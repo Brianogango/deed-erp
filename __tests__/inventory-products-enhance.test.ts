@@ -148,6 +148,8 @@ describe('inventory permissions', () => {
   it('gates receipt validation and serial edits', () => {
     expect(canValidatePurchaseReceipt('director')).toBe(true)
     expect(canValidatePurchaseReceipt('admin_officer')).toBe(true)
+    expect(canValidatePurchaseReceipt('inventory_officer')).toBe(true)
+    expect(canValidatePurchaseReceipt('technical_lead')).toBe(false)
     expect(canValidatePurchaseReceipt('sales_rep')).toBe(false)
     expect(canEditSerialNumber('inventory_officer')).toBe(true)
     expect(canEditSerialNumber('technician')).toBe(false)

@@ -1,10 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from '@/lib/auth/server'
-import { normalizePermissionRole } from '@/lib/auth/authorization'
+import { hasPermission } from '@/lib/auth/authorization'
 import { loadAppState } from '@/lib/server-store'
 import { validateReceiptInput } from '@/lib/inventory-validation'
-
-const ALLOWED_ROLES = ['director', 'admin_officer', 'finance_officer', 'inventory_officer', 'technical_lead']
 
 export const dynamic = 'force-dynamic'
 
@@ -19,10 +17,7 @@ type ReceiptLinePayload = {
 export async function POST(request: NextRequest) {
   const session = await getServerSession()
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
-  const role = normalizePermissionRole(session.user.role)
-  const allowed = ALLOWED_ROLES.map(item => normalizePermissionRole(item)).filter(Boolean)
-  if (!role || !allowed.includes(role)) {
+  if (!hasPermission(session.user, 'validatePurchaseReceipt')) {
     return NextResponse.json({ error: 'Forbidden — insufficient role' }, { status: 403 })
   }
 

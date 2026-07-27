@@ -50,11 +50,14 @@ const roleMatrix = {
   viewEmployeeSensitive:     ['director', 'admin_officer', 'finance_officer'] as UserRole[],
   manageInventoryApprovals:  ['director', 'inventory_officer', 'technical_lead', 'kilimall_officer'] as UserRole[],
   // Validate purchase receipts / GRNs — stock-affecting; keep tight.
-  validatePurchaseReceipt:   ['director', 'admin_officer', 'inventory_officer', 'technical_lead'] as UserRole[],
+  // technical_lead intentionally excluded (ops oversight ≠ stock receipt authority).
+  validatePurchaseReceipt:   ['director', 'admin_officer', 'inventory_officer'] as UserRole[],
   editSerialNumber:          ['director', 'admin_officer', 'inventory_officer', 'technical_lead'] as UserRole[],
   printInventoryLabels:      ['director', 'admin_officer', 'inventory_officer', 'technical_lead', 'kilimall_officer', 'finance_officer'] as UserRole[],
   viewVendorInventoryLedger: ['director', 'admin_officer', 'finance_officer', 'inventory_officer', 'technical_lead'] as UserRole[],
   viewPurchaseCost:          ['director', 'admin_officer', 'finance_officer', 'inventory_officer'] as UserRole[],
+  // Draft customer invoice from a confirmed sale order (not post/pay).
+  createCustomerInvoiceFromSO: ['director', 'finance_officer', 'admin_officer'] as UserRole[],
   postFinancial:             ['director', 'finance_officer'] as UserRole[],
   approvePurchaseOrder:      ['director', 'admin_officer', 'finance_officer'] as UserRole[],
   approveDiscount:           ['director', 'admin_officer', 'finance_officer'] as UserRole[],

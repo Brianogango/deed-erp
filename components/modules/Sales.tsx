@@ -34,7 +34,7 @@ import {
 } from '@fortawesome/free-solid-svg-icons'
 import { printDeliveryNote } from '@/lib/delivery-note-pdf'
 import SerialMultiSelect from '@/components/SerialMultiSelect'
-import { hasModuleAccess } from '@/lib/auth/access'
+import { hasModuleAccess, canCreateCustomerInvoiceFromSO } from '@/lib/auth/access'
 import {
   useSalesStore,
   SaleOrder,
@@ -289,6 +289,7 @@ function SalesContent() {
   const currentUser = users.find(u => u.id === currentUserId)
   const isAdmin = currentUser?.role === 'director'
   const canEditDiscount = isAdmin || !systemSettings.salesDiscountControl
+  const canInvoiceFromSO = canCreateCustomerInvoiceFromSO(currentUser?.role)
 
   // ── View state ──────────────────────────────────────────────────────────
   const [view, setView] = useState<SalesView>('list')
@@ -1189,7 +1190,7 @@ function SalesContent() {
                       </>)}
                       {/* ── Sales Order ── */}
                       {activeOrder?.status === 'sale' && (<>
-                        {activeInvoiceStatus === 'to_invoice' || activeInvoiceStatus === 'upselling' ? (
+                        {canInvoiceFromSO && (activeInvoiceStatus === 'to_invoice' || activeInvoiceStatus === 'upselling') ? (
                           <button className="btn-primary flex items-center gap-2 text-xs" onClick={() => { createInvoiceFromSO(activeOrder.id) }}><Fa icon={faFileInvoiceDollar} /><span>Create Invoice</span></button>
                         ) : null}
                         {activeDeliveries.some(d => ['waiting', 'ready'].includes(d.status)) && (

@@ -1954,6 +1954,10 @@ export interface StockAdjustment {
 const canApproveInventoryAction = (user: User | null) =>
   !!user && ['director', 'admin_officer', 'inventory_officer', 'technical_lead'].includes(user.role)
 
+/** GRN / purchase receipt validation — narrower than general inventory approvals. */
+const canValidatePurchaseReceiptAction = (user: User | null) =>
+  !!user && ['director', 'admin_officer', 'inventory_officer'].includes(user.role)
+
 const canManageInventoryControl = (user: User | null) =>
   !!user && ['director', 'inventory_officer', 'technical_lead', 'finance_officer'].includes(user.role)
 
@@ -1968,6 +1972,10 @@ const canManageHRAssets = (user: User | null) =>
 
 const canManageFinance = (user: User | null) =>
   !!user && ['director', 'finance_officer'].includes(user.role)
+
+/** Draft customer invoice from SO — Admin Officer included; post/pay stay Finance-only. */
+const canCreateCustomerInvoiceFromSOAction = (user: User | null) =>
+  !!user && ['director', 'finance_officer', 'admin_officer'].includes(user.role)
 
 const isoDate = (date?: string) => {
   const source = date || now()
@@ -8097,8 +8105,8 @@ const storeCtx: AppState = {
       sync(`/api/deliveries/${deliveryId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(p) })
     },
     createInvoiceFromSO: (orderId) => {
-      if (!canManageFinance(currentUser())) {
-        showToast('Only Finance can create invoices', 'error'); return {} as Invoice;
+      if (!canCreateCustomerInvoiceFromSOAction(currentUser())) {
+        showToast('Only Finance or Admin Officer can create invoices from a sale order', 'error'); return {} as Invoice;
       }
       const so = soRef.current.find(s => s.id === orderId)!
       if (so.status !== 'sale') {
@@ -8660,7 +8668,9 @@ const storeCtx: AppState = {
       return receipt
     },
     validateReceipt: async (receiptId, lines, destination, serialAccessories, serialAccessoryNotes, serialSpecs, serialIssues) => {
-      if (!canApproveInventoryAction(currentUser())) { showToast('Only inventory approvers can validate GRNs', 'error'); return }
+      if (!canValidatePurchaseReceiptAction(currentUser())) {
+        showToast('Only Director, Admin Officer, or Inventory Officer can validate GRNs', 'error'); return
+      }
       const receipt = recRef.current.find(r => r.id === receiptId)!
       const po = poRef.current.find(p => p.id === receipt.poId)!
       try {

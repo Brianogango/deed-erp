@@ -18,7 +18,6 @@ const RECEIPT_VALIDATORS: InventoryRole[] = [
   'director',
   'admin_officer',
   'inventory_officer',
-  'technical_lead',
 ]
 
 const SERIAL_EDITORS: InventoryRole[] = [
