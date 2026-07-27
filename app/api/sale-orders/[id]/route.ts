@@ -256,7 +256,9 @@ async function enforceSaleWorkflow(
   const confirmedFreeze = from === 'sale' && to === 'sale'
   if ((existing.locked || confirmedFreeze) && !isDirector && to !== 'quotation' && hasCommercialChange(existing, body)) {
     return NextResponse.json(
-      { error: 'Confirmed sale orders freeze commercial fields. Ask a director to unlock before changing prices or quantities.' },
+      { error: existing.locked
+        ? 'This order is locked. Ask a director to unlock it before changing commercial fields.'
+        : 'Confirmed sale orders are locked for commercial edits. Ask a director to unlock before changing prices or quantities.' },
       { status: 409 },
     )
   }
