@@ -9,7 +9,7 @@
   - `InventoryBatch`, `LabelPrintJob`, `CustomerAsset`
 - Permissions added: `validatePurchaseReceipt`, `editSerialNumber`, `printInventoryLabels`, `viewVendorInventoryLedger`, `viewPurchaseCost`
 - GRN validate roles: `director`, `admin_officer`, `inventory_officer` (`technical_lead` excluded)
-- Draft invoice from SO: `director`, `finance_officer`, `admin_officer` (`createCustomerInvoiceFromSO`); post/pay remain Finance-only
+- Draft invoice from SO + post/pay: `director`, `finance_officer`, `admin_officer`
 
 ### Phase 1 — Products filters
 - New `InventoryProductsPanel` with Warehouse + Vendor primary filters

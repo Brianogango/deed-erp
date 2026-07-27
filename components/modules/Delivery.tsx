@@ -765,7 +765,7 @@ function RidersTab() {
 function WeeklyPayTab() {
   const { riders, deliveryJobs, riderWeeklyPays, generateWeeklyPay, markWeeklyPayPaid, companySettings, users, currentUserId } = useDeliveryStore()
   const currentUser = users.find(u => u.id === currentUserId)
-  const canManagePay = ['director', 'finance_officer'].includes(currentUser?.role ?? '')
+  const canManagePay = ['director', 'finance_officer', 'admin_officer'].includes(currentUser?.role ?? '')
 
   const [printPay, setPrintPay] = useState<RiderWeeklyPay | null>(null)
   const [pendingConfirm, setPendingConfirm] = useState<{ msg: string; action: () => void } | null>(null)

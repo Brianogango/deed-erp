@@ -53,7 +53,7 @@ export default function InvoiceDetail() {
   } = useFinanceStore()
 
   const currentUser = users.find(u => u.id === currentUserId)
-  const canManageFinance = ['director', 'finance_officer'].includes(currentUser?.role ?? '')
+  const canManageFinance = ['director', 'finance_officer', 'admin_officer'].includes(currentUser?.role ?? '')
   const invoice = invoices.find(i => i.id === id)
 
   const [showPayModal, setShowPayModal] = useState(false)

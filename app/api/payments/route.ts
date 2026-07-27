@@ -3,7 +3,7 @@ import type { Payment } from '@/lib/store'
 
 const config = {
   storeKey: 'deed_payments',
-  allowedWriteRoles: ['director', 'finance_officer'],
+  allowedWriteRoles: ['director', 'finance_officer', 'admin_officer'],
   build: (body: Record<string, unknown>): Payment | string => {
     if (!body.customerId) return 'customerId is required'
     return { ...body } as unknown as Payment

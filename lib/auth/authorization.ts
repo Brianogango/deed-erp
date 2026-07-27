@@ -56,9 +56,10 @@ const roleMatrix = {
   printInventoryLabels:      ['director', 'admin_officer', 'inventory_officer', 'technical_lead', 'kilimall_officer', 'finance_officer'] as UserRole[],
   viewVendorInventoryLedger: ['director', 'admin_officer', 'finance_officer', 'inventory_officer', 'technical_lead'] as UserRole[],
   viewPurchaseCost:          ['director', 'admin_officer', 'finance_officer', 'inventory_officer'] as UserRole[],
-  // Draft customer invoice from a confirmed sale order (not post/pay).
+  // Draft customer invoice from a confirmed sale order.
   createCustomerInvoiceFromSO: ['director', 'finance_officer', 'admin_officer'] as UserRole[],
-  postFinancial:             ['director', 'finance_officer'] as UserRole[],
+  // Post journals / bank / credit + invoice payment ledger writes.
+  postFinancial:             ['director', 'finance_officer', 'admin_officer'] as UserRole[],
   approvePurchaseOrder:      ['director', 'admin_officer', 'finance_officer'] as UserRole[],
   approveDiscount:           ['director', 'admin_officer', 'finance_officer'] as UserRole[],
   manageMasterData:          ['director', 'admin_officer', 'finance_officer'] as UserRole[],

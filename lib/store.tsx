@@ -1971,9 +1971,9 @@ const canManageHRAssets = (user: User | null) =>
   !!user && ['director', 'inventory_officer', 'technical_lead'].includes(user.role)
 
 const canManageFinance = (user: User | null) =>
-  !!user && ['director', 'finance_officer'].includes(user.role)
+  !!user && ['director', 'finance_officer', 'admin_officer'].includes(user.role)
 
-/** Draft customer invoice from SO — Admin Officer included; post/pay stay Finance-only. */
+/** Draft customer invoice from SO — same commercial roles as post/pay. */
 const canCreateCustomerInvoiceFromSOAction = (user: User | null) =>
   !!user && ['director', 'finance_officer', 'admin_officer'].includes(user.role)
 
@@ -5000,7 +5000,7 @@ const storeCtx: AppState = {
     },
     allocatePaymentToInvoice: (paymentId, invoiceId, amount) => {
       if (!canManageFinance(currentUser())) {
-        showToast('Only Finance can allocate payments', 'error'); return;
+        showToast('Only Finance or Admin Officer can allocate payments', 'error'); return;
       }
       const payment = payments.find(p => p.id === paymentId)
       const invoice = invoices.find(i => i.id === invoiceId)
@@ -5044,7 +5044,7 @@ const storeCtx: AppState = {
     applyCustomerCreditToInvoice: (invoiceId, requestedAmount) => {
       const actor = currentUser()
       if (!canManageFinance(actor)) {
-        showToast('Only Finance can apply customer credit', 'error')
+        showToast('Only Finance or Admin Officer can apply customer credit', 'error')
         return
       }
       const inv = invRef.current.find(i => i.id === invoiceId)
@@ -8310,7 +8310,7 @@ const storeCtx: AppState = {
     },
     postInvoice: (id) => {
       if (!canManageFinance(currentUser())) {
-        showToast('Only Finance can post invoices', 'error'); return
+        showToast('Only Finance or Admin Officer can post invoices', 'error'); return
       }
       const inv = invRef.current.find(i => i.id === id)
       if (!inv) return
@@ -8335,7 +8335,7 @@ const storeCtx: AppState = {
     setInvoicePaymentBlocked: (id, blocked) => {
       const actor = currentUser()
       if (!canManageFinance(actor)) {
-        showToast('Only Finance can block or release invoice payments', 'error'); return
+        showToast('Only Finance or Admin Officer can block or release invoice payments', 'error'); return
       }
       const inv = invRef.current.find(i => i.id === id)
       if (!inv || inv.status !== 'posted') {
@@ -8352,7 +8352,7 @@ const storeCtx: AppState = {
     },
     registerPayment: (invoiceId, amount, method, bankAccountId, reference, paymentDate) => {
       if (!canManageFinance(currentUser())) {
-        showToast('Only Finance can register payments', 'error'); return
+        showToast('Only Finance or Admin Officer can register payments', 'error'); return
       }
       const actor = currentUser()
       const inv = invRef.current.find(i => i.id === invoiceId)
@@ -8400,7 +8400,7 @@ const storeCtx: AppState = {
     resetInvoiceToDraft: (id) => {
       const actor = currentUser()
       if (!canManageFinance(actor)) {
-        showToast('Only Finance can reset invoices to draft', 'error')
+        showToast('Only Finance or Admin Officer can reset invoices to draft', 'error')
         return
       }
       const inv = invRef.current.find(i => i.id === id)
@@ -8433,7 +8433,7 @@ const storeCtx: AppState = {
     cancelInvoice: (id) => {
       const actor = currentUser()
       if (!canManageFinance(actor)) {
-        showToast('Only Finance can cancel invoices', 'error')
+        showToast('Only Finance or Admin Officer can cancel invoices', 'error')
         return
       }
       const inv = invRef.current.find(i => i.id === id)
@@ -8881,7 +8881,7 @@ const storeCtx: AppState = {
     },
     createBillFromPO: (poId) => {
       if (!canManageFinance(currentUser())) {
-        showToast('Only Finance can create vendor bills', 'error'); return null;
+        showToast('Only Finance or Admin Officer can create vendor bills', 'error'); return null;
       }
       const po = poRef.current.find(p => p.id === poId)
       if (!po) return null
@@ -10783,7 +10783,7 @@ const storeCtx: AppState = {
     reviewPortalPayment: (repairId, approved, notes) => {
       const user = currentUser()
       if (!canManageFinance(user)) {
-        showToast('Only Finance can review payment confirmations', 'error'); return
+        showToast('Only Finance or Admin Officer can review payment confirmations', 'error'); return
       }
       const repair = repairsRef.current.find(r => r.id === repairId)
       if (!repair) return

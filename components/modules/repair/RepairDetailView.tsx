@@ -1059,7 +1059,7 @@ export default function RepairDetailView() {
                             Reviewed {new Date(r.paymentConfirmationReviewedAt).toLocaleString('en-KE')}{r.paymentConfirmationReviewedBy ? ` by ${r.paymentConfirmationReviewedBy}` : ''}
                           </p>
                         )}
-                        {r.paymentConfirmationStatus === 'pending_review' && ['director', 'finance_officer'].includes(currentUser?.role ?? '') && (
+                        {r.paymentConfirmationStatus === 'pending_review' && ['director', 'finance_officer', 'admin_officer'].includes(currentUser?.role ?? '') && (
                           <div className="mt-3 space-y-2">
                             {showPaymentRejectInput ? (
                               <div className="space-y-2">

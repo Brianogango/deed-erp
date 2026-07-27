@@ -3,7 +3,7 @@ import prisma from '@/lib/prisma'
 import { requireRole, withApiErrorHandling } from '@/lib/auth/api'
 import { writeFinancialAudit } from '@/lib/finance-audit'
 
-const WRITE_ROLES = ['director', 'finance_officer']
+const WRITE_ROLES = ['director', 'finance_officer', 'admin_officer']
 
 export async function POST(
   request: Request,
