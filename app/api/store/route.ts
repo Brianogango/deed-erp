@@ -5,6 +5,7 @@ import {
   CONTENT_FILTERED_STORE_KEYS, filterStoreValueForRole, hasFullStoreContentAccess, mergeFilteredStoreWrite,
 } from '@/lib/auth/authorization'
 import { loadAppState, saveStoreKeys, getAppStateVersion } from '@/lib/server-store'
+import { mergeAppendOnlyJournals } from '@/lib/finance-controls'
 import crypto from 'crypto'
 
 const PROTECTED_NON_EMPTY_ARRAY_KEYS = new Set<string>([
@@ -155,6 +156,29 @@ export async function POST(request: Request) {
       let incoming: unknown
       try { incoming = JSON.parse(entries[key]) } catch { continue }
       entries[key] = JSON.stringify(mergeFilteredStoreWrite(currentState[key], incoming))
+    }
+  }
+
+  // Posted journals are append-only: existing refs cannot be edited or deleted.
+  if (entries.deed_journalEntries) {
+    const currentState = await loadAppState(['deed_journalEntries'])
+    let incoming: unknown
+    try { incoming = JSON.parse(entries.deed_journalEntries) } catch {
+      delete entries.deed_journalEntries
+      deniedKeys.push('deed_journalEntries')
+    }
+    if (incoming !== undefined) {
+      const merged = mergeAppendOnlyJournals(currentState.deed_journalEntries, incoming)
+      if (!merged.ok) {
+        delete entries.deed_journalEntries
+        deniedKeys.push('deed_journalEntries')
+        await appendStoreAudit(session, [], [], deniedKeys)
+        return NextResponse.json(
+          { error: merged.error, deniedKeys },
+          { status: 409 },
+        )
+      }
+      entries.deed_journalEntries = JSON.stringify(merged.merged)
     }
   }
 

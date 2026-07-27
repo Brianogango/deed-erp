@@ -58,11 +58,27 @@ const roleMatrix = {
   viewPurchaseCost:          ['director', 'admin_officer', 'finance_officer', 'inventory_officer'] as UserRole[],
   // Draft customer invoice from a confirmed sale order.
   createCustomerInvoiceFromSO: ['director', 'finance_officer', 'admin_officer'] as UserRole[],
-  // Post journals / bank / credit + invoice payment ledger writes.
+  // Post journals + customer invoice payment (Admin Officer threshold enforced in actions/API).
   postFinancial:             ['director', 'finance_officer', 'admin_officer'] as UserRole[],
+  // Bank recon / bank accounts / statement lines — Finance + Director only.
+  manageBankRecon:           ['director', 'finance_officer'] as UserRole[],
+  // Customer credit ledger + cancel/reset invoice authority.
+  manageCustomerCredit:      ['director', 'finance_officer'] as UserRole[],
+  // Invoice/payment cash collection writes (narrower than recordSales).
+  recordPayment:             ['director', 'finance_officer', 'admin_officer'] as UserRole[],
+  // Sale order / delivery wholesale store writes.
+  manageSaleOrders:          ['director', 'admin_officer', 'finance_officer', 'sales_rep', 'technical_lead'] as UserRole[],
+  manageDeliveries:          ['director', 'admin_officer', 'inventory_officer', 'technical_lead', 'sales_rep'] as UserRole[],
+  // Expense claims — submitters write own rows via merge; approve/reimburse is action-gated.
+  manageExpenses:            ['director', 'finance_officer', 'admin_officer', 'sales_rep', 'inventory_officer', 'technical_lead', 'technician', 'kilimall_officer'] as UserRole[],
   approvePurchaseOrder:      ['director', 'admin_officer', 'finance_officer'] as UserRole[],
+  // Decide discount/credit approvals (Finance + Director + Admin Officer).
   approveDiscount:           ['director', 'admin_officer', 'finance_officer'] as UserRole[],
+  // Request sales approvals (includes sales_rep so requests persist via store sync).
+  requestSalesApproval:      ['director', 'admin_officer', 'finance_officer', 'sales_rep', 'kilimall_officer', 'technical_lead'] as UserRole[],
   manageMasterData:          ['director', 'admin_officer', 'finance_officer'] as UserRole[],
+  // Append commercial/finance audit rows (not director-only; reading remains director).
+  appendAuditLog:            ['director', 'admin_officer', 'finance_officer', 'sales_rep', 'inventory_officer', 'technical_lead', 'kilimall_officer'] as UserRole[],
   viewAuditLog:              ['director'] as UserRole[],
   // Commercial document creation: invoices, standalone payments, POS orders and
   // after-sales refunds. Every role that legitimately sells or refunds is
@@ -91,24 +107,25 @@ export type PermissionAction = keyof typeof roleMatrix
 export const SENSITIVE_STORE_KEY_PERMISSIONS: Record<string, PermissionAction> = {
   deed_journalEntries: 'postFinancial',
   deed_accounts: 'postFinancial',
-  deed_bankAccounts: 'postFinancial',
-  deed_bankRecons: 'postFinancial',
-  deed_bankStatementLines: 'postFinancial',
-  deed_customerCredits: 'postFinancial',
+  deed_bankAccounts: 'manageBankRecon',
+  deed_bankRecons: 'manageBankRecon',
+  deed_bankStatementLines: 'manageBankRecon',
+  deed_customerCredits: 'manageCustomerCredit',
   deed_salaryAdvances: 'manageHR',
   deed_riderWeeklyPays: 'manageHR',
   deed_systemSettings: 'manageMasterData',
   deed_companySettings: 'manageMasterData',
-  deed_approvalRequests: 'approveDiscount',
+  deed_approvalRequests: 'requestSalesApproval',
   deed_workflowApprovals: 'approveDiscount',
-  deed_auditLogs: 'viewAuditLog',
-  // Commercial ledgers — writable only by roles that sell/refund. This closes
-  // the hole where any authenticated user (e.g. a technician) could overwrite
-  // the entire invoice/payment/POS ledger via the wholesale store-sync endpoint.
+  deed_auditLogs: 'appendAuditLog',
+  // Commercial ledgers
   deed_invoices: 'recordRepairBilling',
-  deed_payments: 'recordSales',
+  deed_payments: 'recordPayment',
   deed_posOrders: 'recordSales',
   deed_refundPayments: 'recordSales',
+  deed_saleOrders: 'manageSaleOrders',
+  deed_deliveries: 'manageDeliveries',
+  deed_expenses: 'manageExpenses',
   // Layby deposits and payroll — restricted to their respective back-office roles.
   deed_deposits: 'manageDeposits',
   deed_payrollRuns: 'managePayroll',
@@ -136,10 +153,11 @@ export const SENSITIVE_STORE_KEY_READ_PERMISSIONS: Record<string, PermissionActi
   deed_hrDocuments: 'viewHrRecords',
   deed_journalEntries: 'postFinancial',
   deed_accounts: 'postFinancial',
+  // Admin Officer needs bank account list to register customer payments.
   deed_bankAccounts: 'postFinancial',
-  deed_bankRecons: 'postFinancial',
-  deed_bankStatementLines: 'postFinancial',
-  deed_customerCredits: 'postFinancial',
+  deed_bankRecons: 'manageBankRecon',
+  deed_bankStatementLines: 'manageBankRecon',
+  deed_customerCredits: 'manageCustomerCredit',
   deed_auditLogs: 'viewAuditLog',
 }
 

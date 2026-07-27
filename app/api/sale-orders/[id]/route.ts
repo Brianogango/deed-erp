@@ -251,11 +251,28 @@ async function enforceSaleWorkflow(
   if (lockChangeRequested && !isDirector && !lockingOnConfirm) {
     return NextResponse.json({ error: 'Only a director can lock or unlock a confirmed order' }, { status: 403 })
   }
-  if (existing.locked && !isDirector && to !== 'quotation' && hasCommercialChange(existing, body)) {
+  // Phase C: confirmed sales orders freeze commercial fields for everyone
+  // except directors (even when salesLockConfirmed did not set locked=true).
+  const confirmedFreeze = from === 'sale' && to === 'sale'
+  if ((existing.locked || confirmedFreeze) && !isDirector && to !== 'quotation' && hasCommercialChange(existing, body)) {
     return NextResponse.json(
-      { error: 'This order is locked. Ask a director to unlock it before changing commercial fields.' },
+      { error: 'Confirmed sale orders freeze commercial fields. Ask a director to unlock before changing prices or quantities.' },
       { status: 409 },
     )
+  }
+  // Reset to quotation requires Finance/Director and cancel blockers when confirmed.
+  if (to === 'quotation' && from === 'sale') {
+    const canReset = ['director', 'finance_officer'].includes(session.user.role)
+    if (!canReset) {
+      return NextResponse.json({ error: 'Only Finance or Director can reset a sale order to quotation' }, { status: 403 })
+    }
+    const blockers = await saleOrderBlockersFor(existing.id)
+    if (blockers.length > 0) {
+      return NextResponse.json(
+        { error: `Cannot reset to quotation: ${blockers.join('; ')}` },
+        { status: 409 },
+      )
+    }
   }
   return null
 }

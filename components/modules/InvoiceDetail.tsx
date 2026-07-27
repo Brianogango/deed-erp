@@ -54,6 +54,7 @@ export default function InvoiceDetail() {
 
   const currentUser = users.find(u => u.id === currentUserId)
   const canManageFinance = ['director', 'finance_officer', 'admin_officer'].includes(currentUser?.role ?? '')
+  const canManageFullFinance = ['director', 'finance_officer'].includes(currentUser?.role ?? '')
   const invoice = invoices.find(i => i.id === id)
 
   const [showPayModal, setShowPayModal] = useState(false)
@@ -209,7 +210,7 @@ export default function InvoiceDetail() {
                 <Fa icon={faEnvelope} className="text-[12px]" />
               </button>
             )}
-            {docState === 'posted' && payState !== 'paid' && canManageFinance && (
+            {docState === 'posted' && payState !== 'paid' && canManageFullFinance && (
               <button
                 className="icon-btn w-9 h-9"
                 onClick={() => setInvoicePaymentBlocked(invoice.id, !invoice.paymentBlocked)}
@@ -219,7 +220,7 @@ export default function InvoiceDetail() {
                 <Fa icon={invoice.paymentBlocked ? faUnlock : faHandPaper} className="text-[12px]" />
               </button>
             )}
-            {invoice.status !== 'draft' && invoice.status !== 'cancelled' && invoice.amountPaid <= 0 && canManageFinance && (
+            {invoice.status !== 'draft' && invoice.status !== 'cancelled' && invoice.amountPaid <= 0 && canManageFullFinance && (
               <button
                 className="icon-btn w-9 h-9"
                 onClick={() => setShowResetDraft(true)}
@@ -229,7 +230,7 @@ export default function InvoiceDetail() {
                 <Fa icon={faRotateLeft} className="text-[12px]" />
               </button>
             )}
-            {invoice.status !== 'draft' && invoice.status !== 'cancelled' && canManageFinance && (
+            {invoice.status !== 'draft' && invoice.status !== 'cancelled' && canManageFullFinance && (
               <button
                 className="icon-btn w-9 h-9"
                 onClick={() => setShowCancel(true)}
@@ -377,7 +378,7 @@ export default function InvoiceDetail() {
                 </button>
               )
             )}
-            {invoice.type === 'customer_invoice' && balance > 0 && availableCredit > 0 && invoice.status !== 'draft' && invoice.status !== 'cancelled' && canManageFinance && (
+            {invoice.type === 'customer_invoice' && balance > 0 && availableCredit > 0 && invoice.status !== 'draft' && invoice.status !== 'cancelled' && canManageFullFinance && (
               <button
                 className="btn-secondary flex items-center gap-1.5 text-emerald-700 hover:bg-emerald-50 border-emerald-200 text-xs"
                 onClick={() => applyCustomerCreditToInvoice(invoice.id)}

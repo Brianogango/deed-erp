@@ -872,7 +872,7 @@ function ReconPanel({
                 <span>Last saved by <strong>{savedRecon.reconciledBy}</strong> · {savedRecon.reconciledAt?.slice(0, 10)}</span>
               )}
             </div>
-        {['director', 'finance_officer', 'admin_officer'].includes(currentUser?.role ?? '') && (
+        {['director', 'finance_officer'].includes(currentUser?.role ?? '') && (
           <button className="btn-primary text-xs px-4 py-1.5"
             onClick={() => onSave(stmtBalance, `${month}-30`, `${matchedPairs.length} matched, ${unmatchedStmt.length} stmt-only, ${unmatchedEntries.length} books-only`)}>
             Save Reconciliation

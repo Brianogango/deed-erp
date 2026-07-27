@@ -424,6 +424,7 @@ function AccountingContent() {
   const currentUser = users.find(u => u.id === currentUserId) ?? null
   const canViewJournals = !!currentUser && ['director', 'finance_officer', 'admin_officer'].includes(currentUser?.role ?? '')
   const canManageFinance = !!currentUser && ['director', 'finance_officer', 'admin_officer'].includes(currentUser?.role ?? '')
+  const canManageFullFinance = !!currentUser && ['director', 'finance_officer'].includes(currentUser?.role ?? '')
   const customers = contacts.filter(c => c.isCustomer)
   const vendors = contacts.filter(c => c.isVendor)
   const invoiceVatRate = companySettings.vatRate ?? 16

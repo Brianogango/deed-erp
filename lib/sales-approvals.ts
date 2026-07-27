@@ -13,8 +13,8 @@ export const APPROVAL_RULES: Record<ApprovalType, (details: any) => string[]> = 
 
     if (percent <= 10) return [] // No approval
     if (percent <= 20) return ['director']
-    if (percent <= 50) return ['director', 'finance_officer']
-    return ['director'] // > 50%
+    // Deep discounts always include Finance (not director-only above 50%).
+    return ['director', 'finance_officer']
   },
 
   special_pricing: () => ['director'],

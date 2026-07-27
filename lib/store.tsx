@@ -32,6 +32,12 @@ import {
   isStockTracked,
   type TrackingMethod,
 } from '@/lib/inventory-identifiers'
+import {
+  canPostOrPayCustomerInvoice,
+  canPayOwnPostedInvoice,
+  paymentJournalRef,
+  DEFAULT_ADMIN_OFFICER_CUSTOMER_INVOICE_LIMIT_KES,
+} from '@/lib/finance-controls'
 
 export type ModuleId = AuthModuleId
 
@@ -500,6 +506,11 @@ export interface SystemSettings {
   // When true, customers must enter the phone number on file to approve a quote
   // or confirm payment through the portal. Off by default to avoid friction.
   secPortalRequirePhoneVerification: boolean
+  /**
+   * Admin Officer may post/pay customer invoices at or under this KES total.
+   * Bank recon, cancel/reset, and expense reimbursement stay Finance/Director.
+   */
+  accAdminOfficerInvoiceLimitKes: number
 }
 
 export const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
@@ -509,7 +520,7 @@ export const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
   crmEnforceNextActivity: true, crmAutoAssignLeads: false, crmAutoFollowUpAfterQuote: true,
   salesQuotationTemplates: true, salesOptionalProducts: true, salesDigitalSignature: false,
   salesOnlineAcceptance: false, salesPricelists: false, salesDiscountControl: true, salesConfirmedQuotesToOrders: true,
-  salesLockConfirmed: false,
+  salesLockConfirmed: true,
   invProductsMasterOnly: true, invNoDirectStockEdits: true, invMultiStepRoutes: true,
   invStorageLocations: ['Incoming', 'Workshop', 'Ready for Sale', 'Faulty / Scrap'],
   invSerialNumbers: true, invLots: false, invAutomatedValuation: true, invCostingMethod: 'fifo',
@@ -520,6 +531,7 @@ export const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
   accCustomerInvoices: true, accVendorBills: true, accCreditNotes: true, accVatEnabled: true,
   accBankJournals: true, accMpesaJournals: true, accReconciliation: true,
   accLockDates: true, accApprovalForRefunds: true,
+  accAdminOfficerInvoiceLimitKes: 100000,
   hrAttendance: false, hrLeaves: true, hrRestrictSalaryInfo: true, hrRoleBasedVisibility: true,
   posSessionControl: true, posCashControl: true, posReceiptPrinting: true,
   secDisableProductDeletion: true, secDisableStockManipulation: true, secDisableInvoiceEditAfterValidation: true,
@@ -792,6 +804,10 @@ export interface Invoice {
   deliveryAddress?: string
   // Finance dispute flag — payment collection blocked until released.
   paymentBlocked?: boolean
+  /** User who posted the invoice — used for SoD on large payments. */
+  postedByUserId?: string
+  postedByName?: string
+  postedAt?: string
 }
 
 export interface Payment {
@@ -1970,10 +1986,15 @@ const canApprovePayroll = (user: User | null) =>
 const canManageHRAssets = (user: User | null) =>
   !!user && ['director', 'inventory_officer', 'technical_lead'].includes(user.role)
 
+/** Broad money role (includes Admin Officer) — use with threshold helpers for post/pay. */
 const canManageFinance = (user: User | null) =>
   !!user && ['director', 'finance_officer', 'admin_officer'].includes(user.role)
 
-/** Draft customer invoice from SO — same commercial roles as post/pay. */
+/** Bank recon / cancel-reset / expense reimburse — Finance + Director only. */
+const canManageFullFinanceAction = (user: User | null) =>
+  !!user && ['director', 'finance_officer'].includes(user.role)
+
+/** Draft customer invoice from SO. */
 const canCreateCustomerInvoiceFromSOAction = (user: User | null) =>
   !!user && ['director', 'finance_officer', 'admin_officer'].includes(user.role)
 
@@ -2041,7 +2062,14 @@ const buildInvoicePostingJournal = (inv: Invoice): JournalEntry => {
   return { id: uid(), ref: `JRN/${inv.ref}`, date: now(), source: 'bill', description: `Bill ${inv.ref} — ${inv.partnerName}`, status: 'posted', invoiceId: inv.id, lines, totalDebit: inv.total, totalCredit: inv.total }
 }
 
-const buildInvoicePaymentJournal = (inv: Invoice, amount: number, method?: string, bankAccountId?: string, paymentDate?: string): JournalEntry => {
+const buildInvoicePaymentJournal = (
+  inv: Invoice,
+  amount: number,
+  method?: string,
+  bankAccountId?: string,
+  paymentDate?: string,
+  paymentId?: string,
+): JournalEntry => {
   const actualBankId = bankAccountIdForMethod(method, bankAccountId)
   const bankAccount = bankAccountLabel(actualBankId, method)
   const isVendorPayment = inv.type === 'vendor_bill'
@@ -2056,7 +2084,7 @@ const buildInvoicePaymentJournal = (inv: Invoice, amount: number, method?: strin
       ]
   return {
     id: uid(),
-    ref: `JRN/PAY/${inv.ref}/${Date.now()}`,
+    ref: paymentId ? paymentJournalRef(inv.ref, paymentId) : `JRN/PAY/${inv.ref}/${uid()}`,
     date: isoDate(paymentDate),
     source: isVendorPayment ? 'purchase_payment' : 'payment',
     description: `Payment for ${inv.ref} — ${inv.partnerName}`,
@@ -2679,7 +2707,7 @@ export interface AppState {
   /** Validate a delivery; partial quantities create a backorder delivery. */
   validateDelivery: (deliveryId: string, qtysDone?: Record<string, number>) => void
   updateDelivery: (deliveryId: string, p: Partial<Pick<Delivery, 'recipientName' | 'recipientPhone' | 'recipientIdNumber' | 'deliveryAddress' | 'notes'>>) => void
-  createInvoiceFromSO: (orderId: string) => Invoice
+  createInvoiceFromSO: (orderId: string) => Promise<Invoice> | Invoice
   deleteSaleOrder: (id: string) => void
 
   // Invoices
@@ -5043,8 +5071,8 @@ const storeCtx: AppState = {
     },
     applyCustomerCreditToInvoice: (invoiceId, requestedAmount) => {
       const actor = currentUser()
-      if (!canManageFinance(actor)) {
-        showToast('Only Finance or Admin Officer can apply customer credit', 'error')
+      if (!canManageFullFinanceAction(actor)) {
+        showToast('Only Finance or Director can apply customer credit', 'error')
         return
       }
       const inv = invRef.current.find(i => i.id === invoiceId)
@@ -5306,8 +5334,8 @@ const storeCtx: AppState = {
       return matched
     },
     saveBankRecon: (recon) => {
-      if (!canManageFinance(currentUser())) {
-        showToast('Only Finance can save bank reconciliations', 'error'); return;
+      if (!canManageFullFinanceAction(currentUser())) {
+        showToast('Only Finance or Director can save bank reconciliations', 'error'); return;
       }
       const user = currentUser()
       const existing = bankRecons.find(r => r.bankAccountId === recon.bankAccountId && r.month === recon.month)
@@ -5443,6 +5471,9 @@ const storeCtx: AppState = {
     reviewExpense: (id, approved, notes) => {
       const user = currentUser()
       if (!user) return
+      if (!canManageFullFinanceAction(user)) {
+        showToast('Only Finance or Director can review expenses', 'error'); return
+      }
       const expense = expenses.find(e => e.id === id)
       if (!expense) return
       if (expense.status === 'reimbursed') { showToast('Reimbursed expenses cannot be reviewed again', 'error'); return }
@@ -5470,6 +5501,9 @@ const storeCtx: AppState = {
     reimburseExpense: (id, notes, method, bankAccountId, reference) => {
       const user = currentUser()
       if (!user) return
+      if (!canManageFullFinanceAction(user)) {
+        showToast('Only Finance or Director can reimburse expenses', 'error'); return
+      }
       const expense = expenses.find(e => e.id === id)
       if (!expense) return
       if (expense.paymentMethod !== 'reimbursement') { showToast('Only staff reimbursement claims can be reimbursed', 'error'); return }
@@ -8104,18 +8138,58 @@ const storeCtx: AppState = {
       setDeliveries(prev => prev.map(d => d.id === deliveryId ? { ...d, ...p } : d))
       sync(`/api/deliveries/${deliveryId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(p) })
     },
-    createInvoiceFromSO: (orderId) => {
+    createInvoiceFromSO: async (orderId) => {
       if (!canCreateCustomerInvoiceFromSOAction(currentUser())) {
         showToast('Only Finance or Admin Officer can create invoices from a sale order', 'error'); return {} as Invoice;
       }
-      const so = soRef.current.find(s => s.id === orderId)!
+      const so = soRef.current.find(s => s.id === orderId)
+      if (!so) { showToast('Sale order not found', 'error'); return {} as Invoice }
       if (so.status !== 'sale') {
         showToast('Only a confirmed Sales Order can be invoiced', 'error'); return {} as Invoice;
       }
 
-      // Odoo-style invoicing: each line is invoiceable per its product policy
-      // (Ordered vs Delivered Quantities) minus what has already been
-      // invoiced. This is also the duplicate-invoice guard.
+      // Prefer server-atomic path (qtyInvoiced bump + invoice create in one transaction).
+      try {
+        const response = await fetch(`/api/sale-orders/${orderId}/create-invoice`, { method: 'POST' })
+        const payload = await response.json().catch(() => null) as {
+          ok?: boolean
+          error?: string
+          invoice?: { id: string; ref: string; total: number; status: string }
+        } | null
+        if (response.ok && payload?.ok && payload.invoice) {
+          const local: Invoice = {
+            id: payload.invoice.id,
+            ref: payload.invoice.ref,
+            type: 'customer_invoice',
+            status: 'draft',
+            partnerId: so.customerId,
+            partnerName: so.customerName,
+            date: now(),
+            dueDate: addDays(now(), parseInt(so.paymentTerms ?? '', 10) || 30),
+            lines: [],
+            subtotal: payload.invoice.total,
+            taxTotal: 0,
+            total: payload.invoice.total,
+            amountPaid: 0,
+            saleOrderId: so.id,
+            notes: `Created from ${so.ref}`,
+            invoiceAddress: so.invoiceAddress,
+            deliveryAddress: so.deliveryAddress,
+          }
+          setInvoices(p => [local, ...p.filter(i => i.id !== local.id)])
+          addAuditLog('create_invoice_from_so', local.ref, `Draft invoice created from ${so.ref} (server atomic)`)
+          showToast(`Draft invoice ${local.ref} created — post it to finalize`)
+          return local
+        }
+        if (payload?.error) {
+          showToast(payload.error, 'error')
+          return {} as Invoice
+        }
+      } catch {
+        // Fall through to client path if server unavailable
+      }
+
+      // Odoo-style invoicing fallback (client) when server path unavailable.
       const resolvePolicy = (l: any): InvoicePolicy =>
         prodRef.current.find(p => p.id === l.productId)?.invoicePolicy === 'delivery' ? 'delivery' : 'order'
       const itemLines = so.lines.filter((l: any) => l.lineType !== 'section')
@@ -8182,17 +8256,52 @@ const storeCtx: AppState = {
       addAuditLog('create_invoice_from_so', inv.ref, `Draft invoice created from ${so.ref}`)
       showToast(`Draft invoice ${inv.ref} created — post it to finalize`); return inv
     },
-    deleteSaleOrder: (id) => { 
-      setSaleOrders(p => p.filter(s => s.id !== id)); 
+    deleteSaleOrder: (id) => {
+      const actor = currentUser()
+      const so = soRef.current.find(s => s.id === id)
+      if (!so) return
+      const isQuotation = ['draft', 'sent', 'quotation', 'quotation_sent'].includes(so.status)
+      if (!isQuotation && actor?.role !== 'director') {
+        showToast('Only a director can delete confirmed sale orders — cancel or reset instead', 'error')
+        return
+      }
+      if (!isQuotation) {
+        const blockers = saleOrderCancelBlockers({
+          status: so.status,
+          deliveries: delRef.current.filter(d => d.saleOrderId === id),
+          invoices: invRef.current.filter(i => i.saleOrderId === id),
+        })
+        if (blockers.length > 0) {
+          showToast(`Cannot delete ${so.ref}: ${blockers.join('; ')}`, 'error')
+          return
+        }
+      }
+      setSaleOrders(p => p.filter(s => s.id !== id))
       sync(`/api/sale-orders/${id}`, { method: 'DELETE' })
-      showToast('Order deleted') 
+      addAuditLog('delete_sale_order', so.ref, `Deleted by ${actor?.name || 'user'}`)
+      showToast('Order deleted')
     },
     resetSOToDraft: (id) => {
       // Odoo "Set to Quotation": back to the quotation stage. Pending
       // deliveries are cancelled and reservations released so the quotation
       // carries no fulfilment side effects.
+      const actor = currentUser()
+      if (!actor || !['director', 'finance_officer'].includes(actor.role)) {
+        showToast('Only Finance or Director can reset a sale order to quotation', 'error')
+        return
+      }
       const so = soRef.current.find(s => s.id === id)
       if (!so) return
+      const blockers = saleOrderCancelBlockers({
+        status: so.status === 'sale' ? 'sale' : so.status,
+        deliveries: delRef.current.filter(d => d.saleOrderId === id),
+        invoices: invRef.current.filter(i => i.saleOrderId === id),
+      })
+      // Always block reset when fulfilment/AR exists (same as cancel for confirmed).
+      if (so.status === 'sale' && blockers.length > 0) {
+        showToast(`Cannot reset ${so.ref}: ${blockers.join('; ')}`, 'error')
+        return
+      }
       const pendingDeliveries = delRef.current.filter(d => d.saleOrderId === id && ['draft', 'waiting', 'ready'].includes(d.status))
       pendingDeliveries.forEach(d => {
         setDeliveries(prev => prev.map(x => x.id === d.id ? { ...x, status: 'cancelled' as const } : x))
@@ -8207,7 +8316,7 @@ const storeCtx: AppState = {
         sync(`/api/sale-orders/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...updated, locked: false, confirmedAt: null }) })
         return updated
       }))
-      addAuditLog('reset_to_quotation', so.ref, 'Order set back to Quotation')
+      addAuditLog('reset_to_quotation', so.ref, `Order set back to Quotation by ${actor.name}`)
       showToast('Order set back to Quotation')
     },
     cancelSO: (id) => {
@@ -8309,11 +8418,23 @@ const storeCtx: AppState = {
       })
     },
     postInvoice: (id) => {
-      if (!canManageFinance(currentUser())) {
+      const actor = currentUser()
+      if (!canManageFinance(actor)) {
         showToast('Only Finance or Admin Officer can post invoices', 'error'); return
       }
       const inv = invRef.current.find(i => i.id === id)
       if (!inv) return
+      if (inv.status === 'posted') {
+        showToast(`${inv.ref} is already posted`, 'info'); return
+      }
+      const limit = systemSettings.accAdminOfficerInvoiceLimitKes ?? DEFAULT_ADMIN_OFFICER_CUSTOMER_INVOICE_LIMIT_KES
+      const gate = canPostOrPayCustomerInvoice({
+        role: actor?.role,
+        invoiceType: inv.type,
+        invoiceTotal: inv.total,
+        limitKes: limit,
+      })
+      if (!gate.ok) { showToast(gate.reason || 'Cannot post invoice', 'error'); return }
       if (!inv.lines || inv.lines.length === 0) {
         showToast('Cannot post an invoice with no line items', 'error'); return
       }
@@ -8322,20 +8443,28 @@ const storeCtx: AppState = {
       const finalRef = isDraftInvoiceRef(inv.ref)
         ? docSeq(inv.type === 'vendor_bill' ? 'BILL' : 'INV')
         : inv.ref
+      const postedMeta = {
+        ref: finalRef,
+        status: 'posted' as const,
+        postedByUserId: actor?.id,
+        postedByName: actor?.name,
+        postedAt: now(),
+      }
       setInvoices(p => {
-        const next = p.map(i => i.id === id ? { ...i, ref: finalRef, status: 'posted' as const } : i)
+        const next = p.map(i => i.id === id ? { ...i, ...postedMeta } : i)
         const updated = next.find(i => i.id === id)
         if (updated) sync(`/api/invoices/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
         return next
       })
       // Auto-post GL journal using the shared posting engine.
       postInvoiceJournalOnce({ ...inv, ref: finalRef })
+      addAuditLog('post_invoice', finalRef, `Posted by ${actor?.name || 'Finance'}`)
       showToast(`${finalRef} posted to accounting`)
     },
     setInvoicePaymentBlocked: (id, blocked) => {
       const actor = currentUser()
-      if (!canManageFinance(actor)) {
-        showToast('Only Finance or Admin Officer can block or release invoice payments', 'error'); return
+      if (!canManageFullFinanceAction(actor)) {
+        showToast('Only Finance or Director can block or release invoice payments', 'error'); return
       }
       const inv = invRef.current.find(i => i.id === id)
       if (!inv || inv.status !== 'posted') {
@@ -8351,22 +8480,46 @@ const storeCtx: AppState = {
       showToast(blocked ? `${inv.ref} payment blocked` : `${inv.ref} payment released`)
     },
     registerPayment: (invoiceId, amount, method, bankAccountId, reference, paymentDate) => {
-      if (!canManageFinance(currentUser())) {
+      const actor = currentUser()
+      if (!canManageFinance(actor)) {
         showToast('Only Finance or Admin Officer can register payments', 'error'); return
       }
-      const actor = currentUser()
       const inv = invRef.current.find(i => i.id === invoiceId)
       if (!inv) return
+      if (inv.status !== 'posted') {
+        showToast('Only posted invoices can receive payments', 'error'); return
+      }
       if (inv.paymentBlocked) { showToast('Payments are blocked on this invoice — release the block first', 'error'); return }
+      const limit = systemSettings.accAdminOfficerInvoiceLimitKes ?? DEFAULT_ADMIN_OFFICER_CUSTOMER_INVOICE_LIMIT_KES
+      const gate = canPostOrPayCustomerInvoice({
+        role: actor?.role,
+        invoiceType: inv.type,
+        invoiceTotal: inv.total,
+        limitKes: limit,
+      })
+      if (!gate.ok) { showToast(gate.reason || 'Cannot register payment', 'error'); return }
+      const sod = canPayOwnPostedInvoice({
+        role: actor?.role,
+        actorUserId: actor?.id,
+        postedByUserId: inv.postedByUserId,
+        invoiceTotal: inv.total,
+        sodThresholdKes: limit,
+      })
+      if (!sod.ok) { showToast(sod.reason || 'Segregation of duties blocked this payment', 'error'); return }
       const balance = inv.total - inv.amountPaid
       if (balance <= 0) { showToast('Invoice is already fully paid', 'info'); return }
       const capped = Math.min(amount, balance)
+      const paymentId = crypto.randomUUID()
+      const journal = buildInvoicePaymentJournal(inv, capped, method, bankAccountId, paymentDate, paymentId)
+      if (journalEntries.some(j => j.ref === journal.ref)) {
+        showToast('This payment journal was already posted', 'info'); return
+      }
       setInvoices(p => {
         const next = p.map(i => {
           if (i.id !== invoiceId) return i
           const paid = i.amountPaid + capped
           const newPayment: InvoicePayment = {
-            id: crypto.randomUUID(),
+            id: paymentId,
             date: paymentDate ? new Date(paymentDate).toISOString() : new Date().toISOString(),
             amount: capped,
             method: method || 'cash',
@@ -8375,8 +8528,6 @@ const storeCtx: AppState = {
             recordedBy: actor?.name || 'Finance',
           }
           const append = `\nPaid ${fmtKes(capped)} via ${method || 'cash'}${bankAccountId ? ` (Bank: ${bankAccountId})` : ''}${reference ? ` Ref: ${reference}` : ''}`
-          // The stored status stays Posted — the payment status (Partially
-          // Paid / Paid) is derived from amountPaid, never stored.
           return {
             ...i,
             amountPaid: paid,
@@ -8386,21 +8537,26 @@ const storeCtx: AppState = {
         })
         return next
       })
-      // Auto-post GL journal through the shared bank-aware posting engine.
-      const journal = buildInvoicePaymentJournal(inv, capped, method, bankAccountId, paymentDate)
       setJournalEntries(p => [journal, ...p])
       fetch(`/api/invoices/${invoiceId}/payments`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ amount: capped, paymentMethod: method || 'cash', reference: reference || undefined, paidAt: paymentDate, bankAccountId }),
+        body: JSON.stringify({
+          amount: capped,
+          paymentMethod: method || 'cash',
+          reference: reference || undefined,
+          paidAt: paymentDate,
+          bankAccountId,
+          idempotencyKey: paymentId,
+        }),
       })
       addAuditLog('register_payment', invoiceId, `Registered payment of KES ${capped} for ${inv.ref}${reference ? ` (Ref: ${reference})` : ''}`)
       showToast('Payment registered')
     },
     resetInvoiceToDraft: (id) => {
       const actor = currentUser()
-      if (!canManageFinance(actor)) {
-        showToast('Only Finance or Admin Officer can reset invoices to draft', 'error')
+      if (!canManageFullFinanceAction(actor)) {
+        showToast('Only Finance or Director can reset invoices to draft', 'error')
         return
       }
       const inv = invRef.current.find(i => i.id === id)
@@ -8432,8 +8588,8 @@ const storeCtx: AppState = {
     },
     cancelInvoice: (id) => {
       const actor = currentUser()
-      if (!canManageFinance(actor)) {
-        showToast('Only Finance or Admin Officer can cancel invoices', 'error')
+      if (!canManageFullFinanceAction(actor)) {
+        showToast('Only Finance or Director can cancel invoices', 'error')
         return
       }
       const inv = invRef.current.find(i => i.id === id)

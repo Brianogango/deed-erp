@@ -79,16 +79,20 @@ describe('POST /api/store — sensitive key gating', () => {
     expect(res.status).toBe(200)
   })
 
-  it('rejects a sales_rep writing the approval trail (deed_approvalRequests)', async () => {
+  it('allows a sales_rep writing approval requests (requestSalesApproval)', async () => {
     mockGetSession.mockResolvedValue(salesSession)
     const res = await STORE_POST(postReq({ deed_approvalRequests: '[]' }))
-    expect(res.status).toBe(403)
+    expect(res.status).toBe(200)
   })
 
-  it('rejects a non-director writing the audit log (deed_auditLogs)', async () => {
+  it('allows finance to append audit logs but still rejects technicians', async () => {
     mockGetSession.mockResolvedValue(financeSession)
-    const res = await STORE_POST(postReq({ deed_auditLogs: '[]' }))
-    expect(res.status).toBe(403)
+    const financeRes = await STORE_POST(postReq({ deed_auditLogs: '[]' }))
+    expect(financeRes.status).toBe(200)
+
+    mockGetSession.mockResolvedValue(technicianSession)
+    const techRes = await STORE_POST(postReq({ deed_auditLogs: '[]' }))
+    expect(techRes.status).toBe(403)
   })
 
   it('does not regress unrestricted keys — any authenticated role can still write deed_quotes', async () => {
@@ -139,12 +143,15 @@ describe('POST /api/store — sensitive key gating', () => {
       const res = await STORE_POST(postReq({ [key]: '[]' }))
       expect(res.status).toBe(200)
     })
-    it(`allows a sales_rep writing ${key} (POS/sales flow)`, async () => {
-      mockGetSession.mockResolvedValue(salesSession)
-      const res = await STORE_POST(postReq({ [key]: '[]' }))
-      expect(res.status).toBe(200)
-    })
   }
+
+  it('allows sales_rep POS/refund writes but not wholesale deed_payments', async () => {
+    mockGetSession.mockResolvedValue(salesSession)
+    expect((await STORE_POST(postReq({ deed_posOrders: '[]' }))).status).toBe(200)
+    expect((await STORE_POST(postReq({ deed_refundPayments: '[]' }))).status).toBe(200)
+    expect((await STORE_POST(postReq({ deed_invoices: '[]' }))).status).toBe(200)
+    expect((await STORE_POST(postReq({ deed_payments: '[]' }))).status).toBe(403)
+  })
 
   // Repair billing: the repair-quote lifecycle (quote → client approval →
   // linked invoice) is owned by technical leads, so deed_invoices is writable
