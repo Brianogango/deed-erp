@@ -211,6 +211,28 @@ export default function DataTable<T>({
     [filteredRows, selectedKeys, rowKey],
   )
 
+  const pageKeys = useMemo(() => pageRows.map(rowKey), [pageRows, rowKey])
+  const allPageSelected = pageKeys.length > 0 && pageKeys.every(key => selectedKeys.has(key))
+  const somePageSelected = pageKeys.some(key => selectedKeys.has(key))
+  const allMatchingSelected =
+    filteredRows.length > 0 && filteredRows.every(row => selectedKeys.has(rowKey(row)))
+
+  function toggleSelectPage() {
+    setSelectedKeys(prev => {
+      const next = new Set(prev)
+      if (allPageSelected) {
+        pageKeys.forEach(key => next.delete(key))
+      } else {
+        pageKeys.forEach(key => next.add(key))
+      }
+      return next
+    })
+  }
+
+  function selectAllMatching() {
+    setSelectedKeys(new Set(filteredRows.map(rowKey)))
+  }
+
   function applyView(view: SavedView) {
     setSearch(view.search)
     setVisibleColumnKeys(view.visibleColumnKeys)
@@ -300,6 +322,43 @@ export default function DataTable<T>({
           bulkActions={bulkActions ? bulkActions({ rows: selectedRows, clear: () => setSelectedKeys(new Set()) }) : undefined}
           loading={isLoading}
         />
+      )}
+
+      {selectable && filteredRows.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2 px-3 py-2 border-b border-[var(--border-lt)] bg-[var(--bg-surface)]/60 text-[11px] text-[var(--text-2)]">
+          <label className="inline-flex items-center gap-1.5 font-semibold">
+            <input
+              type="checkbox"
+              checked={allPageSelected}
+              ref={el => {
+                if (el) el.indeterminate = !allPageSelected && somePageSelected
+              }}
+              onChange={toggleSelectPage}
+              aria-label="Select all rows on this page"
+              style={{ accentColor: 'var(--primary)' }}
+            />
+            Select page ({pageRows.length})
+          </label>
+          <span className="text-[var(--text-4)]">·</span>
+          <span>
+            {selectedRows.length} selected
+            {selectedRows.length > 0 && selectedRows.length < filteredRows.length
+              ? ` on filters (${filteredRows.length} matching)`
+              : ''}
+          </span>
+          {!allMatchingSelected && filteredRows.length > pageRows.length && (
+            <button
+              type="button"
+              className="font-bold text-[var(--primary)] hover:underline"
+              onClick={selectAllMatching}
+            >
+              Select all {filteredRows.length} matching records
+            </button>
+          )}
+          {allMatchingSelected && filteredRows.length > pageRows.length && (
+            <span className="font-bold text-[var(--text-1)]">All {filteredRows.length} matching records selected</span>
+          )}
+        </div>
       )}
 
       {filtersOpen && (

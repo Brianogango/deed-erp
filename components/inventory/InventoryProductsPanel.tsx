@@ -27,6 +27,12 @@ import {
 import { canEditSerialNumber, canPrintInventoryLabels } from '@/lib/inventory/permissions'
 import { inferTrackingMethod, isSerialTracking, type TrackingMethod } from '@/lib/inventory-identifiers'
 import SerialManageDrawer from './SerialManageDrawer'
+import LabelSettingsDialog from './LabelSettingsDialog'
+import {
+  DEFAULT_LABEL_SETTINGS,
+  normalizeLabelSettings,
+  type LabelSettings,
+} from '@/lib/inventory/label-settings'
 
 type ProductListRow = {
   id: string
@@ -62,6 +68,8 @@ export default function InventoryProductsPanel({
   const [collapsedParents, setCollapsedParents] = useState<Set<string>>(new Set())
   const [serialProduct, setSerialProduct] = useState<Product | null>(null)
   const [labelBusy, setLabelBusy] = useState(false)
+  const [labelSettingsOpen, setLabelSettingsOpen] = useState(false)
+  const [labelSettings, setLabelSettings] = useState<LabelSettings>(DEFAULT_LABEL_SETTINGS)
 
   const vendorOptions = useMemo(() => {
     const vendors = contacts.filter(c => c.isVendor)
@@ -463,25 +471,33 @@ export default function InventoryProductsPanel({
     if (!selected.length) return
     setLabelBusy(true)
     try {
+      const settings = normalizeLabelSettings(labelSettings)
+      const ordered = [...selected]
+      if (settings.printOrder === 'name') {
+        ordered.sort((a, b) => a.product.name.localeCompare(b.product.name))
+      } else if (settings.printOrder === 'sku') {
+        ordered.sort((a, b) => a.product.sku.localeCompare(b.product.sku))
+      }
+      const expanded = ordered.flatMap(row => Array.from({ length: settings.copies }, () => row))
       if (mode === 'print') {
-        for (const row of selected) printProductLabels(row.product, 1)
+        for (const row of expanded) printProductLabels(row.product, 1)
       } else {
         const filename = await downloadProductLabelsPdf(
-          selected.map(row => ({
-            name: row.product.name,
-            sku: row.product.sku,
-            barcode: row.product.barcode,
-            salePrice: row.product.salePrice,
+          expanded.map(row => ({
+            name: settings.includeProductName ? row.product.name : row.product.sku,
+            sku: settings.includeSku ? row.product.sku : '',
+            barcode: settings.includeBarcode ? row.product.barcode : undefined,
+            salePrice: settings.includePrice ? row.product.salePrice : undefined,
             category: row.product.category,
           })),
         )
-        addAuditLog('labels_download', filename, `Downloaded ${selected.length} product label(s) as PDF`)
+        addAuditLog('labels_download', filename, `Downloaded ${expanded.length} product label(s) as PDF`)
         showToast(`Downloaded ${filename}`, 'success')
       }
       addAuditLog(
         mode === 'print' ? 'labels_print' : 'labels_download',
         'inventory-products',
-        `${mode} ${selected.length} product label(s)`,
+        `${mode} ${expanded.length} product label(s) · template ${settings.template}`,
       )
     } catch (err) {
       showToast(err instanceof Error ? err.message : 'Label action failed', 'error')
@@ -522,8 +538,13 @@ export default function InventoryProductsPanel({
           selectable
           overflowActions={canLabels ? [
             {
-              id: 'labels-print-page',
-              label: labelBusy ? 'Preparing labels…' : 'Print labels (selected via bulk bar)',
+              id: 'label-settings',
+              label: 'Label settings…',
+              onSelect: () => setLabelSettingsOpen(true),
+            },
+            {
+              id: 'labels-hint',
+              label: labelBusy ? 'Preparing labels…' : 'Print / PDF via bulk bar after selecting rows',
               onSelect: () => showToast('Select products, then use the bulk Labels actions', 'info'),
             },
           ] : undefined}
@@ -629,6 +650,18 @@ export default function InventoryProductsPanel({
           }}
         />
       )}
+
+      <LabelSettingsDialog
+        open={labelSettingsOpen}
+        value={labelSettings}
+        onChange={setLabelSettings}
+        onClose={() => setLabelSettingsOpen(false)}
+        onApply={next => {
+          setLabelSettings(next)
+          setLabelSettingsOpen(false)
+          showToast('Label settings applied', 'success')
+        }}
+      />
     </>
   )
 }

@@ -2703,7 +2703,7 @@ export interface AppState {
   // Validate receipt — the CRITICAL stock entry step
   // serialAccessories: map of serial string → accessories array (e.g. { 'SN001': ['Charger','Bag'] })
   // serialIssues: map of serial string → issue description (non-empty = received with issues → refurbishment)
-  validateReceipt: (receiptId: string, lines: Receipt['lines'], destination: LocationId, serialAccessories?: Record<string, string[]>, serialAccessoryNotes?: Record<string, string>, serialSpecs?: Record<string, string>, serialIssues?: Record<string, string>) => void
+  validateReceipt: (receiptId: string, lines: Receipt['lines'], destination: LocationId, serialAccessories?: Record<string, string[]>, serialAccessoryNotes?: Record<string, string>, serialSpecs?: Record<string, string>, serialIssues?: Record<string, string>) => Promise<boolean>
   deletePO: (id: string) => void
   createBillFromPO: (poId: string) => Invoice | null
 
@@ -2882,6 +2882,8 @@ export type InventoryStoreState = Pick<AppState,
   | 'openingStockPosted'
   | 'purchaseOrders'
   | 'receipts'
+  | 'purchaseReturns'
+  | 'returnOrders'
   | 'contacts'
   | 'currentUserId'
   | 'users'
@@ -8660,209 +8662,139 @@ const storeCtx: AppState = {
       return receipt
     },
     validateReceipt: async (receiptId, lines, destination, serialAccessories, serialAccessoryNotes, serialSpecs, serialIssues) => {
-      if (!canApproveInventoryAction(currentUser())) { showToast('Only inventory approvers can validate GRNs', 'error'); return }
-      const receipt = recRef.current.find(r => r.id === receiptId)!
-      const po = poRef.current.find(p => p.id === receipt.poId)!
+      if (!canApproveInventoryAction(currentUser())) { showToast('Only inventory approvers can validate GRNs', 'error'); return false }
+      const receipt = recRef.current.find(r => r.id === receiptId)
+      if (!receipt) { showToast('Receipt not found', 'error'); return false }
+      if (receipt.status === 'validated') { showToast(`Receipt ${receipt.ref} is already validated`, 'info'); return true }
+      const po = poRef.current.find(p => p.id === receipt.poId)
+      if (!po) { showToast('Purchase order not found', 'error'); return false }
+
       try {
         const response = await fetch('/api/inventory/validate-receipt', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
+            apply: true,
+            receiptId,
+            destination,
             lines: lines.map(line => ({
               productId: line.productId,
               productName: line.productName,
+              qtyExpected: Number(line.qtyExpected ?? 0),
               qtyReceived: Number(line.qtyReceived ?? 0),
               requiresSerial: Boolean(line.requiresSerial),
               serials: line.serials ?? [],
+              importedSerials: line.importedSerials,
+              specs: line.specs,
             })),
+            serialAccessories,
+            serialAccessoryNotes,
+            serialSpecs,
+            serialIssues,
           }),
         })
-        if (!response.ok) {
-          const payload = await response.json().catch(() => null) as { errors?: string[]; error?: string } | null
+        const payload = await response.json().catch(() => null) as {
+          ok?: boolean
+          idempotent?: boolean
+          message?: string
+          errors?: string[]
+          error?: string
+          state?: {
+            receipts: Receipt[]
+            purchaseOrders: PurchaseOrder[]
+            serials: SerialNumber[]
+            products: Product[]
+            bulkStock: BulkStockLevel[]
+            stockMoves: StockMove[]
+            refurbishmentJobs: RefurbishmentJob[]
+          }
+        } | null
+
+        if (!response.ok || !payload?.ok || !payload.state) {
           const message = payload?.errors?.[0] || payload?.error || 'Receipt validation failed'
           showToast(message, 'error')
-          return
+          return false
         }
-      } catch {
-        showToast('Could not validate receipt serials on server', 'error')
-        return
-      }
 
-      // Validate: serialized products need all serial numbers
-      for (const line of lines) {
-        if (line.requiresSerial && line.serials.length < line.qtyReceived) {
-          showToast(`Enter all serial numbers for ${line.productName} (${line.serials.length}/${line.qtyReceived})`, 'error'); return
+        // Authoritative server state (single transactional write)
+        setReceipts(payload.state.receipts)
+        setPurchaseOrders(payload.state.purchaseOrders)
+        setSerials(payload.state.serials)
+        setProducts(payload.state.products)
+        setBulkStock(payload.state.bulkStock)
+        setStockMoves(payload.state.stockMoves)
+        setRefurbishmentJobs(payload.state.refurbishmentJobs)
+
+        if (payload.idempotent) {
+          showToast(payload.message || `Receipt ${receipt.ref} already validated`, 'info')
+          return true
         }
-        // Check duplicate serials
-        for (const s of line.serials) {
-          if (serialRef.current.find(x => x.serial === s)) {
-            showToast(`Serial ${s} already exists in system`, 'error'); return
-          }
-        }
-      }
 
-      const receivedByProduct = new Map(lines.map(line => [line.productId, line.qtyReceived]))
-      const updatedPoLines = po.lines.map(line => {
-        const receivedQty = receivedByProduct.get(line.productId)
-        if (receivedQty === undefined) return line
-        return { ...line, qtyReceived: Math.min(line.qty, line.qtyReceived + receivedQty) }
-      })
-      const allReceived = updatedPoLines.every(line => line.qtyReceived >= line.qty)
-      const anyReceived = updatedPoLines.some(line => line.qtyReceived > 0)
-      const hasOtherDraftReceipt = recRef.current.some(r => r.poId === receipt.poId && r.status === 'draft' && r.id !== receiptId)
-      const followUpLines = updatedPoLines
-        .filter(line => line.qtyReceived < line.qty)
-        .map(line => ({
-          productId: line.productId,
-          productName: line.productName,
-          qtyExpected: line.qty - line.qtyReceived,
-          qtyReceived: 0,
-          serials: [] as string[],
-          requiresSerial: line.requiresSerial,
-          importedSerials: line.importedSerials?.slice(line.qtyReceived),
-          specs: line.specs,
-        }))
-      const followUpReceipt: Receipt | null = !allReceived && anyReceived && !hasOtherDraftReceipt && followUpLines.length > 0
-        ? {
-            id: uid(), ref: docSeq('REC'), poId: receipt.poId, poRef: receipt.poRef,
-            vendorId: receipt.vendorId, vendorName: receipt.vendorName,
-            status: 'draft', date: now(),
-            lines: followUpLines,
-            destinationLocation: destination,
-          }
-        : null
-
-      // Add stock and serials
-      lines.forEach(line => {
-        const prod = prodRef.current.find(x => x.id === line.productId)!
-        if (line.requiresSerial) {
-          line.serials.forEach(s => {
-            const issueDesc = serialIssues?.[s]?.trim() ?? ''
-            const hasIssue  = issueDesc.length > 0
-            const newSerial: SerialNumber = {
-              id: uid(), serial: s, productId: line.productId, productName: line.productName,
-              location: hasIssue ? 'warehouse' : destination,
-              status: hasIssue ? 'refurbishment' : 'available',
-              purchaseOrderId: po.id,
-              receiptId: receiptId,
-              receivedDate: now(),
-              // Always issue an internal inventory barcode at stock receipt time.
-              barcode: buildInventoryBarcodeForProduct(line.productId, s),
-              accessories: serialAccessories?.[s] ?? [],
-              accessoryNotes: serialAccessoryNotes?.[s],
-              specs: serialSpecs?.[s],
-            }
-            setSerials(p => [...p, newSerial])
-            sync('/api/serials', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(newSerial) })
-            if (hasIssue) {
-              const job: RefurbishmentJob = {
-                id: uid(), ref: seq('REF', 'refurb'),
-                status: 'queued',
-                serialId: newSerial.id, serialNumber: s,
-                productId: line.productId, productName: line.productName,
-                specs: serialSpecs?.[s],
-                receiptId, receiptRef: receipt.ref,
-                intakeDate: now(),
-                intakeIssueDescription: issueDesc,
-                partsNeeded: [],
+        // Optional repair auto-resume remains client-side (portal/notifs)
+        if (po.repairId) {
+          const linkedRepair = repairs.find(r => r.id === po.repairId)
+          if (linkedRepair && linkedRepair.status === 'awaiting_parts') {
+            setRepairs(prev => prev.map(r => r.id === po.repairId ? {
+              ...r,
+              procurementRequests: (r.procurementRequests ?? []).map(req =>
+                req.id === po.procurementRequestId ? { ...req, status: 'received' as const } : req
+              ),
+            } : r))
+            const partLines = (linkedRepair.quote?.lines ?? []).filter(l => l.type === 'part' && l.productId)
+            partLines.forEach(line => {
+              const product = prodRef.current.find(p => p.id === line.productId)
+              if (!product) return
+              if (product.requiresSerial) {
+                const availableSerials = serialRef.current
+                  .filter(s => s.productId === line.productId && s.status === 'available')
+                  .slice(0, line.qty)
+                availableSerials.forEach(serial => {
+                  setSerials(p => p.map(s => s.id === serial.id ? { ...s, status: 'assigned' as const, repairId: po.repairId } : s))
+                })
+              } else {
+                setProducts(p => p.map(x => x.id === line.productId ? { ...x, stockQty: Math.max(0, x.stockQty - line.qty) } : x))
+                addMove(line.productId!, line.productName ?? line.description, line.qty, 'out',
+                  `Parts reserved — repair ${linkedRepair.ref}`, linkedRepair.ref, undefined, 'repair_unit')
               }
-              setRefurbishmentJobs(p => [...p, job])
-            }
-          })
-          setProducts(p => p.map(x => x.id === line.productId ? { ...x, stockQty: x.stockQty + line.serials.length } : x))
-          addMove(line.productId, line.productName, line.serials.length, 'in', `Receipt ${receipt.ref}`, receipt.ref, 'vendor', destination, line.serials)
-        } else {
-          setBulkStock(prev => upsertBulkStock(prev, line.productId, destination, line.qtyReceived))
-          setProducts(p => p.map(x => x.id === line.productId ? { ...x, stockQty: x.stockQty + line.qtyReceived } : x))
-          addMove(line.productId, line.productName, line.qtyReceived, 'in', `Receipt ${receipt.ref}`, receipt.ref, 'vendor', destination, [])
-        }
-      })
-
-      // Update receipt status
-      setReceipts(p => {
-        const next = p.map(r => r.id === receiptId ? { ...r, status: 'validated' as const, lines, destinationLocation: destination } : r)
-        if (followUpReceipt) next.unshift(followUpReceipt)
-        const updated = next.find(r => r.id === receiptId)
-        if (updated) sync(`/api/receipts/${receiptId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
-        if (followUpReceipt) sync('/api/receipts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(followUpReceipt) })
-        return next
-      })
-
-      // Update PO quantities and status (receiptId already added in confirmPO)
-      setPurchaseOrders(p => {
-        const next = p.map(po => {
-          if (po.id !== receipt.poId) return po
-          const receiptIds = po.receiptIds.includes(receiptId) ? po.receiptIds : [...po.receiptIds, receiptId]
-          const newReceiptIds = followUpReceipt && !receiptIds.includes(followUpReceipt.id) ? [...receiptIds, followUpReceipt.id] : receiptIds
-          return { ...po, lines: updatedPoLines, status: allReceived ? 'received' as const : anyReceived ? 'partial' as const : po.status, receiptIds: newReceiptIds }
-        })
-        const updated = next.find(po => po.id === receipt.poId)
-        if (updated) sync(`/api/purchase-orders/${receipt.poId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
-        return next
-      })
-      // Auto-resume repair if this PO was created from a procurement request
-      if (po.repairId) {
-        const linkedRepair = repairs.find(r => r.id === po.repairId)
-        if (linkedRepair && linkedRepair.status === 'awaiting_parts') {
-          // Mark procurement request as received
-          setRepairs(prev => prev.map(r => r.id === po.repairId ? {
-            ...r,
-            procurementRequests: (r.procurementRequests ?? []).map(req =>
-              req.id === po.procurementRequestId ? { ...req, status: 'received' as const } : req
-            ),
-          } : r))
-          // Reserve parts and move repair back to approved; notify technician
-          const partLines = (linkedRepair.quote?.lines ?? []).filter(l => l.type === 'part' && l.productId)
-          partLines.forEach(line => {
-            const product = prodRef.current.find(p => p.id === line.productId)
-            if (!product) return
-            if (product.requiresSerial) {
-              const availableSerials = serialRef.current
-                .filter(s => s.productId === line.productId && s.status === 'available')
-                .slice(0, line.qty)
-              availableSerials.forEach(serial => {
-                setSerials(p => p.map(s => s.id === serial.id ? { ...s, status: 'assigned' as const, repairId: po.repairId } : s))
-              })
-            } else {
-              setProducts(p => p.map(x => x.id === line.productId ? { ...x, stockQty: Math.max(0, x.stockQty - line.qty) } : x))
-              addMove(line.productId!, line.productName ?? line.description, line.qty, 'out',
-                `Parts reserved — repair ${linkedRepair.ref}`, linkedRepair.ref, undefined, 'repair_unit')
-            }
-          })
-          const updatedQuoteLines = (linkedRepair.quote?.lines ?? []).map(l => ({
-            ...l, reserved: l.type === 'part' ? true : l.reserved,
-          }))
-          const partsUsedNow = partLines.map(line => ({
-            productId: line.productId ?? '', productName: line.productName ?? line.description,
-            qty: line.qty, price: line.unitPrice, reservedDate: now(),
-          }))
-          setRepairs(prev => prev.map(r => r.id === po.repairId ? {
-            ...r,
-            status: 'approved',
-            quote: r.quote ? { ...r.quote, lines: updatedQuoteLines } : r.quote,
-            partsUsed: partsUsedNow,
-            procurementRequests: (r.procurementRequests ?? []).map(req =>
-              req.status === 'pending' || req.status === 'ordered' ? { ...req, status: 'received' as const } : req
-            ),
-          } : r))
-          if (linkedRepair.assignedTechnicianId) {
-            pushNotif({
-              userId: linkedRepair.assignedTechnicianId, type: 'repair',
-              title: `Parts arrived — ${linkedRepair.ref} ready to start`,
-              body: `${linkedRepair.productName} · Parts received via ${receipt.ref}`,
-              module: 'repair', path: `?id=${linkedRepair.id}`, icon: '📦',
             })
+            const updatedQuoteLines = (linkedRepair.quote?.lines ?? []).map(l => ({
+              ...l, reserved: l.type === 'part' ? true : l.reserved,
+            }))
+            const partsUsedNow = partLines.map(line => ({
+              productId: line.productId ?? '', productName: line.productName ?? line.description,
+              qty: line.qty, price: line.unitPrice, reservedDate: now(),
+            }))
+            setRepairs(prev => prev.map(r => r.id === po.repairId ? {
+              ...r,
+              status: 'approved',
+              quote: r.quote ? { ...r.quote, lines: updatedQuoteLines } : r.quote,
+              partsUsed: partsUsedNow,
+              procurementRequests: (r.procurementRequests ?? []).map(req =>
+                req.status === 'pending' || req.status === 'ordered' ? { ...req, status: 'received' as const } : req
+              ),
+            } : r))
+            if (linkedRepair.assignedTechnicianId) {
+              pushNotif({
+                userId: linkedRepair.assignedTechnicianId, type: 'repair',
+                title: `Parts arrived — ${linkedRepair.ref} ready to start`,
+                body: `${linkedRepair.productName} · Parts received via ${receipt.ref}`,
+                module: 'repair', path: `?id=${linkedRepair.id}`, icon: '📦',
+              })
+            }
+            syncRepairToPortal({ ...linkedRepair, status: 'approved' }, 'Parts arrived — repair resuming')
+            addAuditLog('parts_arrived', po.repairId, `Auto-resumed via GRN ${receipt.ref} (PO ${po.ref})`)
+            showToast(`Stock received · Repair ${linkedRepair.ref} auto-resumed — technician notified`)
+            return true
           }
-          syncRepairToPortal({ ...linkedRepair, status: 'approved' }, 'Parts arrived — repair resuming')
-          addAuditLog('parts_arrived', po.repairId, `Auto-resumed via GRN ${receipt.ref} (PO ${po.ref})`)
-          showToast(`Stock received · Repair ${linkedRepair.ref} auto-resumed — technician notified`)
-        } else {
-          showToast(`Stock received · use "Create Bill" to generate the vendor invoice`)
         }
-      } else {
-        showToast(followUpReceipt ? `Stock received · ${followUpReceipt.ref} created for remaining items` : `Stock received · use "Create Bill" to generate the vendor invoice`)
+
+        showToast(payload.message || 'Stock received · use "Create Bill" to generate the vendor invoice')
+        addAuditLog('validate_receipt', receipt.ref, `Stock received from ${receipt.vendorName}`)
+        return true
+      } catch {
+        showToast('Could not validate receipt on server', 'error')
+        return false
       }
-      addAuditLog('validate_receipt', receipt.ref, `Stock received from ${receipt.vendorName}`)
     },
     deletePO: (id) => { 
       setPurchaseOrders(p => p.filter(po => po.id !== id)); 
@@ -12434,6 +12366,8 @@ const storeCtx: AppState = {
     openingStockPosted,
     purchaseOrders,
     receipts,
+    purchaseReturns,
+    returnOrders,
     contacts,
     currentUserId,
     users,
@@ -12452,6 +12386,8 @@ const storeCtx: AppState = {
     openingStockPosted,
     purchaseOrders,
     receipts,
+    purchaseReturns,
+    returnOrders,
     contacts,
     currentUserId,
     users,
