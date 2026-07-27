@@ -531,7 +531,7 @@ export const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
   accCustomerInvoices: true, accVendorBills: true, accCreditNotes: true, accVatEnabled: true,
   accBankJournals: true, accMpesaJournals: true, accReconciliation: true,
   accLockDates: true, accApprovalForRefunds: true,
-  accAdminOfficerInvoiceLimitKes: 100000,
+  accAdminOfficerInvoiceLimitKes: 1000000,
   hrAttendance: false, hrLeaves: true, hrRestrictSalaryInfo: true, hrRoleBasedVisibility: true,
   posSessionControl: true, posCashControl: true, posReceiptPrinting: true,
   secDisableProductDeletion: true, secDisableStockManipulation: true, secDisableInvoiceEditAfterValidation: true,
@@ -6370,8 +6370,8 @@ const storeCtx: AppState = {
     },
     decideSalaryAdvance: (id, approved, note) => {
       const user = currentUser()
-      if (!['director', 'finance_officer', 'admin_officer'].includes(user?.role ?? '')) {
-        showToast('Only HR or Finance approvers can review salary advances', 'error')
+      if (!['director', 'finance_officer'].includes(user?.role ?? '')) {
+        showToast('Only Finance or Director can review salary advances', 'error')
         return
       }
       const advance = salaryAdvancesRef.current.find(item => item.id === id)
@@ -6421,7 +6421,7 @@ const storeCtx: AppState = {
       const advance = salaryAdvancesRef.current.find(item => item.id === id)
       if (!advance) return
       if (advance.status !== 'pending') { showToast('Only pending advances can be cancelled', 'error'); return }
-      if (advance.createdByUserId !== user?.id && !['director', 'finance_officer', 'admin_officer'].includes(user?.role ?? '')) {
+      if (advance.createdByUserId !== user?.id && !['director', 'finance_officer'].includes(user?.role ?? '')) {
         showToast('You can only cancel your own pending advance', 'error')
         return
       }

@@ -5,7 +5,7 @@ import { writeFinancialAudit } from '@/lib/finance-audit'
 import prisma from '@/lib/prisma'
 import { toClientAdvance, toDbAdvance } from '@/lib/hr/salary-advance-store'
 
-const HR_ROLES = ['director', 'admin_officer', 'finance_officer']
+const HR_ROLES = ['director', 'finance_officer']
 const PAY_ROLES = ['director', 'finance_officer']
 
 // Salary advance lifecycle transitions. Amounts and status changes are validated

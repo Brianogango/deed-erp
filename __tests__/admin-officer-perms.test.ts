@@ -18,8 +18,8 @@ describe('hybrid finance seals', () => {
     expect(canPostOrPayCustomerInvoice({
       role: 'admin_officer',
       invoiceType: 'customer_invoice',
-      invoiceTotal: 50_000,
-      limitKes: 100_000,
+      invoiceTotal: 500_000,
+      limitKes: DEFAULT_ADMIN_OFFICER_CUSTOMER_INVOICE_LIMIT_KES,
     }).ok).toBe(true)
   })
 
@@ -27,8 +27,8 @@ describe('hybrid finance seals', () => {
     const result = canPostOrPayCustomerInvoice({
       role: 'admin_officer',
       invoiceType: 'customer_invoice',
-      invoiceTotal: 150_000,
-      limitKes: 100_000,
+      invoiceTotal: DEFAULT_ADMIN_OFFICER_CUSTOMER_INVOICE_LIMIT_KES + 1,
+      limitKes: DEFAULT_ADMIN_OFFICER_CUSTOMER_INVOICE_LIMIT_KES,
     })
     expect(result.ok).toBe(false)
     expect(result.reason).toMatch(/up to KES/)

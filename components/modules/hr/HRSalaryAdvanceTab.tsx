@@ -25,7 +25,7 @@ export default function HRSalaryAdvanceTab() {
   const { employees, departments } = useHrStore()
 
   const currentUser = users.find(user => user.id === currentUserId) ?? null
-  const isApprover = ['director', 'finance_officer', 'admin_officer'].includes(currentUser?.role ?? '')
+  const isApprover = ['director', 'finance_officer'].includes(currentUser?.role ?? '')
   const isFinance = ['director', 'finance_officer'].includes(currentUser?.role ?? '')
   const currentUsername = normalizeUserText(currentUser?.username)
   const myEmployee = employees.find(employee => {
