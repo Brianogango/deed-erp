@@ -15,11 +15,10 @@ import { guardSpreadsheetFile, guardSpreadsheetRows, SpreadsheetGuardError } fro
 import { Barcode } from '@/components/modules/Barcode'
 import { inferTrackingMethod, isSerialTracking, isStockTracked, type TrackingMethod } from '@/lib/inventory-identifiers'
 import InventoryProductsPanel from '@/components/inventory/InventoryProductsPanel'
-import VendorInventoryLedger from '@/components/inventory/VendorInventoryLedger'
 import { canValidatePurchaseReceipt } from '@/lib/inventory/permissions'
 
 type MainTab = 'warehouse_view' | 'product_master' | 'movements' | 'product_catalog' | 'opening_stock' | 'stock_in' | 'stock_out' | 'transfers' | 'adjustments' | 'stock_take' | 'reports'
-type ReportTab = 'stock_on_hand' | 'opening_closing' | 'movements' | 'serial_tracking' | 'low_stock' | 'vendor_ledger'
+type ReportTab = 'stock_on_hand' | 'opening_closing' | 'movements' | 'serial_tracking' | 'low_stock'
 const MAIN_TABS: MainTab[] = ['warehouse_view', 'product_master', 'movements', 'product_catalog', 'opening_stock', 'stock_in', 'stock_out', 'transfers', 'adjustments', 'stock_take', 'reports']
 const INVENTORY_TAB_ALIASES: Record<string, MainTab> = {
   warehouse: 'warehouse_view',
@@ -2200,7 +2199,6 @@ export default function Inventory() {
               ['movements', 'Stock Movements'],
               ['serial_tracking', 'Serial Tracking'],
               ['low_stock', 'Low Stock'],
-              ['vendor_ledger', 'Vendor Ledger'],
             ] as [ReportTab, string][]).map(([value, label]) => (
               <button type="button" key={value} onClick={() => {
                 setReportTab(value)
@@ -2217,16 +2215,11 @@ export default function Inventory() {
           </div>
 
           <div className="card p-4">
-            {reportTab !== 'vendor_ledger' && (
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <Field label="Month"><Select value={reportMonth} onChange={value => setReportMonth(value)} options={MONTH_OPTS} /></Field>
               <Field label="Category"><Select value={catFilter} onChange={value => setCatFilter(value)} options={[{ value: 'All', label: 'All categories' }, ...ALL_CATEGORIES.map(c => ({ value: c, label: c }))]} /></Field>
               <Field label="Product"><Select value={reportProductId} onChange={value => setReportProductId(value)} options={[{ value: 'All', label: 'All products' }, ...stockableProducts.map(p => ({ value: p.id, label: p.name }))]} /></Field>
             </div>
-            )}
-            {reportTab === 'vendor_ledger' && (
-              <p className="text-xs text-text-3">Vendor ledger filters are on the table toolbar below.</p>
-            )}
           </div>
 
           {reportTab === 'stock_on_hand' && (
@@ -2527,10 +2520,6 @@ export default function Inventory() {
                 perPage={20}
               />
             </div>
-          )}
-
-          {reportTab === 'vendor_ledger' && (
-            <VendorInventoryLedger />
           )}
         </div>
       )}

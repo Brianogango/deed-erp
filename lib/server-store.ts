@@ -132,10 +132,7 @@ export async function loadAppStateChangesSince(sinceUpdatedAt: string): Promise<
   }
 }
 
-export async function saveStoreKeys(
-  entries: Record<string, string>,
-  opts?: { throwOnError?: boolean },
-): Promise<void> {
+export async function saveStoreKeys(entries: Record<string, string>): Promise<void> {
   try {
     await ensureTable()
     const now = new Date().toISOString()
@@ -165,6 +162,5 @@ export async function saveStoreKeys(
     }
   } catch (err) {
     console.error('[server-store] saveStoreKeys error:', err)
-    if (opts?.throwOnError) throw err
   }
 }

@@ -517,18 +517,14 @@ export default function Purchase() {
     if (serialItems.length) printSerialLabels(serialItems)
   }
 
-  const handleValidateReceipt = async () => {
+  const handleValidateReceipt = () => {
     if (!activeReceiptId) return
     for (const line of grnLines) {
       if (line.requiresSerial && line.serials.length < line.qtyReceived) {
         showToast(`Enter all ${line.qtyReceived} serials for ${line.productName} (${line.serials.length} done)`, 'error'); return
       }
     }
-    const ok = await validateReceipt(
-      activeReceiptId, grnLines, destLocation,
-      serialAccessories, serialAccessoryNotes, serialSpecs, serialIssues,
-    )
-    if (!ok) return
+    validateReceipt(activeReceiptId, grnLines, destLocation, serialAccessories, serialAccessoryNotes, serialSpecs, serialIssues)
     setSubView('form'); setActiveReceiptId(null)
     setSerialAccessories({}); setSerialAccessoryNotes({})
     setSerialSpecs({}); setSerialIssues({})
