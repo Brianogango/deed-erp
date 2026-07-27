@@ -1,0 +1,299 @@
+import { calcStockByLocation, type BulkStockLevel, type SerialNumber, type StockProduct } from '@/lib/business-logic'
+import { inferTrackingMethod, isSerialTracking, type TrackingMethod } from '@/lib/inventory-identifiers'
+import type { LocationId } from '@/lib/store'
+
+export type StockAvailabilityFilter =
+  | 'all'
+  | 'in_stock'
+  | 'out_of_stock'
+  | 'low_stock'
+  | 'negative'
+  | 'reserved'
+
+export type ReorderFilter =
+  | 'all'
+  | 'enabled'
+  | 'disabled'
+  | 'below_level'
+  | 'required'
+
+export type OnHandQtyFilter =
+  | 'all'
+  | 'gt_zero'
+  | 'eq_zero'
+  | 'range'
+
+export interface ProductFilterState {
+  search: string
+  warehouse: LocationId | 'all'
+  category: string
+  vendorId: string
+  productType: 'all' | 'stockable' | 'service'
+  tracking: TrackingMethod | 'all'
+  reorder: ReorderFilter
+  stockAvailability: StockAvailabilityFilter
+  onHandQty: OnHandQtyFilter
+  onHandMin: string
+  onHandMax: string
+  includeArchived: boolean
+}
+
+export const EMPTY_PRODUCT_FILTERS: ProductFilterState = {
+  search: '',
+  warehouse: 'all',
+  category: 'All',
+  vendorId: 'all',
+  productType: 'all',
+  tracking: 'all',
+  reorder: 'all',
+  stockAvailability: 'all',
+  onHandQty: 'all',
+  onHandMin: '',
+  onHandMax: '',
+  includeArchived: false,
+}
+
+export interface FilterableProduct {
+  id: string
+  name: string
+  sku: string
+  barcode?: string | null
+  category: string
+  unit?: string | null
+  requiresSerial?: boolean | null
+  trackingMethod?: string | null
+  minStock: number
+  stockQty: number
+  isActive: boolean
+  parentId?: string | null
+}
+
+export interface ProductQtySnapshot {
+  onHand: number
+  available: number
+  reserved: number
+  byLocation: Record<LocationId, number>
+}
+
+export function getProductQtySnapshot(
+  product: FilterableProduct,
+  serials: SerialNumber[],
+  bulkStock: BulkStockLevel[],
+  warehouse: LocationId | 'all',
+): ProductQtySnapshot {
+  const tracking = inferTrackingMethod({
+    trackingMethod: product.trackingMethod,
+    category: product.category,
+    requiresSerial: product.requiresSerial,
+    unit: product.unit,
+  })
+  const stockProduct: StockProduct = {
+    requiresSerial: isSerialTracking(tracking) || Boolean(product.requiresSerial),
+  }
+  const byLocation = calcStockByLocation(stockProduct, serials, bulkStock, product.id)
+
+  const sellableLocations: LocationId[] = ['warehouse', 'shop', 'repair_unit']
+  const onHandAll = sellableLocations.reduce((sum, loc) => sum + (byLocation[loc] || 0), 0)
+  const onHand = warehouse === 'all' ? onHandAll : (byLocation[warehouse] || 0)
+
+  const productSerials = serials.filter(s => s.productId === product.id)
+  const availableSerials = productSerials.filter(s => {
+    if (s.status !== 'available' && s.status !== 'in_stock') return false
+    if (warehouse === 'all') return sellableLocations.includes(s.location)
+    return s.location === warehouse
+  })
+  const reservedSerials = productSerials.filter(s => {
+    if (s.status !== 'assigned') return false
+    if (warehouse === 'all') return sellableLocations.includes(s.location)
+    return s.location === warehouse
+  })
+
+  if (stockProduct.requiresSerial) {
+    return {
+      onHand,
+      available: availableSerials.length,
+      reserved: reservedSerials.length,
+      byLocation,
+    }
+  }
+
+  return {
+    onHand,
+    available: onHand,
+    reserved: 0,
+    byLocation,
+  }
+}
+
+export function productMatchesSearch(
+  product: FilterableProduct,
+  search: string,
+  serials: Array<{ productId: string; serial?: string; barcode?: string }>,
+): boolean {
+  const q = search.trim().toLowerCase()
+  if (!q) return true
+  if (product.name.toLowerCase().includes(q)) return true
+  if (product.sku.toLowerCase().includes(q)) return true
+  if ((product.barcode || '').toLowerCase().includes(q)) return true
+  return serials.some(s =>
+    s.productId === product.id && (
+      String(s.serial || '').toLowerCase().includes(q) ||
+      String(s.barcode || '').toLowerCase().includes(q)
+    ),
+  )
+}
+
+export function productMatchesFilters(args: {
+  product: FilterableProduct
+  filters: ProductFilterState
+  qty: ProductQtySnapshot
+  serials: Array<{ productId: string; serial?: string; barcode?: string }>
+  vendorProductIds?: Set<string>
+}): boolean {
+  const { product, filters, qty, serials, vendorProductIds } = args
+  if (!filters.includeArchived && !product.isActive) return false
+  if (!productMatchesSearch(product, filters.search, serials)) return false
+  if (filters.category !== 'All' && product.category !== filters.category) return false
+
+  const tracking = inferTrackingMethod({
+    trackingMethod: product.trackingMethod,
+    category: product.category,
+    requiresSerial: product.requiresSerial,
+    unit: product.unit,
+  })
+
+  if (filters.productType === 'stockable' && tracking === 'NONE') return false
+  if (filters.productType === 'service' && tracking !== 'NONE') return false
+  if (filters.tracking !== 'all' && tracking !== filters.tracking) return false
+
+  if (filters.vendorId !== 'all') {
+    if (!vendorProductIds || !vendorProductIds.has(product.id)) return false
+  }
+
+  if (filters.warehouse !== 'all' && qty.onHand <= 0 && filters.stockAvailability === 'all' && filters.onHandQty === 'all') {
+    // Keep products that exist in catalog even with zero at location unless stock filters imply otherwise —
+    // warehouse filter alone still shows the product with warehouse-scoped qty (can be 0).
+  }
+
+  const minStock = Number(product.minStock) || 0
+  const reorderEnabled = minStock > 0
+
+  switch (filters.reorder) {
+    case 'enabled':
+      if (!reorderEnabled) return false
+      break
+    case 'disabled':
+      if (reorderEnabled) return false
+      break
+    case 'below_level':
+    case 'required':
+      if (!reorderEnabled || qty.onHand >= minStock) return false
+      break
+    default:
+      break
+  }
+
+  switch (filters.stockAvailability) {
+    case 'in_stock':
+      if (qty.onHand <= 0) return false
+      break
+    case 'out_of_stock':
+      if (qty.onHand !== 0) return false
+      break
+    case 'low_stock':
+      if (!reorderEnabled || qty.onHand <= 0 || qty.onHand >= minStock) return false
+      break
+    case 'negative':
+      if (qty.onHand >= 0) return false
+      break
+    case 'reserved':
+      if (qty.reserved <= 0) return false
+      break
+    default:
+      break
+  }
+
+  if (filters.onHandQty === 'gt_zero' && qty.onHand <= 0) return false
+  if (filters.onHandQty === 'eq_zero' && qty.onHand !== 0) return false
+  if (filters.onHandQty === 'range') {
+    const min = filters.onHandMin === '' ? null : Number(filters.onHandMin)
+    const max = filters.onHandMax === '' ? null : Number(filters.onHandMax)
+    if (min !== null && !Number.isNaN(min) && qty.onHand < min) return false
+    if (max !== null && !Number.isNaN(max) && qty.onHand > max) return false
+  }
+
+  return true
+}
+
+export function collectVendorProductIds(args: {
+  vendorId: string
+  serials: Array<{ productId: string; purchaseOrderId?: string; receiptId?: string }>
+  receipts: Array<{ id: string; vendorId: string; status: string; lines: Array<{ productId: string }> }>
+  purchaseOrders: Array<{ id: string; vendorId: string; lines: Array<{ productId: string }> }>
+}): Set<string> {
+  const ids = new Set<string>()
+  if (args.vendorId === 'all') return ids
+
+  for (const po of args.purchaseOrders) {
+    if (po.vendorId !== args.vendorId) continue
+    for (const line of po.lines) ids.add(line.productId)
+  }
+  for (const receipt of args.receipts) {
+    if (receipt.vendorId !== args.vendorId) continue
+    // Prefer validated supply source for stock traceability
+    if (receipt.status !== 'validated') continue
+    for (const line of receipt.lines) ids.add(line.productId)
+  }
+  for (const serial of args.serials) {
+    if (!serial.purchaseOrderId && !serial.receiptId) continue
+    const fromPo = args.purchaseOrders.find(po => po.id === serial.purchaseOrderId)
+    if (fromPo?.vendorId === args.vendorId) ids.add(serial.productId)
+    const fromReceipt = args.receipts.find(r => r.id === serial.receiptId)
+    if (fromReceipt?.vendorId === args.vendorId) ids.add(serial.productId)
+  }
+  return ids
+}
+
+export function activeFilterChips(filters: ProductFilterState, vendorName?: string) {
+  const chips: Array<{ key: string; label: string; valueLabel: string }> = []
+  if (filters.warehouse !== 'all') {
+    chips.push({ key: 'warehouse', label: 'Warehouse', valueLabel: filters.warehouse })
+  }
+  if (filters.vendorId !== 'all') {
+    chips.push({ key: 'vendor', label: 'Vendor', valueLabel: vendorName || filters.vendorId })
+  }
+  if (filters.category !== 'All') {
+    chips.push({ key: 'category', label: 'Category', valueLabel: filters.category })
+  }
+  if (filters.productType !== 'all') {
+    chips.push({
+      key: 'productType',
+      label: 'Type',
+      valueLabel: filters.productType === 'service' ? 'Service' : 'Stockable product',
+    })
+  }
+  if (filters.tracking !== 'all') {
+    chips.push({ key: 'tracking', label: 'Tracking', valueLabel: filters.tracking })
+  }
+  if (filters.reorder !== 'all') {
+    chips.push({ key: 'reorder', label: 'Reorder', valueLabel: filters.reorder.replace(/_/g, ' ') })
+  }
+  if (filters.stockAvailability !== 'all') {
+    chips.push({
+      key: 'stockAvailability',
+      label: 'Stock',
+      valueLabel: filters.stockAvailability.replace(/_/g, ' '),
+    })
+  }
+  if (filters.onHandQty !== 'all') {
+    const range =
+      filters.onHandQty === 'range'
+        ? `${filters.onHandMin || '…'}–${filters.onHandMax || '…'}`
+        : filters.onHandQty.replace(/_/g, ' ')
+    chips.push({ key: 'onHandQty', label: 'On hand', valueLabel: range })
+  }
+  if (filters.includeArchived) {
+    chips.push({ key: 'includeArchived', label: 'Status', valueLabel: 'Including archived' })
+  }
+  return chips
+}

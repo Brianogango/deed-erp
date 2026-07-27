@@ -1,29 +1,26 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from '@/lib/auth/server'
-import { normalizePermissionRole } from '@/lib/auth/authorization'
+import { hasPermission } from '@/lib/auth/authorization'
 import { loadAppState, saveStoreKeys } from '@/lib/server-store'
 import type { SerialNumber } from '@/lib/store'
+import { appendInventoryAuditLog } from '@/lib/inventory/audit'
+import { validateSerialEdit } from '@/lib/inventory/serial-edit'
 
-const ALLOWED_ROLES = ['director', 'admin_officer', 'finance_officer', 'inventory_officer', 'technical_lead']
-
-const normalize = (value: unknown) => String(value ?? '').trim().toLowerCase()
-
-async function requireWriteRole() {
+async function requireSerialEditRole() {
   const session = await getServerSession()
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  const role = normalizePermissionRole(session.user.role)
-  const allowed = ALLOWED_ROLES.map(item => normalizePermissionRole(item)).filter(Boolean)
-  if (!role || !allowed.includes(role)) {
-    return NextResponse.json({ error: 'Forbidden — insufficient role' }, { status: 403 })
+  if (!session) return { error: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) }
+  if (!hasPermission(session.user, 'editSerialNumber')) {
+    return { error: NextResponse.json({ error: 'Forbidden — insufficient role' }, { status: 403 }) }
   }
-  return null
+  return { session }
 }
 
 async function updateSerial(request: NextRequest, id: string) {
-  const authError = await requireWriteRole()
-  if (authError) return authError
+  const auth = await requireSerialEditRole()
+  if (auth.error) return auth.error
+  const session = auth.session
 
-  const body = await request.json().catch(() => null) as Partial<SerialNumber> | null
+  const body = await request.json().catch(() => null) as (Partial<SerialNumber> & { reason?: string }) | null
   if (!body) return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
 
   const state = await loadAppState(['deed_serials'])
@@ -31,21 +28,37 @@ async function updateSerial(request: NextRequest, id: string) {
   const idx = serials.findIndex(item => item.id === id)
   if (idx === -1) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-  const next = { ...serials[idx], ...body, id }
-  const serialValue = String(next.serial ?? '').trim()
-  if (!serialValue) return NextResponse.json({ error: 'serial is required' }, { status: 422 })
+  const current = serials[idx]
+  const validated = validateSerialEdit({
+    current,
+    next: {
+      serial: body.serial ?? current.serial,
+      barcode: body.barcode ?? current.barcode,
+      specs: body.specs ?? current.specs,
+      conditionNotes: body.accessoryNotes ?? current.accessoryNotes,
+      notes: undefined,
+    },
+    existing: serials,
+    reason: body.reason,
+  })
+  if (!validated.ok) return NextResponse.json({ error: validated.error }, { status: 422 })
 
-  const serialConflict = serials.find(item => item.id !== id && normalize(item.serial) === normalize(serialValue))
-  if (serialConflict) return NextResponse.json({ error: `Serial "${serialValue}" already exists` }, { status: 422 })
-
-  const barcodeValue = String(next.barcode ?? '').trim()
-  if (barcodeValue) {
-    const barcodeConflict = serials.find(item => item.id !== id && normalize(item.barcode) === normalize(barcodeValue))
-    if (barcodeConflict) return NextResponse.json({ error: `Inventory barcode "${barcodeValue}" already exists` }, { status: 422 })
+  const next: SerialNumber = {
+    ...current,
+    serial: validated.patch.serial,
+    barcode: validated.patch.barcode || validated.patch.serial,
+    specs: validated.patch.specs,
+    accessoryNotes: validated.patch.conditionNotes,
   }
-
   serials[idx] = next
   await saveStoreKeys({ deed_serials: JSON.stringify(serials) })
+  await appendInventoryAuditLog({
+    action: 'serial_edit',
+    documentRef: next.serial,
+    details: `Serial ${current.serial} → ${next.serial} (product ${current.productId}). Reason: ${body.reason || 'n/a'}`,
+    userId: session.user.id,
+    username: session.user.username || session.user.name,
+  })
   return NextResponse.json({ item: next })
 }
 
@@ -58,14 +71,23 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
 }
 
 export async function DELETE(_: NextRequest, { params }: { params: { id: string } }) {
-  const authError = await requireWriteRole()
-  if (authError) return authError
+  const auth = await requireSerialEditRole()
+  if (auth.error) return auth.error
+  const session = auth.session
 
   const state = await loadAppState(['deed_serials'])
   const serials = Array.isArray(state.deed_serials) ? state.deed_serials as SerialNumber[] : []
+  const existing = serials.find(item => item.id === params.id)
   const filtered = serials.filter(item => item.id !== params.id)
   if (filtered.length === serials.length) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
   await saveStoreKeys({ deed_serials: JSON.stringify(filtered) })
+  await appendInventoryAuditLog({
+    action: 'serial_delete',
+    documentRef: existing?.serial || params.id,
+    details: `Deleted serial ${existing?.serial || params.id}`,
+    userId: session.user.id,
+    username: session.user.username || session.user.name,
+  })
   return NextResponse.json({ ok: true })
 }

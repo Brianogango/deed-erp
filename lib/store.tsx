@@ -1952,7 +1952,7 @@ export interface StockAdjustment {
 }
 
 const canApproveInventoryAction = (user: User | null) =>
-  !!user && ['director', 'inventory_officer', 'technical_lead'].includes(user.role)
+  !!user && ['director', 'admin_officer', 'inventory_officer', 'technical_lead'].includes(user.role)
 
 const canManageInventoryControl = (user: User | null) =>
   !!user && ['director', 'inventory_officer', 'technical_lead', 'finance_officer'].includes(user.role)
@@ -2882,6 +2882,7 @@ export type InventoryStoreState = Pick<AppState,
   | 'openingStockPosted'
   | 'purchaseOrders'
   | 'receipts'
+  | 'contacts'
   | 'currentUserId'
   | 'users'
   | 'accounts'
@@ -2892,6 +2893,7 @@ export type InventoryStoreState = Pick<AppState,
   | 'addProduct'
   | 'updateProduct'
   | 'updateProductPrice'
+  | 'updateSerial'
   | 'createTransfer'
   | 'addTransferLine'
   | 'validateTransfer'
@@ -2900,6 +2902,7 @@ export type InventoryStoreState = Pick<AppState,
   | 'getStockByLocation'
   | 'getMonthlyMovements'
   | 'showToast'
+  | 'addAuditLog'
   | 'createRefurbishmentJob'
   | 'transferToSell'
   | 'createAdjustment'
@@ -4686,6 +4689,8 @@ export function StoreProvider({
     getStockByLocation: (...args: Parameters<AppState['getStockByLocation']>) => storeCtxRef.current!.getStockByLocation(...args),
     getMonthlyMovements: (...args: Parameters<AppState['getMonthlyMovements']>) => storeCtxRef.current!.getMonthlyMovements(...args),
     showToast: (...args: Parameters<AppState['showToast']>) => storeCtxRef.current!.showToast(...args),
+    addAuditLog: (...args: Parameters<AppState['addAuditLog']>) => storeCtxRef.current!.addAuditLog(...args),
+    updateSerial: (...args: Parameters<AppState['updateSerial']>) => storeCtxRef.current!.updateSerial(...args),
     createRefurbishmentJob: (...args: Parameters<AppState['createRefurbishmentJob']>) => storeCtxRef.current!.createRefurbishmentJob(...args),
     transferToSell: (...args: Parameters<AppState['transferToSell']>) => storeCtxRef.current!.transferToSell(...args),
     createAdjustment: (...args: Parameters<AppState['createAdjustment']>) => storeCtxRef.current!.createAdjustment(...args),
@@ -12429,6 +12434,7 @@ const storeCtx: AppState = {
     openingStockPosted,
     purchaseOrders,
     receipts,
+    contacts,
     currentUserId,
     users,
     accounts,
@@ -12446,6 +12452,7 @@ const storeCtx: AppState = {
     openingStockPosted,
     purchaseOrders,
     receipts,
+    contacts,
     currentUserId,
     users,
     accounts,

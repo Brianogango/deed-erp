@@ -40,6 +40,15 @@ enum ProductType {
   @@map("product_type")
 }
 
+enum TrackingMethod {
+  NONE
+  QUANTITY
+  BATCH
+  SERIAL
+
+  @@map("tracking_method")
+}
+
 enum ConditionGrade {
   A
   B
@@ -267,6 +276,7 @@ model User {
   orcLogActions        OutboundReleaseLog[]        @relation("OrcLogActor")
   kilimallOrderProcs   KilimallOrder[]
   kilimallSyncLogs     KilimallSyncLog[]
+  labelPrintJobs       LabelPrintJob[]
 
   @@map("users")
 }
@@ -702,6 +712,7 @@ model Client {
   contactPersons   ContactPerson[]
   saleOrders       SaleOrder[]
   outboundReleases OutboundRelease[] @relation("OrcClient")
+  customerAssets   CustomerAsset[]
 
   @@index([phone], map: "idx_clients_phone")
   @@index([email], map: "idx_clients_email")
@@ -730,8 +741,9 @@ model Supplier {
   createdAt      DateTime @default(now()) @map("created_at")
   updatedAt      DateTime @updatedAt @map("updated_at")
 
-  createdBy      User?           @relation(fields: [createdById], references: [id])
-  purchaseOrders PurchaseOrder[]
+  createdBy        User?            @relation(fields: [createdById], references: [id])
+  purchaseOrders   PurchaseOrder[]
+  inventoryBatches InventoryBatch[]
 
   @@map("suppliers")
 }
@@ -782,7 +794,8 @@ model Product {
   kilimallPrice    Decimal?    @map("kilimall_price") @db.Decimal(14, 2)
   taxRateId        String?     @map("tax_rate_id") @db.Uuid
   isTaxInclusive   Boolean     @default(false) @map("is_tax_inclusive")
-  trackStock       Boolean     @default(true) @map("track_stock")
+  trackStock       Boolean         @default(true) @map("track_stock")
+  trackingMethod   TrackingMethod  @default(QUANTITY) @map("tracking_method")
   // Odoo-style invoicing policy: 'order' (Ordered Quantities) or 'delivery'
   // (Delivered Quantities). Controls when sale-order lines become invoiceable.
   invoicePolicy    String      @default("order") @map("invoice_policy") @db.VarChar(20)
@@ -818,6 +831,8 @@ model Product {
   kilimallListing    KilimallListing?
   kilimallOrderItems KilimallOrderItem[]
   saleOrderItems     SaleOrderItem[]
+  inventoryBatches   InventoryBatch[]
+  customerAssets     CustomerAsset[]
 
 
   @@index([sku], map: "idx_products_sku")
@@ -825,6 +840,7 @@ model Product {
   @@index([categoryId], map: "idx_products_category")
   @@index([brandId], map: "idx_products_brand")
   @@index([productType], map: "idx_products_type")
+  @@index([trackingMethod], map: "idx_products_tracking_method")
   @@map("products")
 }
 
@@ -845,6 +861,7 @@ model SerialNumber {
   id               String         @id @default(uuid()) @db.Uuid
   productId        String         @map("product_id") @db.Uuid
   serialNumber     String         @unique @map("serial_number") @db.VarChar(100)
+  inventoryBarcode String?        @unique @map("inventory_barcode") @db.VarChar(120)
   conditionGrade   ConditionGrade? @map("condition_grade")
   status           String         @default("in_stock") @db.VarChar(30)
   purchaseItemId   String?        @map("purchase_item_id") @db.Uuid
@@ -865,6 +882,7 @@ model SerialNumber {
   repairParts    RepairPart[]
   posItems       PosTransactionItem[]
   orcItems       OutboundReleaseItem[] @relation("SerialOrcItems")
+  customerAssets CustomerAsset[]
 
   @@index([productId], map: "idx_serials_product")
   @@index([status], map: "idx_serials_status")
@@ -903,6 +921,77 @@ model StockLevel {
   product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
 
   @@map("stock_levels")
+}
+
+// Synced from database/migrations/20260625_inventory_foundation_safe.sql
+model InventoryBatch {
+  id                String    @id @default(uuid()) @db.Uuid
+  batchNumber       String    @map("batch_number") @db.VarChar(100)
+  productId         String    @map("product_id") @db.Uuid
+  warehouseId       String    @map("warehouse_id") @db.VarChar(80)
+  locationId        String?   @map("location_id") @db.VarChar(80)
+  quantityReceived  Int       @default(0) @map("quantity_received")
+  quantityAvailable Int       @default(0) @map("quantity_available")
+  unitCost          Decimal?  @map("unit_cost") @db.Decimal(14, 2)
+  expiryDate        DateTime? @map("expiry_date") @db.Date
+  supplierId        String?   @map("supplier_id") @db.Uuid
+  purchaseOrderId   String?   @map("purchase_order_id") @db.Uuid
+  receivedLineId    String?   @map("received_line_id") @db.Uuid
+  receivedAt        DateTime  @default(now()) @map("received_at")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  product       Product            @relation(fields: [productId], references: [id], onDelete: Cascade)
+  supplier      Supplier?          @relation(fields: [supplierId], references: [id])
+  purchaseOrder PurchaseOrder?     @relation(fields: [purchaseOrderId], references: [id])
+  receivedLine  GrnItem?           @relation(fields: [receivedLineId], references: [id])
+
+  @@unique([productId, batchNumber], map: "idx_inventory_batches_product_batch")
+  @@index([warehouseId], map: "idx_inventory_batches_warehouse")
+  @@index([quantityAvailable], map: "idx_inventory_batches_qty_available")
+  @@map("inventory_batches")
+}
+
+model LabelPrintJob {
+  id        String    @id @default(uuid()) @db.Uuid
+  sourceType String   @map("source_type") @db.VarChar(50)
+  sourceId  String    @map("source_id") @db.Uuid
+  labelType String    @map("label_type") @db.VarChar(40)
+  status    String    @default("queued") @db.VarChar(20)
+  payload   Json      @default("{}")
+  createdById String? @map("created_by") @db.Uuid
+  createdAt DateTime  @default(now()) @map("created_at")
+  printedAt DateTime? @map("printed_at")
+
+  createdBy User? @relation(fields: [createdById], references: [id])
+
+  @@index([sourceType, sourceId], map: "idx_label_print_jobs_source")
+  @@index([status], map: "idx_label_print_jobs_status")
+  @@map("label_print_jobs")
+}
+
+model CustomerAsset {
+  id              String    @id @default(uuid()) @db.Uuid
+  customerId      String    @map("customer_id") @db.Uuid
+  productId       String    @map("product_id") @db.Uuid
+  inventoryItemId String    @map("inventory_item_id") @db.Uuid
+  serialNumber    String?   @map("serial_number") @db.VarChar(100)
+  saleId          String?   @map("sale_id") @db.Uuid
+  warrantyStart   DateTime? @map("warranty_start") @db.Date
+  warrantyEnd     DateTime? @map("warranty_end") @db.Date
+  status          String    @default("active") @db.VarChar(30)
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  customer      Client       @relation(fields: [customerId], references: [id])
+  product       Product      @relation(fields: [productId], references: [id])
+  inventoryItem SerialNumber @relation(fields: [inventoryItemId], references: [id])
+  sale          SaleOrder?   @relation(fields: [saleId], references: [id])
+
+  @@index([customerId], map: "idx_customer_assets_customer")
+  @@index([inventoryItemId], map: "idx_customer_assets_inventory_item")
+  @@index([saleId], map: "idx_customer_assets_sale")
+  @@map("customer_assets")
 }
 
 model StockMovement {
@@ -993,6 +1082,7 @@ model PurchaseOrder {
   items            PurchaseOrderItem[]
   grns             GoodsReceivedNote[]
   supplierPayments SupplierPayment[]
+  inventoryBatches InventoryBatch[]
 
   @@map("purchase_orders")
 }
@@ -1047,6 +1137,7 @@ model GrnItem {
   poItem  PurchaseOrderItem   @relation(fields: [poItemId], references: [id])
   product Product             @relation(fields: [productId], references: [id])
   serials SerialNumber[]      @relation("SerialGrnItem")
+  inventoryBatches InventoryBatch[]
 
   @@map("grn_items")
 }
@@ -1176,6 +1267,7 @@ model SaleOrder {
   items     SaleOrderItem[]
   invoices  Invoice[]       @relation("InvoiceSourceSaleOrder")
   deliveries DeliveryNote[] @relation("DeliveryNoteSaleOrders")
+  customerAssets CustomerAsset[]
 
   @@index([clientId], map: "idx_sale_orders_client")
   @@index([createdById], map: "idx_sale_orders_created_by")

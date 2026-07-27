@@ -14,6 +14,8 @@ import { printProductLabels, printSerialLabels } from '@/lib/product-label'
 import { guardSpreadsheetFile, guardSpreadsheetRows, SpreadsheetGuardError } from '@/lib/spreadsheet-guard'
 import { Barcode } from '@/components/modules/Barcode'
 import { inferTrackingMethod, isSerialTracking, isStockTracked, type TrackingMethod } from '@/lib/inventory-identifiers'
+import InventoryProductsPanel from '@/components/inventory/InventoryProductsPanel'
+import { canValidatePurchaseReceipt } from '@/lib/inventory/permissions'
 
 type MainTab = 'warehouse_view' | 'product_master' | 'movements' | 'product_catalog' | 'opening_stock' | 'stock_in' | 'stock_out' | 'transfers' | 'adjustments' | 'stock_take' | 'reports'
 type ReportTab = 'stock_on_hand' | 'opening_closing' | 'movements' | 'serial_tracking' | 'low_stock'
@@ -1233,181 +1235,11 @@ export default function Inventory() {
 
       {tab === 'product_master' && (
         <div className="overflow-hidden">
-          {(() => {
-            const productColumns: ColumnDef<ProductListRow>[] = [
-              {
-                key: 'product', label: 'Product details', priority: 1, width: '280px',
-                render: row => {
-                  const { product, kind, variants = [], isExpanded } = row
-                  const isVariant = kind === 'variant'
-                  const isParent = kind === 'parent'
-                  return (
-                    <div className={`flex items-center gap-3 min-w-0 group ${isParent ? 'pl-4' : ''} ${isVariant ? 'pl-6' : ''}`}>
-                      {isParent && (
-                        <span className="text-[10px] text-text-3 w-4 shrink-0">{isExpanded ? '▾' : '▸'}</span>
-                      )}
-                      {isVariant
-                        ? <span className="w-1 h-8 rounded-full bg-primary-200 shrink-0" />
-                        : <span className="w-10 h-10 rounded-2xl bg-gradient-to-br from-primary-50 to-sky-50 border border-primary-100 flex items-center justify-center text-xl shadow-sm group-hover:scale-105 transition-transform">{product.image}</span>
-                      }
-                      <div className="min-w-0">
-                        <div className={`font-extrabold text-text-1 erp-truncate group-hover:text-primary-700 transition-colors ${isVariant ? 'text-[12px]' : 'text-[13px]'}`} title={product.name}>{product.name}</div>
-                        <div className="flex items-center gap-2 mt-1 flex-wrap">
-                          {product.sku && <span className="px-2 py-0.5 rounded-md bg-slate-100 border border-slate-200 text-[10px] text-text-3 font-mono font-bold">{product.sku}</span>}
-                          {isParent && (
-                            <span className="px-2 py-0.5 rounded-full text-[9px] font-bold" style={{ background: 'var(--success-bg)', color: 'var(--success-text)', border: '1px solid #BBF7D0' }}>
-                              {variants.length} variant{variants.length !== 1 ? 's' : ''}
-                            </span>
-                          )}
-                          {isVariant && <span className="px-2 py-0.5 rounded-full text-[9px] font-bold" style={{ background: 'var(--info-bg)', color: '#4338CA' }}>Variant</span>}
-                          {orphanedVariantIds.has(product.id) && <span className="px-2 py-0.5 rounded-full bg-orange-50 text-orange-600 border border-orange-100 text-[9px] font-bold" title="Parent product is inactive or missing">Orphaned</span>}
-                          {!product.isActive && <span className="px-2 py-0.5 rounded-full bg-red-50 text-red-600 border border-red-100 text-[9px] font-bold">Inactive</span>}
-                        </div>
-                      </div>
-                    </div>
-                  )
-                },
-                accessor: row => `${row.product.name} ${row.product.sku}`,
-                exportValue: row => row.product.name,
-              },
-              {
-                key: 'category', label: 'Category', priority: 2, width: '140px',
-                render: row => <span className="inline-flex items-center px-2.5 py-1 rounded-full bg-surface border border-border-lt text-[11px] font-bold text-text-2">{row.product.category}</span>,
-                exportValue: row => row.product.category,
-              },
-              {
-                key: 'type', label: 'Type', priority: 2, width: '130px',
-                render: row => {
-                  const isStockable = !!CATEGORY_CONFIG[row.product.category]?.trackStock
-                  return <Badge status={isStockable ? 'active' : 'draft'} label={isStockable ? 'Stockable' : 'Service'} />
-                },
-                exportValue: row => CATEGORY_CONFIG[row.product.category]?.trackStock ? 'Stockable' : 'Service',
-              },
-              {
-                key: 'tracking', label: 'Tracking', priority: 2, width: '140px',
-                render: row => {
-                  const method = inferTrackingMethod({ trackingMethod: row.product.trackingMethod, category: row.product.category, requiresSerial: row.product.requiresSerial, unit: row.product.unit })
-                  return (
-                    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[10px] font-extrabold ${isSerialTracking(method) ? 'bg-indigo-50 text-indigo-700 border-indigo-100' : 'bg-slate-50 text-slate-600 border-slate-200'}`}>
-                      {method}
-                    </span>
-                  )
-                },
-                exportValue: row => inferTrackingMethod({ trackingMethod: row.product.trackingMethod, category: row.product.category, requiresSerial: row.product.requiresSerial, unit: row.product.unit }),
-              },
-              {
-                key: 'reorder', label: 'Reorder', priority: 3, width: '110px', align: 'right',
-                render: row => {
-                  const isStockable = !!CATEGORY_CONFIG[row.product.category]?.trackStock
-                  return <span className="text-xs text-text-3 font-semibold">{isStockable ? row.product.minStock : '—'}</span>
-                },
-                exportValue: row => CATEGORY_CONFIG[row.product.category]?.trackStock ? row.product.minStock : '',
-              },
-              {
-                key: 'onHand', label: 'On hand', priority: 1, width: '120px', align: 'right',
-                render: row => {
-                  const { product, kind, variants = [] } = row
-                  const isStockable = !!CATEGORY_CONFIG[product.category]?.trackStock
-                  const qty = kind === 'parent'
-                    ? product.stockQty + variants.reduce((sum, v) => sum + v.stockQty, 0)
-                    : product.stockQty
-                  const stockTone = !isStockable
-                    ? 'bg-slate-100 text-slate-500 border-slate-200'
-                    : qty <= 0 ? 'bg-red-50 text-red-700 border-red-100'
-                    : qty <= product.minStock ? 'bg-amber-50 text-amber-700 border-amber-100'
-                    : 'bg-emerald-50 text-emerald-700 border-emerald-100'
-                  return (
-                    <div className="flex flex-col items-end gap-0.5">
-                      <span className={`inline-flex justify-center min-w-[72px] px-3 py-1 rounded-full border text-xs font-extrabold ${stockTone}`}>
-                        {isStockable ? qty : 'N/A'}
-                      </span>
-                      {isStockable && kind === 'parent' && <span className="text-[9px] text-text-4">combined</span>}
-                    </div>
-                  )
-                },
-                exportValue: row => {
-                  const { product, kind, variants = [] } = row
-                  if (!CATEGORY_CONFIG[product.category]?.trackStock) return 'N/A'
-                  return kind === 'parent'
-                    ? product.stockQty + variants.reduce((sum, v) => sum + v.stockQty, 0)
-                    : product.stockQty
-                },
-              },
-            ]
-            const productRowActions = (row: ProductListRow) => (
-              <div className="flex justify-end gap-1.5">
-                <button onClick={() => { setLabelProduct(row.product); setLabelQty('1') }} title="Print product label"
-                  className="px-2 py-1.5 rounded-lg bg-slate-50 text-slate-600 border border-slate-200 text-[10px] font-extrabold hover:bg-slate-600 hover:text-white hover:border-slate-600 transition-all shadow-sm flex items-center gap-1">
-                  <Fa icon={faPrint} className="text-[9px]" />
-                </button>
-                {row.kind !== 'variant' && (
-                  <button onClick={() => openVariant(row.product)} title="Create variant"
-                    className="px-2 py-1.5 rounded-lg text-[10px] font-extrabold border transition-all shadow-sm"
-                    style={{ background: 'var(--info-bg)', color: '#4338CA', borderColor: '#C7D2FE' }}>
-                    + Variant
-                  </button>
-                )}
-                <button onClick={() => openEdit(row.product)}
-                  className="px-2.5 py-1.5 rounded-lg bg-primary-50 text-primary-700 border border-primary-100 text-[10px] font-extrabold hover:bg-primary-600 hover:text-white hover:border-primary-600 transition-all shadow-sm">Edit</button>
-              </div>
-            )
-            const productPrimaryFilters: PrimaryFilterConfig[] = [
-              {
-                key: 'category',
-                label: 'Category',
-                placeholder: 'All categories',
-                value: catFilter,
-                allValue: 'All',
-                options: [
-                  { value: 'All', label: 'All categories' },
-                  ...ALL_CATEGORIES.map(c => ({ value: c, label: c })),
-                ],
-                onChange: setCatFilter,
-              },
-            ]
-            return (
-              <TablePageLayout
-                title="Products"
-                notice={
-                  <CompactInfoNotice>
-                    Product creation defines the item only. Stock remains zero until opening stock is posted or a purchase receipt is validated.
-                  </CompactInfoNotice>
-                }
-              >
-                <DataTable
-                  tableId="inventory-products"
-                  columns={productColumns}
-                  rows={productListRows}
-                  rowKey={r => r.id}
-                  searchValue={search}
-                  onSearchChange={setSearch}
-                  searchPlaceholder="Search products by name or SKU..."
-                  clientSearch={false}
-                  primaryFilters={productPrimaryFilters}
-                  onClearFilters={() => { setSearch(''); setCatFilter('All') }}
-                  hideColumnFilters
-                  emptyMessage="No products found"
-                  exportTitle="Product Master"
-                  exportFilename="inventory-products"
-                  perPage={20}
-                  overflowActions={[
-                    { id: 'product-template', label: 'Download product template', onSelect: downloadProductTemplate },
-                    { id: 'product-import', label: 'Import products', onSelect: () => productImportRef.current?.click() },
-                  ]}
-                  rowActions={productRowActions}
-                  rowClassName={row => row.kind === 'variant' ? 'bg-[var(--bg-surface)]' : ''}
-                  onRowClick={row => {
-                    if (row.kind !== 'parent') return
-                    setCollapsedParents(prev => {
-                      const next = new Set(prev)
-                      next.has(row.product.id) ? next.delete(row.product.id) : next.add(row.product.id)
-                      return next
-                    })
-                  }}
-                />
-              </TablePageLayout>
-            )
-          })()}
+          <InventoryProductsPanel
+            orphanedVariantIds={orphanedVariantIds}
+            onEdit={product => openEdit(product)}
+            onCreateVariant={product => openVariant(product)}
+          />
         </div>
       )}
 
@@ -1796,6 +1628,11 @@ export default function Inventory() {
           <PanelHeader title="Stock In - Purchase Receipts Only" count={validatedReceipts.length} />
           <div className="px-4 py-2.5 text-[10px] sm:text-[11px] bg-amber-50/50 border-b border-amber-100 text-amber-800">
             Stock can only increase through Purchase → GRN → Inventory. No manual stock-in exists in Inventory.
+            {pendingReceipts.length > 0 && canValidatePurchaseReceipt(currentUser?.role) && (
+              <span className="block mt-1 font-bold">
+                {pendingReceipts.length} draft receipt(s) await validation in Purchase. Open Purchase → Receive to validate.
+              </span>
+            )}
           </div>
           <DataTable
             tableId="inventory-stock-in"
