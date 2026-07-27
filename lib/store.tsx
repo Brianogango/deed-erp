@@ -4298,6 +4298,13 @@ export function StoreProvider({
   const [bankAccounts, setBankAccountsState] = useLS<BankAccount[]>('deed_bankAccounts', DEFAULT_BANK_ACCOUNTS)
   const [companySettings, setCompanySettings] = useLS<CompanySettings>('deed_companySettings', DEFAULT_COMPANY_SETTINGS)
   const [systemSettings, setSystemSettings] = useLS<SystemSettings>('deed_systemSettings', DEFAULT_SYSTEM_SETTINGS)
+  // One-time bump: previous default was 100_000 with no settings UI; raise stored value to 1_000_000.
+  useEffect(() => {
+    if (systemSettings.accAdminOfficerInvoiceLimitKes === 100000) {
+      setSystemSettings(prev => ({ ...prev, accAdminOfficerInvoiceLimitKes: 1000000 }))
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
   const [bankRecons, setBankRecons]           = useLS<BankRecon[]>('deed_bankRecons', [])
   const [bankStatementLines, setBankStatementLines] = useLS<BankStatementLine[]>('deed_bankStatementLines', [])
 
