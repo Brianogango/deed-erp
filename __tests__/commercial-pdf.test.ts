@@ -77,4 +77,17 @@ describe('buildCommercialPdf', () => {
     )
     expect(doc.getNumberOfPages()).toBe(1)
   })
+
+  it.each(['Quotation', 'Pro-forma Invoice', 'Invoice'])(
+    'uses the shared branded renderer for %s downloads',
+    async title => {
+      const doc = await buildCommercialPdf(
+        { ...baseDoc, title, ref: title === 'Pro-forma Invoice' ? 'PI/2026/0001' : baseDoc.ref },
+        company,
+        banks,
+      )
+      expect(String.fromCharCode(...new Uint8Array(doc.output('arraybuffer')).slice(0, 5))).toBe('%PDF-')
+      expect(doc.getNumberOfPages()).toBe(1)
+    },
+  )
 })

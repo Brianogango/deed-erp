@@ -1,13 +1,10 @@
 'use client'
 
-// Odoo-style commercial document PDFs (quotations, sales orders, pro-forma
+// Branded commercial document PDFs (quotations, sales orders, pro-forma
 // invoices, invoices, bills) generated client-side with jsPDF. Documents
-// download as real .pdf files — never HTML.
-//
-// Layout mirrors the standard Odoo report: letterhead, customer block on the
-// right, "Title # REF" heading, date/salesperson meta, a plain line table,
-// right-aligned totals, an optional payment-communication line, the PAYMENT
-// DETAILS block, and a centered company footer with page numbers.
+// download as real .pdf files — never HTML. The visual shell intentionally
+// matches the delivery note: tri-colour brand bar, light letterhead, rounded
+// metadata/party cards, navy line-table header and compact document footer.
 
 import { jsPDF } from 'jspdf'
 import autoTable from 'jspdf-autotable'
@@ -94,77 +91,139 @@ export async function buildCommercialPdf(
   const doc = new jsPDF({ unit: 'pt', format: 'a4' })
   const currency = company.currency || 'KES'
   const rightX = PAGE_W - MARGIN
+  const contentW = PAGE_W - MARGIN * 2
   const contentBottom = PAGE_H - 70
+  const DARK_NAVY: [number, number, number] = [16, 32, 74]
+  const CYAN: [number, number, number] = [0, 174, 239]
+  const GREEN: [number, number, number] = [16, 185, 129]
+  const BORDER: [number, number, number] = [226, 232, 240]
+  const SURFACE: [number, number, number] = [248, 250, 252]
 
   const ensureRoom = (y: number, needed: number): number => {
     if (y + needed <= contentBottom) return y
     doc.addPage()
-    return MARGIN
+    return 60
   }
 
-  // ── Letterhead ──────────────────────────────────────────────────────────
-  let headerBottom = MARGIN
+  const box = (x: number, y: number, width: number, height: number, fill: [number, number, number] = [255, 255, 255]) => {
+    doc.setFillColor(...fill).setDrawColor(...BORDER).setLineWidth(0.8)
+    doc.roundedRect(x, y, width, height, 12, 12, 'FD')
+  }
+
+  // ── Delivery-note visual shell ──────────────────────────────────────────
+  // Three-segment brand bar approximates the delivery-note gradient while
+  // retaining a true vector PDF.
+  doc.setFillColor(...NAVY).rect(MARGIN, 28, contentW * 0.44, 7, 'F')
+  doc.setFillColor(...CYAN).rect(MARGIN + contentW * 0.44, 28, contentW * 0.36, 7, 'F')
+  doc.setFillColor(...GREEN).rect(MARGIN + contentW * 0.8, 28, contentW * 0.2, 7, 'F')
+  doc.setFillColor(244, 248, 252).rect(MARGIN, 35, contentW, 110, 'F')
+  doc.setDrawColor(...BORDER).setLineWidth(0.8).line(MARGIN, 145, rightX, 145)
+
   const logo = await loadLogo(company.logoUrl)
   if (logo) {
-    const maxH = 42
-    const maxW = 160
+    const maxH = 48
+    const maxW = 135
     const scale = Math.min(maxH / logo.height, maxW / logo.width)
     const w = logo.width * scale
     const h = logo.height * scale
     try {
-      doc.addImage(logo.dataUrl, 'PNG', MARGIN, MARGIN, w, h)
-      headerBottom = MARGIN + h
+      doc.addImage(logo.dataUrl, 'PNG', MARGIN + 26, 66, w, h)
     } catch {
-      doc.setFont('helvetica', 'bold').setFontSize(15).setTextColor(...NAVY)
-      doc.text(company.name, MARGIN, MARGIN + 12)
-      headerBottom = MARGIN + 16
+      doc.setFillColor(...NAVY).roundedRect(MARGIN + 26, 62, 128, 52, 12, 12, 'F')
+      doc.setFont('helvetica', 'bold').setFontSize(13).setTextColor(255, 255, 255)
+      doc.text(company.name, MARGIN + 90, 92, { align: 'center', maxWidth: 112 })
     }
   } else {
-    doc.setFont('helvetica', 'bold').setFontSize(15).setTextColor(...NAVY)
-    doc.text(company.name, MARGIN, MARGIN + 12)
-    headerBottom = MARGIN + 16
+    doc.setFillColor(...NAVY).roundedRect(MARGIN + 26, 62, 128, 52, 12, 12, 'F')
+    doc.setFont('helvetica', 'bold').setFontSize(13).setTextColor(255, 255, 255)
+    doc.text(company.name, MARGIN + 90, 92, { align: 'center', maxWidth: 112 })
   }
 
-  // ── Customer block (right) ──────────────────────────────────────────────
-  let custY = MARGIN + 8
-  doc.setFont('helvetica', 'bold').setFontSize(10).setTextColor(...TEXT)
-  doc.text(input.customerName, rightX, custY, { align: 'right' })
-  custY += 13
-  doc.setFont('helvetica', 'normal').setFontSize(9).setTextColor(...GRAY)
+  // Company identity block (right).
+  let companyY = 58
+  const companyLines = [
+    company.kraPin ? `PIN: ${company.kraPin}` : '',
+    company.name,
+    company.address,
+    [company.city, 'Kenya'].filter(Boolean).join(', '),
+    company.phone,
+    company.email,
+  ].filter(Boolean)
+  companyLines.forEach((line, index) => {
+    const isIdentity = index <= 1
+    doc.setFont('helvetica', isIdentity ? 'bold' : 'normal')
+      .setFontSize(index === 0 ? 8 : index === 1 ? 9.5 : 8)
+      .setTextColor(isIdentity ? NAVY[0] : GRAY[0], isIdentity ? NAVY[1] : GRAY[1], isIdentity ? NAVY[2] : GRAY[2])
+    doc.text(line, rightX - 26, companyY, { align: 'right' })
+    companyY += 13
+  })
+
+  // ── Title and rounded document meta ─────────────────────────────────────
+  const titleY = 183
+  doc.setFont('helvetica', 'bold').setFontSize(23).setTextColor(...TEXT)
+  doc.text(input.title.toUpperCase(), MARGIN + 26, titleY)
+
+  const metaX = rightX - 178
+  const metaY = 165
+  const metaW = 178
+  const metaRows = [
+    { label: 'NO.', value: input.ref },
+    ...(input.date ? [{ label: 'DATE', value: fmtDate(input.date) }] : []),
+    ...(input.dueDate ? [{ label: (input.dueLabel ?? 'DUE DATE').toUpperCase(), value: fmtDate(input.dueDate) }] : []),
+    ...(input.sourceRef ? [{ label: 'SOURCE', value: input.sourceRef }] : []),
+  ]
+  const metaH = Math.max(58, 18 + metaRows.length * 14)
+  box(metaX, metaY, metaW, metaH)
+  let metaTextY = metaY + 17
+  metaRows.forEach(row => {
+    doc.setFont('helvetica', 'bold').setFontSize(7).setTextColor(...GRAY)
+    doc.text(`${row.label}:`, metaX + 12, metaTextY)
+    doc.setFont('helvetica', 'normal').setFontSize(8.5).setTextColor(...TEXT)
+    doc.text(row.value, metaX + metaW - 12, metaTextY, { align: 'right', maxWidth: 104 })
+    metaTextY += 14
+  })
+
+  // ── Customer and prepared-by cards ──────────────────────────────────────
+  const partiesY = Math.max(228, metaY + metaH + 16)
+  const partyGap = 14
+  const partyW = (contentW - 52 - partyGap) / 2
+  const leftPartyX = MARGIN + 26
+  const rightPartyX = leftPartyX + partyW + partyGap
+  const partyH = 76
+  box(leftPartyX, partiesY, partyW, partyH)
+  box(rightPartyX, partiesY, partyW, partyH)
+
+  doc.setFont('helvetica', 'bold').setFontSize(7.5).setTextColor(...GRAY)
+  doc.text('CUSTOMER / BILL TO', leftPartyX + 13, partiesY + 17)
+  doc.setFont('helvetica', 'bold').setFontSize(11).setTextColor(...TEXT)
+  doc.text(input.customerName, leftPartyX + 13, partiesY + 35, { maxWidth: partyW - 26 })
+  let customerY = partiesY + 49
+  doc.setFont('helvetica', 'normal').setFontSize(8).setTextColor(...GRAY)
   if (input.customerAddress) {
-    for (const line of doc.splitTextToSize(input.customerAddress, 230) as string[]) {
-      doc.text(line, rightX, custY, { align: 'right' })
-      custY += 11
-    }
+    const lines = doc.splitTextToSize(input.customerAddress, partyW - 26) as string[]
+    doc.text(lines.slice(0, 2), leftPartyX + 13, customerY)
+    customerY += Math.min(2, lines.length) * 10
   }
-  if (input.customerTaxId) {
-    doc.text(`Tax ID: ${input.customerTaxId}`, rightX, custY, { align: 'right' })
-    custY += 11
+  if (input.customerTaxId && customerY <= partiesY + partyH - 7) {
+    doc.text(`Tax ID: ${input.customerTaxId}`, leftPartyX + 13, customerY)
   }
 
-  // ── Title ───────────────────────────────────────────────────────────────
-  let y = Math.max(headerBottom, custY) + 26
-  doc.setFont('helvetica', 'bold').setFontSize(16).setTextColor(...TEXT)
-  doc.text(`${input.title} # ${input.ref}`, MARGIN, y)
-  y += 22
-
-  // ── Meta row ────────────────────────────────────────────────────────────
-  const meta: Array<{ label: string; value: string }> = []
-  if (input.date) meta.push({ label: `${input.title === 'Quotation' ? 'Quotation' : input.title === 'Invoice' || input.title === 'Bill' ? 'Invoice' : 'Order'} Date:`, value: fmtDate(input.date) })
-  if (input.dueDate) meta.push({ label: `${input.dueLabel ?? 'Due Date'}:`, value: fmtDate(input.dueDate) })
-  if (input.salesperson) meta.push({ label: 'Salesperson:', value: input.salesperson })
-  if (input.sourceRef) meta.push({ label: 'Source:', value: input.sourceRef })
-  if (meta.length) {
-    let x = MARGIN
-    for (const item of meta) {
-      doc.setFont('helvetica', 'bold').setFontSize(8).setTextColor(...GRAY)
-      doc.text(item.label, x, y)
-      doc.setFont('helvetica', 'normal').setFontSize(9.5).setTextColor(...TEXT)
-      doc.text(item.value, x, y + 12)
-      x += Math.max(110, doc.getTextWidth(item.value) + 40)
-    }
-    y += 30
+  doc.setFont('helvetica', 'bold').setFontSize(7.5).setTextColor(...GRAY)
+  doc.text('DOCUMENT DETAILS', rightPartyX + 13, partiesY + 17)
+  let detailY = partiesY + 35
+  const detailRows = [
+    input.salesperson ? `Prepared by: ${input.salesperson}` : '',
+    input.sourceRef ? `Reference: ${input.sourceRef}` : '',
+    input.dueDate ? `${input.dueLabel ?? 'Due Date'}: ${fmtDate(input.dueDate)}` : '',
+  ].filter(Boolean)
+  doc.setFont('helvetica', 'normal').setFontSize(8.5).setTextColor(...TEXT)
+  if (detailRows.length) {
+    detailRows.slice(0, 3).forEach(row => { doc.text(row, rightPartyX + 13, detailY, { maxWidth: partyW - 26 }); detailY += 13 })
+  } else {
+    doc.text(`${input.title} ${input.ref}`, rightPartyX + 13, detailY, { maxWidth: partyW - 26 })
   }
+
+  let y = partiesY + partyH + 18
 
   // ── Line table ──────────────────────────────────────────────────────────
   const bodyRows = input.lines.map(line => {
@@ -177,72 +236,85 @@ export async function buildCommercialPdf(
     }
     return [
       line.description,
-      `${money(line.qty)} Units`,
-      money(line.unitPrice),
+      Number.isInteger(line.qty) ? String(line.qty) : money(line.qty),
+      `${currency} ${money(line.unitPrice)}`,
       line.taxRate ? `VAT (${line.taxRate}%)` : '',
-      `${money(line.subtotal)} ${currency}`,
+      `${currency} ${money(line.subtotal)}`,
     ]
   })
 
   autoTable(doc, {
     startY: y,
-    margin: { left: MARGIN, right: MARGIN, bottom: 80 },
-    head: [['DESCRIPTION', 'QUANTITY', 'UNIT PRICE', 'TAXES', 'AMOUNT']],
+    margin: { left: MARGIN + 26, right: MARGIN + 26, top: 58, bottom: 80 },
+    head: [['PRODUCT / DESCRIPTION', 'QTY', 'UNIT PRICE', 'TAX', 'AMOUNT']],
     body: bodyRows as any,
-    theme: 'plain',
-    styles: { font: 'helvetica', fontSize: 9, textColor: TEXT, cellPadding: { top: 5, bottom: 5, left: 2, right: 2 } },
-    headStyles: {
-      fontSize: 7.5,
-      fontStyle: 'bold',
-      textColor: GRAY,
-      lineWidth: { bottom: 1 },
-      lineColor: TEXT,
+    theme: 'grid',
+    styles: {
+      font: 'helvetica',
+      fontSize: 8.5,
+      textColor: TEXT,
+      cellPadding: { top: 7, bottom: 7, left: 8, right: 8 },
+      lineColor: BORDER,
+      lineWidth: 0.5,
+      overflow: 'linebreak',
     },
-    bodyStyles: { lineWidth: { bottom: 0.4 }, lineColor: [226, 232, 240] },
+    headStyles: {
+      fillColor: DARK_NAVY,
+      fontSize: 7,
+      fontStyle: 'bold',
+      textColor: [255, 255, 255],
+      lineColor: DARK_NAVY,
+      minCellHeight: 26,
+    },
+    alternateRowStyles: { fillColor: SURFACE },
     columnStyles: {
       0: { cellWidth: 'auto' },
-      1: { cellWidth: 70, halign: 'right' },
-      2: { cellWidth: 75, halign: 'right' },
-      3: { cellWidth: 65, halign: 'right' },
-      4: { cellWidth: 85, halign: 'right' },
+      1: { cellWidth: 42, halign: 'center' },
+      2: { cellWidth: 86, halign: 'right' },
+      3: { cellWidth: 55, halign: 'center' },
+      4: { cellWidth: 91, halign: 'right' },
     },
   })
 
-  y = (doc as any).lastAutoTable.finalY + 14
+  y = (doc as any).lastAutoTable.finalY + 16
 
-  // ── Totals (right-aligned) ──────────────────────────────────────────────
+  // ── Rounded totals panel ────────────────────────────────────────────────
   const taxRates = Array.from(new Set(input.lines.filter(l => l.lineType !== 'section' && (l.taxRate ?? 0) > 0).map(l => l.taxRate)))
   const vatLabel = taxRates.length === 1 ? `VAT ${taxRates[0]}%` : 'VAT'
   const totals: Array<{ label: string; value: string; bold?: boolean; rule?: boolean }> = [
-    { label: 'Untaxed Amount', value: `${money(input.subtotal)} ${currency}` },
+    { label: 'Untaxed Amount', value: `${currency} ${money(input.subtotal)}` },
   ]
-  if (input.taxTotal) totals.push({ label: vatLabel, value: `${money(input.taxTotal)} ${currency}` })
-  totals.push({ label: 'Total', value: `${money(input.total)} ${currency}`, bold: true, rule: true })
+  if (input.taxTotal) totals.push({ label: vatLabel, value: `${currency} ${money(input.taxTotal)}` })
+  totals.push({ label: 'Total', value: `${currency} ${money(input.total)}`, bold: true, rule: true })
   if (input.amountPaid && input.amountPaid > 0) {
-    totals.push({ label: 'Amount Paid', value: `- ${money(input.amountPaid)} ${currency}` })
-    totals.push({ label: 'Amount Due', value: `${money(Math.max(0, input.total - input.amountPaid))} ${currency}`, bold: true })
+    totals.push({ label: 'Amount Paid', value: `- ${currency} ${money(input.amountPaid)}` })
+    totals.push({ label: 'Amount Due', value: `${currency} ${money(Math.max(0, input.total - input.amountPaid))}`, bold: true })
   }
-  y = ensureRoom(y, totals.length * 16 + 10)
-  const totalsLabelX = PAGE_W - MARGIN - 220
+  const totalsH = totals.length * 18 + 24
+  y = ensureRoom(y, totalsH + 8)
+  const totalsX = rightX - 238
+  box(totalsX, y, 238, totalsH, [248, 250, 252])
+  let totalsY = y + 19
   for (const row of totals) {
     if (row.rule) {
-      doc.setDrawColor(...TEXT).setLineWidth(0.8)
-      doc.line(totalsLabelX, y - 10, rightX, y - 10)
+      doc.setDrawColor(...BORDER).setLineWidth(0.8)
+      doc.line(totalsX + 13, totalsY - 10, rightX - 13, totalsY - 10)
     }
-    doc.setFont('helvetica', row.bold ? 'bold' : 'normal').setFontSize(row.bold ? 10.5 : 9.5)
+    doc.setFont('helvetica', row.bold ? 'bold' : 'normal').setFontSize(row.bold ? 10 : 8.5)
     doc.setTextColor(...TEXT)
-    doc.text(row.label, totalsLabelX, y)
-    doc.text(row.value, rightX, y, { align: 'right' })
-    y += 16
+    doc.text(row.label, totalsX + 13, totalsY)
+    doc.text(row.value, rightX - 13, totalsY, { align: 'right' })
+    totalsY += 18
   }
-  y += 6
+  y += totalsH + 12
 
   // ── Payment communication ───────────────────────────────────────────────
   if (input.paymentCommunication) {
-    y = ensureRoom(y, 16)
-    doc.setFont('helvetica', 'italic').setFontSize(8.5).setTextColor(...GRAY)
-    doc.text(`Please use the following communication for your payment : ${input.ref}`, MARGIN, y)
-    y += 18
+    y = ensureRoom(y, 40)
+    box(MARGIN + 26, y, contentW - 52, 34, [239, 246, 255])
+    doc.setFont('helvetica', 'bold').setFontSize(8).setTextColor(...NAVY)
+    doc.text(`PAYMENT REFERENCE: ${input.ref}`, MARGIN + 39, y + 21)
+    y += 44
   }
 
   // ── Payment details ─────────────────────────────────────────────────────
@@ -259,27 +331,30 @@ export async function buildCommercialPdf(
     if (company.mpesaAccount) paymentLines.push(`Account number: ${company.mpesaAccount} (${currency})`)
   }
   if (paymentLines.length) {
-    y = ensureRoom(y, paymentLines.length * 11 + 20)
-    doc.setFont('helvetica', 'bold').setFontSize(8.5).setTextColor(...NAVY)
-    doc.text('PAYMENT DETAILS', MARGIN, y)
-    y += 12
-    doc.setFont('helvetica', 'normal').setFontSize(8.5).setTextColor(...TEXT)
+    const paymentH = paymentLines.length * 11 + 35
+    y = ensureRoom(y, paymentH + 8)
+    box(MARGIN + 26, y, contentW - 52, paymentH)
+    doc.setFont('helvetica', 'bold').setFontSize(7.5).setTextColor(...NAVY)
+    doc.text('PAYMENT DETAILS', MARGIN + 39, y + 18)
+    let paymentY = y + 34
+    doc.setFont('helvetica', 'normal').setFontSize(8).setTextColor(...TEXT)
     for (const line of paymentLines) {
-      doc.text(line, MARGIN, y)
-      y += 11
+      doc.text(line, MARGIN + 39, paymentY)
+      paymentY += 11
     }
-    y += 8
+    y += paymentH + 10
   }
 
   // ── Notes / terms ───────────────────────────────────────────────────────
   if (input.notes?.trim()) {
-    const wrapped = doc.splitTextToSize(input.notes.trim(), PAGE_W - MARGIN * 2) as string[]
-    y = ensureRoom(y, wrapped.length * 10 + 16)
-    doc.setFont('helvetica', 'bold').setFontSize(8.5).setTextColor(...NAVY)
-    doc.text('TERMS & CONDITIONS', MARGIN, y)
-    y += 12
-    doc.setFont('helvetica', 'normal').setFontSize(8.5).setTextColor(...GRAY)
-    doc.text(wrapped, MARGIN, y)
+    const wrapped = doc.splitTextToSize(input.notes.trim(), contentW - 78) as string[]
+    const notesH = wrapped.length * 10 + 35
+    y = ensureRoom(y, notesH)
+    box(MARGIN + 26, y, contentW - 52, notesH, SURFACE)
+    doc.setFont('helvetica', 'bold').setFontSize(7.5).setTextColor(...NAVY)
+    doc.text('TERMS & CONDITIONS', MARGIN + 39, y + 18)
+    doc.setFont('helvetica', 'normal').setFontSize(8).setTextColor(...GRAY)
+    doc.text(wrapped, MARGIN + 39, y + 34)
   }
 
   // ── Footer on every page ────────────────────────────────────────────────
@@ -292,12 +367,20 @@ export async function buildCommercialPdf(
   ].filter(Boolean).join('  ·  ')
   for (let page = 1; page <= pageCount; page++) {
     doc.setPage(page)
+    if (page > 1) {
+      doc.setFillColor(...NAVY).rect(MARGIN, 20, contentW * 0.44, 5, 'F')
+      doc.setFillColor(...CYAN).rect(MARGIN + contentW * 0.44, 20, contentW * 0.36, 5, 'F')
+      doc.setFillColor(...GREEN).rect(MARGIN + contentW * 0.8, 20, contentW * 0.2, 5, 'F')
+      doc.setFont('helvetica', 'bold').setFontSize(8).setTextColor(...NAVY)
+      doc.text(`${input.title.toUpperCase()} · ${input.ref}`, MARGIN, 41)
+    }
     doc.setDrawColor(226, 232, 240).setLineWidth(0.6)
     doc.line(MARGIN, PAGE_H - 52, rightX, PAGE_H - 52)
     doc.setFont('helvetica', 'normal').setFontSize(7.5).setTextColor(...GRAY)
     doc.text(footerLine1, PAGE_W / 2, PAGE_H - 40, { align: 'center' })
     doc.text(footerLine2, PAGE_W / 2, PAGE_H - 30, { align: 'center' })
-    doc.text(`Page: ${page} / ${pageCount}`, PAGE_W / 2, PAGE_H - 20, { align: 'center' })
+    doc.text(company.invoiceFooter || 'Please retain a copy for your records.', PAGE_W / 2, PAGE_H - 20, { align: 'center', maxWidth: contentW - 90 })
+    doc.text(`${page} / ${pageCount}`, rightX, PAGE_H - 20, { align: 'right' })
   }
 
   return doc
