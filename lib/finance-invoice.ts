@@ -100,10 +100,10 @@ export function mapDbInvoiceItemsToClientLines(
   items: Array<{
     id?: string
     description?: string | null
-    qty?: number | string | null
-    unitPrice?: number | string | null
-    taxRate?: number | string | null
-    lineSubtotal?: number | string | null
+    qty?: unknown
+    unitPrice?: unknown
+    taxRate?: unknown
+    lineSubtotal?: unknown
     productId?: string | null
   }> | null | undefined,
 ): ClientInvoiceLine[] {

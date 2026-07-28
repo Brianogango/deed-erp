@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { NextRequest } from 'next/server'
 
 const {
   mockRequireRole,
@@ -127,7 +128,7 @@ beforeEach(() => {
 
 describe('POST /api/sale-orders/:id/create-invoice', () => {
   it('returns the full client invoice including lines and pretax subtotals', async () => {
-    const res = await POST(new Request('http://localhost/api/sale-orders/' + ORDER_ID + '/create-invoice', { method: 'POST' }), {
+    const res = await POST(new NextRequest('http://localhost/api/sale-orders/' + ORDER_ID + '/create-invoice', { method: 'POST' }), {
       params: { id: ORDER_ID },
     })
     expect(res.status).toBe(200)
@@ -151,7 +152,7 @@ describe('POST /api/sale-orders/:id/create-invoice', () => {
   })
 
   it('mirrors pretax line subtotals into deed_invoices (not tax-inclusive lineTotal)', async () => {
-    await POST(new Request('http://localhost', { method: 'POST' }), { params: { id: ORDER_ID } })
+    await POST(new NextRequest('http://localhost', { method: 'POST' }), { params: { id: ORDER_ID } })
     const mirrorCall = mockSaveStoreKeys.mock.calls.find(c => c[0].deed_invoices)
     expect(mirrorCall).toBeTruthy()
     const mirrored = JSON.parse(mirrorCall![0].deed_invoices)
@@ -162,7 +163,7 @@ describe('POST /api/sale-orders/:id/create-invoice', () => {
 
   it('rejects non-sale orders', async () => {
     mockPrisma.saleOrder.findUnique.mockResolvedValue({ ...saleOrder, status: 'quotation' })
-    const res = await POST(new Request('http://localhost', { method: 'POST' }), { params: { id: ORDER_ID } })
+    const res = await POST(new NextRequest('http://localhost', { method: 'POST' }), { params: { id: ORDER_ID } })
     expect(res.status).toBe(409)
   })
 })
