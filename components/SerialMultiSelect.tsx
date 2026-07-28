@@ -90,8 +90,9 @@ export default function SerialMultiSelect({ options, maxSelectable, onAssign, di
           aria-label="Assign serial numbers"
           className="dt-anchored-menu flex w-80 flex-col"
           style={{
-            top: placement?.top ?? position.top,
-            bottom: placement?.bottom,
+            // Keep the original anchored placement. Only the panel height is
+            // constrained; the serial list scrolls while the footer remains.
+            top: position.top,
             right: position.right,
             maxHeight: placement?.maxHeight,
             overflow: 'hidden',
