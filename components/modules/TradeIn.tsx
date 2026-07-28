@@ -7,7 +7,10 @@ import {
   useAfterSalesStore, BuyBack, BuyBackLine, Donation, DonationLine, ClientExchange, ExchangeLine,
   LocationId, LOCATIONS, fmtKes, fmtDate,
 } from '@/lib/store'
+import { parseReturnSerialTokens } from '@/lib/tradein-serial-intake'
 import { Badge, Modal, Field, Input, Select, PanelHeader, SearchPicker, ModuleSkeleton, ModuleHeader, TabBar } from '@/components/ui'
+import { CustomerPickerField } from '@/components/tradein/CustomerPickerField'
+import { SerialReturnPicker } from '@/components/tradein/SerialReturnPicker'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const DEST_OPTS = (['warehouse', 'shop'] as LocationId[]).map(k => ({ value: k, label: LOCATIONS[k].name }))
@@ -77,24 +80,43 @@ function findSaleOrder(saleOrders: ReturnType<typeof useAfterSalesStore>['saleOr
   return key ? saleOrders.find(s => norm(s.ref) === key || norm(s.orderNumber) === key) : undefined
 }
 
-function parseSerialIds(raw: string, product: any, serials: ReturnType<typeof useAfterSalesStore>['serials'], qty: number, mode: 'customer_return' | 'stock_out', location?: LocationId) {
-  const tokens = raw.split(',').map(s => s.trim()).filter(Boolean)
-  const errors: string[] = []
-  if (!product?.requiresSerial) return { serialIds: [] as string[], errors }
-  if (tokens.length !== qty) errors.push(`expected ${qty} serial(s)`)
-  const serialIds: string[] = []
-  tokens.forEach(token => {
-    const serial = serials.find(s =>
-      s.productId === product.id &&
-      (norm(s.serial) === norm(token) || norm(s.id) === norm(token)) &&
-      (mode === 'customer_return'
-        ? (s.status === 'sold' || s.location === 'customer')
-        : (['available', 'refurbishment'].includes(s.status) && (!location || s.location === location)))
-    )
-    if (!serial) errors.push(`serial "${token}" not available for ${product.name}`)
-    else serialIds.push(serial.id)
+function parseSerialIds(
+  raw: string,
+  product: any,
+  serials: ReturnType<typeof useAfterSalesStore>['serials'],
+  qty: number,
+  mode: 'customer_return' | 'stock_out',
+  location?: LocationId,
+  allowIntake = false,
+) {
+  if (!product) return { serialIds: [] as string[], pendingIntake: [] as string[], errors: [] as string[] }
+  return parseReturnSerialTokens({
+    raw,
+    productId: product.id,
+    productName: product.name,
+    requiresSerial: !!product.requiresSerial,
+    qty,
+    serials,
+    mode,
+    location,
+    allowIntake,
   })
-  return { serialIds, errors }
+}
+
+function resolveIntakeSerials(
+  serialIds: string[],
+  pendingIntake: string[],
+  productId: string,
+  register: (productId: string, serialText: string, opts?: { source?: string }) => { id: string } | null,
+  source: string,
+) {
+  const ids = [...serialIds]
+  for (const token of pendingIntake) {
+    const created = register(productId, token, { source })
+    if (!created) return null
+    ids.push(created.id)
+  }
+  return ids
 }
 
 function BulkDropzone({ fileRef, onFile }: { fileRef: React.RefObject<HTMLInputElement>, onFile: (file: File) => void }) {
@@ -175,40 +197,31 @@ function RowGrid({ children }: { children: React.ReactNode }) {
 }
 
 // ── Serial picker ─────────────────────────────────────────────────────────────
-function SerialPicker({ productId, selectedIds, onAdd, onRemove, mode = 'customer_return', location }: {
+function SerialPicker({ productId, selectedIds, onAdd, onRemove, mode = 'customer_return', location, allowIntake = false, customerId, saleOrderId, intakeSource }: {
   productId: string
   selectedIds: string[]
   onAdd: (id: string) => void
   onRemove: (id: string) => void
   mode?: 'customer_return' | 'stock_out'
   location?: LocationId
+  allowIntake?: boolean
+  customerId?: string
+  saleOrderId?: string
+  intakeSource?: string
 }) {
-  const { serials } = useAfterSalesStore()
-  const available = serials.filter(s => {
-    if (s.productId !== productId) return false
-    if (mode === 'customer_return') return s.status === 'sold' || s.location === 'customer'
-    return ['available', 'refurbishment'].includes(s.status) && (!location || s.location === location)
-  })
-  const [q, setQ] = useState('')
-  const filtered = available.filter(s => s.serial.toLowerCase().includes(q.toLowerCase()))
   return (
-    <div>
-      <Input value={q} onChange={setQ} placeholder="Search serial…" />
-      <div style={{ maxHeight: 110, overflowY: 'auto', border: '1px solid var(--border-lt)', borderRadius: 8, marginTop: 4 }}>
-        {filtered.length === 0 && <p style={{ fontSize: 11, color: 'var(--text-4)', padding: '6px 12px' }}>No serials found</p>}
-        {filtered.map(s => {
-          const sel = selectedIds.includes(s.id)
-          return (
-            <div key={s.id} onClick={() => sel ? onRemove(s.id) : onAdd(s.id)}
-              style={{ display: 'flex', gap: 8, padding: '5px 10px', cursor: 'pointer', fontSize: 11, background: sel ? '#E8F3FA' : 'transparent', borderBottom: '1px solid var(--bg-muted)' }}>
-              <span style={{ flex: 1, fontFamily: 'monospace', color: 'var(--navy)' }}>{s.serial}</span>
-              <span style={{ fontSize: 9, color: 'var(--text-4)' }}>{s.status} · {s.location}</span>
-              {sel && <span style={{ color: 'var(--accent-cyan)', fontWeight: 700 }}>✓</span>}
-            </div>
-          )
-        })}
-      </div>
-    </div>
+    <SerialReturnPicker
+      productId={productId}
+      selectedIds={selectedIds}
+      onAdd={onAdd}
+      onRemove={onRemove}
+      mode={mode}
+      location={location}
+      allowIntake={allowIntake}
+      customerId={customerId}
+      saleOrderId={saleOrderId}
+      intakeSource={intakeSource}
+    />
   )
 }
 
@@ -220,7 +233,7 @@ type BBLine = { productId: string; productName: string; qty: number; condition: 
 type BuyBackBulkRow = {
   batchRef: string; customerId: string; customerName: string; originalSORef: string
   destination: LocationId; productId: string; productName: string; qty: number
-  condition: 'good'|'fair'|'poor'; unitPrice: number; serialIds: string[]
+  condition: 'good'|'fair'|'poor'; unitPrice: number; serialIds: string[]; pendingIntake: string[]
   notes: string; lineNotes: string; error?: string
 }
 
@@ -236,7 +249,7 @@ function downloadBuyBackBulkTemplate() {
 
 function BuyBackTab() {
   const { buyBacks, createBuyBack, approveBuyBack, payBuyBack, stockBuyBack, deleteBuyBack,
-    contacts, products, saleOrders, serials, users, currentUserId, showToast } = useAfterSalesStore()
+    contacts, products, saleOrders, serials, users, currentUserId, showToast, registerCustomerReturnSerial } = useAfterSalesStore()
 
   const currentRole = users.find(u => u.id === currentUserId)?.role
   const canApprove = currentRole === 'director' || currentRole === 'finance_officer'
@@ -307,7 +320,7 @@ function BuyBackTab() {
         const originalSO = findSaleOrder(saleOrders, originalSORefRaw)
         const destination = (['warehouse', 'shop'] as LocationId[]).includes(destinationRaw as LocationId) ? destinationRaw as LocationId : 'warehouse'
         const condition = (['good', 'fair', 'poor'].includes(conditionRaw) ? conditionRaw : 'good') as 'good'|'fair'|'poor'
-        const serialResult = product ? parseSerialIds(serialRaw, product, serials, qty, 'customer_return') : { serialIds: [], errors: [] }
+        const serialResult = product ? parseSerialIds(serialRaw, product, serials, qty, 'customer_return', undefined, true) : { serialIds: [], pendingIntake: [], errors: [] }
         const errors: string[] = []
         if (!customerRaw) errors.push('customer_name is required')
         if (!customer) errors.push(`customer "${customerRaw}" not found`)
@@ -321,7 +334,8 @@ function BuyBackTab() {
           batchRef, customerId: customer?.id ?? '', customerName: customer?.name ?? customerRaw,
           originalSORef: originalSO?.ref ?? originalSORefRaw, destination,
           productId: product?.id ?? '', productName: product?.name ?? productRaw,
-          qty, condition, unitPrice, serialIds: serialResult.serialIds, notes, lineNotes,
+          qty, condition, unitPrice, serialIds: serialResult.serialIds, pendingIntake: serialResult.pendingIntake,
+          notes, lineNotes,
           error: errors.length ? errors.join('; ') : undefined,
         }
       })
@@ -343,10 +357,15 @@ function BuyBackTab() {
       groups.forEach(rows => {
         const first = rows[0]
         const originalSO = findSaleOrder(saleOrders, first.originalSORef)
+        const lines = rows.map(row => {
+          const serialIds = resolveIntakeSerials(row.serialIds, row.pendingIntake, row.productId, registerCustomerReturnSerial, 'buyback-bulk')
+          if (serialIds === null) throw new Error(`Could not register intake serials for ${row.productName}`)
+          return { productId: row.productId, productName: row.productName, qty: row.qty, condition: row.condition, unitPrice: row.unitPrice, serialIds, notes: row.lineNotes }
+        })
         createBuyBack(
           first.customerId,
           first.customerName,
-          rows.map(row => ({ productId: row.productId, productName: row.productName, qty: row.qty, condition: row.condition, unitPrice: row.unitPrice, serialIds: row.serialIds, notes: row.lineNotes })),
+          lines,
           first.destination,
           first.notes || undefined,
           originalSO?.id,
@@ -356,6 +375,8 @@ function BuyBackTab() {
       })
       setShowBulk(false); resetBulk()
       showToast(`${count} buy-back${count !== 1 ? 's' : ''} imported`, 'success')
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Buy-back import failed', 'error')
     } finally {
       setBulkImporting(false)
     }
@@ -515,10 +536,12 @@ function BuyBackTab() {
           <div style={{ maxHeight: '68vh', overflowY: 'auto', paddingRight: 2 }}>
             <RowGrid>
               <Field label="Customer *">
-                <SearchPicker label="" placeholder="Search customer…"
-                  items={contacts.map(c => ({ id: c.id, name: c.name }))}
-                  onSelect={(c: { id: string; name: string }) => { setCustomerId(c.id); setCustomerName(c.name) }}
-                  renderItem={(c: { id: string; name: string }) => c.name} />
+                <CustomerPickerField
+                  customerId={customerId}
+                  customerName={customerName}
+                  onSelect={(id, name) => { setCustomerId(id); setCustomerName(name) }}
+                  onClear={() => { setCustomerId(''); setCustomerName('') }}
+                />
               </Field>
               <Field label="Original Sale Ref (optional)">
                 <Input value={originalSORef} onChange={setOriginalSORef} placeholder="e.g. SO/0087" />
@@ -541,6 +564,8 @@ function BuyBackTab() {
               </div>
               {lines.map((line, i) => (
                 <BBLineEditor key={i} line={line} products={products}
+                  customerId={customerId}
+                  saleOrderId={originalSO?.id}
                   onChange={p => updLine(i, p)}
                   onRemove={() => setLines(l => l.filter((_, idx) => idx !== i))} />
               ))}
@@ -575,25 +600,41 @@ function BuyBackTab() {
   )
 }
 
-function BBLineEditor({ line, onChange, onRemove, products }: {
+function BBLineEditor({ line, onChange, onRemove, products, customerId, saleOrderId }: {
   line: BBLine
   onChange: (patch: Partial<BBLine>) => void
   onRemove: () => void
   products: ReturnType<typeof useAfterSalesStore>['products']
+  customerId?: string
+  saleOrderId?: string
 }) {
   const [showSerials, setShowSerials] = useState(false)
   const prod = products.find(p => p.id === line.productId)
+  const productItems = useMemo(() => products.map(p => ({
+    id: p.id,
+    name: p.name,
+    sku: p.sku,
+    salePrice: p.salePrice,
+    requiresSerial: p.requiresSerial,
+  })), [products])
   return (
     <div style={{ border: '1px solid var(--border-lt)', borderRadius: 10, padding: 12, marginBottom: 8 }}>
       <div className="grid grid-cols-1 sm:grid-cols-[2fr_1fr_1fr_1fr_auto] gap-2 sm:gap-3 items-end">
         <Field label="Product">
-          <select value={line.productId} onChange={e => {
-            const p = products.find(x => x.id === e.target.value)
-            onChange({ productId: e.target.value, productName: p?.name ?? '', serialIds: [] })
-          }} className="form-select w-full">
-            <option value="">— Select —</option>
-            {products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-          </select>
+          <SearchPicker
+            label=""
+            placeholder="Search product or SKU…"
+            items={productItems}
+            selectedLabel={line.productName || undefined}
+            formatSelected={p => p.name}
+            onSelect={p => onChange({ productId: p.id, productName: p.name, serialIds: [], unitPrice: line.unitPrice || p.salePrice || 0 })}
+            renderItem={p => (
+              <div>
+                <p className="font-medium text-xs text-t1">{p.name}</p>
+                <p className="text-[10px] text-t3">{p.sku || 'No SKU'}{p.requiresSerial ? ' · serialized' : ''}</p>
+              </div>
+            )}
+          />
         </Field>
         <Field label="Condition">
           <Select value={line.condition} onChange={v => onChange({ condition: v as 'good'|'fair'|'poor' })} options={CONDITION_OPTS.map(c => ({ value: c.value, label: c.value }))} />
@@ -609,14 +650,18 @@ function BBLineEditor({ line, onChange, onRemove, products }: {
       {prod?.requiresSerial && line.productId && (
         <div style={{ marginTop: 8 }}>
           <button onClick={() => setShowSerials(s => !s)} style={{ fontSize: 10, color: 'var(--accent-cyan)', background: 'none', border: 'none', cursor: 'pointer' }}>
-            {showSerials ? '▲' : '▼'} Serials ({line.serialIds.length} selected)
+            {showSerials ? '▲' : '▼'} Serials ({line.serialIds.length}/{line.qty})
           </button>
           {showSerials && (
             <div style={{ marginTop: 6 }}>
               <SerialPicker productId={line.productId} selectedIds={line.serialIds}
                 onAdd={id => onChange({ serialIds: [...line.serialIds, id] })}
                 onRemove={id => onChange({ serialIds: line.serialIds.filter(s => s !== id) })}
-                mode="customer_return" />
+                mode="customer_return"
+                allowIntake
+                customerId={customerId}
+                saleOrderId={saleOrderId}
+                intakeSource="buyback" />
             </div>
           )}
         </div>
@@ -1076,7 +1121,7 @@ function DonationLineEditor({ line, products, donationType, location, onChange, 
 type ELine = { productId: string; productName: string; qty: number; unitPrice: number; serialIds: string[] }
 type ExchangeBulkRow = {
   batchRef: string; customerId: string; customerName: string; originalSORef: string
-  returnProductId: string; returnProductName: string; returnQty: number; returnUnitPrice: number; returnSerialIds: string[]
+  returnProductId: string; returnProductName: string; returnQty: number; returnUnitPrice: number; returnSerialIds: string[]; returnPendingIntake: string[]
   newProductId: string; newProductName: string; newQty: number; newUnitPrice: number; newSerialIds: string[]
   notes: string; error?: string
 }
@@ -1093,7 +1138,7 @@ function downloadExchangeBulkTemplate() {
 
 function ExchangeTab() {
   const { clientExchanges, createExchange, approveExchange, completeExchange, cancelExchange,
-    contacts, products, saleOrders, serials, users, currentUserId, showToast } = useAfterSalesStore()
+    contacts, products, saleOrders, serials, users, currentUserId, showToast, registerCustomerReturnSerial } = useAfterSalesStore()
 
   const currentRole = users.find(u => u.id === currentUserId)?.role
   const canApprove = currentRole === 'director' || currentRole === 'finance_officer'
@@ -1172,8 +1217,8 @@ function ExchangeTab() {
         const originalSO = findSaleOrder(saleOrders, originalSORefRaw)
         const returnProduct = findProduct(products, returnProductRaw)
         const newProduct = findProduct(products, newProductRaw)
-        const returnSerialResult = returnProduct ? parseSerialIds(returnSerialRaw, returnProduct, serials, returnQty, 'customer_return') : { serialIds: [], errors: [] }
-        const newSerialResult = newProduct ? parseSerialIds(newSerialRaw, newProduct, serials, newQty, 'stock_out', 'warehouse') : { serialIds: [], errors: [] }
+        const returnSerialResult = returnProduct ? parseSerialIds(returnSerialRaw, returnProduct, serials, returnQty, 'customer_return', undefined, true) : { serialIds: [], pendingIntake: [], errors: [] }
+        const newSerialResult = newProduct ? parseSerialIds(newSerialRaw, newProduct, serials, newQty, 'stock_out', 'warehouse') : { serialIds: [], pendingIntake: [], errors: [] }
         const errors: string[] = []
         if (!customerRaw) errors.push('customer_name is required')
         if (!customer) errors.push(`customer "${customerRaw}" not found`)
@@ -1188,7 +1233,7 @@ function ExchangeTab() {
           batchRef, customerId: customer?.id ?? '', customerName: customer?.name ?? customerRaw,
           originalSORef: originalSO?.ref ?? originalSORefRaw,
           returnProductId: returnProduct?.id ?? '', returnProductName: returnProduct?.name ?? returnProductRaw,
-          returnQty, returnUnitPrice, returnSerialIds: returnSerialResult.serialIds,
+          returnQty, returnUnitPrice, returnSerialIds: returnSerialResult.serialIds, returnPendingIntake: returnSerialResult.pendingIntake,
           newProductId: newProduct?.id ?? '', newProductName: newProduct?.name ?? newProductRaw,
           newQty, newUnitPrice, newSerialIds: newSerialResult.serialIds,
           notes, error: errors.length ? errors.join('; ') : undefined,
@@ -1212,10 +1257,15 @@ function ExchangeTab() {
       groups.forEach(rows => {
         const first = rows[0]
         const originalSO = findSaleOrder(saleOrders, first.originalSORef)
+        const returnLines = rows.map(row => {
+          const serialIds = resolveIntakeSerials(row.returnSerialIds, row.returnPendingIntake, row.returnProductId, registerCustomerReturnSerial, 'exchange-bulk')
+          if (serialIds === null) throw new Error(`Could not register return serials for ${row.returnProductName}`)
+          return { productId: row.returnProductId, productName: row.returnProductName, qty: row.returnQty, unitPrice: row.returnUnitPrice, serialIds }
+        })
         createExchange(
           first.customerId,
           first.customerName,
-          rows.map(row => ({ productId: row.returnProductId, productName: row.returnProductName, qty: row.returnQty, unitPrice: row.returnUnitPrice, serialIds: row.returnSerialIds })),
+          returnLines,
           rows.map(row => ({ productId: row.newProductId, productName: row.newProductName, qty: row.newQty, unitPrice: row.newUnitPrice, serialIds: row.newSerialIds })),
           first.notes || undefined,
           originalSO?.id,
@@ -1225,6 +1275,8 @@ function ExchangeTab() {
       })
       setShowBulk(false); resetBulk()
       showToast(`${count} trade-in exchange${count !== 1 ? 's' : ''} imported`, 'success')
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Exchange import failed', 'error')
     } finally {
       setBulkImporting(false)
     }
@@ -1391,10 +1443,12 @@ function ExchangeTab() {
           <div style={{ maxHeight: '70vh', overflowY: 'auto', paddingRight: 2 }}>
             <RowGrid>
               <Field label="Customer *">
-                <SearchPicker label="" placeholder="Search customer…"
-                  items={contacts.map(c => ({ id: c.id, name: c.name }))}
-                  onSelect={(c: { id: string; name: string }) => { setCustomerId(c.id); setCustomerName(c.name) }}
-                  renderItem={(c: { id: string; name: string }) => c.name} />
+                <CustomerPickerField
+                  customerId={customerId}
+                  customerName={customerName}
+                  onSelect={(id, name) => { setCustomerId(id); setCustomerName(name) }}
+                  onClear={() => { setCustomerId(''); setCustomerName('') }}
+                />
               </Field>
               <Field label="Original Sale Ref (optional)">
                 <Input value={originalSORef} onChange={setOriginalSORef} placeholder="e.g. SO/0087" />
@@ -1412,6 +1466,8 @@ function ExchangeTab() {
               </div>
               {returnLines.map((line, i) => (
                 <ELineEditor key={i} line={line} products={products}
+                  customerId={customerId}
+                  saleOrderId={originalSO?.id}
                   onChange={p => setReturnLines(l => l.map((x, idx) => idx === i ? { ...x, ...p } : x))}
                   onRemove={() => setReturnLines(l => l.filter((_, idx) => idx !== i))}
                   mode="customer_return" />
@@ -1453,27 +1509,43 @@ function ExchangeTab() {
   )
 }
 
-function ELineEditor({ line, onChange, onRemove, products, mode = 'customer_return', location }: {
+function ELineEditor({ line, onChange, onRemove, products, mode = 'customer_return', location, customerId, saleOrderId }: {
   line: ELine
   onChange: (patch: Partial<ELine>) => void
   onRemove: () => void
   products: ReturnType<typeof useAfterSalesStore>['products']
   mode?: 'customer_return' | 'stock_out'
   location?: LocationId
+  customerId?: string
+  saleOrderId?: string
 }) {
   const [showSerials, setShowSerials] = useState(false)
   const product = products.find(p => p.id === line.productId)
+  const productItems = useMemo(() => products.map(p => ({
+    id: p.id,
+    name: p.name,
+    sku: p.sku,
+    salePrice: p.salePrice,
+    requiresSerial: p.requiresSerial,
+  })), [products])
   return (
     <div style={{ border: '1px solid var(--border-lt)', borderRadius: 10, padding: 10, marginBottom: 8 }}>
       <div className="grid grid-cols-1 sm:grid-cols-[2fr_1fr_1fr_auto] gap-2 sm:gap-3 items-end">
         <Field label="Product">
-          <select value={line.productId} onChange={e => {
-            const p = products.find(x => x.id === e.target.value)
-            onChange({ productId: e.target.value, productName: p?.name ?? '', unitPrice: p?.salePrice ?? 0, serialIds: [] })
-          }} className="form-select w-full">
-            <option value="">— Select —</option>
-            {products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-          </select>
+          <SearchPicker
+            label=""
+            placeholder="Search product or SKU…"
+            items={productItems}
+            selectedLabel={line.productName || undefined}
+            formatSelected={p => p.name}
+            onSelect={p => onChange({ productId: p.id, productName: p.name, unitPrice: p.salePrice ?? 0, serialIds: [] })}
+            renderItem={p => (
+              <div>
+                <p className="font-medium text-xs text-t1">{p.name}</p>
+                <p className="text-[10px] text-t3">{p.sku || 'No SKU'}{p.requiresSerial ? ' · serialized' : ''}</p>
+              </div>
+            )}
+          />
         </Field>
         <Field label="Qty">
           <Input type="number" value={String(line.qty)} onChange={v => onChange({ qty: Number(v) })} />
@@ -1497,6 +1569,10 @@ function ELineEditor({ line, onChange, onRemove, products, mode = 'customer_retu
                 onRemove={id => onChange({ serialIds: line.serialIds.filter(s => s !== id) })}
                 mode={mode}
                 location={location}
+                allowIntake={mode === 'customer_return'}
+                customerId={customerId}
+                saleOrderId={saleOrderId}
+                intakeSource="exchange"
               />
             </div>
           )}

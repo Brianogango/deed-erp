@@ -1280,7 +1280,9 @@ export function SearchPicker<T extends { id: string }>({
   onSelect,
   renderItem,
   onCreateNew,
-  createNewLabels = { title: 'Create New', subtitle: 'Not found? Add it now' }
+  createNewLabels = { title: 'Create New', subtitle: 'Not found? Add it now' },
+  formatSelected,
+  selectedLabel,
 }: {
   label: string
   placeholder: string
@@ -1289,11 +1291,24 @@ export function SearchPicker<T extends { id: string }>({
   renderItem: (item: T) => ReactNode
   onCreateNew?: (query: string) => void
   createNewLabels?: { title: string; subtitle: string }
+  /** When set, keeps this label in the input after select instead of clearing. */
+  formatSelected?: (item: T) => string
+  /** Controlled display label when the parent already has a selection (e.g. after remount). */
+  selectedLabel?: string
 }) {
-  const [query, setQuery] = useState('')
+  const [query, setQuery] = useState(selectedLabel ?? '')
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
   const inputId = useId()
+  const prevSelected = useRef(selectedLabel)
+
+  useEffect(() => {
+    if (selectedLabel !== prevSelected.current) {
+      prevSelected.current = selectedLabel
+      if (selectedLabel && !open) setQuery(selectedLabel)
+      if (!selectedLabel) setQuery('')
+    }
+  }, [selectedLabel, open])
 
   const filtered = items.filter(item =>
     JSON.stringify(item).toLowerCase().includes(query.toLowerCase())
@@ -1346,7 +1361,7 @@ export function SearchPicker<T extends { id: string }>({
               onClick={() => {
                 onCreateNew(query)
                 setOpen(false)
-                setQuery('')
+                setQuery(query)
               }}
             >
               <div className="flex items-center gap-3">
@@ -1367,7 +1382,7 @@ export function SearchPicker<T extends { id: string }>({
               onClick={() => {
                 onSelect(item)
                 setOpen(false)
-                setQuery('')
+                setQuery(formatSelected ? formatSelected(item) : '')
               }}
             >
               {renderItem(item)}
