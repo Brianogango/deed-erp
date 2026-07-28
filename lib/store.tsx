@@ -2896,6 +2896,12 @@ export interface AppState {
   payBuyBack: (id: string, paymentMethod: BuyBack['paymentMethod']) => void
   stockBuyBack: (id: string) => void
   deleteBuyBack: (id: string) => void
+  /** Register a serial that is not yet in Deed for a customer return / buyback / exchange / RMA. */
+  registerCustomerReturnSerial: (
+    productId: string,
+    serialText: string,
+    opts?: { saleOrderId?: string; source?: string },
+  ) => SerialNumber | null
 
   // Donations
   donations: Donation[]
@@ -3263,6 +3269,7 @@ export type AfterSalesStoreState = Pick<AppState,
   | 'serials'
   | 'users'
   | 'warranties'
+  | 'addContact'
   | 'approveBuyBack'
   | 'approveExchange'
   | 'approveReturn'
@@ -3278,6 +3285,7 @@ export type AfterSalesStoreState = Pick<AppState,
   | 'payBuyBack'
   | 'processReturn'
   | 'receiveReturn'
+  | 'registerCustomerReturnSerial'
   | 'rejectReturn'
   | 'showToast'
   | 'stockBuyBack'
@@ -4933,6 +4941,7 @@ export function StoreProvider({
   }), [])
 
   const afterSalesActions = useMemo(() => ({
+    addContact: (...args: Parameters<AppState['addContact']>) => storeCtxRef.current!.addContact(...args),
     approveBuyBack: (...args: Parameters<AppState['approveBuyBack']>) => storeCtxRef.current!.approveBuyBack(...args),
     approveExchange: (...args: Parameters<AppState['approveExchange']>) => storeCtxRef.current!.approveExchange(...args),
     approveReturn: (...args: Parameters<AppState['approveReturn']>) => storeCtxRef.current!.approveReturn(...args),
@@ -4948,6 +4957,7 @@ export function StoreProvider({
     payBuyBack: (...args: Parameters<AppState['payBuyBack']>) => storeCtxRef.current!.payBuyBack(...args),
     processReturn: (...args: Parameters<AppState['processReturn']>) => storeCtxRef.current!.processReturn(...args),
     receiveReturn: (...args: Parameters<AppState['receiveReturn']>) => storeCtxRef.current!.receiveReturn(...args),
+    registerCustomerReturnSerial: (...args: Parameters<AppState['registerCustomerReturnSerial']>) => storeCtxRef.current!.registerCustomerReturnSerial(...args),
     rejectReturn: (...args: Parameters<AppState['rejectReturn']>) => storeCtxRef.current!.rejectReturn(...args),
     showToast: (...args: Parameters<AppState['showToast']>) => storeCtxRef.current!.showToast(...args),
     stockBuyBack: (...args: Parameters<AppState['stockBuyBack']>) => storeCtxRef.current!.stockBuyBack(...args),
@@ -12297,6 +12307,15 @@ const storeCtx: AppState = {
     returnOrders, refundPayments,
 
     createReturnOrder: (saleOrderId, saleOrderRef, customerId, customerName, reason, lines) => {
+      for (const line of lines) {
+        const product = prodRef.current.find(p => p.id === line.productId)
+        if (!product) { showToast(`Product not found: ${line.productName || line.productId}`, 'error'); throw new Error('Invalid return product') }
+        if (line.qty <= 0) { showToast(`Quantity must be greater than zero for ${product.name}`, 'error'); throw new Error('Invalid return quantity') }
+        if (product.requiresSerial && line.serialIds.length !== line.qty) {
+          showToast(`Select ${line.qty} returned serial number(s) for ${product.name}`, 'error')
+          throw new Error('Missing return serials')
+        }
+      }
       const order: ReturnOrder = {
         id: uid(), ref: seq('RMA', 'rma'),
         saleOrderId, saleOrderRef, customerId, customerName,
@@ -12319,17 +12338,36 @@ const storeCtx: AppState = {
 
     receiveReturn: (id) => {
       const ro = returnOrders.find(r => r.id === id)
-      setReturnOrders(p => p.map(r => r.id === id ? { ...r, status: 'received', receivedDate: now() } : r))
-      if (ro) {
-        ro.lines.forEach(line => {
-          line.serialIds.forEach(sid => {
-            setSerials(p => p.map(s => s.id === sid
-              ? { ...s, status: 'returned', location: 'warehouse' as LocationId }
-              : s
-            ))
-          })
-        })
+      if (!ro) return
+      if (ro.status !== 'approved') { showToast('Approve the return before receiving items', 'error'); return }
+      for (const line of ro.lines) {
+        const product = prodRef.current.find(p => p.id === line.productId)
+        if (!product) { showToast(`Product not found: ${line.productName}`, 'error'); return }
+        if (product.requiresSerial && line.serialIds.length !== line.qty) {
+          showToast(`Select ${line.qty} returned serial number(s) for ${line.productName}`, 'error'); return
+        }
+        for (const sid of line.serialIds) {
+          if (!serialRef.current.find(s => s.id === sid)) {
+            showToast(`Serial missing for ${line.productName} — re-select returned serials`, 'error'); return
+          }
+        }
       }
+      setReturnOrders(p => p.map(r => r.id === id ? { ...r, status: 'received', receivedDate: now() } : r))
+      ro.lines.forEach(line => {
+        line.serialIds.forEach(sid => {
+          setSerials(p => p.map(s => s.id === sid
+            ? { ...s, status: 'returned', location: 'warehouse' as LocationId }
+            : s
+          ))
+        })
+        if (line.serialIds.length === 0) {
+          setProducts(p => p.map(x => x.id === line.productId ? { ...x, stockQty: x.stockQty + line.qty } : x))
+          setBulkStock(prev => upsertBulkStock(prev, line.productId, 'warehouse', line.qty))
+        } else {
+          setProducts(p => p.map(x => x.id === line.productId ? { ...x, stockQty: x.stockQty + line.qty } : x))
+        }
+      })
+      addAuditLog('rma_receive', ro.ref, `Received return ${ro.ref} for ${ro.customerName}`)
       showToast('Return received — items back in warehouse')
     },
 
@@ -12392,6 +12430,45 @@ const storeCtx: AppState = {
 
     // ── Buy-backs ─────────────────────────────────────────────────────────────
     buyBacks,
+
+    registerCustomerReturnSerial: (productId, serialText, opts) => {
+      const product = prodRef.current.find(p => p.id === productId)
+      if (!product) { showToast('Product not found', 'error'); return null }
+      const serial = String(serialText ?? '').trim()
+      if (!serial) { showToast('Enter a serial number', 'error'); return null }
+      const key = serial.toLowerCase()
+      const existing = serialRef.current.find(s => s.productId === productId && s.serial.toLowerCase() === key)
+      if (existing) {
+        if (existing.status === 'sold' || existing.location === 'customer') {
+          showToast(`Serial ${existing.serial} is already on file — select it from sold stock`, 'info')
+          return existing
+        }
+        showToast(`Serial ${existing.serial} already exists (${existing.status})`, 'error')
+        return null
+      }
+      const newSerial: SerialNumber = {
+        id: uid(),
+        serial,
+        productId,
+        productName: product.name,
+        sku: product.sku,
+        location: 'customer',
+        status: 'sold',
+        saleOrderId: opts?.saleOrderId,
+        receivedDate: now(),
+        soldDate: now(),
+        barcode: buildInventoryBarcodeForProduct(productId, serial),
+      }
+      setSerials(p => [...p, newSerial])
+      sync('/api/serials', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(newSerial) })
+      addAuditLog(
+        'serial_return_intake',
+        newSerial.serial,
+        `Registered return serial for ${product.name} via ${opts?.source ?? 'trade-in'}`,
+      )
+      showToast(`Serial ${serial} registered for return`, 'success')
+      return newSerial
+    },
 
     createBuyBack: (customerId, customerName, lines, destination, notes, originalSOId, originalSORef) => {
       for (const line of lines) {
@@ -12463,9 +12540,13 @@ const storeCtx: AppState = {
         if (product.requiresSerial && line.serialIds.length !== line.qty) {
           showToast(`Select ${line.qty} serial number(s) for ${line.productName}`, 'error'); return
         }
+        for (const sid of line.serialIds) {
+          if (!serialRef.current.find(s => s.id === sid)) {
+            showToast(`Serial missing for ${line.productName} — re-select or register returned serials`, 'error'); return
+          }
+        }
       }
       bb.lines.forEach(line => {
-        const product = prodRef.current.find(p => p.id === line.productId)
         // Restore serials — good/fair → available, poor → refurbishment
         line.serialIds.forEach(sid => {
           setSerials(p => p.map(s => s.id === sid
@@ -12483,6 +12564,7 @@ const storeCtx: AppState = {
         addMove(line.productId, line.productName, line.qty, 'in', `Buy-back ${bb.ref}`, bb.ref, 'customer', bb.destinationLocation, line.serialIds.map(id => serialRef.current.find(s => s.id === id)?.serial ?? id))
       })
       setBuyBacks(p => p.map(b => b.id === id ? { ...b, status: 'stocked', stockedDate: now(), stockedByName: user.name } : b))
+      addAuditLog('buyback_stock', bb.ref, `Stocked buy-back ${bb.ref} for ${bb.customerName}`)
       showToast(`${bb.ref} stocked — inventory updated`)
     },
 
@@ -12666,6 +12748,7 @@ const storeCtx: AppState = {
       })
 
       setClientExchanges(p => p.map(e => e.id === id ? { ...e, status: 'completed', completedDate: now(), completedByName: user.name } : e))
+      addAuditLog('exchange_complete', exc.ref, `Completed exchange ${exc.ref} for ${exc.customerName}`)
       showToast(`Exchange ${exc.ref} completed — stock updated`)
     },
 

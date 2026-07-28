@@ -11,6 +11,7 @@ import { DataTable, type ColumnDef } from '@/components/data-table'
 import { Fa } from '@/components/icons'
 import { faShield, faRotateLeft, faPlus } from '@fortawesome/free-solid-svg-icons'
 import TradeIn from './TradeIn'
+import { SerialReturnPicker } from '@/components/tradein/SerialReturnPicker'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -169,18 +170,32 @@ export default function AfterSales() {
     if (!matchedSO || !rmaReason.trim() || rmaLines.length === 0) {
       showToast('Fill in all required fields', 'error'); return
     }
+    for (const line of rmaLines) {
+      if (!line.productId) { showToast('Each return line needs a product', 'error'); return }
+      const product = products.find(p => p.id === line.productId)
+      const qty = Number(line.qty) || 0
+      if (qty <= 0) { showToast(`Quantity must be greater than zero for ${line.productName || 'item'}`, 'error'); return }
+      if (product?.requiresSerial && line.serialIds.length !== qty) {
+        showToast(`Select ${qty} returned serial number(s) for ${product.name}`, 'error')
+        return
+      }
+    }
     const lines = rmaLines.map(l => ({
       productId: l.productId, productName: l.productName,
       qty: Number(l.qty) || 1, serialIds: l.serialIds,
       condition: l.condition, reason: l.reason,
     }))
-    const order = createReturnOrder(
-      matchedSO.id, matchedSO.ref,
-      matchedSO.customerId, matchedSO.customerName,
-      rmaReason, lines
-    )
-    setShowCreateRMA(false)
-    setSelectedRMA(order)
+    try {
+      const order = createReturnOrder(
+        matchedSO.id, matchedSO.ref,
+        matchedSO.customerId, matchedSO.customerName,
+        rmaReason, lines
+      )
+      setShowCreateRMA(false)
+      setSelectedRMA(order)
+    } catch {
+      /* store toast */
+    }
   }
 
   function handleProcess() {
@@ -382,7 +397,11 @@ export default function AfterSales() {
                   <div className="flex-1">
                     <p className="font-semibold text-t1">{line.productName}</p>
                     <p className="text-[10px] text-t3">Qty: {line.qty} · Condition: <span className="font-medium capitalize">{line.condition}</span></p>
-                    {line.serialIds.length > 0 && <p className="text-[10px] font-mono text-t3">{line.serialIds.join(', ')}</p>}
+                    {line.serialIds.length > 0 && (
+                      <p className="text-[10px] font-mono text-t3">
+                        {line.serialIds.map(id => serials.find(s => s.id === id)?.serial ?? id).join(', ')}
+                      </p>
+                    )}
                   </div>
                   <p className="text-[11px] text-t2">{line.reason}</p>
                 </div>
@@ -712,7 +731,9 @@ export default function AfterSales() {
                   )}
                 </div>
                 <div className="space-y-2">
-                  {rmaLines.map((line, i) => (
+                  {rmaLines.map((line, i) => {
+                    const product = products.find(p => p.id === line.productId)
+                    return (
                     <div key={i} className="rounded-lg p-3 space-y-2" style={{ background: 'var(--bg-surface)', border: '1px solid var(--bg-muted)' }}>
                       <div className="grid grid-cols-2 gap-2">
                         <div>
@@ -721,7 +742,7 @@ export default function AfterSales() {
                             value={line.productId}
                             onChange={e => {
                               const p = products.find(p => p.id === e.target.value)
-                              setRmaLines(prev => prev.map((l, j) => j === i ? { ...l, productId: e.target.value, productName: p?.name ?? '' } : l))
+                              setRmaLines(prev => prev.map((l, j) => j === i ? { ...l, productId: e.target.value, productName: p?.name ?? '', serialIds: [] } : l))
                             }}>
                             <option value="">Select product…</option>
                             {(matchedSO?.lines ?? []).map(sl => (
@@ -740,18 +761,50 @@ export default function AfterSales() {
                           </select>
                         </div>
                       </div>
-                      <div>
-                        <label className="text-[9px] text-t3 block mb-0.5">Item Reason</label>
-                        <input aria-label={`Reason for return item ${i + 1}`} className="form-input w-full text-[11px]" placeholder="e.g. Screen cracked, Not turning on"
-                          value={line.reason}
-                          onChange={e => setRmaLines(prev => prev.map((l, j) => j === i ? { ...l, reason: e.target.value } : l))} />
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="text-[9px] text-t3 block mb-0.5">Qty</label>
+                          <input
+                            aria-label={`Qty for return item ${i + 1}`}
+                            className="form-input w-full text-[11px]"
+                            type="number"
+                            min={1}
+                            value={line.qty}
+                            onChange={e => setRmaLines(prev => prev.map((l, j) => j === i ? { ...l, qty: e.target.value } : l))}
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[9px] text-t3 block mb-0.5">Item Reason</label>
+                          <input aria-label={`Reason for return item ${i + 1}`} className="form-input w-full text-[11px]" placeholder="e.g. Screen cracked"
+                            value={line.reason}
+                            onChange={e => setRmaLines(prev => prev.map((l, j) => j === i ? { ...l, reason: e.target.value } : l))} />
+                        </div>
                       </div>
+                      {product?.requiresSerial && line.productId && (
+                        <div>
+                          <label className="text-[9px] text-t3 block mb-1">
+                            Returned serials ({line.serialIds.length}/{Number(line.qty) || 1})
+                          </label>
+                          <SerialReturnPicker
+                            productId={line.productId}
+                            selectedIds={line.serialIds}
+                            onAdd={id => setRmaLines(prev => prev.map((l, j) => j === i ? { ...l, serialIds: [...l.serialIds, id] } : l))}
+                            onRemove={id => setRmaLines(prev => prev.map((l, j) => j === i ? { ...l, serialIds: l.serialIds.filter(s => s !== id) } : l))}
+                            mode="customer_return"
+                            allowIntake
+                            customerId={matchedSO?.customerId}
+                            saleOrderId={matchedSO?.id}
+                            intakeSource="rma"
+                          />
+                        </div>
+                      )}
                       <button onClick={() => setRmaLines(prev => prev.filter((_, j) => j !== i))}
                         style={{ fontSize: 10, color: 'var(--danger)', background: 'none', border: 'none', cursor: 'pointer' }}>
                         Remove
                       </button>
                     </div>
-                  ))}
+                    )
+                  })}
                   {rmaLines.length === 0 && matchedSO && (
                     <p className="text-[11px] text-t3 text-center py-2">Click "+ Add Item" to add return lines</p>
                   )}
