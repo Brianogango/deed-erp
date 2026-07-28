@@ -8310,9 +8310,24 @@ const storeCtx: AppState = {
       setStockReservations(prev => prev.map(r =>
         r.referenceId === id && r.status === 'reserved' ? { ...r, status: 'cancelled' as const } : r
       ))
+      // Release SO-picked serials back to available (same as cancel) so Available stock recovers.
+      const allSerialIds = so.lines.flatMap((l: any) => l.serialIds ?? [])
+      if (allSerialIds.length > 0) {
+        setSerials(p => p.map(s => allSerialIds.includes(s.id) ? { ...s, status: 'available', saleOrderId: undefined } : s))
+      }
       setSaleOrders(p => p.map(s => {
         if (s.id !== id) return s;
-        const updated = { ...s, status: 'quotation' as const, savedAt: undefined, deliveryId: undefined, locked: undefined, confirmedAt: undefined, confirmedById: undefined, confirmedByName: undefined }
+        const updated = {
+          ...s,
+          status: 'quotation' as const,
+          savedAt: undefined,
+          deliveryId: undefined,
+          locked: undefined,
+          confirmedAt: undefined,
+          confirmedById: undefined,
+          confirmedByName: undefined,
+          lines: s.lines.map((l: any) => ({ ...l, serialIds: [] })),
+        }
         sync(`/api/sale-orders/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...updated, locked: false, confirmedAt: null }) })
         return updated
       }))

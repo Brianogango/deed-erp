@@ -71,8 +71,20 @@ export interface FilterableProduct {
 export interface ProductQtySnapshot {
   onHand: number
   available: number
+  /** Serials with status `assigned` (SO pick / repair part hold). */
   reserved: number
+  /** Serials in refurbishment at sellable locations. */
+  refurbishment: number
+  /** Serials under repair at sellable locations. */
+  underRepair: number
+  /** onHand − available (= reserved + refurbishment + underRepair for serials). */
+  held: number
   byLocation: Record<LocationId, number>
+}
+
+function inWarehouseScope(location: LocationId, warehouse: LocationId | 'all', sellable: LocationId[]) {
+  if (warehouse === 'all') return sellable.includes(location)
+  return location === warehouse
 }
 
 export function getProductQtySnapshot(
@@ -97,22 +109,32 @@ export function getProductQtySnapshot(
   const onHand = warehouse === 'all' ? onHandAll : (byLocation[warehouse] || 0)
 
   const productSerials = serials.filter(s => s.productId === product.id)
-  const availableSerials = productSerials.filter(s => {
-    if (s.status !== 'available' && s.status !== 'in_stock') return false
-    if (warehouse === 'all') return sellableLocations.includes(s.location)
-    return s.location === warehouse
-  })
-  const reservedSerials = productSerials.filter(s => {
-    if (s.status !== 'assigned') return false
-    if (warehouse === 'all') return sellableLocations.includes(s.location)
-    return s.location === warehouse
-  })
+  const availableSerials = productSerials.filter(s =>
+    (s.status === 'available' || s.status === 'in_stock') &&
+    inWarehouseScope(s.location, warehouse, sellableLocations),
+  )
+  const reservedSerials = productSerials.filter(s =>
+    s.status === 'assigned' && inWarehouseScope(s.location, warehouse, sellableLocations),
+  )
+  const refurbSerials = productSerials.filter(s =>
+    s.status === 'refurbishment' && inWarehouseScope(s.location, warehouse, sellableLocations),
+  )
+  const underRepairSerials = productSerials.filter(s =>
+    s.status === 'under_repair' && inWarehouseScope(s.location, warehouse, sellableLocations),
+  )
 
   if (stockProduct.requiresSerial) {
+    const available = availableSerials.length
+    const reserved = reservedSerials.length
+    const refurbishment = refurbSerials.length
+    const underRepair = underRepairSerials.length
     return {
       onHand,
-      available: availableSerials.length,
-      reserved: reservedSerials.length,
+      available,
+      reserved,
+      refurbishment,
+      underRepair,
+      held: Math.max(0, onHand - available),
       byLocation,
     }
   }
@@ -121,6 +143,9 @@ export function getProductQtySnapshot(
     onHand,
     available: onHand,
     reserved: 0,
+    refurbishment: 0,
+    underRepair: 0,
+    held: 0,
     byLocation,
   }
 }
@@ -207,7 +232,8 @@ export function productMatchesFilters(args: {
       if (qty.onHand >= 0) return false
       break
     case 'reserved':
-      if (qty.reserved <= 0) return false
+      // "Reserved stock" filter = any held (not free) units: SO pick, refurb, or repair.
+      if (qty.held <= 0) return false
       break
     default:
       break

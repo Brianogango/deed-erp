@@ -29,14 +29,35 @@ export default function SerialManageDrawer({
 }: SerialManageDrawerProps) {
   const { serials: allSerials, updateSerial, addAuditLog, showToast } = useInventoryStore()
   const [search, setSearch] = useState('')
+  const [statusFilter, setStatusFilter] = useState<'all' | 'available' | 'assigned' | 'refurbishment' | 'under_repair' | 'other'>('all')
   const [editTarget, setEditTarget] = useState<SerialNumber | null>(null)
   const [form, setForm] = useState({ serial: '', barcode: '', specs: '', conditionNotes: '', reason: '' })
   const [busy, setBusy] = useState(false)
 
+  const scoped = useMemo(() => {
+    return serials.filter(s => warehouseFilter === 'all' || s.location === warehouseFilter)
+  }, [serials, warehouseFilter])
+
+  const statusCounts = useMemo(() => {
+    const counts = { available: 0, assigned: 0, refurbishment: 0, under_repair: 0, other: 0 }
+    for (const s of scoped) {
+      if (s.status === 'available') counts.available++
+      else if (s.status === 'assigned') counts.assigned++
+      else if (s.status === 'refurbishment') counts.refurbishment++
+      else if (s.status === 'under_repair') counts.under_repair++
+      else counts.other++
+    }
+    return counts
+  }, [scoped])
+
   const rows = useMemo(() => {
     const q = search.trim().toLowerCase()
-    return serials.filter(s => {
-      if (warehouseFilter !== 'all' && s.location !== warehouseFilter) return false
+    return scoped.filter(s => {
+      if (statusFilter === 'available' && s.status !== 'available') return false
+      if (statusFilter === 'assigned' && s.status !== 'assigned') return false
+      if (statusFilter === 'refurbishment' && s.status !== 'refurbishment') return false
+      if (statusFilter === 'under_repair' && s.status !== 'under_repair') return false
+      if (statusFilter === 'other' && ['available', 'assigned', 'refurbishment', 'under_repair'].includes(s.status)) return false
       if (!q) return true
       return (
         s.serial.toLowerCase().includes(q) ||
@@ -44,7 +65,7 @@ export default function SerialManageDrawer({
         String(s.sku || '').toLowerCase().includes(q)
       )
     })
-  }, [serials, search, warehouseFilter])
+  }, [scoped, search, statusFilter])
 
   const openEdit = (serial: SerialNumber) => {
     setEditTarget(serial)
@@ -163,6 +184,36 @@ export default function SerialManageDrawer({
             SKU {product.sku}
             {warehouseFilter !== 'all' ? ` · Filtered to ${LOCATIONS[warehouseFilter].name}` : ''}
           </p>
+          <div className="flex flex-wrap gap-2 text-[10px]">
+            {([
+              ['all', `All (${scoped.length})`],
+              ['available', `Available (${statusCounts.available})`],
+              ['assigned', `Assigned (${statusCounts.assigned})`],
+              ['refurbishment', `Refurb (${statusCounts.refurbishment})`],
+              ['under_repair', `Under repair (${statusCounts.under_repair})`],
+              ['other', `Other (${statusCounts.other})`],
+            ] as const).map(([id, label]) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => setStatusFilter(id)}
+                className="px-2.5 py-1 rounded-lg border text-[10px] font-bold cursor-pointer"
+                style={{
+                  borderColor: statusFilter === id ? '#A8D4E8' : 'var(--border-lt)',
+                  background: statusFilter === id ? '#E8F3FA' : 'transparent',
+                  color: statusFilter === id ? 'var(--navy)' : 'var(--text-3)',
+                }}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          {(statusCounts.assigned + statusCounts.refurbishment + statusCounts.under_repair) > 0 && (
+            <p className="text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+              On hand includes held units: {statusCounts.assigned} assigned (SO/repair pick), {statusCounts.refurbishment} refurbishment, {statusCounts.under_repair} under repair.
+              Only Available counts toward free-to-sell stock.
+            </p>
+          )}
           <DataTable
             tableId={`inventory-serials-${product.id}`}
             columns={columns}

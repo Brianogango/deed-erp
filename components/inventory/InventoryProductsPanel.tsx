@@ -37,6 +37,9 @@ type ProductListRow = {
   onHand: number
   available: number
   reserved: number
+  refurbishment: number
+  underRepair: number
+  held: number
 }
 
 interface InventoryProductsPanelProps {
@@ -96,7 +99,7 @@ export default function InventoryProductsPanel({
     () => products.filter(p => productMatchesFilters({
       product: p,
       filters,
-      qty: qtyByProduct.get(p.id) || { onHand: 0, available: 0, reserved: 0, byLocation: {
+      qty: qtyByProduct.get(p.id) || { onHand: 0, available: 0, reserved: 0, refurbishment: 0, underRepair: 0, held: 0, byLocation: {
         warehouse: 0, shop: 0, repair_unit: 0, vendor: 0, customer: 0, employee: 0,
       } },
       serials,
@@ -131,6 +134,9 @@ export default function InventoryProductsPanel({
           onHand: qty.onHand,
           available: qty.available,
           reserved: qty.reserved,
+          refurbishment: qty.refurbishment,
+          underRepair: qty.underRepair,
+          held: qty.held,
         })
         continue
       }
@@ -142,9 +148,19 @@ export default function InventoryProductsPanel({
             onHand: acc.onHand + q.onHand,
             available: acc.available + q.available,
             reserved: acc.reserved + q.reserved,
+            refurbishment: acc.refurbishment + q.refurbishment,
+            underRepair: acc.underRepair + q.underRepair,
+            held: acc.held + q.held,
           }
         },
-        { onHand: qty.onHand, available: qty.available, reserved: qty.reserved },
+        {
+          onHand: qty.onHand,
+          available: qty.available,
+          reserved: qty.reserved,
+          refurbishment: qty.refurbishment,
+          underRepair: qty.underRepair,
+          held: qty.held,
+        },
       )
       list.push({
         id: product.id,
@@ -164,6 +180,9 @@ export default function InventoryProductsPanel({
             onHand: q.onHand,
             available: q.available,
             reserved: q.reserved,
+            refurbishment: q.refurbishment,
+            underRepair: q.underRepair,
+            held: q.held,
           })
         }
       }
@@ -290,7 +309,7 @@ export default function InventoryProductsPanel({
           <option value="in_stock">In stock</option>
           <option value="out_of_stock">Out of stock</option>
           <option value="low_stock">Low stock</option>
-          <option value="reserved">Reserved stock</option>
+          <option value="reserved">Held (not free to sell)</option>
           <option value="negative">Negative stock</option>
         </select>
       </label>
@@ -417,7 +436,14 @@ export default function InventoryProductsPanel({
       render: row => {
         const tracking = inferTrackingMethod(row.product)
         if (tracking === 'NONE') return <span className="text-xs text-text-4">N/A</span>
-        return <span className="text-xs font-bold text-text-1">{row.onHand}</span>
+        return (
+          <span
+            className="text-xs font-bold text-text-1"
+            title="Units physically in warehouse / shop / repair (includes held units)"
+          >
+            {row.onHand}
+          </span>
+        )
       },
       exportValue: row => (inferTrackingMethod(row.product) === 'NONE' ? 'N/A' : row.onHand),
     },
@@ -429,9 +455,41 @@ export default function InventoryProductsPanel({
       render: row => {
         const tracking = inferTrackingMethod(row.product)
         if (tracking === 'NONE') return <span className="text-xs text-text-4">—</span>
-        return <span className="text-xs text-text-2">{row.available}</span>
+        return (
+          <span
+            className="text-xs text-text-2"
+            title="Free to sell (status available only)"
+          >
+            {row.available}
+          </span>
+        )
       },
       exportValue: row => row.available,
+    },
+    {
+      key: 'held',
+      label: 'Held',
+      priority: 3,
+      width: '100px',
+      render: row => {
+        const tracking = inferTrackingMethod(row.product)
+        if (tracking === 'NONE') return <span className="text-xs text-text-4">—</span>
+        if (row.held <= 0) return <span className="text-xs text-text-4">0</span>
+        const parts = [
+          row.reserved ? `${row.reserved} assigned (SO/repair)` : '',
+          row.refurbishment ? `${row.refurbishment} refurb` : '',
+          row.underRepair ? `${row.underRepair} under repair` : '',
+        ].filter(Boolean)
+        return (
+          <span
+            className="text-xs font-bold text-amber-700"
+            title={parts.length ? parts.join(' · ') : 'On hand but not free to sell'}
+          >
+            {row.held}
+          </span>
+        )
+      },
+      exportValue: row => row.held,
     },
     {
       key: 'reorder',
@@ -496,7 +554,8 @@ export default function InventoryProductsPanel({
         title="Products"
         notice={
           <CompactInfoNotice>
-            Product creation defines the item only. Stock remains zero until opening stock is posted or a purchase receipt is validated.
+            On hand = units in warehouse/shop/repair (including held). Available = free to sell only.
+            Held covers SO-picked serials, refurbishment, and under-repair — open Manage serials to see the split.
             Quantities respect the selected warehouse filter.
           </CompactInfoNotice>
         }

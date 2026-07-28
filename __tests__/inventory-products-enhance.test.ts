@@ -33,16 +33,33 @@ describe('product filters', () => {
     { productId: 'p1', location: 'warehouse' as const, status: 'available', serial: 'SN-1', barcode: 'INV-1' },
     { productId: 'p1', location: 'shop' as const, status: 'assigned', serial: 'SN-2', barcode: 'INV-2' },
     { productId: 'p1', location: 'warehouse' as const, status: 'sold', serial: 'SN-3', barcode: 'INV-3' },
+    { productId: 'p1', location: 'repair_unit' as const, status: 'refurbishment', serial: 'SN-4', barcode: 'INV-4' },
+    { productId: 'p1', location: 'repair_unit' as const, status: 'under_repair', serial: 'SN-5', barcode: 'INV-5' },
   ]
 
   it('scopes on-hand to selected warehouse', () => {
     const all = getProductQtySnapshot(product, serials, [], 'all')
     const wh = getProductQtySnapshot(product, serials, [], 'warehouse')
-    expect(all.onHand).toBe(2) // available + assigned (not sold)
+    expect(all.onHand).toBe(4) // available + assigned + refurb + under_repair (not sold)
+    expect(all.available).toBe(1)
+    expect(all.reserved).toBe(1)
+    expect(all.refurbishment).toBe(1)
+    expect(all.underRepair).toBe(1)
+    expect(all.held).toBe(3)
     expect(wh.onHand).toBe(1)
     expect(wh.available).toBe(1)
     expect(wh.reserved).toBe(0)
-    expect(all.reserved).toBe(1)
+    expect(wh.held).toBe(0)
+  })
+
+  it('treats held filter as any non-free on-hand serials', () => {
+    const qty = getProductQtySnapshot(product, serials, [], 'all')
+    expect(productMatchesFilters({
+      product,
+      filters: { ...EMPTY_PRODUCT_FILTERS, stockAvailability: 'reserved' },
+      qty,
+      serials,
+    })).toBe(true)
   })
 
   it('matches search by serial', () => {
