@@ -198,6 +198,22 @@ export function initialDeliveryState(hasShortfall: boolean): DeliveryState {
   return hasShortfall ? 'waiting' : 'ready'
 }
 
+/** A Sales Order can invoice only after a completed delivery note was generated. */
+export function hasGeneratedDeliveryNote(
+  deliveries: Array<{
+    saleOrderId?: string
+    status?: string
+    deliveryNoteGeneratedAt?: string | null
+  }> | null | undefined,
+  saleOrderId: string,
+): boolean {
+  return (deliveries ?? []).some(delivery =>
+    delivery.saleOrderId === saleOrderId &&
+    delivery.status === 'done' &&
+    Boolean(delivery.deliveryNoteGeneratedAt),
+  )
+}
+
 export interface DeliverySplitLine {
   productId: string
   productName: string

@@ -74,6 +74,7 @@ import {
   DELIVERY_STATE_LABELS,
   isQuotationStage,
   matchesSalesListFilter,
+  hasGeneratedDeliveryNote,
   saleOrderInvoiceStatus,
   type SalesListFilter,
 } from '@/lib/odoo-sales-flow'
@@ -264,7 +265,7 @@ function SalesContent() {
     saleOrders, contacts, products, serials, invoices, deliveries, returnOrders,
     createSaleOrder, updateSaleOrder, confirmSO, markQuotationSent, setSaleOrderLock,
     addSOLine, removeSOLine,
-    assignSerialsToSOLine, unassignSerialFromSOLine, addContact, createInvoiceFromSO, validateDelivery,
+    assignSerialsToSOLine, unassignSerialFromSOLine, addContact, createInvoiceFromSO, prepareDelivery, validateDelivery, markDeliveryNoteGenerated,
     deleteSaleOrder, showToast, getStockByLocation, resetSOToDraft, cancelSO,
     getCustomerCreditStatus, users, currentUserId, systemSettings,
     companySettings, bankAccounts, confirmDeliveryWithStockDeduction,
@@ -529,8 +530,11 @@ function SalesContent() {
     quotationsSent: salesOrderViews.filter(s => s.status === 'quotation_sent').length,
     pendingApproval: salesOrderViews.filter(s => isQuotationStage(s.status) && s.approvalStatus === 'pending').length,
     orders: salesOrderViews.filter(s => s.status === 'sale').length,
-    toInvoice: salesOrderViews.filter(s => saleOrderInvoiceStatus(s.status, s.lines) === 'to_invoice').length,
-  }), [salesOrderViews])
+    toInvoice: salesOrderViews.filter(s =>
+      saleOrderInvoiceStatus(s.status, s.lines) === 'to_invoice' &&
+      hasGeneratedDeliveryNote(deliveries, s.id)
+    ).length,
+  }), [salesOrderViews, deliveries])
 
   // Odoo-style derived statuses for the active order.
   const activeInvoiceStatus = activeOrder ? saleOrderInvoiceStatus(activeOrder.status, activeOrder.lines) : 'no'
@@ -538,6 +542,9 @@ function SalesContent() {
     () => activeOrder ? deliveries.filter(d => d.saleOrderId === activeOrder.id) : [],
     [deliveries, activeOrder],
   )
+  const invoiceDeliveryReady = activeOrder
+    ? hasGeneratedDeliveryNote(activeDeliveries, activeOrder.id)
+    : false
   const activeInvoices = useMemo(
     () => activeOrder ? invoices.filter(i => i.saleOrderId === activeOrder.id) : [],
     [invoices, activeOrder],
@@ -720,14 +727,8 @@ function SalesContent() {
       const product = products.find(p => p.id === l.productId)
       if (!product) { showToast(`Product not found for ${l.productName || l.description}`, 'error'); return }
       const qty = Number(l.qty) || 1
-      if (product.requiresSerial) {
-        const available = serials.filter(s => s.productId === product.id && s.status === 'available' && (s.location === 'warehouse' || s.location === 'shop')).length
-        if (available < qty) { showToast(`Only ${available} units available for ${product.name}`, 'error'); return }
-      } else if (product.unit !== 'service') {
-        const locs = getStockByLocation(product.id)
-        const available = locs.shop + locs.warehouse
-        if (available < qty) { showToast(`Only ${available} units available for ${product.name}`, 'error'); return }
-      }
+      // A quotation records commercial demand; it does not reserve stock.
+      // Availability is enforced later when the confirmed SO is prepared for delivery.
       const unitPrice = Math.max(0, Number(l.unitPrice) || product.salePrice || 0)
       const discount = Number(l.discount) || 0
       const subtotal = Math.round(unitPrice * qty * (1 - discount / 100))
@@ -816,11 +817,6 @@ function SalesContent() {
     const qty = Math.max(0, Number(addLineQty) || 0)
     const disc = Number(addLineDiscount) || 0
     if (qty <= 0) { showToast('Quantity must be greater than zero', 'error'); return }
-    if (qty > 0 && addLineProduct.unit !== 'service') {
-      const locs = getStockByLocation(addLineProduct.id)
-      const available = locs.shop + locs.warehouse
-      if (available < qty) { showToast(`Only ${available} units available`, 'error'); return }
-    }
     addSOLine(activeId, addLineProduct, qty, disc, addLineVat ? companySettings.vatRate : 0)
     setShowAddLine(false); setAddLineProduct(null); setAddLineQty('1'); setAddLineDiscount('0'); setAddLineVat(false)
   }
@@ -1011,11 +1007,16 @@ function SalesContent() {
                   order={activeOrder}
                   deliveries={deliveries}
                   serials={serials}
+                  products={products}
                   deliveryQtys={deliveryQtys}
                   setDeliveryQtys={setDeliveryQtys}
                   savingDelivery={savingDelivery}
                   setSavingDelivery={setSavingDelivery}
+                  prepareDelivery={prepareDelivery}
                   validateDelivery={validateDelivery}
+                  markDeliveryNoteGenerated={markDeliveryNoteGenerated}
+                  assignSerialsToSOLine={assignSerialsToSOLine}
+                  unassignSerialFromSOLine={unassignSerialFromSOLine}
                   updateDelivery={updateDelivery}
                   showToast={showToast}
                   onBack={() => setView('form')}
@@ -1190,8 +1191,12 @@ function SalesContent() {
                       </>)}
                       {/* ── Sales Order ── */}
                       {activeOrder?.status === 'sale' && (<>
-                        {canInvoiceFromSO && (activeInvoiceStatus === 'to_invoice' || activeInvoiceStatus === 'upselling') ? (
+                        {canInvoiceFromSO && invoiceDeliveryReady && (activeInvoiceStatus === 'to_invoice' || activeInvoiceStatus === 'upselling') ? (
                           <button className="btn-primary flex items-center gap-2 text-xs" onClick={() => { createInvoiceFromSO(activeOrder.id) }}><Fa icon={faFileInvoiceDollar} /><span>Create Invoice</span></button>
+                        ) : canInvoiceFromSO && activeInvoices.length === 0 && !invoiceDeliveryReady ? (
+                          <button className="btn-secondary flex items-center gap-2 text-xs opacity-60 cursor-not-allowed" disabled title="Validate delivery and generate the Delivery Note first">
+                            <Fa icon={faFileInvoiceDollar} /><span>Invoice after Delivery Note</span>
+                          </button>
                         ) : null}
                         {activeDeliveries.some(d => ['waiting', 'ready'].includes(d.status)) && (
                           <button className={`${activeInvoiceStatus === 'to_invoice' ? 'btn-secondary' : 'btn-primary'} flex items-center gap-2 text-xs`} onClick={openDeliveryView}><Fa icon={faTruck} /><span>Delivery</span></button>
@@ -1531,16 +1536,6 @@ function SalesContent() {
                                     )
                                   }
                                   const lineSerials = serials.filter((s: any) => l.serialIds?.includes(s.id))
-                                  const lineProduct = products.find((p: any) => p.id === l.productId)
-                                  const serialLine = Boolean(lineProduct?.requiresSerial)
-                                  const assignableSerials = serialLine
-                                    ? serials.filter((s: any) =>
-                                        s.productId === l.productId &&
-                                        (s.location === 'warehouse' || s.location === 'shop') &&
-                                        (s.status === 'available' || l.serialIds?.includes(s.id)),
-                                      )
-                                    : []
-                                  const serialCount = l.serialIds?.length || 0
                                   const isEditing = editingLineId === l.id
                                   const canEdit = isQuotationStage(activeOrder.status) && !activeOrder.locked
                                   const invoicedQty = (Number(l.qtyInvoiced) || 0) || getInvoicedQty(activeOrder, l.productId)
@@ -1560,36 +1555,8 @@ function SalesContent() {
                                                   <span key={s.id} className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 text-[9px] font-mono border border-blue-100">
                                                     {s.serial ?? s.serialNumber}
                                                     {s.barcode ? <span className="opacity-70">({s.barcode})</span> : null}
-                                                    {canEdit && serialLine && (
-                                                      <button
-                                                        type="button"
-                                                        className="text-[10px] leading-none text-blue-700 hover:text-red-600"
-                                                        onClick={() => unassignSerialFromSOLine(activeOrder.id, l.id, s.id)}
-                                                        title="Unassign serial"
-                                                      >
-                                                        ×
-                                                      </button>
-                                                    )}
                                                   </span>
                                                 ))}
-                                              </div>
-                                            )}
-                                            {canEdit && serialLine && (
-                                              <div className="mt-2 flex flex-wrap items-center gap-2">
-                                                <span className={`text-[10px] font-semibold ${serialCount >= l.qty ? 'text-emerald-600' : 'text-amber-600'}`}>
-                                                  Serials: {serialCount}/{l.qty}
-                                                </span>
-                                                <SerialMultiSelect
-                                                  options={assignableSerials
-                                                    .filter((s: any) => !(l.serialIds || []).includes(s.id))
-                                                    .map((s: any) => ({
-                                                      id: s.id,
-                                                      label: s.serial ?? s.serialNumber ?? s.id,
-                                                      sublabel: [s.barcode, LOCATIONS[s.location as keyof typeof LOCATIONS]?.name ?? s.location].filter(Boolean).join(' · '),
-                                                    }))}
-                                                  maxSelectable={Math.max(0, l.qty - serialCount)}
-                                                  onAssign={ids => assignSerialsToSOLine(activeOrder.id, l.id, ids)}
-                                                />
                                               </div>
                                             )}
                                           </div>
@@ -1823,7 +1790,7 @@ function SalesContent() {
       )}
 
       {showDnModal && activeId && (() => {
-        const del = deliveries.find(d => d.saleOrderId === activeId)
+        const del = deliveries.find(d => d.saleOrderId === activeId && d.status === 'done')
         if (!del) return null
         return (
           <Modal title={`Delivery Note — ${del.ref}`} onClose={() => setShowDnModal(false)} width={480}>
@@ -1838,10 +1805,16 @@ function SalesContent() {
               <Field label="Notes"><textarea className="form-input" rows={2} placeholder="Accessories included, special instructions…" value={dnNotes} onChange={e => setDnNotes(e.target.value)} /></Field>
               <div className="flex gap-2 justify-end pt-2 border-t border-[var(--border-lt)]">
                 <button className="btn-outline text-xs" onClick={() => setShowDnModal(false)}>Cancel</button>
-                <button className="btn-secondary flex items-center gap-1.5 text-xs" onClick={() => {
+                <button className="btn-secondary flex items-center gap-1.5 text-xs" onClick={async () => {
                   if (dnRecipientName.trim()) updateDelivery(del.id, { recipientName: dnRecipientName.trim(), recipientPhone: dnRecipientPhone.trim() || undefined, recipientIdNumber: dnRecipientId.trim() || undefined, deliveryAddress: dnAddress.trim() || undefined, notes: dnNotes.trim() || undefined })
-                  printDeliveryNote(del, serials, { recipientName: dnRecipientName.trim(), recipientPhone: dnRecipientPhone.trim(), recipientIdNumber: dnRecipientId.trim(), deliveryAddress: dnAddress.trim(), notes: dnNotes.trim() })
-                  setShowDnModal(false)
+                  const generated = printDeliveryNote(del, serials, { recipientName: dnRecipientName.trim(), recipientPhone: dnRecipientPhone.trim(), recipientIdNumber: dnRecipientId.trim(), deliveryAddress: dnAddress.trim(), notes: dnNotes.trim() })
+                  if (generated) {
+                    const saved = await markDeliveryNoteGenerated(del.id)
+                    if (saved) {
+                      showToast(`Delivery Note ${del.ref} generated — invoicing is now available`, 'success')
+                      setShowDnModal(false)
+                    }
+                  }
                 }}><Fa icon={faPrint} /> Print / Download</button>
               </div>
             </div>
@@ -2250,15 +2223,21 @@ function NewQuotationForm({
 // DELIVERY NOTE VIEW
 // ═══════════════════════════════════════════════════════════════════════════
 function DeliveryNoteView({
-  order, deliveries, serials, deliveryQtys, setDeliveryQtys, savingDelivery,
-  setSavingDelivery, validateDelivery, updateDelivery, showToast, onBack,
+  order, deliveries, serials, products, deliveryQtys, setDeliveryQtys, savingDelivery,
+  setSavingDelivery, prepareDelivery, validateDelivery, markDeliveryNoteGenerated, assignSerialsToSOLine, unassignSerialFromSOLine,
+  updateDelivery, showToast, onBack,
   dnRecipientName, setDnRecipientName, dnRecipientPhone, setDnRecipientPhone,
   dnRecipientId, setDnRecipientId, dnAddress, setDnAddress, dnNotes, setDnNotes,
 }: {
-  order: SalesOrderView; deliveries: any[]; serials: any[]
+  order: SalesOrderView; deliveries: any[]; serials: any[]; products: any[]
   deliveryQtys: Record<string, number>; setDeliveryQtys: (v: Record<string, number>) => void
   savingDelivery: boolean; setSavingDelivery: (v: boolean) => void
-  validateDelivery: (id: string, qtysDone?: Record<string, number>) => void; updateDelivery: (id: string, p: any) => void
+  prepareDelivery: (id: string, qtysDone?: Record<string, number>) => boolean
+  validateDelivery: (id: string, qtysDone?: Record<string, number>) => void
+  markDeliveryNoteGenerated: (id: string) => Promise<boolean>
+  assignSerialsToSOLine: (orderId: string, lineId: string, serialIds: string[]) => void
+  unassignSerialFromSOLine: (orderId: string, lineId: string, serialId: string) => void
+  updateDelivery: (id: string, p: any) => void
   showToast: (msg: string, type?: 'success' | 'error' | 'info') => void; onBack: () => void
   dnRecipientName: string; setDnRecipientName: (v: string) => void
   dnRecipientPhone: string; setDnRecipientPhone: (v: string) => void
@@ -2271,12 +2250,33 @@ function DeliveryNoteView({
   // records remain visible history.
   const pendingDelivery = orderDeliveries.find((d: any) => ['draft', 'waiting', 'ready'].includes(d.status))
   const existingDelivery = pendingDelivery ?? orderDeliveries[0]
-  const canValidate = order.status === 'sale' && !!pendingDelivery
+  const canPrepare = order.status === 'sale' && !!pendingDelivery && ['draft', 'waiting'].includes(pendingDelivery.status)
+  const canValidate = order.status === 'sale' && !!pendingDelivery && pendingDelivery.status === 'ready' && !!pendingDelivery.preparedAt
+
+  const requestedByProduct = () => {
+    const quantities: Record<string, number> = {}
+    order.lines.forEach(line => {
+      const qty = Math.min(line.qty, Math.max(0, deliveryQtys[line.id] ?? 0))
+      if (line.productId) quantities[line.productId] = (quantities[line.productId] ?? 0) + qty
+    })
+    return quantities
+  }
+
+  const handlePrepare = () => {
+    if (!pendingDelivery) { showToast('No pending delivery to prepare', 'error'); return }
+    prepareDelivery(pendingDelivery.id, requestedByProduct())
+  }
 
   const handleValidate = async () => {
     if (!order.lines.length) { showToast('No line items on this order', 'error'); return }
     if (!pendingDelivery) { showToast('No pending delivery to validate', 'error'); return }
-    const lines = order.lines.map(l => ({ id: l.id, qtyDelivered: Math.min(l.qty, Math.max(0, deliveryQtys[l.id] ?? 0)) }))
+    const lines = order.lines.map(l => {
+      const preparedQty = Number(pendingDelivery.lines.find((line: any) => line.productId === l.productId)?.qtyDone) || 0
+      return {
+        id: l.id,
+        qtyDelivered: Math.min(l.qty, (Number(l.qtyDelivered) || 0) + preparedQty),
+      }
+    })
     if (!lines.some(l => l.qtyDelivered > 0)) { showToast('Enter delivered quantities before validating', 'error'); return }
     setSavingDelivery(true)
     try {
@@ -2298,13 +2298,9 @@ function DeliveryNoteView({
       // Validate the picking with the quantities actually done. Stock is
       // deducted for those quantities only; any remainder automatically
       // becomes a backorder delivery (Odoo behaviour).
-      const qtysByProduct: Record<string, number> = {}
-      order.lines.forEach(l => {
-        const done = Math.min(l.qty, Math.max(0, deliveryQtys[l.id] ?? 0))
-        const alreadyDone = Number(l.qtyDelivered) || 0
-        const increment = Math.max(0, done - alreadyDone)
-        if (l.productId) qtysByProduct[l.productId] = (qtysByProduct[l.productId] ?? 0) + increment
-      })
+      const qtysByProduct = Object.fromEntries(
+        pendingDelivery.lines.map((line: any) => [line.productId, Number(line.qtyDone) || 0]),
+      )
       validateDelivery(pendingDelivery.id, qtysByProduct)
       onBack()
     } catch { showToast('Network error saving delivery', 'error') }
@@ -2313,17 +2309,25 @@ function DeliveryNoteView({
 
   const handlePrintDN = () => {
     if (!existingDelivery) { showToast('No delivery record found. Validate delivery first.', 'error'); return }
+    if (existingDelivery.status !== 'done') {
+      showToast('Validate the delivery before generating the final Delivery Note', 'error')
+      return
+    }
     if (dnRecipientName.trim()) {
       updateDelivery(existingDelivery.id, {
         recipientName: dnRecipientName.trim(), recipientPhone: dnRecipientPhone.trim() || undefined,
         recipientIdNumber: dnRecipientId.trim() || undefined, deliveryAddress: dnAddress.trim() || undefined, notes: dnNotes.trim() || undefined,
       })
     }
-    import('@/lib/delivery-note-pdf').then(({ printDeliveryNote }) => {
-      printDeliveryNote(existingDelivery, serials, {
+    import('@/lib/delivery-note-pdf').then(async ({ printDeliveryNote }) => {
+      const generated = printDeliveryNote(existingDelivery, serials, {
         recipientName: dnRecipientName.trim(), recipientPhone: dnRecipientPhone.trim(),
         recipientIdNumber: dnRecipientId.trim(), deliveryAddress: dnAddress.trim(), notes: dnNotes.trim(),
       })
+      if (generated) {
+        const saved = await markDeliveryNoteGenerated(existingDelivery.id)
+        if (saved) showToast(`Delivery Note ${existingDelivery.ref} generated — invoicing is now available`, 'success')
+      }
     })
   }
 
@@ -2339,7 +2343,12 @@ function DeliveryNoteView({
           </div>
         </div>
         <div className="flex items-center gap-2">
-          {existingDelivery && <button onClick={handlePrintDN} className="btn-secondary flex items-center gap-2 text-xs"><Fa icon={faPrint} /><span>Print Delivery Note</span></button>}
+          {existingDelivery?.status === 'done' && <button onClick={handlePrintDN} className="btn-secondary flex items-center gap-2 text-xs"><Fa icon={faPrint} /><span>Generate Delivery Note</span></button>}
+          {canPrepare && (
+            <button onClick={handlePrepare} disabled={savingDelivery} className="btn-primary flex items-center gap-2 text-xs disabled:opacity-50">
+              <Fa icon={faBoxOpen} /><span>Prepare Delivery</span>
+            </button>
+          )}
           {canValidate && (
             <button onClick={handleValidate} disabled={savingDelivery} className="btn-primary flex items-center gap-2 text-xs disabled:opacity-50">
               <Fa icon={faCheck} /><span>{savingDelivery ? 'Saving…' : 'Validate'}</span>
@@ -2387,14 +2396,24 @@ function DeliveryNoteView({
                 <tr className="bg-[var(--bg-surface)] border-b border-[var(--border-lt)]">
                   <th className="px-4 py-2.5 text-[10px] font-bold uppercase text-[var(--text-4)]">Product</th>
                   <th className="px-4 py-2.5 text-[10px] font-bold uppercase text-[var(--text-4)] text-center w-28">Demand (Ordered)</th>
-                  <th className="px-4 py-2.5 text-[10px] font-bold uppercase text-[var(--text-4)] text-center w-32">{canValidate ? 'Done Qty' : 'Delivered'}</th>
+                  <th className="px-4 py-2.5 text-[10px] font-bold uppercase text-[var(--text-4)] text-center w-32">{canPrepare ? 'Qty to Reserve' : canValidate ? 'Reserved Qty' : 'Delivered'}</th>
                   <th className="px-4 py-2.5 text-[10px] font-bold uppercase text-[var(--text-4)]">Serial Numbers</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[var(--border-lt)]">
                 {order.lines.map(l => {
                   const lineSerials = serials.filter((s: any) => l.serialIds?.includes(s.id))
+                  const product = products.find((item: any) => item.id === l.productId)
+                  const serialTracked = Boolean(product?.requiresSerial)
+                  const assignableSerials = serialTracked
+                    ? serials.filter((serial: any) =>
+                        serial.productId === l.productId &&
+                        (serial.location === 'warehouse' || serial.location === 'shop') &&
+                        serial.status === 'available',
+                      )
+                    : []
                   const delivered = deliveryQtys[l.id] ?? l.qtyDelivered ?? 0
+                  const preparedQty = Number(pendingDelivery?.lines.find((line: any) => line.productId === l.productId)?.qtyDone) || 0
                   const isFullyDelivered = delivered >= l.qty
                   const isPartial = delivered > 0 && delivered < l.qty
                   return (
@@ -2402,20 +2421,44 @@ function DeliveryNoteView({
                       <td className="px-4 py-3 text-xs font-medium text-[var(--text-1)]">{l.productName ?? l.description ?? 'Item'}</td>
                       <td className="px-4 py-3 text-xs text-center font-semibold text-[var(--text-2)]">{l.qty}</td>
                       <td className="px-4 py-3 text-xs text-center">
-                        {canValidate ? (
+                        {canPrepare ? (
                           <input type="number" aria-label={`Delivery quantity for ${l.productName ?? l.description ?? 'line item'}`} min={0} max={l.qty} value={deliveryQtys[l.id] ?? 0}
                             onChange={e => setDeliveryQtys({ ...deliveryQtys, [l.id]: Math.min(l.qty, Math.max(0, Number(e.target.value) || 0)) })}
                             className="w-20 text-center border border-[var(--border-lt)] rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-primary-400 focus:border-primary-400" />
+                        ) : canValidate ? (
+                          <span className="font-semibold text-blue-700">{preparedQty}</span>
                         ) : (
                           <span className={`font-semibold ${isFullyDelivered ? 'text-emerald-600' : isPartial ? 'text-amber-500' : 'text-[var(--text-4)]'}`}>{l.qtyDelivered ?? 0}</span>
                         )}
                       </td>
                       <td className="px-4 py-3 text-xs">
-                        {lineSerials.length > 0 ? (
+                        {lineSerials.length > 0 && (
                           <div className="flex flex-wrap gap-1">
-                            {lineSerials.map((s: any) => <span key={s.id} className="inline-flex items-center px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 text-[9px] font-mono border border-blue-100">{s.serial ?? s.serialNumber}</span>)}
+                            {lineSerials.map((s: any) => (
+                              <span key={s.id} className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 text-[9px] font-mono border border-blue-100">
+                                {s.serial ?? s.serialNumber}
+                                {canPrepare && (
+                                  <button type="button" onClick={() => unassignSerialFromSOLine(order.id, l.id, s.id)} className="text-blue-700 hover:text-red-600" aria-label={`Unassign ${s.serial ?? s.id}`}>×</button>
+                                )}
+                              </span>
+                            ))}
                           </div>
-                        ) : <span className="text-[var(--text-4)]">—</span>}
+                        )}
+                        {canPrepare && serialTracked && (
+                          <div className="mt-2 flex items-center gap-2">
+                            <span className={`text-[10px] font-semibold ${lineSerials.length >= l.qty ? 'text-emerald-600' : 'text-amber-600'}`}>{lineSerials.length}/{l.qty}</span>
+                            <SerialMultiSelect
+                              options={assignableSerials.map((serial: any) => ({
+                                id: serial.id,
+                                label: serial.serial ?? serial.serialNumber ?? serial.id,
+                                sublabel: [serial.barcode, LOCATIONS[serial.location as keyof typeof LOCATIONS]?.name ?? serial.location].filter(Boolean).join(' · '),
+                              }))}
+                              maxSelectable={Math.max(0, l.qty - lineSerials.length)}
+                              onAssign={ids => assignSerialsToSOLine(order.id, l.id, ids)}
+                            />
+                          </div>
+                        )}
+                        {!lineSerials.length && !(canPrepare && serialTracked) && <span className="text-[var(--text-4)]">—</span>}
                       </td>
                     </tr>
                   )
@@ -2438,12 +2481,18 @@ function DeliveryNoteView({
         </div>
 
         {/* Bottom action bar */}
-        {canValidate && (
+        {(canPrepare || canValidate) && (
           <div className="flex items-center justify-between pt-4 border-t border-[var(--border-lt)]">
             <button onClick={onBack} className="btn-outline text-xs">Back to Order</button>
-            <button onClick={handleValidate} disabled={savingDelivery} className="btn-primary flex items-center gap-2 text-xs disabled:opacity-50">
-              <Fa icon={faCheck} /><span>{savingDelivery ? 'Saving…' : 'Validate'}</span>
-            </button>
+            {canPrepare ? (
+              <button onClick={handlePrepare} disabled={savingDelivery} className="btn-primary flex items-center gap-2 text-xs disabled:opacity-50">
+                <Fa icon={faBoxOpen} /><span>Prepare Delivery</span>
+              </button>
+            ) : (
+              <button onClick={handleValidate} disabled={savingDelivery} className="btn-primary flex items-center gap-2 text-xs disabled:opacity-50">
+                <Fa icon={faCheck} /><span>{savingDelivery ? 'Saving…' : 'Validate'}</span>
+              </button>
+            )}
           </div>
         )}
       </div>
