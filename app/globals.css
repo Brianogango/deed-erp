@@ -325,10 +325,20 @@
   }
 
   .badge {
-    @apply inline-flex items-center justify-center rounded-full px-2 py-0.5 font-black uppercase tracking-wider;
+    @apply inline-flex items-center justify-center rounded-full px-2.5 py-1 font-bold uppercase;
     border: 1px solid transparent;
-    font-size: var(--fs-label);
+    min-height: 24px;
+    max-width: 100%;
+    font-size: max(11px, var(--fs-label));
+    line-height: 1.15;
+    letter-spacing: 0.035em;
     white-space: nowrap;
+  }
+
+  .badge-xs {
+    min-height: 22px;
+    padding: 0.2rem 0.5rem;
+    font-size: max(10px, var(--fs-label));
   }
 
   .badge-green,
@@ -433,6 +443,25 @@
   .table-row > * {
     white-space: nowrap;
     text-overflow: ellipsis;
+  }
+
+  /* DataTable reserves explicit space for badges/actions. Keep controls intact
+     instead of showing half a pill or half a button. */
+  .table-row > .data-table-actions {
+    overflow: visible;
+    min-width: max-content;
+  }
+
+  .data-table-actions > button,
+  .data-table-actions > a {
+    min-height: 30px;
+    font-size: 11px !important;
+    line-height: 1.2;
+  }
+
+  .data-table-cell-status,
+  [class*="data-table-cell-"][class*="status"] {
+    overflow: visible;
   }
 
   .erp-truncate {
@@ -2974,6 +3003,41 @@
   margin: auto;
 }
 
+.modal-footer-shell {
+  box-shadow: 0 -8px 24px rgba(15, 23, 42, 0.04);
+}
+
+/* Opt-in contract for legacy dialogs: one scroll region with a pinned footer. */
+.modal-box.modal-layout {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 0;
+}
+
+.modal-box.modal-layout > .modal-header {
+  flex: 0 0 auto;
+  margin: 0;
+  padding: 18px 22px;
+  border-bottom: 1px solid var(--border-lt);
+}
+
+.modal-box.modal-layout > .modal-body-scroll {
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding: 18px 22px;
+}
+
+.modal-box.modal-layout > .modal-footer {
+  flex: 0 0 auto;
+  margin: 0;
+  padding: 14px 22px;
+  border-top: 1px solid var(--border-lt);
+  background: var(--bg-card);
+  box-shadow: 0 -8px 24px rgba(15, 23, 42, 0.04);
+}
+
 /* Ensure modal content doesn't get cut off by centering with flex or grid */
 @media (max-height: 640px) {
   .modal-overlay {
@@ -3009,8 +3073,10 @@
 
   .modal-box [class*="grid-cols-2"],
   .modal-box [class*="grid-cols-3"],
+  .modal-box [class*="grid-cols-["],
   .modal-content-shell [class*="grid-cols-2"],
-  .modal-content-shell [class*="grid-cols-3"] {
+  .modal-content-shell [class*="grid-cols-3"],
+  .modal-content-shell [class*="grid-cols-["] {
     grid-template-columns: minmax(0, 1fr) !important;
   }
 

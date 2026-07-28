@@ -159,7 +159,7 @@ export function SerialReturnPicker({
                   }}
                 >
                   <span style={{ flex: 1, fontFamily: 'monospace', color: 'var(--navy)' }}>{s.serial}</span>
-                  <span style={{ fontSize: 9, color: 'var(--text-4)' }}>{s.status} · {s.location}{preferred ? ' · match' : ''}</span>
+                  <span style={{ fontSize: 11, color: 'var(--text-4)' }}>{s.status} · {s.location}{preferred ? ' · match' : ''}</span>
                   {sel && <span style={{ color: 'var(--accent-cyan)', fontWeight: 700 }}>✓</span>}
                 </div>
               )

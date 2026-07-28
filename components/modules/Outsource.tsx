@@ -2,7 +2,7 @@
 import { useState, useEffect, Suspense } from 'react'
 import { useSearchParams, useRouter, usePathname } from 'next/navigation'
 import { useFinanceStore, fmtDate, fmtKes, OutsourceVendor, OutsourceJob, OUTSOURCE_SERVICE_TYPES, OutsourceServiceType } from '@/lib/store'
-import { ModuleSkeleton, useMounted, InfoRow, ModuleHeader, TabBar } from '@/components/ui'
+import { ModuleSkeleton, useMounted, InfoRow, ModuleHeader, TabBar, SearchPicker } from '@/components/ui'
 import { PrimaryActionButton, StatusBadge } from '@/components/erp'
 import { DataTable, DetailsDrawer, type ColumnDef, type DrawerTab } from '@/components/data-table'
 import { Fa } from '@/components/icons'
@@ -128,26 +128,15 @@ function OutsourceContent() {
     notes: '',
   })
   const [repairSearch, setRepairSearch] = useState('')
-  const [showRepairPicker, setShowRepairPicker] = useState(false)
 
   // Vendor search within job modal
   const [vendorSearch, setVendorSearch] = useState('')
-  const [showVendorPicker, setShowVendorPicker] = useState(false)
   const [vendorModalFromJob, setVendorModalFromJob] = useState(false)
 
   // Only open / in-progress repairs are sensible to send out
   const pickableRepairs = repairs.filter(r =>
     !['delivered', 'cancelled'].includes(r.status)
   )
-  const repairSearchResults = repairSearch.trim()
-    ? pickableRepairs.filter(r =>
-        r.ref.toLowerCase().includes(repairSearch.toLowerCase()) ||
-        r.customerName.toLowerCase().includes(repairSearch.toLowerCase()) ||
-        r.productName.toLowerCase().includes(repairSearch.toLowerCase()) ||
-        (r.serialNumber ?? '').toLowerCase().includes(repairSearch.toLowerCase())
-      )
-    : pickableRepairs.slice(0, 8)
-
   function selectRepair(repairId: string) {
     const r = repairs.find(x => x.id === repairId)
     if (!r) return
@@ -159,7 +148,6 @@ function OutsourceContent() {
       issueDescription:  r.issueDescription,
     }))
     setRepairSearch(`${r.ref} · ${r.productName} (${r.customerName})`)
-    setShowRepairPicker(false)
   }
 
   function clearRepairLink() {
@@ -167,18 +155,11 @@ function OutsourceContent() {
     setRepairSearch('')
   }
 
-  const vendorSearchResults = vendorSearch.trim()
-    ? outsourceVendors.filter(v =>
-        v.name.toLowerCase().includes(vendorSearch.toLowerCase()) ||
-        v.phone.includes(vendorSearch)
-      )
-    : outsourceVendors
-
-  function openVendorFromJob() {
+  function openVendorFromJob(query = vendorSearch) {
+    setVendorSearch(query)
     setVendorModalFromJob(true)
     setEditVendorId(null)
-    setVendorForm({ name: vendorSearch.trim(), phone: '', email: '', address: '', specializations: [], notes: '' })
-    setShowVendorPicker(false)
+    setVendorForm({ name: query.trim(), phone: '', email: '', address: '', specializations: [], notes: '' })
     setShowVendorModal(true)
   }
 
@@ -241,9 +222,7 @@ function OutsourceContent() {
   function openNewJob() {
     setJobForm({ vendorId: '', repairOrderId: '', deviceDescription: '', serial: '', serviceType: 'bios_repair', issueDescription: '', sentDate: new Date().toISOString().slice(0, 10), quotedCost: '', notes: '' })
     setRepairSearch('')
-    setShowRepairPicker(false)
     setVendorSearch('')
-    setShowVendorPicker(false)
     setShowJobModal(true)
   }
 
@@ -365,9 +344,9 @@ function OutsourceContent() {
       render: job => <span className="font-mono text-[11px] font-semibold" style={{ color: 'var(--navy)' }}>{job.ref}</span>,
     },
     {
-      key: 'device', label: 'Device', priority: 1, width: '1.6fr',
+      key: 'device', label: 'Device', priority: 1, width: '1.8fr',
       render: job => (
-        <div className="min-w-0" style={{ maxWidth: 220 }}>
+        <div className="min-w-0">
           <p className="font-medium text-t1 erp-truncate" title={job.deviceDescription}>{job.deviceDescription}</p>
           {job.serial && <p className="text-[10px] text-t3 erp-truncate" title={job.serial}>SN: {job.serial}</p>}
           {job.repairOrderId && (() => {
@@ -379,7 +358,7 @@ function OutsourceContent() {
       exportValue: job => job.deviceDescription,
     },
     {
-      key: 'status', label: 'Status', priority: 1, width: '130px',
+      key: 'status', label: 'Status', priority: 1, width: '160px',
       render: job => <OutsourceStatusBadge status={job.status} />,
       exportValue: job => STATUS_META[job.status].label,
     },
@@ -422,14 +401,14 @@ function OutsourceContent() {
         {job.status === 'sent' && (
           <button
             onClick={e => { e.stopPropagation(); openReturn(job.id) }}
-            style={{ fontSize: 10, padding: '3px 10px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-surface)', color: 'var(--text-3)', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+            style={{ fontSize: 11, padding: '5px 10px', borderRadius: 7, border: '1px solid var(--border)', background: 'var(--bg-surface)', color: 'var(--text-3)', cursor: 'pointer', whiteSpace: 'nowrap' }}>
             Mark Returned
           </button>
         )}
         {bill && (
           <button
             onClick={e => { e.stopPropagation(); setModule('accounting'); router.push('/finance?tab=bills') }}
-            style={{ fontSize: 10, padding: '3px 10px', borderRadius: 6, border: '1px solid #BFDBFE', background: 'var(--info-bg)', color: 'var(--primary-dark)', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+            style={{ fontSize: 11, padding: '5px 10px', borderRadius: 7, border: '1px solid #BFDBFE', background: 'var(--info-bg)', color: 'var(--primary-dark)', cursor: 'pointer', whiteSpace: 'nowrap' }}>
             {bill.ref}
           </button>
         )}
@@ -625,7 +604,7 @@ function OutsourceContent() {
                         <p className="text-[11px] text-t3">{vendor.phone}{vendor.email ? ` · ${vendor.email}` : ''}</p>
                         <div className="flex gap-1.5 mt-1 flex-wrap">
                           {vendor.specializations.map(s => (
-                            <span key={s} style={{ background: '#E8F3FA', color: 'var(--navy-dark)', borderRadius: 20, fontSize: 9, padding: '1px 7px', fontWeight: 600 }}>
+                            <span key={s} style={{ background: '#E8F3FA', color: 'var(--navy-dark)', borderRadius: 20, fontSize: 11, padding: '3px 8px', fontWeight: 600 }}>
                               {svcLabel(s)}
                             </span>
                           ))}
@@ -637,7 +616,7 @@ function OutsourceContent() {
                         <div>
                           <p className="text-[10px] text-t3">Jobs</p>
                           <p className="text-sm font-bold text-t1">{totalJobs}</p>
-                          {activeJobs > 0 && <p className="text-[9px]" style={{ color: 'var(--warning)' }}>{activeJobs} active</p>}
+                          {activeJobs > 0 && <p className="text-[11px]" style={{ color: 'var(--warning)' }}>{activeJobs} active</p>}
                         </div>
                         {completionRate !== null && (
                           <div>
@@ -833,70 +812,44 @@ function OutsourceContent() {
       {/* ── Send for Repair Modal ─────────────────────────────────────────── */}
       {showJobModal && (
         <div className="modal-overlay" onClick={() => setShowJobModal(false)}>
-          <div className="modal-box w-full max-w-lg" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-sm font-bold text-t1">Send Device for Outsource Repair</h3>
-              <button onClick={() => setShowJobModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: 'var(--text-4)' }}>×</button>
+          <div className="modal-box modal-layout w-full max-w-2xl" onClick={e => e.stopPropagation()}>
+            <div className="modal-header flex items-center justify-between">
+              <div>
+                <h3 className="text-base font-bold text-t1">Send Device for Outsource Repair</h3>
+                <p className="mt-0.5 text-xs text-t3">Link the repair, choose a vendor, and record service instructions.</p>
+              </div>
+              <button className="touch-target rounded-lg text-xl text-t3 hover:bg-surface" onClick={() => setShowJobModal(false)} aria-label="Close">×</button>
             </div>
 
-            <div className="space-y-3">
+            <div className="modal-body-scroll space-y-4">
 
               {/* ── Repair picker ── */}
               <div>
-                <label className="text-[11px] font-semibold text-t2 block mb-1">
-                  Link to Repair Job
-                  <span className="font-normal text-t3 ml-1">(search by ref, customer, device or serial)</span>
-                </label>
-                <div className="relative">
-                  <div className="flex gap-1.5">
-                    <input
-                      aria-label="Search vendors by name or phone"
-                      className="form-input flex-1 text-[12px]"
-                      placeholder="e.g. REP/0001 or customer name or Dell Latitude…"
-                      value={repairSearch}
-                      onChange={e => { setRepairSearch(e.target.value); setShowRepairPicker(true) }}
-                      onFocus={() => setShowRepairPicker(true)}
-                      readOnly={!!jobForm.repairOrderId}
-                    />
-                    {jobForm.repairOrderId && (
-                      <button onClick={clearRepairLink}
-                        style={{ fontSize: 11, padding: '0 10px', borderRadius: 8, border: '1px solid var(--border-lt)', background: 'var(--danger-bg)', color: '#991B1B', cursor: 'pointer', whiteSpace: 'nowrap' }}>
-                        Clear
-                      </button>
+                <div className="flex items-end gap-2">
+                  <SearchPicker
+                    label="Link to Repair Job (optional)"
+                    placeholder="Search ref, customer, device or serial…"
+                    items={pickableRepairs}
+                    selectedLabel={jobForm.repairOrderId ? repairSearch : undefined}
+                    formatSelected={r => `${r.ref} · ${r.productName} (${r.customerName})`}
+                    onSelect={r => selectRepair(r.id)}
+                    renderItem={r => (
+                      <div className="flex min-w-0 items-center justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="truncate text-xs font-semibold text-t1">
+                            <span className="font-mono text-primary-700">{r.ref}</span>
+                            <span className="ml-2">{r.productName}</span>
+                          </p>
+                          <p className="truncate text-[11px] text-t3">
+                            {r.customerName} · {r.issueDescription}{r.serialNumber ? ` · SN ${r.serialNumber}` : ''}
+                          </p>
+                        </div>
+                        <StatusBadge status={r.status} label={r.status.replace(/_/g, ' ')} size="xs" />
+                      </div>
                     )}
-                  </div>
-
-                  {/* Dropdown results */}
-                  {showRepairPicker && !jobForm.repairOrderId && (
-                    <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 9300, background: '#fff', border: '1px solid var(--border-lt)', borderRadius: 8, boxShadow: '0 4px 12px rgba(0,0,0,0.1)', maxHeight: 220, overflowY: 'auto', marginTop: 2 }}>
-                      {repairSearchResults.length === 0 ? (
-                        <p className="px-3 py-3 text-[11px] text-t3">No matching repairs found.</p>
-                      ) : (
-                        repairSearchResults.map(r => (
-                          <button key={r.id}
-                            onClick={() => selectRepair(r.id)}
-                            style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 12px', border: 'none', background: 'transparent', cursor: 'pointer', borderBottom: '1px solid var(--bg-surface)' }}
-                            onMouseEnter={e => (e.currentTarget.style.background = '#F5F3FF')}
-                            onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
-                            <div className="flex items-center justify-between gap-3">
-                              <div className="min-w-0">
-                                <span className="font-mono text-[11px] font-semibold" style={{ color: 'var(--navy)' }}>{r.ref}</span>
-                                <span className="text-[11px] text-t1 ml-2">{r.productName}</span>
-                                {r.serialNumber && <span className="text-[10px] text-t3 ml-1">SN {r.serialNumber}</span>}
-                                <div className="text-[10px] text-t3 truncate">{r.customerName} · {r.issueDescription}</div>
-                              </div>
-                              <span style={{
-                                fontSize: 9, padding: '1px 7px', borderRadius: 20, fontWeight: 600, whiteSpace: 'nowrap',
-                                background: r.status === 'received' ? 'var(--success-bg)' : r.status === 'in_repair' ? 'var(--primary-light)' : 'var(--bg-muted)',
-                                color: r.status === 'received' ? 'var(--success-text)' : r.status === 'in_repair' ? 'var(--primary-dark)' : 'var(--text-4)',
-                              }}>
-                                {r.status.replace('_', ' ')}
-                              </span>
-                            </div>
-                          </button>
-                        ))
-                      )}
-                    </div>
+                  />
+                  {jobForm.repairOrderId && (
+                    <button className="btn-outline flex-shrink-0 text-xs" onClick={clearRepairLink}>Clear</button>
                   )}
                 </div>
 
@@ -914,51 +867,36 @@ function OutsourceContent() {
 
               {/* ── Vendor search + inline create ── */}
               <div>
-                <label className="text-[11px] font-semibold text-t2 block mb-1">Vendor *</label>
-                <div className="relative">
-                  <div className="flex gap-1.5">
-                    <input
-                      className="form-input flex-1 text-[12px]"
-                      placeholder="Search by vendor name or phone…"
-                      value={vendorSearch}
-                      readOnly={!!jobForm.vendorId}
-                      onChange={e => {
-                        setVendorSearch(e.target.value)
-                        setJobForm(f => ({ ...f, vendorId: '' }))
-                        setShowVendorPicker(true)
-                      }}
-                      onFocus={() => { if (!jobForm.vendorId) setShowVendorPicker(true) }}
-                    />
-                    {jobForm.vendorId && (
-                      <button
-                        onClick={() => { setJobForm(f => ({ ...f, vendorId: '' })); setVendorSearch(''); setShowVendorPicker(false) }}
-                        style={{ fontSize: 11, padding: '0 10px', borderRadius: 8, border: '1px solid var(--border-lt)', background: 'var(--danger-bg)', color: '#991B1B', cursor: 'pointer', whiteSpace: 'nowrap' }}>
-                        Clear
-                      </button>
+                <div className="flex items-end gap-2">
+                  <SearchPicker
+                    label="Vendor *"
+                    placeholder="Search by vendor name, phone or specialty…"
+                    items={outsourceVendors}
+                    selectedLabel={jobForm.vendorId ? vendorSearch : undefined}
+                    formatSelected={v => v.name}
+                    onSelect={v => {
+                      setJobForm(f => ({ ...f, vendorId: v.id }))
+                      setVendorSearch(v.name)
+                    }}
+                    onCreateNew={openVendorFromJob}
+                    createNewLabels={{ title: 'Create vendor', subtitle: 'Add this vendor without losing the repair form' }}
+                    renderItem={v => (
+                      <div>
+                        <p className="text-xs font-semibold text-t1">{v.name}</p>
+                        <p className="truncate text-[11px] text-t3">
+                          {v.phone}{v.email ? ` · ${v.email}` : ''}
+                          {v.specializations.length ? ` · ${v.specializations.map(s => svcLabel(s)).join(', ')}` : ''}
+                        </p>
+                      </div>
                     )}
-                  </div>
-
-                  {showVendorPicker && !jobForm.vendorId && (
-                    <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 9300, background: '#fff', border: '1px solid var(--border-lt)', borderRadius: 8, boxShadow: '0 4px 12px rgba(0,0,0,0.1)', maxHeight: 220, overflowY: 'auto', marginTop: 2 }}>
-                      {vendorSearchResults.length === 0 && (
-                        <p className="px-3 py-3 text-[11px] text-t3">No vendors match "{vendorSearch}"</p>
-                      )}
-                      {vendorSearchResults.map(v => (
-                        <button key={v.id}
-                          onClick={() => { setJobForm(f => ({ ...f, vendorId: v.id })); setVendorSearch(v.name); setShowVendorPicker(false) }}
-                          style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 12px', border: 'none', background: 'transparent', cursor: 'pointer', borderBottom: '1px solid var(--bg-surface)' }}
-                          onMouseEnter={e => (e.currentTarget.style.background = '#F0F9FF')}
-                          onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
-                          <div className="font-medium text-[12px] text-t1">{v.name}</div>
-                          <div className="text-[10px] text-t3">{v.phone}{v.email ? ` · ${v.email}` : ''}{v.specializations.length ? ` · ${v.specializations.map(s => svcLabel(s)).join(', ')}` : ''}</div>
-                        </button>
-                      ))}
-                      <button
-                        onClick={openVendorFromJob}
-                        style={{ display: 'block', width: '100%', textAlign: 'left', padding: '9px 12px', border: 'none', background: 'var(--success-bg)', cursor: 'pointer', borderTop: '1px solid var(--border-lt)', color: 'var(--success-text)', fontSize: 11, fontWeight: 700 }}>
-                        + Create new vendor{vendorSearch.trim() ? `: "${vendorSearch.trim()}"` : ''}
-                      </button>
-                    </div>
+                  />
+                  {jobForm.vendorId && (
+                    <button
+                      className="btn-outline flex-shrink-0 text-xs"
+                      onClick={() => { setJobForm(f => ({ ...f, vendorId: '' })); setVendorSearch('') }}
+                    >
+                      Clear
+                    </button>
                   )}
                 </div>
 
@@ -1029,9 +967,9 @@ function OutsourceContent() {
               </div>
             </div>
 
-            <div className="flex gap-2 mt-4 justify-end">
-              <button className="btn-outline text-[11px] py-2 px-4" onClick={() => setShowJobModal(false)}>Cancel</button>
-              <button className="btn-primary text-[11px] py-2 px-4" onClick={submitJob}>Send for Repair</button>
+            <div className="modal-footer flex gap-2 justify-end">
+              <button className="btn-outline text-xs py-2 px-4" onClick={() => setShowJobModal(false)}>Cancel</button>
+              <button className="btn-primary text-xs py-2 px-4" onClick={submitJob}>Send for Repair</button>
             </div>
           </div>
         </div>
@@ -1043,16 +981,16 @@ function OutsourceContent() {
         if (!job) return null
         return (
           <div className="modal-overlay" onClick={() => setReturnJobId(null)}>
-            <div className="modal-box w-full max-w-md" onClick={e => e.stopPropagation()}>
-              <div className="flex items-center justify-between mb-4">
+            <div className="modal-box modal-layout w-full max-w-lg" onClick={e => e.stopPropagation()}>
+              <div className="modal-header flex items-center justify-between">
                 <div>
-                  <h3 className="text-sm font-bold text-t1">Mark Device Returned</h3>
-                  <p className="text-[11px] text-t3">{job.ref} · {job.deviceDescription}</p>
+                  <h3 className="text-base font-bold text-t1">Mark Device Returned</h3>
+                  <p className="text-xs text-t3">{job.ref} · {job.deviceDescription}</p>
                 </div>
-                <button onClick={() => setReturnJobId(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: 'var(--text-4)' }}>×</button>
+                <button className="touch-target rounded-lg text-xl text-t3 hover:bg-surface" onClick={() => setReturnJobId(null)} aria-label="Close">×</button>
               </div>
 
-              <div className="space-y-3">
+              <div className="modal-body-scroll space-y-4">
                 <div>
                   <label className="text-[11px] font-semibold text-t2 block mb-1">Return Date *</label>
                   <input type="date" aria-label="Return date" className="form-input w-full text-[12px]" value={returnForm.returnedDate}
@@ -1132,9 +1070,9 @@ function OutsourceContent() {
                 </div>
               </div>
 
-              <div className="flex gap-2 mt-4 justify-end">
-                <button className="btn-outline text-[11px] py-2 px-4" onClick={() => setReturnJobId(null)}>Cancel</button>
-                <button className="btn-primary text-[11px] py-2 px-4" onClick={submitReturn}>Confirm Return</button>
+              <div className="modal-footer flex gap-2 justify-end">
+                <button className="btn-outline text-xs py-2 px-4" onClick={() => setReturnJobId(null)}>Cancel</button>
+                <button className="btn-primary text-xs py-2 px-4" onClick={submitReturn}>Confirm Return</button>
               </div>
             </div>
           </div>
