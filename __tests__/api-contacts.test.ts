@@ -194,6 +194,18 @@ describe('POST /api/contacts', () => {
     expect(mockPrisma.client.create).toHaveBeenCalled()
   })
 
+  it.each([
+    { name: 'Phone-only Customer', isCustomer: true, isVendor: false },
+    { name: 'Phone-only Vendor', isCustomer: false, isVendor: true },
+  ])('creates $name without requiring an email address', async contact => {
+    const res = await POST(postReq({ ...contact, type: 'company', phone: '+254700000001', email: '' }))
+    expect(res.status).toBe(201)
+    expect(mockPrisma.client.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ email: null, phone: '+254700000001' }),
+    }))
+    expect((await res.json()).email).toBe('')
+  })
+
   it('generates a UUID id for the new contact through Prisma', async () => {
     const res = await POST(postReq({ name: 'Test Co' }))
     const body = await res.json()

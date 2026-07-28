@@ -1717,13 +1717,13 @@ function SalesContent() {
           <div className="flex flex-col gap-4">
             <Field label="Customer/Company Name" required><Input value={newContactQuery} onChange={setNewContactQuery} /></Field>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <Field label="Email" required><Input type="email" value={newContactEmail} onChange={setNewContactEmail} /></Field>
+              <Field label="Email"><Input type="email" value={newContactEmail} onChange={setNewContactEmail} /></Field>
               <Field label="Phone" required><Input type="tel" value={newContactPhone} onChange={setNewContactPhone} /></Field>
             </div>
             <div className="flex gap-2 justify-end pt-4 border-t border-[var(--border-lt)]">
               <button className="btn-outline" onClick={() => setShowCreateContact(false)} disabled={registeringContact}>Cancel</button>
               <button className="btn-primary" disabled={registeringContact} onClick={async () => {
-                if (!newContactQuery.trim() || !newContactEmail.trim() || !newContactPhone.trim()) { showToast('Please fill in all required fields', 'error'); return }
+                if (!newContactQuery.trim() || !newContactPhone.trim()) { showToast('Customer name and phone are required', 'error'); return }
                 setRegisteringContact(true)
                 try {
                   const contact = await addContact({ type: 'individual', name: newContactQuery.trim(), email: newContactEmail.trim(), phone: newContactPhone.trim(), address: '', isCustomer: true, isVendor: false, tags: [] })
