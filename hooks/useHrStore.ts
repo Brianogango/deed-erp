@@ -342,11 +342,17 @@ export const useHrStore = create<HrState>((set, get) => ({
         if (response.ok) {
           // The server owns the canonical id/reference — swap them into the
           // optimistic row so approvals and displays target the real record.
-          const data = await response.json().catch(() => null) as { request?: LeaveRequest } | null
+          const data = await response.json().catch(() => null) as {
+            request?: LeaveRequest
+            notification?: { success?: boolean; error?: string }
+          } | null
           const saved = data?.request
           if (saved?.id) {
             get().setLeaveRequests(prev => prev.map(r => r.id === leave.id ? { ...r, ...saved } : r))
             ctx.setWorkflowApprovals(prev => prev.map(flow => flow.targetId === leave.id ? { ...flow, targetId: saved.id, ref: saved.ref } : flow))
+          }
+          if (data?.notification && !data.notification.success) {
+            ctx.showToast(`Leave saved, but HR email was not delivered: ${data.notification.error ?? 'email provider unavailable'}`, 'info')
           }
           return
         }
@@ -387,7 +393,26 @@ export const useHrStore = create<HrState>((set, get) => ({
       get().setLeaveBalances(balPrev => {
         const nextBals = balPrev.map(b => b.employeeId === leave.employeeId && b.leaveType === leave.leaveType && b.year === year
           ? (approved ? { ...b, pending: Math.max(0, b.pending - leave.days), used: b.used + leave.days } : { ...b, pending: Math.max(0, b.pending - leave.days) }) : b)
-        if (updatedReq) fetch(`/api/leave-requests/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ request: updatedReq, balances: nextBals.filter(b => b.employeeId === leave.employeeId) }) }).catch(() => {})
+        if (updatedReq) {
+          fetch(`/api/leave-requests/${id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              request: updatedReq,
+              reviewNotes: note,
+              balances: nextBals.filter(b => b.employeeId === leave.employeeId),
+            }),
+          })
+            .then(async response => {
+              const data = await response.json().catch(() => null) as {
+                notification?: { success?: boolean; error?: string }
+              } | null
+              if (response.ok && data?.notification && !data.notification.success) {
+                ctx.showToast(`Decision saved, but employee email was not delivered: ${data.notification.error ?? 'email provider unavailable'}`, 'info')
+              }
+            })
+            .catch(() => {})
+        }
         return nextBals
       })
       return nextReqs

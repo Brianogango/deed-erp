@@ -1,5 +1,7 @@
 // ─── Email Integration Layer ─────────────────────────────────────────────────
 
+import { resolveEmailProvider, validateEmailConfig } from './email-config'
+
 /**
  * Email Service Integration
  * 
@@ -57,30 +59,45 @@ const profileAuth = (
 }
 
 const pickMailbox = (profile: MailboxProfile): MailboxConfig => {
+  const allowAlias = process.env.SMTP_ALLOW_FROM_ALIAS === 'true'
+  const defaultUser = process.env.SMTP_USER ?? ''
   const def: MailboxConfig = {
-    user: process.env.SMTP_USER ?? '',
+    user: defaultUser,
     pass: process.env.SMTP_PASS ?? '',
-    from: process.env.EMAIL_FROM ?? process.env.SMTP_USER ?? 'noreply@deed.co.ke',
+    // Most SMTP servers reject a From address that differs from the
+    // authenticated mailbox. Aliases must be explicitly enabled.
+    from: allowAlias
+      ? (process.env.EMAIL_FROM ?? (defaultUser || 'noreply@deed.co.ke'))
+      : (defaultUser || process.env.EMAIL_FROM || 'noreply@deed.co.ke'),
   }
   if (profile === 'hr') {
+    const hasProfileAuth = Boolean(process.env.HR_SMTP_USER && process.env.HR_SMTP_PASS)
     const auth = profileAuth(process.env.HR_SMTP_USER, process.env.HR_SMTP_PASS, def)
     return {
       ...auth,
-      from: process.env.HR_EMAIL || process.env.HR_SMTP_USER || def.from,
+      from: (hasProfileAuth || allowAlias)
+        ? (process.env.HR_EMAIL || process.env.HR_SMTP_USER || def.from)
+        : def.from,
     }
   }
   if (profile === 'sales') {
+    const hasProfileAuth = Boolean(process.env.SALES_SMTP_USER && process.env.SALES_SMTP_PASS)
     const auth = profileAuth(process.env.SALES_SMTP_USER, process.env.SALES_SMTP_PASS, def)
     return {
       ...auth,
-      from: process.env.SALES_EMAIL || process.env.SALES_SMTP_USER || def.from,
+      from: (hasProfileAuth || allowAlias)
+        ? (process.env.SALES_EMAIL || process.env.SALES_SMTP_USER || def.from)
+        : def.from,
     }
   }
   if (profile === 'accounts') {
+    const hasProfileAuth = Boolean(process.env.ACCOUNTS_SMTP_USER && process.env.ACCOUNTS_SMTP_PASS)
     const auth = profileAuth(process.env.ACCOUNTS_SMTP_USER, process.env.ACCOUNTS_SMTP_PASS, def)
     return {
       ...auth,
-      from: process.env.ACCOUNTS_EMAIL || process.env.ACCOUNTS_SMTP_USER || def.from,
+      from: (hasProfileAuth || allowAlias)
+        ? (process.env.ACCOUNTS_EMAIL || process.env.ACCOUNTS_SMTP_USER || def.from)
+        : def.from,
     }
   }
   return def
@@ -100,7 +117,7 @@ export interface EmailResult {
  */
 export const sendEmail = async (message: EmailMessage): Promise<EmailResult> => {
   // Development mode: Just log
-  if (process.env.NODE_ENV !== 'production') {
+  if (process.env.NODE_ENV !== 'production' && process.env.EMAIL_SEND_IN_NON_PRODUCTION !== 'true') {
     logEmailForDev(message)
     return {
       success: true,
@@ -108,7 +125,11 @@ export const sendEmail = async (message: EmailMessage): Promise<EmailResult> => 
     }
   }
 
-  const provider = process.env.EMAIL_PROVIDER || 'sendgrid'
+  const config = validateEmailConfig()
+  if (!config.ok) {
+    return { success: false, error: config.errors.join('; ') }
+  }
+  const provider = resolveEmailProvider()
 
   try {
     switch (provider) {
@@ -129,6 +150,41 @@ export const sendEmail = async (message: EmailMessage): Promise<EmailResult> => 
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Unknown error',
+    }
+  }
+}
+
+/**
+ * Validate provider configuration and verify SMTP connectivity without sending
+ * a message. SendGrid/SES are configuration-checked because their APIs do not
+ * expose a side-effect-free send verification call.
+ */
+export const verifyEmailProvider = async (): Promise<EmailResult & { provider?: string }> => {
+  const config = validateEmailConfig()
+  if (!config.ok) {
+    return { success: false, provider: config.provider, error: config.errors.join('; ') }
+  }
+  if (config.provider !== 'smtp') {
+    return { success: true, provider: config.provider, messageId: 'configuration-valid' }
+  }
+
+  try {
+    const nodemailer = await import('nodemailer')
+    const mailbox = pickMailbox('default')
+    const transporter = nodemailer.default.createTransport({
+      host: process.env.SMTP_HOST,
+      port: Number(process.env.SMTP_PORT) || 587,
+      secure: process.env.SMTP_SECURE === 'true',
+      auth: { user: mailbox.user, pass: mailbox.pass },
+      tls: process.env.SMTP_TLS_INSECURE === 'true' ? { rejectUnauthorized: false } : undefined,
+    })
+    await transporter.verify()
+    return { success: true, provider: config.provider, messageId: 'smtp-verified' }
+  } catch (error) {
+    return {
+      success: false,
+      provider: config.provider,
+      error: error instanceof Error ? error.message : 'SMTP verification failed',
     }
   }
 }
@@ -262,7 +318,7 @@ const sendViaSMTP = async (message: EmailMessage): Promise<EmailResult> => {
         user: mailbox.user,
         pass: mailbox.pass,
       },
-      tls: { rejectUnauthorized: false },
+      tls: process.env.SMTP_TLS_INSECURE === 'true' ? { rejectUnauthorized: false } : undefined,
     })
     const result = await transporter.sendMail({
       from: message.from || mailbox.from,

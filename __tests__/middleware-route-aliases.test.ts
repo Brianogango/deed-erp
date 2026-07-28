@@ -59,3 +59,28 @@ describe('legacy ERP route aliases', () => {
     expect(response.headers.get('x-middleware-next')).toBe('1')
   })
 })
+
+describe('internal notification routes', () => {
+  beforeEach(() => {
+    process.env.INTERNAL_API_SECRET = 'internal-test-secret'
+    getToken.mockResolvedValue(null)
+  })
+
+  it.each(['/api/notifications/send', '/api/admin/email-health'])(
+    'allows %s through with the valid internal secret',
+    async path => {
+      const response = await middleware(new NextRequest(`https://erp.example.test${path}`, {
+        headers: { 'x-internal-secret': 'internal-test-secret' },
+      }))
+      expect(response.status).toBe(200)
+      expect(response.headers.get('x-middleware-next')).toBe('1')
+    },
+  )
+
+  it('rejects notification calls with an invalid internal secret and no session', async () => {
+    const response = await middleware(new NextRequest('https://erp.example.test/api/notifications/send', {
+      headers: { 'x-internal-secret': 'wrong' },
+    }))
+    expect(response.status).toBe(401)
+  })
+})

@@ -5,6 +5,7 @@ import { writeFinancialAudit } from '@/lib/finance-audit'
 import prisma from '@/lib/prisma'
 import { toClientRequest, adjustBalance } from '@/lib/hr/leave-store'
 import type { StoreLeaveType } from '@/lib/leave-utils'
+import { notifyLeaveDecision } from '@/lib/integrations/leave-notifications'
 
 const WRITE_ROLES = ['director', 'admin_officer', 'finance_officer', 'technical_lead']
 
@@ -59,7 +60,9 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
       reviewedByName: session.user.name,
       reviewedById: null,
       reviewedAt: new Date(),
-      reviewNotes: typeof requested.reviewNotes === 'string' ? requested.reviewNotes : undefined,
+      reviewNotes: typeof requested.reviewNotes === 'string'
+        ? requested.reviewNotes
+        : typeof body.reviewNotes === 'string' ? body.reviewNotes : undefined,
     },
   })
 
@@ -72,7 +75,30 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
     newValues: { status: nextStatus, employeeId: existing.employeeId },
   })
 
-  return NextResponse.json({ item: toClientRequest(updated as any) })
+  const notification = nextStatus !== existing.status && ['approved', 'rejected', 'cancelled'].includes(nextStatus)
+    ? await notifyLeaveDecision({
+        requestId: updated.id,
+        reference: updated.reference,
+        employeeId: updated.employeeId,
+        employeeName: updated.employeeName,
+        leaveType: String(updated.leaveType),
+        days: Number(updated.daysRequested),
+        startDate: updated.startDate,
+        endDate: updated.endDate,
+        reason: updated.reason,
+        submittedByUserId: updated.submittedByUserId,
+        status: nextStatus as 'approved' | 'rejected' | 'cancelled',
+        reviewerName: session.user.name,
+        note: updated.reviewNotes,
+      }).catch(error => ({
+        attempted: false,
+        success: false,
+        recipients: [],
+        error: error instanceof Error ? error.message : 'Leave email notification failed',
+      }))
+    : null
+
+  return NextResponse.json({ item: toClientRequest(updated as any), notification })
 }
 
 export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {

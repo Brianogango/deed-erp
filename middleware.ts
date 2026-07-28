@@ -19,6 +19,14 @@ const PUBLIC_API_PATHS    = new Set(['/api/auth/login', '/api/auth/logout', '/ap
 const PUBLIC_ASSET_PATHS  = new Set(['/deed-logo.png', '/deed-logo.svg', '/sw.js', '/offline.html', '/manifest.json'])
 const PUBLIC_PATH_PREFIXES = ['/track', '/portal', '/api/portal/repair', '/api/portal/quotes', '/api/portal/intake']
 const HIGH_TRAFFIC_READ_PREFIXES = ['/api/store/stream']
+// These handlers independently validate x-internal-secret. Middleware allows
+// the request through so server-to-server calls are not rejected for lacking a
+// browser session.
+const INTERNAL_SECRET_API_PATHS = new Set([
+  '/api/admin/backfill-repairs',
+  '/api/admin/email-health',
+  '/api/notifications/send',
+])
 
 export const LEGACY_ROUTE_REDIRECTS: Readonly<Record<string, string>> = {
   '/dashboard': '/',
@@ -133,7 +141,7 @@ export async function middleware(request: NextRequest) {
     // the target route re-validates the same header before doing anything.
     const internalSecret = process.env.INTERNAL_API_SECRET
     if (
-      pathname === '/api/admin/backfill-repairs' &&
+      INTERNAL_SECRET_API_PATHS.has(pathname) &&
       internalSecret &&
       request.headers.get('x-internal-secret') === internalSecret
     ) {

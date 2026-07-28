@@ -1,17 +1,21 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
-const { mockGetServerSession, mockPrisma } = vi.hoisted(() => ({
+const { mockGetServerSession, mockPrisma, mockNotifyDecision } = vi.hoisted(() => ({
   mockGetServerSession: vi.fn(),
   mockPrisma: {
     leaveRequest: { findUnique: vi.fn(), update: vi.fn() },
     leaveBalance: { findUnique: vi.fn(), upsert: vi.fn() },
     employee: { findFirst: vi.fn(), findUnique: vi.fn() },
   },
+  mockNotifyDecision: vi.fn(),
 }))
 
 vi.mock('@/lib/auth/server', () => ({ getServerSession: mockGetServerSession }))
 vi.mock('@/lib/finance-audit', () => ({ writeFinancialAudit: vi.fn() }))
 vi.mock('@/lib/prisma', () => ({ default: mockPrisma }))
+vi.mock('@/lib/integrations/leave-notifications', () => ({
+  notifyLeaveDecision: mockNotifyDecision,
+}))
 
 import { PUT } from '@/app/api/leave-requests/[id]/route'
 import { NextRequest } from 'next/server'
@@ -40,6 +44,7 @@ beforeEach(() => {
   mockPrisma.leaveBalance.upsert.mockResolvedValue({})
   mockPrisma.employee.findUnique.mockResolvedValue({ gender: null })
   mockPrisma.employee.findFirst.mockResolvedValue(null)
+  mockNotifyDecision.mockResolvedValue({ attempted: true, success: true, recipients: ['ann@example.test'] })
 })
 
 describe('PUT /api/leave-requests/[id] — no self-approval', () => {
@@ -47,6 +52,23 @@ describe('PUT /api/leave-requests/[id] — no self-approval', () => {
     const res = await PUT(putReq({ status: 'approved' }), { params: { id: 'lr-1' } })
     expect(res.status).toBe(200)
     expect(mockPrisma.leaveRequest.update).toHaveBeenCalled()
+    expect(mockNotifyDecision).toHaveBeenCalledWith(expect.objectContaining({
+      requestId: 'lr-1',
+      status: 'approved',
+      reviewerName: 'Director',
+    }))
+  })
+
+  it('persists and emails the decision note supplied outside the client request shape', async () => {
+    const res = await PUT(putReq({ request: { status: 'rejected' }, reviewNotes: 'Insufficient cover' }), { params: { id: 'lr-1' } })
+    expect(res.status).toBe(200)
+    expect(mockPrisma.leaveRequest.update).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ reviewNotes: 'Insufficient cover' }),
+    }))
+    expect(mockNotifyDecision).toHaveBeenCalledWith(expect.objectContaining({
+      status: 'rejected',
+      note: 'Insufficient cover',
+    }))
   })
 
   it('blocks approving a request the caller submitted themselves', async () => {

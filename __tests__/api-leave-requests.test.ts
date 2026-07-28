@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
-const { mockGetSession, mockPrisma } = vi.hoisted(() => ({
+const { mockGetSession, mockPrisma, mockNotifySubmitted, mockNotifyDecision } = vi.hoisted(() => ({
   mockGetSession: vi.fn(),
   mockPrisma: {
     leaveRequest: { findMany: vi.fn(), findFirst: vi.fn(), findUnique: vi.fn(), create: vi.fn(), update: vi.fn() },
@@ -8,6 +8,8 @@ const { mockGetSession, mockPrisma } = vi.hoisted(() => ({
     employee: { findFirst: vi.fn(), findUnique: vi.fn() },
     $queryRaw: vi.fn(),
   },
+  mockNotifySubmitted: vi.fn(),
+  mockNotifyDecision: vi.fn(),
 }))
 
 vi.mock('@/lib/auth/api', () => ({
@@ -21,6 +23,10 @@ vi.mock('@/lib/auth/api', () => ({
 }))
 vi.mock('@/lib/finance-audit', () => ({ writeFinancialAudit: vi.fn() }))
 vi.mock('@/lib/prisma', () => ({ default: mockPrisma }))
+vi.mock('@/lib/integrations/leave-notifications', () => ({
+  notifyLeaveSubmitted: mockNotifySubmitted,
+  notifyLeaveDecision: mockNotifyDecision,
+}))
 
 import { POST } from '@/app/api/leave-requests/route'
 
@@ -47,6 +53,8 @@ beforeEach(() => {
     ...data, id: 'new-id', createdAt: new Date(), startDate: new Date(data.startDate), endDate: new Date(data.endDate),
     reviewedAt: null, reviewedByName: null,
   }))
+  mockNotifySubmitted.mockResolvedValue({ attempted: true, success: true, recipients: ['hr@example.test'] })
+  mockNotifyDecision.mockResolvedValue({ attempted: true, success: true, recipients: ['employee@example.test'] })
 })
 
 afterEach(() => {
@@ -64,6 +72,10 @@ describe('POST /api/leave-requests — Prisma-backed self-service', () => {
     expect(created.employeeId).toBe('emp-tech')
     // Reserves the days as pending on the balance.
     expect(mockPrisma.leaveBalance.upsert).toHaveBeenCalled()
+    expect(mockNotifySubmitted).toHaveBeenCalledWith(expect.objectContaining({
+      employeeId: 'emp-tech',
+      leaveType: 'annual',
+    }))
   })
 
   it('derives the day count from the date range, ignoring a client-sent days value', async () => {
@@ -191,6 +203,11 @@ describe('POST /api/leave-requests — Prisma-backed self-service', () => {
     expect(res.status).toBe(200)
     const created = mockPrisma.leaveRequest.create.mock.calls[0][0].data
     expect(created.status).toBe('approved')
+    expect(mockNotifyDecision).toHaveBeenCalledWith(expect.objectContaining({
+      employeeId: 'emp-x',
+      status: 'approved',
+      reviewerName: 'HR',
+    }))
   })
 
   it('forces an HR user\'s OWN leave to pending — no self-approval', async () => {
@@ -214,6 +231,8 @@ describe('POST /api/leave-requests — Prisma-backed self-service', () => {
     expect(res.status).toBe(200)
     const created = mockPrisma.leaveRequest.create.mock.calls[0][0].data
     expect(created.status).toBe('approved')
+    expect(mockNotifyDecision).not.toHaveBeenCalled()
+    expect(mockNotifySubmitted).not.toHaveBeenCalled()
   })
 
   it('rejects maternity leave for a male employee', async () => {

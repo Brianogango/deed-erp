@@ -5,6 +5,7 @@ import { writeFinancialAudit } from '@/lib/finance-audit'
 import prisma from '@/lib/prisma'
 import { CALENDAR_DAY_TYPES, calcCalendarDays, calcWorkingDays, EMPLOYEE_LEAVE_TYPES, isLeaveTypeAllowedForGender, requiredNotice, noticeDaysGiven, type EmployeeGender, type StoreLeaveType } from '@/lib/leave-utils'
 import { toClientRequest, toClientBalance, defaultBalances, adjustBalance, getBalance } from '@/lib/hr/leave-store'
+import { notifyLeaveDecision, notifyLeaveSubmitted, type LeaveEmailResult } from '@/lib/integrations/leave-notifications'
 
 const HR_ROLES = ['director', 'admin_officer', 'finance_officer', 'technical_lead']
 
@@ -92,6 +93,7 @@ export async function POST(request: Request) {
       }).catch(() => null)
       const incoming: any[] = body.bulkRequests ?? [body]
       const created: string[] = []
+      const notifications: LeaveEmailResult[] = []
       for (const req of incoming) {
         const leaveType = String(req.leaveType ?? '') as StoreLeaveType
         if (!leaveType) continue
@@ -120,6 +122,32 @@ export async function POST(request: Request) {
         const year = new Date(req.startDate).getFullYear()
         await adjustBalance(req.employeeId, leaveType, year, status === 'approved' ? { used: days } : { pending: days })
         created.push(row.id)
+        if (!req.isSystemGenerated) {
+          const details = {
+            requestId: row.id,
+            reference: row.reference,
+            employeeId: row.employeeId,
+            employeeName: row.employeeName,
+            leaveType: String(row.leaveType),
+            days: Number(row.daysRequested),
+            startDate: row.startDate,
+            endDate: row.endDate,
+            reason: row.reason,
+            submittedByUserId: row.submittedByUserId,
+          }
+          const notification = await (status === 'pending_hr'
+            ? notifyLeaveSubmitted(details)
+            : status === 'approved'
+              ? notifyLeaveDecision({ ...details, status: 'approved', reviewerName: session.user.name })
+              : Promise.resolve(null)
+          ).catch(error => ({
+            attempted: false,
+            success: false,
+            recipients: [],
+            error: error instanceof Error ? error.message : 'Leave email notification failed',
+          }))
+          if (notification) notifications.push(notification)
+        }
       }
       // Optional explicit balance overrides (HR entitlement edits).
       if (Array.isArray(body.balances)) {
@@ -133,7 +161,7 @@ export async function POST(request: Request) {
         }
       }
       await writeFinancialAudit({ userId: session.user.id, action: 'hr_leave_write', entityType: 'leave_request', newValues: { created: created.length } })
-      return NextResponse.json({ ok: true, added: created.length })
+      return NextResponse.json({ ok: true, added: created.length, notifications })
     }
 
     // ── Self-service ────────────────────────────────────────────────────────────
@@ -210,7 +238,24 @@ export async function POST(request: Request) {
     })
     await adjustBalance(employee.id, leaveType, year, { pending: days })
     await writeFinancialAudit({ userId: session.user.id, action: 'apply_leave', entityType: 'leave_request', entityId: row.id, newValues: { leaveType, days, employeeId: employee.id } })
+    const notification = await notifyLeaveSubmitted({
+      requestId: row.id,
+      reference: row.reference,
+      employeeId: row.employeeId,
+      employeeName: row.employeeName,
+      leaveType: String(row.leaveType),
+      days: Number(row.daysRequested),
+      startDate: row.startDate,
+      endDate: row.endDate,
+      reason: row.reason,
+      submittedByUserId: row.submittedByUserId,
+    }).catch(error => ({
+      attempted: false,
+      success: false,
+      recipients: [],
+      error: error instanceof Error ? error.message : 'Leave email notification failed',
+    }))
 
-    return NextResponse.json({ ok: true, added: 1, request: toClientRequest(row as any) })
+    return NextResponse.json({ ok: true, added: 1, request: toClientRequest(row as any), notification })
   })
 }
