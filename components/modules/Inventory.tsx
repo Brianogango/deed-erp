@@ -3,7 +3,7 @@ import React, { useMemo, useState, useRef, useEffect } from 'react'
 import * as XLSX from 'xlsx'
 import {
   useInventoryStore, Product, LOCATIONS, LocationId, CATEGORY_CONFIG, ALL_CATEGORIES, CategoryId,
-  fmtKes, fmtDate, Account, AdjReason,
+  fmtKes, fmtDate, Account, AdjReason, SerialNumber,
 } from '@/lib/store'
 import { Badge, Modal, Field, Input, Select, Confirm, PanelHeader, SearchPicker, ModuleSkeleton, ModuleHeader, TabBar } from '@/components/ui'
 import { DataTable, type ColumnDef, type PrimaryFilterConfig } from '@/components/data-table'
@@ -15,10 +15,11 @@ import { guardSpreadsheetFile, guardSpreadsheetRows, SpreadsheetGuardError } fro
 import { Barcode } from '@/components/modules/Barcode'
 import { inferTrackingMethod, isSerialTracking, isStockTracked, type TrackingMethod } from '@/lib/inventory-identifiers'
 import InventoryProductsPanel from '@/components/inventory/InventoryProductsPanel'
-import { canValidatePurchaseReceipt } from '@/lib/inventory/permissions'
+import { canValidatePurchaseReceipt, canReleaseHeldSerial } from '@/lib/inventory/permissions'
+import { explainSerialWhereabouts, findSerialMatches } from '@/lib/inventory/serial-trace'
 
 type MainTab = 'warehouse_view' | 'product_master' | 'movements' | 'product_catalog' | 'opening_stock' | 'stock_in' | 'stock_out' | 'transfers' | 'adjustments' | 'stock_take' | 'reports'
-type ReportTab = 'stock_on_hand' | 'opening_closing' | 'movements' | 'serial_tracking' | 'low_stock'
+type ReportTab = 'stock_on_hand' | 'opening_closing' | 'movements' | 'serial_tracking' | 'serial_lookup' | 'low_stock'
 const MAIN_TABS: MainTab[] = ['warehouse_view', 'product_master', 'movements', 'product_catalog', 'opening_stock', 'stock_in', 'stock_out', 'transfers', 'adjustments', 'stock_take', 'reports']
 const INVENTORY_TAB_ALIASES: Record<string, MainTab> = {
   warehouse: 'warehouse_view',
@@ -157,6 +158,7 @@ export default function Inventory() {
     systemSettings,
     bulkStock,
     stockAdjustments, createAdjustment, approveAdjustment,
+    saleOrders, releaseSerialToStock,
   } = useInventoryStore()
 
   const [tab, setTab] = useState<MainTab>('product_catalog')
@@ -191,6 +193,9 @@ export default function Inventory() {
   const [catalogCatFilter, setCatalogCatFilter] = useState('All')
   const [reportMonth, setReportMonth] = useState(new Date().toISOString().slice(5, 7))
   const [reportProductId, setReportProductId] = useState('All')
+  const [serialLookupQuery, setSerialLookupQuery] = useState('')
+  const [serialReportStatus, setSerialReportStatus] = useState<'all' | SerialNumber['status']>('all')
+  const [serialReportSearch, setSerialReportSearch] = useState('')
 
   const [showForm, setShowForm] = useState(false)
   const [editId, setEditId] = useState<string | null>(null)
@@ -365,7 +370,8 @@ export default function Inventory() {
     }
     const rSerials: typeof serials = []
     for (const s of serials) {
-      if (['available', 'sold', 'under_repair', 'returned'].includes(s.status) && validProductIds.has(s.productId)) {
+      // Include all lifecycle statuses so reserved (assigned), sold, and refurb are visible.
+      if (validProductIds.has(s.productId)) {
         rSerials.push(s)
       }
     }
@@ -377,6 +383,45 @@ export default function Inventory() {
       filteredLowStock: lStock,
     }
   }, [stockableProducts, stockMoves, serials, bulkStock, getStockByLocation, catFilter, reportProductId, reportMonth])
+
+  const displayedTrackedSerials = useMemo(() => {
+    const q = serialReportSearch.trim().toLowerCase()
+    return filteredTrackedSerials.filter(s => {
+      if (serialReportStatus !== 'all' && s.status !== serialReportStatus) return false
+      if (!q) return true
+      return (
+        s.serial.toLowerCase().includes(q) ||
+        String(s.barcode || '').toLowerCase().includes(q) ||
+        s.productName.toLowerCase().includes(q)
+      )
+    })
+  }, [filteredTrackedSerials, serialReportStatus, serialReportSearch])
+
+  const serialLookupResults = useMemo(() => {
+    const matches = findSerialMatches(serialLookupQuery, serials)
+    return matches.map(serial => explainSerialWhereabouts({
+      serial,
+      saleOrders: saleOrders.map(so => ({
+        id: so.id,
+        ref: so.ref,
+        status: so.status,
+        customerName: so.customerName,
+        lines: so.lines.map(l => ({ serialIds: l.serialIds, productName: l.productName })),
+      })),
+      stockMoves: stockMoves.map(m => ({
+        id: m.id,
+        productId: m.productId,
+        date: m.date,
+        reason: m.reason,
+        documentRef: m.documentRef,
+        serialNumbers: m.serialNumbers,
+        fromLocation: m.fromLocation,
+        toLocation: m.toLocation,
+      })),
+    }))
+  }, [serialLookupQuery, serials, saleOrders, stockMoves])
+
+  const canReleaseSerials = canReleaseHeldSerial(users.find(u => u.id === currentUserId)?.role)
 
   const kpis = useMemo(() => {
     let activeProducts = 0
@@ -2198,6 +2243,7 @@ export default function Inventory() {
               ['opening_closing', 'Opening vs Closing'],
               ['movements', 'Stock Movements'],
               ['serial_tracking', 'Serial Tracking'],
+              ['serial_lookup', 'Find Serial'],
               ['low_stock', 'Low Stock'],
             ] as [ReportTab, string][]).map(([value, label]) => (
               <button type="button" key={value} onClick={() => {
@@ -2405,7 +2451,28 @@ export default function Inventory() {
 
           {reportTab === 'serial_tracking' && (
             <div className="card overflow-hidden">
-              <PanelHeader title="Serial Tracking Report" count={filteredTrackedSerials.length} />
+              <PanelHeader title="Serial Tracking Report" count={displayedTrackedSerials.length} />
+              <div className="px-4 py-3 border-b border-[var(--border-lt)] grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <Field label="Search serial">
+                  <Input value={serialReportSearch} onChange={setSerialReportSearch} placeholder="e.g. PF1CX9NP" />
+                </Field>
+                <Field label="Status">
+                  <Select
+                    value={serialReportStatus}
+                    onChange={v => setSerialReportStatus(v as typeof serialReportStatus)}
+                    options={[
+                      { value: 'all', label: 'All statuses' },
+                      { value: 'available', label: 'Available' },
+                      { value: 'assigned', label: 'Reserved (assigned)' },
+                      { value: 'sold', label: 'Sold' },
+                      { value: 'refurbishment', label: 'Refurbishment' },
+                      { value: 'under_repair', label: 'Under repair' },
+                      { value: 'returned', label: 'Returned' },
+                      { value: 'written_off', label: 'Written off' },
+                    ]}
+                  />
+                </Field>
+              </div>
               <DataTable
                 tableId="inventory-report-serials"
                 columns={[
@@ -2431,8 +2498,8 @@ export default function Inventory() {
                   },
                   {
                     key: 'status', label: 'Status', priority: 1, width: '120px',
-                    render: serial => <Badge status={serial.status === 'available' ? 'active' : serial.status === 'sold' ? 'done' : serial.status === 'under_repair' ? 'pending' : 'cancelled'} label={serial.status.replace('_', ' ')} />,
-                    exportValue: serial => serial.status.replace('_', ' '),
+                    render: serial => <Badge status={serial.status === 'available' ? 'active' : serial.status === 'sold' ? 'done' : serial.status === 'assigned' ? 'pending' : serial.status === 'under_repair' ? 'pending' : 'cancelled'} label={serial.status.replace(/_/g, ' ')} />,
+                    exportValue: serial => serial.status.replace(/_/g, ' '),
                   },
                   {
                     key: 'received', label: 'Received', priority: 3, width: '100px',
@@ -2440,14 +2507,76 @@ export default function Inventory() {
                     exportValue: serial => serial.receivedDate,
                   },
                 ]}
-                rows={filteredTrackedSerials}
+                rows={displayedTrackedSerials}
                 rowKey={s => s.id}
                 hideSearch
-                emptyMessage="No serial records found"
+                emptyMessage="No serial records match this filter — try Find Serial for a global search"
                 exportTitle="Serial Tracking"
                 exportFilename="inventory-serials"
                 perPage={20}
+                rowActions={row => (
+                  (row.status === 'assigned' || row.status === 'returned') && canReleaseSerials ? (
+                    <button
+                      type="button"
+                      className="px-2 py-1 rounded-lg border text-[10px] font-bold text-amber-800 border-amber-300 bg-amber-50"
+                      onClick={() => releaseSerialToStock(row.id, 'warehouse')}
+                    >
+                      Release
+                    </button>
+                  ) : null
+                )}
               />
+            </div>
+          )}
+
+          {reportTab === 'serial_lookup' && (
+            <div className="card p-4 space-y-4">
+              <div>
+                <h3 className="text-sm font-bold text-text-1">Find a serial</h3>
+                <p className="text-[11px] text-text-3 mt-1">
+                  Search any serial (including sold / reserved). Example: look up <span className="font-mono">PF1CX9NP</span> to see where it went.
+                </p>
+              </div>
+              <Field label="Serial or asset tag">
+                <Input value={serialLookupQuery} onChange={setSerialLookupQuery} placeholder="Paste serial e.g. PF1CX9NP" />
+              </Field>
+              {!serialLookupQuery.trim() && (
+                <p className="text-xs text-text-4">Enter a serial number to see status, location, linked sale order, and stock moves.</p>
+              )}
+              {serialLookupQuery.trim() && serialLookupResults.length === 0 && (
+                <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-xs text-red-800">
+                  No record found for <span className="font-mono font-bold">{serialLookupQuery.trim()}</span>.
+                  It may have been renamed via Edit serial, never received into Deed, or belong to a different product spelling.
+                  Also check Stock Movements for that product around the date it disappeared.
+                </div>
+              )}
+              {serialLookupResults.map(result => (
+                <div key={result.serial.id} className="rounded-xl border border-[var(--border-lt)] bg-[var(--bg-surface)] px-4 py-3 space-y-2">
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <div>
+                      <p className="font-mono text-sm font-bold text-primary-800">{result.serial.serial}</p>
+                      <p className="text-xs text-text-2 mt-0.5">{result.serial.productName}</p>
+                    </div>
+                    <Badge
+                      status={result.serial.status === 'available' ? 'active' : result.serial.status === 'sold' ? 'done' : 'pending'}
+                      label={result.serial.status.replace(/_/g, ' ')}
+                    />
+                  </div>
+                  <p className="text-xs font-semibold text-text-1">{result.summary}</p>
+                  <ul className="text-[11px] text-text-3 space-y-1 list-disc pl-4">
+                    {result.details.map((line, i) => <li key={i}>{line}</li>)}
+                  </ul>
+                  {(result.serial.status === 'assigned' || result.serial.status === 'returned') && canReleaseSerials && (
+                    <button
+                      type="button"
+                      className="btn-secondary text-[11px]"
+                      onClick={() => releaseSerialToStock(result.serial.id, 'warehouse')}
+                    >
+                      Release back to on hand
+                    </button>
+                  )}
+                </div>
+              ))}
             </div>
           )}
 

@@ -2688,6 +2688,8 @@ export interface AppState {
   getProductSerials: (productId: string, location?: LocationId) => SerialNumber[]
    getAvailableSerials: (productId: string) => SerialNumber[]
   updateSerial: (id: string, patch: Partial<SerialNumber>) => void
+  /** Return a held (assigned) serial to available on-hand stock and detach from SO lines. */
+  releaseSerialToStock: (serialId: string, destination?: LocationId) => boolean
 
   // Sale Orders
   createSaleOrder: (customerId: string, customerName: string, initial?: Partial<Pick<SaleOrder, 'lines' | 'deliveryDate' | 'notes' | 'paymentTerms' | 'validUntil' | 'customerRef' | 'invoiceAddress' | 'deliveryAddress' | 'pricelist' | 'salespersonId' | 'salespersonName' | 'salesTeam'>>) => SaleOrder
@@ -2926,10 +2928,12 @@ export type InventoryStoreState = Pick<AppState,
   | 'systemSettings'
   | 'bulkStock'
   | 'stockAdjustments'
+  | 'saleOrders'
   | 'addProduct'
   | 'updateProduct'
   | 'updateProductPrice'
   | 'updateSerial'
+  | 'releaseSerialToStock'
   | 'createTransfer'
   | 'addTransferLine'
   | 'validateTransfer'
@@ -4727,6 +4731,7 @@ export function StoreProvider({
     showToast: (...args: Parameters<AppState['showToast']>) => storeCtxRef.current!.showToast(...args),
     addAuditLog: (...args: Parameters<AppState['addAuditLog']>) => storeCtxRef.current!.addAuditLog(...args),
     updateSerial: (...args: Parameters<AppState['updateSerial']>) => storeCtxRef.current!.updateSerial(...args),
+    releaseSerialToStock: (...args: Parameters<AppState['releaseSerialToStock']>) => storeCtxRef.current!.releaseSerialToStock(...args),
     createRefurbishmentJob: (...args: Parameters<AppState['createRefurbishmentJob']>) => storeCtxRef.current!.createRefurbishmentJob(...args),
     transferToSell: (...args: Parameters<AppState['transferToSell']>) => storeCtxRef.current!.transferToSell(...args),
     createAdjustment: (...args: Parameters<AppState['createAdjustment']>) => storeCtxRef.current!.createAdjustment(...args),
@@ -7638,6 +7643,65 @@ const storeCtx: AppState = {
       if (updated) sync(`/api/serials/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
       return next
     }),
+
+    releaseSerialToStock: (serialId, destination = 'warehouse') => {
+      const user = currentUser()
+      if (!user || !['director', 'admin_officer', 'inventory_officer'].includes(user.role)) {
+        showToast('Only Inventory, Admin Officer or Director can release held serials', 'error')
+        return false
+      }
+      const serial = serialRef.current.find(s => s.id === serialId)
+      if (!serial) { showToast('Serial not found', 'error'); return false }
+      if (serial.status === 'available') {
+        showToast('Serial is already available on hand', 'info')
+        return false
+      }
+      if (serial.status === 'sold') {
+        showToast('Sold serials must be returned via buyback, exchange or RMA — not released directly', 'error')
+        return false
+      }
+      if (!['assigned', 'returned'].includes(serial.status)) {
+        showToast(`Cannot release serial with status “${serial.status.replace(/_/g, ' ')}”`, 'error')
+        return false
+      }
+
+      // Detach from any open SO line that still holds this serial id.
+      setSaleOrders(prev => prev.map(so => {
+        const touched = so.lines.some(l => (l.serialIds || []).includes(serialId))
+        if (!touched) return so
+        const lines = so.lines.map(l => ({
+          ...l,
+          serialIds: (l.serialIds || []).filter(id => id !== serialId),
+        }))
+        const updated = { ...so, lines }
+        sync(`/api/sale-orders/${so.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+        return updated
+      }))
+
+      const dest: LocationId = (['warehouse', 'shop', 'repair_unit'] as LocationId[]).includes(destination)
+        ? destination
+        : 'warehouse'
+      const nextSerial: SerialNumber = {
+        ...serial,
+        status: 'available',
+        location: dest,
+        saleOrderId: undefined,
+        repairId: undefined,
+        soldDate: undefined,
+      }
+      setSerials(p => {
+        const next = p.map(s => s.id === serialId ? nextSerial : s)
+        sync(`/api/serials/${serialId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(nextSerial) })
+        return next
+      })
+      addAuditLog(
+        'serial_release',
+        serial.serial,
+        `Released ${serial.serial} from ${serial.status} → available @ ${dest} by ${user.name}`,
+      )
+      showToast(`${serial.serial} returned to on-hand (available)`, 'success')
+      return true
+    },
 
     getSalesApprovalState: (documentId: string) => {
       const requests = approvalRequests.filter(r => r.documentId === documentId && ['discount', 'credit_override', 'backorder'].includes(r.type))
@@ -12623,6 +12687,7 @@ const storeCtx: AppState = {
     systemSettings,
     bulkStock,
     stockAdjustments,
+    saleOrders,
     ...inventoryActions,
   }), [
     products,
@@ -12641,6 +12706,7 @@ const storeCtx: AppState = {
     systemSettings,
     bulkStock,
     stockAdjustments,
+    saleOrders,
     inventoryActions,
   ])
 

@@ -7,6 +7,17 @@ import { Fa } from '@/components/icons'
 import { faPrint } from '@fortawesome/free-solid-svg-icons'
 import { LOCATIONS, LocationId, Product, SerialNumber, useInventoryStore, fmtDate } from '@/lib/store'
 import { validateSerialEdit } from '@/lib/inventory/serial-edit'
+import { canReleaseHeldSerial } from '@/lib/inventory/permissions'
+
+type StatusChip =
+  | 'all'
+  | 'available'
+  | 'assigned'
+  | 'sold'
+  | 'refurbishment'
+  | 'under_repair'
+  | 'returned'
+  | 'written_off'
 
 interface SerialManageDrawerProps {
   product: Product
@@ -27,25 +38,52 @@ export default function SerialManageDrawer({
   onPrintSerials,
   onDownloadSerials,
 }: SerialManageDrawerProps) {
-  const { serials: allSerials, updateSerial, addAuditLog, showToast } = useInventoryStore()
+  const {
+    serials: allSerials,
+    saleOrders,
+    updateSerial,
+    releaseSerialToStock,
+    addAuditLog,
+    showToast,
+    users,
+    currentUserId,
+  } = useInventoryStore()
+
+  const role = users.find(u => u.id === currentUserId)?.role
+  const canRelease = canReleaseHeldSerial(role)
+
   const [search, setSearch] = useState('')
-  const [statusFilter, setStatusFilter] = useState<'all' | 'available' | 'assigned' | 'refurbishment' | 'under_repair' | 'other'>('all')
+  const [statusFilter, setStatusFilter] = useState<StatusChip>('all')
+  // Always show customer/sold/employee locations unless user opts into warehouse-only.
+  const [locationScope, setLocationScope] = useState<'all_locations' | 'warehouse_filter'>('all_locations')
   const [editTarget, setEditTarget] = useState<SerialNumber | null>(null)
   const [form, setForm] = useState({ serial: '', barcode: '', specs: '', conditionNotes: '', reason: '' })
   const [busy, setBusy] = useState(false)
 
   const scoped = useMemo(() => {
-    return serials.filter(s => warehouseFilter === 'all' || s.location === warehouseFilter)
-  }, [serials, warehouseFilter])
+    if (locationScope === 'all_locations' || warehouseFilter === 'all') return serials
+    return serials.filter(s => s.location === warehouseFilter)
+  }, [serials, warehouseFilter, locationScope])
 
   const statusCounts = useMemo(() => {
-    const counts = { available: 0, assigned: 0, refurbishment: 0, under_repair: 0, other: 0 }
+    const counts: Record<StatusChip, number> = {
+      all: scoped.length,
+      available: 0,
+      assigned: 0,
+      sold: 0,
+      refurbishment: 0,
+      under_repair: 0,
+      returned: 0,
+      written_off: 0,
+    }
     for (const s of scoped) {
       if (s.status === 'available') counts.available++
       else if (s.status === 'assigned') counts.assigned++
+      else if (s.status === 'sold') counts.sold++
       else if (s.status === 'refurbishment') counts.refurbishment++
       else if (s.status === 'under_repair') counts.under_repair++
-      else counts.other++
+      else if (s.status === 'returned') counts.returned++
+      else if (s.status === 'written_off') counts.written_off++
     }
     return counts
   }, [scoped])
@@ -53,11 +91,7 @@ export default function SerialManageDrawer({
   const rows = useMemo(() => {
     const q = search.trim().toLowerCase()
     return scoped.filter(s => {
-      if (statusFilter === 'available' && s.status !== 'available') return false
-      if (statusFilter === 'assigned' && s.status !== 'assigned') return false
-      if (statusFilter === 'refurbishment' && s.status !== 'refurbishment') return false
-      if (statusFilter === 'under_repair' && s.status !== 'under_repair') return false
-      if (statusFilter === 'other' && ['available', 'assigned', 'refurbishment', 'under_repair'].includes(s.status)) return false
+      if (statusFilter !== 'all' && s.status !== statusFilter) return false
       if (!q) return true
       return (
         s.serial.toLowerCase().includes(q) ||
@@ -66,6 +100,15 @@ export default function SerialManageDrawer({
       )
     })
   }, [scoped, search, statusFilter])
+
+  const soRefFor = (serial: SerialNumber) => {
+    const list = saleOrders || []
+    const so = list.find(o =>
+      o.id === serial.saleOrderId ||
+      o.lines.some(l => (l.serialIds || []).includes(serial.id)),
+    )
+    return so?.ref || so?.id
+  }
 
   const openEdit = (serial: SerialNumber) => {
     setEditTarget(serial)
@@ -146,13 +189,16 @@ export default function SerialManageDrawer({
           {row.barcode && row.barcode !== row.serial && (
             <div className="text-[10px] text-text-3 font-mono">Tag: {row.barcode}</div>
           )}
+          {soRefFor(row) && (
+            <div className="text-[10px] text-primary-700 font-mono mt-0.5">SO: {soRefFor(row)}</div>
+          )}
         </div>
       ),
       exportValue: row => row.serial,
     },
     {
       key: 'warehouse',
-      label: 'Warehouse',
+      label: 'Location',
       priority: 2,
       width: '120px',
       render: row => <span className="text-xs text-text-2">{LOCATIONS[row.location]?.name || row.location}</span>,
@@ -163,36 +209,72 @@ export default function SerialManageDrawer({
       label: 'Status',
       priority: 2,
       width: '110px',
-      render: row => <span className="text-xs capitalize text-text-2">{row.status.replace(/_/g, ' ')}</span>,
+      render: row => {
+        const color =
+          row.status === 'available' ? '#166534' :
+          row.status === 'assigned' ? '#92400E' :
+          row.status === 'sold' ? '#1E3A8A' :
+          row.status === 'written_off' ? '#991B1B' :
+          '#374151'
+        return (
+          <span className="text-xs capitalize font-bold" style={{ color }}>
+            {row.status.replace(/_/g, ' ')}
+          </span>
+        )
+      },
       exportValue: row => row.status,
     },
     {
       key: 'received',
-      label: 'Received',
+      label: 'Dates',
       priority: 3,
-      width: '110px',
-      render: row => <span className="text-xs text-text-3">{row.receivedDate ? fmtDate(row.receivedDate) : '—'}</span>,
-      exportValue: row => row.receivedDate || '',
+      width: '120px',
+      render: row => (
+        <div className="text-[10px] text-text-3">
+          <div>In: {row.receivedDate ? fmtDate(row.receivedDate) : '—'}</div>
+          {row.soldDate && <div>Sold: {fmtDate(row.soldDate)}</div>}
+        </div>
+      ),
+      exportValue: row => row.soldDate || row.receivedDate || '',
     },
+  ]
+
+  const chips: Array<[StatusChip, string]> = [
+    ['all', `All (${statusCounts.all})`],
+    ['available', `Available (${statusCounts.available})`],
+    ['assigned', `Reserved (${statusCounts.assigned})`],
+    ['sold', `Sold (${statusCounts.sold})`],
+    ['refurbishment', `Refurb (${statusCounts.refurbishment})`],
+    ['under_repair', `Under repair (${statusCounts.under_repair})`],
+    ['returned', `Returned (${statusCounts.returned})`],
+    ['written_off', `Written off (${statusCounts.written_off})`],
   ]
 
   return (
     <>
-      <Modal title={`Serials · ${product.name}`} onClose={onClose} width={960}>
+      <Modal title={`Serials · ${product.name}`} onClose={onClose} width={980}>
         <div className="space-y-3">
-          <p className="text-xs text-text-3">
-            SKU {product.sku}
-            {warehouseFilter !== 'all' ? ` · Filtered to ${LOCATIONS[warehouseFilter].name}` : ''}
-          </p>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-xs text-text-3">
+              SKU {product.sku}
+              {locationScope === 'warehouse_filter' && warehouseFilter !== 'all'
+                ? ` · Filtered to ${LOCATIONS[warehouseFilter].name}`
+                : ' · All locations (incl. customer / sold)'}
+            </p>
+            {warehouseFilter !== 'all' && (
+              <label className="flex items-center gap-2 text-[10px] text-text-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={locationScope === 'warehouse_filter'}
+                  onChange={e => setLocationScope(e.target.checked ? 'warehouse_filter' : 'all_locations')}
+                />
+                Limit to selected warehouse only
+              </label>
+            )}
+          </div>
+
           <div className="flex flex-wrap gap-2 text-[10px]">
-            {([
-              ['all', `All (${scoped.length})`],
-              ['available', `Available (${statusCounts.available})`],
-              ['assigned', `Assigned (${statusCounts.assigned})`],
-              ['refurbishment', `Refurb (${statusCounts.refurbishment})`],
-              ['under_repair', `Under repair (${statusCounts.under_repair})`],
-              ['other', `Other (${statusCounts.other})`],
-            ] as const).map(([id, label]) => (
+            {chips.map(([id, label]) => (
               <button
                 key={id}
                 type="button"
@@ -208,12 +290,20 @@ export default function SerialManageDrawer({
               </button>
             ))}
           </div>
-          {(statusCounts.assigned + statusCounts.refurbishment + statusCounts.under_repair) > 0 && (
+
+          {statusCounts.assigned > 0 && (
             <p className="text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
-              On hand includes held units: {statusCounts.assigned} assigned (SO/repair pick), {statusCounts.refurbishment} refurbishment, {statusCounts.under_repair} under repair.
-              Only Available counts toward free-to-sell stock.
+              {statusCounts.assigned} reserved (assigned) serial(s) are still on hand but not Available.
+              Use <strong>Release</strong> to return them to free stock.
             </p>
           )}
+          {statusCounts.sold > 0 && statusFilter === 'all' && (
+            <p className="text-[11px] text-blue-900 bg-blue-50 border border-blue-200 rounded-lg px-3 py-2">
+              {statusCounts.sold} sold serial(s) are with customers — open the <strong>Sold</strong> filter to list them.
+              They do not count in On hand / Available.
+            </p>
+          )}
+
           <DataTable
             tableId={`inventory-serials-${product.id}`}
             columns={columns}
@@ -226,12 +316,32 @@ export default function SerialManageDrawer({
             hideColumnFilters
             selectable
             perPage={15}
-            emptyMessage="No serials for this product"
+            emptyMessage={
+              statusFilter === 'sold'
+                ? 'No sold serials for this product'
+                : statusFilter === 'assigned'
+                  ? 'No reserved serials for this product'
+                  : 'No serials match this filter'
+            }
             exportTitle={`${product.sku}-serials`}
             exportFilename={`${product.sku}-serials`}
             bulkActions={({ rows: selected, clear }) => (
               <div className="flex flex-wrap gap-2 items-center">
                 <span className="text-xs font-bold">{selected.length} selected</span>
+                {canRelease && selected.some(s => s.status === 'assigned' || s.status === 'returned') && (
+                  <button
+                    type="button"
+                    className="dt-toolbar-btn"
+                    onClick={() => {
+                      selected
+                        .filter(s => s.status === 'assigned' || s.status === 'returned')
+                        .forEach(s => releaseSerialToStock(s.id, 'warehouse'))
+                      clear()
+                    }}
+                  >
+                    Release to on hand
+                  </button>
+                )}
                 <button
                   type="button"
                   className="dt-toolbar-btn"
@@ -266,7 +376,16 @@ export default function SerialManageDrawer({
               </div>
             )}
             rowActions={row => (
-              <div className="flex gap-1 justify-end">
+              <div className="flex gap-1 justify-end flex-wrap">
+                {(row.status === 'assigned' || row.status === 'returned') && canRelease && (
+                  <button
+                    type="button"
+                    className="px-2 py-1 rounded-lg border text-[10px] font-bold text-amber-800 border-amber-300 bg-amber-50"
+                    onClick={() => releaseSerialToStock(row.id, 'warehouse')}
+                  >
+                    Release
+                  </button>
+                )}
                 <button
                   type="button"
                   className="px-2 py-1 rounded-lg border text-[10px] font-bold"
@@ -298,30 +417,27 @@ export default function SerialManageDrawer({
       </Modal>
 
       {editTarget && (
-        <Modal onClose={() => setEditTarget(null)} title="Edit serial number" width={520}>
-          <div className="space-y-3">
-            <Field label="Serial number">
-              <Input value={form.serial} onChange={v => setForm(prev => ({ ...prev, serial: v }))} />
+        <Modal title={`Edit serial · ${editTarget.serial}`} onClose={() => setEditTarget(null)} width={480}>
+          <div className="flex flex-col gap-3">
+            <Field label="Serial number" required>
+              <Input value={form.serial} onChange={v => setForm(f => ({ ...f, serial: v }))} />
             </Field>
-            <Field label="Inventory barcode / asset tag">
-              <Input value={form.barcode} onChange={v => setForm(prev => ({ ...prev, barcode: v }))} />
+            <Field label="Asset tag / barcode">
+              <Input value={form.barcode} onChange={v => setForm(f => ({ ...f, barcode: v }))} />
             </Field>
             <Field label="Specs">
-              <Input value={form.specs} onChange={v => setForm(prev => ({ ...prev, specs: v }))} />
+              <Input value={form.specs} onChange={v => setForm(f => ({ ...f, specs: v }))} />
             </Field>
             <Field label="Condition notes">
-              <Input value={form.conditionNotes} onChange={v => setForm(prev => ({ ...prev, conditionNotes: v }))} />
+              <Input value={form.conditionNotes} onChange={v => setForm(f => ({ ...f, conditionNotes: v }))} />
             </Field>
-            <Field label="Reason (required for serial corrections)">
-              <Input value={form.reason} onChange={v => setForm(prev => ({ ...prev, reason: v }))} />
+            <Field label="Reason for edit" required>
+              <Input value={form.reason} onChange={v => setForm(f => ({ ...f, reason: v }))} />
             </Field>
-            <p className="text-[11px] text-text-4">
-              Warehouse/location changes must use Transfers. Quantity cannot be edited on a serial.
-            </p>
             <div className="flex justify-end gap-2 pt-2">
-              <button type="button" className="btn-secondary" onClick={() => setEditTarget(null)}>Cancel</button>
-              <button type="button" className="btn-primary" disabled={busy} onClick={() => { void saveEdit() }}>
-                {busy ? 'Saving…' : 'Save serial'}
+              <button className="btn-secondary text-[11px]" onClick={() => setEditTarget(null)} disabled={busy}>Cancel</button>
+              <button className="btn-primary text-[11px]" onClick={saveEdit} disabled={busy}>
+                {busy ? 'Saving…' : 'Save'}
               </button>
             </div>
           </div>

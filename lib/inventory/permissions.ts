@@ -27,6 +27,12 @@ const SERIAL_EDITORS: InventoryRole[] = [
   'technical_lead',
 ]
 
+const SERIAL_RELEASE_ROLES: InventoryRole[] = [
+  'director',
+  'admin_officer',
+  'inventory_officer',
+]
+
 const LABEL_USERS: InventoryRole[] = [
   'director',
   'admin_officer',
@@ -49,6 +55,11 @@ export function canValidatePurchaseReceipt(role: InventoryRole | null | undefine
 
 export function canEditSerialNumber(role: InventoryRole | null | undefined) {
   return !!role && SERIAL_EDITORS.includes(role)
+}
+
+/** Release held (assigned) serials back to available on-hand stock. */
+export function canReleaseHeldSerial(role: InventoryRole | null | undefined) {
+  return !!role && SERIAL_RELEASE_ROLES.includes(role)
 }
 
 export function canPrintInventoryLabels(role: InventoryRole | null | undefined) {

@@ -511,7 +511,7 @@ export default function InventoryProductsPanel({
   ]
 
   const productSerialCount = (productId: string) =>
-    serials.filter(s => s.productId === productId && !['sold', 'written_off'].includes(s.status)).length
+    serials.filter(s => s.productId === productId).length
 
   const runProductLabels = async (selected: ProductListRow[], mode: 'print' | 'pdf') => {
     if (!canLabels) {
@@ -554,9 +554,8 @@ export default function InventoryProductsPanel({
         title="Products"
         notice={
           <CompactInfoNotice>
-            On hand = units in warehouse/shop/repair (including held). Available = free to sell only.
-            Held covers SO-picked serials, refurbishment, and under-repair — open Manage serials to see the split.
-            Quantities respect the selected warehouse filter.
+            On hand = warehouse/shop/repair including held units. Available = free to sell only. Held = reserved (SO pick), refurb, under repair.
+            Open Serials for Sold / Reserved filters, or Inventory → Reports → Find Serial to trace a unit (e.g. PF1CX9NP).
           </CompactInfoNotice>
         }
       >
