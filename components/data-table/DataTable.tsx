@@ -333,8 +333,14 @@ export default function DataTable<T>({
               minWidth={960}
               cols={[
                 ...(selectable ? [{ label: '', width: '36px' }] : []),
-                ...visibleColumns.map(c => ({ label: c.label, width: c.width })),
-                ...(rowActions ? [{ label: '', width: '72px' }] : []),
+                ...visibleColumns.map(c => ({
+                  label: c.label,
+                  // Status pills need enough room for meaningful labels such as
+                  // "Returned – not fixed"; tiny fixed tracks clip the pill.
+                  width: c.key.toLowerCase().includes('status') ? '160px' : c.width,
+                  minWidth: c.key.toLowerCase().includes('status') ? 160 : undefined,
+                })),
+                ...(rowActions ? [{ label: 'Actions', width: '144px', minWidth: 144 }] : []),
               ]}
               isLoading={isLoading}
               error={error}
@@ -375,12 +381,17 @@ export default function DataTable<T>({
                       </span>
                     )}
                     {visibleColumns.map(col => (
-                      <span role="gridcell" key={col.key} style={col.align ? { textAlign: col.align } : undefined}>
+                      <span
+                        role="gridcell"
+                        key={col.key}
+                        className={`data-table-cell data-table-cell-${col.key.replace(/[^a-z0-9_-]/gi, '-').toLowerCase()}`}
+                        style={col.align ? { textAlign: col.align } : undefined}
+                      >
                         {col.render(row)}
                       </span>
                     ))}
                     {rowActions && (
-                      <span role="gridcell" className="flex items-center justify-end gap-1.5">
+                      <span role="gridcell" className="data-table-actions flex items-center justify-end gap-1.5">
                         {rowActions(row)}
                       </span>
                     )}

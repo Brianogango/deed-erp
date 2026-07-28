@@ -11,6 +11,7 @@ import { parseReturnSerialTokens } from '@/lib/tradein-serial-intake'
 import { Badge, Modal, Field, Input, Select, PanelHeader, SearchPicker, ModuleSkeleton, ModuleHeader, TabBar } from '@/components/ui'
 import { CustomerPickerField } from '@/components/tradein/CustomerPickerField'
 import { SerialReturnPicker } from '@/components/tradein/SerialReturnPicker'
+import { StatusBadge } from '@/components/erp'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const DEST_OPTS = (['warehouse', 'shop'] as LocationId[]).map(k => ({ value: k, label: LOCATIONS[k].name }))
@@ -176,20 +177,8 @@ function BulkPreview({ rows, columns }: {
   )
 }
 
-const STATUS_COLOR: Record<string, string> = {
-  draft: '#6B7280', approved: '#3B82F6', paid: '#F59E0B',
-  stocked: '#10B981', confirmed: '#10B981', completed: '#10B981',
-  cancelled: '#EF4444',
-}
-
 function StatusPill({ status }: { status: string }) {
-  return (
-    <span style={{
-      fontSize: 9, fontWeight: 700, padding: '2px 8px', borderRadius: 20, textTransform: 'uppercase',
-      background: (STATUS_COLOR[status] ?? 'var(--text-4)') + '22',
-      color: STATUS_COLOR[status] ?? 'var(--text-4)',
-    }}>{status}</span>
-  )
+  return <StatusBadge status={status} label={status.replace(/_/g, ' ')} />
 }
 
 function RowGrid({ children }: { children: React.ReactNode }) {
@@ -411,7 +400,7 @@ function BuyBackTab() {
             {STEPS.map((s, i) => (
               <div key={s} style={{ flex: 1, textAlign: 'center' }}>
                 <div style={{ height: 3, borderRadius: 2, background: i <= si ? 'var(--navy)' : 'var(--border-lt)', marginBottom: 4 }} />
-                <span style={{ fontSize: 9, color: i <= si ? 'var(--navy)' : 'var(--text-4)', fontWeight: i === si ? 700 : 400, textTransform: 'capitalize' }}>{s}</span>
+                <span style={{ fontSize: 11, color: i <= si ? 'var(--navy)' : 'var(--text-4)', fontWeight: i === si ? 700 : 400, textTransform: 'capitalize' }}>{s}</span>
               </div>
             ))}
           </div>
@@ -532,8 +521,18 @@ function BuyBackTab() {
       )}
 
       {showNew && (
-        <Modal title="New Buy-Back" onClose={() => { setShowNew(false); reset() }}>
-          <div style={{ maxHeight: '68vh', overflowY: 'auto', paddingRight: 2 }}>
+        <Modal
+          title="New Buy-Back"
+          width={720}
+          onClose={() => { setShowNew(false); reset() }}
+          footer={(
+            <>
+              <button className="btn-secondary text-xs" onClick={() => { setShowNew(false); reset() }}>Cancel</button>
+              <button className="btn-primary text-xs" onClick={submit}>Create Buy-Back</button>
+            </>
+          )}
+        >
+          <div>
             <RowGrid>
               <Field label="Customer *">
                 <CustomerPickerField
@@ -578,10 +577,6 @@ function BuyBackTab() {
               </div>
             )}
           </div>
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>
-            <button className="btn-secondary text-[11px]" onClick={() => { setShowNew(false); reset() }}>Cancel</button>
-            <button className="btn-primary text-[11px]" onClick={submit}>Create Buy-Back</button>
-          </div>
         </Modal>
       )}
 
@@ -619,7 +614,7 @@ function BBLineEditor({ line, onChange, onRemove, products, customerId, saleOrde
   })), [products])
   return (
     <div style={{ border: '1px solid var(--border-lt)', borderRadius: 10, padding: 12, marginBottom: 8 }}>
-      <div className="grid grid-cols-1 sm:grid-cols-[2fr_1fr_1fr_1fr_auto] gap-2 sm:gap-3 items-end">
+      <div className="grid grid-cols-1 md:grid-cols-[minmax(220px,2fr)_minmax(120px,1fr)_80px_minmax(120px,1fr)_40px] gap-2 sm:gap-3 items-end">
         <Field label="Product">
           <SearchPicker
             label=""
@@ -1308,7 +1303,7 @@ function ExchangeTab() {
               {STEPS.map((s, i) => (
                 <div key={s} style={{ flex: 1, textAlign: 'center' }}>
                   <div style={{ height: 3, borderRadius: 2, background: i <= si ? 'var(--navy)' : 'var(--border-lt)', marginBottom: 4 }} />
-                  <span style={{ fontSize: 9, color: i <= si ? 'var(--navy)' : 'var(--text-4)', fontWeight: i === si ? 700 : 400, textTransform: 'capitalize' }}>{s}</span>
+                  <span style={{ fontSize: 11, color: i <= si ? 'var(--navy)' : 'var(--text-4)', fontWeight: i === si ? 700 : 400, textTransform: 'capitalize' }}>{s}</span>
                 </div>
               ))}
             </div>

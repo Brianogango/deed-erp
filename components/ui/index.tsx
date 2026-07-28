@@ -244,7 +244,7 @@ export function Badge({
     ?? (fallback ? fallback.charAt(0).toUpperCase() + fallback.slice(1) : status)
   return (
     <span
-      className={`badge ${cls} ${size === 'xs' ? 'text-[9px] px-1.5' : ''}`}
+      className={`badge ${cls} ${size === 'xs' ? 'badge-xs' : ''}`}
       data-status={status}
     >
       <span className="sr-only">Status: </span>
@@ -267,7 +267,7 @@ export function ToneBadge({
   size?: 'xs' | 'sm'
 }) {
   return (
-    <span className={`badge badge-${tone} ${size === 'xs' ? 'text-[9px] px-1.5' : ''}`}>
+    <span className={`badge badge-${tone} ${size === 'xs' ? 'badge-xs' : ''}`}>
       {children}
     </span>
   )
@@ -349,6 +349,7 @@ export function Modal({
   subtitle,
   icon,
   accent = '#1B2762',
+  footer,
 }: {
   title: string
   subtitle?: string
@@ -357,6 +358,8 @@ export function Modal({
   width?: number
   icon?: ReactNode
   accent?: string
+  /** Actions pinned below the scrollable body so they are always reachable. */
+  footer?: ReactNode
 }) {
   useBodyScrollLock(true)
   const titleId = useId()
@@ -427,9 +430,14 @@ export function Modal({
           </button>
         </div>
         {/* Body */}
-        <div className="modal-content-shell flex-1 p-4 sm:p-6 overflow-y-auto flex flex-col gap-3 sm:gap-4">
+        <div className="modal-content-shell min-h-0 flex-1 p-4 sm:p-6 overflow-y-auto flex flex-col gap-3 sm:gap-4">
           {children}
         </div>
+        {footer && (
+          <div className="modal-footer-shell flex flex-shrink-0 items-center justify-end gap-2 border-t border-border-lt bg-card px-4 py-3 sm:px-6">
+            {footer}
+          </div>
+        )}
       </div>
     </div>
     </Portal>
@@ -806,7 +814,7 @@ export function Table({
   emptyAction,
   hideColumnMenu = false,
 }: {
-  cols: { label: string; width?: string }[]
+  cols: { label: string; width?: string; minWidth?: number }[]
   children: ReactNode
   empty?: string
   minWidth?: number
@@ -904,7 +912,9 @@ export function Table({
       .map((col, index) => {
         const originalIndex = cols.indexOf(col)
         const stored = colWidths[originalIndex]
-        if (Number.isFinite(stored) && stored >= MIN_PERSISTED_COL_WIDTH) return `${stored}px`
+        if (Number.isFinite(stored) && stored >= MIN_PERSISTED_COL_WIDTH) {
+          return `${Math.max(stored, col.minWidth ?? MIN_PERSISTED_COL_WIDTH)}px`
+        }
         const width = col.width ?? 'minmax(8rem, 1fr)'
         // Fixed px tracks stay fixed — never grow with minmax(..., 1fr), which
         // caused Partner/Date overlap when many columns competed for space.
@@ -1299,6 +1309,13 @@ export function SearchPicker<T extends { id: string }>({
   const [query, setQuery] = useState(selectedLabel ?? '')
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
+  const menuRef = useRef<HTMLDivElement>(null)
+  const [menuPosition, setMenuPosition] = useState<{
+    left: number
+    top: number
+    width: number
+    maxHeight: number
+  } | null>(null)
   const inputId = useId()
   const prevSelected = useRef(selectedLabel)
 
@@ -1314,13 +1331,49 @@ export function SearchPicker<T extends { id: string }>({
     JSON.stringify(item).toLowerCase().includes(query.toLowerCase())
   )
 
+  const positionMenu = useCallback(() => {
+    const rect = ref.current?.getBoundingClientRect()
+    if (!rect) return
+    const margin = 8
+    const preferredHeight = 240
+    const spaceBelow = window.innerHeight - rect.bottom - margin
+    const spaceAbove = rect.top - margin
+    const openAbove = spaceBelow < 150 && spaceAbove > spaceBelow
+    const maxHeight = Math.max(112, Math.min(preferredHeight, openAbove ? spaceAbove - 6 : spaceBelow - 6))
+    const width = Math.min(rect.width, window.innerWidth - margin * 2)
+    const left = Math.max(margin, Math.min(rect.left, window.innerWidth - width - margin))
+    setMenuPosition({
+      left,
+      width,
+      maxHeight,
+      top: openAbove
+        ? Math.max(margin, rect.top - maxHeight - 6)
+        : rect.bottom + 6,
+    })
+  }, [])
+
   useEffect(() => {
+    if (!open) return
+    positionMenu()
     const h = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+      const target = e.target as Node
+      if (ref.current?.contains(target) || menuRef.current?.contains(target)) return
+      setOpen(false)
+    }
+    const closeOnEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false)
     }
     window.addEventListener('mousedown', h)
-    return () => window.removeEventListener('mousedown', h)
-  }, [])
+    window.addEventListener('resize', positionMenu)
+    window.addEventListener('scroll', positionMenu, true)
+    window.addEventListener('keydown', closeOnEscape)
+    return () => {
+      window.removeEventListener('mousedown', h)
+      window.removeEventListener('resize', positionMenu)
+      window.removeEventListener('scroll', positionMenu, true)
+      window.removeEventListener('keydown', closeOnEscape)
+    }
+  }, [open, positionMenu])
 
   return (
     <div className="flex flex-col gap-1.5 relative w-full" ref={ref}>
@@ -1348,10 +1401,18 @@ export function SearchPicker<T extends { id: string }>({
           <path d="m21 21-4.35-4.35" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
         </svg>
       </div>
-      {open && (filtered.length > 0 || (onCreateNew && query.length > 0)) && (
+      {open && menuPosition && (filtered.length > 0 || (onCreateNew && query.length > 0)) && createPortal(
         <div
-          className="absolute top-full left-0 right-0 mt-1 z-[9300] bg-card border border-border rounded-xl shadow-2xl max-h-60 overflow-y-auto divide-y divide-border-lt"
-          style={{ animation: 'dropdownIn 0.18s ease both' }}
+          ref={menuRef}
+          className="fixed z-[9300] bg-card border border-border rounded-xl shadow-2xl overflow-y-auto divide-y divide-border-lt"
+          style={{
+            animation: 'dropdownIn 0.18s ease both',
+            left: menuPosition.left,
+            top: menuPosition.top,
+            width: menuPosition.width,
+            maxHeight: menuPosition.maxHeight,
+          }}
+          role="listbox"
           onMouseDown={e => e.stopPropagation()}
           onClick={e => e.stopPropagation()}
         >
@@ -1388,7 +1449,8 @@ export function SearchPicker<T extends { id: string }>({
               {renderItem(item)}
             </div>
           ))}
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   )
