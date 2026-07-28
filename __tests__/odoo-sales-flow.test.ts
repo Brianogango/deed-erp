@@ -19,7 +19,20 @@ import {
   matchesSalesListFilter,
   saleTransitionError,
   initialDeliveryState,
+  hasGeneratedDeliveryNote,
 } from '@/lib/odoo-sales-flow'
+
+describe('delivery-note invoice gate', () => {
+  it('requires a done delivery with a successfully generated note', () => {
+    const deliveries = [
+      { saleOrderId: 'so-1', status: 'ready', deliveryNoteGeneratedAt: '2026-07-28' },
+      { saleOrderId: 'so-2', status: 'done', deliveryNoteGeneratedAt: '2026-07-28' },
+      { saleOrderId: 'so-1', status: 'done' },
+    ]
+    expect(hasGeneratedDeliveryNote(deliveries, 'so-1')).toBe(false)
+    expect(hasGeneratedDeliveryNote(deliveries, 'so-2')).toBe(true)
+  })
+})
 
 describe('sale order status vocabulary', () => {
   it('uses the Odoo status bar Quotation → Quotation Sent → Sales Order', () => {

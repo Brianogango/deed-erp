@@ -240,10 +240,14 @@ export function printDeliveryNote(
   delivery: Delivery,
   serials: SerialNumber[],
   options: DnPrintOptions = {},
-): void {
+): boolean {
   const html = generateDeliveryNoteHtml(delivery, serials, options)
   const win  = window.open('', '_blank', 'width=820,height=1000')
-  if (!win) { alert('Pop-up blocked — please allow pop-ups for this site to print delivery notes.'); return }
+  if (!win) {
+    alert('Pop-up blocked — please allow pop-ups for this site to print delivery notes.')
+    return false
+  }
   win.document.write(html)
   win.document.close()
+  return true
 }

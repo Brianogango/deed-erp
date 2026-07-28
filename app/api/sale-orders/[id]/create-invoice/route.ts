@@ -3,7 +3,7 @@ import prisma from '@/lib/prisma'
 import { requireRole, withApiErrorHandling } from '@/lib/auth/api'
 import { writeFinancialAudit } from '@/lib/finance-audit'
 import { getNextDocNumber } from '@/lib/doc-ref-counter'
-import { invoiceableQty, normalizeSaleStatus } from '@/lib/odoo-sales-flow'
+import { hasGeneratedDeliveryNote, invoiceableQty, normalizeSaleStatus } from '@/lib/odoo-sales-flow'
 import { mapDbInvoiceItemsToClientLines } from '@/lib/finance-invoice'
 import { loadAppState, saveStoreKeys } from '@/lib/server-store'
 
@@ -32,18 +32,22 @@ export async function POST(
       return NextResponse.json({ error: 'Only a confirmed Sales Order can be invoiced' }, { status: 409 })
     }
 
-    // Product invoice policies from store products (ordered vs delivered)
-    const state = await loadAppState(['deed_products', 'deed_invoices'])
-    const products = Array.isArray(state.deed_products) ? state.deed_products as Array<{ id: string; invoicePolicy?: string }> : []
-    const policyByProduct = new Map(products.map(p => [p.id, p.invoicePolicy === 'delivery' ? 'delivery' as const : 'order' as const]))
+    const state = await loadAppState(['deed_invoices', 'deed_deliveries'])
+    const deliveries = Array.isArray(state.deed_deliveries)
+      ? state.deed_deliveries as Array<{ saleOrderId?: string; status?: string; deliveryNoteGeneratedAt?: string | null }>
+      : []
+    if (!hasGeneratedDeliveryNote(deliveries, orderId)) {
+      return NextResponse.json({
+        error: 'Validate the delivery and generate its Delivery Note before creating an invoice',
+      }, { status: 409 })
+    }
 
     const invoiceable = (order.items ?? []).map(item => {
-      const policy = policyByProduct.get(item.productId ?? '') || 'order'
       const qty = invoiceableQty({
         qty: Number(item.qty) || 0,
         qtyDelivered: Number(item.qtyDelivered) || 0,
         qtyInvoiced: Number(item.qtyInvoiced) || 0,
-        invoicePolicy: policy,
+        invoicePolicy: 'delivery',
       })
       return { item, qty }
     }).filter(entry => entry.qty > 0)
@@ -88,12 +92,11 @@ export async function POST(
       for (const { item, qty } of invoiceable) {
         const live = fresh.items.find(i => i.id === item.id)
         if (!live) throw new Error('Sale order line missing')
-        const policy = policyByProduct.get(live.productId ?? '') || 'order'
         const still = invoiceableQty({
           qty: Number(live.qty) || 0,
           qtyDelivered: Number(live.qtyDelivered) || 0,
           qtyInvoiced: Number(live.qtyInvoiced) || 0,
-          invoicePolicy: policy,
+          invoicePolicy: 'delivery',
         })
         if (still < qty) throw new Error('Invoiceable quantity changed — retry')
         await tx.saleOrderItem.update({

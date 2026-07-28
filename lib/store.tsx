@@ -22,6 +22,7 @@ import {
   invoicePaymentStatus,
   isOpenInvoice,
   invoiceResidual,
+  hasGeneratedDeliveryNote,
   type InvoicePolicy,
 } from '@/lib/odoo-sales-flow'
 import { useHrStore as useHrDomainStore } from '@/hooks/useHrStore'
@@ -992,6 +993,12 @@ export interface Delivery {
   recipientIdNumber?: string
   deliveryAddress?: string
   notes?: string
+  /** Inventory allocation completed; delivery can now be validated. */
+  preparedAt?: string
+  preparedByUserId?: string
+  /** Final delivery note popup/document was generated successfully. */
+  deliveryNoteGeneratedAt?: string
+  deliveryNoteGeneratedByUserId?: string
 }
 
 // ── Rider Delivery ────────────────────────────────────────────────────────────
@@ -2706,9 +2713,13 @@ export interface AppState {
   setSaleOrderLock: (id: string, locked: boolean) => void
   resetSOToDraft: (id: string) => void
   cancelSO: (id: string) => void
+  /** Reserve quantity / assigned serials for this delivery. */
+  prepareDelivery: (deliveryId: string, qtysDone?: Record<string, number>) => boolean
   /** Validate a delivery; partial quantities create a backorder delivery. */
   validateDelivery: (deliveryId: string, qtysDone?: Record<string, number>) => void
-  updateDelivery: (deliveryId: string, p: Partial<Pick<Delivery, 'recipientName' | 'recipientPhone' | 'recipientIdNumber' | 'deliveryAddress' | 'notes'>>) => void
+  /** Persist successful final DN generation before enabling invoicing. */
+  markDeliveryNoteGenerated: (deliveryId: string) => Promise<boolean>
+  updateDelivery: (deliveryId: string, p: Partial<Pick<Delivery, 'recipientName' | 'recipientPhone' | 'recipientIdNumber' | 'deliveryAddress' | 'notes' | 'deliveryNoteGeneratedAt' | 'deliveryNoteGeneratedByUserId'>>) => void
   createInvoiceFromSO: (orderId: string) => Promise<Invoice> | Invoice
   deleteSaleOrder: (id: string) => void
 
@@ -2983,7 +2994,9 @@ export type SalesStoreState = Pick<AppState,
   | 'unassignSerialFromSOLine'
   | 'addContact'
   | 'createInvoiceFromSO'
+  | 'prepareDelivery'
   | 'validateDelivery'
+  | 'markDeliveryNoteGenerated'
   | 'deleteSaleOrder'
   | 'showToast'
   | 'getStockByLocation'
@@ -4766,7 +4779,9 @@ export function StoreProvider({
     unassignSerialFromSOLine: (...args: Parameters<AppState['unassignSerialFromSOLine']>) => storeCtxRef.current!.unassignSerialFromSOLine(...args),
     addContact: (...args: Parameters<AppState['addContact']>) => storeCtxRef.current!.addContact(...args),
     createInvoiceFromSO: (...args: Parameters<AppState['createInvoiceFromSO']>) => storeCtxRef.current!.createInvoiceFromSO(...args),
+    prepareDelivery: (...args: Parameters<AppState['prepareDelivery']>) => storeCtxRef.current!.prepareDelivery(...args),
     validateDelivery: (...args: Parameters<AppState['validateDelivery']>) => storeCtxRef.current!.validateDelivery(...args),
+    markDeliveryNoteGenerated: (...args: Parameters<AppState['markDeliveryNoteGenerated']>) => storeCtxRef.current!.markDeliveryNoteGenerated(...args),
     deleteSaleOrder: (...args: Parameters<AppState['deleteSaleOrder']>) => storeCtxRef.current!.deleteSaleOrder(...args),
     showToast: (...args: Parameters<AppState['showToast']>) => storeCtxRef.current!.showToast(...args),
     getStockByLocation: (...args: Parameters<AppState['getStockByLocation']>) => storeCtxRef.current!.getStockByLocation(...args),
@@ -7766,12 +7781,8 @@ const storeCtx: AppState = {
         showToast('Quantity must be greater than zero', 'error')
         return
       }
-      const locs = calcStockByLocation(product, serialRef.current, bulkStock, product.id)
-      const shopQty = locs.shop
-      const warehouseQty = locs.warehouse
-      const avail = serialRef.current.filter(s => s.productId === product.id && s.status === 'available' && (s.location === 'warehouse' || s.location === 'shop')).length
-      if (product.requiresSerial && avail < qty) { showToast(`Only ${avail} units available for stock out`, 'error'); return }
-      if (!product.requiresSerial && product.unit !== 'service' && shopQty + warehouseQty < qty) { showToast(`Only ${shopQty + warehouseQty} units available for stock out`, 'error'); return }
+      // Quotation lines may exceed current availability. Reservation and
+      // serial allocation happen only after confirmation in delivery prep.
       setSaleOrders(p => p.map(so => {
         if (so.id !== orderId) return so
         const ex = so.lines.find(l => l.productId === product.id)
@@ -7821,7 +7832,29 @@ const storeCtx: AppState = {
         sync(`/api/sale-orders/${orderId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
         return updated
       }))
-      setSerials(p => p.map(s => toAdd.includes(s.id) ? { ...s, status: 'assigned' } : s))
+      const nextSerialIds = [...current, ...toAdd]
+      const pendingDelivery = delRef.current.find(d =>
+        d.saleOrderId === orderId && ['draft', 'waiting', 'ready'].includes(d.status),
+      )
+      if (pendingDelivery) {
+        const lines = pendingDelivery.lines.map(deliveryLine =>
+          deliveryLine.productId === line.productId
+            ? { ...deliveryLine, serialIds: nextSerialIds }
+            : deliveryLine,
+        )
+        setDeliveries(prev => prev.map(d => d.id === pendingDelivery.id ? { ...d, lines, status: 'waiting' as const, preparedAt: undefined } : d))
+        sync(`/api/deliveries/${pendingDelivery.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ lines, status: 'waiting', preparedAt: null }),
+        })
+      }
+      setSerials(p => p.map(s => {
+        if (!toAdd.includes(s.id)) return s
+        const updated = { ...s, status: 'assigned' as const, saleOrderId: orderId }
+        sync(`/api/serials/${s.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+        return updated
+      }))
     },
     unassignSerialFromSOLine: (orderId, lineId, serialId) => {
       setSaleOrders(p => p.map(so => {
@@ -7834,7 +7867,31 @@ const storeCtx: AppState = {
         sync(`/api/sale-orders/${orderId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
         return updated
       }))
-      setSerials(p => p.map(s => s.id === serialId ? { ...s, status: 'available', saleOrderId: undefined } : s))
+      const so = soRef.current.find(order => order.id === orderId)
+      const line = so?.lines.find(item => item.id === lineId)
+      const nextSerialIds = (line?.serialIds || []).filter(id => id !== serialId)
+      const pendingDelivery = delRef.current.find(d =>
+        d.saleOrderId === orderId && ['draft', 'waiting', 'ready'].includes(d.status),
+      )
+      if (pendingDelivery && line) {
+        const lines = pendingDelivery.lines.map(deliveryLine =>
+          deliveryLine.productId === line.productId
+            ? { ...deliveryLine, serialIds: nextSerialIds }
+            : deliveryLine,
+        )
+        setDeliveries(prev => prev.map(d => d.id === pendingDelivery.id ? { ...d, lines, status: 'waiting' as const, preparedAt: undefined } : d))
+        sync(`/api/deliveries/${pendingDelivery.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ lines, status: 'waiting', preparedAt: null }),
+        })
+      }
+      setSerials(p => p.map(s => {
+        if (s.id !== serialId) return s
+        const updated = { ...s, status: 'available' as const, saleOrderId: undefined }
+        sync(`/api/serials/${s.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+        return updated
+      }))
     },
     removeSOLine: (orderId, lineId) => {
       const so = soRef.current.find(s => s.id === orderId)
@@ -7981,62 +8038,22 @@ const storeCtx: AppState = {
         return
       }
 
-      // Validate serial assignment for serialized products
-      for (const line of orderLines) {
-        const prod = prodRef.current.find(p => p.id === line.productId)
-        if (prod?.requiresSerial && line.serialIds.length < line.qty) {
-          showToast(`Assign all serial numbers for ${line.productName} (${line.serialIds.length}/${line.qty} assigned)`, 'error'); return
-        }
-      }
       // Quotations and Sales Orders run separate sequences: confirmation
       // assigns the next SO number and keeps the QUO number on the record.
       const orderRef = docSeq('SO')
-      const reservationsToCreate = orderLines.flatMap(line => {
-        const product = prodRef.current.find(p => p.id === line.productId)
-        if (!product || product.unit === 'service') return []
-        const existing = stockReservations.find(r =>
-          r.productId === line.productId &&
-          r.referenceId === so.id &&
-          r.status === 'reserved'
-        )
-        if (existing) return []
-        const reservation: StockReservation = {
-          id: uid(),
-          productId: line.productId,
-          productName: line.productName,
-          qty: line.qty,
-          reservedFor: 'sales_order',
-          referenceId: so.id,
-          referenceRef: orderRef,
-          referenceType: 'sales_order',
-          location: (line.sourceLocation ?? 'warehouse') as string,
-          reservedBy: user.id,
-          reservedDate: now(),
-          expiresDate: addDays(now(), 7),
-          status: 'reserved',
-          fulfilledQty: 0,
-          serialNumbers: line.serialIds.map((sid: string) => serialRef.current.find(s => s.id === sid)?.serial ?? sid),
-          notes: `Reserved during confirmation of ${orderRef}`,
-        }
-        return [reservation]
-      })
-      if (reservationsToCreate.length > 0) {
-        setStockReservations(prev => [...reservationsToCreate, ...prev])
-        addAuditLog('reserve_stock', orderRef, `Reserved ${reservationsToCreate.reduce((sum, r) => sum + r.qty, 0)} item(s) for sales order confirmation`)
-      }
       const del: Delivery = {
         id: uid(), ref: docSeq('DN'), saleOrderId: id, saleOrderRef: orderRef,
         customerId: so.customerId, customerName: so.customerName,
-        // Odoo stock states: Ready when every line is covered by stock,
-        // Waiting when any line is backordered/short.
-        status: initialDeliveryState(backorderLines.length > 0), date: now(),
+        // Confirmation creates demand only. Inventory is allocated later from
+        // the delivery preparation screen.
+        status: 'waiting', date: now(),
         lines: orderLines.map(l => {
           const prod = prodRef.current.find(p => p.id === l.productId)
           const shopAvailable = serialRef.current.filter(s => s.productId === l.productId && s.status === 'available' && s.location === 'shop').length
           const sourceLocs = calcStockByLocation(prod, serialRef.current, bulkStock, l.productId)
           const selectedSource = (so.lines.find(line => line.id === l.id) as (SaleOrderLine & { sourceLocation?: LocationId }) | undefined)?.sourceLocation
           const sourceLocation: LocationId | undefined = prod?.unit === 'service' ? undefined : (selectedSource ?? (prod?.requiresSerial ? (shopAvailable >= l.qty ? 'shop' : 'warehouse') : (sourceLocs.shop >= l.qty ? 'shop' : 'warehouse')))
-          return { productId: l.productId, productName: l.productName, qty: l.qty, qtyDone: 0, serialIds: l.serialIds, sourceLocation }
+          return { productId: l.productId, productName: l.productName, qty: l.qty, qtyDone: 0, serialIds: [], sourceLocation }
         }),
         warrantyCreated: false,
       }
@@ -8057,14 +8074,14 @@ const storeCtx: AppState = {
           confirmedByName: user.name,
           locked: systemSettings.salesLockConfirmed || undefined,
           approvalStatus: salesApprovalRequests.length ? 'approved' as const : 'not_required' as const,
-          stockReservationIds: Array.from(new Set([...(s.stockReservationIds ?? []), ...reservationsToCreate.map(r => r.id)])),
+          stockReservationIds: s.stockReservationIds ?? [],
           deliveryId: del.id,
         }
         sync(`/api/sale-orders/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
         return updated
       }))
       addAuditLog('confirm_sale_order', orderRef, `Quotation ${so.ref} confirmed into Sales Order ${orderRef} by ${user.name}${systemSettings.salesLockConfirmed ? ' · order locked' : ''}`)
-      showToast(`${so.ref} confirmed as ${orderRef} — delivery ${del.ref} created`)
+      showToast(`${so.ref} confirmed as ${orderRef} — prepare delivery ${del.ref} to allocate stock`)
     },
     markQuotationSent: (id, recipient, message) => {
       const user = currentUser()
@@ -8103,17 +8120,162 @@ const storeCtx: AppState = {
       addAuditLog(locked ? 'lock_sale_order' : 'unlock_sale_order', so.ref, `${locked ? 'Locked' : 'Unlocked'} by ${user.name}`)
       showToast(`${so.ref} ${locked ? 'locked' : 'unlocked'}`)
     },
+    prepareDelivery: (deliveryId, qtysDone) => {
+      const user = currentUser()
+      if (!canApproveInventoryAction(user)) {
+        showToast('Only Inventory or Admin can prepare deliveries', 'error')
+        return false
+      }
+      const del = delRef.current.find(d => d.id === deliveryId)
+      if (!del || !['draft', 'waiting', 'ready'].includes(del.status)) {
+        showToast('No pending delivery available to prepare', 'error')
+        return false
+      }
+      const so = soRef.current.find(s => s.id === del.saleOrderId)
+      if (!so) {
+        showToast('Sales Order not found', 'error')
+        return false
+      }
+
+      const requested = qtysDone ?? Object.fromEntries(del.lines.map(line => [line.productId, line.qty]))
+      const reservations: StockReservation[] = []
+      const preparedLines: DeliveryLine[] = []
+      let totalPrepared = 0
+
+      for (const deliveryLine of del.lines) {
+        const product = prodRef.current.find(p => p.id === deliveryLine.productId)
+        const qty = Math.min(deliveryLine.qty, Math.max(0, Number(requested[deliveryLine.productId]) || 0))
+        const soLine = so.lines.find(line => line.productId === deliveryLine.productId)
+        const serialIds = product?.requiresSerial ? (soLine?.serialIds || []).slice(0, qty) : []
+
+        if (product?.requiresSerial && qty > 0) {
+          if (qty < deliveryLine.qty) {
+            showToast(`${deliveryLine.productName} is serial-tracked — prepare all ${deliveryLine.qty} units together`, 'error')
+            return false
+          }
+          if (serialIds.length !== qty) {
+            showToast(`Assign ${qty} serial number${qty === 1 ? '' : 's'} for ${deliveryLine.productName} before preparing delivery`, 'error')
+            return false
+          }
+          const invalid = serialIds.find(id => {
+            const serial = serialRef.current.find(item => item.id === id)
+            return !serial || serial.status !== 'assigned' || serial.saleOrderId !== so.id
+          })
+          if (invalid) {
+            showToast(`A selected serial for ${deliveryLine.productName} is no longer reserved for this Sales Order`, 'error')
+            return false
+          }
+        } else if (product && product.unit !== 'service' && qty > 0) {
+          const location = (deliveryLine.sourceLocation ?? 'warehouse') as LocationId
+          const stockAtLocation = calcStockByLocation(
+            product,
+            serialRef.current,
+            bulkStock,
+            deliveryLine.productId,
+          )[location]
+          const reservedElsewhere = stockReservations
+            .filter(reservation =>
+              reservation.productId === deliveryLine.productId &&
+              reservation.location === location &&
+              reservation.status === 'reserved' &&
+              reservation.deliveryId !== deliveryId
+            )
+            .reduce((sum, reservation) => sum + Math.max(0, reservation.qty - reservation.fulfilledQty), 0)
+          const available = Math.max(0, stockAtLocation - reservedElsewhere)
+          if (available < qty) {
+            showToast(`Only ${available} ${deliveryLine.productName} available at ${LOCATIONS[location]?.name ?? location}`, 'error')
+            return false
+          }
+        }
+
+        preparedLines.push({ ...deliveryLine, qtyDone: qty, serialIds })
+        totalPrepared += qty
+        if (product && product.unit !== 'service' && qty > 0) {
+          reservations.push({
+            id: uid(),
+            productId: deliveryLine.productId,
+            productName: deliveryLine.productName,
+            qty,
+            reservedFor: 'sales_order',
+            referenceId: so.id,
+            referenceRef: del.ref,
+            referenceType: 'delivery',
+            deliveryId,
+            location: deliveryLine.sourceLocation ?? 'warehouse',
+            reservedBy: user!.id,
+            reservedDate: now(),
+            expiresDate: addDays(now(), 7),
+            status: 'reserved',
+            fulfilledQty: 0,
+            serialNumbers: serialIds.map(id => serialRef.current.find(item => item.id === id)?.serial ?? id),
+            notes: `Reserved while preparing delivery ${del.ref}`,
+          })
+        }
+      }
+
+      if (totalPrepared <= 0) {
+        showToast('Enter at least one delivery quantity before preparing', 'error')
+        return false
+      }
+
+      setStockReservations(prev => [
+        ...reservations,
+        ...prev.map(reservation =>
+          reservation.deliveryId === deliveryId && reservation.status === 'reserved'
+            ? { ...reservation, status: 'cancelled' as const, notes: `${reservation.notes ?? ''} · replaced during re-preparation`.trim() }
+            : reservation
+        ),
+      ])
+      const preparedAt = new Date().toISOString()
+      setDeliveries(prev => prev.map(item => item.id === deliveryId ? {
+        ...item,
+        status: 'ready' as const,
+        lines: preparedLines,
+        preparedAt,
+        preparedByUserId: user!.id,
+        deliveryNoteGeneratedAt: undefined,
+        deliveryNoteGeneratedByUserId: undefined,
+      } : item))
+      sync(`/api/deliveries/${deliveryId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          status: 'ready',
+          lines: preparedLines,
+          preparedAt,
+          preparedByUserId: user!.id,
+          deliveryNoteGeneratedAt: null,
+          deliveryNoteGeneratedByUserId: null,
+        }),
+      })
+      setSaleOrders(prev => prev.map(order => {
+        if (order.id !== so.id) return order
+        const updated = {
+          ...order,
+          stockReservationIds: Array.from(new Set([...(order.stockReservationIds ?? []), ...reservations.map(r => r.id)])),
+        }
+        sync(`/api/sale-orders/${order.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+        return updated
+      }))
+      addAuditLog('prepare_delivery', del.ref, `Reserved ${totalPrepared} item(s) for delivery ${del.ref}`)
+      showToast(`${del.ref} prepared — stock reserved and ready to validate`)
+      return true
+    },
     validateDelivery: (deliveryId, qtysDone) => {
       if (!canApproveInventoryAction(currentUser())) {
         showToast('Only Inventory or Admin can validate deliveries', 'error'); return;
       }
       const del = delRef.current.find(d => d.id === deliveryId)!
       const so  = soRef.current.find(s => s.id === del.saleOrderId)!
+      if (del.status !== 'ready' || !del.preparedAt) {
+        showToast('Prepare and reserve this delivery before validation', 'error')
+        return
+      }
 
       // Odoo-style partial validation: quantities actually done are shipped
       // now; the remainder moves to a backorder delivery. Stock is deducted
       // ONLY for the quantities validated as Done.
-      const requested: Record<string, number> = qtysDone ?? Object.fromEntries(del.lines.map(l => [l.productId, l.qty]))
+      const requested: Record<string, number> = qtysDone ?? Object.fromEntries(del.lines.map(l => [l.productId, l.qtyDone]))
       const { doneLines, backorderLines } = splitDeliveryForBackorder(del.lines, requested)
       if (doneLines.length === 0) {
         showToast('Enter the quantities delivered before validating', 'error'); return
@@ -8132,7 +8294,7 @@ const storeCtx: AppState = {
       const newWarranties: Warranty[] = []
       doneLines.forEach(l => {
         const prod = prodRef.current.find(x => x.id === l.productId)
-        if (prod) {
+        if (prod && prod.unit !== 'service') {
           if (!prod.requiresSerial && l.sourceLocation !== undefined) setBulkStock(prev => upsertBulkStock(prev, l.productId, l.sourceLocation as LocationId, -l.qty))
           setProducts(p => p.map(x => x.id === l.productId ? { ...x, stockQty: Math.max(0, x.stockQty - l.qty) } : x))
           addMove(l.productId, l.productName, l.qty, 'out', `Delivery ${del.ref}`, del.ref, l.sourceLocation ?? 'warehouse', 'customer', l.serialIds.map(id => serialRef.current.find(s => s.id === id)?.serial ?? id))
@@ -8156,7 +8318,7 @@ const storeCtx: AppState = {
       })
       if (newWarranties.length > 0) setWarranties(p => [...p, ...newWarranties])
       setStockReservations(prev => prev.map(r => {
-        if (r.referenceId !== so.id || r.status !== 'reserved') return r
+        if ((r.deliveryId ? r.deliveryId !== deliveryId : r.referenceId !== so.id) || r.status !== 'reserved') return r
         const deliveredLine = doneLines.find(line => line.productId === r.productId)
         if (!deliveredLine) return r
         const fulfilledQty = Math.min(r.qty, r.fulfilledQty + deliveredLine.qty)
@@ -8188,12 +8350,16 @@ const storeCtx: AppState = {
         }
         sync('/api/deliveries', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(backorder) })
       }
+      const completedLines = del.lines.map(l => ({
+        ...l,
+        qtyDone: doneLines.find(x => x.productId === l.productId)?.qty ?? 0,
+      }))
       setDeliveries(p => {
         const next = p.map(d => d.id === deliveryId ? {
           ...d,
           status: 'done' as const,
           warrantyCreated: newWarranties.length > 0,
-          lines: d.lines.map(l => ({ ...l, qtyDone: doneLines.find(x => x.productId === l.productId)?.qty ?? 0 })),
+          lines: completedLines,
         } : d)
         return backorder ? [backorder, ...next] : next
       })
@@ -8211,9 +8377,47 @@ const storeCtx: AppState = {
         sync(`/api/sale-orders/${s.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
         return updated
       }))
-      sync(`/api/deliveries/${deliveryId}/validate`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ autoInvoice: false }) })
+      sync(`/api/deliveries/${deliveryId}/validate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          status: 'done',
+          lines: completedLines,
+          warrantyCreated: newWarranties.length > 0,
+          autoInvoice: false,
+        }),
+      })
       addAuditLog('validate_delivery', del.ref, `Delivery validated${backorder ? ` · backorder ${backorder.ref} created` : ''}`)
       showToast(`Delivery done · stock updated${backorder ? ` · backorder ${backorder.ref} created` : ''}${newWarranties.length > 0 ? ` · ${newWarranties.length} warranty(ies) created` : ''}`)
+    },
+    markDeliveryNoteGenerated: async (deliveryId) => {
+      const delivery = delRef.current.find(item => item.id === deliveryId)
+      const user = currentUser()
+      if (!delivery || delivery.status !== 'done') {
+        showToast('Only a validated delivery can generate the final Delivery Note', 'error')
+        return false
+      }
+      const patch = {
+        deliveryNoteGeneratedAt: new Date().toISOString(),
+        deliveryNoteGeneratedByUserId: user?.id,
+      }
+      try {
+        const response = await fetch(`/api/deliveries/${deliveryId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(patch),
+        })
+        if (!response.ok) {
+          showToast('Delivery Note opened, but its generated status could not be saved', 'error')
+          return false
+        }
+        setDeliveries(prev => prev.map(item => item.id === deliveryId ? { ...item, ...patch } : item))
+        addAuditLog('generate_delivery_note', delivery.ref, `Final Delivery Note generated by ${user?.name ?? 'user'}`)
+        return true
+      } catch {
+        showToast('Delivery Note opened, but the server could not be reached', 'error')
+        return false
+      }
     },
     updateDelivery: (deliveryId, p) => {
       setDeliveries(prev => prev.map(d => d.id === deliveryId ? { ...d, ...p } : d))
@@ -8227,6 +8431,10 @@ const storeCtx: AppState = {
       if (!so) { showToast('Sale order not found', 'error'); return {} as Invoice }
       if (so.status !== 'sale') {
         showToast('Only a confirmed Sales Order can be invoiced', 'error'); return {} as Invoice;
+      }
+      if (!hasGeneratedDeliveryNote(delRef.current, orderId)) {
+        showToast('Validate the delivery and generate its Delivery Note before creating an invoice', 'error')
+        return {} as Invoice
       }
 
       // Prefer server-atomic path (qtyInvoiced bump + invoice create in one transaction).
@@ -8312,8 +8520,6 @@ const storeCtx: AppState = {
       }
 
       // Odoo-style invoicing fallback (client) when server path unavailable.
-      const resolvePolicy = (l: any): InvoicePolicy =>
-        prodRef.current.find(p => p.id === l.productId)?.invoicePolicy === 'delivery' ? 'delivery' : 'order'
       const itemLines = so.lines.filter((l: any) => l.lineType !== 'section')
       const invoiceable = itemLines.map((l: any) => ({
         line: l,
@@ -8321,7 +8527,8 @@ const storeCtx: AppState = {
           qty: Number(l.qty) || 0,
           qtyDelivered: Number(l.qtyDelivered) || 0,
           qtyInvoiced: Number(l.qtyInvoiced) || 0,
-          invoicePolicy: resolvePolicy(l),
+          // This workflow invoices fulfilled quantities only.
+          invoicePolicy: 'delivery' as InvoicePolicy,
         }),
       })).filter(entry => entry.qtyToInvoice > 0)
 

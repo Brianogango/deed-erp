@@ -74,7 +74,7 @@ const saleOrder = {
     description: 'ThinkPad T14',
     productId: 'prod-1',
     qty: 1,
-    qtyDelivered: 0,
+    qtyDelivered: 1,
     qtyInvoiced: 0,
     unitPrice: 10000,
     taxRate: 16,
@@ -86,7 +86,15 @@ beforeEach(() => {
   vi.clearAllMocks()
   mockRequireRole.mockResolvedValue(actor)
   mockGetNextDocNumber.mockResolvedValue('INV/2026/0004')
-  mockLoadAppState.mockResolvedValue({ deed_products: [], deed_invoices: [] })
+  mockLoadAppState.mockResolvedValue({
+    deed_invoices: [],
+    deed_deliveries: [{
+      id: 'delivery-1',
+      saleOrderId: ORDER_ID,
+      status: 'done',
+      deliveryNoteGeneratedAt: '2026-07-28T10:00:00.000Z',
+    }],
+  })
   mockSaveStoreKeys.mockResolvedValue(undefined)
   mockWriteFinancialAudit.mockResolvedValue(undefined)
   mockPrisma.saleOrder.findUnique.mockResolvedValue(saleOrder)
@@ -165,5 +173,32 @@ describe('POST /api/sale-orders/:id/create-invoice', () => {
     mockPrisma.saleOrder.findUnique.mockResolvedValue({ ...saleOrder, status: 'quotation' })
     const res = await POST(new NextRequest('http://localhost', { method: 'POST' }), { params: { id: ORDER_ID } })
     expect(res.status).toBe(409)
+  })
+
+  it('rejects invoicing before a completed Delivery Note is generated', async () => {
+    mockLoadAppState.mockResolvedValue({
+      deed_invoices: [],
+      deed_deliveries: [{ saleOrderId: ORDER_ID, status: 'done' }],
+    })
+    const res = await POST(new NextRequest('http://localhost', { method: 'POST' }), { params: { id: ORDER_ID } })
+    expect(res.status).toBe(409)
+    expect((await res.json()).error).toMatch(/generate.*Delivery Note/i)
+    expect(mockPrisma.$transaction).not.toHaveBeenCalled()
+  })
+
+  it('invoices delivered quantity only after the Delivery Note gate', async () => {
+    const partial = {
+      ...saleOrder,
+      items: [{ ...saleOrder.items[0], qty: 3, qtyDelivered: 1 }],
+    }
+    mockPrisma.saleOrder.findUnique.mockResolvedValue(partial)
+    mockPrisma.$transaction.mockImplementation(async (fn: any) => fn({
+      saleOrder: { findUnique: vi.fn().mockResolvedValue(partial) },
+      saleOrderItem: { update: mockPrisma.saleOrderItem.update.mockResolvedValue({}) },
+      invoice: { create: mockPrisma.invoice.create },
+    }))
+    await POST(new NextRequest('http://localhost', { method: 'POST' }), { params: { id: ORDER_ID } })
+    const createData = mockPrisma.invoice.create.mock.calls.at(-1)?.[0]?.data
+    expect(createData.items.create[0].qty).toBe(1)
   })
 })

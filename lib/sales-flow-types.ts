@@ -75,6 +75,8 @@ export interface StockReservation {
   referenceId: string
   referenceRef: string
   referenceType: string
+  /** Exact delivery/picking that owns this reservation (sales flow). */
+  deliveryId?: string
   
   location: string
   
