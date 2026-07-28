@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useAnchoredMenu } from '@/lib/data-table/use-anchored-menu'
+import { getSerialMenuPlacement } from '@/lib/inventory/serial-menu-placement'
 
 export interface SerialOption {
   id: string
@@ -62,6 +63,12 @@ export default function SerialMultiSelect({ options, maxSelectable, onAssign, di
   }
 
   const limitReached = selected.size >= maxSelectable
+  const triggerRect = open && typeof window !== 'undefined'
+    ? triggerRef.current?.getBoundingClientRect()
+    : null
+  const placement = triggerRect
+    ? getSerialMenuPlacement(triggerRect, window.innerHeight)
+    : null
 
   return (
     <>
@@ -81,20 +88,26 @@ export default function SerialMultiSelect({ options, maxSelectable, onAssign, di
           ref={menuRef}
           role="dialog"
           aria-label="Assign serial numbers"
-          className="dt-anchored-menu w-80"
-          style={{ top: position.top, right: position.right }}
+          className="dt-anchored-menu flex w-80 flex-col"
+          style={{
+            top: placement?.top ?? position.top,
+            bottom: placement?.bottom,
+            right: position.right,
+            maxHeight: placement?.maxHeight,
+            overflow: 'hidden',
+          }}
         >
           <input
             type="text"
             autoFocus
-            className="form-input text-xs w-full mb-2"
+            className="form-input mb-2 w-full flex-shrink-0 text-xs"
             placeholder="Search serial, barcode or location…"
             aria-label="Search available serials"
             value={query}
             onChange={e => setQuery(e.target.value)}
             onKeyDown={e => { if (e.key === 'Enter') assign() }}
           />
-          <div className="max-h-56 overflow-y-auto">
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
             {filtered.length === 0 && (
               <p className="px-2 py-2 text-[11px] text-[var(--text-3)]">No serials match “{query}”.</p>
             )}
@@ -122,7 +135,7 @@ export default function SerialMultiSelect({ options, maxSelectable, onAssign, di
               )
             })}
           </div>
-          <div className="flex items-center justify-between gap-2 border-t border-[var(--border-lt)] mt-2 pt-2">
+          <div className="mt-2 flex flex-shrink-0 items-center justify-between gap-2 border-t border-[var(--border-lt)] bg-[var(--bg-card)] pt-2">
             <span className="text-[10px] text-[var(--text-3)]">
               {selected.size}/{maxSelectable} selected
             </span>
