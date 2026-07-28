@@ -7,8 +7,8 @@ import {
   type LeaveRequest, type Employee,
 } from '@/lib/store'
 import { useHrStore } from '@/hooks/useHrStore'
-import { Confirm, ModuleSkeleton, ModuleHeader, TabBar } from '@/components/ui'
-import { PrimaryActionButton } from '@/components/erp'
+import { Confirm, ModuleSkeleton, ModuleHeader, TabBar, Modal, StatCard, EmptyState } from '@/components/ui'
+import { PrimaryActionButton, StatusBadge } from '@/components/erp'
 import { Fa } from '@/components/icons'
 import { faBullseye, faCircleCheck, faTriangleExclamation, faUserSlash, faPlus } from '@fortawesome/free-solid-svg-icons'
 
@@ -371,10 +371,18 @@ export default function SOPs() {
       ]
     : [{ id: 'my', label: 'My targets' }]
 
+  const activeSops = sops.filter(s => s.active)
+  const teamSummaries = activeSops.map(sop => sopSummary(sop, currentPeriodKey(sop.period)))
+  const teamAchieved = teamSummaries.filter(summary => summary.pctOverall === 100).length
+  const teamAtRisk = teamSummaries.filter(summary => summary.pctOverall < 60).length
+  const teamAverage = teamSummaries.length
+    ? Math.round(teamSummaries.reduce((sum, summary) => sum + summary.pctOverall, 0) / teamSummaries.length)
+    : 0
+
   return (
     <div className="mod-page">
       <ModuleHeader
-        title="Performance targets"
+        title="KPI Targets"
         subtitle="Track individual targets per staff member"
         icon={<Fa icon={faBullseye} />}
         color="var(--warning)"
@@ -393,49 +401,66 @@ export default function SOPs() {
         ariaLabel="Performance target sections"
       />
 
-      <div className="mod-body p-3 sm:p-4">
-      <div className="card overflow-hidden">
+      <div className="mod-body bg-slate-50 p-3 sm:p-4 lg:p-6">
 
         {/* ── Overview (Team View) ── */}
         {tab === 'overview' && canViewTeamHR && (
-          <div className="overflow-x-auto w-full">
-            <div className="min-w-[800px] flex flex-col divide-y divide-gray-100">
-            {sops.filter(s => s.active).length === 0 ? (
-              <div className="py-14 text-center text-t3 text-sm">
-                <div style={{ fontSize: 36 }} className="mb-2">🎯</div>
-                No active targets set. Click "+ Set Target" to get started.
-              </div>
-            ) : sops.filter(s => s.active).map(sop => {
+          <div className="space-y-5">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+              <StatCard compact label="Active targets" value={activeSops.length} sub="Staff scorecards" color="var(--primary)" icon={<Fa icon={faBullseye} />} />
+              <StatCard compact label="Achieved" value={teamAchieved} sub="All metrics met" color="var(--success)" icon={<Fa icon={faCircleCheck} />} />
+              <StatCard compact label="At risk" value={teamAtRisk} sub="Below 60% achieved" color="var(--danger)" icon={<Fa icon={faTriangleExclamation} />} />
+              <StatCard compact label="Team completion" value={`${teamAverage}%`} sub="Average targets met" color={teamAverage >= 70 ? 'var(--success)' : 'var(--warning)'} icon={<Fa icon={faBullseye} />} />
+            </div>
+
+            <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm" aria-label="Team KPI scorecards">
+            {activeSops.length === 0 ? (
+              <EmptyState
+                icon={<Fa icon={faBullseye} />}
+                title="No active targets"
+                subtitle={canEditTargets ? 'Set a target to start tracking team performance.' : 'No active KPI targets have been configured.'}
+                action={canEditTargets ? <button type="button" className="btn-primary" onClick={openCreate}>Set target</button> : undefined}
+              />
+            ) : activeSops.map(sop => {
               const pk  = currentPeriodKey(sop.period)
               const sum = sopSummary(sop, pk)
               const pctC = sum.pctOverall
               const col = pctC === 100 ? 'var(--success)' : pctC >= 60 ? 'var(--warning)' : 'var(--danger)'
               return (
                 <div key={sop.id}
-                  className="p-4 cursor-pointer transition-colors hover:bg-gray-50 flex items-center gap-4"
-                  onClick={() => { setSelectedSopId(sop.id); setHistPeriod(null); setTab('my') }}>
-                  <div className="w-9 h-9 rounded-full flex items-center justify-center font-bold text-sm text-white flex-shrink-0"
+                  role="button"
+                  tabIndex={0}
+                  className="flex cursor-pointer flex-col gap-4 border-b border-slate-100 p-4 transition-colors last:border-b-0 hover:bg-slate-50 sm:flex-row sm:items-center"
+                  onClick={() => { setSelectedSopId(sop.id); setHistPeriod(null); setTab('my') }}
+                  onKeyDown={event => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault()
+                      setSelectedSopId(sop.id)
+                      setHistPeriod(null)
+                      setTab('my')
+                    }
+                  }}>
+                  <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full text-sm font-bold text-white"
                     style={{ background: 'linear-gradient(135deg, var(--navy), var(--accent-cyan))' }}>
                     {sop.userName.slice(0, 2).toUpperCase()}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      <p className="font-semibold text-sm text-t1">{sop.userName}</p>
-                      <span style={{ fontSize: 9, padding: '1px 6px', borderRadius: 20, background: '#E8F3FA', color: 'var(--navy-dark)', fontWeight: 600 }}>
-                        {sop.period}
-                      </span>
-                      <span className="text-[10px] text-t3">{fmtPeriodKey(pk)}</span>
+                    <div className="mb-2 flex flex-wrap items-center gap-2">
+                      <p className="text-sm font-semibold text-slate-900">{sop.userName}</p>
+                      <StatusBadge status={pctC === 100 ? 'done' : pctC >= 60 ? 'confirmed_blue' : 'failed'} label={pctC === 100 ? 'Achieved' : pctC >= 60 ? 'On track' : 'At risk'} size="xs" />
+                      <span className="rounded-full bg-blue-50 px-2 py-1 text-[11px] font-semibold capitalize text-blue-700">{sop.period}</span>
+                      <span className="text-xs text-slate-500">{fmtPeriodKey(pk)}</span>
                     </div>
                     {/* Mini progress bars */}
                     <div className="flex gap-2 flex-wrap">
                       {sum.metrics.map(m => {
                         const c = metricColor(m.actual, m.target, m.targetDir)
                         return (
-                          <div key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                            <div style={{ width: 60, height: 4, borderRadius: 4, background: 'var(--border-lt)', overflow: 'hidden' }}>
+                          <div key={m.id} className="flex items-center gap-1.5">
+                            <div className="h-1.5 w-16 overflow-hidden rounded-full bg-slate-200">
                               <div style={{ height: '100%', width: `${Math.min(100, pct(m.actual, m.target, m.targetDir))}%`, background: c.bar, borderRadius: 4 }} />
                             </div>
-                            <span style={{ fontSize: 9, color: c.text, fontWeight: 600 }}>
+                            <span className="text-[11px] font-semibold" style={{ color: c.text }}>
                               {fmtVal(m.actual, m.unit)}/{fmtVal(m.target, m.unit)}
                             </span>
                           </div>
@@ -443,14 +468,14 @@ export default function SOPs() {
                       })}
                     </div>
                   </div>
-                  <div className="flex items-center gap-3 flex-shrink-0">
-                    <div style={{ textAlign: 'right' }}>
-                      <p className="font-bold text-xl" style={{ color: col, lineHeight: 1 }}>{pctC}%</p>
-                      <p className="text-[9px] text-t3">{sum.met}/{sum.total} targets met</p>
+                  <div className="flex flex-shrink-0 items-center justify-between gap-3 sm:justify-end">
+                    <div className="text-right">
+                      <p className="text-2xl font-bold tabular-nums" style={{ color: col, lineHeight: 1 }}>{pctC}%</p>
+                      <p className="mt-1 text-xs text-slate-500">{sum.met}/{sum.total} targets met</p>
                     </div>
                     {canEditTargets && (
                       <button onClick={e => { e.stopPropagation(); openEdit(sop) }}
-                        className="btn-outline text-[10px] py-0.5 px-2">
+                        className="btn-outline px-3 py-1.5 text-xs">
                         Edit
                       </button>
                     )}
@@ -458,34 +483,44 @@ export default function SOPs() {
                 </div>
               )
             })}
-            </div>
+            </section>
           </div>
         )}
 
         {/* ── Manage SOPs (Admins Only) ── */}
         {tab === 'manage' && canViewTeamHR && (
-          <div className="overflow-x-auto w-full">
-            <div className="min-w-[800px] flex flex-col divide-y divide-gray-100">
+          <div className="space-y-5">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+              <StatCard compact label="Total scorecards" value={sops.length} sub="Configured targets" color="var(--primary)" icon={<Fa icon={faBullseye} />} />
+              <StatCard compact label="Active" value={activeSops.length} sub="Currently tracked" color="var(--success)" icon={<Fa icon={faCircleCheck} />} />
+              <StatCard compact label="Inactive" value={sops.length - activeSops.length} sub="Not currently tracked" color="var(--text-4)" icon={<Fa icon={faUserSlash} />} />
+              <StatCard compact label="Metrics" value={sops.reduce((sum, sop) => sum + sop.metrics.length, 0)} sub="Across all scorecards" color="var(--warning)" icon={<Fa icon={faTriangleExclamation} />} />
+            </div>
+            <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm" aria-label="Managed KPI targets">
             {sops.length === 0 ? (
-              <div className="py-14 text-center text-t3 text-sm">No performance targets defined yet.</div>
+              <EmptyState icon={<Fa icon={faBullseye} />} title="No KPI targets defined" subtitle="Create a staff target to begin tracking performance." action={canEditTargets ? <button type="button" className="btn-primary" onClick={openCreate}>Set target</button> : undefined} />
             ) : sops.map(sop => (
-              <div key={sop.id} className="p-4 flex items-center gap-4 hover:bg-gray-50 transition-colors">
+              <div key={sop.id} className="flex flex-col gap-4 border-b border-slate-100 p-4 transition-colors last:border-b-0 hover:bg-slate-50 sm:flex-row sm:items-center">
                 <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-sm text-t1">{sop.userName}</p>
-                  <p className="text-[11px] text-t3">{sop.period} · {sop.metrics.length} metrics{sop.notes ? ` · ${sop.notes}` : ''}</p>
-                  <div className="flex gap-1.5 mt-1 flex-wrap">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="text-sm font-semibold text-slate-900">{sop.userName}</p>
+                    <StatusBadge status={sop.active ? 'active' : 'returned'} label={sop.active ? 'Active' : 'Inactive'} size="xs" />
+                    <span className="text-xs capitalize text-slate-500">{sop.period} · {sop.metrics.length} metrics</span>
+                  </div>
+                  {sop.notes && <p className="mt-1 text-xs text-slate-500">{sop.notes}</p>}
+                  <div className="mt-2 flex flex-wrap gap-1.5">
                     {sop.metrics.map(m => (
-                      <span key={m.id} style={{ fontSize: 9, padding: '1px 7px', borderRadius: 20, background: 'var(--bg-muted)', color: 'var(--text-4)', fontWeight: 500 }}>
+                      <span key={m.id} className="rounded-full border border-slate-200 bg-slate-50 px-2 py-1 text-[11px] font-medium text-slate-600">
                         {m.label}: {m.targetDir === 'min' ? '≥' : '≤'} {fmtVal(m.target, m.unit)}
                       </span>
                     ))}
                   </div>
                 </div>
-                <div className="flex gap-2 flex-shrink-0">
+                <div className="flex flex-shrink-0 gap-2">
                   {canEditTargets && (
                     <>
-                      <button onClick={() => openEdit(sop)} className="btn-outline text-[10px] py-0.5 px-2">Edit</button>
-                      <button onClick={() => setPendingConfirm({ msg: 'Delete this target?', action: () => deleteSOP(sop.id) })} className="btn-outline text-[10px] py-0.5 px-2" style={{ color: 'var(--danger)', borderColor: '#FCA5A5' }}>
+                      <button type="button" onClick={() => openEdit(sop)} className="btn-outline px-3 py-1.5 text-xs">Edit</button>
+                      <button type="button" onClick={() => setPendingConfirm({ msg: 'Delete this target?', action: () => deleteSOP(sop.id) })} className="btn-outline px-3 py-1.5 text-xs" style={{ color: 'var(--danger)', borderColor: '#FCA5A5' }}>
                         Delete
                       </button>
                     </>
@@ -493,7 +528,7 @@ export default function SOPs() {
                 </div>
               </div>
             ))}
-            </div>
+            </section>
           </div>
         )}
 
@@ -502,9 +537,12 @@ export default function SOPs() {
           const sop = selectedSopId ? sops.find(s => s.id === selectedSopId) : mySOP
           if (!sop) {
             return (
-              <div className="py-14 text-center text-t3 text-sm">
-                <div style={{ fontSize: 36 }} className="mb-2">🎯</div>
-                {canViewTeamHR ? 'Select a staff member from the Overview tab.' : 'No performance target has been set for you yet. Contact your administrator.'}
+              <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+                <EmptyState
+                  icon={<Fa icon={faBullseye} />}
+                  title="No KPI target selected"
+                  subtitle={canViewTeamHR ? 'Select a staff member from the Overview tab.' : 'No performance target has been set for you yet. Contact your administrator.'}
+                />
               </div>
             )
           }
@@ -516,25 +554,27 @@ export default function SOPs() {
           const canEditActuals = canEditTargets || sop.userId === currentUserId
 
           return (
-            <div>
+            <div className="space-y-5">
               {/* Period selector + back */}
-              <div className="flex items-center gap-3 px-4 py-2.5 border-b flex-wrap" style={{ borderColor: 'var(--border-lt)' }}>
+              <div className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm lg:flex-row lg:items-center">
                 {selectedSopId && canViewTeamHR && (
                   <button onClick={() => { setSelectedSopId(null); setTab('overview') }}
-                    style={{ fontSize: 11, color: 'var(--text-4)', background: 'none', border: 'none', cursor: 'pointer' }}>
+                    className="self-start text-xs font-semibold text-blue-700 hover:text-blue-900">
                     ← Back
                   </button>
                 )}
-                <span className="text-[11px] font-semibold text-t1">{sop.userName}</span>
-                <span style={{ fontSize: 9, padding: '1px 6px', borderRadius: 20, background: '#E8F3FA', color: 'var(--navy-dark)', fontWeight: 600 }}>{sop.period}</span>
-                <div className="flex gap-1.5 ml-2">
+                <div className="flex flex-wrap items-center gap-2 lg:mr-auto">
+                  <span className="text-base font-semibold text-slate-900">{sop.userName}</span>
+                  <span className="rounded-full bg-blue-50 px-2 py-1 text-[11px] font-semibold capitalize text-blue-700">{sop.period}</span>
+                </div>
+                <div className="flex gap-2 overflow-x-auto pb-1">
                   <button onClick={() => setHistPeriod(null)}
-                    style={{ fontSize: 10, padding: '3px 10px', borderRadius: 20, border: '1px solid', cursor: 'pointer', background: isCurrent ? 'var(--navy)' : 'var(--bg-muted)', color: isCurrent ? '#fff' : 'var(--text-3)', borderColor: isCurrent ? 'var(--navy)' : 'var(--border)', fontWeight: isCurrent ? 600 : 400 }}>
+                    className={`flex-shrink-0 rounded-full border px-3 py-1.5 text-xs font-semibold ${isCurrent ? 'border-blue-700 bg-blue-700 text-white' : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'}`}>
                     {fmtPeriodKey(currentPeriodKey(sop.period))} (current)
                   </button>
                   {prevKeys.map(k => (
                     <button key={k} onClick={() => setHistPeriod(k)}
-                      style={{ fontSize: 10, padding: '3px 10px', borderRadius: 20, border: '1px solid', cursor: 'pointer', background: histPeriod === k ? 'var(--navy)' : 'var(--bg-muted)', color: histPeriod === k ? '#fff' : 'var(--text-3)', borderColor: histPeriod === k ? 'var(--navy)' : 'var(--border)', fontWeight: histPeriod === k ? 600 : 400 }}>
+                      className={`flex-shrink-0 rounded-full border px-3 py-1.5 text-xs font-semibold ${histPeriod === k ? 'border-blue-700 bg-blue-700 text-white' : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'}`}>
                       {fmtPeriodKey(k)}
                     </button>
                   ))}
@@ -542,25 +582,14 @@ export default function SOPs() {
               </div>
 
               {/* Period summary */}
-              <div className="px-4 py-3 border-b flex items-center gap-6 flex-wrap" style={{ borderColor: 'var(--border-lt)', background: 'var(--bg-muted)' }}>
-                <div>
-                  <p className="text-[10px] text-t3">Period</p>
-                  <p className="font-semibold text-sm text-t1">{fmtPeriodKey(pk)}</p>
-                </div>
-                <div>
-                  <p className="text-[10px] text-t3">Overall Progress</p>
-                  <p className="font-bold text-xl" style={{ color: summary.pctOverall === 100 ? 'var(--success)' : summary.pctOverall >= 60 ? 'var(--warning)' : 'var(--danger)' }}>
-                    {summary.pctOverall}%
-                  </p>
-                </div>
-                <div>
-                  <p className="text-[10px] text-t3">Targets Met</p>
-                  <p className="font-bold text-sm">{summary.met} / {summary.total}</p>
-                </div>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                <StatCard compact label="Period" value={fmtPeriodKey(pk)} sub={sop.period} color="var(--primary)" icon={<Fa icon={faBullseye} />} />
+                <StatCard compact label="Overall progress" value={`${summary.pctOverall}%`} sub="Targets achieved" color={summary.pctOverall === 100 ? 'var(--success)' : summary.pctOverall >= 60 ? 'var(--warning)' : 'var(--danger)'} icon={<Fa icon={faCircleCheck} />} />
+                <StatCard compact label="Targets met" value={`${summary.met} / ${summary.total}`} sub="Current scorecard" color={summary.met === summary.total ? 'var(--success)' : 'var(--warning)'} icon={<Fa icon={faTriangleExclamation} />} />
               </div>
 
               {/* Metric cards */}
-              <div className="p-4 grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))' }}>
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
                 {summary.metrics.map(m => {
                   const p    = pct(m.actual, m.target, m.targetDir)
                   const col  = metricColor(m.actual, m.target, m.targetDir)
@@ -568,25 +597,28 @@ export default function SOPs() {
                   const isCustom = m.metricType === 'custom'
                   const autoType = SOP_METRIC_TYPES.find(t => t.value === m.metricType)
                   return (
-                    <div key={m.id} className="rounded-xl p-4" style={{ border: `1px solid ${col.border}`, background: 'var(--bg-surface)' }}>
-                      <div className="flex items-start justify-between mb-2">
+                    <article key={m.id} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                      <div className="mb-4 flex items-start justify-between gap-3">
                         <div>
-                          <p className="font-semibold text-sm text-t1">{m.label}</p>
-                          {isCustom
-                            ? <span style={{ fontSize: 9, padding: '1px 6px', borderRadius: 20, background: 'var(--bg-muted)', color: 'var(--text-4)', fontWeight: 600 }}>Manual</span>
-                            : <span style={{ fontSize: 9, padding: '1px 6px', borderRadius: 20, background: '#E8F3FA', color: 'var(--navy-dark)', fontWeight: 600 }}>Auto-tracked</span>
-                          }
+                          <p className="text-base font-semibold text-slate-900">{m.label}</p>
+                          <span className={`mt-1 inline-flex rounded-full px-2 py-1 text-[11px] font-semibold ${isCustom ? 'bg-slate-100 text-slate-600' : 'bg-blue-50 text-blue-700'}`}>
+                            {isCustom ? 'Manual' : 'Auto-tracked'}
+                          </span>
                         </div>
-                        <span style={{ fontSize: 18 }}>{met ? '✅' : p >= 70 ? '⚠️' : '❌'}</span>
+                        <StatusBadge
+                          status={met ? 'done' : p >= 70 ? 'confirmed_blue' : 'failed'}
+                          label={met ? 'Achieved' : p >= 70 ? 'On track' : 'At risk'}
+                          size="xs"
+                        />
                       </div>
 
                       {/* Progress bar */}
                       <div className="mb-2">
-                        <div className="flex justify-between text-[10px] mb-1">
+                        <div className="mb-2 flex justify-between gap-3 text-xs">
                           <span style={{ color: col.text, fontWeight: 700 }}>{fmtVal(m.actual, m.unit)}</span>
                           <span className="text-t3">{m.targetDir === 'min' ? 'Target:' : 'Budget:'} {fmtVal(m.target, m.unit)}</span>
                         </div>
-                        <div style={{ height: 8, borderRadius: 8, background: 'var(--border-lt)', overflow: 'hidden' }}>
+                        <div className="h-2.5 overflow-hidden rounded-full bg-slate-200" role="progressbar" aria-valuenow={p} aria-valuemin={0} aria-valuemax={100} aria-label={`${m.label} progress`}>
                           <div style={{
                             height: '100%', borderRadius: 8,
                             width: `${Math.min(100, p)}%`,
@@ -594,7 +626,7 @@ export default function SOPs() {
                             transition: 'width 0.4s ease',
                           }} />
                         </div>
-                        <div className="flex justify-between text-[10px] mt-1">
+                        <div className="mt-2 flex justify-between gap-3 text-xs">
                           <span className="text-t3">
                             {m.targetDir === 'min'
                               ? `${m.target - m.actual > 0 ? `${fmtVal(m.target - m.actual, m.unit)} to go` : 'Reached ✓'}`
@@ -608,25 +640,26 @@ export default function SOPs() {
                       {/* Update button for custom / admin override */}
                       {(isCustom || canEditTargets) && canEditActuals && (
                         <button onClick={() => openActualUpdate(sop, m, pk)}
-                          style={{ width: '100%', fontSize: 10, padding: '5px', borderRadius: 6, border: `1px solid ${col.border}`, background: col.bg, color: col.text, cursor: 'pointer', fontWeight: 600 }}>
+                          className="mt-2 min-h-10 w-full rounded-lg border px-3 text-xs font-semibold transition-opacity hover:opacity-80"
+                          style={{ borderColor: col.border, background: col.bg, color: col.text }}>
                           {isCustom ? 'Update Actual' : 'Override Actual'}
                         </button>
                       )}
 
                       {!isCustom && autoType && (
-                        <p className="text-[9px] text-t3 mt-1.5">{autoType.hint}</p>
+                        <p className="mt-2 text-xs text-slate-500">{autoType.hint}</p>
                       )}
-                    </div>
+                    </article>
                   )
                 })}
               </div>
 
               {/* Historical table */}
               {prevKeys.length > 0 && (
-                <div className="px-4 pb-4">
-                  <p className="text-[10px] font-semibold text-t3 uppercase tracking-wider mb-2">Historical Comparison</p>
-                  <div className="dt-scroll">
-                    <table className="w-full text-[11px]" style={{ minWidth: 500 }}>
+                <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+                  <h3 className="mb-3 text-base font-semibold text-slate-900">Historical comparison</h3>
+                  <div className="dt-scroll rounded-xl border border-slate-200">
+                    <table className="w-full text-[13px]" style={{ minWidth: 640 }}>
                       <thead>
                         <tr style={{ background: 'var(--bg-muted)', borderBottom: '1px solid var(--border-lt)' }}>
                           <th className="px-3 py-2 text-left text-[10px] font-semibold text-t3 uppercase tracking-wider">Metric</th>
@@ -662,7 +695,7 @@ export default function SOPs() {
                       </tbody>
                     </table>
                   </div>
-                </div>
+                </section>
               )}
             </div>
           )
@@ -671,26 +704,38 @@ export default function SOPs() {
 
       {/* ── Create / Edit SOP Modal ───────────────────────────────────────── */}
       {showCreateModal && isAdmin && (
-        <div className="modal-overlay" onClick={() => setShowCreateModal(false)}>
-          <div className="modal-box w-full max-w-2xl" onClick={e => e.stopPropagation()} style={{ maxHeight: '90vh', overflowY: 'auto' }}>
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-sm font-bold text-t1">{editSopId ? 'Edit Target' : 'Set Target for Staff Member'}</h3>
-              <button onClick={() => setShowCreateModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: 'var(--text-4)' }}>×</button>
-            </div>
-
-            <div className="space-y-4">
+        <Modal
+          title={editSopId ? 'Edit Target' : 'Set Target for Staff Member'}
+          subtitle="Define ownership, reporting period, and measurable KPI targets."
+          width={1050}
+          variant="enterprise"
+          accent="#2563EB"
+          icon={<Fa icon={faBullseye} />}
+          onClose={() => setShowCreateModal(false)}
+          footer={(
+            <>
+              <button type="button" className="btn-outline min-h-10 px-5 text-sm" onClick={() => setShowCreateModal(false)}>Cancel</button>
+              <button type="button" className="btn-primary min-h-10 px-5 text-sm" onClick={saveSOP}>
+                {editSopId ? 'Save Changes' : 'Create Target'}
+              </button>
+            </>
+          )}
+        >
+            <div className="space-y-5">
               {/* User + Period */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <section>
+              <h3 className="mb-3 text-sm font-semibold text-slate-900">Ownership and reporting period</h3>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div>
-                  <label className="text-[11px] font-semibold text-t2 block mb-1">Staff Member *</label>
-                  <select aria-label="Staff member" className="form-input w-full text-[12px]" value={sopUserId}
+                  <label className="mb-1.5 block text-[13px] font-semibold text-slate-700">Staff Member *</label>
+                  <select aria-label="Staff member" className="form-input h-11 w-full text-sm" value={sopUserId}
                     onChange={e => setSopUserId(e.target.value)} disabled={!!editSopId}>
                     {users.map(u => <option key={u.id} value={u.id}>{u.name} ({u.role})</option>)}
                   </select>
                 </div>
                 <div>
-                  <label className="text-[11px] font-semibold text-t2 block mb-1">Review Period *</label>
-                  <select aria-label="Review period" className="form-input w-full text-[12px]" value={sopPeriod}
+                  <label className="mb-1.5 block text-[13px] font-semibold text-slate-700">Review Period *</label>
+                  <select aria-label="Review period" className="form-input h-11 w-full text-sm" value={sopPeriod}
                     onChange={e => setSopPeriod(e.target.value as SOP['period'])}>
                     <option value="monthly">Monthly</option>
                     <option value="weekly">Weekly</option>
@@ -698,31 +743,32 @@ export default function SOPs() {
                   </select>
                 </div>
               </div>
+            </section>
 
               {/* Metrics table */}
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <label className="text-[11px] font-semibold text-t2">Targets / Metrics *</label>
-                  <button onClick={addMetricRow}
-                    style={{ fontSize: 10, padding: '3px 10px', borderRadius: 6, border: '1px solid #A8D4E8', background: '#E8F3FA', color: 'var(--navy-dark)', cursor: 'pointer', fontWeight: 600 }}>
+              <section>
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <h3 className="text-sm font-semibold text-slate-900">Targets / Metrics *</h3>
+                  <button type="button" onClick={addMetricRow}
+                    className="btn-outline min-h-10 px-3 text-xs text-blue-700">
                     + Add Metric
                   </button>
                 </div>
 
-                <div className="space-y-2">
+                <div className="space-y-3">
                   {sopMetrics.map(m => (
-                    <div key={m.id} className="rounded-lg p-3 flex gap-2 items-start" style={{ background: 'var(--bg-surface)', border: '1px solid var(--bg-muted)' }}>
+                    <div key={m.id} className="grid grid-cols-1 gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4 md:grid-cols-[minmax(160px,2fr)_minmax(200px,2.5fr)_minmax(100px,1fr)_minmax(100px,1fr)_minmax(120px,1fr)_40px] md:items-end">
                       {/* Label */}
-                      <div style={{ flex: '2 1 0' }}>
-                        <label className="text-[9px] text-t3 block mb-0.5">Label</label>
-                        <input className="form-input w-full text-[11px]" placeholder="e.g. Machines Sold"
+                      <div>
+                        <label className="mb-1 block text-xs font-semibold text-slate-600">Label</label>
+                        <input className="form-input h-10 w-full text-sm" placeholder="e.g. Machines Sold"
                           value={m.label} onChange={e => updateMetricRow(m.id, { label: e.target.value })} />
                       </div>
 
                       {/* Metric type */}
-                      <div style={{ flex: '2.5 1 0' }}>
-                        <label className="text-[9px] text-t3 block mb-0.5">Track From</label>
-                        <select aria-label={`Metric source for ${m.label || 'target'}`} className="form-input w-full text-[11px]" value={m.metricType}
+                      <div>
+                        <label className="mb-1 block text-xs font-semibold text-slate-600">Track From</label>
+                        <select aria-label={`Metric source for ${m.label || 'target'}`} className="form-input h-10 w-full text-sm" value={m.metricType}
                           onChange={e => updateMetricRow(m.id, { metricType: e.target.value as SOPMetricType })}>
                           {SOP_METRIC_TYPES.map(t => (
                             <option key={t.value} value={t.value}>{t.label}{t.auto ? ' (auto)' : ' (manual)'}</option>
@@ -731,96 +777,87 @@ export default function SOPs() {
                       </div>
 
                       {/* Target + Direction */}
-                      <div style={{ flex: '1.2 1 0' }}>
-                        <label className="text-[9px] text-t3 block mb-0.5">Target</label>
-                        <input type="number" className="form-input w-full text-[11px]" placeholder="0"
+                      <div>
+                        <label className="mb-1 block text-xs font-semibold text-slate-600">Target</label>
+                        <input type="number" className="form-input h-10 w-full text-sm" placeholder="0"
                           value={m.target || ''}
                           onChange={e => updateMetricRow(m.id, { target: Number(e.target.value) })} />
                       </div>
 
-                      <div style={{ flex: '1 1 0' }}>
-                        <label className="text-[9px] text-t3 block mb-0.5">Unit</label>
-                        <input className="form-input w-full text-[11px]" placeholder="units"
+                      <div>
+                        <label className="mb-1 block text-xs font-semibold text-slate-600">Unit</label>
+                        <input className="form-input h-10 w-full text-sm" placeholder="units"
                           value={m.unit}
                           onChange={e => updateMetricRow(m.id, { unit: e.target.value })} />
                       </div>
 
-                      <div style={{ flex: '1 1 0' }}>
-                        <label className="text-[9px] text-t3 block mb-0.5">Must</label>
-                        <select aria-label={`Target direction for ${m.label || 'target'}`} className="form-input w-full text-[11px]" value={m.targetDir}
+                      <div>
+                        <label className="mb-1 block text-xs font-semibold text-slate-600">Must</label>
+                        <select aria-label={`Target direction for ${m.label || 'target'}`} className="form-input h-10 w-full text-sm" value={m.targetDir}
                           onChange={e => updateMetricRow(m.id, { targetDir: e.target.value as SOPTargetDir })}>
                           <option value="min">≥ Reach</option>
                           <option value="max">≤ Stay under</option>
                         </select>
                       </div>
 
-                      <button onClick={() => removeMetricRow(m.id)}
-                        style={{ marginTop: 18, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-4)', fontSize: 16, flexShrink: 0 }}>×</button>
+                      <button type="button" onClick={() => removeMetricRow(m.id)}
+                        className="flex h-10 w-10 items-center justify-center rounded-lg text-xl text-slate-400 hover:bg-red-50 hover:text-red-600"
+                        aria-label={`Remove ${m.label || 'metric'}`}>×</button>
                     </div>
                   ))}
                 </div>
-              </div>
+              </section>
 
               {/* Notes */}
               <div>
-                <label className="text-[11px] font-semibold text-t2 block mb-1">Notes (optional)</label>
-                <input className="form-input w-full text-[12px]" placeholder="e.g. Sales team monthly targets"
+                <label className="mb-1.5 block text-[13px] font-semibold text-slate-700">Notes (optional)</label>
+                <input className="form-input h-11 w-full text-sm" placeholder="e.g. Sales team monthly targets"
                   value={sopNotes} onChange={e => setSopNotes(e.target.value)} />
               </div>
             </div>
-
-            <div className="flex gap-2 mt-4 justify-end">
-              <button className="btn-outline text-[11px] py-2 px-4" onClick={() => setShowCreateModal(false)}>Cancel</button>
-              <button className="btn-primary text-[11px] py-2 px-4" onClick={saveSOP}>
-                {editSopId ? 'Save Changes' : 'Create Target'}
-              </button>
-            </div>
-          </div>
-        </div>
+        </Modal>
       )}
 
       {/* ── Update Custom Actual Modal ────────────────────────────────────── */}
       {updatingActual && (
-        <div className="modal-overlay" onClick={() => setUpdatingActual(null)}>
-          <div className="modal-box w-full max-w-sm" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <h3 className="text-sm font-bold text-t1">Update Actual Value</h3>
-                <p className="text-[11px] text-t3">{updatingActual.metric.label} · {fmtPeriodKey(updatingActual.periodKey)}</p>
+        <Modal
+          title="Update Actual Value"
+          subtitle={`${updatingActual.metric.label} · ${fmtPeriodKey(updatingActual.periodKey)}`}
+          width={560}
+          variant="enterprise"
+          accent="#2563EB"
+          onClose={() => setUpdatingActual(null)}
+          footer={(
+            <>
+              <button type="button" className="btn-outline min-h-10 px-5 text-sm" onClick={() => setUpdatingActual(null)}>Cancel</button>
+              <button type="button" className="btn-primary min-h-10 px-5 text-sm" onClick={saveActual}>Save</button>
+            </>
+          )}
+        >
+
+            <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm">
+              <div className="flex justify-between gap-4">
+                <span className="text-slate-500">Current target</span>
+                <span className="font-semibold text-slate-900">{updatingActual.metric.targetDir === 'min' ? '≥' : '≤'} {fmtVal(updatingActual.metric.target, updatingActual.metric.unit)}</span>
               </div>
-              <button onClick={() => setUpdatingActual(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: 'var(--text-4)' }}>×</button>
             </div>
 
-            <div className="rounded-xl p-3 mb-4 text-[11px]" style={{ background: 'var(--bg-surface)', border: '1px solid var(--bg-muted)' }}>
-              <div className="flex justify-between">
-                <span className="text-t3">Target</span>
-                <span className="font-semibold">{updatingActual.metric.targetDir === 'min' ? '≥' : '≤'} {fmtVal(updatingActual.metric.target, updatingActual.metric.unit)}</span>
-              </div>
-            </div>
-
-            <div className="space-y-3 mb-4">
+            <div className="space-y-4">
               <div>
-                <label className="text-[11px] font-semibold text-t2 block mb-1">
+                <label className="mb-1.5 block text-[13px] font-semibold text-slate-700">
                   Actual Value ({updatingActual.metric.unit || 'units'}) *
                 </label>
-                <input type="number" className="form-input w-full text-[12px]" placeholder="0"
+                <input type="number" className="form-input h-11 w-full text-sm" placeholder="0"
                   value={actualValue} onChange={e => setActualValue(e.target.value)} autoFocus />
               </div>
               <div>
-                <label className="text-[11px] font-semibold text-t2 block mb-1">Notes (optional)</label>
-                <input className="form-input w-full text-[12px]" placeholder="e.g. slow month, public holidays"
+                <label className="mb-1.5 block text-[13px] font-semibold text-slate-700">Notes (optional)</label>
+                <input className="form-input h-11 w-full text-sm" placeholder="e.g. slow month, public holidays"
                   value={actualNote} onChange={e => setActualNote(e.target.value)} />
               </div>
             </div>
-
-            <div className="flex gap-2 justify-end">
-              <button className="btn-outline text-[11px] py-2 px-4" onClick={() => setUpdatingActual(null)}>Cancel</button>
-              <button className="btn-primary text-[11px] py-2 px-4" onClick={saveActual}>Save</button>
-            </div>
-          </div>
-        </div>
+        </Modal>
       )}
-      </div>{/* mod-body */}
       {pendingConfirm && (
         <Confirm
           message={pendingConfirm.msg}

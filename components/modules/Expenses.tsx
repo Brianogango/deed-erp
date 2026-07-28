@@ -6,8 +6,8 @@ import {
   Expense, ExpenseCategory, ExpensePaymentMethod,
   EXPENSE_CATEGORIES,
 } from '@/lib/store'
-import { ModuleSkeleton, useMounted, RecordCard, ModuleHeader, TabBar } from '@/components/ui'
-import { PrimaryActionButton, StatusBadge } from '@/components/erp'
+import { ModuleSkeleton, useMounted, RecordCard, ModuleHeader, TabBar, Modal, StatCard } from '@/components/ui'
+import { PrimaryActionButton, StatusBadge, TablePageLayout } from '@/components/erp'
 import { DataTable, type ColumnDef, type PrimaryFilterConfig } from '@/components/data-table'
 import { Fa } from '@/components/icons'
 import { faHourglassHalf, faMoneyBillWave, faCreditCard, faChartBar, faClipboardList, faCircleCheck, faPlus } from '@fortawesome/free-solid-svg-icons'
@@ -322,92 +322,119 @@ function ExpensesContent() {
         ariaLabel="Expense sections"
       />
 
-      <div className="mod-body">
-      <div className="card overflow-hidden m-3 sm:m-4">
+      <div className="mod-body bg-slate-50">
+      <div className="p-0 sm:p-1 lg:p-2">
 
         {/* ── My Expenses tab ── */}
         {tab === 'mine' && (
-          <ExpenseTable
-            rows={myExpenses}
-            showSubmitter={false}
-            emptyMessage='No expenses submitted yet. Click "+ New Expense" to get started.'
-            onPreview={openReceiptPreview}
-            onView={e => setReviewingId(e.id)}
-          />
+          <TablePageLayout
+            title="My expense claims"
+            summary={(
+              <div className="grid w-full grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                <StatCard compact label="Total expenses" value={fmtKes(myTotal)} sub={`${myExpenses.length} claims`} color="var(--primary)" icon={<Fa icon={faChartBar} />} />
+                <StatCard compact label="Pending review" value={myPending} sub="Awaiting finance" color="var(--warning)" icon={<Fa icon={faHourglassHalf} />} />
+                <StatCard compact label="Approved" value={myApproved} sub="Approved claims" color="var(--success)" icon={<Fa icon={faCircleCheck} />} />
+                <StatCard compact label="Reimbursed" value={fmtKes(myReimbursed)} sub="Paid back to you" color="var(--success)" icon={<Fa icon={faMoneyBillWave} />} />
+              </div>
+            )}
+          >
+            <ExpenseTable
+              rows={myExpenses}
+              showSubmitter={false}
+              emptyMessage='No expenses submitted yet. Click "+ New Expense" to get started.'
+              onPreview={openReceiptPreview}
+              onView={e => setReviewingId(e.id)}
+            />
+          </TablePageLayout>
         )}
 
         {/* ── Review tab (finance/admin) ── */}
         {tab === 'review' && isFinance && (
-          <ExpenseTable
-            rows={reviewList}
-            showSubmitter
-            emptyMessage="No expenses match the filter."
-            searchPlaceholder="Search reference or description…"
-            primaryFilters={[
-              {
-                key: 'status',
-                label: 'Status',
-                value: reviewStatus,
-                allValue: 'all',
-                options: [
-                  { value: 'all', label: 'All statuses' },
-                  { value: 'submitted', label: 'Pending' },
-                  { value: 'approved', label: 'Approved' },
-                  { value: 'rejected', label: 'Rejected' },
-                  { value: 'reimbursed', label: 'Reimbursed' },
-                ],
-                onChange: v => setReviewStatus(v as typeof reviewStatus),
-              },
-              {
-                key: 'staff',
-                label: 'Staff',
-                value: reviewUser,
-                allValue: 'all',
-                options: [
-                  { value: 'all', label: 'All staff' },
-                  ...uniqueSubmitters.map(([uid, name]) => ({ value: uid, label: name })),
-                ],
-                onChange: setReviewUser,
-              },
-            ]}
-            onClearFilters={() => {
-              setReviewStatus('all')
-              setReviewUser('all')
-            }}
-            onPreview={openReceiptPreview}
-            onReview={e => { setReviewingId(e.id); setReviewNotes('') }}
-            onReimburse={e => {
-              setReimbursingId(e.id)
-              setReimburseNote('')
-              setReimburseMethod('bank')
-              setReimburseBankAccountId('')
-              setReimburseReference('')
-            }}
-            onView={e => setReviewingId(e.id)}
-          />
+          <TablePageLayout
+            title="Expense review queue"
+            summary={(
+              <div className="grid w-full grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                <StatCard compact label="Pending claims" value={allPending.length} sub="Awaiting review" color="var(--warning)" icon={<Fa icon={faHourglassHalf} />} />
+                <StatCard compact label="Pending amount" value={fmtKes(totalPendingAmt)} sub="Value awaiting review" color="var(--warning)" icon={<Fa icon={faChartBar} />} />
+                <StatCard compact label="Awaiting reimbursement" value={pendingReimbursements.length} sub="Approved employee claims" color="var(--primary)" icon={<Fa icon={faCreditCard} />} />
+                <StatCard compact label="Reimbursement due" value={fmtKes(reimbDue)} sub="Approved amount to pay" color="var(--danger)" icon={<Fa icon={faMoneyBillWave} />} />
+              </div>
+            )}
+          >
+            <ExpenseTable
+              rows={reviewList}
+              showSubmitter
+              emptyMessage="No expenses match the filter."
+              searchPlaceholder="Search reference or description…"
+              primaryFilters={[
+                {
+                  key: 'status',
+                  label: 'Status',
+                  value: reviewStatus,
+                  allValue: 'all',
+                  options: [
+                    { value: 'all', label: 'All statuses' },
+                    { value: 'submitted', label: 'Pending' },
+                    { value: 'approved', label: 'Approved' },
+                    { value: 'rejected', label: 'Rejected' },
+                    { value: 'reimbursed', label: 'Reimbursed' },
+                  ],
+                  onChange: v => setReviewStatus(v as typeof reviewStatus),
+                },
+                {
+                  key: 'staff',
+                  label: 'Staff',
+                  value: reviewUser,
+                  allValue: 'all',
+                  options: [
+                    { value: 'all', label: 'All staff' },
+                    ...uniqueSubmitters.map(([uid, name]) => ({ value: uid, label: name })),
+                  ],
+                  onChange: setReviewUser,
+                },
+              ]}
+              onClearFilters={() => {
+                setReviewStatus('all')
+                setReviewUser('all')
+              }}
+              onPreview={openReceiptPreview}
+              onReview={e => { setReviewingId(e.id); setReviewNotes('') }}
+              onReimburse={e => {
+                setReimbursingId(e.id)
+                setReimburseNote('')
+                setReimburseMethod('bank')
+                setReimburseBankAccountId('')
+                setReimburseReference('')
+              }}
+              onView={e => setReviewingId(e.id)}
+            />
+          </TablePageLayout>
         )}
       </div>
 
       {/* ── Submit Expense Modal ──────────────────────────────────────────── */}
       {showSubmit && (
-        <div className="modal-overlay" onClick={() => setShowSubmit(false)}>
-          <div className="modal-box w-full max-w-lg" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <h3 className="text-sm font-bold text-t1">New Expense</h3>
-                <p className="text-[10px] mt-0.5" style={{ color: 'var(--text-3)' }}>
-                  Submitting as <span className="font-semibold" style={{ color: 'var(--navy)' }}>{currentUser?.name ?? '—'}</span>
-                </p>
-              </div>
-              <button onClick={() => setShowSubmit(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: 'var(--text-4)' }}>×</button>
-            </div>
-
-            <div className="space-y-3">
+        <Modal
+          title="New Expense"
+          subtitle={`Submitting as ${currentUser?.name ?? '—'}`}
+          width={760}
+          variant="enterprise"
+          accent="#2563EB"
+          icon={<Fa icon={faClipboardList} />}
+          onClose={() => setShowSubmit(false)}
+          footer={(
+            <>
+              <button type="button" className="btn-outline min-h-10 px-5 text-sm" onClick={() => setShowSubmit(false)}>Cancel</button>
+              <button type="button" className="btn-primary min-h-10 px-5 text-sm" onClick={handleSubmit}>Submit Expense</button>
+            </>
+          )}
+        >
+            <div className="space-y-4">
               {/* Category + Date */}
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div>
-                  <label className="text-[11px] font-semibold text-t2 block mb-1">Category *</label>
-                  <select aria-label="Expense category" className="form-input w-full text-[12px]" value={form.category}
+                  <label className="mb-1.5 block text-[13px] font-semibold text-slate-700">Category *</label>
+                  <select aria-label="Expense category" className="form-input h-11 w-full text-sm" value={form.category}
                     onChange={e => setForm(f => ({ ...f, category: e.target.value as ExpenseCategory }))}>
                     {EXPENSE_CATEGORIES.map(c => (
                       <option key={c.value} value={c.value}>{CAT_ICONS[c.value]} {c.label}</option>
@@ -415,16 +442,16 @@ function ExpensesContent() {
                   </select>
                 </div>
                 <div>
-                  <label className="text-[11px] font-semibold text-t2 block mb-1">Expense Date *</label>
-                  <input type="date" aria-label="Expense date" className="form-input w-full text-[12px]" value={form.expenseDate}
+                  <label className="mb-1.5 block text-[13px] font-semibold text-slate-700">Expense Date *</label>
+                  <input type="date" aria-label="Expense date" className="form-input h-11 w-full text-sm" value={form.expenseDate}
                     onChange={e => setForm(f => ({ ...f, expenseDate: e.target.value }))} />
                 </div>
               </div>
 
               {/* Description */}
               <div>
-                <label className="text-[11px] font-semibold text-t2 block mb-1">Description *</label>
-                <textarea aria-label="Expense description" className="form-input w-full text-[12px]" rows={2}
+                <label className="mb-1.5 block text-[13px] font-semibold text-slate-700">Description *</label>
+                <textarea aria-label="Expense description" className="form-input min-h-[84px] w-full resize-y py-3 text-sm" rows={3}
                   placeholder="What was purchased / what was the expense for?"
                   value={form.description}
                   onChange={e => setForm(f => ({ ...f, description: e.target.value }))} />
@@ -432,29 +459,35 @@ function ExpensesContent() {
 
               {/* Amount */}
               <div>
-                <label className="text-[11px] font-semibold text-t2 block mb-1">Amount (KSh) *</label>
-                <input type="number" aria-label="Expense amount" className="form-input w-full text-[12px]" placeholder="0.00"
-                  value={form.amount}
-                  onChange={e => setForm(f => ({ ...f, amount: e.target.value }))} />
+                <label className="mb-1.5 block text-[13px] font-semibold text-slate-700">Amount (KSh) *</label>
+                <div className="relative">
+                  <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm font-medium text-slate-500">KSh</span>
+                  <input type="number" inputMode="decimal" aria-label="Expense amount" className="form-input h-11 w-full pl-12 text-sm" placeholder="0.00"
+                    value={form.amount}
+                    onChange={e => setForm(f => ({ ...f, amount: e.target.value }))} />
+                </div>
               </div>
 
               {/* Payment method */}
               <div>
-                <label className="text-[11px] font-semibold text-t2 block mb-2">How was it paid? *</label>
-                <div className="grid grid-cols-2 gap-2">
+                <label className="mb-2 block text-[13px] font-semibold text-slate-700">How was it paid? *</label>
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                   {PAYMENT_METHODS.map(pm => {
                     const active = form.paymentMethod === pm.value
                     return (
-                      <button key={pm.value} onClick={() => setForm(f => ({ ...f, paymentMethod: pm.value }))}
-                        style={{
-                          padding: '8px 12px', borderRadius: 8, cursor: 'pointer', textAlign: 'left',
-                          border: `1px solid ${active ? 'var(--navy)' : 'var(--border-lt)'}`,
-                          background: active ? '#E8F3FA' : '#FAFAFA',
-                        }}>
-                        <p className="text-[11px] font-semibold" style={{ color: active ? 'var(--navy-dark)' : 'var(--text-3)' }}>{pm.label}</p>
-                        <p className="text-[10px]" style={{ color: active ? 'var(--accent-cyan)' : 'var(--text-4)' }}>{pm.desc}</p>
+                      <button
+                        key={pm.value}
+                        type="button"
+                        aria-pressed={active}
+                        onClick={() => setForm(f => ({ ...f, paymentMethod: pm.value }))}
+                        className={`min-h-[62px] rounded-xl border px-3 py-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
+                          active ? 'border-blue-500 bg-blue-50' : 'border-slate-200 bg-slate-50 hover:border-slate-300'
+                        }`}
+                      >
+                        <p className={`text-sm font-semibold ${active ? 'text-blue-900' : 'text-slate-700'}`}>{pm.label}</p>
+                        <p className={`text-xs ${active ? 'text-blue-700' : 'text-slate-500'}`}>{pm.desc}</p>
                         {pm.isReimbursable && (
-                          <span style={{ fontSize: 9, background: 'var(--warning-bg)', color: 'var(--warning-text)', borderRadius: 20, padding: '1px 6px', fontWeight: 600, marginTop: 3, display: 'inline-block' }}>
+                          <span className="mt-1 inline-flex rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800">
                             Reimbursable
                           </span>
                         )}
@@ -466,7 +499,7 @@ function ExpensesContent() {
 
               {/* Receipt upload */}
               <div>
-                <label className="text-[11px] font-semibold text-t2 block mb-1">
+                <label className="mb-1.5 block text-[13px] font-semibold text-slate-700">
                   Attach Receipt / Transaction Message
                   <span className="font-normal text-t3 ml-1">(photo, PDF, screenshot)</span>
                 </label>
@@ -522,18 +555,12 @@ function ExpensesContent() {
 
               {/* Notes */}
               <div>
-                <label className="text-[11px] font-semibold text-t2 block mb-1">Notes (optional)</label>
-                <input aria-label="Expense notes" className="form-input w-full text-[12px]" placeholder="Any additional context..."
+                <label className="mb-1.5 block text-[13px] font-semibold text-slate-700">Notes (optional)</label>
+                <input aria-label="Expense notes" className="form-input h-11 w-full text-sm" placeholder="Any additional context..."
                   value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} />
               </div>
             </div>
-
-            <div className="flex gap-2 mt-4 justify-end">
-              <button className="btn-outline text-[11px] py-2 px-4" onClick={() => setShowSubmit(false)}>Cancel</button>
-              <button className="btn-primary text-[11px] py-2 px-4" onClick={handleSubmit}>Submit Expense</button>
-            </div>
-          </div>
-        </div>
+        </Modal>
       )}
 
       {/* ── Approve / Reject Modal ────────────────────────────────────────── */}
@@ -542,56 +569,70 @@ function ExpensesContent() {
         if (!exp) return null
         const canReview = isFinance && exp.status === 'submitted'
         return (
-          <div className="modal-overlay" onClick={() => setReviewingId(null)}>
-            <div className="modal-box w-full max-w-md" onClick={e => e.stopPropagation()}>
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <h3 className="text-sm font-bold text-t1">{canReview ? 'Review Expense' : 'View Expense'}</h3>
-                  <p className="text-[11px] text-t3">{exp.ref} · {exp.submittedByName}</p>
-                </div>
-                <button onClick={() => setReviewingId(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: 'var(--text-4)' }}>×</button>
-              </div>
+          <Modal
+            title={canReview ? 'Review Expense' : 'View Expense'}
+            subtitle={`${exp.ref} · ${exp.submittedByName}`}
+            width={680}
+            variant="enterprise"
+            accent="#2563EB"
+            onClose={() => setReviewingId(null)}
+            footer={canReview ? (
+              <>
+                <button type="button" onClick={() => setReviewingId(null)} className="btn-outline min-h-10 px-5 text-sm">Cancel</button>
+                <button type="button" onClick={() => { reviewExpense(reviewingId, false, reviewNotes); setReviewingId(null) }}
+                  className="min-h-10 rounded-lg border border-red-200 bg-red-50 px-5 text-sm font-semibold text-red-700 hover:bg-red-100">
+                  Reject
+                </button>
+                <button type="button" onClick={() => { reviewExpense(reviewingId, true, reviewNotes); setReviewingId(null) }}
+                  className="min-h-10 rounded-lg bg-green-600 px-5 text-sm font-semibold text-white hover:bg-green-700">
+                  Approve
+                </button>
+              </>
+            ) : (
+              <button type="button" onClick={() => setReviewingId(null)} className="btn-outline min-h-10 px-5 text-sm">Close</button>
+            )}
+          >
 
               {/* Summary */}
-              <div className="rounded-xl p-3 mb-4 space-y-1.5" style={{ background: 'var(--bg-surface)', border: '1px solid var(--bg-muted)' }}>
-                <div className="flex justify-between text-[12px]">
+              <div className="space-y-2 rounded-xl border border-slate-200 bg-slate-50 p-4">
+                <div className="flex justify-between gap-4 text-sm">
                   <span className="text-t3">Category</span>
                   <span className="font-semibold">{CAT_ICONS[exp.category]} {catLabel(exp.category)}</span>
                 </div>
-                <div className="flex justify-between text-[12px]">
+                <div className="flex justify-between gap-4 text-sm">
                   <span className="text-t3">Date</span>
                   <span>{fmtDate(exp.expenseDate)}</span>
                 </div>
-                <div className="flex justify-between text-[12px]">
+                <div className="flex justify-between gap-4 text-sm">
                   <span className="text-t3">Payment</span>
                   <span>{pmLabel(exp.paymentMethod)}{isReimbursable(exp.paymentMethod) && <span className="ml-1 text-[10px] text-amber-700 font-semibold">(Reimbursable)</span>}</span>
                 </div>
-                <div className="flex justify-between text-[12px]">
+                <div className="flex justify-between gap-4 text-sm">
                   <span className="text-t3">Description</span>
-                  <span className="font-medium text-right ml-4 max-w-[220px]">{exp.description}</span>
+                  <span className="max-w-[360px] text-right font-medium">{exp.description}</span>
                 </div>
-                <div className="flex justify-between text-[12px] pt-1 border-t" style={{ borderColor: 'var(--border-lt)' }}>
+                <div className="flex justify-between gap-4 border-t border-slate-200 pt-2 text-sm">
                   <span className="font-bold text-t1">Amount</span>
-                  <span className="font-bold text-base" style={{ color: 'var(--navy)' }}>{fmtKes(exp.amount)}</span>
+                  <span className="font-mono text-lg font-bold text-slate-900">{fmtKes(exp.amount)}</span>
                 </div>
               </div>
 
               {exp.receiptFileName && (
-                <button onClick={() => { openReceiptPreview(exp); setReviewingId(null) }}
-                  style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: 'var(--navy)', background: '#E8F3FA', border: '1px solid #A8D4E8', borderRadius: 8, padding: '6px 12px', cursor: 'pointer', marginBottom: 12 }}>
+                <button type="button" onClick={() => { openReceiptPreview(exp); setReviewingId(null) }}
+                  className="flex min-h-10 items-center gap-2 self-start rounded-lg border border-blue-200 bg-blue-50 px-4 text-sm font-semibold text-blue-700 hover:bg-blue-100">
                   📎 View attached receipt
                 </button>
               )}
 
               {exp.reviewNotes && !canReview && (
-                <div className="mb-3 p-3 rounded-lg" style={{ background: 'var(--warning-bg)', border: '1px solid #FDE68A' }}>
+                <div className="rounded-lg border border-amber-200 bg-amber-50 p-4">
                   <p className="text-[10px] font-semibold uppercase tracking-wider text-t3 mb-1">Review Notes</p>
                   <p className="text-xs" style={{ color: 'var(--warning-text)' }}>{exp.reviewNotes}</p>
                 </div>
               )}
 
               {exp.status === 'reimbursed' && (exp.reimbursementMethod || exp.reimbursementBankAccount || exp.reimbursementReference) && (
-                <div className="mb-3 p-3 rounded-lg" style={{ background: '#ECFEFF', border: '1px solid #A5F3FC' }}>
+                <div className="rounded-lg border border-cyan-200 bg-cyan-50 p-4">
                   <p className="text-[10px] font-semibold uppercase tracking-wider text-t3 mb-2">Reimbursement Details</p>
                   <div className="space-y-1 text-[11px]">
                     <div className="flex justify-between gap-3"><span className="text-t3">Method</span><span className="font-semibold text-right">{reimbursementMethodLabel(exp.reimbursementMethod)}</span></div>
@@ -602,33 +643,15 @@ function ExpensesContent() {
               )}
 
               {canReview && (
-                <div className="mb-3">
-                  <label className="text-[11px] font-semibold text-t2 block mb-1">Review Notes (optional)</label>
-                  <textarea aria-label="Expense review notes" className="form-input w-full text-[12px]" rows={2}
+                <div>
+                  <label className="mb-1.5 block text-[13px] font-semibold text-slate-700">Review Notes (optional)</label>
+                  <textarea aria-label="Expense review notes" className="form-input min-h-[84px] w-full resize-y py-3 text-sm" rows={3}
                     placeholder="Add a note for the employee..."
                     value={reviewNotes} onChange={e => setReviewNotes(e.target.value)} />
                 </div>
               )}
 
-              <div className="flex gap-2 justify-end">
-                {canReview ? (
-                  <>
-                    <button onClick={() => setReviewingId(null)} className="btn-outline text-[11px] py-2 px-4">Cancel</button>
-                    <button onClick={() => { reviewExpense(reviewingId, false, reviewNotes); setReviewingId(null) }}
-                      style={{ fontSize: 11, padding: '8px 16px', borderRadius: 8, border: '1px solid #FECACA', background: 'var(--danger-bg)', color: '#991B1B', cursor: 'pointer', fontWeight: 600 }}>
-                      Reject
-                    </button>
-                    <button onClick={() => { reviewExpense(reviewingId, true, reviewNotes); setReviewingId(null) }}
-                      className="btn-primary text-[11px] py-2 px-4" style={{ background: 'var(--success)' }}>
-                      Approve
-                    </button>
-                  </>
-                ) : (
-                  <button onClick={() => setReviewingId(null)} className="btn-outline text-[11px] py-2 px-4">Close</button>
-                )}
-              </div>
-            </div>
-          </div>
+          </Modal>
         )
       })()}
 
@@ -637,88 +660,88 @@ function ExpensesContent() {
         const exp = expenses.find(e => e.id === reimbursingId)
         if (!exp) return null
         return (
-          <div className="modal-overlay" onClick={() => setReimbursingId(null)}>
-            <div className="modal-box w-full max-w-sm" onClick={e => e.stopPropagation()}>
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <h3 className="text-sm font-bold text-t1">Mark as Reimbursed</h3>
-                  <p className="text-[11px] text-t3">{exp.ref} · {exp.submittedByName}</p>
-                </div>
-                <button onClick={() => setReimbursingId(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: 'var(--text-4)' }}>×</button>
-              </div>
-
-              <div className="rounded-xl p-3 mb-4 text-center" style={{ background: '#E8F3FA', border: '1px solid #A8D4E8' }}>
-                <p className="text-[10px] text-t3 mb-1">Amount to reimburse to {exp.submittedByName}</p>
-                <p className="text-2xl font-bold" style={{ color: 'var(--navy)' }}>{fmtKes(exp.amount)}</p>
-                <p className="text-[10px] text-t3 mt-1">{catLabel(exp.category)} · {fmtDate(exp.expenseDate)}</p>
-              </div>
-
-              <div className="space-y-3 mb-4">
-                <div>
-                  <label className="text-[11px] font-semibold text-t2 block mb-1">Bank Account</label>
-                  <select aria-label="Reimbursement bank account" className="form-input w-full text-[12px]" value={reimburseBankAccountId} onChange={e => setReimburseBankAccountId(e.target.value)}>
-                    <option value="">— Select Bank Account —</option>
-                    {bankAccounts.filter(a => a.active).map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="text-[11px] font-semibold text-t2 block mb-1">Payment Method</label>
-                  <select aria-label="Reimbursement payment method" className="form-input w-full text-[12px]" value={reimburseMethod} onChange={e => setReimburseMethod(e.target.value)}>
-                    <option value="bank">Bank Transfer</option>
-                    <option value="mpesa">M-Pesa</option>
-                    <option value="cash">Cash</option>
-                    <option value="cheque">Cheque</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="text-[11px] font-semibold text-t2 block mb-1">{reimburseMethod === 'cheque' ? 'Cheque Number' : 'Payment Reference'}</label>
-                  <input aria-label={reimburseMethod === 'cheque' ? 'Cheque number' : 'Payment reference'} className="form-input w-full text-[12px]" placeholder={reimburseMethod === 'cheque' ? 'e.g. 000123' : 'e.g. M-Pesa ref QGH123XY'}
-                    value={reimburseReference} onChange={e => setReimburseReference(e.target.value)} />
-                </div>
-                <div>
-                  <label className="text-[11px] font-semibold text-t2 block mb-1">Reimbursement Note (optional)</label>
-                  <textarea aria-label="Reimbursement note" className="form-input w-full text-[12px]" rows={2} placeholder="Any note about the reimbursement..."
-                    value={reimburseNote} onChange={e => setReimburseNote(e.target.value)} />
-                </div>
-              </div>
-
-              <div className="flex gap-2 justify-end">
-                <button onClick={() => { setReimbursingId(null); setReimburseReference(''); setReimburseBankAccountId('') }} className="btn-outline text-[11px] py-2 px-4">Cancel</button>
-                <button onClick={() => {
+          <Modal
+            title="Mark as Reimbursed"
+            subtitle={`${exp.ref} · ${exp.submittedByName}`}
+            width={600}
+            variant="enterprise"
+            accent="#2563EB"
+            onClose={() => setReimbursingId(null)}
+            footer={(
+              <>
+                <button type="button" onClick={() => { setReimbursingId(null); setReimburseReference(''); setReimburseBankAccountId('') }} className="btn-outline min-h-10 px-5 text-sm">Cancel</button>
+                <button type="button" onClick={() => {
                   reimburseExpense(reimbursingId, reimburseNote.trim() || undefined, reimburseMethod, reimburseBankAccountId || undefined, reimburseReference.trim() || undefined)
                   setReimbursingId(null)
                   setReimburseReference('')
                   setReimburseBankAccountId('')
                   setReimburseNote('')
                 }}
-                  className="btn-primary text-[11px] py-2 px-4" style={{ background: 'var(--accent-cyan)' }}>
+                  className="btn-primary min-h-10 px-5 text-sm">
                   Confirm Reimbursement
                 </button>
+              </>
+            )}
+          >
+
+              <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 text-center">
+                <p className="mb-1 text-xs text-slate-500">Amount to reimburse to {exp.submittedByName}</p>
+                <p className="font-mono text-2xl font-bold text-slate-900">{fmtKes(exp.amount)}</p>
+                <p className="mt-1 text-xs text-slate-500">{catLabel(exp.category)} · {fmtDate(exp.expenseDate)}</p>
               </div>
-            </div>
-          </div>
+
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div>
+                  <label className="mb-1.5 block text-[13px] font-semibold text-slate-700">Bank Account</label>
+                  <select aria-label="Reimbursement bank account" className="form-input h-11 w-full text-sm" value={reimburseBankAccountId} onChange={e => setReimburseBankAccountId(e.target.value)}>
+                    <option value="">— Select Bank Account —</option>
+                    {bankAccounts.filter(a => a.active).map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-[13px] font-semibold text-slate-700">Payment Method</label>
+                  <select aria-label="Reimbursement payment method" className="form-input h-11 w-full text-sm" value={reimburseMethod} onChange={e => setReimburseMethod(e.target.value)}>
+                    <option value="bank">Bank Transfer</option>
+                    <option value="mpesa">M-Pesa</option>
+                    <option value="cash">Cash</option>
+                    <option value="cheque">Cheque</option>
+                  </select>
+                </div>
+                <div className="sm:col-span-2">
+                  <label className="mb-1.5 block text-[13px] font-semibold text-slate-700">{reimburseMethod === 'cheque' ? 'Cheque Number' : 'Payment Reference'}</label>
+                  <input aria-label={reimburseMethod === 'cheque' ? 'Cheque number' : 'Payment reference'} className="form-input h-11 w-full text-sm" placeholder={reimburseMethod === 'cheque' ? 'e.g. 000123' : 'e.g. M-Pesa ref QGH123XY'}
+                    value={reimburseReference} onChange={e => setReimburseReference(e.target.value)} />
+                </div>
+                <div className="sm:col-span-2">
+                  <label className="mb-1.5 block text-[13px] font-semibold text-slate-700">Reimbursement Note (optional)</label>
+                  <textarea aria-label="Reimbursement note" className="form-input min-h-[84px] w-full resize-y py-3 text-sm" rows={3} placeholder="Any note about the reimbursement..."
+                    value={reimburseNote} onChange={e => setReimburseNote(e.target.value)} />
+                </div>
+              </div>
+          </Modal>
         )
       })()}
 
       {/* ── Receipt Preview Modal ─────────────────────────────────────────── */}
       {previewExp && (
-        <div className="modal-overlay" onClick={closeReceiptPreview}>
-          <div className="modal-box w-full max-w-2xl" onClick={e => e.stopPropagation()} style={{ maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}>
-            <div className="flex items-center justify-between mb-3">
-              <div>
-                <h3 className="text-sm font-bold text-t1">{previewExp.ref} · Receipt</h3>
-                <p className="text-[10px] text-t3">{previewExp.receiptFileName} · {previewExp.receiptFileSize ? formatSize(previewExp.receiptFileSize) : ''}</p>
-              </div>
-              <div className="flex items-center gap-2">
-                {previewUrl && (
-                  <a href={previewUrl} download={previewExp.receiptFileName ?? 'receipt'}
-                    className="btn-outline text-[11px] py-1.5 px-3" style={{ textDecoration: 'none' }}>
-                    Download
-                  </a>
-                )}
-                <button onClick={closeReceiptPreview} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 20, color: 'var(--text-4)' }}>×</button>
-              </div>
-            </div>
+        <Modal
+          title={`${previewExp.ref} · Receipt`}
+          subtitle={`${previewExp.receiptFileName} · ${previewExp.receiptFileSize ? formatSize(previewExp.receiptFileSize) : ''}`}
+          width={900}
+          variant="enterprise"
+          onClose={closeReceiptPreview}
+          footer={(
+            <>
+              <button type="button" className="btn-outline min-h-10 px-5 text-sm" onClick={closeReceiptPreview}>Close</button>
+              {previewUrl && (
+                <a href={previewUrl} download={previewExp.receiptFileName ?? 'receipt'}
+                  className="btn-primary inline-flex min-h-10 items-center px-5 text-sm" style={{ textDecoration: 'none' }}>
+                  Download
+                </a>
+              )}
+            </>
+          )}
+        >
             <div className="flex-1 overflow-auto rounded-lg" style={{ background: 'var(--bg-muted)', minHeight: 300 }}>
               {previewLoading ? (
                 <div className="flex items-center justify-center h-48">
@@ -746,8 +769,7 @@ function ExpensesContent() {
                 </div>
               )}
             </div>
-          </div>
-        </div>
+        </Modal>
       )}
       </div>{/* mod-body */}
     </div>
@@ -782,13 +804,13 @@ function ExpenseTable({
   const rowActions = (exp: Expense) => (
     <div className="flex items-center gap-2">
       {onReview && exp.status === 'submitted' && (
-        <button className="btn-primary text-[10px] py-1.5 px-3" onClick={() => onReview(exp)}>Review</button>
+        <button type="button" className="btn-primary px-3 py-1.5 text-xs" onClick={() => onReview(exp)}>Review</button>
       )}
       {onReimburse && exp.status === 'approved' && isReimbursable(exp.paymentMethod) && (
-        <button className="btn-primary text-[10px] py-1.5 px-3 bg-cyan-600 hover:bg-cyan-700" onClick={() => onReimburse(exp)}>Reimburse</button>
+        <button type="button" className="btn-primary bg-cyan-600 px-3 py-1.5 text-xs hover:bg-cyan-700" onClick={() => onReimburse(exp)}>Reimburse</button>
       )}
       {onView && (
-        <button className="btn-secondary text-[10px] py-1.5 px-3" onClick={() => onView(exp)}>View</button>
+        <button type="button" className="btn-secondary px-3 py-1.5 text-xs" onClick={() => onView(exp)}>View</button>
       )}
     </div>
   )
@@ -796,20 +818,20 @@ function ExpenseTable({
   const columns: ColumnDef<Expense>[] = [
     {
       key: 'ref', label: 'Ref', priority: 1, width: '90px',
-      render: exp => <span className="font-mono text-[11px] font-bold text-primary-600">{exp.ref}</span>,
+      render: exp => <span className="font-mono text-[13px] font-bold text-primary-600">{exp.ref}</span>,
     },
     {
       key: 'description', label: 'Description', priority: 1, width: '1.6fr',
       render: exp => (
-        <div className="min-w-0" style={{ maxWidth: 250 }}>
-          <p className="text-[var(--text-1)] font-bold erp-truncate" title={exp.description}>{exp.description}</p>
-          {exp.notes && <p className="text-[10px] text-[var(--text-4)] erp-truncate mt-0.5" title={exp.notes}>{exp.notes}</p>}
+        <div className="min-w-0">
+          <p className="erp-truncate text-[13px] font-semibold text-[var(--text-1)]" title={exp.description}>{exp.description}</p>
+          {exp.notes && <p className="erp-truncate mt-0.5 text-[11px] text-[var(--text-4)]" title={exp.notes}>{exp.notes}</p>}
         </div>
       ),
       exportValue: exp => exp.description,
     },
     {
-      key: 'status', label: 'Status', priority: 1, width: '130px',
+      key: 'status', label: 'Status', priority: 1, width: '160px',
       render: exp => (
         <div>
           <ExpenseStatusBadge status={exp.status} />
@@ -825,7 +847,7 @@ function ExpenseTable({
     },
     {
       key: 'amount', label: 'Amount', priority: 1, width: '100px', align: 'right',
-      render: exp => <span className="font-bold text-[var(--text-1)]">{fmtKes(exp.amount)}</span>,
+      render: exp => <span className="font-mono font-bold tabular-nums text-[var(--text-1)]">{fmtKes(exp.amount)}</span>,
       exportValue: exp => exp.amount,
     },
     {
@@ -868,7 +890,7 @@ function ExpenseTable({
         <div className="whitespace-nowrap font-medium">
           {pmLabel(exp.paymentMethod)}
           {isReimbursable(exp.paymentMethod) && (
-            <span className="block text-[9px] text-amber-600 font-bold uppercase mt-0.5">Reimbursable</span>
+            <span className="mt-0.5 block text-[11px] font-bold uppercase text-amber-700">Reimbursable</span>
           )}
         </div>
       ),
