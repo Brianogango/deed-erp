@@ -493,4 +493,31 @@ describe('POST /api/store — partial-view writes merge instead of replace', () 
     const saved = JSON.parse(mockSaveStoreKeys.mock.calls.find(c => c[0].deed_invoices)![0].deed_invoices)
     expect(saved).toHaveLength(1)
   })
+
+  it('refuses to overwrite non-empty invoice lines with an empty shell', async () => {
+    mockGetSession.mockResolvedValue(financeSession)
+    const withLines = [{
+      id: 'i1',
+      type: 'customer_invoice',
+      total: 11600,
+      subtotal: 10000,
+      taxTotal: 1600,
+      lines: [{ id: 'l1', description: 'ThinkPad', qty: 1, unitPrice: 10000, taxRate: 16, subtotal: 10000 }],
+    }]
+    mockLoadAppState.mockResolvedValue({ deed_invoices: withLines })
+    const emptyShell = [{
+      id: 'i1',
+      type: 'customer_invoice',
+      total: 11600,
+      subtotal: 11600,
+      taxTotal: 0,
+      lines: [],
+    }]
+    const res = await STORE_POST(postReq({ deed_invoices: JSON.stringify(emptyShell) }))
+    expect(res.status).toBe(200)
+    const saved = JSON.parse(mockSaveStoreKeys.mock.calls.find(c => c[0].deed_invoices)![0].deed_invoices)
+    expect(saved[0].lines).toHaveLength(1)
+    expect(saved[0].lines[0].description).toBe('ThinkPad')
+    expect(saved[0].subtotal).toBe(10000)
+  })
 })

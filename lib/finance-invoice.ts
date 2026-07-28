@@ -80,3 +80,81 @@ export function computeInvoiceTotals(
 export function clampAmountPaid(amountPaid: unknown, totalAmount: number): number {
   return Math.min(Math.max(0, round2(num(amountPaid))), totalAmount)
 }
+
+/** Client-store invoice line shape (deed_invoices). */
+export interface ClientInvoiceLine {
+  id: string
+  description: string
+  qty: number
+  unitPrice: number
+  taxRate: number
+  subtotal: number
+  productId?: string
+}
+
+/**
+ * Map Prisma InvoiceItem rows to client-store lines.
+ * Uses pretax `lineSubtotal` — never tax-inclusive `lineTotal` as UI subtotal.
+ */
+export function mapDbInvoiceItemsToClientLines(
+  items: Array<{
+    id?: string
+    description?: string | null
+    qty?: unknown
+    unitPrice?: unknown
+    taxRate?: unknown
+    lineSubtotal?: unknown
+    productId?: string | null
+  }> | null | undefined,
+): ClientInvoiceLine[] {
+  return (items ?? []).map((item, idx) => {
+    const qty = num(item.qty)
+    const unitPrice = num(item.unitPrice)
+    const explicit = item.lineSubtotal != null ? num(item.lineSubtotal) : null
+    return {
+      id: item.id ?? `line-${idx}`,
+      description: item.description ?? '',
+      qty,
+      unitPrice,
+      taxRate: num(item.taxRate),
+      subtotal: explicit != null ? explicit : round2(qty * unitPrice),
+      ...(item.productId ? { productId: item.productId } : {}),
+    }
+  })
+}
+
+/**
+ * When syncing deed_invoices, refuse to wipe non-empty line items with [].
+ * Protects the server mirror if a client briefly holds an empty-line shell
+ * (e.g. after SO→invoice when the API response omitted lines).
+ */
+export function preserveInvoiceLinesOnStoreWrite(current: unknown, incoming: unknown): unknown {
+  if (!Array.isArray(current) || !Array.isArray(incoming)) return incoming
+
+  const currentById = new Map<string, Record<string, unknown>>()
+  for (const row of current) {
+    if (row && typeof row === 'object' && (row as { id?: unknown }).id != null) {
+      currentById.set(String((row as { id: unknown }).id), row as Record<string, unknown>)
+    }
+  }
+
+  return incoming.map((row: unknown) => {
+    if (!row || typeof row !== 'object' || (row as { id?: unknown }).id == null) return row
+    const next = row as Record<string, unknown>
+    const prev = currentById.get(String(next.id))
+    if (!prev) return row
+
+    const incomingLines = Array.isArray(next.lines) ? next.lines : []
+    const prevLines = Array.isArray(prev.lines) ? prev.lines : []
+    if (incomingLines.length === 0 && prevLines.length > 0) {
+      return {
+        ...next,
+        lines: prevLines,
+        subtotal: prev.subtotal ?? next.subtotal,
+        taxTotal: prev.taxTotal ?? next.taxTotal,
+        total: prev.total ?? next.total,
+      }
+    }
+    return row
+  })
+}

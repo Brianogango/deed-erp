@@ -8235,29 +8235,70 @@ const storeCtx: AppState = {
         const payload = await response.json().catch(() => null) as {
           ok?: boolean
           error?: string
-          invoice?: { id: string; ref: string; total: number; status: string }
+          invoice?: Invoice & { taxTotal?: number }
         } | null
-        if (response.ok && payload?.ok && payload.invoice) {
+        if (response.ok && payload?.ok && payload.invoice?.id) {
+          const remote = payload.invoice
+          let remoteLines = Array.isArray(remote.lines) ? remote.lines : []
+          let subtotal = Number(remote.subtotal) || 0
+          let taxTotal = Number(remote.taxTotal) || 0
+          let total = Number(remote.total) || 0
+
+          // Defensive hydrate: never fall through to client re-invoice (qtyInvoiced already locked).
+          if (remoteLines.length === 0) {
+            try {
+              const detailRes = await fetch(`/api/invoices/${remote.id}`)
+              if (detailRes.ok) {
+                const detail = await detailRes.json() as {
+                  items?: Array<{
+                    id?: string; description?: string | null; qty?: number; unitPrice?: number
+                    taxRate?: number; lineSubtotal?: number; productId?: string | null
+                  }>
+                  subtotal?: number; taxAmount?: number; totalAmount?: number
+                }
+                remoteLines = (detail.items ?? []).map((item, idx) => ({
+                  id: item.id ?? `line-${idx}`,
+                  description: item.description ?? '',
+                  qty: Number(item.qty) || 0,
+                  unitPrice: Number(item.unitPrice) || 0,
+                  taxRate: Number(item.taxRate) || 0,
+                  subtotal: Number(item.lineSubtotal) || Math.round((Number(item.qty) || 0) * (Number(item.unitPrice) || 0)),
+                  ...(item.productId ? { productId: item.productId } : {}),
+                }))
+                if (Number(detail.subtotal)) subtotal = Number(detail.subtotal)
+                if (detail.taxAmount != null) taxTotal = Number(detail.taxAmount) || 0
+                if (Number(detail.totalAmount)) total = Number(detail.totalAmount)
+              }
+            } catch { /* InvoiceDetail will hydrate if needed */ }
+          }
+
+          if (remoteLines.length === 0) {
+            showToast('Invoice was created but line items could not be loaded — open the invoice to refresh', 'error')
+          }
+
           const local: Invoice = {
-            id: payload.invoice.id,
-            ref: payload.invoice.ref,
+            id: remote.id,
+            ref: remote.ref,
             type: 'customer_invoice',
             status: 'draft',
-            partnerId: so.customerId,
-            partnerName: so.customerName,
-            date: now(),
-            dueDate: addDays(now(), parseInt(so.paymentTerms ?? '', 10) || 30),
-            lines: [],
-            subtotal: payload.invoice.total,
-            taxTotal: 0,
-            total: payload.invoice.total,
-            amountPaid: 0,
-            saleOrderId: so.id,
-            notes: `Created from ${so.ref}`,
+            partnerId: remote.partnerId || so.customerId,
+            partnerName: remote.partnerName || so.customerName,
+            date: remote.date || now(),
+            dueDate: remote.dueDate || addDays(now(), parseInt(so.paymentTerms ?? '', 10) || 30),
+            lines: remoteLines,
+            subtotal: subtotal || remoteLines.reduce((s, l) => s + (Number(l.subtotal) || 0), 0),
+            taxTotal,
+            total: total || subtotal + taxTotal,
+            amountPaid: Number(remote.amountPaid) || 0,
+            saleOrderId: remote.saleOrderId || so.id,
+            notes: remote.notes || `Created from ${so.ref}`,
             invoiceAddress: so.invoiceAddress,
             deliveryAddress: so.deliveryAddress,
           }
-          setInvoices(p => [local, ...p.filter(i => i.id !== local.id)])
+          // Only push into local store when we have lines — empty shells overwrite the mirror.
+          if (remoteLines.length > 0) {
+            setInvoices(p => [local, ...p.filter(i => i.id !== local.id)])
+          }
           addAuditLog('create_invoice_from_so', local.ref, `Draft invoice created from ${so.ref} (server atomic)`)
           showToast(`Draft invoice ${local.ref} created — post it to finalize`)
           return local

@@ -4,6 +4,7 @@ import {
   hasPermission, SENSITIVE_STORE_KEY_PERMISSIONS, CLIENT_IMMUTABLE_STORE_KEYS, canReadStoreKey,
   CONTENT_FILTERED_STORE_KEYS, filterStoreValueForRole, hasFullStoreContentAccess, mergeFilteredStoreWrite,
 } from '@/lib/auth/authorization'
+import { preserveInvoiceLinesOnStoreWrite } from '@/lib/finance-invoice'
 import { loadAppState, saveStoreKeys } from '@/lib/server-store'
 
 type Params = { params: { key: string } }
@@ -53,6 +54,12 @@ export async function PUT(request: NextRequest, { params }: Params) {
     try { incoming = JSON.parse(value) } catch { incoming = null }
     const currentState = await loadAppState([key])
     value = JSON.stringify(mergeFilteredStoreWrite(currentState[key], incoming))
+  }
+  if (key === 'deed_invoices') {
+    let incoming: unknown
+    try { incoming = JSON.parse(value) } catch { incoming = null }
+    const currentState = await loadAppState([key])
+    value = JSON.stringify(preserveInvoiceLinesOnStoreWrite(currentState[key], incoming))
   }
   await saveStoreKeys({ [key]: value })
 

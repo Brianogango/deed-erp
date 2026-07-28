@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import {
   faBoxOpen,
@@ -47,6 +47,7 @@ export default function InvoiceDetail() {
     getCustomerCreditBalance,
     deleteInvoice,
     postInvoice,
+    updateInvoice,
     showToast,
     users,
     currentUserId,
@@ -68,6 +69,55 @@ export default function InvoiceDetail() {
   const [showResetDraft, setShowResetDraft] = useState(false)
   const [showOrc, setShowOrc] = useState(false)
   const [sendingInvoice, setSendingInvoice] = useState(false)
+  const [hydratingLines, setHydratingLines] = useState(false)
+  const hydrateAttempted = useRef<string | null>(null)
+
+  // Heal empty-line drafts from Prisma (e.g. SO→invoice shell overwrite).
+  useEffect(() => {
+    if (!invoice?.id) return
+    if ((invoice.lines || []).length > 0) {
+      hydrateAttempted.current = null
+      return
+    }
+    if (hydrateAttempted.current === invoice.id) return
+    hydrateAttempted.current = invoice.id
+    let cancelled = false
+    setHydratingLines(true)
+    ;(async () => {
+      try {
+        const res = await fetch(`/api/invoices/${invoice.id}`)
+        if (!res.ok || cancelled) return
+        const data = await res.json() as {
+          items?: Array<{
+            id?: string; description?: string | null; qty?: number; unitPrice?: number
+            taxRate?: number; lineSubtotal?: number; productId?: string | null
+          }>
+          subtotal?: number; taxAmount?: number; totalAmount?: number
+        }
+        const items = Array.isArray(data.items) ? data.items : []
+        if (cancelled || items.length === 0) return
+        updateInvoice(invoice.id, {
+          lines: items.map((item, idx) => ({
+            id: item.id ?? `line-${idx}`,
+            description: item.description ?? '',
+            qty: Number(item.qty) || 0,
+            unitPrice: Number(item.unitPrice) || 0,
+            taxRate: Number(item.taxRate) || 0,
+            subtotal: Number(item.lineSubtotal) || Math.round((Number(item.qty) || 0) * (Number(item.unitPrice) || 0)),
+            ...(item.productId ? { productId: item.productId } : {}),
+          })),
+          ...(Number(data.subtotal) ? { subtotal: Number(data.subtotal) } : {}),
+          ...(data.taxAmount != null ? { taxTotal: Number(data.taxAmount) || 0 } : {}),
+          ...(Number(data.totalAmount) ? { total: Number(data.totalAmount) } : {}),
+        })
+      } catch {
+        // best-effort heal
+      } finally {
+        if (!cancelled) setHydratingLines(false)
+      }
+    })()
+    return () => { cancelled = true }
+  }, [invoice?.id, invoice?.lines?.length, updateInvoice])
 
   if (!mounted) return <ModuleSkeleton />
 
@@ -299,7 +349,7 @@ export default function InvoiceDetail() {
           )}
 
           {/* Invoice Lines */}
-          {(invoice.lines || []).length > 0 && (
+          {(invoice.lines || []).length > 0 ? (
             <div>
               <p className="text-[10px] text-[var(--text-4)] uppercase font-bold mb-2">Line Items</p>
               <div className="rounded-xl border border-[var(--border-lt)] overflow-hidden">
@@ -336,6 +386,12 @@ export default function InvoiceDetail() {
                   </tfoot>
                 </table>
               </div>
+            </div>
+          ) : (
+            <div className="rounded-xl border border-[var(--border-lt)] px-4 py-6 text-center">
+              <p className="text-xs text-[var(--text-3)]">
+                {hydratingLines ? 'Loading line items…' : 'No line items on this invoice.'}
+              </p>
             </div>
           )}
 

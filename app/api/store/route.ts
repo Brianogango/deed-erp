@@ -6,6 +6,7 @@ import {
 } from '@/lib/auth/authorization'
 import { loadAppState, saveStoreKeys, getAppStateVersion } from '@/lib/server-store'
 import { mergeAppendOnlyJournals } from '@/lib/finance-controls'
+import { preserveInvoiceLinesOnStoreWrite } from '@/lib/finance-invoice'
 import crypto from 'crypto'
 
 const PROTECTED_NON_EMPTY_ARRAY_KEYS = new Set<string>([
@@ -193,6 +194,19 @@ export async function POST(request: Request) {
         delete entries[key]
         skippedKeys.push(key)
       }
+    }
+  }
+
+  // Per-invoice line protection: do not let an empty-line shell overwrite a
+  // mirror that already has line items (SO→invoice race / stale client).
+  if (entries.deed_invoices) {
+    const currentInvoices = await loadAppState(['deed_invoices'])
+    let incoming: unknown
+    try { incoming = JSON.parse(entries.deed_invoices) } catch { incoming = null }
+    if (incoming != null) {
+      entries.deed_invoices = JSON.stringify(
+        preserveInvoiceLinesOnStoreWrite(currentInvoices.deed_invoices, incoming),
+      )
     }
   }
 
