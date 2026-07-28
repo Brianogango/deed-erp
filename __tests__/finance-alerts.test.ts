@@ -58,7 +58,7 @@ describe('buildFinanceAlerts', () => {
   it('flags reimbursements due, payroll approvals, reconciliation backlog, and negative cash', () => {
     const alerts = buildFinanceAlerts({
       invoices: [],
-      expenses: [{ reimbursable: true, status: 'approved', reimbursementStatus: 'pending', amount: 3810 }],
+      expenses: [{ paymentMethod: 'reimbursement', status: 'approved', amount: 3810 }],
       payrollRuns: [{ status: 'pending_approval' }],
       bankStatementLines: [{ status: 'unmatched' }],
       bankAccounts: [bank('cash', -100)],
@@ -68,7 +68,20 @@ describe('buildFinanceAlerts', () => {
     expect(keys).toEqual(expect.arrayContaining(['fin-reimbursements', 'fin-payroll', 'fin-unreconciled', 'fin-negative-cash']))
     const reimb = alerts.find(a => a.key === 'fin-reimbursements')!
     expect(reimb.sub).toContain('3,810')
+    expect(reimb.path).toBe('/expenses?tab=review')
     // negative cash is danger and sorts first
     expect(alerts[0].key).toBe('fin-negative-cash')
+  })
+
+  it('does not flag company-paid, rejected, or already-reimbursed expenses', () => {
+    const alerts = buildFinanceAlerts({
+      ...base,
+      expenses: [
+        { paymentMethod: 'company_card', status: 'approved', amount: 1000 },
+        { paymentMethod: 'reimbursement', status: 'rejected', amount: 2000 },
+        { paymentMethod: 'reimbursement', status: 'reimbursed', amount: 3000 },
+      ],
+    })
+    expect(alerts.find(a => a.key === 'fin-reimbursements')).toBeUndefined()
   })
 })

@@ -15,7 +15,7 @@ export interface FinanceAlert {
 }
 
 type InvoiceLike = { type?: string; status?: string; total?: number; amountPaid?: number; dueDate?: string; date?: string }
-type ExpenseLike = { reimbursable?: boolean; status?: string; reimbursementStatus?: string; amount?: number }
+type ExpenseLike = { paymentMethod?: string; status?: string; amount?: number }
 type PayrollLike = { status?: string }
 type StatementLineLike = { status?: string }
 type BankAccountLike = { id: string; name: string; active?: boolean; openingBalance?: number }
@@ -71,7 +71,12 @@ export function buildFinanceAlerts(data: {
   const overdueInvoices = customerInvoices.filter(i => isPastDue(i, today))
   const overdueBills = vendorBills.filter(i => isPastDue(i, today))
   const pendingBills = vendorBills.filter(i => isOpen(i))
-  const pendingReimbursements = expenses.filter(e => e.reimbursable && e.status === 'approved' && e.reimbursementStatus !== 'reimbursed')
+  // Active Expense model: employee-paid claims use paymentMethod
+  // "reimbursement"; reimbursement completion is represented by status
+  // "reimbursed" (there is no separate reimbursementStatus field).
+  const pendingReimbursements = expenses.filter(
+    e => e.paymentMethod === 'reimbursement' && e.status === 'approved',
+  )
   const pendingPayroll = payrollRuns.filter(p => p.status === 'pending_approval')
   const unreconciledLines = bankStatementLines.filter(l => l.status !== 'reconciled')
   const negativeCashAccounts = bankAccounts.filter(a => a.active && (cashbookTotals[a.id] ?? (Number(a.openingBalance) || 0)) < 0)
@@ -99,7 +104,7 @@ export function buildFinanceAlerts(data: {
       key: 'fin-reimbursements', tone: 'warn',
       title: `${pendingReimbursements.length} staff reimbursement${pendingReimbursements.length > 1 ? 's' : ''} due`,
       sub: `${fmtKes(pendingReimbursements.reduce((s, e) => s + (Number(e.amount) || 0), 0))} approved, not yet paid`,
-      path: '/finance?tab=cashbook',
+      path: '/expenses?tab=review',
     } : null,
     pendingPayroll.length ? {
       key: 'fin-payroll', tone: 'warn',

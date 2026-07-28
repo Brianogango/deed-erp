@@ -47,7 +47,6 @@ import HRPayrollTab from './hr/HRPayrollTab'
 import HRRecruitmentTab from './hr/HRRecruitmentTab'
 import HRAssetsTab from './hr/HRAssetsTab'
 import HRSalaryAdvanceTab from './hr/HRSalaryAdvanceTab'
-import HRPerformanceTab from './hr/HRPerformanceTab'
 import { HRTrainingTab, HRDocumentsTab, HRReportsTab } from './hr/HRExtraTabs'
 import {
   Badge,
@@ -65,7 +64,7 @@ import {
 } from '@/components/ui'
 import { PrimaryActionButton, SecondaryActionMenu } from '@/components/erp'
 import { DataTable, type ColumnDef } from '@/components/data-table'
-import { SOPCategory, HRSOP, PerfStatus, PerfPeriod, PerformanceTarget, type Employee } from '@/lib/store'
+import { SOPCategory, HRSOP, type Employee } from '@/lib/store'
 import { Fa } from '@/components/icons'
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -84,10 +83,9 @@ type HRTab =
   | 'self_service'
   | 'sops'
   | 'reports'
-  | 'performance'
   | 'system_users'
 
-const MANAGEMENT_TABS: HRTab[] = ['employees', 'recruitment', 'training', 'documents', 'performance', 'reports']
+const MANAGEMENT_TABS: HRTab[] = ['employees', 'recruitment', 'training', 'documents', 'reports']
 const SELF_SERVICE_TABS: HRTab[] = ['self_service', 'leave', 'salary_advances', 'payroll', 'assets']
 
 const SOP_CATEGORIES: {
@@ -105,16 +103,6 @@ const SOP_CATEGORIES: {
   { id: 'conduct', label: 'Conduct', color: '#0E7490', bg: '#CFFAFE', border: '#A5F3FC' },
   { id: 'general', label: 'General', color: 'var(--text-3)', bg: 'var(--bg-muted)', border: 'var(--border-lt)' },
 ]
-
-const PERF_STATUS: Record<
-  PerfStatus,
-  { label: string; color: string; bg: string; border: string }
-> = {
-  on_track: { label: 'On Track', color: 'var(--success-text)', bg: 'var(--success-bg)', border: '#A7F3D0' },
-  at_risk: { label: 'At Risk', color: 'var(--warning-text)', bg: 'var(--warning-bg)', border: '#FDE68A' },
-  achieved: { label: 'Achieved', color: 'var(--primary-dark)', bg: 'var(--primary-light)', border: '#BFDBFE' },
-  missed: { label: 'Missed', color: '#9F1239', bg: '#FFE4E6', border: '#FECDD3' },
-}
 
 const uid = () => crypto.randomUUID()
 
@@ -162,8 +150,6 @@ function HRContent() {
     showToast,
     hrSops: sops,
     saveHrSops: saveSops,
-    hrPerfTargets: targets,
-    saveHrPerfTargets: saveTargets,
   } = useApp()
 
   const {
@@ -222,6 +208,12 @@ function HRContent() {
   const initialTab = queryTab && allowedTabs.includes(queryTab) ? queryTab : defaultTab
 
   const [tab, setLocalTab] = useState<HRTab>(initialTab)
+
+  // KPI Targets is the single performance-target system. Preserve old HR
+  // deep links by forwarding them to the canonical module.
+  useEffect(() => {
+    if (searchParams.get('tab') === 'performance') router.replace('/sops')
+  }, [searchParams, router])
 
   const setTab = (newTab: HRTab) => {
     if (!allowedTabs.includes(newTab)) {
@@ -484,7 +476,6 @@ function HRContent() {
           { id: 'recruitment', label: 'Recruitment' },
           { id: 'training', label: 'Training' },
           { id: 'documents', label: 'Documents' },
-          { id: 'performance', label: 'Performance' },
           { id: 'reports', label: 'Reports' },
           { id: 'assets', label: 'Assets' },
         ].filter(t => allowedTabs.includes(t.id as HRTab))}
@@ -566,8 +557,6 @@ function HRContent() {
           <HRTrainingTab />
         ) : tab === 'documents' && canManageHR ? (
           <HRDocumentsTab />
-        ) : tab === 'performance' && canManageHR ? (
-          <HRPerformanceTab />
         ) : tab === 'reports' && canManageHR ? (
           <HRReportsTab />
         ) : tab === 'assets' ? (

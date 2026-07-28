@@ -558,7 +558,7 @@ export function Dashboard() {
     const actions: QuickAction[] = [
       { key: 'leave', title: 'Leave Application', desc: 'Apply and track your leave', module: 'hr', path: '/hr?tab=leave', color: '#3B82F6', icon: <Fa icon={faUsers} /> },
       { key: 'payslip', title: 'Payslip', desc: 'View published payslips', module: 'hr', path: '/hr?tab=payroll', color: '#1B2762', icon: <Fa icon={faFileInvoiceDollar} /> },
-      { key: 'performance', title: 'Performance Targets', desc: 'Check your assigned targets', module: 'hr', path: '/hr?tab=performance', color: '#8B5CF6', icon: <Fa icon={faShieldHalved} /> },
+      { key: 'performance', title: 'KPI Targets', desc: 'Check your assigned targets', module: 'sops', path: '/sops', color: '#8B5CF6', icon: <Fa icon={faShieldHalved} /> },
       { key: 'expense', title: 'Expense Application', desc: 'Submit reimbursement claims', module: 'expenses', path: '/expenses', color: '#0891B2', icon: <Fa icon={faMoneyCheckDollar} /> },
       { key: 'account', title: 'Account Settings', desc: 'Password and sign-in settings', path: '/account/password-change', color: '#64748B', icon: <Fa icon={faUsers} /> },
     ]
@@ -954,7 +954,7 @@ export function Dashboard() {
               {[
                 { label: 'Leave', value: selfServiceStats.myLeave.length, path: '/hr?tab=leave', module: 'hr' as ModuleId },
                 { label: 'Payslip', value: 'View', path: '/hr?tab=payroll', module: 'hr' as ModuleId },
-                { label: 'Targets', value: 'View', path: '/hr?tab=performance', module: 'hr' as ModuleId },
+                { label: 'Targets', value: 'View', path: '/sops', module: 'sops' as ModuleId },
                 { label: 'Expenses', value: selfServiceStats.myExpenseClaims.length, path: '/expenses', module: 'expenses' as ModuleId },
               ].filter(item => has(item.module)).map(item => (
                 <button
