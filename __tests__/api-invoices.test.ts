@@ -297,6 +297,17 @@ describe('PUT /api/invoices/:id', () => {
     expect(updateData.items).toHaveProperty('create')
   })
 
+  it('refuses to wipe existing items with lines:[]', async () => {
+    mockPrismaInvoice.findUnique.mockResolvedValue({
+      ...baseInvoice,
+      items: [{ id: 'li1', description: 'Kept', qty: 1, unitPrice: 5000 }],
+    })
+    mockPrismaInvoice.update.mockResolvedValue(baseInvoice)
+    await PUT(idReq(INVOICE_ID, { lines: [], status: 'posted' }), { params: { id: INVOICE_ID } })
+    const updateData = mockPrismaInvoice.update.mock.calls[0][0].data
+    expect(updateData.items).toBeUndefined()
+  })
+
   it('returns 403 for unauthorized role', async () => {
     mockRequireRole.mockRejectedValue(err403())
     const res = await PUT(idReq(INVOICE_ID, {}), { params: { id: INVOICE_ID } })

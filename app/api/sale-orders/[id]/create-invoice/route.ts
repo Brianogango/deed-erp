@@ -4,6 +4,7 @@ import { requireRole, withApiErrorHandling } from '@/lib/auth/api'
 import { writeFinancialAudit } from '@/lib/finance-audit'
 import { getNextDocNumber } from '@/lib/doc-ref-counter'
 import { invoiceableQty, normalizeSaleStatus } from '@/lib/odoo-sales-flow'
+import { mapDbInvoiceItemsToClientLines } from '@/lib/finance-invoice'
 import { loadAppState, saveStoreKeys } from '@/lib/server-store'
 
 const WRITE_ROLES = ['director', 'finance_officer', 'admin_officer']
@@ -137,34 +138,30 @@ export async function POST(
       return invoice
     })
 
+    const clientLines = mapDbInvoiceItemsToClientLines(result.items)
+    const date = new Date().toISOString().slice(0, 10)
+    const dueDate = new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10)
+    const clientInvoice = {
+      id: result.id,
+      ref: result.invoiceNumber,
+      type: 'customer_invoice' as const,
+      status: 'draft' as const,
+      partnerId: order.clientId,
+      partnerName: order.client?.name ?? '',
+      date,
+      dueDate,
+      lines: clientLines,
+      subtotal,
+      taxTotal: taxAmount,
+      total: totalAmount,
+      amountPaid: 0,
+      saleOrderId: order.id,
+      notes: `Created from ${order.orderNumber}`,
+    }
+
     // Mirror into client store invoices for UI
     try {
       const invoices = Array.isArray(state.deed_invoices) ? [...(state.deed_invoices as unknown[])] : []
-      const clientInvoice = {
-        id: result.id,
-        ref: result.invoiceNumber,
-        type: 'customer_invoice',
-        status: 'draft',
-        partnerId: order.clientId,
-        partnerName: order.client?.name ?? '',
-        date: new Date().toISOString().slice(0, 10),
-        dueDate: new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10),
-        lines: (result.items ?? []).map((item: any) => ({
-          id: item.id,
-          description: item.description,
-          qty: Number(item.qty),
-          unitPrice: Number(item.unitPrice),
-          taxRate: Number(item.taxRate),
-          subtotal: Number(item.lineTotal),
-          productId: item.productId ?? undefined,
-        })),
-        subtotal,
-        taxTotal: taxAmount,
-        total: totalAmount,
-        amountPaid: 0,
-        saleOrderId: order.id,
-        notes: `Created from ${order.orderNumber}`,
-      }
       invoices.unshift(clientInvoice)
       await saveStoreKeys({ deed_invoices: JSON.stringify(invoices) })
     } catch {
@@ -208,12 +205,7 @@ export async function POST(
 
     return NextResponse.json({
       ok: true,
-      invoice: {
-        id: result.id,
-        ref: result.invoiceNumber,
-        total: totalAmount,
-        status: 'draft',
-      },
+      invoice: clientInvoice,
     })
   })
 }

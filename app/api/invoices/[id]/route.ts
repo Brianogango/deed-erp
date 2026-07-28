@@ -103,12 +103,23 @@ export async function PUT(request: Request, { params }: { params: { id: string }
   return withApiErrorHandling(async () => {
     const body = await request.json()
     const actor = await requireRole(isRepairLinked(body) ? REPAIR_WRITE_ROLES : WRITE_ROLES)
-    const lines: any[] | undefined = body.lines ?? body.items ?? undefined
+    let lines: any[] | undefined = body.lines ?? body.items ?? undefined
     const clientId = (body.clientId !== undefined || body.partnerId !== undefined)
       ? await resolveClientId(prisma, body.clientId ?? body.partnerId, body)
       : undefined
 
-    const before = await prisma.invoice.findUnique({ where: { id: params.id } })
+    const before = await prisma.invoice.findUnique({
+      where: { id: params.id },
+      include: { items: true },
+    })
+
+    // Never wipe existing line items with an empty payload — empty shells from
+    // store sync must not destroy the Prisma ledger.
+    if (Array.isArray(lines) && lines.length === 0 && (before?.items?.length ?? 0) > 0) {
+      lines = undefined
+      delete body.lines
+      delete body.items
+    }
 
     const data = mapInvoiceUpdateToDb(body, clientId)
     // The official number is assigned when a draft is posted. Once assigned it
