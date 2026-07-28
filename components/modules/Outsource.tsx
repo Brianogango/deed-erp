@@ -2,11 +2,11 @@
 import { useState, useEffect, Suspense } from 'react'
 import { useSearchParams, useRouter, usePathname } from 'next/navigation'
 import { useFinanceStore, fmtDate, fmtKes, OutsourceVendor, OutsourceJob, OUTSOURCE_SERVICE_TYPES, OutsourceServiceType } from '@/lib/store'
-import { ModuleSkeleton, useMounted, InfoRow, ModuleHeader, TabBar, SearchPicker } from '@/components/ui'
+import { ModuleSkeleton, useMounted, InfoRow, ModuleHeader, TabBar, SearchPicker, Modal } from '@/components/ui'
 import { PrimaryActionButton, StatusBadge } from '@/components/erp'
 import { DataTable, DetailsDrawer, type ColumnDef, type DrawerTab } from '@/components/data-table'
 import { Fa } from '@/components/icons'
-import { faScrewdriverWrench, faClipboardList, faBuilding, faCreditCard, faPlus } from '@fortawesome/free-solid-svg-icons'
+import { faScrewdriverWrench, faClipboardList, faBuilding, faCreditCard, faPlus, faCircleCheck } from '@fortawesome/free-solid-svg-icons'
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -811,168 +811,147 @@ function OutsourceContent() {
 
       {/* ── Send for Repair Modal ─────────────────────────────────────────── */}
       {showJobModal && (
-        <div className="modal-overlay" onClick={() => setShowJobModal(false)}>
-          <div className="modal-box modal-layout w-full max-w-2xl" onClick={e => e.stopPropagation()}>
-            <div className="modal-header flex items-center justify-between">
-              <div>
-                <h3 className="text-base font-bold text-t1">Send Device for Outsource Repair</h3>
-                <p className="mt-0.5 text-xs text-t3">Link the repair, choose a vendor, and record service instructions.</p>
-              </div>
-              <button className="touch-target rounded-lg text-xl text-t3 hover:bg-surface" onClick={() => setShowJobModal(false)} aria-label="Close">×</button>
+        <Modal
+          title="Send Device for Outsource Repair"
+          subtitle="Link the repair, choose a vendor, and record service instructions."
+          width={1100}
+          variant="enterprise"
+          accent="#2563EB"
+          icon={<Fa icon={faScrewdriverWrench} />}
+          onClose={() => setShowJobModal(false)}
+          footer={(
+            <>
+              <button type="button" className="btn-outline min-h-11 px-5 text-sm" onClick={() => setShowJobModal(false)}>Cancel</button>
+              <button type="button" className="btn-primary min-h-11 px-5 text-sm" onClick={submitJob}>Send for Repair</button>
+            </>
+          )}
+        >
+          <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+            <div className="min-w-0">
+              <SearchPicker
+                label="Link to Repair Job (Optional)"
+                labelClassName="mb-1.5 block text-[13px] font-semibold text-slate-700"
+                inputClassName="h-11 text-sm"
+                placeholder="Search ref, customer, device or serial…"
+                items={pickableRepairs}
+                selectedLabel={jobForm.repairOrderId ? repairSearch : undefined}
+                formatSelected={r => `${r.ref} · ${r.productName} (${r.customerName})`}
+                onSelect={r => selectRepair(r.id)}
+                renderItem={r => (
+                  <div className="flex min-w-0 items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold text-slate-900">
+                        <span className="font-mono text-blue-700">{r.ref}</span>
+                        <span className="ml-2">{r.productName}</span>
+                      </p>
+                      <p className="truncate text-xs text-slate-500">
+                        {r.customerName} · {r.issueDescription}{r.serialNumber ? ` · SN ${r.serialNumber}` : ''}
+                      </p>
+                    </div>
+                    <StatusBadge status={r.status} label={r.status.replace(/_/g, ' ')} size="xs" />
+                  </div>
+                )}
+              />
+              {jobForm.repairOrderId && (
+                <button type="button" className="mt-1.5 text-xs font-semibold text-blue-700 hover:text-blue-900" onClick={clearRepairLink}>
+                  Clear repair selection
+                </button>
+              )}
             </div>
 
-            <div className="modal-body-scroll space-y-4">
-
-              {/* ── Repair picker ── */}
-              <div>
-                <div className="flex items-end gap-2">
-                  <SearchPicker
-                    label="Link to Repair Job (optional)"
-                    placeholder="Search ref, customer, device or serial…"
-                    items={pickableRepairs}
-                    selectedLabel={jobForm.repairOrderId ? repairSearch : undefined}
-                    formatSelected={r => `${r.ref} · ${r.productName} (${r.customerName})`}
-                    onSelect={r => selectRepair(r.id)}
-                    renderItem={r => (
-                      <div className="flex min-w-0 items-center justify-between gap-3">
-                        <div className="min-w-0">
-                          <p className="truncate text-xs font-semibold text-t1">
-                            <span className="font-mono text-primary-700">{r.ref}</span>
-                            <span className="ml-2">{r.productName}</span>
-                          </p>
-                          <p className="truncate text-[11px] text-t3">
-                            {r.customerName} · {r.issueDescription}{r.serialNumber ? ` · SN ${r.serialNumber}` : ''}
-                          </p>
-                        </div>
-                        <StatusBadge status={r.status} label={r.status.replace(/_/g, ' ')} size="xs" />
-                      </div>
-                    )}
-                  />
-                  {jobForm.repairOrderId && (
-                    <button className="btn-outline flex-shrink-0 text-xs" onClick={clearRepairLink}>Clear</button>
-                  )}
-                </div>
-
-                {/* Linked repair chip */}
-                {jobForm.repairOrderId && (() => {
-                  const r = repairs.find(x => x.id === jobForm.repairOrderId)!
-                  return (
-                    <div className="mt-1.5 flex items-center gap-2 px-3 py-1.5 rounded-lg text-[11px]"
-                      style={{ background: '#E8F3FA', border: '1px solid #A8D4E8', color: '#0D1A4A' }}>
-                      🔗 Linked to <strong className="mx-1">{r.ref}</strong> · {r.productName} · {r.customerName}
-                    </div>
-                  )
-                })()}
-              </div>
-
-              {/* ── Vendor search + inline create ── */}
-              <div>
-                <div className="flex items-end gap-2">
-                  <SearchPicker
-                    label="Vendor *"
-                    placeholder="Search by vendor name, phone or specialty…"
-                    items={outsourceVendors}
-                    selectedLabel={jobForm.vendorId ? vendorSearch : undefined}
-                    formatSelected={v => v.name}
-                    onSelect={v => {
-                      setJobForm(f => ({ ...f, vendorId: v.id }))
-                      setVendorSearch(v.name)
-                    }}
-                    onCreateNew={openVendorFromJob}
-                    createNewLabels={{ title: 'Create vendor', subtitle: 'Add this vendor without losing the repair form' }}
-                    renderItem={v => (
-                      <div>
-                        <p className="text-xs font-semibold text-t1">{v.name}</p>
-                        <p className="truncate text-[11px] text-t3">
-                          {v.phone}{v.email ? ` · ${v.email}` : ''}
-                          {v.specializations.length ? ` · ${v.specializations.map(s => svcLabel(s)).join(', ')}` : ''}
-                        </p>
-                      </div>
-                    )}
-                  />
-                  {jobForm.vendorId && (
-                    <button
-                      className="btn-outline flex-shrink-0 text-xs"
-                      onClick={() => { setJobForm(f => ({ ...f, vendorId: '' })); setVendorSearch('') }}
-                    >
-                      Clear
-                    </button>
-                  )}
-                </div>
-
-                {/* Selected vendor chip */}
-                {jobForm.vendorId && (() => {
-                  const v = outsourceVendors.find(x => x.id === jobForm.vendorId)!
-                  return (
-                    <div className="mt-1.5 flex items-center gap-2 px-3 py-1.5 rounded-lg text-[11px]"
-                      style={{ background: 'var(--success-bg)', border: '1px solid #BBF7D0', color: 'var(--success-text)' }}>
-                      🏭 <strong className="mx-1">{v.name}</strong> · {v.phone}
-                    </div>
-                  )
-                })()}
-
-              </div>
-
-              <div>
-                <label className="text-[11px] font-semibold text-t2 block mb-1">Device Description *</label>
-                <input className="form-input w-full text-[12px]" placeholder="e.g. Dell Latitude 7490 – customer John Doe"
-                  value={jobForm.deviceDescription}
-                  onChange={e => setJobForm(f => ({ ...f, deviceDescription: e.target.value }))} />
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="text-[11px] font-semibold text-t2 block mb-1">Serial / IMEI</label>
-                  <input className="form-input w-full text-[12px]" placeholder="e.g. A1B2C3"
-                    value={jobForm.serial}
-                    onChange={e => setJobForm(f => ({ ...f, serial: e.target.value }))} />
-                </div>
-                <div>
-                  <label className="text-[11px] font-semibold text-t2 block mb-1">Service Type *</label>
-                  <select aria-label="Outsource service type" className="form-input w-full text-[12px]" value={jobForm.serviceType}
-                    onChange={e => setJobForm(f => ({ ...f, serviceType: e.target.value as OutsourceServiceType }))}>
-                    {OUTSOURCE_SERVICE_TYPES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
-                  </select>
-                </div>
-              </div>
-
-              <div>
-                <label className="text-[11px] font-semibold text-t2 block mb-1">Issue / What to do *</label>
-                <textarea className="form-input w-full text-[12px]" rows={2}
-                  placeholder="Describe the fault and what you need the vendor to do..."
-                  value={jobForm.issueDescription}
-                  onChange={e => setJobForm(f => ({ ...f, issueDescription: e.target.value }))} />
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="text-[11px] font-semibold text-t2 block mb-1">Date Sent *</label>
-                  <input type="date" aria-label="Date sent" className="form-input w-full text-[12px]" value={jobForm.sentDate}
-                    onChange={e => setJobForm(f => ({ ...f, sentDate: e.target.value }))} />
-                </div>
-                <div>
-                  <label className="text-[11px] font-semibold text-t2 block mb-1">Quoted Cost (KSh)</label>
-                  <input type="number" className="form-input w-full text-[12px]" placeholder="0"
-                    value={jobForm.quotedCost}
-                    onChange={e => setJobForm(f => ({ ...f, quotedCost: e.target.value }))} />
-                </div>
-              </div>
-
-              <div>
-                <label className="text-[11px] font-semibold text-t2 block mb-1">Notes (optional)</label>
-                <textarea className="form-input w-full text-[12px]" rows={1}
-                  placeholder="Any additional notes..."
-                  value={jobForm.notes}
-                  onChange={e => setJobForm(f => ({ ...f, notes: e.target.value }))} />
-              </div>
-            </div>
-
-            <div className="modal-footer flex gap-2 justify-end">
-              <button className="btn-outline text-xs py-2 px-4" onClick={() => setShowJobModal(false)}>Cancel</button>
-              <button className="btn-primary text-xs py-2 px-4" onClick={submitJob}>Send for Repair</button>
+            <div className="min-w-0">
+              <SearchPicker
+                label="Vendor *"
+                labelClassName="mb-1.5 block text-[13px] font-semibold text-slate-700"
+                inputClassName="h-11 text-sm"
+                placeholder="Search by vendor name, phone or specialty…"
+                items={outsourceVendors}
+                selectedLabel={jobForm.vendorId ? vendorSearch : undefined}
+                formatSelected={v => v.name}
+                onSelect={v => {
+                  setJobForm(f => ({ ...f, vendorId: v.id }))
+                  setVendorSearch(v.name)
+                }}
+                onCreateNew={openVendorFromJob}
+                createNewLabels={{ title: 'Create vendor', subtitle: 'Add this vendor without losing the repair form' }}
+                renderItem={v => (
+                  <div>
+                    <p className="text-sm font-semibold text-slate-900">{v.name}</p>
+                    <p className="truncate text-xs text-slate-500">
+                      {v.phone}{v.email ? ` · ${v.email}` : ''}
+                      {v.specializations.length ? ` · ${v.specializations.map(s => svcLabel(s)).join(', ')}` : ''}
+                    </p>
+                  </div>
+                )}
+              />
+              {jobForm.vendorId && (
+                <button
+                  type="button"
+                  className="mt-1.5 text-xs font-semibold text-blue-700 hover:text-blue-900"
+                  onClick={() => { setJobForm(f => ({ ...f, vendorId: '' })); setVendorSearch('') }}
+                >
+                  Clear vendor selection
+                </button>
+              )}
             </div>
           </div>
-        </div>
+
+          <div>
+            <label htmlFor="outsource-device-description" className="mb-1.5 block text-[13px] font-semibold text-slate-700">Device Description *</label>
+            <input id="outsource-device-description" className="form-input h-11 w-full text-sm" placeholder="e.g. Dell Latitude 7430 – customer John Doe"
+              value={jobForm.deviceDescription}
+              onChange={e => setJobForm(f => ({ ...f, deviceDescription: e.target.value }))} />
+          </div>
+
+          <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+            <div>
+              <label htmlFor="outsource-serial" className="mb-1.5 block text-[13px] font-semibold text-slate-700">Serial / IMEI</label>
+              <input id="outsource-serial" className="form-input h-11 w-full text-sm" placeholder="e.g. A1B2C3"
+                value={jobForm.serial}
+                onChange={e => setJobForm(f => ({ ...f, serial: e.target.value }))} />
+            </div>
+            <div>
+              <label htmlFor="outsource-service-type" className="mb-1.5 block text-[13px] font-semibold text-slate-700">Service Type *</label>
+              <select id="outsource-service-type" className="form-input h-11 w-full text-sm" value={jobForm.serviceType}
+                onChange={e => setJobForm(f => ({ ...f, serviceType: e.target.value as OutsourceServiceType }))}>
+                {OUTSOURCE_SERVICE_TYPES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label htmlFor="outsource-issue" className="mb-1.5 block text-[13px] font-semibold text-slate-700">Issue / What to do *</label>
+            <textarea id="outsource-issue" className="form-input min-h-[84px] w-full resize-y py-3 text-sm" rows={3}
+              placeholder="Describe the fault and what you need the vendor to do…"
+              value={jobForm.issueDescription}
+              onChange={e => setJobForm(f => ({ ...f, issueDescription: e.target.value }))} />
+          </div>
+
+          <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+            <div>
+              <label htmlFor="outsource-date-sent" className="mb-1.5 block text-[13px] font-semibold text-slate-700">Date Sent *</label>
+              <input id="outsource-date-sent" type="date" className="form-input h-11 w-full text-sm" value={jobForm.sentDate}
+                onChange={e => setJobForm(f => ({ ...f, sentDate: e.target.value }))} />
+            </div>
+            <div>
+              <label htmlFor="outsource-quoted-cost" className="mb-1.5 block text-[13px] font-semibold text-slate-700">Quoted Cost (KSh)</label>
+              <div className="relative">
+                <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm font-medium text-slate-500">KSh</span>
+                <input id="outsource-quoted-cost" type="number" inputMode="decimal" className="form-input h-11 w-full pl-12 text-sm" placeholder="0"
+                  value={jobForm.quotedCost}
+                  onChange={e => setJobForm(f => ({ ...f, quotedCost: e.target.value }))} />
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <label htmlFor="outsource-notes" className="mb-1.5 block text-[13px] font-semibold text-slate-700">Notes (optional)</label>
+            <textarea id="outsource-notes" className="form-input min-h-[76px] w-full resize-y py-3 text-sm" rows={2}
+              placeholder="Any additional notes…"
+              value={jobForm.notes}
+              onChange={e => setJobForm(f => ({ ...f, notes: e.target.value }))} />
+          </div>
+        </Modal>
       )}
 
       {/* ── Mark Returned Modal ───────────────────────────────────────────── */}
@@ -980,102 +959,74 @@ function OutsourceContent() {
         const job = outsourceJobs.find(j => j.id === returnJobId)
         if (!job) return null
         return (
-          <div className="modal-overlay" onClick={() => setReturnJobId(null)}>
-            <div className="modal-box modal-layout w-full max-w-lg" onClick={e => e.stopPropagation()}>
-              <div className="modal-header flex items-center justify-between">
-                <div>
-                  <h3 className="text-base font-bold text-t1">Mark Device Returned</h3>
-                  <p className="text-xs text-t3">{job.ref} · {job.deviceDescription}</p>
-                </div>
-                <button className="touch-target rounded-lg text-xl text-t3 hover:bg-surface" onClick={() => setReturnJobId(null)} aria-label="Close">×</button>
-              </div>
+          <Modal
+            title="Mark Device Returned"
+            subtitle={`${job.ref} · ${job.deviceDescription}`}
+            width={900}
+            variant="enterprise"
+            accent="#16A34A"
+            icon={<Fa icon={faCircleCheck} />}
+            onClose={() => setReturnJobId(null)}
+            footer={(
+              <>
+                <button type="button" className="btn-outline min-h-11 px-5 text-sm" onClick={() => setReturnJobId(null)}>Cancel</button>
+                <button type="button" className="btn-primary min-h-11 px-5 text-sm" onClick={submitReturn}>Confirm Return</button>
+              </>
+            )}
+          >
+            <div>
+              <label htmlFor="outsource-return-date" className="mb-1.5 block text-[13px] font-semibold text-slate-700">Return Date *</label>
+              <input id="outsource-return-date" type="date" className="form-input h-11 w-full text-sm" value={returnForm.returnedDate}
+                onChange={e => setReturnForm(f => ({ ...f, returnedDate: e.target.value }))} />
+            </div>
 
-              <div className="modal-body-scroll space-y-4">
-                <div>
-                  <label className="text-[11px] font-semibold text-t2 block mb-1">Return Date *</label>
-                  <input type="date" aria-label="Return date" className="form-input w-full text-[12px]" value={returnForm.returnedDate}
-                    onChange={e => setReturnForm(f => ({ ...f, returnedDate: e.target.value }))} />
-                </div>
-
-                <div>
-                  <label className="text-[11px] font-semibold text-t2 block mb-2">Was the issue resolved?</label>
-                  <div className="flex gap-2">
-                    {[{ v: true, label: '✓ Yes – Fixed', bg: 'var(--success-bg)', text: 'var(--success-text)', border: '#86EFAC' },
-                      { v: false, label: '✗ No – Not Fixed', bg: 'var(--danger-bg)', text: '#991B1B', border: '#FCA5A5' }
-                    ].map(opt => (
-                      <button key={String(opt.v)}
-                        onClick={() => setReturnForm(f => ({ ...f, isResolved: opt.v, repairNextStep: 'keep' }))}
-                        style={{
-                          flex: 1, padding: '8px', borderRadius: 8, cursor: 'pointer', fontSize: 11, fontWeight: 600,
-                          background: returnForm.isResolved === opt.v ? opt.bg : 'var(--bg-surface)',
-                          color:      returnForm.isResolved === opt.v ? opt.text : 'var(--text-4)',
-                          border:     `1px solid ${returnForm.isResolved === opt.v ? opt.border : 'var(--border-lt)'}`,
-                        }}>
-                        {opt.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Repair next-step — only shown when not resolved and job has a linked repair */}
-                {!returnForm.isResolved && job.repairOrderId && (() => {
-                  const linkedRepair = repairs.find(r => r.id === job.repairOrderId)
-                  if (!linkedRepair) return null
+            <fieldset>
+              <legend className="mb-2 block text-[13px] font-semibold text-slate-700">Was the issue resolved?</legend>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                {[
+                  { v: true, label: 'Yes – Fixed', icon: '✓', activeClass: 'border-emerald-400 bg-emerald-50 text-emerald-700' },
+                  { v: false, label: 'No – Not Fixed', icon: '×', activeClass: 'border-red-400 bg-red-50 text-red-700' },
+                ].map(opt => {
+                  const selected = returnForm.isResolved === opt.v
                   return (
-                    <div style={{ background: '#FFF7ED', border: '1px solid #FED7AA', borderRadius: 10, padding: '10px 12px' }}>
-                      <p className="text-[11px] font-semibold mb-1" style={{ color: 'var(--warning-text)' }}>
-                        What should happen to repair <span className="font-mono">{linkedRepair.ref}</span>?
-                      </p>
-                      <div className="flex flex-col gap-1.5">
-                        {([
-                          { v: 'keep',        label: 'Keep current status — decide later', sub: `Stay as "${linkedRepair.status.replace(/_/g, ' ')}"` },
-                          { v: 'in_repair',   label: 'Resume in-house repair',             sub: 'Move back to In Repair so tech can continue' },
-                          { v: 'unrepairable',label: 'Mark as unrepairable',                sub: 'Device cannot be fixed — inform the customer' },
-                        ] as { v: 'keep' | 'in_repair' | 'unrepairable'; label: string; sub: string }[]).map(opt => {
-                          const active = returnForm.repairNextStep === opt.v
-                          return (
-                            <button key={opt.v}
-                              onClick={() => setReturnForm(f => ({ ...f, repairNextStep: opt.v }))}
-                              style={{
-                                textAlign: 'left', padding: '7px 10px', borderRadius: 8, cursor: 'pointer',
-                                background: active ? 'var(--navy)' : 'var(--bg-surface)',
-                                color:      active ? '#fff'    : 'var(--text-3)',
-                                border:     `1px solid ${active ? 'var(--navy)' : 'var(--border-lt)'}`,
-                              }}>
-                              <p style={{ fontSize: 11, fontWeight: 600, margin: 0 }}>{opt.label}</p>
-                              <p style={{ fontSize: 10, margin: 0, opacity: active ? 0.75 : 1, color: active ? 'var(--border)' : 'var(--text-4)' }}>{opt.sub}</p>
-                            </button>
-                          )
-                        })}
-                      </div>
-                    </div>
+                    <button
+                      key={String(opt.v)}
+                      type="button"
+                      aria-pressed={selected}
+                      onClick={() => setReturnForm(f => ({ ...f, isResolved: opt.v, repairNextStep: 'keep' }))}
+                      className={`flex min-h-11 items-center justify-center gap-2 rounded-lg border px-4 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 ${
+                        selected ? opt.activeClass : 'border-slate-200 bg-slate-50 text-slate-600 hover:border-slate-300 hover:bg-slate-100'
+                      }`}
+                    >
+                      <span aria-hidden="true" className="text-base">{opt.icon}</span>
+                      {opt.label}
+                    </button>
                   )
-                })()}
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-[11px] font-semibold text-t2 block mb-1">Final Cost (KSh)</label>
-                    <input type="number" className="form-input w-full text-[12px]"
-                      placeholder={job.quotedCost ? String(job.quotedCost) : '0'}
-                      value={returnForm.finalCost}
-                      onChange={e => setReturnForm(f => ({ ...f, finalCost: e.target.value }))} />
-                    {job.quotedCost && <p className="text-[10px] text-t3 mt-0.5">Quoted: {fmtKes(job.quotedCost)}</p>}
-                  </div>
-                  <div>
-                    <label className="text-[11px] font-semibold text-t2 block mb-1">Return Notes</label>
-                    <input className="form-input w-full text-[12px]" placeholder="What was done / why not fixed"
-                      value={returnForm.returnNotes}
-                      onChange={e => setReturnForm(f => ({ ...f, returnNotes: e.target.value }))} />
-                  </div>
-                </div>
+                })}
               </div>
+            </fieldset>
 
-              <div className="modal-footer flex gap-2 justify-end">
-                <button className="btn-outline text-xs py-2 px-4" onClick={() => setReturnJobId(null)}>Cancel</button>
-                <button className="btn-primary text-xs py-2 px-4" onClick={submitReturn}>Confirm Return</button>
+            <div className="grid grid-cols-1 gap-5 md:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
+              <div>
+                <label htmlFor="outsource-final-cost" className="mb-1.5 block text-[13px] font-semibold text-slate-700">Final Cost (KSh)</label>
+                <div className="relative">
+                  <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm font-medium text-slate-500">KSh</span>
+                  <input id="outsource-final-cost" type="number" inputMode="decimal" className="form-input h-11 w-full pl-12 text-sm"
+                    placeholder={job.quotedCost ? String(job.quotedCost) : '0'}
+                    value={returnForm.finalCost}
+                    onChange={e => setReturnForm(f => ({ ...f, finalCost: e.target.value }))} />
+                </div>
+                {job.quotedCost && <p className="mt-1 text-xs text-slate-500">Quoted: {fmtKes(job.quotedCost)}</p>}
+              </div>
+              <div>
+                <label htmlFor="outsource-return-notes" className="mb-1.5 block text-[13px] font-semibold text-slate-700">Return Notes</label>
+                <textarea id="outsource-return-notes" className="form-input min-h-[76px] w-full resize-y py-3 text-sm" rows={2}
+                  placeholder="What was done / why not fixed"
+                  value={returnForm.returnNotes}
+                  onChange={e => setReturnForm(f => ({ ...f, returnNotes: e.target.value }))} />
               </div>
             </div>
-          </div>
+          </Modal>
         )
       })()}
 
