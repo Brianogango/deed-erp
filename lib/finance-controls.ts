@@ -4,7 +4,7 @@
  * bank recon, cancel/reset invoice, and expense reimbursement stay Finance/Director.
  */
 
-export const DEFAULT_ADMIN_OFFICER_CUSTOMER_INVOICE_LIMIT_KES = 100_000
+export const DEFAULT_ADMIN_OFFICER_CUSTOMER_INVOICE_LIMIT_KES = 1_000_000
 
 export type FinanceRole =
   | 'director'

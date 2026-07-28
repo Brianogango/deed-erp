@@ -531,7 +531,7 @@ export const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
   accCustomerInvoices: true, accVendorBills: true, accCreditNotes: true, accVatEnabled: true,
   accBankJournals: true, accMpesaJournals: true, accReconciliation: true,
   accLockDates: true, accApprovalForRefunds: true,
-  accAdminOfficerInvoiceLimitKes: 100000,
+  accAdminOfficerInvoiceLimitKes: 1000000,
   hrAttendance: false, hrLeaves: true, hrRestrictSalaryInfo: true, hrRoleBasedVisibility: true,
   posSessionControl: true, posCashControl: true, posReceiptPrinting: true,
   secDisableProductDeletion: true, secDisableStockManipulation: true, secDisableInvoiceEditAfterValidation: true,
@@ -4302,6 +4302,13 @@ export function StoreProvider({
   const [bankAccounts, setBankAccountsState] = useLS<BankAccount[]>('deed_bankAccounts', DEFAULT_BANK_ACCOUNTS)
   const [companySettings, setCompanySettings] = useLS<CompanySettings>('deed_companySettings', DEFAULT_COMPANY_SETTINGS)
   const [systemSettings, setSystemSettings] = useLS<SystemSettings>('deed_systemSettings', DEFAULT_SYSTEM_SETTINGS)
+  // One-time bump: previous default was 100_000 with no settings UI; raise stored value to 1_000_000.
+  useEffect(() => {
+    if (systemSettings.accAdminOfficerInvoiceLimitKes === 100000) {
+      setSystemSettings(prev => ({ ...prev, accAdminOfficerInvoiceLimitKes: 1000000 }))
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
   const [bankRecons, setBankRecons]           = useLS<BankRecon[]>('deed_bankRecons', [])
   const [bankStatementLines, setBankStatementLines] = useLS<BankStatementLine[]>('deed_bankStatementLines', [])
 
@@ -6375,8 +6382,8 @@ const storeCtx: AppState = {
     },
     decideSalaryAdvance: (id, approved, note) => {
       const user = currentUser()
-      if (!['director', 'finance_officer', 'admin_officer'].includes(user?.role ?? '')) {
-        showToast('Only HR or Finance approvers can review salary advances', 'error')
+      if (!['director', 'finance_officer'].includes(user?.role ?? '')) {
+        showToast('Only Finance or Director can review salary advances', 'error')
         return
       }
       const advance = salaryAdvancesRef.current.find(item => item.id === id)
@@ -6426,7 +6433,7 @@ const storeCtx: AppState = {
       const advance = salaryAdvancesRef.current.find(item => item.id === id)
       if (!advance) return
       if (advance.status !== 'pending') { showToast('Only pending advances can be cancelled', 'error'); return }
-      if (advance.createdByUserId !== user?.id && !['director', 'finance_officer', 'admin_officer'].includes(user?.role ?? '')) {
+      if (advance.createdByUserId !== user?.id && !['director', 'finance_officer'].includes(user?.role ?? '')) {
         showToast('You can only cancel your own pending advance', 'error')
         return
       }

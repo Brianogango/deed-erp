@@ -6,7 +6,7 @@ Hybrid model (Admin Officer rights retained with limits):
 |---|---|
 | Validate GRN | director, admin_officer, inventory_officer |
 | SO → draft invoice | director, finance_officer, admin_officer |
-| Post/pay **customer** invoice | director, finance_officer, admin_officer **≤ `accAdminOfficerInvoiceLimitKes` (default 100,000)** |
+| Post/pay **customer** invoice | director, finance_officer, admin_officer **≤ `accAdminOfficerInvoiceLimitKes` (default 1,000,000)** |
 | Post/pay vendor bill | director, finance_officer only |
 | Bank recon / cancel-reset invoice / expense reimburse / customer credit | director, finance_officer only |
 | SoD (pay own post) | Required above the same threshold (director break-glass) |

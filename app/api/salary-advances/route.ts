@@ -6,7 +6,7 @@ import prisma from '@/lib/prisma'
 import { toClientAdvance, toDbAdvance } from '@/lib/hr/salary-advance-store'
 
 // HR/finance manage all advances; a regular employee sees/creates only their own.
-const HR_ROLES = ['director', 'admin_officer', 'finance_officer']
+const HR_ROLES = ['director', 'finance_officer']
 
 export async function GET() {
   return withApiErrorHandling(async () => {
