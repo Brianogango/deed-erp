@@ -296,13 +296,13 @@ export default function Purchase() {
   }
 
   const handleCreateVendorForRFQ = async () => {
-    if (!newVendorForm.name || !newVendorForm.email || !newVendorForm.phone) {
-      showToast('Name, email, and phone are required', 'error'); return
+    if (!newVendorForm.name.trim() || !newVendorForm.phone.trim()) {
+      showToast('Name and phone are required', 'error'); return
     }
     try {
       const vendor = await addContact({
-        type: 'company', name: newVendorForm.name, email: newVendorForm.email,
-        phone: newVendorForm.phone, address: newVendorForm.address || '',
+        type: 'company', name: newVendorForm.name.trim(), email: newVendorForm.email.trim(),
+        phone: newVendorForm.phone.trim(), address: newVendorForm.address || '',
         isCustomer: false, isVendor: true, tags: [],
         vatNumber: newVendorForm.vatNumber,
         paymentTermsDays: Number(newVendorForm.paymentTermsDays) || 30,
@@ -1196,7 +1196,7 @@ export default function Purchase() {
             <Input value={newVendorForm.name} onChange={v => setNewVendorForm(p => ({ ...p, name: v }))} placeholder="Vendor Company Ltd" />
           </Field>
           <div className="grid grid-cols-2 gap-3">
-            <Field label="Email" required>
+            <Field label="Email">
               <Input type="email" value={newVendorForm.email} onChange={v => setNewVendorForm(p => ({ ...p, email: v }))} />
             </Field>
             <Field label="Phone" required>
