@@ -350,6 +350,7 @@ export function Modal({
   icon,
   accent = '#1B2762',
   footer,
+  variant = 'default',
 }: {
   title: string
   subtitle?: string
@@ -360,16 +361,23 @@ export function Modal({
   accent?: string
   /** Actions pinned below the scrollable body so they are always reachable. */
   footer?: ReactNode
+  /** Neutral enterprise treatment for dense ERP forms. */
+  variant?: 'default' | 'enterprise'
 }) {
   useBodyScrollLock(true)
   const titleId = useId()
   const modalRef = useFocusTrap<HTMLDivElement>(true, onClose)
+  const enterprise = variant === 'enterprise'
 
   return (
     <Portal>
     <div
-      className="fixed inset-0 z-[9000] flex h-dvh items-center justify-center overflow-y-auto overscroll-contain p-2.5 sm:p-4"
-      style={{ background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(8px)', animation: 'backdropIn 0.2s ease both' }}
+      className="fixed inset-0 z-[9000] flex h-dvh items-center justify-center overflow-y-auto overscroll-contain p-4 sm:p-6"
+      style={{
+        background: enterprise ? 'rgba(15,23,42,0.48)' : 'rgba(0,0,0,0.55)',
+        backdropFilter: enterprise ? 'blur(3px)' : 'blur(8px)',
+        animation: 'backdropIn 0.2s ease both',
+      }}
       role="dialog"
       aria-modal="true"
       aria-labelledby={titleId}
@@ -378,22 +386,28 @@ export function Modal({
       <div
         ref={modalRef}
         tabIndex={-1}
-        className="my-auto flex w-full flex-col overflow-hidden rounded-xl sm:rounded-2xl max-h-[calc(100dvh-20px)] sm:max-h-[92vh]"
+        className={`my-auto flex w-full flex-col overflow-hidden rounded-[14px] sm:rounded-2xl ${
+          enterprise ? 'max-h-[calc(100dvh-48px)]' : 'max-h-[calc(100dvh-20px)] sm:max-h-[92vh]'
+        }`}
         style={{
           maxWidth: width,
-          background: 'var(--bg-card)',
-          border: `1px solid ${accent}28`,
-          boxShadow: `0 32px 72px -12px rgba(0,0,0,0.5), 0 0 0 1px ${accent}12, 0 16px 40px -8px ${accent}22`,
+          background: enterprise ? '#FFFFFF' : 'var(--bg-card)',
+          border: enterprise ? '1px solid #E2E8F0' : `1px solid ${accent}28`,
+          boxShadow: enterprise
+            ? '0 24px 64px -20px rgba(15,23,42,0.38), 0 8px 24px -12px rgba(15,23,42,0.22)'
+            : `0 32px 72px -12px rgba(0,0,0,0.5), 0 0 0 1px ${accent}12, 0 16px 40px -8px ${accent}22`,
           animation: 'modalIn 0.22s cubic-bezier(0.34,1.4,0.64,1) both',
         } as React.CSSProperties}
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}
         <div
-          className="flex items-center justify-between px-4 sm:px-6 py-3.5 sm:py-5 border-b flex-shrink-0"
+          className={`flex flex-shrink-0 items-center justify-between border-b px-5 py-4 sm:px-6 ${
+            enterprise ? 'sm:py-5' : 'sm:py-5'
+          }`}
           style={{
-            background: `linear-gradient(135deg, ${accent}0e 0%, ${accent}1a 100%)`,
-            borderBottomColor: `${accent}25`,
+            background: enterprise ? '#FFFFFF' : `linear-gradient(135deg, ${accent}0e 0%, ${accent}1a 100%)`,
+            borderBottomColor: enterprise ? '#E2E8F0' : `${accent}25`,
           }}
         >
           <div className="flex items-center gap-3.5 min-w-0">
@@ -411,9 +425,12 @@ export function Modal({
               </div>
             )}
             <div className="min-w-0">
-              <h2 id={titleId} className="text-base sm:text-sm font-black text-text-1 leading-tight">{title}</h2>
+              <h2 id={titleId} className={`${enterprise ? 'text-lg font-bold text-slate-900' : 'text-base sm:text-sm font-black text-text-1'} leading-tight`}>{title}</h2>
               {subtitle && (
-                <p className="text-[11px] sm:text-[10px] mt-0.5 font-bold uppercase tracking-wider truncate" style={{ color: accent, opacity: 0.65 }}>
+                <p
+                  className={`${enterprise ? 'mt-1 text-[13px] font-normal normal-case tracking-normal text-slate-500' : 'text-[11px] sm:text-[10px] mt-0.5 font-bold uppercase tracking-wider truncate'}`}
+                  style={enterprise ? undefined : { color: accent, opacity: 0.65 }}
+                >
                   {subtitle}
                 </p>
               )}
@@ -421,8 +438,10 @@ export function Modal({
           </div>
           <button
             type="button"
-            className="flex items-center justify-center w-9 h-9 sm:w-8 sm:h-8 rounded-xl ml-3 flex-shrink-0 text-lg sm:text-base font-bold transition-[background-color,color,border-color,transform] hover:scale-110 active:scale-90"
-            style={{ background: `${accent}16`, color: accent, border: `1px solid ${accent}2a` }}
+            className={`ml-3 flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl text-lg font-bold transition-[background-color,color,border-color,transform] ${
+              enterprise ? 'text-slate-500 hover:bg-slate-100 hover:text-slate-900' : 'sm:h-8 sm:w-8 sm:text-base hover:scale-110 active:scale-90'
+            }`}
+            style={enterprise ? undefined : { background: `${accent}16`, color: accent, border: `1px solid ${accent}2a` }}
             onClick={onClose}
             aria-label="Close"
           >
@@ -430,11 +449,15 @@ export function Modal({
           </button>
         </div>
         {/* Body */}
-        <div className="modal-content-shell min-h-0 flex-1 p-4 sm:p-6 overflow-y-auto flex flex-col gap-3 sm:gap-4">
+        <div className={`modal-content-shell min-h-0 flex-1 overflow-y-auto flex flex-col ${
+          enterprise ? 'gap-5 p-5 sm:p-6' : 'gap-3 p-4 sm:gap-4 sm:p-6'
+        }`}>
           {children}
         </div>
         {footer && (
-          <div className="modal-footer-shell flex flex-shrink-0 items-center justify-end gap-2 border-t border-border-lt bg-card px-4 py-3 sm:px-6">
+          <div className={`modal-footer-shell flex flex-shrink-0 items-center justify-end gap-2 border-t px-5 py-3 sm:px-6 ${
+            enterprise ? 'border-slate-200 bg-white sm:py-4' : 'border-border-lt bg-card'
+          }`}>
             {footer}
           </div>
         )}
@@ -1293,6 +1316,8 @@ export function SearchPicker<T extends { id: string }>({
   createNewLabels = { title: 'Create New', subtitle: 'Not found? Add it now' },
   formatSelected,
   selectedLabel,
+  labelClassName,
+  inputClassName,
 }: {
   label: string
   placeholder: string
@@ -1305,6 +1330,8 @@ export function SearchPicker<T extends { id: string }>({
   formatSelected?: (item: T) => string
   /** Controlled display label when the parent already has a selection (e.g. after remount). */
   selectedLabel?: string
+  labelClassName?: string
+  inputClassName?: string
 }) {
   const [query, setQuery] = useState(selectedLabel ?? '')
   const [open, setOpen] = useState(false)
@@ -1377,13 +1404,13 @@ export function SearchPicker<T extends { id: string }>({
 
   return (
     <div className="flex flex-col gap-1.5 relative w-full" ref={ref}>
-      <label htmlFor={inputId} className="text-[10px] uppercase tracking-wider font-bold text-text-3">
+      <label htmlFor={inputId} className={labelClassName ?? 'text-[10px] uppercase tracking-wider font-bold text-text-3'}>
         {label}
       </label>
       <div className="relative">
         <input
           id={inputId}
-          className="form-input w-full pr-10"
+          className={`form-input w-full pr-10 ${inputClassName ?? ''}`}
           placeholder={placeholder}
           value={query}
           onChange={e => {
