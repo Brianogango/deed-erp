@@ -87,7 +87,41 @@ if (!Array.isArray(products) || products.length === 0) {
 const pool = new Pool({ connectionString: connectionString.trim(), ssl: false });
 const client = await pool.connect();
 
+async function ensureTrackingMethodColumn() {
+  await client.query(`
+    DO $$
+    BEGIN
+      IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'tracking_method') THEN
+        CREATE TYPE tracking_method AS ENUM ('NONE', 'QUANTITY', 'BATCH', 'SERIAL');
+      END IF;
+    END
+    $$;
+  `);
+  await client.query(`
+    ALTER TABLE products
+      ADD COLUMN IF NOT EXISTS tracking_method tracking_method
+  `);
+  await client.query(`
+    UPDATE products
+    SET tracking_method = CASE
+      WHEN track_stock IS FALSE THEN 'NONE'::tracking_method
+      ELSE COALESCE(tracking_method, 'QUANTITY'::tracking_method)
+    END
+    WHERE tracking_method IS NULL
+  `);
+  await client.query(`
+    ALTER TABLE products
+      ALTER COLUMN tracking_method SET DEFAULT 'QUANTITY'::tracking_method
+  `);
+}
+
 try {
+  // Production may lag Prisma schema; ensure SERIAL/QUANTITY column exists first.
+  if (!DRY) {
+    console.log("Ensuring products.tracking_method column…");
+    await ensureTrackingMethodColumn();
+  }
+
   await client.query("BEGIN");
 
   const categoryIdByName = new Map();
