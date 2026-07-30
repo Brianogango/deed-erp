@@ -177,7 +177,7 @@ export default function Inventory() {
   useEffect(() => { setMounted(true) }, [])
 
   const {
-    products, productPriceHistory, addProduct, updateProduct, updateProductPrice,
+    products, productPriceHistory, addProduct, publishProductBulk, updateProduct, updateProductPrice,
     serials, stockMoves, stockTransfers,
     createTransfer, addTransferLine, validateTransfer, submitTransfer,
     importOpeningStock, openingStockPosted,
@@ -246,6 +246,7 @@ export default function Inventory() {
   // Product bulk import
   const productImportRef = useRef<HTMLInputElement>(null)
   const [showImportModal, setShowImportModal] = useState(false)
+  const [importBusy, setImportBusy] = useState(false)
   const [importRows, setImportRows] = useState<ProductImportRow[]>([])
 
   // Opening stock Excel upload
@@ -953,48 +954,66 @@ export default function Inventory() {
 
   const confirmProductImport = async () => {
     const newRows = importRows.filter(r => r.status === 'new')
-    let created = 0
-    let failed = 0
-    for (const row of newRows) {
-      const productKind = inferProductKind({
-        productKind: row.productKind,
-        category: row.category,
-      })
-      const trackingMethod = inferTrackingMethod({
-        trackingMethod: defaultTrackingForKind(productKind, row.category),
-        category: row.category,
-      })
-      const payload = {
-        name: row.name,
-        // Auto-generated preview SKUs are blanked so the API assigns collision-safe values.
-        sku: row.skuProvided ? row.sku : '',
-        barcode: row.barcode || '',
-        category: (ALL_CATEGORIES.includes(row.category as CategoryId) ? row.category : 'Laptops') as CategoryId,
-        productKind,
-        salePrice: row.salePrice, costPrice: row.costPrice, taxRate: row.taxRate,
-        minStock: row.minStock, warrantyMonths: row.warrantyMonths, description: row.description,
-        saleAccountCode: row.saleAccountCode || '', costAccountCode: row.costAccountCode || '',
-        inventoryAccountCode: row.inventoryAccountCode || '', cogsAccountCode: row.cogsAccountCode || '',
-        adjustmentAccountCode: row.adjustmentAccountCode || '', writeOffAccountCode: row.writeOffAccountCode || '',
-        priceDifferenceAccountCode: row.priceDifferenceAccountCode || '',
-        canBeSold: true, canBePurchased: true, image: '📦', isActive: true, stockQty: 0,
-        trackingMethod,
-        requiresSerial: isSerialTracking(trackingMethod),
-        unit: row.unit || defaultUnitForKind(productKind, trackingMethod),
-      }
-      const saved = await Promise.resolve(addProduct(payload))
-      if (saved) created++
-      else failed++
+    if (!newRows.length) {
+      showToast('No new products to publish', 'info')
+      return
     }
-    const skipped = importRows.length - newRows.length
-    const parts = [
-      `Imported ${created} product${created !== 1 ? 's' : ''}`,
-      failed ? `${failed} failed` : '',
-      skipped ? `skipped ${skipped} duplicate/invalid row${skipped !== 1 ? 's' : ''}` : '',
-    ].filter(Boolean)
-    showToast(parts.join('; '), failed ? 'error' : skipped ? 'info' : 'success')
-    setShowImportModal(false)
-    setImportRows([])
+    setImportBusy(true)
+    try {
+      const payloads = newRows.map(row => {
+        const productKind = inferProductKind({
+          productKind: row.productKind,
+          category: row.category,
+        })
+        const trackingMethod = inferTrackingMethod({
+          trackingMethod: defaultTrackingForKind(productKind, row.category),
+          category: row.category,
+        })
+        return {
+          name: row.name,
+          sku: row.skuProvided ? row.sku : '',
+          skuProvided: !!row.skuProvided,
+          barcode: row.barcode || '',
+          category: (ALL_CATEGORIES.includes(row.category as CategoryId) ? row.category : 'Laptops') as CategoryId,
+          productKind,
+          salePrice: row.salePrice,
+          costPrice: row.costPrice,
+          taxRate: row.taxRate,
+          minStock: row.minStock,
+          warrantyMonths: row.warrantyMonths,
+          description: row.description,
+          saleAccountCode: row.saleAccountCode || '',
+          costAccountCode: row.costAccountCode || '',
+          inventoryAccountCode: row.inventoryAccountCode || '',
+          cogsAccountCode: row.cogsAccountCode || '',
+          adjustmentAccountCode: row.adjustmentAccountCode || '',
+          writeOffAccountCode: row.writeOffAccountCode || '',
+          priceDifferenceAccountCode: row.priceDifferenceAccountCode || '',
+          canBeSold: true,
+          canBePurchased: true,
+          image: '📦',
+          isActive: true,
+          stockQty: 0,
+          trackingMethod,
+          requiresSerial: isSerialTracking(trackingMethod),
+          unit: row.unit || defaultUnitForKind(productKind, trackingMethod),
+        }
+      })
+
+      const result = await publishProductBulk(payloads)
+      const previewSkipped = importRows.length - newRows.length
+      const parts = [
+        `Published ${result.created} product${result.created !== 1 ? 's' : ''}`,
+        result.skipped ? `${result.skipped} already existed` : '',
+        result.failed ? `${result.failed} failed` : '',
+        previewSkipped ? `${previewSkipped} skipped in preview` : '',
+      ].filter(Boolean)
+      showToast(parts.join('; '), result.failed ? 'error' : result.created ? 'success' : 'info')
+      setShowImportModal(false)
+      setImportRows([])
+    } finally {
+      setImportBusy(false)
+    }
   }
 
   const downloadOpeningInventoryTemplate = () => {
@@ -3179,7 +3198,7 @@ export default function Inventory() {
         <Modal title="Import Products — Preview" onClose={() => { setShowImportModal(false); setImportRows([]) }} width={780}>
           <div>
           <div className="px-3 py-2 text-[11px] bg-emerald-50 border border-emerald-100 rounded-lg mb-4 text-emerald-800">
-            <strong>{importRows.filter(r => r.status === 'new').length} new</strong> will be imported &nbsp;·&nbsp;
+            <strong>{importRows.filter(r => r.status === 'new').length} new</strong> will be published if they do not already exist &nbsp;·&nbsp;
             <strong>{importRows.filter(r => r.status === 'exists').length} already exist</strong> &nbsp;·&nbsp;
             <strong>{importRows.filter(r => r.status === 'duplicate').length} duplicates in file</strong> &nbsp;·&nbsp;
             <strong>{importRows.filter(r => r.status === 'invalid').length} invalid</strong>
@@ -3241,9 +3260,13 @@ export default function Inventory() {
             Expected columns: <strong>Name, SKU, Category, Barcode, Sale Price, Cost Price, Tax Rate, Min Stock, Warranty Months, Description, Revenue Account, Purchase Account, Inventory Asset Account, COGS Account, Adjustment Account, Write-off Account</strong>
           </div>
           <div className="flex gap-3 justify-end mt-4">
-            <button className="btn-secondary px-6" onClick={() => { setShowImportModal(false); setImportRows([]) }}>Cancel</button>
-            <button className="btn-primary px-8" onClick={confirmProductImport} disabled={importRows.filter(r => r.status === 'new').length === 0}>
-              Import {importRows.filter(r => r.status === 'new').length} Products
+            <button className="btn-secondary px-6" disabled={importBusy} onClick={() => { setShowImportModal(false); setImportRows([]) }}>Cancel</button>
+            <button
+              className="btn-primary px-8"
+              onClick={() => { void confirmProductImport() }}
+              disabled={importBusy || importRows.filter(r => r.status === 'new').length === 0}
+            >
+              {importBusy ? 'Publishing…' : `Publish ${importRows.filter(r => r.status === 'new').length} Products`}
             </button>
           </div>
           </div>
