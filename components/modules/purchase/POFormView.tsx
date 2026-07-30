@@ -1,5 +1,5 @@
 'use client'
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { usePurchase } from './PurchaseContext'
 import { Badge, Modal, Field, Input, Select, Confirm, PanelHeader, StatusStepper, SearchPicker, Divider } from '@/components/ui'
 import { LOCATIONS, CATEGORY_CONFIG, type LocationId, type CategoryId, fmtKes, fmtDate } from '@/lib/store'
@@ -66,6 +66,39 @@ function openRfqMail(po: any, vendor: any, companySettings: any) {
   window.location.href = `mailto:${encodeURIComponent(vendor?.email ?? '')}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
 }
 
+async function sendRfqViaServer(po: any, vendor: any, companySettings: any): Promise<{ ok: boolean; error?: string }> {
+  const to = String(vendor?.email || '').trim()
+  if (!to) return { ok: false, error: 'Vendor has no email address' }
+  const res = await fetch('/api/integrations/send-rfq', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      to,
+      rfq: {
+        ref: po.ref,
+        vendorName: po.vendorName || vendor?.name || 'Vendor',
+        companyName: companySettings?.name || 'Deed Technologies',
+        expectedDate: po.expectedDate,
+        notes: po.notes,
+        lines: (po.lines || []).map((line: any) => ({
+          productName: line.productName || 'Item',
+          qty: Number(line.qty) || 0,
+          unitPrice: Number(line.unitPrice) || 0,
+          subtotal: Number(line.subtotal) || (Number(line.qty) || 0) * (Number(line.unitPrice) || 0),
+        })),
+        subtotal: Number(po.subtotal) || 0,
+        taxTotal: Number(po.taxTotal) || 0,
+        total: Number(po.total) || 0,
+      },
+    }),
+  })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok || !data.success) {
+    return { ok: false, error: data.error || data.message || `Send failed (${res.status})` }
+  }
+  return { ok: true }
+}
+
 export default function POFormView() {
   const {
     activePO, linkedBill, receipts, purchaseReturns, invoices, contacts, products, accounts,
@@ -87,7 +120,37 @@ export default function POFormView() {
     delId, setDelId, vendors, purchasableProds,
   } = usePurchase()
 
+  const [sendingRfqMail, setSendingRfqMail] = useState(false)
+
   if (!activePO) return null
+
+  const vendor = contacts.find((c: any) => c.id === activePO.vendorId) || vendors.find((v: any) => v.id === activePO.vendorId)
+
+  const handleMailRfq = async () => {
+    if (!vendor?.email) {
+      showToast('Add an email address on the vendor contact first', 'error')
+      return
+    }
+    if (!activePO.lines?.length) {
+      showToast('Add at least one line before emailing the RFQ', 'error')
+      return
+    }
+    setSendingRfqMail(true)
+    try {
+      const result = await sendRfqViaServer(activePO, vendor, companySettings)
+      if (result.ok) {
+        showToast(`RFQ emailed to ${vendor.email}`, 'success')
+        return
+      }
+      showToast(`${result.error || 'Server email failed'} — opening mail app…`, 'info')
+      openRfqMail(activePO, vendor, companySettings)
+    } catch {
+      showToast('Server email unavailable — opening mail app…', 'info')
+      openRfqMail(activePO, vendor, companySettings)
+    } finally {
+      setSendingRfqMail(false)
+    }
+  }
 
   const openReceive = () => {
     const draft = receipts.find(r => r.poId === activePO.id && r.status === 'draft') ?? createReceiptFromPO(activePO.id)
@@ -127,7 +190,6 @@ export default function POFormView() {
     const stepIdx        = linkedBill ? 4 : (PO_STEP_IDX[activePO.status] ?? 0)
     const poReceipts     = receipts.filter(r => r.poId === activePO.id)
     const poReturns      = purchaseReturns.filter(r => r.poId === activePO.id)
-    const vendor         = contacts.find(c => c.id === activePO.vendorId)
 
     // Helper: render an inline-editable cell
     const EditableCell = ({ lineId, field, value, formatter }: { lineId: string; field: 'qty' | 'unitPrice' | 'taxRate'; value: number; formatter: (v: number) => string }) => {
@@ -172,7 +234,13 @@ export default function POFormView() {
             {(activePO.status === 'draft' || activePO.status === 'sent') && activePO.lines.length > 0 && (
               <>
                 <button className="btn-secondary text-[11px]" onClick={() => downloadPdf(`RFQ-${activePO.ref}.pdf`, buildRfqPdfLines(activePO, companySettings))}>Download RFQ</button>
-                <button className="btn-secondary text-[11px]" onClick={() => openRfqMail(activePO, vendor, companySettings)}>Mail RFQ</button>
+                <button
+                  className="btn-secondary text-[11px]"
+                  disabled={sendingRfqMail}
+                  onClick={() => void handleMailRfq()}
+                >
+                  {sendingRfqMail ? 'Sending…' : 'Mail RFQ'}
+                </button>
               </>
             )}
             {canEdit && (
