@@ -2744,6 +2744,15 @@ export interface AppState {
 
   // Products
   addProduct: (p: Omit<Product, 'id'>) => Product
+  /** Bulk publish: server checks exists, creates missing, then refreshes catalog into local state. */
+  publishProductBulk: (rows: Array<Omit<Product, 'id'> & { skuProvided?: boolean }>) => Promise<{
+    created: number
+    skipped: number
+    failed: number
+    skippedRows: { name: string; reason: string }[]
+    failedRows: { name: string; reason: string }[]
+  }>
+  refreshProductCatalog: () => Promise<number>
   updateProduct: (id: string, p: Partial<Product>) => void
   updateProductPrice: (id: string, salePrice: number, costPrice: number, reason: string, effectiveDate?: string) => ProductPriceHistory | null
   deleteProduct: (id: string) => void
@@ -3005,6 +3014,8 @@ export type InventoryStoreState = Pick<AppState,
   | 'stockAdjustments'
   | 'saleOrders'
   | 'addProduct'
+  | 'publishProductBulk'
+  | 'refreshProductCatalog'
   | 'updateProduct'
   | 'updateProductPrice'
   | 'updateSerial'
@@ -4809,6 +4820,8 @@ export function StoreProvider({
   const storeCtxRef = useRef<AppState | null>(null)
   const inventoryActions = useMemo(() => ({
     addProduct: (...args: Parameters<AppState['addProduct']>) => storeCtxRef.current!.addProduct(...args),
+    publishProductBulk: (...args: Parameters<AppState['publishProductBulk']>) => storeCtxRef.current!.publishProductBulk(...args),
+    refreshProductCatalog: (...args: Parameters<AppState['refreshProductCatalog']>) => storeCtxRef.current!.refreshProductCatalog(...args),
     updateProduct: (...args: Parameters<AppState['updateProduct']>) => storeCtxRef.current!.updateProduct(...args),
     updateProductPrice: (...args: Parameters<AppState['updateProductPrice']>) => storeCtxRef.current!.updateProductPrice(...args),
     createTransfer: (...args: Parameters<AppState['createTransfer']>) => storeCtxRef.current!.createTransfer(...args),
@@ -7487,7 +7500,6 @@ const storeCtx: AppState = {
       const tempId = uid()
       const optimistic = { ...p, id: tempId, stockQty: 0, createdAt: new Date().toISOString() }
       setProducts(prev => [...prev, optimistic as any])
-      showToast(`${p.name} created`, 'success')
 
       // Background sync to database
       try {
@@ -7512,6 +7524,7 @@ const storeCtx: AppState = {
             sku: saved.sku || optimistic.sku,
           }
           setProducts(prev => prev.map(x => x.id === tempId ? reconciled as any : x))
+          showToast(`${p.name} created`, 'success')
           return reconciled as any
         }
         const err = await res.json().catch(() => ({}))
@@ -7524,6 +7537,119 @@ const storeCtx: AppState = {
         return null as any
       }
     },
+
+    refreshProductCatalog: async () => {
+      try {
+        const res = await fetch('/api/products')
+        if (!res.ok) return 0
+        const rows = await res.json()
+        if (!Array.isArray(rows) || rows.length === 0) return 0
+        setProducts(prev => mergeCatalogProducts(prev, rows, CATEGORY_CONFIG) as any)
+        return rows.length
+      } catch {
+        return 0
+      }
+    },
+
+    publishProductBulk: async (rows) => {
+      const empty = { created: 0, skipped: 0, failed: 0, skippedRows: [] as { name: string; reason: string }[], failedRows: [] as { name: string; reason: string }[] }
+      if (!rows.length) return empty
+
+      const products = rows.map(row => {
+        const productKind = inferProductKind({
+          productKind: row.productKind,
+          trackingMethod: row.trackingMethod,
+          category: row.category,
+          unit: row.unit,
+          requiresSerial: row.requiresSerial,
+        })
+        const trackingMethod = inferTrackingMethod({
+          trackingMethod: row.trackingMethod ?? defaultTrackingForKind(productKind, row.category),
+          category: row.category,
+          requiresSerial: row.requiresSerial,
+          unit: row.unit,
+        })
+        return {
+          name: row.name,
+          sku: (row as any).skuProvided ? row.sku : '',
+          skuProvided: !!(row as any).skuProvided,
+          barcode: String(row.barcode ?? '').trim(),
+          category: row.category,
+          productKind,
+          trackingMethod,
+          salePrice: Number(row.salePrice ?? 0),
+          costPrice: Number(row.costPrice ?? 0),
+          taxRate: Number(row.taxRate ?? 16),
+          minStock: Number(row.minStock ?? 5),
+          unit: row.unit || defaultUnitForKind(productKind, trackingMethod),
+          description: row.description || '',
+          isActive: true,
+          canBeSold: row.canBeSold !== false,
+          canBePurchased: row.canBePurchased !== false,
+        }
+      })
+
+      try {
+        const res = await fetch('/api/products/bulk', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ products }),
+        })
+        const body = await res.json().catch(() => ({}))
+        if (!res.ok) {
+          showToast(body?.error || body?.message || 'Bulk publish failed', 'error')
+          return { ...empty, failed: rows.length, failedRows: [{ name: 'bulk', reason: body?.error || 'Bulk publish failed' }] }
+        }
+
+        // Always re-merge from the relational catalog so published products persist in UI
+        // even if app_state / SSE races with the write.
+        await (async () => {
+          try {
+            const catalogRes = await fetch('/api/products')
+            if (!catalogRes.ok) return
+            const catalogRows = await catalogRes.json()
+            if (!Array.isArray(catalogRows)) return
+            setProducts(prev => {
+              // Preserve client-only account/warranty fields from the import payload by name
+              const byName = new Map(rows.map(r => [String(r.name ?? '').trim().toLowerCase(), r]))
+              const merged = mergeCatalogProducts(prev, catalogRows, CATEGORY_CONFIG) as any[]
+              return merged.map(p => {
+                const src = byName.get(String(p.name ?? '').trim().toLowerCase())
+                if (!src) return p
+                return {
+                  ...p,
+                  productKind: src.productKind ?? p.productKind,
+                  trackingMethod: src.trackingMethod ?? p.trackingMethod,
+                  requiresSerial: src.requiresSerial ?? p.requiresSerial,
+                  unit: src.unit || p.unit,
+                  warrantyMonths: src.warrantyMonths ?? p.warrantyMonths,
+                  taxRate: src.taxRate ?? p.taxRate,
+                  saleAccountCode: src.saleAccountCode || p.saleAccountCode,
+                  costAccountCode: src.costAccountCode || p.costAccountCode,
+                  inventoryAccountCode: src.inventoryAccountCode || p.inventoryAccountCode,
+                  cogsAccountCode: src.cogsAccountCode || p.cogsAccountCode,
+                  adjustmentAccountCode: src.adjustmentAccountCode || p.adjustmentAccountCode,
+                  writeOffAccountCode: src.writeOffAccountCode || p.writeOffAccountCode,
+                  priceDifferenceAccountCode: src.priceDifferenceAccountCode || p.priceDifferenceAccountCode,
+                }
+              })
+            })
+          } catch { /* catalog refresh best-effort */ }
+        })()
+
+        return {
+          created: Number(body.created ?? 0),
+          skipped: Number(body.skipped ?? 0),
+          failed: Number(body.failed ?? 0),
+          skippedRows: Array.isArray(body.skippedRows) ? body.skippedRows : [],
+          failedRows: Array.isArray(body.failedRows) ? body.failedRows : [],
+        }
+      } catch {
+        showToast('Bulk publish failed. Check your connection and try again.', 'error')
+        return { ...empty, failed: rows.length, failedRows: [{ name: 'bulk', reason: 'Network error' }] }
+      }
+    },
+
     updateProduct: (id, p) => {
       const duplicate = findProductIdentityDuplicate(prodRef.current, p, id)
       if (duplicate) {
