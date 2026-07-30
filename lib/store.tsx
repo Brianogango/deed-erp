@@ -4080,6 +4080,9 @@ export function StoreProvider({
       'deed_outsourceJobs',
       'deed_outsourcePayments',
       'deed_outsourceVendors',
+      'deed_buyBacks',
+      'deed_donations',
+      'deed_clientExchanges',
     ] as const
 
     // Recovery pass: if browser cache has stale-empty data for critical modules,
