@@ -10252,8 +10252,9 @@ const storeCtx: AppState = {
       if (!user) return
       const repair = repairs.find(r => r.id === repairId)
       const isAssignedTech = repair?.assignedTechnicianId === user.id
-      if (!isAssignedTech) {
-        showToast('Only the assigned technician can log or update a diagnosis', 'error'); return
+      const isLeadOrDirector = ['technical_lead', 'director'].includes(normalizeClientRole(user.role))
+      if (!isAssignedTech && !isLeadOrDirector) {
+        showToast('Only the assigned technician or lead technician can log or update a diagnosis', 'error'); return
       }
 
       const previousHistory = repair.diagnosisHistory?.length ? repair.diagnosisHistory : repair.diagnosis ? [repair.diagnosis] : []
