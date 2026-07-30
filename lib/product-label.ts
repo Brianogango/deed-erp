@@ -1,5 +1,6 @@
 import type { Product } from '@/lib/store'
 import QRCode from 'qrcode'
+import { buildSerialLabelScanPayload } from '@/lib/barcode-scan'
 
 // Generate a CODE128 barcode as a data URL using JsBarcode
 function barcodeDataUrl(value: string): string {
@@ -64,12 +65,13 @@ function labelHtml(product: Product, barcodeSrc: string): string {
   </div>`
 }
 
-// Per-unit serial label (barcode = serial string)
+// Per-unit serial label — QR + CODE128 encode the inventory barcode (POS-ready).
 function serialLabelHtml(
   item: { serial: string; barcode?: string; productName: string; sku: string; salePrice?: number; category?: string },
-  qrSrc: string
+  qrSrc: string,
+  barcodeSrc: string,
+  scanPayload: string,
 ): string {
-  const qrPayload = `SKU:${item.sku || 'N/A'}|SERIAL:${item.serial}`
   return `
   <div class="label serial-label">
     <div class="label-main">
@@ -84,10 +86,16 @@ function serialLabelHtml(
           <div class="serial-num">${esc(item.serial)}</div>
         </div>
         ${item.sku ? `<div class="sku-pill"><span>SKU</span>${esc(item.sku)}</div>` : ''}
+        <div class="barcode-wrap">
+          ${barcodeSrc
+            ? `<img src="${barcodeSrc}" alt="${esc(scanPayload)}" class="barcode-img" />`
+            : ''}
+          <div class="barcode-num">${esc(scanPayload)}</div>
+        </div>
       </div>
       <div class="qr-wrap">
         ${qrSrc
-          ? `<img src="${qrSrc}" alt="${esc(qrPayload)}" class="qr-img" />`
+          ? `<img src="${qrSrc}" alt="${esc(scanPayload)}" class="qr-img" />`
           : `<div class="qr-placeholder"></div>`}
         <div class="qr-caption">SCAN</div>
       </div>
@@ -101,9 +109,10 @@ export async function printSerialLabels(items: Array<{
   if (!items.length) return
 
   const labels = (await Promise.all(items.map(async item => {
-    const qrPayload = `SKU:${item.sku || 'N/A'}|SERIAL:${item.serial}`
-    const qrSrc = await qrDataUrl(qrPayload)
-    return serialLabelHtml(item, qrSrc)
+    const scanPayload = buildSerialLabelScanPayload(item)
+    const qrSrc = await qrDataUrl(scanPayload)
+    const barcodeSrc = barcodeDataUrl(scanPayload)
+    return serialLabelHtml(item, qrSrc, barcodeSrc, scanPayload)
   }))).join('')
 
   const html = `<!DOCTYPE html>
@@ -123,25 +132,28 @@ export async function printSerialLabels(items: Array<{
   .label {
     border: 0.35mm solid #CBD5E1;
     border-radius: 2mm;
-    padding: 2.6mm;
-    height: 40mm;
+    padding: 2.4mm;
+    height: 44mm;
     overflow: hidden;
     page-break-inside: avoid;
     background: #fff;
   }
   .serial-label { border-left: 1.2mm solid #1A1F5E; }
   .label-main { display: grid; grid-template-columns: minmax(0, 1fr) 18mm; gap: 2mm; height: 100%; align-items: stretch; }
-  .copy { min-width: 0; display: flex; flex-direction: column; gap: 1.1mm; }
+  .copy { min-width: 0; display: flex; flex-direction: column; gap: 0.9mm; }
   .label-top { display: flex; justify-content: space-between; align-items: center; gap: 1mm; }
   .brand { font-size: 8.5pt; font-weight: 900; color: #00AEEF; letter-spacing: -0.3pt; }
   .brand span { color: #1A1F5E; }
   .cat { font-size: 5.5pt; font-weight: 800; color: #64748B; text-transform: uppercase; letter-spacing: 0.45pt; text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 23mm; }
-  .name { font-size: 7.4pt; font-weight: 800; color: #0F172A; line-height: 1.16; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
-  .serial-block { margin-top: auto; }
+  .name { font-size: 7pt; font-weight: 800; color: #0F172A; line-height: 1.16; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+  .serial-block { margin-top: 0.4mm; }
   .eyebrow { font-size: 4.8pt; font-weight: 800; color: #64748B; text-transform: uppercase; letter-spacing: 0.5pt; }
-  .serial-num { font-size: 11pt; font-weight: 900; font-family: 'Courier New', monospace; color: #1A1F5E; letter-spacing: 0.15pt; line-height: 1.05; }
-  .sku-pill { display: inline-flex; align-items: center; gap: 1.2mm; max-width: 100%; border: 0.25mm solid #CBD5E1; border-radius: 999px; padding: 0.8mm 1.5mm; font-size: 6.3pt; font-weight: 800; color: #0F172A; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .sku-pill span { color: #64748B; font-size: 5.2pt; letter-spacing: 0.45pt; }
+  .serial-num { font-size: 9.5pt; font-weight: 900; font-family: 'Courier New', monospace; color: #1A1F5E; letter-spacing: 0.15pt; line-height: 1.05; }
+  .sku-pill { display: inline-flex; align-items: center; gap: 1.2mm; max-width: 100%; border: 0.25mm solid #CBD5E1; border-radius: 999px; padding: 0.6mm 1.3mm; font-size: 6pt; font-weight: 800; color: #0F172A; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .sku-pill span { color: #64748B; font-size: 5pt; letter-spacing: 0.45pt; }
+  .barcode-wrap { margin-top: auto; display: flex; flex-direction: column; align-items: stretch; gap: 0.4mm; }
+  .barcode-img { width: 100%; height: 8mm; object-fit: fill; image-rendering: crisp-edges; }
+  .barcode-num { font-size: 5.5pt; font-weight: 800; font-family: 'Courier New', monospace; color: #334155; letter-spacing: 0.2pt; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .qr-wrap { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.8mm; border-left: 0.25mm solid #E2E8F0; padding-left: 1.5mm; }
   .qr-img { width: 17mm; height: 17mm; object-fit: contain; image-rendering: crisp-edges; }
   .qr-placeholder { width: 17mm; height: 17mm; border: 0.3mm dashed #CBD5E1; border-radius: 1mm; }

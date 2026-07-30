@@ -4,12 +4,14 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import {
   faBoxOpen, faShieldHalved, faSignature, faCircleCheck,
-  faTriangleExclamation, faXmark, faPen, faArrowLeft,
+  faTriangleExclamation, faXmark, faPen, faArrowLeft, faCamera,
 } from '@fortawesome/free-solid-svg-icons'
 import { useOperationsStore, OutboundRelease, OrcItem, SignatureMethod } from '@/lib/store'
 import { normalizeClientRole } from '@/lib/auth/access'
 import { Modal, Field, Input } from '@/components/ui'
 import { Fa } from '@/components/icons'
+import { BarcodeScannerModal } from '@/components/BarcodeScanner'
+import { resolveOrcConfirmedSerial } from '@/lib/barcode-scan'
 
 // ─── Signature Canvas ─────────────────────────────────────────────────────────
 
@@ -160,7 +162,7 @@ interface OutboundReleasePanelProps {
 }
 
 export function OutboundReleasePanel({ release, isRepair = false, onClose }: OutboundReleasePanelProps) {
-  const { verifyReleaseItem, completeVerification, completeRelease, voidRelease, pickRelease, currentUserId, users, repairs } = useOperationsStore()
+  const { verifyReleaseItem, completeVerification, completeRelease, voidRelease, pickRelease, currentUserId, users, repairs, serials, showToast } = useOperationsStore()
 
   const currentUser = users.find(u => u.id === currentUserId)
   // Look up the linked repair (if this is a repair release) to show intake accessories
@@ -173,6 +175,7 @@ export function OutboundReleasePanel({ release, isRepair = false, onClose }: Out
   const statusToStep = { pending: 0, all_picked: 1, verified: 2, released: 3, voided: 0 }
   const [step, setStep]         = useState(statusToStep[release.status] ?? 0)
   const [confirmedSerials, setConfirmedSerials] = useState<Record<string, string>>({})
+  const [scanItemId, setScanItemId] = useState<string | null>(null)
   const [receivedBy, setReceivedBy]     = useState(release.receivedBy ?? '')
   const [receivedByPhone, setReceivedByPhone] = useState(release.receivedByPhone ?? '')
   const [releaseNotes, setReleaseNotes] = useState(release.releaseNotes ?? '')
@@ -184,7 +187,6 @@ export function OutboundReleasePanel({ release, isRepair = false, onClose }: Out
   const [voidReason, setVoidReason]     = useState('')
   const [showVoid, setShowVoid]         = useState(false)
   const [submitting, setSubmitting]     = useState(false)
-  const { showToast } = useOperationsStore()
 
   // Update step if release status changes externally
   useEffect(() => { setStep(statusToStep[release.status] ?? 0) }, [release.status])
@@ -196,10 +198,16 @@ export function OutboundReleasePanel({ release, isRepair = false, onClose }: Out
 
   const handleVerifyAll = () => {
     if (!canVerify) { showToast('Only Release Authorisers, Directors, or Admin Officers can verify', 'error'); return }
-    // Apply all confirmed serials
+    // Apply all confirmed serials (resolve inventory barcodes → manufacturer serial)
     release.items.forEach(item => {
-      const confirmed = confirmedSerials[item.id] ?? item.confirmedSerial ?? ''
-      if (confirmed) verifyReleaseItem(release.id, item.id, confirmed)
+      const raw = confirmedSerials[item.id] ?? item.confirmedSerial ?? ''
+      if (!raw) return
+      const result = resolveOrcConfirmedSerial({
+        scanned: raw,
+        expectedSerial: item.expectedSerial,
+        serials,
+      })
+      verifyReleaseItem(release.id, item.id, result.confirmed)
     })
     completeVerification(release.id, { verifiedById: currentUserId!, verifiedByName: currentUser?.name ?? '' })
     setStep(2)
@@ -305,12 +313,15 @@ export function OutboundReleasePanel({ release, isRepair = false, onClose }: Out
               </div>
             )}
             <p className="text-xs text-[var(--text-3)]">
-              Scan or type each serial number from the physical device and confirm it matches the source document.
+              Scan or type each serial / inventory barcode from the physical device and confirm it matches the source document.
             </p>
             <div className="flex flex-col gap-3">
               {release.items.map(item => {
                 const confirmed = confirmedSerials[item.id] ?? item.confirmedSerial ?? ''
-                const matched   = confirmed.trim().toLowerCase() === item.expectedSerial.trim().toLowerCase()
+                const resolved = confirmed
+                  ? resolveOrcConfirmedSerial({ scanned: confirmed, expectedSerial: item.expectedSerial, serials })
+                  : null
+                const matched   = resolved?.matched ?? (confirmed.trim().toLowerCase() === item.expectedSerial.trim().toLowerCase())
                 const hasInput  = confirmed.trim().length > 0
                 return (
                   <div key={item.id} className="p-3 rounded-xl border border-[var(--border-lt)] bg-[var(--bg-surface)] flex flex-col gap-2">
@@ -321,12 +332,32 @@ export function OutboundReleasePanel({ release, isRepair = false, onClose }: Out
                       </div>
                       {hasInput && <MatchBadge matched={matched} />}
                     </div>
-                    <div className="relative">
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        className="btn-secondary px-3 min-w-[44px] min-h-[44px] flex items-center justify-center cursor-pointer"
+                        title="Open camera scanner"
+                        aria-label="Open camera scanner"
+                        disabled={!canVerify || item.status === 'verified'}
+                        onClick={() => setScanItemId(item.id)}
+                      >
+                        <Fa icon={faCamera} />
+                      </button>
                       <input
-                        className="form-input font-mono text-sm"
-                        placeholder="Scan or type confirmed serial…"
+                        className="form-input font-mono text-sm flex-1"
+                        placeholder="Scan or type confirmed serial / barcode…"
                         value={confirmed}
                         onChange={e => setConfirmedSerials(prev => ({ ...prev, [item.id]: e.target.value }))}
+                        onBlur={e => {
+                          const value = e.target.value
+                          if (!value.trim()) return
+                          const result = resolveOrcConfirmedSerial({
+                            scanned: value,
+                            expectedSerial: item.expectedSerial,
+                            serials,
+                          })
+                          setConfirmedSerials(prev => ({ ...prev, [item.id]: result.confirmed }))
+                        }}
                         onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
                         autoComplete="off"
                         disabled={!canVerify || item.status === 'verified'}
@@ -342,6 +373,25 @@ export function OutboundReleasePanel({ release, isRepair = false, onClose }: Out
                 )
               })}
             </div>
+            <BarcodeScannerModal
+              open={!!scanItemId}
+              onClose={() => setScanItemId(null)}
+              title="Verify unit label"
+              hint="Scan the unit QR or barcode. Inventory barcodes are resolved to the manufacturer serial automatically."
+              onScan={(code) => {
+                if (!scanItemId) return
+                const item = release.items.find(i => i.id === scanItemId)
+                if (!item) return
+                const result = resolveOrcConfirmedSerial({
+                  scanned: code,
+                  expectedSerial: item.expectedSerial,
+                  serials,
+                })
+                setConfirmedSerials(prev => ({ ...prev, [scanItemId]: result.confirmed }))
+                showToast(result.matched ? `Matched ${result.confirmed}` : `Scanned ${result.confirmed} — check mismatch`, result.matched ? 'success' : 'error')
+                setScanItemId(null)
+              }}
+            />
             <div className="flex justify-between items-center pt-2 border-t border-[var(--border-lt)]">
               <button onClick={() => setShowVoid(true)} className="text-xs text-red-500 hover:underline">
                 Void Release

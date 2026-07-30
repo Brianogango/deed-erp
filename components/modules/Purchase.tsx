@@ -4,7 +4,7 @@ import { useFinanceStore, Receipt, LOCATIONS, LocationId, CATEGORY_CONFIG, Categ
 import { Badge, Modal, Field, Input, Select, Confirm, StatCard, PanelHeader, StatusStepper, SearchPicker, Divider, TabContent, ModuleSkeleton, TabBar, ModuleHeader } from '@/components/ui'
 import { PrimaryActionButton, SecondaryActionMenu } from '@/components/erp'
 import { Fa } from '@/components/icons'
-import { faClipboardCheck, faCartShopping, faBoxesStacked, faCreditCard, faPrint, faCamera, faClipboardList, faPlus } from '@fortawesome/free-solid-svg-icons'
+import { faClipboardCheck, faCartShopping, faBoxesStacked, faCreditCard, faPrint, faClipboardList, faPlus } from '@fortawesome/free-solid-svg-icons'
 import { printSerialLabels, printProductLabels } from '@/lib/product-label'
 import { guardSpreadsheetFile, guardSpreadsheetRows, SpreadsheetGuardError } from '@/lib/spreadsheet-guard'
 import TradeIn from './TradeIn'
@@ -15,6 +15,8 @@ import PurchaseBillsTab from './purchase/PurchaseBillsTab'
 import PurchaseReturnsTab from './purchase/PurchaseReturnsTab'
 import POFormView from './purchase/POFormView'
 import { readGuardedImageAsDataUrl, validateImageUpload } from '@/lib/client-image-guard'
+import { ScanInputRow } from '@/components/BarcodeScanner'
+import { parseScanPayload } from '@/lib/barcode-scan'
 
 type MainView = 'orders' | 'receipts' | 'returns' | 'bills' | 'tradein'
 type SubView  = 'list' | 'form' | 'receive'
@@ -477,7 +479,9 @@ export default function Purchase() {
   }
 
   const addSerial = (lineIdx: number, serial: string) => {
-    const val = serial.trim().toUpperCase()
+    const parsed = parseScanPayload(serial)
+    // At GRN we capture manufacturer serials; prefer SERIAL field from QR, else raw.
+    const val = (parsed.serial || parsed.normalized).toUpperCase()
     if (!val) return
     setGrnLines(prev => prev.map((l, i) => {
       if (i !== lineIdx) return l
@@ -780,17 +784,17 @@ export default function Purchase() {
 
               {line.requiresSerial && (
                 <div className="p-4">
-                  <div className="flex gap-2 mb-3">
-                    <div className="relative flex-1">
-                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm" style={{ color: 'var(--text-4)' }} aria-hidden="true"><Fa icon={faCamera} /></span>
-                      <input ref={el => { serialRefs.current[idx] = el }} className="form-input pl-9 font-mono text-sm"
-                        placeholder="Scan or type serial number, press Enter…"
-                        style={{ borderColor: '#A8D4E8' }}
-                        value={serialInputs[idx] ?? ''}
-                        onChange={e => setSerialInputs(p => ({ ...p, [idx]: e.target.value.toUpperCase() }))}
-                        onKeyDown={e => { if (e.key === 'Enter') addSerial(idx, serialInputs[idx] ?? '') }} />
-                    </div>
-                    <button className="btn-primary px-4" onClick={() => addSerial(idx, serialInputs[idx] ?? '')}>Add</button>
+                  <div className="mb-3">
+                    <ScanInputRow
+                      value={serialInputs[idx] ?? ''}
+                      onChange={v => setSerialInputs(p => ({ ...p, [idx]: v.toUpperCase() }))}
+                      onSubmit={v => addSerial(idx, v)}
+                      onCameraScan={code => addSerial(idx, code)}
+                      placeholder="Scan or type serial number…"
+                      continuous
+                      cameraTitle={`Scan serials — ${line.productName}`}
+                      inputRef={el => { serialRefs.current[idx] = el }}
+                    />
                   </div>
                   {line.serials.length > 0 ? (
                     <div className="flex flex-col gap-2">
