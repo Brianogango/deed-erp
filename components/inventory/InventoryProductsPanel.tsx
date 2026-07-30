@@ -266,8 +266,10 @@ export default function InventoryProductsPanel({
           onChange={e => setFilter('productType', e.target.value as ProductFilterState['productType'])}
         >
           <option value="all">All types</option>
-          <option value="stockable">Stockable product</option>
+          <option value="storable">Storable product</option>
+          <option value="consumable">Consumable</option>
           <option value="service">Service</option>
+          <option value="stockable">Any stock-tracked</option>
         </select>
       </label>
       <label className="dt-sheet-field">

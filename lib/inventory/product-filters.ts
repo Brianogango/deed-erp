@@ -1,5 +1,6 @@
 import { calcStockByLocation, type BulkStockLevel, type SerialNumber, type StockProduct } from '@/lib/business-logic'
 import { inferTrackingMethod, isSerialTracking, type TrackingMethod } from '@/lib/inventory-identifiers'
+import { inferProductKind } from '@/lib/product-kind'
 import type { LocationId } from '@/lib/store'
 
 export type StockAvailabilityFilter =
@@ -28,7 +29,7 @@ export interface ProductFilterState {
   warehouse: LocationId | 'all'
   category: string
   vendorId: string
-  productType: 'all' | 'stockable' | 'service'
+  productType: 'all' | 'storable' | 'consumable' | 'service' | 'stockable'
   tracking: TrackingMethod | 'all'
   reorder: ReorderFilter
   stockAvailability: StockAvailabilityFilter
@@ -62,6 +63,7 @@ export interface FilterableProduct {
   unit?: string | null
   requiresSerial?: boolean | null
   trackingMethod?: string | null
+  productKind?: string | null
   minStock: number
   stockQty: number
   isActive: boolean
@@ -186,9 +188,18 @@ export function productMatchesFilters(args: {
     requiresSerial: product.requiresSerial,
     unit: product.unit,
   })
+  const kind = inferProductKind({
+    productKind: product.productKind,
+    trackingMethod: tracking,
+    category: product.category,
+    unit: product.unit,
+    requiresSerial: product.requiresSerial,
+  })
 
   if (filters.productType === 'stockable' && tracking === 'NONE') return false
-  if (filters.productType === 'service' && tracking !== 'NONE') return false
+  if (filters.productType === 'storable' && kind !== 'storable') return false
+  if (filters.productType === 'consumable' && kind !== 'consumable') return false
+  if (filters.productType === 'service' && kind !== 'service') return false
   if (filters.tracking !== 'all' && tracking !== filters.tracking) return false
 
   if (filters.vendorId !== 'all') {
@@ -292,10 +303,16 @@ export function activeFilterChips(filters: ProductFilterState, vendorName?: stri
     chips.push({ key: 'category', label: 'Category', valueLabel: filters.category })
   }
   if (filters.productType !== 'all') {
+    const typeLabels: Record<string, string> = {
+      storable: 'Storable',
+      consumable: 'Consumable',
+      service: 'Service',
+      stockable: 'Any stock-tracked',
+    }
     chips.push({
       key: 'productType',
       label: 'Type',
-      valueLabel: filters.productType === 'service' ? 'Service' : 'Stockable product',
+      valueLabel: typeLabels[filters.productType] || filters.productType,
     })
   }
   if (filters.tracking !== 'all') {

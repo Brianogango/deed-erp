@@ -10,14 +10,19 @@ export const productSchema = z.object({
   sku: z.string().max(50).optional().nullable(),
   barcode: z.string().max(100).optional().nullable(),
   category: z.string().min(1, "Category is required"),
+  productKind: z.enum(['storable', 'consumable', 'service']).optional().nullable(),
   trackingMethod: z.enum(['NONE', 'QUANTITY', 'BATCH', 'SERIAL']).optional().nullable(),
   salePrice: z.number().nonnegative("Sale price cannot be negative"),
   costPrice: z.number().nonnegative("Cost price cannot be negative"),
   taxRate: z.number().min(0).max(100).default(16),
   minStock: z.number().int().nonnegative().default(5),
+  unit: z.string().max(40).optional().nullable(),
   description: z.string().max(1000).optional().nullable(),
   isActive: z.boolean().default(true),
   trackStock: z.boolean().default(true),
+  canBeSold: z.boolean().optional(),
+  canBePurchased: z.boolean().optional(),
+  invoicePolicy: z.enum(['order', 'delivery']).optional().nullable(),
 })
 
 export const userUpdateSchema = z.object({

@@ -1,6 +1,6 @@
 'use client'
 import { useState, useRef, useCallback, useEffect, useMemo } from 'react'
-import { useFinanceStore, Receipt, LOCATIONS, LocationId, CATEGORY_CONFIG, CategoryId, fmtKes, fmtDate, POLine, Account } from '@/lib/store'
+import { useFinanceStore, Receipt, LOCATIONS, LocationId, CATEGORY_CONFIG, CategoryId, fmtKes, fmtDate, POLine, Account, resolveProductAccounts } from '@/lib/store'
 import { Badge, Modal, Field, Input, Select, Confirm, StatCard, PanelHeader, StatusStepper, SearchPicker, Divider, TabContent, ModuleSkeleton, TabBar, ModuleHeader } from '@/components/ui'
 import { PrimaryActionButton, SecondaryActionMenu } from '@/components/erp'
 import { Fa } from '@/components/icons'
@@ -283,7 +283,7 @@ export default function Purchase() {
         taxRate: line.taxRate,
         subtotal: line.subtotal,
         requiresSerial: catCfg.serialRequired,
-        accountCode: product?.costAccountCode,
+        accountCode: product ? resolveProductAccounts(product).costAccountCode : undefined,
       }
     })
     const po = createPO(newVendorId, newVendorName, {
