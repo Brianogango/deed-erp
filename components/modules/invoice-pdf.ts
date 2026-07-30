@@ -25,6 +25,7 @@ export function invoicePdfInput(
     sourceRef: so?.ref,
     customerName: inv.partnerName,
     customerAddress: inv.invoiceAddress || [contact?.address, contact?.city, contact?.country].filter(Boolean).join(', ') || undefined,
+    customerCountry: contact?.country || 'Kenya',
     customerTaxId: contact?.vatNumber || undefined,
     lines: inv.lines.map(l => ({
       lineType: l.lineType,

@@ -56,8 +56,8 @@ export function CustomerPickerField({
   }
 
   async function register() {
-    if (!createName.trim() || !createEmail.trim() || !createPhone.trim()) {
-      showToast('Please fill in name, email and phone', 'error')
+    if (!createName.trim() || !createPhone.trim()) {
+      showToast('Please fill in name and phone', 'error')
       return
     }
     setRegistering(true)
@@ -137,8 +137,8 @@ export function CustomerPickerField({
               <Input value={createName} onChange={setCreateName} />
             </Field>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <Field label="Email" required>
-                <Input type="email" value={createEmail} onChange={setCreateEmail} />
+              <Field label="Email">
+                <Input type="email" value={createEmail} onChange={setCreateEmail} placeholder="Optional" />
               </Field>
               <Field label="Phone" required>
                 <Input type="tel" value={createPhone} onChange={setCreatePhone} />

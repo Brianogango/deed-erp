@@ -1,16 +1,19 @@
 import { describe, it, expect } from 'vitest'
 import { buildCommercialPdf, type CommercialPdfInput } from '@/lib/commercial-pdf'
+import { buildDeedDocumentPdf } from '@/lib/deed-document-pdf'
 
 const company: any = {
   name: 'Deed Technologies LTD',
   address: 'Sanlam House, Kenyatta Avenue',
-  city: 'Nairobi',
+  city: 'Nairobi 6690-20200',
   phone: '0113407964',
-  email: 'sales@deed.co.ke',
+  email: 'info@deed.africa',
+  website: 'http://deed.africa',
   kraPin: 'P051999898X',
   currency: 'KES',
   mpesaPaybill: '880100',
   mpesaAccount: '468778',
+  invoiceFooter: 'Thank you for your business.',
 }
 
 const banks: any[] = [
@@ -26,6 +29,7 @@ const baseDoc: CommercialPdfInput = {
   salesperson: 'Brian Ogango',
   customerName: 'Turaco Kenya Ltd',
   customerAddress: 'Amani Gardens, 71 Church Road, Westlands, Nairobi',
+  customerCountry: 'Kenya',
   customerTaxId: 'P051718937V',
   lines: [
     { description: 'Dell XPS 13 9310 - Intel Core i7-1185G7, 16GB LPDDR4x RAM, 512GB SSD', qty: 1, unitPrice: 80000, taxRate: 16, subtotal: 80000 },
@@ -78,11 +82,16 @@ describe('buildCommercialPdf', () => {
     expect(doc.getNumberOfPages()).toBe(1)
   })
 
-  it.each(['Quotation', 'Pro-forma Invoice', 'Invoice'])(
-    'uses the shared branded renderer for %s downloads',
+  it.each(['Quotation', 'Pro-forma Invoice', 'Invoice', 'Receipt'])(
+    'uses the shared Deed template for %s downloads',
     async title => {
       const doc = await buildCommercialPdf(
-        { ...baseDoc, title, ref: title === 'Pro-forma Invoice' ? 'PI/2026/0001' : baseDoc.ref },
+        {
+          ...baseDoc,
+          title,
+          ref: title === 'Pro-forma Invoice' ? 'PI/2026/0001' : title === 'Receipt' ? 'RCPT/2026/0001' : baseDoc.ref,
+          showPaymentDetails: title !== 'Receipt',
+        },
         company,
         banks,
       )
@@ -90,4 +99,37 @@ describe('buildCommercialPdf', () => {
       expect(doc.getNumberOfPages()).toBe(1)
     },
   )
+})
+
+describe('buildDeedDocumentPdf', () => {
+  it('renders invoice layout matching the Deed downloadable template', () => {
+    const doc = buildDeedDocumentPdf(
+      {
+        title: 'Invoice',
+        ref: 'INV/2026/0008',
+        date: '2026-07-28',
+        dueDate: '2026-08-27',
+        sourceRef: 'SO/2026/0004',
+        customerName: 'D.Light Kenya',
+        customerCountry: 'Kenya',
+        lines: [{
+          description: 'HP EliteBook 845 G7 AMD Ryzen 5 PRO 4650U 16GB RAM, 512GB SSD',
+          qty: 50,
+          unitPrice: 34482.76,
+          taxRate: 16,
+          subtotal: 1724138,
+        }],
+        subtotal: 1724138,
+        taxTotal: 275862,
+        total: 2000000,
+        notes: 'Created from SO/2026/0004.',
+        paymentCommunication: true,
+      },
+      company,
+      banks,
+    )
+    const bytes = new Uint8Array(doc.output('arraybuffer'))
+    expect(String.fromCharCode(...bytes.slice(0, 5))).toBe('%PDF-')
+    expect(doc.getNumberOfPages()).toBe(1)
+  })
 })
