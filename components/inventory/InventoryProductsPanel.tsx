@@ -46,12 +46,18 @@ interface InventoryProductsPanelProps {
   onEdit: (product: Product) => void
   onCreateVariant: (product: Product) => void
   orphanedVariantIds: Set<string>
+  onDownloadTemplate?: () => void
+  onImportProducts?: () => void
+  canImportProducts?: boolean
 }
 
 export default function InventoryProductsPanel({
   onEdit,
   onCreateVariant,
   orphanedVariantIds,
+  onDownloadTemplate,
+  onImportProducts,
+  canImportProducts = false,
 }: InventoryProductsPanelProps) {
   const {
     products, serials, bulkStock, receipts, purchaseOrders, contacts,
@@ -580,13 +586,23 @@ export default function InventoryProductsPanel({
           exportFilename="inventory-products"
           perPage={20}
           selectable
-          overflowActions={canLabels ? [
-            {
+          overflowActions={[
+            ...(canImportProducts && onDownloadTemplate ? [{
+              id: 'product-template',
+              label: 'Download product template',
+              onSelect: onDownloadTemplate,
+            }] : []),
+            ...(canImportProducts && onImportProducts ? [{
+              id: 'product-import',
+              label: 'Import products (bulk)',
+              onSelect: onImportProducts,
+            }] : []),
+            ...(canLabels ? [{
               id: 'labels-print-page',
               label: labelBusy ? 'Preparing labels…' : 'Print labels (selected via bulk bar)',
               onSelect: () => showToast('Select products, then use the bulk Labels actions', 'info'),
-            },
-          ] : undefined}
+            }] : []),
+          ]}
           bulkActions={({ rows: selected, clear }) => (
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-xs font-bold text-text-2">{selected.length} selected</span>
