@@ -122,4 +122,6 @@ jobs:
           script: |
             set -euo pipefail
             cd /var/www/deed-erp
+            # Ensure inventory foundation columns (tracking_method) before seed.
+            node scripts/run-safe-inventory-foundation.mjs || true
             node scripts/seed-products-final-b974.mjs
