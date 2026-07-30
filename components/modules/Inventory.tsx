@@ -3086,29 +3086,6 @@ export default function Inventory() {
               )}
             </div>
 
-            <div className="p-4 bg-gray-50 border border-gray-100 rounded-xl text-xs space-y-1">
-              <div className="flex justify-between">
-                <span className="text-text-3">Product Type:</span>
-                <span className="text-text-1 font-bold capitalize">{form.productKind || inferProductKind(form)}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-text-3">Tracking Type:</span>
-                <span className="text-text-1 font-bold">{inferTrackingMethod({ trackingMethod: form.trackingMethod, category: form.category })}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-text-3">Unit:</span>
-                <span className="text-text-1 font-bold">{form.unit || 'pcs'}</span>
-              </div>
-              <div className="mt-2 pt-2 border-t border-gray-200 text-amber-700 font-medium">Creating a product does not add stock. Stock comes later from purchase receipt or opening stock only.</div>
-              <div className="text-text-3">
-                {kindRequiresInventoryAccounts(form.productKind || 'storable')
-                  ? 'Storable products need Inventory Asset and COGS (category defaults apply if left blank).'
-                  : form.productKind === 'service'
-                    ? 'Services only need a Revenue account — no inventory valuation.'
-                    : 'Consumables use Revenue/Purchase accounts; inventory valuation is optional.'}
-              </div>
-            </div>
-
             <div className="flex gap-3 justify-end mt-2">
               <button className="btn-secondary px-6" onClick={() => { setShowForm(false); setDupConfirm(false) }}>Cancel</button>
               <button className="btn-primary px-8" onClick={saveProduct} disabled={dupConfirm && !!exactDup}>
