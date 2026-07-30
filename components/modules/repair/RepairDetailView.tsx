@@ -160,8 +160,12 @@ export default function RepairDetailView() {
   const canDiagnose = (
       r.status === 'assigned'
       || (r.status === 'diagnosed' && !hasDiagnosis)
-    ) && isMyRepair && r.repairPath !== 'direct_repair' && !pendingOutsourceJob
-  const canUpdateDiagnosis = !!r.diagnosis && isMyRepair && r.repairPath !== 'direct_repair' && ['diagnosed','awaiting_approval','approved','awaiting_parts','in_repair','qc','ready'].includes(r.status) && !pendingOutsourceJob
+    ) && (isMyRepair || ['technical_lead', 'director'].includes(currentRole))
+    && r.repairPath !== 'direct_repair' && !pendingOutsourceJob
+  const canUpdateDiagnosis = !!r.diagnosis && (isMyRepair || ['technical_lead', 'director'].includes(currentRole))
+    && r.repairPath !== 'direct_repair'
+    && ['diagnosed','awaiting_approval','approved','awaiting_parts','in_repair','qc','ready'].includes(r.status)
+    && !pendingOutsourceJob
   const canQuote    = (r.repairPath === 'direct_repair'
     ? ['assigned','diagnosed','awaiting_approval','approved','awaiting_parts','in_repair','qc'].includes(r.status)
     : ['diagnosed','awaiting_approval','approved','awaiting_parts','in_repair','qc'].includes(r.status)
