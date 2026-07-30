@@ -4265,16 +4265,27 @@ export function StoreProvider({
   // client-only fields (image, tax, warranty, account codes…) are preserved,
   // and store-only legacy items referenced by old documents stay listed.
   useEffect(() => {
-    fetch('/api/products')
-      .then(r => (r.ok ? r.json() : null))
-      .then((rows: any[] | null) => {
-        if (!Array.isArray(rows) || rows.length === 0) return
-        setProducts(prev => {
-          const merged = mergeCatalogProducts(prev, rows, CATEGORY_CONFIG)
-          return JSON.stringify(merged) === JSON.stringify(prev) ? prev : merged
+    const refreshCatalog = () => {
+      fetch('/api/products')
+        .then(r => (r.ok ? r.json() : null))
+        .then((rows: any[] | null) => {
+          if (!Array.isArray(rows) || rows.length === 0) return
+          setProducts(prev => {
+            const merged = mergeCatalogProducts(prev, rows, CATEGORY_CONFIG)
+            return JSON.stringify(merged) === JSON.stringify(prev) ? prev : merged
+          })
         })
-      })
-      .catch(() => {})
+        .catch(() => {})
+    }
+    refreshCatalog()
+    // If a stale deed_products SSE payload overwrites local state, immediately
+    // re-merge the Prisma catalog so newly published products do not vanish.
+    const onRemote = (e: Event) => {
+      const detail = (e as CustomEvent).detail
+      if (detail?.key === 'deed_products') refreshCatalog()
+    }
+    window.addEventListener('deed_remote_update', onRemote as EventListener)
+    return () => window.removeEventListener('deed_remote_update', onRemote as EventListener)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
   
@@ -7525,6 +7536,16 @@ const storeCtx: AppState = {
           }
           setProducts(prev => prev.map(x => x.id === tempId ? reconciled as any : x))
           showToast(`${p.name} created`, 'success')
+          // Re-merge catalog so a concurrent SSE wipe cannot drop this product.
+          void (async () => {
+            try {
+              const catalogRes = await fetch('/api/products')
+              if (!catalogRes.ok) return
+              const catalogRows = await catalogRes.json()
+              if (!Array.isArray(catalogRows)) return
+              setProducts(prev => mergeCatalogProducts(prev, catalogRows, CATEGORY_CONFIG) as any)
+            } catch { /* ignore */ }
+          })()
           return reconciled as any
         }
         const err = await res.json().catch(() => ({}))
@@ -7601,41 +7622,84 @@ const storeCtx: AppState = {
           return { ...empty, failed: rows.length, failedRows: [{ name: 'bulk', reason: body?.error || 'Bulk publish failed' }] }
         }
 
-        // Always re-merge from the relational catalog so published products persist in UI
-        // even if app_state / SSE races with the write.
-        await (async () => {
-          try {
-            const catalogRes = await fetch('/api/products')
-            if (!catalogRes.ok) return
-            const catalogRows = await catalogRes.json()
-            if (!Array.isArray(catalogRows)) return
-            setProducts(prev => {
-              // Preserve client-only account/warranty fields from the import payload by name
-              const byName = new Map(rows.map(r => [String(r.name ?? '').trim().toLowerCase(), r]))
-              const merged = mergeCatalogProducts(prev, catalogRows, CATEGORY_CONFIG) as any[]
-              return merged.map(p => {
-                const src = byName.get(String(p.name ?? '').trim().toLowerCase())
-                if (!src) return p
-                return {
-                  ...p,
-                  productKind: src.productKind ?? p.productKind,
-                  trackingMethod: src.trackingMethod ?? p.trackingMethod,
-                  requiresSerial: src.requiresSerial ?? p.requiresSerial,
-                  unit: src.unit || p.unit,
-                  warrantyMonths: src.warrantyMonths ?? p.warrantyMonths,
-                  taxRate: src.taxRate ?? p.taxRate,
-                  saleAccountCode: src.saleAccountCode || p.saleAccountCode,
-                  costAccountCode: src.costAccountCode || p.costAccountCode,
-                  inventoryAccountCode: src.inventoryAccountCode || p.inventoryAccountCode,
-                  cogsAccountCode: src.cogsAccountCode || p.cogsAccountCode,
-                  adjustmentAccountCode: src.adjustmentAccountCode || p.adjustmentAccountCode,
-                  writeOffAccountCode: src.writeOffAccountCode || p.writeOffAccountCode,
-                  priceDifferenceAccountCode: src.priceDifferenceAccountCode || p.priceDifferenceAccountCode,
-                }
-              })
+        const createdProducts = Array.isArray(body.products) ? body.products : []
+        const byName = new Map(rows.map(r => [String(r.name ?? '').trim().toLowerCase(), r]))
+
+        // Immediately seed local state from the publish response so the UI
+        // shows products even if the follow-up catalog GET is slow/fails.
+        if (createdProducts.length > 0) {
+          setProducts(prev => {
+            const asCatalog = createdProducts.map((p: any) => ({
+              id: String(p.id),
+              sku: p.sku,
+              barcode: p.barcode ?? null,
+              name: p.name,
+              description: p.description ?? null,
+              sellingPrice: p.salePrice ?? p.sellingPrice,
+              costPrice: p.costPrice,
+              reorderLevel: p.minStock ?? p.reorderLevel,
+              isActive: p.isActive !== false,
+              trackingMethod: p.trackingMethod ?? null,
+              invoicePolicy: p.invoicePolicy ?? 'order',
+              category: p.category?.name ? p.category : { name: byName.get(String(p.name ?? '').trim().toLowerCase())?.category || 'Laptops' },
+            }))
+            let merged = mergeCatalogProducts(prev, asCatalog, CATEGORY_CONFIG) as any[]
+            merged = merged.map(p => {
+              const src = byName.get(String(p.name ?? '').trim().toLowerCase())
+              if (!src) return p
+              return {
+                ...p,
+                productKind: src.productKind ?? p.productKind,
+                trackingMethod: src.trackingMethod ?? p.trackingMethod,
+                requiresSerial: src.requiresSerial ?? p.requiresSerial,
+                unit: src.unit || p.unit,
+                warrantyMonths: src.warrantyMonths ?? p.warrantyMonths,
+                taxRate: src.taxRate ?? p.taxRate,
+                saleAccountCode: src.saleAccountCode || p.saleAccountCode,
+                costAccountCode: src.costAccountCode || p.costAccountCode,
+                inventoryAccountCode: src.inventoryAccountCode || p.inventoryAccountCode,
+                cogsAccountCode: src.cogsAccountCode || p.cogsAccountCode,
+                adjustmentAccountCode: src.adjustmentAccountCode || p.adjustmentAccountCode,
+                writeOffAccountCode: src.writeOffAccountCode || p.writeOffAccountCode,
+                priceDifferenceAccountCode: src.priceDifferenceAccountCode || p.priceDifferenceAccountCode,
+              }
             })
-          } catch { /* catalog refresh best-effort */ }
-        })()
+            return merged
+          })
+        }
+
+        // Always re-merge from the relational catalog so published products persist.
+        try {
+          const catalogRes = await fetch('/api/products')
+          if (catalogRes.ok) {
+            const catalogRows = await catalogRes.json()
+            if (Array.isArray(catalogRows)) {
+              setProducts(prev => {
+                const merged = mergeCatalogProducts(prev, catalogRows, CATEGORY_CONFIG) as any[]
+                return merged.map(p => {
+                  const src = byName.get(String(p.name ?? '').trim().toLowerCase())
+                  if (!src) return p
+                  return {
+                    ...p,
+                    productKind: src.productKind ?? p.productKind,
+                    trackingMethod: src.trackingMethod ?? p.trackingMethod,
+                    requiresSerial: src.requiresSerial ?? p.requiresSerial,
+                    unit: src.unit || p.unit,
+                    warrantyMonths: src.warrantyMonths ?? p.warrantyMonths,
+                    taxRate: src.taxRate ?? p.taxRate,
+                    saleAccountCode: src.saleAccountCode || p.saleAccountCode,
+                    costAccountCode: src.costAccountCode || p.costAccountCode,
+                    inventoryAccountCode: src.inventoryAccountCode || p.inventoryAccountCode,
+                    cogsAccountCode: src.cogsAccountCode || p.cogsAccountCode,
+                    adjustmentAccountCode: src.adjustmentAccountCode || p.adjustmentAccountCode,
+                    writeOffAccountCode: src.writeOffAccountCode || p.writeOffAccountCode,
+                    priceDifferenceAccountCode: src.priceDifferenceAccountCode || p.priceDifferenceAccountCode,
+                  }
+                })
+              })
+            }
+          }
+        } catch { /* catalog refresh best-effort after local seed */ }
 
         return {
           created: Number(body.created ?? 0),

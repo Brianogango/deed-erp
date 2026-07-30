@@ -71,4 +71,33 @@ describe('mergeCatalogProducts', () => {
     const merged = mergeCatalogProducts([clientItem({ isActive: true })], [apiRow({ isActive: false })], CONFIG)
     expect(merged[0].isActive).toBe(false)
   })
+
+  it('copies trackingMethod from the catalog row', () => {
+    const merged = mergeCatalogProducts(
+      [clientItem({})],
+      [apiRow({ trackingMethod: 'SERIAL' })],
+      CONFIG,
+    )
+    expect(merged[0].trackingMethod).toBe('SERIAL')
+    expect(merged[0].requiresSerial).toBe(true)
+  })
+})
+
+describe('mergeProductsStoreWrite', () => {
+  it('keeps current-only product ids when a stale shorter list is written', async () => {
+    const { mergeProductsStoreWrite } = await import('@/lib/catalog-merge')
+    const current = [
+      { id: 'a', name: 'Kept A' },
+      { id: 'b', name: 'Kept B' },
+      { id: 'c', name: 'New Catalog Product' },
+    ]
+    const incoming = [
+      { id: 'a', name: 'Kept A updated' },
+      { id: 'b', name: 'Kept B' },
+    ]
+    const merged = mergeProductsStoreWrite(current, incoming) as any[]
+    expect(merged).toHaveLength(3)
+    expect(merged.find(p => p.id === 'a')!.name).toBe('Kept A updated')
+    expect(merged.find(p => p.id === 'c')!.name).toBe('New Catalog Product')
+  })
 })

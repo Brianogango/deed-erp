@@ -139,11 +139,16 @@ export async function publishProduct(validated: ValidatedProductInput): Promise<
   }
 }
 
-export function toClientProduct(product: any) {
+export function toClientProduct(product: any, categoryName?: string) {
   return {
     ...product,
     salePrice: Number(product.sellingPrice ?? product.salePrice ?? 0),
     minStock: Number(product.reorderLevel ?? product.minStock ?? 0),
     stockQty: product.stockQty ?? 0,
+    category: product.category?.name
+      ? product.category
+      : categoryName
+        ? { name: categoryName }
+        : product.category,
   }
 }

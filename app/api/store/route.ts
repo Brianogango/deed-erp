@@ -7,6 +7,7 @@ import {
 import { loadAppState, saveStoreKeys, getAppStateVersion } from '@/lib/server-store'
 import { mergeAppendOnlyJournals } from '@/lib/finance-controls'
 import { preserveInvoiceLinesOnStoreWrite } from '@/lib/finance-invoice'
+import { mergeProductsStoreWrite } from '@/lib/catalog-merge'
 import crypto from 'crypto'
 
 const PROTECTED_NON_EMPTY_ARRAY_KEYS = new Set<string>([
@@ -17,6 +18,7 @@ const PROTECTED_NON_EMPTY_ARRAY_KEYS = new Set<string>([
   'deed_outsourcePayments',
   'deed_outsourceVendors',
   'deed_purchaseOrders',
+  'deed_products',
 ])
 const IMMUTABLE_AUDIT_KEY = 'deed_audit_timeline_v1'
 const MAX_AUDIT_ROWS = 600
@@ -193,6 +195,13 @@ export async function POST(request: Request) {
       if (incomingLength === 0 && typeof currentLength === 'number' && currentLength > 0) {
         delete entries[key]
         skippedKeys.push(key)
+        continue
+      }
+      // Product catalog rows created via Prisma must not be dropped by a stale client sync.
+      if (key === 'deed_products' && entries[key]) {
+        let incoming: unknown
+        try { incoming = JSON.parse(entries[key]) } catch { continue }
+        entries[key] = JSON.stringify(mergeProductsStoreWrite(currentState[key], incoming))
       }
     }
   }

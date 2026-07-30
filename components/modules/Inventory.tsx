@@ -753,8 +753,9 @@ export default function Inventory() {
     setShowForm(true)
   }
 
-  const saveProduct = () => {
+  const saveProduct = async () => {
     if (!form.name.trim()) { showToast('Product name is required', 'error'); return }
+    if (form.name.trim().length < 3) { showToast('Product name must be at least 3 characters', 'error'); return }
 
     // SKU is internal; generate one when omitted.
     const skuTrimmed = form.sku.trim() || buildProductSku(form.name, products)
@@ -801,12 +802,15 @@ export default function Inventory() {
       showToast('Select a COGS account for storable products (or set a category default)', 'error')
       return
     }
+    const salePrice = Number(form.salePrice) || 0
+    const costPrice = Number(form.costPrice) || 0
+    if (salePrice < 0 || costPrice < 0) { showToast('Prices cannot be negative', 'error'); return }
     const payload = {
       ...form,
       sku: skuTrimmed,
       barcode: productBarcode,
       parentId: form.parentId || undefined,
-      salePrice: Number(form.salePrice) || 0, costPrice: Number(form.costPrice) || 0,
+      salePrice, costPrice,
       stockQty: 0, minStock: Number(form.minStock) || 0, taxRate: Number(form.taxRate) || 0,
       invoicePolicy: form.invoicePolicy,
       warrantyMonths: Number(form.warrantyMonths) || 0,
@@ -824,7 +828,14 @@ export default function Inventory() {
       writeOffAccountCode: form.writeOffAccountCode || resolved.writeOffAccountCode,
       priceDifferenceAccountCode: form.priceDifferenceAccountCode || resolved.priceDifferenceAccountCode,
     }
-    editId ? updateProduct(editId, payload) : addProduct(payload)
+    if (editId) {
+      updateProduct(editId, payload)
+      setDupConfirm(false)
+      setShowForm(false)
+      return
+    }
+    const saved = await Promise.resolve(addProduct(payload))
+    if (!saved) return
     setDupConfirm(false)
     setShowForm(false)
   }

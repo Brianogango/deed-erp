@@ -48,7 +48,7 @@ export async function POST(request: Request) {
         })
         const result = await publishProduct(validated)
         if (result.status === 'created') {
-          created.push(toClientProduct(result.product))
+          created.push(toClientProduct(result.product, validated.category))
         } else if (result.status === 'exists') {
           skipped.push({
             name: label,
