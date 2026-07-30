@@ -994,6 +994,40 @@ export type CreateDepositInput = Omit<Deposit, 'id' | 'ref' | 'totalPaid' | 'bal
   payRef?: string
 }
 
+/** Device loan / temporary issue log (Holdovers module). */
+export type HoldoverStatus = 'active' | 'returned' | 'overdue'
+export type HoldoverPurpose = 'repair_loaner' | 'exam' | 'purchase_pending' | 'short_term' | 'other'
+export type HoldoverDeviceCondition = 'excellent' | 'good' | 'fair' | 'damaged'
+
+export interface Holdover {
+  id: string
+  ref: string
+  clientName: string
+  clientPhone: string
+  clientIdNo: string
+  productId: string
+  productName: string
+  serialId: string
+  serialNumber: string
+  deviceCondition: HoldoverDeviceCondition
+  accessories: string
+  purpose: HoldoverPurpose
+  purposeNote: string
+  linkedRepairId: string
+  linkedRepairRef: string
+  issuedDate: string
+  expectedReturnDate: string
+  returnedDate: string
+  returnCondition: HoldoverDeviceCondition | ''
+  returnNotes: string
+  returnLocation: 'shop' | 'warehouse'
+  status: HoldoverStatus
+  issuedByName: string
+  authorizedByUserId: string
+  authorizedByName: string
+  createdAt: string
+}
+
 export interface DeliveryLine {
   productId: string; productName: string; qty: number; qtyDone: number; serialIds: string[]; sourceLocation?: LocationId
 }
@@ -2669,6 +2703,11 @@ export interface AppState {
   completeDeposit: (depositId: string) => void
   cancelDeposit: (depositId: string, reason: string) => void
 
+  // Holdovers (device loans)
+  holdovers: Holdover[]
+  addHoldover: (h: Holdover) => void
+  updateHoldover: (id: string, patch: Partial<Holdover>) => void
+
   // Outsource repair
   outsourceVendors: OutsourceVendor[]
   outsourceJobs: OutsourceJob[]
@@ -3377,6 +3416,7 @@ export type OperationsStoreState = Pick<AppState,
   | 'contactPersons'
   | 'contacts'
   | 'currentUserId'
+  | 'holdovers'
   | 'products'
   | 'refurbishmentJobs'
   | 'repairs'
@@ -3384,6 +3424,7 @@ export type OperationsStoreState = Pick<AppState,
   | 'users'
   | 'warranties'
   | 'addContact'
+  | 'addHoldover'
   | 'addRefurbishmentPart'
   | 'allocateRefurbPart'
   | 'assignRefurbishmentJob'
@@ -3401,6 +3442,7 @@ export type OperationsStoreState = Pick<AppState,
   | 'requestPartFromInventory'
   | 'showToast'
   | 'transferToSell'
+  | 'updateHoldover'
   | 'updateRefurbishmentJob'
   | 'updateRefurbishmentPart'
   | 'updateRepair'
@@ -4481,6 +4523,43 @@ export function StoreProvider({
   const [outsourcePayments, setOutsourcePayments] = useLS('deed_outsourcePayments', seedOutsourcePayments)
   const [outboundReleases, setOutboundReleases] = useLS<OutboundRelease[]>('deed_outboundReleases', [])
   const [deposits, setDeposits] = useLS<Deposit[]>('deed_deposits', [])
+  const [holdovers, setHoldovers] = useLS<Holdover[]>('deed_holdovers', (() => {
+    // One-time migrate from the legacy local-only key used before store sync.
+    if (typeof window === 'undefined') return [] as Holdover[]
+    try {
+      const legacy = window.localStorage.getItem('deed_holdovers_v1')
+      if (!legacy) return [] as Holdover[]
+      const parsed = JSON.parse(legacy)
+      return Array.isArray(parsed) ? (parsed as Holdover[]) : []
+    } catch {
+      return [] as Holdover[]
+    }
+  })())
+
+  // Merge any remaining legacy local-only holdovers into the synced key, then drop v1.
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    try {
+      const legacyRaw = window.localStorage.getItem('deed_holdovers_v1')
+      if (!legacyRaw) return
+      const legacy = JSON.parse(legacyRaw)
+      if (!Array.isArray(legacy) || legacy.length === 0) {
+        window.localStorage.removeItem('deed_holdovers_v1')
+        return
+      }
+      setHoldovers(prev => {
+        if (!Array.isArray(prev) || prev.length === 0) return legacy as Holdover[]
+        const ids = new Set(prev.map(h => h.id))
+        const missing = (legacy as Holdover[]).filter(h => h?.id && !ids.has(h.id))
+        return missing.length ? [...missing, ...prev] : prev
+      })
+      window.localStorage.removeItem('deed_holdovers_v1')
+    } catch {
+      /* ignore corrupt legacy */
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   const [users, setUsers] = useState<User[]>(() => {
     // This logic is now mostly handled by the server session, but we keep it for hydration
     if (!initialUser && initialUsers.length === 0) return []
@@ -5066,6 +5145,7 @@ export function StoreProvider({
 
   const operationsActions = useMemo(() => ({
     addContact: (...args: Parameters<AppState['addContact']>) => storeCtxRef.current!.addContact(...args),
+    addHoldover: (...args: Parameters<AppState['addHoldover']>) => storeCtxRef.current!.addHoldover(...args),
     addRefurbishmentPart: (...args: Parameters<AppState['addRefurbishmentPart']>) => storeCtxRef.current!.addRefurbishmentPart(...args),
     allocateRefurbPart: (...args: Parameters<AppState['allocateRefurbPart']>) => storeCtxRef.current!.allocateRefurbPart(...args),
     assignRefurbishmentJob: (...args: Parameters<AppState['assignRefurbishmentJob']>) => storeCtxRef.current!.assignRefurbishmentJob(...args),
@@ -5083,6 +5163,7 @@ export function StoreProvider({
     requestPartFromInventory: (...args: Parameters<AppState['requestPartFromInventory']>) => storeCtxRef.current!.requestPartFromInventory(...args),
     showToast: (...args: Parameters<AppState['showToast']>) => storeCtxRef.current!.showToast(...args),
     transferToSell: (...args: Parameters<AppState['transferToSell']>) => storeCtxRef.current!.transferToSell(...args),
+    updateHoldover: (...args: Parameters<AppState['updateHoldover']>) => storeCtxRef.current!.updateHoldover(...args),
     updateRefurbishmentJob: (...args: Parameters<AppState['updateRefurbishmentJob']>) => storeCtxRef.current!.updateRefurbishmentJob(...args),
     updateRefurbishmentPart: (...args: Parameters<AppState['updateRefurbishmentPart']>) => storeCtxRef.current!.updateRefurbishmentPart(...args),
     updateRepair: (...args: Parameters<AppState['updateRepair']>) => storeCtxRef.current!.updateRepair(...args),
@@ -6001,6 +6082,17 @@ const storeCtx: AppState = {
         body: JSON.stringify({ reason }),
       })
       showToast('Deposit cancelled', 'info')
+    },
+
+    // Holdovers — synced via useLS('deed_holdovers') → app_state
+    holdovers,
+    addHoldover: (h) => {
+      setHoldovers(prev => [h, ...prev])
+      try { window.localStorage.removeItem('deed_holdovers_v1') } catch { /* ignore */ }
+      showToast(`${h.ref} issued to ${h.clientName}`, 'success')
+    },
+    updateHoldover: (id, patch) => {
+      setHoldovers(prev => prev.map(h => (h.id === id ? { ...h, ...patch } : h)))
     },
 
     recordOutsourcePayment: (p) => {
@@ -13659,6 +13751,7 @@ const storeCtx: AppState = {
     contactPersons,
     contacts,
     currentUserId,
+    holdovers,
     products,
     refurbishmentJobs,
     repairs,
@@ -13670,6 +13763,7 @@ const storeCtx: AppState = {
     contactPersons,
     contacts,
     currentUserId,
+    holdovers,
     products,
     refurbishmentJobs,
     repairs,

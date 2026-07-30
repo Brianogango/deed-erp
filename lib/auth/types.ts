@@ -115,13 +115,13 @@ export const ROLE_DEFAULT_MODULES: Record<UserRole, ModuleId[]> = {
     'dashboard', 'accounting', 'sales', 'crm', 'contacts', 'purchase', 'inventory', 'kilimall', 'ecommerce', 'deposits',
   ]),
   inventory_officer: withSelfService([
-    'dashboard', 'inventory', 'delivery', 'purchase',
+    'dashboard', 'inventory', 'delivery', 'purchase', 'holdovers',
   ]),
   kilimall_officer: withSelfService([
     'dashboard', 'kilimall', 'inventory', 'delivery', 'ecommerce', 'after_sales',
   ]),
   sales_rep: withSelfService([
-    'dashboard', 'sales', 'crm', 'contacts', 'delivery', 'after_sales',
+    'dashboard', 'sales', 'crm', 'contacts', 'delivery', 'after_sales', 'holdovers',
   ]),
   technical_lead: withSelfService([
     'dashboard', 'repair', 'refurbishment', 'inventory', 'outsource', 'after_sales', 'holdovers',
