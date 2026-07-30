@@ -110,3 +110,16 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           command_timeout: 30m
           script: /usr/local/bin/deed-erp-deploy.sh
+
+      # Idempotent: skips products that already exist by name.
+      - name: Seed Final_b974 products
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          command_timeout: 5m
+          script: |
+            set -euo pipefail
+            cd /var/www/deed-erp
+            node scripts/seed-products-final-b974.mjs
