@@ -39,6 +39,24 @@ async function findProductDuplicate(name: string, sku?: string | null, barcode?:
   })
 }
 
+function resolveTrackingMethod(
+  trackingMethod: 'NONE' | 'QUANTITY' | 'BATCH' | 'SERIAL' | null | undefined,
+  productKind: 'storable' | 'consumable' | 'service' | null | undefined,
+) {
+  if (trackingMethod) return trackingMethod
+  if (productKind === 'service') return 'NONE' as const
+  if (productKind === 'consumable') return 'QUANTITY' as const
+  return 'QUANTITY' as const
+}
+
+function uniqueTargetLabel(meta: unknown): string {
+  const target = (meta as { target?: string | string[] } | undefined)?.target
+  const fields = Array.isArray(target) ? target : target ? [target] : []
+  if (fields.some(f => /sku/i.test(String(f)))) return 'SKU'
+  if (fields.some(f => /barcode/i.test(String(f)))) return 'barcode'
+  return 'product identity'
+}
+
 export async function GET() {
   return withApiErrorHandling(async () => {
     await getRequiredSession()
@@ -71,30 +89,37 @@ export async function POST(request: Request) {
     })
 
     const requestedSku = validated.sku?.trim() || ''
-    const duplicate = await findProductDuplicate(validated.name, requestedSku, validated.barcode)
+    const barcode = validated.barcode?.trim() || null
+    const duplicate = await findProductDuplicate(validated.name, requestedSku, barcode)
     if (duplicate) {
       const field = requestedSku && duplicate.sku.toLowerCase() === requestedSku.toLowerCase()
         ? 'SKU'
         : duplicate.name.toLowerCase() === validated.name.toLowerCase()
           ? 'name'
           : 'barcode'
-      const value = field === 'SKU' ? requestedSku : field === 'name' ? validated.name : validated.barcode
+      const value = field === 'SKU' ? requestedSku : field === 'name' ? validated.name : barcode
       return NextResponse.json(
         { error: `${field} "${value}" is already used by "${duplicate.name}"` },
         { status: 409 },
       )
     }
 
+    const trackingMethod = resolveTrackingMethod(validated.trackingMethod, validated.productKind)
+    const trackStock = validated.productKind === 'service' ? false : validated.trackStock
+
     // Map to Prisma schema - note: category is a relationship in the schema
     const data: any = {
       name: validated.name,
       sku: requestedSku || await buildUniqueSku(validated.name),
-      barcode: validated.barcode || null,
+      barcode,
       description: validated.description || null,
       sellingPrice: validated.salePrice,
       costPrice: validated.costPrice,
       reorderLevel: validated.minStock,
-      trackStock: validated.trackStock,
+      trackStock,
+      trackingMethod,
+      isActive: validated.isActive,
+      invoicePolicy: validated.invoicePolicy || 'order',
     }
 
     // Category arrives as a UUID (relational clients) or a name (the UI's
@@ -110,7 +135,36 @@ export async function POST(request: Request) {
       }
     }
 
-    const product = await prisma.product.create({ data })
+    let product
+    try {
+      product = await prisma.product.create({ data })
+    } catch (err: any) {
+      if (err?.code === 'P2002') {
+        // Bulk imports can race on client-generated SKUs (same millisecond).
+        // If the client did not insist on a SKU, retry once with a fresh unique value.
+        if (!requestedSku) {
+          data.sku = await buildUniqueSku(validated.name)
+          try {
+            product = await prisma.product.create({ data })
+          } catch (retryErr: any) {
+            if (retryErr?.code === 'P2002') {
+              return NextResponse.json(
+                { error: `${uniqueTargetLabel(retryErr.meta)} is already in use` },
+                { status: 409 },
+              )
+            }
+            throw retryErr
+          }
+        } else {
+          return NextResponse.json(
+            { error: `${uniqueTargetLabel(err.meta)} "${requestedSku || barcode || validated.name}" is already in use` },
+            { status: 409 },
+          )
+        }
+      } else {
+        throw err
+      }
+    }
     
     return NextResponse.json(
       {
