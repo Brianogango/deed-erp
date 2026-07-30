@@ -355,7 +355,7 @@ export default function PointOfSale() {
                 value={scanInput} onChange={e => setScanInput(e.target.value)} onKeyDown={handleScanKey} />
               <span className="badge badge-green text-[10px] hidden sm:inline">Scanner Ready</span>
             </div>
-            <p className="text-[10px] text-t4 px-1">Phone camera or USB scanner. Serialized units need the unit label (INV-…), not only the product SKU.</p>
+            <p className="text-[10px] text-t4 px-1">Phone camera or USB scanner. Serialized units: scan the serial number on the device label.</p>
 
             <BarcodeScannerModal
               open={showCamera}

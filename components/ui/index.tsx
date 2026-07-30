@@ -372,7 +372,7 @@ export function Modal({
   return (
     <Portal>
     <div
-      className="fixed inset-0 z-[9000] flex h-dvh items-center justify-center overflow-y-auto overscroll-contain p-4 sm:p-6"
+      className="fixed inset-0 z-[9600] flex h-dvh items-center justify-center overflow-y-auto overscroll-contain p-4 sm:p-6"
       style={{
         background: enterprise ? 'rgba(15,23,42,0.48)' : 'rgba(0,0,0,0.55)',
         backdropFilter: enterprise ? 'blur(3px)' : 'blur(8px)',
