@@ -843,7 +843,7 @@ function OutsourceContent() {
                 label="Link to Repair Job (Optional)"
                 labelClassName="mb-1.5 block text-[13px] font-semibold text-slate-700"
                 inputClassName="h-11 text-sm"
-                placeholder="Search ref, customer, device or serial…"
+                placeholder="Search assigned + diagnosed repairs…"
                 items={pickableRepairs}
                 selectedLabel={jobForm.repairOrderId ? repairSearch : undefined}
                 formatSelected={r => `${r.ref} · ${r.productName} (${r.customerName})`}
@@ -863,6 +863,9 @@ function OutsourceContent() {
                   </div>
                 )}
               />
+              <p className="mt-1.5 text-[11px] text-slate-500">
+                Only repairs with an assigned technician and a logged diagnosis can be linked.
+              </p>
               {jobForm.repairOrderId && (
                 <button type="button" className="mt-1.5 text-xs font-semibold text-blue-700 hover:text-blue-900" onClick={clearRepairLink}>
                   Clear repair selection
