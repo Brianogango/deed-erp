@@ -3195,7 +3195,7 @@ export default function Inventory() {
 
             <div className="flex gap-3 justify-end mt-2">
               <button className="btn-secondary px-6" onClick={() => { setShowForm(false); setDupConfirm(false) }}>Cancel</button>
-              <button className="btn-primary px-8" onClick={saveProduct} disabled={dupConfirm && !!exactDup}>
+              <button className="btn-primary px-8" onClick={() => { void saveProduct() }} disabled={dupConfirm && !!exactDup}>
                 {dupConfirm && exactDup ? 'Resolve duplicate above' : 'Save Product'}
               </button>
             </div>
