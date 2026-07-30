@@ -20,6 +20,8 @@ import { inferTrackingMethod, isSerialTracking, isStockTracked, type TrackingMet
 import InventoryProductsPanel from '@/components/inventory/InventoryProductsPanel'
 import { canValidatePurchaseReceipt, canReleaseHeldSerial } from '@/lib/inventory/permissions'
 import { explainSerialWhereabouts, findSerialMatches } from '@/lib/inventory/serial-trace'
+import { ScanInputRow } from '@/components/BarcodeScanner'
+import { identityMatchesScan, parseScanPayload } from '@/lib/barcode-scan'
 
 type MainTab = 'warehouse_view' | 'product_master' | 'movements' | 'product_catalog' | 'opening_stock' | 'stock_in' | 'stock_out' | 'transfers' | 'adjustments' | 'stock_take' | 'reports'
 type ReportTab = 'stock_on_hand' | 'opening_closing' | 'movements' | 'serial_tracking' | 'serial_lookup' | 'low_stock'
@@ -1188,12 +1190,20 @@ export default function Inventory() {
   }
 
   const addTransferSerial = () => {
-    const serial = tScanInput.trim().toUpperCase()
-    if (!serial) return
-    const existing = serials.find(s => s.serial === serial && s.productId === tProd?.id && s.location === tFrom)
-    if (!existing) { showToast(`Serial ${serial} not found in ${LOCATIONS[tFrom].name}`, 'error'); return }
-    if (tSerials.includes(serial)) { showToast('Serial already scanned', 'error'); return }
-    setTSerials(prev => [...prev, serial])
+    const parsed = parseScanPayload(tScanInput)
+    if (!parsed.candidates.length) return
+    if (!tProd) { showToast('Select a product first', 'error'); return }
+    const existing = serials.find(s =>
+      s.productId === tProd.id
+      && s.location === tFrom
+      && identityMatchesScan(s, parsed),
+    )
+    if (!existing) {
+      showToast(`Unit "${parsed.normalized}" not found in ${LOCATIONS[tFrom].name} for this product — try inventory barcode or serial`, 'error')
+      return
+    }
+    if (tSerials.includes(existing.serial)) { showToast('Serial already scanned', 'error'); return }
+    setTSerials(prev => [...prev, existing.serial])
     setTScanInput('')
   }
 
@@ -3445,10 +3455,36 @@ export default function Inventory() {
             {tProd && !tProd.requiresSerial && <Field label="Quantity"><Input type="number" value={tQty} onChange={setTQty} /></Field>}
             {tProd?.requiresSerial && (
               <Field label={`Serial Numbers (${tSerials.length} scanned)`}>
-                <div className="flex gap-2">
-                  <Input value={tScanInput} onChange={setTScanInput} placeholder="Scan serial number..." />
-                  <button className="btn-secondary px-4" onClick={addTransferSerial}>Add</button>
-                </div>
+                <ScanInputRow
+                  value={tScanInput}
+                  onChange={setTScanInput}
+                  onSubmit={() => addTransferSerial()}
+                  onCameraScan={(code) => {
+                    setTScanInput(code)
+                    // Defer so state updates before add runs with latest input via direct parse
+                    const parsed = parseScanPayload(code)
+                    if (!parsed.candidates.length || !tProd) return
+                    const existing = serials.find(s =>
+                      s.productId === tProd.id
+                      && s.location === tFrom
+                      && identityMatchesScan(s, parsed),
+                    )
+                    if (!existing) {
+                      showToast(`Unit "${parsed.normalized}" not found in ${LOCATIONS[tFrom].name}`, 'error')
+                      return
+                    }
+                    if (tSerials.includes(existing.serial)) {
+                      showToast('Serial already scanned', 'error')
+                      return
+                    }
+                    setTSerials(prev => [...prev, existing.serial])
+                    setTScanInput('')
+                    showToast(`${existing.serial} added`, 'success')
+                  }}
+                  placeholder="Scan unit barcode / serial…"
+                  continuous
+                  cameraTitle="Scan units to transfer"
+                />
                 {tSerials.length > 0 && (
                   <div className="mt-3 flex flex-wrap gap-2">
                     {tSerials.map(serial => (

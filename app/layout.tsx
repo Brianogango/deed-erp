@@ -5,11 +5,19 @@ import { listPublicUsers } from '@/lib/auth/users-repository'
 import { PUBLIC_USERS } from '@/lib/auth/public-users'
 import { loadAppState } from '@/lib/server-store'
 import AppShell from '@/components/AppShell'
+import SwRegister from '@/components/SwRegister'
 import { inter, dmMono } from './fonts'
 
 export const metadata: Metadata = {
   title: 'Deed ERP',
   description: 'Deed Digital Solutions — Enterprise Resource Planning',
+  manifest: '/manifest.json',
+  applicationName: 'Deed ERP',
+  appleWebApp: {
+    capable: true,
+    title: 'Deed ERP',
+    statusBarStyle: 'default',
+  },
   icons: {
     icon: [
       { url: '/deed-logo.svg', type: 'image/svg+xml' },
@@ -47,6 +55,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     return (
       <html lang="en" className={htmlClassName}>
         <body className={bodyClassName}>
+          <SwRegister />
           {children}
         </body>
       </html>
@@ -77,6 +86,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   return (
     <html lang="en" className={htmlClassName}>
       <body className={bodyClassName}>
+        <SwRegister />
         <AppShell initialUser={shellUser} initialUsers={users} serverState={serverState}>
           {children}
         </AppShell>

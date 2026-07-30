@@ -7,7 +7,8 @@ import {
   Fa, faCashRegister, faReceipt, faCamera, faCartShopping, faStar,
   faCircleCheck, faPrint, faMobileScreenButton, faMoneyBillWave, faCreditCard,
 } from '@/components/icons'
-import { Html5QrcodeScanner, Html5Qrcode } from 'html5-qrcode'
+import { BarcodeScannerModal } from '@/components/BarcodeScanner'
+import { matchPosScan, normalizeScanCode } from '@/lib/barcode-scan'
 
 function ReceiptPrintView({ order, companySettings, onDone }: { order: any, companySettings: any, onDone: () => void }) {
   useEffect(() => {
@@ -118,7 +119,6 @@ export default function PointOfSale() {
   const [showHistory, setShowHistory] = useState(false)
   const [showCamera, setShowCamera] = useState(false)
   const scanRef = useRef<HTMLInputElement>(null)
-  const scannerRef = useRef<Html5Qrcode | null>(null)
 
   const sellableLocations = new Set(['warehouse', 'shop'])
   const getSellableQty = (productId: string, requiresSerial: boolean) => requiresSerial
@@ -168,47 +168,49 @@ export default function PointOfSale() {
   const pointsToEarn = customerId ? Math.floor(cartTotal / 100) : 0
 
   const processScan = (code: string) => {
-    if (!code) return
-    const matchedSerial = serials.find(s =>
-      (s.barcode === code || s.serial === code || s.sku === code) &&
-      s.status === 'available' &&
-      sellableLocations.has(s.location),
-    )
+    const trimmed = normalizeScanCode(code)
+    if (!trimmed) return
 
-    if (matchedSerial) {
-      const product = products.find(p => p.id === matchedSerial.productId)
+    const result = matchPosScan({
+      code: trimmed,
+      serials,
+      products,
+      sellableLocations,
+      getSellableQty,
+    })
+
+    if (result.kind === 'serial') {
+      const product = products.find(p => p.id === result.serial.productId)
       if (!product) {
-        showToast(`Serial ${code} is not linked to a product`, 'error')
-      } else {
-        addToCart(product, matchedSerial.id)
+        showToast(`Serial ${trimmed} is not linked to a product`, 'error')
+        return
       }
-    } else {
-      const product = products.find(p => p.barcode === code || p.sku === code)
-      if (product) {
-        if (product.unit !== 'service' && getSellableQty(product.id, product.requiresSerial) <= 0) {
-          showToast(`${product.name} is not available in ready-for-sale stock`, 'error'); return
-        }
-        if (product.requiresSerial) {
-          showToast(`Scan/select the exact serial barcode for ${product.name}`, 'info')
-        } else {
-          addToCart(product)
-          showToast(`${product.name} added`, 'success')
-        }
-      } else {
-        showToast(`Barcode ${code} not found`, 'error')
-      }
+      addToCart(product, result.serial.id)
+      return
     }
-  }
 
-  // Keep the latest processScan for the camera-scanner effect, which only
-  // re-runs on showCamera changes and would otherwise use stale stock state.
-  const processScanRef = useRef(processScan)
-  processScanRef.current = processScan
+    if (result.kind === 'out_of_stock') {
+      showToast(`${result.product.name} is not available in ready-for-sale stock`, 'error')
+      return
+    }
+
+    if (result.kind === 'product') {
+      if (result.needsUnitScan) {
+        showToast(`Scan the unit barcode on the device label for ${result.product.name} (not the product SKU)`, 'info')
+        return
+      }
+      addToCart(result.product as typeof products[0])
+      showToast(`${result.product.name} added`, 'success')
+      return
+    }
+
+    showToast(`Barcode "${trimmed}" not found — check the label or type the code`, 'error')
+  }
 
   // Barcode scanner — reads quickly typed characters (scanner emits chars fast then Enter)
   const handleScanKey = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
-      processScan(scanInput.trim())
+      processScan(scanInput)
       setScanInput('')
       scanRef.current?.focus()
     }
@@ -298,50 +300,6 @@ export default function PointOfSale() {
     }
   }
 
-  // Camera Scanner Logic
-  useEffect(() => {
-    if (!showCamera) return
-    let cancelled = false
-    let scanner: Html5Qrcode | null = null
-    try {
-      scanner = new Html5Qrcode("reader")
-    } catch (err) {
-      console.error("Camera init error", err)
-      showToast("Could not initialise camera scanner.", "error")
-      setShowCamera(false)
-      return
-    }
-    scannerRef.current = scanner
-    scanner.start(
-      { facingMode: "environment" },
-      { fps: 10, qrbox: { width: 250, height: 250 } },
-      (decodedText) => {
-        if (cancelled) return
-        cancelled = true
-        processScanRef.current(decodedText)
-        showToast(`Scanned: ${decodedText}`, 'success')
-        setShowCamera(false)
-      },
-      () => {}
-    ).catch(err => {
-      console.error("Camera start error", err)
-      if (!cancelled) {
-        showToast("Could not start camera. Check permissions.", "error")
-        setShowCamera(false)
-      }
-    })
-    return () => {
-      cancelled = true
-      scannerRef.current = null
-      // stop() throws synchronously when the scanner never started (e.g.
-      // permission denied), which would crash the app as an unhandled
-      // exception during effect cleanup — guard both sync and async failures.
-      try {
-        if (scanner.isScanning) scanner.stop().catch(() => {})
-      } catch { /* scanner was never running */ }
-    }
-  }, [showCamera]);
-
   // Auto-focus scan input
   useEffect(() => { scanRef.current?.focus() }, [posSessionOpen])
 
@@ -384,29 +342,30 @@ export default function PointOfSale() {
 
             {/* Scanner bar */}
             <div className="flex gap-2 items-center p-3 rounded-xl" style={{ background: 'var(--info-bg)', border: '1px solid #C7D2FE' }}>
-              <button 
-                className="text-xl flex-shrink-0 hover:scale-110 transition-transform cursor-pointer" 
+              <button
+                type="button"
+                className="min-w-[44px] min-h-[44px] flex items-center justify-center flex-shrink-0 hover:scale-110 transition-transform cursor-pointer"
                 onClick={() => setShowCamera(true)}
-                title="Open Camera Scanner"
-                aria-label="Open Camera Scanner"
+                title="Open phone camera scanner"
+                aria-label="Open phone camera scanner"
               >
-                <Fa icon={faCamera} style={{ color: 'var(--primary)' }} />
+                <Fa icon={faCamera} style={{ color: 'var(--primary)', fontSize: 20 }} />
               </button>
-              <input ref={scanRef} className="form-input flex-1 font-mono" placeholder="Scan barcode or type here + Enter..."
+              <input ref={scanRef} className="form-input flex-1 font-mono" placeholder="Scan barcode / QR or type + Enter…"
                 value={scanInput} onChange={e => setScanInput(e.target.value)} onKeyDown={handleScanKey} />
-              <span className="badge badge-green text-[10px]">Scanner Ready</span>
+              <span className="badge badge-green text-[10px] hidden sm:inline">Scanner Ready</span>
             </div>
+            <p className="text-[10px] text-t4 px-1">Phone camera or USB scanner. Serialized units need the unit label (INV-…), not only the product SKU.</p>
 
-            {/* Camera Modal */}
-            {showCamera && (
-              <Modal title="Scan QR / Barcode" onClose={() => setShowCamera(false)} width={400}>
-                <div className="p-4 flex flex-col items-center">
-                  <div id="reader" className="w-full overflow-hidden rounded-xl border-2 border-indigo-500 bg-black aspect-square"></div>
-                  <p className="mt-4 text-xs text-t3 text-center">Point your camera at the barcode or QR code. Ensure good lighting.</p>
-                  <button className="btn-outline w-full mt-4" onClick={() => setShowCamera(false)}>Cancel</button>
-                </div>
-              </Modal>
-            )}
+            <BarcodeScannerModal
+              open={showCamera}
+              onClose={() => setShowCamera(false)}
+              title="Scan product or unit label"
+              hint="Use the rear camera. Good light helps. Serial stock: scan the unit QR/barcode on the device label."
+              onScan={(code) => {
+                processScan(code)
+              }}
+            />
 
             {/* Search + Category filter */}
             <div className="flex flex-col sm:flex-row gap-2">
