@@ -86,6 +86,84 @@ const pickMailbox = (profile: MailboxProfile): MailboxConfig => {
   return def
 }
 
+/**
+ * Resolve which provider to use.
+ * If EMAIL_PROVIDER is unset but SMTP_HOST is present, prefer SMTP
+ * (avoids failing SendGrid when only Contabo mail is configured).
+ */
+export function resolveEmailProvider(): 'sendgrid' | 'ses' | 'smtp' {
+  const explicit = String(process.env.EMAIL_PROVIDER || '').trim().toLowerCase()
+  if (explicit === 'sendgrid' || explicit === 'ses' || explicit === 'smtp') return explicit
+  if (process.env.SMTP_HOST) return 'smtp'
+  return 'sendgrid'
+}
+
+export type EmailConfigStatus = {
+  ready: boolean
+  provider: 'sendgrid' | 'ses' | 'smtp'
+  nodeEnv: string
+  fromDefault: string
+  mailboxes: Array<{
+    id: MailboxProfile
+    from: string
+    authConfigured: boolean
+  }>
+  missing: string[]
+  hints: string[]
+}
+
+/** Safe diagnostics for Settings — never returns passwords. */
+export function getEmailConfigStatus(): EmailConfigStatus {
+  const provider = resolveEmailProvider()
+  const missing: string[] = []
+  const hints: string[] = []
+
+  if (provider === 'smtp') {
+    if (!process.env.SMTP_HOST) missing.push('SMTP_HOST')
+    if (!process.env.SMTP_USER) missing.push('SMTP_USER')
+    if (!process.env.SMTP_PASS) missing.push('SMTP_PASS')
+    if (!process.env.EMAIL_FROM && !process.env.SMTP_USER) missing.push('EMAIL_FROM')
+  } else if (provider === 'sendgrid') {
+    if (!process.env.SENDGRID_API_KEY) missing.push('SENDGRID_API_KEY')
+    if (!process.env.EMAIL_FROM) missing.push('EMAIL_FROM')
+  } else if (provider === 'ses') {
+    if (!process.env.AWS_SES_REGION) missing.push('AWS_SES_REGION')
+    if (!process.env.AWS_SES_ACCESS_KEY_ID) missing.push('AWS_SES_ACCESS_KEY_ID')
+    if (!process.env.AWS_SES_SECRET_ACCESS_KEY) missing.push('AWS_SES_SECRET_ACCESS_KEY')
+    if (!process.env.EMAIL_FROM) missing.push('EMAIL_FROM')
+  }
+
+  const profiles: MailboxProfile[] = ['default', 'hr', 'sales', 'accounts']
+  const mailboxes = profiles.map(id => {
+    const cfg = pickMailbox(id)
+    return {
+      id,
+      from: cfg.from,
+      authConfigured: provider !== 'smtp' ? missing.length === 0 : !!(cfg.user && cfg.pass),
+    }
+  })
+
+  if (process.env.NODE_ENV !== 'production') {
+    hints.push('Non-production mode logs emails to the server console instead of sending.')
+  }
+  if (provider === 'smtp' && process.env.SMTP_HOST && !process.env.EMAIL_PROVIDER) {
+    hints.push('EMAIL_PROVIDER not set — auto-selected smtp because SMTP_HOST is present.')
+  }
+  if (missing.length === 0 && process.env.NODE_ENV === 'production') {
+    hints.push('Config looks complete. Use “Send test email” to verify delivery.')
+  }
+
+  return {
+    ready: missing.length === 0 && process.env.NODE_ENV === 'production',
+    provider,
+    nodeEnv: process.env.NODE_ENV || 'development',
+    fromDefault: process.env.EMAIL_FROM || process.env.SMTP_USER || 'noreply@deed.co.ke',
+    mailboxes,
+    missing,
+    hints,
+  }
+}
+
 export interface EmailResult {
   success: boolean
   messageId?: string
@@ -108,7 +186,7 @@ export const sendEmail = async (message: EmailMessage): Promise<EmailResult> => 
     }
   }
 
-  const provider = process.env.EMAIL_PROVIDER || 'sendgrid'
+  const provider = resolveEmailProvider()
 
   try {
     switch (provider) {
@@ -119,10 +197,7 @@ export const sendEmail = async (message: EmailMessage): Promise<EmailResult> => 
       case 'smtp':
         return await sendViaSMTP(message)
       default:
-        return {
-          success: false,
-          error: `Unknown email provider: ${provider}`,
-        }
+        return { success: false, error: `Unknown email provider: ${provider}` }
     }
   } catch (error) {
     console.error('Email send error:', error)
@@ -427,15 +502,86 @@ sales@deed.co.ke | +254 20 123 4567
   }
 }
 
+export const generateRfqEmail = (rfq: {
+  ref: string
+  vendorName: string
+  companyName: string
+  expectedDate?: string
+  notes?: string
+  lines: Array<{ productName: string; qty: number; unitPrice: number; subtotal: number }>
+  subtotal: number
+  taxTotal: number
+  total: number
+  senderName?: string
+  message?: string
+}) => {
+  const company = escapeHtml(rfq.companyName || 'Deed Technologies')
+  const vendor = escapeHtml(rfq.vendorName || 'Vendor')
+  const rows = rfq.lines.map((line, index) => `
+    <tr>
+      <td style="padding:8px;border-bottom:1px solid #eee;">${index + 1}</td>
+      <td style="padding:8px;border-bottom:1px solid #eee;">${escapeHtml(line.productName)}</td>
+      <td style="padding:8px;border-bottom:1px solid #eee;text-align:right;">${line.qty}</td>
+      <td style="padding:8px;border-bottom:1px solid #eee;text-align:right;">KES ${Number(line.unitPrice || 0).toLocaleString()}</td>
+      <td style="padding:8px;border-bottom:1px solid #eee;text-align:right;">KES ${Number(line.subtotal || 0).toLocaleString()}</td>
+    </tr>`).join('')
+
+  return {
+    subject: `RFQ ${rfq.ref} from ${rfq.companyName || 'Deed Technologies'}`,
+    html: `
+<!DOCTYPE html><html><body style="font-family:'Segoe UI',Arial,sans-serif;color:#333;">
+  <div style="max-width:640px;margin:0 auto;padding:24px;border:1px solid #e5e7eb;border-radius:12px;">
+    <h2 style="margin:0 0 8px;color:#1A1F5E;">Request for Quotation</h2>
+    <p style="margin:0 0 16px;color:#64748B;">${escapeHtml(rfq.ref)} · ${company}</p>
+    <p>Hello ${vendor},</p>
+    ${rfq.message ? `<p>${escapeHtml(rfq.message)}</p>` : ''}
+    <p>Please quote availability, lead time, payment terms, and final pricing for the items below.</p>
+    ${rfq.expectedDate ? `<p><strong>Expected date:</strong> ${escapeHtml(rfq.expectedDate)}</p>` : ''}
+    <table style="width:100%;border-collapse:collapse;margin:16px 0;font-size:13px;">
+      <thead>
+        <tr style="background:#F8FAFC;text-align:left;">
+          <th style="padding:8px;">#</th>
+          <th style="padding:8px;">Item</th>
+          <th style="padding:8px;text-align:right;">Qty</th>
+          <th style="padding:8px;text-align:right;">Target</th>
+          <th style="padding:8px;text-align:right;">Line</th>
+        </tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>
+    <p style="text-align:right;margin:0;"><strong>Subtotal:</strong> KES ${Number(rfq.subtotal || 0).toLocaleString()}</p>
+    <p style="text-align:right;margin:4px 0;"><strong>Tax:</strong> KES ${Number(rfq.taxTotal || 0).toLocaleString()}</p>
+    <p style="text-align:right;margin:4px 0 16px;font-size:16px;"><strong>Expected total:</strong> KES ${Number(rfq.total || 0).toLocaleString()}</p>
+    ${rfq.notes ? `<p><strong>Notes:</strong> ${escapeHtml(rfq.notes)}</p>` : ''}
+    <p>Regards,<br/>${escapeHtml(rfq.senderName || company)}</p>
+  </div>
+</body></html>`,
+    text: [
+      `RFQ ${rfq.ref} from ${rfq.companyName || 'Deed Technologies'}`,
+      '',
+      `Hello ${rfq.vendorName || 'Vendor'},`,
+      rfq.message || '',
+      'Please quote for the items below.',
+      rfq.expectedDate ? `Expected date: ${rfq.expectedDate}` : '',
+      '',
+      ...rfq.lines.map((l, i) => `${i + 1}. ${l.productName} — Qty ${l.qty} — Target KES ${Number(l.unitPrice || 0).toLocaleString()}`),
+      '',
+      `Expected total: KES ${Number(rfq.total || 0).toLocaleString()}`,
+      rfq.notes ? `Notes: ${rfq.notes}` : '',
+      '',
+      `Regards, ${rfq.senderName || rfq.companyName || 'Deed Technologies'}`,
+    ].filter(Boolean).join('\n'),
+  }
+}
+
 /**
  * Send Quote via Email
  */
-export const sendQuoteEmail = async (quote: Parameters<typeof generateQuoteEmail>[0]): Promise<EmailResult> => {
+export const sendQuoteEmail = async (quote: Parameters<typeof generateQuoteEmail>[0] & { to: string }): Promise<EmailResult> => {
   const emailContent = generateQuoteEmail(quote)
-  
-  // In production, also attach PDF
   return sendEmail({
-    to: 'customer@example.com',  // Replace with actual contact email
+    to: quote.to,
+    mailbox: 'sales',
     ...emailContent,
   })
 }

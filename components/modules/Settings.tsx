@@ -1,5 +1,5 @@
 'use client'
-import { createContext, useContext, useState, useMemo } from 'react'
+import { createContext, useContext, useState, useMemo, useEffect, useCallback } from 'react'
 import { useApp, fmtKes, fmtDate } from '@/lib/store'
 import { useHrStore } from '@/hooks/useHrStore'
 import { Badge, Confirm, Field, Input, Modal, ModuleSkeleton, PanelHeader, Select, Textarea, ExportButtons, useMounted, ModuleHeader } from '@/components/ui'
@@ -10,13 +10,13 @@ import { Fa } from '@/components/icons'
 import {
   faBuilding, faUsers, faBriefcase, faBoxesStacked, faCartShopping,
   faScrewdriverWrench, faLandmark, faUserGroup, faCashRegister, faShieldHalved,
-  faPlus, faCheck, faUpload, faBullseye, faChevronRight, faCog, faKey,
+  faPlus, faCheck, faUpload, faBullseye, faChevronRight, faCog, faKey, faEnvelope,
 } from '@fortawesome/free-solid-svg-icons'
 import PartnerApiKeys from './settings/PartnerApiKeys'
 import { readGuardedImageAsDataUrl } from '@/lib/client-image-guard'
 import { resolveSettingsSection } from '@/lib/dashboard-priority'
 type Section =
-  | 'general' | 'banks' | 'access'
+  | 'general' | 'banks' | 'access' | 'email'
   | 'crm' | 'sales' | 'inventory' | 'purchase' | 'repair'
   | 'accounting' | 'hr_config' | 'pos' | 'security' | 'partner_api'
 
@@ -147,6 +147,64 @@ export default function Settings() {
   const [resetting, setResetting] = useState(false)
   const [pendingConfirm, setPendingConfirm] = useState<{ msg: string; action: () => void } | null>(null)
   const [resetStep, setResetStep] = useState(0)
+  const [emailStatus, setEmailStatus] = useState<{
+    ready: boolean
+    provider: string
+    nodeEnv: string
+    fromDefault: string
+    mailboxes: Array<{ id: string; from: string; authConfigured: boolean }>
+    missing: string[]
+    hints: string[]
+  } | null>(null)
+  const [emailStatusLoading, setEmailStatusLoading] = useState(false)
+  const [testEmailTo, setTestEmailTo] = useState('')
+  const [testMailbox, setTestMailbox] = useState('default')
+  const [sendingTestEmail, setSendingTestEmail] = useState(false)
+
+  const loadEmailStatus = useCallback(async () => {
+    setEmailStatusLoading(true)
+    try {
+      const res = await fetch('/api/integrations/email-status')
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        showToast(data.error || data.message || 'Could not load email status', 'error')
+        return
+      }
+      setEmailStatus(data.status)
+      setTestEmailTo(prev => prev || companySettings.email || '')
+    } catch {
+      showToast('Could not reach email status API', 'error')
+    } finally {
+      setEmailStatusLoading(false)
+    }
+  }, [companySettings.email, showToast])
+
+  const sendTestEmail = async () => {
+    setSendingTestEmail(true)
+    try {
+      const res = await fetch('/api/integrations/test-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ to: testEmailTo.trim(), mailbox: testMailbox }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok || !data.success) {
+        showToast(data.error || data.message || 'Test email failed', 'error')
+        if (data.status) setEmailStatus(data.status)
+        return
+      }
+      if (data.status) setEmailStatus(data.status)
+      showToast(`Test email sent to ${testEmailTo.trim()}`, 'success')
+    } catch {
+      showToast('Could not send test email', 'error')
+    } finally {
+      setSendingTestEmail(false)
+    }
+  }
+
+  useEffect(() => {
+    if (section === 'email') void loadEmailStatus()
+  }, [section, loadEmailStatus])
   const [resetPhrase, setResetPhrase] = useState('')
 
   const MIGRATION_CONFIRMATION = 'MIGRATE DEED ERP DATA'
@@ -335,6 +393,7 @@ export default function Settings() {
     { id: 'general',    label: 'General',       icon: faBuilding,        group: 'Company' },
     { id: 'banks',      label: 'Bank Accounts', icon: faLandmark,        group: 'Company' },
     { id: 'access',     label: 'User Access',   icon: faUsers,           group: 'Company' },
+    { id: 'email',      label: 'Email / SMTP',  icon: faEnvelope,        group: 'Company' },
     { id: 'crm',        label: 'CRM',           icon: faBullseye,        group: 'Modules' },
     { id: 'sales',      label: 'Sales',         icon: faBriefcase,       group: 'Modules' },
     { id: 'inventory',  label: 'Inventory',     icon: faBoxesStacked,    group: 'Modules' },
@@ -666,6 +725,99 @@ export default function Settings() {
                 </div>
               </div>
             </div>
+          )}
+
+          {/* ════ EMAIL / SMTP ════ */}
+          {section === 'email' && (
+            <>
+              <SectionCard
+                title="Outbound email status"
+                action={
+                  <button
+                    type="button"
+                    className="btn-secondary text-[11px]"
+                    disabled={emailStatusLoading}
+                    onClick={() => void loadEmailStatus()}
+                  >
+                    {emailStatusLoading ? 'Checking…' : 'Refresh'}
+                  </button>
+                }
+              >
+                {!emailStatus ? (
+                  <p className="text-xs text-gray-500 py-3">Click Refresh to check production mail configuration.</p>
+                ) : (
+                  <div className="py-3 flex flex-col gap-3">
+                    <div className={`rounded-xl border px-3 py-2 text-xs font-semibold ${emailStatus.ready ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-amber-50 border-amber-200 text-amber-900'}`}>
+                      {emailStatus.ready
+                        ? `Ready — provider ${emailStatus.provider}`
+                        : `Not ready — provider ${emailStatus.provider} (${emailStatus.nodeEnv})`}
+                    </div>
+                    <p className="text-[11px] text-gray-500">Default From: <span className="font-mono text-gray-800">{emailStatus.fromDefault}</span></p>
+                    {emailStatus.missing.length > 0 && (
+                      <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2">
+                        <p className="text-[11px] font-bold text-red-700 mb-1">Missing on server (.env)</p>
+                        <p className="text-[11px] font-mono text-red-800">{emailStatus.missing.join(', ')}</p>
+                      </div>
+                    )}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      {emailStatus.mailboxes.map(box => (
+                        <div key={box.id} className="rounded-lg border border-gray-100 bg-gray-50 px-3 py-2">
+                          <p className="text-[10px] uppercase tracking-wider font-bold text-gray-400">{box.id}</p>
+                          <p className="text-[11px] font-mono text-gray-800 mt-0.5">{box.from}</p>
+                          <p className={`text-[10px] font-semibold mt-1 ${box.authConfigured ? 'text-emerald-600' : 'text-amber-600'}`}>
+                            {box.authConfigured ? 'Auth configured' : 'Auth missing'}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                    {emailStatus.hints.map(hint => (
+                      <p key={hint} className="text-[11px] text-gray-500">• {hint}</p>
+                    ))}
+                    <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-[11px] text-slate-700 leading-relaxed">
+                      <p className="font-bold mb-1">Put this in Contabo <span className="font-mono">/var/www/deed-erp/.env</span> then restart PM2:</p>
+                      <pre className="font-mono text-[10px] whitespace-pre-wrap overflow-x-auto">{`EMAIL_PROVIDER=smtp
+EMAIL_FROM=info@deed.co.ke
+SMTP_HOST=mail.deed.co.ke
+SMTP_PORT=587
+SMTP_SECURE=false
+SMTP_USER=info@deed.co.ke
+SMTP_PASS=YOUR_MAILBOX_PASSWORD
+HR_EMAIL=hr@deed.co.ke
+SALES_EMAIL=sales@deed.co.ke
+ACCOUNTS_EMAIL=accounts@deed.co.ke`}</pre>
+                      <p className="mt-2">Covers RFQ mail, sales quotes, invoices, user credentials, and portal notices. Department From-addresses reuse the same SMTP login unless you set separate <span className="font-mono">*_SMTP_USER/PASS</span>.</p>
+                    </div>
+                  </div>
+                )}
+              </SectionCard>
+              <SectionCard title="Send test email">
+                <div className="py-3 flex flex-col gap-3">
+                  <Field label="Send to">
+                    <Input value={testEmailTo} onChange={setTestEmailTo} placeholder="you@deed.co.ke" type="email" />
+                  </Field>
+                  <Field label="Mailbox">
+                    <Select
+                      value={testMailbox}
+                      onChange={setTestMailbox}
+                      options={[
+                        { value: 'default', label: 'Default / info' },
+                        { value: 'sales', label: 'Sales' },
+                        { value: 'accounts', label: 'Accounts' },
+                        { value: 'hr', label: 'HR' },
+                      ]}
+                    />
+                  </Field>
+                  <button
+                    type="button"
+                    className="btn-primary text-xs self-start min-h-[44px]"
+                    disabled={sendingTestEmail || !testEmailTo.trim()}
+                    onClick={() => void sendTestEmail()}
+                  >
+                    {sendingTestEmail ? 'Sending…' : 'Send test email'}
+                  </button>
+                </div>
+              </SectionCard>
+            </>
           )}
 
           {/* ════ CRM ════ */}
