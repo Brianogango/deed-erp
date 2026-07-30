@@ -34,6 +34,14 @@ import {
   type TrackingMethod,
 } from '@/lib/inventory-identifiers'
 import {
+  aggregateLinesByAccount,
+  COMPANY_ACCOUNT_FALLBACKS,
+  formatAccountLabel,
+  resolveProductAccounts,
+  type AccountableProduct,
+} from '@/lib/product-accounts'
+import { inferProductKind, defaultTrackingForKind, defaultUnitForKind } from '@/lib/product-kind'
+import {
   canPostOrPayCustomerInvoice,
   canPayOwnPostedInvoice,
   paymentJournalRef,
@@ -69,11 +77,22 @@ export const CATEGORY_CONFIG: Record<CategoryId, { serialRequired: boolean; trac
   Printers:              { serialRequired: true,  trackStock: true  },
   Networking:            { serialRequired: true,  trackStock: true  },
   'Mobile Devices':      { serialRequired: true,  trackStock: true  },
-  'Software & Licences': { serialRequired: false, trackStock: true  },
+  'Software & Licences': { serialRequired: false, trackStock: false },
   Services:              { serialRequired: false, trackStock: false },
 }
 
 export const ALL_CATEGORIES = Object.keys(CATEGORY_CONFIG) as CategoryId[]
+
+export type { ProductKind } from '@/lib/product-kind'
+export { PRODUCT_KIND_OPTIONS, UOM_OPTIONS, inferProductKind, defaultTrackingForKind, defaultUnitForKind, kindRequiresInventoryAccounts } from '@/lib/product-kind'
+export {
+  CATEGORY_ACCOUNT_DEFAULTS,
+  COMPANY_ACCOUNT_FALLBACKS,
+  resolveProductAccounts,
+  applyCategoryAccountDefaults,
+  formatAccountLabel,
+  aggregateLinesByAccount,
+} from '@/lib/product-accounts'
 
 // ─── Core Types ───────────────────────────────────────────────────────────────
 
@@ -576,6 +595,8 @@ export interface Account {
 export interface Product {
   id: string; name: string; sku: string; barcode: string
   category: CategoryId; salePrice: number; costPrice: number; taxRate: number
+  /** Odoo-style commercial type: storable | consumable | service */
+  productKind?: import('@/lib/product-kind').ProductKind
   trackingMethod?: TrackingMethod
   // stockQty is derived from serials+moves — kept for display/quick access
   stockQty: number; minStock: number; unit: string
@@ -591,6 +612,7 @@ export interface Product {
   cogsAccountCode?: string       // cost of goods sold account code e.g. '6001'
   adjustmentAccountCode?: string // stock gain/variance account code
   writeOffAccountCode?: string   // damage, theft, expiry, and write-off expense account code
+  priceDifferenceAccountCode?: string // PO vs vendor bill price variance
   parentId?: string          // links to a parent product — makes this a variant
   priceUpdatedAt?: string
   priceUpdatedBy?: string
@@ -2051,22 +2073,58 @@ const expenseAccountForCategory = (category?: ExpenseCategory) => {
   return map[category ?? 'other'] ?? '6499 - Other Operating Expenses'
 }
 
-const buildInvoicePostingJournal = (inv: Invoice): JournalEntry => {
+const buildInvoicePostingJournal = (
+  inv: Invoice,
+  resolveProduct?: (productId: string) => AccountableProduct | undefined,
+  chartAccounts: Array<{ code: string; name: string }> = [],
+): JournalEntry => {
   if (inv.type === 'customer_invoice') {
+    const revenueBuckets = aggregateLinesByAccount({
+      lines: inv.lines.map(l => ({
+        productId: l.productId,
+        subtotal: l.subtotal,
+        accountCode: l.accountCode,
+        lineType: l.lineType,
+      })),
+      resolveProduct,
+      side: 'revenue',
+      accounts: chartAccounts,
+    })
+    const revenueLines = revenueBuckets.length
+      ? revenueBuckets.map(b => accountLine(b.account, `Revenue: ${inv.ref}`, 0, b.amount))
+      : [accountLine(formatAccountLabel(COMPANY_ACCOUNT_FALLBACKS.saleAccountCode, chartAccounts), `Revenue: ${inv.ref}`, 0, inv.subtotal)]
     const lines = [
       accountLine('1800 - Accounts Receivable', `AR: ${inv.partnerName}`, inv.total, 0),
-      accountLine('5000 - Sales Revenue', `Revenue: ${inv.ref}`, 0, inv.subtotal),
+      ...revenueLines,
       ...(inv.taxTotal > 0 ? [accountLine('3301 - Output VAT Payable', `VAT on ${inv.ref}`, 0, inv.taxTotal)] : []),
     ]
-    return { id: uid(), ref: `JRN/${inv.ref}`, date: now(), source: 'invoice', description: `Invoice ${inv.ref} — ${inv.partnerName}`, status: 'posted', invoiceId: inv.id, lines, totalDebit: inv.total, totalCredit: inv.total }
+    const totalCredit = lines.reduce((s, l) => s + l.credit, 0)
+    const totalDebit = lines.reduce((s, l) => s + l.debit, 0)
+    return { id: uid(), ref: `JRN/${inv.ref}`, date: now(), source: 'invoice', description: `Invoice ${inv.ref} — ${inv.partnerName}`, status: 'posted', invoiceId: inv.id, lines, totalDebit, totalCredit }
   }
 
+  const purchaseBuckets = aggregateLinesByAccount({
+    lines: inv.lines.map(l => ({
+      productId: l.productId,
+      subtotal: l.subtotal,
+      accountCode: l.accountCode,
+      lineType: l.lineType,
+    })),
+    resolveProduct,
+    side: 'purchase',
+    accounts: chartAccounts,
+  })
+  const purchaseLines = purchaseBuckets.length
+    ? purchaseBuckets.map(b => accountLine(b.account, `Purchase: ${inv.partnerName}`, b.amount, 0))
+    : [accountLine(formatAccountLabel(COMPANY_ACCOUNT_FALLBACKS.costAccountCode, chartAccounts), `Purchase: ${inv.partnerName}`, inv.subtotal, 0)]
   const lines = [
-    accountLine('6101 - Local Purchases', `Purchase: ${inv.partnerName}`, inv.subtotal, 0),
+    ...purchaseLines,
     ...(inv.taxTotal > 0 ? [accountLine('1150 - VAT Input', `VAT input on ${inv.ref}`, inv.taxTotal, 0)] : []),
     accountLine('3000 - Accounts Payable', `AP: ${inv.partnerName}`, 0, inv.total),
   ]
-  return { id: uid(), ref: `JRN/${inv.ref}`, date: now(), source: 'bill', description: `Bill ${inv.ref} — ${inv.partnerName}`, status: 'posted', invoiceId: inv.id, lines, totalDebit: inv.total, totalCredit: inv.total }
+  const totalCredit = lines.reduce((s, l) => s + l.credit, 0)
+  const totalDebit = lines.reduce((s, l) => s + l.debit, 0)
+  return { id: uid(), ref: `JRN/${inv.ref}`, date: now(), source: 'bill', description: `Bill ${inv.ref} — ${inv.partnerName}`, status: 'posted', invoiceId: inv.id, lines, totalDebit, totalCredit }
 }
 
 const buildInvoicePaymentJournal = (
@@ -4739,7 +4797,11 @@ export function StoreProvider({
   // postInvoice action) routes through here so the AR/revenue subledger and the
   // General Ledger never drift apart. The dedup guard keys on the journal ref.
   const postInvoiceJournalOnce = (inv: Invoice) => {
-    const journal = buildInvoicePostingJournal(inv)
+    const journal = buildInvoicePostingJournal(
+      inv,
+      (productId) => prodRef.current.find(p => p.id === productId),
+      accountRef.current.map(a => ({ code: a.code, name: a.name })),
+    )
     setJournalEntries(p => (p.some(j => j.ref === journal.ref) ? p : [journal, ...p]))
     addAuditLog('post_invoice', inv.ref, `${inv.type === 'vendor_bill' ? 'Bill' : 'Invoice'} posted to journal ${journal.ref}`)
   }
@@ -7387,18 +7449,34 @@ const storeCtx: AppState = {
 
     // ── Products ─────────────────────────────────────────────────────────────
     addProduct: async (p) => {
-      const trackingMethod = inferTrackingMethod({
+      const productKind = inferProductKind({
+        productKind: p.productKind,
         trackingMethod: p.trackingMethod,
+        category: p.category,
+        unit: p.unit,
+        requiresSerial: p.requiresSerial,
+      })
+      const trackingMethod = inferTrackingMethod({
+        trackingMethod: p.trackingMethod ?? defaultTrackingForKind(productKind, p.category),
         category: p.category,
         requiresSerial: p.requiresSerial,
         unit: p.unit,
       })
+      const accounts = resolveProductAccounts({ ...p, productKind, trackingMethod })
       p = {
         ...p,
         barcode: String(p.barcode ?? '').trim(),
+        productKind,
         trackingMethod,
         requiresSerial: isSerialTracking(trackingMethod),
-        unit: isStockTracked(trackingMethod) ? 'pcs' : 'service',
+        unit: p.unit || defaultUnitForKind(productKind, trackingMethod),
+        saleAccountCode: p.saleAccountCode || accounts.saleAccountCode,
+        costAccountCode: p.costAccountCode || accounts.costAccountCode,
+        inventoryAccountCode: p.inventoryAccountCode || (productKind === 'storable' ? accounts.inventoryAccountCode : p.inventoryAccountCode),
+        cogsAccountCode: p.cogsAccountCode || (productKind === 'storable' ? accounts.cogsAccountCode : p.cogsAccountCode),
+        adjustmentAccountCode: p.adjustmentAccountCode || accounts.adjustmentAccountCode,
+        writeOffAccountCode: p.writeOffAccountCode || accounts.writeOffAccountCode,
+        priceDifferenceAccountCode: p.priceDifferenceAccountCode || accounts.priceDifferenceAccountCode,
       }
       const duplicate = findProductIdentityDuplicate(prodRef.current, p)
       if (duplicate) {
@@ -7474,9 +7552,21 @@ const storeCtx: AppState = {
       }
       setProducts(prev => prev.map(x => {
         if (x.id !== id) return x
-        const updated = { ...x, ...p, trackingMethod: nextTracking }
-        updated.requiresSerial = isSerialTracking(nextTracking)
-        updated.unit = isStockTracked(nextTracking) ? 'pcs' : 'service'
+        const productKind = inferProductKind({
+          productKind: p.productKind ?? x.productKind,
+          trackingMethod: nextTracking,
+          category: p.category ?? x.category,
+          unit: p.unit ?? x.unit,
+          requiresSerial: p.requiresSerial ?? x.requiresSerial,
+        })
+        const updated = {
+          ...x,
+          ...p,
+          productKind,
+          trackingMethod: nextTracking,
+          requiresSerial: isSerialTracking(nextTracking),
+          unit: p.unit || defaultUnitForKind(productKind, nextTracking),
+        }
         return updated
       }))
       showToast('Product master updated')
@@ -7791,7 +7881,7 @@ const storeCtx: AppState = {
           lines = so.lines.map(l => l.productId === product.id ? { ...l, qty: l.qty + qty, subtotal: Math.round(product.salePrice * (l.qty + qty) * (1 - l.discount / 100)) } : l)
         } else {
           const sub = Math.round(product.salePrice * qty * (1 - discount / 100))
-          lines = [...so.lines, { id: uid(), productId: product.id, productName: product.name, qty, unitPrice: product.salePrice, discount, taxRate: product.taxRate > 0 ? product.taxRate : defaultTaxRate, subtotal: sub, serialIds: [], accountCode: product.saleAccountCode }]
+          lines = [...so.lines, { id: uid(), productId: product.id, productName: product.name, qty, unitPrice: product.salePrice, discount, taxRate: product.taxRate > 0 ? product.taxRate : defaultTaxRate, subtotal: sub, serialIds: [], accountCode: resolveProductAccounts(product).saleAccountCode }]
         }
         const updated = { ...so, lines, ...calcSO(lines) }
         sync(`/api/sale-orders/${orderId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
@@ -9029,7 +9119,7 @@ const storeCtx: AppState = {
       setPurchaseOrders(p => {
         const next = p.map(po => {
           if (po.id !== poId) return po
-          const line: POLine = { id: uid(), productId: product.id, productName: product.name, qty, qtyReceived: 0, unitPrice, taxRate: effectiveTaxRate, subtotal: qty * unitPrice, requiresSerial: catCfg.serialRequired, accountCode: product.costAccountCode }
+          const line: POLine = { id: uid(), productId: product.id, productName: product.name, qty, qtyReceived: 0, unitPrice, taxRate: effectiveTaxRate, subtotal: qty * unitPrice, requiresSerial: catCfg.serialRequired, accountCode: resolveProductAccounts(product).costAccountCode }
           const lines = [...po.lines, line]
           return { ...po, lines, ...calcPO(lines) }
         })
@@ -11823,12 +11913,33 @@ const storeCtx: AppState = {
         id: uid(), ref: docSeq('INV'), type: 'customer_invoice', status: 'posted',
         partnerId: customerId ?? 'walk-in', partnerName: customerName ?? 'Walk-in Customer',
         date: now(), dueDate: now(),
-        lines: normalizedLines.map(l => ({ id: uid(), description: `${l.productName} ×${l.qty}`, qty: l.qty, unitPrice: l.price, taxRate: applyVat ? vatRate : 0, subtotal: l.subtotal })),
+        lines: normalizedLines.map(l => {
+          const product = prodRef.current.find(x => x.id === l.productId)
+          return {
+            id: uid(),
+            description: `${l.productName} ×${l.qty}`,
+            qty: l.qty,
+            unitPrice: l.price,
+            taxRate: applyVat ? vatRate : 0,
+            subtotal: l.subtotal,
+            productId: l.productId,
+            accountCode: product ? resolveProductAccounts(product).saleAccountCode : undefined,
+          }
+        }),
         subtotal: sub, taxTotal: tax, total, amountPaid: total, notes: `POS ${order.ref}`,
       }
       setInvoices(p => [posInv, ...p])
       sync('/api/invoices', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(posInv) })
       setPosOrders(p => [order, ...p])
+      const revenueBuckets = aggregateLinesByAccount({
+        lines: posInv.lines,
+        resolveProduct: (productId) => prodRef.current.find(p => p.id === productId),
+        side: 'revenue',
+        accounts: accountRef.current.map(a => ({ code: a.code, name: a.name })),
+      })
+      const revenueLines = revenueBuckets.length
+        ? revenueBuckets.map(b => accountLine(b.account, `POS revenue ${order.ref}`, 0, b.amount))
+        : [accountLine('5000 - Sales Revenue', `POS revenue ${order.ref}`, 0, sub)]
       const posJournal: JournalEntry = {
         id: uid(),
         ref: `JRN/${order.ref}`,
@@ -11842,7 +11953,7 @@ const storeCtx: AppState = {
         lines: [
           accountLine(bankAccountLabel(bankAccountIdForMethod(payment), payment), `POS receipt ${order.ref}`, posInv.total, 0),
           ...(pointsRedeemed > 0 ? [accountLine('5200 - Sales Discounts', `Loyalty redemption ${order.ref}`, pointsRedeemed, 0)] : []),
-          accountLine('5000 - Sales Revenue', `POS revenue ${order.ref}`, 0, sub),
+          ...revenueLines,
           ...(tax > 0 ? [accountLine('3301 - Output VAT Payable', `VAT on ${order.ref}`, 0, tax)] : []),
         ],
         totalDebit: posInv.total + pointsRedeemed,
@@ -11857,9 +11968,10 @@ const storeCtx: AppState = {
     createAdjustment: (productId, productName, type, qty, reason, notes) => {
       if (!canManageInventoryControl(currentUser())) { showToast('Only inventory-controlled roles can request adjustments', 'error'); throw new Error('Unauthorized adjustment request') }
       const prod = prodRef.current.find(x => x.id === productId)
-      const varianceAccountCode = prod?.adjustmentAccountCode || prod?.costAccountCode
-      const writeOffAccountCode = prod?.writeOffAccountCode || prod?.adjustmentAccountCode || prod?.costAccountCode
-      if (prod && type === 'add' && !prod.inventoryAccountCode) {
+      const resolved = prod ? resolveProductAccounts(prod) : null
+      const varianceAccountCode = resolved?.adjustmentAccountCode || resolved?.costAccountCode
+      const writeOffAccountCode = resolved?.writeOffAccountCode || resolved?.adjustmentAccountCode || resolved?.costAccountCode
+      if (prod && type === 'add' && !resolved?.inventoryAccountCode) {
         showToast(`${prod.name} is missing an Inventory Asset account`, 'error')
         throw new Error('Missing inventory asset account')
       }
@@ -11869,7 +11981,7 @@ const storeCtx: AppState = {
       }
       const adj: StockAdjustment = {
         id: uid(), ref: seq('ADJ', 'adj'), productId, productName, type, qty, reason, notes,
-        inventoryAccountCode: prod?.inventoryAccountCode,
+        inventoryAccountCode: resolved?.inventoryAccountCode,
         varianceAccountCode,
         writeOffAccountCode,
         status: 'pending', requestedBy: currentUser()?.name ?? 'Unknown', date: now(),

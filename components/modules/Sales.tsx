@@ -43,6 +43,7 @@ import {
   LOCATIONS,
   SerialNumber,
   docSeq,
+  resolveProductAccounts,
 } from '@/lib/store'
 import {
   Badge,
@@ -744,7 +745,7 @@ function SalesContent() {
         taxRate: Number(l.taxRate) || 0,
         subtotal,
         serialIds: [],
-        accountCode: product.saleAccountCode,
+        accountCode: product ? resolveProductAccounts(product).saleAccountCode : undefined,
       })
     }
     const so = createSaleOrder(newCustomer.id, newCustomer.name, {

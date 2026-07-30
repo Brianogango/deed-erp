@@ -4,7 +4,10 @@ import * as XLSX from 'xlsx'
 import {
   useInventoryStore, Product, LOCATIONS, LocationId, CATEGORY_CONFIG, ALL_CATEGORIES, CategoryId,
   fmtKes, fmtDate, Account, AdjReason, SerialNumber,
+  PRODUCT_KIND_OPTIONS, UOM_OPTIONS, inferProductKind, defaultTrackingForKind, defaultUnitForKind,
+  kindRequiresInventoryAccounts, applyCategoryAccountDefaults, resolveProductAccounts,
 } from '@/lib/store'
+import type { ProductKind } from '@/lib/product-kind'
 import { Badge, Modal, Field, Input, Select, Confirm, PanelHeader, SearchPicker, ModuleSkeleton, ModuleHeader, TabBar } from '@/components/ui'
 import { DataTable, type ColumnDef, type PrimaryFilterConfig } from '@/components/data-table'
 import { PrimaryActionButton, TablePageLayout, OperationalSummary, CompactInfoNotice } from '@/components/erp'
@@ -37,8 +40,11 @@ type ProductImportRow = {
   name: string; sku: string; category: string; barcode: string
   salePrice: number; costPrice: number; taxRate: number
   minStock: number; warrantyMonths: number; description: string
+  productKind?: ProductKind
+  unit?: string
   saleAccountCode?: string; costAccountCode?: string; inventoryAccountCode?: string
   cogsAccountCode?: string; adjustmentAccountCode?: string; writeOffAccountCode?: string
+  priceDifferenceAccountCode?: string
   status: 'new' | 'exists' | 'duplicate' | 'invalid'
   reason?: string
 }
@@ -71,16 +77,30 @@ const INTERNAL_LOCS = (['warehouse', 'shop', 'repair_unit'] as LocationId[]).map
   label: `${LOCATIONS[k].icon} ${LOCATIONS[k].name}`,
 }))
 
-const blankProduct = () => ({
-  name: '', sku: '', barcode: '', category: 'Laptops' as CategoryId,
-  trackingMethod: 'SERIAL' as TrackingMethod,
-  salePrice: '', costPrice: '', taxRate: '16', minStock: '5',
-  invoicePolicy: 'order' as 'order' | 'delivery',
-  description: '', canBeSold: true, canBePurchased: true, image: '📦',
-  isActive: true, warrantyMonths: '12', saleAccountCode: '', costAccountCode: '',
-  inventoryAccountCode: '', cogsAccountCode: '', adjustmentAccountCode: '', writeOffAccountCode: '',
-  parentId: '',
-})
+const blankProduct = () => {
+  const category = 'Laptops' as CategoryId
+  const defaults = applyCategoryAccountDefaults(category, {})
+  const productKind = defaults.productKind
+  const trackingMethod = defaultTrackingForKind(productKind, category)
+  return {
+    name: '', sku: '', barcode: '', category,
+    productKind,
+    trackingMethod,
+    salePrice: '', costPrice: '', taxRate: '16', minStock: '5',
+    unit: defaultUnitForKind(productKind, trackingMethod),
+    invoicePolicy: 'order' as 'order' | 'delivery',
+    description: '', canBeSold: true, canBePurchased: true, image: '📦',
+    isActive: true, warrantyMonths: '12',
+    saleAccountCode: defaults.saleAccountCode || '',
+    costAccountCode: defaults.costAccountCode || '',
+    inventoryAccountCode: defaults.inventoryAccountCode || '',
+    cogsAccountCode: defaults.cogsAccountCode || '',
+    adjustmentAccountCode: defaults.adjustmentAccountCode || '',
+    writeOffAccountCode: defaults.writeOffAccountCode || '',
+    priceDifferenceAccountCode: defaults.priceDifferenceAccountCode || '',
+    parentId: '',
+  }
+}
 
 const normalizeBarcodeSeed = (value: string) => value.replace(/[^A-Z0-9]/gi, '').toUpperCase().slice(0, 8)
 const buildProductSku = (name: string, existing: Product[] = []) => {
@@ -660,8 +680,10 @@ export default function Inventory() {
   const openNew = () => { setForm(blankProduct()); setEditId(null); setDupConfirm(false); setShowAcctMapping(false); setShowForm(true) }
 
   const openEdit = (product: Product) => {
+    const kind = inferProductKind(product)
     setForm({
       name: product.name, sku: product.sku, barcode: product.barcode ?? '', category: product.category,
+      productKind: kind,
       trackingMethod: inferTrackingMethod({
         trackingMethod: product.trackingMethod,
         category: product.category,
@@ -669,41 +691,50 @@ export default function Inventory() {
         unit: product.unit,
       }),
       salePrice: String(product.salePrice), costPrice: String(product.costPrice), taxRate: String(product.taxRate),
-      minStock: String(product.minStock), invoicePolicy: product.invoicePolicy === 'delivery' ? 'delivery' as const : 'order' as const,
+      minStock: String(product.minStock),
+      unit: product.unit || defaultUnitForKind(kind),
+      invoicePolicy: product.invoicePolicy === 'delivery' ? 'delivery' as const : 'order' as const,
       description: product.description ?? '',
       canBeSold: product.canBeSold, canBePurchased: product.canBePurchased, image: product.image ?? '📦',
       isActive: product.isActive, warrantyMonths: String(product.warrantyMonths),
       saleAccountCode: product.saleAccountCode ?? '', costAccountCode: product.costAccountCode ?? '',
       inventoryAccountCode: product.inventoryAccountCode ?? '', cogsAccountCode: product.cogsAccountCode ?? '',
       adjustmentAccountCode: product.adjustmentAccountCode ?? '', writeOffAccountCode: product.writeOffAccountCode ?? '',
+      priceDifferenceAccountCode: product.priceDifferenceAccountCode ?? '',
       parentId: product.parentId ?? '',
     })
     setEditId(product.id)
     setDupConfirm(false)
-    setShowAcctMapping(!!(product.saleAccountCode || product.costAccountCode))
+    setShowAcctMapping(!!(product.saleAccountCode || product.costAccountCode || product.inventoryAccountCode || product.cogsAccountCode))
     setShowForm(true)
   }
 
   const openVariant = (parent: Product) => {
+    const kind = inferProductKind(parent)
     setForm({
       ...blankProduct(),
       name: parent.name,
       category: parent.category,
+      productKind: kind,
       trackingMethod: inferTrackingMethod({
         trackingMethod: parent.trackingMethod,
         category: parent.category,
         requiresSerial: parent.requiresSerial,
         unit: parent.unit,
       }),
+      unit: parent.unit || defaultUnitForKind(kind),
       taxRate: String(parent.taxRate),
       image: parent.image ?? '📦',
       warrantyMonths: String(parent.warrantyMonths),
+      canBeSold: parent.canBeSold,
+      canBePurchased: parent.canBePurchased,
       saleAccountCode: parent.saleAccountCode ?? '',
       costAccountCode: parent.costAccountCode ?? '',
       inventoryAccountCode: parent.inventoryAccountCode ?? '',
       cogsAccountCode: parent.cogsAccountCode ?? '',
       adjustmentAccountCode: parent.adjustmentAccountCode ?? '',
       writeOffAccountCode: parent.writeOffAccountCode ?? '',
+      priceDifferenceAccountCode: parent.priceDifferenceAccountCode ?? '',
       parentId: parent.id,
     })
     setEditId(null)
@@ -734,14 +765,31 @@ export default function Inventory() {
       if (nameConflict) { setDupConfirm(true); return }
     }
 
-    const selectedTracking = inferTrackingMethod({
+    const productKind = inferProductKind({
+      productKind: form.productKind,
       trackingMethod: form.trackingMethod,
+      category: form.category,
+      unit: form.unit,
+    })
+    const selectedTracking = inferTrackingMethod({
+      trackingMethod: form.trackingMethod || defaultTrackingForKind(productKind, form.category),
       category: form.category,
     })
     const productBarcode = barcodeTrimmed
-    const isStockable = isStockTracked(selectedTracking)
-    if (isStockable && !form.inventoryAccountCode) { showToast('Select an Inventory Asset account for stockable products', 'error'); return }
-    if (isStockable && !form.cogsAccountCode) { showToast('Select a COGS account for stockable products', 'error'); return }
+    const needsInventoryAccounts = kindRequiresInventoryAccounts(productKind)
+    const resolved = resolveProductAccounts({
+      ...form,
+      productKind,
+      trackingMethod: selectedTracking,
+    })
+    if (needsInventoryAccounts && !(form.inventoryAccountCode || resolved.inventoryAccountCode)) {
+      showToast('Select an Inventory Asset account for storable products (or set a category default)', 'error')
+      return
+    }
+    if (needsInventoryAccounts && !(form.cogsAccountCode || resolved.cogsAccountCode)) {
+      showToast('Select a COGS account for storable products (or set a category default)', 'error')
+      return
+    }
     const payload = {
       ...form,
       sku: skuTrimmed,
@@ -751,9 +799,19 @@ export default function Inventory() {
       stockQty: 0, minStock: Number(form.minStock) || 0, taxRate: Number(form.taxRate) || 0,
       invoicePolicy: form.invoicePolicy,
       warrantyMonths: Number(form.warrantyMonths) || 0,
+      productKind,
       trackingMethod: selectedTracking,
       requiresSerial: isSerialTracking(selectedTracking),
-      unit: isStockTracked(selectedTracking) ? 'pcs' : 'service',
+      unit: form.unit || defaultUnitForKind(productKind, selectedTracking),
+      canBeSold: !!form.canBeSold,
+      canBePurchased: !!form.canBePurchased,
+      saleAccountCode: form.saleAccountCode || resolved.saleAccountCode,
+      costAccountCode: form.costAccountCode || resolved.costAccountCode,
+      inventoryAccountCode: form.inventoryAccountCode || (needsInventoryAccounts ? resolved.inventoryAccountCode : ''),
+      cogsAccountCode: form.cogsAccountCode || (needsInventoryAccounts ? resolved.cogsAccountCode : ''),
+      adjustmentAccountCode: form.adjustmentAccountCode || resolved.adjustmentAccountCode,
+      writeOffAccountCode: form.writeOffAccountCode || resolved.writeOffAccountCode,
+      priceDifferenceAccountCode: form.priceDifferenceAccountCode || resolved.priceDifferenceAccountCode,
     }
     editId ? updateProduct(editId, payload) : addProduct(payload)
     setDupConfirm(false)
@@ -761,23 +819,25 @@ export default function Inventory() {
   }
 
   const downloadProductTemplate = () => {
-    const headers = ['Name', 'Category', 'Barcode', 'Sale Price', 'Cost Price', 'Tax Rate', 'Min Stock', 'Warranty Months', 'Description', 'Revenue Account', 'Purchase Account', 'Inventory Asset Account', 'COGS Account', 'Adjustment Account', 'Write-off Account']
+    const headers = ['Name', 'Category', 'Product Type', 'Unit', 'Barcode', 'Sale Price', 'Cost Price', 'Tax Rate', 'Min Stock', 'Warranty Months', 'Description', 'Revenue Account', 'Purchase Account', 'Inventory Asset Account', 'COGS Account', 'Adjustment Account', 'Write-off Account', 'Price Difference Account']
     const categories = ALL_CATEGORIES.join(' | ')
     const sampleRows = [
-      ['HP ProBook 450 G9', 'Laptops', '1234567890123', 85000, 72000, 16, 3, 12, 'Intel Core i5, 8GB RAM, 256GB SSD', '5001', '6101', '1200', '6001', '6200', '6205'],
-      ['Dell OptiPlex 3000', 'Desktops', '9876543210987', 75000, 63000, 16, 2, 12, 'Intel Core i3, 4GB RAM, 1TB HDD', '5001', '6101', '1200', '6001', '6200', '6205'],
-      ['Cat6 Ethernet Cable 5m', 'Networking', '', 850, 500, 16, 10, 0, 'Shielded Cat6 patch cable', '5001', '6101', '1200', '6001', '6200', '6205'],
-      ['HP LaserJet Toner CF217A', 'Parts & Components', '', 3500, 2800, 16, 5, 0, 'Compatible black toner', '5001', '6101', '1200', '6001', '6200', '6205'],
-      ['Monthly Support Contract', 'Services', '', 15000, 0, 16, 0, 0, 'Monthly IT support retainer', '5001', '6101', '', '', '', ''],
+      ['HP ProBook 450 G9', 'Laptops', 'storable', 'pcs', '1234567890123', 85000, 72000, 16, 3, 12, 'Intel Core i5, 8GB RAM, 256GB SSD', '5001', '6101', '1200', '6001', '6200', '6205', '6210'],
+      ['Dell OptiPlex 3000', 'Desktops', 'storable', 'pcs', '9876543210987', 75000, 63000, 16, 2, 12, 'Intel Core i3, 4GB RAM, 1TB HDD', '5001', '6101', '1200', '6001', '6200', '6205', '6210'],
+      ['Cat6 Ethernet Cable 5m', 'Networking', 'consumable', 'pcs', '', 850, 500, 16, 10, 0, 'Shielded Cat6 patch cable', '5001', '6101', '', '', '', '', ''],
+      ['HP LaserJet Toner CF217A', 'Parts & Components', 'consumable', 'pcs', '', 3500, 2800, 16, 5, 0, 'Compatible black toner', '5002', '6101', '', '', '', '', ''],
+      ['Monthly Support Contract', 'Services', 'service', 'month', '', 15000, 0, 16, 0, 0, 'Monthly IT support retainer', '5003', '', '', '', '', '', ''],
     ]
     const notes = [
       [`Categories: ${categories}`],
+      ['Product Type: storable | consumable | service'],
       ['Tax Rate: enter 16 for 16% VAT, 0 for exempt'],
       ['Min Stock: low-stock alert threshold (0 = no alert)'],
       ['Warranty Months: 0 for non-warrantied items'],
       ['Barcode: optional product-level lookup code (leave blank if not needed)'],
       ['SKU: no SKU column is needed; the system generates an internal SKU automatically'],
-      ['Account columns: use Chart of Accounts codes; stockable products should include Inventory Asset and COGS accounts'],
+      ['Account columns: optional overrides; blank inherits category defaults then company fallbacks'],
+      ['Storable products should include Inventory Asset and COGS (or rely on category defaults)'],
     ]
     const ws = XLSX.utils.aoa_to_sheet([headers, ...sampleRows, [], ['--- NOTES ---'], ...notes])
     ws['!cols'] = [
@@ -839,6 +899,10 @@ export default function Inventory() {
         return {
           name, sku: sku || buildProductSku(name || `Product ${index + 1}`, products),
           category: col(row, 'Category', 'category') || 'Laptops',
+          productKind: (['storable', 'consumable', 'service'].includes(col(row, 'Product Type', 'productKind', 'product_type').toLowerCase())
+            ? col(row, 'Product Type', 'productKind', 'product_type').toLowerCase()
+            : undefined) as ProductKind | undefined,
+          unit: col(row, 'Unit', 'UoM', 'unit') || undefined,
           barcode,
           salePrice: Number(col(row, 'Sale Price', 'SalePrice', 'salePrice', 'sale_price')) || 0,
           costPrice: Number(col(row, 'Cost Price', 'CostPrice', 'costPrice', 'cost_price')) || 0,
@@ -852,6 +916,7 @@ export default function Inventory() {
           cogsAccountCode: col(row, 'COGS Account', 'cogsAccountCode', 'cogs_account_code'),
           adjustmentAccountCode: col(row, 'Adjustment Account', 'Variance Account', 'adjustmentAccountCode', 'adjustment_account_code'),
           writeOffAccountCode: col(row, 'Write-off Account', 'Write Off Account', 'writeOffAccountCode', 'write_off_account_code'),
+          priceDifferenceAccountCode: col(row, 'Price Difference Account', 'priceDifferenceAccountCode', 'price_difference_account_code'),
           status,
           reason: reasons.join('; ') || undefined,
         }
@@ -868,19 +933,28 @@ export default function Inventory() {
     const newRows = importRows.filter(r => r.status === 'new')
     const productsIncludingImport = [...products]
     newRows.forEach(row => {
-      const trackingMethod = inferTrackingMethod({ category: row.category })
+      const productKind = inferProductKind({
+        productKind: row.productKind,
+        category: row.category,
+      })
+      const trackingMethod = inferTrackingMethod({
+        trackingMethod: defaultTrackingForKind(productKind, row.category),
+        category: row.category,
+      })
       const payload = {
         name: row.name, sku: row.sku, barcode: row.barcode || '',
         category: (ALL_CATEGORIES.includes(row.category as CategoryId) ? row.category : 'Laptops') as CategoryId,
+        productKind,
         salePrice: row.salePrice, costPrice: row.costPrice, taxRate: row.taxRate,
         minStock: row.minStock, warrantyMonths: row.warrantyMonths, description: row.description,
         saleAccountCode: row.saleAccountCode || '', costAccountCode: row.costAccountCode || '',
         inventoryAccountCode: row.inventoryAccountCode || '', cogsAccountCode: row.cogsAccountCode || '',
         adjustmentAccountCode: row.adjustmentAccountCode || '', writeOffAccountCode: row.writeOffAccountCode || '',
+        priceDifferenceAccountCode: row.priceDifferenceAccountCode || '',
         canBeSold: true, canBePurchased: true, image: '📦', isActive: true, stockQty: 0,
         trackingMethod,
         requiresSerial: isSerialTracking(trackingMethod),
-        unit: isStockTracked(trackingMethod) ? 'pcs' : 'service',
+        unit: row.unit || defaultUnitForKind(productKind, trackingMethod),
       }
       productsIncludingImport.push({ ...payload, id: `import-${row.sku}`, createdAt: new Date().toISOString() } as Product)
       addProduct(payload)
@@ -2791,12 +2865,55 @@ export default function Inventory() {
               </div>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <Field label="Product Type" required>
+                <Select
+                  value={form.productKind || inferProductKind(form)}
+                  onChange={(value) => {
+                    const kind = value as ProductKind
+                    const tracking = defaultTrackingForKind(kind, form.category)
+                    setForm((prev: any) => ({
+                      ...prev,
+                      productKind: kind,
+                      trackingMethod: tracking,
+                      unit: defaultUnitForKind(kind, tracking),
+                      ...((kind === 'service')
+                        ? { inventoryAccountCode: '', cogsAccountCode: '', minStock: '0' }
+                        : {}),
+                    }))
+                  }}
+                  options={PRODUCT_KIND_OPTIONS.map(o => ({ value: o.value, label: o.label }))}
+                />
+              </Field>
               <Field label="Category">
                 <Select
                   value={form.category}
                   onChange={(value) => {
-                    setF('category')(value)
-                    setF('trackingMethod')(inferTrackingMethod({ category: value }))
+                    const defaults = applyCategoryAccountDefaults(value, {
+                      productKind: form.productKind,
+                      saleAccountCode: '',
+                      costAccountCode: '',
+                      inventoryAccountCode: '',
+                      cogsAccountCode: '',
+                      adjustmentAccountCode: '',
+                      writeOffAccountCode: '',
+                      priceDifferenceAccountCode: '',
+                    })
+                    const kind = defaults.productKind
+                    const tracking = defaultTrackingForKind(kind, value)
+                    setForm((prev: any) => ({
+                      ...prev,
+                      category: value,
+                      productKind: kind,
+                      trackingMethod: tracking,
+                      unit: defaultUnitForKind(kind, tracking),
+                      saleAccountCode: defaults.saleAccountCode,
+                      costAccountCode: defaults.costAccountCode,
+                      inventoryAccountCode: kind === 'storable' ? defaults.inventoryAccountCode : '',
+                      cogsAccountCode: kind === 'storable' ? defaults.cogsAccountCode : '',
+                      adjustmentAccountCode: defaults.adjustmentAccountCode,
+                      writeOffAccountCode: defaults.writeOffAccountCode,
+                      priceDifferenceAccountCode: defaults.priceDifferenceAccountCode,
+                    }))
                   }}
                   options={ALL_CATEGORIES.map(c => ({ value: c, label: c }))}
                 />
@@ -2804,7 +2921,11 @@ export default function Inventory() {
               <Field label="Tracking Method">
                 <Select
                   value={form.trackingMethod}
-                  onChange={setF('trackingMethod')}
+                  onChange={(value) => {
+                    setF('trackingMethod')(value)
+                    if (value === 'NONE') setF('productKind')('service')
+                    else if (form.productKind === 'service') setF('productKind')('storable')
+                  }}
                   options={[
                     { value: 'NONE', label: 'NONE (non-stock/service)' },
                     { value: 'QUANTITY', label: 'QUANTITY (bulk qty)' },
@@ -2813,12 +2934,34 @@ export default function Inventory() {
                   ]}
                 />
               </Field>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <Field label="Unit of Measure">
+                <Select
+                  value={form.unit || 'pcs'}
+                  onChange={setF('unit')}
+                  options={UOM_OPTIONS.map(o => ({ value: o.value, label: o.label }))}
+                />
+              </Field>
               <Field label="Barcode">
                 <div className="flex gap-2">
                   <Input value={form.barcode} onChange={setF('barcode')} placeholder="Optional product barcode" />
                   <button type="button" className="btn-secondary px-3 text-[11px] whitespace-nowrap" onClick={() => setF('barcode')(buildProductBarcode(form.sku || form.name, form.name, products, editId || undefined))}>Generate</button>
                 </div>
               </Field>
+              <Field label="Min Stock">
+                <Input type="number" value={form.minStock} onChange={setF('minStock')} disabled={form.productKind === 'service'} />
+              </Field>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+              <label className="flex items-center gap-2 text-[12px] font-semibold text-text-2 cursor-pointer">
+                <input type="checkbox" checked={!!form.canBeSold} onChange={e => setF('canBeSold')(e.target.checked)} />
+                Can be Sold
+              </label>
+              <label className="flex items-center gap-2 text-[12px] font-semibold text-text-2 cursor-pointer">
+                <input type="checkbox" checked={!!form.canBePurchased} onChange={e => setF('canBePurchased')(e.target.checked)} />
+                Can be Purchased
+              </label>
             </div>
             {(form.barcode || form.name) && (
               <div className="rounded-xl border border-border-lt bg-white p-3 flex flex-col sm:flex-row sm:items-center gap-3">
@@ -2829,11 +2972,10 @@ export default function Inventory() {
                 {form.barcode ? <Barcode value={form.barcode} width={1.2} height={42} /> : null}
               </div>
             )}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
               <Field label="Sale Price"><Input type="number" value={form.salePrice} onChange={setF('salePrice')} /></Field>
               <Field label="Cost Price"><Input type="number" value={form.costPrice} onChange={setF('costPrice')} /></Field>
               <Field label="Tax Rate (%)"><Input type="number" value={form.taxRate} onChange={setF('taxRate')} /></Field>
-              <Field label="Min Stock"><Input type="number" value={form.minStock} onChange={setF('minStock')} /></Field>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <Field label="Warranty (Months)"><Input type="number" value={form.warrantyMonths} onChange={setF('warrantyMonths')} /></Field>
@@ -2864,6 +3006,10 @@ export default function Inventory() {
               </button>
               {showAcctMapping && (
                 <div className="px-4 pb-4 pt-3" style={{ background: '#F8FBFF' }}>
+                  <p className="text-[10px] text-text-3 mb-3">
+                    Empty fields inherit the <strong>{form.category}</strong> category defaults, then company fallbacks.
+                    Only storable products require Inventory Asset and COGS.
+                  </p>
                   {accounts.length === 0 ? (
                     <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
                       No accounts found. Open the <strong>Accounting</strong> module to set up your Chart of Accounts first.
@@ -2874,63 +3020,70 @@ export default function Inventory() {
                         <Select
                           value={form.saleAccountCode}
                           onChange={v => setF('saleAccountCode')(v)}
-                          options={[{ value: '', label: '— None —' }, ...acctOpt(revenueAccounts)]}
+                          options={[{ value: '', label: '— Category / company default —' }, ...acctOpt(revenueAccounts)]}
                         />
                       </Field>
-                      <Field label="Purchase / Cost Account">
-                        <Select
-                          value={form.costAccountCode}
-                          onChange={v => setF('costAccountCode')(v)}
-                          options={[{ value: '', label: '— None —' }, ...acctOpt(costAccounts)]}
-                        />
-                      </Field>
-                      <Field label="Inventory Asset Account">
-                        <Select
-                          value={form.inventoryAccountCode}
-                          onChange={v => setF('inventoryAccountCode')(v)}
-                          options={[{ value: '', label: '— Required for stockable products —' }, ...acctOpt(assetAccounts)]}
-                        />
-                      </Field>
-                      <Field label="COGS Account">
-                        <Select
-                          value={form.cogsAccountCode}
-                          onChange={v => setF('cogsAccountCode')(v)}
-                          options={[{ value: '', label: '— Required for stockable products —' }, ...acctOpt(inventoryExpenseAccounts)]}
-                        />
-                      </Field>
-                      <Field label="Adjustment / Variance Account">
-                        <Select
-                          value={form.adjustmentAccountCode}
-                          onChange={v => setF('adjustmentAccountCode')(v)}
-                          options={[{ value: '', label: '— Optional fallback —' }, ...acctOpt(inventoryExpenseAccounts)]}
-                        />
-                      </Field>
-                      <Field label="Write-off / Damage Account">
-                        <Select
-                          value={form.writeOffAccountCode}
-                          onChange={v => setF('writeOffAccountCode')(v)}
-                          options={[{ value: '', label: '— Optional fallback —' }, ...acctOpt(inventoryExpenseAccounts)]}
-                        />
-                      </Field>
+                      {(form.canBePurchased || form.productKind !== 'service') && (
+                        <Field label="Purchase / Cost Account">
+                          <Select
+                            value={form.costAccountCode}
+                            onChange={v => setF('costAccountCode')(v)}
+                            options={[{ value: '', label: '— Category / company default —' }, ...acctOpt(costAccounts)]}
+                          />
+                        </Field>
+                      )}
+                      {kindRequiresInventoryAccounts(form.productKind || 'storable') && (
+                        <>
+                          <Field label="Inventory Asset Account">
+                            <Select
+                              value={form.inventoryAccountCode}
+                              onChange={v => setF('inventoryAccountCode')(v)}
+                              options={[{ value: '', label: '— Required (category default OK) —' }, ...acctOpt(assetAccounts)]}
+                            />
+                          </Field>
+                          <Field label="COGS Account">
+                            <Select
+                              value={form.cogsAccountCode}
+                              onChange={v => setF('cogsAccountCode')(v)}
+                              options={[{ value: '', label: '— Required (category default OK) —' }, ...acctOpt(inventoryExpenseAccounts)]}
+                            />
+                          </Field>
+                          <Field label="Adjustment / Variance Account">
+                            <Select
+                              value={form.adjustmentAccountCode}
+                              onChange={v => setF('adjustmentAccountCode')(v)}
+                              options={[{ value: '', label: '— Optional fallback —' }, ...acctOpt(inventoryExpenseAccounts)]}
+                            />
+                          </Field>
+                          <Field label="Write-off / Damage Account">
+                            <Select
+                              value={form.writeOffAccountCode}
+                              onChange={v => setF('writeOffAccountCode')(v)}
+                              options={[{ value: '', label: '— Optional fallback —' }, ...acctOpt(inventoryExpenseAccounts)]}
+                            />
+                          </Field>
+                          <Field label="Price Difference Account">
+                            <Select
+                              value={form.priceDifferenceAccountCode}
+                              onChange={v => setF('priceDifferenceAccountCode')(v)}
+                              options={[{ value: '', label: '— PO vs bill variance —' }, ...acctOpt(inventoryExpenseAccounts)]}
+                            />
+                          </Field>
+                        </>
+                      )}
+                      {form.productKind === 'consumable' && (
+                        <Field label="Price Difference Account">
+                          <Select
+                            value={form.priceDifferenceAccountCode}
+                            onChange={v => setF('priceDifferenceAccountCode')(v)}
+                            options={[{ value: '', label: '— PO vs bill variance —' }, ...acctOpt(inventoryExpenseAccounts)]}
+                          />
+                        </Field>
+                      )}
                     </div>
                   )}
                 </div>
               )}
-            </div>
-
-            <div className="p-4 bg-gray-50 border border-gray-100 rounded-xl text-xs space-y-1">
-              <div className="flex justify-between">
-                <span className="text-text-3">Product Type:</span>
-                <span className="text-text-1 font-bold">
-                  {isStockTracked(inferTrackingMethod({ trackingMethod: form.trackingMethod, category: form.category })) ? 'Stockable' : 'Service / Non-stock'}
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-text-3">Tracking Type:</span>
-                <span className="text-text-1 font-bold">{inferTrackingMethod({ trackingMethod: form.trackingMethod, category: form.category })}</span>
-              </div>
-              <div className="mt-2 pt-2 border-t border-gray-200 text-amber-700 font-medium">Creating a product does not add stock. Stock comes later from purchase receipt or opening stock only.</div>
-              <div className="text-text-3">Stockable products require Inventory Asset and COGS accounts before saving so sales, purchases, and stock adjustments can post cleanly.</div>
             </div>
 
             <div className="flex gap-3 justify-end mt-2">
