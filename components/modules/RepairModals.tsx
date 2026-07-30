@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react'
 import { useRepairStore, RepairOrder, OUTSOURCE_SERVICE_TYPES } from '@/lib/store'
+import { repairOutsourceReadiness } from '@/lib/repair-outsource'
 import { Modal, Field, Input, Select, Textarea } from '@/components/ui'
 import { Fa } from '@/components/icons'
 import {
@@ -1369,6 +1370,8 @@ export function OutsourceRepairModal({ repair, onClose }: { repair: RepairOrder;
   function handleSubmit() {
     if (!form.vendorId) { showToast('Select an outsource vendor', 'error'); return }
     if (!form.issueDescription.trim()) { showToast('Describe the issue to be outsourced', 'error'); return }
+    const readiness = repairOutsourceReadiness(repair)
+    if (!readiness.ok) { showToast(readiness.reason, 'error'); return }
     setLoading(true)
     addOutsourceJob({
       vendorId: form.vendorId,
@@ -1392,6 +1395,9 @@ export function OutsourceRepairModal({ repair, onClose }: { repair: RepairOrder;
           <p className="text-[10px] font-black text-violet-600 uppercase tracking-wide mb-1">Staff Only — Not Visible to Client</p>
           <p className="text-[11px] text-[var(--text-2)] leading-relaxed">
             This will log the job with an external vendor and lock the repair at In Repair until the device is marked returned. Directors and the technical lead will be notified automatically.
+          </p>
+          <p className="text-[11px] text-[var(--text-3)] leading-relaxed mt-2">
+            Requires an assigned technician and a logged diagnosis before send-out.
           </p>
         </div>
 

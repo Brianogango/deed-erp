@@ -2,6 +2,7 @@
 import { useState, useEffect, Suspense } from 'react'
 import { useSearchParams, useRouter, usePathname } from 'next/navigation'
 import { useFinanceStore, fmtDate, fmtKes, OutsourceVendor, OutsourceJob, OUTSOURCE_SERVICE_TYPES, OutsourceServiceType } from '@/lib/store'
+import { repairOutsourceReadiness } from '@/lib/repair-outsource'
 import { ModuleSkeleton, useMounted, InfoRow, ModuleHeader, TabBar, SearchPicker, Modal } from '@/components/ui'
 import { PrimaryActionButton, StatusBadge } from '@/components/erp'
 import { DataTable, DetailsDrawer, type ColumnDef, type DrawerTab } from '@/components/data-table'
@@ -133,19 +134,22 @@ function OutsourceContent() {
   const [vendorSearch, setVendorSearch] = useState('')
   const [vendorModalFromJob, setVendorModalFromJob] = useState(false)
 
-  // Only open / in-progress repairs are sensible to send out
+  // Only open / in-progress repairs that are assigned + diagnosed may be linked
   const pickableRepairs = repairs.filter(r =>
-    !['delivered', 'cancelled'].includes(r.status)
+    !['delivered', 'cancelled', 'closed', 'declined', 'unrepairable', 'returned', 'ready', 'verified_released', 'collected'].includes(r.status)
+    && repairOutsourceReadiness(r).ok
   )
   function selectRepair(repairId: string) {
     const r = repairs.find(x => x.id === repairId)
     if (!r) return
+    const readiness = repairOutsourceReadiness(r)
+    if (!readiness.ok) { showToast(readiness.reason, 'error'); return }
     setJobForm(f => ({
       ...f,
       repairOrderId:     r.id,
       deviceDescription: `${r.productName}${r.serialNumber ? ` – SN ${r.serialNumber}` : ''} (${r.customerName})`,
       serial:            r.serialNumber ?? '',
-      issueDescription:  r.issueDescription,
+      issueDescription:  r.issueDescription || r.diagnosis?.faultDescription || '',
     }))
     setRepairSearch(`${r.ref} · ${r.productName} (${r.customerName})`)
   }
@@ -230,6 +234,12 @@ function OutsourceContent() {
     if (!jobForm.vendorId) { showToast('Select a vendor', 'error'); return }
     if (!jobForm.deviceDescription.trim()) { showToast('Enter device description', 'error'); return }
     if (!jobForm.issueDescription.trim()) { showToast('Describe the issue', 'error'); return }
+    if (jobForm.repairOrderId) {
+      const linked = repairs.find(r => r.id === jobForm.repairOrderId)
+      if (!linked) { showToast('Linked repair was not found', 'error'); return }
+      const readiness = repairOutsourceReadiness(linked)
+      if (!readiness.ok) { showToast(readiness.reason, 'error'); return }
+    }
     const vendor = outsourceVendors.find(v => v.id === jobForm.vendorId)!
     addOutsourceJob({
       vendorId: jobForm.vendorId,
