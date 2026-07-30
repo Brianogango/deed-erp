@@ -439,6 +439,7 @@ function SalesContent() {
       salesperson: so.salespersonName ?? so.createdByName,
       customerName: so.customerName,
       customerAddress: so.invoiceAddress || [contact?.address, contact?.city, contact?.country].filter(Boolean).join(', ') || undefined,
+      customerCountry: contact?.country || 'Kenya',
       customerTaxId: contact?.vatNumber || undefined,
       lines: so.lines.map(l => ({
         lineType: l.lineType,
