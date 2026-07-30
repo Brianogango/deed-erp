@@ -24,6 +24,7 @@ import { SecondaryActionMenu, StatusBadge } from '@/components/erp'
 import { OutboundReleasePanel, OrcStatusBadge } from '../OutboundReleasePanel'
 import { normalizeClientRole } from '@/lib/auth/access'
 import { readGuardedImageAsDataUrl } from '@/lib/client-image-guard'
+import { repairOutsourceReadiness } from '@/lib/repair-outsource'
 
 const STATUS_BADGE_CLS: Record<string, string> = {
   pending_verification: 'bg-amber-50 text-amber-800 border-amber-200',
@@ -180,7 +181,9 @@ export default function RepairDetailView() {
   const TERMINAL    = ['delivered','closed','cancelled','declined','unrepairable','returned']
   const canCancel   = isDirector && !TERMINAL.includes(r.status)
   const canDelete   = isDirector
-  const canOutsource          = (currentUser?.role === 'technical_lead' || isDirector) && !TERMINAL.includes(r.status) && !pendingOutsourceJob
+  const hasDiagnosis = !!(r.diagnosis?.findings || r.diagnosis?.faultDescription)
+  const outsourceReady = repairOutsourceReadiness(r).ok
+  const canOutsource          = (currentUser?.role === 'technical_lead' || isDirector) && !TERMINAL.includes(r.status) && !pendingOutsourceJob && outsourceReady
   const canMoveBack           = ['technical_lead', 'director'].includes(currentRole) && !TERMINAL.includes(r.status) && r.status !== 'pending_verification' && !pendingOutsourceJob
   const canScheduleDelivery   = isDeliveryManager && ['ready', 'invoiced'].includes(r.status) && !pendingOutsourceJob
   const canMarkCollected      = isDeliveryManager && ['ready', 'invoiced', 'verified_released'].includes(r.status) && !pendingOutsourceJob
@@ -217,7 +220,6 @@ export default function RepairDetailView() {
   const linkedInvoice      = invoices.find(i => i.id === (r.invoiceId ?? (r as any).linkedInvoiceId))
   const linkedOutsourceJob = pendingOutsourceJob ?? outsourceJobs.find(j => j.repairOrderId === r.id)
 
-  const hasDiagnosis = !!(r.diagnosis?.findings || r.diagnosis?.faultDescription)
   const hasProc      = (r.procurementRequests?.length ?? 0) > 0
   const hasPartsUsed = (r.partsUsed?.length ?? 0) > 0
 

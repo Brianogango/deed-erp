@@ -47,6 +47,7 @@ import {
   paymentJournalRef,
   DEFAULT_ADMIN_OFFICER_CUSTOMER_INVOICE_LIMIT_KES,
 } from '@/lib/finance-controls'
+import { repairOutsourceReadiness } from '@/lib/repair-outsource'
 
 export type ModuleId = AuthModuleId
 
@@ -5765,13 +5766,22 @@ const storeCtx: AppState = {
       if (!user) { showToast('Please log in to continue', 'error'); return null }
       const linkedRepair = j.repairOrderId ? repairsRef.current.find(r => r.id === j.repairOrderId) : undefined
       if (j.repairOrderId) {
+        if (!linkedRepair) {
+          showToast('Linked repair was not found', 'error')
+          return null
+        }
         const existing = getActiveOutsourceJob(j.repairOrderId)
         if (existing) {
           showToast(`Repair is already outsourced via ${existing.ref}. Mark it returned before sending out again.`, 'error')
           return null
         }
-        if (linkedRepair && ['ready', 'verified_released', 'collected', 'closed', 'cancelled', 'declined', 'unrepairable', 'returned'].includes(linkedRepair.status)) {
+        if (['ready', 'verified_released', 'collected', 'closed', 'cancelled', 'declined', 'unrepairable', 'returned'].includes(linkedRepair.status)) {
           showToast('This repair is already closed or cannot be outsourced at this stage', 'error')
+          return null
+        }
+        const readiness = repairOutsourceReadiness(linkedRepair)
+        if (!readiness.ok) {
+          showToast(readiness.reason, 'error')
           return null
         }
       }
