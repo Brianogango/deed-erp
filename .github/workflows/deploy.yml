@@ -122,6 +122,7 @@ jobs:
           script: |
             set -euo pipefail
             cd /var/www/deed-erp
-            # Ensure inventory foundation columns (tracking_method) before seed.
-            node scripts/run-safe-inventory-foundation.mjs || true
+            chmod +x scripts/apply-sql-as-postgres.sh
+            # Table owner is postgres; app role cannot ALTER products.
+            scripts/apply-sql-as-postgres.sh database/migrations/20260625_inventory_foundation_safe.sql
             node scripts/seed-products-final-b974.mjs
