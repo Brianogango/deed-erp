@@ -1174,6 +1174,26 @@ export default function Inventory() {
             </PrimaryActionButton>
           ) : undefined
         }
+        overflowActions={
+          canEditStock && (tab === 'product_master' || tab === 'product_catalog') ? (
+            <div className="flex items-center gap-2 flex-wrap justify-end">
+              <button
+                type="button"
+                className="btn-secondary text-[11px] px-3 py-2"
+                onClick={downloadProductTemplate}
+              >
+                Download template
+              </button>
+              <button
+                type="button"
+                className="btn-secondary text-[11px] px-3 py-2"
+                onClick={() => productImportRef.current?.click()}
+              >
+                Bulk upload
+              </button>
+            </div>
+          ) : undefined
+        }
       />
 
       {/* KPI strip removed — stock health lives on the central dashboard */}
@@ -1358,6 +1378,9 @@ export default function Inventory() {
             orphanedVariantIds={orphanedVariantIds}
             onEdit={product => openEdit(product)}
             onCreateVariant={product => openVariant(product)}
+            onDownloadTemplate={downloadProductTemplate}
+            onImportProducts={() => productImportRef.current?.click()}
+            canImportProducts={canEditStock}
           />
         </div>
       )}
@@ -1473,6 +1496,8 @@ export default function Inventory() {
                     exportFilename="inventory-catalog"
                     perPage={20}
                     overflowActions={[
+                      { id: 'product-template', label: 'Download product template', onSelect: downloadProductTemplate },
+                      { id: 'product-import', label: 'Import products (bulk)', onSelect: () => productImportRef.current?.click(), disabled: !canEditStock },
                       { id: 'price-template', label: 'Download price template', onSelect: downloadPriceUpdateTemplate },
                       { id: 'price-import', label: 'Import prices', onSelect: () => priceImportRef.current?.click(), disabled: !canUpdatePrice },
                     ]}
@@ -2805,6 +2830,26 @@ export default function Inventory() {
         return (
         <Modal title={editId ? 'Edit Product Master' : form.parentId ? 'Create Product Variant' : 'Create New Product'} onClose={() => { setShowForm(false); setDupConfirm(false) }} width={640}>
           <div className="flex flex-col gap-4">
+
+            {!editId && !form.parentId && canEditStock && (
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 px-3 py-2.5 rounded-xl border border-sky-100 bg-sky-50/80">
+                <p className="text-[11px] text-sky-900">
+                  Creating many products? Download the Excel template and bulk upload instead.
+                </p>
+                <div className="flex gap-2 shrink-0">
+                  <button type="button" className="btn-secondary text-[10px] px-2.5 py-1" onClick={downloadProductTemplate}>
+                    Download template
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-primary text-[10px] px-2.5 py-1"
+                    onClick={() => { setShowForm(false); productImportRef.current?.click() }}
+                  >
+                    Bulk upload
+                  </button>
+                </div>
+              </div>
+            )}
 
             {/* Variant banner */}
             {parentProduct && (
