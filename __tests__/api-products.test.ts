@@ -108,6 +108,25 @@ describe('POST /api/products', () => {
       }),
     }))
   })
+
+  it('returns a clear error when products.tracking_method is missing', async () => {
+    mockPrisma.product.create.mockRejectedValueOnce({
+      code: 'P2022',
+      meta: { column: 'tracking_method' },
+      message: 'The column `tracking_method` does not exist in the current database.',
+    })
+    const res = await POST_ONE(postReq('http://localhost/api/products', {
+      name: 'NEC VersaPro',
+      category: 'Laptops',
+      salePrice: 14000,
+      costPrice: 0,
+      trackingMethod: 'SERIAL',
+    }))
+    expect(res.status).toBe(503)
+    const body = await res.json()
+    expect(body.error).toMatch(/schema is out of date/i)
+    expect(body.error).toMatch(/tracking_method/i)
+  })
 })
 
 describe('POST /api/products/bulk', () => {
@@ -145,5 +164,24 @@ describe('POST /api/products/bulk', () => {
     expect(body.failed).toBe(0)
     expect(body.products).toHaveLength(1)
     expect(body.skippedRows[0].reason).toMatch(/already used/i)
+  })
+
+  it('reports schema drift on every row when tracking_method is missing', async () => {
+    mockPrisma.product.create.mockRejectedValue({
+      code: 'P2022',
+      meta: { column: 'tracking_method' },
+      message: 'The column `tracking_method` does not exist in the current database.',
+    })
+    const res = await POST_BULK(postReq('http://localhost/api/products/bulk', {
+      products: [
+        { name: 'Adapter A', category: 'Accessories', salePrice: 0, costPrice: 0 },
+        { name: 'Adapter B', category: 'Accessories', salePrice: 0, costPrice: 0 },
+      ],
+    }))
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.created).toBe(0)
+    expect(body.failed).toBe(2)
+    expect(body.failedRows[0].reason).toMatch(/tracking_method/i)
   })
 })

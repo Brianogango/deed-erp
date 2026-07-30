@@ -47,6 +47,22 @@ export function uniqueTargetLabel(meta: unknown): string {
   return 'product identity'
 }
 
+/** Map driver/Prisma schema drift into an actionable publish error (not a generic 500). */
+export function schemaDriftMessage(err: unknown): string | null {
+  const anyErr = err as { code?: string; meta?: { column?: string }; message?: string } | null
+  const message = String(anyErr?.message || '')
+  const column = String(anyErr?.meta?.column || '')
+  const missingColumn =
+    anyErr?.code === 'P2022' ||
+    /column ["'].*["'] of relation ["']products["'] does not exist/i.test(message) ||
+    /column .* does not exist/i.test(message)
+  if (!missingColumn) return null
+  const hint = /tracking_method/i.test(`${column} ${message}`)
+    ? ' Missing products.tracking_method — run scripts/apply-sql-as-postgres.sh database/migrations/20260625_inventory_foundation_safe.sql on the server.'
+    : ''
+  return `Database product schema is out of date.${hint}`.trim()
+}
+
 export function duplicateFieldLabel(
   duplicate: { name: string; sku: string; barcode: string | null },
   requestedSku: string,
@@ -87,6 +103,8 @@ export async function publishProduct(validated: ValidatedProductInput): Promise<
 
   const trackingMethod = resolveTrackingMethod(validated.trackingMethod, validated.productKind)
   const trackStock = validated.productKind === 'service' ? false : validated.trackStock
+  // Client/Excel fields (salePrice, minStock, productKind, unit) map onto Prisma columns.
+  // salePrice → sellingPrice, minStock → reorderLevel; kind/unit live in specs JSON.
   const data: Record<string, unknown> = {
     name: validated.name,
     sku: requestedSku || await buildUniqueSku(validated.name),
@@ -99,6 +117,11 @@ export async function publishProduct(validated: ValidatedProductInput): Promise<
     trackingMethod,
     isActive: validated.isActive,
     invoicePolicy: validated.invoicePolicy || 'order',
+    specs: {
+      productKind: validated.productKind || null,
+      unit: validated.unit || null,
+      taxRatePct: validated.taxRate ?? 16,
+    },
   }
 
   const categoryId = await resolveCategoryId(validated.category)
@@ -108,6 +131,9 @@ export async function publishProduct(validated: ValidatedProductInput): Promise<
     const product = await prisma.product.create({ data: data as any })
     return { status: 'created', product }
   } catch (err: any) {
+    const drift = schemaDriftMessage(err)
+    if (drift) return { status: 'error', message: drift }
+
     if (err?.code === 'P2002') {
       // Re-check — another request may have won the race.
       const again = await findProductDuplicate(validated.name, requestedSku, barcode)
@@ -124,6 +150,8 @@ export async function publishProduct(validated: ValidatedProductInput): Promise<
           const product = await prisma.product.create({ data: data as any })
           return { status: 'created', product }
         } catch (retryErr: any) {
+          const retryDrift = schemaDriftMessage(retryErr)
+          if (retryDrift) return { status: 'error', message: retryDrift }
           if (retryErr?.code === 'P2002') {
             return { status: 'error', message: `${uniqueTargetLabel(retryErr.meta)} is already in use` }
           }

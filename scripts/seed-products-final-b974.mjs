@@ -87,39 +87,75 @@ if (!Array.isArray(products) || products.length === 0) {
 const pool = new Pool({ connectionString: connectionString.trim(), ssl: false });
 const client = await pool.connect();
 
+async function productColumnExists(columnName) {
+  const { rows } = await client.query(
+    `SELECT 1
+       FROM information_schema.columns
+      WHERE table_schema = 'public'
+        AND table_name = 'products'
+        AND column_name = $1
+      LIMIT 1`,
+    [columnName]
+  );
+  return rows.length > 0;
+}
+
 async function ensureTrackingMethodColumn() {
-  await client.query(`
-    DO $$
-    BEGIN
-      IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'tracking_method') THEN
-        CREATE TYPE tracking_method AS ENUM ('NONE', 'QUANTITY', 'BATCH', 'SERIAL');
-      END IF;
-    END
-    $$;
-  `);
-  await client.query(`
-    ALTER TABLE products
-      ADD COLUMN IF NOT EXISTS tracking_method tracking_method
-  `);
-  await client.query(`
-    UPDATE products
-    SET tracking_method = CASE
-      WHEN track_stock IS FALSE THEN 'NONE'::tracking_method
-      ELSE COALESCE(tracking_method, 'QUANTITY'::tracking_method)
-    END
-    WHERE tracking_method IS NULL
-  `);
-  await client.query(`
-    ALTER TABLE products
-      ALTER COLUMN tracking_method SET DEFAULT 'QUANTITY'::tracking_method
-  `);
+  if (await productColumnExists("tracking_method")) {
+    console.log("products.tracking_method already present");
+    return true;
+  }
+
+  try {
+    await client.query(`
+      DO $$
+      BEGIN
+        IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'tracking_method') THEN
+          CREATE TYPE tracking_method AS ENUM ('NONE', 'QUANTITY', 'BATCH', 'SERIAL');
+        END IF;
+      END
+      $$;
+    `);
+    await client.query(`
+      ALTER TABLE products
+        ADD COLUMN IF NOT EXISTS tracking_method tracking_method
+    `);
+    await client.query(`
+      UPDATE products
+      SET tracking_method = CASE
+        WHEN track_stock IS FALSE THEN 'NONE'::tracking_method
+        ELSE COALESCE(tracking_method, 'QUANTITY'::tracking_method)
+      END
+      WHERE tracking_method IS NULL
+    `);
+    await client.query(`
+      ALTER TABLE products
+        ALTER COLUMN tracking_method SET DEFAULT 'QUANTITY'::tracking_method
+    `);
+    return true;
+  } catch (error) {
+    if (error && typeof error === "object" && error.code === "42501") {
+      console.warn(
+        "App DB role cannot ALTER products. Run scripts/apply-sql-as-postgres.sh database/migrations/20260625_inventory_foundation_safe.sql first."
+      );
+      return false;
+    }
+    throw error;
+  }
 }
 
 try {
-  // Production may lag Prisma schema; ensure SERIAL/QUANTITY column exists first.
-  if (!DRY) {
+  let hasTrackingMethod = await productColumnExists("tracking_method");
+  if (!DRY && !hasTrackingMethod) {
     console.log("Ensuring products.tracking_method column…");
-    await ensureTrackingMethodColumn();
+    hasTrackingMethod = await ensureTrackingMethodColumn();
+  }
+  if (!hasTrackingMethod) {
+    console.error(
+      "products.tracking_method is required for SERIAL laptop seeding but is missing. Aborting."
+    );
+    process.exitCode = 1;
+    process.exit(1);
   }
 
   await client.query("BEGIN");

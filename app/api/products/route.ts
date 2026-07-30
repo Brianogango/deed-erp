@@ -59,7 +59,11 @@ export async function POST(request: Request) {
       )
     }
     if (result.status === 'error') {
-      return NextResponse.json({ error: result.message }, { status: 409 })
+      const schemaIssue = /schema is out of date|tracking_method/i.test(result.message)
+      return NextResponse.json(
+        { error: result.message },
+        { status: schemaIssue ? 503 : 409 },
+      )
     }
 
     return NextResponse.json(toClientProduct(result.product), { status: 201 })

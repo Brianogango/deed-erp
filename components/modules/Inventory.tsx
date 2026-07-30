@@ -1013,11 +1013,13 @@ export default function Inventory() {
 
       const result = await publishProductBulk(payloads)
       const previewSkipped = importRows.length - newRows.length
+      const firstFail = result.failedRows?.[0]?.reason
       const parts = [
         `Published ${result.created} product${result.created !== 1 ? 's' : ''}`,
         result.skipped ? `${result.skipped} already existed` : '',
         result.failed ? `${result.failed} failed` : '',
         previewSkipped ? `${previewSkipped} skipped in preview` : '',
+        result.failed && firstFail ? `Reason: ${firstFail}` : '',
       ].filter(Boolean)
       showToast(parts.join('; '), result.failed ? 'error' : result.created ? 'success' : 'info')
       setShowImportModal(false)
