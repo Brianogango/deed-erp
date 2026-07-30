@@ -42,6 +42,8 @@ export interface CatalogApiRow {
   costPrice?: number | string | null
   reorderLevel?: number | null
   isActive?: boolean
+  trackingMethod?: 'NONE' | 'QUANTITY' | 'BATCH' | 'SERIAL' | string | null
+  invoicePolicy?: 'order' | 'delivery' | string | null
   category?: { name?: string | null } | null
 }
 
@@ -53,6 +55,30 @@ const CATEGORY_EMOJI: Record<string, string> = {
 
 const normName = (s: unknown) => String(s ?? '').trim().replace(/\s+/g, ' ').toLowerCase()
 
+/** Union store writes so a stale shorter list cannot drop catalog products. */
+export function mergeProductsStoreWrite(current: unknown, incoming: unknown): unknown {
+  if (!Array.isArray(incoming)) return current
+  if (!Array.isArray(current) || current.length === 0) return incoming
+  const byId = new Map<string, any>()
+  for (const row of current) {
+    if (row && typeof row === 'object' && (row as any).id) byId.set(String((row as any).id), row)
+  }
+  const seen = new Set<string>()
+  const merged: any[] = []
+  for (const row of incoming) {
+    if (!row || typeof row !== 'object' || !(row as any).id) continue
+    const id = String((row as any).id)
+    seen.add(id)
+    merged.push({ ...(byId.get(id) ?? {}), ...(row as any) })
+  }
+  for (const row of current) {
+    if (!row || typeof row !== 'object' || !(row as any).id) continue
+    const id = String((row as any).id)
+    if (!seen.has(id)) merged.push(row)
+  }
+  return merged
+}
+
 export function mergeCatalogProducts<P extends ClientCatalogProduct>(
   prev: P[],
   rows: CatalogApiRow[],
@@ -63,6 +89,9 @@ export function mergeCatalogProducts<P extends ClientCatalogProduct>(
   const merged = rows.map(row => {
     const local = prevById.get(String(row.id)) ?? prevByName.get(normName(row.name))
     const category = String(row.category?.name ?? local?.category ?? '')
+    const trackingMethod = (row.trackingMethod || (local as any)?.trackingMethod || (
+      categoryConfig[category]?.serialRequired ? 'SERIAL' : 'QUANTITY'
+    )) as string
     return {
       unit: 'pcs',
       image: CATEGORY_EMOJI[category] ?? '📦',
@@ -71,7 +100,7 @@ export function mergeCatalogProducts<P extends ClientCatalogProduct>(
       canBeSold: true,
       canBePurchased: true,
       warrantyMonths: 6,
-      requiresSerial: categoryConfig[category]?.serialRequired ?? false,
+      requiresSerial: trackingMethod === 'SERIAL' || (categoryConfig[category]?.serialRequired ?? false),
       saleAccountCode: '5001',
       costAccountCode: '6101',
       ...(local ?? {}),
@@ -84,8 +113,9 @@ export function mergeCatalogProducts<P extends ClientCatalogProduct>(
       salePrice: Number(row.sellingPrice ?? local?.salePrice ?? 0) || 0,
       costPrice: Number(row.costPrice ?? local?.costPrice ?? 0) || 0,
       minStock: Number(row.reorderLevel ?? local?.minStock ?? 1) || 0,
+      trackingMethod,
       // Odoo invoicing policy — server value wins, defaults to Ordered Quantities.
-      invoicePolicy: ((row as any).invoicePolicy === 'delivery' || (local as any)?.invoicePolicy === 'delivery') ? 'delivery' : 'order',
+      invoicePolicy: (row.invoicePolicy === 'delivery' || (local as any)?.invoicePolicy === 'delivery') ? 'delivery' : 'order',
       isActive: row.isActive !== false,
     } as unknown as P
   })
