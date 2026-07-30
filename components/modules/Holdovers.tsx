@@ -1,50 +1,17 @@
 'use client'
 // @ts-nocheck
 
-import { useState, useMemo, useEffect } from 'react'
-import { useOperationsStore } from '@/lib/store'
+import { useState, useMemo } from 'react'
+import { useOperationsStore, type Holdover, type HoldoverStatus, type HoldoverPurpose, type HoldoverDeviceCondition } from '@/lib/store'
 import { ModuleSkeleton, useMounted, ModuleHeader } from '@/components/ui'
 import { PrimaryActionButton, StatusBadge } from '@/components/erp'
 import { DataTable, type ColumnDef, type PrimaryFilterConfig } from '@/components/data-table'
 import { Fa } from '@/components/icons'
 import { faLaptop, faPlus } from '@fortawesome/free-solid-svg-icons'
 
-// ── Types ──────────────────────────────────────────────────────────────────────
-
-type HoldoverStatus = 'active' | 'returned' | 'overdue'
-type HoldoverPurpose = 'repair_loaner' | 'exam' | 'purchase_pending' | 'short_term' | 'other'
-type DeviceCondition = 'excellent' | 'good' | 'fair' | 'damaged'
-
-interface Holdover {
-  id: string
-  ref: string                   // LOAN/0001
-  clientName: string
-  clientPhone: string
-  clientIdNo: string
-  productId: string
-  productName: string
-  serialId: string
-  serialNumber: string
-  deviceCondition: DeviceCondition
-  accessories: string
-  purpose: HoldoverPurpose
-  purposeNote: string
-  linkedRepairId: string
-  linkedRepairRef: string
-  issuedDate: string
-  expectedReturnDate: string
-  returnedDate: string
-  returnCondition: DeviceCondition | ''
-  returnNotes: string
-  returnLocation: 'shop' | 'warehouse'
-  status: HoldoverStatus
-  issuedByName: string
-  authorizedByUserId: string
-  authorizedByName: string
-  createdAt: string
-}
-
 // ── Constants ──────────────────────────────────────────────────────────────────
+
+type DeviceCondition = HoldoverDeviceCondition
 
 const PURPOSE_LABELS: Record<HoldoverPurpose, string> = {
   repair_loaner:    'Repair Loaner',
@@ -67,7 +34,6 @@ const STATUS_CONFIG: Record<HoldoverStatus, { label: string; badgeStatus: string
   returned: { label: 'Returned', badgeStatus: 'done' },
 }
 
-const STORAGE_KEY = 'deed_holdovers_v1'
 const uid = () => crypto.randomUUID()
 const now = () => new Date().toISOString()
 
@@ -83,23 +49,8 @@ function resolveStatus(h: Holdover): HoldoverStatus {
   return 'active'
 }
 
-// ── Hook ──────────────────────────────────────────────────────────────────────
-
-function useHoldovers() {
-  const [items, setItems] = useState<Holdover[]>(() => {
-    if (typeof window === 'undefined') return []
-    try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]') } catch { return [] }
-  })
-
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(items))
-  }, [items])
-
-  const add = (h: Holdover) => setItems(p => [h, ...p])
-  const update = (id: string, patch: Partial<Holdover>) =>
-    setItems(p => p.map(h => h.id === id ? { ...h, ...patch } : h))
-
-  return { items: items.map(h => ({ ...h, status: resolveStatus(h) })), add, update }
+function withResolvedStatus(items: Holdover[]): Holdover[] {
+  return items.map(h => ({ ...h, status: resolveStatus(h) }))
 }
 
 // ── Sub-components ─────────────────────────────────────────────────────────────
@@ -130,7 +81,7 @@ function DaysTag({ h }: { h: Holdover }) {
 // ── New Holdover Modal ─────────────────────────────────────────────────────────
 
 function NewHoldoverModal({ onClose, onSave }: { onClose: () => void; onSave: (h: Holdover) => void }) {
-  const { products, getAvailableSerials, contacts, getVisibleRepairs, users, currentUserId, updateSerial } = useOperationsStore()
+  const { products, getAvailableSerials, contacts, getVisibleRepairs, users, currentUserId, updateSerial, holdovers } = useOperationsStore()
   const currentUser = users.find(u => u.id === currentUserId)
 
   const [step, setStep] = useState(1)
@@ -189,10 +140,9 @@ function NewHoldoverModal({ onClose, onSave }: { onClose: () => void; onSave: (h
     if (!step2Valid || !selectedSerial) return
     setSaving(true)
 
-    const { items } = useHoldoversRef.current
     const h: Holdover = {
       id: uid(),
-      ref: nextRef(items),
+      ref: nextRef(withResolvedStatus(holdovers || [])),
       clientName: clientName.trim(),
       clientPhone: clientPhone.trim(),
       clientIdNo: clientIdNo.trim(),
@@ -443,9 +393,6 @@ function NewHoldoverModal({ onClose, onSave }: { onClose: () => void; onSave: (h
   )
 }
 
-// Ref trick to access hook state inside callback
-const useHoldoversRef = { current: { items: [] as Holdover[] } }
-
 // ── Return Modal ──────────────────────────────────────────────────────────────
 
 function ReturnModal({ holdover, onClose, onReturn }: { holdover: Holdover; onClose: () => void; onReturn: (patch: Partial<Holdover>) => void }) {
@@ -538,8 +485,9 @@ function ReturnModal({ holdover, onClose, onReturn }: { holdover: Holdover; onCl
 
 // ── Detail View ───────────────────────────────────────────────────────────────
 
+const fmtDate = (iso: string) => iso ? new Date(iso).toLocaleDateString('en-KE', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'
+
 function HoldoverDetail({ holdover, onClose, onReturn }: { holdover: Holdover; onClose: () => void; onReturn: () => void }) {
-  const fmt = (iso: string) => iso ? new Date(iso).toLocaleDateString('en-KE', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'
   const isActive = holdover.status !== 'returned'
 
   return (
@@ -595,9 +543,9 @@ function HoldoverDetail({ holdover, onClose, onReturn }: { holdover: Holdover; o
           {/* Dates */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             {[
-              { label: 'Issued', value: fmt(holdover.issuedDate) },
-              { label: 'Expected Return', value: fmt(holdover.expectedReturnDate) },
-              { label: holdover.returnedDate ? 'Returned' : 'Days Out', value: holdover.returnedDate ? fmt(holdover.returnedDate) : <DaysTag h={holdover} /> },
+              { label: 'Issued', value: fmtDate(holdover.issuedDate) },
+              { label: 'Expected Return', value: fmtDate(holdover.expectedReturnDate) },
+              { label: holdover.returnedDate ? 'Returned' : 'Days Out', value: holdover.returnedDate ? fmtDate(holdover.returnedDate) : <DaysTag h={holdover} /> },
             ].map(({ label, value }) => (
               <div key={label} className="p-3 rounded-xl bg-[var(--bg-surface)] border border-[var(--border)] text-center">
                 <p className="text-[10px] font-bold text-[var(--text-4)] uppercase tracking-wider mb-1">{label}</p>
@@ -647,8 +595,8 @@ function HoldoverDetail({ holdover, onClose, onReturn }: { holdover: Holdover; o
 
 export default function Holdovers() {
   const mounted = useMounted()
-  const { items, add, update } = useHoldovers()
-  useHoldoversRef.current = { items }
+  const { holdovers, addHoldover, updateHoldover } = useOperationsStore()
+  const items = useMemo(() => withResolvedStatus(holdovers || []), [holdovers])
 
   const [filter, setFilter] = useState<'all' | HoldoverStatus>('all')
   const [search, setSearch] = useState('')
@@ -692,8 +640,6 @@ export default function Holdovers() {
     },
   ]
 
-  const fmt = (iso: string) => iso ? new Date(iso).toLocaleDateString('en-KE', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'
-
   if (!mounted) return <ModuleSkeleton />
 
   return (
@@ -705,7 +651,12 @@ export default function Holdovers() {
         count={total}
         color="var(--primary)"
         primaryAction={
-          <PrimaryActionButton icon={<Fa icon={faPlus} />} onClick={() => setShowNew(true)} hideLabelOnMobile={false}>
+          <PrimaryActionButton
+            icon={<Fa icon={faPlus} />}
+            onClick={() => setShowNew(true)}
+            hideLabelOnMobile={false}
+            aria-label="Issue device"
+          >
             Issue device
           </PrimaryActionButton>
         }
@@ -755,12 +706,12 @@ export default function Holdovers() {
                 },
                 {
                   key: 'issued', label: 'Issued', priority: 3, width: '100px',
-                  render: (h: Holdover) => <span className="text-[12px] text-[var(--text-3)]">{fmt(h.issuedDate)}</span>,
+                  render: (h: Holdover) => <span className="text-[12px] text-[var(--text-3)]">{fmtDate(h.issuedDate)}</span>,
                   exportValue: (h: Holdover) => h.issuedDate,
                 },
                 {
                   key: 'returnBy', label: 'Return by', priority: 2, width: '100px',
-                  render: (h: Holdover) => <span className="text-[12px] text-[var(--text-3)]">{fmt(h.expectedReturnDate)}</span>,
+                  render: (h: Holdover) => <span className="text-[12px] text-[var(--text-3)]">{fmtDate(h.expectedReturnDate)}</span>,
                   exportValue: (h: Holdover) => h.expectedReturnDate,
                 },
                 {
@@ -785,15 +736,57 @@ export default function Holdovers() {
               onClearFilters={() => { setSearch(''); setFilter('all') }}
               hideColumnFilters
               emptyMessage={search || filter !== 'all' ? 'No matching holdovers' : 'No holdovers yet'}
+              emptyAction={!search && filter === 'all' ? (
+                <button
+                  type="button"
+                  onClick={() => setShowNew(true)}
+                  className="mt-2 px-5 py-2.5 rounded-xl bg-blue-600 text-white text-xs font-black uppercase tracking-wider hover:bg-blue-700 transition-all"
+                >
+                  + Issue device
+                </button>
+              ) : undefined}
               onRowClick={h => setDetail(h)}
               rowActions={h => h.status !== 'returned' ? (
                 <button
-                  onClick={() => setReturning(h)}
-                  className="px-3 py-1.5 rounded-lg bg-emerald-600/10 hover:bg-emerald-600/20 text-emerald-500 text-[11px] font-bold border border-emerald-500/20 transition-colors cursor-pointer"
+                  type="button"
+                  onClick={e => { e.stopPropagation(); setReturning(h) }}
+                  className="px-3 py-1.5 rounded-lg bg-emerald-600/10 hover:bg-emerald-600/20 text-emerald-500 text-[11px] font-bold border border-emerald-500/20 transition-colors cursor-pointer whitespace-nowrap"
                 >
                   Return
                 </button>
               ) : null}
+              renderCard={h => (
+                <div
+                  key={h.id}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => setDetail(h)}
+                  onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setDetail(h) } }}
+                  className="rounded-xl border border-[var(--border-lt)] bg-[var(--bg-card)] p-3 text-left shadow-sm"
+                  style={{ borderLeft: `4px solid ${h.status === 'overdue' ? '#EF4444' : h.status === 'returned' ? '#10B981' : '#3B82F6'}` }}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="font-mono text-[11px] font-bold text-blue-500">{h.ref}</p>
+                      <p className="text-sm font-semibold text-[var(--text-1)] truncate">{h.clientName}</p>
+                      <p className="text-[12px] text-[var(--text-3)] truncate">{h.productName}</p>
+                      <p className="text-[11px] font-mono text-[var(--text-4)]">{h.serialNumber}</p>
+                    </div>
+                    <div className="flex flex-col items-end gap-2 flex-shrink-0">
+                      <HoldoverStatusBadge status={h.status} />
+                      {h.status !== 'returned' && (
+                        <button
+                          type="button"
+                          onClick={e => { e.stopPropagation(); setReturning(h) }}
+                          className="px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-[11px] font-bold"
+                        >
+                          Return
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
               exportTitle="Holdovers"
               exportFilename="holdovers"
             />
@@ -803,7 +796,7 @@ export default function Holdovers() {
       {showNew && (
         <NewHoldoverModal
           onClose={() => setShowNew(false)}
-          onSave={h => { add(h) }}
+          onSave={h => { addHoldover(h) }}
         />
       )}
 
@@ -819,7 +812,7 @@ export default function Holdovers() {
         <ReturnModal
           holdover={returning}
           onClose={() => setReturning(null)}
-          onReturn={patch => { update(returning.id, patch); setReturning(null) }}
+          onReturn={patch => { updateHoldover(returning.id, patch); setReturning(null) }}
         />
       )}
     </div>

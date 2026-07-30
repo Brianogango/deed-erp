@@ -62,7 +62,7 @@ const ROUTE_APP_STATE_KEYS: Record<string, string[]> = {
   '/outsource': ['deed_outsourceVendors', 'deed_outsourceJobs', 'deed_outsourcePayments', 'deed_contacts'],
   '/deposits': ['deed_deposits', 'deed_invoices', 'deed_contacts', 'deed_bankAccounts'],
   '/documents': ['deed_hrDocuments', 'deed_sops', 'deed_sopActuals', 'deed_ref_sops', 'deed_hr_sops'],
-  '/holdovers': ['deed_products', 'deed_bulkStock', 'deed_contacts'],
+  '/holdovers': ['deed_holdovers', 'deed_products', 'deed_serials', 'deed_contacts', 'deed_repairs_v2', 'deed_bulkStock'],
   '/settings': ['deed_companySettings', 'deed_systemSettings', 'deed_departments', 'deed_profileImages'],
 }
 
