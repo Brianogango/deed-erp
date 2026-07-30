@@ -7509,18 +7509,20 @@ const storeCtx: AppState = {
             costPrice: Number(saved.costPrice ?? optimistic.costPrice),
             minStock: Number(saved.minStock ?? saved.reorderLevel ?? optimistic.minStock),
             stockQty: saved.stockQty ?? optimistic.stockQty ?? 0,
+            sku: saved.sku || optimistic.sku,
           }
           setProducts(prev => prev.map(x => x.id === tempId ? reconciled as any : x))
-          return saved
+          return reconciled as any
         }
         const err = await res.json().catch(() => ({}))
         setProducts(prev => prev.filter(x => x.id !== tempId))
         showToast(err?.error || err?.message || `Could not create ${p.name}`, 'error')
+        return null as any
       } catch {
         setProducts(prev => prev.filter(x => x.id !== tempId))
         showToast(`Could not create ${p.name}. Check your connection and try again.`, 'error')
+        return null as any
       }
-      return optimistic as any
     },
     updateProduct: (id, p) => {
       const duplicate = findProductIdentityDuplicate(prodRef.current, p, id)

@@ -45,6 +45,7 @@ type ProductImportRow = {
   saleAccountCode?: string; costAccountCode?: string; inventoryAccountCode?: string
   cogsAccountCode?: string; adjustmentAccountCode?: string; writeOffAccountCode?: string
   priceDifferenceAccountCode?: string
+  skuProvided?: boolean
   status: 'new' | 'exists' | 'duplicate' | 'invalid'
   reason?: string
 }
@@ -103,14 +104,23 @@ const blankProduct = () => {
 }
 
 const normalizeBarcodeSeed = (value: string) => value.replace(/[^A-Z0-9]/gi, '').toUpperCase().slice(0, 8)
-const buildProductSku = (name: string, existing: Product[] = []) => {
+const buildProductSku = (name: string, existing: Product[] = [], salt = 0) => {
   const seed = normalizeBarcodeSeed(name).slice(0, 18) || 'PRODUCT'
-  let candidate = `${seed}-${Date.now().toString(36).toUpperCase().slice(-5)}`
+  // Include salt so bulk rows generated in the same millisecond never collide.
+  let candidate = `${seed}-${Date.now().toString(36).toUpperCase().slice(-5)}${salt ? `-${salt}` : ''}`
   let suffix = 1
   while (existing.some(p => p.sku?.toUpperCase() === candidate.toUpperCase())) {
-    candidate = `${seed}-${Date.now().toString(36).toUpperCase().slice(-5)}-${suffix++}`
+    candidate = `${seed}-${Date.now().toString(36).toUpperCase().slice(-5)}-${salt || suffix++}`
+    suffix++
   }
   return candidate
+}
+
+const isProductImportNotesRow = (name: string) => {
+  const n = name.trim()
+  if (!n) return true
+  if (n.startsWith('---')) return true
+  return /^(categories|product type|tax rate|min stock|warranty months|barcode|sku|account columns|storable products)\b/i.test(n)
 }
 const buildProductBarcode = (sku: string, name: string, existing: Product[] = [], currentId?: string) => {
   const seed = normalizeBarcodeSeed(sku || name) || 'ITEM'
@@ -862,10 +872,16 @@ export default function Inventory() {
       const seenSku = new Map<string, number>()
       const seenBarcode = new Map<string, number>()
       const seenName = new Map<string, number>()
-      const parsed: ProductImportRow[] = rows.map((row, index) => {
-        const sku = col(row, 'SKU', 'sku', 'Sku')
+      const skuPool: Product[] = [...products]
+      const parsed: ProductImportRow[] = []
+      rows.forEach((row, index) => {
         const name = col(row, 'Name', 'name', 'Product Name', 'product_name')
+        if (isProductImportNotesRow(name) && !col(row, 'SKU', 'sku', 'Sku') && !col(row, 'Sale Price', 'SalePrice', 'salePrice', 'sale_price')) {
+          return
+        }
+        const providedSku = col(row, 'SKU', 'sku', 'Sku')
         const barcode = col(row, 'Barcode', 'barcode')
+        const sku = providedSku || buildProductSku(name || `Product ${index + 1}`, skuPool, index + 1)
         const skuKey = normKey(sku)
         const barcodeKey = normKey(barcode)
         const nameKey = normKey(name)
@@ -873,6 +889,7 @@ export default function Inventory() {
         let status: ProductImportRow['status'] = 'new'
 
         if (!name) reasons.push('name is required')
+        else if (name.trim().length < 3) reasons.push('name must be at least 3 characters')
 
         if (skuKey) {
           const product = existingSku.get(skuKey)
@@ -896,8 +913,9 @@ export default function Inventory() {
         if (reasons.length) {
           status = reasons.some(r => r.includes('already')) ? 'exists' : reasons.some(r => r.includes('duplicate')) ? 'duplicate' : 'invalid'
         }
-        return {
-          name, sku: sku || buildProductSku(name || `Product ${index + 1}`, products),
+        const entry: ProductImportRow = {
+          name, sku,
+          skuProvided: !!providedSku,
           category: col(row, 'Category', 'category') || 'Laptops',
           productKind: (['storable', 'consumable', 'service'].includes(col(row, 'Product Type', 'productKind', 'product_type').toLowerCase())
             ? col(row, 'Product Type', 'productKind', 'product_type').toLowerCase()
@@ -920,7 +938,11 @@ export default function Inventory() {
           status,
           reason: reasons.join('; ') || undefined,
         }
-      }).filter(r => r.name || r.sku)
+        if (entry.name || entry.sku) {
+          parsed.push(entry)
+          if (status === 'new') skuPool.push({ sku: entry.sku, name: entry.name } as Product)
+        }
+      })
       if (!parsed.length) { showToast('No valid rows found — check column headers', 'error'); return }
       setImportRows(parsed)
       setShowImportModal(true)
@@ -929,10 +951,11 @@ export default function Inventory() {
     }
   }
 
-  const confirmProductImport = () => {
+  const confirmProductImport = async () => {
     const newRows = importRows.filter(r => r.status === 'new')
-    const productsIncludingImport = [...products]
-    newRows.forEach(row => {
+    let created = 0
+    let failed = 0
+    for (const row of newRows) {
       const productKind = inferProductKind({
         productKind: row.productKind,
         category: row.category,
@@ -942,7 +965,10 @@ export default function Inventory() {
         category: row.category,
       })
       const payload = {
-        name: row.name, sku: row.sku, barcode: row.barcode || '',
+        name: row.name,
+        // Auto-generated preview SKUs are blanked so the API assigns collision-safe values.
+        sku: row.skuProvided ? row.sku : '',
+        barcode: row.barcode || '',
         category: (ALL_CATEGORIES.includes(row.category as CategoryId) ? row.category : 'Laptops') as CategoryId,
         productKind,
         salePrice: row.salePrice, costPrice: row.costPrice, taxRate: row.taxRate,
@@ -956,11 +982,17 @@ export default function Inventory() {
         requiresSerial: isSerialTracking(trackingMethod),
         unit: row.unit || defaultUnitForKind(productKind, trackingMethod),
       }
-      productsIncludingImport.push({ ...payload, id: `import-${row.sku}`, createdAt: new Date().toISOString() } as Product)
-      addProduct(payload)
-    })
+      const saved = await Promise.resolve(addProduct(payload))
+      if (saved) created++
+      else failed++
+    }
     const skipped = importRows.length - newRows.length
-    showToast(`Imported ${newRows.length} product${newRows.length !== 1 ? 's' : ''}${skipped ? `; skipped ${skipped} duplicate/invalid row${skipped !== 1 ? 's' : ''}` : ''}`, skipped ? 'info' : 'success')
+    const parts = [
+      `Imported ${created} product${created !== 1 ? 's' : ''}`,
+      failed ? `${failed} failed` : '',
+      skipped ? `skipped ${skipped} duplicate/invalid row${skipped !== 1 ? 's' : ''}` : '',
+    ].filter(Boolean)
+    showToast(parts.join('; '), failed ? 'error' : skipped ? 'info' : 'success')
     setShowImportModal(false)
     setImportRows([])
   }
