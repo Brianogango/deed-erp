@@ -152,14 +152,18 @@ export default function RepairDetailView() {
   const currentRole = normalizeClientRole(currentUser?.role)
   const isMyRepair  = r.assignedTechnicianId === currentUserId
   const pendingOutsourceJob = outsourceJobs?.find(job => job.repairOrderId === r.id && job.status === 'sent')
+  const hasDiagnosis = !!(r.diagnosis?.findings || r.diagnosis?.faultDescription)
   const canVerify   = r.status === 'pending_verification' && ['technical_lead','director','admin_officer'].includes(currentRole)
   const canAssign   = (currentUser?.role === 'technical_lead' || (currentUser?.role === 'director' && systemSettings?.repAdminAssignsJobs))
     && ['received','assigned','diagnosed','awaiting_approval','approved','awaiting_parts','in_repair','qc','ready'].includes(r.status)
     && !pendingOutsourceJob
-  const canDiagnose = r.status === 'assigned' && isMyRepair && r.repairPath !== 'direct_repair' && !pendingOutsourceJob
+  const canDiagnose = (
+      r.status === 'assigned'
+      || (r.status === 'diagnosed' && !hasDiagnosis)
+    ) && isMyRepair && r.repairPath !== 'direct_repair' && !pendingOutsourceJob
   const canUpdateDiagnosis = !!r.diagnosis && isMyRepair && r.repairPath !== 'direct_repair' && ['diagnosed','awaiting_approval','approved','awaiting_parts','in_repair','qc','ready'].includes(r.status) && !pendingOutsourceJob
   const canQuote    = (r.repairPath === 'direct_repair'
-    ? ['assigned','awaiting_approval','approved','awaiting_parts','in_repair','qc'].includes(r.status)
+    ? ['assigned','diagnosed','awaiting_approval','approved','awaiting_parts','in_repair','qc'].includes(r.status)
     : ['diagnosed','awaiting_approval','approved','awaiting_parts','in_repair','qc'].includes(r.status)
       && !!(r.diagnosis?.findings || r.diagnosis?.faultDescription))
     && (isMyRepair || ['director','admin_officer','technical_lead','sales_rep','finance_officer'].includes(currentUser?.role ?? ''))
@@ -167,7 +171,7 @@ export default function RepairDetailView() {
     && !pendingOutsourceJob
     // Lock quote editing once device is marked ready-for-collection or has been picked up
     && !['ready','invoiced','verified_released','delivered','closed','cancelled','declined','unrepairable','returned'].includes(r.status)
-  const canStart      = ((r.status === 'approved' || r.status === 'awaiting_parts') || (r.status === 'assigned' && r.repairPath === 'direct_repair')) && isMyRepair && !pendingOutsourceJob
+  const canStart      = ((r.status === 'approved' || r.status === 'awaiting_parts') || (['assigned', 'diagnosed'].includes(r.status) && r.repairPath === 'direct_repair')) && isMyRepair && !pendingOutsourceJob
   const canComplete   = r.status === 'in_repair' && isMyRepair && !pendingOutsourceJob
   // QC: director/lead always; technician only if they did NOT work on this repair
   const canPerformQA  = r.status === 'qc'
@@ -181,7 +185,6 @@ export default function RepairDetailView() {
   const TERMINAL    = ['delivered','closed','cancelled','declined','unrepairable','returned']
   const canCancel   = isDirector && !TERMINAL.includes(r.status)
   const canDelete   = isDirector
-  const hasDiagnosis = !!(r.diagnosis?.findings || r.diagnosis?.faultDescription)
   const outsourceReady = repairOutsourceReadiness(r).ok
   const canOutsource          = (currentUser?.role === 'technical_lead' || isDirector) && !TERMINAL.includes(r.status) && !pendingOutsourceJob && outsourceReady
   const canMoveBack           = ['technical_lead', 'director'].includes(currentRole) && !TERMINAL.includes(r.status) && r.status !== 'pending_verification' && !pendingOutsourceJob
@@ -231,8 +234,11 @@ export default function RepairDetailView() {
     : canPerformQA ? 'Perform QC check — repair is ready for testing'
     : canInvoice   ? 'Generate the customer invoice before release'
     : canQuote && !r.quote ? 'Generate a repair quote'
+    : canQuote && r.quote ? 'Update or re-send the quote to move forward'
     : canCloseJob  ? 'Close the job after collection'
     : r.status === 'awaiting_parts' ? 'Parts are being sourced — monitor procurement below'
+    : r.status === 'diagnosed' && !hasDiagnosis ? 'Diagnosis stage has no findings — log diagnosis to continue'
+    : r.status === 'diagnosed' ? 'Generate or edit the quote to continue past diagnosis'
     : null
 
   // Exactly one dominant workflow CTA; everything else goes into More.
@@ -247,7 +253,7 @@ export default function RepairDetailView() {
     : canCloseJob ? 'close'
     : canDiagnose ? 'diagnose'
     : (canUpdateDiagnosis && !canQuote) ? 'diagnose'
-    : (canQuote && !r.quote) ? 'quote'
+    : canQuote ? 'quote'
     : canAssign ? 'assign'
     : null
 
