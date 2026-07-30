@@ -122,7 +122,9 @@ export default function RepairDetailView() {
     setShowCancelModal, setShowDeleteConfirm,
     setShowEditDetailsModal, setShowStopDiagnosisModal, setShowReturnModal,
     setShowOutsourceModal, setShowDeliveryModal, setShowMarkDeliveredConfirm,
+    setShowProgressModal,
     verifyRepairIntake, startRepair, markRepairComplete, moveRepairToPreviousProgress, outsourceJobs, fileWarrantyClaim,
+    markPartsArrived, closeRepairJob, markUnrepairable,
   } = useRepair()
 
   const { invoices, setModule, outboundReleases, initRelease, serials, reviewPortalPayment } = useRepairStore()
@@ -141,6 +143,8 @@ export default function RepairDetailView() {
   const [savingNote, setSavingNote] = useState(false)
   const [claimNotes, setClaimNotes] = useState('')
   const [showClaimModal, setShowClaimModal] = useState(false)
+  const [showUnrepairableModal, setShowUnrepairableModal] = useState(false)
+  const [unrepairableReason, setUnrepairableReason] = useState('')
 
   if (!r) return null
 
@@ -192,6 +196,23 @@ export default function RepairDetailView() {
   const canReturnDevice       = ['director', 'admin_officer', 'technical_lead'].includes(currentRole)
     && ['received', 'assigned', 'diagnosed', 'awaiting_approval', 'approved', 'awaiting_parts', 'in_repair', 'qc'].includes(r.status)
     && !pendingOutsourceJob
+  const canMarkPartsArrived = r.status === 'awaiting_parts'
+    && ['technical_lead', 'director', 'inventory_officer'].includes(currentRole)
+    && !pendingOutsourceJob
+  const canInvoice = r.status === 'ready'
+    && !r.underWarranty
+    && !r.invoiceId
+    && ['director', 'finance_officer', 'admin_officer'].includes(currentUser?.role ?? '')
+    && !pendingOutsourceJob
+  const canCloseJob = ['delivered', 'collected'].includes(r.status)
+    && ['director', 'admin_officer', 'technical_lead', 'finance_officer'].includes(currentRole)
+  const canMarkUnrepairable = ['assigned', 'diagnosed', 'in_repair'].includes(r.status)
+    && ['technical_lead', 'director'].includes(currentRole)
+    && !pendingOutsourceJob
+  const canUpdateProgress = !TERMINAL.includes(r.status)
+    && ['approved', 'awaiting_parts', 'in_repair', 'ready'].includes(r.status)
+    && (isMyRepair || ['director', 'technical_lead', 'finance_officer', 'admin_officer'].includes(currentUser?.role ?? ''))
+    && !pendingOutsourceJob
 
   const linkedInvoice      = invoices.find(i => i.id === (r.invoiceId ?? (r as any).linkedInvoiceId))
   const linkedOutsourceJob = pendingOutsourceJob ?? outsourceJobs.find(j => j.repairOrderId === r.id)
@@ -202,20 +223,26 @@ export default function RepairDetailView() {
 
   const nextActionHint = pendingOutsourceJob ? `Device is at ${pendingOutsourceJob.vendorName} via ${pendingOutsourceJob.ref}. Mark it returned in Outsource before continuing.`
     : canDiagnose ? 'Log your technical diagnosis to proceed'
+    : canMarkPartsArrived ? 'Confirm parts have arrived so the technician can start'
     : canStart     ? 'Start the repair'
     : canComplete  ? 'Mark repair complete to submit for QA'
     : canPerformQA ? 'Perform QC check — repair is ready for testing'
+    : canInvoice   ? 'Generate the customer invoice before release'
     : canQuote && !r.quote ? 'Generate a repair quote'
+    : canCloseJob  ? 'Close the job after collection'
     : r.status === 'awaiting_parts' ? 'Parts are being sourced — monitor procurement below'
     : null
 
   // Exactly one dominant workflow CTA; everything else goes into More.
   const primaryActionId = canVerify ? 'verify'
+    : canMarkPartsArrived ? 'parts_arrived'
     : canStart ? 'start'
     : canComplete ? 'complete'
     : canPerformQA ? 'qc'
+    : canInvoice ? 'invoice'
     : canPrepareRelease ? 'prepare_release'
     : (canMarkCollected && (repairOrc?.status === 'verified' || !repairOrc)) ? 'collect'
+    : canCloseJob ? 'close'
     : canDiagnose ? 'diagnose'
     : (canUpdateDiagnosis && !canQuote) ? 'diagnose'
     : (canQuote && !r.quote) ? 'quote'
@@ -371,6 +398,12 @@ export default function RepairDetailView() {
             {primaryActionId === 'qc' && (
               <ActionBtn onClick={() => setShowQAModal(true)} icon={faStar} label="Perform QC" color="bg-pink-600 hover:bg-pink-700" shadow="shadow-pink-100" pulse />
             )}
+            {primaryActionId === 'parts_arrived' && (
+              <ActionBtn onClick={() => markPartsArrived(r.id)} icon={faBoxOpen} label="Mark parts arrived" color="bg-orange-600 hover:bg-orange-700" shadow="shadow-orange-100" pulse />
+            )}
+            {primaryActionId === 'invoice' && (
+              <ActionBtn onClick={() => setShowProgressModal(true)} icon={faFileInvoiceDollar} label="Create invoice" color="bg-amber-600 hover:bg-amber-700" shadow="shadow-amber-100" pulse />
+            )}
             {primaryActionId === 'prepare_release' && (
               <ActionBtn
                 onClick={() => {
@@ -397,6 +430,9 @@ export default function RepairDetailView() {
             {primaryActionId === 'collect' && (
               <ActionBtn onClick={() => setShowMarkDeliveredConfirm(true)} icon={faTruck} label="Mark collected" color="bg-teal-600 hover:bg-teal-700" shadow="shadow-teal-100" pulse={repairOrc?.status === 'verified'} />
             )}
+            {primaryActionId === 'close' && (
+              <ActionBtn onClick={() => closeRepairJob(r.id)} icon={faCheckCircle} label="Close job" color="bg-slate-800 hover:bg-slate-900" shadow="shadow-slate-200" />
+            )}
 
             <SecondaryActionMenu
               ariaLabel="More repair actions"
@@ -405,12 +441,17 @@ export default function RepairDetailView() {
                 { id: 'assign', label: r.assignedTechnicianId ? 'Reassign technician' : 'Assign technician', onClick: () => setShowAssignModal(true), hidden: !canAssign || primaryActionId === 'assign' },
                 { id: 'diagnosis', label: canUpdateDiagnosis ? 'Update diagnosis' : 'Log diagnosis', onClick: () => setShowDiagnosisModal(true), hidden: !(canDiagnose || canUpdateDiagnosis) || primaryActionId === 'diagnose' },
                 { id: 'quote', label: r.quote ? 'Edit quote' : 'Generate quote', onClick: () => setShowQuoteModal(true), hidden: !canQuote || primaryActionId === 'quote' },
+                { id: 'parts_arrived', label: 'Mark parts arrived', onClick: () => markPartsArrived(r.id), hidden: !canMarkPartsArrived || primaryActionId === 'parts_arrived' },
+                { id: 'progress', label: 'Update progress', onClick: () => setShowProgressModal(true), hidden: !canUpdateProgress || ['start', 'complete', 'invoice'].includes(primaryActionId ?? '') },
+                { id: 'invoice', label: 'Create invoice', onClick: () => setShowProgressModal(true), hidden: !canInvoice || primaryActionId === 'invoice' },
                 { id: 'procure', label: 'Request parts', onClick: () => setShowProcurementModal(true), hidden: !canProcure },
                 { id: 'stop', label: 'Stop at diagnosis', onClick: () => setShowStopDiagnosisModal(true), hidden: !canStopAtDiagnosis },
                 { id: 'return', label: 'Return device', onClick: () => setShowReturnModal(true), hidden: !canReturnDevice },
+                { id: 'unrepairable', label: 'Mark unrepairable', onClick: () => { setUnrepairableReason(''); setShowUnrepairableModal(true) }, hidden: !canMarkUnrepairable, danger: true },
                 { id: 'back', label: 'Back step', onClick: () => moveRepairToPreviousProgress(r.id), hidden: !canMoveBack },
                 { id: 'outsource', label: 'Outsource', onClick: () => setShowOutsourceModal(true), hidden: !canOutsource },
                 { id: 'schedule', label: 'Schedule delivery', onClick: () => setShowDeliveryModal(true), hidden: !canScheduleDelivery },
+                { id: 'close', label: 'Close job', onClick: () => closeRepairJob(r.id), hidden: !canCloseJob || primaryActionId === 'close' },
                 { id: 'claim', label: 'File warranty claim', onClick: () => setShowClaimModal(true), hidden: !(r.underWarranty && !r.warrantyClaimId && ['director', 'admin_officer', 'finance_officer'].includes(currentUser?.role ?? '')) },
                 { id: 'edit', label: 'Edit details', onClick: () => setShowEditDetailsModal(true), hidden: !canEditDetails },
                 { id: 'sticker', label: 'Print sticker', onClick: () => { void printRepairSticker(r) } },
@@ -1350,6 +1391,50 @@ export default function RepairDetailView() {
               }}>
                 <Fa icon={faShieldAlt} className="mr-1.5" />
                 File Claim
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Mark Unrepairable Modal */}
+      {showUnrepairableModal && (
+        <Modal title="Mark Unrepairable" onClose={() => { setShowUnrepairableModal(false); setUnrepairableReason('') }}>
+          <div className="p-5 space-y-4">
+            <div className="flex items-start gap-3 p-3.5 rounded-xl bg-red-50 border border-red-200">
+              <Fa icon={faBan} className="text-red-600 mt-0.5" />
+              <div>
+                <p className="text-[11px] font-bold text-red-700">Mark {r.ref} as unrepairable</p>
+                <p className="text-[10px] text-red-600 mt-0.5">
+                  This closes the job as unrepairable and notifies the customer. Reserved parts are released.
+                </p>
+              </div>
+            </div>
+            <div>
+              <label className="block text-[10px] font-black text-[var(--text-3)] uppercase tracking-widest mb-1.5">Reason *</label>
+              <textarea
+                className="form-input w-full resize-none"
+                rows={3}
+                placeholder="Why can this device not be repaired?"
+                value={unrepairableReason}
+                onChange={e => setUnrepairableReason(e.target.value)}
+              />
+            </div>
+            <div className="flex justify-end gap-2">
+              <button className="btn-secondary" onClick={() => { setShowUnrepairableModal(false); setUnrepairableReason('') }}>Cancel</button>
+              <button
+                className="btn-primary"
+                style={{ background: 'var(--danger)' }}
+                disabled={!unrepairableReason.trim()}
+                onClick={() => {
+                  if (!unrepairableReason.trim()) return
+                  markUnrepairable(r.id, unrepairableReason.trim())
+                  setShowUnrepairableModal(false)
+                  setUnrepairableReason('')
+                }}
+              >
+                <Fa icon={faBan} className="mr-1.5" />
+                Confirm Unrepairable
               </button>
             </div>
           </div>

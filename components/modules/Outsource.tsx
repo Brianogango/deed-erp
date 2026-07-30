@@ -806,6 +806,7 @@ function OutsourceContent() {
           subtitle={activeJob.deviceDescription}
           tabs={jobDrawerTabs(activeJob)}
           onClose={() => setActiveJobId(null)}
+          actions={jobRowActions(activeJob)}
         />
       )}
 
@@ -1005,6 +1006,43 @@ function OutsourceContent() {
                 })}
               </div>
             </fieldset>
+
+            {!returnForm.isResolved && job.repairOrderId && (() => {
+              const linkedRepair = repairs.find(r => r.id === job.repairOrderId)
+              if (!linkedRepair) return null
+              return (
+                <fieldset className="rounded-xl border border-amber-200 bg-amber-50/80 p-4">
+                  <legend className="px-1 text-[13px] font-semibold text-amber-900">
+                    What should happen to repair <span className="font-mono">{linkedRepair.ref}</span>?
+                  </legend>
+                  <div className="mt-2 flex flex-col gap-2">
+                    {([
+                      { v: 'keep', label: 'Keep current status — decide later', sub: `Stay as "${linkedRepair.status.replace(/_/g, ' ')}"` },
+                      { v: 'in_repair', label: 'Resume in-house repair', sub: 'Move back to In Repair so tech can continue' },
+                      { v: 'unrepairable', label: 'Mark as unrepairable', sub: 'Device cannot be fixed — inform the customer' },
+                    ] as { v: 'keep' | 'in_repair' | 'unrepairable'; label: string; sub: string }[]).map(opt => {
+                      const active = returnForm.repairNextStep === opt.v
+                      return (
+                        <button
+                          key={opt.v}
+                          type="button"
+                          aria-pressed={active}
+                          onClick={() => setReturnForm(f => ({ ...f, repairNextStep: opt.v }))}
+                          className={`rounded-lg border px-3 py-2.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 ${
+                            active
+                              ? 'border-[var(--navy)] bg-[var(--navy)] text-white'
+                              : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50'
+                          }`}
+                        >
+                          <p className="text-[12px] font-semibold m-0">{opt.label}</p>
+                          <p className={`text-[11px] m-0 mt-0.5 ${active ? 'text-white/75' : 'text-slate-500'}`}>{opt.sub}</p>
+                        </button>
+                      )
+                    })}
+                  </div>
+                </fieldset>
+              )
+            })()}
 
             <div className="grid grid-cols-1 gap-5 md:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
               <div>
