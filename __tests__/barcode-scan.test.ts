@@ -99,8 +99,9 @@ describe('resolveOrcConfirmedSerial', () => {
 })
 
 describe('buildSerialLabelScanPayload', () => {
-  it('prefers inventory barcode over manufacturer serial', () => {
-    expect(buildSerialLabelScanPayload({ serial: 'MFG', barcode: 'INV-1' })).toBe('INV-1')
+  it('prefers manufacturer serial over inventory barcode for scanning', () => {
+    expect(buildSerialLabelScanPayload({ serial: 'MFG', barcode: 'INV-1' })).toBe('MFG')
     expect(buildSerialLabelScanPayload({ serial: 'MFG', barcode: '' })).toBe('MFG')
+    expect(buildSerialLabelScanPayload({ serial: '', barcode: 'INV-1' })).toBe('INV-1')
   })
 })

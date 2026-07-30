@@ -1333,7 +1333,11 @@ export default function Purchase() {
 
       {/* Payments are processed in Finance → Accounting module */}
 
-      {/* ── CSV IMPORT MODAL ── */}
+      </div>{/* mod-body */}
+    </div>}
+
+      {/* Import + Scan Document must live outside subView gates so they open
+          above the RFQ/PO detail form (Scan Document is triggered from there). */}
       {showImport && (
         <Modal title="Import PO Lines from CSV" subtitle="Upload a CSV file to bulk-add products to a purchase order" width={720}
           onClose={() => { setShowImport(false); setImportRows([]) }}>
@@ -1491,7 +1495,6 @@ export default function Purchase() {
         </Modal>
       )}
 
-      {/* ── DOCUMENT SCAN MODAL (AI OCR) ── */}
       {showScanModal && (
         <Modal title="Scan Document (AI OCR)" subtitle="Upload a vendor quote or invoice to extract lines" width={480} onClose={() => { setShowScanModal(false); setScanFile(null); setIsScanningScan(false) }}>
           <div
@@ -1525,8 +1528,6 @@ export default function Purchase() {
           <div className="flex gap-2 justify-end"><button className="btn-outline" onClick={() => { setShowScanModal(false); setScanFile(null); setIsScanningScan(false) }}>Cancel</button></div>
         </Modal>
       )}
-      </div>{/* mod-body */}
-    </div>}
     </PurchaseProvider>
   )
 }

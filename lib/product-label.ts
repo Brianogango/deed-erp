@@ -65,13 +65,15 @@ function labelHtml(product: Product, barcodeSrc: string): string {
   </div>`
 }
 
-// Per-unit serial label — QR + CODE128 encode the inventory barcode (POS-ready).
+// Per-unit serial label — QR + CODE128 encode the manufacturer serial (POS-ready).
 function serialLabelHtml(
   item: { serial: string; barcode?: string; productName: string; sku: string; salePrice?: number; category?: string },
   qrSrc: string,
   barcodeSrc: string,
   scanPayload: string,
 ): string {
+  const invBarcode = String(item.barcode ?? '').trim()
+  const showInvHint = invBarcode && invBarcode.toUpperCase() !== scanPayload.toUpperCase()
   return `
   <div class="label serial-label">
     <div class="label-main">
@@ -91,6 +93,7 @@ function serialLabelHtml(
             ? `<img src="${barcodeSrc}" alt="${esc(scanPayload)}" class="barcode-img" />`
             : ''}
           <div class="barcode-num">${esc(scanPayload)}</div>
+          ${showInvHint ? `<div class="inv-hint">INV ${esc(invBarcode)}</div>` : ''}
         </div>
       </div>
       <div class="qr-wrap">
@@ -154,6 +157,7 @@ export async function printSerialLabels(items: Array<{
   .barcode-wrap { margin-top: auto; display: flex; flex-direction: column; align-items: stretch; gap: 0.4mm; }
   .barcode-img { width: 100%; height: 8mm; object-fit: fill; image-rendering: crisp-edges; }
   .barcode-num { font-size: 5.5pt; font-weight: 800; font-family: 'Courier New', monospace; color: #334155; letter-spacing: 0.2pt; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .inv-hint { font-size: 4.5pt; font-weight: 700; font-family: 'Courier New', monospace; color: #94A3B8; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .qr-wrap { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.8mm; border-left: 0.25mm solid #E2E8F0; padding-left: 1.5mm; }
   .qr-img { width: 17mm; height: 17mm; object-fit: contain; image-rendering: crisp-edges; }
   .qr-placeholder { width: 17mm; height: 17mm; border: 0.3mm dashed #CBD5E1; border-radius: 1mm; }
