@@ -1,0 +1,63 @@
+import type { RepairStatus } from '@/lib/repair-types'
+
+export const REPAIR_PROGRESS_ORDER: RepairStatus[] = [
+  'pending_verification',
+  'received',
+  'assigned',
+  'diagnosed',
+  'awaiting_approval',
+  'approved',
+  'awaiting_parts',
+  'in_repair',
+  'qc',
+  'ready',
+  'invoiced',
+  'verified_released',
+  'delivered',
+  'collected',
+  'closed',
+]
+
+export type RepairProgressCandidate = {
+  status: RepairStatus | string
+  repairPath?: 'diagnosis_first' | 'direct_repair' | string | null
+  procurementRequests?: unknown[] | null
+}
+
+/**
+ * Progress stages that apply to this repair. Skips diagnosis/approval on
+ * direct_repair, and skips awaiting_parts when no procurement was requested.
+ */
+export function repairProgressOrderFor(repair: RepairProgressCandidate): RepairStatus[] {
+  const isDirect = repair.repairPath === 'direct_repair'
+  const hasProcurement = (repair.procurementRequests?.length ?? 0) > 0
+  return REPAIR_PROGRESS_ORDER.filter(status => {
+    if (isDirect && (status === 'diagnosed' || status === 'awaiting_approval')) return false
+    if (!hasProcurement && status === 'awaiting_parts') return false
+    return true
+  })
+}
+
+/**
+ * Previous progress step for Back step.
+ * Uses the path-aware linear order only — do NOT walk statusHistory.
+ * History-based rewind ping-pongs after a back-step (…diagnosed, assigned →
+ * next Back returns diagnosed again).
+ */
+export function getPreviousRepairProgressStatus(repair: RepairProgressCandidate): RepairStatus | null {
+  const order = repairProgressOrderFor(repair)
+  const current = repair.status as RepairStatus
+  const currentIndex = order.indexOf(current)
+  if (currentIndex > 0) return order[currentIndex - 1]
+
+  // Current status may have been skipped for this path (e.g. direct_repair
+  // landed on diagnosed via the old linear map). Step to the nearest earlier
+  // status that still exists on this path.
+  const fullIndex = REPAIR_PROGRESS_ORDER.indexOf(current)
+  if (fullIndex <= 0) return null
+  for (let i = fullIndex - 1; i >= 0; i--) {
+    const candidate = REPAIR_PROGRESS_ORDER[i]
+    if (order.includes(candidate)) return candidate
+  }
+  return null
+}

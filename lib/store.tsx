@@ -48,6 +48,7 @@ import {
   DEFAULT_ADMIN_OFFICER_CUSTOMER_INVOICE_LIMIT_KES,
 } from '@/lib/finance-controls'
 import { repairOutsourceReadiness } from '@/lib/repair-outsource'
+import { getPreviousRepairProgressStatus } from '@/lib/repair-progress'
 
 export type ModuleId = AuthModuleId
 
@@ -1237,24 +1238,6 @@ export type RepairStatus =
   | 'unrepairable'       // Device cannot be repaired
   | 'returned'           // Device returned to customer without repair
 
-const REPAIR_PROGRESS_ORDER: RepairStatus[] = [
-  'pending_verification',
-  'received',
-  'assigned',
-  'diagnosed',
-  'awaiting_approval',
-  'approved',
-  'awaiting_parts',
-  'in_repair',
-  'qc',
-  'ready',
-  'invoiced',
-  'verified_released',
-  'delivered',
-  'collected',
-  'closed',
-]
-
 const REPAIR_TERMINAL_STATUSES: RepairStatus[] = ['closed', 'cancelled', 'declined', 'unrepairable', 'returned']
 
 const normalizeProductIdentity = (value: unknown) => String(value ?? '').trim().toLowerCase()
@@ -1272,21 +1255,6 @@ function findProductIdentityDuplicate(products: Product[], product: Partial<Prod
       (!!barcode && normalizeProductIdentity(existing.barcode) === barcode)
     )
   })
-}
-
-function getPreviousRepairProgressStatus(repair: RepairOrder): RepairStatus | null {
-  const valid = new Set(REPAIR_PROGRESS_ORDER)
-  const historyStatuses = (repair.statusHistory ?? [])
-    .filter(h => valid.has(h.status as RepairStatus))
-    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
-    .map(h => h.status as RepairStatus)
-    .filter((status, index, statuses) => index === 0 || statuses[index - 1] !== status)
-
-  const historyCurrentIndex = historyStatuses.lastIndexOf(repair.status)
-  if (historyCurrentIndex > 0) return historyStatuses[historyCurrentIndex - 1]
-
-  const currentIndex = REPAIR_PROGRESS_ORDER.indexOf(repair.status)
-  return currentIndex > 0 ? REPAIR_PROGRESS_ORDER[currentIndex - 1] : null
 }
 
 export type IntakeChannel = 'walk_in' | 'website' | 'whatsapp' | 'call' | 'email' | 'rider_pickup'
@@ -10301,7 +10269,11 @@ const storeCtx: AppState = {
         diagnosedDate: now(),
       }
       const diagnosisHistory = [...previousHistory, diagnosis]
-      const nextStatus = isRevision ? repair.status : 'diagnosed'
+      // After a Back step to assigned, revising an existing diagnosis must still
+      // advance to diagnosed — otherwise quote/start stay locked forever.
+      const nextStatus = (repair.status === 'assigned' || repair.status === 'received' || !isRevision)
+        ? 'diagnosed'
+        : repair.status
 
       const diagHistEntry = {
         status: 'diagnosed' as const,
@@ -10358,7 +10330,7 @@ const storeCtx: AppState = {
         showToast('Only the assigned technician or authorised staff can generate a quote', 'error'); return
       }
       const QUOTABLE_STATUSES = repair.repairPath === 'direct_repair'
-        ? ['assigned', 'awaiting_approval', 'approved', 'awaiting_parts', 'in_repair']
+        ? ['assigned', 'diagnosed', 'awaiting_approval', 'approved', 'awaiting_parts', 'in_repair']
         : ['diagnosed', 'awaiting_approval', 'approved', 'awaiting_parts', 'in_repair']
       if (!QUOTABLE_STATUSES.includes(repair.status)) {
         showToast('Cannot generate a new quote at this stage', 'error'); return
@@ -11130,7 +11102,7 @@ const storeCtx: AppState = {
       }
       // Must have client approval unless it is a direct_repair path (no quote required)
       const validStartStatuses: RepairStatus[] = ['approved', 'awaiting_parts']
-      const isDirectRepair = repair.repairPath === 'direct_repair' && repair.status === 'assigned'
+      const isDirectRepair = repair.repairPath === 'direct_repair' && ['assigned', 'diagnosed'].includes(repair.status)
       if (!validStartStatuses.includes(repair.status) && !isDirectRepair) {
         showToast('Client must approve the quote before repair can start', 'error'); return
       }
