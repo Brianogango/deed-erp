@@ -1431,7 +1431,7 @@ export function SearchPicker<T extends { id: string }>({
       {open && menuPosition && (filtered.length > 0 || (onCreateNew && query.length > 0)) && createPortal(
         <div
           ref={menuRef}
-          className="fixed z-[9300] bg-card border border-border rounded-xl shadow-2xl overflow-y-auto divide-y divide-border-lt"
+          className="fixed z-[9700] bg-card border border-border rounded-xl shadow-2xl overflow-y-auto divide-y divide-border-lt"
           style={{
             animation: 'dropdownIn 0.18s ease both',
             left: menuPosition.left,

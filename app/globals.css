@@ -3002,13 +3002,16 @@
    z-40          Sidebar mobile backdrop
    z-[99]        Inactivity warning modal
    z-[100]       Topbar, sidebar tooltip
-   z-[9000]      Base modal overlays (.modal-overlay, Modal, SlidePanel)
+   z-[9000]      Base modal overlays (.modal-overlay, SlidePanel / Drawer)
    z-[9050]      Notifications panel, nested/secondary modals (e.g. Vendor modal over Job modal)
-   z-[9100]      Confirm dialog (above regular modals)
+   z-[9100]      Confirm dialog (above drawers / light overlays)
    z-[9140]      Account panel backdrop
    z-[9150]      Account settings panel
    z-[9200]      Success/completion overlays (e.g. RepairIntake ticket created)
-   z-[9300]      Dropdown pickers inside modals (SearchPicker, Outsource pickers)
+   z-[9400]      Anchored table/tab menus (.dt-anchored-menu, .tab-overflow-menu)
+   z-[9600]      Modal component (full-screen dialogs, e.g. New RFQ)
+   z-[9700]      Portaled dropdown pickers above modals (SearchPicker)
+   z-[9800]      Global search overlay
    z-[9999]      Toast notifications (always on top)
    ────────────────────────────────────────────────────────────────────────
    ════════════════════════════════════════════════════════════════════════ */
