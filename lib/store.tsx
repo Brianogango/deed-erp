@@ -57,6 +57,13 @@ import {
   startableStatusesForPath,
 } from '@/lib/repair-path'
 import {
+  ensureDiagnosisFeeInQuoteLines,
+  isDiagnosisFeeLine,
+  resolveDiagnosisFee,
+  shouldChargeDiagnosisFee,
+  taxableQuoteSubtotal,
+} from '@/lib/diagnosis-fee'
+import {
   buildDefaultRepairQcItems,
   prepareRepairQcItemsForRound,
   summarizeFailedQcItems,
@@ -529,6 +536,10 @@ export interface SystemSettings {
   repEnforceFlow: boolean
   repOnlyAssignedTechSeesJob: boolean
   repAdminAssignsJobs: boolean
+  /** Mandatory Diagnosis First fee — regular machines (KES). */
+  diagnosisFeeRegularKes: number
+  /** Mandatory Diagnosis First fee — high-end machines (KES). */
+  diagnosisFeeHighEndKes: number
   // Accounting
   accCustomerInvoices: boolean
   accVendorBills: boolean
@@ -577,6 +588,7 @@ export const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
   purHighValueThreshold: 50000, purEnforceRFQFlow: true, purStoreLeadTimes: true,
   repRepairOrders: true, repWarrantyTracking: true, repPartsConsumption: true,
   repEnforceFlow: true, repOnlyAssignedTechSeesJob: true, repAdminAssignsJobs: true,
+  diagnosisFeeRegularKes: 1500, diagnosisFeeHighEndKes: 2500,
   accCustomerInvoices: true, accVendorBills: true, accCreditNotes: true, accVatEnabled: true,
   accBankJournals: true, accMpesaJournals: true, accReconciliation: true,
   accLockDates: true, accApprovalForRefunds: true,
@@ -1329,6 +1341,8 @@ export interface RepairQuoteLine {
   subtotal: number
   reserved: boolean
   decision?: RepairQuoteLineDecision
+  /** Locked Diagnosis First fee line — not removable; 0% VAT. */
+  isDiagnosisFee?: boolean
 }
 
 export interface RepairQuote {
@@ -1403,8 +1417,16 @@ export interface RepairOrder {
   liabilityWaiverText?: string
   liabilityWaiverAcceptedAt?: string
   liabilityWaiverSignature?: string
-  diagnosisFee?: number                               // KES 1500 if stops at diagnosis
-  diagnosisStopped?: boolean                          // true if repair closed at diagnosis stage
+  /** Staff-picked at intake for Diagnosis First fee band. */
+  deviceTier?: 'regular' | 'high_end'
+  deviceType?: string
+  deviceBrand?: string
+  deviceModel?: string
+  diagnosisFee?: number                               // resolved Diagnosis First fee (KES)
+  diagnosisFeeStatus?: 'pending' | 'applicable' | 'waived' | 'invoiced' | 'not_applicable'
+  diagnosisFeeWaivedBy?: string
+  diagnosisFeeWaivedReason?: string
+  diagnosisStopped?: boolean                          // true if repair closed at diagnosis stage (fee-only)
   
   // Warranty
   warrantyId?: string
@@ -2958,7 +2980,8 @@ export interface AppState {
   verifyRepairIntake: (repairId: string, notes?: string) => void
   assignTechnicianToRepair: (repairId: string, technicianId: string) => void
   logDiagnosis: (repairId: string, diagnosis: Omit<RepairDiagnosis, 'diagnosedBy' | 'diagnosedDate'>) => void
-  stopAtDiagnosis: (repairId: string) => void          // Close job at diagnosis stage, charge KES 1,500 fee
+  stopAtDiagnosis: (repairId: string) => void          // Close job at diagnosis stage, charge diagnosis fee
+  waiveDiagnosisFee: (repairId: string, reason: string) => void
   generateRepairQuote: (repairId: string, lines: Omit<RepairQuoteLine, 'id' | 'reserved'>[], applyVat?: boolean) => void
   sendQuoteToCustomer: (repairId: string) => void
   approveRepairQuote: (repairId: string, approved: boolean, reason?: string) => void
@@ -3186,6 +3209,7 @@ export type RepairStoreState = Pick<AppState,
   | 'assignTechnicianToRepair'
   | 'logDiagnosis'
   | 'stopAtDiagnosis'
+  | 'waiveDiagnosisFee'
   | 'generateRepairQuote'
   | 'approveRepairQuote'
   | 'startRepair'
@@ -3470,6 +3494,7 @@ export type OperationsStoreState = Pick<AppState,
   | 'refurbishmentJobs'
   | 'repairs'
   | 'serials'
+  | 'systemSettings'
   | 'users'
   | 'warranties'
   | 'addContact'
@@ -4719,6 +4744,10 @@ export function StoreProvider({
       accessories: r.accessories ?? [],
       assignedTechnicianName: r.assignedTechnicianName || r.technicianName || undefined,
       repairPath: r.repairPath === 'direct_repair' ? 'direct_repair' : 'diagnosis_first',
+      deviceTier: r.deviceTier === 'high_end' ? 'high_end' : r.deviceTier === 'regular' ? 'regular' : undefined,
+      diagnosisFee: r.diagnosisFee,
+      diagnosisFeeStatus: r.diagnosisFeeStatus,
+      diagnosisStopped: r.diagnosisStopped,
       liabilityWaiverAccepted: r.liabilityWaiverAccepted,
       liabilityWaiverAcceptedAt: r.liabilityWaiverAcceptedAt,
       diagnosis: r.diagnosis ? {
@@ -5236,6 +5265,7 @@ export function StoreProvider({
     assignTechnicianToRepair: (...args: Parameters<AppState['assignTechnicianToRepair']>) => storeCtxRef.current!.assignTechnicianToRepair(...args),
     logDiagnosis: (...args: Parameters<AppState['logDiagnosis']>) => storeCtxRef.current!.logDiagnosis(...args),
     stopAtDiagnosis: (...args: Parameters<AppState['stopAtDiagnosis']>) => storeCtxRef.current!.stopAtDiagnosis(...args),
+    waiveDiagnosisFee: (...args: Parameters<AppState['waiveDiagnosisFee']>) => storeCtxRef.current!.waiveDiagnosisFee(...args),
     generateRepairQuote: (...args: Parameters<AppState['generateRepairQuote']>) => storeCtxRef.current!.generateRepairQuote(...args),
     approveRepairQuote: (...args: Parameters<AppState['approveRepairQuote']>) => storeCtxRef.current!.approveRepairQuote(...args),
     startRepair: (...args: Parameters<AppState['startRepair']>) => storeCtxRef.current!.startRepair(...args),
@@ -10522,8 +10552,12 @@ const storeCtx: AppState = {
         if (r.id !== id) return r
         const updated = { ...r, ...p }
         const partsTotal = updated.partsUsed.reduce((a, x) => a + x.qty * x.price, 0)
-        const diagnosisFee = updated.diagnosisStopped ? (updated.diagnosisFee ?? 0) : 0
-        updated.total = updated.underWarranty ? 0 : partsTotal + updated.laborCost + diagnosisFee
+        const feeDue = shouldChargeDiagnosisFee(updated) && (updated.diagnosisStopped || updated.diagnosisFeeStatus === 'applicable')
+          ? (updated.diagnosisFee ?? 0)
+          : 0
+        updated.total = updated.underWarranty && updated.warrantyCoverage === 'full'
+          ? 0
+          : partsTotal + updated.laborCost + feeDue
         // Sync portal when customer-visible intake / report fields change
         if (
           'qcReportData' in p || 'diagnosisReportData' in p || 'preRepairPhotos' in p || 'issuePhotos' in p
@@ -10703,19 +10737,21 @@ const storeCtx: AppState = {
       if (!user || (!isManager && repair.assignedTechnicianId !== user.id)) {
         showToast('Only the assigned technician or a manager can stop at diagnosis', 'error'); return
       }
-      // Repair closes at diagnosis stage — charge flat KES 1,500 diagnosis fee
-      const DIAGNOSIS_FEE = 1500
+      const resolved = resolveDiagnosisFee(repair, systemSettings)
+      const DIAGNOSIS_FEE = resolved.amount
       setRepairs(p => p.map(r => r.id === repairId ? {
         ...r,
         diagnosisStopped: true,
         diagnosisFee: DIAGNOSIS_FEE,
+        diagnosisFeeStatus: DIAGNOSIS_FEE > 0 ? 'applicable' : (resolved.status as any),
+        deviceTier: resolved.tier ?? r.deviceTier ?? 'regular',
         laborCost: 0,
         logisticsCost: 0,
         total: DIAGNOSIS_FEE,
         status: 'ready',
       } : r))
-      addAuditLog('stop_at_diagnosis', repairId, `Repair stopped at diagnosis — KES ${DIAGNOSIS_FEE} charged`)
-      showToast(`Repair closed at diagnosis — KES 1,500 diagnosis fee charged`)
+      addAuditLog('stop_at_diagnosis', repairId, `Repair stopped at diagnosis — KES ${DIAGNOSIS_FEE} diagnosis fee charged`)
+      showToast(`Repair closed at diagnosis — KES ${DIAGNOSIS_FEE.toLocaleString('en-KE')} diagnosis fee charged`)
     },
 
     generateRepairQuote: (repairId, incomingLines, applyVat = true) => {
@@ -10766,14 +10802,33 @@ const storeCtx: AppState = {
         })
       }
 
-      const lines: RepairQuoteLine[] = incomingLines.map(line => ({
+      const resolvedFee = resolveDiagnosisFee(repair, systemSettings)
+      const chargeFee = shouldChargeDiagnosisFee(repair) && resolvedFee.amount > 0
+      if (chargeFee && !repair.deviceTier) {
+        showToast('Set device tier (Regular / High-end) on Edit details before generating the quote', 'error')
+        return
+      }
+      const incomingWithFee = ensureDiagnosisFeeInQuoteLines(
+        incomingLines.map(line => ({
+          ...line,
+          subtotal: Number(line.qty) * Number(line.unitPrice),
+          isDiagnosisFee: isDiagnosisFeeLine(line as any) || undefined,
+        })),
+        resolvedFee.amount,
+        chargeFee,
+      )
+
+      const lines: RepairQuoteLine[] = incomingWithFee.map(line => ({
         ...line,
+        type: line.type as RepairQuoteLine['type'],
         id: uid(),
         reserved: false,
+        isDiagnosisFee: isDiagnosisFeeLine(line) || undefined,
       }))
 
       const subtotal = lines.reduce((sum, line) => sum + line.subtotal, 0)
-      const tax = applyVat ? Math.round(subtotal * (companySettings.vatRate / 100)) : 0
+      // Diagnosis fee is always 0% VAT — tax only non-fee lines
+      const tax = applyVat ? Math.round(taxableQuoteSubtotal(lines) * (companySettings.vatRate / 100)) : 0
 
       // ── Gap 1: Build change diff summary ─────────────────────────────────
       let changeSummary: string | undefined
@@ -11052,6 +11107,9 @@ const storeCtx: AppState = {
         laborCost: derivedLaborCost,
         logisticsCost: derivedLogisticsCost,
         total: chargeTotal,
+        diagnosisFee: chargeFee ? resolvedFee.amount : (r.diagnosisFeeStatus === 'waived' ? 0 : r.diagnosisFee),
+        diagnosisFeeStatus: chargeFee ? 'applicable' : (isDirectRepairPath(r.repairPath) || (r.underWarranty && r.warrantyCoverage === 'full') ? 'not_applicable' : r.diagnosisFeeStatus),
+        deviceTier: resolvedFee.tier ?? r.deviceTier,
         status: quoteStatus,
         quoteApprovalDeadline: (isFullWarranty || isDirectRepair) ? undefined : quote.validUntil,
         ...(linkedSaleOrderId ? { saleOrderId: linkedSaleOrderId, saleOrderRef: linkedSaleOrderRef } : {}),
@@ -12046,9 +12104,11 @@ const storeCtx: AppState = {
           taxRate: 0,
           subtotal: repair.logisticsCost,
         }] : []),
-        ...(repair.diagnosisStopped && (repair.diagnosisFee ?? 0) > 0 ? [{
+        ...((shouldChargeDiagnosisFee(repair) && (repair.diagnosisFee ?? 0) > 0) ? [{
           id: uid(),
-          description: 'Diagnosis Fee (repair not undertaken)',
+          description: repair.diagnosisStopped
+            ? 'Diagnosis Fee (repair not undertaken)'
+            : 'Diagnosis Fee',
           qty: 1,
           unitPrice: repair.diagnosisFee!,
           taxRate: 0,
@@ -12104,6 +12164,7 @@ const storeCtx: AppState = {
         invoiceId: invoice.id,
         invoiceDate: now(),
         status: 'invoiced',
+        diagnosisFeeStatus: (shouldChargeDiagnosisFee(r) && (r.diagnosisFee ?? 0) > 0) ? 'invoiced' : r.diagnosisFeeStatus,
       } : r))
 
       addAuditLog('invoice_repair', repair.ref, `Invoice ${invoice.ref} created`)
@@ -12498,6 +12559,28 @@ const storeCtx: AppState = {
         return
       }
 
+      const resolved = resolveDiagnosisFee(repair, systemSettings)
+      const chargeFee = shouldChargeDiagnosisFee(repair) && resolved.amount > 0
+      // Always charge diagnosis fee when Diagnosis First quote is declined after diagnosis
+      if (chargeFee && repair.diagnosis) {
+        setRepairs(p => p.map(r => r.id === repairId ? {
+          ...r,
+          status: 'ready',
+          diagnosisStopped: true,
+          diagnosisFee: resolved.amount,
+          diagnosisFeeStatus: 'applicable',
+          deviceTier: resolved.tier ?? r.deviceTier ?? 'regular',
+          laborCost: 0,
+          logisticsCost: 0,
+          total: resolved.amount,
+          notes: `${r.notes || ''}\n\nQuote declined (diagnosis fee still due — KES ${resolved.amount}): ${reason}`.trim(),
+          quote: r.quote ? { ...r.quote, rejectedDate: now(), rejectionReason: reason } : r.quote,
+        } : r))
+        addAuditLog('decline_quote', repairId, `Quote declined — diagnosis fee KES ${resolved.amount} still charged: ${reason}`)
+        showToast(`Quote declined — KES ${resolved.amount.toLocaleString('en-KE')} diagnosis fee still due`, 'info')
+        return
+      }
+
       setRepairs(p => p.map(r => r.id === repairId ? {
         ...r,
         status: 'declined',
@@ -12536,6 +12619,48 @@ const storeCtx: AppState = {
       } else {
         showToast('Quote marked as declined', 'info')
       }
+    },
+
+    waiveDiagnosisFee: (repairId, reason) => {
+      const user = currentUser()
+      if (!user) return
+      if (!['director', 'technical_lead', 'admin_officer', 'finance_officer'].includes(normalizeClientRole(user.role))) {
+        showToast('Only a manager can waive the diagnosis fee', 'error')
+        return
+      }
+      const repair = repairs.find(r => r.id === repairId)
+      if (!repair) return
+      if (!reason.trim()) {
+        showToast('Enter a reason for waiving the diagnosis fee', 'error')
+        return
+      }
+      setRepairs(p => p.map(r => {
+        if (r.id !== repairId) return r
+        const nextLines = (r.quote?.lines ?? []).filter(l => !isDiagnosisFeeLine(l))
+        const nextQuote = r.quote
+          ? {
+              ...r.quote,
+              lines: nextLines,
+              subtotal: nextLines.reduce((s, l) => s + l.subtotal, 0),
+              tax: r.quote.tax,
+              total: nextLines.reduce((s, l) => s + l.subtotal, 0) + (r.quote.tax || 0),
+            }
+          : r.quote
+        return {
+          ...r,
+          diagnosisFee: 0,
+          diagnosisFeeStatus: 'waived' as const,
+          diagnosisFeeWaivedBy: user.name,
+          diagnosisFeeWaivedReason: reason.trim(),
+          quote: nextQuote,
+          total: r.underWarranty && r.warrantyCoverage === 'full'
+            ? 0
+            : (r.partsUsed?.reduce((a, x) => a + x.qty * x.price, 0) ?? 0) + (r.laborCost || 0),
+          notes: `${r.notes || ''}\n[Diagnosis fee waived by ${user.name}] ${reason.trim()}`.trim(),
+        }
+      }))
+      addAuditLog('waive_diagnosis_fee', repairId, `Diagnosis fee waived by ${user.name}: ${reason.trim()}`)
+      showToast('Diagnosis fee waived', 'success')
     },
 
     markUnrepairable: async (repairId, reason) => {
@@ -14416,6 +14541,7 @@ const storeCtx: AppState = {
     refurbishmentJobs,
     repairs,
     serials,
+    systemSettings,
     users,
     warranties,
     ...operationsActions,
@@ -14428,6 +14554,7 @@ const storeCtx: AppState = {
     refurbishmentJobs,
     repairs,
     serials,
+    systemSettings,
     users,
     warranties,
     operationsActions,

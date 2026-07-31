@@ -129,11 +129,13 @@ export default function RepairDetailView() {
     markPartsArrived, closeRepairJob, markUnrepairable,
   } = useRepair()
 
-  const { invoices, setModule, outboundReleases, initRelease, serials, reviewPortalPayment, leaveDeviceWithDeed, convertRetainedRepairToDonation, convertRetainedRepairToBuyBack } = useRepairStore()
+  const { invoices, setModule, outboundReleases, initRelease, serials, reviewPortalPayment, leaveDeviceWithDeed, convertRetainedRepairToDonation, convertRetainedRepairToBuyBack, waiveDiagnosisFee } = useRepairStore()
 
   const [showOrcPanel, setShowOrcPanel] = useState(false)
   const [showPaymentRejectInput, setShowPaymentRejectInput] = useState(false)
   const [paymentRejectReason, setPaymentRejectReason] = useState('')
+  const [waiveFeeReason, setWaiveFeeReason] = useState('')
+  const [showWaiveFeeModal, setShowWaiveFeeModal] = useState(false)
 
   // Find existing ORC for this repair
   const repairOrc = outboundReleases?.find(o => o.repairId === r?.id && o.status !== 'voided')
@@ -197,12 +199,15 @@ export default function RepairDetailView() {
   const canPrepareRelease     = isDeliveryManager && ['ready', 'invoiced'].includes(r.status) && !repairOrc && !pendingOutsourceJob
   // Managers (director/admin officer/lead tech) can correct intake details until the job is terminal
   const canEditDetails        = ['director', 'admin_officer', 'technical_lead'].includes(currentRole) && !TERMINAL.includes(r.status)
-  // Customer declines repair after diagnosis — close at diagnosis stage with the KES 1,500 fee
-  const canStopAtDiagnosis    = !r.diagnosisStopped && !!r.diagnosis
+  // Customer declines repair after diagnosis — close at diagnosis stage with the diagnosis fee
+  const canStopAtDiagnosis    = !r.diagnosisStopped && !!r.diagnosis && !isDirectRepairPath(r.repairPath)
+  const canWaiveDiagnosisFee  = ['director', 'technical_lead', 'admin_officer', 'finance_officer'].includes(currentRole)
     && !isDirectRepairPath(r.repairPath)
-    && ['diagnosed', 'awaiting_approval', 'approved', 'awaiting_parts'].includes(r.status)
-    && (isMyRepair || ['director', 'admin_officer', 'technical_lead'].includes(currentRole))
-    && !pendingOutsourceJob
+    && r.diagnosisFeeStatus !== 'waived'
+    && r.diagnosisFeeStatus !== 'invoiced'
+    && r.diagnosisFeeStatus !== 'not_applicable'
+    && (r.diagnosisFee ?? 0) > 0
+    && !TERMINAL.includes(r.status)
   // Return the device unrepaired at no charge (e.g. goodwill / part unavailable)
   const canReturnDevice       = ['director', 'admin_officer', 'technical_lead'].includes(currentRole)
     && ['received', 'assigned', 'diagnosed', 'awaiting_approval', 'approved', 'awaiting_parts', 'in_repair', 'qc'].includes(r.status)
@@ -477,6 +482,7 @@ export default function RepairDetailView() {
                 { id: 'invoice', label: 'Create invoice', onClick: () => setShowProgressModal(true), hidden: !canInvoice || primaryActionId === 'invoice' },
                 { id: 'procure', label: 'Request parts', onClick: () => setShowProcurementModal(true), hidden: !canProcure },
                 { id: 'stop', label: 'Stop at diagnosis', onClick: () => setShowStopDiagnosisModal(true), hidden: !canStopAtDiagnosis },
+                { id: 'waive_fee', label: 'Waive diagnosis fee', onClick: () => { setWaiveFeeReason(''); setShowWaiveFeeModal(true) }, hidden: !canWaiveDiagnosisFee },
                 { id: 'return', label: 'Return device', onClick: () => setShowReturnModal(true), hidden: !canReturnDevice },
                 { id: 'leave', label: 'Customer leaves device', onClick: () => { setLeaveDeviceNotes(''); setLeaveConvertMode('donation'); setShowLeaveDeviceModal(true) }, hidden: !canLeaveDeviceWithDeed },
                 { id: 'convert_donation', label: 'Convert → Donation', onClick: () => convertRetainedRepairToDonation(r.id), hidden: !canConvertRetained },
@@ -804,10 +810,22 @@ export default function RepairDetailView() {
                         <p className="text-[18px] font-black text-indigo-500 leading-none">{r.diagnosis.estimatedHours}<span className="text-[11px] font-bold ml-0.5">h</span></p>
                       </div>
                     )}
-                    {r.diagnosisFee && r.diagnosisFee > 0 && (
+                    {((r.diagnosisFee && r.diagnosisFee > 0) || r.diagnosisFeeStatus === 'waived' || r.deviceTier) && (
                       <div className="p-3 rounded-xl bg-[rgba(245,158,11,0.08)] border border-amber-500/25">
                         <p className="text-[9px] font-black text-amber-500 uppercase tracking-widest mb-1">Diagnosis Fee</p>
-                        <p className="text-[13px] font-black text-amber-500">{fmtKes(r.diagnosisFee)}</p>
+                        <p className="text-[13px] font-black text-amber-500">
+                          {r.diagnosisFeeStatus === 'waived'
+                            ? 'Waived'
+                            : (r.diagnosisFee && r.diagnosisFee > 0 ? fmtKes(r.diagnosisFee) : '—')}
+                        </p>
+                        {r.deviceTier && (
+                          <p className="text-[10px] font-semibold text-amber-700/80 mt-0.5">
+                            {r.deviceTier === 'high_end' ? 'High-end' : 'Regular'} · 0% VAT
+                          </p>
+                        )}
+                        {r.diagnosisFeeStatus === 'waived' && r.diagnosisFeeWaivedReason && (
+                          <p className="text-[10px] text-[var(--text-3)] mt-1">Reason: {r.diagnosisFeeWaivedReason}</p>
+                        )}
                       </div>
                     )}
                   </div>
@@ -1640,6 +1658,36 @@ export default function RepairDetailView() {
           isRepair
           onClose={() => setShowOrcPanel(false)}
         />
+      )}
+
+      {showWaiveFeeModal && (
+        <Modal title="Waive Diagnosis Fee" subtitle={r.ref} onClose={() => setShowWaiveFeeModal(false)} width={440}>
+          <div className="flex flex-col gap-4">
+            <p className="text-[11px] text-[var(--text-2)] leading-relaxed">
+              Waiving removes the diagnosis fee from this job. Labour and parts stay separate and are still billed if applicable.
+            </p>
+            <label className="text-[10px] font-black uppercase tracking-widest text-[var(--text-4)]">Reason (required)</label>
+            <textarea
+              className="form-input min-h-[88px]"
+              value={waiveFeeReason}
+              onChange={e => setWaiveFeeReason(e.target.value)}
+              placeholder="e.g. Goodwill / director approval for VIP client"
+            />
+            <div className="flex justify-end gap-2">
+              <button className="btn-secondary" onClick={() => setShowWaiveFeeModal(false)}>Cancel</button>
+              <button
+                className="btn-primary"
+                onClick={() => {
+                  waiveDiagnosisFee(r.id, waiveFeeReason)
+                  setShowWaiveFeeModal(false)
+                  setWaiveFeeReason('')
+                }}
+              >
+                Confirm waive
+              </button>
+            </div>
+          </div>
+        </Modal>
       )}
     </div>
   )

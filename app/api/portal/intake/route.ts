@@ -5,6 +5,7 @@ import { checkRateLimit } from '@/lib/rate-limit'
 import type { RepairOrder } from '@/lib/store'
 import { buildRepairLinkMessage, sendMultiChannelMessage } from '@/lib/integrations/messaging'
 import { DIRECT_REPAIR_WAIVER_TEXT, normalizeRepairPath } from '@/lib/repair-path'
+import { normalizeDeviceTier } from '@/lib/diagnosis-fee'
 
 const REPAIR_STORE_KEY = 'deed_repairs_v2'
 
@@ -39,6 +40,8 @@ export async function POST(req: NextRequest) {
   const issueDescription = clean(body.issueDescription)
   const repairPath = normalizeRepairPath(body.repairPath)
   const liabilityWaiverAccepted = body.liabilityWaiverAccepted === true
+  // Device tier is staff-picked (not customer portal). Portal leaves fee pending for Diagnosis First.
+  const deviceTier = normalizeDeviceTier(body.deviceTier)
 
   if (!customerName) return NextResponse.json({ error: 'Customer name is required.' }, { status: 422 })
   if (!customerPhone) return NextResponse.json({ error: 'Customer phone is required.' }, { status: 422 })
@@ -82,6 +85,9 @@ export async function POST(req: NextRequest) {
     issueDescription,
     accessories,
     repairPath,
+    deviceTier: repairPath === 'diagnosis_first' ? (deviceTier ?? undefined) : undefined,
+    diagnosisFee: 0,
+    diagnosisFeeStatus: repairPath === 'direct_repair' ? 'not_applicable' : 'pending',
     liabilityWaiverAccepted,
     liabilityWaiverText: repairPath === 'direct_repair' ? DIRECT_REPAIR_WAIVER_TEXT : undefined,
     liabilityWaiverAcceptedAt: liabilityWaiverAccepted ? now : undefined,

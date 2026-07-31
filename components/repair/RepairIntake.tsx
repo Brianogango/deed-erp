@@ -4,6 +4,7 @@
 import { useState, useMemo } from 'react'
 import { useOperationsStore, RepairOrder, fmtDate } from '@/lib/store'
 import { DIRECT_REPAIR_WAIVER_TEXT } from '@/lib/repair-path'
+import { diagnosisFeeAmountForTier, deviceTierLabel } from '@/lib/diagnosis-fee'
 import { Field, Input, Select, Textarea, Badge } from '@/components/ui'
 import { Fa } from '@/components/icons'
 import {
@@ -36,7 +37,7 @@ const DEVICE_TYPES = [
 
 export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => void; onSuccess: (id: string) => void }) {
   const {
-    repairs, contacts, contactPersons, warranties,
+    repairs, contacts, contactPersons, warranties, systemSettings,
     createRepair, updateRepair, addContact, createContactPerson, showToast,
   } = useOperationsStore()
 
@@ -73,6 +74,7 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
     priority: 'normal' as 'low' | 'normal' | 'high' | 'urgent',
     intakeChannel: 'walk_in' as 'walk_in' | 'website' | 'whatsapp' | 'call' | 'email' | 'rider_pickup',
     repairPath: 'diagnosis_first' as 'diagnosis_first' | 'direct_repair',
+    deviceTier: 'regular' as 'regular' | 'high_end',
     estimatedCompletion: '',
     consentSignature: '', agreeTerms: false,
     serialWarrantyException: false,
@@ -218,6 +220,9 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
     if (device.repairPath === 'direct_repair' && (!device.consentSignature.trim() || !device.agreeTerms)) {
       showToast('Customer signature and terms agreement required for direct repair', 'error'); return
     }
+    if (device.repairPath === 'diagnosis_first' && !['regular', 'high_end'].includes(device.deviceTier)) {
+      showToast('Select Regular or High-end for the diagnosis fee', 'error'); return
+    }
 
     setLoading(true)
     try {
@@ -326,6 +331,7 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
 
       const isDirect = device.repairPath === 'direct_repair'
       const waiverAt = new Date().toISOString()
+      const feeAmount = !isDirect ? diagnosisFeeAmountForTier(device.deviceTier, systemSettings) : 0
       updateRepair(rep.id, {
         status: 'received',
         customerPhone,
@@ -340,6 +346,12 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
         clientLaptopPassword: device.clientLaptopPassword.trim() || undefined,
         priority: device.priority,
         repairPath: device.repairPath,
+        deviceType: deviceTypeLabel,
+        deviceBrand: device.brand.trim() || undefined,
+        deviceModel: device.model.trim() || undefined,
+        deviceTier: isDirect ? undefined : device.deviceTier,
+        diagnosisFee: isDirect ? 0 : feeAmount,
+        diagnosisFeeStatus: isDirect ? 'not_applicable' : 'applicable',
         estimatedCompletionDate: device.estimatedCompletion || undefined,
         accessories,
         underWarranty: intakeUnderWarranty,
@@ -356,7 +368,7 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
         liabilityWaiverSignature: isDirect ? device.consentSignature.trim() : undefined,
         notes: isDirect
           ? `[Direct Repair Consent] Signed by: ${device.consentSignature}. Liability Waiver Accepted: YES. Device type: ${deviceTypeLabel}.\nTerms Agreed: Customer agrees to bypass the diagnosis phase.`
-          : `Device type: ${deviceTypeLabel}.`,
+          : `Device type: ${deviceTypeLabel}. Tier: ${deviceTierLabel(device.deviceTier)}. Diagnosis fee: KES ${feeAmount.toLocaleString('en-KE')}.`,
       })
 
       showToast(`Ticket ${rep.ref} created`, 'success')
@@ -963,6 +975,37 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
                   </button>
                 ))}
               </div>
+
+              {device.repairPath === 'diagnosis_first' && (
+                <div className="mt-4 space-y-3">
+                  <p className="text-[10px] font-black uppercase tracking-widest" style={{ color: 'var(--text-3)' }}>Device tier (diagnosis fee)</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {([
+                      { value: 'regular' as const, title: 'Regular', fee: diagnosisFeeAmountForTier('regular', systemSettings) },
+                      { value: 'high_end' as const, title: 'High-end', fee: diagnosisFeeAmountForTier('high_end', systemSettings) },
+                    ]).map(opt => (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => setD('deviceTier', opt.value)}
+                        className="p-3 rounded-xl border-2 text-left transition-all"
+                        style={device.deviceTier === opt.value
+                          ? { background: '#E0F6FE', borderColor: CYAN }
+                          : { background: 'var(--bg-surface)', borderColor: 'var(--border)' }
+                        }
+                      >
+                        <p className="text-xs font-bold" style={{ color: device.deviceTier === opt.value ? CYAN : 'var(--text-1)' }}>{opt.title}</p>
+                        <p className="text-[10px] font-semibold mt-1" style={{ color: 'var(--text-3)' }}>
+                          Diagnosis fee KES {opt.fee.toLocaleString('en-KE')} · labor separate
+                        </p>
+                      </button>
+                    ))}
+                  </div>
+                  <p className="text-[10px] leading-relaxed" style={{ color: 'var(--text-4)' }}>
+                    Diagnosis fee is mandatory on Diagnosis First jobs and applies even if repair does not proceed. VAT on this fee is 0%.
+                  </p>
+                </div>
+              )}
 
               {device.repairPath === 'direct_repair' && (
                 <div className="mt-4 p-4 rounded-xl space-y-3 animate-in slide-in-from-top-2 duration-300" style={{ background: '#F5F3FF', border: '1px solid #DDD6FE' }}>
