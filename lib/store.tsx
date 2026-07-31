@@ -1859,6 +1859,7 @@ export interface LeaveRequest {
   submittedDate: string
   hrApprovalBy?: string
   hrDecisionDate?: string
+  reviewNotes?: string
   submittedByUserId?: string
   isSystemGenerated?: boolean  // true for december_closure auto-applied by HR
 }
