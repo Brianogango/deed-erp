@@ -57,17 +57,16 @@ jobs:
           script: |
             set -euo pipefail
             cd /var/www/deed-erp
-            mkdir -p scripts
-            cp /tmp/deed-ops/book-leave-for-employee.mjs scripts/book-leave-for-employee.mjs
+            cp /tmp/deed-ops/book-leave-for-employee.mjs /tmp/book-leave-for-employee.mjs
             ACTION='${{ steps.req.outputs.action }}'
             if [ "$ACTION" = 'set_status' ]; then
-              node scripts/book-leave-for-employee.mjs \
+              NODE_PATH=/var/www/deed-erp/node_modules node /tmp/book-leave-for-employee.mjs \
                 --ref '${{ steps.req.outputs.ref }}' \
                 --set-status '${{ steps.req.outputs.set_status }}'
             else
               PENDING_FLAG=''
               if [ '${{ steps.req.outputs.pending }}' = 'true' ]; then PENDING_FLAG='--pending'; fi
-              node scripts/book-leave-for-employee.mjs \
+              NODE_PATH=/var/www/deed-erp/node_modules node /tmp/book-leave-for-employee.mjs \
                 --name '${{ steps.req.outputs.name }}' \
                 --date '${{ steps.req.outputs.date }}' \
                 --end '${{ steps.req.outputs.end }}' \

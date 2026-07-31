@@ -1,0 +1,42 @@
+name: Ops clean Contabo worktree
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'ops/clean-worktree-request.json'
+
+jobs:
+  clean:
+    name: Clean Contabo app worktree
+    runs-on: ubuntu-latest
+    steps:
+      - name: Reset dirty tracked files
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          command_timeout: 5m
+          script: |
+            set -euo pipefail
+            cd /var/www/deed-erp
+            echo "Before:"
+            git status --porcelain || true
+            # Discard local edits from ops copies; keep untracked uploads alone.
+            git checkout -- scripts/book-leave-for-employee.mjs 2>/dev/null || true
+            git restore scripts/book-leave-for-employee.mjs 2>/dev/null || true
+            # If script was never on this revision, remove the dirty untracked/copied file only when it matches ops copy path.
+            if git status --porcelain | grep -q 'scripts/book-leave-for-employee.mjs'; then
+              git checkout HEAD -- scripts/book-leave-for-employee.mjs 2>/dev/null || rm -f scripts/book-leave-for-employee.mjs
+            fi
+            echo "After:"
+            git status --porcelain || true
+            if [ -n "$(git status --porcelain)" ]; then
+              echo "WARNING: worktree still dirty — listing remaining changes"
+              git status
+              # Soft reset only the known ops artifact; do not wipe real local work blindly.
+              git diff --name-only
+            else
+              echo "OK worktree clean"
+            fi
