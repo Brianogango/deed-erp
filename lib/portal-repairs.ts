@@ -52,6 +52,10 @@ export interface PortalRepair {
   issueDescription: string
   accessories: { name: string; received: boolean; notes?: string }[]
   assignedTechnicianName?: string
+  /** Workflow path — diagnosis_first (default) or direct_repair. */
+  repairPath?: 'diagnosis_first' | 'direct_repair'
+  liabilityWaiverAccepted?: boolean
+  liabilityWaiverAcceptedAt?: string
   diagnosis?: PortalDiagnosis
   diagnosisHistory?: PortalDiagnosis[]
   quote?: {

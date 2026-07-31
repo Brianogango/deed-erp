@@ -24,6 +24,8 @@ import { SecondaryActionMenu, StatusBadge } from '@/components/erp'
 import { OutboundReleasePanel, OrcStatusBadge } from '../OutboundReleasePanel'
 import { normalizeClientRole } from '@/lib/auth/access'
 import { readGuardedImageAsDataUrl } from '@/lib/client-image-guard'
+import { repairProgressOrderFor } from '@/lib/repair-progress'
+import { isDirectRepairPath, quotableStatusesForPath, repairPathLabel, startableStatusesForPath } from '@/lib/repair-path'
 const STATUS_BADGE_CLS: Record<string, string> = {
   pending_verification: 'bg-amber-50 text-amber-800 border-amber-200',
   received:             'bg-slate-100 text-slate-700 border-slate-200',
@@ -168,16 +170,14 @@ export default function RepairDetailView() {
     && r.repairPath !== 'direct_repair'
     && ['diagnosed','awaiting_approval','approved','awaiting_parts','in_repair','qc','ready'].includes(r.status)
     && !pendingOutsourceJob
-  const canQuote    = (r.repairPath === 'direct_repair'
-    ? ['assigned','diagnosed','awaiting_approval','approved','awaiting_parts','in_repair','qc'].includes(r.status)
-    : ['diagnosed','awaiting_approval','approved','awaiting_parts','in_repair','qc'].includes(r.status)
-      && !!(r.diagnosis?.findings || r.diagnosis?.faultDescription))
+  const canQuote    = quotableStatusesForPath(r.repairPath).includes(r.status)
+    && (isDirectRepairPath(r.repairPath) || !!(r.diagnosis?.findings || r.diagnosis?.faultDescription))
     && (isMyRepair || ['director','admin_officer','technical_lead','sales_rep','finance_officer'].includes(currentUser?.role ?? ''))
     && !r.diagnosisStopped
     && !pendingOutsourceJob
     // Lock quote editing once device is marked ready-for-collection or has been picked up
     && !['ready','invoiced','verified_released','delivered','closed','cancelled','declined','unrepairable','returned','retained'].includes(r.status)
-  const canStart      = ((r.status === 'approved' || r.status === 'awaiting_parts') || (['assigned', 'diagnosed'].includes(r.status) && r.repairPath === 'direct_repair')) && isMyRepair && !pendingOutsourceJob
+  const canStart      = startableStatusesForPath(r.repairPath).includes(r.status) && isMyRepair && !pendingOutsourceJob
   const canComplete   = r.status === 'in_repair' && isMyRepair && !pendingOutsourceJob
   // QC: director/lead always; technician only if they did NOT work on this repair
   const canPerformQA  = r.status === 'qc'
@@ -199,6 +199,7 @@ export default function RepairDetailView() {
   const canEditDetails        = ['director', 'admin_officer', 'technical_lead'].includes(currentRole) && !TERMINAL.includes(r.status)
   // Customer declines repair after diagnosis — close at diagnosis stage with the KES 1,500 fee
   const canStopAtDiagnosis    = !r.diagnosisStopped && !!r.diagnosis
+    && !isDirectRepairPath(r.repairPath)
     && ['diagnosed', 'awaiting_approval', 'approved', 'awaiting_parts'].includes(r.status)
     && (isMyRepair || ['director', 'admin_officer', 'technical_lead'].includes(currentRole))
     && !pendingOutsourceJob
@@ -380,6 +381,16 @@ export default function RepairDetailView() {
                   Your job
                 </span>
               )}
+              <span
+                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wide border ${
+                  isDirectRepairPath(r.repairPath)
+                    ? 'bg-violet-50 text-violet-700 border-violet-200'
+                    : 'bg-sky-50 text-sky-700 border-sky-200'
+                }`}
+                title={isDirectRepairPath(r.repairPath) ? 'Bypasses diagnosis; quotes auto-approve' : 'Tech diagnoses before quoting'}
+              >
+                {repairPathLabel(r.repairPath)}
+              </span>
             </div>
           </div>
 
@@ -1455,7 +1466,11 @@ export default function RepairDetailView() {
             <SectionCard delay={340}>
               <SectionHeader icon={faHistory} iconBg="bg-slate-600" title="Repair Timeline" subtitle="Status & progress history" />
               <div className="px-4 sm:px-6 py-4 sm:py-5">
-                <StatusStepper currentStatus={r.status} history={r.statusHistory || []} />
+                <StatusStepper
+                  currentStatus={r.status}
+                  history={r.statusHistory || []}
+                  steps={repairProgressOrderFor(r)}
+                />
               </div>
             </SectionCard>
 

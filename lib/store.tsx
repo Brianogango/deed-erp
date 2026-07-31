@@ -52,6 +52,11 @@ import {
 import { repairOutsourceReadiness } from '@/lib/repair-outsource'
 import { getPreviousRepairProgressStatus } from '@/lib/repair-progress'
 import {
+  isDirectRepairPath,
+  quotableStatusesForPath,
+  startableStatusesForPath,
+} from '@/lib/repair-path'
+import {
   buildDefaultRepairQcItems,
   prepareRepairQcItemsForRound,
   summarizeFailedQcItems,
@@ -4713,6 +4718,9 @@ export function StoreProvider({
       issueDescription: r.issueDescription ?? r.description ?? '',
       accessories: r.accessories ?? [],
       assignedTechnicianName: r.assignedTechnicianName || r.technicianName || undefined,
+      repairPath: r.repairPath === 'direct_repair' ? 'direct_repair' : 'diagnosis_first',
+      liabilityWaiverAccepted: r.liabilityWaiverAccepted,
+      liabilityWaiverAcceptedAt: r.liabilityWaiverAcceptedAt,
       diagnosis: r.diagnosis ? {
         id: r.diagnosis.id,
         revision: r.diagnosis.revision,
@@ -10516,8 +10524,12 @@ const storeCtx: AppState = {
         const partsTotal = updated.partsUsed.reduce((a, x) => a + x.qty * x.price, 0)
         const diagnosisFee = updated.diagnosisStopped ? (updated.diagnosisFee ?? 0) : 0
         updated.total = updated.underWarranty ? 0 : partsTotal + updated.laborCost + diagnosisFee
-        // Sync portal when report/photo fields change so customers can see them
-        if ('qcReportData' in p || 'diagnosisReportData' in p || 'preRepairPhotos' in p || 'issuePhotos' in p) {
+        // Sync portal when customer-visible intake / report fields change
+        if (
+          'qcReportData' in p || 'diagnosisReportData' in p || 'preRepairPhotos' in p || 'issuePhotos' in p
+          || 'repairPath' in p || 'liabilityWaiverAccepted' in p || 'notes' in p
+          || 'issueDescription' in p || 'customerName' in p || 'customerPhone' in p || 'customerEmail' in p
+        ) {
           setTimeout(() => syncRepairToPortal(updated), 0)
         }
         return updated
@@ -10628,7 +10640,12 @@ const storeCtx: AppState = {
       const user = currentUser()
       if (!user) return
       const repair = repairs.find(r => r.id === repairId)
-      const isAssignedTech = repair?.assignedTechnicianId === user.id
+      if (!repair) return
+      if (isDirectRepairPath(repair.repairPath)) {
+        showToast('Direct Repair jobs skip diagnosis — change the workflow path first if diagnosis is required', 'error')
+        return
+      }
+      const isAssignedTech = repair.assignedTechnicianId === user.id
       const isLeadOrDirector = ['technical_lead', 'director'].includes(normalizeClientRole(user.role))
       if (!isAssignedTech && !isLeadOrDirector) {
         showToast('Only the assigned technician or lead technician can log or update a diagnosis', 'error'); return
@@ -10678,8 +10695,12 @@ const storeCtx: AppState = {
     stopAtDiagnosis: (repairId) => {
       const user = currentUser()
       const repair = repairs.find(r => r.id === repairId)
+      if (!repair) return
+      if (isDirectRepairPath(repair.repairPath)) {
+        showToast('Stop at diagnosis only applies to Diagnosis First repairs', 'error'); return
+      }
       const isManager = !!user && ['director', 'admin_officer', 'technical_lead'].includes(normalizeClientRole(user.role))
-      if (!user || (!isManager && repair?.assignedTechnicianId !== user.id)) {
+      if (!user || (!isManager && repair.assignedTechnicianId !== user.id)) {
         showToast('Only the assigned technician or a manager can stop at diagnosis', 'error'); return
       }
       // Repair closes at diagnosis stage — charge flat KES 1,500 diagnosis fee
@@ -10707,9 +10728,7 @@ const storeCtx: AppState = {
       if (!canGenerate) {
         showToast('Only the assigned technician or authorised staff can generate a quote', 'error'); return
       }
-      const QUOTABLE_STATUSES = repair.repairPath === 'direct_repair'
-        ? ['assigned', 'diagnosed', 'awaiting_approval', 'approved', 'awaiting_parts', 'in_repair']
-        : ['diagnosed', 'awaiting_approval', 'approved', 'awaiting_parts', 'in_repair']
+      const QUOTABLE_STATUSES = quotableStatusesForPath(repair.repairPath)
       if (!QUOTABLE_STATUSES.includes(repair.status)) {
         showToast('Cannot generate a new quote at this stage', 'error'); return
       }
@@ -10830,9 +10849,16 @@ const storeCtx: AppState = {
 
       // Full warranty = company pays everything; partial/void/none = client pays quote total
       const isFullWarranty = repair.underWarranty && repair.warrantyCoverage === 'full'
+      const isDirectRepair = isDirectRepairPath(repair.repairPath)
       const chargeTotal = isFullWarranty ? 0 : quote.total
-      // Full warranty quotes are auto-approved — no client approval needed
-      const quoteStatus: RepairStatus = isFullWarranty ? 'approved' : 'awaiting_approval'
+      // Full warranty + Direct Repair quotes are auto-approved — no client approval gate
+      const quoteStatus: RepairStatus = (isFullWarranty || isDirectRepair) ? 'approved' : 'awaiting_approval'
+      if (isFullWarranty || isDirectRepair) {
+        quote.approvedDate = now()
+        quote.approvedBy = isFullWarranty
+          ? 'Warranty (auto-approved)'
+          : `Direct Repair path (auto-approved by ${user.name})`
+      }
 
       if (isUpdate && linkedSaleOrderId) {
         const soPatch = {
@@ -11027,7 +11053,7 @@ const storeCtx: AppState = {
         logisticsCost: derivedLogisticsCost,
         total: chargeTotal,
         status: quoteStatus,
-        quoteApprovalDeadline: isFullWarranty ? undefined : quote.validUntil,
+        quoteApprovalDeadline: (isFullWarranty || isDirectRepair) ? undefined : quote.validUntil,
         ...(linkedSaleOrderId ? { saleOrderId: linkedSaleOrderId, saleOrderRef: linkedSaleOrderRef } : {}),
         ...(salesQuoteId ? { salesQuoteId, salesQuoteRef } : {}),
         ...(invoiceIdToUpdate ? { invoiceId: invoiceIdToUpdate } : {}),
@@ -11051,6 +11077,19 @@ const storeCtx: AppState = {
         syncRepairToPortal({ ...repair, quote, status: 'approved', total: 0 }, 'Repair is fully covered under warranty — no charge')
         addAuditLog('generate_quote', repairId, `Warranty quote auto-approved (full coverage): KES 0`)
         showToast('Quote auto-approved — repair is fully covered under warranty')
+      } else if (isDirectRepair) {
+        // Direct Repair — quote is informational / billing; tech can start without portal approval
+        syncRepairToPortal(
+          { ...repair, quote, laborCost: derivedLaborCost, logisticsCost: derivedLogisticsCost, total: chargeTotal, status: 'approved' },
+          isUpdate
+            ? `Quote revised to KES ${chargeTotal.toLocaleString('en-KE')} (Direct Repair — no approval required)`
+            : `Quote ready: KES ${chargeTotal.toLocaleString('en-KE')} (Direct Repair — no approval required)`,
+        )
+        const auditDetail = isUpdate && changeSummary
+          ? `Direct Repair quote revised: KES ${prevQuote?.total ?? 0} → KES ${quote.total}\n${changeSummary}`
+          : `Direct Repair quote ${isUpdate ? 'updated' : 'generated'} and auto-approved: KES ${quote.total}`
+        addAuditLog(isUpdate ? 'update_quote' : 'generate_quote', repairId, auditDetail)
+        showToast(isUpdate ? 'Quote revised and auto-approved (Direct Repair)' : 'Quote auto-approved — Direct Repair can start without client approval')
       } else {
         const coverageLabel = repair.underWarranty ? (repair.warrantyCoverage === 'partial' ? ' (partial warranty — uncovered items)' : ' (warranty voided — client pays)') : ''
         const portalMsg = isUpdate
@@ -11478,11 +11517,16 @@ const storeCtx: AppState = {
       if (!isAssignedTech) {
         showToast('Only the assigned technician can start the repair', 'error'); return
       }
-      // Must have client approval unless it is a direct_repair path (no quote required)
-      const validStartStatuses: RepairStatus[] = ['approved', 'awaiting_parts']
-      const isDirectRepair = repair.repairPath === 'direct_repair' && ['assigned', 'diagnosed'].includes(repair.status)
-      if (!validStartStatuses.includes(repair.status) && !isDirectRepair) {
-        showToast('Client must approve the quote before repair can start', 'error'); return
+      // Diagnosis First needs quote approval; Direct Repair may start from assigned
+      const validStartStatuses = startableStatusesForPath(repair.repairPath) as RepairStatus[]
+      if (!validStartStatuses.includes(repair.status)) {
+        showToast(
+          isDirectRepairPath(repair.repairPath)
+            ? 'Repair cannot start at this stage'
+            : 'Client must approve the quote before repair can start',
+          'error',
+        )
+        return
       }
       const defaultQA = repair.qcItems.length === 0 ? buildDefaultRepairQcItems(uid) : []
       setRepairs(p => p.map(r => r.id === repairId ? {

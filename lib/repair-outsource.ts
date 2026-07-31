@@ -1,6 +1,7 @@
 /** Minimal repair shape needed to decide if outsourcing is allowed. */
 export type RepairOutsourceCandidate = {
   assignedTechnicianId?: string | null
+  repairPath?: 'diagnosis_first' | 'direct_repair' | string | null
   diagnosis?: {
     findings?: string | null
     faultDescription?: string | null
@@ -16,8 +17,9 @@ export function repairIsAssignedForOutsource(repair: RepairOutsourceCandidate): 
 }
 
 /**
- * A linked repair may only be outsourced after a technician is assigned
- * and a diagnosis has been logged.
+ * A linked repair may only be outsourced after a technician is assigned.
+ * Diagnosis First also requires a logged diagnosis; Direct Repair does not
+ * (that path intentionally bypasses diagnosis).
  */
 export function repairOutsourceReadiness(
   repair: RepairOutsourceCandidate,
@@ -25,7 +27,7 @@ export function repairOutsourceReadiness(
   if (!repairIsAssignedForOutsource(repair)) {
     return { ok: false, reason: 'Assign a technician before outsourcing this repair' }
   }
-  if (!repairHasLoggedDiagnosis(repair)) {
+  if (repair.repairPath !== 'direct_repair' && !repairHasLoggedDiagnosis(repair)) {
     return { ok: false, reason: 'Log a diagnosis before outsourcing this repair' }
   }
   return { ok: true }

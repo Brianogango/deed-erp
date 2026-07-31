@@ -3,6 +3,9 @@
 ## Absolute rule
 **Never delete `app_state` keys** as part of routine migration. Blobs remain the operational fallback until a **verified → certified → archived** cutover.
 
+## Repair workflow path (blob-only)
+`repairPath` (`diagnosis_first` | `direct_repair`) and Direct Repair liability-waiver fields live on `deed_repairs_v2` JSON only — they are **not** Prisma `repairs` columns yet. Do not drop or wipe that key when changing path enforcement.
+
 ## What this change does
 1. Creates relational tables for accounts, journals, product valuations, valuation events, stock reservations, approval rules, **deposits**, **holdovers** (safe SQL, `IF NOT EXISTS`).
 2. **Dual-writes** on blob save:

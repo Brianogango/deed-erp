@@ -7,8 +7,6 @@ describe('getPreviousRepairProgressStatus', () => {
   })
 
   it('does not ping-pong after a prior back-step history pattern', () => {
-    // Even if history ends with diagnosed → assigned → diagnosed, Back from
-    // diagnosed must still go to assigned (linear), not re-read history.
     expect(getPreviousRepairProgressStatus({
       status: 'diagnosed',
       repairPath: 'diagnosis_first',
@@ -19,11 +17,11 @@ describe('getPreviousRepairProgressStatus', () => {
     })).toBe('received')
   })
 
-  it('skips diagnosed for direct_repair path', () => {
+  it('skips diagnosed/approval for direct_repair path', () => {
     expect(getPreviousRepairProgressStatus({
       status: 'in_repair',
       repairPath: 'direct_repair',
-    })).toBe('approved')
+    })).toBe('assigned')
     expect(getPreviousRepairProgressStatus({
       status: 'diagnosed',
       repairPath: 'direct_repair',
@@ -52,7 +50,8 @@ describe('getPreviousRepairProgressStatus', () => {
     const order = repairProgressOrderFor({ status: 'assigned', repairPath: 'direct_repair' })
     expect(order).not.toContain('diagnosed')
     expect(order).not.toContain('awaiting_approval')
+    expect(order).not.toContain('approved')
     expect(order).toContain('assigned')
-    expect(order).toContain('approved')
+    expect(order).toContain('in_repair')
   })
 })
