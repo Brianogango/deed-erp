@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
-import { useRepairStore, RepairOrder, OUTSOURCE_SERVICE_TYPES } from '@/lib/store'
+import { useRepairStore, RepairOrder, OUTSOURCE_SERVICE_TYPES, type RepairQAItem } from '@/lib/store'
 import { repairOutsourceReadiness } from '@/lib/repair-outsource'
 import { Modal, Field, Input, Select, Textarea } from '@/components/ui'
 import { Fa } from '@/components/icons'
@@ -594,33 +594,24 @@ export function QuoteModal({ repair, onClose }: { repair: RepairOrder, onClose: 
  */
 export function QAModal({ repair, onClose }: { repair: RepairOrder, onClose: () => void }) {
   const { completeRepairQA } = useRepairStore()
-  const [qcItems, setQcItems] = useState(() =>
-    (repair.qcItems?.length
-      ? repair.qcItems.map(item => ({ ...item, passed: false, notes: undefined, testedBy: undefined, testedDate: undefined }))
-      : [
-          { id: crypto.randomUUID(), description: 'Device powers on successfully', passed: false },
-          { id: crypto.randomUUID(), description: 'Reported issue(s) fully resolved', passed: false },
-          { id: crypto.randomUUID(), description: 'No new issues introduced during repair', passed: false },
-          { id: crypto.randomUUID(), description: 'All accessories present and returned', passed: false },
-          { id: crypto.randomUUID(), description: 'Device cleaned and presentable', passed: false },
-        ])
+  const seedDefaults = (): RepairQAItem[] => [
+    { id: crypto.randomUUID(), description: 'Device powers on successfully', passed: false },
+    { id: crypto.randomUUID(), description: 'Reported issue(s) fully resolved', passed: false },
+    { id: crypto.randomUUID(), description: 'No new issues introduced during repair', passed: false },
+    { id: crypto.randomUUID(), description: 'All accessories present and returned', passed: false },
+    { id: crypto.randomUUID(), description: 'Device cleaned and presentable', passed: false },
+  ]
+  const resetItems = (items: RepairQAItem[]): RepairQAItem[] =>
+    items.map(item => ({ ...item, passed: false, notes: undefined, testedBy: undefined, testedDate: undefined }))
+
+  const [qcItems, setQcItems] = useState<RepairQAItem[]>(() =>
+    resetItems(repair.qcItems?.length ? repair.qcItems : seedDefaults())
   )
   const [failReason, setFailReason] = useState('')
 
   // Reset prior pass ticks whenever the modal opens for this repair
   useEffect(() => {
-    setQcItems(
-      (repair.qcItems?.length
-        ? repair.qcItems
-        : [
-            { id: crypto.randomUUID(), description: 'Device powers on successfully', passed: false },
-            { id: crypto.randomUUID(), description: 'Reported issue(s) fully resolved', passed: false },
-            { id: crypto.randomUUID(), description: 'No new issues introduced during repair', passed: false },
-            { id: crypto.randomUUID(), description: 'All accessories present and returned', passed: false },
-            { id: crypto.randomUUID(), description: 'Device cleaned and presentable', passed: false },
-          ]
-      ).map(item => ({ ...item, passed: false, notes: undefined, testedBy: undefined, testedDate: undefined }))
-    )
+    setQcItems(resetItems(repair.qcItems?.length ? repair.qcItems : seedDefaults()))
     setFailReason('')
   }, [repair.id])
 
