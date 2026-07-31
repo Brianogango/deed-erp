@@ -23,6 +23,7 @@ const STATUS_META: Record<string, { label: string; color: string; bg: string; ic
   declined:          { label: 'Quote Declined',      color: '#F04438', bg: 'rgba(240,68,56,0.12)',    icon: '✗' },
   unrepairable:      { label: 'Cannot be Repaired',  color: '#F04438', bg: 'rgba(240,68,56,0.12)',    icon: '⛔' },
   returned:          { label: 'Returned',            color: '#6B7280', bg: 'rgba(107,114,128,0.12)',  icon: '↩️' },
+  retained:          { label: 'Left with Deed',     color: '#57534E', bg: 'rgba(87,83,78,0.12)',    icon: '📦' },
   cancelled:         { label: 'Cancelled',           color: '#6B7280', bg: 'rgba(107,114,128,0.12)',  icon: '✗' },
 }
 
