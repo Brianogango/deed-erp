@@ -14,12 +14,17 @@ import {
 } from '@fortawesome/free-solid-svg-icons'
 import PartnerApiKeys from './settings/PartnerApiKeys'
 import ApprovalRulesEditor from './settings/ApprovalRulesEditor'
+import {
+  BlobCutoverPanel,
+  CurrencyRatesEditor,
+  PricelistsPanel,
+} from './settings/CurrencyPricelistCutover'
 import { readGuardedImageAsDataUrl } from '@/lib/client-image-guard'
 import { resolveSettingsSection } from '@/lib/dashboard-priority'
 type Section =
   | 'general' | 'banks' | 'access' | 'email'
   | 'crm' | 'sales' | 'inventory' | 'purchase' | 'repair'
-  | 'accounting' | 'hr_config' | 'pos' | 'security' | 'partner_api'
+  | 'accounting' | 'hr_config' | 'pos' | 'security' | 'partner_api' | 'data_cutover'
 
 type UserFormState = {
   id: string; employeeId: string; username: string; name: string; role: string
@@ -403,7 +408,8 @@ export default function Settings() {
     { id: 'accounting', label: 'Accounting',    icon: faLandmark,        group: 'Modules' },
     { id: 'hr_config',  label: 'HR',            icon: faUserGroup,       group: 'Modules' },
     { id: 'pos',        label: 'Point of Sale', icon: faCashRegister,    group: 'Modules' },
-    { id: 'security',   label: 'Security',      icon: faShieldHalved,    group: 'System' },
+    { id: 'security',   label: 'Security',      icon: faShieldHalved, group: 'System' },
+    ...(canManageSystemUsers ? [{ id: 'data_cutover' as Section, label: 'Data Cutover', icon: faShieldHalved, group: 'System' }] : []),
     ...(canManageSystemUsers ? [{ id: 'partner_api' as Section, label: 'Partner API', icon: faKey, group: 'System' }] : []),
   ]
 
@@ -525,14 +531,14 @@ export default function Settings() {
                   <Field label="Phone"><Input value={companySettings.phone} type="tel" onChange={v => updateCompanySettings({ phone: v })} maxLength={20} /></Field>
                   <Field label="Email"><Input value={companySettings.email} type="email" onChange={v => updateCompanySettings({ email: v })} maxLength={100} /></Field>
                   <Field label="Website"><Input value={companySettings.website} onChange={v => updateCompanySettings({ website: v })} /></Field>
-                  <Field label="Currency">
-                    <Select value={companySettings.currency} onChange={v => updateCompanySettings({ currency: v })} options={[
-                      { value: 'KES', label: 'KES — Kenyan Shilling' },
-                      { value: 'USD', label: 'USD — US Dollar' },
-                      { value: 'EUR', label: 'EUR — Euro' },
-                      { value: 'GBP', label: 'GBP — British Pound' },
-                    ]} />
-                  </Field>
+                  <div className="sm:col-span-2">
+                    <CurrencyRatesEditor
+                      canWrite={currentUser?.role === 'director' || currentUser?.role === 'finance_officer'}
+                      showToast={showToast}
+                      companyCurrency={companySettings.currency}
+                      onCompanyCurrencyChange={v => updateCompanySettings({ currency: v, functionalCurrency: 'KES' })}
+                    />
+                  </div>
                   <Field label="Address"><Input value={companySettings.address} onChange={v => updateCompanySettings({ address: v })} /></Field>
                   <Field label="City / Postal"><Input value={companySettings.city} onChange={v => updateCompanySettings({ city: v })} /></Field>
                   <Field label="Fiscal Year Start">
@@ -855,6 +861,7 @@ ACCOUNTS_EMAIL=accounts@deed.co.ke`}</pre>
               <SectionCard title="Pricing">
                 <SettingRow label="Enable Pricelists" desc="Multiple pricing tiers per customer segment or volume"><Toggle on={ss.salesPricelists} onChange={v => updateSystemSettings({ salesPricelists: v })} /></SettingRow>
                 <SettingRow label="Discount Control" desc="Require manager approval for discounts above a threshold"><Toggle on={ss.salesDiscountControl} onChange={v => updateSystemSettings({ salesDiscountControl: v })} /></SettingRow>
+                {ss.salesPricelists && <PricelistsPanel showToast={showToast} />}
               </SectionCard>
               <SectionCard title="Approval Thresholds">
                 <p className="text-[11px] text-gray-400 pt-2 pb-1">
@@ -1070,6 +1077,16 @@ ACCOUNTS_EMAIL=accounts@deed.co.ke`}</pre>
 
           {/* ════ PARTNER API ════ */}
           {section === 'partner_api' && canManageSystemUsers && <PartnerApiKeys />}
+
+          {/* ════ DATA CUTOVER ════ */}
+          {section === 'data_cutover' && canManageSystemUsers && (
+            <SectionCard title="Blob cutover (gated)">
+              <BlobCutoverPanel
+                canWrite={currentUser?.role === 'director'}
+                showToast={showToast}
+              />
+            </SectionCard>
+          )}
 
         </div>
       </div>

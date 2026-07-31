@@ -4,6 +4,8 @@ import { createContext, useContext, useState, useCallback, useEffect, ReactNode,
 import { requestCreateUser, requestDeleteUser, requestUpdateUser, requestDeactivateUser, requestReactivateUser } from '@/lib/auth/client-users'
 import { canManageHRRole, getFirstAllowedModule, hasModuleAccess as userHasModuleAccess, normalizeClientRole } from '@/lib/auth/access'
 import { mergeCatalogProducts } from '@/lib/catalog-merge'
+import { documentMoneySnapshot, FUNCTIONAL_CURRENCY } from '@/lib/currency'
+import { needsSpecialPricingApproval, resolveListPrice } from '@/lib/pricing/pricelist'
 import type { CreateUserInput, ModuleId as AuthModuleId, PublicUser, UpdateUserInput, UserRole as AuthUserRole } from '@/lib/auth/types'
 import { calcStockByLocation as _calcStockByLocation, upsertBulkStock as _upsertBulkStock, aggregatePayroll } from '@/lib/business-logic'
 import { calculatePayroll } from '@/lib/payroll'
@@ -269,6 +271,12 @@ export interface Quote {
   taxTotal: number
   totalAmount: number
   total: number
+  /** Document currency snapshot (KES-first). */
+  currencyCode?: string
+  baseCurrencyCode?: string
+  exchangeRateToBase?: number
+  pricelist?: string
+  pricelistId?: string
   notes?: string
   internalNotes?: string
   terms?: string
@@ -460,7 +468,10 @@ export interface CompanySettings {
   mpesaPaybill: string
   mpesaAccount: string
   logoUrl: string
+  /** Document default / display currency. Books remain KES (functionalCurrency). */
   currency: string
+  /** Always KES — accounting / trial balance functional currency. */
+  functionalCurrency?: 'KES'
   invoiceFooter: string
   printTemplate?: 'classic' | 'modern' | 'compact'
 }
@@ -584,6 +595,7 @@ export const DEFAULT_COMPANY_SETTINGS: CompanySettings = {
   mpesaAccount:  '468778',
   logoUrl:       '',
   currency:      'KES',
+  functionalCurrency: 'KES',
   invoiceFooter: 'Thank you for your business.',
   printTemplate: 'classic',
 }
@@ -608,6 +620,9 @@ export interface Account {
 export interface Product {
   id: string; name: string; sku: string; barcode: string
   category: CategoryId; salePrice: number; costPrice: number; taxRate: number
+  /** Optional channel prices — used by WHOLESALE / KILIMALL pricelists. */
+  wholesalePrice?: number
+  kilimallPrice?: number
   /** Odoo-style commercial type: storable | consumable | service */
   productKind?: import('@/lib/product-kind').ProductKind
   trackingMethod?: TrackingMethod
@@ -767,6 +782,11 @@ export interface SaleOrder {
   sentMessage?: string
   // Odoo sale-order commercial fields
   pricelist?: string
+  pricelistId?: string
+  /** Document currency snapshot (KES-first). Books remain KES. */
+  currencyCode?: string
+  baseCurrencyCode?: string
+  exchangeRateToBase?: number
   salespersonId?: string
   salespersonName?: string
   salesTeam?: string
@@ -835,6 +855,10 @@ export interface Invoice {
   lines: InvoiceLine[]; subtotal: number; taxTotal: number; total: number; amountPaid: number
   saleOrderId?: string; purchaseOrderId?: string; receiptId?: string; repairId?: string; notes: string
   payments?: InvoicePayment[]
+  /** Document currency snapshot (KES-first). */
+  currencyCode?: string
+  baseCurrencyCode?: string
+  exchangeRateToBase?: number
   // Carried forward from the source sale order (Odoo invoice/delivery address).
   invoiceAddress?: string
   deliveryAddress?: string
@@ -7292,8 +7316,13 @@ const storeCtx: AppState = {
 
       const quoteRef = docSeq('QUO')
       const createdAt = now()
+      const money = documentMoneySnapshot({
+        currencyCode: quoteInput.currencyCode || companySettings.currency || FUNCTIONAL_CURRENCY,
+        exchangeRateToBase: quoteInput.exchangeRateToBase,
+      })
       const quote: Quote = {
         ...quoteInput,
+        ...money,
         id: uid(),
         ref: quoteRef,
         quoteNumber: quoteRef,
@@ -7332,8 +7361,14 @@ const storeCtx: AppState = {
     addQuoteLine: (quoteId, product, qty, discount = 0, customPrice) => {
       const quote = quotes.find(q => q.id === quoteId)
       if (!quote) return
-      
-      const unitPrice = customPrice ?? product.salePrice
+
+      const priced = resolveListPrice({
+        product,
+        pricelist: quote.pricelist,
+        qty,
+        customPrice,
+      })
+      const unitPrice = priced.unitPrice
       const disc = Math.min(Math.max(discount, 0), 100)
       const discountAmount = Math.round(unitPrice * qty * disc / 100)
       const subtotal = unitPrice * qty - discountAmount
@@ -7348,7 +7383,7 @@ const storeCtx: AppState = {
         description: product.description,
         qty,
         unit: product.unit,
-        listPrice: product.salePrice,
+        listPrice: priced.listPrice,
         unitPrice,
         discount: disc,
         discountAmount,
@@ -8297,7 +8332,7 @@ const storeCtx: AppState = {
     },
 
     getSalesApprovalState: (documentId: string) => {
-      const requests = approvalRequests.filter(r => r.documentId === documentId && ['discount', 'credit_override', 'backorder'].includes(r.type))
+      const requests = approvalRequests.filter(r => r.documentId === documentId && ['discount', 'credit_override', 'backorder', 'special_pricing'].includes(r.type))
       if (requests.length === 0) return { status: 'not_required', requests }
       if (requests.some(r => r.status === 'rejected')) return { status: 'rejected', requests }
       if (requests.some(r => r.status === 'pending')) return { status: 'pending', requests }
@@ -8309,6 +8344,10 @@ const storeCtx: AppState = {
       const user = currentUser()
       const initialLines = initial.lines ?? []
       const totals = calcSO(initialLines)
+      const money = documentMoneySnapshot({
+        currencyCode: (initial as any).currencyCode || companySettings.currency || FUNCTIONAL_CURRENCY,
+        exchangeRateToBase: (initial as any).exchangeRateToBase,
+      })
       const so: SaleOrder = {
         id: uid(), ref: docSeq('QUO'), status: 'quotation', customerId, customerName,
         date: now(), validUntil: initial.validUntil ?? addDays(now(), 30), lines: initialLines, ...totals,
@@ -8319,7 +8358,9 @@ const storeCtx: AppState = {
         customerRef: initial.customerRef,
         invoiceAddress: initial.invoiceAddress,
         deliveryAddress: initial.deliveryAddress,
-        pricelist: initial.pricelist,
+        pricelist: initial.pricelist || 'RETAIL',
+        pricelistId: (initial as any).pricelistId,
+        ...money,
         // Odoo defaults the salesperson to the creating user; the form may override.
         salespersonId: initial.salespersonId ?? user?.id,
         salespersonName: initial.salespersonName ?? user?.name,
@@ -8346,13 +8387,39 @@ const storeCtx: AppState = {
       // serial allocation happen only after confirmation in delivery prep.
       setSaleOrders(p => p.map(so => {
         if (so.id !== orderId) return so
+        const priced = resolveListPrice({
+          product,
+          pricelist: so.pricelist,
+          qty,
+        })
+        const unitPrice = priced.unitPrice
         const ex = so.lines.find(l => l.productId === product.id)
         let lines: SaleOrderLine[]
         if (ex) {
-          lines = so.lines.map(l => l.productId === product.id ? { ...l, qty: l.qty + qty, subtotal: Math.round(product.salePrice * (l.qty + qty) * (1 - l.discount / 100)) } : l)
+          const nextQty = ex.qty + qty
+          const nextPriced = resolveListPrice({ product, pricelist: so.pricelist, qty: nextQty })
+          lines = so.lines.map(l => l.productId === product.id ? {
+            ...l,
+            qty: nextQty,
+            unitPrice: nextPriced.unitPrice,
+            listPrice: nextPriced.listPrice,
+            subtotal: Math.round(nextPriced.unitPrice * nextQty * (1 - l.discount / 100)),
+          } : l)
         } else {
-          const sub = Math.round(product.salePrice * qty * (1 - discount / 100))
-          lines = [...so.lines, { id: uid(), productId: product.id, productName: product.name, qty, unitPrice: product.salePrice, discount, taxRate: product.taxRate > 0 ? product.taxRate : defaultTaxRate, subtotal: sub, serialIds: [], accountCode: resolveProductAccounts(product).saleAccountCode }]
+          const sub = Math.round(unitPrice * qty * (1 - discount / 100))
+          lines = [...so.lines, {
+            id: uid(),
+            productId: product.id,
+            productName: product.name,
+            qty,
+            unitPrice,
+            listPrice: priced.listPrice,
+            discount,
+            taxRate: product.taxRate > 0 ? product.taxRate : defaultTaxRate,
+            subtotal: sub,
+            serialIds: [],
+            accountCode: resolveProductAccounts(product).saleAccountCode,
+          }]
         }
         const updated = { ...so, lines, ...calcSO(lines) }
         sync(`/api/sale-orders/${orderId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
@@ -8482,7 +8549,7 @@ const storeCtx: AppState = {
       }
       const orderLines = so.lines.filter((line: any) => line.lineType !== 'section')
       const salesApprovalRequests = approvalRequests.filter(r =>
-        r.documentId === id && ['discount', 'credit_override', 'backorder'].includes(r.type)
+        r.documentId === id && ['discount', 'credit_override', 'backorder', 'special_pricing'].includes(r.type)
       )
       if (salesApprovalRequests.some(r => r.status === 'rejected')) {
         showToast(`${so.ref} has a rejected approval request. Revise the order before confirming.`, 'error')
@@ -8509,6 +8576,34 @@ const storeCtx: AppState = {
           proposedValue: so.total,
         }
         newApprovalRequests.push(createApprovalRequest('discount', 'sales_order', so.id, so.ref, user.id, user.name, discountDetails, approvers))
+      }
+
+      if (systemSettings.salesPricelists && !existingTypes.has('special_pricing')) {
+        const specialLines = orderLines.filter((line: any) => {
+          const product = prodRef.current.find(p => p.id === line.productId)
+          if (!product) return false
+          const priced = resolveListPrice({
+            product,
+            pricelist: so.pricelist,
+            qty: line.qty,
+            customPrice: line.unitPrice,
+          })
+          return needsSpecialPricingApproval(priced, Number(line.discount) || 0)
+        })
+        if (specialLines.length > 0) {
+          const sample = specialLines[0]
+          const product = prodRef.current.find(p => p.id === sample.productId)
+          const priced = product
+            ? resolveListPrice({ product, pricelist: so.pricelist, qty: sample.qty, customPrice: sample.unitPrice })
+            : null
+          newApprovalRequests.push(createApprovalRequest('special_pricing', 'sales_order', so.id, so.ref, user.id, user.name, {
+            reason: `Sales order ${so.ref} has unit price below pricelist (${so.pricelist || 'RETAIL'})`,
+            originalPrice: priced?.listPrice ?? sample.listPrice,
+            specialPrice: Number(sample.unitPrice) || 0,
+            currentValue: priced?.listPrice,
+            proposedValue: Number(sample.unitPrice) || 0,
+          }, approvers))
+        }
       }
 
       const customerCredit = (() => {
@@ -9063,6 +9158,10 @@ const storeCtx: AppState = {
             notes: remote.notes || `Created from ${so.ref}`,
             invoiceAddress: so.invoiceAddress,
             deliveryAddress: so.deliveryAddress,
+            ...documentMoneySnapshot({
+              currencyCode: (remote as any).currencyCode || so.currencyCode || companySettings.currency,
+              exchangeRateToBase: (remote as any).exchangeRateToBase ?? so.exchangeRateToBase,
+            }),
           }
           // Only push into local store when we have lines — empty shells overwrite the mirror.
           if (remoteLines.length > 0) {

@@ -836,7 +836,7 @@ model Product {
   productValuation   ProductValuation?
   stockReservations  StockReservation[]
   valuationEvents    ValuationEvent[]
-
+  priceListItems     PriceListItem[]
 
   @@index([sku], map: "idx_products_sku")
   @@index([barcode], map: "idx_products_barcode")
@@ -1250,6 +1250,10 @@ model SaleOrder {
   sentMessage     String?       @map("sent_message") @db.Text
   // Odoo sale-order commercial fields.
   pricelist       String?       @db.VarChar(120)
+  pricelistId     String?       @map("pricelist_id") @db.Uuid
+  currencyCode        String   @default("KES") @map("currency_code") @db.VarChar(3)
+  baseCurrencyCode    String   @default("KES") @map("base_currency_code") @db.VarChar(3)
+  exchangeRateToBase  Decimal  @default(1) @map("exchange_rate_to_base") @db.Decimal(18, 8)
   salespersonId   String?       @map("salesperson_id") @db.Uuid
   salespersonName String?       @map("salesperson_name") @db.VarChar(120)
   salesTeam       String?       @map("sales_team") @db.VarChar(120)
@@ -1267,6 +1271,7 @@ model SaleOrder {
 
   client    Client          @relation(fields: [clientId], references: [id], onDelete: Cascade)
   quote     Quote?          @relation("QuoteToSaleOrder", fields: [quoteId], references: [id])
+  priceList PriceList?      @relation(fields: [pricelistId], references: [id], onDelete: SetNull)
   createdBy User            @relation("SaleOrderCreator", fields: [createdById], references: [id])
   items     SaleOrderItem[]
   invoices  Invoice[]       @relation("InvoiceSourceSaleOrder")
@@ -1321,6 +1326,11 @@ model Quote {
   notes          String?
   internalNotes  String?        @map("internal_notes")
   terms          String?
+  pricelist      String?        @db.VarChar(120)
+  pricelistId    String?        @map("pricelist_id") @db.Uuid
+  currencyCode       String  @default("KES") @map("currency_code") @db.VarChar(3)
+  baseCurrencyCode   String  @default("KES") @map("base_currency_code") @db.VarChar(3)
+  exchangeRateToBase Decimal @default(1) @map("exchange_rate_to_base") @db.Decimal(18, 8)
   approvedById   String?        @map("approved_by") @db.Uuid
   approvedAt     DateTime?      @map("approved_at")
   convertedToId  String?        @map("converted_to") @db.Uuid
@@ -1333,6 +1343,7 @@ model Quote {
   approvedBy  User?       @relation("QuoteApprover", fields: [approvedById], references: [id])
   convertedTo Invoice?    @relation("QuoteConvertedTo", fields: [convertedToId], references: [id], onDelete: SetNull)
   createdBy   User        @relation("QuoteCreator", fields: [createdById], references: [id])
+  priceList   PriceList?  @relation(fields: [pricelistId], references: [id], onDelete: SetNull)
   items       QuoteItem[]
   invoices    Invoice[]   @relation("InvoiceSourceQuote")
   opportunity Opportunity?  @relation("OpportunityQuotes", fields: [opportunityId], references: [id])
@@ -1391,6 +1402,9 @@ model Invoice {
   // Finance dispute flag — Odoo's "Blocked" payment status is derived from it.
   paymentBlocked Boolean        @default(false) @map("payment_blocked")
   isPosInvoice   Boolean        @default(false) @map("is_pos_invoice")
+  currencyCode       String  @default("KES") @map("currency_code") @db.VarChar(3)
+  baseCurrencyCode   String  @default("KES") @map("base_currency_code") @db.VarChar(3)
+  exchangeRateToBase Decimal @default(1) @map("exchange_rate_to_base") @db.Decimal(18, 8)
   approvedById   String?        @map("approved_by") @db.Uuid
   approvedAt     DateTime?      @map("approved_at")
   createdById    String         @map("created_by") @db.Uuid
@@ -2316,4 +2330,83 @@ model Holdover {
   @@index([blobId], map: "idx_holdovers_blob")
   @@index([status], map: "idx_holdovers_status")
   @@map("holdovers")
+}
+
+// ── Multi-currency + pricelists + gated blob cutover ─────────────────────────
+// Additive only. Functional currency is always KES. Never delete app_state keys
+// without a blob_cutover_certificates row that is certified + archived.
+
+model ExchangeRate {
+  id            String   @id @default(uuid()) @db.Uuid
+  fromCurrency  String   @map("from_currency") @db.VarChar(3)
+  toCurrency    String   @default("KES") @map("to_currency") @db.VarChar(3)
+  rate          Decimal  @db.Decimal(18, 8)
+  effectiveDate DateTime @default(now()) @map("effective_date") @db.Date
+  source        String?  @db.VarChar(80)
+  notes         String?
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  @@index([fromCurrency], map: "idx_exchange_rates_from")
+  @@map("exchange_rates")
+}
+
+model PriceList {
+  id           String   @id @default(uuid()) @db.Uuid
+  code         String   @unique @db.VarChar(40)
+  name         String   @db.VarChar(120)
+  currencyCode String   @default("KES") @map("currency_code") @db.VarChar(3)
+  priceSource  String   @default("selling_price") @map("price_source") @db.VarChar(40)
+  isActive     Boolean  @default(true) @map("is_active")
+  sortOrder    Int      @default(100) @map("sort_order")
+  notes        String?
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  items      PriceListItem[]
+  saleOrders SaleOrder[]
+  quotes     Quote[]
+
+  @@map("price_lists")
+}
+
+model PriceListItem {
+  id              String    @id @default(uuid()) @db.Uuid
+  priceListId     String    @map("price_list_id") @db.Uuid
+  productId       String?   @map("product_id") @db.Uuid
+  unitPrice       Decimal   @default(0) @map("unit_price") @db.Decimal(14, 2)
+  minimumQty      Int       @default(1) @map("minimum_qty")
+  maximumDiscount Decimal   @default(0) @map("maximum_discount") @db.Decimal(5, 2)
+  validFrom       DateTime? @map("valid_from") @db.Date
+  validUntil      DateTime? @map("valid_until") @db.Date
+  isActive        Boolean   @default(true) @map("is_active")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  priceList PriceList @relation(fields: [priceListId], references: [id], onDelete: Cascade)
+  product   Product?  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([priceListId], map: "idx_price_list_items_list")
+  @@index([productId], map: "idx_price_list_items_product")
+  @@map("price_list_items")
+}
+
+model BlobCutoverCertificate {
+  id          String    @id @default(uuid()) @db.Uuid
+  blobKey     String    @map("blob_key") @db.VarChar(120)
+  status      String    @default("pending") @db.VarChar(20)
+  blobCount   Int?      @map("blob_count")
+  prismaCount Int?      @map("prisma_count")
+  parityOk    Boolean   @default(false) @map("parity_ok")
+  details     Json      @default("{}")
+  certifiedBy String?   @map("certified_by") @db.VarChar(80)
+  certifiedAt DateTime? @map("certified_at")
+  archivedAt  DateTime? @map("archived_at")
+  archiveKey  String?   @map("archive_key") @db.VarChar(200)
+  notes       String?
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  @@index([status], map: "idx_blob_cutover_status")
+  @@map("blob_cutover_certificates")
 }

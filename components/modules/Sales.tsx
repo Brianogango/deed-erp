@@ -67,6 +67,7 @@ import { PrimaryActionButton, OperationalSummary, TablePageLayout } from '@/comp
 import { DataTable, type ColumnDef } from '@/components/data-table'
 import { Fa } from '@/components/icons'
 import { downloadCommercialPdf, openCommercialPdf, type CommercialPdfInput } from '@/lib/commercial-pdf'
+import { resolveListPrice } from '@/lib/pricing/pricelist'
 import { finishUxTask, startUxTask, trackUxEvent } from '@/lib/ux-telemetry'
 import {
   SALE_STATUS_BAR,
@@ -454,6 +455,7 @@ function SalesContent() {
       taxTotal: so.taxTotal,
       total: so.total,
       notes: so.notes,
+      currency: so.currencyCode || companySettings.currency || 'KES',
       ...overrides,
     }
   }
@@ -603,9 +605,10 @@ function SalesContent() {
       return next
     })
   const selectProductForDraftLine = (lineId: string, product: typeof products[0]) => {
+    const priced = resolveListPrice({ product, pricelist: newPricelist || 'RETAIL', qty: 1 })
     setNewDraftLines(p => p.map(l => l.id === lineId ? {
       ...l, type: 'item', productId: product.id, productName: product.name, description: product.name,
-      unitPrice: String(product.salePrice), taxRate: String(product.taxRate ?? 0),
+      unitPrice: String(priced.unitPrice), taxRate: String(product.taxRate ?? 0),
     } : l))
   }
   const calcDraftLineTotal = (l: DraftLine) => {
@@ -1343,7 +1346,15 @@ function SalesContent() {
                           </Field>
                           {systemSettings.salesPricelists && (
                             <Field label="Pricelist">
-                              <Input value={activeOrder.pricelist || ''} onChange={value => updateSaleOrder(activeOrder.id, { pricelist: value || undefined })} placeholder="e.g. Retail / Wholesale" />
+                              <Select
+                                value={activeOrder.pricelist || 'RETAIL'}
+                                onChange={value => updateSaleOrder(activeOrder.id, { pricelist: value || 'RETAIL' })}
+                                options={[
+                                  { value: 'RETAIL', label: 'Retail' },
+                                  { value: 'WHOLESALE', label: 'Wholesale' },
+                                  { value: 'KILIMALL', label: 'Kilimall' },
+                                ]}
+                              />
                             </Field>
                           )}
                           <div className="sm:col-span-2 lg:col-span-3 xl:col-span-3">
@@ -2010,7 +2021,16 @@ function NewQuotationForm({
               {pricelistsEnabled && (
                 <div className="flex flex-col gap-1.5">
                   <label className="text-[10px] uppercase tracking-wider font-bold text-[var(--text-3)]">Pricelist</label>
-                  <input type="text" aria-label="Pricelist" className="form-input text-xs" placeholder="e.g. Retail / Wholesale" value={newPricelist} onChange={e => setNewPricelist(e.target.value)} />
+                  <select
+                    aria-label="Pricelist"
+                    className="form-input text-xs"
+                    value={newPricelist || 'RETAIL'}
+                    onChange={e => setNewPricelist(e.target.value)}
+                  >
+                    <option value="RETAIL">Retail</option>
+                    <option value="WHOLESALE">Wholesale</option>
+                    <option value="KILIMALL">Kilimall</option>
+                  </select>
                 </div>
               )}
               <div className="flex flex-col gap-1.5">

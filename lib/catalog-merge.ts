@@ -40,6 +40,8 @@ export interface CatalogApiRow {
   description?: string | null
   sellingPrice?: number | string | null
   costPrice?: number | string | null
+  wholesalePrice?: number | string | null
+  kilimallPrice?: number | string | null
   reorderLevel?: number | null
   isActive?: boolean
   trackingMethod?: 'NONE' | 'QUANTITY' | 'BATCH' | 'SERIAL' | string | null
@@ -112,6 +114,12 @@ export function mergeCatalogProducts<P extends ClientCatalogProduct>(
       category,
       salePrice: Number(row.sellingPrice ?? local?.salePrice ?? 0) || 0,
       costPrice: Number(row.costPrice ?? local?.costPrice ?? 0) || 0,
+      wholesalePrice: row.wholesalePrice != null
+        ? Number(row.wholesalePrice) || 0
+        : (local as any)?.wholesalePrice,
+      kilimallPrice: row.kilimallPrice != null
+        ? Number(row.kilimallPrice) || 0
+        : (local as any)?.kilimallPrice,
       minStock: Number(row.reorderLevel ?? local?.minStock ?? 1) || 0,
       trackingMethod,
       // Odoo invoicing policy — server value wins, defaults to Ordered Quantities.

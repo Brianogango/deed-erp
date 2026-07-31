@@ -38,6 +38,8 @@ export interface CommercialPdfInput {
   /** Override the party heading, e.g. "Invoice To", "Quote To", "Receipt To". */
   partyLabel?: string
   lines: CommercialPdfLine[]
+  /** Prefer document currency snapshot over company display currency. */
+  currency?: string
   subtotal: number
   taxTotal: number
   total: number
@@ -118,7 +120,7 @@ export async function buildCommercialPdf(
       email: company.email,
       website: company.website,
       kraPin: company.kraPin,
-      currency: company.currency,
+      currency: input.currency || company.currency,
       mpesaPaybill: company.mpesaPaybill,
       mpesaAccount: company.mpesaAccount,
       invoiceFooter: company.invoiceFooter,

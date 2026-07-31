@@ -3,8 +3,11 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from '@/lib/auth/server'
 import { isRoleAllowed } from '@/lib/auth/authorization'
 import { sql } from '@/lib/auth/db'
+import { uncertifiedProtectedKeys } from '@/lib/blob-cutover'
+import { listCutoverCertificates } from '@/lib/blob-cutover.server'
 
 const RESET_CONFIRMATION = 'RESET DEED ERP PRODUCTION DATA'
+const FORCE_UNCERTIFIED = 'FORCE UNCERTIFIED BLOB WIPE'
 
 async function ensureAdminAuditLog() {
   await sql`CREATE TABLE IF NOT EXISTS admin_audit_log (
@@ -50,6 +53,9 @@ export async function POST(req: NextRequest) {
   const confirmation = body && typeof body === 'object' && 'confirmation' in body
     ? String((body as { confirmation?: unknown }).confirmation ?? '').trim()
     : ''
+  const forceUncertified = body && typeof body === 'object' && 'forceUncertifiedConfirmation' in body
+    ? String((body as { forceUncertifiedConfirmation?: unknown }).forceUncertifiedConfirmation ?? '').trim()
+    : ''
 
   if (confirmation !== RESET_CONFIRMATION) {
     await writeAdminAuditLog(req, session, 'reset_all_data_rejected', { reason: 'invalid_confirmation' })
@@ -57,7 +63,32 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    await writeAdminAuditLog(req, session, 'reset_all_data_started', { confirmation: true })
+    const certificates = await listCutoverCertificates()
+    const uncertified = uncertifiedProtectedKeys(
+      certificates.map(c => ({
+        blobKey: c.blobKey,
+        status: c.status as 'pending' | 'verified' | 'certified' | 'archived' | 'blocked',
+        parityOk: c.parityOk,
+      })),
+    )
+
+    if (uncertified.length > 0 && forceUncertified !== FORCE_UNCERTIFIED) {
+      await writeAdminAuditLog(req, session, 'reset_all_data_blocked_uncertified', {
+        uncertified,
+      })
+      return NextResponse.json({
+        error: 'Protected blob keys are not certified for cutover. Certify via /api/admin/blob-cutover or send forceUncertifiedConfirmation.',
+        uncertifiedProtectedKeys: uncertified,
+        forceUncertifiedConfirmation: FORCE_UNCERTIFIED,
+        hint: 'Prefer verify → certify → archive → retire per key instead of wiping uncertified dual-write blobs.',
+      }, { status: 409 })
+    }
+
+    await writeAdminAuditLog(req, session, 'reset_all_data_started', {
+      confirmation: true,
+      forceUncertified: forceUncertified === FORCE_UNCERTIFIED,
+      uncertifiedAtStart: uncertified,
+    })
 
     // Clear app_state (all ERP localStorage-synced data)
     await sql`DELETE FROM app_state`

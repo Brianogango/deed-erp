@@ -38,6 +38,10 @@ function mapSaleOrderToClient(order: any) {
     quotationRef: order.quotationRef ?? undefined,
     proformaRef: order.proformaRef ?? undefined,
     pricelist: order.pricelist ?? undefined,
+    pricelistId: order.pricelistId ?? undefined,
+    currencyCode: order.currencyCode ?? 'KES',
+    baseCurrencyCode: order.baseCurrencyCode ?? 'KES',
+    exchangeRateToBase: Number(order.exchangeRateToBase ?? 1) || 1,
     salespersonId: order.salespersonId ?? undefined,
     salespersonName: order.salespersonName ?? undefined,
     salesTeam: order.salesTeam ?? undefined,
@@ -103,6 +107,10 @@ async function buildSaleOrderUpdateData(body: any) {
   if (body.sentTo !== undefined) data.sentTo = body.sentTo ?? null
   if (body.sentMessage !== undefined) data.sentMessage = body.sentMessage ?? null
   if (body.pricelist !== undefined) data.pricelist = body.pricelist ?? null
+  if (body.pricelistId !== undefined) data.pricelistId = optionalUuid(body.pricelistId) ?? null
+  if (body.currencyCode !== undefined) data.currencyCode = body.currencyCode || 'KES'
+  if (body.baseCurrencyCode !== undefined) data.baseCurrencyCode = body.baseCurrencyCode || 'KES'
+  if (body.exchangeRateToBase !== undefined) data.exchangeRateToBase = Number(body.exchangeRateToBase) || 1
   if (body.salespersonId !== undefined) data.salespersonId = optionalUuid(body.salespersonId) ?? null
   if (body.salespersonName !== undefined) data.salespersonName = body.salespersonName ?? null
   if (body.salesTeam !== undefined) data.salesTeam = body.salesTeam ?? null

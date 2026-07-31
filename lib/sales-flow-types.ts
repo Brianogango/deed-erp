@@ -665,7 +665,7 @@ export interface PricelistItem {
   validFrom: string
   validUntil?: string
   
-  currency: 'KES'
+  currency: 'KES' | 'USD' | 'EUR' | 'GBP'
   
   active: boolean
   

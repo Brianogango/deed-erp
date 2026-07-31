@@ -205,7 +205,7 @@ export function resolveSalesTab(_param: string | null | undefined): SalesTab {
 // links (e.g. the dashboard's Active Users card) land on the right section.
 export const SETTINGS_SECTIONS = [
   'general', 'banks', 'access', 'email', 'crm', 'sales', 'inventory', 'purchase',
-  'repair', 'accounting', 'hr_config', 'pos', 'security', 'partner_api',
+  'repair', 'accounting', 'hr_config', 'pos', 'security', 'partner_api', 'data_cutover',
 ] as const
 export type SettingsSection = typeof SETTINGS_SECTIONS[number]
 
