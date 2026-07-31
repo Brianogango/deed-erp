@@ -18,18 +18,24 @@ jobs:
         id: req
         run: |
           set -euo pipefail
-          NAME=$(jq -r '.name' ops/book-leave-request.json)
-          DATE=$(jq -r '.date' ops/book-leave-request.json)
-          END=$(jq -r '.end // .date' ops/book-leave-request.json)
+          ACTION=$(jq -r '.action // "book"' ops/book-leave-request.json)
+          NAME=$(jq -r '.name // empty' ops/book-leave-request.json)
+          DATE=$(jq -r '.date // empty' ops/book-leave-request.json)
+          END=$(jq -r '.end // .date // empty' ops/book-leave-request.json)
           TYPE=$(jq -r '.type // "annual"' ops/book-leave-request.json)
           REASON=$(jq -r '.reason // "Booked by ops request"' ops/book-leave-request.json)
           PENDING=$(jq -r '.pending // false' ops/book-leave-request.json)
+          REF=$(jq -r '.ref // empty' ops/book-leave-request.json)
+          SET_STATUS=$(jq -r '.setStatus // empty' ops/book-leave-request.json)
+          echo "action=$ACTION" >> "$GITHUB_OUTPUT"
           echo "name=$NAME" >> "$GITHUB_OUTPUT"
           echo "date=$DATE" >> "$GITHUB_OUTPUT"
           echo "end=$END" >> "$GITHUB_OUTPUT"
           echo "type=$TYPE" >> "$GITHUB_OUTPUT"
           echo "reason=$REASON" >> "$GITHUB_OUTPUT"
           echo "pending=$PENDING" >> "$GITHUB_OUTPUT"
+          echo "ref=$REF" >> "$GITHUB_OUTPUT"
+          echo "set_status=$SET_STATUS" >> "$GITHUB_OUTPUT"
 
       - name: Copy script to server
         uses: appleboy/scp-action@v0.1.7
@@ -51,15 +57,21 @@ jobs:
           script: |
             set -euo pipefail
             cd /var/www/deed-erp
-            PENDING_FLAG=''
-            if [ '${{ steps.req.outputs.pending }}' = 'true' ]; then PENDING_FLAG='--pending'; fi
             mkdir -p scripts
             cp /tmp/deed-ops/book-leave-for-employee.mjs scripts/book-leave-for-employee.mjs
-            # Run inside the app so node resolves `pg` from node_modules.
-            node scripts/book-leave-for-employee.mjs \
-              --name '${{ steps.req.outputs.name }}' \
-              --date '${{ steps.req.outputs.date }}' \
-              --end '${{ steps.req.outputs.end }}' \
-              --type '${{ steps.req.outputs.type }}' \
-              --reason '${{ steps.req.outputs.reason }}' \
-              $PENDING_FLAG
+            ACTION='${{ steps.req.outputs.action }}'
+            if [ "$ACTION" = 'set_status' ]; then
+              node scripts/book-leave-for-employee.mjs \
+                --ref '${{ steps.req.outputs.ref }}' \
+                --set-status '${{ steps.req.outputs.set_status }}'
+            else
+              PENDING_FLAG=''
+              if [ '${{ steps.req.outputs.pending }}' = 'true' ]; then PENDING_FLAG='--pending'; fi
+              node scripts/book-leave-for-employee.mjs \
+                --name '${{ steps.req.outputs.name }}' \
+                --date '${{ steps.req.outputs.date }}' \
+                --end '${{ steps.req.outputs.end }}' \
+                --type '${{ steps.req.outputs.type }}' \
+                --reason '${{ steps.req.outputs.reason }}' \
+                $PENDING_FLAG
+            fi
