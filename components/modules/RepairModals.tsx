@@ -737,12 +737,12 @@ export function QAModal({ repair, onClose }: { repair: RepairOrder, onClose: () 
 export function LeaveDeviceModal({ repair, onClose }: { repair: RepairOrder, onClose: () => void }) {
   const { leaveDeviceWithDeed } = useRepairStore()
   const [notes, setNotes] = useState('')
-  const [convertToStock, setConvertToStock] = useState(true)
-  const canConvert = !!(repair.productId || repair.productName)
+  const [convertMode, setConvertMode] = useState<'none' | 'donation' | 'buyback'>('donation')
 
   const handleConfirm = () => {
     leaveDeviceWithDeed(repair.id, {
-      convertToStock: convertToStock && canConvert,
+      convertToDonation: convertMode === 'donation',
+      convertToStock: convertMode === 'buyback',
       notes: notes.trim() || undefined,
     })
     onClose()
@@ -756,29 +756,25 @@ export function LeaveDeviceModal({ repair, onClose }: { repair: RepairOrder, onC
           <Fa icon={faBoxOpen} style={{ color: '#57534E', marginTop: 2, flexShrink: 0 } as any} />
           <p className="text-[11px] font-medium leading-relaxed" style={{ color: 'var(--text-2)' }}>
             Closes this job as <strong>Left with Deed</strong>. Reserved parts are released and any linked sale order / invoice is cancelled.
-            Optionally convert the device into warehouse stock via a free buy-back linked to this repair.
+            Convert into a donation-in or free buy-back stocked at warehouse, linked to this repair.
           </p>
         </div>
         <Field label="Notes (optional)">
           <Textarea value={notes} onChange={setNotes} placeholder="e.g. Customer donated the laptop after declining repair" rows={3} />
         </Field>
-        <label className="flex items-start gap-3 p-3 rounded-xl border border-[var(--border)] cursor-pointer">
-          <input
-            type="checkbox"
-            className="mt-0.5 w-4 h-4"
-            checked={convertToStock}
-            disabled={!canConvert}
-            onChange={e => setConvertToStock(e.target.checked)}
-          />
-          <span className="text-[11px] font-medium text-[var(--text-2)] leading-relaxed">
-            Convert into stock (free buy-back → warehouse)
-            {!repair.productId && (
-              <span className="block text-[10px] text-[var(--text-3)] mt-0.5">
-                Best when a catalog product is linked on the repair. Without a match, the job still retains without stocking.
-              </span>
-            )}
-          </span>
-        </label>
+        <div className="flex flex-col gap-2">
+          <p className="text-[10px] font-black text-[var(--text-4)] uppercase tracking-widest">Convert device</p>
+          {([
+            { v: 'donation' as const, label: 'Donation in → warehouse' },
+            { v: 'buyback' as const, label: 'Buy-back stock (KES 0)' },
+            { v: 'none' as const, label: 'Retain only (convert later)' },
+          ]).map(opt => (
+            <label key={opt.v} className="flex items-center gap-3 p-3 rounded-xl border border-[var(--border)] cursor-pointer">
+              <input type="radio" name="leave-convert-modal" checked={convertMode === opt.v} onChange={() => setConvertMode(opt.v)} />
+              <span className="text-[11px] font-medium text-[var(--text-2)]">{opt.label}</span>
+            </label>
+          ))}
+        </div>
         <div className="flex gap-2 justify-end pt-2">
           <button className="btn-outline min-w-[100px]" onClick={onClose}>Cancel</button>
           <ActionBtn onClick={handleConfirm} color="linear-gradient(135deg,#44403C,#78716C)" shadow="0 8px 24px rgba(87,83,78,0.35)">

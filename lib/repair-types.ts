@@ -190,6 +190,8 @@ export interface RepairOrder {
   retainedBy?: string
   retainedBuyBackId?: string
   retainedBuyBackRef?: string
+  retainedDonationId?: string
+  retainedDonationRef?: string
   
   // Billing
   invoiceId?: string

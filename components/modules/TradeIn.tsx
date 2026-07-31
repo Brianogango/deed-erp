@@ -735,8 +735,8 @@ function DonationTab() {
       const product = products.find(p => p.id === line.productId)
       if (!product) { showToast(`Product not found: ${line.productName || line.productId}`, 'error'); return }
       if (line.qty <= 0) { showToast(`Quantity must be greater than zero for ${product.name}`, 'error'); return }
-      if (product.requiresSerial && donType === 'in') {
-        showToast(`Serialized donation-in for ${product.name} needs serial capture first. Use opening stock/receipt intake for serialized donated devices.`, 'error')
+      if (product.requiresSerial && donType === 'in' && line.serialIds.length !== line.qty) {
+        showToast(`Select or register ${line.qty} serial number(s) for donation-in of ${product.name}`, 'error')
         return
       }
       if (product.requiresSerial && donType === 'out' && line.serialIds.length !== line.qty) {
@@ -783,9 +783,11 @@ function DonationTab() {
           if (!party) errors.push('party is required')
           if (!product) errors.push(`product "${productRaw}" not found`)
           if (!qty || qty <= 0) errors.push('qty must be > 0')
-          if (product?.requiresSerial && type === 'in') errors.push('serialized donation-in needs stock intake/opening stock serial capture')
-          const serialResult = product ? parseSerialIds(serialRaw, product, serials, qty, 'stock_out', loc) : { serialIds: [], errors: [] }
-          if (product?.requiresSerial && type === 'out') errors.push(...serialResult.errors)
+          const serialMode = type === 'in' ? 'customer_return' as const : 'stock_out' as const
+          const serialResult = product
+            ? parseSerialIds(serialRaw, product, serials, qty, serialMode, loc)
+            : { serialIds: [] as string[], errors: [] as string[] }
+          if (product?.requiresSerial) errors.push(...serialResult.errors)
 
           return {
             type: (type === 'out' ? 'out' : 'in') as 'in' | 'out',
@@ -1100,10 +1102,25 @@ function DonationLineEditor({ line, products, donationType, location, onChange, 
           )}
         </div>
       )}
-      {product?.requiresSerial && donationType === 'in' && (
-        <p style={{ fontSize: 10, color: '#B45309', marginTop: 6 }}>
-          Serialized donation-in requires serial capture through stock intake/opening stock before confirmation.
-        </p>
+      {product?.requiresSerial && donationType === 'in' && line.productId && (
+        <div style={{ marginTop: 8 }}>
+          <button onClick={() => setShowSerials(s => !s)} style={{ fontSize: 10, color: 'var(--accent-cyan)', background: 'none', border: 'none', cursor: 'pointer' }}>
+            {showSerials ? '▲' : '▼'} Select / register return serials ({line.serialIds.length}/{line.qty})
+          </button>
+          {showSerials && (
+            <div style={{ marginTop: 6 }}>
+              <SerialPicker
+                productId={line.productId}
+                selectedIds={line.serialIds}
+                onAdd={id => onChange({ serialIds: [...line.serialIds, id] })}
+                onRemove={id => onChange({ serialIds: line.serialIds.filter(s => s !== id) })}
+                mode="customer_return"
+                allowIntake
+                intakeSource="donation-in"
+              />
+            </div>
+          )}
+        </div>
       )}
     </div>
   )

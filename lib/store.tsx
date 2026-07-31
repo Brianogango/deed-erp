@@ -54,6 +54,12 @@ import {
   prepareRepairQcItemsForRound,
   summarizeFailedQcItems,
 } from '@/lib/repair-qc'
+import {
+  buyBackConditionFromRepair,
+  canConvertRetainedRepair,
+  findRepairCatalogProduct,
+  matchRepairDeviceSerial,
+} from '@/lib/repair-retain-convert'
 
 export type ModuleId = AuthModuleId
 
@@ -1439,6 +1445,8 @@ export interface RepairOrder {
   retainedBy?: string
   retainedBuyBackId?: string
   retainedBuyBackRef?: string
+  retainedDonationId?: string
+  retainedDonationRef?: string
   qcReportData?: string      // base64 PDF data URL
   qcReportName?: string
   qcReportUrl?: string       // lightweight server download URL for QC reports
@@ -1653,6 +1661,9 @@ export interface Donation {
   status: 'draft' | 'confirmed'
   location: LocationId   // destination for 'in', source for 'out'
   notes?: string
+  /** When created from a retained repair (customer left device with Deed). */
+  repairId?: string
+  repairRef?: string
   confirmedByName?: string; confirmedDate?: string
 }
 
@@ -2954,10 +2965,20 @@ export interface AppState {
   declineQuote: (repairId: string, reason: string) => void
   markUnrepairable: (repairId: string, reason: string) => void
   returnToCustomer: (repairId: string, reason: string) => void
-  /** Customer left the device with Deed (terminal). Optionally convert into stock via free buy-back. */
+  /** Customer left the device with Deed (terminal). Optionally convert into stock via free buy-back or donation-in. */
   leaveDeviceWithDeed: (
     repairId: string,
-    opts?: { convertToStock?: boolean; notes?: string },
+    opts?: { convertToStock?: boolean; convertToDonation?: boolean; notes?: string },
+  ) => { ok: boolean; message: string; buyBackId?: string; buyBackRef?: string; donationId?: string; donationRef?: string }
+  /** One-click: convert a retained repair into a confirmed donation-in linked to the repair. */
+  convertRetainedRepairToDonation: (
+    repairId: string,
+    opts?: { notes?: string },
+  ) => { ok: boolean; message: string; donationId?: string; donationRef?: string }
+  /** One-click: convert a retained repair into a free stocked buy-back linked to the repair. */
+  convertRetainedRepairToBuyBack: (
+    repairId: string,
+    opts?: { notes?: string },
   ) => { ok: boolean; message: string; buyBackId?: string; buyBackRef?: string }
 
   // POS
@@ -3155,6 +3176,8 @@ export type RepairStoreState = Pick<AppState,
   | 'markUnrepairable'
   | 'returnToCustomer'
   | 'leaveDeviceWithDeed'
+  | 'convertRetainedRepairToDonation'
+  | 'convertRetainedRepairToBuyBack'
   | 'fileWarrantyClaim'
   | 'showToast'
   | 'appendRepairHistory'
@@ -4760,6 +4783,154 @@ export function StoreProvider({
     return true
   }
 
+  /** Intake a retained repair device into warehouse via free buy-back or donation-in. */
+  const convertRetainedDeviceIntoInventory = (args: {
+    repair: RepairOrder
+    mode: 'buyback' | 'donation'
+    notes?: string
+    at: string
+    byName: string
+  }): { ok: true; mode: 'buyback' | 'donation'; id: string; ref: string } | { ok: false; message: string } => {
+    const { repair, mode, notes, at, byName } = args
+    const product = findRepairCatalogProduct(prodRef.current, repair)
+    if (!product) {
+      return { ok: false, message: 'Link a catalog product on the repair first' }
+    }
+
+    let serialId: string | undefined
+    let serialText = ''
+    if (product.requiresSerial || repair.serialNumber?.trim()) {
+      const matched = matchRepairDeviceSerial(serialRef.current, product.id, repair)
+      if ('error' in matched) return { ok: false, message: matched.error }
+      serialText = matched.serialText
+      if (matched.existing) {
+        serialId = matched.existing.id
+        if (matched.existing.status !== 'sold' && matched.existing.location !== 'customer') {
+          setSerials(p => p.map(s => s.id === matched.existing!.id
+            ? { ...s, status: 'sold' as const, location: 'customer' as LocationId, soldDate: s.soldDate || at }
+            : s))
+        }
+      } else {
+        const newSerial: SerialNumber = {
+          id: uid(),
+          serial: serialText,
+          productId: product.id,
+          productName: product.name,
+          sku: product.sku,
+          location: 'customer',
+          status: 'sold',
+          receivedDate: at,
+          soldDate: at,
+          barcode: buildInventoryBarcodeForProduct(product.id, serialText),
+        }
+        setSerials(p => [...p, newSerial])
+        sync('/api/serials', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(newSerial) })
+        serialId = newSerial.id
+      }
+    }
+
+    if (product.requiresSerial && !serialId) {
+      return { ok: false, message: 'Serialized product needs a serial number' }
+    }
+
+    const condition = buyBackConditionFromRepair(repair.deviceCondition)
+    const serialIds = serialId ? [serialId] : []
+    const serialLabels = serialText
+      ? [serialText]
+      : serialIds.map(id => serialRef.current.find(s => s.id === id)?.serial ?? id)
+
+    if (mode === 'donation') {
+      const don: Donation = {
+        id: uid(),
+        ref: seq('DON', 'don'),
+        type: 'in',
+        party: repair.customerName || 'Customer',
+        date: at,
+        lines: [{
+          id: uid(),
+          productId: product.id,
+          productName: product.name,
+          qty: 1,
+          serialIds,
+          notes: `From retained repair ${repair.ref}`,
+        }],
+        status: 'confirmed',
+        location: 'warehouse',
+        notes: `Customer left device with Deed from repair ${repair.ref}${notes ? ` — ${notes}` : ''}`,
+        repairId: repair.id,
+        repairRef: repair.ref,
+        confirmedByName: byName,
+        confirmedDate: at,
+      }
+      setDonations(p => [don, ...p])
+      if (serialId) {
+        setSerials(p => p.map(s => s.id === serialId
+          ? {
+              ...s,
+              status: condition === 'poor' ? 'refurbishment' as const : 'available' as const,
+              location: 'warehouse' as LocationId,
+              soldDate: undefined,
+              saleOrderId: undefined,
+              repairId: undefined,
+            }
+          : s))
+      } else {
+        setBulkStock(prev => upsertBulkStock(prev, product.id, 'warehouse', 1))
+      }
+      setProducts(p => p.map(x => x.id === product.id ? { ...x, stockQty: x.stockQty + 1 } : x))
+      addMove(product.id, product.name, 1, 'in', `Donation in ${don.ref} (retained repair ${repair.ref})`, don.ref, 'customer', 'warehouse', serialLabels)
+      return { ok: true, mode: 'donation', id: don.id, ref: don.ref }
+    }
+
+    const bb: BuyBack = {
+      id: uid(),
+      ref: seq('BBK', 'bbk'),
+      customerId: repair.customerId,
+      customerName: repair.customerName,
+      repairId: repair.id,
+      repairRef: repair.ref,
+      status: 'stocked',
+      date: at,
+      lines: [{
+        id: uid(),
+        productId: product.id,
+        productName: product.name,
+        qty: 1,
+        serialIds,
+        condition,
+        unitPrice: 0,
+        notes: `From retained repair ${repair.ref}`,
+      }],
+      total: 0,
+      destinationLocation: 'warehouse',
+      notes: `Customer left device with Deed from repair ${repair.ref}${notes ? ` — ${notes}` : ''}`,
+      approvedByName: byName,
+      approvedDate: at,
+      paidDate: at,
+      paymentMethod: 'cash',
+      stockedDate: at,
+      stockedByName: byName,
+    }
+    setBuyBacks(p => [bb, ...p])
+    if (serialId) {
+      setSerials(p => p.map(s => s.id === serialId
+        ? {
+            ...s,
+            status: condition === 'poor' ? 'refurbishment' as const : 'available' as const,
+            location: 'warehouse' as LocationId,
+            soldDate: undefined,
+            saleOrderId: undefined,
+            repairId: undefined,
+          }
+        : s))
+    } else {
+      setBulkStock(prev => upsertBulkStock(prev, product.id, 'warehouse', 1))
+    }
+    setProducts(p => p.map(x => x.id === product.id ? { ...x, stockQty: x.stockQty + 1 } : x))
+    addMove(product.id, product.name, 1, 'in', `Buy-back ${bb.ref} (retained repair ${repair.ref})`, bb.ref, 'customer', 'warehouse', serialLabels)
+    return { ok: true, mode: 'buyback', id: bb.id, ref: bb.ref }
+  }
+
   const markRepairLockedForOutsource = (repair: RepairOrder, job: OutsourceJob): RepairOrder => ({
     ...repair,
     status: 'in_repair',
@@ -4983,6 +5154,8 @@ export function StoreProvider({
     markUnrepairable: (...args: Parameters<AppState['markUnrepairable']>) => storeCtxRef.current!.markUnrepairable(...args),
     returnToCustomer: (...args: Parameters<AppState['returnToCustomer']>) => storeCtxRef.current!.returnToCustomer(...args),
     leaveDeviceWithDeed: (...args: Parameters<AppState['leaveDeviceWithDeed']>) => storeCtxRef.current!.leaveDeviceWithDeed(...args),
+    convertRetainedRepairToDonation: (...args: Parameters<AppState['convertRetainedRepairToDonation']>) => storeCtxRef.current!.convertRetainedRepairToDonation(...args),
+    convertRetainedRepairToBuyBack: (...args: Parameters<AppState['convertRetainedRepairToBuyBack']>) => storeCtxRef.current!.convertRetainedRepairToBuyBack(...args),
     fileWarrantyClaim: (...args: Parameters<AppState['fileWarrantyClaim']>) => storeCtxRef.current!.fileWarrantyClaim(...args),
     showToast: (...args: Parameters<AppState['showToast']>) => storeCtxRef.current!.showToast(...args),
     appendRepairHistory: (...args: Parameters<AppState['appendRepairHistory']>) => storeCtxRef.current!.appendRepairHistory(...args),
@@ -12257,7 +12430,8 @@ const storeCtx: AppState = {
       }
       if (blockIfOutsourced(repairId, 'retain this device')) return { ok: false, message: 'Outsourced' }
 
-      const convertToStock = !!opts?.convertToStock
+      const convertToDonation = !!opts?.convertToDonation
+      const convertToStock = !!opts?.convertToStock && !convertToDonation
       const extraNotes = String(opts?.notes ?? '').trim()
       const retainedAt = now()
 
@@ -12281,123 +12455,33 @@ const storeCtx: AppState = {
 
       let buyBackId: string | undefined
       let buyBackRef: string | undefined
+      let donationId: string | undefined
+      let donationRef: string | undefined
       let convertMessage = ''
 
-      if (convertToStock) {
-        const product = repair.productId
-          ? prodRef.current.find(p => p.id === repair.productId)
-          : prodRef.current.find(p => normalizeProductIdentity(p.name) === normalizeProductIdentity(repair.productName))
-        if (!product) {
-          convertMessage = ' Retained without stock convert — link a catalog product first, then create a buy-back.'
+      if (convertToStock || convertToDonation) {
+        const converted = convertRetainedDeviceIntoInventory({
+          repair,
+          mode: convertToDonation ? 'donation' : 'buyback',
+          notes: extraNotes,
+          at: retainedAt,
+          byName: user.name,
+        })
+        if (!converted.ok) {
+          convertMessage = ` Retained without convert — ${converted.message}`
+        } else if (converted.mode === 'buyback') {
+          buyBackId = converted.id
+          buyBackRef = converted.ref
+          convertMessage = ` Converted to stock via ${converted.ref}.`
         } else {
-          let serialId: string | undefined
-          if (product.requiresSerial || repair.serialNumber?.trim()) {
-            const serialText = String(repair.serialNumber ?? '').trim()
-            if (!serialText) {
-              convertMessage = ' Retained without stock convert — device has no serial to intake.'
-            } else {
-              const existing = serialRef.current.find(s =>
-                s.productId === product.id && s.serial.toLowerCase() === serialText.toLowerCase()
-              ) || (repair.serialId ? serialRef.current.find(s => s.id === repair.serialId) : undefined)
-              if (existing) {
-                serialId = existing.id
-                if (existing.status !== 'sold' && existing.location !== 'customer') {
-                  setSerials(p => p.map(s => s.id === existing.id
-                    ? { ...s, status: 'sold' as const, location: 'customer' as LocationId, soldDate: s.soldDate || retainedAt }
-                    : s))
-                }
-              } else {
-                const newSerial: SerialNumber = {
-                  id: uid(),
-                  serial: serialText,
-                  productId: product.id,
-                  productName: product.name,
-                  sku: product.sku,
-                  location: 'customer',
-                  status: 'sold',
-                  receivedDate: retainedAt,
-                  soldDate: retainedAt,
-                  barcode: buildInventoryBarcodeForProduct(product.id, serialText),
-                }
-                setSerials(p => [...p, newSerial])
-                sync('/api/serials', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(newSerial) })
-                serialId = newSerial.id
-              }
-            }
-          }
-
-          if (!product.requiresSerial || serialId) {
-            const line: BuyBackLine = {
-              id: uid(),
-              productId: product.id,
-              productName: product.name,
-              qty: 1,
-              serialIds: serialId ? [serialId] : [],
-              condition: repair.deviceCondition === 'poor' || repair.deviceCondition === 'damaged' ? 'poor'
-                : repair.deviceCondition === 'fair' ? 'fair' : 'good',
-              unitPrice: 0,
-              notes: `From retained repair ${repair.ref}`,
-            }
-            const bb: BuyBack = {
-              id: uid(),
-              ref: seq('BBK', 'bbk'),
-              customerId: repair.customerId,
-              customerName: repair.customerName,
-              repairId: repair.id,
-              repairRef: repair.ref,
-              status: 'draft',
-              date: retainedAt,
-              lines: [line],
-              total: 0,
-              destinationLocation: 'warehouse',
-              notes: `Customer left device with Deed from repair ${repair.ref}${extraNotes ? ` — ${extraNotes}` : ''}`,
-            }
-            // Free donate path: draft → approved → paid (KES 0) → stocked
-            setBuyBacks(p => [{
-              ...bb,
-              status: 'stocked',
-              approvedByName: user.name,
-              approvedDate: retainedAt,
-              paidDate: retainedAt,
-              paymentMethod: 'cash',
-              stockedDate: retainedAt,
-              stockedByName: user.name,
-            }, ...p])
-            buyBackId = bb.id
-            buyBackRef = bb.ref
-
-            if (serialId) {
-              setSerials(p => p.map(s => s.id === serialId
-                ? {
-                    ...s,
-                    status: line.condition === 'poor' ? 'refurbishment' as const : 'available' as const,
-                    location: 'warehouse' as LocationId,
-                    soldDate: undefined,
-                    saleOrderId: undefined,
-                    repairId: undefined,
-                  }
-                : s))
-            } else {
-              setBulkStock(prev => upsertBulkStock(prev, product.id, 'warehouse', 1))
-            }
-            setProducts(p => p.map(x => x.id === product.id ? { ...x, stockQty: x.stockQty + 1 } : x))
-            addMove(
-              product.id,
-              product.name,
-              1,
-              'in',
-              `Buy-back ${bb.ref} (retained repair ${repair.ref})`,
-              bb.ref,
-              'customer',
-              'warehouse',
-              serialId ? [serialRef.current.find(s => s.id === serialId)?.serial ?? repair.serialNumber].filter(Boolean) as string[] : [],
-            )
-            convertMessage = ` Converted to stock via ${bb.ref}.`
-          }
+          donationId = converted.id
+          donationRef = converted.ref
+          convertMessage = ` Converted to donation ${converted.ref}.`
         }
       }
 
-      const noteLine = `Customer left device with Deed${extraNotes ? `: ${extraNotes}` : ''}${buyBackRef ? ` → ${buyBackRef}` : ''}`
+      const linkRef = donationRef || buyBackRef
+      const noteLine = `Customer left device with Deed${extraNotes ? `: ${extraNotes}` : ''}${linkRef ? ` → ${linkRef}` : ''}`
       const retainedRepair: RepairOrder = {
         ...repair,
         status: 'retained',
@@ -12406,6 +12490,8 @@ const storeCtx: AppState = {
         retainedBy: user.name,
         retainedBuyBackId: buyBackId,
         retainedBuyBackRef: buyBackRef,
+        retainedDonationId: donationId,
+        retainedDonationRef: donationRef,
         notes: `${repair.notes || ''}\n\n${noteLine}`.trim(),
         statusHistory: [
           ...(repair.statusHistory ?? []),
@@ -12416,7 +12502,107 @@ const storeCtx: AppState = {
       syncRepairToPortal(retainedRepair, noteLine)
       addAuditLog('retain_device', repairId, noteLine)
       showToast(`${repair.ref} retained by Deed.${convertMessage}`, 'success')
-      return { ok: true, message: `Retained.${convertMessage}`, buyBackId, buyBackRef }
+      return { ok: true, message: `Retained.${convertMessage}`, buyBackId, buyBackRef, donationId, donationRef }
+    },
+
+    convertRetainedRepairToDonation: (repairId, opts) => {
+      const user = currentUser()
+      if (!user) return { ok: false, message: 'Not signed in' }
+      if (!['director', 'admin_officer', 'technical_lead', 'inventory_officer'].includes(user.role)) {
+        showToast('Not authorized to convert retained repairs', 'error')
+        return { ok: false, message: 'Not authorized' }
+      }
+      const repair = repairs.find(r => r.id === repairId)
+      if (!repair) {
+        showToast('Repair not found', 'error')
+        return { ok: false, message: 'Repair not found' }
+      }
+      if (!canConvertRetainedRepair(repair)) {
+        const msg = repair.status !== 'retained'
+          ? 'Only retained repairs can be converted'
+          : 'This repair was already converted into stock or a donation'
+        showToast(msg, 'error')
+        return { ok: false, message: msg }
+      }
+      const at = now()
+      const notes = String(opts?.notes ?? '').trim()
+      const converted = convertRetainedDeviceIntoInventory({
+        repair,
+        mode: 'donation',
+        notes,
+        at,
+        byName: user.name,
+      })
+      if (!converted.ok) {
+        showToast(converted.message, 'error')
+        return { ok: false, message: converted.message }
+      }
+      const noteLine = `Converted retained device to donation ${converted.ref}${notes ? ` — ${notes}` : ''}`
+      const updated: RepairOrder = {
+        ...repair,
+        retainedDonationId: converted.id,
+        retainedDonationRef: converted.ref,
+        notes: `${repair.notes || ''}\n\n${noteLine}`.trim(),
+        statusHistory: [
+          ...(repair.statusHistory ?? []),
+          { status: 'retained', date: at, note: noteLine, by: user.name },
+        ],
+      }
+      setRepairs(p => p.map(r => r.id === repairId ? updated : r))
+      syncRepairToPortal(updated, noteLine)
+      addAuditLog('retain_to_donation', repairId, noteLine)
+      showToast(`${repair.ref} → donation ${converted.ref}`, 'success')
+      return { ok: true, message: noteLine, donationId: converted.id, donationRef: converted.ref }
+    },
+
+    convertRetainedRepairToBuyBack: (repairId, opts) => {
+      const user = currentUser()
+      if (!user) return { ok: false, message: 'Not signed in' }
+      if (!['director', 'admin_officer', 'technical_lead', 'inventory_officer'].includes(user.role)) {
+        showToast('Not authorized to convert retained repairs', 'error')
+        return { ok: false, message: 'Not authorized' }
+      }
+      const repair = repairs.find(r => r.id === repairId)
+      if (!repair) {
+        showToast('Repair not found', 'error')
+        return { ok: false, message: 'Repair not found' }
+      }
+      if (!canConvertRetainedRepair(repair)) {
+        const msg = repair.status !== 'retained'
+          ? 'Only retained repairs can be converted'
+          : 'This repair was already converted into stock or a donation'
+        showToast(msg, 'error')
+        return { ok: false, message: msg }
+      }
+      const at = now()
+      const notes = String(opts?.notes ?? '').trim()
+      const converted = convertRetainedDeviceIntoInventory({
+        repair,
+        mode: 'buyback',
+        notes,
+        at,
+        byName: user.name,
+      })
+      if (!converted.ok) {
+        showToast(converted.message, 'error')
+        return { ok: false, message: converted.message }
+      }
+      const noteLine = `Converted retained device to buy-back ${converted.ref}${notes ? ` — ${notes}` : ''}`
+      const updated: RepairOrder = {
+        ...repair,
+        retainedBuyBackId: converted.id,
+        retainedBuyBackRef: converted.ref,
+        notes: `${repair.notes || ''}\n\n${noteLine}`.trim(),
+        statusHistory: [
+          ...(repair.statusHistory ?? []),
+          { status: 'retained', date: at, note: noteLine, by: user.name },
+        ],
+      }
+      setRepairs(p => p.map(r => r.id === repairId ? updated : r))
+      syncRepairToPortal(updated, noteLine)
+      addAuditLog('retain_to_buyback', repairId, noteLine)
+      showToast(`${repair.ref} → buy-back ${converted.ref}`, 'success')
+      return { ok: true, message: noteLine, buyBackId: converted.id, buyBackRef: converted.ref }
     },
 
     // ── POS ───────────────────────────────────────────────────────────────────
@@ -13477,9 +13663,9 @@ const storeCtx: AppState = {
         const product = prodRef.current.find(p => p.id === line.productId)
         if (!product) { showToast(`Product not found: ${line.productName || line.productId}`, 'error'); throw new Error('Invalid donation product') }
         if (line.qty <= 0) { showToast(`Quantity must be greater than zero for ${product.name}`, 'error'); throw new Error('Invalid donation quantity') }
-        if (product.requiresSerial && type === 'in') {
-          showToast(`Serialized donation-in for ${product.name} needs serial intake before confirmation`, 'error')
-          throw new Error('Serialized donation-in requires serial intake')
+        if (product.requiresSerial && type === 'in' && line.serialIds.length !== line.qty) {
+          showToast(`Select ${line.qty} serial number(s) for donation-in of ${product.name}`, 'error')
+          throw new Error('Missing donation-in serials')
         }
         if (product.requiresSerial && type === 'out' && line.serialIds.length !== line.qty) {
           showToast(`Select ${line.qty} serial number(s) for ${product.name}`, 'error')
@@ -13506,8 +13692,8 @@ const storeCtx: AppState = {
         const product = prodRef.current.find(p => p.id === line.productId)
         if (!product) { showToast(`Product not found: ${line.productName}`, 'error'); return }
         if (line.qty <= 0) { showToast(`Quantity must be greater than zero for ${product.name}`, 'error'); return }
-        if (product.requiresSerial && don.type === 'in') {
-          showToast(`Serialized donation-in for ${product.name} needs serial intake before confirmation`, 'error'); return
+        if (product.requiresSerial && don.type === 'in' && line.serialIds.length !== line.qty) {
+          showToast(`Select ${line.qty} serial number(s) for donation-in of ${product.name}`, 'error'); return
         }
         if (product.requiresSerial && don.type === 'out' && line.serialIds.length !== line.qty) {
           showToast(`Select ${line.qty} serial number(s) for ${product.name}`, 'error'); return
@@ -13521,11 +13707,21 @@ const storeCtx: AppState = {
         if (don.type === 'in') {
           // Receive donated items into stock
           line.serialIds.forEach(sid => {
-            setSerials(p => p.map(s => s.id === sid ? { ...s, status: 'available', location: don.location } : s))
+            setSerials(p => p.map(s => s.id === sid ? { ...s, status: 'available', location: don.location, soldDate: undefined, saleOrderId: undefined } : s))
           })
           setProducts(p => p.map(x => x.id === line.productId ? { ...x, stockQty: x.stockQty + line.qty } : x))
           if (line.serialIds.length === 0) setBulkStock(prev => upsertBulkStock(prev, line.productId, don.location, line.qty))
-          addMove(line.productId, line.productName, line.qty, 'in', `Donation in ${don.ref}`, don.ref, 'customer', don.location, [])
+          addMove(
+            line.productId,
+            line.productName,
+            line.qty,
+            'in',
+            `Donation in ${don.ref}`,
+            don.ref,
+            'customer',
+            don.location,
+            line.serialIds.map(sid => serialRef.current.find(s => s.id === sid)?.serial ?? sid),
+          )
         } else {
           // Donate items out of stock
           line.serialIds.forEach(sid => {

@@ -129,7 +129,7 @@ export default function RepairDetailView() {
     markPartsArrived, closeRepairJob, markUnrepairable,
   } = useRepair()
 
-  const { invoices, setModule, outboundReleases, initRelease, serials, reviewPortalPayment, leaveDeviceWithDeed } = useRepairStore()
+  const { invoices, setModule, outboundReleases, initRelease, serials, reviewPortalPayment, leaveDeviceWithDeed, convertRetainedRepairToDonation, convertRetainedRepairToBuyBack } = useRepairStore()
 
   const [showOrcPanel, setShowOrcPanel] = useState(false)
   const [showPaymentRejectInput, setShowPaymentRejectInput] = useState(false)
@@ -149,7 +149,7 @@ export default function RepairDetailView() {
   const [unrepairableReason, setUnrepairableReason] = useState('')
   const [showLeaveDeviceModal, setShowLeaveDeviceModal] = useState(false)
   const [leaveDeviceNotes, setLeaveDeviceNotes] = useState('')
-  const [leaveConvertToStock, setLeaveConvertToStock] = useState(true)
+  const [leaveConvertMode, setLeaveConvertMode] = useState<'none' | 'donation' | 'buyback'>('donation')
 
   if (!r) return null
 
@@ -213,6 +213,9 @@ export default function RepairDetailView() {
   const canLeaveDeviceWithDeed = ['director', 'admin_officer', 'technical_lead'].includes(currentRole)
     && ['received', 'assigned', 'diagnosed', 'awaiting_approval', 'approved', 'awaiting_parts', 'in_repair', 'qc', 'ready'].includes(r.status)
     && !pendingOutsourceJob
+  const canConvertRetained = r.status === 'retained'
+    && !r.retainedBuyBackId && !r.retainedDonationId
+    && ['director', 'admin_officer', 'technical_lead', 'inventory_officer'].includes(currentRole)
   const canMarkPartsArrived = r.status === 'awaiting_parts'
     && ['technical_lead', 'director', 'inventory_officer'].includes(currentRole)
     && !pendingOutsourceJob
@@ -468,7 +471,9 @@ export default function RepairDetailView() {
                 { id: 'procure', label: 'Request parts', onClick: () => setShowProcurementModal(true), hidden: !canProcure },
                 { id: 'stop', label: 'Stop at diagnosis', onClick: () => setShowStopDiagnosisModal(true), hidden: !canStopAtDiagnosis },
                 { id: 'return', label: 'Return device', onClick: () => setShowReturnModal(true), hidden: !canReturnDevice },
-                { id: 'leave', label: 'Customer leaves device', onClick: () => { setLeaveDeviceNotes(''); setLeaveConvertToStock(true); setShowLeaveDeviceModal(true) }, hidden: !canLeaveDeviceWithDeed },
+                { id: 'leave', label: 'Customer leaves device', onClick: () => { setLeaveDeviceNotes(''); setLeaveConvertMode('donation'); setShowLeaveDeviceModal(true) }, hidden: !canLeaveDeviceWithDeed },
+                { id: 'convert_donation', label: 'Convert → Donation', onClick: () => convertRetainedRepairToDonation(r.id), hidden: !canConvertRetained },
+                { id: 'convert_buyback', label: 'Convert → Buy-back stock', onClick: () => convertRetainedRepairToBuyBack(r.id), hidden: !canConvertRetained },
                 { id: 'unrepairable', label: 'Mark unrepairable', onClick: () => { setUnrepairableReason(''); setShowUnrepairableModal(true) }, hidden: !canMarkUnrepairable, danger: true },
                 { id: 'back', label: 'Back step', onClick: () => moveRepairToPreviousProgress(r.id), hidden: !canMoveBack },
                 { id: 'outsource', label: 'Outsource', onClick: () => setShowOutsourceModal(true), hidden: !canOutsource },
@@ -842,6 +847,49 @@ export default function RepairDetailView() {
                       )}
                     </div>
                   )}
+                </div>
+              </SectionCard>
+            )}
+
+            {/* ── Retained device convert ── */}
+            {r.status === 'retained' && (
+              <SectionCard delay={50}>
+                <SectionHeader
+                  icon={faBoxOpen}
+                  iconBg="bg-stone-700"
+                  title="Left with Deed"
+                  subtitle={r.retainedDate ? new Date(r.retainedDate).toLocaleString('en-KE', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : 'Retained'}
+                />
+                <div className="px-4 sm:px-6 py-4 sm:py-5 space-y-3">
+                  {r.retainedDonationRef && (
+                    <p className="text-[12px] font-bold text-[var(--text-1)]">Donation: {r.retainedDonationRef}</p>
+                  )}
+                  {r.retainedBuyBackRef && (
+                    <p className="text-[12px] font-bold text-[var(--text-1)]">Buy-back: {r.retainedBuyBackRef}</p>
+                  )}
+                  {canConvertRetained && (
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        className="btn-primary text-[11px]"
+                        style={{ background: '#57534E' }}
+                        onClick={() => convertRetainedRepairToDonation(r.id)}
+                      >
+                        Convert → Donation
+                      </button>
+                      <button
+                        type="button"
+                        className="btn-secondary text-[11px]"
+                        onClick={() => convertRetainedRepairToBuyBack(r.id)}
+                      >
+                        Convert → Buy-back stock
+                      </button>
+                    </div>
+                  )}
+                  {!canConvertRetained && !r.retainedDonationRef && !r.retainedBuyBackRef && (
+                    <p className="text-[11px] text-[var(--text-3)]">Device retained without stock convert.</p>
+                  )}
+                  {r.retainedBy && <p className="text-[10px] text-[var(--text-4)] font-semibold">By {r.retainedBy}</p>}
                 </div>
               </SectionCard>
             )}
@@ -1520,20 +1568,35 @@ export default function RepairDetailView() {
                 onChange={e => setLeaveDeviceNotes(e.target.value)}
               />
             </div>
-            <label className="flex items-start gap-3 p-3 rounded-xl border border-[var(--border)] cursor-pointer">
-              <input
-                type="checkbox"
-                className="mt-0.5 w-4 h-4"
-                checked={leaveConvertToStock}
-                onChange={e => setLeaveConvertToStock(e.target.checked)}
-              />
-              <span className="text-[11px] font-medium text-[var(--text-2)] leading-relaxed">
-                Convert into stock (free buy-back → warehouse)
-                <span className="block text-[10px] text-[var(--text-3)] mt-0.5">
-                  Creates a KES 0 buy-back linked to this repair and stocks the device.
-                </span>
-              </span>
-            </label>
+            <div className="space-y-2">
+              <p className="text-[10px] font-black text-[var(--text-3)] uppercase tracking-widest">Convert device</p>
+              {([
+                { v: 'donation' as const, label: 'Donation in → warehouse', sub: 'Creates a confirmed donation linked to this repair' },
+                { v: 'buyback' as const, label: 'Buy-back stock (KES 0)', sub: 'Free buy-back stocked at warehouse, linked to this repair' },
+                { v: 'none' as const, label: 'Retain only', sub: 'Close as Left with Deed — convert later from this job' },
+              ]).map(opt => (
+                <label
+                  key={opt.v}
+                  className="flex items-start gap-3 p-3 rounded-xl border cursor-pointer"
+                  style={{
+                    borderColor: leaveConvertMode === opt.v ? '#57534E' : 'var(--border)',
+                    background: leaveConvertMode === opt.v ? 'rgba(87,83,78,0.06)' : 'transparent',
+                  }}
+                >
+                  <input
+                    type="radio"
+                    className="mt-0.5"
+                    name="leave-convert"
+                    checked={leaveConvertMode === opt.v}
+                    onChange={() => setLeaveConvertMode(opt.v)}
+                  />
+                  <span className="text-[11px] font-medium text-[var(--text-2)] leading-relaxed">
+                    {opt.label}
+                    <span className="block text-[10px] text-[var(--text-3)] mt-0.5">{opt.sub}</span>
+                  </span>
+                </label>
+              ))}
+            </div>
             <div className="flex justify-end gap-2">
               <button className="btn-secondary" onClick={() => setShowLeaveDeviceModal(false)}>Cancel</button>
               <button
@@ -1541,7 +1604,8 @@ export default function RepairDetailView() {
                 style={{ background: '#57534E' }}
                 onClick={() => {
                   leaveDeviceWithDeed(r.id, {
-                    convertToStock: leaveConvertToStock,
+                    convertToDonation: leaveConvertMode === 'donation',
+                    convertToStock: leaveConvertMode === 'buyback',
                     notes: leaveDeviceNotes.trim() || undefined,
                   })
                   setShowLeaveDeviceModal(false)
