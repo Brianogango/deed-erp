@@ -4,32 +4,24 @@ import type { ApprovalRequest, ApprovalLevel, ApprovalType } from './sales-flow-
 import {
   APPROVAL_RULES,
   extractApprovalValue,
-  getApprovalRoles,
   getApprovalRolesSync,
   rolesFromThresholds,
   type ApprovalThreshold,
 } from '@/lib/sales-approval-rules'
 
-export { APPROVAL_RULES, extractApprovalValue, getApprovalRoles, getApprovalRolesSync, rolesFromThresholds }
+export { APPROVAL_RULES, extractApprovalValue, getApprovalRolesSync, rolesFromThresholds }
 export type { ApprovalThreshold }
 
 /**
  * Check if approval is required (sync — uses hardcoded rules for client UI).
- * Server paths that need DB-backed thresholds should call `requiresApprovalAsync`.
+ * Server paths that need DB-backed thresholds should import
+ * `requiresApprovalAsync` from `@/lib/sales-approval-rules.server`.
  */
 export function requiresApproval(
   type: ApprovalType,
   details: any
 ): boolean {
   const requiredRoles = getApprovalRolesSync(type, details)
-  return requiredRoles.length > 0
-}
-
-export async function requiresApprovalAsync(
-  type: ApprovalType,
-  details: any
-): Promise<boolean> {
-  const requiredRoles = await getApprovalRoles(type, details)
   return requiredRoles.length > 0
 }
 

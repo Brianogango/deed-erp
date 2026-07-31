@@ -5,6 +5,7 @@ export type ApprovalThreshold = { maxValue: number; requiredRoles: string[] }
 /**
  * Hardcoded fallback thresholds — used when approval_rules table is missing
  * or a type has no active DB row. Keep in sync with historical APPROVAL_RULES.
+ * CLIENT-SAFE: no Prisma / Node-only imports.
  */
 export const APPROVAL_RULES: Record<ApprovalType, (details: any) => string[]> = {
   discount: (details) => {
@@ -62,24 +63,4 @@ export function rolesFromThresholds(thresholds: ApprovalThreshold[], value: numb
 /** Sync helper — uses hardcoded APPROVAL_RULES (no DB). */
 export function getApprovalRolesSync(type: ApprovalType, details: any): string[] {
   return APPROVAL_RULES[type](details)
-}
-
-/**
- * Prefer DB approval_rules; fall back to hardcoded APPROVAL_RULES.
- * Safe when prisma is unavailable (returns hardcoded).
- */
-export async function getApprovalRoles(type: ApprovalType, details: any): Promise<string[]> {
-  try {
-    const { default: prisma } = await import('@/lib/prisma')
-    const rule = await prisma.approvalRule.findUnique({ where: { approvalType: type } })
-    if (rule?.isActive) {
-      const thresholds = rule.thresholds as ApprovalThreshold[]
-      const value = extractApprovalValue(type, details)
-      const fromDb = rolesFromThresholds(thresholds, value)
-      if (fromDb) return fromDb
-    }
-  } catch {
-    // table missing / prisma offline — use hardcoded
-  }
-  return getApprovalRolesSync(type, details)
 }
