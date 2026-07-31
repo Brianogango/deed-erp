@@ -5,6 +5,11 @@ import { writeFinancialAudit } from '@/lib/finance-audit'
 import prisma from '@/lib/prisma'
 import { toClientRequest, adjustBalance } from '@/lib/hr/leave-store'
 import type { StoreLeaveType } from '@/lib/leave-utils'
+import {
+  notifyLeaveDecision,
+  queueLeaveNotification,
+  toLeaveNotifyPayload,
+} from '@/lib/hr/leave-notifications'
 
 const WRITE_ROLES = ['director', 'admin_officer', 'finance_officer', 'technical_lead']
 
@@ -71,6 +76,19 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
     oldValues: { status: existing.status },
     newValues: { status: nextStatus, employeeId: existing.employeeId },
   })
+
+  // Email the applicant after a real approve/decline transition.
+  if (
+    existing.status === 'pending_hr'
+    && (nextStatus === 'approved' || nextStatus === 'rejected')
+  ) {
+    queueLeaveNotification(async () => {
+      await notifyLeaveDecision(
+        toLeaveNotifyPayload(updated as any),
+        nextStatus === 'approved' ? 'approved' : 'rejected',
+      )
+    })
+  }
 
   return NextResponse.json({ item: toClientRequest(updated as any) })
 }

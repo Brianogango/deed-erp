@@ -21,6 +21,7 @@ export interface ClientLeaveRequest {
   submittedDate: string
   hrApprovalBy?: string
   hrDecisionDate?: string
+  reviewNotes?: string
   submittedByUserId?: string
   isSystemGenerated?: boolean
 }
@@ -39,7 +40,7 @@ export interface ClientLeaveBalance {
 type DbLeaveRequest = {
   id: string; reference: string | null; employeeId: string; employeeName: string | null
   leaveType: string; startDate: Date; endDate: Date; daysRequested: unknown; reason: string | null
-  status: string; reviewedByName: string | null; reviewedAt: Date | null
+  status: string; reviewedByName: string | null; reviewedAt: Date | null; reviewNotes?: string | null
   submittedByUserId: string | null; isSystemGenerated: boolean; createdAt: Date
 }
 
@@ -66,6 +67,7 @@ export function toClientRequest(r: DbLeaveRequest): ClientLeaveRequest {
     submittedDate: r.createdAt.toISOString(),
     hrApprovalBy: r.reviewedByName ?? undefined,
     hrDecisionDate: r.reviewedAt ? r.reviewedAt.toISOString() : undefined,
+    reviewNotes: r.reviewNotes ?? undefined,
     submittedByUserId: r.submittedByUserId ?? undefined,
     isSystemGenerated: r.isSystemGenerated || undefined,
   }

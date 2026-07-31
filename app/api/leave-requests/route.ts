@@ -5,6 +5,12 @@ import { writeFinancialAudit } from '@/lib/finance-audit'
 import prisma from '@/lib/prisma'
 import { CALENDAR_DAY_TYPES, calcCalendarDays, calcWorkingDays, EMPLOYEE_LEAVE_TYPES, isLeaveTypeAllowedForGender, requiredNotice, noticeDaysGiven, type EmployeeGender, type StoreLeaveType } from '@/lib/leave-utils'
 import { toClientRequest, toClientBalance, defaultBalances, adjustBalance, getBalance } from '@/lib/hr/leave-store'
+import {
+  notifyLeaveApplied,
+  notifyLeaveBookedForEmployee,
+  queueLeaveNotification,
+  toLeaveNotifyPayload,
+} from '@/lib/hr/leave-notifications'
 
 const HR_ROLES = ['director', 'admin_officer', 'finance_officer', 'technical_lead']
 
@@ -92,6 +98,8 @@ export async function POST(request: Request) {
       }).catch(() => null)
       const incoming: any[] = body.bulkRequests ?? [body]
       const created: string[] = []
+      const pendingNotify: Array<{ id: string }> = []
+      const bookedNotify: Array<{ id: string }> = []
       for (const req of incoming) {
         const leaveType = String(req.leaveType ?? '') as StoreLeaveType
         if (!leaveType) continue
@@ -120,6 +128,8 @@ export async function POST(request: Request) {
         const year = new Date(req.startDate).getFullYear()
         await adjustBalance(req.employeeId, leaveType, year, status === 'approved' ? { used: days } : { pending: days })
         created.push(row.id)
+        if (status === 'pending_hr') pendingNotify.push({ id: row.id })
+        else if (status === 'approved' && !req.isSystemGenerated) bookedNotify.push({ id: row.id })
       }
       // Optional explicit balance overrides (HR entitlement edits).
       if (Array.isArray(body.balances)) {
@@ -133,6 +143,26 @@ export async function POST(request: Request) {
         }
       }
       await writeFinancialAudit({ userId: session.user.id, action: 'hr_leave_write', entityType: 'leave_request', newValues: { created: created.length } })
+
+      // Email after persist — never blocks the write.
+      for (const item of pendingNotify) {
+        queueLeaveNotification(async () => {
+          const row = await prisma.leaveRequest.findUnique({ where: { id: item.id } })
+          if (!row || row.status !== 'pending_hr') return
+          await notifyLeaveApplied(toLeaveNotifyPayload(row as any))
+        })
+      }
+      for (const item of bookedNotify) {
+        queueLeaveNotification(async () => {
+          const row = await prisma.leaveRequest.findUnique({ where: { id: item.id } })
+          if (!row || row.status !== 'approved') return
+          await notifyLeaveBookedForEmployee(toLeaveNotifyPayload({
+            ...(row as any),
+            reviewedByName: row.reviewedByName || session.user.name,
+          }))
+        })
+      }
+
       return NextResponse.json({ ok: true, added: created.length })
     }
 
@@ -210,6 +240,10 @@ export async function POST(request: Request) {
     })
     await adjustBalance(employee.id, leaveType, year, { pending: days })
     await writeFinancialAudit({ userId: session.user.id, action: 'apply_leave', entityType: 'leave_request', entityId: row.id, newValues: { leaveType, days, employeeId: employee.id } })
+
+    queueLeaveNotification(async () => {
+      await notifyLeaveApplied(toLeaveNotifyPayload(row as any))
+    })
 
     return NextResponse.json({ ok: true, added: 1, request: toClientRequest(row as any) })
   })
