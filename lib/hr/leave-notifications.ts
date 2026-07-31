@@ -4,15 +4,12 @@
  * Foolproof rules:
  * - Send only AFTER the leave row is successfully persisted.
  * - Never throw / never block leave create or decide on mail failure.
- * - Deduplicate recipients; skip blank / invalid emails.
- * - HR inbox: HR_TEAM_EMAIL → LEAVE_NOTIFY_EMAILS → HR_EMAIL, plus every
- *   active director / admin_officer user email (covers Edwin when he has that role).
- * - Applicant decision/booking feedback: Employee.email on the HR record only.
+ * - Apply: To hr@deed.co.ke, CC Edwin + Dennis only.
+ * - Approve/reject: To the applier's Employee.email on the HR record only.
  */
 
 import prisma from '@/lib/prisma'
 import { sendEmail } from '@/lib/integrations/email'
-import { HR_MANAGER_ROLES } from '@/lib/auth/access'
 
 export type LeaveNotifyPayload = {
   id: string
@@ -30,6 +27,10 @@ export type LeaveNotifyPayload = {
 }
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
+/** Default leave-apply CC list when env / DB lookup is empty. */
+export const DEFAULT_LEAVE_APPLY_CC = ['edwin@deed.co.ke', 'dennis@deed.co.ke'] as const
+export const DEFAULT_LEAVE_APPLY_TO = 'hr@deed.co.ke'
 
 function escapeHtml(value: string): string {
   return String(value ?? '')
@@ -84,39 +85,69 @@ function leaveSelfUrl(): string {
   return `${appBaseUrl()}/?module=hr&tab=self_service`
 }
 
-/** Shared inbox + optional extras (Edwin etc.). */
-export function configuredLeaveInboxEmails(): string[] {
-  const primary = normalizeEmail(process.env.HR_TEAM_EMAIL)
-    || normalizeEmail(process.env.LEAVE_NOTIFY_EMAIL)
+/** Primary leave-apply inbox (To). */
+export function leaveApplyToEmail(): string {
+  return (
+    normalizeEmail(process.env.HR_TEAM_EMAIL)
     || normalizeEmail(process.env.HR_EMAIL)
-  const extras = parseEmailList(process.env.LEAVE_NOTIFY_EMAILS)
-  return Array.from(new Set([...(primary ? [primary] : []), ...extras]))
-}
-
-/** Active HR managers in the user table (director + admin_officer). */
-export async function resolveHrApproverEmails(): Promise<string[]> {
-  const inbox = configuredLeaveInboxEmails()
-  try {
-    const users = await prisma.user.findMany({
-      where: {
-        isActive: true,
-        role: { in: [...HR_MANAGER_ROLES] as any },
-      },
-      select: { email: true },
-    })
-    const fromUsers = users
-      .map(u => normalizeEmail(u.email))
-      .filter((v): v is string => !!v)
-    return Array.from(new Set([...inbox, ...fromUsers]))
-  } catch (err) {
-    console.error('[leave-notifications] failed to resolve HR emails', err)
-    return inbox
-  }
+    || DEFAULT_LEAVE_APPLY_TO
+  )
 }
 
 /**
- * Resolve the employee's email from their HR record (`Employee.email`).
- * Decision / booking feedback always uses this address — not the login User email.
+ * CC list for leave apply: Edwin + Dennis only.
+ * Prefer LEAVE_APPLY_CC_EMAILS / LEAVE_NOTIFY_EMAILS, else resolve by first name
+ * from active employees, else hardcoded deed.co.ke defaults.
+ */
+export async function resolveLeaveApplyCcEmails(): Promise<string[]> {
+  const fromEnv = parseEmailList(
+    process.env.LEAVE_APPLY_CC_EMAILS || process.env.LEAVE_NOTIFY_EMAILS,
+  )
+  if (fromEnv.length > 0) return Array.from(new Set(fromEnv))
+
+  try {
+    const rows = await prisma.employee.findMany({
+      where: {
+        isActive: true,
+        OR: [
+          { firstName: { equals: 'Edwin', mode: 'insensitive' } },
+          { firstName: { equals: 'Dennis', mode: 'insensitive' } },
+        ],
+      },
+      select: { firstName: true, email: true, user: { select: { email: true } } },
+    })
+    const byName = new Map<string, string>()
+    for (const row of rows) {
+      const key = String(row.firstName || '').trim().toLowerCase()
+      const email = normalizeEmail(row.email) || normalizeEmail(row.user?.email)
+      if ((key === 'edwin' || key === 'dennis') && email) byName.set(key, email)
+    }
+    const resolved = ['edwin', 'dennis']
+      .map(n => byName.get(n))
+      .filter((v): v is string => !!v)
+    if (resolved.length > 0) return Array.from(new Set(resolved))
+  } catch (err) {
+    console.error('[leave-notifications] failed to resolve Edwin/Dennis emails', err)
+  }
+
+  return [...DEFAULT_LEAVE_APPLY_CC]
+}
+
+/** @deprecated Use leaveApplyToEmail + resolveLeaveApplyCcEmails. Kept for tests. */
+export function configuredLeaveInboxEmails(): string[] {
+  return [leaveApplyToEmail()]
+}
+
+/** @deprecated Apply notifications no longer blast all HR managers. */
+export async function resolveHrApproverEmails(): Promise<string[]> {
+  const to = leaveApplyToEmail()
+  const cc = await resolveLeaveApplyCcEmails()
+  return Array.from(new Set([to, ...cc]))
+}
+
+/**
+ * Resolve the applier's email from their HR record (`Employee.email`).
+ * Decision feedback always uses this address only.
  */
 export async function resolveApplicantEmail(employeeId: string, _submittedByUserId?: string | null): Promise<{
   email: string | null
@@ -166,6 +197,7 @@ function wrapHtml(title: string, bodyHtml: string): string {
 
 async function sendHrMailbox(opts: {
   to: string | string[]
+  cc?: string | string[]
   subject: string
   html: string
   text: string
@@ -174,6 +206,10 @@ async function sendHrMailbox(opts: {
   const toList = (Array.isArray(opts.to) ? opts.to : [opts.to])
     .map(normalizeEmail)
     .filter((v): v is string => !!v)
+  const toSet = new Set(toList)
+  const ccList = (Array.isArray(opts.cc) ? opts.cc : opts.cc ? [opts.cc] : [])
+    .map(normalizeEmail)
+    .filter((v): v is string => !!v && !toSet.has(v))
   if (toList.length === 0) {
     console.warn('[leave-notifications] skip send — no recipients', opts.metadata)
     return
@@ -181,6 +217,7 @@ async function sendHrMailbox(opts: {
   try {
     const result = await sendEmail({
       to: toList.length === 1 ? toList[0] : toList,
+      cc: ccList.length > 0 ? ccList : undefined,
       mailbox: 'hr',
       from: process.env.HR_EMAIL || undefined,
       subject: opts.subject,
@@ -190,20 +227,22 @@ async function sendHrMailbox(opts: {
     if (!result.success) {
       console.error('[leave-notifications] send failed', { error: result.error, ...opts.metadata })
     } else {
-      console.log('[leave-notifications] sent', { messageId: result.messageId, to: toList, ...opts.metadata })
+      console.log('[leave-notifications] sent', {
+        messageId: result.messageId,
+        to: toList,
+        cc: ccList,
+        ...opts.metadata,
+      })
     }
   } catch (err) {
     console.error('[leave-notifications] send threw', err, opts.metadata)
   }
 }
 
-/** Email HR / Edwin when a leave request needs approval. */
+/** Email HR (To) with Edwin + Dennis CC when a leave request needs approval. */
 export async function notifyLeaveApplied(payload: LeaveNotifyPayload): Promise<void> {
-  const recipients = await resolveHrApproverEmails()
-  if (recipients.length === 0) {
-    console.warn('[leave-notifications] no HR recipients configured for leave apply', { ref: payload.ref })
-    return
-  }
+  const to = leaveApplyToEmail()
+  const cc = await resolveLeaveApplyCcEmails()
   const subject = `Leave request ${payload.ref} — ${payload.employeeName}`
   const text = [
     `New leave request awaiting approval.`,
@@ -226,7 +265,8 @@ export async function notifyLeaveApplied(payload: LeaveNotifyPayload): Promise<v
   `)
 
   await sendHrMailbox({
-    to: recipients,
+    to,
+    cc,
     subject,
     html,
     text,
@@ -234,7 +274,7 @@ export async function notifyLeaveApplied(payload: LeaveNotifyPayload): Promise<v
   })
 }
 
-/** Email the employee when leave is approved or declined. */
+/** Email the applier only when leave is approved or declined. */
 export async function notifyLeaveDecision(
   payload: LeaveNotifyPayload,
   decision: 'approved' | 'rejected',

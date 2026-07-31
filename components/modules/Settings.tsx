@@ -791,10 +791,10 @@ SMTP_USER=info@deed.co.ke
 SMTP_PASS=YOUR_MAILBOX_PASSWORD
 HR_EMAIL=hr@deed.co.ke
 HR_TEAM_EMAIL=hr@deed.co.ke
-LEAVE_NOTIFY_EMAILS=
+LEAVE_APPLY_CC_EMAILS=edwin@deed.co.ke,dennis@deed.co.ke
 SALES_EMAIL=sales@deed.co.ke
 ACCOUNTS_EMAIL=accounts@deed.co.ke`}</pre>
-                      <p className="mt-2">Covers RFQ mail, sales quotes, invoices, user credentials, portal notices, and leave apply/approve emails. Set <span className="font-mono">HR_TEAM_EMAIL</span> (or <span className="font-mono">LEAVE_NOTIFY_EMAILS</span>) so Edwin / HR receive leave applications. Department From-addresses reuse the same SMTP login unless you set separate <span className="font-mono">*_SMTP_USER/PASS</span>.</p>
+                      <p className="mt-2">Covers RFQ mail, sales quotes, invoices, user credentials, portal notices, and leave emails. Leave apply goes <span className="font-mono">To: HR_TEAM_EMAIL</span> and <span className="font-mono">Cc: LEAVE_APPLY_CC_EMAILS</span> (Edwin + Dennis). Approve/reject goes to the applier&apos;s HR employee email only. Department From-addresses reuse the same SMTP login unless you set separate <span className="font-mono">*_SMTP_USER/PASS</span>.</p>
                     </div>
                   </div>
                 )}

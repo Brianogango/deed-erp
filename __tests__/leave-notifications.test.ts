@@ -4,7 +4,7 @@ const { mockSendEmail, mockPrisma } = vi.hoisted(() => ({
   mockSendEmail: vi.fn(),
   mockPrisma: {
     user: { findMany: vi.fn(), findUnique: vi.fn() },
-    employee: { findUnique: vi.fn() },
+    employee: { findUnique: vi.fn(), findMany: vi.fn() },
   },
 }))
 
@@ -12,11 +12,12 @@ vi.mock('@/lib/integrations/email', () => ({ sendEmail: mockSendEmail }))
 vi.mock('@/lib/prisma', () => ({ default: mockPrisma }))
 
 import {
-  configuredLeaveInboxEmails,
+  DEFAULT_LEAVE_APPLY_CC,
+  leaveApplyToEmail,
   notifyLeaveApplied,
   notifyLeaveDecision,
   resolveApplicantEmail,
-  resolveHrApproverEmails,
+  resolveLeaveApplyCcEmails,
 } from '@/lib/hr/leave-notifications'
 
 const sample = {
@@ -38,13 +39,13 @@ describe('leave-notifications', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     process.env.HR_TEAM_EMAIL = 'hr@deed.co.ke'
-    process.env.LEAVE_NOTIFY_EMAILS = 'edwin@deed.co.ke'
+    delete process.env.LEAVE_APPLY_CC_EMAILS
+    delete process.env.LEAVE_NOTIFY_EMAILS
     delete process.env.LEAVE_NOTIFY_EMAIL
     mockSendEmail.mockResolvedValue({ success: true, messageId: 'm1' })
-    mockPrisma.user.findMany.mockResolvedValue([
-      { email: 'brian@deed.co.ke' },
-      { email: 'edwin@deed.co.ke' },
-      { email: 'invalid' },
+    mockPrisma.employee.findMany.mockResolvedValue([
+      { firstName: 'Edwin', email: 'edwin@deed.co.ke', user: null },
+      { firstName: 'Dennis', email: 'dennis@deed.co.ke', user: { email: 'dennis.user@deed.co.ke' } },
     ])
     mockPrisma.employee.findUnique.mockResolvedValue({
       firstName: 'Ann',
@@ -57,16 +58,29 @@ describe('leave-notifications', () => {
     process.env = { ...prevEnv }
   })
 
-  it('dedupes configured inbox + LEAVE_NOTIFY_EMAILS', () => {
-    expect(configuredLeaveInboxEmails()).toEqual(['hr@deed.co.ke', 'edwin@deed.co.ke'])
+  it('applies To hr@deed.co.ke', () => {
+    expect(leaveApplyToEmail()).toBe('hr@deed.co.ke')
   })
 
-  it('resolves HR recipients from inbox + active director/admin_officer users', async () => {
-    const emails = await resolveHrApproverEmails()
-    expect(emails).toContain('hr@deed.co.ke')
-    expect(emails).toContain('edwin@deed.co.ke')
-    expect(emails).toContain('brian@deed.co.ke')
-    expect(emails).not.toContain('invalid')
+  it('resolves Edwin and Dennis CC from HR employee records', async () => {
+    await expect(resolveLeaveApplyCcEmails()).resolves.toEqual([
+      'edwin@deed.co.ke',
+      'dennis@deed.co.ke',
+    ])
+  })
+
+  it('uses LEAVE_APPLY_CC_EMAILS when set', async () => {
+    process.env.LEAVE_APPLY_CC_EMAILS = 'edwin@deed.co.ke, dennis@deed.co.ke'
+    await expect(resolveLeaveApplyCcEmails()).resolves.toEqual([
+      'edwin@deed.co.ke',
+      'dennis@deed.co.ke',
+    ])
+    expect(mockPrisma.employee.findMany).not.toHaveBeenCalled()
+  })
+
+  it('falls back to default CC emails when DB has none', async () => {
+    mockPrisma.employee.findMany.mockResolvedValue([])
+    await expect(resolveLeaveApplyCcEmails()).resolves.toEqual([...DEFAULT_LEAVE_APPLY_CC])
   })
 
   it('uses the employee HR-record email for the applicant', async () => {
@@ -75,17 +89,22 @@ describe('leave-notifications', () => {
     expect(result.name).toBe('Ann Applicant')
   })
 
-  it('emails HR when leave is applied (does not throw on mail failure)', async () => {
-    mockSendEmail.mockResolvedValueOnce({ success: false, error: 'smtp down' })
-    await expect(notifyLeaveApplied(sample)).resolves.toBeUndefined()
-    expect(mockSendEmail).toHaveBeenCalled()
-    const args = mockSendEmail.mock.calls[0][0]
-    expect(args.mailbox).toBe('hr')
-    expect(args.subject).toContain('LV/0042')
-    expect(String(args.to)).toContain('hr@deed.co.ke')
+  it('emails hr@deed.co.ke To with Edwin+Dennis CC on apply', async () => {
+    await notifyLeaveApplied(sample)
+    expect(mockSendEmail).toHaveBeenCalledWith(expect.objectContaining({
+      to: 'hr@deed.co.ke',
+      cc: ['edwin@deed.co.ke', 'dennis@deed.co.ke'],
+      mailbox: 'hr',
+      subject: expect.stringContaining('LV/0042'),
+    }))
   })
 
-  it('emails the applicant on approve using HR employee email', async () => {
+  it('does not throw when apply mail fails', async () => {
+    mockSendEmail.mockResolvedValueOnce({ success: false, error: 'smtp down' })
+    await expect(notifyLeaveApplied(sample)).resolves.toBeUndefined()
+  })
+
+  it('emails the applier only on approve (no CC)', async () => {
     await notifyLeaveDecision({
       ...sample,
       status: 'approved',
@@ -97,10 +116,11 @@ describe('leave-notifications', () => {
       mailbox: 'hr',
       subject: 'Leave LV/0042 approved',
     }))
+    expect(mockSendEmail.mock.calls[0][0].cc).toBeUndefined()
     expect(mockSendEmail.mock.calls[0][0].text).toContain('Enjoy')
   })
 
-  it('emails the applicant on decline', async () => {
+  it('emails the applier only on decline', async () => {
     await notifyLeaveDecision({
       ...sample,
       status: 'rejected',
@@ -111,6 +131,7 @@ describe('leave-notifications', () => {
       to: 'ann.personal@example.com',
       subject: 'Leave LV/0042 declined',
     }))
+    expect(mockSendEmail.mock.calls[0][0].cc).toBeUndefined()
   })
 
   it('skips applicant email when HR record has no email', async () => {
