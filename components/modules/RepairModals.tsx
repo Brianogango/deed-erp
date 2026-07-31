@@ -1,8 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
-import { useRepairStore, RepairOrder, OUTSOURCE_SERVICE_TYPES, type RepairQAItem } from '@/lib/store'
-import { repairOutsourceReadiness } from '@/lib/repair-outsource'
+import { useRepairStore, RepairOrder, type RepairQAItem } from '@/lib/store'
 import { Modal, Field, Input, Select, Textarea } from '@/components/ui'
 import { Fa } from '@/components/icons'
 import {
@@ -20,7 +19,6 @@ import {
   faTimesCircle,
   faBan,
   faTrash,
-  faExternalLinkSquareAlt,
   faSearch,
   faBoxOpen,
   faExclamationCircle,
@@ -1451,121 +1449,6 @@ export function DeleteRepairConfirm({ repair, onClose, onDeleted }: { repair: Re
           <button className="btn-outline min-w-[100px]" onClick={onClose}>Back</button>
           <ActionBtn onClick={handleDelete} color="linear-gradient(135deg,#7C3AED,#9333EA)" shadow="0 8px 24px rgba(124,58,237,0.4)" disabled={loading}>
             <Fa icon={faTrash} /> Delete Permanently
-          </ActionBtn>
-        </div>
-      </div>
-    </Modal>
-  )
-}
-
-export function OutsourceRepairModal({ repair, onClose }: { repair: RepairOrder; onClose: () => void }) {
-  const { outsourceVendors, addOutsourceJob, showToast } = useRepairStore()
-  const [form, setForm] = useState({
-    vendorId: '',
-    serviceType: 'other' as typeof OUTSOURCE_SERVICE_TYPES[number]['value'],
-    issueDescription: repair.issueDescription ?? repair.diagnosis?.faultDescription ?? '',
-    quotedCost: '',
-    notes: '',
-  })
-  const [loading, setLoading] = useState(false)
-
-  const selectedVendor = outsourceVendors.find(v => v.id === form.vendorId)
-
-  function handleSubmit() {
-    if (!form.vendorId) { showToast('Select an outsource vendor', 'error'); return }
-    if (!form.issueDescription.trim()) { showToast('Describe the issue to be outsourced', 'error'); return }
-    const readiness = repairOutsourceReadiness(repair)
-    if (!readiness.ok) { showToast(readiness.reason, 'error'); return }
-    setLoading(true)
-    addOutsourceJob({
-      vendorId: form.vendorId,
-      vendorName: selectedVendor?.name ?? '',
-      deviceDescription: `${repair.productName}${repair.serialNumber ? ` — SN ${repair.serialNumber}` : ''}`,
-      serial: repair.serialNumber,
-      repairOrderId: repair.id,
-      serviceType: form.serviceType,
-      issueDescription: form.issueDescription,
-      sentDate: new Date().toISOString(),
-      quotedCost: form.quotedCost ? Number(form.quotedCost) : undefined,
-      notes: form.notes || undefined,
-    })
-    onClose()
-  }
-
-  return (
-    <Modal title="Outsource Repair" subtitle={`${repair.ref} — ${repair.productName}`} onClose={onClose} width={520} icon={<Fa icon={faExternalLinkSquareAlt} />} accent="#8B5CF6">
-      <div className="space-y-4">
-        <div className="p-3.5 rounded-xl border border-violet-500/20 bg-[rgba(139,92,246,0.07)]">
-          <p className="text-[10px] font-black text-violet-600 uppercase tracking-wide mb-1">Staff Only — Not Visible to Client</p>
-          <p className="text-[11px] text-[var(--text-2)] leading-relaxed">
-            This will log the job with an external vendor and lock the repair at In Repair until the device is marked returned. Directors and the technical lead will be notified automatically.
-          </p>
-          <p className="text-[11px] text-[var(--text-3)] leading-relaxed mt-2">
-            Requires an assigned technician and a logged diagnosis before send-out.
-          </p>
-        </div>
-
-        <Field label="Vendor">
-          <select
-            className="form-input"
-            value={form.vendorId}
-            onChange={e => setForm(p => ({ ...p, vendorId: e.target.value }))}
-          >
-            <option value="">— Select vendor —</option>
-            {outsourceVendors.map(v => (
-              <option key={v.id} value={v.id}>{v.name}{v.phone ? ` · ${v.phone}` : ''}</option>
-            ))}
-          </select>
-          {outsourceVendors.length === 0 && (
-            <p className="text-[9px] text-amber-600 mt-1 font-medium">No vendors configured yet. Add them in the Outsource module first.</p>
-          )}
-        </Field>
-
-        <Field label="Service Type">
-          <select
-            className="form-input"
-            value={form.serviceType}
-            onChange={e => setForm(p => ({ ...p, serviceType: e.target.value as any }))}
-          >
-            {OUTSOURCE_SERVICE_TYPES.map(t => (
-              <option key={t.value} value={t.value}>{t.label}</option>
-            ))}
-          </select>
-        </Field>
-
-        <Field label="Issue Description">
-          <Textarea
-            value={form.issueDescription}
-            onChange={v => setForm(p => ({ ...p, issueDescription: v }))}
-            placeholder="Describe the fault to communicate to the vendor…"
-            rows={3}
-          />
-        </Field>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <Field label="Quoted Cost (KES) — optional">
-            <input
-              type="number"
-              className="form-input"
-              value={form.quotedCost}
-              placeholder="0"
-              onChange={e => setForm(p => ({ ...p, quotedCost: e.target.value }))}
-            />
-          </Field>
-          <Field label="Internal Notes — optional">
-            <input
-              className="form-input"
-              value={form.notes}
-              placeholder="Any notes for the team…"
-              onChange={e => setForm(p => ({ ...p, notes: e.target.value }))}
-            />
-          </Field>
-        </div>
-
-        <div className="flex gap-2 justify-end pt-3 border-t border-[var(--border-lt)]">
-          <button className="btn-outline min-w-[100px]" onClick={onClose}>Cancel</button>
-          <ActionBtn onClick={handleSubmit} color="linear-gradient(135deg,#7C3AED,#8B5CF6)" shadow="0 8px 24px rgba(139,92,246,0.4)" disabled={loading}>
-            <Fa icon={faExternalLinkSquareAlt} /> Send to Vendor
           </ActionBtn>
         </div>
       </div>

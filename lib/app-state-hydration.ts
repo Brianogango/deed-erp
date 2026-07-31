@@ -59,7 +59,7 @@ const ROUTE_APP_STATE_KEYS: Record<string, string[]> = {
   '/kilimall': ['deed_kilimallOrders', 'deed_kilimallDispatches', 'deed_kilimallSettlements', 'deed_products', 'deed_bulkStock'],
   '/ecommerce': ['deed_products', 'deed_invoices', 'deed_contacts', 'deed_warranties'],
   '/expenses': ['deed_expenses', 'deed_accounts', 'deed_bankAccounts'],
-  '/outsource': ['deed_outsourceVendors', 'deed_outsourceJobs', 'deed_outsourcePayments', 'deed_contacts'],
+  '/outsource': ['deed_outsourceVendors', 'deed_outsourceJobs', 'deed_outsourcePayments', 'deed_contacts', 'deed_repairs_v2'],
   '/deposits': ['deed_deposits', 'deed_invoices', 'deed_contacts', 'deed_bankAccounts'],
   '/documents': ['deed_hrDocuments', 'deed_sops', 'deed_sopActuals', 'deed_ref_sops', 'deed_hr_sops'],
   '/holdovers': ['deed_holdovers', 'deed_products', 'deed_serials', 'deed_contacts', 'deed_repairs_v2', 'deed_bulkStock'],

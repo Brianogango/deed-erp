@@ -241,11 +241,17 @@ function OutsourceContent() {
       if (!readiness.ok) { showToast(readiness.reason, 'error'); return }
     }
     const vendor = outsourceVendors.find(v => v.id === jobForm.vendorId)!
+    const linkedRepair = jobForm.repairOrderId
+      ? repairs.find(r => r.id === jobForm.repairOrderId)
+      : undefined
+    const deviceDescription = jobForm.deviceDescription.trim()
     addOutsourceJob({
       vendorId: jobForm.vendorId,
       vendorName: vendor.name,
       repairOrderId: jobForm.repairOrderId || undefined,
-      deviceDescription: jobForm.deviceDescription.trim(),
+      deviceDescription: linkedRepair
+        ? `${deviceDescription}${deviceDescription.includes(linkedRepair.ref) ? '' : ` (${linkedRepair.ref})`}`
+        : deviceDescription,
       serial: jobForm.serial.trim() || undefined,
       serviceType: jobForm.serviceType,
       issueDescription: jobForm.issueDescription.trim(),
@@ -365,6 +371,10 @@ function OutsourceContent() {
           })()}
         </div>
       ),
+      searchValue: job => {
+        const linked = job.repairOrderId ? repairs.find(x => x.id === job.repairOrderId) : null
+        return [job.deviceDescription, job.serial, linked?.ref, job.repairOrderId].filter(Boolean).join(' ')
+      },
       exportValue: job => job.deviceDescription,
     },
     {
