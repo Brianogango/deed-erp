@@ -27,12 +27,14 @@ export async function creditOverrideDetails(
   body: any,
 ): Promise<{ creditRequested: number; creditAvailable: number } | null> {
   if (body.creditRequested != null || body.creditAvailable != null) {
-    return {
-      creditRequested: Number(body.creditRequested ?? orderTotal),
-      creditAvailable: Number(body.creditAvailable ?? 0),
+    const creditRequested = Number(body.creditRequested ?? orderTotal)
+    const creditAvailable = Number(body.creditAvailable ?? 0)
+    if (creditRequested > creditAvailable) {
+      return { creditRequested, creditAvailable }
     }
+    return null
   }
-  if (!clientId || body.creditLimitExceeded !== true) return null
+  if (!clientId) return null
   try {
     const { default: prisma } = await import('@/lib/prisma')
     const client = await prisma.client.findUnique({
@@ -51,7 +53,10 @@ export async function creditOverrideDetails(
     })
     const outstanding = Math.max(0, Number(open._sum.totalAmount ?? 0) - Number(open._sum.amountPaid ?? 0))
     const creditAvailable = Math.max(0, creditLimit - outstanding)
-    return { creditRequested: orderTotal, creditAvailable }
+    if (orderTotal > creditAvailable || body.creditLimitExceeded === true) {
+      return { creditRequested: orderTotal, creditAvailable }
+    }
+    return null
   } catch {
     return null
   }

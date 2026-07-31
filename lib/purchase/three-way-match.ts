@@ -32,9 +32,9 @@ export function assertBillableQty(poLine: ThreeWayPoLine, qtyToBill: number): vo
 export type BillMatchStatus = 'matched' | 'over_billed' | 'under_billed' | 'pending_receipt'
 
 export function billMatchStatus(line: ThreeWayPoLine): BillMatchStatus {
-  const ordered = Math.max(0, Math.floor(Number(poLine.qtyOrdered ?? poLine.qty) || 0))
-  const received = Math.max(0, Math.floor(Number(poLine.qtyReceived) || 0))
-  const billed = Math.max(0, Math.floor(Number(poLine.qtyBilled) || 0))
+  const ordered = Math.max(0, Math.floor(Number(line.qtyOrdered ?? line.qty) || 0))
+  const received = Math.max(0, Math.floor(Number(line.qtyReceived) || 0))
+  const billed = Math.max(0, Math.floor(Number(line.qtyBilled) || 0))
 
   if (received === 0 && billed === 0) return 'pending_receipt'
   if (billed > received) return 'over_billed'

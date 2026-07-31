@@ -68,6 +68,7 @@ import { DataTable, type ColumnDef } from '@/components/data-table'
 import { Fa } from '@/components/icons'
 import { downloadCommercialPdf, openCommercialPdf, type CommercialPdfInput } from '@/lib/commercial-pdf'
 import { resolveListPrice } from '@/lib/pricing/pricelist'
+import Chatter from '@/components/erp/Chatter'
 import { finishUxTask, startUxTask, trackUxEvent } from '@/lib/ux-telemetry'
 import {
   SALE_STATUS_BAR,
@@ -313,7 +314,7 @@ function SalesContent() {
   const [newNotes, setNewNotes] = useState('')
   const [newCustomerRef, setNewCustomerRef] = useState('')
   const [newSalesTeam, setNewSalesTeam] = useState('')
-  const [newPricelist, setNewPricelist] = useState('')
+  const [newPricelist, setNewPricelist] = useState('RETAIL')
   const [newInvoiceAddress, setNewInvoiceAddress] = useState('')
   const [newDeliveryAddress, setNewDeliveryAddress] = useState('')
   const [newDraftLines, setNewDraftLines] = useState<DraftLine[]>([])
@@ -674,6 +675,18 @@ function SalesContent() {
   }, [view, quoteDraftKey])
 
   useEffect(() => {
+    if (view !== 'new' || !systemSettings.salesPricelists) return
+    setNewDraftLines(prev => prev.map(line => {
+      if (line.type === 'section' || !line.productId) return line
+      const product = products.find(p => p.id === line.productId)
+      if (!product) return line
+      const qty = Math.max(1, Number(line.qty) || 1)
+      const priced = resolveListPrice({ product, pricelist: newPricelist || 'RETAIL', qty })
+      return { ...line, unitPrice: String(priced.unitPrice) }
+    }))
+  }, [newPricelist, view, systemSettings.salesPricelists, products])
+
+  useEffect(() => {
     if (view !== 'new') return
     if (draftAutosaveTimerRef.current) clearTimeout(draftAutosaveTimerRef.current)
     draftAutosaveTimerRef.current = setTimeout(() => {
@@ -734,7 +747,13 @@ function SalesContent() {
       const qty = Number(l.qty) || 1
       // A quotation records commercial demand; it does not reserve stock.
       // Availability is enforced later when the confirmed SO is prepared for delivery.
-      const unitPrice = Math.max(0, Number(l.unitPrice) || product.salePrice || 0)
+      const priced = resolveListPrice({
+        product,
+        pricelist: newPricelist || 'RETAIL',
+        qty,
+        customPrice: Number(l.unitPrice) || undefined,
+      })
+      const unitPrice = Math.max(0, priced.unitPrice)
       const discount = Number(l.discount) || 0
       const subtotal = Math.round(unitPrice * qty * (1 - discount / 100))
       builtLines.push({
@@ -1656,6 +1675,14 @@ function SalesContent() {
                           )}
                         </div>
                       </div>
+
+                      <Chatter
+                        model="sale_order"
+                        recordId={activeOrder.id}
+                        staffName={currentUser?.name || 'Staff'}
+                        title="Internal Notes"
+                        compact
+                      />
 
                       {/* Activity */}
                       <div className="flex flex-col gap-3">

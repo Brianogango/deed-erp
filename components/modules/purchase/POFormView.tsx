@@ -5,6 +5,7 @@ import { Badge, Modal, Field, Input, Select, Confirm, PanelHeader, StatusStepper
 import { LOCATIONS, CATEGORY_CONFIG, type LocationId, type CategoryId, fmtKes, fmtDate } from '@/lib/store'
 import { invoiceDocState, invoicePaymentStatus, displayDocRef, PAYMENT_STATUS_LABELS } from '@/lib/odoo-sales-flow'
 import { downloadPdf, type PdfLine } from '@/lib/pdf'
+import Chatter from '@/components/erp/Chatter'
 
 const ACCESSORIES = ['Charger', 'Bag/Case', 'Mouse', 'Box', 'Cable', 'Manual']
 const PO_STEPS = ['RFQ', 'RFQ Sent', 'Purchase Order', 'Received', 'Billed']
@@ -492,6 +493,13 @@ export default function POFormView() {
                 ))}
               </div>
             )}
+
+            <Chatter
+              model="purchase_order"
+              recordId={activePO.id}
+              title="PO Chatter"
+              compact
+            />
           </div>
 
           {/* ── Right sidebar ── */}
