@@ -211,6 +211,13 @@ function OutsourceContent() {
   const filteredJobs = outsourceJobs
     .filter(j => jobStatusFilter === 'all' || j.status === jobStatusFilter)
     .filter(j => jobVendorFilter === 'all' || j.vendorId === jobVendorFilter)
+    .slice()
+    .sort((a, b) => {
+      const aTime = Date.parse(a.sentDate || a.createdAt || '') || 0
+      const bTime = Date.parse(b.sentDate || b.createdAt || '') || 0
+      if (bTime !== aTime) return bTime - aTime
+      return (b.ref || '').localeCompare(a.ref || '')
+    })
 
   const activeJob = activeJobId ? outsourceJobs.find(j => j.id === activeJobId) ?? null : null
 
@@ -361,19 +368,23 @@ function OutsourceContent() {
     },
     {
       key: 'device', label: 'Device', priority: 1, width: '1.8fr',
-      render: job => (
-        <div className="min-w-0">
-          <p className="font-medium text-t1 erp-truncate" title={job.deviceDescription}>{job.deviceDescription}</p>
-          {job.serial && <p className="text-[10px] text-t3 erp-truncate" title={job.serial}>SN: {job.serial}</p>}
-          {job.repairOrderId && (() => {
-            const r = repairs.find(x => x.id === job.repairOrderId)
-            return r ? <p className="text-[10px] font-mono" style={{ color: 'var(--accent-cyan)' }}>🔗 {r.ref}</p> : null
-          })()}
-        </div>
-      ),
+      render: job => {
+        const linked = job.repairOrderId ? repairs.find(x => x.id === job.repairOrderId) : null
+        return (
+          <div className="min-w-0">
+            <p className="font-medium text-t1 erp-truncate" title={job.deviceDescription}>{job.deviceDescription}</p>
+            {job.serial && <p className="text-[10px] text-t3 erp-truncate" title={job.serial}>SN: {job.serial}</p>}
+            {linked && (
+              <p className="text-[10px] font-mono erp-truncate" style={{ color: 'var(--accent-cyan)' }} title={`${linked.ref} · ${linked.customerName}`}>
+                {linked.ref} · {linked.customerName}
+              </p>
+            )}
+          </div>
+        )
+      },
       searchValue: job => {
         const linked = job.repairOrderId ? repairs.find(x => x.id === job.repairOrderId) : null
-        return [job.deviceDescription, job.serial, linked?.ref, job.repairOrderId].filter(Boolean).join(' ')
+        return [job.deviceDescription, job.serial, linked?.ref, linked?.customerName, linked?.customerPhone, job.repairOrderId, job.ref].filter(Boolean).join(' ')
       },
       exportValue: job => job.deviceDescription,
     },
@@ -449,6 +460,12 @@ function OutsourceContent() {
           <div className="min-w-0 flex-1">
             <div className="text-[10px] font-black uppercase tracking-wider text-primary-600 mb-0.5">{job.ref}</div>
             <div className="text-sm font-black text-t1 truncate">{job.deviceDescription}</div>
+            {job.repairOrderId && (() => {
+              const linked = repairs.find(r => r.id === job.repairOrderId)
+              return linked ? (
+                <div className="text-[11px] font-mono text-primary-600 mt-0.5 truncate">{linked.ref} · {linked.customerName}</div>
+              ) : null
+            })()}
             <div className="text-[11px] text-t3 mt-0.5 truncate">{job.vendorName} · {svcLabel(job.serviceType)}</div>
           </div>
           <div className="flex-shrink-0 text-right">
@@ -536,7 +553,7 @@ function OutsourceContent() {
             rows={filteredJobs}
             rowKey={job => job.id}
             emptyMessage="No outsource jobs match the filter."
-            searchPlaceholder="Search reference, device or vendor…"
+            searchPlaceholder="Search OUT ref, device, customer or repair…"
             clientSearch
             primaryFilters={[
               {

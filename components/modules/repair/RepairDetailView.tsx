@@ -632,7 +632,10 @@ export default function RepairDetailView() {
 
               {/* Outsource job strip */}
               {linkedOutsourceJob && (
-                <div className="mx-4 sm:mx-6 mb-4 flex items-center gap-3 px-3.5 py-2.5 rounded-xl bg-[rgba(245,158,11,0.08)] border border-amber-500/25">
+                <a
+                  href={`/outsource?tab=jobs&id=${encodeURIComponent(linkedOutsourceJob.id)}`}
+                  className="mx-4 sm:mx-6 mb-4 flex items-center gap-3 px-3.5 py-2.5 rounded-xl bg-[rgba(245,158,11,0.08)] border border-amber-500/25 hover:bg-[rgba(245,158,11,0.14)] transition-colors"
+                >
                   <div className="w-6 h-6 rounded-lg bg-amber-500 flex items-center justify-center shrink-0">
                     <Fa icon={faTools} className="text-white text-[9px]" />
                   </div>
@@ -642,10 +645,10 @@ export default function RepairDetailView() {
                       {linkedOutsourceJob.vendorName} · {linkedOutsourceJob.ref} · <span className="capitalize">{linkedOutsourceJob.status.replace(/_/g, ' ')}</span>
                     </p>
                   </div>
-                  <span className="text-[9px] font-black text-amber-600 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full shrink-0 font-mono">
-                    {linkedOutsourceJob.ref.slice(-6).toUpperCase()}
+                  <span className="text-[9px] font-black text-amber-600 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full shrink-0">
+                    Open →
                   </span>
-                </div>
+                </a>
               )}
             </SectionCard>
 
