@@ -79,7 +79,6 @@ export interface RepairCtxValue {
   showMarkDeliveredConfirm: boolean; setShowMarkDeliveredConfirm: (v: boolean) => void
   showCancelModal: boolean; setShowCancelModal: (v: boolean) => void
   showDeleteConfirm: boolean; setShowDeleteConfirm: (v: boolean) => void
-  showOutsourceModal: boolean; setShowOutsourceModal: (v: boolean) => void
   showEditDetailsModal: boolean; setShowEditDetailsModal: (v: boolean) => void
   showStopDiagnosisModal: boolean; setShowStopDiagnosisModal: (v: boolean) => void
   // Report uploads

@@ -24,8 +24,6 @@ import { SecondaryActionMenu, StatusBadge } from '@/components/erp'
 import { OutboundReleasePanel, OrcStatusBadge } from '../OutboundReleasePanel'
 import { normalizeClientRole } from '@/lib/auth/access'
 import { readGuardedImageAsDataUrl } from '@/lib/client-image-guard'
-import { repairOutsourceReadiness } from '@/lib/repair-outsource'
-
 const STATUS_BADGE_CLS: Record<string, string> = {
   pending_verification: 'bg-amber-50 text-amber-800 border-amber-200',
   received:             'bg-slate-100 text-slate-700 border-slate-200',
@@ -123,7 +121,7 @@ export default function RepairDetailView() {
     diagReportInputRef, qcReportInputRef, handleReportUpload, uploadingDiagReport, setUploadingDiagReport, uploadingQcReport, setUploadingQcReport,
     setShowCancelModal, setShowDeleteConfirm,
     setShowEditDetailsModal, setShowStopDiagnosisModal, setShowReturnModal,
-    setShowOutsourceModal, setShowDeliveryModal, setShowMarkDeliveredConfirm,
+    setShowDeliveryModal, setShowMarkDeliveredConfirm,
     setShowProgressModal,
     verifyRepairIntake, startRepair, markRepairComplete, moveRepairToPreviousProgress, outsourceJobs, fileWarrantyClaim,
     markPartsArrived, closeRepairJob, markUnrepairable,
@@ -193,8 +191,6 @@ export default function RepairDetailView() {
   const TERMINAL    = ['delivered','closed','cancelled','declined','unrepairable','returned','retained']
   const canCancel   = isDirector && !TERMINAL.includes(r.status)
   const canDelete   = isDirector
-  const outsourceReady = repairOutsourceReadiness(r).ok
-  const canOutsource          = (currentUser?.role === 'technical_lead' || isDirector) && !TERMINAL.includes(r.status) && !pendingOutsourceJob && outsourceReady
   const canMoveBack           = ['technical_lead', 'director'].includes(currentRole) && !TERMINAL.includes(r.status) && r.status !== 'pending_verification' && !pendingOutsourceJob
   const canScheduleDelivery   = isDeliveryManager && ['ready', 'invoiced'].includes(r.status) && !pendingOutsourceJob
   const canMarkCollected      = isDeliveryManager && ['ready', 'invoiced', 'verified_released'].includes(r.status) && !pendingOutsourceJob
@@ -476,7 +472,6 @@ export default function RepairDetailView() {
                 { id: 'convert_buyback', label: 'Convert → Buy-back stock', onClick: () => convertRetainedRepairToBuyBack(r.id), hidden: !canConvertRetained },
                 { id: 'unrepairable', label: 'Mark unrepairable', onClick: () => { setUnrepairableReason(''); setShowUnrepairableModal(true) }, hidden: !canMarkUnrepairable, danger: true },
                 { id: 'back', label: 'Back step', onClick: () => moveRepairToPreviousProgress(r.id), hidden: !canMoveBack },
-                { id: 'outsource', label: 'Outsource', onClick: () => setShowOutsourceModal(true), hidden: !canOutsource },
                 { id: 'schedule', label: 'Schedule delivery', onClick: () => setShowDeliveryModal(true), hidden: !canScheduleDelivery },
                 { id: 'close', label: 'Close job', onClick: () => closeRepairJob(r.id), hidden: !canCloseJob || primaryActionId === 'close' },
                 { id: 'claim', label: 'File warranty claim', onClick: () => setShowClaimModal(true), hidden: !(r.underWarranty && !r.warrantyClaimId && ['director', 'admin_officer', 'finance_officer'].includes(currentUser?.role ?? '')) },
