@@ -132,8 +132,11 @@ export async function middleware(request: NextRequest) {
     // Server-side maintenance calls authenticate with the internal secret;
     // the target route re-validates the same header before doing anything.
     const internalSecret = process.env.INTERNAL_API_SECRET
+    const isInternalBackfill =
+      pathname === '/api/admin/backfill-repairs' ||
+      pathname === '/api/admin/backfill-accounting'
     if (
-      pathname === '/api/admin/backfill-repairs' &&
+      isInternalBackfill &&
       internalSecret &&
       request.headers.get('x-internal-secret') === internalSecret
     ) {
