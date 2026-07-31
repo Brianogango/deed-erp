@@ -1,4 +1,5 @@
 'use client'
+import { useState } from 'react'
 import { useCrmStore, OpportunityStage, fmtKes } from '@/lib/store'
 import { STAGE_ORDER, STAGE_COLORS, STAGE_LABELS } from './crm-config'
 
@@ -9,7 +10,17 @@ interface Props {
 }
 
 export default function PipelineKanban({ effectiveOwner, stageLabels, onSelectOpp }: Props) {
-  const { opportunities, quotes, opportunityActivities, systemSettings } = useCrmStore()
+  const { opportunities, quotes, opportunityActivities, systemSettings, moveOpportunityStage } = useCrmStore()
+  const [draggedId, setDraggedId] = useState<string | null>(null)
+  const [dropStage, setDropStage] = useState<OpportunityStage | null>(null)
+
+  const handleDrop = (stage: OpportunityStage) => {
+    if (!draggedId) return
+    const opp = opportunities.find(o => o.id === draggedId)
+    if (opp && opp.stage !== stage) moveOpportunityStage(draggedId, stage)
+    setDraggedId(null)
+    setDropStage(null)
+  }
 
   return (
     <div className="flex gap-3 overflow-x-auto pb-3" style={{ minHeight: 'calc(100vh - 280px)' }}>
@@ -19,6 +30,7 @@ export default function PipelineKanban({ effectiveOwner, stageLabels, onSelectOp
           (effectiveOwner === 'all' ? true : o.ownerId === effectiveOwner)
         )
         const stageWeighted = stageOpps.reduce((sum, o) => sum + (o.expectedValue * o.probability / 100), 0)
+        const isDropTarget = dropStage === stage
 
         return (
           <div key={stage} className="flex-shrink-0" style={{ width: 300 }}>
@@ -41,21 +53,51 @@ export default function PipelineKanban({ effectiveOwner, stageLabels, onSelectOp
               </div>
             </div>
 
-            <div className="space-y-2" style={{ maxHeight: 'calc(100vh - 360px)', overflowY: 'auto', paddingRight: 4 }}>
+            <div
+              className={`space-y-2 kanban-drop-column ${isDropTarget ? 'is-drop-target' : ''}`}
+              style={{ maxHeight: 'calc(100vh - 360px)', overflowY: 'auto', paddingRight: 4 }}
+              onDragOver={e => {
+                e.preventDefault()
+                e.dataTransfer.dropEffect = 'move'
+                setDropStage(stage)
+              }}
+              onDragLeave={e => {
+                if (e.currentTarget.contains(e.relatedTarget as Node)) return
+                setDropStage(prev => (prev === stage ? null : prev))
+              }}
+              onDrop={e => {
+                e.preventDefault()
+                handleDrop(stage)
+              }}
+            >
               {stageOpps.map(opp => {
                 const oppQuotes = quotes.filter(q => (opp.quoteIds ?? []).includes(q.id))
                 const daysOpen = Math.round((new Date().getTime() - new Date(opp.createdDate ?? opp.createdAt).getTime()) / (1000 * 60 * 60 * 24))
                 const hasScheduledActivity = opportunityActivities.some(a => a.opportunityId === opp.id && a.status === 'scheduled')
                 const noActivityWarning = systemSettings.crmEnforceNextActivity && !hasScheduledActivity
+                const isDragging = draggedId === opp.id
                 
                 return (
                   <div
                     key={opp.id}
-                    className="card p-3 cursor-pointer"
-                    style={{ borderLeft: `3px solid ${STAGE_COLORS[stage]}`, transition: 'box-shadow 0.15s' }}
-                    onMouseEnter={e => { (e.currentTarget as HTMLElement).style.boxShadow = '0 2px 8px rgba(0,0,0,0.10)' }}
+                    draggable
+                    className={`card p-3 cursor-grab active:cursor-grabbing kanban-card ${isDragging ? 'is-dragging' : ''}`}
+                    style={{ borderLeft: `3px solid ${STAGE_COLORS[stage]}`, transition: 'box-shadow 0.15s, opacity 0.15s' }}
+                    onDragStart={e => {
+                      setDraggedId(opp.id)
+                      e.dataTransfer.effectAllowed = 'move'
+                      e.dataTransfer.setData('text/plain', opp.id)
+                    }}
+                    onDragEnd={() => {
+                      setDraggedId(null)
+                      setDropStage(null)
+                    }}
+                    onMouseEnter={e => { if (!isDragging) (e.currentTarget as HTMLElement).style.boxShadow = '0 2px 8px rgba(0,0,0,0.10)' }}
                     onMouseLeave={e => { (e.currentTarget as HTMLElement).style.boxShadow = '' }}
-                    onClick={() => onSelectOpp(opp.id)}
+                    onClick={() => {
+                      if (draggedId) return
+                      onSelectOpp(opp.id)
+                    }}
                   >
                     <div className="text-xs font-semibold leading-snug mb-0.5" style={{ color: 'var(--text-1)' }}>{opp.name}</div>
                     <div className="text-[10px] mb-2.5 font-medium" style={{ color: 'var(--text-4)' }}>{opp.companyName}</div>

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { withApiErrorHandling, getRequiredSession } from '@/lib/auth/api'
+import { canAccessRecord } from '@/lib/auth/authorization'
 import { saveStoreKeys } from '@/lib/server-store'
 
 async function broadcastOpportunities() {
@@ -30,12 +31,18 @@ function mapOpportunityToDb(body: any) {
 
 export async function GET(_: NextRequest, { params }: { params: { id: string } }) {
   return withApiErrorHandling(async () => {
-    await getRequiredSession()
+    const session = await getRequiredSession()
     const opp = await prisma.opportunity.findUnique({
       where: { id: params.id },
       include: { client: true, assignedTo: true, activities: true },
     })
     if (!opp) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+    if (!canAccessRecord(session.user.role, 'opportunity', {
+      ownerId: opp.assignedToId,
+      assignedToId: opp.assignedToId,
+    }, session.user.id)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
     return NextResponse.json(opp)
   })
 }

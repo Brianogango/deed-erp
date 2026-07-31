@@ -1486,30 +1486,61 @@ export function SearchPicker<T extends { id: string }>({
 /**
  * Status Stepper Component
  */
-export function StatusStepper({ steps, current, labels }: { steps: string[]; current: string; labels?: Record<string, string> }) {
+export function StatusStepper({
+  steps,
+  current,
+  labels,
+  onStepClick,
+  isStepClickable,
+}: {
+  steps: string[]
+  current: string
+  labels?: Record<string, string>
+  onStepClick?: (step: string, index: number) => void
+  isStepClickable?: (step: string, index: number) => boolean
+}) {
   const currentIndex = Math.max(0, steps.indexOf(current))
+  const labelFor = (step: string) => labels?.[step] ?? step.replace(/_/g, ' ')
+
+  const stepClass = (i: number) =>
+    i <= currentIndex
+      ? 'bg-primary-500 text-white'
+      : 'bg-muted text-text-4 border border-border-lt'
+
   return (
     <div className="flex items-center gap-2 w-full overflow-x-auto pb-2 scrollbar-hide">
-      {steps.map((step, i) => (
-        <div key={step} className="flex items-center gap-2 flex-shrink-0">
-          <div
-            className={`
-              flex items-center gap-2 px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wider
-              ${
-                i <= currentIndex
-                  ? 'bg-primary-500 text-white'
-                  : 'bg-muted text-text-4 border border-border-lt'
-              }
-            `}
-          >
+      {steps.map((step, i) => {
+        const clickable = !!onStepClick && (isStepClickable?.(step, i) ?? i >= currentIndex)
+        const content = (
+          <>
             <span className="w-4 h-4 rounded-full bg-white/20 flex items-center justify-center text-[8px]">
               {i + 1}
             </span>
-            {labels?.[step] ?? step.replace(/_/g, ' ')}
+            {labelFor(step)}
+          </>
+        )
+
+        return (
+          <div key={`${step}-${i}`} className="flex items-center gap-2 flex-shrink-0">
+            {clickable ? (
+              <button
+                type="button"
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wider cursor-pointer transition-opacity hover:opacity-90 ${stepClass(i)}`}
+                onClick={() => onStepClick?.(step, i)}
+              >
+                {content}
+              </button>
+            ) : (
+              <div
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${stepClass(i)}`}
+              >
+                {content}
+              </div>
+            )}
+            {i < steps.length - 1 && <div className="w-4 h-px bg-border-lt" />}
           </div>
-          {i < steps.length - 1 && <div className="w-4 h-px bg-border-lt" />}
-        </div>
-      ))}
+        )
+      })}
     </div>
   )
 }

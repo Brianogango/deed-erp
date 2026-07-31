@@ -222,7 +222,7 @@ export const filterReadableStoreKeys = (
   keys: string[],
 ): string[] => keys.filter(key => canReadStoreKey(user, key))
 
-// ── Content-level filtering for financial ledgers ─────────────────────────────
+// ── Content-level filtering (Odoo ir.rule-style row ACL) ─────────────────────
 // deed_invoices / deed_expenses can't be blocked outright like journal entries:
 // many role workflows legitimately need a slice of them (repair billing, sales
 // order → invoice status, purchases follow-up, own expense claims). Instead of
@@ -233,6 +233,7 @@ export const CONTENT_FILTERED_STORE_KEYS = new Set([
   'deed_expenses',
   'deed_saleOrders',
   'deed_repairs_v2',
+  'deed_opportunities',
 ])
 
 type StoreRow = { [k: string]: unknown }
@@ -273,6 +274,7 @@ export const hasFullStoreContentAccess = (
   if (key === 'deed_expenses') return role === 'director' || role === 'finance_officer'
   if (key === 'deed_saleOrders') return role !== 'sales_rep'
   if (key === 'deed_repairs_v2') return role !== 'technician'
+  if (key === 'deed_opportunities') return role !== 'sales_rep'
   return true
 }
 
@@ -294,10 +296,21 @@ export function filterStoreValueForRole(
     return (value as StoreRow[]).filter(e => !!e?.submittedByUserId && e.submittedByUserId === user?.id)
   }
   if (key === 'deed_saleOrders') {
-    return (value as StoreRow[]).filter(order => !!user?.id && order.createdByUserId === user.id)
+    // ir.rule: sales reps see only orders they created or own as salesperson.
+    return (value as StoreRow[]).filter(order => {
+      if (!user?.id) return false
+      return order.createdByUserId === user.id || order.salespersonId === user.id
+    })
   }
   if (key === 'deed_repairs_v2') {
     return (value as StoreRow[]).filter(repair => !!user?.id && repair.assignedTechnicianId === user.id)
+  }
+  if (key === 'deed_opportunities') {
+    if (role !== 'sales_rep') return value
+    return (value as StoreRow[]).filter(opp => {
+      if (!user?.id) return false
+      return opp.ownerId === user.id || opp.assignedToId === user.id
+    })
   }
   return value
 }
@@ -315,6 +328,47 @@ export function mergeFilteredStoreWrite(current: unknown, incoming: unknown): St
   for (const row of currentArr) if (row && row.id != null) byId.set(row.id, row)
   for (const row of incomingArr) if (row && row.id != null) byId.set(row.id, row)
   return [...byId.values()]
+}
+
+export type RecordAccessModel = 'sale_order' | 'opportunity' | 'repair' | 'expense'
+
+const saleOrderOwnedByUser = (record: StoreRow, userId: string) =>
+  record.createdByUserId === userId || record.salespersonId === userId
+
+const opportunityOwnedByUser = (record: StoreRow, userId: string) =>
+  record.ownerId === userId || record.assignedToId === userId
+
+/**
+ * Row-level read/write guard for APIs (mirrors filterStoreValueForRole / ir.rule).
+ */
+export function canAccessRecord(
+  role: string | null | undefined,
+  model: RecordAccessModel,
+  record: StoreRow,
+  userId: string | null | undefined,
+): boolean {
+  const normalizedRole = normalizePermissionRole(role)
+  if (!normalizedRole || !userId) return false
+
+  switch (model) {
+    case 'sale_order':
+      if (['director', 'admin_officer', 'finance_officer', 'technical_lead'].includes(normalizedRole)) return true
+      if (normalizedRole === 'sales_rep') return saleOrderOwnedByUser(record, userId)
+      return false
+    case 'opportunity':
+      if (['director', 'admin_officer', 'finance_officer', 'kilimall_officer', 'technical_lead'].includes(normalizedRole)) return true
+      if (normalizedRole === 'sales_rep') return opportunityOwnedByUser(record, userId)
+      return false
+    case 'repair':
+      if (['director', 'technical_lead'].includes(normalizedRole)) return true
+      if (normalizedRole === 'technician') return record.assignedTechnicianId === userId
+      return false
+    case 'expense':
+      if (['director', 'finance_officer', 'admin_officer'].includes(normalizedRole)) return true
+      return record.submittedByUserId === userId
+    default:
+      return false
+  }
 }
 
 // Store keys that carry an append-only audit trail and must NEVER be written by

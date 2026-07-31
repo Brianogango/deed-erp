@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { getRequiredSession, withApiErrorHandling } from '@/lib/auth/api'
+import { canAccessRecord } from '@/lib/auth/authorization'
 import { optionalUuid, resolveClientId } from '@/lib/legacy-compat'
 import { loadAppState, saveStoreKeys } from '@/lib/server-store'
 import { reserveStockForSaleOrder } from '@/lib/inventory/stock-transactions'
@@ -293,12 +294,18 @@ async function enforceSaleWorkflow(
 
 export async function GET(_: NextRequest, { params }: { params: { id: string } }) {
   return withApiErrorHandling(async () => {
-    await getRequiredSession()
+    const session = await getRequiredSession()
     const order = await prisma.saleOrder.findUnique({
       where: { id: params.id },
       include: { client: true, items: true },
     })
     if (!order) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+    if (!canAccessRecord(session.user.role, 'sale_order', {
+      createdByUserId: order.createdById,
+      salespersonId: order.salespersonId,
+    }, session.user.id)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
     return NextResponse.json(mapSaleOrderToClient(order))
   })
 }

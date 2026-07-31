@@ -8,6 +8,7 @@ import { usePathname, useRouter } from 'next/navigation'
 import GlobalSearch from './GlobalSearch'
 import { readGuardedImageAsDataUrl } from '@/lib/client-image-guard'
 import { trackUxEvent } from '@/lib/ux-telemetry'
+import { ThemeToggle } from '@/components/theme/ThemeToggle'
 
 // ═══════════════════════════════════════════════════════════════════════════
 // CONSTANTS
@@ -1166,6 +1167,8 @@ export default function Topbar() {
           >
             <span>{tableDensity === 'cozy' ? 'Cozy' : 'Compact'}</span>
           </button>
+
+          <ThemeToggle />
 
           {/* Sync state — only surfaced when something needs attention */}
           {syncBadge && (
