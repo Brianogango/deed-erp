@@ -43,7 +43,7 @@ export const downloadQuotePdf = async (quote: Quote) => {
         quote.notes ?? '',
       ].filter(Boolean).join('\n') || undefined,
       paymentCommunication: true,
-      currency: quote.currencyCode || co.currency || 'KES',
+      currency: quote.currencyCode || 'KES',
     },
     {
       name: co.name,
@@ -57,7 +57,7 @@ export const downloadQuotePdf = async (quote: Quote) => {
       mpesaPaybill: co.mpesaPaybill,
       mpesaAccount: co.mpesaAccount,
       logoUrl: co.logoUrl,
-      currency: quote.currencyCode || co.currency || 'KES',
+      currency: quote.currencyCode || 'KES',
       invoiceFooter: co.invoiceFooter || 'Thank you for your business.',
     },
     banks as any,

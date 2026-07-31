@@ -1,6 +1,7 @@
 import 'server-only'
 import { sql } from '@/lib/auth/db'
 import prisma from '@/lib/prisma'
+import type { Prisma } from '@prisma/client'
 import {
   CATALOG_BLOB_KEYS,
   DUAL_WRITE_BLOB_KEYS,
@@ -152,7 +153,7 @@ export async function upsertCutoverCertificate(input: {
     blobCount: input.blobCount,
     prismaCount: input.prismaCount,
     parityOk: input.parityOk,
-    details: input.details ?? {},
+    details: (input.details ?? {}) as Prisma.InputJsonValue,
     certifiedBy: input.certifiedBy ?? null,
     certifiedAt: input.certifiedAt ?? null,
     archivedAt: input.archivedAt ?? null,
