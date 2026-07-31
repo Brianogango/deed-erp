@@ -53,8 +53,10 @@ jobs:
             cd /var/www/deed-erp
             PENDING_FLAG=''
             if [ '${{ steps.req.outputs.pending }}' = 'true' ]; then PENDING_FLAG='--pending'; fi
-            cp /tmp/deed-ops/book-leave-for-employee.mjs /tmp/book-leave-for-employee.mjs
-            node /tmp/book-leave-for-employee.mjs \
+            mkdir -p scripts
+            cp /tmp/deed-ops/book-leave-for-employee.mjs scripts/book-leave-for-employee.mjs
+            # Run inside the app so node resolves `pg` from node_modules.
+            node scripts/book-leave-for-employee.mjs \
               --name '${{ steps.req.outputs.name }}' \
               --date '${{ steps.req.outputs.date }}' \
               --end '${{ steps.req.outputs.end }}' \
