@@ -347,16 +347,18 @@ function AccountingContent() {
   useEffect(() => {
     const urlTab = searchParams.get('tab') as MainTab | null
     const urlReport = searchParams.get('report') as ReportTab | null
+    // URL → local only. Do not depend on `tab`/`reportTab` or optimistic clicks
+    // re-apply a stale URL (e.g. Bills snaps back to Invoices).
     if (urlTab && REPORT_TAB_IDS.has(urlTab)) {
       setLocalTab('reports')
       setReportTab(urlTab as ReportTab)
-    } else if (urlTab && urlTab !== tab) {
+    } else if (urlTab) {
       setLocalTab(urlTab)
     }
-    if (urlReport && REPORT_TAB_IDS.has(urlReport as MainTab) && urlReport !== reportTab) {
+    if (urlReport && REPORT_TAB_IDS.has(urlReport as MainTab)) {
       setReportTab(urlReport)
     }
-  }, [searchParams, tab, reportTab])
+  }, [searchParams])
 
   // Persist CoA blob when missing (Contabo had no deed_accounts) — never wipes balances.
   useEffect(() => {
@@ -778,18 +780,29 @@ function AccountingContent() {
   }
 
   // Deep link from /finance/invoices/[id] — open the edit form for the requested invoice.
+  const handledEditRef = useRef<string | null>(null)
   useEffect(() => {
     const editId = searchParams.get('edit')
-    if (!editId) return
-    const inv = allInvoices.find(i => i.id === editId)
-    if (inv) {
-      handleEditInvoice(inv)
-      setTab(inv.type === 'customer_invoice' ? 'invoices' : 'bills')
+    if (!editId) {
+      handledEditRef.current = null
+      return
     }
+    if (handledEditRef.current === editId) return
+    const inv = allInvoices.find(i => i.id === editId)
+    if (!inv) return // wait until invoices hydrate — do not strip ?edit yet
+
+    handledEditRef.current = editId
+    handleEditInvoice(inv)
+    const nextTab = inv.type === 'customer_invoice' ? 'invoices' : 'bills'
+    setLocalTab(nextTab)
+    setSelectedInvIds(new Set())
+
     const params = new URLSearchParams(searchParams.toString())
+    params.set('tab', nextTab)
     params.delete('edit')
+    params.delete('report')
     router.replace(`${pathname}?${params.toString()}`, { scroll: false })
-  }, [searchParams])
+  }, [searchParams, allInvoices, pathname, router])
 
   const handleBillFile = async (file: File | null) => {
     if (!file) return

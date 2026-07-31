@@ -1,10 +1,12 @@
 #!/usr/bin/env node
 /**
- * Ops helper: book leave for an employee by name (HR-style, auto-approved).
+ * Ops helper: book leave OR update leave status by reference.
  *
- * Usage (on Contabo app host, from /var/www/deed-erp):
- *   node scripts/book-leave-for-employee.mjs --name "David" --date 2026-07-31 --type annual
- *   node scripts/book-leave-for-employee.mjs --name "David" --date 2026-07-31 --type annual --dry-run
+ * Book:
+ *   node scripts/book-leave-for-employee.mjs --name "David" --date 2026-07-31 --type annual --pending
+ *
+ * Set status (e.g. unapprove):
+ *   node scripts/book-leave-for-employee.mjs --ref LV/0033 --set-status pending_hr
  */
 import { readFileSync, existsSync } from 'node:fs'
 import { resolve, dirname } from 'node:path'
@@ -40,38 +42,28 @@ function arg(flag, fallback = null) {
   return fallback
 }
 
-const nameQuery = String(arg('--name', '')).trim()
-const startDate = String(arg('--date', '')).trim()
-const endDate = String(arg('--end', startDate)).trim()
-const leaveType = String(arg('--type', 'annual')).trim().toLowerCase()
-const reason = String(arg('--reason', 'Booked by ops request')).trim()
-const dryRun = process.argv.includes('--dry-run')
-const pending = process.argv.includes('--pending')
-
-const ALLOWED = new Set(['annual', 'sick', 'compassionate', 'study', 'unpaid', 'maternity', 'paternity'])
-
 function fail(msg) {
   console.error(`ERROR: ${msg}`)
   process.exit(1)
 }
 
-if (!nameQuery) fail('Pass --name "David"')
-if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate)) fail('Pass --date YYYY-MM-DD')
-if (!/^\d{4}-\d{2}-\d{2}$/.test(endDate)) fail('Pass --end YYYY-MM-DD')
-if (!ALLOWED.has(leaveType)) fail(`Invalid --type ${leaveType}`)
+const nameQuery = String(arg('--name', '')).trim()
+const startDate = String(arg('--date', '')).trim()
+const endDate = String(arg('--end', startDate)).trim()
+const leaveType = String(arg('--type', 'annual')).trim().toLowerCase()
+const reason = String(arg('--reason', 'Booked by ops request')).trim()
+const refArg = String(arg('--ref', '')).trim()
+const setStatus = String(arg('--set-status', '')).trim()
+const dryRun = process.argv.includes('--dry-run')
+const pending = process.argv.includes('--pending')
+
+const ALLOWED = new Set(['annual', 'sick', 'compassionate', 'study', 'unpaid', 'maternity', 'paternity'])
+const STATUSES = new Set(['pending_hr', 'approved', 'rejected', 'cancelled'])
 
 const connectionString = process.env.DATABASE_URL || process.env.POSTGRES_URL
 if (!connectionString) fail('DATABASE_URL is not set')
 
 const pool = new Pool({ connectionString })
-const year = Number(startDate.slice(0, 4))
-const days = 1 // single-day ops booking for now; extend if end != start
-const dayCount = (() => {
-  const s = new Date(`${startDate}T12:00:00Z`)
-  const e = new Date(`${endDate}T12:00:00Z`)
-  const diff = Math.round((e - s) / 86_400_000) + 1
-  return Math.max(1, diff)
-})()
 
 const ENTITLEMENTS = {
   annual: 13,
@@ -83,7 +75,101 @@ const ENTITLEMENTS = {
   paternity: 14,
 }
 
-async function main() {
+async function setLeaveStatus() {
+  if (!refArg) fail('Pass --ref LV/NNNN with --set-status')
+  if (!STATUSES.has(setStatus)) fail(`Invalid --set-status ${setStatus}`)
+
+  const found = await pool.query(
+    `SELECT id, reference, employee_id, employee_name, leave_type, start_date, end_date,
+            days_requested, status
+     FROM leave_requests WHERE reference = $1`,
+    [refArg],
+  )
+  if (!found.rows.length) fail(`Leave ${refArg} not found`)
+  const row = found.rows[0]
+  const from = row.status
+  const to = setStatus
+  if (from === to) {
+    console.log(`OK ${refArg} already ${to}`)
+    return
+  }
+
+  const days = Number(row.days_requested) || 0
+  const year = new Date(row.start_date).getUTCFullYear()
+  console.log(`Will update ${refArg} (${row.employee_name}): ${from} → ${to}, days=${days}`)
+  if (dryRun) {
+    console.log('Dry run — no write.')
+    return
+  }
+
+  const client = await pool.connect()
+  try {
+    await client.query('BEGIN')
+
+    // Balance transitions mirror API decide/cancel logic.
+    if (from === 'pending_hr' && to === 'approved') {
+      await client.query(
+        `UPDATE leave_balances SET pending = GREATEST(0, pending - $1), used = used + $1, updated_at = NOW()
+         WHERE employee_id = $2 AND leave_type = $3::leave_type AND year = $4`,
+        [days, row.employee_id, row.leave_type, year],
+      )
+    } else if (from === 'approved' && to === 'pending_hr') {
+      await client.query(
+        `UPDATE leave_balances SET used = GREATEST(0, used - $1), pending = pending + $1, updated_at = NOW()
+         WHERE employee_id = $2 AND leave_type = $3::leave_type AND year = $4`,
+        [days, row.employee_id, row.leave_type, year],
+      )
+    } else if (from === 'pending_hr' && (to === 'rejected' || to === 'cancelled')) {
+      await client.query(
+        `UPDATE leave_balances SET pending = GREATEST(0, pending - $1), updated_at = NOW()
+         WHERE employee_id = $2 AND leave_type = $3::leave_type AND year = $4`,
+        [days, row.employee_id, row.leave_type, year],
+      )
+    } else if (from === 'approved' && (to === 'rejected' || to === 'cancelled')) {
+      await client.query(
+        `UPDATE leave_balances SET used = GREATEST(0, used - $1), updated_at = NOW()
+         WHERE employee_id = $2 AND leave_type = $3::leave_type AND year = $4`,
+        [days, row.employee_id, row.leave_type, year],
+      )
+    }
+
+    await client.query(
+      `UPDATE leave_requests
+       SET status = $1::leave_status,
+           reviewed_by_name = CASE WHEN $1 = 'pending_hr' THEN NULL ELSE reviewed_by_name END,
+           reviewed_at = CASE WHEN $1 = 'pending_hr' THEN NULL ELSE reviewed_at END,
+           review_notes = CASE
+             WHEN $1 = 'pending_hr' THEN 'Reverted to pending by ops'
+             ELSE review_notes
+           END
+       WHERE id = $2`,
+      [to, row.id],
+    )
+
+    await client.query('COMMIT')
+    console.log(`OK updated ${refArg}: ${from} → ${to}`)
+  } catch (err) {
+    await client.query('ROLLBACK')
+    throw err
+  } finally {
+    client.release()
+  }
+}
+
+async function bookLeave() {
+  if (!nameQuery) fail('Pass --name "David"')
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate)) fail('Pass --date YYYY-MM-DD')
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(endDate)) fail('Pass --end YYYY-MM-DD')
+  if (!ALLOWED.has(leaveType)) fail(`Invalid --type ${leaveType}`)
+
+  const year = Number(startDate.slice(0, 4))
+  const dayCount = (() => {
+    const s = new Date(`${startDate}T12:00:00Z`)
+    const e = new Date(`${endDate}T12:00:00Z`)
+    const diff = Math.round((e - s) / 86_400_000) + 1
+    return Math.max(1, diff)
+  })()
+
   const clients = await pool.query(
     `SELECT id, employee_number, first_name, last_name, email, is_active
      FROM employees
@@ -102,7 +188,6 @@ async function main() {
     for (const row of clients.rows) {
       console.error(`  - ${row.first_name} ${row.last_name} (${row.employee_number}) active=${row.is_active} id=${row.id}`)
     }
-    // Prefer exact first-name match if unique among actives
     const exact = clients.rows.filter(r =>
       r.is_active
       && (String(r.first_name).toLowerCase() === nameQuery.toLowerCase()
@@ -202,18 +287,16 @@ async function main() {
           status === 'pending_hr' ? dayCount : 0,
         ],
       )
+    } else if (status === 'approved') {
+      await client.query(
+        `UPDATE leave_balances SET used = used + $1, updated_at = NOW() WHERE id = $2`,
+        [dayCount, bal.rows[0].id],
+      )
     } else {
-      if (status === 'approved') {
-        await client.query(
-          `UPDATE leave_balances SET used = used + $1, updated_at = NOW() WHERE id = $2`,
-          [dayCount, bal.rows[0].id],
-        )
-      } else {
-        await client.query(
-          `UPDATE leave_balances SET pending = pending + $1, updated_at = NOW() WHERE id = $2`,
-          [dayCount, bal.rows[0].id],
-        )
-      }
+      await client.query(
+        `UPDATE leave_balances SET pending = pending + $1, updated_at = NOW() WHERE id = $2`,
+        [dayCount, bal.rows[0].id],
+      )
     }
 
     await client.query('COMMIT')
@@ -224,6 +307,11 @@ async function main() {
   } finally {
     client.release()
   }
+}
+
+async function main() {
+  if (setStatus) await setLeaveStatus()
+  else await bookLeave()
 }
 
 main()

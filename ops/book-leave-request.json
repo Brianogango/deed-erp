@@ -1,6 +1,5 @@
 {
-  "name": "David",
-  "date": "2026-07-31",
-  "type": "annual",
-  "reason": "Leave for 31 July (rebook)"
+  "action": "set_status",
+  "ref": "LV/0033",
+  "setStatus": "pending_hr"
 }
