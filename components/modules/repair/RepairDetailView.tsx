@@ -43,6 +43,7 @@ const STATUS_BADGE_CLS: Record<string, string> = {
   declined:             'bg-red-50 text-red-700 border-red-200',
   unrepairable:         'bg-red-100 text-red-800 border-red-300',
   returned:             'bg-stone-50 text-stone-600 border-stone-200',
+  retained:             'bg-stone-100 text-stone-700 border-stone-300',
   cancelled:            'bg-red-50 text-red-600 border-red-200',
 }
 
@@ -128,7 +129,7 @@ export default function RepairDetailView() {
     markPartsArrived, closeRepairJob, markUnrepairable,
   } = useRepair()
 
-  const { invoices, setModule, outboundReleases, initRelease, serials, reviewPortalPayment } = useRepairStore()
+  const { invoices, setModule, outboundReleases, initRelease, serials, reviewPortalPayment, leaveDeviceWithDeed, convertRetainedRepairToDonation, convertRetainedRepairToBuyBack } = useRepairStore()
 
   const [showOrcPanel, setShowOrcPanel] = useState(false)
   const [showPaymentRejectInput, setShowPaymentRejectInput] = useState(false)
@@ -146,6 +147,9 @@ export default function RepairDetailView() {
   const [showClaimModal, setShowClaimModal] = useState(false)
   const [showUnrepairableModal, setShowUnrepairableModal] = useState(false)
   const [unrepairableReason, setUnrepairableReason] = useState('')
+  const [showLeaveDeviceModal, setShowLeaveDeviceModal] = useState(false)
+  const [leaveDeviceNotes, setLeaveDeviceNotes] = useState('')
+  const [leaveConvertMode, setLeaveConvertMode] = useState<'none' | 'donation' | 'buyback'>('donation')
 
   if (!r) return null
 
@@ -174,7 +178,7 @@ export default function RepairDetailView() {
     && !r.diagnosisStopped
     && !pendingOutsourceJob
     // Lock quote editing once device is marked ready-for-collection or has been picked up
-    && !['ready','invoiced','verified_released','delivered','closed','cancelled','declined','unrepairable','returned'].includes(r.status)
+    && !['ready','invoiced','verified_released','delivered','closed','cancelled','declined','unrepairable','returned','retained'].includes(r.status)
   const canStart      = ((r.status === 'approved' || r.status === 'awaiting_parts') || (['assigned', 'diagnosed'].includes(r.status) && r.repairPath === 'direct_repair')) && isMyRepair && !pendingOutsourceJob
   const canComplete   = r.status === 'in_repair' && isMyRepair && !pendingOutsourceJob
   // QC: director/lead always; technician only if they did NOT work on this repair
@@ -186,7 +190,7 @@ export default function RepairDetailView() {
   const isDirector  = currentRole === 'director'
   const isDeliveryManager = ['director', 'admin_officer', 'technical_lead'].includes(currentRole)
   const isStaff     = !!currentUser
-  const TERMINAL    = ['delivered','closed','cancelled','declined','unrepairable','returned']
+  const TERMINAL    = ['delivered','closed','cancelled','declined','unrepairable','returned','retained']
   const canCancel   = isDirector && !TERMINAL.includes(r.status)
   const canDelete   = isDirector
   const outsourceReady = repairOutsourceReadiness(r).ok
@@ -206,6 +210,12 @@ export default function RepairDetailView() {
   const canReturnDevice       = ['director', 'admin_officer', 'technical_lead'].includes(currentRole)
     && ['received', 'assigned', 'diagnosed', 'awaiting_approval', 'approved', 'awaiting_parts', 'in_repair', 'qc'].includes(r.status)
     && !pendingOutsourceJob
+  const canLeaveDeviceWithDeed = ['director', 'admin_officer', 'technical_lead'].includes(currentRole)
+    && ['received', 'assigned', 'diagnosed', 'awaiting_approval', 'approved', 'awaiting_parts', 'in_repair', 'qc', 'ready'].includes(r.status)
+    && !pendingOutsourceJob
+  const canConvertRetained = r.status === 'retained'
+    && !r.retainedBuyBackId && !r.retainedDonationId
+    && ['director', 'admin_officer', 'technical_lead', 'inventory_officer'].includes(currentRole)
   const canMarkPartsArrived = r.status === 'awaiting_parts'
     && ['technical_lead', 'director', 'inventory_officer'].includes(currentRole)
     && !pendingOutsourceJob
@@ -219,6 +229,8 @@ export default function RepairDetailView() {
   const canMarkUnrepairable = ['assigned', 'diagnosed', 'in_repair'].includes(r.status)
     && ['technical_lead', 'director'].includes(currentRole)
     && !pendingOutsourceJob
+  const failedQcItems = (r.qcItems ?? []).filter(item => item.testedDate && !item.passed)
+  const showQcFailPanel = !!(r.qcFailReason || failedQcItems.length) && ['in_repair', 'qc'].includes(r.status)
   const canUpdateProgress = !TERMINAL.includes(r.status)
     && ['approved', 'awaiting_parts', 'in_repair', 'ready'].includes(r.status)
     && (isMyRepair || ['director', 'technical_lead', 'finance_officer', 'admin_officer'].includes(currentUser?.role ?? ''))
@@ -459,6 +471,9 @@ export default function RepairDetailView() {
                 { id: 'procure', label: 'Request parts', onClick: () => setShowProcurementModal(true), hidden: !canProcure },
                 { id: 'stop', label: 'Stop at diagnosis', onClick: () => setShowStopDiagnosisModal(true), hidden: !canStopAtDiagnosis },
                 { id: 'return', label: 'Return device', onClick: () => setShowReturnModal(true), hidden: !canReturnDevice },
+                { id: 'leave', label: 'Customer leaves device', onClick: () => { setLeaveDeviceNotes(''); setLeaveConvertMode('donation'); setShowLeaveDeviceModal(true) }, hidden: !canLeaveDeviceWithDeed },
+                { id: 'convert_donation', label: 'Convert → Donation', onClick: () => convertRetainedRepairToDonation(r.id), hidden: !canConvertRetained },
+                { id: 'convert_buyback', label: 'Convert → Buy-back stock', onClick: () => convertRetainedRepairToBuyBack(r.id), hidden: !canConvertRetained },
                 { id: 'unrepairable', label: 'Mark unrepairable', onClick: () => { setUnrepairableReason(''); setShowUnrepairableModal(true) }, hidden: !canMarkUnrepairable, danger: true },
                 { id: 'back', label: 'Back step', onClick: () => moveRepairToPreviousProgress(r.id), hidden: !canMoveBack },
                 { id: 'outsource', label: 'Outsource', onClick: () => setShowOutsourceModal(true), hidden: !canOutsource },
@@ -830,6 +845,83 @@ export default function RepairDetailView() {
                           Download
                         </a>
                       )}
+                    </div>
+                  )}
+                </div>
+              </SectionCard>
+            )}
+
+            {/* ── Retained device convert ── */}
+            {r.status === 'retained' && (
+              <SectionCard delay={50}>
+                <SectionHeader
+                  icon={faBoxOpen}
+                  iconBg="bg-stone-700"
+                  title="Left with Deed"
+                  subtitle={r.retainedDate ? new Date(r.retainedDate).toLocaleString('en-KE', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : 'Retained'}
+                />
+                <div className="px-4 sm:px-6 py-4 sm:py-5 space-y-3">
+                  {r.retainedDonationRef && (
+                    <p className="text-[12px] font-bold text-[var(--text-1)]">Donation: {r.retainedDonationRef}</p>
+                  )}
+                  {r.retainedBuyBackRef && (
+                    <p className="text-[12px] font-bold text-[var(--text-1)]">Buy-back: {r.retainedBuyBackRef}</p>
+                  )}
+                  {canConvertRetained && (
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        className="btn-primary text-[11px]"
+                        style={{ background: '#57534E' }}
+                        onClick={() => convertRetainedRepairToDonation(r.id)}
+                      >
+                        Convert → Donation
+                      </button>
+                      <button
+                        type="button"
+                        className="btn-secondary text-[11px]"
+                        onClick={() => convertRetainedRepairToBuyBack(r.id)}
+                      >
+                        Convert → Buy-back stock
+                      </button>
+                    </div>
+                  )}
+                  {!canConvertRetained && !r.retainedDonationRef && !r.retainedBuyBackRef && (
+                    <p className="text-[11px] text-[var(--text-3)]">Device retained without stock convert.</p>
+                  )}
+                  {r.retainedBy && <p className="text-[10px] text-[var(--text-4)] font-semibold">By {r.retainedBy}</p>}
+                </div>
+              </SectionCard>
+            )}
+
+            {/* ── QC Fail Results (visible to tech after rework) ── */}
+            {showQcFailPanel && (
+              <SectionCard delay={70}>
+                <SectionHeader
+                  icon={faExclamationTriangle}
+                  iconBg="bg-amber-600"
+                  title="QC Failed — Rework Required"
+                  subtitle={r.qcFailedDate ? new Date(r.qcFailedDate).toLocaleString('en-KE', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : 'Latest QC round'}
+                />
+                <div className="px-4 sm:px-6 py-4 sm:py-5 space-y-3">
+                  {r.qcFailReason && (
+                    <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200">
+                      <p className="text-[9px] font-black text-amber-700 uppercase tracking-widest mb-1">Fail reason</p>
+                      <p className="text-[12px] font-bold text-amber-900 leading-relaxed">{r.qcFailReason}</p>
+                      {r.qcFailedBy && <p className="text-[10px] text-amber-700 mt-1.5 font-semibold">By {r.qcFailedBy}</p>}
+                    </div>
+                  )}
+                  {failedQcItems.length > 0 && (
+                    <div className="space-y-2">
+                      <p className="text-[9px] font-black text-[var(--text-4)] uppercase tracking-widest">Failed checklist items</p>
+                      {failedQcItems.map(item => (
+                        <div key={item.id} className="p-3 rounded-xl bg-[var(--bg-surface)] border border-[var(--border)]">
+                          <p className="text-[11px] font-bold text-[var(--text-1)]">{item.description}</p>
+                          {item.notes?.trim() && (
+                            <p className="text-[10px] text-[var(--text-3)] mt-1 leading-relaxed">Note: {item.notes}</p>
+                          )}
+                        </div>
+                      ))}
                     </div>
                   )}
                 </div>
@@ -1447,6 +1539,81 @@ export default function RepairDetailView() {
               >
                 <Fa icon={faBan} className="mr-1.5" />
                 Confirm Unrepairable
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Customer leaves device with Deed */}
+      {showLeaveDeviceModal && (
+        <Modal title="Customer Leaves Device" onClose={() => setShowLeaveDeviceModal(false)}>
+          <div className="p-5 space-y-4">
+            <div className="flex items-start gap-3 p-3.5 rounded-xl bg-stone-50 border border-stone-200">
+              <Fa icon={faBoxOpen} className="text-stone-600 mt-0.5" />
+              <div>
+                <p className="text-[11px] font-bold text-stone-800">Customer leaves {r.ref} with Deed</p>
+                <p className="text-[10px] text-stone-600 mt-0.5">
+                  Closes the job as Left with Deed. Reserved parts are released and linked SO/invoice cancelled.
+                </p>
+              </div>
+            </div>
+            <div>
+              <label className="block text-[10px] font-black text-[var(--text-3)] uppercase tracking-widest mb-1.5">Notes (optional)</label>
+              <textarea
+                className="form-input w-full resize-none"
+                rows={3}
+                placeholder="e.g. Customer donated the laptop after declining repair"
+                value={leaveDeviceNotes}
+                onChange={e => setLeaveDeviceNotes(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <p className="text-[10px] font-black text-[var(--text-3)] uppercase tracking-widest">Convert device</p>
+              {([
+                { v: 'donation' as const, label: 'Donation in → warehouse', sub: 'Creates a confirmed donation linked to this repair' },
+                { v: 'buyback' as const, label: 'Buy-back stock (KES 0)', sub: 'Free buy-back stocked at warehouse, linked to this repair' },
+                { v: 'none' as const, label: 'Retain only', sub: 'Close as Left with Deed — convert later from this job' },
+              ]).map(opt => (
+                <label
+                  key={opt.v}
+                  className="flex items-start gap-3 p-3 rounded-xl border cursor-pointer"
+                  style={{
+                    borderColor: leaveConvertMode === opt.v ? '#57534E' : 'var(--border)',
+                    background: leaveConvertMode === opt.v ? 'rgba(87,83,78,0.06)' : 'transparent',
+                  }}
+                >
+                  <input
+                    type="radio"
+                    className="mt-0.5"
+                    name="leave-convert"
+                    checked={leaveConvertMode === opt.v}
+                    onChange={() => setLeaveConvertMode(opt.v)}
+                  />
+                  <span className="text-[11px] font-medium text-[var(--text-2)] leading-relaxed">
+                    {opt.label}
+                    <span className="block text-[10px] text-[var(--text-3)] mt-0.5">{opt.sub}</span>
+                  </span>
+                </label>
+              ))}
+            </div>
+            <div className="flex justify-end gap-2">
+              <button className="btn-secondary" onClick={() => setShowLeaveDeviceModal(false)}>Cancel</button>
+              <button
+                className="btn-primary"
+                style={{ background: '#57534E' }}
+                onClick={() => {
+                  leaveDeviceWithDeed(r.id, {
+                    convertToDonation: leaveConvertMode === 'donation',
+                    convertToStock: leaveConvertMode === 'buyback',
+                    notes: leaveDeviceNotes.trim() || undefined,
+                  })
+                  setShowLeaveDeviceModal(false)
+                  setLeaveDeviceNotes('')
+                }}
+              >
+                <Fa icon={faBoxOpen} className="mr-1.5" />
+                Confirm Retain
               </button>
             </div>
           </div>

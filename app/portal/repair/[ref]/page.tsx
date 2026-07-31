@@ -23,6 +23,7 @@ const STATUS_LABELS: Record<string, string> = {
   declined:            'Quote Declined',
   unrepairable:        'Device Unrepairable',
   returned:            'Device Returned',
+  retained:            'Left with Deed',
   cancelled:           'Cancelled',
 }
 
@@ -44,6 +45,7 @@ const STATUS_MESSAGES: Record<string, string> = {
   declined:            'You declined the repair quote. We will contact you shortly regarding next steps.',
   unrepairable:        'Unfortunately, we are unable to repair this device. We will contact you.',
   returned:            'Your device has been returned to you as requested.',
+  retained:            'You left this device with Deed. The repair job is closed.',
   cancelled:           'This repair job has been cancelled.',
 }
 
@@ -54,7 +56,7 @@ const STATUS_COLOR: Record<string, string> = {
   verified_released: '#7C3AED', invoiced:          '#F59E0B', delivered:    '#0D9488',
   collected:         '#059669', closed:            '#6B7280',
   declined:          '#DC2626', unrepairable:      '#991B1B', returned:     '#78716C',
-  cancelled:         '#EF4444',
+  retained:          '#57534E', cancelled:         '#EF4444',
 }
 
 const STEPS = [

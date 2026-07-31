@@ -128,7 +128,7 @@ function NewHoldoverModal({ onClose, onSave }: { onClose: () => void; onSave: (h
   )
 
   const openRepairs = useMemo(() =>
-    getVisibleRepairs().filter(r => !['delivered', 'closed', 'cancelled', 'returned'].includes(r.status)),
+    getVisibleRepairs().filter(r => !['delivered', 'closed', 'cancelled', 'returned', 'retained'].includes(r.status)),
     [getVisibleRepairs]
   )
 

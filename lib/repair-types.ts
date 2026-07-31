@@ -19,6 +19,7 @@ export type RepairStatus =
   | 'declined'           // Quote declined by customer
   | 'unrepairable'       // Device cannot be repaired
   | 'returned'           // Returned to customer without repair
+  | 'retained'           // Customer left / donated the device to Deed
   | 'cancelled'          // Job cancelled
 
 export type IntakeChannel = 'walk_in' | 'website' | 'whatsapp' | 'call' | 'email'
@@ -182,6 +183,15 @@ export interface RepairOrder {
   qcItems: RepairQAItem[]
   qcPassedDate?: string
   qcApprovedBy?: string
+  qcFailReason?: string
+  qcFailedDate?: string
+  qcFailedBy?: string
+  retainedDate?: string
+  retainedBy?: string
+  retainedBuyBackId?: string
+  retainedBuyBackRef?: string
+  retainedDonationId?: string
+  retainedDonationRef?: string
   
   // Billing
   invoiceId?: string
