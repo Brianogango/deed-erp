@@ -49,6 +49,11 @@ import {
 } from '@/lib/finance-controls'
 import { repairOutsourceReadiness } from '@/lib/repair-outsource'
 import { getPreviousRepairProgressStatus } from '@/lib/repair-progress'
+import {
+  buildDefaultRepairQcItems,
+  prepareRepairQcItemsForRound,
+  summarizeFailedQcItems,
+} from '@/lib/repair-qc'
 
 export type ModuleId = AuthModuleId
 
@@ -1237,8 +1242,9 @@ export type RepairStatus =
   | 'declined'           // Customer declined the quote
   | 'unrepairable'       // Device cannot be repaired
   | 'returned'           // Device returned to customer without repair
+  | 'retained'           // Customer left / donated the device to Deed
 
-const REPAIR_TERMINAL_STATUSES: RepairStatus[] = ['closed', 'cancelled', 'declined', 'unrepairable', 'returned']
+const REPAIR_TERMINAL_STATUSES: RepairStatus[] = ['closed', 'cancelled', 'declined', 'unrepairable', 'returned', 'retained']
 
 const normalizeProductIdentity = (value: unknown) => String(value ?? '').trim().toLowerCase()
 
@@ -1424,6 +1430,15 @@ export interface RepairOrder {
   qcItems: RepairQAItem[]
   qcPassedDate?: string
   qcApprovedBy?: string
+  /** Required when QC fails — shown to tech + status history. */
+  qcFailReason?: string
+  qcFailedDate?: string
+  qcFailedBy?: string
+  /** Set when customer leaves the device with Deed (terminal retained). */
+  retainedDate?: string
+  retainedBy?: string
+  retainedBuyBackId?: string
+  retainedBuyBackRef?: string
   qcReportData?: string      // base64 PDF data URL
   qcReportName?: string
   qcReportUrl?: string       // lightweight server download URL for QC reports
@@ -1604,6 +1619,9 @@ export interface BuyBack {
   id: string; ref: string
   customerId: string; customerName: string
   originalSOId?: string; originalSORef?: string
+  /** When created from a retained repair (customer left device with Deed). */
+  repairId?: string
+  repairRef?: string
   status: BuyBackStatus
   date: string
   lines: BuyBackLine[]
@@ -2907,7 +2925,11 @@ export interface AppState {
   startRepair: (repairId: string) => void
   markRepairComplete: (repairId: string) => void
   addRepairQAItem: (repairId: string, description: string) => void
-  completeRepairQA: (repairId: string, qaResults: { itemId: string; passed: boolean; notes?: string }[]) => void
+  completeRepairQA: (
+    repairId: string,
+    qaResults: { itemId: string; description?: string; passed: boolean; notes?: string }[],
+    failReason?: string,
+  ) => void
   markPartsArrived: (repairId: string) => void
   markRepairReady: (repairId: string) => void
   scheduleDelivery: (repairId: string, method: 'pickup' | 'delivery' | 'courier', scheduledDate: string, address?: string, riderId?: string, riderName?: string) => void
@@ -2932,6 +2954,11 @@ export interface AppState {
   declineQuote: (repairId: string, reason: string) => void
   markUnrepairable: (repairId: string, reason: string) => void
   returnToCustomer: (repairId: string, reason: string) => void
+  /** Customer left the device with Deed (terminal). Optionally convert into stock via free buy-back. */
+  leaveDeviceWithDeed: (
+    repairId: string,
+    opts?: { convertToStock?: boolean; notes?: string },
+  ) => { ok: boolean; message: string; buyBackId?: string; buyBackRef?: string }
 
   // POS
   openPOSSession: (openingCash: number) => void
@@ -3127,6 +3154,7 @@ export type RepairStoreState = Pick<AppState,
   | 'requestProcurement'
   | 'markUnrepairable'
   | 'returnToCustomer'
+  | 'leaveDeviceWithDeed'
   | 'fileWarrantyClaim'
   | 'showToast'
   | 'appendRepairHistory'
@@ -4954,6 +4982,7 @@ export function StoreProvider({
     requestProcurement: (...args: Parameters<AppState['requestProcurement']>) => storeCtxRef.current!.requestProcurement(...args),
     markUnrepairable: (...args: Parameters<AppState['markUnrepairable']>) => storeCtxRef.current!.markUnrepairable(...args),
     returnToCustomer: (...args: Parameters<AppState['returnToCustomer']>) => storeCtxRef.current!.returnToCustomer(...args),
+    leaveDeviceWithDeed: (...args: Parameters<AppState['leaveDeviceWithDeed']>) => storeCtxRef.current!.leaveDeviceWithDeed(...args),
     fileWarrantyClaim: (...args: Parameters<AppState['fileWarrantyClaim']>) => storeCtxRef.current!.fileWarrantyClaim(...args),
     showToast: (...args: Parameters<AppState['showToast']>) => storeCtxRef.current!.showToast(...args),
     appendRepairHistory: (...args: Parameters<AppState['appendRepairHistory']>) => storeCtxRef.current!.appendRepairHistory(...args),
@@ -5835,10 +5864,17 @@ const storeCtx: AppState = {
         const resumeStatus: RepairStatus = 'qc'
 
         if (p.isResolved) {
+          const qcItems = prepareRepairQcItemsForRound(repair?.qcItems, uid)
           const returnedRepair = repair ? {
             ...repair,
             status: resumeStatus,
             repairCompletedDate: repair.repairCompletedDate ?? now(),
+            qcItems,
+            qcFailReason: undefined,
+            qcFailedDate: undefined,
+            qcFailedBy: undefined,
+            qcPassedDate: undefined,
+            qcApprovedBy: undefined,
             statusHistory: [
               ...(repair.statusHistory ?? []),
               {
@@ -11107,13 +11143,7 @@ const storeCtx: AppState = {
       if (!validStartStatuses.includes(repair.status) && !isDirectRepair) {
         showToast('Client must approve the quote before repair can start', 'error'); return
       }
-      const defaultQA: RepairQAItem[] = repair.qcItems.length === 0 ? [
-        { id: uid(), description: 'Device powers on successfully', passed: false },
-        { id: uid(), description: 'Reported issue(s) fully resolved', passed: false },
-        { id: uid(), description: 'No new issues introduced during repair', passed: false },
-        { id: uid(), description: 'All accessories present and returned', passed: false },
-        { id: uid(), description: 'Device cleaned and presentable', passed: false },
-      ] : []
+      const defaultQA = repair.qcItems.length === 0 ? buildDefaultRepairQcItems(uid) : []
       setRepairs(p => p.map(r => r.id === repairId ? {
         ...r,
         status: 'in_repair',
@@ -11140,8 +11170,25 @@ const storeCtx: AppState = {
       }
 
       const completedAt = now()
-      setRepairs(p => p.map(r => r.id === repairId ? { ...r, status: 'qc', repairCompletedDate: completedAt } : r))
-      syncRepairToPortal({ ...repair, status: 'qc', repairCompletedDate: completedAt }, 'Repair complete — undergoing quality check')
+      // Seed defaults if missing; clear prior pass ticks so re-QC cannot skip old checks
+      const qcItems = prepareRepairQcItemsForRound(repair.qcItems, uid)
+      const updated: RepairOrder = {
+        ...repair,
+        status: 'qc',
+        repairCompletedDate: completedAt,
+        qcItems,
+        qcFailReason: undefined,
+        qcFailedDate: undefined,
+        qcFailedBy: undefined,
+        qcPassedDate: undefined,
+        qcApprovedBy: undefined,
+        statusHistory: [
+          ...(repair.statusHistory ?? []),
+          { status: 'qc', date: completedAt, note: 'Repair complete — undergoing quality check', by: user.name },
+        ],
+      }
+      setRepairs(p => p.map(r => r.id === repairId ? updated : r))
+      syncRepairToPortal(updated, 'Repair complete — undergoing quality check')
       addAuditLog('complete_repair', repairId, 'Technician marked repair complete — awaiting QC')
       showToast('Repair marked complete — QC can now proceed')
     },
@@ -11155,53 +11202,70 @@ const storeCtx: AppState = {
       
       setRepairs(p => p.map(r => r.id === repairId ? {
         ...r,
-        qcItems: [...r.qcItems, qaItem],
+        qcItems: [...(r.qcItems ?? []), qaItem],
       } : r))
     },
     
-    completeRepairQA: (repairId, qaResults) => {
+    completeRepairQA: (repairId, qaResults, failReason) => {
       const user = currentUser()
       if (!user) return
       const repair = repairs.find(r => r.id === repairId)
+      if (!repair) return
       if (blockIfOutsourced(repairId, 'perform QC')) return
+      if (repair.status !== 'qc') {
+        showToast('Repair must be in QC to complete quality check', 'error'); return
+      }
       // Directors/leads can always QA; technicians can QA any repair they did NOT work on
       const isAuthorized = ['director', 'technical_lead'].includes(user.role)
-        || (user.role === 'technician' && repair?.assignedTechnicianId !== user.id)
+        || (user.role === 'technician' && repair.assignedTechnicianId !== user.id)
       if (!isAuthorized) {
         showToast('You cannot perform QA on a repair you worked on — a different technician must do QC', 'error'); return
       }
 
-      setRepairs(p => p.map(r => {
-        if (r.id !== repairId) return r
-        
-        const updatedQCItems = r.qcItems.map(item => {
-          const result = qaResults.find(res => res.itemId === item.id)
-          return result ? {
-            ...item,
-            passed: result.passed,
-            testedBy: user.name,
-            testedDate: now(),
-            notes: result.notes,
-          } : item
-        })
-        
-        const allPassed = updatedQCItems.every(item => item.passed)
-        
-        return {
-          ...r,
-          qcItems: updatedQCItems,
-          qcPassedDate: allPassed ? now() : undefined,
-          qcApprovedBy: allPassed ? user.name : undefined,
-          status: allPassed ? 'ready' : 'in_repair',
-          repairCompletedDate: now(),
-        }
-      }))
-      
-      const allPassed = qaResults.every(r => r.passed)
+      const testedAt = now()
+      const baseItems = (repair.qcItems?.length
+        ? repair.qcItems
+        : buildDefaultRepairQcItems(uid))
+      const anyIdMatch = qaResults.some(res => baseItems.some(item => item.id === res.itemId))
+      const updatedQCItems: RepairQAItem[] = anyIdMatch
+        ? baseItems.map(item => {
+            const result = qaResults.find(res => res.itemId === item.id)
+            return result ? {
+              ...item,
+              passed: !!result.passed,
+              testedBy: user.name,
+              testedDate: testedAt,
+              notes: result.notes,
+            } : { ...item, passed: false, testedBy: user.name, testedDate: testedAt }
+          })
+        : (qaResults.length > 0
+          ? qaResults.map(res => ({
+              id: res.itemId || uid(),
+              description: res.description || 'QC check',
+              passed: !!res.passed,
+              testedBy: user.name,
+              testedDate: testedAt,
+              notes: res.notes,
+            }))
+          : baseItems.map(item => ({
+              ...item,
+              passed: false,
+              testedBy: user.name,
+              testedDate: testedAt,
+            })))
+
+      // Never auto-pass an empty checklist
+      const allPassed = updatedQCItems.length > 0 && updatedQCItems.every(item => item.passed)
+      const failedSummary = summarizeFailedQcItems(updatedQCItems)
+      const trimmedFailReason = String(failReason ?? '').trim()
+
+      if (!allPassed && !trimmedFailReason) {
+        showToast('A fail reason is required when QC does not pass', 'error')
+        return
+      }
 
       if (allPassed) {
-        // Consume reserved parts
-        const partsToConsume = repair?.partsUsed.filter(part => part.reservedDate && !part.usedDate) || []
+        const partsToConsume = repair.partsUsed.filter(part => part.reservedDate && !part.usedDate) || []
         
         partsToConsume.forEach(part => {
           const product = prodRef.current.find(p => p.id === part.productId)
@@ -11217,53 +11281,78 @@ const storeCtx: AppState = {
               setProducts(p => p.map(x => x.id === part.productId ? { ...x, stockQty: Math.max(0, x.stockQty - 1) } : x))
             })
             
-            addMove(part.productId, part.productName, part.qty, 'out', `Repair ${repair?.ref}`, repair?.ref ?? repairId, 'repair_unit', undefined, assignedSerials.map(s => s.serial))
+            addMove(part.productId, part.productName, part.qty, 'out', `Repair ${repair.ref}`, repair.ref ?? repairId, 'repair_unit', undefined, assignedSerials.map(s => s.serial))
           } else {
-            // Bulk stock wasn't moved to repair_unit during quote approval, so we deduct from where it actually is
             const locs = calcStockByLocation(product, serialRef.current, bulkStock, part.productId)
             const deductLocation = locs.shop >= part.qty ? 'shop' : 'warehouse'
             setBulkStock(prev => upsertBulkStock(prev, part.productId, deductLocation, -part.qty))
             setProducts(p => p.map(x => x.id === part.productId ? { ...x, stockQty: Math.max(0, x.stockQty - part.qty) } : x))
-            addMove(part.productId, part.productName, part.qty, 'out', `Repair ${repair?.ref}`, repair?.ref ?? repairId, deductLocation, undefined, [])
+            addMove(part.productId, part.productName, part.qty, 'out', `Repair ${repair.ref}`, repair.ref ?? repairId, deductLocation, undefined, [])
           }
         })
-        
-        setRepairs(p => p.map(r => r.id === repairId ? {
-          ...r,
-          partsUsed: r.partsUsed.map(part => ({
+
+        const passedRepair: RepairOrder = {
+          ...repair,
+          qcItems: updatedQCItems,
+          qcPassedDate: testedAt,
+          qcApprovedBy: user.name,
+          qcFailReason: undefined,
+          qcFailedDate: undefined,
+          qcFailedBy: undefined,
+          status: 'ready',
+          partsUsed: repair.partsUsed.map(part => ({
             ...part,
-            usedDate: now(),
+            usedDate: part.reservedDate && !part.usedDate ? testedAt : part.usedDate,
           })),
-        } : r))
-        
-        if (repair) syncRepairToPortal({ ...repair, status: 'ready', repairCompletedDate: now() }, 'Device ready for collection')
-        // Notify admin and finance that the device is ready — they can now invoice and schedule delivery
-        if (repair) {
-          users.filter(u => ['director', 'finance_officer'].includes(u.role)).forEach(u => pushNotif({
-            userId: u.id, type: 'repair',
-            title: `Device ready: ${repair.ref}`,
-            body: `${repair.productName} for ${repair.customerName} has passed QA and is ready for collection/delivery.`,
-            module: 'repair', path: `?id=${repair.id}`,
-            icon: '✅',
-          }))
+          statusHistory: [
+            ...(repair.statusHistory ?? []),
+            { status: 'ready', date: testedAt, note: 'QA passed — device ready for collection', by: user.name },
+          ],
         }
+        setRepairs(p => p.map(r => r.id === repairId ? passedRepair : r))
+        syncRepairToPortal(passedRepair, 'Device ready for collection')
+        users.filter(u => ['director', 'finance_officer'].includes(u.role)).forEach(u => pushNotif({
+          userId: u.id, type: 'repair',
+          title: `Device ready: ${repair.ref}`,
+          body: `${repair.productName} for ${repair.customerName} has passed QA and is ready for collection/delivery.`,
+          module: 'repair', path: `?id=${repair.id}`,
+          icon: '✅',
+        }))
         addAuditLog('complete_qc', repairId, 'QA passed — device ready for customer')
         showToast('QA passed — device ready for pickup')
       } else {
-        // Notify the technician that rework is required
-        if (repair?.assignedTechnicianId) {
+        const historyNote = `QA failed: ${trimmedFailReason}${failedSummary ? ` — ${failedSummary}` : ''}`
+        const failedRepair: RepairOrder = {
+          ...repair,
+          qcItems: updatedQCItems,
+          qcFailReason: trimmedFailReason,
+          qcFailedDate: testedAt,
+          qcFailedBy: user.name,
+          qcPassedDate: undefined,
+          qcApprovedBy: undefined,
+          status: 'in_repair',
+          // Do not stamp/overwrite repairCompletedDate on fail
+          statusHistory: [
+            ...(repair.statusHistory ?? []),
+            { status: 'in_repair', date: testedAt, note: historyNote, by: user.name },
+          ],
+        }
+        setRepairs(p => p.map(r => r.id === repairId ? failedRepair : r))
+
+        if (repair.assignedTechnicianId) {
           pushNotif({
             userId: repair.assignedTechnicianId,
             type: 'repair',
             title: '❌ Repair failed QA',
-            body: `${repair.ref} requires rework. Please review the failed QA items.`,
+            body: `${repair.ref} requires rework. Reason: ${trimmedFailReason}${failedSummary ? `. Failed: ${failedSummary}` : ''}`,
             module: 'repair',
             path: `?id=${repair.id}`,
             icon: '❌',
           })
         }
-        if (repair) syncRepairToPortal({ ...repair, status: 'qc' }, 'QA failed — rework in progress')
-        addAuditLog('fail_qc', repairId, 'QA failed — rework required')
+        // Portal must mirror ERP — in_repair, not qc
+        syncRepairToPortal(failedRepair, historyNote)
+        addAuditLog('fail_qc', repairId, historyNote)
         showToast('QA failed — repair requires rework', 'error')
       }
     },
@@ -12148,6 +12237,186 @@ const storeCtx: AppState = {
 
       addAuditLog('return_device', repairId, `Device returned: ${reason}`)
       showToast(`${repair.ref} returned to customer`, 'success')
+    },
+
+    leaveDeviceWithDeed: (repairId, opts) => {
+      const user = currentUser()
+      if (!user) return { ok: false, message: 'Not signed in' }
+      if (!['director', 'admin_officer', 'technical_lead'].includes(user.role)) {
+        showToast('Only managers can record that a customer left a device with Deed', 'error')
+        return { ok: false, message: 'Not authorized' }
+      }
+      const repair = repairs.find(r => r.id === repairId)
+      if (!repair) {
+        showToast('Repair not found', 'error')
+        return { ok: false, message: 'Repair not found' }
+      }
+      if (REPAIR_TERMINAL_STATUSES.includes(repair.status)) {
+        showToast('This repair is already closed', 'error')
+        return { ok: false, message: 'Already terminal' }
+      }
+      if (blockIfOutsourced(repairId, 'retain this device')) return { ok: false, message: 'Outsourced' }
+
+      const convertToStock = !!opts?.convertToStock
+      const extraNotes = String(opts?.notes ?? '').trim()
+      const retainedAt = now()
+
+      // Free reserved parts / cancel linked financial docs (same as unrepairable)
+      setSerials(p => p.map(s => s.repairId === repairId ? {
+        ...s,
+        status: 'available',
+        repairId: undefined,
+      } : s))
+      if (repair.saleOrderId) {
+        setSaleOrders(p => p.map(so => {
+          if (so.id !== repair.saleOrderId) return so
+          const updated = { ...so, status: 'cancelled' as const }
+          sync(`/api/sale-orders/${repair.saleOrderId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+          return updated
+        }))
+      }
+      if (repair.invoiceId) {
+        setInvoices(p => p.map(inv => inv.id === repair.invoiceId ? { ...inv, status: 'cancelled' } : inv))
+      }
+
+      let buyBackId: string | undefined
+      let buyBackRef: string | undefined
+      let convertMessage = ''
+
+      if (convertToStock) {
+        const product = repair.productId
+          ? prodRef.current.find(p => p.id === repair.productId)
+          : prodRef.current.find(p => normalizeProductIdentity(p.name) === normalizeProductIdentity(repair.productName))
+        if (!product) {
+          convertMessage = ' Retained without stock convert — link a catalog product first, then create a buy-back.'
+        } else {
+          let serialId: string | undefined
+          if (product.requiresSerial || repair.serialNumber?.trim()) {
+            const serialText = String(repair.serialNumber ?? '').trim()
+            if (!serialText) {
+              convertMessage = ' Retained without stock convert — device has no serial to intake.'
+            } else {
+              const existing = serialRef.current.find(s =>
+                s.productId === product.id && s.serial.toLowerCase() === serialText.toLowerCase()
+              ) || (repair.serialId ? serialRef.current.find(s => s.id === repair.serialId) : undefined)
+              if (existing) {
+                serialId = existing.id
+                if (existing.status !== 'sold' && existing.location !== 'customer') {
+                  setSerials(p => p.map(s => s.id === existing.id
+                    ? { ...s, status: 'sold' as const, location: 'customer' as LocationId, soldDate: s.soldDate || retainedAt }
+                    : s))
+                }
+              } else {
+                const newSerial: SerialNumber = {
+                  id: uid(),
+                  serial: serialText,
+                  productId: product.id,
+                  productName: product.name,
+                  sku: product.sku,
+                  location: 'customer',
+                  status: 'sold',
+                  receivedDate: retainedAt,
+                  soldDate: retainedAt,
+                  barcode: buildInventoryBarcodeForProduct(product.id, serialText),
+                }
+                setSerials(p => [...p, newSerial])
+                sync('/api/serials', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(newSerial) })
+                serialId = newSerial.id
+              }
+            }
+          }
+
+          if (!product.requiresSerial || serialId) {
+            const line: BuyBackLine = {
+              id: uid(),
+              productId: product.id,
+              productName: product.name,
+              qty: 1,
+              serialIds: serialId ? [serialId] : [],
+              condition: repair.deviceCondition === 'poor' || repair.deviceCondition === 'damaged' ? 'poor'
+                : repair.deviceCondition === 'fair' ? 'fair' : 'good',
+              unitPrice: 0,
+              notes: `From retained repair ${repair.ref}`,
+            }
+            const bb: BuyBack = {
+              id: uid(),
+              ref: seq('BBK', 'bbk'),
+              customerId: repair.customerId,
+              customerName: repair.customerName,
+              repairId: repair.id,
+              repairRef: repair.ref,
+              status: 'draft',
+              date: retainedAt,
+              lines: [line],
+              total: 0,
+              destinationLocation: 'warehouse',
+              notes: `Customer left device with Deed from repair ${repair.ref}${extraNotes ? ` — ${extraNotes}` : ''}`,
+            }
+            // Free donate path: draft → approved → paid (KES 0) → stocked
+            setBuyBacks(p => [{
+              ...bb,
+              status: 'stocked',
+              approvedByName: user.name,
+              approvedDate: retainedAt,
+              paidDate: retainedAt,
+              paymentMethod: 'cash',
+              stockedDate: retainedAt,
+              stockedByName: user.name,
+            }, ...p])
+            buyBackId = bb.id
+            buyBackRef = bb.ref
+
+            if (serialId) {
+              setSerials(p => p.map(s => s.id === serialId
+                ? {
+                    ...s,
+                    status: line.condition === 'poor' ? 'refurbishment' as const : 'available' as const,
+                    location: 'warehouse' as LocationId,
+                    soldDate: undefined,
+                    saleOrderId: undefined,
+                    repairId: undefined,
+                  }
+                : s))
+            } else {
+              setBulkStock(prev => upsertBulkStock(prev, product.id, 'warehouse', 1))
+            }
+            setProducts(p => p.map(x => x.id === product.id ? { ...x, stockQty: x.stockQty + 1 } : x))
+            addMove(
+              product.id,
+              product.name,
+              1,
+              'in',
+              `Buy-back ${bb.ref} (retained repair ${repair.ref})`,
+              bb.ref,
+              'customer',
+              'warehouse',
+              serialId ? [serialRef.current.find(s => s.id === serialId)?.serial ?? repair.serialNumber].filter(Boolean) as string[] : [],
+            )
+            convertMessage = ` Converted to stock via ${bb.ref}.`
+          }
+        }
+      }
+
+      const noteLine = `Customer left device with Deed${extraNotes ? `: ${extraNotes}` : ''}${buyBackRef ? ` → ${buyBackRef}` : ''}`
+      const retainedRepair: RepairOrder = {
+        ...repair,
+        status: 'retained',
+        closedDate: retainedAt,
+        retainedDate: retainedAt,
+        retainedBy: user.name,
+        retainedBuyBackId: buyBackId,
+        retainedBuyBackRef: buyBackRef,
+        notes: `${repair.notes || ''}\n\n${noteLine}`.trim(),
+        statusHistory: [
+          ...(repair.statusHistory ?? []),
+          { status: 'retained', date: retainedAt, note: noteLine, by: user.name },
+        ],
+      }
+      setRepairs(p => p.map(r => r.id === repairId ? retainedRepair : r))
+      syncRepairToPortal(retainedRepair, noteLine)
+      addAuditLog('retain_device', repairId, noteLine)
+      showToast(`${repair.ref} retained by Deed.${convertMessage}`, 'success')
+      return { ok: true, message: `Retained.${convertMessage}`, buyBackId, buyBackRef }
     },
 
     // ── POS ───────────────────────────────────────────────────────────────────

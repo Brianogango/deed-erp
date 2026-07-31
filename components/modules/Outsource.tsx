@@ -136,7 +136,7 @@ function OutsourceContent() {
 
   // Only open / in-progress repairs that are assigned + diagnosed may be linked
   const pickableRepairs = repairs.filter(r =>
-    !['delivered', 'cancelled', 'closed', 'declined', 'unrepairable', 'returned', 'ready', 'verified_released', 'collected'].includes(r.status)
+    !['delivered', 'cancelled', 'closed', 'declined', 'unrepairable', 'returned', 'retained', 'ready', 'verified_released', 'collected'].includes(r.status)
     && repairOutsourceReadiness(r).ok
   )
   function selectRepair(repairId: string) {

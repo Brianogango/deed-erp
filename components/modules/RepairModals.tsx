@@ -594,18 +594,53 @@ export function QuoteModal({ repair, onClose }: { repair: RepairOrder, onClose: 
  */
 export function QAModal({ repair, onClose }: { repair: RepairOrder, onClose: () => void }) {
   const { completeRepairQA } = useRepairStore()
-  const [qcItems, setQcItems] = useState(repair.qcItems)
+  const [qcItems, setQcItems] = useState(() =>
+    (repair.qcItems?.length
+      ? repair.qcItems.map(item => ({ ...item, passed: false, notes: undefined, testedBy: undefined, testedDate: undefined }))
+      : [
+          { id: crypto.randomUUID(), description: 'Device powers on successfully', passed: false },
+          { id: crypto.randomUUID(), description: 'Reported issue(s) fully resolved', passed: false },
+          { id: crypto.randomUUID(), description: 'No new issues introduced during repair', passed: false },
+          { id: crypto.randomUUID(), description: 'All accessories present and returned', passed: false },
+          { id: crypto.randomUUID(), description: 'Device cleaned and presentable', passed: false },
+        ])
+  )
+  const [failReason, setFailReason] = useState('')
+
+  // Reset prior pass ticks whenever the modal opens for this repair
+  useEffect(() => {
+    setQcItems(
+      (repair.qcItems?.length
+        ? repair.qcItems
+        : [
+            { id: crypto.randomUUID(), description: 'Device powers on successfully', passed: false },
+            { id: crypto.randomUUID(), description: 'Reported issue(s) fully resolved', passed: false },
+            { id: crypto.randomUUID(), description: 'No new issues introduced during repair', passed: false },
+            { id: crypto.randomUUID(), description: 'All accessories present and returned', passed: false },
+            { id: crypto.randomUUID(), description: 'Device cleaned and presentable', passed: false },
+          ]
+      ).map(item => ({ ...item, passed: false, notes: undefined, testedBy: undefined, testedDate: undefined }))
+    )
+    setFailReason('')
+  }, [repair.id])
+
+  const allPassed = qcItems.length > 0 && qcItems.every(i => i.passed)
+  const canSubmitFail = allPassed || failReason.trim().length > 0
 
   const handleCompleteQA = () => {
-    const qaResults = qcItems.map(item => ({ itemId: item.id, passed: item.passed, notes: item.notes }))
-    completeRepairQA(repair.id, qaResults)
+    if (!allPassed && !failReason.trim()) return
+    const qaResults = qcItems.map(item => ({
+      itemId: item.id,
+      description: item.description,
+      passed: item.passed,
+      notes: item.notes,
+    }))
+    completeRepairQA(repair.id, qaResults, allPassed ? undefined : failReason.trim())
     onClose()
   }
 
-  const allPassed = qcItems.every(i => i.passed)
-
   return (
-    <Modal title="Quality Assurance" subtitle={repair.ref} onClose={onClose} width={480} icon={<Fa icon={faCheckCircle} />} accent="#10B981">
+    <Modal title="Quality Assurance" subtitle={repair.ref} onClose={onClose} width={520} icon={<Fa icon={faCheckCircle} />} accent="#10B981">
       <div className="flex flex-col gap-6">
         {qcItems.length === 0 ? (
           <div className="py-12 flex flex-col items-center justify-center gap-3 text-slate-400">
@@ -617,29 +652,51 @@ export function QAModal({ repair, onClose }: { repair: RepairOrder, onClose: () 
         ) : (
           <div className="flex flex-col gap-2.5">
             <p className="text-[10px] font-black text-[var(--text-4)] uppercase tracking-widest mb-1">Verify Repair Quality</p>
+            <p className="text-[11px] text-[var(--text-3)] mb-1">Prior pass ticks are cleared for this QC round — re-check every item.</p>
             {qcItems.map(item => (
-              <label
+              <div
                 key={item.id}
-                className="flex items-center gap-4 p-4 rounded-2xl border cursor-pointer transition-all group"
+                className="flex flex-col gap-2 p-4 rounded-2xl border transition-all"
                 style={{
                   background: item.passed ? 'rgba(16,185,129,0.07)' : 'var(--bg-card)',
                   borderColor: item.passed ? 'rgba(16,185,129,0.3)' : 'var(--border)',
                   boxShadow: item.passed ? '0 0 0 3px rgba(16,185,129,0.08)' : 'none',
                 }}
               >
-                <input
-                  type="checkbox"
-                  className="w-5 h-5 rounded-lg border-[var(--border)] text-emerald-600 focus:ring-emerald-500 transition-all cursor-pointer"
-                  checked={item.passed}
-                  onChange={e => setQcItems(prev => prev.map(qi => qi.id === item.id ? { ...qi, passed: e.target.checked } : qi))}
-                />
-                <span className={`text-xs font-bold flex-1 transition-colors ${item.passed ? 'text-emerald-700' : 'text-[var(--text-2)]'}`}>
-                  {item.description}
-                </span>
-                {item.passed && <Fa icon={faCheckCircle} className="text-emerald-500" style={{ animation: 'confirmIn 0.18s cubic-bezier(0.34,1.4,0.64,1) both' }} />}
-              </label>
+                <label className="flex items-center gap-4 cursor-pointer group">
+                  <input
+                    type="checkbox"
+                    className="w-5 h-5 rounded-lg border-[var(--border)] text-emerald-600 focus:ring-emerald-500 transition-all cursor-pointer"
+                    checked={item.passed}
+                    onChange={e => setQcItems(prev => prev.map(qi => qi.id === item.id ? { ...qi, passed: e.target.checked } : qi))}
+                  />
+                  <span className={`text-xs font-bold flex-1 transition-colors ${item.passed ? 'text-emerald-700' : 'text-[var(--text-2)]'}`}>
+                    {item.description}
+                  </span>
+                  {item.passed && <Fa icon={faCheckCircle} className="text-emerald-500" style={{ animation: 'confirmIn 0.18s cubic-bezier(0.34,1.4,0.64,1) both' }} />}
+                </label>
+                {!item.passed && (
+                  <input
+                    className="form-input text-[11px] w-full"
+                    placeholder="Note for this failed / unchecked item (optional)"
+                    value={item.notes || ''}
+                    onChange={e => setQcItems(prev => prev.map(qi => qi.id === item.id ? { ...qi, notes: e.target.value } : qi))}
+                  />
+                )}
+              </div>
             ))}
           </div>
+        )}
+
+        {!allPassed && (
+          <Field label="Fail reason" required>
+            <Textarea
+              value={failReason}
+              onChange={setFailReason}
+              placeholder="Why is QC failing? (required — shown to the technician)"
+              rows={3}
+            />
+          </Field>
         )}
 
         <div
@@ -653,7 +710,7 @@ export function QAModal({ repair, onClose }: { repair: RepairOrder, onClose: () 
           <p className="text-[11px] leading-relaxed font-medium" style={{ color: allPassed ? 'var(--success-text)' : 'var(--warning-text)' }}>
             {allPassed
               ? 'Excellent! All tests passed. The device is verified and ready for the customer.'
-              : 'Some tests are still pending or failed. Submitting now will flag this for rework.'}
+              : 'Submitting will return this job to In Repair for rework. A fail reason is required.'}
           </p>
         </div>
 
@@ -661,11 +718,71 @@ export function QAModal({ repair, onClose }: { repair: RepairOrder, onClose: () 
           <button className="btn-outline min-w-[100px]" onClick={onClose}>Cancel</button>
           <ActionBtn
             onClick={handleCompleteQA}
+            disabled={!canSubmitFail}
             color={allPassed ? 'linear-gradient(135deg,#059669,#10B981)' : 'linear-gradient(135deg,#D97706,#F59E0B)'}
             shadow={allPassed ? '0 8px 24px rgba(16,185,129,0.4)' : '0 8px 24px rgba(245,158,11,0.4)'}
           >
             <Fa icon={allPassed ? faCheckCircle : faExclamationTriangle} />
             {allPassed ? 'Pass Quality Check' : 'Submit as Failed'}
+          </ActionBtn>
+        </div>
+      </div>
+    </Modal>
+  )
+}
+
+/**
+ * LeaveDeviceModal — customer leaves device with Deed (terminal retained)
+ */
+export function LeaveDeviceModal({ repair, onClose }: { repair: RepairOrder, onClose: () => void }) {
+  const { leaveDeviceWithDeed } = useRepairStore()
+  const [notes, setNotes] = useState('')
+  const [convertToStock, setConvertToStock] = useState(true)
+  const canConvert = !!(repair.productId || repair.productName)
+
+  const handleConfirm = () => {
+    leaveDeviceWithDeed(repair.id, {
+      convertToStock: convertToStock && canConvert,
+      notes: notes.trim() || undefined,
+    })
+    onClose()
+  }
+
+  return (
+    <Modal title="Customer Leaves Device" subtitle={repair.ref} onClose={onClose} width={440} icon={<Fa icon={faBoxOpen} />} accent="#57534E">
+      <div className="flex flex-col gap-5">
+        <div className="flex items-start gap-3 p-4 rounded-xl"
+          style={{ background: 'rgba(87,83,78,0.08)', border: '1px solid rgba(87,83,78,0.22)' }}>
+          <Fa icon={faBoxOpen} style={{ color: '#57534E', marginTop: 2, flexShrink: 0 } as any} />
+          <p className="text-[11px] font-medium leading-relaxed" style={{ color: 'var(--text-2)' }}>
+            Closes this job as <strong>Left with Deed</strong>. Reserved parts are released and any linked sale order / invoice is cancelled.
+            Optionally convert the device into warehouse stock via a free buy-back linked to this repair.
+          </p>
+        </div>
+        <Field label="Notes (optional)">
+          <Textarea value={notes} onChange={setNotes} placeholder="e.g. Customer donated the laptop after declining repair" rows={3} />
+        </Field>
+        <label className="flex items-start gap-3 p-3 rounded-xl border border-[var(--border)] cursor-pointer">
+          <input
+            type="checkbox"
+            className="mt-0.5 w-4 h-4"
+            checked={convertToStock}
+            disabled={!canConvert}
+            onChange={e => setConvertToStock(e.target.checked)}
+          />
+          <span className="text-[11px] font-medium text-[var(--text-2)] leading-relaxed">
+            Convert into stock (free buy-back → warehouse)
+            {!repair.productId && (
+              <span className="block text-[10px] text-[var(--text-3)] mt-0.5">
+                Best when a catalog product is linked on the repair. Without a match, the job still retains without stocking.
+              </span>
+            )}
+          </span>
+        </label>
+        <div className="flex gap-2 justify-end pt-2">
+          <button className="btn-outline min-w-[100px]" onClick={onClose}>Cancel</button>
+          <ActionBtn onClick={handleConfirm} color="linear-gradient(135deg,#44403C,#78716C)" shadow="0 8px 24px rgba(87,83,78,0.35)">
+            <Fa icon={faBoxOpen} /> Confirm Retain
           </ActionBtn>
         </div>
       </div>
