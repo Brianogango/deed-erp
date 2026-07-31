@@ -5,6 +5,7 @@ import type { Prisma } from '@prisma/client'
 import {
   CATALOG_BLOB_KEYS,
   DUAL_WRITE_BLOB_KEYS,
+  EXTENDED_CUTOVER_BLOB_KEYS,
   countBlobArray,
   evaluateParity,
   type BlobParityCheck,
@@ -32,7 +33,7 @@ async function safeCount(fn: () => Promise<number>): Promise<number | null> {
 export async function verifyBlobParity(keys?: string[]): Promise<BlobParityCheck[]> {
   const want = keys?.length
     ? keys
-    : [...DUAL_WRITE_BLOB_KEYS, ...CATALOG_BLOB_KEYS]
+    : [...DUAL_WRITE_BLOB_KEYS, ...CATALOG_BLOB_KEYS, ...EXTENDED_CUTOVER_BLOB_KEYS]
 
   const checks: BlobParityCheck[] = []
 
@@ -101,6 +102,33 @@ export async function verifyBlobParity(keys?: string[]): Promise<BlobParityCheck
         blobCount,
         prismaCount: await safeCount(() => prisma.product.count()),
         hardStopWhenUnequal: true,
+      }))
+      continue
+    }
+    if (blobKey === 'deed_purchaseOrders') {
+      checks.push(evaluateParity({
+        blobKey,
+        prismaTable: 'purchase_orders',
+        blobCount,
+        prismaCount: await safeCount(() => prisma.purchaseOrder.count()),
+      }))
+      continue
+    }
+    if (blobKey === 'deed_payments') {
+      checks.push(evaluateParity({
+        blobKey,
+        prismaTable: 'payments',
+        blobCount,
+        prismaCount: await safeCount(() => prisma.payment.count()),
+      }))
+      continue
+    }
+    if (blobKey === 'deed_stockMoves') {
+      checks.push(evaluateParity({
+        blobKey,
+        prismaTable: 'stock_movements',
+        blobCount,
+        prismaCount: await safeCount(() => prisma.stockMovement.count()),
       }))
       continue
     }

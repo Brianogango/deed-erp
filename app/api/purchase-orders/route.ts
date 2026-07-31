@@ -1,14 +1,19 @@
 import { makeCollectionHandlers } from '@/lib/server-store-crud'
+import { getNextDocNumber } from '@/lib/doc-ref-counter'
 import type { PurchaseOrder } from '@/lib/store'
 
 const config = {
   storeKey: 'deed_purchaseOrders',
   allowedWriteRoles: ['director', 'admin_officer', 'finance_officer', 'inventory_officer', 'technical_lead'],
+  prepareCreate: async (body: Record<string, unknown>) => {
+    if (!body.ref) body.ref = await getNextDocNumber('purchase_order')
+    return body
+  },
   build: (body: Record<string, unknown>): PurchaseOrder | string => {
     if (!body.vendorName) return 'vendorName is required'
     return {
       id: `po_${Date.now()}`,
-      ref: `PO-${Date.now()}`,
+      ref: String(body.ref ?? `PO-${Date.now()}`),
       status: 'draft',
       vendorId: String(body.vendorId ?? ''),
       vendorName: String(body.vendorName),

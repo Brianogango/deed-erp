@@ -119,26 +119,20 @@ export async function POST(
     ].filter(Boolean)
     const notes = notesParts.length ? notesParts.join(' · ') : null
 
-    const [payment, updatedInvoice] = await prisma.$transaction([
-      prisma.payment.create({
-        data: {
-          ...(typeof idempotencyKey === 'string' && /^[0-9a-f-]{36}$/i.test(idempotencyKey)
-            ? { id: idempotencyKey }
-            : {}),
-          invoiceId,
-          amount: capped,
-          paymentMethod: paymentMethod as any,
-          reference: reference || null,
-          paidAt: paidAt ? new Date(paidAt) : new Date(),
-          notes,
-          createdById: actor.id,
-        },
-      }),
-      prisma.invoice.update({
-        where: { id: invoiceId },
-        data: { amountPaid: newAmountPaid },
-      }),
-    ])
+    const { recordPaymentWithAllocations } = await import('@/lib/accounting/payment-allocations')
+    const { payment, allocations } = await recordPaymentWithAllocations({
+      amount: capped,
+      paymentMethod,
+      reference: reference || null,
+      paidAt: paidAt ? new Date(paidAt) : new Date(),
+      notes,
+      createdById: actor.id,
+      invoiceId,
+      idempotencyKey: typeof idempotencyKey === 'string' ? idempotencyKey : undefined,
+      allocations: [{ invoiceId, amount: capped }],
+    })
+
+    const updatedInvoice = await prisma.invoice.findUnique({ where: { id: invoiceId } })
 
     await writeFinancialAudit({
       userId: actor.id,
@@ -146,7 +140,7 @@ export async function POST(
       entityType: 'invoice',
       entityId: invoiceId,
       oldValues: { amountPaid: Number(invoice.amountPaid), status: invoice.status },
-      newValues: { amountPaid: newAmountPaid, paymentAmount: capped, paymentMethod, idempotencyKey },
+      newValues: { amountPaid: Number(updatedInvoice?.amountPaid ?? 0), paymentAmount: capped, paymentMethod, idempotencyKey, allocationIds: allocations.map(a => a.id) },
     })
 
     // Dual-write GL: persist payment journal to Prisma (blob journals still written by client store)

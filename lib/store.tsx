@@ -2617,7 +2617,7 @@ export interface AppState {
   // Payments & Credit
   payments: Payment[]
   customerCredits: CustomerCredit[]
-  createPayment: (customerId: string, customerName: string, amount: number, method: Payment['method'], reference: string, notes?: string) => Payment
+  createPayment: (customerId: string, customerName: string, amount: number, method: Payment['method'], reference: string, notes?: string, forcedReceiptNumber?: string) => Payment
   allocatePaymentToInvoice: (paymentId: string, invoiceId: string, amount: number) => void
   generateReceipt: (paymentId: string) => void
   getCustomerCreditBalance: (customerId: string) => number
@@ -2882,7 +2882,7 @@ export interface AppState {
   // Invoices
   createManualInvoice: (type: InvoiceType, partnerId: string, partnerName: string, dueDate: string, lines: { desc: string; qty: string; price: string; tax: string }[], vatRate: number, notes?: string, documentDate?: string) => Invoice
   updateInvoice: (id: string, p: Partial<Invoice>) => void
-  postInvoice: (id: string) => void
+  postInvoice: (id: string, forcedRef?: string) => void
   /** Finance dispute flag — Odoo "Blocked" payment status. */
   setInvoicePaymentBlocked: (id: string, blocked: boolean) => void
   registerPayment: (invoiceId: string, amount: number, method?: string, bankAccountId?: string, reference?: string, paymentDate?: string) => void
@@ -2893,8 +2893,11 @@ export interface AppState {
   // Audit logs
   addAuditLog: (action: string, documentRef: string, details: string) => void
 
+  /** Fetch a server-allocated document ref; falls back to local docSeq on failure. */
+  allocateDocRef: (prefix: string) => Promise<string>
+
   // Purchase Orders
-  createPO: (vendorId: string, vendorName: string, initial?: Partial<Pick<PurchaseOrder, 'lines' | 'expectedDate' | 'notes'>>) => PurchaseOrder
+  createPO: (vendorId: string, vendorName: string, initial?: Partial<Pick<PurchaseOrder, 'lines' | 'expectedDate' | 'notes'>>, forcedRef?: string) => PurchaseOrder
   updatePO: (id: string, p: Partial<PurchaseOrder>) => void
   addPOLine: (poId: string, product: Product, qty: number, unitPrice: number, taxRate?: number) => void
   removePOLine: (poId: string, lineId: string) => void
@@ -2904,7 +2907,7 @@ export interface AppState {
   revertPOToDraft: (id: string) => void
   confirmPO: (id: string) => void
   // Create receipt from PO (opens receiving dialog)
-  createReceiptFromPO: (poId: string) => Receipt | null
+  createReceiptFromPO: (poId: string, forcedRef?: string) => Receipt | null
   // Validate receipt — the CRITICAL stock entry step
   // serialAccessories: map of serial string → accessories array (e.g. { 'SN001': ['Charger','Bag'] })
   // serialIssues: map of serial string → issue description (non-empty = received with issues → refurbishment)

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from '@/lib/auth/server'
 import { loadAppState, saveStoreKeys } from '@/lib/server-store'
 import { postDeliveryValuationFromPayload } from '@/lib/inventory/valuation-hooks'
+import { applyDeliveryStockMutation } from '@/lib/inventory/stock-transactions'
 
 export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
   const session = await getServerSession()
@@ -17,6 +18,32 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
 
   const previous = deliveries[idx]
   const wasDone = previous?.status === 'done'
+  const nextStatus = body.status ?? previous?.status
+  const lines = Array.isArray(body.lines) ? body.lines : (previous?.lines || [])
+
+  if (!wasDone && nextStatus === 'done') {
+    const doneLines = lines
+      .map((line: any) => ({
+        productId: String(line.productId ?? ''),
+        productName: String(line.productName ?? ''),
+        qty: Number(line.qtyDone ?? line.qty ?? 0),
+        serialIds: Array.isArray(line.serialIds) ? line.serialIds : [],
+        sourceLocation: line.sourceLocation,
+      }))
+      .filter((line: { qty: number }) => line.qty > 0)
+
+    const stockResult = await applyDeliveryStockMutation({
+      deliveryId: params.id,
+      deliveryRef: String(previous?.ref || params.id),
+      saleOrderId: String(previous?.saleOrderId ?? body.saleOrderId ?? ''),
+      lines: doneLines,
+      userId: session.user?.id,
+    })
+    if (!stockResult.ok) {
+      return NextResponse.json({ error: stockResult.error }, { status: 409 })
+    }
+  }
+
   deliveries[idx] = { ...previous, ...body, id: params.id }
   await saveStoreKeys({ deed_deliveries: JSON.stringify(deliveries) })
 
@@ -27,7 +54,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     try {
       valuation = await postDeliveryValuationFromPayload({
         deliveryRef: String(deliveries[idx].ref || params.id),
-        lines: Array.isArray(body.lines) ? body.lines : (deliveries[idx].lines || []),
+        lines,
         userId: session.user?.id,
       })
     } catch (err) {

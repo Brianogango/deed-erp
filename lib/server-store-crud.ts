@@ -42,6 +42,8 @@ export interface CrudConfig<T extends object> {
   filter?: (items: T[], params: URLSearchParams) => T[]
   /** Optional: fields to redact from list responses (e.g. sensitive HR data). */
   redact?: (keyof T)[]
+  /** Optional: async mutation of POST body before build (e.g. server-side ref allocation). */
+  prepareCreate?: (body: AnyRecord) => Promise<AnyRecord | string>
   /** Roles allowed to write (POST/PATCH/DELETE). GET is open to any authenticated user. */
   allowedWriteRoles?: string[]
 }
@@ -99,8 +101,15 @@ export function makeCreateHandler<T extends object>(config: CrudConfig<T>) {
     const body = await parseBody(request)
     if (!body) return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
 
+    let preparedBody = body
+    if (config.prepareCreate) {
+      const prepared = await config.prepareCreate(body)
+      if (typeof prepared === 'string') return NextResponse.json({ error: prepared }, { status: 422 })
+      preparedBody = prepared
+    }
+
     const items = await readCollection<T>(config.storeKey)
-    const result = config.build(body, items)
+    const result = config.build(preparedBody, items)
     if (typeof result === 'string') return NextResponse.json({ error: result }, { status: 422 })
 
     items.push(result)

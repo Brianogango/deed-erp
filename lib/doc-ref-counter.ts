@@ -15,17 +15,36 @@ import { sql } from './auth/db'
  * `CLT-NNNNN` format.
  */
 
-export type DocKind = 'quote' | 'quotation' | 'invoice' | 'sale_order' | 'client'
+export type DocKind =
+  | 'quote'
+  | 'quotation'
+  | 'invoice'
+  | 'sale_order'
+  | 'client'
+  | 'purchase_order'
+  | 'delivery_note'
+  | 'credit_note'
+  | 'vendor_bill'
+  | 'receipt'
+  | 'payment_receipt'
 
 // Quotations exist both as CRM quotes and as quotation-state sale orders;
 // they share the QUO prefix and therefore one sequence.
-const PREFIX: Record<DocKind, string> = {
+export const DOC_PREFIX: Record<DocKind, string> = {
   quote: 'QUO',
   quotation: 'QUO',
   invoice: 'INV',
   sale_order: 'SO',
   client: 'CLT',
+  purchase_order: 'PO',
+  delivery_note: 'DN',
+  credit_note: 'CN',
+  vendor_bill: 'BILL',
+  receipt: 'REC',
+  payment_receipt: 'RCT',
 }
+
+const PREFIX = DOC_PREFIX
 
 let _tableReady = false
 async function ensureCounterTable() {
@@ -40,6 +59,36 @@ async function ensureCounterTable() {
   if (process.env.NODE_ENV !== 'test') _tableReady = true
 }
 
+let _tableReady = false
+async function maxRefFromAppStateBlob(
+  key: string,
+  extractRef: (item: Record<string, unknown>) => string | undefined,
+  prefix: string,
+  year: number,
+): Promise<number> {
+  try {
+    const { rows } = await sql`SELECT value FROM app_state WHERE key = ${key}`
+    const raw = rows?.[0]?.value
+    if (!raw || typeof raw !== 'string') return 0
+    const items = JSON.parse(raw)
+    if (!Array.isArray(items)) return 0
+    const re = new RegExp(`^${prefix}/${year}/(\\d+)$`)
+    let max = 0
+    for (const item of items) {
+      if (!item || typeof item !== 'object') continue
+      const ref = extractRef(item as Record<string, unknown>)
+      const m = ref ? re.exec(ref) : null
+      if (m) {
+        const n = parseInt(m[1], 10)
+        if (Number.isFinite(n) && n > max) max = n
+      }
+    }
+    return max
+  } catch {
+    return 0
+  }
+}
+
 /** Highest sequence among existing documents for this prefix (and year, for per-year kinds). */
 async function seedFromExisting(kind: DocKind, year: number): Promise<number> {
   try {
@@ -48,7 +97,8 @@ async function seedFromExisting(kind: DocKind, year: number): Promise<number> {
       ({ rows } = await sql`SELECT COALESCE(MAX((substring(client_number from '[0-9]+$'))::int), 0) AS max_num FROM clients WHERE client_number ~ '^CLT-[0-9]+$'`)
       return Number(rows?.[0]?.max_num ?? 0)
     }
-    const pattern = `^${PREFIX[kind]}/${year}/[0-9]+$`
+    const prefix = PREFIX[kind]
+    const pattern = `^${prefix}/${year}/[0-9]+$`
     switch (kind) {
       case 'quote':
       case 'quotation':
@@ -65,6 +115,37 @@ async function seedFromExisting(kind: DocKind, year: number): Promise<number> {
       case 'sale_order':
         ({ rows } = await sql`SELECT COALESCE(MAX((substring(order_number from '[0-9]+$'))::int), 0) AS max_num FROM sale_orders WHERE order_number ~ ${pattern}`)
         break
+      case 'purchase_order':
+        return maxRefFromAppStateBlob('deed_purchaseOrders', i => String(i.ref ?? ''), prefix, year)
+      case 'delivery_note':
+        return maxRefFromAppStateBlob('deed_deliveries', i => String(i.ref ?? ''), prefix, year)
+      case 'receipt':
+        return maxRefFromAppStateBlob('deed_receipts', i => String(i.ref ?? ''), prefix, year)
+      case 'payment_receipt':
+        return maxRefFromAppStateBlob('deed_payments', i => String(i.receiptNumber ?? i.ref ?? ''), prefix, year)
+      case 'credit_note':
+        return Math.max(
+          await maxRefFromAppStateBlob('deed_customerCredits', i => String(i.ref ?? ''), prefix, year),
+          await maxRefFromAppStateBlob('deed_invoices', i => {
+            const ref = String(i.ref ?? i.invoiceNumber ?? '')
+            return ref.startsWith('CN/') ? ref : undefined
+          }, prefix, year),
+        )
+      case 'vendor_bill': {
+        const fromInvoices = await maxRefFromAppStateBlob('deed_invoices', i => {
+          const ref = String(i.ref ?? i.invoiceNumber ?? '')
+          const type = String(i.type ?? '')
+          return ref.startsWith('BILL/') || type === 'vendor_bill' ? ref : undefined
+        }, prefix, year)
+        try {
+          ({ rows } = await sql`SELECT COALESCE(MAX((substring(invoice_number from '[0-9]+$'))::int), 0) AS max_num FROM invoices WHERE invoice_number ~ ${pattern}`)
+          return Math.max(fromInvoices, Number(rows?.[0]?.max_num ?? 0))
+        } catch {
+          return fromInvoices
+        }
+      }
+      default:
+        return 0
     }
     return Number(rows?.[0]?.max_num ?? 0)
   } catch {

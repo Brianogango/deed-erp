@@ -18,6 +18,13 @@ export const DUAL_WRITE_BLOB_KEYS = [
 /** Relational-first catalogs that may still have a legacy blob mirror. */
 export const CATALOG_BLOB_KEYS = ['deed_products'] as const
 
+/** Additional domains eligible for gated cutover (not required for admin reset). */
+export const EXTENDED_CUTOVER_BLOB_KEYS = [
+  'deed_purchaseOrders',
+  'deed_payments',
+  'deed_stockMoves',
+] as const
+
 export type CutoverBlobKey = (typeof DUAL_WRITE_BLOB_KEYS)[number] | (typeof CATALOG_BLOB_KEYS)[number] | string
 
 export type CutoverStatus = 'pending' | 'verified' | 'certified' | 'archived' | 'blocked'

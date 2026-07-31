@@ -6,6 +6,8 @@ import { isUUID } from '@/lib/utils'
 import { saveStoreKeys } from '@/lib/server-store'
 import { getNextDocNumber } from '@/lib/doc-ref-counter'
 import { normalizeSaleStatus } from '@/lib/odoo-sales-flow'
+import { enforceSaleOrderApprovals } from '@/lib/sales-approval-enforcement.server'
+import { lockVersionMismatch, nextLockVersion, readExpectedVersion } from '@/lib/optimistic-lock'
 
 async function broadcastSaleOrders() {
   try {
@@ -42,6 +44,7 @@ function mapSaleOrderToClient(order: any) {
     subtotal: Number(order.subtotal ?? 0),
     discountAmount: Number(order.discountAmount ?? 0),
     amountPaid: Number(order.amountPaid ?? 0),
+    lockVersion: Number(order.lockVersion ?? 0),
     lines: (order.items ?? []).map((item: any) => ({
       id: item.id,
       productId: item.productId ?? '',
@@ -106,6 +109,21 @@ export async function POST(request: Request) {
   return withApiErrorHandling(async () => {
     const session = await getRequiredSession()
     const body = await request.json()
+
+    const status = normalizeSaleStatus(body.status)
+    const approvalCheck = await enforceSaleOrderApprovals({
+      body,
+      sessionUserId: session.user.id,
+      sessionRole: session.user.role,
+      fromStatus: 'quotation',
+      toStatus: status,
+    })
+    if (!approvalCheck.ok) {
+      return NextResponse.json(
+        { error: approvalCheck.error, requiredRoles: approvalCheck.requiredRoles },
+        { status: approvalCheck.status },
+      )
+    }
 
     const rawItems: any[] = body.items ?? body.lines ?? []
     const clientId = await resolveClientId(prisma, body.clientId ?? body.customerId, body)

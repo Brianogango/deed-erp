@@ -3,11 +3,14 @@ import prisma from '@/lib/prisma'
 import { getRequiredSession, withApiErrorHandling } from '@/lib/auth/api'
 import { optionalUuid, resolveClientId } from '@/lib/legacy-compat'
 import { loadAppState, saveStoreKeys } from '@/lib/server-store'
+import { reserveStockForSaleOrder } from '@/lib/inventory/stock-transactions'
 import {
   normalizeSaleStatus,
   saleTransitionError,
   saleOrderCancelBlockers,
 } from '@/lib/odoo-sales-flow'
+import { enforceSaleOrderApprovals } from '@/lib/sales-approval-enforcement.server'
+import { lockVersionMismatch, nextLockVersion, readExpectedVersion } from '@/lib/optimistic-lock'
 
 async function broadcastSaleOrders() {
   try {
@@ -59,6 +62,7 @@ function mapSaleOrderToClient(order: any) {
     subtotal: Number(order.subtotal ?? 0),
     discountAmount: Number(order.discountAmount ?? 0),
     amountPaid: Number(order.amountPaid ?? 0),
+    lockVersion: Number(order.lockVersion ?? 0),
     lines: (order.items ?? []).map((item: any) => ({
       id: item.id,
       productId: item.productId ?? '',
@@ -312,9 +316,36 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
     })
     if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
+    const expectedVersion = readExpectedVersion(body)
+    if (lockVersionMismatch(existing.lockVersion, expectedVersion)) {
+      return NextResponse.json(
+        { error: 'Record was modified by another user', lockVersion: existing.lockVersion },
+        { status: 409 },
+      )
+    }
+
+    const from = normalizeSaleStatus(existing.status)
+    const to = body.status !== undefined ? normalizeSaleStatus(body.status) : from
+    const approvalCheck = await enforceSaleOrderApprovals({
+      body,
+      existing,
+      sessionUserId: session.user.id,
+      sessionRole: session.user.role,
+      fromStatus: from,
+      toStatus: to,
+    })
+    if (!approvalCheck.ok) {
+      return NextResponse.json(
+        { error: approvalCheck.error, requiredRoles: approvalCheck.requiredRoles },
+        { status: approvalCheck.status },
+      )
+    }
+
     const data = await buildSaleOrderUpdateData(body)
     const workflowError = await enforceSaleWorkflow(existing, body, data, session)
     if (workflowError) return workflowError
+
+    data.lockVersion = nextLockVersion(existing.lockVersion)
 
     const order = await prisma.saleOrder.update({
       where: { id: params.id },
@@ -322,14 +353,19 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
       include: { client: true, items: true },
     })
 
+    const from = normalizeSaleStatus(existing.status)
+    const to = body.status !== undefined ? normalizeSaleStatus(body.status) : from
+
     // Prefer SaleOrderService for confirm/cancel side-effects (reservation release + audit).
     // Workflow already enforced above; service is idempotent on status.
     try {
       const { SaleOrderService } = await import('@/lib/services/sale-order.service')
-      const from = normalizeSaleStatus(existing.status)
-      const to = body.status !== undefined ? normalizeSaleStatus(body.status) : from
       if (to === 'sale' && from !== 'sale') {
         await SaleOrderService.confirm(params.id, session.user.id, session.user.role).catch(() => {})
+        const reserveResult = await reserveStockForSaleOrder(params.id, session.user.id)
+        if (!reserveResult.ok) {
+          console.error('[sale-orders] reserveStockForSaleOrder failed:', reserveResult.error)
+        }
       }
       if (to === 'cancelled' && from !== 'cancelled') {
         await SaleOrderService.cancel(params.id, session.user.id).catch(() => {})
