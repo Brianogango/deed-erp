@@ -110,20 +110,21 @@ function KpiCard({
       } as React.CSSProperties}
     >
       <div className="flex items-start justify-between gap-3 w-full">
-        <p className="text-xs font-bold tracking-[0.04em] text-[var(--text-3)] leading-tight flex-1">
+        <p className="text-xs font-bold tracking-[0.04em] text-[var(--text-3)] leading-tight flex-1 min-w-0">
           {label}
         </p>
         <div className="dashboard-stat-icon" style={{ color }}>
-          <span className="text-base">{icon}</span>
+          <span className="text-sm">{icon}</span>
         </div>
       </div>
-      <div className="mt-5 w-full">
+      <div className="mt-4 w-full min-w-0">
         <p
-          className={`text-[1.65rem] sm:text-[1.85rem] font-extrabold leading-none mb-2 truncate text-[var(--text-1)] ${isCurrency ? 'font-mono tracking-tight' : ''}`}
+          className={`dashboard-stat-value font-extrabold text-[var(--text-1)] mb-1.5 ${isCurrency ? 'is-currency font-mono tracking-tight' : ''}`}
+          title={isCurrency && typeof value === 'number' ? fmtKes(value) : String(value)}
         >
           {isCurrency && typeof value === 'number' ? fmtKes(value) : value}
         </p>
-        <p className="text-[13px] text-[var(--text-4)] leading-snug line-clamp-2 sm:truncate">{sub}</p>
+        <p className="dashboard-stat-sub text-[var(--text-4)] leading-snug">{sub}</p>
       </div>
       <span className="dashboard-stat-accent" aria-hidden="true" />
     </button>

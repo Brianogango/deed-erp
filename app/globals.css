@@ -2262,14 +2262,14 @@
 
   .dashboard-kpi-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(185px, 1fr));
-    gap: 0.75rem;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 0.85rem;
   }
 
   .dashboard-stat-card {
     position: relative;
     display: flex;
-    min-height: 120px;
+    min-height: 118px;
     width: 100%;
     flex-direction: column;
     justify-content: space-between;
@@ -2288,10 +2288,36 @@
     transform: translateY(-1px);
   }
 
+  .dashboard-stat-value {
+    width: 100%;
+    min-width: 0;
+    font-size: clamp(1.2rem, 1.05rem + 0.55vw, 1.55rem);
+    line-height: 1.15;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+
+  .dashboard-stat-value.is-currency {
+    font-size: clamp(0.95rem, 0.85rem + 0.45vw, 1.2rem);
+    line-height: 1.2;
+    letter-spacing: -0.02em;
+  }
+
+  .dashboard-stat-sub {
+    display: -webkit-box;
+    width: 100%;
+    min-width: 0;
+    overflow: hidden;
+    font-size: 0.75rem;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+  }
+
   .dashboard-stat-icon {
     display: flex;
-    width: 2.25rem;
-    height: 2.25rem;
+    width: 2rem;
+    height: 2rem;
     flex: 0 0 auto;
     align-items: center;
     justify-content: center;
