@@ -4171,6 +4171,50 @@ export function StoreProvider({
       }
     }
 
+    const arrayIds = (serialized: string | null): Set<string> | null => {
+      if (!serialized) return null
+      try {
+        const parsed = JSON.parse(serialized)
+        if (!Array.isArray(parsed)) return null
+        return new Set(
+          parsed
+            .map((row: { id?: unknown }) => (row?.id != null ? String(row.id) : ''))
+            .filter(Boolean),
+        )
+      } catch {
+        return null
+      }
+    }
+
+    /** Prefer remote rows on id conflict; keep any local-only rows. */
+    const mergeArrayById = (localStr: string | null, remoteStr: string): string => {
+      let localArr: Array<{ id?: unknown }> = []
+      let remoteArr: Array<{ id?: unknown }> = []
+      try { localArr = localStr ? JSON.parse(localStr) : [] } catch { localArr = [] }
+      try { remoteArr = JSON.parse(remoteStr) } catch { return remoteStr }
+      if (!Array.isArray(localArr)) localArr = []
+      if (!Array.isArray(remoteArr)) return remoteStr
+      const remoteIds = new Set(
+        remoteArr.map(row => (row?.id != null ? String(row.id) : '')).filter(Boolean),
+      )
+      const merged = [
+        ...remoteArr.filter(row => row?.id != null),
+        ...localArr.filter(row => row?.id != null && !remoteIds.has(String(row.id))),
+      ]
+      return JSON.stringify(merged)
+    }
+
+    const remoteHasMissingIds = (localStr: string | null, remoteStr: string): boolean => {
+      const remoteIds = arrayIds(remoteStr)
+      if (!remoteIds || remoteIds.size === 0) return false
+      const localIds = arrayIds(localStr)
+      if (!localIds || localIds.size === 0) return true
+      for (const id of remoteIds) {
+        if (!localIds.has(id)) return true
+      }
+      return false
+    }
+
     const CRITICAL_VISIBILITY_KEYS = [
       'deed_invoices',
       'deed_expenses',
@@ -4178,9 +4222,11 @@ export function StoreProvider({
       'deed_outsourcePayments',
       'deed_outsourceVendors',
     ] as const
+    const CRITICAL_VISIBILITY_KEY_SET = new Set<string>(CRITICAL_VISIBILITY_KEYS)
 
-    // Recovery pass: if browser cache has stale-empty data for critical modules,
-    // pull server truth directly per key and apply it immediately.
+    // Recovery pass: if browser cache is empty OR missing rows the server has
+    // (common after creating an outsource job on another tab/device), pull/merge
+    // server truth so Jobs lists stay complete.
     const reconcileCriticalVisibilityKeys = async () => {
       await Promise.all(
         CRITICAL_VISIBILITY_KEYS.map(async key => {
@@ -4194,11 +4240,20 @@ export function StoreProvider({
             const localStr = window.localStorage.getItem(key)
             const localCount = arrayCount(localStr)
             const remoteCount = arrayCount(remoteStr)
-            const shouldRecover = typeof remoteCount === 'number' && remoteCount > 0 && (localStr === null || localCount === 0)
+            const missingRemoteRows = remoteHasMissingIds(localStr, remoteStr)
+            const shouldRecover = typeof remoteCount === 'number' && remoteCount > 0 && (
+              localStr === null
+              || localCount === 0
+              || missingRemoteRows
+              || (typeof localCount === 'number' && remoteCount > localCount)
+            )
             if (!shouldRecover) return
             removeDirtyKeys([key])
-            window.localStorage.setItem(key, remoteStr)
-            window.dispatchEvent(new CustomEvent('deed_remote_update', { detail: { key, value: remoteStr } }))
+            const nextStr = (localStr && typeof localCount === 'number' && localCount > 0 && missingRemoteRows)
+              ? mergeArrayById(localStr, remoteStr)
+              : remoteStr
+            window.localStorage.setItem(key, nextStr)
+            window.dispatchEvent(new CustomEvent('deed_remote_update', { detail: { key, value: nextStr } }))
           } catch {
             // best effort recovery only
           }
@@ -4240,10 +4295,17 @@ export function StoreProvider({
           if (dirty.has(k)) {
             const localCount = arrayCount(localStr)
             const remoteCount = arrayCount(remoteStr)
+            const missingRemoteRows = CRITICAL_VISIBILITY_KEY_SET.has(k) && remoteHasMissingIds(localStr, remoteStr)
             const shouldRecoverFromStaleEmpty = localCount === 0 && typeof remoteCount === 'number' && remoteCount > 0
-            if (!shouldRecoverFromStaleEmpty) continue // local unsynced write — server state is stale for this key
-            // Recover from stale-empty local cache and clear dirty flag so UI receives server truth.
+            if (!shouldRecoverFromStaleEmpty && !missingRemoteRows) continue // local unsynced write — server state is stale for this key
+            // Recover from stale-empty / incomplete local cache and clear dirty flag.
             removeDirtyKeys([k])
+            if (missingRemoteRows && localStr && typeof localCount === 'number' && localCount > 0) {
+              const merged = mergeArrayById(localStr, remoteStr)
+              window.localStorage.setItem(k, merged)
+              window.dispatchEvent(new CustomEvent('deed_remote_update', { detail: { key: k, value: merged } }))
+              continue
+            }
           }
           if (localStr !== remoteStr) {
             window.localStorage.setItem(k, remoteStr)
@@ -4267,9 +4329,16 @@ export function StoreProvider({
         if (pendingKeys.has(k) || dirtyKeys.has(k)) {
           const localCount = arrayCount(local)
           const remoteCount = arrayCount(remoteStr)
+          const missingRemoteRows = CRITICAL_VISIBILITY_KEY_SET.has(k) && remoteHasMissingIds(local, remoteStr)
           const shouldRecoverFromStaleEmpty = localCount === 0 && typeof remoteCount === 'number' && remoteCount > 0
-          if (!shouldRecoverFromStaleEmpty) continue
+          if (!shouldRecoverFromStaleEmpty && !missingRemoteRows) continue
           removeDirtyKeys([k])
+          if (missingRemoteRows && local && typeof localCount === 'number' && localCount > 0) {
+            const merged = mergeArrayById(local, remoteStr)
+            window.localStorage.setItem(k, merged)
+            window.dispatchEvent(new CustomEvent('deed_remote_update', { detail: { key: k, value: merged } }))
+            continue
+          }
         }
         if (local !== remoteStr) {
           window.localStorage.setItem(k, remoteStr)

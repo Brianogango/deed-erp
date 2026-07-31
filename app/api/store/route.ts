@@ -203,6 +203,27 @@ export async function POST(request: Request) {
         try { incoming = JSON.parse(entries[key]) } catch { continue }
         entries[key] = JSON.stringify(mergeProductsStoreWrite(currentState[key], incoming))
       }
+      // Outsource ledgers: merge by id so a stale browser cache cannot delete
+      // jobs that already exist on the server (e.g. OUT/0060 created elsewhere).
+      if (
+        (key === 'deed_outsourceJobs' || key === 'deed_outsourcePayments' || key === 'deed_outsourceVendors')
+        && entries[key]
+        && Array.isArray(currentState[key])
+      ) {
+        let incoming: unknown
+        try { incoming = JSON.parse(entries[key]) } catch { continue }
+        if (Array.isArray(incoming)) {
+          const incomingIds = new Set(
+            incoming.map((row: { id?: unknown }) => row?.id).filter(id => id != null),
+          )
+          const serverHasMissing = (currentState[key] as Array<{ id?: unknown }>).some(
+            row => row?.id != null && !incomingIds.has(row.id),
+          )
+          if (serverHasMissing) {
+            entries[key] = JSON.stringify(mergeFilteredStoreWrite(currentState[key], incoming))
+          }
+        }
+      }
     }
   }
 
