@@ -25,6 +25,10 @@ try {
 } catch (error) {
   if (error && typeof error === 'object' && 'code' in error && error.code === '42501') {
     console.error('Migration failed: database user lacks ownership/ALTER privileges.')
+    console.error('On Contabo, apply as the postgres OS role instead:')
+    console.error('  install -m 644 database/migrations/20260731_accounting_foundation_safe.sql /tmp/accounting_foundation_safe.sql')
+    console.error('  sudo -u postgres psql -v ON_ERROR_STOP=1 -d deed_erp -f /tmp/accounting_foundation_safe.sql')
+    console.error('  sudo -u postgres psql -d deed_erp -c "GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE account_codes, journals, journal_entries, journal_entry_lines, product_valuations, valuation_events, stock_reservations, approval_rules TO deed_user;"')
   }
   console.error('Safe accounting foundation failed:', error)
   process.exitCode = 1
