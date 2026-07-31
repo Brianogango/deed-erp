@@ -29,7 +29,7 @@ export async function POST(request: Request) {
       rate,
       ref,
       date: body.date,
-      userId: session.user.id,
+      userId: session.id,
       balanceAccountLabel,
       accountGain: body.accountGain,
       accountLoss: body.accountLoss,

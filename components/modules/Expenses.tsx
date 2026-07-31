@@ -80,6 +80,7 @@ function ExpenseApprovalChain({ chain }: { chain: NonNullable<Expense['approvalC
   )
 }
 
+function ExpenseStatusBadge({ status }: { status: Expense['status'] }) {
   const m = STATUS_META[status]
   return <StatusBadge status={m.badgeStatus} label={m.label} />
 }

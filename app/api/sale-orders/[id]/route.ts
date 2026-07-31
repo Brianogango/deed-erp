@@ -360,9 +360,6 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
       include: { client: true, items: true },
     })
 
-    const from = normalizeSaleStatus(existing.status)
-    const to = body.status !== undefined ? normalizeSaleStatus(body.status) : from
-
     // Prefer SaleOrderService for confirm/cancel side-effects (reservation release + audit).
     // Workflow already enforced above; service is idempotent on status.
     try {

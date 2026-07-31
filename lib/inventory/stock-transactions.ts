@@ -4,9 +4,18 @@ import prisma from '@/lib/prisma'
 import { loadAppState, saveStoreKeys } from '@/lib/server-store'
 import { uuidFromKey } from '@/lib/accounting/ids'
 import { calcStockByLocation, upsertBulkStock } from '@/lib/business-logic'
+import type { BulkStockLevel } from '@/lib/business-logic'
+import type { LocationId } from '@/lib/store'
 import { mirrorStockReservationsToPrisma } from '@/lib/inventory/reservation-mirror'
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+
+const VALID_LOCATIONS: LocationId[] = ['warehouse', 'shop', 'repair_unit', 'vendor', 'customer', 'employee']
+
+function asLocationId(value: string | undefined): LocationId {
+  const loc = String(value || 'warehouse')
+  return (VALID_LOCATIONS.includes(loc as LocationId) ? loc : 'warehouse') as LocationId
+}
 
 type BlobProduct = {
   id: string
@@ -100,8 +109,8 @@ export async function applyDeliveryStockMutation(params: {
 
   const products: BlobProduct[] = Array.isArray(state.deed_products) ? [...(state.deed_products as BlobProduct[])] : []
   const serials: BlobSerial[] = Array.isArray(state.deed_serials) ? [...(state.deed_serials as BlobSerial[])] : []
-  let bulkStock: Array<{ productId: string; location: string; qty: number }> =
-    Array.isArray(state.deed_bulkStock) ? [...(state.deed_bulkStock as typeof bulkStock)] : []
+  let bulkStock: BulkStockLevel[] =
+    Array.isArray(state.deed_bulkStock) ? [...(state.deed_bulkStock as BulkStockLevel[])] : []
   const stockMoves: BlobStockMove[] = Array.isArray(state.deed_stockMoves) ? [...(state.deed_stockMoves as BlobStockMove[])] : []
   const stockReservations: BlobReservation[] =
     Array.isArray(state.deed_stockReservations) ? [...(state.deed_stockReservations as BlobReservation[])] : []
@@ -117,7 +126,7 @@ export async function applyDeliveryStockMutation(params: {
     const product = products.find(p => p.id === line.productId)
     if (!product || product.unit === 'service') continue
 
-    const location = line.sourceLocation ?? 'warehouse'
+    const location = asLocationId(line.sourceLocation)
 
     if (product.requiresSerial) {
       const serialIds = Array.isArray(line.serialIds) ? line.serialIds : []
@@ -178,7 +187,7 @@ export async function applyDeliveryStockMutation(params: {
     const product = products[productIdx]
     if (product.unit === 'service') continue
 
-    const location = line.sourceLocation ?? 'warehouse'
+    const location = asLocationId(line.sourceLocation)
     const serialLabels: string[] = []
 
     if (product.requiresSerial) {

@@ -31,7 +31,7 @@ export function buildExpenseApprovalChain(
 }
 
 export function expenseChainIsComplete(chain?: ExpenseApprovalStep[]) {
-  return Boolean(chain?.length) && chain.every(s => s.status === 'approved')
+  return Boolean(chain?.length) && (chain ?? []).every(s => s.status === 'approved')
 }
 
 export function currentPendingExpenseStep(chain?: ExpenseApprovalStep[]) {

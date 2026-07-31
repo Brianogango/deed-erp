@@ -37,7 +37,7 @@ export async function POST(request: NextRequest) {
       : []
 
     if (allocations.length === 0) {
-      return blobHandlers.POST(cloned)
+      return blobHandlers.POST(cloned as NextRequest)
     }
 
     const amount = Number(body.amount)
