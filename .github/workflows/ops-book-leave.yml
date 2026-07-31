@@ -1,0 +1,80 @@
+name: Ops book leave
+
+on:
+  workflow_dispatch:
+    inputs:
+      name:
+        description: Employee name match (e.g. David)
+        required: true
+        type: string
+      date:
+        description: Leave date YYYY-MM-DD
+        required: true
+        type: string
+      end:
+        description: End date YYYY-MM-DD (defaults to date)
+        required: false
+        type: string
+        default: ''
+      type:
+        description: Leave type
+        required: true
+        type: choice
+        options:
+          - annual
+          - sick
+          - compassionate
+          - study
+          - unpaid
+        default: annual
+      reason:
+        description: Reason
+        required: false
+        type: string
+        default: Booked by ops request
+      pending:
+        description: Leave as pending_hr instead of approved
+        required: false
+        type: boolean
+        default: false
+
+jobs:
+  book:
+    name: Book leave on Contabo
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Copy script to server
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          source: scripts/book-leave-for-employee.mjs
+          target: /tmp/deed-ops/
+          strip_components: 1
+
+      - name: Run book-leave script
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          command_timeout: 5m
+          script: |
+            set -euo pipefail
+            cd /var/www/deed-erp
+            END_DATE='${{ inputs.end }}'
+            if [ -z "$END_DATE" ]; then END_DATE='${{ inputs.date }}'; fi
+            PENDING_FLAG=''
+            if [ '${{ inputs.pending }}' = 'true' ]; then PENDING_FLAG='--pending'; fi
+            cp /tmp/deed-ops/book-leave-for-employee.mjs /tmp/book-leave-for-employee.mjs
+            node /tmp/book-leave-for-employee.mjs \
+              --name '${{ inputs.name }}' \
+              --date '${{ inputs.date }}' \
+              --end "$END_DATE" \
+              --type '${{ inputs.type }}' \
+              --reason '${{ inputs.reason }}' \
+              $PENDING_FLAG
