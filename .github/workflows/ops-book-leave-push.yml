@@ -1,0 +1,63 @@
+name: Ops book leave (push trigger)
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'ops/book-leave-request.json'
+
+jobs:
+  book:
+    name: Book leave on Contabo
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Read request
+        id: req
+        run: |
+          set -euo pipefail
+          NAME=$(jq -r '.name' ops/book-leave-request.json)
+          DATE=$(jq -r '.date' ops/book-leave-request.json)
+          END=$(jq -r '.end // .date' ops/book-leave-request.json)
+          TYPE=$(jq -r '.type // "annual"' ops/book-leave-request.json)
+          REASON=$(jq -r '.reason // "Booked by ops request"' ops/book-leave-request.json)
+          PENDING=$(jq -r '.pending // false' ops/book-leave-request.json)
+          echo "name=$NAME" >> "$GITHUB_OUTPUT"
+          echo "date=$DATE" >> "$GITHUB_OUTPUT"
+          echo "end=$END" >> "$GITHUB_OUTPUT"
+          echo "type=$TYPE" >> "$GITHUB_OUTPUT"
+          echo "reason=$REASON" >> "$GITHUB_OUTPUT"
+          echo "pending=$PENDING" >> "$GITHUB_OUTPUT"
+
+      - name: Copy script to server
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          source: scripts/book-leave-for-employee.mjs
+          target: /tmp/deed-ops/
+          strip_components: 1
+
+      - name: Run book-leave script
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          command_timeout: 5m
+          script: |
+            set -euo pipefail
+            cd /var/www/deed-erp
+            PENDING_FLAG=''
+            if [ '${{ steps.req.outputs.pending }}' = 'true' ]; then PENDING_FLAG='--pending'; fi
+            cp /tmp/deed-ops/book-leave-for-employee.mjs /tmp/book-leave-for-employee.mjs
+            node /tmp/book-leave-for-employee.mjs \
+              --name '${{ steps.req.outputs.name }}' \
+              --date '${{ steps.req.outputs.date }}' \
+              --end '${{ steps.req.outputs.end }}' \
+              --type '${{ steps.req.outputs.type }}' \
+              --reason '${{ steps.req.outputs.reason }}' \
+              $PENDING_FLAG
