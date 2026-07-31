@@ -11,6 +11,7 @@ import {
   stockValuationEventKey,
   stockValuationJournalRef,
 } from '@/lib/inventory/valuation-math'
+import { buildZeroBalanceCoaTemplate, coaTemplateToBlobAccounts } from '@/lib/accounting/coa-template'
 
 describe('accounting ids', () => {
   it('extracts codes from CoA labels', () => {
@@ -83,5 +84,21 @@ describe('weighted-average valuation math', () => {
       .toBe(stockValuationEventKey('receipt', 'REC001', 'prod-1'))
     expect(stockValuationJournalRef('delivery', 'DN001', 'prod-1'))
       .toBe('JRN/STK/DEL/DN001/prod-1')
+  })
+})
+
+describe('zero-balance CoA template', () => {
+  it('never ships demo balances', () => {
+    const rows = buildZeroBalanceCoaTemplate()
+    expect(rows.length).toBeGreaterThan(20)
+    expect(rows.every(r => r.balance === 0)).toBe(true)
+    expect(rows.some(r => r.code === '1800')).toBe(true)
+    expect(rows.some(r => r.code === '3000')).toBe(true)
+  })
+
+  it('maps to blob account shape', () => {
+    const blob = coaTemplateToBlobAccounts(buildZeroBalanceCoaTemplate().slice(0, 3))
+    expect(blob[0]).toMatchObject({ balance: 0, isActive: true })
+    expect(blob[0].id).toContain('coa-bootstrap-')
   })
 })

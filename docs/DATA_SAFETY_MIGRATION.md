@@ -4,52 +4,42 @@
 **Never delete `app_state` keys** as part of this migration. Blobs remain the operational fallback until a verified cutover.
 
 ## What this change does
-1. Creates relational tables for accounts, journals, product valuations, valuation events, stock reservations, approval rules (safe SQL, `IF NOT EXISTS`).
+1. Creates relational tables for accounts, journals, product valuations, valuation events, stock reservations, approval rules, **deposits**, **holdovers** (safe SQL, `IF NOT EXISTS`).
 2. **Dual-writes** on blob save:
-   - `deed_accounts` → `account_codes`
+   - `deed_accounts` → `account_codes` (metadata only on update — never overwrites live balances with seed)
    - `deed_journalEntries` → `journal_entries`
    - `deed_stockReservations` → `stock_reservations`
-   - `deed_repairs_v2` → `repairs` (existing mirror; now includes `retained`)
-3. Posts invoice/payment journals to Prisma when invoices are posted or paid via API (client still writes blob journals).
-4. On GRN validate / delivery validate: weighted-average valuation + STK/COGS journals (idempotent via `valuation_events`). Never rewrites blob stock.
-5. Configurable approval thresholds in DB with hardcoded fallback + Settings UI.
-6. Sales domain seam (`SaleOrderService` + thin hook) — no big-bang store split.
+   - `deed_deposits` / `deed_deposits_v1` → `deposits`
+   - `deed_holdovers` → `holdovers`
+   - `deed_repairs_v2` → `repairs` (existing mirror; includes `retained`)
+3. Posts invoice/payment journals to Prisma when invoices are posted or paid via API.
+4. On GRN validate / delivery validate: weighted-average valuation + STK/COGS journals.
+5. Configurable approval thresholds + Settings UI.
+6. Sales + Inventory domain seams (API-first helpers; no big-bang 8-store split).
+7. Prisma read-only **journals** + **trial balance** (KES) in Finance UI.
+8. Safe CoA bootstrap when `deed_accounts` is missing (Contabo case).
 
 ## Deploy order (production)
 ```bash
-# 1. Apply tables (non-destructive)
-node scripts/run-safe-accounting-foundation.mjs
+# 1. Apply tables (non-destructive) — as OS postgres on Contabo when deed_user lacks DDL
+install -m 644 database/migrations/20260731_accounting_foundation_safe.sql /tmp/accounting_foundation_safe.sql
+sudo -u postgres psql -v ON_ERROR_STOP=1 -d deed_erp -f /tmp/accounting_foundation_safe.sql
+# GRANTs as documented in run-safe-accounting-foundation.mjs
 
-# 2. Generate Prisma client
-pnpm prisma:generate
-# or: npx prisma generate
+install -m 644 database/migrations/20260731_deposits_holdovers_safe.sql /tmp/deposits_holdovers_safe.sql
+sudo -u postgres psql -v ON_ERROR_STOP=1 -d deed_erp -f /tmp/deposits_holdovers_safe.sql
+sudo -u postgres psql -d deed_erp -c "GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE deposits, deposit_items, deposit_payments, holdovers TO deed_user;"
 
-# 3. Deploy app (dual-write starts)
+# 2. Generate Prisma client + deploy app
 
-# 4. Backfill existing blobs (idempotent upsert)
-node scripts/backfill-accounting-to-prisma.mjs
-# optional: --dry-run first
-
-# 5. Director: POST /api/admin/backfill-accounting {"force":true}
+# 3. Backfill (never deletes blobs)
+curl -X POST https://<host>/api/admin/backfill-accounting \
+  -H "Content-Type: application/json" \
+  -H "x-internal-secret: $INTERNAL_API_SECRET" \
+  -d '{"force":true}'
 ```
 
-## Verify before any future cutover
-Compare counts (examples):
-```sql
-SELECT COUNT(*) FROM account_codes;
--- vs length of deed_accounts JSON
-
-SELECT COUNT(*) FROM journal_entries;
--- vs length of deed_journalEntries JSON
-
-SELECT COUNT(*) FROM valuation_events;
-SELECT COUNT(*) FROM product_valuations;
-```
-Spot-check 5 refs. Only after match + soak period may blob keys be deprecated (separate change).
-
-## What we deliberately deferred
-- Full 8-way Zustand store split (would merge-conflict live features)
+## What we deliberately still skip
+- Deleting any `deed_*` app_state keys
 - Multi-currency / full pricelist engine
-- Deleting Delivery dual-schema (store SO picking ≠ Prisma invoice DN)
-- Dropping `app_state` keys
-- Full financial statements UI (needs soak of posted journals)
+- Big-bang 8-way Zustand extraction (Sales/Inventory seams only)

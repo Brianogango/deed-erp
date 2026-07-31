@@ -44,15 +44,17 @@ export async function mirrorAccountsToPrisma(accountsInput: unknown, opts: { for
           isActive: a.isActive !== false,
           isDynamic: !!a.isDynamic,
           dynamicKey: a.dynamicKey ? String(a.dynamicKey).slice(0, 40) : null,
-          balance: Number(a.balance ?? 0),
           notes: a.notes ? String(a.notes) : null,
         }
-        const fp = fingerprint(mapped)
+        // Seed/static blob balances must NEVER overwrite relational balances —
+        // live TB derives from journal_entry_lines.
+        const createBalance = Number(a.balance ?? 0)
+        const fp = fingerprint({ ...mapped, balance: createBalance })
         if (!opts.force && hashes[code] === fp) { result.skipped++; continue }
 
         await prisma.accountCode.upsert({
           where: { code },
-          create: { id: uuidFromKey('account', code), ...mapped },
+          create: { id: uuidFromKey('account', code), ...mapped, balance: createBalance },
           update: mapped,
         })
         nextHashes[code] = fp

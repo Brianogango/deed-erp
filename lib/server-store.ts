@@ -177,6 +177,16 @@ export async function saveStoreKeys(entries: Record<string, string>): Promise<vo
           .then(m => m.mirrorStockReservationsToPrisma(entries['deed_stockReservations']))
           .catch(() => {})
       }
+      if (entries['deed_deposits'] || entries['deed_deposits_v1']) {
+        void import('./accounting/deposit-mirror')
+          .then(m => m.mirrorDepositsToPrisma(entries['deed_deposits'] || entries['deed_deposits_v1']))
+          .catch(() => {})
+      }
+      if (entries['deed_holdovers']) {
+        void import('./accounting/holdover-mirror')
+          .then(m => m.mirrorHoldoversToPrisma(entries['deed_holdovers']))
+          .catch(() => {})
+      }
     }
   } catch (err) {
     console.error('[server-store] saveStoreKeys error:', err)

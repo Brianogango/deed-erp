@@ -71,6 +71,7 @@ import JournalsTab from './accounting/JournalsTab'
 import ChartOfAccountsTab from './accounting/ChartOfAccountsTab'
 import GeneralLedgerTab from './accounting/GeneralLedgerTab'
 import PartnerLedgerTab from './accounting/PartnerLedgerTab'
+import { usePrismaAccountingReports, bootstrapCoaClient } from '@/hooks/usePrismaAccountingReports'
 
 // ═══════════════════════════════════════════════════════════════════════════
 // TYPES & CONSTANTS
@@ -356,6 +357,18 @@ function AccountingContent() {
       setReportTab(urlReport)
     }
   }, [searchParams, tab, reportTab])
+
+  // Persist CoA blob when missing (Contabo had no deed_accounts) — never wipes balances.
+  useEffect(() => {
+    if (!mounted) return
+    if (Array.isArray(accounts) && accounts.length > 0) return
+    void bootstrapCoaClient()
+      .then(() => showToast('Chart of Accounts bootstrapped (zero-balance template)'))
+      .catch(() => {})
+  }, [mounted, accounts, showToast])
+
+  const [tbSource, setTbSource] = useState<'blob' | 'prisma'>('prisma')
+  const prismaReports = usePrismaAccountingReports(tbSource === 'prisma' && reportTab === 'trial_balance')
 
   // ── Invoice / Bill state ────────────────────────────────────────────────────
   const [invFilter, setInvFilter] = useState('all')
@@ -1498,24 +1511,52 @@ function AccountingContent() {
             <div className="p-6 space-y-6"><AgeingReport title="Receivables ageing" rows={financeReports.arAgeing.rows} totals={financeReports.arAgeing.totals} /><AgeingReport title="Payables ageing" rows={financeReports.apAgeing.rows} totals={financeReports.apAgeing.totals} /></div>
           ) : activeTab === 'trial_balance' ? (
             <div className="p-6">
-              <div className="flex items-center justify-between mb-5">
+              <div className="flex items-center justify-between mb-5 gap-3 flex-wrap">
                 <div>
                   <h2 className="text-lg font-bold text-[var(--text-1)]">Trial balance</h2>
-                  <p className="text-xs text-[var(--text-3)]">Account balances from posted journals and opening balances.</p>
+                  <p className="text-xs text-[var(--text-3)]">
+                    {tbSource === 'prisma'
+                      ? 'KES-only from posted Prisma journal lines (no FX, no seed balances).'
+                      : 'Account balances from blob journals and opening balances.'}
+                  </p>
                 </div>
-                <span className={`badge ${Math.abs(financeReports.tbTotals.debit - financeReports.tbTotals.credit) < 0.01 ? 'badge-green' : 'badge-red'}`}>
-                  {Math.abs(financeReports.tbTotals.debit - financeReports.tbTotals.credit) < 0.01 ? 'Balanced' : 'Out of balance'}
-                </span>
+                <div className="flex items-center gap-2">
+                  <select
+                    className="form-select text-[11px] py-1.5"
+                    value={tbSource}
+                    onChange={e => setTbSource(e.target.value as 'blob' | 'prisma')}
+                    aria-label="Trial balance source"
+                  >
+                    <option value="prisma">Prisma (KES posted)</option>
+                    <option value="blob">Client blob</option>
+                  </select>
+                  <span className={`badge ${(tbSource === 'prisma' ? prismaReports.trialBalance?.balanced : Math.abs(financeReports.tbTotals.debit - financeReports.tbTotals.credit) < 0.01) ? 'badge-green' : 'badge-red'}`}>
+                    {(tbSource === 'prisma' ? prismaReports.trialBalance?.balanced : Math.abs(financeReports.tbTotals.debit - financeReports.tbTotals.credit) < 0.01) ? 'Balanced' : 'Out of balance'}
+                  </span>
+                </div>
               </div>
               <DataTable
                 tableId="finance-trial-balance"
                 hideSearch
                 perPage={100}
-                emptyMessage="No trial balance rows"
+                emptyMessage={tbSource === 'prisma' ? (prismaReports.loading ? 'Loading…' : 'No posted Prisma journal lines yet') : 'No trial balance rows'}
                 rowKey={row => row.id}
                 rows={[
-                  ...financeReports.trialBalance,
-                  { id: '__totals__', code: '', name: 'Totals', type: '', debit: financeReports.tbTotals.debit, credit: financeReports.tbTotals.credit },
+                  ...(tbSource === 'prisma'
+                    ? (prismaReports.trialBalance?.rows ?? [])
+                    : financeReports.trialBalance),
+                  {
+                    id: '__totals__',
+                    code: '',
+                    name: 'Totals',
+                    type: '',
+                    debit: tbSource === 'prisma'
+                      ? (prismaReports.trialBalance?.totals.debit ?? 0)
+                      : financeReports.tbTotals.debit,
+                    credit: tbSource === 'prisma'
+                      ? (prismaReports.trialBalance?.totals.credit ?? 0)
+                      : financeReports.tbTotals.credit,
+                  },
                 ]}
                 columns={[
                   { key: 'code', label: 'Code', priority: 1, width: '100px', render: row => <span className="font-mono text-xs">{row.code || '—'}</span>, accessor: row => row.code },

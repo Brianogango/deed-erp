@@ -2226,3 +2226,94 @@ model ApprovalRule {
 
   @@map("approval_rules")
 }
+
+model Deposit {
+  id            String    @id @default(uuid()) @db.Uuid
+  blobId        String?   @map("blob_id") @db.VarChar(80)
+  ref           String    @db.VarChar(40)
+  customerId    String?   @map("customer_id") @db.VarChar(80)
+  customerName  String?   @map("customer_name") @db.VarChar(200)
+  customerPhone String?   @map("customer_phone") @db.VarChar(40)
+  totalValue    Decimal   @default(0) @map("total_value") @db.Decimal(14, 2)
+  totalPaid     Decimal   @default(0) @map("total_paid") @db.Decimal(14, 2)
+  balance       Decimal   @default(0) @db.Decimal(14, 2)
+  status        String    @default("active") @db.VarChar(30)
+  notes         String?
+  dueDate       DateTime? @map("due_date") @db.Date
+  completedAt   DateTime? @map("completed_at")
+  cancelledAt   DateTime? @map("cancelled_at")
+  cancelReason  String?   @map("cancel_reason")
+  createdBy     String?   @map("created_by") @db.VarChar(80)
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  items    DepositItem[]
+  payments DepositPayment[]
+
+  @@unique([ref], map: "uq_deposits_ref")
+  @@index([blobId], map: "idx_deposits_blob")
+  @@index([status], map: "idx_deposits_status")
+  @@map("deposits")
+}
+
+model DepositItem {
+  id          String  @id @default(uuid()) @db.Uuid
+  depositId   String  @map("deposit_id") @db.Uuid
+  productId   String? @map("product_id") @db.VarChar(80)
+  productName String? @map("product_name") @db.VarChar(200)
+  sku         String? @db.VarChar(80)
+  qty         Int     @default(1)
+  unitPrice   Decimal @default(0) @map("unit_price") @db.Decimal(14, 2)
+  lineTotal   Decimal @default(0) @map("line_total") @db.Decimal(14, 2)
+  sortOrder   Int     @default(0) @map("sort_order")
+
+  deposit Deposit @relation(fields: [depositId], references: [id], onDelete: Cascade)
+
+  @@index([depositId], map: "idx_deposit_items_deposit")
+  @@map("deposit_items")
+}
+
+model DepositPayment {
+  id         String   @id @default(uuid()) @db.Uuid
+  depositId  String   @map("deposit_id") @db.Uuid
+  blobId     String?  @map("blob_id") @db.VarChar(80)
+  amount     Decimal  @default(0) @db.Decimal(14, 2)
+  method     String   @default("cash") @db.VarChar(40)
+  paymentRef String?  @map("payment_ref") @db.VarChar(80)
+  recordedBy String?  @map("recorded_by") @db.VarChar(80)
+  paidAt     DateTime @default(now()) @map("paid_at")
+
+  deposit Deposit @relation(fields: [depositId], references: [id], onDelete: Cascade)
+
+  @@index([depositId], map: "idx_deposit_payments_deposit")
+  @@map("deposit_payments")
+}
+
+model Holdover {
+  id               String    @id @default(uuid()) @db.Uuid
+  blobId           String?   @map("blob_id") @db.VarChar(80)
+  ref              String    @db.VarChar(40)
+  customerId       String?   @map("customer_id") @db.VarChar(80)
+  customerName     String?   @map("customer_name") @db.VarChar(200)
+  customerPhone    String?   @map("customer_phone") @db.VarChar(40)
+  productId        String?   @map("product_id") @db.VarChar(80)
+  productName      String?   @map("product_name") @db.VarChar(200)
+  serialId         String?   @map("serial_id") @db.VarChar(80)
+  serialNumber     String?   @map("serial_number") @db.VarChar(120)
+  deviceCondition  String?   @map("device_condition") @db.VarChar(40)
+  purpose          String?   @db.VarChar(40)
+  status           String    @default("active") @db.VarChar(30)
+  issuedAt         DateTime? @map("issued_at")
+  dueAt            DateTime? @map("due_at")
+  returnedAt       DateTime? @map("returned_at")
+  returnCondition  String?   @map("return_condition") @db.VarChar(40)
+  notes            String?
+  createdBy        String?   @map("created_by") @db.VarChar(80)
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+
+  @@unique([ref], map: "uq_holdovers_ref")
+  @@index([blobId], map: "idx_holdovers_blob")
+  @@index([status], map: "idx_holdovers_status")
+  @@map("holdovers")
+}

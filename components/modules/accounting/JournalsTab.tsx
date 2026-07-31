@@ -1,11 +1,12 @@
 'use client'
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { useAccounting } from './AccountingContext'
 import { fmtDate, fmtKes, type JournalEntry } from '@/lib/store'
 import { downloadPdf } from '@/lib/pdf'
 import type { PdfLine } from '@/lib/pdf'
 import { Badge } from '@/components/ui'
 import { DataTable, type ColumnDef } from '@/components/data-table'
+import { usePrismaAccountingReports } from '@/hooks/usePrismaAccountingReports'
 
 export default function JournalsTab() {
   const {
@@ -14,16 +15,21 @@ export default function JournalsTab() {
     setViewJournal, canViewJournals, hdr,
   } = useAccounting()
 
+  const [source, setSource] = useState<'blob' | 'prisma'>('prisma')
+  const prismaReports = usePrismaAccountingReports(source === 'prisma' && canViewJournals)
+
+  const activeJournals = source === 'prisma' ? prismaReports.journals : journalEntries
+
   const filteredJournals = useMemo(() => {
     const q = journalRef.toLowerCase()
-    return journalEntries.filter(e => {
+    return activeJournals.filter(e => {
       if (invFilter !== 'all' && e.status !== invFilter) return false
       if (journalDate && e.date !== journalDate) return false
       if (journalSource !== 'all' && e.source !== journalSource) return false
       if (q && !e.ref.toLowerCase().includes(q)) return false
       return true
     })
-  }, [journalEntries, invFilter, journalDate, journalSource, journalRef])
+  }, [activeJournals, invFilter, journalDate, journalSource, journalRef])
 
   const buildJournalPdf = (e: JournalEntry): PdfLine[] => hdr([
     { text: `Reference: ${e.ref}`,          x: 40, y: 710, size: 10, bold: true },
@@ -85,6 +91,16 @@ export default function JournalsTab() {
   return (
     <>
       <div className="flex items-center gap-2 px-4 py-2.5 border-b flex-wrap" style={{ borderColor: 'var(--border-lt)' }}>
+        <select
+          className="form-select text-[11px] py-1.5"
+          style={{ width: 160 }}
+          value={source}
+          onChange={e => setSource(e.target.value as 'blob' | 'prisma')}
+          aria-label="Journal data source"
+        >
+          <option value="prisma">Prisma (KES posted)</option>
+          <option value="blob">Client blob</option>
+        </select>
         <input className="form-input text-[11px] py-1.5" style={{ width: 140 }} type="date"
           value={journalDate} onChange={e => setJournalDate(e.target.value)} />
         <select className="form-select text-[11px] py-1.5" style={{ width: 130 }}
@@ -93,11 +109,21 @@ export default function JournalsTab() {
           <option value="payroll">Payroll</option>
           <option value="refund">Refund</option>
           <option value="sales">Sales</option>
+          <option value="invoice">Invoice</option>
+          <option value="expense">Expense</option>
           <option value="purchase">Purchase</option>
           <option value="manual">Manual</option>
+          <option value="stock_receipt">Stock receipt</option>
+          <option value="stock_delivery">Stock delivery</option>
         </select>
         <input className="form-input text-[11px] py-1.5" style={{ width: 200 }}
           placeholder="Filter by reference..." value={journalRef} onChange={e => setJournalRef(e.target.value)} />
+        {source === 'prisma' && prismaReports.loading && (
+          <span className="text-[11px] text-t3">Loading posted journals…</span>
+        )}
+        {source === 'prisma' && prismaReports.error && (
+          <span className="text-[11px] text-red-500">{prismaReports.error}</span>
+        )}
       </div>
       <DataTable
         tableId="journal-entries"
@@ -105,7 +131,7 @@ export default function JournalsTab() {
         rows={filteredJournals}
         rowKey={e => e.id}
         hideSearch
-        emptyMessage="No journal entries found"
+        emptyMessage={source === 'prisma' ? 'No posted Prisma journals yet' : 'No journal entries found'}
         onRowClick={e => setViewJournal(e)}
         rowActions={e => (
           <div className="flex gap-1">

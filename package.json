@@ -9,6 +9,7 @@
     "start": "npm run prisma:generate && next start",
     "migrate:inventory-foundation:safe": "node scripts/run-safe-inventory-foundation.mjs",
     "migrate:accounting-foundation:safe": "node scripts/run-safe-accounting-foundation.mjs",
+    "migrate:deposits-holdovers:safe": "node scripts/run-safe-deposits-holdovers.mjs",
     "backfill:accounting": "node scripts/backfill-accounting-to-prisma.mjs",
     "screenshots:core": "node scripts/capture-visual-regression.mjs",
     "analyze": "ANALYZE=true npm run build",

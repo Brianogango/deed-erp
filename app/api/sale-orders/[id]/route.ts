@@ -313,6 +313,21 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
       data,
       include: { client: true, items: true },
     })
+
+    // Prefer SaleOrderService for confirm/cancel side-effects (reservation release + audit).
+    // Workflow already enforced above; service is idempotent on status.
+    try {
+      const { SaleOrderService } = await import('@/lib/services/sale-order.service')
+      const from = normalizeSaleStatus(existing.status)
+      const to = body.status !== undefined ? normalizeSaleStatus(body.status) : from
+      if (to === 'sale' && from !== 'sale') {
+        await SaleOrderService.confirm(params.id, session.user.id, session.user.role).catch(() => {})
+      }
+      if (to === 'cancelled' && from !== 'cancelled') {
+        await SaleOrderService.cancel(params.id, session.user.id).catch(() => {})
+      }
+    } catch { /* service optional during soak */ }
+
     void broadcastSaleOrders()
     return NextResponse.json(mapSaleOrderToClient(order))
   })

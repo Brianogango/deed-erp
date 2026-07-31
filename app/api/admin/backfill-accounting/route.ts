@@ -4,15 +4,15 @@ import { loadAppState } from '@/lib/server-store'
 import { mirrorAccountsToPrisma, mirrorJournalEntriesToPrisma } from '@/lib/accounting/account-journal-mirror'
 import { mirrorStockReservationsToPrisma } from '@/lib/inventory/reservation-mirror'
 import { mirrorRepairsToPrisma } from '@/lib/repair-mirror'
+import { mirrorDepositsToPrisma } from '@/lib/accounting/deposit-mirror'
+import { mirrorHoldoversToPrisma } from '@/lib/accounting/holdover-mirror'
+import { bootstrapChartOfAccounts } from '@/lib/accounting/coa-bootstrap'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 300
 
 /**
  * Idempotent dual-write backfill. NEVER deletes app_state.
- * POST /api/admin/backfill-accounting
- * body: { force?: boolean, sections?: Array<'accounts'|'journals'|'reservations'|'repairs'> }
- *
  * Auth: director session, or x-internal-secret (same as backfill-repairs).
  */
 export async function POST(request: NextRequest) {
@@ -31,13 +31,16 @@ export async function POST(request: NextRequest) {
   const force = !!body.force
   const sections: string[] = Array.isArray(body.sections)
     ? body.sections
-    : ['accounts', 'journals', 'reservations', 'repairs']
+    : ['coa', 'accounts', 'journals', 'reservations', 'repairs', 'deposits', 'holdovers']
 
   const state = await loadAppState([
     'deed_accounts',
     'deed_journalEntries',
     'deed_stockReservations',
     'deed_repairs_v2',
+    'deed_deposits',
+    'deed_deposits_v1',
+    'deed_holdovers',
   ])
 
   const result: Record<string, unknown> = {
@@ -46,10 +49,17 @@ export async function POST(request: NextRequest) {
       journals: Array.isArray(state.deed_journalEntries) ? state.deed_journalEntries.length : 0,
       reservations: Array.isArray(state.deed_stockReservations) ? state.deed_stockReservations.length : 0,
       repairs: Array.isArray(state.deed_repairs_v2) ? state.deed_repairs_v2.length : 0,
+      deposits: Array.isArray(state.deed_deposits)
+        ? state.deed_deposits.length
+        : (Array.isArray(state.deed_deposits_v1) ? state.deed_deposits_v1.length : 0),
+      holdovers: Array.isArray(state.deed_holdovers) ? state.deed_holdovers.length : 0,
     },
     note: 'app_state keys were not deleted',
   }
 
+  if (sections.includes('coa')) {
+    result.coa = await bootstrapChartOfAccounts()
+  }
   if (sections.includes('accounts')) {
     result.accounts = await mirrorAccountsToPrisma(state.deed_accounts ?? [], { force })
   }
@@ -61,6 +71,12 @@ export async function POST(request: NextRequest) {
   }
   if (sections.includes('repairs')) {
     result.repairs = await mirrorRepairsToPrisma(state.deed_repairs_v2 ?? [], { force })
+  }
+  if (sections.includes('deposits')) {
+    result.deposits = await mirrorDepositsToPrisma(state.deed_deposits ?? state.deed_deposits_v1 ?? [], { force })
+  }
+  if (sections.includes('holdovers')) {
+    result.holdovers = await mirrorHoldoversToPrisma(state.deed_holdovers ?? [], { force })
   }
 
   return NextResponse.json(result)
