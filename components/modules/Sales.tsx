@@ -68,6 +68,8 @@ import { DataTable, type ColumnDef } from '@/components/data-table'
 import { Fa } from '@/components/icons'
 import { downloadCommercialPdf, openCommercialPdf, type CommercialPdfInput } from '@/lib/commercial-pdf'
 import { resolveListPrice } from '@/lib/pricing/pricelist'
+import Chatter from '@/components/erp/Chatter'
+import { SalesRecordHeader } from '@/components/modules/sales/SalesRecordHeader'
 import { finishUxTask, startUxTask, trackUxEvent } from '@/lib/ux-telemetry'
 import {
   SALE_STATUS_BAR,
@@ -313,7 +315,7 @@ function SalesContent() {
   const [newNotes, setNewNotes] = useState('')
   const [newCustomerRef, setNewCustomerRef] = useState('')
   const [newSalesTeam, setNewSalesTeam] = useState('')
-  const [newPricelist, setNewPricelist] = useState('')
+  const [newPricelist, setNewPricelist] = useState('RETAIL')
   const [newInvoiceAddress, setNewInvoiceAddress] = useState('')
   const [newDeliveryAddress, setNewDeliveryAddress] = useState('')
   const [newDraftLines, setNewDraftLines] = useState<DraftLine[]>([])
@@ -674,6 +676,18 @@ function SalesContent() {
   }, [view, quoteDraftKey])
 
   useEffect(() => {
+    if (view !== 'new' || !systemSettings.salesPricelists) return
+    setNewDraftLines(prev => prev.map(line => {
+      if (line.type === 'section' || !line.productId) return line
+      const product = products.find(p => p.id === line.productId)
+      if (!product) return line
+      const qty = Math.max(1, Number(line.qty) || 1)
+      const priced = resolveListPrice({ product, pricelist: newPricelist || 'RETAIL', qty })
+      return { ...line, unitPrice: String(priced.unitPrice) }
+    }))
+  }, [newPricelist, view, systemSettings.salesPricelists, products])
+
+  useEffect(() => {
     if (view !== 'new') return
     if (draftAutosaveTimerRef.current) clearTimeout(draftAutosaveTimerRef.current)
     draftAutosaveTimerRef.current = setTimeout(() => {
@@ -734,7 +748,13 @@ function SalesContent() {
       const qty = Number(l.qty) || 1
       // A quotation records commercial demand; it does not reserve stock.
       // Availability is enforced later when the confirmed SO is prepared for delivery.
-      const unitPrice = Math.max(0, Number(l.unitPrice) || product.salePrice || 0)
+      const priced = resolveListPrice({
+        product,
+        pricelist: newPricelist || 'RETAIL',
+        qty,
+        customPrice: Number(l.unitPrice) || undefined,
+      })
+      const unitPrice = Math.max(0, priced.unitPrice)
       const discount = Number(l.discount) || 0
       const subtotal = Math.round(unitPrice * qty * (1 - discount / 100))
       builtLines.push({
@@ -1229,77 +1249,34 @@ function SalesContent() {
                   {/* Order form body */}
                   {activeOrder && (
                     <div className="p-6 flex flex-col gap-6">
-                      {/* Header: ref + Odoo status bar + smart buttons */}
-                      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
-                        <div>
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <h2 className="text-xl font-bold text-[var(--text-1)]">{activeOrder.ref}</h2>
-                            {activeOrder.approvalStatus === 'pending' && (
-                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">Awaiting Approval</span>
-                            )}
-                            {activeOrder.approvalStatus === 'approved' && isQuotationStage(activeOrder.status) && (
-                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">Approved — ready to confirm</span>
-                            )}
-                            {activeOrder.approvalStatus === 'rejected' && isQuotationStage(activeOrder.status) && (
-                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-50 text-red-600 border border-red-200">Approval Rejected — revise</span>
-                            )}
-                            {activeOrder.locked && (
-                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-gray-100 text-gray-600 border border-gray-200">Locked</span>
-                            )}
-                          </div>
-                          <p className="text-xs text-[var(--text-3)] mt-0.5">{activeOrder.customerName}</p>
-                          {activeOrder.status === 'quotation_sent' && activeOrder.sentAt && (
-                            <p className="text-[10px] text-[var(--text-4)] mt-0.5">Sent {fmtDate(activeOrder.sentAt)}{activeOrder.sentTo ? ` to ${activeOrder.sentTo}` : ''}{activeOrder.sentByName ? ` by ${activeOrder.sentByName}` : ''}</p>
-                          )}
-                          {activeOrder.status === 'sale' && (
-                            <p className="text-[10px] text-[var(--text-4)] mt-0.5">
-                              Invoice status: <strong className={activeInvoiceStatus === 'to_invoice' ? 'text-amber-600' : activeInvoiceStatus === 'invoiced' ? 'text-emerald-600' : activeInvoiceStatus === 'upselling' ? 'text-violet-600' : ''}>{SO_INVOICE_STATUS_LABELS[activeInvoiceStatus]}</strong>
-                              {activeOrder.confirmedAt ? ` · confirmed ${fmtDate(activeOrder.confirmedAt)}${activeOrder.confirmedByName ? ` by ${activeOrder.confirmedByName}` : ''}` : ''}
-                            </p>
-                          )}
-                        </div>
-                        <div className="flex flex-col items-end gap-3">
-                          {activeOrder.status === 'cancelled' ? (
-                            <span className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-[11px] font-bold uppercase tracking-wider bg-red-50 text-red-600 border border-red-200">
-                              <Fa icon={faBan} className="text-[10px]" /> Cancelled
-                            </span>
-                          ) : (
-                            <StatusStepper steps={SALE_STATUS_BAR} current={activeOrder.status} labels={SALE_STATUS_LABELS} />
-                          )}
-                          {/* Smart buttons — related records */}
-                          <div className="flex items-center gap-2 flex-wrap justify-end">
-                            {activeDeliveries.length > 0 ? (
-                              <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-700 text-[11px] font-semibold hover:bg-emerald-100 transition-colors" onClick={openDeliveryView}>
-                                <Fa icon={faBoxOpen} className="text-[10px]" /><span>Delivery: {activeDeliveries.length}</span>
-                              </button>
-                            ) : activeOrder.status === 'sale' ? (
-                              <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-blue-200 bg-blue-50 text-blue-700 text-[11px] font-semibold hover:bg-blue-100 transition-colors" onClick={openDeliveryView}>
-                                <Fa icon={faTruck} className="text-[10px]" /><span>Record Delivery</span>
-                              </button>
-                            ) : null}
-                            {canSeeFinanceRecords && activeInvoices.length > 0 && (
-                              <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-violet-200 bg-violet-50 text-violet-700 text-[11px] font-semibold hover:bg-violet-100 transition-colors" onClick={() => router.push('/finance?tab=invoices')}>
-                                <Fa icon={faFileInvoice} className="text-[10px]" /><span>Invoices: {activeInvoices.length}</span>
-                              </button>
-                            )}
-                            {canSeeFinanceRecords && activePayments.length > 0 && (
-                              <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-teal-200 bg-teal-50 text-teal-700 text-[11px] font-semibold hover:bg-teal-100 transition-colors" onClick={() => router.push('/finance?tab=invoices')}>
-                                <Fa icon={faMoneyBillWave} className="text-[10px]" /><span>Payments: {activePayments.length}</span>
-                              </button>
-                            )}
-                            {canSeeReturns && activeReturns.length > 0 && (
-                              <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-orange-200 bg-orange-50 text-orange-700 text-[11px] font-semibold hover:bg-orange-100 transition-colors" onClick={() => router.push('/aftersales?tab=returns')}>
-                                <Fa icon={faRotateLeft} className="text-[10px]" /><span>Returns: {activeReturns.length}</span>
-                              </button>
-                            )}
-                            {activeOrder.lines.length > 0 && (
-                              <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-gray-200 bg-gray-50 text-gray-600 text-[11px] font-semibold hover:bg-gray-100 transition-colors" onClick={() => previewSalesDocument(activeOrder, isQuotationStage(activeOrder.status) ? 'Quotation' : 'Sale Order', isQuotationStage(activeOrder.status) ? 'QUOTATION' : 'SALES ORDER')}>
-                                <Fa icon={faFileAlt} className="text-[10px]" /><span>Customer Preview</span>
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                      </div>
+                      <SalesRecordHeader
+                        order={activeOrder}
+                        invoiceStatus={activeInvoiceStatus}
+                        deliveriesCount={activeDeliveries.length}
+                        invoicesCount={activeInvoices.length}
+                        paymentsCount={activePayments.length}
+                        returnsCount={activeReturns.length}
+                        canSeeFinance={canSeeFinanceRecords}
+                        canSeeReturns={canSeeReturns}
+                        onBackToList={backToList}
+                        onOpenDelivery={openDeliveryView}
+                        onOpenInvoices={() => router.push('/finance?tab=invoices')}
+                        onOpenReturns={() => router.push('/aftersales?tab=returns')}
+                        onPreview={() => previewSalesDocument(
+                          activeOrder,
+                          isQuotationStage(activeOrder.status) ? 'Quotation' : 'Sale Order',
+                          isQuotationStage(activeOrder.status) ? 'QUOTATION' : 'SALES ORDER',
+                        )}
+                        onSendQuote={() => openSendQuoteModal(activeOrder)}
+                        onConfirm={() => {
+                          if (!activeOrder.lines.length) {
+                            showToast('Add at least one product before confirming', 'error')
+                            return
+                          }
+                          confirmSO(activeOrder.id)
+                        }}
+                        onStepBlocked={msg => showToast(msg, 'error')}
+                      />
 
                       {/* Order info card — editable through Quotation and
                           Quotation Sent (Odoo keeps sent quotations editable,
@@ -1656,6 +1633,14 @@ function SalesContent() {
                           )}
                         </div>
                       </div>
+
+                      <Chatter
+                        model="sale_order"
+                        recordId={activeOrder.id}
+                        staffName={currentUser?.name || 'Staff'}
+                        title="Internal Notes"
+                        compact
+                      />
 
                       {/* Activity */}
                       <div className="flex flex-col gap-3">

@@ -5,6 +5,8 @@ import { useCrmStore, OpportunityStage, LeadSource, fmtKes, fmtDate } from '@/li
 import { Badge, Modal, Field, Input, Select, Textarea, PanelHeader, ModuleSkeleton, SlidePanel, useMounted, TabBar, ModuleHeader } from '@/components/ui'
 import { PrimaryActionButton } from '@/components/erp'
 import ClientDetail from '@/components/crm/ClientDetail'
+import LeadsPanel from '@/components/crm/LeadsPanel'
+import { PivotView } from '@/components/erp/PivotView'
 import { DataTable, type ColumnDef } from '@/components/data-table'
 import { Fa } from '@/components/icons'
 import { 
@@ -12,7 +14,7 @@ import {
   faFileSignature, faScrewdriverWrench, faTriangleExclamation, faChartLine, faPlus
 } from '@fortawesome/free-solid-svg-icons'
 
-type Tab = 'pipeline' | 'opportunities' | 'companies' | 'contacts' | 'activities' | 'contracts' | 'sla'
+type Tab = 'pipeline' | 'opportunities' | 'companies' | 'contacts' | 'activities' | 'contracts' | 'sla' | 'leads'
 type View = 'kanban' | 'list' | 'detail'
 
 const STAGE_ORDER: OpportunityStage[] = ['prospecting', 'qualification', 'proposal', 'negotiation', 'closed_won', 'closed_lost']
@@ -692,6 +694,7 @@ function CRMContent() {
       <TabBar
         tabs={[
           { id: 'pipeline', label: 'Pipeline' },
+          ...(systemSettings.crmLeads ? [{ id: 'leads' as const, label: 'Leads' }] : []),
           { id: 'companies', label: 'Companies' },
           { id: 'contacts', label: 'Contacts' },
           { id: 'activities', label: 'Activities' },
@@ -761,6 +764,31 @@ function CRMContent() {
                 <span className="text-[10px] text-t3 w-20 text-right">{rep.count} deal{rep.count !== 1 ? 's' : ''}</span>
               </div>
             ))}
+          </div>
+        )}
+
+        {/* Sales analysis pivot */}
+        {isAdmin && opportunities.length > 0 && (
+          <div className="card p-4">
+            <div className="flex items-center gap-2 pb-2 mb-2 border-b border-[var(--border-lt)]">
+              <div className="w-1.5 h-4 rounded-full flex-shrink-0" style={{ background: 'var(--navy)' }} />
+              <p className="text-[10px] uppercase tracking-wider font-semibold text-[var(--navy)]">Sales analysis — stage × owner (KES)</p>
+            </div>
+            <PivotView
+              data={opportunities
+                .filter(o => effectiveOwner === 'all' ? true : o.ownerId === effectiveOwner)
+                .map(o => ({
+                  stage: stageLabels[o.stage] ?? o.stage,
+                  owner: o.ownerName ?? 'Unassigned',
+                  expectedValue: o.expectedValue,
+                }))}
+              rowKey="stage"
+              colKey="owner"
+              valueKey="expectedValue"
+              rowLabel="Stage"
+              colLabel="Owner"
+              formatValue={n => fmtKes(n)}
+            />
           </div>
         )}
 
@@ -969,6 +997,21 @@ function CRMContent() {
           </Modal>
         )}
         </div>{/* pipeline content end */}
+      </div>
+    )
+  }
+
+  if (tab === 'leads' && systemSettings.crmLeads) {
+    return (
+      <div className="mod-page">
+        {moduleHeader}
+        <div className="mod-body p-3 sm:p-4 flex flex-col gap-4">
+          <LeadsPanel
+            showToast={showToast}
+            salesReps={salesReps}
+            currentUserId={currentUserId ?? undefined}
+          />
+        </div>
       </div>
     )
   }

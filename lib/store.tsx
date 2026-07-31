@@ -10,6 +10,12 @@ import type { CreateUserInput, ModuleId as AuthModuleId, PublicUser, UpdateUserI
 import { calcStockByLocation as _calcStockByLocation, upsertBulkStock as _upsertBulkStock, aggregatePayroll } from '@/lib/business-logic'
 import { calculatePayroll } from '@/lib/payroll'
 import { APPROVAL_RULES, createApprovalRequest, getPendingApprovals, processApproval, validateSalesOrderCreation } from '@/lib/sales-approvals'
+import {
+  advanceExpenseApproval,
+  buildExpenseApprovalChain,
+  canUserApproveExpenseStep,
+  expenseChainIsComplete,
+} from '@/lib/expense-approval-chain'
 import type { ApprovalRequest, ApprovalType, StockReservation } from '@/lib/sales-flow-types'
 import { LEAVE_ENTITLEMENTS, NOTICE_EXEMPT_TYPES, CALENDAR_DAY_TYPES, calcWorkingDays, calcCalendarDays, noticeDaysGiven, requiredNotice, decemberClosureDays } from '@/lib/leave-utils'
 import type { StoreLeaveType } from '@/lib/leave-utils'
@@ -579,7 +585,7 @@ export const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
   crmPipelineStages: ['Inquiry Received', 'Assigned', 'Contacted', 'Qualified', 'Needs Confirmed', 'Quote Sent', 'Follow-up', 'Won', 'Lost'],
   crmEnforceNextActivity: true, crmAutoAssignLeads: false, crmAutoFollowUpAfterQuote: true,
   salesQuotationTemplates: true, salesOptionalProducts: true, salesDigitalSignature: false,
-  salesOnlineAcceptance: false, salesPricelists: false, salesDiscountControl: true, salesConfirmedQuotesToOrders: true,
+  salesOnlineAcceptance: false, salesPricelists: true, salesDiscountControl: true, salesConfirmedQuotesToOrders: true,
   salesLockConfirmed: true,
   invProductsMasterOnly: true, invNoDirectStockEdits: true, invMultiStepRoutes: true,
   invStorageLocations: ['Incoming', 'Workshop', 'Ready for Sale', 'Faulty / Scrap'],
@@ -825,6 +831,7 @@ export interface SaleOrder {
   total: number
   amountPaid: number
   notes?: string
+  lockVersion?: number
   createdById?: string
   createdByUserId?: string
   createdByName?: string
@@ -1197,7 +1204,7 @@ export interface RiderWeeklyPay {
 // Enhanced Purchase Order Line with serial tracking
 export interface POLine {
   id: string; productId: string; productName: string
-  qty: number; qtyReceived: number; unitPrice: number; taxRate: number; subtotal: number
+  qty: number; qtyReceived: number; qtyBilled?: number; unitPrice: number; taxRate: number; subtotal: number
   requiresSerial: boolean
   importedSerials?: string[]   // serials pre-loaded from CSV import (auto-fills GRN)
   specs?: string               // product specs from import (e.g. "Intel i5, 8GB RAM, 512GB SSD")
@@ -1212,6 +1219,7 @@ export interface PurchaseOrder {
   date: string; expectedDate: string
   lines: POLine[]; subtotal: number; taxTotal: number; total: number
   billId?: string; notes: string; receiptIds: string[]
+  lockVersion?: number
   // Repair procurement link — set when auto-created from a repair procurement request
   repairId?: string; repairRef?: string; procurementRequestId?: string
 }
@@ -2439,6 +2447,13 @@ export type ExpenseCategory = typeof EXPENSE_CATEGORIES[number]['value']
 export type ExpensePaymentMethod = 'reimbursement' | 'petty_cash' | 'mpesa_company' | 'company_card'
 export type ExpenseStatus = 'submitted' | 'approved' | 'rejected' | 'reimbursed'
 
+export type ExpenseApprovalStep = {
+  role: string
+  status: 'pending' | 'approved' | 'rejected'
+  by?: string
+  at?: string
+}
+
 export interface Expense {
   id: string
   ref: string                       // EXP/0001
@@ -2451,6 +2466,7 @@ export interface Expense {
   amount: number
   paymentMethod: ExpensePaymentMethod
   status: ExpenseStatus
+  approvalChain?: ExpenseApprovalStep[]
   // Receipt proof
   receiptFileName?: string
   receiptFileType?: string
@@ -2617,7 +2633,7 @@ export interface AppState {
   // Payments & Credit
   payments: Payment[]
   customerCredits: CustomerCredit[]
-  createPayment: (customerId: string, customerName: string, amount: number, method: Payment['method'], reference: string, notes?: string) => Payment
+  createPayment: (customerId: string, customerName: string, amount: number, method: Payment['method'], reference: string, notes?: string, forcedReceiptNumber?: string) => Payment
   allocatePaymentToInvoice: (paymentId: string, invoiceId: string, amount: number) => void
   generateReceipt: (paymentId: string) => void
   getCustomerCreditBalance: (customerId: string) => number
@@ -2882,19 +2898,22 @@ export interface AppState {
   // Invoices
   createManualInvoice: (type: InvoiceType, partnerId: string, partnerName: string, dueDate: string, lines: { desc: string; qty: string; price: string; tax: string }[], vatRate: number, notes?: string, documentDate?: string) => Invoice
   updateInvoice: (id: string, p: Partial<Invoice>) => void
-  postInvoice: (id: string) => void
+  postInvoice: (id: string, forcedRef?: string) => void
   /** Finance dispute flag — Odoo "Blocked" payment status. */
   setInvoicePaymentBlocked: (id: string, blocked: boolean) => void
   registerPayment: (invoiceId: string, amount: number, method?: string, bankAccountId?: string, reference?: string, paymentDate?: string) => void
   resetInvoiceToDraft: (id: string) => void
-  cancelInvoice: (id: string) => void
+  cancelInvoice: (id: string, forcedCreditRef?: string) => void
   deleteInvoice: (id: string) => void
 
   // Audit logs
   addAuditLog: (action: string, documentRef: string, details: string) => void
 
+  /** Fetch a server-allocated document ref; falls back to local docSeq on failure. */
+  allocateDocRef: (prefix: string) => Promise<string>
+
   // Purchase Orders
-  createPO: (vendorId: string, vendorName: string, initial?: Partial<Pick<PurchaseOrder, 'lines' | 'expectedDate' | 'notes'>>) => PurchaseOrder
+  createPO: (vendorId: string, vendorName: string, initial?: Partial<Pick<PurchaseOrder, 'lines' | 'expectedDate' | 'notes'>>, forcedRef?: string) => PurchaseOrder
   updatePO: (id: string, p: Partial<PurchaseOrder>) => void
   addPOLine: (poId: string, product: Product, qty: number, unitPrice: number, taxRate?: number) => void
   removePOLine: (poId: string, lineId: string) => void
@@ -2904,7 +2923,7 @@ export interface AppState {
   revertPOToDraft: (id: string) => void
   confirmPO: (id: string) => void
   // Create receipt from PO (opens receiving dialog)
-  createReceiptFromPO: (poId: string) => Receipt | null
+  createReceiptFromPO: (poId: string, forcedRef?: string) => Receipt | null
   // Validate receipt — the CRITICAL stock entry step
   // serialAccessories: map of serial string → accessories array (e.g. { 'SN001': ['Charger','Bag'] })
   // serialIssues: map of serial string → issue description (non-empty = received with issues → refurbishment)
@@ -3056,7 +3075,7 @@ export interface AppState {
   cancelReservation: (referenceId: string, reason: string) => void
   
   // Delivery & Fulfillment
-  createDeliveryFromSO: (salesOrderId: string) => Delivery | null
+  createDeliveryFromSO: (salesOrderId: string, forcedRef?: string) => Delivery | null
   confirmDeliveryWithStockDeduction: (deliveryId: string) => void
   createInvoiceFromDelivery: (deliveryId: string) => Invoice | null
   
@@ -4589,6 +4608,13 @@ export function StoreProvider({
   const [bankAccounts, setBankAccountsState] = useLS<BankAccount[]>('deed_bankAccounts', DEFAULT_BANK_ACCOUNTS)
   const [companySettings, setCompanySettings] = useLS<CompanySettings>('deed_companySettings', DEFAULT_COMPANY_SETTINGS)
   const [systemSettings, setSystemSettings] = useLS<SystemSettings>('deed_systemSettings', DEFAULT_SYSTEM_SETTINGS)
+  const [dbApprovalRules, setDbApprovalRules] = useState<Array<{ approvalType: string; thresholds: { maxValue: number; requiredRoles: string[] }[]; isActive: boolean }>>([])
+  useEffect(() => {
+    fetch('/api/settings/approval-rules')
+      .then(r => r.ok ? r.json() : [])
+      .then(data => { if (Array.isArray(data)) setDbApprovalRules(data) })
+      .catch(() => {})
+  }, [])
   // One-time bump: previous default was 100_000 with no settings UI; raise stored value to 1_000_000.
   useEffect(() => {
     if (systemSettings.accAdminOfficerInvoiceLimitKes === 100000) {
@@ -5519,11 +5545,11 @@ const storeCtx: AppState = {
     // Payments & Credit
     payments,
     customerCredits,
-    createPayment: (customerId, customerName, amount, method, reference, notes) => {
+    createPayment: (customerId, customerName, amount, method, reference, notes, forcedReceiptNumber) => {
       const user = currentUser()
       const payment: Payment = {
         id: uid(), ref: seq('PAY', 'rec'), customerId, customerName, amount, method,
-        reference, receiptNumber: docSeq('RCT'), invoices: [], status: 'cleared',
+        reference, receiptNumber: forcedReceiptNumber ?? docSeq('RCT'), invoices: [], status: 'cleared',
         receivedBy: user?.name ?? 'System', receivedDate: now(), clearedDate: now(),
         accountingDate: now(), notes
       }
@@ -5935,6 +5961,11 @@ const storeCtx: AppState = {
     submitExpense: (e) => {
       const user = currentUser()
       if (!user) { showToast('Please log in to continue', 'error'); return null }
+      const expenseRule = dbApprovalRules.find(r => r.approvalType === 'expense' && r.isActive)
+      const approvalChain = buildExpenseApprovalChain(
+        Number(e.amount) || 0,
+        expenseRule?.thresholds,
+      )
       // Strip receiptDataUrl from the expense object saved in deed_expenses.
       // Receipts are stored separately under expense_receipt_<id> via the API so
       // the deed_expenses blob stays small and loads instantly.
@@ -5947,6 +5978,7 @@ const storeCtx: AppState = {
         submittedByName: user.name,
         submittedDate: now(),
         status: 'submitted',
+        approvalChain,
         createdAt: now(),
       }
       // Upload the receipt blob separately (non-blocking)
@@ -5984,6 +6016,62 @@ const storeCtx: AppState = {
       const expense = expenses.find(e => e.id === id)
       if (!expense) return
       if (expense.status === 'reimbursed') { showToast('Reimbursed expenses cannot be reviewed again', 'error'); return }
+
+      const chain = expense.approvalChain
+      if (chain?.length) {
+        if (!canUserApproveExpenseStep(user.role, chain)) {
+          const pending = chain.find(s => s.status === 'pending')
+          showToast(`This step requires ${pending?.role?.replace('_', ' ') ?? 'another approver'}`, 'error')
+          return
+        }
+        const nextChain = advanceExpenseApproval({
+          chain,
+          approved,
+          reviewerRole: user.role,
+          reviewerName: user.name,
+        })
+        const fullyApproved = approved && expenseChainIsComplete(nextChain)
+        const reviewedExpense: Expense = {
+          ...expense,
+          approvalChain: nextChain,
+          status: !approved ? 'rejected' : fullyApproved ? 'approved' : 'submitted',
+          reviewedByUserId: fullyApproved || !approved ? user.id : expense.reviewedByUserId,
+          reviewedByName: fullyApproved || !approved ? user.name : expense.reviewedByName,
+          reviewedDate: fullyApproved || !approved ? now() : expense.reviewedDate,
+          reviewNotes: notes ?? expense.reviewNotes,
+        }
+        setExpenses(prev => prev.map(e => e.id === id ? reviewedExpense : e))
+        if (fullyApproved && !journalEntries.some(j => j.ref === `JRN/EXP/${expense.ref}`)) {
+          const journal = buildExpenseApprovalJournal(reviewedExpense)
+          setJournalEntries(prev => [journal, ...prev])
+          addAuditLog('post_expense', expense.ref, `Expense ${expense.ref} posted to journal ${journal.ref}`)
+        }
+        if (expense?.submittedByUserId) {
+          const pending = nextChain.find(s => s.status === 'pending')
+          pushNotif({
+            userId: expense.submittedByUserId,
+            type: 'expense',
+            title: !approved ? 'Expense claim rejected' : fullyApproved ? 'Expense claim approved ✓' : 'Expense claim — next approval',
+            body: !approved
+              ? `Your expense claim ${expense.ref} was rejected by ${user.name}.${notes ? ' Note: ' + notes : ''}`
+              : fullyApproved
+                ? `Your expense claim ${expense.ref} (${expense.description}) is fully approved.${notes ? ' Note: ' + notes : ''}`
+                : `Your expense claim ${expense.ref} was approved by ${user.name}. Awaiting ${pending?.role?.replace('_', ' ') ?? 'next approver'}.`,
+            module: 'expenses',
+            path: `?id=${expense.id}`,
+            icon: !approved ? '❌' : fullyApproved ? '💰' : '⏳',
+          })
+        }
+        if (!approved) {
+          showToast('Expense rejected', 'error')
+        } else if (fullyApproved) {
+          showToast('Expense approved and posted', 'success')
+        } else {
+          showToast('Step approved — awaiting next approver', 'success')
+        }
+        return
+      }
+
       const reviewedExpense: Expense = { ...expense, status: approved ? 'approved' : 'rejected', reviewedByUserId: user.id, reviewedByName: user.name, reviewedDate: now(), reviewNotes: notes }
       setExpenses(prev => prev.map(e => e.id === id ? reviewedExpense : e))
       if (approved && !journalEntries.some(j => j.ref === `JRN/EXP/${expense.ref}`)) {
@@ -8836,10 +8924,12 @@ const storeCtx: AppState = {
           confirmedAt: new Date().toISOString(),
           confirmedById: user.id,
           confirmedByName: user.name,
-          locked: systemSettings.salesLockConfirmed || undefined,
+          approvedBy: user.id,
           approvalStatus: salesApprovalRequests.length ? 'approved' as const : 'not_required' as const,
+          locked: systemSettings.salesLockConfirmed || undefined,
           stockReservationIds: s.stockReservationIds ?? [],
           deliveryId: del.id,
+          lockVersion: s.lockVersion,
         }
         sync(`/api/sale-orders/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
         return updated
@@ -9529,7 +9619,7 @@ const storeCtx: AppState = {
         return next
       })
     },
-    postInvoice: (id) => {
+    postInvoice: (id, forcedRef) => {
       const actor = currentUser()
       if (!canManageFinance(actor)) {
         showToast('Only Finance or Admin Officer can post invoices', 'error'); return
@@ -9553,7 +9643,7 @@ const storeCtx: AppState = {
       // Posting assigns the official number: drafts carry a placeholder ref
       // until Finance confirms them (Odoo behaviour).
       const finalRef = isDraftInvoiceRef(inv.ref)
-        ? docSeq(inv.type === 'vendor_bill' ? 'BILL' : 'INV')
+        ? (forcedRef ?? docSeq(inv.type === 'vendor_bill' ? 'BILL' : 'INV'))
         : inv.ref
       const postedMeta = {
         ref: finalRef,
@@ -9698,7 +9788,7 @@ const storeCtx: AppState = {
       addAuditLog('reset_invoice_draft', inv.ref, `${inv.type === 'vendor_bill' ? 'Bill' : 'Invoice'} reset to draft${reversals.length ? ` with ${reversals.length} reversal journal${reversals.length === 1 ? '' : 's'}` : ''}`)
       showToast(`${inv.type === 'vendor_bill' ? 'Bill' : 'Invoice'} reset to draft`)
     },
-    cancelInvoice: (id) => {
+    cancelInvoice: (id, forcedCreditRef) => {
       const actor = currentUser()
       if (!canManageFullFinanceAction(actor)) {
         showToast('Only Finance or Director can cancel invoices', 'error')
@@ -9721,7 +9811,7 @@ const storeCtx: AppState = {
         const creditAmount = Math.min(inv.amountPaid, inv.total)
         credit = {
           id: uid(),
-          ref: docSeq('CN'),
+          ref: forcedCreditRef ?? docSeq('CN'),
           customerId: inv.partnerId,
           customerName: inv.partnerName,
           sourceInvoiceId: inv.id,
@@ -9769,14 +9859,27 @@ const storeCtx: AppState = {
     },
     addAuditLog: (action, documentRef, details) => { addAuditLog(action, documentRef, details) },
 
+    allocateDocRef: async (prefix) => {
+      const { prefixToKind, allocateDocNumber, allocateDocNumberSync } = await import('@/lib/doc-numbers')
+      const kind = prefixToKind(prefix)
+      if (typeof window !== 'undefined' && kind) {
+        try {
+          return await allocateDocNumber(kind)
+        } catch {
+          /* fall through to local sequence */
+        }
+      }
+      return allocateDocNumberSync(prefix)
+    },
+
     // ── Purchase Orders ───────────────────────────────────────────────────────
-    createPO: (vendorId, vendorName, initial = {}) => {
+    createPO: (vendorId, vendorName, initial = {}, forcedRef) => {
       if (!canManageProcurement(currentUser())) {
         showToast('Only Inventory or Admin can create Purchase Orders', 'error'); return {} as PurchaseOrder;
       }
       const initialLines = initial.lines ?? []
       const po: PurchaseOrder = {
-        id: uid(), ref: docSeq('PO'), status: 'draft', vendorId, vendorName,
+        id: uid(), ref: forcedRef ?? docSeq('PO'), status: 'draft', vendorId, vendorName,
         date: now(), expectedDate: initial.expectedDate ?? addDays(now(), 7),
         lines: initialLines, ...calcPO(initialLines), notes: initial.notes ?? '', receiptIds: [],
       }
@@ -9918,7 +10021,7 @@ const storeCtx: AppState = {
         return recRef.current.find(r => r.poId === poId && r.status === 'draft') ?? null
       }
       const receipt: Receipt = {
-        id: uid(), ref: docSeq('REC'), poId, poRef: po.ref,
+        id: uid(), ref: forcedRef ?? docSeq('REC'), poId, poRef: po.ref,
         vendorId: po.vendorId, vendorName: po.vendorName,
         status: 'draft', date: now(),
         lines: outstandingLines.map(l => ({
@@ -10156,15 +10259,29 @@ const storeCtx: AppState = {
       if (po.billId) { showToast('A bill already exists for this purchase order', 'error'); return null }
       const hasValidatedReceipt = recRef.current.some(r => r.poId === poId && r.status === 'validated')
       if (!hasValidatedReceipt) { showToast('Receive goods before creating a vendor bill', 'error'); return null }
-      const sub = po.lines.reduce((a, l) => a + l.qtyReceived * l.unitPrice, 0)
-      const tax = po.lines.reduce((a, l) => a + Math.round(l.qtyReceived * l.unitPrice * l.taxRate / 100), 0)
+
+      const billableLines = po.lines
+        .map(l => {
+          const qtyBilled = l.qtyBilled ?? 0
+          const billQty = Math.max(0, l.qtyReceived - qtyBilled)
+          return { ...l, billQty }
+        })
+        .filter(l => l.billQty > 0)
+
+      if (billableLines.length === 0) {
+        showToast('No received quantity left to bill on this purchase order', 'error')
+        return null
+      }
+
+      const sub = billableLines.reduce((a, l) => a + l.billQty * l.unitPrice, 0)
+      const tax = billableLines.reduce((a, l) => a + Math.round(l.billQty * l.unitPrice * l.taxRate / 100), 0)
       const bill: Invoice = {
         id: uid(), ref: seq('BILL', 'inv'), type: 'vendor_bill', status: 'draft',
         partnerId: po.vendorId, partnerName: po.vendorName,
         date: now(), dueDate: addDays(now(), 30),
-        lines: po.lines.filter(l => l.qtyReceived > 0).map(l => ({
-          id: uid(), description: `${l.productName} ×${l.qtyReceived}`, qty: l.qtyReceived,
-          unitPrice: l.unitPrice, taxRate: l.taxRate, subtotal: l.qtyReceived * l.unitPrice,
+        lines: billableLines.map(l => ({
+          id: uid(), description: `${l.productName} ×${l.billQty}`, qty: l.billQty,
+          unitPrice: l.unitPrice, taxRate: l.taxRate, subtotal: l.billQty * l.unitPrice,
         })),
         subtotal: sub, taxTotal: tax, total: sub + tax, amountPaid: 0,
         purchaseOrderId: po.id, notes: '',
@@ -10172,7 +10289,15 @@ const storeCtx: AppState = {
       setInvoices(p => [bill, ...p])
       sync('/api/invoices', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(bill) })
       setPurchaseOrders(p => {
-        const next = p.map(x => x.id === poId ? { ...x, billId: bill.id } : x)
+        const next = p.map(x => {
+          if (x.id !== poId) return x
+          const lines = x.lines.map(line => {
+            const match = billableLines.find(b => b.id === line.id)
+            if (!match) return line
+            return { ...line, qtyBilled: (line.qtyBilled ?? 0) + match.billQty }
+          })
+          return { ...x, billId: bill.id, lines }
+        })
         const updated = next.find(x => x.id === poId)
         if (updated) sync(`/api/purchase-orders/${poId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
         return next
@@ -13336,7 +13461,7 @@ const storeCtx: AppState = {
     },
 
     // ── Delivery & Fulfillment ───────────────────────────────────────────────
-    createDeliveryFromSO: (salesOrderId) => {
+    createDeliveryFromSO: (salesOrderId, forcedRef) => {
       const so = saleOrders.find(s => s.id === salesOrderId)
       if (!so) {
         showToast('Sales order not found', 'error')
@@ -13345,7 +13470,7 @@ const storeCtx: AppState = {
       
       const delivery: Delivery = {
         id: uid(),
-        ref: docSeq('DN'),
+        ref: forcedRef ?? docSeq('DN'),
         saleOrderId: so.id,
         saleOrderRef: so.ref,
         customerId: so.customerId,

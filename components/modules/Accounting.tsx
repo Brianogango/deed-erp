@@ -370,7 +370,16 @@ function AccountingContent() {
   }, [mounted, accounts, showToast])
 
   const [tbSource, setTbSource] = useState<'blob' | 'prisma'>('prisma')
-  const prismaReports = usePrismaAccountingReports(tbSource === 'prisma' && reportTab === 'trial_balance')
+  const [plSource, setPlSource] = useState<'blob' | 'prisma'>('prisma')
+  const [bsSource, setBsSource] = useState<'blob' | 'prisma'>('prisma')
+  const prismaReportsEnabled = (tbSource === 'prisma' && reportTab === 'trial_balance')
+    || (plSource === 'prisma' && reportTab === 'pl')
+    || (bsSource === 'prisma' && reportTab === 'bs')
+  const prismaReports = usePrismaAccountingReports(prismaReportsEnabled, {
+    trialBalance: tbSource === 'prisma' && reportTab === 'trial_balance',
+    profitLoss: plSource === 'prisma' && reportTab === 'pl',
+    balanceSheet: bsSource === 'prisma' && reportTab === 'bs',
+  })
 
   // ── Invoice / Bill state ────────────────────────────────────────────────────
   const [invFilter, setInvFilter] = useState('all')
@@ -1420,24 +1429,52 @@ function AccountingContent() {
             </div>
           ) : activeTab === 'pl' ? (
             <div className="p-6">
-              <div className="flex items-center justify-between mb-6">
-                <h2 className="text-lg font-bold text-[var(--text-1)]">Profit & Loss Statement</h2>
+              <div className="flex items-center justify-between mb-6 gap-3 flex-wrap">
+                <div>
+                  <h2 className="text-lg font-bold text-[var(--text-1)]">Profit & Loss Statement</h2>
+                  <p className="text-xs text-[var(--text-3)]">
+                    {plSource === 'prisma'
+                      ? 'KES-only from posted Prisma journal lines (income/expense accounts).'
+                      : 'Legacy estimate from invoices, bills, and expenses.'}
+                  </p>
+                </div>
                 <div className="flex items-center gap-2">
+                  <select
+                    className="form-select text-[11px] py-1.5"
+                    value={plSource}
+                    onChange={e => setPlSource(e.target.value as 'blob' | 'prisma')}
+                    aria-label="P&L source"
+                  >
+                    <option value="prisma">Prisma (KES posted)</option>
+                    <option value="blob">Client blob (legacy)</option>
+                  </select>
                   <button className="btn-secondary flex items-center gap-2" onClick={() => {
-                    const rev = customerInvoices.reduce((s, i) => s + i.subtotal, 0)
-                    const cogs = vendorBills.reduce((s, i) => s + i.subtotal, 0)
-                    const opex = expenses.reduce((s, e) => s + e.amount, 0)
-                    const net = rev - cogs - opex
+                    const rev = plSource === 'prisma'
+                      ? (prismaReports.profitLoss?.totalRevenue ?? 0)
+                      : customerInvoices.reduce((s, i) => s + i.subtotal, 0)
+                    const cogs = plSource === 'prisma'
+                      ? (prismaReports.profitLoss?.totalExpenses ?? 0)
+                      : vendorBills.reduce((s, i) => s + i.subtotal, 0)
+                    const opex = plSource === 'prisma' ? 0 : expenses.reduce((s, e) => s + e.amount, 0)
+                    const net = plSource === 'prisma'
+                      ? (prismaReports.profitLoss?.netProfit ?? 0)
+                      : rev - cogs - opex
                     exportToPDF(
                       'Profit & Loss Statement',
                       ['Category', 'Amount (KES)'],
-                      [
-                        ['Total Revenue', fmtKes(rev)],
-                        ['Cost of Goods Sold', fmtKes(cogs)],
-                        ['Gross Profit', fmtKes(rev - cogs)],
-                        ['Operating Expenses', fmtKes(opex)],
-                        ['Net Profit', fmtKes(net)],
-                      ],
+                      plSource === 'prisma'
+                        ? [
+                            ['Total Revenue', fmtKes(rev)],
+                            ['Total Expenses', fmtKes(cogs)],
+                            ['Net Profit', fmtKes(net)],
+                          ]
+                        : [
+                            ['Total Revenue', fmtKes(rev)],
+                            ['Cost of Goods Sold', fmtKes(cogs)],
+                            ['Gross Profit', fmtKes(rev - cogs)],
+                            ['Operating Expenses', fmtKes(opex)],
+                            ['Net Profit', fmtKes(net)],
+                          ],
                       `PL_Statement_${new Date().toISOString().slice(0, 10)}`
                     )
                   }}>
@@ -1451,48 +1488,121 @@ function AccountingContent() {
                 </div>
               </div>
               <div className="max-w-2xl mx-auto">
-                {(() => {
-                  const rev = customerInvoices.reduce((s, i) => s + i.subtotal, 0)
-                  const cogs = vendorBills.reduce((s, i) => s + i.subtotal, 0)
-                  const opex = expenses.reduce((s, e) => s + e.amount, 0)
-                  const net = rev - cogs - opex
-                  return (
+                {plSource === 'prisma' ? (
+                  prismaReports.loading ? (
+                    <p className="text-sm text-[var(--text-3)]">Loading Prisma P&L…</p>
+                  ) : (
                     <>
                       <PLSection title="Revenue">
-                        <PLRow label="Total Revenue (from Invoices)" amount={rev} />
+                        {(prismaReports.profitLoss?.revenue ?? []).map(r => (
+                          <PLRow key={r.code} label={`${r.code} — ${r.name}`} amount={r.amount} />
+                        ))}
+                        <PLRow label="Total Revenue" amount={prismaReports.profitLoss?.totalRevenue ?? 0} bold />
                       </PLSection>
-                      <PLSection title="Cost of Goods Sold">
-                        <PLRow label="Total Purchases (from Bills)" amount={cogs} />
-                      </PLSection>
-                      <PLRow label="Gross Profit" amount={rev - cogs} bold />
                       <PLSection title="Expenses" className="mt-6">
-                        <PLRow label="Operating Expenses (from Expenses)" amount={opex} />
+                        {(prismaReports.profitLoss?.expenses ?? []).map(r => (
+                          <PLRow key={r.code} label={`${r.code} — ${r.name}`} amount={r.amount} />
+                        ))}
+                        <PLRow label="Total Expenses" amount={prismaReports.profitLoss?.totalExpenses ?? 0} bold />
                       </PLSection>
-                      <PLRow label="Net Profit" amount={net} bold />
+                      <PLRow label="Net Profit" amount={prismaReports.profitLoss?.netProfit ?? 0} bold />
                     </>
                   )
-                })()}
+                ) : (
+                  (() => {
+                    const rev = customerInvoices.reduce((s, i) => s + i.subtotal, 0)
+                    const cogs = vendorBills.reduce((s, i) => s + i.subtotal, 0)
+                    const opex = expenses.reduce((s, e) => s + e.amount, 0)
+                    const net = rev - cogs - opex
+                    return (
+                      <>
+                        <PLSection title="Revenue">
+                          <PLRow label="Total Revenue (from Invoices)" amount={rev} />
+                        </PLSection>
+                        <PLSection title="Cost of Goods Sold">
+                          <PLRow label="Total Purchases (from Bills)" amount={cogs} />
+                        </PLSection>
+                        <PLRow label="Gross Profit" amount={rev - cogs} bold />
+                        <PLSection title="Expenses" className="mt-6">
+                          <PLRow label="Operating Expenses (from Expenses)" amount={opex} />
+                        </PLSection>
+                        <PLRow label="Net Profit" amount={net} bold />
+                      </>
+                    )
+                  })()
+                )}
               </div>
             </div>
           ) : activeTab === 'bs' ? (
             <div className="p-6">
-              <h2 className="text-lg font-bold text-[var(--text-1)] mb-6">Balance Sheet</h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
+              <div className="flex items-center justify-between mb-6 gap-3 flex-wrap">
                 <div>
-                  <BSSection title="Assets" />
-                  <BSSectionSub title="Current Assets">
-                    <BSRow label="Cash at Bank" amount={cashAtBankBS} />
-                    <BSRow label="Cash in Hand" amount={cashInHandBS} />
-                    <BSRow label="Accounts Receivable" amount={outstandingAR} />
-                  </BSSectionSub>
+                  <h2 className="text-lg font-bold text-[var(--text-1)]">Balance Sheet</h2>
+                  <p className="text-xs text-[var(--text-3)]">
+                    {bsSource === 'prisma'
+                      ? 'KES-only from posted Prisma journal lines through today.'
+                      : 'Legacy estimate from cashbook and open invoices/bills.'}
+                  </p>
                 </div>
-                <div>
-                  <BSSection title="Liabilities & Equity" />
-                  <BSSectionSub title="Current Liabilities">
-                    <BSRow label="Accounts Payable" amount={outstandingAP} />
-                  </BSSectionSub>
-                </div>
+                <select
+                  className="form-select text-[11px] py-1.5"
+                  value={bsSource}
+                  onChange={e => setBsSource(e.target.value as 'blob' | 'prisma')}
+                  aria-label="Balance sheet source"
+                >
+                  <option value="prisma">Prisma (KES posted)</option>
+                  <option value="blob">Client blob (legacy)</option>
+                </select>
               </div>
+              {bsSource === 'prisma' ? (
+                prismaReports.loading ? (
+                  <p className="text-sm text-[var(--text-3)]">Loading Prisma balance sheet…</p>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
+                    <div>
+                      <BSSection title="Assets" />
+                      <BSSectionSub title="Posted balances">
+                        {(prismaReports.balanceSheet?.assets ?? []).map(r => (
+                          <BSRow key={r.code} label={`${r.code} — ${r.name}`} amount={r.amount} />
+                        ))}
+                        <BSRow label="Total Assets" amount={prismaReports.balanceSheet?.totalAssets ?? 0} bold />
+                      </BSSectionSub>
+                    </div>
+                    <div>
+                      <BSSection title="Liabilities & Equity" />
+                      <BSSectionSub title="Liabilities">
+                        {(prismaReports.balanceSheet?.liabilities ?? []).map(r => (
+                          <BSRow key={r.code} label={`${r.code} — ${r.name}`} amount={r.amount} />
+                        ))}
+                        <BSRow label="Total Liabilities" amount={prismaReports.balanceSheet?.totalLiabilities ?? 0} bold />
+                      </BSSectionSub>
+                      <BSSectionSub title="Equity">
+                        {(prismaReports.balanceSheet?.equity ?? []).map(r => (
+                          <BSRow key={r.code} label={`${r.code} — ${r.name}`} amount={r.amount} />
+                        ))}
+                        <BSRow label="Total Equity" amount={prismaReports.balanceSheet?.totalEquity ?? 0} bold />
+                      </BSSectionSub>
+                    </div>
+                  </div>
+                )
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
+                  <div>
+                    <BSSection title="Assets" />
+                    <BSSectionSub title="Current Assets">
+                      <BSRow label="Cash at Bank" amount={cashAtBankBS} />
+                      <BSRow label="Cash in Hand" amount={cashInHandBS} />
+                      <BSRow label="Accounts Receivable" amount={outstandingAR} />
+                    </BSSectionSub>
+                  </div>
+                  <div>
+                    <BSSection title="Liabilities & Equity" />
+                    <BSSectionSub title="Current Liabilities">
+                      <BSRow label="Accounts Payable" amount={outstandingAP} />
+                    </BSSectionSub>
+                  </div>
+                </div>
+              )}
             </div>
           ) : activeTab === 'vat' ? (
             <div className="p-6">

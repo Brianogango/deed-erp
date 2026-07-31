@@ -224,6 +224,7 @@ model User {
   createdUsers User[]    @relation("UserSelf")
   opportunitiesCreated Opportunity[] @relation("OpportunityOwner")
   opportunityAssignments Opportunity[] @relation("OpportunityAssignee")
+  leadsOwned           Lead[]          @relation("LeadOwner")
   opportunityActivitiesCreated OpportunityActivity[] @relation("OpportunityActivityCreator")
   saleOrders           SaleOrder[] @relation("SaleOrderCreator")
 
@@ -713,6 +714,7 @@ model Client {
   saleOrders       SaleOrder[]
   outboundReleases OutboundRelease[] @relation("OrcClient")
   customerAssets   CustomerAsset[]
+  leads            Lead[]
 
   @@index([phone], map: "idx_clients_phone")
   @@index([email], map: "idx_clients_email")
@@ -799,6 +801,7 @@ model Product {
   // Odoo-style invoicing policy: 'order' (Ordered Quantities) or 'delivery'
   // (Delivered Quantities). Controls when sale-order lines become invoiceable.
   invoicePolicy    String      @default("order") @map("invoice_policy") @db.VarChar(20)
+  costingMethod    String      @default("average") @map("costing_method") @db.VarChar(20)
   reorderLevel     Int?        @default(2) @map("reorder_level")
   reorderQty       Int?        @default(5) @map("reorder_qty")
   isActive         Boolean     @default(true) @map("is_active")
@@ -1076,6 +1079,7 @@ model PurchaseOrder {
   internalNotes   String?             @map("internal_notes")
   approvedById    String?             @map("approved_by") @db.Uuid
   approvedAt      DateTime?           @map("approved_at")
+  lockVersion     Int                 @default(0) @map("lock_version")
   createdById     String              @map("created_by") @db.Uuid
   createdAt       DateTime            @default(now()) @map("created_at")
   updatedAt       DateTime            @updatedAt @map("updated_at")
@@ -1098,6 +1102,7 @@ model PurchaseOrderItem {
   description String?
   qtyOrdered  Int      @map("qty_ordered")
   qtyReceived Int      @default(0) @map("qty_received")
+  qtyBilled   Int      @default(0) @map("qty_billed")
   unitCost    Decimal  @map("unit_cost") @db.Decimal(14, 2)
   taxRate     Decimal  @default(0) @map("tax_rate") @db.Decimal(5, 2)
   lineTotal   Decimal  @map("line_total") @db.Decimal(14, 2)
@@ -1183,6 +1188,7 @@ model Opportunity {
   createdBy           User                  @relation("OpportunityOwner", fields: [createdById], references: [id])
   activities          OpportunityActivity[]
   quotes              Quote[]               @relation("OpportunityQuotes")
+  leads               Lead[]
 
   @@index([clientId], map: "idx_opportunities_client")
   @@index([assignedToId], map: "idx_opportunities_assigned_to")
@@ -1221,6 +1227,30 @@ model ContactPerson {
 
   @@index([clientId], map: "idx_contact_persons_client")
   @@map("contact_persons")
+}
+
+model Lead {
+  id            String   @id @default(uuid()) @db.Uuid
+  name          String   @db.VarChar(200)
+  companyName   String?  @map("company_name") @db.VarChar(200)
+  email         String?  @db.VarChar(150)
+  phone         String?  @db.VarChar(20)
+  source        String?  @db.VarChar(50)
+  stage         String   @default("new") @db.VarChar(30)
+  ownerId       String?  @map("owner_id") @db.Uuid
+  opportunityId String?  @map("opportunity_id") @db.Uuid
+  clientId      String?  @map("client_id") @db.Uuid
+  notes         String?
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  owner       User?        @relation("LeadOwner", fields: [ownerId], references: [id])
+  client      Client?      @relation(fields: [clientId], references: [id])
+  opportunity Opportunity? @relation(fields: [opportunityId], references: [id])
+
+  @@index([stage], map: "idx_leads_stage")
+  @@index([ownerId], map: "idx_leads_owner")
+  @@map("leads")
 }
 
 model SaleOrder {
@@ -1265,6 +1295,7 @@ model SaleOrder {
   customerRef     String?       @map("customer_ref") @db.VarChar(120)
   invoiceAddress  String?       @map("invoice_address")
   deliveryAddress String?       @map("delivery_address")
+  lockVersion     Int           @default(0) @map("lock_version")
   createdById     String        @map("created_by") @db.Uuid
   createdAt       DateTime      @default(now()) @map("created_at")
   updatedAt       DateTime      @updatedAt @map("updated_at")
@@ -1407,6 +1438,7 @@ model Invoice {
   exchangeRateToBase Decimal @default(1) @map("exchange_rate_to_base") @db.Decimal(18, 8)
   approvedById   String?        @map("approved_by") @db.Uuid
   approvedAt     DateTime?      @map("approved_at")
+  lockVersion    Int            @default(0) @map("lock_version")
   createdById    String         @map("created_by") @db.Uuid
   createdAt      DateTime       @default(now()) @map("created_at")
   updatedAt      DateTime       @updatedAt @map("updated_at")
@@ -1419,6 +1451,7 @@ model Invoice {
   createdBy       User            @relation("InvoiceCreator", fields: [createdById], references: [id])
   items           InvoiceItem[]
   payments        Payment[]
+  paymentAllocations PaymentAllocation[]
   creditNotes     CreditNote[]    @relation("CreditNoteInvoice")
   creditApplied   CreditNote[]    @relation("CreditNoteApplied")
   deliveries      DeliveryNote[]
@@ -1466,7 +1499,7 @@ model InvoiceItem {
 
 model Payment {
   id            String        @id @default(uuid()) @db.Uuid
-  invoiceId     String        @map("invoice_id") @db.Uuid
+  invoiceId     String?       @map("invoice_id") @db.Uuid
   amount        Decimal       @db.Decimal(14, 2)
   paymentMethod PaymentMethod @map("payment_method")
   reference     String?       @db.VarChar(80)
@@ -1480,13 +1513,30 @@ model Payment {
   createdById   String        @map("created_by") @db.Uuid
   createdAt     DateTime      @default(now()) @map("created_at")
 
-  invoice   Invoice @relation(fields: [invoiceId], references: [id])
-  voidedBy  User?   @relation("PaymentVoider", fields: [voidedById], references: [id])
-  createdBy User    @relation("PaymentCreator", fields: [createdById], references: [id])
+  invoice     Invoice?             @relation(fields: [invoiceId], references: [id])
+  allocations PaymentAllocation[]
+  voidedBy    User?                @relation("PaymentVoider", fields: [voidedById], references: [id])
+  createdBy   User                 @relation("PaymentCreator", fields: [createdById], references: [id])
 
   @@index([invoiceId], map: "idx_payments_invoice")
   @@index([paidAt], map: "idx_payments_date")
   @@map("payments")
+}
+
+model PaymentAllocation {
+  id          String   @id @default(uuid()) @db.Uuid
+  paymentId   String   @map("payment_id") @db.Uuid
+  invoiceId   String   @map("invoice_id") @db.Uuid
+  amount      Decimal  @db.Decimal(14, 2)
+  allocatedAt DateTime @default(now()) @map("allocated_at")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  payment Payment @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  invoice Invoice @relation(fields: [invoiceId], references: [id])
+
+  @@index([paymentId])
+  @@index([invoiceId])
+  @@map("payment_allocations")
 }
 
 model CreditNote {
@@ -2123,6 +2173,16 @@ model Journal {
   @@map("journals")
 }
 
+model FiscalLock {
+  id        String   @id @default(uuid()) @db.Uuid
+  lockDate  DateTime @map("lock_date") @db.Date
+  note      String?
+  updatedBy String?  @map("updated_by") @db.VarChar(80)
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("fiscal_locks")
+}
+
 model JournalEntry {
   id           String    @id @default(uuid()) @db.Uuid
   ref          String    @unique @db.VarChar(80)
@@ -2389,6 +2449,35 @@ model PriceListItem {
   @@index([priceListId], map: "idx_price_list_items_list")
   @@index([productId], map: "idx_price_list_items_product")
   @@map("price_list_items")
+}
+
+model DocumentMessage {
+  id          String   @id @default(uuid()) @db.Uuid
+  model       String   @db.VarChar(40)
+  recordId    String   @map("record_id") @db.VarChar(80)
+  body        String   @db.Text
+  authorId    String?  @map("author_id") @db.Uuid
+  authorName  String?  @map("author_name") @db.VarChar(120)
+  messageType String   @default("comment") @map("message_type") @db.VarChar(20)
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@index([model, recordId], map: "idx_document_messages_record")
+  @@map("document_messages")
+}
+
+model DocumentActivity {
+  id           String    @id @default(uuid()) @db.Uuid
+  model        String    @db.VarChar(40)
+  recordId     String    @map("record_id") @db.VarChar(80)
+  activityType String    @map("activity_type") @db.VarChar(20)
+  summary      String    @db.Text
+  dueDate      DateTime? @map("due_date")
+  userId       String?   @map("user_id") @db.Uuid
+  status       String    @default("planned") @db.VarChar(20)
+  createdAt    DateTime  @default(now()) @map("created_at")
+
+  @@index([model, recordId], map: "idx_document_activities_record")
+  @@map("document_activities")
 }
 
 model BlobCutoverCertificate {

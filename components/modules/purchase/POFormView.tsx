@@ -1,10 +1,13 @@
 'use client'
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import { usePurchase } from './PurchaseContext'
 import { Badge, Modal, Field, Input, Select, Confirm, PanelHeader, StatusStepper, SearchPicker, Divider } from '@/components/ui'
 import { LOCATIONS, CATEGORY_CONFIG, type LocationId, type CategoryId, fmtKes, fmtDate } from '@/lib/store'
 import { invoiceDocState, invoicePaymentStatus, displayDocRef, PAYMENT_STATUS_LABELS } from '@/lib/odoo-sales-flow'
 import { downloadPdf, type PdfLine } from '@/lib/pdf'
+import Chatter from '@/components/erp/Chatter'
+import { Breadcrumbs } from '@/components/erp/Breadcrumbs'
+import { SmartButtons } from '@/components/erp/SmartButtons'
 
 const ACCESSORIES = ['Charger', 'Bag/Case', 'Mouse', 'Box', 'Cable', 'Manual']
 const PO_STEPS = ['RFQ', 'RFQ Sent', 'Purchase Order', 'Received', 'Billed']
@@ -190,6 +193,21 @@ export default function POFormView() {
     const stepIdx        = linkedBill ? 4 : (PO_STEP_IDX[activePO.status] ?? 0)
     const poReceipts     = receipts.filter(r => r.poId === activePO.id)
     const poReturns      = purchaseReturns.filter(r => r.poId === activePO.id)
+    const billsCount     = linkedBill ? 1 : 0
+
+    const poStepClickable = (step: string, index: number) => {
+      if (index === 1 && activePO.status === 'draft') return canSend
+      if (index === 2 && activePO.status === 'sent') return canConfirm
+      return false
+    }
+
+    const handlePOStepClick = (step: string, index: number) => {
+      if (!poStepClickable(step, index)) return
+      if (index === 1) sendPO(activePO.id)
+      else if (index === 2) confirmPO(activePO.id)
+    }
+
+    const backToList = () => { setSubView('list'); setActiveId(null) }
 
     // Helper: render an inline-editable cell
     const EditableCell = ({ lineId, field, value, formatter }: { lineId: string; field: 'qty' | 'unitPrice' | 'taxRate'; value: number; formatter: (v: number) => string }) => {
@@ -225,8 +243,16 @@ export default function POFormView() {
     return (
       <div className="flex flex-col gap-3">
         {/* ── Header ── */}
-        <div className="flex items-center gap-2 flex-wrap" style={{ background: '#FFFFFF', padding: '12px 0', borderBottom: '1px solid var(--bg-muted)' }}>
-          <button className="btn-outline text-[11px] py-1 px-2.5" onClick={() => { setSubView('list'); setActiveId(null) }}>← Orders</button>
+        <div className="flex flex-col gap-2" style={{ background: 'var(--bg-card)', padding: '12px 0', borderBottom: '1px solid var(--bg-muted)' }}>
+          <Breadcrumbs
+            items={[
+              { label: 'Purchase', onClick: backToList },
+              { label: 'Orders', onClick: backToList },
+              { label: activePO.ref },
+            ]}
+          />
+          <div className="flex items-center gap-2 flex-wrap">
+          <button className="btn-outline text-[11px] py-1 px-2.5" onClick={backToList}>← Orders</button>
           <span className="text-sm font-bold text-t1">{activePO.ref}</span>
           <span className={`badge ${STATUS_BADGE[activePO.status]}`}>{STATUS_LABEL[activePO.status]}</span>
           {canEdit && <span className="text-[10px] text-t3">· Click any value in the table to edit</span>}
@@ -262,11 +288,30 @@ export default function POFormView() {
             {canReturn && <button className="btn-outline text-[11px]" style={{ color: 'var(--warning)', borderColor: '#FDE68A' }} onClick={openReturnForPO}>↩ Return to Vendor</button>}
             {canEdit   && <button className="btn-outline text-[11px]" style={{ color: 'var(--danger)', borderColor: '#FCA5A5' }} onClick={() => setDelId(activePO.id)}>Delete</button>}
           </div>
+          </div>
         </div>
 
-        {/* Stepper */}
-        <div className="card p-4">
-          <StatusStepper steps={PO_STEPS} current={PO_STEPS[stepIdx]} />
+        {/* Stepper + smart buttons */}
+        <div className="card p-4 flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+          <StatusStepper
+            steps={PO_STEPS}
+            current={PO_STEPS[stepIdx]}
+            isStepClickable={poStepClickable}
+            onStepClick={handlePOStepClick}
+          />
+          <SmartButtons
+            buttons={[
+              ...(poReceipts.length > 0
+                ? [{ id: 'receipts', label: 'Receipts', count: poReceipts.length, tone: 'success' as const, onClick: () => document.getElementById('po-grn-history')?.scrollIntoView({ behavior: 'smooth' }) }]
+                : []),
+              ...(billsCount > 0
+                ? [{ id: 'bills', label: 'Bills', count: billsCount, tone: 'violet' as const, onClick: () => document.getElementById('po-vendor-bill')?.scrollIntoView({ behavior: 'smooth' }) }]
+                : []),
+              ...(poReturns.length > 0
+                ? [{ id: 'returns', label: 'Returns', count: poReturns.length, tone: 'warning' as const, onClick: () => document.getElementById('po-returns-history')?.scrollIntoView({ behavior: 'smooth' }) }]
+                : []),
+            ]}
+          />
         </div>
 
         {/* Repair procurement link banner */}
@@ -460,7 +505,7 @@ export default function POFormView() {
 
             {/* GRN history */}
             {poReceipts.length > 0 && (
-              <div className="card overflow-hidden">
+              <div id="po-grn-history" className="card overflow-hidden">
                 <PanelHeader title="Goods Receipts (GRN)" count={poReceipts.length} />
                 {poReceipts.map(r => (
                   <div key={r.id} className="flex items-center justify-between px-4 py-3 border-b text-xs" style={{ borderColor: 'var(--bg-muted)' }}>
@@ -479,7 +524,7 @@ export default function POFormView() {
 
             {/* Returns history */}
             {poReturns.length > 0 && (
-              <div className="card overflow-hidden">
+              <div id="po-returns-history" className="card overflow-hidden">
                 <PanelHeader title="Returns" count={poReturns.length} />
                 {poReturns.map(r => (
                   <div key={r.id} className="flex items-center justify-between px-4 py-3 border-b text-xs" style={{ borderColor: 'var(--bg-muted)' }}>
@@ -492,6 +537,13 @@ export default function POFormView() {
                 ))}
               </div>
             )}
+
+            <Chatter
+              model="purchase_order"
+              recordId={activePO.id}
+              title="PO Chatter"
+              compact
+            />
           </div>
 
           {/* ── Right sidebar ── */}
@@ -544,7 +596,7 @@ export default function POFormView() {
             </div>
 
             {/* Vendor bill */}
-            <div className="card overflow-hidden">
+            <div id="po-vendor-bill" className="card overflow-hidden">
               <PanelHeader title="Vendor Bill" />
               <div className="p-3">
                 {linkedBill ? (

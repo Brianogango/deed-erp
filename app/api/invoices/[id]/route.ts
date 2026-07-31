@@ -4,6 +4,7 @@ import { getRequiredSession, requireRole, withApiErrorHandling } from '@/lib/aut
 import { optionalUuid, resolveClientId } from '@/lib/legacy-compat'
 import { computeInvoiceTotals } from '@/lib/finance-invoice'
 import { writeFinancialAudit } from '@/lib/finance-audit'
+import { lockVersionMismatch, nextLockVersion, readExpectedVersion } from '@/lib/optimistic-lock'
 
 // technical_lead: repair quotes create/update their linked invoice (see recordRepairBilling).
 const WRITE_ROLES = ['director', 'finance_officer', 'admin_officer', 'technical_lead']
@@ -112,6 +113,15 @@ export async function PUT(request: Request, { params }: { params: { id: string }
       where: { id: params.id },
       include: { items: true },
     })
+    if (!before) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+
+    const expectedVersion = readExpectedVersion(body)
+    if (lockVersionMismatch(before.lockVersion, expectedVersion)) {
+      return NextResponse.json(
+        { error: 'Record was modified by another user', lockVersion: before.lockVersion },
+        { status: 409 },
+      )
+    }
 
     // Never wipe existing line items with an empty payload — empty shells from
     // store sync must not destroy the Prisma ledger.
@@ -132,6 +142,7 @@ export async function PUT(request: Request, { params }: { params: { id: string }
       where: { id: params.id },
       data: {
         ...data,
+        lockVersion: nextLockVersion(before.lockVersion),
         ...(lines !== undefined ? {
           items: {
             deleteMany: {},

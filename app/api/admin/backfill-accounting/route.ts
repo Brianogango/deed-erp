@@ -65,6 +65,7 @@ export async function POST(request: NextRequest) {
   }
   if (sections.includes('journals')) {
     result.journals = await mirrorJournalEntriesToPrisma(state.deed_journalEntries ?? [], { force })
+    result.journalsNote = 'Historical journal backfill mirrors deed_journalEntries blobs; re-run is idempotent on ref.'
   }
   if (sections.includes('reservations')) {
     result.reservations = await mirrorStockReservationsToPrisma(state.deed_stockReservations ?? [], { force })

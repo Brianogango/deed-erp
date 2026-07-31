@@ -1,13 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { getRequiredSession, withApiErrorHandling } from '@/lib/auth/api'
+import { canAccessRecord } from '@/lib/auth/authorization'
 import { optionalUuid, resolveClientId } from '@/lib/legacy-compat'
 import { loadAppState, saveStoreKeys } from '@/lib/server-store'
+import { reserveStockForSaleOrder } from '@/lib/inventory/stock-transactions'
 import {
   normalizeSaleStatus,
   saleTransitionError,
   saleOrderCancelBlockers,
 } from '@/lib/odoo-sales-flow'
+import { enforceSaleOrderApprovals } from '@/lib/sales-approval-enforcement.server'
+import { lockVersionMismatch, nextLockVersion, readExpectedVersion } from '@/lib/optimistic-lock'
 
 async function broadcastSaleOrders() {
   try {
@@ -59,6 +63,7 @@ function mapSaleOrderToClient(order: any) {
     subtotal: Number(order.subtotal ?? 0),
     discountAmount: Number(order.discountAmount ?? 0),
     amountPaid: Number(order.amountPaid ?? 0),
+    lockVersion: Number(order.lockVersion ?? 0),
     lines: (order.items ?? []).map((item: any) => ({
       id: item.id,
       productId: item.productId ?? '',
@@ -289,12 +294,18 @@ async function enforceSaleWorkflow(
 
 export async function GET(_: NextRequest, { params }: { params: { id: string } }) {
   return withApiErrorHandling(async () => {
-    await getRequiredSession()
+    const session = await getRequiredSession()
     const order = await prisma.saleOrder.findUnique({
       where: { id: params.id },
       include: { client: true, items: true },
     })
     if (!order) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+    if (!canAccessRecord(session.user.role, 'sale_order', {
+      createdByUserId: order.createdById,
+      salespersonId: order.salespersonId,
+    }, session.user.id)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
     return NextResponse.json(mapSaleOrderToClient(order))
   })
 }
@@ -312,9 +323,36 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
     })
     if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
+    const expectedVersion = readExpectedVersion(body)
+    if (lockVersionMismatch(existing.lockVersion, expectedVersion)) {
+      return NextResponse.json(
+        { error: 'Record was modified by another user', lockVersion: existing.lockVersion },
+        { status: 409 },
+      )
+    }
+
+    const from = normalizeSaleStatus(existing.status)
+    const to = body.status !== undefined ? normalizeSaleStatus(body.status) : from
+    const approvalCheck = await enforceSaleOrderApprovals({
+      body,
+      existing,
+      sessionUserId: session.user.id,
+      sessionRole: session.user.role,
+      fromStatus: from,
+      toStatus: to,
+    })
+    if (!approvalCheck.ok) {
+      return NextResponse.json(
+        { error: approvalCheck.error, requiredRoles: approvalCheck.requiredRoles },
+        { status: approvalCheck.status },
+      )
+    }
+
     const data = await buildSaleOrderUpdateData(body)
     const workflowError = await enforceSaleWorkflow(existing, body, data, session)
     if (workflowError) return workflowError
+
+    data.lockVersion = nextLockVersion(existing.lockVersion)
 
     const order = await prisma.saleOrder.update({
       where: { id: params.id },
@@ -326,10 +364,12 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
     // Workflow already enforced above; service is idempotent on status.
     try {
       const { SaleOrderService } = await import('@/lib/services/sale-order.service')
-      const from = normalizeSaleStatus(existing.status)
-      const to = body.status !== undefined ? normalizeSaleStatus(body.status) : from
       if (to === 'sale' && from !== 'sale') {
         await SaleOrderService.confirm(params.id, session.user.id, session.user.role).catch(() => {})
+        const reserveResult = await reserveStockForSaleOrder(params.id, session.user.id)
+        if (!reserveResult.ok) {
+          console.error('[sale-orders] reserveStockForSaleOrder failed:', reserveResult.error)
+        }
       }
       if (to === 'cancelled' && from !== 'cancelled') {
         await SaleOrderService.cancel(params.id, session.user.id).catch(() => {})

@@ -898,10 +898,10 @@ ACCOUNTS_EMAIL=accounts@deed.co.ke`}</pre>
               </SectionCard>
               <SectionCard title="Valuation">
                 <SettingRow label="Automated Inventory Valuation" desc="Dual-write weighted-average cost + STK journals on validated GRNs and deliveries (Prisma). Blobs stay untouched."><Toggle on={ss.invAutomatedValuation} onChange={v => updateSystemSettings({ invAutomatedValuation: v })} /></SettingRow>
-                <SettingRow label="Costing Method" desc="Live valuation posts use average cost. FIFO/standard remain UI preferences until implemented.">
+                <SettingRow label="Costing Method" desc="Average cost is the default. FIFO consumes oldest inventory batch layers when company or product costing is set to FIFO.">
                   <Select value={ss.invCostingMethod} onChange={v => updateSystemSettings({ invCostingMethod: v as any })} options={[
-                    { value: 'average',  label: 'Average Cost (active)' },
-                    { value: 'fifo',     label: 'FIFO (not yet posted)' },
+                    { value: 'average',  label: 'Average Cost (default)' },
+                    { value: 'fifo',     label: ss.invCostingMethod === 'fifo' ? 'FIFO (batch layers active)' : 'FIFO' },
                     { value: 'standard', label: 'Standard Price (not yet posted)' },
                   ]} />
                 </SettingRow>
@@ -981,7 +981,7 @@ ACCOUNTS_EMAIL=accounts@deed.co.ke`}</pre>
               <SectionCard title="Payments & Journals">
                 <SettingRow label="Bank Journals" desc="Record and reconcile payments through bank accounts"><Toggle on={ss.accBankJournals} onChange={v => updateSystemSettings({ accBankJournals: v })} /></SettingRow>
                 <SettingRow label="M-Pesa Journals" desc="Record M-Pesa Paybill collections and disbursements"><Toggle on={ss.accMpesaJournals} onChange={v => updateSystemSettings({ accMpesaJournals: v })} /></SettingRow>
-                <SettingRow label="Bank Reconciliation" desc="Match bank statements against system cashbook entries monthly"><Toggle on={ss.accReconciliation} onChange={v => updateSystemSettings({ accReconciliation: v })} /></SettingRow>
+                <SettingRow label="Bank Reconciliation" desc="Available in Cashbook — match bank statements against system entries monthly"><Toggle on={ss.accReconciliation} onChange={v => updateSystemSettings({ accReconciliation: v })} /></SettingRow>
               </SectionCard>
               <SectionCard title="Controls">
                 <SettingRow label="Lock Dates After Period Closing" desc="Prevent edits to accounting entries in closed periods"><Toggle on={ss.accLockDates} onChange={v => updateSystemSettings({ accLockDates: v })} /></SettingRow>

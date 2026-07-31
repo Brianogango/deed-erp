@@ -8,6 +8,7 @@ import {
 } from '@/lib/store'
 import { Confirm, Modal, Field, Input, Select, ModuleSkeleton, ModuleHeader, TabBar } from '@/components/ui'
 import { StatusBadge } from '@/components/erp'
+import { CalendarView } from '@/components/erp/CalendarView'
 import { Fa, faPrint, faTruck } from '@/components/icons'
 import { DataTable, type ColumnDef, type PrimaryFilterConfig } from '@/components/data-table'
 
@@ -402,6 +403,7 @@ function JobsTab() {
   const [failTarget, setFailTarget] = useState<DeliveryJob | null>(null)
   const [filterStatus, setFilterStatus] = useState<DeliveryJobStatus | 'all'>('all')
   const [filterType, setFilterType] = useState<DeliveryJobType | 'all'>('all')
+  const [jobsView, setJobsView] = useState<'list' | 'calendar'>('list')
 
   const filtered = useMemo(() =>
     deliveryJobs.filter(j =>
@@ -558,8 +560,51 @@ function JobsTab() {
     )
   }
 
+  const jobStatusColors: Record<DeliveryJobStatus, string> = {
+    pending: 'var(--warning)',
+    assigned: '#8B5CF6',
+    in_transit: '#2E90FA',
+    delivered: 'var(--success)',
+    failed: 'var(--danger)',
+    cancelled: 'var(--text-4)',
+  }
+
+  const calendarItems = useMemo(() =>
+    filtered.map(job => ({
+      id: job.id,
+      date: job.scheduledDate,
+      title: `${job.ref} · ${job.customerName}`,
+      color: jobStatusColors[job.status] ?? 'var(--navy)',
+      onClick: () => setAssignTarget(job.status === 'pending' && !job.riderId ? job : null),
+    })),
+  [filtered])
+
   return (
     <div className="flex flex-col gap-4">
+      <div className="flex items-center justify-end gap-1.5 px-1">
+        {(['list', 'calendar'] as const).map(v => (
+          <button
+            key={v}
+            type="button"
+            onClick={() => setJobsView(v)}
+            className="text-[11px] px-3 py-1.5 rounded-lg border font-medium capitalize cursor-pointer"
+            style={{
+              background: jobsView === v ? 'var(--navy)' : 'var(--bg-surface)',
+              color: jobsView === v ? '#fff' : 'var(--text-3)',
+              borderColor: jobsView === v ? 'var(--navy)' : 'var(--border-lt)',
+            }}
+          >
+            {v}
+          </button>
+        ))}
+      </div>
+
+      {jobsView === 'calendar' ? (
+        <div className="card p-4">
+          <p className="text-xs font-semibold text-[var(--text-2)] mb-3">Planned deliveries by scheduled date</p>
+          <CalendarView items={calendarItems} />
+        </div>
+      ) : (
       <div className="card overflow-hidden">
         <DataTable
           tableId="delivery-jobs"
@@ -581,6 +626,7 @@ function JobsTab() {
           exportFilename="delivery-jobs"
         />
       </div>
+      )}
 
       {/* Modals */}
       {showCreateModal && (

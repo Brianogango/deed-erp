@@ -15,6 +15,7 @@ export function RecordHeader({
   primaryAction,
   secondaryActions,
   smartButtons,
+  breadcrumbs,
   onBack,
   backLabel = 'Back',
 }: {
@@ -25,11 +26,13 @@ export function RecordHeader({
   primaryAction?: ReactNode
   secondaryActions?: ReactNode
   smartButtons?: ReactNode
+  breadcrumbs?: ReactNode
   onBack?: () => void
   backLabel?: string
 }) {
   return (
     <header className="erp-record-header">
+      {breadcrumbs && <div className="erp-record-breadcrumbs w-full">{breadcrumbs}</div>}
       <div className="erp-record-header-main">
         {onBack && (
           <button type="button" className="btn-ghost erp-action-btn" onClick={onBack} aria-label={backLabel}>

@@ -43,6 +43,14 @@ vi.mock('@/lib/auth/api', () => ({
 
 vi.mock('@/lib/prisma', () => ({ default: { invoice: mockPrismaInvoice } }))
 
+vi.mock('@/lib/finance-audit', () => ({
+  writeFinancialAudit: vi.fn().mockResolvedValue(undefined),
+}))
+
+vi.mock('@/lib/accounting/invoice-journals', () => ({
+  dualWriteInvoiceJournal: vi.fn().mockResolvedValue(undefined),
+}))
+
 vi.mock('@/lib/legacy-compat', () => ({
   resolveClientId: mockResolveClientId,
   optionalUuid: (v: unknown) => {
@@ -276,12 +284,14 @@ describe('GET /api/invoices/:id', () => {
 // ── PUT /api/invoices/:id ─────────────────────────────────────────────────────
 describe('PUT /api/invoices/:id', () => {
   it('updates an invoice and returns 200', async () => {
-    mockPrismaInvoice.update.mockResolvedValue({ ...baseInvoice, status: 'approved' })
+    mockPrismaInvoice.findUnique.mockResolvedValue({ ...baseInvoice, lockVersion: 0 })
+    mockPrismaInvoice.update.mockResolvedValue({ ...baseInvoice, status: 'approved', lockVersion: 1 })
     const res = await PUT(idReq(INVOICE_ID, { status: 'posted' }), { params: { id: INVOICE_ID } })
     expect(res.status).toBe(200)
   })
 
   it('maps status alias on update (pending → pending_approval)', async () => {
+    mockPrismaInvoice.findUnique.mockResolvedValue({ ...baseInvoice, lockVersion: 0 })
     mockPrismaInvoice.update.mockResolvedValue(baseInvoice)
     await PUT(idReq(INVOICE_ID, { status: 'pending' }), { params: { id: INVOICE_ID } })
     const updateData = mockPrismaInvoice.update.mock.calls[0][0].data
@@ -289,6 +299,7 @@ describe('PUT /api/invoices/:id', () => {
   })
 
   it('replaces items when lines provided', async () => {
+    mockPrismaInvoice.findUnique.mockResolvedValue({ ...baseInvoice, lockVersion: 0 })
     mockPrismaInvoice.update.mockResolvedValue(baseInvoice)
     const lines = [{ description: 'Service', qty: 1, unitPrice: 5000 }]
     await PUT(idReq(INVOICE_ID, { lines }), { params: { id: INVOICE_ID } })

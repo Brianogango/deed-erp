@@ -23,7 +23,7 @@ Diagnosis First fee fields also live on the same blob only: `deviceTier` (`regul
 6. Sales + Inventory domain seams (API-first helpers; no big-bang 8-store split).
 7. Prisma read-only **journals** + **trial balance** (KES) in Finance UI.
 8. Safe CoA bootstrap when `deed_accounts` is missing (Contabo case).
-9. **Multi-currency (KES-first):** document `currencyCode` / `baseCurrencyCode` / `exchangeRateToBase` snapshots; functional currency locked to KES; exchange rates table; no FX journal posting yet.
+9. **Multi-currency (KES-first):** document `currencyCode` / `baseCurrencyCode` / `exchangeRateToBase` snapshots; functional currency locked to KES; exchange rates table; **Phase 4 FX journals** available for revaluation posts via `POST /api/accounting/fx-revaluation`.
 10. **Pricelists:** Retail / Wholesale / Kilimall map to product selling / wholesale / Kilimall prices; shared resolver; special_pricing approval when unit price undercuts list.
 11. **Gated blob cutover:** Settings → Data Cutover / `POST /api/admin/blob-cutover` — verify → certify → archive (copy) → retire live key. Admin reset blocked while protected keys are uncertified (unless explicit force phrase).
 
@@ -41,6 +41,10 @@ sudo -u postgres psql -d deed_erp -c "GRANT SELECT, INSERT, UPDATE, DELETE ON TA
 install -m 644 database/migrations/20260731_currency_pricelists_cutover_safe.sql /tmp/currency_pricelists_cutover_safe.sql
 sudo -u postgres psql -v ON_ERROR_STOP=1 -d deed_erp -f /tmp/currency_pricelists_cutover_safe.sql
 sudo -u postgres psql -d deed_erp -c "GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE exchange_rates, price_lists, price_list_items, blob_cutover_certificates TO deed_user;"
+
+install -m 644 database/migrations/20260731_odoo_parity_phase4_safe.sql /tmp/odoo_parity_phase4_safe.sql
+sudo -u postgres psql -v ON_ERROR_STOP=1 -d deed_erp -f /tmp/odoo_parity_phase4_safe.sql
+sudo -u postgres psql -d deed_erp -c "GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE leads TO deed_user;"
 
 # 2. Generate Prisma client + deploy app
 
@@ -67,5 +71,4 @@ curl -X POST https://<host>/api/admin/backfill-accounting \
 
 ## What we deliberately still skip
 - Blind `DELETE FROM app_state` / deleting any `deed_*` key without certificate + archive
-- FX journal posting / multi-currency CoA
 - Big-bang 8-way Zustand extraction (Sales/Inventory seams only)

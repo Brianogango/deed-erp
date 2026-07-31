@@ -38,6 +38,7 @@ import { buildFinanceAlerts, computeCashbookTotals, cashPositionFromTotals } fro
 import { saleOrderInvoiceStatus, invoicePaymentStatus, isOpenInvoice, invoiceResidual, isInvoiceOverdue } from '@/lib/odoo-sales-flow'
 import { buildCashbookEntries } from '@/components/modules/Cashbook'
 import { Fa } from '@/components/icons'
+import { OnboardingChecklist } from '@/components/erp/OnboardingChecklist'
 
 // Full sales analytics and rep performance (Recharts/tables) — loaded only
 // when their sections are expanded, so the default dashboard stays light.
@@ -229,6 +230,7 @@ export function Dashboard() {
     accounts,
     bankAccounts,
     bankStatementLines,
+    companySettings,
   } = useApp()
   const { employees, leaveRequests } = useHrStore()
 
@@ -722,6 +724,22 @@ export function Dashboard() {
           )}
         </div>
       </section>
+
+      <OnboardingChecklist
+        companySettings={companySettings}
+        accounts={accounts}
+        products={products}
+        contacts={contacts}
+        saleOrders={saleOrders}
+        onNavigate={path => {
+          if (path.startsWith('/settings')) handleRoute(path)
+          else if (path.startsWith('/finance')) handleNav('accounting', path)
+          else if (path.startsWith('/operations')) handleNav('inventory', path)
+          else if (path.startsWith('/contacts')) handleNav('contacts', path)
+          else if (path.startsWith('/sales')) handleNav('sales', path)
+          else handleRoute(path)
+        }}
+      />
 
       {/* ── P1 · Needs attention now ─────────────────────────────────────── */}
       {focusItems.length > 0 ? (
