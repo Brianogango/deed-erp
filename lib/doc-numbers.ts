@@ -3,7 +3,18 @@
  * Server routes should call getNextDocNumber from lib/doc-ref-counter directly.
  */
 
-import type { DocKind } from './doc-ref-counter'
+type DocKind =
+  | 'quote'
+  | 'quotation'
+  | 'invoice'
+  | 'sale_order'
+  | 'client'
+  | 'purchase_order'
+  | 'delivery_note'
+  | 'credit_note'
+  | 'vendor_bill'
+  | 'receipt'
+  | 'payment_receipt'
 
 const PREFIX_TO_KIND: Record<string, DocKind> = {
   QUO: 'quotation',

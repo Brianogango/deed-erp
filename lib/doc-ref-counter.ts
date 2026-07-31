@@ -59,7 +59,7 @@ async function ensureCounterTable() {
   if (process.env.NODE_ENV !== 'test') _tableReady = true
 }
 
-let _tableReady = false
+/** Scan an app_state JSON array blob for the highest PREFIX/YYYY/NNNN ref. */
 async function maxRefFromAppStateBlob(
   key: string,
   extractRef: (item: Record<string, unknown>) => string | undefined,

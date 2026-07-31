@@ -579,7 +579,7 @@ export const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
   crmPipelineStages: ['Inquiry Received', 'Assigned', 'Contacted', 'Qualified', 'Needs Confirmed', 'Quote Sent', 'Follow-up', 'Won', 'Lost'],
   crmEnforceNextActivity: true, crmAutoAssignLeads: false, crmAutoFollowUpAfterQuote: true,
   salesQuotationTemplates: true, salesOptionalProducts: true, salesDigitalSignature: false,
-  salesOnlineAcceptance: false, salesPricelists: false, salesDiscountControl: true, salesConfirmedQuotesToOrders: true,
+  salesOnlineAcceptance: false, salesPricelists: true, salesDiscountControl: true, salesConfirmedQuotesToOrders: true,
   salesLockConfirmed: true,
   invProductsMasterOnly: true, invNoDirectStockEdits: true, invMultiStepRoutes: true,
   invStorageLocations: ['Incoming', 'Workshop', 'Ready for Sale', 'Faulty / Scrap'],
@@ -825,6 +825,7 @@ export interface SaleOrder {
   total: number
   amountPaid: number
   notes?: string
+  lockVersion?: number
   createdById?: string
   createdByUserId?: string
   createdByName?: string
@@ -1197,7 +1198,7 @@ export interface RiderWeeklyPay {
 // Enhanced Purchase Order Line with serial tracking
 export interface POLine {
   id: string; productId: string; productName: string
-  qty: number; qtyReceived: number; unitPrice: number; taxRate: number; subtotal: number
+  qty: number; qtyReceived: number; qtyBilled?: number; unitPrice: number; taxRate: number; subtotal: number
   requiresSerial: boolean
   importedSerials?: string[]   // serials pre-loaded from CSV import (auto-fills GRN)
   specs?: string               // product specs from import (e.g. "Intel i5, 8GB RAM, 512GB SSD")
@@ -1212,6 +1213,7 @@ export interface PurchaseOrder {
   date: string; expectedDate: string
   lines: POLine[]; subtotal: number; taxTotal: number; total: number
   billId?: string; notes: string; receiptIds: string[]
+  lockVersion?: number
   // Repair procurement link — set when auto-created from a repair procurement request
   repairId?: string; repairRef?: string; procurementRequestId?: string
 }
@@ -2887,7 +2889,7 @@ export interface AppState {
   setInvoicePaymentBlocked: (id: string, blocked: boolean) => void
   registerPayment: (invoiceId: string, amount: number, method?: string, bankAccountId?: string, reference?: string, paymentDate?: string) => void
   resetInvoiceToDraft: (id: string) => void
-  cancelInvoice: (id: string) => void
+  cancelInvoice: (id: string, forcedCreditRef?: string) => void
   deleteInvoice: (id: string) => void
 
   // Audit logs
@@ -3059,7 +3061,7 @@ export interface AppState {
   cancelReservation: (referenceId: string, reason: string) => void
   
   // Delivery & Fulfillment
-  createDeliveryFromSO: (salesOrderId: string) => Delivery | null
+  createDeliveryFromSO: (salesOrderId: string, forcedRef?: string) => Delivery | null
   confirmDeliveryWithStockDeduction: (deliveryId: string) => void
   createInvoiceFromDelivery: (deliveryId: string) => Invoice | null
   
@@ -5522,11 +5524,11 @@ const storeCtx: AppState = {
     // Payments & Credit
     payments,
     customerCredits,
-    createPayment: (customerId, customerName, amount, method, reference, notes) => {
+    createPayment: (customerId, customerName, amount, method, reference, notes, forcedReceiptNumber) => {
       const user = currentUser()
       const payment: Payment = {
         id: uid(), ref: seq('PAY', 'rec'), customerId, customerName, amount, method,
-        reference, receiptNumber: docSeq('RCT'), invoices: [], status: 'cleared',
+        reference, receiptNumber: forcedReceiptNumber ?? docSeq('RCT'), invoices: [], status: 'cleared',
         receivedBy: user?.name ?? 'System', receivedDate: now(), clearedDate: now(),
         accountingDate: now(), notes
       }
@@ -8839,10 +8841,12 @@ const storeCtx: AppState = {
           confirmedAt: new Date().toISOString(),
           confirmedById: user.id,
           confirmedByName: user.name,
-          locked: systemSettings.salesLockConfirmed || undefined,
+          approvedBy: user.id,
           approvalStatus: salesApprovalRequests.length ? 'approved' as const : 'not_required' as const,
+          locked: systemSettings.salesLockConfirmed || undefined,
           stockReservationIds: s.stockReservationIds ?? [],
           deliveryId: del.id,
+          lockVersion: s.lockVersion,
         }
         sync(`/api/sale-orders/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
         return updated
@@ -9532,7 +9536,7 @@ const storeCtx: AppState = {
         return next
       })
     },
-    postInvoice: (id) => {
+    postInvoice: (id, forcedRef) => {
       const actor = currentUser()
       if (!canManageFinance(actor)) {
         showToast('Only Finance or Admin Officer can post invoices', 'error'); return
@@ -9556,7 +9560,7 @@ const storeCtx: AppState = {
       // Posting assigns the official number: drafts carry a placeholder ref
       // until Finance confirms them (Odoo behaviour).
       const finalRef = isDraftInvoiceRef(inv.ref)
-        ? docSeq(inv.type === 'vendor_bill' ? 'BILL' : 'INV')
+        ? (forcedRef ?? docSeq(inv.type === 'vendor_bill' ? 'BILL' : 'INV'))
         : inv.ref
       const postedMeta = {
         ref: finalRef,
@@ -9701,7 +9705,7 @@ const storeCtx: AppState = {
       addAuditLog('reset_invoice_draft', inv.ref, `${inv.type === 'vendor_bill' ? 'Bill' : 'Invoice'} reset to draft${reversals.length ? ` with ${reversals.length} reversal journal${reversals.length === 1 ? '' : 's'}` : ''}`)
       showToast(`${inv.type === 'vendor_bill' ? 'Bill' : 'Invoice'} reset to draft`)
     },
-    cancelInvoice: (id) => {
+    cancelInvoice: (id, forcedCreditRef) => {
       const actor = currentUser()
       if (!canManageFullFinanceAction(actor)) {
         showToast('Only Finance or Director can cancel invoices', 'error')
@@ -9724,7 +9728,7 @@ const storeCtx: AppState = {
         const creditAmount = Math.min(inv.amountPaid, inv.total)
         credit = {
           id: uid(),
-          ref: docSeq('CN'),
+          ref: forcedCreditRef ?? docSeq('CN'),
           customerId: inv.partnerId,
           customerName: inv.partnerName,
           sourceInvoiceId: inv.id,
@@ -9772,14 +9776,27 @@ const storeCtx: AppState = {
     },
     addAuditLog: (action, documentRef, details) => { addAuditLog(action, documentRef, details) },
 
+    allocateDocRef: async (prefix) => {
+      const { prefixToKind, allocateDocNumber, allocateDocNumberSync } = await import('@/lib/doc-numbers')
+      const kind = prefixToKind(prefix)
+      if (typeof window !== 'undefined' && kind) {
+        try {
+          return await allocateDocNumber(kind)
+        } catch {
+          /* fall through to local sequence */
+        }
+      }
+      return allocateDocNumberSync(prefix)
+    },
+
     // ── Purchase Orders ───────────────────────────────────────────────────────
-    createPO: (vendorId, vendorName, initial = {}) => {
+    createPO: (vendorId, vendorName, initial = {}, forcedRef) => {
       if (!canManageProcurement(currentUser())) {
         showToast('Only Inventory or Admin can create Purchase Orders', 'error'); return {} as PurchaseOrder;
       }
       const initialLines = initial.lines ?? []
       const po: PurchaseOrder = {
-        id: uid(), ref: docSeq('PO'), status: 'draft', vendorId, vendorName,
+        id: uid(), ref: forcedRef ?? docSeq('PO'), status: 'draft', vendorId, vendorName,
         date: now(), expectedDate: initial.expectedDate ?? addDays(now(), 7),
         lines: initialLines, ...calcPO(initialLines), notes: initial.notes ?? '', receiptIds: [],
       }
@@ -9921,7 +9938,7 @@ const storeCtx: AppState = {
         return recRef.current.find(r => r.poId === poId && r.status === 'draft') ?? null
       }
       const receipt: Receipt = {
-        id: uid(), ref: docSeq('REC'), poId, poRef: po.ref,
+        id: uid(), ref: forcedRef ?? docSeq('REC'), poId, poRef: po.ref,
         vendorId: po.vendorId, vendorName: po.vendorName,
         status: 'draft', date: now(),
         lines: outstandingLines.map(l => ({
@@ -10159,15 +10176,29 @@ const storeCtx: AppState = {
       if (po.billId) { showToast('A bill already exists for this purchase order', 'error'); return null }
       const hasValidatedReceipt = recRef.current.some(r => r.poId === poId && r.status === 'validated')
       if (!hasValidatedReceipt) { showToast('Receive goods before creating a vendor bill', 'error'); return null }
-      const sub = po.lines.reduce((a, l) => a + l.qtyReceived * l.unitPrice, 0)
-      const tax = po.lines.reduce((a, l) => a + Math.round(l.qtyReceived * l.unitPrice * l.taxRate / 100), 0)
+
+      const billableLines = po.lines
+        .map(l => {
+          const qtyBilled = l.qtyBilled ?? 0
+          const billQty = Math.max(0, l.qtyReceived - qtyBilled)
+          return { ...l, billQty }
+        })
+        .filter(l => l.billQty > 0)
+
+      if (billableLines.length === 0) {
+        showToast('No received quantity left to bill on this purchase order', 'error')
+        return null
+      }
+
+      const sub = billableLines.reduce((a, l) => a + l.billQty * l.unitPrice, 0)
+      const tax = billableLines.reduce((a, l) => a + Math.round(l.billQty * l.unitPrice * l.taxRate / 100), 0)
       const bill: Invoice = {
         id: uid(), ref: seq('BILL', 'inv'), type: 'vendor_bill', status: 'draft',
         partnerId: po.vendorId, partnerName: po.vendorName,
         date: now(), dueDate: addDays(now(), 30),
-        lines: po.lines.filter(l => l.qtyReceived > 0).map(l => ({
-          id: uid(), description: `${l.productName} ×${l.qtyReceived}`, qty: l.qtyReceived,
-          unitPrice: l.unitPrice, taxRate: l.taxRate, subtotal: l.qtyReceived * l.unitPrice,
+        lines: billableLines.map(l => ({
+          id: uid(), description: `${l.productName} ×${l.billQty}`, qty: l.billQty,
+          unitPrice: l.unitPrice, taxRate: l.taxRate, subtotal: l.billQty * l.unitPrice,
         })),
         subtotal: sub, taxTotal: tax, total: sub + tax, amountPaid: 0,
         purchaseOrderId: po.id, notes: '',
@@ -10175,7 +10206,15 @@ const storeCtx: AppState = {
       setInvoices(p => [bill, ...p])
       sync('/api/invoices', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(bill) })
       setPurchaseOrders(p => {
-        const next = p.map(x => x.id === poId ? { ...x, billId: bill.id } : x)
+        const next = p.map(x => {
+          if (x.id !== poId) return x
+          const lines = x.lines.map(line => {
+            const match = billableLines.find(b => b.id === line.id)
+            if (!match) return line
+            return { ...line, qtyBilled: (line.qtyBilled ?? 0) + match.billQty }
+          })
+          return { ...x, billId: bill.id, lines }
+        })
         const updated = next.find(x => x.id === poId)
         if (updated) sync(`/api/purchase-orders/${poId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
         return next
@@ -13339,7 +13378,7 @@ const storeCtx: AppState = {
     },
 
     // ── Delivery & Fulfillment ───────────────────────────────────────────────
-    createDeliveryFromSO: (salesOrderId) => {
+    createDeliveryFromSO: (salesOrderId, forcedRef) => {
       const so = saleOrders.find(s => s.id === salesOrderId)
       if (!so) {
         showToast('Sales order not found', 'error')
@@ -13348,7 +13387,7 @@ const storeCtx: AppState = {
       
       const delivery: Delivery = {
         id: uid(),
-        ref: docSeq('DN'),
+        ref: forcedRef ?? docSeq('DN'),
         saleOrderId: so.id,
         saleOrderRef: so.ref,
         customerId: so.customerId,
