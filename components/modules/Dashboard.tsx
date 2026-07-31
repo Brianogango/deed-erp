@@ -110,20 +110,20 @@ function KpiCard({
       } as React.CSSProperties}
     >
       <div className="flex items-start justify-between gap-3 w-full">
-        <p className="text-[10px] font-bold tracking-[0.04em] text-[var(--text-3)] leading-tight flex-1">
+        <p className="text-xs font-bold tracking-[0.04em] text-[var(--text-3)] leading-tight flex-1">
           {label}
         </p>
         <div className="dashboard-stat-icon" style={{ color }}>
-          <span className="text-sm">{icon}</span>
+          <span className="text-base">{icon}</span>
         </div>
       </div>
       <div className="mt-5 w-full">
         <p
-          className={`text-[1.4rem] sm:text-[1.6rem] font-extrabold leading-none mb-2 truncate text-[var(--text-1)] ${isCurrency ? 'font-mono tracking-tight' : ''}`}
+          className={`text-[1.65rem] sm:text-[1.85rem] font-extrabold leading-none mb-2 truncate text-[var(--text-1)] ${isCurrency ? 'font-mono tracking-tight' : ''}`}
         >
           {isCurrency && typeof value === 'number' ? fmtKes(value) : value}
         </p>
-        <p className="text-[11px] text-[var(--text-4)] leading-snug line-clamp-2 sm:truncate">{sub}</p>
+        <p className="text-[13px] text-[var(--text-4)] leading-snug line-clamp-2 sm:truncate">{sub}</p>
       </div>
       <span className="dashboard-stat-accent" aria-hidden="true" />
     </button>
@@ -134,8 +134,8 @@ function CardHeader({ title, sub, action }: { title: string; sub?: string; actio
   return (
     <div className="flex flex-col sm:flex-row sm:items-center justify-between px-4 sm:px-5 py-4 border-b border-[var(--border-lt)] gap-2 sm:gap-0">
       <div className="min-w-0 pr-2">
-        <h3 className="text-[13px] font-extrabold text-[var(--text-1)] truncate">{title}</h3>
-        {sub && <p className="text-[10px] text-[var(--text-3)] mt-0.5 truncate">{sub}</p>}
+        <h3 className="text-[15px] font-extrabold text-[var(--text-1)] truncate">{title}</h3>
+        {sub && <p className="text-xs text-[var(--text-3)] mt-0.5 truncate">{sub}</p>}
       </div>
       {action && <div className="flex-shrink-0 self-start sm:self-auto">{action}</div>}
     </div>
@@ -146,7 +146,7 @@ function SectionLabel({ label }: { label: string }) {
   return (
     <div className="flex items-center gap-3 mt-1">
       <span className="w-6 h-px bg-primary-500 rounded-full inline-block flex-shrink-0" />
-      <h2 className="text-xs font-semibold text-[var(--text-3)]">{label}</h2>
+      <h2 className="text-sm font-semibold text-[var(--text-3)]">{label}</h2>
     </div>
   )
 }
@@ -157,7 +157,7 @@ function EmptyState({ message }: { message: string }) {
       <div className="w-10 h-10 rounded-full flex items-center justify-center text-base" style={{ background: 'var(--success-bg)', color: 'var(--success-text)' }}>
         <Fa icon={faCircleCheck} />
       </div>
-      <p className="text-xs text-[var(--text-4)]">{message}</p>
+      <p className="text-sm text-[var(--text-4)] leading-relaxed">{message}</p>
     </div>
   )
 }
@@ -186,8 +186,8 @@ function CollapsibleSection({ id, title, sub, defaultOpen = false, accent = 'var
         <div className="flex items-center gap-3 min-w-0">
           <div className="dashboard-insight-icon" aria-hidden="true">{icon}</div>
           <div className="min-w-0 pr-2">
-            <h3 className="text-xs font-extrabold text-[var(--text-1)] truncate">{title}</h3>
-            {sub && <p className="text-[10px] text-[var(--text-3)] mt-1 truncate">{sub}</p>}
+            <h3 className="text-sm font-extrabold text-[var(--text-1)] truncate">{title}</h3>
+            {sub && <p className="text-xs text-[var(--text-3)] mt-1 truncate">{sub}</p>}
           </div>
         </div>
         <span className="dashboard-insight-toggle">{open ? 'Close' : 'Explore'}</span>
@@ -567,10 +567,9 @@ export function Dashboard() {
     if (canSeeSales) actions.unshift({ key: 'sales', title: isSalesRep ? 'My Sales Pipeline' : 'Sales Pipeline', desc: 'Quotations, sales orders, and customers', module: 'sales', path: '/sales', color: '#3B82F6', icon: <Fa icon={faClipboardList} /> })
     if (canSeeInventory) actions.unshift({ key: 'inventory', title: 'Stock Control', desc: 'Stock levels, transfers, and counts', module: 'inventory', path: '/operations', color: '#D97706', icon: <Fa icon={faBoxesStacked} /> })
     if (canSeeKilimall) actions.unshift({ key: 'kilimall', title: 'Kilimall Orders', desc: 'Allocate stock and manage returns', module: 'kilimall', path: '/kilimall', color: '#F59E0B', icon: <Fa icon={faCartShopping} /> })
-    if (canSeeWorkshop) actions.unshift({ key: 'repairs', title: isTechnician ? 'My Repair Jobs' : 'Repair Workshop', desc: isTechnician ? 'Assigned repairs only' : 'Assignment, QA, and refurbishment', module: 'repair', path: '/repairs', color: '#8B5CF6', icon: <Fa icon={faScrewdriverWrench} /> })
 
     return actions.filter(a => !a.module || has(a.module)).slice(0, 8)
-  }, [canSeeFinance, canSeeSales, canSeeInventory, canSeeKilimall, canSeeWorkshop, isSalesRep, isTechnician, has])
+  }, [canSeeFinance, canSeeSales, canSeeInventory, canSeeKilimall, isSalesRep, has])
 
   // P1 — "Needs attention now". Everything here is either overdue, waiting on
   // an approval, or blocking someone. Every entry links to where it is fixed.
@@ -697,16 +696,16 @@ export function Dashboard() {
           </div>
           <div className="min-w-0">
             <p className="dashboard-eyebrow">Your workspace</p>
-            <h2 className="text-xl sm:text-2xl font-extrabold text-[var(--text-1)] truncate">
+            <h2 className="text-2xl sm:text-3xl font-extrabold text-[var(--text-1)] truncate tracking-tight">
               {dashboardClock.greeting}, {currentUser?.name?.split(' ')[0] || 'there'}
             </h2>
-            <p className="text-xs text-[var(--text-3)] mt-1">
+            <p className="text-sm text-[var(--text-3)] mt-1.5 leading-relaxed">
               Here&apos;s what needs your attention today.
             </p>
           </div>
         </div>
         <div className="relative z-[1] flex flex-col sm:items-end gap-3">
-          <div className="flex items-center gap-2 text-[10px] font-semibold text-[var(--text-3)]">
+          <div className="flex items-center gap-2 text-xs font-semibold text-[var(--text-3)]">
             <span className="dashboard-role-pill">{formatRoleLabel(role)}</span>
             <span>{dashboardClock.date}</span>
           </div>
@@ -737,8 +736,8 @@ export function Dashboard() {
               >
                 <span className="dashboard-alert-dot" aria-hidden="true" />
                 <span className="min-w-0">
-                  <span className="block text-xs font-bold text-[var(--text-1)] truncate">{item.title}</span>
-                  <span className="block text-[10px] text-[var(--text-3)] mt-1 truncate">{item.sub}</span>
+                  <span className="block text-sm font-bold text-[var(--text-1)] truncate">{item.title}</span>
+                  <span className="block text-xs text-[var(--text-3)] mt-1 truncate">{item.sub}</span>
                 </span>
               </button>
             ))}
@@ -748,8 +747,8 @@ export function Dashboard() {
         <div className="dashboard-all-clear">
           <div className="dashboard-all-clear-icon"><Fa icon={faCircleCheck} /></div>
           <div>
-            <p className="text-xs font-extrabold text-[var(--text-1)]">You&apos;re all caught up</p>
-            <p className="text-[10px] text-[var(--text-3)] mt-0.5">No overdue approvals, blockers, or urgent exceptions for your role.</p>
+            <p className="text-sm font-extrabold text-[var(--text-1)]">You&apos;re all caught up</p>
+            <p className="text-xs text-[var(--text-3)] mt-0.5 leading-relaxed">No overdue approvals, blockers, or urgent exceptions for your role.</p>
           </div>
         </div>
       )}
@@ -777,12 +776,12 @@ export function Dashboard() {
                         <div className="flex items-center gap-3 min-w-0">
                           <div className={`dashboard-row-symbol ${isOut ? 'is-danger' : 'is-warning'}`}>SKU</div>
                           <div className="min-w-0">
-                            <p className="text-xs font-bold text-[var(--text-1)] truncate">{p.name}</p>
-                            <p className="text-[10px] text-[var(--text-3)] truncate">{p.category}</p>
+                            <p className="text-sm font-bold text-[var(--text-1)] truncate">{p.name}</p>
+                            <p className="text-xs text-[var(--text-3)] truncate">{p.category}</p>
                           </div>
                         </div>
                         <div className="flex items-center gap-3">
-                          <span className="text-[10px] font-mono text-[var(--text-2)]">{p.stockQty}/{p.minStock}</span>
+                          <span className="text-xs font-mono text-[var(--text-2)]">{p.stockQty}/{p.minStock}</span>
                           <Badge status={isOut ? 'cancelled' : 'pending'} label={isOut ? 'Out' : 'Low'} />
                         </div>
                       </div>
@@ -802,8 +801,8 @@ export function Dashboard() {
                       <div className="flex items-center gap-3 min-w-0">
                         <div className="dashboard-row-symbol is-repair"><Fa icon={faScrewdriverWrench} /></div>
                         <div className="min-w-0">
-                          <p className="text-xs font-bold text-[var(--text-1)] truncate">{r.ref} · {r.productName}</p>
-                          <p className="text-[10px] text-[var(--text-3)] truncate">{r.customerName}{r.assignedTechnicianName ? ` · ${r.assignedTechnicianName}` : ''}</p>
+                          <p className="text-sm font-bold text-[var(--text-1)] truncate">{r.ref} · {r.productName}</p>
+                          <p className="text-xs text-[var(--text-3)] truncate">{r.customerName}{r.assignedTechnicianName ? ` · ${r.assignedTechnicianName}` : ''}</p>
                         </div>
                       </div>
                       <Badge status={r.status === 'ready' || r.status === 'closed' ? 'active' : r.status === 'cancelled' ? 'cancelled' : 'pending'} label={r.status.replace(/_/g, ' ')} />
@@ -844,9 +843,9 @@ export function Dashboard() {
                     const color = CATEGORY_COLORS[cat] ?? '#6B7280'
                     return (
                       <div key={cat} className="dashboard-category-card">
-                        <p className="text-[9px] font-bold tracking-wide truncate" style={{ color }}>{cat}</p>
-                        <p className="text-sm font-extrabold text-[var(--text-1)]">{canSeeFinance ? fmtKes(val) : `${qty} units`}</p>
-                        <p className="text-[9px] text-[var(--text-4)]">{prods.length} items · {qty} units</p>
+                        <p className="text-[11px] font-bold tracking-wide truncate" style={{ color }}>{cat}</p>
+                        <p className="text-base font-extrabold text-[var(--text-1)]">{canSeeFinance ? fmtKes(val) : `${qty} units`}</p>
+                        <p className="text-[11px] text-[var(--text-4)]">{prods.length} items · {qty} units</p>
                       </div>
                     )
                   })}
@@ -863,7 +862,7 @@ export function Dashboard() {
                       { label: 'Actual sales', color: '#1D4ED8' },
                       { label: 'Repair revenue', color: '#047857' },
                     ].map(item => (
-                      <span key={item.label} className="flex items-center gap-2 text-[11px] font-bold text-[var(--text-1)]">
+                      <span key={item.label} className="flex items-center gap-2 text-xs font-bold text-[var(--text-1)]">
                         <span className="inline-block w-3 h-3 rounded-sm flex-shrink-0" style={{ background: item.color }} />
                         {item.label}
                       </span>
@@ -877,7 +876,7 @@ export function Dashboard() {
                     ]
                     return (
                       <div key={m.label}>
-                        <div className="flex justify-between mb-1.5 text-[11px]">
+                        <div className="flex justify-between mb-1.5 text-xs">
                           <span className="font-extrabold text-[var(--text-1)]">
                             {m.label}{isCurrent ? ' · current' : ''}
                           </span>
@@ -895,7 +894,7 @@ export function Dashboard() {
                                   }}
                                 />
                               </div>
-                              <span className="w-28 text-right font-mono text-[11px] font-bold" style={{ color: row.color }}>{fmtKes(row.value)}</span>
+                              <span className="w-28 text-right font-mono text-xs font-bold" style={{ color: row.color }}>{fmtKes(row.value)}</span>
                             </div>
                           ))}
                         </div>
@@ -910,8 +909,8 @@ export function Dashboard() {
                       { label: 'Repair MoM', value: `${techLeadStats.revenueChange >= 0 ? '+' : ''}${techLeadStats.revenueChange.toFixed(1)}%`, color: techLeadStats.revenueChange >= 0 ? '#047857' : '#B91C1C' },
                     ].map(item => (
                       <div key={item.label} className="dashboard-category-card">
-                        <p className="text-[9px] font-bold text-[var(--text-3)] uppercase tracking-wide">{item.label}</p>
-                        <p className="text-sm font-extrabold mt-1" style={{ color: item.color }}>{item.value}</p>
+                        <p className="text-[11px] font-bold text-[var(--text-3)] uppercase tracking-wide">{item.label}</p>
+                        <p className="text-base font-extrabold mt-1" style={{ color: item.color }}>{item.value}</p>
                       </div>
                     ))}
                   </div>
@@ -939,8 +938,8 @@ export function Dashboard() {
                   {action.icon}
                 </div>
                 <span className="min-w-0">
-                  <span className="block text-xs font-bold text-[var(--text-1)] truncate">{action.title}</span>
-                  <span className="block text-[10px] text-[var(--text-4)] mt-1 leading-snug line-clamp-2">{action.desc}</span>
+                  <span className="block text-sm font-bold text-[var(--text-1)] truncate">{action.title}</span>
+                  <span className="block text-xs text-[var(--text-4)] mt-1 leading-snug line-clamp-2">{action.desc}</span>
                 </span>
               </button>
             ))}
@@ -963,8 +962,8 @@ export function Dashboard() {
                   onClick={() => handleNav(item.module, item.path)}
                   className="dashboard-self-service"
                 >
-                  <span className="text-base font-extrabold text-primary-600">{item.value}</span>
-                  <span className="text-[9px] font-bold text-[var(--text-4)]">{item.label}</span>
+                  <span className="text-lg font-extrabold text-primary-600">{item.value}</span>
+                  <span className="text-[11px] font-bold text-[var(--text-4)]">{item.label}</span>
                 </button>
               ))}
             </div>
@@ -979,10 +978,10 @@ export function Dashboard() {
                     {item.icon}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-[11px] font-bold text-[var(--text-1)] truncate">{item.title}</p>
-                    <p className="text-[9px] text-[var(--text-3)] mt-0.5 truncate">{item.sub}</p>
+                    <p className="text-[13px] font-bold text-[var(--text-1)] truncate">{item.title}</p>
+                    <p className="text-[11px] text-[var(--text-3)] mt-0.5 truncate">{item.sub}</p>
                   </div>
-                  <span className="text-[9px] text-[var(--text-4)] flex-shrink-0">{fmtDate(item.date)}</span>
+                  <span className="text-[11px] text-[var(--text-4)] flex-shrink-0">{fmtDate(item.date)}</span>
                 </div>
               ))}
               {activity.length === 0 && <EmptyState message="No recent activity is available for your role" />}
