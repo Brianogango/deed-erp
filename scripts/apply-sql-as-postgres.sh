@@ -50,17 +50,26 @@ DB_NAME="$(
   exit 1
 }
 
-echo "Applying $(basename -- "$SQL_FILE") to database '$DB_NAME' as OS user postgres…"
+# Resolve absolute path while still running as the deploy user (who can read
+# the repo). Pipe SQL on stdin so the postgres OS role never needs filesystem
+# access under /var/www (Permission denied on -f for newer migration files).
+ABS_SQL="$(cd -- "$(dirname -- "$SQL_FILE")" && pwd)/$(basename -- "$SQL_FILE")"
+echo "Applying $(basename -- "$ABS_SQL") to database '$DB_NAME' as OS user postgres…"
+
+run_psql() {
+  # shellcheck disable=SC2086
+  "$@" -v ON_ERROR_STOP=1 -d "$DB_NAME" -f -
+}
 
 if command -v sudo >/dev/null 2>&1; then
   if sudo -n -u postgres true 2>/dev/null; then
-    sudo -n -u postgres psql -v ON_ERROR_STOP=1 -d "$DB_NAME" -f "$SQL_FILE"
+    run_psql sudo -n -u postgres psql < "$ABS_SQL"
   else
-    sudo -u postgres psql -v ON_ERROR_STOP=1 -d "$DB_NAME" -f "$SQL_FILE"
+    run_psql sudo -u postgres psql < "$ABS_SQL"
   fi
 else
   # Already running as postgres, or no sudo available
-  psql -v ON_ERROR_STOP=1 -d "$DB_NAME" -f "$SQL_FILE"
+  run_psql psql < "$ABS_SQL"
 fi
 
 echo "SQL applied successfully."
