@@ -52,7 +52,7 @@ export interface RepairDiagnosis {
 
 export interface RepairQuoteLine {
   id: string
-  type: 'part' | 'labor' | 'logistics'
+  type: 'part' | 'labor' | 'logistics' | 'software' | 'license' | 'service'
   description: string
   productId?: string
   productName?: string
@@ -61,6 +61,8 @@ export interface RepairQuoteLine {
   subtotal: number
   reserved: boolean  // Stock reserved for this repair
   decision?: RepairQuoteLineDecision
+  /** Locked Diagnosis First fee line — not removable; 0% VAT. */
+  isDiagnosisFee?: boolean
 }
 
 export interface RepairQuote {
@@ -146,6 +148,15 @@ export interface RepairOrder {
    * (not mirrored to Prisma `repairs` yet).
    */
   repairPath?: 'diagnosis_first' | 'direct_repair'
+  deviceTier?: 'regular' | 'high_end'
+  deviceType?: string
+  deviceBrand?: string
+  deviceModel?: string
+  diagnosisFee?: number
+  diagnosisFeeStatus?: 'pending' | 'applicable' | 'waived' | 'invoiced' | 'not_applicable'
+  diagnosisFeeWaivedBy?: string
+  diagnosisFeeWaivedReason?: string
+  diagnosisStopped?: boolean
   liabilityWaiverAccepted?: boolean
   liabilityWaiverText?: string
   liabilityWaiverAcceptedAt?: string

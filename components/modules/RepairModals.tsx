@@ -1,8 +1,15 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
-import { useRepairStore, RepairOrder, type RepairQAItem } from '@/lib/store'
+import { useRepairStore, RepairOrder, fmtKes, type RepairQAItem } from '@/lib/store'
 import { DIRECT_REPAIR_WAIVER_TEXT } from '@/lib/repair-path'
+import {
+  DIAGNOSIS_FEE_LINE_DESCRIPTION,
+  deviceTierLabel,
+  isDiagnosisFeeLine,
+  resolveDiagnosisFee,
+  shouldChargeDiagnosisFee,
+} from '@/lib/diagnosis-fee'
 import { Modal, Field, Input, Select, Textarea } from '@/components/ui'
 import { Fa } from '@/components/icons'
 import {
@@ -409,9 +416,11 @@ function ProductPicker({ value, productId, onSelect, products, requireInventory,
  * QuoteModal
  */
 export function QuoteModal({ repair, onClose }: { repair: RepairOrder, onClose: () => void }) {
-  const { generateRepairQuote, companySettings, products } = useRepairStore()
+  const { generateRepairQuote, companySettings, products, systemSettings } = useRepairStore()
   const [applyVat, setApplyVat] = useState(repair.quote ? repair.quote.tax > 0 : false)
   const [submitted, setSubmitted] = useState(false)
+  const feeResolved = resolveDiagnosisFee(repair, systemSettings)
+  const chargeFee = shouldChargeDiagnosisFee(repair) && feeResolved.amount > 0
   const [quoteLines, setQuoteLines] = useState<{
     type: 'part'|'labor'|'software'|'license'|'logistics'|'service'
     description: string
@@ -419,18 +428,37 @@ export function QuoteModal({ repair, onClose }: { repair: RepairOrder, onClose: 
     unitPrice: string
     productId?: string
     stockQty?: number
+    isDiagnosisFee?: boolean
   }[]>(() => {
-    if (repair.quote) return repair.quote.lines.map(l => ({
-      type: l.type as any, description: l.description, qty: String(l.qty),
-      unitPrice: String(l.unitPrice), productId: l.productId,
-    }))
-    return [{ type: 'labor', description: 'Labour & Service Charge', qty: '1', unitPrice: '5000' }]
+    const seed = repair.quote
+      ? repair.quote.lines.map(l => ({
+          type: l.type as any,
+          description: l.description,
+          qty: String(l.qty),
+          unitPrice: String(l.unitPrice),
+          productId: l.productId,
+          isDiagnosisFee: !!l.isDiagnosisFee || isDiagnosisFeeLine(l),
+        }))
+      : [{ type: 'labor' as const, description: 'Labour & Service Charge', qty: '1', unitPrice: '5000' }]
+    if (!chargeFee) return seed.filter(l => !isDiagnosisFeeLine(l))
+    const without = seed.filter(l => !isDiagnosisFeeLine(l))
+    return [
+      {
+        type: 'service' as const,
+        description: DIAGNOSIS_FEE_LINE_DESCRIPTION,
+        qty: '1',
+        unitPrice: String(feeResolved.amount),
+        isDiagnosisFee: true,
+      },
+      ...without,
+    ]
   })
 
   const requiresInventory = (type: string) => INVENTORY_REQUIRED_TYPES.includes(type as InventoryRequiredType)
-  const unlinkedInventoryLines = quoteLines.filter(l => requiresInventory(l.type) && !l.productId)
-  const invalidQuoteLines = quoteLines.filter(l => !l.description.trim() || Number(l.qty) <= 0 || Number(l.unitPrice) < 0)
-  const outOfStockLines = quoteLines.filter(l => requiresInventory(l.type) && l.productId && (l.stockQty ?? 0) === 0)
+  const editableLines = quoteLines.filter(l => !l.isDiagnosisFee && !isDiagnosisFeeLine(l))
+  const unlinkedInventoryLines = editableLines.filter(l => requiresInventory(l.type) && !l.productId)
+  const invalidQuoteLines = editableLines.filter(l => !l.description.trim() || Number(l.qty) <= 0 || Number(l.unitPrice) < 0)
+  const outOfStockLines = editableLines.filter(l => requiresInventory(l.type) && l.productId && (l.stockQty ?? 0) === 0)
   const canSubmit = unlinkedInventoryLines.length === 0 && invalidQuoteLines.length === 0 && quoteLines.length > 0
 
   const handleGenerateQuote = () => {
@@ -439,18 +467,35 @@ export function QuoteModal({ repair, onClose }: { repair: RepairOrder, onClose: 
     const lines = quoteLines.map(line => {
       const qty = Number(line.qty)
       const unitPrice = Number(line.unitPrice) || 0
-      return { type: line.type, description: line.description, productId: line.productId, qty, unitPrice, subtotal: qty * unitPrice }
+      return {
+        type: line.type,
+        description: line.description,
+        productId: line.productId,
+        qty,
+        unitPrice,
+        subtotal: qty * unitPrice,
+        isDiagnosisFee: line.isDiagnosisFee || isDiagnosisFeeLine(line) || undefined,
+      }
     })
     generateRepairQuote(repair.id, lines as any, applyVat)
     onClose()
   }
 
+  const taxable = quoteLines.reduce((s, l) => {
+    if (l.isDiagnosisFee || isDiagnosisFeeLine(l)) return s
+    return s + Math.max(0, Number(l.qty) || 0) * Math.max(0, Number(l.unitPrice) || 0)
+  }, 0)
   const total = quoteLines.reduce((s, l) => s + Math.max(0, Number(l.qty) || 0) * Math.max(0, Number(l.unitPrice) || 0), 0)
-  const vatAmt = applyVat ? Math.round(total * (companySettings.vatRate / 100)) : 0
+  const vatAmt = applyVat ? Math.round(taxable * (companySettings.vatRate / 100)) : 0
 
   return (
     <Modal title={repair.quote ? 'Update Quote' : 'Generate Quote'} subtitle={`Job Ref: ${repair.ref} — ${repair.productName}`} onClose={onClose} width={760} icon={<Fa icon={faFileInvoiceDollar} />} accent="#F59E0B">
       <div className="flex flex-col gap-5">
+        {chargeFee && (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-800 font-semibold">
+            Diagnosis fee KES {feeResolved.amount.toLocaleString('en-KE')} ({deviceTierLabel(feeResolved.tier)}) is locked and separate from labour. VAT on diagnosis fee is 0%.
+          </div>
+        )}
         <div className="rounded-2xl border border-[var(--border)] bg-[var(--bg-surface)] overflow-hidden">
           {/* Table header */}
           <div className="hidden sm:grid grid-cols-[120px_1fr_72px_120px_36px] gap-1 px-3 py-2 bg-[var(--bg-muted)] border-b border-[var(--border)]">
@@ -462,12 +507,14 @@ export function QuoteModal({ repair, onClose }: { repair: RepairOrder, onClose: 
           {/* Lines */}
           <div className="divide-y divide-[var(--border-lt)]">
             {quoteLines.map((line, i) => {
-              const hasInvalidLine = !line.description.trim() || Number(line.qty) <= 0 || Number(line.unitPrice) < 0
+              const locked = !!(line.isDiagnosisFee || isDiagnosisFeeLine(line))
+              const hasInvalidLine = !locked && (!line.description.trim() || Number(line.qty) <= 0 || Number(line.unitPrice) < 0)
               return (
-              <div key={i} className={`grid grid-cols-1 sm:grid-cols-[120px_1fr_72px_120px_36px] gap-2 px-3 py-3 sm:py-2 items-center ${hasInvalidLine && submitted ? 'bg-red-50/70' : ''}`} style={{ animation: 'fadeIn 0.18s ease both', animationDelay: `${i * 40}ms` }}>
+              <div key={i} className={`grid grid-cols-1 sm:grid-cols-[120px_1fr_72px_120px_36px] gap-2 px-3 py-3 sm:py-2 items-center ${hasInvalidLine && submitted ? 'bg-red-50/70' : locked ? 'bg-amber-50/40' : ''}`} style={{ animation: 'fadeIn 0.18s ease both', animationDelay: `${i * 40}ms` }}>
                 <select
                   className="form-input text-[12px] sm:text-[11px] font-bold py-1.5"
                   value={line.type}
+                  disabled={locked}
                   onChange={e => setQuoteLines(prev => prev.map((l, j) => j === i ? { ...l, type: e.target.value as any, productId: undefined, stockQty: undefined } : l))}
                 >
                   <option value="part">Part</option>
@@ -478,7 +525,9 @@ export function QuoteModal({ repair, onClose }: { repair: RepairOrder, onClose: 
                   <option value="service">Service</option>
                 </select>
 
-                {line.type === 'part' || line.type === 'license' || line.type === 'service' ? (
+                {locked ? (
+                  <input className="form-input" value={line.description} readOnly />
+                ) : line.type === 'part' || line.type === 'license' || line.type === 'service' ? (
                   <ProductPicker
                     value={line.description}
                     productId={line.productId}
@@ -502,64 +551,59 @@ export function QuoteModal({ repair, onClose }: { repair: RepairOrder, onClose: 
                 )}
 
                 <input
-                  className={`form-input text-center font-mono text-[13px] sm:text-[12px] ${Number(line.qty) <= 0 && submitted ? 'border-red-300' : ''}`}
-                  type="number" min="1"
+                  className="form-input text-right"
+                  type="number"
+                  min="0"
                   value={line.qty}
+                  readOnly={locked}
                   onChange={e => setQuoteLines(prev => prev.map((l, j) => j === i ? { ...l, qty: e.target.value } : l))}
                 />
                 <input
-                  className="form-input text-right font-mono text-[13px] sm:text-[12px]"
-                  type="number" min="0"
+                  className="form-input text-right"
+                  type="number"
+                  min="0"
                   value={line.unitPrice}
+                  readOnly={locked}
                   onChange={e => setQuoteLines(prev => prev.map((l, j) => j === i ? { ...l, unitPrice: e.target.value } : l))}
                 />
                 <button
+                  type="button"
+                  className="text-[var(--text-4)] hover:text-red-500 disabled:opacity-30"
+                  disabled={locked || quoteLines.length <= 1}
+                  title={locked ? 'Diagnosis fee is locked' : 'Remove line'}
                   onClick={() => setQuoteLines(prev => prev.filter((_, j) => j !== i))}
-                  className="w-9 h-9 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center text-[var(--text-4)] hover:text-red-500 hover:bg-[rgba(239,68,68,0.08)] transition-all justify-self-end"
-                >×</button>
+                >
+                  ×
+                </button>
               </div>
             )})}
           </div>
-
-          {/* Footer row */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-3 py-2.5 border-t border-[var(--border)] bg-[var(--bg-card)]">
-            <button
-              className="text-[11px] sm:text-[10px] font-black flex items-center justify-center sm:justify-start gap-1.5 px-3 py-1.5 rounded-lg transition-all w-full sm:w-auto"
-              style={{ color: 'var(--warning)', background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.2)' }}
-              onClick={() => setQuoteLines(prev => [...prev, { type: 'part', description: '', qty: '1', unitPrice: '0' }])}
-            >
-              + ADD LINE
-            </button>
-            <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-5 w-full sm:w-auto">
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input type="checkbox" className="w-4 h-4 rounded" checked={applyVat} onChange={e => setApplyVat(e.target.checked)} />
-                <span className="text-[11px] sm:text-[10px] font-bold text-[var(--text-3)]">VAT {companySettings.vatRate}%</span>
-              </label>
-              <div className="text-left sm:text-right space-y-0.5">
-                {applyVat && (
-                  <p className="text-[11px] sm:text-[10px] text-[var(--text-4)] font-medium">Subtotal: KES {total.toLocaleString()} + VAT {vatAmt.toLocaleString()}</p>
-                )}
-                <p className="text-xl sm:text-lg font-black text-[var(--text-1)] font-mono">KES {(total + vatAmt).toLocaleString()}</p>
-              </div>
-            </div>
-          </div>
         </div>
 
-        {/* Hard block — unlinked inventory lines */}
-        {submitted && !canSubmit && (
-          <div className="flex items-start gap-3 p-3.5 rounded-xl border border-red-500/30 bg-[rgba(239,68,68,0.07)]">
-            <Fa icon={faExclamationCircle} className="text-red-500 mt-0.5 shrink-0" />
-            <div className="flex-1 min-w-0">
-              <p className="text-[11px] font-black text-red-600 uppercase tracking-wide mb-1">Complete quote lines to continue</p>
-              <p className="text-[10px] text-[var(--text-2)] leading-relaxed">
-                Every quote line needs a description, quantity greater than zero, and a non-negative price.
-                Parts and licenses must also be selected from inventory.
-              </p>
-            </div>
-          </div>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <button
+            type="button"
+            className="btn-outline text-xs"
+            onClick={() => setQuoteLines(prev => [...prev, { type: 'labor', description: '', qty: '1', unitPrice: '0' }])}
+          >
+            + Add line
+          </button>
+          <label className="flex items-center gap-2 text-xs font-semibold text-[var(--text-2)]">
+            <input type="checkbox" checked={applyVat} onChange={e => setApplyVat(e.target.checked)} />
+            Apply VAT on labour/parts (diagnosis fee always 0%)
+          </label>
+        </div>
+
+        <div className="rounded-xl border border-[var(--border)] bg-[var(--bg-card)] p-3 text-sm space-y-1">
+          <div className="flex justify-between"><span className="text-[var(--text-3)]">Subtotal</span><span className="font-bold">{fmtKes(total)}</span></div>
+          {applyVat && <div className="flex justify-between"><span className="text-[var(--text-3)]">VAT</span><span className="font-bold">{fmtKes(vatAmt)}</span></div>}
+          <div className="flex justify-between border-t border-[var(--border-lt)] pt-1"><span className="font-black">Total</span><span className="font-black">{fmtKes(total + vatAmt)}</span></div>
+        </div>
+
+        {(submitted && (!canSubmit)) && (
+          <p className="text-[11px] text-red-600 font-semibold">Fix invalid or unlinked inventory lines before generating the quote.</p>
         )}
 
-        {/* Out-of-stock info (non-blocking — procurement fires on approval) */}
         {outOfStockLines.length > 0 && (
           <div className="flex items-start gap-3 p-3.5 rounded-xl border border-amber-500/25 bg-[rgba(245,158,11,0.07)]">
             <Fa icon={faExclamationCircle} className="text-amber-500 mt-0.5 shrink-0" />
@@ -567,20 +611,16 @@ export function QuoteModal({ repair, onClose }: { repair: RepairOrder, onClose: 
               <p className="text-[11px] font-black text-amber-600 uppercase tracking-wide mb-1">Out of Stock — Procurement will be raised</p>
               <p className="text-[10px] text-[var(--text-2)] leading-relaxed">
                 <strong>{outOfStockLines.map(l => l.description).join(', ')}</strong> {outOfStockLines.length === 1 ? 'is' : 'are'} currently out of stock.
-                A procurement request will be created automatically when the client approves and the repair will move to <em>Awaiting Parts</em>.
+                A procurement request will be created automatically when the client approves.
               </p>
             </div>
           </div>
         )}
 
-        <div className="flex gap-2 justify-end pt-3 border-t border-[var(--border-lt)] flex-wrap">
+        <div className="flex gap-2 justify-end pt-2 border-t border-[var(--border-lt)]">
           <button className="btn-outline min-w-[100px]" onClick={onClose}>Cancel</button>
-          <ActionBtn
-            onClick={handleGenerateQuote}
-            color={canSubmit ? 'linear-gradient(135deg,#D97706,#F59E0B)' : '#9CA3AF'}
-            shadow={canSubmit ? '0 8px 24px rgba(245,158,11,0.4)' : 'none'}
-          >
-            <Fa icon={faFileInvoiceDollar} /> {repair.quote ? 'Update & Resend' : 'Generate & Send Quote'}
+          <ActionBtn onClick={handleGenerateQuote} color="linear-gradient(135deg,#D97706,#F59E0B)" shadow="0 8px 24px rgba(245,158,11,0.35)" disabled={submitted && !canSubmit}>
+            <Fa icon={faFileInvoiceDollar} /> {repair.quote ? 'Update Quote' : 'Generate Quote'}
           </ActionBtn>
         </div>
       </div>
@@ -1108,8 +1148,9 @@ export function DeclineModal({ repair, onClose }: { repair: RepairOrder, onClose
  * can correct intake/customer/device details after booking.
  */
 export function EditRepairDetailsModal({ repair, onClose }: { repair: RepairOrder, onClose: () => void }) {
-  const { updateRepair, appendRepairHistory, showToast, currentUserId, users } = useRepairStore()
+  const { updateRepair, appendRepairHistory, showToast, currentUserId, users, systemSettings } = useRepairStore()
   const actor = users.find(u => u.id === currentUserId)
+  const feeLocked = repair.diagnosisFeeStatus === 'invoiced' || repair.diagnosisFeeStatus === 'waived'
   const [form, setForm] = useState({
     customerName: repair.customerName || '',
     customerPhone: repair.customerPhone || '',
@@ -1123,6 +1164,7 @@ export function EditRepairDetailsModal({ repair, onClose }: { repair: RepairOrde
     issueDescription: repair.issueDescription || '',
     intakeNotes: repair.intakeNotes || '',
     repairPath: (repair.repairPath === 'direct_repair' ? 'direct_repair' : 'diagnosis_first') as 'diagnosis_first' | 'direct_repair',
+    deviceTier: (repair.deviceTier === 'high_end' ? 'high_end' : 'regular') as 'regular' | 'high_end',
     consentSignature: repair.liabilityWaiverSignature || '',
     agreeTerms: !!repair.liabilityWaiverAccepted,
   })
@@ -1136,6 +1178,10 @@ export function EditRepairDetailsModal({ repair, onClose }: { repair: RepairOrde
       showToast('Customer signature and terms agreement required when switching to Direct Repair', 'error')
       return
     }
+    if (form.repairPath === 'diagnosis_first' && !['regular', 'high_end'].includes(form.deviceTier)) {
+      showToast('Select Regular or High-end device tier for Diagnosis First', 'error')
+      return
+    }
     const nowIso = new Date().toISOString()
     const pathPatch = pathChanging
       ? form.repairPath === 'direct_repair'
@@ -1145,6 +1191,8 @@ export function EditRepairDetailsModal({ repair, onClose }: { repair: RepairOrde
             liabilityWaiverText: DIRECT_REPAIR_WAIVER_TEXT,
             liabilityWaiverAcceptedAt: nowIso,
             liabilityWaiverSignature: String(form.consentSignature).trim(),
+            diagnosisFee: 0,
+            diagnosisFeeStatus: 'not_applicable' as const,
             notes: `${repair.notes || ''}\n[Workflow path changed → Direct Repair] Signed by: ${String(form.consentSignature).trim()}. By: ${actor?.name || 'staff'}.`.trim(),
           }
         : {
@@ -1156,6 +1204,24 @@ export function EditRepairDetailsModal({ repair, onClose }: { repair: RepairOrde
             notes: `${repair.notes || ''}\n[Workflow path changed → Diagnosis First] By: ${actor?.name || 'staff'}.`.trim(),
           }
       : {}
+
+    const tierPatch = (!feeLocked && form.repairPath === 'diagnosis_first')
+      ? (() => {
+          const amount = resolveDiagnosisFee(
+            { ...repair, repairPath: 'diagnosis_first', deviceTier: form.deviceTier, diagnosisFeeStatus: repair.diagnosisFeeStatus === 'waived' ? 'waived' : 'applicable' },
+            systemSettings,
+          ).amount
+          return {
+            deviceTier: form.deviceTier,
+            diagnosisFee: amount,
+            diagnosisFeeStatus: (repair.diagnosisFeeStatus === 'waived'
+              ? 'waived'
+              : amount > 0 ? 'applicable' : 'not_applicable') as RepairOrder['diagnosisFeeStatus'],
+          }
+        })()
+      : form.repairPath === 'direct_repair'
+        ? { deviceTier: undefined as undefined, diagnosisFee: 0, diagnosisFeeStatus: 'not_applicable' as const }
+        : {}
 
     updateRepair(repair.id, {
       customerName: form.customerName.trim(),
@@ -1171,6 +1237,7 @@ export function EditRepairDetailsModal({ repair, onClose }: { repair: RepairOrde
       intakeNotes: form.intakeNotes.trim(),
       description: form.issueDescription.trim(),
       ...pathPatch,
+      ...tierPatch,
     })
     if (pathChanging && appendRepairHistory) {
       appendRepairHistory(repair.id, {
@@ -1183,6 +1250,9 @@ export function EditRepairDetailsModal({ repair, onClose }: { repair: RepairOrde
     showToast(pathChanging ? 'Repair details and workflow path updated' : 'Repair details updated', 'success')
     onClose()
   }
+
+  const regularFee = resolveDiagnosisFee({ repairPath: 'diagnosis_first', deviceTier: 'regular' }, systemSettings).amount
+  const highEndFee = resolveDiagnosisFee({ repairPath: 'diagnosis_first', deviceTier: 'high_end' }, systemSettings).amount
 
   return (
     <Modal title="Edit Repair Details" subtitle={repair.ref} onClose={onClose} width={560} icon={<Fa icon={faUserGear} />} accent="#2563EB">
@@ -1217,7 +1287,25 @@ export function EditRepairDetailsModal({ repair, onClose }: { repair: RepairOrde
               { value: 'direct_repair', label: 'Direct Repair' },
             ]} />
           </Field>
+          {form.repairPath === 'diagnosis_first' && (
+            <Field label="Device tier (diagnosis fee)">
+              <Select
+                value={form.deviceTier}
+                onChange={v => set('deviceTier')(v)}
+                disabled={feeLocked}
+                options={[
+                  { value: 'regular', label: `Regular — KES ${regularFee.toLocaleString('en-KE')}` },
+                  { value: 'high_end', label: `High-end — KES ${highEndFee.toLocaleString('en-KE')}` },
+                ]}
+              />
+            </Field>
+          )}
         </div>
+        {feeLocked && form.repairPath === 'diagnosis_first' && (
+          <p className="text-[10px] font-semibold text-[var(--text-3)]">
+            Device tier is locked because the diagnosis fee is already {repair.diagnosisFeeStatus}.
+          </p>
+        )}
         {form.repairPath === 'direct_repair' && form.repairPath !== (repair.repairPath === 'direct_repair' ? 'direct_repair' : 'diagnosis_first') && (
           <div className="p-3 rounded-xl space-y-3" style={{ background: '#F5F3FF', border: '1px solid #DDD6FE' }}>
             <p className="text-[10px] font-black uppercase tracking-widest" style={{ color: '#6D28D9' }}>Direct Repair consent</p>
@@ -1246,14 +1334,16 @@ export function EditRepairDetailsModal({ repair, onClose }: { repair: RepairOrde
 }
 
 /**
- * StopAtDiagnosisModal — the customer has decided not to proceed with the
- * repair after diagnosis. The job closes at diagnosis stage with a flat
- * KES 1,500 diagnosis fee and moves to Ready so the device can be invoiced
- * and collected through the normal handover flow.
+ * StopAtDiagnosisModal — customer declines repair after diagnosis.
+ * Diagnosis fee (Regular / High-end) is always charged; labor is not.
  */
 export function StopAtDiagnosisModal({ repair, onClose }: { repair: RepairOrder, onClose: () => void }) {
-  const { stopAtDiagnosis, updateRepair } = useRepairStore()
+  const { stopAtDiagnosis, updateRepair, systemSettings } = useRepairStore()
   const [reason, setReason] = useState('')
+  const fee = resolveDiagnosisFee(repair, systemSettings)
+  const feeLabel = fee.amount > 0
+    ? `KES ${fee.amount.toLocaleString('en-KE')} (${deviceTierLabel(fee.tier)})`
+    : fee.status === 'waived' ? 'waived' : 'KES 0'
 
   const handleConfirm = () => {
     stopAtDiagnosis(repair.id)
@@ -1272,7 +1362,7 @@ export function StopAtDiagnosisModal({ repair, onClose }: { repair: RepairOrder,
           <div className="text-[11px] font-medium leading-relaxed" style={{ color: 'var(--warning-text)' }}>
             <p className="mb-1">The customer is taking the device <strong>without repair</strong>. This will:</p>
             <ul className="list-disc pl-4 space-y-0.5">
-              <li>Charge a flat <strong>KES 1,500 diagnosis fee</strong></li>
+              <li>Charge diagnosis fee <strong>{feeLabel}</strong> (0% VAT; separate from labour)</li>
               <li>Move the job to <strong>Ready</strong> for invoicing and collection</li>
               <li>Release the device through the normal handover flow</li>
             </ul>

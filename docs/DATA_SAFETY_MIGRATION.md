@@ -6,6 +6,8 @@
 ## Repair workflow path (blob-only)
 `repairPath` (`diagnosis_first` | `direct_repair`) and Direct Repair liability-waiver fields live on `deed_repairs_v2` JSON only — they are **not** Prisma `repairs` columns yet. Do not drop or wipe that key when changing path enforcement.
 
+Diagnosis First fee fields also live on the same blob only: `deviceTier` (`regular` | `high_end`, staff-picked), `diagnosisFee`, `diagnosisFeeStatus` (`pending` | `applicable` | `waived` | `invoiced` | `not_applicable`), `diagnosisFeeWaivedBy` / `diagnosisFeeWaivedReason`, and quote-line `isDiagnosisFee`. Amounts default to KES 1,500 / 2,500 via Settings (`diagnosisFeeRegularKes` / `diagnosisFeeHighEndKes`). Fee is always additive to labour (never credited) and billed at 0% VAT.
+
 ## What this change does
 1. Creates relational tables for accounts, journals, product valuations, valuation events, stock reservations, approval rules, **deposits**, **holdovers** (safe SQL, `IF NOT EXISTS`).
 2. **Dual-writes** on blob save:

@@ -54,6 +54,10 @@ export interface PortalRepair {
   assignedTechnicianName?: string
   /** Workflow path — diagnosis_first (default) or direct_repair. */
   repairPath?: 'diagnosis_first' | 'direct_repair'
+  deviceTier?: 'regular' | 'high_end'
+  diagnosisFee?: number
+  diagnosisFeeStatus?: 'pending' | 'applicable' | 'waived' | 'invoiced' | 'not_applicable'
+  diagnosisStopped?: boolean
   liabilityWaiverAccepted?: boolean
   liabilityWaiverAcceptedAt?: string
   diagnosis?: PortalDiagnosis
