@@ -7,7 +7,7 @@
  * - Deduplicate recipients; skip blank / invalid emails.
  * - HR inbox: HR_TEAM_EMAIL → LEAVE_NOTIFY_EMAILS → HR_EMAIL, plus every
  *   active director / admin_officer user email (covers Edwin when he has that role).
- * - Applicant: linked User.email, else Employee.email.
+ * - Applicant decision/booking feedback: Employee.email on the HR record only.
  */
 
 import prisma from '@/lib/prisma'
@@ -114,7 +114,11 @@ export async function resolveHrApproverEmails(): Promise<string[]> {
   }
 }
 
-export async function resolveApplicantEmail(employeeId: string, submittedByUserId?: string | null): Promise<{
+/**
+ * Resolve the employee's email from their HR record (`Employee.email`).
+ * Decision / booking feedback always uses this address — not the login User email.
+ */
+export async function resolveApplicantEmail(employeeId: string, _submittedByUserId?: string | null): Promise<{
   email: string | null
   name: string
 }> {
@@ -125,26 +129,12 @@ export async function resolveApplicantEmail(employeeId: string, submittedByUserI
         firstName: true,
         lastName: true,
         email: true,
-        user: { select: { email: true } },
       },
     })
     const name = employee
       ? `${employee.firstName} ${employee.lastName}`.trim()
       : 'Employee'
-    const fromUser = normalizeEmail(employee?.user?.email)
-    const fromEmployee = normalizeEmail(employee?.email)
-    if (fromUser || fromEmployee) {
-      return { email: fromUser || fromEmployee, name }
-    }
-
-    if (submittedByUserId) {
-      const submitter = await prisma.user.findUnique({
-        where: { id: submittedByUserId },
-        select: { email: true },
-      }).catch(() => null)
-      return { email: normalizeEmail(submitter?.email), name }
-    }
-    return { email: null, name }
+    return { email: normalizeEmail(employee?.email), name }
   } catch (err) {
     console.error('[leave-notifications] failed to resolve applicant email', err)
     return { email: null, name: 'Employee' }
@@ -251,7 +241,7 @@ export async function notifyLeaveDecision(
 ): Promise<void> {
   const applicant = await resolveApplicantEmail(payload.employeeId)
   if (!applicant.email) {
-    console.warn('[leave-notifications] skip decision email — applicant has no email', {
+    console.warn('[leave-notifications] skip decision email — employee HR record has no email', {
       ref: payload.ref,
       employeeId: payload.employeeId,
     })
@@ -300,7 +290,7 @@ export async function notifyLeaveDecision(
 export async function notifyLeaveBookedForEmployee(payload: LeaveNotifyPayload): Promise<void> {
   const applicant = await resolveApplicantEmail(payload.employeeId)
   if (!applicant.email) {
-    console.warn('[leave-notifications] skip booked email — employee has no email', {
+    console.warn('[leave-notifications] skip booked email — employee HR record has no email', {
       ref: payload.ref,
       employeeId: payload.employeeId,
     })

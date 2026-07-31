@@ -50,7 +50,6 @@ describe('leave-notifications', () => {
       firstName: 'Ann',
       lastName: 'Applicant',
       email: 'ann.personal@example.com',
-      user: { email: 'ann@deed.co.ke' },
     })
   })
 
@@ -70,9 +69,9 @@ describe('leave-notifications', () => {
     expect(emails).not.toContain('invalid')
   })
 
-  it('prefers linked user email for the applicant', async () => {
+  it('uses the employee HR-record email for the applicant', async () => {
     const result = await resolveApplicantEmail('emp-1')
-    expect(result.email).toBe('ann@deed.co.ke')
+    expect(result.email).toBe('ann.personal@example.com')
     expect(result.name).toBe('Ann Applicant')
   })
 
@@ -86,7 +85,7 @@ describe('leave-notifications', () => {
     expect(String(args.to)).toContain('hr@deed.co.ke')
   })
 
-  it('emails the applicant on approve', async () => {
+  it('emails the applicant on approve using HR employee email', async () => {
     await notifyLeaveDecision({
       ...sample,
       status: 'approved',
@@ -94,7 +93,7 @@ describe('leave-notifications', () => {
       reviewNotes: 'Enjoy',
     }, 'approved')
     expect(mockSendEmail).toHaveBeenCalledWith(expect.objectContaining({
-      to: 'ann@deed.co.ke',
+      to: 'ann.personal@example.com',
       mailbox: 'hr',
       subject: 'Leave LV/0042 approved',
     }))
@@ -109,17 +108,16 @@ describe('leave-notifications', () => {
       reviewNotes: 'Insufficient cover',
     }, 'rejected')
     expect(mockSendEmail).toHaveBeenCalledWith(expect.objectContaining({
-      to: 'ann@deed.co.ke',
+      to: 'ann.personal@example.com',
       subject: 'Leave LV/0042 declined',
     }))
   })
 
-  it('skips applicant email when no address exists', async () => {
+  it('skips applicant email when HR record has no email', async () => {
     mockPrisma.employee.findUnique.mockResolvedValue({
       firstName: 'No',
       lastName: 'Mail',
       email: null,
-      user: null,
     })
     await notifyLeaveDecision(sample, 'approved')
     expect(mockSendEmail).not.toHaveBeenCalled()
