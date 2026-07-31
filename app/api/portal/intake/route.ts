@@ -4,9 +4,9 @@ import { getNextRepairRef } from '@/lib/repair-ref-counter'
 import { checkRateLimit } from '@/lib/rate-limit'
 import type { RepairOrder } from '@/lib/store'
 import { buildRepairLinkMessage, sendMultiChannelMessage } from '@/lib/integrations/messaging'
+import { DIRECT_REPAIR_WAIVER_TEXT, normalizeRepairPath } from '@/lib/repair-path'
 
 const REPAIR_STORE_KEY = 'deed_repairs_v2'
-const WAIVER_TEXT = 'I authorise Deed to proceed with direct repair work and acknowledge that customer-caused damage, liquid damage, previous tampering, or unavailable parts may affect warranty coverage and repair outcome.'
 
 function clean(value: unknown): string {
   return String(value ?? '').trim()
@@ -37,7 +37,7 @@ export async function POST(req: NextRequest) {
   const customerPhone = clean(body.customerPhone)
   const productName = clean(body.productName)
   const issueDescription = clean(body.issueDescription)
-  const repairPath = clean(body.repairPath) === 'direct_repair' ? 'direct_repair' : 'diagnosis_first'
+  const repairPath = normalizeRepairPath(body.repairPath)
   const liabilityWaiverAccepted = body.liabilityWaiverAccepted === true
 
   if (!customerName) return NextResponse.json({ error: 'Customer name is required.' }, { status: 422 })
@@ -83,7 +83,7 @@ export async function POST(req: NextRequest) {
     accessories,
     repairPath,
     liabilityWaiverAccepted,
-    liabilityWaiverText: repairPath === 'direct_repair' ? WAIVER_TEXT : undefined,
+    liabilityWaiverText: repairPath === 'direct_repair' ? DIRECT_REPAIR_WAIVER_TEXT : undefined,
     liabilityWaiverAcceptedAt: liabilityWaiverAccepted ? now : undefined,
     liabilityWaiverSignature: liabilityWaiverAccepted ? customerName : undefined,
     underWarranty: body.underWarranty === true,

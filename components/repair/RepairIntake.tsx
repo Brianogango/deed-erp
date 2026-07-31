@@ -3,6 +3,7 @@
 
 import { useState, useMemo } from 'react'
 import { useOperationsStore, RepairOrder, fmtDate } from '@/lib/store'
+import { DIRECT_REPAIR_WAIVER_TEXT } from '@/lib/repair-path'
 import { Field, Input, Select, Textarea, Badge } from '@/components/ui'
 import { Fa } from '@/components/icons'
 import {
@@ -323,6 +324,8 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
       const otherItems = device.accessoriesOther.split(',').map(n => n.trim()).filter(Boolean)
       const accessories = [...checkedItems, ...otherItems].map(name => ({ name, received: true }))
 
+      const isDirect = device.repairPath === 'direct_repair'
+      const waiverAt = new Date().toISOString()
       updateRepair(rep.id, {
         status: 'received',
         customerPhone,
@@ -347,7 +350,11 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
         serialWarrantyExceptionNotes: device.serialWarrantyException ? device.serialWarrantyExceptionNotes || undefined : undefined,
         clientCausedDamage: device.clientCausedDamage || undefined,
         clientDamageReason: device.clientCausedDamage ? device.clientDamageReason || undefined : undefined,
-        notes: device.repairPath === 'direct_repair'
+        liabilityWaiverAccepted: isDirect ? true : false,
+        liabilityWaiverText: isDirect ? DIRECT_REPAIR_WAIVER_TEXT : undefined,
+        liabilityWaiverAcceptedAt: isDirect ? waiverAt : undefined,
+        liabilityWaiverSignature: isDirect ? device.consentSignature.trim() : undefined,
+        notes: isDirect
           ? `[Direct Repair Consent] Signed by: ${device.consentSignature}. Liability Waiver Accepted: YES. Device type: ${deviceTypeLabel}.\nTerms Agreed: Customer agrees to bypass the diagnosis phase.`
           : `Device type: ${deviceTypeLabel}.`,
       })

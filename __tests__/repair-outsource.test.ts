@@ -10,15 +10,16 @@ describe('repairOutsourceReadiness', () => {
     if (!result.ok) expect(result.reason).toMatch(/assign a technician/i)
   })
 
-  it('blocks when diagnosis is missing', () => {
+  it('blocks when diagnosis is missing on diagnosis_first', () => {
     const result = repairOutsourceReadiness({
       assignedTechnicianId: 'tech-1',
+      repairPath: 'diagnosis_first',
     })
     expect(result.ok).toBe(false)
     if (!result.ok) expect(result.reason).toMatch(/log a diagnosis/i)
   })
 
-  it('blocks when diagnosis fields are blank', () => {
+  it('blocks when diagnosis fields are blank on diagnosis_first', () => {
     const result = repairOutsourceReadiness({
       assignedTechnicianId: 'tech-1',
       diagnosis: { findings: '  ', faultDescription: '' },
@@ -31,6 +32,14 @@ describe('repairOutsourceReadiness', () => {
     const result = repairOutsourceReadiness({
       assignedTechnicianId: 'tech-1',
       diagnosis: { findings: 'Failed charger IC', faultDescription: 'No power' },
+    })
+    expect(result).toEqual({ ok: true })
+  })
+
+  it('allows direct_repair outsourcing with assignment only', () => {
+    const result = repairOutsourceReadiness({
+      assignedTechnicianId: 'tech-1',
+      repairPath: 'direct_repair',
     })
     expect(result).toEqual({ ok: true })
   })

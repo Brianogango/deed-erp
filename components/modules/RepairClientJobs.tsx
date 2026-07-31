@@ -86,6 +86,9 @@ function MobileRepairCard({ r, onSelect, outsourceJobs }: any) {
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 mb-1 flex-wrap">
             <span className="text-[12px] font-black text-[var(--text-1)] font-mono">{r.ref}</span>
+            <span className={`text-[8px] font-black uppercase px-1.5 py-0.5 rounded-full ${r.repairPath === 'direct_repair' ? 'bg-violet-100 text-violet-700' : 'bg-sky-100 text-sky-700'}`}>
+              {r.repairPath === 'direct_repair' ? 'Direct' : 'Diagnosis'}
+            </span>
             {r.priority && r.priority !== 'normal' && (
               <span className={`text-[8px] font-black uppercase px-1.5 py-0.5 rounded-full ${r.priority === 'urgent' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>
                 {r.priority}
@@ -145,6 +148,7 @@ export default function RepairClientJobs({ onNewIntake, onSelect }: { onNewIntak
   const [searchQuery, setSearchQuery]       = useState('')
   const [statusFilter, setStatusFilter]     = useState(filter ?? 'all')
   const [techFilter, setTechFilter]         = useState('all')
+  const [pathFilter, setPathFilter]         = useState<'all' | 'diagnosis_first' | 'direct_repair'>('all')
   const [priorityFilter, setPriorityFilter] = useState('all')
   const [dateFrom, setDateFrom]             = useState('')
   const [dateTo, setDateTo]                 = useState('')
@@ -162,7 +166,7 @@ export default function RepairClientJobs({ onNewIntake, onSelect }: { onNewIntak
 
   const clearAll = () => {
     setSearchQuery(''); handleStatusChange('all')
-    setTechFilter('all'); setPriorityFilter('all'); setDateFrom(''); setDateTo('')
+    setTechFilter('all'); setPathFilter('all'); setPriorityFilter('all'); setDateFrom(''); setDateTo('')
   }
 
   const filteredRepairs = useMemo(() => {
@@ -183,11 +187,13 @@ export default function RepairClientJobs({ onNewIntake, onSelect }: { onNewIntak
     else if (statusFilter === 'done_group') list = list.filter(r => ['delivered','closed'].includes(r.status))
     else if (statusFilter !== 'all') list = list.filter(r => r.status === statusFilter)
     if (techFilter !== 'all') list = techFilter === 'unassigned' ? list.filter(r => !r.assignedTechnicianId) : list.filter(r => r.assignedTechnicianId === techFilter)
+    if (pathFilter === 'direct_repair') list = list.filter(r => r.repairPath === 'direct_repair')
+    else if (pathFilter === 'diagnosis_first') list = list.filter(r => r.repairPath !== 'direct_repair')
     if (priorityFilter !== 'all') list = list.filter(r => r.priority === priorityFilter)
     if (dateFrom) list = list.filter(r => new Date(r.intakeDate) >= new Date(dateFrom))
     if (dateTo)   list = list.filter(r => new Date(r.intakeDate) <= new Date(dateTo + 'T23:59:59'))
     return list
-  }, [visibleRepairs, searchQuery, statusFilter, techFilter, priorityFilter, dateFrom, dateTo])
+  }, [visibleRepairs, searchQuery, statusFilter, techFilter, pathFilter, priorityFilter, dateFrom, dateTo])
 
   const selectedStatusLabel =
     statusFilter === 'pending_group' ? 'Pending Group'
@@ -214,6 +220,12 @@ export default function RepairClientJobs({ onNewIntake, onSelect }: { onNewIntak
     ...technicians.map(t => ({ value: t.id, label: t.name })),
   ], [technicians])
 
+  const pathOptions = useMemo(() => [
+    { value: 'all', label: 'All paths' },
+    { value: 'diagnosis_first', label: `Diagnosis First (${visibleRepairs.filter(r => r.repairPath !== 'direct_repair').length})` },
+    { value: 'direct_repair', label: `Direct Repair (${visibleRepairs.filter(r => r.repairPath === 'direct_repair').length})` },
+  ], [visibleRepairs])
+
   const repairPrimaryFilters: PrimaryFilterConfig[] = [
     {
       key: 'status',
@@ -231,6 +243,14 @@ export default function RepairClientJobs({ onNewIntake, onSelect }: { onNewIntak
       options: technicianOptions,
       onChange: setTechFilter,
     },
+    {
+      key: 'path',
+      label: 'Workflow',
+      placeholder: 'All paths',
+      value: pathFilter,
+      options: pathOptions,
+      onChange: v => setPathFilter(v as typeof pathFilter),
+    },
   ]
 
   const repairActiveFilters: ActiveFilterChip[] = [
@@ -245,6 +265,12 @@ export default function RepairClientJobs({ onNewIntake, onSelect }: { onNewIntak
       label: 'Technician',
       valueLabel: technicianOptions.find(t => t.value === techFilter)?.label ?? techFilter,
       onRemove: () => setTechFilter('all'),
+    }] : []),
+    ...(pathFilter !== 'all' ? [{
+      key: 'path',
+      label: 'Workflow',
+      valueLabel: pathFilter === 'direct_repair' ? 'Direct Repair' : 'Diagnosis First',
+      onRemove: () => setPathFilter('all'),
     }] : []),
     ...(priorityFilter !== 'all' ? [{
       key: 'priority',
@@ -287,6 +313,9 @@ export default function RepairClientJobs({ onNewIntake, onSelect }: { onNewIntak
       render: r => (
         <div className="flex flex-col gap-1">
           <span className="text-[12px] font-black font-mono tracking-tight" style={{ color: 'var(--text-1)' }}>{r.ref}</span>
+          <span className={`self-start text-[8px] font-black uppercase px-1.5 py-0.5 rounded-full ${r.repairPath === 'direct_repair' ? 'bg-violet-100 text-violet-700' : 'bg-sky-100 text-sky-700'}`}>
+            {r.repairPath === 'direct_repair' ? 'Direct' : 'Diagnosis'}
+          </span>
           {r.priority && r.priority !== 'normal' && (
             <span className={`self-start text-[8px] font-black uppercase px-1.5 py-0.5 rounded-full ${r.priority === 'urgent' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>
               {r.priority}
@@ -294,6 +323,7 @@ export default function RepairClientJobs({ onNewIntake, onSelect }: { onNewIntak
           )}
         </div>
       ),
+      searchValue: r => [r.ref, r.repairPath === 'direct_repair' ? 'direct repair' : 'diagnosis first'].join(' '),
     },
     {
       key: 'customer', label: 'Customer', priority: 2, width: '1fr',

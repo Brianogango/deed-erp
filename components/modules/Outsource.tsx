@@ -134,7 +134,7 @@ function OutsourceContent() {
   const [vendorSearch, setVendorSearch] = useState('')
   const [vendorModalFromJob, setVendorModalFromJob] = useState(false)
 
-  // Only open / in-progress repairs that are assigned + diagnosed may be linked
+  // Open / in-progress repairs that pass outsource readiness (assigned; diagnosis required unless Direct Repair)
   const pickableRepairs = repairs.filter(r =>
     !['delivered', 'cancelled', 'closed', 'declined', 'unrepairable', 'returned', 'retained', 'ready', 'verified_released', 'collected'].includes(r.status)
     && repairOutsourceReadiness(r).ok
@@ -870,7 +870,7 @@ function OutsourceContent() {
                 label="Link to Repair Job (Optional)"
                 labelClassName="mb-1.5 block text-[13px] font-semibold text-slate-700"
                 inputClassName="h-11 text-sm"
-                placeholder="Search assigned + diagnosed repairs…"
+                placeholder="Search assigned repairs (diagnosis required unless Direct)…"
                 items={pickableRepairs}
                 selectedLabel={jobForm.repairOrderId ? repairSearch : undefined}
                 formatSelected={r => `${r.ref} · ${r.productName} (${r.customerName})`}
@@ -883,7 +883,7 @@ function OutsourceContent() {
                         <span className="ml-2">{r.productName}</span>
                       </p>
                       <p className="truncate text-xs text-slate-500">
-                        {r.customerName} · {r.issueDescription}{r.serialNumber ? ` · SN ${r.serialNumber}` : ''}
+                        {r.customerName} · {r.repairPath === 'direct_repair' ? 'Direct Repair' : 'Diagnosis First'} · {r.issueDescription}{r.serialNumber ? ` · SN ${r.serialNumber}` : ''}
                       </p>
                     </div>
                     <StatusBadge status={r.status} label={r.status.replace(/_/g, ' ')} size="xs" />
@@ -891,7 +891,7 @@ function OutsourceContent() {
                 )}
               />
               <p className="mt-1.5 text-[11px] text-slate-500">
-                Only repairs with an assigned technician and a logged diagnosis can be linked.
+                Diagnosis First repairs need an assigned tech and logged diagnosis. Direct Repair needs assignment only.
               </p>
               {jobForm.repairOrderId && (
                 <button type="button" className="mt-1.5 text-xs font-semibold text-blue-700 hover:text-blue-900" onClick={clearRepairLink}>

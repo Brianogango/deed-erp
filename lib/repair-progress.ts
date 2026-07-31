@@ -32,7 +32,11 @@ export function repairProgressOrderFor(repair: RepairProgressCandidate): RepairS
   const isDirect = repair.repairPath === 'direct_repair'
   const hasProcurement = (repair.procurementRequests?.length ?? 0) > 0
   return REPAIR_PROGRESS_ORDER.filter(status => {
-    if (isDirect && (status === 'diagnosed' || status === 'awaiting_approval')) return false
+    // Direct Repair jumps assigned → in_repair (optional quote is auto-approved
+    // without visiting awaiting_approval / approved in the linear stepper).
+    if (isDirect && (status === 'diagnosed' || status === 'awaiting_approval' || status === 'approved')) {
+      return false
+    }
     if (!hasProcurement && status === 'awaiting_parts') return false
     return true
   })

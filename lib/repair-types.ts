@@ -141,6 +141,11 @@ export interface RepairOrder {
   verificationDate?: string
   verifiedBy?: string
   verificationNotes?: string
+  /**
+   * Workflow path chosen at intake. Stored on `deed_repairs_v2` blob only
+   * (not mirrored to Prisma `repairs` yet).
+   */
+  repairPath?: 'diagnosis_first' | 'direct_repair'
   liabilityWaiverAccepted?: boolean
   liabilityWaiverText?: string
   liabilityWaiverAcceptedAt?: string

@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react'
 import { useRepairStore, RepairOrder, type RepairQAItem } from '@/lib/store'
+import { DIRECT_REPAIR_WAIVER_TEXT } from '@/lib/repair-path'
 import { Modal, Field, Input, Select, Textarea } from '@/components/ui'
 import { Fa } from '@/components/icons'
 import {
@@ -867,8 +868,11 @@ export function RepairProgressModal({ repair, onClose }: { repair: RepairOrder, 
   const { startRepair, markRepairComplete, createInvoiceFromRepair } = useRepairStore()
   const [notes, setNotes] = useState('')
 
+  const canStartHere = (['approved', 'awaiting_parts'].includes(repair.status))
+    || (repair.repairPath === 'direct_repair' && ['assigned', 'diagnosed', 'approved', 'awaiting_parts'].includes(repair.status))
+
   const handleAction = () => {
-    if (repair.status === 'approved' || (repair.status === 'assigned' && repair.repairPath === 'direct_repair')) {
+    if (canStartHere) {
       startRepair(repair.id)
     } else if (repair.status === 'in_repair') {
       markRepairComplete(repair.id)
@@ -879,7 +883,7 @@ export function RepairProgressModal({ repair, onClose }: { repair: RepairOrder, 
   }
 
   const getConfig = () => {
-    if (repair.status === 'approved' || (repair.status === 'assigned' && repair.repairPath === 'direct_repair'))
+    if (canStartHere)
       return { title: 'Start Repair Job',     btn: 'Start Repair',      icon: faPlay,             accent: '#2563EB', grad: 'linear-gradient(135deg,#1D4ED8,#2563EB)', shadow: '0 8px 24px rgba(37,99,235,0.4)' }
     if (repair.status === 'in_repair')
       return { title: 'Mark Repair Complete', btn: 'Complete Repair',   icon: faCheckCircle,      accent: '#059669', grad: 'linear-gradient(135deg,#047857,#059669)', shadow: '0 8px 24px rgba(5,150,105,0.4)' }
@@ -1104,7 +1108,8 @@ export function DeclineModal({ repair, onClose }: { repair: RepairOrder, onClose
  * can correct intake/customer/device details after booking.
  */
 export function EditRepairDetailsModal({ repair, onClose }: { repair: RepairOrder, onClose: () => void }) {
-  const { updateRepair, showToast } = useRepairStore()
+  const { updateRepair, appendRepairHistory, showToast, currentUserId, users } = useRepairStore()
+  const actor = users.find(u => u.id === currentUserId)
   const [form, setForm] = useState({
     customerName: repair.customerName || '',
     customerPhone: repair.customerPhone || '',
@@ -1117,12 +1122,41 @@ export function EditRepairDetailsModal({ repair, onClose }: { repair: RepairOrde
     priority: repair.priority || 'normal',
     issueDescription: repair.issueDescription || '',
     intakeNotes: repair.intakeNotes || '',
+    repairPath: (repair.repairPath === 'direct_repair' ? 'direct_repair' : 'diagnosis_first') as 'diagnosis_first' | 'direct_repair',
+    consentSignature: repair.liabilityWaiverSignature || '',
+    agreeTerms: !!repair.liabilityWaiverAccepted,
   })
-  const set = (k: keyof typeof form) => (v: string) => setForm(f => ({ ...f, [k]: v }))
+  const set = (k: keyof typeof form) => (v: string | boolean) => setForm(f => ({ ...f, [k]: v }))
 
   const handleSave = () => {
     if (!form.customerName.trim()) { showToast('Client name is required', 'error'); return }
     if (!form.productName.trim()) { showToast('Device name is required', 'error'); return }
+    const pathChanging = form.repairPath !== (repair.repairPath === 'direct_repair' ? 'direct_repair' : 'diagnosis_first')
+    if (form.repairPath === 'direct_repair' && pathChanging && (!String(form.consentSignature).trim() || !form.agreeTerms)) {
+      showToast('Customer signature and terms agreement required when switching to Direct Repair', 'error')
+      return
+    }
+    const nowIso = new Date().toISOString()
+    const pathPatch = pathChanging
+      ? form.repairPath === 'direct_repair'
+        ? {
+            repairPath: 'direct_repair' as const,
+            liabilityWaiverAccepted: true,
+            liabilityWaiverText: DIRECT_REPAIR_WAIVER_TEXT,
+            liabilityWaiverAcceptedAt: nowIso,
+            liabilityWaiverSignature: String(form.consentSignature).trim(),
+            notes: `${repair.notes || ''}\n[Workflow path changed → Direct Repair] Signed by: ${String(form.consentSignature).trim()}. By: ${actor?.name || 'staff'}.`.trim(),
+          }
+        : {
+            repairPath: 'diagnosis_first' as const,
+            liabilityWaiverAccepted: false,
+            liabilityWaiverText: undefined,
+            liabilityWaiverAcceptedAt: undefined,
+            liabilityWaiverSignature: undefined,
+            notes: `${repair.notes || ''}\n[Workflow path changed → Diagnosis First] By: ${actor?.name || 'staff'}.`.trim(),
+          }
+      : {}
+
     updateRepair(repair.id, {
       customerName: form.customerName.trim(),
       customerPhone: form.customerPhone.trim(),
@@ -1136,8 +1170,17 @@ export function EditRepairDetailsModal({ repair, onClose }: { repair: RepairOrde
       issueDescription: form.issueDescription.trim(),
       intakeNotes: form.intakeNotes.trim(),
       description: form.issueDescription.trim(),
+      ...pathPatch,
     })
-    showToast('Repair details updated', 'success')
+    if (pathChanging && appendRepairHistory) {
+      appendRepairHistory(repair.id, {
+        status: repair.status,
+        date: nowIso.slice(0, 10),
+        note: `Workflow path changed to ${form.repairPath === 'direct_repair' ? 'Direct Repair' : 'Diagnosis First'}`,
+        by: actor?.name || 'staff',
+      })
+    }
+    showToast(pathChanging ? 'Repair details and workflow path updated' : 'Repair details updated', 'success')
     onClose()
   }
 
@@ -1168,7 +1211,27 @@ export function EditRepairDetailsModal({ repair, onClose }: { repair: RepairOrde
             ]} />
           </Field>
           <Field label="Device Password"><Input value={form.clientLaptopPassword} onChange={set('clientLaptopPassword')} /></Field>
+          <Field label="Workflow Path">
+            <Select value={form.repairPath} onChange={v => set('repairPath')(v)} options={[
+              { value: 'diagnosis_first', label: 'Diagnosis First' },
+              { value: 'direct_repair', label: 'Direct Repair' },
+            ]} />
+          </Field>
         </div>
+        {form.repairPath === 'direct_repair' && form.repairPath !== (repair.repairPath === 'direct_repair' ? 'direct_repair' : 'diagnosis_first') && (
+          <div className="p-3 rounded-xl space-y-3" style={{ background: '#F5F3FF', border: '1px solid #DDD6FE' }}>
+            <p className="text-[10px] font-black uppercase tracking-widest" style={{ color: '#6D28D9' }}>Direct Repair consent</p>
+            <Field label="Customer Signature" required>
+              <Input value={String(form.consentSignature)} onChange={v => set('consentSignature')(v)} placeholder="Type full name as signature" />
+            </Field>
+            <label className="flex items-start gap-3 cursor-pointer">
+              <input type="checkbox" className="mt-1" checked={!!form.agreeTerms} onChange={e => set('agreeTerms')(e.target.checked)} />
+              <span className="text-[10px] font-medium leading-tight" style={{ color: 'var(--text-3)' }}>
+                Customer authorises Direct Repair and accepts the liability waiver.
+              </span>
+            </label>
+          </div>
+        )}
         <Field label="Issue Description"><Textarea value={form.issueDescription} onChange={set('issueDescription')} rows={3} /></Field>
         <Field label="Intake Notes"><Textarea value={form.intakeNotes} onChange={set('intakeNotes')} rows={2} /></Field>
         <div className="flex gap-2 justify-end pt-2">
