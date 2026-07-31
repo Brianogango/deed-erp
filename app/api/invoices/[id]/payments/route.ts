@@ -149,6 +149,26 @@ export async function POST(
       newValues: { amountPaid: newAmountPaid, paymentAmount: capped, paymentMethod, idempotencyKey },
     })
 
+    // Dual-write GL: persist payment journal to Prisma (blob journals still written by client store)
+    try {
+      const { postInvoicePaymentJournalToPrisma } = await import('@/lib/accounting/invoice-journals')
+      await postInvoicePaymentJournalToPrisma({
+        invoice: {
+          id: invoice.id,
+          ref: invoice.invoiceNumber,
+          invoiceNumber: invoice.invoiceNumber,
+          totalAmount: Number(invoice.totalAmount),
+          type: 'customer_invoice',
+        },
+        amount: capped,
+        paymentId: payment.id,
+        method: paymentMethod,
+        createdById: actor.id,
+      })
+    } catch (err) {
+      console.error('[invoice-payment] journal dual-write failed:', err)
+    }
+
     return NextResponse.json({ payment, invoice: updatedInvoice })
   })
 }

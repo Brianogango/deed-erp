@@ -833,6 +833,8 @@ model Product {
   saleOrderItems     SaleOrderItem[]
   inventoryBatches   InventoryBatch[]
   customerAssets     CustomerAsset[]
+  productValuation   ProductValuation?
+  stockReservations  StockReservation[]
 
 
   @@index([sku], map: "idx_products_sku")
@@ -883,6 +885,7 @@ model SerialNumber {
   posItems       PosTransactionItem[]
   orcItems       OutboundReleaseItem[] @relation("SerialOrcItems")
   customerAssets CustomerAsset[]
+  stockReservations StockReservation[]
 
   @@index([productId], map: "idx_serials_product")
   @@index([status], map: "idx_serials_status")
@@ -2065,4 +2068,144 @@ model AiDocumentChunk {
 
   @@index([documentId], map: "idx_ai_document_chunks_document")
   @@map("ai_document_chunks")
+}
+
+// ── Accounting foundation (dual-write with deed_accounts / deed_journalEntries) ─
+// app_state blobs remain the operational SoT until backfill is verified.
+// Never delete blob keys when deploying these tables.
+
+model AccountCode {
+  id           String   @id @default(uuid()) @db.Uuid
+  code         String   @unique @db.VarChar(20)
+  name         String   @db.VarChar(200)
+  accountType  String   @map("account_type") @db.VarChar(20)
+  accountGroup String?  @map("account_group") @db.VarChar(120)
+  subGroup     String?  @map("sub_group") @db.VarChar(120)
+  isActive     Boolean  @default(true) @map("is_active")
+  isDynamic    Boolean  @default(false) @map("is_dynamic")
+  dynamicKey   String?  @map("dynamic_key") @db.VarChar(40)
+  balance      Decimal  @default(0) @db.Decimal(14, 2)
+  notes        String?
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  journalLines JournalEntryLine[]
+
+  @@index([accountType], map: "idx_account_codes_type")
+  @@map("account_codes")
+}
+
+model Journal {
+  id          String   @id @default(uuid()) @db.Uuid
+  code        String   @unique @db.VarChar(10)
+  name        String   @db.VarChar(100)
+  journalType String   @default("general") @map("journal_type") @db.VarChar(20)
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  entries JournalEntry[]
+
+  @@map("journals")
+}
+
+model JournalEntry {
+  id           String    @id @default(uuid()) @db.Uuid
+  ref          String    @unique @db.VarChar(80)
+  journalId    String?   @map("journal_id") @db.Uuid
+  entryDate    DateTime  @default(now()) @map("entry_date") @db.Date
+  description  String?
+  sourceType   String?   @map("source_type") @db.VarChar(40)
+  sourceId     String?   @map("source_id") @db.VarChar(80)
+  isPosted     Boolean   @default(true) @map("is_posted")
+  postedAt     DateTime? @map("posted_at")
+  postedById   String?   @map("posted_by_id") @db.Uuid
+  isReversed   Boolean   @default(false) @map("is_reversed")
+  reversalOfId String?   @map("reversal_of_id") @db.Uuid
+  invoiceId    String?   @map("invoice_id") @db.Uuid
+  paymentId    String?   @map("payment_id") @db.Uuid
+  blobId       String?   @map("blob_id") @db.VarChar(80)
+  totalDebit   Decimal   @default(0) @map("total_debit") @db.Decimal(14, 2)
+  totalCredit  Decimal   @default(0) @map("total_credit") @db.Decimal(14, 2)
+  createdById  String?   @map("created_by_id") @db.Uuid
+  createdAt    DateTime  @default(now()) @map("created_at")
+
+  journal    Journal?           @relation(fields: [journalId], references: [id])
+  reversalOf JournalEntry?      @relation("JournalReversal", fields: [reversalOfId], references: [id])
+  reversals  JournalEntry[]     @relation("JournalReversal")
+  lines      JournalEntryLine[]
+
+  @@index([entryDate], map: "idx_journal_entries_date")
+  @@index([sourceType, sourceId], map: "idx_journal_entries_source")
+  @@index([invoiceId], map: "idx_journal_entries_invoice")
+  @@map("journal_entries")
+}
+
+model JournalEntryLine {
+  id             String   @id @default(uuid()) @db.Uuid
+  journalEntryId String   @map("journal_entry_id") @db.Uuid
+  accountId      String?  @map("account_id") @db.Uuid
+  accountLabel   String   @map("account_label") @db.VarChar(200)
+  label          String?  @db.VarChar(300)
+  debit          Decimal  @default(0) @db.Decimal(14, 2)
+  credit         Decimal  @default(0) @db.Decimal(14, 2)
+  partnerId      String?  @map("partner_id") @db.Uuid
+  sortOrder      Int      @default(0) @map("sort_order")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  journalEntry JournalEntry @relation(fields: [journalEntryId], references: [id], onDelete: Cascade)
+  account      AccountCode? @relation(fields: [accountId], references: [id])
+
+  @@index([journalEntryId], map: "idx_jel_entry")
+  @@index([accountId], map: "idx_jel_account")
+  @@map("journal_entry_lines")
+}
+
+model ProductValuation {
+  id          String   @id @default(uuid()) @db.Uuid
+  productId   String   @unique @map("product_id") @db.Uuid
+  averageCost Decimal  @default(0) @map("average_cost") @db.Decimal(14, 4)
+  totalQty    Int      @default(0) @map("total_qty")
+  totalValue  Decimal  @default(0) @map("total_value") @db.Decimal(14, 2)
+  lastUpdated DateTime @updatedAt @map("last_updated")
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@map("product_valuations")
+}
+
+model StockReservation {
+  id            String    @id @default(uuid()) @db.Uuid
+  blobId        String?   @map("blob_id") @db.VarChar(80)
+  saleOrderId   String?   @map("sale_order_id") @db.Uuid
+  saleOrderRef  String?   @map("sale_order_ref") @db.VarChar(40)
+  productId     String?   @map("product_id") @db.Uuid
+  serialId      String?   @map("serial_id") @db.Uuid
+  qty           Int       @default(1)
+  location      String    @default("warehouse") @db.VarChar(30)
+  reservedFor   String?   @map("reserved_for") @db.VarChar(40)
+  referenceId   String?   @map("reference_id") @db.VarChar(80)
+  referenceRef  String?   @map("reference_ref") @db.VarChar(80)
+  status        String    @default("reserved") @db.VarChar(20)
+  reservedAt    DateTime  @default(now()) @map("reserved_at")
+  releasedAt    DateTime? @map("released_at")
+  createdAt     DateTime  @default(now()) @map("created_at")
+
+  product Product?      @relation(fields: [productId], references: [id])
+  serial  SerialNumber? @relation(fields: [serialId], references: [id])
+
+  @@index([saleOrderId], map: "idx_stock_reservations_so")
+  @@index([productId], map: "idx_stock_reservations_product")
+  @@index([blobId], map: "idx_stock_reservations_blob")
+  @@map("stock_reservations")
+}
+
+model ApprovalRule {
+  id           String   @id @default(uuid()) @db.Uuid
+  approvalType String   @unique @map("approval_type") @db.VarChar(40)
+  thresholds   Json     @default("[]")
+  isActive     Boolean  @default(true) @map("is_active")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@map("approval_rules")
 }

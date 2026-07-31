@@ -160,6 +160,24 @@ export async function saveStoreKeys(entries: Record<string, string>): Promise<vo
         .then(m => m.mirrorRepairsToPrisma(entries['deed_repairs_v2']))
         .catch(() => {})
     }
+    // Accounting / inventory dual-write mirrors — NEVER delete app_state keys.
+    if (process.env.NODE_ENV !== 'test') {
+      if (entries['deed_accounts']) {
+        void import('./accounting/account-journal-mirror')
+          .then(m => m.mirrorAccountsToPrisma(entries['deed_accounts']))
+          .catch(() => {})
+      }
+      if (entries['deed_journalEntries']) {
+        void import('./accounting/account-journal-mirror')
+          .then(m => m.mirrorJournalEntriesToPrisma(entries['deed_journalEntries']))
+          .catch(() => {})
+      }
+      if (entries['deed_stockReservations']) {
+        void import('./inventory/reservation-mirror')
+          .then(m => m.mirrorStockReservationsToPrisma(entries['deed_stockReservations']))
+          .catch(() => {})
+      }
+    }
   } catch (err) {
     console.error('[server-store] saveStoreKeys error:', err)
   }

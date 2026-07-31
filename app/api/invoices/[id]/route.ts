@@ -151,6 +151,32 @@ export async function PUT(request: Request, { params }: { params: { id: string }
       newValues: { status: invoice.status, totalAmount: invoice.totalAmount, amountPaid: invoice.amountPaid },
     })
 
+    // When a draft becomes posted/approved, dual-write the AR/revenue journal to Prisma
+    const becamePosted = before
+      && before.status === 'draft'
+      && (invoice.status === 'approved' || invoice.status === 'invoiced')
+    if (becamePosted) {
+      try {
+        const { postInvoiceJournalToPrisma } = await import('@/lib/accounting/invoice-journals')
+        await postInvoiceJournalToPrisma({
+          id: invoice.id,
+          ref: invoice.invoiceNumber,
+          invoiceNumber: invoice.invoiceNumber,
+          totalAmount: Number(invoice.totalAmount),
+          subtotal: Number(invoice.subtotal),
+          taxAmount: Number(invoice.taxAmount),
+          type: 'customer_invoice',
+          lines: invoice.items.map(i => ({
+            productId: i.productId ?? undefined,
+            subtotal: Number(i.lineSubtotal),
+            description: i.description,
+          })),
+        }, { createdById: actor.id })
+      } catch (err) {
+        console.error('[invoice] journal dual-write failed:', err)
+      }
+    }
+
     return NextResponse.json(invoice)
   })
 }

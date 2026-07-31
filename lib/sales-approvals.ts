@@ -1,51 +1,35 @@
 // ─── Approval Workflow Engine ─────────────────────────────────────────────────
 
 import type { ApprovalRequest, ApprovalLevel, ApprovalType } from './sales-flow-types'
+import {
+  APPROVAL_RULES,
+  extractApprovalValue,
+  getApprovalRoles,
+  getApprovalRolesSync,
+  rolesFromThresholds,
+  type ApprovalThreshold,
+} from '@/lib/sales-approval-rules'
+
+export { APPROVAL_RULES, extractApprovalValue, getApprovalRoles, getApprovalRolesSync, rolesFromThresholds }
+export type { ApprovalThreshold }
 
 /**
- * Approval Rules Configuration
- * Defines who needs to approve what
- */
-
-export const APPROVAL_RULES: Record<ApprovalType, (details: any) => string[]> = {
-  discount: (details) => {
-    const percent = details.discountPercent || 0
-
-    if (percent <= 10) return [] // No approval
-    if (percent <= 20) return ['director']
-    // Deep discounts always include Finance (not director-only above 50%).
-    return ['director', 'finance_officer']
-  },
-
-  special_pricing: () => ['director'],
-
-  credit_override: (details) => {
-    const amount = details.creditRequested || 0
-    const available = details.creditAvailable || 0
-    const overage = amount - available
-
-    if (overage <= 0) return [] // Within limit
-    if (overage <= 100000) return ['finance_officer'] // Up to 100K over
-    return ['finance_officer', 'director'] // > 100K over
-  },
-
-  corporate_deal: () => ['director'],
-
-  backorder: (details) => {
-    const qty = details.backorderQty || 0
-    if (qty <= 10) return ['technical_lead']
-    return ['technical_lead', 'director']
-  },
-}
-
-/**
- * Check if approval is required
+ * Check if approval is required (sync — uses hardcoded rules for client UI).
+ * Server paths that need DB-backed thresholds should call `requiresApprovalAsync`.
  */
 export function requiresApproval(
   type: ApprovalType,
   details: any
 ): boolean {
-  const requiredRoles = APPROVAL_RULES[type](details)
+  const requiredRoles = getApprovalRolesSync(type, details)
+  return requiredRoles.length > 0
+}
+
+export async function requiresApprovalAsync(
+  type: ApprovalType,
+  details: any
+): Promise<boolean> {
+  const requiredRoles = await getApprovalRoles(type, details)
   return requiredRoles.length > 0
 }
 
@@ -57,7 +41,7 @@ export function getApprovalLevels(
   details: any,
   availableApprovers: { id: string; name: string; role: string }[]
 ): ApprovalLevel[] {
-  const requiredRoles = APPROVAL_RULES[type](details)
+  const requiredRoles = getApprovalRolesSync(type, details)
   
   return requiredRoles.map((role, index) => {
     const approvers = availableApprovers.filter(a => a.role === role)

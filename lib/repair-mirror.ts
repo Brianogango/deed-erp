@@ -39,6 +39,7 @@ const STATUS_MAP: Record<string, string> = {
   closed: 'collected',
   declined: 'cancelled',
   returned: 'cancelled',
+  retained: 'cancelled',
   cancelled: 'cancelled',
   unrepairable: 'unrepairable',
 }
