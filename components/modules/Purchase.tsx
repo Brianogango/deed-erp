@@ -1226,7 +1226,43 @@ export default function Purchase() {
         </Modal>
       )}
 
-      {/* ── RETURN MODAL ── */}
+      {/* ── LOG PICKUP MODAL ── */}
+      {showPickupModal && (
+        <Modal title="Log Return Pickup" subtitle="Record who took the goods back to the vendor" width={440}
+          onClose={() => setShowPickupModal(false)}>
+          <Field label="Collected by *">
+            <Select value={pickupCollectedBy} onChange={setPickupCollectedBy}
+              options={[{ value: '', label: '— Select staff member —' }, ...users.map(u => ({ value: u.id, label: u.name }))]} />
+          </Field>
+          <Field label="Collection date *">
+            <input className="form-input" type="date" value={pickupCollectedDate} onChange={e => setPickupCollectedDate(e.target.value)} />
+          </Field>
+          <Field label="Notes">
+            <input className="form-input text-xs" value={pickupNotes} placeholder="e.g. Handed to reception, received acknowledgement slip…"
+              onChange={e => setPickupNotes(e.target.value)} />
+          </Field>
+          <div className="flex gap-2 justify-end">
+            <button className="btn-outline" onClick={() => setShowPickupModal(false)}>Cancel</button>
+            <button className="btn-primary"
+              onClick={() => {
+                if (!pickupCollectedBy) { showToast('Select who collected the return', 'error'); return }
+                const u = users.find(x => x.id === pickupCollectedBy)
+                logReturnPickup(pickupReturnId, pickupCollectedBy, u?.name ?? pickupCollectedBy, pickupCollectedDate, pickupNotes || undefined)
+                setShowPickupModal(false)
+              }}>
+              ✓ Save Pickup Details
+            </button>
+          </div>
+        </Modal>
+      )}
+
+      {/* Payments are processed in Finance → Accounting module */}
+
+      </div>{/* mod-body */}
+    </div>}
+
+      {/* Return / Import / Scan must live outside subView gates so they open
+          above the RFQ/PO detail form (Return to Vendor + Scan are triggered there). */}
       {showReturnModal && (
         <Modal title="Return to Vendor" subtitle="Select products and quantities to return" width={580} onClose={() => setShowReturnModal(false)}>
           <Field label="Return Reason">
@@ -1301,43 +1337,6 @@ export default function Purchase() {
         </Modal>
       )}
 
-      {/* ── LOG PICKUP MODAL ── */}
-      {showPickupModal && (
-        <Modal title="Log Return Pickup" subtitle="Record who took the goods back to the vendor" width={440}
-          onClose={() => setShowPickupModal(false)}>
-          <Field label="Collected by *">
-            <Select value={pickupCollectedBy} onChange={setPickupCollectedBy}
-              options={[{ value: '', label: '— Select staff member —' }, ...users.map(u => ({ value: u.id, label: u.name }))]} />
-          </Field>
-          <Field label="Collection date *">
-            <input className="form-input" type="date" value={pickupCollectedDate} onChange={e => setPickupCollectedDate(e.target.value)} />
-          </Field>
-          <Field label="Notes">
-            <input className="form-input text-xs" value={pickupNotes} placeholder="e.g. Handed to reception, received acknowledgement slip…"
-              onChange={e => setPickupNotes(e.target.value)} />
-          </Field>
-          <div className="flex gap-2 justify-end">
-            <button className="btn-outline" onClick={() => setShowPickupModal(false)}>Cancel</button>
-            <button className="btn-primary"
-              onClick={() => {
-                if (!pickupCollectedBy) { showToast('Select who collected the return', 'error'); return }
-                const u = users.find(x => x.id === pickupCollectedBy)
-                logReturnPickup(pickupReturnId, pickupCollectedBy, u?.name ?? pickupCollectedBy, pickupCollectedDate, pickupNotes || undefined)
-                setShowPickupModal(false)
-              }}>
-              ✓ Save Pickup Details
-            </button>
-          </div>
-        </Modal>
-      )}
-
-      {/* Payments are processed in Finance → Accounting module */}
-
-      </div>{/* mod-body */}
-    </div>}
-
-      {/* Import + Scan Document must live outside subView gates so they open
-          above the RFQ/PO detail form (Scan Document is triggered from there). */}
       {showImport && (
         <Modal title="Import PO Lines from CSV" subtitle="Upload a CSV file to bulk-add products to a purchase order" width={720}
           onClose={() => { setShowImport(false); setImportRows([]) }}>
