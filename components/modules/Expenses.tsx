@@ -6,6 +6,7 @@ import {
   Expense, ExpenseCategory, ExpensePaymentMethod,
   EXPENSE_CATEGORIES,
 } from '@/lib/store'
+import { canUserApproveExpenseStep } from '@/lib/expense-approval-chain'
 import { ModuleSkeleton, useMounted, RecordCard, ModuleHeader, TabBar } from '@/components/ui'
 import { PrimaryActionButton, StatusBadge } from '@/components/erp'
 import { DataTable, type ColumnDef, type PrimaryFilterConfig } from '@/components/data-table'
@@ -43,7 +44,42 @@ function reimbursementMethodLabel(v?: string) {
 }
 function isReimbursable(method: ExpensePaymentMethod) { return method === 'reimbursement' }
 
-function ExpenseStatusBadge({ status }: { status: Expense['status'] }) {
+function ExpenseApprovalChain({ chain }: { chain: NonNullable<Expense['approvalChain']> }) {
+  return (
+    <div className="mb-3">
+      <p className="text-[10px] font-semibold uppercase tracking-wider text-t3 mb-2">Approval chain</p>
+      <div className="flex flex-col gap-1.5">
+        {chain.map((step, i) => {
+          const done = step.status === 'approved'
+          const rejected = step.status === 'rejected'
+          const pending = step.status === 'pending'
+          return (
+            <div key={`${step.role}-${i}`} className="flex items-center gap-2 text-[11px]">
+              <span
+                className="w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0"
+                style={{
+                  background: done ? 'var(--success-bg)' : rejected ? 'var(--danger-bg)' : 'var(--bg-muted)',
+                  color: done ? 'var(--success-text)' : rejected ? '#991B1B' : 'var(--text-4)',
+                }}
+              >
+                {done ? '✓' : rejected ? '✕' : i + 1}
+              </span>
+              <div className="flex-1 min-w-0">
+                <span className="font-semibold capitalize">{step.role.replace(/_/g, ' ')}</span>
+                {done && step.by && (
+                  <span className="text-t3 ml-1">· {step.by}{step.at ? ` · ${fmtDate(step.at.slice(0, 10))}` : ''}</span>
+                )}
+                {pending && <span className="text-amber-700 ml-1 font-medium">— pending</span>}
+                {rejected && <span className="text-red-700 ml-1 font-medium">— rejected</span>}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
   const m = STATUS_META[status]
   return <StatusBadge status={m.badgeStatus} label={m.label} />
 }
@@ -541,6 +577,7 @@ function ExpensesContent() {
         const exp = expenses.find(e => e.id === reviewingId)
         if (!exp) return null
         const canReview = isFinance && exp.status === 'submitted'
+          && (!exp.approvalChain?.length || canUserApproveExpenseStep(currentUser?.role, exp.approvalChain))
         return (
           <div className="modal-overlay" onClick={() => setReviewingId(null)}>
             <div className="modal-box w-full max-w-md" onClick={e => e.stopPropagation()}>
@@ -575,6 +612,10 @@ function ExpensesContent() {
                   <span className="font-bold text-base" style={{ color: 'var(--navy)' }}>{fmtKes(exp.amount)}</span>
                 </div>
               </div>
+
+              {exp.approvalChain && exp.approvalChain.length > 0 && (
+                <ExpenseApprovalChain chain={exp.approvalChain} />
+              )}
 
               {exp.receiptFileName && (
                 <button onClick={() => { openReceiptPreview(exp); setReviewingId(null) }}
@@ -813,6 +854,11 @@ function ExpenseTable({
       render: exp => (
         <div>
           <ExpenseStatusBadge status={exp.status} />
+          {exp.approvalChain && exp.approvalChain.length > 1 && exp.status === 'submitted' && (
+            <p className="text-[9px] text-amber-700 mt-1">
+              Step {exp.approvalChain.filter(s => s.status === 'approved').length + 1}/{exp.approvalChain.length}
+            </p>
+          )}
           {exp.reviewNotes && (
             <p className="text-[10px] text-[var(--text-4)] mt-1 italic truncate max-w-[120px]" title={exp.reviewNotes}>{exp.reviewNotes}</p>
           )}

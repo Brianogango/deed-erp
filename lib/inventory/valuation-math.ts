@@ -53,3 +53,70 @@ export function stockValuationJournalRef(kind: 'receipt' | 'delivery', reference
   const pid = String(productId || '').trim() || 'noprod'
   return `JRN/STK/${kind === 'receipt' ? 'RCV' : 'DEL'}/${ref}/${pid}`.slice(0, 80)
 }
+
+export type FifoBatchLayer = {
+  id: string
+  quantityAvailable: number
+  unitCost: number
+  receivedAt?: string | Date | null
+}
+
+export type FifoConsumptionLine = {
+  batchId: string
+  qty: number
+  unitCost: number
+  totalCost: number
+}
+
+/** Pure FIFO consumption — oldest batch layers first (by receivedAt, then id). */
+export function consumeBatchesFIFO(
+  batches: FifoBatchLayer[],
+  qty: number,
+): {
+  consumed: FifoConsumptionLine[]
+  remainingBatches: FifoBatchLayer[]
+  totalCost: number
+  shortfall: number
+} {
+  const need = Math.max(0, Math.floor(Number(qty) || 0))
+  if (need <= 0) {
+    return { consumed: [], remainingBatches: [...batches], totalCost: 0, shortfall: 0 }
+  }
+
+  const sorted = [...batches].sort((a, b) => {
+    const ta = a.receivedAt ? new Date(a.receivedAt).getTime() : 0
+    const tb = b.receivedAt ? new Date(b.receivedAt).getTime() : 0
+    if (ta !== tb) return ta - tb
+    return String(a.id).localeCompare(String(b.id))
+  })
+
+  let remaining = need
+  const consumed: FifoConsumptionLine[] = []
+  const remainingBatches: FifoBatchLayer[] = []
+
+  for (const batch of sorted) {
+    const available = Math.max(0, Math.floor(Number(batch.quantityAvailable) || 0))
+    const unitCost = Math.max(0, Number(batch.unitCost) || 0)
+    if (remaining <= 0) {
+      if (available > 0) remainingBatches.push({ ...batch, quantityAvailable: available, unitCost })
+      continue
+    }
+    if (available <= 0) continue
+    const take = Math.min(available, remaining)
+    if (take > 0) {
+      consumed.push({
+        batchId: batch.id,
+        qty: take,
+        unitCost,
+        totalCost: round2(take * unitCost),
+      })
+      remaining -= take
+      const left = available - take
+      if (left > 0) remainingBatches.push({ ...batch, quantityAvailable: left, unitCost })
+    }
+  }
+
+  const totalCost = round2(consumed.reduce((s, c) => s + c.totalCost, 0))
+  return { consumed, remainingBatches, totalCost, shortfall: remaining }
+}
+

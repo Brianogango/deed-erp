@@ -10,6 +10,12 @@ import type { CreateUserInput, ModuleId as AuthModuleId, PublicUser, UpdateUserI
 import { calcStockByLocation as _calcStockByLocation, upsertBulkStock as _upsertBulkStock, aggregatePayroll } from '@/lib/business-logic'
 import { calculatePayroll } from '@/lib/payroll'
 import { APPROVAL_RULES, createApprovalRequest, getPendingApprovals, processApproval, validateSalesOrderCreation } from '@/lib/sales-approvals'
+import {
+  advanceExpenseApproval,
+  buildExpenseApprovalChain,
+  canUserApproveExpenseStep,
+  expenseChainIsComplete,
+} from '@/lib/expense-approval-chain'
 import type { ApprovalRequest, ApprovalType, StockReservation } from '@/lib/sales-flow-types'
 import { LEAVE_ENTITLEMENTS, NOTICE_EXEMPT_TYPES, CALENDAR_DAY_TYPES, calcWorkingDays, calcCalendarDays, noticeDaysGiven, requiredNotice, decemberClosureDays } from '@/lib/leave-utils'
 import type { StoreLeaveType } from '@/lib/leave-utils'
@@ -2441,6 +2447,13 @@ export type ExpenseCategory = typeof EXPENSE_CATEGORIES[number]['value']
 export type ExpensePaymentMethod = 'reimbursement' | 'petty_cash' | 'mpesa_company' | 'company_card'
 export type ExpenseStatus = 'submitted' | 'approved' | 'rejected' | 'reimbursed'
 
+export type ExpenseApprovalStep = {
+  role: string
+  status: 'pending' | 'approved' | 'rejected'
+  by?: string
+  at?: string
+}
+
 export interface Expense {
   id: string
   ref: string                       // EXP/0001
@@ -2453,6 +2466,7 @@ export interface Expense {
   amount: number
   paymentMethod: ExpensePaymentMethod
   status: ExpenseStatus
+  approvalChain?: ExpenseApprovalStep[]
   // Receipt proof
   receiptFileName?: string
   receiptFileType?: string
@@ -4594,6 +4608,13 @@ export function StoreProvider({
   const [bankAccounts, setBankAccountsState] = useLS<BankAccount[]>('deed_bankAccounts', DEFAULT_BANK_ACCOUNTS)
   const [companySettings, setCompanySettings] = useLS<CompanySettings>('deed_companySettings', DEFAULT_COMPANY_SETTINGS)
   const [systemSettings, setSystemSettings] = useLS<SystemSettings>('deed_systemSettings', DEFAULT_SYSTEM_SETTINGS)
+  const [dbApprovalRules, setDbApprovalRules] = useState<Array<{ approvalType: string; thresholds: { maxValue: number; requiredRoles: string[] }[]; isActive: boolean }>>([])
+  useEffect(() => {
+    fetch('/api/settings/approval-rules')
+      .then(r => r.ok ? r.json() : [])
+      .then(data => { if (Array.isArray(data)) setDbApprovalRules(data) })
+      .catch(() => {})
+  }, [])
   // One-time bump: previous default was 100_000 with no settings UI; raise stored value to 1_000_000.
   useEffect(() => {
     if (systemSettings.accAdminOfficerInvoiceLimitKes === 100000) {
@@ -5940,6 +5961,11 @@ const storeCtx: AppState = {
     submitExpense: (e) => {
       const user = currentUser()
       if (!user) { showToast('Please log in to continue', 'error'); return null }
+      const expenseRule = dbApprovalRules.find(r => r.approvalType === 'expense' && r.isActive)
+      const approvalChain = buildExpenseApprovalChain(
+        Number(e.amount) || 0,
+        expenseRule?.thresholds,
+      )
       // Strip receiptDataUrl from the expense object saved in deed_expenses.
       // Receipts are stored separately under expense_receipt_<id> via the API so
       // the deed_expenses blob stays small and loads instantly.
@@ -5952,6 +5978,7 @@ const storeCtx: AppState = {
         submittedByName: user.name,
         submittedDate: now(),
         status: 'submitted',
+        approvalChain,
         createdAt: now(),
       }
       // Upload the receipt blob separately (non-blocking)
@@ -5989,6 +6016,62 @@ const storeCtx: AppState = {
       const expense = expenses.find(e => e.id === id)
       if (!expense) return
       if (expense.status === 'reimbursed') { showToast('Reimbursed expenses cannot be reviewed again', 'error'); return }
+
+      const chain = expense.approvalChain
+      if (chain?.length) {
+        if (!canUserApproveExpenseStep(user.role, chain)) {
+          const pending = chain.find(s => s.status === 'pending')
+          showToast(`This step requires ${pending?.role?.replace('_', ' ') ?? 'another approver'}`, 'error')
+          return
+        }
+        const nextChain = advanceExpenseApproval({
+          chain,
+          approved,
+          reviewerRole: user.role,
+          reviewerName: user.name,
+        })
+        const fullyApproved = approved && expenseChainIsComplete(nextChain)
+        const reviewedExpense: Expense = {
+          ...expense,
+          approvalChain: nextChain,
+          status: !approved ? 'rejected' : fullyApproved ? 'approved' : 'submitted',
+          reviewedByUserId: fullyApproved || !approved ? user.id : expense.reviewedByUserId,
+          reviewedByName: fullyApproved || !approved ? user.name : expense.reviewedByName,
+          reviewedDate: fullyApproved || !approved ? now() : expense.reviewedDate,
+          reviewNotes: notes ?? expense.reviewNotes,
+        }
+        setExpenses(prev => prev.map(e => e.id === id ? reviewedExpense : e))
+        if (fullyApproved && !journalEntries.some(j => j.ref === `JRN/EXP/${expense.ref}`)) {
+          const journal = buildExpenseApprovalJournal(reviewedExpense)
+          setJournalEntries(prev => [journal, ...prev])
+          addAuditLog('post_expense', expense.ref, `Expense ${expense.ref} posted to journal ${journal.ref}`)
+        }
+        if (expense?.submittedByUserId) {
+          const pending = nextChain.find(s => s.status === 'pending')
+          pushNotif({
+            userId: expense.submittedByUserId,
+            type: 'expense',
+            title: !approved ? 'Expense claim rejected' : fullyApproved ? 'Expense claim approved ✓' : 'Expense claim — next approval',
+            body: !approved
+              ? `Your expense claim ${expense.ref} was rejected by ${user.name}.${notes ? ' Note: ' + notes : ''}`
+              : fullyApproved
+                ? `Your expense claim ${expense.ref} (${expense.description}) is fully approved.${notes ? ' Note: ' + notes : ''}`
+                : `Your expense claim ${expense.ref} was approved by ${user.name}. Awaiting ${pending?.role?.replace('_', ' ') ?? 'next approver'}.`,
+            module: 'expenses',
+            path: `?id=${expense.id}`,
+            icon: !approved ? '❌' : fullyApproved ? '💰' : '⏳',
+          })
+        }
+        if (!approved) {
+          showToast('Expense rejected', 'error')
+        } else if (fullyApproved) {
+          showToast('Expense approved and posted', 'success')
+        } else {
+          showToast('Step approved — awaiting next approver', 'success')
+        }
+        return
+      }
+
       const reviewedExpense: Expense = { ...expense, status: approved ? 'approved' : 'rejected', reviewedByUserId: user.id, reviewedByName: user.name, reviewedDate: now(), reviewNotes: notes }
       setExpenses(prev => prev.map(e => e.id === id ? reviewedExpense : e))
       if (approved && !journalEntries.some(j => j.ref === `JRN/EXP/${expense.ref}`)) {

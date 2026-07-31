@@ -17,6 +17,7 @@ const TYPE_LABELS: Record<string, { label: string; unit: string; hint: string }>
   backorder: { label: 'Backorder qty', unit: 'units', hint: 'Units short against on-hand stock.' },
   special_pricing: { label: 'Special pricing', unit: '', hint: 'Always requires listed roles when active.' },
   corporate_deal: { label: 'Corporate deal', unit: '', hint: 'Always requires listed roles when active.' },
+  expense: { label: 'Expense claims', unit: 'KES', hint: 'Sequential approvers by claim amount (finance_officer, then director above threshold).' },
 }
 
 const ROLE_OPTIONS = ['director', 'finance_officer', 'technical_lead', 'admin_officer', 'sales_rep']

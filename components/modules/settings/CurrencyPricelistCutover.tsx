@@ -102,7 +102,8 @@ export function CurrencyRatesEditor({
       {companyCurrency !== FUNCTIONAL_CURRENCY && (
         <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
           Display currency is {companyCurrency}. Amounts on new documents will be labeled {companyCurrency};
-          set an exchange rate below so base (KES) conversion is snapshot correctly. No FX journals yet.
+          set an exchange rate below so base (KES) conversion is snapshot correctly.
+          FX revaluation journals are available via Finance → POST /api/accounting/fx-revaluation (Director/Finance).
         </p>
       )}
       <div className="pt-2">

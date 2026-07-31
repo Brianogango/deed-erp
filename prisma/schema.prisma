@@ -224,6 +224,7 @@ model User {
   createdUsers User[]    @relation("UserSelf")
   opportunitiesCreated Opportunity[] @relation("OpportunityOwner")
   opportunityAssignments Opportunity[] @relation("OpportunityAssignee")
+  leadsOwned           Lead[]          @relation("LeadOwner")
   opportunityActivitiesCreated OpportunityActivity[] @relation("OpportunityActivityCreator")
   saleOrders           SaleOrder[] @relation("SaleOrderCreator")
 
@@ -713,6 +714,7 @@ model Client {
   saleOrders       SaleOrder[]
   outboundReleases OutboundRelease[] @relation("OrcClient")
   customerAssets   CustomerAsset[]
+  leads            Lead[]
 
   @@index([phone], map: "idx_clients_phone")
   @@index([email], map: "idx_clients_email")
@@ -799,6 +801,7 @@ model Product {
   // Odoo-style invoicing policy: 'order' (Ordered Quantities) or 'delivery'
   // (Delivered Quantities). Controls when sale-order lines become invoiceable.
   invoicePolicy    String      @default("order") @map("invoice_policy") @db.VarChar(20)
+  costingMethod    String      @default("average") @map("costing_method") @db.VarChar(20)
   reorderLevel     Int?        @default(2) @map("reorder_level")
   reorderQty       Int?        @default(5) @map("reorder_qty")
   isActive         Boolean     @default(true) @map("is_active")
@@ -1185,6 +1188,7 @@ model Opportunity {
   createdBy           User                  @relation("OpportunityOwner", fields: [createdById], references: [id])
   activities          OpportunityActivity[]
   quotes              Quote[]               @relation("OpportunityQuotes")
+  leads               Lead[]
 
   @@index([clientId], map: "idx_opportunities_client")
   @@index([assignedToId], map: "idx_opportunities_assigned_to")
@@ -1223,6 +1227,30 @@ model ContactPerson {
 
   @@index([clientId], map: "idx_contact_persons_client")
   @@map("contact_persons")
+}
+
+model Lead {
+  id            String   @id @default(uuid()) @db.Uuid
+  name          String   @db.VarChar(200)
+  companyName   String?  @map("company_name") @db.VarChar(200)
+  email         String?  @db.VarChar(150)
+  phone         String?  @db.VarChar(20)
+  source        String?  @db.VarChar(50)
+  stage         String   @default("new") @db.VarChar(30)
+  ownerId       String?  @map("owner_id") @db.Uuid
+  opportunityId String?  @map("opportunity_id") @db.Uuid
+  clientId      String?  @map("client_id") @db.Uuid
+  notes         String?
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  owner       User?        @relation("LeadOwner", fields: [ownerId], references: [id])
+  client      Client?      @relation(fields: [clientId], references: [id])
+  opportunity Opportunity? @relation(fields: [opportunityId], references: [id])
+
+  @@index([stage], map: "idx_leads_stage")
+  @@index([ownerId], map: "idx_leads_owner")
+  @@map("leads")
 }
 
 model SaleOrder {
