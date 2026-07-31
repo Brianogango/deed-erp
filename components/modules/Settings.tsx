@@ -13,6 +13,7 @@ import {
   faPlus, faCheck, faUpload, faBullseye, faChevronRight, faCog, faKey, faEnvelope,
 } from '@fortawesome/free-solid-svg-icons'
 import PartnerApiKeys from './settings/PartnerApiKeys'
+import ApprovalRulesEditor from './settings/ApprovalRulesEditor'
 import { readGuardedImageAsDataUrl } from '@/lib/client-image-guard'
 import { resolveSettingsSection } from '@/lib/dashboard-priority'
 type Section =
@@ -855,6 +856,15 @@ ACCOUNTS_EMAIL=accounts@deed.co.ke`}</pre>
                 <SettingRow label="Enable Pricelists" desc="Multiple pricing tiers per customer segment or volume"><Toggle on={ss.salesPricelists} onChange={v => updateSystemSettings({ salesPricelists: v })} /></SettingRow>
                 <SettingRow label="Discount Control" desc="Require manager approval for discounts above a threshold"><Toggle on={ss.salesDiscountControl} onChange={v => updateSystemSettings({ salesDiscountControl: v })} /></SettingRow>
               </SectionCard>
+              <SectionCard title="Approval Thresholds">
+                <p className="text-[11px] text-gray-400 pt-2 pb-1">
+                  Configurable ladders stored in Postgres. Hardcoded fallbacks remain if DB is offline — never loses approval coverage.
+                </p>
+                <ApprovalRulesEditor
+                  canWrite={currentUser?.role === 'director' || currentUser?.role === 'finance_officer'}
+                  showToast={showToast}
+                />
+              </SectionCard>
               <SectionCard title="Orders">
                 <SettingRow label="Confirmed Quotes → Sales Orders" desc="Mandatory flow: quote must be confirmed before becoming an order"><Toggle on={ss.salesConfirmedQuotesToOrders} onChange={v => updateSystemSettings({ salesConfirmedQuotesToOrders: v })} /></SettingRow>
                 <SettingRow label="Lock Confirmed Sales" desc="Confirmed sales orders are locked; only a director can unlock to edit, and every unlock is audited"><Toggle on={ss.salesLockConfirmed} onChange={v => updateSystemSettings({ salesLockConfirmed: v })} /></SettingRow>
@@ -878,12 +888,12 @@ ACCOUNTS_EMAIL=accounts@deed.co.ke`}</pre>
                 <SettingRow label="Lot Tracking" desc="Track batches of accessories or consumables"><Toggle on={ss.invLots} onChange={v => updateSystemSettings({ invLots: v })} /></SettingRow>
               </SectionCard>
               <SectionCard title="Valuation">
-                <SettingRow label="Automated Inventory Valuation" desc="Auto-compute stock value on every movement"><Toggle on={ss.invAutomatedValuation} onChange={v => updateSystemSettings({ invAutomatedValuation: v })} /></SettingRow>
-                <SettingRow label="Costing Method" desc="How unit cost is determined for stock valuation">
+                <SettingRow label="Automated Inventory Valuation" desc="Dual-write weighted-average cost + STK journals on validated GRNs and deliveries (Prisma). Blobs stay untouched."><Toggle on={ss.invAutomatedValuation} onChange={v => updateSystemSettings({ invAutomatedValuation: v })} /></SettingRow>
+                <SettingRow label="Costing Method" desc="Live valuation posts use average cost. FIFO/standard remain UI preferences until implemented.">
                   <Select value={ss.invCostingMethod} onChange={v => updateSystemSettings({ invCostingMethod: v as any })} options={[
-                    { value: 'fifo',     label: 'FIFO (recommended)' },
-                    { value: 'average',  label: 'Average Cost' },
-                    { value: 'standard', label: 'Standard Price' },
+                    { value: 'average',  label: 'Average Cost (active)' },
+                    { value: 'fifo',     label: 'FIFO (not yet posted)' },
+                    { value: 'standard', label: 'Standard Price (not yet posted)' },
                   ]} />
                 </SettingRow>
               </SectionCard>

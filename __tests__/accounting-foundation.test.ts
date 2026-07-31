@@ -5,6 +5,12 @@ import {
   extractApprovalValue,
   rolesFromThresholds,
 } from '@/lib/sales-approval-rules'
+import {
+  applyDeliveryAverage,
+  applyReceiptAverage,
+  stockValuationEventKey,
+  stockValuationJournalRef,
+} from '@/lib/inventory/valuation-math'
 
 describe('accounting ids', () => {
   it('extracts codes from CoA labels', () => {
@@ -41,5 +47,41 @@ describe('approval thresholds', () => {
     expect(extractApprovalValue('discount', { discountPercent: 12 })).toBe(12)
     expect(extractApprovalValue('credit_override', { creditRequested: 150000, creditAvailable: 50000 })).toBe(100000)
     expect(extractApprovalValue('backorder', { backorderQty: 3 })).toBe(3)
+  })
+})
+
+describe('weighted-average valuation math', () => {
+  it('computes receipt average cost', () => {
+    const r1 = applyReceiptAverage({ currentQty: 0, currentValue: 0, qty: 2, unitCost: 1000 })
+    expect(r1).toMatchObject({ totalQty: 2, totalValue: 2000, averageCost: 1000 })
+    const r2 = applyReceiptAverage({
+      currentQty: r1.totalQty,
+      currentValue: r1.totalValue,
+      qty: 2,
+      unitCost: 2000,
+    })
+    expect(r2.totalQty).toBe(4)
+    expect(r2.totalValue).toBe(6000)
+    expect(r2.averageCost).toBe(1500)
+  })
+
+  it('reduces delivery at average cost', () => {
+    const d = applyDeliveryAverage({
+      currentQty: 4,
+      currentValue: 6000,
+      averageCost: 1500,
+      qty: 1,
+    })
+    expect(d.totalCost).toBe(1500)
+    expect(d.totalQty).toBe(3)
+    expect(d.totalValue).toBe(4500)
+    expect(d.averageCost).toBe(1500)
+  })
+
+  it('builds stable valuation keys (no Date.now)', () => {
+    expect(stockValuationEventKey('receipt', 'REC001', 'prod-1'))
+      .toBe(stockValuationEventKey('receipt', 'REC001', 'prod-1'))
+    expect(stockValuationJournalRef('delivery', 'DN001', 'prod-1'))
+      .toBe('JRN/STK/DEL/DN001/prod-1')
   })
 })

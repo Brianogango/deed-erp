@@ -1,18 +1,78 @@
 import 'server-only'
 import prisma from '@/lib/prisma'
 import { createJournalEntry } from '@/lib/accounting/journal-service'
-import { COMPANY_ACCOUNT_FALLBACKS } from '@/lib/product-accounts'
+import { COMPANY_ACCOUNT_FALLBACKS, formatAccountLabel } from '@/lib/product-accounts'
+import {
+  applyDeliveryAverage,
+  applyReceiptAverage,
+  stockValuationEventKey,
+  stockValuationJournalRef,
+} from '@/lib/inventory/valuation-math'
 
-function round4(n: number) {
-  return Math.round(Number(n || 0) * 10000) / 10000
+/**
+ * Deed CoA does not have a dedicated GRNI code. Accruals (3201) is the closest
+ * live liability bucket for "goods received, bill not yet posted".
+ */
+const GRNI_ACCOUNT_LABEL = '3201 - Accruals'
+
+async function productExists(productId: string): Promise<boolean> {
+  const row = await prisma.product.findUnique({ where: { id: productId }, select: { id: true } })
+  return Boolean(row)
 }
-function round2(n: number) {
-  return Math.round(Number(n || 0) * 100) / 100
+
+async function alreadyProcessed(eventKey: string): Promise<boolean> {
+  try {
+    const row = await prisma.valuationEvent.findUnique({ where: { eventKey }, select: { id: true } })
+    return Boolean(row)
+  } catch {
+    // Table may not exist yet before safe migration — fall back to journal ref
+    const journalRef = eventKey.replace(/^VAL\//, 'JRN/STK/')
+    try {
+      const je = await prisma.journalEntry.findUnique({ where: { ref: journalRef.slice(0, 80) }, select: { id: true } })
+      return Boolean(je)
+    } catch {
+      return false
+    }
+  }
+}
+
+async function markProcessed(params: {
+  eventKey: string
+  kind: string
+  productId: string
+  qty: number
+  unitCost: number
+  reference?: string
+}) {
+  try {
+    await prisma.valuationEvent.create({
+      data: {
+        eventKey: params.eventKey,
+        kind: params.kind,
+        productId: params.productId,
+        qty: params.qty,
+        unitCost: params.unitCost,
+        reference: params.reference ? String(params.reference).slice(0, 80) : null,
+      },
+    })
+  } catch {
+    // Unique violation = already processed; other errors ignored (soak-safe)
+  }
+}
+
+async function resolveStockAccounts(_productId: string) {
+  // Account codes live on blob/catalog overlays today; company fallbacks match
+  // product-accounts.ts until product account columns are mirrored to Prisma.
+  return {
+    inventoryLabel: formatAccountLabel(COMPANY_ACCOUNT_FALLBACKS.inventoryAccountCode, []),
+    cogsLabel: formatAccountLabel(COMPANY_ACCOUNT_FALLBACKS.cogsAccountCode, []),
+  }
 }
 
 /**
  * Weighted-average cost on stock receipt.
  * Dual-writes valuation + optional STK journal. Never touches app_state blobs.
+ * Idempotent on (reference, productId).
  */
 export async function processStockReceipt(params: {
   productId: string
@@ -23,29 +83,43 @@ export async function processStockReceipt(params: {
   userId?: string
   postJournal?: boolean
 }) {
-  const qty = Math.max(0, Math.floor(Number(params.qty) || 0))
-  const unitCost = Math.max(0, Number(params.unitCost) || 0)
-  if (qty <= 0) throw new Error('Receipt qty must be positive')
+  if (!(await productExists(params.productId))) {
+    return { skipped: true as const, reason: 'product_not_in_prisma' }
+  }
+
+  const eventKey = stockValuationEventKey('receipt', params.reference || params.movementId || '', params.productId)
+  if (await alreadyProcessed(eventKey)) {
+    const valuation = await prisma.productValuation.findUnique({ where: { productId: params.productId } })
+    return {
+      skipped: true as const,
+      reason: 'already_processed',
+      averageCost: Number(valuation?.averageCost ?? 0),
+      totalQty: valuation?.totalQty ?? 0,
+      totalValue: Number(valuation?.totalValue ?? 0),
+    }
+  }
 
   const valuation = await prisma.productValuation.findUnique({ where: { productId: params.productId } })
-  const currentQty = valuation?.totalQty ?? 0
-  const currentValue = Number(valuation?.totalValue ?? 0)
-  const newQty = currentQty + qty
-  const newValue = round2(currentValue + qty * unitCost)
-  const newAvgCost = newQty > 0 ? round4(newValue / newQty) : 0
+  const applied = applyReceiptAverage({
+    currentQty: valuation?.totalQty ?? 0,
+    currentValue: Number(valuation?.totalValue ?? 0),
+    qty: params.qty,
+    unitCost: params.unitCost,
+  })
+  if (applied.qty <= 0) throw new Error('Receipt qty must be positive')
 
   await prisma.productValuation.upsert({
     where: { productId: params.productId },
     create: {
       productId: params.productId,
-      averageCost: newAvgCost,
-      totalQty: newQty,
-      totalValue: newValue,
+      averageCost: applied.averageCost,
+      totalQty: applied.totalQty,
+      totalValue: applied.totalValue,
     },
     update: {
-      averageCost: newAvgCost,
-      totalQty: newQty,
-      totalValue: newValue,
+      averageCost: applied.averageCost,
+      totalQty: applied.totalQty,
+      totalValue: applied.totalValue,
     },
   })
 
@@ -53,39 +127,50 @@ export async function processStockReceipt(params: {
     try {
       await prisma.stockMovement.update({
         where: { id: params.movementId },
-        data: { unitCost },
+        data: { unitCost: applied.unitCost },
       })
     } catch {
       // movement may live only in app_state — ignore
     }
   }
 
-  if (params.postJournal !== false) {
-    const totalCost = round2(qty * unitCost)
-    if (totalCost > 0) {
-      const inv = COMPANY_ACCOUNT_FALLBACKS.inventoryAccountCode
-      const grni = '2300'
-      await createJournalEntry({
-        ref: `JRN/STK/RCV/${params.reference || params.movementId || params.productId}/${Date.now()}`.slice(0, 80),
-        journalCode: 'STK',
-        description: `Stock receipt ${qty} @ ${unitCost}`,
-        sourceType: 'stock_move',
-        sourceId: params.movementId || params.productId,
-        createdById: params.userId,
-        skipIfExists: true,
-        lines: [
-          { accountLabel: `${inv} - Inventory`, label: 'Inventory receipt', debit: totalCost, credit: 0 },
-          { accountLabel: `${grni} - Goods Received Not Invoiced`, label: 'GRNI', debit: 0, credit: totalCost },
-        ],
-      })
-    }
+  if (params.postJournal !== false && applied.totalCost > 0) {
+    const { inventoryLabel } = await resolveStockAccounts(params.productId)
+    await createJournalEntry({
+      ref: stockValuationJournalRef('receipt', params.reference || params.movementId || '', params.productId),
+      journalCode: 'STK',
+      description: `Stock receipt ${applied.qty} @ ${applied.unitCost}`,
+      sourceType: 'stock_receipt',
+      sourceId: params.reference || params.movementId || params.productId,
+      createdById: params.userId,
+      skipIfExists: true,
+      lines: [
+        { accountLabel: inventoryLabel, label: 'Inventory receipt', debit: applied.totalCost, credit: 0 },
+        { accountLabel: GRNI_ACCOUNT_LABEL, label: 'GRNI / Accruals', debit: 0, credit: applied.totalCost },
+      ],
+    })
   }
 
-  return { averageCost: newAvgCost, totalQty: newQty, totalValue: newValue }
+  await markProcessed({
+    eventKey,
+    kind: 'receipt',
+    productId: params.productId,
+    qty: applied.qty,
+    unitCost: applied.unitCost,
+    reference: params.reference,
+  })
+
+  return {
+    skipped: false as const,
+    averageCost: applied.averageCost,
+    totalQty: applied.totalQty,
+    totalValue: applied.totalValue,
+  }
 }
 
 /**
  * Delivery / outbound: reduce valuation at current average cost; post COGS.
+ * Idempotent on (reference, productId). Never touches app_state blobs.
  */
 export async function processStockDelivery(params: {
   productId: string
@@ -95,30 +180,45 @@ export async function processStockDelivery(params: {
   userId?: string
   postJournal?: boolean
 }) {
-  const qty = Math.max(0, Math.floor(Number(params.qty) || 0))
-  if (qty <= 0) throw new Error('Delivery qty must be positive')
+  if (!(await productExists(params.productId))) {
+    return { skipped: true as const, reason: 'product_not_in_prisma' }
+  }
+
+  const eventKey = stockValuationEventKey('delivery', params.reference || params.movementId || '', params.productId)
+  if (await alreadyProcessed(eventKey)) {
+    const valuation = await prisma.productValuation.findUnique({ where: { productId: params.productId } })
+    return {
+      skipped: true as const,
+      reason: 'already_processed',
+      averageCost: Number(valuation?.averageCost ?? 0),
+      unitCostUsed: Number(valuation?.averageCost ?? 0),
+      totalCost: 0,
+      totalQty: valuation?.totalQty ?? 0,
+      totalValue: Number(valuation?.totalValue ?? 0),
+    }
+  }
 
   const valuation = await prisma.productValuation.findUnique({ where: { productId: params.productId } })
-  const avgCost = Number(valuation?.averageCost ?? 0)
-  const totalCost = round2(qty * avgCost)
-  const currentQty = valuation?.totalQty ?? 0
-  const currentValue = Number(valuation?.totalValue ?? 0)
-  const newQty = Math.max(0, currentQty - qty)
-  const newValue = Math.max(0, round2(currentValue - totalCost))
-  const newAvg = newQty > 0 ? round4(newValue / newQty) : 0
+  const applied = applyDeliveryAverage({
+    currentQty: valuation?.totalQty ?? 0,
+    currentValue: Number(valuation?.totalValue ?? 0),
+    averageCost: Number(valuation?.averageCost ?? 0),
+    qty: params.qty,
+  })
+  if (applied.qty <= 0) throw new Error('Delivery qty must be positive')
 
   await prisma.productValuation.upsert({
     where: { productId: params.productId },
     create: {
       productId: params.productId,
-      averageCost: newAvg,
-      totalQty: newQty,
-      totalValue: newValue,
+      averageCost: applied.averageCost,
+      totalQty: applied.totalQty,
+      totalValue: applied.totalValue,
     },
     update: {
-      averageCost: newAvg,
-      totalQty: newQty,
-      totalValue: newValue,
+      averageCost: applied.averageCost,
+      totalQty: applied.totalQty,
+      totalValue: applied.totalValue,
     },
   })
 
@@ -126,28 +226,43 @@ export async function processStockDelivery(params: {
     try {
       await prisma.stockMovement.update({
         where: { id: params.movementId },
-        data: { unitCost: avgCost },
+        data: { unitCost: applied.unitCostUsed },
       })
     } catch { /* ignore */ }
   }
 
-  if (params.postJournal !== false && totalCost > 0) {
-    const cogs = COMPANY_ACCOUNT_FALLBACKS.cogsAccountCode
-    const inv = COMPANY_ACCOUNT_FALLBACKS.inventoryAccountCode
+  if (params.postJournal !== false && applied.totalCost > 0) {
+    const { inventoryLabel, cogsLabel } = await resolveStockAccounts(params.productId)
     await createJournalEntry({
-      ref: `JRN/STK/DEL/${params.reference || params.movementId || params.productId}/${Date.now()}`.slice(0, 80),
+      ref: stockValuationJournalRef('delivery', params.reference || params.movementId || '', params.productId),
       journalCode: 'STK',
-      description: `Stock delivery ${qty} @ avg ${avgCost}`,
-      sourceType: 'stock_move',
-      sourceId: params.movementId || params.productId,
+      description: `Stock delivery ${applied.qty} @ avg ${applied.unitCostUsed}`,
+      sourceType: 'stock_delivery',
+      sourceId: params.reference || params.movementId || params.productId,
       createdById: params.userId,
       skipIfExists: true,
       lines: [
-        { accountLabel: `${cogs} - Cost of Goods Sold`, label: 'COGS', debit: totalCost, credit: 0 },
-        { accountLabel: `${inv} - Inventory`, label: 'Inventory reduction', debit: 0, credit: totalCost },
+        { accountLabel: cogsLabel, label: 'COGS', debit: applied.totalCost, credit: 0 },
+        { accountLabel: inventoryLabel, label: 'Inventory reduction', debit: 0, credit: applied.totalCost },
       ],
     })
   }
 
-  return { averageCost: newAvg, unitCostUsed: avgCost, totalCost, totalQty: newQty, totalValue: newValue }
+  await markProcessed({
+    eventKey,
+    kind: 'delivery',
+    productId: params.productId,
+    qty: applied.qty,
+    unitCost: applied.unitCostUsed,
+    reference: params.reference,
+  })
+
+  return {
+    skipped: false as const,
+    averageCost: applied.averageCost,
+    unitCostUsed: applied.unitCostUsed,
+    totalCost: applied.totalCost,
+    totalQty: applied.totalQty,
+    totalValue: applied.totalValue,
+  }
 }

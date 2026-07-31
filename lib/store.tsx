@@ -556,7 +556,7 @@ export const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
   salesLockConfirmed: true,
   invProductsMasterOnly: true, invNoDirectStockEdits: true, invMultiStepRoutes: true,
   invStorageLocations: ['Incoming', 'Workshop', 'Ready for Sale', 'Faulty / Scrap'],
-  invSerialNumbers: true, invLots: false, invAutomatedValuation: true, invCostingMethod: 'fifo',
+  invSerialNumbers: true, invLots: false, invAutomatedValuation: true, invCostingMethod: 'average',
   purPurchaseAgreements: false, purVendorPricelists: true, purRequireApprovalHighValue: true,
   purHighValueThreshold: 50000, purEnforceRFQFlow: true, purStoreLeadTimes: true,
   repRepairOrders: true, repWarrantyTracking: true, repPartsConsumption: true,

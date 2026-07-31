@@ -98,6 +98,20 @@ CREATE TABLE IF NOT EXISTS product_valuations (
   last_updated   TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- Idempotency for receipt/delivery valuation (never double-apply avg cost)
+CREATE TABLE IF NOT EXISTS valuation_events (
+  id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  event_key    VARCHAR(120) NOT NULL UNIQUE,
+  kind         VARCHAR(20) NOT NULL,
+  product_id   UUID REFERENCES products(id) ON DELETE SET NULL,
+  qty          INT NOT NULL DEFAULT 0,
+  unit_cost    NUMERIC(14, 4) NOT NULL DEFAULT 0,
+  reference    VARCHAR(80),
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_valuation_events_product ON valuation_events (product_id);
+
 -- ── Stock reservations (app_state deed_stockReservations dual-write) ─────────
 CREATE TABLE IF NOT EXISTS stock_reservations (
   id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),

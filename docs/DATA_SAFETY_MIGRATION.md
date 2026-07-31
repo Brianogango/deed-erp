@@ -4,15 +4,16 @@
 **Never delete `app_state` keys** as part of this migration. Blobs remain the operational fallback until a verified cutover.
 
 ## What this change does
-1. Creates relational tables for accounts, journals, product valuations, stock reservations, approval rules (safe SQL, `IF NOT EXISTS`).
+1. Creates relational tables for accounts, journals, product valuations, valuation events, stock reservations, approval rules (safe SQL, `IF NOT EXISTS`).
 2. **Dual-writes** on blob save:
    - `deed_accounts` → `account_codes`
    - `deed_journalEntries` → `journal_entries`
    - `deed_stockReservations` → `stock_reservations`
    - `deed_repairs_v2` → `repairs` (existing mirror; now includes `retained`)
 3. Posts invoice/payment journals to Prisma when invoices are posted or paid via API (client still writes blob journals).
-4. Configurable approval thresholds in DB with hardcoded fallback.
-5. Weighted-average valuation service (call sites can opt in; does not rewrite historical stock blindly).
+4. On GRN validate / delivery validate: weighted-average valuation + STK/COGS journals (idempotent via `valuation_events`). Never rewrites blob stock.
+5. Configurable approval thresholds in DB with hardcoded fallback + Settings UI.
+6. Sales domain seam (`SaleOrderService` + thin hook) — no big-bang store split.
 
 ## Deploy order (production)
 ```bash
@@ -21,12 +22,15 @@ node scripts/run-safe-accounting-foundation.mjs
 
 # 2. Generate Prisma client
 pnpm prisma:generate
+# or: npx prisma generate
 
 # 3. Deploy app (dual-write starts)
 
 # 4. Backfill existing blobs (idempotent upsert)
 node scripts/backfill-accounting-to-prisma.mjs
 # optional: --dry-run first
+
+# 5. Director: POST /api/admin/backfill-accounting {"force":true}
 ```
 
 ## Verify before any future cutover
@@ -37,6 +41,9 @@ SELECT COUNT(*) FROM account_codes;
 
 SELECT COUNT(*) FROM journal_entries;
 -- vs length of deed_journalEntries JSON
+
+SELECT COUNT(*) FROM valuation_events;
+SELECT COUNT(*) FROM product_valuations;
 ```
 Spot-check 5 refs. Only after match + soak period may blob keys be deprecated (separate change).
 
@@ -45,3 +52,4 @@ Spot-check 5 refs. Only after match + soak period may blob keys be deprecated (s
 - Multi-currency / full pricelist engine
 - Deleting Delivery dual-schema (store SO picking ≠ Prisma invoice DN)
 - Dropping `app_state` keys
+- Full financial statements UI (needs soak of posted journals)
