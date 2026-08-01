@@ -82,22 +82,44 @@ function mapSaleOrderToClient(order: any) {
   }
 }
 
-function mapSaleOrderItems(lines: any[]) {
-  return lines.map((item: any) => ({
-    productId: optionalUuid(item.productId),
-    description: item.description ?? item.productName ?? 'Item',
-    qty: Number(item.qty ?? 1),
-    qtyDelivered: Number(item.qtyDelivered ?? 0),
-    qtyInvoiced: Number(item.qtyInvoiced ?? 0),
-    unitPrice: Number(item.unitPrice ?? 0),
-    taxRate: Number(item.taxRate ?? 0),
-    lineTotal: Number(item.lineTotal ?? item.subtotal ?? 0),
-    notes: item.notes ?? null,
-    serialNumberId: optionalUuid(item.serialNumberId ?? item.serialIds?.[0]),
-  }))
+function mapSaleOrderItems(lines: any[], existingItems: any[] = []) {
+  return lines.map((item: any) => {
+    const prev =
+      (item.id ? existingItems.find((row: any) => row.id === item.id) : null) ??
+      (item.productId
+        ? existingItems.find((row: any) => row.productId && row.productId === item.productId)
+        : null)
+    const demand = Number(item.qty ?? 1)
+    const incomingDelivered = Number(item.qtyDelivered ?? 0)
+    const incomingInvoiced = Number(item.qtyInvoiced ?? 0)
+    // Preserve fulfillment progress across deleteMany+create so a stale full
+    // SO PATCH cannot wipe qtyDelivered / qtyInvoiced back to 0.
+    const qtyDelivered = Math.min(
+      demand,
+      Math.max(Number(prev?.qtyDelivered) || 0, incomingDelivered),
+    )
+    const qtyInvoiced = Math.min(
+      demand,
+      Math.max(Number(prev?.qtyInvoiced) || 0, incomingInvoiced),
+    )
+    return {
+      productId: optionalUuid(item.productId),
+      description: item.description ?? item.productName ?? 'Item',
+      qty: demand,
+      qtyDelivered,
+      qtyInvoiced,
+      unitPrice: Number(item.unitPrice ?? 0),
+      taxRate: Number(item.taxRate ?? 0),
+      lineTotal: Number(item.lineTotal ?? item.subtotal ?? 0),
+      notes: item.notes ?? null,
+      serialNumberId: optionalUuid(
+        item.serialNumberId ?? item.serialIds?.[0] ?? prev?.serialNumberId,
+      ),
+    }
+  })
 }
 
-async function buildSaleOrderUpdateData(body: any) {
+async function buildSaleOrderUpdateData(body: any, existingItems: any[] = []) {
   const data: Record<string, any> = {}
 
   if (body.orderNumber !== undefined || body.ref !== undefined) data.orderNumber = body.orderNumber ?? body.ref
@@ -141,7 +163,7 @@ async function buildSaleOrderUpdateData(body: any) {
   if (Array.isArray(rawItems)) {
     data.items = {
       deleteMany: {},
-      create: mapSaleOrderItems(rawItems),
+      create: mapSaleOrderItems(rawItems, existingItems),
     }
   }
 
@@ -348,7 +370,7 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
       )
     }
 
-    const data = await buildSaleOrderUpdateData(body)
+    const data = await buildSaleOrderUpdateData(body, existing.items ?? [])
     const workflowError = await enforceSaleWorkflow(existing, body, data, session)
     if (workflowError) return workflowError
 

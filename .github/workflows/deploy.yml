@@ -102,6 +102,37 @@ jobs:
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/master'
     runs-on: ubuntu-latest
     steps:
+      # Ops helpers copied into scripts/ can block deploy; scrub only those paths
+      # (never .env / uploads / DB) before the deploy script's dirty check.
+      - name: Clear known ops script copies on Contabo
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          command_timeout: 2m
+          script: |
+            set -euo pipefail
+            cd /var/www/deed-erp
+            OPS_SCRIPTS=(
+              scripts/book-leave-for-employee.mjs
+              scripts/add-product-serial.mjs
+              scripts/heal-delivery-qty.mjs
+              scripts/revert-hollow-done-delivery.mjs
+              scripts/detect-hollow-done-deliveries.mjs
+            )
+            for f in "${OPS_SCRIPTS[@]}"; do
+              if git ls-files --error-unmatch "$f" >/dev/null 2>&1; then
+                git restore --source=HEAD --worktree --staged -- "$f" 2>/dev/null \
+                  || git checkout HEAD -- "$f" 2>/dev/null \
+                  || true
+              elif [ -e "$f" ]; then
+                echo "Removing untracked ops copy: $f"
+                rm -f -- "$f"
+              fi
+            done
+            git status --porcelain || true
+
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1
         with:

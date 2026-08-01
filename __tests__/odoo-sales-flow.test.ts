@@ -23,17 +23,54 @@ import {
   effectiveDeliveryLineQty,
   deliveryDeliveredTotal,
   deliveredByProductFromDoneDeliveries,
+  canGenerateDeliveryNote,
+  isHollowDoneDelivery,
+  deliveryFulfillmentWriteError,
 } from '@/lib/odoo-sales-flow'
 
 describe('delivery-note invoice gate', () => {
-  it('requires a done delivery with a successfully generated note', () => {
+  it('requires a done delivery with a generated note AND delivered qty > 0', () => {
     const deliveries = [
-      { saleOrderId: 'so-1', status: 'ready', deliveryNoteGeneratedAt: '2026-07-28' },
-      { saleOrderId: 'so-2', status: 'done', deliveryNoteGeneratedAt: '2026-07-28' },
-      { saleOrderId: 'so-1', status: 'done' },
+      { saleOrderId: 'so-1', status: 'ready', deliveryNoteGeneratedAt: '2026-07-28', lines: [{ qty: 1, qtyDone: 1 }] },
+      {
+        saleOrderId: 'so-2',
+        status: 'done',
+        deliveryNoteGeneratedAt: '2026-07-28',
+        lines: [{ qty: 1, qtyDone: 1, serialIds: [] }],
+      },
+      { saleOrderId: 'so-1', status: 'done', lines: [{ qty: 1, qtyDone: 1 }] },
+      {
+        saleOrderId: 'so-3',
+        status: 'done',
+        deliveryNoteGeneratedAt: '2026-08-01',
+        lines: [{ qty: 1, qtyDone: 0, serialIds: [] }],
+      },
     ]
     expect(hasGeneratedDeliveryNote(deliveries, 'so-1')).toBe(false)
     expect(hasGeneratedDeliveryNote(deliveries, 'so-2')).toBe(true)
+    expect(hasGeneratedDeliveryNote(deliveries, 'so-3')).toBe(false)
+  })
+
+  it('blocks Generate DN and Done writes when delivered qty is 0', () => {
+    const hollow = { status: 'done', lines: [{ qty: 1, qtyDone: 0, serialIds: [] }] }
+    expect(isHollowDoneDelivery(hollow)).toBe(true)
+    expect(canGenerateDeliveryNote(hollow)).toBe(false)
+    expect(deliveryFulfillmentWriteError(hollow, { status: 'ready', preparedAt: '2026-08-01' }))
+      .toMatch(/delivered quantity is 0/i)
+
+    const good = {
+      status: 'done',
+      preparedAt: '2026-08-01',
+      lines: [{ qty: 1, qtyDone: 1, serialIds: [] }],
+    }
+    expect(canGenerateDeliveryNote(good)).toBe(true)
+    expect(deliveryFulfillmentWriteError(good, { status: 'ready', preparedAt: '2026-08-01' })).toBeNull()
+  })
+
+  it('rejects Done without Ready + preparedAt', () => {
+    const next = { status: 'done', lines: [{ qty: 1, qtyDone: 1 }] }
+    expect(deliveryFulfillmentWriteError(next, { status: 'waiting' }))
+      .toMatch(/Prepare and reserve/i)
   })
 })
 

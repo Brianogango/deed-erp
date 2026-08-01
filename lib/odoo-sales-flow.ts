@@ -198,20 +198,86 @@ export function initialDeliveryState(hasShortfall: boolean): DeliveryState {
   return hasShortfall ? 'waiting' : 'ready'
 }
 
-/** A Sales Order can invoice only after a completed delivery note was generated. */
+/**
+ * A Sales Order can invoice only after a completed delivery note was generated
+ * with a positive delivered quantity (qtyDone and/or assigned serials).
+ * A hollow Done DN (Delivered=0, no serials) must never unlock invoicing.
+ */
 export function hasGeneratedDeliveryNote(
   deliveries: Array<{
     saleOrderId?: string
     status?: string
     deliveryNoteGeneratedAt?: string | null
+    lines?: Array<{ qty?: number; qtyDone?: number; serialIds?: string[] | null }> | null
   }> | null | undefined,
   saleOrderId: string,
 ): boolean {
   return (deliveries ?? []).some(delivery =>
     delivery.saleOrderId === saleOrderId &&
     delivery.status === 'done' &&
-    Boolean(delivery.deliveryNoteGeneratedAt),
+    Boolean(delivery.deliveryNoteGeneratedAt) &&
+    deliveryDeliveredTotal(delivery) > 0,
   )
+}
+
+/** True when a delivery is Done (or about to be) but effective delivered qty is 0. */
+export function isHollowDoneDelivery(delivery: {
+  status?: string
+  lines?: Array<{ qty?: number; qtyDone?: number; serialIds?: string[] | null }> | null
+} | null | undefined): boolean {
+  if (!delivery) return false
+  if (normalizeDeliveryStatus(delivery.status) !== 'done') return false
+  return deliveryDeliveredTotal(delivery) <= 0
+}
+
+/**
+ * Whether the UI/API may treat this delivery as eligible for Generate/Print DN.
+ * Requires Done + positive effective delivered qty.
+ */
+export function canGenerateDeliveryNote(delivery: {
+  status?: string
+  lines?: Array<{ qty?: number; qtyDone?: number; serialIds?: string[] | null }> | null
+} | null | undefined): boolean {
+  if (!delivery) return false
+  return normalizeDeliveryStatus(delivery.status) === 'done' && deliveryDeliveredTotal(delivery) > 0
+}
+
+/**
+ * Server/client guard: reject Done status or DN stamp when nothing was delivered.
+ * Returns an error message, or null when the write is allowed.
+ */
+export function deliveryFulfillmentWriteError(next: {
+  status?: string
+  preparedAt?: string | null
+  deliveryNoteGeneratedAt?: string | null
+  lines?: Array<{ qty?: number; qtyDone?: number; serialIds?: string[] | null }> | null
+}, previous?: {
+  status?: string
+  preparedAt?: string | null
+  deliveryNoteGeneratedAt?: string | null
+  lines?: Array<{ qty?: number; qtyDone?: number; serialIds?: string[] | null }> | null
+} | null): string | null {
+  const prevStatus = previous ? normalizeDeliveryStatus(previous.status) : 'draft'
+  const nextStatus = normalizeDeliveryStatus(next.status ?? previous?.status)
+  const lines = next.lines ?? previous?.lines ?? []
+  const delivered = deliveryDeliveredTotal({ lines })
+  const stampingDn = Boolean(next.deliveryNoteGeneratedAt) &&
+    !Boolean(previous?.deliveryNoteGeneratedAt)
+
+  if (nextStatus === 'done' && delivered <= 0) {
+    return 'Cannot mark delivery Done — delivered quantity is 0. Enter quantities or assign serials first.'
+  }
+  if (stampingDn && (nextStatus !== 'done' || delivered <= 0)) {
+    return 'Cannot generate Delivery Note — delivery must be Done with delivered quantity > 0.'
+  }
+  // First transition to Done must come from a prepared Ready picking.
+  if (prevStatus !== 'done' && nextStatus === 'done') {
+    const preparedAt = next.preparedAt ?? previous?.preparedAt
+    if (prevStatus !== 'ready' || !preparedAt) {
+      return 'Prepare and reserve this delivery (Ready) before validating as Done'
+    }
+  }
+  return null
 }
 
 export interface DeliverySplitLine {
@@ -270,9 +336,16 @@ export function splitDeliveryForBackorder(
 
 /** Total delivered units on a delivery (qtyDone, falling back to serial count). */
 export function deliveryDeliveredTotal(delivery: {
-  lines?: Array<{ qty: number; qtyDone?: number; serialIds?: string[] | null }> | null
+  lines?: Array<{ qty?: number; qtyDone?: number; serialIds?: string[] | null }> | null
 }): number {
-  return (delivery.lines ?? []).reduce((sum, line) => sum + effectiveDeliveryLineQty(line), 0)
+  return (delivery.lines ?? []).reduce(
+    (sum, line) => sum + effectiveDeliveryLineQty({
+      qty: Number(line.qty) || 0,
+      qtyDone: line.qtyDone,
+      serialIds: line.serialIds,
+    }),
+    0,
+  )
 }
 
 /**
