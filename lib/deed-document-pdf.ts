@@ -71,6 +71,11 @@ export interface DeedPdfInput {
   showSignature?: boolean
   /** Extra rows under payment details (receipts). */
   extraPaymentLines?: string[]
+  /**
+   * When provided, replaces the default bank/M-Pesa block (still includes
+   * payment reference / extra lines as already composed by the caller).
+   */
+  paymentDetailLines?: string[]
 }
 
 const PAGE_W = 595.28
@@ -385,22 +390,27 @@ export function buildDeedDocumentPdf(
 
   y += blockH + 16
 
-  const paymentLines: string[] = [...(input.extraPaymentLines ?? [])]
+  const paymentLines: string[] = []
   if (showPayment) {
-    if (input.paymentCommunication || input.ref) {
-      paymentLines.unshift(`Payment Reference: ${input.ref}`)
-    }
-    const primaryBank = bankAccounts.find(a => a.active && a.id !== 'cash' && a.id !== 'mpesa')
-    if (primaryBank?.accountNo) {
-      paymentLines.push('Bank Transfer:')
-      paymentLines.push(`Account Name: ${company.name}`)
-      paymentLines.push(`Account Number: ${primaryBank.accountNo} (${primaryBank.currency || currency})`)
-      if (primaryBank.bankName) paymentLines.push(`Bank: ${primaryBank.bankName}`)
-    }
-    if (company.mpesaPaybill) {
-      paymentLines.push('M-PESA:')
-      paymentLines.push(`Pay Bill No: ${company.mpesaPaybill}`)
-      if (company.mpesaAccount) paymentLines.push(`Account Number: ${company.mpesaAccount} (${currency})`)
+    if (Array.isArray(input.paymentDetailLines) && input.paymentDetailLines.length > 0) {
+      paymentLines.push(...input.paymentDetailLines)
+    } else {
+      paymentLines.push(...(input.extraPaymentLines ?? []))
+      if (input.paymentCommunication || input.ref) {
+        paymentLines.unshift(`Payment Reference: ${input.ref}`)
+      }
+      const primaryBank = bankAccounts.find(a => a.active && a.id !== 'cash' && a.id !== 'mpesa')
+      if (primaryBank?.accountNo) {
+        paymentLines.push('Bank Transfer:')
+        paymentLines.push(`Account Name: ${company.name}`)
+        paymentLines.push(`Account Number: ${primaryBank.accountNo} (${primaryBank.currency || currency})`)
+        if (primaryBank.bankName) paymentLines.push(`Bank: ${primaryBank.bankName}`)
+      }
+      if (company.mpesaPaybill) {
+        paymentLines.push('M-PESA:')
+        paymentLines.push(`Pay Bill No: ${company.mpesaPaybill}`)
+        if (company.mpesaAccount) paymentLines.push(`Account Number: ${company.mpesaAccount} (${currency})`)
+      }
     }
   }
 

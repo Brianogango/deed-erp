@@ -22,6 +22,7 @@ import { RecordHeader, PrimaryActionButton } from '@/components/erp'
 import { Fa } from '@/components/icons'
 import { OutboundReleasePanel, OrcStatusBadge } from './OutboundReleasePanel'
 import { downloadInvoicePdf, invoicePdfBase64 } from './invoice-pdf'
+import PaymentDetailsPicker from '@/components/payment/PaymentDetailsPicker'
 
 const today = () => new Date().toISOString().slice(0, 10)
 
@@ -51,6 +52,9 @@ export default function InvoiceDetail() {
     showToast,
     users,
     currentUserId,
+    getDocumentPaymentDetails,
+    setDocumentPaymentDetails,
+    addBankAccount,
   } = useFinanceStore()
 
   const currentUser = users.find(u => u.id === currentUserId)
@@ -189,7 +193,14 @@ export default function InvoiceDetail() {
       // Attach the same Odoo-style PDF the download button produces.
       let attachment: { pdfBase64: string; pdfFilename: string } | undefined
       try {
-        attachment = await invoicePdfBase64(invoice, saleOrders, contacts, companySettings, bankAccounts)
+        attachment = await invoicePdfBase64(
+          invoice,
+          saleOrders,
+          contacts,
+          companySettings,
+          bankAccounts,
+          getDocumentPaymentDetails(invoice.id),
+        )
       } catch { /* the email still sends without the attachment */ }
       const res = await fetch(`/api/invoices/${invoice.id}/send`, {
         method: 'POST',
@@ -213,7 +224,14 @@ export default function InvoiceDetail() {
   const handleDownloadInvoice = async () => {
     // Downloads are real PDFs (Odoo-style layout), never HTML files.
     try {
-      await downloadInvoicePdf(invoice, saleOrders, contacts, companySettings, bankAccounts)
+      await downloadInvoicePdf(
+        invoice,
+        saleOrders,
+        contacts,
+        companySettings,
+        bankAccounts,
+        getDocumentPaymentDetails(invoice.id),
+      )
     } catch {
       showToast('PDF generation failed', 'error')
     }
@@ -399,6 +417,16 @@ export default function InvoiceDetail() {
                 {hydratingLines ? 'Loading line items…' : 'No line items on this invoice.'}
               </p>
             </div>
+          )}
+
+          {invoice.type === 'customer_invoice' && (
+            <PaymentDetailsPicker
+              value={getDocumentPaymentDetails(invoice.id)}
+              onChange={next => setDocumentPaymentDetails(invoice.id, next)}
+              bankAccounts={bankAccounts}
+              companySettings={companySettings}
+              onAddBankAccount={addBankAccount}
+            />
           )}
 
           {/* Payment history */}

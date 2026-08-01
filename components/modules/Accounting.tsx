@@ -72,6 +72,12 @@ import ChartOfAccountsTab from './accounting/ChartOfAccountsTab'
 import GeneralLedgerTab from './accounting/GeneralLedgerTab'
 import PartnerLedgerTab from './accounting/PartnerLedgerTab'
 import { usePrismaAccountingReports, bootstrapCoaClient } from '@/hooks/usePrismaAccountingReports'
+import {
+  DEFAULT_DOCUMENT_PAYMENT_DETAILS,
+  normalizeDocumentPaymentDetails,
+  type DocumentPaymentDetails,
+} from '@/lib/document-payment-details'
+import PaymentDetailsPicker from '@/components/payment/PaymentDetailsPicker'
 
 // ═══════════════════════════════════════════════════════════════════════════
 // TYPES & CONSTANTS
@@ -254,6 +260,9 @@ function AccountingContent() {
     purchaseOrders,
     deposits,
     companySettings,
+    getDocumentPaymentDetails,
+    setDocumentPaymentDetails,
+    addBankAccount,
   } = appState
 
   // Dynamic PDF header builder using live companySettings
@@ -399,6 +408,7 @@ function AccountingContent() {
   const [newDueDate, setNewDueDate] = useState(addDays(today(), 30))
   const [newLines, setNewLines] = useState<ManualInvoiceLine[]>([newManualInvoiceLine()])
   const [newNotes, setNewNotes] = useState('')
+  const [newPaymentDetails, setNewPaymentDetails] = useState<DocumentPaymentDetails>({ ...DEFAULT_DOCUMENT_PAYMENT_DETAILS })
   const [applyVat, setApplyVat] = useState(false)
   const [changingPartner, setChangingPartner] = useState(false)
   const [localInvoices, setLocalInvoices] = useState<Invoice[]>([])
@@ -773,6 +783,7 @@ function AccountingContent() {
     setNewDueDate(addDays(today(), 30))
     setNewLines([newManualInvoiceLine()])
     setNewNotes('')
+    setNewPaymentDetails({ ...DEFAULT_DOCUMENT_PAYMENT_DETAILS })
     setApplyVat(false)
     setChangingPartner(false)
     setReceiptFile(null)
@@ -793,6 +804,11 @@ function AccountingContent() {
       discount: String(l.discountPct ?? 0),
     })))
     setNewNotes(inv.notes ?? '')
+    setNewPaymentDetails(
+      inv.type === 'customer_invoice'
+        ? getDocumentPaymentDetails(inv.id)
+        : { ...DEFAULT_DOCUMENT_PAYMENT_DETAILS },
+    )
     setApplyVat((inv.taxTotal ?? 0) > 0)
     setChangingPartner(false)
     setShowNewForm(true)
@@ -987,9 +1003,15 @@ function AccountingContent() {
         total: invoicePreview.total,
         notes: newNotes,
       })
+      if (type === 'customer_invoice') {
+        setDocumentPaymentDetails(editingInvId, normalizeDocumentPaymentDetails(newPaymentDetails))
+      }
       showToast('Invoice updated', 'success')
     } else {
-      createManualInvoice(type, newPartnerId, newPartnerName, newDueDate, newLines, vatRate, newNotes.trim(), newDocumentDate)
+      const created = createManualInvoice(type, newPartnerId, newPartnerName, newDueDate, newLines, vatRate, newNotes.trim(), newDocumentDate)
+      if (type === 'customer_invoice' && created?.id) {
+        setDocumentPaymentDetails(created.id, normalizeDocumentPaymentDetails(newPaymentDetails))
+      }
     }
     resetInvForm()
   }
@@ -1053,7 +1075,11 @@ function AccountingContent() {
             (tab === 'invoices' || tab === 'bills') ? (
               <PrimaryActionButton
                 icon={<Fa icon={faPlus} />}
-                onClick={() => { setShowNewForm(true); setEditingInvId(null) }}
+                onClick={() => {
+                  setEditingInvId(null)
+                  setNewPaymentDetails({ ...DEFAULT_DOCUMENT_PAYMENT_DETAILS })
+                  setShowNewForm(true)
+                }}
               >
                 {tab === 'invoices' ? 'New invoice' : 'New bill'}
               </PrimaryActionButton>
@@ -2109,6 +2135,15 @@ function AccountingContent() {
                     />
                     <p className="text-[10px] text-[var(--text-4)]">Shown on the document detail and carried into PDF notes.</p>
                   </div>
+                  {tab === 'invoices' && (
+                    <PaymentDetailsPicker
+                      value={newPaymentDetails}
+                      onChange={setNewPaymentDetails}
+                      bankAccounts={bankAccounts}
+                      companySettings={companySettings}
+                      onAddBankAccount={addBankAccount}
+                    />
+                  )}
                 </div>
 
                 <div className="card p-5 bg-[var(--bg-surface)] border-[var(--border-lt)]">

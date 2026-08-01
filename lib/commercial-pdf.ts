@@ -56,6 +56,11 @@ export interface CommercialPdfInput {
   showPaymentDetails?: boolean
   /** Show authorised signature block (default true). */
   showSignature?: boolean
+  /**
+   * Pre-built payment detail lines (reference, selected banks, M-Pesa, note).
+   * When set, overrides the default first-bank + company M-Pesa block.
+   */
+  paymentDetailLines?: string[]
 }
 
 /** Load the company logo (uploaded data URL or same-origin URL) for jsPDF. */
@@ -112,6 +117,7 @@ export async function buildCommercialPdf(
     hideAmounts: input.hideAmounts,
     showPaymentDetails: input.showPaymentDetails,
     showSignature: input.showSignature,
+    paymentDetailLines: input.paymentDetailLines,
   }
 
   return buildDeedDocumentPdf(
