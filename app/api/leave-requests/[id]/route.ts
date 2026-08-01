@@ -3,7 +3,7 @@ import { getServerSession } from '@/lib/auth/server'
 import { isRoleAllowed } from '@/lib/auth/authorization'
 import { writeFinancialAudit } from '@/lib/finance-audit'
 import prisma from '@/lib/prisma'
-import { toClientRequest, adjustBalance } from '@/lib/hr/leave-store'
+import { toClientRequest, adjustBalance, getBalance } from '@/lib/hr/leave-store'
 import type { StoreLeaveType } from '@/lib/leave-utils'
 import {
   notifyLeaveDecision,
@@ -49,6 +49,16 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
   // rejecting/cancelling clears the reservation (and reverses used if already approved).
   if (nextStatus !== existing.status) {
     if (existing.status === 'pending_hr' && nextStatus === 'approved') {
+      // Race-safe: refuse approval if used + this request would exceed entitlement.
+      // (This request's days are already in `pending`, so they are not "available".)
+      if (leaveType !== 'unpaid') {
+        const bal = await getBalance(existing.employeeId, leaveType, year)
+        if (bal.used + days > bal.entitlement + bal.carryForward) {
+          return NextResponse.json({
+            error: `Cannot approve: insufficient ${leaveType} balance (${Math.max(0, bal.entitlement + bal.carryForward - bal.used)} day(s) left against entitlement, ${days} requested)`,
+          }, { status: 422 })
+        }
+      }
       await adjustBalance(existing.employeeId, leaveType, year, { pending: -days, used: +days })
     } else if (existing.status === 'pending_hr' && (nextStatus === 'rejected' || nextStatus === 'cancelled')) {
       await adjustBalance(existing.employeeId, leaveType, year, { pending: -days })

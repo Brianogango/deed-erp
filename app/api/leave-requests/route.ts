@@ -3,7 +3,7 @@ import { getRequiredSession, withApiErrorHandling } from '@/lib/auth/api'
 import { isRoleAllowed } from '@/lib/auth/authorization'
 import { writeFinancialAudit } from '@/lib/finance-audit'
 import prisma from '@/lib/prisma'
-import { CALENDAR_DAY_TYPES, calcCalendarDays, calcWorkingDays, EMPLOYEE_LEAVE_TYPES, isLeaveTypeAllowedForGender, requiredNotice, noticeDaysGiven, type EmployeeGender, type StoreLeaveType } from '@/lib/leave-utils'
+import { EMPLOYEE_LEAVE_TYPES, isLeaveTypeAllowedForGender, leaveDaysForRange, remainingBalance, requiredNotice, noticeDaysGiven, type EmployeeGender, type StoreLeaveType } from '@/lib/leave-utils'
 import { toClientRequest, toClientBalance, defaultBalances, adjustBalance, getBalance } from '@/lib/hr/leave-store'
 import {
   notifyLeaveApplied,
@@ -102,10 +102,32 @@ export async function POST(request: Request) {
       const bookedNotify: Array<{ id: string }> = []
       for (const req of incoming) {
         const leaveType = String(req.leaveType ?? '') as StoreLeaveType
-        if (!leaveType) continue
-        const days = Number(req.days ?? req.daysRequested ?? 0)
-        const isOwnRequest = !req.isSystemGenerated && !!ownEmployee?.id && req.employeeId === ownEmployee.id
+        if (!leaveType || !req.employeeId || !req.startDate || !req.endDate) continue
+        const startStr = String(req.startDate).slice(0, 10)
+        const endStr = String(req.endDate).slice(0, 10)
+        // Always derive days from the date range — never trust client daysRequested.
+        const days = leaveDaysForRange(leaveType, startStr, endStr)
+        if (days <= 0) {
+          return NextResponse.json({
+            error: 'The selected dates contain no leave days — check the date order and that the range is not only Sunday/public holidays',
+          }, { status: 422 })
+        }
+        const isSystemGenerated = !!req.isSystemGenerated
+        const isOwnRequest = !isSystemGenerated && !!ownEmployee?.id && req.employeeId === ownEmployee.id
         const status = isOwnRequest ? 'pending_hr' : ((req.status ?? 'approved') as string)
+        const year = Number(startStr.slice(0, 4))
+
+        // Balance security: HR bookings may not overdraw (except unpaid / system closure).
+        if (leaveType !== 'unpaid' && !isSystemGenerated) {
+          const bal = await getBalance(req.employeeId, leaveType, year)
+          const remaining = remainingBalance(bal)
+          if (days > remaining) {
+            return NextResponse.json({
+              error: `Insufficient ${leaveType} balance for ${req.employeeName ?? 'employee'}: ${Math.max(0, remaining)} day(s) remaining, ${days} requested`,
+            }, { status: 422 })
+          }
+        }
+
         // Skip if a row with this id already exists (idempotent bulk).
         if (req.id) {
           const exists = await prisma.leaveRequest.findUnique({ where: { id: req.id } }).catch(() => null)
@@ -116,29 +138,39 @@ export async function POST(request: Request) {
           employeeId: req.employeeId,
           employeeName: req.employeeName ?? null,
           leaveType: leaveType as any,
-          startDate: new Date(req.startDate),
-          endDate: new Date(req.endDate),
+          startDate: new Date(`${startStr}T12:00:00.000Z`),
+          endDate: new Date(`${endStr}T12:00:00.000Z`),
           daysRequested: days,
           reason: req.reason ?? null,
           status: status as any,
           submittedByUserId: req.submittedByUserId ?? session.user.id,
-          isSystemGenerated: !!req.isSystemGenerated,
+          isSystemGenerated,
           ...(status === 'approved' ? { reviewedByName: session.user.name, reviewedAt: new Date() } : {}),
         }, typeof req.ref === 'string' && req.ref ? req.ref : null)
-        const year = new Date(req.startDate).getFullYear()
         await adjustBalance(req.employeeId, leaveType, year, status === 'approved' ? { used: days } : { pending: days })
         created.push(row.id)
         if (status === 'pending_hr') pendingNotify.push({ id: row.id })
-        else if (status === 'approved' && !req.isSystemGenerated) bookedNotify.push({ id: row.id })
+        else if (status === 'approved' && !isSystemGenerated) bookedNotify.push({ id: row.id })
       }
-      // Optional explicit balance overrides (HR entitlement edits).
+      // Entitlement / carry-forward adjustments only — never let a client snapshot
+      // overwrite used/pending arithmetic (server owns those counters).
       if (Array.isArray(body.balances)) {
         for (const b of body.balances) {
           if (!b.employeeId || !b.leaveType) continue
+          const current = await getBalance(b.employeeId, b.leaveType, b.year)
           await prisma.leaveBalance.upsert({
             where: { employeeId_leaveType_year: { employeeId: b.employeeId, leaveType: b.leaveType, year: b.year } },
-            update: { entitlement: Number(b.entitlement) || 0, carryForward: Number(b.carryForward) || 0, used: Number(b.used) || 0, pending: Number(b.pending) || 0 },
-            create: { employeeId: b.employeeId, leaveType: b.leaveType, year: b.year, entitlement: Number(b.entitlement) || 0, carryForward: Number(b.carryForward) || 0, used: Number(b.used) || 0, pending: Number(b.pending) || 0 },
+            update: {
+              entitlement: Number(b.entitlement) || 0,
+              carryForward: Number(b.carryForward) || 0,
+              used: current.used,
+              pending: current.pending,
+            },
+            create: {
+              employeeId: b.employeeId, leaveType: b.leaveType, year: b.year,
+              entitlement: Number(b.entitlement) || 0, carryForward: Number(b.carryForward) || 0,
+              used: current.used, pending: current.pending,
+            },
           })
         }
       }
@@ -187,27 +219,25 @@ export async function POST(request: Request) {
     // The day count is always derived from the date range — never trusted from
     // the client — so an application can never reserve more (or fewer) days
     // than the dates actually cover. Maternity/paternity use calendar days;
-    // everything else uses working days (Mon–Fri, excl. Kenyan public holidays).
+    // everything else uses working days (Mon–Sat, excl. Kenyan public holidays).
     const startStr = String(body.startDate).slice(0, 10)
     const endStr = String(body.endDate).slice(0, 10)
-    const days = CALENDAR_DAY_TYPES.includes(leaveType)
-      ? calcCalendarDays(startStr, endStr)
-      : calcWorkingDays(startStr, endStr)
+    const days = leaveDaysForRange(leaveType, startStr, endStr)
     if (days <= 0) {
-      return NextResponse.json({ error: 'The selected dates contain no leave days — check that the end date is not before the start date and the range is not only weekends/public holidays' }, { status: 422 })
+      return NextResponse.json({ error: 'The selected dates contain no leave days — check that the end date is not before the start date and the range is not only Sunday/public holidays' }, { status: 422 })
     }
 
     // Notice-period check (mirrors the client rule, enforced server-side).
     const notice = requiredNotice(leaveType, days)
-    if (notice > 0 && noticeDaysGiven(String(body.startDate)) < notice) {
+    if (notice > 0 && noticeDaysGiven(startStr) < notice) {
       return NextResponse.json({ error: `Insufficient notice: ${notice} working days required before the start date` }, { status: 422 })
     }
 
     // Balance enforcement: an application may never exceed the remaining
     // balance. Unpaid leave is the only type without an entitlement to check.
-    const year = new Date(body.startDate).getFullYear()
+    const year = Number(startStr.slice(0, 4))
     const bal = await getBalance(employee.id, leaveType, year)
-    const remaining = bal.entitlement + bal.carryForward - bal.used - bal.pending
+    const remaining = remainingBalance(bal)
     if (leaveType !== 'unpaid' && days > remaining) {
       return NextResponse.json({ error: `Insufficient ${leaveType} balance: ${Math.max(0, remaining)} day(s) remaining, ${days} requested` }, { status: 422 })
     }

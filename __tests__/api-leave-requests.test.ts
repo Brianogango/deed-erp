@@ -84,10 +84,30 @@ describe('POST /api/leave-requests — Prisma-backed self-service', () => {
     expect(Number(created.daysRequested)).toBe(5)
   })
 
-  it('rejects a date range containing no working days', async () => {
+  it('rejects a date range containing no working days (Sunday only — Sat is a working day)', async () => {
     mockGetSession.mockResolvedValue(techSession)
-    const res = await POST(postReq({ leaveType: 'annual', days: 2, startDate: '2026-08-01', endDate: '2026-08-02' }))
+    // 2026-08-02 is Sunday; Saturday 1 Aug would count as 1 working day under Mon–Sat.
+    const res = await POST(postReq({ leaveType: 'annual', days: 1, startDate: '2026-08-02', endDate: '2026-08-02' }))
     expect(res.status).toBe(422)
+    expect(mockPrisma.leaveRequest.create).not.toHaveBeenCalled()
+  })
+
+  it('counts Saturday as a working day when deriving the day count', async () => {
+    mockGetSession.mockResolvedValue(techSession)
+    // Mon 3 Aug → Sat 8 Aug = 6 working days (Mon–Sat)
+    const res = await POST(postReq({ leaveType: 'annual', days: 1, startDate: '2026-08-03', endDate: '2026-08-08' }))
+    expect(res.status).toBe(200)
+    const created = mockPrisma.leaveRequest.create.mock.calls[0][0].data
+    expect(Number(created.daysRequested)).toBe(6)
+  })
+
+  it('rejects insufficient notice for annual leave', async () => {
+    mockGetSession.mockResolvedValue(techSession)
+    // Clock is pinned to 2026-07-01; start 2026-07-06 is only a few working days away.
+    const res = await POST(postReq({ leaveType: 'annual', days: 1, startDate: '2026-07-06', endDate: '2026-07-06' }))
+    expect(res.status).toBe(422)
+    const body = await res.json()
+    expect(String(body.error)).toMatch(/Insufficient notice/i)
     expect(mockPrisma.leaveRequest.create).not.toHaveBeenCalled()
   })
 
@@ -196,10 +216,36 @@ describe('POST /api/leave-requests — Prisma-backed self-service', () => {
 
   it('lets HR create a booking that lands approved', async () => {
     mockGetSession.mockResolvedValue(hrSession)
+    // Saturday 1 Aug is a working day under Mon–Sat
     const res = await POST(postReq({ employeeId: 'emp-x', employeeName: 'X', leaveType: 'annual', days: 1, startDate: '2026-08-01', endDate: '2026-08-01', status: 'approved' }))
     expect(res.status).toBe(200)
     const created = mockPrisma.leaveRequest.create.mock.calls[0][0].data
     expect(created.status).toBe('approved')
+    expect(Number(created.daysRequested)).toBe(1)
+  })
+
+  it('rejects an HR booking that exceeds remaining balance', async () => {
+    mockGetSession.mockResolvedValue(hrSession)
+    mockPrisma.leaveBalance.findUnique.mockResolvedValue({
+      id: 'b1', employeeId: 'emp-x', leaveType: 'annual', year: 2026,
+      entitlement: 2, carryForward: 0, used: 2, pending: 0,
+    })
+    const res = await POST(postReq({
+      employeeId: 'emp-x', employeeName: 'X', leaveType: 'annual',
+      days: 99, startDate: '2026-08-03', endDate: '2026-08-05', status: 'approved',
+    }))
+    expect(res.status).toBe(422)
+    expect(mockPrisma.leaveRequest.create).not.toHaveBeenCalled()
+  })
+
+  it('derives HR booking days from the date range (ignores client days)', async () => {
+    mockGetSession.mockResolvedValue(hrSession)
+    const res = await POST(postReq({
+      employeeId: 'emp-x', employeeName: 'X', leaveType: 'annual',
+      days: 1, startDate: '2026-08-03', endDate: '2026-08-08', status: 'approved',
+    }))
+    expect(res.status).toBe(200)
+    expect(Number(mockPrisma.leaveRequest.create.mock.calls[0][0].data.daysRequested)).toBe(6)
   })
 
   it('forces an HR user\'s OWN leave to pending — no self-approval', async () => {

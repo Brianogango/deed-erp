@@ -163,12 +163,26 @@ async function bookLeave() {
   if (!ALLOWED.has(leaveType)) fail(`Invalid --type ${leaveType}`)
 
   const year = Number(startDate.slice(0, 4))
+  // Match lib/leave-utils: maternity/paternity = calendar days; others = Mon–Sat
+  // working days (Sunday excluded). Public holidays are not loaded in this ops
+  // helper — prefer the ERP UI / API for exact holiday-aware counts.
+  const CALENDAR_TYPES = new Set(['maternity', 'paternity'])
   const dayCount = (() => {
-    const s = new Date(`${startDate}T12:00:00Z`)
-    const e = new Date(`${endDate}T12:00:00Z`)
-    const diff = Math.round((e - s) / 86_400_000) + 1
-    return Math.max(1, diff)
+    const s = new Date(`${startDate}T00:00:00`)
+    const e = new Date(`${endDate}T00:00:00`)
+    if (e < s) fail('End date is before start date')
+    if (CALENDAR_TYPES.has(leaveType)) {
+      return Math.round((e - s) / 86_400_000) + 1
+    }
+    let days = 0
+    const cur = new Date(s)
+    while (cur <= e) {
+      if (cur.getDay() !== 0) days++ // Sunday only is a rest day
+      cur.setDate(cur.getDate() + 1)
+    }
+    return days
   })()
+  if (dayCount <= 0) fail('Selected range contains no leave days (Sunday-only?)')
 
   const clients = await pool.query(
     `SELECT id, employee_number, first_name, last_name, email, is_active
