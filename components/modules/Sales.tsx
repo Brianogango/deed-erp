@@ -63,7 +63,7 @@ import {
   useMounted,
   RecordCard,
 } from '@/components/ui'
-import { PrimaryActionButton, OperationalSummary, TablePageLayout } from '@/components/erp'
+import { PrimaryActionButton, OperationalSummary, TablePageLayout, StatusBadge } from '@/components/erp'
 import { DataTable, type ColumnDef } from '@/components/data-table'
 import { Fa } from '@/components/icons'
 import type { CommercialPdfInput } from '@/lib/commercial-pdf'
@@ -346,6 +346,7 @@ function SalesContent() {
   // ── Delivery view state ─────────────────────────────────────────────────
   const [deliveryQtys, setDeliveryQtys] = useState<Record<string, number>>({})
   const [savingDelivery, setSavingDelivery] = useState(false)
+  const [confirmingSO, setConfirmingSO] = useState(false)
   const [dnRecipientName, setDnRecipientName] = useState('')
   const [dnRecipientPhone, setDnRecipientPhone] = useState('')
   const [dnRecipientId, setDnRecipientId] = useState('')
@@ -912,17 +913,8 @@ function SalesContent() {
     }
   }
 
-  // ── Status colors (Odoo stages) ─────────────────────────────────────────
-  const statusColors: Record<string, string> = {
-    quotation: 'bg-amber-50 text-amber-700 border border-amber-200',
-    quotation_sent: 'bg-blue-50 text-blue-700 border border-blue-200',
-    sale: 'bg-emerald-50 text-emerald-700 border border-emerald-200',
-    cancelled: 'bg-red-50 text-red-600 border border-red-200',
-  }
   const statusPill = (s: SalesOrderView) => (
-    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold ${statusColors[s.status] ?? 'bg-gray-100 text-gray-600'}`}>
-      {SALE_STATUS_LABELS[s.status] ?? s.status}
-    </span>
+    <StatusBadge status={s.status} label={SALE_STATUS_LABELS[s.status] ?? s.status} size="xs" />
   )
 
   const salesListColumns: ColumnDef<SalesOrderView>[] = useMemo(() => [
@@ -1241,7 +1233,19 @@ function SalesContent() {
                               <Fa icon={faFileInvoice} /><span>{sendingQuoteId === activeOrder.id ? 'Sending…' : 'Send by Email'}</span>
                             </button>
                           )}
-                          <button className="btn-primary flex items-center gap-2 text-xs" onClick={() => { if (!activeOrder.lines.length) { showToast('Add at least one product before confirming', 'error'); return } confirmSO(activeOrder.id) }}><Fa icon={faCheck} /><span>Confirm</span></button>
+                          <button
+                            type="button"
+                            className="btn-primary flex items-center gap-2 text-xs"
+                            disabled={confirmingSO}
+                            onClick={async () => {
+                              if (!activeOrder.lines.length) { showToast('Add at least one product before confirming', 'error'); return }
+                              setConfirmingSO(true)
+                              try { await Promise.resolve(confirmSO(activeOrder.id)) }
+                              finally { setConfirmingSO(false) }
+                            }}
+                          >
+                            <Fa icon={faCheck} aria-hidden="true" /><span>{confirmingSO ? 'Confirming…' : 'Confirm'}</span>
+                          </button>
                           <MoreActionsMenu
                             items={[
                               ...(activeOrder.status === 'quotation_sent' ? [{ label: sendingQuoteId === activeOrder.id ? 'Sending…' : 'Send by Email', icon: faFileInvoice, disabled: !activeOrder.lines.length || sendingQuoteId === activeOrder.id, onClick: () => openSendQuoteModal(activeOrder) }] : []),
@@ -1653,13 +1657,13 @@ function SalesContent() {
                                       <td className="px-3 py-2 text-center">
                                         {isEditing ? (
                                           <div className="flex items-center gap-1">
-                                            <button onClick={() => saveEditLine(l.id)} className="w-6 h-6 rounded flex items-center justify-center bg-emerald-100 text-emerald-700 hover:bg-emerald-200 transition-colors" title="Save"><Fa icon={faCheck} className="text-[9px]" /></button>
-                                            <button onClick={cancelEditLine} className="w-6 h-6 rounded flex items-center justify-center bg-red-100 text-red-600 hover:bg-red-200 transition-colors" title="Cancel"><Fa icon={faXmark} className="text-[9px]" /></button>
+                                            <button type="button" onClick={() => saveEditLine(l.id)} className="row-action-btn btn-success" aria-label="Save line"><Fa icon={faCheck} aria-hidden="true" /></button>
+                                            <button type="button" onClick={cancelEditLine} className="row-action-btn btn-danger" aria-label="Cancel edit"><Fa icon={faXmark} aria-hidden="true" /></button>
                                           </div>
                                         ) : (
                                           <div className="flex items-center gap-1">
-                                            {canEdit && <button onClick={() => startEditLine(l)} className="w-6 h-6 rounded flex items-center justify-center text-[var(--text-4)] hover:bg-[var(--bg-surface)] hover:text-primary-600 transition-colors" title="Edit line"><Fa icon={faPencil} className="text-[9px]" /></button>}
-                                            {canEdit && <button onClick={() => removeSOLine(activeOrder.id, l.id)} className="w-6 h-6 rounded flex items-center justify-center text-[var(--text-4)] hover:bg-red-50 hover:text-red-600 transition-colors" title="Remove"><Fa icon={faTrash} className="text-[9px]" /></button>}
+                                            {canEdit && <button type="button" onClick={() => startEditLine(l)} className="row-action-btn btn-edit" aria-label="Edit line"><Fa icon={faPencil} aria-hidden="true" /></button>}
+                                            {canEdit && <button type="button" onClick={() => removeSOLine(activeOrder.id, l.id)} className="row-action-btn btn-danger" aria-label="Remove line"><Fa icon={faTrash} aria-hidden="true" /></button>}
                                           </div>
                                         )}
                                       </td>
@@ -2162,7 +2166,7 @@ function NewQuotationForm({
                           <td className="px-3 py-2">
                             <div className="flex items-center justify-end gap-0.5">
                               {moveButtons}
-                              <button onClick={() => removeDraftLine(line.id)} title="Remove section" className="w-6 h-6 rounded flex items-center justify-center text-[var(--text-4)] hover:bg-red-50 hover:text-red-600 transition-colors"><Fa icon={faTrash} className="text-[9px]" /></button>
+                              <button type="button" onClick={() => removeDraftLine(line.id)} aria-label="Remove section" className="row-action-btn btn-danger"><Fa icon={faTrash} aria-hidden="true" /></button>
                             </div>
                           </td>
                         </tr>
@@ -2240,7 +2244,7 @@ function NewQuotationForm({
                         <td className="px-3 py-2">
                           <div className="flex items-center justify-end gap-0.5">
                             {moveButtons}
-                            <button onClick={() => removeDraftLine(line.id)} title="Remove line" className="w-6 h-6 rounded flex items-center justify-center text-[var(--text-4)] hover:bg-red-50 hover:text-red-600 transition-colors"><Fa icon={faTrash} className="text-[9px]" /></button>
+                            <button type="button" onClick={() => removeDraftLine(line.id)} aria-label="Remove line" className="row-action-btn btn-danger"><Fa icon={faTrash} aria-hidden="true" /></button>
                           </div>
                         </td>
                       </tr>

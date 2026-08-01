@@ -2,7 +2,7 @@
 import { useState, useRef, useCallback, useEffect, useMemo } from 'react'
 import { useFinanceStore, Receipt, LOCATIONS, LocationId, CATEGORY_CONFIG, CategoryId, fmtKes, fmtDate, POLine, Account, resolveProductAccounts } from '@/lib/store'
 import { Badge, Modal, Field, Input, Select, Confirm, StatCard, PanelHeader, StatusStepper, SearchPicker, Divider, TabContent, ModuleSkeleton, TabBar, ModuleHeader } from '@/components/ui'
-import { PrimaryActionButton, SecondaryActionMenu } from '@/components/erp'
+import { PrimaryActionButton, SecondaryActionMenu, StatusBadge } from '@/components/erp'
 import { Fa } from '@/components/icons'
 import { faClipboardCheck, faCartShopping, faBoxesStacked, faCreditCard, faPrint, faClipboardList, faPlus } from '@fortawesome/free-solid-svg-icons'
 import { printSerialLabels, printProductLabels } from '@/lib/product-label'
@@ -29,19 +29,15 @@ const PO_STEPS = ['RFQ', 'RFQ Sent', 'Purchase Order', 'Received', 'Billed']
 const LOC_OPTS = (['warehouse', 'shop'] as LocationId[]).map(k => ({ value: k, label: LOCATIONS[k].name }))
 
 const REASON_OPTS = [
-  { value: 'damaged',      label: '🔴 Damaged goods' },
-  { value: 'wrong_supply', label: '❌ Wrong supply' },
-  { value: 'excess',       label: '📦 Excess stock' },
-  { value: 'other',        label: '📝 Other' },
+  { value: 'damaged',      label: 'Damaged goods' },
+  { value: 'wrong_supply', label: 'Wrong supply' },
+  { value: 'excess',       label: 'Excess stock' },
+  { value: 'other',        label: 'Other' },
 ]
 
 const STATUS_LABEL: Record<string, string> = {
   draft: 'RFQ', sent: 'RFQ Sent', confirmed: 'Purchase Order',
   partial: 'Partially Received', received: 'Fully Received', cancelled: 'Cancelled',
-}
-const STATUS_BADGE: Record<string, string> = {
-  draft: 'badge-gray', sent: 'badge-amber', confirmed: 'badge-blue',
-  partial: 'badge-amber', received: 'badge-green', cancelled: 'badge-red',
 }
 const PO_STEP_IDX: Record<string, number> = {
   draft: 0, sent: 1, confirmed: 2, partial: 3, received: 3,
@@ -726,7 +722,7 @@ export default function Purchase() {
           <button className="btn-outline text-[11px] py-1 px-2.5" onClick={() => { setSubView('form'); setActiveReceiptId(null) }}>← Back to Order</button>
           <span className="text-xs font-semibold">GRN — {activeReceipt.ref}</span>
           <span className="text-[10px] text-t3">From: {activePO.vendorName}</span>
-          <span className={`badge ${STATUS_BADGE[activePO.status]}`}>{STATUS_LABEL[activePO.status]}</span>
+          <StatusBadge status={activePO.status} label={STATUS_LABEL[activePO.status]} />
         </div>
 
         <div className="card p-4 flex items-start gap-4 flex-wrap">
@@ -750,7 +746,7 @@ export default function Purchase() {
             <div key={idx} className="card overflow-hidden">
               <div className="flex items-center justify-between px-4 py-3 border-b" style={{ borderColor: 'var(--bg-muted)' }}>
                 <div className="flex items-center gap-3">
-                  <span className="text-2xl">{prod?.image ?? '📦'}</span>
+                  <span className="text-2xl">{prod?.image ?? ''}</span>
                   <div>
                     <p className="text-xs font-semibold text-t1">{line.productName}</p>
                     <p className="text-[10px] text-t3">
@@ -1304,7 +1300,7 @@ export default function Purchase() {
                             </div>
                             {sn?.accessories && sn.accessories.length > 0 && (
                               <span className="text-[9px] font-sans" style={{ color: 'var(--warning-text)' }}>
-                                📦 {sn.accessories.join(', ')}
+                                {sn.accessories.join(', ')}
                               </span>
                             )}
                           </div>
@@ -1332,7 +1328,7 @@ export default function Purchase() {
           </Field>
           <div className="flex gap-2 justify-end">
             <button className="btn-outline" onClick={() => setShowReturnModal(false)}>Cancel</button>
-            <button className="btn-primary" style={{ background: 'var(--warning)' }} onClick={handleConfirmReturn}>↩ Confirm Return</button>
+            <button className="btn-primary" style={{ background: 'var(--warning)' }} onClick={handleConfirmReturn}>Confirm Return</button>
           </div>
         </Modal>
       )}

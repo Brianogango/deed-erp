@@ -456,7 +456,7 @@ function HRContent() {
         subtitle="Employees, payroll and leave"
         icon={<Fa icon={faUsers} />}
         count={employees.length}
-        color="#0891B2"
+        color="var(--info)"
         primaryAction={isAdmin ? (
           <PrimaryActionButton
             icon={<Fa icon={faUserPlus} />}

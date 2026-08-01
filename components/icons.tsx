@@ -27,7 +27,7 @@ export {
 
 export {
   faFolderOpen, faFolder, faFile, faFileAlt, faFileLines,
-  faFilePdf, faFileSignature, faFileInvoiceDollar, faFileCircleCheck,
+  faFilePdf, faFileSignature, faFileInvoice, faFileInvoiceDollar, faFileCircleCheck,
 } from '@fortawesome/free-solid-svg-icons'
 
 export {
@@ -42,7 +42,7 @@ export {
 
 export {
   faBuilding, faBuildingColumns, faWarehouse,
-  faBoxesStacked, faBoxOpen, faCubes,
+  faBoxesStacked, faBoxOpen, faBox, faCubes,
 } from '@fortawesome/free-solid-svg-icons'
 
 export {
@@ -72,6 +72,8 @@ export {
   faPaperPlane, faDownload, faPrint as faPrintIcon,
   faCheck, faXmark, faMinus,
   faEllipsisVertical, faBars, faGrip,
+  faFire, faSun, faSnowflake, faNoteSticky, faListCheck,
+  faCar, faUtensils, faLightbulb, faComputer, faDroplet,
 } from '@fortawesome/free-solid-svg-icons'
 
 // ── Re-usable wrapper ─────────────────────────────────────────────────────────

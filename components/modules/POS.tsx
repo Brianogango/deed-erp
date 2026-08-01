@@ -6,6 +6,7 @@ import { DataTable, type ColumnDef } from '@/components/data-table'
 import {
   Fa, faCashRegister, faReceipt, faCamera, faCartShopping, faStar,
   faCircleCheck, faPrint, faMobileScreenButton, faMoneyBillWave, faCreditCard,
+  faStore, faBox, faMagnifyingGlass, faMinus, faPlus,
 } from '@/components/icons'
 import { BarcodeScannerModal } from '@/components/BarcodeScanner'
 import { matchPosScan, normalizeScanCode } from '@/lib/barcode-scan'
@@ -230,14 +231,14 @@ export default function PointOfSale() {
           showToast(`${chosen.serial} is already in cart`, 'info')
           return prev
         }
-        return [...prev, { lineId: chosen.id, productId: product.id, productName: product.name, barcode: product.barcode, price: product.salePrice, listPrice: product.salePrice, qty: 1, image: product.image ?? '📦', serialId: chosen.id, serialNumber: chosen.serial }]
+        return [...prev, { lineId: chosen.id, productId: product.id, productName: product.name, barcode: product.barcode, price: product.salePrice, listPrice: product.salePrice, qty: 1, image: product.image ?? '', serialId: chosen.id, serialNumber: chosen.serial }]
       })
       showToast(`${product.name} (${chosen.serial}) added`, 'success')
     } else {
       setCart(prev => {
         const ex = prev.find(i => i.productId === product.id)
         if (ex) return prev.map(i => i.productId === product.id ? { ...i, qty: i.qty + 1 } : i)
-        return [...prev, { lineId: product.id, productId: product.id, productName: product.name, barcode: product.barcode, price: product.salePrice, listPrice: product.salePrice, qty: 1, image: product.image ?? '📦' }]
+        return [...prev, { lineId: product.id, productId: product.id, productName: product.name, barcode: product.barcode, price: product.salePrice, listPrice: product.salePrice, qty: 1, image: product.image ?? '' }]
       })
     }
   }
@@ -263,40 +264,49 @@ export default function PointOfSale() {
     setCart(prev => prev.map(i => i.lineId === lineId ? { ...i, price: i.listPrice } : i))
   }
 
+  const [charging, setCharging] = useState(false)
+  const [openingSession, setOpeningSession] = useState(false)
+
   const charge = async () => {
     if (cart.length === 0) { showToast('Cart is empty', 'error'); return }
     if (!posSessionOpen) { showToast('No active POS session', 'error'); return }
+    if (charging) return
 
     if (customerId) {
       const cs = getCustomerCreditStatus(customerId)
       if (cs.isLocked) { showToast(cs.message, 'error'); return }
     }
 
-    const order = await createPOSOrder(
-      cart.map(i => ({
-        productId: i.productId,
-        productName: i.productName,
-        barcode: i.barcode,
-        price: i.price,
-        qty: i.qty,
-        subtotal: i.price * i.qty,
-        serialId: i.serialId,
-        serialNumber: i.serialNumber
-      })) as any,
-      payMethod,
-      customerId || undefined,
-      customerName || undefined,
-      pointsToRedeem || 0,
-      applyVat
-    )
+    setCharging(true)
+    try {
+      const order = await createPOSOrder(
+        cart.map(i => ({
+          productId: i.productId,
+          productName: i.productName,
+          barcode: i.barcode,
+          price: i.price,
+          qty: i.qty,
+          subtotal: i.price * i.qty,
+          serialId: i.serialId,
+          serialNumber: i.serialNumber
+        })) as any,
+        payMethod,
+        customerId || undefined,
+        customerName || undefined,
+        pointsToRedeem || 0,
+        applyVat
+      )
 
-    if (order) {
-      setCart([])
-      setCustomerId('')
-      setCustomerName('')
-      setRedeemPoints('')
-      setReceiptOrder(order)
-      setIsPrinting(true)
+      if (order) {
+        setCart([])
+        setCustomerId('')
+        setCustomerName('')
+        setRedeemPoints('')
+        setReceiptOrder(order)
+        setIsPrinting(true)
+      }
+    } finally {
+      setCharging(false)
     }
   }
 
@@ -311,14 +321,29 @@ export default function PointOfSale() {
       {/* Boot screen if no session */}
       {!posSessionOpen && (
         <div className="flex-1 flex flex-col items-center justify-center bg-surface p-6 text-center">
-          <div className="text-6xl mb-6">🏪</div>
+          <div className="text-6xl mb-6 text-t4" aria-hidden="true"><Fa icon={faStore} /></div>
           <h2 className="text-2xl font-black text-t1 mb-2">POS Terminal</h2>
           <p className="text-t3 mb-8 max-w-sm">Open a new session to start processing retail sales and managing your till.</p>
-          <button className="btn-primary px-10 py-4 text-lg" onClick={() => setShowOpenSession(true)}>Open New Session</button>
+          <button type="button" className="btn-primary px-10 py-4 text-lg" onClick={() => setShowOpenSession(true)}>Open New Session</button>
           {showOpenSession && (
             <Modal title="Open Session" subtitle="Enter opening cash balance" width={380} onClose={() => setShowOpenSession(false)}>
               <Field label="Opening Cash Count (KES)"><Input value={openingCash} onChange={setOpeningCash} type="number" autoFocus /></Field>
-              <button className="btn-primary w-full mt-4" onClick={() => { openPOSSession(Number(openingCash)); setShowOpenSession(false) }}>Start Session</button>
+              <button
+                type="button"
+                className="btn-primary w-full mt-4"
+                disabled={openingSession}
+                onClick={() => {
+                  setOpeningSession(true)
+                  try {
+                    openPOSSession(Number(openingCash))
+                    setShowOpenSession(false)
+                  } finally {
+                    setOpeningSession(false)
+                  }
+                }}
+              >
+                {openingSession ? 'Starting…' : 'Start Session'}
+              </button>
             </Modal>
           )}
         </div>
@@ -395,7 +420,11 @@ export default function PointOfSale() {
                   return (
                     <div key={p.id} onClick={() => addToCart(p, matchedSerial?.id)}
                       className="group flex flex-col p-2.5 sm:p-3 rounded-2xl bg-surface border border-border hover:border-brand-blue hover:shadow-xl transition-all cursor-pointer relative overflow-hidden">
-                      <div className="text-2xl sm:text-3xl mb-2 sm:mb-3 group-hover:scale-110 transition-transform duration-300">{p.image ?? '📦'}</div>
+                      <div className="text-2xl sm:text-3xl mb-2 sm:mb-3 text-t4 group-hover:opacity-80 transition-opacity duration-200" aria-hidden="true">
+                        {p.image && !/^\p{Extended_Pictographic}/u.test(String(p.image))
+                          ? <img src={p.image} alt="" className="w-10 h-10 object-contain mx-auto" />
+                          : <Fa icon={faBox} />}
+                      </div>
                       <p className="text-[11px] sm:text-xs font-bold text-t1 leading-tight mb-1 line-clamp-2">{p.name}</p>
                       {matchedSerial && (
                         <p className="text-[9px] font-bold text-emerald-600 font-mono truncate mb-1" title={matchedSerial.serial}>
@@ -413,7 +442,7 @@ export default function PointOfSale() {
               </div>
               {filteredProducts.length === 0 && (
                 <div className="py-12 flex flex-col items-center justify-center opacity-40">
-                  <div className="text-4xl mb-2">🔍</div>
+                  <div className="text-4xl mb-2 text-t4" aria-hidden="true"><Fa icon={faMagnifyingGlass} /></div>
                   <p className="text-xs font-bold text-t3">No products found</p>
                 </div>
               )}
@@ -433,7 +462,11 @@ export default function PointOfSale() {
                   <button className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-white border border-border flex items-center justify-center text-[10px] shadow-sm hover:bg-red-50 hover:text-red-600 transition-all"
                     onClick={() => removeFromCart(i.lineId)}>✕</button>
                   <div className="flex gap-3">
-                    <div className="text-xl">{i.image}</div>
+                    <div className="text-xl text-t4" aria-hidden="true">
+                      {i.image && !/^\p{Extended_Pictographic}/u.test(String(i.image))
+                        ? <img src={i.image} alt="" className="w-8 h-8 object-contain" />
+                        : <Fa icon={faBox} />}
+                    </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-[11px] font-bold text-t1 truncate">{i.productName}</p>
                       {i.serialNumber && <p className="text-[9px] font-mono text-brand-blue font-bold">SN: {i.serialNumber}</p>}
@@ -446,11 +479,23 @@ export default function PointOfSale() {
                   </div>
                   <div className="flex items-center justify-between mt-1">
                     <div className="flex items-center gap-1">
-                      <button className="w-6 h-6 rounded bg-white border border-border flex items-center justify-center text-xs hover:bg-muted"
-                        onClick={() => setQty(i.lineId, i.qty - 1)}>−</button>
+                      <button
+                        type="button"
+                        className="icon-btn"
+                        aria-label={`Decrease quantity of ${i.productName}`}
+                        onClick={() => setQty(i.lineId, i.qty - 1)}
+                      >
+                        <Fa icon={faMinus} aria-hidden="true" />
+                      </button>
                       <span className="w-8 text-center text-xs font-bold">{i.qty}</span>
-                      <button className="w-6 h-6 rounded bg-white border border-border flex items-center justify-center text-xs hover:bg-muted"
-                        onClick={() => setQty(i.lineId, i.qty + 1)}>+</button>
+                      <button
+                        type="button"
+                        className="icon-btn"
+                        aria-label={`Increase quantity of ${i.productName}`}
+                        onClick={() => setQty(i.lineId, i.qty + 1)}
+                      >
+                        <Fa icon={faPlus} aria-hidden="true" />
+                      </button>
                     </div>
                     <p className="text-[11px] font-black text-t1">{fmtKes(i.price * i.qty)}</p>
                   </div>
@@ -503,7 +548,7 @@ export default function PointOfSale() {
                 {cartTax > 0 && <div className="flex justify-between text-[11px] text-t3"><span>VAT ({companySettings.vatRate}%)</span><span>{fmtKes(cartTax)}</span></div>}
                 {pointsToRedeem > 0 && <div className="flex justify-between text-[11px] text-indigo-600 font-bold"><span>Points Discount</span><span>-{fmtKes(pointsToRedeem)}</span></div>}
                 <div className="flex justify-between text-lg font-black text-t1 pt-1"><span>Total</span><span>{fmtKes(cartTotal)}</span></div>
-                {pointsToEarn > 0 && <p className="text-[10px] text-center font-bold text-indigo-600 pt-1">✨ Earns {pointsToEarn} loyalty points</p>}
+                {pointsToEarn > 0 && <p className="text-[10px] text-center font-bold text-indigo-600 pt-1">Earns {pointsToEarn} loyalty points</p>}
               </div>
 
               <div className="flex gap-1.5 pt-2">
@@ -520,9 +565,18 @@ export default function PointOfSale() {
                   </button>
                 ))}
               </div>
-              <button className="btn-primary w-full py-3 text-sm font-semibold min-h-[48px]" onClick={charge}
-                style={{ background: cart.length > 0 ? '#12B76A' : 'var(--border-lt)', color: cart.length > 0 ? '#fff' : 'var(--text-3)', cursor: cart.length > 0 ? 'pointer' : 'default' }}>
-                {cart.length > 0 ? `Charge ${fmtKes(cartTotal)}` : 'Add items to cart'}
+              <button
+                type="button"
+                className="btn-primary w-full py-3 text-sm font-semibold min-h-[48px]"
+                onClick={() => { void charge() }}
+                disabled={cart.length === 0 || charging}
+                style={{
+                  background: cart.length > 0 ? 'var(--success)' : 'var(--border-lt)',
+                  color: cart.length > 0 ? '#fff' : 'var(--text-3)',
+                  cursor: cart.length > 0 && !charging ? 'pointer' : 'default',
+                }}
+              >
+                {charging ? 'Charging…' : cart.length > 0 ? `Charge ${fmtKes(cartTotal)}` : 'Add items to cart'}
               </button>
             </div>
           </div>

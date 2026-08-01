@@ -591,7 +591,7 @@ export default function Settings() {
                     style={{ background: resetting ? 'var(--border-strong)' : 'var(--danger)', color: '#fff' }}
                     onClick={handleResetAllData} disabled={resetting || currentUser?.role !== 'director'}
                   >
-                    {resetting ? 'Resetting…' : '🗑 Reset All Data'}
+                    {resetting ? 'Resetting…' : 'Reset All Data'}
                   </button>
                 </SettingRow>
               </SectionCard>

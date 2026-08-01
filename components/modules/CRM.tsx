@@ -120,6 +120,7 @@ function CRMContent() {
   
   // Modals
   const [showNewOppModal, setShowNewOppModal] = useState(false)
+  const [creatingOpp, setCreatingOpp] = useState(false)
   const [showNewCompanyModal, setShowNewCompanyModal] = useState(false)
   const [showNewContactModal, setShowNewContactModal] = useState(false)
   const [showOppCompanyModal, setShowOppCompanyModal] = useState(false)
@@ -359,13 +360,15 @@ function CRMContent() {
   ]
 
   // Handlers
-  const handleCreateOpportunity = () => {
+  const handleCreateOpportunity = async () => {
     if (!oppForm.name || !oppForm.companyId || !oppForm.contactPersonId) {
       showToast('Name, company, and contact person are required', 'error')
       return
     }
-
-    const opp = createOpportunity({
+    if (creatingOpp) return
+    setCreatingOpp(true)
+    try {
+    const opp = await Promise.resolve(createOpportunity({
       name: oppForm.name,
       clientId: oppForm.companyId,
       companyId: oppForm.companyId,
@@ -382,7 +385,7 @@ function CRMContent() {
       description: oppForm.description,
       customerNeeds: oppForm.customerNeeds,
       tags: oppForm.tags.split(',').map(t => t.trim()).filter(Boolean),
-    })
+    }))
 
     setShowNewOppModal(false)
     setOppForm({
@@ -399,6 +402,9 @@ function CRMContent() {
       tags: '',
     })
     setActiveOppId(opp.id)
+    } finally {
+      setCreatingOpp(false)
+    }
   }
 
   const handleCreateCompany = () => {
@@ -678,7 +684,7 @@ function CRMContent() {
         subtitle={`${companies.length} ${companies.length === 1 ? 'company' : 'companies'} · ${fmtKes(totalPipelineValue)} pipeline`}
         icon={<Fa icon={faChartBar} />}
         count={pipelineOpps.length}
-        color="#4F46E5"
+        color="var(--primary)"
         primaryAction={primaryCrmAction}
         overflowActions={tab === 'pipeline' && view !== 'detail' ? (
           <div className="flex items-center gap-1.5">
@@ -925,7 +931,14 @@ function CRMContent() {
             </Field>
             <div className="flex gap-2 justify-end mt-4">
               <button className="btn-outline" onClick={() => setShowNewOppModal(false)}>Cancel</button>
-              <button className="btn-primary" onClick={handleCreateOpportunity} disabled={!oppForm.name || !oppForm.companyId || !oppForm.contactPersonId}>Create Opportunity</button>
+              <button
+                type="button"
+                className="btn-primary"
+                onClick={() => { void handleCreateOpportunity() }}
+                disabled={creatingOpp || !oppForm.name || !oppForm.companyId || !oppForm.contactPersonId}
+              >
+                {creatingOpp ? 'Creating…' : 'Create Opportunity'}
+              </button>
             </div>
           </Modal>
         )}

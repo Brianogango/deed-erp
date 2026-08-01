@@ -4,6 +4,7 @@ import { Badge, PanelHeader, Select } from '@/components/ui'
 import LeadScore from './LeadScore'
 import { STAGE_ORDER, STAGE_COLORS, STAGE_LABELS } from './crm-config'
 import Chatter from '@/components/erp/Chatter'
+import { Fa, faPhone, faEnvelope, faHandshake, faBullseye, faClipboardList, faNoteSticky, faListCheck } from '@/components/icons'
 
 interface Props {
   activeOppId: string
@@ -172,20 +173,26 @@ export default function OpportunityDetail({
                 .sort((a, b) => (b.createdDate ?? b.createdAt).localeCompare(a.createdDate ?? a.createdAt))
                 .map(activity => {
                   const icon = {
-                    call: '📞', email: '📧', meeting: '🤝', demo: '🎯',
-                    proposal: '📋', note: '📝', task: '✅',
-                  }[activity.type]
+                    call: faPhone, email: faEnvelope, meeting: faHandshake, demo: faBullseye,
+                    proposal: faClipboardList, note: faNoteSticky, task: faListCheck,
+                  }[activity.type] ?? faNoteSticky
 
                   return (
                     <div key={activity.id} className="rounded-xl p-3" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-lt)' }}>
                       <div className="flex items-start gap-3">
-                        <span style={{ fontSize: 18 }}>{icon}</span>
+                        <span className="text-t3" aria-hidden="true"><Fa icon={icon} /></span>
                         <div className="flex-1">
                           <div className="flex items-center gap-2 mb-1">
                             <span className="text-xs font-semibold" style={{ color: 'var(--text-1)' }}>
                               {activity.subject ?? activity.type}
                             </span>
-                            {activity.status && <Badge status={activity.status} label={activity.status === 'completed' ? '✓' : '⏳'} size="xs" />}
+                            {activity.status && (
+                              <Badge
+                                status={activity.status === 'completed' ? 'done' : 'pending'}
+                                label={activity.status === 'completed' ? 'Done' : 'Scheduled'}
+                                size="xs"
+                              />
+                            )}
                           </div>
                           <div className="text-[10px]" style={{ color: 'var(--text-3)' }}>
                             {activity.type.toUpperCase()} · {activity.createdByName ?? ''} · {fmtDate(activity.createdDate ?? activity.createdAt)}

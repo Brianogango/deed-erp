@@ -1,19 +1,20 @@
 'use client'
 import { useState } from 'react'
 import { usePurchase } from './PurchaseContext'
-import { Badge, Modal, Field, Input, Select, Confirm, PanelHeader, StatusStepper, SearchPicker, Divider } from '@/components/ui'
+import { Modal, Field, Input, Select, Confirm, PanelHeader, StatusStepper, SearchPicker, Divider } from '@/components/ui'
 import { LOCATIONS, CATEGORY_CONFIG, type LocationId, type CategoryId, fmtKes, fmtDate } from '@/lib/store'
 import { invoiceDocState, invoicePaymentStatus, displayDocRef, PAYMENT_STATUS_LABELS } from '@/lib/odoo-sales-flow'
 import { downloadPdf, type PdfLine } from '@/lib/pdf'
 import Chatter from '@/components/erp/Chatter'
 import { Breadcrumbs } from '@/components/erp/Breadcrumbs'
 import { SmartButtons } from '@/components/erp/SmartButtons'
+import { PrimaryActionButton, SecondaryActionMenu, StatusBadge } from '@/components/erp'
 import { billableQty } from '@/lib/purchase/three-way-match'
+import { Fa, faBox, faCheck, faFileInvoice, faPaperPlane, faPlus, faTrash, faUpload, faWarehouse } from '@/components/icons'
 
 const ACCESSORIES = ['Charger', 'Bag/Case', 'Mouse', 'Box', 'Cable', 'Manual']
 const PO_STEPS = ['RFQ', 'RFQ Sent', 'Purchase Order', 'Received', 'Billed']
 const STATUS_LABEL: Record<string,string> = { draft:'RFQ', sent:'RFQ Sent', confirmed:'Purchase Order', partial:'Partially Received', received:'Fully Received', cancelled:'Cancelled' }
-const STATUS_BADGE: Record<string,string> = { draft:'badge-gray', sent:'badge-amber', confirmed:'badge-blue', partial:'badge-amber', received:'badge-green', cancelled:'badge-red' }
 const PO_STEP_IDX: Record<string,number> = { draft:0, sent:1, confirmed:2, partial:3, received:3 }
 
 function buildRfqPdfLines(po: any, companySettings: any): PdfLine[] {
@@ -125,6 +126,7 @@ export default function POFormView() {
   } = usePurchase()
 
   const [sendingRfqMail, setSendingRfqMail] = useState(false)
+  const [actionBusy, setActionBusy] = useState<string | null>(null)
 
   if (!activePO) return null
 
@@ -254,41 +256,114 @@ export default function POFormView() {
             ]}
           />
           <div className="flex items-center gap-2 flex-wrap">
-          <button className="btn-outline text-[11px] py-1 px-2.5" onClick={backToList}>← Orders</button>
+          <button type="button" className="btn-outline text-[11px] py-1 px-2.5" onClick={backToList} aria-label="Back to orders">← Orders</button>
           <span className="text-sm font-bold text-t1">{activePO.ref}</span>
-          <span className={`badge ${STATUS_BADGE[activePO.status]}`}>{STATUS_LABEL[activePO.status]}</span>
+          <StatusBadge status={activePO.status} label={STATUS_LABEL[activePO.status]} />
           {canEdit && <span className="text-[10px] text-t3">· Click any value in the table to edit</span>}
-          <div className="ml-auto flex gap-2 flex-wrap">
-            {(activePO.status === 'draft' || activePO.status === 'sent') && activePO.lines.length > 0 && (
-              <>
-                <button className="btn-secondary text-[11px]" onClick={() => downloadPdf(`RFQ-${activePO.ref}.pdf`, buildRfqPdfLines(activePO, companySettings))}>Download RFQ</button>
-                <button
-                  className="btn-secondary text-[11px]"
-                  disabled={sendingRfqMail}
-                  onClick={() => void handleMailRfq()}
-                >
-                  {sendingRfqMail ? 'Sending…' : 'Mail RFQ'}
-                </button>
-              </>
+          <div className="ml-auto flex gap-2 flex-wrap items-center">
+            {canSend && (
+              <PrimaryActionButton
+                icon={<Fa icon={faPaperPlane} />}
+                hideLabelOnMobile={false}
+                disabled={!!actionBusy}
+                onClick={async () => {
+                  setActionBusy('send')
+                  try { await Promise.resolve(sendPO(activePO.id)) } finally { setActionBusy(null) }
+                }}
+              >
+                {actionBusy === 'send' ? 'Sending…' : 'Send RFQ'}
+              </PrimaryActionButton>
             )}
-            {canEdit && (
-              <>
-                <button className="btn-secondary text-[11px]" onClick={() => setShowScanModal(true)}>🔍 Scan Document</button>
-                <button className="btn-secondary text-[11px]" onClick={() => setShowImport(true)}>📥 Import Lines</button>
-                <button className="btn-secondary text-[11px]" onClick={() => setShowAddLine(true)}>+ Add Product</button>
-              </>
+            {canConfirm && (
+              <PrimaryActionButton
+                icon={<Fa icon={faCheck} />}
+                hideLabelOnMobile={false}
+                disabled={!!actionBusy}
+                onClick={async () => {
+                  setActionBusy('confirm')
+                  try { await Promise.resolve(confirmPO(activePO.id)) } finally { setActionBusy(null) }
+                }}
+              >
+                {actionBusy === 'confirm' ? 'Confirming…' : 'Confirm Order'}
+              </PrimaryActionButton>
             )}
-            {canRevertToDraft && <button className="btn-outline text-[11px]" style={{ color: 'var(--text-4)', borderColor: 'var(--border)' }} onClick={() => revertPOToDraft(activePO.id)}>↩ Revert to Draft</button>}
-            {canSend         && <button className="btn-primary" style={{ background: 'var(--warning)' }} onClick={() => sendPO(activePO.id)}>📧 Send RFQ</button>}
-            {canConfirm      && <button className="btn-primary" onClick={() => confirmPO(activePO.id)}>✓ Confirm Order</button>}
-            {canReceive      && <button className="btn-primary" style={{ background: 'var(--success)' }} onClick={openReceive}>📦 Process GRN</button>}
-            {canCreateBill   && <button className="btn-primary" style={{ background: '#8B5CF6' }} onClick={() => createBillFromPO(activePO.id)}>🧾 Create Bill</button>}
-            {canValidateBill && <button className="btn-primary" style={{ background: 'var(--success)' }} onClick={() => postInvoice(linkedBill!.id)}>✓ Validate Bill</button>}
+            {!canSend && !canConfirm && canReceive && (
+              <PrimaryActionButton
+                icon={<Fa icon={faWarehouse} />}
+                hideLabelOnMobile={false}
+                disabled={!!actionBusy}
+                onClick={() => openReceive()}
+              >
+                Process GRN
+              </PrimaryActionButton>
+            )}
+            {!canSend && !canConfirm && !canReceive && canCreateBill && (
+              <PrimaryActionButton
+                icon={<Fa icon={faFileInvoice} />}
+                hideLabelOnMobile={false}
+                disabled={!!actionBusy}
+                onClick={async () => {
+                  setActionBusy('bill')
+                  try { await Promise.resolve(createBillFromPO(activePO.id)) } finally { setActionBusy(null) }
+                }}
+              >
+                {actionBusy === 'bill' ? 'Creating…' : 'Create Bill'}
+              </PrimaryActionButton>
+            )}
+            {!canSend && !canConfirm && !canReceive && !canCreateBill && canValidateBill && (
+              <PrimaryActionButton
+                icon={<Fa icon={faCheck} />}
+                hideLabelOnMobile={false}
+                disabled={!!actionBusy}
+                onClick={async () => {
+                  setActionBusy('validate')
+                  try { await Promise.resolve(postInvoice(linkedBill!.id)) } finally { setActionBusy(null) }
+                }}
+              >
+                {actionBusy === 'validate' ? 'Posting…' : 'Validate Bill'}
+              </PrimaryActionButton>
+            )}
             {canPay && (
               <span className="text-[10px] text-[var(--text-3)] italic">Pay via Finance → Accounting</span>
             )}
-            {canReturn && <button className="btn-outline text-[11px]" style={{ color: 'var(--warning)', borderColor: '#FDE68A' }} onClick={openReturnForPO}>↩ Return to Vendor</button>}
-            {canEdit   && <button className="btn-outline text-[11px]" style={{ color: 'var(--danger)', borderColor: '#FCA5A5' }} onClick={() => setDelId(activePO.id)}>Delete</button>}
+            <SecondaryActionMenu
+              label="More"
+              ariaLabel="More purchase order actions"
+              actions={[
+                {
+                  id: 'download-rfq',
+                  label: 'Download RFQ',
+                  hidden: !(activePO.status === 'draft' || activePO.status === 'sent') || activePO.lines.length === 0,
+                  onClick: () => downloadPdf(`RFQ-${activePO.ref}.pdf`, buildRfqPdfLines(activePO, companySettings)),
+                },
+                {
+                  id: 'mail-rfq',
+                  label: sendingRfqMail ? 'Sending RFQ…' : 'Mail RFQ',
+                  disabled: sendingRfqMail,
+                  hidden: !(activePO.status === 'draft' || activePO.status === 'sent') || activePO.lines.length === 0,
+                  onClick: () => { void handleMailRfq() },
+                },
+                { id: 'scan', label: 'Scan document', hidden: !canEdit, onClick: () => setShowScanModal(true) },
+                { id: 'import', label: 'Import lines', hidden: !canEdit, onClick: () => setShowImport(true) },
+                { id: 'add', label: 'Add product', hidden: !canEdit, onClick: () => setShowAddLine(true) },
+                { id: 'receive', label: 'Process GRN', hidden: !canReceive || canSend || canConfirm, onClick: () => openReceive() },
+                {
+                  id: 'bill',
+                  label: 'Create bill',
+                  hidden: !canCreateBill || canSend || canConfirm || canReceive,
+                  onClick: () => { void createBillFromPO(activePO.id) },
+                },
+                {
+                  id: 'validate',
+                  label: 'Validate bill',
+                  hidden: !canValidateBill || canSend || canConfirm || canReceive || canCreateBill,
+                  onClick: () => { void postInvoice(linkedBill!.id) },
+                },
+                { id: 'revert', label: 'Revert to draft', hidden: !canRevertToDraft, onClick: () => revertPOToDraft(activePO.id) },
+                { id: 'return', label: 'Return to vendor', hidden: !canReturn, onClick: () => openReturnForPO() },
+                { id: 'delete', label: 'Delete', hidden: !canEdit, danger: true, onClick: () => setDelId(activePO.id) },
+              ]}
+            />
           </div>
           </div>
         </div>
@@ -377,8 +452,12 @@ export default function POFormView() {
               <PanelHeader title="Products" count={activePO.lines.length}>
                 {canEdit && (
                   <div className="flex gap-1.5">
-                    <button className="btn-secondary text-[10px] py-1" onClick={() => setShowImport(true)}>📥 Import CSV</button>
-                    <button className="btn-primary text-[11px]" onClick={() => setShowAddLine(true)}>+ Add Product</button>
+                    <button type="button" className="btn-secondary text-[10px] py-1 flex items-center gap-1.5" onClick={() => setShowImport(true)}>
+                      <Fa icon={faUpload} aria-hidden="true" /> Import CSV
+                    </button>
+                    <button type="button" className="btn-primary text-[11px] flex items-center gap-1.5" onClick={() => setShowAddLine(true)}>
+                      <Fa icon={faPlus} aria-hidden="true" /> Add Product
+                    </button>
                   </div>
                 )}
               </PanelHeader>
@@ -386,7 +465,7 @@ export default function POFormView() {
               <div className="dt-scroll">
               <div className="flex flex-col">
               {/* Table header */}
-              <div className="table-head" style={{ gridTemplateColumns: '32px 2fr 70px 110px 80px 90px 60px 80px 32px' }}>
+              <div className="table-head" style={{ gridTemplateColumns: '40px 2fr 70px 110px 80px 90px 60px 80px 44px' }}>
                 <span></span>
                 <span>Product / Cost Account</span>
                 <span>Qty {canEdit && <span className="text-[9px] text-t3 normal-case tracking-normal">(click)</span>}</span>
@@ -401,12 +480,16 @@ export default function POFormView() {
               {activePO.lines.length === 0
                 ? (
                   <div className="flex flex-col items-center py-10 gap-2">
-                    <span className="text-3xl">📦</span>
+                    <span className="text-3xl text-t4" aria-hidden="true"><Fa icon={faBox} /></span>
                     <p className="text-xs text-t3">No products yet</p>
                     {canEdit && (
                       <div className="flex gap-2">
-                        <button className="btn-secondary text-[11px]" onClick={() => setShowImport(true)}>📥 Import from CSV</button>
-                        <button className="btn-primary text-[11px]" onClick={() => setShowAddLine(true)}>+ Add Product</button>
+                        <button type="button" className="btn-secondary text-[11px] flex items-center gap-1.5" onClick={() => setShowImport(true)}>
+                          <Fa icon={faUpload} aria-hidden="true" /> Import from CSV
+                        </button>
+                        <button type="button" className="btn-primary text-[11px] flex items-center gap-1.5" onClick={() => setShowAddLine(true)}>
+                          <Fa icon={faPlus} aria-hidden="true" /> Add Product
+                        </button>
                       </div>
                     )}
                   </div>
@@ -416,9 +499,14 @@ export default function POFormView() {
                     const vatOn = l.taxRate > 0
                     const acct = l.accountCode ? accounts.find(a => a.code === l.accountCode) : null
                     const costAccounts = accounts.filter(a => a.type === 'expense' && a.isActive)
+                    const imageSrc = p?.image && !/^\p{Extended_Pictographic}/u.test(p.image) ? p.image : null
                     return (
-                      <div key={l.id} className="table-row" style={{ gridTemplateColumns: '32px 2fr 70px 110px 80px 90px 60px 80px 32px' }}>
-                        <span className="text-base">{p?.image ?? '📦'}</span>
+                      <div key={l.id} className="table-row" style={{ gridTemplateColumns: '40px 2fr 70px 110px 80px 90px 60px 80px 44px' }}>
+                        <span className="text-t4 flex items-center justify-center" aria-hidden="true">
+                          {imageSrc
+                            ? <img src={imageSrc} alt="" className="w-7 h-7 object-contain rounded" />
+                            : <Fa icon={faBox} />}
+                        </span>
                         <div className="min-w-0">
                           <p className="font-medium text-xs text-t1 truncate">{l.productName}</p>
                           {canEdit ? (
@@ -465,7 +553,7 @@ export default function POFormView() {
 
                         <span>
                           {l.requiresSerial
-                            ? <span className="text-[10px]" style={{ color: 'var(--warning)' }}>🔖 Yes</span>
+                            ? <span className="text-[10px]" style={{ color: 'var(--warning-text)' }}>Serial</span>
                             : <span className="text-[10px] text-t3">No</span>}
                         </span>
 
@@ -475,8 +563,14 @@ export default function POFormView() {
                         </span>
 
                         {canEdit ? (
-                          <button onClick={() => removePOLine(activePO.id, l.id)}
-                            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--danger)', fontSize: 18, lineHeight: 1 }}>×</button>
+                          <button
+                            type="button"
+                            className="row-action-btn btn-danger"
+                            aria-label={`Remove ${l.productName}`}
+                            onClick={() => removePOLine(activePO.id, l.id)}
+                          >
+                            <Fa icon={faTrash} aria-hidden="true" />
+                          </button>
                         ) : <span />}
                       </div>
                     )
@@ -518,7 +612,7 @@ export default function POFormView() {
                         {r.status === 'validated' && ` · ${r.lines.reduce((a, l) => a + l.serials.length, 0)} serials`}
                       </p>
                     </div>
-                    <Badge status={r.status === 'validated' ? 'active' : 'pending'} label={r.status === 'validated' ? '✓ Validated' : 'Pending'} />
+                    <StatusBadge status={r.status === 'validated' ? 'done' : 'pending'} label={r.status === 'validated' ? 'Validated' : 'Pending'} />
                   </div>
                 ))}
               </div>
@@ -534,7 +628,7 @@ export default function POFormView() {
                       <p className="font-mono font-semibold" style={{ color: 'var(--warning)' }}>{r.ref}</p>
                       <p className="text-t3 mt-0.5">{fmtDate(r.date)} · {r.reason.replace('_', ' ')}</p>
                     </div>
-                    <Badge status={r.status === 'confirmed' ? 'active' : 'pending'} label={r.status} />
+                    <StatusBadge status={r.status === 'confirmed' ? 'confirmed' : 'pending'} label={r.status} />
                   </div>
                 ))}
               </div>
@@ -587,7 +681,7 @@ export default function POFormView() {
                     </div>
                     {vendor.bankDetails && (
                       <p className="text-[10px] text-t3 pt-2 border-t" style={{ borderColor: 'var(--bg-muted)' }}>
-                        🏦 {vendor.bankDetails}
+                        Bank: {vendor.bankDetails}
                       </p>
                     )}
                   </>
@@ -612,7 +706,7 @@ export default function POFormView() {
                         {fmtKes(linkedBill.total - linkedBill.amountPaid)}
                       </span>
                     </div>
-                    <Badge
+                    <StatusBadge
                       status={invoiceDocState(linkedBill.status) === 'posted' ? invoicePaymentStatus(linkedBill) : invoiceDocState(linkedBill.status)}
                       label={invoiceDocState(linkedBill.status) === 'posted' ? PAYMENT_STATUS_LABELS[invoicePaymentStatus(linkedBill)] : undefined}
                       size="xs"
@@ -631,7 +725,7 @@ export default function POFormView() {
             {/* Serial reminder */}
             {activePO.lines.some(l => l.requiresSerial) && (
               <div className="card p-3 text-xs" style={{ background: 'var(--warning-bg)', borderColor: '#FDE68A' }}>
-                <p className="font-semibold mb-1.5" style={{ color: 'var(--warning)' }}>🔖 Serial Tracking Required</p>
+                <p className="font-semibold mb-1.5" style={{ color: 'var(--warning-text)' }}>Serial tracking required</p>
                 {activePO.lines.filter(l => l.requiresSerial).map(l => (
                   <p key={l.id} className="text-t3 mb-0.5">• {l.productName} — {l.qty} unit(s)</p>
                 ))}
