@@ -93,6 +93,7 @@ beforeEach(() => {
       saleOrderId: ORDER_ID,
       status: 'done',
       deliveryNoteGeneratedAt: '2026-07-28T10:00:00.000Z',
+      lines: [{ productId: 'prod-1', qty: 1, qtyDone: 1, serialIds: [] }],
     }],
   })
   mockSaveStoreKeys.mockResolvedValue(undefined)
@@ -179,6 +180,22 @@ describe('POST /api/sale-orders/:id/create-invoice', () => {
     mockLoadAppState.mockResolvedValue({
       deed_invoices: [],
       deed_deliveries: [{ saleOrderId: ORDER_ID, status: 'done' }],
+    })
+    const res = await POST(new NextRequest('http://localhost', { method: 'POST' }), { params: { id: ORDER_ID } })
+    expect(res.status).toBe(409)
+    expect((await res.json()).error).toMatch(/generate.*Delivery Note/i)
+    expect(mockPrisma.$transaction).not.toHaveBeenCalled()
+  })
+
+  it('rejects a hollow Done DN stamp with delivered qty 0', async () => {
+    mockLoadAppState.mockResolvedValue({
+      deed_invoices: [],
+      deed_deliveries: [{
+        saleOrderId: ORDER_ID,
+        status: 'done',
+        deliveryNoteGeneratedAt: '2026-08-01T10:00:00.000Z',
+        lines: [{ productId: 'prod-1', qty: 1, qtyDone: 0, serialIds: [] }],
+      }],
     })
     const res = await POST(new NextRequest('http://localhost', { method: 'POST' }), { params: { id: ORDER_ID } })
     expect(res.status).toBe(409)
