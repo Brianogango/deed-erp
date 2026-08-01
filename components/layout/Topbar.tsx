@@ -1,14 +1,16 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
+import dynamic from 'next/dynamic'
 import { useShellStore, ModuleId, AppNotification, SYNC_STATUS_EVENT, LAST_SYNC_AT_LS, DIRTY_KEYS_LS } from '@/lib/store'
 import type { UpdateUserInput } from '@/lib/auth/types'
 import { formatRoleLabel, hasModuleAccess, isAdmin as isAdminRole } from '@/lib/auth/access'
 import { usePathname, useRouter } from 'next/navigation'
-import GlobalSearch from './GlobalSearch'
 import { readGuardedImageAsDataUrl } from '@/lib/client-image-guard'
 import { trackUxEvent } from '@/lib/ux-telemetry'
 import { ThemeToggle } from '@/components/theme/ThemeToggle'
+
+const GlobalSearch = dynamic(() => import('./GlobalSearch'), { ssr: false })
 
 // ═══════════════════════════════════════════════════════════════════════════
 // CONSTANTS
@@ -1318,11 +1320,12 @@ export default function Topbar() {
         />
       )}
 
-      <GlobalSearch
-        key={searchOpen ? 'global-search-open' : 'global-search-closed'}
-        open={searchOpen}
-        onClose={() => setSearchOpen(false)}
-      />
+      {searchOpen && (
+        <GlobalSearch
+          open={searchOpen}
+          onClose={() => setSearchOpen(false)}
+        />
+      )}
     </>
   )
 }

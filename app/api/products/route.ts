@@ -16,11 +16,16 @@ export type ApiProduct = {
 
 const WRITE_ROLES = ['director', 'admin_officer', 'inventory_officer', 'technical_lead']
 
-export async function GET() {
+export async function GET(request: Request) {
   return withApiErrorHandling(async () => {
     await getRequiredSession()
+    const url = new URL(request.url)
+    // Catalog boot / merge never reads serial rows — skip them to cut payload size.
+    const lite = url.searchParams.get('lite') === '1' || url.searchParams.get('lite') === 'true'
     const products = await prisma.product.findMany({
-      include: { serials: true, category: { select: { name: true } } },
+      include: lite
+        ? { category: { select: { name: true } } }
+        : { serials: true, category: { select: { name: true } } },
       orderBy: { name: 'asc' },
     })
     return NextResponse.json(products)

@@ -1,7 +1,7 @@
 // @ts-nocheck
 'use client'
 import { useState, useMemo, useRef, useEffect } from 'react'
-import * as XLSX from 'xlsx'
+import { loadXlsx } from '@/lib/xlsx-lazy'
 import { guardSpreadsheetFile, guardSpreadsheetRows, SpreadsheetGuardError } from '@/lib/spreadsheet-guard'
 import {
   useAfterSalesStore, BuyBack, BuyBackLine, Donation, DonationLine, ClientExchange, ExchangeLine,
@@ -37,7 +37,8 @@ const fileCell = (row: Record<string, unknown>, ...keys: string[]) => {
   return ''
 }
 
-function downloadTemplate(filename: string, sheetName: string, headers: string[], exampleRows: unknown[][]) {
+async function downloadTemplate(filename: string, sheetName: string, headers: string[], exampleRows: unknown[][]) {
+  const XLSX = await loadXlsx()
   const wb = XLSX.utils.book_new()
   const ws = XLSX.utils.aoa_to_sheet([headers, ...exampleRows])
   ws['!cols'] = headers.map(() => ({ wch: 22 }))
@@ -51,8 +52,9 @@ function readBulkRows(file: File, onRows: (rows: Record<string, unknown>[]) => v
     return
   }
   const reader = new FileReader()
-  reader.onload = e => {
+  reader.onload = async e => {
     try {
+      const XLSX = await loadXlsx()
       const data = new Uint8Array(e.target!.result as ArrayBuffer)
       const wb = XLSX.read(data, { type: 'array' })
       const ws = wb.Sheets[wb.SheetNames[0]]
@@ -690,7 +692,8 @@ const BULK_TEMPLATE_EXAMPLE = [
   ['out', 'St. Mary School', 'warehouse', 'Laptop HP ProBook',   '1',  'SN12345', ''],
 ]
 
-function downloadBulkTemplate() {
+async function downloadBulkTemplate() {
+  const XLSX = await loadXlsx()
   const wb = XLSX.utils.book_new()
   const ws = XLSX.utils.aoa_to_sheet([BULK_TEMPLATE_HEADERS, ...BULK_TEMPLATE_EXAMPLE])
   ws['!cols'] = BULK_TEMPLATE_HEADERS.map(() => ({ wch: 22 }))
@@ -753,8 +756,9 @@ function DonationTab() {
       showToast(err instanceof SpreadsheetGuardError ? err.message : 'File too large', 'error'); return
     }
     const reader = new FileReader()
-    reader.onload = (e) => {
+    reader.onload = async (e) => {
       try {
+        const XLSX = await loadXlsx()
         const data = new Uint8Array(e.target!.result as ArrayBuffer)
         const wb = XLSX.read(data, { type: 'array' })
         const ws = wb.Sheets[wb.SheetNames[0]]
