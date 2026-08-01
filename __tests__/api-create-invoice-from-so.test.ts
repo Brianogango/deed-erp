@@ -176,34 +176,47 @@ describe('POST /api/sale-orders/:id/create-invoice', () => {
     expect(res.status).toBe(409)
   })
 
-  it('rejects invoicing before a completed Delivery Note is generated', async () => {
+  it('rejects invoicing before the delivery is validated (Done)', async () => {
     mockLoadAppState.mockResolvedValue({
       deed_invoices: [],
-      deed_deliveries: [{ saleOrderId: ORDER_ID, status: 'done' }],
+      deed_deliveries: [{ saleOrderId: ORDER_ID, status: 'ready', lines: [{ productId: 'prod-1', qty: 1, qtyDone: 1 }] }],
     })
     const res = await POST(new NextRequest('http://localhost', { method: 'POST' }), { params: { id: ORDER_ID } })
     expect(res.status).toBe(409)
-    expect((await res.json()).error).toMatch(/generate.*Delivery Note/i)
+    expect((await res.json()).error).toMatch(/Validate the delivery/i)
     expect(mockPrisma.$transaction).not.toHaveBeenCalled()
   })
 
-  it('rejects a hollow Done DN stamp with delivered qty 0', async () => {
+  it('rejects a hollow Done delivery with delivered qty 0', async () => {
     mockLoadAppState.mockResolvedValue({
       deed_invoices: [],
       deed_deliveries: [{
         saleOrderId: ORDER_ID,
         status: 'done',
-        deliveryNoteGeneratedAt: '2026-08-01T10:00:00.000Z',
         lines: [{ productId: 'prod-1', qty: 1, qtyDone: 0, serialIds: [] }],
       }],
     })
     const res = await POST(new NextRequest('http://localhost', { method: 'POST' }), { params: { id: ORDER_ID } })
     expect(res.status).toBe(409)
-    expect((await res.json()).error).toMatch(/generate.*Delivery Note/i)
+    expect((await res.json()).error).toMatch(/Validate the delivery/i)
     expect(mockPrisma.$transaction).not.toHaveBeenCalled()
   })
 
-  it('invoices delivered quantity only after the Delivery Note gate', async () => {
+  it('allows invoicing after Done validation without a printed Delivery Note', async () => {
+    mockLoadAppState.mockResolvedValue({
+      deed_invoices: [],
+      deed_deliveries: [{
+        saleOrderId: ORDER_ID,
+        status: 'done',
+        lines: [{ productId: 'prod-1', qty: 1, qtyDone: 1, serialIds: [] }],
+      }],
+    })
+    const res = await POST(new NextRequest('http://localhost', { method: 'POST' }), { params: { id: ORDER_ID } })
+    expect(res.status).toBe(200)
+    expect(mockPrisma.$transaction).toHaveBeenCalled()
+  })
+
+  it('invoices delivered quantity only after the validated-delivery gate', async () => {
     const partial = {
       ...saleOrder,
       items: [{ ...saleOrder.items[0], qty: 3, qtyDelivered: 1 }],

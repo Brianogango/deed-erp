@@ -85,7 +85,7 @@ import {
   DELIVERY_STATE_LABELS,
   isQuotationStage,
   matchesSalesListFilter,
-  hasGeneratedDeliveryNote,
+  hasValidatedDeliveryForInvoice,
   effectiveDeliveryLineQty,
   deliveryDeliveredTotal,
   canGenerateDeliveryNote,
@@ -563,7 +563,7 @@ function SalesContent() {
     orders: salesOrderViews.filter(s => s.status === 'sale').length,
     toInvoice: salesOrderViews.filter(s =>
       saleOrderInvoiceStatus(s.status, s.lines) === 'to_invoice' &&
-      hasGeneratedDeliveryNote(deliveries, s.id)
+      hasValidatedDeliveryForInvoice(deliveries, s.id)
     ).length,
   }), [salesOrderViews, deliveries])
 
@@ -574,7 +574,7 @@ function SalesContent() {
     [deliveries, activeOrder],
   )
   const invoiceDeliveryReady = activeOrder
-    ? hasGeneratedDeliveryNote(activeDeliveries, activeOrder.id)
+    ? hasValidatedDeliveryForInvoice(activeDeliveries, activeOrder.id)
     : false
   const activeInvoices = useMemo(
     () => activeOrder ? invoices.filter(i => i.saleOrderId === activeOrder.id) : [],
@@ -1268,8 +1268,8 @@ function SalesContent() {
                             <Fa icon={faFileInvoiceDollar} /><span>Create Invoice</span>
                           </button>
                         ) : canInvoiceFromSO && activeInvoices.length === 0 && !invoiceDeliveryReady ? (
-                          <button className="btn-secondary flex items-center gap-2 text-xs opacity-60 cursor-not-allowed" disabled title="Validate delivery and generate the Delivery Note first">
-                            <Fa icon={faFileInvoiceDollar} /><span>Invoice after Delivery Note</span>
+                          <button className="btn-secondary flex items-center gap-2 text-xs opacity-60 cursor-not-allowed" disabled title="Validate the delivery first">
+                            <Fa icon={faFileInvoiceDollar} /><span>Invoice after Delivery</span>
                           </button>
                         ) : null}
                         {activeDeliveries.some(d => ['waiting', 'ready'].includes(d.status)) && (

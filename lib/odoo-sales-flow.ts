@@ -199,9 +199,9 @@ export function initialDeliveryState(hasShortfall: boolean): DeliveryState {
 }
 
 /**
- * A Sales Order can invoice only after a completed delivery note was generated
- * with a positive delivered quantity (qtyDone and/or assigned serials).
- * A hollow Done DN (Delivered=0, no serials) must never unlock invoicing.
+ * True when a completed Delivery Note document was generated for the SO
+ * (print/generate stamp). Kept for DN UI; invoicing uses
+ * {@link hasValidatedDeliveryForInvoice} instead.
  */
 export function hasGeneratedDeliveryNote(
   deliveries: Array<{
@@ -216,6 +216,26 @@ export function hasGeneratedDeliveryNote(
     delivery.saleOrderId === saleOrderId &&
     delivery.status === 'done' &&
     Boolean(delivery.deliveryNoteGeneratedAt) &&
+    deliveryDeliveredTotal(delivery) > 0,
+  )
+}
+
+/**
+ * A Sales Order can invoice once a delivery is validated (Done) with a
+ * positive delivered quantity. Printing the Delivery Note is optional.
+ * A hollow Done delivery (Delivered=0, no serials) must never unlock invoicing.
+ */
+export function hasValidatedDeliveryForInvoice(
+  deliveries: Array<{
+    saleOrderId?: string
+    status?: string
+    lines?: Array<{ qty?: number; qtyDone?: number; serialIds?: string[] | null }> | null
+  }> | null | undefined,
+  saleOrderId: string,
+): boolean {
+  return (deliveries ?? []).some(delivery =>
+    delivery.saleOrderId === saleOrderId &&
+    delivery.status === 'done' &&
     deliveryDeliveredTotal(delivery) > 0,
   )
 }

@@ -38,7 +38,7 @@ import {
   invoicePaymentStatus,
   isOpenInvoice,
   invoiceResidual,
-  hasGeneratedDeliveryNote,
+  hasValidatedDeliveryForInvoice,
   type InvoicePolicy,
 } from '@/lib/odoo-sales-flow'
 import {
@@ -9592,8 +9592,8 @@ const storeCtx: AppState = {
       if (so.status !== 'sale') {
         showToast('Only a confirmed Sales Order can be invoiced', 'error'); return {} as Invoice;
       }
-      if (!hasGeneratedDeliveryNote(delRef.current, orderId)) {
-        showToast('Validate the delivery and generate its Delivery Note before creating an invoice', 'error')
+      if (!hasValidatedDeliveryForInvoice(delRef.current, orderId)) {
+        showToast('Validate the delivery before creating an invoice', 'error')
         return {} as Invoice
       }
 
