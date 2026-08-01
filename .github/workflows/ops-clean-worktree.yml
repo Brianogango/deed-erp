@@ -11,7 +11,7 @@ jobs:
     name: Clean Contabo app worktree
     runs-on: ubuntu-latest
     steps:
-      - name: Reset dirty tracked files
+      - name: Reset dirty ops-copied scripts only
         uses: appleboy/ssh-action@v1
         with:
           host: ${{ secrets.SSH_HOST }}
@@ -23,20 +23,30 @@ jobs:
             cd /var/www/deed-erp
             echo "Before:"
             git status --porcelain || true
-            # Discard local edits from ops copies; keep untracked uploads alone.
-            git checkout -- scripts/book-leave-for-employee.mjs 2>/dev/null || true
-            git restore scripts/book-leave-for-employee.mjs 2>/dev/null || true
-            # If script was never on this revision, remove the dirty untracked/copied file only when it matches ops copy path.
-            if git status --porcelain | grep -q 'scripts/book-leave-for-employee.mjs'; then
-              git checkout HEAD -- scripts/book-leave-for-employee.mjs 2>/dev/null || rm -f scripts/book-leave-for-employee.mjs
-            fi
+            # Only touch known ops artifact paths — never wipe DB, .env, uploads, or unknown local work.
+            OPS_SCRIPTS=(
+              scripts/book-leave-for-employee.mjs
+              scripts/add-product-serial.mjs
+              scripts/heal-delivery-qty.mjs
+              scripts/revert-hollow-done-delivery.mjs
+              scripts/detect-hollow-done-deliveries.mjs
+            )
+            for f in "${OPS_SCRIPTS[@]}"; do
+              if git ls-files --error-unmatch "$f" >/dev/null 2>&1; then
+                git restore --source=HEAD --worktree --staged -- "$f" 2>/dev/null \
+                  || git checkout HEAD -- "$f" 2>/dev/null \
+                  || true
+              elif [ -f "$f" ]; then
+                echo "Removing untracked ops copy: $f"
+                rm -f "$f"
+              fi
+            done
             echo "After:"
             git status --porcelain || true
             if [ -n "$(git status --porcelain)" ]; then
-              echo "WARNING: worktree still dirty — listing remaining changes"
+              echo "WARNING: worktree still dirty — listing remaining changes (not auto-wiped)"
               git status
-              # Soft reset only the known ops artifact; do not wipe real local work blindly.
-              git diff --name-only
+              git diff --name-only || true
             else
               echo "OK worktree clean"
             fi

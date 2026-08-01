@@ -1,0 +1,7 @@
+{
+  "order": "SO/2026/0008",
+  "delivery": "DN/2026/0009",
+  "mode": "single",
+  "requestedAt": "2026-08-01T10:40:00Z",
+  "reason": "Revert hollow Done DN (Delivered=0, no serials) without inventing qty — unlocks correct prepare/validate flow"
+}

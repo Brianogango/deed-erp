@@ -55,16 +55,22 @@ jobs:
           script: |
             set -euo pipefail
             cd /var/www/deed-erp
-            # Run from the app tree so ESM can resolve `pg` from node_modules.
-            cp /tmp/deed-ops/add-product-serial.mjs scripts/add-product-serial.mjs
+            # Run from the app tree so ESM can resolve `pg` from node_modules, then clean up.
+            SCRIPT=scripts/add-product-serial.mjs
+            cp /tmp/deed-ops/add-product-serial.mjs "$SCRIPT"
             if [ -n '${{ steps.req.outputs.product_id }}' ]; then
-              node scripts/add-product-serial.mjs \
+              node "$SCRIPT" \
                 --product-id '${{ steps.req.outputs.product_id }}' \
                 --serial '${{ steps.req.outputs.serial }}' \
                 --location '${{ steps.req.outputs.location }}'
             else
-              node scripts/add-product-serial.mjs \
+              node "$SCRIPT" \
                 --name '${{ steps.req.outputs.name }}' \
                 --serial '${{ steps.req.outputs.serial }}' \
                 --location '${{ steps.req.outputs.location }}'
+            fi
+            if git ls-files --error-unmatch "$SCRIPT" >/dev/null 2>&1; then
+              git restore --source=HEAD --worktree --staged -- "$SCRIPT" 2>/dev/null || git checkout HEAD -- "$SCRIPT" || true
+            else
+              rm -f "$SCRIPT"
             fi

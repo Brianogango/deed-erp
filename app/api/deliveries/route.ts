@@ -1,5 +1,6 @@
 import { makeCollectionHandlers } from '@/lib/server-store-crud'
 import { getNextDocNumber } from '@/lib/doc-ref-counter'
+import { deliveryFulfillmentWriteError } from '@/lib/odoo-sales-flow'
 import type { Delivery } from '@/lib/store'
 
 const config = {
@@ -13,6 +14,7 @@ const config = {
     if (!body.saleOrderId) return 'saleOrderId is required'
     return { ...body } as unknown as Delivery
   },
+  validateWrite: (next: Delivery) => deliveryFulfillmentWriteError(next, null),
 }
 
 export const { GET, POST } = makeCollectionHandlers(config)

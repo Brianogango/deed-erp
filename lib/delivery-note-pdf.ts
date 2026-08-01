@@ -1,5 +1,6 @@
 import { Delivery, SerialNumber } from '@/lib/store'
 import { getStoredCompanyData } from '@/lib/company'
+import { deliveryDeliveredTotal, effectiveDeliveryLineQty } from '@/lib/odoo-sales-flow'
 
 const esc = (s: string | undefined | null) =>
   (s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -40,17 +41,19 @@ export function generateDeliveryNoteHtml(
   const notes            = options.notes            || (delivery as any).notes            || ''
 
   const lineRows = delivery.lines.map((line, lineIdx) => {
+    const shippedQty = effectiveDeliveryLineQty(line)
     if (line.serialIds && line.serialIds.length > 0) {
-      return line.serialIds.map((sid, idx) => {
+      const serialSlice = line.serialIds.slice(0, Math.max(shippedQty, line.serialIds.length))
+      return serialSlice.map((sid, idx) => {
         const ser = serials.find(s => s.id === sid)
         const serialNo   = ser?.serial   || ser?.barcode || sid
         const specs      = ser?.specs    || ''
         return `
           <tr${idx === 0 ? '' : ' class="serial-cont"'}>
             ${idx === 0
-              ? `<td class="c" rowspan="${line.serialIds.length}">${lineIdx + 1}</td>
-                 <td rowspan="${line.serialIds.length}">${esc(line.productName)}</td>
-                 <td rowspan="${line.serialIds.length}" class="c">${line.serialIds.length}</td>`
+              ? `<td class="c" rowspan="${serialSlice.length}">${lineIdx + 1}</td>
+                 <td rowspan="${serialSlice.length}">${esc(line.productName)}</td>
+                 <td rowspan="${serialSlice.length}" class="c">${serialSlice.length}</td>`
               : ''}
             <td class="mono">${esc(serialNo)}</td>
             <td>${esc(specs)}</td>
@@ -58,11 +61,12 @@ export function generateDeliveryNoteHtml(
           </tr>`
       }).join('')
     }
+    // Non-serial lines: print effective delivered qty, never ordered demand when qtyDone=0.
     return `
       <tr>
         <td class="c">${lineIdx + 1}</td>
         <td>${esc(line.productName)}</td>
-        <td class="c">${line.qty}</td>
+        <td class="c">${shippedQty}</td>
         <td colspan="2" class="muted">—</td>
         <td class="sig-cell"></td>
       </tr>`
@@ -226,6 +230,10 @@ export function printDeliveryNote(
   serials: SerialNumber[],
   options: DnPrintOptions = {},
 ): boolean {
+  if (deliveryDeliveredTotal(delivery) <= 0) {
+    alert('Cannot print Delivery Note — delivered quantity is 0. Enter quantities or assign serials first.')
+    return false
+  }
   const html = generateDeliveryNoteHtml(delivery, serials, options)
   const win  = window.open('', '_blank', 'width=820,height=1000')
   if (!win) {

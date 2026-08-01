@@ -1,4 +1,4 @@
 {
-  "reason": "Clear ops-copied book-leave script so deploy can proceed",
-  "requestedAt": "2026-07-31T16:25:00Z"
+  "reason": "Clear ops-copied scripts (heal/add-serial/revert) so Contabo deploy can proceed after #134/#135",
+  "requestedAt": "2026-08-01T10:40:00Z"
 }

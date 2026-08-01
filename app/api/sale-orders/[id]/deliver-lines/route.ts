@@ -74,14 +74,22 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       return NextResponse.json({ error: 'Order must be a confirmed Sales Order to record delivery' }, { status: 422 })
     }
 
-    // Update each line's qtyDelivered individually
+    // Monotonic fulfillment: never lower qtyDelivered via this endpoint
+    // (stale client PATCHes / races must not wipe a real delivery back to 0).
+    // Clamp to ordered qty. Returns use a dedicated after-sales path.
     await Promise.all(
-      lineUpdates.map(({ id, qtyDelivered }) =>
-        prisma.saleOrderItem.update({
+      lineUpdates.map(({ id, qtyDelivered }) => {
+        const existing = order.items.find(item => item.id === id)
+        if (!existing) return Promise.resolve()
+        const demand = Math.max(0, Number(existing.qty) || 0)
+        const current = Math.max(0, Number(existing.qtyDelivered) || 0)
+        const incoming = Math.max(0, Number(qtyDelivered ?? 0))
+        const next = Math.min(demand, Math.max(current, incoming))
+        return prisma.saleOrderItem.update({
           where: { id },
-          data: { qtyDelivered: Math.max(0, Number(qtyDelivered ?? 0)) },
+          data: { qtyDelivered: next },
         })
-      )
+      })
     )
 
     // Report whether all lines are fully delivered; the SO status itself

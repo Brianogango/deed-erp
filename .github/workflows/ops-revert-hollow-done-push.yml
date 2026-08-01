@@ -1,14 +1,14 @@
-name: Ops heal delivery qty (push trigger)
+name: Ops revert hollow Done delivery (push trigger)
 
 on:
   push:
     branches: [master]
     paths:
-      - 'ops/heal-delivery-qty-request.json'
+      - 'ops/revert-hollow-done-request.json'
 
 jobs:
-  heal-delivery-qty:
-    name: Heal delivery qty on Contabo
+  revert-hollow-done:
+    name: Revert hollow Done DN on Contabo
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -18,14 +18,16 @@ jobs:
         id: req
         run: |
           set -euo pipefail
-          ORDER=$(jq -r '.order // empty' ops/heal-delivery-qty-request.json)
-          DELIVERY=$(jq -r '.delivery // empty' ops/heal-delivery-qty-request.json)
-          if [ -z "$ORDER" ]; then
-            echo "ERROR: order required in ops/heal-delivery-qty-request.json" >&2
-            exit 1
-          fi
+          MODE=$(jq -r '.mode // "single"' ops/revert-hollow-done-request.json)
+          ORDER=$(jq -r '.order // empty' ops/revert-hollow-done-request.json)
+          DELIVERY=$(jq -r '.delivery // empty' ops/revert-hollow-done-request.json)
+          echo "mode=$MODE" >> "$GITHUB_OUTPUT"
           echo "order=$ORDER" >> "$GITHUB_OUTPUT"
           echo "delivery=$DELIVERY" >> "$GITHUB_OUTPUT"
+          if [ "$MODE" != "all-hollow" ] && { [ -z "$ORDER" ] || [ -z "$DELIVERY" ]; }; then
+            echo "ERROR: order+delivery required unless mode=all-hollow" >&2
+            exit 1
+          fi
 
       - name: Copy script to server
         uses: appleboy/scp-action@v0.1.7
@@ -33,11 +35,11 @@ jobs:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          source: scripts/heal-delivery-qty.mjs
+          source: scripts/revert-hollow-done-delivery.mjs
           target: /tmp/deed-ops/
           strip_components: 1
 
-      - name: Run heal-delivery-qty script
+      - name: Run revert (safe — no qty invent, no deletes)
         uses: appleboy/ssh-action@v1
         with:
           host: ${{ secrets.SSH_HOST }}
@@ -48,15 +50,14 @@ jobs:
             set -euo pipefail
             cd /var/www/deed-erp
             # Copy into app tree so `pg` resolves from node_modules, then clean up.
-            SCRIPT=scripts/heal-delivery-qty.mjs
-            cp /tmp/deed-ops/heal-delivery-qty.mjs "$SCRIPT"
-            if [ -n '${{ steps.req.outputs.delivery }}' ]; then
+            SCRIPT=scripts/revert-hollow-done-delivery.mjs
+            cp /tmp/deed-ops/revert-hollow-done-delivery.mjs "$SCRIPT"
+            if [ '${{ steps.req.outputs.mode }}' = 'all-hollow' ]; then
+              node "$SCRIPT" --all-hollow
+            else
               node "$SCRIPT" \
                 --order '${{ steps.req.outputs.order }}' \
                 --delivery '${{ steps.req.outputs.delivery }}'
-            else
-              node "$SCRIPT" \
-                --order '${{ steps.req.outputs.order }}'
             fi
             if git ls-files --error-unmatch "$SCRIPT" >/dev/null 2>&1; then
               git restore --source=HEAD --worktree --staged -- "$SCRIPT" 2>/dev/null || git checkout HEAD -- "$SCRIPT" || true

@@ -81,6 +81,7 @@ import {
   hasGeneratedDeliveryNote,
   effectiveDeliveryLineQty,
   deliveryDeliveredTotal,
+  canGenerateDeliveryNote,
   saleOrderInvoiceStatus,
   type SalesListFilter,
 } from '@/lib/odoo-sales-flow'
@@ -1239,7 +1240,7 @@ function SalesContent() {
                             { label: sendingQuoteId === activeOrder.id ? 'Sending…' : 'Send by Email', icon: faFileInvoice, disabled: sendingQuoteId === activeOrder.id, onClick: () => openSendQuoteModal(activeOrder) },
                             { label: 'Preview', icon: faFileAlt, onClick: () => previewSalesDocument(activeOrder, 'Sale Order', 'SALES ORDER') },
                             { label: 'Print', icon: faPrint, onClick: () => downloadSalesDocument(activeOrder, 'Sale Order', 'SO') },
-                            ...(activeDeliveries.some(d => d.status === 'done') ? [{ label: 'Print delivery note', icon: faTruck, onClick: () => { const del = activeDeliveries.find(d => d.status === 'done') ?? activeDeliveries[0]; setDnRecipientName(del.recipientName ?? activeOrder.customerName ?? ''); setDnRecipientPhone(del.recipientPhone ?? ''); setDnRecipientId(del.recipientIdNumber ?? ''); setDnAddress(del.deliveryAddress ?? ''); setDnNotes(del.notes ?? ''); setShowDnModal(true) } }] : []),
+                            ...(activeDeliveries.some(d => canGenerateDeliveryNote(d)) ? [{ label: 'Print delivery note', icon: faTruck, onClick: () => { const del = activeDeliveries.find(d => canGenerateDeliveryNote(d)) ?? activeDeliveries[0]; setDnRecipientName(del.recipientName ?? activeOrder.customerName ?? ''); setDnRecipientPhone(del.recipientPhone ?? ''); setDnRecipientId(del.recipientIdNumber ?? ''); setDnAddress(del.deliveryAddress ?? ''); setDnNotes(del.notes ?? ''); setShowDnModal(true) } }] : []),
                             ...(activeOrder.locked && isAdmin ? [{ label: 'Unlock', icon: faRotateLeft, onClick: () => setSaleOrderLock(activeOrder.id, false) }] : []),
                             ...(!activeOrder.locked && systemSettings.salesLockConfirmed && isAdmin ? [{ label: 'Lock', icon: faSave, onClick: () => setSaleOrderLock(activeOrder.id, true) }] : []),
                             { label: 'Set to Quotation', icon: faRotateLeft, onClick: () => resetSOToDraft(activeOrder.id) },
@@ -1796,7 +1797,7 @@ function SalesContent() {
       )}
 
       {showDnModal && activeId && (() => {
-        const del = deliveries.find(d => d.saleOrderId === activeId && d.status === 'done')
+        const del = deliveries.find(d => d.saleOrderId === activeId && canGenerateDeliveryNote(d))
         if (!del) return null
         return (
           <Modal title={`Delivery Note — ${del.ref}`} onClose={() => setShowDnModal(false)} width={480}>
@@ -1812,6 +1813,10 @@ function SalesContent() {
               <div className="flex gap-2 justify-end pt-2 border-t border-[var(--border-lt)]">
                 <button className="btn-outline text-xs" onClick={() => setShowDnModal(false)}>Cancel</button>
                 <button className="btn-secondary flex items-center gap-1.5 text-xs" onClick={async () => {
+                  if (deliveryDeliveredTotal(del) <= 0) {
+                    showToast('Cannot print Delivery Note — delivered quantity is 0', 'error')
+                    return
+                  }
                   if (dnRecipientName.trim()) updateDelivery(del.id, { recipientName: dnRecipientName.trim(), recipientPhone: dnRecipientPhone.trim() || undefined, recipientIdNumber: dnRecipientId.trim() || undefined, deliveryAddress: dnAddress.trim() || undefined, notes: dnNotes.trim() || undefined })
                   const generated = printDeliveryNote(del, serials, { recipientName: dnRecipientName.trim(), recipientPhone: dnRecipientPhone.trim(), recipientIdNumber: dnRecipientId.trim(), deliveryAddress: dnAddress.trim(), notes: dnNotes.trim() })
                   if (generated) {
@@ -1819,6 +1824,8 @@ function SalesContent() {
                     if (saved) {
                       showToast(`Delivery Note ${del.ref} generated — invoicing is now available`, 'success')
                       setShowDnModal(false)
+                    } else {
+                      showToast('Delivery Note could not be saved — check delivered quantities', 'error')
                     }
                   }
                 }}><Fa icon={faPrint} /> Print / Download</button>
@@ -2374,7 +2381,7 @@ function DeliveryNoteView({
           </div>
         </div>
         <div className="flex items-center gap-2">
-          {existingDelivery?.status === 'done' && <button onClick={handlePrintDN} className="btn-secondary flex items-center gap-2 text-xs"><Fa icon={faPrint} /><span>Generate Delivery Note</span></button>}
+          {canGenerateDeliveryNote(existingDelivery) && <button onClick={handlePrintDN} className="btn-secondary flex items-center gap-2 text-xs"><Fa icon={faPrint} /><span>Generate Delivery Note</span></button>}
           {canPrepare && (
             <button onClick={handlePrepare} disabled={savingDelivery} className="btn-primary flex items-center gap-2 text-xs disabled:opacity-50">
               <Fa icon={faBoxOpen} /><span>Prepare Delivery</span>

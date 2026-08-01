@@ -139,9 +139,30 @@ done
 }
 
 cd "$APP_DIR"
+# Ops push workflows sometimes leave copied helpers under scripts/. Restore or
+# remove only those known paths so a deploy is not blocked — never wipe .env,
+# uploads, or unrelated local edits.
+OPS_SCRIPTS=(
+  scripts/book-leave-for-employee.mjs
+  scripts/add-product-serial.mjs
+  scripts/heal-delivery-qty.mjs
+  scripts/revert-hollow-done-delivery.mjs
+  scripts/detect-hollow-done-deliveries.mjs
+)
+for ops_script in "${OPS_SCRIPTS[@]}"; do
+  if git ls-files --error-unmatch "$ops_script" >/dev/null 2>&1; then
+    git restore --source=HEAD --worktree --staged -- "$ops_script" 2>/dev/null \
+      || git checkout HEAD -- "$ops_script" 2>/dev/null \
+      || true
+  elif [[ -e "$ops_script" ]]; then
+    log "Removing untracked ops copy before deploy: $ops_script"
+    rm -f -- "$ops_script"
+  fi
+done
 [[ -z "$(git status --porcelain --untracked-files=normal -- . \
   ':(exclude).next-previous' ':(exclude).next-staging')" ]] || {
   log "Application worktree is dirty; refusing to overwrite local changes"
+  git status --porcelain || true
   exit 1
 }
 PREVIOUS_COMMIT="$(git rev-parse HEAD)"

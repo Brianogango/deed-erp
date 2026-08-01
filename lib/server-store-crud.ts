@@ -44,6 +44,11 @@ export interface CrudConfig<T extends object> {
   redact?: (keyof T)[]
   /** Optional: async mutation of POST body before build (e.g. server-side ref allocation). */
   prepareCreate?: (body: AnyRecord) => Promise<AnyRecord | string>
+  /**
+   * Optional write guard after merge/build. Return an error string to reject
+   * with 422. For PATCH, `previous` is the existing row; for POST it is undefined.
+   */
+  validateWrite?: (next: T, previous: T | undefined) => string | null
   /** Roles allowed to write (POST/PATCH/DELETE). GET is open to any authenticated user. */
   allowedWriteRoles?: string[]
 }
@@ -112,6 +117,11 @@ export function makeCreateHandler<T extends object>(config: CrudConfig<T>) {
     const result = config.build(preparedBody, items)
     if (typeof result === 'string') return NextResponse.json({ error: result }, { status: 422 })
 
+    if (config.validateWrite) {
+      const writeError = config.validateWrite(result, undefined)
+      if (writeError) return NextResponse.json({ error: writeError }, { status: 422 })
+    }
+
     items.push(result)
     await writeCollection(config.storeKey, items)
     return NextResponse.json({ item: result }, { status: 201 })
@@ -133,7 +143,14 @@ export function makePatchHandler<T extends object>(config: CrudConfig<T>) {
     const idx = items.findIndex(i => (i as AnyRecord)['id'] === params.id)
     if (idx === -1) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-    items[idx] = { ...items[idx], ...body, id: params.id } as T
+    const previous = items[idx]
+    const next = { ...previous, ...body, id: params.id } as T
+    if (config.validateWrite) {
+      const writeError = config.validateWrite(next, previous)
+      if (writeError) return NextResponse.json({ error: writeError }, { status: 422 })
+    }
+
+    items[idx] = next
     await writeCollection(config.storeKey, items)
     return NextResponse.json({ item: items[idx] })
   }
