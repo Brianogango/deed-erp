@@ -3,7 +3,12 @@ import prisma from '@/lib/prisma'
 import { requireRole, withApiErrorHandling } from '@/lib/auth/api'
 import { writeFinancialAudit } from '@/lib/finance-audit'
 import { getNextDocNumber } from '@/lib/doc-ref-counter'
-import { hasGeneratedDeliveryNote, invoiceableQty, normalizeSaleStatus } from '@/lib/odoo-sales-flow'
+import {
+  deliveredByProductFromDoneDeliveries,
+  hasGeneratedDeliveryNote,
+  invoiceableQty,
+  normalizeSaleStatus,
+} from '@/lib/odoo-sales-flow'
 import { mapDbInvoiceItemsToClientLines } from '@/lib/finance-invoice'
 import { loadAppState, saveStoreKeys } from '@/lib/server-store'
 
@@ -34,7 +39,17 @@ export async function POST(
 
     const state = await loadAppState(['deed_invoices', 'deed_deliveries'])
     const deliveries = Array.isArray(state.deed_deliveries)
-      ? state.deed_deliveries as Array<{ saleOrderId?: string; status?: string; deliveryNoteGeneratedAt?: string | null }>
+      ? state.deed_deliveries as Array<{
+          saleOrderId?: string
+          status?: string
+          deliveryNoteGeneratedAt?: string | null
+          lines?: Array<{
+            productId?: string
+            qty?: number
+            qtyDone?: number
+            serialIds?: string[] | null
+          }> | null
+        }>
       : []
     if (!hasGeneratedDeliveryNote(deliveries, orderId)) {
       return NextResponse.json({
@@ -42,7 +57,27 @@ export async function POST(
       }, { status: 409 })
     }
 
-    const invoiceable = (order.items ?? []).map(item => {
+    // Heal qtyDelivered from Done delivery lines (qtyDone / serials) when a
+    // legacy Done DN left Prisma delivered=0 — otherwise Create Invoice is blocked.
+    const healedFromDeliveries = deliveredByProductFromDoneDeliveries(deliveries, orderId)
+    const healedItems = await Promise.all((order.items ?? []).map(async item => {
+      const productId = item.productId ?? ''
+      const fromDelivery = productId ? (healedFromDeliveries[productId] ?? 0) : 0
+      const fromSerial = item.serialNumberId ? 1 : 0
+      const current = Number(item.qtyDelivered) || 0
+      const demand = Number(item.qty) || 0
+      const healed = Math.min(demand, Math.max(current, fromDelivery, fromSerial))
+      if (healed > current) {
+        await prisma.saleOrderItem.update({
+          where: { id: item.id },
+          data: { qtyDelivered: healed },
+        })
+        return { ...item, qtyDelivered: healed }
+      }
+      return item
+    }))
+
+    const invoiceable = healedItems.map(item => {
       const qty = invoiceableQty({
         qty: Number(item.qty) || 0,
         qtyDelivered: Number(item.qtyDelivered) || 0,

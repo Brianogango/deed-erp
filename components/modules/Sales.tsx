@@ -79,6 +79,8 @@ import {
   isQuotationStage,
   matchesSalesListFilter,
   hasGeneratedDeliveryNote,
+  effectiveDeliveryLineQty,
+  deliveryDeliveredTotal,
   saleOrderInvoiceStatus,
   type SalesListFilter,
 } from '@/lib/odoo-sales-flow'
@@ -471,7 +473,10 @@ function SalesContent() {
   useEffect(() => {
     if (activeOrder?.status === 'sale') {
       const init: Record<string, number> = {}
-      activeOrder.lines.forEach(l => { init[l.id] = l.qtyDelivered ?? 0 })
+      activeOrder.lines.forEach(l => {
+        const serialCount = Array.isArray(l.serialIds) ? l.serialIds.length : 0
+        init[l.id] = Math.max(Number(l.qtyDelivered) || 0, serialCount)
+      })
       setDeliveryQtys(init)
     }
   }, [activeId, activeOrder?.status])
@@ -580,7 +585,10 @@ function SalesContent() {
   const openDeliveryView = () => {
     if (!activeOrder) return
     const init: Record<string, number> = {}
-    activeOrder.lines.forEach(l => { init[l.id] = l.qtyDelivered ?? 0 })
+    activeOrder.lines.forEach(l => {
+      const serialCount = Array.isArray(l.serialIds) ? l.serialIds.length : 0
+      init[l.id] = Math.max(Number(l.qtyDelivered) || 0, serialCount)
+    })
     setDeliveryQtys(init)
     const del = deliveries.find(d => d.saleOrderId === activeOrder.id)
     setDnRecipientName(del?.recipientName ?? activeOrder.customerName ?? '')
@@ -2263,7 +2271,10 @@ function DeliveryNoteView({
   const requestedByProduct = () => {
     const quantities: Record<string, number> = {}
     order.lines.forEach(line => {
-      const qty = Math.min(line.qty, Math.max(0, deliveryQtys[line.id] ?? 0))
+      const typed = Math.max(0, deliveryQtys[line.id] ?? 0)
+      const serialCount = Array.isArray(line.serialIds) ? line.serialIds.length : 0
+      // Prefer typed qty; if left at 0 but serials are assigned, ship those.
+      const qty = Math.min(line.qty, typed > 0 ? typed : serialCount)
       if (line.productId) quantities[line.productId] = (quantities[line.productId] ?? 0) + qty
     })
     return quantities
@@ -2278,7 +2289,12 @@ function DeliveryNoteView({
     if (!order.lines.length) { showToast('No line items on this order', 'error'); return }
     if (!pendingDelivery) { showToast('No pending delivery to validate', 'error'); return }
     const lines = order.lines.map(l => {
-      const preparedQty = Number(pendingDelivery.lines.find((line: any) => line.productId === l.productId)?.qtyDone) || 0
+      const delLine = pendingDelivery.lines.find((line: any) => line.productId === l.productId)
+      const preparedQty = effectiveDeliveryLineQty({
+        qty: Number(delLine?.qty) || Number(l.qty) || 0,
+        qtyDone: delLine?.qtyDone,
+        serialIds: delLine?.serialIds?.length ? delLine.serialIds : l.serialIds,
+      })
       return {
         id: l.id,
         qtyDelivered: Math.min(l.qty, (Number(l.qtyDelivered) || 0) + preparedQty),
@@ -2306,7 +2322,10 @@ function DeliveryNoteView({
       // deducted for those quantities only; any remainder automatically
       // becomes a backorder delivery (Odoo behaviour).
       const qtysByProduct = Object.fromEntries(
-        pendingDelivery.lines.map((line: any) => [line.productId, Number(line.qtyDone) || 0]),
+        pendingDelivery.lines.map((line: any) => [
+          line.productId,
+          effectiveDeliveryLineQty(line),
+        ]),
       )
       validateDelivery(pendingDelivery.id, qtysByProduct)
       onBack()
@@ -2318,6 +2337,10 @@ function DeliveryNoteView({
     if (!existingDelivery) { showToast('No delivery record found. Validate delivery first.', 'error'); return }
     if (existingDelivery.status !== 'done') {
       showToast('Validate the delivery before generating the final Delivery Note', 'error')
+      return
+    }
+    if (deliveryDeliveredTotal(existingDelivery) <= 0) {
+      showToast('Cannot generate Delivery Note — delivered quantity is 0. Assign serials or enter quantities first.', 'error')
       return
     }
     if (dnRecipientName.trim()) {
@@ -2334,6 +2357,7 @@ function DeliveryNoteView({
       if (generated) {
         const saved = await markDeliveryNoteGenerated(existingDelivery.id)
         if (saved) showToast(`Delivery Note ${existingDelivery.ref} generated — invoicing is now available`, 'success')
+        else showToast('Delivery Note could not be saved — check delivered quantities', 'error')
       }
     })
   }
@@ -2419,8 +2443,18 @@ function DeliveryNoteView({
                         serial.status === 'available',
                       )
                     : []
-                  const delivered = deliveryQtys[l.id] ?? l.qtyDelivered ?? 0
-                  const preparedQty = Number(pendingDelivery?.lines.find((line: any) => line.productId === l.productId)?.qtyDone) || 0
+                  const delLine = (existingDelivery?.lines ?? []).find((line: any) => line.productId === l.productId)
+                  const effectiveDone = effectiveDeliveryLineQty({
+                    qty: Number(delLine?.qty) || Number(l.qty) || 0,
+                    qtyDone: delLine?.qtyDone,
+                    serialIds: delLine?.serialIds?.length ? delLine.serialIds : l.serialIds,
+                  })
+                  const delivered = Math.max(
+                    Number(deliveryQtys[l.id]) || 0,
+                    Number(l.qtyDelivered) || 0,
+                    effectiveDone,
+                  )
+                  const preparedQty = effectiveDone
                   const isFullyDelivered = delivered >= l.qty
                   const isPartial = delivered > 0 && delivered < l.qty
                   return (
@@ -2435,7 +2469,7 @@ function DeliveryNoteView({
                         ) : canValidate ? (
                           <span className="font-semibold text-blue-700">{preparedQty}</span>
                         ) : (
-                          <span className={`font-semibold ${isFullyDelivered ? 'text-emerald-600' : isPartial ? 'text-amber-500' : 'text-[var(--text-4)]'}`}>{l.qtyDelivered ?? 0}</span>
+                          <span className={`font-semibold ${isFullyDelivered ? 'text-emerald-600' : isPartial ? 'text-amber-500' : 'text-[var(--text-4)]'}`}>{delivered}</span>
                         )}
                       </td>
                       <td className="px-4 py-3 text-xs">
