@@ -113,14 +113,23 @@ function ExpensesContent() {
 
   const currentUser = users.find(u => u.id === currentUserId) ?? null
   const isFinance   = ['director', 'finance_officer'].includes(currentUser?.role ?? '')
+  // Approvers include finance roles plus anyone named on a pending expense-chain step.
+  const canReviewExpenses = isFinance || expenses.some(e =>
+    e.status === 'submitted' && canUserApproveExpenseStep(currentUser?.role, e.approvalChain),
+  )
 
   const myExpenses  = expenses.filter(e => e.submittedByUserId === currentUserId)
-  const allPending  = isFinance ? expenses.filter(e => e.status === 'submitted') : []
+  const allPending  = canReviewExpenses
+    ? expenses.filter(e =>
+        e.status === 'submitted'
+        && (isFinance || canUserApproveExpenseStep(currentUser?.role, e.approvalChain)),
+      )
+    : []
   const pendingReimbursements = isFinance ? expenses.filter(e => e.status === 'approved' && isReimbursable(e.paymentMethod)) : []
 
-  const defaultTab = isFinance ? 'review' : 'mine'
+  const defaultTab = canReviewExpenses ? 'review' : 'mine'
   const queryTab = searchParams.get('tab') as 'mine' | 'review' | null
-  const initialTab = queryTab === 'review' && !isFinance ? 'mine' : (queryTab ?? defaultTab)
+  const initialTab = queryTab === 'review' && !canReviewExpenses ? 'mine' : (queryTab ?? defaultTab)
 
   const [tab, setLocalTab] = useState<'mine' | 'review'>(initialTab)
 
@@ -133,7 +142,7 @@ function ExpensesContent() {
 
   useEffect(() => {
     const urlTab = searchParams.get('tab') as 'mine' | 'review' | null
-    const safeTab = urlTab === 'review' && !isFinance ? 'mine' : (urlTab ?? defaultTab)
+    const safeTab = urlTab === 'review' && !canReviewExpenses ? 'mine' : (urlTab ?? defaultTab)
     if (safeTab !== tab) {
       setLocalTab(safeTab)
       if (urlTab && safeTab !== urlTab) {
@@ -142,19 +151,21 @@ function ExpensesContent() {
         router.replace(`${pathname}?${params.toString()}`, { scroll: false })
       }
     }
-  }, [searchParams, tab, isFinance, defaultTab, router, pathname])
+  }, [searchParams, tab, canReviewExpenses, defaultTab, router, pathname])
 
   // ── Review filters ──
   const [reviewStatus, setReviewStatus] = useState<Expense['status'] | 'all'>('submitted')
   const [reviewUser,   setReviewUser]   = useState('all')
 
-  const uniqueSubmitters: [string, string][] = isFinance
+  const uniqueSubmitters: [string, string][] = canReviewExpenses
     ? Array.from(new Map(expenses.map(e => [e.submittedByUserId, e.submittedByName] as [string, string])))
     : []
 
-  const reviewList = isFinance ? expenses
+  const reviewList = canReviewExpenses ? expenses
     .filter(e => reviewStatus === 'all' || e.status === reviewStatus)
-    .filter(e => reviewUser  === 'all' || e.submittedByUserId === reviewUser) : []
+    .filter(e => reviewUser  === 'all' || e.submittedByUserId === reviewUser)
+    .filter(e => isFinance || e.status !== 'submitted' || canUserApproveExpenseStep(currentUser?.role, e.approvalChain))
+    : []
 
   // ── Submit modal ──
   const [showSubmit, setShowSubmit] = useState(false)
@@ -349,7 +360,7 @@ function ExpensesContent() {
       <TabBar
         tabs={[
           { id: 'mine', label: myExpenses.length > 0 ? `My expenses (${myExpenses.length})` : 'My expenses' },
-          ...(isFinance
+          ...(canReviewExpenses
             ? [{ id: 'review', label: allPending.length > 0 ? `Review (${allPending.length})` : 'Review' }]
             : []),
         ]}
@@ -373,8 +384,8 @@ function ExpensesContent() {
           />
         )}
 
-        {/* ── Review tab (finance/admin) ── */}
-        {tab === 'review' && isFinance && (
+        {/* ── Review tab (finance + chain approvers) ── */}
+        {tab === 'review' && canReviewExpenses && (
           <ExpenseTable
             rows={reviewList}
             showSubmitter
@@ -577,8 +588,11 @@ function ExpensesContent() {
       {reviewingId && (() => {
         const exp = expenses.find(e => e.id === reviewingId)
         if (!exp) return null
-        const canReview = isFinance && exp.status === 'submitted'
-          && (!exp.approvalChain?.length || canUserApproveExpenseStep(currentUser?.role, exp.approvalChain))
+        const canReview = exp.status === 'submitted'
+          && (
+            (!exp.approvalChain?.length && isFinance)
+            || canUserApproveExpenseStep(currentUser?.role, exp.approvalChain)
+          )
         return (
           <div className="modal-overlay" onClick={() => setReviewingId(null)}>
             <div className="modal-box w-full max-w-md" onClick={e => e.stopPropagation()}>

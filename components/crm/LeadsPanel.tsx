@@ -41,10 +41,13 @@ export default function LeadsPanel({
   showToast,
   salesReps,
   currentUserId,
+  onConverted,
 }: {
   showToast: (msg: string, type?: 'success' | 'error' | 'info') => void
   salesReps: { id: string; name: string }[]
   currentUserId?: string
+  /** Called after a successful convert so CRM can open the new opportunity / pipeline. */
+  onConverted?: (opportunityId: string) => void
 }) {
   const [leads, setLeads] = useState<LeadRow[]>([])
   const [loading, setLoading] = useState(true)
@@ -111,8 +114,10 @@ export default function LeadsPanel({
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(data.error || 'Convert failed')
-      showToast(`Lead converted — opportunity created`, 'success')
+      showToast('Lead converted — opportunity created', 'success')
       await load()
+      const opportunityId = String(data.opportunity?.id || data.lead?.opportunityId || '')
+      if (opportunityId) onConverted?.(opportunityId)
     } catch (err) {
       showToast(err instanceof Error ? err.message : 'Convert failed', 'error')
     } finally {

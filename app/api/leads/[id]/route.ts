@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { getRequiredSession, withApiErrorHandling } from '@/lib/auth/api'
+import { saveStoreKeys } from '@/lib/server-store'
 
 const LEAD_INCLUDE = {
   owner: { select: { id: true, username: true, email: true } },
@@ -9,6 +10,16 @@ const LEAD_INCLUDE = {
 } as const
 
 const WRITE_ROLES = ['director', 'admin_officer', 'sales_rep', 'finance_officer']
+
+async function broadcastOpportunities() {
+  try {
+    const all = await prisma.opportunity.findMany({
+      include: { client: true, assignedTo: true, activities: true },
+      orderBy: { createdAt: 'desc' },
+    })
+    void saveStoreKeys({ deed_opportunities: JSON.stringify(all) })
+  } catch { /* best-effort SSE sync */ }
+}
 
 export async function GET(_: NextRequest, { params }: { params: { id: string } }) {
   return withApiErrorHandling(async () => {
@@ -146,6 +157,9 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       },
       include: LEAD_INCLUDE,
     })
+
+    // Push the new opportunity into the CRM blob so the pipeline updates without a full reload.
+    void broadcastOpportunities()
 
     return NextResponse.json({
       lead: updatedLead,

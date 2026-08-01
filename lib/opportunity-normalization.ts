@@ -34,6 +34,13 @@ export function normalizeOpportunityForClient(raw: any) {
     : (STAGE_ALIASES[rawStage] ?? 'prospecting')
 
   const ownerId = raw.ownerId ?? raw.assignedToId ?? raw.createdById ?? undefined
+  const assigned = raw.assignedTo
+  const ownerName =
+    raw.ownerName
+    ?? assigned?.name
+    ?? assigned?.username
+    ?? (typeof assigned?.email === 'string' ? assigned.email.split('@')[0] : undefined)
+    ?? undefined
 
   return {
     ...raw,
@@ -41,7 +48,7 @@ export function normalizeOpportunityForClient(raw: any) {
     companyId: raw.companyId ?? raw.clientId ?? undefined,
     companyName: raw.companyName ?? raw.client?.name ?? undefined,
     ownerId,
-    ownerName: raw.ownerName ?? raw.assignedTo?.name ?? undefined,
+    ownerName,
     assignedToId: raw.assignedToId ?? ownerId,
     stage,
     probability: Number(raw.probability ?? 0) || 0,

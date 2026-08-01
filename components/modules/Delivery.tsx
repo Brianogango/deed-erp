@@ -575,33 +575,65 @@ function JobsTab() {
       date: job.scheduledDate,
       title: `${job.ref} · ${job.customerName}`,
       color: jobStatusColors[job.status] ?? 'var(--navy)',
-      onClick: () => setAssignTarget(job.status === 'pending' && !job.riderId ? job : null),
+      onClick: () => {
+        if (!job.riderId && (job.status === 'pending' || job.status === 'assigned')) {
+          setAssignTarget(job)
+          return
+        }
+        // Fall back to list so riders/status actions remain available.
+        setJobsView('list')
+        setFilterStatus(job.status)
+      },
     })),
   [filtered])
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex items-center justify-end gap-1.5 px-1">
-        {(['list', 'calendar'] as const).map(v => (
-          <button
-            key={v}
-            type="button"
-            onClick={() => setJobsView(v)}
-            className="text-[11px] px-3 py-1.5 rounded-lg border font-medium capitalize cursor-pointer"
-            style={{
-              background: jobsView === v ? 'var(--navy)' : 'var(--bg-surface)',
-              color: jobsView === v ? '#fff' : 'var(--text-3)',
-              borderColor: jobsView === v ? 'var(--navy)' : 'var(--border-lt)',
-            }}
-          >
-            {v}
+      <div className="flex items-center justify-between gap-2 flex-wrap px-1">
+        <div className="flex items-center gap-2 flex-wrap">
+          {deliveryPrimaryFilters.map(f => (
+            <div key={f.key} className="flex items-center gap-1.5">
+              <span className="text-[10px] text-[var(--text-4)] font-medium">{f.label}</span>
+              <select
+                className="form-input text-[11px] py-1 px-2"
+                value={String(f.value)}
+                onChange={e => f.onChange(e.target.value)}
+                aria-label={f.label}
+              >
+                {f.options.map(o => (
+                  <option key={o.value} value={o.value}>{o.label}</option>
+                ))}
+              </select>
+            </div>
+          ))}
+          <button type="button" className="btn-primary text-xs" onClick={() => setShowCreateModal(true)}>
+            + New Delivery Job
           </button>
-        ))}
+        </div>
+        <div className="flex items-center gap-1.5">
+          {(['list', 'calendar'] as const).map(v => (
+            <button
+              key={v}
+              type="button"
+              onClick={() => setJobsView(v)}
+              className="text-[11px] px-3 py-1.5 rounded-lg border font-medium capitalize cursor-pointer"
+              style={{
+                background: jobsView === v ? 'var(--navy)' : 'var(--bg-surface)',
+                color: jobsView === v ? '#fff' : 'var(--text-3)',
+                borderColor: jobsView === v ? 'var(--navy)' : 'var(--border-lt)',
+              }}
+            >
+              {v}
+            </button>
+          ))}
+        </div>
       </div>
 
       {jobsView === 'calendar' ? (
         <div className="card p-4">
-          <p className="text-xs font-semibold text-[var(--text-2)] mb-3">Planned deliveries by scheduled date</p>
+          <p className="text-xs font-semibold text-[var(--text-2)] mb-3">
+            Planned deliveries by scheduled date · click a job to assign a rider or jump to the list
+          </p>
           <CalendarView items={calendarItems} />
         </div>
       ) : (
@@ -615,11 +647,6 @@ function JobsTab() {
           primaryFilters={deliveryPrimaryFilters}
           onClearFilters={() => { setFilterStatus('all'); setFilterType('all') }}
           hideColumnFilters
-          createAction={(
-            <button className="btn-primary text-xs" onClick={() => setShowCreateModal(true)}>
-              + New Delivery Job
-            </button>
-          )}
           emptyMessage="No delivery jobs found"
           rowActions={jobRowActions}
           exportTitle="Delivery Jobs"

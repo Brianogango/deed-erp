@@ -865,19 +865,39 @@ function ReconPanel({
             )}
           </div>
 
-          {/* Save recon summary */}
-          <div className="flex items-center justify-between pt-2">
+          {/* Save / reopen recon summary */}
+          <div className="flex items-center justify-between gap-3 pt-2 flex-wrap">
             <div className="text-[10px]" style={{ color: 'var(--text-4)' }}>
               {savedRecon?.reconciledBy && (
                 <span>Last saved by <strong>{savedRecon.reconciledBy}</strong> · {savedRecon.reconciledAt?.slice(0, 10)}</span>
               )}
             </div>
-        {['director', 'finance_officer'].includes(currentUser?.role ?? '') && (
-          <button className="btn-primary text-xs px-4 py-1.5"
-            onClick={() => onSave(stmtBalance, `${month}-30`, `${matchedPairs.length} matched, ${unmatchedStmt.length} stmt-only, ${unmatchedEntries.length} books-only`)}>
-            Save Reconciliation
-          </button>
-        )}
+            {['director', 'finance_officer'].includes(currentUser?.role ?? '') && (
+              <div className="flex items-center gap-2">
+                {isLocked && (
+                  <button
+                    type="button"
+                    className="btn-outline text-xs px-4 py-1.5"
+                    onClick={() => onSave(
+                      stmtBalance,
+                      savedRecon?.statementDate || `${month}-30`,
+                      savedRecon?.notes || 'Period reopened for corrections',
+                      'pending',
+                    )}
+                  >
+                    Reopen Period
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className="btn-primary text-xs px-4 py-1.5"
+                  disabled={isLocked}
+                  onClick={() => onSave(stmtBalance, `${month}-30`, `${matchedPairs.length} matched, ${unmatchedStmt.length} stmt-only, ${unmatchedEntries.length} books-only`)}
+                >
+                  Save Reconciliation
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -920,7 +940,8 @@ function ReconRow({ label, amount, bold, indent, negative, highlight, note }: {
 // ── Main Cash Book tab component ──────────────────────────────────────────────
 export default function CashbookTab({ accounts }: { accounts: Account[] }) {
   const appState  = useFinanceStore()
-  const { bankAccounts, bankRecons, saveBankRecon } = appState
+  const { bankAccounts, bankRecons, saveBankRecon, systemSettings } = appState
+  const reconEnabled = systemSettings.accReconciliation !== false
 
   const allEntries = useMemo(
     () => buildCashbookEntries(appState, accounts),
@@ -941,6 +962,9 @@ export default function CashbookTab({ accounts }: { accounts: Account[] }) {
   })
   const [activeTab,    setActiveTab]    = useState<'cashbook' | 'reconcile'>('cashbook')
   const [filterAccount, setFilterAccount] = useState<string>('all')
+
+  // Honor Settings → Accounting → Bank reconciliation toggle.
+  const visibleTab = !reconEnabled && activeTab === 'reconcile' ? 'cashbook' : activeTab
 
   const monthEntries = useMemo(() => {
     const res: CashbookEntry[] = []
@@ -1036,9 +1060,9 @@ export default function CashbookTab({ accounts }: { accounts: Account[] }) {
 
       {/* Tab + account filter */}
       <div className="flex items-center gap-2 flex-wrap">
-        {(['cashbook', 'reconcile'] as const).map(t => (
+        {(['cashbook', ...(reconEnabled ? ['reconcile'] as const : [])] as const).map(t => (
           <button key={t}
-            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${activeTab === t ? 'btn-primary' : 'btn-secondary'}`}
+            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${visibleTab === t ? 'btn-primary' : 'btn-secondary'}`}
             onClick={() => setActiveTab(t)}>
             {t === 'cashbook' ? 'Cash Book' : 'Bank Reconciliation'}
           </button>
@@ -1061,7 +1085,7 @@ export default function CashbookTab({ accounts }: { accounts: Account[] }) {
       </div>
 
       {/* ── CASH BOOK TABLE ─────────────────────────────────────────────── */}
-      {activeTab === 'cashbook' && (
+      {visibleTab === 'cashbook' && (
         <div className="card overflow-hidden">
           {/* Opening balance */}
           <div className="px-4 py-2 flex items-center justify-between text-xs"
@@ -1161,7 +1185,7 @@ export default function CashbookTab({ accounts }: { accounts: Account[] }) {
       )}
 
       {/* ── RECONCILIATION TAB ────────────────────────────────────────── */}
-      {activeTab === 'reconcile' && (
+      {visibleTab === 'reconcile' && reconEnabled && (
         <div className="flex flex-col gap-3">
           <div className="rounded-xl px-4 py-3 text-xs"
             style={{ background: 'var(--info-bg)', border: '1px solid #BFDBFE', color: 'var(--info-text)' }}>
