@@ -1,13 +1,14 @@
 'use client'
 
 import React, { useMemo, useState } from 'react'
-import { Modal, Field, Input } from '@/components/ui'
+import { Modal, Field, Input, Select, Textarea } from '@/components/ui'
 import { DataTable, type ColumnDef } from '@/components/data-table'
 import { Fa } from '@/components/icons'
-import { faPrint } from '@fortawesome/free-solid-svg-icons'
+import { faPrint, faPlus } from '@fortawesome/free-solid-svg-icons'
 import { LOCATIONS, LocationId, Product, SerialNumber, useInventoryStore, fmtDate } from '@/lib/store'
 import { validateSerialEdit } from '@/lib/inventory/serial-edit'
-import { canReleaseHeldSerial } from '@/lib/inventory/permissions'
+import { canIntakeOnHandSerials, canReleaseHeldSerial } from '@/lib/inventory/permissions'
+import { ON_HAND_LOCATIONS, parseSerialList, type OnHandLocation } from '@/lib/inventory/serial-intake'
 
 type StatusChip =
   | 'all'
@@ -43,6 +44,8 @@ export default function SerialManageDrawer({
     saleOrders,
     updateSerial,
     releaseSerialToStock,
+    intakeProductSerials,
+    openingStockPosted,
     addAuditLog,
     showToast,
     users,
@@ -51,6 +54,7 @@ export default function SerialManageDrawer({
 
   const role = users.find(u => u.id === currentUserId)?.role
   const canRelease = canReleaseHeldSerial(role)
+  const canIntake = canIntakeOnHandSerials(role)
 
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<StatusChip>('all')
@@ -59,6 +63,13 @@ export default function SerialManageDrawer({
   const [editTarget, setEditTarget] = useState<SerialNumber | null>(null)
   const [form, setForm] = useState({ serial: '', barcode: '', specs: '', conditionNotes: '', reason: '' })
   const [busy, setBusy] = useState(false)
+  const [showIntake, setShowIntake] = useState(false)
+  const [intakeRaw, setIntakeRaw] = useState('')
+  const [intakeLocation, setIntakeLocation] = useState<OnHandLocation>('warehouse')
+  const [intakeReason, setIntakeReason] = useState(
+    openingStockPosted ? 'Physical count / found stock' : 'Opening balance — not previously posted',
+  )
+  const parsedIntake = useMemo(() => parseSerialList(intakeRaw), [intakeRaw])
 
   const scoped = useMemo(() => {
     if (locationScope === 'all_locations' || warehouseFilter === 'all') return serials
@@ -177,6 +188,34 @@ export default function SerialManageDrawer({
     }
   }
 
+  const submitIntake = async () => {
+    if (!canIntake) return
+    if (parsedIntake.length === 0) {
+      showToast('Paste or type at least one serial number', 'error')
+      return
+    }
+    if (!intakeReason.trim()) {
+      showToast('Enter a reason for this intake', 'error')
+      return
+    }
+    setBusy(true)
+    try {
+      const result = await intakeProductSerials(product.id, {
+        serials: parsedIntake,
+        location: intakeLocation,
+        reason: intakeReason.trim(),
+        kind: openingStockPosted ? 'stock_intake' : 'opening_balance',
+      })
+      if (result) {
+        setShowIntake(false)
+        setIntakeRaw('')
+        setStatusFilter('available')
+      }
+    } finally {
+      setBusy(false)
+    }
+  }
+
   const columns: ColumnDef<SerialNumber>[] = [
     {
       key: 'serial',
@@ -260,18 +299,41 @@ export default function SerialManageDrawer({
               {locationScope === 'warehouse_filter' && warehouseFilter !== 'all'
                 ? ` · Filtered to ${LOCATIONS[warehouseFilter].name}`
                 : ' · All locations (incl. customer / sold)'}
+              {' · '}
+              Available {statusCounts.available} · On list {statusCounts.all}
             </p>
-            {warehouseFilter !== 'all' && (
-              <label className="flex items-center gap-2 text-[10px] text-text-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={locationScope === 'warehouse_filter'}
-                  onChange={e => setLocationScope(e.target.checked ? 'warehouse_filter' : 'all_locations')}
-                />
-                Limit to selected warehouse only
-              </label>
-            )}
+            <div className="flex flex-wrap items-center gap-2">
+              {canIntake && (
+                <button
+                  type="button"
+                  className="btn-primary text-[11px]"
+                  onClick={() => setShowIntake(true)}
+                  title="Add available on-hand serials (increases quantity)"
+                >
+                  <Fa icon={faPlus} className="mr-1" /> Add on-hand serials
+                </button>
+              )}
+              {warehouseFilter !== 'all' && (
+                <label className="flex items-center gap-2 text-[10px] text-text-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={locationScope === 'warehouse_filter'}
+                    onChange={e => setLocationScope(e.target.checked ? 'warehouse_filter' : 'all_locations')}
+                  />
+                  Limit to selected warehouse only
+                </label>
+              )}
+            </div>
           </div>
+
+          {statusCounts.available === 0 && canIntake && (
+            <p className="text-[11px] text-amber-900 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+              No available on-hand units yet.
+              {!openingStockPosted
+                ? ' Opening stock was never posted — use Add on-hand serials to seed this product without the global opening-stock lock.'
+                : ' Use Add on-hand serials for count corrections or units found in the warehouse.'}
+            </p>
+          )}
 
           <div className="flex flex-wrap gap-2 text-[10px]">
             {chips.map(([id, label]) => (
@@ -321,7 +383,9 @@ export default function SerialManageDrawer({
                 ? 'No sold serials for this product'
                 : statusFilter === 'assigned'
                   ? 'No reserved serials for this product'
-                  : 'No serials match this filter'
+                  : canIntake
+                    ? 'No serials yet — use Add on-hand serials to increase quantity'
+                    : 'No serials match this filter'
             }
             exportTitle={`${product.sku}-serials`}
             exportFilename={`${product.sku}-serials`}
@@ -438,6 +502,55 @@ export default function SerialManageDrawer({
               <button className="btn-secondary text-[11px]" onClick={() => setEditTarget(null)} disabled={busy}>Cancel</button>
               <button className="btn-primary text-[11px]" onClick={saveEdit} disabled={busy}>
                 {busy ? 'Saving…' : 'Save'}
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {showIntake && (
+        <Modal title={`Add on-hand serials · ${product.name}`} onClose={() => !busy && setShowIntake(false)} width={560}>
+          <div className="flex flex-col gap-3">
+            <p className="text-[11px] text-text-3 leading-relaxed">
+              Each serial becomes one <strong>available</strong> on-hand unit and increases product quantity.
+              Duplicates (already in the system or repeated in this list) are rejected.
+              {!openingStockPosted
+                ? ' This is recorded as an opening balance for this product only — it does not lock global Opening Stock.'
+                : ' This is recorded as a stock intake / count correction with an INTK document ref.'}
+            </p>
+            <Field label="Location" required>
+              <Select
+                value={intakeLocation}
+                onChange={v => setIntakeLocation(v as OnHandLocation)}
+                options={ON_HAND_LOCATIONS.map(loc => ({ value: loc, label: LOCATIONS[loc]?.name || loc }))}
+              />
+            </Field>
+            <Field label="Serial numbers (one per line, or comma-separated)" required>
+              <Textarea
+                value={intakeRaw}
+                onChange={v => setIntakeRaw(v)}
+                rows={8}
+                placeholder={'LR0AWKL5\nPF1A2B3C\n…'}
+              />
+            </Field>
+            <p className="text-[11px] font-bold" style={{ color: parsedIntake.length ? 'var(--success)' : 'var(--text-3)' }}>
+              {parsedIntake.length} unique serial{parsedIntake.length === 1 ? '' : 's'} ready to add
+            </p>
+            <Field label="Reason" required>
+              <Input
+                value={intakeReason}
+                onChange={v => setIntakeReason(v)}
+                placeholder="Opening balance / physical count / found stock"
+              />
+            </Field>
+            <div className="flex justify-end gap-2 pt-2">
+              <button className="btn-secondary text-[11px]" onClick={() => setShowIntake(false)} disabled={busy}>Cancel</button>
+              <button
+                className="btn-primary text-[11px]"
+                onClick={() => { void submitIntake() }}
+                disabled={busy || parsedIntake.length === 0 || !intakeReason.trim()}
+              >
+                {busy ? 'Adding…' : `Add ${parsedIntake.length || ''} unit${parsedIntake.length === 1 ? '' : 's'}`}
               </button>
             </div>
           </div>

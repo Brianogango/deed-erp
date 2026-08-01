@@ -2862,6 +2862,14 @@ export interface AppState {
   updateProductPrice: (id: string, salePrice: number, costPrice: number, reason: string, effectiveDate?: string) => ProductPriceHistory | null
   deleteProduct: (id: string) => void
   importOpeningStock: (items: { productId: string; qty: number; serials?: string[]; serialSkus?: string[]; location?: LocationId }[]) => void
+  /**
+   * Add available on-hand serials to one product (opening balance / stock intake).
+   * Server-authoritative — increases On hand / Available via deed_serials.
+   */
+  intakeProductSerials: (
+    productId: string,
+    input: { serials: string[]; location?: LocationId; reason: string; kind?: 'opening_balance' | 'stock_intake' },
+  ) => Promise<{ added: number; documentRef: string } | null>
 
   // Serials
   getProductSerials: (productId: string, location?: LocationId) => SerialNumber[]
@@ -3153,6 +3161,7 @@ export type InventoryStoreState = Pick<AppState,
   | 'validateTransfer'
   | 'submitTransfer'
   | 'importOpeningStock'
+  | 'intakeProductSerials'
   | 'getStockByLocation'
   | 'getMonthlyMovements'
   | 'showToast'
@@ -5244,6 +5253,7 @@ export function StoreProvider({
     validateTransfer: (...args: Parameters<AppState['validateTransfer']>) => storeCtxRef.current!.validateTransfer(...args),
     submitTransfer: (...args: Parameters<AppState['submitTransfer']>) => storeCtxRef.current!.submitTransfer(...args),
     importOpeningStock: (...args: Parameters<AppState['importOpeningStock']>) => storeCtxRef.current!.importOpeningStock(...args),
+    intakeProductSerials: (...args: Parameters<AppState['intakeProductSerials']>) => storeCtxRef.current!.intakeProductSerials(...args),
     getStockByLocation: (...args: Parameters<AppState['getStockByLocation']>) => storeCtxRef.current!.getStockByLocation(...args),
     getMonthlyMovements: (...args: Parameters<AppState['getMonthlyMovements']>) => storeCtxRef.current!.getMonthlyMovements(...args),
     showToast: (...args: Parameters<AppState['showToast']>) => storeCtxRef.current!.showToast(...args),
@@ -8454,6 +8464,74 @@ const storeCtx: AppState = {
       setOpeningStockPosted(true)
       addAuditLog('opening_stock', 'OPENING', `Opening stock posted — ${items.length} product(s)`)
       showToast('Opening stock posted · locked against further changes')
+    },
+
+    intakeProductSerials: async (productId, input) => {
+      const product = prodRef.current.find(p => p.id === productId)
+      if (!product) { showToast('Product not found', 'error'); return null }
+      const serials = (input.serials ?? []).map(s => String(s).trim()).filter(Boolean)
+      if (serials.length === 0) { showToast('Enter at least one serial number', 'error'); return null }
+      if (!String(input.reason ?? '').trim()) { showToast('Reason is required', 'error'); return null }
+
+      try {
+        const res = await fetch('/api/inventory/intake-serials', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            productId,
+            serials,
+            location: input.location ?? 'warehouse',
+            reason: input.reason,
+            kind: input.kind,
+          }),
+        })
+        const data = await res.json().catch(() => ({})) as {
+          error?: string
+          errors?: string[]
+          added?: number
+          documentRef?: string
+          serials?: SerialNumber[]
+          move?: StockMove
+          product?: Partial<Product>
+        }
+        if (!res.ok) {
+          showToast(data.errors?.[0] || data.error || 'Could not add serials', 'error')
+          return null
+        }
+
+        if (Array.isArray(data.serials) && data.serials.length > 0) {
+          setSerials(prev => {
+            const existingIds = new Set(prev.map(s => s.id))
+            const incoming = data.serials!.filter(s => !existingIds.has(s.id))
+            return incoming.length ? [...incoming, ...prev] : prev
+          })
+        }
+        if (data.move) {
+          setStockMoves(prev => (prev.some(m => m.id === data.move!.id) ? prev : [data.move!, ...prev]))
+        }
+        if (data.product) {
+          setProducts(prev => prev.map(p => p.id === productId
+            ? {
+                ...p,
+                requiresSerial: true,
+                trackingMethod: 'SERIAL',
+                stockQty: typeof data.product!.stockQty === 'number' ? data.product!.stockQty : p.stockQty + (data.added ?? serials.length),
+              }
+            : p))
+        }
+
+        const docRef = data.documentRef || 'INTK'
+        addAuditLog(
+          'serial_intake',
+          docRef,
+          `Added ${data.added ?? serials.length} on-hand serial(s) to ${product.name} @ ${input.location ?? 'warehouse'}: ${serials.join(', ')}`,
+        )
+        showToast(`Added ${data.added ?? serials.length} serial(s) — On hand updated (${docRef})`, 'success')
+        return { added: data.added ?? serials.length, documentRef: docRef }
+      } catch {
+        showToast('Could not reach server to add serials', 'error')
+        return null
+      }
     },
 
     // ── Serials ───────────────────────────────────────────────────────────────
