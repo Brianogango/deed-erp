@@ -1,0 +1,74 @@
+name: Ops heal GRN serials (push trigger)
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'ops/heal-grn-serials-request.json'
+
+jobs:
+  heal-grn-serials:
+    name: Heal GRN serials on Contabo
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Read request
+        id: req
+        run: |
+          set -euo pipefail
+          BILL=$(jq -r '.bill // empty' ops/heal-grn-serials-request.json)
+          PO=$(jq -r '.po // empty' ops/heal-grn-serials-request.json)
+          HEAL=$(jq -r '.heal // true' ops/heal-grn-serials-request.json)
+          DRY=$(jq -r '.dryRun // false' ops/heal-grn-serials-request.json)
+          if [ -z "$BILL" ] && [ -z "$PO" ]; then
+            echo "ERROR: bill or po required in ops/heal-grn-serials-request.json" >&2
+            exit 1
+          fi
+          echo "bill=$BILL" >> "$GITHUB_OUTPUT"
+          echo "po=$PO" >> "$GITHUB_OUTPUT"
+          echo "heal=$HEAL" >> "$GITHUB_OUTPUT"
+          echo "dry=$DRY" >> "$GITHUB_OUTPUT"
+
+      - name: Copy script to server
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          source: scripts/heal-grn-serials.mjs
+          target: /tmp/deed-ops/
+          strip_components: 1
+
+      - name: Run heal-grn-serials script
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          command_timeout: 5m
+          script: |
+            set -euo pipefail
+            cd /var/www/deed-erp
+            SCRIPT=scripts/heal-grn-serials.mjs
+            cp /tmp/deed-ops/heal-grn-serials.mjs "$SCRIPT"
+            ARGS=()
+            if [ -n '${{ steps.req.outputs.bill }}' ]; then
+              ARGS+=(--bill '${{ steps.req.outputs.bill }}')
+            fi
+            if [ -n '${{ steps.req.outputs.po }}' ]; then
+              ARGS+=(--po '${{ steps.req.outputs.po }}')
+            fi
+            if [ '${{ steps.req.outputs.heal }}' = 'true' ]; then
+              ARGS+=(--heal)
+            fi
+            if [ '${{ steps.req.outputs.dry }}' = 'true' ]; then
+              ARGS+=(--dry-run)
+            fi
+            node "$SCRIPT" "${ARGS[@]}"
+            if git ls-files --error-unmatch "$SCRIPT" >/dev/null 2>&1; then
+              git restore --source=HEAD --worktree --staged -- "$SCRIPT" 2>/dev/null || git checkout HEAD -- "$SCRIPT" || true
+            else
+              rm -f "$SCRIPT"
+            fi

@@ -1,0 +1,7 @@
+{
+  "bill": "BILL/0089",
+  "heal": true,
+  "dryRun": false,
+  "requestedAt": "2026-08-01T14:30:00Z",
+  "note": "Reer Global — restore missing serials from validated GRN so Available qty shows the 11 machines"
+}

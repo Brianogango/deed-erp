@@ -10432,43 +10432,68 @@ const storeCtx: AppState = {
           }
         : null
 
-      // Add stock and serials
-      lines.forEach(line => {
-        const prod = prodRef.current.find(x => x.id === line.productId)!
-        if (line.requiresSerial) {
-          line.serials.forEach(s => {
-            const issueDesc = serialIssues?.[s]?.trim() ?? ''
-            const hasIssue  = issueDesc.length > 0
-            const newSerial: SerialNumber = {
-              id: uid(), serial: s, productId: line.productId, productName: line.productName,
-              location: hasIssue ? 'warehouse' : destination,
-              status: hasIssue ? 'refurbishment' : 'available',
-              purchaseOrderId: po.id,
-              receiptId: receiptId,
-              receivedDate: now(),
-              // Always issue an internal inventory barcode at stock receipt time.
-              barcode: buildInventoryBarcodeForProduct(line.productId, s),
-              accessories: serialAccessories?.[s] ?? [],
-              accessoryNotes: serialAccessoryNotes?.[s],
+      // Build serial rows first, persist atomically, then update local stock.
+      // (Previously N× fire-and-forget POST /api/serials raced and lost units.)
+      const newSerials: SerialNumber[] = []
+      const newRefurbJobs: RefurbishmentJob[] = []
+      for (const line of lines) {
+        if (!line.requiresSerial) continue
+        for (const s of line.serials) {
+          const issueDesc = serialIssues?.[s]?.trim() ?? ''
+          const hasIssue = issueDesc.length > 0
+          const newSerial: SerialNumber = {
+            id: uid(), serial: s, productId: line.productId, productName: line.productName,
+            location: hasIssue ? 'warehouse' : destination,
+            status: hasIssue ? 'refurbishment' : 'available',
+            purchaseOrderId: po.id,
+            receiptId: receiptId,
+            receivedDate: now(),
+            barcode: buildInventoryBarcodeForProduct(line.productId, s),
+            accessories: serialAccessories?.[s] ?? [],
+            accessoryNotes: serialAccessoryNotes?.[s],
+            specs: serialSpecs?.[s],
+          }
+          newSerials.push(newSerial)
+          if (hasIssue) {
+            newRefurbJobs.push({
+              id: uid(), ref: seq('REF', 'refurb'),
+              status: 'queued',
+              serialId: newSerial.id, serialNumber: s,
+              productId: line.productId, productName: line.productName,
               specs: serialSpecs?.[s],
-            }
-            setSerials(p => [...p, newSerial])
-            sync('/api/serials', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(newSerial) })
-            if (hasIssue) {
-              const job: RefurbishmentJob = {
-                id: uid(), ref: seq('REF', 'refurb'),
-                status: 'queued',
-                serialId: newSerial.id, serialNumber: s,
-                productId: line.productId, productName: line.productName,
-                specs: serialSpecs?.[s],
-                receiptId, receiptRef: receipt.ref,
-                intakeDate: now(),
-                intakeIssueDescription: issueDesc,
-                partsNeeded: [],
-              }
-              setRefurbishmentJobs(p => [...p, job])
-            }
+              receiptId, receiptRef: receipt.ref,
+              intakeDate: now(),
+              intakeIssueDescription: issueDesc,
+              partsNeeded: [],
+            })
+          }
+        }
+      }
+      if (newSerials.length > 0) {
+        try {
+          const bulkRes = await fetch('/api/serials/bulk', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ items: newSerials }),
           })
+          if (!bulkRes.ok) {
+            const payload = await bulkRes.json().catch(() => null) as { errors?: string[]; error?: string } | null
+            const message = payload?.errors?.[0] || payload?.error || 'Failed to save serial numbers'
+            showToast(message, 'error')
+            return
+          }
+        } catch {
+          showToast('Could not save serial numbers to server', 'error')
+          return
+        }
+        setSerials(p => [...p, ...newSerials])
+      }
+      if (newRefurbJobs.length > 0) {
+        setRefurbishmentJobs(p => [...p, ...newRefurbJobs])
+      }
+
+      lines.forEach(line => {
+        if (line.requiresSerial) {
           setProducts(p => p.map(x => x.id === line.productId ? { ...x, stockQty: x.stockQty + line.serials.length } : x))
           addMove(line.productId, line.productName, line.serials.length, 'in', `Receipt ${receipt.ref}`, receipt.ref, 'vendor', destination, line.serials)
         } else {
