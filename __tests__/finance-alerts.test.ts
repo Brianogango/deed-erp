@@ -37,7 +37,7 @@ describe('buildFinanceAlerts', () => {
       ],
     })
     expect(alerts).toHaveLength(1)
-    expect(alerts[0]).toMatchObject({ tone: 'danger', path: '/finance?tab=invoices' })
+    expect(alerts[0]).toMatchObject({ tone: 'danger', path: '/finance?tab=reports&report=ageing' })
     expect(alerts[0].title).toContain('1 overdue customer invoice')
     expect(alerts[0].sub).toContain('1,000')
   })

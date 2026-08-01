@@ -19,6 +19,7 @@ import { useFinanceStore, fmtKes, fmtDate } from '@/lib/store'
 import { invoiceDocState, invoicePaymentStatus, isInvoiceOverdue, displayDocRef, INVOICE_DOC_STATE_LABELS, PAYMENT_STATUS_LABELS } from '@/lib/odoo-sales-flow'
 import { Badge, Modal, Field, Input, Select, Confirm, ModuleSkeleton, useMounted } from '@/components/ui'
 import { RecordHeader, PrimaryActionButton } from '@/components/erp'
+import Chatter from '@/components/erp/Chatter'
 import { Fa } from '@/components/icons'
 import { OutboundReleasePanel, OrcStatusBadge } from './OutboundReleasePanel'
 import { downloadInvoicePdf, invoicePdfBase64 } from './invoice-pdf'
@@ -497,6 +498,14 @@ export default function InvoiceDetail() {
               </>
             )}
           </div>
+
+          <Chatter
+            model="invoice"
+            recordId={invoice.id}
+            staffName={currentUser?.name || 'Staff'}
+            title="Internal Notes & Activities"
+            compact
+          />
         </div>
       </div>
 

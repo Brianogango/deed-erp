@@ -8,6 +8,7 @@ const ALLOWED_MODELS = new Set([
   'invoice',
   'repair',
   'opportunity',
+  'contact',
 ])
 
 const ACTIVITY_TYPES = new Set(['call', 'meeting', 'email', 'todo'])

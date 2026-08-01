@@ -81,7 +81,7 @@ export function buildFinanceAlerts(data: {
       key: 'fin-overdue-invoices', tone: 'danger',
       title: `${overdueInvoices.length} overdue customer invoice${overdueInvoices.length > 1 ? 's' : ''}`,
       sub: `${fmtKes(overdueInvoices.reduce((s, i) => s + openBalance(i), 0))} needs collection`,
-      path: '/finance?tab=invoices',
+      path: '/finance?tab=reports&report=ageing',
     } : null,
     negativeCashAccounts.length ? {
       key: 'fin-negative-cash', tone: 'danger',
@@ -93,7 +93,7 @@ export function buildFinanceAlerts(data: {
       key: 'fin-overdue-bills', tone: 'warn',
       title: `${overdueBills.length} overdue supplier bill${overdueBills.length > 1 ? 's' : ''}`,
       sub: `${fmtKes(overdueBills.reduce((s, i) => s + openBalance(i), 0))} payables past due`,
-      path: '/finance?tab=bills',
+      path: '/finance?tab=reports&report=ageing',
     } : null,
     pendingReimbursements.length ? {
       key: 'fin-reimbursements', tone: 'warn',

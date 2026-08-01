@@ -71,6 +71,7 @@ import JournalsTab from './accounting/JournalsTab'
 import ChartOfAccountsTab from './accounting/ChartOfAccountsTab'
 import GeneralLedgerTab from './accounting/GeneralLedgerTab'
 import PartnerLedgerTab from './accounting/PartnerLedgerTab'
+import AgeingTab from './accounting/AgeingTab'
 import { usePrismaAccountingReports, bootstrapCoaClient } from '@/hooks/usePrismaAccountingReports'
 import {
   DEFAULT_DOCUMENT_PAYMENT_DETAILS,
@@ -629,25 +630,11 @@ function AccountingContent() {
 
 
   const financeReports = useMemo(() => {
-    const todayDate = new Date()
     const postedCustomerInvoices = customerInvoices.filter(i => invoiceDocState(i.status) === 'posted')
     const postedVendorBills = vendorBills.filter(i => invoiceDocState(i.status) === 'posted')
     const outputVat = postedCustomerInvoices.reduce((s, i) => s + (i.taxTotal || 0), 0)
     const inputVat = postedVendorBills.reduce((s, i) => s + (i.taxTotal || 0), 0)
     const vatPayable = outputVat - inputVat
-
-    const bucketRows = (items: Invoice[]) => {
-      const rows = items
-        .filter(i => isOpenInvoice(i))
-        .map(i => {
-          const due = i.dueDate ? new Date(i.dueDate) : new Date(i.date)
-          const days = Math.max(0, Math.floor((todayDate.getTime() - due.getTime()) / 86400000))
-          const balance = Math.max(0, i.total - i.amountPaid)
-          return { id: i.id, ref: i.ref, partnerName: i.partnerName, dueDate: i.dueDate || i.date, balance, current: days <= 0 ? balance : 0, d30: days > 0 && days <= 30 ? balance : 0, d60: days > 30 && days <= 60 ? balance : 0, d90: days > 60 && days <= 90 ? balance : 0, over90: days > 90 ? balance : 0 }
-        })
-      const totals = rows.reduce((a, r) => ({ balance: a.balance + r.balance, current: a.current + r.current, d30: a.d30 + r.d30, d60: a.d60 + r.d60, d90: a.d90 + r.d90, over90: a.over90 + r.over90 }), { balance: 0, current: 0, d30: 0, d60: 0, d90: 0, over90: 0 })
-      return { rows, totals }
-    }
 
     const trialBalance = accounts
       .map(acc => {
@@ -668,7 +655,7 @@ function AccountingContent() {
     })
     const cashTotals = cashPosition.reduce((a, r) => ({ opening: a.opening + r.opening, inflows: a.inflows + r.inflows, outflows: a.outflows + r.outflows, balance: a.balance + r.balance }), { opening: 0, inflows: 0, outflows: 0, balance: 0 })
 
-    return { vat: { outputVat, inputVat, vatPayable, taxableSales: postedCustomerInvoices.reduce((s, i) => s + i.subtotal, 0), taxablePurchases: postedVendorBills.reduce((s, i) => s + i.subtotal, 0) }, arAgeing: bucketRows(customerInvoices), apAgeing: bucketRows(vendorBills), trialBalance, tbTotals, cashPosition, cashTotals }
+    return { vat: { outputVat, inputVat, vatPayable, taxableSales: postedCustomerInvoices.reduce((s, i) => s + i.subtotal, 0), taxablePurchases: postedVendorBills.reduce((s, i) => s + i.subtotal, 0) }, trialBalance, tbTotals, cashPosition, cashTotals }
   }, [customerInvoices, vendorBills, accounts, journalEntries, bankAccounts, allCashbookEntries])
 
   const monthlyReport = useMemo(() => {
@@ -1670,7 +1657,7 @@ function AccountingContent() {
               />
             </div>
           ) : activeTab === 'ageing' ? (
-            <div className="p-6 space-y-6"><AgeingReport title="Receivables ageing" rows={financeReports.arAgeing.rows} totals={financeReports.arAgeing.totals} /><AgeingReport title="Payables ageing" rows={financeReports.apAgeing.rows} totals={financeReports.apAgeing.totals} /></div>
+            <AgeingTab customerInvoices={customerInvoices} vendorBills={vendorBills} />
           ) : activeTab === 'trial_balance' ? (
             <div className="p-6">
               <div className="flex items-center justify-between mb-5 gap-3 flex-wrap">
@@ -2197,40 +2184,6 @@ function AccountingContent() {
 }
 
 // ── P&L sub-components ────────────────────────────────────────────────────────
-function AgeingReport({ title, rows, totals }: { title: string; rows: { id: string; ref: string; partnerName: string; dueDate: string; balance: number; current: number; d30: number; d60: number; d90: number; over90: number }[]; totals: { balance: number; current: number; d30: number; d60: number; d90: number; over90: number } }) {
-  const tableRows = [
-    ...rows,
-    { id: '__totals__', ref: '', partnerName: 'Totals', dueDate: '', balance: totals.balance, current: totals.current, d30: totals.d30, d60: totals.d60, d90: totals.d90, over90: totals.over90 },
-  ]
-  return (
-    <div>
-      <div className="flex items-center justify-between mb-3">
-        <h2 className="text-base font-bold text-[var(--text-1)]">{title}</h2>
-        <span className="text-xs font-bold text-[var(--text-3)]">Total: {fmtKes(totals.balance)}</span>
-      </div>
-      <DataTable
-        tableId={`finance-ageing-${title.toLowerCase().replace(/\s+/g, '-')}`}
-        hideSearch
-        perPage={50}
-        emptyMessage="No outstanding balances"
-        rowKey={r => r.id}
-        rows={tableRows}
-        columns={[
-          { key: 'ref', label: 'Ref', priority: 1, width: '110px', render: r => <span className="font-mono text-xs">{r.ref || '—'}</span>, accessor: r => r.ref },
-          { key: 'partner', label: 'Partner', priority: 1, width: '1.4fr', render: r => <span className={r.id === '__totals__' ? 'font-bold' : ''}>{r.partnerName}</span>, accessor: r => r.partnerName },
-          { key: 'due', label: 'Due date', priority: 2, width: '110px', render: r => <span className="text-xs">{r.dueDate ? fmtDate(r.dueDate) : '—'}</span>, exportValue: r => r.dueDate },
-          { key: 'current', label: 'Current', priority: 2, width: '100px', align: 'right', render: r => <span className="font-mono">{r.current ? fmtKes(r.current) : '—'}</span>, exportValue: r => r.current },
-          { key: 'd30', label: '1–30', priority: 3, width: '90px', align: 'right', render: r => <span className="font-mono">{r.d30 ? fmtKes(r.d30) : '—'}</span>, exportValue: r => r.d30 },
-          { key: 'd60', label: '31–60', priority: 3, width: '90px', align: 'right', render: r => <span className="font-mono">{r.d60 ? fmtKes(r.d60) : '—'}</span>, exportValue: r => r.d60 },
-          { key: 'd90', label: '61–90', priority: 3, width: '90px', align: 'right', render: r => <span className="font-mono">{r.d90 ? fmtKes(r.d90) : '—'}</span>, exportValue: r => r.d90 },
-          { key: 'over90', label: '90+', priority: 3, width: '90px', align: 'right', render: r => <span className="font-mono">{r.over90 ? fmtKes(r.over90) : '—'}</span>, exportValue: r => r.over90 },
-          { key: 'balance', label: 'Balance', priority: 1, width: '120px', align: 'right', render: r => <span className="font-mono font-bold">{fmtKes(r.balance)}</span>, exportValue: r => r.balance },
-        ]}
-      />
-    </div>
-  )
-}
-
 function PLSection({ title, children, className }: { title: string; children: React.ReactNode; className?: string }) {
   return (
     <div className={`mb-6 ${className || ''}`}>

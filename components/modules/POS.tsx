@@ -98,7 +98,7 @@ export default function PointOfSale() {
   const [mounted, setMounted] = useState(false)
   useEffect(() => { setMounted(true) }, [])
 
-  const { products, serials, contacts, createPOSOrder, posOrders, openPOSSession, closePOSSession, posSessionOpen, posSessionOpeningCash, showToast, companySettings, getCustomerCreditStatus } = useCommerceStore()
+  const { products, serials, contacts, createPOSOrder, posOrders, openPOSSession, closePOSSession, posSessionOpen, posSessionOpeningCash, posSessionId, showToast, companySettings, getCustomerCreditStatus } = useCommerceStore()
 
   const [cart, setCart] = useState<{ lineId: string; productId: string; productName: string; barcode: string; price: number; listPrice: number; qty: number; image: string; serialId?: string; serialNumber?: string }[]>([])
   const [scanInput, setScanInput] = useState('')
@@ -539,19 +539,34 @@ export default function PointOfSale() {
             </Modal>
           )}
 
-          {showCloseSession && (
-            <Modal title="Close Session" width={480} onClose={() => setShowCloseSession(false)}>
-              <Field label="Closing Cash Count (KES)"><Input value={closingCash} onChange={setClosingCash} type="number" autoFocus /></Field>
-              <div className="p-3 rounded text-xs" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-lt)' }}>
-                <p>Session orders: <strong>{posOrders.length}</strong></p>
-                <p className="mt-1">Total revenue: <strong className="font-mono" style={{ color: 'var(--success)' }}>{fmtKes(posOrders.reduce((a, o) => a + o.total, 0))}</strong></p>
-              </div>
-              <div className="flex gap-2 justify-end">
-                <button className="btn-outline" onClick={() => setShowCloseSession(false)}>Cancel</button>
-                <button className="btn-primary" style={{ background: '#F04438' }} onClick={() => { closePOSSession(Number(closingCash)); setShowCloseSession(false) }}>Close Session</button>
-              </div>
-            </Modal>
-          )}
+          {showCloseSession && (() => {
+            const sessionOrders = posOrders.filter(o => o.sessionId === posSessionId || o.sessionId === 'active')
+            const totalCash = sessionOrders.filter(o => o.payment === 'cash').reduce((a, o) => a + o.total, 0)
+            const totalMpesa = sessionOrders.filter(o => o.payment === 'mpesa').reduce((a, o) => a + o.total, 0)
+            const totalCard = sessionOrders.filter(o => o.payment === 'card').reduce((a, o) => a + o.total, 0)
+            const totalSales = sessionOrders.reduce((a, o) => a + o.total, 0)
+            const expectedCash = posSessionOpeningCash + totalCash
+            const counted = Number(closingCash) || 0
+            const variance = counted - expectedCash
+            return (
+              <Modal title="Close Session" subtitle="Count till and post session settlement" width={480} onClose={() => setShowCloseSession(false)}>
+                <Field label="Closing Cash Count (KES)"><Input value={closingCash} onChange={setClosingCash} type="number" autoFocus /></Field>
+                <div className="p-3 rounded text-xs space-y-1" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-lt)' }}>
+                  <p>Session orders: <strong>{sessionOrders.length}</strong></p>
+                  <p>Total sales: <strong className="font-mono" style={{ color: 'var(--success)' }}>{fmtKes(totalSales)}</strong></p>
+                  <p>Cash / M-Pesa / Card: <strong className="font-mono">{fmtKes(totalCash)}</strong> · <strong className="font-mono">{fmtKes(totalMpesa)}</strong> · <strong className="font-mono">{fmtKes(totalCard)}</strong></p>
+                  <p>Opening cash: <strong className="font-mono">{fmtKes(posSessionOpeningCash)}</strong></p>
+                  <p>Expected cash: <strong className="font-mono">{fmtKes(expectedCash)}</strong></p>
+                  <p>Variance: <strong className="font-mono" style={{ color: variance === 0 ? 'var(--success)' : '#F04438' }}>{fmtKes(variance)}</strong></p>
+                  <p className="text-[10px] text-t3 mt-1">Closing posts a session journal (tender totals + cash over/short). Each sale already decremented stock and posted revenue.</p>
+                </div>
+                <div className="flex gap-2 justify-end">
+                  <button className="btn-outline" onClick={() => setShowCloseSession(false)}>Cancel</button>
+                  <button className="btn-primary" style={{ background: '#F04438' }} onClick={() => { closePOSSession(counted); setShowCloseSession(false) }}>Close Session</button>
+                </div>
+              </Modal>
+            )
+          })()}
 
           {/* History modal */}
           {showHistory && (
