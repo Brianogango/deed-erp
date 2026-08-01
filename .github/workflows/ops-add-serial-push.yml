@@ -55,17 +55,16 @@ jobs:
           script: |
             set -euo pipefail
             cd /var/www/deed-erp
-            cp /tmp/deed-ops/add-product-serial.mjs /tmp/add-product-serial.mjs
-            PRODUCT_ID_FLAG=''
+            # Run from the app tree so ESM can resolve `pg` from node_modules.
+            cp /tmp/deed-ops/add-product-serial.mjs scripts/add-product-serial.mjs
             if [ -n '${{ steps.req.outputs.product_id }}' ]; then
-              PRODUCT_ID_FLAG="--product-id '${{ steps.req.outputs.product_id }}'"
+              node scripts/add-product-serial.mjs \
+                --product-id '${{ steps.req.outputs.product_id }}' \
+                --serial '${{ steps.req.outputs.serial }}' \
+                --location '${{ steps.req.outputs.location }}'
+            else
+              node scripts/add-product-serial.mjs \
+                --name '${{ steps.req.outputs.name }}' \
+                --serial '${{ steps.req.outputs.serial }}' \
+                --location '${{ steps.req.outputs.location }}'
             fi
-            NAME_FLAG=''
-            if [ -n '${{ steps.req.outputs.name }}' ]; then
-              NAME_FLAG="--name '${{ steps.req.outputs.name }}'"
-            fi
-            eval NODE_PATH=/var/www/deed-erp/node_modules node /tmp/add-product-serial.mjs \
-              $NAME_FLAG \
-              --serial '${{ steps.req.outputs.serial }}' \
-              --location '${{ steps.req.outputs.location }}' \
-              $PRODUCT_ID_FLAG

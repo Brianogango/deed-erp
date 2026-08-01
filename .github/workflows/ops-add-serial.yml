@@ -54,13 +54,16 @@ jobs:
           script: |
             set -euo pipefail
             cd /var/www/deed-erp
-            cp /tmp/deed-ops/add-product-serial.mjs /tmp/add-product-serial.mjs
-            PRODUCT_ID_FLAG=''
+            cp /tmp/deed-ops/add-product-serial.mjs scripts/add-product-serial.mjs
             if [ -n '${{ inputs.product_id }}' ]; then
-              PRODUCT_ID_FLAG="--product-id '${{ inputs.product_id }}'"
+              node scripts/add-product-serial.mjs \
+                --name '${{ inputs.name }}' \
+                --product-id '${{ inputs.product_id }}' \
+                --serial '${{ inputs.serial }}' \
+                --location '${{ inputs.location }}'
+            else
+              node scripts/add-product-serial.mjs \
+                --name '${{ inputs.name }}' \
+                --serial '${{ inputs.serial }}' \
+                --location '${{ inputs.location }}'
             fi
-            eval node /tmp/add-product-serial.mjs \
-              --name '${{ inputs.name }}' \
-              --serial '${{ inputs.serial }}' \
-              --location '${{ inputs.location }}' \
-              $PRODUCT_ID_FLAG
