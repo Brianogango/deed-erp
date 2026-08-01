@@ -1,0 +1,71 @@
+name: Ops add product serial (push trigger)
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'ops/add-serial-request.json'
+
+jobs:
+  add-serial:
+    name: Add serial on Contabo
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Read request
+        id: req
+        run: |
+          set -euo pipefail
+          NAME=$(jq -r '.name // empty' ops/add-serial-request.json)
+          SERIAL=$(jq -r '.serial // empty' ops/add-serial-request.json)
+          LOCATION=$(jq -r '.location // "warehouse"' ops/add-serial-request.json)
+          PRODUCT_ID=$(jq -r '.productId // empty' ops/add-serial-request.json)
+          if [ -z "$NAME" ] && [ -z "$PRODUCT_ID" ]; then
+            echo "ERROR: name or productId required in ops/add-serial-request.json" >&2
+            exit 1
+          fi
+          if [ -z "$SERIAL" ]; then
+            echo "ERROR: serial required in ops/add-serial-request.json" >&2
+            exit 1
+          fi
+          echo "name=$NAME" >> "$GITHUB_OUTPUT"
+          echo "serial=$SERIAL" >> "$GITHUB_OUTPUT"
+          echo "location=$LOCATION" >> "$GITHUB_OUTPUT"
+          echo "product_id=$PRODUCT_ID" >> "$GITHUB_OUTPUT"
+
+      - name: Copy script to server
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          source: scripts/add-product-serial.mjs
+          target: /tmp/deed-ops/
+          strip_components: 1
+
+      - name: Run add-product-serial script
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          command_timeout: 5m
+          script: |
+            set -euo pipefail
+            cd /var/www/deed-erp
+            cp /tmp/deed-ops/add-product-serial.mjs /tmp/add-product-serial.mjs
+            PRODUCT_ID_FLAG=''
+            if [ -n '${{ steps.req.outputs.product_id }}' ]; then
+              PRODUCT_ID_FLAG="--product-id '${{ steps.req.outputs.product_id }}'"
+            fi
+            NAME_FLAG=''
+            if [ -n '${{ steps.req.outputs.name }}' ]; then
+              NAME_FLAG="--name '${{ steps.req.outputs.name }}'"
+            fi
+            eval NODE_PATH=/var/www/deed-erp/node_modules node /tmp/add-product-serial.mjs \
+              $NAME_FLAG \
+              --serial '${{ steps.req.outputs.serial }}' \
+              --location '${{ steps.req.outputs.location }}' \
+              $PRODUCT_ID_FLAG
