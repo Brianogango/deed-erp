@@ -118,10 +118,27 @@ export function isKenyaPublicHoliday(date: Date): boolean {
   return !!easter && easter.includes(mmdd)
 }
 
+/**
+ * Format a Date as YYYY-MM-DD using the environment's local calendar day.
+ * Do NOT use `toISOString().slice(0,10)` for local midnights — in UTC+3
+ * (Africa/Nairobi) that shifts the date back by one day.
+ */
+export function formatLocalDate(date: Date): string {
+  const y = date.getFullYear()
+  const m = String(date.getMonth() + 1).padStart(2, '0')
+  const d = String(date.getDate()).padStart(2, '0')
+  return `${y}-${m}-${d}`
+}
+
+/** Deed working week: Monday–Saturday. Only Sunday is a rest day. */
+export function isWorkingDay(date: Date): boolean {
+  return date.getDay() !== 0 && !isKenyaPublicHoliday(date)
+}
+
 // ── Day calculators ───────────────────────────────────────────────────────────
 
 /**
- * Count working days (Mon–Fri, excluding Kenyan public holidays)
+ * Count working days (Mon–Saturday, excluding Kenyan public holidays)
  * between start and end inclusive.
  */
 export function calcWorkingDays(start: string, end: string): number {
@@ -132,8 +149,7 @@ export function calcWorkingDays(start: string, end: string): number {
   let days = 0
   const cur = new Date(s)
   while (cur <= e) {
-    const d = cur.getDay()
-    if (d !== 0 && d !== 6 && !isKenyaPublicHoliday(cur)) days++
+    if (isWorkingDay(cur)) days++
     cur.setDate(cur.getDate() + 1)
   }
   return days
@@ -150,21 +166,38 @@ export function calcCalendarDays(start: string, end: string): number {
   return Math.round((e.getTime() - s.getTime()) / 86_400_000) + 1
 }
 
+/** Days charged for a leave type over a date range (never trust a client-sent count). */
+export function leaveDaysForRange(leaveType: StoreLeaveType, start: string, end: string): number {
+  return CALENDAR_DAY_TYPES.includes(leaveType)
+    ? calcCalendarDays(start, end)
+    : calcWorkingDays(start, end)
+}
+
+/** Remaining days available: entitlement + carryForward − used − pending. */
+export function remainingBalance(bal: {
+  entitlement: number
+  carryForward: number
+  used: number
+  pending: number
+}): number {
+  return bal.entitlement + bal.carryForward - bal.used - bal.pending
+}
+
 /**
  * Calculate the number of working days of advance notice given a start date.
  * Returns the number of working days from today up to (but not including) startDate.
  */
-export function noticeDaysGiven(startDate: string): number {
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-  const start = new Date(startDate + 'T00:00:00')
-  if (start <= today) return 0
+export function noticeDaysGiven(startDate: string, today: Date = new Date()): number {
+  const startOfToday = new Date(today)
+  startOfToday.setHours(0, 0, 0, 0)
+  const start = new Date(String(startDate).slice(0, 10) + 'T00:00:00')
+  if (start <= startOfToday) return 0
   // Working days from today to startDate - 1
   const dayBefore = new Date(start)
   dayBefore.setDate(dayBefore.getDate() - 1)
   return calcWorkingDays(
-    today.toISOString().slice(0, 10),
-    dayBefore.toISOString().slice(0, 10),
+    formatLocalDate(startOfToday),
+    formatLocalDate(dayBefore),
   )
 }
 
@@ -179,7 +212,7 @@ export function requiredNotice(leaveType: StoreLeaveType, days: number): number 
 
 /**
  * Compute actual working days in the December closure period for a given year,
- * automatically excluding weekends and public holidays.
+ * automatically excluding Sundays and public holidays (Mon–Sat working week).
  */
 export function decemberClosureDays(year: number): number {
   return calcWorkingDays(`${year}-12-23`, `${year + 1}-01-02`)

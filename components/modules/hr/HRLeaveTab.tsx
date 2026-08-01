@@ -6,15 +6,13 @@ import { Badge, Field, Input, Modal, PanelHeader, Select, Textarea } from '@/com
 import { DataTable, type ColumnDef } from '@/components/data-table'
 import { Fa } from '@/components/icons'
 import { faCircleExclamation, faCheck, faXmark, faCircleCheck, faCircleXmark } from '@fortawesome/free-solid-svg-icons'
-import { CALENDAR_DAY_TYPES, calcCalendarDays, calcWorkingDays, employeeLeaveTypesFor, isLeaveTypeAllowedForGender, LEAVE_LABELS, type StoreLeaveType } from '@/lib/leave-utils'
+import { CALENDAR_DAY_TYPES, employeeLeaveTypesFor, formatLocalDate, isLeaveTypeAllowedForGender, leaveDaysForRange, LEAVE_LABELS, type StoreLeaveType } from '@/lib/leave-utils'
 
 // Days are always derived from the date range so a request can never claim
 // more (or fewer) days than the dates cover — maternity/paternity count
-// calendar days, everything else working days (Mon–Fri, excl. public holidays).
+// calendar days, everything else working days (Mon–Sat, excl. public holidays).
 function daysForRange(leaveType: string, startDate: string, endDate: string): number {
-  return CALENDAR_DAY_TYPES.includes(leaveType as StoreLeaveType)
-    ? calcCalendarDays(startDate, endDate)
-    : calcWorkingDays(startDate, endDate)
+  return leaveDaysForRange(leaveType as StoreLeaveType, startDate, endDate)
 }
 
 const leaveTypeColors: Record<string, { bg: string; color: string }> = {
@@ -91,17 +89,18 @@ export default function HRLeaveTab() {
   const [showLeaveModal, setShowLeaveModal] = useState(false)
   const [showSelfLeaveModal, setShowSelfLeaveModal] = useState(false)
 
+  const todayLocal = formatLocalDate(new Date())
   const [leaveForm, setLeaveForm] = useState({
     employeeId: '', leaveType: 'annual',
-    startDate: new Date().toISOString().slice(0, 10),
-    endDate: new Date().toISOString().slice(0, 10),
+    startDate: todayLocal,
+    endDate: todayLocal,
     reason: '',
   })
 
   const [selfLeaveForm, setSelfLeaveForm] = useState({
     leaveType: 'annual',
-    startDate: new Date().toISOString().slice(0, 10),
-    endDate: new Date().toISOString().slice(0, 10),
+    startDate: todayLocal,
+    endDate: todayLocal,
     reason: '',
   })
 
@@ -115,6 +114,15 @@ export default function HRLeaveTab() {
     ? selfLeaveBalance.entitlement + selfLeaveBalance.carryForward - selfLeaveBalance.used - selfLeaveBalance.pending
     : null
   const selfLeaveInsufficient = selfLeaveForm.leaveType !== 'unpaid' && selfLeaveAvailable !== null && selfLeaveDays > selfLeaveAvailable
+
+  const hrTargetYear = Number(leaveForm.startDate.slice(0, 4)) || new Date().getFullYear()
+  const hrLeaveBalance = leaveBalances.find(b =>
+    b.employeeId === leaveForm.employeeId && b.leaveType === leaveForm.leaveType && b.year === hrTargetYear,
+  ) ?? null
+  const hrLeaveAvailable = hrLeaveBalance
+    ? hrLeaveBalance.entitlement + hrLeaveBalance.carryForward - hrLeaveBalance.used - hrLeaveBalance.pending
+    : null
+  const hrLeaveInsufficient = leaveForm.leaveType !== 'unpaid' && hrLeaveAvailable !== null && leaveDays > hrLeaveAvailable
 
   const submitLeave = () => {
     const emp = employees.find(e => e.id === leaveForm.employeeId)
@@ -387,15 +395,21 @@ export default function HRLeaveTab() {
             <Field label="Start Date"><Input type="date" value={leaveForm.startDate} onChange={v => setLeaveForm(p => ({ ...p, startDate: v }))} /></Field>
             <Field label="End Date"><Input type="date" value={leaveForm.endDate} onChange={v => setLeaveForm(p => ({ ...p, endDate: v }))} /></Field>
           </div>
-          <div className="rounded-lg p-2 text-[11px]" style={{ background: leaveDays > 0 ? 'var(--success-bg)' : 'var(--danger-bg)', color: leaveDays > 0 ? 'var(--success)' : 'var(--danger)' }}>
+          <div className="rounded-lg p-2 text-[11px]" style={{ background: leaveDays > 0 && !hrLeaveInsufficient ? 'var(--success-bg)' : 'var(--danger-bg)', color: leaveDays > 0 && !hrLeaveInsufficient ? 'var(--success)' : 'var(--danger)' }}>
             {leaveDays > 0
-              ? <>Duration: <strong>{leaveDays} {CALENDAR_DAY_TYPES.includes(leaveForm.leaveType as StoreLeaveType) ? 'calendar' : 'working'} day(s)</strong> (calculated from the selected dates)</>
-              : 'The selected dates contain no leave days — check the date order and that the range is not only weekends/public holidays'}
+              ? <>Duration: <strong>{leaveDays} {CALENDAR_DAY_TYPES.includes(leaveForm.leaveType as StoreLeaveType) ? 'calendar' : 'working'} day(s)</strong> (Mon–Sat working week)</>
+              : 'The selected dates contain no leave days — check the date order and that the range is not only Sunday/public holidays'}
           </div>
+          {hrLeaveAvailable !== null && leaveForm.leaveType !== 'unpaid' && (
+            <div className="rounded-lg p-2 text-[11px] mt-2" style={{ background: hrLeaveInsufficient ? 'var(--danger-bg)' : 'var(--success-bg)', color: hrLeaveInsufficient ? 'var(--danger)' : 'var(--success)' }}>
+              Balance: {Math.max(0, hrLeaveAvailable)} day(s) available · Requesting {leaveDays} day(s)
+              {hrLeaveInsufficient && <> — cannot book more days than available</>}
+            </div>
+          )}
           <Field label="Reason"><Textarea value={leaveForm.reason} onChange={v => setLeaveForm(p => ({ ...p, reason: v }))} /></Field>
           <div className="flex justify-end gap-2">
             <button className="btn-outline" onClick={() => setShowLeaveModal(false)}>Cancel</button>
-            <button className="btn-primary" onClick={submitLeave} disabled={!leaveForm.employeeId || leaveDays <= 0}>Submit Leave</button>
+            <button className="btn-primary" onClick={submitLeave} disabled={!leaveForm.employeeId || leaveDays <= 0 || hrLeaveInsufficient}>Submit Leave</button>
           </div>
         </Modal>
       )}
@@ -417,7 +431,7 @@ export default function HRLeaveTab() {
           <div className="rounded-lg p-2 text-[11px]" style={{ background: selfLeaveDays > 0 ? 'var(--success-bg)' : 'var(--danger-bg)', color: selfLeaveDays > 0 ? 'var(--success)' : 'var(--danger)' }}>
             {selfLeaveDays > 0
               ? <>Requesting <strong>{selfLeaveDays} {CALENDAR_DAY_TYPES.includes(selfLeaveForm.leaveType as StoreLeaveType) ? 'calendar' : 'working'} day(s)</strong> (calculated from the selected dates)</>
-              : 'The selected dates contain no leave days — check the date order and that the range is not only weekends/public holidays'}
+              : 'The selected dates contain no leave days — check the date order and that the range is not only Sunday/public holidays'}
           </div>
           <Field label="Reason / Notes">
             <Textarea value={selfLeaveForm.reason} onChange={v => setSelfLeaveForm(p => ({ ...p, reason: v }))} placeholder="Briefly explain your leave reason" />

@@ -16,15 +16,13 @@ import {
   LEAVE_LABELS, LEAVE_COLORS, LEAVE_ENTITLEMENTS,
   CALENDAR_DAY_TYPES, NOTICE_EXEMPT_TYPES,
   employeeLeaveTypesFor, isLeaveTypeAllowedForGender,
-  calcWorkingDays, calcCalendarDays, noticeDaysGiven, requiredNotice,
+  leaveDaysForRange, formatLocalDate, noticeDaysGiven, requiredNotice,
 } from '@/lib/leave-utils'
 
 // ── Day calc helper (respects calendar vs working days per type) ──────────────
 function calcDaysForType(type: StoreLeaveType, start: string, end: string): number {
   if (!start || !end) return 0
-  return CALENDAR_DAY_TYPES.includes(type)
-    ? calcCalendarDays(start, end)
-    : calcWorkingDays(start, end)
+  return leaveDaysForRange(type, start, end)
 }
 
 export default function LeaveApplication() {
@@ -95,21 +93,24 @@ export default function LeaveApplication() {
   const [confirmAction, setConfirmAction] = useState<null | 'init' | 'closure' | 'expire'>(null)
   const [actionYear, setActionYear] = useState(String(currentYear))
 
-  const computedDays = calcDaysForType(fType, fStart, fEnd)
-  const noticeGiven  = fStart ? noticeDaysGiven(fStart) : 0
-  const noticeReq    = requiredNotice(fType, computedDays)
-  const noticeLack   = noticeReq > 0 && computedDays > 0 && noticeGiven < noticeReq
-
-  const pendingAll  = managedLeaves.filter(r => r.status === 'pending_hr')
-  const filteredAll = adminFilter === 'all'
-    ? managedLeaves
-    : managedLeaves.filter(r => r.status === adminFilter)
-
   const getBalance = (type: StoreLeaveType) => {
     const b = myBalances.find(b => b.leaveType === type)
     if (!b) return null
     return { ...b, available: b.entitlement + b.carryForward - b.used - b.pending }
   }
+
+  const computedDays = calcDaysForType(fType, fStart, fEnd)
+  const noticeGiven  = fStart ? noticeDaysGiven(fStart) : 0
+  const noticeReq    = requiredNotice(fType, computedDays)
+  const noticeLack   = noticeReq > 0 && computedDays > 0 && noticeGiven < noticeReq
+  const balanceForType = getBalance(fType)
+  const balanceLack = fType !== 'unpaid' && !!balanceForType && computedDays > 0 && computedDays > balanceForType.available
+  const todayLocal = formatLocalDate(new Date())
+
+  const pendingAll  = managedLeaves.filter(r => r.status === 'pending_hr')
+  const filteredAll = adminFilter === 'all'
+    ? managedLeaves
+    : managedLeaves.filter(r => r.status === adminFilter)
 
   // Oct warning: annual leave >7 days remaining after 1 Oct
   const annualBal        = getBalance('annual')
@@ -120,6 +121,10 @@ export default function LeaveApplication() {
     if (!fStart || !fEnd) { showToast('Select start and end dates', 'error'); return }
     if (computedDays <= 0) { showToast('End date must be after start date', 'error'); return }
     if (!fReason.trim()) { showToast('Please provide a reason', 'error'); return }
+    if (balanceLack) {
+      showToast(`Insufficient ${fType.replace(/_/g, ' ')} balance — ${balanceForType?.available ?? 0} day(s) available, ${computedDays} requested`, 'error')
+      return
+    }
     setSubmitting(true)
     try {
       addLeaveRequest({
@@ -574,35 +579,39 @@ export default function LeaveApplication() {
               <Field label="Start Date *">
                 <input className="form-input" type="date" value={fStart}
                   onChange={e => setFStart(e.target.value)}
-                  min={new Date().toISOString().slice(0, 10)} />
+                  min={todayLocal} />
               </Field>
               <Field label="End Date *">
                 <input className="form-input" type="date" value={fEnd}
                   onChange={e => setFEnd(e.target.value)}
-                  min={fStart || new Date().toISOString().slice(0, 10)} />
+                  min={fStart || todayLocal} />
               </Field>
 
               {computedDays > 0 && (
-                <div className={`col-span-2 px-3 py-2 rounded-lg text-[11px] ${noticeLack ? 'bg-red-50 border-red-200 text-red-700' : 'bg-indigo-50 border-indigo-200 text-indigo-800'}`}
+                <div className={`col-span-2 px-3 py-2 rounded-lg text-[11px] ${noticeLack || balanceLack ? 'bg-red-50 border-red-200 text-red-700' : 'bg-indigo-50 border-indigo-200 text-indigo-800'}`}
                   style={{ border: '1px solid' }}>
                   <p>
                     <span className="font-bold">{computedDays} {CALENDAR_DAY_TYPES.includes(fType) ? 'calendar' : 'working'} day{computedDays !== 1 ? 's' : ''}</span>
-                    {(() => {
-                      const bal = getBalance(fType)
-                      if (!bal) return null
-                      const ok = bal.available >= computedDays
-                      return <span className="ml-2" style={{ color: ok ? 'var(--success)' : 'var(--danger)' }}>
-                        · {bal.available} day{bal.available !== 1 ? 's' : ''} available {ok ? '✓' : '⚠ Insufficient balance'}
+                    {balanceForType && (
+                      <span className="ml-2" style={{ color: balanceLack ? 'var(--danger)' : 'var(--success)' }}>
+                        · {balanceForType.available} day{balanceForType.available !== 1 ? 's' : ''} available {balanceLack ? '⚠ Insufficient balance' : '✓'}
                       </span>
-                    })()}
+                    )}
                   </p>
+                  <p className="mt-0.5" style={{ color: '#6B7280' }}>Working days are Monday–Saturday (Sunday and public holidays excluded).</p>
+                  {balanceLack && (
+                    <p className="mt-1">
+                      <Fa icon={faTriangleExclamation} className="mr-1" />
+                      You have no remaining days for this leave type — reduce the date range or contact HR.
+                    </p>
+                  )}
                   {noticeLack && (
                     <p className="mt-1">
                       <Fa icon={faTriangleExclamation} className="mr-1" />
                       Only {noticeGiven} working day{noticeGiven !== 1 ? 's' : ''} notice given — {noticeReq} required for this request.
                     </p>
                   )}
-                  {!noticeLack && noticeReq > 0 && noticeGiven > 0 && (
+                  {!noticeLack && !balanceLack && noticeReq > 0 && noticeGiven > 0 && (
                     <p className="mt-0.5" style={{ color: 'var(--success)' }}>
                       Notice: {noticeGiven} working days given ✓
                     </p>
@@ -629,9 +638,13 @@ export default function LeaveApplication() {
               <button className="btn-outline" onClick={() => setShowForm(false)}>Cancel</button>
               <button
                 className="btn-primary"
-                disabled={submitting || computedDays <= 0 || !fReason.trim() || noticeLack}
+                disabled={submitting || computedDays <= 0 || !fReason.trim() || noticeLack || balanceLack}
                 onClick={handleSubmit}
-                title={noticeLack ? `Insufficient notice period (${noticeGiven}/${noticeReq} working days)` : undefined}
+                title={
+                  balanceLack ? 'Insufficient leave balance'
+                    : noticeLack ? `Insufficient notice period (${noticeGiven}/${noticeReq} working days)`
+                      : undefined
+                }
               >
                 {submitting ? 'Submitting...' : 'Submit Application'}
               </button>
