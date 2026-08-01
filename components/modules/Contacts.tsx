@@ -378,7 +378,7 @@ export default function Contacts() {
         subtitle="Companies, individuals and vendors"
         icon={<Fa icon={faUsers} />}
         count={total}
-        color="#8B5CF6"
+        color="var(--navy)"
         primaryAction={
           <PrimaryActionButton icon={<Fa icon={faPlus} />} onClick={() => openNew('individual')} hideLabelOnMobile={false}>
             Add contact
@@ -631,7 +631,7 @@ export default function Contacts() {
                   {[
                     { label: 'Total Revenue', value: fmtKes(totalRevenue),         sub: 'invoices paid',  color: 'var(--success)' },
                     { label: 'Open Balance',  value: fmtKes(openBalance),          sub: 'outstanding',    color: openBalance > 0 ? 'var(--danger)' : 'var(--success)' },
-                    { label: 'Orders',        value: String(clientSOs.length + clientPOS.length), sub: 'sales & POS', color: '#8B5CF6' },
+                    { label: 'Orders',        value: String(clientSOs.length + clientPOS.length), sub: 'sales & POS', color: 'var(--navy)' },
                     { label: 'Repairs',       value: String(clientRepairs.length), sub: fmtKes(repairRevenue) + ' billed', color: 'var(--primary)' },
                   ].map(s => (
                     <div key={s.label} className="rounded-xl p-3" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-lt)' }}>

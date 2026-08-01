@@ -12,20 +12,21 @@ import { Badge, Modal, Field, Input, Select, PanelHeader, SearchPicker, ModuleSk
 import { CustomerPickerField } from '@/components/tradein/CustomerPickerField'
 import { SerialReturnPicker } from '@/components/tradein/SerialReturnPicker'
 import { StatusBadge } from '@/components/erp'
+import { Fa, faBox, faCheck, faMoneyBillWave, faTrash, faUpload } from '@/components/icons'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const DEST_OPTS = (['warehouse', 'shop'] as LocationId[]).map(k => ({ value: k, label: LOCATIONS[k].name }))
 
 const CONDITION_OPTS = [
-  { value: 'good',  label: '🟢 Good — sellable as-is' },
-  { value: 'fair',  label: '🟡 Fair — needs minor work' },
-  { value: 'poor',  label: '🔴 Poor — needs refurbishment' },
+  { value: 'good',  label: 'Good — sellable as-is' },
+  { value: 'fair',  label: 'Fair — needs minor work' },
+  { value: 'poor',  label: 'Poor — needs refurbishment' },
 ]
 
 const PAY_OPTS = [
-  { value: 'cash',          label: '💵 Cash' },
-  { value: 'bank_transfer', label: '🏦 Bank Transfer' },
-  { value: 'mpesa',         label: '📱 M-Pesa' },
+  { value: 'cash',          label: 'Cash' },
+  { value: 'bank_transfer', label: 'Bank Transfer' },
+  { value: 'mpesa',         label: 'M-Pesa' },
 ]
 
 const norm = (value: unknown) => String(value ?? '').trim().toLowerCase()
@@ -435,10 +436,26 @@ function BuyBackTab() {
           {bb.stockedByName && <p style={{ fontSize: 10, color: 'var(--text-4)' }}>Stocked by {bb.stockedByName} on {fmtDate(bb.stockedDate!)}</p>}
 
           <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
-            {bb.status === 'draft' && canApprove && <button className="btn-primary text-[11px]" onClick={() => approveBuyBack(bb.id)}>✓ Approve</button>}
-            {bb.status === 'approved' && <button className="btn-primary text-[11px]" onClick={() => setPayModal(bb.id)}>💰 Record Payment</button>}
-            {bb.status === 'paid' && <button className="btn-primary text-[11px]" onClick={() => stockBuyBack(bb.id)}>📦 Add to Stock</button>}
-            {bb.status === 'draft' && <button className="btn-secondary text-[11px]" onClick={() => { deleteBuyBack(bb.id); setDetail(null) }}>🗑 Delete</button>}
+            {bb.status === 'draft' && canApprove && (
+              <button type="button" className="btn-primary text-[11px] flex items-center gap-1.5" onClick={() => approveBuyBack(bb.id)}>
+                <Fa icon={faCheck} aria-hidden="true" /> Approve
+              </button>
+            )}
+            {bb.status === 'approved' && (
+              <button type="button" className="btn-primary text-[11px] flex items-center gap-1.5" onClick={() => setPayModal(bb.id)}>
+                <Fa icon={faMoneyBillWave} aria-hidden="true" /> Record Payment
+              </button>
+            )}
+            {bb.status === 'paid' && (
+              <button type="button" className="btn-primary text-[11px] flex items-center gap-1.5" onClick={() => stockBuyBack(bb.id)}>
+                <Fa icon={faBox} aria-hidden="true" /> Add to Stock
+              </button>
+            )}
+            {bb.status === 'draft' && (
+              <button type="button" className="btn-secondary text-[11px] flex items-center gap-1.5" onClick={() => { deleteBuyBack(bb.id); setDetail(null) }}>
+                <Fa icon={faTrash} aria-hidden="true" /> Delete
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -450,8 +467,10 @@ function BuyBackTab() {
       <PanelHeader title="Buy-Backs" count={displayed.length}>
         <input aria-label="Search buy-backs" className="form-input text-[11px] py-1.5" style={{ width: 200 }}
           placeholder="Search ref, customer…" value={search} onChange={e => setSearch(e.target.value)} />
-        <button className="btn-secondary text-[11px]" onClick={() => setShowBulk(true)}>📤 Bulk Upload</button>
-        <button className="btn-primary text-[11px]" onClick={() => setShowNew(true)}>+ New Buy-Back</button>
+        <button type="button" className="btn-secondary text-[11px] flex items-center gap-1.5" onClick={() => setShowBulk(true)}>
+          <Fa icon={faUpload} aria-hidden="true" /> Bulk Upload
+        </button>
+        <button type="button" className="btn-primary text-[11px]" onClick={() => setShowNew(true)}>+ New Buy-Back</button>
       </PanelHeader>
 
       {displayed.length === 0
@@ -843,7 +862,7 @@ function DonationTab() {
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
             <div>
               <p style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-1)' }}>{don.ref}</p>
-              <p style={{ fontSize: 12, color: 'var(--text-4)' }}>{don.type === 'in' ? '📥 Donation In' : '📤 Donation Out'} · {don.party} · {fmtDate(don.date)}</p>
+              <p style={{ fontSize: 12, color: 'var(--text-4)' }}>{don.type === 'in' ? 'Donation In' : 'Donation Out'} · {don.party} · {fmtDate(don.date)}</p>
             </div>
             <StatusPill status={don.status} />
           </div>
@@ -871,9 +890,9 @@ function DonationTab() {
           {don.status === 'draft' && (
             <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
               <button className="btn-primary text-[11px]" onClick={() => confirmDonation(don.id)}>
-                {don.type === 'in' ? '📥 Receive into Stock' : '📤 Confirm Donation Out'}
+                {don.type === 'in' ? 'Receive into Stock' : 'Confirm Donation Out'}
               </button>
-              <button className="btn-secondary text-[11px]" onClick={() => { deleteDonation(don.id); setDetail(null) }}>🗑 Delete</button>
+              <button type="button" className="btn-secondary text-[11px] flex items-center gap-1.5" onClick={() => { deleteDonation(don.id); setDetail(null) }}><Fa icon={faTrash} aria-hidden="true" /> Delete</button>
             </div>
           )}
         </div>
@@ -886,7 +905,7 @@ function DonationTab() {
       <PanelHeader title="Donations" count={displayedDon.length}>
         <input aria-label="Search donations" className="form-input text-[11px] py-1.5" style={{ width: 180 }}
           placeholder="Search ref, party…" value={donSearch} onChange={e => setDonSearch(e.target.value)} />
-        <button className="btn-secondary text-[11px]" onClick={() => setShowBulk(true)}>📤 Bulk Upload</button>
+        <button type="button" className="btn-secondary text-[11px] flex items-center gap-1.5" onClick={() => setShowBulk(true)}><Fa icon={faUpload} aria-hidden="true" /> Bulk Upload</button>
         <button className="btn-primary text-[11px]" onClick={() => setShowNew(true)}>+ New Donation</button>
       </PanelHeader>
 
@@ -910,7 +929,7 @@ function DonationTab() {
                   <td style={{ padding: '10px 12px', fontWeight: 700, color: 'var(--navy)' }}>{don.ref}</td>
                   <td style={{ padding: '10px 12px' }}>
                     <span style={{ fontSize: 10, padding: '2px 7px', borderRadius: 20, fontWeight: 700, background: don.type === 'in' ? 'var(--primary-light)' : '#FEF9C3', color: don.type === 'in' ? 'var(--info-text)' : '#854D0E' }}>
-                      {don.type === 'in' ? '📥 In' : '📤 Out'}
+                      {don.type === 'in' ? 'In' : 'Out'}
                     </span>
                   </td>
                   <td style={{ padding: '10px 12px' }}>{don.party}</td>
@@ -976,7 +995,7 @@ function DonationTab() {
                         <tr key={i} style={{ borderBottom: '1px solid var(--bg-muted)', background: row.error ? '#FFF7F7' : 'transparent' }}>
                           <td style={{ padding: '7px 10px' }}>
                             <span style={{ fontSize: 10, padding: '2px 7px', borderRadius: 20, fontWeight: 700, background: row.type === 'in' ? 'var(--primary-light)' : '#FEF9C3', color: row.type === 'in' ? 'var(--info-text)' : '#854D0E' }}>
-                              {row.type === 'in' ? '📥 In' : '📤 Out'}
+                              {row.type === 'in' ? 'In' : 'Out'}
                             </span>
                           </td>
                           <td style={{ padding: '7px 10px', maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.party || <span style={{ color: 'var(--text-4)' }}>—</span>}</td>
@@ -1016,7 +1035,7 @@ function DonationTab() {
               {(['in', 'out'] as const).map(t => (
                 <button key={t} onClick={() => setDonType(t)}
                   style={{ fontSize: 11, padding: '7px 16px', borderRadius: 8, cursor: 'pointer', border: 'none', background: donType === t ? 'var(--navy)' : 'var(--bg-muted)', color: donType === t ? '#fff' : 'var(--text-4)', fontWeight: donType === t ? 700 : 400 }}>
-                  {t === 'in' ? '📥 Donation In (we receive)' : '📤 Donation Out (we give)'}
+                  {t === 'in' ? 'Donation In (we receive)' : 'Donation Out (we give)'}
                 </button>
               ))}
             </div>
@@ -1343,7 +1362,7 @@ function ExchangeTab() {
               </div>
             </div>
             <div style={{ border: '1px solid #DCFCE7', borderRadius: 10, padding: 12 }}>
-              <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--success-text)', marginBottom: 8 }}>📦 New Items for Customer</p>
+              <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--success-text)', marginBottom: 8 }}>New items for customer</p>
               {exc.newLines.map(l => (
                 <div key={l.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, marginBottom: 4 }}>
                   <span>{l.productName} ×{l.qty}</span><span style={{ fontWeight: 600 }}>{fmtKes(l.unitPrice * l.qty)}</span>
@@ -1365,7 +1384,7 @@ function ExchangeTab() {
           {exc.notes && <p style={{ fontSize: 11, color: 'var(--text-4)', marginBottom: 12 }}>Note: {exc.notes}</p>}
 
           <div style={{ display: 'flex', gap: 8 }}>
-            {exc.status === 'draft' && canApprove && <button className="btn-primary text-[11px]" onClick={() => approveExchange(exc.id)}>✓ Approve</button>}
+            {exc.status === 'draft' && canApprove && <button className="btn-primary text-[11px]" onClick={() => approveExchange(exc.id)}><Fa icon={faCheck} aria-hidden="true" /> Approve</button>}
             {exc.status === 'approved' && <button className="btn-primary text-[11px]" onClick={() => completeExchange(exc.id)}>✅ Complete Exchange</button>}
             {['draft', 'approved'].includes(exc.status) && <button className="btn-secondary text-[11px]" onClick={() => { cancelExchange(exc.id); setDetail(null) }}>✕ Cancel</button>}
           </div>
@@ -1379,7 +1398,7 @@ function ExchangeTab() {
       <PanelHeader title="Client Exchanges" count={displayedExc.length}>
         <input aria-label="Search client exchanges" className="form-input text-[11px] py-1.5" style={{ width: 200 }}
           placeholder="Search ref, customer…" value={excSearch} onChange={e => setExcSearch(e.target.value)} />
-        <button className="btn-secondary text-[11px]" onClick={() => setShowBulk(true)}>📤 Bulk Upload</button>
+        <button type="button" className="btn-secondary text-[11px] flex items-center gap-1.5" onClick={() => setShowBulk(true)}><Fa icon={faUpload} aria-hidden="true" /> Bulk Upload</button>
         <button className="btn-primary text-[11px]" onClick={() => setShowNew(true)}>+ New Exchange</button>
       </PanelHeader>
 
@@ -1494,7 +1513,7 @@ function ExchangeTab() {
 
             <div style={{ border: '1px solid #DCFCE7', borderRadius: 10, padding: 12, marginTop: 12 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-                <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--success-text)' }}>📦 New Items for Customer</p>
+                <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--success-text)' }}>New items for customer</p>
                 <button className="btn-secondary text-[10px] py-1" onClick={() => setNewLines(l => [...l, { productId: '', productName: '', qty: 1, unitPrice: 0, serialIds: [] }])}>+ Add</button>
               </div>
               {newLines.map((line, i) => (

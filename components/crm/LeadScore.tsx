@@ -13,6 +13,8 @@
  */
 
 import { Opportunity, Client, ContactPerson } from '@/lib/store'
+import { Fa, faFire, faSun, faSnowflake } from '@/components/icons'
+import type { IconProp } from '@fortawesome/fontawesome-svg-core'
 
 export interface LeadScoreProps {
   opportunity: Opportunity
@@ -98,10 +100,10 @@ const calculateLeadScore = (props: LeadScoreProps): number => {
 }
 
 const getScoreColor = (score: number): string => {
-  if (score >= 80) return '#12B76A' // Green - Hot
-  if (score >= 60) return '#fec84b' // Yellow - Warm
-  if (score >= 40) return '#F79009' // Orange - Cold
-  return '#F04438' // Red - Ice Cold
+  if (score >= 80) return 'var(--success)'
+  if (score >= 60) return 'var(--warning)'
+  if (score >= 40) return 'var(--warning-text)'
+  return 'var(--danger)'
 }
 
 const getScoreLabel = (score: number): string => {
@@ -111,11 +113,10 @@ const getScoreLabel = (score: number): string => {
   return 'Ice Cold'
 }
 
-const getScoreIcon = (score: number): string => {
-  if (score >= 80) return '🔥'
-  if (score >= 60) return '☀️'
-  if (score >= 40) return '❄️'
-  return '🧊'
+const getScoreIcon = (score: number): IconProp => {
+  if (score >= 80) return faFire
+  if (score >= 60) return faSun
+  return faSnowflake
 }
 
 export default function LeadScore(props: LeadScoreProps) {
@@ -127,8 +128,8 @@ export default function LeadScore(props: LeadScoreProps) {
 
   if (size === 'sm') {
     return (
-      <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-semibold" style={{ background: `${color}18`, color, border: `1px solid ${color}30` }}>
-        <span>{icon}</span>
+      <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-semibold" style={{ background: 'var(--bg-muted)', color, border: '1px solid var(--border-lt)' }}>
+        <Fa icon={icon} aria-hidden="true" />
         <span>{score}</span>
       </div>
     )
@@ -139,7 +140,7 @@ export default function LeadScore(props: LeadScoreProps) {
       <div className="bg-[#0c0e14] border border-white/10 rounded-lg p-4">
         <div className="flex items-center justify-between mb-3">
           <div className="text-sm text-[#98a2b3]">Lead Quality Score</div>
-          <span className="text-2xl">{icon}</span>
+          <span className="text-2xl" aria-hidden="true"><Fa icon={icon} /></span>
         </div>
         
         <div className="flex items-baseline gap-2 mb-2">
@@ -188,8 +189,8 @@ export default function LeadScore(props: LeadScoreProps) {
 
   // Default: md size
 return (
-    <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg" style={{ background: `${color}18`, border: `1px solid ${color}30` }}>
-      <span className="text-lg">{icon}</span>
+    <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg" style={{ background: 'var(--bg-muted)', border: '1px solid var(--border-lt)' }}>
+      <span className="text-lg" aria-hidden="true"><Fa icon={icon} style={{ color }} /></span>
       <div>
         <div className="text-sm font-bold" style={{ color }}>
           {score} / 100
@@ -212,7 +213,7 @@ export function LeadScoreIndicator({ score }: { score: number }) {
   
   return (
     <div className="inline-flex items-center gap-1" title={`Lead Score: ${score}`}>
-      <span>{icon}</span>
+      <span aria-hidden="true"><Fa icon={icon} style={{ color }} /></span>
       <span className="text-xs font-semibold" style={{ color }}>
         {score}
       </span>

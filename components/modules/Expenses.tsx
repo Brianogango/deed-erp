@@ -10,8 +10,9 @@ import { canUserApproveExpenseStep } from '@/lib/expense-approval-chain'
 import { ModuleSkeleton, useMounted, RecordCard, ModuleHeader, TabBar } from '@/components/ui'
 import { PrimaryActionButton, StatusBadge } from '@/components/erp'
 import { DataTable, type ColumnDef, type PrimaryFilterConfig } from '@/components/data-table'
-import { Fa } from '@/components/icons'
+import { Fa, faBox, faCar, faComputer, faDesktop, faDroplet, faFileLines, faLightbulb, faPrint, faScrewdriverWrench, faUtensils } from '@/components/icons'
 import { faHourglassHalf, faMoneyBillWave, faCreditCard, faChartBar, faClipboardList, faCircleCheck, faPlus } from '@fortawesome/free-solid-svg-icons'
+import type { IconProp } from '@fortawesome/fontawesome-svg-core'
 import { readGuardedImageAsDataUrl, validateImageUpload } from '@/lib/client-image-guard'
 
 // ── Constants ────────────────────────────────────────────────────────────────
@@ -30,10 +31,22 @@ const STATUS_META: Record<Expense['status'], { label: string; badgeStatus: strin
   reimbursed:  { label: 'Reimbursed',     badgeStatus: 'paid' },
 }
 
-const CAT_ICONS: Record<string, string> = {
-  courier: '📦', office_supplies: '🗂️', water: '💧', printing: '🖨️',
-  transport: '🚗', meals: '🍽️', utilities: '💡', software: '💻',
-  hardware: '🖥️', maintenance: '🔧', other: '📝',
+const CAT_ICONS: Record<string, IconProp> = {
+  courier: faBox,
+  office_supplies: faClipboardList,
+  water: faDroplet,
+  printing: faPrint,
+  transport: faCar,
+  meals: faUtensils,
+  utilities: faLightbulb,
+  software: faComputer,
+  hardware: faDesktop,
+  maintenance: faScrewdriverWrench,
+  other: faFileLines,
+}
+
+function catIcon(v: string) {
+  return CAT_ICONS[v] ?? faFileLines
 }
 
 function catLabel(v: string) { return EXPENSE_CATEGORIES.find(c => c.value === v)?.label ?? v }
@@ -458,7 +471,7 @@ function ExpensesContent() {
                   <select aria-label="Expense category" className="form-input w-full text-[12px]" value={form.category}
                     onChange={e => setForm(f => ({ ...f, category: e.target.value as ExpenseCategory }))}>
                     {EXPENSE_CATEGORIES.map(c => (
-                      <option key={c.value} value={c.value}>{CAT_ICONS[c.value]} {c.label}</option>
+                      <option key={c.value} value={c.value}>{c.label}</option>
                     ))}
                   </select>
                 </div>
@@ -608,7 +621,7 @@ function ExpensesContent() {
               <div className="rounded-xl p-3 mb-4 space-y-1.5" style={{ background: 'var(--bg-surface)', border: '1px solid var(--bg-muted)' }}>
                 <div className="flex justify-between text-[12px]">
                   <span className="text-t3">Category</span>
-                  <span className="font-semibold">{CAT_ICONS[exp.category]} {catLabel(exp.category)}</span>
+                  <span className="font-semibold inline-flex items-center gap-1.5"><Fa icon={catIcon(exp.category)} aria-hidden="true" />{catLabel(exp.category)}</span>
                 </div>
                 <div className="flex justify-between text-[12px]">
                   <span className="text-t3">Date</span>
@@ -898,7 +911,7 @@ function ExpenseTable({
       key: 'category', label: 'Category', priority: 2, width: '140px',
       render: exp => (
         <span className="text-[var(--text-2)] font-semibold flex items-center gap-2 whitespace-nowrap">
-          <span className="text-base">{CAT_ICONS[exp.category]}</span>
+          <span className="text-base text-t3" aria-hidden="true"><Fa icon={catIcon(exp.category)} /></span>
           {catLabel(exp.category)}
         </span>
       ),
