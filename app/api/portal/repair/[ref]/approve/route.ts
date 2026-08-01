@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { approvalDecisions } from '@/lib/portal-repairs'
 import { lookupRepair } from '@/lib/portal-repair-server'
+import { roundMoney, settlementAfterReapproval } from '@/lib/portal-payment'
 import { saveStoreKeys, loadAppState } from '@/lib/server-store'
 import { checkRateLimit } from '@/lib/rate-limit'
 import { phoneMatches } from '@/lib/portal-verify'
@@ -11,10 +12,6 @@ type ItemDecision = { lineId: string; decision: 'approved' | 'declined' | 'defer
 
 function lineKey(line: any, index: number) {
   return String(line?.id ?? index)
-}
-
-function roundMoney(n: number) {
-  return Math.round((Number(n) || 0) * 100) / 100
 }
 
 export async function POST(
@@ -90,9 +87,12 @@ export async function POST(
   approvalDecisions.set(ref.toUpperCase(), decision)
   await saveStoreKeys({ [`portal_approval_${ref.toUpperCase()}`]: JSON.stringify(decision) })
 
+  // Clear revision diff once the customer acts — it must not keep driving
+  // "awaiting revision" payment suppression after re-approval.
+  const { changeSummary: _clearedChangeSummary, prevTotal: _clearedPrevTotal, ...quoteWithoutRevision } = targetRepair.quote ?? {}
   targetRepair.status = approved ? 'approved' : 'declined'
   targetRepair.quote = {
-    ...targetRepair.quote,
+    ...quoteWithoutRevision,
     lines: linesWithDecisions,
     partiallyApproved,
     approvedTotal: approved ? approvedTotal : 0,
@@ -100,6 +100,8 @@ export async function POST(
     approvedBy: approved ? 'customer' : undefined,
     rejectedDate: approved ? undefined : date,
     rejectionReason: approved ? undefined : reason,
+    changeSummary: undefined,
+    prevTotal: undefined,
   }
 
   if (approved) {
@@ -154,13 +156,37 @@ export async function POST(
         // Reuse the invoice from a previous approval instead of duplicating it.
         const existingInvoiceId = targetRepair.linkedInvoiceId ?? targetRepair.invoiceId
         let invoice = existingInvoiceId ? await prisma.invoice.findUnique({ where: { id: existingInvoiceId } }) : null
+        // Preserve prior payments across quote revisions (e.g. paid 38k, revised to 17.2k).
+        const preservedAmountPaid = roundMoney(
+          Number(invoice?.amountPaid ?? 0)
+          || Number((appState['deed_invoices'] as any[])?.find((inv: any) => inv.id === existingInvoiceId)?.amountPaid ?? 0)
+          || Number(targetRepair.paymentConfirmationAmount ?? 0)
+        )
+        const settlement = settlementAfterReapproval({
+          approvedTotal,
+          amountPaid: preservedAmountPaid,
+          priorConfirmationStatus: targetRepair.paymentConfirmationStatus,
+        })
+        if (settlement.nextConfirmationStatus !== undefined) {
+          targetRepair.paymentConfirmationStatus = settlement.nextConfirmationStatus
+        }
+        if (settlement.creditBalance > 0) {
+          const creditNote = `Prior payment exceeds revised total by KES ${settlement.creditBalance.toLocaleString('en-KE')} — treat as customer credit/overpayment.`
+          targetRepair.notes = [targetRepair.notes, creditNote].filter(Boolean).join('\n')
+        } else if (settlement.residualDue > 0 && preservedAmountPaid > 0) {
+          const residualNote = `Prior payment of KES ${preservedAmountPaid.toLocaleString('en-KE')} applied; residual due KES ${settlement.residualDue.toLocaleString('en-KE')}.`
+          targetRepair.notes = [targetRepair.notes, residualNote].filter(Boolean).join('\n')
+        }
+
         if (invoice) {
           invoice = await prisma.invoice.update({
             where: { id: invoice.id },
             data: {
               saleOrderId: saleOrder.id, status: 'approved' as any,
               subtotal: approvedSubtotal, taxAmount: approvedTax, totalAmount: approvedTotal,
-              notes: `Updated from repair quote approval: ${ref}${partiallyApproved ? ' (approved items only)' : ''}`,
+              // Explicitly keep amountPaid — never reset on re-approval.
+              amountPaid: preservedAmountPaid,
+              notes: `Updated from repair quote approval: ${ref}${partiallyApproved ? ' (approved items only)' : ''}${settlement.creditBalance > 0 ? `; overpayment/credit KES ${settlement.creditBalance}` : settlement.residualDue > 0 && preservedAmountPaid > 0 ? `; residual due KES ${settlement.residualDue}` : ''}`,
               items: { deleteMany: {}, create: invoiceItems },
             },
           })
@@ -169,7 +195,7 @@ export async function POST(
           invoice = await prisma.invoice.create({
             data: {
               invoiceNumber, clientId: prismaClient.id, createdById: systemUser.id, saleOrderId: saleOrder.id, status: 'approved', invoiceDate: new Date(date), dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), subject: `Repair Invoice — ${ref}`,
-              subtotal: approvedSubtotal, taxAmount: approvedTax, discountAmount: 0, totalAmount: approvedTotal, amountPaid: 0,
+              subtotal: approvedSubtotal, taxAmount: approvedTax, discountAmount: 0, totalAmount: approvedTotal, amountPaid: preservedAmountPaid,
               notes: `Auto-created from repair quote approval: ${ref}${partiallyApproved ? ' (approved items only)' : ''}`,
               items: { create: invoiceItems }
             }
@@ -187,16 +213,19 @@ export async function POST(
           id: invoice.id, ref: invoice.invoiceNumber, type: 'customer_invoice', status: 'posted', partnerId: prismaClient.id, partnerName: customerName, date,
           dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
           lines: approvedLines.map((line: any) => ({ id: crypto.randomUUID(), description: line.description ?? 'Repair Service', qty: Number(line.qty ?? 1), unitPrice: Number(line.unitPrice ?? 0), taxRate: 0, subtotal: Number(line.subtotal ?? line.unitPrice ?? 0) })),
-          subtotal: approvedSubtotal, taxTotal: approvedTax, total: approvedTotal, amountPaid: 0, saleOrderId: saleOrder.id, repairId: targetRepair.id,
+          subtotal: approvedSubtotal, taxTotal: approvedTax, total: approvedTotal, amountPaid: preservedAmountPaid, saleOrderId: saleOrder.id, repairId: targetRepair.id,
           notes: `Auto-created from approved repair quote lines: ${ref}`,
         }
         // Replace an existing app-state copy in place — never append a duplicate.
+        // Always preserve the higher of prior app-state paid vs Prisma/confirmation paid.
         const invoiceIdx = existingInvoices.findIndex((inv: any) => inv.id === invoice!.id)
         const nextInvoices = invoiceIdx >= 0
-          ? existingInvoices.map((inv: any, i: number) => i === invoiceIdx ? { ...inv, ...invoiceForAppState, amountPaid: Number(inv.amountPaid ?? 0) } : inv)
+          ? existingInvoices.map((inv: any, i: number) => i === invoiceIdx
+            ? { ...inv, ...invoiceForAppState, amountPaid: Math.max(Number(inv.amountPaid ?? 0), preservedAmountPaid) }
+            : inv)
           : [invoiceForAppState, ...existingInvoices]
         await saveStoreKeys({ 'deed_invoices': JSON.stringify(nextInvoices) })
-        console.log(`[APPROVE] Upserted SO: ${saleOrder.orderNumber}, Invoice: ${invoice.invoiceNumber}, approved total: ${approvedTotal}`)
+        console.log(`[APPROVE] Upserted SO: ${saleOrder.orderNumber}, Invoice: ${invoice.invoiceNumber}, approved total: ${approvedTotal}, amountPaid: ${preservedAmountPaid}, residual: ${settlement.residualDue}`)
       }
     } catch (err) {
       console.error('[APPROVE] Error creating Prisma SO/Invoice:', err)
