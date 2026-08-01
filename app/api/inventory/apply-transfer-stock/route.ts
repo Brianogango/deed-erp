@@ -1,19 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from '@/lib/auth/server'
-import { hasPermission } from '@/lib/auth/authorization'
 import { applyTransferStockMutation } from '@/lib/inventory/stock-transactions'
 
 export const dynamic = 'force-dynamic'
 
+const TRANSFER_ROLES = new Set([
+  'director', 'admin_officer', 'inventory_officer', 'technical_lead',
+])
+
 export async function POST(request: NextRequest) {
   const session = await getServerSession()
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  if (!hasPermission(session.user, 'manageInventory')) {
-    // Fall back to common inventory roles when permission helper lacks the key
-    const role = String(session.user.role)
-    if (!['director', 'admin_officer', 'inventory_officer', 'technical_lead'].includes(role)) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-    }
+  if (!TRANSFER_ROLES.has(String(session.user.role))) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
   const body = await request.json().catch(() => null) as {
