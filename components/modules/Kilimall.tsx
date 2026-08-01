@@ -8,7 +8,7 @@ import { useRouter } from 'next/navigation'
 import { Badge, PanelHeader, Field, Input, Select, Modal, Textarea, ModuleSkeleton, TabBar, ModuleHeader } from '@/components/ui'
 import { PrimaryActionButton } from '@/components/erp'
 import { DataTable, type ColumnDef, type PrimaryFilterConfig } from '@/components/data-table'
-import * as XLSX from 'xlsx'
+import { loadXlsx } from '@/lib/xlsx-lazy'
 import { guardSpreadsheetFile, guardSpreadsheetRows, SpreadsheetGuardError } from '@/lib/spreadsheet-guard'
 import { Fa } from '@/components/icons'
 import { faCartShopping, faPlus } from '@fortawesome/free-solid-svg-icons'
@@ -380,8 +380,9 @@ export default function Kilimall() {
       showToast(err instanceof SpreadsheetGuardError ? err.message : 'File too large', 'error'); return
     }
     const reader = new FileReader()
-    reader.onload = (e) => {
+    reader.onload = async (e) => {
       try {
+        const XLSX = await loadXlsx()
         const wb = XLSX.read(e.target?.result, { type: 'binary' })
         const ws = wb.Sheets[wb.SheetNames[0]]
         const rows = XLSX.utils.sheet_to_json<{ 'Order ID'?: string; 'Amount'?: number; 'Status'?: string }>(ws)

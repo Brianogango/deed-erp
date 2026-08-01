@@ -4,6 +4,7 @@ import { createContext, useContext, useState, useCallback, useEffect, ReactNode,
 import { requestCreateUser, requestDeleteUser, requestUpdateUser, requestDeactivateUser, requestReactivateUser } from '@/lib/auth/client-users'
 import { canManageHRRole, getFirstAllowedModule, hasModuleAccess as userHasModuleAccess, normalizeClientRole } from '@/lib/auth/access'
 import { mergeCatalogProducts } from '@/lib/catalog-merge'
+import { bootApiGroupsForRoute, remainingBootApiGroups, type BootApiGroup } from '@/lib/boot-apis'
 import { documentMoneySnapshot, FUNCTIONAL_CURRENCY } from '@/lib/currency'
 import { needsSpecialPricingApproval, resolveListPrice } from '@/lib/pricing/pricelist'
 import type { CreateUserInput, ModuleId as AuthModuleId, PublicUser, UpdateUserInput, UserRole as AuthUserRole } from '@/lib/auth/types'
@@ -4313,15 +4314,17 @@ export function StoreProvider({
     // (common after creating an outsource job on another tab/device), pull/merge
     // server truth so Jobs lists stay complete.
     const reconcileCriticalVisibilityKeys = async () => {
-      await Promise.all(
-        CRITICAL_VISIBILITY_KEYS.map(async key => {
+      // One batched GET instead of 5 sequential /api/store/<key> round-trips.
+      try {
+        const res = await fetch(`/api/store?keys=${encodeURIComponent(CRITICAL_VISIBILITY_KEYS.join(','))}`)
+        if (!res.ok) return
+        const state = await res.json().catch(() => null) as Record<string, unknown> | null
+        if (!state || typeof state !== 'object') return
+        for (const key of CRITICAL_VISIBILITY_KEYS) {
+          if (!(key in state)) continue
           try {
-            const res = await fetch(`/api/store/${encodeURIComponent(key)}`)
-            if (!res.ok) return
-            const payload = await res.json().catch(() => null) as { value?: unknown } | null
-            const remoteStr = typeof payload?.value === 'string'
-              ? payload.value
-              : JSON.stringify(payload?.value ?? null)
+            const value = state[key]
+            const remoteStr = typeof value === 'string' ? value : JSON.stringify(value ?? null)
             const localStr = window.localStorage.getItem(key)
             const localCount = arrayCount(localStr)
             const remoteCount = arrayCount(remoteStr)
@@ -4332,7 +4335,7 @@ export function StoreProvider({
               || missingRemoteRows
               || (typeof localCount === 'number' && remoteCount > localCount)
             )
-            if (!shouldRecover) return
+            if (!shouldRecover) continue
             removeDirtyKeys([key])
             const nextStr = (localStr && typeof localCount === 'number' && localCount > 0 && missingRemoteRows)
               ? mergeArrayById(localStr, remoteStr)
@@ -4342,8 +4345,10 @@ export function StoreProvider({
           } catch {
             // best effort recovery only
           }
-        }),
-      )
+        }
+      } catch {
+        // best effort recovery only
+      }
     }
     void reconcileCriticalVisibilityKeys()
 
@@ -4500,64 +4505,35 @@ export function StoreProvider({
   const [productPriceHistory, setProductPriceHistory] = useLS<ProductPriceHistory[]>('deed_productPriceHistory', [])
 
   // The relational catalog (/api/products) is the source of truth for product
-  // identity and commercial fields. The synced JSON store can lag behind it
-  // (e.g. bulk imports done straight against the database), so merge on boot —
-  // client-only fields (image, tax, warranty, account codes…) are preserved,
-  // and store-only legacy items referenced by old documents stay listed.
-  useEffect(() => {
-    const refreshCatalog = () => {
-      fetch('/api/products')
-        .then(r => (r.ok ? r.json() : null))
-        .then((rows: any[] | null) => {
-          if (!Array.isArray(rows) || rows.length === 0) return
-          setProducts(prev => {
-            const merged = mergeCatalogProducts(prev, rows, CATEGORY_CONFIG)
-            return JSON.stringify(merged) === JSON.stringify(prev) ? prev : merged
-          })
+  // identity and commercial fields. Boot merge uses the lite endpoint (no serials).
+  const refreshProductCatalog = useCallback(() => {
+    fetch('/api/products?lite=1')
+      .then(r => (r.ok ? r.json() : null))
+      .then((rows: any[] | null) => {
+        if (!Array.isArray(rows) || rows.length === 0) return
+        setProducts(prev => {
+          const merged = mergeCatalogProducts(prev, rows, CATEGORY_CONFIG)
+          return JSON.stringify(merged) === JSON.stringify(prev) ? prev : merged
         })
-        .catch(() => {})
-    }
-    refreshCatalog()
+      })
+      .catch(() => {})
+  }, [setProducts])
+
+  useEffect(() => {
     // If a stale deed_products SSE payload overwrites local state, immediately
     // re-merge the Prisma catalog so newly published products do not vanish.
     const onRemote = (e: Event) => {
       const detail = (e as CustomEvent).detail
-      if (detail?.key === 'deed_products') refreshCatalog()
+      if (detail?.key === 'deed_products') refreshProductCatalog()
     }
     window.addEventListener('deed_remote_update', onRemote as EventListener)
     return () => window.removeEventListener('deed_remote_update', onRemote as EventListener)
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [refreshProductCatalog])
   
   const [serials, setSerials] = useLS<SerialNumber[]>('deed_serials', seedSerials)
   
   // Sales & Invoicing
   const [saleOrders, setSaleOrders] = useLS<SaleOrder[]>('deed_saleOrders', seedSOs)
-  // Boot: fire all CRM + sales fetches in parallel; React 18 batches the resulting setState calls into one re-render
-  useEffect(() => {
-    void (async () => {
-      const results = await Promise.allSettled([
-        fetch('/api/contacts').then(r => r.ok ? r.json() : null),
-        fetch('/api/companies').then(r => r.ok ? r.json() : null),
-        fetch('/api/contact-persons').then(r => r.ok ? r.json() : null),
-        fetch('/api/opportunities').then(r => r.ok ? r.json() : null),
-        fetch('/api/opportunity-activities').then(r => r.ok ? r.json() : null),
-        fetch('/api/quotes').then(r => r.ok ? r.json() : null),
-        fetch('/api/sale-orders').then(r => r.ok ? r.json() : null),
-      ])
-      const val = (r: PromiseSettledResult<unknown>) =>
-        r.status === 'fulfilled' && r.value != null ? r.value : null
-      const [dc, dco, dcp, dopp, doa, dq, dso] = results.map(val) as any[]
-      if (dc) setContacts(Array.isArray(dc) ? dc : (dc.items ?? []))
-      if (dco) setCompanies(Array.isArray(dco) ? dco : (dco.items ?? []))
-      if (dcp) setContactPersons(Array.isArray(dcp) ? dcp : (dcp.items ?? []))
-      if (dopp) setOpportunities(Array.isArray(dopp) ? normalizeOpportunitiesForClient(dopp) as Opportunity[] : [])
-      if (doa) setOpportunityActivities(Array.isArray(doa) ? doa : [])
-      if (dq) setQuotes(Array.isArray(dq) ? normalizeQuotesForClient(dq) as Quote[] : [])
-      if (dso) setSaleOrders(normalizeSaleOrdersForClient(Array.isArray(dso) ? dso : (dso.items ?? [])) as SaleOrder[])
-    })()
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
 
   const [deliveries, setDeliveries] = useLS<Delivery[]>('deed_deliveries', seedDeliveries)
 
@@ -4576,16 +4552,6 @@ export function StoreProvider({
 
   // Repairs
   const [repairs, setRepairs] = useLS<RepairOrder[]>('deed_repairs_v2', seedRepairs)
-  useEffect(() => {
-    // SSE keeps repairs in sync in real-time; this ensures fresh state on mount only
-    fetch('/api/repairs')
-      .then(r => r.ok ? r.json() : null)
-      .then(data => {
-        if (!Array.isArray(data)) return
-        setRepairs(prev => JSON.stringify(prev) === JSON.stringify(data) ? prev : data)
-      })
-      .catch(() => {})
-  }, [setRepairs])
 
   // HR — employees, departments, leave, hrDocuments, recruitment, and training have
   // moved to hooks/useHrStore.ts (Zustand). `employees` is still read locally below
@@ -4595,28 +4561,8 @@ export function StoreProvider({
   const [workflowApprovals, setWorkflowApprovals] = useLS('deed_workflowApprovals', seedWorkflowApprovals)
   const [employeeAssetAssignments, setEmployeeAssetAssignments] = useLS('deed_employeeAssets', seedEmployeeAssetAssignments)
 
-  // Employee records are fetched from the API so self-service can link the user
-  // to their employee profile; payroll remains fetched only for privileged roles.
   const HR_ROLES = ['director', 'finance_officer']
   const employees = useHrDomainStore(s => s.employees)
-  useEffect(() => {
-    if (!initialUser) return
-    fetch('/api/employees').then(r => r.ok && r.json().then(d => useHrDomainStore.getState().setEmployees(Array.isArray(d) ? d : (d.items ?? [])))).catch(() => {})
-  }, [])
-
-  // Never stored in localStorage/app_state — each user only receives their own data from the API
-  useEffect(() => {
-    const fetchLeave = () => fetch('/api/leave-requests').then(r => r.ok && r.json().then(data => {
-      if (data.requests) useHrDomainStore.getState().setLeaveRequests(data.requests)
-      if (data.balances) useHrDomainStore.getState().setLeaveBalances(data.balances)
-    })).catch(() => {})
-    fetchLeave()
-    // Managers need periodic refresh to see new approval requests; SSE handles real-time
-    if (['director', 'admin_officer'].includes(initialUser.role)) {
-      const id = setInterval(fetchLeave, 60_000)
-      return () => clearInterval(id)
-    }
-  }, [])
 
   // Sensitive: never stored in localStorage/app_state — fetched only for privileged roles
   const [payrollRuns, setPayrollRuns] = useState<PayrollRun[]>(seedPayrollRuns)
@@ -4624,18 +4570,6 @@ export function StoreProvider({
   // Salary advances are relational (Prisma) — fetched from the dedicated API,
   // scoped server-side (HR/finance see all; an employee sees only their own).
   const [salaryAdvances, setSalaryAdvances] = useState<SalaryAdvance[]>([])
-  useEffect(() => {
-    if (!['director', 'finance_officer'].includes(initialUser.role)) return
-    fetch('/api/payroll').then(r => r.ok && r.json().then(data => {
-      if (data.runs) setPayrollRuns(data.runs)
-      if (data.payslips) setPayslips(data.payslips)
-    })).catch(() => {})
-  }, [])
-  useEffect(() => {
-    fetch('/api/salary-advances').then(r => r.ok && r.json().then(data => {
-      if (Array.isArray(data)) setSalaryAdvances(data)
-    })).catch(() => {})
-  }, [])
 
   // Accounting
   const [journalEntries, setJournalEntries] = useLS('deed_journalEntries', seedJournalEntries)
@@ -4648,12 +4582,6 @@ export function StoreProvider({
   const [companySettings, setCompanySettings] = useLS<CompanySettings>('deed_companySettings', DEFAULT_COMPANY_SETTINGS)
   const [systemSettings, setSystemSettings] = useLS<SystemSettings>('deed_systemSettings', DEFAULT_SYSTEM_SETTINGS)
   const [dbApprovalRules, setDbApprovalRules] = useState<Array<{ approvalType: string; thresholds: { maxValue: number; requiredRoles: string[] }[]; isActive: boolean }>>([])
-  useEffect(() => {
-    fetch('/api/settings/approval-rules')
-      .then(r => r.ok ? r.json() : [])
-      .then(data => { if (Array.isArray(data)) setDbApprovalRules(data) })
-      .catch(() => {})
-  }, [])
   // One-time bump: previous default was 100_000 with no settings UI; raise stored value to 1_000_000.
   useEffect(() => {
     if (systemSettings.accAdminOfficerInvoiceLimitKes === 100000) {
@@ -4684,19 +4612,144 @@ export function StoreProvider({
   const [openingStockPosted, setOpeningStockPosted] = useLS<boolean>('deed_openingStockPosted', false)
   
   const [stockMoves, setStockMoves] = useState<StockMove[]>([])
-  useEffect(() => {
-    const fetchMoves = async () => {
-      const res = await fetch('/api/stock-moves')
-      if (res.ok) {
-        const d = await res.json()
-        setStockMoves(Array.isArray(d) ? d : (d.items ?? []))
-      }
-    }
-    fetchMoves()
-  }, [])
   
   const [stockAdjustments, setStockAdjustments] = useLS<StockAdjustment[]>('deed_stockAdjustments', [])
   const [stockReservations, setStockReservations] = useLS<StockReservation[]>('deed_stockReservations', [])
+
+  // Route-scoped Prisma boot + idle prefetch of the rest (cuts cold-start fan-out).
+  const bootedApiGroupsRef = useRef<Set<BootApiGroup>>(new Set())
+  useEffect(() => {
+    if (!initialUser) return
+
+    const fetchLeave = () => fetch('/api/leave-requests').then(r => r.ok && r.json().then(data => {
+      if (data.requests) useHrDomainStore.getState().setLeaveRequests(data.requests)
+      if (data.balances) useHrDomainStore.getState().setLeaveBalances(data.balances)
+    })).catch(() => {})
+
+    const runGroup = async (group: BootApiGroup) => {
+      if (bootedApiGroupsRef.current.has(group)) return
+      bootedApiGroupsRef.current.add(group)
+      try {
+        switch (group) {
+          case 'products':
+            refreshProductCatalog()
+            break
+          case 'contacts': {
+            const results = await Promise.allSettled([
+              fetch('/api/contacts').then(r => r.ok ? r.json() : null),
+              fetch('/api/companies').then(r => r.ok ? r.json() : null),
+              fetch('/api/contact-persons').then(r => r.ok ? r.json() : null),
+            ])
+            const val = (r: PromiseSettledResult<unknown>) =>
+              r.status === 'fulfilled' && r.value != null ? r.value : null
+            const [dc, dco, dcp] = results.map(val) as any[]
+            if (dc) setContacts(Array.isArray(dc) ? dc : (dc.items ?? []))
+            if (dco) setCompanies(Array.isArray(dco) ? dco : (dco.items ?? []))
+            if (dcp) setContactPersons(Array.isArray(dcp) ? dcp : (dcp.items ?? []))
+            break
+          }
+          case 'sales': {
+            const results = await Promise.allSettled([
+              fetch('/api/quotes').then(r => r.ok ? r.json() : null),
+              fetch('/api/sale-orders').then(r => r.ok ? r.json() : null),
+            ])
+            const val = (r: PromiseSettledResult<unknown>) =>
+              r.status === 'fulfilled' && r.value != null ? r.value : null
+            const [dq, dso] = results.map(val) as any[]
+            if (dq) setQuotes(Array.isArray(dq) ? normalizeQuotesForClient(dq) as Quote[] : [])
+            if (dso) setSaleOrders(normalizeSaleOrdersForClient(Array.isArray(dso) ? dso : (dso.items ?? [])) as SaleOrder[])
+            break
+          }
+          case 'crm': {
+            const results = await Promise.allSettled([
+              fetch('/api/opportunities').then(r => r.ok ? r.json() : null),
+              fetch('/api/opportunity-activities').then(r => r.ok ? r.json() : null),
+            ])
+            const val = (r: PromiseSettledResult<unknown>) =>
+              r.status === 'fulfilled' && r.value != null ? r.value : null
+            const [dopp, doa] = results.map(val) as any[]
+            if (dopp) setOpportunities(Array.isArray(dopp) ? normalizeOpportunitiesForClient(dopp) as Opportunity[] : [])
+            if (doa) setOpportunityActivities(Array.isArray(doa) ? doa : [])
+            break
+          }
+          case 'repairs': {
+            const data = await fetch('/api/repairs').then(r => r.ok ? r.json() : null)
+            if (Array.isArray(data)) {
+              setRepairs(prev => JSON.stringify(prev) === JSON.stringify(data) ? prev : data)
+            }
+            break
+          }
+          case 'employees': {
+            const d = await fetch('/api/employees').then(r => r.ok ? r.json() : null)
+            if (d) useHrDomainStore.getState().setEmployees(Array.isArray(d) ? d : (d.items ?? []))
+            break
+          }
+          case 'leave':
+            await fetchLeave()
+            break
+          case 'payroll': {
+            if (!['director', 'finance_officer'].includes(initialUser.role)) break
+            const data = await fetch('/api/payroll').then(r => r.ok ? r.json() : null)
+            if (data?.runs) setPayrollRuns(data.runs)
+            if (data?.payslips) setPayslips(data.payslips)
+            break
+          }
+          case 'salary_advances': {
+            const data = await fetch('/api/salary-advances').then(r => r.ok ? r.json() : null)
+            if (Array.isArray(data)) setSalaryAdvances(data)
+            break
+          }
+          case 'approval_rules': {
+            const data = await fetch('/api/settings/approval-rules').then(r => r.ok ? r.json() : [])
+            if (Array.isArray(data)) setDbApprovalRules(data)
+            break
+          }
+          case 'stock_moves': {
+            const d = await fetch('/api/stock-moves').then(r => r.ok ? r.json() : null)
+            if (d) setStockMoves(Array.isArray(d) ? d : (d.items ?? []))
+            break
+          }
+        }
+      } catch {
+        bootedApiGroupsRef.current.delete(group)
+      }
+    }
+
+    const path = typeof window !== 'undefined' ? (window.location.pathname || '/') : '/'
+    const immediate = bootApiGroupsForRoute(path)
+    void Promise.all(immediate.map(runGroup))
+
+    const idleGroups = remainingBootApiGroups(immediate)
+    let idleHandle: number | undefined
+    let idleTimer: ReturnType<typeof setTimeout> | undefined
+    const prefetchIdle = () => { void Promise.all(idleGroups.map(runGroup)) }
+    if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
+      idleHandle = window.requestIdleCallback(prefetchIdle, { timeout: 2500 })
+    } else {
+      idleTimer = setTimeout(prefetchIdle, 1800)
+    }
+
+    // Managers need periodic leave refresh; SSE covers most real-time cases.
+    let leaveInterval: ReturnType<typeof setInterval> | undefined
+    if (['director', 'admin_officer'].includes(initialUser.role)) {
+      leaveInterval = setInterval(fetchLeave, 60_000)
+    }
+
+    const onRoute = (e: Event) => {
+      const nextPath = (e as CustomEvent).detail?.pathname
+      if (typeof nextPath !== 'string') return
+      void Promise.all(bootApiGroupsForRoute(nextPath).map(runGroup))
+    }
+    window.addEventListener('deed_route_change', onRoute as EventListener)
+
+    return () => {
+      if (idleHandle !== undefined && 'cancelIdleCallback' in window) window.cancelIdleCallback(idleHandle)
+      if (idleTimer) clearTimeout(idleTimer)
+      if (leaveInterval) clearInterval(leaveInterval)
+      window.removeEventListener('deed_route_change', onRoute as EventListener)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialUser?.id, initialUser?.role, refreshProductCatalog])
 
   // POS
   const [posOrders, setPosOrders]           = useLS<POSOrder[]>('deed_posOrders', []) // To be migrated
@@ -8107,7 +8160,7 @@ const storeCtx: AppState = {
           // Re-merge catalog so a concurrent SSE wipe cannot drop this product.
           void (async () => {
             try {
-              const catalogRes = await fetch('/api/products')
+              const catalogRes = await fetch('/api/products?lite=1')
               if (!catalogRes.ok) return
               const catalogRows = await catalogRes.json()
               if (!Array.isArray(catalogRows)) return
@@ -8129,7 +8182,7 @@ const storeCtx: AppState = {
 
     refreshProductCatalog: async () => {
       try {
-        const res = await fetch('/api/products')
+        const res = await fetch('/api/products?lite=1')
         if (!res.ok) return 0
         const rows = await res.json()
         if (!Array.isArray(rows) || rows.length === 0) return 0
@@ -8238,7 +8291,7 @@ const storeCtx: AppState = {
 
         // Always re-merge from the relational catalog so published products persist.
         try {
-          const catalogRes = await fetch('/api/products')
+          const catalogRes = await fetch('/api/products?lite=1')
           if (catalogRes.ok) {
             const catalogRows = await catalogRes.json()
             if (Array.isArray(catalogRows)) {

@@ -24,24 +24,27 @@ const HR_APP_STATE_KEYS = [
 ]
 
 const ROUTE_APP_STATE_KEYS: Record<string, string[]> = {
+  // Dashboard KPIs only — heavy stock/serial payloads hydrate when opening Inventory.
   '/': [
     'deed_products',
+    'deed_saleOrders',
     'deed_invoices',
     'deed_repairs_v2',
-    'deed_deliveryJobs',
     'deed_expenses',
     'deed_deposits',
     'deed_contacts',
     'deed_purchaseOrders',
-    'deed_receipts',
-    'deed_purchaseReturns',
-    'deed_bulkStock',
-    'deed_serials',
     'deed_stockTransfers',
-    'deed_stockAdjustments',
-    'deed_stockReservations',
+    'deed_posOrders',
+    'deed_accounts',
+    'deed_bankAccounts',
+    'deed_bankStatementLines',
+    'deed_refurbishmentJobs',
+    'deed_outsourceJobs',
+    'deed_kilimallOrders',
   ],
   '/sales': ['deed_saleOrders', 'deed_quotes', 'deed_products', 'deed_serials', 'deed_invoices', 'deed_deliveries', 'deed_contacts', 'deed_warranties', 'deed_bulkStock', 'deed_stockReservations', 'deed_approvalRequests', 'deed_bankAccounts', 'deed_documentPaymentDetails'],
+  '/crm': ['deed_quotes', 'deed_saleOrders', 'deed_contacts', 'deed_products', 'deed_approvalRequests'],
   '/purchases': ['deed_products', 'deed_purchaseOrders', 'deed_receipts', 'deed_invoices', 'deed_purchaseReturns', 'deed_contacts', 'deed_bulkStock', 'deed_serials'],
   '/purchase': ['deed_products', 'deed_purchaseOrders', 'deed_receipts', 'deed_invoices', 'deed_purchaseReturns', 'deed_contacts', 'deed_bulkStock', 'deed_serials'],
   '/operations': ['deed_products', 'deed_bulkStock', 'deed_stockTransfers', 'deed_stockAdjustments', 'deed_stockReservations', 'deed_openingStockPosted', 'deed_serials', 'deed_receipts', 'deed_refurbishmentJobs', 'deed_purchaseOrders'],
@@ -73,8 +76,19 @@ function normalizeRoute(pathname: string) {
   return clean || '/'
 }
 
+/** Longest-prefix match so nested routes inherit the parent key set. */
 export function appStateKeysForRoute(pathname: string) {
   const route = normalizeRoute(pathname)
-  const routeKeys = ROUTE_APP_STATE_KEYS[route] ?? []
-  return Array.from(new Set([...COMMON_APP_STATE_KEYS, ...routeKeys]))
+  let matched: string[] = []
+  let matchedLen = -1
+  for (const [key, keys] of Object.entries(ROUTE_APP_STATE_KEYS)) {
+    if (route === key || (key !== '/' && route.startsWith(`${key}/`))) {
+      if (key.length > matchedLen) {
+        matched = keys
+        matchedLen = key.length
+      }
+    }
+  }
+  if (route === '/') matched = ROUTE_APP_STATE_KEYS['/'] ?? []
+  return Array.from(new Set([...COMMON_APP_STATE_KEYS, ...matched]))
 }

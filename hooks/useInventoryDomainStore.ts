@@ -32,7 +32,7 @@ export const useInventoryDomainStore = create<InventoryDomainState>((set) => ({
   refreshProducts: async () => {
     set({ syncing: true, lastError: null })
     try {
-      const res = await fetch('/api/products')
+      const res = await fetch('/api/products?lite=1')
       const data = await readJson(res)
       const rows = Array.isArray(data) ? data : (data.items || data.products || [])
       set({ lastSyncedAt: new Date().toISOString(), syncing: false })

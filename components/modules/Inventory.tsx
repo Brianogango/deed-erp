@@ -1,6 +1,6 @@
 'use client'
 import React, { useMemo, useState, useRef, useEffect } from 'react'
-import * as XLSX from 'xlsx'
+import { loadXlsx } from '@/lib/xlsx-lazy'
 import {
   useInventoryStore, Product, LOCATIONS, LocationId, CATEGORY_CONFIG, ALL_CATEGORIES, CategoryId,
   fmtKes, fmtDate, Account, AdjReason, SerialNumber,
@@ -141,7 +141,8 @@ const MONTH_OPTS = [
   { value: '10', label: 'Oct' }, { value: '11', label: 'Nov' }, { value: '12', label: 'Dec' },
 ]
 
-function readXlsx(file: File): Promise<any[]> {
+async function readXlsx(file: File): Promise<any[]> {
+  const XLSX = await loadXlsx()
   return new Promise((resolve, reject) => {
     const reader = new FileReader()
     reader.onload = e => {
@@ -591,7 +592,8 @@ export default function Inventory() {
     setPriceProduct(null)
   }
 
-  const downloadPriceUpdateTemplate = () => {
+  const downloadPriceUpdateTemplate = async () => {
+    const XLSX = await loadXlsx()
     const headers = ['SKU', 'Product Name', 'Current Price', 'New Price', 'Current Cost Price', 'New Cost Price', 'Reason', 'Effective Date']
     const rows = catalogProducts.slice(0, 100).map(product => [
       product.sku,
@@ -842,7 +844,8 @@ export default function Inventory() {
     setShowForm(false)
   }
 
-  const downloadProductTemplate = () => {
+  const downloadProductTemplate = async () => {
+    const XLSX = await loadXlsx()
     const headers = ['Name', 'Category', 'Product Type', 'Unit', 'Barcode', 'Sale Price', 'Cost Price', 'Tax Rate', 'Min Stock', 'Warranty Months', 'Description', 'Revenue Account', 'Purchase Account', 'Inventory Asset Account', 'COGS Account', 'Adjustment Account', 'Write-off Account', 'Price Difference Account']
     const categories = ALL_CATEGORIES.join(' | ')
     const sampleRows = [
@@ -1031,7 +1034,8 @@ export default function Inventory() {
     }
   }
 
-  const downloadOpeningInventoryTemplate = () => {
+  const downloadOpeningInventoryTemplate = async () => {
+    const XLSX = await loadXlsx()
     const headers = [
       'SKU',
       'Product Name',

@@ -356,9 +356,13 @@ function AppContent({ children }: { children: React.ReactNode }) {
     }
   }, [pathname])
 
+  // Start app_state hydration as soon as we have a session — do not wait for
+  // the mounted skeleton tick. Also notify StoreProvider so Prisma boot APIs
+  // for the new route can warm without a full remount.
   useEffect(() => {
-    if (!mounted || isPublicRepairTracker || !currentUserId) return
+    if (isPublicRepairTracker || !currentUserId) return
     const route = pathname || '/'
+    window.dispatchEvent(new CustomEvent('deed_route_change', { detail: { pathname: route } }))
     if (hydratedRoutesRef.current.has(route)) return
     hydratedRoutesRef.current.add(route)
 
@@ -409,7 +413,7 @@ function AppContent({ children }: { children: React.ReactNode }) {
       .catch(() => {
         hydratedRoutesRef.current.delete(route)
       })
-  }, [mounted, pathname, currentUserId, isPublicRepairTracker])
+  }, [pathname, currentUserId, isPublicRepairTracker])
 
   useEffect(() => {
     if (!mounted || isPublicRepairTracker) return

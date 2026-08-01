@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useCallback, useEffect, useRef, Suspense } from 'react'
 import { useSearchParams, useRouter, usePathname } from 'next/navigation'
-import * as XLSX from 'xlsx'
+import { loadXlsx } from '@/lib/xlsx-lazy'
 import {
   faArrowDown,
   faTriangleExclamation,
@@ -849,10 +849,11 @@ function AccountingContent() {
     }, 1500)
   }
 
-  const downloadMigrationTemplate = () => {
+  const downloadMigrationTemplate = async () => {
+    const XLSX = await loadXlsx()
     const headers = ['Kind', 'Name', 'Email', 'Phone', 'Address', 'VAT Number', 'Opening Balance', 'Reference', 'Date', 'Due Date', 'Notes']
     const rows = [
-      ['customer', 'Example Customer Ltd', 'customer@example.com', '0712345678', 'Nairobi', 'P000000001A', 25000, 'OLD-INV-001', today(), addDays(today(), 30), 'Opening AR balance from old system'],
+      ['customer', 'Example Customer Ltd', 'accounts@example.com', '0712345678', 'Nairobi', 'P000000001A', 25000, 'OLD-INV-001', today(), addDays(today(), 30), 'Opening AR balance from old system'],
       ['vendor', 'Example Supplier Ltd', 'supplier@example.com', '0798765432', 'Nairobi', 'P000000002B', 18000, 'OLD-BILL-001', today(), addDays(today(), 30), 'Opening AP balance from old system'],
     ]
     const wb = XLSX.utils.book_new()
@@ -872,6 +873,7 @@ function AccountingContent() {
     const reader = new FileReader()
     reader.onload = async event => {
       try {
+        const XLSX = await loadXlsx()
         const data = new Uint8Array(event.target?.result as ArrayBuffer)
         const wb = XLSX.read(data, { type: 'array' })
         const ws = wb.Sheets[wb.SheetNames[0]]

@@ -66,7 +66,7 @@ import {
 import { PrimaryActionButton, OperationalSummary, TablePageLayout } from '@/components/erp'
 import { DataTable, type ColumnDef } from '@/components/data-table'
 import { Fa } from '@/components/icons'
-import { downloadCommercialPdf, openCommercialPdf, type CommercialPdfInput } from '@/lib/commercial-pdf'
+import type { CommercialPdfInput } from '@/lib/commercial-pdf'
 import {
   DEFAULT_DOCUMENT_PAYMENT_DETAILS,
   buildPaymentDetailLines,
@@ -485,6 +485,7 @@ function SalesContent() {
 
   // Customer preview / print: the PDF opened in a new tab.
   const previewSalesDocument = async (so: SalesOrderView, title: string, _statusLabel?: string) => {
+    const { openCommercialPdf } = await import('@/lib/commercial-pdf')
     const opened = await openCommercialPdf(salesDocumentPdfInput(so, title), companySettings, bankAccounts)
     if (!opened) showToast('Allow pop-ups to preview the document', 'error')
   }
@@ -882,6 +883,7 @@ function SalesContent() {
   // ── Commercial document builders (real PDF downloads) ───────────────────
   const downloadSalesDocument = async (so: SalesOrderView, title: string, _filePrefix?: string, _statusLabel?: string) => {
     try {
+      const { downloadCommercialPdf } = await import('@/lib/commercial-pdf')
       await downloadCommercialPdf(salesDocumentPdfInput(so, title), companySettings, bankAccounts, `${title} - ${so.ref}.pdf`)
     } catch {
       showToast('PDF generation failed', 'error')
@@ -898,6 +900,7 @@ function SalesContent() {
       updateSaleOrder(so.id, { proformaRef: piRef })
     }
     try {
+      const { downloadCommercialPdf } = await import('@/lib/commercial-pdf')
       await downloadCommercialPdf(
         salesDocumentPdfInput(so, 'Pro-forma Invoice', { ref: piRef, sourceRef: so.ref }),
         companySettings,
