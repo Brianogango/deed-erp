@@ -9,7 +9,14 @@ import { needsSpecialPricingApproval, resolveListPrice } from '@/lib/pricing/pri
 import type { CreateUserInput, ModuleId as AuthModuleId, PublicUser, UpdateUserInput, UserRole as AuthUserRole } from '@/lib/auth/types'
 import { calcStockByLocation as _calcStockByLocation, upsertBulkStock as _upsertBulkStock, aggregatePayroll } from '@/lib/business-logic'
 import { calculatePayroll } from '@/lib/payroll'
-import { APPROVAL_RULES, createApprovalRequest, getPendingApprovals, processApproval, validateSalesOrderCreation } from '@/lib/sales-approvals'
+import {
+  APPROVAL_RULES,
+  computeConfirmBackorderLines,
+  createApprovalRequest,
+  getPendingApprovals,
+  processApproval,
+  validateSalesOrderCreation,
+} from '@/lib/sales-approvals'
 import {
   advanceExpenseApproval,
   buildExpenseApprovalChain,
@@ -7876,11 +7883,11 @@ const storeCtx: AppState = {
         return next
       })
 
-      // NEW: Reserve stock after SO creation (Phase 1 Step 2)
-      so.lines.filter((line: any) => line.lineType !== 'section' && line.productId && line.qty > 0).forEach(line => {
-        reserveStock(line.productId, line.qty, 'sales_order', so.id, so.ref)
-      })
-      
+      // Do not reserve at quotation conversion — same as createSaleOrder.
+      // Reservation happens during delivery preparation after Confirm.
+      // Reserving here made confirmSO treat the order's own reservation as a
+      // shortage and falsely raise Backorder approval.
+
       // Close linked opportunity as won
       if (quote.opportunityId) {
         setOpportunities(prev => {
@@ -8870,14 +8877,73 @@ const storeCtx: AppState = {
         showToast(`${so.ref} has a rejected approval request. Revise the order before confirming.`, 'error')
         return
       }
-      if (salesApprovalRequests.some(r => r.status === 'pending')) {
+
+      // Free sellable qty: serial SKUs use available/in_stock only (matches Inventory Available).
+      // On-hand stockQty also counts assigned / repair / refurb and overstates free stock.
+      const freeQtyByProductId: Record<string, number> = {}
+      for (const line of orderLines) {
+        if (!line.productId || freeQtyByProductId[line.productId] !== undefined) continue
+        const product = prodRef.current.find(p => p.id === line.productId)
+        if (!product || product.unit === 'service') continue
+        if (product.requiresSerial) {
+          freeQtyByProductId[line.productId] = serialRef.current.filter(s =>
+            s.productId === line.productId &&
+            (s.status === 'available' || s.status === 'in_stock') &&
+            ['warehouse', 'shop', 'repair_unit'].includes(s.location),
+          ).length
+        } else {
+          const locs = calcStockByLocation(product, serialRef.current, bulkStock, line.productId)
+          freeQtyByProductId[line.productId] = locs.warehouse + locs.shop + locs.repair_unit
+        }
+      }
+      const stockCheckOpts = { excludeReferenceId: id, freeQtyByProductId }
+      const liveBackorderLines = computeConfirmBackorderLines(
+        orderLines,
+        prodRef.current,
+        stockReservations,
+        stockCheckOpts,
+      )
+
+      // Drop stale backorder approvals when stock is actually free (e.g. self-reservation bug).
+      let activeSalesApprovals = salesApprovalRequests
+      if (liveBackorderLines.length === 0) {
+        const staleBackorders = salesApprovalRequests.filter(r => r.type === 'backorder' && r.status === 'pending')
+        if (staleBackorders.length > 0) {
+          const staleIds = new Set(staleBackorders.map(r => r.id))
+          setApprovalRequests(prev => prev.map(r =>
+            staleIds.has(r.id)
+              ? { ...r, status: 'cancelled' as const, notes: 'Auto-cleared: stock available for this order' }
+              : r,
+          ))
+          activeSalesApprovals = salesApprovalRequests.filter(r => !staleIds.has(r.id))
+          const stillPending = activeSalesApprovals.some(r => r.status === 'pending')
+          setSaleOrders(prev => prev.map(s => {
+            if (s.id !== id) return s
+            const updated = {
+              ...s,
+              backorderApprovalId: undefined,
+              backorderLines: undefined,
+              approvalStatus: stillPending
+                ? 'pending' as const
+                : activeSalesApprovals.some(r => r.status === 'approved')
+                  ? 'approved' as const
+                  : 'not_required' as const,
+              approvalRequiredReason: stillPending ? s.approvalRequiredReason : undefined,
+            }
+            sync(`/api/sale-orders/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+            return updated
+          }))
+        }
+      }
+
+      if (activeSalesApprovals.some(r => r.status === 'pending')) {
         showToast(`${so.ref} is awaiting approval before confirmation`, 'info')
         return
       }
 
       const approvers = users.map(u => ({ id: u.id, name: u.name, role: u.role }))
       const newApprovalRequests: ApprovalRequest[] = []
-      const existingTypes = new Set(salesApprovalRequests.map(r => r.type))
+      const existingTypes = new Set(activeSalesApprovals.map(r => r.type))
       const maxDiscount = orderLines.reduce((max, line) => Math.max(max, Number(line.discount) || 0), 0)
       if (systemSettings.salesDiscountControl && maxDiscount > 10 && !existingTypes.has('discount')) {
         const discountDetails = {
@@ -8950,20 +9016,18 @@ const storeCtx: AppState = {
         }, approvers))
       }
 
-      const stockValidation = validateSalesOrderCreation(orderLines, prodRef.current, stockReservations, {
-        allowSaleWithoutStock: false,
-        allowBackorders: true,
-        requireSerialForTrackedItems: false,
-      })
-      const backorderLines = orderLines.flatMap(line => {
-        const product = prodRef.current.find(p => p.id === line.productId)
-        if (!product || product.unit === 'service') return []
-        const reserved = stockReservations
-          .filter(r => r.productId === line.productId && r.status === 'reserved')
-          .reduce((sum, r) => sum + r.qty, 0)
-        const available = Math.max(0, product.stockQty - reserved)
-        return available < line.qty ? [{ productId: line.productId, productName: line.productName, qtyOrdered: line.qty, qtyAvailable: available, qtyBackordered: line.qty - available }] : []
-      })
+      const stockValidation = validateSalesOrderCreation(
+        orderLines,
+        prodRef.current,
+        stockReservations,
+        {
+          allowSaleWithoutStock: false,
+          allowBackorders: true,
+          requireSerialForTrackedItems: false,
+        },
+        stockCheckOpts,
+      )
+      const backorderLines = liveBackorderLines
       if (stockValidation.requiresApproval && !existingTypes.has('backorder')) {
         newApprovalRequests.push(createApprovalRequest('backorder', 'sales_order', so.id, so.ref, user.id, user.name, {
           reason: stockValidation.approvalReasons.join('; '),
@@ -8974,7 +9038,7 @@ const storeCtx: AppState = {
       }
 
       if (newApprovalRequests.length > 0) {
-        const allRequestIds = [...salesApprovalRequests.map(r => r.id), ...newApprovalRequests.map(r => r.id)]
+        const allRequestIds = [...activeSalesApprovals.map(r => r.id), ...newApprovalRequests.map(r => r.id)]
         setApprovalRequests(prev => [...newApprovalRequests, ...prev])
         const approvalRequiredReason = newApprovalRequests.map(req => `${req.type}: ${req.details.reason}`).join(' | ')
         setSaleOrders(prev => prev.map(s => {

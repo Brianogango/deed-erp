@@ -245,14 +245,78 @@ export function calculateDiscountApproval(
   }
 }
 
+export type SalesOrderStockCheckOptions = {
+  /**
+   * Ignore reservations already held by this document.
+   * Without this, a quote-converted SO that reserved its own stock always
+   * looks short (stockQty − own reservation) and falsely triggers backorder.
+   */
+  excludeReferenceId?: string
+  /**
+   * Optional free sellable qty by product id (e.g. available/in_stock serials).
+   * When omitted, falls back to product.stockQty (on-hand).
+   */
+  freeQtyByProductId?: Record<string, number>
+}
+
+/** Reservations that consume free stock for other documents. */
+export function reservedQtyElsewhere(
+  stockReservations: Array<{ productId?: string; status?: string; qty?: number; referenceId?: string }>,
+  productId: string,
+  excludeReferenceId?: string,
+): number {
+  return (stockReservations ?? [])
+    .filter(r =>
+      r.productId === productId &&
+      r.status === 'reserved' &&
+      (!excludeReferenceId || r.referenceId !== excludeReferenceId),
+    )
+    .reduce((sum, r) => sum + (Number(r.qty) || 0), 0)
+}
+
+export type ConfirmBackorderLine = {
+  productId: string
+  productName: string
+  qtyOrdered: number
+  qtyAvailable: number
+  qtyBackordered: number
+}
+
+/** Lines that need backorder approval at confirm time. */
+export function computeConfirmBackorderLines(
+  lines: Array<{ productId?: string; productName?: string; qty?: number; lineType?: string; unit?: string }>,
+  products: Array<{ id: string; name?: string; stockQty?: number; unit?: string }>,
+  stockReservations: Array<{ productId?: string; status?: string; qty?: number; referenceId?: string }>,
+  options: SalesOrderStockCheckOptions = {},
+): ConfirmBackorderLine[] {
+  return (lines ?? []).flatMap(line => {
+    if (!line?.productId || line.lineType === 'section') return []
+    const product = products.find(p => p.id === line.productId)
+    if (!product || product.unit === 'service') return []
+    const onHand = options.freeQtyByProductId?.[product.id] ?? (Number(product.stockQty) || 0)
+    const reserved = reservedQtyElsewhere(stockReservations, product.id, options.excludeReferenceId)
+    const available = Math.max(0, onHand - reserved)
+    const qtyOrdered = Number(line.qty) || 0
+    if (qtyOrdered <= 0 || available >= qtyOrdered) return []
+    return [{
+      productId: product.id,
+      productName: line.productName || product.name || 'Item',
+      qtyOrdered,
+      qtyAvailable: available,
+      qtyBackordered: qtyOrdered - available,
+    }]
+  })
+}
+
 /**
- * Validate sales order can be created
+ * Validate sales order can be created / confirmed (stock + serial gates).
  */
 export function validateSalesOrderCreation(
   lines: any[],
   products: any[],
   stockReservations: any[],
-  controlRules: any
+  controlRules: any,
+  options: SalesOrderStockCheckOptions = {},
 ): {
   canCreate: boolean
   issues: string[]
@@ -265,26 +329,27 @@ export function validateSalesOrderCreation(
   const approvalReasons: string[] = []
   
   lines.forEach(line => {
+    if (line?.lineType === 'section') return
     const product = products.find(p => p.id === line.productId)
     
     if (!product) {
       issues.push(`Product ${line.productName} not found`)
       return
     }
+
+    if (product.unit === 'service') return
     
-    // Check stock
-    const reserved = stockReservations
-      .filter(r => r.productId === line.productId && r.status === 'reserved')
-      .reduce((sum, r) => sum + r.qty, 0)
-    
-    const available = product.stockQty - reserved
+    // Check free stock minus OTHER documents' reservations (not this order's).
+    const onHand = options.freeQtyByProductId?.[product.id] ?? (Number(product.stockQty) || 0)
+    const reserved = reservedQtyElsewhere(stockReservations, product.id, options.excludeReferenceId)
+    const available = onHand - reserved
     
     if (available < line.qty) {
       if (controlRules.allowBackorders) {
         warnings.push(`${line.productName}: ${line.qty - available} units on backorder`)
         approvalReasons.push(`Backorder required for ${line.productName}`)
       } else if (!controlRules.allowSaleWithoutStock) {
-        issues.push(`${line.productName}: Insufficient stock (need ${line.qty}, have ${available})`)
+        issues.push(`${line.productName}: Insufficient stock (need ${line.qty}, have ${Math.max(0, available)})`)
       }
     }
     
