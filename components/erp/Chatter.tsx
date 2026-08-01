@@ -5,7 +5,7 @@ import { Fa } from '@/components/icons'
 import { faPaperPlane, faSync, faComments, faUser, faClock, faCalendarCheck } from '@fortawesome/free-solid-svg-icons'
 import { fmtDate } from '@/lib/store'
 
-type ChatterModel = 'sale_order' | 'purchase_order' | 'invoice' | 'repair' | 'opportunity'
+type ChatterModel = 'sale_order' | 'purchase_order' | 'invoice' | 'repair' | 'opportunity' | 'contact'
 
 interface DocumentMessage {
   id: string

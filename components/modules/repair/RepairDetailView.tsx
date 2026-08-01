@@ -19,6 +19,7 @@ import {
 import { STATUS_LABELS, STATUS_COLORS } from '../repair-config'
 import StatusStepper from './StatusStepper'
 import MessageThread from './MessageThread'
+import Chatter from '@/components/erp/Chatter'
 import { Modal } from '@/components/ui'
 import { SecondaryActionMenu, StatusBadge } from '@/components/erp'
 import { OutboundReleasePanel, OrcStatusBadge } from '../OutboundReleasePanel'
@@ -1479,6 +1480,15 @@ export default function RepairDetailView() {
 
             {/* Customer Chat */}
             <MessageThread repairRef={r.ref} staffName={currentUser?.name || 'Staff'} />
+
+            {/* Internal staff notes / activities (DocumentMessage) */}
+            <Chatter
+              model="repair"
+              recordId={r.id}
+              staffName={currentUser?.name || 'Staff'}
+              title="Internal Notes & Activities"
+              compact
+            />
 
             {/* Repair Timeline */}
             <SectionCard delay={340}>

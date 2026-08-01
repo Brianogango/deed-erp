@@ -93,6 +93,7 @@ import {
   findRepairCatalogProduct,
   matchRepairDeviceSerial,
 } from '@/lib/repair-retain-convert'
+import { planRepairPartConsume, planRepairPartReserve } from '@/lib/inventory/repair-parts-stock'
 
 export type ModuleId = AuthModuleId
 
@@ -1782,6 +1783,26 @@ export interface POSOrder {
   createdAt?: string
 }
 
+export interface POSSession {
+  id: string
+  ref: string
+  status: 'open' | 'closed'
+  openedAt: string
+  closedAt?: string
+  openingCash: number
+  closingCash?: number
+  expectedCash?: number
+  cashDifference?: number
+  totalSales: number
+  totalCash: number
+  totalMpesa: number
+  totalCard: number
+  orderCount: number
+  openedBy?: string
+  closedBy?: string
+  journalId?: string
+}
+
 export interface StockMove {
   id: string; type: 'in' | 'out' | 'transfer' | 'adjustment' | 'return'
   productId: string; productName: string; qty: number; reason: string
@@ -2053,7 +2074,7 @@ export interface JournalEntry {
   id: string
   ref: string
   date: string
-  source: 'payroll' | 'refund' | 'invoice' | 'payment' | 'bill' | 'purchase_payment' | 'expense' | 'pos' | 'purchase' | 'manual'
+  source: 'payroll' | 'refund' | 'invoice' | 'payment' | 'bill' | 'purchase_payment' | 'expense' | 'pos' | 'pos_session' | 'purchase' | 'manual' | 'adjustment'
   description: string
   status: 'posted'
   lines: JournalEntryLine[]
@@ -2698,6 +2719,8 @@ export interface AppState {
   updateKilimallSettlement: (id: string, p: Partial<KilimallSettlement>) => void
   reconcileKilimallSettlement: (settlementId: string) => void
   posSessionOpen: boolean; posSessionOpeningCash: number
+  posSessionId: string | null
+  posSessions: POSSession[]
   stockMoves: StockMove[]
   bulkStock: BulkStockLevel[]
   openingStockPosted: boolean
@@ -3082,8 +3105,8 @@ export interface AppState {
 
   // POS
   openPOSSession: (openingCash: number) => void
-  closePOSSession: (closingCash: number) => void
-  createPOSOrder: (lines: POSOrder['lines'], payment: POSOrder['payment'], customerId?: string, customerName?: string, pointsRedeemed?: number, applyVat?: boolean) => void
+  closePOSSession: (closingCash: number) => POSSession | null
+  createPOSOrder: (lines: POSOrder['lines'], payment: POSOrder['payment'], customerId?: string, customerName?: string, pointsRedeemed?: number, applyVat?: boolean) => POSOrder | null
 
   // Inventory reports
   getStockByLocation: (productId: string) => Record<LocationId, number>
@@ -3488,6 +3511,8 @@ export type CommerceStoreState = Pick<AppState,
   | 'posOrders'
   | 'posSessionOpen'
   | 'posSessionOpeningCash'
+  | 'posSessionId'
+  | 'posSessions'
   | 'products'
   | 'saleOrders'
   | 'serials'
@@ -4755,6 +4780,8 @@ export function StoreProvider({
   const [posOrders, setPosOrders]           = useLS<POSOrder[]>('deed_posOrders', []) // To be migrated
   const [posSessionOpen, setPosSessionOpen] = useLS<boolean>('deed_posSessionOpen', false)
   const [posSessionOpeningCash, setPosSessionOpeningCash] = useLS<number>('deed_posSessionOpeningCash', 0)
+  const [posSessionId, setPosSessionId] = useLS<string | null>('deed_posSessionId', null)
+  const [posSessions, setPosSessions] = useLS<POSSession[]>('deed_posSessions', [])
 
   // Approvals & Audit
   const [approvalRequests, setApprovalRequests] = useLS<ApprovalRequest[]>('deed_approvalRequests', [])
@@ -5788,7 +5815,7 @@ const storeCtx: AppState = {
     warranties, bulkStock, openingStockPosted, stockMoves, stockAdjustments,
 
     // POS
-    posOrders, posSessionOpen, posSessionOpeningCash,
+    posOrders, posSessionOpen, posSessionOpeningCash, posSessionId, posSessions,
 
     // System
     auditLogs,
@@ -10536,24 +10563,43 @@ const storeCtx: AppState = {
               req.id === po.procurementRequestId ? { ...req, status: 'received' as const } : req
             ),
           } : r))
-          // Reserve parts and move repair back to approved; notify technician
+          // Reserve parts into repair_unit and move repair back to approved
           const partLines = (linkedRepair.quote?.lines ?? []).filter(l => l.type === 'part' && l.productId)
-          partLines.forEach(line => {
-            const product = prodRef.current.find(p => p.id === line.productId)
-            if (!product) return
-            if (product.requiresSerial) {
-              const availableSerials = serialRef.current
-                .filter(s => s.productId === line.productId && s.status === 'available')
-                .slice(0, line.qty)
-              availableSerials.forEach(serial => {
-                setSerials(p => p.map(s => s.id === serial.id ? { ...s, status: 'assigned' as const, repairId: po.repairId } : s))
-              })
-            } else {
-              setProducts(p => p.map(x => x.id === line.productId ? { ...x, stockQty: Math.max(0, x.stockQty - line.qty) } : x))
-              addMove(line.productId!, line.productName ?? line.description, line.qty, 'out',
-                `Parts reserved — repair ${linkedRepair.ref}`, linkedRepair.ref, undefined, 'repair_unit')
-            }
+          const grnReserve = planRepairPartReserve({
+            repairRef: linkedRepair.ref,
+            lines: partLines.map(line => {
+              const product = prodRef.current.find(p => p.id === line.productId)
+              return {
+                productId: line.productId!,
+                productName: line.productName ?? line.description,
+                qty: line.qty,
+                requiresSerial: Boolean(product?.requiresSerial),
+              }
+            }),
+            stockFor: (productId) => {
+              const product = prodRef.current.find(p => p.id === productId)
+              const locs = calcStockByLocation(product, serialRef.current, bulkStock, productId)
+              return { warehouse: locs.warehouse, shop: locs.shop, repair_unit: locs.repair_unit }
+            },
+            availableSerialsFor: (productId) => serialRef.current
+              .filter(s => s.productId === productId && s.status === 'available')
+              .map(s => ({ id: s.id, serial: s.serial, location: s.location })),
           })
+          for (const step of grnReserve.steps) {
+            if (step.kind === 'assign_serial') {
+              setSerials(p => p.map(s => s.id === step.serialId
+                ? { ...s, status: 'assigned' as const, repairId: po.repairId, location: 'repair_unit' as LocationId }
+                : s))
+              addMove(step.productId, step.productName, 1, 'transfer', step.reason, linkedRepair.ref, step.from, 'repair_unit', [step.serialNumber])
+            } else {
+              setBulkStock(prev => {
+                let next = upsertBulkStock(prev, step.productId, step.from, -step.qty)
+                next = upsertBulkStock(next, step.productId, step.to, step.qty)
+                return next
+              })
+              addMove(step.productId, step.productName, step.qty, 'transfer', step.reason, linkedRepair.ref, step.from, step.to, [])
+            }
+          }
           const updatedQuoteLines = (linkedRepair.quote?.lines ?? []).map(l => ({
             ...l, reserved: l.type === 'part' ? true : l.reserved,
           }))
@@ -11907,32 +11953,52 @@ const storeCtx: AppState = {
         return
       }
       
-      // Reserve parts
+      // Reserve parts — transfer bulk into repair_unit + assign serials
       const updatedLines = repair.quote.lines.map(line => ({
         ...line,
         reserved: line.type === 'part',
       }))
-      
-      // Mark serials as assigned to repair
-      partLines.forEach(line => {
-        if (!line.productId) return
-        
-        const product = prodRef.current.find(p => p.id === line.productId)
-        if (!product?.requiresSerial) return
-        
-        const availableSerials = serialRef.current
-          .filter(s => s.productId === line.productId && s.status === 'available')
-          .slice(0, line.qty)
-        
-        availableSerials.forEach(serial => {
-          setSerials(p => p.map(s => s.id === serial.id ? {
-            ...s,
-            status: 'assigned',
-            repairId,
-          } : s))
+
+      const reserveLines = partLines
+        .filter(line => line.productId)
+        .map(line => {
+          const product = prodRef.current.find(p => p.id === line.productId)
+          return {
+            productId: line.productId!,
+            productName: line.productName ?? line.description,
+            qty: line.qty,
+            requiresSerial: Boolean(product?.requiresSerial),
+          }
         })
+      const reservePlan = planRepairPartReserve({
+        repairRef: repair.ref,
+        lines: reserveLines,
+        stockFor: (productId) => {
+          const product = prodRef.current.find(p => p.id === productId)
+          const locs = calcStockByLocation(product, serialRef.current, bulkStock, productId)
+          return { warehouse: locs.warehouse, shop: locs.shop, repair_unit: locs.repair_unit }
+        },
+        availableSerialsFor: (productId) => serialRef.current
+          .filter(s => s.productId === productId && s.status === 'available'
+            && (s.location === 'warehouse' || s.location === 'shop' || s.location === 'repair_unit'))
+          .map(s => ({ id: s.id, serial: s.serial, location: s.location })),
       })
-      
+      for (const step of reservePlan.steps) {
+        if (step.kind === 'assign_serial') {
+          setSerials(p => p.map(s => s.id === step.serialId
+            ? { ...s, status: 'assigned' as const, repairId, location: 'repair_unit' as LocationId }
+            : s))
+          addMove(step.productId, step.productName, 1, 'transfer', step.reason, repair.ref, step.from, 'repair_unit', [step.serialNumber])
+        } else {
+          setBulkStock(prev => {
+            let next = upsertBulkStock(prev, step.productId, step.from, -step.qty)
+            next = upsertBulkStock(next, step.productId, step.to, step.qty)
+            return next
+          })
+          addMove(step.productId, step.productName, step.qty, 'transfer', step.reason, repair.ref, step.from, step.to, [])
+        }
+      }
+
       const partsUsedNow = partLines.map(line => ({
         productId: line.productId ?? '',
         productName: line.productName ?? line.description,
@@ -12179,30 +12245,44 @@ const storeCtx: AppState = {
 
       if (allPassed) {
         const partsToConsume = repair.partsUsed.filter(part => part.reservedDate && !part.usedDate) || []
-        
-        partsToConsume.forEach(part => {
+        const consumeLines = partsToConsume.map(part => {
           const product = prodRef.current.find(p => p.id === part.productId)
-          if (!product) return
-          
-          if (product.requiresSerial) {
-            const assignedSerials = serialRef.current
-              .filter(s => s.productId === part.productId && s.repairId === repairId && s.status === 'assigned')
-              .slice(0, part.qty)
-            
-            assignedSerials.forEach(serial => {
-              setSerials(p => p.map(s => s.id === serial.id ? { ...s, status: 'sold' as const } : s))
-              setProducts(p => p.map(x => x.id === part.productId ? { ...x, stockQty: Math.max(0, x.stockQty - 1) } : x))
-            })
-            
-            addMove(part.productId, part.productName, part.qty, 'out', `Repair ${repair.ref}`, repair.ref ?? repairId, 'repair_unit', undefined, assignedSerials.map(s => s.serial))
-          } else {
-            const locs = calcStockByLocation(product, serialRef.current, bulkStock, part.productId)
-            const deductLocation = locs.shop >= part.qty ? 'shop' : 'warehouse'
-            setBulkStock(prev => upsertBulkStock(prev, part.productId, deductLocation, -part.qty))
-            setProducts(p => p.map(x => x.id === part.productId ? { ...x, stockQty: Math.max(0, x.stockQty - part.qty) } : x))
-            addMove(part.productId, part.productName, part.qty, 'out', `Repair ${repair.ref}`, repair.ref ?? repairId, deductLocation, undefined, [])
+          return {
+            productId: part.productId,
+            productName: part.productName,
+            qty: part.qty,
+            requiresSerial: Boolean(product?.requiresSerial),
           }
         })
+        // Apply consume plan against a mutable local stock snapshot so multi-line
+        // deductions don't over-allocate the same units in one QC pass.
+        const localBulk = bulkStock.map(l => ({ ...l }))
+        const consumePlan = planRepairPartConsume({
+          repairRef: repair.ref,
+          lines: consumeLines,
+          stockFor: (productId) => {
+            const product = prodRef.current.find(p => p.id === productId)
+            const locs = calcStockByLocation(product, serialRef.current, localBulk, productId)
+            return { warehouse: locs.warehouse, shop: locs.shop, repair_unit: locs.repair_unit }
+          },
+          assignedSerialsFor: (productId) => serialRef.current
+            .filter(s => s.productId === productId && s.repairId === repairId && s.status === 'assigned')
+            .map(s => ({ id: s.id, serial: s.serial, location: (s.location || 'repair_unit') as LocationId })),
+        })
+        for (const step of consumePlan.steps) {
+          if (step.kind === 'consume_serial') {
+            setSerials(p => p.map(s => s.id === step.serialId ? { ...s, status: 'sold' as const } : s))
+            setProducts(p => p.map(x => x.id === step.productId ? { ...x, stockQty: Math.max(0, x.stockQty - 1) } : x))
+            addMove(step.productId, step.productName, 1, 'out', step.reason, repair.ref ?? repairId, step.from, undefined, [step.serialNumber])
+          } else {
+            setBulkStock(prev => upsertBulkStock(prev, step.productId, step.from, -step.qty))
+            // Keep local snapshot in sync for subsequent steps in this plan.
+            const idx = localBulk.findIndex(l => l.productId === step.productId && l.location === step.from)
+            if (idx >= 0) localBulk[idx] = { ...localBulk[idx], qty: Math.max(0, localBulk[idx].qty - step.qty) }
+            setProducts(p => p.map(x => x.id === step.productId ? { ...x, stockQty: Math.max(0, x.stockQty - step.qty) } : x))
+            addMove(step.productId, step.productName, step.qty, 'out', step.reason, repair.ref ?? repairId, step.from, undefined, [])
+          }
+        }
 
         const passedRepair: RepairOrder = {
           ...repair,
@@ -12280,26 +12360,42 @@ const storeCtx: AppState = {
 
       const partLines = (repair.quote?.lines ?? []).filter(l => l.type === 'part' && l.productId)
 
-      // Reserve parts now that stock has arrived
-      partLines.forEach(line => {
-        const product = prodRef.current.find(p => p.id === line.productId)
-        if (!product) return
-        if (product.requiresSerial) {
-          const availableSerials = serialRef.current
-            .filter(s => s.productId === line.productId && s.status === 'available')
-            .slice(0, line.qty)
-          availableSerials.forEach(serial => {
-            setSerials(p => p.map(s => s.id === serial.id ? { ...s, status: 'assigned' as const, repairId } : s))
-          })
-        } else {
-          setProducts(p => p.map(x => x.id === line.productId
-            ? { ...x, stockQty: Math.max(0, x.stockQty - line.qty) }
-            : x
-          ))
-          addMove(line.productId!, line.productName ?? line.description, line.qty, 'out',
-            `Parts reserved — repair ${repair.ref}`, repair.ref, undefined, 'repair_unit')
-        }
+      // Reserve parts now that stock has arrived — into repair_unit
+      const arrivedReserve = planRepairPartReserve({
+        repairRef: repair.ref,
+        lines: partLines.map(line => {
+          const product = prodRef.current.find(p => p.id === line.productId)
+          return {
+            productId: line.productId!,
+            productName: line.productName ?? line.description,
+            qty: line.qty,
+            requiresSerial: Boolean(product?.requiresSerial),
+          }
+        }),
+        stockFor: (productId) => {
+          const product = prodRef.current.find(p => p.id === productId)
+          const locs = calcStockByLocation(product, serialRef.current, bulkStock, productId)
+          return { warehouse: locs.warehouse, shop: locs.shop, repair_unit: locs.repair_unit }
+        },
+        availableSerialsFor: (productId) => serialRef.current
+          .filter(s => s.productId === productId && s.status === 'available')
+          .map(s => ({ id: s.id, serial: s.serial, location: s.location })),
       })
+      for (const step of arrivedReserve.steps) {
+        if (step.kind === 'assign_serial') {
+          setSerials(p => p.map(s => s.id === step.serialId
+            ? { ...s, status: 'assigned' as const, repairId, location: 'repair_unit' as LocationId }
+            : s))
+          addMove(step.productId, step.productName, 1, 'transfer', step.reason, repair.ref, step.from, 'repair_unit', [step.serialNumber])
+        } else {
+          setBulkStock(prev => {
+            let next = upsertBulkStock(prev, step.productId, step.from, -step.qty)
+            next = upsertBulkStock(next, step.productId, step.to, step.qty)
+            return next
+          })
+          addMove(step.productId, step.productName, step.qty, 'transfer', step.reason, repair.ref, step.from, step.to, [])
+        }
+      }
 
       const updatedLines = (repair.quote?.lines ?? []).map(l => ({
         ...l,
@@ -13413,21 +13509,157 @@ const storeCtx: AppState = {
     },
 
     // ── POS ───────────────────────────────────────────────────────────────────
-    openPOSSession: (openingCash) => { setPosSessionOpen(true); setPosSessionOpeningCash(openingCash); showToast('POS session opened') },
-    closePOSSession: (_) => { setPosSessionOpen(false); showToast('Session closed') },
+    openPOSSession: (openingCash) => {
+      if (posSessionOpen && posSessionId) {
+        showToast('A POS session is already open', 'error')
+        return
+      }
+      const user = currentUser()
+      const session: POSSession = {
+        id: uid(),
+        ref: seq('POSSESS', 'pos'),
+        status: 'open',
+        openedAt: new Date().toISOString(),
+        openingCash: Math.max(0, Number(openingCash) || 0),
+        totalSales: 0,
+        totalCash: 0,
+        totalMpesa: 0,
+        totalCard: 0,
+        orderCount: 0,
+        openedBy: user?.name,
+      }
+      setPosSessions(p => [session, ...p])
+      setPosSessionId(session.id)
+      setPosSessionOpen(true)
+      setPosSessionOpeningCash(session.openingCash)
+      addAuditLog('open_pos_session', session.ref, `Opening cash ${fmtKes(session.openingCash)}`)
+      showToast(`POS session ${session.ref} opened`)
+    },
+    closePOSSession: (closingCash) => {
+      const user = currentUser()
+      const sessionId = posSessionId
+      if (!posSessionOpen || !sessionId) {
+        showToast('No open POS session', 'error')
+        return null
+      }
+      // Legacy orders used sessionId 'active' — include those while this session is open.
+      const orders = posOrders.filter(o => o.sessionId === sessionId || o.sessionId === 'active')
+      const totalCash = orders.filter(o => o.payment === 'cash').reduce((a, o) => a + o.total, 0)
+      const totalMpesa = orders.filter(o => o.payment === 'mpesa').reduce((a, o) => a + o.total, 0)
+      const totalCard = orders.filter(o => o.payment === 'card').reduce((a, o) => a + o.total, 0)
+      const totalSales = orders.reduce((a, o) => a + o.total, 0)
+      const counted = Math.max(0, Number(closingCash) || 0)
+      const expectedCash = posSessionOpeningCash + totalCash
+      const cashDifference = counted - expectedCash
+
+      let journalId: string | undefined
+      // Session settlement journal: tender totals (memo lines via balanced cash control).
+      // Per-sale journals already recognized revenue; here we post cash over/short + a
+      // zero-impact control entry summarizing tender mix for the GL/audit trail.
+      const controlLines: JournalEntryLine[] = []
+      if (Math.abs(cashDifference) >= 1) {
+        if (cashDifference > 0) {
+          controlLines.push(accountLine('2211 - Petty Cash', 'Cash over on session close', cashDifference, 0))
+          controlLines.push(accountLine('6495 - Cash Over/Short', 'Cash over on session close', 0, cashDifference))
+        } else {
+          const short = Math.abs(cashDifference)
+          controlLines.push(accountLine('6495 - Cash Over/Short', 'Cash short on session close', short, 0))
+          controlLines.push(accountLine('2211 - Petty Cash', 'Cash short on session close', 0, short))
+        }
+      }
+      // Balanced tender summary (Dr tender / Cr same tender) so method totals appear in journals.
+      if (totalCash > 0) {
+        controlLines.push(accountLine('2211 - Petty Cash', `Session cash sales ${fmtKes(totalCash)}`, totalCash, 0))
+        controlLines.push(accountLine('2211 - Petty Cash', `Session cash sales cleared`, 0, totalCash))
+      }
+      if (totalMpesa > 0) {
+        controlLines.push(accountLine('2210 - M-Pesa Paybill', `Session M-Pesa sales ${fmtKes(totalMpesa)}`, totalMpesa, 0))
+        controlLines.push(accountLine('2210 - M-Pesa Paybill', `Session M-Pesa sales cleared`, 0, totalMpesa))
+      }
+      if (totalCard > 0) {
+        controlLines.push(accountLine('2201 - NCBA Bank', `Session card sales ${fmtKes(totalCard)}`, totalCard, 0))
+        controlLines.push(accountLine('2201 - NCBA Bank', `Session card sales cleared`, 0, totalCard))
+      }
+
+      const openSession = posSessions.find(s => s.id === sessionId)
+      const sessionRef = openSession?.ref || seq('POSSESS', 'pos')
+      if (controlLines.length > 0) {
+        const debit = controlLines.reduce((a, l) => a + l.debit, 0)
+        const credit = controlLines.reduce((a, l) => a + l.credit, 0)
+        const journal: JournalEntry = {
+          id: uid(),
+          ref: `JRN/${sessionRef}`,
+          date: now(),
+          source: 'pos_session',
+          description: `POS session close ${sessionRef} · sales ${fmtKes(totalSales)} · cash ${fmtKes(totalCash)} · mpesa ${fmtKes(totalMpesa)} · card ${fmtKes(totalCard)} · variance ${fmtKes(cashDifference)}`,
+          status: 'posted',
+          bankAccountId: 'cash',
+          lines: controlLines,
+          totalDebit: debit,
+          totalCredit: credit,
+        }
+        journalId = journal.id
+        setJournalEntries(p => [journal, ...p])
+        addAuditLog('close_pos_session', sessionRef, journal.description)
+      }
+
+      const closed: POSSession = {
+        id: sessionId,
+        ref: sessionRef,
+        status: 'closed',
+        openedAt: openSession?.openedAt || new Date().toISOString(),
+        closedAt: new Date().toISOString(),
+        openingCash: posSessionOpeningCash,
+        closingCash: counted,
+        expectedCash,
+        cashDifference,
+        totalSales,
+        totalCash,
+        totalMpesa,
+        totalCard,
+        orderCount: orders.length,
+        openedBy: openSession?.openedBy,
+        closedBy: user?.name,
+        journalId,
+      }
+      setPosSessions(p => {
+        const exists = p.some(s => s.id === sessionId)
+        return exists ? p.map(s => s.id === sessionId ? closed : s) : [closed, ...p]
+      })
+      setPosSessionOpen(false)
+      setPosSessionId(null)
+      showToast(
+        cashDifference === 0
+          ? `Session closed · ${orders.length} sales · ${fmtKes(totalSales)}`
+          : `Session closed · cash variance ${fmtKes(cashDifference)}`,
+        cashDifference === 0 ? 'success' : 'info',
+      )
+      return closed
+    },
     createPOSOrder: (lines, payment, customerId, customerName, pointsRedeemed = 0, applyVat = false) => {
+      if (!posSessionOpen) {
+        showToast('Open a POS session before charging', 'error')
+        return null
+      }
+      const sessionId = posSessionId || 'active'
       const normalizedLines = lines.map(l => ({ ...l, subtotal: Number(l.price || 0) * Number(l.qty || 0) }))
       const sub = normalizedLines.reduce((a, l) => a + l.subtotal, 0)
       const vatRate = Number(companySettings.vatRate ?? 16)
       const tax = applyVat ? Math.round(sub * vatRate / 100) : 0
       const total = Math.max(0, sub + tax - pointsRedeemed)
       const user = currentUser()
-    let pointsEarned = 0
-    if (customerId) {
-      pointsEarned = Math.floor(total / 100) // 1 point per 100 KES
+      let pointsEarned = 0
+      if (customerId) {
+        pointsEarned = Math.floor(total / 100) // 1 point per 100 KES
         setContacts(prev => prev.map(c => c.id === customerId ? { ...c, loyaltyPoints: Math.max(0, (c.loyaltyPoints || 0) - pointsRedeemed) + pointsEarned } : c))
-    }
-        const order: POSOrder = { id: uid(), ref: seq('POS', 'pos'), sessionId: 'active', lines: normalizedLines, subtotal: sub, taxTotal: tax, total, payment, customerId, customerName, date: now(), createdAt: new Date().toISOString(), createdByUserId: user?.id, createdByName: user?.name, pointsEarned, pointsRedeemed }
+      }
+      const order: POSOrder = {
+        id: uid(), ref: seq('POS', 'pos'), sessionId,
+        lines: normalizedLines, subtotal: sub, taxTotal: tax, total, payment,
+        customerId, customerName, date: now(), createdAt: new Date().toISOString(),
+        createdByUserId: user?.id, createdByName: user?.name, pointsEarned, pointsRedeemed,
+      }
+      // Inventory: decrement stock + stock move out of shop (or serial source location).
       normalizedLines.forEach(l => {
         const product = prodRef.current.find(x => x.id === l.productId)
         const serialSource = l.serialId ? serialRef.current.find(s => s.id === l.serialId)?.location : undefined
@@ -13491,6 +13723,7 @@ const storeCtx: AppState = {
       setJournalEntries(p => [posJournal, ...p])
       addAuditLog('post_pos', order.ref, `POS sale posted to journal ${posJournal.ref}`)
       showToast(`${order.ref} · ${fmtKes(order.total)} via ${payment.toUpperCase()}`)
+      return order
     },
 
     // ── Stock Adjustments ─────────────────────────────────────────────────────
@@ -14954,6 +15187,8 @@ const storeCtx: AppState = {
     posOrders,
     posSessionOpen,
     posSessionOpeningCash,
+    posSessionId,
+    posSessions,
     products,
     saleOrders,
     serials,
@@ -14971,6 +15206,8 @@ const storeCtx: AppState = {
     posOrders,
     posSessionOpen,
     posSessionOpeningCash,
+    posSessionId,
+    posSessions,
     products,
     saleOrders,
     serials,

@@ -5,6 +5,7 @@ import { invoiceDocState, invoicePaymentStatus, isOpenInvoice, invoiceResidual, 
 import { guardSpreadsheetFile, guardSpreadsheetRows, SpreadsheetGuardError } from '@/lib/spreadsheet-guard'
 import { Badge, Modal, Field, Input, Select, Textarea, InfoRow, ModuleSkeleton, ModuleHeader } from '@/components/ui'
 import { PrimaryActionButton, SecondaryActionMenu } from '@/components/erp'
+import Chatter from '@/components/erp/Chatter'
 import { DataTable, type ColumnDef } from '@/components/data-table'
 import { Fa } from '@/components/icons'
 import {
@@ -14,7 +15,7 @@ import {
 } from '@fortawesome/free-solid-svg-icons'
 
 type FilterTab = 'all' | 'companies' | 'individuals' | 'customers' | 'vendors'
-type ViewTab   = 'info' | 'financial' | 'persons' | 'history'
+type ViewTab   = 'info' | 'financial' | 'persons' | 'history' | 'chatter'
 
 const INDUSTRIES = [
   'Financial Services', 'Telecommunications', 'Electronics', 'IT Services',
@@ -103,7 +104,8 @@ export default function Contacts() {
   useEffect(() => { setMounted(true) }, [])
 
   const { contacts, addContact, updateContact, deleteContact,
-    saleOrders, invoices, repairs, posOrders, showToast } = useCrmStore()
+    saleOrders, invoices, repairs, posOrders, showToast, users, currentUserId } = useCrmStore()
+  const currentUser = users.find(u => u.id === currentUserId)
   const [tab, setTab] = useState<FilterTab>('all')
   const [search, setSearch] = useState('')
   const [showForm, setShowForm] = useState(false)
@@ -486,6 +488,7 @@ export default function Contacts() {
                 ['financial', 'Financial'],
                 ...(vc.type === 'company' ? [['persons', `Persons (${persons.length})`]] : []),
                 ['history',   `History (${historyCount})`],
+                ['chatter',   'Notes'],
               ] as [ViewTab, string][]).map(([t, label]) => (
                 <button key={t} onClick={() => setViewTab(t)} style={viewTabStyle(t)}>
                   {label}
@@ -762,6 +765,15 @@ export default function Contacts() {
                   </div>
                 )}
               </div>
+            )}
+
+            {viewTab === 'chatter' && (
+              <Chatter
+                model="contact"
+                recordId={vc.id}
+                staffName={currentUser?.name || 'Staff'}
+                title="Internal Notes & Activities"
+              />
             )}
 
             <div className="flex justify-end pt-1">
