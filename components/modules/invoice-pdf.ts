@@ -6,17 +6,25 @@ import {
   openCommercialPdf,
   type CommercialPdfInput,
 } from '@/lib/commercial-pdf'
+import {
+  buildPaymentDetailLines,
+  type DocumentPaymentDetails,
+} from '@/lib/document-payment-details'
 
 /** Map an invoice onto the shared Odoo-style PDF input. */
 export function invoicePdfInput(
   inv: Invoice,
   saleOrders: SaleOrder[],
   contacts: Contact[] = [],
+  paymentDetails?: Partial<DocumentPaymentDetails> | null,
+  company?: Pick<CompanySettings, 'name' | 'mpesaPaybill' | 'mpesaAccount' | 'currency'>,
+  bankAccounts: BankAccount[] = [],
 ): CommercialPdfInput {
   const so = saleOrders?.find(s => s.id === inv.saleOrderId)
   const contact = contacts.find(c => c.id === inv.partnerId)
   const isCustomerInvoice = inv.type === 'customer_invoice'
-  return {
+  const paymentCommunication = isCustomerInvoice && invoiceDocState(inv.status) === 'posted'
+  const base: CommercialPdfInput = {
     title: isCustomerInvoice ? 'Invoice' : 'Bill',
     ref: displayDocRef(inv.ref),
     date: inv.date,
@@ -48,8 +56,22 @@ export function invoicePdfInput(
     amountPaid: inv.amountPaid,
     notes: inv.notes,
     // Odoo prints the payment communication on posted customer invoices.
-    paymentCommunication: isCustomerInvoice && invoiceDocState(inv.status) === 'posted',
+    paymentCommunication,
+    // Vendor bills do not show customer payment instructions.
+    showPaymentDetails: isCustomerInvoice,
   }
+
+  if (isCustomerInvoice && company) {
+    base.paymentDetailLines = buildPaymentDetailLines({
+      details: paymentDetails,
+      company,
+      bankAccounts,
+      documentRef: displayDocRef(inv.ref),
+      paymentCommunication,
+    })
+  }
+
+  return base
 }
 
 export async function downloadInvoicePdf(
@@ -58,8 +80,9 @@ export async function downloadInvoicePdf(
   contacts: Contact[],
   companySettings: CompanySettings,
   bankAccounts: BankAccount[],
+  paymentDetails?: Partial<DocumentPaymentDetails> | null,
 ) {
-  const input = invoicePdfInput(inv, saleOrders, contacts)
+  const input = invoicePdfInput(inv, saleOrders, contacts, paymentDetails, companySettings, bankAccounts)
   await downloadCommercialPdf(input, companySettings, bankAccounts, `${input.title} - ${input.ref}.pdf`)
 }
 
@@ -70,8 +93,9 @@ export async function invoicePdfBase64(
   contacts: Contact[],
   companySettings: CompanySettings,
   bankAccounts: BankAccount[],
+  paymentDetails?: Partial<DocumentPaymentDetails> | null,
 ): Promise<{ pdfBase64: string; pdfFilename: string }> {
-  const input = invoicePdfInput(inv, saleOrders, contacts)
+  const input = invoicePdfInput(inv, saleOrders, contacts, paymentDetails, companySettings, bankAccounts)
   const doc = await buildCommercialPdf(input, companySettings, bankAccounts)
   const dataUri = doc.output('datauristring')
   return {
@@ -86,8 +110,13 @@ export async function openInvoicePdf(
   contacts: Contact[],
   companySettings: CompanySettings,
   bankAccounts: BankAccount[],
+  paymentDetails?: Partial<DocumentPaymentDetails> | null,
 ): Promise<boolean> {
-  return openCommercialPdf(invoicePdfInput(inv, saleOrders, contacts), companySettings, bankAccounts)
+  return openCommercialPdf(
+    invoicePdfInput(inv, saleOrders, contacts, paymentDetails, companySettings, bankAccounts),
+    companySettings,
+    bankAccounts,
+  )
 }
 
 export { buildCommercialPdf }

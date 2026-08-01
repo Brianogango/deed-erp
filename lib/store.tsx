@@ -33,6 +33,11 @@ import {
   hasGeneratedDeliveryNote,
   type InvoicePolicy,
 } from '@/lib/odoo-sales-flow'
+import {
+  normalizeDocumentPaymentDetails,
+  type DocumentPaymentDetails,
+  type DocumentPaymentDetailsMap,
+} from '@/lib/document-payment-details'
 import { useHrStore as useHrDomainStore } from '@/hooks/useHrStore'
 import {
   buildInventoryBarcode,
@@ -2722,8 +2727,12 @@ export interface AppState {
   saveBankRecon: (recon: Omit<BankRecon, 'id' | 'reconciledBy' | 'reconciledAt'>) => void
   updateBankRecon: (id: string, p: Partial<BankRecon>) => void
   updateBankAccount: (id: string, p: Partial<Pick<BankAccount, 'name' | 'bankName' | 'accountNo' | 'openingBalance' | 'openingDate' | 'active'>>) => void
-  addBankAccount: (a: Omit<BankAccount, 'id'>) => void
+  addBankAccount: (a: Omit<BankAccount, 'id'>) => string
   deleteBankAccount: (id: string) => void
+  /** Per-document bank/M-Pesa selection for quote / proforma / invoice PDFs. */
+  documentPaymentDetails: DocumentPaymentDetailsMap
+  getDocumentPaymentDetails: (documentId: string) => DocumentPaymentDetails
+  setDocumentPaymentDetails: (documentId: string, details: DocumentPaymentDetails) => void
   companySettings: CompanySettings
   updateCompanySettings: (p: Partial<CompanySettings>) => void
   systemSettings: SystemSettings
@@ -3187,6 +3196,10 @@ export type SalesStoreState = Pick<AppState,
   | 'systemSettings'
   | 'companySettings'
   | 'bankAccounts'
+  | 'documentPaymentDetails'
+  | 'getDocumentPaymentDetails'
+  | 'setDocumentPaymentDetails'
+  | 'addBankAccount'
   | 'outboundReleases'
   | 'approvalRequests'
   | 'sops'
@@ -3333,6 +3346,10 @@ export type CrmStoreState = Pick<AppState,
 export type FinanceStoreState = Pick<AppState,
   | 'accounts'
   | 'bankAccounts'
+  | 'documentPaymentDetails'
+  | 'getDocumentPaymentDetails'
+  | 'setDocumentPaymentDetails'
+  | 'addBankAccount'
   | 'bankRecons'
   | 'bankStatementLines'
   | 'buyBacks'
@@ -4617,6 +4634,10 @@ export function StoreProvider({
   const [journalEntries, setJournalEntries] = useLS('deed_journalEntries', seedJournalEntries)
   const [accounts, setAccounts]             = useLS('deed_accounts', seedAccounts)
   const [bankAccounts, setBankAccountsState] = useLS<BankAccount[]>('deed_bankAccounts', DEFAULT_BANK_ACCOUNTS)
+  const [documentPaymentDetails, setDocumentPaymentDetailsState] = useLS<DocumentPaymentDetailsMap>(
+    'deed_documentPaymentDetails',
+    {},
+  )
   const [companySettings, setCompanySettings] = useLS<CompanySettings>('deed_companySettings', DEFAULT_COMPANY_SETTINGS)
   const [systemSettings, setSystemSettings] = useLS<SystemSettings>('deed_systemSettings', DEFAULT_SYSTEM_SETTINGS)
   const [dbApprovalRules, setDbApprovalRules] = useState<Array<{ approvalType: string; thresholds: { maxValue: number; requiredRoles: string[] }[]; isActive: boolean }>>([])
@@ -5294,6 +5315,9 @@ export function StoreProvider({
     updateDelivery: (...args: Parameters<AppState['updateDelivery']>) => storeCtxRef.current!.updateDelivery(...args),
     initRelease: (...args: Parameters<AppState['initRelease']>) => storeCtxRef.current!.initRelease(...args),
     approveRequest: (...args: Parameters<AppState['approveRequest']>) => storeCtxRef.current!.approveRequest(...args),
+    getDocumentPaymentDetails: (...args: Parameters<AppState['getDocumentPaymentDetails']>) => storeCtxRef.current!.getDocumentPaymentDetails(...args),
+    setDocumentPaymentDetails: (...args: Parameters<AppState['setDocumentPaymentDetails']>) => storeCtxRef.current!.setDocumentPaymentDetails(...args),
+    addBankAccount: (...args: Parameters<AppState['addBankAccount']>) => storeCtxRef.current!.addBankAccount(...args),
   }), [])
 
   const repairActions = useMemo(() => ({
@@ -5422,6 +5446,9 @@ export function StoreProvider({
     updatePO: (...args: Parameters<AppState['updatePO']>) => storeCtxRef.current!.updatePO(...args),
     updatePOLine: (...args: Parameters<AppState['updatePOLine']>) => storeCtxRef.current!.updatePOLine(...args),
     validateReceipt: (...args: Parameters<AppState['validateReceipt']>) => storeCtxRef.current!.validateReceipt(...args),
+    getDocumentPaymentDetails: (...args: Parameters<AppState['getDocumentPaymentDetails']>) => storeCtxRef.current!.getDocumentPaymentDetails(...args),
+    setDocumentPaymentDetails: (...args: Parameters<AppState['setDocumentPaymentDetails']>) => storeCtxRef.current!.setDocumentPaymentDetails(...args),
+    addBankAccount: (...args: Parameters<AppState['addBankAccount']>) => storeCtxRef.current!.addBankAccount(...args),
   }), [])
 
   const hrActions = useMemo(() => ({
@@ -5906,8 +5933,20 @@ const storeCtx: AppState = {
       setBankRecons(prev => prev.map(r => r.id === id ? { ...r, ...p } : r))
     },
     updateBankAccount: (id, p) => setBankAccountsState(prev => prev.map(a => a.id === id ? { ...a, ...p } : a)),
-    addBankAccount: (a) => setBankAccountsState(prev => [...prev, { ...a, id: uid() }]),
+    addBankAccount: (a) => {
+      const id = uid()
+      setBankAccountsState(prev => [...prev, { ...a, id }])
+      return id
+    },
     deleteBankAccount: (id) => setBankAccountsState(prev => prev.filter(a => a.id !== id)),
+    documentPaymentDetails,
+    getDocumentPaymentDetails: (documentId) =>
+      normalizeDocumentPaymentDetails(documentPaymentDetails[documentId]),
+    setDocumentPaymentDetails: (documentId, details) => {
+      if (!documentId) return
+      const next = normalizeDocumentPaymentDetails(details)
+      setDocumentPaymentDetailsState(prev => ({ ...prev, [documentId]: next }))
+    },
     companySettings,
     updateCompanySettings: (p) => setCompanySettings(prev => ({ ...prev, ...p })),
     systemSettings,
@@ -14531,6 +14570,7 @@ const storeCtx: AppState = {
     systemSettings,
     companySettings,
     bankAccounts,
+    documentPaymentDetails,
     outboundReleases,
     approvalRequests,
     sops,
@@ -14548,6 +14588,7 @@ const storeCtx: AppState = {
     systemSettings,
     companySettings,
     bankAccounts,
+    documentPaymentDetails,
     outboundReleases,
     approvalRequests,
     sops,
@@ -14652,6 +14693,7 @@ const storeCtx: AppState = {
   const financeStore = useMemo<FinanceStoreState>(() => ({
     accounts,
     bankAccounts,
+    documentPaymentDetails,
     bankRecons,
     bankStatementLines,
     buyBacks,
@@ -14687,6 +14729,7 @@ const storeCtx: AppState = {
   }), [
     accounts,
     bankAccounts,
+    documentPaymentDetails,
     bankRecons,
     bankStatementLines,
     buyBacks,

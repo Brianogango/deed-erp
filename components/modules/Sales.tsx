@@ -67,6 +67,13 @@ import { PrimaryActionButton, OperationalSummary, TablePageLayout } from '@/comp
 import { DataTable, type ColumnDef } from '@/components/data-table'
 import { Fa } from '@/components/icons'
 import { downloadCommercialPdf, openCommercialPdf, type CommercialPdfInput } from '@/lib/commercial-pdf'
+import {
+  DEFAULT_DOCUMENT_PAYMENT_DETAILS,
+  buildPaymentDetailLines,
+  normalizeDocumentPaymentDetails,
+  type DocumentPaymentDetails,
+} from '@/lib/document-payment-details'
+import PaymentDetailsPicker from '@/components/payment/PaymentDetailsPicker'
 import { resolveListPrice } from '@/lib/pricing/pricelist'
 import Chatter from '@/components/erp/Chatter'
 import { SalesRecordHeader } from '@/components/modules/sales/SalesRecordHeader'
@@ -278,6 +285,7 @@ function SalesContent() {
     companySettings, bankAccounts, confirmDeliveryWithStockDeduction,
     updateDelivery, outboundReleases, initRelease,
     approvalRequests, approveRequest,
+    getDocumentPaymentDetails, setDocumentPaymentDetails, addBankAccount,
   } = useSalesStore()
 
   // The module lands directly on the operational order list. The old
@@ -321,6 +329,7 @@ function SalesContent() {
   const [newPricelist, setNewPricelist] = useState('RETAIL')
   const [newInvoiceAddress, setNewInvoiceAddress] = useState('')
   const [newDeliveryAddress, setNewDeliveryAddress] = useState('')
+  const [newPaymentDetails, setNewPaymentDetails] = useState<DocumentPaymentDetails>({ ...DEFAULT_DOCUMENT_PAYMENT_DETAILS })
   const [newDraftLines, setNewDraftLines] = useState<DraftLine[]>([])
   const draftLoadedRef = useRef(false)
   const draftAutosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -437,7 +446,7 @@ function SalesContent() {
   // Shared mapping onto the Odoo-style PDF document.
   const salesDocumentPdfInput = (so: SalesOrderView, title: string, overrides: Partial<CommercialPdfInput> = {}): CommercialPdfInput => {
     const contact = contacts.find(c => c.id === so.customerId)
-    return {
+    const merged = {
       title,
       ref: so.ref,
       date: so.date,
@@ -463,6 +472,15 @@ function SalesContent() {
       currency: so.currencyCode || companySettings.currency || 'KES',
       ...overrides,
     }
+    if (!merged.paymentDetailLines) {
+      merged.paymentDetailLines = buildPaymentDetailLines({
+        details: getDocumentPaymentDetails(so.id),
+        company: companySettings,
+        bankAccounts,
+        documentRef: merged.ref,
+      })
+    }
+    return merged
   }
 
   // Customer preview / print: the PDF opened in a new tab.
@@ -580,6 +598,7 @@ function SalesContent() {
     setNewCustomer(null); setNewDeliveryDate(''); setNewPaymentTerms('30')
     setNewNotes(''); setNewCustomerRef(''); setNewSalesTeam(''); setNewPricelist('')
     setNewInvoiceAddress(''); setNewDeliveryAddress('')
+    setNewPaymentDetails({ ...DEFAULT_DOCUMENT_PAYMENT_DETAILS })
     setNewDraftLines([]); setView('new')
     startUxTask('sales_quote_create', { module: 'sales' })
   }
@@ -661,6 +680,7 @@ function SalesContent() {
         pricelist?: string
         invoiceAddress?: string
         deliveryAddress?: string
+        paymentDetails?: Partial<DocumentPaymentDetails>
         lines: DraftLine[]
       }
       if (parsed.customer) setNewCustomer(parsed.customer)
@@ -672,6 +692,7 @@ function SalesContent() {
       if (parsed.pricelist) setNewPricelist(parsed.pricelist)
       if (parsed.invoiceAddress) setNewInvoiceAddress(parsed.invoiceAddress)
       if (parsed.deliveryAddress) setNewDeliveryAddress(parsed.deliveryAddress)
+      if (parsed.paymentDetails) setNewPaymentDetails(normalizeDocumentPaymentDetails(parsed.paymentDetails))
       if (Array.isArray(parsed.lines) && parsed.lines.length > 0) {
         setNewDraftLines(parsed.lines.map(line => ({
           ...line,
@@ -710,6 +731,7 @@ function SalesContent() {
         pricelist: newPricelist,
         invoiceAddress: newInvoiceAddress,
         deliveryAddress: newDeliveryAddress,
+        paymentDetails: newPaymentDetails,
         lines: newDraftLines,
       }
       try {
@@ -722,7 +744,7 @@ function SalesContent() {
     return () => {
       if (draftAutosaveTimerRef.current) clearTimeout(draftAutosaveTimerRef.current)
     }
-  }, [view, quoteDraftKey, newCustomer, newDeliveryDate, newPaymentTerms, newNotes, newCustomerRef, newSalesTeam, newPricelist, newInvoiceAddress, newDeliveryAddress, newDraftLines])
+  }, [view, quoteDraftKey, newCustomer, newDeliveryDate, newPaymentTerms, newNotes, newCustomerRef, newSalesTeam, newPricelist, newInvoiceAddress, newDeliveryAddress, newPaymentDetails, newDraftLines])
 
   // ── Save new quotation ──────────────────────────────────────────────────
   const saveNewQuotation = (openCreatedOrder: boolean) => {
@@ -792,6 +814,7 @@ function SalesContent() {
       ...(newInvoiceAddress ? { invoiceAddress: newInvoiceAddress } : {}),
       ...(newDeliveryAddress ? { deliveryAddress: newDeliveryAddress } : {}),
     })
+    setDocumentPaymentDetails(so.id, newPaymentDetails)
     try {
       localStorage.removeItem(quoteDraftKey)
     } catch {
@@ -811,6 +834,7 @@ function SalesContent() {
     setNewPricelist('')
     setNewInvoiceAddress('')
     setNewDeliveryAddress('')
+    setNewPaymentDetails({ ...DEFAULT_DOCUMENT_PAYMENT_DETAILS })
     setNewDraftLines([])
     showToast('Quotation saved. Continue with another entry.', 'success')
     startUxTask('sales_quote_create', { module: 'sales', chained: true })
@@ -1007,6 +1031,10 @@ function SalesContent() {
                   setNewInvoiceAddress={setNewInvoiceAddress}
                   newDeliveryAddress={newDeliveryAddress}
                   setNewDeliveryAddress={setNewDeliveryAddress}
+                  newPaymentDetails={newPaymentDetails}
+                  setNewPaymentDetails={setNewPaymentDetails}
+                  bankAccounts={bankAccounts}
+                  addBankAccount={addBankAccount}
                   pricelistsEnabled={systemSettings.salesPricelists}
                   newDraftLines={newDraftLines}
                   addDraftLine={addDraftLine}
@@ -1226,7 +1254,16 @@ function SalesContent() {
                       {/* ── Sales Order ── */}
                       {activeOrder?.status === 'sale' && (<>
                         {canInvoiceFromSO && invoiceDeliveryReady && (activeInvoiceStatus === 'to_invoice' || activeInvoiceStatus === 'upselling') ? (
-                          <button className="btn-primary flex items-center gap-2 text-xs" onClick={() => { createInvoiceFromSO(activeOrder.id) }}><Fa icon={faFileInvoiceDollar} /><span>Create Invoice</span></button>
+                          <button
+                            className="btn-primary flex items-center gap-2 text-xs"
+                            onClick={async () => {
+                              const soPayment = getDocumentPaymentDetails(activeOrder.id)
+                              const inv = await Promise.resolve(createInvoiceFromSO(activeOrder.id))
+                              if (inv?.id) setDocumentPaymentDetails(inv.id, soPayment)
+                            }}
+                          >
+                            <Fa icon={faFileInvoiceDollar} /><span>Create Invoice</span>
+                          </button>
                         ) : canInvoiceFromSO && activeInvoices.length === 0 && !invoiceDeliveryReady ? (
                           <button className="btn-secondary flex items-center gap-2 text-xs opacity-60 cursor-not-allowed" disabled title="Validate delivery and generate the Delivery Note first">
                             <Fa icon={faFileInvoiceDollar} /><span>Invoice after Delivery Note</span>
@@ -1363,6 +1400,15 @@ function SalesContent() {
                               />
                             </Field>
                           </div>
+                          <div className="sm:col-span-2 lg:col-span-3 xl:col-span-6">
+                            <PaymentDetailsPicker
+                              value={getDocumentPaymentDetails(activeOrder.id)}
+                              onChange={next => setDocumentPaymentDetails(activeOrder.id, next)}
+                              bankAccounts={bankAccounts}
+                              companySettings={companySettings}
+                              onAddBankAccount={addBankAccount}
+                            />
+                          </div>
                         </div>
                       ) : (
                       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 p-4 rounded-2xl bg-[var(--bg-surface)] border border-[var(--border-lt)]">
@@ -1393,6 +1439,15 @@ function SalesContent() {
                         <div className="flex flex-col gap-1">
                           <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)]">Order Total</span>
                           <span className="text-xs font-bold text-primary-600">{fmtKes(activeOrder.total)}</span>
+                        </div>
+                        <div className="sm:col-span-2 lg:col-span-3 xl:col-span-6">
+                          <PaymentDetailsPicker
+                            value={getDocumentPaymentDetails(activeOrder.id)}
+                            onChange={next => setDocumentPaymentDetails(activeOrder.id, next)}
+                            bankAccounts={bankAccounts}
+                            companySettings={companySettings}
+                            onAddBankAccount={addBankAccount}
+                          />
                         </div>
                       </div>
                       )}
@@ -1846,7 +1901,8 @@ function NewQuotationForm({
   newPaymentTerms, setNewPaymentTerms, newNotes, setNewNotes,
   newCustomerRef, setNewCustomerRef, newSalesTeam, setNewSalesTeam,
   newPricelist, setNewPricelist, newInvoiceAddress, setNewInvoiceAddress,
-  newDeliveryAddress, setNewDeliveryAddress, pricelistsEnabled, newDraftLines,
+  newDeliveryAddress, setNewDeliveryAddress, newPaymentDetails, setNewPaymentDetails,
+  bankAccounts, addBankAccount, pricelistsEnabled, newDraftLines,
   addDraftLine, addDraftSection, updateDraftLine, removeDraftLine, moveDraftLine, selectProductForDraftLine,
   calcDraftLineTotal, draftSubtotal, draftTaxTotal, draftTotal, canEditDiscount,
   companySettings, canSave, saveBlockedReason, onSave, onSaveAndAddAnother, onCancel, onCreateNewCustomer,
@@ -1861,6 +1917,10 @@ function NewQuotationForm({
   newPricelist: string; setNewPricelist: (v: string) => void
   newInvoiceAddress: string; setNewInvoiceAddress: (v: string) => void
   newDeliveryAddress: string; setNewDeliveryAddress: (v: string) => void
+  newPaymentDetails: DocumentPaymentDetails
+  setNewPaymentDetails: (v: DocumentPaymentDetails) => void
+  bankAccounts: any[]
+  addBankAccount: (a: any) => string
   pricelistsEnabled: boolean
   newDraftLines: DraftLine[]; addDraftLine: () => void; addDraftSection: () => void
   updateDraftLine: (id: string, field: keyof DraftLine, value: string) => void
@@ -2200,17 +2260,26 @@ function NewQuotationForm({
 
         {/* Notes + Totals */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div className="flex flex-col gap-1.5">
-            <label className="text-[10px] uppercase tracking-wider font-bold text-[var(--text-3)]">Notes / Terms</label>
-            <textarea
-              aria-label="Notes and payment terms"
-              className="form-input text-xs flex-1 min-h-[110px]"
-              rows={5}
-              placeholder="Payment terms, warranty conditions, special instructions…"
-              value={newNotes}
-              onChange={e => setNewNotes(e.target.value)}
+          <div className="flex flex-col gap-3">
+            <div className="flex flex-col gap-1.5">
+              <label className="text-[10px] uppercase tracking-wider font-bold text-[var(--text-3)]">Notes / Terms</label>
+              <textarea
+                aria-label="Notes and payment terms"
+                className="form-input text-xs flex-1 min-h-[110px]"
+                rows={5}
+                placeholder="Payment terms, warranty conditions, special instructions…"
+                value={newNotes}
+                onChange={e => setNewNotes(e.target.value)}
+              />
+              <p className="text-[10px] text-[var(--text-4)]">Shown on the quotation document below the line items.</p>
+            </div>
+            <PaymentDetailsPicker
+              value={newPaymentDetails}
+              onChange={setNewPaymentDetails}
+              bankAccounts={bankAccounts}
+              companySettings={companySettings}
+              onAddBankAccount={addBankAccount}
             />
-            <p className="text-[10px] text-[var(--text-4)]">Shown on the quotation document below the line items.</p>
           </div>
           <div className="card p-5 bg-[var(--bg-surface)] border-[var(--border-lt)]">
             <h4 className="text-xs font-bold text-[var(--text-2)] mb-4">Summary</h4>
