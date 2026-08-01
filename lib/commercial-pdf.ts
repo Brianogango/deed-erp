@@ -18,6 +18,7 @@ export interface CommercialPdfLine {
   qty: number
   unitPrice: number
   taxRate?: number
+  discountPct?: number
   subtotal: number
 }
 
@@ -41,6 +42,8 @@ export interface CommercialPdfInput {
   /** Prefer document currency snapshot over company display currency. */
   currency?: string
   subtotal: number
+  /** Sum of per-line discounts (shown on PDF totals when &gt; 0). */
+  discountTotal?: number
   taxTotal: number
   total: number
   amountPaid?: number
@@ -100,6 +103,7 @@ export async function buildCommercialPdf(
     partyLabel: input.partyLabel,
     lines: input.lines,
     subtotal: input.subtotal,
+    discountTotal: input.discountTotal,
     taxTotal: input.taxTotal,
     total: input.total,
     amountPaid: input.amountPaid,

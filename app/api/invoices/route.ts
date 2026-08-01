@@ -3,7 +3,7 @@ import prisma from '@/lib/prisma'
 import { getRequiredSession, requireRole, withApiErrorHandling } from '@/lib/auth/api'
 import { optionalUuid, resolveClientId } from '@/lib/legacy-compat'
 import { isUUID } from '@/lib/utils'
-import { computeInvoiceTotals, clampAmountPaid } from '@/lib/finance-invoice'
+import { computeInvoiceTotals, clampAmountPaid, computeInvoiceLineMoney } from '@/lib/finance-invoice'
 import { writeFinancialAudit } from '@/lib/finance-audit'
 import { getNextDocNumber } from '@/lib/doc-ref-counter'
 
@@ -73,16 +73,27 @@ function mapInvoiceBodyToDb(body: any, clientId: string) {
 }
 
 function mapInvoiceItems(lines: any[]) {
-  return lines.map((l: any) => ({
-    description: l.description ?? '',
-    qty: Number(l.qty ?? 1),
-    unitPrice: Number(l.unitPrice ?? 0),
-    taxRate: Number(l.taxRate ?? 0),
-    lineSubtotal: Number(l.subtotal ?? l.lineSubtotal ?? 0),
-    lineTax: Number(l.lineTax ?? 0),
-    lineTotal: Number(l.lineTotal ?? l.subtotal ?? 0),
-    ...(optionalUuid(l.productId) ? { productId: optionalUuid(l.productId) } : {}),
-  }))
+  return lines.map((l: any) => {
+    const money = computeInvoiceLineMoney({
+      qty: l.qty,
+      unitPrice: l.unitPrice,
+      taxRate: l.taxRate,
+      discountPct: l.discountPct ?? l.discount,
+      subtotal: l.subtotal,
+      lineSubtotal: l.lineSubtotal,
+    })
+    return {
+      description: l.description ?? '',
+      qty: money.qty || 1,
+      unitPrice: money.unitPrice,
+      discountPct: money.discountPct,
+      taxRate: money.taxRate,
+      lineSubtotal: money.lineSubtotal,
+      lineTax: money.lineTax,
+      lineTotal: money.lineTotal,
+      ...(optionalUuid(l.productId) ? { productId: optionalUuid(l.productId) } : {}),
+    }
+  })
 }
 
 export async function GET() {

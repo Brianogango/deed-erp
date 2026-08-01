@@ -33,9 +33,16 @@ export function invoicePdfInput(
       qty: l.qty,
       unitPrice: l.unitPrice,
       taxRate: l.taxRate,
+      discountPct: l.discountPct,
       subtotal: l.subtotal,
     })),
     subtotal: inv.subtotal,
+    discountTotal: inv.lines.reduce((sum, l) => {
+      const pct = Number(l.discountPct) || 0
+      if (pct <= 0) return sum
+      const gross = (Number(l.qty) || 0) * (Number(l.unitPrice) || 0)
+      return sum + Math.round(gross * pct) / 100
+    }, 0),
     taxTotal: inv.taxTotal,
     total: inv.total,
     amountPaid: inv.amountPaid,

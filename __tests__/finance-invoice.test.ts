@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   computeInvoiceTotals,
+  computeInvoiceLineMoney,
   clampAmountPaid,
   mapDbInvoiceItemsToClientLines,
   preserveInvoiceLinesOnStoreWrite,
@@ -23,6 +24,14 @@ describe('computeInvoiceTotals', () => {
     expect(totals.totalAmount).toBe(1160)
   })
 
+  it('applies per-line discount percent before tax', () => {
+    const totals = computeInvoiceTotals([{ qty: 1, unitPrice: 10000, discountPct: 10, taxRate: 16 }])
+    expect(totals.subtotal).toBe(9000)
+    expect(totals.discountAmount).toBe(1000)
+    expect(totals.taxAmount).toBe(1440)
+    expect(totals.totalAmount).toBe(10440)
+  })
+
   it('falls back to header tax when lines carry no rate (POS/repair VAT pattern)', () => {
     const totals = computeInvoiceTotals(
       [{ qty: 1, unitPrice: 1000, taxRate: 0 }],
@@ -33,7 +42,7 @@ describe('computeInvoiceTotals', () => {
     expect(totals.totalAmount).toBe(1160)
   })
 
-  it('applies discount and never returns a negative total', () => {
+  it('applies header discount when no line discount, and never returns a negative total', () => {
     const totals = computeInvoiceTotals([{ qty: 1, unitPrice: 100 }], { discount: 500 })
     expect(totals.totalAmount).toBe(0)
     expect(totals.discountAmount).toBe(500)
@@ -46,6 +55,17 @@ describe('computeInvoiceTotals', () => {
   })
 })
 
+describe('computeInvoiceLineMoney', () => {
+  it('nets discount then taxes the net', () => {
+    const line = computeInvoiceLineMoney({ qty: 2, unitPrice: 500, discountPct: 20, taxRate: 16 })
+    expect(line.gross).toBe(1000)
+    expect(line.discountAmount).toBe(200)
+    expect(line.lineSubtotal).toBe(800)
+    expect(line.lineTax).toBe(128)
+    expect(line.lineTotal).toBe(928)
+  })
+})
+
 describe('clampAmountPaid', () => {
   it('clamps into [0, totalAmount]', () => {
     expect(clampAmountPaid(999, 500)).toBe(500)
@@ -55,7 +75,7 @@ describe('clampAmountPaid', () => {
 })
 
 describe('mapDbInvoiceItemsToClientLines', () => {
-  it('maps pretax lineSubtotal (not tax-inclusive lineTotal)', () => {
+  it('maps pretax lineSubtotal (not tax-inclusive lineTotal) and discountPct', () => {
     const lines = mapDbInvoiceItemsToClientLines([
       {
         id: 'li1',
@@ -63,7 +83,8 @@ describe('mapDbInvoiceItemsToClientLines', () => {
         qty: 1,
         unitPrice: 10000,
         taxRate: 16,
-        lineSubtotal: 10000,
+        discountPct: 10,
+        lineSubtotal: 9000,
         productId: 'p1',
       },
     ])
@@ -73,7 +94,8 @@ describe('mapDbInvoiceItemsToClientLines', () => {
       qty: 1,
       unitPrice: 10000,
       taxRate: 16,
-      subtotal: 10000,
+      discountPct: 10,
+      subtotal: 9000,
       productId: 'p1',
     }])
   })

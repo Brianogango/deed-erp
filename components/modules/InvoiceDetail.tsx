@@ -90,22 +90,26 @@ export default function InvoiceDetail() {
         const data = await res.json() as {
           items?: Array<{
             id?: string; description?: string | null; qty?: number; unitPrice?: number
-            taxRate?: number; lineSubtotal?: number; productId?: string | null
+            taxRate?: number; discountPct?: number; lineSubtotal?: number; productId?: string | null
           }>
           subtotal?: number; taxAmount?: number; totalAmount?: number
         }
         const items = Array.isArray(data.items) ? data.items : []
         if (cancelled || items.length === 0) return
         updateInvoice(invoice.id, {
-          lines: items.map((item, idx) => ({
-            id: item.id ?? `line-${idx}`,
-            description: item.description ?? '',
-            qty: Number(item.qty) || 0,
-            unitPrice: Number(item.unitPrice) || 0,
-            taxRate: Number(item.taxRate) || 0,
-            subtotal: Number(item.lineSubtotal) || Math.round((Number(item.qty) || 0) * (Number(item.unitPrice) || 0)),
-            ...(item.productId ? { productId: item.productId } : {}),
-          })),
+          lines: items.map((item, idx) => {
+            const discountPct = Math.min(100, Math.max(0, Number(item.discountPct) || 0))
+            return {
+              id: item.id ?? `line-${idx}`,
+              description: item.description ?? '',
+              qty: Number(item.qty) || 0,
+              unitPrice: Number(item.unitPrice) || 0,
+              taxRate: Number(item.taxRate) || 0,
+              ...(discountPct > 0 ? { discountPct } : {}),
+              subtotal: Number(item.lineSubtotal) || Math.round((Number(item.qty) || 0) * (Number(item.unitPrice) || 0) * (1 - discountPct / 100)),
+              ...(item.productId ? { productId: item.productId } : {}),
+            }
+          }),
           ...(Number(data.subtotal) ? { subtotal: Number(data.subtotal) } : {}),
           ...(data.taxAmount != null ? { taxTotal: Number(data.taxAmount) || 0 } : {}),
           ...(Number(data.totalAmount) ? { total: Number(data.totalAmount) } : {}),
@@ -359,6 +363,7 @@ export default function InvoiceDetail() {
                       <th className="px-3 py-2 text-left text-[10px] font-bold uppercase text-[var(--text-4)]">Description</th>
                       <th className="px-3 py-2 text-right text-[10px] font-bold uppercase text-[var(--text-4)]">Qty</th>
                       <th className="px-3 py-2 text-right text-[10px] font-bold uppercase text-[var(--text-4)]">Unit Price</th>
+                      <th className="px-3 py-2 text-right text-[10px] font-bold uppercase text-[var(--text-4)]">Disc%</th>
                       <th className="px-3 py-2 text-right text-[10px] font-bold uppercase text-[var(--text-4)]">Subtotal</th>
                     </tr>
                   </thead>
@@ -366,13 +371,14 @@ export default function InvoiceDetail() {
                     {(invoice.lines || []).map((line, idx) => (
                       line.lineType === 'section' ? (
                         <tr key={line.id || idx} className="bg-[var(--bg-surface)]/70">
-                          <td colSpan={4} className="px-3 py-2 font-bold text-[var(--text-2)]">{line.description}</td>
+                          <td colSpan={5} className="px-3 py-2 font-bold text-[var(--text-2)]">{line.description}</td>
                         </tr>
                       ) : (
                         <tr key={line.id || idx} className="hover:bg-[var(--bg-surface)]">
                           <td className="px-3 py-2 text-[var(--text-1)]">{line.description}</td>
                           <td className="px-3 py-2 text-right text-[var(--text-3)]">{line.qty}</td>
                           <td className="px-3 py-2 text-right text-[var(--text-3)] font-mono">{fmtKes(line.unitPrice)}</td>
+                          <td className="px-3 py-2 text-right text-[var(--text-3)] font-mono">{(line.discountPct ?? 0) > 0 ? `${line.discountPct}%` : '—'}</td>
                           <td className="px-3 py-2 text-right font-bold text-[var(--text-1)] font-mono">{fmtKes(line.subtotal)}</td>
                         </tr>
                       )
@@ -380,7 +386,7 @@ export default function InvoiceDetail() {
                   </tbody>
                   <tfoot className="bg-[var(--bg-surface)] border-t-2 border-[var(--border-lt)]">
                     <tr>
-                      <td colSpan={3} className="px-3 py-2 text-right text-[10px] font-bold uppercase text-[var(--text-4)]">Total</td>
+                      <td colSpan={4} className="px-3 py-2 text-right text-[10px] font-bold uppercase text-[var(--text-4)]">Total</td>
                       <td className="px-3 py-2 text-right font-black text-[var(--text-1)] font-mono">{fmtKes(invoice.total)}</td>
                     </tr>
                   </tfoot>

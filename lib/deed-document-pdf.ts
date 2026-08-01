@@ -13,6 +13,7 @@ export interface DeedPdfLine {
   qty: number
   unitPrice?: number
   taxRate?: number
+  discountPct?: number
   subtotal?: number
 }
 
@@ -59,6 +60,7 @@ export interface DeedPdfInput {
   partyLabel?: string
   lines: DeedPdfLine[]
   subtotal?: number
+  discountTotal?: number
   taxTotal?: number
   total?: number
   amountPaid?: number
@@ -265,12 +267,16 @@ export function buildDeedDocumentPdf(
         Number.isInteger(line.qty) ? String(line.qty) : money(line.qty),
       ]
     }
+    const taxCell = [
+      line.taxRate ? `VAT ${line.taxRate}%` : null,
+      (line.discountPct ?? 0) > 0 ? `Disc ${line.discountPct}%` : null,
+    ].filter(Boolean).join('\n') || '—'
     return [
       String(sl),
       line.description,
       `${currency} ${money(line.unitPrice ?? 0)}`,
       Number.isInteger(line.qty) ? String(line.qty) : money(line.qty),
-      line.taxRate ? `VAT ${line.taxRate}%` : '—',
+      taxCell,
       `${currency} ${money(line.subtotal ?? 0)}`,
     ]
   })
@@ -325,7 +331,16 @@ export function buildDeedDocumentPdf(
 
   const totals: Array<{ label: string; value: string; bold?: boolean; accent?: boolean }> = []
   if (showAmounts) {
-    totals.push({ label: 'Subtotal', value: `${currency} ${money(input.subtotal ?? 0)}` })
+    const disc = Number(input.discountTotal) || 0
+    const net = Number(input.subtotal) || 0
+    // When line discounts exist, show gross → discount → net so the PDF doesn't
+    // look like discount is applied twice on an already-net subtotal.
+    if (disc > 0) {
+      totals.push({ label: 'Subtotal', value: `${currency} ${money(net + disc)}` })
+      totals.push({ label: 'Discount', value: `- ${currency} ${money(disc)}` })
+    } else {
+      totals.push({ label: 'Subtotal', value: `${currency} ${money(net)}` })
+    }
     if (input.taxTotal) totals.push({ label: vatLabel, value: `${currency} ${money(input.taxTotal)}` })
     totals.push({ label: 'TOTAL', value: `${currency} ${money(input.total ?? 0)}`, bold: true, accent: true })
     if (input.amountPaid && input.amountPaid > 0) {

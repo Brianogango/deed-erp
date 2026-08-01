@@ -856,6 +856,8 @@ export type InvoiceStatus = 'draft' | 'posted' | 'cancelled'
 
 export interface InvoiceLine {
   id: string; description: string; qty: number; unitPrice: number; taxRate: number; subtotal: number
+  /** Per-line discount percent (0–100). Applied before tax. */
+  discountPct?: number
   lineType?: 'item' | 'section'
   productId?: string    // original product (for account lookup)
   accountCode?: string  // revenue account code (e.g. '5001')
@@ -2904,7 +2906,7 @@ export interface AppState {
   deleteSaleOrder: (id: string) => void
 
   // Invoices
-  createManualInvoice: (type: InvoiceType, partnerId: string, partnerName: string, dueDate: string, lines: { desc: string; qty: string; price: string; tax: string }[], vatRate: number, notes?: string, documentDate?: string) => Invoice
+  createManualInvoice: (type: InvoiceType, partnerId: string, partnerName: string, dueDate: string, lines: { type?: 'item' | 'section'; desc: string; qty: string; price: string; tax: string; discount?: string }[], vatRate: number, notes?: string, documentDate?: string) => Invoice
   updateInvoice: (id: string, p: Partial<Invoice>) => void
   postInvoice: (id: string, forcedRef?: string) => void
   /** Finance dispute flag — Odoo "Blocked" payment status. */
@@ -9707,13 +9709,26 @@ const storeCtx: AppState = {
 
     // ── Invoices ──────────────────────────────────────────────────────────────
     createManualInvoice: (type, partnerId, partnerName, dueDate, lines, vatRate, notes = '', documentDate) => {
-      const builtLines: InvoiceLine[] = lines.map(l => {
-        const qty = Number(l.qty) || 1
-        const unitPrice = Number(l.price) || 0
-        const taxRate = vatRate > 0 ? vatRate : Number(l.tax) || 0
-        const subtotal = qty * unitPrice
-        return { id: uid(), description: l.desc, qty, unitPrice, taxRate, subtotal }
-      })
+      const builtLines: InvoiceLine[] = lines
+        .filter(l => (l.type ?? 'item') !== 'section')
+        .map(l => {
+          const qty = Number(l.qty) || 1
+          const unitPrice = Number(l.price) || 0
+          const taxRate = vatRate > 0 ? vatRate : Number(l.tax) || 0
+          const discountPct = Math.min(100, Math.max(0, Number(l.discount) || 0))
+          const gross = qty * unitPrice
+          const discountAmount = Math.round(gross * discountPct) / 100
+          const subtotal = Math.max(0, gross - discountAmount)
+          return {
+            id: uid(),
+            description: l.desc,
+            qty,
+            unitPrice,
+            taxRate,
+            ...(discountPct > 0 ? { discountPct } : {}),
+            subtotal,
+          }
+        })
       const subtotal = builtLines.reduce((s, l) => s + l.subtotal, 0)
       const taxTotal = builtLines.reduce((s, l) => s + Math.round(l.subtotal * l.taxRate / 100), 0)
       const invoice: Invoice = {
