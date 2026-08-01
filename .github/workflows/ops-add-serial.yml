@@ -1,0 +1,66 @@
+name: Ops add product serial
+
+on:
+  workflow_dispatch:
+    inputs:
+      name:
+        description: Product name match (e.g. Lenovo ThinkPad 13)
+        required: true
+        type: string
+      serial:
+        description: Manufacturer serial number
+        required: true
+        type: string
+      location:
+        description: Stock location
+        required: false
+        type: choice
+        options:
+          - warehouse
+          - shop
+          - repair_unit
+        default: warehouse
+      product_id:
+        description: Optional product UUID (skips name match)
+        required: false
+        type: string
+        default: ''
+
+jobs:
+  add-serial:
+    name: Add serial on Contabo
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Copy script to server
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          source: scripts/add-product-serial.mjs
+          target: /tmp/deed-ops/
+          strip_components: 1
+
+      - name: Run add-product-serial script
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          command_timeout: 5m
+          script: |
+            set -euo pipefail
+            cd /var/www/deed-erp
+            cp /tmp/deed-ops/add-product-serial.mjs /tmp/add-product-serial.mjs
+            PRODUCT_ID_FLAG=''
+            if [ -n '${{ inputs.product_id }}' ]; then
+              PRODUCT_ID_FLAG="--product-id '${{ inputs.product_id }}'"
+            fi
+            eval node /tmp/add-product-serial.mjs \
+              --name '${{ inputs.name }}' \
+              --serial '${{ inputs.serial }}' \
+              --location '${{ inputs.location }}' \
+              $PRODUCT_ID_FLAG
