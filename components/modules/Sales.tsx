@@ -2140,13 +2140,13 @@ function NewQuotationForm({
                     const hasInvalidQty = !!line.productId && Number(line.qty) <= 0
                     const moveButtons = (
                       <>
-                        <button onClick={() => moveDraftLine(line.id, -1)} disabled={lineIndex === 0} title="Move up"
-                          className="w-6 h-6 rounded flex items-center justify-center text-[var(--text-4)] hover:bg-[var(--bg-muted)] hover:text-[var(--text-1)] transition-colors disabled:opacity-30 disabled:cursor-not-allowed">
-                          <Fa icon={faArrowUp} className="text-[9px]" />
+                        <button type="button" onClick={() => moveDraftLine(line.id, -1)} disabled={lineIndex === 0} aria-label="Move line up"
+                          className="icon-btn disabled:opacity-30 disabled:cursor-not-allowed">
+                          <Fa icon={faArrowUp} aria-hidden="true" />
                         </button>
-                        <button onClick={() => moveDraftLine(line.id, 1)} disabled={lineIndex === newDraftLines.length - 1} title="Move down"
-                          className="w-6 h-6 rounded flex items-center justify-center text-[var(--text-4)] hover:bg-[var(--bg-muted)] hover:text-[var(--text-1)] transition-colors disabled:opacity-30 disabled:cursor-not-allowed">
-                          <Fa icon={faArrowDown} className="text-[9px]" />
+                        <button type="button" onClick={() => moveDraftLine(line.id, 1)} disabled={lineIndex === newDraftLines.length - 1} aria-label="Move line down"
+                          className="icon-btn disabled:opacity-30 disabled:cursor-not-allowed">
+                          <Fa icon={faArrowDown} aria-hidden="true" />
                         </button>
                       </>
                     )

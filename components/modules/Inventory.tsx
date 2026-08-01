@@ -11,8 +11,7 @@ import type { ProductKind } from '@/lib/product-kind'
 import { Badge, Modal, Field, Input, Select, Confirm, PanelHeader, SearchPicker, ModuleSkeleton, ModuleHeader, TabBar } from '@/components/ui'
 import { DataTable, type ColumnDef, type PrimaryFilterConfig } from '@/components/data-table'
 import { PrimaryActionButton, TablePageLayout, OperationalSummary, CompactInfoNotice } from '@/components/erp'
-import { Fa } from '@/components/icons'
-import { faBoxesStacked, faArrowDown, faBarcode, faTriangleExclamation, faWarehouse, faWrench, faPrint, faIndustry } from '@fortawesome/free-solid-svg-icons'
+import { Fa, faBox, faBoxesStacked, faArrowDown, faBarcode, faTriangleExclamation, faWarehouse, faWrench, faPrint, faIndustry } from '@/components/icons'
 import { printProductLabels, printSerialLabels } from '@/lib/product-label'
 import { guardSpreadsheetFile, guardSpreadsheetRows, SpreadsheetGuardError } from '@/lib/spreadsheet-guard'
 import { Barcode } from '@/components/modules/Barcode'
@@ -92,7 +91,7 @@ const blankProduct = () => {
     salePrice: '', costPrice: '', taxRate: '16', minStock: '5',
     unit: defaultUnitForKind(productKind, trackingMethod),
     invoicePolicy: 'order' as 'order' | 'delivery',
-    description: '', canBeSold: true, canBePurchased: true, image: '📦',
+    description: '', canBeSold: true, canBePurchased: true, image: '',
     isActive: true, warrantyMonths: '12',
     saleAccountCode: defaults.saleAccountCode || '',
     costAccountCode: defaults.costAccountCode || '',
@@ -710,7 +709,7 @@ export default function Inventory() {
       unit: product.unit || defaultUnitForKind(kind),
       invoicePolicy: product.invoicePolicy === 'delivery' ? 'delivery' as const : 'order' as const,
       description: product.description ?? '',
-      canBeSold: product.canBeSold, canBePurchased: product.canBePurchased, image: product.image ?? '📦',
+      canBeSold: product.canBeSold, canBePurchased: product.canBePurchased, image: product.image ?? '',
       isActive: product.isActive, warrantyMonths: String(product.warrantyMonths),
       saleAccountCode: product.saleAccountCode ?? '', costAccountCode: product.costAccountCode ?? '',
       inventoryAccountCode: product.inventoryAccountCode ?? '', cogsAccountCode: product.cogsAccountCode ?? '',
@@ -739,7 +738,7 @@ export default function Inventory() {
       }),
       unit: parent.unit || defaultUnitForKind(kind),
       taxRate: String(parent.taxRate),
-      image: parent.image ?? '📦',
+      image: parent.image ?? '',
       warrantyMonths: String(parent.warrantyMonths),
       canBeSold: parent.canBeSold,
       canBePurchased: parent.canBePurchased,
@@ -1007,7 +1006,7 @@ export default function Inventory() {
           priceDifferenceAccountCode: row.priceDifferenceAccountCode || '',
           canBeSold: true,
           canBePurchased: true,
-          image: '📦',
+          image: '',
           isActive: true,
           stockQty: 0,
           trackingMethod,
@@ -2836,8 +2835,10 @@ export default function Inventory() {
           <div className="flex flex-col gap-4">
             {/* Preview */}
             <div className="border border-border-lt rounded-xl p-4 bg-surface flex gap-4 items-center">
-              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-primary-50 to-sky-50 border border-primary-100 flex items-center justify-center text-2xl flex-shrink-0">
-                {labelProduct.image}
+              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-primary-50 to-sky-50 border border-primary-100 flex items-center justify-center text-2xl flex-shrink-0 text-slate-500">
+                {labelProduct.image && !/^\p{Extended_Pictographic}/u.test(labelProduct.image)
+                  ? <img src={labelProduct.image} alt="" className="w-10 h-10 object-contain" />
+                  : <Fa icon={faBox} aria-hidden="true" />}
               </div>
               <div className="min-w-0">
                 <p className="text-sm font-extrabold text-text-1 truncate">{labelProduct.name}</p>
@@ -2932,7 +2933,11 @@ export default function Inventory() {
             {/* Variant banner */}
             {parentProduct && (
               <div className="flex items-center gap-3 px-4 py-3 rounded-xl border" style={{ background: '#F0F4FF', borderColor: '#C7D7FD' }}>
-                <span className="text-xl">{parentProduct.image}</span>
+                <span className="text-xl text-slate-500" aria-hidden="true">
+                  {parentProduct.image && !/^\p{Extended_Pictographic}/u.test(parentProduct.image)
+                    ? <img src={parentProduct.image} alt="" className="w-7 h-7 object-contain" />
+                    : <Fa icon={faBox} />}
+                </span>
                 <div className="flex-1 min-w-0">
                   <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: 'var(--navy)' }}>Variant of</p>
                   <p className="text-[13px] font-extrabold text-text-1 truncate">{parentProduct.name}</p>
@@ -2974,7 +2979,12 @@ export default function Inventory() {
                     <p className="font-bold text-primary-700 mb-1">Similar products already in catalogue:</p>
                     {nameSimilarProducts.map((p: Product) => (
                       <div key={p.id} className="flex items-center justify-between gap-2 py-0.5">
-                        <span className="text-text-2 truncate">{p.image} {p.name} <span className="text-text-4 font-mono">{p.sku}</span></span>
+                        <span className="text-text-2 truncate inline-flex items-center gap-1.5 min-w-0">
+                          {p.image && !/^\p{Extended_Pictographic}/u.test(p.image)
+                            ? <img src={p.image} alt="" className="w-4 h-4 object-contain flex-shrink-0" />
+                            : <Fa icon={faBox} className="text-slate-400 flex-shrink-0" aria-hidden="true" />}
+                          <span className="truncate">{p.name} <span className="text-text-4 font-mono">{p.sku}</span></span>
+                        </span>
                         <div className="flex gap-1 shrink-0">
                           <button className="px-2 py-0.5 rounded text-[9px] font-bold bg-primary-50 text-primary-700 border border-primary-200 hover:bg-primary-100 transition-colors"
                             onClick={() => openVariant(p)}>+ Variant</button>
@@ -3102,7 +3112,7 @@ export default function Inventory() {
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <Field label="Warranty (Months)"><Input type="number" value={form.warrantyMonths} onChange={setF('warrantyMonths')} /></Field>
-              <Field label="Icon / Image"><Input value={form.image} onChange={setF('image')} placeholder="Emoji or URL" /></Field>
+              <Field label="Icon / Image"><Input value={form.image} onChange={setF('image')} placeholder="Image URL" /></Field>
             </div>
             <Field label="Invoicing Policy">
               <Select value={form.invoicePolicy} onChange={setF('invoicePolicy')} options={[

@@ -10,7 +10,10 @@ import { canUserApproveExpenseStep } from '@/lib/expense-approval-chain'
 import { ModuleSkeleton, useMounted, RecordCard, ModuleHeader, TabBar } from '@/components/ui'
 import { PrimaryActionButton, StatusBadge } from '@/components/erp'
 import { DataTable, type ColumnDef, type PrimaryFilterConfig } from '@/components/data-table'
-import { Fa, faBox, faCar, faComputer, faDesktop, faDroplet, faFileLines, faLightbulb, faPrint, faScrewdriverWrench, faUtensils } from '@/components/icons'
+import {
+  Fa, faBox, faCar, faComputer, faDesktop, faDroplet, faFileLines, faLightbulb,
+  faPrint, faScrewdriverWrench, faUtensils, faImage, faPaperclip, faTriangleExclamation,
+} from '@/components/icons'
 import { faHourglassHalf, faMoneyBillWave, faCreditCard, faChartBar, faClipboardList, faCircleCheck, faPlus } from '@fortawesome/free-solid-svg-icons'
 import type { IconProp } from '@fortawesome/fontawesome-svg-core'
 import { readGuardedImageAsDataUrl, validateImageUpload } from '@/lib/client-image-guard'
@@ -556,8 +559,8 @@ function ExpensesContent() {
                     </div>
                   ) : receiptFile ? (
                     <div>
-                      <div style={{ fontSize: 24 }} className="mb-1">
-                        {receiptFile.type.startsWith('image/') ? '🖼️' : '📄'}
+                      <div style={{ fontSize: 24 }} className="mb-1 text-t4" aria-hidden="true">
+                        <Fa icon={receiptFile.type.startsWith('image/') ? faImage : faFileLines} />
                       </div>
                       <p className="text-[11px] font-semibold text-green-700">{receiptFile.name}</p>
                       <p className="text-[10px] text-t3 mt-0.5">{formatSize(receiptFile.size)} · Click to change</p>
@@ -573,7 +576,7 @@ function ExpensesContent() {
                     </div>
                   ) : (
                     <div>
-                      <div style={{ fontSize: 24 }} className="mb-1">📎</div>
+                      <div style={{ fontSize: 24 }} className="mb-1 text-t4" aria-hidden="true"><Fa icon={faPaperclip} /></div>
                       <p className="text-[11px] text-t2 font-medium">Drop receipt here or click to browse</p>
                       <p className="text-[10px] text-t3 mt-0.5">JPG, PNG, or WebP images scan with Deed OCR — max 8 MB; PDF/manual upload max 10 MB</p>
                     </div>
@@ -648,7 +651,7 @@ function ExpensesContent() {
               {exp.receiptFileName && (
                 <button onClick={() => { openReceiptPreview(exp); setReviewingId(null) }}
                   style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: 'var(--navy)', background: '#E8F3FA', border: '1px solid #A8D4E8', borderRadius: 8, padding: '6px 12px', cursor: 'pointer', marginBottom: 12 }}>
-                  📎 View attached receipt
+                  <Fa icon={faPaperclip} aria-hidden="true" /> View attached receipt
                 </button>
               )}
 
@@ -804,13 +807,13 @@ function ExpensesContent() {
                   <iframe src={previewUrl} title="receipt" className="w-full" style={{ height: 500, border: 'none' }} />
                 ) : (
                   <div className="flex flex-col items-center justify-center h-48 text-t3 text-sm gap-2">
-                    <span style={{ fontSize: 40 }}>📄</span>
+                    <span style={{ fontSize: 40 }} aria-hidden="true"><Fa icon={faFileLines} /></span>
                     <a href={previewUrl} download={previewExp.receiptFileName} className="btn-primary text-[11px] py-2 px-4" style={{ textDecoration: 'none' }}>Download to view</a>
                   </div>
                 )
               ) : (
                 <div className="flex flex-col items-center justify-center h-48 text-t3 text-sm gap-2">
-                  <span style={{ fontSize: 40 }}>⚠️</span>
+                  <span style={{ fontSize: 40 }} aria-hidden="true"><Fa icon={faTriangleExclamation} /></span>
                   <p className="text-[12px]">Receipt could not be loaded</p>
                 </div>
               )}

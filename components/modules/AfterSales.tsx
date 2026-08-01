@@ -8,8 +8,12 @@ import {
 import { Badge, Modal, ModuleSkeleton, useMounted, ModuleHeader, TabBar } from '@/components/ui'
 import { PrimaryActionButton } from '@/components/erp'
 import { DataTable, type ColumnDef } from '@/components/data-table'
-import { Fa } from '@/components/icons'
-import { faShield, faRotateLeft, faPlus } from '@fortawesome/free-solid-svg-icons'
+import {
+  Fa, faShield, faRotateLeft, faPlus, faMoneyBillWave, faArrowsRotate, faWrench,
+  faFileLines, faCircleXmark, faNoteSticky, faCircleCheck, faBox, faFlagCheckered,
+  faThumbtack, faMoneyBill, faMobileScreenButton, faBuildingColumns,
+} from '@/components/icons'
+import type { IconProp } from '@fortawesome/fontawesome-svg-core'
 import TradeIn from './TradeIn'
 import { SerialReturnPicker } from '@/components/tradein/SerialReturnPicker'
 
@@ -29,11 +33,17 @@ const RMA_STATUS_META: Record<ReturnOrder['status'], { bg: string; color: string
   rejected:  { bg: 'var(--danger-bg)', color: '#991B1B', label: 'Rejected',   step: 0 },
 }
 
+const RESOLUTION_META: Record<RMAResolution, { label: string; icon: IconProp }> = {
+  refund:      { label: 'Refund',      icon: faMoneyBillWave },
+  replacement: { label: 'Replacement', icon: faArrowsRotate },
+  repair:      { label: 'Repair',      icon: faWrench },
+  credit_note: { label: 'Credit Note', icon: faFileLines },
+}
 const RESOLUTION_LABELS: Record<RMAResolution, string> = {
-  refund:      '💰 Refund',
-  replacement: '🔄 Replacement',
-  repair:      '🔧 Repair',
-  credit_note: '📄 Credit Note',
+  refund: RESOLUTION_META.refund.label,
+  replacement: RESOLUTION_META.replacement.label,
+  repair: RESOLUTION_META.repair.label,
+  credit_note: RESOLUTION_META.credit_note.label,
 }
 
 // ── Main Component ─────────────────────────────────────────────────────────────
@@ -348,7 +358,7 @@ export default function AfterSales() {
 
         {rma.status === 'rejected' && (
           <div className="card px-4 py-3 flex items-center gap-2" style={{ background: 'var(--danger-bg)', border: '1px solid #FECACA' }}>
-            <span>❌</span>
+            <span aria-hidden="true"><Fa icon={faCircleXmark} /></span>
             <p className="text-xs text-red-700">Return rejected{rma.notes ? ` — ${rma.notes}` : ''}</p>
           </div>
         )}
@@ -376,11 +386,11 @@ export default function AfterSales() {
           <div className="card p-4 space-y-2">
             <p className="text-[10px] font-semibold text-t3 uppercase tracking-wider mb-2">Timeline</p>
             <div className="space-y-2 text-[11px]">
-              <div className="flex gap-2"><span style={{ color: 'var(--text-4)' }}>📝</span><span>Submitted {fmtDate(rma.requestDate)}</span></div>
-              {rma.approvedDate && <div className="flex gap-2"><span style={{ color: 'var(--primary)' }}>✅</span><span>Approved {fmtDate(rma.approvedDate)} by {rma.approvedByName}</span></div>}
-              {rma.receivedDate && <div className="flex gap-2"><span style={{ color: '#8B5CF6' }}>📦</span><span>Received {fmtDate(rma.receivedDate)}</span></div>}
-              {rma.processedDate && <div className="flex gap-2"><span style={{ color: 'var(--success)' }}>🏁</span><span>Processed {fmtDate(rma.processedDate)} by {rma.processedByName}</span></div>}
-              {rma.notes && <div className="flex gap-2 pt-1 border-t" style={{ borderColor: 'var(--bg-muted)' }}><span>📌</span><span>{rma.notes}</span></div>}
+              <div className="flex gap-2 items-center"><span style={{ color: 'var(--text-4)' }} aria-hidden="true"><Fa icon={faNoteSticky} /></span><span>Submitted {fmtDate(rma.requestDate)}</span></div>
+              {rma.approvedDate && <div className="flex gap-2 items-center"><span style={{ color: 'var(--primary)' }} aria-hidden="true"><Fa icon={faCircleCheck} /></span><span>Approved {fmtDate(rma.approvedDate)} by {rma.approvedByName}</span></div>}
+              {rma.receivedDate && <div className="flex gap-2 items-center"><span style={{ color: 'var(--navy)' }} aria-hidden="true"><Fa icon={faBox} /></span><span>Received {fmtDate(rma.receivedDate)}</span></div>}
+              {rma.processedDate && <div className="flex gap-2 items-center"><span style={{ color: 'var(--success)' }} aria-hidden="true"><Fa icon={faFlagCheckered} /></span><span>Processed {fmtDate(rma.processedDate)} by {rma.processedByName}</span></div>}
+              {rma.notes && <div className="flex gap-2 items-center pt-1 border-t" style={{ borderColor: 'var(--bg-muted)' }}><span aria-hidden="true"><Fa icon={faThumbtack} /></span><span>{rma.notes}</span></div>}
             </div>
           </div>
         </div>
@@ -425,14 +435,14 @@ export default function AfterSales() {
               </>
             )}
             {rma.status === 'approved' && (
-              <button className="btn-primary text-[11px] px-4 py-2" onClick={() => receiveReturn(rma.id)}>
-                📦 Mark Items Received
+              <button className="btn-primary text-[11px] px-4 py-2 flex items-center gap-1.5" onClick={() => receiveReturn(rma.id)}>
+                <Fa icon={faBox} aria-hidden="true" /> Mark Items Received
               </button>
             )}
             {rma.status === 'received' && (
-              <button className="btn-primary text-[11px] px-4 py-2"
+              <button className="btn-primary text-[11px] px-4 py-2 flex items-center gap-1.5"
                 onClick={() => { setProcessRMA(rma); setResolution('refund'); setRefundAmount(String(saleOrders.find(o => o.id === rma.saleOrderId)?.total ?? '')); setProcessNotes(''); setShowProcess(true) }}>
-                🏁 Process Return
+                <Fa icon={faFlagCheckered} aria-hidden="true" /> Process Return
               </button>
             )}
           </div>
@@ -845,8 +855,10 @@ export default function AfterSales() {
                         background: resolution === r ? '#E8F3FA' : '#FAFAFA',
                         color: resolution === r ? 'var(--navy)' : 'var(--text-4)',
                         fontSize: 11, fontWeight: resolution === r ? 700 : 400,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
                       }}>
-                      {RESOLUTION_LABELS[r]}
+                      <Fa icon={RESOLUTION_META[r].icon} aria-hidden="true" />
+                      {RESOLUTION_META[r].label}
                     </button>
                   ))}
                 </div>
@@ -862,7 +874,7 @@ export default function AfterSales() {
                 <div>
                   <label className="text-[11px] font-semibold text-t2 block mb-1">Payment Method</label>
                   <div className="flex gap-2">
-                    {([['cash','💵 Cash'],['mpesa','📱 M-Pesa'],['bank_transfer','🏦 Bank Transfer']] as const).map(([val, lbl]) => (
+                    {([['cash','Cash',faMoneyBill],['mpesa','M-Pesa',faMobileScreenButton],['bank_transfer','Bank Transfer',faBuildingColumns]] as const).map(([val, lbl, icon]) => (
                       <button key={val} onClick={() => setRefundPaymentMethod(val)}
                         style={{
                           flex: 1, padding: '8px 6px', borderRadius: 8, cursor: 'pointer', fontSize: 10,
@@ -870,8 +882,9 @@ export default function AfterSales() {
                           background: refundPaymentMethod === val ? '#E8F3FA' : '#FAFAFA',
                           color: refundPaymentMethod === val ? 'var(--navy)' : 'var(--text-4)',
                           fontWeight: refundPaymentMethod === val ? 700 : 400,
+                          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
                         }}>
-                        {lbl}
+                        <Fa icon={icon} aria-hidden="true" /> {lbl}
                       </button>
                     ))}
                   </div>

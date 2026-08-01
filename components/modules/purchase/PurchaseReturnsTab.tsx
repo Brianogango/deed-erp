@@ -3,12 +3,13 @@ import { usePurchase } from './PurchaseContext'
 import { Badge, PanelHeader, RecordCard } from '@/components/ui'
 import { DataTable, DetailsDrawer, type ColumnDef, type DrawerTab, type PrimaryFilterConfig } from '@/components/data-table'
 import type { PurchaseReturn } from '@/lib/store'
+import { Fa, faBox } from '@/components/icons'
 
 const REASON_OPTS = [
-  { value: 'damaged',      label: '🔴 Damaged goods' },
-  { value: 'wrong_supply', label: '❌ Wrong supply' },
-  { value: 'excess',       label: '📦 Excess stock' },
-  { value: 'other',        label: '📝 Other' },
+  { value: 'damaged',      label: 'Damaged goods' },
+  { value: 'wrong_supply', label: 'Wrong supply' },
+  { value: 'excess',       label: 'Excess stock' },
+  { value: 'other',        label: 'Other' },
 ]
 
 export default function PurchaseReturnsTab() {
@@ -157,7 +158,7 @@ export default function PurchaseReturnsTab() {
                         <div key={sn.id} className="flex flex-col gap-0.5 px-2 py-1 rounded"
                           style={{ background: '#FEF9C3', border: '1px solid #FDE68A' }}>
                           <span className="font-mono text-[10px] font-semibold" style={{ color: 'var(--warning-text)' }}>{sn.serial}</span>
-                          {(sn.accessories?.length ?? 0) > 0 && <span className="text-[9px]" style={{ color: '#78716C' }}>📦 {sn.accessories?.join(', ')}</span>}
+                          {(sn.accessories?.length ?? 0) > 0 && <span className="text-[9px] inline-flex items-center gap-1" style={{ color: '#78716C' }}><Fa icon={faBox} aria-hidden="true" /> {sn.accessories?.join(', ')}</span>}
                         </div>
                       ))}
                     </div>

@@ -27,26 +27,6 @@ import { normalizeClientRole } from '@/lib/auth/access'
 import { readGuardedImageAsDataUrl } from '@/lib/client-image-guard'
 import { repairProgressOrderFor } from '@/lib/repair-progress'
 import { isDirectRepairPath, quotableStatusesForPath, repairPathLabel, startableStatusesForPath } from '@/lib/repair-path'
-const STATUS_BADGE_CLS: Record<string, string> = {
-  pending_verification: 'bg-amber-50 text-amber-800 border-amber-200',
-  received:             'bg-slate-100 text-slate-700 border-slate-200',
-  assigned:             'bg-blue-50 text-blue-700 border-blue-200',
-  diagnosed:            'bg-cyan-50 text-cyan-700 border-cyan-200',
-  awaiting_approval:    'bg-orange-50 text-orange-700 border-orange-200',
-  approved:             'bg-emerald-50 text-emerald-700 border-emerald-200',
-  awaiting_parts:       'bg-orange-100 text-orange-800 border-orange-200',
-  in_repair:            'bg-violet-50 text-violet-700 border-violet-200',
-  qc:                   'bg-pink-50 text-pink-700 border-pink-200',
-  ready:                'bg-emerald-50 text-emerald-700 border-emerald-200',
-  invoiced:             'bg-amber-50 text-amber-700 border-amber-200',
-  delivered:            'bg-teal-50 text-teal-700 border-teal-200',
-  closed:               'bg-slate-100 text-slate-600 border-slate-200',
-  declined:             'bg-red-50 text-red-700 border-red-200',
-  unrepairable:         'bg-red-100 text-red-800 border-red-300',
-  returned:             'bg-stone-50 text-stone-600 border-stone-200',
-  retained:             'bg-stone-100 text-stone-700 border-stone-300',
-  cancelled:            'bg-red-50 text-red-600 border-red-200',
-}
 
 const PROC_COLORS = {
   pending:   { bg: 'bg-amber-50',   text: 'text-amber-700',   border: 'border-amber-200',   dot: '#F59E0B' },

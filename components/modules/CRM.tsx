@@ -8,11 +8,22 @@ import ClientDetail from '@/components/crm/ClientDetail'
 import LeadsPanel from '@/components/crm/LeadsPanel'
 import { PivotView } from '@/components/erp/PivotView'
 import { DataTable, type ColumnDef } from '@/components/data-table'
-import { Fa } from '@/components/icons'
-import { 
-  faChartBar, faMoneyBillWave, faArrowTrendUp, faBullseye, faCircleCheck,
-  faFileSignature, faScrewdriverWrench, faTriangleExclamation, faChartLine, faPlus
-} from '@fortawesome/free-solid-svg-icons'
+import {
+  Fa, faChartBar, faMoneyBillWave, faArrowTrendUp, faBullseye, faCircleCheck,
+  faFileSignature, faScrewdriverWrench, faTriangleExclamation, faChartLine, faPlus,
+  faPhone, faEnvelope, faHandshake, faClipboardList, faNoteSticky,
+} from '@/components/icons'
+import type { IconProp } from '@fortawesome/fontawesome-svg-core'
+
+const ACTIVITY_ICONS: Record<string, IconProp> = {
+  call: faPhone,
+  email: faEnvelope,
+  meeting: faHandshake,
+  demo: faBullseye,
+  proposal: faClipboardList,
+  note: faNoteSticky,
+  task: faCircleCheck,
+}
 
 type Tab = 'pipeline' | 'opportunities' | 'companies' | 'contacts' | 'activities' | 'contracts' | 'sla' | 'leads'
 type View = 'kanban' | 'list' | 'detail'
@@ -1236,16 +1247,8 @@ function CRMContent() {
               return (
                 <div key={activity.id} className="p-4 transition-colors" onMouseEnter={e=>{(e.currentTarget as HTMLElement).style.background='#F8F9FC'}} onMouseLeave={e=>{(e.currentTarget as HTMLElement).style.background=''}}>
                   <div className="flex items-start gap-3">
-                    <span style={{ fontSize: 18 }}>
-                      {{
-                        call: '📞',
-                        email: '📧',
-                        meeting: '🤝',
-                        demo: '🎯',
-                        proposal: '📋',
-                        note: '📝',
-                        task: '✅',
-                      }[activity.type]}
+                    <span style={{ fontSize: 18, color: 'var(--text-3)' }} aria-hidden="true">
+                      <Fa icon={ACTIVITY_ICONS[activity.type] ?? faNoteSticky} />
                     </span>
                     <div className="flex-1">
                       <div className="text-xs font-semibold mb-1" style={{ color: 'var(--text-1)' }}>
@@ -1428,7 +1431,7 @@ function OpportunityDetail({ activeOppId, onClose, stageLabels, onMarkWon, onMar
             <div className="flex flex-col gap-2">
               {acts.length === 0 ? <p className="text-xs text-t3">No activities logged</p> : acts.map(a => (
                 <div key={a.id} className="p-2 rounded-lg bg-gray-50 border border-gray-100 flex gap-3 text-xs">
-                  <span className="text-lg">{a.type === 'call' ? '📞' : a.type === 'email' ? '✉️' : a.type === 'meeting' ? '🤝' : '📝'}</span>
+                  <span className="text-lg text-t3" aria-hidden="true"><Fa icon={ACTIVITY_ICONS[a.type] ?? faNoteSticky} /></span>
                   <div>
                     <p className="font-semibold">{a.subject ?? a.type}</p>
                     <p className="text-[10px] text-t3">{fmtDate(a.createdDate ?? a.createdAt)} by {a.createdByName ?? ''}</p>

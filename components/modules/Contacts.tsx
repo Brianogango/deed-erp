@@ -3,16 +3,15 @@ import { useState, useEffect, useRef } from 'react'
 import { useCrmStore, Contact, fmtDate, fmtKes } from '@/lib/store'
 import { invoiceDocState, invoicePaymentStatus, isOpenInvoice, invoiceResidual, displayDocRef, PAYMENT_STATUS_LABELS } from '@/lib/odoo-sales-flow'
 import { guardSpreadsheetFile, guardSpreadsheetRows, SpreadsheetGuardError } from '@/lib/spreadsheet-guard'
-import { Badge, Modal, Field, Input, Select, Textarea, InfoRow, ModuleSkeleton, ModuleHeader } from '@/components/ui'
-import { PrimaryActionButton, SecondaryActionMenu } from '@/components/erp'
+import { Badge, Modal, Field, Input, Select, Textarea, InfoRow, ModuleSkeleton } from '@/components/ui'
+import { PrimaryActionButton, SecondaryActionMenu, ModuleChrome, PageToolbar } from '@/components/erp'
 import Chatter from '@/components/erp/Chatter'
 import { DataTable, type ColumnDef } from '@/components/data-table'
-import { Fa } from '@/components/icons'
 import {
-  faUsers, faBuilding, faUser, faCartShopping, faBuildingColumns,
-  faPencil, faPlus, faScrewdriverWrench, faFileInvoiceDollar,
-  faCashRegister, faInbox, faFileArrowDown,
-} from '@fortawesome/free-solid-svg-icons'
+  Fa, faUsers, faBuilding, faUser, faCartShopping, faBuildingColumns,
+  faPen, faPlus, faScrewdriverWrench, faFileInvoiceDollar,
+  faCashRegister, faInbox, faFileArrowDown, faCheck, faTriangleExclamation, faXmark,
+} from '@/components/icons'
 
 type FilterTab = 'all' | 'companies' | 'individuals' | 'customers' | 'vendors'
 type ViewTab   = 'info' | 'financial' | 'persons' | 'history' | 'chatter'
@@ -371,47 +370,47 @@ export default function Contacts() {
   if (!mounted) return <ModuleSkeleton />
 
   return (
-    <div className="mod-page">
+    <ModuleChrome
+      title="Contacts"
+      subtitle="Companies, individuals and vendors"
+      icon={<Fa icon={faUsers} />}
+      count={total}
+      primaryAction={
+        <PrimaryActionButton icon={<Fa icon={faPlus} />} onClick={() => openNew('individual')} hideLabelOnMobile={false}>
+          Add contact
+        </PrimaryActionButton>
+      }
+      overflowActions={
+        <SecondaryActionMenu
+          actions={[
+            { id: 'import', label: 'Import CSV', onClick: () => fileInputRef.current?.click() },
+          ]}
+        />
+      }
+      tabs={[
+        { id: 'all', label: 'All' },
+        { id: 'companies', label: 'Companies' },
+        { id: 'individuals', label: 'Individuals' },
+        { id: 'customers', label: 'Customers' },
+        { id: 'vendors', label: 'Vendors' },
+      ]}
+      activeTab={tab}
+      onTabChange={id => setTab(id as FilterTab)}
+      maxVisibleDesktop={5}
+      tabAriaLabel="Contact filters"
+    >
       <input ref={fileInputRef} type="file" accept=".csv" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) processFile(f); e.target.value = '' }} />
-      <ModuleHeader
-        title="Contacts"
-        subtitle="Companies, individuals and vendors"
-        icon={<Fa icon={faUsers} />}
-        count={total}
-        color="var(--navy)"
-        primaryAction={
-          <PrimaryActionButton icon={<Fa icon={faPlus} />} onClick={() => openNew('individual')} hideLabelOnMobile={false}>
-            Add contact
-          </PrimaryActionButton>
-        }
-        overflowActions={
-          <SecondaryActionMenu
-            actions={[
-              { id: 'import', label: 'Import CSV', onClick: () => fileInputRef.current?.click() },
-            ]}
-          />
-        }
-      />
-
-      {/* Filter tab bar + search */}
-      <div className="filter-bar">
-        <div className="flex gap-1 overflow-x-auto scrollbar-hide">
-          {(['all', 'companies', 'individuals', 'customers', 'vendors'] as FilterTab[]).map(t => (
-            <button key={t} onClick={() => setTab(t)} className={`mod-tab ${tab === t ? 'active' : ''} capitalize`}>{t}</button>
-          ))}
-        </div>
-        <div className="flex items-center gap-2 ml-auto">
+      <PageToolbar
+        search={
           <input
             aria-label="Search contacts by name, email, or phone"
-            className="form-input text-[11px] py-1.5 w-48 sm:w-64"
+            className="form-input text-[11px] py-1.5 w-full min-w-[12rem] sm:w-64"
             placeholder="Search name, email, phone…"
             value={search}
             onChange={e => setSearch(e.target.value)}
           />
-        </div>
-      </div>
-
-      <div className="mod-body">
+        }
+      />
       {/* Contact list */}
       <div className="card overflow-hidden m-3 sm:m-4">
         <DataTable
@@ -476,7 +475,7 @@ export default function Contacts() {
               </div>
               <div className="flex gap-2 w-full sm:w-auto">
                 <button className="btn-outline text-[11px] flex-1 sm:flex-none justify-center" onClick={() => { openEdit(vc); setViewContact(null) }}>
-                  <Fa icon={faPencil} className="mr-1" /> Edit
+                  <Fa icon={faPen} className="mr-1" /> Edit
                 </button>
               </div>
             </div>
@@ -947,9 +946,9 @@ export default function Contacts() {
               <div className="flex items-center justify-between">
                 <p className="text-xs font-semibold text-t1">Preview — {importRows.length} row(s)</p>
                 <div className="flex gap-3 text-[10px]">
-                  <span style={{ color: 'var(--success)' }}>✓ {importRows.filter(r => r.status === 'ok').length} valid</span>
-                  <span style={{ color: 'var(--warning)' }}>⚠ {importRows.filter(r => r.status === 'exists').length} skipped</span>
-                  <span style={{ color: 'var(--danger)' }}>✕ {importRows.filter(r => r.status === 'error').length} errors</span>
+                  <span className="inline-flex items-center gap-1" style={{ color: 'var(--success)' }}><Fa icon={faCheck} aria-hidden="true" /> {importRows.filter(r => r.status === 'ok').length} valid</span>
+                  <span className="inline-flex items-center gap-1" style={{ color: 'var(--warning)' }}><Fa icon={faTriangleExclamation} aria-hidden="true" /> {importRows.filter(r => r.status === 'exists').length} skipped</span>
+                  <span className="inline-flex items-center gap-1" style={{ color: 'var(--danger)' }}><Fa icon={faXmark} aria-hidden="true" /> {importRows.filter(r => r.status === 'error').length} errors</span>
                 </div>
               </div>
 
@@ -985,15 +984,14 @@ export default function Contacts() {
           <div className="flex gap-2 justify-end mt-4 pt-4 border-t" style={{ borderColor: 'var(--bg-muted)' }}>
             <button className="btn-outline" onClick={() => { setShowImport(false); setImportRows([]) }}>Cancel</button>
             <button
-              className="btn-primary"
+              className="btn-primary inline-flex items-center gap-1.5"
               disabled={!importRows.some(r => r.status === 'ok')}
               onClick={handleConfirmImport}>
-              ✓ Import {importRows.filter(r => r.status === 'ok').length} Contact(s)
+              <Fa icon={faCheck} aria-hidden="true" /> Import {importRows.filter(r => r.status === 'ok').length} Contact(s)
             </button>
           </div>
         </Modal>
       )}
-      </div>{/* mod-body */}
-    </div>
+    </ModuleChrome>
   )
 }

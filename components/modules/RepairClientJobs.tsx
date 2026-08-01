@@ -128,11 +128,12 @@ function MobileRepairCard({ r, onSelect, outsourceJobs }: any) {
             {r.total ? fmtKes(r.total) : <span className="text-[var(--text-4)]">—</span>}
           </span>
           <button
+            type="button"
             onClick={e => { e.stopPropagation(); void printRepairSticker(r) }}
-            title="Print sticker"
-            className="w-6 h-6 rounded-lg flex items-center justify-center text-slate-400 hover:bg-slate-100 transition-colors active:scale-95"
+            aria-label="Print sticker"
+            className="icon-btn"
           >
-            <Fa icon={faPrint} className="text-[9px]" />
+            <Fa icon={faPrint} aria-hidden="true" />
           </button>
           <Fa icon={faChevronRight} className="text-[10px] text-[var(--text-4)]" />
         </div>

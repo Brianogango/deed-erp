@@ -3,8 +3,11 @@ import { useState, useRef, useCallback, useEffect, useMemo } from 'react'
 import { useFinanceStore, Receipt, LOCATIONS, LocationId, CATEGORY_CONFIG, CategoryId, fmtKes, fmtDate, POLine, Account, resolveProductAccounts } from '@/lib/store'
 import { Badge, Modal, Field, Input, Select, Confirm, StatCard, PanelHeader, StatusStepper, SearchPicker, Divider, TabContent, ModuleSkeleton, TabBar, ModuleHeader } from '@/components/ui'
 import { PrimaryActionButton, SecondaryActionMenu, StatusBadge } from '@/components/erp'
-import { Fa } from '@/components/icons'
-import { faClipboardCheck, faCartShopping, faBoxesStacked, faCreditCard, faPrint, faClipboardList, faPlus } from '@fortawesome/free-solid-svg-icons'
+import {
+  Fa, faClipboardCheck, faCartShopping, faBoxesStacked, faCreditCard, faPrint,
+  faClipboardList, faPlus, faBarcode, faTriangleExclamation, faFolderOpen,
+  faFileLines, faImage, faMagnifyingGlass, faCheck, faXmark,
+} from '@/components/icons'
 import { printSerialLabels, printProductLabels } from '@/lib/product-label'
 import { guardSpreadsheetFile, guardSpreadsheetRows, SpreadsheetGuardError } from '@/lib/spreadsheet-guard'
 import TradeIn from './TradeIn'
@@ -752,7 +755,7 @@ export default function Purchase() {
                     <p className="text-[10px] text-t3">
                       Expected: {line.qtyExpected}
                       {line.requiresSerial
-                        ? <span style={{ color: 'var(--warning)' }}> · 🔖 Serial tracking required</span>
+                        ? <span style={{ color: 'var(--warning)' }}> · <Fa icon={faBarcode} aria-hidden="true" /> Serial tracking required</span>
                         : ' · No serial required'}
                     </p>
                   </div>
@@ -804,8 +807,8 @@ export default function Purchase() {
                           <div key={s} className="rounded-lg overflow-hidden" style={{ border: `1px solid ${borderColor}`, background: bgColor }}>
                             {/* Serial header row */}
                             <div className="flex items-center justify-between px-3 py-2">
-                              <span className="font-mono text-[11px] font-semibold" style={{ color: headerColor }}>
-                                {hasIssue ? '⚠ ' : '✓ '}{s}
+                              <span className="font-mono text-[11px] font-semibold inline-flex items-center gap-1" style={{ color: headerColor }}>
+                                <Fa icon={hasIssue ? faTriangleExclamation : faCheck} aria-hidden="true" />{s}
                                 {hasIssue && <span className="ml-2 text-[9px] font-sans px-1.5 py-0.5 rounded-full" style={{ background: 'var(--danger-bg)', color: '#991B1B' }}>Refurbishment queue</span>}
                               </span>
                               <button onClick={() => removeSerial(idx, s)}
@@ -868,8 +871,8 @@ export default function Purchase() {
                     <p className="text-[10px] text-t3">No serials entered yet</p>
                   )}
                   {line.serials.length > 0 && line.serials.length < line.qtyReceived && (
-                    <p className="text-[10px] mt-2" style={{ color: 'var(--warning)' }}>
-                      ⚠️ {line.qtyReceived - line.serials.length} more serial(s) needed
+                    <p className="text-[10px] mt-2 inline-flex items-center gap-1" style={{ color: 'var(--warning)' }}>
+                      <Fa icon={faTriangleExclamation} aria-hidden="true" /> {line.qtyReceived - line.serials.length} more serial(s) needed
                     </p>
                   )}
                 </div>
@@ -881,8 +884,8 @@ export default function Purchase() {
         <div className="flex items-center justify-between p-4 card flex-wrap gap-3">
           <div className="text-xs">
             {allComplete
-              ? <span style={{ color: 'var(--success)' }}>✓ All items ready — validate to update stock</span>
-              : <span style={{ color: 'var(--warning)' }}>⚠️ Complete all serial numbers before validating</span>}
+              ? <span className="inline-flex items-center gap-1" style={{ color: 'var(--success)' }}><Fa icon={faCheck} aria-hidden="true" /> All items ready — validate to update stock</span>
+              : <span className="inline-flex items-center gap-1" style={{ color: 'var(--warning)' }}><Fa icon={faTriangleExclamation} aria-hidden="true" /> Complete all serial numbers before validating</span>}
           </div>
           <div className="flex gap-2 flex-wrap">
             <button className="btn-outline" onClick={() => { setSubView('form'); setActiveReceiptId(null) }}>Cancel</button>
@@ -1399,7 +1402,7 @@ export default function Purchase() {
             onDragLeave={() => setIsDragging(false)}
             onDrop={handleDrop}
             onClick={() => fileInputRef.current?.click()}>
-            <span className="text-3xl">{isDragging ? '📂' : '📄'}</span>
+            <span className="text-3xl text-t4" aria-hidden="true"><Fa icon={isDragging ? faFolderOpen : faFileLines} /></span>
             <p className="text-sm font-semibold text-t1">
               {isDragging ? 'Drop to upload' : 'Drop CSV file here or click to browse'}
             </p>
@@ -1413,9 +1416,9 @@ export default function Purchase() {
               <div className="flex items-center justify-between">
                 <p className="text-xs font-semibold text-t1">Preview — {importRows.length} row(s)</p>
                 <div className="flex gap-3 text-[10px]">
-                  <span style={{ color: 'var(--success)' }}>✓ {importRows.filter(r => r.status === 'ok').length} matched</span>
-                  <span style={{ color: 'var(--warning)' }}>⚠ {importRows.filter(r => r.status === 'warn').length} unmatched</span>
-                  <span style={{ color: 'var(--danger)' }}>✕ {importRows.filter(r => r.status === 'error').length} errors</span>
+                  <span className="inline-flex items-center gap-1" style={{ color: 'var(--success)' }}><Fa icon={faCheck} aria-hidden="true" /> {importRows.filter(r => r.status === 'ok').length} matched</span>
+                  <span className="inline-flex items-center gap-1" style={{ color: 'var(--warning)' }}><Fa icon={faTriangleExclamation} aria-hidden="true" /> {importRows.filter(r => r.status === 'warn').length} unmatched</span>
+                  <span className="inline-flex items-center gap-1" style={{ color: 'var(--danger)' }}><Fa icon={faXmark} aria-hidden="true" /> {importRows.filter(r => r.status === 'error').length} errors</span>
                 </div>
               </div>
 
@@ -1435,10 +1438,10 @@ export default function Purchase() {
                       background: row.status === 'error' ? 'var(--danger-bg)' : row.status === 'warn' ? 'var(--warning-bg)' : 'var(--success-bg)',
                       border: `1px solid ${row.status === 'error' ? '#FECACA' : row.status === 'warn' ? '#FDE68A' : '#BBF7D0'}`,
                     }}>
-                    <span>{row.status === 'ok' ? '✓' : row.status === 'warn' ? '⚠' : '✕'}</span>
+                    <span aria-hidden="true"><Fa icon={row.status === 'ok' ? faCheck : row.status === 'warn' ? faTriangleExclamation : faXmark} /></span>
                     <div className="min-w-0">
                       <p className="font-medium text-t1 truncate">{row.productName || row.raw['Product Name'] || '—'}</p>
-                      {row.status !== 'error' && row.requiresSerial && <p className="text-[9px]" style={{ color: 'var(--warning)' }}>🔖 Serial tracking</p>}
+                      {row.status !== 'error' && row.requiresSerial && <p className="text-[9px] inline-flex items-center gap-1" style={{ color: 'var(--warning)' }}><Fa icon={faBarcode} aria-hidden="true" /> Serial tracking</p>}
                     </div>
                     <span className="font-mono">{row.status !== 'error' ? row.qty : '—'}</span>
                     <span className="font-mono">{row.status !== 'error' ? fmtKes(row.unitPrice) : '—'}</span>
@@ -1465,8 +1468,8 @@ export default function Purchase() {
               </div>
 
               {importRows.some(r => r.status === 'warn') && (
-                <p className="text-[10px] text-t3 px-1">
-                  ⚠ Unmatched products will be added with the name as entered. You can edit them after import.
+                <p className="text-[10px] text-t3 px-1 inline-flex items-center gap-1">
+                  <Fa icon={faTriangleExclamation} aria-hidden="true" /> Unmatched products will be added with the name as entered. You can edit them after import.
                 </p>
               )}
             </div>
@@ -1515,9 +1518,9 @@ export default function Purchase() {
                 <p className="text-[10px] text-t3">Reading supplier, reference, line items, quantities, and prices</p>
               </div>
             ) : scanFile ? (
-              <div><div style={{ fontSize: 32 }} className="mb-2">{scanFile.type.startsWith('image/') ? '🖼️' : '📄'}</div><p className="text-xs font-semibold text-green-700">{scanFile.name}</p></div>
+              <div><div style={{ fontSize: 32 }} className="mb-2 text-t4" aria-hidden="true"><Fa icon={scanFile.type.startsWith('image/') ? faImage : faFileLines} /></div><p className="text-xs font-semibold text-green-700">{scanFile.name}</p></div>
             ) : (
-              <div><div style={{ fontSize: 32 }} className="mb-2">🔍</div><p className="text-xs text-t2 font-medium">Drop supplier invoice or quote image here</p><p className="text-[10px] text-t3 mt-1">Supports JPG, PNG, and WebP images — OCR extraction</p></div>
+              <div><div style={{ fontSize: 32 }} className="mb-2 text-t4" aria-hidden="true"><Fa icon={faMagnifyingGlass} /></div><p className="text-xs text-t2 font-medium">Drop supplier invoice or quote image here</p><p className="text-[10px] text-t3 mt-1">Supports JPG, PNG, and WebP images — OCR extraction</p></div>
             )}
           </div>
           <div className="flex gap-2 justify-end"><button className="btn-outline" onClick={() => { setShowScanModal(false); setScanFile(null); setIsScanningScan(false) }}>Cancel</button></div>

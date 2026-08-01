@@ -1,17 +1,14 @@
 'use client'
 import { useEffect, useMemo, useState } from 'react'
 import { usePurchase } from './PurchaseContext'
-import { Badge, PanelHeader, RecordCard } from '@/components/ui'
+import { PanelHeader, RecordCard } from '@/components/ui'
+import { StatusBadge } from '@/components/erp'
 import { DataTable, type ColumnDef, type PrimaryFilterConfig } from '@/components/data-table'
 import type { PurchaseOrder } from '@/lib/store'
 
 const STATUS_LABEL: Record<string, string> = {
   draft: 'RFQ', sent: 'RFQ Sent', confirmed: 'Purchase Order',
   partial: 'Partially Received', received: 'Fully Received', cancelled: 'Cancelled',
-}
-const STATUS_BADGE: Record<string, string> = {
-  draft: 'badge-gray', sent: 'badge-amber', confirmed: 'badge-blue',
-  partial: 'badge-amber', received: 'badge-green', cancelled: 'badge-red',
 }
 
 export default function PurchaseOrdersTab() {
@@ -95,7 +92,7 @@ export default function PurchaseOrdersTab() {
       key: 'type', label: 'Type', priority: 1, width: '90px',
       render: po => {
         const isRFQ = po.status === 'draft' || po.status === 'sent'
-        return <span className="text-[10px]" style={{ color: isRFQ ? 'var(--warning)' : 'var(--primary)' }}>{isRFQ ? '📋 RFQ' : '🛒 PO'}</span>
+        return <span className="text-[10px] font-semibold" style={{ color: isRFQ ? 'var(--warning)' : 'var(--primary)' }}>{isRFQ ? 'RFQ' : 'PO'}</span>
       },
       exportValue: po => ['draft', 'sent'].includes(po.status) ? 'RFQ' : 'PO',
     },
@@ -106,7 +103,7 @@ export default function PurchaseOrdersTab() {
     },
     {
       key: 'status', label: 'Status', priority: 1, width: '120px',
-      render: po => <span className={`badge ${STATUS_BADGE[po.status]}`}>{STATUS_LABEL[po.status]}</span>,
+      render: po => <StatusBadge status={po.status} label={STATUS_LABEL[po.status]} />,
       exportValue: po => STATUS_LABEL[po.status],
     },
     {
@@ -176,7 +173,7 @@ export default function PurchaseOrdersTab() {
               title={po.vendorName}
               subtitle={isRFQ ? 'RFQ' : 'Purchase Order'}
               amount={fmtKes(po.total)}
-              status={<Badge status={po.status === 'received' ? 'active' : po.status === 'cancelled' ? 'cancelled' : 'pending'} label={STATUS_LABEL[po.status]} size="xs" />}
+              status={<StatusBadge status={po.status} label={STATUS_LABEL[po.status]} size="xs" />}
               accent={isRFQ ? 'var(--warning)' : 'var(--primary)'}
               meta={[
                 { label: 'Date', value: fmtDate(po.date) },
