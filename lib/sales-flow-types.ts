@@ -10,14 +10,14 @@ export type { Invoice }
 
 // ─── Approval Workflow ────────────────────────────────────────────────────────
 
-export type ApprovalType = 'discount' | 'special_pricing' | 'credit_override' | 'corporate_deal' | 'backorder'
+export type ApprovalType = 'discount' | 'special_pricing' | 'credit_override' | 'corporate_deal' | 'backorder' | 'purchase_high_value'
 
 export interface ApprovalRequest {
   id: string
   ref: string
   type: ApprovalType
   
-  documentType: 'quote' | 'sales_order' | 'invoice'
+  documentType: 'quote' | 'sales_order' | 'invoice' | 'purchase_order'
   documentId: string
   documentRef: string
   

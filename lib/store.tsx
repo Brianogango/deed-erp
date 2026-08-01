@@ -94,6 +94,7 @@ import {
   matchRepairDeviceSerial,
 } from '@/lib/repair-retain-convert'
 import { planRepairPartConsume, planRepairPartReserve } from '@/lib/inventory/repair-parts-stock'
+import { billableQty, assertBillableQty } from '@/lib/purchase/three-way-match'
 
 export type ModuleId = AuthModuleId
 
@@ -1236,6 +1237,8 @@ export interface PurchaseOrder {
   lines: POLine[]; subtotal: number; taxTotal: number; total: number
   billId?: string; notes: string; receiptIds: string[]
   lockVersion?: number
+  approvalStatus?: 'not_required' | 'pending' | 'approved' | 'rejected'
+  approvalRequestIds?: string[]
   // Repair procurement link — set when auto-created from a repair procurement request
   repairId?: string; repairRef?: string; procurementRequestId?: string
 }
@@ -2921,14 +2924,14 @@ export interface AppState {
   releaseSerialToStock: (serialId: string, destination?: LocationId) => boolean
 
   // Sale Orders
-  createSaleOrder: (customerId: string, customerName: string, initial?: Partial<Pick<SaleOrder, 'lines' | 'deliveryDate' | 'notes' | 'paymentTerms' | 'validUntil' | 'customerRef' | 'invoiceAddress' | 'deliveryAddress' | 'pricelist' | 'salespersonId' | 'salespersonName' | 'salesTeam'>>) => SaleOrder
+  createSaleOrder: (customerId: string, customerName: string, initial?: Partial<Pick<SaleOrder, 'lines' | 'deliveryDate' | 'notes' | 'paymentTerms' | 'validUntil' | 'customerRef' | 'invoiceAddress' | 'deliveryAddress' | 'pricelist' | 'salespersonId' | 'salespersonName' | 'salesTeam'>>) => SaleOrder | Promise<SaleOrder>
   updateSaleOrder: (id: string, p: Partial<SaleOrder>) => void
   addSOLine: (orderId: string, product: Product, qty: number, discount?: number, defaultTaxRate?: number) => void
   assignSerialToSOLine: (orderId: string, lineId: string, serialId: string) => void
   assignSerialsToSOLine: (orderId: string, lineId: string, serialIds: string[]) => void
   unassignSerialFromSOLine: (orderId: string, lineId: string, serialId: string) => void
   removeSOLine: (orderId: string, lineId: string) => void
-  confirmSO: (id: string) => void
+  confirmSO: (id: string) => void | Promise<void>
   /** Send by Email succeeded → Quotation Sent (records date/user/recipient). */
   markQuotationSent: (id: string, recipient?: string, message?: string) => void
   /** Lock/unlock a confirmed sales order (Lock Confirmed Sales setting). */
@@ -2948,7 +2951,7 @@ export interface AppState {
   // Invoices
   createManualInvoice: (type: InvoiceType, partnerId: string, partnerName: string, dueDate: string, lines: { type?: 'item' | 'section'; desc: string; qty: string; price: string; tax: string; discount?: string }[], vatRate: number, notes?: string, documentDate?: string) => Invoice
   updateInvoice: (id: string, p: Partial<Invoice>) => void
-  postInvoice: (id: string, forcedRef?: string) => void
+  postInvoice: (id: string, forcedRef?: string) => void | Promise<void>
   /** Finance dispute flag — Odoo "Blocked" payment status. */
   setInvoicePaymentBlocked: (id: string, blocked: boolean) => void
   registerPayment: (invoiceId: string, amount: number, method?: string, bankAccountId?: string, reference?: string, paymentDate?: string) => void
@@ -3036,8 +3039,8 @@ export interface AppState {
   // Stock Transfers (internal moves)
   createTransfer: (from: LocationId, to: LocationId, notes?: string) => StockTransfer
   addTransferLine: (transferId: string, productId: string, productName: string, qty: number, serialIds: string[]) => void
-  validateTransfer: (transferId: string) => void
-  submitTransfer: (from: LocationId, to: LocationId, productId: string, productName: string, qty: number, serialIds: string[], notes?: string) => boolean
+  validateTransfer: (transferId: string) => void | Promise<void>
+  submitTransfer: (from: LocationId, to: LocationId, productId: string, productName: string, qty: number, serialIds: string[], notes?: string) => boolean | Promise<boolean>
 
   // Repairs - Full Workflow
   createRepair: (customerId: string, customerName: string, productName: string, serial: string, desc: string) => RepairOrder
@@ -3106,7 +3109,7 @@ export interface AppState {
   // POS
   openPOSSession: (openingCash: number) => void
   closePOSSession: (closingCash: number) => POSSession | null
-  createPOSOrder: (lines: POSOrder['lines'], payment: POSOrder['payment'], customerId?: string, customerName?: string, pointsRedeemed?: number, applyVat?: boolean) => POSOrder | null
+  createPOSOrder: (lines: POSOrder['lines'], payment: POSOrder['payment'], customerId?: string, customerName?: string, pointsRedeemed?: number, applyVat?: boolean) => POSOrder | null | Promise<POSOrder | null>
 
   // Inventory reports
   getStockByLocation: (productId: string) => Record<LocationId, number>
@@ -3114,7 +3117,7 @@ export interface AppState {
 
   // Stock adjustments
   createAdjustment: (productId: string, productName: string, type: 'add' | 'subtract', qty: number, reason: AdjReason, notes: string) => StockAdjustment
-  approveAdjustment: (adjId: string, approved: boolean) => void
+  approveAdjustment: (adjId: string, approved: boolean) => void | Promise<void>
   
   // Stock Reservations
   stockReservations: StockReservation[]
@@ -5671,11 +5674,12 @@ const storeCtx: AppState = {
     // Payments & Credit
     payments,
     customerCredits,
-    createPayment: (customerId, customerName, amount, method, reference, notes, forcedReceiptNumber) => {
+    createPayment: async (customerId, customerName, amount, method, reference, notes, forcedReceiptNumber) => {
       const user = currentUser()
+      const receiptNumber = forcedReceiptNumber ?? await storeCtxRef.current!.allocateDocRef('RCT')
       const payment: Payment = {
         id: uid(), ref: seq('PAY', 'rec'), customerId, customerName, amount, method,
-        reference, receiptNumber: forcedReceiptNumber ?? docSeq('RCT'), invoices: [], status: 'cleared',
+        reference, receiptNumber, invoices: [], status: 'cleared',
         receivedBy: user?.name ?? 'System', receivedDate: now(), clearedDate: now(),
         accountingDate: now(), notes
       }
@@ -6495,7 +6499,7 @@ const storeCtx: AppState = {
 
     // Deposits
     deposits,
-    createDeposit: (d) => {
+    createDeposit: async (d) => {
       const user = currentUser()
       if (!user) { showToast('Please log in to continue', 'error'); return null }
       const { initialPayment = 0, payMethod = 'cash', payRef, ...depositInput } = d
@@ -6547,7 +6551,7 @@ const storeCtx: AppState = {
           serialIds: [],
           accountCode: '',
         }))
-        const soRef = docSeq('QUO')
+        const soRef = await storeCtxRef.current!.allocateDocRef('QUO')
         const so: SaleOrder = {
           id: uid(),
           ref: soRef,
@@ -7640,7 +7644,7 @@ const storeCtx: AppState = {
     },
     
     // ── Sales - Quotes ─────────────────────────────────────────────────────────
-    createQuote: (quoteInput) => {
+    createQuote: async (quoteInput) => {
       const user = currentUser()
       if (!user) { showToast('Please log in to continue', 'error'); return null }
       if (Number(quoteInput.total ?? 0) < 1) {
@@ -7648,7 +7652,7 @@ const storeCtx: AppState = {
         return null
       }
 
-      const quoteRef = docSeq('QUO')
+      const quoteRef = await storeCtxRef.current!.allocateDocRef('QUO')
       const createdAt = now()
       const money = documentMoneySnapshot({
         currencyCode: quoteInput.currencyCode || companySettings.currency || FUNCTIONAL_CURRENCY,
@@ -7890,7 +7894,7 @@ const storeCtx: AppState = {
       showToast('Quote rejected by customer')
       return next
     }),
-    convertQuoteToSaleOrder: (quoteId) => {
+    convertQuoteToSaleOrder: async (quoteId) => {
       const quote = quotes.find(q => q.id === quoteId)
       if (!quote) return null
       if (!['accepted', 'sent', 'viewed'].includes(quote.status)) {
@@ -7929,7 +7933,7 @@ const storeCtx: AppState = {
       
       const so: SaleOrder = {
         id: uid(),
-        ref: docSeq('QUO'),
+        ref: await storeCtxRef.current!.allocateDocRef('QUO'),
         status: 'quotation',
         customerId: contact?.id ?? quote.companyId,
         customerName: quote.companyName,
@@ -7986,12 +7990,12 @@ const storeCtx: AppState = {
       return so
     },
 
-    convertRepairQuoteToSOAndInvoice: (quoteId) => {
+    convertRepairQuoteToSOAndInvoice: async (quoteId) => {
       const quote = quotes.find(q => q.id === quoteId)
       if (!quote || quote.source !== 'repair') return null
 
       const soId = uid()
-      const soRef = docSeq('SO')
+      const soRef = await storeCtxRef.current!.allocateDocRef('SO')
       const soLines = quote.lines.map(ql => ({
         id: uid(),
         productId: ql.productId,
@@ -8031,7 +8035,7 @@ const storeCtx: AppState = {
       }))
       const invoice: Invoice = {
         id: uid(),
-        ref: docSeq('INV'),
+        ref: await storeCtxRef.current!.allocateDocRef('INV'),
         type: 'customer_invoice',
         status: 'posted',
         partnerId: quote.companyId,
@@ -8072,7 +8076,7 @@ const storeCtx: AppState = {
       return { so, invoice }
     },
 
-    reviseQuote: (quoteId, changes) => {
+    reviseQuote: async (quoteId, changes) => {
       const originalQuote = quotes.find(q => q.id === quoteId)
       if (!originalQuote) return {} as Quote
       
@@ -8088,7 +8092,7 @@ const storeCtx: AppState = {
       const newQuote: Quote = {
         ...originalQuote,
         id: uid(),
-        ref: docSeq('QUO'),
+        ref: await storeCtxRef.current!.allocateDocRef('QUO'),
         version: originalQuote.version + 1,
         status: 'draft',
         issueDate: now(),
@@ -8742,7 +8746,7 @@ const storeCtx: AppState = {
     },
 
     // ── Sale Orders ───────────────────────────────────────────────────────────
-    createSaleOrder: (customerId, customerName, initial = {}) => {
+    createSaleOrder: async (customerId, customerName, initial = {}) => {
       const user = currentUser()
       const initialLines = initial.lines ?? []
       const totals = calcSO(initialLines)
@@ -8750,8 +8754,9 @@ const storeCtx: AppState = {
         currencyCode: (initial as any).currencyCode || companySettings.currency || FUNCTIONAL_CURRENCY,
         exchangeRateToBase: (initial as any).exchangeRateToBase,
       })
+      const soRef = await storeCtxRef.current!.allocateDocRef('QUO')
       const so: SaleOrder = {
-        id: uid(), ref: docSeq('QUO'), status: 'quotation', customerId, customerName,
+        id: uid(), ref: soRef, status: 'quotation', customerId, customerName,
         date: now(), validUntil: initial.validUntil ?? addDays(now(), 30), lines: initialLines, ...totals,
         approvalStatus: 'not_required', approvalRequestIds: [], stockReservationIds: [],
         deliveryDate: initial.deliveryDate,
@@ -8937,7 +8942,7 @@ const storeCtx: AppState = {
         return updated
       }))
     },
-    confirmSO: (id) => {
+    confirmSO: async (id) => {
       const user = currentUser()
       if (!user || !['director', 'sales_rep', 'admin_officer'].includes(user.role)) {
         showToast('Unauthorized to confirm Sales Orders', 'error'); return;
@@ -9155,9 +9160,10 @@ const storeCtx: AppState = {
 
       // Quotations and Sales Orders run separate sequences: confirmation
       // assigns the next SO number and keeps the QUO number on the record.
-      const orderRef = docSeq('SO')
+      const orderRef = await storeCtxRef.current!.allocateDocRef('SO')
+      const dnRef = await storeCtxRef.current!.allocateDocRef('DN')
       const del: Delivery = {
-        id: uid(), ref: docSeq('DN'), saleOrderId: id, saleOrderRef: orderRef,
+        id: uid(), ref: dnRef, saleOrderId: id, saleOrderRef: orderRef,
         customerId: so.customerId, customerName: so.customerName,
         // Confirmation creates demand only. Inventory is allocated later from
         // the delivery preparation screen.
@@ -9384,7 +9390,7 @@ const storeCtx: AppState = {
       showToast(`${del.ref} prepared — stock reserved and ready to validate`)
       return true
     },
-    validateDelivery: (deliveryId, qtysDone) => {
+    validateDelivery: async (deliveryId, qtysDone) => {
       if (!canApproveInventoryAction(currentUser())) {
         showToast('Only Inventory or Admin can validate deliveries', 'error'); return;
       }
@@ -9475,7 +9481,7 @@ const storeCtx: AppState = {
           return (Number(prod.stockQty) || 0) < l.qty
         })
         backorder = {
-          id: uid(), ref: docSeq('DN'), saleOrderId: del.saleOrderId, saleOrderRef: del.saleOrderRef,
+          id: uid(), ref: await storeCtxRef.current!.allocateDocRef('DN'), saleOrderId: del.saleOrderId, saleOrderRef: del.saleOrderRef,
           customerId: del.customerId, customerName: del.customerName,
           status: initialDeliveryState(backorderShort), date: now(),
           lines: backorderLines.map(l => ({ ...l, serialIds: [] })),
@@ -9965,7 +9971,7 @@ const storeCtx: AppState = {
         return next
       })
     },
-    postInvoice: (id, forcedRef) => {
+    postInvoice: async (id, forcedRef) => {
       const actor = currentUser()
       if (!canManageFinance(actor)) {
         showToast('Only Finance or Admin Officer can post invoices', 'error'); return
@@ -9986,10 +9992,33 @@ const storeCtx: AppState = {
       if (!inv.lines || inv.lines.length === 0) {
         showToast('Cannot post an invoice with no line items', 'error'); return
       }
+      // Vendor bill 3-way match: billed qty must still fit received − previously billed.
+      if (inv.type === 'vendor_bill' && inv.purchaseOrderId) {
+        const po = poRef.current.find(p => p.id === inv.purchaseOrderId)
+        if (!po) { showToast('Linked purchase order not found', 'error'); return }
+        try {
+          for (const line of inv.lines) {
+            const poLine = po.lines.find(l =>
+              l.productId && line.productId && l.productId === line.productId
+            ) || po.lines.find(l => line.description?.includes(l.productName))
+            if (!poLine) continue
+            // qtyBilled already includes this draft bill's qty from createBillFromPO —
+            // assert using received vs (billed − this line) + this line ≡ received ≥ billed.
+            const alreadyBilledExcludingThis = Math.max(0, (poLine.qtyBilled ?? 0) - Math.floor(Number(line.qty) || 0))
+            assertBillableQty(
+              { qty: poLine.qty, qtyReceived: poLine.qtyReceived, qtyBilled: alreadyBilledExcludingThis },
+              Number(line.qty) || 0,
+            )
+          }
+        } catch (err) {
+          showToast(err instanceof Error ? err.message : 'Three-way match failed', 'error')
+          return
+        }
+      }
       // Posting assigns the official number: drafts carry a placeholder ref
       // until Finance confirms them (Odoo behaviour).
       const finalRef = isDraftInvoiceRef(inv.ref)
-        ? (forcedRef ?? docSeq(inv.type === 'vendor_bill' ? 'BILL' : 'INV'))
+        ? (forcedRef ?? await storeCtxRef.current!.allocateDocRef(inv.type === 'vendor_bill' ? 'BILL' : 'INV'))
         : inv.ref
       const postedMeta = {
         ref: finalRef,
@@ -10134,7 +10163,7 @@ const storeCtx: AppState = {
       addAuditLog('reset_invoice_draft', inv.ref, `${inv.type === 'vendor_bill' ? 'Bill' : 'Invoice'} reset to draft${reversals.length ? ` with ${reversals.length} reversal journal${reversals.length === 1 ? '' : 's'}` : ''}`)
       showToast(`${inv.type === 'vendor_bill' ? 'Bill' : 'Invoice'} reset to draft`)
     },
-    cancelInvoice: (id, forcedCreditRef) => {
+    cancelInvoice: async (id, forcedCreditRef) => {
       const actor = currentUser()
       if (!canManageFullFinanceAction(actor)) {
         showToast('Only Finance or Director can cancel invoices', 'error')
@@ -10157,7 +10186,7 @@ const storeCtx: AppState = {
         const creditAmount = Math.min(inv.amountPaid, inv.total)
         credit = {
           id: uid(),
-          ref: forcedCreditRef ?? docSeq('CN'),
+          ref: forcedCreditRef ?? await storeCtxRef.current!.allocateDocRef('CN'),
           customerId: inv.partnerId,
           customerName: inv.partnerName,
           sourceInvoiceId: inv.id,
@@ -10219,14 +10248,16 @@ const storeCtx: AppState = {
     },
 
     // ── Purchase Orders ───────────────────────────────────────────────────────
-    createPO: (vendorId, vendorName, initial = {}, forcedRef) => {
+    createPO: async (vendorId, vendorName, initial = {}, forcedRef) => {
       if (!canManageProcurement(currentUser())) {
         showToast('Only Inventory or Admin can create Purchase Orders', 'error'); return {} as PurchaseOrder;
       }
       const initialLines = initial.lines ?? []
+      const poRefAllocated = forcedRef ?? await storeCtxRef.current!.allocateDocRef('PO')
       const po: PurchaseOrder = {
-        id: uid(), ref: forcedRef ?? docSeq('PO'), status: 'draft', vendorId, vendorName,
+        id: uid(), ref: poRefAllocated, status: 'draft', vendorId, vendorName,
         date: now(), expectedDate: initial.expectedDate ?? addDays(now(), 7),
+        approvalStatus: 'not_required', approvalRequestIds: [],
         lines: initialLines, ...calcPO(initialLines), notes: initial.notes ?? '', receiptIds: [],
       }
       setPurchaseOrders(p => [po, ...p]); addAuditLog('create_po', po.ref, `Draft purchase order created for vendor ${vendorName}`)
@@ -10326,17 +10357,62 @@ const storeCtx: AppState = {
       })
       showToast('PO reverted to draft')
     },
-    confirmPO: (id) => {
-      if (!canManageProcurement(currentUser())) {
+    confirmPO: async (id) => {
+      const user = currentUser()
+      if (!canManageProcurement(user)) {
         showToast('Only Inventory or Admin can confirm Purchase Orders', 'error'); return;
       }
       const po = poRef.current.find(p => p.id === id)
       if (!po) return
-      const vendor = contacts.find(c => c.id === po.vendorId)
-   
+
+      const purchaseApprovals = approvalRequests.filter(r =>
+        r.documentType === 'purchase_order' && r.documentId === id && r.type === 'purchase_high_value',
+      )
+      if (purchaseApprovals.some(r => r.status === 'rejected')) {
+        showToast('Purchase approval was rejected — revise the PO before confirming', 'error')
+        return
+      }
+      if (purchaseApprovals.some(r => r.status === 'pending') || po.approvalStatus === 'pending') {
+        showToast('Purchase approval is still pending', 'error')
+        return
+      }
+
+      const requireHighValue = systemSettings.purRequireApprovalHighValue !== false
+      const threshold = Number(systemSettings.purHighValueThreshold ?? 50000)
+      const alreadyApproved = purchaseApprovals.some(r => r.status === 'approved')
+      if (requireHighValue && po.total > threshold && !alreadyApproved) {
+        const request = createApprovalRequest(
+          'purchase_high_value',
+          'purchase_order',
+          id,
+          po.ref,
+          user!.id,
+          user!.name,
+          {
+            reason: `PO total ${fmtKes(po.total)} exceeds high-value threshold ${fmtKes(threshold)}`,
+            proposedValue: po.total,
+            threshold,
+          },
+          users.map(u => ({ id: u.id, name: u.name, role: u.role })),
+        )
+        setApprovalRequests(prev => [request, ...prev])
+        setPurchaseOrders(p => {
+          const next = p.map(row => row.id === id
+            ? { ...row, approvalStatus: 'pending' as const, approvalRequestIds: [...(row.approvalRequestIds ?? []), request.id] }
+            : row)
+          const updated = next.find(row => row.id === id)
+          if (updated) sync(`/api/purchase-orders/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+          return next
+        })
+        addAuditLog('purchase_approval_required', po.ref, request.details.reason)
+        showToast(`Approval required — PO total exceeds ${fmtKes(threshold)}`, 'info')
+        return
+      }
+
       // Auto-create incoming shipment (receipt) when PO is confirmed — Odoo behaviour
+      const receiptRef = await storeCtxRef.current!.allocateDocRef('REC')
       const receipt: Receipt = {
-        id: uid(), ref: docSeq('REC'), poId: id, poRef: po.ref,
+        id: uid(), ref: receiptRef, poId: id, poRef: po.ref,
         vendorId: po.vendorId, vendorName: po.vendorName,
         status: 'draft', date: now(),
         lines: po.lines.map(l => ({
@@ -10351,15 +10427,17 @@ const storeCtx: AppState = {
       setReceipts(p => [receipt, ...p])
       sync('/api/receipts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(receipt) })
       setPurchaseOrders(p => {
-        const next = p.map(po => po.id === id ? { ...po, status: 'confirmed' as const } : po)
-        const updated = next.find(po => po.id === id)
+        const next = p.map(row => row.id === id
+          ? { ...row, status: 'confirmed' as const, approvalStatus: alreadyApproved ? 'approved' as const : (row.approvalStatus ?? 'not_required') }
+          : row)
+        const updated = next.find(row => row.id === id)
         if (updated) sync(`/api/purchase-orders/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
         return next
       })
       addAuditLog('confirm_po', po.ref, `PO confirmed — receipt ${receipt.ref} created automatically`)
       showToast(`Order confirmed · Receipt ${receipt.ref} ready for goods receiving`)
     },
-    createReceiptFromPO: (poId) => {
+    createReceiptFromPO: async (poId, forcedRef) => {
       const po = poRef.current.find(p => p.id === poId)!
       const outstandingLines = po.lines.filter(l => l.qtyReceived < l.qty)
       if (outstandingLines.length === 0) {
@@ -10367,7 +10445,9 @@ const storeCtx: AppState = {
         return recRef.current.find(r => r.poId === poId && r.status === 'draft') ?? null
       }
       const receipt: Receipt = {
-        id: uid(), ref: forcedRef ?? docSeq('REC'), poId, poRef: po.ref,
+        id: uid(),
+        ref: forcedRef ?? await storeCtxRef.current!.allocateDocRef('REC'),
+        poId, poRef: po.ref,
         vendorId: po.vendorId, vendorName: po.vendorName,
         status: 'draft', date: now(),
         lines: outstandingLines.map(l => ({
@@ -10390,37 +10470,11 @@ const storeCtx: AppState = {
       }
       const receipt = recRef.current.find(r => r.id === receiptId)!
       const po = poRef.current.find(p => p.id === receipt.poId)!
-      try {
-        const response = await fetch('/api/inventory/validate-receipt', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            lines: lines.map(line => ({
-              productId: line.productId,
-              productName: line.productName,
-              qtyReceived: Number(line.qtyReceived ?? 0),
-              requiresSerial: Boolean(line.requiresSerial),
-              serials: line.serials ?? [],
-            })),
-          }),
-        })
-        if (!response.ok) {
-          const payload = await response.json().catch(() => null) as { errors?: string[]; error?: string } | null
-          const message = payload?.errors?.[0] || payload?.error || 'Receipt validation failed'
-          showToast(message, 'error')
-          return
-        }
-      } catch {
-        showToast('Could not validate receipt serials on server', 'error')
-        return
-      }
-
       // Validate: serialized products need all serial numbers
       for (const line of lines) {
         if (line.requiresSerial && line.serials.length < line.qtyReceived) {
           showToast(`Enter all serial numbers for ${line.productName} (${line.serials.length}/${line.qtyReceived})`, 'error'); return
         }
-        // Check duplicate serials
         for (const s of line.serials) {
           if (serialRef.current.find(x => x.serial === s)) {
             showToast(`Serial ${s} already exists in system`, 'error'); return
@@ -10449,9 +10503,12 @@ const storeCtx: AppState = {
           importedSerials: line.importedSerials?.slice(line.qtyReceived),
           specs: line.specs,
         }))
-      const followUpReceipt: Receipt | null = !allReceived && anyReceived && !hasOtherDraftReceipt && followUpLines.length > 0
+      const followUpRef = (!allReceived && anyReceived && !hasOtherDraftReceipt && followUpLines.length > 0)
+        ? await storeCtxRef.current!.allocateDocRef('REC')
+        : null
+      const followUpReceipt: Receipt | null = followUpRef
         ? {
-            id: uid(), ref: docSeq('REC'), poId: receipt.poId, poRef: receipt.poRef,
+            id: uid(), ref: followUpRef, poId: receipt.poId, poRef: receipt.poRef,
             vendorId: receipt.vendorId, vendorName: receipt.vendorName,
             status: 'draft', date: now(),
             lines: followUpLines,
@@ -10459,8 +10516,7 @@ const storeCtx: AppState = {
           }
         : null
 
-      // Build serial rows first, persist atomically, then update local stock.
-      // (Previously N× fire-and-forget POST /api/serials raced and lost units.)
+      // Build rich serial rows, then apply authoritative server stock+serial mutation.
       const newSerials: SerialNumber[] = []
       const newRefurbJobs: RefurbishmentJob[] = []
       for (const line of lines) {
@@ -10496,37 +10552,48 @@ const storeCtx: AppState = {
           }
         }
       }
-      if (newSerials.length > 0) {
-        try {
-          const bulkRes = await fetch('/api/serials/bulk', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ items: newSerials }),
-          })
-          if (!bulkRes.ok) {
-            const payload = await bulkRes.json().catch(() => null) as { errors?: string[]; error?: string } | null
-            const message = payload?.errors?.[0] || payload?.error || 'Failed to save serial numbers'
-            showToast(message, 'error')
-            return
-          }
-        } catch {
-          showToast('Could not save serial numbers to server', 'error')
+
+      try {
+        const response = await fetch('/api/inventory/validate-receipt', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            applyStock: true,
+            destination,
+            receiptId,
+            receiptRef: receipt.ref,
+            purchaseOrderId: po.id,
+            lines: lines.map(line => ({
+              productId: line.productId,
+              productName: line.productName,
+              qtyReceived: Number(line.qtyReceived ?? 0),
+              requiresSerial: Boolean(line.requiresSerial),
+              serials: line.serials ?? [],
+              serialRecords: newSerials.filter(s => s.productId === line.productId),
+            })),
+          }),
+        })
+        if (!response.ok) {
+          const payload = await response.json().catch(() => null) as { errors?: string[]; error?: string } | null
+          const message = payload?.errors?.[0] || payload?.error || 'Receipt validation failed'
+          showToast(message, 'error')
           return
         }
-        setSerials(p => [...p, ...newSerials])
-      }
-      if (newRefurbJobs.length > 0) {
-        setRefurbishmentJobs(p => [...p, ...newRefurbJobs])
+      } catch {
+        showToast('Could not validate receipt on server', 'error')
+        return
       }
 
+      if (newSerials.length > 0) setSerials(p => [...p, ...newSerials])
+      if (newRefurbJobs.length > 0) setRefurbishmentJobs(p => [...p, ...newRefurbJobs])
+
+      // Mirror server stock into local UI state (server already persisted blobs).
       lines.forEach(line => {
         if (line.requiresSerial) {
           setProducts(p => p.map(x => x.id === line.productId ? { ...x, stockQty: x.stockQty + line.serials.length } : x))
-          addMove(line.productId, line.productName, line.serials.length, 'in', `Receipt ${receipt.ref}`, receipt.ref, 'vendor', destination, line.serials)
         } else {
           setBulkStock(prev => upsertBulkStock(prev, line.productId, destination, line.qtyReceived))
           setProducts(p => p.map(x => x.id === line.productId ? { ...x, stockQty: x.stockQty + line.qtyReceived } : x))
-          addMove(line.productId, line.productName, line.qtyReceived, 'in', `Receipt ${receipt.ref}`, receipt.ref, 'vendor', destination, [])
         }
       })
 
@@ -10646,17 +10713,22 @@ const storeCtx: AppState = {
       }
       const po = poRef.current.find(p => p.id === poId)
       if (!po) return null
-      if (po.billId) { showToast('A bill already exists for this purchase order', 'error'); return null }
       const hasValidatedReceipt = recRef.current.some(r => r.poId === poId && r.status === 'validated')
       if (!hasValidatedReceipt) { showToast('Receive goods before creating a vendor bill', 'error'); return null }
 
-      const billableLines = po.lines
-        .map(l => {
-          const qtyBilled = l.qtyBilled ?? 0
-          const billQty = Math.max(0, l.qtyReceived - qtyBilled)
-          return { ...l, billQty }
-        })
-        .filter(l => l.billQty > 0)
+      let billableLines: Array<POLine & { billQty: number }>
+      try {
+        billableLines = po.lines
+          .map(l => {
+            const billQty = billableQty(l)
+            assertBillableQty(l, billQty)
+            return { ...l, billQty }
+          })
+          .filter(l => l.billQty > 0)
+      } catch (err) {
+        showToast(err instanceof Error ? err.message : 'Three-way match failed', 'error')
+        return null
+      }
 
       if (billableLines.length === 0) {
         showToast('No received quantity left to bill on this purchase order', 'error')
@@ -10666,12 +10738,13 @@ const storeCtx: AppState = {
       const sub = billableLines.reduce((a, l) => a + l.billQty * l.unitPrice, 0)
       const tax = billableLines.reduce((a, l) => a + Math.round(l.billQty * l.unitPrice * l.taxRate / 100), 0)
       const bill: Invoice = {
-        id: uid(), ref: seq('BILL', 'inv'), type: 'vendor_bill', status: 'draft',
+        id: uid(), ref: draftInvoiceRef('vendor_bill'), type: 'vendor_bill', status: 'draft',
         partnerId: po.vendorId, partnerName: po.vendorName,
         date: now(), dueDate: addDays(now(), 30),
         lines: billableLines.map(l => ({
           id: uid(), description: `${l.productName} ×${l.billQty}`, qty: l.billQty,
           unitPrice: l.unitPrice, taxRate: l.taxRate, subtotal: l.billQty * l.unitPrice,
+          productId: l.productId,
         })),
         subtotal: sub, taxTotal: tax, total: sub + tax, amountPaid: 0,
         purchaseOrderId: po.id, notes: '',
@@ -10686,14 +10759,15 @@ const storeCtx: AppState = {
             if (!match) return line
             return { ...line, qtyBilled: (line.qtyBilled ?? 0) + match.billQty }
           })
+          // Keep billId as latest bill for UI deep-link; further bills allowed via billable qty.
           return { ...x, billId: bill.id, lines }
         })
         const updated = next.find(x => x.id === poId)
         if (updated) sync(`/api/purchase-orders/${poId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
         return next
       })
-      addAuditLog('create_bill', bill.ref, `Vendor bill created from PO ${po.ref}`)
-      showToast(`Bill ${bill.ref} created · validate to post liability`)
+      addAuditLog('create_bill', bill.ref, `Vendor bill created from PO ${po.ref} (3-way match)`)
+      showToast(`Bill draft created · confirm to post liability`)
       return bill
     },
 
@@ -10913,23 +10987,48 @@ const storeCtx: AppState = {
     addTransferLine: (transferId, productId, productName, qty, serialIds) => {
       setStockTransfers(p => p.map(t => t.id !== transferId ? t : { ...t, lines: [...t.lines, { productId, productName, qty, serialIds }] }))
     },
-    validateTransfer: (transferId) => {
+    validateTransfer: async (transferId) => {
       if (!canManageInventoryControl(currentUser())) { showToast('Only inventory-controlled roles can validate transfers', 'error'); return }
       const tr = stockTransfers.find(t => t.id === transferId)!
+      try {
+        const res = await fetch('/api/inventory/apply-transfer-stock', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            transferRef: tr.ref,
+            fromLocation: tr.fromLocation,
+            toLocation: tr.toLocation,
+            lines: tr.lines.map(l => ({
+              productId: l.productId,
+              productName: l.productName,
+              qty: l.qty,
+              serialIds: l.serialIds,
+            })),
+          }),
+        })
+        if (!res.ok) {
+          const payload = await res.json().catch(() => null) as { error?: string } | null
+          showToast(payload?.error || 'Transfer validation failed', 'error')
+          return
+        }
+      } catch {
+        showToast('Could not apply transfer on server', 'error')
+        return
+      }
+      // Mirror server stock into local UI (moves already persisted server-side).
       tr.lines.forEach(l => {
         if (l.serialIds.length > 0) {
           l.serialIds.forEach(sid => setSerials(p => p.map(s => s.id === sid ? { ...s, location: tr.toLocation } : s)))
         } else {
           setBulkStock(prev => upsertBulkStock(upsertBulkStock(prev, l.productId, tr.fromLocation, -l.qty), l.productId, tr.toLocation, l.qty))
         }
-        addMove(l.productId, l.productName, l.qty, 'transfer', `Transfer ${tr.ref}`, tr.ref, tr.fromLocation, tr.toLocation, l.serialIds.map(id => serialRef.current.find(s => s.id === id)?.serial ?? id))
       })
       setStockTransfers(p => p.map(t => t.id === transferId ? { ...t, status: 'done' } : t))
       showToast(`Transfer ${tr.ref} validated — stock moved to ${LOCATIONS[tr.toLocation].name}`)
     },
 
     // ── Combined create+validate in one atomic step (avoids React batching race) ──
-    submitTransfer: (from, to, productId, productName, qty, serialIds, notes = '') => {
+    submitTransfer: async (from, to, productId, productName, qty, serialIds, notes = '') => {
       if (!canManageInventoryControl(currentUser())) {
         showToast('Only inventory-controlled roles can create transfers', 'error')
         return false
@@ -10954,15 +11053,32 @@ const storeCtx: AppState = {
       const ref = seq('TR', 'tr')
       const id = uid()
       const line = { productId, productName, qty, serialIds }
-      // Move stock immediately — no state read-back needed
+      try {
+        const res = await fetch('/api/inventory/apply-transfer-stock', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            transferRef: ref,
+            fromLocation: from,
+            toLocation: to,
+            lines: [{ productId, productName, qty, serialIds }],
+          }),
+        })
+        if (!res.ok) {
+          const payload = await res.json().catch(() => null) as { error?: string } | null
+          showToast(payload?.error || 'Transfer failed', 'error')
+          return false
+        }
+      } catch {
+        showToast('Could not apply transfer on server', 'error')
+        return false
+      }
+      // Mirror server stock into local UI (moves already persisted server-side).
       if (serialIds.length > 0) {
         serialIds.forEach(sid => setSerials(p => p.map(s => s.id === sid ? { ...s, location: to } : s)))
       } else {
         setBulkStock(prev => upsertBulkStock(upsertBulkStock(prev, productId, from, -qty), productId, to, qty))
       }
-      addMove(productId, productName, qty, 'transfer', `Transfer ${ref}`, ref, from, to,
-        serialIds.map(sid => serialRef.current.find(s => s.id === sid)?.serial ?? sid))
-      // Persist the completed transfer record
       const tr: StockTransfer = { id, ref, fromLocation: from, toLocation: to, status: 'done', date: now(), lines: [line], notes }
       setStockTransfers(p => [tr, ...p])
       showToast(`Transfer ${ref} validated — stock moved to ${LOCATIONS[to].name}`)
@@ -11270,7 +11386,7 @@ const storeCtx: AppState = {
       showToast(`Repair closed at diagnosis — KES ${DIAGNOSIS_FEE.toLocaleString('en-KE')} diagnosis fee charged`)
     },
 
-    generateRepairQuote: (repairId, incomingLines, applyVat = true) => {
+    generateRepairQuote: async (repairId, incomingLines, applyVat = true) => {
       const user = currentUser()
       if (!user) return
       const repair = repairs.find(r => r.id === repairId)
@@ -11448,7 +11564,7 @@ const storeCtx: AppState = {
         sync(`/api/sale-orders/${linkedSaleOrderId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(soPatch) })
       } else if (chargeTotal >= 1) {
         const soId = uid()
-        const soRef = docSeq('QUO')
+        const soRef = await storeCtxRef.current!.allocateDocRef('QUO')
         const saleOrderRecord = {
           id: soId, ref: soRef, status: 'quotation' as const,
           customerId: repair.customerId, customerName: repair.customerName,
@@ -11487,7 +11603,7 @@ const storeCtx: AppState = {
       const shouldPushSalesQuote = isQuoteUpdate || chargeTotal >= 1
       const salesQuoteId = shouldPushSalesQuote ? (existingSalesQuoteId ?? uid()) : undefined
       const salesQuoteRef = shouldPushSalesQuote
-        ? (repair.salesQuoteRef ?? existingSalesQuote?.ref ?? existingSalesQuote?.quoteNumber ?? docSeq('QUO'))
+        ? (repair.salesQuoteRef ?? existingSalesQuote?.ref ?? existingSalesQuote?.quoteNumber ?? await storeCtxRef.current!.allocateDocRef('QUO'))
         : undefined
       const salesQuoteRecord = {
         ...existingSalesQuote,
@@ -11747,7 +11863,7 @@ const storeCtx: AppState = {
       }
     },
     
-    approveRepairQuote: (repairId, approved, reason) => {
+    approveRepairQuote: async (repairId, approved, reason) => {
       const repair = repairs.find(r => r.id === repairId)
       if (!repair?.quote) return
       
@@ -11856,7 +11972,7 @@ const storeCtx: AppState = {
 
           // Auto-create a draft PO (no vendor — admin assigns later)
           const autoPo: PurchaseOrder = {
-            id: uid(), ref: docSeq('PO'), status: 'draft',
+            id: uid(), ref: await storeCtxRef.current!.allocateDocRef('PO'), status: 'draft',
             vendorId: '', vendorName: '',
             date: now(), expectedDate: addDays(now(), 7),
             lines: missingItems
@@ -11894,7 +12010,7 @@ const storeCtx: AppState = {
         let awaitingSoRef = repair.saleOrderRef ?? (repair as any).linkedSaleOrderRef
         if (!awaitingSoId) {
           awaitingSoId = uid()
-          awaitingSoRef = docSeq('QUO')
+          awaitingSoRef = await storeCtxRef.current!.allocateDocRef('QUO')
           const awaitingSo: SaleOrder = {
             id: awaitingSoId, ref: awaitingSoRef, status: 'quotation',
             customerId: repair.customerId, customerName: repair.customerName,
@@ -11925,7 +12041,7 @@ const storeCtx: AppState = {
         if (repair.quote.total >= 1) {
           const invoicePatch: Invoice = {
             ...(existingInvoice ?? {
-              id: uid(), ref: docSeq('INV'), type: 'customer_invoice', status: 'draft',
+              id: uid(), ref: draftInvoiceRef('customer_invoice'), type: 'customer_invoice', status: 'draft',
               partnerId: repair.customerId, partnerName: repair.customerName,
               date: now(), dueDate: addDays(now(), 14), amountPaid: 0, notes: '',
             }),
@@ -12045,7 +12161,7 @@ const storeCtx: AppState = {
         })
       } else {
         soId = uid()
-        soRef = docSeq('SO')
+        soRef = await storeCtxRef.current!.allocateDocRef('SO')
         const newSo: SaleOrder = { id: soId, ref: soRef, status: 'sale', confirmedAt: new Date().toISOString(),
           customerId: repair.customerId, customerName: repair.customerName,
           date: now(), validUntil: addDays(now(), 30),
@@ -12067,7 +12183,7 @@ const storeCtx: AppState = {
       if (repair.quote.total >= 1) {
         const invoice: Invoice = {
           ...(existingInvoice ?? {
-            id: uid(), ref: docSeq('INV'), type: 'customer_invoice', status: 'posted',
+            id: uid(), ref: await storeCtxRef.current!.allocateDocRef('INV'), type: 'customer_invoice', status: 'posted',
             partnerId: repair.customerId, partnerName: repair.customerName,
             date: now(), dueDate: addDays(now(), 14), amountPaid: 0, notes: '',
           }),
@@ -12630,7 +12746,7 @@ const storeCtx: AppState = {
       showToast(`${repair.ref} closed successfully`)
     },
     
-    createInvoiceFromRepair: (repairId, applyVat = true) => {
+    createInvoiceFromRepair: async (repairId, applyVat = true) => {
       const repair = repairs.find(r => r.id === repairId)
       if (!repair) return null
       if (blockIfOutsourced(repairId, 'invoice this repair')) return null
@@ -12692,7 +12808,7 @@ const storeCtx: AppState = {
 
       const invoice: Invoice = {
         id: uid(),
-        ref: docSeq('INV'),
+        ref: await storeCtxRef.current!.allocateDocRef('INV'),
         type: 'customer_invoice',
         status: 'posted',
         partnerId: repair.customerId,
@@ -13004,7 +13120,7 @@ const storeCtx: AppState = {
 
       // Auto-create a draft PO (no vendor yet — admin will assign and process)
       const draftPo: PurchaseOrder = {
-        id: uid(), ref: docSeq('PO'), status: 'draft',
+        id: uid(), ref: await storeCtxRef.current!.allocateDocRef('PO'), status: 'draft',
         vendorId: '', vendorName: '',
         date: now(), expectedDate: addDays(now(), 7),
         lines: [], subtotal: 0, taxTotal: 0, total: 0,
@@ -13636,7 +13752,7 @@ const storeCtx: AppState = {
       )
       return closed
     },
-    createPOSOrder: (lines, payment, customerId, customerName, pointsRedeemed = 0, applyVat = false) => {
+    createPOSOrder: async (lines, payment, customerId, customerName, pointsRedeemed = 0, applyVat = false) => {
       if (!posSessionOpen) {
         showToast('Open a POS session before charging', 'error')
         return null
@@ -13659,7 +13775,34 @@ const storeCtx: AppState = {
         customerId, customerName, date: now(), createdAt: new Date().toISOString(),
         createdByUserId: user?.id, createdByName: user?.name, pointsEarned, pointsRedeemed,
       }
-      // Inventory: decrement stock + stock move out of shop (or serial source location).
+      // Authoritative stock deduction on the server before local UI mirror.
+      const stockLines = normalizedLines.map(l => {
+        const serialSource = l.serialId ? serialRef.current.find(s => s.id === l.serialId)?.location : undefined
+        return {
+          productId: l.productId,
+          productName: l.productName,
+          qty: l.qty,
+          serialId: l.serialId,
+          serialNumber: l.serialNumber,
+          sourceLocation: (serialSource ?? 'shop') as string,
+        }
+      })
+      try {
+        const res = await fetch('/api/inventory/apply-pos-stock', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ orderRef: order.ref, lines: stockLines }),
+        })
+        if (!res.ok) {
+          const payload = await res.json().catch(() => null) as { error?: string } | null
+          showToast(payload?.error || 'POS stock update failed', 'error')
+          return null
+        }
+      } catch {
+        showToast('Could not apply POS stock on server', 'error')
+        return null
+      }
+      // Mirror server stock into local UI (moves already persisted server-side).
       normalizedLines.forEach(l => {
         const product = prodRef.current.find(x => x.id === l.productId)
         const serialSource = l.serialId ? serialRef.current.find(s => s.id === l.serialId)?.location : undefined
@@ -13667,11 +13810,11 @@ const storeCtx: AppState = {
         if (!product?.requiresSerial) setBulkStock(prev => upsertBulkStock(prev, l.productId, sourceLocation, -l.qty))
         setProducts(p => p.map(x => x.id === l.productId ? { ...x, stockQty: Math.max(0, x.stockQty - l.qty) } : x))
         if (l.serialId) setSerials(p => p.map(s => s.id === l.serialId ? { ...s, status: 'sold', location: 'customer', soldDate: now() } : s))
-        addMove(l.productId, l.productName, l.qty, 'out', `POS ${order.ref}`, order.ref, sourceLocation, 'customer', l.serialNumber ? [l.serialNumber] : [])
       })
+      const invRefAllocated = await storeCtxRef.current!.allocateDocRef('INV')
       const posInv: Invoice = {
         // Posted document, fully paid (amountPaid === total → derived Paid).
-        id: uid(), ref: docSeq('INV'), type: 'customer_invoice', status: 'posted',
+        id: uid(), ref: invRefAllocated, type: 'customer_invoice', status: 'posted',
         partnerId: customerId ?? 'walk-in', partnerName: customerName ?? 'Walk-in Customer',
         date: now(), dueDate: now(),
         lines: normalizedLines.map(l => {
@@ -13753,17 +13896,39 @@ const storeCtx: AppState = {
       showToast(`${adj.ref} submitted for approval`)
       return adj
     },
-    approveAdjustment: (adjId, approved) => {
+    approveAdjustment: async (adjId, approved) => {
       if (!canApproveInventoryAction(currentUser())) { showToast('Only inventory approvers can approve adjustments', 'error'); return }
       const adj = adjRef.current.find(a => a.id === adjId)
       if (!adj) return
       if (approved) {
         const prod = prodRef.current.find(x => x.id === adj.productId)
         if (prod) {
+          try {
+            const res = await fetch('/api/inventory/apply-adjustment-stock', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                adjustmentRef: adj.ref,
+                productId: adj.productId,
+                productName: adj.productName,
+                type: adj.type,
+                qty: adj.qty,
+                reason: adj.reason,
+                location: 'warehouse',
+              }),
+            })
+            if (!res.ok) {
+              const payload = await res.json().catch(() => null) as { error?: string } | null
+              showToast(payload?.error || 'Adjustment stock update failed', 'error')
+              return
+            }
+          } catch {
+            showToast('Could not apply adjustment on server', 'error')
+            return
+          }
           const delta = adj.type === 'add' ? adj.qty : -adj.qty
           setBulkStock(prev => upsertBulkStock(prev, adj.productId, 'warehouse', delta))
           setProducts(p => p.map(x => x.id === adj.productId ? { ...x, stockQty: Math.max(0, x.stockQty + delta) } : x))
-          addMove(adj.productId, adj.productName, adj.qty, adj.type === 'add' ? 'in' : 'adjustment', `Adj ${adj.ref}: ${adj.reason}`, adj.ref)
           const unitCost = prod.costPrice || 0
           const value = Math.abs(adj.qty * unitCost)
           if (value > 0 && prod.inventoryAccountCode) {
@@ -14038,7 +14203,7 @@ const storeCtx: AppState = {
     },
 
     // ── Delivery & Fulfillment ───────────────────────────────────────────────
-    createDeliveryFromSO: (salesOrderId, forcedRef) => {
+    createDeliveryFromSO: async (salesOrderId, forcedRef) => {
       const so = saleOrders.find(s => s.id === salesOrderId)
       if (!so) {
         showToast('Sales order not found', 'error')
@@ -14047,7 +14212,7 @@ const storeCtx: AppState = {
       
       const delivery: Delivery = {
         id: uid(),
-        ref: forcedRef ?? docSeq('DN'),
+        ref: forcedRef ?? await storeCtxRef.current!.allocateDocRef('DN'),
         saleOrderId: so.id,
         saleOrderRef: so.ref,
         customerId: so.customerId,
@@ -14072,7 +14237,7 @@ const storeCtx: AppState = {
       return delivery
     },
     
-    confirmDeliveryWithStockDeduction: (deliveryId) => {
+    confirmDeliveryWithStockDeduction: async (deliveryId) => {
       const delivery = deliveries.find(d => d.id === deliveryId)
       if (!delivery) {
         showToast('Delivery not found', 'error')
@@ -14183,7 +14348,7 @@ const storeCtx: AppState = {
           so.lines.forEach(l => { soLineMap[l.productId] = { unitPrice: l.unitPrice, subtotal: l.subtotal } })
 
           const invoice: Invoice = {
-            id: uid(), ref: docSeq('INV'), type: 'customer_invoice', status: 'posted',
+            id: uid(), ref: await storeCtxRef.current!.allocateDocRef('INV'), type: 'customer_invoice', status: 'posted',
             partnerId: delivery.customerId, partnerName: delivery.customerName,
             date: now(), dueDate: addDays(now(), 30),
             lines: delivery.lines.map(l => ({
@@ -14216,7 +14381,7 @@ const storeCtx: AppState = {
       sync(`/api/deliveries/${deliveryId}/validate`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ autoInvoice: !!so && !hasExistingInvoice }) })
     },
 
-    createInvoiceFromDelivery: (deliveryId) => {
+    createInvoiceFromDelivery: async (deliveryId) => {
       const delivery = deliveries.find(d => d.id === deliveryId)
       if (!delivery) return null
 
@@ -14241,7 +14406,7 @@ const storeCtx: AppState = {
 
       const invoice: Invoice = {
         id: uid(),
-        ref: docSeq('INV'),
+        ref: await storeCtxRef.current!.allocateDocRef('INV'),
         type: 'customer_invoice',
         status: 'posted',
         partnerId: delivery.customerId,
@@ -14411,6 +14576,14 @@ const storeCtx: AppState = {
             if (q.id !== request.documentId) return q
             const updated = { ...q, approvalStatus: docStatus }
             sync(`/api/quotes/${q.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+            return updated
+          }))
+        }
+        if (request.documentType === 'purchase_order') {
+          setPurchaseOrders(prev => prev.map(po => {
+            if (po.id !== request.documentId) return po
+            const updated = { ...po, approvalStatus: docStatus }
+            sync(`/api/purchase-orders/${po.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
             return updated
           }))
         }

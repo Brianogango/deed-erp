@@ -51,7 +51,7 @@ export function getApprovalLevels(
  */
 export function createApprovalRequest(
   type: ApprovalType,
-  documentType: 'quote' | 'sales_order' | 'invoice',
+  documentType: 'quote' | 'sales_order' | 'invoice' | 'purchase_order',
   documentId: string,
   documentRef: string,
   requestedBy: string,

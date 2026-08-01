@@ -17,6 +17,7 @@ const TYPE_LABELS: Record<string, { label: string; unit: string; hint: string }>
   backorder: { label: 'Backorder qty', unit: 'units', hint: 'Units short against on-hand stock.' },
   special_pricing: { label: 'Special pricing', unit: '', hint: 'Always requires listed roles when active.' },
   corporate_deal: { label: 'Corporate deal', unit: '', hint: 'Always requires listed roles when active.' },
+  purchase_high_value: { label: 'Purchase high value (KES)', unit: 'KES', hint: 'PO total above the purchase high-value threshold requires listed roles before confirm.' },
   expense: { label: 'Expense claims', unit: 'KES', hint: 'Sequential approvers by claim amount (finance_officer, then director above threshold).' },
 }
 

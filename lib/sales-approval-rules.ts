@@ -29,6 +29,12 @@ export const APPROVAL_RULES: Record<ApprovalType, (details: any) => string[]> = 
     if (qty <= 10) return ['technical_lead']
     return ['technical_lead', 'director']
   },
+  purchase_high_value: (details) => {
+    const amount = Number(details?.proposedValue ?? details?.amount ?? 0)
+    const threshold = Number(details?.threshold ?? 50000)
+    if (amount <= threshold) return []
+    return ['director']
+  },
 }
 
 /** Extract the numeric value used for threshold comparison. */
@@ -45,8 +51,9 @@ export function extractApprovalValue(type: ApprovalType, details: any): number {
       return Number(details?.backorderQty || 0)
     case 'special_pricing':
     case 'corporate_deal':
+    case 'purchase_high_value':
     default:
-      return Number(details?.value ?? details?.amount ?? 0)
+      return Number(details?.proposedValue ?? details?.value ?? details?.amount ?? 0)
   }
 }
 

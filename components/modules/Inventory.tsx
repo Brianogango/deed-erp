@@ -1211,13 +1211,13 @@ export default function Inventory() {
     setTScanInput('')
   }
 
-  const handleTransfer = () => {
+  const handleTransfer = async () => {
     if (!tProd) { showToast('Select a product to transfer', 'error'); return }
     if (tFrom === tTo) { showToast('Source and destination must differ', 'error'); return }
     const qty = tProd.requiresSerial ? tSerials.length : Number(tQty) || 0
     if (qty <= 0) { showToast('Enter a valid transfer quantity', 'error'); return }
     const serialIds = tProd.requiresSerial ? serials.filter(s => tSerials.includes(s.serial) && s.productId === tProd.id).map(s => s.id) : []
-    const ok = submitTransfer(tFrom, tTo, tProd.id, tProd.name, qty, serialIds, tNotes)
+    const ok = await submitTransfer(tFrom, tTo, tProd.id, tProd.name, qty, serialIds, tNotes)
     if (ok) { setShowTransfer(false); setTProd(null); setTQty('1'); setTSerials([]); setTScanInput(''); setTNotes('') }
   }
 
