@@ -256,9 +256,14 @@ export default function RepairPortalPage() {
   const selectedTax = Math.round(selectedSubtotal * quoteTaxRate * 100) / 100
   const selectedTotal = Math.round((selectedSubtotal + selectedTax) * 100) / 100
   const approvedCount = quoteLines.filter((line, index) => (itemDecisions[qLineKey(line, index)] ?? 'approved') === 'approved').length
-  const amountDue = repair.invoiceTotal ?? repair.quote?.approvedTotal ?? repair.quote?.total ?? 0
-  const paymentConfirmed = repair.paymentStatus === 'auto_paid' || repair.paymentStatus === 'paid'
-  const canPay = ['ready','verified_released','invoiced','delivered','collected','closed'].includes(repair.status) && amountDue > 0 && !paymentConfirmed
+  const amountPaid = Number(repair.paymentAmount ?? 0)
+  const invoiceOrQuoteTotal = repair.invoiceTotal ?? repair.quote?.approvedTotal ?? repair.quote?.total ?? 0
+  // Revised quote awaiting re-approval must never compete with a "Payment confirmed" CTA.
+  const awaitingRevisionApproval = repair.status === 'awaiting_approval' && !!repair.quote?.changeSummary?.trim()
+  const amountDue = Math.max(0, Math.round((invoiceOrQuoteTotal - amountPaid) * 100) / 100)
+  const paymentConfirmed = !awaitingRevisionApproval && (repair.paymentStatus === 'auto_paid' || repair.paymentStatus === 'paid')
+  const canPay = !awaitingRevisionApproval && ['ready','verified_released','invoiced','delivered','collected','closed'].includes(repair.status) && amountDue > 0 && !paymentConfirmed
+  const showPriorPaymentNotice = awaitingRevisionApproval && amountPaid > 0
 
   return (
     <div style={{ height: '100vh', overflowY: 'auto', background: 'linear-gradient(160deg, #06070d 0%, #0e1220 100%)', fontFamily: "'Inter', system-ui, sans-serif" }}>
@@ -495,6 +500,17 @@ export default function RepairPortalPage() {
                 </div>
               )}
 
+              {showPriorPaymentNotice && (
+                <div style={{ padding: '12px 14px', borderRadius: 10, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', marginBottom: 4 }}>
+                  <p style={{ fontSize: 10, fontWeight: 900, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 6 }}>Previous payment on file</p>
+                  <p style={{ fontSize: 13, color: '#D1D5DB', lineHeight: 1.6, margin: 0 }}>
+                    We already recorded {fmtKes(amountPaid)}
+                    {repair.paymentReceiptNumber ? ` (receipt ${repair.paymentReceiptNumber})` : ''}.
+                    {' '}Approve this revision and any difference will be settled as residual due or credit.
+                  </p>
+                </div>
+              )}
+
               {/* Totals */}
               <div style={{ padding: '14px 16px', borderRadius: 12, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#6B7280', marginBottom: 6 }}>
@@ -559,8 +575,8 @@ export default function RepairPortalPage() {
         )}
 
 
-        {/* ── Payment Confirmation ── */}
-        {(canPay || paymentConfirmed || repair.paymentStatus === 'pending_review' || repair.paymentStatus === 'rejected') && (
+        {/* ── Payment Confirmation (hidden while revised quote awaits re-approval) ── */}
+        {!awaitingRevisionApproval && (canPay || paymentConfirmed || repair.paymentStatus === 'pending_review' || repair.paymentStatus === 'rejected') && (
           <Card accent={paymentConfirmed ? '#10B981' : repair.paymentStatus === 'pending_review' ? '#F59E0B' : '#00B0D7'} delay={320}>
             <div style={{ padding: '20px 24px' }}>
               <SectionLabel>{paymentConfirmed ? 'Payment Receipt' : 'Pay Now'}</SectionLabel>
@@ -569,7 +585,7 @@ export default function RepairPortalPage() {
                   <p style={{ color: '#D1FAE5', fontSize: 13, lineHeight: 1.6 }}>Payment confirmed. Thank you — your receipt is available below.</p>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 12, marginBottom: 14 }}>
                     <div><p style={{ fontSize: 9, color: '#6B7280', fontWeight: 800, textTransform: 'uppercase' }}>Receipt</p><p style={{ color: '#F9FAFB', fontFamily: 'monospace', fontWeight: 800 }}>{repair.paymentReceiptNumber ?? 'Confirmed'}</p></div>
-                    <div><p style={{ fontSize: 9, color: '#6B7280', fontWeight: 800, textTransform: 'uppercase' }}>Amount</p><p style={{ color: '#F9FAFB', fontFamily: 'monospace', fontWeight: 800 }}>{fmtKes(amountDue)}</p></div>
+                    <div><p style={{ fontSize: 9, color: '#6B7280', fontWeight: 800, textTransform: 'uppercase' }}>Amount Paid</p><p style={{ color: '#F9FAFB', fontFamily: 'monospace', fontWeight: 800 }}>{fmtKes(amountPaid > 0 ? amountPaid : invoiceOrQuoteTotal)}</p></div>
                   </div>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
                     <a href={`/api/portal/repair/${encodeURIComponent(ref)}/receipt-pdf`} download style={{ textAlign: 'center', padding: '12px 10px', borderRadius: 12, background: 'linear-gradient(135deg, #059669, #047857)', color: '#fff', fontWeight: 800, fontSize: 12, textDecoration: 'none' }}>Download Receipt</a>
@@ -584,10 +600,15 @@ export default function RepairPortalPage() {
                 <>
                   <div style={{ padding: 16, borderRadius: 12, background: 'rgba(0,176,215,0.08)', border: '1px solid rgba(0,176,215,0.25)', marginBottom: 14 }}>
                     <p style={{ color: '#E5E7EB', fontSize: 13, lineHeight: 1.7, marginBottom: 10 }}>Pay the repair invoice, then paste the M-PESA confirmation SMS or upload a screenshot so our finance team can confirm it.</p>
+                    {amountPaid > 0 && (
+                      <p style={{ color: '#9CA3AF', fontSize: 12, lineHeight: 1.5, marginBottom: 10 }}>
+                        Prior payment of {fmtKes(amountPaid)} already applied. Balance due below.
+                      </p>
+                    )}
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
                       <div><p style={{ fontSize: 9, color: '#6B7280', fontWeight: 800, textTransform: 'uppercase' }}>Paybill</p><p style={{ color: '#67E8F9', fontFamily: 'monospace', fontWeight: 900 }}>{company.mpesaPaybill}</p></div>
                       <div><p style={{ fontSize: 9, color: '#6B7280', fontWeight: 800, textTransform: 'uppercase' }}>Account</p><p style={{ color: '#67E8F9', fontFamily: 'monospace', fontWeight: 900 }}>{company.mpesaAccount || repair.ref}</p></div>
-                      <div><p style={{ fontSize: 9, color: '#6B7280', fontWeight: 800, textTransform: 'uppercase' }}>Amount</p><p style={{ color: '#F9FAFB', fontFamily: 'monospace', fontWeight: 900 }}>{fmtKes(amountDue)}</p></div>
+                      <div><p style={{ fontSize: 9, color: '#6B7280', fontWeight: 800, textTransform: 'uppercase' }}>Amount Due</p><p style={{ color: '#F9FAFB', fontFamily: 'monospace', fontWeight: 900 }}>{fmtKes(amountDue)}</p></div>
                     </div>
                     <a href={`/api/portal/repair/${encodeURIComponent(ref)}/invoice-pdf`} download style={{ display: 'block', marginTop: 12, textAlign: 'center', padding: '10px 12px', borderRadius: 10, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)', color: '#E5E7EB', fontSize: 12, fontWeight: 800, textDecoration: 'none' }}>Download Invoice Before Paying</a>
                   </div>

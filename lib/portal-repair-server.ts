@@ -1,5 +1,6 @@
 import 'server-only'
 import { getPortalRepair, approvalDecisions, type PortalRepair, type PortalRepairStatus } from './portal-repairs'
+import { resolvePortalPaymentStatus } from './portal-payment'
 import { loadAppState } from './server-store'
 import type { RepairOrder } from './repair-types'
 
@@ -143,10 +144,19 @@ function erpToPortal(r: RepairOrder, linkedInvoice?: any): PortalRepair {
     invoiceId: r.invoiceId ?? (r as any).linkedInvoiceId,
     invoiceRef: (r as any).linkedInvoiceRef ?? linkedInvoice?.ref ?? linkedInvoice?.invoiceNumber,
     invoiceTotal: linkedInvoice ? Number(linkedInvoice.total ?? linkedInvoice.totalAmount ?? 0) : undefined,
-    paymentStatus: r.paymentConfirmationStatus === 'auto_paid' ? 'auto_paid'
-      : r.paymentConfirmationStatus === 'confirmed' ? 'paid'
-      : r.paymentConfirmationStatus ?? (linkedInvoice && Number(linkedInvoice.amountPaid ?? 0) >= Number(linkedInvoice.total ?? linkedInvoice.totalAmount ?? 0) ? 'paid' : 'unpaid'),
-    paymentAmount: linkedInvoice ? Number(linkedInvoice.amountPaid ?? 0) : r.paymentConfirmationAmount,
+    // While a revised quote awaits re-approval, do not map a prior confirmation
+    // to paid/auto_paid — that would show "Payment confirmed" next to approval.
+    // paymentAmount still carries the actual amount previously paid.
+    paymentStatus: resolvePortalPaymentStatus({
+      status: r.status,
+      changeSummary: r.quote?.changeSummary,
+      paymentConfirmationStatus: r.paymentConfirmationStatus,
+      invoiceAmountPaid: linkedInvoice ? Number(linkedInvoice.amountPaid ?? 0) : r.paymentConfirmationAmount,
+      invoiceTotal: linkedInvoice ? Number(linkedInvoice.total ?? linkedInvoice.totalAmount ?? 0) : r.quote?.total,
+    }),
+    paymentAmount: linkedInvoice
+      ? Number(linkedInvoice.amountPaid ?? 0)
+      : (r.paymentConfirmationAmount != null ? Number(r.paymentConfirmationAmount) : undefined),
     paymentReceiptNumber: r.paymentReceiptNumber,
     paymentConfirmationSubmittedAt: r.paymentConfirmationSubmittedAt,
   }
