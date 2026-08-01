@@ -20,6 +20,7 @@ import {
   saleTransitionError,
   initialDeliveryState,
   hasGeneratedDeliveryNote,
+  hasValidatedDeliveryForInvoice,
   effectiveDeliveryLineQty,
   deliveryDeliveredTotal,
   deliveredByProductFromDoneDeliveries,
@@ -29,7 +30,7 @@ import {
 } from '@/lib/odoo-sales-flow'
 
 describe('delivery-note invoice gate', () => {
-  it('requires a done delivery with a generated note AND delivered qty > 0', () => {
+  it('DN stamp helper still requires generated note + delivered qty > 0', () => {
     const deliveries = [
       { saleOrderId: 'so-1', status: 'ready', deliveryNoteGeneratedAt: '2026-07-28', lines: [{ qty: 1, qtyDone: 1 }] },
       {
@@ -49,6 +50,22 @@ describe('delivery-note invoice gate', () => {
     expect(hasGeneratedDeliveryNote(deliveries, 'so-1')).toBe(false)
     expect(hasGeneratedDeliveryNote(deliveries, 'so-2')).toBe(true)
     expect(hasGeneratedDeliveryNote(deliveries, 'so-3')).toBe(false)
+  })
+
+  it('invoice unlocks after validated Done delivery even without printing the DN', () => {
+    const deliveries = [
+      { saleOrderId: 'so-1', status: 'ready', lines: [{ qty: 1, qtyDone: 1 }] },
+      { saleOrderId: 'so-2', status: 'done', lines: [{ qty: 1, qtyDone: 1, serialIds: [] }] },
+      {
+        saleOrderId: 'so-3',
+        status: 'done',
+        deliveryNoteGeneratedAt: '2026-08-01',
+        lines: [{ qty: 1, qtyDone: 0, serialIds: [] }],
+      },
+    ]
+    expect(hasValidatedDeliveryForInvoice(deliveries, 'so-1')).toBe(false)
+    expect(hasValidatedDeliveryForInvoice(deliveries, 'so-2')).toBe(true)
+    expect(hasValidatedDeliveryForInvoice(deliveries, 'so-3')).toBe(false)
   })
 
   it('blocks Generate DN and Done writes when delivered qty is 0', () => {

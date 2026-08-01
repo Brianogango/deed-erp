@@ -5,7 +5,7 @@ import { writeFinancialAudit } from '@/lib/finance-audit'
 import { getNextDocNumber } from '@/lib/doc-ref-counter'
 import {
   deliveredByProductFromDoneDeliveries,
-  hasGeneratedDeliveryNote,
+  hasValidatedDeliveryForInvoice,
   invoiceableQty,
   normalizeSaleStatus,
 } from '@/lib/odoo-sales-flow'
@@ -51,9 +51,9 @@ export async function POST(
           }> | null
         }>
       : []
-    if (!hasGeneratedDeliveryNote(deliveries, orderId)) {
+    if (!hasValidatedDeliveryForInvoice(deliveries, orderId)) {
       return NextResponse.json({
-        error: 'Validate the delivery and generate its Delivery Note before creating an invoice',
+        error: 'Validate the delivery before creating an invoice',
       }, { status: 409 })
     }
 
