@@ -34,6 +34,12 @@ export function CurrencyRatesEditor({
   const [rate, setRate] = useState('')
   const [effectiveDate, setEffectiveDate] = useState(new Date().toISOString().slice(0, 10))
   const [saving, setSaving] = useState(false)
+  const [fxRef, setFxRef] = useState('')
+  const [fxAmountBase, setFxAmountBase] = useState('')
+  const [fxAmountForeign, setFxAmountForeign] = useState('')
+  const [fxRate, setFxRate] = useState('')
+  const [fxBalanceAccount, setFxBalanceAccount] = useState('1100 - Accounts Receivable')
+  const [fxPosting, setFxPosting] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -103,7 +109,7 @@ export function CurrencyRatesEditor({
         <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
           Display currency is {companyCurrency}. Amounts on new documents will be labeled {companyCurrency};
           set an exchange rate below so base (KES) conversion is snapshot correctly.
-          FX revaluation journals are available via Finance → POST /api/accounting/fx-revaluation (Director/Finance).
+          Use FX revaluation below to post gain/loss journals into the GL.
         </p>
       )}
       <div className="pt-2">
@@ -149,6 +155,75 @@ export function CurrencyRatesEditor({
           </div>
         )}
       </div>
+
+      {canWrite && (
+        <div className="pt-4 mt-3 border-t border-gray-100">
+          <p className="text-[12px] font-semibold text-gray-800 mb-1">FX revaluation journal</p>
+          <p className="text-[11px] text-gray-400 mb-3 leading-relaxed">
+            Posts a balanced gain/loss entry when the foreign amount × rate differs from the booked KES amount.
+            Director / Finance only.
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <Field label="Reference *">
+              <Input value={fxRef} onChange={setFxRef} placeholder="e.g. AR-USD-2026-08" />
+            </Field>
+            <Field label="Balance account label *">
+              <Input value={fxBalanceAccount} onChange={setFxBalanceAccount} placeholder="1100 - Accounts Receivable" />
+            </Field>
+            <Field label="Booked amount (KES) *">
+              <Input type="number" value={fxAmountBase} onChange={setFxAmountBase} placeholder="129500" />
+            </Field>
+            <Field label="Foreign amount *">
+              <Input type="number" value={fxAmountForeign} onChange={setFxAmountForeign} placeholder="1000" />
+            </Field>
+            <Field label="Rate to KES *">
+              <Input type="number" value={fxRate} onChange={setFxRate} placeholder="130.25" />
+            </Field>
+            <div className="flex items-end">
+              <button
+                type="button"
+                disabled={fxPosting || !fxRef || !fxAmountBase || !fxAmountForeign || !fxRate || !fxBalanceAccount}
+                onClick={() => {
+                  void (async () => {
+                    setFxPosting(true)
+                    try {
+                      const res = await fetch('/api/accounting/fx-revaluation', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                          ref: fxRef,
+                          amountBase: Number(fxAmountBase),
+                          amountForeign: Number(fxAmountForeign),
+                          rate: Number(fxRate),
+                          balanceAccountLabel: fxBalanceAccount,
+                        }),
+                      })
+                      const data = await res.json().catch(() => ({}))
+                      if (!res.ok) {
+                        showToast(data.error || 'FX revaluation failed', 'error')
+                        return
+                      }
+                      if (data.skipped) {
+                        showToast('No FX difference — journal skipped', 'info')
+                      } else {
+                        showToast(`${data.isGain ? 'Gain' : 'Loss'} ${data.amount} posted (${data.journalRef})`, 'success')
+                        setFxRef('')
+                      }
+                    } catch {
+                      showToast('FX revaluation failed', 'error')
+                    } finally {
+                      setFxPosting(false)
+                    }
+                  })()
+                }}
+                className="text-[11px] font-semibold px-3 py-1.5 rounded-lg bg-navy-500 text-white border-none cursor-pointer disabled:opacity-50"
+              >
+                {fxPosting ? 'Posting…' : 'Post FX journal'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

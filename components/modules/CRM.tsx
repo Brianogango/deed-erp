@@ -1010,6 +1010,12 @@ function CRMContent() {
             showToast={showToast}
             salesReps={salesReps}
             currentUserId={currentUserId ?? undefined}
+            onConverted={opportunityId => {
+              // Server broadcasts deed_opportunities; SSE refreshes the store.
+              setActiveOppId(opportunityId)
+              setView('detail')
+              setTab('pipeline')
+            }}
           />
         </div>
       </div>

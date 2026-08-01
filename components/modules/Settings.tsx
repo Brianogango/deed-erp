@@ -901,7 +901,7 @@ ACCOUNTS_EMAIL=accounts@deed.co.ke`}</pre>
                 <SettingRow label="Costing Method" desc="Average cost is the default. FIFO consumes oldest inventory batch layers when company or product costing is set to FIFO.">
                   <Select value={ss.invCostingMethod} onChange={v => updateSystemSettings({ invCostingMethod: v as any })} options={[
                     { value: 'average',  label: 'Average Cost (default)' },
-                    { value: 'fifo',     label: ss.invCostingMethod === 'fifo' ? 'FIFO (batch layers active)' : 'FIFO' },
+                    { value: 'fifo',     label: 'FIFO (InventoryBatch layers on GRN/delivery)' },
                     { value: 'standard', label: 'Standard Price (not yet posted)' },
                   ]} />
                 </SettingRow>

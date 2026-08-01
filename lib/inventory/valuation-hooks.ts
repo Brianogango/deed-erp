@@ -71,7 +71,13 @@ export async function postReceiptValuationFromBlobs(params: {
     }
   }
 
-  return { ok: true as const, receiptRef: receipt.ref, results }
+  const warnings = results
+    .filter((r: any) => r.error || r.result?.reason === 'product_not_in_prisma' || r.result?.skipped)
+    .map((r: any) => r.error
+      ? `${r.productId}: ${r.error}`
+      : `${r.productId}: valuation skipped (${r.result?.reason || 'unknown'})`)
+
+  return { ok: true as const, receiptRef: receipt.ref, results, warnings }
 }
 
 /**
@@ -84,7 +90,7 @@ export async function postDeliveryValuationFromPayload(params: {
   userId?: string
 }) {
   if (!(await isAutomatedValuationEnabled())) {
-    return { ok: false as const, reason: 'valuation_disabled', results: [] as any[] }
+    return { ok: false as const, reason: 'valuation_disabled', results: [] as any[], warnings: [] as string[] }
   }
   const results = []
   for (const line of params.lines || []) {
@@ -105,5 +111,10 @@ export async function postDeliveryValuationFromPayload(params: {
       results.push({ productId, qty, error: err instanceof Error ? err.message : 'failed' })
     }
   }
-  return { ok: true as const, results }
+  const warnings = results
+    .filter((r: any) => r.error || r.result?.reason === 'product_not_in_prisma' || r.result?.skipped)
+    .map((r: any) => r.error
+      ? `${r.productId}: ${r.error}`
+      : `${r.productId}: valuation skipped (${r.result?.reason || 'unknown'})`)
+  return { ok: true as const, results, warnings }
 }
