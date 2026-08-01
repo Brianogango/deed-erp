@@ -639,7 +639,7 @@ export default function InventoryProductsPanel({
                     type="button"
                     className="px-2 py-1.5 rounded-lg bg-slate-50 text-slate-700 border border-slate-200 text-[10px] font-extrabold"
                     onClick={() => setSerialProduct(row.product)}
-                    title="View serials"
+                    title="View / add on-hand serials"
                   >
                     Serials: {serialCount}
                   </button>

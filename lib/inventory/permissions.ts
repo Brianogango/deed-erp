@@ -27,6 +27,15 @@ const SERIAL_EDITORS: InventoryRole[] = [
   'technical_lead',
 ]
 
+/** Roles that may add on-hand serials (opening balance / stock intake). */
+const SERIAL_INTAKE_ROLES: InventoryRole[] = [
+  'director',
+  'admin_officer',
+  'finance_officer',
+  'inventory_officer',
+  'technical_lead',
+]
+
 const SERIAL_RELEASE_ROLES: InventoryRole[] = [
   'director',
   'admin_officer',
@@ -55,6 +64,11 @@ export function canValidatePurchaseReceipt(role: InventoryRole | null | undefine
 
 export function canEditSerialNumber(role: InventoryRole | null | undefined) {
   return !!role && SERIAL_EDITORS.includes(role)
+}
+
+/** Add available on-hand serials from the product Serials drawer. */
+export function canIntakeOnHandSerials(role: InventoryRole | null | undefined) {
+  return !!role && SERIAL_INTAKE_ROLES.includes(role)
 }
 
 /** Release held (assigned) serials back to available on-hand stock. */
