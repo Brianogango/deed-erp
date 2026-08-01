@@ -167,9 +167,9 @@ const REPORT_DATE = new Date().toLocaleDateString('en-KE', {
   month: 'short',
   year: 'numeric',
 })
-type ManualInvoiceLine = { type: 'item' | 'section'; desc: string; qty: string; price: string; tax: string }
-const newManualInvoiceLine = (): ManualInvoiceLine => ({ type: 'item', desc: '', qty: '1', price: '', tax: '0' })
-const newManualSectionLine = (): ManualInvoiceLine => ({ type: 'section', desc: '', qty: '0', price: '0', tax: '0' })
+type ManualInvoiceLine = { type: 'item' | 'section'; desc: string; qty: string; price: string; tax: string; discount: string }
+const newManualInvoiceLine = (): ManualInvoiceLine => ({ type: 'item', desc: '', qty: '1', price: '', tax: '0', discount: '0' })
+const newManualSectionLine = (): ManualInvoiceLine => ({ type: 'section', desc: '', qty: '0', price: '0', tax: '0', discount: '0' })
 // Odoo-style invoice badge: the document state (Draft/Posted/Cancelled) with
 // the computed payment status shown for posted documents; Overdue is a
 // separate computed badge, never a document state.
@@ -483,7 +483,10 @@ function AccountingContent() {
       const normalizedQty = Number.isFinite(qty) && qty > 0 ? qty : 0
       const normalizedPrice = Number.isFinite(unitPrice) && unitPrice >= 0 ? unitPrice : -1
       const taxRate = applyVat ? invoiceVatRate : (Number(line.tax) || 0)
-      const subtotal = normalizedQty > 0 && normalizedPrice >= 0 ? normalizedQty * normalizedPrice : 0
+      const discountPct = Math.min(100, Math.max(0, Number(line.discount) || 0))
+      const gross = normalizedQty > 0 && normalizedPrice >= 0 ? normalizedQty * normalizedPrice : 0
+      const discountAmount = Math.round(gross * discountPct) / 100
+      const subtotal = Math.max(0, gross - discountAmount)
       const taxAmount = Math.round(subtotal * taxRate / 100)
       return {
         index,
@@ -492,20 +495,26 @@ function AccountingContent() {
         qty: normalizedQty,
         unitPrice: Math.max(0, normalizedPrice),
         taxRate,
+        discountPct,
+        discountAmount,
         subtotal,
         taxAmount,
         total: subtotal + taxAmount,
         valid: !!line.desc.trim() && normalizedQty > 0 && normalizedPrice > 0,
       }
     })
+    const grossTotal = lines.reduce((sum, line) => sum + (line.subtotal + (line.discountAmount ?? 0)), 0)
     const subtotal = lines.reduce((sum, line) => sum + line.subtotal, 0)
     const taxTotal = lines.reduce((sum, line) => sum + line.taxAmount, 0)
+    const discountTotal = lines.reduce((sum, line) => sum + (line.discountAmount ?? 0), 0)
     const invalidLineIndexes = lines.filter(line => !line.valid).map(line => line.index)
     const itemLines = lines.filter(line => line.lineType !== 'section')
     return {
       lines,
+      grossTotal,
       subtotal,
       taxTotal,
+      discountTotal,
       total: subtotal + taxTotal,
       invalidLineIndexes,
       canSave: !!newPartnerId && invalidLineIndexes.length === 0 && itemLines.length > 0,
@@ -781,6 +790,7 @@ function AccountingContent() {
       qty: String(l.qty),
       price: String(l.unitPrice),
       tax: String(l.taxRate ?? 0),
+      discount: String(l.discountPct ?? 0),
     })))
     setNewNotes(inv.notes ?? '')
     setApplyVat((inv.taxTotal ?? 0) > 0)
@@ -963,6 +973,7 @@ function AccountingContent() {
         qty: l.qty,
         unitPrice: l.unitPrice,
         taxRate: l.taxRate,
+        ...(l.discountPct ? { discountPct: l.discountPct } : {}),
         subtotal: l.subtotal,
       }))
       updateInvoice(editingInvId, {
@@ -1936,10 +1947,11 @@ function AccountingContent() {
                       <thead>
                         <tr className="bg-[var(--bg-surface)] border-b border-[var(--border-lt)]">
                           <th className="px-3 py-2.5 text-[10px] font-bold uppercase text-[var(--text-4)]">Description</th>
-                          <th className="px-3 py-2.5 text-[10px] font-bold uppercase text-[var(--text-4)] text-center w-24">Qty</th>
-                          <th className="px-3 py-2.5 text-[10px] font-bold uppercase text-[var(--text-4)] text-right w-36">Unit Price</th>
-                          <th className="px-3 py-2.5 text-[10px] font-bold uppercase text-[var(--text-4)] text-right w-24">Tax</th>
-                          <th className="px-3 py-2.5 text-[10px] font-bold uppercase text-[var(--text-4)] text-right w-36">Line Total</th>
+                          <th className="px-3 py-2.5 text-[10px] font-bold uppercase text-[var(--text-4)] text-center w-20">Qty</th>
+                          <th className="px-3 py-2.5 text-[10px] font-bold uppercase text-[var(--text-4)] text-right w-28">Unit Price</th>
+                          <th className="px-3 py-2.5 text-[10px] font-bold uppercase text-[var(--text-4)] text-center w-20">Disc%</th>
+                          <th className="px-3 py-2.5 text-[10px] font-bold uppercase text-[var(--text-4)] text-right w-20">Tax</th>
+                          <th className="px-3 py-2.5 text-[10px] font-bold uppercase text-[var(--text-4)] text-right w-32">Line Total</th>
                           <th className="px-3 py-2.5 w-10"></th>
                         </tr>
                       </thead>
@@ -1950,7 +1962,7 @@ function AccountingContent() {
                           if (l.type === 'section') {
                             return (
                               <tr key={i} className={`transition-colors ${isInvalid ? 'bg-red-50/60' : 'bg-slate-50/70'}`}>
-                                <td className="px-3 py-2" colSpan={4}>
+                                <td className="px-3 py-2" colSpan={5}>
                                   <input
                                     className="form-input text-xs w-full font-bold"
                                     placeholder="Section title, e.g. Hardware, Services, Accessories"
@@ -1989,7 +2001,7 @@ function AccountingContent() {
                                 <input
                                   type="number"
                                   min={1}
-                                  className="form-input text-xs text-center w-20"
+                                  className="form-input text-xs text-center w-16"
                                   value={l.qty}
                                   onChange={e => setNewLines(p => p.map((x, j) => (j === i ? { ...x, qty: e.target.value } : x)))}
                                 />
@@ -1999,15 +2011,27 @@ function AccountingContent() {
                                 <input
                                   type="number"
                                   min={0}
-                                  className="form-input text-xs text-right w-32"
+                                  className="form-input text-xs text-right w-28"
                                   value={l.price}
                                   onChange={e => setNewLines(p => p.map((x, j) => (j === i ? { ...x, price: e.target.value } : x)))}
                                 />
                                 {isInvalid && Number(l.price) <= 0 && <p className="text-[9px] text-red-600 font-semibold mt-1 text-right">Price &gt; 0</p>}
                               </td>
                               <td className="px-3 py-2">
+                                <input
+                                  type="number"
+                                  min={0}
+                                  max={100}
+                                  step={0.5}
+                                  aria-label={`Discount percent for line ${i + 1}`}
+                                  className="form-input text-xs text-center w-16"
+                                  value={l.discount}
+                                  onChange={e => setNewLines(p => p.map((x, j) => (j === i ? { ...x, discount: e.target.value } : x)))}
+                                />
+                              </td>
+                              <td className="px-3 py-2">
                                 <select
-                                  className="form-select text-xs w-20"
+                                  className="form-select text-xs w-16"
                                   value={applyVat ? String(invoiceVatRate) : l.tax}
                                   disabled={applyVat}
                                   onChange={e => setNewLines(p => p.map((x, j) => (j === i ? { ...x, tax: e.target.value } : x)))}
@@ -2018,6 +2042,9 @@ function AccountingContent() {
                               </td>
                               <td className="px-3 py-2 text-right">
                                 <p className="text-xs font-black text-[var(--text-1)] font-mono">{fmtKes(previewLine?.total ?? 0)}</p>
+                                {(previewLine?.discountAmount ?? 0) > 0 && (
+                                  <p className="text-[9px] text-amber-700 mt-0.5">Disc {fmtKes(previewLine?.discountAmount ?? 0)}</p>
+                                )}
                                 {previewLine?.taxAmount ? <p className="text-[9px] text-[var(--text-4)] mt-0.5">Incl. tax {fmtKes(previewLine.taxAmount)}</p> : null}
                               </td>
                               <td className="px-3 py-2 text-center">
@@ -2090,7 +2117,15 @@ function AccountingContent() {
                     <Badge status={invoicePreview.canSave ? 'paid' : 'warning'} label={invoicePreview.canSave ? 'Ready' : 'Incomplete'} />
                   </div>
                   <div className="flex flex-col gap-3">
-                    <div className="flex justify-between text-xs"><span className="text-[var(--text-3)]">Subtotal</span><span className="font-bold">{fmtKes(invoicePreview.subtotal)}</span></div>
+                    {(invoicePreview.discountTotal ?? 0) > 0 ? (
+                      <>
+                        <div className="flex justify-between text-xs"><span className="text-[var(--text-3)]">Subtotal</span><span className="font-bold">{fmtKes(invoicePreview.grossTotal)}</span></div>
+                        <div className="flex justify-between text-xs"><span className="text-[var(--text-3)]">Discount</span><span className="font-bold text-amber-700">−{fmtKes(invoicePreview.discountTotal)}</span></div>
+                        <div className="flex justify-between text-xs"><span className="text-[var(--text-3)]">Net</span><span className="font-bold">{fmtKes(invoicePreview.subtotal)}</span></div>
+                      </>
+                    ) : (
+                      <div className="flex justify-between text-xs"><span className="text-[var(--text-3)]">Subtotal</span><span className="font-bold">{fmtKes(invoicePreview.subtotal)}</span></div>
+                    )}
                     <div className="flex justify-between text-xs"><span className="text-[var(--text-3)]">VAT / Tax</span><span className="font-bold">{fmtKes(invoicePreview.taxTotal)}</span></div>
                     <div className="border-t border-[var(--border-lt)] pt-3 flex justify-between text-sm"><span className="font-bold text-[var(--text-1)]">Total</span><span className="font-extrabold text-primary-600">{fmtKes(invoicePreview.total)}</span></div>
                   </div>

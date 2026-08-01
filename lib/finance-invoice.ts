@@ -4,12 +4,15 @@
 // persists an invoice to the Prisma ledger must NOT trust those totals — a
 // tampered client could post an invoice whose header total does not match its
 // line items. These helpers recompute the money from the line items so the
-// stored figures always tie back to qty × unitPrice (+ tax − discount).
+// stored figures always tie back to qty × unitPrice (− line discount + tax).
 
 export interface RawInvoiceLine {
   qty?: number | string
   unitPrice?: number | string
   taxRate?: number | string
+  /** Per-line discount percent (0–100). Alias: `discount`. */
+  discountPct?: number | string
+  discount?: number | string
   subtotal?: number | string
   lineSubtotal?: number | string
 }
@@ -18,6 +21,38 @@ const round2 = (n: number) => Math.round((Number.isFinite(n) ? n : 0) * 100) / 1
 const num = (v: unknown) => {
   const n = Number(v)
   return Number.isFinite(n) ? n : 0
+}
+
+export interface ComputedInvoiceLineMoney {
+  qty: number
+  unitPrice: number
+  taxRate: number
+  discountPct: number
+  gross: number
+  discountAmount: number
+  lineSubtotal: number
+  lineTax: number
+  lineTotal: number
+}
+
+/**
+ * Per-line money: discount % off gross, then tax on the discounted net.
+ * Mirrors quotation line math (Disc% → net → VAT).
+ */
+export function computeInvoiceLineMoney(line: RawInvoiceLine): ComputedInvoiceLineMoney {
+  const qty = num(line.qty ?? 1)
+  const unitPrice = num(line.unitPrice)
+  const taxRate = Math.max(0, num(line.taxRate))
+  const discountPct = Math.min(100, Math.max(0, num(line.discountPct ?? line.discount)))
+  const hasQtyPrice = unitPrice !== 0 || qty !== 0
+  const gross = hasQtyPrice
+    ? round2(qty * unitPrice)
+    : round2(num(line.lineSubtotal ?? line.subtotal))
+  const discountAmount = round2((gross * discountPct) / 100)
+  const lineSubtotal = round2(Math.max(0, gross - discountAmount))
+  const lineTax = round2((lineSubtotal * taxRate) / 100)
+  const lineTotal = round2(lineSubtotal + lineTax)
+  return { qty, unitPrice, taxRate, discountPct, gross, discountAmount, lineSubtotal, lineTax, lineTotal }
 }
 
 export interface ComputedInvoiceTotals {
@@ -30,44 +65,29 @@ export interface ComputedInvoiceTotals {
 /**
  * Recompute invoice totals from line items.
  *
- * - `subtotal` is always the sum of qty × unitPrice across lines.
- * - `taxAmount` is derived from per-line tax rates when any line carries one;
- *   otherwise it falls back to the caller-supplied header tax (used by POS and
- *   repair invoices that apply VAT at the document level with zero-rate lines).
- * - `totalAmount` is subtotal + tax − discount, never negative.
- *
- * Client-supplied `subtotal` / `totalAmount` are intentionally ignored.
+ * - With line `discountPct`: subtotal is net after discount; tax is on the net;
+ *   header `opts.discount` is ignored (line discounts are authoritative).
+ * - Without line discounts: subtotal is qty × unitPrice (gross); optional header
+ *   `opts.discount` is subtracted from the total (legacy POS/repair pattern).
+ * - Client-supplied header `subtotal` / `totalAmount` are intentionally ignored.
  */
 export function computeInvoiceTotals(
   lines: RawInvoiceLine[],
   opts: { headerTax?: number | string; discount?: number | string } = {},
 ): ComputedInvoiceTotals {
   const safeLines = Array.isArray(lines) ? lines : []
+  const money = safeLines.map(computeInvoiceLineMoney)
+  const hasLineDiscount = money.some(l => l.discountPct > 0)
 
-  const subtotal = round2(
-    safeLines.reduce((sum, l) => {
-      const qty = num(l.qty ?? 1)
-      const unitPrice = num(l.unitPrice)
-      // Prefer explicit line subtotal only when qty/unitPrice are absent.
-      const explicit = num(l.lineSubtotal ?? l.subtotal)
-      const lineBase = unitPrice !== 0 || qty !== 0 ? qty * unitPrice : explicit
-      return sum + lineBase
-    }, 0),
-  )
+  const subtotal = round2(money.reduce((sum, l) => sum + l.lineSubtotal, 0))
+  const lineDiscountTotal = round2(money.reduce((sum, l) => sum + l.discountAmount, 0))
 
-  const taxFromLines = round2(
-    safeLines.reduce((sum, l) => {
-      const qty = num(l.qty ?? 1)
-      const unitPrice = num(l.unitPrice)
-      const rate = num(l.taxRate)
-      if (rate <= 0) return sum
-      return sum + (qty * unitPrice * rate) / 100
-    }, 0),
-  )
-
+  const taxFromLines = round2(money.reduce((sum, l) => sum + l.lineTax, 0))
   const taxAmount = taxFromLines > 0 ? taxFromLines : Math.max(0, round2(num(opts.headerTax)))
-  const discountAmount = Math.max(0, round2(num(opts.discount)))
-  const totalAmount = Math.max(0, round2(subtotal + taxAmount - discountAmount))
+
+  const headerDiscount = hasLineDiscount ? 0 : Math.max(0, round2(num(opts.discount)))
+  const discountAmount = round2(lineDiscountTotal + headerDiscount)
+  const totalAmount = Math.max(0, round2(subtotal + taxAmount - headerDiscount))
 
   return { subtotal, taxAmount, discountAmount, totalAmount }
 }
@@ -88,6 +108,7 @@ export interface ClientInvoiceLine {
   qty: number
   unitPrice: number
   taxRate: number
+  discountPct?: number
   subtotal: number
   productId?: string
 }
@@ -103,6 +124,7 @@ export function mapDbInvoiceItemsToClientLines(
     qty?: unknown
     unitPrice?: unknown
     taxRate?: unknown
+    discountPct?: unknown
     lineSubtotal?: unknown
     productId?: string | null
   }> | null | undefined,
@@ -110,14 +132,17 @@ export function mapDbInvoiceItemsToClientLines(
   return (items ?? []).map((item, idx) => {
     const qty = num(item.qty)
     const unitPrice = num(item.unitPrice)
+    const discountPct = Math.min(100, Math.max(0, num(item.discountPct)))
     const explicit = item.lineSubtotal != null ? num(item.lineSubtotal) : null
+    const fallback = computeInvoiceLineMoney({ qty, unitPrice, discountPct, taxRate: num(item.taxRate) })
     return {
       id: item.id ?? `line-${idx}`,
       description: item.description ?? '',
       qty,
       unitPrice,
       taxRate: num(item.taxRate),
-      subtotal: explicit != null ? explicit : round2(qty * unitPrice),
+      ...(discountPct > 0 ? { discountPct } : {}),
+      subtotal: explicit != null ? explicit : fallback.lineSubtotal,
       ...(item.productId ? { productId: item.productId } : {}),
     }
   })
