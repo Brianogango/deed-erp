@@ -1,6 +1,6 @@
 {
-  "order": "SO/2026/0007",
-  "delivery": "DN/2026/0008",
-  "requestedAt": "2026-08-01T10:30:00Z",
-  "reason": "Heal Delivered=0 on Done DN with serial LR0AWKL5 so Create Invoice works"
+  "order": "SO/2026/0008",
+  "delivery": "DN/2026/0009",
+  "requestedAt": "2026-08-01T10:50:00Z",
+  "reason": "Sync SO qty_delivered from Done DN with qtyDone=1 + serial (UI showed Delivered=0)"
 }
