@@ -3,6 +3,7 @@ import { useCrmStore, OpportunityStage, fmtKes, fmtDate } from '@/lib/store'
 import { Badge, PanelHeader, Select } from '@/components/ui'
 import LeadScore from './LeadScore'
 import { STAGE_ORDER, STAGE_COLORS, STAGE_LABELS } from './crm-config'
+import Chatter from '@/components/erp/Chatter'
 
 interface Props {
   activeOppId: string
@@ -17,8 +18,9 @@ export default function OpportunityDetail({
   activeOppId, onClose, stageLabels,
   onMarkWon, onMarkLost, onLogActivity
 }: Props) {
-  const { opportunities, companies, contactPersons, quotes, opportunityActivities, moveOpportunityStage } = useCrmStore()
+  const { opportunities, companies, contactPersons, quotes, opportunityActivities, moveOpportunityStage, users, currentUserId } = useCrmStore()
   const activeOpp = opportunities.find(o => o.id === activeOppId)
+  const staffName = users.find(u => u.id === currentUserId)?.name || 'Staff'
 
   if (!activeOpp) return null
 
@@ -362,6 +364,14 @@ export default function OpportunityDetail({
           )}
         </div>
       </div>
+
+      <Chatter
+        model="opportunity"
+        recordId={activeOpp.id}
+        staffName={staffName}
+        title="Opportunity Chatter"
+        compact
+      />
     </div>
   )
 }

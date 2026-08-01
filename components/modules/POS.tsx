@@ -263,7 +263,7 @@ export default function PointOfSale() {
     setCart(prev => prev.map(i => i.lineId === lineId ? { ...i, price: i.listPrice } : i))
   }
 
-  const charge = () => {
+  const charge = async () => {
     if (cart.length === 0) { showToast('Cart is empty', 'error'); return }
     if (!posSessionOpen) { showToast('No active POS session', 'error'); return }
 
@@ -272,7 +272,7 @@ export default function PointOfSale() {
       if (cs.isLocked) { showToast(cs.message, 'error'); return }
     }
 
-    const order = createPOSOrder(
+    const order = await createPOSOrder(
       cart.map(i => ({
         productId: i.productId,
         productName: i.productName,
@@ -288,7 +288,7 @@ export default function PointOfSale() {
       customerName || undefined,
       pointsToRedeem || 0,
       applyVat
-    ) as any
+    )
 
     if (order) {
       setCart([])

@@ -408,3 +408,334 @@ export async function reserveStockForSaleOrder(
   void userId
   return { ok: true, reserved: reservedCount }
 }
+
+async function bumpPrismaOnHand(deltas: Map<string, number>) {
+  if (deltas.size === 0) return
+  try {
+    await prisma.$transaction(async tx => {
+      for (const [productId, delta] of deltas) {
+        if (!isUuid(productId)) continue
+        const existing = await tx.stockLevel.findUnique({ where: { productId } })
+        if (existing) {
+          await tx.stockLevel.update({
+            where: { productId },
+            data: { qtyOnHand: Math.max(0, existing.qtyOnHand + delta) },
+          })
+        } else if (delta !== 0) {
+          await tx.stockLevel.create({
+            data: {
+              id: uuidFromKey('stock_level', productId),
+              productId,
+              qtyOnHand: Math.max(0, delta),
+              qtyReserved: 0,
+            },
+          }).catch(() => {})
+        }
+      }
+    })
+  } catch (err) {
+    console.error('[stock-transactions] prisma stockLevel bump failed:', err)
+  }
+}
+
+/** Authoritative POS sale stock out. */
+export async function applyPosStockMutation(params: {
+  orderRef: string
+  lines: Array<{
+    productId: string
+    productName: string
+    qty: number
+    serialId?: string
+    serialNumber?: string
+    sourceLocation?: string
+  }>
+  userId?: string
+}): Promise<{ ok: true; moves: BlobStockMove[] } | { ok: false; error: string }> {
+  const state = await loadAppState(['deed_products', 'deed_serials', 'deed_bulkStock', 'deed_stockMoves'])
+  const products: BlobProduct[] = Array.isArray(state.deed_products) ? [...(state.deed_products as BlobProduct[])] : []
+  const serials: BlobSerial[] = Array.isArray(state.deed_serials) ? [...(state.deed_serials as BlobSerial[])] : []
+  let bulkStock: BulkStockLevel[] =
+    Array.isArray(state.deed_bulkStock) ? [...(state.deed_bulkStock as BulkStockLevel[])] : []
+  const stockMoves: BlobStockMove[] = Array.isArray(state.deed_stockMoves) ? [...(state.deed_stockMoves as BlobStockMove[])] : []
+  const newMoves: BlobStockMove[] = []
+  const stockLevelDeltas = new Map<string, number>()
+
+  for (const line of params.lines) {
+    const productId = String(line.productId || '')
+    const qty = Math.max(0, Math.floor(Number(line.qty) || 0))
+    if (!productId || qty <= 0) continue
+    const product = products.find(p => p.id === productId)
+    const location = asLocationId(line.sourceLocation || 'shop')
+
+    if (line.serialId || product?.requiresSerial) {
+      const serial = line.serialId
+        ? serials.find(s => s.id === line.serialId)
+        : serials.find(s =>
+            s.productId === productId
+            && String(s.serial || '').toLowerCase() === String(line.serialNumber || '').toLowerCase()
+            && s.status === 'available',
+          )
+      if (!serial || serial.status !== 'available') {
+        return { ok: false, error: `Serial not available for ${line.productName || productId}` }
+      }
+      serial.status = 'sold'
+      serial.location = 'customer'
+      serial.soldDate = nowIso()
+      const idx = products.findIndex(p => p.id === productId)
+      if (idx >= 0) products[idx] = { ...products[idx], stockQty: Math.max(0, Number(products[idx].stockQty ?? 0) - 1) }
+      stockLevelDeltas.set(productId, (stockLevelDeltas.get(productId) ?? 0) - 1)
+      newMoves.push({
+        id: randomUUID(), type: 'out', productId, productName: line.productName || product?.name || 'Item',
+        qty: 1, reason: `POS ${params.orderRef}`, fromLocation: location, toLocation: 'customer',
+        serialNumbers: [String(serial.serial || line.serialNumber || '')].filter(Boolean),
+        date: nowIso(), userId: params.userId ?? 'system', documentRef: params.orderRef,
+      })
+    } else {
+      const locs = calcStockByLocation(
+        { requiresSerial: false },
+        serials as any,
+        bulkStock,
+        productId,
+      )
+      const available = Number(locs[location] ?? 0)
+      if (available < qty) {
+        return { ok: false, error: `Insufficient stock for ${line.productName || productId} at ${location}` }
+      }
+      bulkStock = upsertBulkStock(bulkStock, productId, location, -qty)
+      const idx = products.findIndex(p => p.id === productId)
+      if (idx >= 0) products[idx] = { ...products[idx], stockQty: Math.max(0, Number(products[idx].stockQty ?? 0) - qty) }
+      stockLevelDeltas.set(productId, (stockLevelDeltas.get(productId) ?? 0) - qty)
+      newMoves.push({
+        id: randomUUID(), type: 'out', productId, productName: line.productName || product?.name || 'Item',
+        qty, reason: `POS ${params.orderRef}`, fromLocation: location, toLocation: 'customer',
+        serialNumbers: [], date: nowIso(), userId: params.userId ?? 'system', documentRef: params.orderRef,
+      })
+    }
+  }
+
+  await bumpPrismaOnHand(stockLevelDeltas)
+  await saveStoreKeys({
+    deed_products: JSON.stringify(products),
+    deed_serials: JSON.stringify(serials),
+    deed_bulkStock: JSON.stringify(bulkStock),
+    deed_stockMoves: JSON.stringify([...newMoves, ...stockMoves]),
+  })
+  return { ok: true, moves: newMoves }
+}
+
+/** Authoritative GRN stock in (after serial validation). */
+export async function applyReceiptStockMutation(params: {
+  receiptId: string
+  receiptRef: string
+  purchaseOrderId?: string
+  destination: string
+  lines: Array<{
+    productId: string
+    productName: string
+    qtyReceived: number
+    requiresSerial: boolean
+    serials?: string[]
+    serialRecords?: Array<Record<string, unknown>>
+  }>
+  userId?: string
+}): Promise<{ ok: true; moves: BlobStockMove[] } | { ok: false; error: string }> {
+  const state = await loadAppState(['deed_products', 'deed_serials', 'deed_bulkStock', 'deed_stockMoves'])
+  const products: BlobProduct[] = Array.isArray(state.deed_products) ? [...(state.deed_products as BlobProduct[])] : []
+  const serials: BlobSerial[] = Array.isArray(state.deed_serials) ? [...(state.deed_serials as BlobSerial[])] : []
+  let bulkStock: BulkStockLevel[] =
+    Array.isArray(state.deed_bulkStock) ? [...(state.deed_bulkStock as BulkStockLevel[])] : []
+  const stockMoves: BlobStockMove[] = Array.isArray(state.deed_stockMoves) ? [...(state.deed_stockMoves as BlobStockMove[])] : []
+  const newMoves: BlobStockMove[] = []
+  const stockLevelDeltas = new Map<string, number>()
+  const destination = asLocationId(params.destination || 'warehouse')
+  const existingSerialKeys = new Set(serials.map(s => String(s.serial || '').toLowerCase()).filter(Boolean))
+
+  for (const line of params.lines) {
+    const productId = String(line.productId || '')
+    const qty = Math.max(0, Math.floor(Number(line.qtyReceived) || 0))
+    if (!productId || qty <= 0) continue
+    const productName = line.productName || products.find(p => p.id === productId)?.name || 'Item'
+
+    if (line.requiresSerial) {
+      const tokens = Array.isArray(line.serials) ? line.serials.map(s => String(s).trim()).filter(Boolean) : []
+      if (tokens.length < qty) {
+        return { ok: false, error: `Enter all serial numbers for ${productName}` }
+      }
+      for (const token of tokens.slice(0, qty)) {
+        if (existingSerialKeys.has(token.toLowerCase())) {
+          return { ok: false, error: `Serial ${token} already exists` }
+        }
+        existingSerialKeys.add(token.toLowerCase())
+        const record = (line.serialRecords || []).find(r => String(r.serial || '').toLowerCase() === token.toLowerCase())
+        serials.push({
+          ...(record || {}),
+          id: String(record?.id || randomUUID()),
+          serial: token,
+          productId,
+          status: String(record?.status || 'available'),
+          location: String(record?.location || destination),
+        } as BlobSerial)
+      }
+      const idx = products.findIndex(p => p.id === productId)
+      if (idx >= 0) products[idx] = { ...products[idx], stockQty: Number(products[idx].stockQty ?? 0) + qty }
+      stockLevelDeltas.set(productId, (stockLevelDeltas.get(productId) ?? 0) + qty)
+      newMoves.push({
+        id: randomUUID(), type: 'in', productId, productName, qty,
+        reason: `Receipt ${params.receiptRef}`, fromLocation: 'vendor', toLocation: destination,
+        serialNumbers: tokens.slice(0, qty), date: nowIso(),
+        userId: params.userId ?? 'system', documentRef: params.receiptRef,
+      })
+    } else {
+      bulkStock = upsertBulkStock(bulkStock, productId, destination, qty)
+      const idx = products.findIndex(p => p.id === productId)
+      if (idx >= 0) products[idx] = { ...products[idx], stockQty: Number(products[idx].stockQty ?? 0) + qty }
+      stockLevelDeltas.set(productId, (stockLevelDeltas.get(productId) ?? 0) + qty)
+      newMoves.push({
+        id: randomUUID(), type: 'in', productId, productName, qty,
+        reason: `Receipt ${params.receiptRef}`, fromLocation: 'vendor', toLocation: destination,
+        serialNumbers: [], date: nowIso(),
+        userId: params.userId ?? 'system', documentRef: params.receiptRef,
+      })
+    }
+  }
+
+  await bumpPrismaOnHand(stockLevelDeltas)
+  await saveStoreKeys({
+    deed_products: JSON.stringify(products),
+    deed_serials: JSON.stringify(serials),
+    deed_bulkStock: JSON.stringify(bulkStock),
+    deed_stockMoves: JSON.stringify([...newMoves, ...stockMoves]),
+  })
+  void params.receiptId
+  void params.purchaseOrderId
+  return { ok: true, moves: newMoves }
+}
+
+/** Authoritative internal transfer. */
+export async function applyTransferStockMutation(params: {
+  transferRef: string
+  fromLocation: string
+  toLocation: string
+  lines: Array<{ productId: string; productName: string; qty: number; serialIds?: string[] }>
+  userId?: string
+}): Promise<{ ok: true; moves: BlobStockMove[] } | { ok: false; error: string }> {
+  const from = asLocationId(params.fromLocation)
+  const to = asLocationId(params.toLocation)
+  if (from === to) return { ok: false, error: 'Source and destination must differ' }
+
+  const state = await loadAppState(['deed_products', 'deed_serials', 'deed_bulkStock', 'deed_stockMoves'])
+  const products: BlobProduct[] = Array.isArray(state.deed_products) ? [...(state.deed_products as BlobProduct[])] : []
+  const serials: BlobSerial[] = Array.isArray(state.deed_serials) ? [...(state.deed_serials as BlobSerial[])] : []
+  let bulkStock: BulkStockLevel[] =
+    Array.isArray(state.deed_bulkStock) ? [...(state.deed_bulkStock as BulkStockLevel[])] : []
+  const stockMoves: BlobStockMove[] = Array.isArray(state.deed_stockMoves) ? [...(state.deed_stockMoves as BlobStockMove[])] : []
+  const newMoves: BlobStockMove[] = []
+
+  for (const line of params.lines) {
+    const productId = String(line.productId || '')
+    const qty = Math.max(0, Math.floor(Number(line.qty) || 0))
+    if (!productId || qty <= 0) continue
+    const product = products.find(p => p.id === productId)
+    const serialIds = Array.isArray(line.serialIds) ? line.serialIds : []
+
+    if (product?.requiresSerial || serialIds.length > 0) {
+      if (serialIds.length !== qty) {
+        return { ok: false, error: `Select ${qty} serial(s) for ${line.productName}` }
+      }
+      const labels: string[] = []
+      for (const sid of serialIds) {
+        const serial = serials.find(s => s.id === sid)
+        if (!serial || serial.status !== 'available' || asLocationId(serial.location) !== from) {
+          return { ok: false, error: `Serial not available at ${from} for ${line.productName}` }
+        }
+        serial.location = to
+        labels.push(String(serial.serial || ''))
+      }
+      newMoves.push({
+        id: randomUUID(), type: 'transfer', productId, productName: line.productName,
+        qty, reason: `Transfer ${params.transferRef}`, fromLocation: from, toLocation: to,
+        serialNumbers: labels.filter(Boolean), date: nowIso(),
+        userId: params.userId ?? 'system', documentRef: params.transferRef,
+      })
+    } else {
+      const locs = calcStockByLocation({ requiresSerial: false }, serials as any, bulkStock, productId)
+      if (Number(locs[from] ?? 0) < qty) {
+        return { ok: false, error: `Insufficient stock for ${line.productName} at ${from}` }
+      }
+      bulkStock = upsertBulkStock(bulkStock, productId, from, -qty)
+      bulkStock = upsertBulkStock(bulkStock, productId, to, qty)
+      newMoves.push({
+        id: randomUUID(), type: 'transfer', productId, productName: line.productName,
+        qty, reason: `Transfer ${params.transferRef}`, fromLocation: from, toLocation: to,
+        serialNumbers: [], date: nowIso(),
+        userId: params.userId ?? 'system', documentRef: params.transferRef,
+      })
+    }
+  }
+
+  await saveStoreKeys({
+    deed_serials: JSON.stringify(serials),
+    deed_bulkStock: JSON.stringify(bulkStock),
+    deed_stockMoves: JSON.stringify([...newMoves, ...stockMoves]),
+  })
+  return { ok: true, moves: newMoves }
+}
+
+/** Authoritative stock adjustment (add/subtract at a location). */
+export async function applyAdjustmentStockMutation(params: {
+  adjustmentRef: string
+  productId: string
+  productName: string
+  type: 'add' | 'subtract'
+  qty: number
+  reason: string
+  location?: string
+  userId?: string
+}): Promise<{ ok: true; moves: BlobStockMove[] } | { ok: false; error: string }> {
+  const qty = Math.max(0, Math.floor(Number(params.qty) || 0))
+  if (!params.productId || qty <= 0) return { ok: false, error: 'productId and qty required' }
+  const location = asLocationId(params.location || 'warehouse')
+  const delta = params.type === 'add' ? qty : -qty
+
+  const state = await loadAppState(['deed_products', 'deed_bulkStock', 'deed_stockMoves'])
+  const products: BlobProduct[] = Array.isArray(state.deed_products) ? [...(state.deed_products as BlobProduct[])] : []
+  let bulkStock: BulkStockLevel[] =
+    Array.isArray(state.deed_bulkStock) ? [...(state.deed_bulkStock as BulkStockLevel[])] : []
+  const stockMoves: BlobStockMove[] = Array.isArray(state.deed_stockMoves) ? [...(state.deed_stockMoves as BlobStockMove[])] : []
+
+  if (params.type === 'subtract') {
+    const locs = calcStockByLocation({ requiresSerial: false }, [], bulkStock, params.productId)
+    if (Number(locs[location] ?? 0) < qty) {
+      return { ok: false, error: `Insufficient stock to adjust ${params.productName}` }
+    }
+  }
+
+  bulkStock = upsertBulkStock(bulkStock, params.productId, location, delta)
+  const idx = products.findIndex(p => p.id === params.productId)
+  if (idx >= 0) {
+    products[idx] = { ...products[idx], stockQty: Math.max(0, Number(products[idx].stockQty ?? 0) + delta) }
+  }
+
+  const move: BlobStockMove = {
+    id: randomUUID(),
+    type: params.type === 'add' ? 'in' : 'adjustment',
+    productId: params.productId,
+    productName: params.productName,
+    qty,
+    reason: `Adj ${params.adjustmentRef}: ${params.reason}`,
+    fromLocation: params.type === 'subtract' ? location : undefined,
+    toLocation: params.type === 'add' ? location : undefined,
+    serialNumbers: [],
+    date: nowIso(),
+    userId: params.userId ?? 'system',
+    documentRef: params.adjustmentRef,
+  }
+
+  await bumpPrismaOnHand(new Map([[params.productId, delta]]))
+  await saveStoreKeys({
+    deed_products: JSON.stringify(products),
+    deed_bulkStock: JSON.stringify(bulkStock),
+    deed_stockMoves: JSON.stringify([move, ...stockMoves]),
+  })
+  return { ok: true, moves: [move] }
+}

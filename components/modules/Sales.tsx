@@ -748,7 +748,7 @@ function SalesContent() {
   }, [view, quoteDraftKey, newCustomer, newDeliveryDate, newPaymentTerms, newNotes, newCustomerRef, newSalesTeam, newPricelist, newInvoiceAddress, newDeliveryAddress, newPaymentDetails, newDraftLines])
 
   // ── Save new quotation ──────────────────────────────────────────────────
-  const saveNewQuotation = (openCreatedOrder: boolean) => {
+  const saveNewQuotation = async (openCreatedOrder: boolean) => {
     if (!newCustomer) { showToast('Please select a customer', 'error'); return }
     if (invalidQtyDraftLines.length > 0) { showToast('Quantity must be greater than zero for every quoted product', 'error'); return }
     if (validDraftLines.length === 0) { showToast('Add at least one product with quantity greater than zero', 'error'); return }
@@ -803,7 +803,7 @@ function SalesContent() {
         accountCode: product ? resolveProductAccounts(product).saleAccountCode : undefined,
       })
     }
-    const so = createSaleOrder(newCustomer.id, newCustomer.name, {
+    const so = await createSaleOrder(newCustomer.id, newCustomer.name, {
       lines: builtLines as any,
       ...(newDeliveryDate ? { deliveryDate: newDeliveryDate } : {}),
       paymentTerms: newPaymentTerms === '0' ? 'Immediate' : `${newPaymentTerms} days`,
@@ -1761,7 +1761,7 @@ function SalesContent() {
                   const contact = await addContact({ type: 'individual', name: newContactQuery.trim(), email: newContactEmail.trim(), phone: newContactPhone.trim(), address: '', isCustomer: true, isVendor: false, tags: [] })
                   setShowCreateContact(false); setNewContactQuery(''); setNewContactEmail(''); setNewContactPhone('')
                   setNewCustomer({ id: contact.id, name: contact.name })
-                  if (view !== 'new') { const so = createSaleOrder(contact.id, contact.name); openOrder(so.id) }
+                  if (view !== 'new') { const so = await createSaleOrder(contact.id, contact.name); openOrder(so.id) }
                 } catch { /* addContact shows error toast */ } finally { setRegisteringContact(false) }
               }}>{registeringContact ? 'Registering…' : 'Register & Create Quotation'}</button>
             </div>

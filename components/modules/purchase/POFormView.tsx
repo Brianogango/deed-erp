@@ -8,6 +8,7 @@ import { downloadPdf, type PdfLine } from '@/lib/pdf'
 import Chatter from '@/components/erp/Chatter'
 import { Breadcrumbs } from '@/components/erp/Breadcrumbs'
 import { SmartButtons } from '@/components/erp/SmartButtons'
+import { billableQty } from '@/lib/purchase/three-way-match'
 
 const ACCESSORIES = ['Charger', 'Bag/Case', 'Mouse', 'Box', 'Cable', 'Manual']
 const PO_STEPS = ['RFQ', 'RFQ Sent', 'Purchase Order', 'Received', 'Billed']
@@ -187,7 +188,8 @@ export default function POFormView() {
     const hasOutstandingQty = activePO.lines.some(line => line.qtyReceived < line.qty)
     const canReceive     = (activePO.status === 'confirmed' || activePO.status === 'partial') && hasOutstandingQty && ['director', 'admin_officer', 'inventory_officer', 'technical_lead'].includes(currentUser?.role ?? '')
     const canReturn      = (activePO.status === 'received' || activePO.status === 'partial') && receipts.some(r => r.poId === activePO.id && r.status === 'validated') && ['director', 'admin_officer', 'inventory_officer'].includes(currentUser?.role ?? '')
-    const canCreateBill  = (activePO.status === 'received' || activePO.status === 'partial') && !activePO.billId && ['director', 'finance_officer', 'admin_officer'].includes(currentUser?.role ?? '')
+    const hasBillableQty = activePO.lines.some(line => billableQty(line) > 0)
+    const canCreateBill  = (activePO.status === 'received' || activePO.status === 'partial') && hasBillableQty && ['director', 'finance_officer', 'admin_officer'].includes(currentUser?.role ?? '')
     const canValidateBill = linkedBill?.status === 'draft' && ['director', 'finance_officer'].includes(currentUser?.role ?? '')
     const canPay         = !!linkedBill && invoiceDocState(linkedBill.status) === 'posted' && (linkedBill.amountPaid ?? 0) < (linkedBill.total ?? 0) && ['director', 'finance_officer'].includes(currentUser?.role ?? '')
     const stepIdx        = linkedBill ? 4 : (PO_STEP_IDX[activePO.status] ?? 0)

@@ -1,5 +1,5 @@
 'use client'
-import { useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useAccounting } from './AccountingContext'
 import { fmtDate, fmtKes } from '@/lib/store'
 import { Fa } from '@/components/icons'
@@ -19,20 +19,76 @@ type GlRow = {
   runningBalance: number
 }
 
+type PrismaGlLine = {
+  id: string
+  entryRef: string
+  entryDate: string
+  description: string
+  label: string
+  sourceType: string
+  debit: number
+  credit: number
+  runningBalance: number
+}
+
 export default function GeneralLedgerTab() {
   const {
     journalEntries, accounts,
     glAccount, setGlAccount, glDateFrom, setGlDateFrom, glDateTo, setGlDateTo,
   } = useAccounting()
 
-  const glWithBalance = useMemo(() => {
+  const [source, setSource] = useState<'blob' | 'prisma'>('prisma')
+  const [prismaLines, setPrismaLines] = useState<PrismaGlLine[]>([])
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const selectedAccount = useMemo(
+    () => accounts.find(a => a.code === glAccount || a.name === glAccount) ?? null,
+    [accounts, glAccount],
+  )
+  const accountCode = selectedAccount?.code || (glAccount && /^\d/.test(glAccount) ? glAccount : '')
+
+  useEffect(() => {
+    if (source !== 'prisma' || !accountCode) {
+      setPrismaLines([])
+      setError(null)
+      return
+    }
+    let cancelled = false
+    const load = async () => {
+      setLoading(true)
+      setError(null)
+      try {
+        const params = new URLSearchParams({ accountCode })
+        if (glDateFrom) params.set('dateFrom', glDateFrom)
+        if (glDateTo) params.set('dateTo', glDateTo)
+        const res = await fetch(`/api/accounting/general-ledger?${params}`)
+        if (!res.ok) throw new Error('Failed to load general ledger')
+        const data = await res.json()
+        if (!cancelled) setPrismaLines(Array.isArray(data.lines) ? data.lines : [])
+      } catch (err) {
+        if (!cancelled) {
+          setPrismaLines([])
+          setError(err instanceof Error ? err.message : 'Failed to load general ledger')
+        }
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    }
+    void load()
+    return () => { cancelled = true }
+  }, [source, accountCode, glDateFrom, glDateTo])
+
+  const blobGlWithBalance = useMemo(() => {
     if (!glAccount) return [] as GlRow[]
     const match = glAccount.toLowerCase()
+    const nameMatch = (selectedAccount?.name || '').toLowerCase()
     let running = 0
     const res: GlRow[] = []
     for (const e of journalEntries) {
       for (const l of e.lines) {
-        if (l.account.toLowerCase().includes(match)) {
+        const account = String(l.account || '').toLowerCase()
+        if (account.includes(match) || (nameMatch && account.includes(nameMatch))) {
           running += (l.debit || 0) - (l.credit || 0)
           res.push({
             id: `${e.id}-${l.account}-${res.length}`,
@@ -49,11 +105,25 @@ export default function GeneralLedgerTab() {
       }
     }
     return res
-  }, [glAccount, journalEntries])
+  }, [glAccount, journalEntries, selectedAccount?.name])
 
-  const filteredGlWithBalance = useMemo(() =>
-    glWithBalance.filter(l => (!glDateFrom || l.entryDate >= glDateFrom) && (!glDateTo || l.entryDate <= glDateTo)),
-  [glWithBalance, glDateFrom, glDateTo])
+  const filteredBlob = useMemo(() =>
+    blobGlWithBalance.filter(l => (!glDateFrom || l.entryDate >= glDateFrom) && (!glDateTo || l.entryDate <= glDateTo)),
+  [blobGlWithBalance, glDateFrom, glDateTo])
+
+  const rows: GlRow[] = source === 'prisma'
+    ? prismaLines.map(l => ({
+        id: l.id,
+        entryRef: l.entryRef,
+        entryDate: l.entryDate,
+        description: l.label || l.description,
+        entryDesc: l.description,
+        source: l.sourceType,
+        debit: l.debit,
+        credit: l.credit,
+        runningBalance: l.runningBalance,
+      }))
+    : filteredBlob
 
   const columns: ColumnDef<GlRow>[] = [
     {
@@ -97,19 +167,35 @@ export default function GeneralLedgerTab() {
     },
   ]
 
+  const accountLabel = selectedAccount
+    ? `${selectedAccount.code} — ${selectedAccount.name}`
+    : glAccount
+
   return (
     <>
       <div className="flex items-center gap-2 px-4 py-2.5 border-b flex-wrap" style={{ borderColor: 'var(--border-lt)' }}>
         <Select
-          value={glAccount} onChange={setGlAccount}
+          value={accountCode || glAccount}
+          onChange={setGlAccount}
           options={[
             { value: '', label: 'Select an account to view...' },
-            ...accounts.map(a => ({ value: a.name, label: `${a.code} — ${a.name}` })),
+            ...accounts.map(a => ({ value: a.code, label: `${a.code} — ${a.name}` })),
           ]}
         />
+        <select
+          className="form-select text-[11px] py-1.5"
+          value={source}
+          onChange={e => setSource(e.target.value as 'blob' | 'prisma')}
+          aria-label="General ledger source"
+        >
+          <option value="prisma">Prisma (KES posted)</option>
+          <option value="blob">Client blob</option>
+        </select>
         <input type="date" className="form-input text-[11px] py-1.5" style={{ width: 130 }} value={glDateFrom} onChange={e => setGlDateFrom(e.target.value)} title="From Date" />
         <input type="date" className="form-input text-[11px] py-1.5" style={{ width: 130 }} value={glDateTo} onChange={e => setGlDateTo(e.target.value)} title="To Date" />
-        {glAccount && <span className="text-[11px] text-t3">{filteredGlWithBalance.length} entries</span>}
+        {glAccount && <span className="text-[11px] text-t3">{rows.length} entries</span>}
+        {source === 'prisma' && loading && <span className="text-[11px] text-t3">Loading…</span>}
+        {source === 'prisma' && error && <span className="text-[11px] text-red-500">{error}</span>}
       </div>
 
       {!glAccount ? (
@@ -122,17 +208,17 @@ export default function GeneralLedgerTab() {
           <DataTable
             tableId="general-ledger"
             columns={columns}
-            rows={filteredGlWithBalance}
+            rows={rows}
             rowKey={l => l.id}
             hideSearch
-            emptyMessage="No journal lines found for this account or period"
-            exportTitle={`General Ledger — ${glAccount}`}
-            exportFilename={`gl-${glAccount.replace(/\s+/g, '-')}`}
+            emptyMessage={source === 'prisma' ? 'No posted Prisma lines for this account or period' : 'No journal lines found for this account or period'}
+            exportTitle={`General Ledger — ${accountLabel}`}
+            exportFilename={`gl-${String(accountLabel).replace(/\s+/g, '-')}`}
           />
-          {filteredGlWithBalance.length > 0 && (
+          {rows.length > 0 && (
             <div className="px-4 py-2 border-t border-[var(--border-lt)] text-right text-[11px] font-semibold">
               Closing Balance: <span className="font-mono ml-2 text-purple-600">
-                {fmtKes(filteredGlWithBalance[filteredGlWithBalance.length - 1].runningBalance)}
+                {fmtKes(rows[rows.length - 1].runningBalance)}
               </span>
             </div>
           )}
