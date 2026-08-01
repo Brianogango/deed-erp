@@ -9076,9 +9076,15 @@ const storeCtx: AppState = {
 
       for (const deliveryLine of del.lines) {
         const product = prodRef.current.find(p => p.id === deliveryLine.productId)
-        const qty = Math.min(deliveryLine.qty, Math.max(0, Number(requested[deliveryLine.productId]) || 0))
         const soLine = so.lines.find(line => line.productId === deliveryLine.productId)
-        const serialIds = product?.requiresSerial ? (soLine?.serialIds || []).slice(0, qty) : []
+        const assignedSerials = product?.requiresSerial ? (soLine?.serialIds || deliveryLine.serialIds || []) : []
+        // Serial shipments: if the qty input was left at 0 but serials are
+        // assigned, prepare those units — otherwise Delivered stays 0 forever.
+        const requestedQty = Math.max(0, Number(requested[deliveryLine.productId]) || 0)
+        const qty = product?.requiresSerial
+          ? Math.min(deliveryLine.qty, requestedQty > 0 ? requestedQty : assignedSerials.length)
+          : Math.min(deliveryLine.qty, requestedQty)
+        const serialIds = product?.requiresSerial ? assignedSerials.slice(0, qty) : []
 
         if (product?.requiresSerial && qty > 0) {
           if (qty < deliveryLine.qty) {
@@ -9207,7 +9213,19 @@ const storeCtx: AppState = {
       // Odoo-style partial validation: quantities actually done are shipped
       // now; the remainder moves to a backorder delivery. Stock is deducted
       // ONLY for the quantities validated as Done.
-      const requested: Record<string, number> = qtysDone ?? Object.fromEntries(del.lines.map(l => [l.productId, l.qtyDone]))
+      // Resolve qty per line from explicit input, prior qtyDone, or serial count
+      // so a serial-tracked Done delivery can never ship with Delivered=0.
+      const requested: Record<string, number> = {}
+      for (const line of del.lines) {
+        const fromArg = qtysDone?.[line.productId]
+        const fromLine = Number(line.qtyDone) || 0
+        const fromSerials = (line.serialIds ?? []).length
+        requested[line.productId] = Math.max(
+          fromArg === undefined ? 0 : Number(fromArg) || 0,
+          fromLine,
+          fromSerials,
+        )
+      }
       const { doneLines, backorderLines } = splitDeliveryForBackorder(del.lines, requested)
       if (doneLines.length === 0) {
         showToast('Enter the quantities delivered before validating', 'error'); return
@@ -9329,9 +9347,61 @@ const storeCtx: AppState = {
         showToast('Only a validated delivery can generate the final Delivery Note', 'error')
         return false
       }
+      // Heal qtyDone from serials when the Done delivery was saved with Delivered=0
+      // (legacy bug). Never stamp a DN that unlocks invoicing with zero delivered.
+      const healedLines = delivery.lines.map(line => {
+        const qtyDone = Math.max(
+          Number(line.qtyDone) || 0,
+          Array.isArray(line.serialIds) ? line.serialIds.length : 0,
+        )
+        return { ...line, qtyDone: Math.min(line.qty, qtyDone) }
+      })
+      const deliveredTotal = healedLines.reduce((sum, line) => sum + (Number(line.qtyDone) || 0), 0)
+      if (deliveredTotal <= 0) {
+        showToast('Cannot generate Delivery Note — delivered quantity is 0. Prepare/validate with quantities (or serials) first.', 'error')
+        return false
+      }
+      const so = soRef.current.find(s => s.id === delivery.saleOrderId)
+      if (so) {
+        // Persist SO qtyDelivered so Create Invoice (delivery policy) can proceed.
+        const doneByProduct: Record<string, number> = {}
+        healedLines.forEach(line => {
+          if ((line.qtyDone || 0) > 0) {
+            doneByProduct[line.productId] = (doneByProduct[line.productId] ?? 0) + (line.qtyDone || 0)
+          }
+        })
+        const lineUpdates = so.lines
+          .map(line => {
+            const add = doneByProduct[line.productId] ?? 0
+            if (add <= 0) return null
+            const next = Math.max(Number(line.qtyDelivered) || 0, Math.min(Number(line.qty) || 0, add))
+            return { id: line.id, qtyDelivered: next }
+          })
+          .filter(Boolean) as Array<{ id: string; qtyDelivered: number }>
+        if (lineUpdates.length > 0) {
+          try {
+            await fetch(`/api/sale-orders/${so.id}/deliver-lines`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ lines: lineUpdates }),
+            })
+          } catch { /* local heal below still applies */ }
+          setSaleOrders(prev => prev.map(order => {
+            if (order.id !== so.id) return order
+            return {
+              ...order,
+              lines: order.lines.map(line => {
+                const upd = lineUpdates.find(u => u.id === line.id)
+                return upd ? { ...line, qtyDelivered: upd.qtyDelivered } : line
+              }),
+            }
+          }))
+        }
+      }
       const patch = {
         deliveryNoteGeneratedAt: new Date().toISOString(),
         deliveryNoteGeneratedByUserId: user?.id,
+        lines: healedLines,
       }
       try {
         const response = await fetch(`/api/deliveries/${deliveryId}`, {
@@ -9344,7 +9414,7 @@ const storeCtx: AppState = {
           return false
         }
         setDeliveries(prev => prev.map(item => item.id === deliveryId ? { ...item, ...patch } : item))
-        addAuditLog('generate_delivery_note', delivery.ref, `Final Delivery Note generated by ${user?.name ?? 'user'}`)
+        addAuditLog('generate_delivery_note', delivery.ref, `Final Delivery Note generated by ${user?.name ?? 'user'} (${deliveredTotal} unit(s))`)
         return true
       } catch {
         showToast('Delivery Note opened, but the server could not be reached', 'error')

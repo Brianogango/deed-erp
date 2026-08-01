@@ -224,9 +224,31 @@ export interface DeliverySplitLine {
 }
 
 /**
+ * Effective quantity delivered on a delivery line.
+ * Prefer explicit qtyDone / requested qty; for serial-tracked lines fall back to
+ * assigned serial count so a Done DN with serials can never leave delivered=0.
+ */
+export function effectiveDeliveryLineQty(line: {
+  qty: number
+  qtyDone?: number
+  serialIds?: string[] | null
+}, requested?: number): number {
+  const demand = Math.max(0, Number(line.qty) || 0)
+  const fromRequest = requested === undefined ? undefined : Math.max(0, Number(requested) || 0)
+  const fromDone = Math.max(0, Number(line.qtyDone) || 0)
+  const fromSerials = Array.isArray(line.serialIds) ? line.serialIds.length : 0
+  const raw = Math.max(fromRequest ?? 0, fromDone, fromSerials)
+  return Math.max(0, Math.min(raw, demand))
+}
+
+/**
  * Split a delivery being validated into the quantities actually done and the
  * remainder that must move to a backorder. Quantities done are clamped to the
  * ordered quantity; negative input counts as zero.
+ *
+ * When the requested map is 0/missing but the line already has serials (or a
+ * prior qtyDone), those count as delivered so serial shipments cannot validate
+ * as Done with Delivered=0.
  */
 export function splitDeliveryForBackorder(
   lines: readonly DeliverySplitLine[],
@@ -235,13 +257,58 @@ export function splitDeliveryForBackorder(
   const doneLines: DeliverySplitLine[] = []
   const backorderLines: DeliverySplitLine[] = []
   for (const line of lines) {
-    const requested = qtysDone[line.productId]
-    const done = Math.max(0, Math.min(Number(requested ?? line.qty) || 0, line.qty))
-    if (done > 0) doneLines.push({ ...line, qty: done, qtyDone: done })
+    const done = effectiveDeliveryLineQty(line, qtysDone[line.productId])
+    if (done > 0) {
+      const serialIds = (line.serialIds ?? []).slice(0, done)
+      doneLines.push({ ...line, qty: done, qtyDone: done, serialIds })
+    }
     const remaining = line.qty - done
     if (remaining > 0) backorderLines.push({ ...line, qty: remaining, qtyDone: 0, serialIds: [] })
   }
   return { doneLines, backorderLines }
+}
+
+/** Total delivered units on a delivery (qtyDone, falling back to serial count). */
+export function deliveryDeliveredTotal(delivery: {
+  lines?: Array<{ qty: number; qtyDone?: number; serialIds?: string[] | null }> | null
+}): number {
+  return (delivery.lines ?? []).reduce((sum, line) => sum + effectiveDeliveryLineQty(line), 0)
+}
+
+/**
+ * Sum effective delivered qty per productId from Done deliveries for an SO.
+ * Used to heal Prisma `qtyDelivered` when a legacy Done DN left it at 0
+ * despite assigned serials / qtyDone.
+ */
+export function deliveredByProductFromDoneDeliveries(
+  deliveries: Array<{
+    saleOrderId?: string
+    status?: string
+    lines?: Array<{
+      productId?: string
+      qty?: number
+      qtyDone?: number
+      serialIds?: string[] | null
+    }> | null
+  }> | null | undefined,
+  saleOrderId: string,
+): Record<string, number> {
+  const out: Record<string, number> = {}
+  for (const delivery of deliveries ?? []) {
+    if (delivery.saleOrderId !== saleOrderId) continue
+    if (normalizeDeliveryStatus(delivery.status) !== 'done') continue
+    for (const line of delivery.lines ?? []) {
+      if (!line.productId) continue
+      const qty = effectiveDeliveryLineQty({
+        qty: Number(line.qty) || 0,
+        qtyDone: line.qtyDone,
+        serialIds: line.serialIds,
+      })
+      if (qty <= 0) continue
+      out[line.productId] = (out[line.productId] ?? 0) + qty
+    }
+  }
+  return out
 }
 
 // ─── Invoice document state & payment status ─────────────────────────────────

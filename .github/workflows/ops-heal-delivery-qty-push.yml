@@ -1,0 +1,58 @@
+name: Ops heal delivery qty (push trigger)
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'ops/heal-delivery-qty-request.json'
+
+jobs:
+  heal-delivery-qty:
+    name: Heal delivery qty on Contabo
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Read request
+        id: req
+        run: |
+          set -euo pipefail
+          ORDER=$(jq -r '.order // empty' ops/heal-delivery-qty-request.json)
+          DELIVERY=$(jq -r '.delivery // empty' ops/heal-delivery-qty-request.json)
+          if [ -z "$ORDER" ]; then
+            echo "ERROR: order required in ops/heal-delivery-qty-request.json" >&2
+            exit 1
+          fi
+          echo "order=$ORDER" >> "$GITHUB_OUTPUT"
+          echo "delivery=$DELIVERY" >> "$GITHUB_OUTPUT"
+
+      - name: Copy script to server
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          source: scripts/heal-delivery-qty.mjs
+          target: /tmp/deed-ops/
+          strip_components: 1
+
+      - name: Run heal-delivery-qty script
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          command_timeout: 5m
+          script: |
+            set -euo pipefail
+            cd /var/www/deed-erp
+            cp /tmp/deed-ops/heal-delivery-qty.mjs scripts/heal-delivery-qty.mjs
+            if [ -n '${{ steps.req.outputs.delivery }}' ]; then
+              node scripts/heal-delivery-qty.mjs \
+                --order '${{ steps.req.outputs.order }}' \
+                --delivery '${{ steps.req.outputs.delivery }}'
+            else
+              node scripts/heal-delivery-qty.mjs \
+                --order '${{ steps.req.outputs.order }}'
+            fi

@@ -20,6 +20,9 @@ import {
   saleTransitionError,
   initialDeliveryState,
   hasGeneratedDeliveryNote,
+  effectiveDeliveryLineQty,
+  deliveryDeliveredTotal,
+  deliveredByProductFromDoneDeliveries,
 } from '@/lib/odoo-sales-flow'
 
 describe('delivery-note invoice gate', () => {
@@ -185,6 +188,49 @@ describe('delivery states, partial delivery and backorders', () => {
     const neg = splitDeliveryForBackorder(lines, { p1: -4 })
     expect(neg.doneLines).toHaveLength(0)
     expect(neg.backorderLines[0].qty).toBe(2)
+  })
+
+  it('falls back to assigned serials when requested qty / qtyDone is 0', () => {
+    const lines = [{
+      productId: 'p1',
+      productName: 'ThinkPad',
+      qty: 1,
+      qtyDone: 0,
+      serialIds: ['sid-1'],
+    }]
+    expect(effectiveDeliveryLineQty(lines[0])).toBe(1)
+    expect(effectiveDeliveryLineQty(lines[0], 0)).toBe(1)
+    const { doneLines, backorderLines } = splitDeliveryForBackorder(lines, { p1: 0 })
+    expect(doneLines).toEqual([{
+      productId: 'p1',
+      productName: 'ThinkPad',
+      qty: 1,
+      qtyDone: 1,
+      serialIds: ['sid-1'],
+    }])
+    expect(backorderLines).toHaveLength(0)
+    expect(deliveryDeliveredTotal({ lines })).toBe(1)
+  })
+
+  it('heals delivered-by-product from Done deliveries with serials', () => {
+    const map = deliveredByProductFromDoneDeliveries([
+      {
+        saleOrderId: 'so-1',
+        status: 'done',
+        lines: [{ productId: 'p1', qty: 1, qtyDone: 0, serialIds: ['s1'] }],
+      },
+      {
+        saleOrderId: 'so-1',
+        status: 'ready',
+        lines: [{ productId: 'p1', qty: 1, qtyDone: 1, serialIds: ['s2'] }],
+      },
+      {
+        saleOrderId: 'so-2',
+        status: 'done',
+        lines: [{ productId: 'p1', qty: 1, qtyDone: 1, serialIds: [] }],
+      },
+    ], 'so-1')
+    expect(map).toEqual({ p1: 1 })
   })
 })
 
