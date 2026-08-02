@@ -172,7 +172,66 @@ async function main() {
     console.log(`Already sold: ${alreadySold.length}`)
     console.log(`Will mark sold: ${toMark.length}`)
     if (missing.length) {
-      console.log(`MISSING (not in deed_serials): ${missing.join(', ')}`)
+      console.log(`MISSING (exact match not in deed_serials): ${missing.join(', ')}`)
+      for (const needle of missing) {
+        const key = normalizeSerial(needle)
+        const fuzzy = serials
+          .filter(row => {
+            const serial = normalizeSerial(row?.serial)
+            const barcode = normalizeSerial(row?.barcode)
+            return serial.includes(key) || key.includes(serial) || barcode.includes(key)
+          })
+          .slice(0, 12)
+        if (fuzzy.length) {
+          console.log(`  Fuzzy deed_serials matches for ${needle}:`)
+          for (const row of fuzzy) {
+            console.log(
+              `    ${row.serial}  [${row.status}/${row.location}]  barcode=${row.barcode || '-'}  product=${row.productName || row.productId || '?'}`,
+            )
+          }
+        } else {
+          console.log(`  No fuzzy deed_serials match for ${needle}`)
+        }
+        try {
+          const prismaHits = await client.query(
+            `SELECT serial_number, status, inventory_barcode, product_id
+             FROM serial_numbers
+             WHERE lower(serial_number) LIKE $1
+                OR lower(COALESCE(inventory_barcode, '')) LIKE $1
+             LIMIT 12`,
+            [`%${key.toLowerCase()}%`],
+          )
+          if (prismaHits.rows.length) {
+            console.log(`  Prisma serial_numbers matches for ${needle}:`)
+            for (const row of prismaHits.rows) {
+              console.log(
+                `    ${row.serial_number}  [${row.status}]  barcode=${row.inventory_barcode || '-'}  product=${row.product_id}`,
+              )
+            }
+          }
+        } catch (err) {
+          console.log(
+            `  Note: Prisma lookup skipped (${err instanceof Error ? err.message : String(err)})`,
+          )
+        }
+        try {
+          const blobHits = await client.query(
+            `SELECT key
+             FROM app_state
+             WHERE value ILIKE $1
+             ORDER BY key
+             LIMIT 20`,
+            [`%${needle}%`],
+          )
+          if (blobHits.rows.length) {
+            console.log(
+              `  app_state keys containing ${needle}: ${blobHits.rows.map(r => r.key).join(', ')}`,
+            )
+          }
+        } catch {
+          // ignore
+        }
+      }
     }
 
     for (const row of toMark) {
@@ -183,7 +242,9 @@ async function main() {
 
     if (toMark.length === 0) {
       console.log(dryRun ? 'Dry-run: nothing to change.' : 'Nothing to change.')
-      if (missing.length) process.exitCode = 2
+      // Exit 0 when everything requested is already sold; only fail hard if
+      // serials were missing and nothing could be updated.
+      if (missing.length && alreadySold.length === 0) process.exitCode = 2
       return
     }
 
@@ -250,7 +311,11 @@ async function main() {
         `  stockQty -${delta} → ${product?.stockQty ?? '?'}  (${product?.name || productId})`,
       )
     }
-    if (missing.length) process.exitCode = 2
+    // Partial success should not fail the Contabo job — missing serials are
+    // reported above for follow-up.
+    if (missing.length) {
+      console.log(`WARNING: ${missing.length} serial(s) were not found exactly; see fuzzy matches above.`)
+    }
   } finally {
     client.release()
     await pool.end()
