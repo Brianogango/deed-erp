@@ -1,5 +1,5 @@
 'use client'
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useRef } from 'react'
 import {
   useFinanceStore, fmtKes, fmtDate,
   CashbookEntry, BankAccount, BankStatementLine, StatementLineCategory,
@@ -8,6 +8,11 @@ import {
 import type { Account } from '@/lib/store'
 import { invoicePaymentStatus } from '@/lib/odoo-sales-flow'
 import { DataTable, type ColumnDef } from '@/components/data-table'
+import {
+  bankStatementCsvTemplate,
+  monthFromDate,
+  parseBankStatementCsv,
+} from '@/lib/bank-statement-csv'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 export function monthLabel(ym: string) {
@@ -325,6 +330,8 @@ function ReconPanel({
     bankStatementLines, addStatementLine, deleteStatementLine, currentUser, systemSettings,
     matchStatementLine, unmatchStatementLine, autoMatchStatements, showToast,
   } = useFinanceStore()
+  const csvInputRef = useRef<HTMLInputElement>(null)
+  const [importingCsv, setImportingCsv] = useState(false)
 
   // Local form state for adding a statement line
   const [form, setForm] = useState({
@@ -333,6 +340,57 @@ function ReconPanel({
   })
   const [pendingMatch, setPendingMatch] = useState<string | null>(null) // statementId waiting for cashbook pick
   const [subTab, setSubTab] = useState<'statement' | 'matching' | 'recon'>('statement')
+
+  function downloadCsvTemplate() {
+    const blob = new Blob([bankStatementCsvTemplate()], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `bank-statement-template-${account.id}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  function handleCsvImport(file: File) {
+    if (isLocked) { showToast('This reconciled bank period is locked.', 'error'); return }
+    setImportingCsv(true)
+    const reader = new FileReader()
+    reader.onload = () => {
+      try {
+        const text = String(reader.result || '')
+        const { lines, errors } = parseBankStatementCsv(text)
+        const forMonth = lines.filter(l => monthFromDate(l.date) === month)
+        if (!forMonth.length) {
+          showToast(errors[0] || `No rows for ${month} found in CSV`, 'error')
+          return
+        }
+        forMonth.forEach(l => addStatementLine({
+          bankAccountId: account.id,
+          month,
+          date: l.date,
+          description: l.description,
+          reference: l.reference,
+          debit: l.debit,
+          credit: l.credit,
+          balance: l.balance,
+          category: l.category,
+        }))
+        const skippedOtherMonth = lines.length - forMonth.length
+        showToast(
+          `Imported ${forMonth.length} statement line${forMonth.length === 1 ? '' : 's'}` +
+          (skippedOtherMonth ? ` (${skippedOtherMonth} other month skipped)` : '') +
+          (errors.length ? ` · ${errors.length} row error(s)` : ''),
+          'success',
+        )
+      } catch {
+        showToast('Could not parse bank statement CSV', 'error')
+      } finally {
+        setImportingCsv(false)
+      }
+    }
+    reader.onerror = () => { setImportingCsv(false); showToast('Failed to read file', 'error') }
+    reader.readAsText(file)
+  }
 
   // Statement lines for this account + month
   const stmtLines = bankStatementLines.filter(
@@ -474,9 +532,35 @@ function ReconPanel({
             </div>
           )}
           <div className="px-4 py-3 border-b" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border-lt)' }}>
-            <p className="text-[10px] font-semibold uppercase tracking-wide mb-2" style={{ color: 'var(--text-4)' }}>
-              Add Statement Line
-            </p>
+            <div className="flex items-center justify-between gap-2 flex-wrap mb-2">
+              <p className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: 'var(--text-4)' }}>
+                Add Statement Line
+              </p>
+              <div className="flex items-center gap-2">
+                <input
+                  ref={csvInputRef}
+                  type="file"
+                  accept=".csv,text/csv"
+                  className="hidden"
+                  onChange={e => {
+                    const f = e.target.files?.[0]
+                    if (f) handleCsvImport(f)
+                    e.target.value = ''
+                  }}
+                />
+                <button type="button" className="btn-secondary text-[10px] px-2.5 py-1" onClick={downloadCsvTemplate}>
+                  CSV template
+                </button>
+                <button
+                  type="button"
+                  className="btn-secondary text-[10px] px-2.5 py-1"
+                  disabled={isLocked || importingCsv}
+                  onClick={() => csvInputRef.current?.click()}
+                >
+                  {importingCsv ? 'Importing…' : 'Import CSV'}
+                </button>
+              </div>
+            </div>
             <div className="grid gap-2" style={{ gridTemplateColumns: '110px 1fr 120px 90px 100px 100px 90px 80px' }}>
               <input type="date" className="form-input text-[10px]"
                 value={form.date} onChange={e => setForm(p => ({ ...p, date: e.target.value }))} />

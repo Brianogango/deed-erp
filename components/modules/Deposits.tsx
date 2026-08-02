@@ -349,14 +349,16 @@ function AddPaymentModal({ deposit, onClose, onSave }: { deposit: Deposit; onClo
 }
 
 // ── Detail View ────────────────────────────────────────────────────────────────
-function DepositDetail({ deposit, onBack, onAddPayment, onComplete, onCancel }: {
+function DepositDetail({ deposit, onBack, onAddPayment, onComplete, onCancel, onApplyInvoice }: {
   deposit: Deposit
   onBack: () => void
   onAddPayment: (d: Deposit) => void
   onComplete: (d: Deposit) => void
   onCancel: (d: Deposit) => void
+  onApplyInvoice: (d: Deposit) => void
 }) {
   const pct = deposit.totalValue > 0 ? Math.min(100, (deposit.totalPaid / deposit.totalValue) * 100) : 0
+  const unapplied = Math.max(0, (deposit.totalPaid || 0) - (deposit.appliedAmount || 0))
 
   return (
     <div className="flex flex-col h-full bg-[var(--bg-page)]" style={{ animation: 'fadeIn 0.3s ease both' }}>
@@ -376,6 +378,11 @@ function DepositDetail({ deposit, onBack, onAddPayment, onComplete, onCancel }: 
             {['active', 'partially_paid'].includes(deposit.status) && (
               <button type="button" onClick={() => onAddPayment(deposit)} className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-black uppercase tracking-wider transition-colors shadow-lg shadow-emerald-100">
                 + Payment
+              </button>
+            )}
+            {unapplied > 0 && !['cancelled'].includes(deposit.status) && (
+              <button type="button" onClick={() => onApplyInvoice(deposit)} className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#1B2762] hover:bg-[#243381] text-white text-[10px] font-black uppercase tracking-wider transition-colors">
+                Apply to Invoice
               </button>
             )}
             {deposit.status === 'fully_paid' && (
@@ -496,6 +503,8 @@ function DepositDetail({ deposit, onBack, onAddPayment, onComplete, onCancel }: 
                   { label: 'Phone', value: deposit.customerPhone },
                   { label: 'Created', value: new Date(deposit.createdAt).toLocaleDateString('en-KE', { day: 'numeric', month: 'short', year: 'numeric' }) },
                   { label: 'Created By', value: deposit.createdBy },
+                  ...(deposit.saleOrderRef ? [{ label: 'Linked order', value: deposit.saleOrderRef }] : []),
+                  ...(unapplied > 0 ? [{ label: 'Unapplied to invoices', value: fmtKes(unapplied) }] : []),
                   ...(deposit.dueDate ? [{ label: 'Pickup By', value: new Date(deposit.dueDate).toLocaleDateString('en-KE', { day: 'numeric', month: 'short', year: 'numeric' }) }] : []),
                   ...(deposit.completedAt ? [{ label: 'Collected', value: new Date(deposit.completedAt).toLocaleDateString('en-KE', { day: 'numeric', month: 'short', year: 'numeric' }) }] : []),
                 ].map(({ label, value }) => (
@@ -522,7 +531,7 @@ function DepositDetail({ deposit, onBack, onAddPayment, onComplete, onCancel }: 
 // ── Main Module ────────────────────────────────────────────────────────────────
 export default function Deposits() {
   const mounted = useMounted()
-  const { showToast, deposits, completeDeposit, cancelDeposit } = useFinanceStore()
+  const { showToast, deposits, invoices, completeDeposit, cancelDeposit, applyDepositToInvoice } = useFinanceStore()
 
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<DepositStatus | 'all'>('all')
@@ -531,6 +540,24 @@ export default function Deposits() {
   const [showNew, setShowNew] = useState(false)
   const [addPaymentFor, setAddPaymentFor] = useState<Deposit | null>(null)
   const [pendingConfirm, setPendingConfirm] = useState<{ msg: string; action: () => void } | null>(null)
+
+  const handleApplyInvoice = (dep: Deposit) => {
+    const unapplied = Math.max(0, (dep.totalPaid || 0) - (dep.appliedAmount || 0))
+    if (unapplied <= 0) { showToast('No unapplied deposit balance', 'info'); return }
+    const candidates = (invoices || []).filter(i =>
+      i.type === 'customer_invoice' &&
+      i.status === 'posted' &&
+      (i.saleOrderId === dep.saleOrderId || i.partnerId === dep.customerId) &&
+      (i.total - i.amountPaid) > 0,
+    )
+    if (!candidates.length) {
+      showToast('No posted open invoice for this customer/order — create & confirm an invoice first', 'info')
+      return
+    }
+    // Prefer SO-linked invoice, else newest open invoice for the customer.
+    const inv = candidates.find(i => i.saleOrderId && i.saleOrderId === dep.saleOrderId) || candidates[0]
+    applyDepositToInvoice(dep.id, inv.id)
+  }
 
   const activeDeposit = deposits.find(d => d.id === activeId)
 
@@ -685,6 +712,7 @@ export default function Deposits() {
           onAddPayment={d => setAddPaymentFor(d)}
           onComplete={handleComplete}
           onCancel={handleCancel}
+          onApplyInvoice={handleApplyInvoice}
         />
         {addPaymentFor && (
           <AddPaymentModal

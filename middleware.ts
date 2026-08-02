@@ -17,7 +17,15 @@ const PUBLIC_API_PATHS    = new Set(['/api/auth/login', '/api/auth/logout', '/ap
 // is where stale service workers get replaced, and a worker script that
 // redirects to /login can never be updated by a signed-out browser.
 const PUBLIC_ASSET_PATHS  = new Set(['/deed-logo.png', '/deed-logo.svg', '/sw.js', '/offline.html', '/manifest.json'])
-const PUBLIC_PATH_PREFIXES = ['/track', '/portal', '/api/portal/repair', '/api/portal/quotes', '/api/portal/intake']
+const PUBLIC_PATH_PREFIXES = [
+  '/track',
+  '/portal',
+  '/api/portal/repair',
+  '/api/portal/quotes',
+  '/api/portal/invoices',
+  '/api/portal/orders',
+  '/api/portal/intake',
+]
 const HIGH_TRAFFIC_READ_PREFIXES = ['/api/store/stream']
 
 export const LEGACY_ROUTE_REDIRECTS: Readonly<Record<string, string>> = {

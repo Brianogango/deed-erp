@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react'
 import Link from 'next/link'
 import { DataTable } from '@/components/data-table'
-import { fmtDate, fmtKes, type Invoice } from '@/lib/store'
+import { fmtDate, fmtKes, type Invoice, useFinanceStore } from '@/lib/store'
 import { bucketOpenInvoices, type AgeingRow } from '@/lib/accounting/ageing'
 
 type ViewMode = 'invoices' | 'partners'
@@ -211,6 +211,31 @@ export default function AgeingTab({
   vendorBills: Invoice[]
 }) {
   const [asOf, setAsOf] = useState(() => new Date().toISOString().slice(0, 10))
+  const [minBucket, setMinBucket] = useState<'d30' | 'd60' | 'd90' | 'over90'>('d30')
+  const [sendingReminders, setSendingReminders] = useState(false)
+  const { showToast } = useFinanceStore()
+
+  const sendReminders = async (dryRun = false) => {
+    setSendingReminders(true)
+    try {
+      const res = await fetch('/api/finance/payment-reminders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ asOf, minBucket, channels: ['email'], dryRun }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) { showToast(data.error || 'Failed to send reminders', 'error'); return }
+      if (dryRun) {
+        showToast(`${data.candidateCount ?? 0} overdue invoice(s) would receive reminders`, 'info')
+      } else {
+        showToast(`Sent ${data.sent ?? 0} of ${data.candidateCount ?? 0} payment reminder(s)`, data.sent ? 'success' : 'info')
+      }
+    } catch {
+      showToast('Network error sending reminders', 'error')
+    } finally {
+      setSendingReminders(false)
+    }
+  }
 
   return (
     <div className="p-6 space-y-6">
@@ -222,15 +247,36 @@ export default function AgeingTab({
             Click a partner to drill into invoices.
           </p>
         </div>
-        <label className="flex flex-col gap-1 text-[11px] font-semibold text-[var(--text-3)]">
-          As of
-          <input
-            type="date"
-            className="form-input text-xs py-1.5"
-            value={asOf}
-            onChange={e => setAsOf(e.target.value)}
-          />
-        </label>
+        <div className="flex items-end gap-2 flex-wrap">
+          <label className="flex flex-col gap-1 text-[11px] font-semibold text-[var(--text-3)]">
+            As of
+            <input
+              type="date"
+              className="form-input text-xs py-1.5"
+              value={asOf}
+              onChange={e => setAsOf(e.target.value)}
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-[11px] font-semibold text-[var(--text-3)]">
+            Remind from
+            <select
+              className="form-select text-xs py-1.5"
+              value={minBucket}
+              onChange={e => setMinBucket(e.target.value as typeof minBucket)}
+            >
+              <option value="d30">1–30+ days</option>
+              <option value="d60">31–60+ days</option>
+              <option value="d90">61–90+ days</option>
+              <option value="over90">90+ days only</option>
+            </select>
+          </label>
+          <button type="button" className="btn-secondary text-xs" disabled={sendingReminders} onClick={() => void sendReminders(true)}>
+            Preview reminders
+          </button>
+          <button type="button" className="btn-primary text-xs" disabled={sendingReminders} onClick={() => void sendReminders(false)}>
+            {sendingReminders ? 'Sending…' : 'Send AR reminders'}
+          </button>
+        </div>
       </div>
       <AgeingReport title="Receivables ageing" kind="ar" invoices={customerInvoices} asOf={asOf} />
       <AgeingReport title="Payables ageing" kind="ap" invoices={vendorBills} asOf={asOf} />

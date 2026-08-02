@@ -46,7 +46,10 @@ export default function InvoiceDetail() {
     resetInvoiceToDraft,
     cancelInvoice,
     applyCustomerCreditToInvoice,
+    applyDepositToInvoice,
     getCustomerCreditBalance,
+    getUnappliedDepositBalance,
+    deposits,
     deleteInvoice,
     postInvoice,
     updateInvoice,
@@ -62,6 +65,13 @@ export default function InvoiceDetail() {
   const canManageFinance = ['director', 'finance_officer', 'admin_officer'].includes(currentUser?.role ?? '')
   const canManageFullFinance = ['director', 'finance_officer'].includes(currentUser?.role ?? '')
   const invoice = invoices.find(i => i.id === id)
+  const applicableDeposits = (deposits || []).filter(d =>
+    invoice &&
+    d.customerId === invoice.partnerId &&
+    getUnappliedDepositBalance(d.id) > 0 &&
+    (!d.saleOrderId || !invoice.saleOrderId || d.saleOrderId === invoice.saleOrderId),
+  )
+  const availableDeposit = applicableDeposits.reduce((s, d) => s + getUnappliedDepositBalance(d.id), 0)
 
   const [showPayModal, setShowPayModal] = useState(false)
   const [payAmount, setPayAmount] = useState('')
@@ -476,6 +486,19 @@ export default function InvoiceDetail() {
                 title={`Available credit: ${fmtKes(availableCredit)}`}
               >
                 <Fa icon={faCoins} className="text-[11px]" /> Apply Credit ({fmtKes(Math.min(availableCredit, balance))})
+              </button>
+            )}
+            {invoice.type === 'customer_invoice' && balance > 0 && availableDeposit > 0 && invoice.status !== 'draft' && invoice.status !== 'cancelled' && canManageFinance && (
+              <button
+                className="btn-secondary flex items-center gap-1.5 text-sky-800 hover:bg-sky-50 border-sky-200 text-xs"
+                onClick={() => {
+                  for (const dep of applicableDeposits) {
+                    applyDepositToInvoice(dep.id, invoice.id)
+                  }
+                }}
+                title={`Unapplied deposits: ${fmtKes(availableDeposit)}`}
+              >
+                <Fa icon={faCoins} className="text-[11px]" /> Apply Deposit ({fmtKes(Math.min(availableDeposit, balance))})
               </button>
             )}
             {invoice.status === 'draft' && canManageFinance && (

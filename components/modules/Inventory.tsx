@@ -229,6 +229,7 @@ export default function Inventory() {
   const [serialLookupQuery, setSerialLookupQuery] = useState('')
   const [serialReportStatus, setSerialReportStatus] = useState<'all' | SerialNumber['status']>('all')
   const [serialReportSearch, setSerialReportSearch] = useState('')
+  const [generatingReorderPos, setGeneratingReorderPos] = useState(false)
 
   const [showForm, setShowForm] = useState(false)
   const [editId, setEditId] = useState<string | null>(null)
@@ -2801,7 +2802,32 @@ export default function Inventory() {
 
           {reportTab === 'low_stock' && (
             <div className="card overflow-hidden">
-              <PanelHeader title="Low Stock Alert" count={filteredLowStock.length} />
+              <div className="flex items-center justify-between gap-2 flex-wrap px-4 pt-3">
+                <PanelHeader title="Low Stock Alert" count={filteredLowStock.length} />
+                {canEditStock && (
+                  <button
+                    type="button"
+                    className="btn-primary text-[11px] px-3 py-1.5"
+                    disabled={generatingReorderPos || filteredLowStock.length === 0}
+                    onClick={async () => {
+                      setGeneratingReorderPos(true)
+                      try {
+                        const res = await fetch('/api/inventory/reorder-pos', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })
+                        const data = await res.json().catch(() => ({}))
+                        if (!res.ok) { showToast(data.error || 'Failed to create reorder POs', 'error'); return }
+                        const n = Array.isArray(data.created) ? data.created.length : 0
+                        showToast(n ? `Created ${n} draft PO${n === 1 ? '' : 's'} from reorder rules — assign vendors in Purchase` : (data.message || 'No reorder POs needed'), n ? 'success' : 'info')
+                      } catch {
+                        showToast('Network error creating reorder POs', 'error')
+                      } finally {
+                        setGeneratingReorderPos(false)
+                      }
+                    }}
+                  >
+                    {generatingReorderPos ? 'Creating…' : 'Generate reorder POs'}
+                  </button>
+                )}
+              </div>
               <DataTable
                 tableId="inventory-report-low-stock"
                 columns={[

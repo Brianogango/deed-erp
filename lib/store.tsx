@@ -69,6 +69,7 @@ import {
   paymentJournalRef,
   DEFAULT_ADMIN_OFFICER_CUSTOMER_INVOICE_LIMIT_KES,
 } from '@/lib/finance-controls'
+import { computeWht, shouldApplyWhtOnInvoice } from '@/lib/wht'
 import { ensureArray, parseStoredState } from '@/lib/safe-local-state'
 import { repairOutsourceReadiness } from '@/lib/repair-outsource'
 import { getPreviousRepairProgressStatus } from '@/lib/repair-progress'
@@ -600,6 +601,9 @@ export interface SystemSettings {
    * Bank recon, cancel/reset, and expense reimbursement stay Finance/Director.
    */
   accAdminOfficerInvoiceLimitKes: number
+  /** Withholding tax on vendor bill payments (Kenya). */
+  accWhtEnabled: boolean
+  accWhtRatePct: number
 }
 
 export const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
@@ -623,6 +627,8 @@ export const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
   accBankJournals: true, accMpesaJournals: true, accReconciliation: true,
   accLockDates: true, accApprovalForRefunds: true,
   accAdminOfficerInvoiceLimitKes: 1000000,
+  accWhtEnabled: false,
+  accWhtRatePct: 5,
   hrAttendance: false, hrLeaves: true, hrRestrictSalaryInfo: true, hrRoleBasedVisibility: true,
   posSessionControl: true, posCashControl: true, posReceiptPrinting: true,
   secDisableProductDeletion: true, secDisableStockManipulation: true, secDisableInvoiceEditAfterValidation: true,
@@ -1054,6 +1060,14 @@ export interface DepositPayment {
   recordedBy: string
 }
 
+export interface DepositInvoiceApplication {
+  invoiceId: string
+  invoiceRef: string
+  amount: number
+  date: string
+  appliedBy: string
+}
+
 export interface Deposit {
   id: string
   ref: string
@@ -1066,6 +1080,12 @@ export interface Deposit {
   balance: number
   status: DepositStatus
   payments: DepositPayment[]
+  /** Linked quotation/SO created with the deposit (down-payment bridge). */
+  saleOrderId?: string
+  saleOrderRef?: string
+  /** Amount of deposit payments already applied to invoices. */
+  appliedAmount?: number
+  applications?: DepositInvoiceApplication[]
   notes?: string
   createdAt: string
   createdBy: string
@@ -2274,14 +2294,18 @@ const buildInvoicePaymentJournal = (
   bankAccountId?: string,
   paymentDate?: string,
   paymentId?: string,
+  whtAmount = 0,
 ): JournalEntry => {
   const actualBankId = bankAccountIdForMethod(method, bankAccountId)
   const bankAccount = bankAccountLabel(actualBankId, method)
   const isVendorPayment = inv.type === 'vendor_bill'
+  const wht = Math.max(0, Math.round(Number(whtAmount) || 0))
+  const netBank = Math.max(0, amount - wht)
   const lines = isVendorPayment
     ? [
         accountLine('3000 - Accounts Payable', `AP settlement: ${inv.partnerName}`, amount, 0),
-        accountLine(bankAccount, `Payment out: ${inv.ref}`, 0, amount),
+        accountLine(bankAccount, `Payment out: ${inv.ref}`, 0, netBank),
+        ...(wht > 0 ? [accountLine('3350 - Withholding Tax Payable', `WHT on ${inv.ref}`, 0, wht)] : []),
       ]
     : [
         accountLine(bankAccount, `Received from ${inv.partnerName}`, amount, 0),
@@ -2292,7 +2316,9 @@ const buildInvoicePaymentJournal = (
     ref: paymentId ? paymentJournalRef(inv.ref, paymentId) : `JRN/PAY/${inv.ref}/${uid()}`,
     date: isoDate(paymentDate),
     source: isVendorPayment ? 'purchase_payment' : 'payment',
-    description: `Payment for ${inv.ref} — ${inv.partnerName}`,
+    description: wht > 0
+      ? `Payment for ${inv.ref} — ${inv.partnerName} (WHT ${fmtKes(wht)})`
+      : `Payment for ${inv.ref} — ${inv.partnerName}`,
     status: 'posted',
     invoiceId: inv.id,
     bankAccountId: actualBankId,
@@ -2401,6 +2427,30 @@ const buildCustomerCreditApplicationJournal = (inv: Invoice, amount: number, cre
     totalDebit: amount,
     totalCredit: amount,
   }
+}
+
+const buildDepositApplicationJournal = (inv: Invoice, amount: number, depositRef: string): JournalEntry => {
+  const lines = [
+    accountLine('3100 - Customer Deposits', `Apply deposit ${depositRef}`, amount, 0),
+    accountLine('1800 - Accounts Receivable', `Deposit applied to ${inv.ref}`, 0, amount),
+  ]
+  return {
+    id: uid(),
+    ref: `JRN/DAPP/${inv.ref}/${Date.now()}`,
+    date: now(),
+    source: 'payment',
+    description: `Customer deposit ${depositRef} applied to ${inv.ref}`,
+    status: 'posted',
+    invoiceId: inv.id,
+    lines,
+    totalDebit: amount,
+    totalCredit: amount,
+  }
+}
+
+export function unappliedDepositBalance(deposit: Pick<Deposit, 'totalPaid' | 'appliedAmount' | 'status'>): number {
+  if (deposit.status === 'cancelled') return 0
+  return Math.max(0, Math.round((Number(deposit.totalPaid) || 0) - (Number(deposit.appliedAmount) || 0)))
 }
 
 const canManageProcurement = (user: User | null) =>
@@ -2822,6 +2872,9 @@ export interface AppState {
   addDepositPayment: (depositId: string, p: Omit<DepositPayment, 'id'>) => void
   completeDeposit: (depositId: string) => void
   cancelDeposit: (depositId: string, reason: string) => void
+  /** Apply unapplied deposit payments to a posted customer invoice (down-payment). */
+  applyDepositToInvoice: (depositId: string, invoiceId: string, amount?: number) => void
+  getUnappliedDepositBalance: (depositId: string) => number
 
   // Holdovers (device loans)
   holdovers: Holdover[]
@@ -3433,6 +3486,8 @@ export type FinanceStoreState = Pick<AppState,
   | 'addReturnLine'
   | 'addStatementLine'
   | 'applyCustomerCreditToInvoice'
+  | 'applyDepositToInvoice'
+  | 'getUnappliedDepositBalance'
   | 'autoMatchStatements'
   | 'bulkAddPOLines'
   | 'cancelDeposit'
@@ -5006,6 +5061,7 @@ export function StoreProvider({
   const repairsRef = useRef(repairs); repairsRef.current = repairs
   const soRef      = useRef(saleOrders); soRef.current   = saleOrders
   const invRef    = useRef(invoices);  invRef.current    = invoices
+  const depositsRef = useRef(deposits); depositsRef.current = deposits
   const poRef     = useRef(purchaseOrders); poRef.current = purchaseOrders
   const recRef    = useRef(receipts);   recRef.current    = receipts
   const purchaseReturnsRef = useRef(purchaseReturns); purchaseReturnsRef.current = purchaseReturns
@@ -5527,6 +5583,8 @@ export function StoreProvider({
     addReturnLine: (...args: Parameters<AppState['addReturnLine']>) => storeCtxRef.current!.addReturnLine(...args),
     addStatementLine: (...args: Parameters<AppState['addStatementLine']>) => storeCtxRef.current!.addStatementLine(...args),
     applyCustomerCreditToInvoice: (...args: Parameters<AppState['applyCustomerCreditToInvoice']>) => storeCtxRef.current!.applyCustomerCreditToInvoice(...args),
+    applyDepositToInvoice: (...args: Parameters<AppState['applyDepositToInvoice']>) => storeCtxRef.current!.applyDepositToInvoice(...args),
+    getUnappliedDepositBalance: (...args: Parameters<AppState['getUnappliedDepositBalance']>) => storeCtxRef.current!.getUnappliedDepositBalance(...args),
     autoMatchStatements: (...args: Parameters<AppState['autoMatchStatements']>) => storeCtxRef.current!.autoMatchStatements(...args),
     bulkAddPOLines: (...args: Parameters<AppState['bulkAddPOLines']>) => storeCtxRef.current!.bulkAddPOLines(...args),
     cancelDeposit: (...args: Parameters<AppState['cancelDeposit']>) => storeCtxRef.current!.cancelDeposit(...args),
@@ -6570,7 +6628,7 @@ const storeCtx: AppState = {
           payRef,
         }),
       })
-      // Auto-create a linked quotation-status Sale Order
+      // Auto-create a linked quotation-status Sale Order (down-payment bridge).
       if (depositInput.items?.length) {
         const soLines = depositInput.items.map(item => ({
           id: uid(),
@@ -6584,10 +6642,10 @@ const storeCtx: AppState = {
           serialIds: [],
           accountCode: '',
         }))
-        const soRef = await storeCtxRef.current!.allocateDocRef('QUO')
+        const soDocRef = await storeCtxRef.current!.allocateDocRef('QUO')
         const so: SaleOrder = {
           id: uid(),
-          ref: soRef,
+          ref: soDocRef,
           status: 'quotation',
           customerId: depositInput.customerId,
           customerName: depositInput.customerName,
@@ -6601,8 +6659,89 @@ const storeCtx: AppState = {
         }
         setSaleOrders(p => [so, ...p])
         sync('/api/sale-orders', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(so) })
+        const linked: Deposit = { ...deposit, saleOrderId: so.id, saleOrderRef: so.ref, appliedAmount: 0, applications: [] }
+        setDeposits(p => p.map(d => d.id === deposit.id ? linked : d))
+        sync(`/api/deposits/${deposit.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ saleOrderId: so.id, saleOrderRef: so.ref }),
+        })
+        return linked
       }
       return deposit
+    },
+    getUnappliedDepositBalance: (depositId) => {
+      const d = depositsRef.current.find(x => x.id === depositId)
+      return d ? unappliedDepositBalance(d) : 0
+    },
+    applyDepositToInvoice: (depositId, invoiceId, requestedAmount) => {
+      const actor = currentUser()
+      if (!canManageFinance(actor)) {
+        showToast('Only Finance or Admin Officer can apply deposits to invoices', 'error')
+        return
+      }
+      const deposit = depositsRef.current.find(d => d.id === depositId)
+      const inv = invRef.current.find(i => i.id === invoiceId)
+      if (!deposit || !inv) { showToast('Deposit or invoice not found', 'error'); return }
+      if (inv.type !== 'customer_invoice') { showToast('Deposits can only be applied to customer invoices', 'error'); return }
+      if (inv.status === 'draft' || inv.status === 'cancelled') {
+        showToast('Post the invoice before applying a deposit', 'error'); return
+      }
+      if (deposit.customerId && inv.partnerId && deposit.customerId !== inv.partnerId) {
+        showToast('Deposit customer does not match the invoice partner', 'error'); return
+      }
+      const available = unappliedDepositBalance(deposit)
+      if (available <= 0) { showToast('No unapplied deposit balance left', 'info'); return }
+      const invoiceBalance = Math.max(0, inv.total - inv.amountPaid)
+      if (invoiceBalance <= 0) { showToast('Invoice is already fully paid', 'info'); return }
+      const applied = Math.min(requestedAmount ?? available, available, invoiceBalance)
+      if (applied <= 0) return
+
+      const appliedAt = now()
+      const appliedBy = actor?.name ?? 'Finance'
+      const nextApplied = (Number(deposit.appliedAmount) || 0) + applied
+      const updatedDeposit: Deposit = {
+        ...deposit,
+        appliedAmount: nextApplied,
+        applications: [
+          ...(deposit.applications ?? []),
+          { invoiceId: inv.id, invoiceRef: inv.ref, amount: applied, date: appliedAt, appliedBy },
+        ],
+        // When fully applied and no remaining customer balance on the layaway, mark completed.
+        status: nextApplied >= deposit.totalPaid && deposit.balance <= 0 ? 'completed' : deposit.status,
+        completedAt: nextApplied >= deposit.totalPaid && deposit.balance <= 0 ? appliedAt : deposit.completedAt,
+      }
+      setDeposits(prev => prev.map(d => d.id === depositId ? updatedDeposit : d))
+      sync(`/api/deposits/${depositId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          appliedAmount: updatedDeposit.appliedAmount,
+          applications: updatedDeposit.applications,
+          status: updatedDeposit.status,
+          completedAt: updatedDeposit.completedAt,
+        }),
+      })
+
+      const payment: InvoicePayment = {
+        id: uid(),
+        date: appliedAt,
+        amount: applied,
+        method: 'deposit',
+        reference: deposit.ref,
+        recordedBy: appliedBy,
+      }
+      const updatedInvoice: Invoice = {
+        ...inv,
+        amountPaid: inv.amountPaid + applied,
+        payments: [...(inv.payments ?? []), payment],
+        notes: `${inv.notes || ''}\nApplied deposit ${deposit.ref} (${fmtKes(applied)})`.trim(),
+      }
+      setInvoices(prev => prev.map(i => i.id === inv.id ? updatedInvoice : i))
+      sync(`/api/invoices/${inv.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updatedInvoice) })
+      setJournalEntries(prev => [buildDepositApplicationJournal(inv, applied, deposit.ref), ...prev])
+      addAuditLog('apply_deposit', inv.ref, `Applied deposit ${deposit.ref} (${fmtKes(applied)}) to ${inv.ref}`)
+      showToast(`Applied ${fmtKes(applied)} from deposit ${deposit.ref}`, 'success')
     },
     addDepositPayment: (depositId, p) => {
       let updatedDeposit: Deposit | undefined
@@ -10070,6 +10209,29 @@ const storeCtx: AppState = {
       postInvoiceJournalOnce({ ...inv, ref: finalRef })
       addAuditLog('post_invoice', finalRef, `Posted by ${actor?.name || 'Finance'}`)
       showToast(`${finalRef} posted to accounting`)
+
+      // Down-payment bridge: after posting a customer invoice, apply any linked
+      // unapplied deposits for the same sale order / customer.
+      if (inv.type === 'customer_invoice') {
+        const linked = depositsRef.current.filter(d =>
+          unappliedDepositBalance(d) > 0 &&
+          (d.saleOrderId === inv.saleOrderId || (!!inv.partnerId && d.customerId === inv.partnerId && !!d.saleOrderId && d.saleOrderId === inv.saleOrderId)),
+        )
+        // Prefer SO-linked deposits; fall back to same-customer deposits with a sale order link.
+        const targets = linked.length
+          ? linked
+          : depositsRef.current.filter(d =>
+              unappliedDepositBalance(d) > 0 &&
+              !!inv.partnerId &&
+              d.customerId === inv.partnerId &&
+              !!d.saleOrderId,
+            )
+        for (const dep of targets) {
+          try {
+            storeCtxRef.current!.applyDepositToInvoice(dep.id, id)
+          } catch { /* best-effort */ }
+        }
+      }
     },
     setInvoicePaymentBlocked: (id, blocked) => {
       const actor = currentUser()
@@ -10120,7 +10282,12 @@ const storeCtx: AppState = {
       if (balance <= 0) { showToast('Invoice is already fully paid', 'info'); return }
       const capped = Math.min(amount, balance)
       const paymentId = crypto.randomUUID()
-      const journal = buildInvoicePaymentJournal(inv, capped, method, bankAccountId, paymentDate, paymentId)
+      const applyWht = shouldApplyWhtOnInvoice({
+        enabled: !!systemSettings.accWhtEnabled,
+        invoiceType: inv.type,
+      })
+      const wht = applyWht ? computeWht(capped, systemSettings.accWhtRatePct).whtAmount : 0
+      const journal = buildInvoicePaymentJournal(inv, capped, method, bankAccountId, paymentDate, paymentId, wht)
       if (journalEntries.some(j => j.ref === journal.ref)) {
         showToast('This payment journal was already posted', 'info'); return
       }
@@ -10136,8 +10303,9 @@ const storeCtx: AppState = {
             reference: reference || undefined,
             bankAccountId: bankAccountIdForMethod(method, bankAccountId),
             recordedBy: actor?.name || 'Finance',
+            ...(wht > 0 ? { whtAmount: wht } : {}),
           }
-          const append = `\nPaid ${fmtKes(capped)} via ${method || 'cash'}${bankAccountId ? ` (Bank: ${bankAccountId})` : ''}${reference ? ` Ref: ${reference}` : ''}`
+          const append = `\nPaid ${fmtKes(capped)} via ${method || 'cash'}${bankAccountId ? ` (Bank: ${bankAccountId})` : ''}${reference ? ` Ref: ${reference}` : ''}${wht > 0 ? ` · WHT ${fmtKes(wht)}` : ''}`
           return {
             ...i,
             amountPaid: paid,
@@ -10158,10 +10326,11 @@ const storeCtx: AppState = {
           paidAt: paymentDate,
           bankAccountId,
           idempotencyKey: paymentId,
+          whtAmount: wht > 0 ? wht : undefined,
         }),
       })
-      addAuditLog('register_payment', invoiceId, `Registered payment of KES ${capped} for ${inv.ref}${reference ? ` (Ref: ${reference})` : ''}`)
-      showToast('Payment registered')
+      addAuditLog('register_payment', invoiceId, `Registered payment of KES ${capped} for ${inv.ref}${reference ? ` (Ref: ${reference})` : ''}${wht > 0 ? ` (WHT ${wht})` : ''}`)
+      showToast(wht > 0 ? `Payment registered (WHT ${fmtKes(wht)} withheld)` : 'Payment registered')
     },
     resetInvoiceToDraft: (id) => {
       const actor = currentUser()

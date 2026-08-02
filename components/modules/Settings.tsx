@@ -1026,15 +1026,32 @@ ACCOUNTS_EMAIL=accounts@deed.co.ke`}</pre>
                     </Field>
                   </div>
                 )}
+                <SettingRow label="Withholding Tax (WHT)" desc="When paying vendor bills, withhold tax to liability account 3350 and pay the net to the supplier"><Toggle on={!!ss.accWhtEnabled} onChange={v => updateSystemSettings({ accWhtEnabled: v })} /></SettingRow>
+                {ss.accWhtEnabled && (
+                  <div className="pt-3 pb-2">
+                    <Field label="WHT Rate (%) — common professional services rate is 5%">
+                      <Input type="number" value={String(ss.accWhtRatePct ?? 5)} onChange={v => updateSystemSettings({ accWhtRatePct: Number(v) || 0 })} />
+                    </Field>
+                  </div>
+                )}
               </SectionCard>
               <SectionCard title="Payments & Journals">
                 <SettingRow label="Bank Journals" desc="Record and reconcile payments through bank accounts"><Toggle on={ss.accBankJournals} onChange={v => updateSystemSettings({ accBankJournals: v })} /></SettingRow>
                 <SettingRow label="M-Pesa Journals" desc="Record M-Pesa Paybill collections and disbursements"><Toggle on={ss.accMpesaJournals} onChange={v => updateSystemSettings({ accMpesaJournals: v })} /></SettingRow>
-                <SettingRow label="Bank Reconciliation" desc="Available in Cashbook — match bank statements against system entries monthly"><Toggle on={ss.accReconciliation} onChange={v => updateSystemSettings({ accReconciliation: v })} /></SettingRow>
+                <SettingRow label="Bank Reconciliation" desc="Available in Cashbook — match bank statements against system entries monthly (CSV import supported)"><Toggle on={ss.accReconciliation} onChange={v => updateSystemSettings({ accReconciliation: v })} /></SettingRow>
               </SectionCard>
               <SectionCard title="Controls">
                 <SettingRow label="Lock Dates After Period Closing" desc="Prevent edits to accounting entries in closed periods"><Toggle on={ss.accLockDates} onChange={v => updateSystemSettings({ accLockDates: v })} /></SettingRow>
                 <SettingRow label="Approval Required for Refunds" desc="Refunds need admin or finance approval before processing"><Toggle on={ss.accApprovalForRefunds} onChange={v => updateSystemSettings({ accApprovalForRefunds: v })} /></SettingRow>
+                <div className="pt-3 pb-2">
+                  <Field label="Admin Officer customer invoice post/pay limit (KES)">
+                    <Input
+                      type="number"
+                      value={String(ss.accAdminOfficerInvoiceLimitKes ?? 1000000)}
+                      onChange={v => updateSystemSettings({ accAdminOfficerInvoiceLimitKes: Math.max(0, Number(v) || 0) })}
+                    />
+                  </Field>
+                </div>
               </SectionCard>
             </>
           )}

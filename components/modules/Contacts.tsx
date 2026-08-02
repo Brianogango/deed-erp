@@ -440,6 +440,24 @@ export default function Contacts() {
         <SecondaryActionMenu
           actions={[
             { id: 'import', label: 'Import CSV', onClick: () => fileInputRef.current?.click() },
+            {
+              id: 'migrate-suppliers',
+              label: 'Unify suppliers → vendors',
+              onClick: async () => {
+                try {
+                  const res = await fetch('/api/partners/migrate-suppliers', { method: 'POST' })
+                  const data = await res.json().catch(() => ({}))
+                  if (!res.ok) { showToast(data.error || 'Migration failed', 'error'); return }
+                  showToast(
+                    `Unified ${data.createdOrUpdated ?? 0} supplier(s) into vendor contacts` +
+                    (data.supplierCount ? ` (${data.supplierCount} source rows)` : ''),
+                    'success',
+                  )
+                } catch {
+                  showToast('Network error migrating suppliers', 'error')
+                }
+              },
+            },
           ]}
         />
       }
