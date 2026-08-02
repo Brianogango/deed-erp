@@ -1121,35 +1121,35 @@ function AccountingContent() {
           {tab === 'invoices' || tab === 'bills' ? (
             <div className="flex flex-col">
               <DataTable
-                tableId={`finance-${tab}-list`}
+                tableId={`finance-${tab}-list-v2`}
                 columns={([
                   {
-                    key: 'number', label: 'Invoice number', priority: 1 as const, width: '140px',
+                    key: 'number', label: 'Number', priority: 1 as const, width: '110px',
                     render: (i: Invoice) => <span className="text-xs font-bold text-primary-600 erp-truncate" title={displayDocRef(i.ref)}>{displayDocRef(i.ref)}</span>,
                     accessor: (i: Invoice) => displayDocRef(i.ref),
                   },
                   {
-                    key: 'partner', label: 'Partner', priority: 1 as const, width: 'minmax(14rem, 2fr)',
+                    key: 'partner', label: 'Partner', priority: 1 as const, width: 'minmax(8rem, 2fr)',
                     render: (i: Invoice) => <span className="text-xs text-[var(--text-1)] erp-truncate" title={i.partnerName}>{i.partnerName}</span>,
                     accessor: (i: Invoice) => i.partnerName,
                   },
                   {
-                    key: 'date', label: 'Invoice date', priority: 2 as const, width: '120px',
+                    key: 'date', label: 'Date', priority: 2 as const, width: '96px',
                     render: (i: Invoice) => <span className="text-xs text-[var(--text-3)] tabular-nums">{fmtDate(i.date)}</span>,
                     exportValue: (i: Invoice) => i.date,
                   },
                   {
-                    key: 'due', label: 'Due date', priority: 2 as const, width: '120px',
+                    key: 'due', label: 'Due', priority: 2 as const, width: '96px',
                     render: (i: Invoice) => <span className="text-xs text-[var(--text-3)] tabular-nums">{fmtDate(i.dueDate)}</span>,
                     exportValue: (i: Invoice) => i.dueDate ?? '',
                   },
                   {
-                    key: 'total', label: 'Total', priority: 1 as const, width: '120px', align: 'right' as const,
+                    key: 'total', label: 'Total', priority: 1 as const, width: '100px', align: 'right' as const,
                     render: (i: Invoice) => <span className="text-xs font-bold text-[var(--text-1)] tabular-nums">{fmtKes(i.total)}</span>,
                     exportValue: (i: Invoice) => i.total,
                   },
                   {
-                    key: 'paid', label: 'Paid', priority: 3 as const, width: '110px', align: 'right' as const,
+                    key: 'paid', label: 'Paid', priority: 3 as const, width: '96px', align: 'right' as const,
                     render: (i: Invoice) => {
                       const pct = i.total > 0 ? Math.min(100, (i.amountPaid / i.total) * 100) : 0
                       return i.amountPaid > 0
@@ -1159,7 +1159,7 @@ function AccountingContent() {
                     exportValue: (i: Invoice) => i.amountPaid,
                   },
                   {
-                    key: 'balance', label: 'Balance', priority: 1 as const, width: '120px', align: 'right' as const,
+                    key: 'balance', label: 'Balance', priority: 1 as const, width: '100px', align: 'right' as const,
                     render: (i: Invoice) => {
                       const balance = Math.max(0, i.total - i.amountPaid)
                       return <span className={`text-xs font-bold tabular-nums ${balance > 0 ? 'text-red-500' : 'text-emerald-600'}`}>{balance > 0 ? fmtKes(balance) : '—'}</span>
@@ -1167,11 +1167,11 @@ function AccountingContent() {
                     exportValue: (i: Invoice) => Math.max(0, i.total - i.amountPaid),
                   },
                   {
-                    key: 'status', label: 'Status', priority: 1 as const, width: '130px',
+                    key: 'status', label: 'Status', priority: 1 as const, width: '140px',
                     render: (i: Invoice) => {
                       const badge = invoiceBadge(i)
                       return (
-                        <span className="inline-flex items-center gap-1 min-w-0">
+                        <span className="inline-flex items-center gap-1 flex-wrap">
                           <Badge status={badge.status as any} label={badge.label} />
                           {badge.overdue && <Badge status="cancelled" label="Overdue" />}
                         </span>

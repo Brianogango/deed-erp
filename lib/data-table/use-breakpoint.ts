@@ -20,14 +20,14 @@ function resolveAvailableWidth(containerRef?: RefObject<HTMLElement | null>): nu
 
   const viewportWidth = window.innerWidth
   const containerWidth = containerRef?.current?.getBoundingClientRect().width
-  if (!containerWidth || Number.isNaN(containerWidth)) return viewportWidth
+  // Always prefer the table's actual container width. Anchoring to viewport
+  // ignored the sidebar/padding and kept "desktop" column sets that forced
+  // horizontal scroll inside a ~900px content pane.
+  if (containerWidth && !Number.isNaN(containerWidth) && containerWidth > 0) {
+    return Math.max(0, Math.floor(containerWidth))
+  }
 
-  // Keep desktop/laptop behavior anchored to viewport width; only use
-  // container-constrained width on narrower screens where side-panels and
-  // mobile chrome can materially reduce usable table space.
-  if (viewportWidth >= 1024) return viewportWidth
-
-  return Math.max(0, Math.min(viewportWidth, Math.floor(containerWidth)))
+  return viewportWidth
 }
 
 export function useTableBreakpoint(containerRef?: RefObject<HTMLElement | null>): TableBreakpoint {
@@ -42,14 +42,19 @@ export function useTableBreakpoint(containerRef?: RefObject<HTMLElement | null>)
     window.addEventListener('resize', sync)
 
     let observer: ResizeObserver | null = null
-    if (containerRef?.current && 'ResizeObserver' in window) {
+    const node = containerRef?.current
+    if (node && 'ResizeObserver' in window) {
       observer = new ResizeObserver(sync)
-      observer.observe(containerRef.current)
+      observer.observe(node)
     }
+
+    // Re-sync on next frame in case the ref attached after first paint.
+    const raf = window.requestAnimationFrame(sync)
 
     return () => {
       window.removeEventListener('resize', sync)
       observer?.disconnect()
+      window.cancelAnimationFrame(raf)
     }
   }, [containerRef])
 
