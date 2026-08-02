@@ -1777,7 +1777,7 @@ export interface POSOrder {
   id: string; ref: string; sessionId: string
   lines: {
     productId: string; productName: string; barcode: string
-    qty: number; price: number; subtotal: number; serialId?: string; serialNumber?: string
+    qty: number; price: number; listPrice?: number; discountPct?: number; subtotal: number; serialId?: string; serialNumber?: string
   }[]
   subtotal: number; taxTotal: number; total: number
   payment: 'cash' | 'mpesa' | 'card'
@@ -3521,6 +3521,7 @@ export type CommerceStoreState = Pick<AppState,
   | 'products'
   | 'saleOrders'
   | 'serials'
+  | 'systemSettings'
   | 'users'
   | 'closePOSSession'
   | 'confirmKilimallDispatch'
@@ -15392,6 +15393,7 @@ const storeCtx: AppState = {
     products,
     saleOrders,
     serials,
+    systemSettings,
     users,
     ...commerceActions,
   }), [
@@ -15411,6 +15413,7 @@ const storeCtx: AppState = {
     products,
     saleOrders,
     serials,
+    systemSettings,
     users,
     commerceActions,
   ])

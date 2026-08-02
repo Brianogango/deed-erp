@@ -1,5 +1,5 @@
 'use client'
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useMemo } from 'react'
 import { useCommerceStore, fmtKes, fmtDate } from '@/lib/store'
 import { Modal, Field, Input, Badge, ModuleSkeleton } from '@/components/ui'
 import { DataTable, type ColumnDef } from '@/components/data-table'
@@ -10,6 +10,36 @@ import {
 } from '@/components/icons'
 import { BarcodeScannerModal } from '@/components/BarcodeScanner'
 import { matchPosScan, normalizeScanCode } from '@/lib/barcode-scan'
+import { isAdmin } from '@/lib/auth/access'
+
+type PosCartLine = {
+  lineId: string
+  productId: string
+  productName: string
+  barcode: string
+  price: number
+  listPrice: number
+  discountPct: number
+  qty: number
+  image: string
+  serialId?: string
+  serialNumber?: string
+}
+
+function roundMoney(n: number) {
+  return Math.max(0, Math.round((Number(n) || 0) * 100) / 100)
+}
+
+function priceFromDiscount(listPrice: number, discountPct: number) {
+  const pct = Math.min(100, Math.max(0, Number(discountPct) || 0))
+  return roundMoney(listPrice * (1 - pct / 100))
+}
+
+function discountFromPrice(listPrice: number, price: number) {
+  if (!listPrice || listPrice <= 0) return 0
+  const pct = (1 - roundMoney(price) / listPrice) * 100
+  return Math.max(0, Math.min(100, Math.round(pct * 10) / 10))
+}
 
 function ReceiptPrintView({ order, companySettings, onDone }: { order: any, companySettings: any, onDone: () => void }) {
   useEffect(() => {
@@ -56,7 +86,14 @@ function ReceiptPrintView({ order, companySettings, onDone }: { order: any, comp
         </div>
         {order.lines.map((l: any, i: number) => (
           <div key={i} className="flex justify-between">
-            <span>{l.productName} <br/><span className="text-[10px] text-gray-500">{l.qty} × {fmtKes(l.price)}</span></span>
+            <span>
+              {l.productName}
+              <br />
+              <span className="text-[10px] text-gray-500">
+                {l.qty} × {fmtKes(l.price)}
+                {l.discountPct > 0 ? ` (−${l.discountPct}%)` : ''}
+              </span>
+            </span>
             <span className="font-semibold">{fmtKes(l.subtotal)}</span>
           </div>
         ))}
@@ -99,9 +136,19 @@ export default function PointOfSale() {
   const [mounted, setMounted] = useState(false)
   useEffect(() => { setMounted(true) }, [])
 
-  const { products, serials, contacts, createPOSOrder, posOrders, openPOSSession, closePOSSession, posSessionOpen, posSessionOpeningCash, posSessionId, showToast, companySettings, getCustomerCreditStatus } = useCommerceStore()
+  const {
+    products, serials, contacts, createPOSOrder, posOrders,
+    openPOSSession, closePOSSession, posSessionOpen, posSessionOpeningCash, posSessionId,
+    showToast, companySettings, getCustomerCreditStatus,
+    systemSettings, currentUserId, users,
+  } = useCommerceStore()
 
-  const [cart, setCart] = useState<{ lineId: string; productId: string; productName: string; barcode: string; price: number; listPrice: number; qty: number; image: string; serialId?: string; serialNumber?: string }[]>([])
+  const currentUser = useMemo(() => users.find(u => u.id === currentUserId) ?? null, [users, currentUserId])
+  // POS always allows line price/discount edits. When Sales discount control is on,
+  // deep discounts (>10%) warn so cashiers know a manager may need to review.
+  const warnDeepDiscount = systemSettings.salesDiscountControl && !isAdmin(currentUser?.role)
+
+  const [cart, setCart] = useState<PosCartLine[]>([])
   const [scanInput, setScanInput] = useState('')
   const [search, setSearch] = useState('')
   const [category, setCategory] = useState('All')
@@ -231,14 +278,22 @@ export default function PointOfSale() {
           showToast(`${chosen.serial} is already in cart`, 'info')
           return prev
         }
-        return [...prev, { lineId: chosen.id, productId: product.id, productName: product.name, barcode: product.barcode, price: product.salePrice, listPrice: product.salePrice, qty: 1, image: product.image ?? '', serialId: chosen.id, serialNumber: chosen.serial }]
+        return [...prev, {
+          lineId: chosen.id, productId: product.id, productName: product.name, barcode: product.barcode,
+          price: product.salePrice, listPrice: product.salePrice, discountPct: 0,
+          qty: 1, image: product.image ?? '', serialId: chosen.id, serialNumber: chosen.serial,
+        }]
       })
       showToast(`${product.name} (${chosen.serial}) added`, 'success')
     } else {
       setCart(prev => {
         const ex = prev.find(i => i.productId === product.id)
         if (ex) return prev.map(i => i.productId === product.id ? { ...i, qty: i.qty + 1 } : i)
-        return [...prev, { lineId: product.id, productId: product.id, productName: product.name, barcode: product.barcode, price: product.salePrice, listPrice: product.salePrice, qty: 1, image: product.image ?? '' }]
+        return [...prev, {
+          lineId: product.id, productId: product.id, productName: product.name, barcode: product.barcode,
+          price: product.salePrice, listPrice: product.salePrice, discountPct: 0,
+          qty: 1, image: product.image ?? '',
+        }]
       })
     }
   }
@@ -257,11 +312,23 @@ export default function PointOfSale() {
   }
 
   const setPrice = (lineId: string, price: number) => {
-    setCart(prev => prev.map(i => i.lineId === lineId ? { ...i, price: Math.max(0, Math.round((Number(price) || 0) * 100) / 100) } : i))
+    setCart(prev => prev.map(i => {
+      if (i.lineId !== lineId) return i
+      const nextPrice = roundMoney(price)
+      return { ...i, price: nextPrice, discountPct: discountFromPrice(i.listPrice, nextPrice) }
+    }))
+  }
+
+  const setDiscountPct = (lineId: string, discountPct: number) => {
+    setCart(prev => prev.map(i => {
+      if (i.lineId !== lineId) return i
+      const pct = Math.min(100, Math.max(0, Number(discountPct) || 0))
+      return { ...i, discountPct: pct, price: priceFromDiscount(i.listPrice, pct) }
+    }))
   }
 
   const resetPrice = (lineId: string) => {
-    setCart(prev => prev.map(i => i.lineId === lineId ? { ...i, price: i.listPrice } : i))
+    setCart(prev => prev.map(i => i.lineId === lineId ? { ...i, price: i.listPrice, discountPct: 0 } : i))
   }
 
   const [charging, setCharging] = useState(false)
@@ -285,10 +352,12 @@ export default function PointOfSale() {
           productName: i.productName,
           barcode: i.barcode,
           price: i.price,
+          listPrice: i.listPrice,
+          discountPct: i.discountPct,
           qty: i.qty,
-          subtotal: i.price * i.qty,
+          subtotal: roundMoney(i.price * i.qty),
           serialId: i.serialId,
-          serialNumber: i.serialNumber
+          serialNumber: i.serialNumber,
         })) as any,
         payMethod,
         customerId || undefined,
@@ -457,10 +526,15 @@ export default function PointOfSale() {
             </div>
 
             <div className="flex-1 overflow-y-auto p-4 space-y-3 min-h-0">
-              {cart.map(i => (
+              {cart.map(i => {
+                const discounted = i.price !== i.listPrice || i.discountPct > 0
+                const lineTotal = roundMoney(i.price * i.qty)
+                const productCost = products.find(p => p.id === i.productId)?.costPrice ?? 0
+                const belowCost = productCost > 0 && i.price < productCost
+                return (
                 <div key={i.lineId} className="flex flex-col gap-2 p-3 rounded-xl bg-[var(--bg-muted)] border border-border-lt relative">
                   <button className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-white border border-border flex items-center justify-center text-[10px] shadow-sm hover:bg-red-50 hover:text-red-600 transition-all"
-                    onClick={() => removeFromCart(i.lineId)}>✕</button>
+                    onClick={() => removeFromCart(i.lineId)} aria-label={`Remove ${i.productName}`}>✕</button>
                   <div className="flex gap-3">
                     <div className="text-xl text-t4" aria-hidden="true">
                       {i.image && !/^\p{Extended_Pictographic}/u.test(String(i.image))
@@ -470,14 +544,53 @@ export default function PointOfSale() {
                     <div className="flex-1 min-w-0">
                       <p className="text-[11px] font-bold text-t1 truncate">{i.productName}</p>
                       {i.serialNumber && <p className="text-[9px] font-mono text-brand-blue font-bold">SN: {i.serialNumber}</p>}
-                      <div className="flex items-center gap-2 mt-1">
-                         <input type="number" className="bg-transparent border-none p-0 text-[11px] font-black text-brand-blue w-20 focus:ring-0"
-                           value={i.price} onChange={e => setPrice(i.lineId, Number(e.target.value))} />
-                         {i.price !== i.listPrice && <button className="text-[9px] text-t4 hover:underline" onClick={() => resetPrice(i.lineId)}>Reset</button>}
-                      </div>
+                      {discounted && (
+                        <p className="text-[9px] text-t4 mt-0.5">
+                          List <span className="line-through">{fmtKes(i.listPrice)}</span>
+                          {i.discountPct > 0 ? <> · −{i.discountPct}%</> : null}
+                        </p>
+                      )}
                     </div>
                   </div>
-                  <div className="flex items-center justify-between mt-1">
+                  <div className="grid grid-cols-2 gap-2">
+                    <label className="flex flex-col gap-0.5">
+                      <span className="text-[9px] font-bold uppercase tracking-wider text-t4">Unit price</span>
+                      <input
+                        type="number"
+                        min={0}
+                        step={1}
+                        aria-label={`Unit price for ${i.productName}`}
+                        className="form-input py-1.5 text-xs font-bold text-brand-blue"
+                        value={i.price}
+                        onChange={e => setPrice(i.lineId, Number(e.target.value))}
+                      />
+                    </label>
+                    <label className="flex flex-col gap-0.5">
+                      <span className="text-[9px] font-bold uppercase tracking-wider text-t4">Discount %</span>
+                      <input
+                        type="number"
+                        min={0}
+                        max={100}
+                        step={0.5}
+                        aria-label={`Discount percent for ${i.productName}`}
+                        className="form-input py-1.5 text-xs font-bold"
+                        value={i.discountPct}
+                        onChange={e => setDiscountPct(i.lineId, Number(e.target.value))}
+                      />
+                    </label>
+                  </div>
+                  {discounted && (
+                    <button type="button" className="text-[10px] font-bold text-t3 hover:text-brand-blue text-left" onClick={() => resetPrice(i.lineId)}>
+                      Reset to list price
+                    </button>
+                  )}
+                  {belowCost && (
+                    <p className="text-[9px] font-semibold text-amber-700 m-0">Sale price is below cost ({fmtKes(productCost)})</p>
+                  )}
+                  {warnDeepDiscount && i.discountPct > 10 && (
+                    <p className="text-[9px] font-semibold text-amber-700 m-0">Discount over 10% — manager review may be required</p>
+                  )}
+                  <div className="flex items-center justify-between mt-0.5">
                     <div className="flex items-center gap-1">
                       <button
                         type="button"
@@ -497,10 +610,11 @@ export default function PointOfSale() {
                         <Fa icon={faPlus} aria-hidden="true" />
                       </button>
                     </div>
-                    <p className="text-[11px] font-black text-t1">{fmtKes(i.price * i.qty)}</p>
+                    <p className="text-[11px] font-black text-t1">{fmtKes(lineTotal)}</p>
                   </div>
                 </div>
-              ))}
+                )
+              })}
               {cart.length === 0 && (
                 <div className="py-20 text-center">
                   <div className="text-3xl mb-3 opacity-20" aria-hidden="true"><Fa icon={faCartShopping} /></div>
