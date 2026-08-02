@@ -272,8 +272,8 @@ export function OutboundReleasePanel({ release, isRepair = false, onClose }: Out
         {step === 0 && (
           <div className="flex flex-col gap-4">
             <p className="text-xs text-[var(--text-3)]">Confirm the following items have been physically pulled from the shelf.</p>
-            <div className="border border-[var(--border-lt)] rounded-xl overflow-hidden">
-              <table className="w-full text-left text-xs">
+            <div className="dt-scroll border border-[var(--border-lt)] rounded-xl">
+              <table data-no-responsive className="w-full text-left text-xs">
                 <thead>
                   <tr className="bg-[var(--bg-surface)] border-b border-[var(--border-lt)]">
                     <th className="px-3 py-2 text-[10px] font-bold uppercase text-[var(--text-4)]">Expected Serial</th>

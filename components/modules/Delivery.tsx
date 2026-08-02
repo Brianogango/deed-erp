@@ -141,7 +141,7 @@ function PrintPaySlip({ pay, companySettings, onDone }: { pay: RiderWeeklyPay, c
         </div>
       </div>
 
-      <table className="data-table mb-8">
+      <table data-no-responsive className="data-table mb-8">
         <thead>
           <tr>
             <th>Description</th>

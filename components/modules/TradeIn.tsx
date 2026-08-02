@@ -1348,7 +1348,7 @@ function ExchangeTab() {
             </div>
           )}
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
             <div style={{ border: '1px solid #FEE2E2', borderRadius: 10, padding: 12 }}>
               <p style={{ fontSize: 11, fontWeight: 700, color: '#991B1B', marginBottom: 8 }}>↩ Returned by Customer</p>
               {exc.returnLines.map(l => (

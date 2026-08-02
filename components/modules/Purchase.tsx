@@ -1089,7 +1089,7 @@ export default function Purchase() {
                 </div>
                 <div className="border border-[var(--border-lt)] rounded-2xl overflow-visible">
                   <div className="dt-scroll">
-                    <table className="w-full text-left border-collapse">
+                    <table data-no-responsive className="w-full text-left border-collapse">
                       <thead>
                         <tr className="bg-[var(--bg-surface)] border-b border-[var(--border-lt)]">
                           <th className="px-3 py-2.5 text-[10px] font-bold uppercase text-[var(--text-4)]">Product</th>
@@ -1422,6 +1422,8 @@ export default function Purchase() {
                 </div>
               </div>
 
+              <div className="dt-scroll">
+              <div className="min-w-[640px] flex flex-col gap-1">
               {/* Preview header */}
               <div className="grid text-[10px] font-medium text-t3 uppercase tracking-wider px-3 py-1.5 rounded"
                 style={{ gridTemplateColumns: '24px 1.4fr 50px 100px 50px 1.6fr 100px', background: 'var(--bg-surface)', border: '1px solid var(--border-lt)' }}>
@@ -1465,6 +1467,8 @@ export default function Purchase() {
                   </div>
                   )
                 })}
+              </div>
+              </div>
               </div>
 
               {importRows.some(r => r.status === 'warn') && (

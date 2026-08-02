@@ -1,6 +1,6 @@
 # Responsive Tables — Full-Proof Plan
 
-Status: **Phases A–C implemented** on `cursor/responsive-tables-37a6`.
+Status: **Phases A–D implemented** on `cursor/responsive-tables-37a6`.
 
 ## Problem
 
@@ -47,11 +47,13 @@ Never put a hard `min-w-[Npx]` wrapper around a list table without a bounded `ov
 - [x] Form/report tables use `.dt-scroll` with `data-no-responsive` (scroll stays inside wrapper)
 - [x] Page/module wrappers keep `min-w-0 max-w-full` so flex children cannot blow the viewport
 
-## Phase D — Retirement (later)
+## Phase D — Retirement (done)
 
-- Finish remaining hand-rolled list tables still on the AppShell adapter
-- Remove AppShell `applyLegacyResponsiveTables` once unused
-- Optional: column pinning for wide desktop reports
+- [x] Contacts history panes → `DataTable`
+- [x] Opt out form/report tables with `data-no-responsive` + skip `.dt-scroll` in AppShell
+- [x] Purchase import preview / OutboundRelease / Delivery print opted out or contained
+- AppShell adapter kept as a thin safety net for any remaining bare `<table>` lists
+- Optional later: column pinning; full adapter removal once zero bare tables remain
 
 ## Acceptance checklist
 

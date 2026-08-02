@@ -306,8 +306,12 @@ function AppContent({ children }: { children: React.ReactNode }) {
       toggle.setAttribute('aria-expanded', expanded ? 'true' : 'false')
     }
 
+    // Skip intentional scroll containers (form editors / reports) and tables
+    // that already opt out via data-no-responsive.
     const tables = scope.querySelectorAll<HTMLTableElement>('table:not([data-no-responsive])')
     tables.forEach((table) => {
+      if (table.closest('.dt-scroll, .dt-wrap')) return
+
       table.classList.add('erp-responsive-table')
 
       const headerCells = Array.from(table.querySelectorAll('thead tr:first-child th'))
@@ -324,11 +328,17 @@ function AppContent({ children }: { children: React.ReactNode }) {
       })
     })
 
+    // Grid lists: skip .dt-scroll form editors and DataTable shells that already
+    // inject data-label (and use MobileCardView below 768).
     const gridHeads = scope.querySelectorAll<HTMLElement>('.table-head')
     gridHeads.forEach((head) => {
+      if (head.closest('.dt-scroll, .dt-wrap')) return
+      const existingShell = head.closest<HTMLElement>('.table-scroll.responsive-table')
+      if (existingShell?.querySelector('[data-label]')) return
+
       const labels = Array.from(head.children).map((cell) => (cell.textContent ?? '').trim())
       const possibleContainer =
-        head.closest<HTMLElement>('.table-scroll, .dt-scroll, [class*="overflow-x-auto"]') ??
+        head.closest<HTMLElement>('.table-scroll, [class*="overflow-x-auto"]') ??
         head.parentElement
       if (!possibleContainer) return
       possibleContainer.classList.add('responsive-table')

@@ -1958,7 +1958,7 @@ function AccountingContent() {
                 </div>
                 <div className="border border-[var(--border-lt)] rounded-2xl overflow-hidden">
                   <div className="dt-scroll">
-                    <table className="w-full text-left border-collapse">
+                    <table data-no-responsive className="w-full text-left border-collapse">
                       <thead>
                         <tr className="bg-[var(--bg-surface)] border-b border-[var(--border-lt)]">
                           <th className="px-3 py-2.5 text-[10px] font-bold uppercase text-[var(--text-4)]">Description</th>

@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect, useRef } from 'react'
-import { useCrmStore, Contact, fmtDate, fmtKes } from '@/lib/store'
+import { useCrmStore, Contact, SaleOrder, RepairOrder, Invoice, POSOrder, fmtDate, fmtKes } from '@/lib/store'
 import { invoiceDocState, invoicePaymentStatus, isOpenInvoice, invoiceResidual, displayDocRef, PAYMENT_STATUS_LABELS } from '@/lib/odoo-sales-flow'
 import { guardSpreadsheetFile, guardSpreadsheetRows, SpreadsheetGuardError } from '@/lib/spreadsheet-guard'
 import { Badge, Modal, Field, Input, Select, Textarea, InfoRow, ModuleSkeleton } from '@/components/ui'
@@ -41,6 +41,62 @@ const blankIndividual = (): Omit<Contact, 'id' | 'createdAt'> => ({
   isCustomer: true, isVendor: false, tags: [],
   notes: '',
 })
+
+
+const contactSoColumns: ColumnDef<SaleOrder>[] = [
+  { key: 'ref', label: 'Ref', priority: 1, width: '100px', render: so => <span className="font-mono text-[11px] font-semibold text-primary-600">{so.ref ?? so.orderNumber ?? so.id.slice(0, 8)}</span>, accessor: so => so.ref ?? so.orderNumber ?? so.id },
+  { key: 'date', label: 'Date', priority: 2, width: '100px', render: so => <span className="text-xs text-t3">{fmtDate(so.date)}</span>, accessor: so => so.date },
+  { key: 'items', label: 'Items', priority: 1, width: '1.4fr', render: so => <span className="text-xs text-t2 truncate">{(so.lines ?? []).map(l => l.productName).join(', ')}</span>, accessor: so => (so.lines ?? []).map(l => l.productName).join(' ') },
+  { key: 'total', label: 'Total', priority: 1, width: '100px', align: 'right', render: so => <span className="font-mono text-[11px]">{fmtKes(so.total)}</span>, accessor: so => so.total },
+  { key: 'invoiced', label: 'Invoiced', priority: 3, width: '80px', render: so => <span className="text-[10px]" style={{ color: so.invoiceId ? 'var(--success)' : 'var(--text-3)' }}>{so.invoiceId ? 'Yes' : 'No'}</span>, accessor: so => so.invoiceId ? 'Yes' : 'No' },
+  { key: 'status', label: 'Status', priority: 1, width: '120px', render: so => <Badge status={so.status} size="xs" />, accessor: so => so.status },
+]
+
+const contactRepairColumns: ColumnDef<RepairOrder>[] = [
+  { key: 'ref', label: 'Ref', priority: 1, width: '100px', render: r => <span className="font-mono text-[11px] font-semibold text-primary-600">{r.ref}</span>, accessor: r => r.ref },
+  { key: 'date', label: 'Date', priority: 2, width: '100px', render: r => <span className="text-xs text-t3">{fmtDate(r.intakeDate)}</span>, accessor: r => r.intakeDate },
+  { key: 'device', label: 'Device', priority: 1, width: '1fr', render: r => (
+    <div className="min-w-0">
+      <p className="truncate text-xs text-t1">{r.productName}</p>
+      {r.serialNumber && <p className="text-[9px] font-mono text-t3">{r.serialNumber}</p>}
+    </div>
+  ), accessor: r => `${r.productName} ${r.serialNumber ?? ''}` },
+  { key: 'issue', label: 'Issue', priority: 2, width: '1fr', render: r => <span className="text-xs text-t2 truncate">{r.issueDescription}</span>, accessor: r => r.issueDescription },
+  { key: 'cost', label: 'Cost', priority: 1, width: '90px', align: 'right', render: r => <span className="font-mono text-[11px]" style={{ color: r.total > 0 ? 'var(--success)' : 'var(--text-3)' }}>{r.total > 0 ? fmtKes(r.total) : '—'}</span>, accessor: r => r.total },
+  { key: 'status', label: 'Status', priority: 1, width: '120px', render: r => <Badge status={r.status} size="xs" />, accessor: r => r.status },
+]
+
+const contactInvoiceColumns: ColumnDef<Invoice>[] = [
+  { key: 'ref', label: 'Ref', priority: 1, width: '100px', render: inv => <span className="font-mono text-[11px] font-semibold text-primary-600">{displayDocRef(inv.ref)}</span>, accessor: inv => inv.ref },
+  { key: 'date', label: 'Date', priority: 2, width: '90px', render: inv => <span className="text-xs text-t3">{fmtDate(inv.date)}</span>, accessor: inv => inv.date },
+  { key: 'due', label: 'Due', priority: 3, width: '90px', render: inv => <span className="text-xs text-t3">{fmtDate(inv.dueDate)}</span>, accessor: inv => inv.dueDate },
+  { key: 'total', label: 'Total', priority: 1, width: '90px', align: 'right', render: inv => <span className="font-mono text-[11px]">{fmtKes(inv.total)}</span>, accessor: inv => inv.total },
+  { key: 'paid', label: 'Paid', priority: 2, width: '90px', align: 'right', render: inv => <span className="font-mono text-[11px]" style={{ color: 'var(--success)' }}>{fmtKes(inv.amountPaid)}</span>, accessor: inv => inv.amountPaid },
+  { key: 'status', label: 'Status', priority: 1, width: '130px', render: inv => {
+    const outstanding = inv.total - inv.amountPaid
+    const doc = invoiceDocState(inv.status)
+    return (
+      <div className="flex flex-col gap-0.5">
+        <Badge
+          status={doc === 'posted' ? invoicePaymentStatus(inv) : doc}
+          label={doc === 'posted' ? PAYMENT_STATUS_LABELS[invoicePaymentStatus(inv)] : undefined}
+          size="xs"
+        />
+        {outstanding > 0 && doc !== 'cancelled' && (
+          <span className="text-[9px] font-mono" style={{ color: 'var(--danger)' }}>-{fmtKes(outstanding)}</span>
+        )}
+      </div>
+    )
+  }, accessor: inv => inv.status },
+]
+
+const contactPosColumns: ColumnDef<POSOrder>[] = [
+  { key: 'ref', label: 'Ref', priority: 1, width: '100px', render: tx => <span className="font-mono text-[11px] font-semibold text-primary-600">{tx.ref}</span>, accessor: tx => tx.ref },
+  { key: 'date', label: 'Date', priority: 2, width: '100px', render: tx => <span className="text-xs text-t3">{fmtDate(tx.date)}</span>, accessor: tx => tx.date },
+  { key: 'items', label: 'Items', priority: 1, width: '1.4fr', render: tx => <span className="text-xs text-t2 truncate">{(tx.lines ?? []).map(l => l.productName).join(', ')}</span>, accessor: tx => (tx.lines ?? []).map(l => l.productName).join(' ') },
+  { key: 'total', label: 'Total', priority: 1, width: '100px', align: 'right', render: tx => <span className="font-mono text-[11px]">{fmtKes(tx.total)}</span>, accessor: tx => tx.total },
+  { key: 'payment', label: 'Payment', priority: 2, width: '90px', render: tx => <span className="text-[10px] text-t2 capitalize">{tx.payment}</span>, accessor: tx => tx.payment },
+]
 
 function SectionLabel({ label }: { label: string }) {
   return (
@@ -643,121 +699,89 @@ export default function Contacts() {
 
                 {/* Sales Orders */}
                 {clientSOs.length > 0 && (
-                  <div className="rounded-xl overflow-hidden" style={{ border: '1px solid var(--border-lt)' }}>
+                  <div className="rounded-xl overflow-hidden min-w-0" style={{ border: '1px solid var(--border-lt)' }}>
                     <div className="flex items-center justify-between px-4 py-2.5" style={{ background: 'var(--bg-surface)', borderBottom: '1px solid var(--border-lt)' }}>
                       <p className="text-[11px] font-semibold text-t1"><Fa icon={faCartShopping} /> Sales Orders</p>
                       <span className="text-[10px] text-t3">{clientSOs.length} orders · {fmtKes(clientSOs.reduce((s, o) => s + o.total, 0))} total</span>
                     </div>
-                <div className="table-scroll responsive-table"><div className="flex flex-col min-w-0">
-                    <div className="table-head text-[10px] font-medium uppercase tracking-wider px-4 py-2 text-t3" style={{ gridTemplateColumns: '80px 90px 1fr 80px 80px 80px' }}>
-                      <span>Ref</span><span>Date</span><span>Items</span><span>Total</span><span>Invoiced</span><span>Status</span>
-                    </div>
-                    {clientSOs.map(so => (
-                      <div key={so.id} className="table-row items-center px-4 py-2.5 text-xs" style={{ gridTemplateColumns: '80px 90px 1fr 80px 80px 80px', borderTop: '1px solid var(--border-lt)' }}>
-                        <span className="font-mono text-[11px] font-semibold" style={{ color: 'var(--navy)' }}>{so.ref}</span>
-                        <span className="text-t3">{fmtDate(so.date)}</span>
-                        <span className="text-t2 truncate pr-2">{so.lines.map(l => l.productName).join(', ')}</span>
-                        <span className="font-mono text-[11px] text-t1">{fmtKes(so.total)}</span>
-                        <span className="text-[10px]" style={{ color: so.invoiceId ? 'var(--success)' : 'var(--text-3)' }}>{so.invoiceId ? '✓ Yes' : 'No'}</span>
-                        <Badge status={so.status} size="xs" />
-                      </div>
-                    ))}
-                </div></div>
+                    <DataTable
+                      tableId={`contact-history-so-${vc.id}`}
+                      columns={contactSoColumns}
+                      rows={clientSOs}
+                      rowKey={so => so.id}
+                      hideSearch
+                      hideColumnFilters
+                      hideToolbar
+                      perPage={100}
+                      emptyMessage="No sales orders"
+                    />
                   </div>
                 )}
 
                 {/* Repairs */}
                 {clientRepairs.length > 0 && (
-                  <div className="rounded-xl overflow-hidden" style={{ border: '1px solid var(--border-lt)' }}>
+                  <div className="rounded-xl overflow-hidden min-w-0" style={{ border: '1px solid var(--border-lt)' }}>
                     <div className="flex items-center justify-between px-4 py-2.5" style={{ background: 'var(--bg-surface)', borderBottom: '1px solid var(--border-lt)' }}>
                       <p className="text-[11px] font-semibold text-t1"><Fa icon={faScrewdriverWrench} /> Repairs</p>
                       <span className="text-[10px] text-t3">{clientRepairs.length} jobs · {fmtKes(repairRevenue)} billed</span>
                     </div>
-                    <div className="table-scroll responsive-table"><div className="flex flex-col min-w-0">
-                    <div className="table-head text-[10px] font-medium uppercase tracking-wider px-4 py-2 text-t3" style={{ gridTemplateColumns: '80px 90px 1fr 1fr 80px 80px' }}>
-                      <span>Ref</span><span>Date</span><span>Device</span><span>Issue</span><span>Cost</span><span>Status</span>
-                    </div>
-                    {clientRepairs.map(r => (
-                      <div key={r.id} className="table-row items-center px-4 py-2.5 text-xs" style={{ gridTemplateColumns: '80px 90px 1fr 1fr 80px 80px', borderTop: '1px solid var(--border-lt)' }}>
-                        <span className="font-mono text-[11px] font-semibold" style={{ color: 'var(--navy)' }}>{r.ref}</span>
-                        <span className="text-t3">{fmtDate(r.intakeDate)}</span>
-                        <div className="min-w-0 pr-2">
-                          <p className="truncate text-t1">{r.productName}</p>
-                          {r.serialNumber && <p className="text-[9px] font-mono text-t3">{r.serialNumber}</p>}
-                        </div>
-                        <span className="text-t2 truncate pr-2">{r.issueDescription}</span>
-                        <span className="font-mono text-[11px]" style={{ color: r.total > 0 ? 'var(--success)' : 'var(--text-3)' }}>
-                          {r.total > 0 ? fmtKes(r.total) : '—'}
-                        </span>
-                        <Badge status={r.status} size="xs" />
-                      </div>
-                    ))}
-                    </div></div>
+                    <DataTable
+                      tableId={`contact-history-repairs-${vc.id}`}
+                      columns={contactRepairColumns}
+                      rows={clientRepairs}
+                      rowKey={r => r.id}
+                      hideSearch
+                      hideColumnFilters
+                      hideToolbar
+                      perPage={100}
+                      emptyMessage="No repairs"
+                    />
                   </div>
                 )}
 
                 {/* Customer Invoices */}
                 {clientInvoices.length > 0 && (
-                  <div className="rounded-xl overflow-hidden" style={{ border: '1px solid var(--border-lt)' }}>
+                  <div className="rounded-xl overflow-hidden min-w-0" style={{ border: '1px solid var(--border-lt)' }}>
                     <div className="flex items-center justify-between px-4 py-2.5" style={{ background: 'var(--bg-surface)', borderBottom: '1px solid var(--border-lt)' }}>
                       <p className="text-[11px] font-semibold text-t1"><Fa icon={faFileInvoiceDollar} /> Invoices</p>
                       <span className="text-[10px] text-t3">{clientInvoices.length} invoices · {fmtKes(totalRevenue)} collected</span>
                     </div>
-                    <div className="table-scroll responsive-table"><div className="flex flex-col min-w-0">
-                    <div className="table-head text-[10px] font-medium uppercase tracking-wider px-4 py-2 text-t3" style={{ gridTemplateColumns: '80px 90px 80px 80px 80px 80px' }}>
-                      <span>Ref</span><span>Date</span><span>Due</span><span>Total</span><span>Paid</span><span>Status</span>
-                    </div>
-                    {clientInvoices.map(inv => {
-                      const outstanding = inv.total - inv.amountPaid
-                      return (
-                        <div key={inv.id} className="table-row items-center px-4 py-2.5 text-xs" style={{ gridTemplateColumns: '80px 90px 80px 80px 80px 80px', borderTop: '1px solid var(--border-lt)' }}>
-                          <span className="font-mono text-[11px] font-semibold" style={{ color: 'var(--navy)' }}>{displayDocRef(inv.ref)}</span>
-                          <span className="text-t3">{fmtDate(inv.date)}</span>
-                          <span className="text-t3">{fmtDate(inv.dueDate)}</span>
-                          <span className="font-mono text-[11px] text-t1">{fmtKes(inv.total)}</span>
-                          <span className="font-mono text-[11px]" style={{ color: 'var(--success)' }}>{fmtKes(inv.amountPaid)}</span>
-                          <div className="flex flex-col gap-0.5">
-                            <Badge
-                              status={invoiceDocState(inv.status) === 'posted' ? invoicePaymentStatus(inv) : invoiceDocState(inv.status)}
-                              label={invoiceDocState(inv.status) === 'posted' ? PAYMENT_STATUS_LABELS[invoicePaymentStatus(inv)] : undefined}
-                              size="xs"
-                            />
-                            {outstanding > 0 && invoiceDocState(inv.status) !== 'cancelled' && (
-                              <span className="text-[9px] font-mono" style={{ color: 'var(--danger)' }}>-{fmtKes(outstanding)}</span>
-                            )}
-                          </div>
-                        </div>
-                      )
-                    })}
-                    </div></div>
+                    <DataTable
+                      tableId={`contact-history-invoices-${vc.id}`}
+                      columns={contactInvoiceColumns}
+                      rows={clientInvoices}
+                      rowKey={inv => inv.id}
+                      hideSearch
+                      hideColumnFilters
+                      hideToolbar
+                      perPage={100}
+                      emptyMessage="No invoices"
+                    />
                   </div>
                 )}
 
                 {/* POS transactions */}
                 {clientPOS.length > 0 && (
-                  <div className="rounded-xl overflow-hidden" style={{ border: '1px solid var(--border-lt)' }}>
+                  <div className="rounded-xl overflow-hidden min-w-0" style={{ border: '1px solid var(--border-lt)' }}>
                     <div className="flex items-center justify-between px-4 py-2.5" style={{ background: 'var(--bg-surface)', borderBottom: '1px solid var(--border-lt)' }}>
                       <p className="text-[11px] font-semibold text-t1"><Fa icon={faCashRegister} /> POS Sales</p>
                       <span className="text-[10px] text-t3">{clientPOS.length} transactions · {fmtKes(clientPOS.reduce((s: number, p) => s + p.total, 0))} total</span>
                     </div>
-                    <div className="table-scroll responsive-table"><div className="flex flex-col min-w-0">
-                    <div className="table-head text-[10px] font-medium uppercase tracking-wider px-4 py-2 text-t3" style={{ gridTemplateColumns: '80px 100px 1fr 80px 80px' }}>
-                      <span>Ref</span><span>Date</span><span>Items</span><span>Total</span><span>Payment</span>
-                    </div>
-                    {clientPOS.map(tx => (
-                      <div key={tx.id} className="table-row items-center px-4 py-2.5 text-xs" style={{ gridTemplateColumns: '80px 100px 1fr 80px 80px', borderTop: '1px solid var(--border-lt)' }}>
-                        <span className="font-mono text-[11px] font-semibold" style={{ color: 'var(--navy)' }}>{tx.ref}</span>
-                        <span className="text-t3">{fmtDate(tx.date)}</span>
-                        <span className="text-t2 truncate pr-2">{tx.lines.map((l: { productName: string }) => l.productName).join(', ')}</span>
-                        <span className="font-mono text-[11px] text-t1">{fmtKes(tx.total)}</span>
-                        <span className="text-[10px] text-t2 capitalize">{tx.payment}</span>
-                      </div>
-                    ))}
-                    </div></div>
+                    <DataTable
+                      tableId={`contact-history-pos-${vc.id}`}
+                      columns={contactPosColumns}
+                      rows={clientPOS}
+                      rowKey={tx => tx.id}
+                      hideSearch
+                      hideColumnFilters
+                      hideToolbar
+                      perPage={100}
+                      emptyMessage="No POS sales"
+                    />
                   </div>
                 )}
 
-                {historyCount === 0 && (
+                                {historyCount === 0 && (
                   <div className="py-10 flex flex-col items-center gap-2">
                     <span className="text-3xl" style={{ color: 'var(--text-4)' }} aria-hidden="true"><Fa icon={faInbox} /></span>
                     <p className="text-xs text-t3">No transactions recorded for this contact yet</p>
