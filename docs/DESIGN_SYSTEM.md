@@ -73,7 +73,7 @@ Defined in `tailwind.config.js`: `sm` 480 / `md` 768 / `lg` 1024 / `xl` 1280 /
   rail or full rail ≥ 768px.
 - **Tables**: three patterns, all preserving row actions and identifiers:
   - `<table>` → auto-upgraded to `erp-responsive-table` (stacked label/value
-    cards < 640px, with per-row Details toggle);
+    cards < 768px, with per-row Details toggle);
   - grid tables (`.table-head`/`.table-row`) → `responsive-table` stacking;
   - wide analytical reports → `dt-wrap`/`dt-scroll` horizontal-scroll
     containers with styled thin scrollbars.

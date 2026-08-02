@@ -831,7 +831,7 @@ export function Table({
   cols,
   children,
   empty = 'No records found',
-  minWidth = 800,
+  minWidth = 640,
   tableId,
   stickyHeader = true,
   resizable = true,
@@ -1042,7 +1042,7 @@ export function Table({
   const showEmptyState = !isLoading && !error && visibleRows === 0
 
   return (
-    <div className="table-scroll responsive-table relative">
+    <div className="table-scroll responsive-table relative max-w-full min-w-0">
       {!hideColumnMenu && tableId && cols.length > 3 && (
         <div className="flex items-center justify-end gap-2 border-b border-[var(--border-lt)] bg-[var(--bg-card)] px-3 py-2">
           <button

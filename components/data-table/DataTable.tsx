@@ -31,6 +31,29 @@ function isInteractiveTarget(target: EventTarget | null): boolean {
   ))
 }
 
+/** Estimate desktop grid min-width from visible columns — avoid a hard 960px
+ *  floor that forces horizontal scroll when only a few columns are showing. */
+function estimateTableMinWidth(
+  columns: Array<{ key: string; width?: string }>,
+  options: { selectable?: boolean; hasRowActions?: boolean },
+): number {
+  let total = options.selectable ? 36 : 0
+  for (const column of columns) {
+    if (column.key.toLowerCase().includes('status')) {
+      total += 160
+      continue
+    }
+    if (column.width?.endsWith('px')) {
+      const parsed = Number.parseInt(column.width, 10)
+      total += Number.isFinite(parsed) ? parsed : 120
+      continue
+    }
+    total += 120
+  }
+  if (options.hasRowActions) total += 144
+  return Math.max(320, total)
+}
+
 export interface DataTableProps<T> {
   tableId: string
   columns: ColumnDef<T>[]
@@ -169,6 +192,14 @@ export default function DataTable<T>({
   }, [eligibleColumns, prefs.visibleColumnKeys])
 
   const visibleKeys = useMemo(() => new Set(visibleColumns.map(c => c.key)), [visibleColumns])
+
+  const tableMinWidth = useMemo(
+    () => estimateTableMinWidth(visibleColumns, {
+      selectable: Boolean(selectable),
+      hasRowActions: Boolean(rowActions),
+    }),
+    [visibleColumns, selectable, rowActions],
+  )
 
   const filteredRows = useMemo(() => {
     let result = rows
@@ -330,7 +361,7 @@ export default function DataTable<T>({
           ) : (
             <Table
               tableId={tableId}
-              minWidth={960}
+              minWidth={tableMinWidth}
               cols={[
                 ...(selectable ? [{ label: '', width: '36px' }] : []),
                 ...visibleColumns.map(c => ({

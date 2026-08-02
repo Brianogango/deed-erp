@@ -397,8 +397,8 @@ export default function SOPs() {
 
         {/* ── Overview (Team View) ── */}
         {tab === 'overview' && canViewTeamHR && (
-          <div className="overflow-x-auto w-full">
-            <div className="min-w-[800px] flex flex-col divide-y divide-gray-100">
+          <div className="w-full min-w-0 max-w-full">
+            <div className="flex flex-col divide-y divide-gray-100">
             {sops.filter(s => s.active).length === 0 ? (
               <div className="py-14 text-center text-t3 text-sm">
                 <div style={{ fontSize: 36 }} className="mb-2 text-t4" aria-hidden="true"><Fa icon={faBullseye} /></div>
@@ -463,8 +463,8 @@ export default function SOPs() {
 
         {/* ── Manage SOPs (Admins Only) ── */}
         {tab === 'manage' && canViewTeamHR && (
-          <div className="overflow-x-auto w-full">
-            <div className="min-w-[800px] flex flex-col divide-y divide-gray-100">
+          <div className="w-full min-w-0 max-w-full">
+            <div className="flex flex-col divide-y divide-gray-100">
             {sops.length === 0 ? (
               <div className="py-14 text-center text-t3 text-sm">No performance targets defined yet.</div>
             ) : sops.map(sop => (

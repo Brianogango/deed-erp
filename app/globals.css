@@ -427,7 +427,7 @@
   }
 
   .table-scroll {
-    @apply w-full overflow-x-auto overscroll-x-contain;
+    @apply w-full max-w-full min-w-0 overflow-x-auto overscroll-x-contain;
     border: 1px solid var(--border-lt);
     border-radius: 1rem;
     background: var(--bg-card);
@@ -450,7 +450,9 @@
     border-radius: 999px;
   }
 
-  @media (min-width: 641px) {
+  /* Match DataTable JS breakpoint (<768 = mobile cards). Keep desktop
+     fill-width only at tablet+ so phone/card mode can collapse min-widths. */
+  @media (min-width: 768px) {
     .table-scroll > .flex,
     .table-scroll > div {
       /* Fill wide layouts while still allowing overflow for many columns */
@@ -660,7 +662,7 @@
     table-layout: auto;
   }
 
-  @media (min-width: 641px) {
+  @media (min-width: 768px) {
     .data-table thead,
     .data-table tbody,
     .data-table tfoot {
@@ -742,7 +744,10 @@
   .data-table td.td-danger  { color: var(--danger-text); font-weight: 600; }
   .data-table td.td-success { color: var(--success-text); font-weight: 600; }
 
-  @media (max-width: 640px) {
+  /* Card-stack legacy / grid tables below the DataTable mobile breakpoint
+     (768). Previously 640 — the 641–767 gap left wide min-width tables
+     forcing horizontal page scroll on large phones and small tablets. */
+  @media (max-width: 767px) {
     .table-scroll > .flex,
     .table-scroll > div {
       min-width: 0 !important;
@@ -758,6 +763,15 @@
       border-radius: 0;
       background: transparent;
       box-shadow: none;
+    }
+
+    /* Kill hard min-width wrappers that defeat card stacking / containment */
+    .overflow-x-auto > [class*="min-w-"],
+    .table-scroll > [class*="min-w-"],
+    .dt-scroll > [class*="min-w-"],
+    .dt-wrap > [class*="min-w-"] {
+      min-width: 0 !important;
+      width: 100% !important;
     }
 
     .responsive-table > .flex {
@@ -777,7 +791,7 @@
     .responsive-table .table-head {
       /* !important required: the base .table-head rule sets
          `display: grid !important`, which otherwise wins and leaves the
-         640px-wide sticky header visible — the source of horizontal page
+         wide sticky header visible — the source of horizontal page
          scroll on phones. */
       display: none !important;
     }
@@ -1090,7 +1104,7 @@
      source order) permanently overrode its `display: inline-flex`, so the
      "Details" toggle never appeared and off-card columns were unreachable
      on phones. */
-  @media (min-width: 641px) {
+  @media (min-width: 768px) {
     .mobile-row-toggle {
       display: none;
     }
@@ -1125,7 +1139,7 @@
   }
 
   .mod-page {
-    @apply flex min-h-full flex-col overflow-hidden rounded-none text-text-1;
+    @apply flex min-h-full min-w-0 max-w-full flex-col overflow-hidden rounded-none text-text-1;
     background: var(--bg-page);
   }
 
@@ -1703,7 +1717,7 @@
   }
 
   .mod-body {
-    @apply flex-1 overflow-y-auto;
+    @apply flex-1 min-w-0 overflow-y-auto;
     width: 100%;
     max-width: var(--content-max);
     margin-inline: auto;
@@ -2980,7 +2994,7 @@
 
   /* ── dt-scroll: use ONLY for large analytical reports that cannot be redesigned ── */
   .dt-scroll {
-    @apply w-full overflow-x-auto overscroll-x-contain;
+    @apply w-full max-w-full min-w-0 overflow-x-auto overscroll-x-contain;
     border: 1px solid var(--border-lt);
     border-radius: 1rem;
     background: var(--bg-card);
@@ -3153,6 +3167,8 @@
   }
 
   .view-enter {
+    min-width: 0;
+    max-width: 100%;
     animation: viewEnter 0.18s ease-out both;
   }
 

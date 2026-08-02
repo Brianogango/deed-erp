@@ -648,12 +648,12 @@ export default function Contacts() {
                       <p className="text-[11px] font-semibold text-t1"><Fa icon={faCartShopping} /> Sales Orders</p>
                       <span className="text-[10px] text-t3">{clientSOs.length} orders · {fmtKes(clientSOs.reduce((s, o) => s + o.total, 0))} total</span>
                     </div>
-                <div className="overflow-x-auto w-full"><div className="min-w-[600px] flex flex-col">
-                    <div className="grid text-[10px] font-medium uppercase tracking-wider px-4 py-2 text-t3" style={{ gridTemplateColumns: '80px 90px 1fr 80px 80px 80px' }}>
+                <div className="table-scroll responsive-table"><div className="flex flex-col min-w-0">
+                    <div className="table-head text-[10px] font-medium uppercase tracking-wider px-4 py-2 text-t3" style={{ gridTemplateColumns: '80px 90px 1fr 80px 80px 80px' }}>
                       <span>Ref</span><span>Date</span><span>Items</span><span>Total</span><span>Invoiced</span><span>Status</span>
                     </div>
                     {clientSOs.map(so => (
-                      <div key={so.id} className="grid items-center px-4 py-2.5 text-xs" style={{ gridTemplateColumns: '80px 90px 1fr 80px 80px 80px', borderTop: '1px solid var(--border-lt)' }}>
+                      <div key={so.id} className="table-row items-center px-4 py-2.5 text-xs" style={{ gridTemplateColumns: '80px 90px 1fr 80px 80px 80px', borderTop: '1px solid var(--border-lt)' }}>
                         <span className="font-mono text-[11px] font-semibold" style={{ color: 'var(--navy)' }}>{so.ref}</span>
                         <span className="text-t3">{fmtDate(so.date)}</span>
                         <span className="text-t2 truncate pr-2">{so.lines.map(l => l.productName).join(', ')}</span>
@@ -673,12 +673,12 @@ export default function Contacts() {
                       <p className="text-[11px] font-semibold text-t1"><Fa icon={faScrewdriverWrench} /> Repairs</p>
                       <span className="text-[10px] text-t3">{clientRepairs.length} jobs · {fmtKes(repairRevenue)} billed</span>
                     </div>
-                    <div className="overflow-x-auto w-full"><div className="min-w-[600px] flex flex-col">
-                    <div className="grid text-[10px] font-medium uppercase tracking-wider px-4 py-2 text-t3" style={{ gridTemplateColumns: '80px 90px 1fr 1fr 80px 80px' }}>
+                    <div className="table-scroll responsive-table"><div className="flex flex-col min-w-0">
+                    <div className="table-head text-[10px] font-medium uppercase tracking-wider px-4 py-2 text-t3" style={{ gridTemplateColumns: '80px 90px 1fr 1fr 80px 80px' }}>
                       <span>Ref</span><span>Date</span><span>Device</span><span>Issue</span><span>Cost</span><span>Status</span>
                     </div>
                     {clientRepairs.map(r => (
-                      <div key={r.id} className="grid items-center px-4 py-2.5 text-xs" style={{ gridTemplateColumns: '80px 90px 1fr 1fr 80px 80px', borderTop: '1px solid var(--border-lt)' }}>
+                      <div key={r.id} className="table-row items-center px-4 py-2.5 text-xs" style={{ gridTemplateColumns: '80px 90px 1fr 1fr 80px 80px', borderTop: '1px solid var(--border-lt)' }}>
                         <span className="font-mono text-[11px] font-semibold" style={{ color: 'var(--navy)' }}>{r.ref}</span>
                         <span className="text-t3">{fmtDate(r.intakeDate)}</span>
                         <div className="min-w-0 pr-2">
@@ -703,14 +703,14 @@ export default function Contacts() {
                       <p className="text-[11px] font-semibold text-t1"><Fa icon={faFileInvoiceDollar} /> Invoices</p>
                       <span className="text-[10px] text-t3">{clientInvoices.length} invoices · {fmtKes(totalRevenue)} collected</span>
                     </div>
-                    <div className="overflow-x-auto w-full"><div className="min-w-[600px] flex flex-col">
-                    <div className="grid text-[10px] font-medium uppercase tracking-wider px-4 py-2 text-t3" style={{ gridTemplateColumns: '80px 90px 80px 80px 80px 80px' }}>
+                    <div className="table-scroll responsive-table"><div className="flex flex-col min-w-0">
+                    <div className="table-head text-[10px] font-medium uppercase tracking-wider px-4 py-2 text-t3" style={{ gridTemplateColumns: '80px 90px 80px 80px 80px 80px' }}>
                       <span>Ref</span><span>Date</span><span>Due</span><span>Total</span><span>Paid</span><span>Status</span>
                     </div>
                     {clientInvoices.map(inv => {
                       const outstanding = inv.total - inv.amountPaid
                       return (
-                        <div key={inv.id} className="grid items-center px-4 py-2.5 text-xs" style={{ gridTemplateColumns: '80px 90px 80px 80px 80px 80px', borderTop: '1px solid var(--border-lt)' }}>
+                        <div key={inv.id} className="table-row items-center px-4 py-2.5 text-xs" style={{ gridTemplateColumns: '80px 90px 80px 80px 80px 80px', borderTop: '1px solid var(--border-lt)' }}>
                           <span className="font-mono text-[11px] font-semibold" style={{ color: 'var(--navy)' }}>{displayDocRef(inv.ref)}</span>
                           <span className="text-t3">{fmtDate(inv.date)}</span>
                           <span className="text-t3">{fmtDate(inv.dueDate)}</span>
@@ -740,12 +740,12 @@ export default function Contacts() {
                       <p className="text-[11px] font-semibold text-t1"><Fa icon={faCashRegister} /> POS Sales</p>
                       <span className="text-[10px] text-t3">{clientPOS.length} transactions · {fmtKes(clientPOS.reduce((s: number, p) => s + p.total, 0))} total</span>
                     </div>
-                    <div className="overflow-x-auto w-full"><div className="min-w-[600px] flex flex-col">
-                    <div className="grid text-[10px] font-medium uppercase tracking-wider px-4 py-2 text-t3" style={{ gridTemplateColumns: '80px 100px 1fr 80px 80px' }}>
+                    <div className="table-scroll responsive-table"><div className="flex flex-col min-w-0">
+                    <div className="table-head text-[10px] font-medium uppercase tracking-wider px-4 py-2 text-t3" style={{ gridTemplateColumns: '80px 100px 1fr 80px 80px' }}>
                       <span>Ref</span><span>Date</span><span>Items</span><span>Total</span><span>Payment</span>
                     </div>
                     {clientPOS.map(tx => (
-                      <div key={tx.id} className="grid items-center px-4 py-2.5 text-xs" style={{ gridTemplateColumns: '80px 100px 1fr 80px 80px', borderTop: '1px solid var(--border-lt)' }}>
+                      <div key={tx.id} className="table-row items-center px-4 py-2.5 text-xs" style={{ gridTemplateColumns: '80px 100px 1fr 80px 80px', borderTop: '1px solid var(--border-lt)' }}>
                         <span className="font-mono text-[11px] font-semibold" style={{ color: 'var(--navy)' }}>{tx.ref}</span>
                         <span className="text-t3">{fmtDate(tx.date)}</span>
                         <span className="text-t2 truncate pr-2">{tx.lines.map((l: { productName: string }) => l.productName).join(', ')}</span>
@@ -952,7 +952,8 @@ export default function Contacts() {
                 </div>
               </div>
 
-              <div className="overflow-x-auto w-full"><div className="min-w-[600px] flex flex-col">
+              <div className="dt-scroll">
+              <div className="min-w-[560px] flex flex-col">
               <div className="grid text-[10px] font-medium text-t3 uppercase tracking-wider px-3 py-1.5 rounded"
                 style={{ gridTemplateColumns: '24px 70px 1.4fr 1.2fr 100px 90px', background: 'var(--bg-surface)', border: '1px solid var(--border-lt)' }}>
                 <span></span><span>Type</span><span>Name</span><span>Email</span><span>Phone</span><span>Status</span>
@@ -977,7 +978,8 @@ export default function Contacts() {
                   </div>
                 ))}
               </div>
-              </div></div>
+              </div>
+              </div>
             </div>
           )}
 

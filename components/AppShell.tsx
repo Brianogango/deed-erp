@@ -446,10 +446,33 @@ function AppContent({ children }: { children: React.ReactNode }) {
       })
   }, [pathname, currentUserId, isPublicRepairTracker])
 
+  // Patch legacy tables after route changes and whenever module content
+  // mutates (tabs, lazy panels, detail drawers). Debounced so React paint
+  // bursts don't thrash the DOM adapter.
   useEffect(() => {
     if (!mounted || isPublicRepairTracker) return
-    const timers = [0, 250, 1000].map(delay => window.setTimeout(applyLegacyResponsiveTables, delay))
-    return () => timers.forEach(timer => window.clearTimeout(timer))
+    const scope = contentRef.current
+    if (!scope) return
+
+    let debounceTimer = 0
+    const schedule = () => {
+      window.clearTimeout(debounceTimer)
+      debounceTimer = window.setTimeout(applyLegacyResponsiveTables, 50)
+    }
+
+    applyLegacyResponsiveTables()
+    const bootTimers = [250, 1000].map(delay => window.setTimeout(applyLegacyResponsiveTables, delay))
+
+    const observer = typeof MutationObserver !== 'undefined'
+      ? new MutationObserver(schedule)
+      : null
+    observer?.observe(scope, { childList: true, subtree: true })
+
+    return () => {
+      window.clearTimeout(debounceTimer)
+      bootTimers.forEach(timer => window.clearTimeout(timer))
+      observer?.disconnect()
+    }
   }, [mounted, pathname, isPublicRepairTracker, applyLegacyResponsiveTables])
 
   /**

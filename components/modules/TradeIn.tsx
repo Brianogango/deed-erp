@@ -476,8 +476,7 @@ function BuyBackTab() {
       {displayed.length === 0
         ? <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-4)', fontSize: 12 }}>{search ? 'No results.' : 'No buy-backs yet.'}</div>
         : (
-          <div className="overflow-x-auto w-full">
-            <div className="min-w-[700px] flex flex-col">
+          <div className="w-full min-w-0 max-w-full">
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
             <thead><tr style={{ background: 'var(--bg-surface)' }}>
               {['Ref', 'Customer', 'Original SO', 'Items', 'Total', 'Date', 'Status', ''].map(h => (
@@ -502,7 +501,6 @@ function BuyBackTab() {
               ))}
             </tbody>
           </table>
-            </div>
           </div>
         )}
 
@@ -912,8 +910,7 @@ function DonationTab() {
       {displayedDon.length === 0
         ? <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-4)', fontSize: 12 }}>{donSearch ? 'No results.' : 'No donations recorded.'}</div>
         : (
-          <div className="overflow-x-auto w-full">
-            <div className="min-w-[700px] flex flex-col">
+          <div className="w-full min-w-0 max-w-full">
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
             <thead><tr style={{ background: 'var(--bg-surface)' }}>
               {['Ref', 'Type', 'Party', 'Items', 'Location', 'Date', 'Status', ''].map(h => (
@@ -1405,8 +1402,7 @@ function ExchangeTab() {
       {displayedExc.length === 0
         ? <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-4)', fontSize: 12 }}>{excSearch ? 'No results.' : 'No exchanges yet.'}</div>
         : (
-          <div className="overflow-x-auto w-full">
-            <div className="min-w-[800px] flex flex-col">
+          <div className="w-full min-w-0 max-w-full">
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
             <thead><tr style={{ background: 'var(--bg-surface)' }}>
               {['Ref', 'Customer', 'Original SO', 'Return Value', 'New Value', 'Diff', 'Date', 'Status', ''].map(h => (
