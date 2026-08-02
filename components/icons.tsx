@@ -11,7 +11,7 @@ import type { CSSProperties } from 'react'
 // ── Solid icons ───────────────────────────────────────────────────────────────
 export {
   faUsers, faUserCircle, faUserTie, faUserGroup,
-  faUser, faUserPlus, faUserCheck, faUserClock,
+  faUser, faUserPlus, faUserCheck, faUserClock, faUserSlash,
 } from '@fortawesome/free-solid-svg-icons'
 
 export {
@@ -74,6 +74,7 @@ export {
   faEllipsisVertical, faBars, faGrip,
   faFire, faSun, faSnowflake, faNoteSticky, faListCheck,
   faCar, faUtensils, faLightbulb, faComputer, faDroplet,
+  faFlagCheckered, faThumbtack,
 } from '@fortawesome/free-solid-svg-icons'
 
 // ── Re-usable wrapper ─────────────────────────────────────────────────────────

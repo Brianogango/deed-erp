@@ -10,7 +10,7 @@ import { Fa } from '@/components/icons'
 import {
   faRotate, faPlus, faUser, faWrench, faCheckCircle,
   faArrowRight, faBan, faChevronLeft, faBoxOpen, faPencil, faTrash,
-  faBell, faTriangleExclamation,
+  faBell, faTriangleExclamation, faCheck,
 } from '@fortawesome/free-solid-svg-icons'
 
 // ── Status config ─────────────────────────────────────────────────────────────
@@ -267,7 +267,7 @@ export default function Refurbishment() {
                   </div>
                 </div>
               ) : (
-                <p className="text-xs italic text-amber-500 font-medium">⚠ Not yet assigned</p>
+                <p className="text-xs italic text-amber-500 font-medium inline-flex items-center gap-1"><Fa icon={faTriangleExclamation} aria-hidden="true" /> Not yet assigned</p>
               )}
               {job.completedDate && <p className="text-[11px] text-t3">Completed: <span className="text-t2 font-medium">{fmtDate(job.completedDate)}</span></p>}
               {job.transferDate  && <p className="text-[11px] text-t3">Transferred: <span className="text-t2 font-medium">{fmtDate(job.transferDate)}</span></p>}
@@ -333,7 +333,7 @@ export default function Refurbishment() {
                         {linkedProd && <p className="text-[10px] text-blue-500">{linkedProd.name}</p>}
                         {p.notes && <p className="text-[10px] text-t3">{p.notes}</p>}
                         {p.allocatedByName && <p className="text-[10px] text-green-600">Allocated by {p.allocatedByName}</p>}
-                        {p.notifiedTechDate && <p className="text-[10px] text-emerald-600">✓ Ready — notified {fmtD(p.notifiedTechDate)}</p>}
+                        {p.notifiedTechDate && <p className="text-[10px] text-emerald-600 inline-flex items-center gap-1"><Fa icon={faCheck} aria-hidden="true" /> Ready — notified {fmtD(p.notifiedTechDate)}</p>}
                       </div>
                     )
                   },
@@ -438,7 +438,7 @@ export default function Refurbishment() {
             {job.assignedTechnicianName && (
               <div className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs mb-3"
                 style={{ background: 'var(--warning-bg)', border: '1px solid #FDE68A', color: 'var(--warning-text)' }}>
-                <span>⚠️</span>
+                <span aria-hidden="true"><Fa icon={faTriangleExclamation} /></span>
                 <span>Currently assigned to <strong>{job.assignedTechnicianName}</strong>. Selecting another will reassign.</span>
               </div>
             )}
@@ -519,7 +519,7 @@ export default function Refurbishment() {
                   </select>
                   {linkedProd && (
                     <span style={{ fontSize: 9, fontWeight: 700, padding: '2px 8px', borderRadius: 20, whiteSpace: 'nowrap', background: linkedProd.stockQty >= partForm.qty ? 'var(--success-bg)' : 'var(--danger-bg)', color: linkedProd.stockQty >= partForm.qty ? 'var(--success-text)' : '#991B1B' }}>
-                      {linkedProd.stockQty >= partForm.qty ? `✓ ${linkedProd.stockQty} in stock` : `⚠ Only ${linkedProd.stockQty}`}
+                      <span className="inline-flex items-center gap-1">{linkedProd.stockQty >= partForm.qty ? <><Fa icon={faCheck} aria-hidden="true" /> {linkedProd.stockQty} in stock</> : <><Fa icon={faTriangleExclamation} aria-hidden="true" /> Only {linkedProd.stockQty}</>}</span>
                     </span>
                   )}
                 </div>
@@ -560,7 +560,7 @@ export default function Refurbishment() {
             <div className="flex flex-col gap-3">
               <div className="flex items-start gap-3 px-3 py-2.5 rounded-lg mb-1"
                 style={{ background: 'var(--danger-bg)', border: '1px solid #FCA5A5' }}>
-                <span>⚠️</span>
+                <span aria-hidden="true"><Fa icon={faTriangleExclamation} /></span>
                 <p className="text-xs" style={{ color: '#991B1B', lineHeight: 1.5 }}>
                   This device will be marked as unrepairable and written off from inventory. You can restore it later if needed.
                 </p>
@@ -626,7 +626,7 @@ export default function Refurbishment() {
                         <p className="text-t3">
                           Job: <span className="font-medium cursor-pointer" style={{ color: 'var(--navy)' }} onClick={() => setActiveId(j.id)}>{j.ref}</span>
                           {' · '}{j.productName}
-                          {prod && <> · <span className={prod.stockQty >= p.qty ? 'text-green-600 font-medium' : 'text-red-600 font-medium'}>{prod.stockQty >= p.qty ? `✓ ${prod.stockQty} in stock` : `⚠ Only ${prod.stockQty}`}</span></>}
+                          {prod && <> · <span className={`inline-flex items-center gap-1 ${prod.stockQty >= p.qty ? 'text-green-600 font-medium' : 'text-red-600 font-medium'}`}>{prod.stockQty >= p.qty ? <><Fa icon={faCheck} aria-hidden="true" /> {prod.stockQty} in stock</> : <><Fa icon={faTriangleExclamation} aria-hidden="true" /> Only {prod.stockQty}</>}</span></>}
                         </p>
                       </div>
                       <div className="flex gap-1.5 flex-shrink-0">
@@ -722,7 +722,7 @@ export default function Refurbishment() {
           <div className="rounded-xl overflow-hidden" style={{ border: '1px solid #FDE68A' }}>
             <div className="flex items-center gap-2 px-4 py-2.5"
               style={{ background: 'var(--warning-bg)', borderBottom: '1px solid #FDE68A' }}>
-              <span>⚠️</span>
+              <span aria-hidden="true"><Fa icon={faTriangleExclamation} /></span>
               <p className="text-xs font-bold" style={{ color: 'var(--warning-text)' }}>
                 {orphanedSerials.length} device{orphanedSerials.length > 1 ? 's' : ''} in repair unit — no job created yet
               </p>
@@ -790,7 +790,7 @@ export default function Refurbishment() {
                     <span className="text-xs text-t1 truncate">{j.assignedTechnicianName}</span>
                   </div>
                 ) : (
-                  <span className="text-xs italic font-medium" style={{ color: 'var(--warning)' }}>⚠ Unassigned</span>
+                  <span className="text-xs italic font-medium inline-flex items-center gap-1" style={{ color: 'var(--warning)' }}><Fa icon={faTriangleExclamation} aria-hidden="true" /> Unassigned</span>
                 ),
                 exportValue: (j: RefurbishmentJob) => j.assignedTechnicianName || '',
               },

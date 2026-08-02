@@ -2,7 +2,8 @@
 import { createContext, useContext, useState, useMemo, useEffect, useCallback } from 'react'
 import { useApp, fmtKes, fmtDate } from '@/lib/store'
 import { useHrStore } from '@/hooks/useHrStore'
-import { Badge, Confirm, Field, Input, Modal, ModuleSkeleton, PanelHeader, Select, Textarea, ExportButtons, useMounted, ModuleHeader } from '@/components/ui'
+import { Badge, Confirm, Field, Input, Modal, ModuleSkeleton, PanelHeader, Select, Textarea, ExportButtons, useMounted } from '@/components/ui'
+import { ModuleChrome } from '@/components/erp'
 import { DataTable, type ColumnDef } from '@/components/data-table'
 import { MODULE_IDS, USER_ROLES } from '@/lib/auth/types'
 import { formatRoleLabel, isAdmin } from '@/lib/auth/access'
@@ -427,15 +428,12 @@ export default function Settings() {
   }
 
   return (
-    <div className="mod-page">
-      <ModuleHeader
-        title="System settings"
-        subtitle="Configure company info, users, and module behaviour"
-        icon={<Fa icon={faCog} />}
-        color="var(--navy)"
-      />
-
-      <div className="mod-body p-4 sm:p-5 pb-16">
+    <ModuleChrome
+      title="System settings"
+      subtitle="Configure company info, users, and module behaviour"
+      icon={<Fa icon={faCog} />}
+    >
+      <div className="p-4 sm:p-5 pb-16">
       <div className="flex flex-col lg:flex-row gap-5 items-start">
 
         {/* ── Desktop sidebar ── */}
@@ -1187,7 +1185,7 @@ ACCOUNTS_EMAIL=accounts@deed.co.ke`}</pre>
           </div>
         </Modal>
       )}
-      </div>{/* mod-body */}
+      </div>
       {pendingConfirm && (
         <Confirm
           message={pendingConfirm.msg}
@@ -1197,7 +1195,7 @@ ACCOUNTS_EMAIL=accounts@deed.co.ke`}</pre>
       )}
       {resetStep === 1 && (
         <Confirm
-          message="⚠️ This will permanently delete ALL business data. User accounts will be kept. This cannot be undone. Are you sure?"
+          message="Warning: This will permanently delete ALL business data. User accounts will be kept. This cannot be undone. Are you sure?"
           confirmLabel="Yes, Delete All"
           confirmColor="bg-red-600"
           onConfirm={() => setResetStep(2)}
@@ -1219,6 +1217,6 @@ ACCOUNTS_EMAIL=accounts@deed.co.ke`}</pre>
           onCancel={() => setResetStep(0)}
         />
       )}
-    </div>
+    </ModuleChrome>
   )
 }

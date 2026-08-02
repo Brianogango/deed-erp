@@ -202,7 +202,7 @@ export default function HRPerformanceTab() {
             })
           ) : (
             <div className="py-20 text-center card border-dashed">
-              <div className="text-4xl mb-4">📈</div>
+              <div className="text-4xl mb-4 text-[var(--text-4)]" aria-hidden="true"><Fa icon={faChartLine} /></div>
               <h4 className="text-sm font-bold text-[var(--text-1)]">No Performance Targets</h4>
               <p className="text-xs text-[var(--text-4)] max-w-xs mx-auto mt-1">
                 {canViewAllTargets ? 'Establish performance goals and track employee progress directly from this dashboard.' : 'No performance targets have been assigned to you yet.'}

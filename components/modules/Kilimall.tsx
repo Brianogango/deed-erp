@@ -10,8 +10,11 @@ import { PrimaryActionButton } from '@/components/erp'
 import { DataTable, type ColumnDef, type PrimaryFilterConfig } from '@/components/data-table'
 import { loadXlsx } from '@/lib/xlsx-lazy'
 import { guardSpreadsheetFile, guardSpreadsheetRows, SpreadsheetGuardError } from '@/lib/spreadsheet-guard'
-import { Fa } from '@/components/icons'
-import { faCartShopping, faPlus } from '@fortawesome/free-solid-svg-icons'
+import {
+  Fa, faCartShopping, faPlus, faRotateLeft, faClipboardList,
+  faMoneyBillWave, faMagnifyingGlass, faFileImport, faArrowsRotate,
+  faTriangleExclamation, faCheck, faCircleExclamation,
+} from '@/components/icons'
 
 type Tab = 'orders' | 'dispatch' | 'settlements' | 'reconciliation' | 'returns' | 'reports' | 'settings'
 
@@ -533,14 +536,14 @@ export default function Kilimall() {
                     </datalist>
                   </div>
                   {availableSerials.length === 0 && (
-                    <p className="text-[10px] mt-1" style={{ color: 'var(--danger)' }}>
-                      ⚠ No available stock for this product. <button className="underline" onClick={() => setModule('inventory')}>Check Inventory</button>
+                    <p className="text-[10px] mt-1 inline-flex items-center gap-1 flex-wrap" style={{ color: 'var(--danger)' }}>
+                      <Fa icon={faTriangleExclamation} aria-hidden="true" /> No available stock for this product. <button type="button" className="underline" onClick={() => setModule('inventory')}>Check Inventory</button>
                     </p>
                   )}
                 </Field>
-                <button className="btn-primary" onClick={handleDispatch}
+                <button className="btn-primary inline-flex items-center gap-1.5" onClick={handleDispatch}
                   disabled={!dispatchSerial || availableSerials.length === 0}>
-                  ✓ Confirm Dispatch
+                  <Fa icon={faCheck} aria-hidden="true" /> Confirm Dispatch
                 </button>
                 <button className="btn-outline text-[11px]" onClick={() => { setDispatchOrderId(null); setDispatchSerial('') }}>
                   Cancel
@@ -626,12 +629,12 @@ export default function Kilimall() {
                   <p className="text-[10px] text-t3">{settlement.lines.length} lines · Gross {fmtKes(settlement.grossAmount)} · Net {fmtKes(settlement.netPaid)}</p>
                 </div>
                 {settlement.status !== 'reconciled' && (
-                  <button className="btn-primary text-[11px]" onClick={() => reconcileKilimallSettlement(settlement.id)}>
-                    🔄 Run Reconciliation
+                  <button className="btn-primary text-[11px] inline-flex items-center gap-1.5" onClick={() => reconcileKilimallSettlement(settlement.id)}>
+                    <Fa icon={faArrowsRotate} aria-hidden="true" /> Run Reconciliation
                   </button>
                 )}
                 {settlement.status === 'reconciled' && (
-                  <span className="text-[10px] px-2 py-1 rounded font-semibold" style={{ background: 'var(--success-bg)', color: 'var(--success)' }}>✓ Reconciled</span>
+                  <span className="text-[10px] px-2 py-1 rounded font-semibold inline-flex items-center gap-1" style={{ background: 'var(--success-bg)', color: 'var(--success)' }}><Fa icon={faCheck} aria-hidden="true" /> Reconciled</span>
                 )}
               </div>
 
@@ -672,9 +675,10 @@ export default function Kilimall() {
                         render: (line: KilimallSettlementLine) => {
                           const resultColor = { matched: '#059669', unmatched: '#DC2626', returned: '#F59E0B', mismatch: '#F97316' }[line.status]
                           const resultBg   = { matched: '#DCFCE7', unmatched: '#FEE2E2', returned: '#FEF9C3', mismatch: '#FFF7ED' }[line.status]
+                          const resultLabel = line.status === 'matched' ? 'OK' : line.status === 'unmatched' ? 'Missing' : line.status === 'mismatch' ? 'Mismatch' : 'Returned'
                           return (
                             <span className="text-[9px] px-1.5 py-0.5 rounded font-bold uppercase" style={{ background: resultBg, color: resultColor }}>
-                              {line.status === 'matched' ? '✔ OK' : line.status === 'unmatched' ? '⚠ Missing' : line.status === 'mismatch' ? '❗ Mismatch' : '↩ Returned'}
+                              {resultLabel}
                             </span>
                           )
                         },
@@ -689,10 +693,10 @@ export default function Kilimall() {
                     perPage={50}
                   />
                   <div className="flex gap-6 px-3 py-2 text-[10px] text-t2" style={{ background: 'var(--bg-surface)', borderTop: '1px solid var(--bg-muted)' }}>
-                    <span>✔ Matched: <b>{settlement.lines.filter(l => l.status === 'matched').length}</b></span>
-                    <span style={{ color: 'var(--danger)' }}>⚠ Unmatched: <b>{settlement.lines.filter(l => l.status === 'unmatched').length}</b></span>
-                    <span style={{ color: '#F97316' }}>❗ Mismatch: <b>{settlement.lines.filter(l => l.status === 'mismatch').length}</b></span>
-                    <span style={{ color: 'var(--warning)' }}>↩ Returned: <b>{settlement.lines.filter(l => l.status === 'returned').length}</b></span>
+                    <span className="inline-flex items-center gap-1"><Fa icon={faCheck} aria-hidden="true" /> Matched: <b>{settlement.lines.filter(l => l.status === 'matched').length}</b></span>
+                    <span className="inline-flex items-center gap-1" style={{ color: 'var(--danger)' }}><Fa icon={faTriangleExclamation} aria-hidden="true" /> Unmatched: <b>{settlement.lines.filter(l => l.status === 'unmatched').length}</b></span>
+                    <span className="inline-flex items-center gap-1" style={{ color: '#F97316' }}><Fa icon={faCircleExclamation} aria-hidden="true" /> Mismatch: <b>{settlement.lines.filter(l => l.status === 'mismatch').length}</b></span>
+                    <span className="inline-flex items-center gap-1" style={{ color: 'var(--warning)' }}><Fa icon={faRotateLeft} aria-hidden="true" /> Returned: <b>{settlement.lines.filter(l => l.status === 'returned').length}</b></span>
                   </div>
                 </>
               )}
@@ -706,7 +710,7 @@ export default function Kilimall() {
       ════════════════════════════════════════════════════════════════════════ */}
       {tab === 'returns' && (
         <div className="card p-6 flex flex-col items-center gap-4">
-          <span style={{ fontSize: 40 }}>↩️</span>
+          <span style={{ fontSize: 40, color: 'var(--text-4)' }} aria-hidden="true"><Fa icon={faRotateLeft} /></span>
           <p className="text-sm font-semibold text-t1">Kilimall Returns → RMA</p>
           <p className="text-[11px] text-t3 text-center max-w-sm">
             All Kilimall returns must be processed through the After-Sales RMA module.
@@ -737,8 +741,10 @@ export default function Kilimall() {
       {tab === 'reports' && (
         <div className="flex flex-col gap-4">
           <div className="flex gap-1">
-            {([['ops','📋 Operational'],['financial','💰 Financial'],['control','🔍 Control']] as const).map(([t,l]) => (
-              <button key={t} onClick={() => setReportTab(t)} style={tabBtn(reportTab === t)}>{l}</button>
+            {([['ops','Operational',faClipboardList],['financial','Financial',faMoneyBillWave],['control','Control',faMagnifyingGlass]] as const).map(([t, l, icon]) => (
+              <button key={t} onClick={() => setReportTab(t)} style={{ ...tabBtn(reportTab === t), display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                <Fa icon={icon} aria-hidden="true" /> {l}
+              </button>
             ))}
           </div>
 
@@ -812,7 +818,7 @@ export default function Kilimall() {
                         <span className="font-mono text-[11px]">{l.kilimallRef}</span>
                         <span className="text-[11px]">{fmtKes(l.amount)}</span>
                         <span className="text-[10px] text-t3">{s.weekPeriod}</span>
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded" style={{ background: 'var(--danger-bg)', color: 'var(--danger)' }}>⚠ No ERP Record</span>
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded inline-flex items-center gap-1" style={{ background: 'var(--danger-bg)', color: 'var(--danger)' }}><Fa icon={faTriangleExclamation} aria-hidden="true" /> No ERP Record</span>
                       </div>
                     ))
                   )
@@ -983,8 +989,8 @@ export default function Kilimall() {
             <div className="flex items-center justify-between mb-2">
               <p className="text-[11px] font-semibold text-t2">Settlement Lines (Order IDs)</p>
               <div className="flex gap-2">
-                <button className="text-[10px] px-2 py-1 rounded border text-t2" style={{ borderColor: 'var(--border-lt)' }}
-                  onClick={() => settlFileRef.current?.click()}>📤 Import Excel</button>
+                <button className="text-[10px] px-2 py-1 rounded border text-t2 inline-flex items-center gap-1" style={{ borderColor: 'var(--border-lt)' }}
+                  onClick={() => settlFileRef.current?.click()}><Fa icon={faFileImport} aria-hidden="true" /> Import Excel</button>
                 <input ref={settlFileRef} type="file" accept=".xlsx,.xls,.csv" className="hidden"
                   onChange={e => { if (e.target.files?.[0]) handleSettlementUpload(e.target.files[0]) }} />
                 <button className="text-[10px] px-2 py-1 rounded border text-t2" style={{ borderColor: 'var(--border-lt)' }}
@@ -1062,10 +1068,10 @@ export default function Kilimall() {
           />
           <div className="flex gap-2 justify-end mt-3">
             {viewSettlement.status !== 'reconciled' && (
-              <button className="btn-primary text-[11px]" onClick={() => {
+              <button className="btn-primary text-[11px] inline-flex items-center gap-1.5" onClick={() => {
                 reconcileKilimallSettlement(viewSettlement.id)
                 setViewSettlement(null)
-              }}>🔄 Run Reconciliation</button>
+              }}><Fa icon={faArrowsRotate} aria-hidden="true" /> Run Reconciliation</button>
             )}
           </div>
         </Modal>

@@ -10,7 +10,10 @@ import { Breadcrumbs } from '@/components/erp/Breadcrumbs'
 import { SmartButtons } from '@/components/erp/SmartButtons'
 import { PrimaryActionButton, SecondaryActionMenu, StatusBadge } from '@/components/erp'
 import { billableQty } from '@/lib/purchase/three-way-match'
-import { Fa, faBox, faCheck, faFileInvoice, faPaperPlane, faPlus, faTrash, faUpload, faWarehouse } from '@/components/icons'
+import {
+  Fa, faBox, faCheck, faFileInvoice, faPaperPlane, faPlus, faTrash, faUpload,
+  faWarehouse, faBarcode, faWrench, faPhone, faLocationDot, faEnvelope, faStar,
+} from '@/components/icons'
 
 const ACCESSORIES = ['Charger', 'Bag/Case', 'Mouse', 'Box', 'Cable', 'Manual']
 const PO_STEPS = ['RFQ', 'RFQ Sent', 'Purchase Order', 'Received', 'Billed']
@@ -394,7 +397,7 @@ export default function POFormView() {
         {/* Repair procurement link banner */}
         {activePO.repairRef && (
           <div className="card p-3 flex items-center gap-2.5" style={{ background: 'color-mix(in srgb, var(--accent) 8%, var(--bg-card))', borderColor: 'color-mix(in srgb, var(--accent) 30%, transparent)' }}>
-            <span className="text-base">🔧</span>
+            <span className="text-base text-t3" aria-hidden="true"><Fa icon={faWrench} /></span>
             <div className="flex-1 min-w-0">
               <p className="text-[11px] font-semibold text-t1">Repair procurement — {activePO.repairRef}</p>
               <p className="text-[10px] text-t3">Auto-created from a parts request on repair {activePO.repairRef}. Assign a vendor below, then process normally through Purchase → GRN → Validate to auto-resume the repair.</p>
@@ -661,9 +664,9 @@ export default function POFormView() {
                         <p className="text-[10px] text-t3">{vendor.type === 'company' ? 'Company' : 'Individual'}</p>
                       </div>
                     </div>
-                    {vendor.email    && <p className="text-[11px] text-t2">✉ {vendor.email}</p>}
-                    {vendor.phone    && <p className="text-[11px] text-t2">📞 {vendor.phone}</p>}
-                    {vendor.address  && <p className="text-[10px] text-t3">📍 {vendor.address}</p>}
+                    {vendor.email    && <p className="text-[11px] text-t2 inline-flex items-center gap-1.5"><Fa icon={faEnvelope} className="text-t4" aria-hidden="true" /> {vendor.email}</p>}
+                    {vendor.phone    && <p className="text-[11px] text-t2 inline-flex items-center gap-1.5"><Fa icon={faPhone} className="text-t4" aria-hidden="true" /> {vendor.phone}</p>}
+                    {vendor.address  && <p className="text-[10px] text-t3 inline-flex items-center gap-1.5"><Fa icon={faLocationDot} className="text-t4" aria-hidden="true" /> {vendor.address}</p>}
                     {vendor.vatNumber && <p className="text-[10px] text-t3">PIN: {vendor.vatNumber}</p>}
                     <div className="grid grid-cols-2 gap-2 text-[10px] pt-2 border-t" style={{ borderColor: 'var(--bg-muted)' }}>
                       <div>
@@ -676,7 +679,7 @@ export default function POFormView() {
                       </div>
                       <div>
                         <span className="text-t3">Rating</span><br />
-                        <span className="text-t1">{vendor.vendorRating ? `⭐ ${vendor.vendorRating.toFixed(1)}/5` : '—'}</span>
+                        <span className="text-t1 inline-flex items-center gap-1">{vendor.vendorRating ? <><Fa icon={faStar} className="text-amber-500" aria-hidden="true" /> {vendor.vendorRating.toFixed(1)}/5</> : '—'}</span>
                       </div>
                     </div>
                     {vendor.bankDetails && (
@@ -747,7 +750,7 @@ export default function POFormView() {
                     <p className="font-medium text-xs text-t1">{p.name}</p>
                     <p className="text-[10px] text-t3">
                       {p.category} · Cost: {fmtKes(p.costPrice)}
-                      {CATEGORY_CONFIG[p.category as CategoryId]?.serialRequired ? ' · 🔖 Serial' : ''}
+                      {CATEGORY_CONFIG[p.category as CategoryId]?.serialRequired ? <> · <Fa icon={faBarcode} aria-hidden="true" /> Serial</> : ''}
                     </p>
                   </div>
                 </div>

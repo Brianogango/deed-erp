@@ -9,8 +9,7 @@ import {
 import { useHrStore } from '@/hooks/useHrStore'
 import { Confirm, ModuleSkeleton, ModuleHeader, TabBar } from '@/components/ui'
 import { PrimaryActionButton } from '@/components/erp'
-import { Fa } from '@/components/icons'
-import { faBullseye, faCircleCheck, faTriangleExclamation, faUserSlash, faPlus } from '@fortawesome/free-solid-svg-icons'
+import { Fa, faBullseye, faCircleCheck, faCircleXmark, faTriangleExclamation, faUserSlash, faPlus } from '@/components/icons'
 
 // ── Period helpers ────────────────────────────────────────────────────────────
 
@@ -402,7 +401,7 @@ export default function SOPs() {
             <div className="min-w-[800px] flex flex-col divide-y divide-gray-100">
             {sops.filter(s => s.active).length === 0 ? (
               <div className="py-14 text-center text-t3 text-sm">
-                <div style={{ fontSize: 36 }} className="mb-2">🎯</div>
+                <div style={{ fontSize: 36 }} className="mb-2 text-t4" aria-hidden="true"><Fa icon={faBullseye} /></div>
                 No active targets set. Click "+ Set Target" to get started.
               </div>
             ) : sops.filter(s => s.active).map(sop => {
@@ -503,7 +502,7 @@ export default function SOPs() {
           if (!sop) {
             return (
               <div className="py-14 text-center text-t3 text-sm">
-                <div style={{ fontSize: 36 }} className="mb-2">🎯</div>
+                <div style={{ fontSize: 36 }} className="mb-2 text-t4" aria-hidden="true"><Fa icon={faBullseye} /></div>
                 {canViewTeamHR ? 'Select a staff member from the Overview tab.' : 'No performance target has been set for you yet. Contact your administrator.'}
               </div>
             )
@@ -577,7 +576,9 @@ export default function SOPs() {
                             : <span style={{ fontSize: 9, padding: '1px 6px', borderRadius: 20, background: '#E8F3FA', color: 'var(--navy-dark)', fontWeight: 600 }}>Auto-tracked</span>
                           }
                         </div>
-                        <span style={{ fontSize: 18 }}>{met ? '✅' : p >= 70 ? '⚠️' : '❌'}</span>
+                        <span style={{ fontSize: 18 }} aria-hidden="true">
+                          <Fa icon={met ? faCircleCheck : p >= 70 ? faTriangleExclamation : faCircleXmark} style={{ color: met ? 'var(--success)' : p >= 70 ? 'var(--warning)' : 'var(--danger)' }} />
+                        </span>
                       </div>
 
                       {/* Progress bar */}
