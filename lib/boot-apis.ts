@@ -35,7 +35,9 @@ const ALL_BOOT_API_GROUPS: BootApiGroup[] = [
 const ALWAYS_BOOT: BootApiGroup[] = ['employees', 'leave', 'approval_rules']
 
 const ROUTE_BOOT_APIS: Record<string, BootApiGroup[]> = {
-  '/': ['products', 'contacts', 'sales', 'repairs'],
+  // Dashboard first paint: products + sales for KPI cards. Contacts/repairs
+  // warm on hover or when those modules open (idle prefetch still covers them).
+  '/': ['products', 'sales'],
   '/sales': ['products', 'contacts', 'sales', 'crm'],
   '/crm': ['products', 'contacts', 'sales', 'crm'],
   '/purchases': ['products', 'contacts'],

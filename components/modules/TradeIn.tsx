@@ -1599,7 +1599,7 @@ function ELineEditor({ line, onChange, onRemove, products, mode = 'customer_retu
 type TradeTab = 'buybacks' | 'donations' | 'exchanges'
 
 export default function TradeIn() {
-  const [mounted, setMounted] = useState(false)
+  const [mounted, setMounted] = useState(() => typeof window !== 'undefined')
   const { buyBacks, donations, clientExchanges } = useAfterSalesStore()
   const [tab, setTab] = useState<TradeTab>('buybacks')
 

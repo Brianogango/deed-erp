@@ -155,7 +155,7 @@ type ImportContactRow = {
 }
 
 export default function Contacts() {
-  const [mounted, setMounted] = useState(false)
+  const [mounted, setMounted] = useState(() => typeof window !== 'undefined')
   useEffect(() => { setMounted(true) }, [])
 
   const { contacts, addContact, updateContact, deleteContact,

@@ -209,7 +209,7 @@ const uid = () => crypto.randomUUID()
 // ── Main Component ────────────────────────────────────────────────────────────
 
 export default function SOPs() {
-  const [mounted, setMounted] = useState(false)
+  const [mounted, setMounted] = useState(() => typeof window !== 'undefined')
   useEffect(() => { setMounted(true) }, [])
 
   const {

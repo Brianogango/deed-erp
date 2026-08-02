@@ -1,4 +1,4 @@
 {
-  "reason": "Clear ops-copied scripts (heal/add-serial/revert) so Contabo deploy can proceed after #134/#135",
-  "requestedAt": "2026-08-01T10:40:00Z"
+  "reason": "Clear leftover mark/find-serials ops copies so Contabo deploy can proceed after #160-#162",
+  "requestedAt": "2026-08-02T19:32:00Z"
 }

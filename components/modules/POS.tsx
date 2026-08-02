@@ -96,7 +96,7 @@ function ReceiptPrintView({ order, companySettings, onDone }: { order: any, comp
 }
 
 export default function PointOfSale() {
-  const [mounted, setMounted] = useState(false)
+  const [mounted, setMounted] = useState(() => typeof window !== 'undefined')
   useEffect(() => { setMounted(true) }, [])
 
   const { products, serials, contacts, createPOSOrder, posOrders, openPOSSession, closePOSSession, posSessionOpen, posSessionOpeningCash, posSessionId, showToast, companySettings, getCustomerCreditStatus } = useCommerceStore()

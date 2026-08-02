@@ -142,23 +142,39 @@ cd "$APP_DIR"
 # Ops push workflows sometimes leave copied helpers under scripts/. Restore or
 # remove only those known paths so a deploy is not blocked — never wipe .env,
 # uploads, or unrelated local edits.
-OPS_SCRIPTS=(
+OPS_PATHS=(
   scripts/book-leave-for-employee.mjs
   scripts/add-product-serial.mjs
   scripts/heal-delivery-qty.mjs
   scripts/revert-hollow-done-delivery.mjs
   scripts/detect-hollow-done-deliveries.mjs
+  scripts/purge-explore-test-data.mjs
+  scripts/add-opening-bulk-stock.mjs
+  scripts/heal-grn-serials.mjs
+  scripts/mark-serials-sold.mjs
+  scripts/find-serials.mjs
+  ops/mark-serials-sold-request.json
+  ops/find-serials-request.json
+  ops/heal-grn-serials-request.json
+  ops/add-serial-request.json
+  ops/add-opening-bulk-stock-request.json
+  ops/purge-explore-test-request.json
+  ops/heal-delivery-qty-request.json
+  ops/revert-hollow-done-request.json
+  ops/book-leave-request.json
+  ops/clean-worktree-request.json
 )
-for ops_script in "${OPS_SCRIPTS[@]}"; do
-  if git ls-files --error-unmatch "$ops_script" >/dev/null 2>&1; then
-    git restore --source=HEAD --worktree --staged -- "$ops_script" 2>/dev/null \
-      || git checkout HEAD -- "$ops_script" 2>/dev/null \
+for ops_path in "${OPS_PATHS[@]}"; do
+  if git ls-files --error-unmatch "$ops_path" >/dev/null 2>&1; then
+    git restore --source=HEAD --worktree --staged -- "$ops_path" 2>/dev/null \
+      || git checkout HEAD -- "$ops_path" 2>/dev/null \
       || true
-  elif [[ -e "$ops_script" ]]; then
-    log "Removing untracked ops copy before deploy: $ops_script"
-    rm -f -- "$ops_script"
+  elif [[ -e "$ops_path" ]]; then
+    log "Removing untracked ops copy before deploy: $ops_path"
+    rm -f -- "$ops_path"
   fi
 done
+rm -rf -- "$STAGED_BUILD_PATH"
 [[ -z "$(git status --porcelain --untracked-files=normal -- . \
   ':(exclude).next-previous' ':(exclude).next-staging')" ]] || {
   log "Application worktree is dirty; refusing to overwrite local changes"

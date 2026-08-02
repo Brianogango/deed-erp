@@ -114,14 +114,29 @@ jobs:
           script: |
             set -euo pipefail
             cd /var/www/deed-erp
-            OPS_SCRIPTS=(
+            OPS_PATHS=(
               scripts/book-leave-for-employee.mjs
               scripts/add-product-serial.mjs
               scripts/heal-delivery-qty.mjs
               scripts/revert-hollow-done-delivery.mjs
               scripts/detect-hollow-done-deliveries.mjs
+              scripts/purge-explore-test-data.mjs
+              scripts/add-opening-bulk-stock.mjs
+              scripts/heal-grn-serials.mjs
+              scripts/mark-serials-sold.mjs
+              scripts/find-serials.mjs
+              ops/mark-serials-sold-request.json
+              ops/find-serials-request.json
+              ops/heal-grn-serials-request.json
+              ops/add-serial-request.json
+              ops/add-opening-bulk-stock-request.json
+              ops/purge-explore-test-request.json
+              ops/heal-delivery-qty-request.json
+              ops/revert-hollow-done-request.json
+              ops/book-leave-request.json
+              ops/clean-worktree-request.json
             )
-            for f in "${OPS_SCRIPTS[@]}"; do
+            for f in "${OPS_PATHS[@]}"; do
               if git ls-files --error-unmatch "$f" >/dev/null 2>&1; then
                 git restore --source=HEAD --worktree --staged -- "$f" 2>/dev/null \
                   || git checkout HEAD -- "$f" 2>/dev/null \
@@ -131,6 +146,8 @@ jobs:
                 rm -f -- "$f"
               fi
             done
+            # Stale previous-build dir is excluded from dirty checks but can confuse operators.
+            rm -rf -- .next-staging
             git status --porcelain || true
 
       - name: Deploy via SSH

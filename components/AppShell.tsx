@@ -187,7 +187,7 @@ function PublicPageSkeleton() {
  * Manages layout, session, and auth state
  */
 function AppContent({ children }: { children: React.ReactNode }) {
-  const [mounted, setMounted] = useState(false)
+  const [mounted, setMounted] = useState(() => typeof window !== 'undefined')
   useEffect(() => setMounted(true), [])
 
   const router = useRouter()

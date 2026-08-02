@@ -106,7 +106,7 @@ export default function Purchase() {
     showToast, companySettings, addContact,
   } = useFinanceStore()
 
-  const [mounted, setMounted] = useState(false)
+  const [mounted, setMounted] = useState(() => typeof window !== 'undefined')
   useEffect(() => setMounted(true), [])
 
   const [mainView, setMainView] = useState<MainView>('orders')

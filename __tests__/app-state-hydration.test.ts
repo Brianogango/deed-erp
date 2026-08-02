@@ -38,5 +38,8 @@ describe('appStateKeysForRoute', () => {
     expect(keys).not.toContain('deed_stockReservations')
     expect(keys).not.toContain('deed_outboundReleases')
     expect(keys).not.toContain('deed_bankStatementLines')
+    expect(keys).not.toContain('deed_purchaseOrders')
+    expect(keys).not.toContain('deed_stockTransfers')
+    expect(keys).not.toContain('deed_posOrders')
   })
 })
