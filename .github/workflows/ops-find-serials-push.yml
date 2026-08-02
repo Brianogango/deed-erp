@@ -1,0 +1,58 @@
+name: Ops find serials (push trigger)
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'ops/find-serials-request.json'
+
+jobs:
+  find-serials:
+    name: Find serials on Contabo
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate request
+        run: |
+          set -euo pipefail
+          COUNT=$(jq -r '.queries // [] | length' ops/find-serials-request.json)
+          if [ "$COUNT" -lt 1 ]; then
+            echo "ERROR: queries[] required in ops/find-serials-request.json" >&2
+            exit 1
+          fi
+
+      - name: Copy script + request to server
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          source: scripts/find-serials.mjs,ops/find-serials-request.json
+          target: /tmp/deed-ops/
+
+      - name: Run find-serials script
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          command_timeout: 5m
+          script: |
+            set -euo pipefail
+            cd /var/www/deed-erp
+            SCRIPT=scripts/find-serials.mjs
+            REQUEST=ops/find-serials-request.json
+            cp /tmp/deed-ops/scripts/find-serials.mjs "$SCRIPT"
+            mkdir -p ops
+            cp /tmp/deed-ops/ops/find-serials-request.json "$REQUEST"
+            node "$SCRIPT" --request "$REQUEST"
+            if git ls-files --error-unmatch "$SCRIPT" >/dev/null 2>&1; then
+              git restore --source=HEAD --worktree --staged -- "$SCRIPT" 2>/dev/null || git checkout HEAD -- "$SCRIPT" || true
+            else
+              rm -f "$SCRIPT"
+            fi
+            if git ls-files --error-unmatch "$REQUEST" >/dev/null 2>&1; then
+              git restore --source=HEAD --worktree --staged -- "$REQUEST" 2>/dev/null || git checkout HEAD -- "$REQUEST" || true
+            fi
