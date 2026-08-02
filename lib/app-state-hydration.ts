@@ -24,7 +24,8 @@ const HR_APP_STATE_KEYS = [
 ]
 
 const ROUTE_APP_STATE_KEYS: Record<string, string[]> = {
-  // Dashboard KPIs only — heavy stock/serial payloads hydrate when opening Inventory.
+  // Dashboard KPIs — keep this lean. Heavy workshop/outbound payloads hydrate
+  // when opening Repairs / Inventory so first paint after login stays fast.
   '/': [
     'deed_products',
     'deed_saleOrders',
@@ -38,13 +39,18 @@ const ROUTE_APP_STATE_KEYS: Record<string, string[]> = {
     'deed_posOrders',
     'deed_accounts',
     'deed_bankAccounts',
-    'deed_bankStatementLines',
-    'deed_refurbishmentJobs',
-    'deed_outsourceJobs',
-    'deed_kilimallOrders',
   ],
   '/sales': ['deed_saleOrders', 'deed_quotes', 'deed_products', 'deed_serials', 'deed_invoices', 'deed_deliveries', 'deed_contacts', 'deed_warranties', 'deed_bulkStock', 'deed_stockReservations', 'deed_approvalRequests', 'deed_bankAccounts', 'deed_documentPaymentDetails'],
-  '/crm': ['deed_quotes', 'deed_saleOrders', 'deed_contacts', 'deed_products', 'deed_approvalRequests'],
+  // CRM needs companies/opportunities/contacts — not the full sales + stock catalogs.
+  '/crm': [
+    'deed_quotes',
+    'deed_contacts',
+    'deed_companies',
+    'deed_contactPersons',
+    'deed_opportunities',
+    'deed_customerContracts',
+    'deed_approvalRequests',
+  ],
   '/purchases': ['deed_products', 'deed_purchaseOrders', 'deed_receipts', 'deed_invoices', 'deed_purchaseReturns', 'deed_contacts', 'deed_bulkStock', 'deed_serials'],
   '/purchase': ['deed_products', 'deed_purchaseOrders', 'deed_receipts', 'deed_invoices', 'deed_purchaseReturns', 'deed_contacts', 'deed_bulkStock', 'deed_serials'],
   '/operations': ['deed_products', 'deed_bulkStock', 'deed_stockTransfers', 'deed_stockAdjustments', 'deed_stockReservations', 'deed_openingStockPosted', 'deed_serials', 'deed_receipts', 'deed_refurbishmentJobs', 'deed_purchaseOrders'],

@@ -1,9 +1,16 @@
 'use client'
 
+import { useEffect } from 'react'
+import { recoverClientOnce, resetClientRecoveryFlag } from '@/lib/client-recovery'
+
 /**
  * Root-layout error UI. `app/error.tsx` cannot catch failures inside the root
  * layout (AppShell / StoreProvider). Without this file, those exceptions
  * render as a blank white page in production.
+ *
+ * On first failure we automatically clear corrupted ERP localStorage + SW
+ * caches and reload once — that is the durable fix for "works after clear
+ * site data" module crashes.
  */
 export default function GlobalError({
   error,
@@ -12,6 +19,11 @@ export default function GlobalError({
   error: Error & { digest?: string }
   reset: () => void
 }) {
+  useEffect(() => {
+    console.error('[global-error-boundary]', error)
+    void recoverClientOnce(`global-error:${error?.name}:${error?.message}`)
+  }, [error])
+
   return (
     <html lang="en">
       <body style={{ margin: 0, fontFamily: 'system-ui, sans-serif', background: '#F4F6FB' }}>
@@ -40,8 +52,8 @@ export default function GlobalError({
               Something went wrong
             </h1>
             <p style={{ fontSize: 12, color: '#64748B', marginTop: 8, lineHeight: 1.5 }}>
-              The app hit an unexpected error while loading your workspace. Reloading usually fixes it.
-              If it keeps happening, clear site data for this domain and sign in again.
+              The app hit an unexpected error while loading your workspace. We are clearing the local
+              cache and reloading automatically. If this screen stays, use Repair &amp; reload below.
             </p>
             {error?.digest && (
               <p style={{ fontSize: 10, color: '#94A3B8', marginTop: 8, fontFamily: 'ui-monospace, monospace' }}>
@@ -52,10 +64,8 @@ export default function GlobalError({
               <button
                 type="button"
                 onClick={() => {
-                  try {
-                    sessionStorage.removeItem('deed_stale_build_reloaded')
-                  } catch { /* ignore */ }
-                  window.location.reload()
+                  resetClientRecoveryFlag()
+                  void recoverClientOnce('global-error:manual')
                 }}
                 style={{
                   padding: '8px 20px',
@@ -68,7 +78,7 @@ export default function GlobalError({
                   cursor: 'pointer',
                 }}
               >
-                Reload page
+                Repair &amp; reload
               </button>
               <button
                 type="button"

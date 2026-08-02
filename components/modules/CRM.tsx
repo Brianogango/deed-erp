@@ -89,9 +89,13 @@ function CRMContent() {
     showToast, systemSettings,
   } = useCrmStore()
 
-  // Dynamic stage labels from settings (positionally mapped to STAGE_ORDER)
+  // Dynamic stage labels from settings (positionally mapped to STAGE_ORDER).
+  // Guard incomplete settings objects from older localStorage snapshots.
+  const pipelineStages = Array.isArray(systemSettings?.crmPipelineStages)
+    ? systemSettings.crmPipelineStages
+    : []
   const stageLabels: Record<OpportunityStage, string> = Object.fromEntries(
-    STAGE_ORDER.map((s, i) => [s, systemSettings.crmPipelineStages[i] ?? STAGE_LABELS[s]])
+    STAGE_ORDER.map((s, i) => [s, pipelineStages[i] ?? STAGE_LABELS[s]])
   ) as Record<OpportunityStage, string>
 
   const defaultTab: Tab = 'pipeline'
@@ -711,7 +715,7 @@ function CRMContent() {
       <TabBar
         tabs={[
           { id: 'pipeline', label: 'Pipeline' },
-          ...(systemSettings.crmLeads ? [{ id: 'leads' as const, label: 'Leads' }] : []),
+          ...(systemSettings?.crmLeads ? [{ id: 'leads' as const, label: 'Leads' }] : []),
           { id: 'companies', label: 'Companies' },
           { id: 'contacts', label: 'Contacts' },
           { id: 'activities', label: 'Activities' },
@@ -1025,7 +1029,7 @@ function CRMContent() {
     )
   }
 
-  if (tab === 'leads' && systemSettings.crmLeads) {
+  if (tab === 'leads' && systemSettings?.crmLeads) {
     return (
       <div className="mod-page">
         {moduleHeader}

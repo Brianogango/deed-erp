@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect } from 'react'
+import { recoverClientOnce, resetClientRecoveryFlag } from '@/lib/client-recovery'
 
 // Stale-deploy signatures: a tab from a previous build failing to load chunks
 // or RSC payloads from the new one. A single reload fixes these — do it
@@ -12,9 +13,12 @@ const STALE_BUILD_PATTERNS = [
   /Importing a module script failed/i,
   /clientModules/,
   /Unexpected token '<'/,
+  /\.filter is not a function/i,
+  /\.map is not a function/i,
+  /Cannot read propert(y|ies) of (undefined|null)/i,
 ]
 
-function isStaleBuildError(error: Error): boolean {
+function isRecoverableClientError(error: Error): boolean {
   const text = `${error.name}: ${error.message}`
   return STALE_BUILD_PATTERNS.some(re => re.test(text))
 }
@@ -22,15 +26,8 @@ function isStaleBuildError(error: Error): boolean {
 export default function AppError({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {
   useEffect(() => {
     console.error('[app-error-boundary]', error)
-    if (!isStaleBuildError(error)) return
-    // Reload once per session to pick up the new build; the guard prevents a
-    // reload loop if the error persists after refreshing.
-    try {
-      if (!sessionStorage.getItem('deed_stale_build_reloaded')) {
-        sessionStorage.setItem('deed_stale_build_reloaded', '1')
-        window.location.reload()
-      }
-    } catch { /* storage unavailable — fall through to the manual screen */ }
+    if (!isRecoverableClientError(error)) return
+    void recoverClientOnce(`app-error:${error.name}:${error.message}`)
   }, [error])
 
   return (
@@ -42,19 +39,22 @@ export default function AppError({ error, reset }: { error: Error & { digest?: s
         </div>
         <h1 className="text-base font-extrabold text-[var(--text-1,#0F172A)]">Something went wrong</h1>
         <p className="text-xs text-[var(--text-3,#64748B)] mt-2 leading-relaxed">
-          This usually happens when a new version of the app was released while this tab was open.
-          Reloading normally fixes it.
+          This usually happens after an app update or when local browser data got out of sync.
+          Repair &amp; reload clears the local cache and signs you back into a clean workspace.
         </p>
         {error?.digest && (
           <p className="text-[10px] text-[var(--text-4,#94A3B8)] mt-2 font-mono">Ref: {error.digest}</p>
         )}
         <div className="flex gap-3 justify-center mt-6">
           <button
-            onClick={() => { try { sessionStorage.removeItem('deed_stale_build_reloaded') } catch {}; window.location.reload() }}
+            onClick={() => {
+              resetClientRecoveryFlag()
+              void recoverClientOnce('app-error:manual')
+            }}
             className="px-5 py-2 rounded-xl text-xs font-bold text-white"
             style={{ background: '#1B2762' }}
           >
-            Reload page
+            Repair &amp; reload
           </button>
           <button
             onClick={reset}

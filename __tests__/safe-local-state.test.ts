@@ -30,6 +30,14 @@ describe('parseStoredState', () => {
   it('falls back on invalid JSON', () => {
     expect(parseStoredState('{', [1])).toEqual({ value: [1], corrupted: true })
   })
+
+  it('merges object seeds so missing settings fields are filled', () => {
+    const seed = { crmPipelineStages: ['A', 'B'], crmLeads: true }
+    expect(parseStoredState('{"crmLeads":false}', seed)).toEqual({
+      value: { crmPipelineStages: ['A', 'B'], crmLeads: false },
+      corrupted: false,
+    })
+  })
 })
 
 describe('ensureArray', () => {

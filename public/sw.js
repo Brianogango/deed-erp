@@ -1,5 +1,7 @@
 // Deed ERP Service Worker — PWA + Offline POS
 //
+// v7: bump cache after module-error auto-recovery so clients drop stale
+// runtime assets that crash CRM/other modules after deploy windows.
 // v6: network-first for /_next/static (was cache-first in v4/v5).
 // v5: drop runtime cache after post-login blank-page recovery work.
 // v4: bump runtime cache so clients drop stale fingerprinted CSS/JS after
@@ -8,8 +10,8 @@
 // v2 pre-cached '/' and '/login' at install time; after a deploy those stale
 // snapshots referenced fingerprinted CSS/JS chunks that no longer existed,
 // so users saw a completely unstyled login page until they cleared site data.
-const CACHE = 'deed-erp-v6'
-const RUNTIME_CACHE = 'deed-erp-runtime-v6'
+const CACHE = 'deed-erp-v7'
+const RUNTIME_CACHE = 'deed-erp-runtime-v7'
 const OFFLINE_URL = '/offline.html'
 
 // Next.js static assets are fingerprinted — cache them aggressively

@@ -18,16 +18,25 @@ describe('appStateKeysForRoute', () => {
     expect(keys).not.toContain('deed_journalEntries')
   })
 
-  it('hydrates CRM routes', () => {
+  it('hydrates CRM routes with CRM entities (not full sales/stock catalogs)', () => {
     const keys = appStateKeysForRoute('/crm')
-    expect(keys).toEqual(expect.arrayContaining(['deed_quotes', 'deed_contacts', 'deed_saleOrders']))
+    expect(keys).toEqual(expect.arrayContaining([
+      'deed_quotes',
+      'deed_contacts',
+      'deed_companies',
+      'deed_opportunities',
+    ]))
+    expect(keys).not.toContain('deed_saleOrders')
+    expect(keys).not.toContain('deed_products')
   })
 
-  it('keeps the dashboard payload lean (no serials / bulk stock)', () => {
+  it('keeps the dashboard payload lean (no serials / bulk stock / workshop extras)', () => {
     const keys = appStateKeysForRoute('/')
     expect(keys).toContain('deed_saleOrders')
     expect(keys).not.toContain('deed_serials')
     expect(keys).not.toContain('deed_bulkStock')
     expect(keys).not.toContain('deed_stockReservations')
+    expect(keys).not.toContain('deed_outboundReleases')
+    expect(keys).not.toContain('deed_bankStatementLines')
   })
 })
