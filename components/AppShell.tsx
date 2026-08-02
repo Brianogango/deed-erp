@@ -5,6 +5,7 @@ import { useRouter, usePathname } from 'next/navigation'
 
 import { AppProvider, useShellStore, User } from '@/lib/store'
 import { appStateKeysForRoute } from '@/lib/app-state-hydration'
+import { markRouteWarmed } from '@/lib/warm-route'
 import { Toast } from '@/components/ui'
 import Sidebar from '@/components/layout/Sidebar'
 import Topbar from '@/components/layout/Topbar'
@@ -364,10 +365,10 @@ function AppContent({ children }: { children: React.ReactNode }) {
     return () => { document.body.style.overflow = '' }
   }, [sidebarOpen])
 
-  // Smooth scroll-to-top on route change
+  // Instant scroll-to-top on route change (smooth scroll feels like lag on nav).
   useEffect(() => {
     if (contentRef.current) {
-      contentRef.current.scrollTo({ top: 0, behavior: 'smooth' })
+      contentRef.current.scrollTo({ top: 0, behavior: 'auto' })
     }
   }, [pathname])
 
@@ -378,7 +379,10 @@ function AppContent({ children }: { children: React.ReactNode }) {
     if (isPublicRepairTracker || !currentUserId) return
     const route = pathname || '/'
     window.dispatchEvent(new CustomEvent('deed_route_change', { detail: { pathname: route } }))
-    if (hydratedRoutesRef.current.has(route)) return
+    if (hydratedRoutesRef.current.has(route)) {
+      markRouteWarmed(route)
+      return
+    }
     hydratedRoutesRef.current.add(route)
 
     const keys = appStateKeysForRoute(route)
@@ -416,7 +420,10 @@ function AppContent({ children }: { children: React.ReactNode }) {
         return res.json()
       })
       .then((state: Record<string, unknown> | null) => {
-        if (!state) return
+        if (!state) {
+          markRouteWarmed(route)
+          return
+        }
         // Collection keys that must be arrays — writing an object/null here is what
         // used to crash Sidebar/Topbar with a blank page after login.
         const arrayKeys = /^(deed_repairs_v2|deed_products|deed_invoices|deed_saleOrders|deed_contacts|deed_employees|deed_expenses|deed_purchaseOrders|deed_stockTransfers|deed_serials|deed_accounts|deed_notifications|deed_posOrders|deed_deliveries|deed_journalEntries|deed_leaveRequests|deed_opportunities|deed_companies|deed_quotes|deed_holdovers|deed_deposits|deed_buyBacks|deed_warranties|deed_outsourceJobs|deed_outsourceVendors|deed_outsourcePayments|deed_bankAccounts|deed_receipts|deed_customerCredits|deed_workflowApprovals|deed_contracts|deed_customerContracts|deed_employeeAssets|deed_kilimallOrders|deed_payrollRuns)$/
@@ -450,15 +457,16 @@ function AppContent({ children }: { children: React.ReactNode }) {
           }
           window.dispatchEvent(new CustomEvent('deed_remote_update', { detail: { key, value: serialized } }))
         }
+        markRouteWarmed(route)
       })
       .catch(() => {
         hydratedRoutesRef.current.delete(route)
       })
   }, [pathname, currentUserId, isPublicRepairTracker])
 
-  // Patch legacy tables after route changes and whenever module content
-  // mutates (tabs, lazy panels, detail drawers). Debounced so React paint
-  // bursts don't thrash the DOM adapter.
+  // Patch legacy tables whenever module content mutates (tabs, lazy panels,
+  // detail drawers). Debounced so React paint bursts don't thrash the DOM.
+  // Keep one long-lived observer — do not tear it down on every route change.
   useEffect(() => {
     if (!mounted || isPublicRepairTracker) return
     const scope = contentRef.current
@@ -483,7 +491,7 @@ function AppContent({ children }: { children: React.ReactNode }) {
       bootTimers.forEach(timer => window.clearTimeout(timer))
       observer?.disconnect()
     }
-  }, [mounted, pathname, isPublicRepairTracker, applyLegacyResponsiveTables])
+  }, [mounted, isPublicRepairTracker, applyLegacyResponsiveTables])
 
   /**
    * Handle logout with reason tracking
@@ -625,7 +633,7 @@ function AppContent({ children }: { children: React.ReactNode }) {
           "
           style={{ overscrollBehavior: 'contain', WebkitOverflowScrolling: 'touch' } as React.CSSProperties}
         >
-          <div key={pathname} className="view-enter">
+          <div className="min-w-0">
             {children}
           </div>
         </main>

@@ -1,5 +1,5 @@
 import dynamic from 'next/dynamic'
-import { ModuleSkeleton } from '@/components/ui'
+import { ModuleSkeleton } from '@/components/ui/ModuleSkeleton'
 
 const CRM = dynamic(() => import('@/components/modules/CRM'), {
   loading: () => <ModuleSkeleton />,

@@ -1351,7 +1351,7 @@ function AccountingContent() {
                   <div className="flex gap-2">
                     <button
                       className="btn-secondary flex items-center gap-2"
-                      onClick={() => exportToExcel(
+                      onClick={() => { void exportToExcel(
                         `Monthly Management Report — ${monthlyReport.label}`,
                         ['Metric', 'Amount'],
                         [
@@ -1367,7 +1367,7 @@ function AccountingContent() {
                           ['Cash Collected', monthlyReport.cashCollected],
                         ],
                         `Monthly_Report_${monthlyReport.month}`,
-                      )}
+                      ) }}
                     >
                       <Fa icon={faDownload} /> Export
                     </button>
@@ -1634,7 +1634,7 @@ function AccountingContent() {
             <div className="p-6">
               <div className="flex items-center justify-between mb-5">
                 <div><h2 className="text-lg font-bold text-[var(--text-1)]">VAT Control Report</h2><p className="text-xs text-[var(--text-3)]">Output VAT less input VAT from posted sales invoices and vendor bills.</p></div>
-                <button className="btn-secondary flex items-center gap-2" onClick={() => exportToExcel('VAT Control Report', ['Metric', 'Amount'], [['Taxable Sales', financeReports.vat.taxableSales], ['Output VAT', financeReports.vat.outputVat], ['Taxable Purchases', financeReports.vat.taxablePurchases], ['Input VAT', financeReports.vat.inputVat], ['Net VAT Payable/(Refundable)', financeReports.vat.vatPayable]], `VAT_Report_${new Date().toISOString().slice(0, 10)}`)}><Fa icon={faDownload} /> Export</button>
+                <button className="btn-secondary flex items-center gap-2" onClick={() => { void exportToExcel('VAT Control Report', ['Metric', 'Amount'], [['Taxable Sales', financeReports.vat.taxableSales], ['Output VAT', financeReports.vat.outputVat], ['Taxable Purchases', financeReports.vat.taxablePurchases], ['Input VAT', financeReports.vat.inputVat], ['Net VAT Payable/(Refundable)', financeReports.vat.vatPayable]], `VAT_Report_${new Date().toISOString().slice(0, 10)}`) }}><Fa icon={faDownload} /> Export</button>
               </div>
               <DataTable
                 tableId="finance-vat-report"
