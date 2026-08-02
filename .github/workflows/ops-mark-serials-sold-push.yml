@@ -1,0 +1,64 @@
+name: Ops mark serials sold (push trigger)
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'ops/mark-serials-sold-request.json'
+
+jobs:
+  mark-serials-sold:
+    name: Mark serials sold on Contabo
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate request
+        run: |
+          set -euo pipefail
+          COUNT=$(jq -r '.serials // [] | length' ops/mark-serials-sold-request.json)
+          if [ "$COUNT" -lt 1 ]; then
+            echo "ERROR: serials[] required in ops/mark-serials-sold-request.json" >&2
+            exit 1
+          fi
+          echo "Marking $COUNT serial(s) as sold"
+
+      - name: Copy script + request to server
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          source: scripts/mark-serials-sold.mjs,ops/mark-serials-sold-request.json
+          target: /tmp/deed-ops/
+
+      - name: Run mark-serials-sold script
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          command_timeout: 5m
+          script: |
+            set -euo pipefail
+            cd /var/www/deed-erp
+            SCRIPT=scripts/mark-serials-sold.mjs
+            REQUEST=ops/mark-serials-sold-request.json
+            cp /tmp/deed-ops/scripts/mark-serials-sold.mjs "$SCRIPT"
+            mkdir -p ops
+            cp /tmp/deed-ops/ops/mark-serials-sold-request.json "$REQUEST"
+            DRY=$(jq -r '.dryRun // false' "$REQUEST")
+            ARGS=(--request "$REQUEST")
+            if [ "$DRY" = 'true' ]; then
+              ARGS+=(--dry-run)
+            fi
+            node "$SCRIPT" "${ARGS[@]}"
+            if git ls-files --error-unmatch "$SCRIPT" >/dev/null 2>&1; then
+              git restore --source=HEAD --worktree --staged -- "$SCRIPT" 2>/dev/null || git checkout HEAD -- "$SCRIPT" || true
+            else
+              rm -f "$SCRIPT"
+            fi
+            if git ls-files --error-unmatch "$REQUEST" >/dev/null 2>&1; then
+              git restore --source=HEAD --worktree --staged -- "$REQUEST" 2>/dev/null || git checkout HEAD -- "$REQUEST" || true
+            fi
