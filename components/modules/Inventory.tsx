@@ -176,7 +176,7 @@ type ProductListRow = {
 }
 
 export default function Inventory() {
-  const [mounted, setMounted] = useState(false)
+  const [mounted, setMounted] = useState(() => typeof window !== 'undefined')
   useEffect(() => { setMounted(true) }, [])
 
   const {

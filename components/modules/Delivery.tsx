@@ -1071,7 +1071,7 @@ function WeeklyPayTab() {
 
 // ── Root Component ─────────────────────────────────────────────────────────────
 export default function Delivery() {
-  const [mounted, setMounted] = useState(false)
+  const [mounted, setMounted] = useState(() => typeof window !== 'undefined')
   useEffect(() => { setMounted(true) }, [])
 
   const { deliveryJobs, riderWeeklyPays } = useDeliveryStore()

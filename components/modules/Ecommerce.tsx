@@ -18,7 +18,7 @@ type OnlineOrder = {
 
 export default function Ecommerce() {
   const { products, setModule } = useCommerceStore()
-  const [mounted, setMounted] = useState(false)
+  const [mounted, setMounted] = useState(() => typeof window !== 'undefined')
   useEffect(() => { setMounted(true) }, [])
 
   const [tab, setTab] = useState<'products' | 'orders' | 'settings'>('products')

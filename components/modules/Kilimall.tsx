@@ -31,7 +31,7 @@ const tabBtn = (active: boolean): React.CSSProperties => ({
 })
 
 export default function Kilimall() {
-  const [mounted, setMounted] = useState(false)
+  const [mounted, setMounted] = useState(() => typeof window !== 'undefined')
   useEffect(() => { setMounted(true) }, [])
 
   const {

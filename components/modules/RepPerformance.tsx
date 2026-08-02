@@ -97,7 +97,7 @@ interface RepStats {
 export default function RepPerformance() {
   const { saleOrders, users, currentUserId, sops } = useSalesStore()
 
-  const [mounted, setMounted] = useState(false)
+  const [mounted, setMounted] = useState(() => typeof window !== 'undefined')
   useEffect(() => { setMounted(true) }, [])
 
   const [periodMode, setPeriodMode] = useState<'month' | 'quarter'>('month')

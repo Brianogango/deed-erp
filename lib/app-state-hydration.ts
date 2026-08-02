@@ -24,8 +24,9 @@ const HR_APP_STATE_KEYS = [
 ]
 
 const ROUTE_APP_STATE_KEYS: Record<string, string[]> = {
-  // Dashboard KPIs — keep this lean. Heavy workshop/outbound payloads hydrate
-  // when opening Repairs / Inventory so first paint after login stays fast.
+  // Dashboard KPIs — keep this lean. Defer stock transfers / purchase orders /
+  // POS / bank ledgers until those modules are opened so login + first nav
+  // stay light. Dashboard still has products/SOs/invoices/repairs/expenses.
   '/': [
     'deed_products',
     'deed_saleOrders',
@@ -34,9 +35,6 @@ const ROUTE_APP_STATE_KEYS: Record<string, string[]> = {
     'deed_expenses',
     'deed_deposits',
     'deed_contacts',
-    'deed_purchaseOrders',
-    'deed_stockTransfers',
-    'deed_posOrders',
     'deed_accounts',
     'deed_bankAccounts',
   ],

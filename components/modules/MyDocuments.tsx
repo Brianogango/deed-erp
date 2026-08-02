@@ -14,7 +14,7 @@ const CATEGORIES = [
 ]
 
 export default function MyDocuments() {
-  const [mounted, setMounted] = useState(false)
+  const [mounted, setMounted] = useState(() => typeof window !== 'undefined')
   useEffect(() => { setMounted(true) }, [])
 
   const { users, currentUserId, showToast, refSops: sops, addRefSop, updateRefSop, deleteRefSop } = useHrStore()
