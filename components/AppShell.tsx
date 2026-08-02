@@ -187,7 +187,9 @@ function PublicPageSkeleton() {
  * Manages layout, session, and auth state
  */
 function AppContent({ children }: { children: React.ReactNode }) {
-  const [mounted, setMounted] = useState(() => typeof window !== 'undefined')
+  // Must start false so SSR HTML and the first client paint match (React #418).
+  // Modules loaded with `dynamic(..., { ssr: false })` can start mounted; AppShell cannot.
+  const [mounted, setMounted] = useState(false)
   useEffect(() => setMounted(true), [])
 
   const router = useRouter()
