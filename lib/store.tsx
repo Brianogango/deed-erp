@@ -29,6 +29,7 @@ import { LEAVE_ENTITLEMENTS, NOTICE_EXEMPT_TYPES, CALENDAR_DAY_TYPES, calcWorkin
 import type { StoreLeaveType } from '@/lib/leave-utils'
 import { normalizeQuotesForClient } from '@/lib/quote-normalization'
 import { normalizeOpportunitiesForClient } from '@/lib/opportunity-normalization'
+import { normalizeCompaniesForClient } from '@/lib/company-normalization'
 import {
   normalizeSaleOrdersForClient,
   invoiceableQty as odooInvoiceableQty,
@@ -4543,7 +4544,11 @@ export function StoreProvider({
 
   // Legacy & CRM
   const [contacts, setContacts] = useLS<Contact[]>('deed_contacts', seedContacts)
-  const [companies, setCompanies] = useLS<Company[]>('deed_companies', seedCompanies)
+  const [companiesRaw, setCompanies] = useLS<Company[]>('deed_companies', seedCompanies)
+  // Server rows arrive in the Prisma `clients` shape (no status, string
+  // creditLimit) via boot fetch, app_state sync, or old localStorage snapshots.
+  // Normalize once here so every consumer sees a well-formed Company.
+  const companies = useMemo(() => normalizeCompaniesForClient(companiesRaw) as Company[], [companiesRaw])
   const [contactPersons, setContactPersons] = useLS<ContactPerson[]>('deed_contactPersons', seedContactPersons)
   const [opportunities, setOpportunities] = useLS<Opportunity[]>('deed_opportunities', seedOpportunities)
   const [opportunityActivities, setOpportunityActivities] = useLS<OpportunityActivity[]>('deed_oppActivities', seedOpportunityActivities)
@@ -15571,5 +15576,10 @@ export function useShellStore() {
   return ctx
 }
 
-export const fmtKes = (n: number) => `KSh ${Math.round(n).toLocaleString('en-KE')}`
+// Coerce defensively: amounts synced from the server sometimes arrive as
+// strings (Prisma Decimal) or undefined — never render "KSh NaN".
+export const fmtKes = (n: number | string | null | undefined) => {
+  const v = typeof n === 'string' ? Number(n.replace(/,/g, '')) : Number(n ?? 0)
+  return `KSh ${Math.round(Number.isFinite(v) ? v : 0).toLocaleString('en-KE')}`
+}
 export const fmtDate = (d: string) => { try { return new Date(d).toLocaleDateString('en-KE', { day: '2-digit', month: 'short', year: 'numeric' }) } catch { return d } }

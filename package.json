@@ -69,7 +69,9 @@
       "@prisma/engines",
       "core-js",
       "prisma",
-      "puppeteer"
+      "puppeteer",
+      "sharp",
+      "tesseract.js"
     ]
   },
   "devDependencies": {
