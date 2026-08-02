@@ -1,7 +1,6 @@
 {
   "action": "purge_explore_test",
-  "apply": true,
+  "apply": false,
   "match": ["explore", "test"],
-  "note": "Remove ERP test/demo records whose identity fields contain the whole words explore and/or test.",
-  "retry": 3
+  "note": "Verify no explore/test identity matches remain."
 }
