@@ -21,6 +21,7 @@ import { canValidatePurchaseReceipt, canReleaseHeldSerial } from '@/lib/inventor
 import { explainSerialWhereabouts, findSerialMatches } from '@/lib/inventory/serial-trace'
 import { ScanInputRow } from '@/components/BarcodeScanner'
 import { identityMatchesScan, parseScanPayload } from '@/lib/barcode-scan'
+import { getCategoryMarkupPct, suggestSalePriceFromCost } from '@/lib/sale-price-calculator'
 
 type MainTab = 'warehouse_view' | 'product_master' | 'movements' | 'product_catalog' | 'opening_stock' | 'stock_in' | 'stock_out' | 'transfers' | 'adjustments' | 'stock_take' | 'reports'
 type ReportTab = 'stock_on_hand' | 'opening_closing' | 'movements' | 'serial_tracking' | 'serial_lookup' | 'low_stock'
@@ -1623,9 +1624,51 @@ export default function Inventory() {
                       <Input type="number" value={priceForm.salePrice} onChange={v => setPriceForm(f => ({ ...f, salePrice: v }))} placeholder="0" />
                     </Field>
                     <Field label="New Cost Price" required>
-                      <Input type="number" value={priceForm.costPrice} onChange={v => setPriceForm(f => ({ ...f, costPrice: v }))} placeholder="0" />
+                      <Input
+                        type="number"
+                        value={priceForm.costPrice}
+                        onChange={v => setPriceForm(f => {
+                          const suggested = suggestSalePriceFromCost(
+                            systemSettings.invCategorySaleMarkupPct,
+                            priceProduct.category,
+                            v,
+                          )
+                          return {
+                            ...f,
+                            costPrice: v,
+                            ...(suggested !== null ? { salePrice: String(suggested) } : {}),
+                          }
+                        })}
+                        placeholder="0"
+                      />
                     </Field>
                   </div>
+                  {(() => {
+                    const pct = getCategoryMarkupPct(systemSettings.invCategorySaleMarkupPct, priceProduct.category)
+                    if (pct === null) return null
+                    const suggested = suggestSalePriceFromCost(
+                      systemSettings.invCategorySaleMarkupPct,
+                      priceProduct.category,
+                      priceForm.costPrice,
+                    )
+                    return (
+                      <div className="rounded-lg border border-[#C7D7FD] bg-[#F0F4FF] px-3 py-2 flex items-center justify-between gap-2">
+                        <p className="text-[11px] text-navy-500 m-0">
+                          {priceProduct.category} markup {pct}%
+                          {suggested !== null ? <> → {fmtKes(suggested)}</> : null}
+                        </p>
+                        <button
+                          type="button"
+                          className="btn-secondary text-[11px] px-2.5 py-1"
+                          disabled={suggested === null}
+                          onClick={() => {
+                            if (suggested === null) return
+                            setPriceForm(f => ({ ...f, salePrice: String(suggested) }))
+                          }}
+                        >Use markup</button>
+                      </div>
+                    )
+                  })()}
                   <Field label="Reason" required>
                     <Input value={priceForm.reason} onChange={v => setPriceForm(f => ({ ...f, reason: v }))} placeholder="e.g. Supplier price change, promo, clearance" />
                   </Field>
@@ -3033,20 +3076,28 @@ export default function Inventory() {
                     })
                     const kind = defaults.productKind
                     const tracking = defaultTrackingForKind(kind, value)
-                    setForm((prev: any) => ({
-                      ...prev,
-                      category: value,
-                      productKind: kind,
-                      trackingMethod: tracking,
-                      unit: defaultUnitForKind(kind, tracking),
-                      saleAccountCode: defaults.saleAccountCode,
-                      costAccountCode: defaults.costAccountCode,
-                      inventoryAccountCode: kind === 'storable' ? defaults.inventoryAccountCode : '',
-                      cogsAccountCode: kind === 'storable' ? defaults.cogsAccountCode : '',
-                      adjustmentAccountCode: defaults.adjustmentAccountCode,
-                      writeOffAccountCode: defaults.writeOffAccountCode,
-                      priceDifferenceAccountCode: defaults.priceDifferenceAccountCode,
-                    }))
+                    setForm((prev: any) => {
+                      const suggested = suggestSalePriceFromCost(
+                        systemSettings.invCategorySaleMarkupPct,
+                        value,
+                        prev.costPrice,
+                      )
+                      return {
+                        ...prev,
+                        category: value,
+                        productKind: kind,
+                        trackingMethod: tracking,
+                        unit: defaultUnitForKind(kind, tracking),
+                        saleAccountCode: defaults.saleAccountCode,
+                        costAccountCode: defaults.costAccountCode,
+                        inventoryAccountCode: kind === 'storable' ? defaults.inventoryAccountCode : '',
+                        cogsAccountCode: kind === 'storable' ? defaults.cogsAccountCode : '',
+                        adjustmentAccountCode: defaults.adjustmentAccountCode,
+                        writeOffAccountCode: defaults.writeOffAccountCode,
+                        priceDifferenceAccountCode: defaults.priceDifferenceAccountCode,
+                        ...(suggested !== null ? { salePrice: String(suggested) } : {}),
+                      }
+                    })
                   }}
                   options={ALL_CATEGORIES.map(c => ({ value: c, label: c }))}
                 />
@@ -3106,10 +3157,54 @@ export default function Inventory() {
               </div>
             )}
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-              <Field label="Sale Price"><Input type="number" value={form.salePrice} onChange={setF('salePrice')} /></Field>
-              <Field label="Cost Price"><Input type="number" value={form.costPrice} onChange={setF('costPrice')} /></Field>
+              <Field label="Sale Price">
+                <Input type="number" value={form.salePrice} onChange={setF('salePrice')} />
+              </Field>
+              <Field label="Cost Price">
+                <Input
+                  type="number"
+                  value={form.costPrice}
+                  onChange={v => {
+                    setForm((prev: any) => {
+                      const suggested = suggestSalePriceFromCost(
+                        systemSettings.invCategorySaleMarkupPct,
+                        prev.category,
+                        v,
+                      )
+                      return {
+                        ...prev,
+                        costPrice: v,
+                        ...(suggested !== null ? { salePrice: String(suggested) } : {}),
+                      }
+                    })
+                  }}
+                />
+              </Field>
               <Field label="Tax Rate (%)"><Input type="number" value={form.taxRate} onChange={setF('taxRate')} /></Field>
             </div>
+            {(() => {
+              const pct = getCategoryMarkupPct(systemSettings.invCategorySaleMarkupPct, form.category)
+              if (pct === null) return null
+              const suggested = suggestSalePriceFromCost(systemSettings.invCategorySaleMarkupPct, form.category, form.costPrice)
+              return (
+                <div className="rounded-xl border border-[#C7D7FD] bg-[#F0F4FF] px-3 py-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <p className="text-[11px] text-navy-500 leading-relaxed m-0">
+                    <strong>{form.category}</strong> markup {pct}% — sale auto-fills from cost
+                    {suggested !== null ? <> (suggested {fmtKes(suggested)})</> : null}.
+                    Change in Settings → Sales → Sales price calculator.
+                  </p>
+                  <button
+                    type="button"
+                    className="btn-secondary text-[11px] px-3 py-1.5 whitespace-nowrap"
+                    disabled={suggested === null}
+                    onClick={() => {
+                      if (suggested === null) return
+                      setF('salePrice')(String(suggested))
+                    }}
+                  >Recalculate sale</button>
+                </div>
+              )
+            })()}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <Field label="Warranty (Months)"><Input type="number" value={form.warrantyMonths} onChange={setF('warrantyMonths')} /></Field>
               <Field label="Icon / Image"><Input value={form.image} onChange={setF('image')} placeholder="Image URL" /></Field>

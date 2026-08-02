@@ -545,6 +545,12 @@ export interface SystemSettings {
   invLots: boolean
   invAutomatedValuation: boolean
   invCostingMethod: 'fifo' | 'average' | 'standard'
+  /**
+   * Per-category markup % used to auto-calculate sale price from cost:
+   * salePrice = round(costPrice × (1 + pct / 100)).
+   * Omit or leave blank for a category to disable auto-calc for it.
+   */
+  invCategorySaleMarkupPct: Partial<Record<CategoryId, number>>
   // Purchase
   purPurchaseAgreements: boolean
   purVendorPricelists: boolean
@@ -607,6 +613,7 @@ export const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
   invProductsMasterOnly: true, invNoDirectStockEdits: true, invMultiStepRoutes: true,
   invStorageLocations: ['Incoming', 'Workshop', 'Ready for Sale', 'Faulty / Scrap'],
   invSerialNumbers: true, invLots: false, invAutomatedValuation: true, invCostingMethod: 'average',
+  invCategorySaleMarkupPct: {},
   purPurchaseAgreements: false, purVendorPricelists: true, purRequireApprovalHighValue: true,
   purHighValueThreshold: 50000, purEnforceRFQFlow: true, purStoreLeadTimes: true,
   repRepairOrders: true, repWarrantyTracking: true, repPartsConsumption: true,
