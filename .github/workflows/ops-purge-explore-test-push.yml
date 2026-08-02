@@ -1,0 +1,58 @@
+name: Ops purge explore/test data (push trigger)
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'ops/purge-explore-test-request.json'
+
+jobs:
+  purge:
+    name: Purge explore/test data on Contabo
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Read request
+        id: req
+        run: |
+          set -euo pipefail
+          APPLY=$(jq -r '.apply // false' ops/purge-explore-test-request.json)
+          echo "apply=$APPLY" >> "$GITHUB_OUTPUT"
+
+      - name: Copy script to server
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          source: scripts/purge-explore-test-data.mjs
+          target: /tmp/deed-ops/
+          strip_components: 1
+
+      - name: Dry-run purge on Contabo
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          command_timeout: 10m
+          script: |
+            set -euo pipefail
+            cd /var/www/deed-erp
+            SCRIPT=scripts/purge-explore-test-data.mjs
+            cp /tmp/deed-ops/purge-explore-test-data.mjs "$SCRIPT"
+            echo "======== DRY RUN ========"
+            node "$SCRIPT"
+            if [ '${{ steps.req.outputs.apply }}' = 'true' ]; then
+              echo "======== APPLY ========"
+              node "$SCRIPT" --apply
+            else
+              echo "apply=false — left data unchanged after dry-run"
+            fi
+            if git ls-files --error-unmatch "$SCRIPT" >/dev/null 2>&1; then
+              git restore --source=HEAD --worktree --staged -- "$SCRIPT" 2>/dev/null || git checkout HEAD -- "$SCRIPT" || true
+            else
+              rm -f "$SCRIPT"
+            fi
