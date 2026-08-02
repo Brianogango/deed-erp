@@ -229,6 +229,30 @@ log "--- Reloading PM2"
 pm2 startOrReload ecosystem.config.js --update-env
 pm2 save
 
+# Cluster reloads can leave an old next-server attached to the PM2 god
+# process. That orphan keeps serving HTML that references deleted chunk
+# hashes → blank white page after login for ~half of requests. Kill any
+# next-server whose PID is not in the current deed-erp process list.
+log "--- Reaping orphaned next-server workers"
+alive_pids="$(pm2 jlist | node -e '
+  let raw = "";
+  process.stdin.on("data", c => { raw += c; });
+  process.stdin.on("end", () => {
+    const apps = JSON.parse(raw || "[]");
+    const pids = apps
+      .filter(app => app.name === "deed-erp" && app.pid)
+      .map(app => String(app.pid));
+    process.stdout.write(pids.join(" "));
+  });
+')"
+for pid in $(pgrep -f 'next-server \(v' || true); do
+  if [[ " ${alive_pids} " == *" ${pid} "* ]]; then
+    continue
+  fi
+  log "Killing orphaned next-server pid=${pid}"
+  kill -9 -- "$pid" || true
+done
+
 log "--- Health checking $HEALTH_URL"
 code=none
 for ((attempt=1; attempt<=HEALTH_ATTEMPTS; attempt++)); do
