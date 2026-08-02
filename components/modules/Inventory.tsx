@@ -224,6 +224,8 @@ export default function Inventory() {
   const [catFilter, setCatFilter] = useState('All')
   const [catalogSearch, setCatalogSearch] = useState('')
   const [catalogCatFilter, setCatalogCatFilter] = useState('All')
+  /** All = full sellable catalog (incl. zero stock). In stock / Out of stock narrow the list. */
+  const [catalogStockFilter, setCatalogStockFilter] = useState<'all' | 'in_stock' | 'out_of_stock'>('all')
   const [reportMonth, setReportMonth] = useState(new Date().toISOString().slice(5, 7))
   const [reportProductId, setReportProductId] = useState('All')
   const [serialLookupQuery, setSerialLookupQuery] = useState('')
@@ -565,11 +567,17 @@ export default function Inventory() {
     const q = catalogSearch.trim().toLowerCase()
     return products
       .filter(product => product.isActive && product.canBeSold)
-      .filter(product => product.unit === 'service' || getAvailableQty(product) > 0)
+      .filter(product => {
+        if (product.unit === 'service') return catalogStockFilter !== 'out_of_stock'
+        const qty = getAvailableQty(product)
+        if (catalogStockFilter === 'in_stock') return qty > 0
+        if (catalogStockFilter === 'out_of_stock') return qty <= 0
+        return true
+      })
       .filter(product => catalogCatFilter === 'All' || product.category === catalogCatFilter)
       .filter(product => !q || product.name.toLowerCase().includes(q) || product.sku.toLowerCase().includes(q) || product.barcode?.toLowerCase().includes(q))
       .sort((a, b) => a.name.localeCompare(b.name))
-  }, [products, serials, bulkStock, catalogSearch, catalogCatFilter])
+  }, [products, serials, bulkStock, catalogSearch, catalogCatFilter, catalogStockFilter])
 
   const openPriceUpdate = (product: Product) => {
     setPriceProduct(product)
@@ -595,7 +603,7 @@ export default function Inventory() {
   const downloadPriceUpdateTemplate = async () => {
     const XLSX = await loadXlsx()
     const headers = ['SKU', 'Product Name', 'Current Price', 'New Price', 'Current Cost Price', 'New Cost Price', 'Reason', 'Effective Date']
-    const rows = catalogProducts.slice(0, 100).map(product => [
+    const rows = catalogProducts.map(product => [
       product.sku,
       product.name,
       product.salePrice,
@@ -1524,6 +1532,8 @@ export default function Inventory() {
                   },
                 },
               ]
+              const inStockCount = catalogProducts.filter(p => p.unit === 'service' || getAvailableQty(p) > 0).length
+              const outOfStockCount = catalogProducts.filter(p => p.unit !== 'service' && getAvailableQty(p) <= 0).length
               const catalogPrimaryFilters: PrimaryFilterConfig[] = [
                 {
                   key: 'category',
@@ -1537,14 +1547,29 @@ export default function Inventory() {
                   ],
                   onChange: setCatalogCatFilter,
                 },
+                {
+                  key: 'stock',
+                  label: 'Stock',
+                  placeholder: 'All stock levels',
+                  value: catalogStockFilter,
+                  allValue: 'all',
+                  options: [
+                    { value: 'all', label: 'All products' },
+                    { value: 'in_stock', label: 'In stock only' },
+                    { value: 'out_of_stock', label: 'Out of stock only' },
+                  ],
+                  onChange: value => setCatalogStockFilter(value as 'all' | 'in_stock' | 'out_of_stock'),
+                },
               ]
               return (
                 <TablePageLayout
-                  title="Available product catalog"
+                  title="Product catalog"
                   summary={
                     <OperationalSummary
                       items={[
-                        { id: 'available', label: 'available items', value: catalogProducts.length },
+                        { id: 'catalog', label: 'catalog items', value: catalogProducts.length },
+                        { id: 'in-stock', label: 'in stock / service', value: inStockCount },
+                        { id: 'out-stock', label: 'out of stock', value: outOfStockCount },
                         { id: 'services', label: 'services', value: serviceCount },
                         { id: 'pending', label: 'pending price updates', value: pendingPriceUpdates },
                       ]}
@@ -1552,6 +1577,7 @@ export default function Inventory() {
                   }
                   notice={
                     <CompactInfoNotice dismissible storageKey="inventory-catalog-price-notice">
+                      Catalog export includes every active sellable product (including zero stock). Use the Stock filter for in-stock only.
                       Price changes apply only to future sales. Historical invoices and POS receipts remain unchanged.
                       {!canUpdatePrice ? ' Price editing is read-only for your role.' : ''}
                     </CompactInfoNotice>
@@ -1567,9 +1593,9 @@ export default function Inventory() {
                     searchPlaceholder="Search product, SKU or barcode…"
                     clientSearch={false}
                     primaryFilters={catalogPrimaryFilters}
-                    onClearFilters={() => { setCatalogSearch(''); setCatalogCatFilter('All') }}
+                    onClearFilters={() => { setCatalogSearch(''); setCatalogCatFilter('All'); setCatalogStockFilter('all') }}
                     hideColumnFilters
-                    emptyMessage="No available catalog products"
+                    emptyMessage="No catalog products match these filters"
                     exportTitle="Product Catalog"
                     exportFilename="inventory-catalog"
                     perPage={20}
