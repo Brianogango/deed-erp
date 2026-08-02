@@ -98,12 +98,17 @@ async function saveJson(client, key, value) {
 }
 
 async function execCount(client, label, sql, params = []) {
+  // Isolate failures so one bad optional DELETE does not abort the whole txn.
+  const sp = `sp_${label.replace(/\W+/g, '_').slice(0, 40)}`
+  await client.query(`SAVEPOINT ${sp}`)
   try {
     const res = await client.query(sql, params)
     const n = res.rowCount ?? 0
     if (n) console.log(`  ${label}: ${n}`)
+    await client.query(`RELEASE SAVEPOINT ${sp}`)
     return n
   } catch (err) {
+    await client.query(`ROLLBACK TO SAVEPOINT ${sp}`)
     console.warn(`  warn ${label}: ${err.message}`)
     return 0
   }
@@ -117,14 +122,18 @@ async function findSqlMatches(client, table, idCol, labelCols) {
     .map(c => `(${c} IS NOT NULL AND (${c} ~* '\\yexplore\\y' OR ${c} ~* '\\ytest\\y'))`)
     .join(' OR ')
   const sql = `SELECT ${select} FROM ${table} WHERE (${predicates})`
+  const sp = `sp_find_${table}`
+  await client.query(`SAVEPOINT ${sp}`)
   try {
     const { rows } = await client.query(sql)
+    await client.query(`RELEASE SAVEPOINT ${sp}`)
     return rows.map(r => ({
       table,
       id: r[idCol],
       label: labelCols.map(c => r[c]).filter(Boolean).join(' · '),
     }))
   } catch (err) {
+    await client.query(`ROLLBACK TO SAVEPOINT ${sp}`)
     console.warn(`  skip ${table}: ${err.message}`)
     return []
   }
@@ -150,7 +159,7 @@ async function purgeClientDependents(client, clientIds) {
   await execCount(client, 'opportunities', `DELETE FROM opportunities WHERE client_id = ANY($1::uuid[])`, p)
   await execCount(client, 'contact_persons', `DELETE FROM contact_persons WHERE client_id = ANY($1::uuid[])`, p)
   await execCount(client, 'leads', `DELETE FROM leads WHERE client_id = ANY($1::uuid[])`, p)
-  await execCount(client, 'customer_assets', `DELETE FROM customer_assets WHERE client_id = ANY($1::uuid[])`, p)
+  await execCount(client, 'customer_assets', `DELETE FROM customer_assets WHERE customer_id = ANY($1::uuid[])`, p)
 
   if (await tableExists(client, 'quote_items')) {
     await execCount(client, 'quote_items',
@@ -237,7 +246,7 @@ async function purgeProductDependents(client, productIds) {
   }
 }
 
-async function scrubAppStateArrays(client) {
+async function scrubAppStateArrays(client, { write = false } = {}) {
   const { rows } = await client.query(
     `SELECT key, value FROM app_state WHERE key LIKE 'deed_%' ORDER BY key`,
   )
@@ -268,7 +277,7 @@ async function scrubAppStateArrays(client) {
       })),
     })
 
-    if (apply) await saveJson(client, row.key, kept)
+    if (write) await saveJson(client, row.key, kept)
   }
   return report
 }
@@ -280,8 +289,6 @@ async function main() {
   const client = await pool.connect()
 
   try {
-    await client.query('BEGIN')
-
     const scans = [
       ['clients', 'id', ['name', 'company_name']],
       ['suppliers', 'id', ['name', 'contact_person']],
@@ -331,26 +338,25 @@ async function main() {
       }
     }
 
+    // Dry-run blob scan (no writes). Apply path re-scrubs inside the transaction.
     console.log('\nScanning app_state deed_* arrays…')
-    const blobReport = await scrubAppStateArrays(client)
-    if (!blobReport.length) console.log('  (no matching array items)')
-    for (const b of blobReport) {
+    const blobPreview = await scrubAppStateArrays(client)
+    if (!blobPreview.length) console.log('  (no matching array items)')
+    for (const b of blobPreview) {
       console.log(`[${b.key}] remove ${b.removed}:`)
       for (const s of b.samples) console.log(`  - ${s.id ?? '?'}  ${s.label}`)
     }
 
-    if (!byTable.size && !blobReport.length) {
+    if (!byTable.size && !blobPreview.length) {
       console.log('\nNothing to purge.')
-      await client.query('ROLLBACK')
       return
     }
 
     if (!apply) {
-      await client.query('ROLLBACK')
       const out = {
         mode: 'dry-run',
         tables: Object.fromEntries([...byTable].map(([t, rows]) => [t, rows])),
-        blobs: blobReport,
+        blobs: blobPreview,
       }
       const reportPath = '/tmp/purge-explore-test-dry-run.json'
       writeFileSync(reportPath, JSON.stringify(out, null, 2))
@@ -359,64 +365,69 @@ async function main() {
       return
     }
 
-    const clientIds = (byTable.get('clients') || []).map(r => r.id)
-    const productIds = (byTable.get('products') || []).map(r => r.id)
-    const depositIds = (byTable.get('deposits') || []).map(r => r.id)
+    await client.query('BEGIN')
+    try {
+      const blobReport = await scrubAppStateArrays(client)
 
-    if (clientIds.length) {
-      console.log(`\nPurging dependents for ${clientIds.length} client(s)…`)
-      await purgeClientDependents(client, clientIds)
-    }
-    if (productIds.length) {
-      console.log(`\nPurging dependents for ${productIds.length} product(s)…`)
-      await purgeProductDependents(client, productIds)
-    }
-    if (depositIds.length && (await tableExists(client, 'deposit_payments'))) {
-      await execCount(client, 'deposit_payments',
-        `DELETE FROM deposit_payments WHERE deposit_id = ANY($1::uuid[])`, [depositIds])
-      await execCount(client, 'deposit_items',
-        `DELETE FROM deposit_items WHERE deposit_id = ANY($1::uuid[])`, [depositIds])
-    }
+      const clientIds = (byTable.get('clients') || []).map(r => r.id)
+      const productIds = (byTable.get('products') || []).map(r => r.id)
+      const depositIds = (byTable.get('deposits') || []).map(r => r.id)
 
-    if (byTable.get('kilimall_orders')?.length && (await tableExists(client, 'kilimall_order_items'))) {
-      const ids = byTable.get('kilimall_orders').map(r => r.id)
-      await execCount(client, 'kilimall_order_items',
-        `DELETE FROM kilimall_order_items WHERE kilimall_order_id = ANY($1::uuid[])`, [ids])
+      if (clientIds.length) {
+        console.log(`\nPurging dependents for ${clientIds.length} client(s)…`)
+        await purgeClientDependents(client, clientIds)
+      }
+      if (productIds.length) {
+        console.log(`\nPurging dependents for ${productIds.length} product(s)…`)
+        await purgeProductDependents(client, productIds)
+      }
+      if (depositIds.length && (await tableExists(client, 'deposit_payments'))) {
+        await execCount(client, 'deposit_payments',
+          `DELETE FROM deposit_payments WHERE deposit_id = ANY($1::uuid[])`, [depositIds])
+        await execCount(client, 'deposit_items',
+          `DELETE FROM deposit_items WHERE deposit_id = ANY($1::uuid[])`, [depositIds])
+      }
+
+      if (byTable.get('kilimall_orders')?.length && (await tableExists(client, 'kilimall_order_items'))) {
+        const ids = byTable.get('kilimall_orders').map(r => r.id)
+        await execCount(client, 'kilimall_order_items',
+          `DELETE FROM kilimall_order_items WHERE kilimall_order_id = ANY($1::uuid[])`, [ids])
+      }
+
+      const deleteOrder = [
+        'contact_persons',
+        'leads',
+        'opportunities',
+        'deposits',
+        'holdovers',
+        'partner_api_keys',
+        'kilimall_orders',
+        'products',
+        'categories',
+        'brands',
+        'suppliers',
+        'clients',
+      ]
+
+      const deleted = {}
+      for (const table of deleteOrder) {
+        const rows = byTable.get(table)
+        if (!rows?.length) continue
+        const n = await deleteByIds(client, table, 'id', rows.map(r => r.id))
+        deleted[table] = n
+        console.log(`Deleted ${n} from ${table}`)
+      }
+
+      await client.query('COMMIT')
+      console.log('\nPurge applied successfully.')
+      console.log(JSON.stringify({
+        deleted,
+        blobs: blobReport.map(b => ({ key: b.key, removed: b.removed })),
+      }, null, 2))
+    } catch (err) {
+      await client.query('ROLLBACK').catch(() => {})
+      throw err
     }
-
-    const deleteOrder = [
-      'contact_persons',
-      'leads',
-      'opportunities',
-      'deposits',
-      'holdovers',
-      'partner_api_keys',
-      'kilimall_orders',
-      'products',
-      'categories',
-      'brands',
-      'suppliers',
-      'clients',
-    ]
-
-    const deleted = {}
-    for (const table of deleteOrder) {
-      const rows = byTable.get(table)
-      if (!rows?.length) continue
-      const n = await deleteByIds(client, table, 'id', rows.map(r => r.id))
-      deleted[table] = n
-      console.log(`Deleted ${n} from ${table}`)
-    }
-
-    await client.query('COMMIT')
-    console.log('\nPurge applied successfully.')
-    console.log(JSON.stringify({
-      deleted,
-      blobs: blobReport.map(b => ({ key: b.key, removed: b.removed })),
-    }, null, 2))
-  } catch (err) {
-    await client.query('ROLLBACK').catch(() => {})
-    throw err
   } finally {
     client.release()
     await pool.end()
