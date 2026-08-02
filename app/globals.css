@@ -1352,19 +1352,19 @@
     max-width: none;
   }
 
-  /* Tablet+: one continuous row — search is a fixed control, never a full-width block */
+  /* Tablet+: keep controls in-flow without forcing a page-wide horizontal scrollbar.
+     Search may shrink; trailing icon buttons (column ⋮) stay visible. */
   @media (min-width: 768px) {
     .dt-toolbar-row:not(.dt-toolbar-row-mobile) {
-      flex-wrap: nowrap;
-      overflow-x: auto;
-      scrollbar-width: thin;
+      flex-wrap: wrap;
+      overflow-x: visible;
     }
 
     .dt-toolbar-search {
-      width: 18rem;
-      min-width: 14rem;
+      width: auto;
+      min-width: 12rem;
       max-width: 18rem;
-      flex: 0 0 18rem;
+      flex: 1 1 14rem;
     }
 
     .dt-toolbar-select,
@@ -1374,21 +1374,21 @@
     }
 
     .dt-toolbar-spacer {
-      flex: 1 1 auto;
+      flex: 1 1 0.5rem;
+      min-width: 0.25rem;
     }
   }
 
-  /* Laptop/desktop: slightly wider search, still a single non-wrapping row */
   @media (min-width: 1024px) {
     .dt-toolbar-row:not(.dt-toolbar-row-mobile) {
       flex-wrap: nowrap;
     }
 
     .dt-toolbar-search {
-      width: 20rem;
-      min-width: 16rem;
+      width: 18rem;
+      min-width: 14rem;
       max-width: 20rem;
-      flex: 0 0 20rem;
+      flex: 0 1 18rem;
     }
   }
 

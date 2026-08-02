@@ -10,6 +10,23 @@ describe('table toolbar responsive breakpoints', () => {
   })
 })
 
+describe('column priority defaults', () => {
+  // Mirrors DataTable PRIORITY_CAP — keep in sync with types.ts comments:
+  // 1 always · 2 tablet+ · 3 laptop/desktop
+  const PRIORITY_CAP = { tablet: 2, laptop: 3, desktop: 3 } as const
+
+  it('shows priority-2 columns on tablet-width content panes', () => {
+    expect(PRIORITY_CAP.tablet).toBe(2)
+    const columns = [
+      { key: 'ref', priority: 1 },
+      { key: 'customer', priority: 2 },
+      { key: 'technician', priority: 3 },
+    ]
+    const visible = columns.filter(c => c.priority <= PRIORITY_CAP.tablet).map(c => c.key)
+    expect(visible).toEqual(['ref', 'customer'])
+  })
+})
+
 describe('toolbar filter chip derivation', () => {
   it('treats allValue as inactive', () => {
     const allValue = 'all'

@@ -30,13 +30,15 @@ import type {
   OverflowAction,
   PrimaryFilterConfig,
 } from '@/lib/data-table/toolbar-types'
-import { useTableBreakpoint } from '@/lib/data-table/use-breakpoint'
+import { useTableBreakpoint, type TableBreakpoint } from '@/lib/data-table/use-breakpoint'
 
 export interface DataTableToolbarProps<T> {
   columns: ColumnDef<T>[]
   eligibleKeys: Set<string>
   visibleKeys: Set<string>
   onVisibleKeysChange: (keys: string[]) => void
+  /** Prefer the parent DataTable's container-measured breakpoint so toolbar and body agree. */
+  breakpoint?: TableBreakpoint
 
   search: string
   onSearchChange: (v: string) => void
@@ -97,10 +99,12 @@ function exportIcon(id: string): IconProp {
  * Mobile:  [Search] / [Filters badge] [More] + filter & more sheets
  */
 export default function DataTableToolbar<T>(props: DataTableToolbarProps<T>) {
-  const breakpoint = useTableBreakpoint()
+  const measuredBreakpoint = useTableBreakpoint()
+  const breakpoint = props.breakpoint ?? measuredBreakpoint
   const isMobile = breakpoint === 'mobile'
   const isTablet = breakpoint === 'tablet'
   const isDesktop = breakpoint === 'laptop' || breakpoint === 'desktop'
+  const showInlineColumns = !isMobile && props.showColumns !== false
 
   const [filtersOpen, setFiltersOpen] = useState(false)
   const [moreSheetOpen, setMoreSheetOpen] = useState(false)
@@ -209,9 +213,22 @@ export default function DataTableToolbar<T>(props: DataTableToolbarProps<T>) {
     props.overflowActions,
   ])
 
-  /** Desktop overflow keeps only low-frequency utilities (not Columns/Export). */
-  const desktopOverflowActions = useMemo((): OverflowAction[] => {
-    const actions: OverflowAction[] = [...(props.overflowActions ?? [])]
+  /** Secondary overflow (export / refresh / reset). Columns use the dedicated ⋮ control. */
+  const secondaryOverflowActions = useMemo((): OverflowAction[] => {
+    const actions: OverflowAction[] = []
+    for (const opt of props.exportOptions ?? []) {
+      // On desktop ExportMenu is inline; keep exports in overflow for tablet only.
+      if (isDesktop) continue
+      actions.push({
+        id: `export-${opt.id}`,
+        label: opt.label,
+        disabled: opt.disabled,
+        onSelect: () => { void opt.onSelect() },
+      })
+    }
+    for (const action of props.overflowActions ?? []) {
+      if (!actions.some(a => a.id === action.id)) actions.push(action)
+    }
     if (props.onRefresh && !actions.some(a => a.id === 'refresh')) {
       actions.push({ id: 'refresh', label: 'Refresh', onSelect: props.onRefresh })
     }
@@ -222,37 +239,7 @@ export default function DataTableToolbar<T>(props: DataTableToolbarProps<T>) {
       actions.push({ id: 'reset-filters', label: 'Reset filters', onSelect: props.onClearFilters })
     }
     return actions
-  }, [props.overflowActions, props.onRefresh, props.onImport, props.onClearFilters])
-
-  /** Tablet More dropdown: Columns + exports + reset (matches mock). */
-  const tabletOverflowActions = useMemo((): OverflowAction[] => {
-    const actions: OverflowAction[] = []
-    if (props.showColumns !== false) {
-      actions.push({
-        id: 'columns',
-        label: 'Columns',
-        onSelect: () => setColumnsSheetOpen(true),
-      })
-    }
-    for (const opt of props.exportOptions ?? []) {
-      actions.push({
-        id: `export-${opt.id}`,
-        label: opt.label,
-        disabled: opt.disabled,
-        onSelect: () => { void opt.onSelect() },
-      })
-    }
-    if (props.onClearFilters) {
-      actions.push({ id: 'reset-filters', label: 'Reset filters', onSelect: props.onClearFilters })
-    }
-    for (const action of props.overflowActions ?? []) {
-      if (!actions.some(a => a.id === action.id)) actions.push(action)
-    }
-    if (props.onRefresh && !actions.some(a => a.id === 'refresh')) {
-      actions.push({ id: 'refresh', label: 'Refresh', onSelect: props.onRefresh })
-    }
-    return actions
-  }, [props.showColumns, props.exportOptions, props.onClearFilters, props.overflowActions, props.onRefresh])
+  }, [isDesktop, props.exportOptions, props.overflowActions, props.onRefresh, props.onImport, props.onClearFilters])
 
   if (props.selectedCount > 0) {
     return (
@@ -401,15 +388,6 @@ export default function DataTableToolbar<T>(props: DataTableToolbarProps<T>) {
 
             {props.quickStats}
 
-            {isDesktop && props.showColumns !== false && (
-              <ColumnVisibilityMenu
-                columns={props.columns}
-                eligibleKeys={props.eligibleKeys}
-                visibleKeys={props.visibleKeys}
-                onChange={props.onVisibleKeysChange}
-              />
-            )}
-
             {isDesktop && (props.exportOptions?.length ?? 0) > 0 && props.exportOptions && (
               <ExportMenu options={props.exportOptions} />
             )}
@@ -423,12 +401,20 @@ export default function DataTableToolbar<T>(props: DataTableToolbarProps<T>) {
               />
             )}
 
-            {isTablet && tabletOverflowActions.length > 0 && (
-              <TableOverflowMenu actions={tabletOverflowActions} label="More" />
+            {showInlineColumns && (
+              <ColumnVisibilityMenu
+                columns={props.columns}
+                eligibleKeys={props.eligibleKeys}
+                visibleKeys={props.visibleKeys}
+                onChange={props.onVisibleKeysChange}
+              />
             )}
 
-            {isDesktop && desktopOverflowActions.length > 0 && (
-              <TableOverflowMenu actions={desktopOverflowActions} />
+            {secondaryOverflowActions.length > 0 && (
+              <TableOverflowMenu
+                actions={secondaryOverflowActions}
+                label={isTablet ? 'More' : 'More actions'}
+              />
             )}
 
             {props.createAction}
@@ -545,6 +531,7 @@ export default function DataTableToolbar<T>(props: DataTableToolbarProps<T>) {
           <div className="flex flex-col gap-1">
             {props.columns.filter(c => props.eligibleKeys.has(c.key)).map(col => {
               const checked = props.visibleKeys.has(col.key)
+              const locked = col.priority === 1
               return (
                 <label
                   key={col.key}
@@ -553,10 +540,16 @@ export default function DataTableToolbar<T>(props: DataTableToolbarProps<T>) {
                   <input
                     type="checkbox"
                     checked={checked}
+                    disabled={locked}
                     onChange={() => {
+                      if (locked) return
                       const next = new Set(props.visibleKeys)
-                      if (next.has(col.key)) next.delete(col.key)
-                      else next.add(col.key)
+                      if (next.has(col.key)) {
+                        if (next.size <= 2) return
+                        next.delete(col.key)
+                      } else {
+                        next.add(col.key)
+                      }
                       props.onVisibleKeysChange(
                         props.columns
                           .filter(c => props.eligibleKeys.has(c.key) && next.has(c.key))
@@ -565,7 +558,8 @@ export default function DataTableToolbar<T>(props: DataTableToolbarProps<T>) {
                     }}
                     style={{ accentColor: 'var(--primary)' }}
                   />
-                  {col.label}
+                  <span className="min-w-0 flex-1">{col.label}</span>
+                  {locked && <span className="text-[9px] font-bold text-[var(--text-4)]">Required</span>}
                 </label>
               )
             })}

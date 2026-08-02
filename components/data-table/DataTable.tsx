@@ -17,11 +17,13 @@ import DataTableToolbar from './DataTableToolbar'
 import MobileCardView from './MobileCardView'
 import AdvancedFilters, { applyFilterRules, type FilterRule } from './AdvancedFilters'
 
-// Breakpoint → max column priority allowed in the table view.
-// Mobile doesn't use this at all — it renders MobileCardView instead.
+// Breakpoint → max column priority for the *default* visible set.
+// Matches lib/data-table/types.ts: 1 always · 2 tablet+ · 3 laptop/desktop.
+// Mobile doesn't use this — it renders MobileCardView instead.
+// Users can still opt into higher-priority columns via the column picker.
 const PRIORITY_CAP: Record<'tablet' | 'laptop' | 'desktop', ColumnPriority> = {
-  tablet: 1,
-  laptop: 2,
+  tablet: 2,
+  laptop: 3,
   desktop: 3,
 }
 
@@ -183,18 +185,26 @@ export default function DataTable<T>({
   const [page, setPage] = useState(1)
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set())
 
+  const pickableColumns = useMemo(
+    () => columns.filter(c => c.priority <= 3),
+    [columns],
+  )
+
   const eligibleColumns = useMemo(() => {
     if (breakpoint === 'mobile') return columns.filter(c => c.priority === 1)
     const cap = PRIORITY_CAP[breakpoint]
     return columns.filter(c => c.priority <= cap)
   }, [columns, breakpoint])
 
-  const eligibleKeys = useMemo(() => new Set(eligibleColumns.map(c => c.key)), [eligibleColumns])
+  // Column picker lists every toggleable column (not only the breakpoint default set).
+  const eligibleKeys = useMemo(() => new Set(pickableColumns.map(c => c.key)), [pickableColumns])
 
   const visibleColumns = useMemo(() => {
     if (!prefs.visibleColumnKeys) return eligibleColumns
-    return eligibleColumns.filter(c => c.priority === 1 || prefs.visibleColumnKeys!.includes(c.key))
-  }, [eligibleColumns, prefs.visibleColumnKeys])
+    const selected = new Set(prefs.visibleColumnKeys)
+    // Honour explicit user picks across breakpoints; always keep priority-1 columns.
+    return pickableColumns.filter(c => c.priority === 1 || selected.has(c.key))
+  }, [eligibleColumns, pickableColumns, prefs.visibleColumnKeys])
 
   const visibleKeys = useMemo(() => new Set(visibleColumns.map(c => c.key)), [visibleColumns])
 
@@ -304,10 +314,11 @@ export default function DataTable<T>({
     <div ref={tableRootRef} className="flex flex-col min-w-0">
       {!hideToolbar && (
         <DataTableToolbar
-          columns={columns}
+          columns={pickableColumns}
           eligibleKeys={eligibleKeys}
           visibleKeys={visibleKeys}
           onVisibleKeysChange={setVisibleColumnKeys}
+          breakpoint={breakpoint}
           search={search}
           onSearchChange={v => { setSearch(v); setPage(1) }}
           searchPlaceholder={searchPlaceholder}

@@ -310,7 +310,7 @@ export default function RepairClientJobs({ onNewIntake, onSelect }: { onNewIntak
 
   const repairColumns: ColumnDef<RepairRow>[] = [
     {
-      key: 'ref', label: 'Reference', priority: 1, width: '120px',
+      key: 'ref', label: 'Reference', priority: 1, width: '110px',
       render: r => (
         <div className="flex flex-col gap-1">
           <span className="text-[12px] font-black font-mono tracking-tight" style={{ color: 'var(--text-1)' }}>{r.ref}</span>
@@ -327,21 +327,21 @@ export default function RepairClientJobs({ onNewIntake, onSelect }: { onNewIntak
       searchValue: r => [r.ref, r.repairPath === 'direct_repair' ? 'direct repair' : 'diagnosis first'].join(' '),
     },
     {
-      key: 'customer', label: 'Customer', priority: 2, width: '1fr',
+      key: 'customer', label: 'Customer', priority: 2, width: 'minmax(8rem, 1.2fr)',
       render: r => (
-        <div>
-          <p className="text-[12px] font-bold text-[var(--text-1)]">{r.customerName}</p>
-          <p className="text-[10px] text-[var(--text-4)] font-medium mt-0.5">{r.customerPhone}</p>
+        <div className="min-w-0">
+          <p className="text-[12px] font-bold text-[var(--text-1)] truncate">{r.customerName}</p>
+          <p className="text-[10px] text-[var(--text-4)] font-medium mt-0.5 truncate">{r.customerPhone}</p>
         </div>
       ),
       exportValue: r => r.customerName,
     },
     {
-      key: 'device', label: 'Device', priority: 2, width: '1fr',
+      key: 'device', label: 'Device', priority: 2, width: 'minmax(8rem, 1fr)',
       render: r => (
-        <div>
-          <p className="text-[12px] font-bold text-[var(--text-2)] max-w-[160px] truncate">{r.productName}</p>
-          {r.serialNumber && <p className="text-[10px] text-[var(--text-4)] font-mono max-w-[160px] truncate mt-0.5">{r.serialNumber}</p>}
+        <div className="min-w-0">
+          <p className="text-[12px] font-bold text-[var(--text-2)] truncate">{r.productName}</p>
+          {r.serialNumber && <p className="text-[10px] text-[var(--text-4)] font-mono truncate mt-0.5">{r.serialNumber}</p>}
         </div>
       ),
       exportValue: r => r.productName,
@@ -352,37 +352,37 @@ export default function RepairClientJobs({ onNewIntake, onSelect }: { onNewIntak
       exportValue: r => r.status,
     },
     {
-      key: 'location', label: 'Location', priority: 3, width: '130px',
+      key: 'location', label: 'Location', priority: 3, width: '120px',
       render: r => {
         const loc = locationFor(r)
         return (
-          <div className="flex items-center gap-1.5">
-            <Fa icon={faMapMarkerAlt} className="text-[10px] opacity-60" style={{ color: loc.color }} />
-            <span className="text-[11px] font-bold whitespace-nowrap" style={{ color: loc.color }}>{loc.label}</span>
+          <div className="flex items-center gap-1.5 min-w-0">
+            <Fa icon={faMapMarkerAlt} className="text-[10px] opacity-60 shrink-0" style={{ color: loc.color }} />
+            <span className="text-[11px] font-bold truncate" style={{ color: loc.color }}>{loc.label}</span>
           </div>
         )
       },
       exportValue: r => locationFor(r).label,
     },
     {
-      key: 'technician', label: 'Technician', priority: 3, width: '130px',
+      key: 'technician', label: 'Technician', priority: 3, width: '120px',
       render: r => r.assignedTechnicianName ? (
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1.5 min-w-0">
           <div className="w-6 h-6 rounded-full text-white flex items-center justify-center text-[9px] font-black shrink-0" style={{ background: NAVY }}>
             {r.assignedTechnicianName.charAt(0).toUpperCase()}
           </div>
-          <span className="text-[11px] font-bold text-[var(--text-2)] truncate max-w-[90px]">{r.assignedTechnicianName}</span>
+          <span className="text-[11px] font-bold text-[var(--text-2)] truncate">{r.assignedTechnicianName}</span>
         </div>
       ) : <span className="text-[11px] text-[var(--text-4)] italic">Unassigned</span>,
       exportValue: r => r.assignedTechnicianName ?? 'Unassigned',
     },
     {
-      key: 'intakeDate', label: 'Intake Date', priority: 3, width: '110px',
+      key: 'intakeDate', label: 'Intake Date', priority: 3, width: '100px',
       render: r => <span className="text-[11px] font-bold text-[var(--text-2)] tabular-nums">{fmtDate(r.intakeDate)}</span>,
       exportValue: r => r.intakeDate,
     },
     {
-      key: 'amount', label: 'Amount', priority: 1, width: '110px', align: 'right',
+      key: 'amount', label: 'Amount', priority: 1, width: '100px', align: 'right',
       render: r => <span className="text-[12px] font-black text-[var(--text-1)]">{r.total ? fmtKes(r.total) : <span className="text-[var(--text-4)]">—</span>}</span>,
       exportValue: r => r.total ?? '',
     },
@@ -425,7 +425,7 @@ export default function RepairClientJobs({ onNewIntake, onSelect }: { onNewIntak
         {/* ── Table / Card list ── */}
         <div className="flex-1 overflow-hidden bg-[var(--bg-card)] rounded-xl sm:rounded-2xl border border-[var(--border)] shadow-sm flex flex-col min-h-0">
           <DataTable
-            tableId="repair_client_jobs"
+            tableId="repair_client_jobs_v2"
             columns={repairColumns}
             rows={filteredRepairs}
             rowKey={r => r.id}
