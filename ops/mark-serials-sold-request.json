@@ -1,18 +1,10 @@
 {
   "serials": [
-    "5CG023BSY1",
-    "5CG023BSC4",
-    "LR09560B",
-    "CND8125S10",
     "FVFDJB00MNHP",
-    "PFOUTQ60",
-    "PC1D8CYV",
     "LR0AWKD",
-    "LR0AVY12",
-    "PF1CX9NP",
     "LR0AWBMC"
   ],
   "dryRun": false,
-  "requestedAt": "2026-08-02T19:11:00Z",
-  "note": "User confirmed these serials are already sold — remove from Available stock (mark sold/customer, do not delete)."
+  "requestedAt": "2026-08-02T19:15:00Z",
+  "note": "Follow-up: 8/11 already marked sold. Diagnose + mark remaining three if present under a near match."
 }
