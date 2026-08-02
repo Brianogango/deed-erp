@@ -1,0 +1,70 @@
+name: Ops add opening bulk stock (push trigger)
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'ops/add-opening-bulk-stock-request.json'
+
+jobs:
+  add-opening-bulk-stock:
+    name: Add opening bulk stock on Contabo
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Read request
+        id: req
+        run: |
+          set -euo pipefail
+          APPLY=$(jq -r '.apply // false' ops/add-opening-bulk-stock-request.json)
+          COUNT=$(jq -r '.items | length' ops/add-opening-bulk-stock-request.json)
+          echo "apply=$APPLY" >> "$GITHUB_OUTPUT"
+          echo "count=$COUNT" >> "$GITHUB_OUTPUT"
+          echo "Items in request: $COUNT  apply=$APPLY"
+
+      - name: Copy script and request to server
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          source: scripts/add-opening-bulk-stock.mjs,ops/add-opening-bulk-stock-request.json
+          target: /tmp/deed-ops/
+
+      - name: Run opening bulk stock script
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          command_timeout: 10m
+          script: |
+            set -euo pipefail
+            cd /var/www/deed-erp
+            SCRIPT=scripts/add-opening-bulk-stock.mjs
+            REQUEST=ops/add-opening-bulk-stock-request.json
+            mkdir -p ops
+            cp /tmp/deed-ops/scripts/add-opening-bulk-stock.mjs "$SCRIPT" 2>/dev/null \
+              || cp /tmp/deed-ops/add-opening-bulk-stock.mjs "$SCRIPT"
+            cp /tmp/deed-ops/ops/add-opening-bulk-stock-request.json "$REQUEST" 2>/dev/null \
+              || cp /tmp/deed-ops/add-opening-bulk-stock-request.json "$REQUEST"
+            echo "======== DRY RUN ========"
+            node "$SCRIPT" --request "$REQUEST"
+            if [ '${{ steps.req.outputs.apply }}' = 'true' ]; then
+              echo "======== APPLY ========"
+              node "$SCRIPT" --request "$REQUEST" --apply
+            else
+              echo "apply=false — left stock unchanged after dry-run"
+            fi
+            if git ls-files --error-unmatch "$SCRIPT" >/dev/null 2>&1; then
+              git restore --source=HEAD --worktree --staged -- "$SCRIPT" 2>/dev/null || git checkout HEAD -- "$SCRIPT" || true
+            else
+              rm -f "$SCRIPT"
+            fi
+            if git ls-files --error-unmatch "$REQUEST" >/dev/null 2>&1; then
+              git restore --source=HEAD --worktree --staged -- "$REQUEST" 2>/dev/null || git checkout HEAD -- "$REQUEST" || true
+            else
+              rm -f "$REQUEST"
+            fi

@@ -31,6 +31,7 @@ jobs:
               scripts/revert-hollow-done-delivery.mjs
               scripts/detect-hollow-done-deliveries.mjs
               scripts/purge-explore-test-data.mjs
+              scripts/add-opening-bulk-stock.mjs
             )
             for f in "${OPS_SCRIPTS[@]}"; do
               if git ls-files --error-unmatch "$f" >/dev/null 2>&1; then
