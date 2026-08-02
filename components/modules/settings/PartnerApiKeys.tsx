@@ -3,7 +3,10 @@ import { useEffect, useState } from 'react'
 import { useApp, fmtDate } from '@/lib/store'
 import { Badge, Confirm, Field, Input, Modal } from '@/components/ui'
 import { Fa } from '@/components/icons'
-import { faKey, faPlus, faCopy, faCircleInfo } from '@fortawesome/free-solid-svg-icons'
+import { faKey, faPlus, faCopy, faCircleInfo, faDownload, faFileLines, faBookOpen } from '@fortawesome/free-solid-svg-icons'
+
+const GUIDE_HTML = '/docs/partner-api-guide.html'
+const GUIDE_MD = '/api/public/v1/guide'
 
 interface PartnerKey {
   id: string
@@ -90,6 +93,37 @@ export default function PartnerApiKeys() {
   return (
     <>
       <SectionCard
+        title="Integration guide"
+        action={
+          <div className="flex flex-wrap gap-2">
+            <a className="btn-outline text-[11px] inline-flex items-center" href={GUIDE_HTML} target="_blank" rel="noopener noreferrer">
+              <Fa icon={faBookOpen} style={{ fontSize: 10, marginRight: 5 }} />Open HTML guide
+            </a>
+            <a className="btn-primary text-[11px] inline-flex items-center" href={GUIDE_MD} download="Deed-Partner-API-Guide.md">
+              <Fa icon={faDownload} style={{ fontSize: 10, marginRight: 5 }} />Download Markdown
+            </a>
+          </div>
+        }
+      >
+        <div className="rounded-xl p-3 my-3 flex gap-2.5 items-start" style={{ background: 'var(--info-bg)', border: '1px solid #BFDBFE' }}>
+          <Fa icon={faFileLines} style={{ fontSize: 12, color: 'var(--navy)', marginTop: 2 }} />
+          <div className="text-[11.5px] leading-relaxed" style={{ color: 'var(--navy-dark)' }}>
+            <p className="m-0">
+              Full partner instructions: receive the key, store it on a server, authenticate requests,
+              sync the catalog, handle pagination/rate limits, plus Node / Python / PHP samples.
+            </p>
+            <p className="m-0 mt-1.5 text-[11px] opacity-90">
+              Share the HTML guide (print / Save as PDF) or Markdown file with each partner when you issue a key.
+              Public links (no ERP login):{' '}
+              <code className="font-mono text-[10.5px] px-1 py-0.5 rounded bg-white border border-gray-200">{GUIDE_HTML}</code>
+              {' · '}
+              <code className="font-mono text-[10.5px] px-1 py-0.5 rounded bg-white border border-gray-200">{GUIDE_MD}</code>
+            </p>
+          </div>
+        </div>
+      </SectionCard>
+
+      <SectionCard
         title="Partner API Keys"
         action={
           <button className="btn-primary text-[11px]" onClick={() => setShowCreate(true)}>
@@ -104,7 +138,6 @@ export default function PartnerApiKeys() {
             <code className="font-mono text-[10.5px] px-1 py-0.5 rounded bg-white border border-gray-200">GET /api/public/v1/products</code>{' '}
             — active, priced, in-stock products only, with no cost prices or internal data.
             Each key is shown <strong>once</strong> at creation; share it with exactly one partner so access can be revoked individually.
-            See <code className="font-mono text-[10.5px] px-1 py-0.5 rounded bg-white border border-gray-200">docs/PARTNER_API.md</code> for the full integration guide.
           </p>
         </div>
 
@@ -174,6 +207,19 @@ export default function PartnerApiKeys() {
           <p className="text-[11px] text-gray-400 mb-3">
             The partner sends it on every request: <code className="font-mono text-[10px]">Authorization: Bearer {freshKey.key.slice(0, 12)}…</code>
           </p>
+          <div className="rounded-xl p-3 mb-3 bg-gray-50 border border-gray-200">
+            <p className="text-[11px] text-gray-600 m-0 mb-2">
+              Send them the integration guide with the key — it covers secure storage, auth headers, sync samples, and rate limits.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <a className="btn-outline text-[11px] inline-flex items-center" href={GUIDE_HTML} target="_blank" rel="noopener noreferrer">
+                <Fa icon={faBookOpen} style={{ fontSize: 10, marginRight: 4 }} />Open guide
+              </a>
+              <a className="btn-outline text-[11px] inline-flex items-center" href={GUIDE_MD} download="Deed-Partner-API-Guide.md">
+                <Fa icon={faDownload} style={{ fontSize: 10, marginRight: 4 }} />Download .md
+              </a>
+            </div>
+          </div>
           <div className="flex justify-end">
             <button className="btn-primary" onClick={() => setFreshKey(null)}>Done</button>
           </div>

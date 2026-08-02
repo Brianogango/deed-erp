@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Deed Partner API — Integration Guide</title>
+  <style>
+    :root {
+      --ink: #142033;
+      --muted: #5b6575;
+      --line: #d9e0ea;
+      --surface: #f5f7fb;
+      --accent: #0b5cab;
+      --accent-soft: #e8f1fb;
+      --warn-bg: #fff8e6;
+      --warn-border: #f0d48a;
+      --ok-bg: #eaf7ef;
+      --ok-border: #b7dfc4;
+      --code-bg: #0f1724;
+      --code-fg: #e8eef7;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+      color: var(--ink);
+      background:
+        radial-gradient(1200px 500px at 10% -10%, #d7e7f8 0%, transparent 55%),
+        radial-gradient(900px 400px at 100% 0%, #e9f3ec 0%, transparent 50%),
+        #fff;
+      line-height: 1.55;
+    }
+    .wrap { max-width: 880px; margin: 0 auto; padding: 32px 20px 80px; }
+    header {
+      border-bottom: 1px solid var(--line);
+      padding-bottom: 24px;
+      margin-bottom: 28px;
+    }
+    .brand {
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin: 0 0 8px;
+    }
+    h1 {
+      margin: 0 0 10px;
+      font-size: clamp(1.7rem, 3vw, 2.2rem);
+      line-height: 1.2;
+      letter-spacing: -0.02em;
+    }
+    .lede { color: var(--muted); margin: 0; max-width: 62ch; }
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 18px;
+    }
+    .btn {
+      appearance: none;
+      border: 1px solid var(--line);
+      background: #fff;
+      color: var(--ink);
+      border-radius: 10px;
+      padding: 9px 14px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .btn:hover { border-color: #b8c5d8; background: var(--surface); }
+    .btn-primary {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+    }
+    .btn-primary:hover { filter: brightness(1.05); background: var(--accent); }
+    h2 {
+      font-size: 1.25rem;
+      margin: 36px 0 10px;
+      padding-top: 8px;
+      border-top: 1px solid var(--line);
+    }
+    h2:first-of-type { border-top: 0; padding-top: 0; }
+    h3 { font-size: 1.05rem; margin: 22px 0 8px; }
+    p, li { font-size: 15px; }
+    ul, ol { padding-left: 1.25rem; }
+    li { margin: 4px 0; }
+    a { color: var(--accent); }
+    .callout {
+      border-radius: 12px;
+      padding: 14px 16px;
+      margin: 16px 0;
+      border: 1px solid var(--line);
+      background: var(--surface);
+    }
+    .callout.warn { background: var(--warn-bg); border-color: var(--warn-border); }
+    .callout.ok { background: var(--ok-bg); border-color: var(--ok-border); }
+    .callout strong { display: block; margin-bottom: 4px; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+      margin: 12px 0 18px;
+    }
+    th, td {
+      border: 1px solid var(--line);
+      padding: 9px 10px;
+      text-align: left;
+      vertical-align: top;
+    }
+    th { background: var(--accent-soft); font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; }
+    code, pre {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 12.5px;
+    }
+    code {
+      background: #eef2f7;
+      padding: 1px 6px;
+      border-radius: 5px;
+    }
+    pre {
+      background: var(--code-bg);
+      color: var(--code-fg);
+      padding: 14px 16px;
+      border-radius: 12px;
+      overflow-x: auto;
+      margin: 12px 0 18px;
+    }
+    pre code { background: transparent; color: inherit; padding: 0; }
+    .toc {
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 16px 18px;
+    }
+    .toc ol { margin: 8px 0 0; }
+    .toc a { text-decoration: none; }
+    .toc a:hover { text-decoration: underline; }
+    footer {
+      margin-top: 48px;
+      padding-top: 16px;
+      border-top: 1px solid var(--line);
+      color: var(--muted);
+      font-size: 13px;
+    }
+    @media print {
+      body { background: #fff; }
+      .toolbar { display: none; }
+      .wrap { padding: 0; max-width: none; }
+      a { color: inherit; text-decoration: none; }
+      pre { white-space: pre-wrap; }
+      h2 { break-before: auto; page-break-before: auto; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <p class="brand">Deed Technologies</p>
+      <h1>Partner API Integration Guide</h1>
+      <p class="lede">
+        Full instructions for receiving your API key, securing it on your server,
+        and syncing Deed’s sellable catalog into your own website or app.
+      </p>
+      <div class="toolbar">
+        <button class="btn btn-primary" type="button" onclick="window.print()">Print / Save as PDF</button>
+        <a class="btn" href="/api/public/v1/guide">Download Markdown (.md)</a>
+        <a class="btn" href="/api/public/v1/guide?inline=1" target="_blank" rel="noopener">View Markdown</a>
+      </div>
+    </header>
+
+    <nav class="toc" aria-label="Table of contents">
+      <strong>Contents</strong>
+      <ol>
+        <li><a href="#what">What this API provides</a></li>
+        <li><a href="#get-key">Getting your API key</a></li>
+        <li><a href="#secure">Storing and using the key safely</a></li>
+        <li><a href="#auth">Base URL and authentication</a></li>
+        <li><a href="#endpoint">Endpoint reference</a></li>
+        <li><a href="#fields">Response fields</a></li>
+        <li><a href="#walkthrough">Implementation walkthrough</a></li>
+        <li><a href="#samples">Sample code</a></li>
+        <li><a href="#limits">Pagination, caching, and rate limits</a></li>
+        <li><a href="#errors">Errors</a></li>
+        <li><a href="#checklist">Go-live checklist</a></li>
+        <li><a href="#support">Support</a></li>
+      </ol>
+    </nav>
+
+    <h2 id="what">1. What this API provides</h2>
+    <p>
+      The Partner API is a <strong>read-only catalog API</strong> for approved resellers.
+      It returns active, priced products with live stock availability so you can list
+      Deed Technologies products on your own storefront.
+    </p>
+    <table>
+      <thead><tr><th>Included</th><th>Never included</th></tr></thead>
+      <tbody>
+        <tr>
+          <td>Name, SKU, barcode, description, category</td>
+          <td>Cost / purchase prices</td>
+        </tr>
+        <tr>
+          <td>Retail selling price (KES), warranty months</td>
+          <td>Supplier details, internal accounts</td>
+        </tr>
+        <tr>
+          <td>Live quantity available / in-stock flag</td>
+          <td>Order placement (contact Deed commercially)</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h2 id="get-key">2. Getting your API key</h2>
+    <p>Keys are created by Deed staff (director or admin officer):</p>
+    <ol>
+      <li>Sign in to Deed ERP.</li>
+      <li>Open <strong>Settings → Partner API</strong>.</li>
+      <li>Click <strong>New Partner Key</strong> and enter a clear partner/site name.</li>
+      <li>Click <strong>Create Key</strong>.</li>
+      <li><strong>Copy the key immediately</strong> — it is shown only once.</li>
+      <li>Share it with the partner over a secure channel (password manager, encrypted email).</li>
+    </ol>
+    <div class="callout warn">
+      <strong>Shown once</strong>
+      The full key looks like <code>deed_pk_…</code>. If it is lost, revoke the old key and create a new one. Revocation is immediate.
+    </div>
+
+    <h2 id="secure">3. Storing and using the key safely</h2>
+    <p>Treat the API key like a password.</p>
+    <h3>Do</h3>
+    <ul>
+      <li>Store it in a <strong>server environment variable</strong> (e.g. <code>DEED_PARTNER_API_KEY</code>).</li>
+      <li>Call this API <strong>only from your backend</strong>.</li>
+      <li>Use <strong>one key per site/integration</strong>.</li>
+      <li>Rotate the key if it may have leaked.</li>
+    </ul>
+    <h3>Do not</h3>
+    <ul>
+      <li>Embed the key in browser JavaScript, mobile apps, or public repos.</li>
+      <li>Commit <code>.env</code> files that contain the key.</li>
+      <li>Share one key across unrelated partners.</li>
+      <li>Log the full key in application logs.</li>
+    </ul>
+    <div class="callout ok">
+      <strong>Recommended pattern</strong>
+      Browser / mobile app → Your backend (key lives here) → Deed Partner API
+    </div>
+
+    <h2 id="auth">4. Base URL and authentication</h2>
+    <p><strong>Base URL:</strong> <code>https://&lt;your-deed-erp-host&gt;</code></p>
+    <p>Send the key on every request with either header:</p>
+<pre><code>Authorization: Bearer deed_pk_XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+
+# or
+
+X-API-Key: deed_pk_XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX</code></pre>
+    <p>Prefer <code>Authorization: Bearer</code> unless your stack makes custom headers awkward.</p>
+
+    <h2 id="endpoint">5. Endpoint reference</h2>
+    <h3><code>GET /api/public/v1/products</code></h3>
+    <table>
+      <thead><tr><th>Query param</th><th>Default</th><th>Description</th></tr></thead>
+      <tbody>
+        <tr><td><code>page</code></td><td><code>1</code></td><td>1-based page number</td></tr>
+        <tr><td><code>pageSize</code></td><td><code>50</code></td><td>Items per page (max 100)</td></tr>
+        <tr><td><code>category</code></td><td>—</td><td>Exact category name (case-insensitive)</td></tr>
+        <tr><td><code>q</code></td><td>—</td><td>Search name, SKU, description</td></tr>
+        <tr><td><code>inStock</code></td><td>in-stock only</td><td>Pass <code>inStock=all</code> to include out-of-stock</td></tr>
+      </tbody>
+    </table>
+<pre><code>curl -sS \
+  -H "Authorization: Bearer $DEED_PARTNER_API_KEY" \
+  "https://&lt;deed-erp-host&gt;/api/public/v1/products?category=Laptops&amp;page=1&amp;pageSize=50"</code></pre>
+
+    <h2 id="fields">6. Response fields</h2>
+    <table>
+      <thead><tr><th>Field</th><th>Type</th><th>Notes</th></tr></thead>
+      <tbody>
+        <tr><td><code>id</code></td><td>string</td><td>Stable product ID (sync key)</td></tr>
+        <tr><td><code>sku</code></td><td>string</td><td>Stock-keeping unit</td></tr>
+        <tr><td><code>barcode</code></td><td>string|null</td><td>When present</td></tr>
+        <tr><td><code>name</code> / <code>description</code></td><td>string</td><td>Display copy</td></tr>
+        <tr><td><code>category</code></td><td>string|null</td><td>Category name</td></tr>
+        <tr><td><code>price</code></td><td>number</td><td>Retail selling price</td></tr>
+        <tr><td><code>currency</code></td><td>string</td><td><code>KES</code></td></tr>
+        <tr><td><code>warrantyMonths</code></td><td>number|null</td><td>When configured</td></tr>
+        <tr><td><code>quantityAvailable</code></td><td>number</td><td>Live units available</td></tr>
+        <tr><td><code>inStock</code></td><td>boolean</td><td><code>quantityAvailable &gt; 0</code></td></tr>
+        <tr><td><code>updatedAt</code></td><td>ISO string</td><td>Last product update</td></tr>
+      </tbody>
+    </table>
+    <p>
+      Pagination: <code>page</code>, <code>pageSize</code>, <code>total</code>, <code>totalPages</code>.
+      Meta: <code>currency</code>, <code>generatedAt</code>.
+    </p>
+
+    <h2 id="walkthrough">7. Implementation walkthrough</h2>
+    <ol>
+      <li><strong>Store the key</strong> in server secrets:
+<pre><code>DEED_ERP_BASE_URL=https://&lt;deed-erp-host&gt;
+DEED_PARTNER_API_KEY=deed_pk_your_real_key_here</code></pre>
+      </li>
+      <li><strong>Fetch from your backend</strong> — walk pages until <code>page &gt;= totalPages</code>.</li>
+      <li><strong>Upsert</strong> into your CMS/DB by <code>id</code> or <code>sku</code>.</li>
+      <li><strong>Render</strong> from your cache/DB; hide or mark out-of-stock items.</li>
+      <li><strong>Refresh</strong> every few minutes (5–15 is typical). On <code>429</code>, honour <code>Retry-After</code>.</li>
+      <li><strong>Rotate</strong> by installing a new env key if Deed revokes the old one (<code>401</code>).</li>
+    </ol>
+
+    <h2 id="samples">8. Sample code</h2>
+    <h3>Node.js — fetch all pages</h3>
+<pre><code>const BASE = process.env.DEED_ERP_BASE_URL
+const KEY = process.env.DEED_PARTNER_API_KEY
+
+async function fetchCatalog() {
+  const items = []
+  let page = 1
+  let totalPages = 1
+
+  while (page &lt;= totalPages) {
+    const url = new URL('/api/public/v1/products', BASE)
+    url.searchParams.set('page', String(page))
+    url.searchParams.set('pageSize', '100')
+
+    const res = await fetch(url, {
+      headers: { Authorization: `Bearer ${KEY}`, Accept: 'application/json' },
+    })
+
+    if (res.status === 429) {
+      const retryAfter = Number(res.headers.get('Retry-After') || 60)
+      await new Promise(r =&gt; setTimeout(r, retryAfter * 1000))
+      continue
+    }
+    if (!res.ok) throw new Error(`Deed API ${res.status}: ${await res.text()}`)
+
+    const data = await res.json()
+    items.push(...data.items)
+    totalPages = data.pagination.totalPages
+    page += 1
+  }
+  return items
+}</code></pre>
+
+    <h3>Python</h3>
+<pre><code>import os, time, requests
+
+BASE = os.environ["DEED_ERP_BASE_URL"].rstrip("/")
+KEY = os.environ["DEED_PARTNER_API_KEY"]
+HEADERS = {"Authorization": f"Bearer {KEY}", "Accept": "application/json"}
+
+def fetch_catalog():
+    items, page, total_pages = [], 1, 1
+    while page &lt;= total_pages:
+        r = requests.get(f"{BASE}/api/public/v1/products",
+                         headers=HEADERS, params={"page": page, "pageSize": 100}, timeout=30)
+        if r.status_code == 429:
+            time.sleep(int(r.headers.get("Retry-After", "60"))); continue
+        r.raise_for_status()
+        data = r.json()
+        items.extend(data["items"])
+        total_pages = data["pagination"]["totalPages"]
+        page += 1
+    return items</code></pre>
+
+    <h3>PHP</h3>
+<pre><code>$base = rtrim(getenv('DEED_ERP_BASE_URL'), '/');
+$key  = getenv('DEED_PARTNER_API_KEY');
+// GET $base/api/public/v1/products with header:
+// Authorization: Bearer $key
+// Loop page=1..totalPages with pageSize=100</code></pre>
+    <p>Full PHP and cURL examples are in the Markdown download.</p>
+
+    <h2 id="limits">9. Pagination, caching, and rate limits</h2>
+    <ul>
+      <li>Use <code>pageSize=100</code> for sync jobs; read <code>pagination.totalPages</code>.</li>
+      <li>Cache on your side for <strong>at least 60 seconds</strong> (server responses may also cache for up to 60s).</li>
+      <li><strong>Rate limit:</strong> 120 requests/minute per key. Exceeding returns HTTP <code>429</code> with <code>Retry-After</code>.</li>
+      <li>Rate-limit headers: <code>X-RateLimit-Remaining</code>, <code>X-RateLimit-Reset</code>.</li>
+    </ul>
+
+    <h2 id="errors">10. Errors</h2>
+    <table>
+      <thead><tr><th>Status</th><th>Meaning</th><th>Action</th></tr></thead>
+      <tbody>
+        <tr><td><code>200</code></td><td>Success</td><td>Use items / pagination</td></tr>
+        <tr><td><code>401</code></td><td>Missing, invalid, or revoked key</td><td>Check env; ask Deed to re-issue</td></tr>
+        <tr><td><code>429</code></td><td>Rate limit exceeded</td><td>Wait <code>Retry-After</code>, then retry</td></tr>
+        <tr><td><code>5xx</code></td><td>Temporary server error</td><td>Backoff; contact Deed if persistent</td></tr>
+      </tbody>
+    </table>
+
+    <h2 id="checklist">11. Go-live checklist</h2>
+    <ul>
+      <li>Unique <code>deed_pk_…</code> key for this site only</li>
+      <li>Key in server secrets — never in the browser</li>
+      <li>cURL smoke test returns JSON products</li>
+      <li>Backend syncs all pages</li>
+      <li>Storefront shows KES prices and stock status</li>
+      <li>Cache ≥ 60s; sync job is not hammering the API</li>
+      <li><code>401</code> / <code>429</code> handling in place</li>
+      <li>Deed contact known for key rotation and orders</li>
+    </ul>
+
+    <h2 id="support">12. Support</h2>
+    <ul>
+      <li><strong>Key / access:</strong> Deed ERP admin (Settings → Partner API) or your account contact</li>
+      <li><strong>Orders:</strong> Contact Deed Technologies commercially — not via this API</li>
+      <li><strong>Downloads:</strong> Markdown at <code>/api/public/v1/guide</code> · this HTML at <code>/docs/partner-api-guide.html</code></li>
+    </ul>
+
+    <footer>
+      © Deed Technologies — Partner API Integration Guide v1.0
+    </footer>
+  </div>
+</body>
+</html>
