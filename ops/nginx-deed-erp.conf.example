@@ -1,0 +1,74 @@
+# Example nginx site for Deed ERP on Contabo.
+# Install as /etc/nginx/sites-available/deed-erp (adjust cert paths / upstream).
+#
+# CRITICAL: never use `try_files` together with `alias` for /_next/static/.
+# That combination resolves $uri against the wrong filesystem root and 404s
+# nested chunks such as /_next/static/chunks/app/layout-*.js — after login
+# the shell JS never loads and users see a blank white page.
+
+server {
+    listen 443 ssl http2;
+    server_name erp.deed.co.ke;
+
+    ssl_certificate     /etc/letsencrypt/live/erp.deed.co.ke/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/erp.deed.co.ke/privkey.pem;
+    include /etc/letsencrypt/options-ssl-nginx.conf;
+    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
+
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+
+    client_max_body_size 50M;
+
+    location / {
+        proxy_pass http://localhost:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_cache_bypass $http_upgrade;
+        proxy_read_timeout 86400;
+    }
+
+    # Hashed build assets from disk. Missing files fall through via error_page
+    # to Next.js (covers the brief deploy build-swap window).
+    location ^~ /_next/static/ {
+        alias /var/www/deed-erp/.next/static/;
+        add_header Cache-Control "public, max-age=31536000, immutable";
+        access_log off;
+        error_page 404 = @nextjs_static;
+    }
+
+    location @nextjs_static {
+        proxy_pass http://localhost:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+
+server {
+    listen 80;
+    server_name erp.deed.co.ke 167.86.66.225;
+
+    if ($host = erp.deed.co.ke) {
+        return 301 https://$host$request_uri;
+    }
+
+    location / {
+        proxy_pass http://localhost:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_cache_bypass $http_upgrade;
+    }
+}

@@ -1,15 +1,15 @@
 // Deed ERP Service Worker — PWA + Offline POS
 //
-// v5: drop runtime cache after post-login blank-page recovery work so clients
-// discard any fingerprinted CSS/JS cached across the previous deploy window.
+// v6: network-first for /_next/static (was cache-first in v4/v5).
+// v5: drop runtime cache after post-login blank-page recovery work.
 // v4: bump runtime cache so clients drop stale fingerprinted CSS/JS after
 // toolbar layout deploys. Page HTML remains network-only while online.
 // v3: page HTML is never pre-cached or served from cache while online.
 // v2 pre-cached '/' and '/login' at install time; after a deploy those stale
 // snapshots referenced fingerprinted CSS/JS chunks that no longer existed,
 // so users saw a completely unstyled login page until they cleared site data.
-const CACHE = 'deed-erp-v5'
-const RUNTIME_CACHE = 'deed-erp-runtime-v5'
+const CACHE = 'deed-erp-v6'
+const RUNTIME_CACHE = 'deed-erp-runtime-v6'
 const OFFLINE_URL = '/offline.html'
 
 // Next.js static assets are fingerprinted — cache them aggressively
@@ -50,16 +50,20 @@ self.addEventListener('fetch', event => {
   if (url.origin !== self.location.origin) return
   if (url.pathname.startsWith('/api/')) return
 
-  // Next.js static assets — cache first (immutable, content-hashed names)
+  // Next.js static assets — network first, then cache. Cache-first left users
+  // stranded on blank pages when a deploy replaced fingerprinted chunks while
+  // an older HTML/document still referenced them from the runtime cache.
   if (STATIC_PATTERNS.some(p => p.test(url.pathname))) {
     event.respondWith(
-      caches.match(request).then(cached => cached || fetch(request).then(res => {
-        if (res.ok) {
-          const clone = res.clone()
-          caches.open(RUNTIME_CACHE).then(c => c.put(request, clone))
-        }
-        return res
-      }))
+      fetch(request)
+        .then(res => {
+          if (res.ok) {
+            const clone = res.clone()
+            caches.open(RUNTIME_CACHE).then(c => c.put(request, clone))
+          }
+          return res
+        })
+        .catch(() => caches.match(request).then(cached => cached || Response.error()))
     )
     return
   }
