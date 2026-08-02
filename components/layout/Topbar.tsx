@@ -889,10 +889,12 @@ export default function Topbar() {
   }, [])
 
   // Notifications
-  const baseNotifs = notifications.filter(n => n.userId === currentUserId)
+  const notifList = Array.isArray(notifications) ? notifications : []
+  const baseNotifs = notifList.filter(n => n.userId === currentUserId)
   const canAssignRepairs = ['director', 'technical_lead'].includes(currentUser?.role ?? '')
+  const visibleRepairsRaw = getVisibleRepairs()
   const pendingTickets = canAssignRepairs
-    ? getVisibleRepairs().filter(r => r.status === 'received')
+    ? (Array.isArray(visibleRepairsRaw) ? visibleRepairsRaw : []).filter(r => r.status === 'received')
     : []
 
   const ticketNotifs: AppNotification[] = pendingTickets

@@ -166,8 +166,9 @@ export function visibleDashboardSalesOrders<T extends { createdByUserId?: string
   orders: readonly T[],
 ): T[] {
   if (!dashboardSectionsForUser(user).sales) return []
-  if (user?.role === 'sales_rep') return orders.filter(order => order.createdByUserId === user.id)
-  return [...orders]
+  const list = Array.isArray(orders) ? orders : []
+  if (user?.role === 'sales_rep') return list.filter(order => order.createdByUserId === user.id)
+  return [...list]
 }
 
 export function visibleDashboardRepUsers<T extends { id: string }>(
@@ -184,8 +185,9 @@ export function visibleDashboardRepairs<T extends { assignedTechnicianId?: strin
   repairs: readonly T[],
 ): T[] {
   if (!dashboardSectionsForUser(user).workshop) return []
-  if (user?.role === 'technician') return repairs.filter(repair => repair.assignedTechnicianId === user.id)
-  return [...repairs]
+  const list = Array.isArray(repairs) ? repairs : []
+  if (user?.role === 'technician') return list.filter(repair => repair.assignedTechnicianId === user.id)
+  return [...list]
 }
 
 // ── Sales module landing ─────────────────────────────────────────────────────

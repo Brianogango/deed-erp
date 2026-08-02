@@ -131,8 +131,13 @@ function SidebarBackdrop({ onClose }: { onClose: () => void }) {
 }
 
 function AppBootSkeleton() {
+  // Inline fallback background so a missing CSS chunk never paints a pure white
+  // viewport (the classic "blank page after login" look).
   return (
-    <div className="flex h-screen w-full overflow-hidden bg-[var(--bg-page)] animate-pulse">
+    <div
+      className="flex h-screen w-full overflow-hidden bg-[var(--bg-page)] animate-pulse"
+      style={{ background: 'var(--bg-page, #F4F6FB)' }}
+    >
       <aside className="hidden md:flex w-sidebar flex-col border-r border-border-lt bg-card p-4">
         <div className="h-10 w-32 rounded-xl bg-muted mb-6" />
         <div className="space-y-3">
@@ -402,11 +407,37 @@ function AppContent({ children }: { children: React.ReactNode }) {
       })
       .then((state: Record<string, unknown> | null) => {
         if (!state) return
+        // Collection keys that must be arrays — writing an object/null here is what
+        // used to crash Sidebar/Topbar with a blank page after login.
+        const arrayKeys = /^(deed_repairs_v2|deed_products|deed_invoices|deed_saleOrders|deed_contacts|deed_employees|deed_expenses|deed_purchaseOrders|deed_stockTransfers|deed_serials|deed_accounts|deed_notifications|deed_posOrders|deed_deliveries|deed_journalEntries|deed_leaveRequests|deed_opportunities|deed_companies|deed_quotes|deed_holdovers|deed_deposits|deed_buyBacks|deed_warranties|deed_outsourceJobs|deed_outsourceVendors|deed_outsourcePayments|deed_bankAccounts|deed_receipts|deed_customerCredits|deed_workflowApprovals|deed_contracts|deed_customerContracts|deed_employeeAssets|deed_kilimallOrders|deed_payrollRuns)$/
         for (const [key, value] of Object.entries(state)) {
           if (!key.startsWith('deed_') || dirtyKeys.has(key)) continue
-          const serialized = typeof value === 'string' ? value : JSON.stringify(value)
-          if (window.localStorage.getItem(key) === serialized) continue
-          window.localStorage.setItem(key, serialized)
+          let serialized: string
+          try {
+            serialized = typeof value === 'string' ? value : JSON.stringify(value)
+          } catch {
+            continue
+          }
+          if (arrayKeys.test(key)) {
+            try {
+              const parsed = typeof value === 'string' ? JSON.parse(serialized) : value
+              if (!Array.isArray(parsed)) continue
+            } catch {
+              continue
+            }
+          }
+          try {
+            if (window.localStorage.getItem(key) === serialized) continue
+            // Match useLS: skip oversized payloads so we never leave a partial /
+            // unreadable blob that later crashes the shell on login.
+            if (serialized.length > 512 * 1024) {
+              window.localStorage.removeItem(key)
+            } else {
+              window.localStorage.setItem(key, serialized)
+            }
+          } catch {
+            continue
+          }
           window.dispatchEvent(new CustomEvent('deed_remote_update', { detail: { key, value: serialized } }))
         }
       })

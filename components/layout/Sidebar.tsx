@@ -62,7 +62,9 @@ export default function Sidebar() {
 
   const currentUser = users.find(u => u.id === currentUserId)
   const role = currentUser?.role || ''
-  const pendingRepairs = getVisibleRepairs().filter(r => ['received', 'assigned'].includes(r.status)).length
+  const visibleRepairsRaw = getVisibleRepairs()
+  const pendingRepairs = (Array.isArray(visibleRepairsRaw) ? visibleRepairsRaw : [])
+    .filter(r => ['received', 'assigned'].includes(r.status)).length
 
   const allItems: NavItem[] = [
     { label: 'Dashboard',     href: '/',              id: 'dashboard',     icon: faChartLine },

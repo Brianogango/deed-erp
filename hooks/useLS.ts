@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { parseStoredState } from '@/lib/safe-local-state'
 
 export function useLS<T>(key: string, seed: T): [T, React.Dispatch<React.SetStateAction<T>>] {
   // Always start with seed to match server render — avoids hydration mismatch
@@ -11,7 +12,12 @@ export function useLS<T>(key: string, seed: T): [T, React.Dispatch<React.SetStat
     hydrated.current = true
     try {
       const stored = window.localStorage.getItem(key)
-      if (stored !== null) setState(JSON.parse(stored) as T)
+      const { value, corrupted } = parseStoredState(stored, seed)
+      if (corrupted) {
+        try { window.localStorage.removeItem(key) } catch { /* ignore */ }
+      } else if (stored !== null) {
+        setState(value)
+      }
     } catch { /* corrupted — keep seed */ }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key])

@@ -68,6 +68,7 @@ import {
   paymentJournalRef,
   DEFAULT_ADMIN_OFFICER_CUSTOMER_INVOICE_LIMIT_KES,
 } from '@/lib/finance-controls'
+import { ensureArray, parseStoredState } from '@/lib/safe-local-state'
 import { repairOutsourceReadiness } from '@/lib/repair-outsource'
 import { getPreviousRepairProgressStatus } from '@/lib/repair-progress'
 import {
@@ -4168,15 +4169,23 @@ function stampCache(key: string) {
  * Persists state to localStorage under the given key.
  * Falls back to `seed` on first load or if storage is unavailable.
  * Also syncs changes back to the server via a debounced POST.
+ *
+ * Array seeds reject non-array stored JSON (common corruption that used to
+ * crash the authenticated shell with a blank white page after login).
  */
 function useLS<T>(key: string, seed: T): [T, React.Dispatch<React.SetStateAction<T>>] {
   const [state, setState] = useState<T>(() => {
     if (typeof window === 'undefined') return seed
     try {
       const stored = window.localStorage.getItem(key)
-      if (stored !== null) return JSON.parse(stored) as T
-    } catch { /* corrupted — fall through to seed */ }
-    return seed
+      const { value, corrupted } = parseStoredState(stored, seed)
+      if (corrupted) {
+        try { window.localStorage.removeItem(key) } catch { /* ignore */ }
+      }
+      return value
+    } catch {
+      return seed
+    }
   })
 
   const isFirstRender = useRef(true)
@@ -4204,13 +4213,19 @@ function useLS<T>(key: string, seed: T): [T, React.Dispatch<React.SetStateAction
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state])
 
+  const seedRef = useRef(seed)
+  seedRef.current = seed
+
   // Listen for cross-device updates (from our polling) or cross-tab updates
   useEffect(() => {
     const handleUpdate = (newValue: string) => {
-      try {
-        skipNextSync.current = true
-        setState(JSON.parse(newValue))
-      } catch {}
+      const { value, corrupted } = parseStoredState(newValue, seedRef.current)
+      if (corrupted) {
+        try { window.localStorage.removeItem(key) } catch { /* ignore */ }
+        return
+      }
+      skipNextSync.current = true
+      setState(value)
     }
     const handleStorage = (e: StorageEvent) => {
       if (e.key === key && e.newValue !== null) handleUpdate(e.newValue)
@@ -4266,8 +4281,14 @@ export function StoreProvider({
   // Keep local ERP data through deploys. The server snapshot below is the
   // authority and will update changed keys without making modules appear empty
   // during a data-version bump.
-  if (typeof window !== 'undefined' && localStorage.getItem('deed_data_version') !== DATA_VERSION) {
-    localStorage.setItem('deed_data_version', DATA_VERSION)
+  if (typeof window !== 'undefined') {
+    try {
+      if (localStorage.getItem('deed_data_version') !== DATA_VERSION) {
+        localStorage.setItem('deed_data_version', DATA_VERSION)
+      }
+    } catch {
+      // Private mode / blocked storage must not crash the root shell.
+    }
   }
 
 
@@ -12930,16 +12951,17 @@ const storeCtx: AppState = {
     getVisibleRepairs: () => {
       const user = currentUser()
       if (!user) return []
+      const list = ensureArray<RepairOrder>(repairs)
 
       // Full visibility: admin, finance, lead techs see every repair
-      if (['director', 'finance_officer', 'technical_lead'].includes(user.role)) return repairs
+      if (['director', 'finance_officer', 'technical_lead'].includes(user.role)) return list
 
       // Functional Firewall: Technicians see their assigned jobs + QC-pending repairs they did NOT work on (for cross-tech QA)
       if (user.role === 'technician') {
-        return repairs.filter(r => r.assignedTechnicianId === user.id || (r.status === 'qc' && r.assignedTechnicianId !== user.id))
+        return list.filter(r => r.assignedTechnicianId === user.id || (r.status === 'qc' && r.assignedTechnicianId !== user.id))
       }
 
-      return repairs
+      return list
     },
 
     updateRepairProgress: async (repairId, newStatus, message, notifyCustomer) => {
