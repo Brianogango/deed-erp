@@ -3,5 +3,5 @@
   "apply": true,
   "match": ["explore", "test"],
   "note": "Remove ERP test/demo records whose identity fields contain the whole words explore and/or test.",
-  "retry": 2
+  "retry": 3
 }

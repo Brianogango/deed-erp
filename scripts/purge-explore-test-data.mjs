@@ -122,18 +122,14 @@ async function findSqlMatches(client, table, idCol, labelCols) {
     .map(c => `(${c} IS NOT NULL AND (${c} ~* '\\yexplore\\y' OR ${c} ~* '\\ytest\\y'))`)
     .join(' OR ')
   const sql = `SELECT ${select} FROM ${table} WHERE (${predicates})`
-  const sp = `sp_find_${table}`
-  await client.query(`SAVEPOINT ${sp}`)
   try {
     const { rows } = await client.query(sql)
-    await client.query(`RELEASE SAVEPOINT ${sp}`)
     return rows.map(r => ({
       table,
       id: r[idCol],
       label: labelCols.map(c => r[c]).filter(Boolean).join(' · '),
     }))
   } catch (err) {
-    await client.query(`ROLLBACK TO SAVEPOINT ${sp}`)
     console.warn(`  skip ${table}: ${err.message}`)
     return []
   }
@@ -338,9 +334,9 @@ async function main() {
       }
     }
 
-    // Dry-run blob scan (no writes). Apply path re-scrubs inside the transaction.
+    // Preview blob scan (never writes). Apply path re-scrubs inside the transaction.
     console.log('\nScanning app_state deed_* arrays…')
-    const blobPreview = await scrubAppStateArrays(client)
+    const blobPreview = await scrubAppStateArrays(client, { write: false })
     if (!blobPreview.length) console.log('  (no matching array items)')
     for (const b of blobPreview) {
       console.log(`[${b.key}] remove ${b.removed}:`)
@@ -367,7 +363,7 @@ async function main() {
 
     await client.query('BEGIN')
     try {
-      const blobReport = await scrubAppStateArrays(client)
+      const blobReport = await scrubAppStateArrays(client, { write: true })
 
       const clientIds = (byTable.get('clients') || []).map(r => r.id)
       const productIds = (byTable.get('products') || []).map(r => r.id)
