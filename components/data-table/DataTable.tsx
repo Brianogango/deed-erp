@@ -31,27 +31,32 @@ function isInteractiveTarget(target: EventTarget | null): boolean {
   ))
 }
 
-/** Estimate desktop grid min-width from visible columns — avoid a hard 960px
- *  floor that forces horizontal scroll when only a few columns are showing. */
+/** Minimum scroll width from *fixed* tracks only. Fluid `fr`/`minmax` columns
+ *  absorb leftover space so typical invoice/sales lists fit without page scroll. */
 function estimateTableMinWidth(
   columns: Array<{ key: string; width?: string }>,
   options: { selectable?: boolean; hasRowActions?: boolean },
 ): number {
   let total = options.selectable ? 36 : 0
+  let hasFluid = false
   for (const column of columns) {
     if (column.key.toLowerCase().includes('status')) {
-      total += 160
+      total += 140
       continue
     }
     if (column.width?.endsWith('px')) {
       const parsed = Number.parseInt(column.width, 10)
-      total += Number.isFinite(parsed) ? parsed : 120
+      total += Number.isFinite(parsed) ? parsed : 96
       continue
     }
-    total += 120
+    // fr / minmax / rem — contribute a small floor; grid fills the rest.
+    hasFluid = true
+    total += 96
   }
-  if (options.hasRowActions) total += 144
-  return Math.max(320, total)
+  if (options.hasRowActions) total += 120
+  // With a fluid column, keep the floor modest so the table can shrink to the
+  // card width; fixed-only tables keep a stronger scroll floor.
+  return Math.max(hasFluid ? 280 : 320, total)
 }
 
 export interface DataTableProps<T> {
@@ -366,12 +371,15 @@ export default function DataTable<T>({
                 ...(selectable ? [{ label: '', width: '36px' }] : []),
                 ...visibleColumns.map(c => ({
                   label: c.label,
-                  // Status pills need enough room for meaningful labels such as
-                  // "Returned – not fixed"; tiny fixed tracks clip the pill.
-                  width: c.key.toLowerCase().includes('status') ? '160px' : c.width,
-                  minWidth: c.key.toLowerCase().includes('status') ? 160 : undefined,
+                  // Status pills need room for labels like "Not paid"; prefer the
+                  // column's own width when wider, otherwise a 140px floor.
+                  width: c.key.toLowerCase().includes('status')
+                    ? (c.width?.endsWith('px') && Number.parseInt(c.width, 10) > 140 ? c.width : '140px')
+                    : c.width,
+                  minWidth: c.key.toLowerCase().includes('status') ? 140 : undefined,
+                  sticky: c.key.toLowerCase().includes('status') ? ('right' as const) : undefined,
                 })),
-                ...(rowActions ? [{ label: 'Actions', width: '144px', minWidth: 144 }] : []),
+                ...(rowActions ? [{ label: 'Actions', width: '120px', minWidth: 120, sticky: 'right' as const }] : []),
               ]}
               isLoading={isLoading}
               error={error}
@@ -415,14 +423,18 @@ export default function DataTable<T>({
                       <span
                         role="gridcell"
                         key={col.key}
-                        className={`data-table-cell data-table-cell-${col.key.replace(/[^a-z0-9_-]/gi, '-').toLowerCase()}`}
+                        className={[
+                          'data-table-cell',
+                          `data-table-cell-${col.key.replace(/[^a-z0-9_-]/gi, '-').toLowerCase()}`,
+                          col.key.toLowerCase().includes('status') ? 'data-table-cell-sticky-right' : '',
+                        ].filter(Boolean).join(' ')}
                         style={col.align ? { textAlign: col.align } : undefined}
                       >
                         {col.render(row)}
                       </span>
                     ))}
                     {rowActions && (
-                      <span role="gridcell" className="data-table-actions flex items-center justify-end gap-1.5">
+                      <span role="gridcell" className="data-table-actions data-table-cell-sticky-right flex items-center justify-end gap-1.5">
                         {rowActions(row)}
                       </span>
                     )}

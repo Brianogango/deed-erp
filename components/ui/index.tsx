@@ -843,7 +843,7 @@ export function Table({
   emptyAction,
   hideColumnMenu = false,
 }: {
-  cols: { label: string; width?: string; minWidth?: number }[]
+  cols: { label: string; width?: string; minWidth?: number; sticky?: 'left' | 'right' }[]
   children: ReactNode
   empty?: string
   minWidth?: number
@@ -857,7 +857,7 @@ export function Table({
   hideColumnMenu?: boolean
 }) {
   const MIN_PERSISTED_COL_WIDTH = 56
-  const MAX_PERSISTED_COL_WIDTH = 2400
+  const MAX_PERSISTED_COL_WIDTH = 420
 
   const storageKey = tableId ? `deed_table_widths_v2_${tableId}` : null
   const visibilityKey = tableId ? `deed_table_visible_cols_v1_${tableId}` : null
@@ -897,7 +897,9 @@ export function Table({
           return Math.round(n)
         })
         const hasAnyValid = normalized.some(width => width > 0)
-        if (hasAnyValid) {
+        const totalValid = normalized.reduce((sum, width) => sum + (width > 0 ? width : 0), 0)
+        // Oversized historical widths (pre-cap) force horizontal scroll — drop them.
+        if (hasAnyValid && totalValid <= 1400) {
           setColWidths(normalized)
         } else {
           localStorage.removeItem(storageKey)
@@ -935,13 +937,22 @@ export function Table({
 
   const columnKey = useCallback((col: { label: string }, index: number) => `${index}:${col.label}`, [])
 
+  const hasFluidColumn = useMemo(
+    () => cols.some(col => col.width && !/^\d+px$/.test(col.width)),
+    [cols],
+  )
+
   const grid = useMemo(() => {
     return cols
       .filter((col, index) => !visibleColumnKeys || visibleColumnKeys.includes(columnKey(col, index)))
-      .map((col, index) => {
+      .map((col) => {
         const originalIndex = cols.indexOf(col)
         const stored = colWidths[originalIndex]
-        if (Number.isFinite(stored) && stored >= MIN_PERSISTED_COL_WIDTH) {
+        if (
+          Number.isFinite(stored)
+          && stored >= MIN_PERSISTED_COL_WIDTH
+          && stored <= MAX_PERSISTED_COL_WIDTH
+        ) {
           return `${Math.max(stored, col.minWidth ?? MIN_PERSISTED_COL_WIDTH)}px`
         }
         const width = col.width ?? 'minmax(8rem, 1fr)'
@@ -951,7 +962,13 @@ export function Table({
         if (/^\d+fr$/.test(width)) {
           const fr = Number(width.replace('fr', ''))
           // Give fr tracks a usable minimum so names don't collapse to zero.
-          return `minmax(${Math.max(8, Math.round(fr * 7))}rem, ${width})`
+          return `minmax(${Math.max(6, Math.round(fr * 5))}rem, ${width})`
+        }
+        // Prefer tighter minmax floors so dense ERP tables fit the card.
+        if (width.startsWith('minmax(')) {
+          return width
+            .replace('minmax(14rem,', 'minmax(8rem,')
+            .replace('minmax(12rem,', 'minmax(7rem,')
         }
         return width
       })
@@ -997,7 +1014,10 @@ export function Table({
       const { index: resizeIndex, startX, startWidth } = resizingRef.current
       setColWidths(prev => {
         const next = [...prev]
-        next[resizeIndex] = Math.max(84, Math.round(startWidth + (moveEvent.clientX - startX)))
+        next[resizeIndex] = Math.min(
+          MAX_PERSISTED_COL_WIDTH,
+          Math.max(84, Math.round(startWidth + (moveEvent.clientX - startX))),
+        )
         return next
       })
     }
@@ -1094,7 +1114,12 @@ export function Table({
       )}
       <div
         className="flex flex-col"
-        style={{ minWidth: `max(${minWidth}px, 100%)`, width: '100%', '--table-cols': grid } as React.CSSProperties}
+        style={{
+          // Fluid grids fill the card; only fixed-heavy tables keep a scroll floor.
+          width: '100%',
+          minWidth: hasFluidColumn ? '100%' : `max(${minWidth}px, 100%)`,
+          '--table-cols': grid,
+        } as React.CSSProperties}
         role="grid"
         aria-busy={isLoading || undefined}
         aria-rowcount={visibleRows + 1}
@@ -1107,6 +1132,11 @@ export function Table({
         >
           {visibleCols.map(c => {
             const index = cols.indexOf(c)
+            const stickyClass = c.sticky === 'right'
+              ? 'data-table-cell-sticky-right'
+              : c.sticky === 'left'
+                ? 'data-table-cell-sticky-left'
+                : ''
             return (
             <span
               key={columnKey(c, index)}
@@ -1114,7 +1144,7 @@ export function Table({
                 headCellRefs.current[index] = element
               }}
               role="columnheader"
-              className="relative pr-3"
+              className={`relative pr-3 ${stickyClass}`.trim()}
             >
               {c.label}
               {resizable && (

@@ -510,6 +510,35 @@
     overflow: visible;
   }
 
+  /* Pin status/actions to the trailing edge when a dense table still scrolls. */
+  .table-head > .data-table-cell-sticky-right,
+  .table-row > .data-table-cell-sticky-right {
+    position: sticky;
+    right: 0;
+    z-index: 2;
+    overflow: visible;
+    background: var(--bg-card);
+    box-shadow: -8px 0 12px -10px rgba(15, 23, 42, 0.28);
+  }
+
+  .table-head > .data-table-cell-sticky-right {
+    background: var(--table-head-bg);
+    z-index: 4;
+  }
+
+  .table-row:hover > .data-table-cell-sticky-right {
+    background: var(--bg-surface);
+  }
+
+  .table-head > .data-table-cell-sticky-left,
+  .table-row > .data-table-cell-sticky-left {
+    position: sticky;
+    left: 0;
+    z-index: 2;
+    background: var(--bg-card);
+    box-shadow: 8px 0 12px -10px rgba(15, 23, 42, 0.28);
+  }
+
   .erp-truncate {
     display: block;
     min-width: 0;
