@@ -1566,8 +1566,8 @@ function SalesContent() {
                               </button>
                             )}
                           </div>
-                          <div className="overflow-x-auto border border-[var(--border-lt)] rounded-2xl">
-                            <table className="w-full text-left border-collapse">
+                          <div className="dt-scroll border border-[var(--border-lt)] rounded-2xl">
+                            <table data-no-responsive className="w-full text-left border-collapse">
                               <thead>
                                 <tr className="bg-[var(--bg-surface)] border-b border-[var(--border-lt)]">
                                   <th className="px-3 py-2 text-[10px] font-bold uppercase text-[var(--text-4)]">Product / Description</th>
@@ -2119,8 +2119,8 @@ function NewQuotationForm({
             Tax and discount changes affect posted revenue and margin. Review line-level values before saving.
           </p>
           <div className="border border-[var(--border-lt)] rounded-2xl overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
+            <div className="dt-scroll">
+              <table data-no-responsive className="w-full text-left border-collapse">
                 <thead>
                   <tr className="bg-[var(--bg-surface)] border-b border-[var(--border-lt)]">
                     <th className="px-3 py-2.5 text-[10px] font-bold uppercase text-[var(--text-4)]">Product</th>
@@ -2505,7 +2505,8 @@ function DeliveryNoteView({
         <div className="flex flex-col gap-3">
           <h3 className="text-sm font-bold text-[var(--text-1)]">Products to Deliver</h3>
           <div className="border border-[var(--border-lt)] rounded-2xl overflow-hidden">
-            <table className="w-full text-left border-collapse">
+            <div className="dt-scroll">
+            <table data-no-responsive className="w-full text-left border-collapse">
               <thead>
                 <tr className="bg-[var(--bg-surface)] border-b border-[var(--border-lt)]">
                   <th className="px-4 py-2.5 text-[10px] font-bold uppercase text-[var(--text-4)]">Product</th>
@@ -2589,6 +2590,7 @@ function DeliveryNoteView({
                 })}
               </tbody>
             </table>
+            </div>
           </div>
         </div>
 

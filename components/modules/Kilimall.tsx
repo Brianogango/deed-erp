@@ -997,7 +997,8 @@ export default function Kilimall() {
                   onClick={() => setSettlLines(p => [...p, { kilimallRef: '', amount: '' }])}>+ Add Row</button>
               </div>
             </div>
-            <div className="rounded-lg overflow-hidden" style={{ border: '1px solid var(--border-lt)', maxHeight: 200, overflowY: 'auto' }}>
+            <div className="dt-scroll rounded-lg" style={{ border: '1px solid var(--border-lt)', maxHeight: 200 }}>
+              <div className="min-w-[320px]">
               <div className="table-head" style={{ gridTemplateColumns: '1.5fr 120px 36px' }}>
                 <span>Kilimall Order ID</span><span>Amount (KES)</span><span></span>
               </div>
@@ -1008,10 +1009,11 @@ export default function Kilimall() {
                     placeholder="KLM-..." />
                   <input className="form-input text-[11px] py-1" value={l.amount} type="number"
                     onChange={e => setSettlLines(p => p.map((x, j) => j === i ? { ...x, amount: e.target.value } : x))} />
-                  <button className="text-[10px] text-red-400 hover:text-red-600"
-                    onClick={() => setSettlLines(p => p.filter((_, j) => j !== i))}>✕</button>
+                  <button type="button" className="text-[10px] text-red-400 hover:text-red-600 cursor-pointer"
+                    onClick={() => setSettlLines(p => p.filter((_, j) => j !== i))} aria-label="Remove settlement line">✕</button>
                 </div>
               ))}
+              </div>
             </div>
           </div>
 

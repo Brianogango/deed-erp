@@ -1,6 +1,6 @@
 # Responsive Tables — Full-Proof Plan
 
-Status: **Phase A implemented** on `cursor/responsive-tables-37a6`.
+Status: **Phases A–C implemented** on `cursor/responsive-tables-37a6`.
 
 ## Problem
 
@@ -33,25 +33,23 @@ Never put a hard `min-w-[Npx]` wrapper around a list table without a bounded `ov
 - [x] AppShell: `MutationObserver` + debounce so late-rendered tables get labels
 - [x] Hot-fix TradeIn / Contacts history / SOPs hard min-width wrappers
 
-## Phase B — Hot modules
+## Phase B — Hot modules (done)
 
-Migrate remaining hand-rolled list tables to `DataTable` (or semantic `<table>` + adapter):
+- [x] TradeIn buy-back / donation / exchange lists → `DataTable`
+- [x] Sales order detail / new-order / delivery line tables → `.dt-scroll` + `data-no-responsive`
+- [x] Contacts import preview → `.dt-scroll`
+- [x] AfterSales RMA lines → stacked flex (no hard min-width)
+- [x] Kilimall settlement line editor → `.dt-scroll`
+- [x] InvoiceDetail / Deposits / CRM ClientDetail / PivotView / Repair parts → `.dt-scroll`
 
-- Sales delivery / form line grids (keep form lines as `.dt-scroll`)
-- TradeIn → full `DataTable` migration
-- Contacts import preview → `.dt-scroll` intentional scroll
-- Accounting / PO residual grids
-- Kilimall settlement rows
+## Phase C — Form & report discipline (done)
 
-## Phase C — Form & report discipline
+- [x] Form/report tables use `.dt-scroll` with `data-no-responsive` (scroll stays inside wrapper)
+- [x] Page/module wrappers keep `min-w-0 max-w-full` so flex children cannot blow the viewport
 
-- Standardize every multi-column form editor on `.dt-scroll`
-- Mark analytical reports `data-no-responsive` + `.dt-scroll`
-- Add `min-w-0` to any new flex child that hosts a table
+## Phase D — Retirement (later)
 
-## Phase D — Retirement
-
-- Finish DataTable migration across modules
+- Finish remaining hand-rolled list tables still on the AppShell adapter
 - Remove AppShell `applyLegacyResponsiveTables` once unused
 - Optional: column pinning for wide desktop reports
 

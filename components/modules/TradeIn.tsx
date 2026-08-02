@@ -9,6 +9,7 @@ import {
 } from '@/lib/store'
 import { parseReturnSerialTokens } from '@/lib/tradein-serial-intake'
 import { Badge, Modal, Field, Input, Select, PanelHeader, SearchPicker, ModuleSkeleton, ModuleHeader, TabBar } from '@/components/ui'
+import { DataTable, type ColumnDef } from '@/components/data-table'
 import { CustomerPickerField } from '@/components/tradein/CustomerPickerField'
 import { SerialReturnPicker } from '@/components/tradein/SerialReturnPicker'
 import { StatusBadge } from '@/components/erp'
@@ -151,8 +152,8 @@ function BulkPreview({ rows, columns }: {
           {rows.some(r => r.error) && <span style={{ color: 'var(--danger)', fontWeight: 600 }}>✕ {rows.filter(r => r.error).length} errors</span>}
         </div>
       </div>
-      <div style={{ overflowX: 'auto' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+      <div className="dt-scroll">
+        <table data-no-responsive style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
           <thead><tr style={{ background: 'var(--bg-surface)' }}>
             {[...columns, { key: 'status', label: 'Status' }].map(col => (
               <th key={col.key} style={{ padding: '6px 10px', textAlign: 'left', color: 'var(--text-4)', fontWeight: 600, fontSize: 10, whiteSpace: 'nowrap' }}>{col.label}</th>
@@ -382,6 +383,16 @@ function BuyBackTab() {
     (bb.originalSORef ?? '').toLowerCase().includes(s)
   ) : sorted
 
+  const buyBackColumns: ColumnDef<BuyBack>[] = [
+    { key: 'ref', label: 'Ref', priority: 1, width: '110px', render: bb => <span className="text-xs font-bold text-primary-600">{bb.ref}</span>, accessor: bb => bb.ref },
+    { key: 'customer', label: 'Customer', priority: 1, width: '1.4fr', render: bb => <span className="text-xs truncate">{bb.customerName}</span>, accessor: bb => bb.customerName },
+    { key: 'so', label: 'Original SO', priority: 2, width: '110px', render: bb => <span className="text-xs text-[var(--text-3)]">{bb.originalSORef ?? '—'}</span>, accessor: bb => bb.originalSORef ?? '' },
+    { key: 'items', label: 'Items', priority: 3, width: '80px', render: bb => <span className="text-xs text-[var(--text-3)]">{bb.lines.length}</span>, accessor: bb => bb.lines.length },
+    { key: 'total', label: 'Total', priority: 1, width: '120px', align: 'right', render: bb => <span className="text-xs font-bold">{fmtKes(bb.total)}</span>, accessor: bb => bb.total },
+    { key: 'date', label: 'Date', priority: 2, width: '110px', render: bb => <span className="text-xs text-[var(--text-3)]">{fmtDate(bb.date)}</span>, accessor: bb => bb.date },
+    { key: 'status', label: 'Status', priority: 1, width: '140px', render: bb => <StatusPill status={bb.status} />, accessor: bb => bb.status },
+  ]
+
   if (detail) {
     const bb = buyBacks.find(b => b.id === detail.id) ?? detail
     const STEPS = ['draft', 'approved', 'paid', 'stocked']
@@ -408,7 +419,8 @@ function BuyBackTab() {
             ))}
           </div>
 
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11, marginBottom: 16 }}>
+          <div className="dt-scroll" style={{ marginBottom: 16 }}>
+          <table data-no-responsive style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
             <thead><tr style={{ background: 'var(--bg-surface)' }}>
               {['Product', 'Condition', 'Qty', 'Serials', 'Unit Price', 'Total'].map(h => (
                 <th key={h} style={{ padding: '6px 10px', textAlign: 'left', color: 'var(--text-4)', fontWeight: 600, fontSize: 10 }}>{h}</th>
@@ -429,6 +441,7 @@ function BuyBackTab() {
               ))}
             </tbody>
           </table>
+          </div>
 
           <div style={{ textAlign: 'right', marginBottom: 16, fontSize: 14, fontWeight: 700 }}>Total We Pay: {fmtKes(bb.total)}</div>
           {bb.notes && <p style={{ fontSize: 11, color: 'var(--text-4)', marginBottom: 12 }}>Note: {bb.notes}</p>}
@@ -464,45 +477,26 @@ function BuyBackTab() {
 
   return (
     <div>
-      <PanelHeader title="Buy-Backs" count={displayed.length}>
-        <input aria-label="Search buy-backs" className="form-input text-[11px] py-1.5" style={{ width: 200 }}
-          placeholder="Search ref, customer…" value={search} onChange={e => setSearch(e.target.value)} />
+      <PanelHeader title="Buy-Backs" count={sorted.length}>
         <button type="button" className="btn-secondary text-[11px] flex items-center gap-1.5" onClick={() => setShowBulk(true)}>
           <Fa icon={faUpload} aria-hidden="true" /> Bulk Upload
         </button>
         <button type="button" className="btn-primary text-[11px]" onClick={() => setShowNew(true)}>+ New Buy-Back</button>
       </PanelHeader>
 
-      {displayed.length === 0
-        ? <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-4)', fontSize: 12 }}>{search ? 'No results.' : 'No buy-backs yet.'}</div>
-        : (
-          <div className="w-full min-w-0 max-w-full">
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
-            <thead><tr style={{ background: 'var(--bg-surface)' }}>
-              {['Ref', 'Customer', 'Original SO', 'Items', 'Total', 'Date', 'Status', ''].map(h => (
-                <th key={h} style={{ padding: '8px 12px', textAlign: 'left', color: 'var(--text-4)', fontWeight: 600, fontSize: 10 }}>{h}</th>
-              ))}
-            </tr></thead>
-            <tbody>
-              {displayed.map(bb => (
-                <tr key={bb.id} style={{ borderBottom: '1px solid var(--bg-muted)', cursor: 'pointer' }}
-                  onClick={() => setDetail(bb)}
-                  onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = '#F0F9FF'}
-                  onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = ''}>
-                  <td style={{ padding: '10px 12px', fontWeight: 700, color: 'var(--navy)' }}>{bb.ref}</td>
-                  <td style={{ padding: '10px 12px' }}>{bb.customerName}</td>
-                  <td style={{ padding: '10px 12px', color: 'var(--text-4)' }}>{bb.originalSORef ?? '—'}</td>
-                  <td style={{ padding: '10px 12px' }}>{bb.lines.length} item(s)</td>
-                  <td style={{ padding: '10px 12px', fontWeight: 600 }}>{fmtKes(bb.total)}</td>
-                  <td style={{ padding: '10px 12px', color: 'var(--text-4)' }}>{fmtDate(bb.date)}</td>
-                  <td style={{ padding: '10px 12px' }}><StatusPill status={bb.status} /></td>
-                  <td style={{ padding: '10px 12px', color: 'var(--accent-cyan)' }}>›</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          </div>
-        )}
+      <DataTable
+        tableId="tradein-buybacks"
+        columns={buyBackColumns}
+        rows={displayed}
+        rowKey={bb => bb.id}
+        searchValue={search}
+        onSearchChange={setSearch}
+        clientSearch={false}
+        searchPlaceholder="Search ref, customer…"
+        emptyMessage={search ? 'No results.' : 'No buy-backs yet.'}
+        onRowClick={setDetail}
+        rowLabel={bb => bb.ref}
+      />
 
       {showBulk && (
         <Modal title="Bulk Upload Buy-Backs" subtitle="Upload CSV or Excel rows; use batch_ref to group multiple item rows into one buy-back"
@@ -745,6 +739,20 @@ function DonationTab() {
     (d.notes ?? '').toLowerCase().includes(ds)
   ) : sorted
 
+  const donationColumns: ColumnDef<Donation>[] = [
+    { key: 'ref', label: 'Ref', priority: 1, width: '110px', render: don => <span className="text-xs font-bold text-primary-600">{don.ref}</span>, accessor: don => don.ref },
+    { key: 'type', label: 'Type', priority: 1, width: '80px', render: don => (
+      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ background: don.type === 'in' ? 'var(--primary-light)' : '#FEF9C3', color: don.type === 'in' ? 'var(--info-text)' : '#854D0E' }}>
+        {don.type === 'in' ? 'In' : 'Out'}
+      </span>
+    ), accessor: don => don.type },
+    { key: 'party', label: 'Party', priority: 1, width: '1.4fr', render: don => <span className="text-xs truncate">{don.party}</span>, accessor: don => don.party },
+    { key: 'items', label: 'Items', priority: 3, width: '80px', render: don => <span className="text-xs text-[var(--text-3)]">{don.lines.length}</span>, accessor: don => don.lines.length },
+    { key: 'location', label: 'Location', priority: 2, width: '120px', render: don => <span className="text-xs text-[var(--text-3)]">{LOCATIONS[don.location]?.name ?? don.location}</span>, accessor: don => don.location },
+    { key: 'date', label: 'Date', priority: 2, width: '110px', render: don => <span className="text-xs text-[var(--text-3)]">{fmtDate(don.date)}</span>, accessor: don => don.date },
+    { key: 'status', label: 'Status', priority: 1, width: '140px', render: don => <StatusPill status={don.status} />, accessor: don => don.status },
+  ]
+
   function reset() { setParty(''); setLocation('warehouse'); setNotes(''); setLines([]) }
   function resetBulk() { setBulkRows([]); if (fileRef.current) fileRef.current.value = '' }
 
@@ -865,7 +873,8 @@ function DonationTab() {
             <StatusPill status={don.status} />
           </div>
 
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11, marginBottom: 16 }}>
+          <div className="dt-scroll" style={{ marginBottom: 16 }}>
+          <table data-no-responsive style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
             <thead><tr style={{ background: 'var(--bg-surface)' }}>
               {['Product', 'Qty', 'Serials'].map(h => (
                 <th key={h} style={{ padding: '6px 10px', textAlign: 'left', color: 'var(--text-4)', fontWeight: 600, fontSize: 10 }}>{h}</th>
@@ -881,6 +890,7 @@ function DonationTab() {
               ))}
             </tbody>
           </table>
+          </div>
 
           {don.notes && <p style={{ fontSize: 11, color: 'var(--text-4)', marginBottom: 12 }}>Note: {don.notes}</p>}
           {don.confirmedByName && <p style={{ fontSize: 10, color: 'var(--text-4)' }}>Confirmed by {don.confirmedByName} on {fmtDate(don.confirmedDate!)}</p>}
@@ -900,48 +910,24 @@ function DonationTab() {
 
   return (
     <div>
-      <PanelHeader title="Donations" count={displayedDon.length}>
-        <input aria-label="Search donations" className="form-input text-[11px] py-1.5" style={{ width: 180 }}
-          placeholder="Search ref, party…" value={donSearch} onChange={e => setDonSearch(e.target.value)} />
+      <PanelHeader title="Donations" count={sorted.length}>
         <button type="button" className="btn-secondary text-[11px] flex items-center gap-1.5" onClick={() => setShowBulk(true)}><Fa icon={faUpload} aria-hidden="true" /> Bulk Upload</button>
         <button className="btn-primary text-[11px]" onClick={() => setShowNew(true)}>+ New Donation</button>
       </PanelHeader>
 
-      {displayedDon.length === 0
-        ? <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-4)', fontSize: 12 }}>{donSearch ? 'No results.' : 'No donations recorded.'}</div>
-        : (
-          <div className="w-full min-w-0 max-w-full">
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
-            <thead><tr style={{ background: 'var(--bg-surface)' }}>
-              {['Ref', 'Type', 'Party', 'Items', 'Location', 'Date', 'Status', ''].map(h => (
-                <th key={h} style={{ padding: '8px 12px', textAlign: 'left', color: 'var(--text-4)', fontWeight: 600, fontSize: 10 }}>{h}</th>
-              ))}
-            </tr></thead>
-            <tbody>
-              {displayedDon.map(don => (
-                <tr key={don.id} style={{ borderBottom: '1px solid var(--bg-muted)', cursor: 'pointer' }}
-                  onClick={() => setDetail(don)}
-                  onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = '#F0F9FF'}
-                  onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = ''}>
-                  <td style={{ padding: '10px 12px', fontWeight: 700, color: 'var(--navy)' }}>{don.ref}</td>
-                  <td style={{ padding: '10px 12px' }}>
-                    <span style={{ fontSize: 10, padding: '2px 7px', borderRadius: 20, fontWeight: 700, background: don.type === 'in' ? 'var(--primary-light)' : '#FEF9C3', color: don.type === 'in' ? 'var(--info-text)' : '#854D0E' }}>
-                      {don.type === 'in' ? 'In' : 'Out'}
-                    </span>
-                  </td>
-                  <td style={{ padding: '10px 12px' }}>{don.party}</td>
-                  <td style={{ padding: '10px 12px' }}>{don.lines.length} item(s)</td>
-                  <td style={{ padding: '10px 12px', color: 'var(--text-4)' }}>{LOCATIONS[don.location]?.name ?? don.location}</td>
-                  <td style={{ padding: '10px 12px', color: 'var(--text-4)' }}>{fmtDate(don.date)}</td>
-                  <td style={{ padding: '10px 12px' }}><StatusPill status={don.status} /></td>
-                  <td style={{ padding: '10px 12px', color: 'var(--accent-cyan)' }}>›</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-            </div>
-          </div>
-        )}
+      <DataTable
+        tableId="tradein-donations"
+        columns={donationColumns}
+        rows={displayedDon}
+        rowKey={don => don.id}
+        searchValue={donSearch}
+        onSearchChange={setDonSearch}
+        clientSearch={false}
+        searchPlaceholder="Search ref, party…"
+        emptyMessage={donSearch ? 'No results.' : 'No donations recorded.'}
+        onRowClick={setDetail}
+        rowLabel={don => don.ref}
+      />
 
       {showBulk && (
         <Modal title="Bulk Upload Donations" subtitle="Upload a CSV or Excel file to create multiple donations at once"
@@ -978,8 +964,8 @@ function DonationTab() {
                     {bulkRows.some(r => r.error) && <span style={{ color: 'var(--danger)', fontWeight: 600 }}>✕ {bulkRows.filter(r => r.error).length} errors</span>}
                   </div>
                 </div>
-                <div style={{ overflowX: 'auto' }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+                <div className="dt-scroll">
+                  <table data-no-responsive style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
                     <thead>
                       <tr style={{ background: 'var(--bg-surface)' }}>
                         {['Type', 'Party', 'Location', 'Product', 'Qty', 'Serials', 'Notes', 'Status'].map(h => (
@@ -1201,6 +1187,22 @@ function ExchangeTab() {
     (e.originalSORef ?? '').toLowerCase().includes(es)
   ) : sorted
 
+  const exchangeColumns: ColumnDef<ClientExchange>[] = [
+    { key: 'ref', label: 'Ref', priority: 1, width: '110px', render: exc => <span className="text-xs font-bold text-primary-600">{exc.ref}</span>, accessor: exc => exc.ref },
+    { key: 'customer', label: 'Customer', priority: 1, width: '1.3fr', render: exc => <span className="text-xs truncate">{exc.customerName}</span>, accessor: exc => exc.customerName },
+    { key: 'so', label: 'Original SO', priority: 2, width: '110px', render: exc => <span className="text-xs text-[var(--text-3)]">{exc.originalSORef ?? '—'}</span>, accessor: exc => exc.originalSORef ?? '' },
+    { key: 'returnTotal', label: 'Return Value', priority: 2, width: '110px', align: 'right', render: exc => <span className="text-xs">{fmtKes(exc.returnTotal)}</span>, accessor: exc => exc.returnTotal },
+    { key: 'newTotal', label: 'New Value', priority: 2, width: '110px', align: 'right', render: exc => <span className="text-xs">{fmtKes(exc.newTotal)}</span>, accessor: exc => exc.newTotal },
+    { key: 'diff', label: 'Diff', priority: 1, width: '110px', align: 'right', render: exc => (
+      <span className="text-xs font-bold" style={{ color: exc.priceDiff > 0 ? '#854D0E' : exc.priceDiff < 0 ? 'var(--success-text)' : 'var(--text-3)' }}>
+        {exc.priceDiff > 0 ? `+${fmtKes(exc.priceDiff)}` : exc.priceDiff < 0 ? `-${fmtKes(Math.abs(exc.priceDiff))}` : '—'}
+      </span>
+    ), accessor: exc => exc.priceDiff },
+    { key: 'date', label: 'Date', priority: 3, width: '110px', render: exc => <span className="text-xs text-[var(--text-3)]">{fmtDate(exc.date)}</span>, accessor: exc => exc.date },
+    { key: 'status', label: 'Status', priority: 1, width: '140px', render: exc => <StatusPill status={exc.status} />, accessor: exc => exc.status },
+  ]
+
+
   function reset() { setCustomerId(''); setCustomerName(''); setOriginalSORef(''); setNotes(''); setReturnLines([]); setNewLines([]) }
   function resetBulk() { setBulkRows([]); if (bulkFileRef.current) bulkFileRef.current.value = '' }
 
@@ -1392,47 +1394,24 @@ function ExchangeTab() {
 
   return (
     <div>
-      <PanelHeader title="Client Exchanges" count={displayedExc.length}>
-        <input aria-label="Search client exchanges" className="form-input text-[11px] py-1.5" style={{ width: 200 }}
-          placeholder="Search ref, customer…" value={excSearch} onChange={e => setExcSearch(e.target.value)} />
+      <PanelHeader title="Client Exchanges" count={sorted.length}>
         <button type="button" className="btn-secondary text-[11px] flex items-center gap-1.5" onClick={() => setShowBulk(true)}><Fa icon={faUpload} aria-hidden="true" /> Bulk Upload</button>
         <button className="btn-primary text-[11px]" onClick={() => setShowNew(true)}>+ New Exchange</button>
       </PanelHeader>
 
-      {displayedExc.length === 0
-        ? <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-4)', fontSize: 12 }}>{excSearch ? 'No results.' : 'No exchanges yet.'}</div>
-        : (
-          <div className="w-full min-w-0 max-w-full">
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
-            <thead><tr style={{ background: 'var(--bg-surface)' }}>
-              {['Ref', 'Customer', 'Original SO', 'Return Value', 'New Value', 'Diff', 'Date', 'Status', ''].map(h => (
-                <th key={h} style={{ padding: '8px 12px', textAlign: 'left', color: 'var(--text-4)', fontWeight: 600, fontSize: 10 }}>{h}</th>
-              ))}
-            </tr></thead>
-            <tbody>
-              {displayedExc.map(exc => (
-                <tr key={exc.id} style={{ borderBottom: '1px solid var(--bg-muted)', cursor: 'pointer' }}
-                  onClick={() => setDetail(exc)}
-                  onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = '#F0F9FF'}
-                  onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = ''}>
-                  <td style={{ padding: '10px 12px', fontWeight: 700, color: 'var(--navy)' }}>{exc.ref}</td>
-                  <td style={{ padding: '10px 12px' }}>{exc.customerName}</td>
-                  <td style={{ padding: '10px 12px', color: 'var(--text-4)' }}>{exc.originalSORef ?? '—'}</td>
-                  <td style={{ padding: '10px 12px' }}>{fmtKes(exc.returnTotal)}</td>
-                  <td style={{ padding: '10px 12px' }}>{fmtKes(exc.newTotal)}</td>
-                  <td style={{ padding: '10px 12px', fontWeight: 700, color: exc.priceDiff > 0 ? '#854D0E' : exc.priceDiff < 0 ? 'var(--success-text)' : 'var(--text-3)' }}>
-                    {exc.priceDiff > 0 ? `+${fmtKes(exc.priceDiff)}` : exc.priceDiff < 0 ? `-${fmtKes(Math.abs(exc.priceDiff))}` : '—'}
-                  </td>
-                  <td style={{ padding: '10px 12px', color: 'var(--text-4)' }}>{fmtDate(exc.date)}</td>
-                  <td style={{ padding: '10px 12px' }}><StatusPill status={exc.status} /></td>
-                  <td style={{ padding: '10px 12px', color: 'var(--accent-cyan)' }}>›</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-            </div>
-          </div>
-        )}
+      <DataTable
+        tableId="tradein-exchanges"
+        columns={exchangeColumns}
+        rows={displayedExc}
+        rowKey={exc => exc.id}
+        searchValue={excSearch}
+        onSearchChange={setExcSearch}
+        clientSearch={false}
+        searchPlaceholder="Search ref, customer…"
+        emptyMessage={excSearch ? 'No results.' : 'No exchanges yet.'}
+        onRowClick={setDetail}
+        rowLabel={exc => exc.ref}
+      />
 
       {showBulk && (
         <Modal title="Bulk Upload Trade-Ins" subtitle="Upload exchange rows; use batch_ref to group multiple lines into one trade-in"

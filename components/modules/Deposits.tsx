@@ -423,7 +423,8 @@ function DepositDetail({ deposit, onBack, onAddPayment, onComplete, onCancel }: 
                   <p className="text-[9px] text-[var(--text-4)]">{deposit.items.length} item{deposit.items.length !== 1 ? 's' : ''}</p>
                 </div>
               </div>
-              <table className="w-full text-left">
+              <div className="dt-scroll">
+              <table data-no-responsive className="w-full text-left">
                 <thead className="bg-[var(--bg-surface)] border-b border-[var(--border)]">
                   <tr>
                     {['Product', 'Qty', 'Unit Price', 'Total'].map(h => (
@@ -451,6 +452,7 @@ function DepositDetail({ deposit, onBack, onAddPayment, onComplete, onCancel }: 
                   </tr>
                 </tfoot>
               </table>
+              </div>
             </div>
 
             {/* Payment history */}

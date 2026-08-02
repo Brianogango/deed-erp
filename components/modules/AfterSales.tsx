@@ -400,23 +400,21 @@ export default function AfterSales() {
           <div className="px-4 py-2.5 border-b text-[11px] font-semibold text-t2" style={{ borderColor: 'var(--bg-muted)' }}>
             Return Lines
           </div>
-          <div className="overflow-x-auto w-full">
-            <div className="min-w-[500px] flex flex-col">
+          <div className="flex flex-col min-w-0 max-w-full">
               {rma.lines.map(line => (
-                <div key={line.id} className="px-4 py-3 border-b flex items-start gap-4 text-[12px]" style={{ borderColor: 'var(--bg-surface)' }}>
-                  <div className="flex-1">
+                <div key={line.id} className="px-4 py-3 border-b flex flex-col sm:flex-row sm:items-start gap-2 sm:gap-4 text-[12px]" style={{ borderColor: 'var(--bg-surface)' }}>
+                  <div className="flex-1 min-w-0">
                     <p className="font-semibold text-t1">{line.productName}</p>
                     <p className="text-[10px] text-t3">Qty: {line.qty} · Condition: <span className="font-medium capitalize">{line.condition}</span></p>
                     {line.serialIds.length > 0 && (
-                      <p className="text-[10px] font-mono text-t3">
+                      <p className="text-[10px] font-mono text-t3 break-all">
                         {line.serialIds.map(id => serials.find(s => s.id === id)?.serial ?? id).join(', ')}
                       </p>
                     )}
                   </div>
-                  <p className="text-[11px] text-t2">{line.reason}</p>
+                  <p className="text-[11px] text-t2 sm:max-w-[40%]">{line.reason}</p>
                 </div>
               ))}
-            </div>
           </div>
         </div>
 

@@ -375,8 +375,8 @@ export default function InvoiceDetail() {
           {(invoice.lines || []).length > 0 ? (
             <div>
               <p className="text-[10px] text-[var(--text-4)] uppercase font-bold mb-2">Line Items</p>
-              <div className="rounded-xl border border-[var(--border-lt)] overflow-hidden">
-                <table className="w-full text-xs">
+              <div className="dt-scroll rounded-xl border border-[var(--border-lt)]">
+                <table data-no-responsive className="w-full text-xs">
                   <thead className="bg-[var(--bg-surface)]">
                     <tr>
                       <th className="px-3 py-2 text-left text-[10px] font-bold uppercase text-[var(--text-4)]">Description</th>

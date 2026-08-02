@@ -765,11 +765,11 @@
       box-shadow: none;
     }
 
-    /* Kill hard min-width wrappers that defeat card stacking / containment */
-    .overflow-x-auto > [class*="min-w-"],
-    .table-scroll > [class*="min-w-"],
-    .dt-scroll > [class*="min-w-"],
-    .dt-wrap > [class*="min-w-"] {
+    /* Kill hard min-width wrappers that defeat card stacking. Do NOT apply
+       to `.dt-scroll` / `.dt-wrap` — those are intentional scroll containers
+       for form line editors and analytical reports. */
+    .overflow-x-auto:not(.dt-scroll):not(.dt-wrap) > [class*="min-w-"],
+    .table-scroll.responsive-table > [class*="min-w-"] {
       min-width: 0 !important;
       width: 100% !important;
     }

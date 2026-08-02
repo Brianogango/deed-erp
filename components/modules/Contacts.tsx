@@ -953,7 +953,7 @@ export default function Contacts() {
               </div>
 
               <div className="dt-scroll">
-              <div className="min-w-[560px] flex flex-col">
+              <div className="min-w-[560px] max-w-none flex flex-col">
               <div className="grid text-[10px] font-medium text-t3 uppercase tracking-wider px-3 py-1.5 rounded"
                 style={{ gridTemplateColumns: '24px 70px 1.4fr 1.2fr 100px 90px', background: 'var(--bg-surface)', border: '1px solid var(--border-lt)' }}>
                 <span></span><span>Type</span><span>Name</span><span>Email</span><span>Phone</span><span>Status</span>

@@ -48,7 +48,7 @@ export default function SalesHeatmap() {
         </div>
       </div>
 
-      <div className="overflow-x-auto">
+      <div className="dt-scroll min-w-0 max-w-full">
         <div className="min-w-[600px]">
           <div className="flex">
             <div className="w-10 flex-shrink-0" />
