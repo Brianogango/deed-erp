@@ -27,9 +27,18 @@ import PaymentDetailsPicker from '@/components/payment/PaymentDetailsPicker'
 
 const today = () => new Date().toISOString().slice(0, 10)
 
-export default function InvoiceDetail() {
+export type InvoiceDetailProps = {
+  /** When set, renders this invoice instead of the route param (Sales embed). */
+  invoiceId?: string
+  /** Compact back navigation for embedding inside another module. */
+  embedded?: boolean
+  onClose?: () => void
+}
+
+export default function InvoiceDetail({ invoiceId: invoiceIdProp, embedded = false, onClose }: InvoiceDetailProps = {}) {
   const mounted = useMounted()
-  const { id } = useParams<{ id: string }>()
+  const params = useParams<{ id: string }>()
+  const id = invoiceIdProp || params?.id
   const router = useRouter()
   const {
     invoices,
@@ -62,6 +71,12 @@ export default function InvoiceDetail() {
   const canManageFinance = ['director', 'finance_officer', 'admin_officer'].includes(currentUser?.role ?? '')
   const canManageFullFinance = ['director', 'finance_officer'].includes(currentUser?.role ?? '')
   const invoice = invoices.find(i => i.id === id)
+
+  const handleBack = () => {
+    if (embedded && onClose) onClose()
+    else router.push('/finance')
+  }
+  const backLabel = embedded ? 'Back to order' : 'Back to finance'
 
   const [showPayModal, setShowPayModal] = useState(false)
   const [payAmount, setPayAmount] = useState('')
@@ -135,8 +150,8 @@ export default function InvoiceDetail() {
       <div className="mod-page">
         <RecordHeader
           title="Invoice not found"
-          onBack={() => router.push('/finance')}
-          backLabel="Back to finance"
+          onBack={handleBack}
+          backLabel={backLabel}
         />
         <div className="mod-body p-12 text-center text-[var(--text-3)] text-sm">Invoice not found.</div>
       </div>
@@ -249,8 +264,8 @@ export default function InvoiceDetail() {
         entity={invoice.partnerName}
         status={docState === 'draft' ? 'draft' : docState === 'cancelled' ? 'cancelled' : 'posted'}
         statusLabel={INVOICE_DOC_STATE_LABELS[docState]}
-        onBack={() => router.push('/finance')}
-        backLabel="Back to finance"
+        onBack={handleBack}
+        backLabel={backLabel}
         primaryAction={docState === 'posted' && payState !== 'paid' && payState !== 'blocked' && canManageFinance ? (
           <PrimaryActionButton
             icon={<Fa icon={faMoneyBillWave} />}
@@ -594,7 +609,11 @@ export default function InvoiceDetail() {
           message={`Delete this ${docLabel.toLowerCase()}? This cannot be undone.`}
           confirmLabel="Delete"
           confirmColor="bg-red-600 hover:bg-red-700"
-          onConfirm={() => { deleteInvoice(invoice.id); router.push('/finance') }}
+          onConfirm={() => {
+            deleteInvoice(invoice.id)
+            if (embedded && onClose) onClose()
+            else router.push('/finance')
+          }}
           onCancel={() => setShowDelete(false)}
         />
       )}

@@ -112,7 +112,9 @@ export function SalesRecordHeader({
     })
   }
 
-  if (canSeeFinance && invoicesCount > 0) {
+  // Invoices are embedded on the SO (not a Finance-only deep link), so show the
+  // smart button whenever related invoices exist — even without Accounting access.
+  if (invoicesCount > 0) {
     smartButtons.push({
       id: 'invoices',
       label: 'Invoices',
@@ -123,7 +125,7 @@ export function SalesRecordHeader({
     })
   }
 
-  if (canSeeFinance && paymentsCount > 0) {
+  if ((canSeeFinance || invoicesCount > 0) && paymentsCount > 0) {
     smartButtons.push({
       id: 'payments',
       label: 'Payments',

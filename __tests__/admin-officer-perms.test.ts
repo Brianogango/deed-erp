@@ -9,7 +9,7 @@ import {
   paymentJournalRef,
   DEFAULT_ADMIN_OFFICER_CUSTOMER_INVOICE_LIMIT_KES,
 } from '@/lib/finance-controls'
-import { canCreateCustomerInvoiceFromSO, canManageFullFinance, canManageMoney } from '@/lib/auth/access'
+import { canConfirmCustomerInvoice, canCreateCustomerInvoiceFromSO, canManageFullFinance, canManageMoney } from '@/lib/auth/access'
 import { canValidatePurchaseReceipt } from '@/lib/inventory/permissions'
 import { APPROVAL_RULES } from '@/lib/sales-approvals'
 
@@ -89,7 +89,29 @@ describe('sales approval + GRN permissions', () => {
 
   it('allows sales roles to create SO invoices drafts and keeps GRN tight', () => {
     expect(canCreateCustomerInvoiceFromSO('admin_officer')).toBe(true)
+    expect(canConfirmCustomerInvoice('admin_officer')).toBe(true)
+    expect(canConfirmCustomerInvoice('sales_officer')).toBe(false)
     expect(canValidatePurchaseReceipt('technical_lead')).toBe(false)
     expect(canValidatePurchaseReceipt('admin_officer')).toBe(true)
+  })
+
+  it('gates confirm/post of customer invoice by AO limit (Sales Confirm Invoice)', () => {
+    expect(canPostOrPayCustomerInvoice({
+      role: 'admin_officer',
+      invoiceType: 'customer_invoice',
+      invoiceTotal: DEFAULT_ADMIN_OFFICER_CUSTOMER_INVOICE_LIMIT_KES,
+      limitKes: DEFAULT_ADMIN_OFFICER_CUSTOMER_INVOICE_LIMIT_KES,
+    }).ok).toBe(true)
+    expect(canPostOrPayCustomerInvoice({
+      role: 'admin_officer',
+      invoiceType: 'customer_invoice',
+      invoiceTotal: DEFAULT_ADMIN_OFFICER_CUSTOMER_INVOICE_LIMIT_KES + 1,
+      limitKes: DEFAULT_ADMIN_OFFICER_CUSTOMER_INVOICE_LIMIT_KES,
+    }).ok).toBe(false)
+    expect(canPostOrPayCustomerInvoice({
+      role: 'finance_officer',
+      invoiceType: 'customer_invoice',
+      invoiceTotal: DEFAULT_ADMIN_OFFICER_CUSTOMER_INVOICE_LIMIT_KES + 1,
+    }).ok).toBe(true)
   })
 })

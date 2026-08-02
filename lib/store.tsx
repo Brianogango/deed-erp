@@ -3258,6 +3258,7 @@ export type SalesStoreState = Pick<AppState,
   | 'unassignSerialFromSOLine'
   | 'addContact'
   | 'createInvoiceFromSO'
+  | 'postInvoice'
   | 'prepareDelivery'
   | 'validateDelivery'
   | 'markDeliveryNoteGenerated'
@@ -5425,6 +5426,7 @@ export function StoreProvider({
     unassignSerialFromSOLine: (...args: Parameters<AppState['unassignSerialFromSOLine']>) => storeCtxRef.current!.unassignSerialFromSOLine(...args),
     addContact: (...args: Parameters<AppState['addContact']>) => storeCtxRef.current!.addContact(...args),
     createInvoiceFromSO: (...args: Parameters<AppState['createInvoiceFromSO']>) => storeCtxRef.current!.createInvoiceFromSO(...args),
+    postInvoice: (...args: Parameters<AppState['postInvoice']>) => storeCtxRef.current!.postInvoice(...args),
     prepareDelivery: (...args: Parameters<AppState['prepareDelivery']>) => storeCtxRef.current!.prepareDelivery(...args),
     validateDelivery: (...args: Parameters<AppState['validateDelivery']>) => storeCtxRef.current!.validateDelivery(...args),
     markDeliveryNoteGenerated: (...args: Parameters<AppState['markDeliveryNoteGenerated']>) => storeCtxRef.current!.markDeliveryNoteGenerated(...args),

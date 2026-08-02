@@ -1,5 +1,6 @@
 'use client'
 import { useState, useEffect, useMemo, useRef, Suspense } from 'react'
+import dynamic from 'next/dynamic'
 import { useSearchParams, useRouter } from 'next/navigation'
 import {
   faClipboardCheck,
@@ -34,7 +35,8 @@ import {
 } from '@fortawesome/free-solid-svg-icons'
 import { printDeliveryNote } from '@/lib/delivery-note-pdf'
 import SerialMultiSelect from '@/components/SerialMultiSelect'
-import { hasModuleAccess, canCreateCustomerInvoiceFromSO } from '@/lib/auth/access'
+import { hasModuleAccess, canCreateCustomerInvoiceFromSO, canConfirmCustomerInvoice } from '@/lib/auth/access'
+import { canPostOrPayCustomerInvoice } from '@/lib/finance-controls'
 import {
   useSalesStore,
   SaleOrder,
@@ -83,6 +85,7 @@ import {
   SALE_STATUS_LABELS,
   SO_INVOICE_STATUS_LABELS,
   DELIVERY_STATE_LABELS,
+  PAYMENT_STATUS_LABELS,
   isQuotationStage,
   matchesSalesListFilter,
   hasValidatedDeliveryForInvoice,
@@ -90,8 +93,16 @@ import {
   deliveryDeliveredTotal,
   canGenerateDeliveryNote,
   saleOrderInvoiceStatus,
+  invoiceDocState,
+  invoicePaymentStatus,
+  displayDocRef,
   type SalesListFilter,
 } from '@/lib/odoo-sales-flow'
+
+const InvoiceDetail = dynamic(() => import('@/components/modules/InvoiceDetail'), {
+  loading: () => <ModuleSkeleton />,
+  ssr: false,
+})
 
 // ═══════════════════════════════════════════════════════════════════════════
 // TYPES
@@ -279,7 +290,7 @@ function SalesContent() {
     saleOrders, contacts, products, serials, invoices, deliveries, returnOrders,
     createSaleOrder, updateSaleOrder, confirmSO, markQuotationSent, setSaleOrderLock,
     addSOLine, removeSOLine,
-    assignSerialsToSOLine, unassignSerialFromSOLine, addContact, createInvoiceFromSO, prepareDelivery, validateDelivery, markDeliveryNoteGenerated,
+    assignSerialsToSOLine, unassignSerialFromSOLine, addContact, createInvoiceFromSO, postInvoice, prepareDelivery, validateDelivery, markDeliveryNoteGenerated,
     deleteSaleOrder, showToast, getStockByLocation, resetSOToDraft, cancelSO,
     getCustomerCreditStatus, users, currentUserId, systemSettings,
     companySettings, bankAccounts, confirmDeliveryWithStockDeduction,
@@ -306,10 +317,14 @@ function SalesContent() {
   const isAdmin = currentUser?.role === 'director'
   const canEditDiscount = isAdmin || !systemSettings.salesDiscountControl
   const canInvoiceFromSO = canCreateCustomerInvoiceFromSO(currentUser?.role)
+  const canConfirmInvoiceRole = canConfirmCustomerInvoice(currentUser?.role)
 
   // ── View state ──────────────────────────────────────────────────────────
   const [view, setView] = useState<SalesView>('list')
   const [activeId, setActiveId] = useState<string | null>(null)
+  /** When set, Sales embeds full InvoiceDetail for this invoice id. */
+  const [embeddedInvoiceId, setEmbeddedInvoiceId] = useState<string | null>(null)
+  const [confirmingInvoice, setConfirmingInvoice] = useState(false)
   // Odoo-style menus: Quotations (unconfirmed) vs Orders (confirmed sales).
   const [listTab, setListTab] = useState<'quotations' | 'orders'>('quotations')
   const [filter, setFilter] = useState<SalesListFilter>('all')
@@ -581,6 +596,21 @@ function SalesContent() {
     () => activeOrder ? invoices.filter(i => i.saleOrderId === activeOrder.id) : [],
     [invoices, activeOrder],
   )
+  const draftInvoices = useMemo(
+    () => activeInvoices.filter(i => invoiceDocState(i.status) === 'draft'),
+    [activeInvoices],
+  )
+  const linkedDraftInvoice = draftInvoices[0] ?? null
+  const canConfirmLinkedDraft = Boolean(
+    linkedDraftInvoice &&
+    canConfirmInvoiceRole &&
+    canPostOrPayCustomerInvoice({
+      role: currentUser?.role,
+      invoiceType: linkedDraftInvoice.type,
+      invoiceTotal: linkedDraftInvoice.total,
+      limitKes: systemSettings.accAdminOfficerInvoiceLimitKes,
+    }).ok,
+  )
   const activePayments = useMemo(
     () => activeInvoices.flatMap(i => i.payments ?? []),
     [activeInvoices],
@@ -594,8 +624,40 @@ function SalesContent() {
   const canSeeReturns = hasModuleAccess(currentUser, 'after_sales')
 
   // ── Navigation ──────────────────────────────────────────────────────────
-  const openOrder = (id: string) => { setActiveId(id); setView('form'); setEditingLineId(null) }
-  const backToList = () => { setView('list'); setActiveId(null); setEditingLineId(null) }
+  const openOrder = (id: string) => {
+    setActiveId(id)
+    setView('form')
+    setEditingLineId(null)
+    setEmbeddedInvoiceId(null)
+  }
+  const backToList = () => {
+    setView('list')
+    setActiveId(null)
+    setEditingLineId(null)
+    setEmbeddedInvoiceId(null)
+  }
+  const openEmbeddedInvoice = (invoiceId: string) => setEmbeddedInvoiceId(invoiceId)
+  const openLinkedInvoices = () => {
+    if (activeInvoices.length === 1) {
+      openEmbeddedInvoice(activeInvoices[0].id)
+      return
+    }
+    if (activeInvoices.length > 1) {
+      document.getElementById('so-customer-invoices')?.scrollIntoView({ behavior: 'smooth' })
+      return
+    }
+    document.getElementById('so-customer-invoices')?.scrollIntoView({ behavior: 'smooth' })
+  }
+  const confirmLinkedDraftInvoice = async () => {
+    if (!linkedDraftInvoice || confirmingInvoice) return
+    setConfirmingInvoice(true)
+    try {
+      await Promise.resolve(postInvoice(linkedDraftInvoice.id))
+      openEmbeddedInvoice(linkedDraftInvoice.id)
+    } finally {
+      setConfirmingInvoice(false)
+    }
+  }
   const openNewForm = () => {
     setNewCustomer(null); setNewDeliveryDate(''); setNewPaymentTerms('30')
     setNewNotes(''); setNewCustomerRef(''); setNewSalesTeam(''); setNewPricelist('')
@@ -618,6 +680,7 @@ function SalesContent() {
     setDnRecipientId(del?.recipientIdNumber ?? '')
     setDnAddress(del?.deliveryAddress ?? '')
     setDnNotes(del?.notes ?? '')
+    setEmbeddedInvoiceId(null)
     setView('delivery')
   }
 
@@ -1206,6 +1269,12 @@ function SalesContent() {
                   )}
                   </TablePageLayout>
                 </>
+              ) : embeddedInvoiceId ? (
+                <InvoiceDetail
+                  invoiceId={embeddedInvoiceId}
+                  embedded
+                  onClose={() => setEmbeddedInvoiceId(null)}
+                />
               ) : (
                 /* ── ORDER FORM VIEW ─────────────────────────────────────── */
                 <div className="flex flex-col">
@@ -1266,7 +1335,10 @@ function SalesContent() {
                             onClick={async () => {
                               const soPayment = getDocumentPaymentDetails(activeOrder.id)
                               const inv = await Promise.resolve(createInvoiceFromSO(activeOrder.id))
-                              if (inv?.id) setDocumentPaymentDetails(inv.id, soPayment)
+                              if (inv?.id) {
+                                setDocumentPaymentDetails(inv.id, soPayment)
+                                openEmbeddedInvoice(inv.id)
+                              }
                             }}
                           >
                             <Fa icon={faFileInvoiceDollar} /><span>Create Invoice</span>
@@ -1276,6 +1348,15 @@ function SalesContent() {
                             <Fa icon={faFileInvoiceDollar} /><span>Invoice after Delivery</span>
                           </button>
                         ) : null}
+                        {canConfirmLinkedDraft && linkedDraftInvoice && (
+                          <button
+                            className="btn-primary flex items-center gap-2 text-xs"
+                            disabled={confirmingInvoice}
+                            onClick={() => { void confirmLinkedDraftInvoice() }}
+                          >
+                            <Fa icon={faCircleCheck} /><span>{confirmingInvoice ? 'Confirming…' : 'Confirm Invoice'}</span>
+                          </button>
+                        )}
                         {activeDeliveries.some(d => ['waiting', 'ready'].includes(d.status)) && (
                           <button className={`${activeInvoiceStatus === 'to_invoice' ? 'btn-secondary' : 'btn-primary'} flex items-center gap-2 text-xs`} onClick={openDeliveryView}><Fa icon={faTruck} /><span>Delivery</span></button>
                         )}
@@ -1284,6 +1365,12 @@ function SalesContent() {
                             { label: sendingQuoteId === activeOrder.id ? 'Sending…' : 'Send by Email', icon: faFileInvoice, disabled: sendingQuoteId === activeOrder.id, onClick: () => openSendQuoteModal(activeOrder) },
                             { label: 'Preview', icon: faFileAlt, onClick: () => previewSalesDocument(activeOrder, 'Sale Order', 'SALES ORDER') },
                             { label: 'Print', icon: faPrint, onClick: () => downloadSalesDocument(activeOrder, 'Sale Order', 'SO') },
+                            ...(linkedDraftInvoice && canConfirmInvoiceRole ? [{
+                              label: confirmingInvoice ? 'Confirming…' : 'Confirm Invoice',
+                              icon: faCircleCheck,
+                              disabled: confirmingInvoice || !canConfirmLinkedDraft,
+                              onClick: () => { void confirmLinkedDraftInvoice() },
+                            }] : []),
                             ...(activeDeliveries.some(d => canGenerateDeliveryNote(d)) ? [{ label: 'Print delivery note', icon: faTruck, onClick: () => { const del = activeDeliveries.find(d => canGenerateDeliveryNote(d)) ?? activeDeliveries[0]; setDnRecipientName(del.recipientName ?? activeOrder.customerName ?? ''); setDnRecipientPhone(del.recipientPhone ?? ''); setDnRecipientId(del.recipientIdNumber ?? ''); setDnAddress(del.deliveryAddress ?? ''); setDnNotes(del.notes ?? ''); setShowDnModal(true) } }] : []),
                             ...(activeOrder.locked && isAdmin ? [{ label: 'Unlock', icon: faRotateLeft, onClick: () => setSaleOrderLock(activeOrder.id, false) }] : []),
                             ...(!activeOrder.locked && systemSettings.salesLockConfirmed && isAdmin ? [{ label: 'Lock', icon: faSave, onClick: () => setSaleOrderLock(activeOrder.id, true) }] : []),
@@ -1313,7 +1400,7 @@ function SalesContent() {
                         canSeeReturns={canSeeReturns}
                         onBackToList={backToList}
                         onOpenDelivery={openDeliveryView}
-                        onOpenInvoices={() => router.push('/finance?tab=invoices')}
+                        onOpenInvoices={openLinkedInvoices}
                         onOpenReturns={() => router.push('/aftersales?tab=returns')}
                         onPreview={() => previewSalesDocument(
                           activeOrder,
@@ -1704,6 +1791,55 @@ function SalesContent() {
                           )}
                         </div>
                       </div>
+
+                      {/* Linked customer invoices (Create → Confirm from Sales) */}
+                      {(activeOrder.status === 'sale' || activeInvoices.length > 0) && (
+                        <div id="so-customer-invoices" className="card overflow-hidden">
+                          <PanelHeader title="Customer Invoices" />
+                          <div className="p-3 flex flex-col gap-2">
+                            {activeInvoices.length > 0 ? activeInvoices.map(inv => {
+                              const docState = invoiceDocState(inv.status)
+                              const payState = invoicePaymentStatus(inv)
+                              const outstanding = Math.max(0, (inv.total ?? 0) - (inv.amountPaid ?? 0))
+                              return (
+                                <button
+                                  key={inv.id}
+                                  type="button"
+                                  onClick={() => openEmbeddedInvoice(inv.id)}
+                                  className="p-3 rounded-lg flex flex-col gap-2 text-left cursor-pointer transition-colors hover:brightness-[0.98]"
+                                  style={{ background: '#E8F3FA', border: '1px solid #A8D4E8' }}
+                                >
+                                  <div className="flex items-center justify-between gap-2">
+                                    <p className="font-mono font-semibold text-xs" style={{ color: 'var(--navy)' }}>{displayDocRef(inv.ref)}</p>
+                                    <StatusBadge
+                                      status={docState === 'posted' ? payState : docState}
+                                      label={docState === 'posted' ? PAYMENT_STATUS_LABELS[payState] : undefined}
+                                      size="xs"
+                                    />
+                                  </div>
+                                  <div className="flex justify-between text-xs"><span className="text-[var(--text-3)]">Total</span><span className="font-mono text-[var(--text-1)]">{fmtKes(inv.total)}</span></div>
+                                  <div className="flex justify-between text-xs"><span className="text-[var(--text-3)]">Paid</span><span className="font-mono" style={{ color: 'var(--success)' }}>{fmtKes(inv.amountPaid ?? 0)}</span></div>
+                                  <div className="flex justify-between text-xs font-semibold">
+                                    <span className="text-[var(--text-1)]">Outstanding</span>
+                                    <span className="font-mono" style={{ color: outstanding > 0 ? 'var(--danger)' : 'var(--success)' }}>
+                                      {fmtKes(outstanding)}
+                                    </span>
+                                  </div>
+                                  {docState === 'draft' && canConfirmLinkedDraft && inv.id === linkedDraftInvoice?.id && (
+                                    <span className="text-[10px] font-semibold text-amber-700">Draft — use Confirm Invoice to post</span>
+                                  )}
+                                </button>
+                              )
+                            }) : (
+                              <p className="text-[11px] text-[var(--text-3)] text-center py-3">
+                                {invoiceDeliveryReady
+                                  ? 'Click “Create Invoice” to generate a draft customer invoice'
+                                  : 'Available after delivery is validated'}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      )}
 
                       <Chatter
                         model="sale_order"

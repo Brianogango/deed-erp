@@ -144,6 +144,9 @@ export const canManageFullFinance = (role?: string | null) =>
 /** Draft customer invoice from confirmed SO. */
 export const canCreateCustomerInvoiceFromSO = (role?: string | null) =>
   ['director', 'finance_officer', 'admin_officer'].includes(normalizeClientRole(role))
+/** Confirm/post customer invoice (amount gate applied separately via finance-controls). */
+export const canConfirmCustomerInvoice = (role?: string | null) =>
+  ['director', 'finance_officer', 'admin_officer'].includes(normalizeClientRole(role))
 export const canManageProcess = (role?: string | null) => ['director', 'admin_officer', 'finance_officer'].includes(normalizeClientRole(role))
 export const canManageTech    = (role?: string | null) => ['director', 'technical_lead'].includes(normalizeClientRole(role))
 export const canManageSettings = (role?: string | null) => ['director', 'admin_officer'].includes(normalizeClientRole(role))
