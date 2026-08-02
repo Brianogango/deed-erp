@@ -225,6 +225,15 @@ HAD_PREVIOUS_BUILD=1
 BUILD_SWAPPED=1
 mv -- "$STAGED_BUILD_PATH" "$APP_DIR/.next"
 
+# Tabs opened before the deploy still request the previous build's hashed
+# chunks/CSS. Those hashes are content-addressed and unique, so carrying them
+# into the new static dir (never overwriting) keeps old sessions alive instead
+# of crashing with ChunkLoadError / "Something went wrong" until reload.
+if [[ -d "$PREVIOUS_BUILD_PATH/static" ]]; then
+  log "--- Carrying previous build's hashed static assets forward for open tabs"
+  cp -an -- "$PREVIOUS_BUILD_PATH/static/." "$APP_DIR/.next/static/" || true
+fi
+
 log "--- Reloading PM2"
 pm2 startOrReload ecosystem.config.js --update-env
 pm2 save

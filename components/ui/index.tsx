@@ -236,19 +236,22 @@ export function Badge({
   label,
   size = 'sm',
 }: {
-  status: string
+  /** Tolerates undefined/null — records synced from the server can miss status
+   *  fields, and one bad row must never crash a whole module. */
+  status?: string | null
   label?: string
   size?: 'xs' | 'sm'
 }) {
-  const cls = statusColor[status] ?? 'badge-gray'
-  const fallback = status.replace(/_/g, ' ').replace(/\s+/g, ' ').trim()
+  const safeStatus = typeof status === 'string' ? status : ''
+  const cls = statusColor[safeStatus] ?? 'badge-gray'
+  const fallback = safeStatus.replace(/_/g, ' ').replace(/\s+/g, ' ').trim()
   const text = label
-    ?? statusLabel[status]
-    ?? (fallback ? fallback.charAt(0).toUpperCase() + fallback.slice(1) : status)
+    ?? statusLabel[safeStatus]
+    ?? (fallback ? fallback.charAt(0).toUpperCase() + fallback.slice(1) : '—')
   return (
     <span
       className={`badge ${cls} ${size === 'xs' ? 'badge-xs' : ''}`}
-      data-status={status}
+      data-status={safeStatus}
     >
       <span className="sr-only">Status: </span>
       {text}
