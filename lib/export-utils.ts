@@ -1,17 +1,19 @@
 'use client'
 
-import * as XLSX from 'xlsx'
 import { getStoredCompanyData } from '@/lib/company'
+import { loadXlsx } from '@/lib/xlsx-lazy'
 
 export type ExportRow = (string | number | null | undefined)[]
 
 // ─── Excel Export ─────────────────────────────────────────────────────────────
-export function exportToExcel(
+/** Lazy-loads SheetJS so navigating modules doesn't pay for xlsx up front. */
+export async function exportToExcel(
   title: string,
   headers: string[],
   rows: ExportRow[],
   filename: string,
 ) {
+  const XLSX = await loadXlsx()
   const co = getStoredCompanyData()
   const sheetData = [
     [co.name],

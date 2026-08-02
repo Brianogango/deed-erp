@@ -3335,7 +3335,7 @@ export type ShellStoreState = Pick<AppState,
   | 'users'
   | 'notifications'
   | 'profileImages'
-  | 'invoices'
+  // Keep repairs so the sidebar badge re-renders; invoices are unused by shell chrome.
   | 'repairs'
   | 'getVisibleRepairs'
   | 'logout'
@@ -4780,14 +4780,17 @@ export function StoreProvider({
     const immediate = bootApiGroupsForRoute(path)
     void Promise.all(immediate.map(runGroup))
 
-    const idleGroups = remainingBootApiGroups(immediate)
+    // Only warm high-traffic groups in the background — full remainingBoot
+    // fan-out competed with the user's first clicks after login.
+    const PRIORITY_IDLE: BootApiGroup[] = ['products', 'contacts', 'sales', 'crm']
+    const idleGroups = remainingBootApiGroups(immediate).filter(g => PRIORITY_IDLE.includes(g))
     let idleHandle: number | undefined
     let idleTimer: ReturnType<typeof setTimeout> | undefined
     const prefetchIdle = () => { void Promise.all(idleGroups.map(runGroup)) }
     if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
-      idleHandle = window.requestIdleCallback(prefetchIdle, { timeout: 2500 })
+      idleHandle = window.requestIdleCallback(prefetchIdle, { timeout: 12000 })
     } else {
-      idleTimer = setTimeout(prefetchIdle, 1800)
+      idleTimer = setTimeout(prefetchIdle, 8000)
     }
 
     // Managers need periodic leave refresh; SSE covers most real-time cases.
@@ -15222,7 +15225,6 @@ const storeCtx: AppState = {
     users,
     notifications,
     profileImages,
-    invoices,
     repairs,
     ...shellActions,
   }), [
@@ -15233,7 +15235,6 @@ const storeCtx: AppState = {
     currentUserId,
     notifications,
     profileImages,
-    invoices,
     repairs,
     shellActions,
   ])

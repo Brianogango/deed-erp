@@ -298,7 +298,7 @@ export default function DataTable<T>({
       options.push({
         id: 'excel',
         label: 'Export Excel',
-        onSelect: () => exportToExcel(exportTitle, exportHeaders, exportRows, filename),
+        onSelect: () => { void exportToExcel(exportTitle, exportHeaders, exportRows, filename) },
       })
     }
     return options

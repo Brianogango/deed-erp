@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import { useEffect, useMemo, useState } from 'react'
 import { Fa } from '@/components/icons'
 import {
@@ -12,6 +12,7 @@ import {
 import { useShellStore, ModuleId } from '@/lib/store'
 import { hasModuleAccess } from '@/lib/auth/access'
 import { trackUxEvent } from '@/lib/ux-telemetry'
+import { warmRoute } from '@/lib/warm-route'
 
 // Brand colours
 const DEED_BLUE  = 'var(--primary)'
@@ -49,6 +50,7 @@ interface NavGroup {
 
 export default function Sidebar() {
   const pathname = usePathname()
+  const router = useRouter()
   const { sidebarOpen, toggleSidebar, getVisibleRepairs, users, currentUserId, activeModule, setModule } = useShellStore()
   const [isMobile, setIsMobile] = useState(false)
 
@@ -140,11 +142,12 @@ export default function Sidebar() {
       if (target.id !== 'settings') {
         setModule(target.id)
       }
-      window.location.href = target.href
+      // Soft nav — full page reload made pinned shortcuts feel much slower.
+      router.push(target.href)
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
-  }, [pinnedItems, setModule])
+  }, [pinnedItems, setModule, router])
 
   const togglePinned = (id: ModuleId | 'settings') => {
     setPinnedIds(prev => {
@@ -305,6 +308,7 @@ export default function Sidebar() {
                       isActive={isNavItemActive(pathname, item)}
                       isExpanded={sidebarOpen}
                       isPinned={pinnedIds.has(item.id)}
+                      currentUserId={currentUserId}
                       onTogglePin={() => togglePinned(item.id)}
                       onNavigate={() => {
                         if (item.id !== 'settings') setModule(item.id)
@@ -341,16 +345,20 @@ interface NavItemProps {
   isActive: boolean
   isExpanded: boolean
   isPinned: boolean
+  currentUserId?: string | null
   onNavigate: () => void
   onTogglePin: () => void
 }
 
-function SidebarNavItem({ item, isActive, isExpanded, isPinned, onNavigate, onTogglePin }: NavItemProps) {
+function SidebarNavItem({ item, isActive, isExpanded, isPinned, currentUserId, onNavigate, onTogglePin }: NavItemProps) {
+  const warm = () => warmRoute(item.href, currentUserId)
   return (
     <div className={`flex items-center ${isExpanded ? 'gap-1' : 'justify-center'}`}>
       <Link
         href={item.href}
         onClick={onNavigate}
+        onMouseEnter={warm}
+        onFocus={warm}
         aria-current={isActive ? 'page' : undefined}
         className={`sidebar-nav-item group relative flex items-center rounded-xl cursor-pointer ${isActive ? 'active' : ''} ${isExpanded ? 'min-w-0 flex-1 px-3.5 py-2.5' : 'h-11 w-11 mx-auto justify-center'}`}
       >

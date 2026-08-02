@@ -1,6 +1,6 @@
 'use client'
 import dynamic from 'next/dynamic'
-import { ModuleSkeleton } from '@/components/ui'
+import { ModuleSkeleton } from '@/components/ui/ModuleSkeleton'
 
 const SOPDocuments = dynamic(() => import('@/components/modules/SOPDocuments'), {
   loading: () => <ModuleSkeleton />,
