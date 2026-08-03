@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildInventoryBarcode, inferTrackingMethod } from '@/lib/inventory-identifiers'
+import { buildInventoryBarcode, inferTrackingMethod, productOffersOnHandSerials } from '@/lib/inventory-identifiers'
 
 describe('inferTrackingMethod', () => {
   it('prefers explicit tracking method when provided', () => {
@@ -17,6 +17,31 @@ describe('inferTrackingMethod', () => {
   it('derives default from category map', () => {
     expect(inferTrackingMethod({ category: 'Accessories' })).toBe('QUANTITY')
     expect(inferTrackingMethod({ category: 'Networking' })).toBe('SERIAL')
+    expect(inferTrackingMethod({ category: 'Mobile Devices' })).toBe('SERIAL')
+  })
+})
+
+describe('productOffersOnHandSerials', () => {
+  it('offers Serials for Laptops even when wrongly saved as QUANTITY', () => {
+    expect(productOffersOnHandSerials({
+      trackingMethod: 'QUANTITY',
+      category: 'Laptops',
+      requiresSerial: false,
+    })).toBe(true)
+  })
+
+  it('hides Serials for bulk parts', () => {
+    expect(productOffersOnHandSerials({
+      trackingMethod: 'QUANTITY',
+      category: 'Parts & Components',
+    })).toBe(false)
+  })
+
+  it('offers Serials when the SKU already has serial records', () => {
+    expect(productOffersOnHandSerials({
+      trackingMethod: 'QUANTITY',
+      category: 'Parts & Components',
+    }, { hasExistingSerials: true })).toBe(true)
   })
 })
 
