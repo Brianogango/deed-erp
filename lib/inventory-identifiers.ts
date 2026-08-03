@@ -89,9 +89,6 @@ export function productOffersOnHandSerials(product: {
   return categoryDefaultTracking(product.category) === 'SERIAL'
 }
 
-/** Legacy tags used an INV- prefix (looked like invoice) — e.g. INV-{SERIAL}-0001. */
-const LEGACY_INV_TAG_RE = /^INV-/i
-
 function normalizeTagSeed(value: string | null | undefined, fallback: string) {
   const cleaned = String(value ?? '')
     .trim()
@@ -183,9 +180,4 @@ export function rewriteInventoryTags<T extends { serial?: string | null; barcode
   })
 
   return { rows: nextRows, rewritten }
-}
-
-/** @deprecated Prefer needsInventoryTagRewrite — kept for call-site clarity in scans. */
-export function isLegacyInvTag(barcode: string | null | undefined): boolean {
-  return LEGACY_INV_TAG_RE.test(String(barcode ?? '').trim())
 }
