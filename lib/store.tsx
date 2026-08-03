@@ -2995,7 +2995,7 @@ export interface AppState {
   allocateDocRef: (prefix: string) => Promise<string>
 
   // Purchase Orders
-  createPO: (vendorId: string, vendorName: string, initial?: Partial<Pick<PurchaseOrder, 'lines' | 'expectedDate' | 'notes'>>, forcedRef?: string) => PurchaseOrder
+  createPO: (vendorId: string, vendorName: string, initial?: Partial<Pick<PurchaseOrder, 'lines' | 'expectedDate' | 'notes'>>, forcedRef?: string) => Promise<PurchaseOrder>
   updatePO: (id: string, p: Partial<PurchaseOrder>) => void
   addPOLine: (poId: string, product: Product, qty: number, unitPrice: number, taxRate?: number) => void
   removePOLine: (poId: string, lineId: string) => void

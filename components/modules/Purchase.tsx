@@ -269,7 +269,7 @@ export default function Purchase() {
   }
 
   // ── Create RFQ ─────────────────────────────────────────────────────────────
-  const handleCreateRFQ = () => {
+  const handleCreateRFQ = async () => {
     if (!rfqPreview.canSave) { showToast(rfqPreview.blockedReason || 'Complete the RFQ before creating it', 'error'); return }
     const lines: POLine[] = rfqPreview.lines.map(line => {
       const product = products.find(p => p.id === line.productId)
@@ -287,13 +287,17 @@ export default function Purchase() {
         accountCode: product ? resolveProductAccounts(product).costAccountCode : undefined,
       }
     })
-    const po = createPO(newVendorId, newVendorName, {
+    // createPO awaits doc-ref allocation — must await or po.id is undefined and
+    // subView='form' with no activePO renders a blank page.
+    const po = await createPO(newVendorId, newVendorName, {
       lines,
       expectedDate: newRfqExpectedDate,
       notes: newRfqNotes.trim(),
     })
+    if (!po?.id) return
     resetRfqForm()
-    setActiveId(po.id); setSubView('form')
+    setActiveId(po.id)
+    setSubView('form')
   }
 
   const handleCreateVendorForRFQ = async () => {
@@ -682,14 +686,16 @@ export default function Purchase() {
     if (file) processFile(file)
   }
 
-  const handleConfirmImport = () => {
+  const handleConfirmImport = async () => {
     if (!activeId && !importVendorId) { showToast('Select or open a PO first', 'error'); return }
 
-    const targetPoId = activeId ?? (() => {
-      const po = createPO(importVendorId, importVendorName)
+    let targetPoId = activeId
+    if (!targetPoId) {
+      const po = await createPO(importVendorId, importVendorName)
+      if (!po?.id) { showToast('Could not create purchase order', 'error'); return }
       setActiveId(po.id)
-      return po.id
-    })()
+      targetPoId = po.id
+    }
 
     const valid = importRows.filter(r => r.status !== 'error' && r.qty > 0 && r.unitPrice >= 0)
     if (!valid.length) { showToast('No valid rows to import', 'error'); return }
@@ -960,6 +966,32 @@ export default function Purchase() {
     {/* PO Form view — rendered inside PurchaseProvider so usePurchase() works */}
     {subView === 'form' && activePO && <POFormView />}
 
+    {/* Guard: form mode without a resolvable PO used to render a blank page
+        (e.g. Create RFQ set subView before awaiting createPO). Fall back to list. */}
+    {subView === 'form' && !activePO && activeId && (
+      <div className="mod-page p-6">
+        <p className="text-sm text-[var(--text-3)]">Purchase order not found.</p>
+        <button
+          type="button"
+          className="btn-outline text-xs mt-3"
+          onClick={() => { setActiveId(null); setSubView('list') }}
+        >
+          Back to orders
+        </button>
+      </div>
+    )}
+    {subView === 'form' && !activePO && !activeId && (
+      <div className="mod-page p-6">
+        <p className="text-sm text-[var(--text-3)]">Opening purchase order…</p>
+        <button
+          type="button"
+          className="btn-outline text-xs mt-3"
+          onClick={() => setSubView('list')}
+        >
+          Back to orders
+        </button>
+      </div>
+    )}
     {/* List / receipts / bills view */}
     {subView !== 'form' && <div className="mod-page">
 
