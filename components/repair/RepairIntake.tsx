@@ -4,7 +4,7 @@
 import { useState, useMemo } from 'react'
 import { useOperationsStore, RepairOrder, fmtDate } from '@/lib/store'
 import { DIRECT_REPAIR_WAIVER_TEXT } from '@/lib/repair-path'
-import { diagnosisFeeAmount, resolveCustomerBillingType, resolveDiagnosisFeeBilling } from '@/lib/diagnosis-fee'
+import { diagnosisFeeAmount, resolveCustomerBillingType } from '@/lib/diagnosis-fee'
 import { Field, Input, Select, Textarea, Badge } from '@/components/ui'
 import { Fa } from '@/components/icons'
 import {
@@ -329,7 +329,6 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
       const waiverAt = new Date().toISOString()
       const feeAmount = !isDirect ? diagnosisFeeAmount(systemSettings) : 0
       const billingType = resolveCustomerBillingType(clientType)
-      const feeBilling = resolveDiagnosisFeeBilling(clientType)
       updateRepair(rep.id, {
         status: 'received',
         customerPhone,
@@ -349,7 +348,7 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
         deviceModel: device.model.trim() || undefined,
         diagnosisFee: isDirect ? 0 : feeAmount,
         diagnosisFeeStatus: isDirect ? 'not_applicable' : 'applicable',
-        diagnosisFeeBilling: isDirect ? undefined : feeBilling,
+        diagnosisFeeBilling: isDirect ? undefined : 'invoice',
         customerBillingType: isDirect ? undefined : billingType,
         estimatedCompletionDate: device.estimatedCompletion || undefined,
         accessories,
@@ -367,7 +366,7 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
         liabilityWaiverSignature: isDirect ? device.consentSignature.trim() : undefined,
         notes: isDirect
           ? `[Direct Repair Consent] Signed by: ${device.consentSignature}. Liability Waiver Accepted: YES. Device type: ${deviceTypeLabel}.\nTerms Agreed: Customer declines diagnosis — work limited to the requested scope only. No diagnosis fee.`
-          : `Device type: ${deviceTypeLabel}. Diagnosis fee: KES ${feeAmount.toLocaleString('en-KE')} (${billingType === 'corporate' ? 'on final invoice' : 'pay before work begins'}; not credited against repair).`,
+          : `Device type: ${deviceTypeLabel}. Diagnosis fee: KES ${feeAmount.toLocaleString('en-KE')} (on final invoice with repair; not credited against labour).`,
       })
 
       showToast(`Ticket ${rep.ref} created`, 'success')
@@ -982,9 +981,7 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
                     KES {diagnosisFeeAmount(systemSettings).toLocaleString('en-KE')}
                   </p>
                   <p className="text-[10px] leading-relaxed" style={{ color: 'var(--text-3)' }}>
-                    {clientType === 'company'
-                      ? 'Corporate: fee appears on the final invoice. Not credited against labour or parts.'
-                      : 'Walk-in: collect before work begins. Not credited against the repair bill.'}
+                    Billed on the final invoice with the repair (walk-in &amp; corporate). Not credited against labour or parts.
                     {' '}Warranty (full) exempt. VAT on this fee is 0%.
                   </p>
                 </div>

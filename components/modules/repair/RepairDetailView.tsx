@@ -250,8 +250,6 @@ export default function RepairDetailView() {
 
   const nextActionHint = pendingOutsourceJob ? `Device is at ${pendingOutsourceJob.vendorName} via ${pendingOutsourceJob.ref}. Mark it returned in Outsource before continuing.`
     : isQuoteDeclinedReopenable(r.status) ? 'Customer declined this quote — revise and re-send, or return the device'
-    : canMarkDiagnosisFeePaid && (r.diagnosisFeeBilling === 'upfront' || r.customerBillingType !== 'corporate') && ['received', 'assigned', 'diagnosed', 'awaiting_approval', 'approved'].includes(r.status)
-      ? `Collect diagnosis fee ${fmtKes(r.diagnosisFee ?? 0)} before work begins (walk-in)`
     : canDiagnose ? 'Log your technical diagnosis to proceed'
     : canMarkPartsArrived ? 'Confirm parts have arrived so the technician can start'
     : canStart     ? 'Start the repair'
@@ -497,7 +495,7 @@ export default function RepairDetailView() {
                 { id: 'invoice', label: 'Create invoice', onClick: () => setShowProgressModal(true), hidden: !canInvoice || primaryActionId === 'invoice' },
                 { id: 'procure', label: 'Request parts', onClick: () => setShowProcurementModal(true), hidden: !canProcure },
                 { id: 'stop', label: 'Stop at diagnosis', onClick: () => setShowStopDiagnosisModal(true), hidden: !canStopAtDiagnosis },
-                { id: 'mark_fee_paid', label: 'Mark diagnosis fee paid', onClick: () => markDiagnosisFeePaid(r.id), hidden: !canMarkDiagnosisFeePaid },
+                { id: 'mark_fee_paid', label: 'Mark diagnosis fee paid (early)', onClick: () => markDiagnosisFeePaid(r.id), hidden: !canMarkDiagnosisFeePaid },
                 { id: 'waive_fee', label: 'Waive diagnosis fee', onClick: () => { setWaiveFeeReason(''); setShowWaiveFeeModal(true) }, hidden: !canWaiveDiagnosisFee },
                 { id: 'return', label: isQuoteDeclinedReopenable(r.status) ? 'Return device (after decline)' : 'Return device', onClick: () => setShowReturnModal(true), hidden: !canReturnDevice },
                 { id: 'leave', label: 'Customer leaves device', onClick: () => { setLeaveDeviceNotes(''); setLeaveConvertMode('donation'); setShowLeaveDeviceModal(true) }, hidden: !canLeaveDeviceWithDeed },
@@ -874,12 +872,10 @@ export default function RepairDetailView() {
                         </p>
                         <p className="text-[10px] font-semibold text-amber-700/80 mt-0.5">
                           {r.diagnosisFeeStatus === 'paid'
-                            ? `Paid${r.diagnosisFeePaidMethod ? ` · ${r.diagnosisFeePaidMethod}` : ''} · not credited against repair`
+                            ? `Paid early${r.diagnosisFeePaidMethod ? ` · ${r.diagnosisFeePaidMethod}` : ''} · not credited against repair`
                             : r.diagnosisFeeStatus === 'invoiced'
                               ? 'On invoice · 0% VAT'
-                              : r.customerBillingType === 'corporate' || r.diagnosisFeeBilling === 'invoice'
-                                ? 'Corporate · on final invoice · 0% VAT'
-                                : 'Walk-in · pay before work · 0% VAT'}
+                              : 'On final invoice with repair · 0% VAT'}
                         </p>
                         {r.diagnosisFeeStatus === 'waived' && r.diagnosisFeeWaivedReason && (
                           <p className="text-[10px] text-[var(--text-3)] mt-1">Reason: {r.diagnosisFeeWaivedReason}</p>

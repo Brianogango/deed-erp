@@ -95,7 +95,6 @@ import {
   ensureDiagnosisFeeInQuoteLines,
   isDiagnosisFeeLine,
   isDiagnosisFeeSettled,
-  mustCollectDiagnosisFeeUpfront,
   resolveCustomerBillingType,
   resolveDiagnosisFee,
   resolveDiagnosisFeeBilling,
@@ -1473,7 +1472,7 @@ export interface RepairOrder {
   deviceModel?: string
   diagnosisFee?: number                               // resolved Diagnosis First fee (KES)
   diagnosisFeeStatus?: 'pending' | 'applicable' | 'paid' | 'waived' | 'invoiced' | 'not_applicable'
-  /** Walk-in = collect before work; corporate = bill on final invoice. */
+  /** Walk-in or corporate — fee normally on final invoice. Optional early pay recorded as paid. */
   diagnosisFeeBilling?: 'upfront' | 'invoice'
   customerBillingType?: 'walk_in' | 'corporate'
   diagnosisFeePaidAt?: string
@@ -11612,14 +11611,6 @@ const storeCtx: AppState = {
         showToast('Direct Repair jobs skip diagnosis — change the workflow path first if diagnosis is required', 'error')
         return
       }
-      if (mustCollectDiagnosisFeeUpfront(repair)) {
-        const fee = resolveDiagnosisFee(repair, systemSettings).amount
-        showToast(
-          `Collect diagnosis fee KES ${fee.toLocaleString('en-KE')} before starting work (walk-in policy)`,
-          'error',
-        )
-        return
-      }
       const isAssignedTech = repair.assignedTechnicianId === user.id
       const isLeadOrDirector = ['technical_lead', 'director'].includes(normalizeClientRole(user.role))
       if (!isAssignedTech && !isLeadOrDirector) {
@@ -12620,14 +12611,6 @@ const storeCtx: AppState = {
       const isAssignedTech = repair.assignedTechnicianId === user.id
       if (!isAssignedTech) {
         showToast('Only the assigned technician can start the repair', 'error'); return
-      }
-      if (mustCollectDiagnosisFeeUpfront(repair)) {
-        const fee = resolveDiagnosisFee(repair, systemSettings).amount
-        showToast(
-          `Collect diagnosis fee KES ${fee.toLocaleString('en-KE')} before work begins (walk-in policy)`,
-          'error',
-        )
-        return
       }
       // Diagnosis First needs quote approval; Direct Repair may start from assigned
       const validStartStatuses = startableStatusesForPath(repair.repairPath) as RepairStatus[]

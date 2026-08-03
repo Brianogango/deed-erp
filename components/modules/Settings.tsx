@@ -996,7 +996,7 @@ ACCOUNTS_EMAIL=accounts@deed.co.ke`}</pre>
               <SectionCard title="Diagnosis Fee (Diagnosis First)">
                 <p className="text-[11px] text-[var(--text-3)] px-1 pb-2 leading-relaxed">
                   Flat fee for walk-in and corporate Diagnosis First jobs. Not credited against labour or parts.
-                  Walk-ins pay before work; corporates see it on the final invoice. Direct Repair (declined diagnosis) and full warranty are exempt. VAT is always 0%.
+                  Appears on the final invoice with the repair (optional early collection allowed). Direct Repair (declined diagnosis) and full warranty are exempt. VAT is always 0%.
                 </p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 px-1 pb-2">
                   <Field label="Diagnosis fee (KES)">

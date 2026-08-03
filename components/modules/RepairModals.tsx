@@ -1309,11 +1309,8 @@ export function EditRepairDetailsModal({ repair, onClose }: { repair: RepairOrde
         </div>
         {form.repairPath === 'diagnosis_first' && (
           <p className="text-[10px] font-semibold text-[var(--text-3)]">
-            Diagnosis fee KES {flatFee.toLocaleString('en-KE')} · not credited against repair
+            Diagnosis fee KES {flatFee.toLocaleString('en-KE')} · billed on final invoice · not credited against repair
             {feeLocked ? ` · currently ${repair.diagnosisFeeStatus}` : ''}
-            {repair.customerBillingType === 'corporate' || repair.diagnosisFeeBilling === 'invoice'
-              ? ' · billed on final invoice'
-              : ' · walk-in: collect before work'}
           </p>
         )}
         {form.repairPath === 'direct_repair' && form.repairPath !== (repair.repairPath === 'direct_repair' ? 'direct_repair' : 'diagnosis_first') && (

@@ -26,8 +26,8 @@ describe('diagnosis-fee', () => {
     expect(diagnosisFeeAmount({ diagnosisFeeRegularKes: 900 })).toBe(900)
   })
 
-  it('maps walk-in vs corporate billing timing', () => {
-    expect(resolveDiagnosisFeeBilling('individual')).toBe('upfront')
+  it('bills fee on final invoice for walk-in and corporate', () => {
+    expect(resolveDiagnosisFeeBilling('individual')).toBe('invoice')
     expect(resolveDiagnosisFeeBilling('company')).toBe('invoice')
     expect(resolveCustomerBillingType('individual')).toBe('walk_in')
     expect(resolveCustomerBillingType('company')).toBe('corporate')
@@ -48,7 +48,7 @@ describe('diagnosis-fee', () => {
     expect(resolveDiagnosisFee({ repairPath: 'diagnosis_first' })).toMatchObject({
       amount: 1000,
       status: 'applicable',
-      billing: 'upfront',
+      billing: 'invoice',
       customerType: 'walk_in',
     })
     expect(resolveDiagnosisFee({ repairPath: 'direct_repair' }).status).toBe('not_applicable')
@@ -58,22 +58,17 @@ describe('diagnosis-fee', () => {
     }).billing).toBe('invoice')
   })
 
-  it('requires upfront collection for unpaid walk-in only', () => {
+  it('never gates diagnosis/start on unpaid fee (invoice settlement)', () => {
     expect(mustCollectDiagnosisFeeUpfront({
       repairPath: 'diagnosis_first',
       diagnosisFeeBilling: 'upfront',
       diagnosisFeeStatus: 'applicable',
-    })).toBe(true)
+    })).toBe(false)
     expect(mustCollectDiagnosisFeeUpfront({
       repairPath: 'diagnosis_first',
       diagnosisFeeBilling: 'invoice',
       customerBillingType: 'corporate',
       diagnosisFeeStatus: 'applicable',
-    })).toBe(false)
-    expect(mustCollectDiagnosisFeeUpfront({
-      repairPath: 'diagnosis_first',
-      diagnosisFeeBilling: 'upfront',
-      diagnosisFeeStatus: 'paid',
     })).toBe(false)
     expect(mustCollectDiagnosisFeeUpfront({ repairPath: 'direct_repair' })).toBe(false)
   })

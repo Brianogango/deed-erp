@@ -1,11 +1,11 @@
 /**
  * Diagnosis First mandatory diagnosis fee.
  *
- * Policy (Service Charges & Pricing — Aug 2026):
+ * Policy (Service Charges & Pricing — Aug 2026, revised):
  * - Flat KES 1,000 for walk-in & corporate Diagnosis First jobs
  * - Not credited against the repair bill (labour/parts stay separate)
- * - Walk-in: collect before work begins
- * - Corporate: add to the final consolidated invoice
+ * - Fee is billed on the final invoice with the repair (walk-in & corporate)
+ * - Optional early collection allowed; does not block diagnosis or repair start
  * - Warranty (full): exempt
  * - Client declines diagnosis (Direct Repair / instructed scope): no fee
  * - VAT on diagnosis fee is always 0%
@@ -97,11 +97,11 @@ export function diagnosisFeeAmountForTier(
   return diagnosisFeeAmount(settings)
 }
 
-/** Corporate (company) → invoice; walk-in / individual → upfront. */
+/** Fee is billed on the final invoice for both walk-in and corporate. */
 export function resolveDiagnosisFeeBilling(
-  clientType: 'individual' | 'company' | string | null | undefined,
+  _clientType?: 'individual' | 'company' | string | null,
 ): DiagnosisFeeBilling {
-  return clientType === 'company' ? 'invoice' : 'upfront'
+  return 'invoice'
 }
 
 export function resolveCustomerBillingType(
@@ -119,7 +119,7 @@ export function shouldChargeDiagnosisFee(repair: DiagnosisFeeRepair): boolean {
   return repair.repairPath !== 'direct_repair'
 }
 
-/** Fee already collected (walk-in upfront) or posted on an invoice. */
+/** Fee already collected early or posted on an invoice. */
 export function isDiagnosisFeeSettled(repair: DiagnosisFeeRepair): boolean {
   const status = String(repair.diagnosisFeeStatus ?? '')
   if (status === 'paid' || status === 'invoiced' || status === 'waived' || status === 'not_applicable') return true
@@ -128,15 +128,11 @@ export function isDiagnosisFeeSettled(repair: DiagnosisFeeRepair): boolean {
 }
 
 /**
- * Walk-in Diagnosis First jobs must collect the fee before diagnosis/repair starts.
- * Corporate jobs bill on the final invoice — no upfront gate.
+ * Upfront collection is optional — never blocks diagnosis or repair start.
+ * Kept for call-site compatibility; always returns false.
  */
-export function mustCollectDiagnosisFeeUpfront(repair: DiagnosisFeeRepair): boolean {
-  if (!shouldChargeDiagnosisFee(repair)) return false
-  const billing = repair.diagnosisFeeBilling
-    ?? (repair.customerBillingType === 'corporate' ? 'invoice' : 'upfront')
-  if (billing !== 'upfront') return false
-  return !isDiagnosisFeeSettled(repair)
+export function mustCollectDiagnosisFeeUpfront(_repair: DiagnosisFeeRepair): boolean {
+  return false
 }
 
 function billingMeta(repair: DiagnosisFeeRepair): {
@@ -150,9 +146,7 @@ function billingMeta(repair: DiagnosisFeeRepair): {
   const billing: DiagnosisFeeBilling =
     repair.diagnosisFeeBilling === 'upfront' || repair.diagnosisFeeBilling === 'invoice'
       ? repair.diagnosisFeeBilling
-      : customerType === 'corporate'
-        ? 'invoice'
-        : 'upfront'
+      : 'invoice'
   return { billing, customerType }
 }
 
