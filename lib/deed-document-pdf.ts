@@ -138,6 +138,45 @@ function drawFooterTriangles(doc: jsPDF) {
   doc.triangle(MARGIN, baseY, MARGIN + 90, baseY - 28, MARGIN + 160, baseY, 'F')
 }
 
+/**
+ * Full-page faded logo watermark, inset from the edges (not edge-flush).
+ * Drawn first on each page so letterhead/content paint above it.
+ */
+function drawPageWatermark(doc: jsPDF, company: DeedPdfCompany) {
+  const insetX = MARGIN + 28
+  const insetY = 120
+  const maxW = PAGE_W - insetX * 2
+  const maxH = PAGE_H - insetY - 140
+
+  try {
+    const GState = (doc as any).GState
+    if (typeof GState === 'function') {
+      doc.saveGraphicsState()
+      doc.setGState(new GState({ opacity: 0.07 }))
+    }
+
+    if (company.logoDataUrl && company.logoWidth && company.logoHeight) {
+      const scale = Math.min(maxW / company.logoWidth, maxH / company.logoHeight)
+      const w = company.logoWidth * scale
+      const h = company.logoHeight * scale
+      const x = (PAGE_W - w) / 2
+      const y = insetY + (maxH - h) / 2
+      doc.addImage(company.logoDataUrl, 'PNG', x, y, w, h)
+    } else {
+      // Fallback wordmark — large, centered, same inset band as the logo.
+      doc.setFont('helvetica', 'bold').setFontSize(120).setTextColor(230, 238, 248)
+      doc.text('deed', PAGE_W / 2, insetY + maxH / 2 + 30, { align: 'center' })
+    }
+
+    if (typeof GState === 'function') {
+      doc.restoreGraphicsState()
+    }
+  } catch {
+    doc.setFont('helvetica', 'bold').setFontSize(96).setTextColor(230, 238, 248)
+    doc.text('deed', PAGE_W / 2, PAGE_H / 2, { align: 'center' })
+  }
+}
+
 function drawContactIcon(doc: jsPDF, kind: 'phone' | 'email' | 'pin', x: number, y: number) {
   doc.setDrawColor(...LIGHT_BLUE)
   doc.setFillColor(239, 246, 255)
@@ -156,7 +195,8 @@ export function buildDeedDocumentPdf(
   const currency = company.currency || 'KES'
   const rightX = PAGE_W - MARGIN
   const contentW = PAGE_W - MARGIN * 2
-  const contentBottom = PAGE_H - 88
+  // Leave clear air above the fixed contact footer so body text never stacks on it.
+  const contentBottom = PAGE_H - 100
   const showAmounts = !input.hideAmounts
   const showPayment = input.showPaymentDetails ?? showAmounts
   const showSignature = input.showSignature ?? true
@@ -166,8 +206,12 @@ export function buildDeedDocumentPdf(
   const ensureRoom = (y: number, needed: number): number => {
     if (y + needed <= contentBottom) return y
     doc.addPage()
+    drawPageWatermark(doc, company)
     return 56
   }
+
+  // Watermark first so letterhead + body paint above it.
+  drawPageWatermark(doc, company)
 
   // Letterhead
   if (company.logoDataUrl && company.logoWidth && company.logoHeight) {
@@ -189,10 +233,6 @@ export function buildDeedDocumentPdf(
 
   doc.setFont('helvetica', 'normal').setFontSize(9).setTextColor(...FOOTER_GRAY)
   doc.text(website, rightX, 44, { align: 'right' })
-
-  // Watermark
-  doc.setFont('helvetica', 'bold').setFontSize(64).setTextColor(230, 238, 248)
-  doc.text('deed', PAGE_W / 2, 420, { align: 'center' })
 
   let y = 88
   doc.setFont('helvetica', 'bold').setFontSize(28).setTextColor(...NAVY)
@@ -288,7 +328,7 @@ export function buildDeedDocumentPdf(
 
   autoTable(doc, {
     startY: y,
-    margin: { left: MARGIN, right: MARGIN, top: 56, bottom: 96 },
+    margin: { left: MARGIN, right: MARGIN, top: 56, bottom: 100 },
     head,
     body: bodyRows as any,
     theme: 'grid',
@@ -326,6 +366,10 @@ export function buildDeedDocumentPdf(
           1: { cellWidth: 'auto',halign: 'left' },
           2: { cellWidth: 70,halign: 'center' },
         },
+    // New pages created by the table: stamp watermark before cells so content sits above it.
+    didDrawPage: data => {
+      if (data.pageNumber > 1) drawPageWatermark(doc, company)
+    },
   })
 
   y = (doc as any).lastAutoTable.finalY + 18
@@ -360,11 +404,13 @@ export function buildDeedDocumentPdf(
   }
 
   const leftW = contentW * 0.52
-  const rightW = contentW * 0.42
-  const totalsH = Math.max(48, totals.length * 16 + 8)
+  const rightW = contentW * 0.40
+  const colGap = contentW - leftW - rightW
+  const totalsX = MARGIN + leftW + colGap
+  const totalsH = Math.max(36, totals.length * 16 + 8)
   const notesWrapped = notesText ? (doc.splitTextToSize(notesText, leftW - 18) as string[]) : []
-  const notesH = notesText ? Math.max(48, notesWrapped.length * 11 + 28) : 0
-  const notesTotalsH = Math.max(notesH, totalsH, showAmounts ? 48 : 0)
+  const notesH = notesText ? Math.max(36, notesWrapped.length * 11 + 28) : 0
+  const notesTotalsH = Math.max(notesH, totalsH, showAmounts ? 36 : 0)
 
   const paymentLines: string[] = []
   if (showPayment) {
@@ -390,35 +436,35 @@ export function buildDeedDocumentPdf(
     }
   }
 
-  const paymentH = paymentLines.length ? paymentLines.length * 11 + 28 : 0
-  const sigH = showSignature ? 70 : 0
-  const bottomBlockH = Math.max(paymentH, sigH)
-  // Notes/totals + gap + payment/signature. Keep the contact footer band clear.
-  const closingH = notesTotalsH + 16 + (bottomBlockH > 0 ? bottomBlockH + 8 : 0)
-
-  // Short quotes/invoices: pin the closing band just above the page footer so
-  // the document fills the A4 page. The contact footer is always drawn at the
-  // absolute page bottom (not under sparse mid-page content).
-  let pinnedClosing = false
-  if (closingH > 0 && y + closingH <= contentBottom) {
-    y = Math.max(y, contentBottom - closingH)
-    pinnedClosing = true
+  // Measure payment block with real wraps so height matches drawn text.
+  let paymentDrawH = 0
+  if (paymentLines.length) {
+    paymentDrawH = 22
+    for (const line of paymentLines) {
+      const wrapped = doc.splitTextToSize(line, leftW - 12) as string[]
+      paymentDrawH += Math.max(1, wrapped.length) * 11
+    }
+    paymentDrawH += 6
   }
+  const sigH = showSignature ? 68 : 0
+  const bottomBlockH = Math.max(paymentDrawH, sigH)
 
-  y = ensureRoom(y, notesTotalsH + 12)
+  // Natural flow under the table — do not shove totals into the footer zone.
+  y = ensureRoom(y, notesTotalsH + 14)
+
+  const blockTop = y
 
   if (notesText) {
     doc.setFillColor(...CYAN)
-    doc.roundedRect(MARGIN, y, 3.5, 14, 1, 1, 'F')
+    doc.roundedRect(MARGIN, blockTop, 3.5, 14, 1, 1, 'F')
     doc.setFont('helvetica', 'bold').setFontSize(9).setTextColor(...NAVY)
-    doc.text('Notes', MARGIN + 10, y + 11)
+    doc.text('Notes', MARGIN + 10, blockTop + 11)
     doc.setFont('helvetica', 'normal').setFontSize(8.5).setTextColor(...GRAY)
-    doc.text(notesWrapped, MARGIN + 10, y + 26)
+    doc.text(notesWrapped, MARGIN + 10, blockTop + 26)
   }
 
   if (showAmounts && totals.length) {
-    const totalsX = rightX - rightW
-    let totalsY = y + 10
+    let totalsY = blockTop + 12
     for (const row of totals) {
       doc.setFont('helvetica', row.bold ? 'bold' : 'normal').setFontSize(row.bold ? 12 : 9)
       doc.setTextColor(...(row.accent ? NAVY : TEXT))
@@ -428,55 +474,49 @@ export function buildDeedDocumentPdf(
     }
   }
 
-  y += notesTotalsH + 16
+  y = blockTop + notesTotalsH + 18
 
   if (bottomBlockH > 0) {
-    const pagesBefore = doc.getNumberOfPages()
     y = ensureRoom(y, bottomBlockH + 8)
-    const spilledToNewPage = doc.getNumberOfPages() > pagesBefore
-    // Pin payment/signature above the footer on short pages, or after a spill.
-    // Skip when the full closing band was already pinned (preserves the gap).
-    if (spilledToNewPage || !pinnedClosing) {
-      if (y + bottomBlockH <= contentBottom) {
-        y = Math.max(y, contentBottom - bottomBlockH)
+    const paySigTop = y
+
+    if (paymentLines.length) {
+      doc.setFillColor(...NAVY)
+      doc.roundedRect(MARGIN, paySigTop, 3.5, 14, 1, 1, 'F')
+      doc.setFont('helvetica', 'bold').setFontSize(9).setTextColor(...NAVY)
+      doc.text('Payment Details', MARGIN + 10, paySigTop + 11)
+      let payY = paySigTop + 28
+      doc.setFont('helvetica', 'normal').setFontSize(8.5).setTextColor(...TEXT)
+      for (const line of paymentLines) {
+        const isHeading = line.endsWith(':') && !line.includes('Reference')
+        doc.setFont('helvetica', isHeading ? 'bold' : 'normal')
+        const wrapped = doc.splitTextToSize(line, leftW - 12) as string[]
+        doc.text(wrapped, MARGIN + 10, payY)
+        payY += Math.max(1, wrapped.length) * 11
       }
     }
-  }
 
-  if (paymentLines.length) {
-    doc.setFillColor(...NAVY)
-    doc.roundedRect(MARGIN, y, 3.5, 14, 1, 1, 'F')
-    doc.setFont('helvetica', 'bold').setFontSize(9).setTextColor(...NAVY)
-    doc.text('Payment Details', MARGIN + 10, y + 11)
-    let payY = y + 28
-    doc.setFont('helvetica', 'normal').setFontSize(8.5).setTextColor(...TEXT)
-    for (const line of paymentLines) {
-      const isHeading = line.endsWith(':') && !line.includes('Reference')
-      doc.setFont('helvetica', isHeading ? 'bold' : 'normal')
-      doc.text(line, MARGIN + 10, payY, { maxWidth: leftW - 10 })
-      payY += 11
+    if (showSignature) {
+      const sigX = totalsX
+      doc.setFont('helvetica', 'bold').setFontSize(8).setTextColor(...GRAY)
+      doc.text('AUTHORISED SIGNATURE', sigX, paySigTop + 11)
+      doc.setDrawColor(...BORDER).setLineWidth(0.8)
+      doc.line(sigX, paySigTop + 46, rightX, paySigTop + 46)
+      doc.setFont('helvetica', 'normal').setFontSize(8).setTextColor(...GRAY)
+      doc.text('Authorised Signature', sigX + rightW / 2, paySigTop + 60, { align: 'center' })
     }
-  }
-
-  if (showSignature) {
-    const sigX = rightX - rightW
-    doc.setFont('helvetica', 'bold').setFontSize(8).setTextColor(...GRAY)
-    doc.text('AUTHORISED SIGNATURE', sigX, y + 11)
-    doc.setDrawColor(...BORDER).setLineWidth(0.8)
-    doc.line(sigX, y + 48, rightX, y + 48)
-    doc.setFont('helvetica', 'normal').setFontSize(8).setTextColor(...GRAY)
-    doc.text('Authorised Signature', sigX + rightW / 2, y + 62, { align: 'center' })
   }
 
   const pageCount = doc.getNumberOfPages()
   const phone = company.phone || ''
   const email = company.email || ''
-  const address = [company.address, company.city, 'Kenya'].filter(Boolean).join(', ')
+  const address = [company.address, company.city].filter(Boolean).join(', ')
   const pin = company.kraPin || ''
 
   for (let page = 1; page <= pageCount; page++) {
     doc.setPage(page)
     if (page > 1) {
+      // Continuation header only — watermark already drawn when the page was created.
       doc.setFont('helvetica', 'bold').setFontSize(8).setTextColor(...NAVY)
       doc.text(`${input.title.toUpperCase()} · ${input.ref}`, MARGIN, 28)
       doc.setFont('helvetica', 'normal').setFontSize(8).setTextColor(...FOOTER_GRAY)
@@ -488,11 +528,11 @@ export function buildDeedDocumentPdf(
 
     const footerY = PAGE_H - 52
     doc.setDrawColor(...BORDER).setLineWidth(0.5)
-    doc.line(MARGIN, footerY - 14, rightX - 120, footerY - 14)
+    doc.line(MARGIN, footerY - 14, rightX, footerY - 14)
 
     const col1 = MARGIN + 12
-    const col2 = MARGIN + contentW * 0.34
-    const col3 = MARGIN + contentW * 0.62
+    const col2 = MARGIN + contentW * 0.32
+    const col3 = MARGIN + contentW * 0.58
     drawContactIcon(doc, 'phone', col1, footerY)
     doc.setFont('helvetica', 'normal').setFontSize(7.5).setTextColor(...GRAY)
     doc.text(phone, col1 + 12, footerY + 2)
@@ -501,12 +541,12 @@ export function buildDeedDocumentPdf(
     doc.text(email, col2 + 12, footerY + 2)
 
     drawContactIcon(doc, 'pin', col3, footerY)
-    const addrLines = doc.splitTextToSize(address, 150) as string[]
+    const addrLines = doc.splitTextToSize(address || 'Kenya', 118) as string[]
     doc.text(addrLines.slice(0, 2), col3 + 12, footerY - 2)
 
     if (pin) {
       doc.setFont('helvetica', 'bold').setFontSize(7.5).setTextColor(...NAVY)
-      doc.text(`PIN: ${pin}`, rightX - 100, footerY + 2, { align: 'right' })
+      doc.text(`PIN: ${pin}`, rightX, footerY + 2, { align: 'right' })
     }
 
     doc.setFont('helvetica', 'normal').setFontSize(8).setTextColor(...GRAY)

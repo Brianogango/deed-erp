@@ -135,28 +135,37 @@ describe('buildDeedDocumentPdf', () => {
     expect(doc.internal.pageSize.getWidth()).toBeCloseTo(595.28, 1)
   })
 
-  it('keeps short quotations on a full A4 page with footer chrome at the bottom', () => {
+  it('keeps short invoices flowing under the table without shoving totals into the footer', () => {
     const doc = buildDeedDocumentPdf(
       {
-        title: 'Quotation',
-        ref: 'QUO/2026/0099',
+        title: 'Invoice',
+        ref: 'INV/2026/0025',
         date: '2026-08-03',
+        dueDate: '2026-09-02',
+        sourceRef: 'QUO/2026/0052',
         customerName: 'Tica Health',
         customerCountry: 'Kenya',
-        lines: [{ description: 'Apple 61W USB-C Power Adapter', qty: 1, unitPrice: 8000, taxRate: 16, subtotal: 8000 }],
-        subtotal: 8000,
+        lines: [
+          { description: 'Apple 61W USB-C Power Adapter ×1', qty: 1, unitPrice: 8000, taxRate: 16, subtotal: 8000 },
+          { description: 'Delivery', qty: 1, unitPrice: 700, taxRate: 0, subtotal: 700 },
+        ],
+        subtotal: 8700,
         taxTotal: 1280,
-        total: 9280,
-        notes: 'Short quote.',
+        total: 9980,
+        notes: 'Created from QUO/2026/0052',
+        paymentCommunication: true,
       },
       company,
       banks,
     )
     expect(doc.getNumberOfPages()).toBe(1)
     expect(doc.internal.pageSize.getHeight()).toBeCloseTo(841.89, 1)
-    // Footer thank-you is always present on the A4 canvas (not clipped by content height).
     const asString = Buffer.from(doc.output('arraybuffer')).toString('latin1')
     expect(asString).toContain('Thank you for your business')
     expect(asString).toContain('AUTHORISED SIGNATURE')
+    expect(asString).toContain('Subtotal')
+    expect(asString).toContain('TOTAL')
+    // Fallback wordmark watermark is present when no logo bytes are supplied.
+    expect(asString.toLowerCase()).toContain('deed')
   })
 })
