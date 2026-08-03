@@ -115,6 +115,16 @@ import {
 } from '@/lib/repair-retain-convert'
 import { planRepairPartConsume, planRepairPartReserve } from '@/lib/inventory/repair-parts-stock'
 import { billableQty, assertBillableQty } from '@/lib/purchase/three-way-match'
+import {
+  applyCustomerToInvoice,
+  applyCustomerToQuote,
+  applyCustomerToSaleOrder,
+  formatCustomerAddress,
+  quoteMatchesCustomer,
+  shouldSyncInvoiceCustomer,
+  shouldSyncQuoteCustomer,
+  shouldSyncSaleOrderCustomer,
+} from '@/lib/sync-customer-documents'
 
 export type ModuleId = AuthModuleId
 
@@ -5452,6 +5462,124 @@ export function StoreProvider({
     setAuditLogs(p => [log, ...p])
   }
 
+  /**
+   * Push customer identity onto linked quotes, sale orders (proformas), and invoices.
+   * Used when a contact or document customer fields change so PDF reprints stay current.
+   */
+  const syncCustomerIdentityToDocuments = (opts: {
+    contactId?: string
+    saleOrderId?: string
+    repairId?: string
+    invoiceId?: string
+    identity: {
+      name: string
+      email?: string
+      phone?: string
+      address?: string
+      customerId?: string
+    }
+  }) => {
+    const { contactId, saleOrderId, repairId, invoiceId, identity } = opts
+    if (!identity.name?.trim()) return
+
+    const quoteNext = quotesRef.current.map(q => {
+      const repair = repairId ? repairsRef.current.find(r => r.id === repairId) : undefined
+      const linked =
+        (contactId && quoteMatchesCustomer(q, contactId))
+        || (repairId && (q.repairId === repairId || (repair?.salesQuoteId && q.id === repair.salesQuoteId)))
+      if (!linked || !shouldSyncQuoteCustomer(q.status)) return q
+      const patched = applyCustomerToQuote(q, identity)
+      if (
+        patched.companyName === q.companyName
+        && patched.contactPersonEmail === q.contactPersonEmail
+        && patched.contactPersonPhone === q.contactPersonPhone
+      ) return q
+      sync(`/api/quotes/${q.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patched) })
+      return patched
+    })
+    if (quoteNext.some((q, i) => q !== quotesRef.current[i])) {
+      setQuotes(quoteNext)
+      quotesRef.current = quoteNext
+    }
+
+    const soNext = soRef.current.map(so => {
+      const repair = repairId ? repairsRef.current.find(r => r.id === repairId) : undefined
+      const linked =
+        (contactId && so.customerId === contactId)
+        || (saleOrderId && so.id === saleOrderId)
+        || (repair && (so.id === repair.saleOrderId || so.quoteId === repair.salesQuoteId))
+      if (!linked || !shouldSyncSaleOrderCustomer(so.status)) return so
+      const patched = applyCustomerToSaleOrder(so, {
+        ...identity,
+        customerId: identity.customerId || contactId || so.customerId,
+      })
+      if (
+        patched.customerName === so.customerName
+        && patched.customerId === so.customerId
+        && patched.invoiceAddress === so.invoiceAddress
+      ) return so
+      sync(`/api/sale-orders/${so.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patched) })
+      return patched
+    })
+    if (soNext.some((s, i) => s !== soRef.current[i])) {
+      setSaleOrders(soNext)
+      soRef.current = soNext
+    }
+
+    const invNext = invRef.current.map(inv => {
+      if (inv.type === 'vendor_bill') return inv
+      const repair = repairId ? repairsRef.current.find(r => r.id === repairId) : undefined
+      const linked =
+        (contactId && inv.partnerId === contactId)
+        || (saleOrderId && inv.saleOrderId === saleOrderId)
+        || (repairId && (inv.repairId === repairId || (repair?.invoiceId && inv.id === repair.invoiceId) || (repair?.saleOrderId && inv.saleOrderId === repair.saleOrderId)))
+        || (invoiceId && inv.id === invoiceId)
+      if (!linked || !shouldSyncInvoiceCustomer(inv.status)) return inv
+      const patched = applyCustomerToInvoice(inv, {
+        ...identity,
+        customerId: identity.customerId || contactId || inv.partnerId,
+      })
+      if (
+        patched.partnerName === inv.partnerName
+        && patched.partnerId === inv.partnerId
+        && patched.invoiceAddress === inv.invoiceAddress
+      ) return inv
+      sync(`/api/invoices/${inv.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patched) })
+      return patched
+    })
+    if (invNext.some((inv, i) => inv !== invRef.current[i])) {
+      setInvoices(invNext)
+      invRef.current = invNext
+    }
+
+    if (contactId) {
+      const repairNext = repairsRef.current.map(r => {
+        if (repairId && r.id === repairId) return r // already updated by caller
+        if (r.customerId !== contactId) return r
+        const nextName = identity.name
+        const nextPhone = identity.phone !== undefined ? identity.phone : r.customerPhone
+        const nextEmail = identity.email !== undefined ? (identity.email || undefined) : r.customerEmail
+        if (
+          r.customerName === nextName
+          && r.customerPhone === nextPhone
+          && r.customerEmail === nextEmail
+        ) return r
+        const patched = {
+          ...r,
+          customerName: nextName,
+          customerPhone: nextPhone || r.customerPhone,
+          customerEmail: nextEmail,
+        }
+        setTimeout(() => syncRepairToPortal(patched), 0)
+        return patched
+      })
+      if (repairNext.some((r, i) => r !== repairsRef.current[i])) {
+        setRepairs(repairNext)
+        repairsRef.current = repairNext
+      }
+    }
+  }
+
   // Post an invoice's GL journal exactly once. Every path that marks an invoice
   // `posted` (from a sale order, delivery, repair-quote conversion, or the manual
   // postInvoice action) routes through here so the AR/revenue subledger and the
@@ -7535,6 +7663,18 @@ const storeCtx: AppState = {
       if (res.ok) {
         const updated = await res.json()
         setContacts(prev => prev.map(c => c.id === id ? updated : c))
+        const phone = String(updated.phone || updated.mobile || '').trim()
+        const email = String(updated.email || '').trim()
+        syncCustomerIdentityToDocuments({
+          contactId: id,
+          identity: {
+            name: String(updated.name || '').trim(),
+            email: email || undefined,
+            phone: phone || undefined,
+            address: formatCustomerAddress(updated),
+            customerId: id,
+          },
+        })
         showToast('Contact updated', 'success')
       }
     },
@@ -8977,12 +9117,36 @@ const storeCtx: AppState = {
       showToast(`${so.ref} created`)
       return so
     },
-    updateSaleOrder: (id, p) => setSaleOrders(prev => {
-      const next = prev.map(s => s.id === id ? { ...s, ...p } : s)
-      const updated = next.find(s => s.id === id)
-      if (updated) sync(`/api/sale-orders/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
-      return next
-    }),
+    updateSaleOrder: (id, p) => {
+      const existing = soRef.current.find(s => s.id === id)
+      setSaleOrders(prev => {
+        const next = prev.map(s => s.id === id ? { ...s, ...p } : s)
+        const updated = next.find(s => s.id === id)
+        if (updated) {
+          soRef.current = next
+          sync(`/api/sale-orders/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+        }
+        return next
+      })
+      if (existing && ('customerId' in p || 'customerName' in p || 'invoiceAddress' in p)) {
+        const contact = contacts.find(c => c.id === (p.customerId ?? existing.customerId))
+        const name = String(p.customerName ?? existing.customerName ?? contact?.name ?? '').trim()
+        const address = 'invoiceAddress' in p
+          ? (p.invoiceAddress || undefined)
+          : (existing.invoiceAddress || (contact ? formatCustomerAddress(contact) : undefined))
+        syncCustomerIdentityToDocuments({
+          contactId: p.customerId ?? existing.customerId,
+          saleOrderId: id,
+          identity: {
+            name,
+            email: contact?.email || undefined,
+            phone: contact?.phone || contact?.mobile || undefined,
+            address,
+            customerId: p.customerId ?? existing.customerId,
+          },
+        })
+      }
+    },
     addSOLine: (orderId, product, qty, discount = 0, defaultTaxRate = 0) => {
       if (qty <= 0) {
         showToast('Quantity must be greater than zero', 'error')
@@ -10238,9 +10402,33 @@ const storeCtx: AppState = {
       setInvoices(prev => {
         const next = prev.map(i => i.id === id ? { ...i, ...p } : i)
         const updated = next.find(i => i.id === id)
-        if (updated) sync(`/api/invoices/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+        if (updated) {
+          invRef.current = next
+          sync(`/api/invoices/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+        }
         return next
       })
+      if (
+        existing.type !== 'vendor_bill'
+        && ('partnerId' in p || 'partnerName' in p || 'invoiceAddress' in p)
+      ) {
+        const contact = contacts.find(c => c.id === (p.partnerId ?? existing.partnerId))
+        const name = String(p.partnerName ?? existing.partnerName ?? contact?.name ?? '').trim()
+        syncCustomerIdentityToDocuments({
+          contactId: p.partnerId ?? existing.partnerId,
+          saleOrderId: existing.saleOrderId,
+          invoiceId: id,
+          identity: {
+            name,
+            email: contact?.email || undefined,
+            phone: contact?.phone || contact?.mobile || undefined,
+            address: 'invoiceAddress' in p
+              ? (p.invoiceAddress || undefined)
+              : (existing.invoiceAddress || (contact ? formatCustomerAddress(contact) : undefined)),
+            customerId: p.partnerId ?? existing.partnerId,
+          },
+        })
+      }
     },
     postInvoice: async (id, forcedRef) => {
       const actor = currentUser()
@@ -11475,26 +11663,45 @@ const storeCtx: AppState = {
       return rep
     },
     updateRepair: (id, p) => {
-      setRepairs(prev => prev.map(r => {
-        if (r.id !== id) return r
-        const updated = { ...r, ...p }
-        const partsTotal = updated.partsUsed.reduce((a, x) => a + x.qty * x.price, 0)
-        const feeDue = shouldChargeDiagnosisFee(updated) && (updated.diagnosisStopped || updated.diagnosisFeeStatus === 'applicable')
-          ? (updated.diagnosisFee ?? 0)
-          : 0
-        updated.total = updated.underWarranty && updated.warrantyCoverage === 'full'
+      const existing = repairsRef.current.find(r => r.id === id)
+      if (!existing) return
+      const partsTotal = (p.partsUsed ?? existing.partsUsed).reduce((a, x) => a + x.qty * x.price, 0)
+      const updatedBase = { ...existing, ...p }
+      const feeDue = shouldChargeDiagnosisFee(updatedBase) && (updatedBase.diagnosisStopped || updatedBase.diagnosisFeeStatus === 'applicable')
+        ? (updatedBase.diagnosisFee ?? 0)
+        : 0
+      const updated: RepairOrder = {
+        ...updatedBase,
+        total: updatedBase.underWarranty && updatedBase.warrantyCoverage === 'full'
           ? 0
-          : partsTotal + updated.laborCost + feeDue
-        // Sync portal when customer-visible intake / report fields change
-        if (
-          'qcReportData' in p || 'diagnosisReportData' in p || 'preRepairPhotos' in p || 'issuePhotos' in p
-          || 'repairPath' in p || 'liabilityWaiverAccepted' in p || 'notes' in p
-          || 'issueDescription' in p || 'customerName' in p || 'customerPhone' in p || 'customerEmail' in p
-        ) {
-          setTimeout(() => syncRepairToPortal(updated), 0)
-        }
-        return updated
-      }))
+          : partsTotal + updatedBase.laborCost + feeDue,
+      }
+      setRepairs(prev => prev.map(r => r.id === id ? updated : r))
+      repairsRef.current = repairsRef.current.map(r => r.id === id ? updated : r)
+      // Sync portal when customer-visible intake / report fields change
+      if (
+        'qcReportData' in p || 'diagnosisReportData' in p || 'preRepairPhotos' in p || 'issuePhotos' in p
+        || 'repairPath' in p || 'liabilityWaiverAccepted' in p || 'notes' in p
+        || 'issueDescription' in p || 'customerName' in p || 'customerPhone' in p || 'customerEmail' in p
+      ) {
+        setTimeout(() => syncRepairToPortal(updated), 0)
+      }
+      if ('customerName' in p || 'customerPhone' in p || 'customerEmail' in p || 'customerId' in p) {
+        const contact = contacts.find(c => c.id === updated.customerId)
+        syncCustomerIdentityToDocuments({
+          contactId: updated.customerId,
+          saleOrderId: updated.saleOrderId,
+          repairId: updated.id,
+          invoiceId: updated.invoiceId,
+          identity: {
+            name: String(updated.customerName || '').trim(),
+            email: updated.customerEmail || contact?.email || undefined,
+            phone: updated.customerPhone || contact?.phone || contact?.mobile || undefined,
+            address: contact ? formatCustomerAddress(contact) : undefined,
+            customerId: updated.customerId,
+          },
+        })
+      }
     },
     deleteRepair: (id) => {
       const user = currentUser()
