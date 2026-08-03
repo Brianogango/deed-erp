@@ -213,28 +213,38 @@ export function buildDeedDocumentPdf(
   // Watermark first so letterhead + body paint above it.
   drawPageWatermark(doc, company)
 
-  // Letterhead
+  // Letterhead — give the logo its own band so title / meta / party never crowd it.
+  const LOGO_TOP = 22
+  const LOGO_MAX_H = 58
+  const LOGO_MAX_W = 168
+  let letterheadBottom = LOGO_TOP + 28
+
   if (company.logoDataUrl && company.logoWidth && company.logoHeight) {
-    const maxH = 42
-    const maxW = 128
-    const scale = Math.min(maxH / company.logoHeight, maxW / company.logoWidth)
+    const scale = Math.min(LOGO_MAX_H / company.logoHeight, LOGO_MAX_W / company.logoWidth)
+    const logoW = company.logoWidth * scale
+    const logoH = company.logoHeight * scale
     try {
-      doc.addImage(company.logoDataUrl, 'PNG', MARGIN, 28, company.logoWidth * scale, company.logoHeight * scale)
+      doc.addImage(company.logoDataUrl, 'PNG', MARGIN, LOGO_TOP, logoW, logoH)
+      letterheadBottom = LOGO_TOP + logoH
     } catch {
-      doc.setFont('helvetica', 'bold').setFontSize(20).setTextColor(...NAVY)
-      doc.text('deed', MARGIN, 48)
+      doc.setFont('helvetica', 'bold').setFontSize(22).setTextColor(...NAVY)
+      doc.text('deed', MARGIN, LOGO_TOP + 28)
+      letterheadBottom = LOGO_TOP + 32
     }
   } else {
-    doc.setFont('helvetica', 'bold').setFontSize(20).setTextColor(...NAVY)
-    doc.text('deed', MARGIN, 48)
+    doc.setFont('helvetica', 'bold').setFontSize(22).setTextColor(...NAVY)
+    doc.text('deed', MARGIN, LOGO_TOP + 28)
     doc.setFillColor(...CYAN)
-    doc.circle(MARGIN + 42, 40, 2.2, 'F')
+    doc.circle(MARGIN + 46, LOGO_TOP + 20, 2.4, 'F')
+    letterheadBottom = LOGO_TOP + 32
   }
 
+  // Website stays top-right in the logo band (does not sit under the mark).
   doc.setFont('helvetica', 'normal').setFontSize(9).setTextColor(...FOOTER_GRAY)
-  doc.text(website, rightX, 44, { align: 'right' })
+  doc.text(website, rightX, LOGO_TOP + 18, { align: 'right' })
 
-  let y = 88
+  // Body starts below the logo with clear air — title / invoice-to never compete with the mark.
+  let y = letterheadBottom + 28
   doc.setFont('helvetica', 'bold').setFontSize(28).setTextColor(...NAVY)
   doc.text(input.title.toUpperCase(), MARGIN, y)
 
@@ -252,7 +262,7 @@ export function buildDeedDocumentPdf(
     y += 14
   })
 
-  let partyY = 88
+  let partyY = letterheadBottom + 28
   doc.setFont('helvetica', 'bold').setFontSize(9).setTextColor(...LIGHT_BLUE)
   doc.text(`${partyLabel}:`, rightX, partyY, { align: 'right' })
   partyY += 14
