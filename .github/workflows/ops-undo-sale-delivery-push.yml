@@ -1,0 +1,68 @@
+name: Ops undo sale delivery (push trigger)
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'ops/undo-sale-delivery-request.json'
+
+jobs:
+  undo-sale-delivery:
+    name: Undo sale delivery on Contabo
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Read request
+        id: req
+        run: |
+          set -euo pipefail
+          MODE=$(jq -r '.mode // "list"' ops/undo-sale-delivery-request.json)
+          CUSTOMER=$(jq -r '.customer // empty' ops/undo-sale-delivery-request.json)
+          ORDER=$(jq -r '.order // empty' ops/undo-sale-delivery-request.json)
+          DELIVERY=$(jq -r '.delivery // empty' ops/undo-sale-delivery-request.json)
+          if [ -z "$CUSTOMER" ] && [ -z "$ORDER" ] && [ -z "$DELIVERY" ]; then
+            echo "ERROR: customer, order, or delivery required" >&2
+            exit 1
+          fi
+          echo "mode=$MODE" >> "$GITHUB_OUTPUT"
+          echo "customer=$CUSTOMER" >> "$GITHUB_OUTPUT"
+          echo "order=$ORDER" >> "$GITHUB_OUTPUT"
+          echo "delivery=$DELIVERY" >> "$GITHUB_OUTPUT"
+
+      - name: Copy script + request to server
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          source: scripts/undo-sale-delivery.mjs,ops/undo-sale-delivery-request.json
+          target: /tmp/deed-ops/
+
+      - name: Run undo-sale-delivery script
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          command_timeout: 5m
+          script: |
+            set -euo pipefail
+            cd /var/www/deed-erp
+            SCRIPT=scripts/undo-sale-delivery.mjs
+            REQUEST=ops/undo-sale-delivery-request.json
+            mkdir -p scripts ops
+            cp /tmp/deed-ops/scripts/undo-sale-delivery.mjs "$SCRIPT"
+            cp /tmp/deed-ops/ops/undo-sale-delivery-request.json "$REQUEST"
+            node "$SCRIPT" --request "$REQUEST"
+            if git ls-files --error-unmatch "$SCRIPT" >/dev/null 2>&1; then
+              git restore --source=HEAD --worktree --staged -- "$SCRIPT" 2>/dev/null || git checkout HEAD -- "$SCRIPT" || true
+            else
+              rm -f "$SCRIPT"
+            fi
+            if git ls-files --error-unmatch "$REQUEST" >/dev/null 2>&1; then
+              git restore --source=HEAD --worktree --staged -- "$REQUEST" 2>/dev/null || git checkout HEAD -- "$REQUEST" || true
+            else
+              rm -f "$REQUEST"
+            fi

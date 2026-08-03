@@ -1,0 +1,9 @@
+{
+  "mode": "list",
+  "customer": "Tica Health",
+  "cancelOpen": true,
+  "force": false,
+  "dryRun": false,
+  "requestedAt": "2026-08-03T10:35:00Z",
+  "reason": "Discover Tica Health deliveries before undoing Done DN(s) and returning stock"
+}
