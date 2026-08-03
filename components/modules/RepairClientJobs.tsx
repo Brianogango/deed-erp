@@ -419,8 +419,8 @@ export default function RepairClientJobs({ onNewIntake, onSelect }: { onNewIntak
         />
       </div>
 
-      {/* ── Main Content ── */}
-      <div className="flex-1 overflow-hidden flex flex-col px-3 sm:px-6 py-3 sm:py-5 max-w-[1600px] mx-auto w-full gap-3 sm:gap-4">
+      {/* ── Main Content — full width, align with ModuleHeader (no max-width / side gutters) ── */}
+      <div className="flex-1 overflow-hidden flex flex-col px-1 py-2 sm:py-3 w-full gap-2 sm:gap-3">
 
         {/* ── Table / Card list ── */}
         <div className="flex-1 overflow-hidden bg-[var(--bg-card)] rounded-xl sm:rounded-2xl border border-[var(--border)] shadow-sm flex flex-col min-h-0">
