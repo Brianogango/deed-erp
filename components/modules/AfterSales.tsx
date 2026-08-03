@@ -1,6 +1,7 @@
 // @ts-nocheck
 'use client'
-import { useState, useMemo, useEffect } from 'react'
+import { Suspense, useState, useMemo } from 'react'
+import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import {
   useAfterSalesStore, fmtKes, fmtDate,
   Warranty, ReturnOrder, RMAResolution, ReturnOrderLine,
@@ -16,6 +17,7 @@ import {
 import type { IconProp } from '@fortawesome/fontawesome-svg-core'
 import TradeIn from './TradeIn'
 import { SerialReturnPicker } from '@/components/tradein/SerialReturnPicker'
+import { useUrlQueryState, useUrlRecordId } from '@/hooks/useUrlRecordId'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -50,8 +52,10 @@ const RESOLUTION_LABELS: Record<RMAResolution, string> = {
 
 type Tab = 'warranties' | 'returns' | 'trade'
 type ProcessedWarranty = Warranty & { daysLeft: number }
+const AFTER_SALES_TABS: Tab[] = ['warranties', 'returns', 'trade']
+const TRADE_IN_TABS = ['buybacks', 'donations', 'exchanges']
 
-export default function AfterSales() {
+function AfterSalesContent() {
   const mounted = useMounted()
   const {
     warranties, saleOrders, products, serials, users, currentUserId,
@@ -65,24 +69,32 @@ export default function AfterSales() {
   const isFinance   = currentUser?.role === 'finance_officer'
   const canManage   = isAdmin || isFinance
 
-  const [tab, setTab] = useState<Tab>('warranties')
+  const [tabParam] = useUrlQueryState('tab', 'warranties')
+  const tab: Tab = AFTER_SALES_TABS.includes(tabParam as Tab)
+    ? tabParam as Tab
+    : TRADE_IN_TABS.includes(tabParam)
+      ? 'trade'
+      : 'warranties'
+  const [detailId, setDetailId] = useUrlRecordId({ whenOpen: { tab } })
+  const searchParams = useSearchParams()
+  const router = useRouter()
+  const pathname = usePathname()
 
-  // Deep links from smart buttons (e.g. the sales order's Returns button)
-  // land on the right tab: /aftersales?tab=returns
-  useEffect(() => {
-    const requested = new URLSearchParams(window.location.search).get('tab')
-    if (requested === 'returns' || requested === 'trade' || requested === 'warranties') setTab(requested)
-  }, [])
+  function selectTab(nextTab: Tab) {
+    const params = new URLSearchParams(searchParams.toString())
+    params.set('tab', nextTab)
+    params.delete('id')
+    const qs = params.toString()
+    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false })
+  }
 
   // ── Warranty state ──────────────────────────────────────────────────────────
   const [wFilter, setWFilter] = useState<Warranty['status'] | 'all'>('all')
   const [wSearch, setWSearch] = useState('')
-  const [selectedWarranty, setSelectedWarranty] = useState<ProcessedWarranty | null>(null)
 
   // ── RMA state ───────────────────────────────────────────────────────────────
   const [rmaFilter, setRmaFilter] = useState<ReturnOrder['status'] | 'all'>('all')
   const [rmaSearch, setRmaSearch] = useState('')
-  const [selectedRMA, setSelectedRMA] = useState<ReturnOrder | null>(null)
 
   // Create RMA modal
   const [showCreateRMA, setShowCreateRMA] = useState(false)
@@ -151,6 +163,13 @@ export default function AfterSales() {
     return { total: returnOrders.length, requested, approved, received, processed }
   }, [returnOrders])
 
+  const selectedWarranty = tab === 'warranties' && detailId
+    ? refreshedWarranties.find(w => w.id === detailId) ?? null
+    : null
+  const selectedRMA = tab === 'returns' && detailId
+    ? returnOrders.find(r => r.id === detailId) ?? null
+    : null
+
   // ── RMA creation helpers ────────────────────────────────────────────────────
   const matchedSO = useMemo(() =>
     saleOrders.find(o => o.ref.toLowerCase() === rmaSORef.toLowerCase().trim()),
@@ -202,7 +221,7 @@ export default function AfterSales() {
         rmaReason, lines
       )
       setShowCreateRMA(false)
-      setSelectedRMA(order)
+      setDetailId(order.id)
     } catch {
       /* store toast */
     }
@@ -218,9 +237,6 @@ export default function AfterSales() {
     )
     setShowProcess(false)
     setProcessRMA(null)
-    if (selectedRMA?.id === processRMA.id) {
-      setSelectedRMA(prev => prev ? { ...prev, status: 'processed', resolution, refundAmount: refundAmount ? Number(refundAmount) : undefined, processNotes } : prev)
-    }
   }
 
   const tabStyle = (t: Tab): React.CSSProperties => ({
@@ -244,7 +260,7 @@ export default function AfterSales() {
     return (
       <div className="flex flex-col gap-3 max-w-3xl mx-auto">
         <div className="flex items-center gap-3">
-          <button onClick={() => setSelectedWarranty(null)}
+          <button onClick={() => setDetailId(null)}
             style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-4)', fontSize: 20, lineHeight: 1 }}>←</button>
           <div>
             <h2 className="text-sm font-bold text-t1">{w.ref}</h2>
@@ -316,7 +332,7 @@ export default function AfterSales() {
     return (
       <div className="flex flex-col gap-3 max-w-3xl mx-auto">
         <div className="flex items-center gap-3">
-          <button onClick={() => setSelectedRMA(null)}
+          <button onClick={() => setDetailId(null)}
             style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-4)', fontSize: 20, lineHeight: 1 }}>←</button>
           <div>
             <h2 className="text-sm font-bold text-t1">{rma.ref}</h2>
@@ -509,7 +525,7 @@ export default function AfterSales() {
     const meta = WARRANTY_STATUS_META[w.status]
     const days = w.daysLeft
     return (
-      <div key={w.id} className="p-4 cursor-pointer rounded-xl border border-[var(--border-lt)]" onClick={() => setSelectedWarranty(w)}>
+      <div key={w.id} className="p-4 cursor-pointer rounded-xl border border-[var(--border-lt)]" onClick={() => setDetailId(w.id)}>
         <div className="flex items-start justify-between gap-2 mb-1">
           <span className="font-mono text-[11px] font-bold" style={{ color: 'var(--navy)' }}>{w.ref}</span>
           <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 20, background: meta.bg, color: meta.color, fontWeight: 600, whiteSpace: 'nowrap' }}>{meta.label}</span>
@@ -567,7 +583,7 @@ export default function AfterSales() {
   function rmaCard(rma: ReturnOrder) {
     const meta = RMA_STATUS_META[rma.status]
     return (
-      <div key={rma.id} className="p-4 cursor-pointer rounded-xl border border-[var(--border-lt)]" onClick={() => setSelectedRMA(rma)}>
+      <div key={rma.id} className="p-4 cursor-pointer rounded-xl border border-[var(--border-lt)]" onClick={() => setDetailId(rma.id)}>
         <div className="flex items-start justify-between gap-2 mb-1">
           <span className="font-mono text-[11px] font-bold" style={{ color: 'var(--navy)' }}>{rma.ref}</span>
           <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 20, background: meta.bg, color: meta.color, fontWeight: 600, whiteSpace: 'nowrap' }}>{meta.label}</span>
@@ -604,7 +620,7 @@ export default function AfterSales() {
           { id: 'trade', label: `Trade-in (${buyBacks.length + donations.length + clientExchanges.length})` },
         ]}
         active={tab}
-        onChange={id => setTab(id as Tab)}
+        onChange={id => selectTab(id as Tab)}
         maxVisibleDesktop={6}
         ariaLabel="After-sales sections"
       />
@@ -645,7 +661,7 @@ export default function AfterSales() {
               onClearFilters={() => { setWFilter('all'); setWSearch('') }}
               hideColumnFilters
               emptyMessage={warranties.length === 0 ? 'No warranties yet — they are created automatically when a delivery is validated.' : 'No warranties match the filter.'}
-              onRowClick={w => setSelectedWarranty(w)}
+              onRowClick={w => setDetailId(w.id)}
               renderCard={warrantyCard}
               exportTitle="Warranties List"
               exportFilename="warranties-list"
@@ -688,7 +704,7 @@ export default function AfterSales() {
               onClearFilters={() => { setRmaFilter('all'); setRmaSearch('') }}
               hideColumnFilters
               emptyMessage={returnOrders.length === 0 ? 'No return requests yet. Click "+ New Return (RMA)" to create one.' : 'No returns match the filter.'}
-              onRowClick={rma => setSelectedRMA(rma)}
+              onRowClick={rma => setDetailId(rma.id)}
               renderCard={rmaCard}
               exportTitle="Returns & RMAs"
               exportFilename="returns-rmas"
@@ -932,5 +948,13 @@ export default function AfterSales() {
       )}
       </div>{/* mod-body */}
     </div>
+  )
+}
+
+export default function AfterSales() {
+  return (
+    <Suspense fallback={<ModuleSkeleton />}>
+      <AfterSalesContent />
+    </Suspense>
   )
 }

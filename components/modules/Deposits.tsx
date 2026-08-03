@@ -1,13 +1,14 @@
 // @ts-nocheck
 'use client'
 
-import { useState, useMemo } from 'react'
+import { Suspense, useState, useMemo } from 'react'
 import { useFinanceStore, fmtKes } from '@/lib/store'
 import type { DepositStatus, DepositItem, DepositPayment, Deposit } from '@/lib/store'
 import { Confirm, ModuleSkeleton, useMounted, ModuleHeader } from '@/components/ui'
 import { PrimaryActionButton, StatusBadge } from '@/components/erp'
 import { Fa, faBoxOpen, faCreditCard, faMoneyBillWave, faPlus } from '@/components/icons'
 import { DataTable, type ColumnDef, type PrimaryFilterConfig } from '@/components/data-table'
+import { useUrlRecordId } from '@/hooks/useUrlRecordId'
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 const STATUS_CONFIG: Record<DepositStatus, { label: string; badgeStatus: string }> = {
@@ -520,14 +521,13 @@ function DepositDetail({ deposit, onBack, onAddPayment, onComplete, onCancel }: 
 }
 
 // ── Main Module ────────────────────────────────────────────────────────────────
-export default function Deposits() {
+function DepositsContent() {
   const mounted = useMounted()
   const { showToast, deposits, completeDeposit, cancelDeposit } = useFinanceStore()
 
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<DepositStatus | 'all'>('all')
-  const [view, setView] = useState<'list' | 'detail'>('list')
-  const [activeId, setActiveId] = useState<string | null>(null)
+  const [activeId, setActiveId] = useUrlRecordId()
   const [showNew, setShowNew] = useState(false)
   const [addPaymentFor, setAddPaymentFor] = useState<Deposit | null>(null)
   const [pendingConfirm, setPendingConfirm] = useState<{ msg: string; action: () => void } | null>(null)
@@ -585,7 +585,7 @@ export default function Deposits() {
       msg: `Cancel deposit ${dep.ref}? This cannot be undone.`,
       action: () => {
         cancelDeposit(dep.id, 'User requested cancellation')
-        if (activeId === dep.id) { setView('list'); setActiveId(null) }
+        if (activeId === dep.id) setActiveId(null)
       },
     })
   }
@@ -656,7 +656,7 @@ export default function Deposits() {
     <div
       key={dep.id}
       className="bg-[var(--bg-card)] rounded-xl border border-[var(--border)] p-4 cursor-pointer active:scale-[0.99] transition-all"
-      onClick={() => { setActiveId(dep.id); setView('detail') }}
+      onClick={() => setActiveId(dep.id)}
     >
       <div className="flex items-start justify-between gap-2 mb-2">
         <div>
@@ -676,12 +676,12 @@ export default function Deposits() {
 
   if (!mounted) return <ModuleSkeleton />
 
-  if (view === 'detail' && activeDeposit) {
+  if (activeDeposit) {
     return (
       <>
         <DepositDetail
           deposit={activeDeposit}
-          onBack={() => { setView('list'); setActiveId(null) }}
+          onBack={() => setActiveId(null)}
           onAddPayment={d => setAddPaymentFor(d)}
           onComplete={handleComplete}
           onCancel={handleCancel}
@@ -740,7 +740,7 @@ export default function Deposits() {
               + New Deposit
             </button>
           ) : undefined}
-          onRowClick={dep => { setActiveId(dep.id); setView('detail') }}
+          onRowClick={dep => setActiveId(dep.id)}
           rowActions={depositRowActions}
           renderCard={depositCard}
           exportTitle="Deposits & Laybys"
@@ -758,5 +758,13 @@ export default function Deposits() {
         />
       )}
     </div>
+  )
+}
+
+export default function Deposits() {
+  return (
+    <Suspense fallback={<ModuleSkeleton />}>
+      <DepositsContent />
+    </Suspense>
   )
 }

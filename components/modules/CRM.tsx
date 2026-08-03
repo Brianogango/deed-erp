@@ -1,5 +1,5 @@
 'use client'
-import { useState, useMemo, useEffect, Suspense } from 'react'
+import { useState, useMemo, useEffect, Suspense, useCallback } from 'react'
 import { useSearchParams, useRouter, usePathname } from 'next/navigation'
 import { useCrmStore, OpportunityStage, LeadSource, fmtKes, fmtDate } from '@/lib/store'
 import { Badge, Modal, Field, Input, Select, Textarea, PanelHeader, ModuleSkeleton, SlidePanel, useMounted, TabBar, ModuleHeader } from '@/components/ui'
@@ -14,6 +14,7 @@ import {
   faPhone, faEnvelope, faHandshake, faClipboardList, faNoteSticky,
 } from '@/components/icons'
 import type { IconProp } from '@fortawesome/fontawesome-svg-core'
+import { useUrlRecordId } from '@/hooks/useUrlRecordId'
 
 const ACTIVITY_ICONS: Record<string, IconProp> = {
   call: faPhone,
@@ -27,6 +28,8 @@ const ACTIVITY_ICONS: Record<string, IconProp> = {
 
 type Tab = 'pipeline' | 'opportunities' | 'companies' | 'contacts' | 'activities' | 'contracts' | 'sla' | 'leads'
 type View = 'kanban' | 'list' | 'detail'
+
+const CRM_RECORD_QUERY = { crmTab: 'pipeline' }
 
 const STAGE_ORDER: OpportunityStage[] = ['prospecting', 'qualification', 'proposal', 'negotiation', 'closed_won', 'closed_lost']
 
@@ -77,6 +80,7 @@ function CRMContent() {
   const searchParams = useSearchParams()
   const router = useRouter()
   const pathname = usePathname()
+  const [urlOppId, setUrlOppId] = useUrlRecordId({ whenOpen: CRM_RECORD_QUERY })
 
   const {
     companies, contactPersons, opportunities, opportunityActivities, quotes, customerContracts, users, currentUserId,
@@ -109,6 +113,11 @@ function CRMContent() {
     setLocalTab(newTab)
     const params = new URLSearchParams(searchParams.toString())
     params.set('crmTab', newTab)
+    if (newTab !== 'pipeline') {
+      params.delete('id')
+      setLocalActiveOppId(null)
+      setLocalView('kanban')
+    }
     router.replace(`${pathname}?${params.toString()}`, { scroll: false })
   }
 
@@ -120,8 +129,16 @@ function CRMContent() {
     }
   }, [searchParams, tab])
 
-  const [view, setView] = useState<View>('kanban')
-  const [activeOppId, setActiveOppId] = useState<string | null>(null)
+  const [view, setLocalView] = useState<View>('kanban')
+  const [activeOppId, setLocalActiveOppId] = useState<string | null>(null)
+  const setActiveOppId = useCallback((id: string | null) => {
+    setLocalActiveOppId(id)
+    setUrlOppId(id)
+  }, [setUrlOppId])
+  const setView = useCallback((nextView: View) => {
+    setLocalView(nextView)
+    if (nextView !== 'detail') setActiveOppId(null)
+  }, [setActiveOppId])
   // Directors/admins land on the full pipeline across every rep; they can
   // still narrow to "My Pipeline" or a specific rep with the filter chips.
   const [ownerFilter, setOwnerFilter] = useState<string>('all')
@@ -245,6 +262,22 @@ function CRMContent() {
   const currentUser = users.find(u => u.id === currentUserId)
   const activeOpp = opportunities.find(o => o.id === activeOppId)
   const activeCompany = companies.find(c => c.id === activeCompanyId)
+
+  useEffect(() => {
+    if (!urlOppId) {
+      if (activeOppId) {
+        setLocalActiveOppId(null)
+        if (view === 'detail') setLocalView('kanban')
+      }
+      return
+    }
+
+    if (opportunities.some(o => o.id === urlOppId)) {
+      if (tab !== 'pipeline') setLocalTab('pipeline')
+      if (activeOppId !== urlOppId || tab !== 'pipeline') setActiveOppId(urlOppId)
+      if (view !== 'detail') setLocalView('detail')
+    }
+  }, [urlOppId, opportunities, activeOppId, view, tab, setActiveOppId])
 
   // Pipeline metrics — scoped to owner filter
   const isAdmin = ['director', 'admin_officer', 'finance_officer'].includes(currentUser?.role ?? '')
@@ -417,6 +450,7 @@ function CRMContent() {
       tags: '',
     })
     setActiveOppId(opp.id)
+    setView('detail')
     } finally {
       setCreatingOpp(false)
     }
@@ -1040,9 +1074,9 @@ function CRMContent() {
             currentUserId={currentUserId ?? undefined}
             onConverted={opportunityId => {
               // Server broadcasts deed_opportunities; SSE refreshes the store.
+              setTab('pipeline')
               setActiveOppId(opportunityId)
               setView('detail')
-              setTab('pipeline')
             }}
           />
         </div>

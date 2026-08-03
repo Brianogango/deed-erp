@@ -1,5 +1,6 @@
 'use client'
-import { useState, useMemo, useRef } from 'react'
+import { Suspense, useState, useMemo, useRef, useEffect } from 'react'
+import { useUrlRecordId } from '@/hooks/useUrlRecordId'
 import { useHrStore } from '@/lib/store'
 import { ModuleSkeleton, useMounted, ModuleHeader } from '@/components/ui'
 import { PrimaryActionButton } from '@/components/erp'
@@ -118,6 +119,14 @@ function formatBytes(bytes: number) {
 
 // ── Main Component ────────────────────────────────────────────────────────────
 export default function SOPDocuments() {
+  return (
+    <Suspense fallback={<ModuleSkeleton />}>
+      <SOPDocumentsContent />
+    </Suspense>
+  )
+}
+
+function SOPDocumentsContent() {
   const mounted = useMounted()
   const { users, currentUserId } = useHrStore()
   const currentUser = users.find(u => u.id === currentUserId)
@@ -128,7 +137,8 @@ export default function SOPDocuments() {
   const [search, setSearch]           = useState('')
   const [filterDept, setFilterDept]   = useState<string>('all')
   const [filterStatus, setFilterStatus] = useState<string>('active')
-  const [viewDoc, setViewDoc]         = useState<SOPDoc | null>(null)
+  const [viewId, setViewId]           = useUrlRecordId()
+  const [editId, setEditId]           = useUrlRecordId({ param: 'edit', clearKeys: ['id'] })
   const [editDoc, setEditDoc]         = useState<Partial<SOPDoc> & { steps: SOPStep[] } | null>(null)
   const [isNew, setIsNew]             = useState(false)
   const [tagInput, setTagInput]       = useState('')
@@ -136,6 +146,21 @@ export default function SOPDocuments() {
   const [uploading, setUploading]     = useState(false)
   const [pendingFile, setPendingFile] = useState<{ dataUrl: string; fileName: string; fileType: string; fileSize: number } | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const viewDoc = !editId && viewId ? docs.find(d => d.id === viewId) ?? null : null
+
+  useEffect(() => {
+    if (!editId) {
+      if (!isNew) setEditDoc(null)
+      return
+    }
+    const doc = docs.find(d => d.id === editId)
+    if (!doc || editDoc?.id === editId) return
+    setIsNew(false)
+    setEditDoc({ ...doc, steps: doc.steps.map(s => ({ ...s })) })
+    setTagInput('')
+    setFileError('')
+    setPendingFile(null)
+  }, [docs, editDoc?.id, editId, isNew])
 
   // ── Filtered list ──────────────────────────────────────────────────────────
   const filtered = useMemo(() => {
@@ -178,7 +203,7 @@ export default function SOPDocuments() {
     setTagInput('')
     setFileError('')
     setPendingFile(null)
-    setViewDoc(null)
+    setEditId(doc.id)
   }
 
   async function saveDoc() {
@@ -250,6 +275,7 @@ export default function SOPDocuments() {
       ))
     }
     setPendingFile(null)
+    setEditId(null)
     setEditDoc(null)
   }
 
@@ -258,7 +284,7 @@ export default function SOPDocuments() {
     // Also clean up the file on the server (fire and forget)
     fetch(`/api/sop-files/${id}`, { method: 'DELETE' }).catch(() => {})
     save(docs.filter(d => d.id !== id))
-    if (viewDoc?.id === id) setViewDoc(null)
+    if (viewDoc?.id === id) setViewId(null)
   }
 
   async function removeFile(doc: SOPDoc) {
@@ -268,9 +294,6 @@ export default function SOPDocuments() {
       ? { ...d, fileName: undefined, fileType: undefined, fileSize: undefined, updatedAt: new Date().toISOString() }
       : d
     ))
-    if (viewDoc?.id === doc.id) {
-      setViewDoc(prev => prev ? { ...prev, fileName: undefined, fileType: undefined, fileSize: undefined } : null)
-    }
   }
 
   // ── File selection with client-side guards ─────────────────────────────────
@@ -350,7 +373,7 @@ export default function SOPDocuments() {
     return (
       <div className="flex flex-col h-full" style={{ background: 'var(--bg-page)' }}>
         <div className="flex items-center gap-3 px-4 py-3 border-b" style={{ borderColor: 'var(--border-lt)', background: 'var(--bg-card)' }}>
-          <button onClick={() => setViewDoc(null)} className="btn-outline text-xs px-3 py-1.5">← Back</button>
+          <button onClick={() => setViewId(null)} className="btn-outline text-xs px-3 py-1.5">← Back</button>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <h2 className="font-bold text-base text-t1 truncate">{viewDoc.title}</h2>
@@ -474,7 +497,7 @@ export default function SOPDocuments() {
     return (
       <div className="flex flex-col h-full" style={{ background: 'var(--bg-page)' }}>
         <div className="flex items-center gap-3 px-4 py-3 border-b" style={{ borderColor: 'var(--border-lt)', background: 'var(--bg-card)' }}>
-          <button onClick={() => { setEditDoc(null); setPendingFile(null); setFileError('') }} className="btn-outline text-xs px-3 py-1.5">Cancel</button>
+          <button onClick={() => { setEditId(null); setEditDoc(null); setPendingFile(null); setFileError('') }} className="btn-outline text-xs px-3 py-1.5">Cancel</button>
           <h2 className="font-bold text-sm text-t1 flex-1">{isNew ? 'New SOP' : 'Edit SOP'}</h2>
           <button onClick={saveDoc} disabled={uploading} className="btn-primary text-xs px-4 py-1.5 disabled:opacity-60">
             {uploading ? 'Uploading…' : <><Fa icon={faCheck} className="mr-1.5" />Save SOP</>}
@@ -735,7 +758,7 @@ export default function SOPDocuments() {
                         <div key={doc.id}
                           className="rounded-xl border p-4 cursor-pointer transition-all duration-200 hover:shadow-md group"
                           style={{ borderColor: 'var(--border-lt)', background: 'var(--bg-card)' }}
-                          onClick={() => setViewDoc(doc)}>
+                          onClick={() => setViewId(doc.id)}>
                           <div className="flex items-start justify-between gap-2 mb-2">
                             <h3 className="font-bold text-sm text-t1 group-hover:text-[#00AEEF] transition-colors leading-snug">
                               {doc.title}

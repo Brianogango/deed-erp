@@ -1,6 +1,6 @@
 // @ts-nocheck
 'use client'
-import { useState, useMemo, useRef, useCallback, useEffect } from 'react'
+import { useState, useMemo, useRef, useCallback, useEffect, Suspense } from 'react'
 import { useRepairStore } from '@/lib/store'
 import { useRepair, RepairProvider } from './repair/RepairContext'
 import RepairClientJobs from './RepairClientJobs'
@@ -24,6 +24,7 @@ import {
   StopAtDiagnosisModal
 } from './RepairModals'
 import { ModuleSkeleton, TabBar, useMounted } from '@/components/ui'
+import { useUrlRecordId } from '@/hooks/useUrlRecordId'
 
 function RepairContent() {
   const { 
@@ -96,6 +97,14 @@ function RepairContent() {
 }
 
 export default function Repair() {
+  return (
+    <Suspense fallback={<ModuleSkeleton />}>
+      <RepairInner />
+    </Suspense>
+  )
+}
+
+function RepairInner() {
   const mounted = useMounted()
   const {
     repairs, contacts, products, users, riders, refurbishmentJobs, currentUserId, outsourceJobs, warranties, systemSettings, companySettings,
@@ -104,8 +113,17 @@ export default function Repair() {
     getVisibleRepairs, updateRepairProgress, moveRepairToPreviousProgress, requestProcurement, markUnrepairable, returnToCustomer, fileWarrantyClaim, showToast, appendRepairHistory
   } = useRepairStore()
 
-  const [view, setView] = useState('list')
-  const [activeId, setActiveId] = useState(null)
+  const [urlActiveId, setUrlActiveId] = useUrlRecordId()
+  const [view, setLocalView] = useState('list')
+  const [activeId, setLocalActiveId] = useState(null)
+  const setActiveId = useCallback((id) => {
+    setLocalActiveId(id)
+    setUrlActiveId(id)
+  }, [setUrlActiveId])
+  const setView = useCallback((nextView) => {
+    setLocalView(nextView)
+    if (nextView === 'list') setActiveId(null)
+  }, [setActiveId])
   const [filter, setFilter] = useState('all')
   const [mainTab, setMainTab] = useState('client')
   
@@ -209,16 +227,21 @@ export default function Repair() {
     return filter === 'all' ? all : all.filter(r => r.status === filter)
   }, [getVisibleRepairs, filter, repairs])
 
-  // Deep-link: if URL contains ?id=<repairId>, open that repair on mount
+  // Deep-link: keep ?id=<repairId> while a repair is open and restore it on refresh.
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search)
-    const id = params.get('id')
-    if (id) {
-      setActiveId(id)
-      setView('detail')
-      window.history.replaceState({}, '', window.location.pathname)
+    if (!urlActiveId) {
+      if (activeId) {
+        setLocalActiveId(null)
+        if (view === 'detail') setLocalView('list')
+      }
+      return
     }
-  }, [])
+
+    if (repairs.some(r => r.id === urlActiveId)) {
+      if (activeId !== urlActiveId) setActiveId(urlActiveId)
+      if (view !== 'detail') setLocalView('detail')
+    }
+  }, [urlActiveId, repairs, activeId, view, setActiveId])
 
   if (!mounted) return <ModuleSkeleton />
 

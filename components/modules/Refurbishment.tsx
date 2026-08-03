@@ -1,12 +1,13 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { Suspense, useState, useMemo } from 'react'
 import { useOperationsStore, fmtDate as fmtD } from '@/lib/store'
 import type { RefurbishmentJob, RefurbStatus, RefurbPart, SerialNumber } from '@/lib/store'
 import { Confirm, Modal, Field, Textarea, ModuleSkeleton, useMounted, ModuleHeader } from '@/components/ui'
 import { StatusBadge, RecordHeader, PrimaryActionButton } from '@/components/erp'
 import { DataTable, type ColumnDef, type PrimaryFilterConfig } from '@/components/data-table'
 import { Fa } from '@/components/icons'
+import { useUrlRecordId } from '@/hooks/useUrlRecordId'
 import {
   faRotate, faPlus, faUser, faWrench, faCheckCircle,
   faArrowRight, faBan, faChevronLeft, faBoxOpen, faPencil, faTrash,
@@ -42,7 +43,7 @@ function RefurbStatusBadge({ status }: { status: RefurbStatus }) {
   return <StatusBadge status={m.badgeStatus} label={m.label} />
 }
 
-export default function Refurbishment() {
+function RefurbishmentContent() {
   const mounted = useMounted()
   const {
     refurbishmentJobs, serials, products,
@@ -61,7 +62,7 @@ export default function Refurbishment() {
   const canAssignJobs = currentUser?.role === 'technical_lead'
   const techs       = users.filter(u => u.role === 'technical_lead' || u.role === 'technician')
 
-  const [activeId, setActiveId]           = useState<string | null>(null)
+  const [activeId, setActiveId]           = useUrlRecordId()
   const [filterStatus, setFilterStatus]   = useState<RefurbStatus | 'all'>('all')
 
   const [showAssignModal, setShowAssignModal]       = useState(false)
@@ -899,5 +900,13 @@ export default function Refurbishment() {
         />
       )}
     </div>
+  )
+}
+
+export default function Refurbishment() {
+  return (
+    <Suspense fallback={<ModuleSkeleton />}>
+      <RefurbishmentContent />
+    </Suspense>
   )
 }

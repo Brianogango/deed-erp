@@ -1,6 +1,7 @@
 // @ts-nocheck
 'use client'
-import { useState, useMemo, useRef, useEffect } from 'react'
+import { Suspense, useState, useMemo, useRef, useEffect } from 'react'
+import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { loadXlsx } from '@/lib/xlsx-lazy'
 import { guardSpreadsheetFile, guardSpreadsheetRows, SpreadsheetGuardError } from '@/lib/spreadsheet-guard'
 import {
@@ -14,6 +15,7 @@ import { CustomerPickerField } from '@/components/tradein/CustomerPickerField'
 import { SerialReturnPicker } from '@/components/tradein/SerialReturnPicker'
 import { StatusBadge } from '@/components/erp'
 import { Fa, faBox, faCheck, faMoneyBillWave, faTrash, faUpload } from '@/components/icons'
+import { useUrlQueryState, useUrlRecordId } from '@/hooks/useUrlRecordId'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const DEST_OPTS = (['warehouse', 'shop'] as LocationId[]).map(k => ({ value: k, label: LOCATIONS[k].name }))
@@ -223,6 +225,7 @@ function SerialPicker({ productId, selectedIds, onAdd, onRemove, mode = 'custome
 // ══════════════════════════════════════════════════════════════════════════════
 
 type BBLine = { productId: string; productName: string; qty: number; condition: 'good'|'fair'|'poor'; unitPrice: number; serialIds: string[]; notes: string }
+type DetailTabProps = { detailId: string | null; onOpenDetail: (id: string | null) => void }
 type BuyBackBulkRow = {
   batchRef: string; customerId: string; customerName: string; originalSORef: string
   destination: LocationId; productId: string; productName: string; qty: number
@@ -240,14 +243,13 @@ function downloadBuyBackBulkTemplate() {
   downloadTemplate('buybacks_bulk_template.xlsx', 'BuyBacks', BUYBACK_BULK_HEADERS, BUYBACK_BULK_EXAMPLE)
 }
 
-function BuyBackTab() {
+function BuyBackTab({ detailId, onOpenDetail }: DetailTabProps) {
   const { buyBacks, createBuyBack, approveBuyBack, payBuyBack, stockBuyBack, deleteBuyBack,
     contacts, products, saleOrders, serials, users, currentUserId, showToast, registerCustomerReturnSerial } = useAfterSalesStore()
 
   const currentRole = users.find(u => u.id === currentUserId)?.role
   const canApprove = currentRole === 'director' || currentRole === 'finance_officer'
 
-  const [detail, setDetail] = useState<BuyBack | null>(null)
   const [showNew, setShowNew] = useState(false)
   const [search, setSearch] = useState('')
   const [customerId, setCustomerId]   = useState('')
@@ -383,6 +385,7 @@ function BuyBackTab() {
     (bb.originalSORef ?? '').toLowerCase().includes(s) ||
     (bb.repairRef ?? '').toLowerCase().includes(s)
   ) : sorted
+  const detail = detailId ? buyBacks.find(bb => bb.id === detailId) ?? null : null
 
   const buyBackColumns: ColumnDef<BuyBack>[] = [
     { key: 'ref', label: 'Ref', priority: 1, width: '110px', render: bb => <span className="text-xs font-bold text-primary-600">{bb.ref}</span>, accessor: bb => bb.ref },
@@ -399,12 +402,12 @@ function BuyBackTab() {
   ]
 
   if (detail) {
-    const bb = buyBacks.find(b => b.id === detail.id) ?? detail
+    const bb = detail
     const STEPS = ['draft', 'approved', 'paid', 'stocked']
     const si = STEPS.indexOf(bb.status)
     return (
       <div>
-        <button onClick={() => setDetail(null)} style={{ fontSize: 11, color: 'var(--accent-cyan)', fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer', marginBottom: 16 }}>← Back</button>
+        <button onClick={() => onOpenDetail(null)} style={{ fontSize: 11, color: 'var(--accent-cyan)', fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer', marginBottom: 16 }}>← Back</button>
         <div style={{ background: '#fff', border: '1px solid var(--border-lt)', borderRadius: 12, padding: 20 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
             <div>
@@ -471,7 +474,7 @@ function BuyBackTab() {
               </button>
             )}
             {bb.status === 'draft' && (
-              <button type="button" className="btn-secondary text-[11px] flex items-center gap-1.5" onClick={() => { deleteBuyBack(bb.id); setDetail(null) }}>
+              <button type="button" className="btn-secondary text-[11px] flex items-center gap-1.5" onClick={() => { deleteBuyBack(bb.id); onOpenDetail(null) }}>
                 <Fa icon={faTrash} aria-hidden="true" /> Delete
               </button>
             )}
@@ -500,7 +503,7 @@ function BuyBackTab() {
         clientSearch={false}
         searchPlaceholder="Search ref, customer, repair…"
         emptyMessage={search ? 'No results.' : 'No buy-backs yet.'}
-        onRowClick={setDetail}
+        onRowClick={bb => onOpenDetail(bb.id)}
         rowLabel={bb => bb.ref}
       />
 
@@ -718,11 +721,10 @@ async function downloadBulkTemplate() {
   XLSX.writeFile(wb, 'donations_bulk_template.xlsx')
 }
 
-function DonationTab() {
+function DonationTab({ detailId, onOpenDetail }: DetailTabProps) {
   const { donations, createDonation, confirmDonation, deleteDonation,
     products, serials, users, currentUserId, showToast } = useAfterSalesStore()
 
-  const [detail, setDetail]   = useState<Donation | null>(null)
   const [showNew, setShowNew] = useState(false)
   const [showBulk, setShowBulk] = useState(false)
   const [donType, setDonType] = useState<'in' | 'out'>('in')
@@ -744,6 +746,7 @@ function DonationTab() {
     d.party.toLowerCase().includes(ds) ||
     (d.notes ?? '').toLowerCase().includes(ds)
   ) : sorted
+  const detail = detailId ? donations.find(d => d.id === detailId) ?? null : null
 
   const donationColumns: ColumnDef<Donation>[] = [
     { key: 'ref', label: 'Ref', priority: 1, width: '110px', render: don => <span className="text-xs font-bold text-primary-600">{don.ref}</span>, accessor: don => don.ref },
@@ -866,10 +869,10 @@ function DonationTab() {
   }
 
   if (detail) {
-    const don = donations.find(d => d.id === detail.id) ?? detail
+    const don = detail
     return (
       <div>
-        <button onClick={() => setDetail(null)} style={{ fontSize: 11, color: 'var(--accent-cyan)', fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer', marginBottom: 16 }}>← Back</button>
+        <button onClick={() => onOpenDetail(null)} style={{ fontSize: 11, color: 'var(--accent-cyan)', fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer', marginBottom: 16 }}>← Back</button>
         <div style={{ background: '#fff', border: '1px solid var(--border-lt)', borderRadius: 12, padding: 20 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
             <div>
@@ -906,7 +909,7 @@ function DonationTab() {
               <button className="btn-primary text-[11px]" onClick={() => confirmDonation(don.id)}>
                 {don.type === 'in' ? 'Receive into Stock' : 'Confirm Donation Out'}
               </button>
-              <button type="button" className="btn-secondary text-[11px] flex items-center gap-1.5" onClick={() => { deleteDonation(don.id); setDetail(null) }}><Fa icon={faTrash} aria-hidden="true" /> Delete</button>
+              <button type="button" className="btn-secondary text-[11px] flex items-center gap-1.5" onClick={() => { deleteDonation(don.id); onOpenDetail(null) }}><Fa icon={faTrash} aria-hidden="true" /> Delete</button>
             </div>
           )}
         </div>
@@ -931,7 +934,7 @@ function DonationTab() {
         clientSearch={false}
         searchPlaceholder="Search ref, party…"
         emptyMessage={donSearch ? 'No results.' : 'No donations recorded.'}
-        onRowClick={setDetail}
+        onRowClick={don => onOpenDetail(don.id)}
         rowLabel={don => don.ref}
       />
 
@@ -1160,14 +1163,13 @@ function downloadExchangeBulkTemplate() {
   downloadTemplate('trade_in_exchanges_bulk_template.xlsx', 'TradeIns', EXCHANGE_BULK_HEADERS, EXCHANGE_BULK_EXAMPLE)
 }
 
-function ExchangeTab() {
+function ExchangeTab({ detailId, onOpenDetail }: DetailTabProps) {
   const { clientExchanges, createExchange, approveExchange, completeExchange, cancelExchange,
     contacts, products, saleOrders, serials, users, currentUserId, showToast, registerCustomerReturnSerial } = useAfterSalesStore()
 
   const currentRole = users.find(u => u.id === currentUserId)?.role
   const canApprove = currentRole === 'director' || currentRole === 'finance_officer'
 
-  const [detail, setDetail]   = useState<ClientExchange | null>(null)
   const [showNew, setShowNew] = useState(false)
   const [customerId, setCustomerId]   = useState('')
   const [customerName, setCustomerName] = useState('')
@@ -1192,6 +1194,7 @@ function ExchangeTab() {
     e.customerName.toLowerCase().includes(es) ||
     (e.originalSORef ?? '').toLowerCase().includes(es)
   ) : sorted
+  const detail = detailId ? clientExchanges.find(e => e.id === detailId) ?? null : null
 
   const exchangeColumns: ColumnDef<ClientExchange>[] = [
     { key: 'ref', label: 'Ref', priority: 1, width: '110px', render: exc => <span className="text-xs font-bold text-primary-600">{exc.ref}</span>, accessor: exc => exc.ref },
@@ -1327,12 +1330,12 @@ function ExchangeTab() {
   const diff        = newTotal - returnTotal
 
   if (detail) {
-    const exc = clientExchanges.find(e => e.id === detail.id) ?? detail
+    const exc = detail
     const STEPS = ['draft', 'approved', 'completed']
     const si = exc.status === 'cancelled' ? -1 : STEPS.indexOf(exc.status)
     return (
       <div>
-        <button onClick={() => setDetail(null)} style={{ fontSize: 11, color: 'var(--accent-cyan)', fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer', marginBottom: 16 }}>← Back</button>
+        <button onClick={() => onOpenDetail(null)} style={{ fontSize: 11, color: 'var(--accent-cyan)', fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer', marginBottom: 16 }}>← Back</button>
         <div style={{ background: '#fff', border: '1px solid var(--border-lt)', borderRadius: 12, padding: 20 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
             <div>
@@ -1391,7 +1394,7 @@ function ExchangeTab() {
           <div style={{ display: 'flex', gap: 8 }}>
             {exc.status === 'draft' && canApprove && <button className="btn-primary text-[11px]" onClick={() => approveExchange(exc.id)}><Fa icon={faCheck} aria-hidden="true" /> Approve</button>}
             {exc.status === 'approved' && <button className="btn-primary text-[11px]" onClick={() => completeExchange(exc.id)}>✅ Complete Exchange</button>}
-            {['draft', 'approved'].includes(exc.status) && <button className="btn-secondary text-[11px]" onClick={() => { cancelExchange(exc.id); setDetail(null) }}>✕ Cancel</button>}
+            {['draft', 'approved'].includes(exc.status) && <button className="btn-secondary text-[11px]" onClick={() => { cancelExchange(exc.id); onOpenDetail(null) }}>✕ Cancel</button>}
           </div>
         </div>
       </div>
@@ -1415,7 +1418,7 @@ function ExchangeTab() {
         clientSearch={false}
         searchPlaceholder="Search ref, customer…"
         emptyMessage={excSearch ? 'No results.' : 'No exchanges yet.'}
-        onRowClick={setDetail}
+        onRowClick={exc => onOpenDetail(exc.id)}
         rowLabel={exc => exc.ref}
       />
 
@@ -1603,13 +1606,27 @@ function ELineEditor({ line, onChange, onRemove, products, mode = 'customer_retu
 // ══════════════════════════════════════════════════════════════════════════════
 
 type TradeTab = 'buybacks' | 'donations' | 'exchanges'
+const TRADE_TABS: TradeTab[] = ['buybacks', 'donations', 'exchanges']
 
-export default function TradeIn() {
+function TradeInContent() {
   const [mounted, setMounted] = useState(() => typeof window !== 'undefined')
   const { buyBacks, donations, clientExchanges } = useAfterSalesStore()
-  const [tab, setTab] = useState<TradeTab>('buybacks')
+  const [tabParam] = useUrlQueryState('tab', 'buybacks')
+  const tab = TRADE_TABS.includes(tabParam as TradeTab) ? tabParam as TradeTab : 'buybacks'
+  const [detailId, setDetailId] = useUrlRecordId({ whenOpen: { tab } })
+  const searchParams = useSearchParams()
+  const router = useRouter()
+  const pathname = usePathname()
 
   useEffect(() => { setMounted(true) }, [])
+
+  function selectTab(nextTab: TradeTab) {
+    const params = new URLSearchParams(searchParams.toString())
+    params.set('tab', nextTab)
+    params.delete('id')
+    const qs = params.toString()
+    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false })
+  }
 
   if (!mounted) {
     return (
@@ -1637,15 +1654,23 @@ export default function TradeIn() {
           label: t.count > 0 ? `${t.label} (${t.count})` : t.label,
         }))}
         active={tab}
-        onChange={id => setTab(id as TradeTab)}
+        onChange={id => selectTab(id as TradeTab)}
         maxVisibleDesktop={6}
         ariaLabel="Trade-in sections"
       />
       <div className="mod-body p-3 sm:p-4">
-        {tab === 'buybacks'  && <BuyBackTab />}
-        {tab === 'donations' && <DonationTab />}
-        {tab === 'exchanges' && <ExchangeTab />}
+        {tab === 'buybacks'  && <BuyBackTab detailId={detailId} onOpenDetail={setDetailId} />}
+        {tab === 'donations' && <DonationTab detailId={detailId} onOpenDetail={setDetailId} />}
+        {tab === 'exchanges' && <ExchangeTab detailId={detailId} onOpenDetail={setDetailId} />}
       </div>
     </div>
+  )
+}
+
+export default function TradeIn() {
+  return (
+    <Suspense fallback={<ModuleSkeleton />}>
+      <TradeInContent />
+    </Suspense>
   )
 }

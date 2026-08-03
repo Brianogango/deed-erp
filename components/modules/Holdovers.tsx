@@ -1,13 +1,14 @@
 'use client'
 // @ts-nocheck
 
-import { useState, useMemo } from 'react'
+import { Suspense, useState, useMemo } from 'react'
 import { useOperationsStore, type Holdover, type HoldoverStatus, type HoldoverPurpose, type HoldoverDeviceCondition } from '@/lib/store'
 import { ModuleSkeleton, useMounted, ModuleHeader } from '@/components/ui'
 import { PrimaryActionButton, StatusBadge } from '@/components/erp'
 import { DataTable, type ColumnDef, type PrimaryFilterConfig } from '@/components/data-table'
 import { Fa } from '@/components/icons'
 import { faLaptop, faPlus } from '@fortawesome/free-solid-svg-icons'
+import { useUrlRecordId } from '@/hooks/useUrlRecordId'
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 
@@ -593,7 +594,7 @@ function HoldoverDetail({ holdover, onClose, onReturn }: { holdover: Holdover; o
 
 // ── Main Component ─────────────────────────────────────────────────────────────
 
-export default function Holdovers() {
+function HoldoversContent() {
   const mounted = useMounted()
   const { holdovers, addHoldover, updateHoldover } = useOperationsStore()
   const items = useMemo(() => withResolvedStatus(holdovers || []), [holdovers])
@@ -601,8 +602,9 @@ export default function Holdovers() {
   const [filter, setFilter] = useState<'all' | HoldoverStatus>('all')
   const [search, setSearch] = useState('')
   const [showNew, setShowNew] = useState(false)
-  const [detail, setDetail] = useState<Holdover | null>(null)
+  const [detailId, setDetailId] = useUrlRecordId()
   const [returning, setReturning] = useState<Holdover | null>(null)
+  const detail = detailId ? items.find(h => h.id === detailId) ?? null : null
 
   // Stats
   const total    = items.length
@@ -745,7 +747,7 @@ export default function Holdovers() {
                   + Issue device
                 </button>
               ) : undefined}
-              onRowClick={h => setDetail(h)}
+              onRowClick={h => setDetailId(h.id)}
               rowActions={h => h.status !== 'returned' ? (
                 <button
                   type="button"
@@ -760,8 +762,8 @@ export default function Holdovers() {
                   key={h.id}
                   role="button"
                   tabIndex={0}
-                  onClick={() => setDetail(h)}
-                  onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setDetail(h) } }}
+                  onClick={() => setDetailId(h.id)}
+                  onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setDetailId(h.id) } }}
                   className="rounded-xl border border-[var(--border-lt)] bg-[var(--bg-card)] p-3 text-left shadow-sm"
                   style={{ borderLeft: `4px solid ${h.status === 'overdue' ? '#EF4444' : h.status === 'returned' ? '#10B981' : '#3B82F6'}` }}
                 >
@@ -803,8 +805,8 @@ export default function Holdovers() {
       {detail && (
         <HoldoverDetail
           holdover={detail}
-          onClose={() => setDetail(null)}
-          onReturn={() => { setReturning(detail); setDetail(null) }}
+          onClose={() => setDetailId(null)}
+          onReturn={() => { setReturning(detail); setDetailId(null) }}
         />
       )}
 
@@ -816,5 +818,13 @@ export default function Holdovers() {
         />
       )}
     </div>
+  )
+}
+
+export default function Holdovers() {
+  return (
+    <Suspense fallback={<ModuleSkeleton />}>
+      <HoldoversContent />
+    </Suspense>
   )
 }

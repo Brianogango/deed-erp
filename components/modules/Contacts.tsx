@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, Suspense } from 'react'
 import { useCrmStore, Contact, SaleOrder, RepairOrder, Invoice, POSOrder, fmtDate, fmtKes } from '@/lib/store'
 import { invoiceDocState, invoicePaymentStatus, isOpenInvoice, invoiceResidual, displayDocRef, PAYMENT_STATUS_LABELS } from '@/lib/odoo-sales-flow'
 import { guardSpreadsheetFile, guardSpreadsheetRows, SpreadsheetGuardError } from '@/lib/spreadsheet-guard'
@@ -12,6 +12,7 @@ import {
   faPen, faPlus, faScrewdriverWrench, faFileInvoiceDollar,
   faCashRegister, faInbox, faFileArrowDown, faCheck, faTriangleExclamation, faXmark,
 } from '@/components/icons'
+import { useUrlRecordId } from '@/hooks/useUrlRecordId'
 
 type FilterTab = 'all' | 'companies' | 'individuals' | 'customers' | 'vendors'
 type ViewTab   = 'info' | 'financial' | 'persons' | 'history' | 'chatter'
@@ -155,6 +156,14 @@ type ImportContactRow = {
 }
 
 export default function Contacts() {
+  return (
+    <Suspense fallback={<ModuleSkeleton />}>
+      <ContactsInner />
+    </Suspense>
+  )
+}
+
+function ContactsInner() {
   const [mounted, setMounted] = useState(() => typeof window !== 'undefined')
   useEffect(() => { setMounted(true) }, [])
 
@@ -168,7 +177,9 @@ export default function Contacts() {
   const [importRows, setImportRows] = useState<ImportContactRow[]>([])
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [editId, setEditId] = useState<string | null>(null)
-  const [viewContact, setViewContact] = useState<Contact | null>(null)
+  const [viewContactId, setViewContactId] = useUrlRecordId()
+  const viewContact = viewContactId ? contacts.find(c => c.id === viewContactId) ?? null : null
+  const setViewContact = (c: Contact | null) => setViewContactId(c?.id ?? null)
   const [form, setForm] = useState<any>(blankCompany())
   const [viewTab, setViewTab] = useState<ViewTab>('info')
   const [saving, setSaving] = useState(false)

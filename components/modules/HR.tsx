@@ -40,6 +40,7 @@ import {
 
 import { useApp, fmtKes, fmtDate } from '@/lib/store'
 import { useHrStore } from '@/hooks/useHrStore'
+import { useUrlRecordId } from '@/hooks/useUrlRecordId'
 import { downloadPdf, printPdf } from '@/lib/pdf'
 import { calculatePayroll } from '@/lib/payroll'
 import HRLeaveTab from './hr/HRLeaveTab'
@@ -249,7 +250,7 @@ function HRContent() {
   const [showEmployeeModal, setShowEmployeeModal] = useState(false)
   const [showLeaveModal, setShowLeaveModal] = useState(false)
   const [empSearch, setEmpSearch] = useState('')
-  const [viewEmpId, setViewEmpId] = useState<string | null>(null)
+  const [viewEmpId, setViewEmpId] = useUrlRecordId({ param: 'emp' })
   const [editEmpId, setEditEmpId] = useState<string | null>(null)
 
   const DEPARTMENTS = [

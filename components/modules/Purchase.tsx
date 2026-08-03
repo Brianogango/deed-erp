@@ -1,5 +1,5 @@
 'use client'
-import { useState, useRef, useCallback, useEffect, useMemo } from 'react'
+import { useState, useRef, useCallback, useEffect, useMemo, Suspense } from 'react'
 import { useFinanceStore, Receipt, LOCATIONS, LocationId, CATEGORY_CONFIG, CategoryId, fmtKes, fmtDate, POLine, Account, resolveProductAccounts } from '@/lib/store'
 import { Badge, Modal, Field, Input, Select, Confirm, StatCard, PanelHeader, StatusStepper, SearchPicker, Divider, TabContent, ModuleSkeleton, TabBar, ModuleHeader } from '@/components/ui'
 import { PrimaryActionButton, SecondaryActionMenu, StatusBadge } from '@/components/erp'
@@ -20,10 +20,14 @@ import POFormView from './purchase/POFormView'
 import { readGuardedImageAsDataUrl, validateImageUpload } from '@/lib/client-image-guard'
 import { ScanInputRow } from '@/components/BarcodeScanner'
 import { parseScanPayload } from '@/lib/barcode-scan'
+import { useUrlQueryState, useUrlRecordId } from '@/hooks/useUrlRecordId'
 
 type MainView = 'orders' | 'receipts' | 'returns' | 'bills' | 'tradein'
 type SubView  = 'list' | 'form' | 'receive'
 type RfqDraftLine = { id: string; productId: string; productName: string; description: string; qty: string; unitPrice: string; taxRate: string }
+
+const PURCHASE_TABS: MainView[] = ['orders', 'receipts', 'returns', 'bills', 'tradein']
+const PURCHASE_RECORD_QUERY = { tab: 'orders' }
 
 const ACCESSORIES = ['Charger', 'Bag/Case', 'Mouse', 'Box', 'Cable', 'Manual']
 
@@ -95,6 +99,14 @@ type ImportRow = {
 }
 
 export default function Purchase() {
+  return (
+    <Suspense fallback={<ModuleSkeleton />}>
+      <PurchaseContent />
+    </Suspense>
+  )
+}
+
+function PurchaseContent() {
   const {
     purchaseOrders, contacts, products, receipts, invoices, purchaseReturns, serials, users, bankAccounts,
     currentUserId, accounts,
@@ -109,9 +121,22 @@ export default function Purchase() {
   const [mounted, setMounted] = useState(() => typeof window !== 'undefined')
   useEffect(() => setMounted(true), [])
 
-  const [mainView, setMainView] = useState<MainView>('orders')
-  const [subView,  setSubView]  = useState<SubView>('list')
-  const [activeId, setActiveId] = useState<string | null>(null)
+  const [queryMainView, setQueryMainView] = useUrlQueryState('tab', 'orders')
+  const mainView = PURCHASE_TABS.includes(queryMainView as MainView) ? queryMainView as MainView : 'orders'
+  const setMainView = useCallback((nextView: MainView) => {
+    setQueryMainView(nextView)
+  }, [setQueryMainView])
+  const [subView,  setLocalSubView]  = useState<SubView>('list')
+  const [urlActiveId, setUrlActiveId] = useUrlRecordId({ whenOpen: PURCHASE_RECORD_QUERY })
+  const [activeId, setLocalActiveId] = useState<string | null>(null)
+  const setActiveId = useCallback((id: string | null) => {
+    setLocalActiveId(id)
+    setUrlActiveId(id)
+  }, [setUrlActiveId])
+  const setSubView = useCallback((nextView: SubView) => {
+    setLocalSubView(nextView)
+    if (nextView === 'list') setActiveId(null)
+  }, [setActiveId])
   const [filter,   setFilter]   = useState('all')
 
   // ── New RFQ ────────────────────────────────────────────────────────────────
@@ -202,6 +227,21 @@ export default function Purchase() {
   const activePO      = useMemo(() => purchaseOrders.find(p => p.id === activeId) ?? null, [purchaseOrders, activeId])
   const activeReceipt = useMemo(() => receipts.find(r => r.id === activeReceiptId) ?? null, [receipts, activeReceiptId])
   const linkedBill    = useMemo(() => activePO?.billId ? (invoices.find(i => i.id === activePO.billId) ?? null) : null, [activePO, invoices])
+
+  useEffect(() => {
+    if (!urlActiveId) {
+      if (activeId) {
+        setLocalActiveId(null)
+        if (subView === 'form') setLocalSubView('list')
+      }
+      return
+    }
+
+    if (purchaseOrders.some(po => po.id === urlActiveId)) {
+      if (activeId !== urlActiveId) setActiveId(urlActiveId)
+      if (subView !== 'form') setLocalSubView('form')
+    }
+  }, [urlActiveId, purchaseOrders, activeId, subView, setActiveId])
 
   const filteredPOs = useMemo(() => purchaseOrders.filter(po => {
     if (filter === 'rfq') return po.status === 'draft' || po.status === 'sent'
