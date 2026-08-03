@@ -783,6 +783,13 @@ function AccountingContent() {
     setApplyVat(false)
     setChangingPartner(false)
     setReceiptFile(null)
+    // Drop deep-link so refresh does not reopen a discarded editor.
+    if (searchParams.get('edit')) {
+      const params = new URLSearchParams(searchParams.toString())
+      params.delete('edit')
+      const qs = params.toString()
+      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false })
+    }
   }
 
   const handleEditInvoice = (inv: Invoice) => {
@@ -810,7 +817,8 @@ function AccountingContent() {
     setShowNewForm(true)
   }
 
-  // Deep link from /finance/invoices/[id] — open the edit form for the requested invoice.
+  // Deep link: /finance?edit=<id> opens the invoice/bill editor and keeps
+  // ?edit= in the URL so refresh restores the same form.
   const handledEditRef = useRef<string | null>(null)
   useEffect(() => {
     const editId = searchParams.get('edit')
@@ -818,9 +826,9 @@ function AccountingContent() {
       handledEditRef.current = null
       return
     }
-    if (handledEditRef.current === editId) return
+    if (handledEditRef.current === editId && showNewForm && editingInvId === editId) return
     const inv = allInvoices.find(i => i.id === editId)
-    if (!inv) return // wait until invoices hydrate — do not strip ?edit yet
+    if (!inv) return // wait until invoices hydrate — do not strip ?edit
 
     handledEditRef.current = editId
     handleEditInvoice(inv)
@@ -830,10 +838,10 @@ function AccountingContent() {
 
     const params = new URLSearchParams(searchParams.toString())
     params.set('tab', nextTab)
-    params.delete('edit')
+    params.set('edit', editId)
     params.delete('report')
     router.replace(`${pathname}?${params.toString()}`, { scroll: false })
-  }, [searchParams, allInvoices, pathname, router])
+  }, [searchParams, allInvoices, pathname, router]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleBillFile = async (file: File | null) => {
     if (!file) return

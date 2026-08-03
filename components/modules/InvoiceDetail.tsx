@@ -80,7 +80,20 @@ export default function InvoiceDetail() {
   const [showOrc, setShowOrc] = useState(false)
   const [sendingInvoice, setSendingInvoice] = useState(false)
   const [hydratingLines, setHydratingLines] = useState(false)
+  const [lookupReady, setLookupReady] = useState(false)
   const hydrateAttempted = useRef<string | null>(null)
+
+  // Wait briefly for store hydration before declaring the invoice missing —
+  // a hard refresh can render before deed_invoices is loaded.
+  useEffect(() => {
+    if (invoice) {
+      setLookupReady(true)
+      return
+    }
+    setLookupReady(false)
+    const t = window.setTimeout(() => setLookupReady(true), 2000)
+    return () => window.clearTimeout(t)
+  }, [invoice, id])
 
   // Heal empty-line drafts from Prisma (e.g. SO→invoice shell overwrite).
   useEffect(() => {
@@ -149,6 +162,8 @@ export default function InvoiceDetail() {
   }, [invoice?.id, invoice?.lines?.length, updateInvoice])
 
   if (!mounted) return <ModuleSkeleton />
+
+  if (!invoice && !lookupReady) return <ModuleSkeleton />
 
   if (!invoice) {
     return (

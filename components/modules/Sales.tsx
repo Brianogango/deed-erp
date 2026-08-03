@@ -1,6 +1,6 @@
 'use client'
-import { useState, useEffect, useMemo, useRef, Suspense } from 'react'
-import { useSearchParams, useRouter } from 'next/navigation'
+import { useState, useEffect, useMemo, useRef, Suspense, useCallback } from 'react'
+import { useSearchParams, useRouter, usePathname } from 'next/navigation'
 import {
   faClipboardCheck,
   faCircleCheck,
@@ -278,6 +278,7 @@ function SalesContent() {
   const mounted = useMounted()
   const searchParams = useSearchParams()
   const router = useRouter()
+  const pathname = usePathname()
   const {
     saleOrders, contacts, products, serials, invoices, deliveries, returnOrders,
     createSaleOrder, updateSaleOrder, confirmSO, markQuotationSent, setSaleOrderLock,
@@ -312,7 +313,7 @@ function SalesContent() {
 
   // ── View state ──────────────────────────────────────────────────────────
   const [view, setView] = useState<SalesView>('list')
-  const [activeId, setActiveId] = useState<string | null>(null)
+  const [activeId, setActiveId] = useState<string | null>(() => searchParams.get('id'))
   // Odoo-style menus: Quotations (unconfirmed) vs Orders (confirmed sales).
   const [listTab, setListTab] = useState<'quotations' | 'orders'>('quotations')
   const [filter, setFilter] = useState<SalesListFilter>('all')
@@ -601,15 +602,63 @@ function SalesContent() {
   const canSeeFinanceRecords = hasModuleAccess(currentUser, 'accounting')
   const canSeeReturns = hasModuleAccess(currentUser, 'after_sales')
 
+  // Persist the open quotation/order in the URL so refresh keeps the same page.
+  const syncOrderUrl = useCallback((id: string | null, nextView: SalesView = 'form') => {
+    const params = new URLSearchParams(searchParams.toString())
+    params.delete('tab')
+    params.delete('crmTab')
+    if (id) {
+      params.set('id', id)
+      if (nextView === 'delivery') params.set('view', 'delivery')
+      else params.delete('view')
+    } else {
+      params.delete('id')
+      params.delete('view')
+    }
+    const qs = params.toString()
+    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false })
+  }, [searchParams, router, pathname])
+
+  useEffect(() => {
+    const urlId = searchParams.get('id')
+    if (!urlId) {
+      // Browser back/forward cleared ?id= — leave the list, not a stale form.
+      if (view === 'form' || view === 'delivery') {
+        setActiveId(null)
+        setView('list')
+        setEditingLineId(null)
+      }
+      return
+    }
+    const order = saleOrders.find(s => s.id === urlId)
+    if (!order) return // wait until store hydrates
+    setActiveId(urlId)
+    const urlView = searchParams.get('view')
+    setView(urlView === 'delivery' ? 'delivery' : 'form')
+    if (isQuotationStage(order.status)) setListTab('quotations')
+    else if (order.status === 'sale') setListTab('orders')
+  }, [searchParams, saleOrders]) // eslint-disable-line react-hooks/exhaustive-deps -- intentionally omit view
+
   // ── Navigation ──────────────────────────────────────────────────────────
-  const openOrder = (id: string) => { setActiveId(id); setView('form'); setEditingLineId(null) }
-  const backToList = () => { setView('list'); setActiveId(null); setEditingLineId(null) }
+  const openOrder = (id: string) => {
+    setActiveId(id)
+    setView('form')
+    setEditingLineId(null)
+    syncOrderUrl(id, 'form')
+  }
+  const backToList = () => {
+    setView('list')
+    setActiveId(null)
+    setEditingLineId(null)
+    syncOrderUrl(null)
+  }
   const openNewForm = () => {
     setNewCustomer(null); setNewDeliveryDate(''); setNewPaymentTerms('30')
     setNewNotes(''); setNewCustomerRef(''); setNewSalesTeam(''); setNewPricelist('')
     setNewInvoiceAddress(''); setNewDeliveryAddress('')
     setNewPaymentDetails({ ...DEFAULT_DOCUMENT_PAYMENT_DETAILS })
     setNewDraftLines([]); setView('new')
+    syncOrderUrl(null)
     startUxTask('sales_quote_create', { module: 'sales' })
   }
   const openDeliveryView = (deliveryId?: string) => {
@@ -657,6 +706,7 @@ function SalesContent() {
     setDnAddress(target?.deliveryAddress ?? '')
     setDnNotes(target?.notes ?? '')
     setView('delivery')
+    syncOrderUrl(activeOrder.id, 'delivery')
   }
 
   // ── Draft line helpers ──────────────────────────────────────────────────
@@ -1115,7 +1165,7 @@ function SalesContent() {
                   unassignSerialFromSOLine={unassignSerialFromSOLine}
                   updateDelivery={updateDelivery}
                   showToast={showToast}
-                  onBack={() => { setFocusDeliveryId(null); setView('form') }}
+                  onBack={() => { setFocusDeliveryId(null); setView('form'); if (activeOrder) syncOrderUrl(activeOrder.id, 'form') }}
                   dnRecipientName={dnRecipientName}
                   setDnRecipientName={setDnRecipientName}
                   dnRecipientPhone={dnRecipientPhone}
