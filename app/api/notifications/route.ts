@@ -13,7 +13,7 @@ export async function GET(request: NextRequest) {
   let notifications: any[] = Array.isArray(state['deed_notifications']) ? state['deed_notifications'] as any[] : []
 
   if (userId) {
-    notifications = notifications.filter(n => n.userId === userId || n.global === true)
+    notifications = notifications.filter(n => n.userId === userId)
   }
 
   return NextResponse.json({ notifications })

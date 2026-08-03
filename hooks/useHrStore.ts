@@ -62,7 +62,7 @@ export interface HrCtx {
   users: User[]
   showToast: (msg: string, type?: 'success' | 'error' | 'info') => void
   addAuditLog: (action: string, documentRef: string, details: string) => void
-  pushNotif: (n: Omit<AppNotification, 'id' | 'createdAt' | 'read'>) => void
+  pushNotif: (n: Omit<AppNotification, 'id' | 'createdAt' | 'read' | 'readAt'> & { excludeUserId?: string | null }) => void
   workflowApprovals: WorkflowApproval[]
   setWorkflowApprovals: (updater: (prev: WorkflowApproval[]) => WorkflowApproval[]) => void
 }
@@ -305,12 +305,13 @@ export const useHrStore = create<HrState>((set, get) => ({
     if (!isHRBooking) {
       const approval: WorkflowApproval = { id: uid(), process: 'leave', ref: leave.ref, targetId: leave.id, targetName: `${leave.employeeName} — ${leave.leaveType.replace(/_/g, ' ')}`, stepName: 'HR Approval', approverRole: 'director', status: 'pending', requestedBy: leave.employeeName, requestedDate: now() }
       ctx.setWorkflowApprovals(prev => [approval, ...prev])
-      // In-app ping for directors + admin officers (email is sent server-side).
-      ctx.users.filter(u => ['director', 'admin_officer'].includes(u.role)).forEach(u => ctx.pushNotif({
+      // In-app: directors only (admin officers do not receive leave-applied alerts).
+      ctx.users.filter(u => u.role === 'director').forEach(u => ctx.pushNotif({
         userId: u.id, type: 'leave',
         title: `Leave request from ${leave.employeeName}`,
         body: `${leave.days} day(s) ${leave.leaveType.replace(/_/g, ' ')} — ${leave.startDate} to ${leave.endDate}. Reason: ${leave.reason}`,
         module: 'hr', path: '?tab=leave', icon: '🌴',
+        entityKey: `leave:${leave.id}:applied`,
       }))
     } else {
       const emp = get().employees.find(e => e.id === leave.employeeId)
@@ -319,6 +320,8 @@ export const useHrStore = create<HrState>((set, get) => ({
         title: 'Leave booked for you',
         body: `${user.name} has booked ${leave.days} day(s) ${leave.leaveType.replace(/_/g, ' ')} for you — ${leave.startDate} to ${leave.endDate}.`,
         module: 'hr', path: '?tab=self_service', icon: '🌴',
+        entityKey: `leave:${leave.id}:booked`,
+        excludeUserId: user.id,
       })
     }
     ctx.addAuditLog('create_leave', leave.ref, isHRBooking ? `Leave booked for ${leave.employeeName} by ${user.name} (auto-approved)` : `Leave request created for ${leave.employeeName}`)
@@ -421,6 +424,8 @@ export const useHrStore = create<HrState>((set, get) => ({
         title: approved ? 'Leave request approved ✓' : 'Leave request rejected',
         body: `Your ${leave.leaveType.replace(/_/g, ' ')} request (${leave.days} day${leave.days !== 1 ? 's' : ''}, ${leave.startDate} – ${leave.endDate}) has been ${approved ? 'approved' : 'rejected'} by ${user!.name}.`,
         module: 'hr', path: '?tab=self_service', icon: approved ? '✅' : '❌',
+        entityKey: `leave:${id}:decided`,
+        excludeUserId: user!.id,
       })
     }
     ctx.addAuditLog('decide_leave', leave.ref, `Leave request ${approved ? 'approved' : 'rejected'} by ${user!.name}${note ? ': ' + note : ''}`)

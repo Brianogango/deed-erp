@@ -25,6 +25,15 @@ import {
   expenseChainIsComplete,
 } from '@/lib/expense-approval-chain'
 import type { ApprovalRequest, ApprovalType, StockReservation } from '@/lib/sales-flow-types'
+import {
+  buildNotifyRows,
+  clearReadNotificationsForUser,
+  markAllNotificationsReadForUser,
+  markNotificationReadInList,
+  mergeNotificationsSticky,
+  userIdsWithRoles,
+  type NotifyUsersInput,
+} from '@/lib/in-app-notifications'
 import { LEAVE_ENTITLEMENTS, NOTICE_EXEMPT_TYPES, CALENDAR_DAY_TYPES, calcWorkingDays, calcCalendarDays, noticeDaysGiven, requiredNotice, decemberClosureDays } from '@/lib/leave-utils'
 import type { StoreLeaveType } from '@/lib/leave-utils'
 import { normalizeQuotesForClient } from '@/lib/quote-normalization'
@@ -412,20 +421,11 @@ export interface AuditLog {
 }
 
 // ── In-app Notifications ──────────────────────────────────────────────────────
-export type NotifType = 'assignment' | 'leave' | 'asset' | 'expense' | 'system' | 'repair'
-
-export interface AppNotification {
-  id: string
-  userId: string          // recipient user id
-  type: NotifType
-  title: string
-  body: string
-  module?: ModuleId       // navigate here on click
-  path?: string           // deep link path/query to navigate to
-  read: boolean
-  createdAt: string
-  icon: string            // emoji
-}
+export type {
+  NotifType,
+  AppNotification,
+  NotifyUsersInput,
+} from '@/lib/in-app-notifications'
 
 // ── Cashbook / Bank Accounts ──────────────────────────────────────────────────
 export interface BankAccount {
@@ -2762,6 +2762,7 @@ export interface AppState {
   profileImages: Record<string, string>      // userId → base64 data URL
   markNotificationRead: (id: string) => void
   markAllNotificationsRead: () => void
+  clearReadNotifications: () => void
   setProfileImage: (userId: string, dataUrl: string) => void
 
   // Rider deliveries
@@ -3356,6 +3357,7 @@ export type ShellStoreState = Pick<AppState,
   | 'logout'
   | 'markAllNotificationsRead'
   | 'markNotificationRead'
+  | 'clearReadNotifications'
   | 'setModule'
   | 'setProfileImage'
   | 'showToast'
@@ -4196,7 +4198,11 @@ function stampCache(key: string) {
  * Array seeds reject non-array stored JSON (common corruption that used to
  * crash the authenticated shell with a blank white page after login).
  */
-function useLS<T>(key: string, seed: T): [T, React.Dispatch<React.SetStateAction<T>>] {
+function useLS<T>(
+  key: string,
+  seed: T,
+  opts?: { mergeRemote?: (local: T, remote: T) => T },
+): [T, React.Dispatch<React.SetStateAction<T>>] {
   const [state, setState] = useState<T>(() => {
     if (typeof window === 'undefined') return seed
     try {
@@ -4213,6 +4219,8 @@ function useLS<T>(key: string, seed: T): [T, React.Dispatch<React.SetStateAction
 
   const isFirstRender = useRef(true)
   const skipNextSync = useRef(false)
+  const mergeRemoteRef = useRef(opts?.mergeRemote)
+  mergeRemoteRef.current = opts?.mergeRemote
 
   useEffect(() => {
     if (isFirstRender.current) {
@@ -4248,7 +4256,10 @@ function useLS<T>(key: string, seed: T): [T, React.Dispatch<React.SetStateAction
         return
       }
       skipNextSync.current = true
-      setState(value)
+      setState(prev => {
+        const merge = mergeRemoteRef.current
+        return merge ? merge(prev, value) : value
+      })
     }
     const handleStorage = (e: StorageEvent) => {
       if (e.key === key && e.newValue !== null) handleUpdate(e.newValue)
@@ -4840,7 +4851,11 @@ export function StoreProvider({
   // Approvals & Audit
   const [approvalRequests, setApprovalRequests] = useLS<ApprovalRequest[]>('deed_approvalRequests', [])
   const [auditLogs, setAuditLogs]               = useLS<AuditLog[]>('deed_auditLogs', []) // To be migrated
-  const [notifications, setNotifications]       = useLS<AppNotification[]>('deed_notifications', [])
+  const [notifications, setNotifications] = useLS<AppNotification[]>(
+    'deed_notifications',
+    [],
+    { mergeRemote: mergeNotificationsSticky },
+  )
   const [profileImages, setProfileImages]       = useLS<Record<string, string>>('deed_profileImages', {})
 
   // Delivery / Riders
@@ -4921,11 +4936,24 @@ export function StoreProvider({
     setToast({ msg, type }); setTimeout(() => setToast(null), 3500)
   }, [])
 
-  // ── Internal notification pusher ───────────────────────────────────────────
-  const pushNotif = useCallback((n: Omit<AppNotification, 'id' | 'createdAt' | 'read'>) => {
-    const notif: AppNotification = { ...n, id: uid(), createdAt: new Date().toISOString(), read: false }
-    setNotifications(prev => [notif, ...prev])
+  // ── Internal notification pusher (single-recipient compat + multi fan-out) ──
+  const notifyUsers = useCallback((input: NotifyUsersInput) => {
+    setNotifications(prev => buildNotifyRows(prev, input, uid).next)
   }, [])
+
+  const pushNotif = useCallback((n: Omit<AppNotification, 'id' | 'createdAt' | 'read' | 'readAt'> & { excludeUserId?: string | null }) => {
+    notifyUsers({
+      recipients: [n.userId],
+      type: n.type,
+      title: n.title,
+      body: n.body,
+      module: n.module,
+      path: n.path,
+      icon: n.icon,
+      entityKey: n.entityKey,
+      excludeUserId: n.excludeUserId,
+    })
+  }, [notifyUsers])
 
   const syncRepairToPortal = useCallback((r: RepairOrder, historyNote?: string) => {
     const portalRepair = {
@@ -5323,14 +5351,15 @@ export function StoreProvider({
             }
           }))
           if (repair.assignedTechnicianId) {
-            pushNotif({
-              userId: repair.assignedTechnicianId,
+            notifyUsers({
+              recipients: [repair.assignedTechnicianId],
               type: 'repair',
               title: approved ? '✅ Quote approved by customer' : '❌ Quote declined by customer',
               body: `${repair.ref} — ${repair.productName}`,
               module: 'repair',
               path: `?id=${repair.id}`,
               icon: approved ? '✅' : '❌',
+              entityKey: `repair:${repair.id}:portal_quote`,
             })
           }
           setAuditLogs(prev => [{
@@ -5347,7 +5376,7 @@ export function StoreProvider({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Poll server for new notifications every 15 seconds to sync across computers
+  // Poll server for new notifications — sticky-merge so read never flips unread
   useEffect(() => {
     if (!currentUserId) return
     const checkNotifications = async () => {
@@ -5356,14 +5385,7 @@ export function StoreProvider({
         if (!res.ok) return
         const data = await res.json()
         if (data?.notifications && Array.isArray(data.notifications)) {
-          setNotifications(prev => {
-            const existingIds = new Set(prev.map(n => n.id))
-            const newNotifs = data.notifications.filter((n: AppNotification) => !existingIds.has(n.id))
-            if (newNotifs.length > 0) {
-              return [...newNotifs, ...prev]
-            }
-            return prev
-          })
+          setNotifications(prev => mergeNotificationsSticky(prev, data.notifications as AppNotification[]))
         }
       } catch { /* silent */ }
     }
@@ -5504,6 +5526,7 @@ export function StoreProvider({
     logout: (...args: Parameters<AppState['logout']>) => storeCtxRef.current!.logout(...args),
     markAllNotificationsRead: (...args: Parameters<AppState['markAllNotificationsRead']>) => storeCtxRef.current!.markAllNotificationsRead(...args),
     markNotificationRead: (...args: Parameters<AppState['markNotificationRead']>) => storeCtxRef.current!.markNotificationRead(...args),
+    clearReadNotifications: (...args: Parameters<AppState['clearReadNotifications']>) => storeCtxRef.current!.clearReadNotifications(...args),
     setModule: (...args: Parameters<AppState['setModule']>) => storeCtxRef.current!.setModule(...args),
     setProfileImage: (...args: Parameters<AppState['setProfileImage']>) => storeCtxRef.current!.setProfileImage(...args),
     showToast: (...args: Parameters<AppState['showToast']>) => storeCtxRef.current!.showToast(...args),
@@ -6003,10 +6026,17 @@ const storeCtx: AppState = {
 
     notifications, profileImages,
     markNotificationRead: (id) => {
-      setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n))
+      setNotifications(prev => markNotificationReadInList(prev, id))
     },
     markAllNotificationsRead: () => {
-      setNotifications(prev => prev.map(n => ({ ...n, read: true })))
+      const uid = currentUserId
+      if (!uid) return
+      setNotifications(prev => markAllNotificationsReadForUser(prev, uid))
+    },
+    clearReadNotifications: () => {
+      const uid = currentUserId
+      if (!uid) return
+      setNotifications(prev => clearReadNotificationsForUser(prev, uid))
     },
     setProfileImage: (userId, dataUrl) => {
       compressProfileImage(dataUrl).then(compressed => {
@@ -6231,14 +6261,17 @@ const storeCtx: AppState = {
         }).catch(() => { /* non-blocking — receipt upload failure is silent */ })
       }
       setExpenses(prev => [expense, ...prev])
-      // Notify finance officers and admin officers that a new expense needs review
-      users.filter(u => ['director', 'finance_officer'].includes(u.role)).forEach(u => pushNotif({
-        userId: u.id, type: 'expense',
+      // Notify finance / director approvers (not the submitter)
+      notifyUsers({
+        recipients: userIdsWithRoles(users, ['director', 'finance_officer'], user.id),
+        type: 'expense',
         title: `Expense claim from ${expense.submittedByName}`,
         body: `${expense.ref} — ${expense.description} · KES ${expense.amount.toLocaleString()}`,
         module: 'expenses',
         icon: '💰',
-      }))
+        entityKey: `expense:${expense.id}:submitted`,
+        excludeUserId: user.id,
+      })
       showToast(`Expense ${expense.ref} submitted`, 'success')
       return expense
     },
@@ -6284,8 +6317,8 @@ const storeCtx: AppState = {
         }
         if (expense?.submittedByUserId) {
           const pending = nextChain.find(s => s.status === 'pending')
-          pushNotif({
-            userId: expense.submittedByUserId,
+          notifyUsers({
+            recipients: [expense.submittedByUserId],
             type: 'expense',
             title: !approved ? 'Expense claim rejected' : fullyApproved ? 'Expense claim approved ✓' : 'Expense claim — next approval',
             body: !approved
@@ -6296,6 +6329,8 @@ const storeCtx: AppState = {
             module: 'expenses',
             path: `?id=${expense.id}`,
             icon: !approved ? '❌' : fullyApproved ? '💰' : '⏳',
+            entityKey: `expense:${expense.id}:review`,
+            excludeUserId: user.id,
           })
         }
         if (!approved) {
@@ -6316,14 +6351,16 @@ const storeCtx: AppState = {
         addAuditLog('post_expense', expense.ref, `Expense ${expense.ref} posted to journal ${journal.ref}`)
       }
       if (expense?.submittedByUserId) {
-        pushNotif({
-          userId: expense.submittedByUserId,
+        notifyUsers({
+          recipients: [expense.submittedByUserId],
           type: 'expense',
           title: approved ? 'Expense claim approved ✓' : 'Expense claim rejected',
           body: `Your expense claim ${expense.ref} (${expense.description}) has been ${approved ? 'approved' : 'rejected'} by ${user.name}.${notes ? ' Note: ' + notes : ''}`,
           module: 'expenses',
           path: `?id=${expense.id}`,
           icon: approved ? '💰' : '❌',
+          entityKey: `expense:${expense.id}:review`,
+          excludeUserId: user.id,
         })
       }
       showToast(approved ? 'Expense approved and posted' : 'Expense rejected', approved ? 'success' : 'error')
@@ -6434,11 +6471,18 @@ const storeCtx: AppState = {
       }
       showToast(`Job ${job.ref} created`, 'success')
 
-      // Notify directors and technical leads — internal only, not visible to client
+      // Notify technical leads (+ directors) — exclude actor; internal only
       const notifBody = `${job.ref}: ${job.deviceDescription} → ${job.vendorName} for ${OUTSOURCE_SERVICE_TYPES.find(t => t.value === job.serviceType)?.label ?? job.serviceType}. Sent by ${user.name}.`
-      users.filter(u => ['director', 'technical_lead'].includes(u.role) && u.id !== user.id).forEach(u =>
-        pushNotif({ userId: u.id, type: 'info', title: `Repair Outsourced${job.repairOrderId ? '' : ''}`, body: notifBody, module: 'outsource', icon: '🔧' })
-      )
+      notifyUsers({
+        recipients: userIdsWithRoles(users, ['technical_lead', 'director'], user.id),
+        type: 'repair',
+        title: 'Repair Outsourced',
+        body: notifBody,
+        module: 'outsource',
+        icon: '🔧',
+        entityKey: `outsource:${job.id}:created`,
+        excludeUserId: user.id,
+      })
 
       return job
     },
@@ -6520,23 +6564,22 @@ const storeCtx: AppState = {
           if (returnedRepair) syncRepairToPortal(returnedRepair, `Outsource job ${job.ref} returned fixed — repair moved to QC`)
           addAuditLog('advance_repair', job.repairOrderId, `Outsource job ${job.ref} returned resolved; repair resumed at ${resumeStatus}`)
 
-          // Notify assigned tech + TL/director
-          if (repair?.assignedTechnicianId) {
-            pushNotif({
-              userId: repair.assignedTechnicianId, type: 'repair',
-              title: `Outsource returned — repair resumed`,
-              body: `${job.ref}: ${job.deviceDescription} came back fixed from ${job.vendorName}. Repair ${repair.ref} resumed at ${resumeStatus}.`,
-              module: 'repair', icon: '✅',
-            })
-          }
-          users.filter(u => ['director', 'technical_lead'].includes(u.role) && u.id !== repair?.assignedTechnicianId).forEach(u =>
-            pushNotif({
-              userId: u.id, type: 'repair',
-              title: `Outsource job ${job.ref} resolved`,
-              body: `${job.deviceDescription} returned fixed from ${job.vendorName}. ${repair ? `Repair ${repair.ref} resumed at ${resumeStatus}.` : ''}`,
-              module: 'outsource', icon: '✅',
-            })
-          )
+          // Notify assigned tech + TL/director (exclude actor)
+          notifyUsers({
+            recipients: [
+              repair?.assignedTechnicianId,
+              ...userIdsWithRoles(users, ['director', 'technical_lead']),
+            ],
+            type: 'repair',
+            title: repair?.assignedTechnicianId ? 'Outsource returned — repair resumed' : `Outsource job ${job.ref} resolved`,
+            body: repair?.assignedTechnicianId
+              ? `${job.ref}: ${job.deviceDescription} came back fixed from ${job.vendorName}. Repair ${repair.ref} resumed at ${resumeStatus}.`
+              : `${job.deviceDescription} returned fixed from ${job.vendorName}. ${repair ? `Repair ${repair.ref} resumed at ${resumeStatus}.` : ''}`,
+            module: repair?.assignedTechnicianId ? 'repair' : 'outsource',
+            icon: '✅',
+            entityKey: `outsource:${job.id}:returned_ok`,
+            excludeUserId: currentUserId,
+          })
         } else {
           // Unresolved — apply next-step to the linked repair
           const nextStep = p.repairNextStep ?? 'keep'
@@ -6565,26 +6608,25 @@ const storeCtx: AppState = {
               `Status set to ${newStatus} after outsource job ${job.ref} returned unresolved`)
           }
 
-          // Notify assigned tech + TL/director
+          // Notify assigned tech + TL/director (exclude actor)
           const nextLabel = p.repairNextStep === 'unrepairable' ? 'marked unrepairable'
             : p.repairNextStep === 'in_repair' ? 'moved back to in-repair'
             : 'status unchanged'
-          if (repair?.assignedTechnicianId) {
-            pushNotif({
-              userId: repair.assignedTechnicianId, type: 'repair',
-              title: `Outsource returned — not fixed`,
-              body: `${job.ref}: ${job.deviceDescription} came back unfixed from ${job.vendorName}. Repair ${repair?.ref ?? ''} ${nextLabel}.`,
-              module: 'repair', icon: '⚠️',
-            })
-          }
-          users.filter(u => ['director', 'technical_lead'].includes(u.role) && u.id !== repair?.assignedTechnicianId).forEach(u =>
-            pushNotif({
-              userId: u.id, type: 'repair',
-              title: `Outsource job ${job.ref} unresolved`,
-              body: `${job.deviceDescription} returned unfixed from ${job.vendorName}. ${repair ? `Repair ${repair.ref} ${nextLabel}.` : ''}`,
-              module: 'outsource', icon: '⚠️',
-            })
-          )
+          notifyUsers({
+            recipients: [
+              repair?.assignedTechnicianId,
+              ...userIdsWithRoles(users, ['director', 'technical_lead']),
+            ],
+            type: 'repair',
+            title: repair?.assignedTechnicianId ? 'Outsource returned — not fixed' : `Outsource job ${job.ref} unresolved`,
+            body: repair?.assignedTechnicianId
+              ? `${job.ref}: ${job.deviceDescription} came back unfixed from ${job.vendorName}. Repair ${repair?.ref ?? ''} ${nextLabel}.`
+              : `${job.deviceDescription} returned unfixed from ${job.vendorName}. ${repair ? `Repair ${repair.ref} ${nextLabel}.` : ''}`,
+            module: repair?.assignedTechnicianId ? 'repair' : 'outsource',
+            icon: '⚠️',
+            entityKey: `outsource:${job.id}:returned_bad`,
+            excludeUserId: currentUserId,
+          })
         }
       }
 
@@ -7308,14 +7350,16 @@ const storeCtx: AppState = {
       setProducts(prev => prev.map(item => item.id === productId ? { ...item, stockQty: Math.max(0, item.stockQty - qty) } : item))
       const empUserId2 = employee.userId
       if (empUserId2) {
-        pushNotif({
-          userId: empUserId2,
+        notifyUsers({
+          recipients: [empUserId2],
           type: 'asset',
           title: 'Asset assigned to you',
           body: `${product.name}${serial ? ` (S/N: ${serial.serial})` : ` ×${qty}`} has been issued to you. Please acknowledge receipt.`,
           module: 'hr',
           path: '?tab=self_service',
           icon: '💻',
+          entityKey: `asset:${assignment.id}:assigned`,
+          excludeUserId: currentUserId,
         })
       }
       addAuditLog('assign_asset', assignment.productName, `Assigned ${assignment.productName} to ${employee.fullName}`)
@@ -7898,14 +7942,16 @@ const storeCtx: AppState = {
         const updatedQuote = { ...existing, approvalStatus: 'pending', approvalRequestIds: [...(existing.approvalRequestIds ?? []), request.id], approvalRequiredReason: request.details.reason }
         setQuotes(prev => prev.map(q => q.id === id ? updatedQuote : q))
         sync(`/api/quotes/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updatedQuote) })
-        request.approvers[0]?.approverIds.forEach(approverId => pushNotif({
-          userId: approverId,
+        notifyUsers({
+          recipients: request.approvers[0]?.approverIds ?? [],
           type: 'system',
           title: `Quote approval needed: ${existing.ref ?? existing.quoteNumber}`,
           body: request.details.reason,
           module: 'sales',
           icon: '⚠️',
-        }))
+          entityKey: `quote:${id}:approval:${request.id}`,
+          excludeUserId: currentUserId,
+        })
         addAuditLog('quote_approval_requested', existing.ref ?? id, request.details.reason)
         showToast('Quote sent for approval before customer delivery', 'info')
         return
@@ -9238,14 +9284,16 @@ const storeCtx: AppState = {
           return updated
         }))
         newApprovalRequests.forEach(req => {
-          req.approvers[0]?.approverIds.forEach(approverId => pushNotif({
-            userId: approverId,
+          notifyUsers({
+            recipients: req.approvers[0]?.approverIds ?? [],
             type: 'system',
             title: `Approval needed: ${so.ref}`,
             body: req.details.reason,
             module: 'sales',
             icon: '⚠️',
-          }))
+            entityKey: `so:${id}:approval:${req.id}`,
+            excludeUserId: currentUserId,
+          })
         })
         addAuditLog('sales_approval_requested', so.ref, approvalRequiredReason)
         showToast(`${so.ref} sent for approval`, 'info')
@@ -10778,11 +10826,14 @@ const storeCtx: AppState = {
             ),
           } : r))
           if (linkedRepair.assignedTechnicianId) {
-            pushNotif({
-              userId: linkedRepair.assignedTechnicianId, type: 'repair',
+            notifyUsers({
+              recipients: [linkedRepair.assignedTechnicianId],
+              type: 'repair',
               title: `Parts arrived — ${linkedRepair.ref} ready to start`,
               body: `${linkedRepair.productName} · Parts received via ${receipt.ref}`,
               module: 'repair', path: `?id=${linkedRepair.id}`, icon: '📦',
+              entityKey: `repair:${linkedRepair.id}:parts_arrived`,
+              excludeUserId: currentUserId,
             })
           }
           syncRepairToPortal({ ...linkedRepair, status: 'approved' }, 'Parts arrived — repair resuming')
@@ -10951,14 +11002,16 @@ const storeCtx: AppState = {
       const job = refurbishmentJobs.find(j => j.id === jobId)
       setRefurbishmentJobs(p => p.map(j => j.id !== jobId ? j : { ...j, assignedTechnicianId: techId, assignedTechnicianName: techName, assignedDate: now(), status: 'assigned' }))
       if (job) {
-        pushNotif({
-          userId: techId,
+        notifyUsers({
+          recipients: [techId],
           type: 'assignment',
           title: 'Refurbishment job assigned',
           body: `${job.productName} (${job.serialNumber}) has been assigned to you for refurbishment.`,
           module: 'refurbishment',
           path: '?tab=refurb',
           icon: '🔧',
+          entityKey: `refurb:${jobId}:assigned`,
+          excludeUserId: currentUserId,
         })
       }
       showToast(`Job assigned to ${techName}`)
@@ -11005,15 +11058,17 @@ const storeCtx: AppState = {
             ...pt, status: 'requested', requestedDate: now(),
           })
         }))
-        users.filter(u => u.role === 'technical_lead').forEach(u => pushNotif({
-          userId: u.id,
+        notifyUsers({
+          recipients: userIdsWithRoles(users, ['technical_lead', 'inventory_officer'], currentUserId),
           type: 'repair',
           title: 'Part requested for refurb job',
           body: `${job.ref} — ${part.partName} × ${part.qty} (out of stock)`,
           module: 'refurbishment',
           path: '?tab=refurb',
           icon: '🔧',
-        }))
+          entityKey: `refurb:${jobId}:part:${partId}:oos`,
+          excludeUserId: currentUserId,
+        })
         showToast(`Part requested — lead tech alerted to avail or order: ${part.partName} × ${part.qty}`, 'info')
       }
     },
@@ -11042,11 +11097,26 @@ const storeCtx: AppState = {
 
     notifyTechPartAvailable: (jobId, partId) => {
       const user = currentUser(); if (!user) return
+      const job = refurbishmentJobs.find(j => j.id === jobId)
+      const part = job?.partsNeeded.find(pt => pt.id === partId)
       setRefurbishmentJobs(p => p.map(j => j.id !== jobId ? j : {
         ...j, partsNeeded: j.partsNeeded.map(pt => pt.id !== partId ? pt : {
           ...pt, status: 'received', notifiedTechDate: now(), allocatedByName: user.name,
         })
       }))
+      if (job?.assignedTechnicianId) {
+        notifyUsers({
+          recipients: [job.assignedTechnicianId],
+          type: 'assignment',
+          title: 'Part ready for your refurb job',
+          body: `${job.ref} — ${part?.partName ?? 'Part'} is available and ready to use.`,
+          module: 'refurbishment',
+          path: '?tab=refurb',
+          icon: '📦',
+          entityKey: `refurb:${jobId}:part:${partId}:ready`,
+          excludeUserId: user.id,
+        })
+      }
       showToast('Technician notified — part is ready for use')
     },
 
@@ -11261,15 +11331,17 @@ const storeCtx: AppState = {
         .catch(() => { /* local/app_state sync remains available offline */ })
       addAuditLog('create_repair', rep.ref, `Repair job created for ${customerName} - ${productName}`)
       // Notify all lead techs of the new job
-      users.filter(u => u.role === 'technical_lead').forEach(u => pushNotif({
-        userId: u.id,
+      notifyUsers({
+        recipients: userIdsWithRoles(users, ['technical_lead'], currentUserId),
         type: 'repair',
         title: 'New repair job booked',
         body: `${customerName} — ${productName}`,
         module: 'repair',
         path: `?id=${rep.id}`,
         icon: '🛠️',
-      }))
+        entityKey: `repair:${rep.id}:booked`,
+        excludeUserId: currentUserId,
+      })
       showToast(`${rep.ref} created`)
       return rep
     },
@@ -11349,15 +11421,17 @@ const storeCtx: AppState = {
       }
       setRepairs(p => p.map(r => r.id === repairId ? verified : r))
       syncRepairToPortal(verified, 'Device verified by staff — repair received')
-      users.filter(u => u.role === 'technical_lead').forEach(u => pushNotif({
-        userId: u.id,
+      notifyUsers({
+        recipients: userIdsWithRoles(users, ['technical_lead'], actor.id),
         type: 'repair',
         title: `Repair intake verified: ${repair.ref}`,
         body: `${repair.productName} for ${repair.customerName} is ready for assignment.`,
         module: 'repair',
         path: `?id=${repair.id}`,
         icon: '✅',
-      }))
+        entityKey: `repair:${repair.id}:verified`,
+        excludeUserId: actor.id,
+      })
       addAuditLog('verify_repair_intake', repairId, `${actor.name} verified intake${notes ? `: ${notes}` : ''}`)
       showToast(`${repair.ref} verified and moved to received`)
     },
@@ -11381,14 +11455,16 @@ const storeCtx: AppState = {
       } : r))
 
       if (repair) {
-        pushNotif({
-          userId: technicianId,
+        notifyUsers({
+          recipients: [technicianId],
           type: 'assignment',
           title: 'Repair job assigned to you',
           body: `${repair.productName} — ${repair.issueDescription?.slice(0, 80) ?? 'See repair details'}.`,
           module: 'repair',
           path: `?id=${repair.id}`,
           icon: '🛠️',
+          entityKey: `repair:${repair.id}:assigned`,
+          excludeUserId: actor.id,
         })
         syncRepairToPortal({ ...repair, assignedTechnicianId: technicianId, assignedTechnicianName: tech.name, assignedDate: now(), status: repair.status === 'received' ? 'assigned' : repair.status, technicianName: tech.name }, `Assigned to ${tech.name}`)
       }
@@ -11852,12 +11928,18 @@ const storeCtx: AppState = {
 
       if (isFullWarranty) {
         // Warranty-covered — no customer approval needed, notify staff instead
-        users.filter(u => ['director', 'finance_officer'].includes(u.role)).forEach(u => pushNotif({
-          userId: u.id, type: 'repair',
+        notifyUsers({
+          recipients: [
+            repair.assignedTechnicianId,
+            ...userIdsWithRoles(users, ['director', 'finance_officer']),
+          ],
+          type: 'repair',
           title: `Warranty repair approved: ${repair.ref}`,
           body: `${repair.productName} (${repair.customerName}) is fully covered under warranty. Quote auto-approved — KES 0 charge.`,
           module: 'repair', path: `?id=${repair.id}`, icon: '🛡️',
-        }))
+          entityKey: `repair:${repair.id}:warranty_approved`,
+          excludeUserId: currentUserId,
+        })
         syncRepairToPortal({ ...repair, quote, status: 'approved', total: 0 }, 'Repair is fully covered under warranty — no charge')
         addAuditLog('generate_quote', repairId, `Warranty quote auto-approved (full coverage): KES 0`)
         showToast('Quote auto-approved — repair is fully covered under warranty')
@@ -12005,14 +12087,17 @@ const storeCtx: AppState = {
           
           if (available < line.qty) {
             allPartsAvailable = false
-            users.filter(u => u.role === 'technical_lead').forEach(u => pushNotif({
-              userId: u.id, type: 'repair',
+            notifyUsers({
+              recipients: userIdsWithRoles(users, ['technical_lead', 'inventory_officer'], currentUserId),
+              type: 'repair',
               title: 'Part needed for repair',
               body: `${repair.ref} — ${product.name} × ${line.qty} (only ${available} in stock)`,
               module: 'repair',
               path: `?id=${repair.id}`,
               icon: '🔧',
-            }))
+              entityKey: `repair:${repair.id}:part_oos:${line.productId}`,
+              excludeUserId: currentUserId,
+            })
             showToast(`Insufficient stock for ${product.name}`, 'error')
             break
           }
@@ -12089,12 +12174,15 @@ const storeCtx: AppState = {
           sync('/api/purchase-orders', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(autoPo) })
           addAuditLog('create_po', autoPo.ref, `Draft PO auto-created for repair ${repair.ref} — assign vendor in Purchase`)
 
-          users.filter(u => u.role === 'technical_lead').forEach(u => pushNotif({
-            userId: u.id, type: 'repair',
+          notifyUsers({
+            recipients: userIdsWithRoles(users, ['technical_lead', 'inventory_officer'], currentUserId),
+            type: 'repair',
             title: `Parts needed: ${repair.ref}`,
             body: `Client approved quote. ${missingItems.length} part(s) need procurement before repair can start.`,
             module: 'repair', path: `?id=${repair.id}`, icon: '📦',
-          }))
+            entityKey: `repair:${repair.id}:parts_needed`,
+            excludeUserId: currentUserId,
+          })
           showToast('Quote approved — parts sourcing required before repair can start', 'info')
         }
 
@@ -12514,13 +12602,19 @@ const storeCtx: AppState = {
         }
         setRepairs(p => p.map(r => r.id === repairId ? passedRepair : r))
         syncRepairToPortal(passedRepair, 'Device ready for collection')
-        users.filter(u => ['director', 'finance_officer'].includes(u.role)).forEach(u => pushNotif({
-          userId: u.id, type: 'repair',
+        notifyUsers({
+          recipients: [
+            repair.assignedTechnicianId,
+            ...userIdsWithRoles(users, ['director', 'finance_officer']),
+          ],
+          type: 'repair',
           title: `Device ready: ${repair.ref}`,
           body: `${repair.productName} for ${repair.customerName} has passed QA and is ready for collection/delivery.`,
           module: 'repair', path: `?id=${repair.id}`,
           icon: '✅',
-        }))
+          entityKey: `repair:${repair.id}:qc_pass`,
+          excludeUserId: user.id,
+        })
         addAuditLog('complete_qc', repairId, 'QA passed — device ready for customer')
         showToast('QA passed — device ready for pickup')
       } else {
@@ -12543,14 +12637,16 @@ const storeCtx: AppState = {
         setRepairs(p => p.map(r => r.id === repairId ? failedRepair : r))
 
         if (repair.assignedTechnicianId) {
-          pushNotif({
-            userId: repair.assignedTechnicianId,
+          notifyUsers({
+            recipients: [repair.assignedTechnicianId],
             type: 'repair',
             title: '❌ Repair failed QA',
             body: `${repair.ref} requires rework. Reason: ${trimmedFailReason}${failedSummary ? `. Failed: ${failedSummary}` : ''}`,
             module: 'repair',
             path: `?id=${repair.id}`,
             icon: '❌',
+            entityKey: `repair:${repair.id}:qc_fail`,
+            excludeUserId: user.id,
           })
         }
         // Portal must mirror ERP — in_repair, not qc
@@ -12628,14 +12724,16 @@ const storeCtx: AppState = {
       } : r))
 
       if (repair.assignedTechnicianId) {
-        pushNotif({
-          userId: repair.assignedTechnicianId,
+        notifyUsers({
+          recipients: [repair.assignedTechnicianId],
           type: 'repair',
           title: '📦 Parts have arrived — ready to start',
           body: `${repair.ref} — ${repair.productName}`,
           module: 'repair',
           path: `?id=${repair.id}`,
           icon: '📦',
+          entityKey: `repair:${repair.id}:parts_arrived`,
+          excludeUserId: actor?.id,
         })
       }
       syncRepairToPortal({ ...repair, status: 'approved' }, 'Parts arrived — repair resuming')
@@ -12720,14 +12818,19 @@ const storeCtx: AppState = {
       }
 
       if (repair?.assignedTechnicianId) {
-        pushNotif({
-          userId: repair.assignedTechnicianId,
+        notifyUsers({
+          recipients: [
+            repair.assignedTechnicianId,
+            ...userIdsWithRoles(users, ['director', 'finance_officer']),
+          ],
           type: 'repair',
           title: `Device ready — ${repair.ref}`,
           body: `${repair.productName} for ${repair.customerName} has been marked ready for pickup/delivery.`,
           module: 'repair',
           path: `?id=${repair.id}`,
           icon: '✅',
+          entityKey: `repair:${repair.id}:ready`,
+          excludeUserId: currentUserId,
         })
       }
       if (repair) syncRepairToPortal({ ...repair, status: 'ready' }, 'Repair complete — device ready for collection')
@@ -13266,15 +13369,17 @@ const storeCtx: AppState = {
         .join(' · ')
 
       // Notify technical leads and inventory/procurement-facing staff in-app
-      users.filter(u => ['technical_lead', 'inventory_officer', 'director'].includes(u.role)).forEach(u => pushNotif({
-        userId: u.id,
+      notifyUsers({
+        recipients: userIdsWithRoles(users, ['technical_lead', 'inventory_officer', 'director'], user.id),
         type: 'repair',
         title: `${user.name} requested items for ${repair.ref}`,
         body: `${repair.productName} — ${summary}`,
         module: 'repair',
         path: `?id=${repair.id}`,
         icon: '📋',
-      }))
+        entityKey: `repair:${repair.id}:procurement`,
+        excludeUserId: user.id,
+      })
 
       addAuditLog('procurement_request', repairId, `${user.name} requested: ${summary}`)
       
