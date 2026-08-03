@@ -155,7 +155,7 @@ function AppBootSkeleton() {
             <div className="h-8 w-24 rounded-xl bg-muted" />
           </div>
         </div>
-        <main className="flex-1 p-3 md:p-4 lg:p-5 xl:p-6">
+        <main className="flex-1 p-2 md:p-2.5 lg:p-3">
           <div className="mod-page gap-4">
             <div className="mod-header">
               <div className="h-9 w-56 rounded-xl bg-muted" />
@@ -630,7 +630,7 @@ function AppContent({ children }: { children: React.ReactNode }) {
           ref={contentRef}
           className="
             flex-1 overflow-y-auto overflow-x-hidden
-            p-3 md:p-4 lg:p-5 xl:p-6
+            p-2 md:p-2.5 lg:p-3
             transition-all duration-200
           "
           style={{ overscrollBehavior: 'contain', WebkitOverflowScrolling: 'touch' } as React.CSSProperties}

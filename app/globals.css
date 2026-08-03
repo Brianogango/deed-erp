@@ -1173,7 +1173,7 @@
   }
 
   .mod-tabs {
-    @apply flex flex-wrap items-center gap-1 border-b px-2.5 py-1.5;
+    @apply flex flex-wrap items-center gap-1 border-b px-1 py-1.5;
     background: var(--bg-card);
     border-color: var(--border-lt);
   }
@@ -1745,14 +1745,14 @@
     background: #EEF2FF;
   }
 
-  /* Align with module header/tabs: same small horizontal inset (0.75rem),
-     not the larger --page-gutter which left empty gray side margins. */
+  /* Tight operational inset — keep body flush with header; only a hair of
+     horizontal pad so table edges don't kiss the shell. */
   .mod-body {
     @apply flex-1 min-w-0 overflow-y-auto;
     width: 100%;
     max-width: none;
     margin-inline: 0;
-    padding: 0.75rem;
+    padding: 0.5rem 0.25rem;
   }
 
   /* Compact module chrome
@@ -1764,7 +1764,7 @@
     align-items: center;
     justify-content: space-between;
     gap: 0.5rem;
-    padding: 0.45rem 0.75rem;
+    padding: 0.4rem 0.25rem;
   }
 
   .mod-page > .mod-header > .flex-1 {
@@ -1906,8 +1906,7 @@
     width: 100%;
     max-width: none;
     margin-inline: 0;
-    /* Match module header horizontal inset */
-    padding-inline: 0.75rem;
+    padding-inline: 0.25rem;
   }
 
   .erp-page-toolbar {
