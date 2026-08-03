@@ -1,5 +1,5 @@
 'use client'
-import React, { useMemo, useState, useRef, useEffect } from 'react'
+import React, { useMemo, useState, useRef, useEffect, Suspense } from 'react'
 import { loadXlsx } from '@/lib/xlsx-lazy'
 import {
   useInventoryStore, Product, LOCATIONS, LocationId, CATEGORY_CONFIG, ALL_CATEGORIES, CategoryId,
@@ -23,6 +23,7 @@ import { explainSerialWhereabouts, findSerialMatches } from '@/lib/inventory/ser
 import { ScanInputRow } from '@/components/BarcodeScanner'
 import { identityMatchesScan, parseScanPayload } from '@/lib/barcode-scan'
 import { getCategoryMarkupPct, suggestSalePriceFromCost } from '@/lib/sale-price-calculator'
+import { useUrlRecordId } from '@/hooks/useUrlRecordId'
 
 type MainTab = 'warehouse_view' | 'product_master' | 'movements' | 'product_catalog' | 'opening_stock' | 'stock_in' | 'stock_out' | 'transfers' | 'adjustments' | 'stock_take' | 'reports'
 type ReportTab = 'stock_on_hand' | 'opening_closing' | 'movements' | 'serial_tracking' | 'serial_lookup' | 'low_stock'
@@ -177,6 +178,14 @@ type ProductListRow = {
 }
 
 export default function Inventory() {
+  return (
+    <Suspense fallback={<ModuleSkeleton />}>
+      <InventoryContent />
+    </Suspense>
+  )
+}
+
+function InventoryContent() {
   const [mounted, setMounted] = useState(() => typeof window !== 'undefined')
   useEffect(() => { setMounted(true) }, [])
 
@@ -240,8 +249,9 @@ export default function Inventory() {
   const [serialReportSearch, setSerialReportSearch] = useState('')
 
   const [showForm, setShowForm] = useState(false)
-  const [editId, setEditId] = useState<string | null>(null)
+  const [editId, setEditId] = useUrlRecordId({ param: 'edit' })
   const [form, setForm] = useState<any>(blankProduct())
+  const restoredEditRef = useRef<string | null>(null)
 
   const [showOpening, setShowOpening] = useState(false)
   const [openingLines, setOpeningLines] = useState<OpeningStockLine[]>([])
@@ -717,9 +727,9 @@ export default function Inventory() {
     return ids
   }, [refurbishmentJobs])
 
-  const openNew = () => { setForm(blankProduct()); setEditId(null); setDupConfirm(false); setShowAcctMapping(false); setShowForm(true) }
+  const openNew = () => { setForm(blankProduct()); setEditId(null); setDupConfirm(false); setShowAcctMapping(false); setShowForm(true); restoredEditRef.current = null }
 
-  const openEdit = (product: Product) => {
+  const fillProductForm = (product: Product) => {
     const kind = inferProductKind(product)
     setForm({
       name: product.name, sku: product.sku, barcode: product.barcode ?? '', category: product.category,
@@ -743,11 +753,37 @@ export default function Inventory() {
       priceDifferenceAccountCode: product.priceDifferenceAccountCode ?? '',
       parentId: product.parentId ?? '',
     })
-    setEditId(product.id)
     setDupConfirm(false)
     setShowAcctMapping(!!(product.saleAccountCode || product.costAccountCode || product.inventoryAccountCode || product.cogsAccountCode))
-    setShowForm(true)
   }
+
+  const openEdit = (product: Product) => {
+    fillProductForm(product)
+    setEditId(product.id)
+    setShowForm(true)
+    restoredEditRef.current = product.id
+  }
+
+  const closeProductForm = () => {
+    setShowForm(false)
+    setDupConfirm(false)
+    setEditId(null)
+    restoredEditRef.current = null
+  }
+
+  // Restore product edit modal from ?edit= after refresh.
+  useEffect(() => {
+    if (!editId) {
+      restoredEditRef.current = null
+      return
+    }
+    if (restoredEditRef.current === editId && showForm) return
+    const product = products.find(p => p.id === editId)
+    if (!product) return
+    fillProductForm(product)
+    setShowForm(true)
+    restoredEditRef.current = editId
+  }, [editId, products, showForm])
 
   const openVariant = (parent: Product) => {
     const kind = inferProductKind(parent)
@@ -861,12 +897,16 @@ export default function Inventory() {
       updateProduct(editId, payload)
       setDupConfirm(false)
       setShowForm(false)
+      setEditId(null)
+      restoredEditRef.current = null
       return
     }
     const saved = await Promise.resolve(addProduct(payload))
     if (!saved) return
     setDupConfirm(false)
     setShowForm(false)
+    setEditId(null)
+    restoredEditRef.current = null
   }
 
   const downloadProductTemplate = async () => {
@@ -3002,7 +3042,7 @@ export default function Inventory() {
         const parentProduct = form.parentId ? products.find((p: Product) => p.id === form.parentId) : null
         const exactDup = !editId && !form.parentId && products.find((p: Product) => p.isActive && p.name.trim().toLowerCase() === form.name.trim().toLowerCase())
         return (
-        <Modal title={editId ? 'Edit Product Master' : form.parentId ? 'Create Product Variant' : 'Create New Product'} onClose={() => { setShowForm(false); setDupConfirm(false) }} width={640}>
+        <Modal title={editId ? 'Edit Product Master' : form.parentId ? 'Create Product Variant' : 'Create New Product'} onClose={closeProductForm} width={640}>
           <div className="flex flex-col gap-4">
 
             {!editId && !form.parentId && canEditStock && (
@@ -3376,7 +3416,7 @@ export default function Inventory() {
             </div>
 
             <div className="flex gap-3 justify-end mt-2">
-              <button className="btn-secondary px-6" onClick={() => { setShowForm(false); setDupConfirm(false) }}>Cancel</button>
+              <button className="btn-secondary px-6" onClick={closeProductForm}>Cancel</button>
               <button className="btn-primary px-8" onClick={() => { void saveProduct() }} disabled={dupConfirm && !!exactDup}>
                 {dupConfirm && exactDup ? 'Resolve duplicate above' : 'Save Product'}
               </button>

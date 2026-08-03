@@ -1,15 +1,16 @@
 'use client'
-import { useState, useRef, useEffect } from 'react'
+import { Suspense, useState, useRef, useEffect } from 'react'
 import {
   useCommerceStore, KilimallOrder, KilimallOrderStatus, KilimallSettlement,
   KilimallSettlementLine, KilimallDispatch, fmtKes, fmtDate,
 } from '@/lib/store'
-import { useRouter } from 'next/navigation'
+import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { Badge, PanelHeader, Field, Input, Select, Modal, Textarea, ModuleSkeleton, TabBar, ModuleHeader } from '@/components/ui'
 import { PrimaryActionButton } from '@/components/erp'
 import { DataTable, type ColumnDef, type PrimaryFilterConfig } from '@/components/data-table'
 import { loadXlsx } from '@/lib/xlsx-lazy'
 import { guardSpreadsheetFile, guardSpreadsheetRows, SpreadsheetGuardError } from '@/lib/spreadsheet-guard'
+import { useUrlQueryState, useUrlRecordId } from '@/hooks/useUrlRecordId'
 import {
   Fa, faCartShopping, faPlus, faRotateLeft, faClipboardList,
   faMoneyBillWave, faMagnifyingGlass, faFileImport, faArrowsRotate,
@@ -17,6 +18,7 @@ import {
 } from '@/components/icons'
 
 type Tab = 'orders' | 'dispatch' | 'settlements' | 'reconciliation' | 'returns' | 'reports' | 'settings'
+const KILIMALL_TABS: Tab[] = ['orders', 'dispatch', 'settlements', 'reconciliation', 'returns', 'reports', 'settings']
 
 const STATUS_COLOR: Record<KilimallOrderStatus, string> = {
   pending: '#F59E0B', dispatched: '#3B82F6', delivered: '#10B981',
@@ -30,7 +32,7 @@ const tabBtn = (active: boolean): React.CSSProperties => ({
   fontWeight: active ? 600 : 400,
 })
 
-export default function Kilimall() {
+function KilimallContent() {
   const [mounted, setMounted] = useState(() => typeof window !== 'undefined')
   useEffect(() => { setMounted(true) }, [])
 
@@ -44,14 +46,28 @@ export default function Kilimall() {
 
   // Lands directly on the operational order queue — module analytics moved to
   // the central dashboard; the KPI strip and Reports tab cover the summaries.
-  const [tab, setTab] = useState<Tab>('orders')
+  const [tabParam] = useUrlQueryState('tab', 'orders')
+  const tab = KILIMALL_TABS.includes(tabParam as Tab) ? tabParam as Tab : 'orders'
+  const [detailId, setDetailId] = useUrlRecordId({ whenOpen: { tab } })
+  const searchParams = useSearchParams()
   const router = useRouter()
+  const pathname = usePathname()
+
+  function selectTab(nextTab: Tab) {
+    const params = new URLSearchParams(searchParams.toString())
+    params.set('tab', nextTab)
+    params.delete('id')
+    const qs = params.toString()
+    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false })
+  }
 
   // ── Orders ────────────────────────────────────────────────────────────────────
   const [orderSearch, setOrderSearch] = useState('')
   const [orderStatusFilter, setOrderStatusFilter] = useState<KilimallOrderStatus | 'all'>('all')
   const [showNewOrder, setShowNewOrder] = useState(false)
-  const [viewOrder, setViewOrder] = useState<KilimallOrder | null>(null)
+  const viewOrder = tab === 'orders' && detailId
+    ? kilimallOrders.find(o => o.id === detailId) ?? null
+    : null
   const [newOrder, setNewOrder] = useState({
     kilimallRef: '', orderDate: new Date().toISOString().slice(0, 10),
     customerName: '', productId: '', productName: '', qty: '1',
@@ -67,7 +83,9 @@ export default function Kilimall() {
 
   // ── Settlements ───────────────────────────────────────────────────────────────
   const [showNewSettlement, setShowNewSettlement] = useState(false)
-  const [viewSettlement, setViewSettlement] = useState<KilimallSettlement | null>(null)
+  const viewSettlement = tab === 'settlements' && detailId
+    ? kilimallSettlements.find(s => s.id === detailId) ?? null
+    : null
   const [settlForm, setSettlForm] = useState({
     weekPeriod: '', weekStart: '', weekEnd: '',
     grossAmount: '', deductions: '', netPaid: '',
@@ -510,7 +528,7 @@ export default function Kilimall() {
           { id: 'settings', label: 'Settings' },
         ]}
         active={tab}
-        onChange={id => setTab(id as Tab)}
+        onChange={id => selectTab(id as Tab)}
         maxVisibleMobile={4}
         maxVisibleTablet={6}
         maxVisibleDesktop={7}
@@ -539,7 +557,7 @@ export default function Kilimall() {
             onClearFilters={() => { setOrderSearch(''); setOrderStatusFilter('all') }}
             hideColumnFilters
             emptyMessage="No orders found"
-            onRowClick={o => setViewOrder(o)}
+            onRowClick={o => setDetailId(o.id)}
             exportTitle="Kilimall Orders"
             exportFilename="kilimall-orders"
           />
@@ -706,7 +724,7 @@ export default function Kilimall() {
             rowKey={s => s.id}
             searchPlaceholder="Search settlements…"
             emptyMessage="No settlements recorded"
-            onRowClick={s => setViewSettlement(s)}
+            onRowClick={s => setDetailId(s.id)}
             exportTitle="Kilimall Settlements"
             exportFilename="kilimall-settlements"
           />
@@ -1041,7 +1059,7 @@ export default function Kilimall() {
 
       {/* Order detail */}
       {viewOrder && (
-        <Modal title={viewOrder.ref} subtitle={`Kilimall Ref: ${viewOrder.kilimallRef}`} onClose={() => setViewOrder(null)} width={500}>
+        <Modal title={viewOrder.ref} subtitle={`Kilimall Ref: ${viewOrder.kilimallRef}`} onClose={() => setDetailId(null)} width={500}>
           <div className="grid grid-cols-2 gap-3 text-xs">
             {[
               ['Ordered product', viewOrder.productName],
@@ -1073,7 +1091,6 @@ export default function Kilimall() {
             {viewOrder.status === 'dispatched' && (
               <button className="btn-primary text-[11px]" onClick={() => {
                 updateKilimallOrder(viewOrder.id, { status: 'delivered' })
-                setViewOrder(p => p ? { ...p, status: 'delivered' } : null)
                 showToast('Order marked as delivered')
               }}>Mark Delivered</button>
             )}
@@ -1081,7 +1098,6 @@ export default function Kilimall() {
               <button className="btn-outline text-[11px]" style={{ borderColor: 'var(--danger)', color: 'var(--danger)' }}
                 onClick={() => {
                   updateKilimallOrder(viewOrder.id, { status: 'returned' })
-                  setViewOrder(p => p ? { ...p, status: 'returned' } : null)
                   showToast('Order marked as returned — create RMA in After-Sales')
                 }}>Mark Returned</button>
             )}
@@ -1156,7 +1172,7 @@ export default function Kilimall() {
 
       {/* Settlement detail */}
       {viewSettlement && (
-        <Modal title={viewSettlement.ref} subtitle={viewSettlement.weekPeriod} onClose={() => setViewSettlement(null)} width={560}>
+        <Modal title={viewSettlement.ref} subtitle={viewSettlement.weekPeriod} onClose={() => setDetailId(null)} width={560}>
           <div className="grid grid-cols-3 gap-3 text-xs mb-3">
             {[['Gross Amount', fmtKes(viewSettlement.grossAmount)], ['Deductions', fmtKes(viewSettlement.deductions)], ['Net Paid', fmtKes(viewSettlement.netPaid)]].map(([k, v]) => (
               <div key={k} className="p-2.5 rounded-lg text-center" style={{ background: 'var(--bg-surface)' }}>
@@ -1202,12 +1218,20 @@ export default function Kilimall() {
             {viewSettlement.status !== 'reconciled' && (
               <button className="btn-primary text-[11px] inline-flex items-center gap-1.5" onClick={() => {
                 reconcileKilimallSettlement(viewSettlement.id)
-                setViewSettlement(null)
+                setDetailId(null)
               }}><Fa icon={faArrowsRotate} aria-hidden="true" /> Run Reconciliation</button>
             )}
           </div>
         </Modal>
       )}
     </div>
+  )
+}
+
+export default function Kilimall() {
+  return (
+    <Suspense fallback={<ModuleSkeleton />}>
+      <KilimallContent />
+    </Suspense>
   )
 }

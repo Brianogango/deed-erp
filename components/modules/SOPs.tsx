@@ -1,5 +1,5 @@
 'use client'
-import { useState, useMemo, useEffect } from 'react'
+import { Suspense, useState, useMemo, useEffect } from 'react'
 import {
   useApp, fmtKes,
   SOP, SOPMetric, SOPMetricType, SOPTargetDir,
@@ -10,6 +10,8 @@ import { useHrStore } from '@/hooks/useHrStore'
 import { Confirm, ModuleSkeleton, ModuleHeader, TabBar } from '@/components/ui'
 import { PrimaryActionButton } from '@/components/erp'
 import { Fa, faBullseye, faCircleCheck, faCircleXmark, faTriangleExclamation, faUserSlash, faPlus } from '@/components/icons'
+import { usePathname, useRouter, useSearchParams } from 'next/navigation'
+import { useUrlQueryState, useUrlRecordId } from '@/hooks/useUrlRecordId'
 
 // ── Period helpers ────────────────────────────────────────────────────────────
 
@@ -208,7 +210,10 @@ const uid = () => crypto.randomUUID()
 
 // ── Main Component ────────────────────────────────────────────────────────────
 
-export default function SOPs() {
+type SopTab = 'overview' | 'manage' | 'my'
+const SOP_TABS: SopTab[] = ['overview', 'manage', 'my']
+
+function SOPsContent() {
   const [mounted, setMounted] = useState(() => typeof window !== 'undefined')
   useEffect(() => { setMounted(true) }, [])
 
@@ -233,11 +238,22 @@ export default function SOPs() {
 
   // Managers land on the operational Manage Targets screen; the team Overview
   // summary stays available as an optional tab (progressive disclosure).
-  const [tab, setTab] = useState<'overview' | 'manage' | 'my'>(canViewTeamHR ? 'manage' : 'my')
+  const defaultTab: SopTab = canViewTeamHR ? 'manage' : 'my'
+  const [tabParam] = useUrlQueryState('tab', defaultTab)
+  const tab = SOP_TABS.includes(tabParam as SopTab) ? tabParam as SopTab : defaultTab
+  const [selectedSopId, setSelectedSopId] = useUrlRecordId({ whenOpen: { tab: 'my' } })
+  const searchParams = useSearchParams()
+  const router = useRouter()
+  const pathname = usePathname()
   const [pendingConfirm, setPendingConfirm] = useState<{ msg: string; action: () => void } | null>(null)
 
-  // ── Admin: Overview ──
-  const [selectedSopId, setSelectedSopId] = useState<string | null>(null)
+  function selectTab(nextTab: SopTab) {
+    const params = new URLSearchParams(searchParams.toString())
+    params.set('tab', nextTab)
+    if (nextTab !== 'my') params.delete('id')
+    const qs = params.toString()
+    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false })
+  }
 
   // ── Admin: Manage / Create ──
   const [showCreateModal, setShowCreateModal] = useState(false)
@@ -387,7 +403,7 @@ export default function SOPs() {
       <TabBar
         tabs={sopTabs}
         active={tab}
-        onChange={id => setTab(id as typeof tab)}
+        onChange={id => selectTab(id as SopTab)}
         maxVisibleDesktop={6}
         ariaLabel="Performance target sections"
       />
@@ -412,7 +428,7 @@ export default function SOPs() {
               return (
                 <div key={sop.id}
                   className="p-4 cursor-pointer transition-colors hover:bg-gray-50 flex items-center gap-4"
-                  onClick={() => { setSelectedSopId(sop.id); setHistPeriod(null); setTab('my') }}>
+                  onClick={() => { setSelectedSopId(sop.id); setHistPeriod(null) }}>
                   <div className="w-9 h-9 rounded-full flex items-center justify-center font-bold text-sm text-white flex-shrink-0"
                     style={{ background: 'linear-gradient(135deg, var(--navy), var(--accent-cyan))' }}>
                     {sop.userName.slice(0, 2).toUpperCase()}
@@ -519,7 +535,7 @@ export default function SOPs() {
               {/* Period selector + back */}
               <div className="flex items-center gap-3 px-4 py-2.5 border-b flex-wrap" style={{ borderColor: 'var(--border-lt)' }}>
                 {selectedSopId && canViewTeamHR && (
-                  <button onClick={() => { setSelectedSopId(null); setTab('overview') }}
+                  <button onClick={() => { setSelectedSopId(null); selectTab('overview') }}
                     style={{ fontSize: 11, color: 'var(--text-4)', background: 'none', border: 'none', cursor: 'pointer' }}>
                     ← Back
                   </button>
@@ -830,5 +846,13 @@ export default function SOPs() {
         />
       )}
     </div>
+  )
+}
+
+export default function SOPs() {
+  return (
+    <Suspense fallback={<ModuleSkeleton />}>
+      <SOPsContent />
+    </Suspense>
   )
 }

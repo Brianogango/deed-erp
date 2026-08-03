@@ -1,10 +1,11 @@
 'use client'
-import { useMemo, useState, useEffect } from 'react'
+import { Suspense, useMemo, useState, useEffect } from 'react'
 import { useSalesStore, fmtKes, fmtDate, type SaleOrder } from '@/lib/store'
 import { ModuleSkeleton } from '@/components/ui'
 import { DataTable, type ColumnDef } from '@/components/data-table'
 import { visibleDashboardRepUsers, visibleDashboardSalesOrders } from '@/lib/dashboard-priority'
 import { SALE_STATUS_LABELS } from '@/lib/odoo-sales-flow'
+import { useUrlRecordId } from '@/hooks/useUrlRecordId'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -95,6 +96,14 @@ interface RepStats {
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function RepPerformance() {
+  return (
+    <Suspense fallback={<ModuleSkeleton />}>
+      <RepPerformanceContent />
+    </Suspense>
+  )
+}
+
+function RepPerformanceContent() {
   const { saleOrders, users, currentUserId, sops } = useSalesStore()
 
   const [mounted, setMounted] = useState(() => typeof window !== 'undefined')
@@ -104,7 +113,7 @@ export default function RepPerformance() {
   const [selectedPeriod, setSelectedPeriod] = useState(() =>
     periodMode === 'month' ? currentMonthKey() : currentQuarterKey()
   )
-  const [selectedRep, setSelectedRep] = useState<string | null>(null)
+  const [selectedRep, setSelectedRep] = useUrlRecordId({ param: 'rep' })
 
   const currentUser = users.find(u => u.id === currentUserId) ?? null
   const visibleOrders = useMemo(
