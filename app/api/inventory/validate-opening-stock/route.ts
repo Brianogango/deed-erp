@@ -3,6 +3,7 @@ import { getServerSession } from '@/lib/auth/server'
 import { normalizePermissionRole } from '@/lib/auth/authorization'
 import { loadAppState } from '@/lib/server-store'
 import { validateOpeningStockInput } from '@/lib/inventory-validation'
+import { isOpeningStockLocked } from '@/lib/inventory/opening-stock'
 
 const ALLOWED_ROLES = ['director', 'admin_officer', 'finance_officer', 'inventory_officer', 'technical_lead']
 
@@ -32,7 +33,17 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Expected body { items: [...] }' }, { status: 400 })
   }
 
-  const state = await loadAppState(['deed_serials'])
+  const state = await loadAppState(['deed_serials', 'deed_stockMoves', 'deed_openingStockPosted'])
+  if (isOpeningStockLocked(
+    state.deed_openingStockPosted === true,
+    Array.isArray(state.deed_stockMoves) ? state.deed_stockMoves as Array<{ type?: string; documentRef?: string; reason?: string }> : [],
+  )) {
+    return NextResponse.json(
+      { error: 'Opening stock has already been posted and is locked', errors: ['Opening stock has already been posted and is locked'] },
+      { status: 409 },
+    )
+  }
+
   const existingSerials = Array.isArray(state.deed_serials) ? state.deed_serials as Array<{ serial?: string; barcode?: string }> : []
   const result = validateOpeningStockInput(body.items, existingSerials)
 

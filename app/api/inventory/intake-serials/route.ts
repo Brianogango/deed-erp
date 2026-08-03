@@ -11,6 +11,7 @@ import {
   validateSerialIntakeInput,
   type SerialIntakeKind,
 } from '@/lib/inventory/serial-intake'
+import { isOpeningStockLocked } from '@/lib/inventory/opening-stock'
 import prisma from '@/lib/prisma'
 import { writeFinancialAudit } from '@/lib/finance-audit'
 
@@ -95,7 +96,10 @@ export async function POST(request: NextRequest) {
   const existingSerials = (Array.isArray(state.deed_serials) ? state.deed_serials : []) as BlobSerial[]
   const products = (Array.isArray(state.deed_products) ? state.deed_products : []) as BlobProduct[]
   const stockMoves = (Array.isArray(state.deed_stockMoves) ? state.deed_stockMoves : []) as BlobMove[]
-  const openingStockPosted = state.deed_openingStockPosted === true
+  const openingStockPosted = isOpeningStockLocked(
+    state.deed_openingStockPosted === true,
+    stockMoves,
+  )
 
   const product = products.find(p => p.id === body.productId)
   if (!product) {
