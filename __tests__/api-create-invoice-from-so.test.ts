@@ -14,6 +14,7 @@ const {
     saleOrder: {
       findUnique: vi.fn(),
       findMany: vi.fn(),
+      update: vi.fn(),
     },
     saleOrderItem: {
       update: vi.fn(),
@@ -171,9 +172,18 @@ describe('POST /api/sale-orders/:id/create-invoice', () => {
   })
 
   it('rejects non-sale orders', async () => {
-    mockPrisma.saleOrder.findUnique.mockResolvedValue({ ...saleOrder, status: 'quotation' })
+    // No confirmation evidence — quotation number, no confirmedAt, no active DN —
+    // so status heal must not promote this to sale.
+    mockLoadAppState.mockResolvedValue({ deed_invoices: [], deed_deliveries: [] })
+    mockPrisma.saleOrder.findUnique.mockResolvedValue({
+      ...saleOrder,
+      status: 'quotation',
+      orderNumber: 'SQ/2026/0001',
+      confirmedAt: null,
+    })
     const res = await POST(new NextRequest('http://localhost', { method: 'POST' }), { params: { id: ORDER_ID } })
     expect(res.status).toBe(409)
+    expect(mockPrisma.saleOrder.update).not.toHaveBeenCalled()
   })
 
   it('rejects invoicing before the delivery is validated (Done)', async () => {

@@ -2973,7 +2973,7 @@ export interface AppState {
   validateDelivery: (deliveryId: string, qtysDone?: Record<string, number>) => void
   /** Persist successful final DN generation before enabling invoicing. */
   markDeliveryNoteGenerated: (deliveryId: string) => Promise<boolean>
-  updateDelivery: (deliveryId: string, p: Partial<Pick<Delivery, 'recipientName' | 'recipientPhone' | 'recipientIdNumber' | 'deliveryAddress' | 'notes' | 'deliveryNoteGeneratedAt' | 'deliveryNoteGeneratedByUserId'>>) => void
+  updateDelivery: (deliveryId: string, p: Partial<Pick<Delivery, 'status' | 'recipientName' | 'recipientPhone' | 'recipientIdNumber' | 'deliveryAddress' | 'notes' | 'deliveryNoteGeneratedAt' | 'deliveryNoteGeneratedByUserId'>>) => void
   createInvoiceFromSO: (orderId: string) => Promise<Invoice> | Invoice
   deleteSaleOrder: (id: string) => void
 
