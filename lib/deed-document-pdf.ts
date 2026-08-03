@@ -509,12 +509,16 @@ export function buildDeedDocumentPdf(
 
     if (showSignature) {
       const sigX = totalsX
+      // Prefer the lower content band (just above the fixed footer) so the
+      // signature does not sit flush under totals when the page has free space.
+      const sigTop = Math.max(paySigTop, contentBottom - sigH)
+
       doc.setFont('helvetica', 'bold').setFontSize(8).setTextColor(...GRAY)
-      doc.text('AUTHORISED SIGNATURE', sigX, paySigTop + 11)
+      doc.text('AUTHORISED SIGNATURE', sigX, sigTop + 11)
       doc.setDrawColor(...BORDER).setLineWidth(0.8)
-      doc.line(sigX, paySigTop + 46, rightX, paySigTop + 46)
+      doc.line(sigX, sigTop + 46, rightX, sigTop + 46)
       doc.setFont('helvetica', 'normal').setFontSize(8).setTextColor(...GRAY)
-      doc.text('Authorised Signature', sigX + rightW / 2, paySigTop + 60, { align: 'center' })
+      doc.text('Authorised Signature', sigX + rightW / 2, sigTop + 60, { align: 'center' })
     }
   }
 
