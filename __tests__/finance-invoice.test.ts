@@ -90,6 +90,7 @@ describe('mapDbInvoiceItemsToClientLines', () => {
     ])
     expect(lines).toEqual([{
       id: 'li1',
+      lineType: 'item',
       description: 'Laptop ×1',
       qty: 1,
       unitPrice: 10000,

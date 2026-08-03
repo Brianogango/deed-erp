@@ -14,6 +14,9 @@ import {
   faCoins,
   faHandPaper,
   faUnlock,
+  faArrowUp,
+  faArrowDown,
+  faPlus,
 } from '@fortawesome/free-solid-svg-icons'
 import { useFinanceStore, fmtKes, fmtDate } from '@/lib/store'
 import { invoiceDocState, invoicePaymentStatus, isInvoiceOverdue, displayDocRef, INVOICE_DOC_STATE_LABELS, PAYMENT_STATUS_LABELS } from '@/lib/odoo-sales-flow'
@@ -50,6 +53,8 @@ export default function InvoiceDetail() {
     deleteInvoice,
     postInvoice,
     updateInvoice,
+    moveInvoiceLine,
+    addInvoiceSection,
     showToast,
     users,
     currentUserId,
@@ -104,14 +109,29 @@ export default function InvoiceDetail() {
         updateInvoice(invoice.id, {
           lines: items.map((item, idx) => {
             const discountPct = Math.min(100, Math.max(0, Number(item.discountPct) || 0))
+            const qty = Number(item.qty) || 0
+            const unitPrice = Number(item.unitPrice) || 0
+            const isSection = !item.productId && qty === 0 && unitPrice === 0
+            if (isSection) {
+              return {
+                id: item.id ?? `line-${idx}`,
+                lineType: 'section' as const,
+                description: item.description ?? '',
+                qty: 0,
+                unitPrice: 0,
+                taxRate: 0,
+                subtotal: 0,
+              }
+            }
             return {
               id: item.id ?? `line-${idx}`,
+              lineType: 'item' as const,
               description: item.description ?? '',
-              qty: Number(item.qty) || 0,
-              unitPrice: Number(item.unitPrice) || 0,
+              qty,
+              unitPrice,
               taxRate: Number(item.taxRate) || 0,
               ...(discountPct > 0 ? { discountPct } : {}),
-              subtotal: Number(item.lineSubtotal) || Math.round((Number(item.qty) || 0) * (Number(item.unitPrice) || 0) * (1 - discountPct / 100)),
+              subtotal: Number(item.lineSubtotal) || Math.round(qty * unitPrice * (1 - discountPct / 100)),
               ...(item.productId ? { productId: item.productId } : {}),
             }
           }),
@@ -372,9 +392,29 @@ export default function InvoiceDetail() {
           )}
 
           {/* Invoice Lines */}
-          {(invoice.lines || []).length > 0 ? (
+          {(invoice.lines || []).length > 0 || (invoice.status === 'draft' && canManageFinance) ? (
             <div>
-              <p className="text-[10px] text-[var(--text-4)] uppercase font-bold mb-2">Line Items</p>
+              <div className="flex items-center justify-between gap-2 mb-2 flex-wrap">
+                <p className="text-[10px] text-[var(--text-4)] uppercase font-bold">Line Items</p>
+                {invoice.status === 'draft' && canManageFinance && (
+                  <div className="flex items-center gap-3">
+                    <button
+                      type="button"
+                      className="text-xs font-bold text-slate-600 hover:underline flex items-center gap-1"
+                      onClick={() => addInvoiceSection(invoice.id)}
+                    >
+                      <Fa icon={faPlus} className="text-[10px]" /> Add a section
+                    </button>
+                    <button
+                      type="button"
+                      className="text-xs font-bold text-primary-600 hover:underline flex items-center gap-1"
+                      onClick={() => router.push(`/finance?tab=${invoice.type === 'customer_invoice' ? 'invoices' : 'bills'}&edit=${invoice.id}`)}
+                    >
+                      <Fa icon={faPencil} className="text-[10px]" /> Edit lines
+                    </button>
+                  </div>
+                )}
+              </div>
               <div className="dt-scroll rounded-xl border border-[var(--border-lt)]">
                 <table data-no-responsive className="w-full text-xs">
                   <thead className="bg-[var(--bg-surface)]">
@@ -384,29 +424,86 @@ export default function InvoiceDetail() {
                       <th className="px-3 py-2 text-right text-[10px] font-bold uppercase text-[var(--text-4)]">Unit Price</th>
                       <th className="px-3 py-2 text-right text-[10px] font-bold uppercase text-[var(--text-4)]">Disc%</th>
                       <th className="px-3 py-2 text-right text-[10px] font-bold uppercase text-[var(--text-4)]">Subtotal</th>
+                      {invoice.status === 'draft' && canManageFinance && (
+                        <th className="px-3 py-2 w-24"></th>
+                      )}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[var(--border-lt)]">
-                    {(invoice.lines || []).map((line, idx) => (
-                      line.lineType === 'section' ? (
-                        <tr key={line.id || idx} className="bg-[var(--bg-surface)]/70">
-                          <td colSpan={5} className="px-3 py-2 font-bold text-[var(--text-2)]">{line.description}</td>
-                        </tr>
-                      ) : (
+                    {(invoice.lines || []).map((line, idx) => {
+                      const canReorder = invoice.status === 'draft' && canManageFinance
+                      const moveButtons = canReorder ? (
+                        <div className="flex items-center justify-end gap-0.5">
+                          <button
+                            type="button"
+                            onClick={() => moveInvoiceLine(invoice.id, line.id, -1)}
+                            disabled={idx === 0}
+                            aria-label="Move line up"
+                            className="icon-btn disabled:opacity-30 disabled:cursor-not-allowed"
+                          >
+                            <Fa icon={faArrowUp} aria-hidden="true" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => moveInvoiceLine(invoice.id, line.id, 1)}
+                            disabled={idx === (invoice.lines || []).length - 1}
+                            aria-label="Move line down"
+                            className="icon-btn disabled:opacity-30 disabled:cursor-not-allowed"
+                          >
+                            <Fa icon={faArrowDown} aria-hidden="true" />
+                          </button>
+                        </div>
+                      ) : null
+                      if (line.lineType === 'section') {
+                        return (
+                          <tr key={line.id || idx} className="bg-[var(--bg-surface)]/70">
+                            <td colSpan={5} className="px-3 py-2">
+                              {canReorder ? (
+                                <input
+                                  aria-label="Section title"
+                                  className="form-input text-xs w-full font-bold"
+                                  value={line.description || ''}
+                                  placeholder="Section title"
+                                  onChange={e => {
+                                    const title = e.target.value
+                                    const lines = (invoice.lines || []).map(l =>
+                                      l.id === line.id ? { ...l, description: title } : l,
+                                    )
+                                    updateInvoice(invoice.id, { lines })
+                                  }}
+                                />
+                              ) : (
+                                <span className="font-bold text-[var(--text-2)]">{line.description}</span>
+                              )}
+                            </td>
+                            {canReorder && <td className="px-3 py-2 text-center">{moveButtons}</td>}
+                          </tr>
+                        )
+                      }
+                      return (
                         <tr key={line.id || idx} className="hover:bg-[var(--bg-surface)]">
                           <td className="px-3 py-2 text-[var(--text-1)]">{line.description}</td>
                           <td className="px-3 py-2 text-right text-[var(--text-3)]">{line.qty}</td>
                           <td className="px-3 py-2 text-right text-[var(--text-3)] font-mono">{fmtKes(line.unitPrice)}</td>
                           <td className="px-3 py-2 text-right text-[var(--text-3)] font-mono">{(line.discountPct ?? 0) > 0 ? `${line.discountPct}%` : '—'}</td>
                           <td className="px-3 py-2 text-right font-bold text-[var(--text-1)] font-mono">{fmtKes(line.subtotal)}</td>
+                          {canReorder && <td className="px-3 py-2 text-center">{moveButtons}</td>}
                         </tr>
                       )
-                    ))}
+                    })}
+                    {(invoice.lines || []).length === 0 && (
+                      <tr>
+                        <td colSpan={6} className="px-4 py-6 text-center text-xs text-[var(--text-4)]">
+                          No line items yet.
+                        </td>
+                      </tr>
+                    )}
                   </tbody>
                   <tfoot className="bg-[var(--bg-surface)] border-t-2 border-[var(--border-lt)]">
                     <tr>
                       <td colSpan={4} className="px-3 py-2 text-right text-[10px] font-bold uppercase text-[var(--text-4)]">Total</td>
                       <td className="px-3 py-2 text-right font-black text-[var(--text-1)] font-mono">{fmtKes(invoice.total)}</td>
+                      {invoice.status === 'draft' && canManageFinance && <td />}
                     </tr>
                   </tfoot>
                 </table>

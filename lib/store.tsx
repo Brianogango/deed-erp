@@ -3019,6 +3019,10 @@ export interface AppState {
   // Invoices
   createManualInvoice: (type: InvoiceType, partnerId: string, partnerName: string, dueDate: string, lines: { type?: 'item' | 'section'; desc: string; qty: string; price: string; tax: string; discount?: string }[], vatRate: number, notes?: string, documentDate?: string) => Invoice
   updateInvoice: (id: string, p: Partial<Invoice>) => void
+  /** Reorder a draft invoice line (product or section) up/down. */
+  moveInvoiceLine: (invoiceId: string, lineId: string, direction: -1 | 1) => void
+  /** Insert a section heading on a draft invoice. */
+  addInvoiceSection: (invoiceId: string, title?: string) => void
   postInvoice: (id: string, forcedRef?: string) => void | Promise<void>
   /** Finance dispute flag — Odoo "Blocked" payment status. */
   setInvoicePaymentBlocked: (id: string, blocked: boolean) => void
@@ -3523,6 +3527,8 @@ export type FinanceStoreState = Pick<AppState,
   | 'createBillFromPO'
   | 'createDeposit'
   | 'createManualInvoice'
+  | 'moveInvoiceLine'
+  | 'addInvoiceSection'
   | 'createPO'
   | 'createPurchaseReturn'
   | 'createReceiptFromPO'
@@ -5808,6 +5814,8 @@ export function StoreProvider({
     unmatchStatementLine: (...args: Parameters<AppState['unmatchStatementLine']>) => storeCtxRef.current!.unmatchStatementLine(...args),
     updateAccount: (...args: Parameters<AppState['updateAccount']>) => storeCtxRef.current!.updateAccount(...args),
     updateInvoice: (...args: Parameters<AppState['updateInvoice']>) => storeCtxRef.current!.updateInvoice(...args),
+    moveInvoiceLine: (...args: Parameters<AppState['moveInvoiceLine']>) => storeCtxRef.current!.moveInvoiceLine(...args),
+    addInvoiceSection: (...args: Parameters<AppState['addInvoiceSection']>) => storeCtxRef.current!.addInvoiceSection(...args),
     updateOutsourceVendor: (...args: Parameters<AppState['updateOutsourceVendor']>) => storeCtxRef.current!.updateOutsourceVendor(...args),
     updatePO: (...args: Parameters<AppState['updatePO']>) => storeCtxRef.current!.updatePO(...args),
     updatePOLine: (...args: Parameters<AppState['updatePOLine']>) => storeCtxRef.current!.updatePOLine(...args),
@@ -10509,8 +10517,22 @@ const storeCtx: AppState = {
     // ── Invoices ──────────────────────────────────────────────────────────────
     createManualInvoice: (type, partnerId, partnerName, dueDate, lines, vatRate, notes = '', documentDate) => {
       const builtLines: InvoiceLine[] = lines
-        .filter(l => (l.type ?? 'item') !== 'section')
+        .filter(l => {
+          if ((l.type ?? 'item') === 'section') return !!String(l.desc || '').trim()
+          return true
+        })
         .map(l => {
+          if ((l.type ?? 'item') === 'section') {
+            return {
+              id: uid(),
+              lineType: 'section' as const,
+              description: String(l.desc).trim(),
+              qty: 0,
+              unitPrice: 0,
+              taxRate: 0,
+              subtotal: 0,
+            }
+          }
           const qty = Number(l.qty) || 1
           const unitPrice = Number(l.price) || 0
           const taxRate = vatRate > 0 ? vatRate : Number(l.tax) || 0
@@ -10520,6 +10542,7 @@ const storeCtx: AppState = {
           const subtotal = Math.max(0, gross - discountAmount)
           return {
             id: uid(),
+            lineType: 'item' as const,
             description: l.desc,
             qty,
             unitPrice,
@@ -10528,8 +10551,9 @@ const storeCtx: AppState = {
             subtotal,
           }
         })
-      const subtotal = builtLines.reduce((s, l) => s + l.subtotal, 0)
-      const taxTotal = builtLines.reduce((s, l) => s + Math.round(l.subtotal * l.taxRate / 100), 0)
+      const itemLines = builtLines.filter(l => l.lineType !== 'section')
+      const subtotal = itemLines.reduce((s, l) => s + l.subtotal, 0)
+      const taxTotal = itemLines.reduce((s, l) => s + Math.round(l.subtotal * l.taxRate / 100), 0)
       const invoice: Invoice = {
         id: uid(),
         // Placeholder ref — the official number is assigned when posted.
@@ -10551,6 +10575,41 @@ const storeCtx: AppState = {
       sync('/api/invoices', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(invoice) })
       showToast(`${type === 'vendor_bill' ? 'Bill' : 'Invoice'} ${invoice.ref} created`, 'success')
       return invoice
+    },
+
+    moveInvoiceLine: (invoiceId, lineId, direction) => {
+      const inv = invRef.current.find(i => i.id === invoiceId)
+      if (!inv) return
+      if (inv.status !== 'draft') {
+        showToast('Only draft invoices can reorder lines', 'error')
+        return
+      }
+      const index = (inv.lines || []).findIndex(l => l.id === lineId)
+      const target = index + direction
+      if (index < 0 || target < 0 || target >= (inv.lines || []).length) return
+      const lines = [...(inv.lines || [])]
+      ;[lines[index], lines[target]] = [lines[target], lines[index]]
+      storeCtxRef.current!.updateInvoice(invoiceId, { lines })
+    },
+
+    addInvoiceSection: (invoiceId, title) => {
+      const inv = invRef.current.find(i => i.id === invoiceId)
+      if (!inv) return
+      if (inv.status !== 'draft') {
+        showToast('Only draft invoices can add sections', 'error')
+        return
+      }
+      const sectionTitle = String(title ?? '').trim() || 'Section'
+      const lines = [...(inv.lines || []), {
+        id: uid(),
+        lineType: 'section' as const,
+        description: sectionTitle,
+        qty: 0,
+        unitPrice: 0,
+        taxRate: 0,
+        subtotal: 0,
+      }]
+      storeCtxRef.current!.updateInvoice(invoiceId, { lines })
     },
 
     updateInvoice: (id, p) => {

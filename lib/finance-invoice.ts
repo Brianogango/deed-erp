@@ -111,11 +111,13 @@ export interface ClientInvoiceLine {
   discountPct?: number
   subtotal: number
   productId?: string
+  lineType?: 'item' | 'section'
 }
 
 /**
  * Map Prisma InvoiceItem rows to client-store lines.
  * Uses pretax `lineSubtotal` — never tax-inclusive `lineTotal` as UI subtotal.
+ * Zero-qty / zero-price rows without a product are treated as section headings.
  */
 export function mapDbInvoiceItemsToClientLines(
   items: Array<{
@@ -127,16 +129,31 @@ export function mapDbInvoiceItemsToClientLines(
     discountPct?: unknown
     lineSubtotal?: unknown
     productId?: string | null
+    sortOrder?: unknown
   }> | null | undefined,
 ): ClientInvoiceLine[] {
-  return (items ?? []).map((item, idx) => {
+  const ordered = [...(items ?? [])].sort((a, b) => num(a.sortOrder) - num(b.sortOrder))
+  return ordered.map((item, idx) => {
     const qty = num(item.qty)
     const unitPrice = num(item.unitPrice)
     const discountPct = Math.min(100, Math.max(0, num(item.discountPct)))
+    const isSection = !item.productId && qty === 0 && unitPrice === 0
+    if (isSection) {
+      return {
+        id: item.id ?? `line-${idx}`,
+        lineType: 'section',
+        description: item.description ?? '',
+        qty: 0,
+        unitPrice: 0,
+        taxRate: 0,
+        subtotal: 0,
+      }
+    }
     const explicit = item.lineSubtotal != null ? num(item.lineSubtotal) : null
     const fallback = computeInvoiceLineMoney({ qty, unitPrice, discountPct, taxRate: num(item.taxRate) })
     return {
       id: item.id ?? `line-${idx}`,
+      lineType: 'item',
       description: item.description ?? '',
       qty,
       unitPrice,

@@ -76,7 +76,21 @@ function mapInvoiceUpdateToDb(body: any, clientId?: string) {
 }
 
 function mapInvoiceItems(lines: any[]) {
-  return lines.map((l: any) => {
+  return lines.map((l: any, index: number) => {
+    const isSection = l.lineType === 'section' || l.type === 'section'
+    if (isSection) {
+      return {
+        description: String(l.description ?? l.desc ?? '').trim() || 'Section',
+        qty: 0,
+        unitPrice: 0,
+        discountPct: 0,
+        taxRate: 0,
+        lineSubtotal: 0,
+        lineTax: 0,
+        lineTotal: 0,
+        sortOrder: index,
+      }
+    }
     const money = computeInvoiceLineMoney({
       qty: l.qty,
       unitPrice: l.unitPrice,
@@ -94,6 +108,7 @@ function mapInvoiceItems(lines: any[]) {
       lineSubtotal: money.lineSubtotal,
       lineTax: money.lineTax,
       lineTotal: money.lineTotal,
+      sortOrder: index,
       ...(optionalUuid(l.productId) ? { productId: optionalUuid(l.productId) } : {}),
     }
   })
