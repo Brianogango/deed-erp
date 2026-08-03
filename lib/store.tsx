@@ -97,7 +97,6 @@ import {
   isDiagnosisFeeSettled,
   resolveCustomerBillingType,
   resolveDiagnosisFee,
-  resolveDiagnosisFeeBilling,
   shouldChargeDiagnosisFee,
   taxableQuoteSubtotal,
   diagnosisFeeAmount,
