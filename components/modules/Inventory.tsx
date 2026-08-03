@@ -18,6 +18,7 @@ import { Barcode } from '@/components/modules/Barcode'
 import { inferTrackingMethod, isSerialTracking, isStockTracked, type TrackingMethod } from '@/lib/inventory-identifiers'
 import InventoryProductsPanel from '@/components/inventory/InventoryProductsPanel'
 import { canValidatePurchaseReceipt, canReleaseHeldSerial } from '@/lib/inventory/permissions'
+import { isOpeningStockMove } from '@/lib/inventory/opening-stock'
 import { explainSerialWhereabouts, findSerialMatches } from '@/lib/inventory/serial-trace'
 import { ScanInputRow } from '@/components/BarcodeScanner'
 import { identityMatchesScan, parseScanPayload } from '@/lib/barcode-scan'
@@ -532,7 +533,7 @@ export default function Inventory() {
   }, [reportFilteredProducts, serials, bulkStock, stockMoves])
 
   const openingStockRows = useMemo(() => stockMoves
-    .filter(move => move.type === 'in' && (move.documentRef === 'OPENING' || move.reason.toLowerCase().includes('opening stock')))
+    .filter(isOpeningStockMove)
     .map(move => ({
       ...move,
       product: products.find(product => product.id === move.productId),

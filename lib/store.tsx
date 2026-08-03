@@ -114,6 +114,10 @@ import {
   matchRepairDeviceSerial,
 } from '@/lib/repair-retain-convert'
 import { planRepairPartConsume, planRepairPartReserve } from '@/lib/inventory/repair-parts-stock'
+import {
+  isOpeningStockLocked,
+  isOpeningStockMove,
+} from '@/lib/inventory/opening-stock'
 import { billableQty, assertBillableQty } from '@/lib/purchase/three-way-match'
 import {
   formatStockByLocation,
@@ -4749,6 +4753,14 @@ export function StoreProvider({
   const [openingStockPosted, setOpeningStockPosted] = useLS<boolean>('deed_openingStockPosted', false)
   
   const [stockMoves, setStockMoves] = useState<StockMove[]>([])
+
+  // Heal lock when OPENING moves already exist (ops seed / missed flag sync).
+  const openingStockLocked = isOpeningStockLocked(openingStockPosted, stockMoves)
+  useEffect(() => {
+    if (!openingStockPosted && stockMoves.some(isOpeningStockMove)) {
+      setOpeningStockPosted(true)
+    }
+  }, [openingStockPosted, stockMoves, setOpeningStockPosted])
   
   const [stockAdjustments, setStockAdjustments] = useLS<StockAdjustment[]>('deed_stockAdjustments', [])
   const [stockReservations, setStockReservations] = useLS<StockReservation[]>('deed_stockReservations', [])
@@ -6064,7 +6076,7 @@ const storeCtx: AppState = {
     journalEntries, accounts,
 
     // Inventory
-    warranties, bulkStock, openingStockPosted, stockMoves, stockAdjustments,
+    warranties, bulkStock, openingStockPosted: openingStockLocked, stockMoves, stockAdjustments,
 
     // POS
     posOrders, posSessionOpen, posSessionOpeningCash, posSessionId, posSessions,
@@ -8818,7 +8830,11 @@ const storeCtx: AppState = {
     },
     importOpeningStock: async (items) => {
       if (!canApproveInventoryAction(currentUser())) { showToast('Only inventory approvers can post opening stock', 'error'); return }
-      if (openingStockPosted) { showToast('Opening stock has already been posted and is locked', 'error'); return }
+      if (isOpeningStockLocked(openingStockPosted, stockMoves)) {
+        if (!openingStockPosted) setOpeningStockPosted(true)
+        showToast('Opening stock has already been posted and is locked', 'error')
+        return
+      }
       try {
         const preflightItems = items.map(item => {
           const product = prodRef.current.find(x => x.id === item.productId)
@@ -16000,7 +16016,7 @@ const storeCtx: AppState = {
     serials,
     stockMoves,
     stockTransfers,
-    openingStockPosted,
+    openingStockPosted: openingStockLocked,
     purchaseOrders,
     receipts,
     contacts,
@@ -16019,7 +16035,7 @@ const storeCtx: AppState = {
     serials,
     stockMoves,
     stockTransfers,
-    openingStockPosted,
+    openingStockLocked,
     purchaseOrders,
     receipts,
     contacts,
