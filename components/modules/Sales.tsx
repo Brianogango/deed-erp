@@ -1295,6 +1295,8 @@ function SalesContent() {
                   )}
                   </TablePageLayout>
                 </>
+              ) : view === 'form' && !activeOrder && searchParams.get('id') ? (
+                <ModuleSkeleton />
               ) : (
                 /* ── ORDER FORM VIEW ─────────────────────────────────────── */
                 <div className="flex flex-col">
