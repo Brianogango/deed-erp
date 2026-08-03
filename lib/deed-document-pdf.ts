@@ -364,31 +364,7 @@ export function buildDeedDocumentPdf(
   const totalsH = Math.max(48, totals.length * 16 + 8)
   const notesWrapped = notesText ? (doc.splitTextToSize(notesText, leftW - 18) as string[]) : []
   const notesH = notesText ? Math.max(48, notesWrapped.length * 11 + 28) : 0
-  const blockH = Math.max(notesH, totalsH, showAmounts ? 48 : 0)
-  y = ensureRoom(y, blockH + 12)
-
-  if (notesText) {
-    doc.setFillColor(...CYAN)
-    doc.roundedRect(MARGIN, y, 3.5, 14, 1, 1, 'F')
-    doc.setFont('helvetica', 'bold').setFontSize(9).setTextColor(...NAVY)
-    doc.text('Notes', MARGIN + 10, y + 11)
-    doc.setFont('helvetica', 'normal').setFontSize(8.5).setTextColor(...GRAY)
-    doc.text(notesWrapped, MARGIN + 10, y + 26)
-  }
-
-  if (showAmounts && totals.length) {
-    const totalsX = rightX - rightW
-    let totalsY = y + 10
-    for (const row of totals) {
-      doc.setFont('helvetica', row.bold ? 'bold' : 'normal').setFontSize(row.bold ? 12 : 9)
-      doc.setTextColor(...(row.accent ? NAVY : TEXT))
-      doc.text(row.label, totalsX, totalsY)
-      doc.text(row.value, rightX, totalsY, { align: 'right' })
-      totalsY += row.bold ? 18 : 15
-    }
-  }
-
-  y += blockH + 16
+  const notesTotalsH = Math.max(notesH, totalsH, showAmounts ? 48 : 0)
 
   const paymentLines: string[] = []
   if (showPayment) {
@@ -416,7 +392,56 @@ export function buildDeedDocumentPdf(
 
   const paymentH = paymentLines.length ? paymentLines.length * 11 + 28 : 0
   const sigH = showSignature ? 70 : 0
-  y = ensureRoom(y, Math.max(paymentH, sigH) + 8)
+  const bottomBlockH = Math.max(paymentH, sigH)
+  // Notes/totals + gap + payment/signature. Keep the contact footer band clear.
+  const closingH = notesTotalsH + 16 + (bottomBlockH > 0 ? bottomBlockH + 8 : 0)
+
+  // Short quotes/invoices: pin the closing band just above the page footer so
+  // the document fills the A4 page. The contact footer is always drawn at the
+  // absolute page bottom (not under sparse mid-page content).
+  let pinnedClosing = false
+  if (closingH > 0 && y + closingH <= contentBottom) {
+    y = Math.max(y, contentBottom - closingH)
+    pinnedClosing = true
+  }
+
+  y = ensureRoom(y, notesTotalsH + 12)
+
+  if (notesText) {
+    doc.setFillColor(...CYAN)
+    doc.roundedRect(MARGIN, y, 3.5, 14, 1, 1, 'F')
+    doc.setFont('helvetica', 'bold').setFontSize(9).setTextColor(...NAVY)
+    doc.text('Notes', MARGIN + 10, y + 11)
+    doc.setFont('helvetica', 'normal').setFontSize(8.5).setTextColor(...GRAY)
+    doc.text(notesWrapped, MARGIN + 10, y + 26)
+  }
+
+  if (showAmounts && totals.length) {
+    const totalsX = rightX - rightW
+    let totalsY = y + 10
+    for (const row of totals) {
+      doc.setFont('helvetica', row.bold ? 'bold' : 'normal').setFontSize(row.bold ? 12 : 9)
+      doc.setTextColor(...(row.accent ? NAVY : TEXT))
+      doc.text(row.label, totalsX, totalsY)
+      doc.text(row.value, rightX, totalsY, { align: 'right' })
+      totalsY += row.bold ? 18 : 15
+    }
+  }
+
+  y += notesTotalsH + 16
+
+  if (bottomBlockH > 0) {
+    const pagesBefore = doc.getNumberOfPages()
+    y = ensureRoom(y, bottomBlockH + 8)
+    const spilledToNewPage = doc.getNumberOfPages() > pagesBefore
+    // Pin payment/signature above the footer on short pages, or after a spill.
+    // Skip when the full closing band was already pinned (preserves the gap).
+    if (spilledToNewPage || !pinnedClosing) {
+      if (y + bottomBlockH <= contentBottom) {
+        y = Math.max(y, contentBottom - bottomBlockH)
+      }
+    }
+  }
 
   if (paymentLines.length) {
     doc.setFillColor(...NAVY)
@@ -458,6 +483,7 @@ export function buildDeedDocumentPdf(
       doc.text(website, rightX, 28, { align: 'right' })
     }
 
+    // Page chrome is always absolute to A4 — never follows mid-page content.
     drawFooterTriangles(doc)
 
     const footerY = PAGE_H - 52

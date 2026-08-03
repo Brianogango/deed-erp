@@ -131,5 +131,32 @@ describe('buildDeedDocumentPdf', () => {
     const bytes = new Uint8Array(doc.output('arraybuffer'))
     expect(String.fromCharCode(...bytes.slice(0, 5))).toBe('%PDF-')
     expect(doc.getNumberOfPages()).toBe(1)
+    expect(doc.internal.pageSize.getHeight()).toBeCloseTo(841.89, 1)
+    expect(doc.internal.pageSize.getWidth()).toBeCloseTo(595.28, 1)
+  })
+
+  it('keeps short quotations on a full A4 page with footer chrome at the bottom', () => {
+    const doc = buildDeedDocumentPdf(
+      {
+        title: 'Quotation',
+        ref: 'QUO/2026/0099',
+        date: '2026-08-03',
+        customerName: 'Tica Health',
+        customerCountry: 'Kenya',
+        lines: [{ description: 'Apple 61W USB-C Power Adapter', qty: 1, unitPrice: 8000, taxRate: 16, subtotal: 8000 }],
+        subtotal: 8000,
+        taxTotal: 1280,
+        total: 9280,
+        notes: 'Short quote.',
+      },
+      company,
+      banks,
+    )
+    expect(doc.getNumberOfPages()).toBe(1)
+    expect(doc.internal.pageSize.getHeight()).toBeCloseTo(841.89, 1)
+    // Footer thank-you is always present on the A4 canvas (not clipped by content height).
+    const asString = Buffer.from(doc.output('arraybuffer')).toString('latin1')
+    expect(asString).toContain('Thank you for your business')
+    expect(asString).toContain('AUTHORISED SIGNATURE')
   })
 })
