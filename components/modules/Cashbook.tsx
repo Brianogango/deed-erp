@@ -1096,9 +1096,7 @@ export default function CashbookTab({ accounts }: { accounts: Account[] }) {
             style={{ background: 'var(--bg-surface)', borderBottom: '1px solid var(--border-lt)' }}>
             <span className="font-semibold min-w-0" style={{ color: 'var(--text-2)' }}>
               Opening — {monthLabel(activeMonth)}
-              <span className="font-normal block sm:inline sm:before:content-['·_']" style={{ color: 'var(--text-3)' }}>
-                {filterAccountName}
-              </span>
+              <span className="font-normal" style={{ color: 'var(--text-3)' }}> · {filterAccountName}</span>
             </span>
             <span className="font-bold font-mono shrink-0" style={{ color: 'var(--navy)' }}>{fmtKes(viewOpening)}</span>
           </div>
