@@ -9865,7 +9865,7 @@ const storeCtx: AppState = {
       for (const l of del.lines) {
         const prod = prodRef.current.find(x => x.id === l.productId)
         const done = doneLines.find(d => d.productId === l.productId)?.qty ?? 0
-        if (prod?.requiresSerial && done > 0 && done < l.qty) {
+        if (prod && isSerialTracking(inferTrackingMethod(prod)) && done > 0 && done < l.qty) {
           showToast(`${l.productName} is serial-tracked — deliver all ${l.qty} units or remove serials to split`, 'error')
           return
         }
@@ -9875,7 +9875,7 @@ const storeCtx: AppState = {
       doneLines.forEach(l => {
         const prod = prodRef.current.find(x => x.id === l.productId)
         if (prod && prod.unit !== 'service') {
-          if (!prod.requiresSerial && l.sourceLocation !== undefined) setBulkStock(prev => upsertBulkStock(prev, l.productId, l.sourceLocation as LocationId, -l.qty))
+          if (!isSerialTracking(inferTrackingMethod(prod)) && l.sourceLocation !== undefined) setBulkStock(prev => upsertBulkStock(prev, l.productId, l.sourceLocation as LocationId, -l.qty))
           setProducts(p => p.map(x => x.id === l.productId ? { ...x, stockQty: Math.max(0, x.stockQty - l.qty) } : x))
           addMove(l.productId, l.productName, l.qty, 'out', `Delivery ${del.ref}`, del.ref, l.sourceLocation ?? 'warehouse', 'customer', l.serialIds.map(id => serialRef.current.find(s => s.id === id)?.serial ?? id))
         }
@@ -15167,7 +15167,7 @@ const storeCtx: AppState = {
       
       const hasIssues = delivery.lines.some(line => {
         const product = products.find(p => p.id === line.productId)
-        if (product?.requiresSerial && line.serialIds.length !== line.qty) {
+        if (product && isSerialTracking(inferTrackingMethod(product)) && line.serialIds.length !== line.qty) {
           showToast(`${line.productName} requires ${line.qty} serial numbers`, 'error')
           return true
         }
