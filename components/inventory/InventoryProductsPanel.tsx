@@ -25,7 +25,7 @@ import {
   type ProductFilterState,
 } from '@/lib/inventory/product-filters'
 import { canArchiveProduct, canEditSerialNumber, canPrintInventoryLabels } from '@/lib/inventory/permissions'
-import { inferTrackingMethod, isSerialTracking, type TrackingMethod } from '@/lib/inventory-identifiers'
+import { inferTrackingMethod, isSerialTracking, productOffersOnHandSerials, type TrackingMethod } from '@/lib/inventory-identifiers'
 import SerialManageDrawer from './SerialManageDrawer'
 
 type ProductListRow = {
@@ -639,15 +639,20 @@ export default function InventoryProductsPanel({
           )}
           rowActions={row => {
             const tracking = inferTrackingMethod(row.product)
-            const serialCount = isSerialTracking(tracking) ? productSerialCount(row.product.id) : 0
+            const serialCount = productSerialCount(row.product.id)
+            const showSerials = productOffersOnHandSerials(row.product, { hasExistingSerials: serialCount > 0 })
             return (
               <div className="flex justify-end gap-1.5">
-                {isSerialTracking(tracking) && (
+                {showSerials && (
                   <button
                     type="button"
                     className="px-2 py-1.5 rounded-lg bg-slate-50 text-slate-700 border border-slate-200 text-[10px] font-extrabold"
                     onClick={() => setSerialProduct(row.product)}
-                    title="View / add on-hand serials"
+                    title={
+                      isSerialTracking(tracking)
+                        ? 'View / add on-hand serials'
+                        : 'Add on-hand serials (switches this product to SERIAL tracking)'
+                    }
                   >
                     Serials: {serialCount}
                   </button>

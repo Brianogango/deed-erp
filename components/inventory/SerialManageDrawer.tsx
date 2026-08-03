@@ -9,6 +9,7 @@ import { LOCATIONS, LocationId, Product, SerialNumber, useInventoryStore, fmtDat
 import { validateSerialEdit } from '@/lib/inventory/serial-edit'
 import { canIntakeOnHandSerials, canReleaseHeldSerial } from '@/lib/inventory/permissions'
 import { ON_HAND_LOCATIONS, parseSerialList, type OnHandLocation } from '@/lib/inventory/serial-intake'
+import { inferTrackingMethod, isSerialTracking } from '@/lib/inventory-identifiers'
 
 type StatusChip =
   | 'all'
@@ -55,6 +56,7 @@ export default function SerialManageDrawer({
   const role = users.find(u => u.id === currentUserId)?.role
   const canRelease = canReleaseHeldSerial(role)
   const canIntake = canIntakeOnHandSerials(role)
+  const willUpgradeToSerial = !isSerialTracking(inferTrackingMethod(product))
 
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<StatusChip>('all')
@@ -325,6 +327,12 @@ export default function SerialManageDrawer({
               )}
             </div>
           </div>
+
+          {willUpgradeToSerial && canIntake && (
+            <p className="text-[11px] text-blue-900 bg-blue-50 border border-blue-200 rounded-lg px-3 py-2">
+              This product is currently quantity-tracked. Adding on-hand serials will switch it to <strong>SERIAL</strong> unit tracking.
+            </p>
+          )}
 
           {statusCounts.available === 0 && canIntake && (
             <p className="text-[11px] text-amber-900 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">

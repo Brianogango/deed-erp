@@ -5,9 +5,11 @@ const CATEGORY_TRACKING_DEFAULT: Record<string, TrackingMethod> = {
   desktops: 'SERIAL',
   printers: 'SERIAL',
   networking: 'SERIAL',
+  'mobile devices': 'SERIAL',
   accessories: 'QUANTITY',
   'parts & components': 'QUANTITY',
   services: 'NONE',
+  'software & licences': 'NONE',
 }
 
 function normalizeSeed(value: string | null | undefined, fallback: string) {
@@ -16,6 +18,11 @@ function normalizeSeed(value: string | null | undefined, fallback: string) {
     .replace(/[^A-Z0-9]/g, '')
     .slice(0, 12)
   return cleaned || fallback
+}
+
+export function categoryDefaultTracking(category?: string | null): TrackingMethod | null {
+  const categoryKey = String(category ?? '').trim().toLowerCase()
+  return CATEGORY_TRACKING_DEFAULT[categoryKey] ?? null
 }
 
 export function inferTrackingMethod(input: {
@@ -29,10 +36,8 @@ export function inferTrackingMethod(input: {
     return explicit
   }
 
-  const categoryKey = String(input.category ?? '').trim().toLowerCase()
-  if (CATEGORY_TRACKING_DEFAULT[categoryKey]) {
-    return CATEGORY_TRACKING_DEFAULT[categoryKey]
-  }
+  const fromCategory = categoryDefaultTracking(input.category)
+  if (fromCategory) return fromCategory
 
   if (input.requiresSerial) return 'SERIAL'
   if (String(input.unit ?? '').toLowerCase() === 'service') return 'NONE'
@@ -45,6 +50,25 @@ export function isSerialTracking(method: TrackingMethod) {
 
 export function isStockTracked(method: TrackingMethod) {
   return method !== 'NONE'
+}
+
+/**
+ * Whether Product Master should offer the Serials / on-hand intake drawer.
+ * Machine categories (Laptops, Desktops, …) stay eligible even when the SKU was
+ * wrongly saved as QUANTITY — intake will switch tracking to SERIAL.
+ */
+export function productOffersOnHandSerials(product: {
+  trackingMethod?: string | null
+  category?: string | null
+  requiresSerial?: boolean | null
+  unit?: string | null
+}, opts?: { hasExistingSerials?: boolean }): boolean {
+  if (String(product.unit ?? '').toLowerCase() === 'service') return false
+  if (opts?.hasExistingSerials) return true
+  const tracking = inferTrackingMethod(product)
+  if (isSerialTracking(tracking)) return true
+  if (product.requiresSerial) return true
+  return categoryDefaultTracking(product.category) === 'SERIAL'
 }
 
 export function buildInventoryBarcode(params: {
