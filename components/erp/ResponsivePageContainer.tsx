@@ -3,8 +3,8 @@
 import type { ReactNode } from 'react'
 
 /**
- * Constrains operational content to the ERP max width with consistent gutters.
- * Tables may still use the full container width inside.
+ * Full-bleed operational content with consistent page gutters.
+ * Tables and list views use the full shell width (no centered max-width).
  */
 export function ResponsivePageContainer({
   children,
