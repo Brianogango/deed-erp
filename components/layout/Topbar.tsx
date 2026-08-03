@@ -204,12 +204,14 @@ function NotificationsPanel({
   onClose,
   onMarkRead,
   onMarkAll,
+  onClearRead,
   onNavigate,
 }: {
   notifs: AppNotification[]
   onClose: () => void
   onMarkRead: (id: string) => void
   onMarkAll: () => void
+  onClearRead: () => void
   onNavigate: (module: ModuleId, path?: string) => void
 }) {
   const [activeFilter, setActiveFilter] = useState<NotifFilter>('all')
@@ -233,7 +235,7 @@ function NotificationsPanel({
   const readNotifs = notifs.filter(n => n.read)
   const groups = groupByDate(filtered)
 
-  const handleClearRead = () => readNotifs.forEach(n => onMarkRead(n.id))
+  const handleClearRead = () => onClearRead()
 
   return (
     <div
@@ -772,6 +774,7 @@ export default function Topbar() {
     notifications,
     markNotificationRead,
     markAllNotificationsRead,
+    clearReadNotifications,
     profileImages,
     sidebarOpen,
     toggleSidebar,
@@ -1229,6 +1232,9 @@ export default function Topbar() {
                       return next
                     })
                   }
+                }}
+                onClearRead={() => {
+                  clearReadNotifications()
                 }}
                 onNavigate={(mod, path) => {
                   setModule(mod)
