@@ -2961,6 +2961,10 @@ export interface AppState {
   refreshProductCatalog: () => Promise<number>
   updateProduct: (id: string, p: Partial<Product>) => void
   updateProductPrice: (id: string, salePrice: number, costPrice: number, reason: string, effectiveDate?: string) => ProductPriceHistory | null
+  /** Soft-archive a product master (`isActive: false`). Hides from pickers; stock history kept. */
+  archiveProduct: (id: string) => void
+  /** Restore an archived product (`isActive: true`). */
+  unarchiveProduct: (id: string) => void
   deleteProduct: (id: string) => void
   importOpeningStock: (items: { productId: string; qty: number; serials?: string[]; serialSkus?: string[]; location?: LocationId }[]) => void
   /**
@@ -3268,6 +3272,8 @@ export type InventoryStoreState = Pick<AppState,
   | 'refreshProductCatalog'
   | 'updateProduct'
   | 'updateProductPrice'
+  | 'archiveProduct'
+  | 'unarchiveProduct'
   | 'updateSerial'
   | 'releaseSerialToStock'
   | 'createTransfer'
@@ -5605,6 +5611,8 @@ export function StoreProvider({
     refreshProductCatalog: (...args: Parameters<AppState['refreshProductCatalog']>) => storeCtxRef.current!.refreshProductCatalog(...args),
     updateProduct: (...args: Parameters<AppState['updateProduct']>) => storeCtxRef.current!.updateProduct(...args),
     updateProductPrice: (...args: Parameters<AppState['updateProductPrice']>) => storeCtxRef.current!.updateProductPrice(...args),
+    archiveProduct: (...args: Parameters<AppState['archiveProduct']>) => storeCtxRef.current!.archiveProduct(...args),
+    unarchiveProduct: (...args: Parameters<AppState['unarchiveProduct']>) => storeCtxRef.current!.unarchiveProduct(...args),
     createTransfer: (...args: Parameters<AppState['createTransfer']>) => storeCtxRef.current!.createTransfer(...args),
     addTransferLine: (...args: Parameters<AppState['addTransferLine']>) => storeCtxRef.current!.addTransferLine(...args),
     validateTransfer: (...args: Parameters<AppState['validateTransfer']>) => storeCtxRef.current!.validateTransfer(...args),
@@ -8796,6 +8804,67 @@ const storeCtx: AppState = {
       addAuditLog('update_product_price', product.sku || product.name, `Price updated for ${product.name}: ${fmtKes(history.oldSalePrice)} → ${fmtKes(salePrice)}. Reason: ${history.reason}`)
       showToast(`Sale price updated for ${product.name}`, 'success')
       return history
+    },
+    archiveProduct: (id) => {
+      if (!canApproveInventoryAction(currentUser())) {
+        showToast('Only inventory approvers can archive products', 'error')
+        return
+      }
+      const product = prodRef.current.find(p => p.id === id)
+      if (!product) {
+        showToast('Product not found', 'error')
+        return
+      }
+      if (!product.isActive) {
+        showToast(`${product.name} is already archived`, 'info')
+        return
+      }
+      const ids = [
+        id,
+        ...prodRef.current.filter(p => p.parentId === id && p.isActive).map(p => p.id),
+      ]
+      setProducts(prev => prev.map(p => ids.includes(p.id) ? { ...p, isActive: false } : p))
+      for (const productId of ids) {
+        fetch(`/api/products/${productId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ isActive: false }),
+        }).catch(() => {})
+      }
+      const extra = ids.length > 1 ? ` (+${ids.length - 1} variant${ids.length === 2 ? '' : 's'})` : ''
+      addAuditLog('archive_product', product.sku || product.name, `Archived product ${product.name}${extra}`)
+      showToast(`Archived ${product.name}${extra}`, 'success')
+    },
+    unarchiveProduct: (id) => {
+      if (!canApproveInventoryAction(currentUser())) {
+        showToast('Only inventory approvers can restore archived products', 'error')
+        return
+      }
+      const product = prodRef.current.find(p => p.id === id)
+      if (!product) {
+        showToast('Product not found', 'error')
+        return
+      }
+      if (product.isActive) {
+        showToast(`${product.name} is already active`, 'info')
+        return
+      }
+      // Restoring a variant whose parent is archived — restore parent too so it stays findable.
+      const parent = product.parentId ? prodRef.current.find(p => p.id === product.parentId) : undefined
+      const ids = [
+        id,
+        ...(parent && !parent.isActive ? [parent.id] : []),
+      ]
+      setProducts(prev => prev.map(p => ids.includes(p.id) ? { ...p, isActive: true } : p))
+      for (const productId of ids) {
+        fetch(`/api/products/${productId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ isActive: true }),
+        }).catch(() => {})
+      }
+      addAuditLog('unarchive_product', product.sku || product.name, `Restored product ${product.name}`)
+      showToast(`Restored ${product.name}`, 'success')
     },
     deleteProduct: (id) => {
       if (!canApproveInventoryAction(currentUser())) { showToast('Only inventory approvers can delete product masters', 'error'); return }

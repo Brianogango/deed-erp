@@ -9,6 +9,7 @@ import {
 } from '@/lib/inventory/product-filters'
 import { validateSerialEdit } from '@/lib/inventory/serial-edit'
 import {
+  canArchiveProduct,
   canEditSerialNumber,
   canValidatePurchaseReceipt,
   canViewPurchaseCost,
@@ -171,5 +172,13 @@ describe('inventory permissions', () => {
     expect(canEditSerialNumber('inventory_officer')).toBe(true)
     expect(canEditSerialNumber('technician')).toBe(false)
     expect(canViewPurchaseCost('finance_officer')).toBe(true)
+  })
+
+  it('gates product archive / restore', () => {
+    expect(canArchiveProduct('director')).toBe(true)
+    expect(canArchiveProduct('inventory_officer')).toBe(true)
+    expect(canArchiveProduct('technical_lead')).toBe(true)
+    expect(canArchiveProduct('sales_rep')).toBe(false)
+    expect(canArchiveProduct('technician')).toBe(false)
   })
 })

@@ -24,7 +24,7 @@ import {
   productMatchesFilters,
   type ProductFilterState,
 } from '@/lib/inventory/product-filters'
-import { canEditSerialNumber, canPrintInventoryLabels } from '@/lib/inventory/permissions'
+import { canArchiveProduct, canEditSerialNumber, canPrintInventoryLabels } from '@/lib/inventory/permissions'
 import { inferTrackingMethod, isSerialTracking, type TrackingMethod } from '@/lib/inventory-identifiers'
 import SerialManageDrawer from './SerialManageDrawer'
 
@@ -61,11 +61,12 @@ export default function InventoryProductsPanel({
 }: InventoryProductsPanelProps) {
   const {
     products, serials, bulkStock, receipts, purchaseOrders, contacts,
-    currentUserId, users, addAuditLog, showToast,
+    currentUserId, users, addAuditLog, showToast, archiveProduct, unarchiveProduct,
   } = useInventoryStore()
   const role = users.find(u => u.id === currentUserId)?.role
   const canLabels = canPrintInventoryLabels(role)
   const canEditSerial = canEditSerialNumber(role)
+  const canArchive = canArchiveProduct(role)
 
   const [filters, setFilters] = useState<ProductFilterState>(EMPTY_PRODUCT_FILTERS)
   const [collapsedParents, setCollapsedParents] = useState<Set<string>>(new Set())
@@ -379,7 +380,14 @@ export default function InventoryProductsPanel({
           <div className={`min-w-0 ${kind === 'variant' ? 'pl-4' : ''}`}>
             <div className="flex items-center gap-2">
               {kind === 'parent' && <span className="text-[10px] text-text-3">{isExpanded ? '▾' : '▸'}</span>}
-              <span className="text-xs font-bold text-text-1 erp-truncate" title={product.name}>{product.name}</span>
+              <span className={`text-xs font-bold erp-truncate ${product.isActive ? 'text-text-1' : 'text-text-3'}`} title={product.name}>
+                {product.name}
+              </span>
+              {!product.isActive && (
+                <span className="shrink-0 text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 border border-slate-200">
+                  Archived
+                </span>
+              )}
             </div>
             <div className="text-[10px] text-text-3 font-mono erp-truncate">
               SKU: {product.sku || '—'}
@@ -671,10 +679,40 @@ export default function InventoryProductsPanel({
                 >
                   Edit
                 </button>
+                {canArchive && row.product.isActive && (
+                  <button
+                    type="button"
+                    className="px-2.5 py-1.5 rounded-lg bg-slate-50 text-slate-700 border border-slate-200 text-[10px] font-extrabold"
+                    onClick={() => {
+                      if (window.confirm(`Archive “${row.product.name}”? It will be hidden from sales and purchase pickers. Stock history is kept.`)) {
+                        archiveProduct(row.product.id)
+                      }
+                    }}
+                    title="Archive product (hide from pickers)"
+                  >
+                    Archive
+                  </button>
+                )}
+                {canArchive && !row.product.isActive && (
+                  <button
+                    type="button"
+                    className="px-2.5 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-extrabold"
+                    onClick={() => unarchiveProduct(row.product.id)}
+                    title="Restore archived product"
+                  >
+                    Restore
+                  </button>
+                )}
               </div>
             )
           }}
-          rowClassName={row => (row.kind === 'variant' ? 'bg-[var(--bg-surface)]' : '')}
+          rowClassName={row => {
+            const parts = [
+              row.kind === 'variant' ? 'bg-[var(--bg-surface)]' : '',
+              !row.product.isActive ? 'opacity-70' : '',
+            ]
+            return parts.filter(Boolean).join(' ')
+          }}
           onRowClick={row => {
             if (row.kind !== 'parent') return
             setCollapsedParents(prev => {

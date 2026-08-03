@@ -3191,6 +3191,10 @@ export default function Inventory() {
                 <input type="checkbox" checked={!!form.canBePurchased} onChange={e => setF('canBePurchased')(e.target.checked)} />
                 Can be Purchased
               </label>
+              <label className="flex items-center gap-2 text-[12px] font-semibold text-text-2 cursor-pointer" title="Inactive products are archived — hidden from sales/purchase pickers">
+                <input type="checkbox" checked={!!form.isActive} onChange={e => setF('isActive')(e.target.checked)} />
+                Active (uncheck to archive)
+              </label>
             </div>
             {(form.barcode || form.name) && (
               <div className="rounded-xl border border-border-lt bg-white p-3 flex flex-col sm:flex-row sm:items-center gap-3">

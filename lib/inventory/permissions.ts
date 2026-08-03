@@ -93,3 +93,13 @@ export function canViewVendorLedger(role: InventoryRole | null | undefined) {
     'technical_lead',
   ].includes(role)
 }
+
+/** Archive / restore product masters (soft-hide via isActive). */
+export function canArchiveProduct(role: InventoryRole | null | undefined) {
+  return !!role && [
+    'director',
+    'admin_officer',
+    'inventory_officer',
+    'technical_lead',
+  ].includes(role)
+}
