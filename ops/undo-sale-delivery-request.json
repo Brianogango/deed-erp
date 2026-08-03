@@ -1,9 +1,11 @@
 {
-  "mode": "list",
+  "mode": "undo",
   "customer": "Tica Health",
+  "order": "SO/2026/0006",
+  "delivery": "DN/2026/0014",
   "cancelOpen": true,
   "force": false,
   "dryRun": false,
-  "requestedAt": "2026-08-03T10:35:00Z",
-  "reason": "Discover Tica Health deliveries before undoing Done DN(s) and returning stock"
+  "requestedAt": "2026-08-03T10:40:00Z",
+  "reason": "Cancel Tica Health DN/2026/0014 (ready) so delivery can be redone; release reserved stock. Does not touch posted INV/2026/0015 Dell lines."
 }
