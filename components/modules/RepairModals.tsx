@@ -1271,7 +1271,11 @@ export function EditRepairDetailsModal({ repair, onClose }: { repair: RepairOrde
     onClose()
   }
 
-  const flatFee = resolveDiagnosisFee({ repairPath: 'diagnosis_first' }, systemSettings).amount
+  const flatFee = resolveDiagnosisFee({
+    repairPath: 'diagnosis_first',
+    intakeDate: repair.intakeDate,
+  }, systemSettings).amount
+  const feeInEffect = flatFee > 0
 
   return (
     <Modal title="Edit Repair Details" subtitle={repair.ref} onClose={onClose} width={560} icon={<Fa icon={faUserGear} />} accent="#2563EB">
@@ -1309,7 +1313,9 @@ export function EditRepairDetailsModal({ repair, onClose }: { repair: RepairOrde
         </div>
         {form.repairPath === 'diagnosis_first' && (
           <p className="text-[10px] font-semibold text-[var(--text-3)]">
-            Diagnosis fee KES {flatFee.toLocaleString('en-KE')} · billed on final invoice · not credited against repair
+            {feeInEffect
+              ? `Diagnosis fee KES ${flatFee.toLocaleString('en-KE')} · billed on final invoice · not credited against repair`
+              : 'No mandatory diagnosis fee — this job was received before 3 Aug 2026, 3:00pm'}
             {feeLocked ? ` · currently ${repair.diagnosisFeeStatus}` : ''}
           </p>
         )}
