@@ -61,6 +61,9 @@ export default function Kilimall() {
   // ── Dispatch ──────────────────────────────────────────────────────────────────
   const [dispatchOrderId, setDispatchOrderId] = useState<string | null>(null)
   const [dispatchSerial, setDispatchSerial] = useState('')
+  const [useSubstitution, setUseSubstitution] = useState(false)
+  const [substituteProductId, setSubstituteProductId] = useState('')
+  const [substitutionReason, setSubstitutionReason] = useState('')
 
   // ── Settlements ───────────────────────────────────────────────────────────────
   const [showNewSettlement, setShowNewSettlement] = useState(false)
@@ -96,7 +99,9 @@ export default function Kilimall() {
     const q = orderSearch.toLowerCase()
     const matchStatus = orderStatusFilter === 'all' || o.status === orderStatusFilter
     const matchSearch = !q || o.ref.toLowerCase().includes(q) || o.kilimallRef.toLowerCase().includes(q)
-      || o.productName.toLowerCase().includes(q) || (o.customerName ?? '').toLowerCase().includes(q)
+      || o.productName.toLowerCase().includes(q)
+      || (o.fulfilledProductName ?? '').toLowerCase().includes(q)
+      || (o.customerName ?? '').toLowerCase().includes(q)
     return matchStatus && matchSearch
   })
 
@@ -131,8 +136,20 @@ export default function Kilimall() {
     },
     {
       key: 'product', label: 'Product', priority: 1, width: '1.4fr',
-      render: o => <span className="text-[11px] erp-truncate" title={o.productName}>{o.productName}</span>,
-      exportValue: o => o.productName,
+      render: o => (
+        <div className="min-w-0">
+          <span className="text-[11px] erp-truncate block" title={o.productName}>{o.productName}</span>
+          {o.fulfilledProductId && o.fulfilledProductId !== o.productId && (
+            <span className="text-[10px] text-t3 erp-truncate block" title={o.fulfilledProductName}>
+              Shipped: {o.fulfilledProductName}
+            </span>
+          )}
+        </div>
+      ),
+      accessor: o => `${o.productName} ${o.fulfilledProductName ?? ''}`,
+      exportValue: o => o.fulfilledProductId && o.fulfilledProductId !== o.productId
+        ? `${o.productName} → ${o.fulfilledProductName}`
+        : o.productName,
     },
     {
       key: 'qty', label: 'Qty', priority: 3, width: '60px',
@@ -183,9 +200,19 @@ export default function Kilimall() {
       exportValue: d => d.kilimallRef,
     },
     {
-      key: 'product', label: 'Product', priority: 1, width: '1.4fr',
-      render: d => <span className="text-[11px]">{d.productName}</span>,
-      exportValue: d => d.productName,
+      key: 'product', label: 'Shipped', priority: 1, width: '1.4fr',
+      render: d => (
+        <div className="min-w-0">
+          <span className="text-[11px] erp-truncate block">{d.productName}</span>
+          {d.isSubstitution && d.orderedProductName && (
+            <span className="text-[10px] text-t3 erp-truncate block">Ordered: {d.orderedProductName}</span>
+          )}
+        </div>
+      ),
+      accessor: d => `${d.productName} ${d.orderedProductName ?? ''}`,
+      exportValue: d => d.isSubstitution && d.orderedProductName
+        ? `${d.orderedProductName} → ${d.productName}`
+        : d.productName,
     },
     {
       key: 'serial', label: 'Serial', priority: 1, width: '140px',
@@ -200,13 +227,18 @@ export default function Kilimall() {
     {
       key: 'status', label: 'Status', priority: 1, width: '90px',
       render: d => (
-        <span className="text-[10px] px-2 py-0.5 rounded font-medium"
-          style={{ background: d.status === 'dispatched' ? 'var(--primary-light)' : 'var(--success-bg)', color: d.status === 'dispatched' ? 'var(--primary-dark)' : 'var(--success)' }}>
-          {d.status}
-        </span>
+        <div className="flex flex-col gap-0.5">
+          <span className="text-[10px] px-2 py-0.5 rounded font-medium w-fit"
+            style={{ background: d.status === 'dispatched' ? 'var(--primary-light)' : 'var(--success-bg)', color: d.status === 'dispatched' ? 'var(--primary-dark)' : 'var(--success)' }}>
+            {d.status}
+          </span>
+          {d.isSubstitution && (
+            <span className="text-[9px] font-medium" style={{ color: 'var(--warning)' }}>substituted</span>
+          )}
+        </div>
       ),
       accessor: d => d.status,
-      exportValue: d => d.status,
+      exportValue: d => d.isSubstitution ? `${d.status} (substituted)` : d.status,
     },
   ]
 
@@ -339,12 +371,24 @@ export default function Kilimall() {
     },
   ]
 
-  // Available serials for dispatch
+  // Available serials for dispatch (ordered product, or substitute when enabled)
   const pendingOrders = kilimallOrders.filter(o => o.status === 'pending')
   const dispatchOrder = pendingOrders.find(o => o.id === dispatchOrderId)
-  const availableSerials = dispatchOrder
-    ? serials.filter(s => s.status === 'available' && s.productId === dispatchOrder.productId)
+  const shipProductId = dispatchOrder
+    ? (useSubstitution && substituteProductId ? substituteProductId : dispatchOrder.productId)
+    : null
+  const availableSerials = shipProductId
+    ? serials.filter(s => s.status === 'available' && s.productId === shipProductId)
     : []
+  const sellableProducts = products.filter(p => p.canBeSold && p.isActive)
+
+  const resetDispatchForm = () => {
+    setDispatchOrderId(null)
+    setDispatchSerial('')
+    setUseSubstitution(false)
+    setSubstituteProductId('')
+    setSubstitutionReason('')
+  }
 
   // ─────────────────────────────────────────────────────────────────────────────
   // Handlers
@@ -372,10 +416,20 @@ export default function Kilimall() {
     if (!dispatchOrderId || !dispatchSerial) {
       showToast('Select an order and enter/select a serial number', 'error'); return
     }
+    if (useSubstitution && !substituteProductId) {
+      showToast('Select the product to ship as a substitute', 'error'); return
+    }
     const serial = serials.find(s => s.serial === dispatchSerial.trim() || s.id === dispatchSerial.trim())
     if (!serial) { showToast('Serial not found in inventory', 'error'); return }
-    const result = confirmKilimallDispatch(dispatchOrderId, serial.id, serial.serial)
-    if (result) { setDispatchOrderId(null); setDispatchSerial('') }
+    const result = confirmKilimallDispatch(
+      dispatchOrderId,
+      serial.id,
+      serial.serial,
+      useSubstitution
+        ? { fulfilledProductId: substituteProductId, substitutionReason: substitutionReason || undefined }
+        : undefined,
+    )
+    if (result) resetDispatchForm()
   }
 
   const handleSettlementUpload = (file: File) => {
@@ -505,10 +559,16 @@ export default function Kilimall() {
               : pendingOrders.map(o => (
                 <div key={o.id} className="table-row flex items-center justify-between px-4 py-3"
                   style={{ background: dispatchOrderId === o.id ? 'var(--info-bg)' : undefined, cursor: 'pointer' }}
-                  onClick={() => setDispatchOrderId(o.id)}>
+                  onClick={() => {
+                    setDispatchOrderId(o.id)
+                    setDispatchSerial('')
+                    setUseSubstitution(false)
+                    setSubstituteProductId('')
+                    setSubstitutionReason('')
+                  }}>
                   <div>
                     <p className="text-[11px] font-semibold">{o.ref} <span className="font-normal text-t3">· {o.kilimallRef}</span></p>
-                    <p className="text-[10px] text-t3">{o.productName} · {fmtDate(o.orderDate)}</p>
+                    <p className="text-[10px] text-t3">Ordered: {o.productName} · {fmtDate(o.orderDate)}</p>
                   </div>
                   <span className="text-[11px] font-mono font-semibold">{fmtKes(o.total)}</span>
                 </div>
@@ -523,29 +583,89 @@ export default function Kilimall() {
               <>
                 <div className="rounded-lg p-3" style={{ background: 'var(--info-bg)', border: '1px solid #BFDBFE' }}>
                   <p className="text-[11px] font-semibold">{dispatchOrder.ref} — {dispatchOrder.kilimallRef}</p>
-                  <p className="text-[10px] text-t3">{dispatchOrder.productName} · Qty {dispatchOrder.qty}</p>
+                  <p className="text-[10px] text-t3">Ordered: {dispatchOrder.productName} · Qty {dispatchOrder.qty}</p>
                   <p className="text-[10px] text-t3">{fmtKes(dispatchOrder.total)}</p>
                 </div>
-                <Field label="Serial Number" required hint={`${availableSerials.length} available in stock`}>
+
+                <label className="flex items-start gap-2 text-[11px] cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    className="mt-0.5"
+                    checked={useSubstitution}
+                    onChange={e => {
+                      const on = e.target.checked
+                      setUseSubstitution(on)
+                      setDispatchSerial('')
+                      if (!on) {
+                        setSubstituteProductId('')
+                        setSubstitutionReason('')
+                      }
+                    }}
+                  />
+                  <span>
+                    <span className="font-semibold text-t1">Substitute with different product</span>
+                    <span className="block text-t3 mt-0.5">
+                      Use when the customer ordered one model but you ship another (e.g. L490 → ThinkPad 13). Settlement stays on the Kilimall order.
+                    </span>
+                  </span>
+                </label>
+
+                {useSubstitution && (
+                  <>
+                    <Field label="Ship product" required hint="Stock and serial come from this product">
+                      <Select
+                        value={substituteProductId}
+                        onChange={v => {
+                          setSubstituteProductId(v)
+                          setDispatchSerial('')
+                        }}
+                        options={[
+                          { value: '', label: 'Select product…' },
+                          ...sellableProducts
+                            .filter(p => p.id !== dispatchOrder.productId)
+                            .map(p => ({ value: p.id, label: p.name })),
+                        ]}
+                      />
+                    </Field>
+                    <Field label="Substitution reason" hint="Optional">
+                      <Input
+                        value={substitutionReason}
+                        onChange={v => setSubstitutionReason(v)}
+                        placeholder="e.g. Stock swap — same class laptop"
+                      />
+                    </Field>
+                  </>
+                )}
+
+                <Field
+                  label="Serial Number"
+                  required
+                  hint={shipProductId
+                    ? `${availableSerials.length} available for ${useSubstitution
+                      ? (sellableProducts.find(p => p.id === substituteProductId)?.name || 'selected product')
+                      : dispatchOrder.productName}`
+                    : 'Select a ship product first'}
+                >
                   <div className="relative">
                     <input className="form-input w-full" value={dispatchSerial}
                       onChange={e => setDispatchSerial(e.target.value)}
-                      placeholder="Type or select serial…" list="dispatch-serials" />
+                      placeholder="Type or select serial…" list="dispatch-serials"
+                      disabled={useSubstitution && !substituteProductId} />
                     <datalist id="dispatch-serials">
                       {availableSerials.map(s => <option key={s.id} value={s.serial} />)}
                     </datalist>
                   </div>
-                  {availableSerials.length === 0 && (
+                  {shipProductId && availableSerials.length === 0 && (
                     <p className="text-[10px] mt-1 inline-flex items-center gap-1 flex-wrap" style={{ color: 'var(--danger)' }}>
                       <Fa icon={faTriangleExclamation} aria-hidden="true" /> No available stock for this product. <button type="button" className="underline" onClick={() => setModule('inventory')}>Check Inventory</button>
                     </p>
                   )}
                 </Field>
                 <button className="btn-primary inline-flex items-center gap-1.5" onClick={handleDispatch}
-                  disabled={!dispatchSerial || availableSerials.length === 0}>
+                  disabled={!dispatchSerial || availableSerials.length === 0 || (useSubstitution && !substituteProductId)}>
                   <Fa icon={faCheck} aria-hidden="true" /> Confirm Dispatch
                 </button>
-                <button className="btn-outline text-[11px]" onClick={() => { setDispatchOrderId(null); setDispatchSerial('') }}>
+                <button className="btn-outline text-[11px]" onClick={resetDispatchForm}>
                   Cancel
                 </button>
               </>
@@ -924,10 +1044,20 @@ export default function Kilimall() {
         <Modal title={viewOrder.ref} subtitle={`Kilimall Ref: ${viewOrder.kilimallRef}`} onClose={() => setViewOrder(null)} width={500}>
           <div className="grid grid-cols-2 gap-3 text-xs">
             {[
-              ['Product', viewOrder.productName], ['Quantity', String(viewOrder.qty)],
-              ['Unit Price', fmtKes(viewOrder.unitPrice)], ['Total', fmtKes(viewOrder.total)],
-              ['Order Date', fmtDate(viewOrder.orderDate)], ['Customer', viewOrder.customerName || '—'],
-              ['Serial', viewOrder.serialNumber || '—'], ['Settlement', viewOrder.settlementRef || '—'],
+              ['Ordered product', viewOrder.productName],
+              ['Shipped product', viewOrder.fulfilledProductName && viewOrder.fulfilledProductId !== viewOrder.productId
+                ? viewOrder.fulfilledProductName
+                : (viewOrder.serialNumber ? viewOrder.productName : '—')],
+              ['Quantity', String(viewOrder.qty)],
+              ['Unit Price', fmtKes(viewOrder.unitPrice)],
+              ['Total', fmtKes(viewOrder.total)],
+              ['Order Date', fmtDate(viewOrder.orderDate)],
+              ['Customer', viewOrder.customerName || '—'],
+              ['Serial', viewOrder.serialNumber || '—'],
+              ['Settlement', viewOrder.settlementRef || '—'],
+              ...(viewOrder.substitutionReason
+                ? [['Substitution reason', viewOrder.substitutionReason] as const]
+                : []),
             ].map(([k, v]) => (
               <div key={k} className="p-2.5 rounded-lg" style={{ background: 'var(--bg-surface)' }}>
                 <p className="text-[10px] text-t3 mb-0.5">{k}</p>

@@ -1623,10 +1623,15 @@ export interface KilimallOrder {
   kilimallRef: string        // external Kilimall order ID
   orderDate: string
   customerName?: string
+  /** Product the Kilimall customer ordered (catalog listing). */
   productId: string; productName: string
   qty: number; unitPrice: number; total: number
   status: KilimallOrderStatus
   serialId?: string; serialNumber?: string
+  /** Product actually shipped when different from the ordered product. */
+  fulfilledProductId?: string
+  fulfilledProductName?: string
+  substitutionReason?: string
   dispatchId?: string
   settlementId?: string
   settlementRef?: string
@@ -1639,7 +1644,12 @@ export interface KilimallDispatch {
   id: string; ref: string
   date: string
   orderId: string; orderRef: string; kilimallRef: string
+  /** Product actually shipped (serial belongs to this product). */
   productId: string; productName: string
+  /** Ordered product when a substitution was made. */
+  orderedProductId?: string
+  orderedProductName?: string
+  isSubstitution?: boolean
   serialId: string; serialNumber: string
   status: 'dispatched' | 'delivered' | 'failed'
   notes?: string
@@ -2726,7 +2736,12 @@ export interface AppState {
   kilimallSettlements: KilimallSettlement[]
   createKilimallOrder: (p: Omit<KilimallOrder, 'id' | 'ref' | 'status' | 'createdDate' | 'createdBy'>) => KilimallOrder
   updateKilimallOrder: (id: string, p: Partial<KilimallOrder>) => void
-  confirmKilimallDispatch: (orderId: string, serialId: string, serialNumber: string) => KilimallDispatch | null
+  confirmKilimallDispatch: (
+    orderId: string,
+    serialId: string,
+    serialNumber: string,
+    opts?: { fulfilledProductId?: string; substitutionReason?: string },
+  ) => KilimallDispatch | null
   createKilimallSettlement: (p: Omit<KilimallSettlement, 'id' | 'ref' | 'status' | 'createdDate' | 'createdBy'>) => KilimallSettlement
   updateKilimallSettlement: (id: string, p: Partial<KilimallSettlement>) => void
   reconcileKilimallSettlement: (settlementId: string) => void
@@ -5879,7 +5894,7 @@ const storeCtx: AppState = {
       return order
     },
     updateKilimallOrder: (id, p) => setKilimallOrders(prev => prev.map(o => o.id === id ? { ...o, ...p } : o)),
-    confirmKilimallDispatch: (orderId, serialId, serialNumber) => {
+    confirmKilimallDispatch: (orderId, serialId, serialNumber, opts) => {
       const user = currentUser()
       if (!user || !['director', 'inventory_officer', 'kilimall_officer'].includes(user.role)) {
         showToast('Unauthorized to dispatch orders', 'error'); return null;
@@ -5887,19 +5902,62 @@ const storeCtx: AppState = {
       const order = kilimallOrdersRef.current.find(o => o.id === orderId)
       if (!order) { showToast('Order not found', 'error'); return null }
       if (order.status !== 'pending') { showToast('Order already dispatched', 'error'); return null }
+      const serial = serialRef.current.find(s => s.id === serialId)
+      if (!serial) { showToast('Serial not found in inventory', 'error'); return null }
+      if (serial.status !== 'available') { showToast('Serial is not available', 'error'); return null }
+
+      const shipProductId = opts?.fulfilledProductId || order.productId
+      if (serial.productId !== shipProductId) {
+        showToast('Serial does not belong to the product being shipped', 'error'); return null
+      }
+
+      const shipProduct = prodRef.current.find(p => p.id === shipProductId)
+      const shipProductName = shipProduct?.name || serial.productName || order.productName
+      const isSubstitution = shipProductId !== order.productId
+      if (isSubstitution && !opts?.fulfilledProductId) {
+        showToast('Select the product being shipped for a substitution', 'error'); return null
+      }
+
       const dispatch: KilimallDispatch = {
         id: uid(), ref: seq('KD', 'kd'), date: now(),
         orderId: order.id, orderRef: order.ref, kilimallRef: order.kilimallRef,
-        productId: order.productId, productName: order.productName,
+        productId: shipProductId, productName: shipProductName,
+        orderedProductId: isSubstitution ? order.productId : undefined,
+        orderedProductName: isSubstitution ? order.productName : undefined,
+        isSubstitution: isSubstitution || undefined,
         serialId, serialNumber, status: 'dispatched',
+        notes: isSubstitution
+          ? (opts?.substitutionReason?.trim() || `Substituted for ordered ${order.productName}`)
+          : undefined,
         createdBy: currentUserId ?? 'system', createdDate: now(),
       }
       setKilimallDispatches(prev => [dispatch, ...prev])
       setKilimallOrders(prev => prev.map(o => o.id === orderId
-        ? { ...o, status: 'dispatched', dispatchId: dispatch.id, serialId, serialNumber } : o))
+        ? {
+            ...o,
+            status: 'dispatched' as const,
+            dispatchId: dispatch.id,
+            serialId,
+            serialNumber,
+            fulfilledProductId: isSubstitution ? shipProductId : undefined,
+            fulfilledProductName: isSubstitution ? shipProductName : undefined,
+            substitutionReason: isSubstitution
+              ? (opts?.substitutionReason?.trim() || undefined)
+              : undefined,
+          }
+        : o))
       setSerials(prev => prev.map(s => s.id === serialId ? { ...s, status: 'sold', location: 'customer' } : s))
-      showToast(`Dispatched ${order.ref} — serial ${serialNumber}`)
-      addAuditLog('kilimall_dispatch', dispatch.id, `Dispatch ${dispatch.ref} for ${order.ref}`)
+      const toastMsg = isSubstitution
+        ? `Dispatched ${order.ref} — shipped ${shipProductName} (ordered ${order.productName})`
+        : `Dispatched ${order.ref} — serial ${serialNumber}`
+      showToast(toastMsg)
+      addAuditLog(
+        'kilimall_dispatch',
+        dispatch.id,
+        isSubstitution
+          ? `Dispatch ${dispatch.ref} for ${order.ref}: substituted ${order.productName} → ${shipProductName}`
+          : `Dispatch ${dispatch.ref} for ${order.ref}`,
+      )
       return dispatch
     },
     createKilimallSettlement: (p) => {

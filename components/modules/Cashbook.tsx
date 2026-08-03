@@ -1019,23 +1019,42 @@ export default function CashbookTab({ accounts }: { accounts: Account[] }) {
     ncba: 'var(--navy)', equity: '#0891B2', kcb: 'var(--warning)', mpesa: '#16A34A', cash: 'var(--text-4)',
   }
 
+  const filterAccountName = filterAccount === 'all'
+    ? 'All accounts'
+    : (bankAccounts.find(a => a.id === filterAccount)?.name ?? filterAccount)
+
   return (
     <div className="flex flex-col gap-4 py-3">
 
-      {/* Month selector + filter pills row */}
-      <div className="flex items-center gap-3 flex-wrap">
+      {/* Title + month / account selects (mobile-first; no pill strip) */}
+      <div className="flex flex-col gap-3">
         <div>
           <p className="text-xs font-semibold mb-0.5" style={{ color: 'var(--text-1)' }}>Cash Book</p>
           <p className="text-[10px]" style={{ color: 'var(--text-3)' }}>Daily transactions · bank reconciliation</p>
         </div>
-        <select className="form-select text-xs ml-auto" style={{ width: 200 }}
-          value={activeMonth} onChange={e => setActiveMonth(e.target.value)}>
-          {availableMonths.map(m => <option key={m} value={m}>{monthLabel(m)}</option>)}
-        </select>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <label className="flex flex-col gap-1 min-w-0">
+            <span className="text-[10px] font-medium" style={{ color: 'var(--text-3)' }}>Month</span>
+            <select className="form-select text-xs w-full min-h-[44px]"
+              value={activeMonth} onChange={e => setActiveMonth(e.target.value)}>
+              {availableMonths.map(m => <option key={m} value={m}>{monthLabel(m)}</option>)}
+            </select>
+          </label>
+          <label className="flex flex-col gap-1 min-w-0">
+            <span className="text-[10px] font-medium" style={{ color: 'var(--text-3)' }}>Account</span>
+            <select className="form-select text-xs w-full min-h-[44px]"
+              value={filterAccount} onChange={e => setFilterAccount(e.target.value)}>
+              <option value="all">All accounts</option>
+              {bankAccounts.filter(a => a.active).map(acc => (
+                <option key={acc.id} value={acc.id}>{acc.name}</option>
+              ))}
+            </select>
+          </label>
+        </div>
       </div>
 
-      {/* Per-account KPI cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2">
+      {/* Per-account KPI cards — desktop only; mobile uses the account select + one balance line */}
+      <div className="hidden sm:grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2">
         {bankAccounts.filter(a => a.active).map(acc => {
           const closing = closingByAccount[acc.id] ?? 0
           const mCredit = monthEntries.filter(e => e.bankAccountId === acc.id).reduce((s,e) => s+e.credit, 0)
@@ -1058,43 +1077,30 @@ export default function CashbookTab({ accounts }: { accounts: Account[] }) {
         })}
       </div>
 
-      {/* Tab + account filter */}
+      {/* Section tabs */}
       <div className="flex items-center gap-2 flex-wrap">
         {(['cashbook', ...(reconEnabled ? ['reconcile'] as const : [])] as const).map(t => (
           <button key={t}
-            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${visibleTab === t ? 'btn-primary' : 'btn-secondary'}`}
+            className={`min-h-[44px] px-3 py-2 rounded-lg text-xs font-medium transition-all ${visibleTab === t ? 'btn-primary' : 'btn-secondary'}`}
             onClick={() => setActiveTab(t)}>
             {t === 'cashbook' ? 'Cash Book' : 'Bank Reconciliation'}
           </button>
         ))}
-        <div className="flex items-center gap-1 ml-2">
-          {[{ id: 'all', name: 'All Accounts' }, ...bankAccounts].map(acc => (
-            <button key={acc.id} onClick={() => setFilterAccount(acc.id)}
-              className="px-2.5 py-1 rounded-full text-[10px] font-medium transition-all"
-              style={{
-                background: filterAccount === acc.id
-                  ? (acc.id === 'all' ? 'var(--navy)' : ACCT_COLOR[acc.id] ?? 'var(--navy)')
-                  : 'var(--bg-surface)',
-                color: filterAccount === acc.id ? '#fff' : 'var(--text-3)',
-                border: '1px solid var(--border)',
-              }}>
-              {acc.name}
-            </button>
-          ))}
-        </div>
       </div>
 
       {/* ── CASH BOOK TABLE ─────────────────────────────────────────────── */}
       {visibleTab === 'cashbook' && (
         <div className="card overflow-hidden">
-          {/* Opening balance */}
-          <div className="px-4 py-2 flex items-center justify-between text-xs"
+          {/* Opening balance — single line on all viewports */}
+          <div className="px-4 py-3 flex items-center justify-between gap-3 text-xs"
             style={{ background: 'var(--bg-surface)', borderBottom: '1px solid var(--border-lt)' }}>
-            <span className="font-semibold" style={{ color: 'var(--text-2)' }}>
-              Opening Balance — {monthLabel(activeMonth)}
-              {filterAccount !== 'all' && ` (${bankAccounts.find(a => a.id === filterAccount)?.name})`}
+            <span className="font-semibold min-w-0" style={{ color: 'var(--text-2)' }}>
+              Opening — {monthLabel(activeMonth)}
+              <span className="font-normal block sm:inline sm:before:content-['·_']" style={{ color: 'var(--text-3)' }}>
+                {filterAccountName}
+              </span>
             </span>
-            <span className="font-bold font-mono" style={{ color: 'var(--navy)' }}>{fmtKes(viewOpening)}</span>
+            <span className="font-bold font-mono shrink-0" style={{ color: 'var(--navy)' }}>{fmtKes(viewOpening)}</span>
           </div>
 
           <DataTable
@@ -1166,20 +1172,56 @@ export default function CashbookTab({ accounts }: { accounts: Account[] }) {
             rows={entriesWithBal as (CashbookEntry & { balance: number })[]}
             rowKey={e => e.id}
             hideSearch
-            emptyMessage={`No transactions for ${monthLabel(activeMonth)}${filterAccount !== 'all' ? ` in ${bankAccounts.find(a => a.id === filterAccount)?.name}` : ''}`}
+            emptyMessage={`No transactions for ${monthLabel(activeMonth)}${filterAccount !== 'all' ? ` in ${filterAccountName}` : ''}`}
             perPage={50}
             exportTitle="Cashbook"
             exportFilename="cashbook"
+            renderCard={(e: CashbookEntry & { balance: number }) => {
+              const acc = bankAccounts.find(a => a.id === e.bankAccountId)
+              const bankColor = ACCT_COLOR[e.bankAccountId] ?? 'var(--text-4)'
+              const amount = e.credit > 0 ? e.credit : e.debit
+              const isIn = e.credit > 0
+              return (
+                <div
+                  className="px-1 py-3"
+                  style={{ borderBottom: '1px solid var(--border-lt)' }}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[10px] font-mono" style={{ color: 'var(--navy)' }}>{e.ref}</p>
+                      <p className="text-xs font-medium truncate mt-0.5" style={{ color: 'var(--text-1)' }}>{e.description}</p>
+                      <p className="text-[10px] mt-0.5" style={{ color: 'var(--text-3)' }}>
+                        {fmtDate(e.date)}
+                        {acc ? <> · <span style={{ color: bankColor }}>{acc.name}</span></> : null}
+                      </p>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <p className={`font-mono text-xs font-semibold ${isIn ? 'text-green-600' : 'text-red-500'}`}>
+                        {isIn ? '+' : '−'}{fmtKes(amount)}
+                      </p>
+                      <p className={`font-mono text-[10px] mt-0.5 ${e.balance < 0 ? 'text-red-500' : ''}`} style={{ color: e.balance < 0 ? undefined : 'var(--text-3)' }}>
+                        Bal {fmtKes(e.balance)}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )
+            }}
           />
 
           {/* Footer totals */}
-          <div className="px-4 py-2.5 flex flex-wrap gap-4 justify-end text-xs font-semibold border-t-2 border-[var(--border)] bg-[var(--bg-surface)]">
-            <span className="text-t3 mr-auto">Closing Balance — {entriesWithBal.length} transactions</span>
-            <span className="font-mono text-red-500">{fmtKes(totalDebit)}</span>
-            <span className="font-mono text-green-600">{fmtKes(totalCredit)}</span>
-            <span className={`font-mono font-bold ${closingBal < 0 ? 'text-red-500' : 'text-brand-navy'}`}>
-              {fmtKes(closingBal)}
+          <div className="px-4 py-3 flex flex-col sm:flex-row sm:flex-wrap gap-2 sm:gap-4 sm:justify-end text-xs font-semibold border-t-2 border-[var(--border)] bg-[var(--bg-surface)]">
+            <span className="text-t3 sm:mr-auto font-medium">
+              Closing — {entriesWithBal.length} txn
+              <span className="hidden sm:inline">s</span>
             </span>
+            <div className="flex items-center justify-between sm:justify-end gap-4">
+              <span className="font-mono text-red-500" aria-label="Total debit">{fmtKes(totalDebit)}</span>
+              <span className="font-mono text-green-600" aria-label="Total credit">{fmtKes(totalCredit)}</span>
+              <span className={`font-mono font-bold ${closingBal < 0 ? 'text-red-500' : 'text-brand-navy'}`} aria-label="Closing balance">
+                {fmtKes(closingBal)}
+              </span>
+            </div>
           </div>
         </div>
       )}
