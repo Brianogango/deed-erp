@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   buyBackConditionFromRepair,
   canConvertRetainedRepair,
+  canCreateTradeInFromRepair,
   findRepairCatalogProduct,
   matchRepairDeviceSerial,
 } from '@/lib/repair-retain-convert'
@@ -44,5 +45,15 @@ describe('repair-retain-convert helpers', () => {
     expect(canConvertRetainedRepair({ status: 'retained', retainedDonationId: 'd1' })).toBe(false)
     expect(canConvertRetainedRepair({ status: 'retained', retainedBuyBackId: 'b1' })).toBe(false)
     expect(canConvertRetainedRepair({ status: 'in_repair' })).toBe(false)
+  })
+
+  it('allows paid trade-in from evaluation / declined / unrepairable / retained', () => {
+    expect(canCreateTradeInFromRepair({ status: 'diagnosed' })).toBe(true)
+    expect(canCreateTradeInFromRepair({ status: 'declined' })).toBe(true)
+    expect(canCreateTradeInFromRepair({ status: 'unrepairable' })).toBe(true)
+    expect(canCreateTradeInFromRepair({ status: 'retained' })).toBe(true)
+    expect(canCreateTradeInFromRepair({ status: 'retained', retainedBuyBackId: 'b1' })).toBe(false)
+    expect(canCreateTradeInFromRepair({ status: 'returned' })).toBe(false)
+    expect(canCreateTradeInFromRepair({ status: 'delivered' })).toBe(false)
   })
 })

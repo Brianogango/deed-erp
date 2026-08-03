@@ -58,3 +58,34 @@ export function canConvertRetainedRepair(repair: {
 }): boolean {
   return repair.status === 'retained' && !repair.retainedBuyBackId && !repair.retainedDonationId
 }
+
+/** Statuses where staff can open a paid trade-in from the repair job. */
+export const TRADE_IN_FROM_REPAIR_STATUSES = [
+  'received',
+  'assigned',
+  'diagnosed',
+  'awaiting_approval',
+  'approved',
+  'awaiting_parts',
+  'in_repair',
+  'qc',
+  'ready',
+  'declined',
+  'unrepairable',
+  'retained',
+] as const
+
+/**
+ * Paid trade-in from repair is allowed when the job is still open for that
+ * path (or already declined/unrepairable/retained) and not yet linked to a
+ * buy-back or donation.
+ */
+export function canCreateTradeInFromRepair(repair: {
+  status: string
+  retainedBuyBackId?: string
+  retainedDonationId?: string
+}): boolean {
+  if (repair.retainedBuyBackId || repair.retainedDonationId) return false
+  return (TRADE_IN_FROM_REPAIR_STATUSES as readonly string[]).includes(repair.status)
+}
+
