@@ -94,9 +94,14 @@ import {
 import {
   ensureDiagnosisFeeInQuoteLines,
   isDiagnosisFeeLine,
+  isDiagnosisFeeSettled,
+  mustCollectDiagnosisFeeUpfront,
+  resolveCustomerBillingType,
   resolveDiagnosisFee,
+  resolveDiagnosisFeeBilling,
   shouldChargeDiagnosisFee,
   taxableQuoteSubtotal,
+  diagnosisFeeAmount,
 } from '@/lib/diagnosis-fee'
 import {
   buildDefaultRepairQcItems,
@@ -571,9 +576,11 @@ export interface SystemSettings {
   repEnforceFlow: boolean
   repOnlyAssignedTechSeesJob: boolean
   repAdminAssignsJobs: boolean
-  /** Mandatory Diagnosis First fee — regular machines (KES). */
+  /** Flat Diagnosis First fee (KES) — walk-in & corporate; not credited against labour. */
+  diagnosisFeeKes: number
+  /** @deprecated Prefer diagnosisFeeKes. */
   diagnosisFeeRegularKes: number
-  /** Mandatory Diagnosis First fee — high-end machines (KES). */
+  /** @deprecated Prefer diagnosisFeeKes. */
   diagnosisFeeHighEndKes: number
   // Accounting
   accCustomerInvoices: boolean
@@ -624,7 +631,7 @@ export const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
   purHighValueThreshold: 50000, purEnforceRFQFlow: true, purStoreLeadTimes: true,
   repRepairOrders: true, repWarrantyTracking: true, repPartsConsumption: true,
   repEnforceFlow: true, repOnlyAssignedTechSeesJob: true, repAdminAssignsJobs: true,
-  diagnosisFeeRegularKes: 1500, diagnosisFeeHighEndKes: 2500,
+  diagnosisFeeKes: 1000, diagnosisFeeRegularKes: 1000, diagnosisFeeHighEndKes: 1000,
   accCustomerInvoices: true, accVendorBills: true, accCreditNotes: true, accVatEnabled: true,
   accBankJournals: true, accMpesaJournals: true, accReconciliation: true,
   accLockDates: true, accApprovalForRefunds: true,
@@ -1459,13 +1466,19 @@ export interface RepairOrder {
   liabilityWaiverText?: string
   liabilityWaiverAcceptedAt?: string
   liabilityWaiverSignature?: string
-  /** Staff-picked at intake for Diagnosis First fee band. */
+  /** Staff-picked at intake (informational). Fee amount is flat — not tiered. */
   deviceTier?: 'regular' | 'high_end'
   deviceType?: string
   deviceBrand?: string
   deviceModel?: string
   diagnosisFee?: number                               // resolved Diagnosis First fee (KES)
-  diagnosisFeeStatus?: 'pending' | 'applicable' | 'waived' | 'invoiced' | 'not_applicable'
+  diagnosisFeeStatus?: 'pending' | 'applicable' | 'paid' | 'waived' | 'invoiced' | 'not_applicable'
+  /** Walk-in = collect before work; corporate = bill on final invoice. */
+  diagnosisFeeBilling?: 'upfront' | 'invoice'
+  customerBillingType?: 'walk_in' | 'corporate'
+  diagnosisFeePaidAt?: string
+  diagnosisFeePaidBy?: string
+  diagnosisFeePaidMethod?: string
   diagnosisFeeWaivedBy?: string
   diagnosisFeeWaivedReason?: string
   diagnosisStopped?: boolean                          // true if repair closed at diagnosis stage (fee-only)
@@ -3085,6 +3098,7 @@ export interface AppState {
   assignTechnicianToRepair: (repairId: string, technicianId: string) => void
   logDiagnosis: (repairId: string, diagnosis: Omit<RepairDiagnosis, 'diagnosedBy' | 'diagnosedDate'>) => void
   stopAtDiagnosis: (repairId: string) => void          // Close job at diagnosis stage, charge diagnosis fee
+  markDiagnosisFeePaid: (repairId: string, method?: string) => void
   waiveDiagnosisFee: (repairId: string, reason: string) => void
   generateRepairQuote: (repairId: string, lines: Omit<RepairQuoteLine, 'id' | 'reserved'>[], applyVat?: boolean) => void
   sendQuoteToCustomer: (repairId: string) => void
@@ -3330,6 +3344,7 @@ export type RepairStoreState = Pick<AppState,
   | 'assignTechnicianToRepair'
   | 'logDiagnosis'
   | 'stopAtDiagnosis'
+  | 'markDiagnosisFeePaid'
   | 'waiveDiagnosisFee'
   | 'generateRepairQuote'
   | 'approveRepairQuote'
@@ -4998,6 +5013,9 @@ export function StoreProvider({
       deviceTier: r.deviceTier === 'high_end' ? 'high_end' : r.deviceTier === 'regular' ? 'regular' : undefined,
       diagnosisFee: r.diagnosisFee,
       diagnosisFeeStatus: r.diagnosisFeeStatus,
+      diagnosisFeeBilling: r.diagnosisFeeBilling,
+      customerBillingType: r.customerBillingType,
+      diagnosisFeePaidAt: r.diagnosisFeePaidAt,
       diagnosisStopped: r.diagnosisStopped,
       liabilityWaiverAccepted: r.liabilityWaiverAccepted,
       liabilityWaiverAcceptedAt: r.liabilityWaiverAcceptedAt,
@@ -5514,6 +5532,7 @@ export function StoreProvider({
     assignTechnicianToRepair: (...args: Parameters<AppState['assignTechnicianToRepair']>) => storeCtxRef.current!.assignTechnicianToRepair(...args),
     logDiagnosis: (...args: Parameters<AppState['logDiagnosis']>) => storeCtxRef.current!.logDiagnosis(...args),
     stopAtDiagnosis: (...args: Parameters<AppState['stopAtDiagnosis']>) => storeCtxRef.current!.stopAtDiagnosis(...args),
+    markDiagnosisFeePaid: (...args: Parameters<AppState['markDiagnosisFeePaid']>) => storeCtxRef.current!.markDiagnosisFeePaid(...args),
     waiveDiagnosisFee: (...args: Parameters<AppState['waiveDiagnosisFee']>) => storeCtxRef.current!.waiveDiagnosisFee(...args),
     generateRepairQuote: (...args: Parameters<AppState['generateRepairQuote']>) => storeCtxRef.current!.generateRepairQuote(...args),
     approveRepairQuote: (...args: Parameters<AppState['approveRepairQuote']>) => storeCtxRef.current!.approveRepairQuote(...args),
@@ -11593,6 +11612,14 @@ const storeCtx: AppState = {
         showToast('Direct Repair jobs skip diagnosis — change the workflow path first if diagnosis is required', 'error')
         return
       }
+      if (mustCollectDiagnosisFeeUpfront(repair)) {
+        const fee = resolveDiagnosisFee(repair, systemSettings).amount
+        showToast(
+          `Collect diagnosis fee KES ${fee.toLocaleString('en-KE')} before starting work (walk-in policy)`,
+          'error',
+        )
+        return
+      }
       const isAssignedTech = repair.assignedTechnicianId === user.id
       const isLeadOrDirector = ['technical_lead', 'director'].includes(normalizeClientRole(user.role))
       if (!isAssignedTech && !isLeadOrDirector) {
@@ -11653,19 +11680,73 @@ const storeCtx: AppState = {
       }
       const resolved = resolveDiagnosisFee(repair, systemSettings)
       const DIAGNOSIS_FEE = resolved.amount
+      const alreadyPaid = isDiagnosisFeeSettled(repair) || resolved.status === 'paid'
+      const nextFeeStatus = DIAGNOSIS_FEE <= 0
+        ? (resolved.status as RepairOrder['diagnosisFeeStatus'])
+        : alreadyPaid
+          ? 'paid'
+          : 'applicable'
       setRepairs(p => p.map(r => r.id === repairId ? {
         ...r,
         diagnosisStopped: true,
         diagnosisFee: DIAGNOSIS_FEE,
-        diagnosisFeeStatus: DIAGNOSIS_FEE > 0 ? 'applicable' : (resolved.status as any),
-        deviceTier: resolved.tier ?? r.deviceTier ?? 'regular',
+        diagnosisFeeStatus: nextFeeStatus,
+        diagnosisFeeBilling: r.diagnosisFeeBilling ?? resolved.billing,
+        customerBillingType: r.customerBillingType ?? resolved.customerType,
         laborCost: 0,
         logisticsCost: 0,
         total: DIAGNOSIS_FEE,
         status: 'ready',
       } : r))
-      addAuditLog('stop_at_diagnosis', repairId, `Repair stopped at diagnosis — KES ${DIAGNOSIS_FEE} diagnosis fee charged`)
-      showToast(`Repair closed at diagnosis — KES ${DIAGNOSIS_FEE.toLocaleString('en-KE')} diagnosis fee charged`)
+      addAuditLog('stop_at_diagnosis', repairId, `Repair stopped at diagnosis — KES ${DIAGNOSIS_FEE} diagnosis fee ${alreadyPaid ? '(already paid)' : 'due (not credited against repairs)'}`)
+      showToast(
+        DIAGNOSIS_FEE <= 0
+          ? 'Repair closed at diagnosis — no diagnosis fee'
+          : alreadyPaid
+            ? `Repair closed at diagnosis — diagnosis fee KES ${DIAGNOSIS_FEE.toLocaleString('en-KE')} already paid`
+            : `Repair closed at diagnosis — KES ${DIAGNOSIS_FEE.toLocaleString('en-KE')} diagnosis fee due (not credited against repair)`,
+      )
+    },
+
+    markDiagnosisFeePaid: (repairId, method) => {
+      const user = currentUser()
+      if (!user) return
+      const repair = repairs.find(r => r.id === repairId)
+      if (!repair) return
+      const resolved = resolveDiagnosisFee(repair, systemSettings)
+      if (resolved.amount <= 0) {
+        showToast('No diagnosis fee on this job', 'error')
+        return
+      }
+      if (isDiagnosisFeeSettled(repair)) {
+        showToast('Diagnosis fee already marked paid')
+        return
+      }
+      const canMark = ['director', 'admin_officer', 'finance_officer', 'sales_rep'].includes(
+        normalizeClientRole(user.role),
+      )
+      if (!canMark) {
+        showToast('Only sales, finance, admin officer, or a director can mark the diagnosis fee paid', 'error')
+        return
+      }
+      const at = now()
+      const payMethod = method?.trim() || 'cash'
+      setRepairs(p => p.map(r => r.id === repairId ? {
+        ...r,
+        diagnosisFee: resolved.amount,
+        diagnosisFeeStatus: 'paid',
+        diagnosisFeeBilling: r.diagnosisFeeBilling ?? resolved.billing,
+        customerBillingType: r.customerBillingType ?? resolved.customerType,
+        diagnosisFeePaidAt: at,
+        diagnosisFeePaidBy: user.id,
+        diagnosisFeePaidMethod: payMethod,
+      } : r))
+      addAuditLog(
+        'diagnosis_fee_paid',
+        repairId,
+        `Diagnosis fee KES ${resolved.amount.toLocaleString('en-KE')} marked paid (${payMethod}) — not credited against repair bill`,
+      )
+      showToast(`Diagnosis fee KES ${resolved.amount.toLocaleString('en-KE')} recorded as paid`)
     },
 
     generateRepairQuote: async (repairId, incomingLines, applyVat = true) => {
@@ -11718,11 +11799,9 @@ const storeCtx: AppState = {
       }
 
       const resolvedFee = resolveDiagnosisFee(repair, systemSettings)
+      // Fee stays on the quote for visibility but is never credited against labour/parts.
+      // Walk-in fees already paid upfront still appear as a locked line (settled separately).
       const chargeFee = shouldChargeDiagnosisFee(repair) && resolvedFee.amount > 0
-      if (chargeFee && !repair.deviceTier) {
-        showToast('Set device tier (Regular / High-end) on Edit details before generating the quote', 'error')
-        return
-      }
       const incomingWithFee = ensureDiagnosisFeeInQuoteLines(
         incomingLines.map(line => ({
           ...line,
@@ -12031,7 +12110,11 @@ const storeCtx: AppState = {
         logisticsCost: derivedLogisticsCost,
         total: chargeTotal,
         diagnosisFee: chargeFee ? resolvedFee.amount : (r.diagnosisFeeStatus === 'waived' ? 0 : r.diagnosisFee),
-        diagnosisFeeStatus: chargeFee ? 'applicable' : (isDirectRepairPath(r.repairPath) || (r.underWarranty && r.warrantyCoverage === 'full') ? 'not_applicable' : r.diagnosisFeeStatus),
+        diagnosisFeeStatus: chargeFee
+          ? (r.diagnosisFeeStatus === 'paid' || r.diagnosisFeePaidAt ? 'paid' : 'applicable')
+          : (isDirectRepairPath(r.repairPath) || (r.underWarranty && r.warrantyCoverage === 'full') ? 'not_applicable' : r.diagnosisFeeStatus),
+        diagnosisFeeBilling: r.diagnosisFeeBilling ?? resolvedFee.billing,
+        customerBillingType: r.customerBillingType ?? resolvedFee.customerType,
         deviceTier: resolvedFee.tier ?? r.deviceTier,
         status: quoteStatus,
         quoteApprovalDeadline: (isFullWarranty || isDirectRepair) ? undefined : quote.validUntil,
@@ -12537,6 +12620,14 @@ const storeCtx: AppState = {
       const isAssignedTech = repair.assignedTechnicianId === user.id
       if (!isAssignedTech) {
         showToast('Only the assigned technician can start the repair', 'error'); return
+      }
+      if (mustCollectDiagnosisFeeUpfront(repair)) {
+        const fee = resolveDiagnosisFee(repair, systemSettings).amount
+        showToast(
+          `Collect diagnosis fee KES ${fee.toLocaleString('en-KE')} before work begins (walk-in policy)`,
+          'error',
+        )
+        return
       }
       // Diagnosis First needs quote approval; Direct Repair may start from assigned
       const validStartStatuses = startableStatusesForPath(repair.repairPath) as RepairStatus[]
@@ -13112,16 +13203,23 @@ const storeCtx: AppState = {
           taxRate: 0,
           subtotal: repair.logisticsCost,
         }] : []),
-        ...((shouldChargeDiagnosisFee(repair) && (repair.diagnosisFee ?? 0) > 0) ? [{
-          id: uid(),
-          description: repair.diagnosisStopped
-            ? 'Diagnosis Fee (repair not undertaken)'
-            : 'Diagnosis Fee',
-          qty: 1,
-          unitPrice: repair.diagnosisFee!,
-          taxRate: 0,
-          subtotal: repair.diagnosisFee!,
-        }] : []),
+        // Corporate: fee on final invoice. Walk-in already paid upfront: omit (not double-billed; not credited against labour).
+        ...((() => {
+          if (!shouldChargeDiagnosisFee(repair) || !(repair.diagnosisFee ?? 0)) return []
+          // Already collected separately (walk-in upfront) — do not re-bill on the repair invoice
+          if (repair.diagnosisFeeStatus === 'paid' || !!repair.diagnosisFeePaidAt) return []
+          if (repair.diagnosisFeeStatus === 'waived' || repair.diagnosisFeeStatus === 'not_applicable') return []
+          return [{
+            id: uid(),
+            description: repair.diagnosisStopped
+              ? 'Diagnosis Fee (repair not undertaken)'
+              : 'Diagnosis Fee',
+            qty: 1,
+            unitPrice: repair.diagnosisFee!,
+            taxRate: 0,
+            subtotal: repair.diagnosisFee!,
+          }]
+        })()),
       ]
       
       const subtotal = lines.reduce((sum, line) => sum + line.subtotal, 0)
@@ -13147,7 +13245,11 @@ const storeCtx: AppState = {
         total: subtotal + taxTotal,
         amountPaid: 0,
         repairId,
-        notes: `Repair invoice for ${repair.ref}`,
+        notes: `Repair invoice for ${repair.ref}${
+          isDiagnosisFeeSettled(repair) && repair.diagnosisFeeStatus === 'paid'
+            ? ` — diagnosis fee KES ${(repair.diagnosisFee ?? 0).toLocaleString('en-KE')} collected upfront (not credited against this bill)`
+            : ''
+        }`,
       }
       
       setInvoices(p => [invoice, ...p])
@@ -13172,7 +13274,13 @@ const storeCtx: AppState = {
         invoiceId: invoice.id,
         invoiceDate: now(),
         status: 'invoiced',
-        diagnosisFeeStatus: (shouldChargeDiagnosisFee(r) && (r.diagnosisFee ?? 0) > 0) ? 'invoiced' : r.diagnosisFeeStatus,
+        diagnosisFeeStatus: (() => {
+          if (!shouldChargeDiagnosisFee(r) || !(r.diagnosisFee ?? 0)) return r.diagnosisFeeStatus
+          if (r.diagnosisFeeStatus === 'paid' || r.diagnosisFeePaidAt) return 'paid'
+          // Fee line included on this invoice
+          if (r.diagnosisFeeStatus !== 'waived' && r.diagnosisFeeStatus !== 'not_applicable') return 'invoiced'
+          return r.diagnosisFeeStatus
+        })(),
       } : r))
 
       addAuditLog('invoice_repair', repair.ref, `Invoice ${invoice.ref} created`)
@@ -13586,8 +13694,12 @@ const storeCtx: AppState = {
           : r.quote,
         ...(feeApplies ? {
           diagnosisFee: resolved.amount,
-          diagnosisFeeStatus: 'applicable' as const,
-          deviceTier: resolved.tier ?? r.deviceTier ?? 'regular',
+          // Keep paid if walk-in already settled; otherwise mark applicable for collection
+          diagnosisFeeStatus: (r.diagnosisFeeStatus === 'paid' || r.diagnosisFeePaidAt)
+            ? 'paid' as const
+            : 'applicable' as const,
+          diagnosisFeeBilling: r.diagnosisFeeBilling ?? resolved.billing,
+          customerBillingType: r.customerBillingType ?? resolved.customerType,
         } : {}),
       } : r))
 
@@ -13595,7 +13707,7 @@ const storeCtx: AppState = {
         'decline_quote',
         repairId,
         feeApplies
-          ? `Quote declined — diagnosis fee KES ${resolved.amount} still due: ${trimmedReason}`
+          ? `Quote declined — diagnosis fee KES ${resolved.amount}${repair.diagnosisFeeStatus === 'paid' || repair.diagnosisFeePaidAt ? ' (already paid)' : ' still due'}: ${trimmedReason}`
           : `Quote declined by customer: ${trimmedReason}`,
       )
 
@@ -13768,19 +13880,23 @@ const storeCtx: AppState = {
       }
 
       const resolved = resolveDiagnosisFee(repair, systemSettings)
+      const feeAlreadyPaid = repair.diagnosisFeeStatus === 'paid' || !!repair.diagnosisFeePaidAt
       const feeStillDue =
         shouldChargeDiagnosisFee(repair) &&
         resolved.amount > 0 &&
         !!repair.diagnosis &&
         repair.diagnosisFeeStatus !== 'invoiced' &&
-        repair.diagnosisFeeStatus !== 'waived'
+        repair.diagnosisFeeStatus !== 'waived' &&
+        !feeAlreadyPaid
 
       const declineNote = isQuoteDeclinedReopenable(repair.status)
         ? ' (after quote decline)'
         : ''
       const feeNote = feeStillDue
         ? `\nDiagnosis fee still due — KES ${resolved.amount.toLocaleString('en-KE')}.`
-        : ''
+        : feeAlreadyPaid
+          ? `\nDiagnosis fee KES ${resolved.amount.toLocaleString('en-KE')} already paid.`
+          : ''
 
       setRepairs(p => p.map(r => r.id === repairId ? {
         ...r,
@@ -13792,7 +13908,10 @@ const storeCtx: AppState = {
           diagnosisFee: resolved.amount,
           diagnosisFeeStatus: 'applicable' as const,
           diagnosisStopped: true,
-          deviceTier: resolved.tier ?? r.deviceTier ?? 'regular',
+          diagnosisFeeBilling: r.diagnosisFeeBilling ?? resolved.billing,
+          customerBillingType: r.customerBillingType ?? resolved.customerType,
+        } : feeAlreadyPaid ? {
+          diagnosisStopped: true,
         } : {}),
         quote: r.quote && isQuoteDeclinedReopenable(r.status)
           ? { ...r.quote, rejectionReason: r.quote.rejectionReason || reason.trim() }

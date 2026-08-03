@@ -5,7 +5,6 @@ import { useRepairStore, RepairOrder, fmtKes, type RepairQAItem } from '@/lib/st
 import { DIRECT_REPAIR_WAIVER_TEXT } from '@/lib/repair-path'
 import {
   DIAGNOSIS_FEE_LINE_DESCRIPTION,
-  deviceTierLabel,
   isDiagnosisFeeLine,
   resolveDiagnosisFee,
   shouldChargeDiagnosisFee,
@@ -493,7 +492,7 @@ export function QuoteModal({ repair, onClose }: { repair: RepairOrder, onClose: 
       <div className="flex flex-col gap-5">
         {chargeFee && (
           <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-800 font-semibold">
-            Diagnosis fee KES {feeResolved.amount.toLocaleString('en-KE')} ({deviceTierLabel(feeResolved.tier)}) is locked and separate from labour. VAT on diagnosis fee is 0%.
+            Diagnosis fee KES {feeResolved.amount.toLocaleString('en-KE')} is locked and not credited against labour or parts. VAT on diagnosis fee is 0%.
           </div>
         )}
         <div className="rounded-2xl border border-[var(--border)] bg-[var(--bg-surface)] overflow-hidden">
@@ -1082,7 +1081,9 @@ export function ReturnModal({ repair, onClose }: { repair: RepairOrder, onClose:
     resolved.amount > 0 &&
     !!repair.diagnosis &&
     repair.diagnosisFeeStatus !== 'invoiced' &&
-    repair.diagnosisFeeStatus !== 'waived'
+    repair.diagnosisFeeStatus !== 'waived' &&
+    repair.diagnosisFeeStatus !== 'paid' &&
+    !repair.diagnosisFeePaidAt
 
   const handleReturn = () => {
     if (!reason.trim()) return
@@ -1141,7 +1142,8 @@ export function DeclineModal({ repair, onClose }: { repair: RepairOrder, onClose
           <p className="text-[11px] font-medium leading-relaxed" style={{ color: '#7F1D1D' }}>
             Marks the quote as <strong>Declined</strong>. You can still{' '}
             <strong>revise and re-send</strong> another quote, or <strong>return the device</strong>.
-            Diagnosis fee (if applicable) stays due.
+            Diagnosis fee (if diagnosis was done) stays due — it is not credited against any future repair.
+            Declining diagnosis at intake (Direct Repair) is different and has no fee.
           </p>
         </div>
         <Field label="Reason for Declining" required>
@@ -1179,7 +1181,6 @@ export function EditRepairDetailsModal({ repair, onClose }: { repair: RepairOrde
     issueDescription: repair.issueDescription || '',
     intakeNotes: repair.intakeNotes || '',
     repairPath: (repair.repairPath === 'direct_repair' ? 'direct_repair' : 'diagnosis_first') as 'diagnosis_first' | 'direct_repair',
-    deviceTier: (repair.deviceTier === 'high_end' ? 'high_end' : 'regular') as 'regular' | 'high_end',
     consentSignature: repair.liabilityWaiverSignature || '',
     agreeTerms: !!repair.liabilityWaiverAccepted,
   })
@@ -1193,10 +1194,6 @@ export function EditRepairDetailsModal({ repair, onClose }: { repair: RepairOrde
       showToast('Customer signature and terms agreement required when switching to Direct Repair', 'error')
       return
     }
-    if (form.repairPath === 'diagnosis_first' && !['regular', 'high_end'].includes(form.deviceTier)) {
-      showToast('Select Regular or High-end device tier for Diagnosis First', 'error')
-      return
-    }
     const nowIso = new Date().toISOString()
     const pathPatch = pathChanging
       ? form.repairPath === 'direct_repair'
@@ -1208,7 +1205,8 @@ export function EditRepairDetailsModal({ repair, onClose }: { repair: RepairOrde
             liabilityWaiverSignature: String(form.consentSignature).trim(),
             diagnosisFee: 0,
             diagnosisFeeStatus: 'not_applicable' as const,
-            notes: `${repair.notes || ''}\n[Workflow path changed → Direct Repair] Signed by: ${String(form.consentSignature).trim()}. By: ${actor?.name || 'staff'}.`.trim(),
+            diagnosisFeeBilling: undefined,
+            notes: `${repair.notes || ''}\n[Workflow path changed → Direct Repair / declined diagnosis] Signed by: ${String(form.consentSignature).trim()}. No diagnosis fee. By: ${actor?.name || 'staff'}.`.trim(),
           }
         : {
             repairPath: 'diagnosis_first' as const,
@@ -1220,22 +1218,29 @@ export function EditRepairDetailsModal({ repair, onClose }: { repair: RepairOrde
           }
       : {}
 
-    const tierPatch = (!feeLocked && form.repairPath === 'diagnosis_first')
+    const feePatch = (!feeLocked && form.repairPath === 'diagnosis_first')
       ? (() => {
-          const amount = resolveDiagnosisFee(
-            { ...repair, repairPath: 'diagnosis_first', deviceTier: form.deviceTier, diagnosisFeeStatus: repair.diagnosisFeeStatus === 'waived' ? 'waived' : 'applicable' },
+          const resolved = resolveDiagnosisFee(
+            {
+              ...repair,
+              repairPath: 'diagnosis_first',
+              diagnosisFeeStatus: repair.diagnosisFeeStatus === 'waived' ? 'waived' : (repair.diagnosisFeeStatus === 'paid' ? 'paid' : 'applicable'),
+            },
             systemSettings,
-          ).amount
+          )
           return {
-            deviceTier: form.deviceTier,
-            diagnosisFee: amount,
+            diagnosisFee: resolved.amount,
             diagnosisFeeStatus: (repair.diagnosisFeeStatus === 'waived'
               ? 'waived'
-              : amount > 0 ? 'applicable' : 'not_applicable') as RepairOrder['diagnosisFeeStatus'],
+              : repair.diagnosisFeeStatus === 'paid' || repair.diagnosisFeePaidAt
+                ? 'paid'
+                : resolved.amount > 0 ? 'applicable' : 'not_applicable') as RepairOrder['diagnosisFeeStatus'],
+            diagnosisFeeBilling: repair.diagnosisFeeBilling ?? resolved.billing,
+            customerBillingType: repair.customerBillingType ?? resolved.customerType,
           }
         })()
       : form.repairPath === 'direct_repair'
-        ? { deviceTier: undefined as undefined, diagnosisFee: 0, diagnosisFeeStatus: 'not_applicable' as const }
+        ? { diagnosisFee: 0, diagnosisFeeStatus: 'not_applicable' as const }
         : {}
 
     updateRepair(repair.id, {
@@ -1252,7 +1257,7 @@ export function EditRepairDetailsModal({ repair, onClose }: { repair: RepairOrde
       intakeNotes: form.intakeNotes.trim(),
       description: form.issueDescription.trim(),
       ...pathPatch,
-      ...tierPatch,
+      ...feePatch,
     })
     if (pathChanging && appendRepairHistory) {
       appendRepairHistory(repair.id, {
@@ -1266,8 +1271,7 @@ export function EditRepairDetailsModal({ repair, onClose }: { repair: RepairOrde
     onClose()
   }
 
-  const regularFee = resolveDiagnosisFee({ repairPath: 'diagnosis_first', deviceTier: 'regular' }, systemSettings).amount
-  const highEndFee = resolveDiagnosisFee({ repairPath: 'diagnosis_first', deviceTier: 'high_end' }, systemSettings).amount
+  const flatFee = resolveDiagnosisFee({ repairPath: 'diagnosis_first' }, systemSettings).amount
 
   return (
     <Modal title="Edit Repair Details" subtitle={repair.ref} onClose={onClose} width={560} icon={<Fa icon={faUserGear} />} accent="#2563EB">
@@ -1299,26 +1303,17 @@ export function EditRepairDetailsModal({ repair, onClose }: { repair: RepairOrde
           <Field label="Workflow Path">
             <Select value={form.repairPath} onChange={v => set('repairPath')(v)} options={[
               { value: 'diagnosis_first', label: 'Diagnosis First' },
-              { value: 'direct_repair', label: 'Direct Repair' },
+              { value: 'direct_repair', label: 'Direct Repair (decline diagnosis)' },
             ]} />
           </Field>
-          {form.repairPath === 'diagnosis_first' && (
-            <Field label="Device tier (diagnosis fee)">
-              <Select
-                value={form.deviceTier}
-                onChange={v => set('deviceTier')(v)}
-                disabled={feeLocked}
-                options={[
-                  { value: 'regular', label: `Regular — KES ${regularFee.toLocaleString('en-KE')}` },
-                  { value: 'high_end', label: `High-end — KES ${highEndFee.toLocaleString('en-KE')}` },
-                ]}
-              />
-            </Field>
-          )}
         </div>
-        {feeLocked && form.repairPath === 'diagnosis_first' && (
+        {form.repairPath === 'diagnosis_first' && (
           <p className="text-[10px] font-semibold text-[var(--text-3)]">
-            Device tier is locked because the diagnosis fee is already {repair.diagnosisFeeStatus}.
+            Diagnosis fee KES {flatFee.toLocaleString('en-KE')} · not credited against repair
+            {feeLocked ? ` · currently ${repair.diagnosisFeeStatus}` : ''}
+            {repair.customerBillingType === 'corporate' || repair.diagnosisFeeBilling === 'invoice'
+              ? ' · billed on final invoice'
+              : ' · walk-in: collect before work'}
           </p>
         )}
         {form.repairPath === 'direct_repair' && form.repairPath !== (repair.repairPath === 'direct_repair' ? 'direct_repair' : 'diagnosis_first') && (
@@ -1330,7 +1325,7 @@ export function EditRepairDetailsModal({ repair, onClose }: { repair: RepairOrde
             <label className="flex items-start gap-3 cursor-pointer">
               <input type="checkbox" className="mt-1" checked={!!form.agreeTerms} onChange={e => set('agreeTerms')(e.target.checked)} />
               <span className="text-[10px] font-medium leading-tight" style={{ color: 'var(--text-3)' }}>
-                Customer authorises Direct Repair and accepts the liability waiver.
+                Customer declines diagnosis — no diagnosis fee; work limited to the requested scope. Liability waiver accepted.
               </span>
             </label>
           </div>
@@ -1349,15 +1344,16 @@ export function EditRepairDetailsModal({ repair, onClose }: { repair: RepairOrde
 }
 
 /**
- * StopAtDiagnosisModal — customer declines repair after diagnosis.
- * Diagnosis fee (Regular / High-end) is always charged; labor is not.
+ * StopAtDiagnosisModal — customer declines repair after diagnosis was performed.
+ * Diagnosis fee still applies (not the same as declining diagnosis at intake).
  */
 export function StopAtDiagnosisModal({ repair, onClose }: { repair: RepairOrder, onClose: () => void }) {
   const { stopAtDiagnosis, updateRepair, systemSettings } = useRepairStore()
   const [reason, setReason] = useState('')
   const fee = resolveDiagnosisFee(repair, systemSettings)
+  const alreadyPaid = fee.status === 'paid' || !!repair.diagnosisFeePaidAt
   const feeLabel = fee.amount > 0
-    ? `KES ${fee.amount.toLocaleString('en-KE')} (${deviceTierLabel(fee.tier)})`
+    ? `KES ${fee.amount.toLocaleString('en-KE')}`
     : fee.status === 'waived' ? 'waived' : 'KES 0'
 
   const handleConfirm = () => {
@@ -1377,7 +1373,11 @@ export function StopAtDiagnosisModal({ repair, onClose }: { repair: RepairOrder,
           <div className="text-[11px] font-medium leading-relaxed" style={{ color: 'var(--warning-text)' }}>
             <p className="mb-1">The customer is taking the device <strong>without repair</strong>. This will:</p>
             <ul className="list-disc pl-4 space-y-0.5">
-              <li>Charge diagnosis fee <strong>{feeLabel}</strong> (0% VAT; separate from labour)</li>
+              <li>
+                {alreadyPaid
+                  ? <>Diagnosis fee <strong>{feeLabel}</strong> already paid (not credited against labour)</>
+                  : <>Charge diagnosis fee <strong>{feeLabel}</strong> (0% VAT; not credited against labour)</>}
+              </li>
               <li>Move the job to <strong>Ready</strong> for invoicing and collection</li>
               <li>Release the device through the normal handover flow</li>
             </ul>
@@ -1389,7 +1389,7 @@ export function StopAtDiagnosisModal({ repair, onClose }: { repair: RepairOrder,
         <div className="flex gap-2 justify-end pt-2">
           <button className="btn-outline min-w-[100px]" onClick={onClose}>Cancel</button>
           <ActionBtn onClick={handleConfirm} color="linear-gradient(135deg,#D97706,#F59E0B)" shadow="0 8px 24px rgba(245,158,11,0.4)">
-            <Fa icon={faBan} /> Stop &amp; Charge Fee
+            <Fa icon={faBan} /> Stop &amp; {alreadyPaid ? 'Close' : 'Charge Fee'}
           </ActionBtn>
         </div>
       </div>

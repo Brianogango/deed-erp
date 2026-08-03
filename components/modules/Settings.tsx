@@ -993,16 +993,21 @@ ACCOUNTS_EMAIL=accounts@deed.co.ke`}</pre>
                 <SettingRow label="Only Assigned Technician Sees Job" desc="Technicians cannot view or edit repair jobs not assigned to them"><Toggle on={ss.repOnlyAssignedTechSeesJob} onChange={v => updateSystemSettings({ repOnlyAssignedTechSeesJob: v })} /></SettingRow>
                 <SettingRow label="Admin / Lead Assigns Jobs" desc="Only admins and lead techs can assign repair jobs to technicians"><Toggle on={ss.repAdminAssignsJobs} onChange={v => updateSystemSettings({ repAdminAssignsJobs: v })} /></SettingRow>
               </SectionCard>
-              <SectionCard title="Diagnosis Fees (Diagnosis First)">
+              <SectionCard title="Diagnosis Fee (Diagnosis First)">
                 <p className="text-[11px] text-[var(--text-3)] px-1 pb-2 leading-relaxed">
-                  Mandatory on Diagnosis First jobs. Labor is charged separately. Direct Repair is exempt. VAT on this fee is always 0%.
+                  Flat fee for walk-in and corporate Diagnosis First jobs. Not credited against labour or parts.
+                  Walk-ins pay before work; corporates see it on the final invoice. Direct Repair (declined diagnosis) and full warranty are exempt. VAT is always 0%.
                 </p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 px-1 pb-2">
-                  <Field label="Regular machines (KES)">
-                    <Input type="number" value={String(ss.diagnosisFeeRegularKes ?? 1500)} onChange={v => updateSystemSettings({ diagnosisFeeRegularKes: Math.max(0, Number(v) || 0) })} />
-                  </Field>
-                  <Field label="High-end machines (KES)">
-                    <Input type="number" value={String(ss.diagnosisFeeHighEndKes ?? 2500)} onChange={v => updateSystemSettings({ diagnosisFeeHighEndKes: Math.max(0, Number(v) || 0) })} />
+                  <Field label="Diagnosis fee (KES)">
+                    <Input
+                      type="number"
+                      value={String(ss.diagnosisFeeKes ?? ss.diagnosisFeeRegularKes ?? 1000)}
+                      onChange={v => {
+                        const n = Math.max(0, Number(v) || 0)
+                        updateSystemSettings({ diagnosisFeeKes: n, diagnosisFeeRegularKes: n, diagnosisFeeHighEndKes: n })
+                      }}
+                    />
                   </Field>
                 </div>
               </SectionCard>

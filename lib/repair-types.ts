@@ -153,7 +153,12 @@ export interface RepairOrder {
   deviceBrand?: string
   deviceModel?: string
   diagnosisFee?: number
-  diagnosisFeeStatus?: 'pending' | 'applicable' | 'waived' | 'invoiced' | 'not_applicable'
+  diagnosisFeeStatus?: 'pending' | 'applicable' | 'paid' | 'waived' | 'invoiced' | 'not_applicable'
+  diagnosisFeeBilling?: 'upfront' | 'invoice'
+  customerBillingType?: 'walk_in' | 'corporate'
+  diagnosisFeePaidAt?: string
+  diagnosisFeePaidBy?: string
+  diagnosisFeePaidMethod?: string
   diagnosisFeeWaivedBy?: string
   diagnosisFeeWaivedReason?: string
   diagnosisStopped?: boolean

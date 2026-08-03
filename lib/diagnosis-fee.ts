@@ -1,7 +1,15 @@
 /**
  * Diagnosis First mandatory diagnosis fee.
- * Labor / parts are always separate — never credited against this fee.
- * VAT on diagnosis fee is always 0% (policy).
+ *
+ * Policy (Service Charges & Pricing — Aug 2026):
+ * - Flat KES 1,000 for walk-in & corporate Diagnosis First jobs
+ * - Not credited against the repair bill (labour/parts stay separate)
+ * - Walk-in: collect before work begins
+ * - Corporate: add to the final consolidated invoice
+ * - Warranty (full): exempt
+ * - Client declines diagnosis (Direct Repair / instructed scope): no fee
+ * - VAT on diagnosis fee is always 0%
+ *
  * Stored amounts live on the repair blob (`deed_repairs_v2`).
  */
 
@@ -10,16 +18,30 @@ export type DeviceTier = 'regular' | 'high_end'
 export type DiagnosisFeeStatus =
   | 'pending'
   | 'applicable'
+  | 'paid'
   | 'waived'
   | 'invoiced'
   | 'not_applicable'
 
+/** When the fee is collected relative to the job. */
+export type DiagnosisFeeBilling = 'upfront' | 'invoice'
+
+export type CustomerBillingType = 'walk_in' | 'corporate'
+
 export const DIAGNOSIS_FEE_LINE_DESCRIPTION = 'Diagnosis Fee'
-export const DEFAULT_DIAGNOSIS_FEE_REGULAR_KES = 1500
-export const DEFAULT_DIAGNOSIS_FEE_HIGH_END_KES = 2500
+/** Policy default — flat fee for all Diagnosis First jobs. */
+export const DEFAULT_DIAGNOSIS_FEE_KES = 1000
+/** @deprecated Prefer DEFAULT_DIAGNOSIS_FEE_KES — kept for older settings blobs. */
+export const DEFAULT_DIAGNOSIS_FEE_REGULAR_KES = DEFAULT_DIAGNOSIS_FEE_KES
+/** @deprecated Prefer DEFAULT_DIAGNOSIS_FEE_KES — kept for older settings blobs. */
+export const DEFAULT_DIAGNOSIS_FEE_HIGH_END_KES = DEFAULT_DIAGNOSIS_FEE_KES
 
 export type DiagnosisFeeSettings = {
+  /** Flat Diagnosis First fee (KES). Preferred. */
+  diagnosisFeeKes?: number
+  /** @deprecated Legacy tier amount — used only if diagnosisFeeKes is unset. */
   diagnosisFeeRegularKes?: number
+  /** @deprecated Legacy tier amount — ignored for flat policy amount. */
   diagnosisFeeHighEndKes?: number
 }
 
@@ -28,6 +50,9 @@ export type DiagnosisFeeRepair = {
   deviceTier?: DeviceTier | string | null
   diagnosisFee?: number | null
   diagnosisFeeStatus?: DiagnosisFeeStatus | string | null
+  diagnosisFeeBilling?: DiagnosisFeeBilling | string | null
+  diagnosisFeePaidAt?: string | null
+  customerBillingType?: CustomerBillingType | string | null
   underWarranty?: boolean
   warrantyCoverage?: 'full' | 'partial' | 'void' | string | null
 }
@@ -52,16 +77,40 @@ export function deviceTierLabel(tier: unknown): string {
   return normalizeDeviceTier(tier) === 'high_end' ? 'High-end' : 'Regular'
 }
 
-export function diagnosisFeeAmountForTier(
-  tier: unknown,
-  settings?: DiagnosisFeeSettings | null,
-): number {
-  const regular = Math.max(0, Number(settings?.diagnosisFeeRegularKes ?? DEFAULT_DIAGNOSIS_FEE_REGULAR_KES) || 0)
-  const highEnd = Math.max(0, Number(settings?.diagnosisFeeHighEndKes ?? DEFAULT_DIAGNOSIS_FEE_HIGH_END_KES) || 0)
-  return normalizeDeviceTier(tier) === 'high_end' ? highEnd : regular
+/** Flat diagnosis fee from settings (policy: KES 1,000). */
+export function diagnosisFeeAmount(settings?: DiagnosisFeeSettings | null): number {
+  const flat = Number(settings?.diagnosisFeeKes)
+  if (Number.isFinite(flat) && flat >= 0) return flat
+  const legacy = Number(settings?.diagnosisFeeRegularKes)
+  if (Number.isFinite(legacy) && legacy >= 0) return legacy
+  return DEFAULT_DIAGNOSIS_FEE_KES
 }
 
-/** Full warranty → no diagnosis fee. Direct Repair → not applicable. */
+/**
+ * @deprecated Flat fee policy — tier no longer changes the amount.
+ * Kept so call sites compile; always returns diagnosisFeeAmount(settings).
+ */
+export function diagnosisFeeAmountForTier(
+  _tier: unknown,
+  settings?: DiagnosisFeeSettings | null,
+): number {
+  return diagnosisFeeAmount(settings)
+}
+
+/** Corporate (company) → invoice; walk-in / individual → upfront. */
+export function resolveDiagnosisFeeBilling(
+  clientType: 'individual' | 'company' | string | null | undefined,
+): DiagnosisFeeBilling {
+  return clientType === 'company' ? 'invoice' : 'upfront'
+}
+
+export function resolveCustomerBillingType(
+  clientType: 'individual' | 'company' | string | null | undefined,
+): CustomerBillingType {
+  return clientType === 'company' ? 'corporate' : 'walk_in'
+}
+
+/** Full warranty → no fee. Direct Repair (declined diagnosis) → not applicable. */
 export function shouldChargeDiagnosisFee(repair: DiagnosisFeeRepair): boolean {
   if (repair.repairPath === 'direct_repair') return false
   if (repair.diagnosisFeeStatus === 'waived' || repair.diagnosisFeeStatus === 'not_applicable') return false
@@ -70,18 +119,63 @@ export function shouldChargeDiagnosisFee(repair: DiagnosisFeeRepair): boolean {
   return repair.repairPath !== 'direct_repair'
 }
 
+/** Fee already collected (walk-in upfront) or posted on an invoice. */
+export function isDiagnosisFeeSettled(repair: DiagnosisFeeRepair): boolean {
+  const status = String(repair.diagnosisFeeStatus ?? '')
+  if (status === 'paid' || status === 'invoiced' || status === 'waived' || status === 'not_applicable') return true
+  if (repair.diagnosisFeePaidAt) return true
+  return false
+}
+
+/**
+ * Walk-in Diagnosis First jobs must collect the fee before diagnosis/repair starts.
+ * Corporate jobs bill on the final invoice — no upfront gate.
+ */
+export function mustCollectDiagnosisFeeUpfront(repair: DiagnosisFeeRepair): boolean {
+  if (!shouldChargeDiagnosisFee(repair)) return false
+  const billing = repair.diagnosisFeeBilling
+    ?? (repair.customerBillingType === 'corporate' ? 'invoice' : 'upfront')
+  if (billing !== 'upfront') return false
+  return !isDiagnosisFeeSettled(repair)
+}
+
+function billingMeta(repair: DiagnosisFeeRepair): {
+  billing: DiagnosisFeeBilling
+  customerType: CustomerBillingType
+} {
+  const customerType: CustomerBillingType =
+    repair.customerBillingType === 'corporate' || repair.customerBillingType === 'walk_in'
+      ? repair.customerBillingType
+      : 'walk_in'
+  const billing: DiagnosisFeeBilling =
+    repair.diagnosisFeeBilling === 'upfront' || repair.diagnosisFeeBilling === 'invoice'
+      ? repair.diagnosisFeeBilling
+      : customerType === 'corporate'
+        ? 'invoice'
+        : 'upfront'
+  return { billing, customerType }
+}
+
 export function resolveDiagnosisFee(
   repair: DiagnosisFeeRepair,
   settings?: DiagnosisFeeSettings | null,
-): { amount: number; status: DiagnosisFeeStatus; tier: DeviceTier | null } {
+): {
+  amount: number
+  status: DiagnosisFeeStatus
+  tier: DeviceTier | null
+  billing: DiagnosisFeeBilling
+  customerType: CustomerBillingType
+} {
+  const meta = billingMeta(repair)
   if (repair.repairPath === 'direct_repair') {
-    return { amount: 0, status: 'not_applicable', tier: normalizeDeviceTier(repair.deviceTier) }
+    return { amount: 0, status: 'not_applicable', tier: normalizeDeviceTier(repair.deviceTier), ...meta }
   }
   if (repair.diagnosisFeeStatus === 'waived') {
     return {
       amount: 0,
       status: 'waived',
       tier: normalizeDeviceTier(repair.deviceTier),
+      ...meta,
     }
   }
   if (repair.underWarranty && repair.warrantyCoverage === 'full') {
@@ -89,11 +183,34 @@ export function resolveDiagnosisFee(
       amount: 0,
       status: 'not_applicable',
       tier: normalizeDeviceTier(repair.deviceTier),
+      ...meta,
     }
   }
-  const tier = normalizeDeviceTier(repair.deviceTier) ?? 'regular'
-  const amount = diagnosisFeeAmountForTier(tier, settings)
-  return { amount, status: amount > 0 ? 'applicable' : 'not_applicable', tier }
+  if (repair.diagnosisFeeStatus === 'paid' || repair.diagnosisFeePaidAt) {
+    const amount = Math.max(0, Number(repair.diagnosisFee) || diagnosisFeeAmount(settings))
+    return {
+      amount,
+      status: 'paid',
+      tier: normalizeDeviceTier(repair.deviceTier),
+      ...meta,
+    }
+  }
+  if (repair.diagnosisFeeStatus === 'invoiced') {
+    const amount = Math.max(0, Number(repair.diagnosisFee) || diagnosisFeeAmount(settings))
+    return {
+      amount,
+      status: 'invoiced',
+      tier: normalizeDeviceTier(repair.deviceTier),
+      ...meta,
+    }
+  }
+  const amount = diagnosisFeeAmount(settings)
+  return {
+    amount,
+    status: amount > 0 ? 'applicable' : 'not_applicable',
+    tier: normalizeDeviceTier(repair.deviceTier),
+    ...meta,
+  }
 }
 
 export function buildDiagnosisFeeQuoteLine(amount: number): {
@@ -117,7 +234,7 @@ export function buildDiagnosisFeeQuoteLine(amount: number): {
 
 /**
  * Ensure incoming quote lines include exactly one locked diagnosis fee line
- * when the fee applies. Labor/parts are left untouched.
+ * when the fee applies. Labor/parts are left untouched — never credited against the fee.
  */
 export function ensureDiagnosisFeeInQuoteLines<T extends {
   type: string

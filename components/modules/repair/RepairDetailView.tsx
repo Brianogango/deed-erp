@@ -110,7 +110,7 @@ export default function RepairDetailView() {
     markPartsArrived, closeRepairJob, markUnrepairable,
   } = useRepair()
 
-  const { invoices, setModule, outboundReleases, initRelease, serials, reviewPortalPayment, leaveDeviceWithDeed, convertRetainedRepairToDonation, convertRetainedRepairToBuyBack, createTradeInFromRepair, waiveDiagnosisFee } = useRepairStore()
+  const { invoices, setModule, outboundReleases, initRelease, serials, reviewPortalPayment, leaveDeviceWithDeed, convertRetainedRepairToDonation, convertRetainedRepairToBuyBack, createTradeInFromRepair, waiveDiagnosisFee, markDiagnosisFeePaid } = useRepairStore()
 
   const [showOrcPanel, setShowOrcPanel] = useState(false)
   const [showPaymentRejectInput, setShowPaymentRejectInput] = useState(false)
@@ -191,9 +191,19 @@ export default function RepairDetailView() {
     && !isDirectRepairPath(r.repairPath)
     && r.diagnosisFeeStatus !== 'waived'
     && r.diagnosisFeeStatus !== 'invoiced'
+    && r.diagnosisFeeStatus !== 'paid'
     && r.diagnosisFeeStatus !== 'not_applicable'
     && (r.diagnosisFee ?? 0) > 0
     && (!TERMINAL.includes(r.status) || isQuoteDeclinedReopenable(r.status))
+  const canMarkDiagnosisFeePaid = ['director', 'admin_officer', 'finance_officer', 'sales_rep'].includes(currentRole)
+    && !isDirectRepairPath(r.repairPath)
+    && (r.diagnosisFee ?? 0) > 0
+    && r.diagnosisFeeStatus !== 'waived'
+    && r.diagnosisFeeStatus !== 'not_applicable'
+    && r.diagnosisFeeStatus !== 'paid'
+    && r.diagnosisFeeStatus !== 'invoiced'
+    && !r.diagnosisFeePaidAt
+    && (!TERMINAL.includes(r.status) || isQuoteDeclinedReopenable(r.status) || r.diagnosisStopped)
   const canDeclineQuote = ['director', 'admin_officer', 'technical_lead', 'sales_rep', 'finance_officer'].includes(currentRole)
     && !!r.quote
     && ['awaiting_approval', 'diagnosed', 'approved'].includes(r.status)
@@ -240,6 +250,8 @@ export default function RepairDetailView() {
 
   const nextActionHint = pendingOutsourceJob ? `Device is at ${pendingOutsourceJob.vendorName} via ${pendingOutsourceJob.ref}. Mark it returned in Outsource before continuing.`
     : isQuoteDeclinedReopenable(r.status) ? 'Customer declined this quote — revise and re-send, or return the device'
+    : canMarkDiagnosisFeePaid && (r.diagnosisFeeBilling === 'upfront' || r.customerBillingType !== 'corporate') && ['received', 'assigned', 'diagnosed', 'awaiting_approval', 'approved'].includes(r.status)
+      ? `Collect diagnosis fee ${fmtKes(r.diagnosisFee ?? 0)} before work begins (walk-in)`
     : canDiagnose ? 'Log your technical diagnosis to proceed'
     : canMarkPartsArrived ? 'Confirm parts have arrived so the technician can start'
     : canStart     ? 'Start the repair'
@@ -485,6 +497,7 @@ export default function RepairDetailView() {
                 { id: 'invoice', label: 'Create invoice', onClick: () => setShowProgressModal(true), hidden: !canInvoice || primaryActionId === 'invoice' },
                 { id: 'procure', label: 'Request parts', onClick: () => setShowProcurementModal(true), hidden: !canProcure },
                 { id: 'stop', label: 'Stop at diagnosis', onClick: () => setShowStopDiagnosisModal(true), hidden: !canStopAtDiagnosis },
+                { id: 'mark_fee_paid', label: 'Mark diagnosis fee paid', onClick: () => markDiagnosisFeePaid(r.id), hidden: !canMarkDiagnosisFeePaid },
                 { id: 'waive_fee', label: 'Waive diagnosis fee', onClick: () => { setWaiveFeeReason(''); setShowWaiveFeeModal(true) }, hidden: !canWaiveDiagnosisFee },
                 { id: 'return', label: isQuoteDeclinedReopenable(r.status) ? 'Return device (after decline)' : 'Return device', onClick: () => setShowReturnModal(true), hidden: !canReturnDevice },
                 { id: 'leave', label: 'Customer leaves device', onClick: () => { setLeaveDeviceNotes(''); setLeaveConvertMode('donation'); setShowLeaveDeviceModal(true) }, hidden: !canLeaveDeviceWithDeed },
@@ -849,19 +862,25 @@ export default function RepairDetailView() {
                         <p className="text-[18px] font-black text-indigo-500 leading-none">{r.diagnosis.estimatedHours}<span className="text-[11px] font-bold ml-0.5">h</span></p>
                       </div>
                     )}
-                    {((r.diagnosisFee && r.diagnosisFee > 0) || r.diagnosisFeeStatus === 'waived' || r.deviceTier) && (
+                    {((r.diagnosisFee && r.diagnosisFee > 0) || r.diagnosisFeeStatus === 'waived' || r.diagnosisFeeStatus === 'not_applicable') && (
                       <div className="p-3 rounded-xl bg-[rgba(245,158,11,0.08)] border border-amber-500/25">
                         <p className="text-[9px] font-black text-amber-500 uppercase tracking-widest mb-1">Diagnosis Fee</p>
                         <p className="text-[13px] font-black text-amber-500">
                           {r.diagnosisFeeStatus === 'waived'
                             ? 'Waived'
-                            : (r.diagnosisFee && r.diagnosisFee > 0 ? fmtKes(r.diagnosisFee) : '—')}
+                            : r.diagnosisFeeStatus === 'not_applicable'
+                              ? 'N/A'
+                              : (r.diagnosisFee && r.diagnosisFee > 0 ? fmtKes(r.diagnosisFee) : '—')}
                         </p>
-                        {r.deviceTier && (
-                          <p className="text-[10px] font-semibold text-amber-700/80 mt-0.5">
-                            {r.deviceTier === 'high_end' ? 'High-end' : 'Regular'} · 0% VAT
-                          </p>
-                        )}
+                        <p className="text-[10px] font-semibold text-amber-700/80 mt-0.5">
+                          {r.diagnosisFeeStatus === 'paid'
+                            ? `Paid${r.diagnosisFeePaidMethod ? ` · ${r.diagnosisFeePaidMethod}` : ''} · not credited against repair`
+                            : r.diagnosisFeeStatus === 'invoiced'
+                              ? 'On invoice · 0% VAT'
+                              : r.customerBillingType === 'corporate' || r.diagnosisFeeBilling === 'invoice'
+                                ? 'Corporate · on final invoice · 0% VAT'
+                                : 'Walk-in · pay before work · 0% VAT'}
+                        </p>
                         {r.diagnosisFeeStatus === 'waived' && r.diagnosisFeeWaivedReason && (
                           <p className="text-[10px] text-[var(--text-3)] mt-1">Reason: {r.diagnosisFeeWaivedReason}</p>
                         )}
