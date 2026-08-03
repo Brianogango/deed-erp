@@ -49,6 +49,9 @@ import {
   isOpenInvoice,
   invoiceResidual,
   hasValidatedDeliveryForInvoice,
+  isOpenDeliveryStatus,
+  remainingUndeliveredByProduct,
+  openDeliveryDemandByProduct,
   type InvoicePolicy,
 } from '@/lib/odoo-sales-flow'
 import {
@@ -4312,6 +4315,9 @@ const DATA_VERSION = 'v4'
 
 // Fire-and-forget server sync — swallows network errors so local state is never blocked
 const sync = (url: string, opts: RequestInit) => fetch(url, opts).catch(() => {})
+
+/** Prevents concurrent confirmSO races from creating duplicate waiting DNs. */
+const confirmingSaleOrderIds = new Set<string>()
 
 export function StoreProvider({
   children,
@@ -9109,6 +9115,18 @@ const storeCtx: AppState = {
         showToast(`${so.ref} is already ${so.status === 'sale' ? 'a Sales Order' : 'cancelled'}`, 'info')
         return
       }
+      // Concurrent confirm (toolbar + status stepper) must not create two DNs.
+      if (confirmingSaleOrderIds.has(id)) {
+        showToast('Confirmation already in progress', 'info')
+        return
+      }
+      const existingOpen = delRef.current.filter(d => d.saleOrderId === id && isOpenDeliveryStatus(d.status))
+      if (existingOpen.length > 0) {
+        showToast(`${so.ref} already has delivery ${existingOpen[0].ref} — open that picking instead of confirming again`, 'info')
+        return
+      }
+      confirmingSaleOrderIds.add(id)
+      try {
       const orderLines = so.lines.filter((line: any) => line.lineType !== 'section')
       const salesApprovalRequests = approvalRequests.filter(r =>
         r.documentId === id && ['discount', 'credit_override', 'backorder', 'special_pricing'].includes(r.type)
@@ -9395,6 +9413,9 @@ const storeCtx: AppState = {
       if (!syncFailed) {
         showToast(`${so.ref} confirmed as ${orderRef} — prepare delivery ${del.ref} to allocate stock`)
       }
+      } finally {
+        confirmingSaleOrderIds.delete(id)
+      }
     },
     markQuotationSent: (id, recipient, message) => {
       const user = currentUser()
@@ -9662,10 +9683,33 @@ const storeCtx: AppState = {
       }))
 
       // Backorder for the undelivered remainder (linked to the same SO).
+      // Clamp to SO remaining after this shipment; skip if already covered or
+      // another open picking already holds the remainder (avoids DN spam on qty=1).
       let backorder: Delivery | null = null
-      if (backorderLines.length > 0) {
+      const remainingAfterShip = remainingUndeliveredByProduct(
+        (so.lines ?? []).map(line => {
+          const shipped = doneLines.find(d => d.productId === line.productId)?.qty ?? 0
+          return {
+            ...line,
+            qtyDelivered: Math.max(0, Number(line.qtyDelivered) || 0) + shipped,
+          }
+        }),
+      )
+      const otherOpenDemand = openDeliveryDemandByProduct(
+        delRef.current.filter(d => d.id !== deliveryId),
+        del.saleOrderId,
+      )
+      const clampedBackorder = backorderLines
+        .map(line => {
+          const soRemain = remainingAfterShip[line.productId] ?? 0
+          const alreadyOpen = otherOpenDemand[line.productId] ?? 0
+          const need = Math.max(0, Math.min(line.qty, soRemain - alreadyOpen))
+          return need > 0 ? { ...line, qty: need, qtyDone: 0, serialIds: [] as string[] } : null
+        })
+        .filter(Boolean) as typeof backorderLines
+      if (clampedBackorder.length > 0) {
         // Ready when the remaining quantity is on hand, Waiting otherwise.
-        const backorderShort = backorderLines.some(l => {
+        const backorderShort = clampedBackorder.some(l => {
           const prod = prodRef.current.find(p => p.id === l.productId)
           if (!prod || prod.unit === 'service') return false
           return (Number(prod.stockQty) || 0) < l.qty
@@ -9674,7 +9718,7 @@ const storeCtx: AppState = {
           id: uid(), ref: await storeCtxRef.current!.allocateDocRef('DN'), saleOrderId: del.saleOrderId, saleOrderRef: del.saleOrderRef,
           customerId: del.customerId, customerName: del.customerName,
           status: initialDeliveryState(backorderShort), date: now(),
-          lines: backorderLines.map(l => ({ ...l, serialIds: [] })),
+          lines: clampedBackorder,
           warrantyCreated: false,
           backorderOfId: del.id,
           backorderOfRef: del.ref,
@@ -14612,12 +14656,35 @@ const storeCtx: AppState = {
 
     // ── Delivery & Fulfillment ───────────────────────────────────────────────
     createDeliveryFromSO: async (salesOrderId, forcedRef) => {
-      const so = saleOrders.find(s => s.id === salesOrderId)
+      const so = soRef.current.find(s => s.id === salesOrderId) ?? saleOrders.find(s => s.id === salesOrderId)
       if (!so) {
         showToast('Sales order not found', 'error')
         return null
       }
-      
+      if (so.status !== 'sale') {
+        showToast('Only a confirmed Sales Order can create a delivery', 'error')
+        return null
+      }
+      const open = delRef.current.filter(d => d.saleOrderId === so.id && isOpenDeliveryStatus(d.status))
+      if (open.length > 0) {
+        showToast(`${so.ref} already has open delivery ${open[0].ref}`, 'info')
+        return open[0]
+      }
+      const remaining = remainingUndeliveredByProduct(so.lines)
+      const lines = (so.lines ?? [])
+        .filter(line => (line as any).lineType !== 'section' && remaining[line.productId] > 0)
+        .map(line => ({
+          productId: line.productId,
+          productName: line.productName,
+          qty: remaining[line.productId],
+          qtyDone: 0,
+          serialIds: [] as string[],
+        }))
+      if (lines.length === 0) {
+        showToast(`${so.ref} is fully delivered — no new delivery needed`, 'info')
+        return null
+      }
+
       const delivery: Delivery = {
         id: uid(),
         ref: forcedRef ?? await storeCtxRef.current!.allocateDocRef('DN'),
@@ -14628,16 +14695,10 @@ const storeCtx: AppState = {
         date: now(),
         status: 'ready',
         warrantyCreated: false,
-        lines: so.lines.map(line => ({
-          productId: line.productId,
-          productName: line.productName,
-          qty: line.qty,
-          qtyDone: 0,
-          serialIds: [],
-        })),
+        lines,
       }
       
-      setDeliveries(prev => [...prev, delivery])
+      setDeliveries(prev => [delivery, ...prev])
       sync('/api/deliveries', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(delivery) })
       addAuditLog('create_delivery', delivery.ref, `Created from ${so.ref}`)
       showToast(`Delivery note ${delivery.ref} created`)

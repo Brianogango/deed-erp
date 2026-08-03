@@ -211,6 +211,69 @@ export function normalizeDeliveryStatus(raw: unknown): DeliveryState {
   return 'ready'
 }
 
+/** Open pickings that still need prepare/validate (not Done / Cancelled). */
+export function isOpenDeliveryStatus(status: unknown): boolean {
+  const s = normalizeDeliveryStatus(status)
+  return s === 'draft' || s === 'waiting' || s === 'ready'
+}
+
+/** Deliveries linked to an SO; cancelled excluded unless requested. */
+export function deliveriesForSaleOrder<T extends { saleOrderId?: string; status?: string }>(
+  deliveries: T[] | null | undefined,
+  saleOrderId: string,
+  opts?: { includeCancelled?: boolean },
+): T[] {
+  return (deliveries ?? []).filter(d => {
+    if (d.saleOrderId !== saleOrderId) return false
+    if (opts?.includeCancelled) return true
+    return normalizeDeliveryStatus(d.status) !== 'cancelled'
+  })
+}
+
+/**
+ * Remaining undelivered qty per product on a Sales Order (ordered − qtyDelivered).
+ * Section lines are ignored. Used to refuse duplicate DNs / empty backorders.
+ */
+export function remainingUndeliveredByProduct(
+  lines: Array<{
+    productId?: string
+    qty?: number
+    qtyDelivered?: number
+    lineType?: string
+  }> | null | undefined,
+): Record<string, number> {
+  const out: Record<string, number> = {}
+  for (const line of lines ?? []) {
+    if (line.lineType === 'section' || !line.productId) continue
+    const demand = Math.max(0, Number(line.qty) || 0)
+    const delivered = Math.max(0, Number(line.qtyDelivered) || 0)
+    const remaining = Math.max(0, demand - delivered)
+    out[line.productId] = (out[line.productId] ?? 0) + remaining
+  }
+  return out
+}
+
+/** Total open (waiting/ready/draft) demand per product across pickings for an SO. */
+export function openDeliveryDemandByProduct(
+  deliveries: Array<{
+    saleOrderId?: string
+    status?: string
+    lines?: Array<{ productId?: string; qty?: number }> | null
+  }> | null | undefined,
+  saleOrderId: string,
+): Record<string, number> {
+  const out: Record<string, number> = {}
+  for (const delivery of deliveries ?? []) {
+    if (delivery.saleOrderId !== saleOrderId) continue
+    if (!isOpenDeliveryStatus(delivery.status)) continue
+    for (const line of delivery.lines ?? []) {
+      if (!line.productId) continue
+      out[line.productId] = (out[line.productId] ?? 0) + Math.max(0, Number(line.qty) || 0)
+    }
+  }
+  return out
+}
+
 /**
  * Odoo-style initial state for a delivery created at confirmation: Ready when
  * every line can be reserved from stock, Waiting when any line is short (the

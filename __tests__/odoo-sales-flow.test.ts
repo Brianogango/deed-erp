@@ -5,6 +5,9 @@ import {
   legacyApprovalFromStatus,
   isQuotationStage,
   saleOrderLooksConfirmed,
+  remainingUndeliveredByProduct,
+  openDeliveryDemandByProduct,
+  deliveriesForSaleOrder,
   SALE_STATUS_BAR,
   SALE_STATUS_LABELS,
   invoiceableQty,
@@ -109,6 +112,32 @@ describe('sale order status vocabulary', () => {
     expect(saleOrderLooksConfirmed({ status: 'quotation_sent', confirmedAt: '2026-08-03' })).toBe(true)
     expect(saleOrderLooksConfirmed({ status: 'quotation', orderNumber: 'SQ/2026/0014' })).toBe(false)
     expect(saleOrderLooksConfirmed({ status: 'cancelled', orderNumber: 'SO/2026/0006' })).toBe(false)
+  })
+
+  it('computes remaining undelivered qty and open delivery demand', () => {
+    expect(remainingUndeliveredByProduct([
+      { productId: 'p1', qty: 2, qtyDelivered: 1 },
+      { productId: 'p2', qty: 1, qtyDelivered: 1 },
+      { productId: 'p3', qty: 3, lineType: 'section' },
+    ])).toEqual({ p1: 1, p2: 0 })
+
+    expect(openDeliveryDemandByProduct([
+      { saleOrderId: 'so-1', status: 'waiting', lines: [{ productId: 'p1', qty: 1 }] },
+      { saleOrderId: 'so-1', status: 'ready', lines: [{ productId: 'p1', qty: 1 }] },
+      { saleOrderId: 'so-1', status: 'done', lines: [{ productId: 'p1', qty: 1 }] },
+      { saleOrderId: 'so-1', status: 'cancelled', lines: [{ productId: 'p1', qty: 9 }] },
+      { saleOrderId: 'so-2', status: 'waiting', lines: [{ productId: 'p1', qty: 5 }] },
+    ], 'so-1')).toEqual({ p1: 2 })
+
+    expect(deliveriesForSaleOrder([
+      { saleOrderId: 'so-1', status: 'waiting' },
+      { saleOrderId: 'so-1', status: 'cancelled' },
+      { saleOrderId: 'so-2', status: 'ready' },
+    ], 'so-1')).toHaveLength(1)
+    expect(deliveriesForSaleOrder([
+      { saleOrderId: 'so-1', status: 'waiting' },
+      { saleOrderId: 'so-1', status: 'cancelled' },
+    ], 'so-1', { includeCancelled: true })).toHaveLength(2)
   })
 
   it('a new quotation remains a Quotation (draft DB default maps to Quotation)', () => {

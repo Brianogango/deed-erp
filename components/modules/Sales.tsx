@@ -90,6 +90,9 @@ import {
   deliveryDeliveredTotal,
   canGenerateDeliveryNote,
   saleOrderInvoiceStatus,
+  isOpenDeliveryStatus,
+  deliveriesForSaleOrder,
+  remainingUndeliveredByProduct,
   type SalesListFilter,
 } from '@/lib/odoo-sales-flow'
 
@@ -345,6 +348,7 @@ function SalesContent() {
 
   // ── Delivery view state ─────────────────────────────────────────────────
   const [deliveryQtys, setDeliveryQtys] = useState<Record<string, number>>({})
+  const [focusDeliveryId, setFocusDeliveryId] = useState<string | null>(null)
   const [savingDelivery, setSavingDelivery] = useState(false)
   const [confirmingSO, setConfirmingSO] = useState(false)
   const [dnRecipientName, setDnRecipientName] = useState('')
@@ -571,8 +575,12 @@ function SalesContent() {
   // Odoo-style derived statuses for the active order.
   const activeInvoiceStatus = activeOrder ? saleOrderInvoiceStatus(activeOrder.status, activeOrder.lines) : 'no'
   const activeDeliveries = useMemo(
-    () => activeOrder ? deliveries.filter(d => d.saleOrderId === activeOrder.id) : [],
+    () => activeOrder ? deliveriesForSaleOrder(deliveries, activeOrder.id, { includeCancelled: true }) : [],
     [deliveries, activeOrder],
+  )
+  const visibleDeliveries = useMemo(
+    () => activeDeliveries.filter(d => d.status !== 'cancelled'),
+    [activeDeliveries],
   )
   const invoiceDeliveryReady = activeOrder
     ? hasValidatedDeliveryForInvoice(activeDeliveries, activeOrder.id)
@@ -604,20 +612,50 @@ function SalesContent() {
     setNewDraftLines([]); setView('new')
     startUxTask('sales_quote_create', { module: 'sales' })
   }
-  const openDeliveryView = () => {
+  const openDeliveryView = (deliveryId?: string) => {
     if (!activeOrder) return
+    // Heal duplicate open pickings left by concurrent confirm (keep prepared / SO-linked).
+    const open = activeDeliveries
+      .filter(d => isOpenDeliveryStatus(d.status))
+      .slice()
+      .sort((a, b) => String(a.date).localeCompare(String(b.date)) || String(a.ref).localeCompare(String(b.ref)))
+    if (open.length > 1) {
+      const keeper =
+        open.find(d => d.preparedAt) ??
+        open.find(d => d.id === activeOrder.deliveryId) ??
+        open[0]
+      let cancelled = 0
+      open.forEach(d => {
+        if (d.id !== keeper.id && !d.preparedAt) {
+          updateDelivery(d.id, { status: 'cancelled' })
+          cancelled += 1
+        }
+      })
+      if (cancelled > 0) {
+        showToast(`Removed ${cancelled} duplicate open delivery for ${activeOrder.ref}`, 'info')
+      }
+    }
+    const target =
+      (deliveryId ? activeDeliveries.find(d => d.id === deliveryId) : undefined) ??
+      open[0] ??
+      visibleDeliveries[0] ??
+      activeDeliveries[0]
+    setFocusDeliveryId(target?.id ?? null)
+    const remaining = remainingUndeliveredByProduct(activeOrder.lines)
     const init: Record<string, number> = {}
     activeOrder.lines.forEach(l => {
+      if ((l as any).lineType === 'section') return
+      const delLine = target?.lines?.find((line: any) => line.productId === l.productId)
+      const demand = Math.max(0, Number(delLine?.qty) || remaining[l.productId ?? ''] || Number(l.qty) || 0)
       const serialCount = Array.isArray(l.serialIds) ? l.serialIds.length : 0
-      init[l.id] = Math.max(Number(l.qtyDelivered) || 0, serialCount)
+      init[l.id] = serialCount > 0 ? Math.min(demand, serialCount) : demand
     })
     setDeliveryQtys(init)
-    const del = deliveries.find(d => d.saleOrderId === activeOrder.id)
-    setDnRecipientName(del?.recipientName ?? activeOrder.customerName ?? '')
-    setDnRecipientPhone(del?.recipientPhone ?? '')
-    setDnRecipientId(del?.recipientIdNumber ?? '')
-    setDnAddress(del?.deliveryAddress ?? '')
-    setDnNotes(del?.notes ?? '')
+    setDnRecipientName(target?.recipientName ?? activeOrder.customerName ?? '')
+    setDnRecipientPhone(target?.recipientPhone ?? '')
+    setDnRecipientId(target?.recipientIdNumber ?? '')
+    setDnAddress(target?.deliveryAddress ?? '')
+    setDnNotes(target?.notes ?? '')
     setView('delivery')
   }
 
@@ -1063,6 +1101,7 @@ function SalesContent() {
                 <DeliveryNoteView
                   order={activeOrder}
                   deliveries={deliveries}
+                  focusDeliveryId={focusDeliveryId}
                   serials={serials}
                   products={products}
                   deliveryQtys={deliveryQtys}
@@ -1076,7 +1115,7 @@ function SalesContent() {
                   unassignSerialFromSOLine={unassignSerialFromSOLine}
                   updateDelivery={updateDelivery}
                   showToast={showToast}
-                  onBack={() => setView('form')}
+                  onBack={() => { setFocusDeliveryId(null); setView('form') }}
                   dnRecipientName={dnRecipientName}
                   setDnRecipientName={setDnRecipientName}
                   dnRecipientPhone={dnRecipientPhone}
@@ -1276,9 +1315,11 @@ function SalesContent() {
                             <Fa icon={faFileInvoiceDollar} /><span>Invoice after Delivery</span>
                           </button>
                         ) : null}
-                        {activeDeliveries.some(d => ['waiting', 'ready'].includes(d.status)) && (
-                          <button className={`${activeInvoiceStatus === 'to_invoice' ? 'btn-secondary' : 'btn-primary'} flex items-center gap-2 text-xs`} onClick={openDeliveryView}><Fa icon={faTruck} /><span>Delivery</span></button>
-                        )}
+                        {visibleDeliveries.some(d => isOpenDeliveryStatus(d.status)) ? (
+                          <button className={`${activeInvoiceStatus === 'to_invoice' ? 'btn-secondary' : 'btn-primary'} flex items-center gap-2 text-xs`} onClick={() => openDeliveryView()}><Fa icon={faTruck} /><span>Delivery</span></button>
+                        ) : visibleDeliveries.length > 0 ? (
+                          <button className="btn-secondary flex items-center gap-2 text-xs" onClick={() => openDeliveryView()}><Fa icon={faTruck} /><span>Deliveries</span></button>
+                        ) : null}
                         <MoreActionsMenu
                           items={[
                             { label: sendingQuoteId === activeOrder.id ? 'Sending…' : 'Send by Email', icon: faFileInvoice, disabled: sendingQuoteId === activeOrder.id, onClick: () => openSendQuoteModal(activeOrder) },
@@ -1305,14 +1346,14 @@ function SalesContent() {
                       <SalesRecordHeader
                         order={activeOrder}
                         invoiceStatus={activeInvoiceStatus}
-                        deliveriesCount={activeDeliveries.length}
+                        deliveriesCount={visibleDeliveries.length}
                         invoicesCount={activeInvoices.length}
                         paymentsCount={activePayments.length}
                         returnsCount={activeReturns.length}
                         canSeeFinance={canSeeFinanceRecords}
                         canSeeReturns={canSeeReturns}
                         onBackToList={backToList}
-                        onOpenDelivery={openDeliveryView}
+                        onOpenDelivery={() => openDeliveryView()}
                         onOpenInvoices={() => router.push('/finance?tab=invoices')}
                         onOpenReturns={() => router.push('/aftersales?tab=returns')}
                         onPreview={() => previewSalesDocument(
@@ -1326,10 +1367,63 @@ function SalesContent() {
                             showToast('Add at least one product before confirming', 'error')
                             return
                           }
-                          confirmSO(activeOrder.id)
+                          if (confirmingSO) return
+                          setConfirmingSO(true)
+                          Promise.resolve(confirmSO(activeOrder.id)).finally(() => setConfirmingSO(false))
                         }}
                         onStepBlocked={msg => showToast(msg, 'error')}
                       />
+
+                      {activeOrder.status === 'sale' && activeDeliveries.length > 0 && (
+                        <div className="rounded-2xl border border-[var(--border-lt)] bg-[var(--bg-surface)] p-4 flex flex-col gap-2">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)]">
+                              Deliveries for {activeOrder.ref}
+                            </span>
+                            <span className="text-[10px] text-[var(--text-4)]">
+                              {visibleDeliveries.length} active · click to open
+                            </span>
+                          </div>
+                          <div className="flex flex-col gap-1">
+                            {activeDeliveries.map(d => {
+                              const cancelled = d.status === 'cancelled'
+                              const units = (d.lines ?? []).reduce((sum: number, line: any) => sum + (Number(line.qty) || 0), 0)
+                              const done = deliveryDeliveredTotal(d)
+                              return (
+                                <button
+                                  key={d.id}
+                                  type="button"
+                                  disabled={cancelled}
+                                  onClick={() => openDeliveryView(d.id)}
+                                  className={`flex items-center justify-between gap-3 rounded-xl px-3 py-2 text-left text-xs transition-colors ${
+                                    cancelled
+                                      ? 'opacity-50 cursor-not-allowed'
+                                      : 'hover:bg-[var(--bg-muted)] border border-transparent hover:border-[var(--border-lt)]'
+                                  }`}
+                                >
+                                  <span className="font-semibold text-[var(--text-1)]">
+                                    {d.ref}
+                                    {d.backorderOfRef ? (
+                                      <span className="ml-1 font-normal text-[var(--text-4)]">(backorder of {d.backorderOfRef})</span>
+                                    ) : null}
+                                  </span>
+                                  <span className="flex items-center gap-2 shrink-0">
+                                    <span className="text-[var(--text-3)]">{done}/{units} qty</span>
+                                    <span className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+                                      d.status === 'done' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                        : d.status === 'ready' ? 'bg-blue-50 text-blue-700 border border-blue-200'
+                                          : d.status === 'waiting' ? 'bg-amber-50 text-amber-700 border border-amber-200'
+                                            : 'bg-gray-50 text-gray-600 border border-gray-200'
+                                    }`}>
+                                      {DELIVERY_STATE_LABELS[d.status as keyof typeof DELIVERY_STATE_LABELS] ?? d.status}
+                                    </span>
+                                  </span>
+                                </button>
+                              )
+                            })}
+                          </div>
+                        </div>
+                      )}
 
                       {/* Order info card — editable through Quotation and
                           Quotation Sent (Odoo keeps sent quotations editable,
@@ -2321,13 +2415,14 @@ function NewQuotationForm({
 // DELIVERY NOTE VIEW
 // ═══════════════════════════════════════════════════════════════════════════
 function DeliveryNoteView({
-  order, deliveries, serials, products, deliveryQtys, setDeliveryQtys, savingDelivery,
+  order, deliveries, focusDeliveryId, serials, products, deliveryQtys, setDeliveryQtys, savingDelivery,
   setSavingDelivery, prepareDelivery, validateDelivery, markDeliveryNoteGenerated, assignSerialsToSOLine, unassignSerialFromSOLine,
   updateDelivery, showToast, onBack,
   dnRecipientName, setDnRecipientName, dnRecipientPhone, setDnRecipientPhone,
   dnRecipientId, setDnRecipientId, dnAddress, setDnAddress, dnNotes, setDnNotes,
 }: {
-  order: SalesOrderView; deliveries: any[]; serials: any[]; products: any[]
+  order: SalesOrderView; deliveries: any[]; focusDeliveryId?: string | null
+  serials: any[]; products: any[]
   deliveryQtys: Record<string, number>; setDeliveryQtys: (v: Record<string, number>) => void
   savingDelivery: boolean; setSavingDelivery: (v: boolean) => void
   prepareDelivery: (id: string, qtysDone?: Record<string, number>) => boolean
@@ -2343,13 +2438,43 @@ function DeliveryNoteView({
   dnAddress: string; setDnAddress: (v: string) => void
   dnNotes: string; setDnNotes: (v: string) => void
 }) {
-  const orderDeliveries = deliveries.filter((d: any) => d.saleOrderId === order.id)
-  // The pending picking (Waiting/Ready) is what gets validated; done/cancelled
-  // records remain visible history.
-  const pendingDelivery = orderDeliveries.find((d: any) => ['draft', 'waiting', 'ready'].includes(d.status))
-  const existingDelivery = pendingDelivery ?? orderDeliveries[0]
-  const canPrepare = order.status === 'sale' && !!pendingDelivery && ['draft', 'waiting'].includes(pendingDelivery.status)
-  const canValidate = order.status === 'sale' && !!pendingDelivery && pendingDelivery.status === 'ready' && !!pendingDelivery.preparedAt
+  const orderDeliveries = deliveriesForSaleOrder(deliveries, order.id, { includeCancelled: true })
+  const [selectedDeliveryId, setSelectedDeliveryId] = useState<string | null>(
+    focusDeliveryId ?? null,
+  )
+  useEffect(() => {
+    if (focusDeliveryId) setSelectedDeliveryId(focusDeliveryId)
+  }, [focusDeliveryId])
+
+  const pendingDelivery = orderDeliveries.find((d: any) => isOpenDeliveryStatus(d.status))
+  const selectedDelivery =
+    orderDeliveries.find((d: any) => d.id === selectedDeliveryId) ??
+    pendingDelivery ??
+    orderDeliveries.find((d: any) => d.status !== 'cancelled') ??
+    orderDeliveries[0]
+  const existingDelivery = selectedDelivery
+  const canPrepare = order.status === 'sale' && !!existingDelivery && isOpenDeliveryStatus(existingDelivery.status) && ['draft', 'waiting'].includes(existingDelivery.status)
+  const canValidate = order.status === 'sale' && !!existingDelivery && existingDelivery.status === 'ready' && !!existingDelivery.preparedAt
+
+  const selectDelivery = (deliveryId: string) => {
+    const target = orderDeliveries.find((d: any) => d.id === deliveryId)
+    if (!target || target.status === 'cancelled') return
+    setSelectedDeliveryId(deliveryId)
+    const remaining = remainingUndeliveredByProduct(order.lines)
+    const init: Record<string, number> = {}
+    order.lines.forEach(line => {
+      if ((line as any).lineType === 'section') return
+      const delLine = target.lines?.find((l: any) => l.productId === line.productId)
+      const demand = Math.max(0, Number(delLine?.qty) || remaining[line.productId ?? ''] || Number(line.qty) || 0)
+      init[line.id] = demand
+    })
+    setDeliveryQtys(init)
+    setDnRecipientName(target.recipientName ?? order.customerName ?? '')
+    setDnRecipientPhone(target.recipientPhone ?? '')
+    setDnRecipientId(target.recipientIdNumber ?? '')
+    setDnAddress(target.deliveryAddress ?? '')
+    setDnNotes(target.notes ?? '')
+  }
 
   const requestedByProduct = () => {
     const quantities: Record<string, number> = {}
@@ -2364,15 +2489,19 @@ function DeliveryNoteView({
   }
 
   const handlePrepare = () => {
-    if (!pendingDelivery) { showToast('No pending delivery to prepare', 'error'); return }
-    prepareDelivery(pendingDelivery.id, requestedByProduct())
+    if (!existingDelivery || !isOpenDeliveryStatus(existingDelivery.status)) {
+      showToast('No pending delivery to prepare', 'error'); return
+    }
+    prepareDelivery(existingDelivery.id, requestedByProduct())
   }
 
   const handleValidate = async () => {
     if (!order.lines.length) { showToast('No line items on this order', 'error'); return }
-    if (!pendingDelivery) { showToast('No pending delivery to validate', 'error'); return }
+    if (!existingDelivery || existingDelivery.status !== 'ready') {
+      showToast('No pending delivery to validate', 'error'); return
+    }
     const lines = order.lines.map(l => {
-      const delLine = pendingDelivery.lines.find((line: any) => line.productId === l.productId)
+      const delLine = existingDelivery.lines.find((line: any) => line.productId === l.productId)
       const preparedQty = effectiveDeliveryLineQty({
         qty: Number(delLine?.qty) || Number(l.qty) || 0,
         qtyDone: delLine?.qtyDone,
@@ -2408,7 +2537,7 @@ function DeliveryNoteView({
       const json = await res.json()
       if (!res.ok) { showToast(json.error ?? 'Failed to save delivery', 'error'); return }
       if (dnRecipientName.trim()) {
-        updateDelivery(pendingDelivery.id, {
+        updateDelivery(existingDelivery.id, {
           recipientName: dnRecipientName.trim(),
           recipientPhone: dnRecipientPhone.trim() || undefined,
           recipientIdNumber: dnRecipientId.trim() || undefined,
@@ -2420,12 +2549,12 @@ function DeliveryNoteView({
       // deducted for those quantities only; any remainder automatically
       // becomes a backorder delivery (Odoo behaviour).
       const qtysByProduct = Object.fromEntries(
-        pendingDelivery.lines.map((line: any) => [
+        existingDelivery.lines.map((line: any) => [
           line.productId,
           effectiveDeliveryLineQty(line),
         ]),
       )
-      validateDelivery(pendingDelivery.id, qtysByProduct)
+      validateDelivery(existingDelivery.id, qtysByProduct)
       onBack()
     } catch { showToast('Network error saving delivery', 'error') }
     finally { setSavingDelivery(false) }
@@ -2504,15 +2633,37 @@ function DeliveryNoteView({
           </div>
         </div>
 
-        {orderDeliveries.length > 1 && (
+        {orderDeliveries.length > 0 && (
           <div className="rounded-2xl border border-[var(--border-lt)] bg-[var(--bg-surface)] p-3 flex flex-col gap-1">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)]">All deliveries for {order.ref}</span>
-            {orderDeliveries.map((d: any) => (
-              <div key={d.id} className="flex items-center justify-between text-xs">
-                <span className="font-semibold text-[var(--text-2)]">{d.ref}{d.backorderOfRef ? ` (backorder of ${d.backorderOfRef})` : ''}</span>
-                <span className="text-[10px] font-bold">{DELIVERY_STATE_LABELS[d.status as keyof typeof DELIVERY_STATE_LABELS] ?? d.status}</span>
-              </div>
-            ))}
+            <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)]">
+              All deliveries for {order.ref} — select one to work on
+            </span>
+            {orderDeliveries.map((d: any) => {
+              const selected = existingDelivery?.id === d.id
+              const cancelled = d.status === 'cancelled'
+              return (
+                <button
+                  key={d.id}
+                  type="button"
+                  disabled={cancelled}
+                  onClick={() => selectDelivery(d.id)}
+                  className={`flex items-center justify-between text-xs rounded-lg px-2 py-1.5 text-left transition-colors ${
+                    cancelled ? 'opacity-40 cursor-not-allowed'
+                      : selected
+                        ? 'bg-primary-50 border border-primary-200 text-primary-800'
+                        : 'hover:bg-[var(--bg-muted)] border border-transparent'
+                  }`}
+                >
+                  <span className="font-semibold">
+                    {d.ref}{d.backorderOfRef ? ` (backorder of ${d.backorderOfRef})` : ''}
+                    {selected ? ' · viewing' : ''}
+                  </span>
+                  <span className="text-[10px] font-bold">
+                    {DELIVERY_STATE_LABELS[d.status as keyof typeof DELIVERY_STATE_LABELS] ?? d.status}
+                  </span>
+                </button>
+              )
+            })}
           </div>
         )}
 
