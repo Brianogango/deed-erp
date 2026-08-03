@@ -281,7 +281,7 @@ function SalesContent() {
   const {
     saleOrders, contacts, products, serials, invoices, deliveries, returnOrders,
     createSaleOrder, updateSaleOrder, confirmSO, markQuotationSent, setSaleOrderLock,
-    addSOLine, removeSOLine,
+    addSOLine, removeSOLine, moveSOLine, addSOSection,
     assignSerialsToSOLine, unassignSerialFromSOLine, addContact, createInvoiceFromSO, prepareDelivery, validateDelivery, markDeliveryNoteGenerated,
     deleteSaleOrder, showToast, getStockByLocation, resetSOToDraft, cancelSO,
     getCustomerCreditStatus, users, currentUserId, systemSettings,
@@ -1652,12 +1652,17 @@ function SalesContent() {
                       {/* Lines + Summary */}
                       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                         <div className="lg:col-span-2 flex flex-col gap-4">
-                          <div className="flex items-center justify-between">
+                          <div className="flex items-center justify-between gap-2 flex-wrap">
                             <h3 className="text-sm font-bold text-[var(--text-1)]">Order Lines</h3>
                             {isQuotationStage(activeOrder.status) && !activeOrder.locked && (
-                              <button onClick={() => setShowAddLine(true)} className="text-xs font-bold text-primary-600 hover:underline flex items-center gap-1">
-                                <Fa icon={faPlus} className="text-[10px]" />Add a product
-                              </button>
+                              <div className="flex items-center gap-3">
+                                <button type="button" onClick={() => setShowAddLine(true)} className="text-xs font-bold text-primary-600 hover:underline flex items-center gap-1">
+                                  <Fa icon={faPlus} className="text-[10px]" />Add a product
+                                </button>
+                                <button type="button" onClick={() => addSOSection(activeOrder.id)} className="text-xs font-bold text-slate-600 hover:underline flex items-center gap-1">
+                                  <Fa icon={faPlus} className="text-[10px]" />Add a section
+                                </button>
+                              </div>
                             )}
                           </div>
                           <div className="dt-scroll border border-[var(--border-lt)] rounded-2xl">
@@ -1676,23 +1681,54 @@ function SalesContent() {
                                   <th className="px-3 py-2 text-[10px] font-bold uppercase text-[var(--text-4)] text-right w-16">Disc%</th>
                                   <th className="px-3 py-2 text-[10px] font-bold uppercase text-[var(--text-4)] text-right w-16">Tax%</th>
                                   <th className="px-3 py-2 text-[10px] font-bold uppercase text-[var(--text-4)] text-right w-24">Amount</th>
-                                  <th className="px-3 py-2 w-12"></th>
+                                  <th className="px-3 py-2 w-24"></th>
                                 </tr>
                               </thead>
                               <tbody className="divide-y divide-[var(--border-lt)]">
-                                {activeOrder.lines.map(l => {
+                                {activeOrder.lines.map((l, lineIndex) => {
+                                  const canEdit = isQuotationStage(activeOrder.status) && !activeOrder.locked
                                   if (l.lineType === 'section') {
                                     return (
                                       <tr key={l.id} className="bg-slate-50/70">
-                                        <td className="px-3 py-2 text-xs font-black text-[var(--text-2)]" colSpan={9}>
-                                          {l.description || l.productName || 'Section'}
+                                        <td className="px-3 py-2" colSpan={canEdit ? 7 : 8}>
+                                          {canEdit ? (
+                                            <input
+                                              aria-label="Section title"
+                                              className="form-input text-xs w-full font-bold"
+                                              value={l.description || l.productName || ''}
+                                              placeholder="Section title"
+                                              onChange={e => {
+                                                const title = e.target.value
+                                                const lines = activeOrder.lines.map((line: any) =>
+                                                  line.id === l.id
+                                                    ? { ...line, description: title, productName: title }
+                                                    : line,
+                                                )
+                                                updateSaleOrder(activeOrder.id, { lines })
+                                              }}
+                                            />
+                                          ) : (
+                                            <span className="text-xs font-black text-[var(--text-2)]">{l.description || l.productName || 'Section'}</span>
+                                          )}
                                         </td>
+                                        {canEdit && (
+                                          <td className="px-3 py-2 text-center">
+                                            <div className="flex items-center justify-end gap-0.5">
+                                              <button type="button" onClick={() => moveSOLine(activeOrder.id, l.id, -1)} disabled={lineIndex === 0} aria-label="Move section up" className="icon-btn disabled:opacity-30 disabled:cursor-not-allowed">
+                                                <Fa icon={faArrowUp} aria-hidden="true" />
+                                              </button>
+                                              <button type="button" onClick={() => moveSOLine(activeOrder.id, l.id, 1)} disabled={lineIndex === activeOrder.lines.length - 1} aria-label="Move section down" className="icon-btn disabled:opacity-30 disabled:cursor-not-allowed">
+                                                <Fa icon={faArrowDown} aria-hidden="true" />
+                                              </button>
+                                              <button type="button" onClick={() => removeSOLine(activeOrder.id, l.id)} className="row-action-btn btn-danger" aria-label="Remove section"><Fa icon={faTrash} aria-hidden="true" /></button>
+                                            </div>
+                                          </td>
+                                        )}
                                       </tr>
                                     )
                                   }
                                   const lineSerials = serials.filter((s: any) => l.serialIds?.includes(s.id))
                                   const isEditing = editingLineId === l.id
-                                  const canEdit = isQuotationStage(activeOrder.status) && !activeOrder.locked
                                   const invoicedQty = (Number(l.qtyInvoiced) || 0) || getInvoicedQty(activeOrder, l.productId)
                                   const showInvoiced = activeInvoices.length > 0 || (activeOrder.status === 'sale' && activeOrder.lines.some((x: any) => (x.qtyInvoiced ?? 0) > 0))
                                   const showDelivered = activeOrder.status === 'sale'
@@ -1755,9 +1791,19 @@ function SalesContent() {
                                             <button type="button" onClick={cancelEditLine} className="row-action-btn btn-danger" aria-label="Cancel edit"><Fa icon={faXmark} aria-hidden="true" /></button>
                                           </div>
                                         ) : (
-                                          <div className="flex items-center gap-1">
-                                            {canEdit && <button type="button" onClick={() => startEditLine(l)} className="row-action-btn btn-edit" aria-label="Edit line"><Fa icon={faPencil} aria-hidden="true" /></button>}
-                                            {canEdit && <button type="button" onClick={() => removeSOLine(activeOrder.id, l.id)} className="row-action-btn btn-danger" aria-label="Remove line"><Fa icon={faTrash} aria-hidden="true" /></button>}
+                                          <div className="flex items-center justify-end gap-0.5">
+                                            {canEdit && (
+                                              <>
+                                                <button type="button" onClick={() => moveSOLine(activeOrder.id, l.id, -1)} disabled={lineIndex === 0} aria-label="Move line up" className="icon-btn disabled:opacity-30 disabled:cursor-not-allowed">
+                                                  <Fa icon={faArrowUp} aria-hidden="true" />
+                                                </button>
+                                                <button type="button" onClick={() => moveSOLine(activeOrder.id, l.id, 1)} disabled={lineIndex === activeOrder.lines.length - 1} aria-label="Move line down" className="icon-btn disabled:opacity-30 disabled:cursor-not-allowed">
+                                                  <Fa icon={faArrowDown} aria-hidden="true" />
+                                                </button>
+                                                <button type="button" onClick={() => startEditLine(l)} className="row-action-btn btn-edit" aria-label="Edit line"><Fa icon={faPencil} aria-hidden="true" /></button>
+                                                <button type="button" onClick={() => removeSOLine(activeOrder.id, l.id)} className="row-action-btn btn-danger" aria-label="Remove line"><Fa icon={faTrash} aria-hidden="true" /></button>
+                                              </>
+                                            )}
                                           </div>
                                         )}
                                       </td>
@@ -1772,8 +1818,11 @@ function SalesContent() {
                               </tbody>
                             </table>
                           </div>
-                          {activeOrder.status === 'quotation' && (
-                            <button onClick={() => setShowAddLine(true)} className="flex items-center gap-2 text-xs text-primary-600 hover:underline font-semibold self-start"><Fa icon={faPlus} className="text-[10px]" />Add a product</button>
+                          {isQuotationStage(activeOrder.status) && !activeOrder.locked && (
+                            <div className="flex flex-wrap items-center gap-4">
+                              <button onClick={() => setShowAddLine(true)} className="flex items-center gap-2 text-xs text-primary-600 hover:underline font-semibold self-start"><Fa icon={faPlus} className="text-[10px]" />Add a product</button>
+                              <button onClick={() => addSOSection(activeOrder.id)} className="flex items-center gap-2 text-xs text-slate-600 hover:underline font-semibold self-start"><Fa icon={faPlus} className="text-[10px]" />Add a section</button>
+                            </div>
                           )}
                         </div>
 

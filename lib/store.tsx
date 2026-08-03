@@ -2995,6 +2995,10 @@ export interface AppState {
   assignSerialsToSOLine: (orderId: string, lineId: string, serialIds: string[]) => void
   unassignSerialFromSOLine: (orderId: string, lineId: string, serialId: string) => void
   removeSOLine: (orderId: string, lineId: string) => void
+  /** Reorder a quotation line (product or section) up/down. Quotation stage only. */
+  moveSOLine: (orderId: string, lineId: string, direction: -1 | 1) => void
+  /** Insert a section heading on a quotation. */
+  addSOSection: (orderId: string, title?: string) => void
   confirmSO: (id: string) => void | Promise<void>
   /** Send by Email succeeded → Quotation Sent (records date/user/recipient). */
   markQuotationSent: (id: string, recipient?: string, message?: string) => void
@@ -3323,6 +3327,8 @@ export type SalesStoreState = Pick<AppState,
   | 'setSaleOrderLock'
   | 'addSOLine'
   | 'removeSOLine'
+  | 'moveSOLine'
+  | 'addSOSection'
   | 'assignSerialToSOLine'
   | 'assignSerialsToSOLine'
   | 'unassignSerialFromSOLine'
@@ -5651,6 +5657,8 @@ export function StoreProvider({
     setSaleOrderLock: (...args: Parameters<AppState['setSaleOrderLock']>) => storeCtxRef.current!.setSaleOrderLock(...args),
     addSOLine: (...args: Parameters<AppState['addSOLine']>) => storeCtxRef.current!.addSOLine(...args),
     removeSOLine: (...args: Parameters<AppState['removeSOLine']>) => storeCtxRef.current!.removeSOLine(...args),
+    moveSOLine: (...args: Parameters<AppState['moveSOLine']>) => storeCtxRef.current!.moveSOLine(...args),
+    addSOSection: (...args: Parameters<AppState['addSOSection']>) => storeCtxRef.current!.addSOSection(...args),
     assignSerialToSOLine: (...args: Parameters<AppState['assignSerialToSOLine']>) => storeCtxRef.current!.assignSerialToSOLine(...args),
     assignSerialsToSOLine: (...args: Parameters<AppState['assignSerialsToSOLine']>) => storeCtxRef.current!.assignSerialsToSOLine(...args),
     unassignSerialFromSOLine: (...args: Parameters<AppState['unassignSerialFromSOLine']>) => storeCtxRef.current!.unassignSerialFromSOLine(...args),
@@ -9382,13 +9390,68 @@ const storeCtx: AppState = {
     removeSOLine: (orderId, lineId) => {
       const so = soRef.current.find(s => s.id === orderId)
       const line = so?.lines.find(l => l.id === lineId)
-      if (line?.serialIds.length) {
+      if (line?.serialIds?.length) {
         setSerials(p => p.map(s => line.serialIds.includes(s.id) ? { ...s, status: 'available' } : s))
       }
       setSaleOrders(p => p.map(so => { 
         if (so.id !== orderId) return so; 
         const lines = so.lines.filter(l => l.id !== lineId); 
         const updated = { ...so, lines, ...calcSO(lines) }
+        sync(`/api/sale-orders/${orderId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+        return updated
+      }))
+    },
+    moveSOLine: (orderId, lineId, direction) => {
+      const so = soRef.current.find(s => s.id === orderId)
+      if (!so) return
+      if (so.status !== 'quotation' && so.status !== 'quotation_sent') {
+        showToast('Only quotations can reorder lines', 'error')
+        return
+      }
+      if (so.locked) {
+        showToast('Unlock this quotation before reordering lines', 'error')
+        return
+      }
+      const index = so.lines.findIndex((l: any) => l.id === lineId)
+      const target = index + direction
+      if (index < 0 || target < 0 || target >= so.lines.length) return
+      setSaleOrders(p => p.map(order => {
+        if (order.id !== orderId) return order
+        const lines = [...order.lines]
+        ;[lines[index], lines[target]] = [lines[target], lines[index]]
+        const updated = { ...order, lines }
+        sync(`/api/sale-orders/${orderId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+        return updated
+      }))
+    },
+    addSOSection: (orderId, title) => {
+      const so = soRef.current.find(s => s.id === orderId)
+      if (!so) return
+      if (so.status !== 'quotation' && so.status !== 'quotation_sent') {
+        showToast('Only quotations can add sections', 'error')
+        return
+      }
+      if (so.locked) {
+        showToast('Unlock this quotation before adding sections', 'error')
+        return
+      }
+      const sectionTitle = String(title ?? '').trim() || 'Section'
+      setSaleOrders(p => p.map(order => {
+        if (order.id !== orderId) return order
+        const lines = [...order.lines, {
+          id: uid(),
+          lineType: 'section',
+          productId: '',
+          productName: sectionTitle,
+          description: sectionTitle,
+          qty: 0,
+          unitPrice: 0,
+          discount: 0,
+          taxRate: 0,
+          subtotal: 0,
+          serialIds: [],
+        }]
+        const updated = { ...order, lines, ...calcSO(lines) }
         sync(`/api/sale-orders/${orderId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
         return updated
       }))

@@ -408,6 +408,15 @@ function AccountingContent() {
   const [newDocumentDate, setNewDocumentDate] = useState(today())
   const [newDueDate, setNewDueDate] = useState(addDays(today(), 30))
   const [newLines, setNewLines] = useState<ManualInvoiceLine[]>([newManualInvoiceLine()])
+  const moveNewLine = (index: number, direction: -1 | 1) => {
+    setNewLines(prev => {
+      const target = index + direction
+      if (index < 0 || target < 0 || target >= prev.length) return prev
+      const next = [...prev]
+      ;[next[index], next[target]] = [next[target], next[index]]
+      return next
+    })
+  }
   const [newNotes, setNewNotes] = useState('')
   const [newPaymentDetails, setNewPaymentDetails] = useState<DocumentPaymentDetails>({ ...DEFAULT_DOCUMENT_PAYMENT_DETAILS })
   const [applyVat, setApplyVat] = useState(false)
@@ -1967,13 +1976,35 @@ function AccountingContent() {
                           <th className="px-3 py-2.5 text-[10px] font-bold uppercase text-[var(--text-4)] text-center w-20">Disc%</th>
                           <th className="px-3 py-2.5 text-[10px] font-bold uppercase text-[var(--text-4)] text-right w-20">Tax</th>
                           <th className="px-3 py-2.5 text-[10px] font-bold uppercase text-[var(--text-4)] text-right w-32">Line Total</th>
-                          <th className="px-3 py-2.5 w-10"></th>
+                          <th className="px-3 py-2.5 w-28"></th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-[var(--border-lt)]">
                         {newLines.map((l, i) => {
                           const previewLine = invoicePreview.lines[i]
                           const isInvalid = invoicePreview.invalidLineIndexes.includes(i)
+                          const moveButtons = (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => moveNewLine(i, -1)}
+                                disabled={i === 0}
+                                aria-label={`Move line ${i + 1} up`}
+                                className="icon-btn disabled:opacity-30 disabled:cursor-not-allowed"
+                              >
+                                <Fa icon={faArrowUp} className="text-[9px]" aria-hidden="true" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => moveNewLine(i, 1)}
+                                disabled={i === newLines.length - 1}
+                                aria-label={`Move line ${i + 1} down`}
+                                className="icon-btn disabled:opacity-30 disabled:cursor-not-allowed"
+                              >
+                                <Fa icon={faArrowDown} className="text-[9px]" aria-hidden="true" />
+                              </button>
+                            </>
+                          )
                           if (l.type === 'section') {
                             return (
                               <tr key={i} className={`transition-colors ${isInvalid ? 'bg-red-50/60' : 'bg-slate-50/70'}`}>
@@ -1988,15 +2019,18 @@ function AccountingContent() {
                                 </td>
                                 <td className="px-3 py-2 text-right text-[10px] font-bold text-[var(--text-4)]">Section</td>
                                 <td className="px-3 py-2 text-center">
-                                  <button
-                                    type="button"
-                                    onClick={() => setNewLines(p => p.length > 1 ? p.filter((_, j) => j !== i) : p)}
-                                    disabled={newLines.length === 1}
-                                    className="w-7 h-7 rounded flex items-center justify-center text-[var(--text-4)] hover:bg-red-50 hover:text-red-600 transition-colors disabled:opacity-30 disabled:hover:bg-transparent cursor-pointer disabled:cursor-not-allowed"
-                                    aria-label={`Remove section ${i + 1}`}
-                                  >
-                                    <Fa icon={faTrash} className="text-[9px]" />
-                                  </button>
+                                  <div className="flex items-center justify-end gap-0.5">
+                                    {moveButtons}
+                                    <button
+                                      type="button"
+                                      onClick={() => setNewLines(p => p.length > 1 ? p.filter((_, j) => j !== i) : p)}
+                                      disabled={newLines.length === 1}
+                                      className="w-7 h-7 rounded flex items-center justify-center text-[var(--text-4)] hover:bg-red-50 hover:text-red-600 transition-colors disabled:opacity-30 disabled:hover:bg-transparent cursor-pointer disabled:cursor-not-allowed"
+                                      aria-label={`Remove section ${i + 1}`}
+                                    >
+                                      <Fa icon={faTrash} className="text-[9px]" />
+                                    </button>
+                                  </div>
                                 </td>
                               </tr>
                             )
@@ -2063,15 +2097,18 @@ function AccountingContent() {
                                 {previewLine?.taxAmount ? <p className="text-[9px] text-[var(--text-4)] mt-0.5">Incl. tax {fmtKes(previewLine.taxAmount)}</p> : null}
                               </td>
                               <td className="px-3 py-2 text-center">
-                                <button
-                                  type="button"
-                                  onClick={() => setNewLines(p => p.length > 1 ? p.filter((_, j) => j !== i) : p)}
-                                  disabled={newLines.length === 1}
-                                  className="w-7 h-7 rounded flex items-center justify-center text-[var(--text-4)] hover:bg-red-50 hover:text-red-600 transition-colors disabled:opacity-30 disabled:hover:bg-transparent cursor-pointer disabled:cursor-not-allowed"
-                                  aria-label={`Remove line ${i + 1}`}
-                                >
-                                  <Fa icon={faTrash} className="text-[9px]" />
-                                </button>
+                                <div className="flex items-center justify-end gap-0.5">
+                                  {moveButtons}
+                                  <button
+                                    type="button"
+                                    onClick={() => setNewLines(p => p.length > 1 ? p.filter((_, j) => j !== i) : p)}
+                                    disabled={newLines.length === 1}
+                                    className="w-7 h-7 rounded flex items-center justify-center text-[var(--text-4)] hover:bg-red-50 hover:text-red-600 transition-colors disabled:opacity-30 disabled:hover:bg-transparent cursor-pointer disabled:cursor-not-allowed"
+                                    aria-label={`Remove line ${i + 1}`}
+                                  >
+                                    <Fa icon={faTrash} className="text-[9px]" />
+                                  </button>
+                                </div>
                               </td>
                             </tr>
                           )
