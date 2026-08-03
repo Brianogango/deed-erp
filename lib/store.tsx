@@ -11791,7 +11791,7 @@ const storeCtx: AppState = {
 
       const resolvedFee = resolveDiagnosisFee(repair, systemSettings)
       // Fee stays on the quote for visibility but is never credited against labour/parts.
-      // Walk-in fees already paid upfront still appear as a locked line (settled separately).
+      // Fees already paid early still appear as a locked quote line (settled separately).
       const chargeFee = shouldChargeDiagnosisFee(repair) && resolvedFee.amount > 0
       const incomingWithFee = ensureDiagnosisFeeInQuoteLines(
         incomingLines.map(line => ({
@@ -13230,7 +13230,7 @@ const storeCtx: AppState = {
         repairId,
         notes: `Repair invoice for ${repair.ref}${
           isDiagnosisFeeSettled(repair) && repair.diagnosisFeeStatus === 'paid'
-            ? ` — diagnosis fee KES ${(repair.diagnosisFee ?? 0).toLocaleString('en-KE')} collected upfront (not credited against this bill)`
+            ? ` — diagnosis fee KES ${(repair.diagnosisFee ?? 0).toLocaleString('en-KE')} collected early (not credited against this bill)`
             : ''
         }`,
       }
