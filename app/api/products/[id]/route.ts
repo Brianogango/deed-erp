@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { requireRole, withApiErrorHandling } from '@/lib/auth/api'
+import { isSerialOnlyCategory } from '@/lib/inventory-identifiers'
 
 const WRITE_ROLES = ['director', 'admin_officer', 'inventory_officer', 'technical_lead', 'finance_officer']
 
@@ -29,6 +30,12 @@ function mapBody(body: any) {
   else if (body.reorderLevel !== undefined) data.reorderLevel = Number(body.reorderLevel)
   if (body.isActive   !== undefined) data.isActive     = Boolean(body.isActive)
   if (body.trackStock !== undefined) data.trackStock   = Boolean(body.trackStock)
+  if (body.trackingMethod !== undefined) {
+    const method = String(body.trackingMethod).toUpperCase()
+    if (method === 'NONE' || method === 'QUANTITY' || method === 'BATCH' || method === 'SERIAL') {
+      data.trackingMethod = method
+    }
+  }
   return data
 }
 
@@ -37,6 +44,17 @@ async function handleUpdate(request: NextRequest, id: string) {
     await requireRole(WRITE_ROLES)
     const body = await request.json()
     const data = mapBody(body)
+    const existing = await prisma.product.findUnique({
+      where: { id },
+      select: { id: true, category: { select: { name: true } } },
+    })
+    if (!existing) return NextResponse.json({ error: 'Product not found' }, { status: 404 })
+
+    const categoryName = body.category ?? existing.category?.name
+    if (isSerialOnlyCategory(categoryName)) {
+      data.trackingMethod = 'SERIAL'
+    }
+
     const duplicate = await findProductDuplicate(id, data.name, data.sku, data.barcode)
     if (duplicate) {
       const field = data.sku && duplicate.sku.toLowerCase() === String(data.sku).toLowerCase()

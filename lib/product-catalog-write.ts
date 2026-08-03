@@ -1,6 +1,7 @@
 import prisma from '@/lib/prisma'
 import type { z } from 'zod'
 import type { productSchema } from '@/lib/validation'
+import { isSerialOnlyCategory } from '@/lib/inventory-identifiers'
 
 export type ValidatedProductInput = z.infer<typeof productSchema>
 
@@ -32,7 +33,9 @@ export async function findProductDuplicate(name: string, sku?: string | null, ba
 export function resolveTrackingMethod(
   trackingMethod: 'NONE' | 'QUANTITY' | 'BATCH' | 'SERIAL' | null | undefined,
   productKind: 'storable' | 'consumable' | 'service' | null | undefined,
+  category?: string | null,
 ) {
+  if (isSerialOnlyCategory(category)) return 'SERIAL' as const
   if (trackingMethod) return trackingMethod
   if (productKind === 'service') return 'NONE' as const
   if (productKind === 'consumable') return 'QUANTITY' as const
@@ -101,7 +104,7 @@ export async function publishProduct(validated: ValidatedProductInput): Promise<
     }
   }
 
-  const trackingMethod = resolveTrackingMethod(validated.trackingMethod, validated.productKind)
+  const trackingMethod = resolveTrackingMethod(validated.trackingMethod, validated.productKind, validated.category)
   const trackStock = validated.productKind === 'service' ? false : validated.trackStock
   // Client/Excel fields (salePrice, minStock, productKind, unit) map onto Prisma columns.
   // salePrice → sellingPrice, minStock → reorderLevel; kind/unit live in specs JSON.

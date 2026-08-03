@@ -1,5 +1,14 @@
 export type TrackingMethod = 'NONE' | 'QUANTITY' | 'BATCH' | 'SERIAL'
 
+/** Categories that must always be unit (SERIAL) tracked — never QUANTITY. */
+export const SERIAL_ONLY_CATEGORIES = [
+  'laptops',
+  'desktops',
+  'printers',
+  'networking',
+  'mobile devices',
+] as const
+
 const CATEGORY_TRACKING_DEFAULT: Record<string, TrackingMethod> = {
   laptops: 'SERIAL',
   desktops: 'SERIAL',
@@ -25,12 +34,29 @@ export function categoryDefaultTracking(category?: string | null): TrackingMetho
   return CATEGORY_TRACKING_DEFAULT[categoryKey] ?? null
 }
 
+export function isSerialOnlyCategory(category?: string | null): boolean {
+  const categoryKey = String(category ?? '').trim().toLowerCase()
+  return (SERIAL_ONLY_CATEGORIES as readonly string[]).includes(categoryKey)
+}
+
+/** Force SERIAL for machine categories; otherwise return the requested method. */
+export function coerceTrackingForCategory(
+  category: string | null | undefined,
+  tracking: TrackingMethod,
+): TrackingMethod {
+  if (isSerialOnlyCategory(category)) return 'SERIAL'
+  return tracking
+}
+
 export function inferTrackingMethod(input: {
   trackingMethod?: string | null
   category?: string | null
   requiresSerial?: boolean | null
   unit?: string | null
 }): TrackingMethod {
+  // Machine categories are always unit-tracked — never QUANTITY/BATCH.
+  if (isSerialOnlyCategory(input.category)) return 'SERIAL'
+
   const explicit = String(input.trackingMethod ?? '').toUpperCase()
   if (explicit === 'NONE' || explicit === 'QUANTITY' || explicit === 'BATCH' || explicit === 'SERIAL') {
     return explicit

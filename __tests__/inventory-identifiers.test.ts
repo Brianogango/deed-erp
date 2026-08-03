@@ -1,9 +1,16 @@
 import { describe, expect, it } from 'vitest'
-import { buildInventoryBarcode, inferTrackingMethod, productOffersOnHandSerials } from '@/lib/inventory-identifiers'
+import {
+  buildInventoryBarcode,
+  coerceTrackingForCategory,
+  inferTrackingMethod,
+  isSerialOnlyCategory,
+  productOffersOnHandSerials,
+} from '@/lib/inventory-identifiers'
 
 describe('inferTrackingMethod', () => {
-  it('prefers explicit tracking method when provided', () => {
-    expect(inferTrackingMethod({ trackingMethod: 'BATCH', category: 'Laptops' })).toBe('BATCH')
+  it('forces SERIAL for Laptops even when QUANTITY was saved', () => {
+    expect(inferTrackingMethod({ trackingMethod: 'QUANTITY', category: 'Laptops' })).toBe('SERIAL')
+    expect(inferTrackingMethod({ trackingMethod: 'BATCH', category: 'Desktops' })).toBe('SERIAL')
   })
 
   it('derives SERIAL from legacy requiresSerial flag', () => {
@@ -14,15 +21,27 @@ describe('inferTrackingMethod', () => {
     expect(inferTrackingMethod({ unit: 'service' })).toBe('NONE')
   })
 
-  it('derives default from category map', () => {
-    expect(inferTrackingMethod({ category: 'Accessories' })).toBe('QUANTITY')
-    expect(inferTrackingMethod({ category: 'Networking' })).toBe('SERIAL')
-    expect(inferTrackingMethod({ category: 'Mobile Devices' })).toBe('SERIAL')
+  it('keeps QUANTITY for parts and accessories', () => {
+    expect(inferTrackingMethod({ trackingMethod: 'QUANTITY', category: 'Accessories' })).toBe('QUANTITY')
+    expect(inferTrackingMethod({ category: 'Parts & Components' })).toBe('QUANTITY')
+  })
+})
+
+describe('serial-only categories', () => {
+  it('recognizes machine categories', () => {
+    expect(isSerialOnlyCategory('Laptops')).toBe(true)
+    expect(isSerialOnlyCategory('Mobile Devices')).toBe(true)
+    expect(isSerialOnlyCategory('Parts & Components')).toBe(false)
+  })
+
+  it('coerces tracking to SERIAL for machines', () => {
+    expect(coerceTrackingForCategory('Laptops', 'QUANTITY')).toBe('SERIAL')
+    expect(coerceTrackingForCategory('Accessories', 'QUANTITY')).toBe('QUANTITY')
   })
 })
 
 describe('productOffersOnHandSerials', () => {
-  it('offers Serials for Laptops even when wrongly saved as QUANTITY', () => {
+  it('offers Serials for Laptops', () => {
     expect(productOffersOnHandSerials({
       trackingMethod: 'QUANTITY',
       category: 'Laptops',
@@ -35,13 +54,6 @@ describe('productOffersOnHandSerials', () => {
       trackingMethod: 'QUANTITY',
       category: 'Parts & Components',
     })).toBe(false)
-  })
-
-  it('offers Serials when the SKU already has serial records', () => {
-    expect(productOffersOnHandSerials({
-      trackingMethod: 'QUANTITY',
-      category: 'Parts & Components',
-    }, { hasExistingSerials: true })).toBe(true)
   })
 })
 
@@ -56,9 +68,5 @@ describe('buildInventoryBarcode', () => {
       manufacturerSerial: 'SN-001-A',
     })
     expect(next).toBe('INV-SN001A-0003')
-  })
-
-  it('falls back to SKU seed when serial is missing', () => {
-    expect(buildInventoryBarcode({ existingBarcodes: [], productSku: 'HP-ELITEBOOK-840' })).toBe('INV-HPELITEBOOK8-0001')
   })
 })

@@ -65,6 +65,7 @@ import {
   inferTrackingMethod,
   isSerialTracking,
   isStockTracked,
+  isSerialOnlyCategory,
   type TrackingMethod,
 } from '@/lib/inventory-identifiers'
 import {
@@ -8575,11 +8576,19 @@ const storeCtx: AppState = {
 
     refreshProductCatalog: async () => {
       try {
+        // Idempotent: force SERIAL on all Laptops / machine-category products.
+        await fetch('/api/products/normalize-serial-tracking', { method: 'POST' }).catch(() => null)
         const res = await fetch('/api/products?lite=1')
         if (!res.ok) return 0
         const rows = await res.json()
         if (!Array.isArray(rows) || rows.length === 0) return 0
         setProducts(prev => mergeCatalogProducts(prev, rows, CATEGORY_CONFIG) as any)
+        // Heal local blob rows that still say QUANTITY for machine categories.
+        setProducts(prev => prev.map(p => {
+          if (!isSerialOnlyCategory(p.category)) return p
+          if (p.trackingMethod === 'SERIAL' && p.requiresSerial) return p
+          return { ...p, trackingMethod: 'SERIAL' as TrackingMethod, requiresSerial: true }
+        }))
         return rows.length
       } catch {
         return 0
@@ -8737,13 +8746,16 @@ const storeCtx: AppState = {
       const current = prodRef.current.find(product => product.id === id)
       if (!current) return
       const currentTracking = getProductTrackingMethod(current)
+      const nextCategory = p.category ?? current.category
       const nextTracking = inferTrackingMethod({
         trackingMethod: p.trackingMethod,
-        category: p.category ?? current.category,
+        category: nextCategory,
         requiresSerial: p.requiresSerial ?? current.requiresSerial,
         unit: p.unit ?? current.unit,
       })
       if (currentTracking !== nextTracking) {
+        // Always allow upgrading machine categories (Laptops…) to SERIAL.
+        const serialUpgrade = nextTracking === 'SERIAL' && isSerialOnlyCategory(nextCategory)
         const hasStock =
           serialRef.current.some(item => item.productId === id && item.status !== 'sold') ||
           bulkStock.some(item => item.productId === id && item.qty > 0)
@@ -8751,7 +8763,7 @@ const storeCtx: AppState = {
           saleOrders.some(order => order.lines.some(line => line.productId === id)) ||
           purchaseOrders.some(order => order.lines.some(line => line.productId === id)) ||
           receipts.some(receipt => receipt.lines.some(line => line.productId === id))
-        if (hasStock || hasTransactions) {
+        if (!serialUpgrade && (hasStock || hasTransactions)) {
           showToast('Tracking method cannot be changed after stock or transactions exist. Use admin migration flow.', 'error')
           return
         }
@@ -8761,7 +8773,7 @@ const storeCtx: AppState = {
         const productKind = inferProductKind({
           productKind: p.productKind ?? x.productKind,
           trackingMethod: nextTracking,
-          category: p.category ?? x.category,
+          category: nextCategory,
           unit: p.unit ?? x.unit,
           requiresSerial: p.requiresSerial ?? x.requiresSerial,
         })
@@ -8779,7 +8791,12 @@ const storeCtx: AppState = {
       fetch(`/api/products/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(p),
+        body: JSON.stringify({
+          ...p,
+          trackingMethod: nextTracking,
+          requiresSerial: isSerialTracking(nextTracking),
+          category: nextCategory,
+        }),
       }).catch(() => {})
     },
     updateProductPrice: (id, salePrice, costPrice, reason, effectiveDate) => {

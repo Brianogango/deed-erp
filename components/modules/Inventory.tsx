@@ -15,7 +15,7 @@ import { Fa, faBox, faBoxesStacked, faArrowDown, faBarcode, faTriangleExclamatio
 import { printProductLabels, printSerialLabels } from '@/lib/product-label'
 import { guardSpreadsheetFile, guardSpreadsheetRows, SpreadsheetGuardError } from '@/lib/spreadsheet-guard'
 import { Barcode } from '@/components/modules/Barcode'
-import { inferTrackingMethod, isSerialTracking, isStockTracked, type TrackingMethod } from '@/lib/inventory-identifiers'
+import { inferTrackingMethod, isSerialTracking, isStockTracked, isSerialOnlyCategory, type TrackingMethod } from '@/lib/inventory-identifiers'
 import InventoryProductsPanel from '@/components/inventory/InventoryProductsPanel'
 import { canValidatePurchaseReceipt, canReleaseHeldSerial } from '@/lib/inventory/permissions'
 import { isOpeningStockMove } from '@/lib/inventory/opening-stock'
@@ -3150,18 +3150,23 @@ export default function Inventory() {
               </Field>
               <Field label="Tracking Method">
                 <Select
-                  value={form.trackingMethod}
+                  value={isSerialOnlyCategory(form.category) ? 'SERIAL' : form.trackingMethod}
                   onChange={(value) => {
+                    if (isSerialOnlyCategory(form.category)) return
                     setF('trackingMethod')(value)
                     if (value === 'NONE') setF('productKind')('service')
                     else if (form.productKind === 'service') setF('productKind')('storable')
                   }}
-                  options={[
-                    { value: 'NONE', label: 'NONE (non-stock/service)' },
-                    { value: 'QUANTITY', label: 'QUANTITY (bulk qty)' },
-                    { value: 'BATCH', label: 'BATCH (lot tracked)' },
-                    { value: 'SERIAL', label: 'SERIAL (unit tracked)' },
-                  ]}
+                  options={
+                    isSerialOnlyCategory(form.category)
+                      ? [{ value: 'SERIAL', label: 'SERIAL (unit tracked) — required for this category' }]
+                      : [
+                          { value: 'NONE', label: 'NONE (non-stock/service)' },
+                          { value: 'QUANTITY', label: 'QUANTITY (bulk qty)' },
+                          { value: 'BATCH', label: 'BATCH (lot tracked)' },
+                          { value: 'SERIAL', label: 'SERIAL (unit tracked)' },
+                        ]
+                  }
                 />
               </Field>
             </div>

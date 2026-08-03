@@ -1,3 +1,5 @@
+import { isSerialOnlyCategory, inferTrackingMethod } from '@/lib/inventory-identifiers'
+
 // Merge the relational product catalog (GET /api/products rows) into the
 // client-side product list kept in the synced JSON store.
 //
@@ -91,9 +93,12 @@ export function mergeCatalogProducts<P extends ClientCatalogProduct>(
   const merged = rows.map(row => {
     const local = prevById.get(String(row.id)) ?? prevByName.get(normName(row.name))
     const category = String(row.category?.name ?? local?.category ?? '')
-    const trackingMethod = (row.trackingMethod || (local as any)?.trackingMethod || (
-      categoryConfig[category]?.serialRequired ? 'SERIAL' : 'QUANTITY'
-    )) as string
+    const trackingMethod = inferTrackingMethod({
+      trackingMethod: row.trackingMethod || (local as any)?.trackingMethod,
+      category,
+      requiresSerial: categoryConfig[category]?.serialRequired,
+      unit: local?.unit,
+    })
     return {
       unit: 'pcs',
       image: CATEGORY_EMOJI[category] ?? '📦',
@@ -102,7 +107,6 @@ export function mergeCatalogProducts<P extends ClientCatalogProduct>(
       canBeSold: true,
       canBePurchased: true,
       warrantyMonths: 6,
-      requiresSerial: trackingMethod === 'SERIAL' || (categoryConfig[category]?.serialRequired ?? false),
       saleAccountCode: '5001',
       costAccountCode: '6101',
       ...(local ?? {}),
@@ -122,6 +126,7 @@ export function mergeCatalogProducts<P extends ClientCatalogProduct>(
         : (local as any)?.kilimallPrice,
       minStock: Number(row.reorderLevel ?? local?.minStock ?? 1) || 0,
       trackingMethod,
+      requiresSerial: trackingMethod === 'SERIAL' || isSerialOnlyCategory(category),
       // Odoo invoicing policy — server value wins, defaults to Ordered Quantities.
       invoicePolicy: (row.invoicePolicy === 'delivery' || (local as any)?.invoicePolicy === 'delivery') ? 'delivery' : 'order',
       isActive: row.isActive !== false,
