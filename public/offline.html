@@ -9,7 +9,7 @@
     body {
       background: #090B12;
       color: #CBD5E1;
-      font-family: 'Inter', system-ui, sans-serif;
+      font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -27,7 +27,7 @@
     }
     .icon { font-size: 48px; margin-bottom: 16px; }
     h1 { color: #F1F5F9; font-size: 20px; font-weight: 700; margin-bottom: 8px; }
-    p { font-size: 14px; color: #94A3B8; line-height: 1.6; margin-bottom: 24px; }
+    p { font-size: 14px; color: #94A3B8; line-height: 1.6; margin-bottom: 16px; }
     .badge {
       display: inline-block;
       background: #1B2762;
@@ -48,8 +48,20 @@
       font-weight: 600;
       cursor: pointer;
       width: 100%;
+      min-height: 44px;
     }
-    button:hover { background: #243380; }
+    button:hover:not(:disabled) { background: #243380; }
+    button:disabled {
+      opacity: 0.7;
+      cursor: wait;
+    }
+    .status {
+      min-height: 18px;
+      margin: 0 0 16px;
+      font-size: 12px;
+      color: #F87171;
+    }
+    .status.ok { color: #4ADE80; }
     .pos-note {
       margin-top: 20px;
       padding: 12px 16px;
@@ -63,14 +75,112 @@
 </head>
 <body>
   <div class="card">
-    <div class="icon">📡</div>
+    <div class="icon" aria-hidden="true">📡</div>
     <span class="badge">No Connection</span>
     <h1>You're offline</h1>
     <p>Deed ERP requires a connection for most features. Point of Sale will continue working with previously cached data.</p>
-    <button onclick="window.location.reload()">Try Again</button>
+    <p id="status" class="status" role="status" aria-live="polite"></p>
+    <button type="button" id="retry">Try Again</button>
     <div class="pos-note">
       💡 POS sales made offline will sync automatically when you reconnect.
     </div>
   </div>
+  <script>
+    (function () {
+      var btn = document.getElementById('retry')
+      var statusEl = document.getElementById('status')
+      var checking = false
+
+      function returnUrl() {
+        try {
+          var stored = sessionStorage.getItem('deed_offline_return')
+          if (stored && stored !== '/offline.html' && stored.indexOf('/offline.html') !== 0) {
+            return stored
+          }
+        } catch (e) { /* private mode */ }
+        // If SW served this fallback for another route, location is still that route.
+        if (location.pathname && location.pathname !== '/offline.html') {
+          return location.pathname + location.search + location.hash
+        }
+        return '/'
+      }
+
+      function rememberReturn() {
+        try {
+          if (location.pathname !== '/offline.html') {
+            sessionStorage.setItem(
+              'deed_offline_return',
+              location.pathname + location.search + location.hash
+            )
+          }
+        } catch (e) { /* ignore */ }
+      }
+
+      async function probeOnline() {
+        // navigator.onLine alone is unreliable; probe a tiny same-origin asset
+        // that the SW does not treat as navigational HTML.
+        var controller = typeof AbortController !== 'undefined' ? new AbortController() : null
+        var timer = setTimeout(function () {
+          if (controller) controller.abort()
+        }, 4000)
+        try {
+          var res = await fetch('/manifest.json?__online_check=' + Date.now(), {
+            method: 'GET',
+            cache: 'no-store',
+            credentials: 'same-origin',
+            signal: controller ? controller.signal : undefined,
+            headers: { 'Cache-Control': 'no-cache', Pragma: 'no-cache' },
+          })
+          return res.ok
+        } catch (e) {
+          return false
+        } finally {
+          clearTimeout(timer)
+        }
+      }
+
+      function goOnline() {
+        statusEl.className = 'status ok'
+        statusEl.textContent = 'Connection restored — reloading…'
+        var target = returnUrl()
+        try { sessionStorage.removeItem('deed_offline_return') } catch (e) { /* ignore */ }
+        // Always navigate (not bare reload) so we leave /offline.html when that
+        // is the document URL, and pick up fresh HTML for the intended route.
+        location.replace(target)
+      }
+
+      async function tryAgain() {
+        if (checking) return
+        checking = true
+        btn.disabled = true
+        btn.textContent = 'Checking…'
+        statusEl.className = 'status'
+        statusEl.textContent = ''
+
+        var online = await probeOnline()
+        if (online) {
+          goOnline()
+          return
+        }
+
+        checking = false
+        btn.disabled = false
+        btn.textContent = 'Try Again'
+        statusEl.className = 'status'
+        statusEl.textContent = 'Still offline — check your network and try again.'
+      }
+
+      rememberReturn()
+      btn.addEventListener('click', function (e) {
+        e.preventDefault()
+        tryAgain()
+      })
+
+      // Auto-retry when the browser reports connectivity again.
+      window.addEventListener('online', function () {
+        tryAgain()
+      })
+    })()
+  </script>
 </body>
 </html>

@@ -1,5 +1,7 @@
 // Deed ERP Service Worker — PWA + Offline POS
 //
+// v8: offline Try Again probes the network and navigates back into the app
+// instead of a bare reload that can strand users on /offline.html.
 // v7: bump cache after module-error auto-recovery so clients drop stale
 // runtime assets that crash CRM/other modules after deploy windows.
 // v6: network-first for /_next/static (was cache-first in v4/v5).
@@ -10,8 +12,8 @@
 // v2 pre-cached '/' and '/login' at install time; after a deploy those stale
 // snapshots referenced fingerprinted CSS/JS chunks that no longer existed,
 // so users saw a completely unstyled login page until they cleared site data.
-const CACHE = 'deed-erp-v7'
-const RUNTIME_CACHE = 'deed-erp-runtime-v7'
+const CACHE = 'deed-erp-v8'
+const RUNTIME_CACHE = 'deed-erp-runtime-v8'
 const OFFLINE_URL = '/offline.html'
 
 // Next.js static assets are fingerprinted — cache them aggressively
@@ -74,9 +76,23 @@ self.addEventListener('fetch', event => {
   // cached HTML we ever serve, so a deploy can never strand a stale page
   // whose fingerprinted assets are gone.
   event.respondWith(
-    fetch(request).catch(() =>
-      caches.match(OFFLINE_URL).then(cached => cached || Response.error())
-    )
+    fetch(request)
+      .then(res => res)
+      .catch(async () => {
+        const cached = await caches.match(OFFLINE_URL)
+        if (!cached) return Response.error()
+        // Clone into a 503 navigation response so the browser treats this as a
+        // temporary offline document (URL stays on the intended route).
+        const body = await cached.blob()
+        return new Response(body, {
+          status: 503,
+          statusText: 'Service Unavailable',
+          headers: {
+            'Content-Type': 'text/html; charset=utf-8',
+            'Cache-Control': 'no-store',
+          },
+        })
+      })
   )
 })
 
