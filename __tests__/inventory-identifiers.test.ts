@@ -5,6 +5,7 @@ import {
   inferTrackingMethod,
   isSerialOnlyCategory,
   productOffersOnHandSerials,
+  rewriteInventoryTags,
 } from '@/lib/inventory-identifiers'
 
 describe('inferTrackingMethod', () => {
@@ -58,15 +59,55 @@ describe('productOffersOnHandSerials', () => {
 })
 
 describe('buildInventoryBarcode', () => {
-  it('builds deterministic INV barcode from serial seed', () => {
-    expect(buildInventoryBarcode({ existingBarcodes: [], manufacturerSerial: 'SN-001-A' })).toBe('INV-SN001A-0001')
+  it('uses the manufacturer serial as the tag (no INV- prefix)', () => {
+    expect(buildInventoryBarcode({ existingBarcodes: [], manufacturerSerial: 'SN-001-A' })).toBe('SN-001-A')
+    expect(buildInventoryBarcode({
+      existingBarcodes: [],
+      manufacturerSerial: '5CG023BRN8',
+    })).toBe('5CG023BRN8')
   })
 
-  it('increments counter when barcode already exists', () => {
-    const next = buildInventoryBarcode({
-      existingBarcodes: ['INV-SN001A-0001', 'INV-SN001A-0002'],
-      manufacturerSerial: 'SN-001-A',
-    })
-    expect(next).toBe('INV-SN001A-0003')
+  it('falls back to SKU when serial is missing', () => {
+    expect(buildInventoryBarcode({
+      existingBarcodes: [],
+      productSku: 'LAP-X1',
+    })).toBe('LAP-X1')
+  })
+
+  it('appends a suffix on collisions', () => {
+    expect(buildInventoryBarcode({
+      existingBarcodes: ['5CG023BRN8'],
+      manufacturerSerial: '5CG023BRN8',
+    })).toBe('5CG023BRN8-2')
+  })
+})
+
+describe('rewriteInventoryTags', () => {
+  it('rewrites INV-* legacy tags to the manufacturer serial', () => {
+    const { rows, rewritten } = rewriteInventoryTags([
+      { serial: '5CG023BRN8', barcode: 'INV-5CG023BRN8-0001' },
+      { serial: '5CG023BT9T', barcode: 'INV-5CG023BT9T-0001' },
+      { serial: 'KEEP', barcode: 'KEEP' },
+    ])
+    expect(rewritten).toBe(2)
+    expect(rows[0].barcode).toBe('5CG023BRN8')
+    expect(rows[1].barcode).toBe('5CG023BT9T')
+    expect(rows[2].barcode).toBe('KEEP')
+  })
+
+  it('leaves barcode that already equals the serial unchanged', () => {
+    const { rows, rewritten } = rewriteInventoryTags([
+      { serial: 'ABC123', barcode: 'ABC123' },
+    ])
+    expect(rewritten).toBe(0)
+    expect(rows[0].barcode).toBe('ABC123')
+  })
+
+  it('rewrites sequential INV-###### tags to serial', () => {
+    const { rows, rewritten } = rewriteInventoryTags([
+      { serial: 'SN9', barcode: 'INV-000001' },
+    ])
+    expect(rewritten).toBe(1)
+    expect(rows[0].barcode).toBe('SN9')
   })
 })

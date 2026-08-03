@@ -2,11 +2,12 @@
  * Shared barcode / QR scan parsing and matching for POS, transfers, GRN, ORC.
  *
  * Accepted payloads:
- * - Raw inventory barcode (INV-…)
+ * - Raw inventory barcode / manufacturer serial (tag === serial)
  * - Manufacturer serial
  * - Product SKU / product barcode
  * - Legacy serial-label QR: SKU:xxx|SERIAL:yyy
  * - Extended QR: SKU:xxx|SERIAL:yyy|BARCODE:zzz
+ * - Legacy INV-* tags (still matched if present in stock)
  */
 
 export type ParsedScan = {

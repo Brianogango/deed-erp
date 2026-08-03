@@ -2964,6 +2964,8 @@ export interface AppState {
     failedRows: { name: string; reason: string }[]
   }>
   refreshProductCatalog: () => Promise<number>
+  /** Rewrite legacy INV-* tags so Tag = manufacturer serial. */
+  normalizeInventoryTags: () => Promise<number>
   updateProduct: (id: string, p: Partial<Product>) => void
   updateProductPrice: (id: string, salePrice: number, costPrice: number, reason: string, effectiveDate?: string) => ProductPriceHistory | null
   /** Soft-archive a product master (`isActive: false`). Hides from pickers; stock history kept. */
@@ -3283,6 +3285,7 @@ export type InventoryStoreState = Pick<AppState,
   | 'addProduct'
   | 'publishProductBulk'
   | 'refreshProductCatalog'
+  | 'normalizeInventoryTags'
   | 'updateProduct'
   | 'updateProductPrice'
   | 'archiveProduct'
@@ -5634,6 +5637,7 @@ export function StoreProvider({
     addProduct: (...args: Parameters<AppState['addProduct']>) => storeCtxRef.current!.addProduct(...args),
     publishProductBulk: (...args: Parameters<AppState['publishProductBulk']>) => storeCtxRef.current!.publishProductBulk(...args),
     refreshProductCatalog: (...args: Parameters<AppState['refreshProductCatalog']>) => storeCtxRef.current!.refreshProductCatalog(...args),
+    normalizeInventoryTags: (...args: Parameters<AppState['normalizeInventoryTags']>) => storeCtxRef.current!.normalizeInventoryTags(...args),
     updateProduct: (...args: Parameters<AppState['updateProduct']>) => storeCtxRef.current!.updateProduct(...args),
     updateProductPrice: (...args: Parameters<AppState['updateProductPrice']>) => storeCtxRef.current!.updateProductPrice(...args),
     archiveProduct: (...args: Parameters<AppState['archiveProduct']>) => storeCtxRef.current!.archiveProduct(...args),
@@ -8578,6 +8582,8 @@ const storeCtx: AppState = {
       try {
         // Idempotent: force SERIAL on all Laptops / machine-category products.
         await fetch('/api/products/normalize-serial-tracking', { method: 'POST' }).catch(() => null)
+        // Idempotent: rewrite legacy INV-* tags to manufacturer serial.
+        await storeCtxRef.current!.normalizeInventoryTags().catch(() => 0)
         const res = await fetch('/api/products?lite=1')
         if (!res.ok) return 0
         const rows = await res.json()
@@ -8590,6 +8596,20 @@ const storeCtx: AppState = {
           return { ...p, trackingMethod: 'SERIAL' as TrackingMethod, requiresSerial: true }
         }))
         return rows.length
+      } catch {
+        return 0
+      }
+    },
+
+    normalizeInventoryTags: async () => {
+      try {
+        const res = await fetch('/api/inventory/normalize-tags', { method: 'POST' })
+        if (!res.ok) return 0
+        const data = await res.json().catch(() => null)
+        const next = Array.isArray(data?.serials) ? data.serials as SerialNumber[] : null
+        const rewritten = Number(data?.rewritten ?? 0)
+        if (next) setSerials(next)
+        return Number.isFinite(rewritten) ? rewritten : 0
       } catch {
         return 0
       }

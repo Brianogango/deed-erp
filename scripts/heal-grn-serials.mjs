@@ -62,18 +62,14 @@ function buildInventoryBarcode(existingBarcodes, manufacturerSerial, productSku)
   const existing = new Set(
     existingBarcodes.map(v => String(v ?? '').trim().toUpperCase()).filter(Boolean),
   )
-  const normalize = (value, fallback) => {
-    const cleaned = String(value ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 12)
-    return cleaned || fallback
-  }
-  const seed = normalize(manufacturerSerial, normalize(productSku, 'ITEM'))
-  let counter = 1
+  const seed = String(manufacturerSerial ?? '').trim()
+    || String(productSku ?? '').trim()
+    || 'ITEM'
+  if (!existing.has(seed.toUpperCase())) return seed
+  let counter = 2
   while (true) {
-    const candidate = `INV-${seed}-${String(counter).padStart(4, '0')}`
-    if (!existing.has(candidate)) {
-      existing.add(candidate)
-      return candidate
-    }
+    const candidate = `${seed}-${counter}`
+    if (!existing.has(candidate.toUpperCase())) return candidate
     counter += 1
   }
 }

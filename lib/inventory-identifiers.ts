@@ -21,14 +21,6 @@ const CATEGORY_TRACKING_DEFAULT: Record<string, TrackingMethod> = {
   'software & licences': 'NONE',
 }
 
-function normalizeSeed(value: string | null | undefined, fallback: string) {
-  const cleaned = String(value ?? '')
-    .toUpperCase()
-    .replace(/[^A-Z0-9]/g, '')
-    .slice(0, 12)
-  return cleaned || fallback
-}
-
 export function categoryDefaultTracking(category?: string | null): TrackingMethod | null {
   const categoryKey = String(category ?? '').trim().toLowerCase()
   return CATEGORY_TRACKING_DEFAULT[categoryKey] ?? null
@@ -97,6 +89,36 @@ export function productOffersOnHandSerials(product: {
   return categoryDefaultTracking(product.category) === 'SERIAL'
 }
 
+/** Legacy tags used an INV- prefix (looked like invoice) — e.g. INV-{SERIAL}-0001. */
+const LEGACY_INV_TAG_RE = /^INV-/i
+
+function normalizeTagSeed(value: string | null | undefined, fallback: string) {
+  const cleaned = String(value ?? '')
+    .trim()
+    .replace(/\s+/g, '')
+  return cleaned || fallback
+}
+
+/**
+ * True when the stored tag should be rewritten to the manufacturer serial
+ * (missing, INV-* legacy, or any value other than the serial).
+ */
+export function needsInventoryTagRewrite(row: {
+  serial?: string | null
+  barcode?: string | null
+}): boolean {
+  const serial = String(row.serial ?? '').trim()
+  if (!serial) return false
+  const barcode = String(row.barcode ?? '').trim()
+  if (!barcode) return true
+  return barcode.toUpperCase() !== serial.toUpperCase()
+}
+
+/**
+ * Internal inventory barcode (Tag) — the manufacturer serial only.
+ * No INV- prefix (that read as “invoice”). Falls back to SKU / ITEM when
+ * serial is missing; appends -2, -3… on rare collisions.
+ */
 export function buildInventoryBarcode(params: {
   existingBarcodes: Iterable<string | null | undefined>
   manufacturerSerial?: string | null
@@ -105,12 +127,65 @@ export function buildInventoryBarcode(params: {
   const existing = new Set(
     Array.from(params.existingBarcodes, value => String(value ?? '').trim().toUpperCase()).filter(Boolean),
   )
-  const seed = normalizeSeed(params.manufacturerSerial, normalizeSeed(params.productSku, 'ITEM'))
+  const seed = normalizeTagSeed(
+    params.manufacturerSerial,
+    normalizeTagSeed(params.productSku, 'ITEM'),
+  )
 
-  let counter = 1
+  if (!existing.has(seed.toUpperCase())) return seed
+
+  let counter = 2
   while (true) {
-    const candidate = `INV-${seed}-${String(counter).padStart(4, '0')}`
-    if (!existing.has(candidate)) return candidate
+    const candidate = `${seed}-${counter}`
+    if (!existing.has(candidate.toUpperCase())) return candidate
     counter += 1
   }
+}
+
+/**
+ * Rewrite legacy INV-* (and other non-serial) tags to the manufacturer serial.
+ * Rows without a serial are left unchanged.
+ */
+export function rewriteInventoryTags<T extends { serial?: string | null; barcode?: string | null }>(
+  rows: T[],
+): { rows: T[]; rewritten: number } {
+  if (rows.length === 0) return { rows, rewritten: 0 }
+
+  const used = new Set(
+    rows
+      .filter(row => !needsInventoryTagRewrite(row))
+      .map(row => String(row.barcode ?? '').trim().toUpperCase())
+      .filter(Boolean),
+  )
+  let rewritten = 0
+
+  const allocate = (serial: string) => {
+    if (!used.has(serial.toUpperCase())) {
+      used.add(serial.toUpperCase())
+      return serial
+    }
+    let counter = 2
+    while (true) {
+      const candidate = `${serial}-${counter}`
+      if (!used.has(candidate.toUpperCase())) {
+        used.add(candidate.toUpperCase())
+        return candidate
+      }
+      counter += 1
+    }
+  }
+
+  const nextRows = rows.map(row => {
+    if (!needsInventoryTagRewrite(row)) return row
+    const serial = String(row.serial ?? '').trim()
+    rewritten += 1
+    return { ...row, barcode: allocate(serial) }
+  })
+
+  return { rows: nextRows, rewritten }
+}
+
+/** @deprecated Prefer needsInventoryTagRewrite — kept for call-site clarity in scans. */
+export function isLegacyInvTag(barcode: string | null | undefined): boolean {
+  return LEGACY_INV_TAG_RE.test(String(barcode ?? '').trim())
 }

@@ -193,10 +193,16 @@ export default function Inventory() {
     bulkStock,
     stockAdjustments, createAdjustment, approveAdjustment,
     saleOrders, releaseSerialToStock,
+    normalizeInventoryTags,
   } = useInventoryStore()
 
   const [tab, setTab] = useState<MainTab>('product_catalog')
   const [reportTab, setReportTab] = useState<ReportTab>('stock_on_hand')
+
+  useEffect(() => {
+    // One-shot heal: rewrite INV-* tags so Tag = manufacturer serial.
+    void normalizeInventoryTags()
+  }, [normalizeInventoryTags])
 
   useEffect(() => {
     const syncTabFromUrl = () => {
