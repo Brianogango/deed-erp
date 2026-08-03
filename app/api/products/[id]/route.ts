@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { requireRole, withApiErrorHandling } from '@/lib/auth/api'
 
-const WRITE_ROLES = ['director', 'admin_officer', 'inventory_officer', 'technical_lead']
+const WRITE_ROLES = ['director', 'admin_officer', 'inventory_officer', 'technical_lead', 'finance_officer']
 
 async function findProductDuplicate(id: string, name?: string | null, sku?: string | null, barcode?: string | null) {
   const or: any[] = []

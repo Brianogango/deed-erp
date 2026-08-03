@@ -8604,16 +8604,32 @@ const storeCtx: AppState = {
         updatedByName,
         updatedAt,
       }
-      const patch: Partial<Product> = { salePrice, costPrice, priceUpdatedAt: updatedAt, priceUpdatedBy: updatedByName }
+      // Catalog price edits update sale price; cost stays purchase-driven unless
+      // an explicit cost change is passed (bulk import).
+      const patch: Partial<Product> = {
+        salePrice,
+        costPrice,
+        priceUpdatedAt: updatedAt,
+        priceUpdatedBy: updatedByName,
+      }
+      const previous = { salePrice: product.salePrice, costPrice: product.costPrice }
       setProducts(prev => prev.map(p => p.id === id ? { ...p, ...patch } : p))
       setProductPriceHistory(prev => [history, ...prev])
-      fetch(`/api/products/${id}`, {
+      void fetch(`/api/products/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(patch),
-      }).catch(() => {})
+        body: JSON.stringify({ salePrice, costPrice }),
+      }).then(async res => {
+        if (res.ok) return
+        const payload = await res.json().catch(() => null) as { error?: string } | null
+        setProducts(prev => prev.map(p => p.id === id ? { ...p, ...previous } : p))
+        setProductPriceHistory(prev => prev.filter(h => h.id !== history.id))
+        showToast(payload?.error ?? 'Failed to save sale price on server', 'error')
+      }).catch(() => {
+        showToast('Network error saving sale price', 'error')
+      })
       addAuditLog('update_product_price', product.sku || product.name, `Price updated for ${product.name}: ${fmtKes(history.oldSalePrice)} → ${fmtKes(salePrice)}. Reason: ${history.reason}`)
-      showToast(`Price updated for ${product.name}`, 'success')
+      showToast(`Sale price updated for ${product.name}`, 'success')
       return history
     },
     deleteProduct: (id) => {

@@ -580,9 +580,19 @@ export default function Inventory() {
   }, [products, serials, bulkStock, catalogSearch, catalogCatFilter, catalogStockFilter])
 
   const openPriceUpdate = (product: Product) => {
+    const markupSuggested = suggestSalePriceFromCost(
+      systemSettings.invCategorySaleMarkupPct,
+      product.category,
+      product.costPrice,
+    )
+    // Prefill sale from category markup when cost exists but sale is still unset.
+    const saleSeed =
+      Number(product.salePrice) > 0
+        ? product.salePrice
+        : (markupSuggested !== null && Number(product.costPrice) > 0 ? markupSuggested : product.salePrice)
     setPriceProduct(product)
     setPriceForm({
-      salePrice: String(product.salePrice ?? 0),
+      salePrice: String(saleSeed ?? 0),
       costPrice: String(product.costPrice ?? 0),
       reason: '',
       effectiveDate: new Date().toISOString().slice(0, 10),
@@ -592,9 +602,9 @@ export default function Inventory() {
   const submitPriceUpdate = () => {
     if (!priceProduct) return
     const salePrice = Number(priceForm.salePrice)
-    const costPrice = Number(priceForm.costPrice)
-    if (!Number.isFinite(salePrice) || salePrice < 0) { showToast('Enter a valid selling price', 'error'); return }
-    if (!Number.isFinite(costPrice) || costPrice < 0) { showToast('Enter a valid cost price', 'error'); return }
+    // Cost is not editable here — keep the product's current cost (purchase-driven).
+    const costPrice = Number(priceProduct.costPrice) || 0
+    if (!Number.isFinite(salePrice) || salePrice < 0) { showToast('Enter a valid sale price', 'error'); return }
     if (!priceForm.reason.trim()) { showToast('Enter a reason for the price update', 'error'); return }
     updateProductPrice(priceProduct.id, salePrice, costPrice, priceForm.reason, priceForm.effectiveDate)
     setPriceProduct(null)
@@ -1512,12 +1522,40 @@ export default function Inventory() {
                   exportValue: product => product.salePrice,
                 },
                 {
-                  key: 'margin', label: 'Margin', priority: 2, width: '90px', align: 'right',
+                  key: 'margin', label: 'Markup', priority: 2, width: '100px', align: 'right',
                   render: product => {
-                    const margin = product.salePrice > 0 ? Math.round(((product.salePrice - product.costPrice) / product.salePrice) * 1000) / 10 : 0
-                    return <span className={`text-xs font-bold tabular-nums ${margin < 0 ? 'text-red-600' : margin < 15 ? 'text-amber-600' : 'text-emerald-600'}`}>{margin}%</span>
+                    const markup = getCategoryMarkupPct(systemSettings.invCategorySaleMarkupPct, product.category)
+                    const profit = product.salePrice > 0
+                      ? Math.round(((product.salePrice - product.costPrice) / product.salePrice) * 1000) / 10
+                      : null
+                    if (markup !== null) {
+                      return (
+                        <span
+                          className="text-xs font-bold tabular-nums text-emerald-700"
+                          title={profit !== null ? `Profit margin ${profit}%` : 'Category markup from Sales settings'}
+                        >
+                          {markup}%
+                        </span>
+                      )
+                    }
+                    return (
+                      <span className={`text-xs font-bold tabular-nums ${
+                        profit === null ? 'text-text-3'
+                          : profit < 0 ? 'text-red-600'
+                            : profit < 15 ? 'text-amber-600'
+                              : 'text-emerald-600'
+                      }`}>
+                        {profit === null ? '—' : `${profit}%`}
+                      </span>
+                    )
                   },
-                  exportValue: product => product.salePrice > 0 ? Math.round(((product.salePrice - product.costPrice) / product.salePrice) * 1000) / 10 : 0,
+                  exportValue: product => {
+                    const markup = getCategoryMarkupPct(systemSettings.invCategorySaleMarkupPct, product.category)
+                    if (markup !== null) return markup
+                    return product.salePrice > 0
+                      ? Math.round(((product.salePrice - product.costPrice) / product.salePrice) * 1000) / 10
+                      : ''
+                  },
                 },
                 {
                   key: 'lastUpdate', label: 'Last update', priority: 3, width: '140px',
@@ -1633,7 +1671,7 @@ export default function Inventory() {
             })()}
 
             {priceProduct && (
-              <Modal title="Update Product Price" subtitle={priceProduct.name} onClose={() => setPriceProduct(null)} width={520}>
+              <Modal title="Update Sale Price" subtitle={priceProduct.name} onClose={() => setPriceProduct(null)} width={520}>
                 <div className="flex flex-col gap-4">
                   <div className="grid grid-cols-2 gap-3">
                     <div className="p-3 bg-surface border border-border-lt rounded-xl">
@@ -1641,52 +1679,33 @@ export default function Inventory() {
                       <p className="text-sm font-extrabold text-text-1 mt-1">{fmtKes(priceProduct.salePrice)}</p>
                     </div>
                     <div className="p-3 bg-surface border border-border-lt rounded-xl">
-                      <p className="text-[10px] uppercase font-bold text-text-3">Current Cost</p>
+                      <p className="text-[10px] uppercase font-bold text-text-3">Cost (read-only)</p>
                       <p className="text-sm font-extrabold text-text-1 mt-1">{fmtKes(priceProduct.costPrice)}</p>
                     </div>
                   </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <Field label="New Sale Price" required>
-                      <Input type="number" value={priceForm.salePrice} onChange={v => setPriceForm(f => ({ ...f, salePrice: v }))} placeholder="0" />
-                    </Field>
-                    <Field label="New Cost Price" required>
-                      <Input
-                        type="number"
-                        value={priceForm.costPrice}
-                        onChange={v => setPriceForm(f => {
-                          const suggested = suggestSalePriceFromCost(
-                            systemSettings.invCategorySaleMarkupPct,
-                            priceProduct.category,
-                            v,
-                          )
-                          return {
-                            ...f,
-                            costPrice: v,
-                            ...(suggested !== null ? { salePrice: String(suggested) } : {}),
-                          }
-                        })}
-                        placeholder="0"
-                      />
-                    </Field>
-                  </div>
+                  <Field label="New Sale Price" required>
+                    <Input type="number" value={priceForm.salePrice} onChange={v => setPriceForm(f => ({ ...f, salePrice: v }))} placeholder="0" />
+                  </Field>
                   {(() => {
                     const pct = getCategoryMarkupPct(systemSettings.invCategorySaleMarkupPct, priceProduct.category)
                     if (pct === null) return null
                     const suggested = suggestSalePriceFromCost(
                       systemSettings.invCategorySaleMarkupPct,
                       priceProduct.category,
-                      priceForm.costPrice,
+                      priceProduct.costPrice,
                     )
                     return (
                       <div className="rounded-lg border border-[#C7D7FD] bg-[#F0F4FF] px-3 py-2 flex items-center justify-between gap-2">
                         <p className="text-[11px] text-navy-500 m-0">
                           {priceProduct.category} markup {pct}%
-                          {suggested !== null ? <> → {fmtKes(suggested)}</> : null}
+                          {suggested !== null && Number(priceProduct.costPrice) > 0
+                            ? <> → suggested sale {fmtKes(suggested)}</>
+                            : <> · set cost on the product to auto-suggest sale</>}
                         </p>
                         <button
                           type="button"
                           className="btn-secondary text-[11px] px-2.5 py-1"
-                          disabled={suggested === null}
+                          disabled={suggested === null || !(Number(priceProduct.costPrice) > 0)}
                           onClick={() => {
                             if (suggested === null) return
                             setPriceForm(f => ({ ...f, salePrice: String(suggested) }))
@@ -1701,14 +1720,14 @@ export default function Inventory() {
                   <Field label="Effective Date">
                     <Input type="date" value={priceForm.effectiveDate} onChange={v => setPriceForm(f => ({ ...f, effectiveDate: v }))} />
                   </Field>
-                  {Number(priceForm.salePrice) < Number(priceForm.costPrice) && (
+                  {Number(priceForm.salePrice) < Number(priceProduct.costPrice) && Number(priceProduct.costPrice) > 0 && (
                     <div className="p-3 bg-amber-50 border border-amber-100 rounded-lg text-[11px] text-amber-800">
                       New sale price is below cost. Confirm this is intentional in the reason.
                     </div>
                   )}
                   <div className="flex justify-end gap-3">
                     <button className="btn-secondary px-6" onClick={() => setPriceProduct(null)}>Cancel</button>
-                    <button className="btn-primary px-8" onClick={submitPriceUpdate}>Save Price</button>
+                    <button className="btn-primary px-8" onClick={submitPriceUpdate}>Save Sale Price</button>
                   </div>
                 </div>
               </Modal>
