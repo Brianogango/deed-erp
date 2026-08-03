@@ -26,7 +26,7 @@ import { OutboundReleasePanel, OrcStatusBadge } from '../OutboundReleasePanel'
 import { normalizeClientRole } from '@/lib/auth/access'
 import { readGuardedImageAsDataUrl } from '@/lib/client-image-guard'
 import { repairProgressOrderFor } from '@/lib/repair-progress'
-import { isDirectRepairPath, quotableStatusesForPath, repairPathLabel, startableStatusesForPath } from '@/lib/repair-path'
+import { isDirectRepairPath, isQuoteDeclinedReopenable, quotableStatusesForPath, repairPathLabel, returnableStatusesForPath, startableStatusesForPath } from '@/lib/repair-path'
 
 const PROC_COLORS = {
   pending:   { bg: 'bg-amber-50',   text: 'text-amber-700',   border: 'border-amber-200',   dot: '#F59E0B' },
@@ -162,8 +162,9 @@ export default function RepairDetailView() {
     && (isMyRepair || ['director','admin_officer','technical_lead','sales_rep','finance_officer'].includes(currentUser?.role ?? ''))
     && !r.diagnosisStopped
     && !pendingOutsourceJob
-    // Lock quote editing once device is marked ready-for-collection or has been picked up
-    && !['ready','invoiced','verified_released','delivered','closed','cancelled','declined','unrepairable','returned','retained'].includes(r.status)
+    // Lock quote editing once device is marked ready-for-collection or has been picked up.
+    // `declined` is intentionally allowed — staff may revise and re-send another quote.
+    && !['ready','invoiced','verified_released','delivered','closed','cancelled','unrepairable','returned','retained'].includes(r.status)
   const canStart      = startableStatusesForPath(r.repairPath).includes(r.status) && isMyRepair && !pendingOutsourceJob
   const canComplete   = r.status === 'in_repair' && isMyRepair && !pendingOutsourceJob
   // QC: director/lead always; technician only if they did NOT work on this repair
@@ -192,10 +193,14 @@ export default function RepairDetailView() {
     && r.diagnosisFeeStatus !== 'invoiced'
     && r.diagnosisFeeStatus !== 'not_applicable'
     && (r.diagnosisFee ?? 0) > 0
-    && !TERMINAL.includes(r.status)
-  // Return the device unrepaired at no charge (e.g. goodwill / part unavailable)
+    && (!TERMINAL.includes(r.status) || isQuoteDeclinedReopenable(r.status))
+  const canDeclineQuote = ['director', 'admin_officer', 'technical_lead', 'sales_rep', 'finance_officer'].includes(currentRole)
+    && !!r.quote
+    && ['awaiting_approval', 'diagnosed', 'approved'].includes(r.status)
+    && !pendingOutsourceJob
+  // Return the device unrepaired (incl. after quote decline / unrepairable)
   const canReturnDevice       = ['director', 'admin_officer', 'technical_lead'].includes(currentRole)
-    && ['received', 'assigned', 'diagnosed', 'awaiting_approval', 'approved', 'awaiting_parts', 'in_repair', 'qc'].includes(r.status)
+    && returnableStatusesForPath(r.repairPath).includes(r.status)
     && !pendingOutsourceJob
   const canLeaveDeviceWithDeed = ['director', 'admin_officer', 'technical_lead'].includes(currentRole)
     && ['received', 'assigned', 'diagnosed', 'awaiting_approval', 'approved', 'awaiting_parts', 'in_repair', 'qc', 'ready'].includes(r.status)
@@ -234,6 +239,7 @@ export default function RepairDetailView() {
   const hasPartsUsed = (r.partsUsed?.length ?? 0) > 0
 
   const nextActionHint = pendingOutsourceJob ? `Device is at ${pendingOutsourceJob.vendorName} via ${pendingOutsourceJob.ref}. Mark it returned in Outsource before continuing.`
+    : isQuoteDeclinedReopenable(r.status) ? 'Customer declined this quote — revise and re-send, or return the device'
     : canDiagnose ? 'Log your technical diagnosis to proceed'
     : canMarkPartsArrived ? 'Confirm parts have arrived so the technician can start'
     : canStart     ? 'Start the repair'
@@ -260,6 +266,7 @@ export default function RepairDetailView() {
     : canCloseJob ? 'close'
     : canDiagnose ? 'diagnose'
     : (canUpdateDiagnosis && !canQuote) ? 'diagnose'
+    : (isQuoteDeclinedReopenable(r.status) && canQuote) ? 'quote'
     : canQuote ? 'quote'
     : canAssign ? 'assign'
     : null
@@ -412,7 +419,14 @@ export default function RepairDetailView() {
               <ActionBtn onClick={() => setShowDiagnosisModal(true)} icon={faStethoscope} label={canUpdateDiagnosis && !canDiagnose ? 'Update diagnosis' : 'Log diagnosis'} color="bg-blue-600 hover:bg-blue-700" shadow="shadow-blue-100" pulse={canDiagnose} />
             )}
             {primaryActionId === 'quote' && (
-              <ActionBtn onClick={() => setShowQuoteModal(true)} icon={faFileInvoiceDollar} label="Generate quote" color="bg-indigo-600 hover:bg-indigo-700" shadow="shadow-indigo-100" pulse />
+              <ActionBtn
+                onClick={() => setShowQuoteModal(true)}
+                icon={faFileInvoiceDollar}
+                label={isQuoteDeclinedReopenable(r.status) ? 'Revise quote' : r.quote ? 'Update quote' : 'Generate quote'}
+                color="bg-indigo-600 hover:bg-indigo-700"
+                shadow="shadow-indigo-100"
+                pulse
+              />
             )}
             {primaryActionId === 'start' && (
               <ActionBtn onClick={() => startRepair(r.id)} icon={faPlay} label="Start repair" color="bg-violet-600 hover:bg-violet-700" shadow="shadow-violet-100" pulse />
@@ -462,17 +476,17 @@ export default function RepairDetailView() {
             <SecondaryActionMenu
               ariaLabel="More repair actions"
               actions={[
-                { id: 'decline', label: 'Decline', onClick: () => setShowDeclineModal(true), hidden: !canVerify, danger: true },
+                { id: 'decline', label: 'Decline quote', onClick: () => setShowDeclineModal(true), hidden: !canDeclineQuote, danger: true },
                 { id: 'assign', label: r.assignedTechnicianId ? 'Reassign technician' : 'Assign technician', onClick: () => setShowAssignModal(true), hidden: !canAssign || primaryActionId === 'assign' },
                 { id: 'diagnosis', label: canUpdateDiagnosis ? 'Update diagnosis' : 'Log diagnosis', onClick: () => setShowDiagnosisModal(true), hidden: !(canDiagnose || canUpdateDiagnosis) || primaryActionId === 'diagnose' },
-                { id: 'quote', label: r.quote ? 'Edit quote' : 'Generate quote', onClick: () => setShowQuoteModal(true), hidden: !canQuote || primaryActionId === 'quote' },
+                { id: 'quote', label: isQuoteDeclinedReopenable(r.status) ? 'Revise & re-send quote' : r.quote ? 'Edit quote' : 'Generate quote', onClick: () => setShowQuoteModal(true), hidden: !canQuote || primaryActionId === 'quote' },
                 { id: 'parts_arrived', label: 'Mark parts arrived', onClick: () => markPartsArrived(r.id), hidden: !canMarkPartsArrived || primaryActionId === 'parts_arrived' },
                 { id: 'progress', label: 'Update progress', onClick: () => setShowProgressModal(true), hidden: !canUpdateProgress || ['start', 'complete', 'invoice'].includes(primaryActionId ?? '') },
                 { id: 'invoice', label: 'Create invoice', onClick: () => setShowProgressModal(true), hidden: !canInvoice || primaryActionId === 'invoice' },
                 { id: 'procure', label: 'Request parts', onClick: () => setShowProcurementModal(true), hidden: !canProcure },
                 { id: 'stop', label: 'Stop at diagnosis', onClick: () => setShowStopDiagnosisModal(true), hidden: !canStopAtDiagnosis },
                 { id: 'waive_fee', label: 'Waive diagnosis fee', onClick: () => { setWaiveFeeReason(''); setShowWaiveFeeModal(true) }, hidden: !canWaiveDiagnosisFee },
-                { id: 'return', label: 'Return device', onClick: () => setShowReturnModal(true), hidden: !canReturnDevice },
+                { id: 'return', label: isQuoteDeclinedReopenable(r.status) ? 'Return device (after decline)' : 'Return device', onClick: () => setShowReturnModal(true), hidden: !canReturnDevice },
                 { id: 'leave', label: 'Customer leaves device', onClick: () => { setLeaveDeviceNotes(''); setLeaveConvertMode('donation'); setShowLeaveDeviceModal(true) }, hidden: !canLeaveDeviceWithDeed },
                 { id: 'tradein', label: 'Trade-in after evaluation', onClick: () => {
                   setTradeInPrice('')
@@ -496,8 +510,38 @@ export default function RepairDetailView() {
           </div>
         </div>
 
+        {/* Declined quote — always show next-step banner (not only for assigned tech) */}
+        {isQuoteDeclinedReopenable(r.status) && (
+          <div className="max-w-[1600px] mx-auto mt-2.5">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 px-3.5 py-2.5 rounded-xl bg-[rgba(239,68,68,0.06)] border border-red-500/25">
+              <div className="flex items-start gap-2.5 min-w-0">
+                <div className="w-5 h-5 rounded-full bg-red-600 flex items-center justify-center shrink-0 mt-0.5">
+                  <Fa icon={faArrowRight} className="text-white text-[8px]" />
+                </div>
+                <p className="text-[11px] font-bold text-[var(--text-2)] m-0">
+                  <span className="font-black text-red-600">Quote declined. </span>
+                  Revise and re-send a new quote, or return the device
+                  {r.quote?.rejectionReason ? <> — “{r.quote.rejectionReason}”</> : null}.
+                </p>
+              </div>
+              <div className="flex items-center gap-2 flex-shrink-0">
+                {canQuote && (
+                  <button type="button" className="btn-primary text-[11px] px-3 py-1.5" onClick={() => setShowQuoteModal(true)}>
+                    Revise quote
+                  </button>
+                )}
+                {canReturnDevice && (
+                  <button type="button" className="btn-secondary text-[11px] px-3 py-1.5" onClick={() => setShowReturnModal(true)}>
+                    Return device
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Next-action hint for assigned tech or QA performer */}
-        {(isMyRepair || canPerformQA) && nextActionHint && (
+        {(isMyRepair || canPerformQA) && nextActionHint && !isQuoteDeclinedReopenable(r.status) && (
           <div className="max-w-[1600px] mx-auto mt-2.5">
             <div className="flex items-center gap-2.5 px-3.5 py-2 rounded-xl bg-[rgba(37,99,235,0.08)] border border-blue-500/25">
               <div className="w-5 h-5 rounded-full bg-blue-600 flex items-center justify-center shrink-0">

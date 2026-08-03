@@ -86,7 +86,9 @@ import { repairOutsourceReadiness } from '@/lib/repair-outsource'
 import { getPreviousRepairProgressStatus } from '@/lib/repair-progress'
 import {
   isDirectRepairPath,
+  isQuoteDeclinedReopenable,
   quotableStatusesForPath,
+  returnableStatusesForPath,
   startableStatusesForPath,
 } from '@/lib/repair-path'
 import {
@@ -3346,6 +3348,7 @@ export type RepairStoreState = Pick<AppState,
   | 'moveRepairToPreviousProgress'
   | 'requestProcurement'
   | 'markUnrepairable'
+  | 'declineQuote'
   | 'returnToCustomer'
   | 'leaveDeviceWithDeed'
   | 'convertRetainedRepairToDonation'
@@ -5529,6 +5532,7 @@ export function StoreProvider({
     moveRepairToPreviousProgress: (...args: Parameters<AppState['moveRepairToPreviousProgress']>) => storeCtxRef.current!.moveRepairToPreviousProgress(...args),
     requestProcurement: (...args: Parameters<AppState['requestProcurement']>) => storeCtxRef.current!.requestProcurement(...args),
     markUnrepairable: (...args: Parameters<AppState['markUnrepairable']>) => storeCtxRef.current!.markUnrepairable(...args),
+    declineQuote: (...args: Parameters<AppState['declineQuote']>) => storeCtxRef.current!.declineQuote(...args),
     returnToCustomer: (...args: Parameters<AppState['returnToCustomer']>) => storeCtxRef.current!.returnToCustomer(...args),
     leaveDeviceWithDeed: (...args: Parameters<AppState['leaveDeviceWithDeed']>) => storeCtxRef.current!.leaveDeviceWithDeed(...args),
     convertRetainedRepairToDonation: (...args: Parameters<AppState['convertRetainedRepairToDonation']>) => storeCtxRef.current!.convertRetainedRepairToDonation(...args),
@@ -11687,6 +11691,7 @@ const storeCtx: AppState = {
       }
       const isUpdate = !!repair.quote
       const prevQuote = repair.quote
+      const reopeningAfterDecline = isQuoteDeclinedReopenable(repair.status)
 
       // ── Gap 3: Reverse reserved stock on quote revision ───────────────────
       // If parts were already reserved (markPartsArrived ran), unreserve them
@@ -11771,7 +11776,15 @@ const storeCtx: AppState = {
         })
         if (diffLines.length === 0) diffLines.push('No line-item changes — total updated')
         diffLines.push(`Total: ${fmtKesLocal(prevQuote.total)} → ${fmtKesLocal(subtotal + (applyVat ? Math.round(subtotal * (companySettings.vatRate / 100)) : 0))}`)
+        if (reopeningAfterDecline) {
+          diffLines.unshift(
+            `Re-quote after customer decline${prevQuote.rejectionReason ? ` (“${prevQuote.rejectionReason}”)` : ''}`,
+          )
+        }
         changeSummary = diffLines.join('\n')
+      } else if (reopeningAfterDecline && prevQuote) {
+        prevTotal = prevQuote.total
+        changeSummary = `Re-quote after customer decline${prevQuote.rejectionReason ? ` (“${prevQuote.rejectionReason}”)` : ''}`
       }
 
       const quote: RepairQuote = {
@@ -12066,9 +12079,11 @@ const storeCtx: AppState = {
         showToast(isUpdate ? 'Quote revised and auto-approved (Direct Repair)' : 'Quote auto-approved — Direct Repair can start without client approval')
       } else {
         const coverageLabel = repair.underWarranty ? (repair.warrantyCoverage === 'partial' ? ' (partial warranty — uncovered items)' : ' (warranty voided — client pays)') : ''
-        const portalMsg = isUpdate
-          ? `Quote revised — new total KES ${chargeTotal.toLocaleString('en-KE')}. Please review and re-approve.`
-          : 'Quote sent — awaiting your approval'
+        const portalMsg = reopeningAfterDecline
+          ? `Revised quote after your previous decline — new total KES ${chargeTotal.toLocaleString('en-KE')}. Please review and approve.`
+          : isUpdate
+            ? `Quote revised — new total KES ${chargeTotal.toLocaleString('en-KE')}. Please review and re-approve.`
+            : 'Quote sent — awaiting your approval'
         syncRepairToPortal({ ...repair, quote, laborCost: derivedLaborCost, logisticsCost: derivedLogisticsCost, total: chargeTotal, status: 'awaiting_approval', quoteApprovalDeadline: quote.validUntil }, portalMsg)
         const auditDetail = isUpdate && changeSummary
           ? `Quote revised: KES ${prevQuote?.total ?? 0} → KES ${quote.total}\n${changeSummary}`
@@ -12092,7 +12107,13 @@ const storeCtx: AppState = {
             }),
           }).catch(() => {})
         }
-        showToast(isUpdate ? 'Quote revised — customer re-notified, procurement requests reset' : `Quote generated — customer notified via ${repair.customerEmail ? 'email' : 'SMS'}`)
+        showToast(
+          reopeningAfterDecline
+            ? 'Revised quote sent after decline — awaiting customer re-approval'
+            : isUpdate
+              ? 'Quote revised — customer re-notified, procurement requests reset'
+              : `Quote generated — customer notified via ${repair.customerEmail ? 'email' : 'SMS'}`,
+        )
       }
     },
     
@@ -13548,37 +13569,36 @@ const storeCtx: AppState = {
         showToast('Repair not found', 'error')
         return
       }
+      const trimmedReason = String(reason ?? '').trim() || 'Declined by customer'
 
       const resolved = resolveDiagnosisFee(repair, systemSettings)
-      const chargeFee = shouldChargeDiagnosisFee(repair) && resolved.amount > 0
-      // Always charge diagnosis fee when Diagnosis First quote is declined after diagnosis
-      if (chargeFee && repair.diagnosis) {
-        setRepairs(p => p.map(r => r.id === repairId ? {
-          ...r,
-          status: 'ready',
-          diagnosisStopped: true,
-          diagnosisFee: resolved.amount,
-          diagnosisFeeStatus: 'applicable',
-          deviceTier: resolved.tier ?? r.deviceTier ?? 'regular',
-          laborCost: 0,
-          logisticsCost: 0,
-          total: resolved.amount,
-          notes: `${r.notes || ''}\n\nQuote declined (diagnosis fee still due — KES ${resolved.amount}): ${reason}`.trim(),
-          quote: r.quote ? { ...r.quote, rejectedDate: now(), rejectionReason: reason } : r.quote,
-        } : r))
-        addAuditLog('decline_quote', repairId, `Quote declined — diagnosis fee KES ${resolved.amount} still charged: ${reason}`)
-        showToast(`Quote declined — KES ${resolved.amount.toLocaleString('en-KE')} diagnosis fee still due`, 'info')
-        return
-      }
+      const feeApplies = shouldChargeDiagnosisFee(repair) && resolved.amount > 0 && !!repair.diagnosis
 
+      // Soft-terminal: stay on `declined` so staff can revise & re-send another
+      // quote OR return the device. Diagnosis fee (if due) is stamped for collection
+      // on return / invoice — we do not force `ready` here.
       setRepairs(p => p.map(r => r.id === repairId ? {
         ...r,
         status: 'declined',
-        notes: r.notes + `\n\nQuote declined: ${reason}`,
+        notes: `${r.notes || ''}\n\nQuote declined: ${trimmedReason}${feeApplies ? ` (diagnosis fee KES ${resolved.amount} still due)` : ''}`.trim(),
+        quote: r.quote
+          ? { ...r.quote, rejectedDate: now(), rejectionReason: trimmedReason }
+          : r.quote,
+        ...(feeApplies ? {
+          diagnosisFee: resolved.amount,
+          diagnosisFeeStatus: 'applicable' as const,
+          deviceTier: resolved.tier ?? r.deviceTier ?? 'regular',
+        } : {}),
       } : r))
 
-      addAuditLog('decline_quote', repairId, `Quote declined by customer: ${reason}`)
-      
+      addAuditLog(
+        'decline_quote',
+        repairId,
+        feeApplies
+          ? `Quote declined — diagnosis fee KES ${resolved.amount} still due: ${trimmedReason}`
+          : `Quote declined by customer: ${trimmedReason}`,
+      )
+
       // Notify customer
       if (repair.customerPhone) {
         try {
@@ -13591,23 +13611,35 @@ const storeCtx: AppState = {
               customerPhone: repair.customerPhone,
               repairRef: repair.ref,
               deviceName: repair.productName,
-              message: "We understand you've declined the repair quote. Your device is ready for return pickup at our service center.",
-              options: { priority: 'normal' }
-            })
+              message: feeApplies
+                ? `We understand you've declined the repair quote for ${repair.productName} (${repair.ref}). A diagnosis fee of KES ${resolved.amount.toLocaleString('en-KE')} still applies. We can send a revised quote, or arrange device return.`
+                : `We understand you've declined the repair quote for ${repair.productName} (${repair.ref}). We can send a revised quote, or arrange device return pickup.`,
+              options: { priority: 'normal' },
+            }),
           })
 
           const result = await response.json()
 
           if (result.success) {
-            showToast(`Quote declined • Customer notified via ${result.channel?.toUpperCase()}`, 'info')
+            showToast(
+              feeApplies
+                ? `Quote declined — KES ${resolved.amount.toLocaleString('en-KE')} diagnosis fee still due · customer notified`
+                : `Quote declined · customer notified via ${result.channel?.toUpperCase()}`,
+              'info',
+            )
           } else {
-            showToast('Quote declined • Notification failed', 'error')
+            showToast('Quote declined · notification failed', 'error')
           }
         } catch {
-          showToast('Quote declined • Notification error', 'error')
+          showToast('Quote declined · notification error', 'error')
         }
       } else {
-        showToast('Quote marked as declined', 'info')
+        showToast(
+          feeApplies
+            ? `Quote declined — KES ${resolved.amount.toLocaleString('en-KE')} diagnosis fee still due. Revise quote or return device.`
+            : 'Quote declined — revise quote or return device',
+          'info',
+        )
       }
     },
 
@@ -13726,17 +13758,58 @@ const storeCtx: AppState = {
         return
       }
       if (blockIfOutsourced(repairId, 'return this device to customer')) return
+      if (!returnableStatusesForPath(repair.repairPath).includes(repair.status)) {
+        showToast('This repair cannot be returned at the current stage', 'error')
+        return
+      }
+      if (!String(reason ?? '').trim()) {
+        showToast('Enter a reason for returning the device', 'error')
+        return
+      }
+
+      const resolved = resolveDiagnosisFee(repair, systemSettings)
+      const feeStillDue =
+        shouldChargeDiagnosisFee(repair) &&
+        resolved.amount > 0 &&
+        !!repair.diagnosis &&
+        repair.diagnosisFeeStatus !== 'invoiced' &&
+        repair.diagnosisFeeStatus !== 'waived'
+
+      const declineNote = isQuoteDeclinedReopenable(repair.status)
+        ? ' (after quote decline)'
+        : ''
+      const feeNote = feeStillDue
+        ? `\nDiagnosis fee still due — KES ${resolved.amount.toLocaleString('en-KE')}.`
+        : ''
 
       setRepairs(p => p.map(r => r.id === repairId ? {
         ...r,
         status: 'returned',
         deliveryActualDate: now(),
-        notes: r.notes + `\n\nReturned to customer: ${reason}`,
+        notes: `${r.notes || ''}\n\nReturned to customer${declineNote}: ${reason.trim()}${feeNote}`.trim(),
         closedDate: now(),
+        ...(feeStillDue ? {
+          diagnosisFee: resolved.amount,
+          diagnosisFeeStatus: 'applicable' as const,
+          diagnosisStopped: true,
+          deviceTier: resolved.tier ?? r.deviceTier ?? 'regular',
+        } : {}),
+        quote: r.quote && isQuoteDeclinedReopenable(r.status)
+          ? { ...r.quote, rejectionReason: r.quote.rejectionReason || reason.trim() }
+          : r.quote,
       } : r))
 
-      addAuditLog('return_device', repairId, `Device returned: ${reason}`)
-      showToast(`${repair.ref} returned to customer`, 'success')
+      addAuditLog(
+        'return_device',
+        repairId,
+        `Device returned${declineNote}: ${reason.trim()}${feeStillDue ? ` · diagnosis fee KES ${resolved.amount} still due` : ''}`,
+      )
+      showToast(
+        feeStillDue
+          ? `${repair.ref} returned — diagnosis fee KES ${resolved.amount.toLocaleString('en-KE')} still due`
+          : `${repair.ref} returned to customer`,
+        feeStillDue ? 'info' : 'success',
+      )
     },
 
     leaveDeviceWithDeed: (repairId, opts) => {

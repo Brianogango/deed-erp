@@ -22,10 +22,36 @@ export function repairPathLabel(value: unknown): string {
   return isDirectRepairPath(value) ? 'Direct Repair' : 'Diagnosis First'
 }
 
+/**
+ * Soft-terminal: customer declined this quote, but the job can still be
+ * re-quoted or the device returned (not a permanent close).
+ */
+export function isQuoteDeclinedReopenable(status: unknown): boolean {
+  return status === 'declined'
+}
+
 /** Statuses where a quote may be generated/edited. */
 export function quotableStatusesForPath(path: unknown): string[] {
-  const base = ['diagnosed', 'awaiting_approval', 'approved', 'awaiting_parts', 'in_repair', 'qc']
+  // `declined` is intentionally included — staff may revise and re-send after
+  // the customer rejects a quote (cheaper scope, fewer parts, etc.).
+  const base = ['diagnosed', 'awaiting_approval', 'approved', 'awaiting_parts', 'in_repair', 'qc', 'declined']
   return isDirectRepairPath(path) ? ['assigned', ...base] : base
+}
+
+/** Statuses from which an unrepaired device may be returned to the customer. */
+export function returnableStatusesForPath(_path?: unknown): string[] {
+  return [
+    'received',
+    'assigned',
+    'diagnosed',
+    'awaiting_approval',
+    'approved',
+    'awaiting_parts',
+    'in_repair',
+    'qc',
+    'declined',
+    'unrepairable',
+  ]
 }
 
 /** Statuses from which the assigned tech may start work. */

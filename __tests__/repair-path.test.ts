@@ -1,9 +1,11 @@
 import { describe, it, expect } from 'vitest'
 import {
   isDirectRepairPath,
+  isQuoteDeclinedReopenable,
   normalizeRepairPath,
   quotableStatusesForPath,
   repairPathLabel,
+  returnableStatusesForPath,
   startableStatusesForPath,
 } from '@/lib/repair-path'
 
@@ -24,6 +26,16 @@ describe('repair-path helpers', () => {
     expect(quotableStatusesForPath('diagnosis_first')).not.toContain('assigned')
     expect(quotableStatusesForPath('diagnosis_first')).toContain('qc')
     expect(quotableStatusesForPath('direct_repair')).toContain('qc')
+  })
+
+  it('allows re-quote and return after customer declines a quote', () => {
+    expect(isQuoteDeclinedReopenable('declined')).toBe(true)
+    expect(isQuoteDeclinedReopenable('returned')).toBe(false)
+    expect(quotableStatusesForPath('diagnosis_first')).toContain('declined')
+    expect(quotableStatusesForPath('direct_repair')).toContain('declined')
+    expect(returnableStatusesForPath()).toEqual(
+      expect.arrayContaining(['declined', 'unrepairable', 'awaiting_approval']),
+    )
   })
 
   it('allows start from assigned on direct_repair', () => {

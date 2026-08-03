@@ -248,7 +248,7 @@ export async function POST(
   if (repair.customerPhone) {
     const message = approved
       ? `Hi ${repair.customerName}, your approval for ${approvedLines.length} repair quote item(s) on ${repair.productName} (${repair.ref}) has been received. Approved total: KES ${approvedTotal.toLocaleString('en-KE')}.`
-      : `Hi ${repair.customerName}, we have received your decision to decline the repair quote for ${repair.productName} (${repair.ref}). We will contact you regarding next steps.`
+      : `Hi ${repair.customerName}, we have received your decision to decline the repair quote for ${repair.productName} (${repair.ref}). We can send a revised quote, or arrange device return.`
     fetch(`${req.nextUrl.origin}/api/notifications/send`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-internal-secret': process.env.INTERNAL_API_SECRET ?? '' }, body: JSON.stringify({ type: 'general', to: repair.customerPhone, message, priority: 'high' }) }).catch(() => {})
   }
 

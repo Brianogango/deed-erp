@@ -1073,23 +1073,36 @@ export function ProcurementModal({ repair, onClose }: { repair: RepairOrder, onC
  * ReturnModal
  */
 export function ReturnModal({ repair, onClose }: { repair: RepairOrder, onClose: () => void }) {
-  const { returnToCustomer } = useRepairStore()
+  const { returnToCustomer, systemSettings } = useRepairStore()
   const [reason, setReason] = useState('')
+  const afterDecline = repair.status === 'declined'
+  const resolved = resolveDiagnosisFee(repair, systemSettings)
+  const feeStillDue =
+    shouldChargeDiagnosisFee(repair) &&
+    resolved.amount > 0 &&
+    !!repair.diagnosis &&
+    repair.diagnosisFeeStatus !== 'invoiced' &&
+    repair.diagnosisFeeStatus !== 'waived'
 
   const handleReturn = () => {
-    returnToCustomer(repair.id, reason)
+    if (!reason.trim()) return
+    returnToCustomer(repair.id, reason.trim())
     onClose()
   }
 
   return (
-    <Modal title="Return to Customer" subtitle={repair.ref} onClose={onClose} width={400} icon={<Fa icon={faUndo} />} accent="#F59E0B">
+    <Modal title="Return to Customer" subtitle={repair.ref} onClose={onClose} width={440} icon={<Fa icon={faUndo} />} accent="#F59E0B">
       <div className="flex flex-col gap-5">
         <div className="flex items-start gap-3 p-4 rounded-xl"
           style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.25)' }}>
           <Fa icon={faUndo} style={{ color: 'var(--warning)', marginTop: 2, flexShrink: 0 } as any} />
           <p className="text-[11px] font-medium leading-relaxed" style={{ color: 'var(--warning-text)' }}>
-            Returning the device without completing repairs. This will move the job to{' '}
-            <strong>Returned</strong> status.
+            {afterDecline
+              ? <>Returning the device after the customer declined the quote. Job moves to <strong>Returned</strong>.</>
+              : <>Returning the device without completing repairs. This will move the job to <strong>Returned</strong> status.</>}
+            {feeStillDue ? (
+              <> Diagnosis fee of <strong>KES {resolved.amount.toLocaleString('en-KE')}</strong> still applies.</>
+            ) : null}
           </p>
         </div>
         <Field label="Reason for Return" required>
@@ -1110,23 +1123,25 @@ export function ReturnModal({ repair, onClose }: { repair: RepairOrder, onClose:
  * DeclineModal
  */
 export function DeclineModal({ repair, onClose }: { repair: RepairOrder, onClose: () => void }) {
-  const { updateRepair } = useRepairStore()
+  const { declineQuote } = useRepairStore()
   const [reason, setReason] = useState('')
 
   const handleDecline = () => {
-    updateRepair(repair.id, { status: 'declined', notes: (repair.notes || '') + `\n[Declined] Reason: ${reason}` })
+    if (!reason.trim()) return
+    void declineQuote(repair.id, reason.trim())
     onClose()
   }
 
   return (
-    <Modal title="Decline Quote" subtitle={repair.ref} onClose={onClose} width={400} icon={<Fa icon={faTimesCircle} />} accent="#EF4444">
+    <Modal title="Decline Quote" subtitle={repair.ref} onClose={onClose} width={440} icon={<Fa icon={faTimesCircle} />} accent="#EF4444">
       <div className="flex flex-col gap-5">
         <div className="flex items-start gap-3 p-4 rounded-xl"
           style={{ background: 'rgba(239,68,68,0.07)', border: '1px solid rgba(239,68,68,0.22)' }}>
           <Fa icon={faTimesCircle} style={{ color: 'var(--danger)', marginTop: 2, flexShrink: 0 } as any} />
           <p className="text-[11px] font-medium leading-relaxed" style={{ color: '#7F1D1D' }}>
-            The customer has declined the repair quote. The device will be marked as{' '}
-            <strong>Declined</strong>.
+            Marks the quote as <strong>Declined</strong>. You can still{' '}
+            <strong>revise and re-send</strong> another quote, or <strong>return the device</strong>.
+            Diagnosis fee (if applicable) stays due.
           </p>
         </div>
         <Field label="Reason for Declining" required>
