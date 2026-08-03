@@ -254,6 +254,9 @@ export function buildDeedDocumentPdf(
     { label: docNoLabel(input.title), value: input.ref },
     ...(input.date ? [{ label: 'Date', value: fmtDate(input.date) }] : []),
     ...(input.dueDate ? [{ label: input.dueLabel ?? 'Due Date', value: fmtDate(input.dueDate) }] : []),
+    // Doc meta stays on the left — never mixed into the Quote/Bill To party block.
+    ...(input.sourceRef ? [{ label: 'Reference', value: input.sourceRef }] : []),
+    ...(input.salesperson ? [{ label: 'Prepared by', value: input.salesperson }] : []),
   ]
   metaRows.forEach(row => {
     doc.setFont('helvetica', 'bold').setFontSize(9).setTextColor(...TEXT)
@@ -283,15 +286,6 @@ export function buildDeedDocumentPdf(
   if (input.customerPhone) {
     doc.setFont('helvetica', 'normal').setFontSize(9).setTextColor(...LIGHT_BLUE)
     doc.text(input.customerPhone, rightX, partyY, { align: 'right' })
-    partyY += 14
-  }
-  if (input.sourceRef) {
-    doc.setFont('helvetica', 'bold').setFontSize(9).setTextColor(...LIGHT_BLUE)
-    doc.text(`Reference: ${input.sourceRef}`, rightX, partyY, { align: 'right' })
-    partyY += 14
-  } else if (input.salesperson) {
-    doc.setFont('helvetica', 'normal').setFontSize(9).setTextColor(...LIGHT_BLUE)
-    doc.text(`Prepared by: ${input.salesperson}`, rightX, partyY, { align: 'right' })
     partyY += 14
   }
   if (input.customerTaxId) {
