@@ -4,6 +4,7 @@ import {
   normalizeSaleOrderForClient,
   legacyApprovalFromStatus,
   isQuotationStage,
+  saleOrderLooksConfirmed,
   SALE_STATUS_BAR,
   SALE_STATUS_LABELS,
   invoiceableQty,
@@ -100,6 +101,14 @@ describe('sale order status vocabulary', () => {
     expect(SALE_STATUS_LABELS.cancelled).toBe('Cancelled')
     // Cancelled is an exception state, not a progress stage.
     expect(SALE_STATUS_BAR).not.toContain('cancelled')
+  })
+
+  it('treats SO number / confirmedAt as confirmed even when status drifted', () => {
+    expect(saleOrderLooksConfirmed({ status: 'sale' })).toBe(true)
+    expect(saleOrderLooksConfirmed({ status: 'quotation', orderNumber: 'SO/2026/0006' })).toBe(true)
+    expect(saleOrderLooksConfirmed({ status: 'quotation_sent', confirmedAt: '2026-08-03' })).toBe(true)
+    expect(saleOrderLooksConfirmed({ status: 'quotation', orderNumber: 'SQ/2026/0014' })).toBe(false)
+    expect(saleOrderLooksConfirmed({ status: 'cancelled', orderNumber: 'SO/2026/0006' })).toBe(false)
   })
 
   it('a new quotation remains a Quotation (draft DB default maps to Quotation)', () => {

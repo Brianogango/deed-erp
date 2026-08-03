@@ -69,6 +69,28 @@ export function isQuotationStage(status: OdooSaleStatus): boolean {
   return status === 'quotation' || status === 'quotation_sent'
 }
 
+/**
+ * True when the order is already a Sales Order, or when durable confirmation
+ * evidence exists even if `status` drifted back to a quotation stage.
+ *
+ * Client confirm uses fire-and-forget sync; the UI can show SO/… + confirmed
+ * while Prisma still has quotation. Delivery / invoice APIs use this to heal.
+ */
+export function saleOrderLooksConfirmed(order: {
+  status?: unknown
+  confirmedAt?: unknown
+  orderNumber?: unknown
+  ref?: unknown
+}): boolean {
+  const status = normalizeSaleStatus(order.status)
+  if (status === 'sale') return true
+  if (status === 'cancelled') return false
+  if (order.confirmedAt) return true
+  const num = String(order.orderNumber ?? order.ref ?? '').trim()
+  // Confirmed orders use the SO sequence; quotations use SQ/QUO.
+  return /^SO[/\\-]/i.test(num)
+}
+
 // ─── Server-side transition rules ────────────────────────────────────────────
 
 /** Roles allowed to confirm a quotation into a Sales Order. */

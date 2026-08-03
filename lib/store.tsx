@@ -9336,7 +9336,7 @@ const storeCtx: AppState = {
         warrantyCreated: false,
       }
       setDeliveries(p => [del, ...p])
-      sync('/api/deliveries', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(del) })
+        sync('/api/deliveries', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(del) })
       setSaleOrders(p => p.map(s => {
         if (s.id !== id) return s;
         // Confirm: the quotation becomes a Sales Order with the next number
@@ -9357,11 +9357,44 @@ const storeCtx: AppState = {
           deliveryId: del.id,
           lockVersion: s.lockVersion,
         }
-        sync(`/api/sale-orders/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
         return updated
       }))
+      // Await confirmation sync so Prisma status matches the UI (delivery Validate
+      // previously failed when this fire-and-forget PATCH never landed).
+      const confirmBody = {
+        ref: orderRef,
+        orderNumber: orderRef,
+        quotationRef: so.quotationRef ?? so.ref,
+        status: 'sale' as const,
+        confirmedAt: new Date().toISOString(),
+        confirmedById: user.id,
+        confirmedByName: user.name,
+        approvedBy: user.id,
+        approvalStatus: salesApprovalRequests.length ? 'approved' as const : 'not_required' as const,
+        locked: systemSettings.salesLockConfirmed || undefined,
+        deliveryId: del.id,
+        lockVersion: so.lockVersion,
+      }
+      let syncFailed = false
+      try {
+        const res = await fetch(`/api/sale-orders/${id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(confirmBody),
+        })
+        if (!res.ok) {
+          syncFailed = true
+          const payload = await res.json().catch(() => null) as { error?: string } | null
+          showToast(payload?.error ?? `Confirmed as ${orderRef}, but server sync failed — retry Validate if delivery errors`, 'error')
+        }
+      } catch {
+        syncFailed = true
+        showToast(`Confirmed as ${orderRef}, but server sync failed — retry Validate if delivery errors`, 'error')
+      }
       addAuditLog('confirm_sale_order', orderRef, `Quotation ${so.ref} confirmed into Sales Order ${orderRef} by ${user.name}${systemSettings.salesLockConfirmed ? ' · order locked' : ''}`)
-      showToast(`${so.ref} confirmed as ${orderRef} — prepare delivery ${del.ref} to allocate stock`)
+      if (!syncFailed) {
+        showToast(`${so.ref} confirmed as ${orderRef} — prepare delivery ${del.ref} to allocate stock`)
+      }
     },
     markQuotationSent: (id, recipient, message) => {
       const user = currentUser()

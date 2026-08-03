@@ -12,6 +12,7 @@ import prisma from '@/lib/prisma'
 import { getRequiredSession, withApiErrorHandling } from '@/lib/auth/api'
 import { saveStoreKeys } from '@/lib/server-store'
 import { normalizeSaleStatus } from '@/lib/odoo-sales-flow'
+import { ensureConfirmedSaleOrderForFulfillment } from '@/lib/sale-order-confirm-heal.server'
 
 const DELIVER_ROLES = ['director', 'admin_officer', 'inventory_officer', 'sales_rep']
 
@@ -65,21 +66,32 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     }
 
     // Fetch the order and verify it is a confirmed Sales Order
-    const order = await prisma.saleOrder.findUnique({
+    let order = await prisma.saleOrder.findUnique({
       where: { id: params.id },
       include: { items: true },
     })
     if (!order) return NextResponse.json({ error: 'Not found' }, { status: 404 })
     if (normalizeSaleStatus(order.status) !== 'sale') {
-      return NextResponse.json({ error: 'Order must be a confirmed Sales Order to record delivery' }, { status: 422 })
+      const healed = await ensureConfirmedSaleOrderForFulfillment(order)
+      if (!healed) {
+        return NextResponse.json(
+          {
+            error:
+              'Order must be a confirmed Sales Order to record delivery. Re-confirm the quotation, then try Validate again.',
+          },
+          { status: 422 },
+        )
+      }
+      order = healed
     }
 
+    const confirmed = order
     // Monotonic fulfillment: never lower qtyDelivered via this endpoint
     // (stale client PATCHes / races must not wipe a real delivery back to 0).
     // Clamp to ordered qty. Returns use a dedicated after-sales path.
     await Promise.all(
       lineUpdates.map(({ id, qtyDelivered }) => {
-        const existing = order.items.find(item => item.id === id)
+        const existing = confirmed.items.find(item => item.id === id)
         if (!existing) return Promise.resolve()
         const demand = Math.max(0, Number(existing.qty) || 0)
         const current = Math.max(0, Number(existing.qtyDelivered) || 0)
@@ -104,7 +116,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     return NextResponse.json({
       ok: true,
       allDelivered,
-      status: normalizeSaleStatus(order.status),
+      status: normalizeSaleStatus(confirmed.status),
     })
   })
 }

@@ -11,6 +11,7 @@ import {
 } from '@/lib/odoo-sales-flow'
 import { mapDbInvoiceItemsToClientLines } from '@/lib/finance-invoice'
 import { loadAppState, saveStoreKeys } from '@/lib/server-store'
+import { ensureConfirmedSaleOrderForFulfillment } from '@/lib/sale-order-confirm-heal.server'
 
 const WRITE_ROLES = ['director', 'finance_officer', 'admin_officer']
 
@@ -26,16 +27,24 @@ export async function POST(
     const actor = await requireRole(WRITE_ROLES)
     const orderId = params.id
 
-    const order = await prisma.saleOrder.findUnique({
+    let order = await prisma.saleOrder.findUnique({
       where: { id: orderId },
       include: { client: true, items: true },
     })
     if (!order) return NextResponse.json({ error: 'Sale order not found' }, { status: 404 })
 
-    const status = normalizeSaleStatus(order.status)
-    if (status !== 'sale') {
+    if (normalizeSaleStatus(order.status) !== 'sale') {
+      const healed = await ensureConfirmedSaleOrderForFulfillment(order)
+      if (!healed) {
+        return NextResponse.json({ error: 'Only a confirmed Sales Order can be invoiced' }, { status: 409 })
+      }
+      order = healed
+    }
+    if (normalizeSaleStatus(order.status) !== 'sale') {
       return NextResponse.json({ error: 'Only a confirmed Sales Order can be invoiced' }, { status: 409 })
     }
+
+    const confirmed = order
 
     const state = await loadAppState(['deed_invoices', 'deed_deliveries'])
     const deliveries = Array.isArray(state.deed_deliveries)
@@ -60,7 +69,7 @@ export async function POST(
     // Heal qtyDelivered from Done delivery lines (qtyDone / serials) when a
     // legacy Done DN left Prisma delivered=0 — otherwise Create Invoice is blocked.
     const healedFromDeliveries = deliveredByProductFromDoneDeliveries(deliveries, orderId)
-    const healedItems = await Promise.all((order.items ?? []).map(async item => {
+    const healedItems = await Promise.all((confirmed.items ?? []).map(async item => {
       const productId = item.productId ?? ''
       const fromDelivery = productId ? (healedFromDeliveries[productId] ?? 0) : 0
       const fromSerial = item.serialNumberId ? 1 : 0
@@ -144,15 +153,15 @@ export async function POST(
         data: {
           invoiceNumber: draftRef,
           status: 'draft',
-          clientId: order.clientId,
-          saleOrderId: order.id,
+          clientId: confirmed.clientId,
+          saleOrderId: confirmed.id,
           invoiceDate: new Date(),
           dueDate: new Date(Date.now() + 30 * 86400000),
           subtotal,
           taxAmount,
           totalAmount,
           amountPaid: 0,
-          notes: `Created from ${order.orderNumber}`,
+          notes: `Created from ${confirmed.orderNumber}`,
           createdById: actor.id,
           items: {
             create: lines.map(l => {
@@ -184,8 +193,8 @@ export async function POST(
       ref: result.invoiceNumber,
       type: 'customer_invoice' as const,
       status: 'draft' as const,
-      partnerId: order.clientId,
-      partnerName: order.client?.name ?? '',
+      partnerId: confirmed.clientId,
+      partnerName: confirmed.client?.name ?? '',
       date,
       dueDate,
       lines: clientLines,
@@ -193,8 +202,8 @@ export async function POST(
       taxTotal: taxAmount,
       total: totalAmount,
       amountPaid: 0,
-      saleOrderId: order.id,
-      notes: `Created from ${order.orderNumber}`,
+      saleOrderId: confirmed.id,
+      notes: `Created from ${confirmed.orderNumber}`,
     }
 
     // Mirror into client store invoices for UI

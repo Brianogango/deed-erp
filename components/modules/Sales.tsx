@@ -2386,6 +2386,21 @@ function DeliveryNoteView({
     if (!lines.some(l => l.qtyDelivered > 0)) { showToast('Enter delivered quantities before validating', 'error'); return }
     setSavingDelivery(true)
     try {
+      // Heal Prisma if confirm sync drifted (UI shows sale, DB still quotation).
+      if (order.status === 'sale') {
+        await fetch(`/api/sale-orders/${order.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            status: 'sale',
+            confirmedAt: order.confirmedAt ?? new Date().toISOString(),
+            orderNumber: order.orderNumber ?? order.ref,
+            quotationRef: order.quotationRef,
+            locked: order.locked,
+            confirmedById: order.confirmedById,
+          }),
+        }).catch(() => {})
+      }
       // Persist per-line delivered quantities on the sale order.
       const res = await fetch(`/api/sale-orders/${order.id}/deliver-lines`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ lines }),
