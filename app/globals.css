@@ -1745,11 +1745,14 @@
     background: #EEF2FF;
   }
 
+  /* Full-bleed operational content — tables (Catalog, Products, Warehouse,
+     Sales, etc.) use the full shell width. Keep page gutters only; do not
+     reintroduce a centered max-width that leaves empty side margins. */
   .mod-body {
     @apply flex-1 min-w-0 overflow-y-auto;
     width: 100%;
-    max-width: var(--content-max);
-    margin-inline: auto;
+    max-width: none;
+    margin-inline: 0;
     padding: var(--page-gutter);
   }
 
@@ -1902,8 +1905,8 @@
 
   .erp-page-container {
     width: 100%;
-    max-width: var(--content-max);
-    margin-inline: auto;
+    max-width: none;
+    margin-inline: 0;
     padding-inline: var(--page-gutter);
   }
 
