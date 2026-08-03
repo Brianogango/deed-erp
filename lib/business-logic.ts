@@ -7,11 +7,15 @@
  */
 
 import type { LocationId } from './store'
+import { inferTrackingMethod, isSerialTracking } from './inventory-identifiers'
 
 // ── Minimal types (mirrors store types without the full import chain) ──────────
 
 export interface StockProduct {
-  requiresSerial: boolean
+  requiresSerial?: boolean | null
+  trackingMethod?: string | null
+  category?: string | null
+  unit?: string | null
 }
 
 export interface SerialNumber {
@@ -61,7 +65,14 @@ export function calcStockByLocation(
   }
   if (!product) return locs
 
-  if (product.requiresSerial) {
+  const serialTracked = isSerialTracking(inferTrackingMethod({
+    trackingMethod: product.trackingMethod,
+    category: product.category,
+    requiresSerial: product.requiresSerial,
+    unit: product.unit,
+  }))
+
+  if (serialTracked) {
     serials
       .filter(s => s.productId === productId && ['available', 'assigned', 'under_repair', 'refurbishment', 'in_stock'].includes(s.status))
       .forEach(s => { locs[s.location] = (locs[s.location] || 0) + 1 })

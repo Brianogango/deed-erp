@@ -116,6 +116,10 @@ import {
 import { planRepairPartConsume, planRepairPartReserve } from '@/lib/inventory/repair-parts-stock'
 import { billableQty, assertBillableQty } from '@/lib/purchase/three-way-match'
 import {
+  formatStockByLocation,
+  resolveBulkDeliverySourceLocation,
+} from '@/lib/inventory/delivery-source'
+import {
   applyCustomerToInvoice,
   applyCustomerToQuote,
   applyCustomerToSaleOrder,
@@ -9546,10 +9550,27 @@ const storeCtx: AppState = {
         status: 'waiting', date: now(),
         lines: orderLines.map(l => {
           const prod = prodRef.current.find(p => p.id === l.productId)
-          const shopAvailable = serialRef.current.filter(s => s.productId === l.productId && s.status === 'available' && s.location === 'shop').length
-          const sourceLocs = calcStockByLocation(prod, serialRef.current, bulkStock, l.productId)
           const selectedSource = (so.lines.find(line => line.id === l.id) as (SaleOrderLine & { sourceLocation?: LocationId }) | undefined)?.sourceLocation
-          const sourceLocation: LocationId | undefined = prod?.unit === 'service' ? undefined : (selectedSource ?? (prod?.requiresSerial ? (shopAvailable >= l.qty ? 'shop' : 'warehouse') : (sourceLocs.shop >= l.qty ? 'shop' : 'warehouse')))
+          let sourceLocation: LocationId | undefined
+          if (prod?.unit === 'service') {
+            sourceLocation = undefined
+          } else if (selectedSource) {
+            sourceLocation = selectedSource
+          } else if (prod && isSerialTracking(inferTrackingMethod(prod))) {
+            const shopAvailable = serialRef.current.filter(s => s.productId === l.productId && s.status === 'available' && s.location === 'shop').length
+            sourceLocation = shopAvailable >= l.qty ? 'shop' : 'warehouse'
+          } else {
+            const qty = Math.max(0, Math.floor(Number(l.qty) || 0))
+            sourceLocation = resolveBulkDeliverySourceLocation({
+              product: prod,
+              productId: l.productId,
+              qty,
+              preferred: 'warehouse',
+              serials: serialRef.current,
+              bulkStock,
+              reservations: stockReservations,
+            }).location
+          }
           return { productId: l.productId, productName: l.productName, qty: l.qty, qtyDone: 0, serialIds: [], sourceLocation }
         }),
         warrantyCreated: false,
@@ -9680,16 +9701,19 @@ const storeCtx: AppState = {
       for (const deliveryLine of del.lines) {
         const product = prodRef.current.find(p => p.id === deliveryLine.productId)
         const soLine = so.lines.find(line => line.productId === deliveryLine.productId)
-        const assignedSerials = product?.requiresSerial ? (soLine?.serialIds || deliveryLine.serialIds || []) : []
+        const serialTracked = !!product && isSerialTracking(inferTrackingMethod(product))
+        const stockTracked = !!product && isStockTracked(inferTrackingMethod(product))
+        const assignedSerials = serialTracked ? (soLine?.serialIds || deliveryLine.serialIds || []) : []
         // Serial shipments: if the qty input was left at 0 but serials are
         // assigned, prepare those units — otherwise Delivered stays 0 forever.
         const requestedQty = Math.max(0, Number(requested[deliveryLine.productId]) || 0)
-        const qty = product?.requiresSerial
+        const qty = serialTracked
           ? Math.min(deliveryLine.qty, requestedQty > 0 ? requestedQty : assignedSerials.length)
           : Math.min(deliveryLine.qty, requestedQty)
-        const serialIds = product?.requiresSerial ? assignedSerials.slice(0, qty) : []
+        const serialIds = serialTracked ? assignedSerials.slice(0, qty) : []
+        let sourceLocation = (deliveryLine.sourceLocation ?? 'warehouse') as LocationId
 
-        if (product?.requiresSerial && qty > 0) {
+        if (serialTracked && qty > 0) {
           if (qty < deliveryLine.qty) {
             showToast(`${deliveryLine.productName} is serial-tracked — prepare all ${deliveryLine.qty} units together`, 'error')
             return false
@@ -9706,32 +9730,35 @@ const storeCtx: AppState = {
             showToast(`A selected serial for ${deliveryLine.productName} is no longer reserved for this Sales Order`, 'error')
             return false
           }
-        } else if (product && product.unit !== 'service' && qty > 0) {
-          const location = (deliveryLine.sourceLocation ?? 'warehouse') as LocationId
-          const stockAtLocation = calcStockByLocation(
+        } else if (stockTracked && qty > 0) {
+          const resolved = resolveBulkDeliverySourceLocation({
             product,
-            serialRef.current,
+            productId: deliveryLine.productId,
+            qty,
+            preferred: deliveryLine.sourceLocation as LocationId | undefined,
+            serials: serialRef.current,
             bulkStock,
-            deliveryLine.productId,
-          )[location]
-          const reservedElsewhere = stockReservations
-            .filter(reservation =>
-              reservation.productId === deliveryLine.productId &&
-              reservation.location === location &&
-              reservation.status === 'reserved' &&
-              reservation.deliveryId !== deliveryId
+            reservations: stockReservations,
+            excludeDeliveryId: deliveryId,
+          })
+          sourceLocation = resolved.location
+          if (resolved.available < qty) {
+            const breakdown = formatStockByLocation(resolved.byLocation, {
+              warehouse: LOCATIONS.warehouse.name,
+              shop: LOCATIONS.shop.name,
+              repair_unit: LOCATIONS.repair_unit.name,
+            })
+            showToast(
+              `Only ${resolved.available} ${deliveryLine.productName} free to ship (need ${qty}). Stock free by location — ${breakdown}`,
+              'error',
             )
-            .reduce((sum, reservation) => sum + Math.max(0, reservation.qty - reservation.fulfilledQty), 0)
-          const available = Math.max(0, stockAtLocation - reservedElsewhere)
-          if (available < qty) {
-            showToast(`Only ${available} ${deliveryLine.productName} available at ${LOCATIONS[location]?.name ?? location}`, 'error')
             return false
           }
         }
 
-        preparedLines.push({ ...deliveryLine, qtyDone: qty, serialIds })
+        preparedLines.push({ ...deliveryLine, qtyDone: qty, serialIds, sourceLocation: stockTracked ? sourceLocation : deliveryLine.sourceLocation })
         totalPrepared += qty
-        if (product && product.unit !== 'service' && qty > 0) {
+        if (stockTracked && qty > 0) {
           reservations.push({
             id: uid(),
             productId: deliveryLine.productId,
@@ -9742,7 +9769,7 @@ const storeCtx: AppState = {
             referenceRef: del.ref,
             referenceType: 'delivery',
             deliveryId,
-            location: deliveryLine.sourceLocation ?? 'warehouse',
+            location: sourceLocation,
             reservedBy: user!.id,
             reservedDate: now(),
             expiresDate: addDays(now(), 7),
@@ -15070,13 +15097,38 @@ const storeCtx: AppState = {
       const remaining = remainingUndeliveredByProduct(so.lines)
       const lines = (so.lines ?? [])
         .filter(line => (line as any).lineType !== 'section' && remaining[line.productId] > 0)
-        .map(line => ({
-          productId: line.productId,
-          productName: line.productName,
-          qty: remaining[line.productId],
-          qtyDone: 0,
-          serialIds: [] as string[],
-        }))
+        .map(line => {
+          const prod = prodRef.current.find(p => p.id === line.productId)
+          const qty = remaining[line.productId]
+          const selectedSource = (line as SaleOrderLine & { sourceLocation?: LocationId }).sourceLocation
+          let sourceLocation: LocationId | undefined
+          if (prod?.unit === 'service') {
+            sourceLocation = undefined
+          } else if (selectedSource) {
+            sourceLocation = selectedSource
+          } else if (prod && isSerialTracking(inferTrackingMethod(prod))) {
+            const shopAvailable = serialRef.current.filter(s => s.productId === line.productId && s.status === 'available' && s.location === 'shop').length
+            sourceLocation = shopAvailable >= qty ? 'shop' : 'warehouse'
+          } else {
+            sourceLocation = resolveBulkDeliverySourceLocation({
+              product: prod,
+              productId: line.productId,
+              qty,
+              preferred: 'warehouse',
+              serials: serialRef.current,
+              bulkStock,
+              reservations: stockReservations,
+            }).location
+          }
+          return {
+            productId: line.productId,
+            productName: line.productName,
+            qty,
+            qtyDone: 0,
+            serialIds: [] as string[],
+            sourceLocation,
+          }
+        })
       if (lines.length === 0) {
         showToast(`${so.ref} is fully delivered — no new delivery needed`, 'info')
         return null

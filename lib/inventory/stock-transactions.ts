@@ -7,6 +7,7 @@ import { calcStockByLocation, upsertBulkStock } from '@/lib/business-logic'
 import type { BulkStockLevel } from '@/lib/business-logic'
 import type { LocationId } from '@/lib/store'
 import { mirrorStockReservationsToPrisma } from '@/lib/inventory/reservation-mirror'
+import { inferTrackingMethod, isSerialTracking } from '@/lib/inventory-identifiers'
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
@@ -22,6 +23,8 @@ type BlobProduct = {
   name?: string
   stockQty?: number
   requiresSerial?: boolean
+  trackingMethod?: string
+  category?: string
   unit?: string
   warrantyMonths?: number
 }
@@ -127,8 +130,9 @@ export async function applyDeliveryStockMutation(params: {
     if (!product || product.unit === 'service') continue
 
     const location = asLocationId(line.sourceLocation)
+    const serialTracked = isSerialTracking(inferTrackingMethod(product))
 
-    if (product.requiresSerial) {
+    if (serialTracked) {
       const serialIds = Array.isArray(line.serialIds) ? line.serialIds : []
       if (serialIds.length !== qty) {
         return { ok: false, error: `${line.productName}: ${qty} serial number(s) required` }
@@ -147,7 +151,7 @@ export async function applyDeliveryStockMutation(params: {
       }
     } else {
       const stockAtLocation = calcStockByLocation(
-        { requiresSerial: false },
+        product,
         [],
         bulkStock,
         line.productId,
@@ -189,8 +193,9 @@ export async function applyDeliveryStockMutation(params: {
 
     const location = asLocationId(line.sourceLocation)
     const serialLabels: string[] = []
+    const serialTracked = isSerialTracking(inferTrackingMethod(product))
 
-    if (product.requiresSerial) {
+    if (serialTracked) {
       for (const serialId of line.serialIds ?? []) {
         const serialIdx = serials.findIndex(s => s.id === serialId)
         if (serialIdx === -1) continue
@@ -467,7 +472,7 @@ export async function applyPosStockMutation(params: {
     const product = products.find(p => p.id === productId)
     const location = asLocationId(line.sourceLocation || 'shop')
 
-    if (line.serialId || product?.requiresSerial) {
+    if (line.serialId || (product && isSerialTracking(inferTrackingMethod(product)))) {
       const serial = line.serialId
         ? serials.find(s => s.id === line.serialId)
         : serials.find(s =>
@@ -492,7 +497,7 @@ export async function applyPosStockMutation(params: {
       })
     } else {
       const locs = calcStockByLocation(
-        { requiresSerial: false },
+        product ?? { requiresSerial: false },
         serials as any,
         bulkStock,
         productId,
@@ -638,7 +643,7 @@ export async function applyTransferStockMutation(params: {
     const product = products.find(p => p.id === productId)
     const serialIds = Array.isArray(line.serialIds) ? line.serialIds : []
 
-    if (product?.requiresSerial || serialIds.length > 0) {
+    if ((product && isSerialTracking(inferTrackingMethod(product))) || serialIds.length > 0) {
       if (serialIds.length !== qty) {
         return { ok: false, error: `Select ${qty} serial(s) for ${line.productName}` }
       }
@@ -658,7 +663,7 @@ export async function applyTransferStockMutation(params: {
         userId: params.userId ?? 'system', documentRef: params.transferRef,
       })
     } else {
-      const locs = calcStockByLocation({ requiresSerial: false }, serials as any, bulkStock, productId)
+      const locs = calcStockByLocation(product ?? { requiresSerial: false }, serials as any, bulkStock, productId)
       if (Number(locs[from] ?? 0) < qty) {
         return { ok: false, error: `Insufficient stock for ${line.productName} at ${from}` }
       }
@@ -704,7 +709,8 @@ export async function applyAdjustmentStockMutation(params: {
   const stockMoves: BlobStockMove[] = Array.isArray(state.deed_stockMoves) ? [...(state.deed_stockMoves as BlobStockMove[])] : []
 
   if (params.type === 'subtract') {
-    const locs = calcStockByLocation({ requiresSerial: false }, [], bulkStock, params.productId)
+    const product = products.find(p => p.id === params.productId)
+    const locs = calcStockByLocation(product ?? { requiresSerial: false }, [], bulkStock, params.productId)
     if (Number(locs[location] ?? 0) < qty) {
       return { ok: false, error: `Insufficient stock to adjust ${params.productName}` }
     }
