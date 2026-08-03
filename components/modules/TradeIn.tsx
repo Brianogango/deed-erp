@@ -380,13 +380,18 @@ function BuyBackTab() {
   const displayed = s ? sorted.filter(bb =>
     bb.ref.toLowerCase().includes(s) ||
     bb.customerName.toLowerCase().includes(s) ||
-    (bb.originalSORef ?? '').toLowerCase().includes(s)
+    (bb.originalSORef ?? '').toLowerCase().includes(s) ||
+    (bb.repairRef ?? '').toLowerCase().includes(s)
   ) : sorted
 
   const buyBackColumns: ColumnDef<BuyBack>[] = [
     { key: 'ref', label: 'Ref', priority: 1, width: '110px', render: bb => <span className="text-xs font-bold text-primary-600">{bb.ref}</span>, accessor: bb => bb.ref },
     { key: 'customer', label: 'Customer', priority: 1, width: '1.4fr', render: bb => <span className="text-xs truncate">{bb.customerName}</span>, accessor: bb => bb.customerName },
-    { key: 'so', label: 'Original SO', priority: 2, width: '110px', render: bb => <span className="text-xs text-[var(--text-3)]">{bb.originalSORef ?? '—'}</span>, accessor: bb => bb.originalSORef ?? '' },
+    { key: 'so', label: 'Source', priority: 2, width: '120px', render: bb => (
+      <span className="text-xs text-[var(--text-3)]">
+        {bb.repairRef ? `Repair ${bb.repairRef}` : (bb.originalSORef ?? '—')}
+      </span>
+    ), accessor: bb => bb.repairRef ?? bb.originalSORef ?? '' },
     { key: 'items', label: 'Items', priority: 3, width: '80px', render: bb => <span className="text-xs text-[var(--text-3)]">{bb.lines.length}</span>, accessor: bb => bb.lines.length },
     { key: 'total', label: 'Total', priority: 1, width: '120px', align: 'right', render: bb => <span className="text-xs font-bold">{fmtKes(bb.total)}</span>, accessor: bb => bb.total },
     { key: 'date', label: 'Date', priority: 2, width: '110px', render: bb => <span className="text-xs text-[var(--text-3)]">{fmtDate(bb.date)}</span>, accessor: bb => bb.date },
@@ -405,6 +410,7 @@ function BuyBackTab() {
             <div>
               <p style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-1)' }}>{bb.ref}</p>
               <p style={{ fontSize: 12, color: 'var(--text-4)' }}>{bb.customerName} · {fmtDate(bb.date)}</p>
+              {bb.repairRef && <p style={{ fontSize: 11, color: 'var(--text-4)' }}>From repair: {bb.repairRef}</p>}
               {bb.originalSORef && <p style={{ fontSize: 11, color: 'var(--text-4)' }}>Original sale: {bb.originalSORef}</p>}
             </div>
             <StatusPill status={bb.status} />
@@ -492,7 +498,7 @@ function BuyBackTab() {
         searchValue={search}
         onSearchChange={setSearch}
         clientSearch={false}
-        searchPlaceholder="Search ref, customer…"
+        searchPlaceholder="Search ref, customer, repair…"
         emptyMessage={search ? 'No results.' : 'No buy-backs yet.'}
         onRowClick={setDetail}
         rowLabel={bb => bb.ref}

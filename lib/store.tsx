@@ -101,6 +101,7 @@ import {
 import {
   buyBackConditionFromRepair,
   canConvertRetainedRepair,
+  canCreateTradeInFromRepair,
   findRepairCatalogProduct,
   matchRepairDeviceSerial,
 } from '@/lib/repair-retain-convert'
@@ -3130,6 +3131,18 @@ export interface AppState {
     repairId: string,
     opts?: { notes?: string },
   ) => { ok: boolean; message: string; buyBackId?: string; buyBackRef?: string }
+  /**
+   * Paid trade-in after evaluation: retain the repair and open a draft BuyBack
+   * (approve → pay → stock) linked to this job.
+   */
+  createTradeInFromRepair: (
+    repairId: string,
+    opts: {
+      unitPrice: number
+      condition?: 'good' | 'fair' | 'poor'
+      notes?: string
+    },
+  ) => { ok: boolean; message: string; buyBackId?: string; buyBackRef?: string }
 
   // POS
   openPOSSession: (openingCash: number) => void
@@ -3334,6 +3347,7 @@ export type RepairStoreState = Pick<AppState,
   | 'leaveDeviceWithDeed'
   | 'convertRetainedRepairToDonation'
   | 'convertRetainedRepairToBuyBack'
+  | 'createTradeInFromRepair'
   | 'fileWarrantyClaim'
   | 'showToast'
   | 'appendRepairHistory'
@@ -5513,6 +5527,7 @@ export function StoreProvider({
     leaveDeviceWithDeed: (...args: Parameters<AppState['leaveDeviceWithDeed']>) => storeCtxRef.current!.leaveDeviceWithDeed(...args),
     convertRetainedRepairToDonation: (...args: Parameters<AppState['convertRetainedRepairToDonation']>) => storeCtxRef.current!.convertRetainedRepairToDonation(...args),
     convertRetainedRepairToBuyBack: (...args: Parameters<AppState['convertRetainedRepairToBuyBack']>) => storeCtxRef.current!.convertRetainedRepairToBuyBack(...args),
+    createTradeInFromRepair: (...args: Parameters<AppState['createTradeInFromRepair']>) => storeCtxRef.current!.createTradeInFromRepair(...args),
     fileWarrantyClaim: (...args: Parameters<AppState['fileWarrantyClaim']>) => storeCtxRef.current!.fileWarrantyClaim(...args),
     showToast: (...args: Parameters<AppState['showToast']>) => storeCtxRef.current!.showToast(...args),
     appendRepairHistory: (...args: Parameters<AppState['appendRepairHistory']>) => storeCtxRef.current!.appendRepairHistory(...args),
@@ -13824,6 +13839,166 @@ const storeCtx: AppState = {
       return { ok: true, message: noteLine, buyBackId: converted.id, buyBackRef: converted.ref }
     },
 
+    createTradeInFromRepair: (repairId, opts) => {
+      const user = currentUser()
+      if (!user) return { ok: false, message: 'Not signed in' }
+      if (!['director', 'admin_officer', 'technical_lead'].includes(user.role)) {
+        showToast('Only managers can create a trade-in from a repair', 'error')
+        return { ok: false, message: 'Not authorized' }
+      }
+      const repair = repairs.find(r => r.id === repairId)
+      if (!repair) {
+        showToast('Repair not found', 'error')
+        return { ok: false, message: 'Repair not found' }
+      }
+      if (!canCreateTradeInFromRepair(repair)) {
+        const msg = repair.retainedBuyBackId || repair.retainedDonationId
+          ? 'This repair is already linked to a buy-back or donation'
+          : 'Trade-in is not available for this repair status'
+        showToast(msg, 'error')
+        return { ok: false, message: msg }
+      }
+      if (blockIfOutsourced(repairId, 'create a trade-in for this device')) {
+        return { ok: false, message: 'Outsourced' }
+      }
+
+      const unitPrice = Number(opts.unitPrice)
+      if (!Number.isFinite(unitPrice) || unitPrice < 0) {
+        showToast('Enter a valid trade-in offer amount', 'error')
+        return { ok: false, message: 'Invalid unit price' }
+      }
+
+      const product = findRepairCatalogProduct(prodRef.current, repair)
+      if (!product) {
+        showToast('Link a catalog product on the repair first', 'error')
+        return { ok: false, message: 'Missing catalog product' }
+      }
+
+      const at = now()
+      const condition = opts.condition ?? buyBackConditionFromRepair(repair.deviceCondition)
+      const extraNotes = String(opts.notes ?? '').trim()
+
+      let serialId: string | undefined
+      if (product.requiresSerial || repair.serialNumber?.trim()) {
+        const matched = matchRepairDeviceSerial(serialRef.current, product.id, repair)
+        if ('error' in matched) {
+          showToast(matched.error, 'error')
+          return { ok: false, message: matched.error }
+        }
+        if (matched.existing) {
+          serialId = matched.existing.id
+          if (matched.existing.status !== 'sold' && matched.existing.location !== 'customer') {
+            setSerials(p => p.map(s => s.id === matched.existing!.id
+              ? { ...s, status: 'sold' as const, location: 'customer' as LocationId, soldDate: s.soldDate || at }
+              : s))
+          }
+        } else {
+          const newSerial: SerialNumber = {
+            id: uid(),
+            serial: matched.serialText,
+            productId: product.id,
+            productName: product.name,
+            sku: product.sku,
+            location: 'customer',
+            status: 'sold',
+            receivedDate: at,
+            soldDate: at,
+            barcode: buildInventoryBarcodeForProduct(product.id, matched.serialText),
+          }
+          setSerials(p => [...p, newSerial])
+          sync('/api/serials', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(newSerial) })
+          serialId = newSerial.id
+        }
+      }
+      if (product.requiresSerial && !serialId) {
+        showToast('Serialized product needs a serial number', 'error')
+        return { ok: false, message: 'Missing serial' }
+      }
+
+      // Release reserved parts / cancel linked docs when leaving an open job
+      const alreadyTerminal = REPAIR_TERMINAL_STATUSES.includes(repair.status)
+      if (!alreadyTerminal || repair.status === 'declined' || repair.status === 'unrepairable') {
+        setSerials(p => p.map(s => s.repairId === repairId ? {
+          ...s,
+          status: 'available',
+          repairId: undefined,
+        } : s))
+        if (repair.saleOrderId) {
+          setSaleOrders(p => p.map(so => {
+            if (so.id !== repair.saleOrderId) return so
+            if (so.status === 'cancelled') return so
+            const updated = { ...so, status: 'cancelled' as const }
+            sync(`/api/sale-orders/${repair.saleOrderId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+            return updated
+          }))
+        }
+        if (repair.invoiceId) {
+          setInvoices(p => p.map(inv => inv.id === repair.invoiceId && inv.status !== 'cancelled'
+            ? { ...inv, status: 'cancelled' }
+            : inv))
+        }
+      }
+
+      const bb: BuyBack = {
+        id: uid(),
+        ref: seq('BBK', 'bbk'),
+        customerId: repair.customerId,
+        customerName: repair.customerName,
+        repairId: repair.id,
+        repairRef: repair.ref,
+        status: 'draft',
+        date: at,
+        lines: [{
+          id: uid(),
+          productId: product.id,
+          productName: product.name,
+          qty: 1,
+          serialIds: serialId ? [serialId] : [],
+          condition,
+          unitPrice,
+          notes: `Trade-in from repair ${repair.ref}`,
+        }],
+        total: unitPrice,
+        destinationLocation: 'warehouse',
+        notes: `Trade-in after evaluation from repair ${repair.ref}${extraNotes ? ` — ${extraNotes}` : ''}`,
+      }
+      setBuyBacks(p => [bb, ...p])
+
+      const noteLine = `Trade-in after evaluation → draft ${bb.ref} (${fmtKes(unitPrice)}, ${condition})${extraNotes ? ` — ${extraNotes}` : ''}`
+      const retainedRepair: RepairOrder = {
+        ...repair,
+        status: 'retained',
+        closedDate: repair.closedDate || at,
+        retainedDate: repair.retainedDate || at,
+        retainedBy: repair.retainedBy || user.name,
+        retainedBuyBackId: bb.id,
+        retainedBuyBackRef: bb.ref,
+        notes: `${repair.notes || ''}\n\n${noteLine}`.trim(),
+        statusHistory: [
+          ...(repair.statusHistory ?? []),
+          { status: 'retained', date: at, note: noteLine, by: user.name },
+        ],
+      }
+      setRepairs(p => p.map(r => r.id === repairId ? retainedRepair : r))
+      syncRepairToPortal(retainedRepair, noteLine)
+      addAuditLog('repair_tradein', repairId, noteLine)
+
+      notifyUsers({
+        recipients: userIdsWithRoles(users, ['director', 'finance_officer'], user.id),
+        type: 'system',
+        title: `Trade-in approval needed: ${bb.ref}`,
+        body: `${repair.ref} — ${product.name} offered at ${fmtKes(unitPrice)}. Approve payout in Trade-in.`,
+        module: 'after_sales',
+        path: '?tab=tradein',
+        icon: '💰',
+        entityKey: `buyback:${bb.id}:from_repair`,
+        excludeUserId: user.id,
+      })
+
+      showToast(`${repair.ref} → trade-in ${bb.ref} (draft). Approve & pay in Trade-in.`, 'success')
+      return { ok: true, message: noteLine, buyBackId: bb.id, buyBackRef: bb.ref }
+    },
+
     // ── POS ───────────────────────────────────────────────────────────────────
     openPOSSession: (openingCash) => {
       if (posSessionOpen && posSessionId) {
@@ -15064,7 +15239,18 @@ const storeCtx: AppState = {
     },
 
     deleteBuyBack: (id) => {
+      const bb = buyBacks.find(b => b.id === id)
       setBuyBacks(p => p.filter(b => b.id !== id))
+      if (bb?.repairId) {
+        setRepairs(p => p.map(r => r.id === bb.repairId && r.retainedBuyBackId === id
+          ? {
+              ...r,
+              retainedBuyBackId: undefined,
+              retainedBuyBackRef: undefined,
+              notes: `${r.notes || ''}\n\nDraft trade-in ${bb.ref} deleted — repair unlinked`.trim(),
+            }
+          : r))
+      }
       showToast('Buy-back deleted')
     },
 

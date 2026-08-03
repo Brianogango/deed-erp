@@ -110,7 +110,7 @@ export default function RepairDetailView() {
     markPartsArrived, closeRepairJob, markUnrepairable,
   } = useRepair()
 
-  const { invoices, setModule, outboundReleases, initRelease, serials, reviewPortalPayment, leaveDeviceWithDeed, convertRetainedRepairToDonation, convertRetainedRepairToBuyBack, waiveDiagnosisFee } = useRepairStore()
+  const { invoices, setModule, outboundReleases, initRelease, serials, reviewPortalPayment, leaveDeviceWithDeed, convertRetainedRepairToDonation, convertRetainedRepairToBuyBack, createTradeInFromRepair, waiveDiagnosisFee } = useRepairStore()
 
   const [showOrcPanel, setShowOrcPanel] = useState(false)
   const [showPaymentRejectInput, setShowPaymentRejectInput] = useState(false)
@@ -133,6 +133,10 @@ export default function RepairDetailView() {
   const [showLeaveDeviceModal, setShowLeaveDeviceModal] = useState(false)
   const [leaveDeviceNotes, setLeaveDeviceNotes] = useState('')
   const [leaveConvertMode, setLeaveConvertMode] = useState<'none' | 'donation' | 'buyback'>('donation')
+  const [showTradeInModal, setShowTradeInModal] = useState(false)
+  const [tradeInPrice, setTradeInPrice] = useState('')
+  const [tradeInCondition, setTradeInCondition] = useState<'good' | 'fair' | 'poor'>('good')
+  const [tradeInNotes, setTradeInNotes] = useState('')
 
   if (!r) return null
 
@@ -195,6 +199,10 @@ export default function RepairDetailView() {
     && !pendingOutsourceJob
   const canLeaveDeviceWithDeed = ['director', 'admin_officer', 'technical_lead'].includes(currentRole)
     && ['received', 'assigned', 'diagnosed', 'awaiting_approval', 'approved', 'awaiting_parts', 'in_repair', 'qc', 'ready'].includes(r.status)
+    && !pendingOutsourceJob
+  const canTradeInFromRepair = ['director', 'admin_officer', 'technical_lead'].includes(currentRole)
+    && ['received', 'assigned', 'diagnosed', 'awaiting_approval', 'approved', 'awaiting_parts', 'in_repair', 'qc', 'ready', 'declined', 'unrepairable', 'retained'].includes(r.status)
+    && !r.retainedBuyBackId && !r.retainedDonationId
     && !pendingOutsourceJob
   const canConvertRetained = r.status === 'retained'
     && !r.retainedBuyBackId && !r.retainedDonationId
@@ -466,6 +474,12 @@ export default function RepairDetailView() {
                 { id: 'waive_fee', label: 'Waive diagnosis fee', onClick: () => { setWaiveFeeReason(''); setShowWaiveFeeModal(true) }, hidden: !canWaiveDiagnosisFee },
                 { id: 'return', label: 'Return device', onClick: () => setShowReturnModal(true), hidden: !canReturnDevice },
                 { id: 'leave', label: 'Customer leaves device', onClick: () => { setLeaveDeviceNotes(''); setLeaveConvertMode('donation'); setShowLeaveDeviceModal(true) }, hidden: !canLeaveDeviceWithDeed },
+                { id: 'tradein', label: 'Trade-in after evaluation', onClick: () => {
+                  setTradeInPrice('')
+                  setTradeInCondition((r.deviceCondition === 'poor' || r.deviceCondition === 'damaged') ? 'poor' : r.deviceCondition === 'fair' ? 'fair' : 'good')
+                  setTradeInNotes('')
+                  setShowTradeInModal(true)
+                }, hidden: !canTradeInFromRepair },
                 { id: 'convert_donation', label: 'Convert → Donation', onClick: () => convertRetainedRepairToDonation(r.id), hidden: !canConvertRetained },
                 { id: 'convert_buyback', label: 'Convert → Buy-back stock', onClick: () => convertRetainedRepairToBuyBack(r.id), hidden: !canConvertRetained },
                 { id: 'unrepairable', label: 'Mark unrepairable', onClick: () => { setUnrepairableReason(''); setShowUnrepairableModal(true) }, hidden: !canMarkUnrepairable, danger: true },
@@ -873,7 +887,16 @@ export default function RepairDetailView() {
                     <p className="text-[12px] font-bold text-[var(--text-1)]">Donation: {r.retainedDonationRef}</p>
                   )}
                   {r.retainedBuyBackRef && (
-                    <p className="text-[12px] font-bold text-[var(--text-1)]">Buy-back: {r.retainedBuyBackRef}</p>
+                    <div className="space-y-2">
+                      <p className="text-[12px] font-bold text-[var(--text-1)]">Buy-back / trade-in: {r.retainedBuyBackRef}</p>
+                      <button
+                        type="button"
+                        className="btn-secondary text-[11px]"
+                        onClick={() => setModule('after_sales')}
+                      >
+                        Open Trade-in
+                      </button>
+                    </div>
                   )}
                   {canConvertRetained && (
                     <div className="flex flex-wrap gap-2">
@@ -890,8 +913,22 @@ export default function RepairDetailView() {
                         className="btn-secondary text-[11px]"
                         onClick={() => convertRetainedRepairToBuyBack(r.id)}
                       >
-                        Convert → Buy-back stock
+                        Convert → Buy-back stock (KES 0)
                       </button>
+                      {canTradeInFromRepair && (
+                        <button
+                          type="button"
+                          className="btn-primary text-[11px]"
+                          onClick={() => {
+                            setTradeInPrice('')
+                            setTradeInCondition((r.deviceCondition === 'poor' || r.deviceCondition === 'damaged') ? 'poor' : r.deviceCondition === 'fair' ? 'fair' : 'good')
+                            setTradeInNotes('')
+                            setShowTradeInModal(true)
+                          }}
+                        >
+                          Trade-in after evaluation
+                        </button>
+                      )}
                     </div>
                   )}
                   {!canConvertRetained && !r.retainedDonationRef && !r.retainedBuyBackRef && (
@@ -1635,6 +1672,76 @@ export default function RepairDetailView() {
               >
                 <Fa icon={faBoxOpen} className="mr-1.5" />
                 Confirm Retain
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Paid trade-in after evaluation */}
+      {showTradeInModal && (
+        <Modal title="Trade-in after evaluation" subtitle={r.ref} onClose={() => setShowTradeInModal(false)} width={460}>
+          <div className="flex flex-col gap-4">
+            <div className="flex items-start gap-3 p-3.5 rounded-xl" style={{ background: 'var(--info-bg)', border: '1px solid #BFDBFE' }}>
+              <Fa icon={faBoxOpen} className="mt-0.5" style={{ color: 'var(--navy)' }} />
+              <p className="text-[11px] leading-relaxed" style={{ color: 'var(--text-2)' }}>
+                Closes this repair as <strong>Left with Deed</strong> and opens a <strong>draft BuyBack</strong> in Trade-in
+                for {r.productName}. Finance approves, pays the customer, then stocks the device.
+              </p>
+            </div>
+            <div>
+              <label className="block text-[10px] font-black text-[var(--text-3)] uppercase tracking-widest mb-1.5">Offer amount (KES)</label>
+              <input
+                className="form-input w-full"
+                type="number"
+                min={0}
+                step={1}
+                value={tradeInPrice}
+                onChange={e => setTradeInPrice(e.target.value)}
+                placeholder="e.g. 25000"
+              />
+            </div>
+            <div>
+              <label className="block text-[10px] font-black text-[var(--text-3)] uppercase tracking-widest mb-1.5">Condition</label>
+              <select
+                className="form-select w-full"
+                value={tradeInCondition}
+                onChange={e => setTradeInCondition(e.target.value as 'good' | 'fair' | 'poor')}
+              >
+                <option value="good">Good</option>
+                <option value="fair">Fair</option>
+                <option value="poor">Poor (refurb)</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-[10px] font-black text-[var(--text-3)] uppercase tracking-widest mb-1.5">Notes (optional)</label>
+              <textarea
+                className="form-input w-full resize-none"
+                rows={3}
+                value={tradeInNotes}
+                onChange={e => setTradeInNotes(e.target.value)}
+                placeholder="e.g. Customer declined repair — accepted trade-in offer"
+              />
+            </div>
+            <div className="flex justify-end gap-2">
+              <button className="btn-secondary" onClick={() => setShowTradeInModal(false)}>Cancel</button>
+              <button
+                className="btn-primary"
+                disabled={tradeInPrice === '' || Number(tradeInPrice) < 0}
+                onClick={() => {
+                  const result = createTradeInFromRepair(r.id, {
+                    unitPrice: Number(tradeInPrice),
+                    condition: tradeInCondition,
+                    notes: tradeInNotes.trim() || undefined,
+                  })
+                  if (result.ok) {
+                    setShowTradeInModal(false)
+                    setTradeInPrice('')
+                    setTradeInNotes('')
+                  }
+                }}
+              >
+                Create trade-in draft
               </button>
             </div>
           </div>
