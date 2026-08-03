@@ -1501,15 +1501,6 @@ function SalesContent() {
                               />
                             </Field>
                           </div>
-                          <div className="sm:col-span-2 lg:col-span-3 xl:col-span-6">
-                            <PaymentDetailsPicker
-                              value={getDocumentPaymentDetails(activeOrder.id)}
-                              onChange={next => setDocumentPaymentDetails(activeOrder.id, next)}
-                              bankAccounts={bankAccounts}
-                              companySettings={companySettings}
-                              onAddBankAccount={addBankAccount}
-                            />
-                          </div>
                         </div>
                       ) : (
                       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 p-4 rounded-2xl bg-[var(--bg-surface)] border border-[var(--border-lt)]">
@@ -1540,15 +1531,6 @@ function SalesContent() {
                         <div className="flex flex-col gap-1">
                           <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)]">Order Total</span>
                           <span className="text-xs font-bold text-primary-600">{fmtKes(activeOrder.total)}</span>
-                        </div>
-                        <div className="sm:col-span-2 lg:col-span-3 xl:col-span-6">
-                          <PaymentDetailsPicker
-                            value={getDocumentPaymentDetails(activeOrder.id)}
-                            onChange={next => setDocumentPaymentDetails(activeOrder.id, next)}
-                            bankAccounts={bankAccounts}
-                            companySettings={companySettings}
-                            onAddBankAccount={addBankAccount}
-                          />
                         </div>
                       </div>
                       )}
@@ -1847,6 +1829,14 @@ function SalesContent() {
                           )}
                         </div>
                       </div>
+
+                      <PaymentDetailsPicker
+                        value={getDocumentPaymentDetails(activeOrder.id)}
+                        onChange={next => setDocumentPaymentDetails(activeOrder.id, next)}
+                        bankAccounts={bankAccounts}
+                        companySettings={companySettings}
+                        onAddBankAccount={addBankAccount}
+                      />
 
                       <Chatter
                         model="sale_order"
