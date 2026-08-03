@@ -27,6 +27,7 @@ import { normalizeClientRole } from '@/lib/auth/access'
 import { readGuardedImageAsDataUrl } from '@/lib/client-image-guard'
 import { repairProgressOrderFor } from '@/lib/repair-progress'
 import { isDirectRepairPath, isQuoteDeclinedReopenable, quotableStatusesForPath, repairPathLabel, returnableStatusesForPath, startableStatusesForPath } from '@/lib/repair-path'
+import { resolveDiagnosisFee, shouldChargeDiagnosisFee } from '@/lib/diagnosis-fee'
 
 const PROC_COLORS = {
   pending:   { bg: 'bg-amber-50',   text: 'text-amber-700',   border: 'border-amber-200',   dot: '#F59E0B' },
@@ -187,17 +188,19 @@ export default function RepairDetailView() {
   const canEditDetails        = ['director', 'admin_officer', 'technical_lead'].includes(currentRole) && !TERMINAL.includes(r.status)
   // Customer declines repair after diagnosis — close at diagnosis stage with the diagnosis fee
   const canStopAtDiagnosis    = !r.diagnosisStopped && !!r.diagnosis && !isDirectRepairPath(r.repairPath)
+  const feeResolved = resolveDiagnosisFee(r, systemSettings)
+  const feeApplies = shouldChargeDiagnosisFee(r) && feeResolved.amount > 0
   const canWaiveDiagnosisFee  = ['director', 'technical_lead', 'admin_officer', 'finance_officer'].includes(currentRole)
     && !isDirectRepairPath(r.repairPath)
+    && feeApplies
     && r.diagnosisFeeStatus !== 'waived'
     && r.diagnosisFeeStatus !== 'invoiced'
     && r.diagnosisFeeStatus !== 'paid'
     && r.diagnosisFeeStatus !== 'not_applicable'
-    && (r.diagnosisFee ?? 0) > 0
     && (!TERMINAL.includes(r.status) || isQuoteDeclinedReopenable(r.status))
   const canMarkDiagnosisFeePaid = ['director', 'admin_officer', 'finance_officer', 'sales_rep'].includes(currentRole)
     && !isDirectRepairPath(r.repairPath)
-    && (r.diagnosisFee ?? 0) > 0
+    && feeApplies
     && r.diagnosisFeeStatus !== 'waived'
     && r.diagnosisFeeStatus !== 'not_applicable'
     && r.diagnosisFeeStatus !== 'paid'
@@ -860,22 +863,24 @@ export default function RepairDetailView() {
                         <p className="text-[18px] font-black text-indigo-500 leading-none">{r.diagnosis.estimatedHours}<span className="text-[11px] font-bold ml-0.5">h</span></p>
                       </div>
                     )}
-                    {((r.diagnosisFee && r.diagnosisFee > 0) || r.diagnosisFeeStatus === 'waived' || r.diagnosisFeeStatus === 'not_applicable') && (
+                    {(feeApplies || feeResolved.status === 'paid' || feeResolved.status === 'invoiced' || feeResolved.status === 'waived' || feeResolved.status === 'not_applicable') && (
                       <div className="p-3 rounded-xl bg-[rgba(245,158,11,0.08)] border border-amber-500/25">
                         <p className="text-[9px] font-black text-amber-500 uppercase tracking-widest mb-1">Diagnosis Fee</p>
                         <p className="text-[13px] font-black text-amber-500">
-                          {r.diagnosisFeeStatus === 'waived'
+                          {feeResolved.status === 'waived'
                             ? 'Waived'
-                            : r.diagnosisFeeStatus === 'not_applicable'
+                            : feeResolved.status === 'not_applicable'
                               ? 'N/A'
-                              : (r.diagnosisFee && r.diagnosisFee > 0 ? fmtKes(r.diagnosisFee) : '—')}
+                              : feeResolved.amount > 0 ? fmtKes(feeResolved.amount) : '—'}
                         </p>
                         <p className="text-[10px] font-semibold text-amber-700/80 mt-0.5">
-                          {r.diagnosisFeeStatus === 'paid'
+                          {feeResolved.status === 'paid'
                             ? `Paid early${r.diagnosisFeePaidMethod ? ` · ${r.diagnosisFeePaidMethod}` : ''} · not credited against repair`
-                            : r.diagnosisFeeStatus === 'invoiced'
+                            : feeResolved.status === 'invoiced'
                               ? 'On invoice · 0% VAT'
-                              : 'On final invoice with repair · 0% VAT'}
+                              : feeResolved.status === 'not_applicable'
+                                ? 'Not charged (pre-policy intake or exempt)'
+                                : 'On final invoice with repair · 0% VAT'}
                         </p>
                         {r.diagnosisFeeStatus === 'waived' && r.diagnosisFeeWaivedReason && (
                           <p className="text-[10px] text-[var(--text-3)] mt-1">Reason: {r.diagnosisFeeWaivedReason}</p>

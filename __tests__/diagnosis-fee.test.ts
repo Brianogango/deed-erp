@@ -2,10 +2,12 @@ import { describe, it, expect } from 'vitest'
 import {
   buildDiagnosisFeeQuoteLine,
   DEFAULT_DIAGNOSIS_FEE_KES,
+  DIAGNOSIS_FEE_POLICY_EFFECTIVE_AT,
   diagnosisFeeAmount,
   diagnosisFeeAmountForTier,
   ensureDiagnosisFeeInQuoteLines,
   isDiagnosisFeeLine,
+  isDiagnosisFeePolicyInEffect,
   isDiagnosisFeeSettled,
   mustCollectDiagnosisFeeUpfront,
   resolveCustomerBillingType,
@@ -14,6 +16,10 @@ import {
   shouldChargeDiagnosisFee,
   taxableQuoteSubtotal,
 } from '@/lib/diagnosis-fee'
+
+const AFTER = '2026-08-03T15:00:00+03:00'
+const JUST_BEFORE = '2026-08-03T14:59:59+03:00'
+const EARLIER = '2026-08-02T10:00:00+03:00'
 
 describe('diagnosis-fee', () => {
   it('uses flat KES 1000 by default (tier ignored)', () => {
@@ -33,41 +39,83 @@ describe('diagnosis-fee', () => {
     expect(resolveCustomerBillingType('company')).toBe('corporate')
   })
 
-  it('does not charge Direct Repair (declined diagnosis) or waived / full warranty', () => {
-    expect(shouldChargeDiagnosisFee({ repairPath: 'direct_repair' })).toBe(false)
-    expect(shouldChargeDiagnosisFee({ repairPath: 'diagnosis_first', diagnosisFeeStatus: 'waived' })).toBe(false)
+  it('applies only from 3 Aug 2026 3pm EAT based on intakeDate', () => {
+    expect(DIAGNOSIS_FEE_POLICY_EFFECTIVE_AT).toBe('2026-08-03T15:00:00+03:00')
+    expect(isDiagnosisFeePolicyInEffect(AFTER)).toBe(true)
+    expect(isDiagnosisFeePolicyInEffect(JUST_BEFORE)).toBe(false)
+    expect(isDiagnosisFeePolicyInEffect(EARLIER)).toBe(false)
+    expect(isDiagnosisFeePolicyInEffect(undefined)).toBe(false)
+    expect(isDiagnosisFeePolicyInEffect('')).toBe(false)
+  })
+
+  it('does not charge Direct Repair, waived, full warranty, or pre-policy jobs', () => {
+    expect(shouldChargeDiagnosisFee({ repairPath: 'direct_repair', intakeDate: AFTER })).toBe(false)
     expect(shouldChargeDiagnosisFee({
       repairPath: 'diagnosis_first',
+      intakeDate: AFTER,
+      diagnosisFeeStatus: 'waived',
+    })).toBe(false)
+    expect(shouldChargeDiagnosisFee({
+      repairPath: 'diagnosis_first',
+      intakeDate: AFTER,
       underWarranty: true,
       warrantyCoverage: 'full',
     })).toBe(false)
-    expect(shouldChargeDiagnosisFee({ repairPath: 'diagnosis_first' })).toBe(true)
+    expect(shouldChargeDiagnosisFee({
+      repairPath: 'diagnosis_first',
+      intakeDate: JUST_BEFORE,
+    })).toBe(false)
+    expect(shouldChargeDiagnosisFee({
+      repairPath: 'diagnosis_first',
+      intakeDate: EARLIER,
+    })).toBe(false)
+    expect(shouldChargeDiagnosisFee({ repairPath: 'diagnosis_first', intakeDate: AFTER })).toBe(true)
   })
 
-  it('resolveDiagnosisFee returns flat applicable amount for diagnosis_first', () => {
-    expect(resolveDiagnosisFee({ repairPath: 'diagnosis_first' })).toMatchObject({
+  it('resolveDiagnosisFee returns flat applicable amount only after policy start', () => {
+    expect(resolveDiagnosisFee({ repairPath: 'diagnosis_first', intakeDate: AFTER })).toMatchObject({
       amount: 1000,
       status: 'applicable',
       billing: 'invoice',
       customerType: 'walk_in',
     })
-    expect(resolveDiagnosisFee({ repairPath: 'direct_repair' }).status).toBe('not_applicable')
     expect(resolveDiagnosisFee({
       repairPath: 'diagnosis_first',
+      intakeDate: JUST_BEFORE,
+      diagnosisFee: 1000,
+      diagnosisFeeStatus: 'applicable',
+    })).toMatchObject({
+      amount: 0,
+      status: 'not_applicable',
+    })
+    expect(resolveDiagnosisFee({ repairPath: 'direct_repair', intakeDate: AFTER }).status).toBe('not_applicable')
+    expect(resolveDiagnosisFee({
+      repairPath: 'diagnosis_first',
+      intakeDate: AFTER,
       customerBillingType: 'corporate',
     }).billing).toBe('invoice')
+  })
+
+  it('preserves paid/invoiced amounts on pre-policy jobs', () => {
+    expect(resolveDiagnosisFee({
+      repairPath: 'diagnosis_first',
+      intakeDate: EARLIER,
+      diagnosisFee: 1000,
+      diagnosisFeeStatus: 'paid',
+    }).status).toBe('paid')
+    expect(resolveDiagnosisFee({
+      repairPath: 'diagnosis_first',
+      intakeDate: EARLIER,
+      diagnosisFee: 1000,
+      diagnosisFeeStatus: 'invoiced',
+    }).status).toBe('invoiced')
   })
 
   it('never gates diagnosis/start on unpaid fee (invoice settlement)', () => {
     expect(mustCollectDiagnosisFeeUpfront({
       repairPath: 'diagnosis_first',
+      intakeDate: AFTER,
       diagnosisFeeBilling: 'upfront',
-      diagnosisFeeStatus: 'applicable',
-    })).toBe(false)
-    expect(mustCollectDiagnosisFeeUpfront({
-      repairPath: 'diagnosis_first',
-      diagnosisFeeBilling: 'invoice',
-      customerBillingType: 'corporate',
       diagnosisFeeStatus: 'applicable',
     })).toBe(false)
     expect(mustCollectDiagnosisFeeUpfront({ repairPath: 'direct_repair' })).toBe(false)

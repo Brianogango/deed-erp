@@ -4,7 +4,7 @@
 import { useState, useMemo } from 'react'
 import { useOperationsStore, RepairOrder, fmtDate } from '@/lib/store'
 import { DIRECT_REPAIR_WAIVER_TEXT } from '@/lib/repair-path'
-import { diagnosisFeeAmount, resolveCustomerBillingType } from '@/lib/diagnosis-fee'
+import { diagnosisFeeAmount, isDiagnosisFeePolicyInEffect, resolveCustomerBillingType, resolveDiagnosisFee } from '@/lib/diagnosis-fee'
 import { Field, Input, Select, Textarea, Badge } from '@/components/ui'
 import { Fa } from '@/components/icons'
 import {
@@ -327,7 +327,12 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
 
       const isDirect = device.repairPath === 'direct_repair'
       const waiverAt = new Date().toISOString()
-      const feeAmount = !isDirect ? diagnosisFeeAmount(systemSettings) : 0
+      const feeResolved = resolveDiagnosisFee({
+        repairPath: device.repairPath,
+        intakeDate: rep.intakeDate,
+      }, systemSettings)
+      const feeAmount = feeResolved.amount
+      const feeApplies = !isDirect && feeResolved.status === 'applicable' && feeAmount > 0
       const billingType = resolveCustomerBillingType(clientType)
       updateRepair(rep.id, {
         status: 'received',
@@ -346,10 +351,10 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
         deviceType: deviceTypeLabel,
         deviceBrand: device.brand.trim() || undefined,
         deviceModel: device.model.trim() || undefined,
-        diagnosisFee: isDirect ? 0 : feeAmount,
-        diagnosisFeeStatus: isDirect ? 'not_applicable' : 'applicable',
-        diagnosisFeeBilling: isDirect ? undefined : 'invoice',
-        customerBillingType: isDirect ? undefined : billingType,
+        diagnosisFee: feeApplies ? feeAmount : 0,
+        diagnosisFeeStatus: isDirect || !feeApplies ? 'not_applicable' : 'applicable',
+        diagnosisFeeBilling: feeApplies ? 'invoice' : undefined,
+        customerBillingType: !isDirect ? billingType : undefined,
         estimatedCompletionDate: device.estimatedCompletion || undefined,
         accessories,
         underWarranty: intakeUnderWarranty,
@@ -366,7 +371,9 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
         liabilityWaiverSignature: isDirect ? device.consentSignature.trim() : undefined,
         notes: isDirect
           ? `[Direct Repair Consent] Signed by: ${device.consentSignature}. Liability Waiver Accepted: YES. Device type: ${deviceTypeLabel}.\nTerms Agreed: Customer declines diagnosis — work limited to the requested scope only. No diagnosis fee.`
-          : `Device type: ${deviceTypeLabel}. Diagnosis fee: KES ${feeAmount.toLocaleString('en-KE')} (on final invoice with repair; not credited against labour).`,
+          : feeApplies
+            ? `Device type: ${deviceTypeLabel}. Diagnosis fee: KES ${feeAmount.toLocaleString('en-KE')} (on final invoice with repair; not credited against labour).`
+            : `Device type: ${deviceTypeLabel}. No mandatory diagnosis fee (intake before policy effective date).`,
       })
 
       showToast(`Ticket ${rep.ref} created`, 'success')
@@ -974,7 +981,7 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
                 ))}
               </div>
 
-              {device.repairPath === 'diagnosis_first' && (
+              {device.repairPath === 'diagnosis_first' && isDiagnosisFeePolicyInEffect(new Date().toISOString()) && (
                 <div className="mt-4 p-4 rounded-xl space-y-2" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
                   <p className="text-[10px] font-black uppercase tracking-widest" style={{ color: 'var(--text-3)' }}>Diagnosis fee</p>
                   <p className="text-sm font-black" style={{ color: NAVY }}>
@@ -982,7 +989,16 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
                   </p>
                   <p className="text-[10px] leading-relaxed" style={{ color: 'var(--text-3)' }}>
                     Billed on the final invoice with the repair (walk-in &amp; corporate). Not credited against labour or parts.
-                    {' '}Warranty (full) exempt. VAT on this fee is 0%.
+                    {' '}Applies to jobs received from 3 Aug 2026, 3:00pm. Warranty (full) exempt. VAT on this fee is 0%.
+                  </p>
+                </div>
+              )}
+
+              {device.repairPath === 'diagnosis_first' && !isDiagnosisFeePolicyInEffect(new Date().toISOString()) && (
+                <div className="mt-4 p-4 rounded-xl space-y-2" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
+                  <p className="text-[10px] font-black uppercase tracking-widest" style={{ color: 'var(--text-3)' }}>Diagnosis fee</p>
+                  <p className="text-[10px] leading-relaxed" style={{ color: 'var(--text-3)' }}>
+                    Mandatory KES {diagnosisFeeAmount(systemSettings).toLocaleString('en-KE')} fee starts 3 Aug 2026 at 3:00pm. This booking is before that cutoff — no diagnosis fee.
                   </p>
                 </div>
               )}

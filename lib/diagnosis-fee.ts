@@ -3,6 +3,7 @@
  *
  * Policy (Service Charges & Pricing — Aug 2026, revised):
  * - Flat KES 1,000 for walk-in & corporate Diagnosis First jobs
+ * - Effective from 3 Aug 2026, 3:00pm EAT — jobs received before then are exempt
  * - Not credited against the repair bill (labour/parts stay separate)
  * - Fee is billed on the final invoice with the repair (walk-in & corporate)
  * - Optional early collection allowed; does not block diagnosis or repair start
@@ -36,6 +37,12 @@ export const DEFAULT_DIAGNOSIS_FEE_REGULAR_KES = DEFAULT_DIAGNOSIS_FEE_KES
 /** @deprecated Prefer DEFAULT_DIAGNOSIS_FEE_KES — kept for older settings blobs. */
 export const DEFAULT_DIAGNOSIS_FEE_HIGH_END_KES = DEFAULT_DIAGNOSIS_FEE_KES
 
+/**
+ * Mandatory flat diagnosis fee starts at this instant (Africa/Nairobi).
+ * Repairs with intakeDate before this are not charged the new fee.
+ */
+export const DIAGNOSIS_FEE_POLICY_EFFECTIVE_AT = '2026-08-03T15:00:00+03:00'
+
 export type DiagnosisFeeSettings = {
   /** Flat Diagnosis First fee (KES). Preferred. */
   diagnosisFeeKes?: number
@@ -47,6 +54,8 @@ export type DiagnosisFeeSettings = {
 
 export type DiagnosisFeeRepair = {
   repairPath?: string | null
+  /** Job received timestamp — used for the Aug 2026 policy cutoff. */
+  intakeDate?: string | null
   deviceTier?: DeviceTier | string | null
   diagnosisFee?: number | null
   diagnosisFeeStatus?: DiagnosisFeeStatus | string | null
@@ -97,6 +106,21 @@ export function diagnosisFeeAmountForTier(
   return diagnosisFeeAmount(settings)
 }
 
+/**
+ * True when the job was received on/after the policy effective instant
+ * (3 Aug 2026, 3:00pm EAT). Missing intake dates are treated as pre-policy
+ * so legacy jobs are not charged.
+ */
+export function isDiagnosisFeePolicyInEffect(intakeDate?: string | null): boolean {
+  const effectiveMs = Date.parse(DIAGNOSIS_FEE_POLICY_EFFECTIVE_AT)
+  if (!Number.isFinite(effectiveMs)) return false
+  const raw = String(intakeDate ?? '').trim()
+  if (!raw) return false
+  const intakeMs = Date.parse(raw)
+  if (!Number.isFinite(intakeMs)) return false
+  return intakeMs >= effectiveMs
+}
+
 /** Fee is billed on the final invoice for both walk-in and corporate. */
 export function resolveDiagnosisFeeBilling(
   _clientType?: 'individual' | 'company' | string | null,
@@ -110,11 +134,15 @@ export function resolveCustomerBillingType(
   return clientType === 'company' ? 'corporate' : 'walk_in'
 }
 
-/** Full warranty → no fee. Direct Repair (declined diagnosis) → not applicable. */
+/**
+ * Full warranty → no fee. Direct Repair (declined diagnosis) → not applicable.
+ * Pre-policy intake (before 3 Aug 2026 3pm EAT) → not charged.
+ */
 export function shouldChargeDiagnosisFee(repair: DiagnosisFeeRepair): boolean {
   if (repair.repairPath === 'direct_repair') return false
   if (repair.diagnosisFeeStatus === 'waived' || repair.diagnosisFeeStatus === 'not_applicable') return false
   if (repair.underWarranty && repair.warrantyCoverage === 'full') return false
+  if (!isDiagnosisFeePolicyInEffect(repair.intakeDate)) return false
   // Default: diagnosis_first (including missing path treated as diagnosis_first elsewhere)
   return repair.repairPath !== 'direct_repair'
 }
@@ -180,6 +208,7 @@ export function resolveDiagnosisFee(
       ...meta,
     }
   }
+  // Preserve settlements already recorded, even on pre-policy jobs.
   if (repair.diagnosisFeeStatus === 'paid' || repair.diagnosisFeePaidAt) {
     const amount = Math.max(0, Number(repair.diagnosisFee) || diagnosisFeeAmount(settings))
     return {
@@ -194,6 +223,14 @@ export function resolveDiagnosisFee(
     return {
       amount,
       status: 'invoiced',
+      tier: normalizeDeviceTier(repair.deviceTier),
+      ...meta,
+    }
+  }
+  if (!isDiagnosisFeePolicyInEffect(repair.intakeDate)) {
+    return {
+      amount: 0,
+      status: 'not_applicable',
       tier: normalizeDeviceTier(repair.deviceTier),
       ...meta,
     }
