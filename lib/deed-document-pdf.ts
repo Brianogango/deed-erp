@@ -213,10 +213,11 @@ export function buildDeedDocumentPdf(
   // Watermark first so letterhead + body paint above it.
   drawPageWatermark(doc, company)
 
-  // Letterhead — give the logo its own band so title / meta / party never crowd it.
-  const LOGO_TOP = 22
-  const LOGO_MAX_H = 58
-  const LOGO_MAX_W = 168
+  // Letterhead — logo is the brand signal; document title stays secondary below it.
+  const LOGO_TOP = 20
+  const LOGO_MAX_H = 72
+  const LOGO_MAX_W = 200
+  const TITLE_GAP = 38
   let letterheadBottom = LOGO_TOP + 28
 
   if (company.logoDataUrl && company.logoWidth && company.logoHeight) {
@@ -227,12 +228,12 @@ export function buildDeedDocumentPdf(
       doc.addImage(company.logoDataUrl, 'PNG', MARGIN, LOGO_TOP, logoW, logoH)
       letterheadBottom = LOGO_TOP + logoH
     } catch {
-      doc.setFont('helvetica', 'bold').setFontSize(22).setTextColor(...NAVY)
+      doc.setFont('helvetica', 'bold').setFontSize(20).setTextColor(...NAVY)
       doc.text('deed', MARGIN, LOGO_TOP + 28)
       letterheadBottom = LOGO_TOP + 32
     }
   } else {
-    doc.setFont('helvetica', 'bold').setFontSize(22).setTextColor(...NAVY)
+    doc.setFont('helvetica', 'bold').setFontSize(20).setTextColor(...NAVY)
     doc.text('deed', MARGIN, LOGO_TOP + 28)
     doc.setFillColor(...CYAN)
     doc.circle(MARGIN + 46, LOGO_TOP + 20, 2.4, 'F')
@@ -243,12 +244,12 @@ export function buildDeedDocumentPdf(
   doc.setFont('helvetica', 'normal').setFontSize(9).setTextColor(...FOOTER_GRAY)
   doc.text(website, rightX, LOGO_TOP + 18, { align: 'right' })
 
-  // Body starts below the logo with clear air — title / invoice-to never compete with the mark.
-  let y = letterheadBottom + 28
-  doc.setFont('helvetica', 'bold').setFontSize(28).setTextColor(...NAVY)
+  // Title sits clearly below the logo — smaller than the mark so it does not compete.
+  let y = letterheadBottom + TITLE_GAP
+  doc.setFont('helvetica', 'bold').setFontSize(18).setTextColor(...NAVY)
   doc.text(input.title.toUpperCase(), MARGIN, y)
 
-  y += 22
+  y += 18
   const metaRows = [
     { label: docNoLabel(input.title), value: input.ref },
     ...(input.date ? [{ label: 'Date', value: fmtDate(input.date) }] : []),
@@ -262,7 +263,7 @@ export function buildDeedDocumentPdf(
     y += 14
   })
 
-  let partyY = letterheadBottom + 28
+  let partyY = letterheadBottom + TITLE_GAP
   doc.setFont('helvetica', 'bold').setFontSize(9).setTextColor(...LIGHT_BLUE)
   doc.text(`${partyLabel}:`, rightX, partyY, { align: 'right' })
   partyY += 14
