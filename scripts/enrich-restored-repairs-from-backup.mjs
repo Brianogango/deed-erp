@@ -140,22 +140,33 @@ function run(cmd, args, opts = {}) {
 
 async function extractStoreKeysViaTempDb(dumpPath, keys) {
   const dbName = `deed_enrich_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`
+  const tmpDumpDir = mkdtempSync(join(tmpdir(), 'deed-enrich-dump-'))
+  const tmpDump = join(tmpDumpDir, 'database.dump')
+
   const created = run('sudo', ['-n', '-u', 'postgres', 'createdb', dbName])
   if (created.status !== 0) {
+    rmSync(tmpDumpDir, { recursive: true, force: true })
     throw new Error(`createdb failed: ${created.stderr || created.stdout || created.status}`)
   }
 
   const dropDb = () => {
     run('sudo', ['-n', '-u', 'postgres', 'dropdb', '--if-exists', dbName])
+    rmSync(tmpDumpDir, { recursive: true, force: true })
   }
 
   try {
-    // Create minimal app_state table, then data-only restore that table from the dump.
+    // postgres OS user cannot read /var/backups/... (mode 600, deploy-user owned).
+    // Copy to a world-readable temp path before sudo pg_restore.
+    const copied = run('cp', ['--', dumpPath, tmpDump])
+    if (copied.status !== 0) throw new Error(`cp dump failed: ${copied.stderr || copied.status}`)
+    run('chmod', ['a+r', tmpDump])
+
+    // Match live Contabo schema (TEXT value) so data-only restore succeeds.
     const ddl = run('sudo', ['-n', '-u', 'postgres', 'psql', '-d', dbName, '-v', 'ON_ERROR_STOP=1', '-c',
       `CREATE TABLE IF NOT EXISTS app_state (
-         key text PRIMARY KEY,
-         value jsonb NOT NULL,
-         updated_at timestamptz NOT NULL DEFAULT NOW()
+         key TEXT PRIMARY KEY,
+         value TEXT NOT NULL,
+         updated_at TEXT NOT NULL DEFAULT NOW()::text
        );`,
     ])
     if (ddl.status !== 0) {
@@ -167,9 +178,12 @@ async function extractStoreKeysViaTempDb(dumpPath, keys) {
       '--no-owner', '--no-privileges', '--data-only',
       '-t', 'app_state',
       '-d', dbName,
-      dumpPath,
+      tmpDump,
     ])
-    // pg_restore may warn; check whether our keys exist.
+    if (data.status !== 0) {
+      console.warn(`  data-only restore note: ${(data.stderr || data.stdout || '').slice(0, 240)}`)
+    }
+
     const out = {}
     for (const key of keys) {
       const q = run('sudo', [
@@ -184,9 +198,34 @@ async function extractStoreKeysViaTempDb(dumpPath, keys) {
         }
       }
     }
+
     if (!Object.keys(out).length) {
-      // Fallback: full restore (slower) if table-only data restore did not populate.
-      console.warn('  app_state empty after table restore — trying full pg_restore (filtered)')
+      // Fallback: restore schema+data for app_state from the readable copy.
+      console.warn('  app_state empty after TEXT table restore — trying schema+data restore')
+      run('sudo', ['-n', '-u', 'postgres', 'dropdb', '--if-exists', dbName])
+      const recreated = run('sudo', ['-n', '-u', 'postgres', 'createdb', dbName])
+      if (recreated.status !== 0) throw new Error('recreate failed')
+      run('sudo', [
+        '-n', '-u', 'postgres', 'pg_restore',
+        '--no-owner', '--no-privileges',
+        '-t', 'app_state',
+        '-d', dbName,
+        tmpDump,
+      ])
+      for (const key of keys) {
+        const q = run('sudo', [
+          '-n', '-u', 'postgres', 'psql', '-d', dbName, '-At', '-c',
+          `SELECT value::text FROM app_state WHERE key = '${key.replace(/'/g, "''")}'`,
+        ])
+        if (q.status === 0 && q.stdout?.trim()) {
+          try { out[key] = JSON.parse(q.stdout.trim()) } catch { /* ignore */ }
+        }
+      }
+    }
+
+    if (!Object.keys(out).length) {
+      // Last resort: full database restore from the readable copy.
+      console.warn('  still empty — full pg_restore from temp copy')
       run('sudo', ['-n', '-u', 'postgres', 'dropdb', '--if-exists', dbName])
       const recreated = run('sudo', ['-n', '-u', 'postgres', 'createdb', dbName])
       if (recreated.status !== 0) throw new Error('recreate failed')
@@ -194,10 +233,10 @@ async function extractStoreKeysViaTempDb(dumpPath, keys) {
         '-n', '-u', 'postgres', 'pg_restore',
         '--no-owner', '--no-privileges',
         '-d', dbName,
-        dumpPath,
+        tmpDump,
       ])
       if (full.status !== 0) {
-        console.warn(`  full restore warnings/errors: ${(full.stderr || '').slice(0, 300)}`)
+        console.warn(`  full restore warnings: ${(full.stderr || '').slice(0, 300)}`)
       }
       for (const key of keys) {
         const q = run('sudo', [
@@ -209,6 +248,7 @@ async function extractStoreKeysViaTempDb(dumpPath, keys) {
         }
       }
     }
+
     return out
   } finally {
     dropDb()
