@@ -1,8 +1,8 @@
 {
   "since": "2026-08-01",
   "onlyStubs": true,
-  "maxBackups": 30,
+  "maxBackups": 25,
   "apply": false,
-  "requestedAt": "2026-08-04T13:15:00Z",
-  "note": "Dry-run retry: copy dumps to /tmp so postgres can read them; TEXT app_state schema"
+  "requestedAt": "2026-08-04T13:18:00Z",
+  "note": "Dry-run: extract dump as deploy user via pg_restore -f, load as postgres"
 }
