@@ -7,6 +7,6 @@
   "accountsEmail": "accounts@deed.co.ke",
   "restart": true,
   "envPath": "/var/www/deed-erp/.env",
-  "requestedAt": "2026-08-04T09:03:00Z",
-  "note": "ONE-SHOT: set Contabo department SMTP passwords then scrub this file"
+  "requestedAt": "2026-08-04T09:06:00Z",
+  "note": "Re-apply with quoted .env values for accounts special-char password"
 }

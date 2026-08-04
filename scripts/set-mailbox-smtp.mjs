@@ -23,8 +23,13 @@ function fail(msg) {
   process.exit(1)
 }
 
+function escapeEnvValue(value) {
+  // Always double-quote so special chars (& % @ ( ) etc.) survive dotenv parsers.
+  return `"${String(value).replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`
+}
+
 function upsertEnv(content, key, value) {
-  const line = `${key}=${value}`
+  const line = `${key}=${escapeEnvValue(value)}`
   const re = new RegExp(`^${key}=.*$`, 'm')
   if (re.test(content)) return content.replace(re, line)
   const trimmed = content.replace(/\s*$/, '')
