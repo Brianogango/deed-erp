@@ -183,7 +183,8 @@ export const COLLABORATIVE_STORE_READ_POLICIES: Record<string, CollaborativeRead
     modules: ['sales'],
   },
   deed_repairs_v2: {
-    roles: ['director', 'technical_lead', 'technician'],
+    // Admin officers book intake + run the desk; finance needs billing follow-up.
+    roles: ['director', 'admin_officer', 'finance_officer', 'technical_lead', 'technician'],
     modules: ['repair'],
   },
   deed_contacts: {
@@ -360,7 +361,7 @@ export function canAccessRecord(
       if (normalizedRole === 'sales_rep') return opportunityOwnedByUser(record, userId)
       return false
     case 'repair':
-      if (['director', 'technical_lead'].includes(normalizedRole)) return true
+      if (['director', 'admin_officer', 'finance_officer', 'technical_lead'].includes(normalizedRole)) return true
       if (normalizedRole === 'technician') return record.assignedTechnicianId === userId
       return false
     case 'expense':

@@ -1,0 +1,177 @@
+#!/usr/bin/env node
+/**
+ * Ops helper: search repair jobs in deed_repairs_v2 (and related contacts).
+ *
+ *   node scripts/find-repairs.mjs --q turaco --q sample
+ *   node scripts/find-repairs.mjs --request ops/find-repairs-request.json
+ *   node scripts/find-repairs.mjs --since 2026-08-04 --q turaco
+ */
+import { readFileSync, existsSync } from 'node:fs'
+import { resolve, dirname } from 'node:path'
+import { fileURLToPath } from 'node:url'
+import { Pool } from 'pg'
+
+const __dirname = dirname(fileURLToPath(import.meta.url))
+const ROOT = resolve(__dirname, '..')
+
+function loadEnvFile(filePath) {
+  if (!existsSync(filePath)) return
+  for (const line of readFileSync(filePath, 'utf8').split('\n')) {
+    const trimmed = line.trim()
+    if (!trimmed || trimmed.startsWith('#')) continue
+    const eq = trimmed.indexOf('=')
+    if (eq <= 0) continue
+    const key = trimmed.slice(0, eq).trim()
+    let value = trimmed.slice(eq + 1).trim()
+    if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+      value = value.slice(1, -1)
+    }
+    if (!(key in process.env)) process.env[key] = value
+  }
+}
+
+loadEnvFile(resolve(ROOT, '.env'))
+loadEnvFile(resolve(ROOT, '.env.local'))
+
+function arg(flag, fallback = null) {
+  const i = process.argv.indexOf(flag)
+  if (i >= 0 && process.argv[i + 1]) return process.argv[i + 1]
+  return fallback
+}
+
+function allArgs(flag) {
+  const out = []
+  for (let i = 0; i < process.argv.length; i++) {
+    if (process.argv[i] === flag && process.argv[i + 1]) out.push(process.argv[i + 1])
+  }
+  return out
+}
+
+function fail(msg) {
+  console.error(`ERROR: ${msg}`)
+  process.exit(1)
+}
+
+const connectionString =
+  process.env.deed_erp_POSTGRES_URL || process.env.POSTGRES_URL || process.env.DATABASE_URL
+if (!connectionString) fail('DATABASE_URL / POSTGRES_URL is not set')
+
+const requestPath = String(arg('--request', '')).trim()
+let queries = allArgs('--q').map(s => String(s).trim()).filter(Boolean)
+let since = String(arg('--since', '') || '').trim()
+let limit = Number(arg('--limit', '50')) || 50
+
+if (requestPath) {
+  const abs = resolve(ROOT, requestPath)
+  if (!existsSync(abs)) fail(`Request file not found: ${abs}`)
+  const parsed = JSON.parse(readFileSync(abs, 'utf8'))
+  const fromFile = Array.isArray(parsed?.queries) ? parsed.queries : []
+  queries = [...queries, ...fromFile.map(s => String(s).trim()).filter(Boolean)]
+  if (parsed?.since) since = String(parsed.since).trim()
+  if (parsed?.limit) limit = Number(parsed.limit) || limit
+}
+
+if (!queries.length && !since) fail('Provide --q <text> and/or --since YYYY-MM-DD')
+
+const needles = queries.map(q => q.toLowerCase())
+const pool = new Pool({ connectionString })
+
+function haystack(repair) {
+  return [
+    repair?.ref,
+    repair?.customerName,
+    repair?.customerPhone,
+    repair?.contactPersonName,
+    repair?.contactPersonPhone,
+    repair?.productName,
+    repair?.deviceBrand,
+    repair?.deviceModel,
+    repair?.serialNumber,
+    repair?.issueDescription,
+    repair?.notes,
+    repair?.assignedTechnicianName,
+  ]
+    .map(v => String(v ?? '').toLowerCase())
+    .join(' | ')
+}
+
+function summarize(repair) {
+  return {
+    ref: repair.ref,
+    status: repair.status,
+    customerName: repair.customerName,
+    customerPhone: repair.customerPhone || repair.contactPersonPhone || '',
+    productName: repair.productName,
+    serialNumber: repair.serialNumber || '',
+    intakeDate: repair.intakeDate,
+    assignedTechnicianName: repair.assignedTechnicianName || null,
+    total: repair.total ?? null,
+  }
+}
+
+try {
+  const { rows } = await pool.query(`SELECT value FROM app_state WHERE key = 'deed_repairs_v2'`)
+  if (!rows.length) fail('No deed_repairs_v2 key found')
+  const repairs = Array.isArray(rows[0].value) ? rows[0].value : JSON.parse(rows[0].value)
+  if (!Array.isArray(repairs)) fail('deed_repairs_v2 is not an array')
+
+  console.log(`Total repairs in blob: ${repairs.length}`)
+  if (queries.length) console.log(`Queries: ${queries.join(', ')}`)
+  if (since) console.log(`Since: ${since}`)
+
+  let matched = repairs.filter(r => {
+    if (since) {
+      const d = String(r?.intakeDate || r?.createdAt || '')
+      if (!d || d < since) return false
+    }
+    if (!needles.length) return true
+    const text = haystack(r)
+    return needles.some(n => text.includes(n))
+  })
+
+  matched = matched
+    .sort((a, b) => String(b.intakeDate || '').localeCompare(String(a.intakeDate || '')))
+    .slice(0, limit)
+
+  console.log(`Matches: ${matched.length}`)
+  console.log(JSON.stringify(matched.map(summarize), null, 2))
+
+  // Also list today's intakes for context when searching a missing morning job
+  if (since) {
+    const today = repairs
+      .filter(r => String(r?.intakeDate || '') >= since)
+      .sort((a, b) => String(b.intakeDate || '').localeCompare(String(a.intakeDate || '')))
+      .slice(0, 30)
+      .map(summarize)
+    console.log(`\n--- Intakes since ${since} (up to 30) ---`)
+    console.log(JSON.stringify(today, null, 2))
+  }
+
+  // Contacts hit?
+  if (needles.length) {
+    const contactKeys = ['deed_contacts', 'deed_contactPersons']
+    for (const key of contactKeys) {
+      const res = await pool.query(`SELECT value FROM app_state WHERE key = $1`, [key])
+      if (!res.rows.length) continue
+      const arr = Array.isArray(res.rows[0].value) ? res.rows[0].value : JSON.parse(res.rows[0].value)
+      if (!Array.isArray(arr)) continue
+      const hits = arr.filter(c => {
+        const text = [
+          c?.name, c?.firstName, c?.lastName, c?.companyName,
+          c?.phone, c?.mobile, c?.email, c?.tradingName,
+        ].map(v => String(v ?? '').toLowerCase()).join(' | ')
+        return needles.some(n => text.includes(n))
+      }).slice(0, 20)
+      console.log(`\n--- ${key} matches: ${hits.length} ---`)
+      console.log(JSON.stringify(hits.map(c => ({
+        id: c.id,
+        name: c.name || `${c.firstName || ''} ${c.lastName || ''}`.trim(),
+        phone: c.phone || c.mobile || '',
+        email: c.email || '',
+        type: c.type || null,
+      })), null, 2))
+    }
+  }
+} finally {
+  await pool.end()
+}
