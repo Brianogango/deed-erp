@@ -79,6 +79,7 @@ import {
   type DocumentPaymentDetails,
 } from '@/lib/document-payment-details'
 import PaymentDetailsPicker from '@/components/payment/PaymentDetailsPicker'
+import ContactFormModal, { blankCompanyContact, blankIndividualContact } from '@/components/contacts/ContactFormModal'
 
 // ═══════════════════════════════════════════════════════════════════════════
 // TYPES & CONSTANTS
@@ -420,6 +421,9 @@ function AccountingContent() {
   const [newPaymentDetails, setNewPaymentDetails] = useState<DocumentPaymentDetails>({ ...DEFAULT_DOCUMENT_PAYMENT_DETAILS })
   const [applyVat, setApplyVat] = useState(false)
   const [changingPartner, setChangingPartner] = useState(false)
+  const [showCreatePartner, setShowCreatePartner] = useState(false)
+  const [createPartnerSeed, setCreatePartnerSeed] = useState('')
+  const [createPartnerKey, setCreatePartnerKey] = useState(0)
   const [localInvoices, setLocalInvoices] = useState<Invoice[]>([])
 
   const [receiptFile, setReceiptFile] = useState<File | null>(null)
@@ -1909,6 +1913,15 @@ function AccountingContent() {
                       setNewPartnerName((c as any).name)
                       setChangingPartner(false)
                     }}
+                    onCreateNew={q => {
+                      setCreatePartnerSeed(q.trim())
+                      setCreatePartnerKey(k => k + 1)
+                      setShowCreatePartner(true)
+                    }}
+                    createNewLabels={{
+                      title: tab === 'bills' ? 'Create vendor' : 'Create customer',
+                      subtitle: 'Open the full Contacts form',
+                    }}
                     renderItem={c => (
                       <div>
                         <p className="font-bold text-xs">{(c as any).name}</p>
@@ -2216,6 +2229,58 @@ function AccountingContent() {
               </div>
             </div>
           </Modal>
+        )}
+
+        {showCreatePartner && (
+          <ContactFormModal
+            key={createPartnerKey}
+            forceCustomer={tab !== 'bills'}
+            forceVendor={tab === 'bills'}
+            initial={tab === 'bills'
+              ? blankCompanyContact({
+                  name: createPartnerSeed,
+                  isCustomer: false,
+                  isVendor: true,
+                })
+              : blankIndividualContact({ name: createPartnerSeed })}
+            onClose={() => {
+              setShowCreatePartner(false)
+              setCreatePartnerSeed('')
+            }}
+            onSaved={(contact) => {
+              setNewPartnerId(contact.id)
+              setNewPartnerName(contact.name)
+              setChangingPartner(false)
+              setShowCreatePartner(false)
+              setCreatePartnerSeed('')
+            }}
+          />
+        )}
+
+        {showCreatePartner && (
+          <ContactFormModal
+            key={createPartnerKey}
+            forceCustomer={tab !== 'bills'}
+            forceVendor={tab === 'bills'}
+            initial={tab === 'bills'
+              ? blankCompanyContact({
+                  name: createPartnerSeed,
+                  isCustomer: false,
+                  isVendor: true,
+                })
+              : blankIndividualContact({ name: createPartnerSeed })}
+            onClose={() => {
+              setShowCreatePartner(false)
+              setCreatePartnerSeed('')
+            }}
+            onSaved={(contact) => {
+              setNewPartnerId(contact.id)
+              setNewPartnerName(contact.name)
+              setChangingPartner(false)
+              setShowCreatePartner(false)
+              setCreatePartnerSeed('')
+            }}
+          />
         )}
 
         </div>{/* mod-body */}

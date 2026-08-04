@@ -1,13 +1,14 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import { Field, Input, Modal, SearchPicker } from '@/components/ui'
+import { SearchPicker } from '@/components/ui'
 import { useAfterSalesStore } from '@/lib/store'
+import ContactFormModal, { blankIndividualContact } from '@/components/contacts/ContactFormModal'
 
 type ContactItem = { id: string; name: string; phone?: string; email?: string; isCustomer?: boolean }
 
 /**
- * Customer search + selected card + quick-register for Trade-in (buyback / exchange).
+ * Customer search + selected card + full Contacts create form for Trade-in (buyback / exchange).
  */
 export function CustomerPickerField({
   customerId,
@@ -20,13 +21,11 @@ export function CustomerPickerField({
   onSelect: (id: string, name: string) => void
   onClear: () => void
 }) {
-  const { contacts, addContact, showToast } = useAfterSalesStore()
+  const { contacts } = useAfterSalesStore()
 
   const [showCreate, setShowCreate] = useState(false)
-  const [createName, setCreateName] = useState('')
-  const [createEmail, setCreateEmail] = useState('')
-  const [createPhone, setCreatePhone] = useState('')
-  const [registering, setRegistering] = useState(false)
+  const [createSeed, setCreateSeed] = useState('')
+  const [formKey, setFormKey] = useState(0)
 
   const customerItems = useMemo(() => {
     const list = (contacts as ContactItem[])
@@ -49,36 +48,9 @@ export function CustomerPickerField({
   const selected = customerItems.find(c => c.id === customerId)
 
   function openCreate(seed = '') {
-    setCreateName(seed.trim())
-    setCreateEmail('')
-    setCreatePhone('')
+    setCreateSeed(seed.trim())
+    setFormKey(k => k + 1)
     setShowCreate(true)
-  }
-
-  async function register() {
-    if (!createName.trim() || !createPhone.trim()) {
-      showToast('Please fill in name and phone', 'error')
-      return
-    }
-    setRegistering(true)
-    try {
-      const contact = await addContact({
-        type: 'individual',
-        name: createName.trim(),
-        email: createEmail.trim(),
-        phone: createPhone.trim(),
-        address: '',
-        isCustomer: true,
-        isVendor: false,
-        tags: [],
-      })
-      onSelect(contact.id, contact.name)
-      setShowCreate(false)
-    } catch {
-      /* toast from addContact */
-    } finally {
-      setRegistering(false)
-    }
   }
 
   return (
@@ -91,7 +63,7 @@ export function CustomerPickerField({
         formatSelected={c => c.name}
         onSelect={c => onSelect(c.id, c.name)}
         onCreateNew={q => openCreate(q)}
-        createNewLabels={{ title: 'Register', subtitle: 'Add this customer to the system' }}
+        createNewLabels={{ title: 'Create contact', subtitle: 'Open the full Contacts form' }}
         renderItem={c => (
           <div>
             <p className="font-medium text-xs text-t1">{c.name}</p>
@@ -107,7 +79,7 @@ export function CustomerPickerField({
           style={{ color: 'var(--accent)' }}
           onClick={() => openCreate()}
         >
-          + Register new customer
+          + Create new contact
         </button>
       </div>
       {customerId && (
@@ -131,27 +103,20 @@ export function CustomerPickerField({
       )}
 
       {showCreate && (
-        <Modal title="Quick Register Customer" onClose={() => setShowCreate(false)} width={460}>
-          <div className="flex flex-col gap-3">
-            <Field label="Customer Name" required>
-              <Input value={createName} onChange={setCreateName} />
-            </Field>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <Field label="Email">
-                <Input type="email" value={createEmail} onChange={setCreateEmail} placeholder="Optional" />
-              </Field>
-              <Field label="Phone" required>
-                <Input type="tel" value={createPhone} onChange={setCreatePhone} />
-              </Field>
-            </div>
-            <div className="flex gap-2 justify-end pt-3 border-t border-[var(--border-lt)]">
-              <button className="btn-secondary text-[11px]" onClick={() => setShowCreate(false)} disabled={registering}>Cancel</button>
-              <button className="btn-primary text-[11px]" onClick={register} disabled={registering}>
-                {registering ? 'Registering…' : 'Register & Select'}
-              </button>
-            </div>
-          </div>
-        </Modal>
+        <ContactFormModal
+          key={formKey}
+          forceCustomer
+          initial={blankIndividualContact({ name: createSeed })}
+          onClose={() => {
+            setShowCreate(false)
+            setCreateSeed('')
+          }}
+          onSaved={(contact) => {
+            onSelect(contact.id, contact.name)
+            setShowCreate(false)
+            setCreateSeed('')
+          }}
+        />
       )}
     </div>
   )

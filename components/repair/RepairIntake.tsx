@@ -6,6 +6,7 @@ import { useOperationsStore, RepairOrder, fmtDate } from '@/lib/store'
 import { DIRECT_REPAIR_WAIVER_TEXT } from '@/lib/repair-path'
 import { diagnosisFeeAmount, isDiagnosisFeePolicyInEffect, resolveCustomerBillingType, resolveDiagnosisFee } from '@/lib/diagnosis-fee'
 import { Field, Input, Select, Textarea, Badge } from '@/components/ui'
+import ContactFormModal, { blankCompanyContact, blankIndividualContact } from '@/components/contacts/ContactFormModal'
 import { Fa } from '@/components/icons'
 import {
   faArrowLeft, faSave, faUser, faMicrochip, faClipboardList,
@@ -42,7 +43,7 @@ const DEVICE_TYPES = [
 export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => void; onSuccess: (id: string) => void }) {
   const {
     repairs, contacts, contactPersons, warranties, systemSettings,
-    createRepair, updateRepair, addContact, createContactPerson, showToast,
+    createRepair, updateRepair, createContactPerson, showToast,
   } = useOperationsStore()
 
   const customers   = useMemo(() => contacts.filter(c => c.isCustomer), [contacts])
@@ -59,9 +60,10 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
   // ── Company fields ─────────────────────────────────────────────────────────
   const [companySearch, setCompanySearch] = useState('')
   const [selectedCompany, setSelectedCompany] = useState<(typeof companies)[0] | null>(null)
-  const [showNewCompanyForm, setShowNewCompanyForm] = useState(false)
-  const [newCompany, setNewCompany] = useState({ name: '', phone: '', email: '', address: '' })
-  const setNC = (k: keyof typeof newCompany, v: string) => setNewCompany(p => ({ ...p, [k]: v }))
+  const [showContactForm, setShowContactForm] = useState(false)
+  const [contactFormSeed, setContactFormSeed] = useState('')
+  const [contactFormKind, setContactFormKind] = useState<'individual' | 'company'>('individual')
+  const [contactFormKey, setContactFormKey] = useState(0)
 
   // ── Contact person fields ──────────────────────────────────────────────────
   const [selectedPersonId, setSelectedPersonId] = useState('')
@@ -115,21 +117,17 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
     return q.length < 1 ? companies : companies.filter(c => c.name.toLowerCase().includes(q))
   }, [companies, companySearch])
 
+  const openContactForm = (kind: 'individual' | 'company', seed = '') => {
+    setContactFormKind(kind)
+    setContactFormSeed(seed.trim())
+    setContactFormKey(k => k + 1)
+    setShowContactForm(true)
+  }
+
   const findExistingIndividual = (name: string, phone: string, email?: string) => {
     const emailKey = normalEmail(email)
     const nameKey = normalName(name)
     return individuals.find(c =>
-      (emailKey && normalEmail(c.email) === emailKey) ||
-      phoneMatches(c.phone, phone) ||
-      phoneMatches(c.mobile, phone) ||
-      (!!nameKey && normalName(c.name) === nameKey)
-    )
-  }
-
-  const findExistingCompany = (name: string, phone?: string, email?: string) => {
-    const emailKey = normalEmail(email)
-    const nameKey = normalName(name)
-    return companies.find(c =>
       (emailKey && normalEmail(c.email) === emailKey) ||
       phoneMatches(c.phone, phone) ||
       phoneMatches(c.mobile, phone) ||
@@ -205,7 +203,7 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
         showToast('Customer name and phone are required', 'error'); return
       }
     } else {
-      if (!selectedCompany && !newCompany.name.trim()) {
+      if (!selectedCompany) {
         showToast('Select or create a company', 'error'); return
       }
       if (!selectedPersonId && !showNewPersonForm) {
@@ -252,35 +250,18 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
           customerPhone = existingIndividual.phone || indv.phone
           customerEmail = existingIndividual.email || indv.email
         } else {
-          const contact = await addContact({
-            type: 'individual',
-            name: indv.name.trim(),
-            phone: indv.phone.trim(),
-            email: indv.email.trim(),
-            address: '',
-            isCustomer: true,
-            isVendor: false,
-            tags: ['repair-client'],
-          })
-          customerId    = contact.id
-          customerName  = contact.name
-          customerPhone = contact.phone
-          customerEmail = contact.email ?? ''
+          showToast('Create the customer with + Create new contact first', 'error')
+          setLoading(false)
+          openContactForm('individual', indv.name || indv.phone)
+          return
         }
       } else {
-        // Resolve or create company contact
-        let company = selectedCompany ?? findExistingCompany(newCompany.name, newCompany.phone, newCompany.email)
+        // Resolve selected company contact (created via Contacts form when new)
+        const company = selectedCompany
         if (!company) {
-          company = await addContact({
-            type: 'company',
-            name: newCompany.name.trim(),
-            phone: newCompany.phone.trim(),
-            email: newCompany.email.trim(),
-            address: newCompany.address.trim(),
-            isCustomer: true,
-            isVendor: false,
-            tags: ['repair-client'],
-          })
+          showToast('Select or create a company', 'error')
+          setLoading(false)
+          return
         }
         customerId   = company.id
         customerName = company.name
@@ -316,9 +297,7 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
         cpPhone = person.phone ?? ''
         cpEmail = person.email ?? ''
         cpTitle = person.jobTitle ?? ''
-
         // Keep the client/company details separate from the selected contact person.
-        // Staff screens can then show both without overwriting the client record.
         customerPhone = company.phone || cpPhone
         customerEmail = company.email || cpEmail
       }
@@ -579,6 +558,17 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
                   </Field>
                 </div>
 
+                {!indv.id && (
+                  <button
+                    type="button"
+                    onClick={() => openContactForm('individual', indv.name || indv.phone)}
+                    className="mt-3 text-xs font-bold flex items-center gap-1.5"
+                    style={{ color: CYAN }}
+                  >
+                    <Fa icon={faPlusCircle} /> Create new contact
+                  </button>
+                )}
+
                 {/* Returning client banner */}
                 {indv.id && priorIndvRepairs > 0 && (
                   <div className="mt-4 flex items-center gap-3 p-3 rounded-xl text-xs font-semibold animate-in fade-in duration-200" style={{ background: '#E0F6FE', color: NAVY }}>
@@ -611,7 +601,7 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
                 </div>
 
                 {/* Company search / select */}
-                {!selectedCompany && !showNewCompanyForm && (
+                {!selectedCompany && (
                   <>
                     <Field label="Search Company" hint="Type to filter existing companies">
                       <div className="relative">
@@ -643,42 +633,13 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
                     )}
                     <button
                       type="button"
-                      onClick={() => setShowNewCompanyForm(true)}
+                      onClick={() => openContactForm('company', companySearch)}
                       className="mt-3 text-xs font-bold flex items-center gap-1.5"
                       style={{ color: CYAN }}
                     >
                       <Fa icon={faPlusCircle} /> Create new company
                     </button>
                   </>
-                )}
-
-                {/* New company mini-form */}
-                {showNewCompanyForm && !selectedCompany && (
-                  <div className="space-y-3 p-4 rounded-xl animate-in slide-in-from-top-2 duration-200" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
-                    <p className="text-[10px] font-black uppercase tracking-widest" style={{ color: NAVY }}>New Company</p>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <Field label="Company Name" required>
-                        <Input value={newCompany.name} onChange={v => setNC('name', v)} placeholder="Safaricom PLC" />
-                      </Field>
-                      <Field label="Phone" required>
-                        <Input value={newCompany.phone} onChange={v => setNC('phone', v)} placeholder="+254 7XX XXX XXX" />
-                      </Field>
-                      <Field label="Email">
-                        <Input value={newCompany.email} onChange={v => setNC('email', v)} placeholder="info@company.co.ke" type="email" />
-                      </Field>
-                      <Field label="Address">
-                        <Input value={newCompany.address} onChange={v => setNC('address', v)} placeholder="Nairobi" />
-                      </Field>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setShowNewCompanyForm(false)}
-                      className="text-xs"
-                      style={{ color: 'var(--text-3)' }}
-                    >
-                      Cancel
-                    </button>
-                  </div>
                 )}
 
                 {/* Selected company chip */}
@@ -701,7 +662,7 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
                 )}
 
                 {/* Contact person section — only show when company is resolved */}
-                {(selectedCompany || (showNewCompanyForm && newCompany.name)) && (
+                {selectedCompany && (
                   <>
                     <div className="mt-2 mb-3 flex items-center gap-2">
                       <div className="h-px flex-1" style={{ background: 'var(--border)' }} />
@@ -1087,6 +1048,40 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
           </div>
         </div>
       </div>
+
+      {showContactForm && (
+        <ContactFormModal
+          key={contactFormKey}
+          forceCustomer
+          initial={contactFormKind === 'company'
+            ? blankCompanyContact({ name: contactFormSeed, tags: ['repair-client'] })
+            : blankIndividualContact({
+                name: contactFormSeed || indv.name,
+                phone: indv.phone,
+                email: indv.email,
+                tags: ['repair-client'],
+              })}
+          onClose={() => setShowContactForm(false)}
+          onSaved={(contact) => {
+            if (contact.type === 'company') {
+              setSelectedCompany(contact)
+              setCompanySearch('')
+              setSelectedPersonId('')
+              setShowNewPersonForm(false)
+              setClientType('company')
+            } else {
+              setIndv({
+                id: contact.id,
+                name: contact.name,
+                phone: contact.phone || '',
+                email: contact.email || '',
+              })
+              setClientType('individual')
+            }
+            setShowContactForm(false)
+          }}
+        />
+      )}
     </div>
   )
 }

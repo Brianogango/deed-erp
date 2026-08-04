@@ -70,10 +70,8 @@ export interface PurchaseCtxValue {
   newVendorId: string; setNewVendorId: (v: string) => void
   newVendorName: string; setNewVendorName: (v: string) => void
   showNewVendorModal: boolean; setShowNewVendorModal: (v: boolean) => void
-  newVendorForm: { name: string; email: string; phone: string; address: string; vatNumber: string; paymentTermsDays: string; creditLimit: string }
-  setNewVendorForm: (f: any) => void
+  openNewVendorForm: (seed?: string) => void
   handleCreateRFQ: () => void
-  handleCreateVendorForRFQ: () => Promise<void>
   // Add line
   showAddLine: boolean; setShowAddLine: (v: boolean) => void
   addProd: any; setAddProd: (p: any) => void

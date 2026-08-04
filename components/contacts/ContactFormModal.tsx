@@ -57,12 +57,14 @@ type Props = {
   onClose: () => void
   /** Called after a successful create/update with the saved contact. */
   onSaved: (contact: Contact) => void
-  /** Force customer flag (e.g. from Sales quote flow). */
+  /** Force customer flag (e.g. from Sales / Trade-in / Repair). */
   forceCustomer?: boolean
+  /** Force vendor flag (e.g. from Purchase RFQ). */
+  forceVendor?: boolean
 }
 
 /**
- * Full Contacts-module create/edit form — shared by Contacts and Sales quote creation.
+ * Full Contacts-module create/edit form — shared by Contacts and other modules.
  */
 export default function ContactFormModal({
   editId = null,
@@ -70,11 +72,13 @@ export default function ContactFormModal({
   onClose,
   onSaved,
   forceCustomer = false,
+  forceVendor = false,
 }: Props) {
   const { contacts, addContact, updateContact } = useCrmStore()
   const [form, setForm] = useState<ContactFormValues>(() => ({
     ...initial,
     ...(forceCustomer ? { isCustomer: true } : {}),
+    ...(forceVendor ? { isVendor: true } : {}),
   }))
   const [saving, setSaving] = useState(false)
 
@@ -99,7 +103,7 @@ export default function ContactFormModal({
       vatNumber: form.vatNumber,
       notes: form.notes,
       isCustomer: forceCustomer ? true : form.isCustomer,
-      isVendor: form.isVendor,
+      isVendor: forceVendor ? true : form.isVendor,
       tags: form.tags,
     }
     setForm(type === 'company'
@@ -115,6 +119,7 @@ export default function ContactFormModal({
         ...form,
         name: form.name.trim(),
         ...(forceCustomer ? { isCustomer: true } : {}),
+        ...(forceVendor ? { isVendor: true } : {}),
       }
       const contact = editId
         ? await updateContact(editId, payload)
@@ -251,6 +256,7 @@ export default function ContactFormModal({
             <input
               type="checkbox"
               checked={form.isVendor}
+              disabled={forceVendor}
               onChange={e => f('isVendor')(e.target.checked)}
               style={{ accentColor: 'var(--navy)', width: 14, height: 14 }}
             />
