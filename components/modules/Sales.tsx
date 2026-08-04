@@ -2235,7 +2235,7 @@ function NewQuotationForm({
                 </div>
                 {filteredCustomers.length > 0 && (
                   <div className="p-2 border-t border-[var(--border-lt)]">
-                    <button className="text-xs text-primary-600 font-semibold hover:underline" onClick={() => { setCustomerDropdownOpen(false); onCreateNewCustomer(customerSearch) }}>+ Register new customer</button>
+                    <button className="text-xs text-primary-600 font-semibold hover:underline" onClick={() => { setCustomerDropdownOpen(false); onCreateNewCustomer(customerSearch) }}>+ Create new contact</button>
                   </div>
                 )}
               </div>
