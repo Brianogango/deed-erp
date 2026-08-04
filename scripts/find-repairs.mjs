@@ -205,7 +205,7 @@ try {
     console.log(`\n--- Prisma repairs table count: ${prismaCount.rows[0]?.n ?? 0} ---`)
     if (since) {
       const prismaRecent = await pool.query(
-        `SELECT ref, status, device_type, serial_number, intake_date, created_at
+        `SELECT job_number, status, device_type, serial_number, intake_date, created_at
          FROM repairs
          WHERE intake_date >= $1::date OR created_at >= $1::timestamptz
          ORDER BY COALESCE(intake_date, created_at) DESC
