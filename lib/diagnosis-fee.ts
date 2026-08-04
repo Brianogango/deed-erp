@@ -8,6 +8,7 @@
  * - Fee is billed on the final invoice with the repair (walk-in & corporate)
  * - Optional early collection allowed; does not block diagnosis or repair start
  * - Warranty (full): exempt
+ * - Company mistake / goodwill (billingExempt): exempt
  * - Client declines diagnosis (Direct Repair / instructed scope): no fee
  * - VAT on diagnosis fee is always 0%
  *
@@ -64,6 +65,8 @@ export type DiagnosisFeeRepair = {
   customerBillingType?: CustomerBillingType | string | null
   underWarranty?: boolean
   warrantyCoverage?: 'full' | 'partial' | 'void' | string | null
+  /** Company mistake / goodwill — no customer fee or invoice. */
+  billingExempt?: boolean | null
 }
 
 export function isDiagnosisFeeLine(line: {
@@ -201,6 +204,7 @@ export function resolveCustomerBillingType(
  */
 export function shouldChargeDiagnosisFee(repair: DiagnosisFeeRepair): boolean {
   if (repair.repairPath === 'direct_repair') return false
+  if (repair.billingExempt) return false
   if (repair.diagnosisFeeStatus === 'waived' || repair.diagnosisFeeStatus === 'not_applicable') return false
   if (repair.underWarranty && repair.warrantyCoverage === 'full') return false
   if (!isDiagnosisFeePolicyInEffect(repair.intakeDate)) return false
@@ -252,6 +256,14 @@ export function resolveDiagnosisFee(
   const meta = billingMeta(repair)
   if (repair.repairPath === 'direct_repair') {
     return { amount: 0, status: 'not_applicable', tier: normalizeDeviceTier(repair.deviceTier), ...meta }
+  }
+  if (repair.billingExempt) {
+    return {
+      amount: 0,
+      status: 'not_applicable',
+      tier: normalizeDeviceTier(repair.deviceTier),
+      ...meta,
+    }
   }
   if (repair.diagnosisFeeStatus === 'waived') {
     return {

@@ -27,6 +27,15 @@ import { normalizeClientRole } from '@/lib/auth/access'
 import { readGuardedImageAsDataUrl } from '@/lib/client-image-guard'
 import { repairProgressOrderFor } from '@/lib/repair-progress'
 import { isDirectRepairPath, isQuoteDeclinedReopenable, quotableStatusesForPath, repairPathLabel, returnableStatusesForPath, startableStatusesForPath } from '@/lib/repair-path'
+import {
+  BILLING_EXEMPT_REASON_LABELS,
+  billingExemptLabel,
+  canMarkRepairBillingExempt,
+  isRepairBillingExempt,
+  isRepairNoCharge,
+  startableStatusesWhenBillingExempt,
+  type BillingExemptReason,
+} from '@/lib/repair-billing-exempt'
 import { resolveDiagnosisFee, shouldChargeDiagnosisFee } from '@/lib/diagnosis-fee'
 
 const PROC_COLORS = {
@@ -111,13 +120,16 @@ export default function RepairDetailView() {
     markPartsArrived, closeRepairJob, markUnrepairable,
   } = useRepair()
 
-  const { invoices, setModule, outboundReleases, initRelease, serials, reviewPortalPayment, leaveDeviceWithDeed, convertRetainedRepairToDonation, convertRetainedRepairToBuyBack, createTradeInFromRepair, waiveDiagnosisFee, markDiagnosisFeePaid } = useRepairStore()
+  const { invoices, setModule, outboundReleases, initRelease, serials, reviewPortalPayment, leaveDeviceWithDeed, convertRetainedRepairToDonation, convertRetainedRepairToBuyBack, createTradeInFromRepair, waiveDiagnosisFee, markDiagnosisFeePaid, markRepairNoCharge } = useRepairStore()
 
   const [showOrcPanel, setShowOrcPanel] = useState(false)
   const [showPaymentRejectInput, setShowPaymentRejectInput] = useState(false)
   const [paymentRejectReason, setPaymentRejectReason] = useState('')
   const [waiveFeeReason, setWaiveFeeReason] = useState('')
   const [showWaiveFeeModal, setShowWaiveFeeModal] = useState(false)
+  const [showNoChargeModal, setShowNoChargeModal] = useState(false)
+  const [noChargeReason, setNoChargeReason] = useState('company_mistake')
+  const [noChargeNotes, setNoChargeNotes] = useState('')
 
   // Find existing ORC for this repair
   const repairOrc = outboundReleases?.find(o => o.repairId === r?.id && o.status !== 'voided')
@@ -158,15 +170,22 @@ export default function RepairDetailView() {
     && r.repairPath !== 'direct_repair'
     && ['diagnosed','awaiting_approval','approved','awaiting_parts','in_repair','qc','ready'].includes(r.status)
     && !pendingOutsourceJob
+  const billingExempt = isRepairBillingExempt(r)
+  const noCharge = isRepairNoCharge(r)
   const canQuote    = quotableStatusesForPath(r.repairPath).includes(r.status)
     && (isDirectRepairPath(r.repairPath) || !!(r.diagnosis?.findings || r.diagnosis?.faultDescription))
     && (isMyRepair || ['director','admin_officer','technical_lead','sales_rep','finance_officer'].includes(currentUser?.role ?? ''))
     && !r.diagnosisStopped
+    && !billingExempt
     && !pendingOutsourceJob
     // Lock quote editing once device is marked ready-for-collection or has been picked up.
     // `declined` is intentionally allowed — staff may revise and re-send another quote.
     && !['ready','invoiced','verified_released','delivered','closed','cancelled','unrepairable','returned','retained'].includes(r.status)
-  const canStart      = startableStatusesForPath(r.repairPath).includes(r.status) && isMyRepair && !pendingOutsourceJob
+  const canStart      = (
+    billingExempt
+      ? startableStatusesWhenBillingExempt()
+      : startableStatusesForPath(r.repairPath)
+  ).includes(r.status) && isMyRepair && !pendingOutsourceJob
   const canComplete   = r.status === 'in_repair' && isMyRepair && !pendingOutsourceJob
   // QC: director/lead always; technician only if they did NOT work on this repair
   const canPerformQA  = r.status === 'qc'
@@ -187,7 +206,7 @@ export default function RepairDetailView() {
   // Managers (director/admin officer/lead tech) can correct intake details until the job is terminal
   const canEditDetails        = ['director', 'admin_officer', 'technical_lead'].includes(currentRole) && !TERMINAL.includes(r.status)
   // Customer declines repair after diagnosis — close at diagnosis stage with the diagnosis fee
-  const canStopAtDiagnosis    = !r.diagnosisStopped && !!r.diagnosis && !isDirectRepairPath(r.repairPath)
+  const canStopAtDiagnosis    = !billingExempt && !r.diagnosisStopped && !!r.diagnosis && !isDirectRepairPath(r.repairPath)
   const feeResolved = resolveDiagnosisFee(r, systemSettings)
   const feeApplies = shouldChargeDiagnosisFee(r) && feeResolved.amount > 0
   const canWaiveDiagnosisFee  = ['director', 'technical_lead', 'admin_officer', 'finance_officer'].includes(currentRole)
@@ -207,9 +226,11 @@ export default function RepairDetailView() {
     && r.diagnosisFeeStatus !== 'invoiced'
     && !r.diagnosisFeePaidAt
     && (!TERMINAL.includes(r.status) || isQuoteDeclinedReopenable(r.status) || r.diagnosisStopped)
+  const canMarkNoCharge = canMarkRepairBillingExempt(currentRole, r) && !pendingOutsourceJob
   const canDeclineQuote = ['director', 'admin_officer', 'technical_lead', 'sales_rep', 'finance_officer'].includes(currentRole)
     && !!r.quote
     && ['awaiting_approval', 'diagnosed', 'approved'].includes(r.status)
+    && !billingExempt
     && !pendingOutsourceJob
   // Return the device unrepaired (incl. after quote decline / unrepairable)
   const canReturnDevice       = ['director', 'admin_officer', 'technical_lead'].includes(currentRole)
@@ -229,7 +250,7 @@ export default function RepairDetailView() {
     && ['technical_lead', 'director', 'inventory_officer'].includes(currentRole)
     && !pendingOutsourceJob
   const canInvoice = r.status === 'ready'
-    && !r.underWarranty
+    && !noCharge
     && !r.invoiceId
     && ['director', 'finance_officer', 'admin_officer'].includes(currentUser?.role ?? '')
     && !pendingOutsourceJob
@@ -255,7 +276,7 @@ export default function RepairDetailView() {
     : isQuoteDeclinedReopenable(r.status) ? 'Customer declined this quote — revise and re-send, or return the device'
     : canDiagnose ? 'Log your technical diagnosis to proceed'
     : canMarkPartsArrived ? 'Confirm parts have arrived so the technician can start'
-    : canStart     ? 'Start the repair'
+    : canStart     ? (billingExempt ? 'No-charge job — start the repair (quote & billing skipped)' : 'Start the repair')
     : canComplete  ? 'Mark repair complete to submit for QA'
     : canPerformQA ? 'Perform QC check — repair is ready for testing'
     : canInvoice   ? 'Generate the customer invoice before release'
@@ -264,6 +285,7 @@ export default function RepairDetailView() {
     : canCloseJob  ? 'Close the job after collection'
     : r.status === 'awaiting_parts' ? 'Parts are being sourced — monitor procurement below'
     : r.status === 'diagnosed' && !hasDiagnosis ? 'Diagnosis stage has no findings — log diagnosis to continue'
+    : r.status === 'diagnosed' && billingExempt ? 'No-charge job — assign/start repair without quoting'
     : r.status === 'diagnosed' ? 'Generate or edit the quote to continue past diagnosis'
     : null
 
@@ -405,6 +427,14 @@ export default function RepairDetailView() {
               >
                 {repairPathLabel(r.repairPath)}
               </span>
+              {billingExempt && (
+                <span
+                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wide border bg-rose-50 text-rose-700 border-rose-200"
+                  title={r.billingExemptNotes || 'No customer quote or invoice'}
+                >
+                  No-charge · {billingExemptLabel(r) || 'Company mistake'}
+                </span>
+              )}
             </div>
           </div>
 
@@ -500,6 +530,7 @@ export default function RepairDetailView() {
                 { id: 'stop', label: 'Stop at diagnosis', onClick: () => setShowStopDiagnosisModal(true), hidden: !canStopAtDiagnosis },
                 { id: 'mark_fee_paid', label: 'Mark diagnosis fee paid (early)', onClick: () => markDiagnosisFeePaid(r.id), hidden: !canMarkDiagnosisFeePaid },
                 { id: 'waive_fee', label: 'Waive diagnosis fee', onClick: () => { setWaiveFeeReason(''); setShowWaiveFeeModal(true) }, hidden: !canWaiveDiagnosisFee },
+                { id: 'no_charge', label: 'Mark no-charge (company mistake)', onClick: () => { setNoChargeReason('company_mistake'); setNoChargeNotes(''); setShowNoChargeModal(true) }, hidden: !canMarkNoCharge },
                 { id: 'return', label: isQuoteDeclinedReopenable(r.status) ? 'Return device (after decline)' : 'Return device', onClick: () => setShowReturnModal(true), hidden: !canReturnDevice },
                 { id: 'leave', label: 'Customer leaves device', onClick: () => { setLeaveDeviceNotes(''); setLeaveConvertMode('donation'); setShowLeaveDeviceModal(true) }, hidden: !canLeaveDeviceWithDeed },
                 { id: 'tradein', label: 'Trade-in after evaluation', onClick: () => {
@@ -738,6 +769,23 @@ export default function RepairDetailView() {
                     </div>
                   )}
                 </div>
+                {billingExempt && (
+                  <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-[rgba(225,29,72,0.08)] border border-rose-500/30">
+                    <div className="w-7 h-7 rounded-lg bg-rose-600 flex items-center justify-center shrink-0">
+                      <Fa icon={faBan} className="text-white text-xs" />
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-black text-rose-700 uppercase tracking-widest">
+                        No-charge — {billingExemptLabel(r) || 'Company mistake'}
+                      </p>
+                      <p className="text-[10px] text-rose-800 mt-0.5">
+                        Quote approval and customer invoicing skipped.
+                        {r.billingExemptBy ? ` Marked by ${r.billingExemptBy}.` : ''}
+                        {r.billingExemptNotes ? ` ${r.billingExemptNotes}` : ''}
+                      </p>
+                    </div>
+                  </div>
+                )}
                 {r.underWarranty && (() => {
                   const cov = r.warrantyCoverage
                   if (cov === 'full') return (
@@ -1845,6 +1893,51 @@ export default function RepairDetailView() {
                 }}
               >
                 Confirm waive
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {showNoChargeModal && (
+        <Modal title="Mark No-Charge" subtitle={r.ref} onClose={() => setShowNoChargeModal(false)} width={460}>
+          <div className="flex flex-col gap-4">
+            <p className="text-[11px] text-[var(--text-2)] leading-relaxed">
+              Use for company-mistake rework or goodwill. This skips customer quote approval and invoicing,
+              zeroes the customer total, and sets the diagnosis fee to not applicable. Parts may still be
+              requested internally.
+            </p>
+            <label className="text-[10px] font-black uppercase tracking-widest text-[var(--text-4)]">Reason</label>
+            <select
+              className="form-input"
+              value={noChargeReason}
+              onChange={e => setNoChargeReason(e.target.value)}
+            >
+              {(Object.keys(BILLING_EXEMPT_REASON_LABELS) as BillingExemptReason[]).map(key => (
+                <option key={key} value={key}>{BILLING_EXEMPT_REASON_LABELS[key]}</option>
+              ))}
+            </select>
+            <label className="text-[10px] font-black uppercase tracking-widest text-[var(--text-4)]">Notes (required)</label>
+            <textarea
+              className="form-input min-h-[88px]"
+              value={noChargeNotes}
+              onChange={e => setNoChargeNotes(e.target.value)}
+              placeholder="e.g. Comeback — screen still flickering after our last repair; Deed error"
+            />
+            <div className="flex justify-end gap-2">
+              <button className="btn-secondary" onClick={() => setShowNoChargeModal(false)}>Cancel</button>
+              <button
+                className="btn-primary"
+                onClick={() => {
+                  markRepairNoCharge(r.id, {
+                    reason: noChargeReason as BillingExemptReason,
+                    notes: noChargeNotes,
+                  })
+                  setShowNoChargeModal(false)
+                  setNoChargeNotes('')
+                }}
+              >
+                Confirm no-charge
               </button>
             </div>
           </div>

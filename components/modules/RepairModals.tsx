@@ -1101,7 +1101,9 @@ export function ReturnModal({ repair, onClose }: { repair: RepairOrder, onClose:
             {afterDecline
               ? <>Returning the device after the customer declined the quote. Job moves to <strong>Returned</strong>.</>
               : <>Returning the device without completing repairs. This will move the job to <strong>Returned</strong> status.</>}
-            {feeStillDue ? (
+            {repair.billingExempt ? (
+              <> This job is <strong>no-charge</strong> — no diagnosis fee is due.</>
+            ) : feeStillDue ? (
               <> Diagnosis fee of <strong>KES {resolved.amount.toLocaleString('en-KE')}</strong> still applies.</>
             ) : null}
           </p>

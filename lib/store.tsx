@@ -93,6 +93,15 @@ import {
   startableStatusesForPath,
 } from '@/lib/repair-path'
 import {
+  BILLING_EXEMPT_REASON_LABELS,
+  canMarkRepairBillingExempt,
+  isRepairBillingExempt,
+  isRepairNoCharge,
+  normalizeBillingExemptReason,
+  startableStatusesWhenBillingExempt,
+  type BillingExemptReason,
+} from '@/lib/repair-billing-exempt'
+import {
   ensureDiagnosisFeeInQuoteLines,
   isDiagnosisFeeLine,
   isDiagnosisFeeSettled,
@@ -1514,6 +1523,16 @@ export interface RepairOrder {
   serialWarrantyExceptionNotes?: string
   clientCausedDamage?: boolean
   clientDamageReason?: string
+
+  /**
+   * Company mistake / goodwill — skip customer quote approval and invoicing.
+   * Distinct from warranty (customer entitlement). Manager-only; audited.
+   */
+  billingExempt?: boolean
+  billingExemptReason?: 'company_mistake' | 'goodwill' | 'other'
+  billingExemptNotes?: string
+  billingExemptBy?: string
+  billingExemptAt?: string
   
   // Assignment
   assignedTechnicianId?: string
@@ -3134,6 +3153,14 @@ export interface AppState {
   stopAtDiagnosis: (repairId: string) => void          // Close job at diagnosis stage, charge diagnosis fee
   markDiagnosisFeePaid: (repairId: string, method?: string) => void
   waiveDiagnosisFee: (repairId: string, reason: string) => void
+  /**
+   * Mark a repair as no-charge (company mistake / goodwill).
+   * Skips customer quote approval and invoicing. Manager-only; audited.
+   */
+  markRepairNoCharge: (
+    repairId: string,
+    opts: { reason: BillingExemptReason; notes: string },
+  ) => void
   generateRepairQuote: (repairId: string, lines: Omit<RepairQuoteLine, 'id' | 'reserved'>[], applyVat?: boolean) => void
   sendQuoteToCustomer: (repairId: string) => void
   approveRepairQuote: (repairId: string, approved: boolean, reason?: string) => void
@@ -3385,6 +3412,7 @@ export type RepairStoreState = Pick<AppState,
   | 'stopAtDiagnosis'
   | 'markDiagnosisFeePaid'
   | 'waiveDiagnosisFee'
+  | 'markRepairNoCharge'
   | 'generateRepairQuote'
   | 'approveRepairQuote'
   | 'startRepair'
@@ -5737,6 +5765,7 @@ export function StoreProvider({
     stopAtDiagnosis: (...args: Parameters<AppState['stopAtDiagnosis']>) => storeCtxRef.current!.stopAtDiagnosis(...args),
     markDiagnosisFeePaid: (...args: Parameters<AppState['markDiagnosisFeePaid']>) => storeCtxRef.current!.markDiagnosisFeePaid(...args),
     waiveDiagnosisFee: (...args: Parameters<AppState['waiveDiagnosisFee']>) => storeCtxRef.current!.waiveDiagnosisFee(...args),
+    markRepairNoCharge: (...args: Parameters<AppState['markRepairNoCharge']>) => storeCtxRef.current!.markRepairNoCharge(...args),
     generateRepairQuote: (...args: Parameters<AppState['generateRepairQuote']>) => storeCtxRef.current!.generateRepairQuote(...args),
     approveRepairQuote: (...args: Parameters<AppState['approveRepairQuote']>) => storeCtxRef.current!.approveRepairQuote(...args),
     startRepair: (...args: Parameters<AppState['startRepair']>) => storeCtxRef.current!.startRepair(...args),
@@ -12406,17 +12435,21 @@ const storeCtx: AppState = {
         subtotal: l.subtotal, serialIds: [] as string[],
       }))
 
-      // Full warranty = company pays everything; partial/void/none = client pays quote total
+      // Full warranty / billing-exempt = company pays; Direct Repair auto-approves
       const isFullWarranty = repair.underWarranty && repair.warrantyCoverage === 'full'
+      const isBillingExempt = isRepairBillingExempt(repair)
+      const isNoCharge = isFullWarranty || isBillingExempt
       const isDirectRepair = isDirectRepairPath(repair.repairPath)
-      const chargeTotal = isFullWarranty ? 0 : quote.total
-      // Full warranty + Direct Repair quotes are auto-approved — no client approval gate
-      const quoteStatus: RepairStatus = (isFullWarranty || isDirectRepair) ? 'approved' : 'awaiting_approval'
-      if (isFullWarranty || isDirectRepair) {
+      const chargeTotal = isNoCharge ? 0 : quote.total
+      // Full warranty + billing-exempt + Direct Repair quotes are auto-approved — no client approval gate
+      const quoteStatus: RepairStatus = (isNoCharge || isDirectRepair) ? 'approved' : 'awaiting_approval'
+      if (isNoCharge || isDirectRepair) {
         quote.approvedDate = now()
-        quote.approvedBy = isFullWarranty
-          ? 'Warranty (auto-approved)'
-          : `Direct Repair path (auto-approved by ${user.name})`
+        quote.approvedBy = isBillingExempt
+          ? `No-charge (${normalizeBillingExemptReason(repair.billingExemptReason)}) — auto-approved`
+          : isFullWarranty
+            ? 'Warranty (auto-approved)'
+            : `Direct Repair path (auto-approved by ${user.name})`
       }
 
       if (isUpdate && linkedSaleOrderId) {
@@ -12490,7 +12523,7 @@ const storeCtx: AppState = {
         opportunityName: `Repair — ${repair.ref}`,
         ownerId: user.id,
         ownerName: user.name,
-        status: isFullWarranty ? 'accepted' : 'sent',
+        status: isFullWarranty || isBillingExempt ? 'accepted' : 'sent',
         source: 'repair',
         repairId: repair.id,
         repairRef: repair.ref,
@@ -12614,12 +12647,12 @@ const storeCtx: AppState = {
         diagnosisFee: chargeFee ? resolvedFee.amount : (r.diagnosisFeeStatus === 'waived' ? 0 : r.diagnosisFee),
         diagnosisFeeStatus: chargeFee
           ? (r.diagnosisFeeStatus === 'paid' || r.diagnosisFeePaidAt ? 'paid' : 'applicable')
-          : (isDirectRepairPath(r.repairPath) || (r.underWarranty && r.warrantyCoverage === 'full') ? 'not_applicable' : r.diagnosisFeeStatus),
+          : (isDirectRepairPath(r.repairPath) || isNoCharge ? 'not_applicable' : r.diagnosisFeeStatus),
         diagnosisFeeBilling: r.diagnosisFeeBilling ?? resolvedFee.billing,
         customerBillingType: r.customerBillingType ?? resolvedFee.customerType,
         deviceTier: resolvedFee.tier ?? r.deviceTier,
         status: quoteStatus,
-        quoteApprovalDeadline: (isFullWarranty || isDirectRepair) ? undefined : quote.validUntil,
+        quoteApprovalDeadline: (isNoCharge || isDirectRepair) ? undefined : quote.validUntil,
         ...(linkedSaleOrderId ? { saleOrderId: linkedSaleOrderId, saleOrderRef: linkedSaleOrderRef } : {}),
         ...(salesQuoteId ? { salesQuoteId, salesQuoteRef } : {}),
         ...(invoiceIdToUpdate ? { invoiceId: invoiceIdToUpdate } : {}),
@@ -13123,11 +13156,15 @@ const storeCtx: AppState = {
       if (!isAssignedTech) {
         showToast('Only the assigned technician can start the repair', 'error'); return
       }
-      // Diagnosis First needs quote approval; Direct Repair may start from assigned
-      const validStartStatuses = startableStatusesForPath(repair.repairPath) as RepairStatus[]
+      // Diagnosis First needs quote approval; Direct Repair / billing-exempt may start earlier
+      const validStartStatuses = (
+        isRepairBillingExempt(repair)
+          ? startableStatusesWhenBillingExempt()
+          : startableStatusesForPath(repair.repairPath)
+      ) as RepairStatus[]
       if (!validStartStatuses.includes(repair.status)) {
         showToast(
-          isDirectRepairPath(repair.repairPath)
+          isRepairBillingExempt(repair) || isDirectRepairPath(repair.repairPath)
             ? 'Repair cannot start at this stage'
             : 'Client must approve the quote before repair can start',
           'error',
@@ -13466,7 +13503,7 @@ const storeCtx: AppState = {
       if (repair.status === 'pending_verification') {
         missingSteps.push('intake verification')
       }
-      const requiresFullWorkflow = !repair.diagnosisStopped && repair.repairPath !== 'direct_repair'
+      const requiresFullWorkflow = !repair.diagnosisStopped && repair.repairPath !== 'direct_repair' && !isRepairBillingExempt(repair)
       if (requiresFullWorkflow && !repair.diagnosis) {
         missingSteps.push('diagnosis')
       }
@@ -13640,7 +13677,7 @@ const storeCtx: AppState = {
         return
       }
       
-      if (!repair.underWarranty && !repair.invoiceId) {
+      if (!isRepairNoCharge(repair) && !repair.invoiceId) {
         showToast('Generate invoice before closing', 'error')
         return
       }
@@ -13662,8 +13699,13 @@ const storeCtx: AppState = {
       if (!repair) return null
       if (blockIfOutsourced(repairId, 'invoice this repair')) return null
       
-      if (repair.underWarranty) {
-        showToast('No invoice needed for warranty repairs', 'info')
+      if (isRepairNoCharge(repair)) {
+        showToast(
+          isRepairBillingExempt(repair)
+            ? 'No invoice — this job is marked no-charge (company mistake / goodwill)'
+            : 'No invoice needed for warranty repairs',
+          'info',
+        )
         return null
       }
       
@@ -14281,7 +14323,7 @@ const storeCtx: AppState = {
           diagnosisFeeWaivedBy: user.name,
           diagnosisFeeWaivedReason: reason.trim(),
           quote: nextQuote,
-          total: r.underWarranty && r.warrantyCoverage === 'full'
+          total: isRepairNoCharge(r)
             ? 0
             : (r.partsUsed?.reduce((a, x) => a + x.qty * x.price, 0) ?? 0) + (r.laborCost || 0),
           notes: `${r.notes || ''}\n[Diagnosis fee waived by ${user.name}] ${reason.trim()}`.trim(),
@@ -14289,6 +14331,112 @@ const storeCtx: AppState = {
       }))
       addAuditLog('waive_diagnosis_fee', repairId, `Diagnosis fee waived by ${user.name}: ${reason.trim()}`)
       showToast('Diagnosis fee waived', 'success')
+    },
+
+    markRepairNoCharge: (repairId, opts) => {
+      const user = currentUser()
+      if (!user) return
+      const repair = repairs.find(r => r.id === repairId)
+      if (!repair) {
+        showToast('Repair not found', 'error')
+        return
+      }
+      if (!canMarkRepairBillingExempt(normalizeClientRole(user.role), repair)) {
+        showToast(
+          isRepairBillingExempt(repair)
+            ? 'This job is already marked no-charge'
+            : 'Only a manager can mark a job as no-charge, and only while it is still open',
+          'error',
+        )
+        return
+      }
+      const reason = normalizeBillingExemptReason(opts?.reason)
+      const notes = String(opts?.notes ?? '').trim()
+      if (!notes) {
+        showToast('Enter notes explaining why this job is no-charge', 'error')
+        return
+      }
+      if (reason === 'other' && notes.length < 8) {
+        showToast('For “Other”, add a clearer explanation in the notes', 'error')
+        return
+      }
+      if (blockIfOutsourced(repairId, 'mark this repair no-charge')) return
+
+      const markedAt = now()
+      const reasonLabel = BILLING_EXEMPT_REASON_LABELS[reason]
+      const nextStatus: RepairStatus =
+        ['awaiting_approval', 'declined', 'diagnosed'].includes(repair.status)
+          ? 'approved'
+          : repair.status
+
+      const existingInv = repair.invoiceId
+        ? invRef.current.find(i => i.id === repair.invoiceId)
+        : undefined
+      const clearInvoiceLink = !!existingInv && !['paid', 'partially_paid'].includes(String(existingInv.status))
+
+      // Cancel any unpaid customer invoice — this job must not bill the client
+      if (clearInvoiceLink && repair.invoiceId) {
+        setInvoices(p => p.map(inv => {
+          if (inv.id !== repair.invoiceId) return inv
+          const updated = { ...inv, status: 'cancelled' as const }
+          sync(`/api/invoices/${inv.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+          return updated
+        }))
+      }
+
+      setRepairs(p => p.map(r => {
+        if (r.id !== repairId) return r
+        let nextQuote = r.quote
+        if (r.quote) {
+          const nextLines = (r.quote.lines ?? []).filter(l => !isDiagnosisFeeLine(l))
+          const sub = nextLines.reduce((s, l) => s + l.subtotal, 0)
+          nextQuote = {
+            ...r.quote,
+            lines: nextLines,
+            subtotal: sub,
+            total: sub + (r.quote.tax || 0),
+            approvedDate: r.quote.approvedDate || markedAt,
+            approvedBy: r.quote.approvedBy || `No-charge (${reason}) — auto-approved`,
+          }
+        }
+        return {
+          ...r,
+          billingExempt: true,
+          billingExemptReason: reason,
+          billingExemptNotes: notes,
+          billingExemptBy: user.name,
+          billingExemptAt: markedAt,
+          diagnosisFee: 0,
+          diagnosisFeeStatus: 'not_applicable' as const,
+          total: 0,
+          quote: nextQuote,
+          quoteApprovalDeadline: undefined,
+          status: nextStatus,
+          ...(clearInvoiceLink ? { invoiceId: undefined, invoiceDate: undefined } : {}),
+          notes: `${r.notes || ''}\n[No-charge — ${reasonLabel} by ${user.name}] ${notes}`.trim(),
+          statusHistory: [
+            ...(r.statusHistory ?? []),
+            {
+              status: nextStatus,
+              date: markedAt,
+              note: `Marked no-charge (${reasonLabel}): ${notes}`,
+              by: user.name,
+            },
+          ],
+        }
+      }))
+
+      addAuditLog(
+        'mark_repair_no_charge',
+        repairId,
+        `No-charge (${reasonLabel}) by ${user.name}: ${notes}`,
+      )
+      showToast(
+        nextStatus === 'approved' && repair.status !== 'approved'
+          ? `${repair.ref} marked no-charge — quote skipped, ready to repair`
+          : `${repair.ref} marked no-charge — no quote or invoice for the customer`,
+        'success',
+      )
     },
 
     markUnrepairable: async (repairId, reason) => {
