@@ -417,7 +417,7 @@ export default function DataTable<T>({
                   sortable: isColumnSortable(c),
                   sortDirection: sort?.key === c.key ? sort.direction : null,
                   onSortClick: isColumnSortable(c)
-                    ? () => setSort(prev => nextSortState(prev, c.key))
+                    ? () => setSort(prev => nextSortState(prev, c.key, defaultSort))
                     : undefined,
                 })),
                 ...(rowActions ? [{ label: 'Actions', width: '120px', minWidth: 120, sticky: 'right' as const }] : []),

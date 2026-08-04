@@ -5,6 +5,7 @@ import { useRepair } from './repair/RepairContext'
 import { STATUS_LABELS, STATUS_COLORS } from './repair-config'
 import { fmtKes, fmtDate } from '@/lib/store'
 import { printRepairSticker } from '@/lib/repair-sticker'
+import { sortRepairsNewestFirst } from '@/lib/repair-list-sort'
 import { ModuleHeader } from '@/components/ui'
 import { PrimaryActionButton, StatusBadge } from '@/components/erp'
 import { Fa } from '@/components/icons'
@@ -193,7 +194,8 @@ export default function RepairClientJobs({ onNewIntake, onSelect }: { onNewIntak
     if (priorityFilter !== 'all') list = list.filter(r => r.priority === priorityFilter)
     if (dateFrom) list = list.filter(r => new Date(r.intakeDate) >= new Date(dateFrom))
     if (dateTo)   list = list.filter(r => new Date(r.intakeDate) <= new Date(dateTo + 'T23:59:59'))
-    return list
+    // Always newest-first before DataTable pagination — survives cleared column sort.
+    return sortRepairsNewestFirst(list)
   }, [visibleRepairs, searchQuery, statusFilter, techFilter, pathFilter, priorityFilter, dateFrom, dateTo])
 
   const selectedStatusLabel =
@@ -379,6 +381,7 @@ export default function RepairClientJobs({ onNewIntake, onSelect }: { onNewIntak
     {
       key: 'intakeDate', label: 'Intake Date', priority: 3, width: '100px',
       render: r => <span className="text-[11px] font-bold text-[var(--text-2)] tabular-nums">{fmtDate(r.intakeDate)}</span>,
+      sortValue: r => r.intakeDate || r.createdDate || '',
       exportValue: r => r.intakeDate,
     },
     {
