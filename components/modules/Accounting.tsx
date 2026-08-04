@@ -31,6 +31,7 @@ import {
   fmtDate,
 } from '@/lib/store'
 import { downloadPdf, printPdf, PdfLine } from '@/lib/pdf'
+import { downloadInvoicePdf } from '@/components/modules/invoice-pdf'
 import { CO } from '@/lib/company'
 import {
   invoiceDocState,
@@ -262,6 +263,7 @@ function AccountingContent() {
     purchaseOrders,
     deposits,
     companySettings,
+    saleOrders,
     getDocumentPaymentDetails,
     setDocumentPaymentDetails,
   } = appState
@@ -396,6 +398,7 @@ function AccountingContent() {
   const [invSearch, setInvSearch] = useState('')
   const [selectedInvIds, setSelectedInvIds] = useState<Set<string>>(new Set())
   const [showBulkPayModal, setShowBulkPayModal] = useState(false)
+  const [bulkDownloading, setBulkDownloading] = useState(false)
   const [payAmount, setPayAmount] = useState('')
   const [payMethod, setPayMethod] = useState('mpesa')
   const [payBankAccountId, setPayBankAccountId] = useState('')
@@ -796,6 +799,11 @@ function AccountingContent() {
   }
 
   const handleEditInvoice = (inv: Invoice) => {
+    if (inv.status !== 'draft') {
+      showToast('Reset to draft first, then edit and save.', 'info')
+      router.push(`/finance/invoices/${inv.id}`)
+      return
+    }
     setEditingInvId(inv.id)
     setNewPartnerId(inv.partnerId)
     setNewPartnerName(inv.partnerName)
@@ -833,6 +841,17 @@ function AccountingContent() {
     const inv = allInvoices.find(i => i.id === editId)
     if (!inv) return // wait until invoices hydrate — do not strip ?edit
 
+    if (inv.status !== 'draft') {
+      handledEditRef.current = editId
+      showToast('Reset to draft first, then edit and save.', 'info')
+      const params = new URLSearchParams(searchParams.toString())
+      params.delete('edit')
+      const qs = params.toString()
+      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false })
+      router.push(`/finance/invoices/${inv.id}`)
+      return
+    }
+
     handledEditRef.current = editId
     handleEditInvoice(inv)
     const nextTab = inv.type === 'customer_invoice' ? 'invoices' : 'bills'
@@ -845,6 +864,34 @@ function AccountingContent() {
     params.delete('report')
     router.replace(`${pathname}?${params.toString()}`, { scroll: false })
   }, [searchParams, allInvoices, pathname, router]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const downloadSelectedInvoices = async (rows: Invoice[]) => {
+    if (!rows.length) return
+    setBulkDownloading(true)
+    let ok = 0
+    try {
+      for (const inv of rows) {
+        try {
+          await downloadInvoicePdf(
+            inv,
+            saleOrders,
+            contacts,
+            companySettings,
+            bankAccounts,
+            inv.type === 'customer_invoice' ? getDocumentPaymentDetails(inv.id) : undefined,
+          )
+          ok += 1
+          // Brief gap so the browser does not coalesce / block successive saves.
+          await new Promise(r => setTimeout(r, 250))
+        } catch {
+          showToast(`Could not download ${displayDocRef(inv.ref)}`, 'error')
+        }
+      }
+      if (ok > 0) showToast(`Downloaded ${ok} PDF${ok === 1 ? '' : 's'}`, 'success')
+    } finally {
+      setBulkDownloading(false)
+    }
+  }
 
   const handleBillFile = async (file: File | null) => {
     if (!file) return
@@ -991,6 +1038,11 @@ function AccountingContent() {
     const vatRate = applyVat ? invoiceVatRate : 0
 
     if (editingInvId) {
+      const existing = allInvoices.find(i => i.id === editingInvId)
+      if (existing && existing.status !== 'draft') {
+        showToast('Reset to draft first, then edit and save.', 'error')
+        return
+      }
       const builtLines = invoicePreview.lines.map(l => ({
         id: uid(),
         description: l.description,
@@ -1242,9 +1294,19 @@ function AccountingContent() {
                   return (
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="text-xs font-semibold text-[var(--text-2)]">
-                        {payable.length} payable · {fmtKes(totalOutstanding)} outstanding
+                        {rows.length} selected
+                        {payable.length > 0 ? ` · ${payable.length} payable · ${fmtKes(totalOutstanding)} outstanding` : ''}
                       </span>
                       <button type="button" className="btn-ghost text-xs" onClick={clear}>Clear</button>
+                      <button
+                        type="button"
+                        className="btn-secondary text-xs flex items-center gap-1.5"
+                        disabled={rows.length === 0 || bulkDownloading}
+                        onClick={() => { void downloadSelectedInvoices(rows) }}
+                      >
+                        <Fa icon={faDownload} className="text-[10px]" />
+                        {bulkDownloading ? 'Downloading…' : `Download PDF${rows.length !== 1 ? 's' : ''}`}
+                      </button>
                       <button
                         type="button"
                         className="btn-primary text-xs"

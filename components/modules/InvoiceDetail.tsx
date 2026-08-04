@@ -850,7 +850,7 @@ export default function InvoiceDetail() {
       {/* Reset confirmation */}
       {showResetDraft && (
         <Confirm
-          message={`Reset this ${docLabel.toLowerCase()} to draft so it can be edited? Any posting journals will be reversed.`}
+          message={`Reset this ${docLabel.toLowerCase()} to draft so it can be edited and saved? Any posting journals will be reversed.`}
           confirmLabel="Reset to Draft"
           confirmColor="bg-amber-600 hover:bg-amber-700"
           onConfirm={() => {

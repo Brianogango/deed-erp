@@ -4,6 +4,7 @@ import {
   normalizeSaleOrderForClient,
   legacyApprovalFromStatus,
   isQuotationStage,
+  isQuotationDraft,
   saleOrderLooksConfirmed,
   remainingUndeliveredByProduct,
   openDeliveryDemandByProduct,
@@ -181,6 +182,13 @@ describe('sale order status vocabulary', () => {
     expect(isQuotationStage('quotation_sent')).toBe(true)
     expect(isQuotationStage('sale')).toBe(false)
     expect(isQuotationStage('cancelled')).toBe(false)
+  })
+
+  it('treats only quotation as an editable draft', () => {
+    expect(isQuotationDraft('quotation')).toBe(true)
+    expect(isQuotationDraft('quotation_sent')).toBe(false)
+    expect(isQuotationDraft('sale')).toBe(false)
+    expect(isQuotationDraft('cancelled')).toBe(false)
   })
 })
 
