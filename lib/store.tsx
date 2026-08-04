@@ -2927,7 +2927,7 @@ export interface AppState {
 
   // Legacy Contacts (backward compatibility)
   addContact: (c: Omit<Contact, 'id' | 'createdAt'>) => Promise<Contact>
-  updateContact: (id: string, p: Partial<Contact>) => Promise<void>
+  updateContact: (id: string, p: Partial<Contact>) => Promise<Contact>
   deleteContact: (id: string) => Promise<void>
 
   // Chart of Accounts
@@ -7768,23 +7768,26 @@ const storeCtx: AppState = {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(p),
       })
-      if (res.ok) {
-        const updated = await res.json()
-        setContacts(prev => prev.map(c => c.id === id ? updated : c))
-        const phone = String(updated.phone || updated.mobile || '').trim()
-        const email = String(updated.email || '').trim()
-        syncCustomerIdentityToDocuments({
-          contactId: id,
-          identity: {
-            name: String(updated.name || '').trim(),
-            email: email || undefined,
-            phone: phone || undefined,
-            address: formatCustomerAddress(updated),
-            customerId: id,
-          },
-        })
-        showToast('Contact updated', 'success')
+      if (!res.ok) {
+        showToast('Failed to update contact', 'error')
+        throw new Error('Failed to update contact')
       }
+      const updated = await res.json()
+      setContacts(prev => prev.map(c => c.id === id ? updated : c))
+      const phone = String(updated.phone || updated.mobile || '').trim()
+      const email = String(updated.email || '').trim()
+      syncCustomerIdentityToDocuments({
+        contactId: id,
+        identity: {
+          name: String(updated.name || '').trim(),
+          email: email || undefined,
+          phone: phone || undefined,
+          address: formatCustomerAddress(updated),
+          customerId: id,
+        },
+      })
+      showToast('Contact updated', 'success')
+      return updated
     },
     deleteContact: async (id) => {
       const res = await fetch(`/api/contacts/${id}`, { method: 'DELETE' })

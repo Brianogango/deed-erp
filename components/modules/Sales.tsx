@@ -74,6 +74,7 @@ import {
   type DocumentPaymentDetails,
 } from '@/lib/document-payment-details'
 import PaymentDetailsPicker from '@/components/payment/PaymentDetailsPicker'
+import ContactFormModal, { blankIndividualContact } from '@/components/contacts/ContactFormModal'
 import { resolveListPrice } from '@/lib/pricing/pricelist'
 import Chatter from '@/components/erp/Chatter'
 import { SalesRecordHeader } from '@/components/modules/sales/SalesRecordHeader'
@@ -283,7 +284,7 @@ function SalesContent() {
     saleOrders, contacts, products, serials, invoices, deliveries, returnOrders,
     createSaleOrder, updateSaleOrder, confirmSO, markQuotationSent, setSaleOrderLock,
     addSOLine, removeSOLine, moveSOLine, addSOSection,
-    assignSerialsToSOLine, unassignSerialFromSOLine, addContact, createInvoiceFromSO, prepareDelivery, validateDelivery, markDeliveryNoteGenerated,
+    assignSerialsToSOLine, unassignSerialFromSOLine, createInvoiceFromSO, prepareDelivery, validateDelivery, markDeliveryNoteGenerated,
     deleteSaleOrder, showToast, getStockByLocation, resetSOToDraft, cancelSO,
     getCustomerCreditStatus, users, currentUserId, systemSettings,
     companySettings, bankAccounts, confirmDeliveryWithStockDeduction,
@@ -369,9 +370,7 @@ function SalesContent() {
   const [showDnModal, setShowDnModal] = useState(false)
   const [showCreateContact, setShowCreateContact] = useState(false)
   const [newContactQuery, setNewContactQuery] = useState('')
-  const [newContactPhone, setNewContactPhone] = useState('')
-  const [newContactEmail, setNewContactEmail] = useState('')
-  const [registeringContact, setRegisteringContact] = useState(false)
+  const [contactFormKey, setContactFormKey] = useState(0)
   const [sendingQuoteId, setSendingQuoteId] = useState<string | null>(null)
   // Send-by-Email compose dialog (Odoo records recipient + message on the order)
   const [sendModalOrderId, setSendModalOrderId] = useState<string | null>(null)
@@ -1159,7 +1158,11 @@ function SalesContent() {
                     })
                     backToList()
                   }}
-                  onCreateNewCustomer={(q) => { setNewContactQuery(q); setShowCreateContact(true) }}
+                  onCreateNewCustomer={(q) => {
+                    setNewContactQuery(q)
+                    setContactFormKey(k => k + 1)
+                    setShowCreateContact(true)
+                  }}
                 />
               ) : view === 'delivery' && activeOrder ? (
                 /* ── DELIVERY NOTE VIEW ──────────────────────────────────── */
@@ -1947,28 +1950,24 @@ function SalesContent() {
 
       {/* ── Modals ─────────────────────────────────────────────────────────── */}
       {showCreateContact && (
-        <Modal title="Quick Register Customer" onClose={() => setShowCreateContact(false)} width={500}>
-          <div className="flex flex-col gap-4">
-            <Field label="Customer/Company Name" required><Input value={newContactQuery} onChange={setNewContactQuery} /></Field>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <Field label="Email"><Input type="email" value={newContactEmail} onChange={setNewContactEmail} /></Field>
-              <Field label="Phone" required><Input type="tel" value={newContactPhone} onChange={setNewContactPhone} /></Field>
-            </div>
-            <div className="flex gap-2 justify-end pt-4 border-t border-[var(--border-lt)]">
-              <button className="btn-outline" onClick={() => setShowCreateContact(false)} disabled={registeringContact}>Cancel</button>
-              <button className="btn-primary" disabled={registeringContact} onClick={async () => {
-                if (!newContactQuery.trim() || !newContactPhone.trim()) { showToast('Customer name and phone are required', 'error'); return }
-                setRegisteringContact(true)
-                try {
-                  const contact = await addContact({ type: 'individual', name: newContactQuery.trim(), email: newContactEmail.trim(), phone: newContactPhone.trim(), address: '', isCustomer: true, isVendor: false, tags: [] })
-                  setShowCreateContact(false); setNewContactQuery(''); setNewContactEmail(''); setNewContactPhone('')
-                  setNewCustomer({ id: contact.id, name: contact.name })
-                  if (view !== 'new') { const so = await createSaleOrder(contact.id, contact.name); openOrder(so.id) }
-                } catch { /* addContact shows error toast */ } finally { setRegisteringContact(false) }
-              }}>{registeringContact ? 'Registering…' : 'Register & Create Quotation'}</button>
-            </div>
-          </div>
-        </Modal>
+        <ContactFormModal
+          key={contactFormKey}
+          forceCustomer
+          initial={blankIndividualContact({ name: newContactQuery.trim() })}
+          onClose={() => {
+            setShowCreateContact(false)
+            setNewContactQuery('')
+          }}
+          onSaved={async (contact) => {
+            setShowCreateContact(false)
+            setNewContactQuery('')
+            setNewCustomer({ id: contact.id, name: contact.name })
+            if (view !== 'new') {
+              const so = await createSaleOrder(contact.id, contact.name)
+              openOrder(so.id)
+            }
+          }}
+        />
       )}
 
       {showAddLine && (

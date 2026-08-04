@@ -3,10 +3,15 @@ import { useState, useEffect, useRef, Suspense } from 'react'
 import { useCrmStore, Contact, SaleOrder, RepairOrder, Invoice, POSOrder, fmtDate, fmtKes } from '@/lib/store'
 import { invoiceDocState, invoicePaymentStatus, isOpenInvoice, invoiceResidual, displayDocRef, PAYMENT_STATUS_LABELS } from '@/lib/odoo-sales-flow'
 import { guardSpreadsheetFile, guardSpreadsheetRows, SpreadsheetGuardError } from '@/lib/spreadsheet-guard'
-import { Badge, Modal, Field, Input, Select, Textarea, InfoRow, ModuleSkeleton } from '@/components/ui'
+import { Badge, Modal, InfoRow, ModuleSkeleton } from '@/components/ui'
 import { PrimaryActionButton, SecondaryActionMenu, ModuleChrome, PageToolbar } from '@/components/erp'
 import Chatter from '@/components/erp/Chatter'
 import { DataTable, type ColumnDef } from '@/components/data-table'
+import ContactFormModal, {
+  blankCompanyContact,
+  blankIndividualContact,
+  type ContactFormValues,
+} from '@/components/contacts/ContactFormModal'
 import {
   Fa, faUsers, faBuilding, faUser, faCartShopping, faBuildingColumns,
   faPen, faPlus, faScrewdriverWrench, faFileInvoiceDollar,
@@ -17,32 +22,10 @@ import { useUrlRecordId } from '@/hooks/useUrlRecordId'
 type FilterTab = 'all' | 'companies' | 'individuals' | 'customers' | 'vendors'
 type ViewTab   = 'info' | 'financial' | 'persons' | 'history' | 'chatter'
 
-const INDUSTRIES = [
-  'Financial Services', 'Telecommunications', 'Electronics', 'IT Services',
-  'Healthcare', 'Education', 'Retail', 'Manufacturing', 'Construction',
-  'Real Estate', 'Hospitality', 'Transport & Logistics', 'Agriculture',
-  'Government', 'NGO / Non-profit', 'Media & Entertainment', 'Other',
-]
-
-const blankCompany = (): Omit<Contact, 'id' | 'createdAt'> => ({
-  type: 'company', name: '', tradingName: '', registrationNumber: '', vatNumber: '',
-  industry: '', email: '', phone: '', mobile: '', website: '',
-  address: '', postalAddress: '', city: '', country: 'Kenya',
-  isCustomer: true, isVendor: false, tags: [],
-  paymentTermsDays: 30, creditLimit: 0,
-  bankName: '', bankAccount: '', bankBranch: '',
-  notes: '',
-})
-
-const blankIndividual = (): Omit<Contact, 'id' | 'createdAt'> => ({
-  type: 'individual', name: '', jobTitle: '', idNumber: '', vatNumber: '',
-  email: '', phone: '', mobile: '',
-  address: '', city: '', country: 'Kenya',
-  companyId: undefined,
-  isCustomer: true, isVendor: false, tags: [],
-  notes: '',
-})
-
+function contactToFormValues(c: Contact): ContactFormValues {
+  const { id: _id, createdAt: _createdAt, ...rest } = c
+  return rest
+}
 
 const contactSoColumns: ColumnDef<SaleOrder>[] = [
   { key: 'ref', label: 'Ref', priority: 1, width: '100px', render: so => <span className="font-mono text-[11px] font-semibold text-primary-600">{so.ref ?? so.orderNumber ?? so.id.slice(0, 8)}</span>, accessor: so => so.ref ?? so.orderNumber ?? so.id },
@@ -98,15 +81,6 @@ const contactPosColumns: ColumnDef<POSOrder>[] = [
   { key: 'total', label: 'Total', priority: 1, width: '100px', align: 'right', render: tx => <span className="font-mono text-[11px]">{fmtKes(tx.total)}</span>, accessor: tx => tx.total },
   { key: 'payment', label: 'Payment', priority: 2, width: '90px', render: tx => <span className="text-[10px] text-t2 capitalize">{tx.payment}</span>, accessor: tx => tx.payment },
 ]
-
-function SectionLabel({ label }: { label: string }) {
-  return (
-    <div className="col-span-2 flex items-center gap-2 mt-1">
-      <span className="text-[10px] uppercase tracking-wider font-semibold" style={{ color: 'var(--text-3)' }}>{label}</span>
-      <div className="flex-1 h-px" style={{ background: 'var(--border-lt)' }} />
-    </div>
-  )
-}
 
 // ── CSV helpers ──────────────────────────────────────────────────────────────
 function parseCSV(text: string): Record<string, string>[] {
@@ -167,7 +141,7 @@ function ContactsInner() {
   const [mounted, setMounted] = useState(() => typeof window !== 'undefined')
   useEffect(() => { setMounted(true) }, [])
 
-  const { contacts, addContact, updateContact, deleteContact,
+  const { contacts, addContact, deleteContact,
     saleOrders, invoices, repairs, posOrders, showToast, users, currentUserId } = useCrmStore()
   const currentUser = users.find(u => u.id === currentUserId)
   const [tab, setTab] = useState<FilterTab>('all')
@@ -180,11 +154,9 @@ function ContactsInner() {
   const [viewContactId, setViewContactId] = useUrlRecordId()
   const viewContact = viewContactId ? contacts.find(c => c.id === viewContactId) ?? null : null
   const setViewContact = (c: Contact | null) => setViewContactId(c?.id ?? null)
-  const [form, setForm] = useState<any>(blankCompany())
+  const [formDraft, setFormDraft] = useState<ContactFormValues>(blankCompanyContact())
+  const [formKey, setFormKey] = useState(0)
   const [viewTab, setViewTab] = useState<ViewTab>('info')
-  const [saving, setSaving] = useState(false)
-
-  const companies = contacts.filter(c => c.type === 'company')
 
   const filtered = contacts.filter(c => {
     const q = search.toLowerCase()
@@ -210,31 +182,17 @@ function ContactsInner() {
   const getLinkedPersons = (companyId: string) => contacts.filter(c => c.companyId === companyId)
 
   const openNew = (type: 'company' | 'individual') => {
-    setForm(type === 'company' ? blankCompany() : blankIndividual())
+    setFormDraft(type === 'company' ? blankCompanyContact() : blankIndividualContact())
     setEditId(null)
+    setFormKey(k => k + 1)
     setShowForm(true)
   }
   const openEdit = (c: Contact) => {
-    setForm({ ...c })
+    setFormDraft(contactToFormValues(c))
     setEditId(c.id)
+    setFormKey(k => k + 1)
     setShowForm(true)
   }
-  const save = async () => {
-    if (!form.name.trim()) return
-    setSaving(true)
-    try {
-      if (editId) {
-        await updateContact(editId, form)
-      } else {
-        await addContact(form)
-      }
-      setShowForm(false)
-      setViewContact(null)
-    } finally {
-      setSaving(false)
-    }
-  }
-  const f = (k: string) => (v: any) => setForm((p: any) => ({ ...p, [k]: v }))
 
   const processFile = (file: File) => {
     if (!file.name.endsWith('.csv')) { showToast('Please upload a .csv file', 'error'); return }
@@ -678,8 +636,9 @@ function ContactsInner() {
                   className="flex items-center gap-2 mt-1 text-[11px] cursor-pointer"
                   style={{ background: '#E8F3FA', border: '1px dashed #A8D4E8', borderRadius: 8, padding: '8px 12px', color: 'var(--navy)' }}
                   onClick={() => {
-                    setForm({ ...blankIndividual(), companyId: vc.id })
+                    setFormDraft(blankIndividualContact({ companyId: vc.id }))
                     setEditId(null)
+                    setFormKey(k => k + 1)
                     setShowForm(true)
                     setViewContact(null)
                   }}>
@@ -817,150 +776,18 @@ function ContactsInner() {
         )
       })()}
 
-      {/* ── Create / Edit Form ────────────────────────────────────────────────── */}
+      {/* ── Create / Edit Form (shared Contacts form) ─────────────────────────── */}
       {showForm && (
-        <Modal
-          title={editId ? `Edit — ${form.name || 'Contact'}` : form.type === 'company' ? 'New Company' : 'New Individual'}
-          width={680}
+        <ContactFormModal
+          key={formKey}
+          editId={editId}
+          initial={formDraft}
           onClose={() => setShowForm(false)}
-        >
-          {/* Type toggle (only for new) */}
-          {!editId && (
-            <div className="grid grid-cols-2 gap-2 mb-1">
-              {(['company', 'individual'] as const).map(t => (
-                <button key={t}
-                  onClick={() => setForm(t === 'company' ? blankCompany() : blankIndividual())}
-                  className="py-2.5 rounded-lg text-xs font-medium cursor-pointer"
-                  style={{
-                    background: form.type === t ? '#E8F3FA' : 'var(--bg-surface)',
-                    color: form.type === t ? 'var(--navy)' : 'var(--text-3)',
-                    border: form.type === t ? '1px solid #A8D4E8' : '1px solid var(--border-lt)',
-                    fontWeight: form.type === t ? 600 : 400,
-                  }}>
-                  {t === 'company' ? <><Fa icon={faBuilding} /> Company / Organisation</> : <><Fa icon={faUser} /> Individual / Person</>}
-                </button>
-              ))}
-            </div>
-          )}
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3">
-
-            <SectionLabel label="Basic Information" />
-
-            {form.type === 'company' ? (
-              <>
-                <div className="sm:col-span-2">
-                  <Field label="Company Name" required>
-                    <Input value={form.name} onChange={f('name')} placeholder="e.g. Acme Corporation Ltd" autoFocus />
-                  </Field>
-                </div>
-                <Field label="Trading Name">
-                  <Input value={form.tradingName ?? ''} onChange={f('tradingName')} placeholder="e.g. Acme (if different)" />
-                </Field>
-                <Field label="Industry">
-                  <Select value={form.industry ?? ''} onChange={f('industry')}
-                    options={[{ value: '', label: 'Select industry...' }, ...INDUSTRIES.map(i => ({ value: i, label: i }))]} />
-                </Field>
-                <Field label="Registration Number">
-                  <Input value={form.registrationNumber ?? ''} onChange={f('registrationNumber')} placeholder="e.g. CPR/2024/1234" />
-                </Field>
-                <Field label="KRA PIN">
-                  <Input value={form.vatNumber ?? ''} onChange={f('vatNumber')} placeholder="e.g. P051130572W" />
-                </Field>
-              </>
-            ) : (
-              <>
-                <div className="sm:col-span-2">
-                  <Field label="Full Name" required>
-                    <Input value={form.name} onChange={f('name')} placeholder="e.g. John Kamau Mwangi" autoFocus />
-                  </Field>
-                </div>
-                <Field label="Job Title">
-                  <Input value={form.jobTitle ?? ''} onChange={f('jobTitle')} placeholder="e.g. IT Manager" />
-                </Field>
-                <Field label="Linked Company">
-                  <Select value={form.companyId ?? ''} onChange={f('companyId')}
-                    options={[{ value: '', label: 'No company / Independent' }, ...companies.map(c => ({ value: c.id, label: c.name }))]} />
-                </Field>
-                <Field label="National ID / Passport No.">
-                  <Input value={form.idNumber ?? ''} onChange={f('idNumber')} placeholder="e.g. 12345678" />
-                </Field>
-                <Field label="KRA PIN">
-                  <Input value={form.vatNumber ?? ''} onChange={f('vatNumber')} placeholder="e.g. A123456789B" />
-                </Field>
-              </>
-            )}
-
-            <SectionLabel label="Contact Details" />
-
-            <Field label="Email"><Input value={form.email} onChange={f('email')} type="email" placeholder="email@example.com" maxLength={100} /></Field>
-            <Field label="Phone"><Input value={form.phone} onChange={f('phone')} type="tel" placeholder="+254 700 000 000" maxLength={20} pattern="^\+?[0-9\s\-\(\)]+$" /></Field>
-            <Field label="Mobile"><Input value={form.mobile ?? ''} onChange={f('mobile')} type="tel" placeholder="+254 700 000 000" maxLength={20} pattern="^\+?[0-9\s\-\(\)]+$" /></Field>
-            {form.type === 'company' && (
-              <Field label="Website"><Input value={form.website ?? ''} onChange={f('website')} placeholder="https://example.com" /></Field>
-            )}
-
-            <SectionLabel label="Address" />
-
-            <div className="sm:col-span-2">
-              <Field label="Physical Address">
-                <Input value={form.address} onChange={f('address')} placeholder="Street / Building, Area" />
-              </Field>
-            </div>
-            {form.type === 'company' && (
-              <Field label="Postal Address">
-                <Input value={form.postalAddress ?? ''} onChange={f('postalAddress')} placeholder="P.O. Box 00000-00100" />
-              </Field>
-            )}
-            <Field label="City"><Input value={form.city ?? ''} onChange={f('city')} placeholder="e.g. Nairobi" /></Field>
-            <Field label="Country"><Input value={form.country ?? ''} onChange={f('country')} placeholder="e.g. Kenya" /></Field>
-
-            <SectionLabel label="Classification" />
-
-            <div className="sm:col-span-2 flex gap-6 py-1">
-              <label className="flex items-center gap-2 text-xs cursor-pointer select-none">
-                <input type="checkbox" checked={form.isCustomer} onChange={e => f('isCustomer')(e.target.checked)}
-                  style={{ accentColor: 'var(--navy)', width: 14, height: 14 }} />
-                <span className="text-t1">Is a Customer</span>
-                <span className="text-t3 text-[10px]">(buys from us)</span>
-              </label>
-              <label className="flex items-center gap-2 text-xs cursor-pointer select-none">
-                <input type="checkbox" checked={form.isVendor} onChange={e => f('isVendor')(e.target.checked)}
-                  style={{ accentColor: 'var(--navy)', width: 14, height: 14 }} />
-                <span className="text-t1">Is a Vendor</span>
-                <span className="text-t3 text-[10px]">(supplies to us)</span>
-              </label>
-            </div>
-
-            <SectionLabel label="Financial & Banking" />
-
-            <Field label="Payment Terms (days)">
-              <Input value={String(form.paymentTermsDays ?? '')} onChange={v => f('paymentTermsDays')(Number(v) || 0)} placeholder="e.g. 30" />
-            </Field>
-            <Field label="Credit Limit (KES)">
-              <Input value={String(form.creditLimit ?? '')} onChange={v => f('creditLimit')(Number(v) || 0)} placeholder="e.g. 500000" />
-            </Field>
-            <Field label="Bank Name"><Input value={form.bankName ?? ''} onChange={f('bankName')} placeholder="e.g. Equity Bank" /></Field>
-            <Field label="Account Number"><Input value={form.bankAccount ?? ''} onChange={f('bankAccount')} placeholder="e.g. 0110123456" /></Field>
-            <div className="sm:col-span-2">
-              <Field label="Branch"><Input value={form.bankBranch ?? ''} onChange={f('bankBranch')} placeholder="e.g. Westlands Branch" /></Field>
-            </div>
-
-            <SectionLabel label="Notes" />
-
-            <div className="sm:col-span-2">
-              <Textarea value={form.notes ?? ''} onChange={f('notes')} placeholder="Any additional notes about this contact..." rows={3} />
-            </div>
-
-          </div>
-
-          <div className="flex flex-col sm:flex-row gap-2 justify-end pt-3">
-            <button className="btn-outline w-full sm:w-auto" onClick={() => setShowForm(false)} disabled={saving}>Cancel</button>
-            <button className="btn-primary w-full sm:w-auto" onClick={save} disabled={!form.name.trim() || saving}>
-              {saving ? 'Saving…' : editId ? 'Save Changes' : form.type === 'company' ? 'Create Company' : 'Create Contact'}
-            </button>
-          </div>
-        </Modal>
+          onSaved={() => {
+            setShowForm(false)
+            setViewContact(null)
+          }}
+        />
       )}
 
       {/* ── CSV IMPORT MODAL ── */}
