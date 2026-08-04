@@ -845,7 +845,15 @@ export function Table({
   emptyAction,
   hideColumnMenu = false,
 }: {
-  cols: { label: string; width?: string; minWidth?: number; sticky?: 'left' | 'right' }[]
+  cols: {
+    label: string
+    width?: string
+    minWidth?: number
+    sticky?: 'left' | 'right'
+    sortable?: boolean
+    sortDirection?: 'asc' | 'desc' | null
+    onSortClick?: () => void
+  }[]
   children: ReactNode
   empty?: string
   minWidth?: number
@@ -1139,6 +1147,15 @@ export function Table({
               : c.sticky === 'left'
                 ? 'data-table-cell-sticky-left'
                 : ''
+            const sortClass = c.sortable
+              ? [
+                  'sort-col',
+                  'cursor-pointer',
+                  'select-none',
+                  c.sortDirection === 'asc' ? 'sort-asc' : '',
+                  c.sortDirection === 'desc' ? 'sort-desc' : '',
+                ].filter(Boolean).join(' ')
+              : ''
             return (
             <span
               key={columnKey(c, index)}
@@ -1146,7 +1163,29 @@ export function Table({
                 headCellRefs.current[index] = element
               }}
               role="columnheader"
-              className={`relative pr-3 ${stickyClass}`.trim()}
+              aria-sort={
+                c.sortable
+                  ? c.sortDirection === 'asc'
+                    ? 'ascending'
+                    : c.sortDirection === 'desc'
+                      ? 'descending'
+                      : 'none'
+                  : undefined
+              }
+              tabIndex={c.sortable ? 0 : undefined}
+              className={`relative pr-3 ${stickyClass} ${sortClass}`.trim()}
+              onClick={c.sortable && c.onSortClick ? (event) => {
+                // Don't trigger sort when starting a column resize.
+                if ((event.target as HTMLElement).closest('button')) return
+                c.onSortClick?.()
+              } : undefined}
+              onKeyDown={c.sortable && c.onSortClick ? (event) => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                  event.preventDefault()
+                  c.onSortClick?.()
+                }
+              } : undefined}
+              title={c.sortable ? `Sort by ${c.label}` : undefined}
             >
               {c.label}
               {resizable && (

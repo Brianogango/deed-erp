@@ -14,6 +14,13 @@ export interface ColumnDef<T> {
   /** Grid track width, passed straight through to the existing Table()'s `cols[].width`. */
   width?: string
   align?: 'left' | 'right' | 'center'
+  /**
+   * When true (default), the column header is clickable for client-side sort.
+   * Set false for action-only / non-comparable columns.
+   */
+  sortable?: boolean
+  /** Explicit sort value. Falls back to accessor → exportValue → searchValue → row[key]. */
+  sortValue?: (row: T) => unknown
   /** Cell content for the table/grid rendering (desktop + tablet + laptop). */
   render: (row: T) => ReactNode
   /**
@@ -44,6 +51,31 @@ export function getColumnValue<T>(
   if (purpose !== 'export' && column.searchValue) return column.searchValue(row)
   if (column.exportValue) return column.exportValue(row)
   return column.render(row)
+}
+
+/** Value used when sorting a column (never falls back to React render output). */
+export function getColumnSortValue<T>(column: ColumnDef<T>, row: T): unknown {
+  if (column.sortValue) return column.sortValue(row)
+  if (column.accessor) return column.accessor(row)
+  if (column.exportValue) return column.exportValue(row)
+  if (column.searchValue) return column.searchValue(row)
+  if (row && typeof row === 'object' && column.key in (row as object)) {
+    return (row as Record<string, unknown>)[column.key]
+  }
+  return ''
+}
+
+export function isColumnSortable<T>(column: ColumnDef<T>): boolean {
+  if (column.sortable === false) return false
+  if (column.sortable === true) return true
+  // Default: sortable whenever we can resolve a comparable value.
+  return Boolean(
+    column.sortValue
+    || column.accessor
+    || column.exportValue
+    || column.searchValue
+    || column.key,
+  )
 }
 
 export type TableType = 'A' | 'B' | 'C'

@@ -5,7 +5,8 @@ import { Table, Pagination } from '@/components/ui'
 import { exportToExcel, exportToPDF, type ExportRow } from '@/lib/export-utils'
 import { useTableBreakpoint } from '@/lib/data-table/use-breakpoint'
 import { useTablePreferences } from '@/lib/data-table/use-table-preferences'
-import { getColumnValue, type ColumnDef, type ColumnPriority, type SavedView } from '@/lib/data-table/types'
+import { getColumnSortValue, getColumnValue, isColumnSortable, type ColumnDef, type ColumnPriority, type SavedView } from '@/lib/data-table/types'
+import { compareSortValues, nextSortState, type TableSortState } from '@/lib/data-table/sort'
 import type {
   ActiveFilterChip,
   ExportMenuOption,
@@ -124,6 +125,11 @@ export interface DataTableProps<T> {
   onImport?: () => void
   exportTitle?: string
   exportFilename?: string
+  /**
+   * Initial sort. Click column headers to change.
+   * Example: `{ key: 'intakeDate', direction: 'desc' }` for newest-first repairs.
+   */
+  defaultSort?: TableSortState | null
 }
 
 export default function DataTable<T>({
@@ -168,6 +174,7 @@ export default function DataTable<T>({
   onImport,
   exportTitle,
   exportFilename,
+  defaultSort = null,
 }: DataTableProps<T>) {
   const tableRootRef = useRef<HTMLDivElement | null>(null)
   const breakpoint = useTableBreakpoint(tableRootRef)
@@ -184,6 +191,7 @@ export default function DataTable<T>({
   const [filtersOpen, setFiltersOpen] = useState(false)
   const [page, setPage] = useState(1)
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set())
+  const [sort, setSort] = useState<TableSortState | null>(defaultSort)
 
   const pickableColumns = useMemo(
     () => columns.filter(c => c.priority <= 3),
@@ -230,13 +238,30 @@ export default function DataTable<T>({
     if (filterRules.length > 0) {
       result = result.filter(row => applyFilterRules(row, columns, filterRules))
     }
+    if (sort) {
+      const column = columns.find(c => c.key === sort.key)
+      if (column && isColumnSortable(column)) {
+        const direction = sort.direction === 'asc' ? 1 : -1
+        result = [...result].sort((left, right) =>
+          direction * compareSortValues(
+            getColumnSortValue(column, left),
+            getColumnSortValue(column, right),
+          ),
+        )
+      }
+    }
     return result
-  }, [rows, search, filterRules, eligibleColumns, columns, clientSearch])
+  }, [rows, search, filterRules, eligibleColumns, columns, clientSearch, sort])
 
   const totalPages = Math.max(1, Math.ceil(filteredRows.length / perPage))
   useEffect(() => {
     if (page > totalPages) setPage(totalPages)
   }, [page, totalPages])
+
+  // Reset to page 1 when sort changes so the new first rows are visible.
+  useEffect(() => {
+    setPage(1)
+  }, [sort?.key, sort?.direction])
 
   const pageRows = useMemo(() => {
     const start = (page - 1) * perPage
@@ -389,6 +414,11 @@ export default function DataTable<T>({
                     : c.width,
                   minWidth: c.key.toLowerCase().includes('status') ? 140 : undefined,
                   sticky: c.key.toLowerCase().includes('status') ? ('right' as const) : undefined,
+                  sortable: isColumnSortable(c),
+                  sortDirection: sort?.key === c.key ? sort.direction : null,
+                  onSortClick: isColumnSortable(c)
+                    ? () => setSort(prev => nextSortState(prev, c.key))
+                    : undefined,
                 })),
                 ...(rowActions ? [{ label: 'Actions', width: '120px', minWidth: 120, sticky: 'right' as const }] : []),
               ]}

@@ -429,6 +429,7 @@ export default function RepairClientJobs({ onNewIntake, onSelect }: { onNewIntak
             columns={repairColumns}
             rows={filteredRepairs}
             rowKey={r => r.id}
+            defaultSort={{ key: 'intakeDate', direction: 'desc' }}
             searchValue={searchQuery}
             onSearchChange={setSearchQuery}
             searchPlaceholder="Search repairs by name, reference, device, or serial..."
