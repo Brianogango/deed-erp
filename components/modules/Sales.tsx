@@ -2222,7 +2222,7 @@ function NewQuotationForm({
                   {filteredCustomers.length === 0 ? (
                     <div className="px-3 py-2">
                       <p className="text-xs text-[var(--text-4)] mb-2">No customers found</p>
-                      <button className="text-xs text-primary-600 font-semibold hover:underline" onClick={() => { setCustomerDropdownOpen(false); onCreateNewCustomer(customerSearch) }}>+ Register new customer</button>
+                      <button className="text-xs text-primary-600 font-semibold hover:underline" onClick={() => { setCustomerDropdownOpen(false); onCreateNewCustomer(customerSearch) }}>+ Create new contact</button>
                     </div>
                   ) : (
                     filteredCustomers.map(c => (
