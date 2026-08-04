@@ -4522,6 +4522,7 @@ export function StoreProvider({
     }
 
     const CRITICAL_VISIBILITY_KEYS = [
+      'deed_repairs_v2',
       'deed_invoices',
       'deed_expenses',
       'deed_outsourceJobs',

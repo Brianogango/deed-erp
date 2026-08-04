@@ -203,10 +203,15 @@ export async function POST(request: Request) {
         try { incoming = JSON.parse(entries[key]) } catch { continue }
         entries[key] = JSON.stringify(mergeProductsStoreWrite(currentState[key], incoming))
       }
-      // Outsource ledgers: merge by id so a stale browser cache cannot delete
-      // jobs that already exist on the server (e.g. OUT/0060 created elsewhere).
+      // Collaborative ledgers: merge by id so a stale browser cache cannot delete
+      // rows that already exist on the server (outsource jobs, repair intakes, …).
       if (
-        (key === 'deed_outsourceJobs' || key === 'deed_outsourcePayments' || key === 'deed_outsourceVendors')
+        (
+          key === 'deed_outsourceJobs'
+          || key === 'deed_outsourcePayments'
+          || key === 'deed_outsourceVendors'
+          || key === 'deed_repairs_v2'
+        )
         && entries[key]
         && Array.isArray(currentState[key])
       ) {

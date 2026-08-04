@@ -1,0 +1,66 @@
+name: Ops restore missing repairs (push trigger)
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'ops/restore-missing-repairs-request.json'
+
+jobs:
+  restore-missing-repairs:
+    name: Restore missing repairs on Contabo
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate request
+        id: req
+        run: |
+          set -euo pipefail
+          SINCE=$(jq -r '.since // empty' ops/restore-missing-repairs-request.json)
+          REFS=$(jq -r '.refs // [] | length' ops/restore-missing-repairs-request.json)
+          APPLY=$(jq -r '.apply // false' ops/restore-missing-repairs-request.json)
+          if [ -z "$SINCE" ] && [ "$REFS" -lt 1 ]; then
+            echo "ERROR: since or refs[] required in ops/restore-missing-repairs-request.json" >&2
+            exit 1
+          fi
+          echo "apply=$APPLY" >> "$GITHUB_OUTPUT"
+          echo "since=$SINCE refs=$REFS apply=$APPLY"
+
+      - name: Copy script + request to server
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          source: scripts/restore-missing-repairs.mjs,ops/restore-missing-repairs-request.json
+          target: /tmp/deed-ops/
+
+      - name: Run restore-missing-repairs script
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          command_timeout: 30m
+          script: |
+            set -euo pipefail
+            cd /var/www/deed-erp
+            SCRIPT=scripts/restore-missing-repairs.mjs
+            REQUEST=ops/restore-missing-repairs-request.json
+            mkdir -p scripts ops
+            cp /tmp/deed-ops/scripts/restore-missing-repairs.mjs "$SCRIPT"
+            cp /tmp/deed-ops/ops/restore-missing-repairs-request.json "$REQUEST"
+            echo "apply=${{ steps.req.outputs.apply }}"
+            node "$SCRIPT" --request "$REQUEST"
+            if git ls-files --error-unmatch "$SCRIPT" >/dev/null 2>&1; then
+              git restore --source=HEAD --worktree --staged -- "$SCRIPT" 2>/dev/null || git checkout HEAD -- "$SCRIPT" || true
+            else
+              rm -f "$SCRIPT"
+            fi
+            if git ls-files --error-unmatch "$REQUEST" >/dev/null 2>&1; then
+              git restore --source=HEAD --worktree --staged -- "$REQUEST" 2>/dev/null || git checkout HEAD -- "$REQUEST" || true
+            else
+              rm -f "$REQUEST"
+            fi
