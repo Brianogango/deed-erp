@@ -138,6 +138,10 @@ import {
 } from '@/lib/inventory/delivery-source'
 import { resolveAssignedRiderFee } from '@/lib/delivery-job-fee'
 import {
+  appendDeliveryChargeToInvoice,
+  buildDeliveryChargeInvoiceLine,
+} from '@/lib/invoice-delivery-charge'
+import {
   applyCustomerToInvoice,
   applyCustomerToQuote,
   applyCustomerToSaleOrder,
@@ -955,6 +959,8 @@ export interface Invoice {
   // Carried forward from the source sale order (Odoo invoice/delivery address).
   invoiceAddress?: string
   deliveryAddress?: string
+  /** Linked rider logistics job (DeliveryJob) — not the stock DN. */
+  deliveryJobId?: string
   // Finance dispute flag — payment collection blocked until released.
   paymentBlocked?: boolean
   /** User who posted the invoice — used for SoD on large payments. */
@@ -1223,6 +1229,9 @@ export interface DeliveryJob {
   saleOrderRef?: string
   repairOrderId?: string
   repairOrderRef?: string
+  /** Customer invoice that scheduled this rider delivery. */
+  invoiceId?: string
+  invoiceRef?: string
   // Customer details
   customerName: string
   customerPhone: string
@@ -1239,6 +1248,7 @@ export interface DeliveryJob {
   deliveredAt?: string
   // Billing
   billedTo?: 'customer' | 'company'
+  /** Amount charged to the customer for delivery (may differ from riderFee). */
   deliveryFee?: number
   riderFee: number       // amount paid to rider for this job
   // Metadata
@@ -2834,6 +2844,21 @@ export interface AppState {
   updateDeliveryJob: (id: string, p: Partial<DeliveryJob>) => void
   deleteDeliveryJob: (id: string) => void
   assignRiderToJob: (jobId: string, riderId: string, riderFee?: number) => void
+  /**
+   * Create a sales_delivery rider job from a customer invoice.
+   * When deliveryFee > 0, always appends a Delivery charge line on the invoice
+   * (draft or posted). Posted invoices also get an adjustment journal.
+   */
+  scheduleInvoiceDelivery: (invoiceId: string, opts: {
+    deliveryAddress: string
+    scheduledDate: string
+    riderFee: number
+    deliveryFee?: number
+    riderId?: string
+    notes?: string
+    /** When false, skip adding the delivery charge invoice line. Default true. */
+    addChargeToInvoice?: boolean
+  }) => DeliveryJob | null
   advanceJobStatus: (jobId: string, newStatus: DeliveryJobStatus, failureReason?: string) => void
   generateWeeklyPay: (riderId: string, weekStart: string) => RiderWeeklyPay | null
   markWeeklyPayPaid: (id: string) => void
@@ -3586,6 +3611,7 @@ export type FinanceStoreState = Pick<AppState,
   | 'revertPOToDraft'
   | 'reviewExpense'
   | 'saveBankRecon'
+  | 'scheduleInvoiceDelivery'
   | 'sendPO'
   | 'setModule'
   | 'showToast'
@@ -3617,6 +3643,7 @@ export type DeliveryStoreState = Pick<AppState,
   | 'companySettings'
   | 'currentUserId'
   | 'deliveryJobs'
+  | 'invoices'
   | 'repairs'
   | 'riderWeeklyPays'
   | 'riders'
@@ -3629,7 +3656,9 @@ export type DeliveryStoreState = Pick<AppState,
   | 'deleteDeliveryJob'
   | 'generateWeeklyPay'
   | 'markWeeklyPayPaid'
+  | 'scheduleInvoiceDelivery'
   | 'showToast'
+  | 'updateDeliveryJob'
   | 'updateRider'
 >
 
@@ -5876,6 +5905,7 @@ export function StoreProvider({
     revertPOToDraft: (...args: Parameters<AppState['revertPOToDraft']>) => storeCtxRef.current!.revertPOToDraft(...args),
     reviewExpense: (...args: Parameters<AppState['reviewExpense']>) => storeCtxRef.current!.reviewExpense(...args),
     saveBankRecon: (...args: Parameters<AppState['saveBankRecon']>) => storeCtxRef.current!.saveBankRecon(...args),
+    scheduleInvoiceDelivery: (...args: Parameters<AppState['scheduleInvoiceDelivery']>) => storeCtxRef.current!.scheduleInvoiceDelivery(...args),
     sendPO: (...args: Parameters<AppState['sendPO']>) => storeCtxRef.current!.sendPO(...args),
     setModule: (...args: Parameters<AppState['setModule']>) => storeCtxRef.current!.setModule(...args),
     showToast: (...args: Parameters<AppState['showToast']>) => storeCtxRef.current!.showToast(...args),
@@ -5911,7 +5941,9 @@ export function StoreProvider({
     deleteDeliveryJob: (...args: Parameters<AppState['deleteDeliveryJob']>) => storeCtxRef.current!.deleteDeliveryJob(...args),
     generateWeeklyPay: (...args: Parameters<AppState['generateWeeklyPay']>) => storeCtxRef.current!.generateWeeklyPay(...args),
     markWeeklyPayPaid: (...args: Parameters<AppState['markWeeklyPayPaid']>) => storeCtxRef.current!.markWeeklyPayPaid(...args),
+    scheduleInvoiceDelivery: (...args: Parameters<AppState['scheduleInvoiceDelivery']>) => storeCtxRef.current!.scheduleInvoiceDelivery(...args),
     showToast: (...args: Parameters<AppState['showToast']>) => storeCtxRef.current!.showToast(...args),
+    updateDeliveryJob: (...args: Parameters<AppState['updateDeliveryJob']>) => storeCtxRef.current!.updateDeliveryJob(...args),
     updateRider: (...args: Parameters<AppState['updateRider']>) => storeCtxRef.current!.updateRider(...args),
   }), [])
 
@@ -10732,7 +10764,10 @@ const storeCtx: AppState = {
       if (!existing) return
       const protectedStatus = existing.status !== 'draft' && existing.status !== 'cancelled'
       const cancelling = p.status === 'cancelled'
-      if (protectedStatus && !cancelling && systemSettings.secDisableInvoiceEditAfterValidation) {
+      // Allow linking a rider delivery job / address on posted invoices without unlocking lines.
+      const keys = Object.keys(p)
+      const deliveryLinkOnly = keys.length > 0 && keys.every(k => k === 'deliveryJobId' || k === 'deliveryAddress')
+      if (protectedStatus && !cancelling && !deliveryLinkOnly && systemSettings.secDisableInvoiceEditAfterValidation) {
         showToast('Posted finance documents are locked. Cancel or reverse instead of editing.', 'error')
         return
       }
@@ -15410,6 +15445,133 @@ const storeCtx: AppState = {
       setDeliveryJobs(prev => prev.filter(j => j.id !== id))
       showToast('Delivery job deleted')
     },
+    scheduleInvoiceDelivery: (invoiceId, opts) => {
+      const inv = invRef.current.find(i => i.id === invoiceId)
+      if (!inv) { showToast('Invoice not found', 'error'); return null }
+      if (inv.type !== 'customer_invoice') {
+        showToast('Rider delivery can only be scheduled from a customer invoice', 'error')
+        return null
+      }
+      if (inv.status === 'cancelled') {
+        showToast('Cannot schedule delivery on a cancelled invoice', 'error')
+        return null
+      }
+      const address = (opts.deliveryAddress || '').trim()
+      if (!address) { showToast('Enter a delivery address', 'error'); return null }
+      if (!opts.scheduledDate) { showToast('Enter a scheduled date', 'error'); return null }
+      const riderFee = Number(opts.riderFee)
+      if (!Number.isFinite(riderFee) || riderFee < 0) {
+        showToast('Enter a valid rider fee for this trip', 'error')
+        return null
+      }
+      const deliveryFee = Math.max(0, Number(opts.deliveryFee) || 0)
+      const activeJob = deliveryJobs.find(j =>
+        j.invoiceId === invoiceId && !['cancelled', 'failed'].includes(j.status)
+      )
+      if (activeJob) {
+        showToast(`Delivery job ${activeJob.ref} already exists for this invoice`, 'info')
+        return null
+      }
+
+      const contact = contacts.find(c => c.id === inv.partnerId)
+      const so = inv.saleOrderId ? soRef.current.find(s => s.id === inv.saleOrderId) : undefined
+      const pickup = [companySettings.name, companySettings.address, companySettings.city]
+        .filter(Boolean).join(', ') || 'Deed Technologies'
+      const phone = contact?.phone || contact?.mobile || ''
+      const addCharge = opts.addChargeToInvoice !== false && deliveryFee > 0
+
+      const job = storeCtxRef.current!.createDeliveryJob({
+        type: 'sales_delivery',
+        invoiceId: inv.id,
+        invoiceRef: inv.ref,
+        saleOrderId: so?.id || inv.saleOrderId,
+        saleOrderRef: so?.ref,
+        customerName: inv.partnerName,
+        customerPhone: phone,
+        pickupAddress: pickup,
+        deliveryAddress: address,
+        scheduledDate: opts.scheduledDate,
+        riderFee,
+        deliveryFee: deliveryFee > 0 ? deliveryFee : undefined,
+        billedTo: deliveryFee > 0 ? 'customer' : 'company',
+        notes: opts.notes?.trim()
+          || `Invoice ${inv.ref}${so ? ` · ${so.ref}` : ''}${deliveryFee > 0 ? ` · customer delivery charge ${deliveryFee}` : ''}`,
+      })
+
+      if (opts.riderId) {
+        storeCtxRef.current!.assignRiderToJob(job.id, opts.riderId, riderFee)
+      }
+
+      if (addCharge) {
+        const vatRate = Number(companySettings.vatRate) || 0
+        const chargeLine = buildDeliveryChargeInvoiceLine({
+          id: uid(),
+          amount: deliveryFee,
+          taxRate: vatRate,
+        })
+        const { lines, subtotal, taxTotal, total } = appendDeliveryChargeToInvoice(inv, chargeLine)
+        const deltaTax = Math.round(deliveryFee * vatRate / 100)
+        const deltaTotal = deliveryFee + deltaTax
+
+        // Always write the delivery line onto the invoice (including posted docs).
+        setInvoices(prev => {
+          const next = prev.map(i => i.id !== inv.id ? i : {
+            ...i,
+            lines,
+            subtotal,
+            taxTotal,
+            total,
+            deliveryAddress: address,
+            deliveryJobId: job.id,
+          })
+          const updated = next.find(i => i.id === inv.id)
+          if (updated) {
+            invRef.current = next
+            sync(`/api/invoices/${inv.id}`, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(updated),
+            })
+          }
+          return next
+        })
+
+        // Keep GL in sync for already-posted invoices (original JRN/ref stays; add DEL adj).
+        if (inv.status === 'posted' && deltaTotal > 0) {
+          const chartAccounts = accountRef.current.map(a => ({ code: a.code, name: a.name }))
+          const saleLabel = formatAccountLabel(COMPANY_ACCOUNT_FALLBACKS.saleAccountCode, chartAccounts)
+          const adjLines = [
+            accountLine('1800 - Accounts Receivable', `AR delivery: ${inv.partnerName}`, deltaTotal, 0),
+            accountLine(saleLabel, `Delivery charge: ${inv.ref}`, 0, deliveryFee),
+            ...(deltaTax > 0
+              ? [accountLine('3301 - Output VAT Payable', `VAT delivery on ${inv.ref}`, 0, deltaTax)]
+              : []),
+          ]
+          const adj: JournalEntry = {
+            id: uid(),
+            ref: `JRN/DEL/${inv.ref}`,
+            date: now(),
+            source: 'invoice',
+            description: `Delivery charge on ${inv.ref} — ${inv.partnerName}`,
+            status: 'posted',
+            invoiceId: inv.id,
+            lines: adjLines,
+            totalDebit: deltaTotal,
+            totalCredit: deltaTotal,
+          }
+          setJournalEntries(p => (p.some(j => j.ref === adj.ref) ? p : [adj, ...p]))
+          addAuditLog('post_invoice', inv.ref, `Delivery charge ${deltaTotal} posted to journal ${adj.ref}`)
+        }
+      } else {
+        storeCtxRef.current!.updateInvoice(inv.id, {
+          deliveryAddress: address,
+          deliveryJobId: job.id,
+        })
+      }
+
+      addAuditLog('schedule_invoice_delivery', inv.ref, `Created ${job.ref} (rider fee ${riderFee}${deliveryFee > 0 ? `, customer charge ${deliveryFee}` : ''})`)
+      return job
+    },
     assignRiderToJob: (jobId, riderId, riderFee) => {
       const rider = riders.find(r => r.id === riderId)
       if (!rider) { showToast('Rider not found', 'error'); return }
@@ -16710,6 +16872,7 @@ const storeCtx: AppState = {
     companySettings,
     currentUserId,
     deliveryJobs,
+    invoices,
     repairs,
     riderWeeklyPays,
     riders,
@@ -16720,6 +16883,7 @@ const storeCtx: AppState = {
     companySettings,
     currentUserId,
     deliveryJobs,
+    invoices,
     repairs,
     riderWeeklyPays,
     riders,
