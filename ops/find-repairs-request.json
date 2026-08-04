@@ -1,7 +1,7 @@
 {
-  "queries": ["turaco", "sample"],
+  "queries": ["sample", "REP-861745"],
   "since": "2026-08-04",
-  "limit": 50,
-  "requestedAt": "2026-08-04T08:20:00Z",
-  "note": "Locate missing Turaco morning repair and explain sample sample test ticket"
+  "limit": 20,
+  "requestedAt": "2026-08-04T08:26:00Z",
+  "note": "Verify sample repair deletion"
 }
