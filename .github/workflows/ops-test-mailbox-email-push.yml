@@ -1,0 +1,66 @@
+name: Ops test mailbox email (push trigger)
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'ops/test-mailbox-email-request.json'
+
+jobs:
+  test-mailbox-email:
+    name: Test sales/accounts SMTP on Contabo
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate request
+        run: |
+          set -euo pipefail
+          TO=$(jq -r '.to // empty' ops/test-mailbox-email-request.json)
+          COUNT=$(jq -r '(.mailboxes // []) | length' ops/test-mailbox-email-request.json)
+          if [ -z "$TO" ]; then
+            echo "ERROR: to required" >&2
+            exit 1
+          fi
+          if [ "$COUNT" -lt 1 ]; then
+            echo "ERROR: mailboxes[] required" >&2
+            exit 1
+          fi
+          echo "to=$TO mailboxes=$COUNT"
+
+      - name: Copy script + request to server
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          source: scripts/test-mailbox-email.mjs,ops/test-mailbox-email-request.json
+          target: /tmp/deed-ops/
+
+      - name: Run mailbox SMTP test
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          command_timeout: 5m
+          script: |
+            set -euo pipefail
+            cd /var/www/deed-erp
+            SCRIPT=scripts/test-mailbox-email.mjs
+            REQUEST=ops/test-mailbox-email-request.json
+            mkdir -p scripts ops
+            cp /tmp/deed-ops/scripts/test-mailbox-email.mjs "$SCRIPT"
+            cp /tmp/deed-ops/ops/test-mailbox-email-request.json "$REQUEST"
+            node "$SCRIPT" --request "$REQUEST"
+            if git ls-files --error-unmatch "$SCRIPT" >/dev/null 2>&1; then
+              git restore --source=HEAD --worktree --staged -- "$SCRIPT" 2>/dev/null || git checkout HEAD -- "$SCRIPT" || true
+            else
+              rm -f "$SCRIPT"
+            fi
+            if git ls-files --error-unmatch "$REQUEST" >/dev/null 2>&1; then
+              git restore --source=HEAD --worktree --staged -- "$REQUEST" 2>/dev/null || git checkout HEAD -- "$REQUEST" || true
+            else
+              rm -f "$REQUEST"
+            fi
