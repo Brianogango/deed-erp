@@ -263,7 +263,6 @@ function AccountingContent() {
     companySettings,
     getDocumentPaymentDetails,
     setDocumentPaymentDetails,
-    addBankAccount,
   } = appState
 
   // Dynamic PDF header builder using live companySettings
@@ -2173,9 +2172,6 @@ function AccountingContent() {
                     <PaymentDetailsPicker
                       value={newPaymentDetails}
                       onChange={setNewPaymentDetails}
-                      bankAccounts={bankAccounts}
-                      companySettings={companySettings}
-                      onAddBankAccount={addBankAccount}
                     />
                   )}
                 </div>

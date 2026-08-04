@@ -119,25 +119,17 @@ export function buildPaymentDetailLines(opts: {
   return lines
 }
 
-/** Short UI summary of what will appear on the PDF. */
+/** Short UI summary of the custom payment note. */
 export function summarizePaymentDetails(
   details: Partial<DocumentPaymentDetails> | null | undefined,
-  bankAccounts: BankAccount[],
-  company: Pick<CompanySettings, 'mpesaPaybill'>,
+  _bankAccounts?: BankAccount[],
+  _company?: Pick<CompanySettings, 'mpesaPaybill'>,
 ): string {
   const d = normalizeDocumentPaymentDetails(details)
-  if (d.useCompanyDefault) {
-    const first = selectablePaymentBanks(bankAccounts)[0]
-    const parts = [
-      first ? first.name || first.bankName : null,
-      company.mpesaPaybill ? 'M-Pesa' : null,
-    ].filter(Boolean)
-    return parts.length ? `Default: ${parts.join(', ')}` : 'Default company payment details'
+  const note = d.customNote?.trim()
+  if (note) {
+    const first = note.split(/\r?\n/).map(s => s.trim()).filter(Boolean)[0] || note
+    return first.length > 80 ? `${first.slice(0, 77)}…` : first
   }
-  const selected = selectablePaymentBanks(bankAccounts)
-    .filter(b => d.bankAccountIds.includes(b.id))
-    .map(b => b.name || b.bankName)
-  if (d.includeMpesa && company.mpesaPaybill) selected.push('M-Pesa')
-  if (d.customNote?.trim()) selected.push('custom note')
-  return selected.length ? selected.join(', ') : 'No payment details selected'
+  return 'Company payment defaults'
 }

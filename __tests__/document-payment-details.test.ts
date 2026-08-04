@@ -89,14 +89,14 @@ describe('document payment details', () => {
     expect(lines).toContain('Pay using the quotation number')
   })
 
-  it('summarizes selection for the UI', () => {
-    expect(summarizePaymentDetails({ useCompanyDefault: true }, banks, company)).toContain('Default')
+  it('summarizes the custom payment note for the UI', () => {
+    expect(summarizePaymentDetails({ useCompanyDefault: true }, banks, company)).toBe('Company payment defaults')
     expect(
       summarizePaymentDetails(
-        { useCompanyDefault: false, bankAccountIds: ['equity'], includeMpesa: true },
+        { useCompanyDefault: true, customNote: 'Pay via NCBA\nUse quote ref' },
         banks,
         company,
       ),
-    ).toBe('Equity Ops, M-Pesa')
+    ).toBe('Pay via NCBA')
   })
 })

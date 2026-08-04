@@ -60,7 +60,6 @@ export default function InvoiceDetail() {
     currentUserId,
     getDocumentPaymentDetails,
     setDocumentPaymentDetails,
-    addBankAccount,
   } = useFinanceStore()
 
   const currentUser = users.find(u => u.id === currentUserId)
@@ -536,9 +535,6 @@ export default function InvoiceDetail() {
             <PaymentDetailsPicker
               value={getDocumentPaymentDetails(invoice.id)}
               onChange={next => setDocumentPaymentDetails(invoice.id, next)}
-              bankAccounts={bankAccounts}
-              companySettings={companySettings}
-              onAddBankAccount={addBankAccount}
             />
           )}
 

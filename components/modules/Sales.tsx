@@ -1133,8 +1133,6 @@ function SalesContent() {
                   setNewDeliveryAddress={setNewDeliveryAddress}
                   newPaymentDetails={newPaymentDetails}
                   setNewPaymentDetails={setNewPaymentDetails}
-                  bankAccounts={bankAccounts}
-                  addBankAccount={addBankAccount}
                   pricelistsEnabled={systemSettings.salesPricelists}
                   newDraftLines={newDraftLines}
                   addDraftLine={addDraftLine}
@@ -1902,9 +1900,6 @@ function SalesContent() {
                       <PaymentDetailsPicker
                         value={getDocumentPaymentDetails(activeOrder.id)}
                         onChange={next => setDocumentPaymentDetails(activeOrder.id, next)}
-                        bankAccounts={bankAccounts}
-                        companySettings={companySettings}
-                        onAddBankAccount={addBankAccount}
                       />
 
                       <Chatter
@@ -2111,7 +2106,7 @@ function NewQuotationForm({
   newCustomerRef, setNewCustomerRef, newSalesTeam, setNewSalesTeam,
   newPricelist, setNewPricelist, newInvoiceAddress, setNewInvoiceAddress,
   newDeliveryAddress, setNewDeliveryAddress, newPaymentDetails, setNewPaymentDetails,
-  bankAccounts, addBankAccount, pricelistsEnabled, newDraftLines,
+  pricelistsEnabled, newDraftLines,
   addDraftLine, addDraftSection, updateDraftLine, removeDraftLine, moveDraftLine, selectProductForDraftLine,
   calcDraftLineTotal, draftSubtotal, draftTaxTotal, draftTotal, canEditDiscount,
   companySettings, canSave, saveBlockedReason, onSave, onSaveAndAddAnother, onCancel, onCreateNewCustomer,
@@ -2128,8 +2123,6 @@ function NewQuotationForm({
   newDeliveryAddress: string; setNewDeliveryAddress: (v: string) => void
   newPaymentDetails: DocumentPaymentDetails
   setNewPaymentDetails: (v: DocumentPaymentDetails) => void
-  bankAccounts: any[]
-  addBankAccount: (a: any) => string
   pricelistsEnabled: boolean
   newDraftLines: DraftLine[]; addDraftLine: () => void; addDraftSection: () => void
   updateDraftLine: (id: string, field: keyof DraftLine, value: string) => void
@@ -2495,9 +2488,6 @@ function NewQuotationForm({
             <PaymentDetailsPicker
               value={newPaymentDetails}
               onChange={setNewPaymentDetails}
-              bankAccounts={bankAccounts}
-              companySettings={companySettings}
-              onAddBankAccount={addBankAccount}
             />
           </div>
           <div className="card p-5 bg-[var(--bg-surface)] border-[var(--border-lt)]">
