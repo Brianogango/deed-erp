@@ -71,6 +71,7 @@ let since = String(arg('--since', '') || '').trim()
 let excludeSamples = true
 let apply = process.argv.includes('--apply')
 let backupRoot = BACKUP_ROOT
+let skipBackups = process.argv.includes('--skip-backups')
 
 if (requestPath) {
   const abs = resolve(ROOT, requestPath)
@@ -82,6 +83,7 @@ if (requestPath) {
   if (parsed?.apply === true) apply = true
   if (parsed?.excludeSamples === false) excludeSamples = false
   if (parsed?.backupRoot) backupRoot = String(parsed.backupRoot)
+  if (parsed?.skipBackups === true) skipBackups = true
 }
 
 refs = [...new Set(refs)]
@@ -360,8 +362,8 @@ try {
 
   const remaining = new Set(targets)
   const recovered = new Map()
-  const dumps = listBackupDumps(backupRoot)
-  console.log(`Backup dumps found: ${dumps.length} under ${backupRoot}`)
+  const dumps = skipBackups ? [] : listBackupDumps(backupRoot)
+  console.log(`Backup dumps found: ${dumps.length} under ${backupRoot}${skipBackups ? ' (skipped)' : ''}`)
 
   for (const { name, dump } of dumps) {
     if (remaining.size === 0) break

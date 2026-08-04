@@ -1,7 +1,8 @@
 {
   "since": "2026-08-01",
   "excludeSamples": true,
-  "apply": false,
-  "requestedAt": "2026-08-04T12:15:00Z",
-  "note": "Dry-run retry after fixing comment syntax that broke Node parse"
+  "skipBackups": true,
+  "apply": true,
+  "requestedAt": "2026-08-04T12:20:00Z",
+  "note": "APPLY: restore 14 August customer repairs from Prisma mirror stubs into deed_repairs_v2"
 }
