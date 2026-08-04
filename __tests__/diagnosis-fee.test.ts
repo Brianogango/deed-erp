@@ -28,8 +28,13 @@ describe('diagnosis-fee', () => {
     expect(diagnosisFeeAmountForTier('regular', {})).toBe(1000)
     expect(diagnosisFeeAmountForTier('high_end', {})).toBe(1000)
     expect(diagnosisFeeAmountForTier('high_end', { diagnosisFeeKes: 1200 })).toBe(1200)
-    // Legacy regular amount used only when flat unset
+    // Custom legacy amount still honored when flat unset and not the old shipped default
     expect(diagnosisFeeAmount({ diagnosisFeeRegularKes: 900 })).toBe(900)
+    // Old shipped defaults (1,500 / 2,500) must not override the flat policy
+    expect(diagnosisFeeAmount({ diagnosisFeeRegularKes: 1500 })).toBe(1000)
+    expect(diagnosisFeeAmount({ diagnosisFeeRegularKes: 2500 })).toBe(1000)
+    expect(diagnosisFeeAmount({ diagnosisFeeKes: 1500 })).toBe(1000)
+    expect(diagnosisFeeAmount({ diagnosisFeeKes: 1200 })).toBe(1200)
   })
 
   it('bills fee on final invoice for walk-in and corporate', () => {
@@ -46,6 +51,10 @@ describe('diagnosis-fee', () => {
     expect(isDiagnosisFeePolicyInEffect(EARLIER)).toBe(false)
     expect(isDiagnosisFeePolicyInEffect(undefined)).toBe(false)
     expect(isDiagnosisFeePolicyInEffect('')).toBe(false)
+    // Date-only Aug 3 (noon bookings with no time stored) stay pre-policy
+    expect(isDiagnosisFeePolicyInEffect('2026-08-03')).toBe(false)
+    expect(isDiagnosisFeePolicyInEffect('2026-08-03T12:00:00+03:00')).toBe(false)
+    expect(isDiagnosisFeePolicyInEffect('2026-08-04')).toBe(true)
   })
 
   it('does not charge Direct Repair, waived, full warranty, or pre-policy jobs', () => {
