@@ -289,7 +289,7 @@ function SalesContent() {
     companySettings, bankAccounts, confirmDeliveryWithStockDeduction,
     updateDelivery, outboundReleases, initRelease,
     approvalRequests, approveRequest,
-    getDocumentPaymentDetails, setDocumentPaymentDetails, addBankAccount,
+    getDocumentPaymentDetails, setDocumentPaymentDetails,
   } = useSalesStore()
 
   // The module lands directly on the operational order list. The old
