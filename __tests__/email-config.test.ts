@@ -48,7 +48,7 @@ describe('getEmailConfigStatus', () => {
   })
 })
 
-describe('pickMailbox Contabo From/Reply-To', () => {
+describe('pickMailbox department From/Reply-To', () => {
   const keys = [
     'SMTP_USER', 'SMTP_PASS', 'EMAIL_FROM',
     'SALES_EMAIL', 'SALES_SMTP_USER', 'SALES_SMTP_PASS',
@@ -65,23 +65,24 @@ describe('pickMailbox Contabo From/Reply-To', () => {
     }
   })
 
-  it('uses EMAIL_FROM as From and SALES_EMAIL as Reply-To when sharing SMTP login', () => {
-    process.env.SMTP_USER = 'info@deed.co.ke'
+  it('sends From and Reply-To as sales@ and authenticates as sales@', () => {
+    process.env.SMTP_USER = 'hello@deed.co.ke'
     process.env.SMTP_PASS = 'secret'
-    process.env.EMAIL_FROM = 'info@deed.co.ke'
+    process.env.EMAIL_FROM = 'hello@deed.co.ke'
     process.env.SALES_EMAIL = 'sales@deed.co.ke'
     delete process.env.SALES_SMTP_USER
     delete process.env.SALES_SMTP_PASS
     const sales = pickMailbox('sales')
-    expect(sales.from).toBe('info@deed.co.ke')
+    expect(sales.from).toBe('sales@deed.co.ke')
     expect(sales.replyTo).toBe('sales@deed.co.ke')
-    expect(sales.dedicatedAuth).toBe(false)
+    expect(sales.user).toBe('sales@deed.co.ke')
+    expect(sales.pass).toBe('secret')
   })
 
-  it('uses accounts department From when dedicated SMTP credentials exist', () => {
-    process.env.SMTP_USER = 'info@deed.co.ke'
+  it('uses dedicated accounts SMTP credentials when set', () => {
+    process.env.SMTP_USER = 'hello@deed.co.ke'
     process.env.SMTP_PASS = 'secret'
-    process.env.EMAIL_FROM = 'info@deed.co.ke'
+    process.env.EMAIL_FROM = 'hello@deed.co.ke'
     process.env.ACCOUNTS_EMAIL = 'accounts@deed.co.ke'
     process.env.ACCOUNTS_SMTP_USER = 'accounts@deed.co.ke'
     process.env.ACCOUNTS_SMTP_PASS = 'accounts-secret'
@@ -90,6 +91,7 @@ describe('pickMailbox Contabo From/Reply-To', () => {
     expect(accounts.replyTo).toBe('accounts@deed.co.ke')
     expect(accounts.dedicatedAuth).toBe(true)
     expect(accounts.user).toBe('accounts@deed.co.ke')
+    expect(accounts.pass).toBe('accounts-secret')
   })
 })
 

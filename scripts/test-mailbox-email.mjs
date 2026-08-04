@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Ops helper: send a real SMTP test for sales + accounts mailboxes.
- * Uses Contabo-safe From (EMAIL_FROM / SMTP_USER) and department Reply-To.
+ * Authenticates as sales@/accounts@ and sends From + Reply-To as that address.
  *
  *   node scripts/test-mailbox-email.mjs --request ops/test-mailbox-email-request.json
  *   node scripts/test-mailbox-email.mjs --to hello@deed.co.ke --mailboxes sales,accounts
@@ -88,20 +88,31 @@ if (!smtpUser || !smtpPass) fail('SMTP_USER / SMTP_PASS missing')
 
 function identityFor(mailbox) {
   const dedicated = {
-    sales: { user: process.env.SALES_SMTP_USER, pass: process.env.SALES_SMTP_PASS, replyTo: process.env.SALES_EMAIL || 'sales@deed.co.ke' },
-    accounts: { user: process.env.ACCOUNTS_SMTP_USER, pass: process.env.ACCOUNTS_SMTP_PASS, replyTo: process.env.ACCOUNTS_EMAIL || 'accounts@deed.co.ke' },
-    hr: { user: process.env.HR_SMTP_USER, pass: process.env.HR_SMTP_PASS, replyTo: process.env.HR_EMAIL || 'hr@deed.co.ke' },
-    default: { user: smtpUser, pass: smtpPass, replyTo: emailFrom },
-  }[mailbox] || { user: smtpUser, pass: smtpPass, replyTo: emailFrom }
+    sales: {
+      user: process.env.SALES_SMTP_USER || process.env.SALES_EMAIL || 'sales@deed.co.ke',
+      pass: process.env.SALES_SMTP_PASS || smtpPass,
+      address: process.env.SALES_EMAIL || 'sales@deed.co.ke',
+    },
+    accounts: {
+      user: process.env.ACCOUNTS_SMTP_USER || process.env.ACCOUNTS_EMAIL || 'accounts@deed.co.ke',
+      pass: process.env.ACCOUNTS_SMTP_PASS || smtpPass,
+      address: process.env.ACCOUNTS_EMAIL || 'accounts@deed.co.ke',
+    },
+    hr: {
+      user: process.env.HR_SMTP_USER || process.env.HR_EMAIL || 'hr@deed.co.ke',
+      pass: process.env.HR_SMTP_PASS || smtpPass,
+      address: process.env.HR_EMAIL || 'hr@deed.co.ke',
+    },
+    default: { user: smtpUser, pass: smtpPass, address: emailFrom },
+  }[mailbox] || { user: smtpUser, pass: smtpPass, address: emailFrom }
 
-  const hasDedicated = !!(dedicated.user && dedicated.pass)
   return {
     mailbox,
-    authUser: hasDedicated ? dedicated.user : smtpUser,
-    authPass: hasDedicated ? dedicated.pass : smtpPass,
-    from: hasDedicated ? (dedicated.replyTo || dedicated.user) : emailFrom,
-    replyTo: dedicated.replyTo || emailFrom,
-    dedicatedAuth: hasDedicated,
+    authUser: dedicated.user,
+    authPass: dedicated.pass,
+    from: dedicated.address,
+    replyTo: dedicated.address,
+    dedicatedAuth: dedicated.user.toLowerCase() !== smtpUser.toLowerCase(),
   }
 }
 

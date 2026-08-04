@@ -2,6 +2,6 @@
   "to": "hello@deed.co.ke",
   "mailboxes": ["sales", "accounts"],
   "dryRun": false,
-  "requestedAt": "2026-08-04T08:56:00Z",
-  "note": "Live verify sales + accounts SMTP after From/Reply-To fix"
+  "requestedAt": "2026-08-04T09:00:00Z",
+  "note": "Verify From+Reply-To are sales@/accounts@ with department SMTP auth"
 }
