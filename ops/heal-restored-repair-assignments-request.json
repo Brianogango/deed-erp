@@ -1,0 +1,6 @@
+{
+  "since": "2026-08-01",
+  "apply": true,
+  "requestedAt": "2026-08-04T13:00:00Z",
+  "note": "Re-apply technician names/IDs onto restored August stubs so UI no longer shows Unassigned"
+}

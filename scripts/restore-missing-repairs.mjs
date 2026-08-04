@@ -250,9 +250,11 @@ async function buildStubFromPrisma(poolConn, missingRefs) {
             r.accessories_in, r.estimated_cost, r.labour_cost, r.parts_cost,
             r.intake_date, r.completed_date, r.collected_date, r.priority, r.source,
             r.notes, r.resolution_notes, r.created_at, r.client_id, r.assigned_to,
-            c.name AS client_name, c.phone AS client_phone, c.email AS client_email
+            c.name AS client_name, c.phone AS client_phone, c.email AS client_email,
+            u.name AS tech_name
      FROM repairs r
      LEFT JOIN clients c ON c.id = r.client_id
+     LEFT JOIN users u ON u.id = r.assigned_to
      WHERE r.job_number = ANY($1::text[])`,
     [missingRefs],
   )
@@ -261,10 +263,13 @@ async function buildStubFromPrisma(poolConn, missingRefs) {
     const createdDay = r.created_at
       ? new Date(r.created_at).toISOString().slice(0, 10)
       : intakeIso.slice(0, 10)
+    let status = PRISMA_STATUS_TO_BLOB[r.status] || 'received'
+    // Blob uses "assigned" once a technician is set; Prisma keeps intake/diagnosis/etc.
+    if (r.assigned_to && status === 'received') status = 'assigned'
     return {
       id: r.id,
       ref: r.job_number,
-      status: PRISMA_STATUS_TO_BLOB[r.status] || 'received',
+      status,
       customerId: r.client_id || '',
       customerName: r.client_name || 'Unknown customer',
       customerPhone: r.client_phone || '',
@@ -285,6 +290,9 @@ async function buildStubFromPrisma(poolConn, missingRefs) {
       underWarranty: false,
       warrantyVerificationStatus: 'not_checked',
       assignedTechnicianId: r.assigned_to || undefined,
+      assignedTechnicianName: r.tech_name || undefined,
+      technicianName: r.tech_name || undefined,
+      assignedDate: r.assigned_to ? createdDay : undefined,
       partsUsed: [],
       laborCost: Number(r.labour_cost || 0),
       logisticsCost: 0,
