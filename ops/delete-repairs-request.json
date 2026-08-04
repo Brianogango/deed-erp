@@ -1,0 +1,7 @@
+{
+  "refs": ["REP-861745"],
+  "contactIds": ["234cae43-202e-4f94-934c-120cdf2217bd"],
+  "apply": true,
+  "requestedAt": "2026-08-04T08:25:00Z",
+  "note": "Remove WhatsApp-test sample booking (customer/device typed as sample)"
+}

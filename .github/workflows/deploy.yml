@@ -126,9 +126,11 @@ jobs:
               scripts/mark-serials-sold.mjs
               scripts/find-serials.mjs
               scripts/find-repairs.mjs
+              scripts/delete-repairs.mjs
               ops/mark-serials-sold-request.json
               ops/find-serials-request.json
               ops/find-repairs-request.json
+              ops/delete-repairs-request.json
               ops/heal-grn-serials-request.json
               ops/add-serial-request.json
               ops/add-opening-bulk-stock-request.json
