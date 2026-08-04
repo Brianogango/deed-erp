@@ -15,6 +15,11 @@ type Options = {
 /**
  * Persist an open list→detail record id in the URL so refresh / share keeps the same page.
  * Pattern matches Expenses / Outsource deep-links.
+ *
+ * Local state is updated immediately on setRecordId; URL sync only flows
+ * searchParams → local when the URL actually changes (browser back/forward,
+ * refresh). That way Back can clear the open record without the stale query
+ * string reopening it before router.replace finishes.
  */
 export function useUrlRecordId(options: Options = {}) {
   const param = options.param ?? 'id'
@@ -43,9 +48,8 @@ export function useUrlRecordId(options: Options = {}) {
   }, [searchParams, router, pathname, param, options.whenOpen, options.clearKeys])
 
   useEffect(() => {
-    const urlId = searchParams.get(param)
-    if (urlId !== recordId) setLocalRecordId(urlId)
-  }, [searchParams, param, recordId])
+    setLocalRecordId(searchParams.get(param))
+  }, [searchParams, param])
 
   return [recordId, setRecordId] as const
 }
@@ -63,20 +67,14 @@ export function useUrlQueryState(param: string, fallback: string) {
   const setValue = useCallback((next: string) => {
     setLocalValue(next)
     const params = new URLSearchParams(searchParams.toString())
-    if (!next || next === fallback) {
-      // Keep explicit tab values for clarity when non-default modules need them
-      params.set(param, next)
-    } else {
-      params.set(param, next)
-    }
+    params.set(param, next)
     const qs = params.toString()
     router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false })
-  }, [searchParams, router, pathname, param, fallback])
+  }, [searchParams, router, pathname, param])
 
   useEffect(() => {
-    const urlValue = searchParams.get(param) ?? fallback
-    if (urlValue !== value) setLocalValue(urlValue)
-  }, [searchParams, param, fallback, value])
+    setLocalValue(searchParams.get(param) ?? fallback)
+  }, [searchParams, param, fallback])
 
   return [value, setValue] as const
 }
