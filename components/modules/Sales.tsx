@@ -725,10 +725,14 @@ function SalesContent() {
       return next
     })
   const selectProductForDraftLine = (lineId: string, product: typeof products[0]) => {
-    const priced = resolveListPrice({ product, pricelist: newPricelist || 'RETAIL', qty: 1 })
+    const qty = 1
+    const priced = resolveListPrice({ product, pricelist: newPricelist || 'RETAIL', qty })
+    // Unit price on the quote = catalog sales price (via active pricelist). Keep 0 when
+    // the catalog price is 0 so the field stays editable instead of looking blank/broken.
+    const unitPrice = Number.isFinite(priced.unitPrice) ? Math.max(0, priced.unitPrice) : Math.max(0, Number(product.salePrice) || 0)
     setNewDraftLines(p => p.map(l => l.id === lineId ? {
       ...l, type: 'item', productId: product.id, productName: product.name, description: product.name,
-      unitPrice: String(priced.unitPrice), taxRate: String(product.taxRate ?? 0),
+      unitPrice: String(unitPrice), taxRate: String(product.taxRate ?? 0),
     } : l))
   }
   const calcDraftLineTotal = (l: DraftLine) => {
@@ -795,6 +799,8 @@ function SalesContent() {
     }
   }, [view, quoteDraftKey])
 
+  // Re-seed line unit prices only when the pricelist itself changes — never when
+  // the products array refreshes, or manual unit-price edits get wiped mid-typing.
   useEffect(() => {
     if (view !== 'new' || !systemSettings.salesPricelists) return
     setNewDraftLines(prev => prev.map(line => {
@@ -803,9 +809,11 @@ function SalesContent() {
       if (!product) return line
       const qty = Math.max(1, Number(line.qty) || 1)
       const priced = resolveListPrice({ product, pricelist: newPricelist || 'RETAIL', qty })
-      return { ...line, unitPrice: String(priced.unitPrice) }
+      const unitPrice = Number.isFinite(priced.unitPrice) ? Math.max(0, priced.unitPrice) : Math.max(0, Number(product.salePrice) || 0)
+      return { ...line, unitPrice: String(unitPrice) }
     }))
-  }, [newPricelist, view, systemSettings.salesPricelists, products])
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional: only react to pricelist switches
+  }, [newPricelist])
 
   useEffect(() => {
     if (view !== 'new') return
@@ -869,11 +877,13 @@ function SalesContent() {
       const qty = Number(l.qty) || 1
       // A quotation records commercial demand; it does not reserve stock.
       // Availability is enforced later when the confirmed SO is prepared for delivery.
+      // Preserve typed unit price including 0 — `Number(x) || undefined` would drop 0.
+      const typedPrice = Number(l.unitPrice)
       const priced = resolveListPrice({
         product,
         pricelist: newPricelist || 'RETAIL',
         qty,
-        customPrice: Number(l.unitPrice) || undefined,
+        customPrice: Number.isFinite(typedPrice) ? typedPrice : undefined,
       })
       const unitPrice = Math.max(0, priced.unitPrice)
       const discount = Number(l.discount) || 0
@@ -2408,7 +2418,17 @@ function NewQuotationForm({
                         </td>
                         {/* Unit Price */}
                         <td className="px-3 py-2">
-                          <input type="number" aria-label="Line item unit price" min={0} className="form-input text-xs text-right w-28" value={line.unitPrice} onChange={e => updateDraftLine(line.id, 'unitPrice', e.target.value)} />
+                          <input
+                            type="number"
+                            aria-label="Line item unit price"
+                            min={0}
+                            step="any"
+                            inputMode="decimal"
+                            className="form-input text-xs text-right w-28"
+                            value={line.unitPrice}
+                            onChange={e => updateDraftLine(line.id, 'unitPrice', e.target.value)}
+                            onFocus={e => e.currentTarget.select()}
+                          />
                         </td>
                         {/* Discount */}
                         {canEditDiscount && (
