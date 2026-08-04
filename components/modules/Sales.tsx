@@ -393,8 +393,14 @@ function SalesContent() {
   // Open the compose dialog (Odoo's Send by Email opens an email composer).
   const openSendQuoteModal = (order: SalesOrderView) => {
     const contact = contacts.find(c => c.id === order.customerId)
+    const isUpdate = order.status === 'quotation_sent' || !!order.sentAt
     setSendEmailTo(order.sentTo ?? contact?.email ?? '')
-    setSendEmailMessage(order.sentMessage ?? '')
+    setSendEmailMessage(
+      order.sentMessage
+      ?? (isUpdate
+        ? `Please find the updated quotation for ${order.customerName} below.\n\nKind regards,\nSales`
+        : ''),
+    )
     setSendModalOrderId(order.id)
   }
 
@@ -405,6 +411,7 @@ function SalesContent() {
       showToast('Enter the recipient email address before sending.', 'error')
       return
     }
+    const kind = (order.status === 'quotation_sent' || !!order.sentAt) ? 'update' : 'initial'
     setSendingQuoteId(order.id)
     try {
       const res = await fetch('/api/integrations/send-quote', {
@@ -414,6 +421,7 @@ function SalesContent() {
           quoteId: order.id,
           channels: ['email'],
           message: message || undefined,
+          kind,
           quote: {
             ref: order.ref,
             companyName: order.customerName,
@@ -2014,8 +2022,13 @@ function SalesContent() {
       {sendModalOrderId && (() => {
         const order = salesOrderViews.find(s => s.id === sendModalOrderId)
         if (!order) return null
+        const isUpdate = order.status === 'quotation_sent' || !!order.sentAt
         return (
-          <Modal title={`Send ${order.ref} by Email`} onClose={() => setSendModalOrderId(null)} width={460}>
+          <Modal
+            title={isUpdate ? `Send updated ${order.ref}` : `Send ${order.ref} by Email`}
+            onClose={() => setSendModalOrderId(null)}
+            width={460}
+          >
             <div className="flex flex-col gap-4">
               <Field label="Recipient Email *">
                 <Input value={sendEmailTo} onChange={setSendEmailTo} placeholder="customer@example.com" />
@@ -2025,10 +2038,14 @@ function SalesContent() {
                   className="form-input text-xs min-h-[90px]"
                   value={sendEmailMessage}
                   onChange={e => setSendEmailMessage(e.target.value)}
-                  placeholder="Personal note included in the email body…"
+                  placeholder={isUpdate
+                    ? 'Note for this revised quotation…'
+                    : 'Personal note included in the email body…'}
                 />
               </Field>
-              <p className="text-[10px] text-[var(--text-4)]">The quotation PDF ({order.ref}) is attached automatically.</p>
+              <p className="text-[10px] text-[var(--text-4)]">
+                {isUpdate ? 'Updated quotation' : 'Quotation'} PDF ({order.ref}) is attached automatically for download.
+              </p>
               <div className="flex gap-2 justify-end pt-2 border-t border-[var(--border-lt)]">
                 <button className="btn-outline text-xs" onClick={() => setSendModalOrderId(null)}>Cancel</button>
                 <button
@@ -2036,7 +2053,7 @@ function SalesContent() {
                   disabled={!sendEmailTo.trim() || sendingQuoteId === order.id}
                   onClick={() => emailSalesQuote(order, sendEmailTo.trim(), sendEmailMessage.trim() || undefined)}
                 >
-                  {sendingQuoteId === order.id ? 'Sending…' : 'Send'}
+                  {sendingQuoteId === order.id ? 'Sending…' : (isUpdate ? 'Send update' : 'Send')}
                 </button>
               </div>
             </div>

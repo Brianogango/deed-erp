@@ -132,15 +132,21 @@ export const quoteEmail = (quote: {
   contactPersonName: string
   total: number
   validUntil: string
-  ownerName: string
+  ownerName?: string
   lines: Array<{ productName: string; qty: number; lineTotal: number }>
-}) => baseTemplate(`
-  <h2 style="color: ${DEED_PURPLE}; margin-top: 0; font-size: 22px;">Quotation Ready</h2>
+  kind?: 'initial' | 'update'
+  pdfDownloadUrl?: string
+}) => {
+  const isUpdate = quote.kind === 'update'
+  return baseTemplate(`
+  <h2 style="color: ${DEED_PURPLE}; margin-top: 0; font-size: 22px;">${isUpdate ? 'Updated Quotation' : 'Quotation'}</h2>
   <p>Hello ${quote.contactPersonName},</p>
-  <p>Thank you for your interest in Deed Technologies. We are pleased to present our quotation for <strong>${quote.companyName}</strong>.</p>
+  <p>${isUpdate
+    ? `Please find the <strong>updated quotation</strong> for <strong>${quote.companyName}</strong> below.`
+    : `Please find our quotation for <strong>${quote.companyName}</strong> below.`}</p>
   
   <div style="margin: 32px 0;">
-    <h3 style="font-size: 16px; color: ${DEED_PURPLE}; margin-bottom: 16px;">Quote Summary: ${quote.ref}</h3>
+    <h3 style="font-size: 16px; color: ${DEED_PURPLE}; margin-bottom: 16px;">Quote Summary: ${quote.ref}${isUpdate ? ' (Updated)' : ''}</h3>
     <table>
       <thead>
         <tr>
@@ -165,13 +171,14 @@ export const quoteEmail = (quote: {
     </table>
   </div>
   
-  <p><strong>Validity:</strong> This quote is valid until ${quote.validUntil}.</p>
-  
-  <p>To proceed with this quotation, please reply to this email or contact your account manager, ${quote.ownerName}.</p>
+  <p><strong>Valid until:</strong> ${quote.validUntil}</p>
+  ${quote.pdfDownloadUrl
+    ? `<p style="margin:24px 0;"><a href="${quote.pdfDownloadUrl}" class="button">Download PDF</a></p>`
+    : `<p>The full quotation PDF is attached to this email — open the attachment to download.</p>`}
   
   <div class="divider"></div>
   
   <p style="margin-bottom: 0;">Best regards,</p>
-  <p style="margin-top: 4px; font-weight: 700; color: ${DEED_PURPLE};">${quote.ownerName}<br>Deed Technologies Limited</p>
-  <p style="margin-top: 4px; font-size: 13px; color: ${TEXT_MUTED};"><a href="mailto:sales@deed.co.ke" style="color: ${DEED_PURPLE};">sales@deed.co.ke</a> | +254 113 704 451</p>
-`);
+  <p style="margin-top: 4px; font-weight: 700; color: ${DEED_PURPLE};">Sales<br>Deed Technologies Limited</p>
+  <p style="margin-top: 4px; font-size: 13px; color: ${TEXT_MUTED};"><a href="mailto:sales@deed.co.ke" style="color: ${DEED_PURPLE};">sales@deed.co.ke</a></p>
+`)}

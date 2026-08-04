@@ -40,6 +40,8 @@ export async function POST(request: Request) {
       }
       /** Optional personal message from the sender, included in the email body. */
       message?: string
+      /** First send vs revised quotation email copy. */
+      kind?: 'initial' | 'update'
       channels: ('email' | 'whatsapp')[]
     }
 
@@ -53,7 +55,12 @@ export async function POST(request: Request) {
     // Send by Email attaches the quotation document).
     if (payload.channels.includes('email')) {
       const isDev = process.env.NODE_ENV !== 'production'
-      const emailContent = generateQuoteEmail({ ...payload.quote, message: payload.message })
+      const emailContent = generateQuoteEmail({
+        ...payload.quote,
+        message: payload.message,
+        kind: payload.kind === 'update' ? 'update' : 'initial',
+        pdfAttached: true,
+      })
       let attachments: Array<{ filename: string; content: Buffer; contentType: string }> = []
       try {
         const pdf = await generateQuotePdfBuffer(payload.quote)
@@ -67,10 +74,20 @@ export async function POST(request: Request) {
         console.error('Quote PDF generation failed:', error)
       }
 
+      // If PDF attach failed, regenerate copy without the attachment claim.
+      const finalEmailContent = attachments.length > 0
+        ? emailContent
+        : generateQuoteEmail({
+            ...payload.quote,
+            message: payload.message,
+            kind: payload.kind === 'update' ? 'update' : 'initial',
+            pdfAttached: false,
+          })
+
       if (isDev) {
         logEmailForDev({
           to: payload.quote.contactEmail,
-          ...emailContent,
+          ...finalEmailContent,
           attachments,
         })
         results.email = { success: true }
@@ -80,7 +97,7 @@ export async function POST(request: Request) {
           mailbox: 'sales',
           // From is resolved Contabo-safe by pickMailbox; sales@ goes on Reply-To.
           replyTo: process.env.SALES_EMAIL || undefined,
-          ...emailContent,
+          ...finalEmailContent,
           attachments,
         })
         results.email = emailResult
@@ -107,6 +124,7 @@ export async function POST(request: Request) {
           total: payload.quote.total,
           validUntil: payload.quote.validUntil,
           ownerName: payload.quote.ownerName,
+          kind: payload.kind === 'update' ? 'update' : 'initial',
         })
         results.whatsapp = whatsappResult
       }

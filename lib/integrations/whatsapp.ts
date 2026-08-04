@@ -128,28 +128,32 @@ export const sendQuoteViaWhatsApp = async (quote: {
   contactPhone: string
   total: number
   validUntil: string
-  ownerName: string
+  ownerName?: string
   quoteUrl?: string
+  kind?: 'initial' | 'update'
 }): Promise<WhatsAppResult> => {
-  const message = `
-Hi ${quote.contactPersonName},
-
-Thank you for your interest! Your quotation is ready:
-
-*Quote ${quote.ref}*
-Company: ${quote.companyName}
-Total: KES ${quote.total.toLocaleString()}
-Valid Until: ${quote.validUntil}
-
-${quote.quoteUrl ? `View quote: ${quote.quoteUrl}` : 'Please check your email for the detailed quote.'}
-
-To accept or discuss, please reply to this message or contact:
-${quote.ownerName}
-Deed Technologies
-+254 20 123 4567
-
-Thank you!
-  `.trim()
+  const isUpdate = quote.kind === 'update'
+  const brand = process.env.PDF_COMPANY_NAME || 'Deed Technologies'
+  const salesEmail = process.env.SALES_EMAIL || process.env.PDF_COMPANY_EMAIL || 'sales@deed.co.ke'
+  const message = [
+    `Hi ${quote.contactPersonName},`,
+    '',
+    isUpdate
+      ? 'Please find the updated quotation below:'
+      : 'Please find our quotation below:',
+    '',
+    `*Quote ${quote.ref}*${isUpdate ? ' (Updated)' : ''}`,
+    `Company: ${quote.companyName}`,
+    `Total: KES ${Number(quote.total || 0).toLocaleString()}`,
+    `Valid until: ${quote.validUntil}`,
+    '',
+    quote.quoteUrl ? `View quote: ${quote.quoteUrl}` : 'Please check your email for the detailed PDF.',
+    '',
+    'Best regards,',
+    'Sales',
+    brand,
+    salesEmail,
+  ].join('\n')
 
   return sendWhatsAppMessage({
     to: quote.contactPhone,

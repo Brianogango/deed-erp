@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { sendEmail } from '@/lib/integrations/email'
+import { sendEmail, generateQuoteEmail } from '@/lib/integrations/email'
 import { sendWhatsAppMessage } from '@/lib/integrations/whatsapp'
 import { generateQuotePdfBuffer } from '@/lib/integrations/quote-pdf'
 
@@ -10,7 +10,7 @@ import { generateQuotePdfBuffer } from '@/lib/integrations/quote-pdf'
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { quote, recipient, method = 'email' } = body
+    const { quote, recipient, method = 'email', kind = 'initial' } = body
 
     if (!quote || !recipient) {
       return NextResponse.json(
@@ -21,34 +21,54 @@ export async function POST(request: NextRequest) {
 
     if (method === 'email') {
       // Generate PDF server-side (shared with /api/integrations/send-quote)
-      const pdfBuffer = await generateQuotePdfBuffer({
+      let attachments: Array<{ filename: string; content: Buffer; contentType: string }> = []
+      try {
+        const pdfBuffer = await generateQuotePdfBuffer({
+          ref: quote.ref,
+          companyName: quote.companyName,
+          contactPersonName: quote.contactPersonName ?? recipient.name,
+          date: quote.issueDate,
+          validUntil: quote.validUntil,
+          lines: quote.lines ?? [],
+          subtotal: quote.subtotal,
+          taxTotal: quote.taxTotal,
+          total: quote.total,
+          paymentTerms: quote.paymentTerms,
+          notes: quote.notes,
+        })
+        attachments = [{
+          filename: `${String(quote.ref).replace(/[/\\]/g, '-')}.pdf`,
+          content: pdfBuffer,
+          contentType: 'application/pdf',
+        }]
+      } catch (error) {
+        console.error('Quote PDF generation failed:', error)
+      }
+
+      const emailContent = generateQuoteEmail({
         ref: quote.ref,
         companyName: quote.companyName,
-        contactPersonName: quote.contactPersonName,
-        date: quote.issueDate,
-        validUntil: quote.validUntil,
-        lines: quote.lines ?? [],
-        subtotal: quote.subtotal,
-        taxTotal: quote.taxTotal,
+        contactPersonName: recipient.name || quote.contactPersonName || quote.companyName,
         total: quote.total,
-        paymentTerms: quote.paymentTerms,
-        notes: quote.notes,
+        validUntil: quote.validUntil,
+        ownerName: quote.ownerName,
+        lines: (quote.lines ?? []).map((line: { productName?: string; description?: string; qty?: number; lineTotal?: number; subtotal?: number }) => ({
+          productName: line.productName || line.description || 'Item',
+          qty: Number(line.qty ?? 1),
+          lineTotal: Number(line.lineTotal ?? line.subtotal ?? 0),
+        })),
+        message: quote.message,
+        kind: kind === 'update' ? 'update' : 'initial',
+        pdfAttached: attachments.length > 0,
+        pdfDownloadUrl: quote.pdfDownloadUrl,
       })
 
       const result = await sendEmail({
         to: recipient.email,
         mailbox: 'sales',
         replyTo: process.env.SALES_EMAIL || undefined,
-        subject: `Quote ${quote.ref} from ${process.env.PDF_COMPANY_NAME || 'Deed ERP'}`,
-        html: generateQuoteEmailHtml(quote, recipient),
-        text: generateQuoteEmailText(quote, recipient),
-        attachments: [
-          {
-            filename: `${quote.ref}.pdf`,
-            content: pdfBuffer,
-            contentType: 'application/pdf',
-          },
-        ],
+        ...emailContent,
+        attachments,
       })
 
       if (!result.success) {
@@ -69,7 +89,7 @@ export async function POST(request: NextRequest) {
       const result = await sendWhatsAppMessage({
         to: recipient.phone,
         type: 'text',
-        text: generateQuoteWhatsAppMessage(quote, recipient),
+        text: generateQuoteWhatsAppMessage(quote, recipient, kind === 'update' ? 'update' : 'initial'),
       })
 
       if (!result.success) {
@@ -99,109 +119,30 @@ export async function POST(request: NextRequest) {
   }
 }
 
-function generateQuoteEmailHtml(quote: any, recipient: any): string {
-  return `
-<!DOCTYPE html>
-<html>
-<head>
-  <style>
-    body { font-family: 'Segoe UI', Arial, sans-serif; line-height: 1.6; color: #333; }
-    .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-    .header { background: #875BF7; color: white; padding: 20px; border-radius: 8px 8px 0 0; }
-    .content { background: #f9f9f9; padding: 20px; }
-    .quote-summary { background: white; padding: 15px; border-radius: 8px; margin: 15px 0; }
-    .footer { text-align: center; padding: 20px; font-size: 12px; color: #666; }
-    .total { font-size: 18px; font-weight: bold; color: #875BF7; }
-  </style>
-</head>
-<body>
-  <div class="container">
-    <div class="header">
-      <h1 style="margin: 0; font-size: 24px;">${process.env.PDF_COMPANY_NAME || 'Deed Technologies'}</h1>
-      <p style="margin: 5px 0 0 0; opacity: 0.9;">Your Technology Partner</p>
-    </div>
-    
-    <div class="content">
-      <p>Hello ${recipient.name},</p>
-      
-      <p>Thank you for your interest! We're pleased to present our quotation.</p>
-      
-      <div class="quote-summary">
-        <h2 style="margin: 0 0 15px 0; font-size: 18px; color: #875BF7;">
-          Quote ${quote.ref}
-        </h2>
-        
-        <p><strong>Company:</strong> ${quote.companyName}</p>
-        <p><strong>Total Amount (incl. VAT):</strong> <span class="total">KES ${quote.total.toLocaleString()}</span></p>
-        <p><strong>Valid Until:</strong> ${quote.validUntil}</p>
-      </div>
-      
-      <p>Please find the detailed quotation attached as a PDF.</p>
-      
-      <p>To accept this quote or discuss further, please reply to this email or contact ${quote.ownerName}.</p>
-      
-      <p>Best regards,<br>
-      <strong>${quote.ownerName}</strong><br>
-      ${process.env.PDF_COMPANY_NAME || 'Deed Technologies'}<br>
-      ${process.env.PDF_COMPANY_EMAIL || 'sales@deed.co.ke'} | ${process.env.PDF_COMPANY_PHONE || '+254 20 123 4567'}</p>
-    </div>
-    
-    <div class="footer">
-      <p>${process.env.PDF_COMPANY_NAME || 'Deed Technologies'} · ${process.env.PDF_COMPANY_ADDRESS || 'Nairobi, Kenya'}</p>
-      <p style="font-size: 10px; color: #999;">This is an automated message from Deed ERP.</p>
-    </div>
-  </div>
-</body>
-</html>
-  `
-}
-
-function generateQuoteEmailText(quote: any, recipient: any): string {
-  return `
-Quote ${quote.ref} from ${process.env.PDF_COMPANY_NAME || 'Deed Technologies'}
-
-Hello ${recipient.name},
-
-Thank you for your interest! We're pleased to present our quotation.
-
-Quote Details:
-Company: ${quote.companyName}
-Total Amount (incl. VAT): KES ${quote.total.toLocaleString()}
-Valid Until: ${quote.validUntil}
-
-Please find the detailed quotation attached as a PDF.
-
-To accept this quote or discuss further, please reply to this email or contact ${quote.ownerName}.
-
-Best regards,
-${quote.ownerName}
-${process.env.PDF_COMPANY_NAME || 'Deed Technologies'}
-${process.env.PDF_COMPANY_EMAIL || 'sales@deed.co.ke'} | ${process.env.PDF_COMPANY_PHONE || '+254 20 123 4567'}
-  `.trim()
-}
-
-function generateQuoteWhatsAppMessage(quote: any, recipient: any): string {
+function generateQuoteWhatsAppMessage(quote: any, recipient: any, kind: 'initial' | 'update'): string {
   const portalUrl = process.env.NEXT_PUBLIC_APP_URL
     ? `${process.env.NEXT_PUBLIC_APP_URL}/portal/quotes/${quote.id}`
     : ''
+  const brand = process.env.PDF_COMPANY_NAME || 'Deed Technologies'
+  const salesEmail = process.env.SALES_EMAIL || process.env.PDF_COMPANY_EMAIL || 'sales@deed.co.ke'
 
-  return `
-Hi ${recipient.name},
-
-Thank you for your interest! Your quotation is ready:
-
-*Quote ${quote.ref}*
-Company: ${quote.companyName}
-Total: KES ${quote.total.toLocaleString()}
-Valid Until: ${quote.validUntil}
-
-${portalUrl ? `View and accept online: ${portalUrl}` : 'Please check your email for the detailed quote.'}
-
-To discuss or accept, please reply to this message or contact:
-${quote.ownerName}
-${process.env.PDF_COMPANY_NAME || 'Deed Technologies'}
-${process.env.PDF_COMPANY_PHONE || '+254 20 123 4567'}
-
-Thank you!
-  `.trim()
+  return [
+    `Hi ${recipient.name},`,
+    '',
+    kind === 'update'
+      ? `Please find the updated quotation below:`
+      : `Please find our quotation below:`,
+    '',
+    `*Quote ${quote.ref}*${kind === 'update' ? ' (Updated)' : ''}`,
+    `Company: ${quote.companyName}`,
+    `Total: KES ${Number(quote.total || 0).toLocaleString()}`,
+    `Valid until: ${quote.validUntil}`,
+    '',
+    portalUrl ? `View online: ${portalUrl}` : 'Check your email for the detailed PDF.',
+    '',
+    'Best regards,',
+    'Sales',
+    brand,
+    salesEmail,
+  ].join('\n')
 }

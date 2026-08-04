@@ -445,53 +445,115 @@ const sendViaSMTP = async (message: EmailMessage): Promise<EmailResult> => {
 const escapeHtml = (value: string) =>
   value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 
+export type QuoteEmailKind = 'initial' | 'update'
+
+const quoteCompanyName = () => process.env.PDF_COMPANY_NAME || 'Deed Technologies'
+const quoteSalesEmail = () => process.env.SALES_EMAIL || process.env.PDF_COMPANY_EMAIL || 'sales@deed.co.ke'
+
+/**
+ * Sales quotation email — first send vs update.
+ * Body ends after the quote with a Sales signature only (no phone, no accept CTA).
+ * PDF is expected as an attachment; optional download URL adds an in-body button.
+ */
 export const generateQuoteEmail = (quote: {
   ref: string
   companyName: string
   contactPersonName: string
   total: number
   validUntil: string
-  ownerName: string
+  ownerName?: string
   lines: Array<{ productName: string; qty: number; lineTotal: number }>
   /** Optional personal message written by the sender. */
   message?: string
+  /** First send vs revised quotation. */
+  kind?: QuoteEmailKind
+  /** When true (default), tell the recipient the PDF is attached. */
+  pdfAttached?: boolean
+  /** Optional public/signed URL for an in-email Download PDF button. */
+  pdfDownloadUrl?: string
 }) => {
+  const brand = quoteCompanyName()
+  const salesEmail = quoteSalesEmail()
+  const isUpdate = quote.kind === 'update'
+  const hasMessage = Boolean(quote.message?.trim())
+  const pdfAttached = quote.pdfAttached !== false
+  const greetingName = escapeHtml(quote.contactPersonName || quote.companyName || 'there')
+  const company = escapeHtml(quote.companyName || 'your organisation')
+  const ref = escapeHtml(quote.ref)
+  const validUntil = escapeHtml(quote.validUntil || '—')
+
+  const subject = isUpdate
+    ? `Updated Quote ${quote.ref} — ${brand}`
+    : `Quote ${quote.ref} — ${brand}`
+
+  const introHtml = hasMessage
+    ? ''
+    : isUpdate
+      ? `<p>Please find the <strong>updated quotation</strong> for ${company} below.</p>`
+      : `<p>Please find our quotation for ${company} below.</p>`
+
+  const downloadHtml = quote.pdfDownloadUrl
+    ? `
+            <p style="margin: 20px 0 8px 0;">
+              <a href="${escapeHtml(quote.pdfDownloadUrl)}"
+                 style="display:inline-block;background:#1A1F5E;color:#fff;text-decoration:none;padding:12px 20px;border-radius:8px;font-weight:600;font-size:14px;">
+                Download PDF
+              </a>
+            </p>
+            ${pdfAttached ? `<p style="margin:0;font-size:13px;color:#64748B;">The quotation PDF is also attached to this email.</p>` : ''}`
+    : pdfAttached
+      ? `<p style="margin:20px 0 0 0;font-size:14px;">The full quotation PDF is <strong>attached</strong> to this email — open the attachment to download.</p>`
+      : ''
+
+  const lineRows = quote.lines.map(line => `
+                    <tr>
+                      <td>${escapeHtml(line.productName)}</td>
+                      <td style="text-align: center;">${line.qty}</td>
+                      <td style="text-align: right;">KES ${Number(line.lineTotal || 0).toLocaleString()}</td>
+                    </tr>`).join('')
+
   return {
-    subject: `Quote ${quote.ref} from Deed Technologies`,
+    subject,
     html: `
       <!DOCTYPE html>
       <html>
       <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <style>
           body { font-family: 'Segoe UI', Arial, sans-serif; line-height: 1.6; color: #333; }
           .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-          .header { background: #875BF7; color: white; padding: 20px; border-radius: 8px 8px 0 0; }
+          .header { background: #1A1F5E; color: white; padding: 20px; border-radius: 8px 8px 0 0; }
           .content { background: #f9f9f9; padding: 20px; }
-          .quote-summary { background: white; padding: 15px; border-radius: 8px; margin: 15px 0; }
+          .quote-summary { background: white; padding: 15px; border-radius: 8px; margin: 15px 0; border: 1px solid #e5e7eb; }
           .footer { text-align: center; padding: 20px; font-size: 12px; color: #666; }
           table { width: 100%; border-collapse: collapse; }
           th, td { padding: 10px; text-align: left; border-bottom: 1px solid #ddd; }
           th { background: #f5f5f5; font-weight: 600; }
-          .total { font-size: 18px; font-weight: bold; color: #875BF7; }
+          .total { font-size: 18px; font-weight: bold; color: #1A1F5E; }
+          .badge { display:inline-block;font-size:11px;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;padding:4px 8px;border-radius:999px;background:${isUpdate ? '#FEF3C7' : '#E0E7FF'};color:${isUpdate ? '#92400E' : '#1A1F5E'}; }
         </style>
       </head>
       <body>
         <div class="container">
           <div class="header">
-            <h1 style="margin: 0; font-size: 24px;">Deed Technologies</h1>
-            <p style="margin: 5px 0 0 0; opacity: 0.9;">Your Technology Partner</p>
+            <h1 style="margin: 0; font-size: 24px;">${escapeHtml(brand)}</h1>
+            <p style="margin: 5px 0 0 0; opacity: 0.9;">${isUpdate ? 'Updated quotation' : 'Quotation'}</p>
           </div>
-          
+
           <div class="content">
-            <p>Hello ${quote.contactPersonName},</p>
-            ${quote.message ? `<p style="white-space: pre-wrap;">${escapeHtml(quote.message)}</p>` : ''}
-            <p>Thank you for your interest! We're pleased to present our quotation for ${quote.companyName}.</p>
-            
+            <p>Hello ${greetingName},</p>
+            ${hasMessage ? `<p style="white-space: pre-wrap;">${escapeHtml(quote.message!.trim())}</p>` : ''}
+            ${introHtml}
+
             <div class="quote-summary">
-              <h2 style="margin: 0 0 15px 0; font-size: 18px; color: #875BF7;">
-                Quote ${quote.ref}
-              </h2>
-              
+              <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 0 15px 0;flex-wrap:wrap;">
+                <h2 style="margin: 0; font-size: 18px; color: #1A1F5E;">
+                  Quote ${ref}
+                </h2>
+                <span class="badge">${isUpdate ? 'Updated' : 'New'}</span>
+              </div>
+
               <table>
                 <thead>
                   <tr>
@@ -501,63 +563,56 @@ export const generateQuoteEmail = (quote: {
                   </tr>
                 </thead>
                 <tbody>
-                  ${quote.lines.map(line => `
-                    <tr>
-                      <td>${line.productName}</td>
-                      <td style="text-align: center;">${line.qty}</td>
-                      <td style="text-align: right;">KES ${line.lineTotal.toLocaleString()}</td>
-                    </tr>
-                  `).join('')}
+                  ${lineRows}
                 </tbody>
               </table>
-              
-              <div style="text-align: right; margin-top: 20px; padding-top: 15px; border-top: 2px solid #875BF7;">
+
+              <div style="text-align: right; margin-top: 20px; padding-top: 15px; border-top: 2px solid #1A1F5E;">
                 <p style="margin: 5px 0; font-size: 14px;">Total Amount (incl. VAT)</p>
-                <p class="total" style="margin: 0;">KES ${quote.total.toLocaleString()}</p>
+                <p class="total" style="margin: 0;">KES ${Number(quote.total || 0).toLocaleString()}</p>
               </div>
+              <p style="margin: 16px 0 0 0; font-size: 13px; color: #64748B;"><strong>Valid until:</strong> ${validUntil}</p>
             </div>
-            
-            <p><strong>Valid Until:</strong> ${quote.validUntil}</p>
-            
-            <p>To accept this quote, please reply to this email or contact your account manager ${quote.ownerName}.</p>
-            
-            <p>If you have any questions, feel free to reach out!</p>
-            
-            <p>Best regards,<br>
-            <strong>${quote.ownerName}</strong><br>
-            Deed Technologies<br>
-            <a href="mailto:sales@deed.co.ke">sales@deed.co.ke</a> | +254 20 123 4567</p>
+
+            ${downloadHtml}
+
+            <p style="margin: 28px 0 0 0;">Best regards,<br>
+            <strong>Sales</strong><br>
+            ${escapeHtml(brand)}<br>
+            <a href="mailto:${escapeHtml(salesEmail)}">${escapeHtml(salesEmail)}</a></p>
           </div>
-          
+
           <div class="footer">
-            <p>Deed Technologies Ltd · Westlands, Nairobi · deed.co.ke</p>
-            <p style="font-size: 10px; color: #999;">This is an automated message from Deed ERP.</p>
+            <p>${escapeHtml(brand)}</p>
           </div>
         </div>
       </body>
       </html>
     `,
-    text: `
-Quote ${quote.ref} from Deed Technologies
-
-Hello ${quote.contactPersonName},
-
-${quote.message ? `${quote.message}\n\n` : ''}Thank you for your interest! We're pleased to present our quotation for ${quote.companyName}.
-
-Quote Details:
-${quote.lines.map(line => `${line.productName} × ${line.qty} = KES ${line.lineTotal.toLocaleString()}`).join('\n')}
-
-TOTAL (incl. VAT): KES ${quote.total.toLocaleString()}
-
-Valid Until: ${quote.validUntil}
-
-To accept this quote, please reply to this email or contact ${quote.ownerName}.
-
-Best regards,
-${quote.ownerName}
-Deed Technologies
-sales@deed.co.ke | +254 20 123 4567
-    `.trim(),
+    text: [
+      subject,
+      '',
+      `Hello ${quote.contactPersonName || quote.companyName || 'there'},`,
+      '',
+      hasMessage ? quote.message!.trim() : '',
+      hasMessage ? '' : (isUpdate
+        ? `Please find the updated quotation for ${quote.companyName} below.`
+        : `Please find our quotation for ${quote.companyName} below.`),
+      '',
+      `Quote ${quote.ref}${isUpdate ? ' (Updated)' : ''}`,
+      ...quote.lines.map(line => `${line.productName} × ${line.qty} = KES ${Number(line.lineTotal || 0).toLocaleString()}`),
+      '',
+      `TOTAL (incl. VAT): KES ${Number(quote.total || 0).toLocaleString()}`,
+      `Valid until: ${quote.validUntil}`,
+      '',
+      quote.pdfDownloadUrl ? `Download PDF: ${quote.pdfDownloadUrl}` : '',
+      pdfAttached ? 'The full quotation PDF is attached to this email.' : '',
+      '',
+      'Best regards,',
+      'Sales',
+      brand,
+      salesEmail,
+    ].filter(line => line !== undefined).join('\n').replace(/\n{3,}/g, '\n\n').trim(),
   }
 }
 
