@@ -2,6 +2,6 @@
   "queries": [],
   "since": "2026-08-01",
   "limit": 100,
-  "requestedAt": "2026-08-04T12:10:00Z",
-  "note": "Histogram + Prisma mirror check — why Aug repairs missing from UI"
+  "requestedAt": "2026-08-04T12:12:00Z",
+  "note": "Compare Prisma vs blob to find missing August repairs"
 }

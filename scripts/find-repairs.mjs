@@ -203,17 +203,36 @@ try {
   try {
     const prismaCount = await pool.query(`SELECT COUNT(*)::int AS n FROM repairs`)
     console.log(`\n--- Prisma repairs table count: ${prismaCount.rows[0]?.n ?? 0} ---`)
+    const prismaAll = await pool.query(
+      `SELECT job_number, status, device_type, serial_number, intake_date, created_at
+       FROM repairs
+       ORDER BY COALESCE(intake_date, created_at) DESC`,
+    )
+    const blobRefs = new Set(repairs.map(r => String(r?.ref || '').trim()).filter(Boolean))
+    const prismaOnly = prismaAll.rows.filter(row => !blobRefs.has(String(row.job_number || '').trim()))
+    const blobOnly = repairs.filter(r => {
+      const ref = String(r?.ref || '').trim()
+      return ref && !prismaAll.rows.some(row => String(row.job_number || '').trim() === ref)
+    })
+    console.log(`Prisma-only (not in blob): ${prismaOnly.length}`)
+    console.log(JSON.stringify(prismaOnly.slice(0, limit), null, 2))
+    console.log(`Blob-only (not in Prisma): ${blobOnly.length}`)
+    console.log(JSON.stringify(blobOnly.slice(0, 20).map(summarize), null, 2))
     if (since) {
-      const prismaRecent = await pool.query(
-        `SELECT job_number, status, device_type, serial_number, intake_date, created_at
-         FROM repairs
-         WHERE intake_date >= $1::date OR created_at >= $1::timestamptz
-         ORDER BY COALESCE(intake_date, created_at) DESC
-         LIMIT $2`,
-        [since, limit],
-      )
-      console.log(`Prisma rows since ${since}: ${prismaRecent.rows.length}`)
-      console.log(JSON.stringify(prismaRecent.rows, null, 2))
+      const prismaRecent = prismaAll.rows.filter(row => {
+        const intake = row.intake_date ? new Date(row.intake_date).toISOString() : ''
+        const created = row.created_at ? new Date(row.created_at).toISOString() : ''
+        return (intake && intake >= since) || (created && created >= since)
+      })
+      console.log(`Prisma rows since ${since}: ${prismaRecent.length}`)
+      console.log(JSON.stringify(prismaRecent.slice(0, limit), null, 2))
+      const prismaOnlyRecent = prismaOnly.filter(row => {
+        const intake = row.intake_date ? new Date(row.intake_date).toISOString() : ''
+        const created = row.created_at ? new Date(row.created_at).toISOString() : ''
+        return (intake && intake >= since) || (created && created >= since)
+      })
+      console.log(`Prisma-only since ${since}: ${prismaOnlyRecent.length}`)
+      console.log(JSON.stringify(prismaOnlyRecent, null, 2))
     }
   } catch (err) {
     console.log(`\n--- Prisma repairs query skipped: ${err instanceof Error ? err.message : err} ---`)
