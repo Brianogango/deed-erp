@@ -18,7 +18,6 @@ export { default as ViewSelector } from './ViewSelector'
 export { getColumnValue, getColumnSortValue, isColumnSortable } from '@/lib/data-table/types'
 export type { ColumnDef, ColumnPriority, ColumnValuePurpose, TableType, SavedView, TablePreferences } from '@/lib/data-table/types'
 export type { TableSortState, SortDirection } from '@/lib/data-table/sort'
-export type { TableSortState, SortDirection } from '@/lib/data-table/sort'
 export type {
   ToolbarFilterOption,
   PrimaryFilterConfig,

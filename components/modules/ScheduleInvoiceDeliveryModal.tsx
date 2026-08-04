@@ -124,8 +124,6 @@ export function ScheduleInvoiceDeliveryModal({
           <Field label="Delivery charge (customer) KES *">
             <Input
               type="number"
-              min="0"
-              step="1"
               value={form.deliveryFee}
               onChange={v => set('deliveryFee', v)}
               placeholder="Added as invoice line"
@@ -134,8 +132,6 @@ export function ScheduleInvoiceDeliveryModal({
           <Field label="Rider fee (KES) *">
             <Input
               type="number"
-              min="0"
-              step="1"
               value={form.riderFee}
               onChange={v => set('riderFee', v)}
               placeholder="What rider is paid"
