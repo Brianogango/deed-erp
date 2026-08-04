@@ -1,12 +1,12 @@
 {
   "salesUser": "sales@deed.co.ke",
-  "salesPass": "DeedPCollective",
+  "salesPass": "",
   "salesEmail": "sales@deed.co.ke",
   "accountsUser": "accounts@deed.co.ke",
-  "accountsPass": "(&KF11%0t@.-",
+  "accountsPass": "",
   "accountsEmail": "accounts@deed.co.ke",
   "restart": true,
   "envPath": "/var/www/deed-erp/.env",
-  "requestedAt": "2026-08-04T09:06:00Z",
-  "note": "Re-apply with quoted .env values for accounts special-char password"
+  "requestedAt": "2026-08-04T09:08:00Z",
+  "note": "SCRUBBED — passwords cleared after Contabo apply. Fill salesPass/accountsPass only for a new one-shot run."
 }
