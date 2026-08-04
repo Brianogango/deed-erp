@@ -156,6 +156,7 @@ OPS_PATHS=(
   scripts/find-repairs.mjs
   scripts/find-sale-orders.mjs
   scripts/delete-repairs.mjs
+  scripts/restore-missing-repairs.mjs
   scripts/diagnose-email.mjs
   scripts/release-orphan-reservations.mjs
   scripts/undo-sale-delivery.mjs
@@ -166,6 +167,7 @@ OPS_PATHS=(
   ops/find-repairs-request.json
   ops/find-sale-orders-request.json
   ops/delete-repairs-request.json
+  ops/restore-missing-repairs-request.json
   ops/heal-grn-serials-request.json
   ops/add-serial-request.json
   ops/add-opening-bulk-stock-request.json
