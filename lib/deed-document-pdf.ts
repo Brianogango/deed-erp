@@ -15,6 +15,10 @@ export interface DeedPdfLine {
   taxRate?: number
   discountPct?: number
   subtotal?: number
+  /** Delivery notes: serial / IMEI for the shipped unit. */
+  serial?: string
+  /** Delivery notes: unit specs (RAM, storage, CPU, accessories, …). */
+  specs?: string
 }
 
 export interface DeedPdfCompany {
@@ -69,6 +73,15 @@ export interface DeedPdfInput {
   hideAmounts?: boolean
   showPaymentDetails?: boolean
   showSignature?: boolean
+  /**
+   * Delivery notes: show Serial / Specs / Cond. columns instead of the
+   * simple qty-only hideAmounts table.
+   */
+  deliveryNoteLayout?: boolean
+  /** Delivery notes: ID / passport for receipt acknowledgement. */
+  recipientIdNumber?: string
+  /** Delivery notes: receipt acknowledgement block (default when deliveryNoteLayout). */
+  showReceiptAcknowledgement?: boolean
   /** Extra rows under payment details (receipts). */
   extraPaymentLines?: string[]
   /**
@@ -198,10 +211,13 @@ export function buildDeedDocumentPdf(
   // Leave clear air above the fixed contact footer so body text never stacks on it.
   const contentBottom = PAGE_H - 100
   const showAmounts = !input.hideAmounts
+  const deliveryLayout = Boolean(input.deliveryNoteLayout) || (!showAmounts && /delivery/i.test(input.title))
   const showPayment = input.showPaymentDetails ?? showAmounts
   const showSignature = input.showSignature ?? true
+  const showAck = input.showReceiptAcknowledgement ?? deliveryLayout
   const partyLabel = partyLabelFor(input.title, input.partyLabel)
   const website = displayWebsite(company.website)
+  const colCount = showAmounts ? 6 : deliveryLayout ? 6 : 3
 
   const ensureRoom = (y: number, needed: number): number => {
     if (y + needed <= contentBottom) return y
@@ -278,7 +294,15 @@ export function buildDeedDocumentPdf(
     doc.text(`Attn: ${input.attention}`, rightX, partyY, { align: 'right', maxWidth: 240 })
     partyY += 14
   }
-  if (input.customerCountry || input.customerAddress) {
+  if (input.customerAddress) {
+    doc.setFont('helvetica', 'normal').setFontSize(9).setTextColor(...LIGHT_BLUE)
+    const addrLines = doc.splitTextToSize(input.customerAddress, 240) as string[]
+    for (const line of addrLines.slice(0, 3)) {
+      doc.text(line, rightX, partyY, { align: 'right' })
+      partyY += 12
+    }
+  }
+  if (input.customerCountry || (!input.customerAddress && !deliveryLayout)) {
     doc.setFont('helvetica', 'normal').setFontSize(9).setTextColor(...LIGHT_BLUE)
     doc.text(input.customerCountry || 'Kenya', rightX, partyY, { align: 'right' })
     partyY += 14
@@ -298,18 +322,30 @@ export function buildDeedDocumentPdf(
 
   const head = showAmounts
     ? [['SL.', 'ITEM DESCRIPTION', 'UNIT PRICE', 'QUANTITY', 'TAX', 'TOTAL']]
-    : [['SL.', 'ITEM DESCRIPTION', 'QUANTITY']]
+    : deliveryLayout
+      ? [['SL.', 'ITEM DESCRIPTION', 'QTY', 'SERIAL / IMEI', 'SPECS', 'COND. ✓']]
+      : [['SL.', 'ITEM DESCRIPTION', 'QUANTITY']]
 
   let sl = 0
   const bodyRows = input.lines.map(line => {
     if (line.lineType === 'section') {
       return [{
         content: line.description,
-        colSpan: showAmounts ? 6 : 3,
+        colSpan: colCount,
         styles: { fontStyle: 'bold' as const, textColor: NAVY, fillColor: [239, 246, 255] as [number, number, number] },
       }]
     }
     sl += 1
+    if (!showAmounts && deliveryLayout) {
+      return [
+        String(sl),
+        line.description,
+        Number.isInteger(line.qty) ? String(line.qty) : money(line.qty),
+        line.serial?.trim() || '—',
+        line.specs?.trim() || '—',
+        '',
+      ]
+    }
     if (!showAmounts) {
       return [
         String(sl),
@@ -366,11 +402,20 @@ export function buildDeedDocumentPdf(
           4: { cellWidth: 58,halign: 'center' },
           5: { cellWidth: 92,halign: 'right' },
         }
-      : {
-          0: { cellWidth: 28,halign: 'center' },
-          1: { cellWidth: 'auto',halign: 'left' },
-          2: { cellWidth: 70,halign: 'center' },
-        },
+      : deliveryLayout
+        ? {
+            0: { cellWidth: 26,halign: 'center' },
+            1: { cellWidth: 'auto',halign: 'left' },
+            2: { cellWidth: 36,halign: 'center' },
+            3: { cellWidth: 92,halign: 'left', font: 'courier', fontSize: 7.5 },
+            4: { cellWidth: 110,halign: 'left', fontSize: 7.5 },
+            5: { cellWidth: 42,halign: 'center' },
+          }
+        : {
+            0: { cellWidth: 28,halign: 'center' },
+            1: { cellWidth: 'auto',halign: 'left' },
+            2: { cellWidth: 70,halign: 'center' },
+          },
     // New pages created by the table: stamp watermark before cells so content sits above it.
     didDrawPage: data => {
       if (data.pageNumber > 1) drawPageWatermark(doc, company)
@@ -513,7 +558,44 @@ export function buildDeedDocumentPdf(
       doc.line(sigX, sigTop + 46, rightX, sigTop + 46)
       doc.setFont('helvetica', 'normal').setFontSize(8).setTextColor(...GRAY)
       doc.text('Authorised Signature', sigX + rightW / 2, sigTop + 60, { align: 'center' })
+      y = Math.max(y, sigTop + sigH)
+    } else {
+      y = Math.max(y, paySigTop + bottomBlockH)
     }
+  }
+
+  if (showAck) {
+    const ackH = 118
+    y = ensureRoom(y + 10, ackH)
+    doc.setDrawColor(...BORDER).setLineWidth(0.6)
+    doc.setFillColor(255, 255, 255)
+    doc.roundedRect(MARGIN, y, contentW, ackH - 8, 3, 3, 'S')
+    doc.setFont('helvetica', 'bold').setFontSize(9).setTextColor(...NAVY)
+    doc.text('Receipt Acknowledgement', MARGIN + 12, y + 16)
+
+    const colW = (contentW - 36) / 2
+    const leftAck = MARGIN + 12
+    const rightAck = MARGIN + 18 + colW
+    const row1 = y + 34
+    const row2 = y + 72
+
+    const drawAckField = (x: number, top: number, label: string, value?: string, lineH = 28) => {
+      doc.setFont('helvetica', 'bold').setFontSize(7).setTextColor(...GRAY)
+      doc.text(label.toUpperCase(), x, top)
+      if (value?.trim()) {
+        doc.setFont('helvetica', 'normal').setFontSize(9).setTextColor(...TEXT)
+        doc.text(value.trim(), x, top + 16, { maxWidth: colW - 8 })
+      } else {
+        doc.setDrawColor(...TEXT).setLineWidth(0.5)
+        doc.line(x, top + lineH, x + colW - 8, top + lineH)
+      }
+    }
+
+    drawAckField(leftAck, row1, 'Received By (Full Name)', input.attention)
+    drawAckField(rightAck, row1, 'ID / Passport No.', input.recipientIdNumber)
+    drawAckField(leftAck, row2, 'Signature', undefined, 34)
+    drawAckField(rightAck, row2, 'Date Received', undefined, 34)
+    y += ackH
   }
 
   const pageCount = doc.getNumberOfPages()

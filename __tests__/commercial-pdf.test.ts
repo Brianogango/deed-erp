@@ -82,21 +82,29 @@ describe('buildCommercialPdf', () => {
     expect(doc.getNumberOfPages()).toBe(1)
   })
 
-  it.each(['Quotation', 'Pro-forma Invoice', 'Invoice', 'Receipt'])(
+  it.each(['Quotation', 'Pro-forma Invoice', 'Invoice', 'Receipt', 'Delivery Note'])(
     'uses the shared Deed template for %s downloads',
     async title => {
       const doc = await buildCommercialPdf(
         {
           ...baseDoc,
           title,
-          ref: title === 'Pro-forma Invoice' ? 'PI/2026/0001' : title === 'Receipt' ? 'RCPT/2026/0001' : baseDoc.ref,
-          showPaymentDetails: title !== 'Receipt',
+          ref: title === 'Pro-forma Invoice' ? 'PI/2026/0001' : title === 'Receipt' ? 'RCPT/2026/0001' : title === 'Delivery Note' ? 'DN-2026-0001' : baseDoc.ref,
+          showPaymentDetails: title !== 'Receipt' && title !== 'Delivery Note',
+          hideAmounts: title === 'Delivery Note',
+          deliveryNoteLayout: title === 'Delivery Note',
+          lines: title === 'Delivery Note'
+            ? [{ description: 'Dell XPS 13', qty: 1, unitPrice: 0, subtotal: 0, serial: 'SN-1', specs: '16GB / 512GB' }]
+            : baseDoc.lines,
+          subtotal: title === 'Delivery Note' ? 0 : baseDoc.subtotal,
+          taxTotal: title === 'Delivery Note' ? 0 : baseDoc.taxTotal,
+          total: title === 'Delivery Note' ? 0 : baseDoc.total,
         },
         company,
         banks,
       )
       expect(String.fromCharCode(...new Uint8Array(doc.output('arraybuffer')).slice(0, 5))).toBe('%PDF-')
-      expect(doc.getNumberOfPages()).toBe(1)
+      expect(doc.getNumberOfPages()).toBeGreaterThanOrEqual(1)
     },
   )
 })

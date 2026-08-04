@@ -20,10 +20,12 @@ export interface CommercialPdfLine {
   taxRate?: number
   discountPct?: number
   subtotal: number
+  serial?: string
+  specs?: string
 }
 
 export interface CommercialPdfInput {
-  /** e.g. "Quotation", "Sale Order", "Pro-forma Invoice", "Invoice", "Bill", "Receipt" */
+  /** e.g. "Quotation", "Sale Order", "Pro-forma Invoice", "Invoice", "Bill", "Receipt", "Delivery Note" */
   title: string
   ref: string
   date?: string
@@ -36,6 +38,9 @@ export interface CommercialPdfInput {
   customerAddress?: string
   customerCountry?: string
   customerTaxId?: string
+  customerPhone?: string
+  attention?: string
+  recipientIdNumber?: string
   /** Override the party heading, e.g. "Invoice To", "Quote To", "Receipt To". */
   partyLabel?: string
   lines: CommercialPdfLine[]
@@ -52,6 +57,9 @@ export interface CommercialPdfInput {
   paymentCommunication?: boolean
   /** Hide unit prices / totals (delivery-style). */
   hideAmounts?: boolean
+  /** Delivery-note columns: Serial / Specs / Cond. */
+  deliveryNoteLayout?: boolean
+  showReceiptAcknowledgement?: boolean
   /** Show bank / M-Pesa block (default true unless hideAmounts). */
   showPaymentDetails?: boolean
   /** Show authorised signature block (default true). */
@@ -105,6 +113,9 @@ export async function buildCommercialPdf(
     customerAddress: input.customerAddress,
     customerCountry: input.customerCountry,
     customerTaxId: input.customerTaxId,
+    customerPhone: input.customerPhone,
+    attention: input.attention,
+    recipientIdNumber: input.recipientIdNumber,
     partyLabel: input.partyLabel,
     lines: input.lines,
     subtotal: input.subtotal,
@@ -115,6 +126,8 @@ export async function buildCommercialPdf(
     notes: input.notes,
     paymentCommunication: input.paymentCommunication,
     hideAmounts: input.hideAmounts,
+    deliveryNoteLayout: input.deliveryNoteLayout,
+    showReceiptAcknowledgement: input.showReceiptAcknowledgement,
     showPaymentDetails: input.showPaymentDetails,
     showSignature: input.showSignature,
     paymentDetailLines: input.paymentDetailLines,

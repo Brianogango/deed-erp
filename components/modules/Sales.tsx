@@ -32,7 +32,7 @@ import {
   faSave,
   faChevronDown,
 } from '@fortawesome/free-solid-svg-icons'
-import { printDeliveryNote } from '@/lib/delivery-note-pdf'
+import { downloadDeliveryNotePdf } from '@/lib/delivery-note-pdf'
 import SerialMultiSelect from '@/components/SerialMultiSelect'
 import { hasModuleAccess, canCreateCustomerInvoiceFromSO } from '@/lib/auth/access'
 import {
@@ -1187,6 +1187,8 @@ function SalesContent() {
                   focusDeliveryId={focusDeliveryId}
                   serials={serials}
                   products={products}
+                  companySettings={companySettings}
+                  bankAccounts={bankAccounts}
                   deliveryQtys={deliveryQtys}
                   setDeliveryQtys={setDeliveryQtys}
                   savingDelivery={savingDelivery}
@@ -2105,7 +2107,7 @@ function SalesContent() {
         return (
           <Modal title={`Delivery Note — ${del.ref}`} onClose={() => setShowDnModal(false)} width={480}>
             <div className="flex flex-col gap-4">
-              <p className="text-xs text-[var(--text-3)]">Fill in recipient details before printing.</p>
+              <p className="text-xs text-[var(--text-3)]">Fill in recipient details before downloading the Delivery Note PDF.</p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <Field label="Received By (Full Name) *"><Input value={dnRecipientName} onChange={setDnRecipientName} placeholder="e.g. John Kamau" /></Field>
                 <Field label="Phone"><Input value={dnRecipientPhone} onChange={setDnRecipientPhone} placeholder="+254…" /></Field>
@@ -2117,11 +2119,24 @@ function SalesContent() {
                 <button className="btn-outline text-xs" onClick={() => setShowDnModal(false)}>Cancel</button>
                 <button className="btn-secondary flex items-center gap-1.5 text-xs" onClick={async () => {
                   if (deliveryDeliveredTotal(del) <= 0) {
-                    showToast('Cannot print Delivery Note — delivered quantity is 0', 'error')
+                    showToast('Cannot download Delivery Note — delivered quantity is 0', 'error')
                     return
                   }
                   if (dnRecipientName.trim()) updateDelivery(del.id, { recipientName: dnRecipientName.trim(), recipientPhone: dnRecipientPhone.trim() || undefined, recipientIdNumber: dnRecipientId.trim() || undefined, deliveryAddress: dnAddress.trim() || undefined, notes: dnNotes.trim() || undefined })
-                  const generated = printDeliveryNote(del, serials, { recipientName: dnRecipientName.trim(), recipientPhone: dnRecipientPhone.trim(), recipientIdNumber: dnRecipientId.trim(), deliveryAddress: dnAddress.trim(), notes: dnNotes.trim() })
+                  const generated = await downloadDeliveryNotePdf(
+                    del,
+                    serials,
+                    companySettings,
+                    bankAccounts,
+                    {
+                      recipientName: dnRecipientName.trim(),
+                      recipientPhone: dnRecipientPhone.trim(),
+                      recipientIdNumber: dnRecipientId.trim(),
+                      deliveryAddress: dnAddress.trim(),
+                      notes: dnNotes.trim(),
+                    },
+                    products,
+                  )
                   if (generated) {
                     const saved = await markDeliveryNoteGenerated(del.id)
                     if (saved) {
@@ -2131,7 +2146,7 @@ function SalesContent() {
                       showToast('Delivery Note could not be saved — check delivered quantities', 'error')
                     }
                   }
-                }}><Fa icon={faPrint} /> Print / Download</button>
+                }}><Fa icon={faPrint} /> Download PDF</button>
               </div>
             </div>
           </Modal>
@@ -2567,7 +2582,7 @@ function NewQuotationForm({
 // DELIVERY NOTE VIEW
 // ═══════════════════════════════════════════════════════════════════════════
 function DeliveryNoteView({
-  order, deliveries, focusDeliveryId, serials, products, deliveryQtys, setDeliveryQtys, savingDelivery,
+  order, deliveries, focusDeliveryId, serials, products, companySettings, bankAccounts, deliveryQtys, setDeliveryQtys, savingDelivery,
   setSavingDelivery, prepareDelivery, validateDelivery, markDeliveryNoteGenerated, assignSerialsToSOLine, unassignSerialFromSOLine,
   updateDelivery, showToast, onBack,
   dnRecipientName, setDnRecipientName, dnRecipientPhone, setDnRecipientPhone,
@@ -2575,6 +2590,7 @@ function DeliveryNoteView({
 }: {
   order: SalesOrderView; deliveries: any[]; focusDeliveryId?: string | null
   serials: any[]; products: any[]
+  companySettings: any; bankAccounts: any[]
   deliveryQtys: Record<string, number>; setDeliveryQtys: (v: Record<string, number>) => void
   savingDelivery: boolean; setSavingDelivery: (v: boolean) => void
   prepareDelivery: (id: string, qtysDone?: Record<string, number>) => boolean
@@ -2728,11 +2744,21 @@ function DeliveryNoteView({
         recipientIdNumber: dnRecipientId.trim() || undefined, deliveryAddress: dnAddress.trim() || undefined, notes: dnNotes.trim() || undefined,
       })
     }
-    import('@/lib/delivery-note-pdf').then(async ({ printDeliveryNote }) => {
-      const generated = printDeliveryNote(existingDelivery, serials, {
-        recipientName: dnRecipientName.trim(), recipientPhone: dnRecipientPhone.trim(),
-        recipientIdNumber: dnRecipientId.trim(), deliveryAddress: dnAddress.trim(), notes: dnNotes.trim(),
-      })
+    import('@/lib/delivery-note-pdf').then(async ({ downloadDeliveryNotePdf }) => {
+      const generated = await downloadDeliveryNotePdf(
+        existingDelivery,
+        serials,
+        companySettings,
+        bankAccounts,
+        {
+          recipientName: dnRecipientName.trim(),
+          recipientPhone: dnRecipientPhone.trim(),
+          recipientIdNumber: dnRecipientId.trim(),
+          deliveryAddress: dnAddress.trim(),
+          notes: dnNotes.trim(),
+        },
+        products,
+      )
       if (generated) {
         const saved = await markDeliveryNoteGenerated(existingDelivery.id)
         if (saved) showToast(`Delivery Note ${existingDelivery.ref} generated — invoicing is now available`, 'success')
@@ -2753,7 +2779,7 @@ function DeliveryNoteView({
           </div>
         </div>
         <div className="flex items-center gap-2">
-          {canGenerateDeliveryNote(existingDelivery) && <button onClick={handlePrintDN} className="btn-secondary flex items-center gap-2 text-xs"><Fa icon={faPrint} /><span>Generate Delivery Note</span></button>}
+          {canGenerateDeliveryNote(existingDelivery) && <button onClick={handlePrintDN} className="btn-secondary flex items-center gap-2 text-xs"><Fa icon={faPrint} /><span>Download Delivery Note</span></button>}
           {canPrepare && (
             <button onClick={handlePrepare} disabled={savingDelivery} className="btn-primary flex items-center gap-2 text-xs disabled:opacity-50">
               <Fa icon={faBoxOpen} /><span>Prepare Delivery</span>
