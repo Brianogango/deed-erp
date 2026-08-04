@@ -1,0 +1,8 @@
+{
+  "since": "2026-08-01",
+  "onlyStubs": true,
+  "maxBackups": 50,
+  "apply": false,
+  "requestedAt": "2026-08-04T13:10:00Z",
+  "note": "Dry-run: enrich Prisma-stub August repairs with full diagnosis/quotes/notes from Contabo backups"
+}

@@ -130,6 +130,7 @@ jobs:
               scripts/delete-repairs.mjs
               scripts/restore-missing-repairs.mjs
               scripts/heal-restored-repair-assignments.mjs
+              scripts/enrich-restored-repairs-from-backup.mjs
               scripts/diagnose-email.mjs
               scripts/release-orphan-reservations.mjs
               scripts/undo-sale-delivery.mjs
@@ -142,6 +143,7 @@ jobs:
               ops/delete-repairs-request.json
               ops/restore-missing-repairs-request.json
               ops/heal-restored-repair-assignments-request.json
+              ops/enrich-restored-repairs-request.json
               ops/heal-grn-serials-request.json
               ops/add-serial-request.json
               ops/add-opening-bulk-stock-request.json
