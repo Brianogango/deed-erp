@@ -138,6 +138,10 @@ import {
 } from '@/lib/inventory/delivery-source'
 import { resolveAssignedRiderFee } from '@/lib/delivery-job-fee'
 import {
+  appendDeliveryChargeToInvoice,
+  buildDeliveryChargeInvoiceLine,
+} from '@/lib/invoice-delivery-charge'
+import {
   applyCustomerToInvoice,
   applyCustomerToQuote,
   applyCustomerToSaleOrder,
@@ -2842,7 +2846,8 @@ export interface AppState {
   assignRiderToJob: (jobId: string, riderId: string, riderFee?: number) => void
   /**
    * Create a sales_delivery rider job from a customer invoice.
-   * Optionally appends a delivery charge line when the invoice is still draft.
+   * When deliveryFee > 0, always appends a Delivery charge line on the invoice
+   * (draft or posted). Posted invoices also get an adjustment journal.
    */
   scheduleInvoiceDelivery: (invoiceId: string, opts: {
     deliveryAddress: string
@@ -2851,7 +2856,7 @@ export interface AppState {
     deliveryFee?: number
     riderId?: string
     notes?: string
-    /** When true (default) and invoice is draft, add a "Delivery charge" line. */
+    /** When false, skip adding the delivery charge invoice line. Default true. */
     addChargeToInvoice?: boolean
   }) => DeliveryJob | null
   advanceJobStatus: (jobId: string, newStatus: DeliveryJobStatus, failureReason?: string) => void
@@ -15473,7 +15478,7 @@ const storeCtx: AppState = {
       const pickup = [companySettings.name, companySettings.address, companySettings.city]
         .filter(Boolean).join(', ') || 'Deed Technologies'
       const phone = contact?.phone || contact?.mobile || ''
-      const addCharge = opts.addChargeToInvoice !== false && inv.status === 'draft' && deliveryFee > 0
+      const addCharge = opts.addChargeToInvoice !== false && deliveryFee > 0
 
       const job = storeCtxRef.current!.createDeliveryJob({
         type: 'sales_delivery',
@@ -15499,34 +15504,69 @@ const storeCtx: AppState = {
 
       if (addCharge) {
         const vatRate = Number(companySettings.vatRate) || 0
-        const chargeLine = {
+        const chargeLine = buildDeliveryChargeInvoiceLine({
           id: uid(),
-          description: 'Delivery charge',
-          qty: 1,
-          unitPrice: deliveryFee,
+          amount: deliveryFee,
           taxRate: vatRate,
-          subtotal: deliveryFee,
-        }
-        const lines = [...(inv.lines || []), chargeLine]
-        const itemLines = lines.filter(l => l.lineType !== 'section')
-        const subtotal = itemLines.reduce((s, l) => s + l.subtotal, 0)
-        const taxTotal = itemLines.reduce((s, l) => s + Math.round(l.subtotal * (l.taxRate || 0) / 100), 0)
-        storeCtxRef.current!.updateInvoice(inv.id, {
-          lines,
-          subtotal,
-          taxTotal,
-          total: subtotal + taxTotal,
-          deliveryAddress: address,
-          deliveryJobId: job.id,
         })
+        const { lines, subtotal, taxTotal, total } = appendDeliveryChargeToInvoice(inv, chargeLine)
+        const deltaTax = Math.round(deliveryFee * vatRate / 100)
+        const deltaTotal = deliveryFee + deltaTax
+
+        // Always write the delivery line onto the invoice (including posted docs).
+        setInvoices(prev => {
+          const next = prev.map(i => i.id !== inv.id ? i : {
+            ...i,
+            lines,
+            subtotal,
+            taxTotal,
+            total,
+            deliveryAddress: address,
+            deliveryJobId: job.id,
+          })
+          const updated = next.find(i => i.id === inv.id)
+          if (updated) {
+            invRef.current = next
+            sync(`/api/invoices/${inv.id}`, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(updated),
+            })
+          }
+          return next
+        })
+
+        // Keep GL in sync for already-posted invoices (original JRN/ref stays; add DEL adj).
+        if (inv.status === 'posted' && deltaTotal > 0) {
+          const chartAccounts = accountRef.current.map(a => ({ code: a.code, name: a.name }))
+          const saleLabel = formatAccountLabel(COMPANY_ACCOUNT_FALLBACKS.saleAccountCode, chartAccounts)
+          const adjLines = [
+            accountLine('1800 - Accounts Receivable', `AR delivery: ${inv.partnerName}`, deltaTotal, 0),
+            accountLine(saleLabel, `Delivery charge: ${inv.ref}`, 0, deliveryFee),
+            ...(deltaTax > 0
+              ? [accountLine('3301 - Output VAT Payable', `VAT delivery on ${inv.ref}`, 0, deltaTax)]
+              : []),
+          ]
+          const adj: JournalEntry = {
+            id: uid(),
+            ref: `JRN/DEL/${inv.ref}`,
+            date: now(),
+            source: 'invoice',
+            description: `Delivery charge on ${inv.ref} — ${inv.partnerName}`,
+            status: 'posted',
+            invoiceId: inv.id,
+            lines: adjLines,
+            totalDebit: deltaTotal,
+            totalCredit: deltaTotal,
+          }
+          setJournalEntries(p => (p.some(j => j.ref === adj.ref) ? p : [adj, ...p]))
+          addAuditLog('post_invoice', inv.ref, `Delivery charge ${deltaTotal} posted to journal ${adj.ref}`)
+        }
       } else {
         storeCtxRef.current!.updateInvoice(inv.id, {
           deliveryAddress: address,
           deliveryJobId: job.id,
         })
-        if (deliveryFee > 0 && inv.status !== 'draft') {
-          showToast('Delivery charge saved on the job — posted invoices cannot gain a new line', 'info')
-        }
       }
 
       addAuditLog('schedule_invoice_delivery', inv.ref, `Created ${job.ref} (rider fee ${riderFee}${deliveryFee > 0 ? `, customer charge ${deliveryFee}` : ''})`)

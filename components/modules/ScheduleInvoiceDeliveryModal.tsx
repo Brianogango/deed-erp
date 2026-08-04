@@ -64,15 +64,14 @@ export function ScheduleInvoiceDeliveryModal({
 
   const riderFee = parseRiderFeeInput(form.riderFee)
   const deliveryFee = form.deliveryFee.trim() === ''
-    ? 0
+    ? null
     : parseRiderFeeInput(form.deliveryFee)
   const canSubmit =
     form.deliveryAddress.trim().length > 0
     && form.scheduledDate
     && riderFee !== null
     && deliveryFee !== null
-
-  const isDraft = invoice.status === 'draft'
+    && deliveryFee > 0
 
   return (
     <Modal
@@ -122,14 +121,14 @@ export function ScheduleInvoiceDeliveryModal({
         </div>
 
         <div className="grid grid-cols-2 gap-3">
-          <Field label="Delivery charge (customer) KES">
+          <Field label="Delivery charge (customer) KES *">
             <Input
               type="number"
               min="0"
               step="1"
               value={form.deliveryFee}
               onChange={v => set('deliveryFee', v)}
-              placeholder="What customer pays"
+              placeholder="Added as invoice line"
             />
           </Field>
           <Field label="Rider fee (KES) *">
@@ -145,10 +144,8 @@ export function ScheduleInvoiceDeliveryModal({
         </div>
 
         <p className="text-[10px] text-[var(--text-4)] -mt-1">
-          Delivery charge and rider fee are separate and can differ.
-          {isDraft
-            ? ' On a draft invoice, a delivery charge &gt; 0 is added as an invoice line.'
-            : ' Posted invoices keep the charge on the delivery job only (lines are locked).'}
+          Delivery charge is added as an invoice line (draft or posted) and updates the invoice total.
+          Rider fee is separate and paid to the rider.
         </p>
 
         <Field label="Notes">
@@ -168,12 +165,12 @@ export function ScheduleInvoiceDeliveryModal({
             className="btn-primary text-xs flex items-center gap-1.5"
             disabled={!canSubmit}
             onClick={() => {
-              if (riderFee === null || deliveryFee === null) return
+              if (riderFee === null || deliveryFee === null || deliveryFee <= 0) return
               onConfirm({
                 deliveryAddress: form.deliveryAddress.trim(),
                 scheduledDate: form.scheduledDate,
                 riderFee,
-                deliveryFee: deliveryFee > 0 ? deliveryFee : undefined,
+                deliveryFee,
                 riderId: form.riderId || undefined,
                 notes: form.notes.trim() || undefined,
               })
