@@ -161,8 +161,11 @@ export default function POFormView() {
     }
   }
 
-  const openReceive = () => {
-    const draft = receipts.find(r => r.poId === activePO.id && r.status === 'draft') ?? createReceiptFromPO(activePO.id)
+  const openReceive = async () => {
+    let draft = receipts.find(r => r.poId === activePO.id && r.status === 'draft') ?? null
+    if (!draft) {
+      draft = await Promise.resolve(createReceiptFromPO(activePO.id))
+    }
     if (!draft) { showToast('No pending receipt found', 'error'); return }
     setActiveReceiptId(draft.id)
     const preSpecs: Record<string, string> = {}
@@ -295,9 +298,12 @@ export default function POFormView() {
                 icon={<Fa icon={faWarehouse} />}
                 hideLabelOnMobile={false}
                 disabled={!!actionBusy}
-                onClick={() => openReceive()}
+                onClick={async () => {
+                  setActionBusy('receive')
+                  try { await openReceive() } finally { setActionBusy(null) }
+                }}
               >
-                Process GRN
+                {actionBusy === 'receive' ? 'Opening…' : 'Process GRN'}
               </PrimaryActionButton>
             )}
             {!canSend && !canConfirm && !canReceive && canCreateBill && (
@@ -349,7 +355,7 @@ export default function POFormView() {
                 { id: 'scan', label: 'Scan document', hidden: !canEdit, onClick: () => setShowScanModal(true) },
                 { id: 'import', label: 'Import lines', hidden: !canEdit, onClick: () => setShowImport(true) },
                 { id: 'add', label: 'Add product', hidden: !canEdit, onClick: () => setShowAddLine(true) },
-                { id: 'receive', label: 'Process GRN', hidden: !canReceive || canSend || canConfirm, onClick: () => openReceive() },
+                { id: 'receive', label: 'Process GRN', hidden: !canReceive || canSend || canConfirm, onClick: () => { void openReceive() } },
                 {
                   id: 'bill',
                   label: 'Create bill',
@@ -607,12 +613,26 @@ export default function POFormView() {
               <div id="po-grn-history" className="card overflow-hidden">
                 <PanelHeader title="Goods Receipts (GRN)" count={poReceipts.length} />
                 {poReceipts.map(r => (
-                  <div key={r.id} className="flex items-center justify-between px-4 py-3 border-b text-xs" style={{ borderColor: 'var(--bg-muted)' }}>
+                  <div
+                    key={r.id}
+                    className={`flex items-center justify-between px-4 py-3 border-b text-xs ${r.status === 'draft' ? 'cursor-pointer hover:bg-[var(--bg-surface)]' : ''}`}
+                    style={{ borderColor: 'var(--bg-muted)' }}
+                    onClick={() => { if (r.status === 'draft' && canReceive) void openReceive() }}
+                    role={r.status === 'draft' && canReceive ? 'button' : undefined}
+                    tabIndex={r.status === 'draft' && canReceive ? 0 : undefined}
+                    onKeyDown={e => {
+                      if ((e.key === 'Enter' || e.key === ' ') && r.status === 'draft' && canReceive) {
+                        e.preventDefault()
+                        void openReceive()
+                      }
+                    }}
+                  >
                     <div>
                       <p className="font-mono font-semibold" style={{ color: 'var(--navy)' }}>{r.ref}</p>
                       <p className="text-t3 mt-0.5">
                         {fmtDate(r.date)} · {LOCATIONS[r.destinationLocation].icon} {LOCATIONS[r.destinationLocation].name}
                         {r.status === 'validated' && ` · ${r.lines.reduce((a, l) => a + l.serials.length, 0)} serials`}
+                        {r.status === 'draft' && canReceive ? ' · Click to process' : ''}
                       </p>
                     </div>
                     <StatusBadge status={r.status === 'validated' ? 'done' : 'pending'} label={r.status === 'validated' ? 'Validated' : 'Pending'} />

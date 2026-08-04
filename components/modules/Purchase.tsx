@@ -239,7 +239,9 @@ function PurchaseContent() {
 
     if (purchaseOrders.some(po => po.id === urlActiveId)) {
       if (activeId !== urlActiveId) setActiveId(urlActiveId)
-      if (subView !== 'form') setLocalSubView('form')
+      // Deep-link opens the PO form from the list — but do NOT kick the user
+      // out of the GRN receive screen (Process GRN sets subView to 'receive').
+      if (subView === 'list') setLocalSubView('form')
     }
   }, [urlActiveId, purchaseOrders, activeId, subView, setActiveId])
 
@@ -495,9 +497,12 @@ function PurchaseContent() {
   }, [updatePOLine, showToast])
 
   // ── GRN ────────────────────────────────────────────────────────────────────
-  const openReceive = () => {
+  const openReceive = async () => {
     if (!activePO) return
-    const draft = receipts.find(r => r.poId === activePO.id && r.status === 'draft')
+    let draft = receipts.find(r => r.poId === activePO.id && r.status === 'draft') ?? null
+    if (!draft) {
+      draft = await Promise.resolve(createReceiptFromPO(activePO.id))
+    }
     if (!draft) { showToast('No pending receipt found', 'error'); return }
     setActiveReceiptId(draft.id)
 
