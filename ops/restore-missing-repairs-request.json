@@ -2,7 +2,7 @@
   "since": "2026-08-01",
   "excludeSamples": true,
   "skipBackups": true,
-  "apply": true,
-  "requestedAt": "2026-08-04T12:20:00Z",
-  "note": "APPLY: restore 14 August customer repairs from Prisma mirror stubs into deed_repairs_v2"
+  "apply": false,
+  "requestedAt": "2026-08-04T12:20:30Z",
+  "note": "Reset apply=false after successful restore of 14 August repairs"
 }

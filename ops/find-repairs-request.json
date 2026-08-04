@@ -1,7 +1,7 @@
 {
   "queries": [],
   "since": "2026-08-01",
-  "limit": 100,
-  "requestedAt": "2026-08-04T12:12:00Z",
-  "note": "Compare Prisma vs blob to find missing August repairs"
+  "limit": 50,
+  "requestedAt": "2026-08-04T12:20:00Z",
+  "note": "Verify August repairs restored into blob after Prisma stub merge"
 }
