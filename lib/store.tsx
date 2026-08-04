@@ -136,6 +136,7 @@ import {
   formatStockByLocation,
   resolveBulkDeliverySourceLocation,
 } from '@/lib/inventory/delivery-source'
+import { resolveAssignedRiderFee } from '@/lib/delivery-job-fee'
 import {
   applyCustomerToInvoice,
   applyCustomerToQuote,
@@ -2832,7 +2833,7 @@ export interface AppState {
   createDeliveryJob: (j: Omit<DeliveryJob, 'id' | 'ref' | 'status' | 'createdByUserId' | 'createdByName' | 'createdAt'>) => DeliveryJob
   updateDeliveryJob: (id: string, p: Partial<DeliveryJob>) => void
   deleteDeliveryJob: (id: string) => void
-  assignRiderToJob: (jobId: string, riderId: string) => void
+  assignRiderToJob: (jobId: string, riderId: string, riderFee?: number) => void
   advanceJobStatus: (jobId: string, newStatus: DeliveryJobStatus, failureReason?: string) => void
   generateWeeklyPay: (riderId: string, weekStart: string) => RiderWeeklyPay | null
   markWeeklyPayPaid: (id: string) => void
@@ -15409,14 +15410,25 @@ const storeCtx: AppState = {
       setDeliveryJobs(prev => prev.filter(j => j.id !== id))
       showToast('Delivery job deleted')
     },
-    assignRiderToJob: (jobId, riderId) => {
+    assignRiderToJob: (jobId, riderId, riderFee) => {
       const rider = riders.find(r => r.id === riderId)
       if (!rider) { showToast('Rider not found', 'error'); return }
-      setDeliveryJobs(prev => prev.map(j =>
-        j.id === jobId
-          ? { ...j, riderId, riderName: rider.name, riderFee: rider.ratePerDelivery, status: 'assigned', assignedAt: new Date().toISOString() }
-          : j
-      ))
+      setDeliveryJobs(prev => prev.map(j => {
+        if (j.id !== jobId) return j
+        const fee = resolveAssignedRiderFee({
+          existingFee: j.riderFee,
+          overrideFee: riderFee,
+          riderDefaultRate: rider.ratePerDelivery,
+        })
+        return {
+          ...j,
+          riderId,
+          riderName: rider.name,
+          riderFee: fee,
+          status: 'assigned',
+          assignedAt: new Date().toISOString(),
+        }
+      }))
       showToast(`${rider.name} assigned`)
     },
     advanceJobStatus: (jobId, newStatus, failureReason) => {
