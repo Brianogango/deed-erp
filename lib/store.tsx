@@ -9825,6 +9825,7 @@ const storeCtx: AppState = {
               serials: serialRef.current,
               bulkStock,
               reservations: stockReservations,
+              excludeReferenceId: id,
             }).location
           }
           return { productId: l.productId, productName: l.productName, qty: l.qty, qtyDone: 0, serialIds: [], sourceLocation }
@@ -9996,6 +9997,9 @@ const storeCtx: AppState = {
             bulkStock,
             reservations: stockReservations,
             excludeDeliveryId: deliveryId,
+            // Quote→SO often leaves a reservation on the order with no deliveryId;
+            // that must not count as "elsewhere" or Prepare falsely fails.
+            excludeReferenceId: so.id,
           })
           sourceLocation = resolved.location
           if (resolved.available < qty) {
@@ -10044,11 +10048,18 @@ const storeCtx: AppState = {
 
       setStockReservations(prev => [
         ...reservations,
-        ...prev.map(reservation =>
-          reservation.deliveryId === deliveryId && reservation.status === 'reserved'
-            ? { ...reservation, status: 'cancelled' as const, notes: `${reservation.notes ?? ''} · replaced during re-preparation`.trim() }
-            : reservation
-        ),
+        ...prev.map(reservation => {
+          if (reservation.status !== 'reserved') return reservation
+          const sameDelivery = reservation.deliveryId === deliveryId
+          // Replace quote/SO-era orphans so prepare does not double-book stock.
+          const orphanForThisOrder = reservation.referenceId === so.id && !reservation.deliveryId
+          if (!sameDelivery && !orphanForThisOrder) return reservation
+          return {
+            ...reservation,
+            status: 'cancelled' as const,
+            notes: `${reservation.notes ?? ''} · replaced during re-preparation`.trim(),
+          }
+        }),
       ])
       const preparedAt = new Date().toISOString()
       setDeliveries(prev => prev.map(item => item.id === deliveryId ? {
@@ -15544,6 +15555,7 @@ const storeCtx: AppState = {
               serials: serialRef.current,
               bulkStock,
               reservations: stockReservations,
+              excludeReferenceId: so.id,
             }).location
           }
           return {

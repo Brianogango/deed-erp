@@ -13,8 +13,35 @@ export type StockReservationLike = {
   location: string
   status: string
   deliveryId?: string
+  /** Sale order / quote id that owns this reservation */
+  referenceId?: string
   qty: number
   fulfilledQty: number
+}
+
+/**
+ * A reservation is already held for *this* delivery/document when:
+ * - it is tagged with this delivery id, or
+ * - it is an orphan SO/quote reservation (same referenceId, no deliveryId yet).
+ *
+ * Quote→SO conversion often leaves the latter; treating it as "elsewhere"
+ * falsely blocks Prepare Delivery (stockQty − own reservation).
+ */
+export function isOwnDeliveryReservation(
+  reservation: StockReservationLike,
+  opts: { excludeDeliveryId?: string; excludeReferenceId?: string },
+): boolean {
+  if (opts.excludeDeliveryId && reservation.deliveryId === opts.excludeDeliveryId) {
+    return true
+  }
+  if (
+    opts.excludeReferenceId
+    && reservation.referenceId === opts.excludeReferenceId
+    && !reservation.deliveryId
+  ) {
+    return true
+  }
+  return false
 }
 
 export function freeQtyAtLocation(args: {
@@ -25,6 +52,7 @@ export function freeQtyAtLocation(args: {
   bulkStock: BulkStockLevel[]
   reservations: StockReservationLike[]
   excludeDeliveryId?: string
+  excludeReferenceId?: string
 }): number {
   const stockAtLocation = calcStockByLocation(
     args.product,
@@ -37,7 +65,10 @@ export function freeQtyAtLocation(args: {
       reservation.productId === args.productId
       && reservation.location === args.location
       && reservation.status === 'reserved'
-      && reservation.deliveryId !== args.excludeDeliveryId,
+      && !isOwnDeliveryReservation(reservation, {
+        excludeDeliveryId: args.excludeDeliveryId,
+        excludeReferenceId: args.excludeReferenceId,
+      }),
     )
     .reduce((sum, reservation) => sum + Math.max(0, reservation.qty - reservation.fulfilledQty), 0)
   return Math.max(0, stockAtLocation - reservedElsewhere)
@@ -56,6 +87,7 @@ export function resolveBulkDeliverySourceLocation(args: {
   bulkStock: BulkStockLevel[]
   reservations: StockReservationLike[]
   excludeDeliveryId?: string
+  excludeReferenceId?: string
 }): { location: LocationId; available: number; byLocation: Record<LocationId, number> } {
   const byLocation = {} as Record<LocationId, number>
   for (const location of DELIVERY_PICK_LOCATIONS) {

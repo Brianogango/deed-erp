@@ -1,0 +1,9 @@
+{
+  "mode": "release",
+  "order": "SO/2026/0014",
+  "customer": "Moses Gitonga",
+  "cancelOpenQuoteDeliveries": true,
+  "dryRun": false,
+  "requestedAt": "2026-08-04T09:00:00Z",
+  "note": "Release orphan SO reservation blocking Prepare Delivery for Moses Gitonga laptop stands; cancel competing open quote DNs"
+}
