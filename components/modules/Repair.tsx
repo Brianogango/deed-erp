@@ -228,20 +228,19 @@ function RepairInner() {
   }, [getVisibleRepairs, filter, repairs])
 
   // Deep-link: keep ?id=<repairId> while a repair is open and restore it on refresh.
+  // Back clears local + URL via setActiveId(null); do not fight that with a stale ?id=.
   useEffect(() => {
     if (!urlActiveId) {
-      if (activeId) {
-        setLocalActiveId(null)
-        if (view === 'detail') setLocalView('list')
-      }
+      if (activeId) setLocalActiveId(null)
+      if (view === 'detail') setLocalView('list')
       return
     }
 
     if (repairs.some(r => r.id === urlActiveId)) {
-      if (activeId !== urlActiveId) setActiveId(urlActiveId)
+      if (activeId !== urlActiveId) setLocalActiveId(urlActiveId)
       if (view !== 'detail') setLocalView('detail')
     }
-  }, [urlActiveId, repairs, activeId, view, setActiveId])
+  }, [urlActiveId, repairs, activeId, view])
 
   if (!mounted) return <ModuleSkeleton />
 
