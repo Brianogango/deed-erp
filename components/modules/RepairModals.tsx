@@ -906,16 +906,19 @@ export function ScheduleDeliveryModal({ repair, onClose }: { repair: RepairOrder
 export function RepairProgressModal({ repair, onClose }: { repair: RepairOrder, onClose: () => void }) {
   const { startRepair, markRepairComplete, createInvoiceFromRepair } = useRepairStore()
   const [notes, setNotes] = useState('')
+  const noCharge = !!(repair.billingExempt || (repair.underWarranty && repair.warrantyCoverage === 'full'))
+  const billingExempt = !!repair.billingExempt
 
   const canStartHere = (['approved', 'awaiting_parts'].includes(repair.status))
     || (repair.repairPath === 'direct_repair' && ['assigned', 'diagnosed', 'approved', 'awaiting_parts'].includes(repair.status))
+    || (billingExempt && ['assigned', 'diagnosed', 'awaiting_approval', 'approved', 'awaiting_parts', 'declined'].includes(repair.status))
 
   const handleAction = () => {
     if (canStartHere) {
       startRepair(repair.id)
     } else if (repair.status === 'in_repair') {
       markRepairComplete(repair.id)
-    } else if (repair.status === 'ready') {
+    } else if (repair.status === 'ready' && !noCharge) {
       createInvoiceFromRepair(repair.id, true)
     }
     onClose()
@@ -926,12 +929,19 @@ export function RepairProgressModal({ repair, onClose }: { repair: RepairOrder, 
       return { title: 'Start Repair Job',     btn: 'Start Repair',      icon: faPlay,             accent: '#2563EB', grad: 'linear-gradient(135deg,#1D4ED8,#2563EB)', shadow: '0 8px 24px rgba(37,99,235,0.4)' }
     if (repair.status === 'in_repair')
       return { title: 'Mark Repair Complete', btn: 'Complete Repair',   icon: faCheckCircle,      accent: '#059669', grad: 'linear-gradient(135deg,#047857,#059669)', shadow: '0 8px 24px rgba(5,150,105,0.4)' }
+    if (repair.status === 'ready' && noCharge)
+      return { title: 'No Invoice Needed',    btn: 'Done',              icon: faCheckCircle,      accent: '#059669', grad: 'linear-gradient(135deg,#047857,#059669)', shadow: '0 8px 24px rgba(5,150,105,0.4)' }
     if (repair.status === 'ready')
       return { title: 'Create Invoice',       btn: 'Generate Invoice',  icon: faFileInvoiceDollar, accent: '#D97706', grad: 'linear-gradient(135deg,#B45309,#D97706)', shadow: '0 8px 24px rgba(217,119,6,0.4)'  }
     return   { title: 'Update Progress',      btn: 'Update',            icon: faHistory,           accent: '#475569', grad: 'linear-gradient(135deg,#334155,#475569)', shadow: '0 8px 24px rgba(71,85,105,0.35)' }
   }
 
   const cfg = getConfig()
+  const readyNoChargeHint = repair.status === 'ready' && noCharge
+    ? (billingExempt
+      ? 'This job is no-charge — prepare release / mark collected. No customer invoice.'
+      : 'Full warranty — no customer invoice. Prepare release / mark collected.')
+    : null
 
   return (
     <Modal title={cfg.title} subtitle={repair.ref} onClose={onClose} width={400} icon={<Fa icon={cfg.icon} />} accent={cfg.accent}>
@@ -948,13 +958,17 @@ export function RepairProgressModal({ repair, onClose }: { repair: RepairOrder, 
           </div>
           <div className="flex-1">
             <p className="text-xs font-black text-[var(--text-1)] uppercase tracking-tight">{cfg.title}</p>
-            <p className="text-[10px] text-[var(--text-3)] font-medium mt-0.5">Moving this job to the next stage in the workflow</p>
+            <p className="text-[10px] text-[var(--text-3)] font-medium mt-0.5">
+              {readyNoChargeHint || 'Moving this job to the next stage in the workflow'}
+            </p>
           </div>
         </div>
 
-        <Field label="Progress Notes (Optional)">
-          <Textarea value={notes} onChange={setNotes} placeholder="Any specific notes about this stage..." rows={3} />
-        </Field>
+        {!readyNoChargeHint && (
+          <Field label="Progress Notes (Optional)">
+            <Textarea value={notes} onChange={setNotes} placeholder="Any specific notes about this stage..." rows={3} />
+          </Field>
+        )}
 
         <div className="flex gap-2 justify-end pt-2">
           <button className="btn-outline min-w-[100px]" onClick={onClose}>Cancel</button>
