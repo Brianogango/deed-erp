@@ -96,6 +96,9 @@ import {
   ensureDiagnosisFeeInQuoteLines,
   isDiagnosisFeeLine,
   isDiagnosisFeeSettled,
+  migratedDiagnosisFeeSettings,
+  needsDiagnosisFeeSettingsMigration,
+  normalizeStoredDiagnosisFee,
   resolveCustomerBillingType,
   resolveDiagnosisFee,
   shouldChargeDiagnosisFee,
@@ -4752,6 +4755,37 @@ export function StoreProvider({
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // One-time: rewrite legacy diagnosis fee tiers (1,500 / 2,500) to flat KES 1,000.
+  useEffect(() => {
+    if (needsDiagnosisFeeSettingsMigration(systemSettings)) {
+      setSystemSettings(prev => ({ ...prev, ...migratedDiagnosisFeeSettings(prev) }))
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // One-time: rewrite unpaid open repairs still stamped with legacy 1,500 / 2,500.
+  useEffect(() => {
+    setRepairs(prev => {
+      let changed = false
+      const next = prev.map(r => {
+        const status = String(r.diagnosisFeeStatus ?? '')
+        if (status === 'paid' || status === 'invoiced' || status === 'waived') return r
+        const stored = Number(r.diagnosisFee)
+        if (stored !== 1500 && stored !== 2500) return r
+        const amount = normalizeStoredDiagnosisFee(r, systemSettings)
+        const resolved = resolveDiagnosisFee(r, systemSettings)
+        changed = true
+        return {
+          ...r,
+          diagnosisFee: amount,
+          diagnosisFeeStatus: resolved.status === 'applicable' ? 'applicable' : resolved.status === 'not_applicable' ? 'not_applicable' : r.diagnosisFeeStatus,
+        }
+      })
+      return changed ? next : prev
+    })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
   const [bankRecons, setBankRecons]           = useLS<BankRecon[]>('deed_bankRecons', [])
   const [bankStatementLines, setBankStatementLines] = useLS<BankStatementLine[]>('deed_bankStatementLines', [])
 
@@ -7615,7 +7649,7 @@ const storeCtx: AppState = {
           serialNumber: assignment.serialNumber ?? '',
           serialId: assignment.serialId,
           intakeChannel: 'walk_in',
-          intakeDate: now(),
+          intakeDate: new Date().toISOString(),
           intakeNotes: `Internal asset return - ${notes || 'Damaged on return'}`,
           issueDescription: `Device returned damaged from employee asset assignment`,
           accessories: [],
@@ -11275,7 +11309,7 @@ const storeCtx: AppState = {
               productId: line.productId, productName: line.productName,
               specs: serialSpecs?.[s],
               receiptId, receiptRef: receipt.ref,
-              intakeDate: now(),
+              intakeDate: new Date().toISOString(),
               intakeIssueDescription: issueDesc,
               partsNeeded: [],
             })
@@ -11577,7 +11611,7 @@ const storeCtx: AppState = {
         serialId, serialNumber: ser.serial,
         productId: ser.productId, productName: ser.productName,
         specs: prod?.description,
-        intakeDate: now(),
+        intakeDate: new Date().toISOString(),
         intakeIssueDescription: issueDescription,
         partsNeeded: [],
       }
@@ -11860,7 +11894,7 @@ const storeCtx: AppState = {
         
         // Intake
         intakeChannel: 'walk_in',
-        intakeDate: now(),
+        intakeDate: new Date().toISOString(),
         intakeNotes: desc,
         issueDescription: desc,
         accessories: [],

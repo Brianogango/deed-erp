@@ -80,7 +80,7 @@ export async function POST(req: NextRequest) {
     deviceCondition: ['good', 'fair', 'poor', 'damaged'].includes(clean(body.deviceCondition)) ? clean(body.deviceCondition) as RepairOrder['deviceCondition'] : undefined,
     priority: ['low', 'normal', 'high', 'urgent'].includes(clean(body.priority)) ? clean(body.priority) as RepairOrder['priority'] : 'normal',
     intakeChannel: 'website',
-    intakeDate: today,
+    intakeDate: now,
     intakeNotes: clean(body.intakeNotes),
     issueDescription,
     accessories,

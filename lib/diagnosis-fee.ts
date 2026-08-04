@@ -89,10 +89,51 @@ export function deviceTierLabel(tier: unknown): string {
 /** Flat diagnosis fee from settings (policy: KES 1,000). */
 export function diagnosisFeeAmount(settings?: DiagnosisFeeSettings | null): number {
   const flat = Number(settings?.diagnosisFeeKes)
-  if (Number.isFinite(flat) && flat >= 0) return flat
+  // Prefer an explicit flat fee whenever it is a finite number (including 0),
+  // but never keep the old shipped tier defaults (1,500 / 2,500).
+  if (Number.isFinite(flat) && flat >= 0) {
+    if (flat === 1500 || flat === 2500) return DEFAULT_DIAGNOSIS_FEE_KES
+    return flat
+  }
+
+  // Legacy tier fields: ignore the old shipped defaults (1,500 / 2,500) so
+  // environments that never wrote diagnosisFeeKes do not keep charging 1,500.
   const legacy = Number(settings?.diagnosisFeeRegularKes)
-  if (Number.isFinite(legacy) && legacy >= 0) return legacy
+  if (Number.isFinite(legacy) && legacy >= 0 && legacy !== 1500 && legacy !== 2500) {
+    return legacy
+  }
   return DEFAULT_DIAGNOSIS_FEE_KES
+}
+
+/**
+ * True when stored settings still reflect the pre–Aug 2026 tier amounts and
+ * should be rewritten to the flat KES 1,000 policy.
+ */
+export function needsDiagnosisFeeSettingsMigration(settings?: DiagnosisFeeSettings | null): boolean {
+  if (!settings) return false
+  const flat = Number(settings.diagnosisFeeKes)
+  const regular = Number(settings.diagnosisFeeRegularKes)
+  const highEnd = Number(settings.diagnosisFeeHighEndKes)
+  const hasLegacyDefault = regular === 1500 || regular === 2500 || highEnd === 1500 || highEnd === 2500
+  if (!Number.isFinite(flat)) return hasLegacyDefault || !Number.isFinite(regular)
+  if (flat === 1500 || flat === 2500) return true
+  // Flat already correct, but sibling legacy fields still need cleanup.
+  if (hasLegacyDefault && flat === DEFAULT_DIAGNOSIS_FEE_KES) return true
+  return false
+}
+
+export function migratedDiagnosisFeeSettings(
+  settings?: DiagnosisFeeSettings | null,
+): Required<Pick<DiagnosisFeeSettings, 'diagnosisFeeKes' | 'diagnosisFeeRegularKes' | 'diagnosisFeeHighEndKes'>> {
+  const flat = Number(settings?.diagnosisFeeKes)
+  const amount = (
+    Number.isFinite(flat) && flat >= 0 && flat !== 1500 && flat !== 2500
+  ) ? flat : DEFAULT_DIAGNOSIS_FEE_KES
+  return {
+    diagnosisFeeKes: amount,
+    diagnosisFeeRegularKes: amount,
+    diagnosisFeeHighEndKes: amount,
+  }
 }
 
 /**
@@ -110,6 +151,11 @@ export function diagnosisFeeAmountForTier(
  * True when the job was received on/after the policy effective instant
  * (3 Aug 2026, 3:00pm EAT). Missing intake dates are treated as pre-policy
  * so legacy jobs are not charged.
+ *
+ * Date-only values (`YYYY-MM-DD`) are interpreted as start-of-day UTC. That
+ * means the effective calendar day (3 Aug) stays pre-policy for jobs that
+ * never stored a time — matching noon bookings that must not be charged —
+ * while full ISO timestamps honor the 3:00pm EAT cutoff.
  */
 export function isDiagnosisFeePolicyInEffect(intakeDate?: string | null): boolean {
   const effectiveMs = Date.parse(DIAGNOSIS_FEE_POLICY_EFFECTIVE_AT)
@@ -119,6 +165,21 @@ export function isDiagnosisFeePolicyInEffect(intakeDate?: string | null): boolea
   const intakeMs = Date.parse(raw)
   if (!Number.isFinite(intakeMs)) return false
   return intakeMs >= effectiveMs
+}
+
+/**
+ * Normalize an unpaid open job that still carries the old tier amount (1,500 /
+ * 2,500) so the UI and invoices show the flat KES 1,000 policy fee.
+ */
+export function normalizeStoredDiagnosisFee(
+  repair: DiagnosisFeeRepair,
+  settings?: DiagnosisFeeSettings | null,
+): number {
+  const resolved = resolveDiagnosisFee(repair, settings)
+  if (resolved.status === 'paid' || resolved.status === 'invoiced' || resolved.status === 'waived') {
+    return Math.max(0, Number(repair.diagnosisFee) || resolved.amount)
+  }
+  return resolved.amount
 }
 
 /** Fee is billed on the final invoice for both walk-in and corporate. */
