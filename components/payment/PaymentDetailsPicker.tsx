@@ -18,6 +18,8 @@ type Props = {
   label?: string
   /** Shown under the title when expanded. */
   hint?: string
+  /** When true, note is view-only (sent / posted documents). */
+  readOnly?: boolean
 }
 
 /**
@@ -31,6 +33,7 @@ export default function PaymentDetailsPicker({
   defaultOpen,
   label = 'Payment note',
   hint = 'Optional text printed under Payment Details on the PDF (quotes, proformas, and invoices). Company bank / M-Pesa defaults still apply.',
+  readOnly = false,
 }: Props) {
   const details = normalizeDocumentPaymentDetails(value)
   const note = details.customNote ?? ''
@@ -82,8 +85,16 @@ export default function PaymentDetailsPicker({
             rows={3}
             placeholder="e.g. Pay to NCBA 1005157785 · use this document number as reference"
             value={note}
-            onChange={e => setNote(e.target.value)}
+            readOnly={readOnly}
+            disabled={readOnly}
+            onChange={e => {
+              if (readOnly) return
+              setNote(e.target.value)
+            }}
           />
+          {readOnly && (
+            <p className="text-[10px] text-amber-700 font-semibold">Reset to draft to change the payment note.</p>
+          )}
         </div>
       )}
     </div>

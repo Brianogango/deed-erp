@@ -9361,6 +9361,24 @@ const storeCtx: AppState = {
     },
     updateSaleOrder: (id, p) => {
       const existing = soRef.current.find(s => s.id === id)
+      if (!existing) return
+      // Sent / confirmed documents are locked for content edits. Allow narrow
+      // metadata (e.g. proformaRef) so PDF helpers still work without a reset.
+      const keys = Object.keys(p)
+      const metadataOnly = keys.length > 0 && keys.every(k => k === 'proformaRef')
+      if (existing.status !== 'quotation' && !metadataOnly) {
+        showToast(
+          existing.status === 'quotation_sent'
+            ? 'Sent quotations are locked. Reset to draft first, then edit and save.'
+            : 'Only draft quotations can be edited. Reset to quotation first.',
+          'error',
+        )
+        return
+      }
+      if (existing.locked && !metadataOnly) {
+        showToast('Unlock this quotation before editing', 'error')
+        return
+      }
       setSaleOrders(prev => {
         const next = prev.map(s => s.id === id ? { ...s, ...p } : s)
         const updated = next.find(s => s.id === id)
@@ -9392,6 +9410,21 @@ const storeCtx: AppState = {
     addSOLine: (orderId, product, qty, discount = 0, defaultTaxRate = 0) => {
       if (qty <= 0) {
         showToast('Quantity must be greater than zero', 'error')
+        return
+      }
+      const so = soRef.current.find(s => s.id === orderId)
+      if (!so) return
+      if (so.status !== 'quotation') {
+        showToast(
+          so.status === 'quotation_sent'
+            ? 'Sent quotations are locked. Reset to draft first, then edit and save.'
+            : 'Only draft quotations can add lines',
+          'error',
+        )
+        return
+      }
+      if (so.locked) {
+        showToast('Unlock this quotation before adding lines', 'error')
         return
       }
       // Quotation lines may exceed current availability. Reservation and
@@ -9534,7 +9567,21 @@ const storeCtx: AppState = {
     },
     removeSOLine: (orderId, lineId) => {
       const so = soRef.current.find(s => s.id === orderId)
-      const line = so?.lines.find(l => l.id === lineId)
+      if (!so) return
+      if (so.status !== 'quotation') {
+        showToast(
+          so.status === 'quotation_sent'
+            ? 'Sent quotations are locked. Reset to draft first, then edit and save.'
+            : 'Only draft quotations can remove lines',
+          'error',
+        )
+        return
+      }
+      if (so.locked) {
+        showToast('Unlock this quotation before removing lines', 'error')
+        return
+      }
+      const line = so.lines.find(l => l.id === lineId)
       if (line?.serialIds?.length) {
         setSerials(p => p.map(s => line.serialIds.includes(s.id) ? { ...s, status: 'available' } : s))
       }
@@ -9549,8 +9596,13 @@ const storeCtx: AppState = {
     moveSOLine: (orderId, lineId, direction) => {
       const so = soRef.current.find(s => s.id === orderId)
       if (!so) return
-      if (so.status !== 'quotation' && so.status !== 'quotation_sent') {
-        showToast('Only quotations can reorder lines', 'error')
+      if (so.status !== 'quotation') {
+        showToast(
+          so.status === 'quotation_sent'
+            ? 'Sent quotations are locked. Reset to draft first, then edit and save.'
+            : 'Only draft quotations can reorder lines',
+          'error',
+        )
         return
       }
       if (so.locked) {
@@ -9572,8 +9624,13 @@ const storeCtx: AppState = {
     addSOSection: (orderId, title) => {
       const so = soRef.current.find(s => s.id === orderId)
       if (!so) return
-      if (so.status !== 'quotation' && so.status !== 'quotation_sent') {
-        showToast('Only quotations can add sections', 'error')
+      if (so.status !== 'quotation') {
+        showToast(
+          so.status === 'quotation_sent'
+            ? 'Sent quotations are locked. Reset to draft first, then edit and save.'
+            : 'Only draft quotations can add sections',
+          'error',
+        )
         return
       }
       if (so.locked) {
@@ -10578,12 +10635,21 @@ const storeCtx: AppState = {
       // deliveries are cancelled and reservations released so the quotation
       // carries no fulfilment side effects.
       const actor = currentUser()
-      if (!actor || !['director', 'finance_officer'].includes(actor.role)) {
+      const so = soRef.current.find(s => s.id === id)
+      if (!so) return
+      // Sent → draft: sales staff may unlock for edits. Confirmed SO → quotation
+      // still requires Finance / Director.
+      const salesCanResetSent = ['director', 'finance_officer', 'sales_rep', 'admin_officer'].includes(actor?.role ?? '')
+      const financeCanResetConfirmed = ['director', 'finance_officer'].includes(actor?.role ?? '')
+      if (so.status === 'quotation_sent' || so.status === 'cancelled') {
+        if (!actor || !salesCanResetSent) {
+          showToast('You do not have permission to reset this quotation to draft', 'error')
+          return
+        }
+      } else if (!actor || !financeCanResetConfirmed) {
         showToast('Only Finance or Director can reset a sale order to quotation', 'error')
         return
       }
-      const so = soRef.current.find(s => s.id === id)
-      if (!so) return
       const blockers = saleOrderCancelBlockers({
         status: so.status === 'sale' ? 'sale' : so.status,
         deliveries: delRef.current.filter(d => d.saleOrderId === id),
@@ -10624,7 +10690,7 @@ const storeCtx: AppState = {
         return updated
       }))
       addAuditLog('reset_to_quotation', so.ref, `Order set back to Quotation by ${actor.name}`)
-      showToast('Order set back to Quotation')
+      showToast(so.status === 'quotation_sent' ? 'Quotation reset to draft — you can edit and save' : 'Order set back to Quotation')
     },
     cancelSO: (id) => {
       const so = soRef.current.find(s => s.id === id)
@@ -10769,7 +10835,7 @@ const storeCtx: AppState = {
       const keys = Object.keys(p)
       const deliveryLinkOnly = keys.length > 0 && keys.every(k => k === 'deliveryJobId' || k === 'deliveryAddress')
       if (protectedStatus && !cancelling && !deliveryLinkOnly && systemSettings.secDisableInvoiceEditAfterValidation) {
-        showToast('Posted finance documents are locked. Cancel or reverse instead of editing.', 'error')
+        showToast('Posted documents are locked. Reset to draft first, then edit and save.', 'error')
         return
       }
       if (cancelling && existing.status !== 'cancelled') {

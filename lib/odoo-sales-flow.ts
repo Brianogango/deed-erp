@@ -69,6 +69,11 @@ export function isQuotationStage(status: OdooSaleStatus): boolean {
   return status === 'quotation' || status === 'quotation_sent'
 }
 
+/** Draft quotation only — sent quotations must be reset before editing. */
+export function isQuotationDraft(status: OdooSaleStatus): boolean {
+  return status === 'quotation'
+}
+
 /**
  * True when the order is already a Sales Order, or when durable confirmation
  * evidence exists even if `status` drifted back to a quotation stage.

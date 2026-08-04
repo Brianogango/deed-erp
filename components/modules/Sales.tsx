@@ -86,6 +86,7 @@ import {
   SO_INVOICE_STATUS_LABELS,
   DELIVERY_STATE_LABELS,
   isQuotationStage,
+  isQuotationDraft,
   matchesSalesListFilter,
   hasValidatedDeliveryForInvoice,
   effectiveDeliveryLineQty,
@@ -363,6 +364,7 @@ function SalesContent() {
   // ── Modals ──────────────────────────────────────────────────────────────
   const [showDelConfirm, setShowDelConfirm] = useState(false)
   const [showCancelConfirm, setShowCancelConfirm] = useState(false)
+  const [showResetDraftConfirm, setShowResetDraftConfirm] = useState(false)
   const [showAddLine, setShowAddLine] = useState(false)
   const [addLineQty, setAddLineQty] = useState('1')
   const [addLineDiscount, setAddLineDiscount] = useState('0')
@@ -1375,7 +1377,10 @@ function SalesContent() {
                           </button>
                           <MoreActionsMenu
                             items={[
-                              ...(activeOrder.status === 'quotation_sent' ? [{ label: sendingQuoteId === activeOrder.id ? 'Sending…' : 'Send by Email', icon: faFileInvoice, disabled: !activeOrder.lines.length || sendingQuoteId === activeOrder.id, onClick: () => openSendQuoteModal(activeOrder) }] : []),
+                              ...(activeOrder.status === 'quotation_sent' ? [
+                                { label: sendingQuoteId === activeOrder.id ? 'Sending…' : 'Send by Email', icon: faFileInvoice, disabled: !activeOrder.lines.length || sendingQuoteId === activeOrder.id, onClick: () => openSendQuoteModal(activeOrder) },
+                                { label: 'Reset to Draft', icon: faRotateLeft, onClick: () => setShowResetDraftConfirm(true) },
+                              ] : []),
                               { label: 'Preview', icon: faFileAlt, disabled: !activeOrder.lines.length, onClick: () => previewSalesDocument(activeOrder, 'Quotation', 'QUOTATION') },
                               { label: 'Print', icon: faPrint, disabled: !activeOrder.lines.length, onClick: () => downloadSalesDocument(activeOrder, 'Quotation', 'QUOTE', 'QUOTATION') },
                               { label: 'Pro-forma invoice', icon: faFileInvoiceDollar, disabled: !activeOrder.lines.length, onClick: () => downloadProformaInvoice(activeOrder) },
@@ -1513,10 +1518,9 @@ function SalesContent() {
                         </div>
                       )}
 
-                      {/* Order info card — editable through Quotation and
-                          Quotation Sent (Odoo keeps sent quotations editable,
-                          subject to permissions). */}
-                      {isQuotationStage(activeOrder.status) && !activeOrder.locked ? (
+                      {/* Order info — editable only while draft quotation.
+                          Sent quotations must be reset to draft before changes. */}
+                      {isQuotationDraft(activeOrder.status) && !activeOrder.locked ? (
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 p-4 rounded-2xl bg-[var(--bg-surface)] border border-[var(--border-lt)]">
                           <div className="xl:col-span-2">
                             <SearchPicker
@@ -1591,6 +1595,19 @@ function SalesContent() {
                           </div>
                         </div>
                       ) : (
+                      <>
+                      {activeOrder.status === 'quotation_sent' && !activeOrder.locked && (
+                        <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900 flex flex-wrap items-center justify-between gap-2">
+                          <span>This quotation was sent. Reset to draft to make changes, then save.</span>
+                          <button
+                            type="button"
+                            className="btn-secondary text-xs flex items-center gap-1.5 shrink-0"
+                            onClick={() => setShowResetDraftConfirm(true)}
+                          >
+                            <Fa icon={faRotateLeft} className="text-[10px]" /> Reset to Draft
+                          </button>
+                        </div>
+                      )}
                       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 p-4 rounded-2xl bg-[var(--bg-surface)] border border-[var(--border-lt)]">
                         <div className="flex flex-col gap-1">
                           <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)]">Customer</span>
@@ -1621,6 +1638,7 @@ function SalesContent() {
                           <span className="text-xs font-bold text-primary-600">{fmtKes(activeOrder.total)}</span>
                         </div>
                       </div>
+                      </>
                       )}
 
                       {/* Attachments */}
@@ -1724,7 +1742,7 @@ function SalesContent() {
                         <div className="lg:col-span-2 flex flex-col gap-4">
                           <div className="flex items-center justify-between gap-2 flex-wrap">
                             <h3 className="text-sm font-bold text-[var(--text-1)]">Order Lines</h3>
-                            {isQuotationStage(activeOrder.status) && !activeOrder.locked && (
+                            {isQuotationDraft(activeOrder.status) && !activeOrder.locked && (
                               <div className="flex items-center gap-3">
                                 <button type="button" onClick={() => setShowAddLine(true)} className="text-xs font-bold text-primary-600 hover:underline flex items-center gap-1">
                                   <Fa icon={faPlus} className="text-[10px]" />Add a product
@@ -1756,7 +1774,7 @@ function SalesContent() {
                               </thead>
                               <tbody className="divide-y divide-[var(--border-lt)]">
                                 {activeOrder.lines.map((l, lineIndex) => {
-                                  const canEdit = isQuotationStage(activeOrder.status) && !activeOrder.locked
+                                  const canEdit = isQuotationDraft(activeOrder.status) && !activeOrder.locked
                                   if (l.lineType === 'section') {
                                     return (
                                       <tr key={l.id} className="bg-slate-50/70">
@@ -1888,7 +1906,7 @@ function SalesContent() {
                               </tbody>
                             </table>
                           </div>
-                          {isQuotationStage(activeOrder.status) && !activeOrder.locked && (
+                          {isQuotationDraft(activeOrder.status) && !activeOrder.locked && (
                             <div className="flex flex-wrap items-center gap-4">
                               <button onClick={() => setShowAddLine(true)} className="flex items-center gap-2 text-xs text-primary-600 hover:underline font-semibold self-start"><Fa icon={faPlus} className="text-[10px]" />Add a product</button>
                               <button onClick={() => addSOSection(activeOrder.id)} className="flex items-center gap-2 text-xs text-slate-600 hover:underline font-semibold self-start"><Fa icon={faPlus} className="text-[10px]" />Add a section</button>
@@ -1921,6 +1939,7 @@ function SalesContent() {
                       <PaymentDetailsPicker
                         value={getDocumentPaymentDetails(activeOrder.id)}
                         onChange={next => setDocumentPaymentDetails(activeOrder.id, next)}
+                        readOnly={!isQuotationDraft(activeOrder.status) || !!activeOrder.locked}
                       />
 
                       <Chatter
@@ -2099,6 +2118,14 @@ function SalesContent() {
         <Confirm title="Cancel Order" message={`Cancel ${activeOrder.ref}? This will mark the order as cancelled.`}
           onConfirm={() => { cancelSO(activeOrder.id); setShowCancelConfirm(false) }}
           onCancel={() => setShowCancelConfirm(false)} />
+      )}
+      {showResetDraftConfirm && activeOrder && (
+        <Confirm
+          title="Reset to Draft"
+          message={`Reset ${activeOrder.ref} to draft so it can be edited? You can send it again after saving your changes.`}
+          onConfirm={() => { resetSOToDraft(activeOrder.id); setShowResetDraftConfirm(false) }}
+          onCancel={() => setShowResetDraftConfirm(false)}
+        />
       )}
 
       {showDnModal && activeId && (() => {
