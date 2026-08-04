@@ -559,6 +559,7 @@ function JobsTab() {
         <div>
           <p className="font-mono text-[10px] font-bold" style={{ color: 'var(--navy)' }}>{job.ref}</p>
           {job.saleOrderRef && <p className="text-[9px]" style={{ color: 'var(--text-4)' }}>{job.saleOrderRef}</p>}
+          {job.invoiceRef && <p className="text-[9px]" style={{ color: 'var(--text-4)' }}>{job.invoiceRef}</p>}
           {job.repairOrderRef && <p className="text-[9px]" style={{ color: 'var(--text-4)' }}>{job.repairOrderRef}</p>}
         </div>
       ),

@@ -17,8 +17,9 @@ import {
   faArrowUp,
   faArrowDown,
   faPlus,
+  faTruck,
 } from '@fortawesome/free-solid-svg-icons'
-import { useFinanceStore, fmtKes, fmtDate } from '@/lib/store'
+import { useFinanceStore, useDeliveryStore, fmtKes, fmtDate } from '@/lib/store'
 import { invoiceDocState, invoicePaymentStatus, isInvoiceOverdue, displayDocRef, INVOICE_DOC_STATE_LABELS, PAYMENT_STATUS_LABELS } from '@/lib/odoo-sales-flow'
 import { Badge, Modal, Field, Input, Select, Confirm, ModuleSkeleton, useMounted } from '@/components/ui'
 import { RecordHeader, PrimaryActionButton } from '@/components/erp'
@@ -28,6 +29,8 @@ import { OutboundReleasePanel, OrcStatusBadge } from './OutboundReleasePanel'
 import { downloadInvoicePdf, invoicePdfBase64 } from './invoice-pdf'
 import PaymentDetailsPicker from '@/components/payment/PaymentDetailsPicker'
 import DocumentEmailSendHistory from '@/components/email/DocumentEmailSendHistory'
+import { ScheduleInvoiceDeliveryModal } from './ScheduleInvoiceDeliveryModal'
+import { canScheduleInvoiceDelivery, findInvoiceDeliveryJob } from '@/lib/invoice-delivery-job'
 
 const today = () => new Date().toISOString().slice(0, 10)
 
@@ -61,7 +64,10 @@ export default function InvoiceDetail() {
     currentUserId,
     getDocumentPaymentDetails,
     setDocumentPaymentDetails,
+    scheduleInvoiceDelivery,
   } = useFinanceStore()
+
+  const { deliveryJobs, riders } = useDeliveryStore()
 
   const currentUser = users.find(u => u.id === currentUserId)
   const canManageFinance = ['director', 'finance_officer', 'admin_officer'].includes(currentUser?.role ?? '')
@@ -78,6 +84,7 @@ export default function InvoiceDetail() {
   const [showCancel, setShowCancel] = useState(false)
   const [showResetDraft, setShowResetDraft] = useState(false)
   const [showOrc, setShowOrc] = useState(false)
+  const [showDeliveryModal, setShowDeliveryModal] = useState(false)
   const [sendingInvoice, setSendingInvoice] = useState(false)
   const [showSendModal, setShowSendModal] = useState(false)
   const [sendTo, setSendTo] = useState('')
@@ -195,7 +202,11 @@ export default function InvoiceDetail() {
   const serialLines = (invoice.lines || []).filter(l => l.productId)
   const activeBanks = bankAccounts.filter(a => a.active)
   const partnerEmail = contacts.find(c => c.id === invoice.partnerId)?.email
+  const partnerContact = contacts.find(c => c.id === invoice.partnerId)
   const availableCredit = invoice.type === 'customer_invoice' ? getCustomerCreditBalance(invoice.partnerId) : 0
+  const linkedDeliveryJob = findInvoiceDeliveryJob(deliveryJobs, invoice)
+  const showScheduleDelivery = canScheduleInvoiceDelivery(invoice, linkedDeliveryJob)
+  const companyPickup = [companySettings.name, companySettings.address, companySettings.city].filter(Boolean).join(', ')
 
   const handlePayment = () => {
     if (!payAmount || Number(payAmount) <= 0) return
@@ -426,6 +437,27 @@ export default function InvoiceDetail() {
             </div>
           )}
 
+          {linkedDeliveryJob && (
+            <div className="flex items-center gap-3 px-3.5 py-2.5 rounded-xl bg-[rgba(20,184,166,0.08)] border border-teal-500/25">
+              <div className="w-6 h-6 rounded-lg bg-teal-500 flex items-center justify-center shrink-0">
+                <Fa icon={faTruck} className="text-white text-[9px]" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-[9px] font-black text-teal-600 uppercase tracking-widest">Rider Delivery Job</p>
+                <p className="text-[11px] font-semibold text-[var(--text-2)]">
+                  {linkedDeliveryJob.ref}
+                  {linkedDeliveryJob.riderName ? ` · ${linkedDeliveryJob.riderName}` : ' · Rider TBD'}
+                  {` · ${fmtDate(linkedDeliveryJob.scheduledDate)}`}
+                  {` · fee ${fmtKes(linkedDeliveryJob.riderFee)}`}
+                  {linkedDeliveryJob.deliveryFee ? ` · charge ${fmtKes(linkedDeliveryJob.deliveryFee)}` : ''}
+                </p>
+              </div>
+              <span className="text-[9px] font-black text-teal-600 bg-teal-50 border border-teal-200 px-2 py-0.5 rounded-full shrink-0 uppercase">
+                {linkedDeliveryJob.status.replace('_', ' ')}
+              </span>
+            </div>
+          )}
+
           {/* Invoice Lines */}
           {(invoice.lines || []).length > 0 || (invoice.status === 'draft' && canManageFinance) ? (
             <div>
@@ -598,6 +630,16 @@ export default function InvoiceDetail() {
                 </button>
               )
             )}
+            {showScheduleDelivery && canManageFinance && (
+              <button
+                type="button"
+                className="btn-secondary flex items-center gap-1.5 text-xs"
+                style={{ color: '#0F766E', borderColor: '#99F6E4' }}
+                onClick={() => setShowDeliveryModal(true)}
+              >
+                <Fa icon={faTruck} /> Schedule Delivery
+              </button>
+            )}
             {invoice.type === 'customer_invoice' && balance > 0 && availableCredit > 0 && invoice.status !== 'draft' && invoice.status !== 'cancelled' && canManageFullFinance && (
               <button
                 className="btn-secondary flex items-center gap-1.5 text-emerald-700 hover:bg-emerald-50 border-emerald-200 text-xs"
@@ -683,6 +725,20 @@ export default function InvoiceDetail() {
             </div>
           </div>
         </Modal>
+      )}
+
+      {showDeliveryModal && (
+        <ScheduleInvoiceDeliveryModal
+          invoice={invoice}
+          riders={riders}
+          companyPickup={companyPickup}
+          contactPhone={partnerContact?.phone || partnerContact?.mobile}
+          onClose={() => setShowDeliveryModal(false)}
+          onConfirm={opts => {
+            const job = scheduleInvoiceDelivery(invoice.id, opts)
+            if (job) setShowDeliveryModal(false)
+          }}
+        />
       )}
 
       {/* ── Register Payment modal ─────────────────────────────────────────── */}
