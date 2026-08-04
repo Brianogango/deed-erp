@@ -27,6 +27,7 @@ import { Fa } from '@/components/icons'
 import { OutboundReleasePanel, OrcStatusBadge } from './OutboundReleasePanel'
 import { downloadInvoicePdf, invoicePdfBase64 } from './invoice-pdf'
 import PaymentDetailsPicker from '@/components/payment/PaymentDetailsPicker'
+import DocumentEmailSendHistory from '@/components/email/DocumentEmailSendHistory'
 
 const today = () => new Date().toISOString().slice(0, 10)
 
@@ -78,6 +79,11 @@ export default function InvoiceDetail() {
   const [showResetDraft, setShowResetDraft] = useState(false)
   const [showOrc, setShowOrc] = useState(false)
   const [sendingInvoice, setSendingInvoice] = useState(false)
+  const [showSendModal, setShowSendModal] = useState(false)
+  const [sendTo, setSendTo] = useState('')
+  const [sendCc, setSendCc] = useState('')
+  const [sendMessage, setSendMessage] = useState('')
+  const [emailHistoryKey, setEmailHistoryKey] = useState(0)
   const [hydratingLines, setHydratingLines] = useState(false)
   const [lookupReady, setLookupReady] = useState(false)
   const hydrateAttempted = useRef<string | null>(null)
@@ -221,8 +227,19 @@ export default function InvoiceDetail() {
     setShowOrc(true)
   }
 
+  const openSendInvoiceModal = () => {
+    setSendTo(partnerEmail || '')
+    setSendCc('')
+    setSendMessage(`Please find ${docLabel.toLowerCase()} ${invoice.ref} attached.`)
+    setShowSendModal(true)
+  }
+
   const handleSendInvoice = async () => {
     if (sendingInvoice) return
+    if (!sendTo.trim()) {
+      showToast('Enter the recipient email address before sending.', 'error')
+      return
+    }
     setSendingInvoice(true)
     try {
       // Attach the same Odoo-style PDF the download button produces.
@@ -241,14 +258,18 @@ export default function InvoiceDetail() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          to: partnerEmail || undefined,
-          message: `Please find ${docLabel.toLowerCase()} ${invoice.ref} attached.`,
+          to: sendTo.trim(),
+          cc: sendCc.trim() || undefined,
+          message: sendMessage.trim() || undefined,
           ...(attachment ?? {}),
         }),
       })
       const body = await res.json().catch(() => ({}))
+      setEmailHistoryKey(k => k + 1)
       if (!res.ok || body?.success === false) throw new Error(body?.error || 'Email could not be sent')
-      showToast(`${docLabel} emailed to ${body.to || partnerEmail || invoice.partnerName}`, 'success')
+      const ccNote = Array.isArray(body?.cc) && body.cc.length ? ` (Cc ${body.cc.join(', ')})` : ''
+      showToast(`${docLabel} emailed to ${body.to || sendTo}${ccNote}`, 'success')
+      setShowSendModal(false)
     } catch (error) {
       showToast(error instanceof Error ? error.message : 'Email could not be sent', 'error')
     } finally {
@@ -309,7 +330,7 @@ export default function InvoiceDetail() {
             {invoice.type === 'customer_invoice' && invoice.status !== 'draft' && (
               <button
                 className="icon-btn w-9 h-9"
-                onClick={handleSendInvoice}
+                onClick={openSendInvoiceModal}
                 disabled={sendingInvoice}
                 title={sendingInvoice ? 'Sending…' : `Email ${docLabel}`}
                 aria-label={sendingInvoice ? 'Sending email' : `Email ${docLabel}`}
@@ -614,8 +635,55 @@ export default function InvoiceDetail() {
             title="Internal Notes & Activities"
             compact
           />
+
+          {invoice.type === 'customer_invoice' && (
+            <DocumentEmailSendHistory
+              documentId={invoice.id}
+              documentType="invoice"
+              refreshKey={emailHistoryKey}
+              title="Invoice email history"
+            />
+          )}
         </div>
       </div>
+
+      {showSendModal && (
+        <Modal title={`Email ${docLabel} ${displayDocRef(invoice.ref)}`} onClose={() => setShowSendModal(false)} width={520}>
+          <div className="flex flex-col gap-4">
+            <Field label="Recipient Email *">
+              <Input value={sendTo} onChange={setSendTo} placeholder="customer@example.com" />
+            </Field>
+            <Field label="Cc (optional)">
+              <Input value={sendCc} onChange={setSendCc} placeholder="colleague@deed.co.ke, accounts@client.com" />
+            </Field>
+            <Field label="Message (optional)">
+              <textarea
+                className="form-input text-xs min-h-[90px]"
+                value={sendMessage}
+                onChange={e => setSendMessage(e.target.value)}
+                placeholder="Note included above the invoice summary…"
+              />
+            </Field>
+            <p className="text-[10px] text-[var(--text-4)]">The invoice PDF is attached automatically when available.</p>
+            <DocumentEmailSendHistory
+              documentId={invoice.id}
+              documentType="invoice"
+              refreshKey={emailHistoryKey}
+              title="Previous sends"
+            />
+            <div className="flex gap-2 justify-end pt-2 border-t border-[var(--border-lt)]">
+              <button className="btn-outline text-xs" onClick={() => setShowSendModal(false)}>Cancel</button>
+              <button
+                className="btn-primary text-xs"
+                disabled={!sendTo.trim() || sendingInvoice}
+                onClick={() => void handleSendInvoice()}
+              >
+                {sendingInvoice ? 'Sending…' : 'Send'}
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
 
       {/* ── Register Payment modal ─────────────────────────────────────────── */}
       {showPayModal && (

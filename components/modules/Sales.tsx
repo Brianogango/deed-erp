@@ -75,6 +75,7 @@ import {
 } from '@/lib/document-payment-details'
 import PaymentDetailsPicker from '@/components/payment/PaymentDetailsPicker'
 import ContactFormModal, { blankIndividualContact } from '@/components/contacts/ContactFormModal'
+import DocumentEmailSendHistory from '@/components/email/DocumentEmailSendHistory'
 import { resolveListPrice } from '@/lib/pricing/pricelist'
 import Chatter from '@/components/erp/Chatter'
 import { SalesRecordHeader } from '@/components/modules/sales/SalesRecordHeader'
@@ -375,7 +376,9 @@ function SalesContent() {
   // Send-by-Email compose dialog (Odoo records recipient + message on the order)
   const [sendModalOrderId, setSendModalOrderId] = useState<string | null>(null)
   const [sendEmailTo, setSendEmailTo] = useState('')
+  const [sendEmailCc, setSendEmailCc] = useState('')
   const [sendEmailMessage, setSendEmailMessage] = useState('')
+  const [emailHistoryKey, setEmailHistoryKey] = useState(0)
   // Order attachments (Odoo: documents attached to the quotation/order)
   const [soAttachments, setSoAttachments] = useState<Array<{ id: string; name: string; size: number; uploadedAt: string; uploadedBy: string }>>([])
   const [uploadingAttachment, setUploadingAttachment] = useState(false)
@@ -393,18 +396,26 @@ function SalesContent() {
   // Open the compose dialog (Odoo's Send by Email opens an email composer).
   const openSendQuoteModal = (order: SalesOrderView) => {
     const contact = contacts.find(c => c.id === order.customerId)
+    const isUpdate = order.status === 'quotation_sent' || !!order.sentAt
     setSendEmailTo(order.sentTo ?? contact?.email ?? '')
-    setSendEmailMessage(order.sentMessage ?? '')
+    setSendEmailCc('')
+    setSendEmailMessage(
+      order.sentMessage
+      ?? (isUpdate
+        ? `Please find the updated quotation for ${order.customerName} below.\n\nKind regards,\nSales`
+        : ''),
+    )
     setSendModalOrderId(order.id)
   }
 
-  const emailSalesQuote = async (order: SalesOrderView, email: string, message?: string) => {
+  const emailSalesQuote = async (order: SalesOrderView, email: string, message?: string, ccRaw?: string) => {
     if (sendingQuoteId) return
     const contact = contacts.find(c => c.id === order.customerId)
     if (!email) {
       showToast('Enter the recipient email address before sending.', 'error')
       return
     }
+    const kind = (order.status === 'quotation_sent' || !!order.sentAt) ? 'update' : 'initial'
     setSendingQuoteId(order.id)
     try {
       const res = await fetch('/api/integrations/send-quote', {
@@ -414,6 +425,8 @@ function SalesContent() {
           quoteId: order.id,
           channels: ['email'],
           message: message || undefined,
+          kind,
+          cc: ccRaw || undefined,
           quote: {
             ref: order.ref,
             companyName: order.customerName,
@@ -435,6 +448,7 @@ function SalesContent() {
         }),
       })
       const body = await res.json().catch(() => ({}))
+      setEmailHistoryKey(k => k + 1)
       if (!res.ok || body?.success === false) {
         const detail =
           body?.message
@@ -447,7 +461,8 @@ function SalesContent() {
       // sender/recipient/date/message recorded — no new document is created).
       markQuotationSent(order.id, email, message)
       setSendModalOrderId(null)
-      showToast(`Quotation emailed to ${email}`, 'success')
+      const ccNote = Array.isArray(body?.cc) && body.cc.length ? ` (Cc ${body.cc.join(', ')})` : ''
+      showToast(`Quotation emailed to ${email}${ccNote}`, 'success')
     } catch (error) {
       showToast(error instanceof Error ? error.message : 'Quote email failed', 'error')
     } finally {
@@ -1914,6 +1929,13 @@ function SalesContent() {
                         compact
                       />
 
+                      <DocumentEmailSendHistory
+                        documentId={activeOrder.id}
+                        documentType="quote"
+                        refreshKey={emailHistoryKey}
+                        title="Quote email history"
+                      />
+
                       {/* Activity */}
                       <div className="flex flex-col gap-3">
                         <h3 className="text-sm font-bold text-[var(--text-1)] flex items-center gap-2"><Fa icon={faClockRotateLeft} className="text-[var(--text-4)] text-xs" />Activity</h3>
@@ -2014,29 +2036,51 @@ function SalesContent() {
       {sendModalOrderId && (() => {
         const order = salesOrderViews.find(s => s.id === sendModalOrderId)
         if (!order) return null
+        const isUpdate = order.status === 'quotation_sent' || !!order.sentAt
         return (
-          <Modal title={`Send ${order.ref} by Email`} onClose={() => setSendModalOrderId(null)} width={460}>
+          <Modal
+            title={isUpdate ? `Send updated ${order.ref}` : `Send ${order.ref} by Email`}
+            onClose={() => setSendModalOrderId(null)}
+            width={520}
+          >
             <div className="flex flex-col gap-4">
               <Field label="Recipient Email *">
                 <Input value={sendEmailTo} onChange={setSendEmailTo} placeholder="customer@example.com" />
+              </Field>
+              <Field label="Cc (optional)">
+                <Input
+                  value={sendEmailCc}
+                  onChange={setSendEmailCc}
+                  placeholder="colleague@deed.co.ke, manager@client.com"
+                />
               </Field>
               <Field label="Message (optional)">
                 <textarea
                   className="form-input text-xs min-h-[90px]"
                   value={sendEmailMessage}
                   onChange={e => setSendEmailMessage(e.target.value)}
-                  placeholder="Personal note included in the email body…"
+                  placeholder={isUpdate
+                    ? 'Note for this revised quotation…'
+                    : 'Personal note included in the email body…'}
                 />
               </Field>
-              <p className="text-[10px] text-[var(--text-4)]">The quotation PDF ({order.ref}) is attached automatically.</p>
+              <p className="text-[10px] text-[var(--text-4)]">
+                {isUpdate ? 'Updated quotation' : 'Quotation'} PDF ({order.ref}) is attached automatically.
+              </p>
+              <DocumentEmailSendHistory
+                documentId={order.id}
+                documentType="quote"
+                refreshKey={emailHistoryKey}
+                title="Previous sends"
+              />
               <div className="flex gap-2 justify-end pt-2 border-t border-[var(--border-lt)]">
                 <button className="btn-outline text-xs" onClick={() => setSendModalOrderId(null)}>Cancel</button>
                 <button
                   className="btn-primary text-xs"
                   disabled={!sendEmailTo.trim() || sendingQuoteId === order.id}
-                  onClick={() => emailSalesQuote(order, sendEmailTo.trim(), sendEmailMessage.trim() || undefined)}
+                  onClick={() => emailSalesQuote(order, sendEmailTo.trim(), sendEmailMessage.trim() || undefined, sendEmailCc.trim() || undefined)}
                 >
-                  {sendingQuoteId === order.id ? 'Sending…' : 'Send'}
+                  {sendingQuoteId === order.id ? 'Sending…' : (isUpdate ? 'Send update' : 'Send')}
                 </button>
               </div>
             </div>

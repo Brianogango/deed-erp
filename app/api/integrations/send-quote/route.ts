@@ -3,16 +3,17 @@ import { getRequiredSession, withApiErrorHandling } from '@/lib/auth/api'
 import { sendEmail, generateQuoteEmail, logEmailForDev } from '@/lib/integrations/email'
 import { sendQuoteViaWhatsApp, logWhatsAppForDev } from '@/lib/integrations/whatsapp'
 import { generateQuotePdfBuffer } from '@/lib/integrations/quote-pdf'
+import { appendDocumentEmailSend, parseEmailList } from '@/lib/document-email-sends'
 
 /**
  * POST /api/integrations/send-quote
- * 
+ *
  * Send quote to customer via email and/or WhatsApp
  */
 export async function POST(request: Request) {
   return withApiErrorHandling(async () => {
     const session = await getRequiredSession()
-    
+
     let body: unknown
     try {
       body = await request.json()
@@ -40,6 +41,10 @@ export async function POST(request: Request) {
       }
       /** Optional personal message from the sender, included in the email body. */
       message?: string
+      /** First send vs revised quotation (used when template supports it). */
+      kind?: 'initial' | 'update'
+      /** Extra recipients (Cc). */
+      cc?: string | string[]
       channels: ('email' | 'whatsapp')[]
     }
 
@@ -47,13 +52,22 @@ export async function POST(request: Request) {
       throw Object.assign(new Error('Quote data is required'), { status: 400 })
     }
 
-    const results: Record<string, { success: boolean; error?: string }> = {}
+    const cc = parseEmailList(payload.cc)
+    const kind = payload.kind === 'update' ? 'update' as const : 'initial' as const
+    const results: Record<string, { success: boolean; error?: string; messageId?: string }> = {}
+    let emailSendRecord: Awaited<ReturnType<typeof appendDocumentEmailSend>> | null = null
 
     // Send via Email — the quotation PDF travels as an attachment (Odoo:
     // Send by Email attaches the quotation document).
     if (payload.channels.includes('email')) {
       const isDev = process.env.NODE_ENV !== 'production'
-      const emailContent = generateQuoteEmail({ ...payload.quote, message: payload.message })
+      const emailContent = generateQuoteEmail({
+        ...payload.quote,
+        message: payload.message,
+        // Extra fields are ignored by older templates and used by newer ones.
+        ...( { kind, pdfAttached: true } as Record<string, unknown>),
+      } as Parameters<typeof generateQuoteEmail>[0])
+
       let attachments: Array<{ filename: string; content: Buffer; contentType: string }> = []
       try {
         const pdf = await generateQuotePdfBuffer(payload.quote)
@@ -70,13 +84,15 @@ export async function POST(request: Request) {
       if (isDev) {
         logEmailForDev({
           to: payload.quote.contactEmail,
+          cc,
           ...emailContent,
           attachments,
         })
-        results.email = { success: true }
+        results.email = { success: true, messageId: `dev-${Date.now()}` }
       } else {
         const emailResult = await sendEmail({
           to: payload.quote.contactEmail,
+          cc: cc.length ? cc : undefined,
           mailbox: 'sales',
           // From is resolved Contabo-safe by pickMailbox; sales@ goes on Reply-To.
           replyTo: process.env.SALES_EMAIL || undefined,
@@ -85,6 +101,22 @@ export async function POST(request: Request) {
         })
         results.email = emailResult
       }
+
+      emailSendRecord = await appendDocumentEmailSend({
+        documentType: 'quote',
+        documentId: payload.quoteId,
+        documentRef: payload.quote.ref,
+        to: payload.quote.contactEmail,
+        cc,
+        subject: emailContent.subject,
+        status: results.email.success ? 'success' : 'failed',
+        error: results.email.error,
+        messageId: results.email.messageId,
+        channel: 'email',
+        kind,
+        sentById: session.user.id,
+        sentByName: session.user.name || session.user.username,
+      })
     }
 
     // Send via WhatsApp
@@ -121,6 +153,7 @@ export async function POST(request: Request) {
         success: false,
         message: firstError || 'Failed to send quote via any channel',
         results,
+        emailSend: emailSendRecord,
       }, { status: 500 })
     }
 
@@ -128,7 +161,9 @@ export async function POST(request: Request) {
       success: true,
       message: 'Quote sent successfully',
       results,
+      emailSend: emailSendRecord,
       sentBy: session.user.username,
+      cc,
     })
   })
 }

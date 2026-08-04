@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { requireRole, withApiErrorHandling } from '@/lib/auth/api'
 import { sendMultiChannelMessage } from '@/lib/integrations/messaging'
+import { appendDocumentEmailSend, parseEmailList } from '@/lib/document-email-sends'
 
 /**
  * POST /api/invoices/[id]/send
@@ -11,7 +12,7 @@ import { sendMultiChannelMessage } from '@/lib/integrations/messaging'
  * Body (all optional — sensible defaults are inferred from the invoice / client):
  * {
  *   to?: string         // override recipient (otherwise client.email)
- *   cc?: string[]
+ *   cc?: string | string[]
  *   subject?: string
  *   message?: string    // free-text message inserted above the invoice summary
  *   pdfBase64?: string  // optional pre-rendered PDF generated client-side
@@ -38,6 +39,7 @@ export async function POST(request: Request, { params }: { params: { id: string 
       throw Object.assign(new Error('No recipient email — provide "to" or set the client email'), { status: 400 })
     }
 
+    const cc = parseEmailList(body.cc)
     const companyName = process.env.PDF_COMPANY_NAME || 'Deed Technologies'
     const subject: string = body.subject || `Invoice ${invoice.invoiceNumber} from ${companyName}`
     const greeting = `Hello ${invoice.client.name || invoice.client.companyName || 'Customer'}`
@@ -94,19 +96,40 @@ ${companyName}`
       mailbox: 'accounts',
       // Contabo-safe From via pickMailbox; accounts@ stays on Reply-To.
       replyTo: process.env.ACCOUNTS_EMAIL || undefined,
-      cc: body.cc,
+      cc: cc.length ? cc : undefined,
       content: { subject, html, text },
       attachments: attachments.length > 0 ? attachments : undefined,
       metadata: { invoiceId: invoice.id, invoiceNumber: invoice.invoiceNumber, sentBy: actor.username },
     })
     const emailResult = result.results.email
 
+    const emailSend = await appendDocumentEmailSend({
+      documentType: String(invoice.invoiceNumber || '').toUpperCase().startsWith('BILL') ? 'bill' : 'invoice',
+      documentId: invoice.id,
+      documentRef: invoice.invoiceNumber,
+      to: recipient,
+      cc,
+      subject,
+      status: result.success ? 'success' : 'failed',
+      error: emailResult?.error,
+      messageId: emailResult?.messageId,
+      channel: 'email',
+      sentById: actor.id,
+      sentByName: actor.name || actor.username,
+    })
+
     if (!result.success) {
       console.error('[invoices] Send failed', { invoiceId: invoice.id, to: recipient, error: emailResult?.error })
-      return NextResponse.json({ success: false, error: emailResult?.error || 'Invoice email failed', to: recipient }, { status: 502 })
+      return NextResponse.json({
+        success: false,
+        error: emailResult?.error || 'Invoice email failed',
+        to: recipient,
+        cc,
+        emailSend,
+      }, { status: 502 })
     }
 
-    console.log('[invoices] Sent', { invoiceId: invoice.id, to: recipient, messageId: emailResult?.messageId, sentBy: actor.username })
+    console.log('[invoices] Sent', { invoiceId: invoice.id, to: recipient, cc, messageId: emailResult?.messageId, sentBy: actor.username })
 
     // Mark as 'invoiced' (i.e. issued) if it was draft
     if (invoice.status === 'draft') {
@@ -116,8 +139,10 @@ ${companyName}`
     return NextResponse.json({
       success: true,
       to: recipient,
+      cc,
       messageId: emailResult?.messageId,
       delivery: result,
+      emailSend,
       invoiceId: invoice.id,
       sentBy: actor.username,
     })
