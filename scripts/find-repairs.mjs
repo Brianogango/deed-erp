@@ -119,9 +119,57 @@ try {
   if (queries.length) console.log(`Queries: ${queries.join(', ')}`)
   if (since) console.log(`Since: ${since}`)
 
+  // Date histogram + recent-by-created help catch missing intakes / bad intakeDate values.
+  const byMonth = {}
+  const byIntakeDay = {}
+  const byCreatedDay = {}
+  let badIntake = 0
+  for (const r of repairs) {
+    const intake = String(r?.intakeDate || '')
+    const created = String(r?.createdDate || r?.createdAt || '')
+    const month = intake.slice(0, 7) || '(blank)'
+    byMonth[month] = (byMonth[month] || 0) + 1
+    const day = intake.slice(0, 10) || '(blank)'
+    byIntakeDay[day] = (byIntakeDay[day] || 0) + 1
+    const cday = created.slice(0, 10) || '(blank)'
+    byCreatedDay[cday] = (byCreatedDay[cday] || 0) + 1
+    if (intake && (intake.startsWith('209') || intake.startsWith('19') || intake < '2020-01-01')) badIntake += 1
+  }
+  console.log('\n--- Intake month histogram ---')
+  console.log(JSON.stringify(Object.fromEntries(Object.entries(byMonth).sort((a, b) => a[0].localeCompare(b[0]))), null, 2))
+  console.log(`Suspicious intakeDate values: ${badIntake}`)
+
+  if (since) {
+    const createdSince = repairs
+      .filter(r => {
+        const c = String(r?.createdDate || r?.createdAt || '')
+        return c && c >= since
+      })
+      .sort((a, b) => String(b.createdDate || b.createdAt || '').localeCompare(String(a.createdDate || a.createdAt || '')))
+      .slice(0, limit)
+    console.log(`\n--- createdDate/createdAt >= ${since}: ${createdSince.length} (showing up to ${limit}) ---`)
+    console.log(JSON.stringify(createdSince.map(r => ({
+      ...summarize(r),
+      createdDate: r.createdDate || null,
+      createdAt: r.createdAt || null,
+    })), null, 2))
+
+    const recentIntakeDays = Object.entries(byIntakeDay)
+      .filter(([d]) => d >= since || d.startsWith('209'))
+      .sort((a, b) => b[0].localeCompare(a[0]))
+    console.log(`\n--- intakeDate day counts (>= ${since} or year 209x) ---`)
+    console.log(JSON.stringify(Object.fromEntries(recentIntakeDays), null, 2))
+
+    const recentCreatedDays = Object.entries(byCreatedDay)
+      .filter(([d]) => d >= since)
+      .sort((a, b) => b[0].localeCompare(a[0]))
+    console.log(`\n--- createdDate day counts (>= ${since}) ---`)
+    console.log(JSON.stringify(Object.fromEntries(recentCreatedDays), null, 2))
+  }
+
   let matched = repairs.filter(r => {
     if (since) {
-      const d = String(r?.intakeDate || r?.createdAt || '')
+      const d = String(r?.intakeDate || r?.createdAt || r?.createdDate || '')
       if (!d || d < since) return false
     }
     if (!needles.length) return true
@@ -139,12 +187,36 @@ try {
   // Also list today's intakes for context when searching a missing morning job
   if (since) {
     const today = repairs
-      .filter(r => String(r?.intakeDate || '') >= since)
-      .sort((a, b) => String(b.intakeDate || '').localeCompare(String(a.intakeDate || '')))
+      .filter(r => {
+        const intake = String(r?.intakeDate || '')
+        const created = String(r?.createdDate || r?.createdAt || '')
+        return (intake && intake >= since) || (created && created >= since)
+      })
+      .sort((a, b) => String(b.intakeDate || b.createdDate || '').localeCompare(String(a.intakeDate || a.createdDate || '')))
       .slice(0, 30)
-      .map(summarize)
-    console.log(`\n--- Intakes since ${since} (up to 30) ---`)
+      .map(r => ({ ...summarize(r), createdDate: r.createdDate || null }))
+    console.log(`\n--- Intakes/created since ${since} (up to 30) ---`)
     console.log(JSON.stringify(today, null, 2))
+  }
+
+  // Relational mirror (Prisma repairs table) — may retain rows wiped from the blob.
+  try {
+    const prismaCount = await pool.query(`SELECT COUNT(*)::int AS n FROM repairs`)
+    console.log(`\n--- Prisma repairs table count: ${prismaCount.rows[0]?.n ?? 0} ---`)
+    if (since) {
+      const prismaRecent = await pool.query(
+        `SELECT ref, status, device_type, serial_number, intake_date, created_at
+         FROM repairs
+         WHERE intake_date >= $1::date OR created_at >= $1::timestamptz
+         ORDER BY COALESCE(intake_date, created_at) DESC
+         LIMIT $2`,
+        [since, limit],
+      )
+      console.log(`Prisma rows since ${since}: ${prismaRecent.rows.length}`)
+      console.log(JSON.stringify(prismaRecent.rows, null, 2))
+    }
+  } catch (err) {
+    console.log(`\n--- Prisma repairs query skipped: ${err instanceof Error ? err.message : err} ---`)
   }
 
   // Contacts hit?

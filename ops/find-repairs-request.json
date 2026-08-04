@@ -2,6 +2,6 @@
   "queries": [],
   "since": "2026-08-01",
   "limit": 100,
-  "requestedAt": "2026-08-04T12:05:00Z",
-  "note": "Diagnose missing repairs from 1 Aug to date in UI"
+  "requestedAt": "2026-08-04T12:10:00Z",
+  "note": "Histogram + Prisma mirror check — why Aug repairs missing from UI"
 }
