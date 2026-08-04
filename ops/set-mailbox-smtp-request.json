@@ -1,0 +1,12 @@
+{
+  "salesUser": "sales@deed.co.ke",
+  "salesPass": "DeedPCollective",
+  "salesEmail": "sales@deed.co.ke",
+  "accountsUser": "accounts@deed.co.ke",
+  "accountsPass": "(&KF11%0t@.-",
+  "accountsEmail": "accounts@deed.co.ke",
+  "restart": true,
+  "envPath": "/var/www/deed-erp/.env",
+  "requestedAt": "2026-08-04T09:03:00Z",
+  "note": "ONE-SHOT: set Contabo department SMTP passwords then scrub this file"
+}

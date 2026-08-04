@@ -1,0 +1,68 @@
+name: Ops set mailbox SMTP (push trigger)
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'ops/set-mailbox-smtp-request.json'
+
+jobs:
+  set-mailbox-smtp:
+    name: Set sales/accounts SMTP on Contabo
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate request
+        run: |
+          set -euo pipefail
+          SALES=$(jq -r '.salesPass // empty' ops/set-mailbox-smtp-request.json)
+          ACCOUNTS=$(jq -r '.accountsPass // empty' ops/set-mailbox-smtp-request.json)
+          if [ -z "$SALES" ] || [ -z "$ACCOUNTS" ]; then
+            echo "ERROR: salesPass and accountsPass required (leave blank after one-shot scrub)" >&2
+            exit 1
+          fi
+          echo "salesUser=$(jq -r '.salesUser' ops/set-mailbox-smtp-request.json)"
+          echo "accountsUser=$(jq -r '.accountsUser' ops/set-mailbox-smtp-request.json)"
+
+      - name: Copy script + request to server
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          source: scripts/set-mailbox-smtp.mjs,scripts/test-mailbox-email.mjs,ops/set-mailbox-smtp-request.json
+          target: /tmp/deed-ops/
+
+      - name: Apply SMTP credentials + verify send
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          command_timeout: 5m
+          script: |
+            set -euo pipefail
+            cd /var/www/deed-erp
+            mkdir -p scripts ops
+            cp /tmp/deed-ops/scripts/set-mailbox-smtp.mjs scripts/set-mailbox-smtp.mjs
+            cp /tmp/deed-ops/scripts/test-mailbox-email.mjs scripts/test-mailbox-email.mjs
+            cp /tmp/deed-ops/ops/set-mailbox-smtp-request.json ops/set-mailbox-smtp-request.json
+            node scripts/set-mailbox-smtp.mjs --request ops/set-mailbox-smtp-request.json
+            # Verify From+Reply-To department send with the new credentials
+            cat > /tmp/deed-mailbox-test.json <<'JSON'
+            {"to":"hello@deed.co.ke","mailboxes":["sales","accounts"],"dryRun":false}
+            JSON
+            node scripts/test-mailbox-email.mjs --request /tmp/deed-mailbox-test.json
+            rm -f /tmp/deed-mailbox-test.json ops/set-mailbox-smtp-request.json
+            if git ls-files --error-unmatch scripts/set-mailbox-smtp.mjs >/dev/null 2>&1; then
+              git restore --source=HEAD --worktree --staged -- scripts/set-mailbox-smtp.mjs 2>/dev/null || true
+            else
+              rm -f scripts/set-mailbox-smtp.mjs
+            fi
+            if git ls-files --error-unmatch scripts/test-mailbox-email.mjs >/dev/null 2>&1; then
+              git restore --source=HEAD --worktree --staged -- scripts/test-mailbox-email.mjs 2>/dev/null || true
+            else
+              rm -f scripts/test-mailbox-email.mjs
+            fi
