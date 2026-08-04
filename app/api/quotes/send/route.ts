@@ -38,7 +38,7 @@ export async function POST(request: NextRequest) {
       const result = await sendEmail({
         to: recipient.email,
         mailbox: 'sales',
-        from: process.env.SALES_EMAIL || 'sales@deed.co.ke',
+        replyTo: process.env.SALES_EMAIL || undefined,
         subject: `Quote ${quote.ref} from ${process.env.PDF_COMPANY_NAME || 'Deed ERP'}`,
         html: generateQuoteEmailHtml(quote, recipient),
         text: generateQuoteEmailText(quote, recipient),

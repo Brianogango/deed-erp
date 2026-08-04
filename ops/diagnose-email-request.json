@@ -1,0 +1,5 @@
+{
+  "logs": true,
+  "requestedAt": "2026-08-04T08:50:00Z",
+  "note": "Diagnose quote/invoice email failures — SMTP From vs auth mismatch"
+}

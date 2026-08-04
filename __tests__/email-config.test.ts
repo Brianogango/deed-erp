@@ -1,5 +1,5 @@
 import { describe, expect, it, beforeEach, afterEach } from 'vitest'
-import { resolveEmailProvider, getEmailConfigStatus, generateRfqEmail } from '@/lib/integrations/email'
+import { resolveEmailProvider, getEmailConfigStatus, generateRfqEmail, pickMailbox } from '@/lib/integrations/email'
 
 describe('resolveEmailProvider', () => {
   const prevProvider = process.env.EMAIL_PROVIDER
@@ -45,6 +45,51 @@ describe('getEmailConfigStatus', () => {
     const status = getEmailConfigStatus()
     expect(status.missing).toContain('SMTP_PASS')
     expect(status.provider).toBe('smtp')
+  })
+})
+
+describe('pickMailbox Contabo From/Reply-To', () => {
+  const keys = [
+    'SMTP_USER', 'SMTP_PASS', 'EMAIL_FROM',
+    'SALES_EMAIL', 'SALES_SMTP_USER', 'SALES_SMTP_PASS',
+    'ACCOUNTS_EMAIL', 'ACCOUNTS_SMTP_USER', 'ACCOUNTS_SMTP_PASS',
+  ] as const
+  const prev: Record<string, string | undefined> = {}
+  beforeEach(() => {
+    for (const key of keys) prev[key] = process.env[key]
+  })
+  afterEach(() => {
+    for (const key of keys) {
+      if (prev[key] === undefined) delete process.env[key]
+      else process.env[key] = prev[key]
+    }
+  })
+
+  it('uses EMAIL_FROM as From and SALES_EMAIL as Reply-To when sharing SMTP login', () => {
+    process.env.SMTP_USER = 'info@deed.co.ke'
+    process.env.SMTP_PASS = 'secret'
+    process.env.EMAIL_FROM = 'info@deed.co.ke'
+    process.env.SALES_EMAIL = 'sales@deed.co.ke'
+    delete process.env.SALES_SMTP_USER
+    delete process.env.SALES_SMTP_PASS
+    const sales = pickMailbox('sales')
+    expect(sales.from).toBe('info@deed.co.ke')
+    expect(sales.replyTo).toBe('sales@deed.co.ke')
+    expect(sales.dedicatedAuth).toBe(false)
+  })
+
+  it('uses accounts department From when dedicated SMTP credentials exist', () => {
+    process.env.SMTP_USER = 'info@deed.co.ke'
+    process.env.SMTP_PASS = 'secret'
+    process.env.EMAIL_FROM = 'info@deed.co.ke'
+    process.env.ACCOUNTS_EMAIL = 'accounts@deed.co.ke'
+    process.env.ACCOUNTS_SMTP_USER = 'accounts@deed.co.ke'
+    process.env.ACCOUNTS_SMTP_PASS = 'accounts-secret'
+    const accounts = pickMailbox('accounts')
+    expect(accounts.from).toBe('accounts@deed.co.ke')
+    expect(accounts.replyTo).toBe('accounts@deed.co.ke')
+    expect(accounts.dedicatedAuth).toBe(true)
+    expect(accounts.user).toBe('accounts@deed.co.ke')
   })
 })
 

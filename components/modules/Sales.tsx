@@ -436,7 +436,14 @@ function SalesContent() {
         }),
       })
       const body = await res.json().catch(() => ({}))
-      if (!res.ok || body?.success === false) throw new Error(body?.message || 'Quote email failed')
+      if (!res.ok || body?.success === false) {
+        const detail =
+          body?.message
+          || body?.results?.email?.error
+          || body?.error
+          || 'Quote email failed'
+        throw new Error(detail)
+      }
       // Odoo: sending the quotation moves it to Quotation Sent (same record,
       // sender/recipient/date/message recorded — no new document is created).
       markQuotationSent(order.id, email, message)

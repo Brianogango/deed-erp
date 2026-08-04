@@ -92,7 +92,8 @@ ${companyName}`
       recipient: { name: invoice.client.name || invoice.client.companyName || 'Customer', email: recipient },
       channels: ['email'],
       mailbox: 'accounts',
-      from: process.env.ACCOUNTS_EMAIL || 'accounts@deed.co.ke',
+      // Contabo-safe From via pickMailbox; accounts@ stays on Reply-To.
+      replyTo: process.env.ACCOUNTS_EMAIL || undefined,
       cc: body.cc,
       content: { subject, html, text },
       attachments: attachments.length > 0 ? attachments : undefined,

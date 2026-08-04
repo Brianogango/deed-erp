@@ -42,46 +42,66 @@ export interface EmailMessage {
 interface MailboxConfig {
   user: string
   pass: string
+  /** Envelope / visible From — must be allowed by the SMTP login on Contabo/cPanel. */
   from: string
+  /** Department address for customer replies (e.g. sales@ / accounts@). */
+  replyTo: string
+  /** True when this profile has its own SMTP_USER/PASS (safe to From as department). */
+  dedicatedAuth: boolean
 }
 
 const profileAuth = (
   user: string | undefined,
   pass: string | undefined,
   fallback: MailboxConfig,
-): Pick<MailboxConfig, 'user' | 'pass'> => {
+): Pick<MailboxConfig, 'user' | 'pass' | 'dedicatedAuth'> => {
   if (user && pass) {
-    return { user, pass }
+    return { user, pass, dedicatedAuth: true }
   }
-  return { user: fallback.user, pass: fallback.pass }
+  return { user: fallback.user, pass: fallback.pass, dedicatedAuth: false }
 }
 
-const pickMailbox = (profile: MailboxProfile): MailboxConfig => {
+/**
+ * Contabo/cPanel SMTP typically only allows From = authenticated mailbox (or
+ * an alias of it). When a department profile reuses the default SMTP login,
+ * keep From as EMAIL_FROM/SMTP_USER and put the department address on Reply-To.
+ */
+const departmentMailbox = (
+  departmentFrom: string,
+  auth: Pick<MailboxConfig, 'user' | 'pass' | 'dedicatedAuth'>,
+  def: MailboxConfig,
+): MailboxConfig => ({
+  user: auth.user,
+  pass: auth.pass,
+  dedicatedAuth: auth.dedicatedAuth,
+  from: auth.dedicatedAuth ? departmentFrom : def.from,
+  replyTo: departmentFrom || def.replyTo || def.from,
+})
+
+/** Exported for tests / diagnostics. */
+export const pickMailbox = (profile: MailboxProfile): MailboxConfig => {
+  const defFrom = process.env.EMAIL_FROM ?? process.env.SMTP_USER ?? 'noreply@deed.co.ke'
   const def: MailboxConfig = {
     user: process.env.SMTP_USER ?? '',
     pass: process.env.SMTP_PASS ?? '',
-    from: process.env.EMAIL_FROM ?? process.env.SMTP_USER ?? 'noreply@deed.co.ke',
+    from: defFrom,
+    replyTo: defFrom,
+    dedicatedAuth: !!(process.env.SMTP_USER && process.env.SMTP_PASS),
   }
   if (profile === 'hr') {
     const auth = profileAuth(process.env.HR_SMTP_USER, process.env.HR_SMTP_PASS, def)
-    return {
-      ...auth,
-      from: process.env.HR_EMAIL || process.env.HR_SMTP_USER || def.from,
-    }
+    const department = process.env.HR_EMAIL || process.env.HR_SMTP_USER || def.from
+    return departmentMailbox(department, auth, def)
   }
   if (profile === 'sales') {
     const auth = profileAuth(process.env.SALES_SMTP_USER, process.env.SALES_SMTP_PASS, def)
-    return {
-      ...auth,
-      from: process.env.SALES_EMAIL || process.env.SALES_SMTP_USER || def.from,
-    }
+    const department = process.env.SALES_EMAIL || process.env.SALES_SMTP_USER || def.from
+    return departmentMailbox(department, auth, def)
   }
   if (profile === 'accounts') {
     const auth = profileAuth(process.env.ACCOUNTS_SMTP_USER, process.env.ACCOUNTS_SMTP_PASS, def)
-    return {
-      ...auth,
-      from: process.env.ACCOUNTS_EMAIL || process.env.ACCOUNTS_SMTP_USER || def.from,
-    }
+    const department = process.env.ACCOUNTS_EMAIL || process.env.ACCOUNTS_SMTP_USER || def.from
+    return departmentMailbox(department, auth, def)
   }
   return def
 }
@@ -106,6 +126,8 @@ export type EmailConfigStatus = {
   mailboxes: Array<{
     id: MailboxProfile
     from: string
+    replyTo: string
+    dedicatedAuth: boolean
     authConfigured: boolean
   }>
   missing: string[]
@@ -139,6 +161,8 @@ export function getEmailConfigStatus(): EmailConfigStatus {
     return {
       id,
       from: cfg.from,
+      replyTo: cfg.replyTo,
+      dedicatedAuth: cfg.dedicatedAuth,
       authConfigured: provider !== 'smtp' ? missing.length === 0 : !!(cfg.user && cfg.pass),
     }
   })
@@ -327,6 +351,18 @@ const sendViaSMTP = async (message: EmailMessage): Promise<EmailResult> => {
       error: `SMTP credentials not configured for mailbox profile "${profile}"`,
     }
   }
+  // Prefer Reply-To from the caller, else the department address. Never let a
+  // mismatched From override the Contabo-safe mailbox.from unless this profile
+  // has dedicated SMTP credentials (or the caller From matches the login).
+  const requestedFrom = (message.from || '').trim()
+  const authUser = mailbox.user.trim().toLowerCase()
+  const fromAllowed =
+    !requestedFrom
+    || mailbox.dedicatedAuth
+    || requestedFrom.toLowerCase() === authUser
+    || requestedFrom.toLowerCase() === mailbox.from.trim().toLowerCase()
+  const from = fromAllowed && requestedFrom ? requestedFrom : mailbox.from
+  const replyTo = message.replyTo || mailbox.replyTo || mailbox.from
   try {
     const nodemailer = await import('nodemailer')
     const transporter = nodemailer.default.createTransport({
@@ -340,11 +376,11 @@ const sendViaSMTP = async (message: EmailMessage): Promise<EmailResult> => {
       tls: { rejectUnauthorized: false },
     })
     const result = await transporter.sendMail({
-      from: message.from || mailbox.from,
+      from,
       to: message.to,
       cc: message.cc,
       bcc: message.bcc,
-      replyTo: message.replyTo || mailbox.from,
+      replyTo,
       subject: message.subject,
       html: message.html,
       text: message.text,
@@ -354,13 +390,13 @@ const sendViaSMTP = async (message: EmailMessage): Promise<EmailResult> => {
     const rejected = (result.rejected || []) as string[]
     if (accepted.length === 0 && rejected.length > 0) {
       const reason = (result as { response?: string }).response || 'all recipients rejected'
-      console.error('[email] SMTP rejected all recipients', { profile, to: message.to, rejected, reason })
+      console.error('[email] SMTP rejected all recipients', { profile, to: message.to, from, replyTo, rejected, reason })
       return { success: false, error: `Mail server rejected the recipient(s): ${reason}` }
     }
     if (rejected.length > 0) {
-      console.warn('[email] SMTP partial delivery', { profile, accepted, rejected })
+      console.warn('[email] SMTP partial delivery', { profile, accepted, rejected, from, replyTo })
     } else {
-      console.log('[email] SMTP sent', { profile, to: message.to, messageId: result.messageId })
+      console.log('[email] SMTP sent', { profile, to: message.to, from, replyTo, messageId: result.messageId })
     }
     return {
       success: true,
@@ -368,10 +404,22 @@ const sendViaSMTP = async (message: EmailMessage): Promise<EmailResult> => {
     }
   } catch (error: any) {
     const responseCode = error?.responseCode
-    const friendly = responseCode === 550
-      ? `Mail server rejected the recipient (550 No Such User Here). Please ensure the mailbox exists.`
-      : (error?.message || 'Unknown SMTP error')
-    console.error('[email] SMTP send failed', { profile, to: message.to, code: error?.code, responseCode, message: error?.message })
+    const response = String(error?.response || error?.message || '')
+    const senderRejected = /sender|from address|not owned|not allowed|relay/i.test(response)
+    const friendly = responseCode === 550 && senderRejected
+      ? `Mail server rejected the sender address (${from}). Use a From that matches the SMTP login, or create ${from} as an alias.`
+      : responseCode === 550
+        ? `Mail server rejected the recipient (550 No Such User Here). Please ensure the mailbox exists.`
+        : (error?.message || 'Unknown SMTP error')
+    console.error('[email] SMTP send failed', {
+      profile,
+      to: message.to,
+      from,
+      replyTo,
+      code: error?.code,
+      responseCode,
+      message: error?.message,
+    })
     return {
       success: false,
       error: friendly,
