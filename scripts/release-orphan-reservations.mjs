@@ -235,20 +235,19 @@ try {
       if (cancelledDeliveries > 0) {
         await saveJsonArray(client, 'deed_deliveries', nextDeliveries)
       }
-      // Best-effort Prisma mirror for reservation rows
+      // Best-effort Prisma mirror (blob remains source of truth for the UI).
       try {
         for (const so of matchedOrders) {
           await client.query(
-            `UPDATE "StockReservation"
-             SET status = 'cancelled', "updatedAt" = NOW()
-             WHERE "referenceId" = $1
-               AND status = 'reserved'
-               AND ("deliveryId" IS NULL OR "deliveryId" = '')`,
+            `UPDATE stock_reservations
+             SET status = 'cancelled', released_at = NOW()
+             WHERE reference_id = $1
+               AND status = 'reserved'`,
             [so.id],
           ).catch(() => null)
         }
       } catch {
-        // Prisma table naming may differ; blob is source of truth for the UI.
+        // Ignore mirror failures — app_state blob drives the client.
       }
       await client.query('COMMIT')
       console.log(`Saved: cancelled ${cancelledReservations} orphan reservation(s), ${cancelledDeliveries} quote DN(s)`)
