@@ -128,6 +128,11 @@ jobs:
               scripts/find-repairs.mjs
               scripts/find-sale-orders.mjs
               scripts/delete-repairs.mjs
+              scripts/diagnose-email.mjs
+              scripts/release-orphan-reservations.mjs
+              scripts/undo-sale-delivery.mjs
+              scripts/set-mailbox-smtp.mjs
+              scripts/test-mailbox-email.mjs
               ops/mark-serials-sold-request.json
               ops/find-serials-request.json
               ops/find-repairs-request.json
@@ -140,6 +145,11 @@ jobs:
               ops/heal-delivery-qty-request.json
               ops/revert-hollow-done-request.json
               ops/book-leave-request.json
+              ops/diagnose-email-request.json
+              ops/release-orphan-reservations-request.json
+              ops/undo-sale-delivery-request.json
+              ops/set-mailbox-smtp-request.json
+              ops/test-mailbox-email-request.json
               ops/clean-worktree-request.json
             )
             for f in "${OPS_PATHS[@]}"; do
@@ -152,6 +162,8 @@ jobs:
                 rm -f -- "$f"
               fi
             done
+            # Mailbox SMTP ops leave timestamped .env backups; never touch live .env.
+            rm -f -- .env.bak-mailbox-*
             # Stale previous-build dir is excluded from dirty checks but can confuse operators.
             rm -rf -- .next-staging
             git status --porcelain || true

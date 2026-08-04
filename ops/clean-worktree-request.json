@@ -1,4 +1,4 @@
 {
-  "reason": "Clear leftover mark/find-serials ops copies so Contabo deploy can proceed after #160-#162",
-  "requestedAt": "2026-08-02T19:32:00Z"
+  "reason": "Clear mailbox SMTP ops leftovers (.env.bak-mailbox-*, set/test-mailbox scripts) blocking Contabo production deploy",
+  "requestedAt": "2026-08-04T11:45:00Z"
 }

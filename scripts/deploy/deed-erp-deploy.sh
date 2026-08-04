@@ -153,8 +153,19 @@ OPS_PATHS=(
   scripts/heal-grn-serials.mjs
   scripts/mark-serials-sold.mjs
   scripts/find-serials.mjs
+  scripts/find-repairs.mjs
+  scripts/find-sale-orders.mjs
+  scripts/delete-repairs.mjs
+  scripts/diagnose-email.mjs
+  scripts/release-orphan-reservations.mjs
+  scripts/undo-sale-delivery.mjs
+  scripts/set-mailbox-smtp.mjs
+  scripts/test-mailbox-email.mjs
   ops/mark-serials-sold-request.json
   ops/find-serials-request.json
+  ops/find-repairs-request.json
+  ops/find-sale-orders-request.json
+  ops/delete-repairs-request.json
   ops/heal-grn-serials-request.json
   ops/add-serial-request.json
   ops/add-opening-bulk-stock-request.json
@@ -162,6 +173,11 @@ OPS_PATHS=(
   ops/heal-delivery-qty-request.json
   ops/revert-hollow-done-request.json
   ops/book-leave-request.json
+  ops/diagnose-email-request.json
+  ops/release-orphan-reservations-request.json
+  ops/undo-sale-delivery-request.json
+  ops/set-mailbox-smtp-request.json
+  ops/test-mailbox-email-request.json
   ops/clean-worktree-request.json
 )
 for ops_path in "${OPS_PATHS[@]}"; do
@@ -174,6 +190,8 @@ for ops_path in "${OPS_PATHS[@]}"; do
     rm -f -- "$ops_path"
   fi
 done
+# Mailbox SMTP ops leave timestamped .env backups; never touch live .env.
+rm -f -- .env.bak-mailbox-*
 rm -rf -- "$STAGED_BUILD_PATH"
 [[ -z "$(git status --porcelain --untracked-files=normal -- . \
   ':(exclude).next-previous' ':(exclude).next-staging')" ]] || {
