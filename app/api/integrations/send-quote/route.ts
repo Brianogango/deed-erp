@@ -78,7 +78,8 @@ export async function POST(request: Request) {
         const emailResult = await sendEmail({
           to: payload.quote.contactEmail,
           mailbox: 'sales',
-          from: process.env.SALES_EMAIL || 'sales@deed.co.ke',
+          // From is resolved Contabo-safe by pickMailbox; sales@ goes on Reply-To.
+          replyTo: process.env.SALES_EMAIL || undefined,
           ...emailContent,
           attachments,
         })
@@ -115,9 +116,10 @@ export async function POST(request: Request) {
     const anySuccess = Object.values(results).some(r => r.success)
 
     if (!anySuccess) {
+      const firstError = Object.values(results).map(r => r.error).find(Boolean)
       return NextResponse.json({
         success: false,
-        message: 'Failed to send quote via any channel',
+        message: firstError || 'Failed to send quote via any channel',
         results,
       }, { status: 500 })
     }
