@@ -2041,11 +2041,7 @@ function SalesContent() {
           <Modal
             title={isUpdate ? `Send updated ${order.ref}` : `Send ${order.ref} by Email`}
             onClose={() => setSendModalOrderId(null)}
-<<<<<<< HEAD
-            width={460}
-=======
             width={520}
->>>>>>> origin/cursor/email-cc-send-history-37a6
           >
             <div className="flex flex-col gap-4">
               <Field label="Recipient Email *">
@@ -2069,11 +2065,7 @@ function SalesContent() {
                 />
               </Field>
               <p className="text-[10px] text-[var(--text-4)]">
-<<<<<<< HEAD
                 {isUpdate ? 'Updated quotation' : 'Quotation'} PDF ({order.ref}) is attached automatically for download.
-              </p>
-=======
-                {isUpdate ? 'Updated quotation' : 'Quotation'} PDF ({order.ref}) is attached automatically.
               </p>
               <DocumentEmailSendHistory
                 documentId={order.id}
@@ -2081,7 +2073,6 @@ function SalesContent() {
                 refreshKey={emailHistoryKey}
                 title="Previous sends"
               />
->>>>>>> origin/cursor/email-cc-send-history-37a6
               <div className="flex gap-2 justify-end pt-2 border-t border-[var(--border-lt)]">
                 <button className="btn-outline text-xs" onClick={() => setSendModalOrderId(null)}>Cancel</button>
                 <button
