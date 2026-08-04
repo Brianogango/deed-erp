@@ -11,6 +11,10 @@ import { StatusBadge } from '@/components/erp'
 import { CalendarView } from '@/components/erp/CalendarView'
 import { Fa, faPrint, faTruck } from '@/components/icons'
 import { DataTable, type ColumnDef, type PrimaryFilterConfig } from '@/components/data-table'
+import {
+  parseRiderFeeInput,
+  suggestRiderFeePrefill,
+} from '@/lib/delivery-job-fee'
 
 // ── Print Components ───────────────────────────────────────────────────────────
 function PrintJobSheet({ job, companySettings, onDone }: { job: DeliveryJob, companySettings: any, onDone: () => void }) {
@@ -226,7 +230,7 @@ function TypeBadge({ type }: { type: DeliveryJobType }) {
 // ── Job Form Modal ─────────────────────────────────────────────────────────────
 function JobModal({
   onClose, repairs, saleOrders, riders,
-  createDeliveryJob, assignRiderToJob,
+  createDeliveryJob, assignRiderToJob, showToast,
 }: {
   onClose: () => void
   repairs: { id: string; ref: string; customerName: string; customerPhone: string }[]
@@ -234,6 +238,7 @@ function JobModal({
   riders: Rider[]
   createDeliveryJob: ReturnType<typeof useDeliveryStore>['createDeliveryJob']
   assignRiderToJob: ReturnType<typeof useDeliveryStore>['assignRiderToJob']
+  showToast: ReturnType<typeof useDeliveryStore>['showToast']
 }) {
   const [form, setForm] = useState({
     type: 'sales_delivery' as DeliveryJobType,
@@ -242,7 +247,7 @@ function JobModal({
     customerName: '', customerPhone: '',
     pickupAddress: '', deliveryAddress: '',
     scheduledDate: new Date().toISOString().slice(0, 10),
-    riderFee: '150',
+    riderFee: '',
     notes: '',
   })
 
@@ -250,7 +255,12 @@ function JobModal({
 
   function handleRiderChange(id: string) {
     const rider = riders.find(r => r.id === id)
-    setForm(p => ({ ...p, riderId: id, riderFee: rider ? String(rider.ratePerDelivery) : p.riderFee }))
+    setForm(p => ({
+      ...p,
+      riderId: id,
+      // Prefill only when the fee field is still empty and rider has a positive default.
+      riderFee: suggestRiderFeePrefill(p.riderFee, rider?.ratePerDelivery),
+    }))
   }
 
   function handleSourceChange(type: DeliveryJobType, id: string) {
@@ -270,6 +280,11 @@ function JobModal({
 
   function submit() {
     if (!form.customerName || !form.pickupAddress || !form.deliveryAddress || !form.scheduledDate) return
+    const fee = parseRiderFeeInput(form.riderFee)
+    if (fee === null) {
+      showToast('Enter the rider fee for this job (amount can vary per trip)', 'error')
+      return
+    }
     const job = createDeliveryJob({
       type: form.type,
       saleOrderId:   form.saleOrderId   || undefined,
@@ -281,10 +296,11 @@ function JobModal({
       pickupAddress:   form.pickupAddress,
       deliveryAddress: form.deliveryAddress,
       scheduledDate:   form.scheduledDate,
-      riderFee:        parseFloat(form.riderFee) || 0,
+      riderFee:        fee,
       notes:           form.notes,
     })
-    if (form.riderId) assignRiderToJob(job.id, form.riderId)
+    // Pass the entered fee so assign never overwrites it with a zero default rate.
+    if (form.riderId) assignRiderToJob(job.id, form.riderId, fee)
     onClose()
   }
 
@@ -337,8 +353,11 @@ function JobModal({
           <Field label="Assign Rider">
             <Select value={form.riderId} onChange={handleRiderChange} options={[{ value: '', label: '— Assign later —' }, ...riders.filter(r => r.active).map(r => ({ value: r.id, label: `${r.name} · ${r.vehicle}` }))]} />
           </Field>
-          <Field label="Rider Fee (KES)"><Input type="number" value={form.riderFee} onChange={v => set('riderFee', v)} placeholder="150" /></Field>
+          <Field label="Rider Fee (KES) *">
+            <Input type="number" min="0" step="1" value={form.riderFee} onChange={v => set('riderFee', v)} placeholder="Amount for this trip" />
+          </Field>
         </div>
+        <p className="text-[10px] text-t4 -mt-1">Fee is per job and can vary. Selecting a rider only suggests their default rate when this field is empty.</p>
 
         <Field label="Notes / Instructions">
           <textarea className="form-input text-xs w-full" rows={2} value={form.notes} onChange={e => set('notes', e.target.value)} placeholder="Special instructions, fragile items, gate code, etc." />
@@ -353,16 +372,91 @@ function JobModal({
 }
 
 // ── Assign Rider Modal ─────────────────────────────────────────────────────────
-function AssignModal({ job, riders, onAssign, onClose }: { job: DeliveryJob; riders: Rider[]; onAssign: (riderId: string) => void; onClose: () => void }) {
+function AssignModal({
+  job, riders, onAssign, onClose,
+}: {
+  job: DeliveryJob
+  riders: Rider[]
+  onAssign: (riderId: string, riderFee: number) => void
+  onClose: () => void
+}) {
   const [riderId, setRiderId] = useState(job.riderId ?? '')
+  const [riderFee, setRiderFee] = useState(
+    Number(job.riderFee) > 0 ? String(job.riderFee) : '',
+  )
+
+  function handleRiderChange(id: string) {
+    const rider = riders.find(r => r.id === id)
+    setRiderId(id)
+    setRiderFee(prev => suggestRiderFeePrefill(prev, rider?.ratePerDelivery))
+  }
+
+  function submit() {
+    if (!riderId) return
+    const fee = parseRiderFeeInput(riderFee)
+    if (fee === null) return
+    onAssign(riderId, fee)
+    onClose()
+  }
+
   return (
     <Modal title={`Assign Rider — ${job.ref}`} onClose={onClose} width={400}>
-      <Field label="Select Rider">
-        <Select value={riderId} onChange={setRiderId} options={[{ value: '', label: '— Select —' }, ...riders.filter(r => r.active).map(r => ({ value: r.id, label: `${r.name} · ${r.vehicle} · KES ${r.ratePerDelivery}/job` }))]} />
-      </Field>
+      <div className="space-y-3">
+        <Field label="Select Rider">
+          <Select
+            value={riderId}
+            onChange={handleRiderChange}
+            options={[
+              { value: '', label: '— Select —' },
+              ...riders.filter(r => r.active).map(r => ({
+                value: r.id,
+                label: r.ratePerDelivery > 0
+                  ? `${r.name} · ${r.vehicle} · default KES ${r.ratePerDelivery}`
+                  : `${r.name} · ${r.vehicle}`,
+              })),
+            ]}
+          />
+        </Field>
+        <Field label="Rider Fee (KES) *">
+          <Input type="number" min="0" step="1" value={riderFee} onChange={setRiderFee} placeholder="Amount for this trip" />
+        </Field>
+        <p className="text-[10px] text-t4">Enter the fee for this trip. It is not overwritten by the rider’s default rate.</p>
+      </div>
       <div className="flex justify-end gap-2 mt-4">
         <button className="btn-outline text-[11px]" onClick={onClose}>Cancel</button>
-        <button className="btn-primary text-[11px]" onClick={() => { if (riderId) { onAssign(riderId); onClose() } }}>Assign</button>
+        <button className="btn-primary text-[11px]" onClick={submit} disabled={!riderId || parseRiderFeeInput(riderFee) === null}>Assign</button>
+      </div>
+    </Modal>
+  )
+}
+
+// ── Edit Rider Fee Modal ───────────────────────────────────────────────────────
+function EditFeeModal({
+  job, onSave, onClose,
+}: {
+  job: DeliveryJob
+  onSave: (fee: number) => void
+  onClose: () => void
+}) {
+  const [riderFee, setRiderFee] = useState(String(job.riderFee ?? ''))
+  const fee = parseRiderFeeInput(riderFee)
+  return (
+    <Modal title={`Edit Rider Fee — ${job.ref}`} onClose={onClose} width={380}>
+      <Field label="Rider Fee (KES) *">
+        <Input type="number" min="0" step="1" value={riderFee} onChange={setRiderFee} placeholder="Amount for this trip" />
+      </Field>
+      {job.riderName && (
+        <p className="text-[10px] text-t4 mt-2">Rider: {job.riderName}. Fee is per job and can vary.</p>
+      )}
+      <div className="flex justify-end gap-2 mt-4">
+        <button className="btn-outline text-[11px]" onClick={onClose}>Cancel</button>
+        <button
+          className="btn-primary text-[11px]"
+          disabled={fee === null}
+          onClick={() => { if (fee !== null) { onSave(fee); onClose() } }}
+        >
+          Save Fee
+        </button>
       </div>
     </Modal>
   )
@@ -388,7 +482,7 @@ function FailModal({ onConfirm, onClose }: { onConfirm: (reason: string) => void
 function JobsTab() {
   const {
     deliveryJobs, riders, repairs, saleOrders,
-    createDeliveryJob, assignRiderToJob, advanceJobStatus, deleteDeliveryJob,
+    createDeliveryJob, assignRiderToJob, updateDeliveryJob, advanceJobStatus, deleteDeliveryJob,
     showToast, companySettings,
   } = useDeliveryStore()
 
@@ -400,6 +494,7 @@ function JobsTab() {
 
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [assignTarget, setAssignTarget] = useState<DeliveryJob | null>(null)
+  const [feeTarget, setFeeTarget] = useState<DeliveryJob | null>(null)
   const [failTarget, setFailTarget] = useState<DeliveryJob | null>(null)
   const [filterStatus, setFilterStatus] = useState<DeliveryJobStatus | 'all'>('all')
   const [filterType, setFilterType] = useState<DeliveryJobType | 'all'>('all')
@@ -514,7 +609,15 @@ function JobsTab() {
     {
       key: 'fee', label: 'Rider fee', priority: 3, width: '100px', align: 'right',
       render: job => (
-        <span className="font-mono text-xs" style={{ color: 'var(--danger)' }}>{fmtKes(job.riderFee)}</span>
+        <button
+          type="button"
+          className="font-mono text-xs cursor-pointer underline-offset-2 hover:underline"
+          style={{ color: 'var(--danger)', background: 'none', border: 'none', padding: 0 }}
+          title="Edit rider fee"
+          onClick={e => { e.stopPropagation(); setFeeTarget(job) }}
+        >
+          {fmtKes(job.riderFee)}
+        </button>
       ),
       exportValue: job => job.riderFee,
     },
@@ -538,6 +641,11 @@ function JobsTab() {
           <button className="text-[9px] px-1.5 py-0.5 rounded"
             style={{ background: '#EDE9FE', color: '#5B21B6', border: 'none', cursor: 'pointer' }}
             onClick={() => setAssignTarget(job)}>Assign</button>
+        )}
+        {!['cancelled'].includes(job.status) && (
+          <button className="text-[9px] px-1.5 py-0.5 rounded"
+            style={{ background: 'var(--bg-muted)', color: 'var(--text-2)', border: '1px solid var(--border)', cursor: 'pointer' }}
+            onClick={() => setFeeTarget(job)}>Edit fee</button>
         )}
         {action && (
           <button className="text-[9px] px-1.5 py-0.5 rounded"
@@ -664,14 +772,25 @@ function JobsTab() {
           riders={riders}
           createDeliveryJob={createDeliveryJob}
           assignRiderToJob={assignRiderToJob}
+          showToast={showToast}
         />
       )}
       {assignTarget && (
         <AssignModal
           job={assignTarget}
           riders={riders}
-          onAssign={riderId => assignRiderToJob(assignTarget.id, riderId)}
+          onAssign={(riderId, fee) => assignRiderToJob(assignTarget.id, riderId, fee)}
           onClose={() => setAssignTarget(null)}
+        />
+      )}
+      {feeTarget && (
+        <EditFeeModal
+          job={feeTarget}
+          onSave={fee => {
+            updateDeliveryJob(feeTarget.id, { riderFee: fee })
+            showToast(`Rider fee updated to ${fmtKes(fee)}`)
+          }}
+          onClose={() => setFeeTarget(null)}
         />
       )}
       {failTarget && (
@@ -693,18 +812,22 @@ function RidersTab() {
     name: '', phone: '', idNumber: '',
     vehicle: 'motorcycle' as Rider['vehicle'],
     vehicleReg: '',
+    ratePerDelivery: '',
   })
 
   function set(k: string, v: string) { setForm(p => ({ ...p, [k]: v })) }
 
   function submit() {
     if (!form.name || !form.phone) return
+    const rate = parseRiderFeeInput(form.ratePerDelivery)
     addRider({
       name: form.name, phone: form.phone, idNumber: form.idNumber,
       vehicle: form.vehicle, vehicleReg: form.vehicleReg || undefined,
-      active: true, ratePerDelivery: 0,
+      active: true,
+      // Optional suggestion only — jobs still require their own fee.
+      ratePerDelivery: rate ?? 0,
     })
-    setForm({ name: '', phone: '', idNumber: '', vehicle: 'motorcycle', vehicleReg: '' })
+    setForm({ name: '', phone: '', idNumber: '', vehicle: 'motorcycle', vehicleReg: '', ratePerDelivery: '' })
     setShowForm(false)
   }
 
@@ -736,9 +859,22 @@ function RidersTab() {
       exportValue: rider => rider.vehicleReg || '',
     },
     {
-      key: 'rate', label: 'Rate / job', priority: 2, width: '100px', align: 'right',
+      key: 'rate', label: 'Default rate', priority: 2, width: '110px', align: 'right',
       render: rider => (
-        <span className="font-mono text-xs font-semibold text-brand-navy">{fmtKes(rider.ratePerDelivery)}</span>
+        <input
+          type="number"
+          min="0"
+          step="1"
+          aria-label={`${rider.name} default rate`}
+          className="form-input text-[11px] font-mono w-[88px] text-right"
+          defaultValue={rider.ratePerDelivery || ''}
+          placeholder="—"
+          title="Optional default suggestion when creating jobs"
+          onBlur={e => {
+            const next = parseRiderFeeInput(e.target.value)
+            updateRider(rider.id, { ratePerDelivery: next ?? 0 })
+          }}
+        />
       ),
       exportValue: rider => rider.ratePerDelivery,
     },
@@ -795,7 +931,7 @@ function RidersTab() {
                 onChange={e => set('idNumber', e.target.value)} placeholder="National ID" />
             </div>
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <div>
               <p className="text-[10px] uppercase font-semibold mb-1 text-t4">Vehicle</p>
               <select aria-label="Rider vehicle" className="form-select text-xs w-full" value={form.vehicle}
@@ -811,10 +947,18 @@ function RidersTab() {
               <input className="form-input text-xs w-full" value={form.vehicleReg}
                 onChange={e => set('vehicleReg', e.target.value)} placeholder="KMCK 001A" />
             </div>
+            <div>
+              <p className="text-[10px] uppercase font-semibold mb-1 text-t4">Default rate (optional)</p>
+              <input className="form-input text-xs w-full font-mono" type="number" min="0" step="1"
+                value={form.ratePerDelivery}
+                onChange={e => set('ratePerDelivery', e.target.value)}
+                placeholder="Suggest only" />
+            </div>
             <div className="flex items-end">
               <button className="btn-primary text-xs py-1.5 px-4" onClick={submit}>Save</button>
             </div>
           </div>
+          <p className="text-[10px] text-t4">Default rate is only a suggestion when creating jobs. Each job still needs its own rider fee.</p>
         </div>
       )}
 
