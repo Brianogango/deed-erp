@@ -134,10 +134,10 @@ function KpiCard({
 
 function CardHeader({ title, sub, action }: { title: string; sub?: string; action?: ReactNode }) {
   return (
-    <div className="flex flex-col sm:flex-row sm:items-center justify-between px-4 sm:px-5 py-4 border-b border-[var(--border-lt)] gap-2 sm:gap-0">
+    <div className="dashboard-card-header flex flex-col sm:flex-row sm:items-center justify-between px-3 sm:px-5 py-2.5 sm:py-4 border-b border-[var(--border-lt)] gap-1 sm:gap-0">
       <div className="min-w-0 pr-2">
-        <h3 className="text-[15px] font-extrabold text-[var(--text-1)] truncate">{title}</h3>
-        {sub && <p className="text-xs text-[var(--text-3)] mt-0.5 truncate">{sub}</p>}
+        <h3 className="text-[13px] sm:text-[15px] font-extrabold text-[var(--text-1)] truncate">{title}</h3>
+        {sub && <p className="hidden sm:block text-xs text-[var(--text-3)] mt-0.5 truncate">{sub}</p>}
       </div>
       {action && <div className="flex-shrink-0 self-start sm:self-auto">{action}</div>}
     </div>
@@ -146,9 +146,9 @@ function CardHeader({ title, sub, action }: { title: string; sub?: string; actio
 
 function SectionLabel({ label }: { label: string }) {
   return (
-    <div className="flex items-center gap-3 mt-1">
-      <span className="w-6 h-px bg-primary-500 rounded-full inline-block flex-shrink-0" />
-      <h2 className="text-sm font-semibold text-[var(--text-3)]">{label}</h2>
+    <div className="flex items-center gap-2 sm:gap-3 mt-0.5 sm:mt-1">
+      <span className="w-5 sm:w-6 h-px bg-primary-500 rounded-full inline-block flex-shrink-0" />
+      <h2 className="text-[11px] sm:text-sm font-semibold text-[var(--text-3)]">{label}</h2>
     </div>
   )
 }
@@ -184,12 +184,12 @@ function CollapsibleSection({ id, title, sub, defaultOpen = false, accent = 'var
   }
   return (
     <div className={`dashboard-insight-card ${open ? 'is-open' : ''}`} style={{ '--insight-accent': accent } as React.CSSProperties}>
-      <button type="button" onClick={toggle} className="w-full flex items-center justify-between gap-3 p-4 text-left" aria-expanded={open}>
-        <div className="flex items-center gap-3 min-w-0">
+      <button type="button" onClick={toggle} className="dashboard-insight-trigger w-full flex items-center justify-between gap-2 sm:gap-3 p-2.5 sm:p-4 text-left" aria-expanded={open}>
+        <div className="flex items-center gap-2 sm:gap-3 min-w-0">
           <div className="dashboard-insight-icon" aria-hidden="true">{icon}</div>
-          <div className="min-w-0 pr-2">
-            <h3 className="text-sm font-extrabold text-[var(--text-1)] truncate">{title}</h3>
-            {sub && <p className="text-xs text-[var(--text-3)] mt-1 truncate">{sub}</p>}
+          <div className="min-w-0 pr-1 sm:pr-2">
+            <h3 className="text-[13px] sm:text-sm font-extrabold text-[var(--text-1)] truncate">{title}</h3>
+            {sub && <p className="hidden sm:block text-xs text-[var(--text-3)] mt-1 truncate">{sub}</p>}
           </div>
         </div>
         <span className="dashboard-insight-toggle">{open ? 'Close' : 'Explore'}</span>
@@ -745,7 +745,7 @@ export function Dashboard() {
       {focusItems.length > 0 ? (
         <section className="dashboard-panel overflow-hidden">
           <CardHeader title="Needs attention" sub="Overdue items, approvals, and blockers — most urgent first" />
-          <div className="p-4 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+          <div className="p-2.5 sm:p-4 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-1.5 sm:gap-3">
             {focusItems.map(item => (
               <button
                 type="button"
@@ -755,8 +755,8 @@ export function Dashboard() {
               >
                 <span className="dashboard-alert-dot" aria-hidden="true" />
                 <span className="min-w-0">
-                  <span className="block text-sm font-bold text-[var(--text-1)] truncate">{item.title}</span>
-                  <span className="block text-xs text-[var(--text-3)] mt-1 truncate">{item.sub}</span>
+                  <span className="block text-[13px] sm:text-sm font-bold text-[var(--text-1)] truncate">{item.title}</span>
+                  <span className="block text-[11px] sm:text-xs text-[var(--text-3)] mt-0.5 truncate">{item.sub}</span>
                 </span>
               </button>
             ))}
@@ -787,20 +787,20 @@ export function Dashboard() {
             {canSeeInventory && (
               <section className="dashboard-panel overflow-hidden">
                 <CardHeader title="Stock health" sub="Products below their safe stock level" />
-                <div className="p-4 flex flex-col gap-2.5">
+                <div className="p-2.5 sm:p-4 flex flex-col gap-1.5 sm:gap-2.5">
                   {inventoryStats.lowStockItems.slice(0, 6).map(p => {
                     const isOut = p.stockQty === 0
                     return (
                       <div key={p.id} className="dashboard-list-row">
-                        <div className="flex items-center gap-3 min-w-0">
+                        <div className="flex items-center gap-2 sm:gap-3 min-w-0">
                           <div className={`dashboard-row-symbol ${isOut ? 'is-danger' : 'is-warning'}`}>SKU</div>
                           <div className="min-w-0">
-                            <p className="text-sm font-bold text-[var(--text-1)] truncate">{p.name}</p>
-                            <p className="text-xs text-[var(--text-3)] truncate">{p.category}</p>
+                            <p className="text-[13px] sm:text-sm font-bold text-[var(--text-1)] truncate">{p.name}</p>
+                            <p className="text-[11px] sm:text-xs text-[var(--text-3)] truncate">{p.category}</p>
                           </div>
                         </div>
-                        <div className="flex items-center gap-3">
-                          <span className="text-xs font-mono text-[var(--text-2)]">{p.stockQty}/{p.minStock}</span>
+                        <div className="flex items-center gap-2 sm:gap-3">
+                          <span className="text-[11px] sm:text-xs font-mono text-[var(--text-2)]">{p.stockQty}/{p.minStock}</span>
                           <Badge status={isOut ? 'cancelled' : 'pending'} label={isOut ? 'Out' : 'Low'} />
                         </div>
                       </div>
@@ -814,14 +814,14 @@ export function Dashboard() {
             {canSeeWorkshop && (
               <section className="dashboard-panel overflow-hidden">
                 <CardHeader title={isTechnician ? 'My repair queue' : 'Workshop queue'} sub={isTechnician ? 'Jobs currently assigned to you' : 'Active service work and ownership'} />
-                <div className="p-4 flex flex-col gap-2.5">
+                <div className="p-2.5 sm:p-4 flex flex-col gap-1.5 sm:gap-2.5">
                   {visibleRepairs.slice(0, 6).map(r => (
                     <button type="button" key={r.id} onClick={() => handleNav('repair', '/repairs')} className="dashboard-list-row text-left">
-                      <div className="flex items-center gap-3 min-w-0">
+                      <div className="flex items-center gap-2 sm:gap-3 min-w-0">
                         <div className="dashboard-row-symbol is-repair"><Fa icon={faScrewdriverWrench} /></div>
                         <div className="min-w-0">
-                          <p className="text-sm font-bold text-[var(--text-1)] truncate">{r.ref} · {r.productName}</p>
-                          <p className="text-xs text-[var(--text-3)] truncate">{r.customerName}{r.assignedTechnicianName ? ` · ${r.assignedTechnicianName}` : ''}</p>
+                          <p className="text-[13px] sm:text-sm font-bold text-[var(--text-1)] truncate">{r.ref} · {r.productName}</p>
+                          <p className="text-[11px] sm:text-xs text-[var(--text-3)] truncate">{r.customerName}{r.assignedTechnicianName ? ` · ${r.assignedTechnicianName}` : ''}</p>
                         </div>
                       </div>
                       <Badge status={r.status === 'ready' || r.status === 'closed' ? 'active' : r.status === 'cancelled' ? 'cancelled' : 'pending'} label={r.status.replace(/_/g, ' ')} />
@@ -945,7 +945,7 @@ export function Dashboard() {
       <div className="dashboard-bottom-grid">
         <section className="dashboard-panel overflow-hidden lg:col-span-8">
           <CardHeader title="Quick actions" sub="Shortcuts selected for your role and permissions" />
-          <div className="p-4 grid grid-cols-2 xl:grid-cols-4 gap-3">
+          <div className="p-2.5 sm:p-4 grid grid-cols-2 xl:grid-cols-4 gap-1.5 sm:gap-3">
             {quickActions.map(action => (
               <button
                 type="button"
@@ -957,18 +957,18 @@ export function Dashboard() {
                   {action.icon}
                 </div>
                 <span className="min-w-0">
-                  <span className="block text-sm font-bold text-[var(--text-1)] truncate">{action.title}</span>
-                  <span className="block text-xs text-[var(--text-4)] mt-1 leading-snug line-clamp-2">{action.desc}</span>
+                  <span className="block text-[12px] sm:text-sm font-bold text-[var(--text-1)] leading-snug line-clamp-2 sm:truncate">{action.title}</span>
+                  <span className="hidden sm:block text-xs text-[var(--text-4)] mt-1 leading-snug line-clamp-2">{action.desc}</span>
                 </span>
               </button>
             ))}
           </div>
         </section>
 
-        <div className="lg:col-span-4 flex flex-col gap-5">
+        <div className="lg:col-span-4 flex flex-col gap-2.5 sm:gap-5">
           <section className="dashboard-panel overflow-hidden">
             <CardHeader title="My self-service" sub="Your personal workspace" />
-            <div className="p-4 grid grid-cols-2 gap-2.5">
+            <div className="p-2.5 sm:p-4 grid grid-cols-2 gap-1.5 sm:gap-2.5">
               {[
                 { label: 'Leave', value: selfServiceStats.myLeave.length, path: '/hr?tab=leave', module: 'hr' as ModuleId },
                 { label: 'Payslip', value: 'View', path: '/hr?tab=payroll', module: 'hr' as ModuleId },
@@ -981,8 +981,8 @@ export function Dashboard() {
                   onClick={() => handleNav(item.module, item.path)}
                   className="dashboard-self-service"
                 >
-                  <span className="text-lg font-extrabold text-primary-600">{item.value}</span>
-                  <span className="text-[11px] font-bold text-[var(--text-4)]">{item.label}</span>
+                  <span className="text-sm sm:text-lg font-extrabold text-primary-600">{item.value}</span>
+                  <span className="text-[10px] sm:text-[11px] font-bold text-[var(--text-4)]">{item.label}</span>
                 </button>
               ))}
             </div>
