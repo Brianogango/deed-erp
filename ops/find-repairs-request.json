@@ -1,7 +1,7 @@
 {
-  "queries": ["sample", "REP-861745"],
-  "since": "2026-08-04",
-  "limit": 20,
-  "requestedAt": "2026-08-04T08:26:00Z",
-  "note": "Verify sample repair deletion"
+  "queries": [],
+  "since": "2026-08-01",
+  "limit": 100,
+  "requestedAt": "2026-08-04T12:05:00Z",
+  "note": "Diagnose missing repairs from 1 Aug to date in UI"
 }
