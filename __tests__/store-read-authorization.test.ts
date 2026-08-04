@@ -19,6 +19,8 @@ describe('collaborative wholesale store read authorization', () => {
 
   it('requires repair role and module for repair records', () => {
     expect(canReadStoreKey(user('technical_lead', ['repair']), 'deed_repairs_v2')).toBe(true)
+    expect(canReadStoreKey(user('admin_officer', ['repair']), 'deed_repairs_v2')).toBe(true)
+    expect(canReadStoreKey(user('finance_officer', ['repair']), 'deed_repairs_v2')).toBe(true)
     expect(canReadStoreKey(user('technical_lead', ['inventory']), 'deed_repairs_v2')).toBe(false)
     expect(canReadStoreKey(user('sales_rep', ['repair']), 'deed_repairs_v2')).toBe(false)
   })
