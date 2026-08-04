@@ -11,8 +11,12 @@ import {
   faArrowLeft, faSave, faUser, faMicrochip, faClipboardList,
   faShieldAlt, faCheckCircle, faExclamationTriangle, faSignature,
   faCopy, faExternalLinkAlt, faBuilding, faPlusCircle, faChevronDown,
-  faArrowsRotate, faMagnifyingGlass, faScrewdriverWrench,
+  faArrowsRotate, faMagnifyingGlass, faScrewdriverWrench, faCommentDots,
 } from '@fortawesome/free-solid-svg-icons'
+import {
+  buildRepairTrackingWhatsAppMessage,
+  buildWhatsAppShareUrl,
+} from '@/lib/whatsapp-share'
 
 const CYAN  = '#00AEEF'
 const NAVY  = '#1A1F5E'
@@ -84,7 +88,12 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
   const setD = (k: keyof typeof device, v: string | boolean) => setDevice(p => ({ ...p, [k]: v }))
 
   const [loading, setLoading] = useState(false)
-  const [successData, setSuccessData] = useState<{ id: string; ref: string } | null>(null)
+  const [successData, setSuccessData] = useState<{
+    id: string
+    ref: string
+    clientName: string
+    clientPhone: string
+  } | null>(null)
 
   // ── Derived lookups ────────────────────────────────────────────────────────
   const companyPersons = useMemo(
@@ -377,7 +386,13 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
       })
 
       showToast(`Ticket ${rep.ref} created`, 'success')
-      setSuccessData({ id: rep.id, ref: rep.ref })
+      // Prefer contact-person for company jobs (the person we actually WhatsApp)
+      setSuccessData({
+        id: rep.id,
+        ref: rep.ref,
+        clientName: (cpName || customerName).trim(),
+        clientPhone: (cpPhone || customerPhone).trim(),
+      })
     } catch (err) {
       showToast('Failed to create repair job', 'error')
     } finally {
@@ -386,6 +401,15 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
   }
 
   const portalUrl = successData ? `https://erp.deed.co.ke/portal/repair/${successData.ref}` : ''
+  const whatsappUrl = successData
+    ? buildWhatsAppShareUrl({
+        phone: successData.clientPhone,
+        text: buildRepairTrackingWhatsAppMessage({
+          clientName: successData.clientName,
+          trackingUrl: portalUrl,
+        }),
+      })
+    : null
 
   // ── Success screen ─────────────────────────────────────────────────────────
   if (successData) {
@@ -403,23 +427,51 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
           <div className="rounded-xl p-3 text-xs font-mono break-all mb-4" style={{ background: 'var(--bg-surface)', color: CYAN }}>
             {portalUrl}
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 gap-3 mb-3">
             <button
+              type="button"
               onClick={() => { navigator.clipboard.writeText(portalUrl); showToast('Copied!', 'success') }}
               className="btn-outline flex items-center justify-center gap-2 py-3"
             >
               <Fa icon={faCopy} /> Copy Link
             </button>
-            <a href={portalUrl} target="_blank" className="btn-primary flex items-center justify-center gap-2 py-3">
+            <a href={portalUrl} target="_blank" rel="noreferrer" className="btn-primary flex items-center justify-center gap-2 py-3">
               <Fa icon={faExternalLinkAlt} /> Open Portal
             </a>
           </div>
+          {whatsappUrl ? (
+            <a
+              href={whatsappUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="flex items-center justify-center gap-2 w-full py-3 rounded-xl font-bold text-sm text-white transition-transform hover:scale-[1.02] active:scale-[0.98]"
+              style={{ background: '#25D366', boxShadow: '0 8px 20px rgba(37,211,102,0.35)' }}
+              aria-label={`Share tracking link on WhatsApp to ${successData.clientName}`}
+            >
+              <Fa icon={faCommentDots} />
+              WhatsApp {successData.clientName.split(' ')[0] || 'client'}
+            </a>
+          ) : (
+            <button
+              type="button"
+              className="btn-outline flex items-center justify-center gap-2 w-full py-3 opacity-60 cursor-not-allowed"
+              onClick={() => showToast('Add a valid client phone number on the repair to share via WhatsApp', 'error')}
+            >
+              <Fa icon={faCommentDots} /> WhatsApp unavailable — no phone
+            </button>
+          )}
+          {successData.clientPhone ? (
+            <p className="text-[10px] font-medium mt-2.5 m-0" style={{ color: 'var(--text-3)' }}>
+              Opens WhatsApp to {successData.clientPhone}. Sends from the WhatsApp account logged in on this device.
+            </p>
+          ) : null}
         </div>
         <div className="flex flex-col sm:flex-row gap-4">
-          <button onClick={() => onSuccess(successData.id)} className="btn-primary px-8 py-3">
+          <button type="button" onClick={() => onSuccess(successData.id)} className="btn-primary px-8 py-3">
             View Job Details
           </button>
           <button
+            type="button"
             onClick={() => {
               setSuccessData(null)
               setDevice(p => ({ ...p, brand: '', model: '', serial: '', issueDesc: '', accessoriesChecked: new Set<string>(), accessoriesOther: '', clientLaptopPassword: '' }))
