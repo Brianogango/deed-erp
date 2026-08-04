@@ -2,6 +2,6 @@
   "since": "2026-08-01",
   "excludeSamples": true,
   "apply": false,
-  "requestedAt": "2026-08-04T12:20:00Z",
-  "note": "Dry-run: restore August repairs wiped from blob by stale client sync (Prisma still has them)"
+  "requestedAt": "2026-08-04T12:15:00Z",
+  "note": "Dry-run retry after fixing comment syntax that broke Node parse"
 }

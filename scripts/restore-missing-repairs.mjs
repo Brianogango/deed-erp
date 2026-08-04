@@ -3,8 +3,8 @@
  * Ops helper: restore missing repair jobs into deed_repairs_v2 from Contabo backups.
  *
  * Finds refs present in Prisma (or requested) but absent from the live blob, then
- * scans /var/backups/deed-erp/*/database.dump for those full JSON rows and merges
- * them back. Samples can be excluded.
+ * scans backup database.dump files under /var/backups/deed-erp for those full JSON
+ * rows and merges them back. Samples can be excluded.
  *
  *   node scripts/restore-missing-repairs.mjs --request ops/restore-missing-repairs-request.json
  *   node scripts/restore-missing-repairs.mjs --since 2026-08-01 --apply
