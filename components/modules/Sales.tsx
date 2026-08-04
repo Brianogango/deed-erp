@@ -1212,6 +1212,7 @@ function SalesContent() {
                     columns={salesListColumns}
                     rows={filtered}
                     rowKey={s => s.id}
+                    defaultSort={{ key: 'date', direction: 'desc' }}
                     searchValue={search}
                     onSearchChange={setSearchAndReset}
                     clientSearch={false}
