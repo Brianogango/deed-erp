@@ -8,10 +8,10 @@ import {
   kindRequiresInventoryAccounts, applyCategoryAccountDefaults, resolveProductAccounts,
 } from '@/lib/store'
 import type { ProductKind } from '@/lib/product-kind'
-import { Badge, Modal, Field, Input, Select, Confirm, PanelHeader, SearchPicker, ModuleSkeleton, ModuleHeader, TabBar } from '@/components/ui'
+import { Badge, Modal, Field, Input, Select, Confirm, PanelHeader, SearchPicker, ModuleSkeleton, ModuleHeader, TabBar, Textarea } from '@/components/ui'
 import { DataTable, type ColumnDef, type PrimaryFilterConfig } from '@/components/data-table'
 import { PrimaryActionButton, TablePageLayout, OperationalSummary, CompactInfoNotice } from '@/components/erp'
-import { Fa, faBox, faBoxesStacked, faArrowDown, faBarcode, faTriangleExclamation, faWarehouse, faWrench, faPrint, faIndustry } from '@/components/icons'
+import { Fa, faBox, faBoxesStacked, faArrowDown, faBarcode, faTriangleExclamation, faWarehouse, faWrench, faPrint, faIndustry, faMagnifyingGlass } from '@/components/icons'
 import { printProductLabels, printSerialLabels } from '@/lib/product-label'
 import { guardSpreadsheetFile, guardSpreadsheetRows, SpreadsheetGuardError } from '@/lib/spreadsheet-guard'
 import { Barcode } from '@/components/modules/Barcode'
@@ -275,10 +275,20 @@ function InventoryContent() {
   const openingImportRef = useRef<HTMLInputElement>(null)
   const [openingImportErrors, setOpeningImportErrors] = useState<string[]>([])
 
-  // Refurbishment send-to state
+  // Refurbishment send-to state (warehouse safety modal)
   const [showNewRefurb, setShowNewRefurb] = useState(false)
   const [refurbSerial, setRefurbSerial] = useState<{ id: string; serial: string; productName: string } | null>(null)
   const [refurbIssueDesc, setRefurbIssueDesc] = useState('')
+  const [warehouseSearchDraft, setWarehouseSearchDraft] = useState('')
+  const [warehouseSearch, setWarehouseSearch] = useState('')
+  const [pendingConfirm, setPendingConfirm] = useState<{
+    title: string
+    message: string
+    detail?: string
+    confirmLabel: string
+    confirmColor?: string
+    action: () => void
+  } | null>(null)
 
   // Stock adjustment state
   const [showAdjForm, setShowAdjForm] = useState(false)
@@ -1372,13 +1382,53 @@ function InventoryContent() {
       {tab === 'warehouse_view' && (() => {
         const { warehouseSerials, issuesSerials, repairSerials, bulkByLocation } = warehouseStock
         const bulkByLoc = (loc: LocationId) => bulkByLocation[loc] ?? []
+        const q = warehouseSearch.trim().toLowerCase()
+        const serialMatches = (s: (typeof serials)[number]) => {
+          if (!q) return true
+          const prod = products.find(p => p.id === s.productId)
+          return (
+            s.productName.toLowerCase().includes(q) ||
+            s.serial.toLowerCase().includes(q) ||
+            (s.sku ?? '').toLowerCase().includes(q) ||
+            (s.barcode ?? '').toLowerCase().includes(q) ||
+            (prod?.sku ?? '').toLowerCase().includes(q) ||
+            (prod?.barcode ?? '').toLowerCase().includes(q)
+          )
+        }
+        const productMatches = (p: { name: string; sku?: string; barcode?: string | null }) => {
+          if (!q) return true
+          return (
+            p.name.toLowerCase().includes(q) ||
+            (p.sku ?? '').toLowerCase().includes(q) ||
+            (p.barcode ?? '').toLowerCase().includes(q)
+          )
+        }
+        const filteredWarehouseSerials = warehouseSerials.filter(serialMatches)
+        const filteredIssuesSerials = issuesSerials.filter(serialMatches)
+        const filteredRepairSerials = repairSerials.filter(serialMatches)
+        const filteredBulkWarehouse = bulkByLoc('warehouse').filter(productMatches)
+        const filteredBulkShop = bulkByLoc('shop').filter(productMatches)
+        const filteredBulkRepair = bulkByLoc('repair_unit').filter(productMatches)
 
         function quickMove(productId: string, productName: string, from: LocationId, to: LocationId, serialId?: string, qty = 1) {
           submitTransfer(from, to, productId, productName, qty, serialId ? [serialId] : [], `${LOCATIONS[from].name} → ${LOCATIONS[to].name}`)
         }
 
-        function sendForRefurbishment(serial: typeof serials[0]) {
-          createRefurbishmentJob(serial.id, 'Flagged for refurbishment from warehouse stock')
+        function requestMoveToIssues(s: (typeof serials)[number]) {
+          setPendingConfirm({
+            title: 'Move to With Issues?',
+            message: `Move ${s.productName} (${s.serial}) out of Ready for Sale into With Issues?`,
+            detail: 'This unit will no longer be available to sell until it is returned to the warehouse.',
+            confirmLabel: 'Move to With Issues',
+            confirmColor: 'bg-amber-600',
+            action: () => quickMove(s.productId, s.productName, 'warehouse', 'shop', s.id),
+          })
+        }
+
+        function requestSendForRefurbishment(s: (typeof serials)[number]) {
+          setRefurbSerial({ id: s.id, serial: s.serial, productName: s.productName })
+          setRefurbIssueDesc('')
+          setShowNewRefurb(true)
         }
 
         const Section = ({ title, icon, color, count, children, emptyText }: {
@@ -1402,11 +1452,50 @@ function InventoryContent() {
           </button>
         )
 
+        const applyWarehouseSearch = () => setWarehouseSearch(warehouseSearchDraft.trim())
+
         return (
           <div className="flex flex-col gap-4">
+            <form
+              className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center"
+              onSubmit={e => { e.preventDefault(); applyWarehouseSearch() }}
+            >
+              <div className="relative flex-1 min-w-0">
+                <Fa icon={faMagnifyingGlass} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-4 text-[12px]" aria-hidden="true" />
+                <input
+                  type="search"
+                  value={warehouseSearchDraft}
+                  onChange={e => setWarehouseSearchDraft(e.target.value)}
+                  placeholder="Search by serial, product, SKU, or barcode…"
+                  aria-label="Search warehouse stock"
+                  className="form-input w-full pl-9 text-[12px]"
+                />
+              </div>
+              <div className="flex gap-2 shrink-0">
+                <button type="submit" className="btn-primary text-[11px] px-4 py-2 inline-flex items-center gap-1.5">
+                  <Fa icon={faMagnifyingGlass} aria-hidden="true" /> Search
+                </button>
+                {warehouseSearch && (
+                  <button
+                    type="button"
+                    className="btn-secondary text-[11px] px-3 py-2"
+                    onClick={() => { setWarehouseSearch(''); setWarehouseSearchDraft('') }}
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
+            </form>
+            {warehouseSearch && (
+              <p className="text-[11px] text-text-3 -mt-2">
+                Showing matches for <span className="font-semibold text-text-2">“{warehouseSearch}”</span>
+              </p>
+            )}
+
             <Section title="Warehouse — Ready for Sale" icon={<Fa icon={faIndustry} />} color="#1B2762"
-              count={warehouseSerials.length + bulkByLoc('warehouse').reduce((s,p) => s+p.qty, 0)} emptyText="No stock in warehouse">
-              {warehouseSerials.map(s => {
+              count={filteredWarehouseSerials.length + filteredBulkWarehouse.reduce((s,p) => s+p.qty, 0)}
+              emptyText={q ? 'No warehouse stock matches this search' : 'No stock in warehouse'}>
+              {filteredWarehouseSerials.map(s => {
                 const prod = products.find(p => p.id === s.productId)
                 return (
                 <div key={s.id} className="flex flex-col sm:flex-row sm:items-center gap-3 px-4 py-3 hover:bg-surface transition-colors">
@@ -1417,13 +1506,13 @@ function InventoryContent() {
                   </div>
                   <div className="flex flex-wrap gap-2">
                     <ActionBtn label={<><Fa icon={faPrint} /> Label</>} bg="#F0F4FF" color="#1B2762" onClick={() => printSerialLabels([{ serial: s.serial, barcode: s.barcode, productName: s.productName, sku: s.sku ?? prod?.sku ?? '', salePrice: prod?.salePrice, category: prod?.category }])} />
-                    <ActionBtn label={<><Fa icon={faTriangleExclamation} /> Move to With Issues</>} bg="#FEF3C7" color="#92400E" onClick={() => quickMove(s.productId, s.productName, 'warehouse', 'shop', s.id)} />
-                    <ActionBtn label={<><Fa icon={faWrench} /> Send for Refurbishment</>} bg="#EDE9FE" color="#5B21B6" onClick={() => sendForRefurbishment(s)} />
+                    <ActionBtn label={<><Fa icon={faTriangleExclamation} /> Move to With Issues</>} bg="#FEF3C7" color="#92400E" onClick={() => requestMoveToIssues(s)} />
+                    <ActionBtn label={<><Fa icon={faWrench} /> Send for Refurbishment</>} bg="#EDE9FE" color="#5B21B6" onClick={() => requestSendForRefurbishment(s)} />
                   </div>
                 </div>
                 )
               })}
-              {bulkByLoc('warehouse').map(p => (
+              {filteredBulkWarehouse.map(p => (
                 <div key={p.id} className="flex flex-col sm:flex-row sm:items-center gap-3 px-4 py-3 hover:bg-surface transition-colors">
                   <div className="flex-1 min-w-0">
                     <p className="text-[12px] font-bold text-text-1 truncate">{p.name}</p>
@@ -1438,20 +1527,21 @@ function InventoryContent() {
             </Section>
 
             <Section title="With Issues" icon={<Fa icon={faTriangleExclamation} />} color="#D97706"
-              count={issuesSerials.length + bulkByLoc('shop').reduce((s,p) => s+p.qty, 0)} emptyText="No machines with issues">
-              {issuesSerials.map(s => (
+              count={filteredIssuesSerials.length + filteredBulkShop.reduce((s,p) => s+p.qty, 0)}
+              emptyText={q ? 'No With Issues stock matches this search' : 'No machines with issues'}>
+              {filteredIssuesSerials.map(s => (
                 <div key={s.id} className="flex flex-col sm:flex-row sm:items-center gap-3 px-4 py-3 hover:bg-surface transition-colors">
                   <div className="flex-1 min-w-0">
                     <p className="text-[12px] font-bold text-text-1 truncate">{s.productName}</p>
                     <p className="font-mono text-[10px] text-text-3">{s.serial}</p>
                   </div>
                   <div className="flex flex-wrap gap-2">
-                    <ActionBtn label={<><Fa icon={faWrench} /> Send for Refurbishment</>} bg="#EDE9FE" color="#5B21B6" onClick={() => sendForRefurbishment(s)} />
+                    <ActionBtn label={<><Fa icon={faWrench} /> Send for Refurbishment</>} bg="#EDE9FE" color="#5B21B6" onClick={() => requestSendForRefurbishment(s)} />
                     <ActionBtn label="✓ Return to Warehouse" bg="#DCFCE7" color="#166534" onClick={() => quickMove(s.productId, s.productName, 'shop', 'warehouse', s.id)} />
                   </div>
                 </div>
               ))}
-              {bulkByLoc('shop').map(p => (
+              {filteredBulkShop.map(p => (
                 <div key={p.id} className="flex flex-col sm:flex-row sm:items-center gap-3 px-4 py-3 hover:bg-surface transition-colors">
                   <div className="flex-1 min-w-0">
                     <p className="text-[12px] font-bold text-text-1 truncate">{p.name}</p>
@@ -1463,8 +1553,9 @@ function InventoryContent() {
             </Section>
 
             <Section title="Refurbishment Unit — Internal Stock" icon={<Fa icon={faWrench} />} color="#5B21B6"
-              count={repairSerials.length + bulkByLoc('repair_unit').reduce((s,p) => s+p.qty, 0)} emptyText="No stock currently in refurbishment">
-              {repairSerials.map(s => {
+              count={filteredRepairSerials.length + filteredBulkRepair.reduce((s,p) => s+p.qty, 0)}
+              emptyText={q ? 'No refurbishment stock matches this search' : 'No stock currently in refurbishment'}>
+              {filteredRepairSerials.map(s => {
                 const refurbJob = refurbishmentJobs.filter(j => j.serialId === s.id).sort((a, b) => b.intakeDate.localeCompare(a.intakeDate))[0] ?? null
                 const statusMeta: Record<string, { bg: string; text: string; label: string }> = {
                   queued: { bg: '#FEF3C7', text: '#92400E', label: 'Queued' },
@@ -1496,7 +1587,7 @@ function InventoryContent() {
                   </div>
                 )
               })}
-              {bulkByLoc('repair_unit').map(p => (
+              {filteredBulkRepair.map(p => (
                 <div key={p.id} className="flex flex-col sm:flex-row sm:items-center gap-3 px-4 py-3 hover:bg-surface transition-colors">
                   <div className="flex-1 min-w-0">
                     <p className="text-[12px] font-bold text-text-1 truncate">{p.name}</p>
@@ -1505,7 +1596,7 @@ function InventoryContent() {
                   <span className="text-[10px] text-text-4 italic">Use Transfers tab to move bulk items</span>
                 </div>
               ))}
-              {(repairSerials.length > 0 || bulkByLoc('repair_unit').length > 0) && (
+              {(filteredRepairSerials.length > 0 || filteredBulkRepair.length > 0) && (
                 <div className="px-4 py-2 text-[10px] bg-primary-50 text-primary-700 border-t border-primary-100">
                   <Fa icon={faWrench} /> Manage assignments, progress &amp; transfers in the <strong>Refurbishment</strong> module
                 </div>
@@ -3712,6 +3803,69 @@ function InventoryContent() {
               <button className="btn-secondary px-6" onClick={() => setShowTransfer(false)}>Cancel</button>
               <button className="btn-primary px-8" onClick={handleTransfer}>Validate Transfer</button>
             </div>
+          </div>
+        </Modal>
+      )}
+
+      {pendingConfirm && (
+        <Confirm
+          title={pendingConfirm.title}
+          message={pendingConfirm.message}
+          detail={pendingConfirm.detail}
+          confirmLabel={pendingConfirm.confirmLabel}
+          confirmColor={pendingConfirm.confirmColor}
+          onConfirm={() => {
+            pendingConfirm.action()
+            setPendingConfirm(null)
+          }}
+          onCancel={() => setPendingConfirm(null)}
+        />
+      )}
+
+      {showNewRefurb && refurbSerial && (
+        <Modal
+          title="Send for Refurbishment"
+          onClose={() => { setShowNewRefurb(false); setRefurbSerial(null); setRefurbIssueDesc('') }}
+          width={440}
+        >
+          <div className="rounded-lg p-3 mb-3" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-lt)' }}>
+            <p className="text-xs font-semibold text-t1">{refurbSerial.productName}</p>
+            <p className="font-mono text-[11px] text-t3">S/N: {refurbSerial.serial}</p>
+          </div>
+          <p className="text-[11px] text-text-3 mb-3">
+            This creates a refurbishment job and moves the unit out of sellable stock. Cancel if you pressed this by mistake.
+          </p>
+          <Field label="Issue description *">
+            <Textarea
+              value={refurbIssueDesc}
+              onChange={setRefurbIssueDesc}
+              rows={3}
+              placeholder="Describe the problem — e.g. cracked screen, battery failure…"
+            />
+          </Field>
+          <div className="flex gap-2 justify-end mt-4">
+            <button
+              type="button"
+              className="btn-outline"
+              onClick={() => { setShowNewRefurb(false); setRefurbSerial(null); setRefurbIssueDesc('') }}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="btn-primary"
+              style={{ background: '#5B21B6', borderColor: '#5B21B6' }}
+              onClick={() => {
+                if (!refurbIssueDesc.trim()) { showToast('Enter an issue description', 'error'); return }
+                createRefurbishmentJob(refurbSerial.id, refurbIssueDesc.trim())
+                setShowNewRefurb(false)
+                setRefurbSerial(null)
+                setRefurbIssueDesc('')
+                showToast('Sent to refurbishment')
+              }}
+            >
+              Confirm send
+            </button>
           </div>
         </Modal>
       )}
