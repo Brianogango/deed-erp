@@ -50,6 +50,15 @@ export async function GET(request: NextRequest) {
       )
     }
 
+    // Newest intake first so clients hydrate in a stable, expected order.
+    repairs = [...repairs].sort((a, b) => {
+      const aKey = String(a.intakeDate || a.createdDate || '')
+      const bKey = String(b.intakeDate || b.createdDate || '')
+      const byDate = bKey.localeCompare(aKey)
+      if (byDate !== 0) return byDate
+      return String(b.ref || '').localeCompare(String(a.ref || ''), undefined, { numeric: true })
+    })
+
     return NextResponse.json(repairs.map(stripInlinePhotoPayloads), { status: 200 })
   } catch (err) {
     console.error('[repairs GET] Error:', err)

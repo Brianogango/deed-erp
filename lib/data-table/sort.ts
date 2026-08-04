@@ -56,11 +56,21 @@ export function compareSortValues(a: unknown, b: unknown): number {
   return String(a).localeCompare(String(b), undefined, { numeric: true, sensitivity: 'base' })
 }
 
+/**
+ * Advance column sort. When `fallback` is provided (table defaultSort),
+ * cycling never returns to unsorted null — it toggles asc ↔ desc instead.
+ * That keeps repairs/sales from snapping back to scrambled store order.
+ */
 export function nextSortState(
   current: TableSortState | null,
   key: string,
+  fallback: TableSortState | null = null,
 ): TableSortState | null {
-  if (!current || current.key !== key) return { key, direction: 'asc' }
+  if (!current || current.key !== key) {
+    if (fallback?.key === key) return { key, direction: fallback.direction }
+    return { key, direction: 'asc' }
+  }
   if (current.direction === 'asc') return { key, direction: 'desc' }
+  if (fallback) return { key, direction: 'asc' }
   return null
 }
