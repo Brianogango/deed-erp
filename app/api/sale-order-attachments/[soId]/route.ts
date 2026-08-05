@@ -4,6 +4,7 @@ import path from 'path'
 import { mkdir, writeFile, readFile, unlink } from 'fs/promises'
 import { getServerSession } from '@/lib/auth/server'
 import { loadAppState, saveStoreKeys } from '@/lib/server-store'
+import { validateFileContent, logRejectedUpload } from '@/lib/file-validation'
 
 // Quotation / sales-order attachments (Odoo: documents attached to the order).
 // Files live under .uploads/so-attachments/<soId>/; metadata is a JSON array
@@ -84,7 +85,7 @@ export async function POST(req: NextRequest, { params }: { params: { soId: strin
   if (file.size <= 0) return NextResponse.json({ error: 'Attachment file is empty' }, { status: 400 })
   if (file.size > MAX_ATTACHMENT_BYTES) return NextResponse.json({ error: 'Attachments must be 10 MB or smaller' }, { status: 413 })
 
-  const contentType = file.type || 'application/octet-stream'
+  const contentType = (file.type || 'application/octet-stream').toLowerCase()
   if (!ALLOWED_TYPES.has(contentType)) {
     return NextResponse.json({ error: 'Unsupported attachment type. Upload PDF, Word, Excel, CSV, text, JPG, PNG, or WebP.' }, { status: 415 })
   }
@@ -96,7 +97,20 @@ export async function POST(req: NextRequest, { params }: { params: { soId: strin
     const dir = path.join(process.cwd(), '.uploads', 'so-attachments', safeStem(params.soId))
     await mkdir(dir, { recursive: true })
     const storagePath = path.join(dir, `${id}${ext || ''}`)
-    await writeFile(storagePath, Buffer.from(await file.arrayBuffer()))
+    const buffer = Buffer.from(await file.arrayBuffer())
+    const contentCheck = validateFileContent(buffer, contentType)
+    if (!contentCheck.ok) {
+      logRejectedUpload({
+        route: 'sale-order-attachments',
+        declaredType: contentType,
+        fileName: originalName,
+        size: file.size,
+        reason: contentCheck.error,
+        userId: session.user.id,
+      })
+      return NextResponse.json({ error: contentCheck.error }, { status: 415 })
+    }
+    await writeFile(storagePath, buffer)
 
     const existing = await listAttachments(params.soId)
     const meta: AttachmentMeta = {
