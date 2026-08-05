@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { loadAppState } from '@/lib/server-store'
+import { findRepairLinkedInvoice } from '@/lib/portal-invoice-link'
 import { DEFAULT_COMPANY_SETTINGS, DEFAULT_BANK_ACCOUNTS } from '@/lib/store'
 import { buildDeedDocumentPdf, deedPdfToBuffer } from '@/lib/deed-document-pdf'
 
@@ -30,12 +31,7 @@ export async function GET(
       return NextResponse.json({ error: 'Repair not found.' }, { status: 404 })
     }
 
-    const invoiceKey = repair.invoiceId ?? repair.linkedInvoiceId
-    const invoice = invoices.find((inv: any) =>
-      inv.id === invoiceKey ||
-      inv.ref === repair.linkedInvoiceRef ||
-      inv.invoiceNumber === repair.linkedInvoiceRef
-    )
+    const invoice = findRepairLinkedInvoice(invoices, repair)
     if (!invoice) {
       return NextResponse.json({ error: 'No invoice found for this repair.' }, { status: 404 })
     }

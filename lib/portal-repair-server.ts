@@ -1,6 +1,7 @@
 import 'server-only'
 import { getPortalRepair, approvalDecisions, type PortalRepair, type PortalRepairStatus } from './portal-repairs'
 import { resolvePortalPaymentStatus } from './portal-payment'
+import { findRepairLinkedInvoice } from './portal-invoice-link'
 import { loadAppState } from './server-store'
 import type { RepairOrder } from './repair-types'
 
@@ -188,8 +189,7 @@ export async function lookupRepair(ref: string): Promise<PortalRepair | null> {
     const decoded = decodeURIComponent(ref)
     const erp = repairs.find(r => r.ref.toLowerCase() === decoded.toLowerCase())
     if (erp) {
-      const invoiceKey = erp.invoiceId ?? (erp as any).linkedInvoiceId
-      const linkedInvoice = invoices.find(inv => inv.id === invoiceKey || inv.ref === (erp as any).linkedInvoiceRef || inv.invoiceNumber === (erp as any).linkedInvoiceRef)
+      const linkedInvoice = findRepairLinkedInvoice(invoices, erp as any)
       const portal = erpToPortal(erp, linkedInvoice)
       return storedPhotos.length > 0 ? { ...portal, issuePhotos: storedPhotos } : portal
     }
