@@ -123,6 +123,7 @@ const statusLabel: Record<string, string> = {
   repair_pickup: 'Repair pickup',
   repair_dropoff: 'Repair drop-off',
   sales_delivery: 'Sales delivery',
+  general: 'General',
 }
 
 let bodyLockCount = 0
