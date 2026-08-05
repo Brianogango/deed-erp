@@ -647,8 +647,8 @@ export interface SystemSettings {
   secDisableProductDeletion: boolean
   secDisableStockManipulation: boolean
   secDisableInvoiceEditAfterValidation: boolean
-  // When true, customers must enter the phone number on file to approve a quote
-  // or confirm payment through the portal. Off by default to avoid friction.
+  // When true (default), customers must enter the phone number on file to approve a quote
+  // or confirm payment through the portal. Set false only to temporarily reduce friction.
   secPortalRequirePhoneVerification: boolean
   /**
    * Admin Officer may post/pay customer invoices at or under this KES total.
@@ -682,7 +682,7 @@ export const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
   hrAttendance: false, hrLeaves: true, hrRestrictSalaryInfo: true, hrRoleBasedVisibility: true,
   posSessionControl: true, posCashControl: true, posReceiptPrinting: true,
   secDisableProductDeletion: true, secDisableStockManipulation: true, secDisableInvoiceEditAfterValidation: true,
-  secPortalRequirePhoneVerification: false,
+  secPortalRequirePhoneVerification: true,
 }
 
 export const DEFAULT_COMPANY_SETTINGS: CompanySettings = {

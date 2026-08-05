@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { lookupRepair } from '@/lib/portal-repair-server'
 import { saveStoreKeys, loadAppState } from '@/lib/server-store'
 import { checkRateLimit } from '@/lib/rate-limit'
-import { phoneMatches } from '@/lib/portal-verify'
+import { phoneMatches, isPortalPhoneVerificationRequired } from '@/lib/portal-verify'
 
 function parseAmount(text: string): number | null {
   const patterns = [
@@ -62,10 +62,10 @@ export async function POST(req: NextRequest, { params }: { params: { ref: string
 
   const appState = await loadAppState()
 
-  // Ownership proof (optional): enforced only when secPortalRequirePhoneVerification
-  // is enabled. Off by default so it never blocks customers unless an admin opts in.
+  // Ownership proof (default ON): enforced unless an admin explicitly sets
+  // secPortalRequirePhoneVerification to false (SEC-005).
   const settings = appState['deed_systemSettings'] as { secPortalRequirePhoneVerification?: boolean } | undefined
-  if (settings?.secPortalRequirePhoneVerification === true && !phoneMatches(String(form.get('verifyPhone') ?? ''), repair.customerPhone)) {
+  if (isPortalPhoneVerificationRequired(settings) && !phoneMatches(String(form.get('verifyPhone') ?? ''), repair.customerPhone)) {
     return NextResponse.json({ error: 'Verification failed. Enter the phone number on this repair to confirm.' }, { status: 403 })
   }
   const repairs = (appState['deed_repairs_v2'] as any[]) || []

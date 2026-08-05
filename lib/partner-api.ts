@@ -51,11 +51,39 @@ export async function authenticatePartnerRequest(request: Request): Promise<Part
 }
 
 // ── CORS for the public endpoints ────────────────────────────────────────────
-// Partner sites may call from the browser during development; production
-// integrations should proxy through their own backend so the key stays secret.
-export const PUBLIC_API_CORS_HEADERS: Record<string, string> = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, OPTIONS',
-  'Access-Control-Allow-Headers': 'Authorization, X-API-Key, Content-Type',
-  'Access-Control-Max-Age': '86400',
+// Partner browser calls must come from an allow-listed origin
+// (PARTNER_CORS_ORIGINS, comma-separated). Empty / unmatched Origin → no
+// Access-Control-Allow-Origin (browser denies). Server-to-server calls without
+// an Origin header remain unaffected. Authorization is intentionally omitted
+// from Allow-Headers so browser clients use X-API-Key only (SEC-007 / SEC-010).
+
+export function parsePartnerCorsOrigins(
+  envValue: string | undefined = process.env.PARTNER_CORS_ORIGINS,
+): string[] {
+  return String(envValue ?? '')
+    .split(',')
+    .map(value => value.trim())
+    .filter(Boolean)
 }
+
+/**
+ * Build CORS headers for a public partner API response.
+ * Only echoes Access-Control-Allow-Origin when the request Origin is listed.
+ */
+export function partnerCorsHeaders(request?: Request | null): Record<string, string> {
+  const allowed = parsePartnerCorsOrigins()
+  const origin = request?.headers.get('origin')?.trim() || ''
+  const headers: Record<string, string> = {
+    'Access-Control-Allow-Methods': 'GET, OPTIONS',
+    'Access-Control-Allow-Headers': 'X-API-Key, Content-Type',
+    'Access-Control-Max-Age': '86400',
+    Vary: 'Origin',
+  }
+  if (origin && allowed.includes(origin)) {
+    headers['Access-Control-Allow-Origin'] = origin
+  }
+  return headers
+}
+
+/** @deprecated Prefer partnerCorsHeaders(request) — static * CORS removed (SEC-007). */
+export const PUBLIC_API_CORS_HEADERS: Record<string, string> = partnerCorsHeaders(null)

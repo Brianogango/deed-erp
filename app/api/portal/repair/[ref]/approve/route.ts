@@ -4,7 +4,7 @@ import { lookupRepair } from '@/lib/portal-repair-server'
 import { roundMoney, settlementAfterReapproval } from '@/lib/portal-payment'
 import { saveStoreKeys, loadAppState } from '@/lib/server-store'
 import { checkRateLimit } from '@/lib/rate-limit'
-import { phoneMatches } from '@/lib/portal-verify'
+import { phoneMatches, isPortalPhoneVerificationRequired } from '@/lib/portal-verify'
 import prisma from '@/lib/prisma'
 import { getNextDocNumber } from '@/lib/doc-ref-counter'
 
@@ -39,11 +39,10 @@ export async function POST(
   const date = new Date().toISOString().slice(0, 10)
   const appState = await loadAppState()
 
-  // Ownership proof (optional): when secPortalRequirePhoneVerification is on, the
-  // caller must supply the customer phone on file. This prevents a guessed
-  // reference alone from approving a quote. Off by default to avoid friction.
+  // Ownership proof (default ON): require the customer phone on file unless an
+  // admin explicitly disables secPortalRequirePhoneVerification (SEC-005).
   const settings = appState['deed_systemSettings'] as { secPortalRequirePhoneVerification?: boolean } | undefined
-  if (settings?.secPortalRequirePhoneVerification === true && !phoneMatches(body.verifyPhone, repair.customerPhone)) {
+  if (isPortalPhoneVerificationRequired(settings) && !phoneMatches(body.verifyPhone, repair.customerPhone)) {
     return NextResponse.json({ error: 'Verification failed. Enter the phone number on this repair to confirm.' }, { status: 403 })
   }
   const repairs = (appState['deed_repairs_v2'] as any[]) || []
