@@ -94,6 +94,23 @@ const roleMatrix = {
   manageDeposits:            ['director', 'admin_officer', 'finance_officer'] as UserRole[],
   // Payroll runs and payslips — matches the payroll API role set.
   managePayroll:             ['director', 'admin_officer', 'finance_officer'] as UserRole[],
+  // Device reconfiguration work orders
+  viewReconfiguration:       ['director', 'admin_officer', 'finance_officer', 'inventory_officer', 'sales_rep', 'technical_lead', 'technician', 'kilimall_officer'] as UserRole[],
+  createReconfiguration:     ['director', 'admin_officer', 'sales_rep', 'technical_lead', 'kilimall_officer'] as UserRole[],
+  editReconfigurationDraft:  ['director', 'admin_officer', 'sales_rep', 'technical_lead'] as UserRole[],
+  reserveReconfigurationComponents: ['director', 'inventory_officer', 'technical_lead'] as UserRole[],
+  approveReconfiguration:    ['director', 'admin_officer', 'finance_officer', 'technical_lead'] as UserRole[],
+  performReconfigRemoval:    ['director', 'technical_lead', 'technician'] as UserRole[],
+  performReconfigInstallation: ['director', 'technical_lead', 'technician'] as UserRole[],
+  completeReconfigQa:        ['director', 'technical_lead'] as UserRole[],
+  completeReconfiguration:   ['director', 'inventory_officer', 'technical_lead'] as UserRole[],
+  overrideReconfigCompatibility: ['director', 'technical_lead'] as UserRole[],
+  overrideReconfigStock:     ['director', 'inventory_officer'] as UserRole[],
+  overrideMinimumMargin:     ['director', 'finance_officer'] as UserRole[],
+  reverseReconfiguration:    ['director', 'finance_officer', 'technical_lead'] as UserRole[],
+  viewReconfigComponentCosts: ['director', 'admin_officer', 'finance_officer', 'inventory_officer', 'technical_lead'] as UserRole[],
+  viewReconfigSellingPrices: ['director', 'admin_officer', 'finance_officer', 'sales_rep', 'technical_lead', 'kilimall_officer'] as UserRole[],
+  viewReconfigAccounting:    ['director', 'finance_officer'] as UserRole[],
 } as const
 
 export type PermissionAction = keyof typeof roleMatrix

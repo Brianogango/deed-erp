@@ -13,7 +13,7 @@ const VALID_KINDS = new Set<DocKind>([
   'credit_note',
   'vendor_bill',
   'receipt',
-  'payment_receipt',
+  'reconfiguration',
 ])
 
 export async function POST(request: NextRequest) {

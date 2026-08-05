@@ -62,6 +62,7 @@ export function calcStockByLocation(
 ): Record<LocationId, number> {
   const locs: Record<LocationId, number> = {
     warehouse: 0, shop: 0, repair_unit: 0, vendor: 0, customer: 0, employee: 0,
+    pending_testing: 0, quarantine: 0,
   }
   if (!product) return locs
 
@@ -74,7 +75,7 @@ export function calcStockByLocation(
 
   if (serialTracked) {
     serials
-      .filter(s => s.productId === productId && ['available', 'assigned', 'under_repair', 'refurbishment', 'in_stock'].includes(s.status))
+      .filter(s => s.productId === productId && ['available', 'assigned', 'under_repair', 'refurbishment', 'reconfiguration', 'in_stock'].includes(s.status))
       .forEach(s => { locs[s.location] = (locs[s.location] || 0) + 1 })
   } else {
     bulkStock

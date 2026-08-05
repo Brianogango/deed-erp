@@ -27,6 +27,7 @@ export type DocKind =
   | 'vendor_bill'
   | 'receipt'
   | 'payment_receipt'
+  | 'reconfiguration'
 
 // Quotations exist both as CRM quotes and as quotation-state sale orders;
 // they share the QUO prefix and therefore one sequence.
@@ -42,6 +43,7 @@ export const DOC_PREFIX: Record<DocKind, string> = {
   vendor_bill: 'BILL',
   receipt: 'REC',
   payment_receipt: 'RCT',
+  reconfiguration: 'RCF',
 }
 
 const PREFIX = DOC_PREFIX
@@ -144,6 +146,13 @@ async function seedFromExisting(kind: DocKind, year: number): Promise<number> {
           return fromInvoices
         }
       }
+      case 'reconfiguration':
+        try {
+          ({ rows } = await sql`SELECT COALESCE(MAX((substring(ref from '[0-9]+$'))::int), 0) AS max_num FROM reconfiguration_work_orders WHERE ref ~ ${pattern}`)
+          return Number(rows?.[0]?.max_num ?? 0)
+        } catch {
+          return 0
+        }
       default:
         return 0
     }

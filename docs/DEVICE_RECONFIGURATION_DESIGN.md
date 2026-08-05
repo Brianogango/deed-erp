@@ -1,12 +1,9 @@
 # Device Reconfiguration — ERP Audit & Solution Design
 
-**Status:** Phase 1–2 complete — awaiting approval before implementation  
+**Status:** Implementation in progress (Phases A–D landed) — see PR commits  
 **Scope:** Serialized computers (laptops/desktops) — upgrade / downgrade / replacement / correction  
 **ERP:** Deed ERP (Next.js 14 + Prisma + PostgreSQL + app_state blobs)  
 **Date:** 2026-08-05  
-
-> **Do not implement until this document is approved.**  
-> All proposals below reuse existing patterns. Nothing invented where an equivalent already exists.
 
 ---
 
