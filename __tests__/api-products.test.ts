@@ -6,6 +6,8 @@ const { mockGetSession, mockRequireRole, mockPrisma } = vi.hoisted(() => ({
   mockPrisma: {
     product: { findFirst: vi.fn(), findMany: vi.fn(), create: vi.fn() },
     category: { findFirst: vi.fn(), create: vi.fn() },
+    stockLevel: { create: vi.fn() },
+    $transaction: vi.fn(),
   },
 }))
 
@@ -50,6 +52,7 @@ beforeEach(() => {
   mockRequireRole.mockResolvedValue({ id: 'u1', role: 'director', name: 'Dir', username: 'dir' })
   mockPrisma.product.findFirst.mockResolvedValue(null)
   mockPrisma.category.findFirst.mockResolvedValue({ id: 'cat-1', name: 'Laptops' })
+  mockPrisma.stockLevel.create.mockResolvedValue({})
   mockPrisma.product.create.mockImplementation(({ data }: any) =>
     Promise.resolve({
       id: `prod-${data.sku}`,
@@ -57,6 +60,12 @@ beforeEach(() => {
       sellingPrice: data.sellingPrice,
       reorderLevel: data.reorderLevel,
       createdAt: new Date('2026-07-30T00:00:00Z'),
+    }),
+  )
+  mockPrisma.$transaction.mockImplementation(async (fn: any) =>
+    fn({
+      product: { create: mockPrisma.product.create },
+      stockLevel: { create: mockPrisma.stockLevel.create },
     }),
   )
 })
@@ -110,7 +119,7 @@ describe('POST /api/products', () => {
   })
 
   it('returns a clear error when products.tracking_method is missing', async () => {
-    mockPrisma.product.create.mockRejectedValueOnce({
+    mockPrisma.$transaction.mockRejectedValueOnce({
       code: 'P2022',
       meta: { column: 'tracking_method' },
       message: 'The column `tracking_method` does not exist in the current database.',
@@ -126,6 +135,27 @@ describe('POST /api/products', () => {
     const body = await res.json()
     expect(body.error).toMatch(/schema is out of date/i)
     expect(body.error).toMatch(/tracking_method/i)
+  })
+
+  it('creates a StockLevel atomically with the product', async () => {
+    const res = await POST_ONE(postReq('http://localhost/api/products', {
+      name: 'Atomic Stock Widget',
+      category: 'Laptops',
+      salePrice: 1000,
+      costPrice: 500,
+      sku: 'ATOMIC-1',
+    }))
+    expect(res.status).toBe(201)
+    expect(mockPrisma.$transaction).toHaveBeenCalled()
+    expect(mockPrisma.stockLevel.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          qtyOnHand: 0,
+          qtyReserved: 0,
+          qtyOnOrder: 0,
+        }),
+      }),
+    )
   })
 })
 
@@ -167,7 +197,7 @@ describe('POST /api/products/bulk', () => {
   })
 
   it('reports schema drift on every row when tracking_method is missing', async () => {
-    mockPrisma.product.create.mockRejectedValue({
+    mockPrisma.$transaction.mockRejectedValue({
       code: 'P2022',
       meta: { column: 'tracking_method' },
       message: 'The column `tracking_method` does not exist in the current database.',
