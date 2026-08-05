@@ -12,10 +12,12 @@ vi.mock('@/lib/auth/users-repository', () => ({
   toPublicAuthUser: vi.fn((u) => ({ id: u.id, name: u.name, username: u.username, role: u.role, modules: [], active: true, createdAt: u.createdAt })),
   recordFailedLogin: vi.fn().mockResolvedValue(undefined),
   clearFailedLogin: vi.fn().mockResolvedValue(undefined),
+  updateAuthUser: vi.fn().mockResolvedValue(undefined),
 }))
 
 vi.mock('@/lib/auth/password', () => ({
   verifyPassword: vi.fn(),
+  hashPassword: vi.fn().mockResolvedValue('$2b$12$upgraded'),
 }))
 
 vi.mock('@/lib/auth/access', () => ({
@@ -27,8 +29,8 @@ vi.mock('next-auth/jwt', () => ({
 }))
 
 import { POST } from '@/app/api/auth/login/route'
-import { findAuthUserByUsername, recordFailedLogin, clearFailedLogin } from '@/lib/auth/users-repository'
-import { verifyPassword } from '@/lib/auth/password'
+import { findAuthUserByUsername, recordFailedLogin, clearFailedLogin, updateAuthUser } from '@/lib/auth/users-repository'
+import { verifyPassword, hashPassword } from '@/lib/auth/password'
 import { loginRatelimit } from '@/lib/rate-limit'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -115,7 +117,7 @@ describe('POST /api/auth/login', () => {
 
     it('returns 401 and records failed attempt on wrong password', async () => {
       vi.mocked(findAuthUserByUsername).mockResolvedValue(fakeUser as any)
-      vi.mocked(verifyPassword).mockResolvedValue(false)
+      vi.mocked(verifyPassword).mockResolvedValue({ verified: false, needsRehash: false })
       const res = await POST(makeRequest({ username: 'admin', password: 'wrong' }))
       expect(res.status).toBe(401)
       expect(recordFailedLogin).toHaveBeenCalledWith(fakeUser.id)
@@ -123,18 +125,32 @@ describe('POST /api/auth/login', () => {
 
     it('returns 200 and sets session cookie on valid credentials', async () => {
       vi.mocked(findAuthUserByUsername).mockResolvedValue(fakeUser as any)
-      vi.mocked(verifyPassword).mockResolvedValue(true)
+      vi.mocked(verifyPassword).mockResolvedValue({ verified: true, needsRehash: false })
       const res = await POST(makeRequest({ username: 'admin', password: 'correct' }))
       expect(res.status).toBe(200)
       expect(clearFailedLogin).toHaveBeenCalledWith(fakeUser.id)
       const body = await res.json()
       expect(body.message).toBe('Login successful')
       expect(body.user).toBeDefined()
+      expect(updateAuthUser).not.toHaveBeenCalled()
+    })
+
+    it('upgrades a legacy SHA-256 hash to bcrypt on successful login', async () => {
+      vi.mocked(findAuthUserByUsername).mockResolvedValue({
+        ...fakeUser,
+        passwordHash: 'a'.repeat(64),
+      } as any)
+      vi.mocked(verifyPassword).mockResolvedValue({ verified: true, needsRehash: true })
+      vi.mocked(hashPassword).mockResolvedValue('$2b$12$upgraded-hash')
+      const res = await POST(makeRequest({ username: 'admin', password: 'correctpwd' }))
+      expect(res.status).toBe(200)
+      expect(hashPassword).toHaveBeenCalledWith('correctpwd')
+      expect(updateAuthUser).toHaveBeenCalledWith(fakeUser.id, {}, '$2b$12$upgraded-hash')
     })
 
     it('sets HttpOnly cookie on successful login', async () => {
       vi.mocked(findAuthUserByUsername).mockResolvedValue(fakeUser as any)
-      vi.mocked(verifyPassword).mockResolvedValue(true)
+      vi.mocked(verifyPassword).mockResolvedValue({ verified: true, needsRehash: false })
       const res = await POST(makeRequest({ username: 'admin', password: 'correct' }))
       const cookie = res.headers.get('set-cookie') ?? ''
       expect(cookie).toContain('deed-session')

@@ -17,8 +17,8 @@ export default function ForcePasswordChangePage() {
       showToast('Passwords do not match or are empty.', 'error')
       return
     }
-    if (newPassword.length < 6) {
-      showToast('Password must be at least 6 characters.', 'error')
+    if (newPassword.length < 8) {
+      showToast('Password must be at least 8 characters.', 'error')
       return
     }
     if (!currentUser) {
