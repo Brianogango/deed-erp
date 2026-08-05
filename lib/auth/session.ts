@@ -5,7 +5,17 @@ export const SESSION_TTL_SECONDS = 60 * 60 * 12
 
 const encoder = new TextEncoder()
 
-const getSessionSecret = () => process.env.AUTH_SECRET || 'deed-erp-demo-secret-2026'
+/**
+ * Fail closed when AUTH_SECRET is missing — never fall back to a known demo value.
+ * (Audit SEC-001)
+ */
+export const getSessionSecret = (): string => {
+  const secret = String(process.env.AUTH_SECRET ?? '').trim()
+  if (!secret) {
+    throw new Error('AUTH_SECRET is not configured — refusing to sign or verify sessions')
+  }
+  return secret
+}
 
 const toHex = (buffer: ArrayBuffer) =>
   Array.from(new Uint8Array(buffer))

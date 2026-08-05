@@ -4,9 +4,13 @@ import { isRoleAllowed } from '@/lib/auth/authorization'
 import { loadAppState, saveStoreKeys } from '@/lib/server-store'
 import type { PurchaseOrder } from '@/lib/store'
 import { lockVersionMismatch, nextLockVersion, readExpectedVersion } from '@/lib/optimistic-lock'
+import { writeFinancialAudit } from '@/lib/finance-audit'
 
 const STORE_KEY = 'deed_purchaseOrders'
 const WRITE_ROLES = ['director', 'admin_officer', 'finance_officer', 'inventory_officer', 'technical_lead']
+
+/** PO statuses that must never be removed from the blob (audit FIN-003). */
+const PROTECTED_PO_STATUSES = new Set(['partial', 'received', 'billed', 'partially_received'])
 
 async function requireWrite() {
   const session = await getServerSession()
@@ -64,11 +68,43 @@ export async function DELETE(_: NextRequest, { params }: { params: { id: string 
   if (gate.error) return gate.error
 
   const items = await readPurchaseOrders()
-  const filtered = items.filter(po => po.id !== params.id)
-  if (filtered.length === items.length) {
+  const idx = items.findIndex(po => po.id === params.id)
+  if (idx === -1) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 })
   }
 
-  await saveStoreKeys({ [STORE_KEY]: JSON.stringify(filtered) })
-  return NextResponse.json({ ok: true })
+  const existing = items[idx] as PurchaseOrder & { receiptIds?: string[]; billIds?: string[] }
+  const status = String(existing.status || '').toLowerCase()
+
+  if (status === 'cancelled') {
+    return NextResponse.json({ ok: true, item: existing })
+  }
+
+  const hasReceipts = Array.isArray(existing.receiptIds) && existing.receiptIds.length > 0
+  const hasBills = Array.isArray(existing.billIds) && existing.billIds.length > 0
+  if (PROTECTED_PO_STATUSES.has(status) || hasReceipts || hasBills) {
+    return NextResponse.json({
+      error: 'Received or billed purchase orders cannot be deleted',
+    }, { status: 409 })
+  }
+
+  // Soft-cancel draft/sent/confirmed POs — keep the record for audit (FIN-003).
+  const cancelled = {
+    ...existing,
+    status: 'cancelled' as const,
+    lockVersion: nextLockVersion((existing as any).lockVersion),
+  }
+  items[idx] = cancelled
+  await saveStoreKeys({ [STORE_KEY]: JSON.stringify(items) })
+
+  await writeFinancialAudit({
+    userId: gate.session!.user.id,
+    action: 'cancel_purchase_order',
+    entityType: 'purchase_order',
+    entityId: existing.id,
+    oldValues: { status: existing.status, ref: existing.ref },
+    newValues: { status: 'cancelled' },
+  })
+
+  return NextResponse.json({ ok: true, item: cancelled })
 }
