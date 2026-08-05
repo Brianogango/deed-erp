@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
-import { authenticatePartnerRequest, PUBLIC_API_CORS_HEADERS } from '@/lib/partner-api'
+import { authenticatePartnerRequest, partnerCorsHeaders } from '@/lib/partner-api'
 import { loadAppState } from '@/lib/server-store'
 
 export const dynamic = 'force-dynamic'
@@ -18,11 +18,14 @@ export const dynamic = 'force-dynamic'
 //   q             search in name/SKU/description          (optional)
 //   inStock       'all' to include out-of-stock items     (default: in-stock only)
 
-const json = (body: unknown, init?: ResponseInit) =>
-  NextResponse.json(body, { ...init, headers: { ...PUBLIC_API_CORS_HEADERS, ...(init?.headers ?? {}) } })
+const json = (body: unknown, request: Request, init?: ResponseInit) =>
+  NextResponse.json(body, {
+    ...init,
+    headers: { ...partnerCorsHeaders(request), ...(init?.headers ?? {}) },
+  })
 
-export async function OPTIONS() {
-  return new NextResponse(null, { status: 204, headers: PUBLIC_API_CORS_HEADERS })
+export async function OPTIONS(request: Request) {
+  return new NextResponse(null, { status: 204, headers: partnerCorsHeaders(request) })
 }
 
 type JsonSerial = { productId?: string; status?: string }
@@ -80,7 +83,7 @@ async function availabilityByProduct(): Promise<Map<string, number>> {
 
 export async function GET(request: Request) {
   const auth = await authenticatePartnerRequest(request)
-  if (!auth.ok) return json({ error: auth.error }, { status: auth.status })
+  if (!auth.ok) return json({ error: auth.error }, request, { status: auth.status })
 
   const url = new URL(request.url)
   const page = Math.max(1, Number(url.searchParams.get('page')) || 1)
@@ -150,6 +153,7 @@ export async function GET(request: Request) {
       pagination: { page, pageSize, total, totalPages: Math.max(1, Math.ceil(total / pageSize)) },
       meta: { currency: 'KES', generatedAt: new Date().toISOString() },
     },
+    request,
     { headers: { 'Cache-Control': 'private, max-age=60' } },
   )
 }

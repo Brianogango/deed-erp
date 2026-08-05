@@ -549,7 +549,7 @@ export default function RepairPortalPage() {
                   <input
                     value={verifyPhone}
                     onChange={e => setVerifyPhone(e.target.value)}
-                    placeholder="Phone number on this repair (optional — helps confirm it's you)"
+                    placeholder="Phone number on this repair (required to confirm it's you)"
                     inputMode="tel"
                     style={{ width: '100%', marginTop: 10, background: 'var(--portal-bg)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, padding: '10px 14px', color: '#E5E7EB', fontSize: 13, outline: 'none' }}
                   />
@@ -614,7 +614,7 @@ export default function RepairPortalPage() {
                   </div>
                   <textarea value={paymentText} onChange={e => setPaymentText(e.target.value)} placeholder="Paste M-PESA confirmation message here…" rows={4} style={{ width: '100%', background: 'var(--portal-bg)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, padding: '10px 14px', color: '#E5E7EB', fontSize: 13, resize: 'vertical', outline: 'none', marginBottom: 10 }} />
                   <input type="file" accept="image/*" onChange={e => setPaymentFile(e.target.files?.[0] ?? null)} style={{ width: '100%', color: '#9CA3AF', fontSize: 12, marginBottom: 10 }} />
-                  <input value={verifyPhone} onChange={e => setVerifyPhone(e.target.value)} placeholder="Phone number on this repair (optional — helps confirm it's you)" inputMode="tel" style={{ width: '100%', background: 'var(--portal-bg)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, padding: '10px 14px', color: '#E5E7EB', fontSize: 13, outline: 'none', marginBottom: 10 }} />
+                  <input value={verifyPhone} onChange={e => setVerifyPhone(e.target.value)} placeholder="Phone number on this repair (required to confirm it's you)" inputMode="tel" style={{ width: '100%', background: 'var(--portal-bg)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, padding: '10px 14px', color: '#E5E7EB', fontSize: 13, outline: 'none', marginBottom: 10 }} />
                   <button onClick={submitPaymentConfirmation} disabled={paymentSubmitting} style={{ width: '100%', padding: '13px 0', borderRadius: 12, border: 'none', background: 'linear-gradient(135deg, var(--accent-cyan), var(--primary))', color: '#fff', fontWeight: 800, fontSize: 14, cursor: paymentSubmitting ? 'not-allowed' : 'pointer', opacity: paymentSubmitting ? 0.7 : 1 }}>{paymentSubmitting ? 'Submitting…' : 'Submit Payment Confirmation'}</button>
                   {paymentError && <div style={{ marginTop: 10, padding: '10px 14px', borderRadius: 10, background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', fontSize: 13, color: '#F87171', textAlign: 'center' }}>{paymentError}</div>}
                   {paymentDone && <div style={{ marginTop: 10, padding: '10px 14px', borderRadius: 10, background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.3)', fontSize: 13, color: '#34D399', textAlign: 'center' }}>Payment confirmation submitted.</div>}

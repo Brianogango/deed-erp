@@ -765,7 +765,7 @@ export default function HRSettings() {
                 <SettingRow label="Disable Product Deletion" desc="Products can be archived but never permanently deleted — preserves history"><Toggle on={ss.secDisableProductDeletion} onChange={v => updateSystemSettings({ secDisableProductDeletion: v })} /></SettingRow>
                 <SettingRow label="Disable Manual Stock Manipulation" desc="Stock levels can only change through validated inventory operations"><Toggle on={ss.secDisableStockManipulation} onChange={v => updateSystemSettings({ secDisableStockManipulation: v })} /></SettingRow>
                 <SettingRow label="Lock Invoices After Validation" desc="Validated invoices cannot be edited — corrections require a credit note"><Toggle on={ss.secDisableInvoiceEditAfterValidation} onChange={v => updateSystemSettings({ secDisableInvoiceEditAfterValidation: v })} /></SettingRow>
-                <SettingRow label="Require Phone Verification on Portal" desc="Customers must enter the phone number on file to approve quotes or confirm payment via the portal"><Toggle on={ss.secPortalRequirePhoneVerification} onChange={v => updateSystemSettings({ secPortalRequirePhoneVerification: v })} /></SettingRow>
+                <SettingRow label="Require Phone Verification on Portal" desc="Customers must enter the phone number on file to approve quotes or confirm payment via the portal (on by default — turn off only if needed)"><Toggle on={ss.secPortalRequirePhoneVerification} onChange={v => updateSystemSettings({ secPortalRequirePhoneVerification: v })} /></SettingRow>
               </SectionCard>
               <SectionCard title="System Rules">
                 <div className="py-1">

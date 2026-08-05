@@ -2,10 +2,13 @@ import { describe, it, expect } from 'vitest'
 import { GET, OPTIONS } from '@/app/api/public/v1/guide/route'
 
 describe('GET /api/public/v1/guide', () => {
-  it('allows CORS preflight', async () => {
-    const res = await OPTIONS()
+  it('allows CORS preflight without wildcard origin', async () => {
+    const res = await OPTIONS(new Request('http://localhost/api/public/v1/guide', {
+      headers: { origin: 'https://evil.example' },
+    }))
     expect(res.status).toBe(204)
-    expect(res.headers.get('Access-Control-Allow-Origin')).toBe('*')
+    expect(res.headers.get('Access-Control-Allow-Origin')).toBeNull()
+    expect(res.headers.get('Access-Control-Allow-Methods')).toContain('GET')
   })
 
   it('downloads the Markdown integration guide without an API key', async () => {

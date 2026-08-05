@@ -86,10 +86,12 @@ describe('GET /api/public/v1/products — partner catalog', () => {
     expect(item).not.toHaveProperty('wholesalePrice')
   })
 
-  it('accepts the key via X-API-Key too and sets CORS headers', async () => {
+  it('accepts the key via X-API-Key and does not use wildcard CORS', async () => {
     const res = await GET(req('', { 'x-api-key': VALID_KEY }))
     expect(res.status).toBe(200)
-    expect(res.headers.get('Access-Control-Allow-Origin')).toBe('*')
+    // Default PARTNER_CORS_ORIGINS is empty → no Allow-Origin echo.
+    expect(res.headers.get('Access-Control-Allow-Origin')).toBeNull()
+    expect(res.headers.get('Access-Control-Allow-Headers') ?? '').not.toMatch(/Authorization/i)
   })
 
   it('hides out-of-stock items by default and includes them with inStock=all', async () => {
@@ -125,7 +127,7 @@ describe('GET /api/public/v1/products — partner catalog', () => {
   })
 
   it('answers CORS preflight', async () => {
-    const res = await OPTIONS()
+    const res = await OPTIONS(new Request('http://localhost/api/public/v1/products'))
     expect(res.status).toBe(204)
     expect(res.headers.get('Access-Control-Allow-Methods')).toContain('GET')
   })

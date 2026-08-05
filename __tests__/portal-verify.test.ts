@@ -36,3 +36,12 @@ describe('maskPhone', () => {
     expect(maskPhone(null)).toBe('')
   })
 })
+
+describe('isPortalPhoneVerificationRequired', () => {
+  it('defaults to required unless explicitly disabled', async () => {
+    const { isPortalPhoneVerificationRequired } = await import('@/lib/portal-verify')
+    expect(isPortalPhoneVerificationRequired(undefined)).toBe(true)
+    expect(isPortalPhoneVerificationRequired({})).toBe(true)
+    expect(isPortalPhoneVerificationRequired({ secPortalRequirePhoneVerification: false })).toBe(false)
+  })
+})

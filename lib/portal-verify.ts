@@ -30,3 +30,14 @@ export function maskPhone(phone: string | null | undefined): string {
   const tail = digits.slice(-2)
   return `${head}${'*'.repeat(Math.max(2, digits.length - 4))}${tail}`
 }
+
+/**
+ * Portal quote approve / payment confirmation require phone proof by default.
+ * Admins must explicitly set secPortalRequirePhoneVerification to false to disable
+ * (audit SEC-005 / AGENT-SEC-003).
+ */
+export function isPortalPhoneVerificationRequired(
+  settings?: { secPortalRequirePhoneVerification?: boolean } | null,
+): boolean {
+  return settings?.secPortalRequirePhoneVerification !== false
+}
