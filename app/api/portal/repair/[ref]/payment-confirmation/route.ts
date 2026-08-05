@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { lookupRepair } from '@/lib/portal-repair-server'
+import { findRepairLinkedInvoice } from '@/lib/portal-invoice-link'
 import { saveStoreKeys, loadAppState } from '@/lib/server-store'
 import { checkRateLimit } from '@/lib/rate-limit'
 import { phoneMatches, isPortalPhoneVerificationRequired } from '@/lib/portal-verify'
@@ -74,10 +75,10 @@ export async function POST(req: NextRequest, { params }: { params: { ref: string
 
   const targetRepair = repairs[repairIndex]
   const invoices = (appState['deed_invoices'] as any[]) || []
-  const invoiceKey = targetRepair.invoiceId ?? targetRepair.linkedInvoiceId
-  const invoiceIndex = invoices.findIndex((inv: any) => inv.id === invoiceKey || inv.ref === targetRepair.linkedInvoiceRef || inv.invoiceNumber === targetRepair.linkedInvoiceRef)
-  const invoice = invoiceIndex >= 0 ? invoices[invoiceIndex] : null
-  const invoiceTotal = Number(invoice?.total ?? invoice?.totalAmount ?? repair.invoiceTotal ?? targetRepair.quote?.approvedTotal ?? targetRepair.quote?.total ?? 0)
+  const invoice = findRepairLinkedInvoice(invoices, targetRepair) ?? null
+  // Prefer a real linked invoice; otherwise fall back to the repair quote — never
+  // a random unmatched invoice (see findRepairLinkedInvoice).
+  const invoiceTotal = Number(invoice?.total ?? invoice?.totalAmount ?? targetRepair.quote?.approvedTotal ?? targetRepair.quote?.total ?? 0)
   if (!invoiceTotal || invoiceTotal <= 0) return NextResponse.json({ error: 'No payable invoice amount was found for this repair.' }, { status: 409 })
 
   const parsedAmount = parseAmount(confirmationText)
