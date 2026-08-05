@@ -62,10 +62,12 @@ test.describe('repair → quote → invoice money path', () => {
   })
 
   test('lists the repair in the ERP', async () => {
-    const res = await api.get('/api/repairs')
+    const res = await api.get(`/api/repairs?q=${encodeURIComponent(repairRef)}`)
     expect(res.status()).toBe(200)
-    const repairs = await res.json()
+    const body = await res.json()
+    const repairs = Array.isArray(body) ? body : (body.items ?? [])
     expect(repairs.some((r: any) => r.ref === repairRef)).toBe(true)
+    expect(body.total).toBeGreaterThanOrEqual(1)
   })
 
   test('rejects quotes with a total below 1', async () => {

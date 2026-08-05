@@ -4925,7 +4925,7 @@ export function StoreProvider({
           case 'sales': {
             const results = await Promise.allSettled([
               fetch('/api/quotes').then(r => r.ok ? r.json() : null),
-              fetch('/api/sale-orders').then(r => r.ok ? r.json() : null),
+              fetch('/api/sale-orders?limit=200').then(r => r.ok ? r.json() : null),
             ])
             const val = (r: PromiseSettledResult<unknown>) =>
               r.status === 'fulfilled' && r.value != null ? r.value : null
@@ -4947,9 +4947,10 @@ export function StoreProvider({
             break
           }
           case 'repairs': {
-            const data = await fetch('/api/repairs').then(r => r.ok ? r.json() : null)
-            if (Array.isArray(data)) {
-              setRepairs(prev => JSON.stringify(prev) === JSON.stringify(data) ? prev : data)
+            const data = await fetch('/api/repairs?limit=200').then(r => r.ok ? r.json() : null)
+            const list = Array.isArray(data) ? data : (data?.items ?? null)
+            if (Array.isArray(list)) {
+              setRepairs(prev => JSON.stringify(prev) === JSON.stringify(list) ? prev : list)
             }
             break
           }
@@ -4979,7 +4980,7 @@ export function StoreProvider({
             break
           }
           case 'stock_moves': {
-            const d = await fetch('/api/stock-moves').then(r => r.ok ? r.json() : null)
+            const d = await fetch('/api/stock-moves?limit=200').then(r => r.ok ? r.json() : null)
             if (d) setStockMoves(Array.isArray(d) ? d : (d.items ?? []))
             break
           }

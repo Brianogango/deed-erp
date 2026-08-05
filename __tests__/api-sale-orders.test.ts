@@ -98,19 +98,24 @@ beforeEach(() => {
 
 // ── GET /api/sale-orders ──────────────────────────────────────────────────────
 describe('GET /api/sale-orders', () => {
-  it('returns 200 with transformed orders array', async () => {
+  it('returns 200 with paginated transformed orders', async () => {
     mockPrismaSO.findMany.mockResolvedValue([dbOrder])
+    mockPrismaSO.count.mockResolvedValue(1)
     const res = await GET(getReq())
     expect(res.status).toBe(200)
     const body = await res.json()
-    expect(body).toHaveLength(1)
-    expect(body[0].id).toBe(ORDER_ID)
+    expect(body.items).toHaveLength(1)
+    expect(body.items[0].id).toBe(ORDER_ID)
+    expect(body.total).toBe(1)
+    expect(body.limit).toBe(50)
   })
 
   it('transforms response: adds ref, customerId, customerName, date, total, lines', async () => {
     mockPrismaSO.findMany.mockResolvedValue([dbOrder])
+    mockPrismaSO.count.mockResolvedValue(1)
     const res = await GET(getReq())
-    const [order] = await res.json()
+    const { items } = await res.json()
+    const [order] = items
     expect(order.ref).toBe('SO-00001')
     expect(order.customerId).toBe(CLIENT_ID)
     expect(order.customerName).toBe('Acme Ltd')
@@ -122,20 +127,23 @@ describe('GET /api/sale-orders', () => {
 
   it('formats date as YYYY-MM-DD string', async () => {
     mockPrismaSO.findMany.mockResolvedValue([dbOrder])
+    mockPrismaSO.count.mockResolvedValue(1)
     const res = await GET(getReq())
-    const [order] = await res.json()
+    const { items: [order] } = await res.json()
     expect(order.date).toMatch(/^\d{4}-\d{2}-\d{2}$/)
   })
 
-  it('returns empty array when no orders', async () => {
+  it('returns empty items when no orders', async () => {
     mockPrismaSO.findMany.mockResolvedValue([])
+    mockPrismaSO.count.mockResolvedValue(0)
     const res = await GET(getReq())
     expect(res.status).toBe(200)
-    expect(await res.json()).toEqual([])
+    expect(await res.json()).toMatchObject({ items: [], total: 0, totalPages: 0 })
   })
 
   it('filters by status query param', async () => {
     mockPrismaSO.findMany.mockResolvedValue([])
+    mockPrismaSO.count.mockResolvedValue(0)
     await GET(getReq('?status=pending'))
     expect(mockPrismaSO.findMany).toHaveBeenCalledWith(
       expect.objectContaining({ where: expect.objectContaining({ status: 'pending' }) })
@@ -144,9 +152,19 @@ describe('GET /api/sale-orders', () => {
 
   it('filters by search query param q', async () => {
     mockPrismaSO.findMany.mockResolvedValue([])
+    mockPrismaSO.count.mockResolvedValue(0)
     await GET(getReq('?q=ACME'))
     const callArg = mockPrismaSO.findMany.mock.calls[0][0]
     expect(callArg.where.OR).toBeDefined()
+  })
+
+  it('caps limit at 200', async () => {
+    mockPrismaSO.findMany.mockResolvedValue([])
+    mockPrismaSO.count.mockResolvedValue(0)
+    const res = await GET(getReq('?limit=999'))
+    const body = await res.json()
+    expect(body.limit).toBe(200)
+    expect(mockPrismaSO.findMany).toHaveBeenCalledWith(expect.objectContaining({ take: 200 }))
   })
 
   it('returns 401 when unauthenticated', async () => {
@@ -235,9 +253,10 @@ describe('sale-order status normalization (Odoo vocabulary)', () => {
       { ...dbOrder, id: 'a4', status: 'quotation_sent' },
       { ...dbOrder, id: 'a5', status: 'cancelled' },
     ])
+    mockPrismaSO.count.mockResolvedValue(6)
     const res = await GET(getReq())
     const body = await res.json()
-    expect(body.map((o: any) => o.status)).toEqual([
+    expect(body.items.map((o: any) => o.status)).toEqual([
       'quotation', 'sale', 'sale', 'sale', 'quotation_sent', 'cancelled',
     ])
   })

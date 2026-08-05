@@ -3,6 +3,7 @@ import { getServerSession } from '@/lib/auth/server'
 import { loadAppState, saveStoreKeys } from '@/lib/server-store'
 import { getNextRepairRef } from '@/lib/repair-ref-counter'
 import type { RepairOrder } from '@/lib/store'
+import { parsePaginationParams, paginateArray } from '@/lib/api-pagination'
 
 function publicPhotoUrl(ref: string, index: number) {
   return `/api/portal/repair/${encodeURIComponent(ref)}/photos/${index}`
@@ -23,7 +24,7 @@ function stripInlinePhotoPayloads(repair: RepairOrder): RepairOrder {
 
 /**
  * GET /api/repairs
- * Retrieve all repairs with optional filtering by status or search query.
+ * Paginated repair list (blob SoT). Defaults: page=1, limit=50 (max 200).
  */
 export async function GET(request: NextRequest) {
   const session = await getServerSession()
@@ -35,9 +36,12 @@ export async function GET(request: NextRequest) {
     const state = await loadAppState()
     let repairs = Array.isArray(state['deed_repairs_v2']) ? state['deed_repairs_v2'] as RepairOrder[] : []
 
-    // Apply filters
     const status = request.nextUrl.searchParams.get('status')
     const q = request.nextUrl.searchParams.get('q')?.toLowerCase()
+    const { page, limit, sort, order } = parsePaginationParams(request.nextUrl.searchParams, {
+      defaultSort: 'intakeDate',
+      allowedSorts: ['intakeDate', 'createdDate', 'ref', 'status', 'customerName'],
+    })
 
     if (status) {
       repairs = repairs.filter(r => r.status === status)
@@ -50,16 +54,21 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    // Newest intake first so clients hydrate in a stable, expected order.
+    const sortKey = (sort ?? 'intakeDate') as keyof RepairOrder
     repairs = [...repairs].sort((a, b) => {
-      const aKey = String(a.intakeDate || a.createdDate || '')
-      const bKey = String(b.intakeDate || b.createdDate || '')
-      const byDate = bKey.localeCompare(aKey)
-      if (byDate !== 0) return byDate
+      if (sortKey === 'ref') {
+        const cmp = String(a.ref || '').localeCompare(String(b.ref || ''), undefined, { numeric: true })
+        return order === 'asc' ? cmp : -cmp
+      }
+      const aKey = String((a as any)[sortKey] || a.intakeDate || a.createdDate || '')
+      const bKey = String((b as any)[sortKey] || b.intakeDate || b.createdDate || '')
+      const byField = aKey.localeCompare(bKey)
+      if (byField !== 0) return order === 'asc' ? byField : -byField
       return String(b.ref || '').localeCompare(String(a.ref || ''), undefined, { numeric: true })
     })
 
-    return NextResponse.json(repairs.map(stripInlinePhotoPayloads), { status: 200 })
+    const pagePayload = paginateArray(repairs.map(stripInlinePhotoPayloads), page, limit)
+    return NextResponse.json(pagePayload, { status: 200 })
   } catch (err) {
     console.error('[repairs GET] Error:', err)
     return NextResponse.json({ error: 'Failed to fetch repairs' }, { status: 500 })
