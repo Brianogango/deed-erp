@@ -4,6 +4,7 @@ import path from 'path'
 import { mkdir, writeFile } from 'fs/promises'
 import { getServerSession } from '@/lib/auth/server'
 import { loadAppState, saveStoreKeys } from '@/lib/server-store'
+import { validateFileContent, logRejectedUpload } from '@/lib/file-validation'
 
 type QcReportMeta = {
   id: string
@@ -55,7 +56,7 @@ export async function POST(req: NextRequest, { params }: { params: { repairRef: 
   if (file.size <= 0) return NextResponse.json({ error: 'QC report file is empty' }, { status: 400 })
   if (file.size > MAX_QC_REPORT_BYTES) return NextResponse.json({ error: 'QC report must be 10 MB or smaller' }, { status: 413 })
 
-  const contentType = file.type || 'application/octet-stream'
+  const contentType = (file.type || 'application/octet-stream').toLowerCase()
   if (!ALLOWED_TYPES.has(contentType)) {
     return NextResponse.json({ error: 'Unsupported QC report type. Upload PDF, Word, Excel, CSV, JPG, PNG, or WebP.' }, { status: 415 })
   }
@@ -70,6 +71,18 @@ export async function POST(req: NextRequest, { params }: { params: { repairRef: 
     await mkdir(dir, { recursive: true })
     const storagePath = path.join(dir, `${id}${ext || ''}`)
     const buffer = Buffer.from(await file.arrayBuffer())
+    const contentCheck = validateFileContent(buffer, contentType)
+    if (!contentCheck.ok) {
+      logRejectedUpload({
+        route: 'repair-qc-reports',
+        declaredType: contentType,
+        fileName: originalName,
+        size: file.size,
+        reason: contentCheck.error,
+        userId: session.user.id,
+      })
+      return NextResponse.json({ error: contentCheck.error }, { status: 415 })
+    }
     await writeFile(storagePath, buffer)
 
     const key = stateKey(ref)
