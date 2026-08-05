@@ -14,6 +14,7 @@ import {
 import { enforceSaleOrderApprovals } from '@/lib/sales-approval-enforcement.server'
 import { lockVersionMismatch, nextLockVersion, readExpectedVersion } from '@/lib/optimistic-lock'
 import { writeFinancialAudit } from '@/lib/finance-audit'
+import { checkFiscalLock } from '@/lib/fiscal-lock.server'
 
 async function broadcastSaleOrders() {
   try {
@@ -268,6 +269,11 @@ async function enforceSaleWorkflow(
     }
     // Stamp transitions server-side when the client did not.
     if (to === 'sale') {
+      const confirmDate = data.orderDate ?? existing.orderDate ?? new Date()
+      const lock = await checkFiscalLock(confirmDate)
+      if (!lock.ok) {
+        return NextResponse.json({ error: lock.error }, { status: lock.status })
+      }
       if (data.confirmedAt === undefined) data.confirmedAt = new Date()
       if (data.confirmedById === undefined) data.confirmedById = session.user.id
     }

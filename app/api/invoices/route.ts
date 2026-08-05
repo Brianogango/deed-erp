@@ -6,6 +6,7 @@ import { isUUID } from '@/lib/utils'
 import { computeInvoiceTotals, clampAmountPaid, computeInvoiceLineMoney } from '@/lib/finance-invoice'
 import { writeFinancialAudit } from '@/lib/finance-audit'
 import { getNextDocNumber } from '@/lib/doc-ref-counter'
+import { checkFiscalLock } from '@/lib/fiscal-lock.server'
 
 // technical_lead: repair quotes create/update their linked invoice (see recordRepairBilling).
 const WRITE_ROLES = ['director', 'finance_officer', 'admin_officer', 'technical_lead']
@@ -137,6 +138,12 @@ export async function POST(request: Request) {
     }
 
     const clientId = await resolveClientId(prisma, body.clientId ?? body.partnerId, body)
+
+    const invoiceDate = body.invoiceDate ?? body.date ?? new Date().toISOString().slice(0, 10)
+    const lock = await checkFiscalLock(invoiceDate)
+    if (!lock.ok) {
+      return NextResponse.json({ error: lock.error }, { status: lock.status })
+    }
 
     let invoiceNumber = body.invoiceNumber ?? body.ref
     if (!invoiceNumber) {

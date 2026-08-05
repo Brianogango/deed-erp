@@ -5,6 +5,7 @@ import { writeFinancialAudit } from '@/lib/finance-audit'
 import { recordPaymentWithAllocations } from '@/lib/accounting/payment-allocations'
 import { makeCollectionHandlers } from '@/lib/server-store-crud'
 import type { Payment } from '@/lib/store'
+import { checkFiscalLock } from '@/lib/fiscal-lock.server'
 
 const blobConfig = {
   storeKey: 'deed_payments',
@@ -29,6 +30,12 @@ export async function POST(request: NextRequest) {
     const actor = await requireRole(['director', 'finance_officer', 'admin_officer'])
     const body = await request.json().catch(() => ({}))
 
+    const paidAt = body.paidAt ? new Date(String(body.paidAt)) : (body.date ? new Date(String(body.date)) : new Date())
+    const lock = await checkFiscalLock(paidAt)
+    if (!lock.ok) {
+      return NextResponse.json({ error: lock.error }, { status: lock.status })
+    }
+
     const allocations = Array.isArray(body.allocations)
       ? body.allocations.map((a: { invoiceId?: string; amount?: number }) => ({
           invoiceId: String(a.invoiceId || ''),
@@ -52,7 +59,6 @@ export async function POST(request: NextRequest) {
 
     const paymentMethod = String(body.paymentMethod || body.method || 'cash')
     const reference = body.reference ? String(body.reference) : null
-    const paidAt = body.paidAt ? new Date(String(body.paidAt)) : new Date()
     const notes = body.notes ? String(body.notes) : null
     const mpesaPhone = body.mpesaPhone ? String(body.mpesaPhone) : null
     const idempotencyKey = typeof body.idempotencyKey === 'string' ? body.idempotencyKey : undefined

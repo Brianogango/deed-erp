@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from '@/lib/auth/server'
 import { isRoleAllowed } from '@/lib/auth/authorization'
 import { sql } from '@/lib/auth/db'
+import prisma from '@/lib/prisma'
 import { uncertifiedProtectedKeys } from '@/lib/blob-cutover'
 import { listCutoverCertificates } from '@/lib/blob-cutover.server'
 
@@ -34,6 +35,46 @@ async function writeAdminAuditLog(req: NextRequest, session: Awaited<ReturnType<
   } catch (err) {
     console.error('[admin-audit] logging failed:', err)
   }
+}
+
+/**
+ * Wipe structured Prisma tables using correct @@map names (ARCH-001).
+ * Children are cleared before parents. Returns the list of cleared model labels.
+ */
+export async function clearStructuredErpTables(): Promise<string[]> {
+  const cleared: string[] = []
+
+  // Order matters for FK constraints — leaf tables first.
+  const steps: Array<{ label: string; run: () => Promise<unknown> }> = [
+    { label: 'payment_allocations', run: () => prisma.paymentAllocation.deleteMany() },
+    { label: 'payments', run: () => prisma.payment.deleteMany() },
+    { label: 'invoice_items', run: () => prisma.invoiceItem.deleteMany() },
+    { label: 'invoices', run: () => prisma.invoice.deleteMany() },
+    { label: 'sale_order_items', run: () => prisma.saleOrderItem.deleteMany() },
+    { label: 'sale_orders', run: () => prisma.saleOrder.deleteMany() },
+    { label: 'purchase_order_items', run: () => prisma.purchaseOrderItem.deleteMany() },
+    { label: 'purchase_orders', run: () => prisma.purchaseOrder.deleteMany() },
+    { label: 'repair_parts', run: () => prisma.repairPart.deleteMany() },
+    { label: 'repair_stages', run: () => prisma.repairStage.deleteMany() },
+    { label: 'repair_diagnostics', run: () => prisma.repairDiagnostic.deleteMany() },
+    { label: 'repair_client_communications', run: () => prisma.repairClientCommunication.deleteMany() },
+    { label: 'repairs', run: () => prisma.repair.deleteMany() },
+    { label: 'serial_numbers', run: () => prisma.serialNumber.deleteMany() },
+    { label: 'kilimall_order_items', run: () => prisma.kilimallOrderItem.deleteMany() },
+    { label: 'kilimall_orders', run: () => prisma.kilimallOrder.deleteMany() },
+    { label: 'employees', run: () => prisma.employee.deleteMany() },
+    { label: 'clients', run: () => prisma.client.deleteMany() },
+    { label: 'product_images', run: () => prisma.productImage.deleteMany() },
+    { label: 'products', run: () => prisma.product.deleteMany() },
+    { label: 'company_settings', run: () => prisma.companySetting.deleteMany() },
+  ]
+
+  for (const step of steps) {
+    await step.run()
+    cleared.push(step.label)
+  }
+
+  return cleared
 }
 
 export async function POST(req: NextRequest) {
@@ -90,27 +131,16 @@ export async function POST(req: NextRequest) {
       uncertifiedAtStart: uncertified,
     })
 
-    // Clear app_state (all ERP localStorage-synced data)
+    // Clear app_state (all ERP localStorage-synced / blob dual-write data)
     await sql`DELETE FROM app_state`
 
-    // Clear all structured Prisma tables in dependency order (children first)
-    await sql`DELETE FROM invoice_lines`
-    await sql`DELETE FROM invoices`
-    await sql`DELETE FROM sale_order_lines`
-    await sql`DELETE FROM sale_orders`
-    await sql`DELETE FROM po_lines`
-    await sql`DELETE FROM purchase_orders`
-    await sql`DELETE FROM repair_orders`
-    await sql`DELETE FROM serials`
-    await sql`DELETE FROM warranties`
-    await sql`DELETE FROM kilimall_orders`
-    await sql`DELETE FROM employees`
-    await sql`DELETE FROM contacts`
-    await sql`DELETE FROM products`
-    await sql`DELETE FROM app_settings`
+    const clearedTables = await clearStructuredErpTables()
 
-    await writeAdminAuditLog(req, session, 'reset_all_data_completed', { ok: true })
-    return NextResponse.json({ ok: true })
+    await writeAdminAuditLog(req, session, 'reset_all_data_completed', {
+      ok: true,
+      clearedTables,
+    })
+    return NextResponse.json({ ok: true, clearedTables })
   } catch (err) {
     console.error('[reset] error:', err)
     await writeAdminAuditLog(req, session, 'reset_all_data_failed', { error: String(err) })
