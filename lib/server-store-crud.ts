@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from './auth/server'
 import { isRoleAllowed } from './auth/authorization'
 import { loadAppState, saveStoreKeys } from './server-store'
+import { parsePaginationParams, paginateArray } from './api-pagination'
 
 type AnyRecord = Record<string, unknown>
 
@@ -78,20 +79,30 @@ export function makeListHandler<T extends object>(config: CrudConfig<T>) {
       }
     }
 
-    const page = parseInt(searchParams.get('page') ?? '1', 10)
-    const limit = Math.min(parseInt(searchParams.get('limit') ?? '200', 10), 500)
-    const total = items.length
-    const paginated = items.slice((page - 1) * limit, page * limit)
+    const { page, limit, sort, order } = parsePaginationParams(searchParams)
+    if (sort) {
+      items = [...items].sort((a, b) => {
+        const av = (a as AnyRecord)[sort]
+        const bv = (b as AnyRecord)[sort]
+        const as = av == null ? '' : String(av)
+        const bs = bv == null ? '' : String(bv)
+        const cmp = as.localeCompare(bs, undefined, { numeric: true, sensitivity: 'base' })
+        return order === 'asc' ? cmp : -cmp
+      })
+    }
+    const pagePayload = paginateArray(
+      config.redact
+        ? items.map(item => {
+            const copy = { ...item }
+            config.redact!.forEach(k => delete (copy as AnyRecord)[k as string])
+            return copy
+          })
+        : items,
+      page,
+      limit,
+    )
 
-    const result = config.redact
-      ? paginated.map(item => {
-          const copy = { ...item }
-          config.redact!.forEach(k => delete (copy as AnyRecord)[k as string])
-          return copy
-        })
-      : paginated
-
-    return NextResponse.json({ items: result, total, page, limit })
+    return NextResponse.json(pagePayload)
   }
 }
 

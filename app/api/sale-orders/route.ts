@@ -8,6 +8,7 @@ import { getNextDocNumber } from '@/lib/doc-ref-counter'
 import { normalizeSaleStatus } from '@/lib/odoo-sales-flow'
 import { enforceSaleOrderApprovals } from '@/lib/sales-approval-enforcement.server'
 import { lockVersionMismatch, nextLockVersion, readExpectedVersion } from '@/lib/optimistic-lock'
+import { parsePaginationParams, paginatedResponse } from '@/lib/api-pagination'
 
 async function broadcastSaleOrders() {
   try {
@@ -83,25 +84,40 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url)
     const status = searchParams.get('status')
     const q = searchParams.get('q')
-
-    const orders = await prisma.saleOrder.findMany({
-      where: {
-        ...(status ? { status } : {}),
-        ...(q ? {
-          OR: [
-            { orderNumber: { contains: q, mode: 'insensitive' } },
-            { client: { name: { contains: q, mode: 'insensitive' } } }
-          ]
-        } : {})
-      },
-      include: {
-        client: true,
-        items: true,
-      },
-      orderBy: { createdAt: 'desc' },
+    const { page, limit, skip, sort, order } = parsePaginationParams(searchParams, {
+      defaultSort: 'createdAt',
+      allowedSorts: ['createdAt', 'updatedAt', 'orderDate', 'totalAmount', 'orderNumber', 'status'],
     })
 
-    return NextResponse.json(orders.map(mapSaleOrderToClient))
+    const where = {
+      ...(status ? { status } : {}),
+      ...(q
+        ? {
+            OR: [
+              { orderNumber: { contains: q, mode: 'insensitive' as const } },
+              { client: { name: { contains: q, mode: 'insensitive' as const } } },
+            ],
+          }
+        : {}),
+    }
+
+    const [total, orders] = await Promise.all([
+      prisma.saleOrder.count({ where }),
+      prisma.saleOrder.findMany({
+        where,
+        include: {
+          client: true,
+          items: true,
+        },
+        orderBy: { [sort ?? 'createdAt']: order },
+        skip,
+        take: limit,
+      }),
+    ])
+
+    return NextResponse.json(
+      paginatedResponse(orders.map(mapSaleOrderToClient), total, page, limit),
+    )
   })
 }
 

@@ -59,6 +59,10 @@ vi.mock('@/lib/legacy-compat', () => ({
   },
 }))
 
+vi.mock('@/lib/fiscal-lock.server', () => ({
+  checkFiscalLock: vi.fn().mockResolvedValue({ ok: true }),
+}))
+
 // ── Imports (after mocks) ─────────────────────────────────────────────────────
 import { GET, POST } from '@/app/api/invoices/route'
 import { GET as GET_ONE, PUT, DELETE } from '@/app/api/invoices/[id]/route'
@@ -117,25 +121,30 @@ beforeEach(() => {
 
 // ── GET /api/invoices ─────────────────────────────────────────────────────────
 describe('GET /api/invoices', () => {
-  it('returns 200 with all invoices', async () => {
+  it('returns 200 with paginated invoices', async () => {
     mockPrismaInvoice.findMany.mockResolvedValue([baseInvoice])
-    const res = await GET()
+    mockPrismaInvoice.count.mockResolvedValue(1)
+    const res = await GET(new Request('http://localhost/api/invoices'))
     expect(res.status).toBe(200)
     const body = await res.json()
-    expect(body).toHaveLength(1)
-    expect(body[0].id).toBe(INVOICE_ID)
+    expect(body.items).toHaveLength(1)
+    expect(body.items[0].id).toBe(INVOICE_ID)
+    expect(body.total).toBe(1)
+    expect(body.page).toBe(1)
+    expect(body.limit).toBe(50)
   })
 
-  it('returns empty array when no invoices', async () => {
+  it('returns empty items when no invoices', async () => {
     mockPrismaInvoice.findMany.mockResolvedValue([])
-    const res = await GET()
+    mockPrismaInvoice.count.mockResolvedValue(0)
+    const res = await GET(new Request('http://localhost/api/invoices'))
     expect(res.status).toBe(200)
-    expect(await res.json()).toEqual([])
+    expect(await res.json()).toMatchObject({ items: [], total: 0, totalPages: 0 })
   })
 
   it('returns 401 when unauthenticated', async () => {
     mockGetSession.mockRejectedValue(err401())
-    const res = await GET()
+    const res = await GET(new Request('http://localhost/api/invoices'))
     expect(res.status).toBe(401)
   })
 })

@@ -7,6 +7,7 @@ import { computeInvoiceTotals, clampAmountPaid, computeInvoiceLineMoney } from '
 import { writeFinancialAudit } from '@/lib/finance-audit'
 import { getNextDocNumber } from '@/lib/doc-ref-counter'
 import { checkFiscalLock } from '@/lib/fiscal-lock.server'
+import { parsePaginationParams, paginatedResponse } from '@/lib/api-pagination'
 
 // technical_lead: repair quotes create/update their linked invoice (see recordRepairBilling).
 const WRITE_ROLES = ['director', 'finance_officer', 'admin_officer', 'technical_lead']
@@ -112,14 +113,43 @@ function mapInvoiceItems(lines: any[]) {
   })
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   return withApiErrorHandling(async () => {
     await getRequiredSession()
-    const invoices = await prisma.invoice.findMany({
-      include: { items: true },
-      orderBy: { invoiceDate: 'desc' },
+    const { searchParams } = new URL(request.url)
+    const status = searchParams.get('status')
+    const q = searchParams.get('q')?.trim()
+    const { page, limit, skip, sort, order } = parsePaginationParams(searchParams, {
+      defaultSort: 'invoiceDate',
+      allowedSorts: ['invoiceDate', 'createdAt', 'updatedAt', 'totalAmount', 'invoiceNumber'],
     })
-    return NextResponse.json(invoices)
+
+    const where: Record<string, unknown> = {
+      ...(status ? { status: INVOICE_STATUS_MAP[status] ?? status } : {}),
+      ...(q
+        ? {
+            OR: [
+              { invoiceNumber: { contains: q, mode: 'insensitive' } },
+              { subject: { contains: q, mode: 'insensitive' } },
+              { notes: { contains: q, mode: 'insensitive' } },
+              { client: { name: { contains: q, mode: 'insensitive' } } },
+            ],
+          }
+        : {}),
+    }
+
+    const [total, invoices] = await Promise.all([
+      prisma.invoice.count({ where }),
+      prisma.invoice.findMany({
+        where,
+        include: { items: true },
+        orderBy: { [sort ?? 'invoiceDate']: order },
+        skip,
+        take: limit,
+      }),
+    ])
+
+    return NextResponse.json(paginatedResponse(invoices, total, page, limit))
   })
 }
 
