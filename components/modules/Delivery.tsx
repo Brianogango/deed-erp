@@ -17,7 +17,6 @@ import {
 } from '@/lib/delivery-job-fee'
 import {
   DELIVERY_JOB_TYPE_LABELS,
-  deliveryJobTypeUsesDocumentLink,
   isGeneralDeliveryJob,
 } from '@/lib/delivery-job-type'
 
