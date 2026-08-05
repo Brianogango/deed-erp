@@ -5,6 +5,7 @@ import { hashPassword, verifyPassword } from '@/lib/auth/password'
 import { findAuthUserByUsername, toPublicAuthUser, recordFailedLogin, clearFailedLogin, updateAuthUser } from '@/lib/auth/users-repository'
 import { loginRatelimit } from '@/lib/rate-limit'
 import { loginSchema, validate } from '@/lib/validation'
+import { publishSessionStatus } from '@/lib/auth/session-validity'
 
 const SECRET = process.env.NEXTAUTH_SECRET ?? process.env.AUTH_SECRET ?? ''
 const SESSION_AGE = 12 * 60 * 60 // 12 hours
@@ -77,6 +78,13 @@ export async function POST(request: NextRequest) {
 
   await clearFailedLogin(account.id)
   const user = toPublicAuthUser(account)
+
+  // Seed the validity cache so subsequent requests see a fresh active status.
+  void publishSessionStatus(account.id, {
+    isActive: true,
+    role: account.role,
+    invalidatedAt: Date.now(),
+  })
 
   const jwt = await encode({
     token: {

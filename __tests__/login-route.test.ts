@@ -20,6 +20,10 @@ vi.mock('@/lib/auth/password', () => ({
   hashPassword: vi.fn().mockResolvedValue('$2b$12$upgraded'),
 }))
 
+vi.mock('@/lib/auth/session-validity', () => ({
+  publishSessionStatus: vi.fn().mockResolvedValue(undefined),
+}))
+
 vi.mock('@/lib/auth/access', () => ({
   getFirstAllowedModule: vi.fn().mockReturnValue('dashboard'),
 }))

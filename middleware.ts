@@ -154,10 +154,26 @@ export async function middleware(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
+    // SEC-002: deny JWT sessions revoked via the shared validity cache.
+    // Cache miss fails open — getServerSession re-checks Postgres.
+    const userId = typeof token.id === 'string' ? token.id : (typeof token.sub === 'string' ? token.sub : '')
+    let requestHeaders: Headers | null = null
+    if (userId) {
+      const { evaluateSessionAccess } = await import('@/lib/auth/session-validity')
+      const access = await evaluateSessionAccess(userId, typeof token.role === 'string' ? token.role : null)
+      if (!access.allowed) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      }
+      if (access.effectiveRole) {
+        requestHeaders = new Headers(request.headers)
+        requestHeaders.set('x-deed-effective-role', access.effectiveRole)
+      }
+    }
+
     const { checkRateLimit } = await import('@/lib/rate-limit')
     const ip = getIP(request)
     const policy = rateLimitPolicy(pathname, request.method)
-    const userKey = typeof token.id === 'string' ? token.id : (typeof token.sub === 'string' ? token.sub : ip)
+    const userKey = userId || ip
     const key = `${policy.bucket}:${userKey}:${request.method}:${pathname}`
     const { success, remaining, resetAt } = await checkRateLimit(key, policy.limit, policy.windowSec)
 
@@ -172,11 +188,27 @@ export async function middleware(request: NextRequest) {
       })
     }
 
-    return withRateLimitHeaders(NextResponse.next(), remaining, resetAt)
+    const next = requestHeaders
+      ? NextResponse.next({ request: { headers: requestHeaders } })
+      : NextResponse.next()
+    return withRateLimitHeaders(next, remaining, resetAt)
   }
 
   // ── Page auth ─────────────────────────────────────────────────────────────
   const token = SECRET ? await getToken({ req: request, secret: SECRET, cookieName: COOKIE_NAME }) : null
+
+  if (token) {
+    const pageUserId = typeof token.id === 'string' ? token.id : (typeof token.sub === 'string' ? token.sub : '')
+    if (pageUserId) {
+      const { evaluateSessionAccess } = await import('@/lib/auth/session-validity')
+      const access = await evaluateSessionAccess(pageUserId, typeof token.role === 'string' ? token.role : null)
+      if (!access.allowed) {
+        const res = redirectTo('/login', request)
+        res.cookies.set(COOKIE_NAME, '', { httpOnly: true, path: '/', maxAge: 0 })
+        return res
+      }
+    }
+  }
 
   if (!token && !PUBLIC_PAGES.has(pathname)) {
     return redirectTo('/login', request)
