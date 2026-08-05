@@ -42,7 +42,8 @@ vi.mock('@/lib/prisma', () => ({
   },
 }))
 
-import { POST, clearStructuredErpTables } from '@/app/api/admin/reset/route'
+import { POST } from '@/app/api/admin/reset/route'
+import { clearStructuredErpTables } from '@/lib/admin/reset-tables'
 import prisma from '@/lib/prisma'
 
 beforeEach(() => {
