@@ -154,6 +154,64 @@ describe('diff-engine upgrade / additive', () => {
     expect(diff.removals).toHaveLength(2)
     expect(diff.installations).toHaveLength(2)
   })
+
+  it('supports RAM-only downgrade without touching SSD', () => {
+    const installed = [ram('i1', 16, 1), ssd('i2', 512)]
+    const diff = calculateConfigurationDiff({
+      installed,
+      current: { totalRamGb: 16, primaryStorageGb: 512, ramComposition: [], displayName: '' },
+      target: {
+        changeScope: 'ram',
+        totalRamGb: 8,
+        primaryStorageGb: 256, // intentionally different — must be ignored
+        ramProductId: 'prod-ram-8',
+        storageProductId: 'prod-ssd-256',
+      },
+    })
+    expect(diff.removals).toHaveLength(1)
+    expect(diff.removals[0].installationId).toBe('i1')
+    expect(diff.installations).toHaveLength(1)
+    expect(diff.installations[0].category).toBe('ram')
+    expect(diff.proposed.primaryStorageGb).toBe(512)
+    expect(diff.proposed.totalRamGb).toBe(8)
+  })
+
+  it('supports storage-only upgrade without touching RAM', () => {
+    const installed = [ram('i1', 8, 1), ssd('i2', 256)]
+    const diff = calculateConfigurationDiff({
+      installed,
+      current: { totalRamGb: 8, primaryStorageGb: 256, ramComposition: [], displayName: '' },
+      target: {
+        changeScope: 'storage',
+        totalRamGb: 32, // intentionally different — must be ignored
+        primaryStorageGb: 512,
+        ramProductId: 'prod-ram-32',
+        storageProductId: 'prod-ssd-512',
+      },
+    })
+    expect(diff.removals).toHaveLength(1)
+    expect(diff.removals[0].installationId).toBe('i2')
+    expect(diff.installations).toHaveLength(1)
+    expect(diff.installations[0].category).toBe('storage')
+    expect(diff.proposed.totalRamGb).toBe(8)
+    expect(diff.proposed.primaryStorageGb).toBe(512)
+  })
+
+  it('errors when scoped change has no actual delta', () => {
+    const installed = [ram('i1', 16, 1), ssd('i2', 512)]
+    const diff = calculateConfigurationDiff({
+      installed,
+      current: { totalRamGb: 16, primaryStorageGb: 512, ramComposition: [], displayName: '' },
+      target: {
+        changeScope: 'ram',
+        totalRamGb: 16,
+        primaryStorageGb: 512,
+      },
+    })
+    expect(diff.removals).toHaveLength(0)
+    expect(diff.installations).toHaveLength(0)
+    expect(diff.issues.some(i => i.code === 'no_component_changes')).toBe(true)
+  })
 })
 
 describe('compatibility', () => {

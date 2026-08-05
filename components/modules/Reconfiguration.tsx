@@ -56,6 +56,7 @@ export default function Reconfiguration() {
 
   const [wizSerialId, setWizSerialId] = useState('')
   const [wizType, setWizType] = useState<ReconfigTransactionType>('downgrade_for_sale')
+  const [wizScope, setWizScope] = useState<'ram' | 'storage' | 'both'>('both')
   const [wizReason, setWizReason] = useState('')
   const [wizRam, setWizRam] = useState(8)
   const [wizStorage, setWizStorage] = useState(256)
@@ -149,12 +150,17 @@ export default function Reconfiguration() {
           transactionType: wizType,
           reason: wizReason,
           target: {
-            totalRamGb: wizRam,
-            primaryStorageGb: wizStorage,
+            changeScope: wizScope,
+            totalRamGb: wizScope === 'storage'
+              ? (deviceConfig?.current?.totalRamGb ?? wizRam)
+              : wizRam,
+            primaryStorageGb: wizScope === 'ram'
+              ? (deviceConfig?.current?.primaryStorageGb ?? wizStorage)
+              : wizStorage,
             storageType: 'SSD',
-            ramProductId: wizRamProductId || undefined,
-            storageProductId: wizStorageProductId || undefined,
-            additiveRam: wizAdditive,
+            ramProductId: wizScope === 'storage' ? undefined : (wizRamProductId || undefined),
+            storageProductId: wizScope === 'ram' ? undefined : (wizStorageProductId || undefined),
+            additiveRam: wizScope === 'storage' ? false : wizAdditive,
           },
         }),
       })
@@ -347,46 +353,84 @@ export default function Reconfiguration() {
             </select>
           </label>
 
+          <fieldset className="block">
+            <legend className="text-sm text-[var(--text-2)]">Change scope</legend>
+            <div className="mt-2 flex flex-wrap gap-3 text-sm">
+              {([
+                ['ram', 'RAM only'],
+                ['storage', 'SSD / storage only'],
+                ['both', 'RAM and storage'],
+              ] as const).map(([value, label]) => (
+                <label key={value} className="inline-flex items-center gap-2">
+                  <input
+                    type="radio"
+                    name="changeScope"
+                    checked={wizScope === value}
+                    onChange={() => setWizScope(value)}
+                  />
+                  {label}
+                </label>
+              ))}
+            </div>
+            <p className="text-xs text-[var(--text-3)] mt-1">
+              {wizScope === 'ram'
+                ? 'Storage stays as-is. Only RAM removal/install movements are created.'
+                : wizScope === 'storage'
+                  ? 'RAM stays as-is. Only storage removal/install movements are created.'
+                  : 'Either or both components may change in this work order.'}
+            </p>
+          </fieldset>
+
           <label className="block">
             <span className="text-sm text-[var(--text-2)]">Reason</span>
             <textarea className="form-input w-full mt-1" rows={2} value={wizReason} onChange={e => setWizReason(e.target.value)} />
           </label>
 
           <div className="grid grid-cols-2 gap-3">
-            <label className="block">
-              <span className="text-sm text-[var(--text-2)]">Target RAM (GB)</span>
-              <input type="number" className="form-input w-full mt-1" value={wizRam} onChange={e => setWizRam(Number(e.target.value))} />
-            </label>
-            <label className="block">
-              <span className="text-sm text-[var(--text-2)]">Target storage (GB)</span>
-              <input type="number" className="form-input w-full mt-1" value={wizStorage} onChange={e => setWizStorage(Number(e.target.value))} />
-            </label>
+            {(wizScope === 'ram' || wizScope === 'both') && (
+              <label className="block">
+                <span className="text-sm text-[var(--text-2)]">Target RAM (GB)</span>
+                <input type="number" className="form-input w-full mt-1" value={wizRam} onChange={e => setWizRam(Number(e.target.value))} />
+              </label>
+            )}
+            {(wizScope === 'storage' || wizScope === 'both') && (
+              <label className="block">
+                <span className="text-sm text-[var(--text-2)]">Target storage (GB)</span>
+                <input type="number" className="form-input w-full mt-1" value={wizStorage} onChange={e => setWizStorage(Number(e.target.value))} />
+              </label>
+            )}
           </div>
 
-          <label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" checked={wizAdditive} onChange={e => setWizAdditive(e.target.checked)} />
-            Additive RAM upgrade (keep existing modules)
-          </label>
+          {(wizScope === 'ram' || wizScope === 'both') && (
+            <label className="flex items-center gap-2 text-sm">
+              <input type="checkbox" checked={wizAdditive} onChange={e => setWizAdditive(e.target.checked)} />
+              Additive RAM upgrade (keep existing modules)
+            </label>
+          )}
 
-          <label className="block">
-            <span className="text-sm text-[var(--text-2)]">RAM component product</span>
-            <select className="form-select w-full mt-1" value={wizRamProductId} onChange={e => setWizRamProductId(e.target.value)}>
-              <option value="">Select…</option>
-              {partProducts.map((p: any) => (
-                <option key={p.id} value={p.id}>{p.name} ({p.sku})</option>
-              ))}
-            </select>
-          </label>
+          {(wizScope === 'ram' || wizScope === 'both') && (
+            <label className="block">
+              <span className="text-sm text-[var(--text-2)]">RAM component product</span>
+              <select className="form-select w-full mt-1" value={wizRamProductId} onChange={e => setWizRamProductId(e.target.value)}>
+                <option value="">Select…</option>
+                {partProducts.map((p: any) => (
+                  <option key={p.id} value={p.id}>{p.name} ({p.sku})</option>
+                ))}
+              </select>
+            </label>
+          )}
 
-          <label className="block">
-            <span className="text-sm text-[var(--text-2)]">Storage component product</span>
-            <select className="form-select w-full mt-1" value={wizStorageProductId} onChange={e => setWizStorageProductId(e.target.value)}>
-              <option value="">Select…</option>
-              {partProducts.map((p: any) => (
-                <option key={p.id} value={p.id}>{p.name} ({p.sku})</option>
-              ))}
-            </select>
-          </label>
+          {(wizScope === 'storage' || wizScope === 'both') && (
+            <label className="block">
+              <span className="text-sm text-[var(--text-2)]">Storage component product</span>
+              <select className="form-select w-full mt-1" value={wizStorageProductId} onChange={e => setWizStorageProductId(e.target.value)}>
+                <option value="">Select…</option>
+                {partProducts.map((p: any) => (
+                  <option key={p.id} value={p.id}>{p.name} ({p.sku})</option>
+                ))}
+              </select>
+            </label>
+          )}
 
           <button
             type="button"

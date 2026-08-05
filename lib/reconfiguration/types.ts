@@ -163,6 +163,13 @@ export interface InstalledComponentView {
 }
 
 export interface TargetConfigInput {
+  /**
+   * Which components this work order may change.
+   * - `ram` — leave storage unchanged
+   * - `storage` — leave RAM unchanged
+   * - `both` — allow either or both (default)
+   */
+  changeScope?: 'ram' | 'storage' | 'both'
   totalRamGb: number
   primaryStorageGb: number
   secondaryStorageGb?: number | null

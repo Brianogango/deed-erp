@@ -423,6 +423,11 @@ async function applyTargetToWorkOrder(workOrderId: string, target: TargetConfigI
     issuesFromDiff: diff.issues,
   })
 
+  if (hasBlockingCompatibilityIssues(compat)) {
+    const blocking = compat.filter(i => i.severity === 'error' && !i.overridable)
+    throw httpError(blocking.map(i => i.message).join(' ') || 'Configuration change is not possible', 422)
+  }
+
   // Replace lines
   await prisma.reconfigurationRemovalLine.deleteMany({ where: { workOrderId } })
   await prisma.reconfigurationInstallationLine.deleteMany({ where: { workOrderId } })

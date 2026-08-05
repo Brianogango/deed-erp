@@ -8,6 +8,7 @@ import {
 } from './types'
 
 export const targetConfigSchema = z.object({
+  changeScope: z.enum(['ram', 'storage', 'both']).optional(),
   totalRamGb: z.number().int().min(0),
   primaryStorageGb: z.number().int().min(0),
   secondaryStorageGb: z.number().int().min(0).nullable().optional(),

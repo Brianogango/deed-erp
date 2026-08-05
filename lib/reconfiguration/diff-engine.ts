@@ -54,14 +54,22 @@ export function calculateConfigurationDiff(params: {
   const installations: DiffResult['installations'] = []
   const removalIds = new Set<string>()
 
+  const scope = params.target.changeScope || 'both'
+  const changeRam = scope === 'ram' || scope === 'both'
+  const changeStorage = scope === 'storage' || scope === 'both'
+
   const ramModules = installed
     .filter(i => i.category === 'ram' || i.slotType === 'ram_slot')
     .sort((a, b) => a.slotNumber - b.slotNumber)
   const currentRam = sumRam(installed) || Number(params.current.totalRamGb) || 0
-  const targetRam = Math.max(0, Math.floor(Number(params.target.totalRamGb) || 0))
+  // RAM-only / storage-only: freeze the out-of-scope target to the current value
+  // so callers can still send both fields without accidentally swapping the other.
+  const targetRam = changeRam
+    ? Math.max(0, Math.floor(Number(params.target.totalRamGb) || 0))
+    : currentRam
 
   // ── RAM ────────────────────────────────────────────────────────────────────
-  if (targetRam < currentRam) {
+  if (changeRam && targetRam < currentRam) {
     // Downgrade: remove removable modules until we can meet target, then install if needed
     const removable = ramModules.filter(m => m.removable)
     const soldered = ramModules.filter(m => !m.removable)
@@ -123,7 +131,7 @@ export function calculateConfigurationDiff(params: {
         })
       }
     }
-  } else if (targetRam > currentRam) {
+  } else if (changeRam && targetRam > currentRam) {
     const delta = targetRam - currentRam
     if (params.target.additiveRam) {
       installations.push({
@@ -182,9 +190,11 @@ export function calculateConfigurationDiff(params: {
   const currentDrive = primaryStorage(installed)
   const currentStorage =
     Number(currentDrive?.capacityGb) || Number(params.current.primaryStorageGb) || 0
-  const targetStorage = Math.max(0, Math.floor(Number(params.target.primaryStorageGb) || 0))
+  const targetStorage = changeStorage
+    ? Math.max(0, Math.floor(Number(params.target.primaryStorageGb) || 0))
+    : currentStorage
 
-  if (targetStorage > 0 && targetStorage !== currentStorage) {
+  if (changeStorage && targetStorage > 0 && targetStorage !== currentStorage) {
     if (currentDrive) {
       if (!currentDrive.removable) {
         issues.push({
@@ -242,6 +252,20 @@ export function calculateConfigurationDiff(params: {
     }
   }
 
+  if (removals.length === 0 && installations.length === 0) {
+    issues.push({
+      code: 'no_component_changes',
+      severity: 'error',
+      message:
+        scope === 'ram'
+          ? 'RAM-only scope selected but target RAM matches the current configuration.'
+          : scope === 'storage'
+            ? 'Storage-only scope selected but target storage matches the current configuration.'
+            : 'Target configuration matches the current device — nothing to reconfigure.',
+      overridable: false,
+    })
+  }
+
   const remainingRamModules = installed.filter(
     i => (i.category === 'ram' || i.slotType === 'ram_slot') && !removalIds.has(i.id),
   )
@@ -278,7 +302,9 @@ export function calculateConfigurationDiff(params: {
     ramComposition: proposedRamComposition,
     primaryStorageGb: targetStorage || params.current.primaryStorageGb || null,
     secondaryStorageGb: params.target.secondaryStorageGb ?? params.current.secondaryStorageGb ?? null,
-    storageType: params.target.storageType ?? params.current.storageType ?? 'SSD',
+    storageType: changeStorage
+      ? (params.target.storageType ?? params.current.storageType ?? 'SSD')
+      : (params.current.storageType ?? 'SSD'),
     screenSize: params.current.screenSize ?? null,
     screenResolution: params.current.screenResolution ?? null,
     touchscreen: params.current.touchscreen ?? null,
