@@ -100,4 +100,47 @@ describe('mergeProductsStoreWrite', () => {
     expect(merged.find(p => p.id === 'a')!.name).toBe('Kept A updated')
     expect(merged.find(p => p.id === 'c')!.name).toBe('New Catalog Product')
   })
+
+  it('preserves client order so catalogue search does not reshuffle on sync', async () => {
+    const { mergeProductsStoreWrite } = await import('@/lib/catalog-merge')
+    const current = [
+      { id: 'asus-1', name: 'ASUS 1', stockQty: 1 },
+      { id: 'asus-2', name: 'ASUS 2', stockQty: 2 },
+      { id: 'other', name: 'Other', stockQty: 3 },
+    ]
+    const incoming = [
+      { id: 'other', name: 'Other', stockQty: 9 },
+      { id: 'asus-2', name: 'ASUS 2', stockQty: 8 },
+      { id: 'asus-1', name: 'ASUS 1', stockQty: 7 },
+      { id: 'new', name: 'New', stockQty: 1 },
+    ]
+    const merged = mergeProductsStoreWrite(current, incoming) as any[]
+    expect(merged.map(p => p.id)).toEqual(['asus-1', 'asus-2', 'other', 'new'])
+    expect(merged[0].stockQty).toBe(7)
+  })
+})
+
+describe('mergeProductsRemoteState', () => {
+  it('returns the same array reference when remote data is unchanged', async () => {
+    const { mergeProductsRemoteState } = await import('@/lib/catalog-merge')
+    const local = [{ id: 'a', name: 'A', stockQty: 1 }]
+    const next = mergeProductsRemoteState(local, [{ id: 'a', name: 'A', stockQty: 1 }])
+    expect(next).toBe(local)
+  })
+})
+
+describe('mergeCatalogProducts preserveClientOrder', () => {
+  it('keeps previous row order when refreshing from the API', () => {
+    const prev = [
+      clientItem({ id: 'p-2', name: 'Second', sku: 'SKU-2' }),
+      clientItem({ id: 'p-1', name: 'Laptop A', sku: 'SKU-1' }),
+    ]
+    const merged = mergeCatalogProducts(
+      prev,
+      [apiRow({}), apiRow({ id: 'p-2', sku: 'SKU-2', name: 'Second' })],
+      CONFIG,
+      { preserveClientOrder: true },
+    )
+    expect(merged.map(p => p.id)).toEqual(['p-2', 'p-1'])
+  })
 })

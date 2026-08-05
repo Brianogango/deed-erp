@@ -63,30 +63,68 @@ const normName = (s: unknown) => String(s ?? '').trim().replace(/\s+/g, ' ').toL
 export function mergeProductsStoreWrite(current: unknown, incoming: unknown): unknown {
   if (!Array.isArray(incoming)) return current
   if (!Array.isArray(current) || current.length === 0) return incoming
-  const byId = new Map<string, any>()
+  const currentById = new Map<string, any>()
   for (const row of current) {
-    if (row && typeof row === 'object' && (row as any).id) byId.set(String((row as any).id), row)
+    if (row && typeof row === 'object' && (row as any).id) currentById.set(String((row as any).id), row)
+  }
+  const incomingById = new Map<string, any>()
+  for (const row of incoming) {
+    if (row && typeof row === 'object' && (row as any).id) incomingById.set(String((row as any).id), row)
   }
   const seen = new Set<string>()
   const merged: any[] = []
-  for (const row of incoming) {
-    if (!row || typeof row !== 'object' || !(row as any).id) continue
-    const id = String((row as any).id)
-    seen.add(id)
-    merged.push({ ...(byId.get(id) ?? {}), ...(row as any) })
-  }
+  // Keep the client's existing order so SSE stock/catalog sync does not reshuffle
+  // the product catalogue while the user is searching or paging.
   for (const row of current) {
     if (!row || typeof row !== 'object' || !(row as any).id) continue
     const id = String((row as any).id)
-    if (!seen.has(id)) merged.push(row)
+    const incomingRow = incomingById.get(id)
+    seen.add(id)
+    merged.push(incomingRow ? { ...(row as any), ...incomingRow } : row)
+  }
+  for (const row of incoming) {
+    if (!row || typeof row !== 'object' || !(row as any).id) continue
+    const id = String((row as any).id)
+    if (seen.has(id)) continue
+    seen.add(id)
+    merged.push({ ...(currentById.get(id) ?? {}), ...(row as any) })
   }
   return merged
+}
+
+/**
+ * Apply an SSE / cross-tab products payload without dropping catalog rows or
+ * reshuffling the list. Returns the previous array reference when unchanged so
+ * React skips catalogue re-renders (search flicker).
+ */
+export function mergeProductsRemoteState<P extends { id?: string }>(local: P[], remote: P[]): P[] {
+  const merged = mergeProductsStoreWrite(local, remote) as P[]
+  if (!Array.isArray(merged)) return local
+  return JSON.stringify(merged) === JSON.stringify(local) ? local : merged
+}
+
+function preserveClientProductOrder<P extends { id: string }>(prev: P[], merged: P[]): P[] {
+  if (prev.length === 0) return merged
+  const byId = new Map(merged.map(p => [p.id, p]))
+  const ordered: P[] = []
+  const seen = new Set<string>()
+  for (const p of prev) {
+    const next = byId.get(p.id)
+    if (!next) continue
+    ordered.push(next)
+    seen.add(p.id)
+  }
+  for (const p of merged) {
+    if (!seen.has(p.id)) ordered.push(p)
+  }
+  return ordered
 }
 
 export function mergeCatalogProducts<P extends ClientCatalogProduct>(
   prev: P[],
   rows: CatalogApiRow[],
   categoryConfig: Record<string, { serialRequired: boolean }>,
+  opts?: { preserveClientOrder?: boolean },
 ): P[] {
   const prevById = new Map(prev.map(p => [p.id, p]))
   const prevByName = new Map(prev.map(p => [normName(p.name), p]))
@@ -137,5 +175,6 @@ export function mergeCatalogProducts<P extends ClientCatalogProduct>(
   for (const p of prev) {
     if (!ids.has(p.id) && !names.has(normName(p.name))) merged.push(p)
   }
-  return merged
+  const ordered = opts?.preserveClientOrder ? preserveClientProductOrder(prev, merged) : merged
+  return ordered
 }
