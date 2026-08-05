@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import type { PortalRepair } from '@/lib/portal-repairs'
 import { PortalPageSkeleton } from '@/components/ui'
+import { isDiagnosisFeeLine, taxableQuoteSubtotal } from '@/lib/diagnosis-fee'
 
 const STATUS_LABELS: Record<string, string> = {
   received:            'Device Received',
@@ -177,7 +178,9 @@ export default function RepairPortalPage() {
     if (!repair?.quote) return
     const next: Record<string, 'approved' | 'declined'> = {}
     repair.quote.lines.forEach((line, index) => {
-      next[qLineKey(line, index)] = line.lineDecision === 'declined' ? 'declined' : 'approved'
+      next[qLineKey(line, index)] = isDiagnosisFeeLine(line)
+        ? 'approved'
+        : (line.lineDecision === 'declined' ? 'declined' : 'approved')
     })
     setItemDecisions(next)
   }, [repair?.ref, repair?.quote?.sentDate])
@@ -186,7 +189,12 @@ export default function RepairPortalPage() {
     if (!repair?.quote) return
     setActing(true)
     try {
-      const itemDecisionsPayload = repair.quote.lines.map((line, index) => ({ lineId: qLineKey(line, index), decision: itemDecisions[qLineKey(line, index)] ?? 'declined' }))
+      const itemDecisionsPayload = repair.quote.lines.map((line, index) => ({
+        lineId: qLineKey(line, index),
+        decision: isDiagnosisFeeLine(line)
+          ? 'approved' as const
+          : (itemDecisions[qLineKey(line, index)] ?? 'declined'),
+      }))
       const res = await fetch(`/api/portal/repair/${encodeURIComponent(ref)}/approve`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ itemDecisions: itemDecisionsPayload, reason: declineReason || undefined, verifyPhone: verifyPhone.trim() }),
@@ -254,11 +262,25 @@ export default function RepairPortalPage() {
   const canApprove = repair.status === 'awaiting_approval' && !actionDone
   const showDiag   = !!(repair.diagnosis?.faultDescription || repair.diagnosis?.findings || repair.diagnosisHistory?.length)
   const quoteLines = repair.quote?.lines ?? []
-  const selectedSubtotal = quoteLines.reduce((sum, line, index) => sum + ((itemDecisions[qLineKey(line, index)] ?? 'approved') === 'approved' ? line.subtotal : 0), 0)
-  const quoteTaxRate = repair.quote && repair.quote.subtotal > 0 ? repair.quote.tax / repair.quote.subtotal : 0
-  const selectedTax = Math.round(selectedSubtotal * quoteTaxRate * 100) / 100
+  const selectedSubtotal = quoteLines.reduce((sum, line, index) => {
+    const decision = isDiagnosisFeeLine(line) ? 'approved' : (itemDecisions[qLineKey(line, index)] ?? 'approved')
+    return sum + (decision === 'approved' ? line.subtotal : 0)
+  }, 0)
+  const selectedTaxable = taxableQuoteSubtotal(
+    quoteLines.filter((line, index) => {
+      const decision = isDiagnosisFeeLine(line) ? 'approved' : (itemDecisions[qLineKey(line, index)] ?? 'approved')
+      return decision === 'approved'
+    }),
+  )
+  const quoteTaxRate = repair.quote && repair.quote.tax > 0 && selectedTaxable > 0
+    ? repair.quote.tax / Math.max(1, taxableQuoteSubtotal(quoteLines))
+    : 0
+  const selectedTax = Math.round(selectedTaxable * quoteTaxRate * 100) / 100
   const selectedTotal = Math.round((selectedSubtotal + selectedTax) * 100) / 100
-  const approvedCount = quoteLines.filter((line, index) => (itemDecisions[qLineKey(line, index)] ?? 'approved') === 'approved').length
+  const approvedCount = quoteLines.filter((line, index) => {
+    const decision = isDiagnosisFeeLine(line) ? 'approved' : (itemDecisions[qLineKey(line, index)] ?? 'approved')
+    return decision === 'approved'
+  }).length
   const amountPaid = Number(repair.paymentAmount ?? 0)
   const invoiceOrQuoteTotal = repair.invoiceTotal ?? repair.quote?.approvedTotal ?? repair.quote?.total ?? 0
   // Revised quote awaiting re-approval must never compete with a "Payment confirmed" CTA.
@@ -464,7 +486,8 @@ export default function RepairPortalPage() {
               <div style={{ borderRadius: 12, overflow: 'hidden', border: '1px solid rgba(255,255,255,0.08)', marginBottom: 14 }}>
                 {repair.quote.lines.map((line, i) => {
                   const key = qLineKey(line, i)
-                  const decision = itemDecisions[key] ?? line.lineDecision ?? 'approved'
+                  const feeLocked = isDiagnosisFeeLine(line)
+                  const decision = feeLocked ? 'approved' : (itemDecisions[key] ?? line.lineDecision ?? 'approved')
                   return (
                     <div key={key} style={{
                       display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12,
@@ -475,12 +498,17 @@ export default function RepairPortalPage() {
                       <div style={{ flex: 1 }}>
                         <span style={{ color: '#E5E7EB', fontWeight: 500 }}>{line.description}</span>
                         <span style={{ color: '#6B7280', fontSize: 11, marginLeft: 6 }}>×{line.qty}</span>
-                        {line.lineDecision && (
+                        {feeLocked && (
+                          <span style={{ display: 'inline-block', marginLeft: 8, fontSize: 9, fontWeight: 900, textTransform: 'uppercase', color: '#F59E0B' }}>
+                            Required · 0% VAT
+                          </span>
+                        )}
+                        {line.lineDecision && !feeLocked && (
                           <span style={{ display: 'inline-block', marginLeft: 8, fontSize: 9, fontWeight: 900, textTransform: 'uppercase', color: line.lineDecision === 'approved' ? '#34D399' : '#F87171' }}>
                             {line.lineDecision}
                           </span>
                         )}
-                        {canApprove && (
+                        {canApprove && !feeLocked && (
                           <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
                             <button onClick={() => setItemDecisions(prev => ({ ...prev, [key]: 'approved' }))}
                               style={{ padding: '5px 9px', borderRadius: 8, border: decision === 'approved' ? '1px solid rgba(16,185,129,0.7)' : '1px solid rgba(255,255,255,0.12)', background: decision === 'approved' ? 'rgba(16,185,129,0.14)' : 'transparent', color: decision === 'approved' ? '#34D399' : '#9CA3AF', fontSize: 10, fontWeight: 800, cursor: 'pointer' }}>Approve</button>

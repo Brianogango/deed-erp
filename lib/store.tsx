@@ -108,6 +108,9 @@ import {
   migratedDiagnosisFeeSettings,
   needsDiagnosisFeeSettingsMigration,
   normalizeStoredDiagnosisFee,
+  normalizeQuoteWithDiagnosisFee,
+  quoteShouldIncludeDiagnosisFee,
+  diagnosisFeeAmountForQuote,
   resolveCustomerBillingType,
   resolveDiagnosisFee,
   shouldChargeDiagnosisFee,
@@ -4855,6 +4858,62 @@ export function StoreProvider({
     })
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // One-time: ensure open (non-invoiced) quotes carry Diagnosis Fee @ current settings
+  // so the client portal shows KES 1,000 when the fee applies.
+  useEffect(() => {
+    setRepairs(prev => {
+      let changed = false
+      const next = prev.map(r => {
+        if (!r.quote?.lines?.length) return r
+        if (['cancelled', 'closed', 'invoiced'].includes(String(r.status))) return r
+        if (r.diagnosisFeeStatus === 'invoiced') return r
+        const applyVat = Number(r.quote.tax) > 0
+        const normalized = normalizeQuoteWithDiagnosisFee(
+          r.quote.lines.map(l => ({ ...l, isDiagnosisFee: l.isDiagnosisFee || isDiagnosisFeeLine(l) })),
+          r,
+          systemSettings,
+          { applyVat, vatRatePercent: companySettings.vatRate },
+        )
+        const sameLen = normalized.lines.length === r.quote.lines.length
+        const sameFee = r.quote.lines.every((l, i) => {
+          const n = normalized.lines[i]
+          if (!n) return false
+          if (isDiagnosisFeeLine(l) || isDiagnosisFeeLine(n)) {
+            return isDiagnosisFeeLine(l) && isDiagnosisFeeLine(n) && Number(l.unitPrice) === Number(n.unitPrice)
+          }
+          return l.id === n.id && Number(l.unitPrice) === Number(n.unitPrice) && Number(l.subtotal) === Number(n.subtotal)
+        })
+        if (sameLen && sameFee && Number(r.quote.subtotal) === normalized.subtotal && Number(r.quote.total) === normalized.total) {
+          return r
+        }
+        changed = true
+        const include = normalized.includeFee
+        return {
+          ...r,
+          diagnosisFee: include
+            ? normalized.feeAmount
+            : (r.diagnosisFeeStatus === 'waived' ? 0 : r.diagnosisFee),
+          diagnosisFeeStatus: include
+            ? (r.diagnosisFeeStatus === 'paid' || r.diagnosisFeePaidAt ? 'paid' : 'applicable')
+            : (r.repairPath === 'direct_repair' || r.billingExempt ? 'not_applicable' : r.diagnosisFeeStatus),
+          quote: {
+            ...r.quote,
+            lines: normalized.lines.map(l => ({
+              ...l,
+              type: l.type as RepairQuoteLine['type'],
+              isDiagnosisFee: isDiagnosisFeeLine(l) || undefined,
+            })),
+            subtotal: normalized.subtotal,
+            tax: normalized.tax,
+            total: normalized.total,
+          },
+        }
+      })
+      return changed ? next : prev
+    })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
   const [bankRecons, setBankRecons]           = useLS<BankRecon[]>('deed_bankRecons', [])
   const [bankStatementLines, setBankStatementLines] = useLS<BankStatementLine[]>('deed_bankStatementLines', [])
 
@@ -5193,7 +5252,16 @@ export function StoreProvider({
         diagnosedDate: d.diagnosedDate,
       })),
       quote: r.quote ? {
-        lines: r.quote.lines.map(l => ({ id: l.id, type: l.type as 'part' | 'labor' | 'logistics' | 'software' | 'license' | 'service', description: l.description, qty: l.qty, unitPrice: l.unitPrice, subtotal: l.subtotal, lineDecision: l.decision })),
+        lines: r.quote.lines.map(l => ({
+          id: l.id,
+          type: l.type as 'part' | 'labor' | 'logistics' | 'software' | 'license' | 'service',
+          description: l.description,
+          qty: l.qty,
+          unitPrice: l.unitPrice,
+          subtotal: l.subtotal,
+          lineDecision: l.decision,
+          isDiagnosisFee: !!l.isDiagnosisFee || isDiagnosisFeeLine(l),
+        })),
         subtotal: r.quote.subtotal,
         tax: r.quote.tax,
         total: r.quote.total,
@@ -12459,16 +12527,19 @@ const storeCtx: AppState = {
       const resolvedFee = resolveDiagnosisFee(repair, systemSettings)
       // Fee stays on the quote for visibility but is never credited against labour/parts.
       // Fees already paid early still appear as a locked quote line (settled separately).
-      const chargeFee = shouldChargeDiagnosisFee(repair) && resolvedFee.amount > 0
-      const incomingWithFee = ensureDiagnosisFeeInQuoteLines(
+      const chargeFee = quoteShouldIncludeDiagnosisFee(repair, systemSettings)
+      const feeAmount = diagnosisFeeAmountForQuote(repair, systemSettings)
+      const normalized = normalizeQuoteWithDiagnosisFee(
         incomingLines.map(line => ({
           ...line,
           subtotal: Number(line.qty) * Number(line.unitPrice),
           isDiagnosisFee: isDiagnosisFeeLine(line as any) || undefined,
         })),
-        resolvedFee.amount,
-        chargeFee,
+        repair,
+        systemSettings,
+        { applyVat, vatRatePercent: companySettings.vatRate },
       )
+      const incomingWithFee = normalized.lines
 
       const lines: RepairQuoteLine[] = incomingWithFee.map(line => ({
         ...line,
@@ -12478,9 +12549,9 @@ const storeCtx: AppState = {
         isDiagnosisFee: isDiagnosisFeeLine(line) || undefined,
       }))
 
-      const subtotal = lines.reduce((sum, line) => sum + line.subtotal, 0)
+      const subtotal = normalized.subtotal
       // Diagnosis fee is always 0% VAT — tax only non-fee lines
-      const tax = applyVat ? Math.round(taxableQuoteSubtotal(lines) * (companySettings.vatRate / 100)) : 0
+      const tax = normalized.tax
 
       // ── Gap 1: Build change diff summary ─────────────────────────────────
       let changeSummary: string | undefined
@@ -12771,7 +12842,7 @@ const storeCtx: AppState = {
         laborCost: derivedLaborCost,
         logisticsCost: derivedLogisticsCost,
         total: chargeTotal,
-        diagnosisFee: chargeFee ? resolvedFee.amount : (r.diagnosisFeeStatus === 'waived' ? 0 : r.diagnosisFee),
+        diagnosisFee: chargeFee ? feeAmount : (r.diagnosisFeeStatus === 'waived' ? 0 : r.diagnosisFee),
         diagnosisFeeStatus: chargeFee
           ? (r.diagnosisFeeStatus === 'paid' || r.diagnosisFeePaidAt ? 'paid' : 'applicable')
           : (isDirectRepairPath(r.repairPath) || isNoCharge ? 'not_applicable' : r.diagnosisFeeStatus),

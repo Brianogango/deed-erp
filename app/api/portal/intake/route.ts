@@ -5,7 +5,7 @@ import { checkRateLimit } from '@/lib/rate-limit'
 import type { RepairOrder } from '@/lib/store'
 import { buildRepairLinkMessage, sendMultiChannelMessage } from '@/lib/integrations/messaging'
 import { DIRECT_REPAIR_WAIVER_TEXT, normalizeRepairPath } from '@/lib/repair-path'
-import { normalizeDeviceTier } from '@/lib/diagnosis-fee'
+import { normalizeDeviceTier, resolveDiagnosisFee, resolveCustomerBillingType } from '@/lib/diagnosis-fee'
 
 const REPAIR_STORE_KEY = 'deed_repairs_v2'
 
@@ -66,6 +66,16 @@ export async function POST(req: NextRequest) {
       })).filter(item => item.name)
     : clean(body.accessories).split(',').map(name => name.trim()).filter(Boolean).map(name => ({ name, received: true }))
 
+  const settings = state['deed_systemSettings'] as { diagnosisFeeKes?: number } | undefined
+  const feeResolved = resolveDiagnosisFee({
+    repairPath,
+    intakeDate: now,
+    underWarranty: body.underWarranty === true,
+  }, settings)
+  const billingType = resolveCustomerBillingType(
+    clean(body.clientType) === 'company' ? 'company' : 'individual',
+  )
+
   const repair: RepairOrder = {
     id: `rep_${Date.now()}`,
     ref,
@@ -86,8 +96,10 @@ export async function POST(req: NextRequest) {
     accessories,
     repairPath,
     deviceTier: repairPath === 'diagnosis_first' ? (deviceTier ?? undefined) : undefined,
-    diagnosisFee: 0,
-    diagnosisFeeStatus: repairPath === 'direct_repair' ? 'not_applicable' : 'pending',
+    diagnosisFee: feeResolved.amount,
+    diagnosisFeeStatus: feeResolved.status,
+    diagnosisFeeBilling: feeResolved.status === 'applicable' ? 'invoice' : undefined,
+    customerBillingType: billingType,
     liabilityWaiverAccepted,
     liabilityWaiverText: repairPath === 'direct_repair' ? DIRECT_REPAIR_WAIVER_TEXT : undefined,
     liabilityWaiverAcceptedAt: liabilityWaiverAccepted ? now : undefined,

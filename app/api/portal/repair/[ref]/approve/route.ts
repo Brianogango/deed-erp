@@ -7,6 +7,11 @@ import { checkRateLimit } from '@/lib/rate-limit'
 import { phoneMatches } from '@/lib/portal-verify'
 import prisma from '@/lib/prisma'
 import { getNextDocNumber } from '@/lib/doc-ref-counter'
+import {
+  isDiagnosisFeeLine,
+  normalizeQuoteWithDiagnosisFee,
+  taxableQuoteSubtotal,
+} from '@/lib/diagnosis-fee'
 
 type ItemDecision = { lineId: string; decision: 'approved' | 'declined' | 'deferred' }
 
@@ -42,7 +47,7 @@ export async function POST(
   // Ownership proof (optional): when secPortalRequirePhoneVerification is on, the
   // caller must supply the customer phone on file. This prevents a guessed
   // reference alone from approving a quote. Off by default to avoid friction.
-  const settings = appState['deed_systemSettings'] as { secPortalRequirePhoneVerification?: boolean } | undefined
+  const settings = appState['deed_systemSettings'] as { diagnosisFeeKes?: number; secPortalRequirePhoneVerification?: boolean } | undefined
   if (settings?.secPortalRequirePhoneVerification === true && !phoneMatches(body.verifyPhone, repair.customerPhone)) {
     return NextResponse.json({ error: 'Verification failed. Enter the phone number on this repair to confirm.' }, { status: 403 })
   }
@@ -53,6 +58,28 @@ export async function POST(
   const targetRepair = repairs[repairIndex]
   if (targetRepair.status !== 'awaiting_approval') {
     return NextResponse.json({ error: `Quote cannot be actioned — current status is "${targetRepair.status}".` }, { status: 409 })
+  }
+
+  const company = appState['deed_companySettings'] as { vatRate?: number } | undefined
+  const applyVat = Number(targetRepair.quote?.tax) > 0
+  const normalizedQuote = normalizeQuoteWithDiagnosisFee(
+    Array.isArray(targetRepair.quote?.lines) ? targetRepair.quote.lines : [],
+    targetRepair,
+    settings,
+    { applyVat, vatRatePercent: Number(company?.vatRate) || 16 },
+  )
+  targetRepair.quote = {
+    ...targetRepair.quote,
+    lines: normalizedQuote.lines,
+    subtotal: normalizedQuote.subtotal,
+    tax: normalizedQuote.tax,
+    total: normalizedQuote.total,
+  }
+  if (normalizedQuote.includeFee) {
+    targetRepair.diagnosisFee = normalizedQuote.feeAmount
+    if (targetRepair.diagnosisFeeStatus !== 'paid' && !targetRepair.diagnosisFeePaidAt) {
+      targetRepair.diagnosisFeeStatus = 'applicable'
+    }
   }
 
   const originalLines = Array.isArray(targetRepair.quote?.lines) ? targetRepair.quote.lines : []
@@ -71,14 +98,18 @@ export async function POST(
   if (decisionMap.size === 0) return NextResponse.json({ error: 'Select at least one quote line decision.' }, { status: 400 })
 
   const linesWithDecisions = originalLines.map((line: any, i: number) => {
-    const decision = decisionMap.get(lineKey(line, i)) ?? 'declined'
+    // Diagnosis fee is mandatory and cannot be declined on the portal.
+    const decision = isDiagnosisFeeLine(line)
+      ? 'approved'
+      : (decisionMap.get(lineKey(line, i)) ?? 'declined')
     return { ...line, decision }
   })
   const approvedLines = linesWithDecisions.filter((line: any) => line.decision === 'approved')
   const approved = approvedLines.length > 0
   const approvedSubtotal = roundMoney(approvedLines.reduce((sum: number, line: any) => sum + Number(line.subtotal ?? 0), 0))
-  const taxRate = Number(targetRepair.quote?.subtotal ?? 0) > 0 ? Number(targetRepair.quote?.tax ?? 0) / Number(targetRepair.quote?.subtotal ?? 0) : 0
-  const approvedTax = roundMoney(approvedSubtotal * taxRate)
+  const approvedTaxable = taxableQuoteSubtotal(approvedLines)
+  const vatRate = applyVat ? (Number(company?.vatRate) || 16) / 100 : 0
+  const approvedTax = roundMoney(approvedTaxable * vatRate)
   const approvedTotal = roundMoney(approvedSubtotal + approvedTax)
   const partiallyApproved = approved && approvedLines.length < originalLines.length
   const reason = body.reason?.trim() || undefined

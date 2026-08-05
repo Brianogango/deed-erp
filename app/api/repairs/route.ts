@@ -117,7 +117,7 @@ export async function POST(request: NextRequest) {
       productName: String(body.productName),
       serialNumber: String(body.serialNumber ?? ''),
       intakeChannel: (body.intakeChannel === 'website' || body.intakeChannel === 'whatsapp' || body.intakeChannel === 'call' || body.intakeChannel === 'email' || body.intakeChannel === 'rider_pickup') ? body.intakeChannel as RepairOrder['intakeChannel'] : 'walk_in',
-      intakeDate: new Date().toISOString().slice(0, 10),
+      intakeDate: new Date().toISOString(),
       intakeNotes: '',
       issueDescription: String(body.issueDescription ?? ''),
       accessories: [],

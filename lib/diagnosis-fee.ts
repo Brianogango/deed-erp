@@ -205,10 +205,11 @@ export function resolveCustomerBillingType(
 export function shouldChargeDiagnosisFee(repair: DiagnosisFeeRepair): boolean {
   if (repair.repairPath === 'direct_repair') return false
   if (repair.billingExempt) return false
-  if (repair.diagnosisFeeStatus === 'waived' || repair.diagnosisFeeStatus === 'not_applicable') return false
+  if (repair.diagnosisFeeStatus === 'waived') return false
   if (repair.underWarranty && repair.warrantyCoverage === 'full') return false
   if (!isDiagnosisFeePolicyInEffect(repair.intakeDate)) return false
-  // Default: diagnosis_first (including missing path treated as diagnosis_first elsewhere)
+  // Do not honour a stale `not_applicable` stamp when policy + path say the fee
+  // applies (e.g. date-only intake wrongly marked N/A, then revised later).
   return repair.repairPath !== 'direct_repair'
 }
 
@@ -218,6 +219,121 @@ export function isDiagnosisFeeSettled(repair: DiagnosisFeeRepair): boolean {
   if (status === 'paid' || status === 'invoiced' || status === 'waived' || status === 'not_applicable') return true
   if (repair.diagnosisFeePaidAt) return true
   return false
+}
+
+/**
+ * Whether the customer-facing quote must show a Diagnosis Fee line.
+ * Includes paid/invoiced (show settled amount) and currently chargeable jobs.
+ */
+export function quoteShouldIncludeDiagnosisFee(
+  repair: DiagnosisFeeRepair,
+  settings?: DiagnosisFeeSettings | null,
+): boolean {
+  if (repair.repairPath === 'direct_repair') return false
+  if (repair.billingExempt) return false
+  if (repair.diagnosisFeeStatus === 'waived') return false
+  if (repair.underWarranty && repair.warrantyCoverage === 'full') return false
+  if (repair.diagnosisFeeStatus === 'paid' || repair.diagnosisFeePaidAt) {
+    return (Math.max(0, Number(repair.diagnosisFee) || diagnosisFeeAmount(settings))) > 0
+  }
+  if (repair.diagnosisFeeStatus === 'invoiced') {
+    return (Math.max(0, Number(repair.diagnosisFee) || diagnosisFeeAmount(settings))) > 0
+  }
+  return shouldChargeDiagnosisFee(repair) && diagnosisFeeAmount(settings) > 0
+}
+
+/** Amount to put on the quote / portal Diagnosis Fee line. */
+export function diagnosisFeeAmountForQuote(
+  repair: DiagnosisFeeRepair,
+  settings?: DiagnosisFeeSettings | null,
+): number {
+  if (repair.diagnosisFeeStatus === 'waived') return 0
+  if (
+    repair.diagnosisFeeStatus === 'paid'
+    || repair.diagnosisFeePaidAt
+    || repair.diagnosisFeeStatus === 'invoiced'
+  ) {
+    return Math.max(0, Number(repair.diagnosisFee) || diagnosisFeeAmount(settings))
+  }
+  if (!quoteShouldIncludeDiagnosisFee(repair, settings)) return 0
+  return diagnosisFeeAmount(settings)
+}
+
+export type QuoteMoneyLine = {
+  type?: string
+  description?: string
+  qty?: number
+  unitPrice?: number
+  subtotal?: number
+  isDiagnosisFee?: boolean
+  [key: string]: unknown
+}
+
+/**
+ * Ensure quote lines carry the correct locked Diagnosis Fee at the policy
+ * amount (or settled amount), and return recalculated money totals.
+ */
+export function normalizeQuoteWithDiagnosisFee<T extends QuoteMoneyLine>(
+  lines: T[],
+  repair: DiagnosisFeeRepair,
+  settings?: DiagnosisFeeSettings | null,
+  opts?: { applyVat?: boolean; vatRatePercent?: number },
+): {
+  lines: T[]
+  subtotal: number
+  tax: number
+  total: number
+  includeFee: boolean
+  feeAmount: number
+} {
+  const includeFee = quoteShouldIncludeDiagnosisFee(repair, settings)
+  const feeAmount = diagnosisFeeAmountForQuote(repair, settings)
+  const seeded = ensureDiagnosisFeeInQuoteLines(
+    lines.map(l => ({
+      type: String(l.type || 'service'),
+      description: String(l.description || ''),
+      qty: Number(l.qty) || 1,
+      unitPrice: Number(l.unitPrice) || 0,
+      subtotal: Number(l.subtotal) || 0,
+      isDiagnosisFee: l.isDiagnosisFee,
+      ...l,
+    })),
+    feeAmount,
+    includeFee,
+  )
+  const nextLines = seeded.map(line => {
+    if (!isDiagnosisFeeLine(line)) return line as T
+    const unitPrice = feeAmount
+    const qty = Math.max(1, Number(line.qty) || 1)
+    return {
+      ...line,
+      type: (line.type || 'service'),
+      description: DIAGNOSIS_FEE_LINE_DESCRIPTION,
+      qty,
+      unitPrice,
+      subtotal: qty * unitPrice,
+      isDiagnosisFee: true as const,
+    } as T
+  }) as T[]
+  const subtotal = nextLines.reduce((sum, l) => sum + (Number(l.subtotal) || 0), 0)
+  const applyVat = opts?.applyVat === true
+  const vatRate = Math.max(0, Number(opts?.vatRatePercent) || 0)
+  const tax = applyVat
+    ? Math.round(taxableQuoteSubtotal(nextLines.map(l => ({
+      subtotal: Number(l.subtotal) || 0,
+      isDiagnosisFee: l.isDiagnosisFee,
+      description: String(l.description || ''),
+      type: String(l.type || ''),
+    }))) * (vatRate / 100))
+    : 0
+  return {
+    lines: nextLines,
+    subtotal,
+    tax,
+    total: subtotal + tax,
+    includeFee,
+    feeAmount,
+  }
 }
 
 /**

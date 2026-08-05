@@ -3,6 +3,11 @@ import { getPortalRepair, approvalDecisions, type PortalRepair, type PortalRepai
 import { resolvePortalPaymentStatus } from './portal-payment'
 import { loadAppState } from './server-store'
 import type { RepairOrder } from './repair-types'
+import {
+  isDiagnosisFeeLine,
+  normalizeQuoteWithDiagnosisFee,
+  type DiagnosisFeeSettings,
+} from './diagnosis-fee'
 
 async function loadStoredPhotos(ref: string): Promise<{ url: string; name: string; date: string }[]> {
   try {
@@ -32,7 +37,7 @@ async function restoreApprovalIfMissing(ref: string): Promise<void> {
   } catch { /* ignore DB errors */ }
 }
 
-function erpToPortal(r: RepairOrder, linkedInvoice?: any): PortalRepair {
+function erpToPortal(r: RepairOrder, linkedInvoice?: any, settings?: DiagnosisFeeSettings | null): PortalRepair {
   const statusHistory: PortalRepair['statusHistory'] = []
   if (r.intakeDate) statusHistory.push({ status: 'received', date: r.intakeDate })
   if (r.assignedDate) statusHistory.push({ status: 'assigned', date: r.assignedDate, note: r.assignedTechnicianName ? `Assigned to ${r.assignedTechnicianName}` : undefined })
@@ -62,6 +67,13 @@ function erpToPortal(r: RepairOrder, linkedInvoice?: any): PortalRepair {
     issueDescription: r.issueDescription,
     accessories: r.accessories,
     assignedTechnicianName: r.assignedTechnicianName,
+    repairPath: r.repairPath === 'direct_repair' ? 'direct_repair' : r.repairPath === 'diagnosis_first' ? 'diagnosis_first' : undefined,
+    deviceTier: r.deviceTier === 'high_end' ? 'high_end' : r.deviceTier === 'regular' ? 'regular' : undefined,
+    diagnosisFee: r.diagnosisFee,
+    diagnosisFeeStatus: r.diagnosisFeeStatus as PortalRepair['diagnosisFeeStatus'],
+    diagnosisStopped: r.diagnosisStopped,
+    liabilityWaiverAccepted: r.liabilityWaiverAccepted,
+    liabilityWaiverAcceptedAt: r.liabilityWaiverAcceptedAt,
     diagnosis: r.diagnosis
       ? {
           id: r.diagnosis.id,
@@ -89,32 +101,66 @@ function erpToPortal(r: RepairOrder, linkedInvoice?: any): PortalRepair {
       diagnosedDate: d.diagnosedDate,
     })),
     quote: r.quote
-      ? {
-          lines: r.quote.lines.map(l => ({
-            id: l.id,
-            type: l.type,
-            description: l.description,
-            qty: l.qty,
-            unitPrice: l.unitPrice,
-            subtotal: l.subtotal,
-            lineDecision: l.decision,
-          })),
-          subtotal: r.quote.subtotal,
-          tax: r.quote.tax,
-          total: r.quote.total,
-          validUntil: r.quote.validUntil,
-          sentDate: r.quote.sentDate,
-          approvedDate: r.quote.approvedDate,
-          approvedBy: r.quote.approvedBy,
-          rejectedDate: r.quote.rejectedDate,
-          rejectionReason: r.quote.rejectionReason,
-          partiallyApproved: r.quote.partiallyApproved,
-          approvedTotal: r.quote.approvedTotal,
-          changeSummary: r.quote.changeSummary,
-          prevTotal: r.quote.prevTotal,
-          diagnosisRevision: r.quote.diagnosisRevision,
-          diagnosisFaultSummary: r.quote.diagnosisFaultSummary,
-        }
+      ? (() => {
+          const applyVat = Number(r.quote.tax) > 0
+          // Prefer company VAT from linked invoice tax pattern; portal totals use stored quote tax flag.
+          const vatRatePercent = applyVat && Number(r.quote.subtotal) > 0
+            ? Math.round((Number(r.quote.tax) / Math.max(1, Number(r.quote.subtotal) - Number(r.quote.tax))) * 100) || 16
+            : 16
+          // Safer: if tax was computed on taxable-only base, derive rate from non-fee subtotal.
+          const nonFeeSubtotal = (r.quote.lines || [])
+            .filter(l => !isDiagnosisFeeLine(l))
+            .reduce((s, l) => s + (Number(l.subtotal) || 0), 0)
+          const derivedVat = applyVat && nonFeeSubtotal > 0
+            ? (Number(r.quote.tax) / nonFeeSubtotal) * 100
+            : 16
+          const normalized = normalizeQuoteWithDiagnosisFee(
+            (r.quote.lines || []).map(l => ({
+              ...l,
+              isDiagnosisFee: !!(l as any).isDiagnosisFee || isDiagnosisFeeLine(l),
+            })),
+            {
+              repairPath: r.repairPath,
+              intakeDate: r.intakeDate,
+              diagnosisFee: r.diagnosisFee,
+              diagnosisFeeStatus: r.diagnosisFeeStatus,
+              diagnosisFeePaidAt: r.diagnosisFeePaidAt,
+              underWarranty: r.underWarranty,
+              warrantyCoverage: (r as any).warrantyCoverage,
+              billingExempt: (r as any).billingExempt,
+              customerBillingType: (r as any).customerBillingType,
+            },
+            settings,
+            { applyVat, vatRatePercent: derivedVat || vatRatePercent },
+          )
+          return {
+            lines: normalized.lines.map(l => ({
+              id: String(l.id ?? ''),
+              type: (l.type || 'service') as 'part' | 'labor' | 'logistics' | 'software' | 'license' | 'service',
+              description: String(l.description ?? ''),
+              qty: Number(l.qty) || 0,
+              unitPrice: Number(l.unitPrice) || 0,
+              subtotal: Number(l.subtotal) || 0,
+              lineDecision: (l as any).decision ?? (l as any).lineDecision,
+              isDiagnosisFee: isDiagnosisFeeLine(l),
+            })),
+            subtotal: normalized.subtotal,
+            tax: normalized.tax,
+            total: normalized.total,
+            validUntil: r.quote.validUntil,
+            sentDate: r.quote.sentDate,
+            approvedDate: r.quote.approvedDate,
+            approvedBy: r.quote.approvedBy,
+            rejectedDate: r.quote.rejectedDate,
+            rejectionReason: r.quote.rejectionReason,
+            partiallyApproved: r.quote.partiallyApproved,
+            approvedTotal: r.quote.approvedTotal,
+            changeSummary: r.quote.changeSummary,
+            prevTotal: r.quote.prevTotal,
+            diagnosisRevision: r.quote.diagnosisRevision,
+            diagnosisFaultSummary: r.quote.diagnosisFaultSummary,
+          }
+        })()
       : undefined,
     statusHistory,
     repairStartDate: r.repairStartDate,
@@ -182,15 +228,16 @@ export async function lookupRepair(ref: string): Promise<PortalRepair | null> {
   //    by the staff app and can go stale, so it must not shadow live data.
   //    deed_invoices is loaded alongside so the payment prompt/amount populate.
   try {
-    const state = await loadAppState(['deed_repairs_v2', 'deed_repairs', 'deed_invoices'])
+    const state = await loadAppState(['deed_repairs_v2', 'deed_repairs', 'deed_invoices', 'deed_systemSettings'])
     const repairs = (state['deed_repairs_v2'] ?? state['deed_repairs'] ?? []) as RepairOrder[]
     const invoices = (state['deed_invoices'] ?? []) as any[]
+    const settings = (state['deed_systemSettings'] ?? null) as DiagnosisFeeSettings | null
     const decoded = decodeURIComponent(ref)
     const erp = repairs.find(r => r.ref.toLowerCase() === decoded.toLowerCase())
     if (erp) {
       const invoiceKey = erp.invoiceId ?? (erp as any).linkedInvoiceId
       const linkedInvoice = invoices.find(inv => inv.id === invoiceKey || inv.ref === (erp as any).linkedInvoiceRef || inv.invoiceNumber === (erp as any).linkedInvoiceRef)
-      const portal = erpToPortal(erp, linkedInvoice)
+      const portal = erpToPortal(erp, linkedInvoice, settings)
       return storedPhotos.length > 0 ? { ...portal, issuePhotos: storedPhotos } : portal
     }
   } catch {}

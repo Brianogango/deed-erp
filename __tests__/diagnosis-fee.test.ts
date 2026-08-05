@@ -4,12 +4,15 @@ import {
   DEFAULT_DIAGNOSIS_FEE_KES,
   DIAGNOSIS_FEE_POLICY_EFFECTIVE_AT,
   diagnosisFeeAmount,
+  diagnosisFeeAmountForQuote,
   diagnosisFeeAmountForTier,
   ensureDiagnosisFeeInQuoteLines,
   isDiagnosisFeeLine,
   isDiagnosisFeePolicyInEffect,
   isDiagnosisFeeSettled,
   mustCollectDiagnosisFeeUpfront,
+  normalizeQuoteWithDiagnosisFee,
+  quoteShouldIncludeDiagnosisFee,
   resolveCustomerBillingType,
   resolveDiagnosisFee,
   resolveDiagnosisFeeBilling,
@@ -150,9 +153,47 @@ describe('diagnosis-fee', () => {
     expect(lines[1].unitPrice).toBe(5000)
   })
 
-  it('excludes diagnosis fee from taxable subtotal (0% VAT)', () => {
-    const fee = buildDiagnosisFeeQuoteLine(1000)
-    const labor = { type: 'labor', description: 'Labour', qty: 1, unitPrice: 5000, subtotal: 5000 }
-    expect(taxableQuoteSubtotal([fee, labor])).toBe(5000)
+  it('ignores stale not_applicable when policy and path say fee applies', () => {
+    expect(shouldChargeDiagnosisFee({
+      repairPath: 'diagnosis_first',
+      intakeDate: AFTER,
+      diagnosisFeeStatus: 'not_applicable',
+    })).toBe(true)
+  })
+
+  it('forces Diagnosis Fee onto quotes at the settings amount', () => {
+    const repair = {
+      repairPath: 'diagnosis_first' as const,
+      intakeDate: AFTER,
+      diagnosisFeeStatus: 'not_applicable' as const,
+      diagnosisFee: 0,
+    }
+    expect(quoteShouldIncludeDiagnosisFee(repair, { diagnosisFeeKes: 1000 })).toBe(true)
+    expect(diagnosisFeeAmountForQuote(repair, { diagnosisFeeKes: 1000 })).toBe(1000)
+    const normalized = normalizeQuoteWithDiagnosisFee(
+      [{ type: 'labor', description: 'Labour', qty: 1, unitPrice: 5000, subtotal: 5000 }],
+      repair,
+      { diagnosisFeeKes: 1000 },
+      { applyVat: true, vatRatePercent: 16 },
+    )
+    expect(normalized.lines[0].description).toBe('Diagnosis Fee')
+    expect(normalized.lines[0].unitPrice).toBe(1000)
+    expect(normalized.subtotal).toBe(6000)
+    expect(normalized.tax).toBe(800) // VAT only on labour
+    expect(normalized.total).toBe(6800)
+  })
+
+  it('rewrites legacy 1500 quote fee lines to 1000 when normalizing', () => {
+    const normalized = normalizeQuoteWithDiagnosisFee(
+      [
+        { type: 'service', description: 'Diagnosis Fee', qty: 1, unitPrice: 1500, subtotal: 1500, isDiagnosisFee: true },
+        { type: 'labor', description: 'Labour', qty: 1, unitPrice: 5000, subtotal: 5000 },
+      ],
+      { repairPath: 'diagnosis_first', intakeDate: AFTER, diagnosisFeeStatus: 'applicable', diagnosisFee: 1500 },
+      { diagnosisFeeKes: 1000 },
+    )
+    expect(normalized.feeAmount).toBe(1000)
+    expect(normalized.lines.find(l => l.description === 'Diagnosis Fee')?.unitPrice).toBe(1000)
+    expect(normalized.subtotal).toBe(6000)
   })
 })

@@ -8,6 +8,8 @@ import {
   isDiagnosisFeeLine,
   resolveDiagnosisFee,
   shouldChargeDiagnosisFee,
+  quoteShouldIncludeDiagnosisFee,
+  diagnosisFeeAmountForQuote,
 } from '@/lib/diagnosis-fee'
 import { Modal, Field, Input, Select, Textarea } from '@/components/ui'
 import { Fa } from '@/components/icons'
@@ -419,7 +421,8 @@ export function QuoteModal({ repair, onClose }: { repair: RepairOrder, onClose: 
   const [applyVat, setApplyVat] = useState(repair.quote ? repair.quote.tax > 0 : false)
   const [submitted, setSubmitted] = useState(false)
   const feeResolved = resolveDiagnosisFee(repair, systemSettings)
-  const chargeFee = shouldChargeDiagnosisFee(repair) && feeResolved.amount > 0
+  const chargeFee = quoteShouldIncludeDiagnosisFee(repair, systemSettings)
+  const feeAmount = diagnosisFeeAmountForQuote(repair, systemSettings)
   const [quoteLines, setQuoteLines] = useState<{
     type: 'part'|'labor'|'software'|'license'|'logistics'|'service'
     description: string
@@ -446,7 +449,7 @@ export function QuoteModal({ repair, onClose }: { repair: RepairOrder, onClose: 
         type: 'service' as const,
         description: DIAGNOSIS_FEE_LINE_DESCRIPTION,
         qty: '1',
-        unitPrice: String(feeResolved.amount),
+        unitPrice: String(feeAmount || feeResolved.amount),
         isDiagnosisFee: true,
       },
       ...without,

@@ -20,6 +20,8 @@ export interface PortalQuoteLine {
   unitPrice: number
   subtotal: number
   lineDecision?: PortalQuoteLineDecision
+  /** Locked mandatory diagnosis fee — not declinable on the portal. */
+  isDiagnosisFee?: boolean
 }
 
 export type PortalDiagnosisRevisionType = 'initial' | 'update' | 'correction'
