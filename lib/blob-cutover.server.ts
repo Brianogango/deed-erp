@@ -7,7 +7,9 @@ import {
   DUAL_WRITE_BLOB_KEYS,
   EXTENDED_CUTOVER_BLOB_KEYS,
   countBlobArray,
+  domainRoleFor,
   evaluateParity,
+  extractBlobIds,
   type BlobParityCheck,
 } from '@/lib/blob-cutover'
 
@@ -29,118 +31,155 @@ async function safeCount(fn: () => Promise<number>): Promise<number | null> {
   }
 }
 
-/** Map dual-write / catalog blob keys to Prisma count queries. */
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+
+/** Sample blob ids and count how many exist in a Prisma table by primary key. */
+async function sampleIdOverlap(
+  raw: string | null,
+  existsInPrisma: (ids: string[]) => Promise<number>,
+  sampleSize = 100,
+): Promise<{ sampled: number; matched: number } | undefined> {
+  const ids = extractBlobIds(raw, sampleSize).filter(id => UUID_RE.test(id))
+  if (ids.length === 0) return undefined
+  try {
+    const matched = await existsInPrisma(ids)
+    return { sampled: ids.length, matched }
+  } catch {
+    return { sampled: ids.length, matched: 0 }
+  }
+}
+
+type Mapping = {
+  prismaTable: string
+  count: () => Promise<number>
+  /** Optional deep ID check against Prisma */
+  overlap?: (ids: string[]) => Promise<number>
+  allowPrismaAhead?: boolean
+  hardStopWhenUnequal?: boolean
+}
+
+function mappings(): Record<string, Mapping> {
+  return {
+    deed_accounts: {
+      prismaTable: 'account_codes',
+      count: () => prisma.accountCode.count(),
+    },
+    deed_journalEntries: {
+      prismaTable: 'journal_entries',
+      count: () => prisma.journalEntry.count(),
+    },
+    deed_stockReservations: {
+      prismaTable: 'stock_reservations',
+      count: () => prisma.stockReservation.count(),
+    },
+    deed_deposits: {
+      prismaTable: 'deposits',
+      count: () => prisma.deposit.count(),
+    },
+    deed_deposits_v1: {
+      prismaTable: 'deposits',
+      count: () => prisma.deposit.count(),
+    },
+    deed_holdovers: {
+      prismaTable: 'holdovers',
+      count: () => prisma.holdover.count(),
+    },
+    deed_repairs_v2: {
+      prismaTable: 'repairs',
+      count: () => prisma.repair.count(),
+      // Repairs use blob ids that may not be UUIDs; overlap only counts UUID-shaped ids.
+      overlap: async ids => prisma.repair.count({ where: { id: { in: ids } } }),
+      allowPrismaAhead: true,
+    },
+    deed_products: {
+      prismaTable: 'products',
+      count: () => prisma.product.count(),
+      overlap: async ids => prisma.product.count({ where: { id: { in: ids } } }),
+      hardStopWhenUnequal: true,
+    },
+    deed_purchaseOrders: {
+      prismaTable: 'purchase_orders',
+      count: () => prisma.purchaseOrder.count(),
+    },
+    deed_payments: {
+      prismaTable: 'payments',
+      count: () => prisma.payment.count(),
+      overlap: async ids => prisma.payment.count({ where: { id: { in: ids } } }),
+    },
+    deed_stockMoves: {
+      prismaTable: 'stock_movements',
+      count: () => prisma.stockMovement.count(),
+    },
+    deed_invoices: {
+      prismaTable: 'invoices',
+      count: () => prisma.invoice.count(),
+      overlap: async ids => prisma.invoice.count({ where: { id: { in: ids } } }),
+    },
+    deed_saleOrders: {
+      prismaTable: 'sale_orders',
+      count: () => prisma.saleOrder.count(),
+      overlap: async ids => prisma.saleOrder.count({ where: { id: { in: ids } } }),
+    },
+    deed_quotes: {
+      prismaTable: 'quotes',
+      count: () => prisma.quote.count(),
+      overlap: async ids => prisma.quote.count({ where: { id: { in: ids } } }),
+    },
+    deed_serials: {
+      prismaTable: 'serial_numbers',
+      count: () => prisma.serialNumber.count(),
+    },
+    deed_deliveries: {
+      prismaTable: 'delivery_notes',
+      count: () => prisma.deliveryNote.count(),
+    },
+    // Receipts/GRNs remain blob-only — no parent Prisma model yet.
+  }
+}
+
+/** Map dual-write / catalog / extended blob keys to Prisma count (+ optional ID overlap). */
 export async function verifyBlobParity(keys?: string[]): Promise<BlobParityCheck[]> {
   const want = keys?.length
     ? keys
     : [...DUAL_WRITE_BLOB_KEYS, ...CATALOG_BLOB_KEYS, ...EXTENDED_CUTOVER_BLOB_KEYS]
 
+  const map = mappings()
   const checks: BlobParityCheck[] = []
 
   for (const blobKey of want) {
     const raw = await readAppState(blobKey)
     const blobCount = countBlobArray(raw)
+    const mapping = map[blobKey]
 
-    if (blobKey === 'deed_accounts') {
-      checks.push(evaluateParity({
+    if (!mapping) {
+      checks.push({
         blobKey,
-        prismaTable: 'account_codes',
+        prismaTable: 'unknown',
         blobCount,
-        prismaCount: await safeCount(() => prisma.accountCode.count()),
-      }))
-      continue
-    }
-    if (blobKey === 'deed_journalEntries') {
-      checks.push(evaluateParity({
-        blobKey,
-        prismaTable: 'journal_entries',
-        blobCount,
-        prismaCount: await safeCount(() => prisma.journalEntry.count()),
-      }))
-      continue
-    }
-    if (blobKey === 'deed_stockReservations') {
-      checks.push(evaluateParity({
-        blobKey,
-        prismaTable: 'stock_reservations',
-        blobCount,
-        prismaCount: await safeCount(() => prisma.stockReservation.count()),
-      }))
-      continue
-    }
-    if (blobKey === 'deed_deposits' || blobKey === 'deed_deposits_v1') {
-      checks.push(evaluateParity({
-        blobKey,
-        prismaTable: 'deposits',
-        blobCount,
-        prismaCount: await safeCount(() => prisma.deposit.count()),
-      }))
-      continue
-    }
-    if (blobKey === 'deed_holdovers') {
-      checks.push(evaluateParity({
-        blobKey,
-        prismaTable: 'holdovers',
-        blobCount,
-        prismaCount: await safeCount(() => prisma.holdover.count()),
-      }))
-      continue
-    }
-    if (blobKey === 'deed_repairs_v2') {
-      checks.push(evaluateParity({
-        blobKey,
-        prismaTable: 'repairs',
-        blobCount,
-        prismaCount: await safeCount(() => prisma.repair.count()),
-      }))
-      continue
-    }
-    if (blobKey === 'deed_products') {
-      checks.push(evaluateParity({
-        blobKey,
-        prismaTable: 'products',
-        blobCount,
-        prismaCount: await safeCount(() => prisma.product.count()),
-        hardStopWhenUnequal: true,
-      }))
-      continue
-    }
-    if (blobKey === 'deed_purchaseOrders') {
-      checks.push(evaluateParity({
-        blobKey,
-        prismaTable: 'purchase_orders',
-        blobCount,
-        prismaCount: await safeCount(() => prisma.purchaseOrder.count()),
-      }))
-      continue
-    }
-    if (blobKey === 'deed_payments') {
-      checks.push(evaluateParity({
-        blobKey,
-        prismaTable: 'payments',
-        blobCount,
-        prismaCount: await safeCount(() => prisma.payment.count()),
-      }))
-      continue
-    }
-    if (blobKey === 'deed_stockMoves') {
-      checks.push(evaluateParity({
-        blobKey,
-        prismaTable: 'stock_movements',
-        blobCount,
-        prismaCount: await safeCount(() => prisma.stockMovement.count()),
-      }))
+        prismaCount: null,
+        parityOk: false,
+        domainRole: domainRoleFor(blobKey),
+        blockedReason: 'No Prisma mapping registered for this blob key',
+      })
       continue
     }
 
-    checks.push({
+    const prismaCount = await safeCount(mapping.count)
+    let idOverlap: { sampled: number; matched: number } | undefined
+    if (mapping.overlap) {
+      idOverlap = await sampleIdOverlap(raw, mapping.overlap)
+    }
+
+    checks.push(evaluateParity({
       blobKey,
-      prismaTable: 'unknown',
+      prismaTable: mapping.prismaTable,
       blobCount,
-      prismaCount: null,
-      parityOk: false,
-      blockedReason: 'No Prisma mapping registered for this blob key',
-    })
+      prismaCount,
+      domainRole: domainRoleFor(blobKey),
+      allowPrismaAhead: mapping.allowPrismaAhead,
+      hardStopWhenUnequal: mapping.hardStopWhenUnequal,
+      idOverlap,
+    }))
   }
 
   return checks
@@ -170,7 +209,7 @@ export async function upsertCutoverCertificate(input: {
   const existing = await prisma.blobCutoverCertificate.findFirst({
     where: {
       blobKey: input.blobKey,
-      status: { in: ['verified', 'certified', 'archived', 'blocked', 'pending'] },
+      status: { in: ['verified', 'certified', 'archived', 'blocked', 'pending', 'tracked'] },
     },
     orderBy: { updatedAt: 'desc' },
   })

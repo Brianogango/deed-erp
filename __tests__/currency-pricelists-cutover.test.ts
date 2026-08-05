@@ -20,6 +20,7 @@ import {
   canRetireLiveKey,
   countBlobArray,
   evaluateParity,
+  summariseParityChecks,
   uncertifiedProtectedKeys,
 } from '@/lib/blob-cutover'
 
@@ -131,6 +132,44 @@ describe('blob cutover gates', () => {
     expect(check.parityOk).toBe(false)
     expect(check.blockedReason).toMatch(/Hard stop/)
     expect(canCertify(check)).toBe(false)
+  })
+
+  it('tracks blob-SoT lag without treating it as certify-ready', () => {
+    const check = evaluateParity({
+      blobKey: 'deed_serials',
+      prismaTable: 'serial_numbers',
+      blobCount: 200,
+      prismaCount: 15,
+      domainRole: 'blob_sot',
+    })
+    expect(check.parityOk).toBe(false)
+    expect(check.mirrorCoverage).toBeCloseTo(0.075)
+    expect(check.details?.tracked).toBe(true)
+    expect(canCertify(check)).toBe(false)
+  })
+
+  it('flags Prisma ahead of blob-SoT as unhealthy', () => {
+    const check = evaluateParity({
+      blobKey: 'deed_serials',
+      prismaTable: 'serial_numbers',
+      blobCount: 10,
+      prismaCount: 12,
+      domainRole: 'blob_sot',
+    })
+    expect(check.parityOk).toBe(false)
+    expect(check.blockedReason).toMatch(/Prisma ahead/)
+  })
+
+  it('summarises hard-stops vs blob-SoT lag for cron exit codes', () => {
+    const summary = summariseParityChecks([
+      evaluateParity({ blobKey: 'deed_products', prismaTable: 'products', blobCount: 10, prismaCount: 9, domainRole: 'catalog' }),
+      evaluateParity({ blobKey: 'deed_serials', prismaTable: 'serial_numbers', blobCount: 10, prismaCount: 2, domainRole: 'blob_sot' }),
+      evaluateParity({ blobKey: 'deed_quotes', prismaTable: 'quotes', blobCount: 5, prismaCount: 5, domainRole: 'dual_write' }),
+    ])
+    expect(summary.hardStops).toBe(1)
+    expect(summary.blobSotLag).toBe(1)
+    expect(summary.dualWriteGaps).toBe(0)
+    expect(summary.unhealthy).toBe(true)
   })
 
   it('requires certify before archive and archive before retire', () => {

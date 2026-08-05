@@ -7,6 +7,7 @@ import {
   canArchive,
   canCertify,
   canRetireLiveKey,
+  summariseParityChecks,
   uncertifiedProtectedKeys,
 } from '@/lib/blob-cutover'
 import {
@@ -54,6 +55,7 @@ export async function GET() {
     functionalCurrency: 'KES',
     note: 'Never deletes app_state keys. Archive copies first; retire requires certified+archived.',
     checks,
+    summary: summariseParityChecks(checks),
     certificates,
     uncertifiedProtectedKeys: uncertified,
     allProtectedCertified: uncertified.length === 0,
@@ -87,22 +89,36 @@ export async function POST(req: NextRequest) {
     const checks = await verifyBlobParity(keys)
     const persisted = []
     for (const check of checks) {
+      const status =
+        check.parityOk
+          ? 'verified'
+          : check.domainRole === 'blob_sot'
+            ? 'tracked'
+            : 'blocked'
       const row = await upsertCutoverCertificate({
         blobKey: check.blobKey,
-        status: check.parityOk ? 'verified' : 'blocked',
+        status,
         blobCount: check.blobCount,
         prismaCount: check.prismaCount,
         parityOk: check.parityOk,
         details: {
           blockedReason: check.blockedReason,
           prismaTable: check.prismaTable,
+          domainRole: check.domainRole,
+          mirrorCoverage: check.mirrorCoverage,
           ...(check.details || {}),
         },
         notes: check.blockedReason || null,
       })
       persisted.push(row)
     }
-    return NextResponse.json({ ok: true, action: 'verify', checks, certificates: persisted })
+    return NextResponse.json({
+      ok: true,
+      action: 'verify',
+      checks,
+      summary: summariseParityChecks(checks),
+      certificates: persisted,
+    })
   }
 
   if (!blobKey) {
