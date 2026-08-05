@@ -15,6 +15,11 @@ import {
   parseRiderFeeInput,
   suggestRiderFeePrefill,
 } from '@/lib/delivery-job-fee'
+import {
+  DELIVERY_JOB_TYPE_LABELS,
+  deliveryJobTypeUsesDocumentLink,
+  isGeneralDeliveryJob,
+} from '@/lib/delivery-job-type'
 
 // ── Print Components ───────────────────────────────────────────────────────────
 function PrintJobSheet({ job, companySettings, onDone }: { job: DeliveryJob, companySettings: any, onDone: () => void }) {
@@ -52,7 +57,7 @@ function PrintJobSheet({ job, companySettings, onDone }: { job: DeliveryJob, com
         </div>
         <div>
           <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Job Information</p>
-          <p className="text-sm"><span className="font-semibold">Type:</span> {JOB_TYPE_LABELS[job.type]}</p>
+          <p className="text-sm"><span className="font-semibold">Type:</span> {DELIVERY_JOB_TYPE_LABELS[job.type] ?? job.type}</p>
           <p className="text-sm mt-1"><span className="font-semibold">Rider:</span> {job.riderName || 'Unassigned'}</p>
           {job.saleOrderRef && <p className="text-sm mt-1"><span className="font-semibold">Sale Order:</span> {job.saleOrderRef}</p>}
           {job.repairOrderRef && <p className="text-sm mt-1"><span className="font-semibold">Repair Order:</span> {job.repairOrderRef}</p>}
@@ -202,11 +207,7 @@ function PrintPaySlip({ pay, companySettings, onDone }: { pay: RiderWeeklyPay, c
 // ── Helpers ────────────────────────────────────────────────────────────────────
 type MainTab = 'jobs' | 'riders' | 'weekly_pay'
 
-const JOB_TYPE_LABELS: Record<DeliveryJobType, string> = {
-  repair_pickup:   'Repair Pickup',
-  repair_dropoff:  'Repair Drop-off',
-  sales_delivery:  'Sales Delivery',
-}
+const JOB_TYPE_LABELS = DELIVERY_JOB_TYPE_LABELS
 
 const labelMap: Record<DeliveryJobStatus, string> = {
   pending: 'Pending',
@@ -222,9 +223,10 @@ function TypeBadge({ type }: { type: DeliveryJobType }) {
     repair_pickup:  { bg: 'var(--warning-bg)', color: 'var(--warning-text)', border: '#FDE68A' },
     repair_dropoff: { bg: '#E8F3FA', color: 'var(--navy)', border: '#A8D4E8' },
     sales_delivery: { bg: 'var(--success-bg)', color: 'var(--success-text)', border: '#BBF7D0' },
+    general:        { bg: 'var(--bg-surface)', color: 'var(--text-2)', border: 'var(--border-lt)' },
   }
-  const c = colors[type]
-  return <span style={{ fontSize: 9, fontWeight: 700, padding: '2px 8px', borderRadius: 20, background: c.bg, color: c.color, border: `1px solid ${c.border}`, whiteSpace: 'nowrap' }}>{JOB_TYPE_LABELS[type]}</span>
+  const c = colors[type] ?? colors.general
+  return <span style={{ fontSize: 9, fontWeight: 700, padding: '2px 8px', borderRadius: 20, background: c.bg, color: c.color, border: `1px solid ${c.border}`, whiteSpace: 'nowrap' }}>{JOB_TYPE_LABELS[type] ?? type}</span>
 }
 
 // ── Job Form Modal ─────────────────────────────────────────────────────────────
@@ -252,6 +254,16 @@ function JobModal({
   })
 
   function set(k: string, v: string) { setForm(p => ({ ...p, [k]: v })) }
+
+  function selectType(type: DeliveryJobType) {
+    setForm(p => ({
+      ...p,
+      type,
+      // Clear document links that don't apply to the new type.
+      saleOrderId: type === 'sales_delivery' ? p.saleOrderId : '',
+      repairOrderId: type === 'repair_dropoff' ? p.repairOrderId : '',
+    }))
+  }
 
   function handleRiderChange(id: string) {
     const rider = riders.find(r => r.id === id)
@@ -285,18 +297,24 @@ function JobModal({
       showToast('Enter the rider fee for this job (amount can vary per trip)', 'error')
       return
     }
+    const isGeneral = isGeneralDeliveryJob(form.type)
     const job = createDeliveryJob({
       type: form.type,
-      saleOrderId:   form.saleOrderId   || undefined,
-      saleOrderRef:  saleOrders.find(s => s.id === form.saleOrderId)?.ref,
-      repairOrderId: form.repairOrderId || undefined,
-      repairOrderRef: repairs.find(r => r.id === form.repairOrderId)?.ref,
+      saleOrderId:   !isGeneral && form.saleOrderId ? form.saleOrderId : undefined,
+      saleOrderRef:  !isGeneral && form.saleOrderId
+        ? saleOrders.find(s => s.id === form.saleOrderId)?.ref
+        : undefined,
+      repairOrderId: !isGeneral && form.repairOrderId ? form.repairOrderId : undefined,
+      repairOrderRef: !isGeneral && form.repairOrderId
+        ? repairs.find(r => r.id === form.repairOrderId)?.ref
+        : undefined,
       customerName:    form.customerName,
       customerPhone:   form.customerPhone,
       pickupAddress:   form.pickupAddress,
       deliveryAddress: form.deliveryAddress,
       scheduledDate:   form.scheduledDate,
       riderFee:        fee,
+      billedTo:        isGeneral ? 'company' : undefined,
       notes:           form.notes,
     })
     // Pass the entered fee so assign never overwrites it with a zero default rate.
@@ -309,9 +327,9 @@ function JobModal({
       <div className="space-y-3">
         <div>
           <label className="text-[11px] font-semibold text-t2 block mb-1.5">Job Type *</label>
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
             {(Object.keys(JOB_TYPE_LABELS) as DeliveryJobType[]).map(t => (
-              <button key={t} onClick={() => set('type', t)}
+              <button key={t} type="button" onClick={() => selectType(t)}
                 style={{
                   padding: '8px 12px', borderRadius: 8, fontSize: 11, fontWeight: 600, cursor: 'pointer', transition: 'all 0.15s',
                   background: form.type === t ? '#E8F3FA' : 'var(--bg-surface)',
@@ -322,6 +340,11 @@ function JobModal({
               </button>
             ))}
           </div>
+          {isGeneralDeliveryJob(form.type) && (
+            <p className="text-[10px] text-t4 mt-1.5">
+              No sale order, repair, or invoice link. Use notes to describe the trip (courier, supplier pickup, internal move, etc.).
+            </p>
+          )}
         </div>
 
         {form.type === 'repair_dropoff' ? (
@@ -360,7 +383,7 @@ function JobModal({
         <p className="text-[10px] text-t4 -mt-1">Fee is per job and can vary. Selecting a rider only suggests their default rate when this field is empty.</p>
 
         <Field label="Notes / Instructions">
-          <textarea className="form-input text-xs w-full" rows={2} value={form.notes} onChange={e => set('notes', e.target.value)} placeholder="Special instructions, fragile items, gate code, etc." />
+          <textarea className="form-input text-xs w-full" rows={2} value={form.notes} onChange={e => set('notes', e.target.value)} placeholder={isGeneralDeliveryJob(form.type) ? 'Why this trip: courier docs, supplier pickup, shop transfer, etc.' : 'Special instructions, fragile items, gate code, etc.'} />
         </Field>
       </div>
       <div className="flex justify-end gap-2 mt-4">

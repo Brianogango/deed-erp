@@ -1207,6 +1207,7 @@ export type DeliveryJobType =
   | 'repair_pickup'    // collect device from customer for repair
   | 'repair_dropoff'   // return repaired device to customer
   | 'sales_delivery'   // deliver items from a confirmed sale order
+  | 'general'          // ad-hoc rider trip with no SO / repair / invoice link
 
 export type DeliveryJobStatus =
   | 'pending'     // created, not yet assigned to a rider
