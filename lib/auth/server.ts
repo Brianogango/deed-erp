@@ -5,19 +5,27 @@ import { getServerSession as nextAuthGetServerSession } from 'next-auth'
 
 import { authOptions } from './auth-options'
 import type { PublicUser, ServerSession, UserRole, ModuleId } from './types'
+import { resolveUserSessionStatus } from './session-validity.server'
 
 export const getServerSession = async (): Promise<ServerSession | null> => {
   const session = await nextAuthGetServerSession(authOptions)
 
   if (!session?.user?.id) return null
 
+  // Live active/role check so deactivated users and role changes take effect
+  // without waiting for the JWT to expire (SEC-002).
+  const status = await resolveUserSessionStatus(session.user.id)
+  if (!status.isActive) return null
+
+  const role = (status.role || session.user.role) as UserRole
+
   const user: PublicUser = {
     id:        session.user.id,
     username:  session.user.username,
     name:      session.user.name ?? '',
-    role:      session.user.role as UserRole,
+    role,
     modules:   Array.isArray(session.user.modules) ? session.user.modules as ModuleId[] : [],
-    active:    session.user.active,
+    active:    true,
     createdAt: session.user.createdAt,
   }
 

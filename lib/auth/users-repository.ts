@@ -3,6 +3,7 @@ import 'server-only'
 import { sql } from './db'
 import { buildSeedUsers } from './seed'
 import type { AuthUserRecord, CreateUserInput, PublicUser, UpdateUserInput } from './types'
+import { invalidateUserSessions } from './session-validity'
 
 // Row type matches the live PostgreSQL schema which has BOTH Prisma-managed
 // columns (is_active, must_reset_pw) AND legacy app columns (active, must_change_password).
@@ -368,6 +369,14 @@ export const updateAuthUser = async (id: string, input: UpdateUserInput, passwor
     WHERE id = ${id}
   `
 
+  // Role / active changes must revoke or refresh cached JWT claims (SEC-002).
+  if (
+    nextUser.role !== existingUser.role ||
+    nextUser.active !== existingUser.active
+  ) {
+    await invalidateUserSessions(id, { isActive: nextUser.active, role: nextUser.role })
+  }
+
   return nextUser
 }
 
@@ -377,6 +386,7 @@ export const deleteAuthUser = async (id: string) => {
   const existingUser = await findAuthUserById(id)
   if (!existingUser) return null
   await sql`DELETE FROM users WHERE id = ${id}`
+  await invalidateUserSessions(id, { isActive: false, role: existingUser.role })
   return existingUser
 }
 
@@ -395,6 +405,7 @@ export const deactivateAuthUser = async (id: string) => {
         updated_at = ${nowTs}
     WHERE id = ${id}
   `
+  await invalidateUserSessions(id, { isActive: false, role: existingUser.role })
   return { ...existingUser, active: false }
 }
 
@@ -411,6 +422,7 @@ export const reactivateAuthUser = async (id: string) => {
         updated_at = ${nowTs}
     WHERE id = ${id}
   `
+  await invalidateUserSessions(id, { isActive: true, role: existingUser.role })
   return { ...existingUser, active: true }
 }
 
