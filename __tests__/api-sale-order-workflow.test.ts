@@ -4,12 +4,21 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 // /api/sale-orders/[id]: illegal transitions, cancellation blockers,
 // lock rules, and server-side stamping.
 
-const { mockGetSession, mockPrismaSO, mockPrismaInvoice, mockResolveClientId, mockLoadAppState, mockSaveStoreKeys } = vi.hoisted(() => ({
+const {
+  mockGetSession,
+  mockPrismaSO,
+  mockPrismaInvoice,
+  mockResolveClientId,
+  mockLoadAppState,
+  mockSaveStoreKeys,
+  mockWriteFinancialAudit,
+} = vi.hoisted(() => ({
   mockGetSession: vi.fn(),
   mockPrismaSO: {
     findUnique: vi.fn(),
     findMany: vi.fn().mockResolvedValue([]),
     update: vi.fn(),
+    delete: vi.fn(),
   },
   mockPrismaInvoice: {
     findMany: vi.fn().mockResolvedValue([]),
@@ -17,6 +26,7 @@ const { mockGetSession, mockPrismaSO, mockPrismaInvoice, mockResolveClientId, mo
   mockResolveClientId: vi.fn(),
   mockLoadAppState: vi.fn().mockResolvedValue({}),
   mockSaveStoreKeys: vi.fn().mockResolvedValue(undefined),
+  mockWriteFinancialAudit: vi.fn().mockResolvedValue(undefined),
 }))
 
 vi.mock('@/lib/auth/api', () => ({
@@ -33,13 +43,14 @@ vi.mock('@/lib/auth/api', () => ({
 
 vi.mock('@/lib/prisma', () => ({ default: { saleOrder: mockPrismaSO, invoice: mockPrismaInvoice } }))
 vi.mock('@/lib/server-store', () => ({ loadAppState: mockLoadAppState, saveStoreKeys: mockSaveStoreKeys }))
+vi.mock('@/lib/finance-audit', () => ({ writeFinancialAudit: mockWriteFinancialAudit }))
 vi.mock('@/lib/legacy-compat', () => ({
   resolveClientId: mockResolveClientId,
   optionalUuid: (v: unknown) =>
     typeof v === 'string' && /^[0-9a-f-]{36}$/i.test(v) ? v : undefined,
 }))
 
-import { PUT } from '@/app/api/sale-orders/[id]/route'
+import { PUT, DELETE } from '@/app/api/sale-orders/[id]/route'
 
 const ORDER_ID = 'ffffffff-ffff-ffff-ffff-ffffffffffff'
 const CLIENT_ID = 'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee'
@@ -207,5 +218,47 @@ describe('sale-order workflow enforcement (server-side)', () => {
     mockPrismaSO.findUnique.mockResolvedValue(null)
     const res = await PUT(putReq({ status: 'sale' }), params)
     expect(res.status).toBe(404)
+  })
+})
+
+// ── DELETE /api/sale-orders/:id (FIN-001 soft-cancel) ─────────────────────────
+describe('DELETE /api/sale-orders/:id', () => {
+  function deleteReq(): any {
+    return new Request(`http://localhost/api/sale-orders/${ORDER_ID}`, { method: 'DELETE' })
+  }
+
+  it('soft-cancels a draft quotation (never hard-deletes)', async () => {
+    mockPrismaSO.findUnique.mockResolvedValue({ ...baseOrder, status: 'quotation' })
+    mockPrismaSO.update.mockResolvedValue({ ...baseOrder, status: 'cancelled', client: baseOrder.client, items: baseOrder.items })
+    const res = await DELETE(deleteReq(), params)
+    expect(res.status).toBe(200)
+    expect((await res.json()).ok).toBe(true)
+    expect(mockPrismaSO.delete).not.toHaveBeenCalled()
+    expect(mockPrismaSO.update.mock.calls[0][0].data.status).toBe('cancelled')
+    expect(mockWriteFinancialAudit).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'cancel_sale_order', entityType: 'sale_order', entityId: ORDER_ID }),
+    )
+  })
+
+  it('returns 409 for a confirmed sale order', async () => {
+    mockPrismaSO.findUnique.mockResolvedValue({ ...baseOrder, status: 'sale', orderNumber: 'SO/2026/0001' })
+    mockLoadAppState.mockResolvedValue({ deed_deliveries: [], deed_invoices: [] })
+    const res = await DELETE(deleteReq(), params)
+    expect(res.status).toBe(409)
+    expect(mockPrismaSO.delete).not.toHaveBeenCalled()
+    expect(mockPrismaSO.update).not.toHaveBeenCalled()
+  })
+
+  it('returns 409 when confirmed SO has a linked invoice', async () => {
+    mockPrismaSO.findUnique.mockResolvedValue({ ...baseOrder, status: 'sale', orderNumber: 'SO/2026/0001' })
+    mockLoadAppState.mockResolvedValue({
+      deed_deliveries: [],
+      deed_invoices: [{ id: 'inv-1', saleOrderId: ORDER_ID, status: 'posted', amountPaid: 0 }],
+    })
+    const res = await DELETE(deleteReq(), params)
+    expect(res.status).toBe(409)
+    const body = await res.json()
+    expect(String(body.error)).toMatch(/invoice/i)
+    expect(mockPrismaSO.delete).not.toHaveBeenCalled()
   })
 })

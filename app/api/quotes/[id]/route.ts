@@ -4,6 +4,7 @@ import { withApiErrorHandling, getRequiredSession } from '@/lib/auth/api'
 import { optionalUuid, resolveClientId } from '@/lib/legacy-compat'
 import { saveStoreKeys } from '@/lib/server-store'
 import { normalizeQuoteForClient, normalizeQuotesForClient } from '@/lib/quote-normalization'
+import { writeFinancialAudit } from '@/lib/finance-audit'
 
 async function broadcastQuotes() {
   try {
@@ -144,8 +145,51 @@ export async function DELETE(_: NextRequest, { params }: { params: { id: string 
   return withApiErrorHandling(async () => {
     const session = await getRequiredSession()
     if (!WRITE_ROLES.includes(session.user.role)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-    await prisma.quote.delete({ where: { id: params.id } })
+
+    const quote = await prisma.quote.findUnique({ where: { id: params.id } })
+    if (!quote) return NextResponse.json({ error: 'Quote not found' }, { status: 404 })
+
+    const status = String(quote.status || '').toLowerCase()
+    if (status === 'cancelled' || status === 'voided') {
+      return NextResponse.json({ ok: true, quote: normalizeQuoteForClient(quote as any) })
+    }
+
+    // Approved / sent / converted quotes must never be hard-deleted (audit FIN-002).
+    const protectedStatuses = new Set([
+      'pending_approval', 'approved', 'rejected', 'invoiced',
+      'dispatched', 'delivered', 'paid', 'partially_paid',
+      'sent', 'viewed', 'accepted',
+    ])
+    if (quote.convertedToId || protectedStatuses.has(status)) {
+      return NextResponse.json({
+        error: quote.convertedToId
+          ? 'Converted quotes cannot be deleted'
+          : `Quotes with status "${quote.status}" cannot be deleted — cancel only draft quotes`,
+      }, { status: 409 })
+    }
+
+    if (status !== 'draft' && status !== 'revised') {
+      return NextResponse.json({
+        error: `Quotes with status "${quote.status}" cannot be deleted`,
+      }, { status: 409 })
+    }
+
+    const cancelled = await prisma.quote.update({
+      where: { id: quote.id },
+      data: { status: 'cancelled' },
+      include: { items: true, client: true, opportunity: true },
+    })
+
+    await writeFinancialAudit({
+      userId: session.user.id,
+      action: 'cancel_quote',
+      entityType: 'quote',
+      entityId: quote.id,
+      oldValues: { status: quote.status, quoteNumber: (quote as any).quoteNumber },
+      newValues: { status: 'cancelled' },
+    })
+
     void broadcastQuotes()
-    return NextResponse.json({ ok: true })
+    return NextResponse.json({ ok: true, quote: normalizeQuoteForClient(cancelled) })
   })
 }

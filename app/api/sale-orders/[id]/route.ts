@@ -9,9 +9,11 @@ import {
   normalizeSaleStatus,
   saleTransitionError,
   saleOrderCancelBlockers,
+  isQuotationStage,
 } from '@/lib/odoo-sales-flow'
 import { enforceSaleOrderApprovals } from '@/lib/sales-approval-enforcement.server'
 import { lockVersionMismatch, nextLockVersion, readExpectedVersion } from '@/lib/optimistic-lock'
+import { writeFinancialAudit } from '@/lib/finance-audit'
 
 async function broadcastSaleOrders() {
   try {
@@ -412,8 +414,51 @@ export async function DELETE(_: NextRequest, { params }: { params: { id: string 
     const session = await getRequiredSession()
     if (!canWrite(session.user.role)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
-    await prisma.saleOrder.delete({ where: { id: params.id } })
+    const order = await prisma.saleOrder.findUnique({
+      where: { id: params.id },
+      include: { items: true },
+    })
+    if (!order) return NextResponse.json({ error: 'Sale order not found' }, { status: 404 })
+
+    const status = normalizeSaleStatus(order.status)
+    if (status === 'cancelled') {
+      return NextResponse.json({ ok: true, saleOrder: mapSaleOrderToClient(order) })
+    }
+
+    // Confirmed / progressed orders: never hard-delete (audit FIN-001).
+    if (!isQuotationStage(status)) {
+      const state = await loadAppState(['deed_deliveries', 'deed_invoices'])
+      const deliveries = (Array.isArray(state.deed_deliveries) ? state.deed_deliveries : [])
+        .filter((d: any) => d?.saleOrderId === order.id)
+      const invoices = (Array.isArray(state.deed_invoices) ? state.deed_invoices : [])
+        .filter((i: any) => i?.saleOrderId === order.id)
+      const blockers = saleOrderCancelBlockers({
+        status,
+        deliveries: deliveries.map((d: any) => ({ status: d.status })),
+        invoices: invoices.map((i: any) => ({ status: i.status, amountPaid: i.amountPaid })),
+      })
+      const reason = blockers.length > 0
+        ? `Confirmed sale orders cannot be deleted (${blockers.join('; ')})`
+        : 'Confirmed sale orders cannot be deleted — cancel via sales workflow if allowed'
+      return NextResponse.json({ error: reason }, { status: 409 })
+    }
+
+    const cancelled = await prisma.saleOrder.update({
+      where: { id: order.id },
+      data: { status: 'cancelled' },
+      include: { client: true, items: true },
+    })
+
+    await writeFinancialAudit({
+      userId: session.user.id,
+      action: 'cancel_sale_order',
+      entityType: 'sale_order',
+      entityId: order.id,
+      oldValues: { status: order.status, orderNumber: order.orderNumber },
+      newValues: { status: 'cancelled' },
+    })
+
     void broadcastSaleOrders()
-    return NextResponse.json({ ok: true })
+    return NextResponse.json({ ok: true, saleOrder: mapSaleOrderToClient(cancelled) })
   })
 }

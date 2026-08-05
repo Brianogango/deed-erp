@@ -43,6 +43,15 @@ vi.mock('@/lib/auth/api', () => ({
 
 vi.mock('@/lib/prisma', () => ({ default: { quote: mockPrismaQuote } }))
 
+vi.mock('@/lib/finance-audit', () => ({
+  writeFinancialAudit: vi.fn().mockResolvedValue(undefined),
+}))
+
+vi.mock('@/lib/server-store', () => ({
+  saveStoreKeys: vi.fn().mockResolvedValue(undefined),
+  loadAppState: vi.fn().mockResolvedValue({}),
+}))
+
 vi.mock('@/lib/legacy-compat', () => ({
   resolveClientId: mockResolveClientId,
   optionalUuid: (v: unknown) => {
@@ -435,12 +444,36 @@ describe('PUT /api/quotes/:id', () => {
 
 // ── DELETE /api/quotes/:id ────────────────────────────────────────────────────
 describe('DELETE /api/quotes/:id', () => {
-  it('deletes the quote and returns { ok: true }', async () => {
-    mockPrismaQuote.delete.mockResolvedValue(baseQuote)
+  it('soft-cancels a draft quote (never hard-deletes)', async () => {
+    mockPrismaQuote.findUnique.mockResolvedValue({ ...baseQuote, status: 'draft' })
+    mockPrismaQuote.update.mockResolvedValue({ ...baseQuote, status: 'cancelled' })
     const req = new NextRequest(`http://localhost/api/quotes/${QUOTE_ID}`, { method: 'DELETE' })
     const res = await DELETE(req, { params: { id: QUOTE_ID } })
     expect(res.status).toBe(200)
     expect((await res.json()).ok).toBe(true)
+    expect(mockPrismaQuote.delete).not.toHaveBeenCalled()
+    expect(mockPrismaQuote.update.mock.calls[0][0].data.status).toBe('cancelled')
+  })
+
+  it('returns 409 for an approved quote', async () => {
+    mockPrismaQuote.findUnique.mockResolvedValue({ ...baseQuote, status: 'approved' })
+    const req = new NextRequest(`http://localhost/api/quotes/${QUOTE_ID}`, { method: 'DELETE' })
+    const res = await DELETE(req, { params: { id: QUOTE_ID } })
+    expect(res.status).toBe(409)
+    expect(mockPrismaQuote.delete).not.toHaveBeenCalled()
+    expect(mockPrismaQuote.update).not.toHaveBeenCalled()
+  })
+
+  it('returns 409 for a converted quote', async () => {
+    mockPrismaQuote.findUnique.mockResolvedValue({
+      ...baseQuote,
+      status: 'draft',
+      convertedToId: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+    })
+    const req = new NextRequest(`http://localhost/api/quotes/${QUOTE_ID}`, { method: 'DELETE' })
+    const res = await DELETE(req, { params: { id: QUOTE_ID } })
+    expect(res.status).toBe(409)
+    expect(mockPrismaQuote.delete).not.toHaveBeenCalled()
   })
 
   it('returns 403 for technician role', async () => {
