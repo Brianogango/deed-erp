@@ -130,7 +130,7 @@ export default function Reconfiguration() {
       return
     }
     try {
-      const cfg = await api(`/api/reconfiguration/device/${encodeURIComponent(serialId)}/configuration`)
+      const cfg = await api<any>(`/api/reconfiguration/device/${encodeURIComponent(serialId)}/configuration`)
       setDeviceConfig(cfg)
       if (cfg?.current?.totalRamGb) setWizRam(cfg.current.totalRamGb)
       if (cfg?.current?.primaryStorageGb) setWizStorage(cfg.current.primaryStorageGb)
