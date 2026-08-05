@@ -527,7 +527,7 @@ function InventoryContent() {
     }>()
     for (const p of reportFilteredProducts) {
       map.set(p.id, {
-        locs: { warehouse: 0, shop: 0, repair_unit: 0, vendor: 0, customer: 0, employee: 0 },
+        locs: { warehouse: 0, shop: 0, repair_unit: 0, vendor: 0, customer: 0, employee: 0, pending_testing: 0, quarantine: 0 },
         monthly: { opening: 0, purchases: 0, sales: 0, usage: 0, closing: 0 }
       })
     }
