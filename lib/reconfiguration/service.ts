@@ -312,7 +312,7 @@ async function syncBlobSpecs(serialId: string, specs: string) {
   const idx = serials.findIndex(s => s.id === serialId || s.serial === serialId)
   if (idx < 0) return
   serials[idx] = { ...serials[idx], specs }
-  await saveStoreKeys({ deed_serials: serials })
+  await saveStoreKeys({ deed_serials: JSON.stringify(serials) })
 }
 
 export async function createReconfiguration(params: {
@@ -714,7 +714,7 @@ export async function reserveComponents(params: {
     })
   }
 
-  await saveStoreKeys({ deed_stockReservations: reservations })
+  await saveStoreKeys({ deed_stockReservations: JSON.stringify(reservations) })
   await mirrorStockReservationsToPrisma(reservations).catch(() => null)
 
   const next = wo.status === 'components_reserved' ? 'components_reserved' : nextStatus(
@@ -844,7 +844,7 @@ export async function startWork(params: { id: string; version: number; userId?: 
       status: 'reconfiguration',
       location: 'repair_unit',
     }
-    await saveStoreKeys({ deed_serials: serials })
+    await saveStoreKeys({ deed_serials: JSON.stringify(serials) })
   }
 
   // Seed QA checklist
@@ -1001,7 +1001,7 @@ export async function recordInstallation(params: {
     reservations = reservations.map(r =>
       r.id === line.reservationId ? { ...r, status: 'fulfilled', releasedDate: new Date().toISOString() } : r,
     )
-    await saveStoreKeys({ deed_stockReservations: reservations })
+    await saveStoreKeys({ deed_stockReservations: JSON.stringify(reservations) })
     await mirrorStockReservationsToPrisma(reservations).catch(() => null)
   }
 
@@ -1143,9 +1143,9 @@ async function applyStockPlan(plan: ReturnType<typeof planComponentRemoval> | Re
   }
 
   await saveStoreKeys({
-    deed_bulkStock: bulkStock,
-    deed_serials: serials,
-    deed_stockMoves: stockMoves,
+    deed_bulkStock: JSON.stringify(bulkStock),
+    deed_serials: JSON.stringify(serials),
+    deed_stockMoves: JSON.stringify(stockMoves),
   })
   return moveId
 }
@@ -1317,7 +1317,7 @@ export async function completeWorkOrder(params: {
       location: wo.warehouseLocation || 'warehouse',
       salePriceOverride: selling,
     }
-    await saveStoreKeys({ deed_serials: serials })
+    await saveStoreKeys({ deed_serials: JSON.stringify(serials) })
   }
 
   // Valuation journals (idempotent)
@@ -1487,7 +1487,10 @@ export async function cancelWorkOrder(params: { id: string; version: number; use
   if (idx >= 0 && serials[idx].status === 'reconfiguration') {
     serials[idx] = { ...serials[idx], status: 'available', location: wo.warehouseLocation || 'warehouse' }
   }
-  await saveStoreKeys({ deed_stockReservations: reservations, deed_serials: serials })
+  await saveStoreKeys({
+    deed_stockReservations: JSON.stringify(reservations),
+    deed_serials: JSON.stringify(serials),
+  })
   await mirrorStockReservationsToPrisma(reservations).catch(() => null)
 
   await prisma.reconfigurationWorkOrder.update({

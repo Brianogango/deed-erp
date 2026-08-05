@@ -21,6 +21,7 @@ const EXPECTED_PREFIXES: Record<string, string> = {
   vendor_bill: 'BILL',
   receipt: 'REC',
   payment_receipt: 'RCT',
+  reconfiguration: 'RCF',
 }
 
 beforeEach(() => {
