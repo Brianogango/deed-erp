@@ -162,3 +162,37 @@ export function mergeAppendOnlyJournals(
   // Prefer incoming order but keep any server-only rows already validated
   return { ok: true, merged: next }
 }
+
+/** Normalize a date-like value to YYYY-MM-DD (UTC). */
+export function toFiscalDay(value: Date | string): string {
+  if (value instanceof Date) {
+    if (Number.isNaN(value.getTime())) return ''
+    return value.toISOString().slice(0, 10)
+  }
+  const raw = String(value)
+  const dt = raw.includes('T') || raw.includes('Z')
+    ? new Date(raw)
+    : new Date(`${raw}T00:00:00Z`)
+  if (Number.isNaN(dt.getTime())) return ''
+  return dt.toISOString().slice(0, 10)
+}
+
+/**
+ * True when the document date is on or before the fiscal lock date.
+ * A missing lock date never blocks.
+ */
+export function isDocumentDateFiscalLocked(
+  documentDate: Date | string,
+  lockDate: Date | string | null | undefined,
+): boolean {
+  if (lockDate == null || lockDate === '') return false
+  const docDay = toFiscalDay(documentDate)
+  const lockDay = toFiscalDay(lockDate)
+  if (!docDay || !lockDay) return false
+  return docDay <= lockDay
+}
+
+export function fiscalLockConflictMessage(lockDate: Date | string): string {
+  const lockDay = toFiscalDay(lockDate)
+  return `Fiscal period locked through ${lockDay} — backdated documents are not allowed`
+}

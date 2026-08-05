@@ -44,6 +44,9 @@ vi.mock('@/lib/auth/api', () => ({
 vi.mock('@/lib/prisma', () => ({ default: { saleOrder: mockPrismaSO, invoice: mockPrismaInvoice } }))
 vi.mock('@/lib/server-store', () => ({ loadAppState: mockLoadAppState, saveStoreKeys: mockSaveStoreKeys }))
 vi.mock('@/lib/finance-audit', () => ({ writeFinancialAudit: mockWriteFinancialAudit }))
+vi.mock('@/lib/fiscal-lock.server', () => ({
+  checkFiscalLock: vi.fn().mockResolvedValue({ ok: true }),
+}))
 vi.mock('@/lib/legacy-compat', () => ({
   resolveClientId: mockResolveClientId,
   optionalUuid: (v: unknown) =>

@@ -1,6 +1,7 @@
 import 'server-only'
 import prisma from '@/lib/prisma'
 import { extractAccountCode, uuidFromKey } from '@/lib/accounting/ids'
+import { fiscalLockConflictMessage, isDocumentDateFiscalLocked } from '@/lib/finance-controls'
 
 export type JournalLineInput = {
   accountLabel: string
@@ -30,26 +31,19 @@ function round2(n: number) {
   return Math.round(Number(n || 0) * 100) / 100
 }
 
-function toDateOnly(d: Date | string): string {
-  const dt = d instanceof Date ? d : new Date(String(d).includes('T') ? String(d) : `${d}T00:00:00Z`)
-  return dt.toISOString().slice(0, 10)
-}
-
 /** Latest fiscal lock date, or null when no lock is configured. */
 export async function getFiscalLockDate(): Promise<Date | null> {
   const lock = await prisma.fiscalLock.findFirst({ orderBy: { lockDate: 'desc' } })
   return lock?.lockDate ?? null
 }
 
-/** Throws when `date` falls on or before the active fiscal lock date. */
+/** Throws (status 409) when `date` falls on or before the active fiscal lock date. */
 export async function assertFiscalPeriodOpen(date: Date | string): Promise<void> {
   const lockDate = await getFiscalLockDate()
-  if (!lockDate) return
-  const entryDay = toDateOnly(date)
-  const lockDay = toDateOnly(lockDate)
-  if (entryDay <= lockDay) {
-    throw new Error(`Fiscal period locked through ${lockDay}`)
-  }
+  if (!lockDate || !isDocumentDateFiscalLocked(date, lockDate)) return
+  const err = new Error(fiscalLockConflictMessage(lockDate))
+  ;(err as Error & { status?: number }).status = 409
+  throw err
 }
 
 async function resolveAccountId(accountLabel: string): Promise<string | null> {

@@ -8,6 +8,7 @@ import {
   canPostOrPayCustomerInvoice,
   DEFAULT_ADMIN_OFFICER_CUSTOMER_INVOICE_LIMIT_KES,
 } from '@/lib/finance-controls'
+import { checkFiscalLock } from '@/lib/fiscal-lock.server'
 
 const WRITE_ROLES = ['director', 'finance_officer', 'admin_officer']
 
@@ -37,6 +38,12 @@ export async function POST(
 
     if (!amount || Number(amount) <= 0) {
       return NextResponse.json({ error: 'Amount must be positive' }, { status: 400 })
+    }
+
+    const paymentDate = paidAt ? new Date(String(paidAt)) : new Date()
+    const lock = await checkFiscalLock(paymentDate)
+    if (!lock.ok) {
+      return NextResponse.json({ error: lock.error }, { status: lock.status })
     }
 
     const invoice = await prisma.invoice.findUnique({ where: { id: invoiceId } })

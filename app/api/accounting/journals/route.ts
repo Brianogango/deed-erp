@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { requireRole, withApiErrorHandling } from '@/lib/auth/api'
+import { createJournalEntry } from '@/lib/accounting/journal-service'
+import { checkFiscalLock } from '@/lib/fiscal-lock.server'
 
 export const dynamic = 'force-dynamic'
 
@@ -57,5 +59,49 @@ export async function GET(request: NextRequest) {
       count: mapped.length,
       journals: mapped,
     })
+  })
+}
+
+/**
+ * POST /api/accounting/journals — create a posted journal entry.
+ * Enforces fiscal lock (FIN-004) before persisting.
+ */
+export async function POST(request: NextRequest) {
+  return withApiErrorHandling(async () => {
+    const actor = await requireRole(['director', 'finance_officer'])
+    const body = await request.json().catch(() => ({}))
+
+    const ref = String(body.ref || '').trim()
+    const description = String(body.description || '').trim()
+    const date = body.date || new Date().toISOString().slice(0, 10)
+    const lines = Array.isArray(body.lines) ? body.lines : []
+
+    if (!ref) return NextResponse.json({ error: 'ref is required' }, { status: 400 })
+    if (!description) return NextResponse.json({ error: 'description is required' }, { status: 400 })
+    if (lines.length === 0) return NextResponse.json({ error: 'lines are required' }, { status: 400 })
+
+    const lock = await checkFiscalLock(date)
+    if (!lock.ok) {
+      return NextResponse.json({ error: lock.error }, { status: lock.status })
+    }
+
+    const entry = await createJournalEntry({
+      ref,
+      journalCode: body.journalCode ? String(body.journalCode) : undefined,
+      date,
+      description,
+      sourceType: String(body.sourceType || body.source || 'manual'),
+      sourceId: body.sourceId ? String(body.sourceId) : null,
+      createdById: actor.id,
+      skipIfExists: false,
+      lines: lines.map((l: any) => ({
+        accountLabel: String(l.account || l.accountLabel || ''),
+        label: l.description || l.label || undefined,
+        debit: Number(l.debit || 0),
+        credit: Number(l.credit || 0),
+      })),
+    })
+
+    return NextResponse.json({ journal: entry }, { status: 201 })
   })
 }
