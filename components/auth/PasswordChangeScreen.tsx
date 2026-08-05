@@ -19,7 +19,7 @@ interface Props {
 
 /**
  * Returns a list of human-readable validation problems for a candidate password.
- * Mirrors the server-side rule (>= 6 chars) but adds basic strength hints.
+ * Mirrors the server-side rule (>= 8 chars) but adds basic strength hints.
  */
 const evaluatePassword = (pwd: string): string[] => {
   const problems: string[] = []
@@ -54,7 +54,8 @@ function PasswordChangeForm({ user }: Props) {
   const passwordsMatch = newPassword.length > 0 && newPassword === confirmPassword
   const formValid =
     currentPassword.length > 0 &&
-    newPassword.length >= 6 &&
+    newPassword.length >= 8 &&
+    problems.length === 0 &&
     passwordsMatch &&
     newPassword !== currentPassword
 

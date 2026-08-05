@@ -1,5 +1,6 @@
 import { MODULE_IDS, USER_ROLES, ROLE_DEFAULT_MODULES } from './types'
 import type { CreateUserInput, ModuleId, UpdateUserInput, UserRole } from './types'
+import { MIN_PASSWORD_LENGTH } from './password-policy'
 
 const isModuleId = (value: string): value is ModuleId => MODULE_IDS.includes(value as ModuleId)
 const isUserRole = (value: string): value is UserRole => USER_ROLES.includes(value as UserRole)
@@ -70,8 +71,11 @@ export const normalizeUpdateUserInput = (body: unknown): UpdateUserInput => {
   }
 
   if ('password' in payload) {
-    if (typeof payload.password !== 'string' || payload.password.length < 6) {
-      throw Object.assign(new Error('Password must be at least 6 characters'), { status: 400 })
+    if (typeof payload.password !== 'string' || payload.password.length < MIN_PASSWORD_LENGTH) {
+      throw Object.assign(
+        new Error(`Password must be at least ${MIN_PASSWORD_LENGTH} characters`),
+        { status: 400 },
+      )
     }
     update.password = payload.password
   }

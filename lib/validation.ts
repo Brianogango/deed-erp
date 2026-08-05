@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { MIN_PASSWORD_LENGTH } from '@/lib/auth/password-policy'
 
 /**
  * Common validation schemas for the ERP system.
@@ -32,7 +33,7 @@ export const userUpdateSchema = z.object({
   role: z.string().optional(),
   modules: z.array(z.string()).optional(),
   active: z.boolean().optional(),
-  password: z.string().min(8, "Password must be at least 8 characters").optional(),
+  password: z.string().min(MIN_PASSWORD_LENGTH, `Password must be at least ${MIN_PASSWORD_LENGTH} characters`).optional(),
   mustChangePassword: z.boolean().optional(),
 })
 

@@ -523,8 +523,8 @@ function AccountPanel({
         setPwError('Enter your current password to change it.')
         return
       }
-      if (newPw.length < 6) {
-        setPwError('New password must be at least 6 characters.')
+      if (newPw.length < 8) {
+        setPwError('New password must be at least 8 characters.')
         return
       }
       if (newPw !== confirmPw) {

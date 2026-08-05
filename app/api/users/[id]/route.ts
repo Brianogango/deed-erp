@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getRequiredSession, requirePermission, withApiErrorHandling, sanitizeActor } from '@/lib/auth/api'
 import { findAuthUserById, updateAuthUser, findAuthUserByUsername, clearFailedLogin, toPublicAuthUser, deleteAuthUser, deactivateAuthUser, reactivateAuthUser } from '@/lib/auth/users-repository'
-import { hashPassword, verifyPassword } from '@/lib/auth/password'
+import { hashPassword, passwordMatchesHistory } from '@/lib/auth/password'
 import { userUpdateSchema, validate } from '@/lib/validation'
 import { assertPermission } from '@/lib/auth/authorization'
 import { isDirector } from '@/lib/auth/access'
@@ -40,16 +40,15 @@ export async function PATCH(request: Request, { params }: { params: { id: string
       delete validated.active
     }
 
-    // Password validation: Check history
+    // Password validation: reject reuse of current or last 5 hashes (SEC-009).
     if (validated.password) {
-      const history = existingUser.passwordHistory || []
-      const hashesToCheck = Array.from(new Set([existingUser.passwordHash, ...history])).filter(Boolean)
-      
-      for (const oldHash of hashesToCheck) {
-        const isMatch = await verifyPassword(validated.password, oldHash)
-        if (isMatch) {
-          throw Object.assign(new Error('You cannot reuse your current or recently used passwords.'), { status: 400 })
-        }
+      const reused = await passwordMatchesHistory(
+        validated.password,
+        existingUser.passwordHash,
+        existingUser.passwordHistory || [],
+      )
+      if (reused) {
+        throw Object.assign(new Error('You cannot reuse your current or recently used passwords.'), { status: 400 })
       }
     }
 

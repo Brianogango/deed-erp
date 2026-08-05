@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { encode } from 'next-auth/jwt'
 import { getFirstAllowedModule } from '@/lib/auth/access'
-import { verifyPassword } from '@/lib/auth/password'
-import { findAuthUserByUsername, toPublicAuthUser, recordFailedLogin, clearFailedLogin } from '@/lib/auth/users-repository'
+import { hashPassword, verifyPassword } from '@/lib/auth/password'
+import { findAuthUserByUsername, toPublicAuthUser, recordFailedLogin, clearFailedLogin, updateAuthUser } from '@/lib/auth/users-repository'
 import { loginRatelimit } from '@/lib/rate-limit'
 import { loginSchema, validate } from '@/lib/validation'
 
@@ -59,10 +59,20 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ message: 'Account locked. Try again later.' }, { status: 403 })
   }
 
-  const validPassword = await verifyPassword(validated.password, account.passwordHash)
-  if (!validPassword) {
+  const passwordCheck = await verifyPassword(validated.password, account.passwordHash)
+  if (!passwordCheck.verified) {
     await recordFailedLogin(account.id)
     return NextResponse.json({ message: 'Invalid credentials' }, { status: 401 })
+  }
+
+  // Silently upgrade legacy SHA-256 hashes to bcrypt after a successful login (SEC-006).
+  if (passwordCheck.needsRehash) {
+    try {
+      const upgradedHash = await hashPassword(validated.password)
+      await updateAuthUser(account.id, {}, upgradedHash)
+    } catch (err) {
+      console.error('[auth/login] failed to upgrade legacy password hash:', err)
+    }
   }
 
   await clearFailedLogin(account.id)
