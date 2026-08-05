@@ -20,6 +20,7 @@
     "test:coverage": "vitest run --coverage",
     "postinstall": "prisma generate",
     "test:e2e": "playwright test",
+    "parity:check": "node scripts/check-blob-parity.mjs",
     "seed:final-b974": "node scripts/seed-products-final-b974.mjs"
   },
   "dependencies": {
