@@ -65,9 +65,12 @@ export async function checkRateLimit(
   return memCheck(key, limit, windowSec * 1000)
 }
 
-// Convenience wrappers
+// Convenience wrappers — E2E suites log in many times from one IP; relax only
+// when explicitly opted in (CI / playwright.config), never by default in prod.
+const e2eRelaxed = () => process.env.E2E_RELAX_RATE_LIMIT === '1'
+
 export const loginRatelimit = {
-  limit: (ip: string) => checkRateLimit(`login:${ip}`, 10, 60),
+  limit: (ip: string) => checkRateLimit(`login:${ip}`, e2eRelaxed() ? 120 : 10, 60),
 }
 
 export const apiRatelimit = {

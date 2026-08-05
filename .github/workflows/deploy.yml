@@ -40,13 +40,16 @@ jobs:
         run: pnpm test
 
   e2e:
-    name: E2E smoke tests
+    name: E2E smoke + critical workflows
     runs-on: ubuntu-latest
     env:
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/deed_erp_ci
       POSTGRES_URL: postgresql://postgres:postgres@localhost:5432/deed_erp_ci
       NEXTAUTH_SECRET: ci-only-secret-not-for-production
       NEXT_PUBLIC_APP_URL: http://localhost:3100
+      E2E_USERNAME: e2edirector
+      E2E_PASSWORD: ci-e2e-password-not-for-production
+      E2E_RELAX_RATE_LIMIT: '1'
     services:
       postgres:
         image: postgres:16
@@ -85,7 +88,7 @@ jobs:
       - name: Install Playwright browser
         run: npx playwright install --with-deps chromium
 
-      - name: Run e2e smoke tests
+      - name: Run e2e smoke + critical workflow tests
         run: pnpm test:e2e
 
       - name: Upload traces on failure
