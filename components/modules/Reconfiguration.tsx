@@ -109,7 +109,7 @@ export default function Reconfiguration() {
     setLoading(true)
     setError(null)
     try {
-      const data = await api(`/api/reconfiguration/${id}`)
+      const data = await api<any>(`/api/reconfiguration/${id}`)
       setDetail(data)
       setTab('detail')
     } catch (e: any) {
@@ -130,7 +130,7 @@ export default function Reconfiguration() {
       return
     }
     try {
-      const cfg = await api(`/api/reconfiguration/device/${encodeURIComponent(serialId)}/configuration`)
+      const cfg = await api<any>(`/api/reconfiguration/device/${encodeURIComponent(serialId)}/configuration`)
       setDeviceConfig(cfg)
       if (cfg?.current?.totalRamGb) setWizRam(cfg.current.totalRamGb)
       if (cfg?.current?.primaryStorageGb) setWizStorage(cfg.current.primaryStorageGb)
@@ -179,7 +179,7 @@ export default function Reconfiguration() {
     setLoading(true)
     setError(null)
     try {
-      const data = await api(`/api/reconfiguration/${detail.id}/${path}`, {
+      const data = await api<any>(`/api/reconfiguration/${detail.id}/${path}`, {
         method: 'POST',
         body: JSON.stringify({ version: detail.version, ...body }),
       })
