@@ -2,6 +2,7 @@ import prisma from '@/lib/prisma'
 import type { z } from 'zod'
 import type { productSchema } from '@/lib/validation'
 import { isSerialOnlyCategory } from '@/lib/inventory-identifiers'
+import { createZeroStockLevel } from '@/lib/inventory/stock-level'
 
 export type ValidatedProductInput = z.infer<typeof productSchema>
 
@@ -131,7 +132,12 @@ export async function publishProduct(validated: ValidatedProductInput): Promise<
   if (categoryId) data.categoryId = categoryId
 
   try {
-    const product = await prisma.product.create({ data: data as any })
+    const product = await prisma.$transaction(async tx => {
+      const created = await tx.product.create({ data: data as any })
+      // Every product gets a StockLevel row atomically (DB-003 / AGENT-DB-001).
+      await createZeroStockLevel(tx, created.id)
+      return created
+    })
     return { status: 'created', product }
   } catch (err: any) {
     const drift = schemaDriftMessage(err)
@@ -150,7 +156,11 @@ export async function publishProduct(validated: ValidatedProductInput): Promise<
       if (!requestedSku) {
         data.sku = await buildUniqueSku(validated.name)
         try {
-          const product = await prisma.product.create({ data: data as any })
+          const product = await prisma.$transaction(async tx => {
+            const created = await tx.product.create({ data: data as any })
+            await createZeroStockLevel(tx, created.id)
+            return created
+          })
           return { status: 'created', product }
         } catch (retryErr: any) {
           const retryDrift = schemaDriftMessage(retryErr)

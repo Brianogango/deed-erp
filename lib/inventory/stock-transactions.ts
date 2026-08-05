@@ -2,7 +2,7 @@ import 'server-only'
 import { randomUUID } from 'crypto'
 import prisma from '@/lib/prisma'
 import { loadAppState, saveStoreKeys } from '@/lib/server-store'
-import { uuidFromKey } from '@/lib/accounting/ids'
+import { adjustStockLevel } from '@/lib/inventory/stock-level'
 import { calcStockByLocation, upsertBulkStock } from '@/lib/business-logic'
 import type { BulkStockLevel } from '@/lib/business-logic'
 import type { LocationId } from '@/lib/store'
@@ -266,29 +266,15 @@ export async function applyDeliveryStockMutation(params: {
     await prisma.$transaction(async tx => {
       for (const [productId, delta] of stockLevelDeltas) {
         const reservedDelta = -(reservedReleaseByProduct.get(productId) ?? 0)
-        const existing = await tx.stockLevel.findUnique({ where: { productId } })
-        if (existing) {
-          await tx.stockLevel.update({
-            where: { productId },
-            data: {
-              qtyOnHand: Math.max(0, existing.qtyOnHand + delta),
-              qtyReserved: Math.max(0, existing.qtyReserved + reservedDelta),
-            },
-          })
-        } else if (delta < 0 || reservedDelta < 0) {
-          await tx.stockLevel.create({
-            data: {
-              id: uuidFromKey('stock_level', productId),
-              productId,
-              qtyOnHand: 0,
-              qtyReserved: 0,
-            },
-          }).catch(() => {})
-        }
+        await adjustStockLevel(tx, productId, {
+          onHand: delta,
+          reserved: reservedDelta,
+        })
       }
     })
   } catch (err) {
     console.error('[applyDeliveryStockMutation] prisma transaction failed:', err)
+    throw err
   }
 
   await saveStoreKeys({
@@ -388,26 +374,12 @@ export async function reserveStockForSaleOrder(
     await mirrorStockReservationsToPrisma(reservations)
     await prisma.$transaction(async tx => {
       for (const [productId, delta] of reservedDeltas) {
-        const existing = await tx.stockLevel.findUnique({ where: { productId } })
-        if (existing) {
-          await tx.stockLevel.update({
-            where: { productId },
-            data: { qtyReserved: existing.qtyReserved + delta },
-          })
-        } else {
-          await tx.stockLevel.create({
-            data: {
-              id: uuidFromKey('stock_level', productId),
-              productId,
-              qtyOnHand: 0,
-              qtyReserved: delta,
-            },
-          }).catch(() => {})
-        }
+        await adjustStockLevel(tx, productId, { reserved: delta })
       }
     })
   } catch (err) {
     console.error('[reserveStockForSaleOrder] prisma mirror failed:', err)
+    throw err
   }
 
   void userId
@@ -419,27 +391,13 @@ async function bumpPrismaOnHand(deltas: Map<string, number>) {
   try {
     await prisma.$transaction(async tx => {
       for (const [productId, delta] of deltas) {
-        if (!isUuid(productId)) continue
-        const existing = await tx.stockLevel.findUnique({ where: { productId } })
-        if (existing) {
-          await tx.stockLevel.update({
-            where: { productId },
-            data: { qtyOnHand: Math.max(0, existing.qtyOnHand + delta) },
-          })
-        } else if (delta !== 0) {
-          await tx.stockLevel.create({
-            data: {
-              id: uuidFromKey('stock_level', productId),
-              productId,
-              qtyOnHand: Math.max(0, delta),
-              qtyReserved: 0,
-            },
-          }).catch(() => {})
-        }
+        if (!isUuid(productId) || delta === 0) continue
+        await adjustStockLevel(tx, productId, { onHand: delta })
       }
     })
   } catch (err) {
     console.error('[stock-transactions] prisma stockLevel bump failed:', err)
+    throw err
   }
 }
 

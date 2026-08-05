@@ -1338,6 +1338,7 @@ model SaleOrder {
 
   @@index([clientId], map: "idx_sale_orders_client")
   @@index([createdById], map: "idx_sale_orders_created_by")
+  @@index([clientId, status], map: "idx_sale_orders_client_status")
   @@map("sale_orders")
 }
 
@@ -1496,6 +1497,8 @@ model Invoice {
   @@index([status], map: "idx_invoices_status")
   @@index([invoiceDate], map: "idx_invoices_date")
   @@index([invoiceNumber], map: "idx_invoices_number")
+  @@index([clientId, status], map: "idx_invoices_client_status")
+  @@index([status, invoiceDate], map: "idx_invoices_status_date")
   @@map("invoices")
 }
 
@@ -1697,6 +1700,7 @@ model Repair {
   @@index([status], map: "idx_repairs_status")
   @@index([assignedToId], map: "idx_repairs_technician")
   @@index([jobNumber], map: "idx_repairs_job_number")
+  @@index([status, createdAt], map: "idx_repairs_status_created")
   @@map("repairs")
 }
 
