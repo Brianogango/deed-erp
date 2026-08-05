@@ -1,5 +1,6 @@
-import { test, expect, type APIRequestContext, type Browser } from '@playwright/test'
+import { test, expect, type APIRequestContext } from '@playwright/test'
 import { E2E_USER } from './global-setup'
+import { loginViaApi } from './helpers'
 
 /**
  * Smoke tests for the critical money paths:
@@ -7,16 +8,9 @@ import { E2E_USER } from './global-setup'
  * UI coverage is intentionally shallow (render + key interactions); the
  * document flows are exercised through the real HTTP APIs against a real
  * Postgres database, which is where the production bugs have lived.
+ *
+ * Broader journey coverage lives in e2e/critical-workflows.spec.ts (AGENT-QA-001).
  */
-
-async function loginViaApi(browser: Browser) {
-  const context = await browser.newContext()
-  const res = await context.request.post('/api/auth/login', {
-    data: { username: E2E_USER.username, password: E2E_USER.password },
-  })
-  expect(res.status(), 'login should succeed').toBe(200)
-  return context
-}
 
 test.describe('authentication', () => {
   test('login page renders and rejects bad credentials', async ({ page }) => {

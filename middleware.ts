@@ -52,7 +52,8 @@ function isWriteMethod(method: string): boolean {
 }
 
 function rateLimitPolicy(pathname: string, method: string): { limit: number; windowSec: number; bucket: string } {
-  if (pathname === '/api/auth/login') return { limit: 10, windowSec: 60, bucket: 'login' }
+  const e2eRelaxed = process.env.E2E_RELAX_RATE_LIMIT === '1'
+  if (pathname === '/api/auth/login') return { limit: e2eRelaxed ? 120 : 10, windowSec: 60, bucket: 'login' }
   if (pathname === '/api/admin/reset' || pathname === '/api/admin/blob-cutover') return { limit: 3, windowSec: 60 * 60, bucket: 'critical-admin' }
   if (pathname.startsWith('/api/jarvis/chat')) return { limit: 20, windowSec: 60, bucket: 'jarvis-chat' }
   if (pathname.startsWith('/api/jarvis/ingest')) return { limit: 5, windowSec: 60 * 60, bucket: 'jarvis-ingest' }

@@ -1,7 +1,13 @@
 import { Pool } from 'pg'
 import bcrypt from 'bcryptjs'
 
-export const E2E_USER = { username: 'e2edirector', password: 'E2e-Test-2026!', name: 'E2E Director', role: 'director' }
+export const E2E_USER = {
+  username: process.env.E2E_USERNAME || 'e2edirector',
+  // Override in CI / local .env — do not reuse this default outside test DBs.
+  password: process.env.E2E_PASSWORD || 'E2e-Test-2026!',
+  name: 'E2E Director',
+  role: 'director',
+}
 const E2E_USER_ID = '9e2e0000-0000-4000-8000-000000000001'
 
 const ALL_MODULES = JSON.stringify([
