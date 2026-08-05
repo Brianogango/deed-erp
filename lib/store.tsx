@@ -3,7 +3,7 @@
 import { createContext, useContext, useState, useCallback, useEffect, ReactNode, useRef, useMemo } from 'react'
 import { requestCreateUser, requestDeleteUser, requestUpdateUser, requestDeactivateUser, requestReactivateUser } from '@/lib/auth/client-users'
 import { canManageHRRole, getFirstAllowedModule, hasModuleAccess as userHasModuleAccess, normalizeClientRole } from '@/lib/auth/access'
-import { mergeCatalogProducts } from '@/lib/catalog-merge'
+import { mergeCatalogProducts, mergeProductsRemoteState } from '@/lib/catalog-merge'
 import { bootApiGroupsForRoute, remainingBootApiGroups, type BootApiGroup } from '@/lib/boot-apis'
 import { documentMoneySnapshot, FUNCTIONAL_CURRENCY } from '@/lib/currency'
 import { needsSpecialPricingApproval, resolveListPrice } from '@/lib/pricing/pricelist'
@@ -4735,8 +4735,12 @@ export function StoreProvider({
   const [opportunityActivities, setOpportunityActivities] = useLS<OpportunityActivity[]>('deed_oppActivities', seedOpportunityActivities)
   const [quotes, setQuotes] = useLS<Quote[]>('deed_quotes', seedQuotes)
   
-  // Products & Inventory
-  const [products, setProducts] = useLS('deed_products', seedProducts)
+  // Products & Inventory — merge SSE/cross-tab writes instead of replacing the
+  // list. A hard replace + immediate Prisma re-merge was flashing the catalog
+  // (and wiping in-progress search results) on every stock/sync push.
+  const [products, setProducts] = useLS('deed_products', seedProducts, {
+    mergeRemote: (local, remote) => mergeProductsRemoteState(local as any[], remote as any[]) as typeof local,
+  })
   const [productPriceHistory, setProductPriceHistory] = useLS<ProductPriceHistory[]>('deed_productPriceHistory', [])
 
   // The relational catalog (/api/products) is the source of truth for product
@@ -4747,7 +4751,7 @@ export function StoreProvider({
       .then((rows: any[] | null) => {
         if (!Array.isArray(rows) || rows.length === 0) return
         setProducts(prev => {
-          const merged = mergeCatalogProducts(prev, rows, CATEGORY_CONFIG)
+          const merged = mergeCatalogProducts(prev, rows, CATEGORY_CONFIG, { preserveClientOrder: true })
           return JSON.stringify(merged) === JSON.stringify(prev) ? prev : merged
         })
       })
@@ -4755,14 +4759,27 @@ export function StoreProvider({
   }, [setProducts])
 
   useEffect(() => {
-    // If a stale deed_products SSE payload overwrites local state, immediately
-    // re-merge the Prisma catalog so newly published products do not vanish.
+    // mergeRemote already protects against stale shorter blobs. Only re-pull
+    // Prisma when a remote payload looks empty/corrupt — not on every stock sync.
+    let timer: ReturnType<typeof setTimeout> | null = null
     const onRemote = (e: Event) => {
       const detail = (e as CustomEvent).detail
-      if (detail?.key === 'deed_products') refreshProductCatalog()
+      if (detail?.key !== 'deed_products') return
+      let remote: unknown
+      try {
+        remote = typeof detail.value === 'string' ? JSON.parse(detail.value) : detail.value
+      } catch {
+        return
+      }
+      if (Array.isArray(remote) && remote.length > 0) return
+      if (timer) clearTimeout(timer)
+      timer = setTimeout(() => refreshProductCatalog(), 400)
     }
     window.addEventListener('deed_remote_update', onRemote as EventListener)
-    return () => window.removeEventListener('deed_remote_update', onRemote as EventListener)
+    return () => {
+      if (timer) clearTimeout(timer)
+      window.removeEventListener('deed_remote_update', onRemote as EventListener)
+    }
   }, [refreshProductCatalog])
   
   const [serials, setSerials] = useLS<SerialNumber[]>('deed_serials', seedSerials)
@@ -8699,13 +8716,16 @@ const storeCtx: AppState = {
         if (!res.ok) return 0
         const rows = await res.json()
         if (!Array.isArray(rows) || rows.length === 0) return 0
-        setProducts(prev => mergeCatalogProducts(prev, rows, CATEGORY_CONFIG) as any)
-        // Heal local blob rows that still say QUANTITY for machine categories.
-        setProducts(prev => prev.map(p => {
-          if (!isSerialOnlyCategory(p.category)) return p
-          if (p.trackingMethod === 'SERIAL' && p.requiresSerial) return p
-          return { ...p, trackingMethod: 'SERIAL' as TrackingMethod, requiresSerial: true }
-        }))
+        // Single state update + stable order — avoids catalog flicker mid-search.
+        setProducts(prev => {
+          const merged = mergeCatalogProducts(prev, rows, CATEGORY_CONFIG, { preserveClientOrder: true }) as any[]
+          const healed = merged.map(p => {
+            if (!isSerialOnlyCategory(p.category)) return p
+            if (p.trackingMethod === 'SERIAL' && p.requiresSerial) return p
+            return { ...p, trackingMethod: 'SERIAL' as TrackingMethod, requiresSerial: true }
+          })
+          return JSON.stringify(healed) === JSON.stringify(prev) ? prev : healed
+        })
         return rows.length
       } catch {
         return 0
