@@ -29,7 +29,7 @@ describe('calcStockByLocation()', () => {
   describe('bulk (non-serial) products', () => {
     it('returns zeros for all locations when no bulk stock exists', () => {
       const result = calcStockByLocation(bulkProduct, [], [], 'prod-1')
-      expect(result).toEqual({ warehouse: 0, shop: 0, repair_unit: 0, vendor: 0, customer: 0, employee: 0 })
+      expect(result).toEqual({ warehouse: 0, shop: 0, repair_unit: 0, vendor: 0, customer: 0, employee: 0, pending_testing: 0, quarantine: 0 })
     })
 
     it('reads qty from bulk stock levels for matching product', () => {
@@ -63,7 +63,7 @@ describe('calcStockByLocation()', () => {
   describe('serial products', () => {
     it('returns zeros when no serials exist', () => {
       const result = calcStockByLocation(serialProduct, [], [], 'prod-1')
-      expect(result).toEqual({ warehouse: 0, shop: 0, repair_unit: 0, vendor: 0, customer: 0, employee: 0 })
+      expect(result).toEqual({ warehouse: 0, shop: 0, repair_unit: 0, vendor: 0, customer: 0, employee: 0, pending_testing: 0, quarantine: 0 })
     })
 
     it('counts each active serial at its location', () => {
@@ -104,7 +104,7 @@ describe('calcStockByLocation()', () => {
   describe('undefined product', () => {
     it('returns all-zeros when product is undefined', () => {
       const result = calcStockByLocation(undefined, [], [], 'prod-1')
-      expect(result).toEqual({ warehouse: 0, shop: 0, repair_unit: 0, vendor: 0, customer: 0, employee: 0 })
+      expect(result).toEqual({ warehouse: 0, shop: 0, repair_unit: 0, vendor: 0, customer: 0, employee: 0, pending_testing: 0, quarantine: 0 })
     })
   })
 })

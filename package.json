@@ -11,6 +11,7 @@
     "migrate:accounting-foundation:safe": "node scripts/run-safe-accounting-foundation.mjs",
     "migrate:deposits-holdovers:safe": "node scripts/run-safe-deposits-holdovers.mjs",
     "migrate:currency-pricelists-cutover:safe": "node scripts/run-safe-currency-pricelists-cutover.mjs",
+    "migrate:device-reconfiguration:safe": "node scripts/run-safe-device-reconfiguration.mjs",
     "backfill:accounting": "node scripts/backfill-accounting-to-prisma.mjs",
     "screenshots:core": "node scripts/capture-visual-regression.mjs",
     "analyze": "ANALYZE=true npm run build",

@@ -278,6 +278,21 @@ model User {
   kilimallOrderProcs   KilimallOrder[]
   kilimallSyncLogs     KilimallSyncLog[]
   labelPrintJobs       LabelPrintJob[]
+  reconfigRequested    ReconfigurationWorkOrder[] @relation("ReconfigRequester")
+  reconfigTechnician   ReconfigurationWorkOrder[] @relation("ReconfigTechnician")
+  reconfigApprover     ReconfigurationWorkOrder[] @relation("ReconfigApprover")
+  reconfigQaOfficer    ReconfigurationWorkOrder[] @relation("ReconfigQaOfficer")
+  reconfigCreated      ReconfigurationWorkOrder[] @relation("ReconfigCreator")
+  reconfigUpdated      ReconfigurationWorkOrder[] @relation("ReconfigUpdater")
+  reconfigApprovals    ReconfigurationApproval[]
+  reconfigQaChecks     ReconfigurationQaCheck[]
+  reconfigAttachments  ReconfigurationAttachment[]
+  deviceSerialCostUpdates DeviceSerialCost[]
+  configSnapshotsCreated DeviceConfigurationSnapshot[]
+  installationsInstalled DeviceComponentInstallation[] @relation("InstallationInstaller")
+  installationsRemoved   DeviceComponentInstallation[] @relation("InstallationRemover")
+  reconfigRemovalsPerformed ReconfigurationRemovalLine[]
+  reconfigInstallsPerformed ReconfigurationInstallationLine[]
 
   @@map("users")
 }
@@ -715,6 +730,7 @@ model Client {
   outboundReleases OutboundRelease[] @relation("OrcClient")
   customerAssets   CustomerAsset[]
   leads            Lead[]
+  reconfigurationWorkOrders ReconfigurationWorkOrder[]
 
   @@index([phone], map: "idx_clients_phone")
   @@index([email], map: "idx_clients_email")
@@ -840,6 +856,10 @@ model Product {
   stockReservations  StockReservation[]
   valuationEvents    ValuationEvent[]
   priceListItems     PriceListItem[]
+  componentInstallations DeviceComponentInstallation[]
+  reconfigurationWorkOrders ReconfigurationWorkOrder[]
+  reconfigRemovalLines ReconfigurationRemovalLine[]
+  reconfigInstallationLines ReconfigurationInstallationLine[]
 
   @@index([sku], map: "idx_products_sku")
   @@index([barcode], map: "idx_products_barcode")
@@ -890,6 +910,12 @@ model SerialNumber {
   orcItems       OutboundReleaseItem[] @relation("SerialOrcItems")
   customerAssets CustomerAsset[]
   stockReservations StockReservation[]
+  deviceSerialCost DeviceSerialCost?
+  configurationSnapshots DeviceConfigurationSnapshot[]
+  componentInstallations DeviceComponentInstallation[] @relation("DeviceHostInstallations")
+  installedAsComponent   DeviceComponentInstallation[] @relation("ComponentSerialInstallations")
+  reconfigurationWorkOrders ReconfigurationWorkOrder[]
+  reconfigInstallSelections ReconfigurationInstallationLine[]
 
   @@index([productId], map: "idx_serials_product")
   @@index([status], map: "idx_serials_status")
@@ -1308,6 +1334,7 @@ model SaleOrder {
   invoices  Invoice[]       @relation("InvoiceSourceSaleOrder")
   deliveries DeliveryNote[] @relation("DeliveryNoteSaleOrders")
   customerAssets CustomerAsset[]
+  reconfigurationWorkOrders ReconfigurationWorkOrder[]
 
   @@index([clientId], map: "idx_sale_orders_client")
   @@index([createdById], map: "idx_sale_orders_created_by")
@@ -1463,6 +1490,7 @@ model Invoice {
   commissions     SalesCommission[] @relation("CommissionInvoice")
   repairs         Repair[]        @relation("RepairInvoice")
   outboundRelease OutboundRelease? @relation("OrcInvoice")
+  reconfigurationWorkOrders ReconfigurationWorkOrder[]
 
   @@index([clientId], map: "idx_invoices_client")
   @@index([status], map: "idx_invoices_status")
@@ -2498,4 +2526,375 @@ model BlobCutoverCertificate {
 
   @@index([status], map: "idx_blob_cutover_status")
   @@map("blob_cutover_certificates")
+}
+
+
+// ── Device Reconfiguration ───────────────────────────────────────────────────
+
+enum ReconfigTransactionType {
+  downgrade_for_sale
+  upgrade_for_sale
+  customer_paid_upgrade
+  internal_refurbishment
+  component_replacement
+  warranty_replacement
+  repair_related
+  configuration_correction
+  stock_standardisation
+
+  @@map("reconfig_transaction_type")
+}
+
+enum ReconfigStatus {
+  draft
+  pending_stock_check
+  components_reserved
+  pending_approval
+  approved
+  in_progress
+  pending_qa
+  completed
+  cancelled
+  reversed
+
+  @@map("reconfig_status")
+}
+
+enum ComponentSlotType {
+  ram_slot
+  m2_slot
+  sata_bay
+  battery
+  keyboard
+  wifi_card
+  charger
+  other
+
+  @@map("component_slot_type")
+}
+
+enum ComponentDisposition {
+  quarantine
+  pending_testing
+  ready_for_sale
+  repair_required
+  parts_harvesting
+  damaged
+  write_off
+  supplier_return
+
+  @@map("component_disposition")
+}
+
+enum DataStatus {
+  unknown
+  none
+  company
+  client
+  test
+  awaiting_backup
+  awaiting_sanitisation
+  sanitised
+  sanitisation_failed
+  physical_destruction_required
+
+  @@map("data_status")
+}
+
+enum InstallationStatus {
+  installed
+  removed
+  quarantined
+
+  @@map("installation_status")
+}
+
+model DeviceSerialCost {
+  id           String   @id @default(uuid()) @db.Uuid
+  serialId     String   @unique @map("serial_id") @db.Uuid
+  currentCost  Decimal  @default(0) @map("current_cost") @db.Decimal(14, 2)
+  currencyCode String   @default("KES") @map("currency_code") @db.VarChar(3)
+  updatedAt    DateTime @updatedAt @map("updated_at")
+  updatedById  String?  @map("updated_by") @db.Uuid
+
+  serial    SerialNumber @relation(fields: [serialId], references: [id], onDelete: Cascade)
+  updatedBy User?        @relation(fields: [updatedById], references: [id])
+
+  @@map("device_serial_costs")
+}
+
+model DeviceConfigurationSnapshot {
+  id                   String          @id @default(uuid()) @db.Uuid
+  serialId             String          @map("serial_id") @db.Uuid
+  processor            String?         @db.VarChar(120)
+  processorGeneration  String?         @map("processor_generation") @db.VarChar(80)
+  totalRamGb           Int             @default(0) @map("total_ram_gb")
+  ramComposition       Json            @default("[]") @map("ram_composition")
+  primaryStorageGb     Int?            @map("primary_storage_gb")
+  secondaryStorageGb   Int?            @map("secondary_storage_gb")
+  storageType          String?         @map("storage_type") @db.VarChar(40)
+  screenSize           String?         @map("screen_size") @db.VarChar(40)
+  screenResolution     String?         @map("screen_resolution") @db.VarChar(40)
+  touchscreen          Boolean?
+  graphics             String?         @db.VarChar(120)
+  operatingSystem      String?         @map("operating_system") @db.VarChar(120)
+  keyboardLayout       String?         @map("keyboard_layout") @db.VarChar(40)
+  colour               String?         @db.VarChar(40)
+  includedAccessories  Json            @default("[]") @map("included_accessories")
+  batteryCondition     String?         @map("battery_condition") @db.VarChar(40)
+  grade                ConditionGrade?
+  displayName          String          @map("display_name") @db.VarChar(300)
+  source               String          @default("manual") @db.VarChar(40)
+  sourceWorkOrderId    String?         @map("source_work_order_id") @db.Uuid
+  isCurrent            Boolean         @default(false) @map("is_current")
+  createdAt            DateTime        @default(now()) @map("created_at")
+  createdById          String?         @map("created_by") @db.Uuid
+
+  serial          SerialNumber              @relation(fields: [serialId], references: [id], onDelete: Cascade)
+  sourceWorkOrder ReconfigurationWorkOrder? @relation("SnapshotSourceWo", fields: [sourceWorkOrderId], references: [id], onDelete: SetNull)
+  createdBy       User?                     @relation(fields: [createdById], references: [id])
+  currentForWorkOrders  ReconfigurationWorkOrder[] @relation("WoCurrentSnapshot")
+  proposedForWorkOrders ReconfigurationWorkOrder[] @relation("WoProposedSnapshot")
+
+  @@index([serialId], map: "idx_device_config_snapshots_serial")
+  @@map("device_configuration_snapshots")
+}
+
+model DeviceComponentInstallation {
+  id                       String             @id @default(uuid()) @db.Uuid
+  serialId                 String             @map("serial_id") @db.Uuid
+  componentProductId       String             @map("component_product_id") @db.Uuid
+  componentSerialId        String?            @map("component_serial_id") @db.Uuid
+  componentSerialText      String?            @map("component_serial_text") @db.VarChar(120)
+  category                 String             @default("other") @db.VarChar(40)
+  slotType                 ComponentSlotType  @map("slot_type")
+  slotNumber               Int                @default(1) @map("slot_number")
+  capacityGb               Int?               @map("capacity_gb")
+  technology               String?            @db.VarChar(60)
+  quantity                 Int                @default(1)
+  removable                Boolean            @default(true)
+  status                   InstallationStatus @default(installed)
+  installedAt              DateTime           @default(now()) @map("installed_at")
+  installedById            String?            @map("installed_by") @db.Uuid
+  removedAt                DateTime?          @map("removed_at")
+  removedById              String?            @map("removed_by") @db.Uuid
+  costAtInstallation       Decimal            @default(0) @map("cost_at_installation") @db.Decimal(14, 2)
+  condition                ConditionGrade?
+  sourceStockMoveRef       String?            @map("source_stock_move_ref") @db.VarChar(80)
+  installationWorkOrderId  String?            @map("installation_work_order_id") @db.Uuid
+  removalWorkOrderId       String?            @map("removal_work_order_id") @db.Uuid
+  version                  Int                @default(1)
+  createdAt                DateTime           @default(now()) @map("created_at")
+  updatedAt                DateTime           @updatedAt @map("updated_at")
+
+  hostDevice            SerialNumber               @relation("DeviceHostInstallations", fields: [serialId], references: [id], onDelete: Cascade)
+  componentProduct      Product                    @relation(fields: [componentProductId], references: [id])
+  componentSerial       SerialNumber?              @relation("ComponentSerialInstallations", fields: [componentSerialId], references: [id])
+  installedBy           User?                      @relation("InstallationInstaller", fields: [installedById], references: [id])
+  removedBy             User?                      @relation("InstallationRemover", fields: [removedById], references: [id])
+  installationWorkOrder ReconfigurationWorkOrder?  @relation("InstallWo", fields: [installationWorkOrderId], references: [id], onDelete: SetNull)
+  removalWorkOrder      ReconfigurationWorkOrder?  @relation("RemovalWo", fields: [removalWorkOrderId], references: [id], onDelete: SetNull)
+  removalLines          ReconfigurationRemovalLine[]
+  resultingFromLines    ReconfigurationInstallationLine[]
+
+  @@index([serialId], map: "idx_device_installs_serial")
+  @@index([componentProductId], map: "idx_device_installs_product")
+  @@index([status], map: "idx_device_installs_status")
+  @@map("device_component_installations")
+}
+
+model ReconfigurationWorkOrder {
+  id                          String                   @id @default(uuid()) @db.Uuid
+  ref                         String                   @unique @db.VarChar(40)
+  serialId                    String                   @map("serial_id") @db.Uuid
+  manufacturerSerial          String                   @map("manufacturer_serial") @db.VarChar(100)
+  productId                   String                   @map("product_id") @db.Uuid
+  transactionType             ReconfigTransactionType  @map("transaction_type")
+  status                      ReconfigStatus           @default(draft)
+  reason                      String                   @default("") @db.Text
+  warehouseLocation           String                   @default("warehouse") @map("warehouse_location") @db.VarChar(30)
+  sourceLocation              String?                  @map("source_location") @db.VarChar(30)
+  destinationLocation         String?                  @map("destination_location") @db.VarChar(30)
+  currentSnapshotId           String?                  @map("current_snapshot_id") @db.Uuid
+  proposedSnapshotId          String?                  @map("proposed_snapshot_id") @db.Uuid
+  linkedClientId              String?                  @map("linked_client_id") @db.Uuid
+  linkedQuoteId               String?                  @map("linked_quote_id")
+  linkedSaleOrderId           String?                  @map("linked_sale_order_id") @db.Uuid
+  linkedInvoiceId             String?                  @map("linked_invoice_id") @db.Uuid
+  linkedRepairId              String?                  @map("linked_repair_id")
+  requestedById               String?                  @map("requested_by") @db.Uuid
+  technicianId                String?                  @map("technician_id") @db.Uuid
+  approverId                  String?                  @map("approver_id") @db.Uuid
+  qaOfficerId                 String?                  @map("qa_officer_id") @db.Uuid
+  dateRequested               DateTime                 @default(now()) @map("date_requested")
+  dateStarted                 DateTime?                @map("date_started")
+  dateCompleted               DateTime?                @map("date_completed")
+  notes                       String?                  @db.Text
+  costBefore                  Decimal                  @default(0) @map("cost_before") @db.Decimal(14, 2)
+  costRemoved                 Decimal                  @default(0) @map("cost_removed") @db.Decimal(14, 2)
+  costInstalled               Decimal                  @default(0) @map("cost_installed") @db.Decimal(14, 2)
+  labourCost                  Decimal                  @default(0) @map("labour_cost") @db.Decimal(14, 2)
+  otherCost                   Decimal                  @default(0) @map("other_cost") @db.Decimal(14, 2)
+  costAfter                   Decimal                  @default(0) @map("cost_after") @db.Decimal(14, 2)
+  sellingPriceBefore          Decimal?                 @map("selling_price_before") @db.Decimal(14, 2)
+  recommendedSellingPrice     Decimal?                 @map("recommended_selling_price") @db.Decimal(14, 2)
+  finalSellingPrice           Decimal?                 @map("final_selling_price") @db.Decimal(14, 2)
+  priceDifference             Decimal?                 @map("price_difference") @db.Decimal(14, 2)
+  grossMargin                 Decimal?                 @map("gross_margin") @db.Decimal(14, 2)
+  grossMarginPct              Decimal?                 @map("gross_margin_pct") @db.Decimal(8, 4)
+  priceMethod                 String?                  @map("price_method") @db.VarChar(40)
+  valuationEventKey           String?                  @unique @map("valuation_event_key") @db.VarChar(120)
+  completionEventKey          String?                  @unique @map("completion_event_key") @db.VarChar(120)
+  reversesWorkOrderId         String?                  @map("reverses_work_order_id") @db.Uuid
+  compatibilityOverride       Boolean                  @default(false) @map("compatibility_override")
+  compatibilityOverrideReason String?                  @map("compatibility_override_reason") @db.Text
+  marginOverride              Boolean                  @default(false) @map("margin_override")
+  version                     Int                      @default(1)
+  createdAt                   DateTime                 @default(now()) @map("created_at")
+  createdById                 String?                  @map("created_by") @db.Uuid
+  updatedAt                   DateTime                 @updatedAt @map("updated_at")
+  updatedById                 String?                  @map("updated_by") @db.Uuid
+
+  serial            SerialNumber @relation(fields: [serialId], references: [id])
+  product           Product      @relation(fields: [productId], references: [id])
+  linkedClient      Client?      @relation(fields: [linkedClientId], references: [id])
+  linkedSaleOrder   SaleOrder?   @relation(fields: [linkedSaleOrderId], references: [id])
+  linkedInvoice     Invoice?     @relation(fields: [linkedInvoiceId], references: [id])
+  currentSnapshot   DeviceConfigurationSnapshot? @relation("WoCurrentSnapshot", fields: [currentSnapshotId], references: [id])
+  proposedSnapshot  DeviceConfigurationSnapshot? @relation("WoProposedSnapshot", fields: [proposedSnapshotId], references: [id])
+  reversesWorkOrder ReconfigurationWorkOrder?    @relation("ReconfigReversal", fields: [reversesWorkOrderId], references: [id])
+  reversedBy        ReconfigurationWorkOrder[]   @relation("ReconfigReversal")
+  requestedBy       User? @relation("ReconfigRequester", fields: [requestedById], references: [id])
+  technician        User? @relation("ReconfigTechnician", fields: [technicianId], references: [id])
+  approver          User? @relation("ReconfigApprover", fields: [approverId], references: [id])
+  qaOfficer         User? @relation("ReconfigQaOfficer", fields: [qaOfficerId], references: [id])
+  createdBy         User? @relation("ReconfigCreator", fields: [createdById], references: [id])
+  updatedBy         User? @relation("ReconfigUpdater", fields: [updatedById], references: [id])
+  removalLines      ReconfigurationRemovalLine[]
+  installationLines ReconfigurationInstallationLine[]
+  approvals         ReconfigurationApproval[]
+  qaChecks          ReconfigurationQaCheck[]
+  attachments       ReconfigurationAttachment[]
+  snapshotsProduced      DeviceConfigurationSnapshot[]  @relation("SnapshotSourceWo")
+  installationsCreated   DeviceComponentInstallation[]  @relation("InstallWo")
+  installationsRemoved   DeviceComponentInstallation[]  @relation("RemovalWo")
+
+  @@index([serialId], map: "idx_rcf_wo_serial")
+  @@index([status], map: "idx_rcf_wo_status")
+  @@index([productId], map: "idx_rcf_wo_product")
+  @@map("reconfiguration_work_orders")
+}
+
+model ReconfigurationRemovalLine {
+  id                    String               @id @default(uuid()) @db.Uuid
+  workOrderId           String               @map("work_order_id") @db.Uuid
+  installationId        String               @map("installation_id") @db.Uuid
+  componentProductId    String               @map("component_product_id") @db.Uuid
+  componentSerialText   String?              @map("component_serial_text") @db.VarChar(120)
+  slotType              ComponentSlotType    @map("slot_type")
+  slotNumber            Int                  @default(1) @map("slot_number")
+  quantity              Int                  @default(1)
+  existingCost          Decimal              @default(0) @map("existing_cost") @db.Decimal(14, 2)
+  conditionAfterRemoval ConditionGrade?      @map("condition_after_removal")
+  destinationLocation   String               @default("pending_testing") @map("destination_location") @db.VarChar(30)
+  disposition           ComponentDisposition @default(pending_testing)
+  dataStatus            DataStatus?          @map("data_status")
+  qaStatus              String               @default("pending") @map("qa_status") @db.VarChar(20)
+  actualRemovedAt       DateTime?            @map("actual_removed_at")
+  removedById           String?              @map("removed_by") @db.Uuid
+  stockMoveRef          String?              @map("stock_move_ref") @db.VarChar(80)
+  createdAt             DateTime             @default(now()) @map("created_at")
+
+  workOrder        ReconfigurationWorkOrder    @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+  installation     DeviceComponentInstallation @relation(fields: [installationId], references: [id])
+  componentProduct Product                     @relation(fields: [componentProductId], references: [id])
+  removedBy        User?                       @relation(fields: [removedById], references: [id])
+
+  @@index([workOrderId], map: "idx_rcf_removal_wo")
+  @@map("reconfiguration_removal_lines")
+}
+
+model ReconfigurationInstallationLine {
+  id                      String            @id @default(uuid()) @db.Uuid
+  workOrderId             String            @map("work_order_id") @db.Uuid
+  componentProductId      String            @map("component_product_id") @db.Uuid
+  requiredSpec            Json              @default("{}") @map("required_spec")
+  selectedSerialId        String?           @map("selected_serial_id") @db.Uuid
+  selectedSerialText      String?           @map("selected_serial_text") @db.VarChar(120)
+  sourceLocation          String            @default("warehouse") @map("source_location") @db.VarChar(30)
+  quantity                Int               @default(1)
+  unitCost                Decimal           @default(0) @map("unit_cost") @db.Decimal(14, 2)
+  targetSlotType          ComponentSlotType @map("target_slot_type")
+  targetSlotNumber        Int               @default(1) @map("target_slot_number")
+  reservationId           String?           @map("reservation_id") @db.VarChar(80)
+  reservationStatus       String            @default("none") @map("reservation_status") @db.VarChar(20)
+  compatibilityResult     String            @default("pending") @map("compatibility_result") @db.VarChar(20)
+  installedAt             DateTime?         @map("installed_at")
+  installedById           String?           @map("installed_by") @db.Uuid
+  resultingInstallationId String?           @map("resulting_installation_id") @db.Uuid
+  stockMoveRef            String?           @map("stock_move_ref") @db.VarChar(80)
+  createdAt               DateTime          @default(now()) @map("created_at")
+
+  workOrder             ReconfigurationWorkOrder     @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+  componentProduct      Product                      @relation(fields: [componentProductId], references: [id])
+  selectedSerial        SerialNumber?                @relation(fields: [selectedSerialId], references: [id])
+  installedBy           User?                        @relation(fields: [installedById], references: [id])
+  resultingInstallation DeviceComponentInstallation? @relation(fields: [resultingInstallationId], references: [id])
+
+  @@index([workOrderId], map: "idx_rcf_install_wo")
+  @@map("reconfiguration_installation_lines")
+}
+
+model ReconfigurationApproval {
+  id             String   @id @default(uuid()) @db.Uuid
+  workOrderId    String   @map("work_order_id") @db.Uuid
+  action         String   @db.VarChar(20)
+  userId         String?  @map("user_id") @db.Uuid
+  reason         String?  @db.Text
+  marginOverride Boolean  @default(false) @map("margin_override")
+  compatOverride Boolean  @default(false) @map("compat_override")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  workOrder ReconfigurationWorkOrder @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+  user      User?                    @relation(fields: [userId], references: [id])
+
+  @@index([workOrderId], map: "idx_rcf_approvals_wo")
+  @@map("reconfiguration_approvals")
+}
+
+model ReconfigurationQaCheck {
+  id          String    @id @default(uuid()) @db.Uuid
+  workOrderId String    @map("work_order_id") @db.Uuid
+  checkKey    String    @map("check_key") @db.VarChar(60)
+  label       String    @db.VarChar(200)
+  required    Boolean   @default(true)
+  result      String    @default("pending") @db.VarChar(20)
+  notes       String?   @db.Text
+  checkedById String?   @map("checked_by") @db.Uuid
+  checkedAt   DateTime? @map("checked_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  workOrder ReconfigurationWorkOrder @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+  checkedBy User?                    @relation(fields: [checkedById], references: [id])
+
+  @@unique([workOrderId, checkKey])
+  @@index([workOrderId], map: "idx_rcf_qa_wo")
+  @@map("reconfiguration_qa_checks")
+}
+
+model ReconfigurationAttachment {
+  id           String   @id @default(uuid()) @db.Uuid
+  workOrderId  String   @map("work_order_id") @db.Uuid
+  kind         String   @default("other") @db.VarChar(40)
+  filePath     String   @map("file_path")
+  fileName     String?  @map("file_name") @db.VarChar(255)
+  mimeType     String?  @map("mime_type") @db.VarChar(120)
+  uploadedById String?  @map("uploaded_by") @db.Uuid
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  workOrder  ReconfigurationWorkOrder @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+  uploadedBy User?                    @relation(fields: [uploadedById], references: [id])
+
+  @@index([workOrderId], map: "idx_rcf_attachments_wo")
+  @@map("reconfiguration_attachments")
 }

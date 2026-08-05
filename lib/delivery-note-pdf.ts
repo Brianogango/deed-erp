@@ -30,12 +30,16 @@ export interface DnProductRef {
 
 /**
  * Resolve specs for a shipped unit:
- * serial.specs → product.description → accessories → accessory notes.
+ * configuration display name (at-sale snapshot) → serial.specs → product.description → accessories.
  */
 export function resolveDeliveryUnitSpecs(
   serial?: Pick<SerialNumber, 'specs' | 'accessories' | 'accessoryNotes'> | null,
   product?: Pick<DnProductRef, 'description'> | null,
+  configurationDisplayName?: string | null,
 ): string {
+  const fromSnapshot = configurationDisplayName?.trim()
+  if (fromSnapshot) return fromSnapshot
+
   const fromSerial = serial?.specs?.trim()
   if (fromSerial) return fromSerial
 

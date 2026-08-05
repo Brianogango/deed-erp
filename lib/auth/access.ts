@@ -10,6 +10,7 @@ export const MODULE_LABELS: Record<ModuleId, string> = {
   pos: 'Point of Sale',
   repair: 'Repairs',
   refurbishment: 'Refurbishment',
+  reconfiguration: 'Device Reconfiguration',
   delivery: 'Delivery',
   ecommerce: 'eCommerce',
   kilimall: 'Kilimall',

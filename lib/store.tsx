@@ -159,15 +159,17 @@ export type UserRole = AuthUserRole
 export type User = PublicUser
 
 // ─── Stock Locations ──────────────────────────────────────────────────────────
-export type LocationId = 'warehouse' | 'shop' | 'repair_unit' | 'vendor' | 'customer' | 'employee'
+export type LocationId = 'warehouse' | 'shop' | 'repair_unit' | 'vendor' | 'customer' | 'employee' | 'pending_testing' | 'quarantine'
 
 export const LOCATIONS: Record<LocationId, { name: string; icon: string; color: string }> = {
-  warehouse:    { name: 'Warehouse (Main)',  icon: '🏭', color: '#875BF7' },
-  shop:         { name: 'With Issues',        icon: '⚠️',  color: '#F59E0B' },
-  repair_unit:  { name: 'Repair Unit',       icon: '🔧', color: '#F04438' },
-  vendor:       { name: 'Vendor',            icon: '🚚', color: '#F79009' },
-  customer:     { name: 'Customer',          icon: '👤', color: '#2E90FA' },
-  employee:     { name: 'Employee Asset',    icon: '🧑', color: '#7F56D9' },
+  warehouse:         { name: 'Warehouse (Main)',  icon: '🏭', color: '#875BF7' },
+  shop:              { name: 'With Issues',        icon: '⚠️',  color: '#F59E0B' },
+  repair_unit:       { name: 'Repair Unit',       icon: '🔧', color: '#F04438' },
+  vendor:            { name: 'Vendor',            icon: '🚚', color: '#F79009' },
+  customer:          { name: 'Customer',          icon: '👤', color: '#2E90FA' },
+  employee:          { name: 'Employee Asset',    icon: '🧑', color: '#7F56D9' },
+  pending_testing:   { name: 'Pending Testing',   icon: '🧪', color: '#0EA5E9' },
+  quarantine:        { name: 'Quarantine',        icon: '🚫', color: '#DC2626' },
 }
 
 // ─── Category Config ──────────────────────────────────────────────────────────
@@ -590,6 +592,12 @@ export interface SystemSettings {
   invLots: boolean
   invAutomatedValuation: boolean
   invCostingMethod: 'fifo' | 'average' | 'standard'
+  /** Feature flag for Device Reconfiguration work orders. Default true when unset. */
+  reconfigurationEnabled: boolean
+  /**
+   * Minimum gross-margin % required after reconfiguration without finance override.
+   */
+  reconfigurationMinMarginPct: number
   /**
    * Per-category markup % used to auto-calculate sale price from cost:
    * salePrice = round(costPrice × (1 + pct / 100)).
@@ -660,6 +668,7 @@ export const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
   invProductsMasterOnly: true, invNoDirectStockEdits: true, invMultiStepRoutes: true,
   invStorageLocations: ['Incoming', 'Workshop', 'Ready for Sale', 'Faulty / Scrap'],
   invSerialNumbers: true, invLots: false, invAutomatedValuation: true, invCostingMethod: 'average',
+  reconfigurationEnabled: true, reconfigurationMinMarginPct: 10,
   invCategorySaleMarkupPct: {},
   purPurchaseAgreements: false, purVendorPricelists: true, purRequireApprovalHighValue: true,
   purHighValueThreshold: 50000, purEnforceRFQFlow: true, purStoreLeadTimes: true,
@@ -761,7 +770,7 @@ export interface SerialNumber {
   id: string; serial: string; productId: string; productName: string
   sku?: string
   location: LocationId
-  status: 'available' | 'assigned' | 'sold' | 'under_repair' | 'returned' | 'written_off' | 'refurbishment'
+  status: 'available' | 'assigned' | 'sold' | 'under_repair' | 'returned' | 'written_off' | 'refurbishment' | 'reconfiguration'
   purchaseOrderId?: string; receiptId?: string
   saleOrderId?: string; warrantyId?: string; repairId?: string
   receivedDate: string; soldDate?: string

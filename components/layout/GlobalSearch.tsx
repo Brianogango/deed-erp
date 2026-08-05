@@ -93,6 +93,7 @@ const MODULE_SHORTCUTS: Array<{ id: string; title: string; subtitle: string; hre
   { id: 'mod-purchases', title: 'Purchases', subtitle: 'Purchase orders and bills', href: '/purchases', module: 'purchase', aliases: ['purchases', 'procurement', 'vendors'] },
   { id: 'mod-delivery', title: 'Delivery', subtitle: 'Riders and delivery tracking', href: '/delivery', module: 'delivery', aliases: ['delivery', 'riders', 'dispatch'] },
   { id: 'mod-refurbishment', title: 'Refurbishment', subtitle: 'Internal device refurbishment', href: '/refurbishment', module: 'refurbishment', aliases: ['refurbishment', 'refurbish'] },
+  { id: 'mod-reconfiguration', title: 'Device Reconfiguration', subtitle: 'Upgrade and downgrade serialized machines', href: '/reconfiguration', module: 'reconfiguration', aliases: ['reconfiguration', 'reconfigure', 'upgrade', 'downgrade', 'rcf'] },
   { id: 'mod-outsource', title: 'Outsource', subtitle: 'External repair vendors', href: '/outsource', module: 'outsource', aliases: ['outsource', 'external repair'] },
   { id: 'mod-aftersales', title: 'After-Sales', subtitle: 'Warranties and RMAs', href: '/aftersales', module: 'after_sales', aliases: ['after sales', 'warranty', 'rma'] },
   { id: 'mod-holdovers', title: 'Holdovers', subtitle: 'Device loans and temporary issues', href: '/holdovers', module: 'holdovers', aliases: ['holdovers', 'device loans'] },

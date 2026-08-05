@@ -8,6 +8,7 @@ export const MODULE_IDS = [
   'pos',
   'repair',
   'refurbishment',
+  'reconfiguration',
   'delivery',
   'ecommerce',
   'kilimall',
@@ -109,24 +110,24 @@ const withSelfService = (modules: ModuleId[]): ModuleId[] => Array.from(new Set(
 export const ROLE_DEFAULT_MODULES: Record<UserRole, ModuleId[]> = {
   director: allModules,
   admin_officer: withSelfService([
-    'dashboard', 'sales', 'crm', 'contacts', 'purchase', 'inventory', 'delivery', 'after_sales', 'deposits', 'holdovers',
+    'dashboard', 'sales', 'crm', 'contacts', 'purchase', 'inventory', 'delivery', 'after_sales', 'deposits', 'holdovers', 'reconfiguration',
   ]),
   finance_officer: withSelfService([
-    'dashboard', 'accounting', 'sales', 'crm', 'contacts', 'purchase', 'inventory', 'kilimall', 'ecommerce', 'deposits',
+    'dashboard', 'accounting', 'sales', 'crm', 'contacts', 'purchase', 'inventory', 'kilimall', 'ecommerce', 'deposits', 'reconfiguration',
   ]),
   inventory_officer: withSelfService([
-    'dashboard', 'inventory', 'delivery', 'purchase', 'holdovers',
+    'dashboard', 'inventory', 'delivery', 'purchase', 'holdovers', 'reconfiguration',
   ]),
   kilimall_officer: withSelfService([
-    'dashboard', 'kilimall', 'inventory', 'delivery', 'ecommerce', 'after_sales',
+    'dashboard', 'kilimall', 'inventory', 'delivery', 'ecommerce', 'after_sales', 'reconfiguration',
   ]),
   sales_rep: withSelfService([
-    'dashboard', 'sales', 'crm', 'contacts', 'delivery', 'after_sales', 'holdovers',
+    'dashboard', 'sales', 'crm', 'contacts', 'delivery', 'after_sales', 'holdovers', 'reconfiguration',
   ]),
   technical_lead: withSelfService([
-    'dashboard', 'repair', 'refurbishment', 'inventory', 'outsource', 'after_sales', 'holdovers',
+    'dashboard', 'repair', 'refurbishment', 'reconfiguration', 'inventory', 'outsource', 'after_sales', 'holdovers',
   ]),
   technician: withSelfService([
-    'dashboard', 'repair',
+    'dashboard', 'repair', 'reconfiguration',
   ]),
 }

@@ -7,7 +7,8 @@ import { Fa } from '@/components/icons'
 import {
   faChartLine, faShoppingCart, faBuildingColumns, faUsers, faGear, faBoxesStacked, faScrewdriverWrench,
   faDesktop, faGlobe, faAddressBook, faCartShopping, faTruck, faArrowsRotate, faShieldHalved, faReceipt,
-  faChevronRight, faChevronLeft, faChevronDown, faMoneyBillWave, faHandHolding, faBullseye, faFileLines
+  faChevronRight, faChevronLeft, faChevronDown, faMoneyBillWave, faHandHolding, faBullseye, faFileLines,
+  faMicrochip,
 } from '@fortawesome/free-solid-svg-icons'
 import { useShellStore, ModuleId } from '@/lib/store'
 import { hasModuleAccess } from '@/lib/auth/access'
@@ -81,6 +82,7 @@ export default function Sidebar() {
     { label: 'Delivery',      href: '/delivery',      id: 'delivery',      icon: faTruck },
     { label: 'Repairs',       href: '/repairs',       id: 'repair',        icon: faScrewdriverWrench, badge: pendingRepairs },
     { label: 'Refurbishment', href: '/refurbishment', id: 'refurbishment', icon: faArrowsRotate },
+    { label: 'Reconfiguration', href: '/reconfiguration', id: 'reconfiguration', icon: faMicrochip },
     { label: 'Outsource',     href: '/outsource',     id: 'outsource',     icon: faArrowsRotate },
     { label: 'After-Sales',   href: '/aftersales',    id: 'after_sales',   icon: faShieldHalved },
     { label: 'Holdovers',     href: '/holdovers',     id: 'holdovers',     icon: faHandHolding },
@@ -213,7 +215,7 @@ export default function Sidebar() {
     },
     {
       title: 'Service operations',
-      items: visibleItems.filter(i => ['repair', 'refurbishment', 'outsource', 'after_sales', 'holdovers'].includes(i.id) && !pinnedIds.has(i.id)),
+      items: visibleItems.filter(i => ['repair', 'refurbishment', 'reconfiguration', 'outsource', 'after_sales', 'holdovers'].includes(i.id) && !pinnedIds.has(i.id)),
     },
     {
       title: 'Finance & people',

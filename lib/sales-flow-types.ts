@@ -71,7 +71,7 @@ export interface StockReservation {
   productName: string
   qty: number
   
-  reservedFor: 'sales_order' | 'repair' | 'transfer' | 'employee'
+  reservedFor: 'sales_order' | 'repair' | 'transfer' | 'employee' | 'reconfiguration'
   referenceId: string
   referenceRef: string
   referenceType: string
