@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect, useMemo, useRef, Suspense, useCallback } from 'react'
+import { useState, useEffect, useMemo, useRef, Suspense, useCallback, type FormEvent } from 'react'
 import { useSearchParams, useRouter, usePathname } from 'next/navigation'
 import {
   faClipboardCheck,
@@ -82,6 +82,13 @@ import { resolveListPrice } from '@/lib/pricing/pricelist'
 import { pairOrderLinesWithDeliveryLines } from '@/lib/delivery-prepare'
 import Chatter from '@/components/erp/Chatter'
 import { SalesRecordHeader } from '@/components/modules/sales/SalesRecordHeader'
+import { ConfirmQuotationDialog } from '@/components/modules/sales/ConfirmQuotationDialog'
+import {
+  canConfirmAndReserve,
+  canConfirmWithoutReservation,
+  stockShortageLines,
+  type ConfirmQuotationMode,
+} from '@/lib/sales/confirm-quotation'
 import { finishUxTask, startUxTask, trackUxEvent } from '@/lib/ux-telemetry'
 import {
   SALE_STATUS_BAR,
@@ -329,6 +336,8 @@ function SalesContent() {
   // Reversing a confirmed Sales Order (Set to Quotation / Cancel) is Finance/Director-only —
   // matches the server-side check in enforceSaleWorkflow / cancelSO.
   const canReverseConfirmedSO = currentUser?.role === 'director' || currentUser?.role === 'finance_officer'
+  const canReserveOnConfirm = canConfirmAndReserve(currentUser?.role)
+  const canSkipReserveOnConfirm = canConfirmWithoutReservation(currentUser?.role)
 
   // ── View state ──────────────────────────────────────────────────────────
   const [view, setView] = useState<SalesView>('list')
@@ -372,6 +381,7 @@ function SalesContent() {
   const [focusDeliveryId, setFocusDeliveryId] = useState<string | null>(null)
   const [savingDelivery, setSavingDelivery] = useState(false)
   const [confirmingSO, setConfirmingSO] = useState(false)
+  const [showConfirmQuoteDialog, setShowConfirmQuoteDialog] = useState(false)
   const [dnRecipientName, setDnRecipientName] = useState('')
   const [dnRecipientPhone, setDnRecipientPhone] = useState('')
   const [dnRecipientId, setDnRecipientId] = useState('')
@@ -871,6 +881,47 @@ function SalesContent() {
     syncOrderUrl(activeOrder.id, 'delivery')
   }
 
+  const openConfirmQuoteDialog = () => {
+    if (!activeOrder) return
+    if (!activeOrder.lines.filter((l: any) => l.lineType !== 'section').length) {
+      showToast('Add at least one product before confirming', 'error')
+      return
+    }
+    if (confirmingSO) return
+    setShowConfirmQuoteDialog(true)
+  }
+
+  const runConfirmQuotation = async (mode: ConfirmQuotationMode) => {
+    if (!activeOrder) return
+    if (confirmingSO) return
+    setConfirmingSO(true)
+    try {
+      await Promise.resolve(confirmSO(activeOrder.id))
+      if (mode === 'reserve' && canReserveOnConfirm) {
+        const del = await ensureWaitingDeliveryForSO(activeOrder.id)
+        if (del) {
+          const qtys: Record<string, number> = {}
+          for (const line of activeOrder.lines) {
+            if ((line as any).lineType === 'section' || !line.productId) continue
+            qtys[line.productId] = (qtys[line.productId] ?? 0) + (Number(line.qty) || 0)
+          }
+          prepareDelivery(del.id, qtys)
+        }
+      }
+      setShowConfirmQuoteDialog(false)
+    } finally {
+      setConfirmingSO(false)
+    }
+  }
+
+  const quotationStockShortages = useMemo(() => {
+    if (!activeOrder || !isQuotationStage(activeOrder.status)) return []
+    return stockShortageLines(activeOrder.lines as any, productId => {
+      const byLoc = getStockByLocation(productId)
+      return (byLoc.warehouse ?? 0) + (byLoc.shop ?? 0)
+    })
+  }, [activeOrder, getStockByLocation])
+
   // ── Draft line helpers ──────────────────────────────────────────────────
   const addDraftLine = () => setNewDraftLines(p => [...p, { type: 'item', id: uid(), productId: '', productName: '', description: '', qty: '1', unitPrice: '0', discount: '0', taxRate: '0' }])
   const addDraftSection = () => setNewDraftLines(p => [...p, { type: 'section', id: uid(), productId: '', productName: '', description: '', qty: '0', unitPrice: '0', discount: '0', taxRate: '0' }])
@@ -1008,7 +1059,7 @@ function SalesContent() {
   }, [view, quoteDraftKey, newCustomer, newDeliveryDate, newPaymentTerms, newNotes, newCustomerRef, newSalesTeam, newPricelist, newInvoiceAddress, newDeliveryAddress, newPaymentDetails, newDraftLines])
 
   // ── Save new quotation ──────────────────────────────────────────────────
-  const saveNewQuotation = async (openCreatedOrder: boolean) => {
+  const saveNewQuotation = async (after: 'open' | 'another' | 'list' = 'open') => {
     const errors: { customer?: string; lines?: string } = {}
     if (!newCustomer) errors.customer = 'Please select a customer'
     if (invalidQtyDraftLines.length > 0) {
@@ -1103,8 +1154,13 @@ function SalesContent() {
       // ignore
     }
     finishUxTask('success', { task: 'sales_quote_create', lines: builtLines.length, total: so.total })
-    if (openCreatedOrder) {
+    if (after === 'open') {
       openOrder(so.id)
+      return
+    }
+    if (after === 'list') {
+      showToast(`Quotation ${so.ref} saved as draft`, 'success')
+      backToList()
       return
     }
     setNewCustomer(null)
@@ -1121,8 +1177,9 @@ function SalesContent() {
     showToast('Quotation saved. Continue with another entry.', 'success')
     startUxTask('sales_quote_create', { module: 'sales', chained: true })
   }
-  const handleSaveNewQuotation = () => saveNewQuotation(true)
-  const handleSaveAndAddAnotherQuotation = () => saveNewQuotation(false)
+  const handleSaveNewQuotation = () => saveNewQuotation('open')
+  const handleSaveAndAddAnotherQuotation = () => saveNewQuotation('another')
+  const handleSaveDraftQuotation = () => saveNewQuotation('list')
 
   // ── Inline line editing ─────────────────────────────────────────────────
   const startEditLine = (l: SalesOrderLineView) => {
@@ -1372,6 +1429,7 @@ function SalesContent() {
                   fieldErrors={quoteFieldErrors}
                   onSave={handleSaveNewQuotation}
                   onSaveAndAddAnother={handleSaveAndAddAnotherQuotation}
+                  onSaveDraft={handleSaveDraftQuotation}
                   onCancel={() => {
                     finishUxTask('abandon', {
                       task: 'sales_quote_create',
@@ -1595,14 +1653,9 @@ function SalesContent() {
                             type="button"
                             className="btn-primary flex items-center gap-2 text-xs"
                             disabled={confirmingSO}
-                            onClick={async () => {
-                              if (!activeOrder.lines.length) { showToast('Add at least one product before confirming', 'error'); return }
-                              setConfirmingSO(true)
-                              try { await Promise.resolve(confirmSO(activeOrder.id)) }
-                              finally { setConfirmingSO(false) }
-                            }}
+                            onClick={openConfirmQuoteDialog}
                           >
-                            <Fa icon={faCheck} aria-hidden="true" /><span>{confirmingSO ? 'Confirming…' : 'Confirm'}</span>
+                            <Fa icon={faCheck} aria-hidden="true" /><span>{confirmingSO ? 'Confirming…' : 'Confirm quotation'}</span>
                           </button>
                           <MoreActionsMenu
                             items={[
@@ -1644,7 +1697,7 @@ function SalesContent() {
                         ) : visibleDeliveries.length > 0 ? (
                           <button className="btn-secondary flex items-center gap-2 text-xs" onClick={() => void openDeliveryView()}><Fa icon={faTruck} /><span>Deliveries</span></button>
                         ) : (
-                          <button className="btn-primary flex items-center gap-2 text-xs" onClick={() => void openDeliveryView()}><Fa icon={faTruck} /><span>Delivery</span></button>
+                          <button className="btn-primary flex items-center gap-2 text-xs" onClick={() => void openDeliveryView()}><Fa icon={faTruck} /><span>Create delivery</span></button>
                         )}
                         <MoreActionsMenu
                           items={[
@@ -1693,17 +1746,45 @@ function SalesContent() {
                           isQuotationStage(activeOrder.status) ? 'QUOTATION' : 'SALES ORDER',
                         )}
                         onSendQuote={() => openSendQuoteModal(activeOrder)}
-                        onConfirm={() => {
-                          if (!activeOrder.lines.length) {
-                            showToast('Add at least one product before confirming', 'error')
-                            return
-                          }
-                          if (confirmingSO) return
-                          setConfirmingSO(true)
-                          Promise.resolve(confirmSO(activeOrder.id)).finally(() => setConfirmingSO(false))
-                        }}
+                        onConfirm={openConfirmQuoteDialog}
                         onStepBlocked={msg => showToast(msg, 'error')}
                       />
+
+                      {isQuotationStage(activeOrder.status) && quotationStockShortages.length > 0 && (
+                        <div className="sales-pilot-banner sales-pilot-banner--warn" role="status">
+                          <span aria-hidden>!</span>
+                          <div>
+                            <strong>Stock warning</strong>
+                            <div>
+                              {quotationStockShortages
+                                .slice(0, 3)
+                                .map(s => `${s.productName} needs ${s.qty}, free ${s.available}`)
+                                .join(' · ')}
+                              {quotationStockShortages.length > 3
+                                ? ` · +${quotationStockShortages.length - 3} more`
+                                : ''}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {activeOrder.status === 'sale' && activeOrder.quotationRef && (
+                        <div className="sales-pilot-banner sales-pilot-banner--ok" role="status">
+                          <span aria-hidden>✓</span>
+                          <div>
+                            <strong>Confirmed sales order</strong>
+                            <div>
+                              Source quotation {activeOrder.quotationRef}
+                              {activeOrder.confirmedAt
+                                ? ` · confirmed ${fmtDate(activeOrder.confirmedAt)}${activeOrder.confirmedByName ? ` by ${activeOrder.confirmedByName}` : ''}`
+                                : ''}
+                              {visibleDeliveries.length === 0
+                                ? ' · create a delivery to allocate stock'
+                                : ` · ${visibleDeliveries.length} delivery${visibleDeliveries.length === 1 ? '' : 'ies'}`}
+                            </div>
+                          </div>
+                        </div>
+                      )}
 
                       {activeOrder.status === 'sale' && activeDeliveries.length > 0 && (
                         <div className="rounded-2xl border border-[var(--border-lt)] bg-[var(--bg-surface)] p-4 flex flex-col gap-2">
@@ -2461,6 +2542,22 @@ function SalesContent() {
           onCancel={() => setShowResetDraftConfirm(false)}
         />
       )}
+      {showConfirmQuoteDialog && activeOrder && isQuotationStage(activeOrder.status) && (
+        <ConfirmQuotationDialog
+          orderRef={activeOrder.ref}
+          customerName={activeOrder.customerName}
+          total={activeOrder.total}
+          validUntil={activeOrder.validUntil}
+          deliveryDate={activeOrder.deliveryDate}
+          lineCount={activeOrder.lines.filter((l: any) => l.lineType !== 'section').length}
+          shortages={quotationStockShortages}
+          canReserve={canReserveOnConfirm}
+          canSkipReserve={canSkipReserveOnConfirm && canReserveOnConfirm}
+          confirming={confirmingSO}
+          onClose={() => setShowConfirmQuoteDialog(false)}
+          onConfirm={mode => void runConfirmQuotation(mode)}
+        />
+      )}
 
       {showDnModal && activeId && (() => {
         const del = deliveries.find(d => d.saleOrderId === activeId && canGenerateDeliveryNote(d))
@@ -2529,7 +2626,7 @@ function NewQuotationForm({
   pricelistsEnabled, newDraftLines,
   addDraftLine, addDraftSection, updateDraftLine, removeDraftLine, moveDraftLine, selectProductForDraftLine,
   calcDraftLineTotal, draftSubtotal, draftTaxTotal, draftTotal, canEditDiscount,
-  companySettings, canSave, saveBlockedReason, fieldErrors, onSave, onSaveAndAddAnother, onCancel, onCreateNewCustomer,
+  companySettings, canSave, saveBlockedReason, fieldErrors, onSave, onSaveAndAddAnother, onSaveDraft, onCancel, onCreateNewCustomer,
 }: {
   customers: any[]; products: any[]; newCustomer: { id: string; name: string } | null
   setNewCustomer: (c: { id: string; name: string } | null) => void
@@ -2554,7 +2651,7 @@ function NewQuotationForm({
   canEditDiscount: boolean; companySettings: any
   canSave: boolean; saveBlockedReason: string
   fieldErrors?: { customer?: string; lines?: string }
-  onSave: () => void; onSaveAndAddAnother: () => void; onCancel: () => void
+  onSave: () => void; onSaveAndAddAnother: () => void; onSaveDraft: () => void; onCancel: () => void
   onCreateNewCustomer: (query: string) => void
 }) {
   const [productSearch, setProductSearch] = useState<Record<string, string>>({})
@@ -2609,17 +2706,20 @@ function NewQuotationForm({
   return (
     <div className="flex flex-col min-h-[600px]">
       {/* Form header */}
-      <div className="p-4 border-b border-[var(--border-lt)] flex items-center justify-between bg-[var(--bg-surface)]">
+      <div className="p-4 border-b border-[var(--border-lt)] flex items-center justify-between gap-3 flex-wrap bg-[var(--bg-surface)]">
         <div className="flex items-center gap-3">
           <button type="button" onClick={onCancel} className="btn-outline flex items-center gap-2 text-xs"><Fa icon={faArrowLeft} /><span>Discard</span></button>
           <div>
-            <h2 className="text-sm font-bold text-[var(--text-1)]">New Quotation</h2>
-            <p className="text-[10px] text-[var(--text-4)]">Draft — not yet confirmed</p>
+            <h2 className="text-sm font-bold text-[var(--text-1)]">Create quotation</h2>
+            <p className="text-[10px] text-[var(--text-4)]">Draft — save to allocate a quotation number</p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <button type="button" onClick={onCancel} className="btn-outline text-xs">Cancel</button>
-          <button type="button" onClick={onSave} disabled={!canSave} className="btn-primary flex items-center gap-2 text-xs disabled:opacity-50 disabled:cursor-not-allowed"><Fa icon={faSave} /><span>Save Quotation</span></button>
+          <button type="button" onClick={onSaveDraft} disabled={!canSave} className="btn-secondary flex items-center gap-2 text-xs disabled:opacity-50 disabled:cursor-not-allowed">
+            <Fa icon={faSave} /><span>Save as draft</span>
+          </button>
+          <button type="button" onClick={onSave} disabled={!canSave} className="btn-primary flex items-center gap-2 text-xs disabled:opacity-50 disabled:cursor-not-allowed"><Fa icon={faSave} /><span>Submit quotation</span></button>
         </div>
       </div>
 
@@ -2923,27 +3023,31 @@ function NewQuotationForm({
               onChange={setNewPaymentDetails}
             />
           </div>
-          <div className="card p-5 bg-[var(--bg-surface)] border-[var(--border-lt)]">
-            <h4 className="text-xs font-bold text-[var(--text-2)] mb-4">Summary</h4>
-            <div className="flex flex-col gap-3">
-              <div className="flex justify-between text-xs"><span className="text-[var(--text-3)]">Subtotal</span><span className="font-bold">{fmtKes(draftSubtotal)}</span></div>
-              <div className="flex justify-between text-xs"><span className="text-[var(--text-3)]">Tax</span><span className="font-bold">{fmtKes(draftTaxTotal)}</span></div>
-              <div className="border-t border-[var(--border-lt)] pt-3 flex justify-between text-sm"><span className="font-bold text-[var(--text-1)]">Total</span><span className="font-extrabold text-primary-600">{fmtKes(draftTotal)}</span></div>
+          <div className="sales-pilot-sticky-totals" aria-label="Document totals">
+            <h4 className="text-xs font-bold text-[var(--text-2)] mb-3">Totals</h4>
+            <div className="flex flex-col gap-2">
+              <div className="flex justify-between text-xs"><span className="text-[var(--text-3)]">Untaxed amount</span><span className="font-bold">{fmtKes(draftSubtotal)}</span></div>
+              <div className="flex justify-between text-xs"><span className="text-[var(--text-3)]">VAT</span><span className="font-bold">{fmtKes(draftTaxTotal)}</span></div>
+              <div className="border-t border-[var(--border-lt)] pt-2 flex justify-between text-sm"><span className="font-bold text-[var(--text-1)]">Total</span><span className="font-extrabold text-primary-600">{fmtKes(draftTotal)}</span></div>
             </div>
           </div>
         </div>
 
         {/* Bottom action bar */}
-        <div className="flex items-center justify-between pt-4 border-t border-[var(--border-lt)]">
+        <div className="flex items-center justify-between pt-4 border-t border-[var(--border-lt)] gap-3 flex-wrap">
           <button type="button" onClick={onCancel} className="btn-outline text-xs">Discard</button>
           <div className="flex flex-col items-end gap-1">
             {saveBlockedReason && <p className="text-[10px] text-amber-600 font-semibold">{saveBlockedReason}</p>}
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap justify-end">
               <button type="button" onClick={onSaveAndAddAnother} disabled={!canSave} className="btn-outline flex items-center gap-2 text-xs disabled:opacity-50 disabled:cursor-not-allowed">
                 <Fa icon={faSave} />
-                <span>Create &amp; add another</span>
+                <span>Save &amp; add another</span>
               </button>
-              <button type="button" onClick={onSave} disabled={!canSave} className="btn-primary flex items-center gap-2 text-xs disabled:opacity-50 disabled:cursor-not-allowed"><Fa icon={faSave} /><span>Save as Quotation</span></button>
+              <button type="button" onClick={onSaveDraft} disabled={!canSave} className="btn-secondary flex items-center gap-2 text-xs disabled:opacity-50 disabled:cursor-not-allowed">
+                <Fa icon={faSave} />
+                <span>Save as draft</span>
+              </button>
+              <button type="button" onClick={onSave} disabled={!canSave} className="btn-primary flex items-center gap-2 text-xs disabled:opacity-50 disabled:cursor-not-allowed"><Fa icon={faSave} /><span>Submit quotation</span></button>
             </div>
           </div>
         </div>
@@ -2999,6 +3103,69 @@ function DeliveryNoteView({
   // Allow re-prepare on Ready so duplicate-product qty mistakes can be corrected.
   const canPrepare = orderConfirmed && !!existingDelivery && isOpenDeliveryStatus(existingDelivery.status) && ['draft', 'waiting', 'ready'].includes(existingDelivery.status)
   const canValidate = orderConfirmed && !!existingDelivery && existingDelivery.status === 'ready' && !!existingDelivery.preparedAt
+  const [serialScan, setSerialScan] = useState('')
+
+  const pickingSummary = useMemo(() => {
+    const pairs = pairOrderLinesWithDeliveryLines(order.lines, existingDelivery?.lines ?? [])
+    let required = 0
+    let picked = 0
+    for (const { orderLine: l, deliveryLine: delLine } of pairs) {
+      if ((l as any).lineType === 'section') continue
+      const demand = Math.max(0, Number(l.qty) || 0)
+      required += demand
+      const serialCount = Array.isArray(l.serialIds) ? l.serialIds.length : 0
+      const typed = Math.max(0, Number(deliveryQtys[l.id]) || 0)
+      const effective = effectiveDeliveryLineQty({
+        qty: Number(delLine?.qty) || demand,
+        qtyDone: delLine?.qtyDone,
+        serialIds: delLine?.serialIds?.length ? delLine.serialIds : l.serialIds,
+      })
+      const linePicked = canPrepare
+        ? Math.min(demand, Math.max(typed, serialCount, effective))
+        : Math.min(demand, Math.max(Number(l.qtyDelivered) || 0, effective, serialCount))
+      picked += linePicked
+    }
+    const remaining = Math.max(0, required - picked)
+    const pct = required > 0 ? Math.round((picked / required) * 100) : 0
+    return { required, picked, remaining, pct }
+  }, [order.lines, existingDelivery, deliveryQtys, canPrepare])
+
+  const handleSerialScan = (e: FormEvent) => {
+    e.preventDefault()
+    if (!canPrepare) return
+    const value = serialScan.trim().toUpperCase()
+    if (!value) return
+    const match = serials.find((s: any) => {
+      const sn = String(s.serial ?? s.serialNumber ?? '').toUpperCase()
+      return sn === value &&
+        (s.location === 'warehouse' || s.location === 'shop') &&
+        s.status === 'available'
+    })
+    if (!match) {
+      showToast(`Invalid or unavailable serial ${value}`, 'error')
+      setSerialScan('')
+      return
+    }
+    const targetLine = order.lines.find(l => {
+      if ((l as any).lineType === 'section' || l.productId !== match.productId) return false
+      const assigned = Array.isArray(l.serialIds) ? l.serialIds.length : 0
+      return assigned < l.qty
+    })
+    if (!targetLine) {
+      showToast(`No open line for serial ${value}`, 'error')
+      setSerialScan('')
+      return
+    }
+    const assigned = Array.isArray(targetLine.serialIds) ? targetLine.serialIds : []
+    if (assigned.includes(match.id)) {
+      showToast(`Duplicate scan ${value}`, 'error')
+      setSerialScan('')
+      return
+    }
+    assignSerialsToSOLine(order.id, targetLine.id, [match.id])
+    showToast(`Scanned ${value}`, 'success')
+    setSerialScan('')
+  }
 
   const selectDelivery = (deliveryId: string) => {
     const target = orderDeliveries.find((d: any) => d.id === deliveryId)
@@ -3152,7 +3319,7 @@ function DeliveryNoteView({
             <p className="text-[10px] text-[var(--text-4)]">{order.ref} · {order.customerName}</p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           {canGenerateDeliveryNote(existingDelivery) && <button onClick={handlePrintDN} className="btn-secondary flex items-center gap-2 text-xs"><Fa icon={faPrint} /><span>Download Delivery Note</span></button>}
           {canPrepare && (
             <button onClick={handlePrepare} disabled={savingDelivery} className="btn-primary flex items-center gap-2 text-xs disabled:opacity-50">
@@ -3161,7 +3328,7 @@ function DeliveryNoteView({
           )}
           {canValidate && (
             <button onClick={handleValidate} disabled={savingDelivery} className="btn-primary flex items-center gap-2 text-xs disabled:opacity-50">
-              <Fa icon={faCheck} /><span>{savingDelivery ? 'Saving…' : 'Validate'}</span>
+              <Fa icon={faCheck} /><span>{savingDelivery ? 'Saving…' : 'Mark as delivered'}</span>
             </button>
           )}
         </div>
@@ -3169,6 +3336,13 @@ function DeliveryNoteView({
 
       {/* Body */}
       <div className="p-6 flex flex-col gap-6">
+        <div className="sales-pilot-picking-summary" aria-label="Picking progress">
+          <div><span>Required</span><strong>{pickingSummary.required}</strong></div>
+          <div><span>Picked</span><strong>{pickingSummary.picked}</strong></div>
+          <div><span>Remaining</span><strong>{pickingSummary.remaining}</strong></div>
+          <div><span>Progress</span><strong>{pickingSummary.pct}%</strong></div>
+        </div>
+
         {/* DN Info card */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 p-4 rounded-2xl bg-[var(--bg-surface)] border border-[var(--border-lt)]">
           <div className="flex flex-col gap-1"><span className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)]">Order Ref</span><span className="text-xs font-semibold text-primary-600">{order.ref}</span></div>
@@ -3221,7 +3395,23 @@ function DeliveryNoteView({
 
         {/* Delivery lines */}
         <div className="flex flex-col gap-3">
-          <h3 className="text-sm font-bold text-[var(--text-1)]">Products to Deliver</h3>
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <h3 className="text-sm font-bold text-[var(--text-1)]">Products to Deliver</h3>
+            {canPrepare && (
+              <form onSubmit={handleSerialScan} className="flex items-center gap-2 min-w-[220px] flex-1 max-w-md">
+                <label className="sr-only" htmlFor="delivery-serial-scan">Barcode / serial</label>
+                <input
+                  id="delivery-serial-scan"
+                  className="sales-pilot-scan"
+                  placeholder="Scan or type serial…"
+                  value={serialScan}
+                  onChange={e => setSerialScan(e.target.value)}
+                  autoComplete="off"
+                />
+                <button type="submit" className="btn-secondary text-xs shrink-0">Assign</button>
+              </form>
+            )}
+          </div>
           <div className="border border-[var(--border-lt)] rounded-2xl overflow-hidden">
             <div className="dt-scroll">
             <table data-no-responsive className="w-full text-left border-collapse">
@@ -3336,7 +3526,7 @@ function DeliveryNoteView({
               </button>
             ) : (
               <button onClick={handleValidate} disabled={savingDelivery} className="btn-primary flex items-center gap-2 text-xs disabled:opacity-50">
-                <Fa icon={faCheck} /><span>{savingDelivery ? 'Saving…' : 'Validate'}</span>
+                <Fa icon={faCheck} /><span>{savingDelivery ? 'Saving…' : 'Mark as delivered'}</span>
               </button>
             )}
           </div>
