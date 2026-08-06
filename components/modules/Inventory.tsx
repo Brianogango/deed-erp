@@ -1379,6 +1379,40 @@ function InventoryContent() {
       />
 
       <div className="mod-body">
+      <div className="inventory-pilot-rail" aria-label="Inventory overview">
+        <button
+          type="button"
+          className={`inventory-pilot-stat ${tab === 'product_catalog' ? 'is-active' : ''}`}
+          onClick={() => setActiveTab('product_catalog')}
+        >
+          <span className="inventory-pilot-stat-value tabular-nums">{kpis.productMasters.toLocaleString()}</span>
+          <span className="inventory-pilot-stat-label">Active products</span>
+        </button>
+        <button
+          type="button"
+          className={`inventory-pilot-stat ${tab === 'warehouse_view' ? 'is-active' : ''}`}
+          onClick={() => setActiveTab('warehouse_view')}
+        >
+          <span className="inventory-pilot-stat-value tabular-nums">{kpis.serialTracked.toLocaleString()}</span>
+          <span className="inventory-pilot-stat-label">Available serials</span>
+        </button>
+        <button
+          type="button"
+          className={`inventory-pilot-stat ${kpis.lowStock > 0 ? 'tone-warning' : ''} ${tab === 'reports' ? 'is-active' : ''}`}
+          onClick={() => { setActiveTab('reports'); setReportTab('low_stock') }}
+        >
+          <span className="inventory-pilot-stat-value tabular-nums">{kpis.lowStock.toLocaleString()}</span>
+          <span className="inventory-pilot-stat-label">Low stock</span>
+        </button>
+        <button
+          type="button"
+          className={`inventory-pilot-stat ${tab === 'stock_in' || tab === 'movements' ? 'is-active' : ''}`}
+          onClick={() => setActiveTab(canEditStock ? 'stock_in' : 'movements')}
+        >
+          <span className="inventory-pilot-stat-value tabular-nums">{kpis.stockReceipts.toLocaleString()}</span>
+          <span className="inventory-pilot-stat-label">Validated GRNs</span>
+        </button>
+      </div>
 
       {tab === 'warehouse_view' && (() => {
         const { warehouseSerials, issuesSerials, repairSerials, bulkByLocation } = warehouseStock
@@ -1476,7 +1510,7 @@ function InventoryContent() {
         return (
           <div className="flex flex-col gap-4">
             <form
-              className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center"
+              className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center inventory-pilot-search"
               onSubmit={e => { e.preventDefault(); applyWarehouseSearch() }}
             >
               <div className="relative flex-1 min-w-0">
@@ -1511,6 +1545,7 @@ function InventoryContent() {
               </p>
             )}
 
+            <div className="inventory-warehouse-board">
             <Section title="Warehouse — Ready for Sale" icon={<Fa icon={faIndustry} />} tone="navy"
               count={filteredWarehouseSerials.length + filteredBulkWarehouse.reduce((s,p) => s+p.qty, 0)}
               emptyText={q ? 'No warehouse stock matches this search' : 'No stock in warehouse'}>
@@ -1626,6 +1661,7 @@ function InventoryContent() {
                 </div>
               )}
             </Section>
+            </div>
           </div>
         )
       })()}
@@ -1767,11 +1803,33 @@ function InventoryContent() {
                   summary={
                     <OperationalSummary
                       items={[
-                        { id: 'catalog', label: 'catalog items', value: catalogProducts.length },
-                        { id: 'in-stock', label: 'in stock / service', value: inStockCount },
-                        { id: 'out-stock', label: 'out of stock', value: outOfStockCount },
+                        {
+                          id: 'catalog',
+                          label: 'catalog items',
+                          value: catalogProducts.length,
+                          onClick: () => { setCatalogStockFilter('all'); setCatalogCatFilter('All') },
+                        },
+                        {
+                          id: 'in-stock',
+                          label: 'in stock / service',
+                          value: inStockCount,
+                          tone: 'success',
+                          onClick: () => setCatalogStockFilter('in_stock'),
+                        },
+                        {
+                          id: 'out-stock',
+                          label: 'out of stock',
+                          value: outOfStockCount,
+                          tone: outOfStockCount > 0 ? 'danger' : 'default',
+                          onClick: () => setCatalogStockFilter('out_of_stock'),
+                        },
                         { id: 'services', label: 'services', value: serviceCount },
-                        { id: 'pending', label: 'pending price updates', value: pendingPriceUpdates },
+                        {
+                          id: 'pending',
+                          label: 'pending price updates',
+                          value: pendingPriceUpdates,
+                          tone: pendingPriceUpdates > 0 ? 'warning' : 'default',
+                        },
                       ]}
                     />
                   }

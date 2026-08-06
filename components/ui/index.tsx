@@ -2146,7 +2146,7 @@ export function ModuleHeader({
   overflowActions,
   headingLevel = 1,
   subtitleMode = 'compact',
-  color = '#1B2762',
+  color = 'var(--navy)',
 }: {
   title: string
   subtitle?: string
