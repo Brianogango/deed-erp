@@ -1904,13 +1904,15 @@
       min-height: 44px;
     }
 
-    /* Sales prototype density must not inherit 44px touch targets */
-    .mod-page.sales-doc .sales-workbench button,
+    /* Sales workbench keeps compact desktop density but uses 40px touch targets on phones */
+    .mod-page.sales-doc .sales-workbench .sp-btn,
+    .mod-page.sales-doc .sales-workbench .sp-line-actions button,
+    .mod-page.sales-doc .sales-workbench .sp-tab,
     .mod-page.sales-doc .sales-workbench .form-input,
     .mod-page.sales-doc .sales-workbench .form-select,
-    .mod-page.sales-doc .sales-workbench .sp-tab,
-    .mod-page.sales-doc .sales-workbench .sp-btn {
-      min-height: 0;
+    .mod-page.sales-doc .sales-workbench .sp-field input,
+    .mod-page.sales-doc .sales-workbench .sp-field select {
+      min-height: 40px;
     }
   }
 
