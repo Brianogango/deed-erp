@@ -4585,12 +4585,90 @@
   border-radius: 0.5rem;
   background: color-mix(in srgb, var(--navy) 3%, var(--bg-card));
   box-shadow: none;
+  padding: 0.85rem 1rem;
 }
 
 .sales-pilot .sales-quote-total {
   color: var(--navy);
   font-variant-numeric: tabular-nums;
   font-family: var(--font-dm-mono), ui-monospace, monospace;
+}
+
+.sales-pilot .sales-quote-field-label {
+  display: block;
+  font-size: 0.625rem;
+  font-weight: 750;
+  letter-spacing: 0.045em;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+
+.sales-pilot .sales-quote-payment-note {
+  border-top: 1px solid var(--border-lt);
+  padding-top: 0.75rem;
+  margin-top: 0.15rem;
+}
+
+.sales-pilot .sales-quote-payment-note > button > div > p:first-child {
+  font-size: 0.625rem;
+  font-weight: 750;
+  letter-spacing: 0.045em;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+
+.sales-pilot .sales-quote-lines .dt-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.sales-pilot .sales-quote-lines-empty {
+  white-space: normal;
+  word-break: break-word;
+  max-width: 100%;
+}
+
+.sales-pilot .sales-quote-form-footer {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.55rem;
+}
+
+.sales-pilot .sales-quote-form-footer-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.5rem;
+}
+
+.sales-pilot .sales-quote-footer-btn {
+  width: 100%;
+  justify-content: center;
+  white-space: nowrap;
+}
+
+@media (min-width: 640px) {
+  .sales-pilot .sales-quote-form-footer {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .sales-pilot .sales-quote-form-footer-actions {
+    flex-direction: row;
+    align-items: center;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+
+  .sales-pilot .sales-quote-footer-btn {
+    width: auto;
+  }
+
+  .sales-pilot .sales-quote-summary {
+    padding: 1.1rem 1.25rem;
+  }
 }
 
 /* Record header sits below navy action bar — title is navy on light ground */

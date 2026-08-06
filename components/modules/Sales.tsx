@@ -2281,22 +2281,29 @@ function NewQuotationForm({
   return (
     <div className="sales-quote-form flex flex-col min-h-[600px]">
       {/* Form header */}
-      <div className="sales-quote-form-header p-4 border-b border-[var(--border-lt)] flex items-center justify-between flex-wrap gap-3">
+      <div className="sales-quote-form-header p-3 sm:p-4 border-b border-[var(--border-lt)] flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-3 min-w-0">
-          <button type="button" onClick={onCancel} className="btn-outline flex items-center gap-2 text-xs"><Fa icon={faArrowLeft} /><span>Discard</span></button>
+          <button type="button" onClick={onCancel} className="btn-outline flex items-center gap-2 text-xs">
+            <Fa icon={faArrowLeft} />
+            <span>Discard</span>
+          </button>
           <div className="min-w-0">
             <h2 className="sales-quote-form-title">New Quotation</h2>
             <p className="sales-quote-form-sub">Draft — not yet confirmed</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <button type="button" onClick={onCancel} className="btn-outline text-xs">Cancel</button>
-          <button type="button" onClick={onSave} disabled={!canSave} className="btn-primary flex items-center gap-2 text-xs disabled:opacity-50 disabled:cursor-not-allowed"><Fa icon={faSave} /><span>Save Quotation</span></button>
+          <button type="button" onClick={onCancel} className="btn-outline text-xs hidden sm:inline-flex">Cancel</button>
+          <button type="button" onClick={onSave} disabled={!canSave} className="btn-primary flex items-center gap-2 text-xs disabled:opacity-50 disabled:cursor-not-allowed">
+            <Fa icon={faSave} />
+            <span className="sm:hidden">Save</span>
+            <span className="hidden sm:inline">Save Quotation</span>
+          </button>
         </div>
       </div>
 
       {/* Form body */}
-      <div className="p-6 flex flex-col gap-6">
+      <div className="sales-quote-form-body p-4 sm:p-6 flex flex-col gap-4 sm:gap-6">
         {/* Header fields */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {/* Customer picker */}
@@ -2351,7 +2358,10 @@ function NewQuotationForm({
           >
             <div>
               <p className="text-xs font-bold text-[var(--text-2)]">Advanced details</p>
-              <p className="text-[10px] text-[var(--text-4)]">Delivery date, payment terms, addresses, customer reference{pricelistsEnabled ? ', pricelist' : ''} and sales team</p>
+              <p className="text-[10px] text-[var(--text-4)] leading-snug">
+                <span className="sm:hidden">Dates, terms, addresses, team</span>
+                <span className="hidden sm:inline">Delivery date, payment terms, addresses, customer reference{pricelistsEnabled ? ', pricelist' : ''} and sales team</span>
+              </p>
             </div>
             <Fa icon={faChevronDown} className={`text-[10px] text-[var(--text-4)] transition-transform duration-150 ease-out ${showAdvanced ? 'rotate-180' : ''}`} />
           </button>
@@ -2562,13 +2572,17 @@ function NewQuotationForm({
                     )
                   })}
                   {newDraftLines.length === 0 && (
-                    <tr><td colSpan={canEditDiscount ? 8 : 7} className="px-4 py-6 text-center text-xs text-[var(--text-4)]">No products added yet. Click "Add a product" below.</td></tr>
+                    <tr>
+                      <td colSpan={canEditDiscount ? 8 : 7} className="sales-quote-lines-empty px-4 py-8 text-center text-xs text-[var(--text-4)]">
+                        No products yet — add one below.
+                      </td>
+                    </tr>
                   )}
                 </tbody>
               </table>
             </div>
             <div className="px-3 py-2.5 border-t border-[var(--border-lt)] bg-[color-mix(in_srgb,var(--navy)_3.5%,var(--bg-surface))]">
-              <div className="flex flex-wrap items-center gap-4">
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
                 <button type="button" onClick={addDraftLine} className="sales-quote-link flex items-center gap-2 text-xs hover:underline font-semibold"><Fa icon={faPlus} className="text-[10px]" />Add a product</button>
                 <button type="button" onClick={addDraftSection} className="flex items-center gap-2 text-xs text-[var(--text-3)] hover:underline font-semibold"><Fa icon={faPlus} className="text-[10px]" />Add a section</button>
               </div>
@@ -2576,15 +2590,15 @@ function NewQuotationForm({
           </div>
         </div>
 
-        {/* Notes + Totals */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div className="flex flex-col gap-3">
+        {/* Notes + payment note + totals — one rhythm on mobile */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
+          <div className="sales-quote-panel p-3 sm:p-4 flex flex-col gap-3">
             <div className="flex flex-col gap-1.5">
-              <label className="text-[10px] uppercase tracking-wider font-bold text-[var(--text-3)]">Notes / Terms</label>
+              <label className="sales-quote-field-label">Notes / Terms</label>
               <textarea
                 aria-label="Notes and payment terms"
-                className="form-input text-xs flex-1 min-h-[110px]"
-                rows={5}
+                className="form-input text-xs flex-1 min-h-[96px] sm:min-h-[110px]"
+                rows={4}
                 placeholder="Payment terms, warranty conditions, special instructions…"
                 value={newNotes}
                 onChange={e => setNewNotes(e.target.value)}
@@ -2594,30 +2608,35 @@ function NewQuotationForm({
             <PaymentDetailsPicker
               value={newPaymentDetails}
               onChange={setNewPaymentDetails}
+              label="Payment note"
+              className="sales-quote-payment-note"
             />
           </div>
-          <div className="sales-quote-summary card p-5">
-            <h4 className="text-xs font-bold text-[var(--text-2)] mb-4">Summary</h4>
-            <div className="flex flex-col gap-3">
+          <div className="sales-quote-summary">
+            <h4 className="sales-quote-field-label mb-3">Summary</h4>
+            <div className="flex flex-col gap-2.5">
               <div className="flex justify-between text-xs"><span className="text-[var(--text-3)]">Subtotal</span><span className="font-bold tabular-nums">{fmtKes(draftSubtotal)}</span></div>
               <div className="flex justify-between text-xs"><span className="text-[var(--text-3)]">Tax</span><span className="font-bold tabular-nums">{fmtKes(draftTaxTotal)}</span></div>
-              <div className="border-t border-[var(--border-lt)] pt-3 flex justify-between text-sm"><span className="font-bold text-[var(--text-1)]">Total</span><span className="sales-quote-total font-extrabold tabular-nums">{fmtKes(draftTotal)}</span></div>
+              <div className="border-t border-[var(--border-lt)] pt-2.5 flex justify-between text-sm"><span className="font-bold text-[var(--text-1)]">Total</span><span className="sales-quote-total font-extrabold tabular-nums">{fmtKes(draftTotal)}</span></div>
             </div>
           </div>
         </div>
 
-        {/* Bottom action bar */}
-        <div className="sales-quote-form-footer flex items-center justify-between pt-4 border-t border-[var(--border-lt)]">
-          <button type="button" onClick={onCancel} className="btn-outline text-xs">Discard</button>
-          <div className="flex flex-col items-end gap-1">
-            {saveBlockedReason && <p className="text-[10px] text-amber-600 font-semibold">{saveBlockedReason}</p>}
-            <div className="flex items-center gap-2">
-              <button type="button" onClick={onSaveAndAddAnother} disabled={!canSave} className="btn-outline flex items-center gap-2 text-xs disabled:opacity-50 disabled:cursor-not-allowed">
-                <Fa icon={faSave} />
-                <span>Create &amp; add another</span>
-              </button>
-              <button type="button" onClick={onSave} disabled={!canSave} className="btn-primary flex items-center gap-2 text-xs disabled:opacity-50 disabled:cursor-not-allowed"><Fa icon={faSave} /><span>Save as Quotation</span></button>
-            </div>
+        {/* Bottom action bar — stacks on narrow viewports so labels never truncate */}
+        <div className="sales-quote-form-footer pt-4 border-t border-[var(--border-lt)]">
+          <button type="button" onClick={onCancel} className="btn-outline text-xs sales-quote-footer-btn">Discard</button>
+          <div className="sales-quote-form-footer-actions">
+            {saveBlockedReason && <p className="text-[10px] text-amber-600 font-semibold w-full text-right sm:text-right">{saveBlockedReason}</p>}
+            <button type="button" onClick={onSaveAndAddAnother} disabled={!canSave} className="btn-outline flex items-center justify-center gap-2 text-xs disabled:opacity-50 disabled:cursor-not-allowed sales-quote-footer-btn">
+              <Fa icon={faSave} />
+              <span className="sm:hidden">Save &amp; new</span>
+              <span className="hidden sm:inline">Create &amp; add another</span>
+            </button>
+            <button type="button" onClick={onSave} disabled={!canSave} className="btn-primary flex items-center justify-center gap-2 text-xs disabled:opacity-50 disabled:cursor-not-allowed sales-quote-footer-btn">
+              <Fa icon={faSave} />
+              <span className="sm:hidden">Save</span>
+              <span className="hidden sm:inline">Save as Quotation</span>
+            </button>
           </div>
         </div>
       </div>
