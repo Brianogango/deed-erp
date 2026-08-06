@@ -1,190 +1,220 @@
-# Phase 2 — Existing UI Audit
+# Phase 2 — Existing UI Audit (redo)
 
-**Date:** 2026-08-06  
+**Date:** 2026-08-06 (revision 2)  
 **Scope:** Audit only — **no application code changed**  
-**Skills:** Impeccable (`critique` Assessment A + `detect.mjs`) · design-taste-frontend (Operate restraint / anti-slop)  
-**Mode:** Operate (ERP), not Persuade/marketing  
-**Assessment B note:** Detector CLI ran on layout + Dashboard + Sales + Inventory + `components/ui`. Full browser overlay injection was not required for this docs phase; live screenshots from prior pilots remain available under `/opt/cursor/artifacts/`.
+**Skills:** Impeccable (critique Assessment A + `detect.mjs` Assessment B) · design-taste-frontend (Operate dials) · redesign-existing-projects (checklist adapted for ERP)  
+**Mode:** Operate  
+
+**Design read:** Enterprise Operate ERP for Deed staff — trust-first, calm, data-dense (VARIANCE 2 / MOTION 2 / DENSITY 8).
 
 ---
 
 ## Executive verdict
 
-The ERP already has a **real design system** (tokens, shared chrome, DataTable, StatusBadge) and two **strong Operate pilots** (Inventory navy; Sales slate + emerald). Overall specificity is **partial**: pilots feel like Deed; most other modules still read as generic dense admin UI with local colour dialects.
+| Dimension | Score (0–4) | Notes |
+|-----------|-------------|--------|
+| Accessibility | **2** | Focus rings & many labels exist; title-only icons, clickable `div`s, colour-only status, some &lt;44px actions |
+| Performance (UI) | **3** | Skeletons present; bounce easings & heavy blur overlays are minor |
+| Theming / tokens | **2** | Strong token file; frequent hard-coded hex/Tailwind + purple dialects |
+| Responsive | **3** | Sidebar drawer + table stacking exist; topbar/filter crowding on phone |
+| Implementation integrity | **2** | Detector: 14 warnings + large advisory token drift; pilots diverge from default chrome |
+| **Heuristic total (A)** | **26/40** | Acceptable — not ship-quality consistency |
 
-**Heuristic score (Assessment A):** **26/40 — Acceptable**  
-**Biggest risks if we “just restyle”:** uneven pilots, IA tab walls, dual titles, purple status residue, a11y gaps in shell chrome.
+**One-line:** Shared system is real; **two pilots look like Deed; peers still look like generic admin + local colour hacks.** Do not paint every module with another one-off band before Phase 4 chooses one language.
+
+---
+
+## Method
+
+1. **Assessment A** — design-director review of shell, Dashboard, Sales, Inventory, Repair, Refurb, shared UI (prior run retained; findings re-validated in source).  
+2. **Assessment B** — Impeccable detector on layout + Dashboard + Sales + Inventory + Repair + Refurb + `components/ui/index.tsx` → **482 findings**.  
+3. **Taste / redesign** — anti-slop checklist with **ERP exclusions** (see below).  
+4. **Live screenshots** — captured under `/opt/cursor/artifacts/ux-phase2-redo/` when available.
+
+### Detector summary (Assessment B)
+
+| Antipattern | Count | Severity |
+|-------------|------:|----------|
+| `design-system-font-size` | 331 | advisory (Tailwind arbitrary sizes vs DESIGN.md ramp) |
+| `design-system-color` | 137 | advisory (undocumented colours vs DESIGN.md) |
+| `side-tab` | 8 | warning |
+| `bounce-easing` | 4 | warning |
+| `gray-on-color` | 2 | warning |
+| **Total** | **482** | 468 advisory / 14 warning |
+
+Heaviest files: Inventory (127), Dashboard (82), Sales (73), Refurbishment (72), ui/index (44).
+
+Advisory token drift is expected until Phase 3 regenerates MASTER + DESIGN.md as one SoT; **warnings are the actionable slop**.
 
 ---
 
 ## Surfaces reviewed
 
-| Area | Sources |
-|------|---------|
-| Sidebar / Topbar | `components/layout/Sidebar.tsx`, `Topbar.tsx`, `GlobalSearch.tsx` |
-| Dashboard | `components/modules/Dashboard.tsx` |
-| Sales / Inventory pilots | `Sales.tsx`, `Inventory.tsx`, `.sales-pilot` / `.inventory-pilot` CSS |
-| Repair / Refurb | `RepairClientJobs.tsx`, `Refurbishment.tsx` (critique) |
-| Shared UI | `components/ui/index.tsx`, `components/erp/*` |
-| Tokens / docs | `app/globals.css`, `design-system/deed-erp/*`, `docs/ERP_*.md` |
+| Surface | What we looked for |
+|---------|-------------------|
+| Sidebar | Brand, groups, active state, pins, emoji, glow |
+| Topbar | Dual title, utility density, a11y of icon controls |
+| Dashboard | Hero/orbs, KPI cards, hierarchy vs Operate |
+| Sales / Inventory | Pilot command bands, rails, table chrome |
+| Repairs | Compact header, left status borders, purple in `STATUS_COLORS` |
+| Refurbishment | `#8B5CF6` header, left borders, local STATUS_META |
+| Tables / filters | Density, toolbar, empty/loading |
+| Forms / modals / drawers | Shared Modal/SlidePanel; bounce easing |
+| Status / approvals | StatusBadge vs local maps |
+| Mobile | Drawer, stacked tables, touch targets |
+| States | Skeleton, empty, toast/error, PermissionDenied |
 
 ---
 
-## What is working (preserve)
+## What works (do not throw away)
 
-1. **Token foundation** in `globals.css` (brand navy/blue/cyan, status pairs, spacing, motion, z-index).
-2. **Shared Operate primitives:** ModuleHeader, TabBar (keyboard + overflow portal), TablePageLayout, DataTable, OperationalSummary, PrimaryActionButton, StatusBadge, PermissionDeniedState, EmptyState, ModuleSkeleton.
-3. **Inventory & Sales pilots** — inverted command bands, clickable rails, mono tabular metrics, page overrides.
-4. **Power-user shell** — pins + Alt shortcuts, Ctrl+K search, table density, role-gated nav.
-5. **Documented UX rules** — one primary action, ≤6 tabs + More, no KPI card strips on lists (`docs/ERP_UX_REFACTOR.md`).
-6. **Responsive intent** — off-canvas sidebar, stacked tables, 44px targets in many controls, reduced-motion hooks.
+1. Token architecture in `globals.css` (brand, status pairs, spacing, motion, z-index, sidebar).  
+2. Shared Operate kit: ModuleHeader, TabBar, TablePageLayout, DataTable, OperationalSummary, PrimaryActionButton, StatusBadge, EmptyState, ModuleSkeleton, PermissionDeniedState.  
+3. Sales + Inventory pilots as **proof** that a stronger Operate chrome is possible.  
+4. Power-user affordances: pins, Alt shortcuts, Ctrl+K, density toggle.  
+5. Documented contracts in `docs/ERP_UX_REFACTOR.md` / table system docs.  
+6. Light-first theme with opt-in dark.
 
 ---
 
-## Audit findings by category
+## Findings by brief category
 
-### Generic / AI-adjacent patterns (Taste + detector)
+### Generic AI / Taste patterns (ERP-relevant)
 
-| Finding | Evidence | Severity |
-|---------|----------|----------|
-| Thick **side-tab** borders | `border-l-4` Inventory; `borderLeft: 4px` RecordCard/StatCard; Repair left status rails | High |
-| Bounce / elastic easing | GlobalSearch + ui Confirm/Modal curves `cubic-bezier(0.34, 1.2/1.4, …)` | Medium |
-| Gray text on tinted fills | Sales `text-gray-600` on `bg-blue-50`; Inventory slate on indigo | Medium |
-| Dashboard decorative orbs / soft hero greeting | Dashboard hero styling | Medium |
-| Emoji as UI | Sidebar pin ★/☆; Topbar urgent 🚨; Refurb ✅ | Medium |
-| Large uniform `rounded-2xl` cards | `.card`, RecordCard, empty states | Low–Med |
-| Module purple accents | Refurb `#8B5CF6` / violet Tailwind; banned by MASTER | High |
+| Finding | Where | Sev |
+|---------|-------|-----|
+| Side-tab / thick left status borders | Inventory `border-l-4`, ui RecordCard/StatCard, Repair/Refurb `borderLeft` | P1 |
+| Purple / violet / pink status hexes | `repair-config.ts` (`#8B5CF6`, `#EC4899`), Refurb header `#8B5CF6` | P1 |
+| Bounce/elastic easing | GlobalSearch, Modal/Confirm | P2 |
+| Gray-on-color | Sales / Inventory tinted panels | P2 |
+| Dashboard decorative orbs + soft greeting hero | Dashboard | P2 |
+| Emoji as UI | Sidebar pins ★/☆, Topbar 🚨, Refurb ✅ | P2 |
+| Uniform large `rounded-2xl` | Cards, empty states, search panel | P2 |
 
-### Hierarchy & chrome consistency
+### Taste / redesign items **excluded** for Operate ERP
 
-| Finding | Detail |
-|---------|--------|
-| **Dual titles** | Topbar route `h1` + ModuleHeader title (pilots amplify the second) |
-| **Uneven pilots** | Sales/Inventory command bands vs white compact Repair/Refurb/others |
-| **Crowded Topbar** | Search, Density, Theme, JARVIS, Bell, Account, date/sync compete |
-| **Inventory tab wall** | ~9–11 peer tabs → More buries critical stock actions |
+Do **not** treat these marketing recommendations as defects:
 
-### Tables, filters, density
+- Replace Inter with a “characterful” display font  
+- Add grain/photo heroes or asymmetric marketing grids  
+- Break sidebar IA into experimental top-nav for novelty  
+- Maximise whitespace / art-gallery density  
 
-| Finding | Detail |
-|---------|--------|
-| System exists | DataTable + toolbar + chips + mobile cards — good |
-| Density uneven | Some modules still custom tables / card grids |
-| Ops summaries | Correct direction; pilots restyle as chips — watch for KPI-card regression |
-| Row actions | Some &lt;44px (`w-7 h-7`) with `title` only |
+### Hierarchy & chrome
+
+| Finding | Sev |
+|---------|-----|
+| Dual Topbar `h1` + ModuleHeader title (pilots amplify) | P1 |
+| Uneven pilots (navy / slate / white / purple) across modules | P1 |
+| Crowded Topbar utility strip | P1 |
+| Inventory ~9–11 peer tabs → “More” buries stock actions | P1 |
+
+### Tables, filters, search
+
+| Finding | Sev |
+|---------|-----|
+| DataTable system strong; adoption uneven | P2 |
+| Some row actions &lt;44px + `title`-only | P2 |
+| Ops summaries good; risk of regressing to KPI card strips | P2 |
 
 ### Forms, detail, modals, drawers
 
-| Finding | Detail |
-|---------|--------|
-| Shared Modal / SlidePanel / Confirm | Present; bounce easing on some entrances |
-| RecordHeader / SmartButtons / steppers | Good for Sales detail |
-| Repair detail | Dense secondary panels (noted in ERP_UX_REFACTOR follow-ups) |
-| FilterDrawer | Exists; adoption incomplete |
+| Finding | Sev |
+|---------|-----|
+| Shared Modal/SlidePanel OK; bounce easing | P2 |
+| Repair detail still dense secondary panels | P2 |
+| FilterDrawer under-adopted | P3 |
 
 ### Status & approvals
 
-| Finding | Detail |
-|---------|--------|
-| Canonical StatusBadge | Exists and should be universal |
-| Fragmented maps | Repair/Refurb local colour maps + left borders |
-| Approvals | Functionally present; chrome does not always make pending state globally scannable |
+| Finding | Sev |
+|---------|-----|
+| Canonical StatusBadge exists but not universal | P1 |
+| Colour-only status (left bars, violet pills) | P1 |
 
 ### Accessibility
 
-| Finding | Detail |
-|---------|--------|
-| Strengths | Focus-visible global; many aria-labels; tab roles; inert mobile sidebar |
-| Gaps | Some icon controls `title`-only; notification rows as clickable `div`s; Toggle without name; colour-only status in places; collapsed sidebar hover-only tooltips |
-| Contrast | `--text-4` improved for AA; gray-on-color detector hits remain |
+| Finding | Sev |
+|---------|-----|
+| Notification rows as clickable `div`s | P1 |
+| Some toggles/icon buttons missing accessible names | P1 |
+| Collapsed sidebar tooltips hover-only | P2 |
+| `--text-4` improved for AA; gray-on-color remains | P2 |
 
-### Responsive / mobile
+### Responsive
 
-| Finding | Detail |
-|---------|--------|
-| Sidebar drawer | Solid pattern &lt;768 |
-| Tables | Stacking + horizontal scroll patterns exist |
-| Risk | Topbar wrap + dense filters on phone; inconsistent touch targets on row actions |
+| Finding | Sev |
+|---------|-----|
+| Sidebar off-canvas solid | — |
+| Topbar + filters wrap poorly on narrow widths | P2 |
+| Touch target inconsistency on dense rows | P2 |
 
 ### Loading / empty / error / permission
 
-| State | Assessment |
-|-------|------------|
-| Loading | ModuleSkeleton / table skeletons — good baseline |
-| Empty | EmptyState + CTA patterns — generally good; copy quality varies |
-| Error | Toasts + field errors — uneven near-field placement |
-| Permission | PermissionDeniedState — preserve |
+| State | Verdict |
+|-------|---------|
+| Loading | ModuleSkeleton / table skeletons — keep |
+| Empty | EmptyState + CTA — keep; polish copy later |
+| Error | Toasts + some field errors — uneven |
+| Permission | PermissionDeniedState — keep |
 
 ### Hard-coded styling
 
-- Pilot CSS hard-codes `#0b1220`, `#12163f`, `#fff` (acceptable if later tokenised)
-- Module hex accents (`#8B5CF6`, Tailwind violet/rose) — replace with tokens
-- README still mentions Lucide/DM Sans / dark-only in places — docs drift
+- Module purple hexes and Tailwind violet/rose chips  
+- Pilot hard-coded `#0b1220` / `#fff` (tokenise in Phase 3)  
+- Arbitrary `text-[10px]` etc. → detector advisories  
 
 ---
 
-## Impeccable detector snapshot (CLI)
+## Screens that should not change lightly
 
-Run against layout + Dashboard + Sales + Inventory + `components/ui`:
-
-| Antipattern | Count (sample) | Files |
-|-------------|----------------|-------|
-| `side-tab` | 5+ | Inventory, ui RecordCard/StatCard |
-| `bounce-easing` | 4+ | GlobalSearch, ui modal/confirm |
-| `gray-on-color` | 2+ | Sales, Inventory |
-
----
-
-## Screens / areas that should **not** change lightly
-
-1. **Auth / password-change** flows and security UX copy  
-2. **Customer portal / track** public surfaces (separate identity)  
-3. **Posted finance document** behaviours (immutability) — visual only around them  
-4. **PermissionDeniedState** semantics  
-5. **DataTable DOM contracts** (`data-label`, density attrs)  
-6. **Role-gated nav ModuleIds / hrefs**  
-7. **Business steppers** that encode real status machines (Sales, Repair) — restyle, don’t reorder steps without product sign-off  
+1. Login / password-change security flows  
+2. Customer portal & public track  
+3. Posted finance document behaviour (visual shell only)  
+4. PermissionDenied semantics  
+5. DataTable DOM contracts  
+6. Nav ModuleIds / hrefs / Sales & Inventory tab IDs  
+7. Status stepper **order** tied to real machines (restyle only with product sign-off)
 
 ---
 
-## Priority backlog (for later phases — do not implement yet)
+## Priority backlog (later phases — no code now)
 
-### P0 — Design system decision (Phase 3–4)
-Unify **one Operate chrome language** (command band vs compact) with module accent tokens — stop navy/slate/white fragmentation.
+### P0 — Direction (Phase 3–4)
+Choose **one** Operate chrome language + module accent tokens. Stop adding one-off bands.
 
-### P1 — Consistency
-1. Extend chosen chrome to Repair (recommended pilot for Phase 5)  
-2. Remove purple / side-tab status dialects → StatusBadge + top accent only  
-3. Resolve dual Topbar/ModuleHeader title ownership  
-4. Distill Inventory IA (tabs vs hubs)  
+### P1
+1. Unify Repair/Refurb (and peers) to chosen chrome; remove purple  
+2. Replace side-tab status with StatusBadge (+ optional top hairline)  
+3. Resolve Topbar vs ModuleHeader title ownership; thin Topbar utilities  
+4. Distill Inventory IA (≤4 hubs) if product agrees  
 
-### P2 — Quality
-5. Replace bounce easings; tokenise gray-on-color  
-6. Shell a11y (notification rows, unlabeled toggles, 44px row actions)  
-7. Dashboard Operate quieting (orbs/eyebrow)  
-8. Sweep emoji icons → Font Awesome  
+### P2
+5. Fix bounce easings + gray-on-color  
+6. Shell a11y (names, notification rows, 44px actions)  
+7. Quiet Dashboard Operate tone (drop orbs/eyebrow)  
+8. Emoji → Font Awesome  
 
 ### P3 — Motion (Phase 7 only)
-Drawer/modal/toast only; never large tables or money ticks.
+Drawer/modal/toast; never tables or money ticks.
 
 ---
 
-## Taste-skill design read (Operate)
+## Comparison to prior Phase 2 draft
 
-> Reading this as: **enterprise ERP Operate UI** for Deed staff, with a **trust-first / data-dense** language, leaning toward **tokenised navy–blue–cyan brand + restrained motion** — not a landing page, not glassmorphism, not consumer SaaS marketing.
-
-**Dials for future work:** VARIANCE **2–3** · MOTION **2** · DENSITY **8–9**
+| Item | v1 | v2 (this redo) |
+|------|----|----------------|
+| Detector scope | Narrow sample | 482 findings across shell + 5 modules + ui |
+| Audit scores | Heuristic only | + Impeccable 5-dimension scores |
+| Taste dials | Mentioned | Locked 2 / 2 / 8 with ERP exclusions |
+| Purple evidence | Mentioned | Concrete paths (`repair-config`, Refurb header) |
+| Marketing false-positives | Implicit | Explicitly excluded |
 
 ---
 
-## Stop here
+## Stop
 
-Phases **1–2 complete**.  
-**Do not start Phase 3** (design-system regeneration), **4** (directions), **5** (prototypes), or code migration until:
-
-1. This audit is reviewed  
-2. `prototype` skill is installed for Phase 5  
-3. Explicit approval to continue  
+Phases **1–2 redo complete**. Await approval before Phase 3. Install **`prototype`** before Phase 5.
 
 ---
 
@@ -192,8 +222,9 @@ Phases **1–2 complete**.
 
 | Artefact | Path |
 |----------|------|
-| Product context | `PRODUCT.md` |
-| Incumbent design scan | `DESIGN.md` |
-| Phase 1 summary | `docs/ux-redesign/PHASE1_PRODUCT_DESIGN_CONTEXT.md` |
-| Phase 2 audit (this file) | `docs/ux-redesign/PHASE2_EXISTING_UI_AUDIT.md` |
-| Prior pilots | `design-system/deed-erp/pages/inventory.md`, `sales.md` |
+| Product | `PRODUCT.md` |
+| Design scan | `DESIGN.md` |
+| Phase 1 | `docs/ux-redesign/PHASE1_PRODUCT_DESIGN_CONTEXT.md` |
+| Phase 2 | `docs/ux-redesign/PHASE2_EXISTING_UI_AUDIT.md` |
+| Screenshots | `/opt/cursor/artifacts/ux-phase2-redo/` (when present) |
+| PR | branch `cursor/ux-phase1-2-audit-ddc8` |

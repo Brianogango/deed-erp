@@ -1,6 +1,6 @@
 ---
 name: Deed ERP
-description: Operational B2B ERP for Deed Technologies — inventory, sales, repairs, finance
+description: Operational ERP for Deed Technologies — inventory, sales, repairs, finance (Operate mode)
 colors:
   primary: "#2563EB"
   primary-dark: "#1D4ED8"
@@ -24,17 +24,27 @@ colors:
   warning: "#D97706"
   danger: "#DC2626"
   info: "#2563EB"
+  success-text: "#047857"
+  warning-text: "#92400E"
+  danger-text: "#B91C1C"
+  info-text: "#1E40AF"
 typography:
   ui:
     fontFamily: "Inter, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif"
     fontSize: "13px"
     fontWeight: 400
     lineHeight: 1.45
+    letterSpacing: "normal"
   table:
     fontFamily: "Inter, sans-serif"
     fontSize: "12px"
     fontWeight: 400
     lineHeight: 1.35
+  label:
+    fontFamily: "Inter, sans-serif"
+    fontSize: "10px"
+    fontWeight: 600
+    letterSpacing: "0.04em"
   mono:
     fontFamily: "DM Mono, ui-monospace, monospace"
     fontSize: "12px"
@@ -50,6 +60,7 @@ spacing:
   2: "8px"
   3: "12px"
   4: "16px"
+  5: "20px"
   6: "24px"
   8: "32px"
 components:
@@ -61,65 +72,82 @@ components:
   button-primary-hover:
     backgroundColor: "{colors.primary-dark}"
     textColor: "#FFFFFF"
-  module-header:
+  module-header-default:
     backgroundColor: "{colors.bg-card}"
     textColor: "{colors.text-1}"
   sidebar:
     backgroundColor: "{colors.navy}"
     textColor: "#FFFFFF"
+  status-success:
+    backgroundColor: "rgba(5, 150, 105, 0.10)"
+    textColor: "{colors.success-text}"
 ---
 
 # Design
 
-<!-- impeccable:document scan of incumbent visual system — 2026-08-06 -->
-<!-- Source of truth for live values remains app/globals.css -->
+<!-- impeccable:document — Phase 1 redo scan of incumbent system, 2026-08-06 -->
+<!-- Live SoT: app/globals.css. This file describes what EXISTS, including known fractures. -->
 
 ## Overview
 
-Deed ERP is an **Operate-mode** product UI: light-first slate surfaces, navy sidebar, blue primary actions, dense tables. Two module pilots (Inventory navy command band; Sales slate-ink + emerald) sit ahead of the default compact white module chrome. This file documents the **incumbent** system before Phase 3–4 redesign alternatives.
+Deed ERP’s incumbent look is a **light-first Operate UI**: navy sidebar, blue primary actions, slate neutrals, dense tables. Two experimental **module pilots** diverge on purpose today:
+
+| Pilot | Signature |
+|-------|-----------|
+| Inventory `.inventory-pilot` | Navy command band + cyan underline |
+| Sales `.sales-pilot` | Slate-ink command band + emerald CTA/underline |
+
+Most other modules still use the **default compact white** `ModuleHeader`. That unevenness is a documented Phase 2 issue, not the target end-state.
 
 ## Colors
 
-Brand anchors: **navy** `#1A1F5E`, **primary blue** `#2563EB`, **cyan** `#00B0D7`. Semantic status greens/ambers/reds with paired `*-bg` / `*-text` for badges. Page wash `#F1F5F9`; cards white. Dark theme is opt-in via `[data-theme='dark']`.
+**Brand:** navy `#1A1F5E`, primary blue `#2563EB`, cyan `#00B0D7`.  
+**Neutrals:** cool slate page/surface/card/border/text scale.  
+**Status:** success / warning / danger / info with paired `*-bg` / `*-text`.  
+**Shell:** `--sidebar-*` tokens for navy gradient rail and active cyan-blue pill.
 
-Do not introduce purple/indigo decorative accents. Prefer CSS variables over hard-coded hex in modules.
+**Violations still in code (anti-reference):** purple `#8B5CF6` / violet & pink status hexes in Repair/Refurb (`repair-config.ts`, Refurbishment header).
 
 ## Typography
 
-Single UI family: **Inter** (self-hosted). **DM Mono** for serials, SKUs, tabular money/counts. Fixed rem/px scale (`--fs-ui`, `--fs-table`, `--fs-label`, `--fs-tab`) stepped at 768 / 1536 — not fluid marketing display type.
+**Inter** (self-hosted variable) for UI. **DM Mono** for serials, SKUs, and tabular counts/money.  
+Scale tokens: `--fs-ui` / `--fs-table` / `--fs-label` / `--fs-tab`, stepped at 768px and 1536px.  
+Operate rule: **no marketing display face**; do not replace Inter with a “characterful” landing font.
 
 ## Layout
 
-AppShell: collapsible navy sidebar + sticky topbar + `mod-page` workspace. Content max `--content-max` 1440px. Module pattern: `ModuleHeader` → `TabBar` (≤6 + More) → `mod-body` → `TablePageLayout` / `DataTable`. Sidebar off-canvas below 768px.
+AppShell → `mod-page` → `ModuleHeader` → `TabBar` (≤6 + More) → `mod-body` → `TablePageLayout` / `DataTable`.  
+`--content-max: 1440px`. Sidebar off-canvas below 768px.  
+Topbar currently repeats route title alongside ModuleHeader (hierarchy conflict — Phase 2).
 
 ## Elevation & Depth
 
-Soft slate-tinted shadows (`--shadow-xs` … `--shadow-modal`). Prefer flat table headers over gradients. Avoid glass as decoration; existing drawers/modals use light backdrop blur for focus only.
+Slate-tinted soft shadows (`--shadow-xs` … `--shadow-modal`). Flat `--table-head-bg`.  
+Backdrop blur appears on overlays (search, drawers) for focus — not as decorative glass panels.
 
 ## Shapes
 
-`--radius-sm/md/lg/full` mapped to controls/cards. Dense ERP should prefer **sm/md**; large `rounded-2xl` on every card is a known inconsistency to resolve in redesign.
+`--radius-sm/md/lg/full`. Cards/modals often use `--radius-lg` / `rounded-2xl` — **over-rounded for dense ERP** relative to controls; candidate to tighten in Phase 3–4.
 
 ## Components
 
-Canonical shared UI: `components/ui` (ModuleHeader, TabBar, Modal, SlidePanel, Badge, EmptyState, …) and `components/erp` (PrimaryActionButton, StatusBadge, TablePageLayout, OperationalSummary, RecordHeader, …). Status must use `StatusBadge` / shared maps — not per-module purple pills.
-
-Pilots:
-- `.inventory-pilot` — navy command header + cyan accents
-- `.sales-pilot` — slate-ink header + emerald accents
+**Canonical:** `components/ui` (ModuleHeader, TabBar, Modal, SlidePanel, Badge, EmptyState, skeletons…) and `components/erp` (PrimaryActionButton, StatusBadge, TablePageLayout, OperationalSummary, RecordHeader, FilterDrawer, PermissionDeniedState…).  
+**Tables:** `components/data-table/*`.  
+**Status rule:** use `StatusBadge` / shared maps — not per-module left-border colour dialects.
 
 ## Do's and Don'ts
 
 **Do**
-- Preserve business logic, APIs, permissions, routes
-- Use tokens from `globals.css`
+- Prefer CSS variables from `globals.css`
 - One primary action per viewport
 - Compact operational summaries on lists (not KPI card strips)
-- 44px touch targets; visible `:focus-visible`; `prefers-reduced-motion`
+- Press-only micro-motion; honour reduced motion
+- Keep information density high
 
 **Don't**
 - Marketing heroes, glassmorphism showcases, huge display headings
-- Emoji as UI icons
-- Thick colored left borders as the main status language
-- Duplicate status colour maps per module
-- Animate large tables, money figures, or routine navigation
+- Purple/indigo decorative accents
+- Thick coloured left borders as primary status language
+- Emoji as icons
+- Animate large tables, financial figures, or routine navigation
+- Apply landing-page Taste defaults (grain heroes, asymmetric marketing grids, Inter replacement) to Operate screens
