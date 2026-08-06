@@ -63,10 +63,11 @@
 /* Production: content area only (AppShell keeps the ERP sidebar) */
 .sales-workbench {
   display: block;
-  min-height: 0;
+  min-height: calc(100vh - 52px);
   width: 100%;
-  padding: 12px 16px 24px;
+  padding: 10px 14px 20px;
   box-sizing: border-box;
+  background: var(--sp-bg);
 }
 
 .sales-proto *,
@@ -78,12 +79,94 @@
   box-sizing: border-box;
 }
 
+/* Density lock — beat global .form-input (min-h-10 / rounded-xl) and touch targets */
 .sales-workbench .sp-field {
-  margin-bottom: 8px;
+  margin-bottom: 8px !important;
 }
 
 .sales-workbench .sp-field:last-child {
-  margin-bottom: 0;
+  margin-bottom: 0 !important;
+}
+
+.sales-workbench .sp-grid-2 {
+  gap: 8px 20px !important;
+}
+
+.sales-workbench .sp-panel-pad {
+  padding: 10px 12px !important;
+}
+
+.sales-workbench .sp-field input,
+.sales-workbench .sp-field select,
+.sales-workbench .sp-field textarea,
+.sales-workbench .sp-panel input:not([type='checkbox']):not([type='radio']),
+.sales-workbench .sp-panel select,
+.sales-workbench .sp-panel textarea,
+.sales-workbench .form-input,
+.sales-workbench .form-select {
+  min-height: 0 !important;
+  height: auto !important;
+  padding: 5px 8px !important;
+  font-size: 12.5px !important;
+  font-weight: 450 !important;
+  line-height: 1.25 !important;
+  border-radius: var(--sp-radius-sm) !important;
+  border: 1px solid var(--sp-border-strong) !important;
+  box-shadow: none !important;
+  background: #fff !important;
+}
+
+.sales-workbench .sp-field textarea,
+.sales-workbench .sp-panel textarea {
+  min-height: 72px !important;
+}
+
+.sales-workbench .sp-btn,
+.sales-workbench .sp-line-actions button,
+.sales-workbench button.sp-btn {
+  min-height: 0 !important;
+  min-width: 0 !important;
+  height: auto !important;
+  padding: 5px 10px !important;
+  font-size: 12px !important;
+  border-radius: var(--sp-radius-sm) !important;
+  line-height: 1.2 !important;
+}
+
+.sales-workbench .sp-btn-primary {
+  background: var(--sp-accent) !important;
+  border-color: var(--sp-accent) !important;
+  color: #fff !important;
+}
+
+.sales-workbench .sp-table th,
+.sales-workbench .sp-table td {
+  padding: 6px 8px !important;
+  font-size: 12px !important;
+}
+
+.sales-workbench .sp-table th {
+  font-size: 11px !important;
+  padding: 6px 8px !important;
+}
+
+.sales-workbench .sp-tab {
+  padding: 8px 10px !important;
+  min-height: 0 !important;
+}
+
+.sales-workbench .sp-totals {
+  padding: 8px 12px 10px !important;
+}
+
+.sales-workbench .sp-totals-row {
+  font-size: 12px !important;
+  padding: 2px 0 !important;
+}
+
+.sales-workbench .sp-totals-row.grand {
+  font-size: 14px !important;
+  padding-top: 6px !important;
 }
 
 .sales-workbench .erp-table-page-title,
@@ -94,12 +177,14 @@
 }
 
 /* Neutralize leftover bulky Tailwind cards inside sales workbench */
-.sales-workbench .rounded-2xl {
+.sales-workbench .rounded-2xl,
+.sales-workbench .rounded-xl {
   border-radius: var(--sp-radius) !important;
 }
 .sales-workbench .card {
   border-radius: var(--sp-radius) !important;
   box-shadow: none !important;
+  padding: 10px 12px !important;
 }
 
 .sales-workbench .dt-toolbar {
