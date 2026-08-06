@@ -43,11 +43,14 @@ function getIP(req: NextRequest): string {
 function redirectTo(path: string, req: NextRequest, returnTo?: string | null): NextResponse {
   const url = req.nextUrl.clone()
   url.pathname = path
-  url.search = ''
-  if (path === '/login' && returnTo) {
-    const safe = safeReturnTo(returnTo)
-    if (safe) url.searchParams.set('returnTo', safe)
+  if (path === '/login') {
+    url.search = ''
+    if (returnTo) {
+      const safe = safeReturnTo(returnTo)
+      if (safe) url.searchParams.set('returnTo', safe)
+    }
   }
+  // Legacy aliases and other redirects keep the original query string.
   return NextResponse.redirect(url)
 }
 
