@@ -1218,7 +1218,11 @@ function SalesContent() {
     const sub = updatedLines.reduce((a, l) => a + l.subtotal, 0)
     const tax = updatedLines.reduce((a, l) => a + Math.round(l.subtotal * (l.taxRate ?? 0) / 100), 0)
     setEditingLineId(null)
-    const ok = await updateSaleOrder(activeOrder.id, { lines: updatedLines, subtotal: sub, taxTotal: tax, total: sub + tax })
+    const ok = await updateSaleOrder(
+      activeOrder.id,
+      { lines: updatedLines, subtotal: sub, taxTotal: tax, total: sub + tax },
+      { persist: true },
+    )
     if (ok !== false) showToast('Line saved', 'success')
   }
 
@@ -1636,7 +1640,7 @@ function SalesContent() {
                                     validUntil: activeOrder.validUntil,
                                     paymentTerms: activeOrder.paymentTerms,
                                     salespersonName: activeOrder.salespersonName,
-                                  })
+                                  }, { persist: true })
                                   if (ok !== false) showToast('Quotation saved', 'success')
                                 })()
                               }}
