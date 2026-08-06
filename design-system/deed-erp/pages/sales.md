@@ -29,3 +29,5 @@
 2. Emerald (`--success`) only for success/money semantic states, not module chrome  
 3. Empty Quotations with existing Orders → CTA to switch to Orders  
 4. Press ~120ms; `prefers-reduced-motion` respected  
+5. Header CTA press `scale(0.97)`; action menu quiet (`rounded-lg` / `shadow-md`)  
+6. Delivery status fallback chips use `text-gray-700` (not `600`) on `bg-gray-50`  

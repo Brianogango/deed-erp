@@ -4212,6 +4212,15 @@
   box-shadow: none;
 }
 
+.sales-pilot .mod-header .btn-primary,
+.sales-pilot .mod-header .btn-secondary {
+  transition:
+    background-color 140ms ease-out,
+    border-color 140ms ease-out,
+    color 140ms ease-out,
+    transform 120ms ease-out;
+}
+
 .sales-pilot .mod-header .btn-primary {
   background: var(--accent-cyan);
   color: #04202a;
@@ -4224,6 +4233,11 @@
   background: color-mix(in srgb, var(--accent-cyan) 88%, #fff);
   border-color: color-mix(in srgb, var(--accent-cyan) 88%, #fff);
   color: #04202a;
+}
+
+.sales-pilot .mod-header .btn-primary:active,
+.sales-pilot .mod-header .btn-secondary:active {
+  transform: scale(0.97);
 }
 
 .sales-pilot .mod-header .btn-secondary {
@@ -4256,6 +4270,7 @@
   background: transparent;
   border: 0;
   box-shadow: none;
+  transition: background-color 120ms ease-out, color 120ms ease-out;
 }
 
 .sales-pilot .mod-tab:hover {
@@ -4432,6 +4447,11 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .sales-pilot .mod-header .btn-primary,
+  .sales-pilot .mod-header .btn-secondary,
+  .sales-pilot .mod-header .btn-primary:active,
+  .sales-pilot .mod-header .btn-secondary:active,
+  .sales-pilot .mod-tab,
   .sales-pilot-stat,
   .sales-pilot-stat:active,
   .sales-pilot .sales-kanban-card,

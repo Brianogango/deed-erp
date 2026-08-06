@@ -250,11 +250,11 @@ function MoreActionsMenu({ items, label = 'More' }: { items: MoreAction[]; label
         onClick={() => setOpen(o => !o)}
       >
         <span>{label}</span>
-        <Fa icon={faChevronDown} className={`text-[10px] transition-transform ${open ? 'rotate-180' : ''}`} />
+        <Fa icon={faChevronDown} className={`text-[10px] transition-transform duration-150 ease-out ${open ? 'rotate-180' : ''}`} />
       </button>
       {open && (<>
         <div className="fixed inset-0 z-[8990]" aria-hidden="true" onClick={() => setOpen(false)} />
-        <div role="menu" className="absolute right-0 top-full z-[9000] mt-2 min-w-52 rounded-xl border border-[var(--border-lt)] bg-[var(--bg-card)] p-1.5 shadow-xl">
+        <div role="menu" className="absolute right-0 top-full z-[9000] mt-2 min-w-52 rounded-lg border border-[var(--border-lt)] bg-[var(--bg-card)] p-1.5 shadow-md">
           {items.map((item, idx) => (
             <div key={item.label}>
               {idx === firstDanger && firstDanger > 0 && <div className="my-1 border-t border-[var(--border-lt)]" />}
@@ -1565,7 +1565,7 @@ function SalesContent() {
                                       d.status === 'done' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                                         : d.status === 'ready' ? 'bg-blue-50 text-blue-700 border border-blue-200'
                                           : d.status === 'waiting' ? 'bg-amber-50 text-amber-700 border border-amber-200'
-                                            : 'bg-gray-50 text-gray-600 border border-gray-200'
+                                            : 'bg-gray-50 text-gray-700 border border-gray-200'
                                     }`}>
                                       {DELIVERY_STATE_LABELS[d.status as keyof typeof DELIVERY_STATE_LABELS] ?? d.status}
                                     </span>
@@ -2848,7 +2848,7 @@ function DeliveryNoteView({
           <div className="flex flex-col gap-1"><span className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)]">Order Date</span><span className="text-xs text-[var(--text-2)]">{fmtDate(order.date)}</span></div>
           <div className="flex flex-col gap-1">
             <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)]">Delivery Status</span>
-            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold w-fit ${existingDelivery?.status === 'ready' ? 'bg-blue-50 text-blue-700 border border-blue-200' : existingDelivery?.status === 'done' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : existingDelivery?.status === 'waiting' ? 'bg-amber-50 text-amber-700 border border-amber-200' : 'bg-gray-50 text-gray-600 border border-gray-200'}`}>
+            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold w-fit ${existingDelivery?.status === 'ready' ? 'bg-blue-50 text-blue-700 border border-blue-200' : existingDelivery?.status === 'done' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : existingDelivery?.status === 'waiting' ? 'bg-amber-50 text-amber-700 border border-amber-200' : 'bg-gray-50 text-gray-700 border border-gray-200'}`}>
               {existingDelivery ? (DELIVERY_STATE_LABELS[existingDelivery.status as keyof typeof DELIVERY_STATE_LABELS] ?? existingDelivery.status) : 'No delivery yet'}
             </span>
             {existingDelivery?.backorderOfRef && (
