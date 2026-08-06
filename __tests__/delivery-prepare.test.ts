@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   buildSerialPoolsByProduct,
+  pairOrderLinesWithDeliveryLines,
   planPrepareDeliveryLines,
   sumQtyByProductId,
 } from '@/lib/delivery-prepare'
@@ -51,6 +52,24 @@ describe('delivery prepare with duplicate product lines', () => {
     expect(result.lines[1].serialIds).toEqual(['PC1AVLYS', 'PC19P3VZ'])
     expect(result.lines[2].serialIds).toEqual(['PC1D8D2N'])
     expect(result.lines[3]).toMatchObject({ qty: 4, serialIds: [] })
+  })
+
+  it('pairs each SO ThinkPad row to its own DN row by qty', () => {
+    const pairs = pairOrderLinesWithDeliveryLines(
+      [
+        { id: 'a', productId: thinkpad, qty: 1 },
+        { id: 'b', productId: thinkpad, qty: 2 },
+        { id: 'c', productId: thinkpad, qty: 1 },
+      ],
+      [
+        { productId: thinkpad, qty: 1, qtyDone: 1 },
+        { productId: thinkpad, qty: 2, qtyDone: 2 },
+        { productId: thinkpad, qty: 1, qtyDone: 1 },
+      ],
+    )
+    expect(pairs[0].deliveryLine).toMatchObject({ qty: 1, qtyDone: 1 })
+    expect(pairs[1].deliveryLine).toMatchObject({ qty: 2, qtyDone: 2 })
+    expect(pairs[2].deliveryLine).toMatchObject({ qty: 1, qtyDone: 1 })
   })
 
   it('still errors when not enough serials are assigned overall', () => {
