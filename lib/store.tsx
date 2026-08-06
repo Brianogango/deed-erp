@@ -37,6 +37,7 @@ import type { StoreLeaveType } from '@/lib/leave-utils'
 import { normalizeQuotesForClient } from '@/lib/quote-normalization'
 import { normalizeOpportunitiesForClient } from '@/lib/opportunity-normalization'
 import { normalizeCompaniesForClient } from '@/lib/company-normalization'
+import { saleOrderPersistBody } from '@/lib/sale-order-persist'
 import {
   normalizeSaleOrdersForClient,
   invoiceableQty as odooInvoiceableQty,
@@ -3062,16 +3063,16 @@ export interface AppState {
 
   // Sale Orders
   createSaleOrder: (customerId: string, customerName: string, initial?: Partial<Pick<SaleOrder, 'lines' | 'deliveryDate' | 'notes' | 'paymentTerms' | 'validUntil' | 'customerRef' | 'invoiceAddress' | 'deliveryAddress' | 'pricelist' | 'salespersonId' | 'salespersonName' | 'salesTeam'>>) => SaleOrder | Promise<SaleOrder>
-  updateSaleOrder: (id: string, p: Partial<SaleOrder>) => void
-  addSOLine: (orderId: string, product: Product, qty: number, discount?: number, defaultTaxRate?: number) => void
+  updateSaleOrder: (id: string, p: Partial<SaleOrder>) => void | Promise<boolean>
+  addSOLine: (orderId: string, product: Product, qty: number, discount?: number, defaultTaxRate?: number) => void | Promise<boolean>
   assignSerialToSOLine: (orderId: string, lineId: string, serialId: string) => void
   assignSerialsToSOLine: (orderId: string, lineId: string, serialIds: string[]) => void
   unassignSerialFromSOLine: (orderId: string, lineId: string, serialId: string) => void
-  removeSOLine: (orderId: string, lineId: string) => void
+  removeSOLine: (orderId: string, lineId: string) => void | Promise<boolean>
   /** Reorder a quotation line (product or section) up/down. Quotation stage only. */
-  moveSOLine: (orderId: string, lineId: string, direction: -1 | 1) => void
+  moveSOLine: (orderId: string, lineId: string, direction: -1 | 1) => void | Promise<boolean>
   /** Insert a section heading on a quotation. */
-  addSOSection: (orderId: string, title?: string) => void
+  addSOSection: (orderId: string, title?: string) => void | Promise<boolean>
   confirmSO: (id: string) => void | Promise<void>
   /** Create a waiting delivery when a confirmed SO has none (heal / retry). */
   ensureWaitingDeliveryForSO: (id: string) => Promise<Delivery | null>
@@ -4463,6 +4464,63 @@ const DATA_VERSION = 'v4'
 
 // Fire-and-forget server sync — swallows network errors so local state is never blocked
 const sync = (url: string, opts: RequestInit) => fetch(url, opts).catch(() => {})
+
+async function patchSaleOrderPersist(
+  id: string,
+  order: Record<string, unknown>,
+): Promise<{ ok: true; data: any } | { ok: false; error: string }> {
+  try {
+    const res = await fetch(`/api/sale-orders/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(saleOrderPersistBody(order)),
+    })
+    const data = await res.json().catch(() => null)
+    if (!res.ok) {
+      return { ok: false, error: String(data?.error ?? `Could not save quotation (${res.status})`) }
+    }
+    return { ok: true, data }
+  } catch {
+    return { ok: false, error: 'Could not save quotation — check your connection and try again' }
+  }
+}
+
+/**
+ * Merge Prisma PATCH response into local SO state.
+ * Only lockVersion (+ optional lines/totals) — never wholesale-replace the row,
+ * or a slower notes keystroke response can clobber a newer local edit.
+ */
+function applySaleOrderPersistResult(
+  setSaleOrders: React.Dispatch<React.SetStateAction<SaleOrder[]>>,
+  soRef: React.MutableRefObject<SaleOrder[]>,
+  id: string,
+  data: any,
+  opts?: { syncLines?: boolean },
+) {
+  if (!data || typeof data !== 'object') return
+  const [normalized] = normalizeSaleOrdersForClient([data]) as SaleOrder[]
+  if (!normalized) return
+  setSaleOrders(cur => {
+    const next = cur.map(s => {
+      if (s.id !== id) return s
+      const withLock = {
+        ...s,
+        lockVersion: normalized.lockVersion ?? s.lockVersion,
+      }
+      if (!opts?.syncLines || !Array.isArray(normalized.lines)) return withLock
+      return {
+        ...withLock,
+        lines: normalized.lines,
+        subtotal: normalized.subtotal ?? s.subtotal,
+        taxTotal: normalized.taxTotal ?? s.taxTotal,
+        total: normalized.total ?? s.total,
+        discountAmount: normalized.discountAmount ?? s.discountAmount,
+      }
+    })
+    soRef.current = next
+    return next
+  })
+}
 
 /** Prevents concurrent confirmSO races from creating duplicate waiting DNs. */
 const confirmingSaleOrderIds = new Set<string>()
@@ -9412,9 +9470,9 @@ const storeCtx: AppState = {
       showToast(`${so.ref} created`)
       return so
     },
-    updateSaleOrder: (id, p) => {
+    updateSaleOrder: async (id, p) => {
       const existing = soRef.current.find(s => s.id === id)
-      if (!existing) return
+      if (!existing) return false
       // Sent / confirmed documents are locked for content edits. Allow narrow
       // metadata (e.g. proformaRef) so PDF helpers still work without a reset.
       const keys = Object.keys(p)
@@ -9426,34 +9484,36 @@ const storeCtx: AppState = {
             : 'Only draft quotations can be edited. Reset to quotation first.',
           'error',
         )
-        return
+        return false
       }
       if (existing.locked && !metadataOnly) {
         showToast('Unlock this quotation before editing', 'error')
-        return
+        return false
       }
-      setSaleOrders(prev => {
-        const next = prev.map(s => s.id === id ? { ...s, ...p } : s)
-        const updated = next.find(s => s.id === id)
-        if (updated) {
-          soRef.current = next
-          fetch(`/api/sale-orders/${id}`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(updated),
-          }).then(async (res) => {
-            if (!res.ok) return
-            const data = await res.json().catch(() => null)
-            if (data?.lockVersion == null) return
-            setSaleOrders(cur => cur.map(s =>
-              s.id === id && Number(s.lockVersion ?? 0) < Number(data.lockVersion)
-                ? { ...s, lockVersion: data.lockVersion }
-                : s,
-            ))
-          }).catch(() => {})
+      const updated = { ...existing, ...p }
+      const syncLines = Object.prototype.hasOwnProperty.call(p, 'lines')
+      soRef.current = soRef.current.map(s => s.id === id ? updated : s)
+      setSaleOrders(prev => prev.map(s => s.id === id ? updated : s))
+
+      const persist = async () => {
+        const result = await patchSaleOrderPersist(id, updated as unknown as Record<string, unknown>)
+        if (!result.ok) {
+          // Only roll back line edits — metadata keystrokes must not clobber newer local state.
+          if (syncLines) {
+            const latest = soRef.current.find(s => s.id === id)
+            const stillOurs = latest && latest.lines === updated.lines
+            if (stillOurs) {
+              soRef.current = soRef.current.map(s => s.id === id ? existing : s)
+              setSaleOrders(prev => prev.map(s => s.id === id ? existing : s))
+            }
+          }
+          showToast(result.error, 'error')
+          return false
         }
-        return next
-      })
+        applySaleOrderPersistResult(setSaleOrders, soRef, id, result.data, { syncLines })
+        return true
+      }
+
       if (existing && ('customerId' in p || 'customerName' in p || 'invoiceAddress' in p)) {
         const contact = contacts.find(c => c.id === (p.customerId ?? existing.customerId))
         const name = String(p.customerName ?? existing.customerName ?? contact?.name ?? '').trim()
@@ -9472,14 +9532,20 @@ const storeCtx: AppState = {
           },
         })
       }
+
+      // Line edits must await Prisma (refresh boots from /api/sale-orders).
+      // Metadata (notes, etc.) stays fire-and-forget so typing is not blocked.
+      if (syncLines) return persist()
+      void persist()
+      return true
     },
-    addSOLine: (orderId, product, qty, discount = 0, defaultTaxRate = 0) => {
+    addSOLine: async (orderId, product, qty, discount = 0, defaultTaxRate = 0) => {
       if (qty <= 0) {
         showToast('Quantity must be greater than zero', 'error')
-        return
+        return false
       }
       const so = soRef.current.find(s => s.id === orderId)
-      if (!so) return
+      if (!so) return false
       if (so.status !== 'quotation') {
         showToast(
           so.status === 'quotation_sent'
@@ -9487,67 +9553,60 @@ const storeCtx: AppState = {
             : 'Only draft quotations can add lines',
           'error',
         )
-        return
+        return false
       }
       if (so.locked) {
         showToast('Unlock this quotation before adding lines', 'error')
-        return
+        return false
       }
       // Quotation lines may exceed current availability. Reservation and
       // serial allocation happen only after confirmation in delivery prep.
-      setSaleOrders(p => p.map(so => {
-        if (so.id !== orderId) return so
-        const priced = resolveListPrice({
-          product,
-          pricelist: so.pricelist,
+      const priced = resolveListPrice({
+        product,
+        pricelist: so.pricelist,
+        qty,
+      })
+      const unitPrice = priced.unitPrice
+      const ex = so.lines.find(l => l.productId === product.id)
+      let lines: SaleOrderLine[]
+      if (ex) {
+        const nextQty = ex.qty + qty
+        const nextPriced = resolveListPrice({ product, pricelist: so.pricelist, qty: nextQty })
+        lines = so.lines.map(l => l.productId === product.id ? {
+          ...l,
+          qty: nextQty,
+          unitPrice: nextPriced.unitPrice,
+          listPrice: nextPriced.listPrice,
+          subtotal: Math.round(nextPriced.unitPrice * nextQty * (1 - l.discount / 100)),
+        } : l)
+      } else {
+        const sub = Math.round(unitPrice * qty * (1 - discount / 100))
+        lines = [...so.lines, {
+          id: uid(),
+          productId: product.id,
+          productName: product.name,
           qty,
-        })
-        const unitPrice = priced.unitPrice
-        const ex = so.lines.find(l => l.productId === product.id)
-        let lines: SaleOrderLine[]
-        if (ex) {
-          const nextQty = ex.qty + qty
-          const nextPriced = resolveListPrice({ product, pricelist: so.pricelist, qty: nextQty })
-          lines = so.lines.map(l => l.productId === product.id ? {
-            ...l,
-            qty: nextQty,
-            unitPrice: nextPriced.unitPrice,
-            listPrice: nextPriced.listPrice,
-            subtotal: Math.round(nextPriced.unitPrice * nextQty * (1 - l.discount / 100)),
-          } : l)
-        } else {
-          const sub = Math.round(unitPrice * qty * (1 - discount / 100))
-          lines = [...so.lines, {
-            id: uid(),
-            productId: product.id,
-            productName: product.name,
-            qty,
-            unitPrice,
-            listPrice: priced.listPrice,
-            discount,
-            taxRate: product.taxRate > 0 ? product.taxRate : defaultTaxRate,
-            subtotal: sub,
-            serialIds: [],
-            accountCode: resolveProductAccounts(product).saleAccountCode,
-          }]
-        }
-        const updated = { ...so, lines, ...calcSO(lines) }
-        fetch(`/api/sale-orders/${orderId}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(updated),
-        }).then(async (res) => {
-          if (!res.ok) return
-          const data = await res.json().catch(() => null)
-          if (data?.lockVersion == null) return
-          setSaleOrders(cur => cur.map(s =>
-            s.id === orderId && Number(s.lockVersion ?? 0) < Number(data.lockVersion)
-              ? { ...s, lockVersion: data.lockVersion }
-              : s,
-          ))
-        }).catch(() => {})
-        return updated
-      }))
+          unitPrice,
+          listPrice: priced.listPrice,
+          discount,
+          taxRate: product.taxRate > 0 ? product.taxRate : defaultTaxRate,
+          subtotal: sub,
+          serialIds: [],
+          accountCode: resolveProductAccounts(product).saleAccountCode,
+        }]
+      }
+      const updated = { ...so, lines, ...calcSO(lines) }
+      soRef.current = soRef.current.map(s => s.id === orderId ? updated : s)
+      setSaleOrders(p => p.map(s => s.id === orderId ? updated : s))
+      const result = await patchSaleOrderPersist(orderId, updated as unknown as Record<string, unknown>)
+      if (!result.ok) {
+        soRef.current = soRef.current.map(s => s.id === orderId ? so : s)
+        setSaleOrders(p => p.map(s => s.id === orderId ? so : s))
+        showToast(result.error, 'error')
+        return false
+      }
+      applySaleOrderPersistResult(setSaleOrders, soRef, orderId, result.data, { syncLines: true })
+      return true
     },
     assignSerialToSOLine: (orderId, lineId, serialId) => {
       setSaleOrders(p => p.map(so => {
@@ -9559,7 +9618,7 @@ const storeCtx: AppState = {
           return { ...l, serialIds: [...l.serialIds, serialId] }
         })
         const updated = { ...so, lines }
-        sync(`/api/sale-orders/${orderId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+        sync(`/api/sale-orders/${orderId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(saleOrderPersistBody(updated as unknown as Record<string, unknown>)) })
         return updated
       }))
       setSerials(p => p.map(s => s.id === serialId ? { ...s, status: 'assigned' } : s))
@@ -9580,7 +9639,7 @@ const storeCtx: AppState = {
         if (order.id !== orderId) return order
         const lines = order.lines.map((l: any) => l.id === lineId ? { ...l, serialIds: [...(l.serialIds || []), ...toAdd] } : l)
         const updated = { ...order, lines }
-        sync(`/api/sale-orders/${orderId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+        sync(`/api/sale-orders/${orderId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(saleOrderPersistBody(updated as unknown as Record<string, unknown>)) })
         return updated
       }))
       const nextSerialIds = [...current, ...toAdd]
@@ -9619,7 +9678,7 @@ const storeCtx: AppState = {
           return { ...l, serialIds: (l.serialIds || []).filter(id => id !== serialId) }
         })
         const updated = { ...so, lines }
-        sync(`/api/sale-orders/${orderId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+        sync(`/api/sale-orders/${orderId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(saleOrderPersistBody(updated as unknown as Record<string, unknown>)) })
         return updated
       }))
       const so = soRef.current.find(order => order.id === orderId)
@@ -9650,9 +9709,9 @@ const storeCtx: AppState = {
         return updated
       }))
     },
-    removeSOLine: (orderId, lineId) => {
+    removeSOLine: async (orderId, lineId) => {
       const so = soRef.current.find(s => s.id === orderId)
-      if (!so) return
+      if (!so) return false
       if (so.status !== 'quotation') {
         showToast(
           so.status === 'quotation_sent'
@@ -9660,27 +9719,40 @@ const storeCtx: AppState = {
             : 'Only draft quotations can remove lines',
           'error',
         )
-        return
+        return false
       }
       if (so.locked) {
         showToast('Unlock this quotation before removing lines', 'error')
-        return
+        return false
       }
       const line = so.lines.find(l => l.id === lineId)
+      const prevSerials = line?.serialIds?.length
+        ? serials.filter(s => line.serialIds.includes(s.id)).map(s => ({ id: s.id, status: s.status }))
+        : []
       if (line?.serialIds?.length) {
         setSerials(p => p.map(s => line.serialIds.includes(s.id) ? { ...s, status: 'available' } : s))
       }
-      setSaleOrders(p => p.map(so => { 
-        if (so.id !== orderId) return so; 
-        const lines = so.lines.filter(l => l.id !== lineId); 
-        const updated = { ...so, lines, ...calcSO(lines) }
-        sync(`/api/sale-orders/${orderId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
-        return updated
-      }))
+      const lines = so.lines.filter(l => l.id !== lineId)
+      const updated = { ...so, lines, ...calcSO(lines) }
+      soRef.current = soRef.current.map(s => s.id === orderId ? updated : s)
+      setSaleOrders(p => p.map(s => s.id === orderId ? updated : s))
+      const result = await patchSaleOrderPersist(orderId, updated as unknown as Record<string, unknown>)
+      if (!result.ok) {
+        soRef.current = soRef.current.map(s => s.id === orderId ? so : s)
+        setSaleOrders(p => p.map(s => s.id === orderId ? so : s))
+        if (prevSerials.length) {
+          const byId = new Map(prevSerials.map(s => [s.id, s.status]))
+          setSerials(p => p.map(s => byId.has(s.id) ? { ...s, status: byId.get(s.id)! } : s))
+        }
+        showToast(result.error, 'error')
+        return false
+      }
+      applySaleOrderPersistResult(setSaleOrders, soRef, orderId, result.data, { syncLines: true })
+      return true
     },
-    moveSOLine: (orderId, lineId, direction) => {
+    moveSOLine: async (orderId, lineId, direction) => {
       const so = soRef.current.find(s => s.id === orderId)
-      if (!so) return
+      if (!so) return false
       if (so.status !== 'quotation') {
         showToast(
           so.status === 'quotation_sent'
@@ -9688,27 +9760,33 @@ const storeCtx: AppState = {
             : 'Only draft quotations can reorder lines',
           'error',
         )
-        return
+        return false
       }
       if (so.locked) {
         showToast('Unlock this quotation before reordering lines', 'error')
-        return
+        return false
       }
       const index = so.lines.findIndex((l: any) => l.id === lineId)
       const target = index + direction
-      if (index < 0 || target < 0 || target >= so.lines.length) return
-      setSaleOrders(p => p.map(order => {
-        if (order.id !== orderId) return order
-        const lines = [...order.lines]
-        ;[lines[index], lines[target]] = [lines[target], lines[index]]
-        const updated = { ...order, lines }
-        sync(`/api/sale-orders/${orderId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
-        return updated
-      }))
+      if (index < 0 || target < 0 || target >= so.lines.length) return false
+      const lines = [...so.lines]
+      ;[lines[index], lines[target]] = [lines[target], lines[index]]
+      const updated = { ...so, lines }
+      soRef.current = soRef.current.map(s => s.id === orderId ? updated : s)
+      setSaleOrders(p => p.map(s => s.id === orderId ? updated : s))
+      const result = await patchSaleOrderPersist(orderId, updated as unknown as Record<string, unknown>)
+      if (!result.ok) {
+        soRef.current = soRef.current.map(s => s.id === orderId ? so : s)
+        setSaleOrders(p => p.map(s => s.id === orderId ? so : s))
+        showToast(result.error, 'error')
+        return false
+      }
+      applySaleOrderPersistResult(setSaleOrders, soRef, orderId, result.data, { syncLines: true })
+      return true
     },
-    addSOSection: (orderId, title) => {
+    addSOSection: async (orderId, title) => {
       const so = soRef.current.find(s => s.id === orderId)
-      if (!so) return
+      if (!so) return false
       if (so.status !== 'quotation') {
         showToast(
           so.status === 'quotation_sent'
@@ -9716,32 +9794,38 @@ const storeCtx: AppState = {
             : 'Only draft quotations can add sections',
           'error',
         )
-        return
+        return false
       }
       if (so.locked) {
         showToast('Unlock this quotation before adding sections', 'error')
-        return
+        return false
       }
       const sectionTitle = String(title ?? '').trim() || 'Section'
-      setSaleOrders(p => p.map(order => {
-        if (order.id !== orderId) return order
-        const lines = [...order.lines, {
-          id: uid(),
-          lineType: 'section',
-          productId: '',
-          productName: sectionTitle,
-          description: sectionTitle,
-          qty: 0,
-          unitPrice: 0,
-          discount: 0,
-          taxRate: 0,
-          subtotal: 0,
-          serialIds: [],
-        }]
-        const updated = { ...order, lines, ...calcSO(lines) }
-        sync(`/api/sale-orders/${orderId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
-        return updated
-      }))
+      const lines = [...so.lines, {
+        id: uid(),
+        lineType: 'section' as const,
+        productId: '',
+        productName: sectionTitle,
+        description: sectionTitle,
+        qty: 0,
+        unitPrice: 0,
+        discount: 0,
+        taxRate: 0,
+        subtotal: 0,
+        serialIds: [],
+      }]
+      const updated = { ...so, lines, ...calcSO(lines) }
+      soRef.current = soRef.current.map(s => s.id === orderId ? updated : s)
+      setSaleOrders(p => p.map(s => s.id === orderId ? updated : s))
+      const result = await patchSaleOrderPersist(orderId, updated as unknown as Record<string, unknown>)
+      if (!result.ok) {
+        soRef.current = soRef.current.map(s => s.id === orderId ? so : s)
+        setSaleOrders(p => p.map(s => s.id === orderId ? so : s))
+        showToast(result.error, 'error')
+        return false
+      }
+      applySaleOrderPersistResult(setSaleOrders, soRef, orderId, result.data, { syncLines: true })
+      return true
     },
     confirmSO: async (id) => {
       const user = currentUser()
