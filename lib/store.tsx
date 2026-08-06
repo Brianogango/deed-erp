@@ -53,6 +53,7 @@ import {
   saleOrderLooksConfirmed,
   type InvoicePolicy,
 } from '@/lib/odoo-sales-flow'
+import { planPrepareDeliveryLines, sumQtyByProductId } from '@/lib/delivery-prepare'
 import {
   normalizeDocumentPaymentDetails,
   type DocumentPaymentDetails,
@@ -10091,35 +10092,37 @@ const storeCtx: AppState = {
         return false
       }
 
-      const requested = qtysDone ?? Object.fromEntries(del.lines.map(line => [line.productId, line.qty]))
+      // Sum by product — Object.fromEntries would keep only the last duplicate line.
+      const requested = qtysDone ?? sumQtyByProductId(del.lines)
+      const plan = planPrepareDeliveryLines({
+        deliveryLines: del.lines,
+        soLines: so.lines,
+        requestedByProduct: requested,
+        isSerialTracked: (productId) => {
+          const product = prodRef.current.find(p => p.id === productId)
+          return !!product && isSerialTracking(inferTrackingMethod(product))
+        },
+      })
+      if (!plan.ok) {
+        showToast(plan.error, 'error')
+        return false
+      }
+
       const reservations: StockReservation[] = []
       const preparedLines: DeliveryLine[] = []
       let totalPrepared = 0
 
-      for (const deliveryLine of del.lines) {
+      for (let i = 0; i < del.lines.length; i++) {
+        const deliveryLine = del.lines[i]
+        const planned = plan.lines[i]
         const product = prodRef.current.find(p => p.id === deliveryLine.productId)
-        const soLine = so.lines.find(line => line.productId === deliveryLine.productId)
         const serialTracked = !!product && isSerialTracking(inferTrackingMethod(product))
         const stockTracked = !!product && isStockTracked(inferTrackingMethod(product))
-        const assignedSerials = serialTracked ? (soLine?.serialIds || deliveryLine.serialIds || []) : []
-        // Serial shipments: if the qty input was left at 0 but serials are
-        // assigned, prepare those units — otherwise Delivered stays 0 forever.
-        const requestedQty = Math.max(0, Number(requested[deliveryLine.productId]) || 0)
-        const qty = serialTracked
-          ? Math.min(deliveryLine.qty, requestedQty > 0 ? requestedQty : assignedSerials.length)
-          : Math.min(deliveryLine.qty, requestedQty)
-        const serialIds = serialTracked ? assignedSerials.slice(0, qty) : []
+        const qty = planned?.qty ?? 0
+        const serialIds = planned?.serialIds ?? []
         let sourceLocation = (deliveryLine.sourceLocation ?? 'warehouse') as LocationId
 
         if (serialTracked && qty > 0) {
-          if (qty < deliveryLine.qty) {
-            showToast(`${deliveryLine.productName} is serial-tracked — prepare all ${deliveryLine.qty} units together`, 'error')
-            return false
-          }
-          if (serialIds.length !== qty) {
-            showToast(`Assign ${qty} serial number${qty === 1 ? '' : 's'} for ${deliveryLine.productName} before preparing delivery`, 'error')
-            return false
-          }
           const invalid = serialIds.find(id => {
             const serial = serialRef.current.find(item => item.id === id)
             return !serial || serial.status !== 'assigned' || serial.saleOrderId !== so.id
