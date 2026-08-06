@@ -1,13 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { encode, getToken } from 'next-auth/jwt'
 import { getServerSession } from '@/lib/auth/server'
+import {
+  SESSION_TTL_SECONDS,
+  SESSION_ABSOLUTE_MAX_SECONDS,
+  SESSION_REFRESH_THRESHOLD_SECONDS,
+  SESSION_WARN_BEFORE_SECONDS,
+} from '@/lib/auth/session-policy'
 
 const SECRET = process.env.NEXTAUTH_SECRET ?? process.env.AUTH_SECRET ?? ''
 const COOKIE_NAME = 'deed-session'
-export const SESSION_TTL_SECONDS = 12 * 60 * 60
-export const SESSION_ABSOLUTE_MAX_SECONDS = 24 * 60 * 60
-export const SESSION_REFRESH_THRESHOLD_SECONDS = 2 * 60 * 60
-export const SESSION_WARN_BEFORE_SECONDS = 5 * 60
 
 function shouldUseSecureCookie(request: NextRequest) {
   const forwardedProto = request.headers.get('x-forwarded-proto')?.split(',')[0]?.trim()
