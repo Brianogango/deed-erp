@@ -6,8 +6,9 @@ import {
 } from '@/lib/auth/authorization'
 import { loadAppState, saveStoreKeys, getAppStateVersion } from '@/lib/server-store'
 import { mergeAppendOnlyJournals } from '@/lib/finance-controls'
-import { preserveInvoiceLinesOnStoreWrite } from '@/lib/finance-invoice'
+import { preserveInvoiceLinesOnStoreWrite, enforcePostedInvoiceImmutability, type RejectedPostedInvoiceEdit } from '@/lib/finance-invoice'
 import { mergeProductsStoreWrite } from '@/lib/catalog-merge'
+import { appendStoreAudit } from '@/lib/store-audit'
 import crypto from 'crypto'
 
 const PROTECTED_NON_EMPTY_ARRAY_KEYS = new Set<string>([
@@ -20,18 +21,6 @@ const PROTECTED_NON_EMPTY_ARRAY_KEYS = new Set<string>([
   'deed_purchaseOrders',
   'deed_products',
 ])
-const IMMUTABLE_AUDIT_KEY = 'deed_audit_timeline_v1'
-const MAX_AUDIT_ROWS = 600
-
-type StoreAuditEntry = {
-  id: string
-  at: string
-  actor: { id: string; username: string; role: string; name?: string }
-  source: 'store_sync'
-  savedKeys: string[]
-  skippedKeys: string[]
-  deniedKeys?: string[]
-}
 
 function parseArrayLength(serializedValue: string): number | null {
   try {
@@ -40,28 +29,6 @@ function parseArrayLength(serializedValue: string): number | null {
   } catch {
     return null
   }
-}
-
-async function appendStoreAudit(session: Awaited<ReturnType<typeof getServerSession>>, savedKeys: string[], skippedKeys: string[], deniedKeys: string[] = []) {
-  if (!session || (savedKeys.length === 0 && skippedKeys.length === 0 && deniedKeys.length === 0)) return
-  const current = await loadAppState([IMMUTABLE_AUDIT_KEY])
-  const existing = Array.isArray(current[IMMUTABLE_AUDIT_KEY]) ? current[IMMUTABLE_AUDIT_KEY] as StoreAuditEntry[] : []
-  const entry: StoreAuditEntry = {
-    id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-    at: new Date().toISOString(),
-    actor: {
-      id: session.user.id,
-      username: session.user.username,
-      role: session.user.role,
-      name: session.user.name || undefined,
-    },
-    source: 'store_sync',
-    savedKeys,
-    skippedKeys,
-    ...(deniedKeys.length > 0 ? { deniedKeys } : {}),
-  }
-  const next = [...existing, entry].slice(-MAX_AUDIT_ROWS)
-  await saveStoreKeys({ [IMMUTABLE_AUDIT_KEY]: JSON.stringify(next) })
 }
 
 export async function GET(request: NextRequest) {
@@ -234,24 +201,31 @@ export async function POST(request: Request) {
 
   // Per-invoice line protection: do not let an empty-line shell overwrite a
   // mirror that already has line items (SO→invoice race / stale client).
+  // Posted-invoice immutability (FIN-001): once an invoice is posted, its
+  // financial substance (lines/totals/dates/customer/type/ref) can never
+  // change through this sync path — only via a credit note, reversal, or
+  // the posted→cancelled transition. This runs after the empty-shell guard
+  // so a posted invoice is protected regardless of which defect it hit.
+  let rejectedPostedInvoiceEdits: RejectedPostedInvoiceEdit[] = []
   if (entries.deed_invoices) {
     const currentInvoices = await loadAppState(['deed_invoices'])
     let incoming: unknown
     try { incoming = JSON.parse(entries.deed_invoices) } catch { incoming = null }
     if (incoming != null) {
-      entries.deed_invoices = JSON.stringify(
-        preserveInvoiceLinesOnStoreWrite(currentInvoices.deed_invoices, incoming),
-      )
+      const withPreservedLines = preserveInvoiceLinesOnStoreWrite(currentInvoices.deed_invoices, incoming)
+      const guarded = enforcePostedInvoiceImmutability(currentInvoices.deed_invoices, withPreservedLines)
+      entries.deed_invoices = JSON.stringify(guarded.merged)
+      rejectedPostedInvoiceEdits = guarded.rejected
     }
   }
 
   const savedKeys = Object.keys(entries)
   if (savedKeys.length === 0) {
-    await appendStoreAudit(session, [], skippedKeys, deniedKeys)
-    return NextResponse.json({ ok: true, savedKeys: 0, skippedKeys, deniedKeys })
+    await appendStoreAudit(session, [], skippedKeys, deniedKeys, rejectedPostedInvoiceEdits)
+    return NextResponse.json({ ok: true, savedKeys: 0, skippedKeys, deniedKeys, rejectedPostedInvoiceEdits })
   }
 
   await saveStoreKeys(entries)
-  await appendStoreAudit(session, savedKeys, skippedKeys, deniedKeys)
-  return NextResponse.json({ ok: true, savedKeys: savedKeys.length, skippedKeys, deniedKeys })
+  await appendStoreAudit(session, savedKeys, skippedKeys, deniedKeys, rejectedPostedInvoiceEdits)
+  return NextResponse.json({ ok: true, savedKeys: savedKeys.length, skippedKeys, deniedKeys, rejectedPostedInvoiceEdits })
 }

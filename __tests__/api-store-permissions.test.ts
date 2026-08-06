@@ -494,6 +494,86 @@ describe('POST /api/store — partial-view writes merge instead of replace', () 
     expect(saved).toHaveLength(1)
   })
 
+  it('rejects a tampered total/date on a posted invoice via wholesale sync (FIN-001)', async () => {
+    mockGetSession.mockResolvedValue(financeSession)
+    const posted = [{
+      id: 'i1', ref: 'INV/2026/0044', type: 'customer_invoice', status: 'posted',
+      partnerId: 'c1', partnerName: 'Kevin Mbugua', date: '2026-08-01', dueDate: '2026-08-31',
+      lines: [{ id: 'l1', description: 'HP ZBook', qty: 1, unitPrice: 51000, taxRate: 0, subtotal: 51000 }],
+      subtotal: 51000, taxTotal: 0, total: 51700, amountPaid: 0,
+    }]
+    mockLoadAppState.mockResolvedValue({ deed_invoices: posted })
+    const tampered = [{ ...posted[0], total: 100, subtotal: 100, date: '2020-01-01' }]
+    const res = await STORE_POST(postReq({ deed_invoices: JSON.stringify(tampered) }))
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.rejectedPostedInvoiceEdits).toHaveLength(1)
+    expect(body.rejectedPostedInvoiceEdits[0].ref).toBe('INV/2026/0044')
+    const saved = JSON.parse(mockSaveStoreKeys.mock.calls.find(c => c[0].deed_invoices)![0].deed_invoices)
+    expect(saved[0].total).toBe(51700)
+    expect(saved[0].date).toBe('2026-08-01')
+    // A second, separate saveStoreKeys call records the rejection in the audit timeline.
+    expect(mockSaveStoreKeys).toHaveBeenCalledWith(
+      expect.objectContaining({ deed_audit_timeline_v1: expect.stringContaining('rejectedPostedInvoiceEdits') }),
+    )
+  })
+
+  it('still allows amountPaid to be recorded on a posted invoice (payment registration)', async () => {
+    mockGetSession.mockResolvedValue(financeSession)
+    const posted = [{
+      id: 'i1', ref: 'INV/2026/0044', type: 'customer_invoice', status: 'posted',
+      partnerId: 'c1', partnerName: 'Kevin Mbugua', date: '2026-08-01', dueDate: '2026-08-31',
+      lines: [{ id: 'l1', description: 'HP ZBook', qty: 1, unitPrice: 51700, taxRate: 0, subtotal: 51700 }],
+      subtotal: 51700, taxTotal: 0, total: 51700, amountPaid: 0,
+    }]
+    mockLoadAppState.mockResolvedValue({ deed_invoices: posted })
+    const paid = [{ ...posted[0], amountPaid: 51700 }]
+    const res = await STORE_POST(postReq({ deed_invoices: JSON.stringify(paid) }))
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.rejectedPostedInvoiceEdits).toEqual([])
+    const saved = JSON.parse(mockSaveStoreKeys.mock.calls.find(c => c[0].deed_invoices)![0].deed_invoices)
+    expect(saved[0].amountPaid).toBe(51700)
+  })
+
+  it('allows posting a credit-note-style cancellation of a posted invoice', async () => {
+    mockGetSession.mockResolvedValue(financeSession)
+    const posted = [{
+      id: 'i1', ref: 'INV/2026/0044', type: 'customer_invoice', status: 'posted',
+      partnerId: 'c1', partnerName: 'Kevin Mbugua', date: '2026-08-01', dueDate: '2026-08-31',
+      lines: [{ id: 'l1', description: 'HP ZBook', qty: 1, unitPrice: 51700, taxRate: 0, subtotal: 51700 }],
+      subtotal: 51700, taxTotal: 0, total: 51700, amountPaid: 0,
+    }]
+    mockLoadAppState.mockResolvedValue({ deed_invoices: posted })
+    const cancelled = [{ ...posted[0], status: 'cancelled' }]
+    const res = await STORE_POST(postReq({ deed_invoices: JSON.stringify(cancelled) }))
+    const saved = JSON.parse(mockSaveStoreKeys.mock.calls.find(c => c[0].deed_invoices)![0].deed_invoices)
+    expect(saved[0].status).toBe('cancelled')
+    expect((await res.json()).rejectedPostedInvoiceEdits).toEqual([])
+  })
+
+  it('rejects a tampered posted invoice via PUT /api/store/[key] too (no weaker single-key path)', async () => {
+    mockGetSession.mockResolvedValue(directorSession)
+    const posted = [{
+      id: 'i1', ref: 'INV/2026/0044', type: 'customer_invoice', status: 'posted',
+      partnerId: 'c1', partnerName: 'Kevin Mbugua', date: '2026-08-01', dueDate: '2026-08-31',
+      lines: [{ id: 'l1', description: 'HP ZBook', qty: 1, unitPrice: 51700, taxRate: 0, subtotal: 51700 }],
+      subtotal: 51700, taxTotal: 0, total: 51700, amountPaid: 0,
+    }]
+    mockLoadAppState.mockResolvedValue({ deed_invoices: posted })
+    const tampered = [{ ...posted[0], total: 1 }]
+    const res = await STORE_KEY_PUT(
+      new NR('http://localhost/api/store/deed_invoices', {
+        method: 'PUT', body: JSON.stringify({ value: tampered }), headers: { 'Content-Type': 'application/json' },
+      }),
+      { params: { key: 'deed_invoices' } },
+    )
+    expect(res.status).toBe(200)
+    const savedCall = mockSaveStoreKeys.mock.calls.find(c => c[0].deed_invoices)
+    const saved = JSON.parse(savedCall![0].deed_invoices)
+    expect(saved[0].total).toBe(51700)
+  })
+
   it('refuses to overwrite non-empty invoice lines with an empty shell', async () => {
     mockGetSession.mockResolvedValue(financeSession)
     const withLines = [{
