@@ -16,6 +16,9 @@ import { lockVersionMismatch, nextLockVersion, readExpectedVersion } from '@/lib
 import { writeFinancialAudit } from '@/lib/finance-audit'
 import { checkFiscalLock } from '@/lib/fiscal-lock.server'
 import { validateSaleOrderLines } from '@/lib/sale-order-line-validation'
+import { buildSaleOrderItemsNestedWrite } from '@/lib/sale-order-items-write'
+import { assertSaleOrderCreditOnConfirm } from '@/lib/sale-order-credit.server'
+import { assertQuoteNotExpired } from '@/lib/sale-order-expiry'
 
 async function broadcastSaleOrders() {
   try {
@@ -86,43 +89,6 @@ function mapSaleOrderToClient(order: any) {
   }
 }
 
-function mapSaleOrderItems(lines: any[], existingItems: any[] = []) {
-  return lines.map((item: any) => {
-    const prev =
-      (item.id ? existingItems.find((row: any) => row.id === item.id) : null) ??
-      (item.productId
-        ? existingItems.find((row: any) => row.productId && row.productId === item.productId)
-        : null)
-    const demand = Math.max(0, Number(item.qty ?? 1) || 0)
-    const incomingDelivered = Math.max(0, Number(item.qtyDelivered ?? 0) || 0)
-    const incomingInvoiced = Math.max(0, Number(item.qtyInvoiced ?? 0) || 0)
-    // Preserve fulfillment progress across deleteMany+create so a stale full
-    // SO PATCH cannot wipe qtyDelivered / qtyInvoiced back to 0.
-    const qtyDelivered = Math.min(
-      demand,
-      Math.max(Number(prev?.qtyDelivered) || 0, incomingDelivered),
-    )
-    const qtyInvoiced = Math.min(
-      demand,
-      Math.max(Number(prev?.qtyInvoiced) || 0, incomingInvoiced),
-    )
-    return {
-      productId: optionalUuid(item.productId),
-      description: item.description ?? item.productName ?? 'Item',
-      qty: demand,
-      qtyDelivered,
-      qtyInvoiced,
-      unitPrice: Math.max(0, Number(item.unitPrice ?? 0) || 0),
-      taxRate: Math.max(0, Number(item.taxRate ?? 0) || 0),
-      lineTotal: Math.max(0, Number(item.lineTotal ?? item.subtotal ?? 0) || 0),
-      notes: item.notes ?? null,
-      serialNumberId: optionalUuid(
-        item.serialNumberId ?? item.serialIds?.[0] ?? prev?.serialNumberId,
-      ),
-    }
-  })
-}
-
 async function buildSaleOrderUpdateData(body: any, existingItems: any[] = []) {
   const data: Record<string, any> = {}
 
@@ -165,10 +131,11 @@ async function buildSaleOrderUpdateData(body: any, existingItems: any[] = []) {
 
   const rawItems = body.items ?? body.lines
   if (Array.isArray(rawItems)) {
-    data.items = {
-      deleteMany: {},
-      create: mapSaleOrderItems(rawItems, existingItems),
-    }
+    // Upsert by stable line id — avoid deleteMany+create UUID churn (Phase 5).
+    const nested = buildSaleOrderItemsNestedWrite(rawItems, existingItems)
+    data.items = Object.fromEntries(
+      Object.entries(nested).filter(([, v]) => v !== undefined),
+    )
   }
 
   return data
@@ -255,7 +222,9 @@ async function enforceSaleWorkflow(
   const to = body.status !== undefined ? normalizeSaleStatus(body.status) : from
 
   if (to !== from) {
-    const transitionError = saleTransitionError(from, to, session.user.role)
+    const transitionError = saleTransitionError(from, to, session.user.role, {
+      previouslyConfirmed: Boolean(existing.confirmedAt),
+    })
     if (transitionError) {
       return NextResponse.json({ error: transitionError }, { status: 409 })
     }
@@ -317,6 +286,16 @@ async function enforceSaleWorkflow(
       return NextResponse.json(
         { error: `Cannot reset to quotation: ${blockers.join('; ')}` },
         { status: 409 },
+      )
+    }
+  }
+  // Cancelled → quotation: if the SO was previously confirmed, Finance/Director only.
+  if (to === 'quotation' && from === 'cancelled' && existing.confirmedAt) {
+    const canReset = ['director', 'finance_officer'].includes(session.user.role)
+    if (!canReset) {
+      return NextResponse.json(
+        { error: 'Only Finance or Director can reset a previously confirmed order to quotation' },
+        { status: 403 },
       )
     }
   }
@@ -387,6 +366,22 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
       }
     }
 
+    const confirming = to === 'sale' && from !== 'sale'
+    if (confirming) {
+      const expiry = assertQuoteNotExpired(body.validUntil ?? existing.validUntil)
+      if (!expiry.ok) {
+        return NextResponse.json({ error: expiry.error }, { status: expiry.status })
+      }
+      const credit = await assertSaleOrderCreditOnConfirm({
+        clientId: existing.clientId,
+        orderTotal: Number(body.totalAmount ?? body.total ?? existing.totalAmount ?? 0),
+        role: session.user.role,
+      })
+      if (!credit.ok) {
+        return NextResponse.json({ error: credit.error }, { status: credit.status })
+      }
+    }
+
     const data = await buildSaleOrderUpdateData(body, existing.items ?? [])
     const workflowError = await enforceSaleWorkflow(existing, body, data, session)
     if (workflowError) return workflowError
@@ -399,37 +394,83 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
       include: { client: true, items: true },
     })
 
-    // Prefer SaleOrderService for confirm/cancel side-effects (reservation release + audit).
-    // Workflow already enforced above; service is idempotent on status. These are
-    // best-effort side-effects (the SO update above already committed), but failures
-    // must be logged loudly — a swallowed reservation failure means the order shows
-    // as confirmed with no stock actually held against it.
+    // Confirm/cancel side-effects. Reservation failure rolls the SO back so we
+    // never leave a "sale" with no stock held (Phase 1).
     try {
-      const { SaleOrderService } = await import('@/lib/services/sale-order.service')
-      if (to === 'sale' && from !== 'sale') {
-        await SaleOrderService.confirm(params.id, session.user.id, session.user.role).catch(err =>
-          console.error('[sale-orders] SaleOrderService.confirm side-effect failed:', err),
-        )
+      if (confirming) {
+        await writeFinancialAudit({
+          userId: session.user.id,
+          action: 'confirm_sale_order',
+          entityType: 'SaleOrder',
+          entityId: params.id,
+          oldValues: { status: from },
+          newValues: { status: 'sale' },
+        }).catch(() => {})
         try {
           const reserveResult = await reserveStockForSaleOrder(params.id, session.user.id)
           if (!reserveResult.ok) {
-            console.error('[sale-orders] reserveStockForSaleOrder failed:', reserveResult.error)
+            await prisma.saleOrder.update({
+              where: { id: params.id },
+              data: {
+                status: from,
+                confirmedAt: null,
+                confirmedById: null,
+                locked: existing.locked,
+                lockVersion: nextLockVersion(order.lockVersion),
+              },
+            })
+            void broadcastSaleOrders()
+            return NextResponse.json(
+              { error: reserveResult.error || 'Could not reserve stock for this order' },
+              { status: 409 },
+            )
           }
         } catch (err) {
           console.error('[sale-orders] reserveStockForSaleOrder threw:', err)
+          await prisma.saleOrder.update({
+            where: { id: params.id },
+            data: {
+              status: from,
+              confirmedAt: null,
+              confirmedById: null,
+              locked: existing.locked,
+              lockVersion: nextLockVersion(order.lockVersion),
+            },
+          }).catch(() => {})
+          void broadcastSaleOrders()
+          return NextResponse.json(
+            { error: 'Stock reservation failed — order was not confirmed. Try again or confirm without reservation.' },
+            { status: 409 },
+          )
         }
       }
       if (to === 'cancelled' && from !== 'cancelled') {
-        await SaleOrderService.cancel(params.id, session.user.id).catch(err =>
-          console.error('[sale-orders] SaleOrderService.cancel side-effect failed:', err),
-        )
+        // Route already wrote cancelled; release reservations without re-validating status.
+        await prisma.stockReservation.updateMany({
+          where: { saleOrderId: params.id, status: 'reserved' },
+          data: { status: 'cancelled', releasedAt: new Date() },
+        }).catch(err => console.error('[sale-orders] reservation release failed:', err))
+        await writeFinancialAudit({
+          userId: session.user.id,
+          action: 'cancel_sale_order',
+          entityType: 'SaleOrder',
+          entityId: params.id,
+          oldValues: { status: from },
+          newValues: { status: 'cancelled' },
+        }).catch(() => {})
       }
     } catch (err) {
       console.error('[sale-orders] confirm/cancel side-effect block failed:', err)
     }
 
     void broadcastSaleOrders()
-    return NextResponse.json(mapSaleOrderToClient(order))
+    const fresh = confirming
+      ? await prisma.saleOrder.findUnique({
+          where: { id: params.id },
+          include: { client: true, items: true },
+        })
+      : order
+    return NextResponse.json(mapSaleOrderToClient(fresh ?? order))
   })
 }
 
@@ -454,16 +495,19 @@ export async function DELETE(_: NextRequest, { params }: { params: { id: string 
     }
 
     // Confirmed / progressed orders: never hard-delete (audit FIN-001).
+    // Prefer Prisma invoices for parity (blob can lag); deliveries remain blob-backed.
     if (!isQuotationStage(status)) {
-      const state = await loadAppState(['deed_deliveries', 'deed_invoices'])
+      const state = await loadAppState(['deed_deliveries'])
       const deliveries = (Array.isArray(state.deed_deliveries) ? state.deed_deliveries : [])
         .filter((d: any) => d?.saleOrderId === order.id)
-      const invoices = (Array.isArray(state.deed_invoices) ? state.deed_invoices : [])
-        .filter((i: any) => i?.saleOrderId === order.id)
+      const invoices = await prisma.invoice.findMany({
+        where: { saleOrderId: order.id },
+        select: { status: true, amountPaid: true },
+      }).catch(() => [])
       const blockers = saleOrderCancelBlockers({
         status,
         deliveries: deliveries.map((d: any) => ({ status: d.status })),
-        invoices: invoices.map((i: any) => ({ status: i.status, amountPaid: i.amountPaid })),
+        invoices: invoices.map((i: any) => ({ status: i.status, amountPaid: Number(i.amountPaid) })),
       })
       const reason = blockers.length > 0
         ? `Confirmed sale orders cannot be deleted (${blockers.join('; ')})`

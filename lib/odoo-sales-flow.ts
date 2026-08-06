@@ -112,6 +112,7 @@ export function saleTransitionError(
   from: OdooSaleStatus,
   to: OdooSaleStatus,
   role: string,
+  opts?: { previouslyConfirmed?: boolean },
 ): string | null {
   if (from === to) return null
   switch (to) {
@@ -135,10 +136,18 @@ export function saleTransitionError(
       return null
     case 'quotation':
       // "Set to Quotation" from a confirmed SO requires Finance/Director
-      // (matches enforceSaleWorkflow + store resetSOToDraft). Sent/cancelled
-      // → draft stays available to sales staff.
+      // (matches enforceSaleWorkflow + store resetSOToDraft). Cancelled orders
+      // that were previously confirmed use the same gate; draft/sent cancel
+      // → quotation stays available to sales staff.
       if (from === 'sale' && !['director', 'finance_officer'].includes(role)) {
         return 'Only Finance or Director can reset a sale order to quotation'
+      }
+      if (
+        from === 'cancelled' &&
+        opts?.previouslyConfirmed &&
+        !['director', 'finance_officer'].includes(role)
+      ) {
+        return 'Only Finance or Director can reset a previously confirmed order to quotation'
       }
       return null
     default:

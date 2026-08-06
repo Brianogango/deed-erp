@@ -5,6 +5,32 @@ import { loadXlsx } from '@/lib/xlsx-lazy'
 
 export type ExportRow = (string | number | null | undefined)[]
 
+/** Download a simple CSV (UTF-8 BOM for Excel). */
+export function exportToCsv(
+  headers: string[],
+  rows: ExportRow[],
+  filename: string,
+) {
+  const escape = (v: string | number | null | undefined) => {
+    const s = String(v ?? '')
+    if (/[",\n\r]/.test(s)) return `"${s.replace(/"/g, '""')}"`
+    return s
+  }
+  const lines = [
+    headers.map(escape).join(','),
+    ...rows.map(r => r.map(escape).join(',')),
+  ]
+  const blob = new Blob(['\uFEFF' + lines.join('\n')], { type: 'text/csv;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename.endsWith('.csv') ? filename : `${filename}.csv`
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  setTimeout(() => URL.revokeObjectURL(url), 1000)
+}
+
 // ─── Excel Export ─────────────────────────────────────────────────────────────
 /** Lazy-loads SheetJS so navigating modules doesn't pay for xlsx up front. */
 export async function exportToExcel(
