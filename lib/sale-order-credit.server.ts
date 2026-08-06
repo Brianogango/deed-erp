@@ -46,7 +46,6 @@ export async function assertSaleOrderCreditOnConfirm(opts: {
     prisma.invoice.findMany({
       where: {
         clientId,
-        type: 'customer_invoice',
         status: { in: [...OPEN_INVOICE_STATUSES] },
       },
       select: { totalAmount: true, amountPaid: true, dueDate: true, status: true },
