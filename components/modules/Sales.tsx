@@ -2613,7 +2613,7 @@ function NewQuotationForm({
                   tabIndex={0}
                   role="button"
                   className={`cursor-pointer flex items-center justify-between ${!newCustomer ? 'text-[var(--sp-text-3)]' : ''}`}
-                  style={{ border: '1px solid var(--sp-border-strong)', borderRadius: 4, padding: '6px 8px', fontSize: 12.5, background: '#fff' }}
+                  style={{ border: '1px solid var(--sp-border-strong)', borderRadius: 4, padding: '5px 8px', fontSize: 12.5, background: '#fff', minHeight: 30, lineHeight: 1.25 }}
                   onClick={() => setCustomerDropdownOpen(v => !v)}
                   onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setCustomerDropdownOpen(v => !v) } }}
                 >
@@ -2723,9 +2723,9 @@ function NewQuotationForm({
                     <th>Product</th>
                     <th>Description</th>
                     <th className="num">Qty</th>
+                    <th>Unit</th>
                     <th className="num">Unit price</th>
-                    {canEditDiscount && <th className="num">Disc%</th>}
-                    <th className="num">Taxes</th>
+                    <th>Taxes</th>
                     <th className="num">Amount</th>
                     <th></th>
                   </tr>
@@ -2751,7 +2751,7 @@ function NewQuotationForm({
                       return (
                         <tr key={line.id}>
                           <td className="num">{lineIndex + 1}</td>
-                          <td colSpan={canEditDiscount ? 6 : 5}>
+                          <td colSpan={6}>
                             <input
                               aria-label="Quote section title"
                               className="w-full font-bold"
@@ -2760,7 +2760,7 @@ function NewQuotationForm({
                               onChange={e => updateDraftLine(line.id, 'description', e.target.value)}
                             />
                           </td>
-                          <td className="num text-[10px] font-bold text-[var(--text-4)]">Section</td>
+                          <td className="num text-[10px] font-bold text-[var(--sp-text-3)]">Section</td>
                           <td>
                             <div className="flex items-center justify-end gap-0.5">
                               {moveButtons}
@@ -2774,15 +2774,15 @@ function NewQuotationForm({
                       <tr key={line.id} className={hasInvalidQty ? 'bg-red-50/60' : undefined}>
                         <td className="num">{lineIndex + 1}</td>
                         <td>
-                          <div className="flex items-center gap-1 cursor-pointer border border-[var(--border-lt)] rounded-lg px-2 py-1.5 hover:border-primary-400 transition-colors bg-[var(--bg-card)] min-w-[140px]"
+                          <div className="flex items-center gap-1 cursor-pointer min-w-[140px]" style={{ border: '1px solid var(--sp-border-strong)', borderRadius: 4, padding: '4px 6px', background: '#fff', fontSize: 12 }}
                             onClick={e => (isOpen ? setProductDropdownOpen(null) : openProductDropdown(line.id, e.currentTarget))}>
-                            <span className="flex-1 truncate min-w-0" title={line.productName || undefined}>{line.productName || <span className="text-[var(--text-4)]">Select product…</span>}</span>
-                            <Fa icon={faChevronDown} className={`text-[9px] text-[var(--text-4)] flex-shrink-0 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+                            <span className="flex-1 truncate min-w-0" title={line.productName || undefined}>{line.productName || <span className="text-[var(--sp-text-3)]">Select product…</span>}</span>
+                            <Fa icon={faChevronDown} className={`text-[9px] text-[var(--sp-text-3)] flex-shrink-0 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
                           </div>
                           {isOpen && productDropdownOpen && (
                             <div
                               ref={dropdownRef}
-                              className="fixed z-[9500] w-72 bg-[var(--bg-card)] border border-[var(--border)] rounded-xl shadow-xl overflow-hidden"
+                              className="fixed z-[9500] w-72 bg-white border border-[var(--sp-border)] rounded-[6px] shadow-lg overflow-hidden"
                               style={{
                                 left: productDropdownOpen.left,
                                 ...(productDropdownOpen.openUp
@@ -2790,19 +2790,19 @@ function NewQuotationForm({
                                   : { top: productDropdownOpen.top }),
                               }}
                             >
-                              <div className="p-2 border-b border-[var(--border-lt)]">
-                                <input autoFocus type="text" aria-label="Search products" placeholder="Search products…" className="form-input text-xs w-full"
+                              <div className="p-2 border-b border-[var(--sp-border)]">
+                                <input autoFocus type="text" aria-label="Search products" placeholder="Search products…" className="w-full"
                                   value={productSearch[line.id] ?? ''} onChange={e => setProductSearch(prev => ({ ...prev, [line.id]: e.target.value }))} />
                               </div>
                               <div className="max-h-48 overflow-y-auto">
                                 {filteredProds.length === 0 ? (
-                                  <p className="px-3 py-2 text-xs text-[var(--text-4)]">No products found</p>
+                                  <p className="px-3 py-2 text-xs text-[var(--sp-text-3)]">No products found</p>
                                 ) : (
                                   filteredProds.map(p => (
-                                    <button key={p.id} className="w-full text-left px-3 py-2 hover:bg-[var(--bg-surface)] transition-colors"
+                                    <button key={p.id} className="w-full text-left px-3 py-2 hover:bg-[var(--sp-accent-soft)] transition-colors"
                                       onClick={() => { selectProductForDraftLine(line.id, p); setProductSearch(prev => ({ ...prev, [line.id]: '' })); setProductDropdownOpen(null) }}>
-                                      <p className="text-xs font-semibold text-[var(--text-1)]">{p.name}</p>
-                                      <p className="text-[10px] text-[var(--text-4)]">{p.category} · {fmtKes(p.salePrice)} · {p.stockQty > 0 ? `${p.stockQty} in stock` : 'out of stock'}</p>
+                                      <p className="text-xs font-semibold text-[var(--sp-text)]">{p.name}</p>
+                                      <p className="text-[10px] text-[var(--sp-text-3)]">{p.category} · {fmtKes(p.salePrice)} · {p.stockQty > 0 ? `${p.stockQty} in stock` : 'out of stock'}</p>
                                     </button>
                                   ))
                                 )}
@@ -2817,6 +2817,7 @@ function NewQuotationForm({
                           <input type="number" aria-label="Line item quantity" min={1} className="text-center w-16" value={line.qty} onChange={e => updateDraftLine(line.id, 'qty', e.target.value)} />
                           {hasInvalidQty && <p className="text-[9px] text-red-600 font-semibold mt-1">Qty &gt; 0</p>}
                         </td>
+                        <td>Unit</td>
                         <td className="num">
                           <input
                             type="number"
@@ -2830,15 +2831,10 @@ function NewQuotationForm({
                             onFocus={e => e.currentTarget.select()}
                           />
                         </td>
-                        {canEditDiscount && (
-                          <td className="num">
-                            <input type="number" aria-label="Line item discount percentage" min={0} max={100} className="text-right w-20" value={line.discount} onChange={e => updateDraftLine(line.id, 'discount', e.target.value)} />
-                          </td>
-                        )}
-                        <td className="num">
+                        <td>
                           <select aria-label="Line item tax rate" className="w-20" value={line.taxRate} onChange={e => updateDraftLine(line.id, 'taxRate', e.target.value)}>
                             <option value="0">0%</option>
-                            <option value={String(companySettings.vatRate)}>{companySettings.vatRate}% VAT</option>
+                            <option value={String(companySettings.vatRate)}>{companySettings.vatRate}%</option>
                           </select>
                         </td>
                         <td className="num font-bold">{fmtKes(calcDraftLineTotal(line))}</td>
@@ -2852,7 +2848,7 @@ function NewQuotationForm({
                     )
                   })}
                   {newDraftLines.length === 0 && (
-                    <tr><td colSpan={canEditDiscount ? 9 : 8} className="text-center text-[var(--text-4)] py-6">No products added yet. Click &quot;Add a line&quot; below.</td></tr>
+                    <tr><td colSpan={9} className="text-center text-[var(--sp-text-3)]" style={{ padding: '16px 10px', fontSize: 12 }}>No products added yet. Click &quot;Add a line&quot; below.</td></tr>
                   )}
                 </tbody>
               </table>
