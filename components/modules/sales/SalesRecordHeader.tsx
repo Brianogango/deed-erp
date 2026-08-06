@@ -118,7 +118,7 @@ export function SalesRecordHeader({
       id: 'invoices',
       label: 'Invoices',
       count: invoicesCount,
-      tone: 'violet',
+      tone: 'primary',
       icon: <Fa icon={faFileInvoice} className="text-[10px]" />,
       onClick: onOpenInvoices,
     })
@@ -129,7 +129,7 @@ export function SalesRecordHeader({
       id: 'payments',
       label: 'Payments',
       count: paymentsCount,
-      tone: 'teal',
+      tone: 'success',
       icon: <Fa icon={faMoneyBillWave} className="text-[10px]" />,
       onClick: onOpenInvoices,
     })
@@ -157,11 +157,14 @@ export function SalesRecordHeader({
   }
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="sales-record-header flex flex-col gap-3">
       <Breadcrumbs
         items={[
           { label: 'Sales', onClick: onBackToList },
-          { label: 'Orders', onClick: onBackToList },
+          {
+            label: isQuotationStage(order.status) ? 'Quotations' : 'Orders',
+            onClick: onBackToList,
+          },
           { label: order.ref ?? 'Order' },
         ]}
       />
@@ -169,9 +172,9 @@ export function SalesRecordHeader({
       <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
         <div>
           <div className="flex items-center gap-2 flex-wrap">
-            <h2 className="text-xl font-bold text-[var(--text-1)]">{order.ref}</h2>
+            <h2 className="sales-record-ref">{order.ref}</h2>
             {order.locked && (
-              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-gray-100 text-gray-600 border border-gray-200">
+              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-gray-100 text-gray-700 border border-gray-200">
                 Locked
               </span>
             )}

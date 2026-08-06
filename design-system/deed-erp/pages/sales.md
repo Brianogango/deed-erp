@@ -31,3 +31,4 @@
 4. Press ~120ms; `prefers-reduced-motion` respected  
 5. Header CTA press `scale(0.97)`; action menu quiet (`rounded-lg` / `shadow-md`)  
 6. Delivery status fallback chips use `text-gray-700` (not `600`) on `bg-gray-50`  
+7. Quote create + record detail: navy action/form header, cyan primary CTAs, quiet panels, navy totals (no violet smart chips)  

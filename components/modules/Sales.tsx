@@ -1408,9 +1408,9 @@ function SalesContent() {
                 <ModuleSkeleton />
               ) : (
                 /* ── ORDER FORM VIEW ─────────────────────────────────────── */
-                <div className="flex flex-col">
+                <div className="sales-quote-detail flex flex-col">
                   {/* Action bar */}
-                  <div className="p-4 border-b border-[var(--border-lt)] flex items-center justify-between flex-wrap gap-3">
+                  <div className="sales-quote-detail-actions p-4 border-b border-[var(--border-lt)] flex items-center justify-between flex-wrap gap-3">
                     <button onClick={backToList} className="btn-outline flex items-center gap-2"><Fa icon={faArrowLeft} /><span>Back</span></button>
                     <div className="flex items-center gap-2 flex-wrap">
                       {/* ── Quotation / Quotation Sent (Odoo button visibility) ── */}
@@ -1527,7 +1527,7 @@ function SalesContent() {
                       />
 
                       {activeOrder.status === 'sale' && activeDeliveries.length > 0 && (
-                        <div className="rounded-2xl border border-[var(--border-lt)] bg-[var(--bg-surface)] p-4 flex flex-col gap-2">
+                        <div className="sales-quote-panel p-4 flex flex-col gap-2">
                           <div className="flex items-center justify-between gap-2">
                             <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)]">
                               Deliveries for {activeOrder.ref}
@@ -1580,7 +1580,7 @@ function SalesContent() {
                       {/* Order info — editable only while draft quotation.
                           Sent quotations must be reset to draft before changes. */}
                       {isQuotationDraft(activeOrder.status) && !activeOrder.locked ? (
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 p-4 rounded-2xl bg-[var(--bg-surface)] border border-[var(--border-lt)]">
+                        <div className="sales-quote-panel grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 p-4">
                           <div className="xl:col-span-2">
                             <SearchPicker
                               label="Customer"
@@ -1667,7 +1667,7 @@ function SalesContent() {
                           </button>
                         </div>
                       )}
-                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 p-4 rounded-2xl bg-[var(--bg-surface)] border border-[var(--border-lt)]">
+                      <div className="sales-quote-panel grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 p-4">
                         <div className="flex flex-col gap-1">
                           <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)]">Customer</span>
                           <span className="text-xs font-semibold text-[var(--text-1)]">{activeOrder.customerName}</span>
@@ -1694,14 +1694,14 @@ function SalesContent() {
                         </div>
                         <div className="flex flex-col gap-1">
                           <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)]">Order Total</span>
-                          <span className="text-xs font-bold text-primary-600">{fmtKes(activeOrder.total)}</span>
+                          <span className="sales-quote-total text-xs font-bold tabular-nums">{fmtKes(activeOrder.total)}</span>
                         </div>
                       </div>
                       </>
                       )}
 
                       {/* Attachments */}
-                      <div className="rounded-2xl border border-[var(--border-lt)] bg-[var(--bg-surface)] p-4">
+                      <div className="sales-quote-panel p-4">
                         <div className="flex items-center justify-between gap-2 mb-2">
                           <h3 className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)]">Attachments{soAttachments.length ? ` (${soAttachments.length})` : ''}</h3>
                           <label className={`btn-outline px-2.5 py-1 text-[10px] cursor-pointer ${uploadingAttachment ? 'opacity-50 pointer-events-none' : ''}`}>
@@ -1721,7 +1721,7 @@ function SalesContent() {
                             {soAttachments.map(a => (
                               <div key={a.id} className="flex items-center justify-between gap-2 rounded-lg bg-white border border-[var(--border-lt)] px-3 py-1.5">
                                 <a
-                                  className="text-xs text-[var(--primary)] font-semibold truncate hover:underline"
+                                  className="sales-quote-link text-xs font-semibold truncate hover:underline"
                                   href={`/api/sale-order-attachments/${activeOrder.id}?file=${encodeURIComponent(a.id)}`}
                                 >
                                   {a.name}
@@ -1747,22 +1747,22 @@ function SalesContent() {
                       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                         <div className="lg:col-span-2 flex flex-col gap-4">
                           <div className="flex items-center justify-between gap-2 flex-wrap">
-                            <h3 className="text-sm font-bold text-[var(--text-1)]">Order Lines</h3>
+                            <h3 className="sales-quote-section-title">Order Lines</h3>
                             {isQuotationDraft(activeOrder.status) && !activeOrder.locked && (
                               <div className="flex items-center gap-3">
-                                <button type="button" onClick={() => setShowAddLine(true)} className="text-xs font-bold text-primary-600 hover:underline flex items-center gap-1">
+                                <button type="button" onClick={() => setShowAddLine(true)} className="sales-quote-link text-xs font-bold hover:underline flex items-center gap-1">
                                   <Fa icon={faPlus} className="text-[10px]" />Add a product
                                 </button>
-                                <button type="button" onClick={() => addSOSection(activeOrder.id)} className="text-xs font-bold text-slate-600 hover:underline flex items-center gap-1">
+                                <button type="button" onClick={() => addSOSection(activeOrder.id)} className="text-xs font-bold text-[var(--text-3)] hover:underline flex items-center gap-1">
                                   <Fa icon={faPlus} className="text-[10px]" />Add a section
                                 </button>
                               </div>
                             )}
                           </div>
-                          <div className="dt-scroll border border-[var(--border-lt)] rounded-2xl">
+                          <div className="sales-quote-lines dt-scroll border border-[var(--border-lt)]">
                             <table data-no-responsive className="w-full text-left border-collapse">
                               <thead>
-                                <tr className="bg-[var(--bg-surface)] border-b border-[var(--border-lt)]">
+                                <tr className="sales-quote-lines-head border-b border-[var(--border-lt)]">
                                   <th className="px-3 py-2 text-[10px] font-bold uppercase text-[var(--text-4)]">Product / Description</th>
                                   <th className="px-3 py-2 text-[10px] font-bold uppercase text-[var(--text-4)] text-center w-14">Qty</th>
                                   {activeOrder.status === 'sale' && (
@@ -1783,7 +1783,7 @@ function SalesContent() {
                                   const canEdit = isQuotationDraft(activeOrder.status) && !activeOrder.locked
                                   if (l.lineType === 'section') {
                                     return (
-                                      <tr key={l.id} className="bg-slate-50/70">
+                                      <tr key={l.id} className="sales-quote-section-row">
                                         <td className="px-3 py-2" colSpan={canEdit ? 7 : 8}>
                                           {canEdit ? (
                                             <input
@@ -1906,7 +1906,7 @@ function SalesContent() {
                                 })}
                                 {activeOrder.lines.length === 0 && (
                                   <tr><td colSpan={9} className="px-4 py-8 text-center text-xs text-[var(--text-4)]">
-                                    No products added yet.{activeOrder.status === 'quotation' && <button onClick={() => setShowAddLine(true)} className="ml-2 text-primary-600 font-semibold hover:underline">+ Add a product</button>}
+                                    No products added yet.{activeOrder.status === 'quotation' && <button type="button" onClick={() => setShowAddLine(true)} className="ml-2 sales-quote-link font-semibold hover:underline">+ Add a product</button>}
                                   </td></tr>
                                 )}
                               </tbody>
@@ -1914,21 +1914,21 @@ function SalesContent() {
                           </div>
                           {isQuotationDraft(activeOrder.status) && !activeOrder.locked && (
                             <div className="flex flex-wrap items-center gap-4">
-                              <button onClick={() => setShowAddLine(true)} className="flex items-center gap-2 text-xs text-primary-600 hover:underline font-semibold self-start"><Fa icon={faPlus} className="text-[10px]" />Add a product</button>
-                              <button onClick={() => addSOSection(activeOrder.id)} className="flex items-center gap-2 text-xs text-slate-600 hover:underline font-semibold self-start"><Fa icon={faPlus} className="text-[10px]" />Add a section</button>
+                              <button type="button" onClick={() => setShowAddLine(true)} className="sales-quote-link flex items-center gap-2 text-xs hover:underline font-semibold self-start"><Fa icon={faPlus} className="text-[10px]" />Add a product</button>
+                              <button type="button" onClick={() => addSOSection(activeOrder.id)} className="flex items-center gap-2 text-xs text-[var(--text-3)] hover:underline font-semibold self-start"><Fa icon={faPlus} className="text-[10px]" />Add a section</button>
                             </div>
                           )}
                         </div>
 
                         {/* Summary */}
                         <div className="flex flex-col gap-4">
-                          <div className="card p-5 bg-[var(--bg-surface)] border-[var(--border-lt)]">
-                            <h3 className="text-sm font-bold text-[var(--text-1)] mb-4">Order Summary</h3>
+                          <div className="sales-quote-summary card p-5">
+                            <h3 className="sales-quote-section-title mb-4">Order Summary</h3>
                             <div className="flex flex-col gap-3">
-                              <div className="flex justify-between text-xs"><span className="text-[var(--text-3)]">Subtotal</span><span className="font-bold">{fmtKes(activeOrder.subtotal)}</span></div>
-                              <div className="flex justify-between text-xs"><span className="text-[var(--text-3)]">Tax Total</span><span className="font-bold">{fmtKes(activeOrder.taxTotal)}</span></div>
+                              <div className="flex justify-between text-xs"><span className="text-[var(--text-3)]">Subtotal</span><span className="font-bold tabular-nums">{fmtKes(activeOrder.subtotal)}</span></div>
+                              <div className="flex justify-between text-xs"><span className="text-[var(--text-3)]">Tax Total</span><span className="font-bold tabular-nums">{fmtKes(activeOrder.taxTotal)}</span></div>
                               <Divider />
-                              <div className="flex justify-between text-sm"><span className="font-bold text-[var(--text-1)]">Total</span><span className="font-extrabold text-primary-600">{fmtKes(activeOrder.total)}</span></div>
+                              <div className="flex justify-between text-sm"><span className="font-bold text-[var(--text-1)]">Total</span><span className="sales-quote-total font-extrabold tabular-nums">{fmtKes(activeOrder.total)}</span></div>
                             </div>
                           </div>
                           {activeOrder.notes && (
@@ -2279,14 +2279,14 @@ function NewQuotationForm({
     products.filter(p => !search || p.name.toLowerCase().includes(search.toLowerCase()) || (p.sku ?? '').toLowerCase().includes(search.toLowerCase()))
 
   return (
-    <div className="flex flex-col min-h-[600px]">
+    <div className="sales-quote-form flex flex-col min-h-[600px]">
       {/* Form header */}
-      <div className="p-4 border-b border-[var(--border-lt)] flex items-center justify-between bg-[var(--bg-surface)]">
-        <div className="flex items-center gap-3">
+      <div className="sales-quote-form-header p-4 border-b border-[var(--border-lt)] flex items-center justify-between flex-wrap gap-3">
+        <div className="flex items-center gap-3 min-w-0">
           <button type="button" onClick={onCancel} className="btn-outline flex items-center gap-2 text-xs"><Fa icon={faArrowLeft} /><span>Discard</span></button>
-          <div>
-            <h2 className="text-sm font-bold text-[var(--text-1)]">New Quotation</h2>
-            <p className="text-[10px] text-[var(--text-4)]">Draft — not yet confirmed</p>
+          <div className="min-w-0">
+            <h2 className="sales-quote-form-title">New Quotation</h2>
+            <p className="sales-quote-form-sub">Draft — not yet confirmed</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -2310,11 +2310,11 @@ function NewQuotationForm({
                 onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setCustomerDropdownOpen(v => !v) } }}
               >
                 <span className="text-xs font-medium truncate">{newCustomer ? newCustomer.name : 'Search customer…'}</span>
-                <Fa icon={faChevronDown} className={`text-[10px] text-[var(--text-4)] flex-shrink-0 transition-transform ${customerDropdownOpen ? 'rotate-180' : ''}`} />
+                <Fa icon={faChevronDown} className={`text-[10px] text-[var(--text-4)] flex-shrink-0 transition-transform duration-150 ease-out ${customerDropdownOpen ? 'rotate-180' : ''}`} />
               </div>
             </Field>
             {customerDropdownOpen && (
-              <div className="absolute top-full left-0 right-0 z-[9300] mt-1 bg-[var(--bg-card)] border border-[var(--border)] rounded-xl shadow-xl overflow-hidden">
+              <div className="absolute top-full left-0 right-0 z-[9300] mt-1 bg-[var(--bg-card)] border border-[var(--border)] rounded-lg shadow-md overflow-hidden">
                 <div className="p-2 border-b border-[var(--border-lt)]">
                   <input autoFocus type="text" aria-label="Search customers by name or email" placeholder="Search by name or email…" className="form-input text-xs w-full" value={customerSearch} onChange={e => setCustomerSearch(e.target.value)} />
                 </div>
@@ -2322,7 +2322,7 @@ function NewQuotationForm({
                   {filteredCustomers.length === 0 ? (
                     <div className="px-3 py-2">
                       <p className="text-xs text-[var(--text-4)] mb-2">No customers found</p>
-                      <button className="text-xs text-primary-600 font-semibold hover:underline" onClick={() => { setCustomerDropdownOpen(false); onCreateNewCustomer(customerSearch) }}>+ Create new contact</button>
+                      <button className="sales-quote-link text-xs font-semibold hover:underline" onClick={() => { setCustomerDropdownOpen(false); onCreateNewCustomer(customerSearch) }}>+ Create new contact</button>
                     </div>
                   ) : (
                     filteredCustomers.map(c => (
@@ -2335,7 +2335,7 @@ function NewQuotationForm({
                 </div>
                 {filteredCustomers.length > 0 && (
                   <div className="p-2 border-t border-[var(--border-lt)]">
-                    <button className="text-xs text-primary-600 font-semibold hover:underline" onClick={() => { setCustomerDropdownOpen(false); onCreateNewCustomer(customerSearch) }}>+ Create new contact</button>
+                    <button className="sales-quote-link text-xs font-semibold hover:underline" onClick={() => { setCustomerDropdownOpen(false); onCreateNewCustomer(customerSearch) }}>+ Create new contact</button>
                   </div>
                 )}
               </div>
@@ -2343,8 +2343,9 @@ function NewQuotationForm({
           </div>
         </div>
 
-        <div className="rounded-2xl border border-[var(--border-lt)] bg-[var(--bg-surface)] p-3">
+        <div className="sales-quote-panel p-3">
           <button
+            type="button"
             className="w-full flex items-center justify-between text-left"
             onClick={() => setShowAdvanced(v => !v)}
           >
@@ -2352,7 +2353,7 @@ function NewQuotationForm({
               <p className="text-xs font-bold text-[var(--text-2)]">Advanced details</p>
               <p className="text-[10px] text-[var(--text-4)]">Delivery date, payment terms, addresses, customer reference{pricelistsEnabled ? ', pricelist' : ''} and sales team</p>
             </div>
-            <Fa icon={faChevronDown} className={`text-[10px] text-[var(--text-4)] transition-transform ${showAdvanced ? 'rotate-180' : ''}`} />
+            <Fa icon={faChevronDown} className={`text-[10px] text-[var(--text-4)] transition-transform duration-150 ease-out ${showAdvanced ? 'rotate-180' : ''}`} />
           </button>
           {showAdvanced && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
@@ -2409,7 +2410,7 @@ function NewQuotationForm({
 
         {/* Order Lines */}
         <div className="flex flex-col gap-3" id="quote-lines" tabIndex={-1}>
-          <h3 className="text-sm font-bold text-[var(--text-1)]">Order Lines</h3>
+          <h3 className="sales-quote-section-title">Order Lines</h3>
           {fieldErrors?.lines && (
             <p id="quote-lines-error" role="alert" className="text-[10px] text-destructive font-semibold">
               {fieldErrors.lines}
@@ -2418,11 +2419,11 @@ function NewQuotationForm({
           <p className="text-[10px] text-[var(--text-4)]">
             Tax and discount changes affect posted revenue and margin. Review line-level values before saving.
           </p>
-          <div className="border border-[var(--border-lt)] rounded-2xl overflow-hidden">
+          <div className="sales-quote-lines border border-[var(--border-lt)] overflow-hidden">
             <div className="dt-scroll">
               <table data-no-responsive className="w-full text-left border-collapse">
                 <thead>
-                  <tr className="bg-[var(--bg-surface)] border-b border-[var(--border-lt)]">
+                  <tr className="sales-quote-lines-head border-b border-[var(--border-lt)]">
                     <th className="px-3 py-2.5 text-[10px] font-bold uppercase text-[var(--text-4)]">Product</th>
                     <th className="px-3 py-2.5 text-[10px] font-bold uppercase text-[var(--text-4)]">Description</th>
                     <th className="px-3 py-2.5 text-[10px] font-bold uppercase text-[var(--text-4)] text-center w-16">Qty</th>
@@ -2452,7 +2453,7 @@ function NewQuotationForm({
                     )
                     if (line.type === 'section') {
                       return (
-                        <tr key={line.id} className="bg-slate-50/70">
+                        <tr key={line.id} className="sales-quote-section-row">
                           <td className="px-3 py-2" colSpan={canEditDiscount ? 6 : 5}>
                             <input
                               aria-label="Quote section title"
@@ -2566,10 +2567,10 @@ function NewQuotationForm({
                 </tbody>
               </table>
             </div>
-            <div className="px-3 py-2.5 border-t border-[var(--border-lt)] bg-[var(--bg-surface)]">
+            <div className="px-3 py-2.5 border-t border-[var(--border-lt)] bg-[color-mix(in_srgb,var(--navy)_3.5%,var(--bg-surface))]">
               <div className="flex flex-wrap items-center gap-4">
-                <button onClick={addDraftLine} className="flex items-center gap-2 text-xs text-primary-600 hover:underline font-semibold"><Fa icon={faPlus} className="text-[10px]" />Add a product</button>
-                <button onClick={addDraftSection} className="flex items-center gap-2 text-xs text-slate-600 hover:underline font-semibold"><Fa icon={faPlus} className="text-[10px]" />Add a section</button>
+                <button type="button" onClick={addDraftLine} className="sales-quote-link flex items-center gap-2 text-xs hover:underline font-semibold"><Fa icon={faPlus} className="text-[10px]" />Add a product</button>
+                <button type="button" onClick={addDraftSection} className="flex items-center gap-2 text-xs text-[var(--text-3)] hover:underline font-semibold"><Fa icon={faPlus} className="text-[10px]" />Add a section</button>
               </div>
             </div>
           </div>
@@ -2595,18 +2596,18 @@ function NewQuotationForm({
               onChange={setNewPaymentDetails}
             />
           </div>
-          <div className="card p-5 bg-[var(--bg-surface)] border-[var(--border-lt)]">
+          <div className="sales-quote-summary card p-5">
             <h4 className="text-xs font-bold text-[var(--text-2)] mb-4">Summary</h4>
             <div className="flex flex-col gap-3">
-              <div className="flex justify-between text-xs"><span className="text-[var(--text-3)]">Subtotal</span><span className="font-bold">{fmtKes(draftSubtotal)}</span></div>
-              <div className="flex justify-between text-xs"><span className="text-[var(--text-3)]">Tax</span><span className="font-bold">{fmtKes(draftTaxTotal)}</span></div>
-              <div className="border-t border-[var(--border-lt)] pt-3 flex justify-between text-sm"><span className="font-bold text-[var(--text-1)]">Total</span><span className="font-extrabold text-primary-600">{fmtKes(draftTotal)}</span></div>
+              <div className="flex justify-between text-xs"><span className="text-[var(--text-3)]">Subtotal</span><span className="font-bold tabular-nums">{fmtKes(draftSubtotal)}</span></div>
+              <div className="flex justify-between text-xs"><span className="text-[var(--text-3)]">Tax</span><span className="font-bold tabular-nums">{fmtKes(draftTaxTotal)}</span></div>
+              <div className="border-t border-[var(--border-lt)] pt-3 flex justify-between text-sm"><span className="font-bold text-[var(--text-1)]">Total</span><span className="sales-quote-total font-extrabold tabular-nums">{fmtKes(draftTotal)}</span></div>
             </div>
           </div>
         </div>
 
         {/* Bottom action bar */}
-        <div className="flex items-center justify-between pt-4 border-t border-[var(--border-lt)]">
+        <div className="sales-quote-form-footer flex items-center justify-between pt-4 border-t border-[var(--border-lt)]">
           <button type="button" onClick={onCancel} className="btn-outline text-xs">Discard</button>
           <div className="flex flex-col items-end gap-1">
             {saveBlockedReason && <p className="text-[10px] text-amber-600 font-semibold">{saveBlockedReason}</p>}
