@@ -531,7 +531,7 @@ function AfterSalesContent() {
           <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 20, background: meta.bg, color: meta.color, fontWeight: 600, whiteSpace: 'nowrap' }}>{meta.label}</span>
         </div>
         <p className="text-xs font-semibold text-t1">{w.customerName}</p>
-        <p className="text-[10px] text-t2 truncate">{w.productName} · <span className="font-mono">{w.serialNumber}</span></p>
+        <p className="text-[10px] text-t2 truncate" title={`${w.productName} · ${w.serialNumber}`}>{w.productName} · <span className="font-mono">{w.serialNumber}</span></p>
         <p className="text-[10px] text-t3 mt-0.5">{w.months}mo · {fmtDate(w.startDate)} → {fmtDate(w.endDate)}</p>
         <p style={{ fontSize: 9, fontWeight: 600, color: days < 0 ? 'var(--danger)' : days <= 30 ? 'var(--warning-text)' : 'var(--success)', marginTop: 2 }}>
           {days < 0 ? `${Math.abs(days)}d overdue` : `${days}d left`}

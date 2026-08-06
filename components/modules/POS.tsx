@@ -468,7 +468,7 @@ export default function PointOfSale() {
                         : <Fa icon={faBox} />}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-[11px] font-bold text-t1 truncate">{i.productName}</p>
+                      <p className="text-[11px] font-bold text-t1 truncate" title={i.productName}>{i.productName}</p>
                       {i.serialNumber && <p className="text-[9px] font-mono text-brand-blue font-bold">SN: {i.serialNumber}</p>}
                       <div className="flex items-center gap-2 mt-1">
                          <input type="number" className="bg-transparent border-none p-0 text-[11px] font-black text-brand-blue w-20 focus:ring-0"

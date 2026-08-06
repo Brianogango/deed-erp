@@ -114,6 +114,7 @@ export function clientToContact(client: any): Contact {
     vendorRating: numberOr(client.vendorRating, 0),
     loyaltyPoints: numberOr(client.loyaltyPoints, 0),
     createdAt: dateOnly(client.createdAt),
+    isArchived: client.isActive === false,
   }
 }
 
@@ -320,7 +321,8 @@ export async function updateContactById(prisma: PrismaClientLike, id: string, bo
 export async function deleteContactById(prisma: PrismaClientLike, id: string): Promise<boolean> {
   const existing = await prisma.client.findUnique({ where: { id } })
   if (!existing) return false
-  await prisma.client.delete({ where: { id } })
+  // P1-DEED-006: never hard-delete business contacts — soft-archive via isActive=false.
+  await prisma.client.update({ where: { id }, data: { isActive: false } })
   void broadcastContacts(prisma)
   return true
 }

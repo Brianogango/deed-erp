@@ -75,7 +75,7 @@ export default function RepairRefurbJobs({ onSelect }: { onSelect: (id: string) 
                     </span>
                   </div>
                   <div className="flex flex-col">
-                    <p className="text-xs font-bold text-slate-800 truncate">{j.productName}</p>
+                    <p className="text-xs font-bold text-slate-800 truncate" title={j.productName}>{j.productName}</p>
                     <p className="font-mono text-[10px] text-slate-400 font-medium">{j.serialNumber || 'No Serial'}</p>
                   </div>
                   <div className="flex items-center justify-between mt-1">

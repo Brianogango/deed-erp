@@ -40,10 +40,25 @@ export default function Login() {
         return
       }
 
-      const { user } = await res.json()
+      const { user, defaultModule } = await res.json()
 
       setToast({ msg: 'Access granted. Redirecting...', type: 'success' })
-      window.location.href = '/'
+      const rawReturn = searchParams.get('returnTo')
+      let dest = '/'
+      if (rawReturn) {
+        try {
+          const decoded = decodeURIComponent(rawReturn)
+          if (decoded.startsWith('/') && !decoded.startsWith('//') && !decoded.includes('://') && !decoded.startsWith('/login')) {
+            dest = decoded
+          }
+        } catch {
+          dest = '/'
+        }
+      } else if (typeof defaultModule === 'string' && defaultModule && defaultModule !== 'dashboard') {
+        dest = `/${defaultModule}`
+      }
+      window.location.href = dest
+      void user
     } catch {
       setToast({ msg: 'Authentication service is unavailable', type: 'error' })
     } finally {

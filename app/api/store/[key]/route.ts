@@ -4,8 +4,9 @@ import {
   hasPermission, SENSITIVE_STORE_KEY_PERMISSIONS, CLIENT_IMMUTABLE_STORE_KEYS, canReadStoreKey,
   CONTENT_FILTERED_STORE_KEYS, filterStoreValueForRole, hasFullStoreContentAccess, mergeFilteredStoreWrite,
 } from '@/lib/auth/authorization'
-import { preserveInvoiceLinesOnStoreWrite } from '@/lib/finance-invoice'
+import { preserveInvoiceLinesOnStoreWrite, enforcePostedInvoiceImmutability } from '@/lib/finance-invoice'
 import { loadAppState, saveStoreKeys } from '@/lib/server-store'
+import { appendStoreAudit } from '@/lib/store-audit'
 
 type Params = { params: { key: string } }
 
@@ -55,13 +56,22 @@ export async function PUT(request: NextRequest, { params }: Params) {
     const currentState = await loadAppState([key])
     value = JSON.stringify(mergeFilteredStoreWrite(currentState[key], incoming))
   }
+  let rejectedPostedInvoiceEdits: ReturnType<typeof enforcePostedInvoiceImmutability>['rejected'] = []
   if (key === 'deed_invoices') {
     let incoming: unknown
     try { incoming = JSON.parse(value) } catch { incoming = null }
     const currentState = await loadAppState([key])
-    value = JSON.stringify(preserveInvoiceLinesOnStoreWrite(currentState[key], incoming))
+    const withPreservedLines = preserveInvoiceLinesOnStoreWrite(currentState[key], incoming)
+    // Posted-invoice immutability (FIN-001) — same guard as POST /api/store;
+    // a single-key PUT must not be a weaker path to the same tampering.
+    const guarded = enforcePostedInvoiceImmutability(currentState[key], withPreservedLines)
+    value = JSON.stringify(guarded.merged)
+    rejectedPostedInvoiceEdits = guarded.rejected
   }
   await saveStoreKeys({ [key]: value })
+  if (rejectedPostedInvoiceEdits.length > 0) {
+    await appendStoreAudit(session, [key], [], [], rejectedPostedInvoiceEdits)
+  }
 
-  return NextResponse.json({ ok: true, key })
+  return NextResponse.json({ ok: true, key, ...(rejectedPostedInvoiceEdits.length > 0 ? { rejectedPostedInvoiceEdits } : {}) })
 }

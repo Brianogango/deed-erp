@@ -1,10 +1,9 @@
 import type { NextRequest } from 'next/server'
 import { NextResponse } from 'next/server'
 import { getToken } from 'next-auth/jwt'
+import { safeReturnTo } from '@/lib/auth/return-to'
 
-// No hardcoded fallback: a guessable default secret would let anyone forge a
-// valid session token for any role. If neither env var is set, auth checks
-// below fail closed (deny) instead of trusting a known string.
+export { safeReturnTo }
 const SECRET = process.env.NEXTAUTH_SECRET ?? process.env.AUTH_SECRET ?? ''
 const COOKIE_NAME = 'deed-session'
 
@@ -41,9 +40,17 @@ function getIP(req: NextRequest): string {
   )
 }
 
-function redirectTo(path: string, req: NextRequest): NextResponse {
+function redirectTo(path: string, req: NextRequest, returnTo?: string | null): NextResponse {
   const url = req.nextUrl.clone()
   url.pathname = path
+  if (path === '/login') {
+    url.search = ''
+    if (returnTo) {
+      const safe = safeReturnTo(returnTo)
+      if (safe) url.searchParams.set('returnTo', safe)
+    }
+  }
+  // Legacy aliases and other redirects keep the original query string.
   return NextResponse.redirect(url)
 }
 
@@ -204,7 +211,7 @@ export async function middleware(request: NextRequest) {
       const { evaluateSessionAccess } = await import('@/lib/auth/session-validity')
       const access = await evaluateSessionAccess(pageUserId, typeof token.role === 'string' ? token.role : null)
       if (!access.allowed) {
-        const res = redirectTo('/login', request)
+        const res = redirectTo('/login', request, `${pathname}${request.nextUrl.search}`)
         res.cookies.set(COOKIE_NAME, '', { httpOnly: true, path: '/', maxAge: 0 })
         return res
       }
@@ -212,10 +219,20 @@ export async function middleware(request: NextRequest) {
   }
 
   if (!token && !PUBLIC_PAGES.has(pathname)) {
-    return redirectTo('/login', request)
+    return redirectTo('/login', request, `${pathname}${request.nextUrl.search}`)
   }
   if (token && pathname === '/login') {
-    return redirectTo('/', request)
+    const dest = safeReturnTo(request.nextUrl.searchParams.get('returnTo')) || '/'
+    const url = request.nextUrl.clone()
+    if (dest.includes('?')) {
+      const [p, qs] = dest.split('?')
+      url.pathname = p
+      url.search = qs ? `?${qs}` : ''
+    } else {
+      url.pathname = dest
+      url.search = ''
+    }
+    return NextResponse.redirect(url)
   }
 
   const canonicalPath = LEGACY_ROUTE_REDIRECTS[pathname]

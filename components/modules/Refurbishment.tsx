@@ -697,7 +697,7 @@ function RefurbishmentContent() {
                         }} />
                     )}
                     <div className="min-w-0 flex-1">
-                      <p className="text-xs font-semibold text-t1 truncate">{s.productName}</p>
+                      <p className="text-xs font-semibold text-t1 truncate" title={s.productName}>{s.productName}</p>
                       <p className="font-mono text-[10px] text-t3">{s.serial}</p>
                     </div>
                     {isLeadTech && selectedIssueIds.size === 0 && (
@@ -733,7 +733,7 @@ function RefurbishmentContent() {
                 <div key={s.id} className="flex items-center justify-between gap-2 rounded-lg px-3 py-2"
                   style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-lt)' }}>
                   <div className="min-w-0">
-                    <p className="text-xs font-semibold text-t1 truncate">{s.productName}</p>
+                    <p className="text-xs font-semibold text-t1 truncate" title={s.productName}>{s.productName}</p>
                     <p className="font-mono text-[10px] text-t3">{s.serial}</p>
                   </div>
                   {isLeadTech && (

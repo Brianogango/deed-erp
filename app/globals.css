@@ -231,6 +231,23 @@
   }
 }
 
+/* P1-DEED-008: Tailwind utilities like `bg-bg` / `text-t1` on <body> are still
+   hardcoded light hexes in tailwind.config.js, so they win over @layer base
+   token rules. Unlayered selectors below beat layered utilities and keep the
+   document chrome on --bg-page / --text-1 when ThemeToggle sets data-theme. */
+[data-theme='dark'] html,
+[data-theme='dark'],
+[data-theme='dark'] body {
+  background-color: var(--bg-page);
+  color: var(--text-1);
+}
+
+[data-theme='dark'] #__next,
+[data-theme='dark'] #__next > div,
+[data-theme='dark'] main {
+  background-color: var(--bg-page);
+}
+
 @layer components {
   .card {
     @apply rounded-2xl border bg-card shadow-card;
@@ -389,28 +406,28 @@
   .badge-sage {
     background: var(--success-bg);
     color: var(--success-text);
-    border-color: rgba(5, 150, 105, 0.24);
+    border-color: color-mix(in srgb, var(--success) 24%, transparent);
   }
 
   .badge-amber,
   .badge-honey {
-    background: rgba(245, 158, 11, 0.16);
-    color: #78350F;
-    border-color: rgba(217, 119, 6, 0.3);
+    background: var(--warning-bg);
+    color: var(--warning-text);
+    border-color: color-mix(in srgb, var(--warning) 30%, transparent);
   }
 
   .badge-red,
   .badge-coral {
     background: var(--danger-bg);
     color: var(--danger-text);
-    border-color: rgba(220, 38, 38, 0.24);
+    border-color: color-mix(in srgb, var(--danger) 24%, transparent);
   }
 
   .badge-blue,
   .badge-mist {
     background: var(--info-bg);
     color: var(--info-text);
-    border-color: rgba(37, 99, 235, 0.24);
+    border-color: color-mix(in srgb, var(--info) 24%, transparent);
   }
 
   .badge-purple {
@@ -419,11 +436,17 @@
     border-color: rgba(109, 40, 217, 0.28);
   }
 
+  [data-theme='dark'] .badge-purple {
+    background: rgba(167, 139, 250, 0.16);
+    color: #DDD6FE;
+    border-color: rgba(167, 139, 250, 0.28);
+  }
+
   .badge-gray,
   .badge-stone {
-    background: rgba(107, 114, 128, 0.10);
-    color: #4B5563;
-    border-color: rgba(107, 114, 128, 0.18);
+    background: color-mix(in srgb, var(--text-4) 14%, transparent);
+    color: var(--text-3);
+    border-color: color-mix(in srgb, var(--text-4) 22%, transparent);
   }
 
   .table-scroll {
@@ -1740,9 +1763,9 @@
   }
 
   .tab-overflow-item.active {
-    color: var(--primary-dark);
-    border-color: rgba(29, 78, 216, 0.24);
-    background: #EEF2FF;
+    color: var(--primary);
+    border-color: color-mix(in srgb, var(--primary) 28%, transparent);
+    background: color-mix(in srgb, var(--primary) 12%, var(--bg-card));
   }
 
   /* Tight operational inset — keep body flush with header; only a hair of
@@ -3093,19 +3116,19 @@
   .status-pill-success {
     background: var(--success-bg);
     color: var(--success-text);
-    border: 1px solid rgba(5, 150, 105, 0.20);
+    border: 1px solid color-mix(in srgb, var(--success) 24%, transparent);
   }
 
   .status-pill-danger {
     background: var(--danger-bg);
     color: var(--danger-text);
-    border: 1px solid rgba(220, 38, 38, 0.20);
+    border: 1px solid color-mix(in srgb, var(--danger) 24%, transparent);
   }
 
   .status-pill-warning {
-    background: #FEF3C7;
-    color: #92400E;
-    border: 1px solid rgba(217, 119, 6, 0.25);
+    background: var(--warning-bg);
+    color: var(--warning-text);
+    border: 1px solid color-mix(in srgb, var(--warning) 28%, transparent);
   }
 
   /* ── Focus ring utility ─────────────────────────────────────────────────── */

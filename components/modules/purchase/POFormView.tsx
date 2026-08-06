@@ -517,7 +517,7 @@ export default function POFormView() {
                             : <Fa icon={faBox} />}
                         </span>
                         <div className="min-w-0">
-                          <p className="font-medium text-xs text-t1 truncate">{l.productName}</p>
+                          <p className="font-medium text-xs text-t1 truncate" title={l.productName}>{l.productName}</p>
                           {canEdit ? (
                             <select
                               className="form-select text-[10px] py-0.5 mt-0.5"

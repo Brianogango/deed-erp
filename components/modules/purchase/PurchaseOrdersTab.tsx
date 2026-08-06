@@ -1,63 +1,123 @@
 'use client'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo } from 'react'
 import { usePurchase } from './PurchaseContext'
 import { PanelHeader, RecordCard } from '@/components/ui'
 import { StatusBadge } from '@/components/erp'
 import { DataTable, type ColumnDef, type PrimaryFilterConfig } from '@/components/data-table'
 import type { PurchaseOrder } from '@/lib/store'
+import {
+  countPurchaseFilterFacets,
+  PURCHASE_LIFECYCLE_STATUSES,
+  PURCHASE_STATUS_FILTER_LABELS,
+  purchaseDocType,
+  type PurchaseStatusFilter,
+  type PurchaseTypeFilter,
+} from '@/lib/purchases-filter'
 
 const STATUS_LABEL: Record<string, string> = {
   draft: 'RFQ', sent: 'RFQ Sent', confirmed: 'Purchase Order',
   partial: 'Partially Received', received: 'Fully Received', cancelled: 'Cancelled',
 }
 
+const TYPE_FILTERS: PurchaseTypeFilter[] = ['all', 'rfq', 'po']
+const STATUS_FILTERS: PurchaseStatusFilter[] = ['all', ...PURCHASE_LIFECYCLE_STATUSES]
+
+function isTypeFilter(value: string): value is PurchaseTypeFilter {
+  return (TYPE_FILTERS as string[]).includes(value)
+}
+
+function isStatusFilter(value: string): value is PurchaseStatusFilter {
+  return (STATUS_FILTERS as string[]).includes(value)
+}
+
+/** Migrate legacy single-filter saved views (`rfq` | `po` | `received` | status). */
+function migrateLegacySavedView(stored: string): {
+  typeFilter: PurchaseTypeFilter
+  statusFilter: PurchaseStatusFilter
+} | null {
+  if (stored === 'all') return { typeFilter: 'all', statusFilter: 'all' }
+  if (stored === 'rfq') return { typeFilter: 'rfq', statusFilter: 'all' }
+  if (stored === 'po') return { typeFilter: 'po', statusFilter: 'all' }
+  if (isStatusFilter(stored) && stored !== 'all') {
+    return { typeFilter: 'all', statusFilter: stored }
+  }
+  return null
+}
+
 export default function PurchaseOrdersTab() {
   const {
-    purchaseOrders, filteredPOs, filter, setFilter, setActiveId, setSubView,
-    setShowNewRFQ, fmtKes, fmtDate, confirmPO,
+    purchaseOrders, filteredPOs, typeFilter, setTypeFilter, statusFilter, setStatusFilter,
+    setActiveId, setSubView, setShowNewRFQ, fmtKes, fmtDate, confirmPO,
   } = usePurchase()
   const savedViewKey = 'deed_po_saved_view'
 
   useEffect(() => {
     try {
       const stored = localStorage.getItem(savedViewKey)
-      if (stored && ['all', 'rfq', 'po', 'received'].includes(stored)) {
-        setFilter(stored)
+      if (!stored) return
+
+      try {
+        const parsed = JSON.parse(stored) as { type?: string; status?: string }
+        if (parsed && typeof parsed === 'object' && (parsed.type || parsed.status)) {
+          if (parsed.type && isTypeFilter(parsed.type)) setTypeFilter(parsed.type)
+          if (parsed.status && isStatusFilter(parsed.status)) setStatusFilter(parsed.status)
+          return
+        }
+      } catch {
+        // not JSON — try legacy string values
+      }
+
+      const migrated = migrateLegacySavedView(stored)
+      if (migrated) {
+        setTypeFilter(migrated.typeFilter)
+        setStatusFilter(migrated.statusFilter)
       }
     } catch {
       // ignore storage failures
     }
-  }, [setFilter])
+  }, [setTypeFilter, setStatusFilter])
 
   useEffect(() => {
     try {
-      localStorage.setItem(savedViewKey, filter)
+      localStorage.setItem(savedViewKey, JSON.stringify({ type: typeFilter, status: statusFilter }))
     } catch {
       // ignore storage failures
     }
-  }, [filter])
+  }, [typeFilter, statusFilter])
 
-  const filterCounts = useMemo(() => ({
-    all: purchaseOrders.length,
-    rfq: purchaseOrders.filter(po => ['draft', 'sent'].includes(po.status)).length,
-    po: purchaseOrders.filter(po => ['confirmed', 'partial'].includes(po.status)).length,
-    received: purchaseOrders.filter(po => po.status === 'received').length,
-  }), [purchaseOrders])
+  const filterCounts = useMemo(
+    () => countPurchaseFilterFacets(purchaseOrders, typeFilter as PurchaseTypeFilter, statusFilter as PurchaseStatusFilter),
+    [purchaseOrders, typeFilter, statusFilter],
+  )
 
   const primaryFilters: PrimaryFilterConfig[] = [
+    {
+      key: 'type',
+      label: 'Type',
+      placeholder: 'All types',
+      value: typeFilter,
+      allValue: 'all',
+      options: [
+        { value: 'all', label: `All (${filterCounts.type.all})` },
+        { value: 'rfq', label: `RFQ (${filterCounts.type.rfq})` },
+        { value: 'po', label: `PO (${filterCounts.type.po})` },
+      ],
+      onChange: setTypeFilter,
+    },
     {
       key: 'status',
       label: 'Status',
       placeholder: 'All statuses',
-      value: filter,
+      value: statusFilter,
       allValue: 'all',
       options: [
-        { value: 'all', label: `All (${filterCounts.all})` },
-        { value: 'rfq', label: `RFQs (${filterCounts.rfq})` },
-        { value: 'po', label: `POs (${filterCounts.po})` },
-        { value: 'received', label: `Received (${filterCounts.received})` },
+        { value: 'all', label: `All (${filterCounts.status.all})` },
+        ...PURCHASE_LIFECYCLE_STATUSES.map(status => ({
+          value: status,
+          label: `${PURCHASE_STATUS_FILTER_LABELS[status]} (${filterCounts.status[status]})`,
+        })),
       ],
-      onChange: setFilter,
+      onChange: setStatusFilter,
     },
   ]
 
@@ -67,7 +127,7 @@ export default function PurchaseOrdersTab() {
       ['Ref', 'Type', 'Vendor', 'Date', 'Total', 'Status'].join(','),
       ...rows.map(po => ([
         po.ref,
-        ['draft', 'sent'].includes(po.status) ? 'RFQ' : 'PO',
+        purchaseDocType(po.status) === 'rfq' ? 'RFQ' : 'PO',
         po.vendorName,
         fmtDate(po.date),
         String(po.total),
@@ -91,10 +151,10 @@ export default function PurchaseOrdersTab() {
     {
       key: 'type', label: 'Type', priority: 1, width: '90px',
       render: po => {
-        const isRFQ = po.status === 'draft' || po.status === 'sent'
+        const isRFQ = purchaseDocType(po.status) === 'rfq'
         return <span className="text-[10px] font-semibold" style={{ color: isRFQ ? 'var(--warning)' : 'var(--primary)' }}>{isRFQ ? 'RFQ' : 'PO'}</span>
       },
-      exportValue: po => ['draft', 'sent'].includes(po.status) ? 'RFQ' : 'PO',
+      exportValue: po => purchaseDocType(po.status) === 'rfq' ? 'RFQ' : 'PO',
     },
     {
       key: 'vendor', label: 'Vendor', priority: 1, width: '1.5fr',
@@ -139,7 +199,7 @@ export default function PurchaseOrdersTab() {
         rowKey={po => po.id}
         searchPlaceholder="Search purchase orders by ref or vendor..."
         primaryFilters={primaryFilters}
-        onClearFilters={() => setFilter('all')}
+        onClearFilters={() => { setTypeFilter('all'); setStatusFilter('all') }}
         hideColumnFilters
         selectable
         emptyMessage={purchaseOrders.length === 0 ? 'No purchase orders yet' : 'No orders match this view'}
@@ -165,7 +225,7 @@ export default function PurchaseOrdersTab() {
           </>
         )}
         renderCard={po => {
-          const isRFQ = po.status === 'draft' || po.status === 'sent'
+          const isRFQ = purchaseDocType(po.status) === 'rfq'
           return (
             <RecordCard
               key={po.id}

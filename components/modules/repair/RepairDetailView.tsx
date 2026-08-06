@@ -407,7 +407,7 @@ export default function RepairDetailView() {
                 <span className="text-[var(--border)]">·</span>
                 <span className="text-[var(--text-1)] font-semibold truncate max-w-[140px]">{r.customerName}</span>
                 <span className="text-[var(--border)]">·</span>
-                <span className="text-[var(--primary)] truncate max-w-[140px]">{r.productName}</span>
+                <span className="text-[var(--primary)] truncate max-w-[140px]" title={r.productName}>{r.productName}</span>
               </span>
               <span className="md:hidden text-xs font-medium text-[var(--text-3)] truncate max-w-full">
                 {r.customerName} · <span className="text-[var(--primary)]">{r.productName}</span>
@@ -1487,7 +1487,7 @@ export default function RepairDetailView() {
                                 <Fa icon={faBoxOpen} className="text-orange-500 text-[9px]" />
                               </div>
                               <div className="flex-1 min-w-0">
-                                <p className="text-[11px] font-bold text-[var(--text-1)] truncate">{item.productName || item.description}</p>
+                                <p className="text-[11px] font-bold text-[var(--text-1)] truncate" title={item.productName || item.description}>{item.productName || item.description}</p>
                                 <p className="text-[9px] text-[var(--text-4)]">Qty: {item.qty}{item.supplier ? ` · ${item.supplier}` : ''}</p>
                               </div>
                               {item.estimatedCost && Number(item.estimatedCost) > 0 && (

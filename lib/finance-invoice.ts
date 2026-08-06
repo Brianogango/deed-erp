@@ -166,6 +166,89 @@ export function mapDbInvoiceItemsToClientLines(
 }
 
 /**
+ * Fields that make up the financial substance of a posted invoice. Once an
+ * invoice's stored status is 'posted', none of these may change via a sync
+ * write — corrections must go through a credit note, reversal, or the
+ * cancellation transition, never a silent field edit.
+ */
+const POSTED_INVOICE_PROTECTED_FIELDS = [
+  'lines', 'subtotal', 'taxTotal', 'total', 'date', 'dueDate',
+  'partnerId', 'partnerName', 'currencyCode', 'exchangeRateToBase',
+  'type', 'ref',
+] as const
+
+/** Status transitions a posted invoice may still make (nothing else). */
+const ALLOWED_POSTED_STATUS_TRANSITIONS = new Set(['posted', 'cancelled'])
+
+export interface RejectedPostedInvoiceEdit {
+  id: string
+  ref?: string
+  fields: string[]
+}
+
+function fieldsDiffer(a: unknown, b: unknown): boolean {
+  // Line arrays and scalars alike — JSON comparison is sufficient here since
+  // both sides originate from the same JSON-serialisable store payloads.
+  return JSON.stringify(a) !== JSON.stringify(b)
+}
+
+/**
+ * Reject mutations to a posted invoice's financial substance arriving via any
+ * whole-array sync write (POST /api/store, PUT /api/store/[key]). Draft
+ * invoices, and non-protected fields on posted invoices (amountPaid,
+ * paymentBlocked, notes, postedBy*, status→cancelled), pass through
+ * unchanged. When a protected field differs, every protected field on that
+ * invoice is restored to the currently-stored value — the invoice is not
+ * dropped from the batch, only its protected fields are pinned — and the
+ * invoice id/ref plus the attempted field names are reported in `rejected`
+ * so the caller can write an audit entry.
+ */
+export function enforcePostedInvoiceImmutability(
+  current: unknown,
+  incoming: unknown,
+): { merged: unknown; rejected: RejectedPostedInvoiceEdit[] } {
+  if (!Array.isArray(incoming)) return { merged: incoming, rejected: [] }
+  if (!Array.isArray(current)) return { merged: incoming, rejected: [] }
+
+  const currentById = new Map<string, Record<string, unknown>>()
+  for (const row of current) {
+    if (row && typeof row === 'object' && (row as { id?: unknown }).id != null) {
+      currentById.set(String((row as { id: unknown }).id), row as Record<string, unknown>)
+    }
+  }
+
+  const rejected: RejectedPostedInvoiceEdit[] = []
+  const merged = incoming.map((row: unknown) => {
+    if (!row || typeof row !== 'object' || (row as { id?: unknown }).id == null) return row
+    const next = row as Record<string, unknown>
+    const prev = currentById.get(String(next.id))
+    // No stored counterpart (new invoice) or stored copy is not posted — fully editable.
+    if (!prev || prev.status !== 'posted') return row
+
+    const incomingStatus = typeof next.status === 'string' ? next.status : prev.status
+    const statusChangeAllowed = ALLOWED_POSTED_STATUS_TRANSITIONS.has(incomingStatus)
+
+    const changedFields = POSTED_INVOICE_PROTECTED_FIELDS.filter(field => fieldsDiffer(prev[field], next[field]))
+    if (changedFields.length === 0 && statusChangeAllowed) return row
+
+    if (changedFields.length > 0 || !statusChangeAllowed) {
+      const restored: Record<string, unknown> = { ...next }
+      for (const field of POSTED_INVOICE_PROTECTED_FIELDS) restored[field] = prev[field]
+      if (!statusChangeAllowed) restored.status = prev.status
+      rejected.push({
+        id: String(next.id),
+        ref: typeof prev.ref === 'string' ? prev.ref : undefined,
+        fields: [...changedFields, ...(!statusChangeAllowed ? ['status'] : [])],
+      })
+      return restored
+    }
+    return row
+  })
+
+  return { merged, rejected }
+}
+
+/**
  * When syncing deed_invoices, refuse to wipe non-empty line items with [].
  * Protects the server mirror if a client briefly holds an empty-line shell
  * (e.g. after SO→invoice when the API response omitted lines).

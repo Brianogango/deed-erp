@@ -5,6 +5,7 @@ import {
   clampAmountPaid,
   mapDbInvoiceItemsToClientLines,
   preserveInvoiceLinesOnStoreWrite,
+  enforcePostedInvoiceImmutability,
 } from '@/lib/finance-invoice'
 
 describe('computeInvoiceTotals', () => {
@@ -141,5 +142,101 @@ describe('preserveInvoiceLinesOnStoreWrite', () => {
     const merged = preserveInvoiceLinesOnStoreWrite(current, incoming) as typeof incoming
     expect(merged[0].lines[0].id).toBe('l2')
     expect(merged[0].subtotal).toBe(200)
+  })
+})
+
+describe('enforcePostedInvoiceImmutability (FIN-001)', () => {
+  const postedInvoice = (over: Record<string, unknown> = {}) => ({
+    id: 'inv1',
+    ref: 'INV/2026/0001',
+    status: 'posted',
+    type: 'customer_invoice',
+    partnerId: 'cust1',
+    partnerName: 'Kevin Mbugua',
+    date: '2026-08-01',
+    dueDate: '2026-08-31',
+    lines: [{ id: 'l1', description: 'Screen replacement', qty: 1, unitPrice: 4000, taxRate: 0, subtotal: 4000 }],
+    subtotal: 4000,
+    taxTotal: 0,
+    total: 4000,
+    amountPaid: 0,
+    notes: '',
+    ...over,
+  })
+
+  it('rejects a tampered total/lines/date/customer on a posted invoice and restores the stored values', () => {
+    const current = [postedInvoice()]
+    const incoming = [postedInvoice({ total: 51700, subtotal: 51700, date: '2020-01-01', partnerName: 'Someone Else' })]
+    const { merged, rejected } = enforcePostedInvoiceImmutability(current, incoming) as {
+      merged: typeof current
+      rejected: { id: string; ref?: string; fields: string[] }[]
+    }
+    expect(merged[0].total).toBe(4000)
+    expect(merged[0].subtotal).toBe(4000)
+    expect(merged[0].date).toBe('2026-08-01')
+    expect(merged[0].partnerName).toBe('Kevin Mbugua')
+    expect(rejected).toHaveLength(1)
+    expect(rejected[0].id).toBe('inv1')
+    expect(rejected[0].ref).toBe('INV/2026/0001')
+    expect(rejected[0].fields).toEqual(expect.arrayContaining(['total', 'subtotal', 'date', 'partnerName']))
+  })
+
+  it('rejects an invalid status transition away from posted (e.g. back to draft)', () => {
+    const current = [postedInvoice()]
+    const incoming = [postedInvoice({ status: 'draft' })]
+    const { merged, rejected } = enforcePostedInvoiceImmutability(current, incoming) as {
+      merged: typeof current
+      rejected: { id: string; fields: string[] }[]
+    }
+    expect(merged[0].status).toBe('posted')
+    expect(rejected[0].fields).toContain('status')
+  })
+
+  it('allows amountPaid, paymentBlocked, and notes to change on a posted invoice', () => {
+    const current = [postedInvoice()]
+    const incoming = [postedInvoice({ amountPaid: 4000, paymentBlocked: false, notes: 'Paid via M-Pesa' })]
+    const { merged, rejected } = enforcePostedInvoiceImmutability(current, incoming) as { merged: typeof current; rejected: unknown[] }
+    expect(merged[0].amountPaid).toBe(4000)
+    expect(merged[0].notes).toBe('Paid via M-Pesa')
+    expect(rejected).toHaveLength(0)
+  })
+
+  it('allows the posted → cancelled transition', () => {
+    const current = [postedInvoice()]
+    const incoming = [postedInvoice({ status: 'cancelled' })]
+    const { merged, rejected } = enforcePostedInvoiceImmutability(current, incoming) as { merged: typeof current; rejected: unknown[] }
+    expect(merged[0].status).toBe('cancelled')
+    expect(rejected).toHaveLength(0)
+  })
+
+  it('leaves draft invoices fully editable', () => {
+    const current = [postedInvoice({ status: 'draft' })]
+    const incoming = [postedInvoice({ status: 'draft', total: 9999, subtotal: 9999 })]
+    const { merged, rejected } = enforcePostedInvoiceImmutability(current, incoming) as { merged: typeof current; rejected: unknown[] }
+    expect(merged[0].total).toBe(9999)
+    expect(rejected).toHaveLength(0)
+  })
+
+  it('leaves a brand-new invoice (no stored counterpart) fully editable', () => {
+    const current: unknown[] = []
+    const incoming = [postedInvoice()]
+    const { merged, rejected } = enforcePostedInvoiceImmutability(current, incoming) as { merged: typeof current; rejected: unknown[] }
+    expect(merged).toEqual(incoming)
+    expect(rejected).toHaveLength(0)
+  })
+
+  it('does not reject other invoices in the same batch', () => {
+    const current = [postedInvoice(), postedInvoice({ id: 'inv2', ref: 'INV/2026/0002' })]
+    const incoming = [
+      postedInvoice({ total: 999999 }),
+      postedInvoice({ id: 'inv2', ref: 'INV/2026/0002', amountPaid: 4000 }),
+    ]
+    const { merged, rejected } = enforcePostedInvoiceImmutability(current, incoming) as {
+      merged: typeof current
+      rejected: { id: string }[]
+    }
+    expect(rejected).toHaveLength(1)
+    expect(rejected[0].id).toBe('inv1')
+    expect(merged[1].amountPaid).toBe(4000)
   })
 })
