@@ -1098,13 +1098,14 @@ function SalesContent() {
   if (!mounted) return <ModuleSkeleton />
 
   return (
-    <div className="mod-page">
+    <div className="mod-page sales-pilot">
       <ModuleHeader
         title="Sales"
-        subtitle="Quotations, orders and deliveries"
+        subtitle="Quotations · orders · deliveries · invoicing"
         icon={<Fa icon={faClipboardCheck} />}
         count={stats.quotations + stats.quotationsSent + stats.orders}
-        color="var(--primary)"
+        color="#FFFFFF"
+        subtitleMode="visible"
         primaryAction={
           <PrimaryActionButton icon={<Fa icon={faPlus} />} onClick={openNewForm}>
             New quotation
@@ -1126,7 +1127,43 @@ function SalesContent() {
       )}
 
       <div className="mod-body">
-        <div className="card overflow-hidden">
+        {view === 'list' && (
+          <div className="sales-pilot-rail" aria-label="Sales pipeline">
+            <button
+              type="button"
+              className={`sales-pilot-stat ${listTab === 'quotations' && (filter === 'all' || filter === 'quotations' || filter === 'my_quotations') ? 'is-active' : ''}`}
+              onClick={() => { setListTabAndReset('quotations'); setFilterAndReset('quotations') }}
+            >
+              <span className="sales-pilot-stat-label">Draft quotes</span>
+              <span className="sales-pilot-stat-value tabular-nums">{stats.quotations.toLocaleString()}</span>
+            </button>
+            <button
+              type="button"
+              className={`sales-pilot-stat ${listTab === 'quotations' && filter === 'quotation_sent' ? 'is-active' : ''}`}
+              onClick={() => { setListTabAndReset('quotations'); setFilterAndReset('quotation_sent') }}
+            >
+              <span className="sales-pilot-stat-label">Sent</span>
+              <span className="sales-pilot-stat-value tabular-nums">{stats.quotationsSent.toLocaleString()}</span>
+            </button>
+            <button
+              type="button"
+              className={`sales-pilot-stat ${listTab === 'orders' && filter !== 'to_invoice' ? 'is-active' : ''} ${stats.pendingApproval > 0 ? 'tone-warning' : ''}`}
+              onClick={() => { setListTabAndReset('orders'); setFilterAndReset('sales_orders') }}
+            >
+              <span className="sales-pilot-stat-label">Confirmed orders</span>
+              <span className="sales-pilot-stat-value tabular-nums">{stats.orders.toLocaleString()}</span>
+            </button>
+            <button
+              type="button"
+              className={`sales-pilot-stat ${listTab === 'orders' && filter === 'to_invoice' ? 'is-active' : ''} ${stats.toInvoice > 0 ? 'tone-success' : ''}`}
+              onClick={() => { setListTabAndReset('orders'); setFilterAndReset('to_invoice') }}
+            >
+              <span className="sales-pilot-stat-label">Ready to invoice</span>
+              <span className="sales-pilot-stat-value tabular-nums">{stats.toInvoice.toLocaleString()}</span>
+            </button>
+          </div>
+        )}
+        <div className="card overflow-hidden sales-pilot-surface">
           <div className="flex flex-col">
               {/* ── NEW QUOTATION FULL-PAGE FORM ──────────────────────────── */}
               {view === 'new' ? (
@@ -1230,9 +1267,10 @@ function SalesContent() {
                     summary={
                       <OperationalSummary
                         items={[
-                          { id: 'quotations', label: 'quotations', value: stats.quotations + stats.quotationsSent },
-                          { id: 'orders', label: 'sales orders', value: stats.orders },
-                          ...(stats.toInvoice ? [{ id: 'to_invoice', label: 'ready to invoice', value: stats.toInvoice, tone: 'warning' as const, onClick: () => { setListTabAndReset('orders'); setFilterAndReset('to_invoice') } }] : []),
+                          { id: 'quotations', label: 'quotations', value: stats.quotations + stats.quotationsSent, onClick: () => { setListTabAndReset('quotations'); setFilterAndReset('all') } },
+                          { id: 'orders', label: 'sales orders', value: stats.orders, onClick: () => { setListTabAndReset('orders'); setFilterAndReset('all') } },
+                          ...(stats.pendingApproval ? [{ id: 'pending_approval', label: 'awaiting approval', value: stats.pendingApproval, tone: 'warning' as const, onClick: () => { setListTabAndReset('quotations'); setFilterAndReset('all') } }] : []),
+                          ...(stats.toInvoice ? [{ id: 'to_invoice', label: 'ready to invoice', value: stats.toInvoice, tone: 'success' as const, onClick: () => { setListTabAndReset('orders'); setFilterAndReset('to_invoice') } }] : []),
                         ]}
                       />
                     }
@@ -1325,7 +1363,11 @@ function SalesContent() {
                             </div>
                             {colOrders.length === 0 && <div className="border-2 border-dashed border-[var(--border-lt)] rounded-xl p-4 text-center text-[10px] text-[var(--text-4)]">No orders</div>}
                             {colOrders.map(s => (
-                              <div key={s.id} onClick={() => openOrder(s.id)} className="card p-3 cursor-pointer hover:shadow-md transition-shadow border-l-4" style={{ borderLeftColor: colColors[col] }}>
+                              <div
+                                key={s.id}
+                                onClick={() => openOrder(s.id)}
+                                className={`card p-3 cursor-pointer sales-kanban-card sales-kanban-card--${col}`}
+                              >
                                 <div className="flex items-center justify-between mb-1">
                                   <span className="text-xs font-bold text-primary-600">{s.ref}</span>
                                   <span className="text-[10px] font-bold text-[var(--text-1)]">{fmtKes(s.total)}</span>

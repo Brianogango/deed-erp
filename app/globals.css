@@ -4147,3 +4147,354 @@
     transform: none;
   }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Sales Operate pilot — /sales only
+   Skills: Impeccable Operate + craft-floor, frontend-design (slate-ink
+   signature distinct from Inventory navy), redesign audit, ui-ux-pro-max
+   Trust & Authority / data-dense, emil press-only motion.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.sales-pilot.mod-page {
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--text-1) 5%, var(--bg-page)) 0 11rem, var(--bg-page) 11rem);
+}
+
+.sales-pilot.mod-page > .mod-header {
+  position: relative;
+  min-height: 3.75rem;
+  padding: 0.85rem 1rem;
+  gap: 0.75rem;
+  border-bottom: none;
+  background: linear-gradient(135deg, var(--text-1) 0%, #0b1220 55%, #07101c 100%);
+  color: #fff;
+  box-shadow: 0 10px 28px color-mix(in srgb, var(--text-1) 22%, transparent);
+}
+
+.sales-pilot .mod-header-icon,
+.sales-pilot.mod-page > .mod-header .w-9.h-9 {
+  width: 2.5rem !important;
+  height: 2.5rem !important;
+  border-radius: 0.55rem;
+  background: color-mix(in srgb, var(--success) 22%, transparent);
+  border: 1px solid color-mix(in srgb, var(--success) 40%, transparent);
+  color: #fff !important;
+  box-shadow: none;
+}
+
+.sales-pilot .mod-header-icon [style] {
+  color: inherit !important;
+}
+
+.sales-pilot .erp-module-title,
+.sales-pilot.mod-page > .mod-header h1 {
+  font-size: 1.35rem !important;
+  font-weight: 750;
+  letter-spacing: -0.025em;
+  line-height: 1.15;
+  color: #fff;
+}
+
+.sales-pilot .erp-module-subtitle,
+.sales-pilot.mod-page > .mod-header p {
+  font-size: 0.78rem;
+  color: color-mix(in srgb, #fff 70%, transparent);
+  font-weight: 500;
+}
+
+.sales-pilot.mod-page > .mod-header .badge {
+  display: inline-flex;
+  min-height: 1.35rem;
+  background: color-mix(in srgb, #fff 14%, transparent);
+  border-color: color-mix(in srgb, #fff 26%, transparent);
+  color: #fff;
+  box-shadow: none;
+}
+
+.sales-pilot .mod-header .btn-primary {
+  background: var(--success);
+  color: #fff;
+  border-color: var(--success);
+  box-shadow: none;
+}
+
+.sales-pilot .mod-header .btn-primary:hover {
+  background: var(--success-text);
+  border-color: var(--success-text);
+  color: #fff;
+}
+
+.sales-pilot .mod-header .btn-secondary {
+  background: transparent;
+  color: #fff;
+  border-color: color-mix(in srgb, #fff 32%, transparent);
+}
+
+.sales-pilot .mod-header .btn-secondary:hover {
+  background: color-mix(in srgb, #fff 10%, transparent);
+  color: #fff;
+}
+
+.sales-pilot .mod-tabs,
+.sales-pilot .mod-tabs.mod-tabs-adaptive,
+.sales-pilot .mod-tabs.mod-tabs-tablet-grid,
+.sales-pilot .mod-tabs.mod-tabs-desktop-full {
+  background: #0b1220;
+  border-bottom: 1px solid color-mix(in srgb, #fff 8%, transparent);
+  padding: 0.35rem 0.65rem 0.45rem;
+  gap: 0.15rem;
+}
+
+.sales-pilot .mod-tab,
+.sales-pilot .mod-tabs.mod-tabs-adaptive .mod-tab,
+.sales-pilot .mod-tabs.mod-tabs-tablet-grid .mod-tab {
+  border-radius: 0.35rem;
+  font-weight: 650;
+  color: color-mix(in srgb, #fff 66%, transparent);
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+}
+
+.sales-pilot .mod-tab:hover {
+  background: color-mix(in srgb, #fff 9%, transparent);
+  color: #fff;
+}
+
+.sales-pilot .mod-tab.active {
+  background: color-mix(in srgb, var(--success) 16%, transparent);
+  color: #fff;
+  border-color: transparent;
+  box-shadow: none;
+}
+
+.sales-pilot .mod-tab.active::after {
+  background: var(--success);
+  height: 3px;
+  bottom: 0.05rem;
+  border-radius: 2px;
+}
+
+.sales-pilot-rail {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0;
+  margin: 0 0 0.85rem;
+  border: 1px solid color-mix(in srgb, var(--text-1) 14%, var(--border));
+  border-radius: 0.55rem;
+  overflow: hidden;
+  background: var(--bg-card);
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--text-1) 6%, transparent);
+}
+
+@media (min-width: 768px) {
+  .sales-pilot-rail {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+.sales-pilot-stat {
+  display: flex;
+  flex-direction: row;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.65rem;
+  padding: 0.8rem 0.95rem;
+  border: 0;
+  border-right: 1px solid var(--border-lt);
+  border-bottom: 1px solid var(--border-lt);
+  border-radius: 0;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 140ms ease-out, transform 120ms ease-out;
+}
+
+@media (min-width: 768px) {
+  .sales-pilot-stat {
+    border-bottom: 0;
+  }
+
+  .sales-pilot-stat:last-child {
+    border-right: 0;
+  }
+}
+
+@media (max-width: 767px) {
+  .sales-pilot-stat:nth-child(2n) {
+    border-right: 0;
+  }
+
+  .sales-pilot-stat:nth-last-child(-n + 2) {
+    border-bottom: 0;
+  }
+}
+
+.sales-pilot-stat:hover {
+  background: color-mix(in srgb, var(--text-1) 4%, var(--bg-card));
+}
+
+.sales-pilot-stat:active {
+  transform: scale(0.99);
+}
+
+.sales-pilot-stat:focus-visible {
+  outline: 2px solid var(--success);
+  outline-offset: -2px;
+  z-index: 1;
+}
+
+.sales-pilot-stat.is-active {
+  background: color-mix(in srgb, var(--success) 8%, var(--bg-card));
+  box-shadow: inset 0 -3px 0 var(--success);
+}
+
+.sales-pilot-stat.tone-warning .sales-pilot-stat-value {
+  color: var(--warning-text);
+}
+
+.sales-pilot-stat.tone-success .sales-pilot-stat-value {
+  color: var(--success-text);
+}
+
+.sales-pilot-stat-value {
+  order: 2;
+  font-size: 1.35rem;
+  font-weight: 750;
+  line-height: 1;
+  letter-spacing: -0.03em;
+  color: var(--text-1);
+  font-variant-numeric: tabular-nums;
+  font-family: var(--font-dm-mono), ui-monospace, monospace;
+}
+
+.sales-pilot-stat-label {
+  order: 1;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-3);
+  max-width: 7.75rem;
+  line-height: 1.25;
+}
+
+.sales-pilot-surface {
+  border-color: color-mix(in srgb, var(--text-1) 12%, var(--border));
+  border-radius: 0.55rem;
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--text-1) 6%, transparent);
+}
+
+.sales-pilot .erp-ops-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  align-items: stretch;
+}
+
+.sales-pilot .erp-ops-summary-sep {
+  display: none;
+}
+
+.sales-pilot .erp-ops-summary-plain,
+.sales-pilot .erp-ops-summary-btn {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.1rem;
+  padding: 0.5rem 0.7rem;
+  border: 1px solid var(--border);
+  border-radius: 0.4rem;
+  background: var(--bg-card);
+  min-width: 5.75rem;
+}
+
+.sales-pilot .erp-ops-summary-btn:hover {
+  border-color: var(--success);
+  background: color-mix(in srgb, var(--success) 7%, var(--bg-card));
+}
+
+.sales-pilot .erp-ops-summary-value {
+  font-size: 1rem;
+  font-weight: 750;
+  color: var(--text-1);
+  font-variant-numeric: tabular-nums;
+  font-family: var(--font-dm-mono), ui-monospace, monospace;
+}
+
+.sales-pilot .erp-ops-summary-label {
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--text-4);
+}
+
+.sales-pilot .erp-table-page-title {
+  font-size: 1.1rem;
+  font-weight: 750;
+  color: var(--text-1);
+  letter-spacing: -0.02em;
+}
+
+.sales-pilot .dt-toolbar {
+  background: color-mix(in srgb, var(--text-1) 3.5%, var(--bg-surface));
+  border-bottom: 1px solid var(--border-lt);
+}
+
+.sales-pilot .dt-wrap > table thead th,
+.sales-pilot .dt-scroll > table thead th {
+  background: color-mix(in srgb, var(--text-1) 5%, var(--table-head-bg));
+  font-size: 0.68rem;
+  letter-spacing: 0.045em;
+  text-transform: uppercase;
+  color: var(--text-2);
+  font-weight: 750;
+}
+
+.sales-pilot .dt-wrap > table tbody tr:hover,
+.sales-pilot .dt-scroll > table tbody tr:hover {
+  background: color-mix(in srgb, var(--success) 6%, var(--bg-card));
+}
+
+.sales-pilot .sales-kanban-card {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--border-lt);
+  box-shadow: none;
+  transition: border-color 140ms ease-out, background-color 140ms ease-out, transform 120ms ease-out;
+}
+
+.sales-pilot .sales-kanban-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: var(--border-strong);
+}
+
+.sales-pilot .sales-kanban-card--quotation::before { background: var(--warning); }
+.sales-pilot .sales-kanban-card--quotation_sent::before { background: var(--primary); }
+.sales-pilot .sales-kanban-card--sale::before { background: var(--success); }
+.sales-pilot .sales-kanban-card--cancelled::before { background: var(--text-4); }
+
+.sales-pilot .sales-kanban-card:hover {
+  border-color: color-mix(in srgb, var(--text-1) 22%, var(--border));
+  background: color-mix(in srgb, var(--text-1) 2%, var(--bg-card));
+}
+
+.sales-pilot .sales-kanban-card:active {
+  transform: scale(0.99);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sales-pilot-stat,
+  .sales-pilot-stat:active,
+  .sales-pilot .sales-kanban-card,
+  .sales-pilot .sales-kanban-card:active {
+    transition: none;
+    transform: none;
+  }
+}
