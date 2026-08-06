@@ -2426,12 +2426,18 @@ function NewQuotationForm({
               {fieldErrors.lines}
             </p>
           )}
-          <p className="text-[10px] text-[var(--text-4)]">
-            Tax and discount changes affect posted revenue and margin. Review line-level values before saving.
+          <p className="text-[10px] text-[var(--text-4)] leading-snug">
+            <span className="sm:hidden">Tax and discount affect revenue — review before saving.</span>
+            <span className="hidden sm:inline">Tax and discount changes affect posted revenue and margin. Review line-level values before saving.</span>
           </p>
           <div className="sales-quote-lines border border-[var(--border-lt)] overflow-hidden">
+            {newDraftLines.length === 0 ? (
+              <div className="sales-quote-lines-empty px-4 py-8 text-center text-xs text-[var(--text-4)]">
+                No products yet — add one below.
+              </div>
+            ) : (
             <div className="dt-scroll">
-              <table data-no-responsive className="w-full text-left border-collapse">
+              <table data-no-responsive className="w-full text-left border-collapse min-w-[36rem]">
                 <thead>
                   <tr className="sales-quote-lines-head border-b border-[var(--border-lt)]">
                     <th className="px-3 py-2.5 text-[10px] font-bold uppercase text-[var(--text-4)]">Product</th>
@@ -2571,16 +2577,10 @@ function NewQuotationForm({
                       </tr>
                     )
                   })}
-                  {newDraftLines.length === 0 && (
-                    <tr>
-                      <td colSpan={canEditDiscount ? 8 : 7} className="sales-quote-lines-empty px-4 py-8 text-center text-xs text-[var(--text-4)]">
-                        No products yet — add one below.
-                      </td>
-                    </tr>
-                  )}
                 </tbody>
               </table>
             </div>
+            )}
             <div className="px-3 py-2.5 border-t border-[var(--border-lt)] bg-[color-mix(in_srgb,var(--navy)_3.5%,var(--bg-surface))]">
               <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
                 <button type="button" onClick={addDraftLine} className="sales-quote-link flex items-center gap-2 text-xs hover:underline font-semibold"><Fa icon={faPlus} className="text-[10px]" />Add a product</button>
