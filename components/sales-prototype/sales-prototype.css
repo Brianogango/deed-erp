@@ -87,8 +87,19 @@
 }
 
 .sales-workbench .erp-table-page-title,
-.sales-workbench .erp-ops-summary {
+.sales-workbench .erp-ops-summary,
+.sales-workbench .table-page-layout > .flex.items-center.justify-between,
+.sales-workbench [class*='TablePage'] > h2 {
   display: none !important;
+}
+
+/* Neutralize leftover bulky Tailwind cards inside sales workbench */
+.sales-workbench .rounded-2xl {
+  border-radius: var(--sp-radius) !important;
+}
+.sales-workbench .card {
+  border-radius: var(--sp-radius) !important;
+  box-shadow: none !important;
 }
 
 .sales-workbench .dt-toolbar {
