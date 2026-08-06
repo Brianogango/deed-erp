@@ -603,10 +603,6 @@ export function Dashboard() {
     }
 
     if (isDirector || isAdminOfficer) {
-      const pendingSignOff = saleOrders.filter(s => s.approvalStatus === 'pending')
-      if (pendingSignOff.length > 0) {
-        items.push({ key: 'sales-sign-off', title: `${pendingSignOff.length} sales order${pendingSignOff.length > 1 ? 's' : ''} awaiting internal sign-off`, sub: 'Approve discounts/terms in Sales', tone: 'warn', module: 'sales', path: '/sales?tab=list' })
-      }
       const readyDeposits = deposits.filter(d => d.status === 'fully_paid')
       if (readyDeposits.length > 0) {
         items.push({ key: 'deposits-ready', title: `${readyDeposits.length} deposit${readyDeposits.length > 1 ? 's' : ''} ready to collect`, sub: 'Fully paid — arrange customer collection', tone: 'info', module: 'deposits', path: '/deposits' })

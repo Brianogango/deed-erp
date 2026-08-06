@@ -70,10 +70,9 @@ export function SalesRecordHeader({
   onStepBlocked,
 }: Props) {
   const currentIdx = saleStepIndex(order.status)
-  const approvalBlocksTransition = order.approvalStatus === 'pending'
 
   const isStepClickable = (step: string, index: number) => {
-    if (order.status === 'cancelled' || approvalBlocksTransition) return false
+    if (order.status === 'cancelled') return false
     if (index !== currentIdx + 1) return false
     if (!order.lines.length) return false
     if (step === 'quotation_sent') return order.status === 'quotation'
@@ -169,21 +168,6 @@ export function SalesRecordHeader({
         <div>
           <div className="flex items-center gap-2 flex-wrap">
             <h2 className="text-xl font-bold text-[var(--text-1)]">{order.ref}</h2>
-            {order.approvalStatus === 'pending' && (
-              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
-                Awaiting Approval
-              </span>
-            )}
-            {order.approvalStatus === 'approved' && isQuotationStage(order.status) && (
-              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                Approved — ready to confirm
-              </span>
-            )}
-            {order.approvalStatus === 'rejected' && isQuotationStage(order.status) && (
-              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-50 text-red-600 border border-red-200">
-                Approval Rejected — revise
-              </span>
-            )}
             {order.locked && (
               <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-gray-100 text-gray-600 border border-gray-200">
                 Locked

@@ -6,17 +6,15 @@ import { canManageHRRole, getFirstAllowedModule, hasModuleAccess as userHasModul
 import { mergeCatalogProducts, mergeProductsRemoteState } from '@/lib/catalog-merge'
 import { bootApiGroupsForRoute, remainingBootApiGroups, type BootApiGroup } from '@/lib/boot-apis'
 import { documentMoneySnapshot, FUNCTIONAL_CURRENCY } from '@/lib/currency'
-import { needsSpecialPricingApproval, resolveListPrice } from '@/lib/pricing/pricelist'
+import { resolveListPrice } from '@/lib/pricing/pricelist'
 import type { CreateUserInput, ModuleId as AuthModuleId, PublicUser, UpdateUserInput, UserRole as AuthUserRole } from '@/lib/auth/types'
 import { calcStockByLocation as _calcStockByLocation, upsertBulkStock as _upsertBulkStock, aggregatePayroll } from '@/lib/business-logic'
 import { calculatePayroll } from '@/lib/payroll'
 import {
   APPROVAL_RULES,
-  computeConfirmBackorderLines,
   createApprovalRequest,
   getPendingApprovals,
   processApproval,
-  validateSalesOrderCreation,
 } from '@/lib/sales-approvals'
 import {
   advanceExpenseApproval,
@@ -9737,208 +9735,37 @@ const storeCtx: AppState = {
       confirmingSaleOrderIds.add(id)
       try {
       const orderLines = so.lines.filter((line: any) => line.lineType !== 'section')
-      const salesApprovalRequests = approvalRequests.filter(r =>
-        r.documentId === id && ['discount', 'credit_override', 'backorder', 'special_pricing'].includes(r.type)
+
+      // Sales confirmation no longer waits on special pricing / backorder /
+      // discount / credit approval gates — cancel any leftover requests so
+      // stuck quotations (e.g. pending Special Pricing) can confirm.
+      const leftoverSalesApprovals = approvalRequests.filter(r =>
+        r.documentId === id &&
+        ['discount', 'credit_override', 'backorder', 'special_pricing'].includes(r.type) &&
+        r.status === 'pending',
       )
-      if (salesApprovalRequests.some(r => r.status === 'rejected')) {
-        showToast(`${so.ref} has a rejected approval request. Revise the order before confirming.`, 'error')
-        return
-      }
-
-      // Free sellable qty: serial SKUs use available/in_stock only (matches Inventory Available).
-      // On-hand stockQty also counts assigned / repair / refurb and overstates free stock.
-      const freeQtyByProductId: Record<string, number> = {}
-      for (const line of orderLines) {
-        if (!line.productId || freeQtyByProductId[line.productId] !== undefined) continue
-        const product = prodRef.current.find(p => p.id === line.productId)
-        if (!product || product.unit === 'service') continue
-        if (product.requiresSerial) {
-          freeQtyByProductId[line.productId] = serialRef.current.filter(s =>
-            s.productId === line.productId &&
-            (s.status === 'available' || s.status === 'in_stock') &&
-            ['warehouse', 'shop', 'repair_unit'].includes(s.location),
-          ).length
-        } else {
-          const locs = calcStockByLocation(product, serialRef.current, bulkStock, line.productId)
-          freeQtyByProductId[line.productId] = locs.warehouse + locs.shop + locs.repair_unit
-        }
-      }
-      const stockCheckOpts = { excludeReferenceId: id, freeQtyByProductId }
-      const liveBackorderLines = computeConfirmBackorderLines(
-        orderLines,
-        prodRef.current,
-        stockReservations,
-        stockCheckOpts,
-      )
-
-      // Drop stale backorder approvals when stock is actually free (e.g. self-reservation bug).
-      let activeSalesApprovals = salesApprovalRequests
-      if (liveBackorderLines.length === 0) {
-        const staleBackorders = salesApprovalRequests.filter(r => r.type === 'backorder' && r.status === 'pending')
-        if (staleBackorders.length > 0) {
-          const staleIds = new Set(staleBackorders.map(r => r.id))
-          setApprovalRequests(prev => prev.map(r =>
-            staleIds.has(r.id)
-              ? { ...r, status: 'cancelled' as const, notes: 'Auto-cleared: stock available for this order' }
-              : r,
-          ))
-          activeSalesApprovals = salesApprovalRequests.filter(r => !staleIds.has(r.id))
-          const stillPending = activeSalesApprovals.some(r => r.status === 'pending')
-          setSaleOrders(prev => prev.map(s => {
-            if (s.id !== id) return s
-            const updated = {
-              ...s,
-              backorderApprovalId: undefined,
-              backorderLines: undefined,
-              approvalStatus: stillPending
-                ? 'pending' as const
-                : activeSalesApprovals.some(r => r.status === 'approved')
-                  ? 'approved' as const
-                  : 'not_required' as const,
-              approvalRequiredReason: stillPending ? s.approvalRequiredReason : undefined,
-            }
-            sync(`/api/sale-orders/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
-            return updated
-          }))
-        }
-      }
-
-      if (activeSalesApprovals.some(r => r.status === 'pending')) {
-        showToast(`${so.ref} is awaiting approval before confirmation`, 'info')
-        return
-      }
-
-      const approvers = users.map(u => ({ id: u.id, name: u.name, role: u.role }))
-      const newApprovalRequests: ApprovalRequest[] = []
-      const existingTypes = new Set(activeSalesApprovals.map(r => r.type))
-      const maxDiscount = orderLines.reduce((max, line) => Math.max(max, Number(line.discount) || 0), 0)
-      if (systemSettings.salesDiscountControl && maxDiscount > 10 && !existingTypes.has('discount')) {
-        const discountDetails = {
-          reason: `Sales order ${so.ref} includes discount above 10%`,
-          discountPercent: maxDiscount,
-          discountAmount: orderLines.reduce((sum, line) => {
-            const listTotal = Number(line.unitPrice || 0) * Number(line.qty || 0)
-            return sum + Math.max(0, listTotal - Number(line.subtotal || 0))
-          }, 0),
-          currentValue: so.total,
-          proposedValue: so.total,
-        }
-        newApprovalRequests.push(createApprovalRequest('discount', 'sales_order', so.id, so.ref, user.id, user.name, discountDetails, approvers))
-      }
-
-      if (systemSettings.salesPricelists && !existingTypes.has('special_pricing')) {
-        const specialLines = orderLines.filter((line: any) => {
-          const product = prodRef.current.find(p => p.id === line.productId)
-          if (!product) return false
-          const priced = resolveListPrice({
-            product,
-            pricelist: so.pricelist,
-            qty: line.qty,
-            customPrice: line.unitPrice,
-          })
-          return needsSpecialPricingApproval(priced, Number(line.discount) || 0)
-        })
-        if (specialLines.length > 0) {
-          const sample = specialLines[0]
-          const product = prodRef.current.find(p => p.id === sample.productId)
-          const priced = product
-            ? resolveListPrice({ product, pricelist: so.pricelist, qty: sample.qty, customPrice: sample.unitPrice })
-            : null
-          newApprovalRequests.push(createApprovalRequest('special_pricing', 'sales_order', so.id, so.ref, user.id, user.name, {
-            reason: `Sales order ${so.ref} has unit price below pricelist (${so.pricelist || 'RETAIL'})`,
-            originalPrice: priced?.listPrice ?? sample.listPrice,
-            specialPrice: Number(sample.unitPrice) || 0,
-            currentValue: priced?.listPrice,
-            proposedValue: Number(sample.unitPrice) || 0,
-          }, approvers))
-        }
+      if (leftoverSalesApprovals.length > 0) {
+        const leftoverIds = new Set(leftoverSalesApprovals.map(r => r.id))
+        setApprovalRequests(prev => prev.map(r =>
+          leftoverIds.has(r.id)
+            ? { ...r, status: 'cancelled' as const, notes: 'Auto-cleared: sales confirmation approvals disabled' }
+            : r,
+        ))
       }
 
       const customerCredit = (() => {
-        const contact = contacts.find(c => c.id === so.customerId)
         const unpaidInvoices = invoices.filter(inv =>
           inv.partnerId === so.customerId &&
           inv.type === 'customer_invoice' &&
           isOpenInvoice(inv)
         )
-        const outstandingBalance = unpaidInvoices.reduce((sum, inv) => sum + Math.max(0, inv.total - inv.amountPaid), 0)
         const overdueBalance = unpaidInvoices
           .filter(inv => inv.dueDate < now())
           .reduce((sum, inv) => sum + Math.max(0, inv.total - inv.amountPaid), 0)
-        const creditLimit = contact?.creditLimit ?? 0
-        const creditAvailable = creditLimit > 0 ? Math.max(0, creditLimit - outstandingBalance) : -1
-        return { creditLimit, creditAvailable, outstandingBalance, overdueBalance, creditLimitExceeded: creditLimit > 0 && outstandingBalance + so.total > creditLimit }
+        return { overdueBalance }
       })()
       if (customerCredit.overdueBalance > 0) {
         showToast(`Account locked by overdue balance of ${fmtKes(customerCredit.overdueBalance)}. Clear overdue invoices before confirming.`, 'error')
-        return
-      }
-      if (customerCredit.creditLimitExceeded && !existingTypes.has('credit_override')) {
-        newApprovalRequests.push(createApprovalRequest('credit_override', 'sales_order', so.id, so.ref, user.id, user.name, {
-          reason: `Credit limit override required for ${so.customerName}`,
-          creditRequested: so.total,
-          creditAvailable: customerCredit.creditAvailable,
-          currentValue: customerCredit.outstandingBalance,
-          proposedValue: customerCredit.outstandingBalance + so.total,
-        }, approvers))
-      }
-
-      const stockValidation = validateSalesOrderCreation(
-        orderLines,
-        prodRef.current,
-        stockReservations,
-        {
-          allowSaleWithoutStock: false,
-          allowBackorders: true,
-          requireSerialForTrackedItems: false,
-        },
-        stockCheckOpts,
-      )
-      const backorderLines = liveBackorderLines
-      if (stockValidation.requiresApproval && !existingTypes.has('backorder')) {
-        newApprovalRequests.push(createApprovalRequest('backorder', 'sales_order', so.id, so.ref, user.id, user.name, {
-          reason: stockValidation.approvalReasons.join('; '),
-          backorderQty: backorderLines.reduce((sum, line) => sum + line.qtyBackordered, 0),
-          currentValue: backorderLines.reduce((sum, line) => sum + line.qtyAvailable, 0),
-          proposedValue: backorderLines.reduce((sum, line) => sum + line.qtyOrdered, 0),
-        }, approvers))
-      }
-
-      if (newApprovalRequests.length > 0) {
-        const allRequestIds = [...activeSalesApprovals.map(r => r.id), ...newApprovalRequests.map(r => r.id)]
-        setApprovalRequests(prev => [...newApprovalRequests, ...prev])
-        const approvalRequiredReason = newApprovalRequests.map(req => `${req.type}: ${req.details.reason}`).join(' | ')
-        setSaleOrders(prev => prev.map(s => {
-          if (s.id !== id) return s
-          // Odoo has no approval stage: the record stays a Quotation and the
-          // approval gate is carried by approvalStatus (shown as a badge).
-          const updated = {
-            ...s,
-            approvalStatus: 'pending' as const,
-            approvalRequestIds: allRequestIds,
-            approvalRequiredReason,
-            backorderLines: backorderLines.length ? backorderLines : s.backorderLines,
-            discountApprovalId: newApprovalRequests.find(r => r.type === 'discount')?.id ?? s.discountApprovalId,
-            creditOverrideApprovalId: newApprovalRequests.find(r => r.type === 'credit_override')?.id ?? s.creditOverrideApprovalId,
-            backorderApprovalId: newApprovalRequests.find(r => r.type === 'backorder')?.id ?? s.backorderApprovalId,
-          }
-          sync(`/api/sale-orders/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
-          return updated
-        }))
-        newApprovalRequests.forEach(req => {
-          notifyUsers({
-            recipients: req.approvers[0]?.approverIds ?? [],
-            type: 'system',
-            title: `Approval needed: ${so.ref}`,
-            body: req.details.reason,
-            module: 'sales',
-            icon: '⚠️',
-            entityKey: `so:${id}:approval:${req.id}`,
-            excludeUserId: currentUserId,
-          })
-        })
-        addAuditLog('sales_approval_requested', so.ref, approvalRequiredReason)
-        showToast(`${so.ref} sent for approval`, 'info')
         return
       }
 
@@ -9996,7 +9823,13 @@ const storeCtx: AppState = {
           confirmedById: user.id,
           confirmedByName: user.name,
           approvedBy: user.id,
-          approvalStatus: salesApprovalRequests.length ? 'approved' as const : 'not_required' as const,
+          approvalStatus: 'not_required' as const,
+          approvalRequiredReason: undefined,
+          approvalRequestIds: [],
+          discountApprovalId: undefined,
+          creditOverrideApprovalId: undefined,
+          backorderApprovalId: undefined,
+          backorderLines: undefined,
           locked: systemSettings.salesLockConfirmed || undefined,
           stockReservationIds: s.stockReservationIds ?? [],
           deliveryId: del.id,
@@ -10015,7 +9848,13 @@ const storeCtx: AppState = {
         confirmedById: user.id,
         confirmedByName: user.name,
         approvedBy: user.id,
-        approvalStatus: salesApprovalRequests.length ? 'approved' as const : 'not_required' as const,
+        approvalStatus: 'not_required' as const,
+        approvalRequiredReason: null,
+        approvalRequestIds: [],
+        discountApprovalId: null,
+        creditOverrideApprovalId: null,
+        backorderApprovalId: null,
+        backorderLines: null,
         locked: systemSettings.salesLockConfirmed || undefined,
         deliveryId: del.id,
         lockVersion: so.lockVersion,
