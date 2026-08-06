@@ -24,7 +24,20 @@ Operate ERP audit for Deed sales/ops users — restrain variance, maximize densi
 3. Impeccable detector on Sales sources
 4. Peer scan: Dashboard / Inventory hardcodes
 
-**Screenshot note:** Live authenticated capture blocked this session (local Prisma client init / e2e user). Audit is code + CSS + prior pilot docs. Recommend attaching desktop/mobile Sales shots before Phase 4 approval.
+**Screenshot note:** Live captures saved under `/opt/cursor/artifacts/ux-sales-phase2/` (desktop list, kanban, mobile list, login). Local data showed Quotations empty / Orders=3.
+
+## Screenshot findings (2026-08-06)
+
+| Shot | Finding |
+|------|---------|
+| `sales-list-desktop.png` | Dual chrome: topbar “Sales & CRM” **and** slate-ink module header “Sales” — competing titles |
+| same | Pipeline rail **plus** OperationalSummary cards (“0 Quotations / 3 Sales Orders”) — duplicate metrics |
+| same | Emerald CTA + ink header read clearly; empty state OK but Quotations tab while Orders hold data is easy to miss |
+| `sales-kanban-desktop.png` | Kanban columns empty on Quotations; top status treatment present; large empty whitespace under density dial 8 |
+| `sales-list-mobile.png` | Pipeline becomes 2×2 cards; italic zero stats look weaker than bold “3”; sync-conflict banner competes with header |
+| `login.png` | **Glassmorphism + glow + large radius** — consumer/marketing pattern; conflicts with Operate ERP brief (out of Sales module but brand-first surface) |
+
+Artifacts: `/opt/cursor/artifacts/ux-sales-phase2/`
 
 ---
 
@@ -67,11 +80,14 @@ Operate ERP audit for Deed sales/ops users — restrain variance, maximize densi
 
 | Severity | Issue | Evidence |
 |----------|-------|----------|
+| Medium | Dual titles: topbar breadcrumb + module ink header both claim “Sales” | Screenshots |
+| Medium | Duplicate metrics: pipeline rail + OperationalSummary stat cards | Screenshots |
 | Medium | Detector `gray-on-color` on blue-tinted surface | Sales.tsx ~2845 |
 | Medium | Module still ~3k lines — visual + logic coupled; restyle risk if CSS overrides fight Tailwind utilities | `Sales.tsx` |
 | Low | Action dropdown `rounded-xl` + `shadow-xl` slightly louder than density dial | Sales.tsx menu |
 | Low | Mixed status rendering (`StatusBadge` vs inline amber text) | List columns |
 | Low | `.card` wrapper around list surface — acceptable as interaction container; avoid stacking more cards in header | `sales-pilot-surface` |
+| Low | Login page glassmorphism/glow (peer surface) | `login.png` |
 | Info | Pilot CSS uses `!important` on title sizes — brittle if ModuleHeader markup changes | `globals.css` `.sales-pilot` |
 
 ### Anti-patterns checked
@@ -121,12 +137,12 @@ Operate ERP audit for Deed sales/ops users — restrain variance, maximize densi
 | Task efficiency | 4 | Pipeline filters + dense table |
 | Hierarchy | 4 | Ink header reads immediately |
 | Brand alignment | 4 | Emerald money accent; not purple |
-| Accessibility | 3 | One detector hit; need live a11y pass |
-| Responsiveness | 3 | Contracts exist; need live mobile shots |
-| Table usability | 4 | Shared DataTable |
-| Form / detail UX | 4 | Stepper + smart buttons |
-| Consistency vs peers | 3 | Pilot ahead of shell average |
-| **Overall** | **26/40** | **Acceptable → Strong** for Sales pilot |
+| Accessibility | 3 | One detector hit; live focus pass still needed |
+| Responsiveness | 3 | Mobile works; pipeline card grid + dual metrics eat viewport |
+| Table usability | 4 | Shared DataTable; empty Quotations while Orders=3 is a UX trap |
+| Form / detail UX | 4 | Stepper + smart buttons (detail not captured — no row open) |
+| Consistency vs peers | 3 | Pilot ahead of shell; login still glass/glow |
+| **Overall** | **25/40** | **Acceptable** — strong signature, clutter from dual titles + duplicate stats |
 
 ---
 

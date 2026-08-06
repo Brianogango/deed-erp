@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Direction A — Conservative Sales</title>
+<style>
+  :root {
+    --primary:#2563EB; --navy:#1A1F5E; --success:#059669;
+    --bg:#F1F5F9; --card:#fff; --text:#0F172A; --muted:#64748B; --border:#CBD5E1;
+    --ink:#0F172A; --font:Inter,system-ui,sans-serif; --mono:ui-monospace,monospace;
+  }
+  *{box-sizing:border-box} body{margin:0;font:13px/1.4 var(--font);background:var(--bg);color:var(--text)}
+  .shell{display:grid;grid-template-columns:220px 1fr;min-height:100vh}
+  .side{background:linear-gradient(180deg,#12183a,#1A1F5E);color:#fff;padding:16px 12px}
+  .side .brand{font-weight:700;letter-spacing:.02em;margin-bottom:20px;font-size:12px;opacity:.9}
+  .nav{display:flex;flex-direction:column;gap:4px}
+  .nav a{color:rgba(255,255,255,.75);text-decoration:none;padding:8px 10px;border-radius:6px;font-size:12px}
+  .nav a.active{background:rgba(37,99,235,.45);color:#fff}
+  .main{display:flex;flex-direction:column}
+  .top{height:48px;background:#fff;border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 16px;gap:12px;color:var(--muted);font-size:12px}
+  .page{padding:16px;max-width:1440px}
+  .header{background:var(--ink);color:#fff;border-radius:8px;padding:14px 16px;display:flex;justify-content:space-between;align-items:center}
+  .header h1{margin:0;font-size:20px;font-weight:700;letter-spacing:-.02em}
+  .header p{margin:2px 0 0;font-size:12px;opacity:.7}
+  .btn{background:var(--success);color:#fff;border:0;border-radius:6px;padding:8px 14px;font-weight:650;font-size:12px;cursor:pointer}
+  .tabs{display:flex;gap:16px;margin:12px 0 0;border-bottom:1px solid var(--border)}
+  .tabs span{padding:8px 0;font-weight:600;font-size:12px;color:var(--muted)}
+  .tabs .on{color:var(--success);border-bottom:2px solid var(--success)}
+  .rail{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--border);border:1px solid var(--border);border-radius:8px;overflow:hidden;margin:12px 0}
+  .rail button{background:#fff;border:0;padding:10px 12px;text-align:left;cursor:pointer}
+  .rail button:hover{background:#f8fafc}
+  .rail .lab{display:block;font-size:10px;font-weight:700;color:var(--muted);letter-spacing:.04em}
+  .rail .val{font-family:var(--mono);font-size:18px;font-weight:650;font-variant-numeric:tabular-nums}
+  .rail .active{box-shadow:inset 0 -2px 0 var(--success);background:#ecfdf5}
+  .toolbar{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0;align-items:center}
+  .toolbar input,.toolbar select{border:1px solid var(--border);border-radius:6px;padding:8px 10px;font:inherit;background:#fff}
+  .toolbar input{min-width:220px}
+  table{width:100%;border-collapse:collapse;background:#fff;border:1px solid var(--border);border-radius:8px;overflow:hidden}
+  th{text-align:left;font-size:11px;color:var(--muted);background:#f8fafc;padding:10px 12px;border-bottom:1px solid var(--border)}
+  td{padding:12px;border-bottom:1px solid #e2e8f0;font-size:12px}
+  tr:hover td{background:#ecfdf5}
+  .mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+  .badge{display:inline-block;padding:2px 8px;border-radius:999px;font-size:10px;font-weight:700;background:#ecfdf5;color:#047857}
+  .tag{position:fixed;top:8px;right:8px;background:#0f172a;color:#fff;font-size:11px;padding:6px 10px;border-radius:6px;z-index:9}
+</style>
+</head>
+<body>
+<div class="tag">Direction A — Conservative · refine incumbent</div>
+<div class="shell">
+  <aside class="side">
+    <div class="brand">DEED ERP</div>
+    <nav class="nav">
+      <a href="#">Dashboard</a>
+      <a class="active" href="#">Sales</a>
+      <a href="#">Operations</a>
+      <a href="#">Finance</a>
+    </nav>
+  </aside>
+  <div class="main">
+    <div class="top">Sales · Quotations &amp; orders</div>
+    <div class="page">
+      <header class="header">
+        <div>
+          <h1>Sales <span style="opacity:.55;font-size:13px;font-weight:600">3</span></h1>
+          <p>Quotations · orders · deliveries · invoicing</p>
+        </div>
+        <button class="btn">+ New quotation</button>
+      </header>
+      <div class="tabs"><span>Quotations (0)</span><span class="on">Orders (3)</span></div>
+      <div class="rail" aria-label="Pipeline">
+        <button type="button"><span class="lab">DRAFT QUOTES</span><span class="val">0</span></button>
+        <button type="button"><span class="lab">SENT</span><span class="val">0</span></button>
+        <button type="button" class="active"><span class="lab">CONFIRMED</span><span class="val">3</span></button>
+        <button type="button"><span class="lab">TO INVOICE</span><span class="val">0</span></button>
+      </div>
+      <div class="toolbar">
+        <input placeholder="Search order or customer…"/>
+        <select><option>All statuses</option></select>
+      </div>
+      <table>
+        <thead><tr><th>Ref</th><th>Customer</th><th>Date</th><th>Items</th><th>Total</th><th>Status</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">SO/2026/0029</td><td>Beyond Matrix Limited</td><td>06 Aug</td><td>4</td><td class="mono">132,000</td><td><span class="badge">Sale order</span></td></tr>
+          <tr><td class="mono">SO/2026/0025</td><td>Kevin Mbugua</td><td>06 Aug</td><td>2</td><td class="mono">51,812</td><td><span class="badge">Sale order</span></td></tr>
+          <tr><td class="mono">SO/2026/0020</td><td>NCBA Group</td><td>05 Aug</td><td>2</td><td class="mono">125,280</td><td><span class="badge">Sale order</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+</body>
+</html>

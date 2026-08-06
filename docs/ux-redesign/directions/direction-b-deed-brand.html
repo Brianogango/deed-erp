@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Direction B — Deed brand Sales</title>
+<style>
+  :root {
+    --primary:#2563EB; --navy:#1A1F5E; --navy-dark:#161A50; --cyan:#00B0D7; --success:#059669;
+    --bg:#EEF2F7; --card:#fff; --text:#0F172A; --muted:#475569; --border:#CBD5E1;
+    --font:Inter,system-ui,sans-serif; --mono:ui-monospace,monospace;
+  }
+  *{box-sizing:border-box} body{margin:0;font:13px/1.4 var(--font);background:var(--bg);color:var(--text)}
+  .shell{display:grid;grid-template-columns:220px 1fr;min-height:100vh}
+  .side{background:var(--navy-dark);color:#fff;padding:16px 12px}
+  .side .brand{font-weight:800;margin-bottom:18px;font-size:13px}
+  .side .brand span{color:var(--cyan)}
+  .nav a{display:block;color:rgba(255,255,255,.72);text-decoration:none;padding:8px 10px;border-radius:6px;font-size:12px;margin-bottom:2px}
+  .nav a.active{background:rgba(0,176,215,.18);color:#fff;box-shadow:inset 3px 0 0 var(--cyan)}
+  .main{display:flex;flex-direction:column}
+  .top{height:48px;background:#fff;border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 16px;color:var(--muted);font-size:12px}
+  .page{padding:0 0 24px}
+  .header{background:linear-gradient(135deg,var(--navy) 0%,var(--navy-dark) 55%,#0c1230 100%);color:#fff;padding:18px 20px;display:flex;justify-content:space-between;align-items:center;border-radius:0}
+  .header h1{margin:0;font-size:22px;font-weight:750;letter-spacing:-.025em}
+  .header p{margin:4px 0 0;font-size:12px;color:rgba(255,255,255,.7)}
+  .icon{width:36px;height:36px;border-radius:8px;background:rgba(0,176,215,.25);border:1px solid rgba(0,176,215,.5);display:inline-flex;align-items:center;justify-content:center;margin-right:10px;font-size:14px}
+  .btn{background:var(--cyan);color:#04202a;border:0;border-radius:6px;padding:9px 16px;font-weight:750;font-size:12px;cursor:pointer}
+  .body{padding:12px 20px;max-width:1440px}
+  .tabs{display:flex;gap:18px;border-bottom:1px solid var(--border);margin-bottom:12px}
+  .tabs span{padding:10px 0;font-weight:650;font-size:12px;color:var(--muted)}
+  .tabs .on{color:var(--navy);border-bottom:2px solid var(--cyan)}
+  .rail{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px}
+  .rail button{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:10px 12px;text-align:left;cursor:pointer}
+  .rail .active{border-color:color-mix(in srgb,var(--cyan) 55%,var(--border));background:color-mix(in srgb,var(--cyan) 8%,#fff);box-shadow:inset 0 -2px 0 var(--cyan)}
+  .lab{display:block;font-size:10px;font-weight:700;color:var(--muted);letter-spacing:.05em}
+  .val{font-family:var(--mono);font-size:18px;font-weight:700;font-variant-numeric:tabular-nums;color:var(--navy)}
+  .toolbar{display:flex;gap:8px;margin-bottom:10px}
+  .toolbar input,.toolbar select{border:1px solid var(--border);border-radius:6px;padding:8px 10px;font:inherit;background:#fff}
+  table{width:100%;border-collapse:collapse;background:#fff;border:1px solid var(--border);border-radius:8px;overflow:hidden}
+  th{text-align:left;font-size:11px;color:var(--muted);background:color-mix(in srgb,var(--navy) 4%,#fff);padding:10px 12px;border-bottom:1px solid var(--border)}
+  td{padding:12px;border-bottom:1px solid #e2e8f0;font-size:12px}
+  tr:hover td{background:color-mix(in srgb,var(--cyan) 6%,#fff)}
+  .mono{font-family:var(--mono);font-variant-numeric:tabular-nums;font-weight:600;color:var(--primary)}
+  .badge{display:inline-block;padding:2px 8px;border-radius:6px;font-size:10px;font-weight:700;background:rgba(0,176,215,.12);color:#0e7490}
+  .tag{position:fixed;top:8px;right:8px;background:var(--navy);color:#fff;font-size:11px;padding:6px 10px;border-radius:6px;z-index:9}
+</style>
+</head>
+<body>
+<div class="tag">Direction B — Deed navy + cyan brand</div>
+<div class="shell">
+  <aside class="side">
+    <div class="brand">DEED <span>ERP</span></div>
+    <nav class="nav">
+      <a href="#">Dashboard</a>
+      <a class="active" href="#">Sales</a>
+      <a href="#">Operations</a>
+      <a href="#">Finance</a>
+    </nav>
+  </aside>
+  <div class="main">
+    <div class="top">Selling · Sales</div>
+    <header class="header">
+      <div style="display:flex;align-items:center">
+        <span class="icon" aria-hidden="true">◎</span>
+        <div>
+          <h1>Sales</h1>
+          <p>Quotations · orders · deliveries · invoicing</p>
+        </div>
+      </div>
+      <button class="btn">+ New quotation</button>
+    </header>
+    <div class="body">
+      <div class="tabs"><span>Quotations (0)</span><span class="on">Orders (3)</span></div>
+      <div class="rail">
+        <button type="button"><span class="lab">DRAFT QUOTES</span><span class="val">0</span></button>
+        <button type="button"><span class="lab">SENT</span><span class="val">0</span></button>
+        <button type="button" class="active"><span class="lab">CONFIRMED</span><span class="val">3</span></button>
+        <button type="button"><span class="lab">TO INVOICE</span><span class="val">0</span></button>
+      </div>
+      <div class="toolbar">
+        <input placeholder="Search order or customer…"/>
+        <select><option>All statuses</option></select>
+      </div>
+      <table>
+        <thead><tr><th>Ref</th><th>Customer</th><th>Date</th><th>Items</th><th>Total</th><th>Status</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">SO/2026/0029</td><td>Beyond Matrix Limited</td><td>06 Aug</td><td>4</td><td class="mono" style="color:var(--text)">132,000</td><td><span class="badge">Sale order</span></td></tr>
+          <tr><td class="mono">SO/2026/0025</td><td>Kevin Mbugua</td><td>06 Aug</td><td>2</td><td class="mono" style="color:var(--text)">51,812</td><td><span class="badge">Sale order</span></td></tr>
+          <tr><td class="mono">SO/2026/0020</td><td>NCBA Group</td><td>05 Aug</td><td>2</td><td class="mono" style="color:var(--text)">125,280</td><td><span class="badge">Sale order</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+</body>
+</html>
