@@ -90,18 +90,11 @@ async function main() {
       try {
         const id = asUuid(blobId) ?? uuidFromKey('serial', blobId)
         const status = String(r.status ?? 'available').toLowerCase() === 'in_stock' ? 'available' : String(r.status ?? 'available').slice(0, 30)
-        let barcode = String(r.barcode ?? serial).trim().slice(0, 120) || null
+        const barcode = String(r.barcode ?? serial).trim().slice(0, 120) || null
         const existing = await client.query(
           `SELECT id::text FROM serial_numbers WHERE blob_id = $1 OR id = $2::uuid OR serial_number = $3 LIMIT 1`,
           [blobId, id, serial.slice(0, 100)],
         )
-        if (barcode) {
-          const taken = await client.query(
-            `SELECT id::text FROM serial_numbers WHERE inventory_barcode = $1 AND id <> $2::uuid LIMIT 1`,
-            [barcode, existing.rows[0]?.id ?? id],
-          )
-          if (taken.rows[0]) barcode = null
-        }
         const params = [
           existing.rows[0]?.id ?? id, blobId, productId, serial.slice(0, 100), barcode,
           status, String(r.location ?? 'warehouse').slice(0, 30),
@@ -173,7 +166,7 @@ async function main() {
               movement_type=$5::stock_movement_type, qty=$6, from_location=$7, to_location=$8,
               document_ref=$9, serial_numbers=$10::text[], notes=$11, created_by=$12::uuid
              WHERE id=$1::uuid`,
-            params,
+            params.slice(0, 12),
           )
         } else {
           await client.query(
@@ -254,8 +247,8 @@ async function main() {
         } else {
           await client.query(
             `INSERT INTO purchase_orders (id, blob_id, po_number, supplier_id, vendor_name, status, order_date, expected_date,
-              subtotal, tax_amount, total_amount, notes, created_by)
-             VALUES ($1::uuid,$2,$3,$4::uuid,$5,$6::purchase_order_status,$7::date,$8::date,$9,$10,$11,$12,$13::uuid)`,
+              subtotal, tax_amount, total_amount, notes, created_by, created_at, updated_at)
+             VALUES ($1::uuid,$2,$3,$4::uuid,$5,$6::purchase_order_status,$7::date,$8::date,$9,$10,$11,$12,$13::uuid,NOW(),NOW())`,
             header,
           )
         }
