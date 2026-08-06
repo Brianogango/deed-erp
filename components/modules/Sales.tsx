@@ -1609,14 +1609,16 @@ function SalesContent() {
                               className="sp-btn"
                               onClick={() => {
                                 void (async () => {
-                                  let lines = activeOrder.lines
+                                  // Prefer store row over view snapshot — draft deletes live on saleOrders.
+                                  const latest = saleOrders.find(s => s.id === activeOrder.id) ?? activeOrder
+                                  let lines = latest.lines
                                   if (editingLineId) {
                                     const qty = Math.max(0, Number(editLineQty) || 0)
                                     const unitPrice = Math.max(0, Number(editLinePrice) || 0)
                                     const discount = Math.max(0, Math.min(100, Number(editLineDiscount) || 0))
                                     const taxRate = Math.max(0, Number(editLineTax) || 0)
                                     const subtotal = Math.round(qty * unitPrice * (1 - discount / 100))
-                                    lines = activeOrder.lines.map(l => l.id !== editingLineId ? l : {
+                                    lines = latest.lines.map(l => l.id !== editingLineId ? l : {
                                       ...l,
                                       productName: editLineDesc || l.productName,
                                       description: editLineDesc || l.description,
@@ -1636,10 +1638,10 @@ function SalesContent() {
                                     subtotal: sub,
                                     taxTotal: tax,
                                     total: sub + tax,
-                                    notes: activeOrder.notes,
-                                    validUntil: activeOrder.validUntil,
-                                    paymentTerms: activeOrder.paymentTerms,
-                                    salespersonName: activeOrder.salespersonName,
+                                    notes: latest.notes,
+                                    validUntil: latest.validUntil,
+                                    paymentTerms: latest.paymentTerms,
+                                    salespersonName: latest.salespersonName,
                                   }, { persist: true })
                                   if (ok !== false) showToast('Quotation saved', 'success')
                                 })()
