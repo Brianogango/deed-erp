@@ -10100,10 +10100,17 @@ const storeCtx: AppState = {
 
       // Sum by product — Object.fromEntries would keep only the last duplicate line.
       const requested = qtysDone ?? sumQtyByProductId(del.lines)
+      // SO line serialIds are often wiped (Prisma stores only one serialNumberId).
+      // Prefer DN stamps + serial inventory already reserved for this order.
+      const assignedSerials = serialRef.current.filter(s =>
+        s.saleOrderId === so.id &&
+        ['assigned', 'reserved', 'sold'].includes(String(s.status)),
+      )
       const plan = planPrepareDeliveryLines({
         deliveryLines: del.lines,
         soLines: so.lines,
         requestedByProduct: requested,
+        assignedSerials,
         isSerialTracked: (productId) => {
           const product = prodRef.current.find(p => p.id === productId)
           return !!product && isSerialTracking(inferTrackingMethod(product))
