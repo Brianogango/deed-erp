@@ -10267,28 +10267,32 @@ const storeCtx: AppState = {
       // Odoo-style partial validation: quantities actually done are shipped
       // now; the remainder moves to a backorder delivery. Stock is deducted
       // ONLY for the quantities validated as Done.
-      // Resolve qty per line from explicit input, prior qtyDone, or serial count
-      // so a serial-tracked Done delivery can never ship with Delivered=0.
-      const requested: Record<string, number> = {}
-      for (const line of del.lines) {
-        const fromArg = qtysDone?.[line.productId]
-        const fromLine = Number(line.qtyDone) || 0
-        const fromSerials = (line.serialIds ?? []).length
-        requested[line.productId] = Math.max(
-          fromArg === undefined ? 0 : Number(fromArg) || 0,
-          fromLine,
-          fromSerials,
-        )
+      // Prefer line-local qtyDone/serials (stamped at prepare). Optional
+      // qtysDone is a per-product pool — never collapse duplicate product
+      // rows with Object.fromEntries (SO/2026/0029 ThinkPad 1+2+1 bug).
+      const requestedPool: Record<string, number> = {}
+      if (qtysDone) {
+        for (const [productId, raw] of Object.entries(qtysDone)) {
+          requestedPool[productId] = Math.max(0, Number(raw) || 0)
+        }
+      } else {
+        for (const line of del.lines) {
+          const local = Math.max(Number(line.qtyDone) || 0, (line.serialIds ?? []).length)
+          if (local <= 0) continue
+          requestedPool[line.productId] = (requestedPool[line.productId] ?? 0) + local
+        }
       }
-      const { doneLines, backorderLines } = splitDeliveryForBackorder(del.lines, requested)
+      const { doneLines, backorderLines, lineDone } = splitDeliveryForBackorder(del.lines, requestedPool)
       if (doneLines.length === 0) {
         showToast('Enter the quantities delivered before validating', 'error'); return
       }
-      // Serial-tracked lines cannot be split implicitly — the serials on the
-      // line define exactly what ships.
-      for (const l of del.lines) {
+      // Serial-tracked lines cannot be split implicitly — check EACH delivery
+      // line against its own done qty (never .find(productId), which breaks
+      // when duplicate product rows have different quantities).
+      for (let i = 0; i < del.lines.length; i++) {
+        const l = del.lines[i]
         const prod = prodRef.current.find(x => x.id === l.productId)
-        const done = doneLines.find(d => d.productId === l.productId)?.qty ?? 0
+        const done = lineDone[i] ?? 0
         if (prod && isSerialTracking(inferTrackingMethod(prod)) && done > 0 && done < l.qty) {
           showToast(`${l.productName} is serial-tracked — deliver all ${l.qty} units or remove serials to split`, 'error')
           return

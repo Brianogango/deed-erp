@@ -2754,15 +2754,14 @@ function DeliveryNoteView({
           notes: dnNotes.trim() || undefined,
         })
       }
-      // Validate the picking with the quantities actually done. Stock is
-      // deducted for those quantities only; any remainder automatically
-      // becomes a backorder delivery (Odoo behaviour).
-      const qtysByProduct = Object.fromEntries(
-        existingDelivery.lines.map((line: any) => [
-          line.productId,
-          effectiveDeliveryLineQty(line),
-        ]),
-      )
+      // Validate with a summed per-product pool (not Object.fromEntries — that
+      // keeps only the last duplicate productId row and breaks ThinkPad 1+2+1).
+      const qtysByProduct: Record<string, number> = {}
+      for (const line of existingDelivery.lines) {
+        const qty = effectiveDeliveryLineQty(line)
+        if (!line.productId || qty <= 0) continue
+        qtysByProduct[line.productId] = (qtysByProduct[line.productId] ?? 0) + qty
+      }
       validateDelivery(existingDelivery.id, qtysByProduct)
       onBack()
     } catch { showToast('Network error saving delivery', 'error') }

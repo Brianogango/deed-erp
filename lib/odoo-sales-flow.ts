@@ -425,15 +425,42 @@ export function effectiveDeliveryLineQty(line: {
  * When the requested map is 0/missing but the line already has serials (or a
  * prior qtyDone), those count as delivered so serial shipments cannot validate
  * as Done with Delivered=0.
+ *
+ * `qtysDone` is treated as a **per-product pool** consumed FIFO across duplicate
+ * productId rows (same shape as prepare). A collapsed Object.fromEntries map
+ * must not make every duplicate line read the last row's qty.
  */
 export function splitDeliveryForBackorder(
   lines: readonly DeliverySplitLine[],
-  qtysDone: Readonly<Record<string, number>>,
-): { doneLines: DeliverySplitLine[]; backorderLines: DeliverySplitLine[] } {
+  qtysDone: Readonly<Record<string, number>> = {},
+): {
+  doneLines: DeliverySplitLine[]
+  backorderLines: DeliverySplitLine[]
+  /** Per-input-line done qty (same order as `lines`) — use this instead of `.find(productId)`. */
+  lineDone: number[]
+} {
+  const pool: Record<string, number> = {}
+  for (const [productId, raw] of Object.entries(qtysDone)) {
+    pool[productId] = Math.max(0, Number(raw) || 0)
+  }
   const doneLines: DeliverySplitLine[] = []
   const backorderLines: DeliverySplitLine[] = []
+  const lineDone: number[] = []
   for (const line of lines) {
-    const done = effectiveDeliveryLineQty(line, qtysDone[line.productId])
+    const local = Math.max(Number(line.qtyDone) || 0, Array.isArray(line.serialIds) ? line.serialIds.length : 0)
+    const hasPool = Object.prototype.hasOwnProperty.call(pool, line.productId)
+    // Prefer what prepare stamped on THIS line; only draw from the product pool
+    // when the line has no local done/serial signal yet.
+    const override = local > 0
+      ? local
+      : hasPool
+        ? pool[line.productId]
+        : undefined
+    const done = effectiveDeliveryLineQty(line, override)
+    lineDone.push(done)
+    if (hasPool) {
+      pool[line.productId] = Math.max(0, (pool[line.productId] ?? 0) - done)
+    }
     if (done > 0) {
       const serialIds = (line.serialIds ?? []).slice(0, done)
       doneLines.push({ ...line, qty: done, qtyDone: done, serialIds })
@@ -441,7 +468,7 @@ export function splitDeliveryForBackorder(
     const remaining = line.qty - done
     if (remaining > 0) backorderLines.push({ ...line, qty: remaining, qtyDone: 0, serialIds: [] })
   }
-  return { doneLines, backorderLines }
+  return { doneLines, backorderLines, lineDone }
 }
 
 /** Total delivered units on a delivery (qtyDone, falling back to serial count). */

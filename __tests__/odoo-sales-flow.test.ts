@@ -312,6 +312,45 @@ describe('delivery states, partial delivery and backorders', () => {
     expect(deliveryDeliveredTotal({ lines })).toBe(1)
   })
 
+  it('validates duplicate product rows (SO/2026/0029 ThinkPad 1+2+1) without false serial-split errors', () => {
+    const thinkpad = 'prod-thinkpad'
+    const lines = [
+      { productId: thinkpad, productName: 'ThinkPad T495s', qty: 1, qtyDone: 1, serialIds: ['s1'] },
+      { productId: thinkpad, productName: 'ThinkPad T495s', qty: 2, qtyDone: 2, serialIds: ['s2', 's3'] },
+      { productId: thinkpad, productName: 'ThinkPad T495s', qty: 1, qtyDone: 1, serialIds: ['s4'] },
+    ]
+    // Collapsed Object.fromEntries map (last wins = 1) — must still ship all rows.
+    const collapsed = Object.fromEntries(
+      lines.map(line => [line.productId, effectiveDeliveryLineQty(line)]),
+    )
+    expect(collapsed[thinkpad]).toBe(1)
+
+    const { doneLines, backorderLines, lineDone } = splitDeliveryForBackorder(lines, collapsed)
+    expect(lineDone).toEqual([1, 2, 1])
+    expect(doneLines.map(l => l.qty)).toEqual([1, 2, 1])
+    expect(backorderLines).toHaveLength(0)
+
+    // Summed pool (correct UI path) also works.
+    const summed = { [thinkpad]: 4 }
+    const full = splitDeliveryForBackorder(lines, summed)
+    expect(full.lineDone).toEqual([1, 2, 1])
+    expect(full.backorderLines).toHaveLength(0)
+  })
+
+  it('does not let .find(productId) semantics affect per-line done (qty-1 then qty-2)', () => {
+    const thinkpad = 'prod-thinkpad'
+    const lines = [
+      { productId: thinkpad, productName: 'ThinkPad', qty: 1, qtyDone: 1, serialIds: ['a'] },
+      { productId: thinkpad, productName: 'ThinkPad', qty: 2, qtyDone: 2, serialIds: ['b', 'c'] },
+    ]
+    const { lineDone } = splitDeliveryForBackorder(lines, { [thinkpad]: 1 })
+    // First line consumes local=1; second keeps its own local=2 even if pool was collapsed.
+    expect(lineDone[0]).toBe(1)
+    expect(lineDone[1]).toBe(2)
+    // The old guard used doneLines.find(productId).qty === 1 against line qty 2 → false error.
+    expect(lineDone[1] < lines[1].qty).toBe(false)
+  })
+
   it('heals delivered-by-product from Done deliveries with serials', () => {
     const map = deliveredByProductFromDoneDeliveries([
       {
