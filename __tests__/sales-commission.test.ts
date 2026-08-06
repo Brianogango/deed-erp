@@ -3,11 +3,11 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 const { mockPrisma } = vi.hoisted(() => ({
   mockPrisma: {
     salesCommission: {
-      findFirst: vi.fn(),
       createMany: vi.fn(),
     },
     invoice: {
       findUnique: vi.fn(),
+      updateMany: vi.fn(),
     },
     saleOrder: {
       findUnique: vi.fn(),
@@ -39,7 +39,7 @@ const baseInvoice = {
 
 beforeEach(() => {
   vi.clearAllMocks()
-  mockPrisma.salesCommission.findFirst.mockResolvedValue(null)
+  mockPrisma.invoice.updateMany.mockResolvedValue({ count: 1 })
   mockPrisma.invoice.findUnique.mockResolvedValue(baseInvoice)
   mockPrisma.saleOrder.findUnique.mockResolvedValue({ salespersonId: SALESPERSON_USER_ID })
   mockPrisma.user.findUnique.mockResolvedValue({ employeeId: EMPLOYEE_ID })
@@ -49,11 +49,19 @@ beforeEach(() => {
 })
 
 describe('postSalesCommissionForInvoice', () => {
-  it('is a no-op when already computed for this invoice (idempotent)', async () => {
-    mockPrisma.salesCommission.findFirst.mockResolvedValue({ id: 'existing' })
+  it('is a no-op when the atomic claim loses the race (already computed/computing)', async () => {
+    mockPrisma.invoice.updateMany.mockResolvedValue({ count: 0 })
     await postSalesCommissionForInvoice(INVOICE_ID)
     expect(mockPrisma.invoice.findUnique).not.toHaveBeenCalled()
     expect(mockPrisma.salesCommission.createMany).not.toHaveBeenCalled()
+  })
+
+  it('claims via an atomic updateMany scoped to this invoice with no prior claim', async () => {
+    await postSalesCommissionForInvoice(INVOICE_ID)
+    expect(mockPrisma.invoice.updateMany).toHaveBeenCalledWith({
+      where: { id: INVOICE_ID, commissionComputedAt: null },
+      data: { commissionComputedAt: expect.any(Date) },
+    })
   })
 
   it('does nothing for an invoice with no linked sale order', async () => {

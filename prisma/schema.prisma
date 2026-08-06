@@ -1495,6 +1495,10 @@ model Invoice {
   exchangeRateToBase Decimal @default(1) @map("exchange_rate_to_base") @db.Decimal(18, 8)
   approvedById   String?        @map("approved_by") @db.Uuid
   approvedAt     DateTime?      @map("approved_at")
+  // Atomic claim for sales-commission calculation on posting — an
+  // updateMany(where: { commissionComputedAt: null }) is the idempotency
+  // lock, not a findFirst-then-create race. See lib/accounting/sales-commission.ts.
+  commissionComputedAt DateTime? @map("commission_computed_at")
   lockVersion    Int            @default(0) @map("lock_version")
   createdById    String         @map("created_by") @db.Uuid
   createdAt      DateTime       @default(now()) @map("created_at")

@@ -89,6 +89,8 @@ export async function POST(_request: NextRequest, { params }: { params: { id: st
           clientId: source.clientId,
           status: 'quotation',
           orderDate: new Date(),
+          validUntil: source.validUntil,
+          deliveryDate: source.deliveryDate,
           subtotal: source.subtotal,
           taxAmount: source.taxAmount,
           discountAmount: source.discountAmount,

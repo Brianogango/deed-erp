@@ -9,12 +9,20 @@ const round2 = (n: number) => Math.round((Number.isFinite(n) ? n : 0) * 100) / 1
  * else the product's category rate, else 0 (no commission — an unconfigured
  * product/category never silently earns commission).
  *
- * Idempotent on invoiceId: posting can only transition draft -> approved once
- * per invoice, but this guards against a retried request creating duplicates.
+ * Idempotent on invoiceId via an atomic claim (updateMany with a `WHERE
+ * commissionComputedAt IS NULL`), not a findFirst-then-create check — a
+ * SalesCommission row exists per commission-earning line, so there's no
+ * natural per-invoice unique constraint to race against. Two concurrent
+ * calls for the same invoice: only one gets `count: 1` and proceeds: the
+ * other sees `count: 0` and returns immediately, so duplicate rows can't
+ * be created no matter how the caller retries.
  */
 export async function postSalesCommissionForInvoice(invoiceId: string): Promise<void> {
-  const already = await prisma.salesCommission.findFirst({ where: { invoiceId }, select: { id: true } })
-  if (already) return
+  const claim = await prisma.invoice.updateMany({
+    where: { id: invoiceId, commissionComputedAt: null },
+    data: { commissionComputedAt: new Date() },
+  })
+  if (claim.count === 0) return
 
   const invoice = await prisma.invoice.findUnique({
     where: { id: invoiceId },

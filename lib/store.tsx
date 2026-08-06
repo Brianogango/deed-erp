@@ -16388,29 +16388,38 @@ const storeCtx: AppState = {
       // creating anything — no CustomerCredit, journal or audit entry. Wire it up using
       // the same mechanism cancelInvoice() uses for a cancelled paid invoice.
       let creditNoteRef: string | null = null
-      let creditNoteError: string | null = null
       if (resolution === 'credit_note' && refundAmount && refundAmount > 0) {
-        const sourceInvoice = invRef.current.find(i => i.saleOrderId === rma.saleOrderId && i.type === 'customer_invoice')
-        if (!sourceInvoice) {
-          creditNoteError = `No invoice found for sale order ${rma.saleOrderRef} — cannot issue a credit note`
-        } else {
-          const ref = await storeCtxRef.current!.allocateDocRef('CN')
-          const credit: CustomerCredit = {
-            id: uid(), ref,
-            customerId: rma.customerId, customerName: rma.customerName,
-            sourceInvoiceId: sourceInvoice.id, sourceInvoiceRef: sourceInvoice.ref,
-            amount: refundAmount, balance: refundAmount, status: 'available',
-            createdAt: now(), createdBy: user.name,
-            notes: `Credit note issued from return ${rma.ref}`,
-            applications: [],
-          }
-          setCustomerCredits(prev => [credit, ...prev])
-          setJournalEntries(prev => [buildCustomerCreditJournal(sourceInvoice, ref, refundAmount), ...prev])
-          addAuditLog('rma_credit_note', rma.ref, `Credit note ${ref} issued for ${fmtKes(refundAmount)} against return ${rma.ref}`)
-          creditNoteRef = ref
+        // Partial invoicing means a sale order can have several customer
+        // invoices — guessing which one to credit is a financial-correctness
+        // risk, so require exactly one match rather than picking arbitrarily.
+        const candidateInvoices = invRef.current.filter(i => i.saleOrderId === rma.saleOrderId && i.type === 'customer_invoice')
+        if (candidateInvoices.length === 0) {
+          showToast(`No invoice found for sale order ${rma.saleOrderRef} — cannot issue a credit note`, 'error')
+          return
         }
+        if (candidateInvoices.length > 1) {
+          showToast(`${rma.saleOrderRef} has ${candidateInvoices.length} invoices — issue this credit note manually from Finance so the right one is credited`, 'error')
+          return
+        }
+        const sourceInvoice = candidateInvoices[0]
+        const ref = await storeCtxRef.current!.allocateDocRef('CN')
+        const credit: CustomerCredit = {
+          id: uid(), ref,
+          customerId: rma.customerId, customerName: rma.customerName,
+          sourceInvoiceId: sourceInvoice.id, sourceInvoiceRef: sourceInvoice.ref,
+          amount: refundAmount, balance: refundAmount, status: 'available',
+          createdAt: now(), createdBy: user.name,
+          notes: `Credit note issued from return ${rma.ref}`,
+          applications: [],
+        }
+        setCustomerCredits(prev => [credit, ...prev])
+        setJournalEntries(prev => [buildCustomerCreditJournal(sourceInvoice, ref, refundAmount), ...prev])
+        addAuditLog('rma_credit_note', rma.ref, `Credit note ${ref} issued for ${fmtKes(refundAmount)} against return ${rma.ref}`)
+        creditNoteRef = ref
       }
 
+      // Only reached once any credit note (if requested) actually succeeded —
+      // a return must never show as "processed" while its resolution failed.
       setReturnOrders(p => p.map(r => r.id === id
         ? { ...r, status: 'processed', resolution, refundAmount, notes: processNotes, processedDate: now(), processedByName: user.name }
         : r
@@ -16456,14 +16465,10 @@ const storeCtx: AppState = {
         setRefundPayments(p => [payment, ...p])
       }
 
-      if (creditNoteError) {
-        showToast(`Return processed, but ${creditNoteError}`, 'error')
-      } else {
-        const label = resolution === 'refund' ? 'Refund recorded'
-          : resolution === 'replacement' ? 'Replacement issued'
-          : resolution === 'credit_note' ? `Credit note ${creditNoteRef} issued` : 'Repair initiated'
-        showToast(`Return processed — ${label}`)
-      }
+      const label = resolution === 'refund' ? 'Refund recorded'
+        : resolution === 'replacement' ? 'Replacement issued'
+        : resolution === 'credit_note' ? `Credit note ${creditNoteRef} issued` : 'Repair initiated'
+      showToast(`Return processed — ${label}`)
     },
 
     rejectReturn: (id, reason) => {

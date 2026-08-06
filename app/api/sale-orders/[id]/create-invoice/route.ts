@@ -33,7 +33,10 @@ export async function POST(
     // Omitted entirely (or no JSON body) keeps the original all-invoiceable
     // behavior for the one-click "Create Invoice" action.
     const body = await request.json().catch(() => null) as { lines?: Array<{ itemId?: string; qty?: number }> } | null
-    const overrideQtyByItemId = Array.isArray(body?.lines)
+    // An empty array (no explicit selection) falls back to full auto-invoice
+    // rather than being treated as "invoice nothing" — only a non-empty
+    // lines array is a real partial-invoice request.
+    const overrideQtyByItemId = Array.isArray(body?.lines) && body!.lines!.length > 0
       ? new Map(
           body!.lines!
             .filter((l): l is { itemId: string; qty: number } => typeof l?.itemId === 'string' && l.itemId.length > 0)
