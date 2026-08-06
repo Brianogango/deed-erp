@@ -241,9 +241,9 @@ async function main() {
               status=$6::purchase_order_status, order_date=$7::date, expected_date=$8::date,
               subtotal=$9, tax_amount=$10, total_amount=$11, notes=$12, updated_at=NOW()
              WHERE id=$1::uuid`,
-            header,
+            header.slice(0, 12),
           )
-          await client.query(`DELETE FROM purchase_order_items WHERE po_id=$1::uuid`, [poId])
+          // Do not delete PO items — GRN lines FK them. Upsert by id below.
         } else {
           await client.query(
             `INSERT INTO purchase_orders (id, blob_id, po_number, supplier_id, vendor_name, status, order_date, expected_date,
@@ -262,7 +262,11 @@ async function main() {
           const unitCost = Number(line.unitPrice ?? line.unitCost ?? 0) || 0
           await client.query(
             `INSERT INTO purchase_order_items (id, po_id, product_id, description, qty_ordered, qty_received, unit_cost, tax_rate, line_total)
-             VALUES ($1::uuid,$2::uuid,$3::uuid,$4,$5,$6,$7,$8,$9)`,
+             VALUES ($1::uuid,$2::uuid,$3::uuid,$4,$5,$6,$7,$8,$9)
+             ON CONFLICT (id) DO UPDATE SET
+               description=EXCLUDED.description, qty_ordered=EXCLUDED.qty_ordered,
+               qty_received=EXCLUDED.qty_received, unit_cost=EXCLUDED.unit_cost,
+               tax_rate=EXCLUDED.tax_rate, line_total=EXCLUDED.line_total`,
             [
               lineId, poId, productId,
               line.productName ? String(line.productName) : null,
@@ -315,7 +319,7 @@ async function main() {
           await client.query(
             `UPDATE goods_received_notes SET blob_id=$2, grn_number=$3, po_id=$4::uuid, received_date=$5::date,
               destination_location=$6, status=$7, vendor_name=$8 WHERE id=$1::uuid`,
-            header,
+            header.slice(0, 8),
           )
           await client.query(`DELETE FROM grn_items WHERE grn_id=$1::uuid`, [grnId])
         } else {

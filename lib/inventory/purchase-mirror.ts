@@ -183,13 +183,31 @@ export async function mirrorPurchaseOrdersToPrisma(input: unknown, opts: { force
           const poId = existing?.id ?? id
           if (existing) {
             await tx.purchaseOrder.update({ where: { id: poId }, data: header })
-            await tx.purchaseOrderItem.deleteMany({ where: { poId } })
+            // Upsert lines — never delete (GRN items FK purchase_order_items).
+            for (const line of linePayload) {
+              await tx.purchaseOrderItem.upsert({
+                where: { id: line.id },
+                create: { ...line, poId },
+                update: {
+                  description: line.description,
+                  qtyOrdered: line.qtyOrdered,
+                  qtyReceived: line.qtyReceived,
+                  unitCost: line.unitCost,
+                  taxRate: line.taxRate,
+                  lineTotal: line.lineTotal,
+                  notes: line.notes,
+                },
+              })
+            }
           } else {
-            await tx.purchaseOrder.create({ data: { id: poId, ...header } })
-          }
-          if (linePayload.length) {
-            await tx.purchaseOrderItem.createMany({
-              data: linePayload.map(line => ({ ...line, poId })),
+            await tx.purchaseOrder.create({
+              data: {
+                id: poId,
+                ...header,
+                items: linePayload.length
+                  ? { create: linePayload.map(line => ({ ...line })) }
+                  : undefined,
+              },
             })
           }
         })
