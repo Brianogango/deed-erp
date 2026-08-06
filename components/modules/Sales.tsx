@@ -263,7 +263,7 @@ function MoreActionsMenu({ items, label = 'More' }: { items: MoreAction[]; label
     <div className="relative">
       <button
         type="button"
-        className="btn-secondary flex items-center gap-2 text-xs"
+        className="sp-btn flex items-center gap-2"
         aria-haspopup="menu"
         aria-expanded={open}
         onClick={() => setOpen(o => !o)}
@@ -273,16 +273,16 @@ function MoreActionsMenu({ items, label = 'More' }: { items: MoreAction[]; label
       </button>
       {open && (<>
         <div className="fixed inset-0 z-[8990]" aria-hidden="true" onClick={() => setOpen(false)} />
-        <div role="menu" className="absolute right-0 top-full z-[9000] mt-2 min-w-52 rounded-lg border border-[var(--border-lt)] bg-[var(--bg-card)] p-1.5 shadow-md">
+        <div role="menu" className="absolute right-0 top-full z-[9000] mt-2 min-w-52 rounded-[6px] border border-[var(--sp-border)] bg-[var(--sp-surface)] p-1.5 shadow-md">
           {items.map((item, idx) => (
             <div key={item.label}>
-              {idx === firstDanger && firstDanger > 0 && <div className="my-1 border-t border-[var(--border-lt)]" />}
+              {idx === firstDanger && firstDanger > 0 && <div className="my-1 border-t border-[var(--sp-border)]" />}
               <button
                 type="button"
                 role="menuitem"
                 disabled={item.disabled}
                 title={item.title}
-                className={`flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-[11px] font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-45 ${item.tone === 'danger' ? 'text-red-600 hover:bg-red-50' : 'text-[var(--text-2)] hover:bg-[var(--bg-surface)]'}`}
+                className={`flex w-full items-center gap-2.5 rounded-[4px] px-3 py-2 text-left text-[11px] font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-45 ${item.tone === 'danger' ? 'text-[var(--sp-danger)] hover:bg-[var(--sp-danger-bg)]' : 'text-[var(--sp-text-2)] hover:bg-[var(--sp-accent-soft)]'}`}
                 onClick={() => { setOpen(false); item.onClick() }}
               >
                 {item.icon && <Fa icon={item.icon} className="w-3.5 text-[11px]" />}
@@ -1273,49 +1273,55 @@ function SalesContent() {
 
   const salesListColumns: ColumnDef<SalesOrderView>[] = useMemo(() => [
     {
-      key: 'ref', label: 'Ref', priority: 1, width: '110px',
-      render: s => <span className="text-xs font-bold text-primary-600">{s.ref}</span>,
+      key: 'ref', label: listTab === 'quotations' ? 'Quote #' : 'Order #', priority: 1, width: '120px',
+      render: s => <span className="sp-linkish text-xs font-bold">{s.ref}</span>,
       accessor: s => s.ref,
     },
     {
-      key: 'customer', label: 'Customer', priority: 1, width: '1.6fr',
-      render: s => <span className="text-xs text-[var(--text-1)] truncate">{s.customerName}</span>,
+      key: 'customer', label: 'Customer', priority: 1, width: '1.5fr',
+      render: s => <span className="text-xs text-[var(--sp-text)] truncate">{s.customerName}</span>,
       accessor: s => s.customerName,
     },
     {
-      key: 'date', label: 'Date', priority: 2, width: '120px',
-      render: s => <span className="text-xs text-[var(--text-3)]">{fmtDate(s.date)}</span>,
+      key: 'date', label: listTab === 'quotations' ? 'Quote date' : 'Order date', priority: 2, width: '110px',
+      render: s => <span className="text-xs text-[var(--sp-text-3)]">{fmtDate(s.date)}</span>,
       accessor: s => s.date,
       exportValue: s => s.date,
     },
     {
-      key: 'items', label: 'Items', priority: 3, width: '90px', align: 'center',
-      render: s => <span className="text-xs text-[var(--text-3)]">{s.lines?.length ?? 0}</span>,
-      accessor: s => s.lines?.length ?? 0,
+      key: 'validUntil', label: 'Valid until', priority: 3, width: '110px',
+      render: s => <span className="text-xs text-[var(--sp-text-3)]">{s.validUntil ? fmtDate(s.validUntil) : '—'}</span>,
+      accessor: s => s.validUntil || '',
+      exportValue: s => s.validUntil || '',
     },
     {
-      key: 'total', label: 'Total', priority: 1, width: '140px', align: 'right',
-      render: s => <span className="text-xs font-bold text-[var(--text-1)]">{fmtKes(s.total)}</span>,
+      key: 'salesperson', label: 'Salesperson', priority: 3, width: '120px',
+      render: s => <span className="text-xs text-[var(--sp-text-3)] truncate">{s.salespersonName || s.createdByName || '—'}</span>,
+      accessor: s => s.salespersonName || s.createdByName || '',
+    },
+    {
+      key: 'total', label: 'Amount', priority: 1, width: '120px', align: 'right',
+      render: s => <span className="text-xs font-bold text-[var(--sp-text)]">{fmtKes(s.total)}</span>,
       accessor: s => s.total,
       exportValue: s => s.total,
     },
     {
-      key: 'status', label: 'Status', priority: 1, width: '160px', align: 'center',
+      key: 'status', label: 'Status', priority: 1, width: '140px', align: 'center',
       render: s => (
         <span className="inline-flex flex-col items-center gap-0.5">
           {statusPill(s)}
           {s.status === 'sale' && saleOrderInvoiceStatus(s.status, s.lines) === 'to_invoice' && (
-            <span className="text-[9px] font-semibold text-amber-600">To invoice</span>
+            <span className="text-[9px] font-semibold text-[var(--sp-warning)]">To invoice</span>
           )}
           {isQuotationStage(s.status) && s.validUntil && s.validUntil < todayIso && (
-            <span className="text-[9px] font-semibold text-red-600">Expired</span>
+            <span className="text-[9px] font-semibold text-[var(--sp-danger)]">Expired</span>
           )}
         </span>
       ),
       accessor: s => SALE_STATUS_LABELS[s.status] ?? s.status,
       exportValue: s => SALE_STATUS_LABELS[s.status] ?? s.status,
     },
-  ], [todayIso])
+  ], [todayIso, listTab])
 
   const getInvoicedQty = (so: SalesOrderView, lineProductId?: string) => {
     if (!lineProductId) return 0
@@ -1540,10 +1546,10 @@ function SalesContent() {
                             {rows.length} selected
                             {cancellable.length !== rows.length ? ` · ${cancellable.length} cancellable` : ''}
                           </span>
-                          <button type="button" className="btn-ghost text-xs" onClick={clear}>Clear</button>
+                          <button type="button" className="sp-btn sp-btn-ghost" onClick={clear}>Clear</button>
                           <button
                             type="button"
-                            className="btn-secondary text-xs flex items-center gap-1.5"
+                            className="sp-btn"
                             disabled={cancellable.length === 0}
                             title={cancellable.length === 0 ? 'Select draft or sent quotations to cancel in bulk' : undefined}
                             onClick={() => {
@@ -1552,7 +1558,7 @@ function SalesContent() {
                             }}
                           >
                             <Fa icon={faBan} className="text-[10px]" />
-                            Cancel {cancellable.length || ''} quotation{cancellable.length !== 1 ? 's' : ''}
+                            {' '}Cancel {cancellable.length || ''} quotation{cancellable.length !== 1 ? 's' : ''}
                           </button>
                         </div>
                       )
@@ -1568,30 +1574,30 @@ function SalesContent() {
                       listTab === 'quotations' && stats.orders > 0 && filtered.length === 0 ? (
                         <button
                           type="button"
-                          className="btn-primary text-xs px-4 py-1.5 mt-1"
+                          className="sp-btn sp-btn-primary"
                           onClick={() => { setListTabAndReset('orders'); setFilterAndReset('sales_orders') }}
                         >
                           View orders ({stats.orders})
                         </button>
                       ) : filtered.length === 0 && salesOrderViews.length === 0 ? (
-                      <button type="button" className="btn-primary text-xs px-4 py-1.5 mt-1" onClick={openNewForm}>New quotation</button>
+                      <button type="button" className="sp-btn sp-btn-primary" onClick={openNewForm}>New quotation</button>
                       ) : undefined
                     }
                     onRowClick={s => openOrder(s.id)}
                     rowLabel={s => `${s.ref} ${s.customerName}`}
-                    cardAccent={s => s.status === 'quotation' ? 'var(--warning)' : s.status === 'quotation_sent' ? 'var(--primary)' : s.status === 'sale' ? 'var(--accent-cyan)' : 'var(--success)'}
+                    cardAccent={s => s.status === 'quotation' ? 'var(--warning)' : s.status === 'quotation_sent' ? 'var(--primary)' : s.status === 'sale' ? 'var(--navy)' : 'var(--text-4)'}
                     renderCard={s => (
                       <RecordCard
                         eyebrow={s.ref}
                         title={s.customerName}
-                        subtitle={`${fmtDate(s.date)} · ${s.lines?.length ?? 0} item${(s.lines?.length ?? 0) !== 1 ? 's' : ''}`}
+                        subtitle={`${fmtDate(s.date)}${s.salespersonName ? ` · ${s.salespersonName}` : ''} · ${s.lines?.length ?? 0} item${(s.lines?.length ?? 0) !== 1 ? 's' : ''}`}
                         amount={fmtKes(s.total)}
                         status={statusPill(s)}
-                        accent={s.status === 'quotation' ? 'var(--warning)' : s.status === 'quotation_sent' ? 'var(--primary)' : 'var(--success)'}
+                        accent={s.status === 'quotation' ? 'var(--warning)' : s.status === 'quotation_sent' ? 'var(--primary)' : s.status === 'sale' ? 'var(--navy)' : 'var(--text-4)'}
                         meta={[
                           { label: 'Status', value: SALE_STATUS_LABELS[s.status] ?? s.status },
                           ...(s.status === 'sale' ? [{ label: 'Invoice status', value: SO_INVOICE_STATUS_LABELS[saleOrderInvoiceStatus(s.status, s.lines)] }] : []),
-                          { label: 'Items', value: s.lines?.length ?? 0 },
+                          { label: 'Amount', value: fmtKes(s.total) },
                         ]}
                         onClick={() => openOrder(s.id)}
                       />
@@ -1603,7 +1609,7 @@ function SalesContent() {
                     <div className="p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                       {(['quotation', 'quotation_sent', 'sale', 'cancelled'] as const).map(col => {
                         const colOrders = filtered.filter(s => s.status === col)
-                        const colColors: Record<string, string> = { quotation: 'var(--warning)', quotation_sent: 'var(--primary)', sale: 'var(--success)', cancelled: '#9CA3AF' }
+                        const colColors: Record<string, string> = { quotation: 'var(--warning)', quotation_sent: 'var(--primary)', sale: 'var(--navy)', cancelled: 'var(--text-4)' }
                         return (
                           <div key={col} className="flex flex-col gap-2">
                             <div className="flex items-center justify-between mb-1">
@@ -1670,7 +1676,7 @@ function SalesContent() {
                           {isQuotationDraft(activeOrder.status) && !activeOrder.locked && (
                             <button
                               type="button"
-                              className="sp-btn sp-btn-primary"
+                              className="sp-btn"
                               onClick={() => {
                                 let lines = activeOrder.lines
                                 if (editingLineId) {
@@ -1711,7 +1717,7 @@ function SalesContent() {
                             </button>
                           )}
                           {activeOrder.status === 'quotation' && (
-                            <button type="button" className="sp-btn" disabled={!activeOrder.lines.length || sendingQuoteId === activeOrder.id} onClick={() => openSendQuoteModal(activeOrder)}>
+                            <button type="button" className="sp-btn sp-btn-primary" disabled={!activeOrder.lines.length || sendingQuoteId === activeOrder.id} onClick={() => openSendQuoteModal(activeOrder)}>
                               {sendingQuoteId === activeOrder.id ? 'Sending…' : 'Send to customer'}
                             </button>
                           )}
@@ -1737,7 +1743,7 @@ function SalesContent() {
                           />
                           <button
                             type="button"
-                            className="sp-btn sp-btn-success"
+                            className={activeOrder.status === 'quotation_sent' ? 'sp-btn sp-btn-primary' : 'sp-btn'}
                             disabled={confirmingSO}
                             onClick={openConfirmQuoteDialog}
                           >

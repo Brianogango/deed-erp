@@ -4558,24 +4558,25 @@
   }
 }
 
-/* ── Document mode — matches approved Sales prototypes (content area) ── */
+/* ── Document mode — prototype structure, ERP company colors ── */
 .sales-pilot.sales-doc {
-  --sd-bg: #f4f5f7;
-  --sd-surface: #ffffff;
-  --sd-border: #e5e7eb;
-  --sd-border-strong: #d1d5db;
-  --sd-text: #111827;
-  --sd-text-2: #374151;
-  --sd-text-3: #6b7280;
-  --sd-accent: #2563eb;
-  --sd-accent-hover: #1d4ed8;
-  --sd-accent-soft: #eff6ff;
-  --sd-success: #059669;
-  --sd-success-bg: #ecfdf5;
-  --sd-warning: #d97706;
-  --sd-warning-bg: #fffbeb;
-  --sd-danger: #dc2626;
+  --sd-bg: var(--bg-page);
+  --sd-surface: var(--bg-card);
+  --sd-border: var(--border-lt);
+  --sd-border-strong: var(--border);
+  --sd-text: var(--text-1);
+  --sd-text-2: var(--text-2);
+  --sd-text-3: var(--text-3);
+  --sd-accent: var(--primary);
+  --sd-accent-hover: var(--primary-dark);
+  --sd-accent-soft: var(--primary-light);
+  --sd-success: var(--success);
+  --sd-success-bg: var(--success-bg);
+  --sd-warning: var(--warning);
+  --sd-warning-bg: var(--warning-bg);
+  --sd-danger: var(--danger);
   --sd-radius: 6px;
+  --sales-accent: var(--primary);
   background: var(--sd-bg) !important;
 }
 
