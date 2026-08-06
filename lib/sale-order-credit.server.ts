@@ -4,15 +4,15 @@ import { assertQuoteNotExpired } from '@/lib/sale-order-expiry'
 
 export { assertQuoteNotExpired }
 
+/** Prisma `DocumentStatus` values that can still carry an unpaid residual. */
 const OPEN_INVOICE_STATUSES = [
   'approved',
   'invoiced',
   'pending_approval',
   'dispatched',
   'delivered',
-  'posted',
-  'partial',
-  'open',
+  'partially_paid',
+  'paid',
 ] as const
 
 const CREDIT_OVERRIDE_ROLES = new Set(['director', 'finance_officer'])
@@ -46,7 +46,6 @@ export async function assertSaleOrderCreditOnConfirm(opts: {
     prisma.invoice.findMany({
       where: {
         clientId,
-        type: 'customer_invoice',
         status: { in: [...OPEN_INVOICE_STATUSES] },
       },
       select: { totalAmount: true, amountPaid: true, dueDate: true, status: true },
