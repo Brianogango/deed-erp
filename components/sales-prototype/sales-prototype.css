@@ -1,6 +1,5 @@
-/* Sales Module high-fidelity prototypes — scoped tokens (do not alter global ERP chrome).
-   Direction: compact enterprise fidelity per supplied workflow reference.
-   Shell = Deed navy; primary actions = Deed blue (#2563EB) matching reference CTAs. */
+/* Sales Module — prototype structure + Deed ERP company colors.
+   Tokens bridge to global :root so Sales never drifts from Inventory/Purchase/Contacts. */
 
 .sales-proto .sr-only {
   position: absolute;
@@ -17,27 +16,28 @@
 /* Shared tokens: prototype shell (.sales-proto) + production content (.sales-workbench) */
 .sales-proto,
 .sales-workbench {
-  --sp-bg: #f4f5f7;
-  --sp-surface: #ffffff;
-  --sp-border: #e5e7eb;
-  --sp-border-strong: #d1d5db;
-  --sp-text: #111827;
-  --sp-text-2: #374151;
-  --sp-text-3: #6b7280;
-  --sp-accent: #2563eb;
-  --sp-accent-hover: #1d4ed8;
-  --sp-accent-soft: #eff6ff;
-  --sp-accent-border: #bfdbfe;
-  --sp-navy: #1a1f5e;
-  --sp-navy-dark: #161a50;
-  --sp-success: #059669;
-  --sp-success-bg: #ecfdf5;
-  --sp-warning: #d97706;
-  --sp-warning-bg: #fffbeb;
-  --sp-danger: #dc2626;
-  --sp-danger-bg: #fef2f2;
-  --sp-info: #2563eb;
-  --sp-info-bg: #eff6ff;
+  /* Company brand — always follow ERP globals */
+  --sp-bg: var(--bg-page, #f1f5f9);
+  --sp-surface: var(--bg-card, #ffffff);
+  --sp-border: var(--border-lt, #e5e7eb);
+  --sp-border-strong: var(--border, #d1d5db);
+  --sp-text: var(--text-1, #111827);
+  --sp-text-2: var(--text-2, #374151);
+  --sp-text-3: var(--text-3, #6b7280);
+  --sp-accent: var(--primary, #2563eb);
+  --sp-accent-hover: var(--primary-dark, #1d4ed8);
+  --sp-accent-soft: var(--primary-light, #eff6ff);
+  --sp-accent-border: color-mix(in srgb, var(--primary, #2563eb) 35%, #fff);
+  --sp-navy: var(--navy, #1a1f5e);
+  --sp-navy-dark: var(--navy-dark, #161a50);
+  --sp-success: var(--success, #059669);
+  --sp-success-bg: var(--success-bg, #ecfdf5);
+  --sp-warning: var(--warning, #d97706);
+  --sp-warning-bg: var(--warning-bg, #fffbeb);
+  --sp-danger: var(--danger, #dc2626);
+  --sp-danger-bg: var(--danger-bg, #fef2f2);
+  --sp-info: var(--primary, #2563eb);
+  --sp-info-bg: var(--primary-light, #eff6ff);
   --sp-grey-bg: #f3f4f6;
   --sp-radius: 6px;
   --sp-radius-sm: 4px;
@@ -185,6 +185,76 @@
   border-radius: var(--sp-radius) !important;
   box-shadow: none !important;
   padding: 10px 12px !important;
+}
+
+/* Map leftover ERP button classes → sales prototype / company primary */
+.sales-workbench .btn-primary,
+.sales-workbench .btn.btn-primary {
+  appearance: none;
+  border: 1px solid var(--sp-accent) !important;
+  background: var(--sp-accent) !important;
+  color: #fff !important;
+  border-radius: var(--sp-radius-sm) !important;
+  padding: 6px 11px !important;
+  font-size: 12px !important;
+  font-weight: 550 !important;
+  min-height: 0 !important;
+  box-shadow: none !important;
+}
+
+.sales-workbench .btn-primary:hover,
+.sales-workbench .btn.btn-primary:hover {
+  background: var(--sp-accent-hover) !important;
+  border-color: var(--sp-accent-hover) !important;
+}
+
+.sales-workbench .btn-secondary,
+.sales-workbench .btn-outline,
+.sales-workbench .btn-ghost,
+.sales-workbench .btn.btn-secondary {
+  appearance: none;
+  border: 1px solid var(--sp-border-strong) !important;
+  background: var(--sp-surface) !important;
+  color: var(--sp-text-2) !important;
+  border-radius: var(--sp-radius-sm) !important;
+  padding: 6px 11px !important;
+  font-size: 12px !important;
+  font-weight: 550 !important;
+  min-height: 0 !important;
+  box-shadow: none !important;
+}
+
+/* DataTable inside sales — same density as sp-table */
+.sales-workbench .dt-wrap,
+.sales-workbench .dt-scroll {
+  border: 0 !important;
+  box-shadow: none !important;
+  background: transparent !important;
+}
+
+.sales-workbench .dt-wrap > table,
+.sales-workbench .dt-scroll > table {
+  font-size: var(--sp-fs-table) !important;
+}
+
+.sales-workbench a.sp-linkish,
+.sales-workbench .text-primary-600 {
+  color: var(--sp-accent) !important;
+}
+
+/* Confirm / primary workflow CTAs stay company blue; success only for paid/done money states */
+.sales-workbench .sp-btn-success {
+  background: var(--sp-success) !important;
+  border-color: var(--sp-success) !important;
+  color: #fff !important;
+}
+
+/* Kanban cards — compact ERP cards with brand accent rail */
+.sales-workbench .sales-kanban-card {
+  border: 1px solid var(--sp-border) !important;
+  border-radius: var(--sp-radius) !important;
+  box-shadow: none !important;
+  background: var(--sp-surface) !important;
 }
 
 .sales-workbench .dt-toolbar {
@@ -608,14 +678,14 @@
 }
 
 .sp-workflow-step[data-state='done'] {
-  background: var(--sp-success-bg);
-  color: var(--sp-success);
+  background: color-mix(in srgb, var(--sp-navy) 10%, #fff);
+  color: var(--sp-navy);
 }
 
 .sp-workflow-step[data-state='current'] {
-  background: var(--sp-accent-soft);
-  color: var(--sp-accent);
-  box-shadow: inset 0 -2px 0 var(--sp-accent);
+  background: var(--sp-navy);
+  color: #fff;
+  box-shadow: none;
 }
 
 .sp-totals {
