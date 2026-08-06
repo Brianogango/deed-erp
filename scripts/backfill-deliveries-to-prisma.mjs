@@ -5,7 +5,8 @@
  * Usage (on Contabo app host):
  *   cd /var/www/deed-erp && node scripts/backfill-deliveries-to-prisma.mjs
  *
- * Safe to re-run (upsert by blobId). Never deletes the blob.
+ * Safe to re-run (upsert by blob_id). Never deletes the blob.
+ * Uses `pg` only (no PrismaClient adapter) so it runs under production Node.
  */
 import { createHash } from 'crypto'
 import { createRequire } from 'module'
@@ -14,7 +15,6 @@ import { config as loadEnv } from 'dotenv'
 loadEnv({ path: '.env' })
 
 const require = createRequire(import.meta.url)
-const { PrismaClient } = require('@prisma/client')
 const { Pool } = require('pg')
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
@@ -30,106 +30,151 @@ function asUuid(v) {
 }
 
 async function main() {
-  const prisma = new PrismaClient()
   const pool = new Pool({ connectionString: process.env.DATABASE_URL })
-
-  const { rows } = await pool.query(
-    `SELECT value FROM app_state WHERE key = 'deed_deliveries' LIMIT 1`,
-  )
-  const raw = rows[0]?.value
-  if (!raw) {
-    console.log('No deed_deliveries blob found')
-    await prisma.$disconnect()
-    await pool.end()
-    process.exit(0)
-  }
-  const deliveries = JSON.parse(raw)
-  if (!Array.isArray(deliveries)) {
-    console.error('deed_deliveries is not an array')
-    process.exit(1)
-  }
-
-  console.log(`Backfilling ${deliveries.length} deliveries…`)
-
-  const products = new Set((await prisma.product.findMany({ select: { id: true } })).map(p => p.id))
-  const clients = new Set((await prisma.client.findMany({ select: { id: true } })).map(c => c.id))
-  const saleOrders = new Set((await prisma.saleOrder.findMany({ select: { id: true } })).map(s => s.id))
-  const users = new Set((await prisma.user.findMany({ select: { id: true } })).map(u => u.id))
-
-  let ok = 0
-  let fail = 0
-  for (const r of deliveries) {
-    const blobId = String(r?.id ?? '').trim()
-    if (!blobId) continue
-    try {
-      const saleOrderId = asUuid(r.saleOrderId) && saleOrders.has(r.saleOrderId) ? r.saleOrderId : null
-      const clientId = asUuid(r.customerId) && clients.has(r.customerId) ? r.customerId : null
-      const id = UUID_RE.test(blobId) ? blobId : uuidFromKey('delivery', blobId)
-      const lines = Array.isArray(r.lines) ? r.lines : []
-      await prisma.$transaction(async tx => {
-        const existing = await tx.deliveryNote.findFirst({
-          where: { OR: [{ blobId }, { id }] },
-          select: { id: true },
-        })
-        const dnId = existing?.id ?? id
-        const header = {
-          blobId,
-          dnNumber: String(r.ref || blobId).slice(0, 30),
-          saleOrderId,
-          clientId,
-          saleOrderRef: r.saleOrderRef ? String(r.saleOrderRef).slice(0, 40) : null,
-          customerName: r.customerName ? String(r.customerName).slice(0, 200) : null,
-          status: String(r.status || 'waiting').slice(0, 30),
-          deliveryDate: r.date ? new Date(r.date) : null,
-          deliveryAddress: r.deliveryAddress || null,
-          recipientName: r.recipientName ? String(r.recipientName).slice(0, 150) : null,
-          recipientPhone: r.recipientPhone ? String(r.recipientPhone).slice(0, 20) : null,
-          recipientIdNumber: r.recipientIdNumber ? String(r.recipientIdNumber).slice(0, 40) : null,
-          notes: r.notes || null,
-          warrantyCreated: Boolean(r.warrantyCreated),
-          preparedAt: r.preparedAt ? new Date(r.preparedAt) : null,
-          preparedById: asUuid(r.preparedByUserId) && users.has(r.preparedByUserId) ? r.preparedByUserId : null,
-          createdById: asUuid(r.preparedByUserId) && users.has(r.preparedByUserId) ? r.preparedByUserId : null,
-        }
-        if (existing) {
-          await tx.deliveryNote.update({ where: { id: dnId }, data: header })
-          await tx.deliveryNoteItem.deleteMany({ where: { dnId } })
-        } else {
-          await tx.deliveryNote.create({ data: { id: dnId, ...header } })
-        }
-        if (lines.length) {
-          await tx.deliveryNoteItem.createMany({
-            data: lines.map((line, idx) => {
-              const serialIds = Array.isArray(line.serialIds) ? line.serialIds.map(String).filter(Boolean) : []
-              const productId = asUuid(line.productId) && products.has(line.productId) ? line.productId : null
-              return {
-                id: uuidFromKey('dn-line', `${blobId}:${idx}`),
-                dnId,
-                productId,
-                productName: line.productName ? String(line.productName).slice(0, 200) : null,
-                description: line.productName ? String(line.productName) : null,
-                qty: Math.max(0, Number(line.qty) || 0),
-                qtyDone: Math.max(0, Number(line.qtyDone) || 0),
-                serialIds,
-                serialNumberId: serialIds.find(s => UUID_RE.test(s)) || null,
-                sourceLocation: line.sourceLocation ? String(line.sourceLocation).slice(0, 40) : null,
-                lineOrder: idx,
-              }
-            }),
-          })
-        }
-      })
-      ok++
-    } catch (e) {
-      fail++
-      console.error('fail', blobId, e.message)
+  const client = await pool.connect()
+  try {
+    const { rows } = await client.query(
+      `SELECT value FROM app_state WHERE key = 'deed_deliveries' LIMIT 1`,
+    )
+    const raw = rows[0]?.value
+    if (!raw) {
+      console.log('No deed_deliveries blob found')
+      return
     }
-  }
+    const deliveries = JSON.parse(raw)
+    if (!Array.isArray(deliveries)) {
+      throw new Error('deed_deliveries is not an array')
+    }
 
-  const count = await prisma.deliveryNote.count()
-  console.log(JSON.stringify({ mirrored: ok, failed: fail, prismaDeliveryNotes: count, blobCount: deliveries.length }))
-  await prisma.$disconnect()
-  await pool.end()
+    console.log(`Backfilling ${deliveries.length} deliveries…`)
+
+    const products = new Set(
+      (await client.query(`SELECT id::text FROM products`)).rows.map(r => r.id),
+    )
+    const clients = new Set(
+      (await client.query(`SELECT id::text FROM clients`)).rows.map(r => r.id),
+    )
+    const saleOrders = new Set(
+      (await client.query(`SELECT id::text FROM sale_orders`)).rows.map(r => r.id),
+    )
+    const users = new Set(
+      (await client.query(`SELECT id::text FROM users`)).rows.map(r => r.id),
+    )
+
+    let ok = 0
+    let fail = 0
+    for (const r of deliveries) {
+      const blobId = String(r?.id ?? '').trim()
+      if (!blobId) continue
+      try {
+        await client.query('BEGIN')
+        const saleOrderId = asUuid(r.saleOrderId) && saleOrders.has(r.saleOrderId) ? r.saleOrderId : null
+        const clientId = asUuid(r.customerId) && clients.has(r.customerId) ? r.customerId : null
+        const preparedBy =
+          asUuid(r.preparedByUserId) && users.has(r.preparedByUserId) ? r.preparedByUserId : null
+        const id = UUID_RE.test(blobId) ? blobId : uuidFromKey('delivery', blobId)
+        const lines = Array.isArray(r.lines) ? r.lines : []
+
+        const existing = await client.query(
+          `SELECT id::text AS id FROM delivery_notes WHERE blob_id = $1 OR id = $2::uuid LIMIT 1`,
+          [blobId, id],
+        )
+        const dnId = existing.rows[0]?.id ?? id
+
+        if (existing.rows[0]) {
+          await client.query(
+            `UPDATE delivery_notes SET
+              blob_id = $2, dn_number = $3, sale_order_id = $4::uuid, client_id = $5::uuid,
+              sale_order_ref = $6, customer_name = $7, status = $8,
+              delivery_date = $9::date, delivery_address = $10,
+              recipient_name = $11, recipient_phone = $12, recipient_id_number = $13,
+              notes = $14, warranty_created = $15,
+              prepared_at = $16::timestamptz, prepared_by = $17::uuid, created_by = $17::uuid,
+              updated_at = NOW()
+             WHERE id = $1::uuid`,
+            [
+              dnId, blobId, String(r.ref || blobId).slice(0, 30), saleOrderId, clientId,
+              r.saleOrderRef ? String(r.saleOrderRef).slice(0, 40) : null,
+              r.customerName ? String(r.customerName).slice(0, 200) : null,
+              String(r.status || 'waiting').slice(0, 30),
+              r.date || null, r.deliveryAddress || null,
+              r.recipientName ? String(r.recipientName).slice(0, 150) : null,
+              r.recipientPhone ? String(r.recipientPhone).slice(0, 20) : null,
+              r.recipientIdNumber ? String(r.recipientIdNumber).slice(0, 40) : null,
+              r.notes || null, Boolean(r.warrantyCreated),
+              r.preparedAt || null, preparedBy,
+            ],
+          )
+          await client.query(`DELETE FROM delivery_note_items WHERE dn_id = $1::uuid`, [dnId])
+        } else {
+          await client.query(
+            `INSERT INTO delivery_notes (
+              id, blob_id, dn_number, sale_order_id, client_id, sale_order_ref, customer_name,
+              status, delivery_date, delivery_address, recipient_name, recipient_phone,
+              recipient_id_number, notes, warranty_created, prepared_at, prepared_by, created_by
+            ) VALUES (
+              $1::uuid, $2, $3, $4::uuid, $5::uuid, $6, $7, $8, $9::date, $10, $11, $12, $13, $14, $15,
+              $16::timestamptz, $17::uuid, $17::uuid
+            )`,
+            [
+              dnId, blobId, String(r.ref || blobId).slice(0, 30), saleOrderId, clientId,
+              r.saleOrderRef ? String(r.saleOrderRef).slice(0, 40) : null,
+              r.customerName ? String(r.customerName).slice(0, 200) : null,
+              String(r.status || 'waiting').slice(0, 30),
+              r.date || null, r.deliveryAddress || null,
+              r.recipientName ? String(r.recipientName).slice(0, 150) : null,
+              r.recipientPhone ? String(r.recipientPhone).slice(0, 20) : null,
+              r.recipientIdNumber ? String(r.recipientIdNumber).slice(0, 40) : null,
+              r.notes || null, Boolean(r.warrantyCreated),
+              r.preparedAt || null, preparedBy,
+            ],
+          )
+        }
+
+        for (let idx = 0; idx < lines.length; idx++) {
+          const line = lines[idx]
+          const serialIds = Array.isArray(line.serialIds) ? line.serialIds.map(String).filter(Boolean) : []
+          const productId = asUuid(line.productId) && products.has(line.productId) ? line.productId : null
+          const serialNumberId = serialIds.find(s => UUID_RE.test(s)) || null
+          await client.query(
+            `INSERT INTO delivery_note_items (
+              id, dn_id, product_id, serial_number_id, description, product_name,
+              qty, qty_done, serial_ids, source_location, line_order
+            ) VALUES (
+              $1::uuid, $2::uuid, $3::uuid, $4::uuid, $5, $6, $7, $8, $9::text[], $10, $11
+            )`,
+            [
+              uuidFromKey('dn-line', `${blobId}:${idx}`),
+              dnId,
+              productId,
+              serialNumberId,
+              line.productName ? String(line.productName) : null,
+              line.productName ? String(line.productName).slice(0, 200) : null,
+              Math.max(0, Number(line.qty) || 0),
+              Math.max(0, Number(line.qtyDone) || 0),
+              serialIds,
+              line.sourceLocation ? String(line.sourceLocation).slice(0, 40) : null,
+              idx,
+            ],
+          )
+        }
+
+        await client.query('COMMIT')
+        ok++
+      } catch (e) {
+        await client.query('ROLLBACK')
+        fail++
+        console.error('fail', blobId, e.message)
+      }
+    }
+
+    const notes = (await client.query(`SELECT count(*)::int AS c FROM delivery_notes`)).rows[0].c
+    const items = (await client.query(`SELECT count(*)::int AS c FROM delivery_note_items`)).rows[0].c
+    console.log(JSON.stringify({ mirrored: ok, failed: fail, prismaDeliveryNotes: notes, prismaItems: items, blobCount: deliveries.length }))
+  } finally {
+    client.release()
+    await pool.end()
+  }
 }
 
 main().catch(e => {
