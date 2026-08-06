@@ -39,4 +39,8 @@
 
 ## Ship readiness
 
-Direction B Sales chrome + motion + polish is ready for Contabo deploy on branch `cursor/sales-direction-b-ddc8` (or merge to `master` then deploy).
+Direction B Sales chrome + motion + polish is **deployed** to Contabo (`erp.deed.co.ke`) on branch `cursor/sales-direction-b-ddc8` @ `13463e2` (2026-08-06). Hard-refresh `/sales`.
+
+## Verify artifacts
+
+`/opt/cursor/artifacts/ux-sales-phase7-8/` — desktop list, mobile list, orders desktop.  
