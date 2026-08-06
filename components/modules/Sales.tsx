@@ -1204,7 +1204,7 @@ function SalesContent() {
     setEditLineDesc(l.productName ?? l.description ?? '')
   }
   const cancelEditLine = () => setEditingLineId(null)
-  const saveEditLine = (lineId: string) => {
+  const saveEditLine = async (lineId: string) => {
     if (!activeOrder) return
     const qty = Math.max(0, Number(editLineQty) || 0)
     const unitPrice = Math.max(0, Number(editLinePrice) || 0)
@@ -1217,9 +1217,9 @@ function SalesContent() {
     })
     const sub = updatedLines.reduce((a, l) => a + l.subtotal, 0)
     const tax = updatedLines.reduce((a, l) => a + Math.round(l.subtotal * (l.taxRate ?? 0) / 100), 0)
-    updateSaleOrder(activeOrder.id, { lines: updatedLines, subtotal: sub, taxTotal: tax, total: sub + tax })
     setEditingLineId(null)
-    showToast('Line saved', 'success')
+    const ok = await updateSaleOrder(activeOrder.id, { lines: updatedLines, subtotal: sub, taxTotal: tax, total: sub + tax })
+    if (ok !== false) showToast('Line saved', 'success')
   }
 
   // ── Add line handler ────────────────────────────────────────────────────
@@ -1604,39 +1604,41 @@ function SalesContent() {
                               type="button"
                               className="sp-btn"
                               onClick={() => {
-                                let lines = activeOrder.lines
-                                if (editingLineId) {
-                                  const qty = Math.max(0, Number(editLineQty) || 0)
-                                  const unitPrice = Math.max(0, Number(editLinePrice) || 0)
-                                  const discount = Math.max(0, Math.min(100, Number(editLineDiscount) || 0))
-                                  const taxRate = Math.max(0, Number(editLineTax) || 0)
-                                  const subtotal = Math.round(qty * unitPrice * (1 - discount / 100))
-                                  lines = activeOrder.lines.map(l => l.id !== editingLineId ? l : {
-                                    ...l,
-                                    productName: editLineDesc || l.productName,
-                                    description: editLineDesc || l.description,
-                                    qty,
-                                    unitPrice,
-                                    discount,
-                                    discountPercent: discount,
-                                    taxRate,
-                                    subtotal,
+                                void (async () => {
+                                  let lines = activeOrder.lines
+                                  if (editingLineId) {
+                                    const qty = Math.max(0, Number(editLineQty) || 0)
+                                    const unitPrice = Math.max(0, Number(editLinePrice) || 0)
+                                    const discount = Math.max(0, Math.min(100, Number(editLineDiscount) || 0))
+                                    const taxRate = Math.max(0, Number(editLineTax) || 0)
+                                    const subtotal = Math.round(qty * unitPrice * (1 - discount / 100))
+                                    lines = activeOrder.lines.map(l => l.id !== editingLineId ? l : {
+                                      ...l,
+                                      productName: editLineDesc || l.productName,
+                                      description: editLineDesc || l.description,
+                                      qty,
+                                      unitPrice,
+                                      discount,
+                                      discountPercent: discount,
+                                      taxRate,
+                                      subtotal,
+                                    })
+                                    setEditingLineId(null)
+                                  }
+                                  const sub = lines.reduce((a, l) => a + (Number(l.subtotal) || 0), 0)
+                                  const tax = lines.reduce((a, l) => a + Math.round((Number(l.subtotal) || 0) * (Number(l.taxRate) || 0) / 100), 0)
+                                  const ok = await updateSaleOrder(activeOrder.id, {
+                                    lines,
+                                    subtotal: sub,
+                                    taxTotal: tax,
+                                    total: sub + tax,
+                                    notes: activeOrder.notes,
+                                    validUntil: activeOrder.validUntil,
+                                    paymentTerms: activeOrder.paymentTerms,
+                                    salespersonName: activeOrder.salespersonName,
                                   })
-                                  setEditingLineId(null)
-                                }
-                                const sub = lines.reduce((a, l) => a + (Number(l.subtotal) || 0), 0)
-                                const tax = lines.reduce((a, l) => a + Math.round((Number(l.subtotal) || 0) * (Number(l.taxRate) || 0) / 100), 0)
-                                updateSaleOrder(activeOrder.id, {
-                                  lines,
-                                  subtotal: sub,
-                                  taxTotal: tax,
-                                  total: sub + tax,
-                                  notes: activeOrder.notes,
-                                  validUntil: activeOrder.validUntil,
-                                  paymentTerms: activeOrder.paymentTerms,
-                                  salespersonName: activeOrder.salespersonName,
-                                })
-                                showToast('Quotation saved', 'success')
+                                  if (ok !== false) showToast('Quotation saved', 'success')
+                                })()
                               }}
                             >
                               Save
