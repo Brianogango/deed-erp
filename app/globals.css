@@ -3810,80 +3810,141 @@
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   Inventory pilot (Operate mode) — visible chrome for /operations
-   Scoped to .inventory-pilot so other modules are unchanged.
+   Inventory Operate pilot — /operations only
+   Impeccable bolder + Operate: amplify navy into a full command band so the
+   module cannot be mistaken for the previous white compact chrome.
    ═══════════════════════════════════════════════════════════════════════════ */
 
-.inventory-pilot {
-  --inventory-rail-gap: 0.5rem;
-}
-
-.inventory-pilot .mod-header {
-  position: relative;
-  padding-block: 0.85rem;
-  padding-inline: 1rem 1rem;
+.inventory-pilot.mod-page {
   background:
-    linear-gradient(90deg, var(--navy) 0 4px, transparent 4px),
-    var(--bg-card);
-  box-shadow: var(--shadow-xs);
+    linear-gradient(180deg, color-mix(in srgb, var(--navy) 6%, var(--bg-page)) 0 11rem, var(--bg-page) 11rem);
 }
 
-.inventory-pilot .mod-header-icon {
-  width: 2.5rem;
-  height: 2.5rem;
-  border-radius: 0.5rem;
-  background: var(--navy);
-  border: none;
+.inventory-pilot.mod-page > .mod-header {
+  position: relative;
+  min-height: 3.75rem;
+  padding: 0.85rem 1rem;
+  gap: 0.75rem;
+  border-bottom: none;
+  background: linear-gradient(135deg, var(--navy) 0%, var(--navy-dark) 72%, #12163f 100%);
+  color: #fff;
+  box-shadow: 0 8px 24px color-mix(in srgb, var(--navy) 28%, transparent);
+}
+
+.inventory-pilot .mod-header-icon,
+.inventory-pilot.mod-page > .mod-header .w-9.h-9 {
+  width: 2.5rem !important;
+  height: 2.5rem !important;
+  border-radius: 0.55rem;
+  background: color-mix(in srgb, #fff 14%, transparent);
+  border: 1px solid color-mix(in srgb, #fff 22%, transparent);
   color: #fff !important;
+  box-shadow: none;
 }
 
 .inventory-pilot .mod-header-icon [style] {
   color: inherit !important;
 }
 
-.inventory-pilot .erp-module-title {
-  font-size: 1.2rem;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  color: var(--navy);
+.inventory-pilot .erp-module-title,
+.inventory-pilot.mod-page > .mod-header h1 {
+  font-size: 1.35rem !important;
+  font-weight: 750;
+  letter-spacing: -0.025em;
+  line-height: 1.15;
+  color: #fff;
 }
 
-.inventory-pilot .erp-module-subtitle {
+.inventory-pilot .erp-module-subtitle,
+.inventory-pilot.mod-page > .mod-header p {
   font-size: 0.78rem;
-  color: var(--text-3);
+  color: color-mix(in srgb, #fff 72%, transparent);
   font-weight: 500;
 }
 
-.inventory-pilot .mod-tabs {
-  background: var(--bg-card);
-  border-bottom: 1px solid var(--border);
-  padding-inline: 0.65rem;
-  gap: 0.25rem;
+.inventory-pilot.mod-page > .mod-header .badge {
+  display: inline-flex;
+  min-height: 1.35rem;
+  background: color-mix(in srgb, #fff 16%, transparent);
+  border-color: color-mix(in srgb, #fff 28%, transparent);
+  color: #fff;
+  box-shadow: none;
 }
 
-.inventory-pilot .mod-tab {
-  border-radius: 0.4rem;
-  font-weight: 600;
-  color: var(--text-3);
+.inventory-pilot .mod-header .btn-primary {
+  background: #fff;
+  color: var(--navy);
+  border-color: #fff;
+  box-shadow: none;
+}
+
+.inventory-pilot .mod-header .btn-primary:hover {
+  background: color-mix(in srgb, #fff 90%, var(--accent-cyan));
+  color: var(--navy-dark);
+}
+
+.inventory-pilot .mod-header .btn-secondary {
+  background: transparent;
+  color: #fff;
+  border-color: color-mix(in srgb, #fff 35%, transparent);
+}
+
+.inventory-pilot .mod-header .btn-secondary:hover {
+  background: color-mix(in srgb, #fff 12%, transparent);
+  border-color: color-mix(in srgb, #fff 55%, transparent);
+  color: #fff;
+}
+
+.inventory-pilot .mod-tabs,
+.inventory-pilot .mod-tabs.mod-tabs-adaptive,
+.inventory-pilot .mod-tabs.mod-tabs-tablet-grid,
+.inventory-pilot .mod-tabs.mod-tabs-desktop-full {
+  background: var(--navy-dark);
+  border-bottom: 1px solid color-mix(in srgb, #fff 10%, transparent);
+  padding: 0.35rem 0.65rem 0.45rem;
+  gap: 0.15rem;
+}
+
+.inventory-pilot .mod-tab,
+.inventory-pilot .mod-tabs.mod-tabs-adaptive .mod-tab,
+.inventory-pilot .mod-tabs.mod-tabs-tablet-grid .mod-tab {
+  border-radius: 0.35rem;
+  font-weight: 650;
+  color: color-mix(in srgb, #fff 68%, transparent);
+  background: transparent;
+  border: 0;
+  box-shadow: none;
 }
 
 .inventory-pilot .mod-tab:hover {
-  background: var(--bg-muted);
-  color: var(--text-1);
+  background: color-mix(in srgb, #fff 10%, transparent);
+  color: #fff;
 }
 
 .inventory-pilot .mod-tab.active {
-  background: var(--navy);
-  border-color: var(--navy);
+  background: color-mix(in srgb, #fff 14%, transparent);
   color: #fff;
+  border-color: transparent;
   box-shadow: none;
+}
+
+.inventory-pilot .mod-tab.active::after {
+  background: var(--accent-cyan);
+  height: 3px;
+  bottom: 0.05rem;
+  border-radius: 2px;
 }
 
 .inventory-pilot-rail {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--inventory-rail-gap);
+  gap: 0;
   margin: 0 0 0.85rem;
+  border: 1px solid color-mix(in srgb, var(--navy) 18%, var(--border));
+  border-radius: 0.55rem;
+  overflow: hidden;
+  background: var(--bg-card);
+  box-shadow: var(--shadow-xs);
 }
 
 @media (min-width: 768px) {
@@ -3894,36 +3955,58 @@
 
 .inventory-pilot-stat {
   display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 0.15rem;
-  padding: 0.7rem 0.85rem;
-  border: 1px solid var(--border-lt);
-  border-radius: 0.5rem;
-  background: var(--bg-card);
+  flex-direction: row;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.65rem;
+  padding: 0.8rem 0.95rem;
+  border: 0;
+  border-right: 1px solid var(--border-lt);
+  border-bottom: 1px solid var(--border-lt);
+  border-radius: 0;
+  background: transparent;
   text-align: left;
   cursor: pointer;
-  transition: border-color var(--motion-fast) ease-out, box-shadow var(--motion-fast) ease-out, transform 120ms ease-out;
+  transition: background-color 140ms ease-out, transform 120ms ease-out;
+}
+
+@media (min-width: 768px) {
+  .inventory-pilot-stat {
+    border-bottom: 0;
+  }
+
+  .inventory-pilot-stat:last-child {
+    border-right: 0;
+  }
+}
+
+@media (max-width: 767px) {
+  .inventory-pilot-stat:nth-child(2n) {
+    border-right: 0;
+  }
+
+  .inventory-pilot-stat:nth-last-child(-n + 2) {
+    border-bottom: 0;
+  }
 }
 
 .inventory-pilot-stat:hover {
-  border-color: var(--border-strong);
-  box-shadow: var(--shadow-xs);
+  background: color-mix(in srgb, var(--navy) 5%, var(--bg-card));
 }
 
 .inventory-pilot-stat:active {
-  transform: scale(0.98);
+  transform: scale(0.99);
 }
 
 .inventory-pilot-stat:focus-visible {
   outline: 2px solid var(--primary);
-  outline-offset: 2px;
+  outline-offset: -2px;
+  z-index: 1;
 }
 
 .inventory-pilot-stat.is-active {
-  border-color: var(--navy);
-  box-shadow: inset 0 0 0 1px var(--navy);
-  background: var(--primary-light);
+  background: color-mix(in srgb, var(--navy) 9%, var(--bg-card));
+  box-shadow: inset 0 -3px 0 var(--accent-cyan);
 }
 
 .inventory-pilot-stat.tone-warning .inventory-pilot-stat-value {
@@ -3931,9 +4014,10 @@
 }
 
 .inventory-pilot-stat-value {
-  font-size: 1.25rem;
+  order: 2;
+  font-size: 1.35rem;
   font-weight: 750;
-  line-height: 1.1;
+  line-height: 1;
   letter-spacing: -0.03em;
   color: var(--navy);
   font-variant-numeric: tabular-nums;
@@ -3941,11 +4025,14 @@
 }
 
 .inventory-pilot-stat-label {
-  font-size: 0.7rem;
-  font-weight: 600;
-  letter-spacing: 0.02em;
+  order: 1;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
-  color: var(--text-4);
+  color: var(--text-3);
+  max-width: 7.5rem;
+  line-height: 1.25;
 }
 
 .inventory-pilot .erp-ops-summary {
@@ -3965,16 +4052,16 @@
   flex-direction: column;
   align-items: flex-start;
   gap: 0.1rem;
-  padding: 0.45rem 0.65rem;
-  border: 1px solid var(--border-lt);
+  padding: 0.5rem 0.7rem;
+  border: 1px solid var(--border);
   border-radius: 0.4rem;
-  background: var(--bg-surface);
-  min-width: 5.5rem;
+  background: var(--bg-card);
+  min-width: 5.75rem;
 }
 
 .inventory-pilot .erp-ops-summary-btn:hover {
-  border-color: var(--primary);
-  background: var(--primary-light);
+  border-color: var(--navy);
+  background: color-mix(in srgb, var(--navy) 6%, var(--bg-card));
 }
 
 .inventory-pilot .erp-ops-summary-btn:hover .erp-ops-summary-value {
@@ -3982,52 +4069,52 @@
 }
 
 .inventory-pilot .erp-ops-summary-value {
-  font-size: 0.95rem;
+  font-size: 1rem;
   font-weight: 750;
-  color: var(--text-1);
+  color: var(--navy);
   font-variant-numeric: tabular-nums;
   font-family: var(--font-dm-mono), ui-monospace, monospace;
 }
 
 .inventory-pilot .erp-ops-summary-label {
   font-size: 0.65rem;
-  font-weight: 600;
+  font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.03em;
   color: var(--text-4);
 }
 
 .inventory-pilot .erp-table-page-title {
-  font-size: 1.05rem;
-  font-weight: 700;
+  font-size: 1.1rem;
+  font-weight: 750;
   color: var(--navy);
-  letter-spacing: -0.015em;
+  letter-spacing: -0.02em;
 }
 
 .inventory-pilot .erp-table-page-surface {
-  border-color: var(--border);
-  border-radius: 0.5rem;
-  box-shadow: var(--shadow-xs);
+  border-color: color-mix(in srgb, var(--navy) 14%, var(--border));
+  border-radius: 0.55rem;
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--navy) 8%, transparent);
 }
 
 .inventory-pilot .dt-toolbar {
-  background: var(--bg-surface);
+  background: color-mix(in srgb, var(--navy) 4%, var(--bg-surface));
   border-bottom: 1px solid var(--border-lt);
 }
 
 .inventory-pilot .dt-wrap > table thead th,
 .inventory-pilot .dt-scroll > table thead th {
-  background: var(--table-head-bg);
+  background: color-mix(in srgb, var(--navy) 6%, var(--table-head-bg));
   font-size: 0.68rem;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.045em;
   text-transform: uppercase;
-  color: var(--text-3);
-  font-weight: 700;
+  color: var(--navy);
+  font-weight: 750;
 }
 
 .inventory-pilot .dt-wrap > table tbody tr:hover,
 .inventory-pilot .dt-scroll > table tbody tr:hover {
-  background: var(--primary-light);
+  background: color-mix(in srgb, var(--navy) 5%, var(--bg-card));
 }
 
 .inventory-warehouse-board {
@@ -4049,6 +4136,14 @@
 }
 
 .inventory-pilot .inventory-pilot-search .form-input:focus {
-  border-color: var(--primary);
-  box-shadow: 0 0 0 3px var(--primary-light);
+  border-color: var(--navy);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--navy) 14%, transparent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .inventory-pilot-stat,
+  .inventory-pilot-stat:active {
+    transition: none;
+    transform: none;
+  }
 }

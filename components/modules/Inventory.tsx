@@ -1314,11 +1314,11 @@ function InventoryContent() {
 
       <ModuleHeader
         title="Inventory"
-        subtitle="Stock management and warehouse control"
+        subtitle="Catalog · warehouse · movements · stock control"
         icon={<Fa icon={faBoxesStacked} />}
         count={kpis.productMasters}
-        color="var(--navy)"
-        subtitleMode="compact"
+        color="#FFFFFF"
+        subtitleMode="visible"
         primaryAction={
           canEditStock && (tab === 'product_master' || tab === 'product_catalog') ? (
             <PrimaryActionButton onClick={openNew}>New product</PrimaryActionButton>
