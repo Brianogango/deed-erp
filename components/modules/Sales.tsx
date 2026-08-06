@@ -95,6 +95,7 @@ import {
   deliveryDeliveredTotal,
   canGenerateDeliveryNote,
   saleOrderInvoiceStatus,
+  invoiceableQty,
   isOpenDeliveryStatus,
   deliveriesForSaleOrder,
   remainingUndeliveredByProduct,
@@ -380,6 +381,9 @@ function SalesContent() {
   const [showDelConfirm, setShowDelConfirm] = useState(false)
   const [showCancelConfirm, setShowCancelConfirm] = useState(false)
   const [showResetDraftConfirm, setShowResetDraftConfirm] = useState(false)
+  const [showPartialInvoiceModal, setShowPartialInvoiceModal] = useState(false)
+  const [partialInvoiceQtys, setPartialInvoiceQtys] = useState<Record<string, string>>({})
+  const [creatingPartialInvoice, setCreatingPartialInvoice] = useState(false)
   const [showAddLine, setShowAddLine] = useState(false)
   const [addLineQty, setAddLineQty] = useState('1')
   const [addLineDiscount, setAddLineDiscount] = useState('0')
@@ -723,6 +727,45 @@ function SalesContent() {
     startUxTask('sales_quote_create', { module: 'sales' })
     showToast(`Duplicated ${so.ref} as a new draft quotation`, 'success')
   }
+  /** Invoiceable lines for the partial-invoice picker: id, label, and max qty capped by delivery/invoiced progress. */
+  const invoiceableLinesFor = (so: SalesOrderView) =>
+    (so.lines ?? [])
+      .filter((l: any) => l.lineType !== 'section')
+      .map((l: any) => ({
+        id: String(l.id),
+        label: l.productName || l.description || 'Item',
+        maxQty: invoiceableQty({ qty: Number(l.qty) || 0, qtyDelivered: Number(l.qtyDelivered) || 0, qtyInvoiced: Number(l.qtyInvoiced) || 0, invoicePolicy: 'delivery' }),
+      }))
+      .filter(l => l.maxQty > 0)
+
+  const openPartialInvoiceModal = (so: SalesOrderView) => {
+    const lines = invoiceableLinesFor(so)
+    setPartialInvoiceQtys(Object.fromEntries(lines.map(l => [l.id, String(l.maxQty)])))
+    setShowPartialInvoiceModal(true)
+  }
+
+  const submitPartialInvoice = async () => {
+    if (!activeOrder) return
+    const overrides = Object.entries(partialInvoiceQtys)
+      .map(([itemId, qty]) => ({ itemId, qty: Math.max(0, Number(qty) || 0) }))
+      .filter(o => o.qty > 0)
+    if (overrides.length === 0) {
+      showToast('Enter a quantity greater than zero for at least one line', 'error')
+      return
+    }
+    setCreatingPartialInvoice(true)
+    try {
+      const soPayment = getDocumentPaymentDetails(activeOrder.id)
+      const inv = await Promise.resolve(createInvoiceFromSO(activeOrder.id, overrides))
+      if (inv?.id) {
+        setDocumentPaymentDetails(inv.id, soPayment)
+        setShowPartialInvoiceModal(false)
+      }
+    } finally {
+      setCreatingPartialInvoice(false)
+    }
+  }
+
   const openDeliveryView = async (deliveryId?: string) => {
     if (!activeOrder) return
     // Heal duplicate open pickings left by concurrent confirm (keep prepared / SO-linked).
@@ -1553,6 +1596,7 @@ function SalesContent() {
                             { label: sendingQuoteId === activeOrder.id ? 'Sending…' : 'Send by Email', icon: faFileInvoice, disabled: sendingQuoteId === activeOrder.id, onClick: () => openSendQuoteModal(activeOrder) },
                             { label: 'Preview', icon: faFileAlt, onClick: () => previewSalesDocument(activeOrder, 'Sale Order', 'SALES ORDER') },
                             { label: 'Print', icon: faPrint, onClick: () => downloadSalesDocument(activeOrder, 'Sale Order', 'SO') },
+                            ...(canInvoiceFromSO && invoiceableLinesFor(activeOrder).length > 0 ? [{ label: 'Create Partial Invoice…', icon: faFileInvoiceDollar, onClick: () => openPartialInvoiceModal(activeOrder) }] : []),
                             ...(activeDeliveries.some(d => canGenerateDeliveryNote(d)) ? [{ label: 'Print delivery note', icon: faTruck, onClick: () => { const del = activeDeliveries.find(d => canGenerateDeliveryNote(d)) ?? activeDeliveries[0]; setDnRecipientName(del.recipientName ?? activeOrder.customerName ?? ''); setDnRecipientPhone(del.recipientPhone ?? ''); setDnRecipientId(del.recipientIdNumber ?? ''); setDnAddress(del.deliveryAddress ?? ''); setDnNotes(del.notes ?? ''); setShowDnModal(true) } }] : []),
                             ...(activeOrder.locked && isAdmin ? [{ label: 'Unlock', icon: faRotateLeft, onClick: () => setSaleOrderLock(activeOrder.id, false) }] : []),
                             ...(!activeOrder.locked && systemSettings.salesLockConfirmed && isAdmin ? [{ label: 'Lock', icon: faSave, onClick: () => setSaleOrderLock(activeOrder.id, true) }] : []),
@@ -2137,6 +2181,45 @@ function SalesContent() {
             <div className="flex gap-2 justify-end pt-4 border-t border-[var(--border-lt)]">
               <button className="btn-outline" onClick={() => setShowAddLine(false)}>Cancel</button>
               <button className="btn-primary" onClick={handleAddLine} disabled={!addLineProduct || !Number(addLineQty)}>Add to Order</button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Partial invoice — pick which lines/quantities to invoice this round
+          instead of the one-click "Create Invoice" which bills everything
+          currently invoiceable. Each qty is capped server-side regardless of
+          what's typed here. */}
+      {showPartialInvoiceModal && activeOrder && (
+        <Modal title={`Create Partial Invoice — ${activeOrder.ref}`} onClose={() => setShowPartialInvoiceModal(false)} width={520}>
+          <div className="flex flex-col gap-4">
+            <p className="text-xs text-[var(--text-3)]">Choose how much of each delivered line to invoice now. Leave a line at 0 to invoice it later.</p>
+            <div className="flex flex-col gap-3">
+              {invoiceableLinesFor(activeOrder).map(l => (
+                <div key={l.id} className="flex items-center justify-between gap-3 p-3 rounded-xl bg-[var(--bg-surface)] border border-[var(--border-lt)]">
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold text-[var(--text-1)] truncate">{l.label}</p>
+                    <p className="text-[10px] text-[var(--text-4)]">Up to {l.maxQty} available to invoice</p>
+                  </div>
+                  <input
+                    type="number"
+                    min={0}
+                    max={l.maxQty}
+                    className="form-input text-xs w-20 text-right"
+                    value={partialInvoiceQtys[l.id] ?? ''}
+                    onChange={e => {
+                      const clamped = Math.max(0, Math.min(l.maxQty, Number(e.target.value) || 0))
+                      setPartialInvoiceQtys(prev => ({ ...prev, [l.id]: String(clamped) }))
+                    }}
+                  />
+                </div>
+              ))}
+            </div>
+            <div className="flex gap-2 justify-end pt-4 border-t border-[var(--border-lt)]">
+              <button className="btn-outline" onClick={() => setShowPartialInvoiceModal(false)}>Cancel</button>
+              <button className="btn-primary" onClick={() => void submitPartialInvoice()} disabled={creatingPartialInvoice}>
+                {creatingPartialInvoice ? 'Creating…' : 'Create Invoice'}
+              </button>
             </div>
           </div>
         </Modal>

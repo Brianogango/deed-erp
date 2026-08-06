@@ -20,12 +20,26 @@ const WRITE_ROLES = ['director', 'finance_officer', 'admin_officer']
  * Locks line qtyInvoiced on the Prisma sale order items in the same transaction.
  */
 export async function POST(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: { id: string } },
 ) {
   return withApiErrorHandling(async () => {
     const actor = await requireRole(WRITE_ROLES)
     const orderId = params.id
+
+    // Optional partial-invoice quantity picker: { lines: [{ itemId, qty }] }.
+    // When provided, only the listed line items are invoiced, each capped at
+    // its own invoiceable qty — never trust the client's qty beyond that cap.
+    // Omitted entirely (or no JSON body) keeps the original all-invoiceable
+    // behavior for the one-click "Create Invoice" action.
+    const body = await request.json().catch(() => null) as { lines?: Array<{ itemId?: string; qty?: number }> } | null
+    const overrideQtyByItemId = Array.isArray(body?.lines)
+      ? new Map(
+          body!.lines!
+            .filter((l): l is { itemId: string; qty: number } => typeof l?.itemId === 'string' && l.itemId.length > 0)
+            .map(l => [l.itemId, Math.max(0, Number(l.qty) || 0)] as const),
+        )
+      : null
 
     let order = await prisma.saleOrder.findUnique({
       where: { id: orderId },
@@ -87,18 +101,25 @@ export async function POST(
     }))
 
     const invoiceable = healedItems.map(item => {
-      const qty = invoiceableQty({
+      const maxQty = invoiceableQty({
         qty: Number(item.qty) || 0,
         qtyDelivered: Number(item.qtyDelivered) || 0,
         qtyInvoiced: Number(item.qtyInvoiced) || 0,
         invoicePolicy: 'delivery',
       })
+      // No override map: full auto-invoice (existing one-click behavior).
+      // Override map present but this item absent: 0 (not selected this round).
+      const qty = overrideQtyByItemId === null
+        ? maxQty
+        : Math.min(maxQty, overrideQtyByItemId.get(item.id) ?? 0)
       return { item, qty }
     }).filter(entry => entry.qty > 0)
 
     if (invoiceable.length === 0) {
       return NextResponse.json({
-        error: 'Nothing to invoice — quantities are already invoiced or not yet delivered',
+        error: overrideQtyByItemId
+          ? 'Select at least one line with a quantity greater than zero to invoice'
+          : 'Nothing to invoice — quantities are already invoiced or not yet delivered',
       }, { status: 409 })
     }
 

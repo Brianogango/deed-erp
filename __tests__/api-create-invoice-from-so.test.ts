@@ -241,4 +241,76 @@ describe('POST /api/sale-orders/:id/create-invoice', () => {
     const createData = mockPrisma.invoice.create.mock.calls.at(-1)?.[0]?.data
     expect(createData.items.create[0].qty).toBe(1)
   })
+
+  describe('partial-invoice line overrides', () => {
+    it('caps a requested override qty at the line’s invoiceable maximum', async () => {
+      const partial = {
+        ...saleOrder,
+        items: [{ ...saleOrder.items[0], qty: 3, qtyDelivered: 3, qtyInvoiced: 0 }],
+      }
+      mockPrisma.saleOrder.findUnique.mockResolvedValue(partial)
+      mockPrisma.$transaction.mockImplementation(async (fn: any) => fn({
+        saleOrder: { findUnique: vi.fn().mockResolvedValue(partial) },
+        saleOrderItem: { update: mockPrisma.saleOrderItem.update.mockResolvedValue({}) },
+        invoice: { create: mockPrisma.invoice.create },
+      }))
+      const res = await POST(
+        new NextRequest('http://localhost', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ lines: [{ itemId: ITEM_ID, qty: 999 }] }),
+        }),
+        { params: { id: ORDER_ID } },
+      )
+      expect(res.status).toBe(200)
+      const createData = mockPrisma.invoice.create.mock.calls.at(-1)?.[0]?.data
+      expect(createData.items.create[0].qty).toBe(3)
+    })
+
+    it('only invoices lines explicitly listed in the override, leaving others untouched', async () => {
+      const otherItemId = '11111111-1111-1111-1111-111111111111'
+      const twoLine = {
+        ...saleOrder,
+        items: [
+          saleOrder.items[0],
+          { ...saleOrder.items[0], id: otherItemId, productId: 'prod-2', description: 'Mouse' },
+        ],
+      }
+      mockPrisma.saleOrder.findUnique.mockResolvedValue(twoLine)
+      mockPrisma.$transaction.mockImplementation(async (fn: any) => fn({
+        saleOrder: { findUnique: vi.fn().mockResolvedValue(twoLine) },
+        saleOrderItem: { update: mockPrisma.saleOrderItem.update.mockResolvedValue({}) },
+        invoice: { create: mockPrisma.invoice.create },
+      }))
+      const res = await POST(
+        new NextRequest('http://localhost', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ lines: [{ itemId: ITEM_ID, qty: 1 }] }),
+        }),
+        { params: { id: ORDER_ID } },
+      )
+      expect(res.status).toBe(200)
+      const createData = mockPrisma.invoice.create.mock.calls.at(-1)?.[0]?.data
+      expect(createData.items.create).toHaveLength(1)
+      expect(mockPrisma.saleOrderItem.update).toHaveBeenCalledTimes(1)
+      expect(mockPrisma.saleOrderItem.update).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { id: ITEM_ID } }),
+      )
+    })
+
+    it('rejects an override payload with nothing selected', async () => {
+      const res = await POST(
+        new NextRequest('http://localhost', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ lines: [{ itemId: ITEM_ID, qty: 0 }] }),
+        }),
+        { params: { id: ORDER_ID } },
+      )
+      expect(res.status).toBe(409)
+      expect((await res.json()).error).toMatch(/select at least one line/i)
+      expect(mockPrisma.$transaction).not.toHaveBeenCalled()
+    })
+  })
 })

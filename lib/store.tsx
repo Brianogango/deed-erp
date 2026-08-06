@@ -3082,7 +3082,8 @@ export interface AppState {
   /** Persist successful final DN generation before enabling invoicing. */
   markDeliveryNoteGenerated: (deliveryId: string) => Promise<boolean>
   updateDelivery: (deliveryId: string, p: Partial<Pick<Delivery, 'status' | 'recipientName' | 'recipientPhone' | 'recipientIdNumber' | 'deliveryAddress' | 'notes' | 'deliveryNoteGeneratedAt' | 'deliveryNoteGeneratedByUserId'>>) => void
-  createInvoiceFromSO: (orderId: string) => Promise<Invoice> | Invoice
+  /** lineOverrides: partial-invoice qty picker — { itemId, qty } per SO line, capped server-side. Omit to invoice everything currently invoiceable. */
+  createInvoiceFromSO: (orderId: string, lineOverrides?: Array<{ itemId: string; qty: number }>) => Promise<Invoice> | Invoice
   deleteSaleOrder: (id: string) => void
 
   // Invoices
@@ -10490,7 +10491,7 @@ const storeCtx: AppState = {
       setDeliveries(prev => prev.map(d => d.id === deliveryId ? { ...d, ...p } : d))
       sync(`/api/deliveries/${deliveryId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(p) })
     },
-    createInvoiceFromSO: async (orderId) => {
+    createInvoiceFromSO: async (orderId, lineOverrides) => {
       if (!canCreateCustomerInvoiceFromSOAction(currentUser())) {
         showToast('Only Finance or Admin Officer can create invoices from a sale order', 'error'); return {} as Invoice;
       }
@@ -10506,7 +10507,13 @@ const storeCtx: AppState = {
 
       // Prefer server-atomic path (qtyInvoiced bump + invoice create in one transaction).
       try {
-        const response = await fetch(`/api/sale-orders/${orderId}/create-invoice`, { method: 'POST' })
+        const response = await fetch(`/api/sale-orders/${orderId}/create-invoice`, {
+          method: 'POST',
+          ...(lineOverrides ? {
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ lines: lineOverrides }),
+          } : {}),
+        })
         const payload = await response.json().catch(() => null) as {
           ok?: boolean
           error?: string
@@ -10588,6 +10595,14 @@ const storeCtx: AppState = {
         }
       } catch {
         // Fall through to client path if server unavailable
+      }
+
+      // A partial-invoice request must never silently fall back to invoicing
+      // everything — that would invoice quantities the user explicitly chose
+      // not to invoice this round.
+      if (lineOverrides) {
+        showToast('Could not reach the server to create the partial invoice — try again', 'error')
+        return {} as Invoice
       }
 
       // Odoo-style invoicing fallback (client) when server path unavailable.
