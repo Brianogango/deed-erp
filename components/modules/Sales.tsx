@@ -32,6 +32,7 @@ import {
   faSave,
   faChevronDown,
   faCopy,
+  faCodeBranch,
 } from '@fortawesome/free-solid-svg-icons'
 import { downloadDeliveryNotePdf } from '@/lib/delivery-note-pdf'
 import SerialMultiSelect from '@/components/SerialMultiSelect'
@@ -300,7 +301,7 @@ function SalesContent() {
     createSaleOrder, updateSaleOrder, confirmSO, ensureWaitingDeliveryForSO, markQuotationSent, setSaleOrderLock,
     addSOLine, removeSOLine, moveSOLine, addSOSection,
     assignSerialsToSOLine, unassignSerialFromSOLine, createInvoiceFromSO, prepareDelivery, validateDelivery, markDeliveryNoteGenerated,
-    deleteSaleOrder, showToast, getStockByLocation, resetSOToDraft, cancelSO,
+    deleteSaleOrder, showToast, getStockByLocation, resetSOToDraft, cancelSO, createNewSOVersion,
     getCustomerCreditStatus, users, currentUserId, systemSettings,
     companySettings, bankAccounts, confirmDeliveryWithStockDeduction,
     updateDelivery, outboundReleases, initRelease,
@@ -384,6 +385,15 @@ function SalesContent() {
   const [showPartialInvoiceModal, setShowPartialInvoiceModal] = useState(false)
   const [partialInvoiceQtys, setPartialInvoiceQtys] = useState<Record<string, string>>({})
   const [creatingPartialInvoice, setCreatingPartialInvoice] = useState(false)
+  const [creatingNewVersion, setCreatingNewVersion] = useState(false)
+  const [showVersionHistory, setShowVersionHistory] = useState(false)
+  const [loadingVersionHistory, setLoadingVersionHistory] = useState(false)
+  const [versionHistoryRows, setVersionHistoryRows] = useState<Array<{
+    id: string; ref: string; versionNumber: number; status: string; total: number
+    createdAt: string; createdByName?: string; isLatest: boolean
+  }>>([])
+  const [compareVersions, setCompareVersions] = useState<{ a: SalesOrderView; b: SalesOrderView } | null>(null)
+  const [loadingCompare, setLoadingCompare] = useState(false)
   const [showAddLine, setShowAddLine] = useState(false)
   const [addLineQty, setAddLineQty] = useState('1')
   const [addLineDiscount, setAddLineDiscount] = useState('0')
@@ -727,6 +737,49 @@ function SalesContent() {
     startUxTask('sales_quote_create', { module: 'sales' })
     showToast(`Duplicated ${so.ref} as a new draft quotation`, 'success')
   }
+
+  const handleCreateNewVersion = async (so: SalesOrderView) => {
+    setCreatingNewVersion(true)
+    try {
+      const created = await createNewSOVersion(so.id)
+      if (created?.id) openOrder(created.id)
+    } finally {
+      setCreatingNewVersion(false)
+    }
+  }
+
+  const openVersionHistory = async (so: SalesOrderView) => {
+    setShowVersionHistory(true)
+    setLoadingVersionHistory(true)
+    try {
+      const res = await fetch(`/api/sale-orders/${so.id}/versions`)
+      const data = await res.json().catch(() => null)
+      setVersionHistoryRows(Array.isArray(data?.versions) ? data.versions : [])
+    } catch {
+      setVersionHistoryRows([])
+    } finally {
+      setLoadingVersionHistory(false)
+    }
+  }
+
+  /** Fetch two full versions and open the line-by-line diff view. */
+  const openCompareVersions = async (idA: string, idB: string) => {
+    setLoadingCompare(true)
+    try {
+      const [resA, resB] = await Promise.all([
+        fetch(`/api/sale-orders/${idA}`),
+        fetch(`/api/sale-orders/${idB}`),
+      ])
+      const [a, b] = await Promise.all([resA.json(), resB.json()])
+      if (a?.id && b?.id) setCompareVersions({ a: normalizeSalesOrderView(a), b: normalizeSalesOrderView(b) })
+      else showToast('Could not load both versions to compare', 'error')
+    } catch {
+      showToast('Could not load both versions to compare', 'error')
+    } finally {
+      setLoadingCompare(false)
+    }
+  }
+
   /** Invoiceable lines for the partial-invoice picker: id, label, and max qty capped by delivery/invoiced progress. */
   const invoiceableLinesFor = (so: SalesOrderView) =>
     (so.lines ?? [])
@@ -1561,6 +1614,8 @@ function SalesContent() {
                               { label: 'Print', icon: faPrint, disabled: !activeOrder.lines.length, onClick: () => downloadSalesDocument(activeOrder, 'Quotation', 'QUOTE', 'QUOTATION') },
                               { label: 'Pro-forma invoice', icon: faFileInvoiceDollar, disabled: !activeOrder.lines.length, onClick: () => downloadProformaInvoice(activeOrder) },
                               { label: 'Duplicate', icon: faCopy, onClick: () => duplicateSaleOrder(activeOrder) },
+                              { label: creatingNewVersion ? 'Creating version…' : 'New Version', icon: faCodeBranch, disabled: creatingNewVersion, onClick: () => void handleCreateNewVersion(activeOrder) },
+                              { label: 'Version History', icon: faClockRotateLeft, onClick: () => void openVersionHistory(activeOrder) },
                               { label: 'Cancel', icon: faBan, tone: 'danger', onClick: () => setShowCancelConfirm(true) },
                               { label: 'Delete', icon: faTrash, tone: 'danger', onClick: () => setShowDelConfirm(true) },
                             ]}
@@ -1601,6 +1656,7 @@ function SalesContent() {
                             ...(activeOrder.locked && isAdmin ? [{ label: 'Unlock', icon: faRotateLeft, onClick: () => setSaleOrderLock(activeOrder.id, false) }] : []),
                             ...(!activeOrder.locked && systemSettings.salesLockConfirmed && isAdmin ? [{ label: 'Lock', icon: faSave, onClick: () => setSaleOrderLock(activeOrder.id, true) }] : []),
                             { label: 'Duplicate', icon: faCopy, onClick: () => duplicateSaleOrder(activeOrder) },
+                            { label: 'Version History', icon: faClockRotateLeft, onClick: () => void openVersionHistory(activeOrder) },
                             ...(canReverseConfirmedSO ? [
                               { label: 'Set to Quotation', icon: faRotateLeft, onClick: () => resetSOToDraft(activeOrder.id) },
                               { label: 'Cancel', icon: faBan, tone: 'danger' as const, onClick: () => setShowCancelConfirm(true) },
@@ -2224,6 +2280,111 @@ function SalesContent() {
           </div>
         </Modal>
       )}
+
+      {/* Version history — full lineage for a quotation created via "New Version".
+          Most quotations have exactly one row here (never versioned). */}
+      {showVersionHistory && (
+        <Modal title="Version History" onClose={() => { setShowVersionHistory(false); setVersionHistoryRows([]) }} width={560}>
+          <div className="flex flex-col gap-3">
+            {loadingVersionHistory ? (
+              <p className="text-xs text-[var(--text-3)]">Loading versions…</p>
+            ) : versionHistoryRows.length === 0 ? (
+              <p className="text-xs text-[var(--text-3)]">No version history found.</p>
+            ) : (
+              versionHistoryRows.map((v, idx) => {
+                const prev = idx > 0 ? versionHistoryRows[idx - 1] : null
+                return (
+                  <div key={v.id} className="flex items-center justify-between gap-3 p-3 rounded-xl bg-[var(--bg-surface)] border border-[var(--border-lt)]">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold text-primary-600">{v.ref}</span>
+                        <span className="text-[9px] font-semibold uppercase tracking-wider text-[var(--text-4)]">v{v.versionNumber}</span>
+                        {v.isLatest && <span className="text-[9px] font-semibold uppercase tracking-wider text-emerald-600">Latest</span>}
+                        <StatusBadge status={v.status as any} label={SALE_STATUS_LABELS[v.status as keyof typeof SALE_STATUS_LABELS] ?? v.status} size="xs" />
+                      </div>
+                      <p className="text-[10px] text-[var(--text-4)] mt-1">
+                        {fmtKes(v.total)} · {fmtDate(v.createdAt)}{v.createdByName ? ` · ${v.createdByName}` : ''}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      {prev && (
+                        <button
+                          type="button"
+                          className="btn-outline text-[10px] px-2 py-1"
+                          disabled={loadingCompare}
+                          onClick={() => void openCompareVersions(prev.id, v.id)}
+                        >
+                          Compare
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        className="btn-outline text-[10px] px-2 py-1"
+                        onClick={() => { setShowVersionHistory(false); openOrder(v.id) }}
+                      >
+                        Open
+                      </button>
+                    </div>
+                  </div>
+                )
+              })
+            )}
+          </div>
+        </Modal>
+      )}
+
+      {/* Compare two versions — line-by-line qty/price/total diff. */}
+      {compareVersions && (() => {
+        const { a, b } = compareVersions
+        const linesA = (a.lines ?? []).filter((l: any) => l.lineType !== 'section')
+        const linesB = (b.lines ?? []).filter((l: any) => l.lineType !== 'section')
+        const keys = Array.from(new Set([...linesA.map((l: any) => l.productId || l.description), ...linesB.map((l: any) => l.productId || l.description)]))
+        const rows = keys.map(key => {
+          const la = linesA.find((l: any) => (l.productId || l.description) === key)
+          const lb = linesB.find((l: any) => (l.productId || l.description) === key)
+          const changed = !la || !lb || Number(la.qty) !== Number(lb.qty) || Number(la.unitPrice) !== Number(lb.unitPrice)
+          return { key, la, lb, changed }
+        })
+        return (
+          <Modal title={`Compare ${a.ref} → ${b.ref}`} onClose={() => setCompareVersions(null)} width={640}>
+            <div className="flex flex-col gap-3">
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="text-[10px] uppercase tracking-wider text-[var(--text-4)] text-left">
+                      <th className="pb-2">Product</th>
+                      <th className="pb-2 text-right">{a.ref} Qty</th>
+                      <th className="pb-2 text-right">{b.ref} Qty</th>
+                      <th className="pb-2 text-right">{a.ref} Price</th>
+                      <th className="pb-2 text-right">{b.ref} Price</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rows.map(r => (
+                      <tr key={r.key} className={`border-t border-[var(--border-lt)] ${r.changed ? 'bg-amber-500/5' : ''}`}>
+                        <td className="py-2 pr-2 font-semibold text-[var(--text-1)]">{r.la?.productName ?? r.lb?.productName ?? r.la?.description ?? r.lb?.description ?? '—'}</td>
+                        <td className="py-2 text-right">{r.la ? r.la.qty : <span className="text-[var(--text-4)]">—</span>}</td>
+                        <td className="py-2 text-right">{r.lb ? r.lb.qty : <span className="text-[var(--text-4)]">—</span>}</td>
+                        <td className="py-2 text-right">{r.la ? fmtKes(r.la.unitPrice) : <span className="text-[var(--text-4)]">—</span>}</td>
+                        <td className="py-2 text-right">{r.lb ? fmtKes(r.lb.unitPrice) : <span className="text-[var(--text-4)]">—</span>}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div className="flex items-center justify-between p-3 rounded-xl bg-[var(--bg-surface)] border border-[var(--border-lt)] text-xs font-bold">
+                <span>Total</span>
+                <span>{fmtKes(a.total)} → {fmtKes(b.total)}{a.total !== b.total && (
+                  <span className={b.total > a.total ? 'text-emerald-600' : 'text-red-600'}> ({b.total > a.total ? '+' : ''}{fmtKes(b.total - a.total)})</span>
+                )}</span>
+              </div>
+              <div className="flex justify-end pt-2 border-t border-[var(--border-lt)]">
+                <button className="btn-outline" onClick={() => setCompareVersions(null)}>Close</button>
+              </div>
+            </div>
+          </Modal>
+        )
+      })()}
 
       {/* Send by Email — compose dialog. The message is recorded on the order
           and the quotation PDF is attached server-side. */}

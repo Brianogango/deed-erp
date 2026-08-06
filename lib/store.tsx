@@ -884,6 +884,11 @@ export interface SaleOrder {
   validUntil?: string
   deliveryDate?: string
   paymentTerms?: string
+  // Quotation versioning: versionGroupId points at the v1 (root) order's own
+  // id for every row in a lineage once a second version exists; undefined
+  // means this quotation was never versioned.
+  versionNumber?: number
+  versionGroupId?: string
   // Quotation Sent metadata (recorded when Send by Email succeeds)
   sentAt?: string
   sentById?: string
@@ -3075,6 +3080,8 @@ export interface AppState {
   setSaleOrderLock: (id: string, locked: boolean) => void
   resetSOToDraft: (id: string) => void
   cancelSO: (id: string) => void
+  /** Quotation versioning: clone a quotation-stage SO into a new draft version (v2, v3, …). Confirmed SOs use duplicateSaleOrder in the UI instead. */
+  createNewSOVersion: (orderId: string) => Promise<SaleOrder | null>
   /** Reserve quantity / assigned serials for this delivery. */
   prepareDelivery: (deliveryId: string, qtysDone?: Record<string, number>) => boolean
   /** Validate a delivery; partial quantities create a backorder delivery. */
@@ -3426,6 +3433,7 @@ export type SalesStoreState = Pick<AppState,
   | 'getStockByLocation'
   | 'resetSOToDraft'
   | 'cancelSO'
+  | 'createNewSOVersion'
   | 'getCustomerCreditStatus'
   | 'confirmDeliveryWithStockDeduction'
   | 'updateDelivery'
@@ -5824,6 +5832,7 @@ export function StoreProvider({
     getStockByLocation: (...args: Parameters<AppState['getStockByLocation']>) => storeCtxRef.current!.getStockByLocation(...args),
     resetSOToDraft: (...args: Parameters<AppState['resetSOToDraft']>) => storeCtxRef.current!.resetSOToDraft(...args),
     cancelSO: (...args: Parameters<AppState['cancelSO']>) => storeCtxRef.current!.cancelSO(...args),
+    createNewSOVersion: (...args: Parameters<AppState['createNewSOVersion']>) => storeCtxRef.current!.createNewSOVersion(...args),
     getCustomerCreditStatus: (...args: Parameters<AppState['getCustomerCreditStatus']>) => storeCtxRef.current!.getCustomerCreditStatus(...args),
     confirmDeliveryWithStockDeduction: (...args: Parameters<AppState['confirmDeliveryWithStockDeduction']>) => storeCtxRef.current!.confirmDeliveryWithStockDeduction(...args),
     updateDelivery: (...args: Parameters<AppState['updateDelivery']>) => storeCtxRef.current!.updateDelivery(...args),
@@ -10800,6 +10809,30 @@ const storeCtx: AppState = {
       }))
       addAuditLog('cancel_sale_order', so.ref, 'Order cancelled')
       showToast('Order cancelled')
+    },
+    createNewSOVersion: async (orderId) => {
+      const so = soRef.current.find(s => s.id === orderId)
+      if (!so) { showToast('Quotation not found', 'error'); return null }
+      if (!isQuotationStage(so.status)) {
+        showToast('Only a quotation can have a new version — use Duplicate for confirmed Sales Orders', 'error')
+        return null
+      }
+      try {
+        const res = await fetch(`/api/sale-orders/${orderId}/new-version`, { method: 'POST' })
+        const payload = await res.json().catch(() => null)
+        if (!res.ok || !payload?.id) {
+          showToast(payload?.error || 'Could not create a new version', 'error')
+          return null
+        }
+        const created = payload as SaleOrder
+        setSaleOrders(p => [created, ...p])
+        addAuditLog('sale_order_new_version', created.ref, `Version ${created.versionNumber} created from ${so.ref}`)
+        showToast(`Created ${created.ref}`)
+        return created
+      } catch {
+        showToast('Could not reach the server to create a new version', 'error')
+        return null
+      }
     },
 
     // ── Invoices ──────────────────────────────────────────────────────────────

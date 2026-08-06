@@ -1342,6 +1342,13 @@ model SaleOrder {
   customerRef     String?       @map("customer_ref") @db.VarChar(120)
   invoiceAddress  String?       @map("invoice_address")
   deliveryAddress String?       @map("delivery_address")
+  // Quotation versioning: versionNumber counts up within a lineage;
+  // versionGroupId points at the v1 (root) row's own id for every row in the
+  // lineage, including the root itself, once a second version is created.
+  // Null versionGroupId (the common case) means this quote was never
+  // versioned — it is implicitly its own v1.
+  versionNumber   Int           @default(1) @map("version_number")
+  versionGroupId  String?       @map("version_group_id") @db.Uuid
   lockVersion     Int           @default(0) @map("lock_version")
   createdById     String        @map("created_by") @db.Uuid
   createdAt       DateTime      @default(now()) @map("created_at")
@@ -1360,6 +1367,7 @@ model SaleOrder {
   @@index([clientId], map: "idx_sale_orders_client")
   @@index([createdById], map: "idx_sale_orders_created_by")
   @@index([clientId, status], map: "idx_sale_orders_client_status")
+  @@index([versionGroupId], map: "idx_sale_orders_version_group")
   @@map("sale_orders")
 }
 
