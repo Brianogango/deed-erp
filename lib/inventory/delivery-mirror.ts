@@ -170,7 +170,7 @@ export async function mirrorDeliveriesToPrisma(input: unknown, opts: { force?: b
           }
           if (linePayload.length) {
             await tx.deliveryNoteItem.createMany({
-              data: linePayload.map(line => ({
+              data: linePayload.map((line: LinePayload) => ({
                 id: uuidFromKey('dn-line', `${blobId}:${line.lineOrder}`),
                 dnId,
                 ...line,

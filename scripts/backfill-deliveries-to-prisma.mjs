@@ -7,20 +7,30 @@
  *
  * Safe to re-run (upsert by blobId). Never deletes the blob.
  */
-require('dotenv').config({ path: '.env' })
+import { createHash } from 'crypto'
+import { createRequire } from 'module'
+import { config as loadEnv } from 'dotenv'
+
+loadEnv({ path: '.env' })
+
+const require = createRequire(import.meta.url)
+const { PrismaClient } = require('@prisma/client')
+const { Pool } = require('pg')
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+
+function uuidFromKey(namespace, key) {
+  const h = createHash('md5').update(`${namespace}:${key}`).digest('hex')
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-4${h.slice(13, 16)}-a${h.slice(17, 20)}-${h.slice(20, 32)}`
+}
+
+function asUuid(v) {
+  const s = String(v ?? '').trim()
+  return UUID_RE.test(s) ? s : null
+}
 
 async function main() {
-  const { loadAppState } = await import('../lib/server-store.ts').catch(async () => {
-    // Compiled / tsx path
-    return import('../lib/server-store.js')
-  }).catch(() => null)
-
-  // Prefer prisma + raw SQL via tsx/ts-node when available
-  const { PrismaClient } = require('@prisma/client')
-  const { createHash } = require('crypto')
   const prisma = new PrismaClient()
-
-  const { Pool } = require('pg')
   const pool = new Pool({ connectionString: process.env.DATABASE_URL })
 
   const { rows } = await pool.query(
@@ -29,6 +39,8 @@ async function main() {
   const raw = rows[0]?.value
   if (!raw) {
     console.log('No deed_deliveries blob found')
+    await prisma.$disconnect()
+    await pool.end()
     process.exit(0)
   }
   const deliveries = JSON.parse(raw)
@@ -38,24 +50,6 @@ async function main() {
   }
 
   console.log(`Backfilling ${deliveries.length} deliveries…`)
-
-  // Dynamic import of TS mirror via child process with npx tsx when available
-  const { spawnSync } = require('child_process')
-  const payload = JSON.stringify(deliveries)
-  const runner = `
-    const { mirrorDeliveriesToPrisma } = require('./lib/inventory/delivery-mirror.ts');
-  `
-
-  // Inline minimal upsert using Prisma for environments without tsx
-  const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
-  function uuidFromKey(namespace, key) {
-    const h = createHash('md5').update(`${namespace}:${key}`).digest('hex')
-    return `${h.slice(0, 8)}-${h.slice(8, 12)}-4${h.slice(13, 16)}-a${h.slice(17, 20)}-${h.slice(20, 32)}`
-  }
-  function asUuid(v) {
-    const s = String(v ?? '').trim()
-    return UUID_RE.test(s) ? s : null
-  }
 
   const products = new Set((await prisma.product.findMany({ select: { id: true } })).map(p => p.id))
   const clients = new Set((await prisma.client.findMany({ select: { id: true } })).map(c => c.id))
