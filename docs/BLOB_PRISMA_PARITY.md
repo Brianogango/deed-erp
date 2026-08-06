@@ -67,8 +67,9 @@ Observed after AGENT packages (counts move over time):
 1. Run `verify` weekly; treat dual-write / catalog gaps as SEV-2.
 2. For products gap: export blob-only SKUs, create missing Prisma rows or archive orphans deliberately.
 3. For invoices gap: compare ID sets; re-broadcast / backfill from Prisma → blob or repair missing Prisma rows.
-4. Keep blob-SoT domains on blob writes until a dedicated cutover project migrates POs / serials / stock moves.
-5. Never `retire` a live key without archive + Director confirmation.
+4. **Deliveries cutover (unblocked 2026-08-06):** `DeliveryNote.invoiceId` is nullable so rows can represent “delivered, not yet invoiced” (Confirm SO → Delivery → Invoice). Next: dual-write `deed_deliveries` → Prisma `delivery_notes` / items with transactions, then retire the blob.
+5. Keep remaining blob-SoT domains (POs / serials / stock moves) on blob writes until their dedicated cutover.
+6. Never `retire` a live key without archive + Director confirmation.
 
 ## What this package does **not** do
 

@@ -1628,7 +1628,9 @@ model CreditNote {
 model DeliveryNote {
   id              String         @id @default(uuid()) @db.Uuid
   dnNumber        String         @unique @map("dn_number") @db.VarChar(30)
-  invoiceId       String         @map("invoice_id") @db.Uuid
+  // Nullable: real flow is Confirm SO → Delivery → Invoice. Requiring an
+  // invoice blocked Prisma cutover from the deed_deliveries blob.
+  invoiceId       String?        @map("invoice_id") @db.Uuid
   clientId        String         @map("client_id") @db.Uuid
   deliveryMethod  DeliveryMethod @default(pickup) @map("delivery_method")
   status          String         @default("pending") @db.VarChar(30)
@@ -1646,7 +1648,7 @@ model DeliveryNote {
   createdAt       DateTime       @default(now()) @map("created_at")
   updatedAt       DateTime       @updatedAt @map("updated_at")
 
-  invoice      Invoice            @relation(fields: [invoiceId], references: [id])
+  invoice      Invoice?           @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
   client       Client             @relation(fields: [clientId], references: [id])
   dispatchedBy User?              @relation("DeliveryDispatcher", fields: [dispatchedById], references: [id])
   createdBy    User               @relation("DeliveryCreator", fields: [createdById], references: [id])
@@ -1654,6 +1656,8 @@ model DeliveryNote {
   saleOrders      SaleOrder[]      @relation("DeliveryNoteSaleOrders")
   outboundRelease OutboundRelease? @relation("OrcDelivery")
 
+  @@index([invoiceId], map: "idx_delivery_notes_invoice")
+  @@index([clientId], map: "idx_delivery_notes_client")
   @@map("delivery_notes")
 }
 

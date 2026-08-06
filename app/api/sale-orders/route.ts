@@ -9,6 +9,7 @@ import { normalizeSaleStatus } from '@/lib/odoo-sales-flow'
 import { enforceSaleOrderApprovals } from '@/lib/sales-approval-enforcement.server'
 import { lockVersionMismatch, nextLockVersion, readExpectedVersion } from '@/lib/optimistic-lock'
 import { parsePaginationParams, paginatedResponse } from '@/lib/api-pagination'
+import { validateSaleOrderLines } from '@/lib/sale-order-line-validation'
 
 async function broadcastSaleOrders() {
   try {
@@ -142,6 +143,10 @@ export async function POST(request: Request) {
     }
 
     const rawItems: any[] = body.items ?? body.lines ?? []
+    const lineError = validateSaleOrderLines(rawItems)
+    if (lineError) {
+      return NextResponse.json({ error: lineError }, { status: 400 })
+    }
     const clientId = await resolveClientId(prisma, body.clientId ?? body.customerId, body)
     let orderNumber = body.orderNumber ?? body.ref
 
