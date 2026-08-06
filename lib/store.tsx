@@ -2777,7 +2777,6 @@ export interface AppState {
   // Payments & Credit
   payments: Payment[]
   customerCredits: CustomerCredit[]
-  createPayment: (customerId: string, customerName: string, amount: number, method: Payment['method'], reference: string, notes?: string, forcedReceiptNumber?: string) => Payment
   allocatePaymentToInvoice: (paymentId: string, invoiceId: string, amount: number) => void
   generateReceipt: (paymentId: string) => void
   getCustomerCreditBalance: (customerId: string) => number
@@ -6108,21 +6107,6 @@ const storeCtx: AppState = {
     // Payments & Credit
     payments,
     customerCredits,
-    createPayment: async (customerId, customerName, amount, method, reference, notes, forcedReceiptNumber) => {
-      const user = currentUser()
-      const receiptNumber = forcedReceiptNumber ?? await storeCtxRef.current!.allocateDocRef('RCT')
-      const payment: Payment = {
-        id: uid(), ref: seq('PAY', 'rec'), customerId, customerName, amount, method,
-        reference, receiptNumber, invoices: [], status: 'cleared',
-        receivedBy: user?.name ?? 'System', receivedDate: now(), clearedDate: now(),
-        accountingDate: now(), notes
-      }
-      setPayments(prev => [payment, ...prev])
-      sync('/api/payments', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payment) })
-      addAuditLog('create_payment', payment.ref, `Payment of ${fmtKes(amount)} received from ${customerName}`)
-      showToast(`Payment ${payment.ref} recorded successfully`, 'success')
-      return payment
-    },
     allocatePaymentToInvoice: (paymentId, invoiceId, amount) => {
       if (!canManageFinance(currentUser())) {
         showToast('Only Finance or Admin Officer can allocate payments', 'error'); return;
@@ -10760,8 +10744,16 @@ const storeCtx: AppState = {
       showToast(so.status === 'quotation_sent' ? 'Quotation reset to draft — you can edit and save' : 'Order set back to Quotation')
     },
     cancelSO: (id) => {
+      const actor = currentUser()
       const so = soRef.current.find(s => s.id === id)
       if (!so) return
+      // Cancelling a confirmed Sales Order reverses a commercial document,
+      // same as "Set to Quotation" — requires Finance/Director (matches the
+      // server-side gate in saleTransitionError).
+      if (so.status === 'sale' && !['director', 'finance_officer'].includes(actor?.role ?? '')) {
+        showToast('Only Finance or Director can cancel a confirmed Sales Order', 'error')
+        return
+      }
       // Dependent records are never silently cancelled: completed deliveries,
       // posted invoices and registered payments must be reversed first.
       const blockers = saleOrderCancelBlockers({

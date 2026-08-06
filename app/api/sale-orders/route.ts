@@ -68,13 +68,13 @@ function mapSaleOrderItems(lines: any[]) {
   return lines.map((item: any) => ({
     productId: optionalUuid(item.productId),
     description: item.description ?? item.productName ?? 'Item',
-    qty: Number(item.qty ?? 1),
-    unitPrice: Number(item.unitPrice ?? 0),
-    taxRate: Number(item.taxRate ?? 0),
-    lineTotal: Number(item.lineTotal ?? item.subtotal ?? 0),
+    qty: Math.max(0, Number(item.qty ?? 1) || 0),
+    unitPrice: Math.max(0, Number(item.unitPrice ?? 0) || 0),
+    taxRate: Math.max(0, Number(item.taxRate ?? 0) || 0),
+    lineTotal: Math.max(0, Number(item.lineTotal ?? item.subtotal ?? 0) || 0),
     notes: item.notes ?? null,
     serialNumberId: optionalUuid(item.serialNumberId ?? item.serialIds?.[0]),
-    qtyInvoiced: Number(item.qtyInvoiced ?? 0),
+    qtyInvoiced: Math.max(0, Number(item.qtyInvoiced ?? 0) || 0),
   }))
 }
 

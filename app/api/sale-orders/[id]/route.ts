@@ -92,9 +92,9 @@ function mapSaleOrderItems(lines: any[], existingItems: any[] = []) {
       (item.productId
         ? existingItems.find((row: any) => row.productId && row.productId === item.productId)
         : null)
-    const demand = Number(item.qty ?? 1)
-    const incomingDelivered = Number(item.qtyDelivered ?? 0)
-    const incomingInvoiced = Number(item.qtyInvoiced ?? 0)
+    const demand = Math.max(0, Number(item.qty ?? 1) || 0)
+    const incomingDelivered = Math.max(0, Number(item.qtyDelivered ?? 0) || 0)
+    const incomingInvoiced = Math.max(0, Number(item.qtyInvoiced ?? 0) || 0)
     // Preserve fulfillment progress across deleteMany+create so a stale full
     // SO PATCH cannot wipe qtyDelivered / qtyInvoiced back to 0.
     const qtyDelivered = Math.min(
@@ -111,9 +111,9 @@ function mapSaleOrderItems(lines: any[], existingItems: any[] = []) {
       qty: demand,
       qtyDelivered,
       qtyInvoiced,
-      unitPrice: Number(item.unitPrice ?? 0),
-      taxRate: Number(item.taxRate ?? 0),
-      lineTotal: Number(item.lineTotal ?? item.subtotal ?? 0),
+      unitPrice: Math.max(0, Number(item.unitPrice ?? 0) || 0),
+      taxRate: Math.max(0, Number(item.taxRate ?? 0) || 0),
+      lineTotal: Math.max(0, Number(item.lineTotal ?? item.subtotal ?? 0) || 0),
       notes: item.notes ?? null,
       serialNumberId: optionalUuid(
         item.serialNumberId ?? item.serialIds?.[0] ?? prev?.serialNumberId,
@@ -391,20 +391,33 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
     })
 
     // Prefer SaleOrderService for confirm/cancel side-effects (reservation release + audit).
-    // Workflow already enforced above; service is idempotent on status.
+    // Workflow already enforced above; service is idempotent on status. These are
+    // best-effort side-effects (the SO update above already committed), but failures
+    // must be logged loudly — a swallowed reservation failure means the order shows
+    // as confirmed with no stock actually held against it.
     try {
       const { SaleOrderService } = await import('@/lib/services/sale-order.service')
       if (to === 'sale' && from !== 'sale') {
-        await SaleOrderService.confirm(params.id, session.user.id, session.user.role).catch(() => {})
-        const reserveResult = await reserveStockForSaleOrder(params.id, session.user.id)
-        if (!reserveResult.ok) {
-          console.error('[sale-orders] reserveStockForSaleOrder failed:', reserveResult.error)
+        await SaleOrderService.confirm(params.id, session.user.id, session.user.role).catch(err =>
+          console.error('[sale-orders] SaleOrderService.confirm side-effect failed:', err),
+        )
+        try {
+          const reserveResult = await reserveStockForSaleOrder(params.id, session.user.id)
+          if (!reserveResult.ok) {
+            console.error('[sale-orders] reserveStockForSaleOrder failed:', reserveResult.error)
+          }
+        } catch (err) {
+          console.error('[sale-orders] reserveStockForSaleOrder threw:', err)
         }
       }
       if (to === 'cancelled' && from !== 'cancelled') {
-        await SaleOrderService.cancel(params.id, session.user.id).catch(() => {})
+        await SaleOrderService.cancel(params.id, session.user.id).catch(err =>
+          console.error('[sale-orders] SaleOrderService.cancel side-effect failed:', err),
+        )
       }
-    } catch { /* service optional during soak */ }
+    } catch (err) {
+      console.error('[sale-orders] confirm/cancel side-effect block failed:', err)
+    }
 
     void broadcastSaleOrders()
     return NextResponse.json(mapSaleOrderToClient(order))

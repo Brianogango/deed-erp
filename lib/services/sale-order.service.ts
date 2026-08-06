@@ -9,6 +9,24 @@ import {
   saleTransitionError,
 } from '@/lib/odoo-sales-flow'
 import { writeFinancialAudit } from '@/lib/finance-audit'
+import { loadAppState } from '@/lib/server-store'
+
+/**
+ * Deliveries still live in the `deed_deliveries` blob, not the (unused)
+ * Prisma `DeliveryNote` table — see docs/BLOB_PRISMA_PARITY.md. Mirrors the
+ * lookup in app/api/sale-orders/[id]/route.ts's saleOrderBlockersFor.
+ */
+async function blobDeliveriesForSaleOrder(saleOrderId: string): Promise<Array<{ status: string }>> {
+  try {
+    const state = await loadAppState(['deed_deliveries'])
+    const all = state.deed_deliveries
+    return Array.isArray(all)
+      ? all.filter((d: any) => d?.saleOrderId === saleOrderId).map((d: any) => ({ status: String(d.status) }))
+      : []
+  } catch {
+    return []
+  }
+}
 
 export class SaleOrderService {
   static async confirm(saleOrderId: string, userId: string, userRole: string) {
@@ -41,17 +59,14 @@ export class SaleOrderService {
       where: { id: saleOrderId },
       include: { items: true },
     })
-    const deliveries = await prisma.deliveryNote.findMany({
-      where: { invoice: { is: { saleOrderId } } },
-      select: { status: true },
-    }).catch(() => [] as { status: string }[])
+    const deliveries = await blobDeliveriesForSaleOrder(saleOrderId)
     const invoices = await prisma.invoice.findMany({
       where: { saleOrderId },
       select: { status: true, amountPaid: true },
     })
     const blockers = saleOrderCancelBlockers({
       status: normalizeSaleStatus(so.status),
-      deliveries: deliveries.map(d => ({ status: d.status })),
+      deliveries,
       invoices: invoices.map(i => ({ status: i.status, amountPaid: Number(i.amountPaid) })),
     })
     if (blockers.length > 0) throw new Error(blockers.join('; '))

@@ -124,8 +124,14 @@ export function saleTransitionError(
       if (!SALE_CONFIRM_ROLES.includes(role)) return 'Your role cannot confirm Sales Orders'
       return null
     case 'cancelled':
-      // Any state may request cancellation; sale-order blockers are checked
-      // against dependent records by the caller.
+      // Quotations may always be cancelled. Cancelling a confirmed Sales
+      // Order reverses a commercial document, same as "Set to Quotation",
+      // so it requires the same Finance/Director gate. Dependent-record
+      // blockers (completed deliveries, posted invoices) are checked
+      // separately by the caller.
+      if (from === 'sale' && !['director', 'finance_officer'].includes(role)) {
+        return 'Only Finance or Director can cancel a confirmed Sales Order'
+      }
       return null
     case 'quotation':
       // "Set to Quotation" — allowed from sent, cancelled, or a confirmed

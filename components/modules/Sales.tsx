@@ -31,6 +31,7 @@ import {
   faXmark,
   faSave,
   faChevronDown,
+  faCopy,
 } from '@fortawesome/free-solid-svg-icons'
 import { downloadDeliveryNotePdf } from '@/lib/delivery-note-pdf'
 import SerialMultiSelect from '@/components/SerialMultiSelect'
@@ -323,6 +324,9 @@ function SalesContent() {
   const isAdmin = currentUser?.role === 'director'
   const canEditDiscount = isAdmin || !systemSettings.salesDiscountControl
   const canInvoiceFromSO = canCreateCustomerInvoiceFromSO(currentUser?.role)
+  // Reversing a confirmed Sales Order (Set to Quotation / Cancel) is Finance/Director-only —
+  // matches the server-side check in enforceSaleWorkflow / cancelSO.
+  const canReverseConfirmedSO = currentUser?.role === 'director' || currentUser?.role === 'finance_officer'
 
   // ── View state ──────────────────────────────────────────────────────────
   const [view, setView] = useState<SalesView>('list')
@@ -592,7 +596,6 @@ function SalesContent() {
   const stats = useMemo(() => ({
     quotations: salesOrderViews.filter(s => s.status === 'quotation').length,
     quotationsSent: salesOrderViews.filter(s => s.status === 'quotation_sent').length,
-    pendingApproval: salesOrderViews.filter(s => isQuotationStage(s.status) && s.approvalStatus === 'pending').length,
     orders: salesOrderViews.filter(s => s.status === 'sale').length,
     toInvoice: salesOrderViews.filter(s =>
       saleOrderInvoiceStatus(s.status, s.lines) === 'to_invoice' &&
@@ -688,6 +691,38 @@ function SalesContent() {
     syncOrderUrl(null)
     startUxTask('sales_quote_create', { module: 'sales' })
   }
+  /** Clone an existing quotation/sale order's customer + lines into a new draft quotation. */
+  const duplicateSaleOrder = (so: SalesOrderView) => {
+    setNewCustomer(so.customerId ? { id: so.customerId, name: so.customerName } : null)
+    setNewDeliveryDate('')
+    setNewPaymentTerms('30')
+    setNewNotes(so.notes ?? '')
+    setNewCustomerRef(so.customerRef ?? '')
+    setNewSalesTeam(so.salesTeam ?? '')
+    setNewPricelist(so.pricelist ?? '')
+    setNewInvoiceAddress(so.invoiceAddress ?? '')
+    setNewDeliveryAddress(so.deliveryAddress ?? '')
+    setNewPaymentDetails({ ...DEFAULT_DOCUMENT_PAYMENT_DETAILS })
+    setNewDraftLines(
+      (so.lines ?? [])
+        .filter((l: any) => l.lineType !== 'section')
+        .map((l: any) => ({
+          type: 'item' as const,
+          id: uid(),
+          productId: l.productId ?? '',
+          productName: l.productName ?? l.description ?? '',
+          description: l.description ?? l.productName ?? '',
+          qty: String(l.qty ?? 1),
+          unitPrice: String(l.unitPrice ?? 0),
+          discount: String(l.discount ?? 0),
+          taxRate: String(l.taxRate ?? 0),
+        })),
+    )
+    setView('new')
+    syncOrderUrl(null)
+    startUxTask('sales_quote_create', { module: 'sales' })
+    showToast(`Duplicated ${so.ref} as a new draft quotation`, 'success')
+  }
   const openDeliveryView = async (deliveryId?: string) => {
     if (!activeOrder) return
     // Heal duplicate open pickings left by concurrent confirm (keep prepared / SO-linked).
@@ -778,6 +813,15 @@ function SalesContent() {
   const draftTotal = draftSubtotal + draftTaxTotal
   const validDraftLines = newDraftLines.filter(l => l.type !== 'section' && l.productId && Number(l.qty) > 0)
   const invalidQtyDraftLines = newDraftLines.filter(l => l.type !== 'section' && l.productId && Number(l.qty) <= 0)
+  // Mirrors the authoritative checks in saveNewQuotation so the Save button reflects
+  // real validation state instead of always being enabled.
+  const quoteSaveBlockedReason = !newCustomer
+    ? 'Select a customer before saving'
+    : invalidQtyDraftLines.length > 0
+      ? 'Quantity must be greater than zero for every quoted product'
+      : validDraftLines.length === 0
+        ? 'Add at least one product with quantity greater than zero'
+        : ''
 
   useEffect(() => {
     if (view !== 'new' || draftLoadedRef.current) return
@@ -1057,6 +1101,8 @@ function SalesContent() {
     <StatusBadge status={s.status} label={SALE_STATUS_LABELS[s.status] ?? s.status} size="xs" />
   )
 
+  const todayIso = useMemo(() => new Date().toISOString().slice(0, 10), [])
+
   const salesListColumns: ColumnDef<SalesOrderView>[] = useMemo(() => [
     {
       key: 'ref', label: 'Ref', priority: 1, width: '110px',
@@ -1093,12 +1139,15 @@ function SalesContent() {
           {s.status === 'sale' && saleOrderInvoiceStatus(s.status, s.lines) === 'to_invoice' && (
             <span className="text-[9px] font-semibold text-amber-600">To invoice</span>
           )}
+          {isQuotationStage(s.status) && s.validUntil && s.validUntil < todayIso && (
+            <span className="text-[9px] font-semibold text-red-600">Expired</span>
+          )}
         </span>
       ),
       accessor: s => SALE_STATUS_LABELS[s.status] ?? s.status,
       exportValue: s => SALE_STATUS_LABELS[s.status] ?? s.status,
     },
-  ], [])
+  ], [todayIso])
 
   const getInvoicedQty = (so: SalesOrderView, lineProductId?: string) => {
     if (!lineProductId) return 0
@@ -1162,7 +1211,7 @@ function SalesContent() {
             </button>
             <button
               type="button"
-              className={`sales-pilot-stat ${listTab === 'orders' && filter !== 'to_invoice' ? 'is-active' : ''} ${stats.pendingApproval > 0 ? 'tone-warning' : ''}`}
+              className={`sales-pilot-stat ${listTab === 'orders' && filter !== 'to_invoice' ? 'is-active' : ''}`}
               onClick={() => { setListTabAndReset('orders'); setFilterAndReset('sales_orders') }}
             >
               <span className="sales-pilot-stat-label">Confirmed orders</span>
@@ -1222,8 +1271,8 @@ function SalesContent() {
                   draftTotal={draftTotal}
                   canEditDiscount={canEditDiscount}
                   companySettings={companySettings}
-                  canSave={true}
-                  saveBlockedReason=""
+                  canSave={!quoteSaveBlockedReason}
+                  saveBlockedReason={quoteSaveBlockedReason}
                   fieldErrors={quoteFieldErrors}
                   onSave={handleSaveNewQuotation}
                   onSaveAndAddAnother={handleSaveAndAddAnotherQuotation}
@@ -1329,6 +1378,32 @@ function SalesContent() {
                     hideColumnFilters
                     hideBody={listViewMode === 'kanban'}
                     perPage={50}
+                    selectable
+                    bulkActions={({ rows, clear }) => {
+                      const cancellable = rows.filter(s => isQuotationStage(s.status))
+                      return (
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-xs font-semibold text-[var(--text-2)]">
+                            {rows.length} selected
+                            {cancellable.length !== rows.length ? ` · ${cancellable.length} cancellable` : ''}
+                          </span>
+                          <button type="button" className="btn-ghost text-xs" onClick={clear}>Clear</button>
+                          <button
+                            type="button"
+                            className="btn-secondary text-xs flex items-center gap-1.5"
+                            disabled={cancellable.length === 0}
+                            title={cancellable.length === 0 ? 'Select draft or sent quotations to cancel in bulk' : undefined}
+                            onClick={() => {
+                              cancellable.forEach(s => cancelSO(s.id))
+                              clear()
+                            }}
+                          >
+                            <Fa icon={faBan} className="text-[10px]" />
+                            Cancel {cancellable.length || ''} quotation{cancellable.length !== 1 ? 's' : ''}
+                          </button>
+                        </div>
+                      )
+                    }}
                     emptyMessage={
                       listTab === 'quotations' && stats.orders > 0 && filtered.length === 0
                         ? 'No quotations here — switch to Orders to see confirmed sales.'
@@ -1442,6 +1517,7 @@ function SalesContent() {
                               { label: 'Preview', icon: faFileAlt, disabled: !activeOrder.lines.length, onClick: () => previewSalesDocument(activeOrder, 'Quotation', 'QUOTATION') },
                               { label: 'Print', icon: faPrint, disabled: !activeOrder.lines.length, onClick: () => downloadSalesDocument(activeOrder, 'Quotation', 'QUOTE', 'QUOTATION') },
                               { label: 'Pro-forma invoice', icon: faFileInvoiceDollar, disabled: !activeOrder.lines.length, onClick: () => downloadProformaInvoice(activeOrder) },
+                              { label: 'Duplicate', icon: faCopy, onClick: () => duplicateSaleOrder(activeOrder) },
                               { label: 'Cancel', icon: faBan, tone: 'danger', onClick: () => setShowCancelConfirm(true) },
                               { label: 'Delete', icon: faTrash, tone: 'danger', onClick: () => setShowDelConfirm(true) },
                             ]}
@@ -1480,8 +1556,11 @@ function SalesContent() {
                             ...(activeDeliveries.some(d => canGenerateDeliveryNote(d)) ? [{ label: 'Print delivery note', icon: faTruck, onClick: () => { const del = activeDeliveries.find(d => canGenerateDeliveryNote(d)) ?? activeDeliveries[0]; setDnRecipientName(del.recipientName ?? activeOrder.customerName ?? ''); setDnRecipientPhone(del.recipientPhone ?? ''); setDnRecipientId(del.recipientIdNumber ?? ''); setDnAddress(del.deliveryAddress ?? ''); setDnNotes(del.notes ?? ''); setShowDnModal(true) } }] : []),
                             ...(activeOrder.locked && isAdmin ? [{ label: 'Unlock', icon: faRotateLeft, onClick: () => setSaleOrderLock(activeOrder.id, false) }] : []),
                             ...(!activeOrder.locked && systemSettings.salesLockConfirmed && isAdmin ? [{ label: 'Lock', icon: faSave, onClick: () => setSaleOrderLock(activeOrder.id, true) }] : []),
-                            { label: 'Set to Quotation', icon: faRotateLeft, onClick: () => resetSOToDraft(activeOrder.id) },
-                            { label: 'Cancel', icon: faBan, tone: 'danger', onClick: () => setShowCancelConfirm(true) },
+                            { label: 'Duplicate', icon: faCopy, onClick: () => duplicateSaleOrder(activeOrder) },
+                            ...(canReverseConfirmedSO ? [
+                              { label: 'Set to Quotation', icon: faRotateLeft, onClick: () => resetSOToDraft(activeOrder.id) },
+                              { label: 'Cancel', icon: faBan, tone: 'danger' as const, onClick: () => setShowCancelConfirm(true) },
+                            ] : []),
                           ]}
                         />
                       </>)}
@@ -1678,7 +1757,12 @@ function SalesContent() {
                         </div>
                         <div className="flex flex-col gap-1">
                           <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)]">Valid Until</span>
-                          <span className="text-xs text-[var(--text-2)]">{activeOrder.validUntil ? fmtDate(activeOrder.validUntil) : '—'}</span>
+                          <span className="text-xs text-[var(--text-2)] flex items-center gap-1.5">
+                            {activeOrder.validUntil ? fmtDate(activeOrder.validUntil) : '—'}
+                            {isQuotationStage(activeOrder.status) && activeOrder.validUntil && activeOrder.validUntil < todayIso && (
+                              <span className="text-[9px] font-semibold text-red-600 uppercase">Expired</span>
+                            )}
+                          </span>
                         </div>
                         <div className="flex flex-col gap-1">
                           <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)]">Delivery Date</span>

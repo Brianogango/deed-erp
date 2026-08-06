@@ -40,8 +40,8 @@ export interface ComputedInvoiceLineMoney {
  * Mirrors quotation line math (Disc% → net → VAT).
  */
 export function computeInvoiceLineMoney(line: RawInvoiceLine): ComputedInvoiceLineMoney {
-  const qty = num(line.qty ?? 1)
-  const unitPrice = num(line.unitPrice)
+  const qty = Math.max(0, num(line.qty ?? 1))
+  const unitPrice = Math.max(0, num(line.unitPrice))
   const taxRate = Math.max(0, num(line.taxRate))
   const discountPct = Math.min(100, Math.max(0, num(line.discountPct ?? line.discount)))
   const hasQtyPrice = unitPrice !== 0 || qty !== 0

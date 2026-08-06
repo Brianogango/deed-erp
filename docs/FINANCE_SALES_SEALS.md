@@ -27,3 +27,16 @@ Hybrid model (Admin Officer rights retained with limits):
 - Confirmed SO commercial freeze server-side
 - Deep discount approvals always include Finance
 - Default `salesLockConfirmed: true`
+- Reversing a confirmed Sales Order ("Set to Quotation" or "Cancel") requires director or finance_officer, both client- and server-side (`lib/odoo-sales-flow.ts` `saleTransitionError`, `lib/store.tsx` `cancelSO`/`resetSOToDraft`)
+
+## Known gap: deep-discount/credit approval gate is currently disabled
+
+Commit `a701411` ("Remove sales confirmation approval workflow") turned the deep-discount/backorder/credit-override
+approval gate described above into a server-side no-op: `lib/sales-approval-enforcement.server.ts`'s
+`enforceSaleOrderApprovals` always returns `{ ok: true }`, and no `requestSalesApproval` record is ever created for
+a sale order anymore. Credit-limit checking exists only client-side (`lib/store.tsx` `getCustomerCreditStatus`),
+so it can be bypassed by calling the API directly.
+
+This is a known, accepted gap as of 2026-08 — not yet restored. If Finance needs this control back, re-enabling
+`enforceSaleOrderApprovals` (and reconnecting a `requestSalesApproval` write path) is the fix; until then, treat
+deep discounts and credit-limit overrides on confirmed sale orders as unenforced server-side.
