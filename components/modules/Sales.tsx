@@ -1216,6 +1216,7 @@ function SalesContent() {
     const tax = updatedLines.reduce((a, l) => a + Math.round(l.subtotal * (l.taxRate ?? 0) / 100), 0)
     updateSaleOrder(activeOrder.id, { lines: updatedLines, subtotal: sub, taxTotal: tax, total: sub + tax })
     setEditingLineId(null)
+    showToast('Line saved', 'success')
   }
 
   // ── Add line handler ────────────────────────────────────────────────────
@@ -1666,8 +1667,51 @@ function SalesContent() {
                     </div>
                     <div className="sales-proto-actions">
                       {isQuotationStage(activeOrder.status) && (<>
+                          {isQuotationDraft(activeOrder.status) && !activeOrder.locked && (
+                            <button
+                              type="button"
+                              className="sp-btn sp-btn-primary"
+                              onClick={() => {
+                                let lines = activeOrder.lines
+                                if (editingLineId) {
+                                  const qty = Math.max(0, Number(editLineQty) || 0)
+                                  const unitPrice = Math.max(0, Number(editLinePrice) || 0)
+                                  const discount = Math.max(0, Math.min(100, Number(editLineDiscount) || 0))
+                                  const taxRate = Math.max(0, Number(editLineTax) || 0)
+                                  const subtotal = Math.round(qty * unitPrice * (1 - discount / 100))
+                                  lines = activeOrder.lines.map(l => l.id !== editingLineId ? l : {
+                                    ...l,
+                                    productName: editLineDesc || l.productName,
+                                    description: editLineDesc || l.description,
+                                    qty,
+                                    unitPrice,
+                                    discount,
+                                    discountPercent: discount,
+                                    taxRate,
+                                    subtotal,
+                                  })
+                                  setEditingLineId(null)
+                                }
+                                const sub = lines.reduce((a, l) => a + (Number(l.subtotal) || 0), 0)
+                                const tax = lines.reduce((a, l) => a + Math.round((Number(l.subtotal) || 0) * (Number(l.taxRate) || 0) / 100), 0)
+                                updateSaleOrder(activeOrder.id, {
+                                  lines,
+                                  subtotal: sub,
+                                  taxTotal: tax,
+                                  total: sub + tax,
+                                  notes: activeOrder.notes,
+                                  validUntil: activeOrder.validUntil,
+                                  paymentTerms: activeOrder.paymentTerms,
+                                  salespersonName: activeOrder.salespersonName,
+                                })
+                                showToast('Quotation saved', 'success')
+                              }}
+                            >
+                              Save
+                            </button>
+                          )}
                           {activeOrder.status === 'quotation' && (
-                            <button type="button" className="sp-btn sp-btn-primary" disabled={!activeOrder.lines.length || sendingQuoteId === activeOrder.id} onClick={() => openSendQuoteModal(activeOrder)}>
+                            <button type="button" className="sp-btn" disabled={!activeOrder.lines.length || sendingQuoteId === activeOrder.id} onClick={() => openSendQuoteModal(activeOrder)}>
                               {sendingQuoteId === activeOrder.id ? 'Sending…' : 'Send to customer'}
                             </button>
                           )}
