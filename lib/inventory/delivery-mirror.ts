@@ -49,16 +49,18 @@ export async function mirrorDeliveriesToPrisma(input: unknown, opts: { force?: b
     const nextHashes = { ...hashes }
     let dirty = false
 
-    const [products, clients, saleOrders, users] = await Promise.all([
+    const [products, clients, saleOrders, users, serials] = await Promise.all([
       prisma.product.findMany({ select: { id: true } }),
       prisma.client.findMany({ select: { id: true } }),
       prisma.saleOrder.findMany({ select: { id: true } }),
       prisma.user.findMany({ select: { id: true } }),
+      prisma.serialNumber.findMany({ select: { id: true } }),
     ])
     const productIds = new Set(products.map(p => p.id))
     const clientIds = new Set(clients.map(c => c.id))
     const saleOrderIds = new Set(saleOrders.map(s => s.id))
     const userIds = new Set(users.map(u => u.id))
+    const serialIdsInDb = new Set(serials.map(s => s.id))
 
     for (const r of rows) {
       const blobId = String(r?.id ?? '').trim()
@@ -106,7 +108,8 @@ export async function mirrorDeliveriesToPrisma(input: unknown, opts: { force?: b
           const serialIds = Array.isArray(line.serialIds)
             ? line.serialIds.map((id: unknown) => String(id)).filter(Boolean)
             : []
-          const firstSerial = serialIds.find((id: string) => UUID_RE.test(id)) ?? null
+          const firstSerial =
+            serialIds.find((id: string) => UUID_RE.test(id) && serialIdsInDb.has(id)) ?? null
           return {
             productId,
             productName: line.productName ? String(line.productName).slice(0, 200) : null,

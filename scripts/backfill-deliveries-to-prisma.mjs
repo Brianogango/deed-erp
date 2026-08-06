@@ -60,6 +60,9 @@ async function main() {
     const users = new Set(
       (await client.query(`SELECT id::text FROM users`)).rows.map(r => r.id),
     )
+    const serials = new Set(
+      (await client.query(`SELECT id::text FROM serial_numbers`)).rows.map(r => r.id),
+    )
 
     let ok = 0
     let fail = 0
@@ -135,7 +138,7 @@ async function main() {
           const line = lines[idx]
           const serialIds = Array.isArray(line.serialIds) ? line.serialIds.map(String).filter(Boolean) : []
           const productId = asUuid(line.productId) && products.has(line.productId) ? line.productId : null
-          const serialNumberId = serialIds.find(s => UUID_RE.test(s)) || null
+          const serialNumberId = serialIds.find(s => UUID_RE.test(s) && serials.has(s)) || null
           await client.query(
             `INSERT INTO delivery_note_items (
               id, dn_id, product_id, serial_number_id, description, product_name,
