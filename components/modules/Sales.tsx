@@ -391,6 +391,7 @@ function SalesContent() {
   const [savingDelivery, setSavingDelivery] = useState(false)
   const [confirmingSO, setConfirmingSO] = useState(false)
   const [showConfirmQuoteDialog, setShowConfirmQuoteDialog] = useState(false)
+  const [detailTab, setDetailTab] = useState('Order Lines')
   const [dnRecipientName, setDnRecipientName] = useState('')
   const [dnRecipientPhone, setDnRecipientPhone] = useState('')
   const [dnRecipientId, setDnRecipientId] = useState('')
@@ -1344,8 +1345,8 @@ function SalesContent() {
         }
       />
 
-      <div className="mod-body sales-doc-body">
-        <div className="sales-doc-shell">
+      <div className="mod-body sales-doc-body p-0">
+        <div className="sales-workbench">
           <div className="flex flex-col">
               {/* ── NEW QUOTATION FULL-PAGE FORM ──────────────────────────── */}
               {view === 'new' ? (
@@ -1445,7 +1446,7 @@ function SalesContent() {
               ) : view === 'list' ? (
                 /* ── ORDERS LIST ─────────────────────────────────────────── */
                 <>
-                  <div className="sales-doc-page-header">
+                  <div className="sales-proto-page-header">
                     <div>
                       <h1>{listTab === 'quotations' ? 'Quotations' : 'Sales orders'}</h1>
                       <div className="sub">
@@ -1454,13 +1455,13 @@ function SalesContent() {
                           : 'Confirmed → deliver → invoice → paid'}
                       </div>
                     </div>
-                    <div className="sales-doc-actions">
-                      <button type="button" className="sd-btn sd-btn-primary" onClick={openNewForm}>
+                    <div className="sales-proto-actions">
+                      <button type="button" className="sp-btn sp-btn-primary" onClick={openNewForm}>
                         New quotation
                       </button>
                     </div>
                   </div>
-                  <div className="sales-doc-panel">
+                  <div className="sp-panel">
                   <SalesDocTabs
                     tabs={[
                       `Quotations (${stats.quotations + stats.quotationsSent})`,
@@ -1635,13 +1636,13 @@ function SalesContent() {
                 <ModuleSkeleton />
               ) : (
                 /* ── ORDER FORM VIEW ─────────────────────────────────────── */
-                <div className="flex flex-col gap-3">
+                <div>
                   {activeOrder && (
                     <>
-                  <div className="sales-doc-page-header">
+                  <div className="sales-proto-page-header">
                     <div>
-                      <button type="button" className="sd-btn sd-btn-ghost" style={{ paddingLeft: 0 }} onClick={backToList}>← Back</button>
-                      <div className="sales-doc-ref-row">
+                      <button type="button" className="sp-btn sp-btn-ghost" style={{ paddingLeft: 0 }} onClick={backToList}>← Back</button>
+                      <div className="sp-ref-row">
                         <h1>{activeOrder.ref}</h1>
                         {(() => {
                           const pill = saleStatusPill(activeOrder.status)
@@ -1656,22 +1657,22 @@ function SalesContent() {
                           <>
                             Source quotation{' '}
                             {activeOrder.quotationRef ? (
-                              <span className="sales-doc-link">{activeOrder.quotationRef}</span>
+                              <span className="sp-linkish">{activeOrder.quotationRef}</span>
                             ) : '—'}
                             {' · '}{activeOrder.customerName}
                           </>
                         )}
                       </div>
                     </div>
-                    <div className="sales-doc-actions">
+                    <div className="sales-proto-actions">
                       {isQuotationStage(activeOrder.status) && (<>
                           {activeOrder.status === 'quotation' && (
-                            <button type="button" className="sd-btn sd-btn-primary" disabled={!activeOrder.lines.length || sendingQuoteId === activeOrder.id} onClick={() => openSendQuoteModal(activeOrder)}>
+                            <button type="button" className="sp-btn sp-btn-primary" disabled={!activeOrder.lines.length || sendingQuoteId === activeOrder.id} onClick={() => openSendQuoteModal(activeOrder)}>
                               {sendingQuoteId === activeOrder.id ? 'Sending…' : 'Send to customer'}
                             </button>
                           )}
                           {activeOrder.status === 'quotation_sent' && (
-                            <button type="button" className="sd-btn" disabled={!activeOrder.lines.length || sendingQuoteId === activeOrder.id} onClick={() => openSendQuoteModal(activeOrder)}>
+                            <button type="button" className="sp-btn" disabled={!activeOrder.lines.length || sendingQuoteId === activeOrder.id} onClick={() => openSendQuoteModal(activeOrder)}>
                               {sendingQuoteId === activeOrder.id ? 'Sending…' : 'Send to customer'}
                             </button>
                           )}
@@ -1692,7 +1693,7 @@ function SalesContent() {
                           />
                           <button
                             type="button"
-                            className="sd-btn sd-btn-success"
+                            className="sp-btn sp-btn-success"
                             disabled={confirmingSO}
                             onClick={openConfirmQuoteDialog}
                           >
@@ -1700,8 +1701,8 @@ function SalesContent() {
                           </button>
                       </>)}
                       {activeOrder.status === 'sale' && (<>
-                        <button type="button" className="sd-btn" onClick={() => previewSalesDocument(activeOrder, 'Sale Order', 'SALES ORDER')}>Print</button>
-                        <button type="button" className="sd-btn" disabled={sendingQuoteId === activeOrder.id} onClick={() => openSendQuoteModal(activeOrder)}>
+                        <button type="button" className="sp-btn" onClick={() => previewSalesDocument(activeOrder, 'Sale Order', 'SALES ORDER')}>Print</button>
+                        <button type="button" className="sp-btn" disabled={sendingQuoteId === activeOrder.id} onClick={() => openSendQuoteModal(activeOrder)}>
                           {sendingQuoteId === activeOrder.id ? 'Sending…' : 'Send by email'}
                         </button>
                         <MoreActionsMenu
@@ -1720,16 +1721,16 @@ function SalesContent() {
                           ]}
                         />
                         {(visibleDeliveries.some(d => isOpenDeliveryStatus(d.status)) || visibleDeliveries.length === 0) ? (
-                          <button type="button" className="sd-btn sd-btn-primary" onClick={() => void openDeliveryView()}>
+                          <button type="button" className="sp-btn sp-btn-primary" onClick={() => void openDeliveryView()}>
                             {visibleDeliveries.length === 0 ? 'Create delivery' : 'Delivery'}
                           </button>
                         ) : (
-                          <button type="button" className="sd-btn" onClick={() => void openDeliveryView()}>Deliveries</button>
+                          <button type="button" className="sp-btn" onClick={() => void openDeliveryView()}>Deliveries</button>
                         )}
                         {canInvoiceFromSO && invoiceDeliveryReady && (activeInvoiceStatus === 'to_invoice' || activeInvoiceStatus === 'upselling') ? (
                           <button
                             type="button"
-                            className="sd-btn"
+                            className="sp-btn"
                             onClick={async () => {
                               const soPayment = getDocumentPaymentDetails(activeOrder.id)
                               const inv = await Promise.resolve(createInvoiceFromSO(activeOrder.id))
@@ -1741,7 +1742,7 @@ function SalesContent() {
                         ) : null}
                       </>)}
                       {activeOrder.status === 'cancelled' && (
-                        <button type="button" className="sd-btn" onClick={() => resetSOToDraft(activeOrder.id)}>Set to Quotation</button>
+                        <button type="button" className="sp-btn" onClick={() => resetSOToDraft(activeOrder.id)}>Set to Quotation</button>
                       )}
                     </div>
                   </div>
@@ -1759,7 +1760,7 @@ function SalesContent() {
                   )}
 
                       {isQuotationStage(activeOrder.status) && quotationStockShortages.length > 0 && (
-                        <div className="sales-doc-banner sales-doc-banner--warn" role="status">
+                        <div className="sp-banner-warn" role="status">
                           <span aria-hidden>!</span>
                           <div>
                             <strong>Stock warning</strong>
@@ -1777,7 +1778,7 @@ function SalesContent() {
                       )}
 
                       {activeOrder.status === 'sale' && activeOrder.quotationRef && (
-                        <div className="sales-doc-banner sales-doc-banner--ok" role="status">
+                        <div className="sp-banner-ok" role="status">
                           <span aria-hidden>✓</span>
                           <div>
                             <strong>Confirmed sales order</strong>
@@ -1794,33 +1795,35 @@ function SalesContent() {
                         </div>
                       )}
 
-                    <div className="sales-doc-panel sales-doc-panel-pad">
-                      <div className="sales-doc-grid-2">
+                    <div className="sp-panel sp-panel-pad">
+                      <div className="sp-grid-2">
                         <div>
-                          <SalesDocField label="Customer"><div className="sd-value">{activeOrder.customerName}</div></SalesDocField>
-                          <SalesDocField label="Payment terms"><div className="sd-value">{activeOrder.paymentTerms || '—'}</div></SalesDocField>
-                          <SalesDocField label="Salesperson"><div className="sd-value">{activeOrder.salespersonName || '—'}</div></SalesDocField>
+                          <SalesDocField label="Customer"><input readOnly value={activeOrder.customerName || ''} /></SalesDocField>
+                          <SalesDocField label="Contact"><input readOnly value={(() => { const c = customers.find(x => x.id === activeOrder.customerId); return c?.name || '—' })()} /></SalesDocField>
+                          <SalesDocField label="Email"><input readOnly value={customers.find(c => c.id === activeOrder.customerId)?.email || '—'} /></SalesDocField>
+                          <SalesDocField label="Phone"><input readOnly value={(() => { const c = customers.find(x => x.id === activeOrder.customerId); return c?.phone || c?.mobile || '—' })()} /></SalesDocField>
                         </div>
                         <div>
-                          <SalesDocField label={isQuotationStage(activeOrder.status) ? 'Quote date' : 'Order date'}><div className="sd-value">{fmtDate(activeOrder.date)}</div></SalesDocField>
+                          <SalesDocField label={isQuotationStage(activeOrder.status) ? 'Quote date' : 'Order date'}><input readOnly value={fmtDate(activeOrder.date) || ''} /></SalesDocField>
                           <SalesDocField label={isQuotationStage(activeOrder.status) ? 'Valid until' : 'Expected delivery'}>
-                            <div className="sd-value">{fmtDate(isQuotationStage(activeOrder.status) ? (activeOrder.validUntil || '') : (activeOrder.deliveryDate || '')) || '—'}</div>
+                            <input readOnly value={fmtDate(isQuotationStage(activeOrder.status) ? (activeOrder.validUntil || '') : (activeOrder.deliveryDate || '')) || '—'} />
                           </SalesDocField>
-                          <SalesDocField label="Order total"><div className="sd-value">{fmtKes(activeOrder.total)}</div></SalesDocField>
+                          <SalesDocField label="Salesperson"><input readOnly value={activeOrder.salespersonName || '—'} /></SalesDocField>
+                          <SalesDocField label="Payment terms"><input readOnly value={activeOrder.paymentTerms || '—'} /></SalesDocField>
+                          <SalesDocField label="Currency"><input readOnly value="KES" /></SalesDocField>
                           {activeOrder.status === 'sale' && (
                             <SalesDocField label="Related">
-                              <div className="sd-value" style={{ display: 'block', paddingTop: 6, paddingBottom: 6 }}>
+                              <div style={{ fontSize: 12.5, paddingTop: 4 }}>
                                 Deliveries:{' '}
                                 {visibleDeliveries.length
                                   ? visibleDeliveries.map(d => (
-                                      <button key={d.id} type="button" className="sales-doc-link" style={{ marginRight: 6 }} onClick={() => void openDeliveryView(d.id)}>{d.ref}</button>
+                                      <button key={d.id} type="button" className="sp-linkish" style={{ marginRight: 6 }} onClick={() => void openDeliveryView(d.id)}>{d.ref}</button>
                                     ))
                                   : '—'}
-                                <br />
-                                Invoices:{' '}
+                                {' · '}Invoices:{' '}
                                 {activeInvoices.length
                                   ? activeInvoices.map(inv => (
-                                      <button key={inv.id} type="button" className="sales-doc-link" style={{ marginRight: 6 }} onClick={() => router.push('/finance?tab=invoices')}>{inv.ref}</button>
+                                      <button key={inv.id} type="button" className="sp-linkish" style={{ marginRight: 6 }} onClick={() => router.push('/finance?tab=invoices')}>{inv.ref}</button>
                                     ))
                                   : 'None yet'}
                               </div>
@@ -1829,268 +1832,47 @@ function SalesContent() {
                         </div>
                       </div>
                     </div>
-                    </>
-                  )}
 
-                  {/* Order form body */}
-                  {activeOrder && (
-                    <div className="flex flex-col gap-3">
-
-                      {activeOrder.status === 'sale' && activeDeliveries.length > 0 && (
-                        <div className="rounded-2xl border border-[var(--border-lt)] bg-[var(--bg-surface)] p-4 flex flex-col gap-2">
-                          <div className="flex items-center justify-between gap-2">
-                            <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)]">
-                              Deliveries for {activeOrder.ref}
-                            </span>
-                            <span className="text-[10px] text-[var(--text-4)]">
-                              {visibleDeliveries.length} active · click to open
-                            </span>
-                          </div>
-                          <div className="flex flex-col gap-1">
-                            {activeDeliveries.map(d => {
-                              const cancelled = d.status === 'cancelled'
-                              const units = (d.lines ?? []).reduce((sum: number, line: any) => sum + (Number(line.qty) || 0), 0)
-                              const done = deliveryDeliveredTotal(d)
-                              return (
-                                <button
-                                  key={d.id}
-                                  type="button"
-                                  disabled={cancelled}
-                                  onClick={() => void openDeliveryView(d.id)}
-                                  className={`flex items-center justify-between gap-3 rounded-xl px-3 py-2 text-left text-xs transition-colors ${
-                                    cancelled
-                                      ? 'opacity-50 cursor-not-allowed'
-                                      : 'hover:bg-[var(--bg-muted)] border border-transparent hover:border-[var(--border-lt)]'
-                                  }`}
-                                >
-                                  <span className="font-semibold text-[var(--text-1)]">
-                                    {d.ref}
-                                    {d.backorderOfRef ? (
-                                      <span className="ml-1 font-normal text-[var(--text-4)]">(backorder of {d.backorderOfRef})</span>
-                                    ) : null}
-                                  </span>
-                                  <span className="flex items-center gap-2 shrink-0">
-                                    <span className="text-[var(--text-3)]">{done}/{units} qty</span>
-                                    <span className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-semibold ${
-                                      d.status === 'done' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                                        : d.status === 'ready' ? 'bg-blue-50 text-blue-700 border border-blue-200'
-                                          : d.status === 'waiting' ? 'bg-amber-50 text-amber-700 border border-amber-200'
-                                            : 'bg-gray-50 text-gray-700 border border-gray-200'
-                                    }`}>
-                                      {DELIVERY_STATE_LABELS[d.status as keyof typeof DELIVERY_STATE_LABELS] ?? d.status}
-                                    </span>
-                                  </span>
-                                </button>
-                              )
-                            })}
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Order info — editable only while draft quotation.
-                          Sent quotations must be reset to draft before changes. */}
-                      {isQuotationDraft(activeOrder.status) && !activeOrder.locked ? (
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 p-4 rounded-2xl bg-[var(--bg-surface)] border border-[var(--border-lt)]">
-                          <div className="xl:col-span-2">
-                            <SearchPicker
-                              label="Customer"
-                              placeholder="Change customer..."
-                              items={customers}
-                              onSelect={customer => updateSaleOrder(activeOrder.id, { customerId: customer.id, customerName: customer.name })}
-                              renderItem={customer => `${customer.name}${customer.email ? ` · ${customer.email}` : ''}`}
-                            />
-                            <p className="text-[10px] text-[var(--text-4)] mt-1">Current: <strong>{activeOrder.customerName}</strong></p>
-                          </div>
-                          <Field label="Quotation Date">
-                            <Input type="date" value={activeOrder.date || ''} onChange={value => updateSaleOrder(activeOrder.id, { date: value })} />
-                          </Field>
-                          <Field label="Expiration">
-                            <Input type="date" value={activeOrder.validUntil || ''} onChange={value => updateSaleOrder(activeOrder.id, { validUntil: value })} />
-                          </Field>
-                          <Field label="Delivery Date">
-                            <Input type="date" value={activeOrder.deliveryDate || ''} onChange={value => updateSaleOrder(activeOrder.id, { deliveryDate: value || undefined })} />
-                          </Field>
-                          <Field label="Payment Terms">
-                            <Input value={activeOrder.paymentTerms || ''} onChange={value => updateSaleOrder(activeOrder.id, { paymentTerms: value })} placeholder="30 days" />
-                          </Field>
-                          <Field label="Customer Reference">
-                            <Input value={activeOrder.customerRef || ''} onChange={value => updateSaleOrder(activeOrder.id, { customerRef: value || undefined })} placeholder="Customer PO / LPO no." />
-                          </Field>
-                          <Field label="Salesperson">
-                            <Select
-                              value={activeOrder.salespersonId || activeOrder.createdByUserId || ''}
-                              onChange={value => {
-                                const person = users.find((u: any) => u.id === value)
-                                updateSaleOrder(activeOrder.id, { salespersonId: value || undefined, salespersonName: person?.name })
-                              }}
-                              options={[{ value: '', label: '—' }, ...users.filter((u: any) => ['director', 'sales_rep', 'admin_officer'].includes(u.role)).map((u: any) => ({ value: u.id, label: u.name }))]}
-                            />
-                          </Field>
-                          <Field label="Sales Team">
-                            <Input value={activeOrder.salesTeam || ''} onChange={value => updateSaleOrder(activeOrder.id, { salesTeam: value || undefined })} placeholder="e.g. Direct Sales" />
-                          </Field>
-                          {systemSettings.salesPricelists && (
-                            <Field label="Pricelist">
-                              <Select
-                                value={activeOrder.pricelist || 'RETAIL'}
-                                onChange={value => updateSaleOrder(activeOrder.id, { pricelist: value || 'RETAIL' })}
-                                options={[
-                                  { value: 'RETAIL', label: 'Retail' },
-                                  { value: 'WHOLESALE', label: 'Wholesale' },
-                                  { value: 'KILIMALL', label: 'Kilimall' },
-                                ]}
-                              />
-                            </Field>
-                          )}
-                          <div className="sm:col-span-2 lg:col-span-3 xl:col-span-3">
-                            <Field label="Invoice Address">
-                              <Input value={activeOrder.invoiceAddress || ''} onChange={value => updateSaleOrder(activeOrder.id, { invoiceAddress: value || undefined })} placeholder="Billing address" />
-                            </Field>
-                          </div>
-                          <div className="sm:col-span-2 lg:col-span-3 xl:col-span-3">
-                            <Field label="Delivery Address">
-                              <Input value={activeOrder.deliveryAddress || ''} onChange={value => updateSaleOrder(activeOrder.id, { deliveryAddress: value || undefined })} placeholder="Shipping address" />
-                            </Field>
-                          </div>
-                          <div className="sm:col-span-2 lg:col-span-3 xl:col-span-6">
-                            <Field label="Notes / Terms & Conditions">
-                              <textarea
-                                className="form-input text-xs min-h-[76px]"
-                                value={activeOrder.notes || ''}
-                                onChange={event => updateSaleOrder(activeOrder.id, { notes: event.target.value })}
-                                placeholder="Payment terms, delivery notes, or customer instructions..."
-                              />
-                            </Field>
-                          </div>
-                        </div>
-                      ) : (
-                      <>
                       {activeOrder.status === 'quotation_sent' && !activeOrder.locked && (
-                        <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900 flex flex-wrap items-center justify-between gap-2">
-                          <span>This quotation was sent. Reset to draft to make changes, then save.</span>
-                          <button
-                            type="button"
-                            className="btn-secondary text-xs flex items-center gap-1.5 shrink-0"
-                            onClick={() => setShowResetDraftConfirm(true)}
-                          >
-                            <Fa icon={faRotateLeft} className="text-[10px]" /> Reset to Draft
-                          </button>
+                        <div className="sp-banner-warn" role="status">
+                          <span aria-hidden>!</span>
+                          <div className="flex flex-wrap items-center justify-between gap-2 w-full">
+                            <span>This quotation was sent. Reset to draft to make changes, then save.</span>
+                            <button type="button" className="sp-btn" onClick={() => setShowResetDraftConfirm(true)}>Reset to Draft</button>
+                          </div>
                         </div>
                       )}
-                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 p-4 rounded-2xl bg-[var(--bg-surface)] border border-[var(--border-lt)]">
-                        <div className="flex flex-col gap-1">
-                          <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)]">Customer</span>
-                          <span className="text-xs font-semibold text-[var(--text-1)]">{activeOrder.customerName}</span>
-                        </div>
-                        <div className="flex flex-col gap-1">
-                          <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)]">Order Date</span>
-                          <span className="text-xs text-[var(--text-2)]">{fmtDate(activeOrder.date)}</span>
-                        </div>
-                        <div className="flex flex-col gap-1">
-                          <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)]">Valid Until</span>
-                          <span className="text-xs text-[var(--text-2)] flex items-center gap-1.5">
-                            {activeOrder.validUntil ? fmtDate(activeOrder.validUntil) : '—'}
-                            {isQuotationStage(activeOrder.status) && activeOrder.validUntil && activeOrder.validUntil < todayIso && (
-                              <span className="text-[9px] font-semibold text-red-600 uppercase">Expired</span>
-                            )}
-                          </span>
-                        </div>
-                        <div className="flex flex-col gap-1">
-                          <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)]">Delivery Date</span>
-                          <span className="text-xs text-[var(--text-2)]">{activeOrder.deliveryDate ? fmtDate(activeOrder.deliveryDate) : '—'}</span>
-                        </div>
-                        <div className="flex flex-col gap-1">
-                          <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)]">Payment Terms</span>
-                          <span className="text-xs text-[var(--text-2)]">{activeOrder.paymentTerms ?? '—'}</span>
-                        </div>
-                        <div className="flex flex-col gap-1">
-                          <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)]">Items</span>
-                          <span className="text-xs text-[var(--text-2)]">{activeOrder.lines.length} product{activeOrder.lines.length !== 1 ? 's' : ''}</span>
-                        </div>
-                        <div className="flex flex-col gap-1">
-                          <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)]">Order Total</span>
-                          <span className="text-xs font-bold text-primary-600">{fmtKes(activeOrder.total)}</span>
-                        </div>
-                      </div>
-                      </>
-                      )}
 
-                      {/* Attachments */}
-                      <div className="rounded-2xl border border-[var(--border-lt)] bg-[var(--bg-surface)] p-4">
-                        <div className="flex items-center justify-between gap-2 mb-2">
-                          <h3 className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)]">Attachments{soAttachments.length ? ` (${soAttachments.length})` : ''}</h3>
-                          <label className={`btn-outline px-2.5 py-1 text-[10px] cursor-pointer ${uploadingAttachment ? 'opacity-50 pointer-events-none' : ''}`}>
-                            {uploadingAttachment ? 'Uploading…' : 'Attach file'}
-                            <input
-                              type="file"
-                              className="hidden"
-                              accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.jpg,.jpeg,.png,.webp"
-                              onChange={e => { const f = e.target.files?.[0]; if (f) uploadSoAttachment(f); e.target.value = '' }}
-                            />
-                          </label>
-                        </div>
-                        {soAttachments.length === 0 ? (
-                          <p className="text-[11px] text-[var(--text-4)]">No documents attached.</p>
-                        ) : (
-                          <div className="flex flex-col gap-1">
-                            {soAttachments.map(a => (
-                              <div key={a.id} className="flex items-center justify-between gap-2 rounded-lg bg-white border border-[var(--border-lt)] px-3 py-1.5">
-                                <a
-                                  className="text-xs text-[var(--primary)] font-semibold truncate hover:underline"
-                                  href={`/api/sale-order-attachments/${activeOrder.id}?file=${encodeURIComponent(a.id)}`}
-                                >
-                                  {a.name}
-                                </a>
-                                <div className="flex items-center gap-2 shrink-0">
-                                  <span className="text-[10px] text-[var(--text-4)]">{Math.max(1, Math.round(a.size / 1024))} KB · {a.uploadedBy}</span>
-                                  <button
-                                    type="button"
-                                    className="text-[11px] text-[var(--text-4)] hover:text-red-600"
-                                    title="Remove attachment"
-                                    onClick={() => deleteSoAttachment(a.id)}
-                                  >
-                                    ×
-                                  </button>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Lines + Summary */}
-                      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                        <div className="lg:col-span-2 flex flex-col gap-4">
-                          <div className="flex items-center justify-between gap-2 flex-wrap">
-                            <h3 className="text-sm font-bold text-[var(--text-1)]">Order Lines</h3>
-                            {isQuotationDraft(activeOrder.status) && !activeOrder.locked && (
-                              <div className="flex items-center gap-3">
-                                <button type="button" onClick={() => setShowAddLine(true)} className="text-xs font-bold text-primary-600 hover:underline flex items-center gap-1">
-                                  <Fa icon={faPlus} className="text-[10px]" />Add a product
-                                </button>
-                                <button type="button" onClick={() => addSOSection(activeOrder.id)} className="text-xs font-bold text-slate-600 hover:underline flex items-center gap-1">
-                                  <Fa icon={faPlus} className="text-[10px]" />Add a section
-                                </button>
-                              </div>
-                            )}
-                          </div>
-                          <div className="dt-scroll border border-[var(--border-lt)] rounded-2xl">
-                            <table data-no-responsive className="w-full text-left border-collapse">
+                      {/* Lines + Summary — prototype tabbed panel */}
+                      <div className="sp-panel" style={{ marginTop: 10 }}>
+                        <SalesDocTabs
+                          tabs={isQuotationStage(activeOrder.status)
+                            ? ['Order Lines', 'Terms and Conditions', 'Notes', 'Activities', 'History']
+                            : ['Order Lines', 'Delivery and Stock', 'Invoices', 'Notes', 'History']}
+                          active={detailTab}
+                          onChange={setDetailTab}
+                        />
+                        {detailTab === 'Order Lines' && (
+                          <>
+                          <div className="sp-table-wrap">
+                            <table data-no-responsive className="sp-table">
                               <thead>
-                                <tr className="bg-[var(--bg-surface)] border-b border-[var(--border-lt)]">
-                                  <th className="px-3 py-2 text-[10px] font-bold uppercase text-[var(--text-4)]">Product / Description</th>
-                                  <th className="px-3 py-2 text-[10px] font-bold uppercase text-[var(--text-4)] text-center w-14">Qty</th>
+                                <tr>
+                                  <th>Product</th>
+                                  <th>Description</th>
+                                  <th className="num">Qty</th>
+                                  <th>Unit</th>
                                   {activeOrder.status === 'sale' && (
-                                    <th className="px-3 py-2 text-[10px] font-bold uppercase text-[var(--text-4)] text-center w-20">Delivered</th>
+                                    <th className="num">Delivered</th>
                                   )}
                                   {(activeInvoices.length > 0 || (activeOrder.status === 'sale' && activeOrder.lines.some((l: any) => (l.qtyInvoiced ?? 0) > 0))) && (
-                                    <th className="px-3 py-2 text-[10px] font-bold uppercase text-[var(--text-4)] text-center w-20">Invoiced</th>
+                                    <th className="num">Invoiced</th>
                                   )}
-                                  <th className="px-3 py-2 text-[10px] font-bold uppercase text-[var(--text-4)] text-right w-24">Unit Price</th>
-                                  <th className="px-3 py-2 text-[10px] font-bold uppercase text-[var(--text-4)] text-right w-16">Disc%</th>
-                                  <th className="px-3 py-2 text-[10px] font-bold uppercase text-[var(--text-4)] text-right w-16">Tax%</th>
-                                  <th className="px-3 py-2 text-[10px] font-bold uppercase text-[var(--text-4)] text-right w-24">Amount</th>
-                                  <th className="px-3 py-2 w-24"></th>
+                                  <th className="num">Unit price</th>
+                                  <th className="num">Disc%</th>
+                                  <th>Tax</th>
+                                  <th className="num">Amount</th>
+                                  <th></th>
                                 </tr>
                               </thead>
                               <tbody className="divide-y divide-[var(--border-lt)]">
@@ -2143,57 +1925,54 @@ function SalesContent() {
                                   const showDelivered = activeOrder.status === 'sale'
                                   return (
                                     <tr key={l.id} className={isEditing ? 'row-editing' : ''}>
-                                      <td className="px-3 py-2 text-xs text-[var(--text-1)]">
+                                      <td>
                                         {isEditing ? (
-                                          <input type="text" aria-label="Line item description" value={editLineDesc} onChange={e => setEditLineDesc(e.target.value)} className="form-input w-full py-1 text-xs" />
+                                          <input type="text" aria-label="Line item product" value={editLineDesc} onChange={e => setEditLineDesc(e.target.value)} />
                                         ) : (
                                           <div>
-                                            <span className="font-medium">{l.productName ?? l.description ?? 'Item'}</span>
+                                            <span>{l.productName ?? 'Item'}</span>
                                             {lineSerials.length > 0 && (
-                                              <div className="mt-1 flex flex-wrap gap-1">
-                                                {lineSerials.map((s: any) => (
-                                                  <span key={s.id} className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 text-[9px] font-mono border border-blue-100">
-                                                    {s.serial ?? s.serialNumber}
-                                                    {s.barcode ? <span className="opacity-70">({s.barcode})</span> : null}
-                                                  </span>
-                                                ))}
+                                              <div style={{ fontSize: 10, color: 'var(--sp-text-3)' }}>
+                                                {lineSerials.map((s: any) => s.serial ?? s.serialNumber).join(', ')}
                                               </div>
                                             )}
                                           </div>
                                         )}
                                       </td>
-                                      <td className="px-3 py-2 text-xs text-center">
-                                        {isEditing ? <input type="number" aria-label="Line item quantity" min={1} value={editLineQty} onChange={e => setEditLineQty(e.target.value)} className="w-14 text-center border border-blue-300 rounded px-1 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-blue-400" />
-                                        : <span className="font-semibold">{l.qty}</span>}
+                                      <td>{l.description || '—'}</td>
+                                      <td className="num">
+                                        {isEditing ? <input type="number" aria-label="Line item quantity" min={1} value={editLineQty} onChange={e => setEditLineQty(e.target.value)} className="w-14 text-center" />
+                                        : l.qty}
                                       </td>
+                                      <td>Unit</td>
                                       {showDelivered && (
-                                        <td className="px-3 py-2 text-xs text-center">
+                                        <td className="num">
                                           <span className={`font-semibold ${(l.qtyDelivered ?? 0) >= l.qty ? 'text-emerald-600' : (l.qtyDelivered ?? 0) > 0 ? 'text-amber-500' : 'text-[var(--text-4)]'}`}>{l.qtyDelivered ?? 0}</span>
                                         </td>
                                       )}
                                       {showInvoiced && (
-                                        <td className="px-3 py-2 text-xs text-center">
+                                        <td className="num">
                                           <span className={`font-semibold ${invoicedQty > 0 ? 'text-violet-600' : 'text-[var(--text-4)]'}`}>{invoicedQty}</span>
                                         </td>
                                       )}
-                                      <td className="px-3 py-2 text-xs text-right">
-                                        {isEditing ? <input type="number" aria-label="Line item unit price" min={0} value={editLinePrice} onChange={e => setEditLinePrice(e.target.value)} className="w-20 text-right border border-blue-300 rounded px-1 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-blue-400" />
+                                      <td className="num">
+                                        {isEditing ? <input type="number" aria-label="Line item unit price" min={0} value={editLinePrice} onChange={e => setEditLinePrice(e.target.value)} className="w-20 text-right" />
                                         : fmtKes(l.unitPrice)}
                                       </td>
-                                      <td className="px-3 py-2 text-xs text-right">
-                                        {isEditing ? <input type="number" aria-label="Line item discount percentage" min={0} max={100} value={editLineDiscount} onChange={e => setEditLineDiscount(e.target.value)} className="w-14 text-right border border-blue-300 rounded px-1 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-blue-400" />
-                                        : <span className="text-[var(--text-3)]">{l.discount ?? l.discountPercent ?? 0}%</span>}
+                                      <td className="num">
+                                        {isEditing ? <input type="number" aria-label="Line item discount percentage" min={0} max={100} value={editLineDiscount} onChange={e => setEditLineDiscount(e.target.value)} className="w-14 text-right" />
+                                        : `${l.discount ?? l.discountPercent ?? 0}%`}
                                       </td>
-                                      <td className="px-3 py-2 text-xs text-right">
-                                        {isEditing ? <input type="number" aria-label="Line item tax percentage" min={0} max={100} value={editLineTax} onChange={e => setEditLineTax(e.target.value)} className="w-14 text-right border border-blue-300 rounded px-1 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-blue-400" />
-                                        : <span className="text-[var(--text-3)]">{l.taxRate ?? 0}%</span>}
+                                      <td>
+                                        {isEditing ? <input type="number" aria-label="Line item tax percentage" min={0} max={100} value={editLineTax} onChange={e => setEditLineTax(e.target.value)} className="w-14 text-right" />
+                                        : `${l.taxRate ?? 0}%`}
                                       </td>
-                                      <td className="px-3 py-2 text-xs font-bold text-right">
+                                      <td className="num">
                                         {isEditing ? (
-                                          <span className="text-primary-600">{fmtKes(Math.round(Math.max(0, Number(editLineQty) || 0) * Math.max(0, Number(editLinePrice) || 0) * (1 - Math.max(0, Math.min(100, Number(editLineDiscount) || 0)) / 100)))}</span>
+                                          <span>{fmtKes(Math.round(Math.max(0, Number(editLineQty) || 0) * Math.max(0, Number(editLinePrice) || 0) * (1 - Math.max(0, Math.min(100, Number(editLineDiscount) || 0)) / 100)))}</span>
                                         ) : fmtKes(l.subtotal)}
                                       </td>
-                                      <td className="px-3 py-2 text-center">
+                                      <td>
                                         {isEditing ? (
                                           <div className="flex items-center gap-1">
                                             <button type="button" onClick={() => saveEditLine(l.id)} className="row-action-btn btn-success" aria-label="Save line"><Fa icon={faCheck} aria-hidden="true" /></button>
@@ -2228,83 +2007,137 @@ function SalesContent() {
                             </table>
                           </div>
                           {isQuotationDraft(activeOrder.status) && !activeOrder.locked && (
-                            <div className="flex flex-wrap items-center gap-4">
-                              <button onClick={() => setShowAddLine(true)} className="flex items-center gap-2 text-xs text-primary-600 hover:underline font-semibold self-start"><Fa icon={faPlus} className="text-[10px]" />Add a product</button>
-                              <button onClick={() => addSOSection(activeOrder.id)} className="flex items-center gap-2 text-xs text-slate-600 hover:underline font-semibold self-start"><Fa icon={faPlus} className="text-[10px]" />Add a section</button>
+                            <div className="sp-line-actions">
+                              <button type="button" onClick={() => setShowAddLine(true)}>Add a product</button>
+                              <button type="button" onClick={() => addSOSection(activeOrder.id)}>Add a section</button>
                             </div>
                           )}
-                        </div>
-
-                        {/* Summary */}
-                        <div className="flex flex-col gap-4">
-                          <div className="card p-5 bg-[var(--bg-surface)] border-[var(--border-lt)]">
-                            <h3 className="text-sm font-bold text-[var(--text-1)] mb-4">Order Summary</h3>
-                            <div className="flex flex-col gap-3">
-                              <div className="flex justify-between text-xs"><span className="text-[var(--text-3)]">Subtotal</span><span className="font-bold">{fmtKes(activeOrder.subtotal)}</span></div>
-                              <div className="flex justify-between text-xs"><span className="text-[var(--text-3)]">Tax Total</span><span className="font-bold">{fmtKes(activeOrder.taxTotal)}</span></div>
-                              <Divider />
-                              <div className="flex justify-between text-sm"><span className="font-bold text-[var(--text-1)]">Total</span><span className="font-extrabold text-primary-600">{fmtKes(activeOrder.total)}</span></div>
+                          <SalesDocTotals
+                            sticky
+                            rows={[
+                              { label: 'Untaxed amount', value: fmtKes(activeOrder.subtotal) },
+                              { label: 'VAT', value: fmtKes(activeOrder.taxTotal) },
+                              { label: 'Total', value: fmtKes(activeOrder.total), grand: true },
+                            ]}
+                          />
+                          </>
+                        )}
+                        {detailTab === 'Notes' && (
+                          <div className="sp-panel-pad flex flex-col gap-3">
+                            <SalesDocField label="Notes">
+                              <textarea
+                                rows={5}
+                                value={activeOrder.notes || ''}
+                                readOnly={!isQuotationDraft(activeOrder.status) || !!activeOrder.locked}
+                                onChange={e => updateSaleOrder(activeOrder.id, { notes: e.target.value })}
+                                placeholder="Customer-facing notes…"
+                              />
+                            </SalesDocField>
+                            <PaymentDetailsPicker
+                              value={getDocumentPaymentDetails(activeOrder.id)}
+                              onChange={next => setDocumentPaymentDetails(activeOrder.id, next)}
+                              readOnly={!isQuotationDraft(activeOrder.status) || !!activeOrder.locked}
+                            />
+                            <Chatter
+                              model="sale_order"
+                              recordId={activeOrder.id}
+                              staffName={currentUser?.name || 'Staff'}
+                              title="Internal Notes"
+                              compact
+                            />
+                          </div>
+                        )}
+                        {detailTab === 'Terms and Conditions' && (
+                          <p className="sp-panel-pad" style={{ color: 'var(--sp-text-3)' }}>
+                            Terms and conditions content.
+                          </p>
+                        )}
+                        {detailTab === 'Attachments' && (
+                          <p className="sp-panel-pad" style={{ color: 'var(--sp-text-3)' }}>
+                            Attachments are managed after the document is saved.
+                          </p>
+                        )}
+                        {detailTab === 'Delivery and Stock' && (
+                          <div className="sp-panel-pad">
+                            {activeDeliveries.length === 0 ? (
+                              <p style={{ color: 'var(--sp-text-3)' }}>No deliveries yet.</p>
+                            ) : (
+                              <table className="sp-table">
+                                <thead>
+                                  <tr>
+                                    <th>Reference</th>
+                                    <th>Status</th>
+                                    <th>Scheduled</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {activeDeliveries.map((d: any) => (
+                                    <tr key={d.id}>
+                                      <td>{d.name || d.id}</td>
+                                      <td>{d.status}</td>
+                                      <td>{d.scheduledDate ? fmtDate(d.scheduledDate) : '—'}</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            )}
+                          </div>
+                        )}
+                        {detailTab === 'Invoices' && (
+                          <div className="sp-panel-pad">
+                            {activeInvoices.length === 0 ? (
+                              <p style={{ color: 'var(--sp-text-3)' }}>No invoices yet.</p>
+                            ) : (
+                              <table className="sp-table">
+                                <thead>
+                                  <tr>
+                                    <th>Reference</th>
+                                    <th>Status</th>
+                                    <th className="num">Total</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {activeInvoices.map((inv: any) => (
+                                    <tr key={inv.id}>
+                                      <td>{inv.name || inv.number || inv.id}</td>
+                                      <td>{inv.status || inv.state}</td>
+                                      <td className="num">{fmtKes(inv.total ?? inv.amountTotal ?? 0)}</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            )}
+                          </div>
+                        )}
+                        {(detailTab === 'History' || detailTab === 'Activities') && (
+                          <div className="sp-panel-pad">
+                            {[
+                              { label: 'Quotation created', date: activeOrder.date, show: true },
+                              { label: `Quotation sent${activeOrder.sentTo ? ` to ${activeOrder.sentTo}` : ''}${activeOrder.sentByName ? ` by ${activeOrder.sentByName}` : ''}`, date: activeOrder.sentAt ?? activeOrder.date, show: !!activeOrder.sentAt },
+                              { label: `Confirmed into Sales Order${activeOrder.confirmedByName ? ` by ${activeOrder.confirmedByName}` : ''}`, date: activeOrder.confirmedAt ?? activeOrder.date, show: activeOrder.status === 'sale' },
+                              { label: 'Delivery validated', date: activeOrder.date, show: activeDeliveries.some(d => d.status === 'done') },
+                              { label: 'Invoice created', date: activeOrder.date, show: activeInvoices.length > 0 },
+                            ].filter(e => e.show).map((event, idx) => (
+                              <div key={idx} style={{ display: 'flex', gap: 10, padding: '6px 0', borderBottom: '1px solid var(--sp-border)' }}>
+                                <div style={{ width: 8, height: 8, borderRadius: 99, background: 'var(--sp-accent)', marginTop: 4, flexShrink: 0 }} />
+                                <div>
+                                  <div style={{ fontSize: 12, fontWeight: 600 }}>{event.label}</div>
+                                  <div style={{ fontSize: 11, color: 'var(--sp-text-3)' }}>{fmtDate(event.date)}</div>
+                                </div>
+                              </div>
+                            ))}
+                            <div style={{ marginTop: 12 }}>
+                              <DocumentEmailSendHistory
+                                documentId={activeOrder.id}
+                                documentType="quote"
+                                refreshKey={emailHistoryKey}
+                                title="Quote email history"
+                              />
                             </div>
                           </div>
-                          {activeOrder.notes && (
-                            <div className="card p-4 bg-amber-50 border-amber-200">
-                              <div className="flex items-start gap-2">
-                                <Fa icon={faStickyNote} className="text-amber-500 text-xs mt-0.5 flex-shrink-0" />
-                                <p className="text-xs text-amber-800">{activeOrder.notes}</p>
-                              </div>
-                            </div>
-                          )}
-                        </div>
+                        )}
                       </div>
-
-                      <PaymentDetailsPicker
-                        value={getDocumentPaymentDetails(activeOrder.id)}
-                        onChange={next => setDocumentPaymentDetails(activeOrder.id, next)}
-                        readOnly={!isQuotationDraft(activeOrder.status) || !!activeOrder.locked}
-                      />
-
-                      <Chatter
-                        model="sale_order"
-                        recordId={activeOrder.id}
-                        staffName={currentUser?.name || 'Staff'}
-                        title="Internal Notes"
-                        compact
-                      />
-
-                      <DocumentEmailSendHistory
-                        documentId={activeOrder.id}
-                        documentType="quote"
-                        refreshKey={emailHistoryKey}
-                        title="Quote email history"
-                      />
-
-                      {/* Activity */}
-                      <div className="flex flex-col gap-3">
-                        <h3 className="text-sm font-bold text-[var(--text-1)] flex items-center gap-2"><Fa icon={faClockRotateLeft} className="text-[var(--text-4)] text-xs" />Activity</h3>
-                        <div className="flex flex-col gap-0">
-                          {[
-                            { label: 'Quotation created', date: activeOrder.date, show: true },
-                            { label: `Quotation sent${activeOrder.sentTo ? ` to ${activeOrder.sentTo}` : ''}${activeOrder.sentByName ? ` by ${activeOrder.sentByName}` : ''}`, date: activeOrder.sentAt ?? activeOrder.date, show: !!activeOrder.sentAt },
-                            { label: 'Approval requested', date: activeOrder.date, show: false },
-                            { label: 'Order approved', date: activeOrder.date, show: false },
-                            { label: `Confirmed into Sales Order${activeOrder.confirmedByName ? ` by ${activeOrder.confirmedByName}` : ''}`, date: activeOrder.confirmedAt ?? activeOrder.date, show: activeOrder.status === 'sale' },
-                            { label: 'Delivery validated', date: activeOrder.date, show: activeDeliveries.some(d => d.status === 'done') },
-                            { label: 'Invoice created', date: activeOrder.date, show: activeInvoices.length > 0 },
-                          ].filter(e => e.show).map((event, idx, arr) => (
-                            <div key={idx} className="flex items-start gap-3 relative">
-                              <div className="flex flex-col items-center">
-                                <div className="w-2.5 h-2.5 rounded-full bg-primary-500 mt-0.5 flex-shrink-0" />
-                                {idx < arr.length - 1 && <div className="w-px flex-1 bg-[var(--border-lt)] my-0.5" style={{ minHeight: 20 }} />}
-                              </div>
-                              <div className="pb-3">
-                                <p className="text-xs font-semibold text-[var(--text-1)]">{event.label}</p>
-                                <p className="text-[10px] text-[var(--text-4)]">{fmtDate(event.date)}</p>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
+                    </>
                   )}
                 </div>
               )}
@@ -2756,59 +2589,60 @@ function NewQuotationForm({
     products.filter(p => !search || p.name.toLowerCase().includes(search.toLowerCase()) || (p.sku ?? '').toLowerCase().includes(search.toLowerCase()))
 
   return (
-    <div className="sales-doc-shell">
-      <div className="sales-doc-page-header">
+    <div>
+      <div className="sales-proto-page-header">
         <div>
-          <button type="button" className="sd-btn sd-btn-ghost" onClick={onCancel} style={{ paddingLeft: 0 }}>← Back</button>
+          <button type="button" className="sp-btn sp-btn-ghost" onClick={onCancel} style={{ paddingLeft: 0 }}>← Back</button>
           <h1>Create quotation</h1>
           <div className="sub">Customer · lines · terms · send</div>
         </div>
-        <div className="sales-doc-actions">
-          <button type="button" className="sd-btn" onClick={onCancel}>Discard</button>
-          <button type="button" className="sd-btn" onClick={onSaveDraft} disabled={!canSave}>Save as draft</button>
-          <button type="button" className="sd-btn sd-btn-primary" onClick={onSave} disabled={!canSave}>Submit</button>
+        <div className="sales-proto-actions">
+          <button type="button" className="sp-btn" onClick={onCancel}>Discard</button>
+          <button type="button" className="sp-btn" onClick={onSaveDraft} disabled={!canSave}>Save as draft</button>
+          <button type="button" className="sp-btn sp-btn-primary" onClick={onSave} disabled={!canSave}>Submit</button>
         </div>
       </div>
 
-      <div className="sales-doc-panel sales-doc-panel-pad">
-        <div className="sales-doc-grid-2">
-          <div className="flex flex-col gap-3">
+      <div className="sp-panel sp-panel-pad">
+        <div className="sp-grid-2">
+          <div>
             <SalesDocField label="Customer" htmlFor="quote-customer">
               <div className="relative" ref={customerRef}>
                 <div
                   id="quote-customer"
                   tabIndex={0}
                   role="button"
-                  className={`cursor-pointer flex items-center justify-between ${!newCustomer ? 'text-[var(--text-4)]' : ''}`}
+                  className={`cursor-pointer flex items-center justify-between ${!newCustomer ? 'text-[var(--sp-text-3)]' : ''}`}
+                  style={{ border: '1px solid var(--sp-border-strong)', borderRadius: 4, padding: '6px 8px', fontSize: 12.5, background: '#fff' }}
                   onClick={() => setCustomerDropdownOpen(v => !v)}
                   onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setCustomerDropdownOpen(v => !v) } }}
                 >
                   <span className="truncate">{newCustomer ? newCustomer.name : 'Search customer…'}</span>
-                  <Fa icon={faChevronDown} className={`text-[10px] text-[var(--text-4)] flex-shrink-0 transition-transform ${customerDropdownOpen ? 'rotate-180' : ''}`} />
+                  <Fa icon={faChevronDown} className={`text-[10px] flex-shrink-0 transition-transform ${customerDropdownOpen ? 'rotate-180' : ''}`} />
                 </div>
                 {customerDropdownOpen && (
-                  <div className="absolute top-full left-0 right-0 z-[9300] mt-1 bg-[var(--bg-card)] border border-[var(--border)] rounded-xl shadow-xl overflow-hidden">
-                    <div className="p-2 border-b border-[var(--border-lt)]">
-                      <input autoFocus type="text" aria-label="Search customers by name or email" placeholder="Search by name or email…" className="form-input text-xs w-full" value={customerSearch} onChange={e => setCustomerSearch(e.target.value)} />
+                  <div className="absolute top-full left-0 right-0 z-[9300] mt-1 bg-white border border-[var(--sp-border)] rounded-[6px] shadow-lg overflow-hidden">
+                    <div className="p-2 border-b border-[var(--sp-border)]">
+                      <input autoFocus type="text" aria-label="Search customers by name or email" placeholder="Search by name or email…" className="w-full" style={{ border: '1px solid var(--sp-border-strong)', borderRadius: 4, padding: '6px 8px', fontSize: 12.5 }} value={customerSearch} onChange={e => setCustomerSearch(e.target.value)} />
                     </div>
                     <div className="max-h-48 overflow-y-auto">
                       {filteredCustomers.length === 0 ? (
                         <div className="px-3 py-2">
-                          <p className="text-xs text-[var(--text-4)] mb-2">No customers found</p>
-                          <button className="text-xs text-primary-600 font-semibold hover:underline" onClick={() => { setCustomerDropdownOpen(false); onCreateNewCustomer(customerSearch) }}>+ Create new contact</button>
+                          <p className="text-[12px] text-[var(--sp-text-3)] mb-2">No customers found</p>
+                          <button className="text-[12px] text-[var(--sp-accent)] font-semibold hover:underline" onClick={() => { setCustomerDropdownOpen(false); onCreateNewCustomer(customerSearch) }}>+ Create new contact</button>
                         </div>
                       ) : (
                         filteredCustomers.map(c => (
-                          <button key={c.id} className="w-full text-left px-3 py-2 hover:bg-[var(--bg-surface)] transition-colors" onClick={() => { setNewCustomer({ id: c.id, name: c.name }); setCustomerDropdownOpen(false); setCustomerSearch('') }}>
-                            <p className="text-xs font-semibold text-[var(--text-1)]">{c.name}</p>
-                            <p className="text-[10px] text-[var(--text-4)]">{c.email || c.phone || 'No contact info'}</p>
+                          <button key={c.id} className="w-full text-left px-3 py-2 hover:bg-[var(--sp-accent-soft)] transition-colors" onClick={() => { setNewCustomer({ id: c.id, name: c.name }); setCustomerDropdownOpen(false); setCustomerSearch('') }}>
+                            <p className="text-[12.5px] font-semibold text-[var(--sp-text)]">{c.name}</p>
+                            <p className="text-[11px] text-[var(--sp-text-3)]">{c.email || c.phone || 'No contact info'}</p>
                           </button>
                         ))
                       )}
                     </div>
                     {filteredCustomers.length > 0 && (
-                      <div className="p-2 border-t border-[var(--border-lt)]">
-                        <button className="text-xs text-primary-600 font-semibold hover:underline" onClick={() => { setCustomerDropdownOpen(false); onCreateNewCustomer(customerSearch) }}>+ Create new contact</button>
+                      <div className="p-2 border-t border-[var(--sp-border)]">
+                        <button className="text-[12px] text-[var(--sp-accent)] font-semibold hover:underline" onClick={() => { setCustomerDropdownOpen(false); onCreateNewCustomer(customerSearch) }}>+ Create new contact</button>
                       </div>
                     )}
                   </div>
@@ -2816,22 +2650,38 @@ function NewQuotationForm({
               </div>
             </SalesDocField>
             {fieldErrors?.customer && (
-              <p role="alert" className="text-[10px] text-destructive font-semibold -mt-2">{fieldErrors.customer}</p>
+              <p role="alert" className="text-[11px] text-[var(--sp-danger)] font-semibold" style={{ marginTop: -4, marginBottom: 8 }}>{fieldErrors.customer}</p>
             )}
             <SalesDocField label="Contact">
-              <div className="sd-value">{selectedCustomer?.type === 'individual' ? selectedCustomer.name : '—'}</div>
+              <input readOnly value={selectedCustomer?.name || '—'} />
             </SalesDocField>
             <SalesDocField label="Email">
-              <div className="sd-value">{selectedCustomer?.email || '—'}</div>
+              <input readOnly value={selectedCustomer?.email || '—'} />
             </SalesDocField>
             <SalesDocField label="Phone">
-              <div className="sd-value">{selectedCustomer?.phone || selectedCustomer?.mobile || '—'}</div>
+              <input readOnly value={selectedCustomer?.phone || selectedCustomer?.mobile || '—'} />
             </SalesDocField>
           </div>
 
-          <div className="flex flex-col gap-3">
-            <SalesDocField label="Delivery date" htmlFor="quote-delivery-date">
-              <input id="quote-delivery-date" type="date" aria-label="Delivery date" value={newDeliveryDate} onChange={e => setNewDeliveryDate(e.target.value)} />
+          <div>
+            <SalesDocField label="Quotation date" htmlFor="quote-date">
+              <input id="quote-date" type="date" aria-label="Quotation date" value={new Date().toISOString().slice(0, 10)} readOnly />
+            </SalesDocField>
+            <SalesDocField label="Valid until" htmlFor="quote-valid-until">
+              <input
+                id="quote-valid-until"
+                type="date"
+                aria-label="Valid until"
+                value={newDeliveryDate || ''}
+                onChange={e => setNewDeliveryDate(e.target.value)}
+              />
+            </SalesDocField>
+            <SalesDocField label="Price list" htmlFor="quote-pricelist">
+              <select id="quote-pricelist" aria-label="Pricelist" value={newPricelist || 'RETAIL'} onChange={e => setNewPricelist(e.target.value)} disabled={!pricelistsEnabled}>
+                <option value="RETAIL">Public · KES</option>
+                <option value="WHOLESALE">Wholesale · KES</option>
+                <option value="KILIMALL">Kilimall · KES</option>
+              </select>
             </SalesDocField>
             <SalesDocField label="Payment terms" htmlFor="quote-payment-terms">
               <select id="quote-payment-terms" aria-label="Payment terms" value={newPaymentTerms} onChange={e => setNewPaymentTerms(e.target.value)}>
@@ -2844,63 +2694,29 @@ function NewQuotationForm({
                 <option value="90">90 days</option>
               </select>
             </SalesDocField>
-            {pricelistsEnabled && (
-              <SalesDocField label="Price list" htmlFor="quote-pricelist">
-                <select id="quote-pricelist" aria-label="Pricelist" value={newPricelist || 'RETAIL'} onChange={e => setNewPricelist(e.target.value)}>
-                  <option value="RETAIL">Retail</option>
-                  <option value="WHOLESALE">Wholesale</option>
-                  <option value="KILIMALL">Kilimall</option>
-                </select>
-              </SalesDocField>
-            )}
             <SalesDocField label="Salesperson" htmlFor="quote-sales-team">
-              <input id="quote-sales-team" type="text" aria-label="Sales team" placeholder="Assign salesperson…" value={newSalesTeam} onChange={e => setNewSalesTeam(e.target.value)} />
-            </SalesDocField>
-            <SalesDocField label="Customer reference" htmlFor="quote-customer-ref">
-              <input id="quote-customer-ref" type="text" aria-label="Customer reference" placeholder="Customer PO / LPO no." value={newCustomerRef} onChange={e => setNewCustomerRef(e.target.value)} />
+              <input id="quote-sales-team" type="text" aria-label="Salesperson" placeholder="Salesperson" value={newSalesTeam} onChange={e => setNewSalesTeam(e.target.value)} />
             </SalesDocField>
           </div>
         </div>
-
-        <button
-          type="button"
-          className="w-full flex items-center justify-between text-left mt-4 pt-3 border-t border-[var(--border-lt)]"
-          onClick={() => setShowAdvanced(v => !v)}
-        >
-          <div>
-            <p className="text-xs font-bold text-[var(--text-2)]">Advanced addresses</p>
-            <p className="text-[10px] text-[var(--text-4)]">Invoice and delivery addresses</p>
-          </div>
-          <Fa icon={faChevronDown} className={`text-[10px] text-[var(--text-4)] transition-transform ${showAdvanced ? 'rotate-180' : ''}`} />
-        </button>
-        {showAdvanced && (
-          <div className="sales-doc-grid-2 mt-3">
-            <SalesDocField label="Invoice address" htmlFor="quote-invoice-address">
-              <input id="quote-invoice-address" type="text" aria-label="Invoice address" placeholder="Billing address" value={newInvoiceAddress} onChange={e => setNewInvoiceAddress(e.target.value)} />
-            </SalesDocField>
-            <SalesDocField label="Delivery address" htmlFor="quote-delivery-address">
-              <input id="quote-delivery-address" type="text" aria-label="Delivery address" placeholder="Shipping address" value={newDeliveryAddress} onChange={e => setNewDeliveryAddress(e.target.value)} />
-            </SalesDocField>
-          </div>
-        )}
       </div>
 
-      <div className="sales-doc-panel">
+      <div className="sp-panel" style={{ marginTop: 10 }}>
         <SalesDocTabs
-          tabs={['Order Lines', 'Notes', 'Terms and Conditions', 'Attachments']}
+          tabs={['Order Lines', 'Optional Products', 'Notes', 'Terms and Conditions', 'Attachments']}
           active={createTab}
           onChange={setCreateTab}
         />
 
         {createTab === 'Order Lines' && (
           <>
-            <div className="sales-doc-table-wrap" id="quote-lines" tabIndex={-1}>
+            <div className="sp-table-wrap" id="quote-lines" tabIndex={-1}>
               {fieldErrors?.lines && (
                 <p id="quote-lines-error" role="alert" className="px-4 pt-3 text-[10px] text-destructive font-semibold">
                   {fieldErrors.lines}
                 </p>
               )}
-              <table className="sales-doc-table" data-no-responsive>
+              <table className="sp-table" data-no-responsive>
                 <thead>
                   <tr>
                     <th>#</th>
@@ -3041,20 +2857,31 @@ function NewQuotationForm({
                 </tbody>
               </table>
             </div>
-            <div className="sales-doc-line-actions">
+            <div className="sp-line-actions">
               <button type="button" onClick={addDraftLine}>Add a line</button>
               <button type="button" onClick={addDraftSection}>Add a section</button>
+              <button type="button" onClick={() => setCreateTab('Notes')}>Add a note</button>
             </div>
-            <SalesDocTotals rows={[
-              { label: 'Untaxed amount', value: fmtKes(draftSubtotal) },
-              { label: 'VAT', value: fmtKes(draftTaxTotal) },
-              { label: 'Total', value: fmtKes(draftTotal), grand: true },
-            ]} />
+            <SalesDocTotals
+              sticky
+              rows={[
+                { label: 'Untaxed amount', value: fmtKes(draftSubtotal) },
+                { label: 'Taxes', value: fmtKes(draftTaxTotal) },
+                { label: 'Total', value: fmtKes(draftTotal), grand: true },
+                { label: 'Currency', value: 'KES' },
+              ]}
+            />
           </>
         )}
 
+        {createTab === 'Optional Products' && (
+          <div className="sp-panel-pad" style={{ color: 'var(--sp-text-3)' }}>
+            Optional products (prototype placeholder).
+          </div>
+        )}
+
         {createTab === 'Notes' && (
-          <div className="sales-doc-panel-pad flex flex-col gap-4">
+          <div className="sp-panel-pad flex flex-col gap-4">
             <SalesDocField label="Notes" htmlFor="quote-notes">
               <textarea
                 id="quote-notes"
@@ -3073,11 +2900,15 @@ function NewQuotationForm({
         )}
 
         {createTab === 'Terms and Conditions' && (
-          <p className="sales-doc-panel-pad text-sm text-[var(--text-4)]">Terms and conditions can be added after the quotation is saved.</p>
+          <div className="sp-panel-pad" style={{ color: 'var(--sp-text-3)' }}>
+            Terms and Conditions content (prototype placeholder — demo data only).
+          </div>
         )}
 
         {createTab === 'Attachments' && (
-          <p className="sales-doc-panel-pad text-sm text-[var(--text-4)]">Attach files after the quotation is saved.</p>
+          <div className="sp-panel-pad" style={{ color: 'var(--sp-text-3)' }}>
+            Attachments content (prototype placeholder — demo data only).
+          </div>
         )}
       </div>
 
@@ -3342,38 +3173,38 @@ function DeliveryNoteView({
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="sales-doc-page-header">
+      <div className="sales-proto-page-header">
         <div>
-          <button type="button" className="sd-btn sd-btn-ghost" style={{ paddingLeft: 0 }} onClick={onBack}>← Back to order</button>
-          <div className="sales-doc-ref-row">
+          <button type="button" className="sp-btn sp-btn-ghost" style={{ paddingLeft: 0 }} onClick={onBack}>← Back to order</button>
+          <div className="sp-ref-row">
             <h1>{existingDelivery?.ref ?? 'Delivery'}</h1>
             <SalesDocPill label={dnPill.label} tone={dnPill.tone} />
           </div>
           <div className="sub">Source {order.ref} · {order.customerName}</div>
         </div>
-        <div className="sales-doc-actions">
+        <div className="sales-proto-actions">
           {canGenerateDeliveryNote(existingDelivery) && (
-            <button type="button" className="sd-btn" onClick={handlePrintDN}>Print</button>
+            <button type="button" className="sp-btn" onClick={handlePrintDN}>Print</button>
           )}
           {canPrepare && (
-            <button type="button" className="sd-btn sd-btn-primary" onClick={handlePrepare} disabled={savingDelivery}>
+            <button type="button" className="sp-btn sp-btn-primary" onClick={handlePrepare} disabled={savingDelivery}>
               {savingDelivery ? 'Saving…' : 'Prepare delivery'}
             </button>
           )}
           {canValidate && (
-            <button type="button" className="sd-btn sd-btn-primary" onClick={handleValidate} disabled={savingDelivery}>
+            <button type="button" className="sp-btn sp-btn-primary" onClick={handleValidate} disabled={savingDelivery}>
               {savingDelivery ? 'Saving…' : 'Mark as delivered'}
             </button>
           )}
         </div>
       </div>
 
-      <div className="sales-doc-panel sales-doc-panel-pad">
-        <div className="sales-doc-grid-2">
-          <SalesDocField label="Customer"><div className="sd-value">{order.customerName}</div></SalesDocField>
-          <SalesDocField label="Scheduled / order date"><div className="sd-value">{fmtDate(order.date)}</div></SalesDocField>
-          <SalesDocField label="Source order"><div className="sd-value"><span className="sales-doc-link">{order.ref}</span></div></SalesDocField>
-          <SalesDocField label="Delivery address"><div className="sd-value">{dnAddress || '—'}</div></SalesDocField>
+      <div className="sp-panel sp-panel-pad">
+        <div className="sp-grid-2">
+          <SalesDocField label="Customer"><div className="sp-value">{order.customerName}</div></SalesDocField>
+          <SalesDocField label="Scheduled / order date"><div className="sp-value">{fmtDate(order.date)}</div></SalesDocField>
+          <SalesDocField label="Source order"><div className="sp-value"><span className="sp-linkish">{order.ref}</span></div></SalesDocField>
+          <SalesDocField label="Delivery address"><div className="sp-value">{dnAddress || '—'}</div></SalesDocField>
         </div>
       </div>
 
@@ -3536,20 +3367,20 @@ function DeliveryNoteView({
           <Field label="Notes"><textarea className="form-input text-xs" rows={2} placeholder="Accessories included, special instructions…" value={dnNotes} onChange={e => setDnNotes(e.target.value)} /></Field>
         </div>
 
-        <div className="sales-doc-footer-sticky" aria-label="Picking progress">
+        <div className="sp-footer-sticky" aria-label="Picking progress">
           <div>
             Required {pickingSummary.required} · Picked {pickingSummary.picked} · Remaining {pickingSummary.remaining}
             {' — '}<span className="pct">{pickingSummary.pct}%</span>
           </div>
-          <div className="sales-doc-actions">
-            <button type="button" className="sd-btn" onClick={onBack}>Back</button>
+          <div className="sales-proto-actions">
+            <button type="button" className="sp-btn" onClick={onBack}>Back</button>
             {canPrepare && (
-              <button type="button" className="sd-btn sd-btn-primary" onClick={handlePrepare} disabled={savingDelivery}>
+              <button type="button" className="sp-btn sp-btn-primary" onClick={handlePrepare} disabled={savingDelivery}>
                 {savingDelivery ? 'Saving…' : 'Complete picking'}
               </button>
             )}
             {canValidate && (
-              <button type="button" className="sd-btn sd-btn-success" onClick={handleValidate} disabled={savingDelivery}>
+              <button type="button" className="sp-btn sp-btn-success" onClick={handleValidate} disabled={savingDelivery}>
                 {savingDelivery ? 'Saving…' : 'Mark as delivered'}
               </button>
             )}

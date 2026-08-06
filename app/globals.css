@@ -4578,11 +4578,17 @@
 }
 
 .sales-pilot.sales-doc > .mod-body.sales-doc-body {
-  padding: 0.75rem 1rem 1.5rem;
-  max-width: 1280px;
-  margin: 0 auto;
+  padding: 0 !important;
+  max-width: none;
+  margin: 0;
   width: 100%;
-  background: transparent;
+  background: var(--sd-bg);
+}
+
+/* Kill AppShell / mod-page spacing that fights prototype density */
+.sales-pilot.sales-doc.mod-page {
+  gap: 0 !important;
+  padding: 0 !important;
 }
 
 .sales-doc-shell {
