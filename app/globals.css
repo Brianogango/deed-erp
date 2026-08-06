@@ -4451,7 +4451,7 @@
 
 .sales-pilot .sales-kanban-card--quotation::before { background: var(--warning); }
 .sales-pilot .sales-kanban-card--quotation_sent::before { background: var(--primary); }
-.sales-pilot .sales-kanban-card--sale::before { background: var(--primary); }
+.sales-pilot .sales-kanban-card--sale::before { background: var(--navy); }
 .sales-pilot .sales-kanban-card--cancelled::before { background: var(--text-4); }
 
 .sales-pilot .sales-kanban-card:hover {
