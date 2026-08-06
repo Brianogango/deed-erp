@@ -163,7 +163,7 @@ export function planPrepareDeliveryLines(opts: {
  */
 export function pairOrderLinesWithDeliveryLines<
   OL extends { productId?: string; qty?: number; lineType?: string },
-  DL extends { productId?: string; qty?: number },
+  DL extends { productId?: string; qty?: number; qtyDone?: number; serialIds?: string[] | null },
 >(
   orderLines: OL[] | null | undefined,
   deliveryLines: DL[] | null | undefined,
