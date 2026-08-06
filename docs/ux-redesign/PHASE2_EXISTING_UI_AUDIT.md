@@ -29,7 +29,17 @@
 1. **Assessment A** — design-director review of shell, Dashboard, Sales, Inventory, Repair, Refurb, shared UI (prior run retained; findings re-validated in source).  
 2. **Assessment B** — Impeccable detector on layout + Dashboard + Sales + Inventory + Repair + Refurb + `components/ui/index.tsx` → **482 findings**.  
 3. **Taste / redesign** — anti-slop checklist with **ERP exclusions** (see below).  
-4. **Live screenshots** — captured under `/opt/cursor/artifacts/ux-phase2-redo/` when available.
+4. **Live screenshots** — `/opt/cursor/artifacts/ux-phase2-redo/` (desktop, director session).
+
+| Screen | File | Visual note |
+|--------|------|-------------|
+| Dashboard | `dashboard.png` | White content + card KPI tiles; navy sidebar; soft marketing-like greeting area |
+| Sales | `sales.png` | Slate-ink command header + emerald CTA; pipeline strip; dense table empty state |
+| Operations | `operations.png` | Navy command header + cyan accents; overview rail; Catalog table |
+| Repairs | `repairs.png` | Default white compact header; colour status pills; left-accent rows — not on pilot chrome |
+| Finance | `finance.png` | Default white compact header; multi-tab accounting; blue primary CTA |
+
+**Chrome consistency (from screenshots):** Sales/Inventory = inverted command bands; Repairs/Finance/Dashboard content = default light chrome — confirms uneven rollout.
 
 ### Detector summary (Assessment B)
 
