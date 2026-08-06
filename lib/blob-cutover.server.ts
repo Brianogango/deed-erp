@@ -128,12 +128,21 @@ function mappings(): Record<string, Mapping> {
     deed_serials: {
       prismaTable: 'serial_numbers',
       count: () => prisma.serialNumber.count(),
+      overlap: async ids => prisma.serialNumber.count({ where: { id: { in: ids } } }),
     },
     deed_deliveries: {
       prismaTable: 'delivery_notes',
       count: () => prisma.deliveryNote.count(),
     },
-    // Receipts/GRNs remain blob-only — no parent Prisma model yet.
+    deed_receipts: {
+      prismaTable: 'goods_received_notes',
+      count: () => prisma.goodsReceivedNote.count(),
+      overlap: async ids => prisma.goodsReceivedNote.count({ where: { id: { in: ids } } }),
+    },
+    deed_bulkStock: {
+      prismaTable: 'bulk_stock_levels',
+      count: () => prisma.bulkStockLevel.count(),
+    },
   }
 }
 

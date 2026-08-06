@@ -3,47 +3,54 @@
 **Goal:** Every operational domain is written to Prisma/Postgres. Blobs may remain as read caches until certified and archived — never deleted without a parity certificate.
 
 **Date started:** 2026-08-06  
-**Branch:** `cursor/blob-cutover-deliveries-ddc8`
+**Branch:** `cursor/blob-cutover-db-sot-ddc8` (continues deliveries work)
 
 ## Sequencing
 
 | Phase | Domain | Status |
 |-------|--------|--------|
-| 1 | **Deliveries** (`deed_deliveries` → `delivery_notes`) | **In progress** — SO-first schema + dual-write mirror |
-| 2 | Serials (`deed_serials` → `serial_numbers`) | Next |
-| 3 | Stock moves (`deed_stockMoves` → `stock_movements`) | Next |
-| 4 | PO + GRN (`deed_purchaseOrders`, `deed_receipts`) | After 2–3 |
+| 1 | **Deliveries** (`deed_deliveries` → `delivery_notes`) | **Done** — SO-first schema + dual-write + backfilled (41/41) |
+| 2 | **Serials** (`deed_serials` → `serial_numbers`) | **In progress** — location + blob_id + dual-write |
+| 3 | **Stock moves** (`deed_stockMoves` → `stock_movements`) | **In progress** — blob_id + locations + dual-write |
+| 4 | **PO + GRN** (`deed_purchaseOrders`, `deed_receipts`) | **In progress** — suppliers stubs + dual-write |
+| 4b | **Bulk stock** (`deed_bulkStock` → `bulk_stock_levels`) | **In progress** — location-aware qty table |
 | 5 | Retire dual-write mirrors (SO/invoice/quote blobs as cache-only, then archive) | Last |
 
-## Phase 1 — Deliveries (this PR)
+## What ships in this cutover
 
-### Schema blocker fixed
-- `DeliveryNote.invoiceId` is now **nullable** (SO → DN → Invoice order)
-- Added `saleOrderId`, `blobId`, recipient/prepare fields, line `qtyDone` + `serialIds[]`
-- Empty-table migration: `database/migrations/20260806_delivery_notes_so_first.sql`
+### Schema
+- `database/migrations/20260806_blob_cutover_inventory_sot.sql`
+- Serials: `location`, `blob_id`, `received_date`, `sold_date`, `product_name`
+- Stock moves: `blob_id`, `from_location`, `to_location`, `document_ref`, `serial_numbers[]`
+- PO/GRN: `blob_id`, vendor/destination/status fields
+- New table: `bulk_stock_levels (product_id, location, qty)`
 
-### Dual-write
-- `lib/inventory/delivery-mirror.ts` upserts on every `deed_deliveries` save
-- Hooked from `lib/server-store.ts` `saveStoreKeys`
-- Catalog: `deed_deliveries` moved from `BLOB_SOT` → `DUAL_WRITE`
+### Dual-write (hooked from `saveStoreKeys`)
+- `lib/inventory/serial-mirror.ts`
+- `lib/inventory/stock-move-mirror.ts`
+- `lib/inventory/purchase-mirror.ts` (PO + GRN; ensures `suppliers` stubs for blob vendors)
+- `lib/inventory/bulk-stock-mirror.ts`
+- Deliveries mirror unchanged
+
+### Catalog
+- Inventory keys moved **BLOB_SOT → DUAL_WRITE** (`BLOB_SOT_KEYS` is empty)
+- Reads still use blob until certify/archive
 
 ### Backfill
 ```bash
 # After schema applied on Contabo:
 cd /var/www/deed-erp
-node scripts/backfill-deliveries-to-prisma.mjs
+psql "$DATABASE_URL" -f database/migrations/20260806_blob_cutover_inventory_sot.sql
+node scripts/backfill-inventory-to-prisma.mjs
+# Or via API (director / internal secret):
+# POST /api/admin/backfill-inventory { "force": true }
 ```
-
-### Not yet
-- UI/API still **reads** from blob (SoT for reads until parity soak)
-- Stock mutation still blob-driven on validate
-- Certify/archive of `deed_deliveries` after counts converge
 
 ## Absolute rules
 1. Verified backup before any production schema change  
 2. Additive dual-write first; never blind-delete `deed_*`  
 3. Certify via `/api/admin/blob-cutover` + `scripts/check-blob-parity.mjs`  
-4. One domain at a time  
+4. One domain soak at a time before archive  
 
-## Next slice after merge/deploy of Phase 1
-Serials: location field + dual-write from `/api/serials` and stock-transactions; then stock_movements on delivery validate.
+## Still blob-read (not deleted)
+UI/API still hydrates from `deed_*` blobs. Prisma is the write mirror. After parity soak, flip reads per domain then archive.

@@ -195,10 +195,14 @@ export async function POST(request: NextRequest) {
         await prisma.serialNumber.create({
           data: {
             id: row.id,
+            blobId: row.id,
             productId: product.id,
             serialNumber: row.serial,
             inventoryBarcode: row.barcode,
-            status: 'in_stock',
+            status: 'available',
+            location: validation.location,
+            productName: product.name?.slice(0, 200) ?? null,
+            receivedDate: receivedDate ? new Date(receivedDate) : new Date(),
             notes: reasonLabel,
           },
         }).catch(() => { /* unique conflict — blob is SoR */ })

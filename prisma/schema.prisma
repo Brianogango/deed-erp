@@ -860,6 +860,7 @@ model Product {
   images             ProductImage[]
   serials            SerialNumber[]
   stockLevel         StockLevel?
+  bulkStockLevels    BulkStockLevel[]
   stockMovements     StockMovement[]
   adjItems           StockAdjustmentItem[]
   poItems            PurchaseOrderItem[]
@@ -907,11 +908,18 @@ model ProductImage {
 
 model SerialNumber {
   id               String         @id @default(uuid()) @db.Uuid
+  /** Bridges deed_serials during dual-write cutover. */
+  blobId           String?        @unique @map("blob_id") @db.VarChar(80)
   productId        String         @map("product_id") @db.Uuid
   serialNumber     String         @unique @map("serial_number") @db.VarChar(100)
   inventoryBarcode String?        @unique @map("inventory_barcode") @db.VarChar(120)
   conditionGrade   ConditionGrade? @map("condition_grade")
   status           String         @default("in_stock") @db.VarChar(30)
+  /** warehouse | shop | repair_unit | customer | vendor | … */
+  location         String         @default("warehouse") @db.VarChar(30)
+  productName      String?        @map("product_name") @db.VarChar(200)
+  receivedDate     DateTime?      @map("received_date") @db.Date
+  soldDate         DateTime?      @map("sold_date") @db.Date
   purchaseItemId   String?        @map("purchase_item_id") @db.Uuid
   soldViaInvoiceId String?        @map("sold_via_invoice_id") @db.Uuid
   notes            String?
@@ -941,6 +949,7 @@ model SerialNumber {
 
   @@index([productId], map: "idx_serials_product")
   @@index([status], map: "idx_serials_status")
+  @@index([location], map: "idx_serials_location")
   @@map("serial_numbers")
 }
 
@@ -976,6 +985,21 @@ model StockLevel {
   product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
 
   @@map("stock_levels")
+}
+
+/** Location-aware bulk qty — dual-write from deed_bulkStock. */
+model BulkStockLevel {
+  id        String   @id @default(uuid()) @db.Uuid
+  productId String   @map("product_id") @db.Uuid
+  location  String   @default("warehouse") @db.VarChar(30)
+  qty       Int      @default(0)
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([productId, location], map: "uq_bulk_stock_product_location")
+  @@index([location], map: "idx_bulk_stock_location")
+  @@map("bulk_stock_levels")
 }
 
 // Synced from database/migrations/20260625_inventory_foundation_safe.sql
@@ -1051,15 +1075,22 @@ model CustomerAsset {
 
 model StockMovement {
   id             String            @id @default(uuid()) @db.Uuid
+  /** Bridges deed_stockMoves during dual-write cutover. */
+  blobId         String?           @unique @map("blob_id") @db.VarChar(80)
   productId      String            @map("product_id") @db.Uuid
   serialNumberId String?           @map("serial_number_id") @db.Uuid
   movementType   StockMovementType @map("movement_type")
   qty            Int
-  qtyBefore      Int               @map("qty_before")
-  qtyAfter       Int               @map("qty_after")
+  qtyBefore      Int               @default(0) @map("qty_before")
+  qtyAfter       Int               @default(0) @map("qty_after")
   unitCost       Decimal?          @map("unit_cost") @db.Decimal(14, 2)
   referenceType  String?           @map("reference_type") @db.VarChar(40)
   referenceId    String?           @map("reference_id") @db.Uuid
+  fromLocation   String?           @map("from_location") @db.VarChar(40)
+  toLocation     String?           @map("to_location") @db.VarChar(40)
+  documentRef    String?           @map("document_ref") @db.VarChar(80)
+  /** Blob serial strings when IDs are unknown / multi-serial moves. */
+  serialNumbers  String[]          @default([]) @map("serial_numbers")
   notes          String?
   createdById    String?           @map("created_by") @db.Uuid
   createdAt      DateTime          @default(now()) @map("created_at")
@@ -1071,6 +1102,7 @@ model StockMovement {
   @@index([productId], map: "idx_stock_movements_product")
   @@index([referenceType, referenceId], map: "idx_stock_movements_ref")
   @@index([createdAt], map: "idx_stock_movements_date")
+  @@index([documentRef], map: "idx_stock_movements_document_ref")
   @@map("stock_movements")
 }
 
@@ -1112,8 +1144,11 @@ model StockAdjustmentItem {
 
 model PurchaseOrder {
   id              String              @id @default(uuid()) @db.Uuid
+  /** Bridges deed_purchaseOrders during dual-write cutover. */
+  blobId          String?             @unique @map("blob_id") @db.VarChar(80)
   poNumber        String              @unique @map("po_number") @db.VarChar(30)
   supplierId      String              @map("supplier_id") @db.Uuid
+  vendorName      String?             @map("vendor_name") @db.VarChar(200)
   status          PurchaseOrderStatus @default(draft)
   orderDate       DateTime            @default(now()) @map("order_date") @db.Date
   expectedDate    DateTime?           @map("expected_date") @db.Date
@@ -1164,14 +1199,19 @@ model PurchaseOrderItem {
 }
 
 model GoodsReceivedNote {
-  id                String   @id @default(uuid()) @db.Uuid
-  grnNumber         String   @unique @map("grn_number") @db.VarChar(30)
-  poId              String   @map("po_id") @db.Uuid
-  receivedDate      DateTime @default(now()) @map("received_date") @db.Date
-  supplierInvoiceNo String?  @map("supplier_invoice_no") @db.VarChar(60)
-  notes             String?
-  createdById       String   @map("created_by") @db.Uuid
-  createdAt         DateTime @default(now()) @map("created_at")
+  id                   String   @id @default(uuid()) @db.Uuid
+  /** Bridges deed_receipts during dual-write cutover. */
+  blobId               String?  @unique @map("blob_id") @db.VarChar(80)
+  grnNumber            String   @unique @map("grn_number") @db.VarChar(30)
+  poId                 String   @map("po_id") @db.Uuid
+  receivedDate         DateTime @default(now()) @map("received_date") @db.Date
+  supplierInvoiceNo    String?  @map("supplier_invoice_no") @db.VarChar(60)
+  destinationLocation  String   @default("warehouse") @map("destination_location") @db.VarChar(40)
+  status               String   @default("draft") @db.VarChar(20)
+  vendorName           String?  @map("vendor_name") @db.VarChar(200)
+  notes                String?
+  createdById          String   @map("created_by") @db.Uuid
+  createdAt            DateTime @default(now()) @map("created_at")
 
   po        PurchaseOrder @relation(fields: [poId], references: [id])
   createdBy User          @relation(fields: [createdById], references: [id])
@@ -1185,6 +1225,8 @@ model GrnItem {
   grnId         String   @map("grn_id") @db.Uuid
   poItemId      String   @map("po_item_id") @db.Uuid
   productId     String   @map("product_id") @db.Uuid
+  productName   String?  @map("product_name") @db.VarChar(200)
+  qtyExpected   Int      @default(0) @map("qty_expected")
   qtyReceived   Int      @map("qty_received")
   unitCost      Decimal  @map("unit_cost") @db.Decimal(14, 2)
   conditionNote String?  @map("condition_note")

@@ -182,6 +182,37 @@ export async function saveStoreKeys(entries: Record<string, string>): Promise<vo
           .then(m => m.mirrorDeliveriesToPrisma(entries['deed_deliveries']))
           .catch(() => {})
       }
+      if (entries['deed_serials']) {
+        void import('./inventory/serial-mirror')
+          .then(m => m.mirrorSerialsToPrisma(entries['deed_serials']))
+          .catch(() => {})
+      }
+      if (entries['deed_stockMoves']) {
+        void import('./inventory/stock-move-mirror')
+          .then(m => m.mirrorStockMovesToPrisma(entries['deed_stockMoves']))
+          .catch(() => {})
+      }
+      if (entries['deed_purchaseOrders']) {
+        void import('./inventory/purchase-mirror')
+          .then(m => m.mirrorPurchaseOrdersToPrisma(entries['deed_purchaseOrders']))
+          .catch(() => {})
+      }
+      if (entries['deed_receipts']) {
+        // GRNs depend on PO items — mirror POs first when both arrive together.
+        void import('./inventory/purchase-mirror')
+          .then(async m => {
+            if (entries['deed_purchaseOrders']) {
+              await m.mirrorPurchaseOrdersToPrisma(entries['deed_purchaseOrders'])
+            }
+            return m.mirrorReceiptsToPrisma(entries['deed_receipts'])
+          })
+          .catch(() => {})
+      }
+      if (entries['deed_bulkStock']) {
+        void import('./inventory/bulk-stock-mirror')
+          .then(m => m.mirrorBulkStockToPrisma(entries['deed_bulkStock']))
+          .catch(() => {})
+      }
       if (entries['deed_deposits'] || entries['deed_deposits_v1']) {
         void import('./accounting/deposit-mirror')
           .then(m => m.mirrorDepositsToPrisma(entries['deed_deposits'] || entries['deed_deposits_v1']))

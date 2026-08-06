@@ -19,35 +19,36 @@ export const DUAL_WRITE_BLOB_KEYS = [
   'deed_deposits_v1',
   'deed_holdovers',
   'deed_repairs_v2',
-  /** Cutover in progress: dual-write to delivery_notes (SO-first schema). */
+  /** Cutover: dual-write to delivery_notes (SO-first schema). */
   'deed_deliveries',
+  /** Cutover: dual-write inventory domains to Postgres. */
+  'deed_serials',
+  'deed_stockMoves',
+  'deed_purchaseOrders',
+  'deed_receipts',
+  'deed_bulkStock',
 ] as const
 
 /** Relational-first catalogs that may still have a legacy blob mirror. */
 export const CATALOG_BLOB_KEYS = ['deed_products'] as const
 
 /**
- * Domains still blob-SoT or partial Prisma mirrors — tracked for soak/parity
- * reporting (not required for admin-reset certification gate).
+ * Domains still tracked for soak/parity (Prisma-first sales docs + payments).
+ * Inventory SoT keys moved into DUAL_WRITE_BLOB_KEYS above.
  */
 export const EXTENDED_CUTOVER_BLOB_KEYS = [
-  'deed_purchaseOrders',
   'deed_payments',
-  'deed_stockMoves',
   'deed_invoices',
   'deed_saleOrders',
   'deed_quotes',
-  'deed_serials',
-  'deed_receipts',
 ] as const
 
-/** Keys where blob remains the operational source of truth today. */
-export const BLOB_SOT_KEYS = [
-  'deed_purchaseOrders',
-  'deed_stockMoves',
-  'deed_serials',
-  'deed_receipts',
-] as const
+/**
+ * Keys where blob remains the *only* operational write path with no Prisma
+ * dual-write yet. Empty after inventory cutover — reads may still use blob
+ * until certify/archive.
+ */
+export const BLOB_SOT_KEYS = [] as const
 
 export type CutoverBlobKey = (typeof DUAL_WRITE_BLOB_KEYS)[number] | (typeof CATALOG_BLOB_KEYS)[number] | string
 

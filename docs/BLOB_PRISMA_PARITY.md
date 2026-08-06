@@ -16,7 +16,7 @@ Audit finding **DB-001**: the ERP dual-writes critical domains (blob + Prisma). 
 |------|---------|-------------------|
 | `catalog` | Relational-first (e.g. products) | Only when counts match (hard stop otherwise) |
 | `dual_write` | Both sides should converge (invoices, quotes, sale orders, repairs, …) | Only when counts match (optionally Prisma ahead) |
-| `blob_sot` | Blob is still operational SoT (POs, serials, stock moves, deliveries, receipts) | Track coverage; do **not** certify until Prisma catches up |
+| `blob_sot` | Blob is still operational SoT (none remaining for inventory — see dual_write) | Track coverage; do **not** certify until Prisma catches up |
 
 ## How to run a check
 
