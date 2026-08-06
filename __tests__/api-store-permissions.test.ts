@@ -491,13 +491,31 @@ describe('POST /api/store — partial-view writes merge instead of replace', () 
     expect(saved.map((e: any) => e.id).sort()).toEqual(['e1', 'e2', 'e3'])
   })
 
-  it('a finance officer still replaces the ledger wholesale (full-access write)', async () => {
+  it('a finance officer cannot drop posted invoices via a stale truncated sync', async () => {
     mockGetSession.mockResolvedValue(financeSession)
-    mockLoadAppState.mockResolvedValue({ deed_invoices: serverInvoices })
-    const res = await STORE_POST(postReq({ deed_invoices: JSON.stringify([serverInvoices[0]]) }))
+    const ledger = [
+      { id: 'i1', type: 'customer_invoice', status: 'posted', total: 1000, repairId: 'r1' },
+      { id: 'i2', type: 'customer_invoice', status: 'posted', total: 2000 },
+      { id: 'i3', type: 'vendor_bill', status: 'posted', total: 3000 },
+    ]
+    mockLoadAppState.mockResolvedValue({ deed_invoices: ledger })
+    const res = await STORE_POST(postReq({ deed_invoices: JSON.stringify([ledger[0]]) }))
     expect(res.status).toBe(200)
     const saved = JSON.parse(mockSaveStoreKeys.mock.calls.find(c => c[0].deed_invoices)![0].deed_invoices)
-    expect(saved).toHaveLength(1)
+    expect(saved.map((i: any) => i.id).sort()).toEqual(['i1', 'i2', 'i3'])
+  })
+
+  it('a finance officer can still remove a draft invoice from the ledger', async () => {
+    mockGetSession.mockResolvedValue(financeSession)
+    const ledger = [
+      { id: 'i1', type: 'customer_invoice', status: 'draft', total: 1000 },
+      { id: 'i2', type: 'customer_invoice', status: 'posted', total: 2000 },
+    ]
+    mockLoadAppState.mockResolvedValue({ deed_invoices: ledger })
+    const res = await STORE_POST(postReq({ deed_invoices: JSON.stringify([ledger[1]]) }))
+    expect(res.status).toBe(200)
+    const saved = JSON.parse(mockSaveStoreKeys.mock.calls.find(c => c[0].deed_invoices)![0].deed_invoices)
+    expect(saved.map((i: any) => i.id)).toEqual(['i2'])
   })
 
   it('rejects a tampered total/date on a posted invoice via wholesale sync (FIN-001)', async () => {

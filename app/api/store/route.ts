@@ -6,7 +6,12 @@ import {
 } from '@/lib/auth/authorization'
 import { loadAppState, saveStoreKeys, getAppStateVersion } from '@/lib/server-store'
 import { mergeAppendOnlyJournals } from '@/lib/finance-controls'
-import { preserveInvoiceLinesOnStoreWrite, enforcePostedInvoiceImmutability, type RejectedPostedInvoiceEdit } from '@/lib/finance-invoice'
+import {
+  preserveInvoiceLinesOnStoreWrite,
+  preserveMissingInvoicesOnStoreWrite,
+  enforcePostedInvoiceImmutability,
+  type RejectedPostedInvoiceEdit,
+} from '@/lib/finance-invoice'
 import { mergeProductsStoreWrite } from '@/lib/catalog-merge'
 import { appendStoreAudit } from '@/lib/store-audit'
 import crypto from 'crypto'
@@ -259,7 +264,10 @@ export async function POST(request: Request) {
     let incoming: unknown
     try { incoming = JSON.parse(entries.deed_invoices) } catch { incoming = null }
     if (incoming != null) {
-      const withPreservedLines = preserveInvoiceLinesOnStoreWrite(currentInvoices.deed_invoices, incoming)
+      // Stale browsers must not drop posted/cancelled invoices that still exist
+      // on the server (draft removals still allowed — see deleteInvoice).
+      const withPreservedRows = preserveMissingInvoicesOnStoreWrite(currentInvoices.deed_invoices, incoming)
+      const withPreservedLines = preserveInvoiceLinesOnStoreWrite(currentInvoices.deed_invoices, withPreservedRows)
       const guarded = enforcePostedInvoiceImmutability(currentInvoices.deed_invoices, withPreservedLines)
       entries.deed_invoices = JSON.stringify(guarded.merged)
       rejectedPostedInvoiceEdits = guarded.rejected

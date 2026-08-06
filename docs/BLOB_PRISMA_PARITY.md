@@ -66,7 +66,7 @@ Observed after AGENT packages (counts move over time):
 
 1. Run `verify` weekly; treat dual-write / catalog gaps as SEV-2.
 2. For products gap: export blob-only SKUs, create missing Prisma rows or archive orphans deliberately.
-3. For invoices gap: compare ID sets; re-broadcast / backfill from Prisma → blob or repair missing Prisma rows.
+3. For invoices gap: compare ID sets; run `POST /api/admin/backfill-invoices` (director or `x-internal-secret`) to merge Prisma → `deed_invoices` by id, or repair missing Prisma rows. Store sync now refuses to drop non-draft invoices from a truncated client write.
 4. Keep blob-SoT domains on blob writes until a dedicated cutover project migrates POs / serials / stock moves.
 5. Never `retire` a live key without archive + Director confirmation.
 

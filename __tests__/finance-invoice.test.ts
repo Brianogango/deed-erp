@@ -4,7 +4,11 @@ import {
   computeInvoiceLineMoney,
   clampAmountPaid,
   mapDbInvoiceItemsToClientLines,
+  mapDbInvoiceStatusToClient,
+  mapDbInvoiceToClientStore,
+  mergePrismaInvoicesIntoBlob,
   preserveInvoiceLinesOnStoreWrite,
+  preserveMissingInvoicesOnStoreWrite,
   enforcePostedInvoiceImmutability,
 } from '@/lib/finance-invoice'
 
@@ -142,6 +146,113 @@ describe('preserveInvoiceLinesOnStoreWrite', () => {
     const merged = preserveInvoiceLinesOnStoreWrite(current, incoming) as typeof incoming
     expect(merged[0].lines[0].id).toBe('l2')
     expect(merged[0].subtotal).toBe(200)
+  })
+})
+
+describe('preserveMissingInvoicesOnStoreWrite', () => {
+  it('restores posted invoices dropped by a truncated sync', () => {
+    const current = [
+      { id: 'a', status: 'posted', ref: 'INV/1' },
+      { id: 'b', status: 'posted', ref: 'INV/2' },
+      { id: 'c', status: 'draft', ref: 'DRAFT/INV/X' },
+    ]
+    const incoming = [{ id: 'a', status: 'posted', ref: 'INV/1' }]
+    const merged = preserveMissingInvoicesOnStoreWrite(current, incoming) as typeof current
+    expect(merged.map(r => r.id).sort()).toEqual(['a', 'b'])
+  })
+
+  it('allows intentional draft removal', () => {
+    const current = [
+      { id: 'a', status: 'draft', ref: 'DRAFT/INV/X' },
+      { id: 'b', status: 'posted', ref: 'INV/2' },
+    ]
+    const incoming = [{ id: 'b', status: 'posted', ref: 'INV/2' }]
+    const merged = preserveMissingInvoicesOnStoreWrite(current, incoming) as typeof current
+    expect(merged.map(r => r.id)).toEqual(['b'])
+  })
+})
+
+describe('mapDbInvoiceToClientStore / mergePrismaInvoicesIntoBlob', () => {
+  it('maps approved Prisma invoices to posted customer invoices', () => {
+    const row = mapDbInvoiceToClientStore({
+      id: 'inv-1',
+      invoiceNumber: 'INV/2026/0046',
+      status: 'approved',
+      clientId: 'c1',
+      client: { name: 'Kevin Mbugua' },
+      invoiceDate: new Date('2026-08-06T00:00:00.000Z'),
+      dueDate: new Date('2026-09-05T00:00:00.000Z'),
+      subtotal: 51700,
+      taxAmount: 112,
+      totalAmount: 51812,
+      amountPaid: 0,
+      saleOrderId: 'so-1',
+      notes: 'Created from SO/2026/0025',
+      items: [{
+        id: 'li-1',
+        description: 'HP ZBook',
+        qty: 1,
+        unitPrice: 51000,
+        taxRate: 0,
+        discountPct: 0,
+        lineSubtotal: 51000,
+        productId: 'p1',
+        sortOrder: 0,
+      }],
+    })
+    expect(row).toMatchObject({
+      id: 'inv-1',
+      ref: 'INV/2026/0046',
+      type: 'customer_invoice',
+      status: 'posted',
+      partnerName: 'Kevin Mbugua',
+      total: 51812,
+      saleOrderId: 'so-1',
+    })
+    expect((row.lines as unknown[]).length).toBe(1)
+  })
+
+  it('maps BILL refs to vendor_bill and voided to cancelled', () => {
+    expect(mapDbInvoiceStatusToClient('voided')).toBe('cancelled')
+    const row = mapDbInvoiceToClientStore({
+      id: 'b1',
+      invoiceNumber: 'BILL/2026/0011',
+      status: 'voided',
+      clientId: 'v1',
+      client: { name: 'Vendor' },
+      invoiceDate: '2026-08-06',
+      totalAmount: 1700,
+      amountPaid: 0,
+      items: [],
+    })
+    expect(row.type).toBe('vendor_bill')
+    expect(row.status).toBe('cancelled')
+  })
+
+  it('merges missing Prisma invoices into the blob without clobbering existing rows', () => {
+    const blob = [{
+      id: 'keep',
+      ref: 'BILL/0096',
+      type: 'vendor_bill',
+      status: 'posted',
+      purchaseOrderId: 'po-1',
+      amountPaid: 0,
+    }]
+    const { merged, added } = mergePrismaInvoicesIntoBlob(blob, [{
+      id: 'new',
+      invoiceNumber: 'INV/2026/0046',
+      status: 'approved',
+      clientId: 'c1',
+      client: { name: 'Kevin' },
+      invoiceDate: '2026-08-06',
+      totalAmount: 100,
+      amountPaid: 0,
+      items: [],
+    }])
+    expect(added).toBe(1)
+    expect(merged).toHaveLength(2)
+    expect(merged.find(r => r.id === 'keep')?.purchaseOrderId).toBe('po-1')
+    expect(merged.find(r => r.id === 'new')?.ref).toBe('INV/2026/0046')
   })
 })
 

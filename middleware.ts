@@ -148,7 +148,8 @@ export async function middleware(request: NextRequest) {
     const internalSecret = process.env.INTERNAL_API_SECRET
     const isInternalBackfill =
       pathname === '/api/admin/backfill-repairs' ||
-      pathname === '/api/admin/backfill-accounting'
+      pathname === '/api/admin/backfill-accounting' ||
+      pathname === '/api/admin/backfill-invoices'
     if (
       isInternalBackfill &&
       internalSecret &&

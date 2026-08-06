@@ -283,3 +283,161 @@ export function preserveInvoiceLinesOnStoreWrite(current: unknown, incoming: unk
     return row
   })
 }
+
+/**
+ * Map Prisma DocumentStatus → client InvoiceStatus.
+ * Payment progress is never stored on the client row.
+ */
+export function mapDbInvoiceStatusToClient(status: unknown): 'draft' | 'posted' | 'cancelled' {
+  const s = String(status ?? '')
+  if (s === 'draft' || s === 'pending_approval' || s === 'rejected') return 'draft'
+  if (s === 'cancelled' || s === 'voided' || s === 'void') return 'cancelled'
+  return 'posted'
+}
+
+export function invoiceTypeFromRef(ref: string | null | undefined): 'customer_invoice' | 'vendor_bill' {
+  const value = String(ref ?? '').toUpperCase()
+  if (value.startsWith('BILL') || value.startsWith('DRAFT/BILL')) return 'vendor_bill'
+  return 'customer_invoice'
+}
+
+function isoDateOnly(value: unknown): string {
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    return value.toISOString().slice(0, 10)
+  }
+  const raw = String(value ?? '')
+  if (/^\d{4}-\d{2}-\d{2}/.test(raw)) return raw.slice(0, 10)
+  const parsed = new Date(raw)
+  if (!Number.isNaN(parsed.getTime())) return parsed.toISOString().slice(0, 10)
+  return new Date().toISOString().slice(0, 10)
+}
+
+/** Prisma invoice (+ items + client) → deed_invoices client row. */
+export function mapDbInvoiceToClientStore(invoice: {
+  id: string
+  invoiceNumber: string
+  status: unknown
+  clientId: string
+  client?: { name?: string | null } | null
+  invoiceDate?: unknown
+  dueDate?: unknown
+  subtotal?: unknown
+  taxAmount?: unknown
+  totalAmount?: unknown
+  amountPaid?: unknown
+  saleOrderId?: string | null
+  repairId?: string | null
+  quoteId?: string | null
+  notes?: string | null
+  invoiceAddress?: string | null
+  deliveryAddress?: string | null
+  paymentBlocked?: boolean | null
+  currencyCode?: string | null
+  baseCurrencyCode?: string | null
+  exchangeRateToBase?: unknown
+  approvedById?: string | null
+  approvedAt?: unknown
+  items?: Parameters<typeof mapDbInvoiceItemsToClientLines>[0]
+}): Record<string, unknown> {
+  const ref = invoice.invoiceNumber
+  const total = num(invoice.totalAmount)
+  const row: Record<string, unknown> = {
+    id: invoice.id,
+    ref,
+    type: invoiceTypeFromRef(ref),
+    status: mapDbInvoiceStatusToClient(invoice.status),
+    partnerId: invoice.clientId,
+    partnerName: invoice.client?.name ?? '',
+    date: isoDateOnly(invoice.invoiceDate),
+    dueDate: isoDateOnly(invoice.dueDate ?? invoice.invoiceDate),
+    lines: mapDbInvoiceItemsToClientLines(invoice.items),
+    subtotal: num(invoice.subtotal),
+    taxTotal: num(invoice.taxAmount),
+    total,
+    amountPaid: clampAmountPaid(invoice.amountPaid, total),
+    notes: invoice.notes ?? '',
+  }
+  if (invoice.saleOrderId) row.saleOrderId = invoice.saleOrderId
+  if (invoice.repairId) row.repairId = invoice.repairId
+  if (invoice.quoteId) row.quoteId = invoice.quoteId
+  if (invoice.invoiceAddress) row.invoiceAddress = invoice.invoiceAddress
+  if (invoice.deliveryAddress) row.deliveryAddress = invoice.deliveryAddress
+  if (invoice.paymentBlocked) row.paymentBlocked = true
+  if (invoice.currencyCode) row.currencyCode = invoice.currencyCode
+  if (invoice.baseCurrencyCode) row.baseCurrencyCode = invoice.baseCurrencyCode
+  if (invoice.exchangeRateToBase != null) row.exchangeRateToBase = num(invoice.exchangeRateToBase)
+  if (invoice.approvedById) row.postedByUserId = invoice.approvedById
+  if (invoice.approvedAt) row.postedAt = isoDateOnly(invoice.approvedAt)
+  return row
+}
+
+/**
+ * Stale full-access clients must not drop non-draft invoices that already exist
+ * on the server. Draft removals still pass (deleteInvoice strips drafts locally).
+ * Posted/cancelled rows missing from the write are appended back.
+ */
+export function preserveMissingInvoicesOnStoreWrite(current: unknown, incoming: unknown): unknown {
+  if (!Array.isArray(current) || !Array.isArray(incoming)) return incoming
+
+  const incomingIds = new Set<string>()
+  for (const row of incoming) {
+    if (row && typeof row === 'object' && (row as { id?: unknown }).id != null) {
+      incomingIds.add(String((row as { id: unknown }).id))
+    }
+  }
+
+  const restored: unknown[] = []
+  for (const row of current) {
+    if (!row || typeof row !== 'object' || (row as { id?: unknown }).id == null) continue
+    const id = String((row as { id: unknown }).id)
+    if (incomingIds.has(id)) continue
+    const status = String((row as { status?: unknown }).status ?? '')
+    if (status === 'draft') continue
+    restored.push(row)
+  }
+
+  if (restored.length === 0) return incoming
+  return [...incoming, ...restored]
+}
+
+/**
+ * Merge Prisma invoices into a deed_invoices array by id.
+ * Existing blob rows win for identity fields (keeps vendor-only keys like
+ * purchaseOrderId); amountPaid is refreshed from Prisma when present.
+ */
+export function mergePrismaInvoicesIntoBlob(
+  currentBlob: unknown,
+  prismaInvoices: Array<Parameters<typeof mapDbInvoiceToClientStore>[0]>,
+): { merged: Record<string, unknown>[]; added: number; refreshedPaid: number } {
+  const blob: Record<string, unknown>[] = Array.isArray(currentBlob)
+    ? currentBlob.filter((row): row is Record<string, unknown> => !!row && typeof row === 'object')
+    : []
+  const byId = new Map<string, Record<string, unknown>>()
+  for (const row of blob) {
+    if (row.id != null) byId.set(String(row.id), { ...row })
+  }
+
+  let added = 0
+  let refreshedPaid = 0
+  for (const inv of prismaInvoices) {
+    const mapped = mapDbInvoiceToClientStore(inv)
+    const id = String(mapped.id)
+    const existing = byId.get(id)
+    if (!existing) {
+      byId.set(id, mapped)
+      added += 1
+      continue
+    }
+    const nextPaid = num(mapped.amountPaid)
+    if (num(existing.amountPaid) !== nextPaid) {
+      existing.amountPaid = nextPaid
+      refreshedPaid += 1
+    }
+    // Prefer Prisma status when blob is missing a terminal state.
+    if (mapped.status === 'cancelled' && existing.status !== 'cancelled') {
+      existing.status = 'cancelled'
+    }
+  }
+
+  return { merged: [...byId.values()], added, refreshedPaid }
+}
