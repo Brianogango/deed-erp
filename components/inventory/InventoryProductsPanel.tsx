@@ -458,7 +458,7 @@ export default function InventoryProductsPanel({
         if (tracking === 'NONE') return <span className="text-xs text-text-4">N/A</span>
         return (
           <span
-            className="text-xs font-bold text-text-1"
+            className="text-xs font-bold text-text-1 tabular-nums font-mono"
             title="Units physically in warehouse / shop / repair (includes held units)"
           >
             {row.onHand}
@@ -477,7 +477,7 @@ export default function InventoryProductsPanel({
         if (tracking === 'NONE') return <span className="text-xs text-text-4">—</span>
         return (
           <span
-            className="text-xs text-text-2"
+            className="text-xs text-text-2 tabular-nums font-mono"
             title="Free to sell (status available only)"
           >
             {row.available}
@@ -502,7 +502,7 @@ export default function InventoryProductsPanel({
         ].filter(Boolean)
         return (
           <span
-            className="text-xs font-bold text-amber-700"
+            className="text-xs font-bold text-[var(--warning-text)] tabular-nums font-mono"
             title={parts.length ? parts.join(' · ') : 'On hand but not free to sell'}
           >
             {row.held}
@@ -521,7 +521,7 @@ export default function InventoryProductsPanel({
         if (!min) return <span className="text-xs text-text-4">—</span>
         const below = row.onHand < min
         return (
-          <span className={`text-xs font-bold ${below ? 'text-amber-700' : 'text-text-2'}`}>
+          <span className={`text-xs font-bold tabular-nums ${below ? 'text-[var(--warning-text)]' : 'text-text-2'}`}>
             {below ? `Below ${min}` : `Min ${min}`}
           </span>
         )

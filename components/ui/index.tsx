@@ -47,10 +47,14 @@ const statusColor: Record<string, string> = {
   diagnosed: 'badge-amber',
   waiting: 'badge-amber',
   to_invoice: 'badge-amber',
-  // purples
-  in_repair: 'badge-purple',
-  in_transit: 'badge-purple',
-  qc: 'badge-purple',
+  queued: 'badge-amber',
+  // Active process — use info blue (not decorative purple)
+  in_repair: 'badge-blue',
+  in_transit: 'badge-blue',
+  in_progress: 'badge-blue',
+  qc: 'badge-blue',
+  transit: 'badge-blue',
+  confirmed_blue: 'badge-blue',
   // reds
   cancelled: 'badge-red',
   canceled: 'badge-red',
@@ -61,18 +65,17 @@ const statusColor: Record<string, string> = {
   failed: 'badge-red',
   declined: 'badge-red',
   unrepairable: 'badge-red',
+  written_off: 'badge-red',
+  blocked: 'badge-red',
   returned: 'badge-gray',
-  // blues
-  transit: 'badge-blue',
-  confirmed_blue: 'badge-blue',
+  transferred: 'badge-gray',
   // invoice partial
   partially_paid: 'badge-amber',
   warning: 'badge-amber',
   // computed invoice payment statuses (Odoo)
   not_paid: 'badge-blue',
   in_payment: 'badge-blue',
-  reversed: 'badge-purple',
-  blocked: 'badge-red',
+  reversed: 'badge-gray',
 }
 
 const statusLabel: Record<string, string> = {

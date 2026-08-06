@@ -10,7 +10,7 @@ import {
 import type { ProductKind } from '@/lib/product-kind'
 import { Badge, Modal, Field, Input, Select, Confirm, PanelHeader, SearchPicker, ModuleSkeleton, ModuleHeader, TabBar, Textarea } from '@/components/ui'
 import { DataTable, type ColumnDef, type PrimaryFilterConfig } from '@/components/data-table'
-import { PrimaryActionButton, TablePageLayout, OperationalSummary, CompactInfoNotice } from '@/components/erp'
+import { PrimaryActionButton, TablePageLayout, OperationalSummary, CompactInfoNotice, StatusBadge } from '@/components/erp'
 import { Fa, faBox, faBoxesStacked, faArrowDown, faBarcode, faTriangleExclamation, faWarehouse, faWrench, faPrint, faIndustry, faMagnifyingGlass } from '@/components/icons'
 import { printProductLabels, printSerialLabels } from '@/lib/product-label'
 import { guardSpreadsheetFile, guardSpreadsheetRows, SpreadsheetGuardError } from '@/lib/spreadsheet-guard'
@@ -1305,7 +1305,7 @@ function InventoryContent() {
   const acctOpt = (list: Account[]) => list.map(a => ({ value: a.code, label: `[${a.code}] ${a.name}` }))
 
   return (
-    <div className="mod-page">
+    <div className="mod-page inventory-pilot">
       {/* Hidden file inputs */}
       <input ref={productImportRef} type="file" accept=".xlsx,.xls,.csv" className="hidden"
         onChange={e => { const f = e.target.files?.[0]; if (f) handleProductImportFile(f); e.target.value = '' }} />
@@ -1318,6 +1318,7 @@ function InventoryContent() {
         icon={<Fa icon={faBoxesStacked} />}
         count={kpis.productMasters}
         color="var(--navy)"
+        subtitleMode="compact"
         primaryAction={
           canEditStock && (tab === 'product_master' || tab === 'product_catalog') ? (
             <PrimaryActionButton onClick={openNew}>New product</PrimaryActionButton>
@@ -1431,26 +1432,44 @@ function InventoryContent() {
           setShowNewRefurb(true)
         }
 
-        const Section = ({ title, icon, color, count, children, emptyText }: {
-          title: string; icon: React.ReactNode; color: string; count: number; children: React.ReactNode; emptyText: string
-        }) => (
-          <div className="card overflow-hidden flex flex-col">
-            <div className="flex items-center gap-2 px-4 py-3 border-b border-border-lt bg-surface">
-              <span className="text-lg" style={{ color }} aria-hidden="true">{icon}</span>
+        const Section = ({ title, icon, tone = 'navy', count, children, emptyText }: {
+          title: string; icon: React.ReactNode; tone?: 'navy' | 'warning' | 'info'; count: number; children: React.ReactNode; emptyText: string
+        }) => {
+          const toneClass =
+            tone === 'warning' ? 'text-[var(--warning)] bg-[var(--warning-bg)]' :
+            tone === 'info' ? 'text-[var(--info)] bg-[var(--info-bg)]' :
+            'text-[var(--navy)] bg-[var(--primary-light)]'
+          const iconClass =
+            tone === 'warning' ? 'text-[var(--warning)]' :
+            tone === 'info' ? 'text-[var(--info)]' :
+            'text-[var(--navy)]'
+          return (
+          <div className="rounded-token-md border border-[var(--border-lt)] bg-[var(--bg-card)] overflow-hidden flex flex-col">
+            <div className="flex items-center gap-2 px-4 py-3 border-b border-[var(--border-lt)] bg-[var(--bg-surface)]">
+              <span className={`text-lg ${iconClass}`} aria-hidden="true">{icon}</span>
               <p className="font-bold text-sm text-text-1">{title}</p>
-              <span className="ml-2 px-2 py-0.5 rounded-full text-[10px] font-bold" style={{ background: color + '20', color }}>{count}</span>
+              <span className={`ml-2 px-2 py-0.5 rounded-md text-[10px] font-bold tabular-nums ${toneClass}`}>{count}</span>
             </div>
             {count === 0 ? <div className="py-8 text-center text-[12px] text-text-3">{emptyText}</div>
-              : <div className="divide-y divide-border-lt">{children}</div>}
+              : <div className="divide-y divide-[var(--border-lt)]">{children}</div>}
           </div>
-        )
+          )
+        }
 
-        const ActionBtn = ({ label, bg, color, onClick }: { label: React.ReactNode; bg: string; color: string; onClick: () => void }) => (
-          <button onClick={e => { e.stopPropagation(); onClick() }}
-            className="px-2.5 py-1.5 rounded-md text-[10px] font-bold transition-all hover:opacity-80 shadow-sm active:scale-95" style={{ background: bg, color, whiteSpace: 'nowrap' }}>
+        const ActionBtn = ({ label, tone = 'secondary', onClick }: { label: React.ReactNode; tone?: 'secondary' | 'warning' | 'danger' | 'success' | 'primary'; onClick: () => void }) => {
+          const toneCls =
+            tone === 'warning' ? 'bg-[var(--warning-bg)] text-[var(--warning-text)] border-[var(--warning)]/30' :
+            tone === 'danger' ? 'bg-[var(--danger-bg)] text-[var(--danger-text)] border-[var(--danger)]/30' :
+            tone === 'success' ? 'bg-[var(--success-bg)] text-[var(--success-text)] border-[var(--success)]/30' :
+            tone === 'primary' ? 'bg-[var(--primary-light)] text-[var(--navy)] border-[var(--primary)]/25' :
+            'bg-[var(--bg-muted)] text-[var(--text-2)] border-[var(--border)]'
+          return (
+          <button type="button" onClick={e => { e.stopPropagation(); onClick() }}
+            className={`px-2.5 py-1.5 min-h-[36px] rounded-md text-[10px] font-bold border transition-opacity hover:opacity-90 active:scale-[0.98] cursor-pointer whitespace-nowrap ${toneCls}`}>
             {label}
           </button>
-        )
+          )
+        }
 
         const applyWarehouseSearch = () => setWarehouseSearch(warehouseSearchDraft.trim())
 
@@ -1492,7 +1511,7 @@ function InventoryContent() {
               </p>
             )}
 
-            <Section title="Warehouse — Ready for Sale" icon={<Fa icon={faIndustry} />} color="#1B2762"
+            <Section title="Warehouse — Ready for Sale" icon={<Fa icon={faIndustry} />} tone="navy"
               count={filteredWarehouseSerials.length + filteredBulkWarehouse.reduce((s,p) => s+p.qty, 0)}
               emptyText={q ? 'No warehouse stock matches this search' : 'No stock in warehouse'}>
               {filteredWarehouseSerials.map(s => {
@@ -1501,13 +1520,13 @@ function InventoryContent() {
                 <div key={s.id} className="flex flex-col sm:flex-row sm:items-center gap-3 px-4 py-3 hover:bg-surface transition-colors">
                   <div className="flex-1 min-w-0">
                     <p className="text-[12px] font-bold text-text-1 truncate" title={s.productName}>{s.productName}</p>
-                    <p className="font-mono text-[10px] text-text-3">{s.serial}</p>
+                    <p className="font-mono text-[10px] text-text-3 tabular-nums">{s.serial}</p>
                     <p className="font-mono text-[9px] text-primary-700">SKU: {s.sku ?? prod?.sku ?? '—'}</p>
                   </div>
                   <div className="flex flex-wrap gap-2">
-                    <ActionBtn label={<><Fa icon={faPrint} /> Label</>} bg="#F0F4FF" color="#1B2762" onClick={() => printSerialLabels([{ serial: s.serial, barcode: s.barcode, productName: s.productName, sku: s.sku ?? prod?.sku ?? '', salePrice: prod?.salePrice, category: prod?.category }])} />
-                    <ActionBtn label={<><Fa icon={faTriangleExclamation} /> Move to With Issues</>} bg="#FEF3C7" color="#92400E" onClick={() => requestMoveToIssues(s)} />
-                    <ActionBtn label={<><Fa icon={faWrench} /> Send for Refurbishment</>} bg="#EDE9FE" color="#5B21B6" onClick={() => requestSendForRefurbishment(s)} />
+                    <ActionBtn label={<><Fa icon={faPrint} /> Label</>} tone="primary" onClick={() => printSerialLabels([{ serial: s.serial, barcode: s.barcode, productName: s.productName, sku: s.sku ?? prod?.sku ?? '', salePrice: prod?.salePrice, category: prod?.category }])} />
+                    <ActionBtn label={<><Fa icon={faTriangleExclamation} /> Move to With Issues</>} tone="warning" onClick={() => requestMoveToIssues(s)} />
+                    <ActionBtn label={<><Fa icon={faWrench} /> Send for Refurbishment</>} tone="secondary" onClick={() => requestSendForRefurbishment(s)} />
                   </div>
                 </div>
                 )
@@ -1516,28 +1535,28 @@ function InventoryContent() {
                 <div key={p.id} className="flex flex-col sm:flex-row sm:items-center gap-3 px-4 py-3 hover:bg-surface transition-colors">
                   <div className="flex-1 min-w-0">
                     <p className="text-[12px] font-bold text-text-1 truncate" title={p.name}>{p.name}</p>
-                    <p className="text-[10px] text-text-3">{p.qty} units in warehouse</p>
+                    <p className="text-[10px] text-text-3"><span className="tabular-nums font-semibold">{p.qty}</span> units in warehouse</p>
                   </div>
                   <div className="flex flex-wrap gap-2">
-                    <ActionBtn label={<><Fa icon={faPrint} /> Print {p.qty} Label{p.qty !== 1 ? 's' : ''}</>} bg="#F0F4FF" color="#1B2762" onClick={() => printProductLabels(p, p.qty)} />
+                    <ActionBtn label={<><Fa icon={faPrint} /> Print {p.qty} Label{p.qty !== 1 ? 's' : ''}</>} tone="primary" onClick={() => printProductLabels(p, p.qty)} />
                     <span className="text-[10px] text-text-4 italic self-center">Use Transfers tab to move bulk items</span>
                   </div>
                 </div>
               ))}
             </Section>
 
-            <Section title="With Issues" icon={<Fa icon={faTriangleExclamation} />} color="#D97706"
+            <Section title="With Issues" icon={<Fa icon={faTriangleExclamation} />} tone="warning"
               count={filteredIssuesSerials.length + filteredBulkShop.reduce((s,p) => s+p.qty, 0)}
               emptyText={q ? 'No With Issues stock matches this search' : 'No machines with issues'}>
               {filteredIssuesSerials.map(s => (
                 <div key={s.id} className="flex flex-col sm:flex-row sm:items-center gap-3 px-4 py-3 hover:bg-surface transition-colors">
                   <div className="flex-1 min-w-0">
                     <p className="text-[12px] font-bold text-text-1 truncate" title={s.productName}>{s.productName}</p>
-                    <p className="font-mono text-[10px] text-text-3">{s.serial}</p>
+                    <p className="font-mono text-[10px] text-text-3 tabular-nums">{s.serial}</p>
                   </div>
                   <div className="flex flex-wrap gap-2">
-                    <ActionBtn label={<><Fa icon={faWrench} /> Send for Refurbishment</>} bg="#EDE9FE" color="#5B21B6" onClick={() => requestSendForRefurbishment(s)} />
-                    <ActionBtn label="✓ Return to Warehouse" bg="#DCFCE7" color="#166534" onClick={() => quickMove(s.productId, s.productName, 'shop', 'warehouse', s.id)} />
+                    <ActionBtn label={<><Fa icon={faWrench} /> Send for Refurbishment</>} tone="secondary" onClick={() => requestSendForRefurbishment(s)} />
+                    <ActionBtn label="Return to Warehouse" tone="success" onClick={() => quickMove(s.productId, s.productName, 'shop', 'warehouse', s.id)} />
                   </div>
                 </div>
               ))}
@@ -1545,34 +1564,39 @@ function InventoryContent() {
                 <div key={p.id} className="flex flex-col sm:flex-row sm:items-center gap-3 px-4 py-3 hover:bg-surface transition-colors">
                   <div className="flex-1 min-w-0">
                     <p className="text-[12px] font-bold text-text-1 truncate" title={p.name}>{p.name}</p>
-                    <p className="text-[10px] text-text-3">{p.qty} units with issues</p>
+                    <p className="text-[10px] text-text-3"><span className="tabular-nums font-semibold">{p.qty}</span> units with issues</p>
                   </div>
                   <span className="text-[10px] text-text-4 italic">Use Transfers tab to move bulk items</span>
                 </div>
               ))}
             </Section>
 
-            <Section title="Refurbishment Unit — Internal Stock" icon={<Fa icon={faWrench} />} color="#5B21B6"
+            <Section title="Refurbishment Unit — Internal Stock" icon={<Fa icon={faWrench} />} tone="info"
               count={filteredRepairSerials.length + filteredBulkRepair.reduce((s,p) => s+p.qty, 0)}
               emptyText={q ? 'No refurbishment stock matches this search' : 'No stock currently in refurbishment'}>
               {filteredRepairSerials.map(s => {
                 const refurbJob = refurbishmentJobs.filter(j => j.serialId === s.id).sort((a, b) => b.intakeDate.localeCompare(a.intakeDate))[0] ?? null
-                const statusMeta: Record<string, { bg: string; text: string; label: string }> = {
-                  queued: { bg: '#FEF3C7', text: '#92400E', label: 'Queued' },
-                  assigned: { bg: '#DBEAFE', text: '#1E40AF', label: 'Assigned' },
-                  in_progress: { bg: '#EDE9FE', text: '#5B21B6', label: 'In Progress' },
-                  ready: { bg: '#D1FAE5', text: '#065F46', label: 'Ready to Sell' },
-                  transferred: { bg: '#F3F4F6', text: '#374151', label: 'Transferred' },
-                  written_off: { bg: '#FEE2E2', text: '#991B1B', label: 'Written Off' },
+                const REFURB_STATUS_LABEL: Record<string, string> = {
+                  queued: 'Queued',
+                  assigned: 'Assigned',
+                  in_progress: 'In Progress',
+                  ready: 'Ready to Sell',
+                  transferred: 'Transferred',
+                  written_off: 'Written Off',
                 }
-                const meta = refurbJob ? (statusMeta[refurbJob.status] ?? { bg: '#F3F4F6', text: '#6B7280', label: refurbJob.status }) : null
                 return (
                   <div key={s.id} className="flex flex-col sm:flex-row sm:items-center gap-3 px-4 py-3 hover:bg-surface transition-colors">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <p className="text-[12px] font-bold text-text-1">{s.productName}</p>
-                        <span className="font-mono text-[10px] text-text-3">{s.serial}</span>
-                        {refurbJob && meta && <span className="px-2 py-0.5 rounded-full text-[9px] font-bold" style={{ background: meta.bg, color: meta.text }}>{meta.label}</span>}
+                        <span className="font-mono text-[10px] text-text-3 tabular-nums">{s.serial}</span>
+                        {refurbJob && (
+                          <StatusBadge
+                            status={refurbJob.status}
+                            label={REFURB_STATUS_LABEL[refurbJob.status] ?? refurbJob.status.replace(/_/g, ' ')}
+                            size="xs"
+                          />
+                        )}
                       </div>
                       {refurbJob && (
                         <div className="flex items-center gap-3 mt-1 text-[10px] text-text-4">
@@ -1582,7 +1606,7 @@ function InventoryContent() {
                       )}
                     </div>
                     {refurbJob?.status === 'ready' && canTransfer && (
-                      <ActionBtn label="✓ Transfer to Warehouse" bg="#DCFCE7" color="#166534" onClick={() => transferToSell(refurbJob.id)} />
+                      <ActionBtn label="Transfer to Warehouse" tone="success" onClick={() => transferToSell(refurbJob.id)} />
                     )}
                   </div>
                 )
@@ -1591,13 +1615,13 @@ function InventoryContent() {
                 <div key={p.id} className="flex flex-col sm:flex-row sm:items-center gap-3 px-4 py-3 hover:bg-surface transition-colors">
                   <div className="flex-1 min-w-0">
                     <p className="text-[12px] font-bold text-text-1 truncate" title={p.name}>{p.name}</p>
-                    <p className="text-[10px] text-text-3">{p.qty} units in refurbishment</p>
+                    <p className="text-[10px] text-text-3"><span className="tabular-nums font-semibold">{p.qty}</span> units in refurbishment</p>
                   </div>
                   <span className="text-[10px] text-text-4 italic">Use Transfers tab to move bulk items</span>
                 </div>
               ))}
               {(filteredRepairSerials.length > 0 || filteredBulkRepair.length > 0) && (
-                <div className="px-4 py-2 text-[10px] bg-primary-50 text-primary-700 border-t border-primary-100">
+                <div className="px-4 py-2 text-[10px] bg-[var(--info-bg)] text-[var(--info-text)] border-t border-[var(--border-lt)]">
                   <Fa icon={faWrench} /> Manage assignments, progress &amp; transfers in the <strong>Refurbishment</strong> module
                 </div>
               )}
@@ -1771,7 +1795,16 @@ function InventoryContent() {
                     primaryFilters={catalogPrimaryFilters}
                     onClearFilters={() => { setCatalogSearch(''); setCatalogCatFilter('All'); setCatalogStockFilter('all') }}
                     hideColumnFilters
-                    emptyMessage="No catalog products match these filters"
+                    emptyMessage={
+                      catalogSearch || catalogCatFilter !== 'All' || catalogStockFilter !== 'all'
+                        ? 'No catalog products match these filters'
+                        : 'No catalog products yet'
+                    }
+                    emptyAction={
+                      canEditStock && !catalogSearch && catalogCatFilter === 'All' && catalogStockFilter === 'all' ? (
+                        <PrimaryActionButton onClick={openNew}>New product</PrimaryActionButton>
+                      ) : undefined
+                    }
                     exportTitle="Product Catalog"
                     exportFilename="inventory-catalog"
                     perPage={20}
@@ -1833,7 +1866,7 @@ function InventoryContent() {
                       priceProduct.costPrice,
                     )
                     return (
-                      <div className="rounded-lg border border-[#C7D7FD] bg-[#F0F4FF] px-3 py-2 flex items-center justify-between gap-2">
+                      <div className="rounded-lg border border-[var(--border)] bg-[var(--info-bg)] px-3 py-2 flex items-center justify-between gap-2">
                         <p className="text-[11px] text-navy-500 m-0">
                           {priceProduct.category} markup {pct}%
                           {suggested !== null && Number(priceProduct.costPrice) > 0
@@ -3164,7 +3197,7 @@ function InventoryContent() {
 
             {/* Variant banner */}
             {parentProduct && (
-              <div className="flex items-center gap-3 px-4 py-3 rounded-xl border" style={{ background: '#F0F4FF', borderColor: '#C7D7FD' }}>
+              <div className="flex items-center gap-3 px-4 py-3 rounded-xl border border-[var(--border)] bg-[var(--info-bg)]">
                 <span className="text-xl text-slate-500" aria-hidden="true">
                   {parentProduct.image && !/^\p{Extended_Pictographic}/u.test(parentProduct.image)
                     ? <img src={parentProduct.image} alt="" className="w-7 h-7 object-contain" />
@@ -3181,7 +3214,7 @@ function InventoryContent() {
 
             {/* Duplicate confirmation banner */}
             {dupConfirm && exactDup && (
-              <div className="flex items-start gap-3 px-4 py-3 rounded-xl border" style={{ background: 'var(--warning-bg)', borderColor: '#FCD34D' }}>
+              <div className="flex items-start gap-3 px-4 py-3 rounded-xl border border-[var(--warning)]/40 bg-[var(--warning-bg)]">
                 <span className="text-lg mt-0.5 text-amber-600" aria-hidden="true"><Fa icon={faTriangleExclamation} /></span>
                 <div className="flex-1">
                   <p className="text-[12px] font-bold text-amber-800">Product already exists</p>
@@ -3207,8 +3240,8 @@ function InventoryContent() {
                 </Field>
                 {/* Live similar-name hint */}
                 {nameSimilarProducts.length > 0 && !dupConfirm && !editId && (
-                  <div className="mt-1.5 px-3 py-2 rounded-lg border text-[10px]" style={{ background: '#F8FAFF', borderColor: '#C7D7FD' }}>
-                    <p className="font-bold text-primary-700 mb-1">Similar products already in catalogue:</p>
+                  <div className="mt-1.5 px-3 py-2 rounded-lg border border-[var(--border)] bg-[var(--info-bg)] text-[10px]">
+                    <p className="font-bold text-[var(--info-text)] mb-1">Similar products already in catalogue:</p>
                     {nameSimilarProducts.map((p: Product) => (
                       <div key={p.id} className="flex items-center justify-between gap-2 py-0.5">
                         <span className="text-text-2 truncate inline-flex items-center gap-1.5 min-w-0">
@@ -3385,8 +3418,8 @@ function InventoryContent() {
               if (pct === null) return null
               const suggested = suggestSalePriceFromCost(systemSettings.invCategorySaleMarkupPct, form.category, form.costPrice)
               return (
-                <div className="rounded-xl border border-[#C7D7FD] bg-[#F0F4FF] px-3 py-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                  <p className="text-[11px] text-navy-500 leading-relaxed m-0">
+                <div className="rounded-xl border border-[var(--border)] bg-[var(--info-bg)] px-3 py-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <p className="text-[11px] text-[var(--navy)] leading-relaxed m-0">
                     <strong>{form.category}</strong> markup {pct}% — sale auto-fills from cost
                     {suggested !== null ? <> (suggested {fmtKes(suggested)})</> : null}.
                     Change in Settings → Sales → Sales price calculator.
@@ -3416,22 +3449,21 @@ function InventoryContent() {
             <Field label="Description"><Input value={form.description} onChange={setF('description')} placeholder="Technical specs, condition, etc." /></Field>
 
             {/* Account Mapping — collapsible */}
-            <div className="rounded-xl border overflow-hidden" style={{ borderColor: '#C7D7FD' }}>
+            <div className="rounded-xl border border-[var(--border)] overflow-hidden">
               <button
                 type="button"
-                className="w-full flex items-center justify-between px-4 py-3 text-left transition-colors hover:bg-primary-50/40"
-                style={{ background: showAcctMapping ? '#EEF4FF' : '#F0F4FF' }}
+                className={`w-full flex items-center justify-between px-4 py-3 text-left transition-colors cursor-pointer ${showAcctMapping ? 'bg-[var(--primary-light)]' : 'bg-[var(--info-bg)] hover:bg-[var(--primary-light)]'}`}
                 onClick={() => setShowAcctMapping(v => !v)}
               >
-                <span className="text-[11px] font-bold uppercase tracking-wider" style={{ color: 'var(--navy)' }}>
+                <span className="text-[11px] font-bold uppercase tracking-wider text-[var(--navy)]">
                   Account Mapping (Chart of Accounts)
                 </span>
-                <span className="text-[11px] font-bold" style={{ color: '#4B7BEC' }}>
+                <span className="text-[11px] font-bold text-[var(--primary)]">
                   {showAcctMapping ? '▾ Hide' : '▸ Show'}
                 </span>
               </button>
               {showAcctMapping && (
-                <div className="px-4 pb-4 pt-3" style={{ background: '#F8FBFF' }}>
+                <div className="px-4 pb-4 pt-3 bg-[var(--bg-surface)]">
                   <p className="text-[10px] text-text-3 mb-3">
                     Empty fields inherit the <strong>{form.category}</strong> category defaults, then company fallbacks.
                     Only storable products require Inventory Asset and COGS.
@@ -3860,7 +3892,6 @@ function InventoryContent() {
             <button
               type="button"
               className="btn-primary"
-              style={{ background: '#5B21B6', borderColor: '#5B21B6' }}
               onClick={() => {
                 if (!refurbIssueDesc.trim()) { showToast('Enter an issue description', 'error'); return }
                 createRefurbishmentJob(refurbSerial.id, refurbIssueDesc.trim())

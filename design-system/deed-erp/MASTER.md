@@ -94,6 +94,7 @@
 - Prefer `ModuleHeader` + `TabBar` + `mod-body`.
 - Prefer `TablePageLayout` + `DataTable` for lists.
 - Prefer `RecordHeader` / smart buttons for document detail.
+- **Inventory pilot:** see `design-system/deed-erp/pages/inventory.md` (Operate mode; token-first warehouse chrome; StatusBadge for refurb status).
 
 ### Forms
 
