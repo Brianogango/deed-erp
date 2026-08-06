@@ -41,7 +41,7 @@ export async function loadAppState(keys?: string[]): Promise<AppStateMap> {
     const { rows } = wantedKeys?.length
       ? await sql`SELECT key, value FROM app_state WHERE key = ANY(${wantedKeys})`
       : await sql`SELECT key, value FROM app_state`
-    const state = rowsToAppState(rows as { key: string; value: string }[])
+    let state = rowsToAppState(rows as { key: string; value: string }[])
     // Binary payloads live on the filesystem; overlay them for explicitly
     // requested keys. Missing files fall back to any legacy app_state row.
     if (wantedKeys?.length) {
@@ -50,6 +50,15 @@ export async function loadAppState(keys?: string[]): Promise<AppStateMap> {
         if (blob !== null) {
           try { state[key] = JSON.parse(blob) } catch { state[key] = blob }
         }
+      }
+    }
+    // Inventory cutover: Prisma-first reads with blob field enrichment.
+    if (process.env.NODE_ENV !== 'test') {
+      try {
+        const { overlayInventoryPrismaReads } = await import('./inventory/prisma-read')
+        state = await overlayInventoryPrismaReads(state, wantedKeys)
+      } catch {
+        /* keep blob-only state */
       }
     }
     return state
@@ -72,7 +81,16 @@ export async function loadInitialAppState(): Promise<AppStateMap> {
         AND key NOT LIKE ${excludedKeyPatterns[1]}
         AND key NOT LIKE ${excludedKeyPatterns[2]}
     `
-    return rowsToAppState(rows as { key: string; value: string }[])
+    let state = rowsToAppState(rows as { key: string; value: string }[])
+    if (process.env.NODE_ENV !== 'test') {
+      try {
+        const { overlayInventoryPrismaReads } = await import('./inventory/prisma-read')
+        state = await overlayInventoryPrismaReads(state)
+      } catch {
+        /* keep blob-only */
+      }
+    }
+    return state
   } catch {
     return {}
   }
@@ -92,7 +110,17 @@ export async function getAppStateVersion(keys: string[]): Promise<string> {
       WHERE key = ANY(${keys})
     `
     const row = rows?.[0] as { latest?: string; n?: string | number } | undefined
-    return `${row?.latest ?? ''}:${row?.n ?? 0}`
+    let version = `${row?.latest ?? ''}:${row?.n ?? 0}`
+    if (process.env.NODE_ENV !== 'test') {
+      try {
+        const { inventoryPrismaReadVersion } = await import('./inventory/prisma-read')
+        const prismaPart = await inventoryPrismaReadVersion(keys)
+        if (prismaPart) version = `${version}|${prismaPart}`
+      } catch {
+        /* ignore */
+      }
+    }
+    return version
   } catch {
     return ''
   }
