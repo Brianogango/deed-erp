@@ -1726,7 +1726,10 @@ function SalesContent() {
                         ) : null}
                       </>)}
                       {activeOrder.status === 'cancelled' && (
-                        <button type="button" className="sp-btn" onClick={() => resetSOToDraft(activeOrder.id)}>Set to Quotation</button>
+                        // Confirmed-then-cancelled needs Finance/Director; draft/sent cancel can be reset by sales.
+                        (activeOrder.confirmedAt ? canReverseConfirmedSO : ['director', 'finance_officer', 'sales_rep', 'admin_officer'].includes(currentUser?.role ?? '')) && (
+                          <button type="button" className="sp-btn" onClick={() => resetSOToDraft(activeOrder.id)}>Set to Quotation</button>
+                        )
                       )}
                     </div>
                   </div>
@@ -1756,6 +1759,7 @@ function SalesContent() {
                               {quotationStockShortages.length > 3
                                 ? ` · +${quotationStockShortages.length - 3} more`
                                 : ''}
+                              {' — you can still confirm; shortage is checked again at delivery preparation.'}
                             </div>
                           </div>
                         </div>
@@ -2070,7 +2074,50 @@ function SalesContent() {
                         {detailTab === 'Invoices' && (
                           <div className="sp-panel-pad">
                             {activeInvoices.length === 0 ? (
-                              <p style={{ color: 'var(--sp-text-3)' }}>No invoices yet.</p>
+                              <div className="flex flex-col gap-3" style={{ maxWidth: 420 }}>
+                                <p style={{ color: 'var(--sp-text-3)', margin: 0 }}>No invoices yet.</p>
+                                {!invoiceDeliveryReady ? (
+                                  <>
+                                    <p style={{ color: 'var(--sp-text-2)', margin: 0, fontSize: 13 }}>
+                                      Validate a delivery before creating an invoice. Invoicing follows delivered quantities.
+                                    </p>
+                                    <div>
+                                      <button type="button" className="sp-btn sp-btn-primary" onClick={() => void openDeliveryView()}>
+                                        {visibleDeliveries.length === 0 ? 'Create delivery' : 'Go to delivery'}
+                                      </button>
+                                    </div>
+                                  </>
+                                ) : canInvoiceFromSO && (activeInvoiceStatus === 'to_invoice' || activeInvoiceStatus === 'upselling') ? (
+                                  <>
+                                    <p style={{ color: 'var(--sp-text-2)', margin: 0, fontSize: 13 }}>
+                                      Delivery is validated. Create an invoice for the delivered quantities.
+                                    </p>
+                                    <div className="flex flex-wrap gap-2">
+                                      <button
+                                        type="button"
+                                        className="sp-btn sp-btn-primary"
+                                        onClick={async () => {
+                                          const soPayment = getDocumentPaymentDetails(activeOrder.id)
+                                          const inv = await Promise.resolve(createInvoiceFromSO(activeOrder.id))
+                                          if (inv?.id) setDocumentPaymentDetails(inv.id, soPayment)
+                                        }}
+                                      >
+                                        Create invoice
+                                      </button>
+                                      {invoiceableLinesFor(activeOrder).length > 0 && (
+                                        <button type="button" className="sp-btn" onClick={() => openPartialInvoiceModal(activeOrder)}>
+                                          Create partial invoice…
+                                        </button>
+                                      )}
+                                    </div>
+                                  </>
+                                ) : (
+                                  <p style={{ color: 'var(--sp-text-3)', margin: 0, fontSize: 13 }}>
+                                    Nothing left to invoice on this order
+                                    {!canInvoiceFromSO ? ' (your role cannot create customer invoices).' : '.'}
+                                  </p>
+                                )}
+                              </div>
                             ) : (
                               <table className="sp-table">
                                 <thead>

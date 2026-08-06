@@ -15,6 +15,7 @@ import { enforceSaleOrderApprovals } from '@/lib/sales-approval-enforcement.serv
 import { lockVersionMismatch, nextLockVersion, readExpectedVersion } from '@/lib/optimistic-lock'
 import { writeFinancialAudit } from '@/lib/finance-audit'
 import { checkFiscalLock } from '@/lib/fiscal-lock.server'
+import { validateSaleOrderLines } from '@/lib/sale-order-line-validation'
 
 async function broadcastSaleOrders() {
   try {
@@ -376,6 +377,14 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
         { error: approvalCheck.error, requiredRoles: approvalCheck.requiredRoles },
         { status: approvalCheck.status },
       )
+    }
+
+    const rawItems = body.items ?? body.lines
+    if (Array.isArray(rawItems)) {
+      const lineError = validateSaleOrderLines(rawItems)
+      if (lineError) {
+        return NextResponse.json({ error: lineError }, { status: 400 })
+      }
     }
 
     const data = await buildSaleOrderUpdateData(body, existing.items ?? [])

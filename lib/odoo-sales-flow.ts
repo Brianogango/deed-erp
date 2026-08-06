@@ -134,8 +134,12 @@ export function saleTransitionError(
       }
       return null
     case 'quotation':
-      // "Set to Quotation" — allowed from sent, cancelled, or a confirmed
-      // order (the store releases reservations and pending deliveries).
+      // "Set to Quotation" from a confirmed SO requires Finance/Director
+      // (matches enforceSaleWorkflow + store resetSOToDraft). Sent/cancelled
+      // → draft stays available to sales staff.
+      if (from === 'sale' && !['director', 'finance_officer'].includes(role)) {
+        return 'Only Finance or Director can reset a sale order to quotation'
+      }
       return null
     default:
       return `Unknown sale status "${to}"`
