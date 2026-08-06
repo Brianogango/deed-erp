@@ -50,6 +50,7 @@ import {
   isOpenDeliveryStatus,
   remainingUndeliveredByProduct,
   openDeliveryDemandByProduct,
+  saleOrderLooksConfirmed,
   type InvoicePolicy,
 } from '@/lib/odoo-sales-flow'
 import {
@@ -3066,6 +3067,8 @@ export interface AppState {
   /** Insert a section heading on a quotation. */
   addSOSection: (orderId: string, title?: string) => void
   confirmSO: (id: string) => void | Promise<void>
+  /** Create a waiting delivery when a confirmed SO has none (heal / retry). */
+  ensureWaitingDeliveryForSO: (id: string) => Promise<Delivery | null>
   /** Send by Email succeeded → Quotation Sent (records date/user/recipient). */
   markQuotationSent: (id: string, recipient?: string, message?: string) => void
   /** Lock/unlock a confirmed sales order (Lock Confirmed Sales setting). */
@@ -3402,6 +3405,7 @@ export type SalesStoreState = Pick<AppState,
   | 'createSaleOrder'
   | 'updateSaleOrder'
   | 'confirmSO'
+  | 'ensureWaitingDeliveryForSO'
   | 'markQuotationSent'
   | 'setSaleOrderLock'
   | 'addSOLine'
@@ -5799,6 +5803,7 @@ export function StoreProvider({
     createSaleOrder: (...args: Parameters<AppState['createSaleOrder']>) => storeCtxRef.current!.createSaleOrder(...args),
     updateSaleOrder: (...args: Parameters<AppState['updateSaleOrder']>) => storeCtxRef.current!.updateSaleOrder(...args),
     confirmSO: (...args: Parameters<AppState['confirmSO']>) => storeCtxRef.current!.confirmSO(...args),
+    ensureWaitingDeliveryForSO: (...args: Parameters<AppState['ensureWaitingDeliveryForSO']>) => storeCtxRef.current!.ensureWaitingDeliveryForSO(...args),
     markQuotationSent: (...args: Parameters<AppState['markQuotationSent']>) => storeCtxRef.current!.markQuotationSent(...args),
     setSaleOrderLock: (...args: Parameters<AppState['setSaleOrderLock']>) => storeCtxRef.current!.setSaleOrderLock(...args),
     addSOLine: (...args: Parameters<AppState['addSOLine']>) => storeCtxRef.current!.addSOLine(...args),
@@ -9436,7 +9441,20 @@ const storeCtx: AppState = {
         const updated = next.find(s => s.id === id)
         if (updated) {
           soRef.current = next
-          sync(`/api/sale-orders/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+          fetch(`/api/sale-orders/${id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(updated),
+          }).then(async (res) => {
+            if (!res.ok) return
+            const data = await res.json().catch(() => null)
+            if (data?.lockVersion == null) return
+            setSaleOrders(cur => cur.map(s =>
+              s.id === id && Number(s.lockVersion ?? 0) < Number(data.lockVersion)
+                ? { ...s, lockVersion: data.lockVersion }
+                : s,
+            ))
+          }).catch(() => {})
         }
         return next
       })
@@ -9518,7 +9536,20 @@ const storeCtx: AppState = {
           }]
         }
         const updated = { ...so, lines, ...calcSO(lines) }
-        sync(`/api/sale-orders/${orderId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+        fetch(`/api/sale-orders/${orderId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(updated),
+        }).then(async (res) => {
+          if (!res.ok) return
+          const data = await res.json().catch(() => null)
+          if (data?.lockVersion == null) return
+          setSaleOrders(cur => cur.map(s =>
+            s.id === orderId && Number(s.lockVersion ?? 0) < Number(data.lockVersion)
+              ? { ...s, lockVersion: data.lockVersion }
+              : s,
+          ))
+        }).catch(() => {})
         return updated
       }))
     },
@@ -9715,45 +9746,83 @@ const storeCtx: AppState = {
       if (!user || !['director', 'sales_rep', 'admin_officer'].includes(user.role)) {
         showToast('Unauthorized to confirm Sales Orders', 'error'); return;
       }
-      const so = soRef.current.find(s => s.id === id)!
-      // Idempotency: only a Quotation / Quotation Sent can be confirmed —
-      // repeating the action on a Sales Order must not duplicate deliveries.
-      if (so.status !== 'quotation' && so.status !== 'quotation_sent') {
-        showToast(`${so.ref} is already ${so.status === 'sale' ? 'a Sales Order' : 'cancelled'}`, 'info')
+      const so = soRef.current.find(s => s.id === id)
+      if (!so) return
+
+      // Already a durable Sales Order — never re-confirm / duplicate DNs.
+      if (so.status === 'sale' || (saleOrderLooksConfirmed(so) && so.status !== 'cancelled')) {
+        const openDn = delRef.current.filter(d => d.saleOrderId === id && isOpenDeliveryStatus(d.status))
+        if (openDn.length === 0 && so.status === 'sale') {
+          await storeCtxRef.current!.ensureWaitingDeliveryForSO(id)
+        }
+        if (so.status !== 'sale') {
+          // Status drifted locally; heal Prisma + local without allocating a new SO number.
+          try {
+            const healRes = await fetch(`/api/sale-orders/${id}`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                status: 'sale',
+                confirmedAt: so.confirmedAt ?? new Date().toISOString(),
+                orderNumber: so.orderNumber ?? so.ref,
+                quotationRef: so.quotationRef,
+                confirmedById: so.confirmedById ?? user.id,
+                confirmedByName: so.confirmedByName ?? user.name,
+              }),
+            })
+            if (healRes.ok) {
+              const healed = await healRes.json().catch(() => null)
+              setSaleOrders(p => p.map(s => s.id !== id ? s : {
+                ...s,
+                status: 'sale' as const,
+                lockVersion: healed?.lockVersion ?? s.lockVersion,
+                confirmedAt: healed?.confirmedAt ?? s.confirmedAt,
+                orderNumber: healed?.orderNumber ?? s.orderNumber,
+                ref: healed?.ref ?? healed?.orderNumber ?? s.ref,
+              }))
+            }
+          } catch { /* heal best-effort */ }
+        }
+        showToast(`${so.ref} is already a Sales Order`, 'info')
         return
       }
-      // Concurrent confirm (toolbar + status stepper) must not create two DNs.
+
+      if (so.status !== 'quotation' && so.status !== 'quotation_sent') {
+        showToast(`${so.ref} is already ${so.status === 'cancelled' ? 'cancelled' : so.status}`, 'info')
+        return
+      }
       if (confirmingSaleOrderIds.has(id)) {
         showToast('Confirmation already in progress', 'info')
         return
       }
+
       const existingOpen = delRef.current.filter(d => d.saleOrderId === id && isOpenDeliveryStatus(d.status))
-      if (existingOpen.length > 0) {
-        showToast(`${so.ref} already has delivery ${existingOpen[0].ref} — open that picking instead of confirming again`, 'info')
-        return
-      }
+      // Open DN already exists while SO is still quotation → confirm SO onto that DN (no second DN).
+      const reuseDelivery = existingOpen[0] ?? null
+
       confirmingSaleOrderIds.add(id)
+      const snapshot = { ...so }
       try {
-      const orderLines = so.lines.filter((line: any) => line.lineType !== 'section')
+        const orderLines = so.lines.filter((line: any) => line.lineType !== 'section')
+        if (!orderLines.length) {
+          showToast('Add at least one product before confirming', 'error')
+          return
+        }
 
-      // Sales confirmation no longer waits on special pricing / backorder /
-      // discount / credit approval gates — cancel any leftover requests so
-      // stuck quotations (e.g. pending Special Pricing) can confirm.
-      const leftoverSalesApprovals = approvalRequests.filter(r =>
-        r.documentId === id &&
-        ['discount', 'credit_override', 'backorder', 'special_pricing'].includes(r.type) &&
-        r.status === 'pending',
-      )
-      if (leftoverSalesApprovals.length > 0) {
-        const leftoverIds = new Set(leftoverSalesApprovals.map(r => r.id))
-        setApprovalRequests(prev => prev.map(r =>
-          leftoverIds.has(r.id)
-            ? { ...r, status: 'cancelled' as const, notes: 'Auto-cleared: sales confirmation approvals disabled' }
-            : r,
-        ))
-      }
+        const leftoverSalesApprovals = approvalRequests.filter(r =>
+          r.documentId === id &&
+          ['discount', 'credit_override', 'backorder', 'special_pricing'].includes(r.type) &&
+          r.status === 'pending',
+        )
+        if (leftoverSalesApprovals.length > 0) {
+          const leftoverIds = new Set(leftoverSalesApprovals.map(r => r.id))
+          setApprovalRequests(prev => prev.map(r =>
+            leftoverIds.has(r.id)
+              ? { ...r, status: 'cancelled' as const, notes: 'Auto-cleared: sales confirmation approvals disabled' }
+              : r,
+          ))
+        }
 
-      const customerCredit = (() => {
         const unpaidInvoices = invoices.filter(inv =>
           inv.partnerId === so.customerId &&
           inv.type === 'customer_invoice' &&
@@ -9762,31 +9831,177 @@ const storeCtx: AppState = {
         const overdueBalance = unpaidInvoices
           .filter(inv => inv.dueDate < now())
           .reduce((sum, inv) => sum + Math.max(0, inv.total - inv.amountPaid), 0)
-        return { overdueBalance }
-      })()
-      if (customerCredit.overdueBalance > 0) {
-        showToast(`Account locked by overdue balance of ${fmtKes(customerCredit.overdueBalance)}. Clear overdue invoices before confirming.`, 'error')
-        return
-      }
+        if (overdueBalance > 0) {
+          showToast(`Account locked by overdue balance of ${fmtKes(overdueBalance)}. Clear overdue invoices before confirming.`, 'error')
+          return
+        }
 
-      // Quotations and Sales Orders run separate sequences: confirmation
-      // assigns the next SO number and keeps the QUO number on the record.
-      const orderRef = await storeCtxRef.current!.allocateDocRef('SO')
+        const orderRef = await storeCtxRef.current!.allocateDocRef('SO')
+        const confirmedAt = new Date().toISOString()
+        // Omit lockVersion so a stale client version cannot 409 the confirm after line edits.
+        const confirmBody = {
+          ref: orderRef,
+          orderNumber: orderRef,
+          quotationRef: so.quotationRef ?? so.ref,
+          status: 'sale' as const,
+          confirmedAt,
+          confirmedById: user.id,
+          confirmedByName: user.name,
+          approvedBy: user.id,
+          approvalStatus: 'not_required' as const,
+          locked: systemSettings.salesLockConfirmed || undefined,
+        }
+
+        const confirmRes = await fetch(`/api/sale-orders/${id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(confirmBody),
+        })
+        const confirmPayload = await confirmRes.json().catch(() => null)
+        if (!confirmRes.ok) {
+          showToast(confirmPayload?.error ?? `Could not confirm ${so.ref} — try again`, 'error')
+          return
+        }
+
+        const serverRef = String(confirmPayload?.orderNumber ?? confirmPayload?.ref ?? orderRef)
+        const serverLock = confirmPayload?.lockVersion
+
+        let del = reuseDelivery
+        if (!del) {
+          const dnRef = await storeCtxRef.current!.allocateDocRef('DN')
+          del = {
+            id: uid(), ref: dnRef, saleOrderId: id, saleOrderRef: serverRef,
+            customerId: so.customerId, customerName: so.customerName,
+            status: 'waiting', date: now(),
+            lines: orderLines.map(l => {
+              const prod = prodRef.current.find(p => p.id === l.productId)
+              const selectedSource = (so.lines.find(line => line.id === l.id) as (SaleOrderLine & { sourceLocation?: LocationId }) | undefined)?.sourceLocation
+              let sourceLocation
+              if (prod?.unit === 'service') {
+                sourceLocation = undefined
+              } else if (selectedSource) {
+                sourceLocation = selectedSource
+              } else if (prod && isSerialTracking(inferTrackingMethod(prod))) {
+                const shopAvailable = serialRef.current.filter(s => s.productId === l.productId && s.status === 'available' && s.location === 'shop').length
+                sourceLocation = shopAvailable >= l.qty ? 'shop' : 'warehouse'
+              } else {
+                const qty = Math.max(0, Math.floor(Number(l.qty) || 0))
+                sourceLocation = resolveBulkDeliverySourceLocation({
+                  product: prod,
+                  productId: l.productId,
+                  qty,
+                  preferred: 'warehouse',
+                  serials: serialRef.current,
+                  bulkStock,
+                  reservations: stockReservations,
+                  excludeReferenceId: id,
+                }).location
+              }
+              return { productId: l.productId, productName: l.productName, qty: l.qty, qtyDone: 0, serialIds: [], sourceLocation }
+            }),
+            warrantyCreated: false,
+          }
+
+          const dnRes = await fetch('/api/deliveries', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(del),
+          })
+          if (!dnRes.ok) {
+            const dnErr = await dnRes.json().catch(() => null)
+            setSaleOrders(p => p.map(s => {
+              if (s.id !== id) return s
+              return {
+                ...s,
+                ref: serverRef,
+                orderNumber: serverRef,
+                quotationRef: s.quotationRef ?? snapshot.ref,
+                status: 'sale',
+                confirmedAt,
+                confirmedById: user.id,
+                confirmedByName: user.name,
+                approvedBy: user.id,
+                approvalStatus: 'not_required',
+                locked: systemSettings.salesLockConfirmed || undefined,
+                lockVersion: serverLock ?? s.lockVersion,
+              }
+            }))
+            showToast(dnErr?.error ?? `Confirmed as ${serverRef}, but delivery note failed to save — open Delivery to retry`, 'error')
+            return
+          }
+          setDeliveries(p => [del, ...p.filter(d => d.id !== del.id)])
+        } else {
+          const patched = { ...del, saleOrderRef: serverRef }
+          setDeliveries(p => p.map(d => d.id === del.id ? patched : d))
+          sync(`/api/deliveries/${del.id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ saleOrderRef: serverRef }),
+          })
+          del = patched
+        }
+
+        setSaleOrders(p => p.map(s => {
+          if (s.id !== id) return s
+          return {
+            ...s,
+            ref: serverRef,
+            orderNumber: serverRef,
+            quotationRef: s.quotationRef ?? snapshot.ref,
+            status: 'sale',
+            confirmedAt,
+            confirmedById: user.id,
+            confirmedByName: user.name,
+            approvedBy: user.id,
+            approvalStatus: 'not_required',
+            approvalRequiredReason: undefined,
+            approvalRequestIds: [],
+            discountApprovalId: undefined,
+            creditOverrideApprovalId: undefined,
+            backorderApprovalId: undefined,
+            backorderLines: undefined,
+            locked: systemSettings.salesLockConfirmed || undefined,
+            stockReservationIds: s.stockReservationIds ?? [],
+            deliveryId: del.id,
+            lockVersion: serverLock ?? s.lockVersion,
+          }
+        }))
+
+        addAuditLog('confirm_sale_order', serverRef, `Quotation ${snapshot.ref} confirmed into Sales Order ${serverRef} by ${user.name}${systemSettings.salesLockConfirmed ? ' · order locked' : ''}`)
+        showToast(`${snapshot.ref} confirmed as ${serverRef} — prepare delivery ${del.ref} to allocate stock`)
+      } finally {
+        confirmingSaleOrderIds.delete(id)
+      }
+    },
+    ensureWaitingDeliveryForSO: async (id) => {
+      const so = soRef.current.find(s => s.id === id)
+      if (!so || so.status === 'cancelled') return null
+      if (!saleOrderLooksConfirmed(so) && so.status !== 'sale') return null
+      const existingOpen = delRef.current.filter(d => d.saleOrderId === id && isOpenDeliveryStatus(d.status))
+      if (existingOpen[0]) return existingOpen[0]
+      const anyActive = delRef.current.find(d => d.saleOrderId === id && d.status !== 'cancelled')
+      if (anyActive) return anyActive
+
+      const orderLines = so.lines.filter((line: any) => line.lineType !== 'section')
+      if (!orderLines.length) {
+        showToast('Cannot create delivery — order has no product lines', 'error')
+        return null
+      }
       const dnRef = await storeCtxRef.current!.allocateDocRef('DN')
       const del: Delivery = {
-        id: uid(), ref: dnRef, saleOrderId: id, saleOrderRef: orderRef,
-        customerId: so.customerId, customerName: so.customerName,
-        // Confirmation creates demand only. Inventory is allocated later from
-        // the delivery preparation screen.
-        status: 'waiting', date: now(),
+        id: uid(),
+        ref: dnRef,
+        saleOrderId: id,
+        saleOrderRef: so.orderNumber ?? so.ref,
+        customerId: so.customerId,
+        customerName: so.customerName,
+        status: 'waiting',
+        date: now(),
         lines: orderLines.map(l => {
           const prod = prodRef.current.find(p => p.id === l.productId)
-          const selectedSource = (so.lines.find(line => line.id === l.id) as (SaleOrderLine & { sourceLocation?: LocationId }) | undefined)?.sourceLocation
           let sourceLocation: LocationId | undefined
           if (prod?.unit === 'service') {
             sourceLocation = undefined
-          } else if (selectedSource) {
-            sourceLocation = selectedSource
           } else if (prod && isSerialTracking(inferTrackingMethod(prod))) {
             const shopAvailable = serialRef.current.filter(s => s.productId === l.productId && s.status === 'available' && s.location === 'shop').length
             sourceLocation = shopAvailable >= l.qty ? 'shop' : 'warehouse'
@@ -9807,81 +10022,20 @@ const storeCtx: AppState = {
         }),
         warrantyCreated: false,
       }
+      const dnRes = await fetch('/api/deliveries', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(del),
+      })
+      if (!dnRes.ok) {
+        const err = await dnRes.json().catch(() => null) as { error?: string } | null
+        showToast(err?.error ?? 'Could not create delivery note', 'error')
+        return null
+      }
       setDeliveries(p => [del, ...p])
-        sync('/api/deliveries', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(del) })
-      setSaleOrders(p => p.map(s => {
-        if (s.id !== id) return s;
-        // Confirm: the quotation becomes a Sales Order with the next number
-        // in the SO sequence; the QUO number stays on the record for history.
-        const updated = {
-          ...s,
-          ref: orderRef,
-          orderNumber: orderRef,
-          quotationRef: s.quotationRef ?? s.ref,
-          status: 'sale' as const,
-          confirmedAt: new Date().toISOString(),
-          confirmedById: user.id,
-          confirmedByName: user.name,
-          approvedBy: user.id,
-          approvalStatus: 'not_required' as const,
-          approvalRequiredReason: undefined,
-          approvalRequestIds: [],
-          discountApprovalId: undefined,
-          creditOverrideApprovalId: undefined,
-          backorderApprovalId: undefined,
-          backorderLines: undefined,
-          locked: systemSettings.salesLockConfirmed || undefined,
-          stockReservationIds: s.stockReservationIds ?? [],
-          deliveryId: del.id,
-          lockVersion: s.lockVersion,
-        }
-        return updated
-      }))
-      // Await confirmation sync so Prisma status matches the UI (delivery Validate
-      // previously failed when this fire-and-forget PATCH never landed).
-      const confirmBody = {
-        ref: orderRef,
-        orderNumber: orderRef,
-        quotationRef: so.quotationRef ?? so.ref,
-        status: 'sale' as const,
-        confirmedAt: new Date().toISOString(),
-        confirmedById: user.id,
-        confirmedByName: user.name,
-        approvedBy: user.id,
-        approvalStatus: 'not_required' as const,
-        approvalRequiredReason: null,
-        approvalRequestIds: [],
-        discountApprovalId: null,
-        creditOverrideApprovalId: null,
-        backorderApprovalId: null,
-        backorderLines: null,
-        locked: systemSettings.salesLockConfirmed || undefined,
-        deliveryId: del.id,
-        lockVersion: so.lockVersion,
-      }
-      let syncFailed = false
-      try {
-        const res = await fetch(`/api/sale-orders/${id}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(confirmBody),
-        })
-        if (!res.ok) {
-          syncFailed = true
-          const payload = await res.json().catch(() => null) as { error?: string } | null
-          showToast(payload?.error ?? `Confirmed as ${orderRef}, but server sync failed — retry Validate if delivery errors`, 'error')
-        }
-      } catch {
-        syncFailed = true
-        showToast(`Confirmed as ${orderRef}, but server sync failed — retry Validate if delivery errors`, 'error')
-      }
-      addAuditLog('confirm_sale_order', orderRef, `Quotation ${so.ref} confirmed into Sales Order ${orderRef} by ${user.name}${systemSettings.salesLockConfirmed ? ' · order locked' : ''}`)
-      if (!syncFailed) {
-        showToast(`${so.ref} confirmed as ${orderRef} — prepare delivery ${del.ref} to allocate stock`)
-      }
-      } finally {
-        confirmingSaleOrderIds.delete(id)
-      }
+      setSaleOrders(p => p.map(s => s.id === id ? { ...s, deliveryId: del.id } : s))
+      showToast(`Created delivery ${del.ref} for ${so.ref}`, 'info')
+      return del
     },
     markQuotationSent: (id, recipient, message) => {
       const user = currentUser()

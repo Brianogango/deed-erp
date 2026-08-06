@@ -18,6 +18,7 @@ import {
   SALE_STATUS_LABELS,
   SO_INVOICE_STATUS_LABELS,
   isQuotationStage,
+  saleOrderLooksConfirmed,
   type OdooSaleStatus,
 } from '@/lib/odoo-sales-flow'
 import { fmtDate } from '@/lib/store'
@@ -92,6 +93,7 @@ export function SalesRecordHeader({
 
   const smartButtons: SmartButton[] = []
 
+  const looksConfirmed = order.status === 'sale' || saleOrderLooksConfirmed(order)
   if (deliveriesCount > 0) {
     smartButtons.push({
       id: 'delivery',
@@ -101,7 +103,7 @@ export function SalesRecordHeader({
       icon: <Fa icon={faBoxOpen} className="text-[10px]" />,
       onClick: onOpenDelivery,
     })
-  } else if (order.status === 'sale') {
+  } else if (looksConfirmed) {
     smartButtons.push({
       id: 'record-delivery',
       label: 'Record Delivery',
