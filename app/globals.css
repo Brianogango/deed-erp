@@ -4578,11 +4578,27 @@
 }
 
 .sales-pilot.sales-doc > .mod-body.sales-doc-body {
-  padding: 0.75rem 1rem 1.5rem;
-  max-width: 1280px;
-  margin: 0 auto;
+  padding: 0 !important;
+  max-width: none;
+  margin: 0;
   width: 100%;
-  background: transparent;
+  background: var(--sd-bg);
+}
+
+/* Kill AppShell / mod-page spacing that fights prototype density */
+.sales-pilot.sales-doc.mod-page {
+  gap: 0 !important;
+  padding: 0 !important;
+}
+
+/* AppShell <main> uses p-2/p-3 — remove so sales canvas is edge-to-edge like prototype content */
+main#main-content:has(.sales-pilot.sales-doc) {
+  padding: 0 !important;
+}
+
+main#main-content:has(.sales-pilot.sales-doc) > .min-w-0 {
+  min-height: 100%;
+  background: #f4f5f7;
 }
 
 .sales-doc-shell {

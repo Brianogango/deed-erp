@@ -1,6 +1,7 @@
 'use client'
 
 import type { ReactNode } from 'react'
+import '@/components/sales-prototype/sales-prototype.css'
 
 export type SalesDocPillTone =
   | 'draft'
@@ -13,8 +14,20 @@ export type SalesDocPillTone =
   | 'info'
   | 'success'
 
+const PILL_MAP: Record<SalesDocPillTone, string> = {
+  draft: 'grey',
+  sent: 'blue',
+  accepted: 'green',
+  confirmed: 'green',
+  warning: 'amber',
+  danger: 'red',
+  neutral: 'grey',
+  info: 'blue',
+  success: 'green',
+}
+
 export function SalesDocPill({ label, tone }: { label: string; tone: SalesDocPillTone }) {
-  return <span className={`sales-doc-pill sales-doc-pill--${tone}`}>{label}</span>
+  return <span className={`sp-pill sp-pill-${PILL_MAP[tone]}`}>{label}</span>
 }
 
 export function SalesDocTabs({
@@ -29,13 +42,13 @@ export function SalesDocTabs({
   ariaLabel?: string
 }) {
   return (
-    <div className="sales-doc-tabs" role="tablist" aria-label={ariaLabel}>
+    <div className="sp-tabs" role="tablist" aria-label={ariaLabel}>
       {tabs.map(tab => (
         <button
           key={tab}
           type="button"
           role="tab"
-          className="sales-doc-tab"
+          className="sp-tab"
           aria-selected={active === tab}
           data-active={active === tab ? 'true' : 'false'}
           onClick={() => onChange(tab)}
@@ -49,13 +62,15 @@ export function SalesDocTabs({
 
 export function SalesDocTotals({
   rows,
+  sticky,
 }: {
   rows: Array<{ label: string; value: string; grand?: boolean }>
+  sticky?: boolean
 }) {
   return (
-    <div className="sales-doc-totals" aria-label="Document totals">
+    <div className={`sp-totals${sticky ? ' sticky' : ''}`} aria-label="Document totals">
       {rows.map(row => (
-        <div key={row.label} className={`sales-doc-totals-row${row.grand ? ' grand' : ''}`}>
+        <div key={row.label} className={`sp-totals-row${row.grand ? ' grand' : ''}`}>
           <span>{row.label}</span>
           <span>{row.value}</span>
         </div>
@@ -70,11 +85,11 @@ export function SalesDocWorkflow({
   steps: Array<{ key: string; label: string; state: 'done' | 'current' | 'todo' }>
 }) {
   return (
-    <div className="sales-doc-workflow" role="list" aria-label="Sales workflow progress">
+    <div className="sp-workflow" role="list" aria-label="Sales workflow progress">
       {steps.map(step => (
         <div
           key={step.key}
-          className="sales-doc-workflow-step"
+          className="sp-workflow-step"
           role="listitem"
           data-state={step.state}
           aria-current={step.state === 'current' ? 'step' : undefined}
@@ -96,7 +111,7 @@ export function SalesDocField({
   htmlFor?: string
 }) {
   return (
-    <div className="sales-doc-field">
+    <div className="sp-field">
       {htmlFor ? <label htmlFor={htmlFor}>{label}</label> : <label>{label}</label>}
       {children}
     </div>
@@ -134,7 +149,6 @@ export function deliveryStatusPill(status: string): { label: string; tone: Sales
   }
 }
 
-/** SO fulfillment workflow bar from delivery + invoice state. */
 export function buildSoWorkflowSteps(input: {
   hasDelivery: boolean
   deliveryPrepared: boolean
@@ -160,6 +174,6 @@ export function buildSoWorkflowSteps(input: {
   return keys.map((k, i) => ({
     key: k.key,
     label: k.label,
-    state: i < idx ? 'done' : i === idx ? 'current' : 'todo',
+    state: (i < idx ? 'done' : i === idx ? 'current' : 'todo') as 'done' | 'current' | 'todo',
   }))
 }
