@@ -771,7 +771,7 @@ function HoldoversContent() {
                     <div className="min-w-0">
                       <p className="font-mono text-[11px] font-bold text-blue-500">{h.ref}</p>
                       <p className="text-sm font-semibold text-[var(--text-1)] truncate">{h.clientName}</p>
-                      <p className="text-[12px] text-[var(--text-3)] truncate">{h.productName}</p>
+                      <p className="text-[12px] text-[var(--text-3)] truncate" title={h.productName}>{h.productName}</p>
                       <p className="text-[11px] font-mono text-[var(--text-4)]">{h.serialNumber}</p>
                     </div>
                     <div className="flex flex-col items-end gap-2 flex-shrink-0">

@@ -217,14 +217,22 @@ function useFocusTrap<T extends HTMLElement>(active: boolean, onEscape?: () => v
   return ref
 }
 
-function withLinkedId(children: ReactNode, id: string, describedBy?: string) {
+function withLinkedId(
+  children: ReactNode,
+  id: string,
+  opts?: { describedBy?: string; invalid?: boolean },
+) {
   if (!isValidElement(children)) return children
   const child = children as ReactElement<any>
-  if (child.props?.id) return child
-  return cloneElement(child, {
-    id,
-    ...(describedBy && !child.props?.['aria-describedby'] ? { 'aria-describedby': describedBy } : {}),
-  })
+  const next: Record<string, unknown> = {}
+  if (!child.props?.id) next.id = id
+  if (opts?.describedBy && !child.props?.['aria-describedby']) {
+    next['aria-describedby'] = opts.describedBy
+  }
+  // Only set when invalid — never aria-invalid={false}
+  if (opts?.invalid) next['aria-invalid'] = true
+  if (Object.keys(next).length === 0) return child
+  return cloneElement(child, next)
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -701,24 +709,34 @@ export function Field({
   children,
   hint,
   id,
+  error,
 }: {
   label: string
   required?: boolean
   children: ReactNode
   hint?: string
   id?: string
+  /** When set, shows an alert and marks the control aria-invalid. */
+  error?: string
 }) {
   const generatedId = useId()
   const fieldId = id ?? `field-${generatedId}`
   const hintId = hint ? `${fieldId}-hint` : undefined
+  const errorId = error ? `${fieldId}-error` : undefined
+  const describedBy = [hintId, errorId].filter(Boolean).join(' ') || undefined
   return (
     <div className="flex flex-col gap-1.5 w-full">
       <label htmlFor={fieldId} className="text-[10px] uppercase tracking-wider font-bold text-text-3">
         {label}
         {required && <span className="text-destructive ml-0.5"> *</span>}
       </label>
-      {withLinkedId(children, fieldId, hintId)}
+      {withLinkedId(children, fieldId, { describedBy, invalid: !!error })}
       {hint && <p id={hintId} className="text-[10px] text-text-4">{hint}</p>}
+      {error && (
+        <p id={errorId} role="alert" className="text-[10px] text-destructive font-semibold">
+          {error}
+        </p>
+      )}
     </div>
   )
 }
@@ -736,6 +754,8 @@ export function Input({
   autoFocus,
   maxLength,
   pattern,
+  'aria-invalid': ariaInvalid,
+  'aria-describedby': ariaDescribedBy,
 }: {
   id?: string
   value: string
@@ -746,6 +766,8 @@ export function Input({
   autoFocus?: boolean
   maxLength?: number
   pattern?: string
+  'aria-invalid'?: boolean | 'true' | 'false'
+  'aria-describedby'?: string
 }) {
   return (
     <input
@@ -759,6 +781,8 @@ export function Input({
       placeholder={placeholder}
       maxLength={maxLength}
       pattern={pattern}
+      aria-invalid={ariaInvalid}
+      aria-describedby={ariaDescribedBy}
     />
   )
 }
@@ -772,12 +796,16 @@ export function Textarea({
   onChange,
   placeholder,
   rows = 3,
+  'aria-invalid': ariaInvalid,
+  'aria-describedby': ariaDescribedBy,
 }: {
   id?: string
   value: string
   onChange: (v: string) => void
   placeholder?: string
   rows?: number
+  'aria-invalid'?: boolean | 'true' | 'false'
+  'aria-describedby'?: string
 }) {
   return (
     <textarea
@@ -788,6 +816,8 @@ export function Textarea({
       onChange={e => onChange(e.target.value)}
       placeholder={placeholder}
       style={{ resize: 'vertical' }}
+      aria-invalid={ariaInvalid}
+      aria-describedby={ariaDescribedBy}
     />
   )
 }
@@ -801,12 +831,16 @@ export function Select({
   onChange,
   options,
   disabled,
+  'aria-invalid': ariaInvalid,
+  'aria-describedby': ariaDescribedBy,
 }: {
   id?: string
   value: string
   onChange: (v: string) => void
   options: { value: string; label: string }[]
   disabled?: boolean
+  'aria-invalid'?: boolean | 'true' | 'false'
+  'aria-describedby'?: string
 }) {
   return (
     <div className="relative w-full">
@@ -816,6 +850,8 @@ export function Select({
         value={value}
         onChange={e => onChange(e.target.value)}
         disabled={disabled}
+        aria-invalid={ariaInvalid}
+        aria-describedby={ariaDescribedBy}
       >
         {options.map(o => (
           <option key={o.value} value={o.value}>

@@ -330,6 +330,23 @@ model AuditLog {
   @@map("audit_logs")
 }
 
+/// Long-term archive for store-sync timeline rows displaced from the live
+/// `deed_audit_timeline_v1` blob (P0-SEC-002). Additive only — never drops live rows.
+model StoreAuditArchive {
+  id        String   @id @default(cuid())
+  entryId   String   @map("entry_id") @db.VarChar(80)
+  at        DateTime @map("at")
+  actorId   String?  @map("actor_id") @db.VarChar(80)
+  actorName String?  @map("actor_name") @db.VarChar(200)
+  actorRole String?  @map("actor_role") @db.VarChar(60)
+  payload   Json
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([at], map: "idx_store_audit_archive_at")
+  @@index([entryId], map: "idx_store_audit_archive_entry")
+  @@map("store_audit_archive")
+}
+
 // ── Settings ───────────────────────────────────────────────────────────────────
 
 model CompanySetting {

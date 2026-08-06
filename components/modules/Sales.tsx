@@ -338,6 +338,7 @@ function SalesContent() {
   const [newDeliveryAddress, setNewDeliveryAddress] = useState('')
   const [newPaymentDetails, setNewPaymentDetails] = useState<DocumentPaymentDetails>({ ...DEFAULT_DOCUMENT_PAYMENT_DETAILS })
   const [newDraftLines, setNewDraftLines] = useState<DraftLine[]>([])
+  const [quoteFieldErrors, setQuoteFieldErrors] = useState<{ customer?: string; lines?: string }>({})
   const draftLoadedRef = useRef(false)
   const draftAutosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const quoteDraftKey = currentUserId ? `deed_sales_quote_draft_${currentUserId}` : 'deed_sales_quote_draft'
@@ -770,14 +771,6 @@ function SalesContent() {
   const draftTotal = draftSubtotal + draftTaxTotal
   const validDraftLines = newDraftLines.filter(l => l.type !== 'section' && l.productId && Number(l.qty) > 0)
   const invalidQtyDraftLines = newDraftLines.filter(l => l.type !== 'section' && l.productId && Number(l.qty) <= 0)
-  const canSaveNewQuotation = !!newCustomer && validDraftLines.length > 0 && invalidQtyDraftLines.length === 0
-  const newQuotationBlockedReason = !newCustomer
-    ? 'Select a customer first.'
-    : invalidQtyDraftLines.length > 0
-      ? 'Quantity must be greater than zero for every quoted product.'
-      : validDraftLines.length === 0
-        ? 'Add at least one product with quantity greater than zero.'
-        : ''
 
   useEffect(() => {
     if (view !== 'new' || draftLoadedRef.current) return
@@ -869,9 +862,28 @@ function SalesContent() {
 
   // ── Save new quotation ──────────────────────────────────────────────────
   const saveNewQuotation = async (openCreatedOrder: boolean) => {
-    if (!newCustomer) { showToast('Please select a customer', 'error'); return }
-    if (invalidQtyDraftLines.length > 0) { showToast('Quantity must be greater than zero for every quoted product', 'error'); return }
-    if (validDraftLines.length === 0) { showToast('Add at least one product with quantity greater than zero', 'error'); return }
+    const errors: { customer?: string; lines?: string } = {}
+    if (!newCustomer) errors.customer = 'Please select a customer'
+    if (invalidQtyDraftLines.length > 0) {
+      errors.lines = 'Quantity must be greater than zero for every quoted product'
+    } else if (validDraftLines.length === 0) {
+      errors.lines = 'Add at least one product with quantity greater than zero'
+    }
+    if (errors.customer || errors.lines) {
+      setQuoteFieldErrors(errors)
+      showToast('Please fix the highlighted fields', 'error')
+      requestAnimationFrame(() => {
+        const id = errors.customer ? 'quote-customer' : 'quote-lines'
+        const el = document.getElementById(id)
+        const target = el?.matches('input, select, textarea, button, [tabindex]')
+          ? el
+          : el?.querySelector<HTMLElement>('input, select, textarea, button, [tabindex]')
+        target?.focus?.()
+      })
+      return
+    }
+    if (!newCustomer) return
+    setQuoteFieldErrors({})
     const creditStatus = getCustomerCreditStatus(newCustomer.id)
     if (creditStatus.isLocked) { showToast(creditStatus.message, 'error'); return }
     const builtLines = []
@@ -1130,7 +1142,10 @@ function SalesContent() {
                   customers={customers}
                   products={sellableProducts}
                   newCustomer={newCustomer}
-                  setNewCustomer={setNewCustomer}
+                  setNewCustomer={(c) => {
+                    setNewCustomer(c)
+                    if (c) setQuoteFieldErrors(prev => ({ ...prev, customer: undefined }))
+                  }}
                   newDeliveryDate={newDeliveryDate}
                   setNewDeliveryDate={setNewDeliveryDate}
                   newPaymentTerms={newPaymentTerms}
@@ -1163,8 +1178,9 @@ function SalesContent() {
                   draftTotal={draftTotal}
                   canEditDiscount={canEditDiscount}
                   companySettings={companySettings}
-                  canSave={canSaveNewQuotation}
-                  saveBlockedReason={newQuotationBlockedReason}
+                  canSave={true}
+                  saveBlockedReason=""
+                  fieldErrors={quoteFieldErrors}
                   onSave={handleSaveNewQuotation}
                   onSaveAndAddAnother={handleSaveAndAddAnotherQuotation}
                   onCancel={() => {
@@ -2195,7 +2211,7 @@ function NewQuotationForm({
   pricelistsEnabled, newDraftLines,
   addDraftLine, addDraftSection, updateDraftLine, removeDraftLine, moveDraftLine, selectProductForDraftLine,
   calcDraftLineTotal, draftSubtotal, draftTaxTotal, draftTotal, canEditDiscount,
-  companySettings, canSave, saveBlockedReason, onSave, onSaveAndAddAnother, onCancel, onCreateNewCustomer,
+  companySettings, canSave, saveBlockedReason, fieldErrors, onSave, onSaveAndAddAnother, onCancel, onCreateNewCustomer,
 }: {
   customers: any[]; products: any[]; newCustomer: { id: string; name: string } | null
   setNewCustomer: (c: { id: string; name: string } | null) => void
@@ -2219,6 +2235,7 @@ function NewQuotationForm({
   draftSubtotal: number; draftTaxTotal: number; draftTotal: number
   canEditDiscount: boolean; companySettings: any
   canSave: boolean; saveBlockedReason: string
+  fieldErrors?: { customer?: string; lines?: string }
   onSave: () => void; onSaveAndAddAnother: () => void; onCancel: () => void
   onCreateNewCustomer: (query: string) => void
 }) {
@@ -2293,12 +2310,19 @@ function NewQuotationForm({
         {/* Header fields */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {/* Customer picker */}
-          <div className="sm:col-span-2 flex flex-col gap-1.5 relative" ref={customerRef}>
-            <label className="text-[10px] uppercase tracking-wider font-bold text-[var(--text-3)]">Customer <span className="text-red-500">*</span></label>
-            <div className={`form-input cursor-pointer flex items-center justify-between ${!newCustomer ? 'text-[var(--text-4)]' : 'text-[var(--text-1)]'}`} onClick={() => setCustomerDropdownOpen(v => !v)}>
-              <span className="text-xs font-medium truncate">{newCustomer ? newCustomer.name : 'Search customer…'}</span>
-              <Fa icon={faChevronDown} className={`text-[10px] text-[var(--text-4)] flex-shrink-0 transition-transform ${customerDropdownOpen ? 'rotate-180' : ''}`} />
-            </div>
+          <div className="sm:col-span-2 relative" ref={customerRef}>
+            <Field label="Customer" required id="quote-customer" error={fieldErrors?.customer}>
+              <div
+                tabIndex={0}
+                role="button"
+                className={`form-input cursor-pointer flex items-center justify-between ${!newCustomer ? 'text-[var(--text-4)]' : 'text-[var(--text-1)]'}`}
+                onClick={() => setCustomerDropdownOpen(v => !v)}
+                onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setCustomerDropdownOpen(v => !v) } }}
+              >
+                <span className="text-xs font-medium truncate">{newCustomer ? newCustomer.name : 'Search customer…'}</span>
+                <Fa icon={faChevronDown} className={`text-[10px] text-[var(--text-4)] flex-shrink-0 transition-transform ${customerDropdownOpen ? 'rotate-180' : ''}`} />
+              </div>
+            </Field>
             {customerDropdownOpen && (
               <div className="absolute top-full left-0 right-0 z-[9300] mt-1 bg-[var(--bg-card)] border border-[var(--border)] rounded-xl shadow-xl overflow-hidden">
                 <div className="p-2 border-b border-[var(--border-lt)]">
@@ -2394,8 +2418,13 @@ function NewQuotationForm({
         </div>
 
         {/* Order Lines */}
-        <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-3" id="quote-lines" tabIndex={-1}>
           <h3 className="text-sm font-bold text-[var(--text-1)]">Order Lines</h3>
+          {fieldErrors?.lines && (
+            <p id="quote-lines-error" role="alert" className="text-[10px] text-destructive font-semibold">
+              {fieldErrors.lines}
+            </p>
+          )}
           <p className="text-[10px] text-[var(--text-4)]">
             Tax and discount changes affect posted revenue and margin. Review line-level values before saving.
           </p>
@@ -2459,7 +2488,7 @@ function NewQuotationForm({
                         <td className="px-3 py-2">
                           <div className="flex items-center gap-1 cursor-pointer border border-[var(--border-lt)] rounded-lg px-2 py-1.5 hover:border-primary-400 transition-colors bg-[var(--bg-card)] min-w-[140px]"
                             onClick={e => (isOpen ? setProductDropdownOpen(null) : openProductDropdown(line.id, e.currentTarget))}>
-                            <span className="text-xs text-[var(--text-1)] flex-1 truncate min-w-0">{line.productName || <span className="text-[var(--text-4)]">Select product…</span>}</span>
+                            <span className="text-xs text-[var(--text-1)] flex-1 truncate min-w-0" title={line.productName || undefined}>{line.productName || <span className="text-[var(--text-4)]">Select product…</span>}</span>
                             <Fa icon={faChevronDown} className={`text-[9px] text-[var(--text-4)] flex-shrink-0 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
                           </div>
                           {isOpen && productDropdownOpen && (

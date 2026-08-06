@@ -390,7 +390,10 @@ export default function InventoryProductsPanel({
                 </span>
               )}
             </div>
-            <div className="text-[10px] text-text-3 font-mono erp-truncate">
+            <div
+              className="text-[10px] text-text-3 font-mono erp-truncate"
+              title={`SKU: ${product.sku || '—'}${product.barcode ? ` · Barcode: ${product.barcode}` : ''}`}
+            >
               SKU: {product.sku || '—'}
               {product.barcode ? ` · Barcode: ${product.barcode}` : ''}
             </div>
@@ -411,7 +414,7 @@ export default function InventoryProductsPanel({
       label: 'Category',
       priority: 2,
       width: '120px',
-      render: row => <span className="text-xs text-text-3 erp-truncate">{row.product.category}</span>,
+      render: row => <span className="text-xs text-text-3 erp-truncate" title={row.product.category}>{row.product.category}</span>,
       exportValue: row => row.product.category,
     },
     {

@@ -22,6 +22,11 @@ import { readGuardedImageAsDataUrl, validateImageUpload } from '@/lib/client-ima
 import { ScanInputRow } from '@/components/BarcodeScanner'
 import { parseScanPayload } from '@/lib/barcode-scan'
 import { useUrlQueryState, useUrlRecordId } from '@/hooks/useUrlRecordId'
+import {
+  filterPurchaseOrders,
+  type PurchaseStatusFilter,
+  type PurchaseTypeFilter,
+} from '@/lib/purchases-filter'
 
 type MainView = 'orders' | 'receipts' | 'returns' | 'bills' | 'tradein'
 type SubView  = 'list' | 'form' | 'receive'
@@ -138,7 +143,8 @@ function PurchaseContent() {
     setLocalSubView(nextView)
     if (nextView === 'list') setActiveId(null)
   }, [setActiveId])
-  const [filter,   setFilter]   = useState('all')
+  const [typeFilter, setTypeFilter] = useState<PurchaseTypeFilter>('all')
+  const [statusFilter, setStatusFilter] = useState<PurchaseStatusFilter>('all')
 
   // ── New RFQ ────────────────────────────────────────────────────────────────
   const [showNewRFQ,    setShowNewRFQ]    = useState(false)
@@ -247,11 +253,10 @@ function PurchaseContent() {
     }
   }, [urlActiveId, purchaseOrders, activeId, subView, setActiveId])
 
-  const filteredPOs = useMemo(() => purchaseOrders.filter(po => {
-    if (filter === 'rfq') return po.status === 'draft' || po.status === 'sent'
-    if (filter === 'po')  return po.status === 'confirmed' || po.status === 'partial' || po.status === 'received'
-    return filter === 'all' || po.status === filter
-  }), [purchaseOrders, filter])
+  const filteredPOs = useMemo(
+    () => filterPurchaseOrders(purchaseOrders, typeFilter, statusFilter),
+    [purchaseOrders, typeFilter, statusFilter],
+  )
 
   const currentUser = useMemo(() => users.find(u => u.id === currentUserId), [users, currentUserId])
 
@@ -959,7 +964,8 @@ function PurchaseContent() {
     sendPO, confirmPO, createReceiptFromPO, validateReceipt, deletePO, createBillFromPO, revertPOToDraft,
     postInvoice, registerPayment, createPurchaseReturn, addReturnLine, confirmPurchaseReturn, logReturnPickup, showToast,
     // View state
-    mainView, setMainView, subView, setSubView, activeId, setActiveId, filter, setFilter,
+    mainView, setMainView, subView, setSubView, activeId, setActiveId,
+    typeFilter, setTypeFilter, statusFilter, setStatusFilter,
     // Derived
     vendors, purchasableProds, vendorBills, activePO, activeReceipt, linkedBill, filteredPOs, currentUser, stats,
     // RFQ
@@ -1498,7 +1504,7 @@ function PurchaseContent() {
                     }}>
                     <span aria-hidden="true"><Fa icon={row.status === 'ok' ? faCheck : row.status === 'warn' ? faTriangleExclamation : faXmark} /></span>
                     <div className="min-w-0">
-                      <p className="font-medium text-t1 truncate">{row.productName || row.raw['Product Name'] || '—'}</p>
+                      <p className="font-medium text-t1 truncate" title={row.productName || row.raw['Product Name'] || '—'}>{row.productName || row.raw['Product Name'] || '—'}</p>
                       {row.status !== 'error' && row.requiresSerial && <p className="text-[9px] inline-flex items-center gap-1" style={{ color: 'var(--warning)' }}><Fa icon={faBarcode} aria-hidden="true" /> Serial tracking</p>}
                     </div>
                     <span className="font-mono">{row.status !== 'error' ? row.qty : '—'}</span>

@@ -6,11 +6,31 @@ import { useCrmStore } from '@/lib/store'
 import { Modal, Field, Input, Select, Textarea } from '@/components/ui'
 import { Fa, faBuilding, faUser } from '@/components/icons'
 
+function focusFieldControl(fieldId: string) {
+  const el = document.getElementById(fieldId)
+  if (!el) return
+  const target = el.matches('input, select, textarea')
+    ? el
+    : el.querySelector<HTMLElement>('input, select, textarea, [tabindex]')
+  ;(target as HTMLElement | null)?.focus?.()
+}
+
 export const CONTACT_INDUSTRIES = [
   'Financial Services', 'Telecommunications', 'Electronics', 'IT Services',
   'Healthcare', 'Education', 'Retail', 'Manufacturing', 'Construction',
   'Real Estate', 'Hospitality', 'Transport & Logistics', 'Agriculture',
   'Government', 'NGO / Non-profit', 'Media & Entertainment', 'Other',
+] as const
+
+/** Standard payment-terms presets (days). Default remains 30; 0 = cash / due immediately. */
+export const PAYMENT_TERMS_DAY_OPTIONS = [
+  { value: '0', label: 'Cash / due immediately (0 days)' },
+  { value: '7', label: '7 days' },
+  { value: '14', label: '14 days' },
+  { value: '30', label: '30 days' },
+  { value: '45', label: '45 days' },
+  { value: '60', label: '60 days' },
+  { value: '90', label: '90 days' },
 ] as const
 
 export type ContactFormValues = Omit<Contact, 'id' | 'createdAt'>
@@ -74,21 +94,36 @@ export default function ContactFormModal({
   forceCustomer = false,
   forceVendor = false,
 }: Props) {
-  const { contacts, addContact, updateContact } = useCrmStore()
+  const { contacts, addContact, updateContact, showToast } = useCrmStore()
   const [form, setForm] = useState<ContactFormValues>(() => ({
     ...initial,
+    paymentTermsDays: initial.paymentTermsDays ?? 30,
     ...(forceCustomer ? { isCustomer: true } : {}),
     ...(forceVendor ? { isVendor: true } : {}),
   }))
   const [saving, setSaving] = useState(false)
+  const [fieldErrors, setFieldErrors] = useState<Partial<Record<'name', string>>>({})
 
   const companies = useMemo(
     () => contacts.filter(c => c.type === 'company'),
     [contacts],
   )
 
+  const paymentTermsValue = String(form.paymentTermsDays ?? 30)
+  const paymentTermsOptions = useMemo(() => {
+    const base: Array<{ value: string; label: string }> = PAYMENT_TERMS_DAY_OPTIONS.map(o => ({
+      value: o.value,
+      label: o.label,
+    }))
+    if (!base.some(o => o.value === paymentTermsValue)) {
+      base.push({ value: paymentTermsValue, label: `${paymentTermsValue} days` })
+    }
+    return base
+  }, [paymentTermsValue])
+
   const f = (k: keyof ContactFormValues) => (v: unknown) => {
     setForm(prev => ({ ...prev, [k]: v }))
+    if (k === 'name' && fieldErrors.name) setFieldErrors(prev => ({ ...prev, name: undefined }))
   }
 
   const switchType = (type: 'company' | 'individual') => {
@@ -105,6 +140,8 @@ export default function ContactFormModal({
       isCustomer: forceCustomer ? true : form.isCustomer,
       isVendor: forceVendor ? true : form.isVendor,
       tags: form.tags,
+      paymentTermsDays: form.paymentTermsDays ?? 30,
+      creditLimit: form.creditLimit ?? 0,
     }
     setForm(type === 'company'
       ? blankCompanyContact(shared)
@@ -112,7 +149,13 @@ export default function ContactFormModal({
   }
 
   const save = async () => {
-    if (!form.name.trim()) return
+    if (!form.name.trim()) {
+      setFieldErrors({ name: form.type === 'company' ? 'Company name is required' : 'Full name is required' })
+      showToast('Please fix the highlighted fields', 'error')
+      requestAnimationFrame(() => focusFieldControl('contact-name'))
+      return
+    }
+    setFieldErrors({})
     setSaving(true)
     try {
       const payload: ContactFormValues = {
@@ -167,7 +210,7 @@ export default function ContactFormModal({
         {form.type === 'company' ? (
           <>
             <div className="sm:col-span-2">
-              <Field label="Company Name" required>
+              <Field label="Company Name" required id="contact-name" error={fieldErrors.name}>
                 <Input value={form.name} onChange={f('name')} placeholder="e.g. Acme Corporation Ltd" autoFocus />
               </Field>
             </div>
@@ -191,7 +234,7 @@ export default function ContactFormModal({
         ) : (
           <>
             <div className="sm:col-span-2">
-              <Field label="Full Name" required>
+              <Field label="Full Name" required id="contact-name" error={fieldErrors.name}>
                 <Input value={form.name} onChange={f('name')} placeholder="e.g. John Kamau Mwangi" autoFocus />
               </Field>
             </div>
@@ -267,8 +310,15 @@ export default function ContactFormModal({
 
         <SectionLabel label="Financial & Banking" />
 
-        <Field label="Payment Terms (days)">
-          <Input value={String(form.paymentTermsDays ?? '')} onChange={v => f('paymentTermsDays')(Number(v) || 0)} placeholder="e.g. 30" />
+        <Field
+          label="Payment Terms (days)"
+          hint="This determines when this customer's invoices are marked overdue."
+        >
+          <Select
+            value={paymentTermsValue}
+            onChange={v => f('paymentTermsDays')(Number(v))}
+            options={paymentTermsOptions}
+          />
         </Field>
         <Field label="Credit Limit (KES)">
           <Input value={String(form.creditLimit ?? '')} onChange={v => f('creditLimit')(Number(v) || 0)} placeholder="e.g. 500000" />
@@ -288,7 +338,7 @@ export default function ContactFormModal({
 
       <div className="flex flex-col sm:flex-row gap-2 justify-end pt-3">
         <button type="button" className="btn-outline w-full sm:w-auto" onClick={onClose} disabled={saving}>Cancel</button>
-        <button type="button" className="btn-primary w-full sm:w-auto" onClick={() => void save()} disabled={!form.name.trim() || saving}>
+        <button type="button" className="btn-primary w-full sm:w-auto" onClick={() => void save()} disabled={saving}>
           {saving ? 'Saving…' : editId ? 'Save Changes' : form.type === 'company' ? 'Create Company' : 'Create Contact'}
         </button>
       </div>

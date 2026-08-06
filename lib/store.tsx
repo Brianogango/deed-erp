@@ -85,6 +85,7 @@ import {
 import { ensureArray, parseStoredState } from '@/lib/safe-local-state'
 import { repairOutsourceReadiness } from '@/lib/repair-outsource'
 import { getPreviousRepairProgressStatus } from '@/lib/repair-progress'
+import { assertFiniteSequenceNext, repairDatesWriteError } from '@/lib/data-validation'
 import {
   isDirectRepairPath,
   isQuoteDeclinedReopenable,
@@ -461,6 +462,12 @@ export interface Contact {
   vendorRating?: number
   loyaltyPoints?: number
   createdAt: string
+  /** Soft-archive (P1-DEED-006) — hidden from pickers, retained for history. */
+  isArchived?: boolean
+  archivedAt?: string
+  archivedBy?: string
+  /** Set when this contact was merged into another (survivor id). */
+  mergedIntoId?: string
 }
 
 export interface AuditLog {
@@ -3796,8 +3803,10 @@ let C = makeC()
 export const seq = (prefix: string, key: keyof ReturnType<typeof makeC>) => {
   const lsKey = `deed_seq2_${key}`
   const stored = typeof window !== 'undefined' ? localStorage.getItem(lsKey) : null
-  const current = stored !== null ? parseInt(stored, 10) : C[key]
-  const next = current + 1
+  const parsed = stored !== null ? parseInt(stored, 10) : NaN
+  const fallback = C[key]
+  const current = Number.isFinite(parsed) ? parsed : (Number.isFinite(fallback) ? fallback : NaN)
+  const next = assertFiniteSequenceNext(current + 1, `${prefix} sequence`)
   if (typeof window !== 'undefined') localStorage.setItem(lsKey, String(next))
   C[key] = next
   return `${prefix}/${String(next).padStart(4, '0')}`
@@ -5619,6 +5628,13 @@ export function StoreProvider({
     const actor = currentUser()?.username || 'system'
     const log: AuditLog = { id: uid(), date: now(), user: actor, action, documentRef, details }
     setAuditLogs(p => [log, ...p])
+    // P0-SEC-002: persist via server-authored endpoint (client store writes to
+    // deed_auditLogs are ignored).
+    void fetch('/api/audit/commercial', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action, documentRef, details }),
+    }).catch(() => { /* offline — local mirror remains until sync */ })
   }
 
   /**
@@ -7338,6 +7354,13 @@ const storeCtx: AppState = {
       await fetch('/api/auth/logout', { method: 'POST' })
       setCurrentUserId(null)
       setActiveModule('dashboard')
+      // P0-DEED-001 / SEC-004: purge business + draft keys on explicit logout
+      try {
+        const { purgeClientBusinessStorage } = await import('@/hooks/useFormDraft')
+        purgeClientBusinessStorage()
+      } catch {
+        // ignore — still complete logout
+      }
       showToast('Logged out')
       window.location.href = '/login'
     },
@@ -12147,6 +12170,13 @@ const storeCtx: AppState = {
     updateRepair: (id, p) => {
       const existing = repairsRef.current.find(r => r.id === id)
       if (!existing) return
+      if ('intakeDate' in p || 'date' in p) {
+        const dateErr = repairDatesWriteError({
+          intakeDate: 'intakeDate' in p ? p.intakeDate : existing.intakeDate,
+          date: 'date' in p ? p.date : existing.date,
+        })
+        if (dateErr) { showToast(dateErr, 'error'); return }
+      }
       const partsTotal = (p.partsUsed ?? existing.partsUsed).reduce((a, x) => a + x.qty * x.price, 0)
       const updatedBase = { ...existing, ...p }
       const feeDue = shouldChargeDiagnosisFee(updatedBase) && (updatedBase.diagnosisStopped || updatedBase.diagnosisFeeStatus === 'applicable')
@@ -16437,7 +16467,7 @@ const storeCtx: AppState = {
       if (!bb || bb.status !== 'approved') { showToast('Approve the buy-back before recording payment', 'error'); return }
       const payment: RefundPayment = {
         id: uid(),
-        ref: seq('RFD', 'refund'),
+        ref: seq('RFD', 'rfd'),
         rmaId: bb.id,
         rmaRef: bb.ref,
         customerName: bb.customerName,

@@ -97,7 +97,7 @@ function MobileRepairCard({ r, onSelect, outsourceJobs }: any) {
             )}
           </div>
           <p className="text-[13px] font-bold text-[var(--text-1)] truncate">{r.customerName}</p>
-          <p className="text-[11px] text-[var(--text-3)] truncate mt-0.5">{r.productName}</p>
+          <p className="text-[11px] text-[var(--text-3)] truncate mt-0.5" title={r.productName}>{r.productName}</p>
         </div>
         <div className="flex flex-col items-end gap-2 shrink-0">
           <RepairStatusBadge status={r.status} />
@@ -342,8 +342,8 @@ export default function RepairClientJobs({ onNewIntake, onSelect }: { onNewIntak
       key: 'device', label: 'Device', priority: 2, width: 'minmax(8rem, 1fr)',
       render: r => (
         <div className="min-w-0">
-          <p className="text-[12px] font-bold text-[var(--text-2)] truncate">{r.productName}</p>
-          {r.serialNumber && <p className="text-[10px] text-[var(--text-4)] font-mono truncate mt-0.5">{r.serialNumber}</p>}
+          <p className="text-[12px] font-bold text-[var(--text-2)] truncate" title={r.productName}>{r.productName}</p>
+          {r.serialNumber && <p className="text-[10px] text-[var(--text-4)] font-mono truncate mt-0.5" title={r.serialNumber}>{r.serialNumber}</p>}
         </div>
       ),
       exportValue: r => r.productName,

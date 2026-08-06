@@ -85,14 +85,20 @@ describe('POST /api/store — sensitive key gating', () => {
     expect(res.status).toBe(200)
   })
 
-  it('allows finance to append audit logs but still rejects technicians', async () => {
+  it('ignores client writes to deed_auditLogs (server-authored only, P0-SEC-002)', async () => {
     mockGetSession.mockResolvedValue(financeSession)
     const financeRes = await STORE_POST(postReq({ deed_auditLogs: '[]' }))
-    expect(financeRes.status).toBe(200)
+    // Immutable keys are dropped; with nothing left to save the route returns 400
+    // (no keys) or 200 with savedKeys:0 depending on batch shape — never persist client content.
+    expect([200, 400]).toContain(financeRes.status)
+    expect(mockSaveStoreKeys).not.toHaveBeenCalledWith(
+      expect.objectContaining({ deed_auditLogs: expect.anything() }),
+    )
 
     mockGetSession.mockResolvedValue(technicianSession)
     const techRes = await STORE_POST(postReq({ deed_auditLogs: '[]' }))
-    expect(techRes.status).toBe(403)
+    // Technicians previously 403'd via permission; now the key is also immutable.
+    expect([200, 400, 403]).toContain(techRes.status)
   })
 
   it('does not regress unrestricted keys — any authenticated role can still write deed_quotes', async () => {

@@ -1500,7 +1500,7 @@ function InventoryContent() {
                 return (
                 <div key={s.id} className="flex flex-col sm:flex-row sm:items-center gap-3 px-4 py-3 hover:bg-surface transition-colors">
                   <div className="flex-1 min-w-0">
-                    <p className="text-[12px] font-bold text-text-1 truncate">{s.productName}</p>
+                    <p className="text-[12px] font-bold text-text-1 truncate" title={s.productName}>{s.productName}</p>
                     <p className="font-mono text-[10px] text-text-3">{s.serial}</p>
                     <p className="font-mono text-[9px] text-primary-700">SKU: {s.sku ?? prod?.sku ?? '—'}</p>
                   </div>
@@ -1515,7 +1515,7 @@ function InventoryContent() {
               {filteredBulkWarehouse.map(p => (
                 <div key={p.id} className="flex flex-col sm:flex-row sm:items-center gap-3 px-4 py-3 hover:bg-surface transition-colors">
                   <div className="flex-1 min-w-0">
-                    <p className="text-[12px] font-bold text-text-1 truncate">{p.name}</p>
+                    <p className="text-[12px] font-bold text-text-1 truncate" title={p.name}>{p.name}</p>
                     <p className="text-[10px] text-text-3">{p.qty} units in warehouse</p>
                   </div>
                   <div className="flex flex-wrap gap-2">
@@ -1532,7 +1532,7 @@ function InventoryContent() {
               {filteredIssuesSerials.map(s => (
                 <div key={s.id} className="flex flex-col sm:flex-row sm:items-center gap-3 px-4 py-3 hover:bg-surface transition-colors">
                   <div className="flex-1 min-w-0">
-                    <p className="text-[12px] font-bold text-text-1 truncate">{s.productName}</p>
+                    <p className="text-[12px] font-bold text-text-1 truncate" title={s.productName}>{s.productName}</p>
                     <p className="font-mono text-[10px] text-text-3">{s.serial}</p>
                   </div>
                   <div className="flex flex-wrap gap-2">
@@ -1544,7 +1544,7 @@ function InventoryContent() {
               {filteredBulkShop.map(p => (
                 <div key={p.id} className="flex flex-col sm:flex-row sm:items-center gap-3 px-4 py-3 hover:bg-surface transition-colors">
                   <div className="flex-1 min-w-0">
-                    <p className="text-[12px] font-bold text-text-1 truncate">{p.name}</p>
+                    <p className="text-[12px] font-bold text-text-1 truncate" title={p.name}>{p.name}</p>
                     <p className="text-[10px] text-text-3">{p.qty} units with issues</p>
                   </div>
                   <span className="text-[10px] text-text-4 italic">Use Transfers tab to move bulk items</span>
@@ -1590,7 +1590,7 @@ function InventoryContent() {
               {filteredBulkRepair.map(p => (
                 <div key={p.id} className="flex flex-col sm:flex-row sm:items-center gap-3 px-4 py-3 hover:bg-surface transition-colors">
                   <div className="flex-1 min-w-0">
-                    <p className="text-[12px] font-bold text-text-1 truncate">{p.name}</p>
+                    <p className="text-[12px] font-bold text-text-1 truncate" title={p.name}>{p.name}</p>
                     <p className="text-[10px] text-text-3">{p.qty} units in refurbishment</p>
                   </div>
                   <span className="text-[10px] text-text-4 italic">Use Transfers tab to move bulk items</span>
@@ -1935,7 +1935,10 @@ function InventoryContent() {
                     },
                     {
                       key: 'product', label: 'Product', priority: 1, width: '1.5fr',
-                      render: row => <span className="text-xs text-text-1 font-medium truncate">{row.productName || row.sku || '—'}</span>,
+                      render: row => {
+                        const label = row.productName || row.sku || '—'
+                        return <span className="text-xs text-text-1 font-medium truncate" title={label}>{label}</span>
+                      },
                       exportValue: row => row.productName || row.sku || '',
                     },
                     {
@@ -2026,7 +2029,7 @@ function InventoryContent() {
                 },
                 {
                   key: 'product', label: 'Product', priority: 1, width: '1.5fr',
-                  render: move => <span className="text-xs text-text-1 font-medium truncate">{move.productName}</span>,
+                  render: move => <span className="text-xs text-text-1 font-medium truncate" title={move.productName}>{move.productName}</span>,
                   exportValue: move => move.productName,
                 },
                 {
@@ -2226,7 +2229,10 @@ function InventoryContent() {
               },
               {
                 key: 'items', label: 'Items', priority: 2, width: '1.5fr',
-                render: transfer => <span className="text-xs text-text-1 font-medium truncate">{transfer.lines.map(line => `${line.productName} ×${line.qty}`).join(', ')}</span>,
+                render: transfer => {
+                  const label = transfer.lines.map(line => `${line.productName} ×${line.qty}`).join(', ')
+                  return <span className="text-xs text-text-1 font-medium truncate" title={label}>{label}</span>
+                },
                 exportValue: transfer => transfer.lines.map(line => `${line.productName} x${line.qty}`).join(', '),
               },
               {
@@ -2347,7 +2353,7 @@ function InventoryContent() {
                   },
                   {
                     key: 'product', label: 'Product', priority: 1, width: '1.5fr',
-                    render: adj => <span className="text-xs text-text-1 font-medium truncate">{adj.productName}</span>,
+                    render: adj => <span className="text-xs text-text-1 font-medium truncate" title={adj.productName}>{adj.productName}</span>,
                     exportValue: adj => adj.productName,
                   },
                   {
@@ -3067,7 +3073,7 @@ function InventoryContent() {
                   : <Fa icon={faBox} aria-hidden="true" />}
               </div>
               <div className="min-w-0">
-                <p className="text-sm font-extrabold text-text-1 truncate">{labelProduct.name}</p>
+                <p className="text-sm font-extrabold text-text-1 truncate" title={labelProduct.name}>{labelProduct.name}</p>
                 <p className="text-xs text-text-3 font-mono mt-0.5">{labelProduct.sku}</p>
                 <p className="text-xs font-bold text-primary-700 mt-0.5">{fmtKes(labelProduct.salePrice)}</p>
                 {labelProduct.barcode && (
@@ -3166,7 +3172,7 @@ function InventoryContent() {
                 </span>
                 <div className="flex-1 min-w-0">
                   <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: 'var(--navy)' }}>Variant of</p>
-                  <p className="text-[13px] font-extrabold text-text-1 truncate">{parentProduct.name}</p>
+                  <p className="text-[13px] font-extrabold text-text-1 truncate" title={parentProduct.name}>{parentProduct.name}</p>
                   <p className="text-[10px] text-text-3">Inherits category &amp; account mapping · Give this variant a unique name, SKU, price and description</p>
                 </div>
                 <button className="text-[10px] text-text-3 underline hover:text-red-500 transition-colors" onClick={() => setF('parentId')('')}>Remove link</button>
@@ -3209,7 +3215,7 @@ function InventoryContent() {
                           {p.image && !/^\p{Extended_Pictographic}/u.test(p.image)
                             ? <img src={p.image} alt="" className="w-4 h-4 object-contain flex-shrink-0" />
                             : <Fa icon={faBox} className="text-slate-400 flex-shrink-0" aria-hidden="true" />}
-                          <span className="truncate">{p.name} <span className="text-text-4 font-mono">{p.sku}</span></span>
+                          <span className="truncate" title={`${p.name} ${p.sku}`}>{p.name} <span className="text-text-4 font-mono">{p.sku}</span></span>
                         </span>
                         <div className="flex gap-1 shrink-0">
                           <button className="px-2 py-0.5 rounded text-[9px] font-bold bg-primary-50 text-primary-700 border border-primary-200 hover:bg-primary-100 transition-colors"
@@ -3544,7 +3550,7 @@ function InventoryContent() {
               },
               {
                 key: 'name', label: 'Name', priority: 1, width: '1.5fr',
-                render: row => <span className="text-xs text-text-1 font-medium truncate">{row.name || <span className="text-text-4 italic">—</span>}</span>,
+                render: row => <span className="text-xs text-text-1 font-medium truncate" title={row.name || undefined}>{row.name || <span className="text-text-4 italic">—</span>}</span>,
                 exportValue: row => row.name,
               },
               {

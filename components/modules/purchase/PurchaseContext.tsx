@@ -54,7 +54,8 @@ export interface PurchaseCtxValue {
   mainView: MainView; setMainView: (v: MainView) => void
   subView: SubView;   setSubView: (v: SubView) => void
   activeId: string | null; setActiveId: (id: string | null) => void
-  filter: string; setFilter: (f: string) => void
+  typeFilter: string; setTypeFilter: (f: string) => void
+  statusFilter: string; setStatusFilter: (f: string) => void
   // Derived
   vendors: ReturnType<typeof useFinanceStore>['contacts']
   purchasableProds: ReturnType<typeof useFinanceStore>['products']

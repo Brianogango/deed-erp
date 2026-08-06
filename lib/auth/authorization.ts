@@ -391,9 +391,12 @@ export function canAccessRecord(
 
 // Store keys that carry an append-only audit trail and must NEVER be written by
 // a client through either store-sync endpoint. The server maintains these
-// itself (see appendStoreAudit in app/api/store/route.ts).
+// itself (see appendStoreAudit / lib/inventory/audit.ts).
 export const CLIENT_IMMUTABLE_STORE_KEYS = new Set<string>([
   'deed_audit_timeline_v1',
+  // P0-SEC-002: legacy commercial audit blob is server-authored only.
+  // Clients may still read it; writes via /api/store are dropped.
+  'deed_auditLogs',
 ])
 
 export const hasPermission = (user: Pick<PublicUser, 'role'> | null | undefined, action: PermissionAction) => {

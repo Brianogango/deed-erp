@@ -118,6 +118,47 @@ function InactivityWarningModal({ onContinue }: { onContinue: () => void }) {
   )
 }
 
+/** Absolute login-session expiry warning (P0-DEED-001) — separate from idle timeout. */
+function SessionExpiryWarningModal({
+  secondsLeft,
+  onExtend,
+  onLogout,
+  extending,
+}: {
+  secondsLeft: number
+  onExtend: () => void
+  onLogout: () => void
+  extending: boolean
+}) {
+  const mins = Math.max(0, Math.floor(secondsLeft / 60))
+  const secs = Math.max(0, secondsLeft % 60)
+  return (
+    <div className="fixed inset-0 z-[99] flex items-center justify-center bg-black/60 backdrop-blur-sm">
+      <div
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby="session-expiry-title"
+        className="bg-[var(--bg-card)] rounded-2xl shadow-2xl p-6 mx-4 max-w-sm w-full text-center"
+      >
+        <h2 id="session-expiry-title" className="text-base font-bold text-[var(--text-1)] mb-1">
+          Session expiring soon
+        </h2>
+        <p className="text-xs text-[var(--text-3)] mb-5">
+          Your login expires in {mins}:{String(secs).padStart(2, '0')}. Stay signed in to keep working, or sign out now.
+        </p>
+        <div className="flex flex-col gap-2">
+          <button type="button" className="btn-primary w-full py-2.5 text-sm" disabled={extending} onClick={onExtend}>
+            {extending ? 'Extending…' : 'Stay signed in'}
+          </button>
+          <button type="button" className="btn-secondary w-full py-2 text-sm" onClick={onLogout}>
+            Log out now
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 /**
  * Sidebar Overlay Backdrop Component
  * Closes sidebar when clicked on mobile
@@ -199,7 +240,11 @@ function AppContent({ children }: { children: React.ReactNode }) {
   const inactivityTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const warnTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const contentRef = useRef<HTMLElement>(null)
+  const sessionExpiresAt = useRef<number | null>(null)
   const [showInactivityWarning, setShowInactivityWarning] = useState(false)
+  const [showSessionExpiryWarning, setShowSessionExpiryWarning] = useState(false)
+  const [sessionSecondsLeft, setSessionSecondsLeft] = useState(0)
+  const [extendingSession, setExtendingSession] = useState(false)
   const [offlineBanner, setOfflineBanner] = useState(false)
   const [jarvisOpen, setJarvisOpen] = useState(false)
   const hydratedRoutesRef = useRef<Set<string>>(new Set())
@@ -540,6 +585,56 @@ function AppContent({ children }: { children: React.ReactNode }) {
     }
   }, [currentUserId, resetInactivityTimer])
 
+  /** Absolute session expiry countdown + extend (P0-DEED-001) */
+  useEffect(() => {
+    if (!currentUserId) return
+    let cancelled = false
+    const poll = async () => {
+      try {
+        const res = await fetch('/api/auth/session-status')
+        if (!res.ok) return
+        const data = await res.json()
+        if (cancelled || !data.expiresAt) return
+        sessionExpiresAt.current = Date.parse(data.expiresAt)
+      } catch {
+        // ignore
+      }
+    }
+    void poll()
+    const interval = window.setInterval(() => {
+      void poll()
+      const exp = sessionExpiresAt.current
+      if (!exp) return
+      const left = Math.floor((exp - Date.now()) / 1000)
+      setSessionSecondsLeft(left)
+      if (left <= 5 * 60 && left > 0) setShowSessionExpiryWarning(true)
+      else if (left > 5 * 60) setShowSessionExpiryWarning(false)
+    }, 15_000)
+    return () => {
+      cancelled = true
+      window.clearInterval(interval)
+    }
+  }, [currentUserId])
+
+  const extendSession = useCallback(async () => {
+    setExtendingSession(true)
+    try {
+      const res = await fetch('/api/auth/session-status', { method: 'POST' })
+      if (!res.ok) {
+        showToast('Could not extend session — please sign in again', 'error')
+        return
+      }
+      const data = await res.json()
+      if (data.expiresAt) sessionExpiresAt.current = Date.parse(data.expiresAt)
+      setShowSessionExpiryWarning(false)
+      showToast('Session extended')
+    } catch {
+      showToast('Could not extend session', 'error')
+    } finally {
+      setExtendingSession(false)
+    }
+  }, [showToast])
+
   /**
    * Network connectivity banner.
    * Shows an informational amber bar when offline; dismisses it and toasts
@@ -612,6 +707,14 @@ function AppContent({ children }: { children: React.ReactNode }) {
 
       {/* Inactivity Warning Modal */}
       {showInactivityWarning && <InactivityWarningModal onContinue={resetInactivityTimer} />}
+      {showSessionExpiryWarning && (
+        <SessionExpiryWarningModal
+          secondsLeft={sessionSecondsLeft}
+          onExtend={() => void extendSession()}
+          onLogout={() => void logout()}
+          extending={extendingSession}
+        />
+      )}
 
       {/* Sidebar Overlay Backdrop */}
       {sidebarOpen && <SidebarBackdrop onClose={toggleSidebar} />}

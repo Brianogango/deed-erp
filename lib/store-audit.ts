@@ -2,6 +2,7 @@ import 'server-only'
 import { getServerSession } from '@/lib/auth/server'
 import { loadAppState, saveStoreKeys } from '@/lib/server-store'
 import type { RejectedPostedInvoiceEdit } from '@/lib/finance-invoice'
+import { archiveDisplacedAuditEntries } from '@/lib/audit-archive'
 
 export const IMMUTABLE_AUDIT_KEY = 'deed_audit_timeline_v1'
 export const MAX_AUDIT_ROWS = 600
@@ -20,8 +21,8 @@ export type StoreAuditEntry = {
 /**
  * Append a server-authored, client-immutable audit entry to the timeline.
  * Actor identity always comes from the server session, never the request
- * body. Callers pass empty arrays for anything not applicable; the entry is
- * skipped entirely when there is nothing to record.
+ * body. Rows displaced by the live 600-row window are archived (P0-SEC-002)
+ * instead of being discarded.
  */
 export async function appendStoreAudit(
   session: Awaited<ReturnType<typeof getServerSession>>,
@@ -49,6 +50,11 @@ export async function appendStoreAudit(
     ...(deniedKeys.length > 0 ? { deniedKeys } : {}),
     ...(rejectedPostedInvoiceEdits.length > 0 ? { rejectedPostedInvoiceEdits } : {}),
   }
-  const next = [...existing, entry].slice(-MAX_AUDIT_ROWS)
+  const combined = [...existing, entry]
+  const displaced = combined.length > MAX_AUDIT_ROWS ? combined.slice(0, combined.length - MAX_AUDIT_ROWS) : []
+  if (displaced.length > 0) {
+    await archiveDisplacedAuditEntries(displaced)
+  }
+  const next = combined.slice(-MAX_AUDIT_ROWS)
   await saveStoreKeys({ [IMMUTABLE_AUDIT_KEY]: JSON.stringify(next) })
 }

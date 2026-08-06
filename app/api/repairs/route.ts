@@ -4,6 +4,7 @@ import { loadAppState, saveStoreKeys } from '@/lib/server-store'
 import { getNextRepairRef } from '@/lib/repair-ref-counter'
 import type { RepairOrder } from '@/lib/store'
 import { parsePaginationParams, paginateArray } from '@/lib/api-pagination'
+import { repairDatesWriteError } from '@/lib/data-validation'
 
 function publicPhotoUrl(ref: string, index: number) {
   return `/api/portal/repair/${encodeURIComponent(ref)}/photos/${index}`
@@ -132,6 +133,14 @@ export async function POST(request: NextRequest) {
       accessories: [],
       ...(body as Partial<RepairOrder>),
     } as RepairOrder
+
+    const dateErr = repairDatesWriteError(repair)
+    if (dateErr) {
+      return NextResponse.json({
+        error: dateErr,
+        field: dateErr.startsWith('date ') ? 'date' : 'intakeDate',
+      }, { status: 422 })
+    }
 
     // Save the updated repairs list
     const updatedRepairs = [repair, ...repairs]

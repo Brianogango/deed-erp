@@ -820,7 +820,7 @@ export function Dashboard() {
                       <div className="flex items-center gap-2 sm:gap-3 min-w-0">
                         <div className="dashboard-row-symbol is-repair"><Fa icon={faScrewdriverWrench} /></div>
                         <div className="min-w-0">
-                          <p className="text-[13px] sm:text-sm font-bold text-[var(--text-1)] truncate">{r.ref} · {r.productName}</p>
+                          <p className="text-[13px] sm:text-sm font-bold text-[var(--text-1)] truncate" title={`${r.ref} · ${r.productName}`}>{r.ref} · {r.productName}</p>
                           <p className="text-[11px] sm:text-xs text-[var(--text-3)] truncate">{r.customerName}{r.assignedTechnicianName ? ` · ${r.assignedTechnicianName}` : ''}</p>
                         </div>
                       </div>

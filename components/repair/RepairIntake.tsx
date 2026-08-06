@@ -18,9 +18,38 @@ import {
   buildRepairTrackingWhatsAppMessage,
   buildWhatsAppShareUrl,
 } from '@/lib/whatsapp-share'
+import { useFormDraft } from '@/hooks/useFormDraft'
 
 const CYAN  = '#00AEEF'
 const NAVY  = '#1A1F5E'
+
+const INTAKE_ERROR_FOCUS: Array<{ key: string; id: string }> = [
+  { key: 'phone', id: 'intake-phone' },
+  { key: 'name', id: 'intake-name' },
+  { key: 'company', id: 'intake-company' },
+  { key: 'contactPerson', id: 'intake-contactPerson' },
+  { key: 'personFirstName', id: 'intake-personFirstName' },
+  { key: 'personPhone', id: 'intake-personPhone' },
+  { key: 'brand', id: 'intake-brand' },
+  { key: 'model', id: 'intake-model' },
+  { key: 'serialExceptionReason', id: 'intake-serialExceptionReason' },
+  { key: 'consentSignature', id: 'intake-consentSignature' },
+  { key: 'agreeTerms', id: 'intake-agreeTerms' },
+]
+
+function focusFieldControl(fieldId: string) {
+  const el = document.getElementById(fieldId)
+  if (!el) return
+  const target = el.matches('input, select, textarea, button')
+    ? el
+    : el.querySelector<HTMLElement>('input, select, textarea, button, [tabindex]')
+  ;(target as HTMLElement | null)?.focus?.()
+}
+
+function focusFirstInvalid(errors: Record<string, string>) {
+  const hit = INTAKE_ERROR_FOCUS.find(f => errors[f.key])
+  if (hit) requestAnimationFrame(() => focusFieldControl(hit.id))
+}
 
 const digits = (value?: string) => String(value ?? '').replace(/\D/g, '')
 const normalEmail = (value?: string) => String(value ?? '').trim().toLowerCase()
@@ -43,7 +72,7 @@ const DEVICE_TYPES = [
 export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => void; onSuccess: (id: string) => void }) {
   const {
     repairs, contacts, contactPersons, warranties, systemSettings,
-    createRepair, updateRepair, createContactPerson, showToast,
+    createRepair, updateRepair, createContactPerson, showToast, currentUserId,
   } = useOperationsStore()
 
   const customers   = useMemo(() => contacts.filter(c => c.isCustomer), [contacts])
@@ -52,10 +81,22 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
 
   // ── Client type ────────────────────────────────────────────────────────────
   const [clientType, setClientType] = useState<'individual' | 'company'>('individual')
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
+  const clearFieldError = (key: string) => {
+    setFieldErrors(prev => {
+      if (!prev[key]) return prev
+      const next = { ...prev }
+      delete next[key]
+      return next
+    })
+  }
 
   // ── Individual fields ──────────────────────────────────────────────────────
   const [indv, setIndv] = useState({ name: '', phone: '', email: '', id: '' })
-  const setI = (k: keyof typeof indv, v: string) => setIndv(p => ({ ...p, [k]: v }))
+  const setI = (k: keyof typeof indv, v: string) => {
+    setIndv(p => ({ ...p, [k]: v }))
+    clearFieldError(k)
+  }
 
   // ── Company fields ─────────────────────────────────────────────────────────
   const [companySearch, setCompanySearch] = useState('')
@@ -69,7 +110,11 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
   const [selectedPersonId, setSelectedPersonId] = useState('')
   const [showNewPersonForm, setShowNewPersonForm] = useState(false)
   const [newPerson, setNewPerson] = useState({ firstName: '', lastName: '', phone: '', email: '', jobTitle: '' })
-  const setNP = (k: keyof typeof newPerson, v: string) => setNewPerson(p => ({ ...p, [k]: v }))
+  const setNP = (k: keyof typeof newPerson, v: string) => {
+    setNewPerson(p => ({ ...p, [k]: v }))
+    if (k === 'firstName') clearFieldError('personFirstName')
+    else if (k === 'phone') clearFieldError('personPhone')
+  }
 
   // ── Device & job fields ────────────────────────────────────────────────────
   const [device, setDevice] = useState({
@@ -87,7 +132,34 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
     serialWarrantyExceptionNotes: '',
     clientCausedDamage: false, clientDamageReason: '',
   })
-  const setD = (k: keyof typeof device, v: string | boolean) => setDevice(p => ({ ...p, [k]: v }))
+  const setD = (k: keyof typeof device, v: string | boolean) => {
+    setDevice(p => ({ ...p, [k]: v }))
+    if (k === 'brand') clearFieldError('brand')
+    else if (k === 'model') clearFieldError('model')
+    else if (k === 'serialWarrantyExceptionReason') clearFieldError('serialExceptionReason')
+    else if (k === 'consentSignature') clearFieldError('consentSignature')
+    else if (k === 'agreeTerms') clearFieldError('agreeTerms')
+  }
+
+  const draftValues = useMemo(() => ({
+    clientType,
+    indv,
+    companySearch,
+    selectedCompanyId: selectedCompany?.id ?? '',
+    selectedPersonId,
+    newPerson,
+    device: {
+      ...device,
+      accessoriesChecked: [...device.accessoriesChecked],
+      clientLaptopPassword: '',
+    },
+  }), [clientType, indv, companySearch, selectedCompany, selectedPersonId, newPerson, device])
+  const { hasDraft, meta, restore, discard, clearOnSubmit } = useFormDraft(
+    currentUserId,
+    'repair_intake',
+    draftValues as Record<string, unknown>,
+  )
+  const [draftPromptDismissed, setDraftPromptDismissed] = useState(false)
 
   const [loading, setLoading] = useState(false)
   const [successData, setSuccessData] = useState<{
@@ -197,36 +269,44 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
 
   // ── Submit ─────────────────────────────────────────────────────────────────
   const handleCreateIntake = async () => {
-    // Validate client fields
+    const errors: Record<string, string> = {}
+
     if (clientType === 'individual') {
-      if (!indv.name.trim() || !indv.phone.trim()) {
-        showToast('Customer name and phone are required', 'error'); return
-      }
+      if (!indv.phone.trim()) errors.phone = 'Phone number is required'
+      if (!indv.name.trim()) errors.name = 'Customer name is required'
     } else {
-      if (!selectedCompany) {
-        showToast('Select or create a company', 'error'); return
-      }
+      if (!selectedCompany) errors.company = 'Select or create a company'
       if (!selectedPersonId && !showNewPersonForm) {
-        showToast('Select or add a contact person', 'error'); return
+        errors.contactPerson = 'Select or add a contact person'
       }
-      if (showNewPersonForm && (!newPerson.firstName.trim() || !newPerson.phone.trim())) {
-        showToast('Contact person first name and phone are required', 'error'); return
+      if (showNewPersonForm) {
+        if (!newPerson.firstName.trim()) errors.personFirstName = 'First name is required'
+        if (!newPerson.phone.trim()) errors.personPhone = 'Phone is required'
       }
     }
 
-    if (!device.brand || !device.model) {
-      showToast('Device brand and model are required', 'error'); return
+    if (!device.brand) errors.brand = 'Brand is required'
+    if (!device.model) errors.model = 'Model is required'
+    if (device.serialWarrantyException && !device.serialWarrantyExceptionReason) {
+      errors.serialExceptionReason = 'Select why the serial/warranty information cannot be verified'
     }
+    if (device.repairPath === 'direct_repair') {
+      if (!device.consentSignature.trim()) errors.consentSignature = 'Customer signature is required'
+      if (!device.agreeTerms) errors.agreeTerms = 'Terms agreement is required'
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors)
+      showToast('Please fix the highlighted fields', 'error')
+      focusFirstInvalid(errors)
+      return
+    }
+
     if (duplicateRepair) {
       showToast(`Device already in repair: ${duplicateRepair.ref}`, 'error'); return
     }
-    if (device.serialWarrantyException && !device.serialWarrantyExceptionReason) {
-      showToast('Select why the serial/warranty information cannot be verified', 'error'); return
-    }
-    if (device.repairPath === 'direct_repair' && (!device.consentSignature.trim() || !device.agreeTerms)) {
-      showToast('Customer signature and terms agreement required for direct repair', 'error'); return
-    }
 
+    setFieldErrors({})
     setLoading(true)
     try {
       let customerId  = ''
@@ -308,6 +388,7 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
       const productLabel = `${device.brand} ${device.model}`.trim()
 
       const rep = createRepair(customerId, customerName, productLabel, device.serial, device.issueDesc)
+      clearOnSubmit()
 
       const checkedItems = Array.from(device.accessoriesChecked)
       const otherItems = device.accessoriesOther.split(',').map(n => n.trim()).filter(Boolean)
@@ -467,6 +548,39 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
   // ── Main form ──────────────────────────────────────────────────────────────
   return (
     <div className="flex flex-col h-full animate-in fade-in duration-300" style={{ background: 'var(--bg-page)' }}>
+      {hasDraft && !draftPromptDismissed && meta && (
+        <div className="px-4 pt-3 sm:px-6" role="status">
+          <div className="max-w-5xl mx-auto mb-2 rounded-xl border px-3 py-2 text-xs flex flex-wrap items-center gap-2" style={{ borderColor: 'var(--warning)', background: 'var(--warning-bg)', color: 'var(--warning-text)' }}>
+            <span>Unsaved repair intake from {new Date(meta.savedAt).toLocaleString()}.</span>
+            <button type="button" className="btn-primary text-[10px] px-2 py-1" onClick={() => {
+              const d = restore() as {
+                clientType?: 'individual' | 'company'
+                indv?: typeof indv
+                companySearch?: string
+                selectedPersonId?: string
+                newPerson?: typeof newPerson
+                device?: Record<string, unknown> & { accessoriesChecked?: string[] }
+              } | null
+              if (!d) return
+              if (d.clientType) setClientType(d.clientType)
+              if (d.indv) setIndv(d.indv)
+              if (typeof d.companySearch === 'string') setCompanySearch(d.companySearch)
+              if (d.selectedPersonId) setSelectedPersonId(d.selectedPersonId)
+              if (d.newPerson) setNewPerson(d.newPerson)
+              if (d.device) {
+                setDevice(p => ({
+                  ...p,
+                  ...d.device,
+                  accessoriesChecked: new Set(d.device?.accessoriesChecked || []),
+                  clientLaptopPassword: p.clientLaptopPassword,
+                }))
+              }
+              setDraftPromptDismissed(true)
+            }}>Restore</button>
+            <button type="button" className="btn-secondary text-[10px] px-2 py-1" onClick={() => { discard(); setDraftPromptDismissed(true) }}>Discard</button>
+          </div>
+        </div>
+      )}
       {/* Header */}
       <div className="border-b px-4 py-3 sm:px-6 sticky top-0 z-10 shadow-sm flex-shrink-0" style={{ background: 'var(--bg-card)', borderColor: 'var(--border)' }}>
         <div className="max-w-5xl mx-auto flex items-center justify-between gap-4">
@@ -532,14 +646,14 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <Field label="Phone Number" required hint="Searched first — fills name if returning client">
+                  <Field label="Phone Number" required id="intake-phone" error={fieldErrors.phone} hint="Searched first — fills name if returning client">
                     <Input
                       value={indv.phone}
                       onChange={handleIndvPhoneChange}
                       placeholder="+254 7XX XXX XXX"
                     />
                   </Field>
-                  <Field label="Customer Name" required>
+                  <Field label="Customer Name" required id="intake-name" error={fieldErrors.name}>
                     <div className="relative">
                       <input
                         className="form-input font-medium"
@@ -603,12 +717,15 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
                 {/* Company search / select */}
                 {!selectedCompany && (
                   <>
-                    <Field label="Search Company" hint="Type to filter existing companies">
+                    <Field label="Search Company" id="intake-company" error={fieldErrors.company} hint="Type to filter existing companies">
                       <div className="relative">
                         <input
                           className="form-input"
                           value={companySearch}
-                          onChange={e => setCompanySearch(e.target.value)}
+                          onChange={e => {
+                            setCompanySearch(e.target.value)
+                            clearFieldError('company')
+                          }}
                           placeholder="Company name..."
                         />
                       </div>
@@ -619,7 +736,7 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
                           <button
                             key={c.id}
                             type="button"
-                            onClick={() => { setSelectedCompany(c); setCompanySearch(''); setSelectedPersonId(''); setShowNewPersonForm(false) }}
+                            onClick={() => { setSelectedCompany(c); setCompanySearch(''); setSelectedPersonId(''); setShowNewPersonForm(false); clearFieldError('company') }}
                             className="w-full text-left px-4 py-3 text-xs hover:bg-[var(--bg-surface)] transition-colors"
                           >
                             <div className="font-bold" style={{ color: NAVY }}>{c.name}</div>
@@ -669,6 +786,11 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
                       <span className="text-[10px] font-black uppercase tracking-widest px-2" style={{ color: 'var(--text-3)' }}>Contact Person</span>
                       <div className="h-px flex-1" style={{ background: 'var(--border)' }} />
                     </div>
+                    {fieldErrors.contactPerson && (
+                      <p id="intake-contactPerson-error" role="alert" className="text-[10px] text-destructive font-semibold mb-2">
+                        {fieldErrors.contactPerson}
+                      </p>
+                    )}
 
                     {/* Existing persons list */}
                     {companyPersons.length > 0 && !showNewPersonForm && (
@@ -687,7 +809,7 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
                               name="contactPerson"
                               value={p.id}
                               checked={selectedPersonId === p.id}
-                              onChange={() => { setSelectedPersonId(p.id); setShowNewPersonForm(false) }}
+                              onChange={() => { setSelectedPersonId(p.id); setShowNewPersonForm(false); clearFieldError('contactPerson') }}
                               style={{ accentColor: CYAN }}
                             />
                             <div className="flex-1">
@@ -710,7 +832,8 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
                     {!showNewPersonForm ? (
                       <button
                         type="button"
-                        onClick={() => { setShowNewPersonForm(true); setSelectedPersonId('') }}
+                        id="intake-contactPerson"
+                        onClick={() => { setShowNewPersonForm(true); setSelectedPersonId(''); clearFieldError('contactPerson') }}
                         className="text-xs font-bold flex items-center gap-1.5"
                         style={{ color: CYAN }}
                       >
@@ -721,13 +844,13 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
                       <div className="space-y-3 p-4 rounded-xl animate-in slide-in-from-top-2 duration-200" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
                         <p className="text-[10px] font-black uppercase tracking-widest" style={{ color: NAVY }}>New Contact Person</p>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                          <Field label="First Name" required>
+                          <Field label="First Name" required id="intake-personFirstName" error={fieldErrors.personFirstName}>
                             <Input value={newPerson.firstName} onChange={v => setNP('firstName', v)} placeholder="John" />
                           </Field>
                           <Field label="Last Name">
                             <Input value={newPerson.lastName} onChange={v => setNP('lastName', v)} placeholder="Mutua" />
                           </Field>
-                          <Field label="Phone" required>
+                          <Field label="Phone" required id="intake-personPhone" error={fieldErrors.personPhone}>
                             <Input value={newPerson.phone} onChange={v => setNP('phone', v)} placeholder="+254 7XX XXX XXX" />
                           </Field>
                           <Field label="Email">
@@ -772,10 +895,10 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
                     <Input value={device.customDeviceType} onChange={v => setD('customDeviceType', v)} placeholder="e.g. Smart TV" />
                   </Field>
                 )}
-                <Field label="Brand" required>
+                <Field label="Brand" required id="intake-brand" error={fieldErrors.brand}>
                   <Input value={device.brand} onChange={v => setD('brand', v)} placeholder="HP, Apple, Dell…" />
                 </Field>
-                <Field label="Model" required>
+                <Field label="Model" required id="intake-model" error={fieldErrors.model}>
                   <Input value={device.model} onChange={v => setD('model', v)} placeholder="MacBook Pro 2022" />
                 </Field>
                 <Field label="Serial / IMEI" hint="Duplicate check based on this">
@@ -794,7 +917,7 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
                     </label>
                     {device.serialWarrantyException && (
                       <div className="space-y-3 rounded-xl p-3 animate-in slide-in-from-top-2 duration-200" style={{ background: 'var(--warning-bg)', border: '1px solid #FDE68A' }}>
-                        <Field label="Reason" required>
+                        <Field label="Reason" required id="intake-serialExceptionReason" error={fieldErrors.serialExceptionReason}>
                           <Select value={device.serialWarrantyExceptionReason} onChange={v => setD('serialWarrantyExceptionReason', v)}
                             options={[
                               { value: '', label: 'Select reason…' },
@@ -1022,15 +1145,28 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
                     <Fa icon={faSignature} className="text-sm" />
                     <p className="text-[10px] font-black uppercase tracking-widest">Customer Consent</p>
                   </div>
-                  <Field label="Customer Signature" required>
+                  <Field label="Customer Signature" required id="intake-consentSignature" error={fieldErrors.consentSignature}>
                     <Input value={device.consentSignature} onChange={v => setD('consentSignature', v)} placeholder="Type full name as signature" />
                   </Field>
                   <label className="flex items-start gap-3 cursor-pointer">
-                    <input type="checkbox" className="mt-1" checked={device.agreeTerms} onChange={e => setD('agreeTerms', e.target.checked)} />
+                    <input
+                      id="intake-agreeTerms"
+                      type="checkbox"
+                      className="mt-1"
+                      checked={device.agreeTerms}
+                      onChange={e => setD('agreeTerms', e.target.checked)}
+                      aria-invalid={fieldErrors.agreeTerms ? true : undefined}
+                      aria-describedby={fieldErrors.agreeTerms ? 'intake-agreeTerms-error' : undefined}
+                    />
                     <span className="text-[10px] font-medium leading-tight" style={{ color: 'var(--text-3)' }}>
                       I decline diagnosis — no diagnosis fee. Work only what I specifically asked for.
                     </span>
                   </label>
+                  {fieldErrors.agreeTerms && (
+                    <p id="intake-agreeTerms-error" role="alert" className="text-[10px] text-destructive font-semibold">
+                      {fieldErrors.agreeTerms}
+                    </p>
+                  )}
                 </div>
               )}
             </section>
@@ -1069,6 +1205,7 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
               setSelectedPersonId('')
               setShowNewPersonForm(false)
               setClientType('company')
+              clearFieldError('company')
             } else {
               setIndv({
                 id: contact.id,
@@ -1077,6 +1214,8 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
                 email: contact.email || '',
               })
               setClientType('individual')
+              clearFieldError('name')
+              clearFieldError('phone')
             }
             setShowContactForm(false)
           }}

@@ -31,6 +31,37 @@ function parseArrayLength(serializedValue: string): number | null {
   }
 }
 
+function stripEtagQuotes(value: string): string {
+  return value.replace(/^W\//i, '').replace(/^"|"$/g, '')
+}
+
+function buildStoreEtag(
+  session: { user: { id: string; role: string; modules?: string[] | null } },
+  keys: string[],
+  version: string,
+): string {
+  return `W/"${crypto.createHash('md5')
+    .update(`${session.user.id}:${session.user.role}:${[...(session.user.modules ?? [])].sort().join(',')}:${keys.join(',')}:${version}`)
+    .digest('hex')}"`
+}
+
+/** Client may send raw getAppStateVersion fingerprint or the weak ETag from GET. */
+function clientVersionMatches(clientVersion: string, currentVersion: string, etag: string): boolean {
+  if (clientVersion === currentVersion || clientVersion === etag) return true
+  const stripped = stripEtagQuotes(clientVersion)
+  return stripped === currentVersion || stripped === stripEtagQuotes(etag)
+}
+
+function extractClientVersion(request: Request, body: Record<string, unknown>): string | null {
+  const header = request.headers.get('if-match')?.trim()
+  if (header) return header
+  const fromBodyVersion = body._version
+  if (typeof fromBodyVersion === 'string' && fromBodyVersion.trim()) return fromBodyVersion.trim()
+  const fromBodyIfMatch = body['If-Match']
+  if (typeof fromBodyIfMatch === 'string' && fromBodyIfMatch.trim()) return fromBodyIfMatch.trim()
+  return null
+}
+
 export async function GET(request: NextRequest) {
   const session = await getServerSession()
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -45,12 +76,11 @@ export async function GET(request: NextRequest) {
   // client already holds this exact version in localStorage, answer 304 and
   // skip loading + serializing + transferring the payload entirely.
   let etag: string | undefined
+  let version: string | undefined
   if (keys?.length) {
-    const version = await getAppStateVersion(keys)
+    version = await getAppStateVersion(keys)
     if (version) {
-      etag = `W/"${crypto.createHash('md5')
-        .update(`${session.user.id}:${session.user.role}:${[...(session.user.modules ?? [])].sort().join(',')}:${keys.join(',')}:${version}`)
-        .digest('hex')}"`
+      etag = buildStoreEtag(session, keys, version)
       if (request.headers.get('if-none-match') === etag) {
         return new NextResponse(null, { status: 304, headers: { ETag: etag } })
       }
@@ -67,7 +97,9 @@ export async function GET(request: NextRequest) {
   for (const key of Object.keys(state)) {
     if (CONTENT_FILTERED_STORE_KEYS.has(key)) state[key] = filterStoreValueForRole(session.user, key, state[key]) as typeof state[string]
   }
-  return NextResponse.json(state, etag ? { headers: { ETag: etag } } : undefined)
+  // Clients already ignore non-deed_ keys when hydrating; expose version for If-Match writes.
+  const payload = version ? { ...state, version } : state
+  return NextResponse.json(payload, etag ? { headers: { ETag: etag } } : undefined)
 }
 
 export async function POST(request: Request) {
@@ -113,6 +145,21 @@ export async function POST(request: Request) {
       { error: `Forbidden — insufficient role to write: ${deniedKeys.join(', ')}`, deniedKeys },
       { status: 403 },
     )
+  }
+
+  // P1-SEC-005: optional optimistic concurrency. Absent If-Match / _version →
+  // behave as before (last-writer-wins). When present, reject stale writes with 409.
+  const writeKeys = Object.keys(entries)
+  const clientVersion = extractClientVersion(request, body as Record<string, unknown>)
+  if (clientVersion) {
+    const currentVersion = await getAppStateVersion(writeKeys)
+    const currentEtag = buildStoreEtag(session, writeKeys, currentVersion)
+    if (!clientVersionMatches(clientVersion, currentVersion, currentEtag)) {
+      return NextResponse.json(
+        { error: 'conflict', currentVersion },
+        { status: 409, headers: { ETag: currentEtag } },
+      )
+    }
   }
 
   // Partial-view roles sync back only the slice of deed_invoices/deed_expenses
@@ -222,10 +269,20 @@ export async function POST(request: Request) {
   const savedKeys = Object.keys(entries)
   if (savedKeys.length === 0) {
     await appendStoreAudit(session, [], skippedKeys, deniedKeys, rejectedPostedInvoiceEdits)
-    return NextResponse.json({ ok: true, savedKeys: 0, skippedKeys, deniedKeys, rejectedPostedInvoiceEdits })
+    const version = await getAppStateVersion(writeKeys)
+    const etag = buildStoreEtag(session, writeKeys, version)
+    return NextResponse.json(
+      { ok: true, savedKeys: 0, skippedKeys, deniedKeys, rejectedPostedInvoiceEdits, version },
+      { headers: { ETag: etag } },
+    )
   }
 
   await saveStoreKeys(entries)
   await appendStoreAudit(session, savedKeys, skippedKeys, deniedKeys, rejectedPostedInvoiceEdits)
-  return NextResponse.json({ ok: true, savedKeys: savedKeys.length, skippedKeys, deniedKeys, rejectedPostedInvoiceEdits })
+  const version = await getAppStateVersion(savedKeys)
+  const etag = buildStoreEtag(session, savedKeys, version)
+  return NextResponse.json(
+    { ok: true, savedKeys: savedKeys.length, skippedKeys, deniedKeys, rejectedPostedInvoiceEdits, version },
+    { headers: { ETag: etag } },
+  )
 }

@@ -96,6 +96,8 @@ export async function POST(request: NextRequest) {
       modules: user.modules,
       active: user.active,
       createdAt: user.createdAt,
+      // Absolute session lifetime anchor (P0-DEED-001)
+      sessionIssuedAt: new Date().toISOString(),
     },
     secret: SECRET,
     maxAge: SESSION_AGE,

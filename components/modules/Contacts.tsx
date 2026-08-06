@@ -30,7 +30,10 @@ function contactToFormValues(c: Contact): ContactFormValues {
 const contactSoColumns: ColumnDef<SaleOrder>[] = [
   { key: 'ref', label: 'Ref', priority: 1, width: '100px', render: so => <span className="font-mono text-[11px] font-semibold text-primary-600">{so.ref ?? so.orderNumber ?? so.id.slice(0, 8)}</span>, accessor: so => so.ref ?? so.orderNumber ?? so.id },
   { key: 'date', label: 'Date', priority: 2, width: '100px', render: so => <span className="text-xs text-t3">{fmtDate(so.date)}</span>, accessor: so => so.date },
-  { key: 'items', label: 'Items', priority: 1, width: '1.4fr', render: so => <span className="text-xs text-t2 truncate">{(so.lines ?? []).map(l => l.productName).join(', ')}</span>, accessor: so => (so.lines ?? []).map(l => l.productName).join(' ') },
+  { key: 'items', label: 'Items', priority: 1, width: '1.4fr', render: so => {
+    const items = (so.lines ?? []).map(l => l.productName).join(', ')
+    return <span className="text-xs text-t2 truncate" title={items}>{items}</span>
+  }, accessor: so => (so.lines ?? []).map(l => l.productName).join(' ') },
   { key: 'total', label: 'Total', priority: 1, width: '100px', align: 'right', render: so => <span className="font-mono text-[11px]">{fmtKes(so.total)}</span>, accessor: so => so.total },
   { key: 'invoiced', label: 'Invoiced', priority: 3, width: '80px', render: so => <span className="text-[10px]" style={{ color: so.invoiceId ? 'var(--success)' : 'var(--text-3)' }}>{so.invoiceId ? 'Yes' : 'No'}</span>, accessor: so => so.invoiceId ? 'Yes' : 'No' },
   { key: 'status', label: 'Status', priority: 1, width: '120px', render: so => <Badge status={so.status} size="xs" />, accessor: so => so.status },
@@ -41,7 +44,7 @@ const contactRepairColumns: ColumnDef<RepairOrder>[] = [
   { key: 'date', label: 'Date', priority: 2, width: '100px', render: r => <span className="text-xs text-t3">{fmtDate(r.intakeDate)}</span>, accessor: r => r.intakeDate },
   { key: 'device', label: 'Device', priority: 1, width: '1fr', render: r => (
     <div className="min-w-0">
-      <p className="truncate text-xs text-t1">{r.productName}</p>
+      <p className="truncate text-xs text-t1" title={r.productName}>{r.productName}</p>
       {r.serialNumber && <p className="text-[9px] font-mono text-t3">{r.serialNumber}</p>}
     </div>
   ), accessor: r => `${r.productName} ${r.serialNumber ?? ''}` },
@@ -77,7 +80,10 @@ const contactInvoiceColumns: ColumnDef<Invoice>[] = [
 const contactPosColumns: ColumnDef<POSOrder>[] = [
   { key: 'ref', label: 'Ref', priority: 1, width: '100px', render: tx => <span className="font-mono text-[11px] font-semibold text-primary-600">{tx.ref}</span>, accessor: tx => tx.ref },
   { key: 'date', label: 'Date', priority: 2, width: '100px', render: tx => <span className="text-xs text-t3">{fmtDate(tx.date)}</span>, accessor: tx => tx.date },
-  { key: 'items', label: 'Items', priority: 1, width: '1.4fr', render: tx => <span className="text-xs text-t2 truncate">{(tx.lines ?? []).map(l => l.productName).join(', ')}</span>, accessor: tx => (tx.lines ?? []).map(l => l.productName).join(' ') },
+  { key: 'items', label: 'Items', priority: 1, width: '1.4fr', render: tx => {
+    const items = (tx.lines ?? []).map(l => l.productName).join(', ')
+    return <span className="text-xs text-t2 truncate" title={items}>{items}</span>
+  }, accessor: tx => (tx.lines ?? []).map(l => l.productName).join(' ') },
   { key: 'total', label: 'Total', priority: 1, width: '100px', align: 'right', render: tx => <span className="font-mono text-[11px]">{fmtKes(tx.total)}</span>, accessor: tx => tx.total },
   { key: 'payment', label: 'Payment', priority: 2, width: '90px', render: tx => <span className="text-[10px] text-t2 capitalize">{tx.payment}</span>, accessor: tx => tx.payment },
 ]
@@ -158,7 +164,9 @@ function ContactsInner() {
   const [formKey, setFormKey] = useState(0)
   const [viewTab, setViewTab] = useState<ViewTab>('info')
 
+  const [showArchived, setShowArchived] = useState(false)
   const filtered = contacts.filter(c => {
+    if (!showArchived && c.isArchived) return false
     const q = search.toLowerCase()
     const matchSearch = !q
       || c.name.toLowerCase().includes(q)
@@ -348,11 +356,44 @@ function ContactsInner() {
 
   function contactRowActions(c: Contact) {
     return (
-      <button
-        style={{ background: '#E8F3FA', border: '1px solid #A8D4E8', cursor: 'pointer', color: 'var(--navy)', fontSize: 10, borderRadius: 6, padding: '2px 8px' }}
-        onClick={e => { e.stopPropagation(); openEdit(c) }}>
-        Edit
-      </button>
+      <div className="flex items-center gap-1">
+        <button
+          style={{ background: '#E8F3FA', border: '1px solid #A8D4E8', cursor: 'pointer', color: 'var(--navy)', fontSize: 10, borderRadius: 6, padding: '2px 8px' }}
+          onClick={e => { e.stopPropagation(); openEdit(c) }}>
+          Edit
+        </button>
+        {c.isArchived ? (
+          <button
+            style={{ background: '#ECFDF5', border: '1px solid #A7F3D0', cursor: 'pointer', color: '#065F46', fontSize: 10, borderRadius: 6, padding: '2px 8px' }}
+            onClick={async e => {
+              e.stopPropagation()
+              const res = await fetch(`/api/contacts/${c.id}/restore`, { method: 'POST' })
+              if (res.ok) {
+                const updated = await res.json()
+                // force list refresh via updateContact local path
+                await fetch(`/api/contacts/${c.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ isCustomer: updated.isCustomer }) })
+                showToast('Contact restored')
+                window.location.reload()
+              } else showToast('Could not restore contact', 'error')
+            }}>
+            Restore
+          </button>
+        ) : (
+          <button
+            style={{ background: '#FEF3C7', border: '1px solid #FDE68A', cursor: 'pointer', color: '#92400E', fontSize: 10, borderRadius: 6, padding: '2px 8px' }}
+            onClick={async e => {
+              e.stopPropagation()
+              if (!confirm(`Archive ${c.name}? They stay in history but leave pickers.`)) return
+              const res = await fetch(`/api/contacts/${c.id}/archive`, { method: 'POST' })
+              if (res.ok) {
+                showToast('Contact archived')
+                window.location.reload()
+              } else showToast('Could not archive contact', 'error')
+            }}>
+            Archive
+          </button>
+        )}
+      </div>
     )
   }
 
@@ -427,13 +468,23 @@ function ContactsInner() {
       <input ref={fileInputRef} type="file" accept=".csv" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) processFile(f); e.target.value = '' }} />
       <PageToolbar
         search={
-          <input
-            aria-label="Search contacts by name, email, or phone"
-            className="form-input text-[11px] py-1.5 w-full min-w-[12rem] sm:w-64"
-            placeholder="Search name, email, phone…"
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-          />
+          <div className="flex flex-wrap items-center gap-2 w-full">
+            <input
+              aria-label="Search contacts by name, email, or phone"
+              className="form-input text-[11px] py-1.5 w-full min-w-[12rem] sm:w-64"
+              placeholder="Search name, email, phone…"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+            />
+            <label className="flex items-center gap-1.5 text-[10px] text-[var(--text-3)] whitespace-nowrap">
+              <input
+                type="checkbox"
+                checked={showArchived}
+                onChange={e => setShowArchived(e.target.checked)}
+              />
+              Show archived
+            </label>
+          </div>
         }
       />
       {/* Contact list */}
@@ -581,7 +632,16 @@ function ContactsInner() {
                 <div>
                   <p className="text-[10px] uppercase tracking-wider font-semibold mb-2 text-t3">Payment Terms</p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    <InfoRow label="Payment Terms" value={vc.paymentTermsDays ? `${vc.paymentTermsDays} days` : '—'} />
+                    <InfoRow
+                      label="Payment Terms"
+                      value={
+                        vc.paymentTermsDays === 0
+                          ? 'Cash / due immediately (0 days)'
+                          : vc.paymentTermsDays != null
+                            ? `${vc.paymentTermsDays} days`
+                            : '—'
+                      }
+                    />
                     <InfoRow label="Credit Limit" value={vc.creditLimit ? `KES ${vc.creditLimit.toLocaleString()}` : '—'} />
                     {vc.vendorRating && <InfoRow label="Vendor Rating" value={`${vc.vendorRating} / 5`} />}
               {vc.isCustomer && <InfoRow label="Loyalty Points" value={String(vc.loyaltyPoints || 0)} />}

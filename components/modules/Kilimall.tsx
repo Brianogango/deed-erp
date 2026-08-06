@@ -221,9 +221,9 @@ function KilimallContent() {
       key: 'product', label: 'Shipped', priority: 1, width: '1.4fr',
       render: d => (
         <div className="min-w-0">
-          <span className="text-[11px] erp-truncate block">{d.productName}</span>
+          <span className="text-[11px] erp-truncate block" title={d.productName}>{d.productName}</span>
           {d.isSubstitution && d.orderedProductName && (
-            <span className="text-[10px] text-t3 erp-truncate block">Ordered: {d.orderedProductName}</span>
+            <span className="text-[10px] text-t3 erp-truncate block" title={`Ordered: ${d.orderedProductName}`}>Ordered: {d.orderedProductName}</span>
           )}
         </div>
       ),
