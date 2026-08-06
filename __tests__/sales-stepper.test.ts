@@ -7,9 +7,8 @@ function isSaleStepClickable(
   step: string,
   index: number,
   lineCount: number,
-  approvalStatus?: string,
 ) {
-  if (status === 'cancelled' || approvalStatus === 'pending') return false
+  if (status === 'cancelled') return false
   const currentIdx = Math.max(0, SALE_STATUS_BAR.indexOf(status as typeof SALE_STATUS_BAR[number]))
   if (index !== currentIdx + 1 || lineCount === 0) return false
   if (step === 'quotation_sent') return status === 'quotation'
@@ -29,8 +28,8 @@ describe('sales status stepper click rules', () => {
     expect(isSaleStepClickable('quotation', 'sale', 2, 2)).toBe(false)
   })
 
-  it('blocks when approval is pending or lines are empty', () => {
+  it('blocks when lines are empty', () => {
     expect(isSaleStepClickable('quotation', 'quotation_sent', 1, 0)).toBe(false)
-    expect(isSaleStepClickable('quotation', 'quotation_sent', 1, 1, 'pending')).toBe(false)
+    expect(isSaleStepClickable('quotation_sent', 'sale', 2, 0)).toBe(false)
   })
 })

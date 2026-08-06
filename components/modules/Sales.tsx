@@ -291,7 +291,6 @@ function SalesContent() {
     getCustomerCreditStatus, users, currentUserId, systemSettings,
     companySettings, bankAccounts, confirmDeliveryWithStockDeduction,
     updateDelivery, outboundReleases, initRelease,
-    approvalRequests, approveRequest,
     getDocumentPaymentDetails, setDocumentPaymentDetails,
   } = useSalesStore()
 
@@ -389,13 +388,6 @@ function SalesContent() {
   // ── Derived data ────────────────────────────────────────────────────────
   const salesOrderViews = useMemo(() => (saleOrders as any[]).map(normalizeSalesOrderView), [saleOrders])
   const activeOrder = salesOrderViews.find(s => s.id === activeId) ?? null
-  const activeOrderApprovals = activeOrder
-    ? approvalRequests.filter((request: any) => request.documentType === 'sales_order' && request.documentId === activeOrder.id)
-    : []
-  const activePendingApproval = activeOrderApprovals.find((request: any) => request.status === 'pending')
-  const currentApprovalLevel = activePendingApproval?.approvers?.find((level: any) => level.level === activePendingApproval.currentLevel)
-  const canApproveActiveOrder = !!currentUser && !!currentApprovalLevel?.approverIds?.includes(currentUser.id)
-
   // Open the compose dialog (Odoo's Send by Email opens an email composer).
   const openSendQuoteModal = (order: SalesOrderView) => {
     const contact = contacts.find(c => c.id === order.customerId)
@@ -1360,19 +1352,6 @@ function SalesContent() {
                     <div className="flex items-center gap-2 flex-wrap">
                       {/* ── Quotation / Quotation Sent (Odoo button visibility) ── */}
                       {activeOrder && isQuotationStage(activeOrder.status) && (<>
-                        {activeOrder.approvalStatus === 'pending' ? (<>
-                          {canApproveActiveOrder && activePendingApproval && (<>
-                            <button className="btn-primary flex items-center gap-2 text-xs" onClick={() => approveRequest(activePendingApproval.id, 'approved', `Approved from ${activeOrder.ref}`)}><Fa icon={faCheck} /><span>Approve</span></button>
-                            <button className="btn-danger flex items-center gap-2 text-xs" onClick={() => approveRequest(activePendingApproval.id, 'rejected', `Rejected from ${activeOrder.ref}`)}><Fa icon={faXmark} /><span>Reject</span></button>
-                          </>)}
-                          <MoreActionsMenu
-                            items={[
-                              { label: 'Preview', icon: faFileAlt, disabled: !activeOrder.lines.length, onClick: () => previewSalesDocument(activeOrder, 'Quotation', 'QUOTATION') },
-                              { label: 'Print', icon: faPrint, disabled: !activeOrder.lines.length, onClick: () => downloadSalesDocument(activeOrder, 'Quotation', 'QUOTE', 'QUOTATION') },
-                              { label: 'Cancel', icon: faBan, tone: 'danger', onClick: () => setShowCancelConfirm(true) },
-                            ]}
-                          />
-                        </>) : (<>
                           {activeOrder.status === 'quotation' && (
                             <button className="btn-primary flex items-center gap-2 text-xs" disabled={!activeOrder.lines.length || sendingQuoteId === activeOrder.id} title={!activeOrder.lines.length ? 'Add at least one product first' : undefined} onClick={() => openSendQuoteModal(activeOrder)}>
                               <Fa icon={faFileInvoice} /><span>{sendingQuoteId === activeOrder.id ? 'Sending…' : 'Send by Email'}</span>
@@ -1404,7 +1383,6 @@ function SalesContent() {
                               { label: 'Delete', icon: faTrash, tone: 'danger', onClick: () => setShowDelConfirm(true) },
                             ]}
                           />
-                        </>)}
                       </>)}
                       {/* ── Sales Order ── */}
                       {activeOrder?.status === 'sale' && (<>
@@ -1700,59 +1678,6 @@ function SalesContent() {
                         )}
                       </div>
 
-                      {activeOrderApprovals.length > 0 && (
-                        <div className="rounded-2xl border border-orange-200 bg-orange-50 p-4">
-                          <div className="flex items-start justify-between gap-3">
-                            <div>
-                              <h3 className="text-sm font-black text-orange-800 uppercase tracking-wider">Approval Workflow</h3>
-                              <p className="text-[11px] text-orange-700 mt-1">
-                                {activeOrder.approvalRequiredReason || 'This order requires internal approval before confirmation.'}
-                              </p>
-                            </div>
-                            <span className={`inline-flex px-2.5 py-1 rounded-full text-[10px] font-black uppercase ${
-                              activeOrder.approvalStatus === 'approved' ? 'bg-emerald-100 text-emerald-700'
-                              : activeOrder.approvalStatus === 'rejected' ? 'bg-red-100 text-red-700'
-                              : 'bg-orange-100 text-orange-700'
-                            }`}>
-                              {activeOrder.approvalStatus || 'pending'}
-                            </span>
-                          </div>
-                          <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-2">
-                            {activeOrderApprovals.map((request: any) => {
-                              const currentLevel = request.approvers?.find((level: any) => level.level === request.currentLevel)
-                              return (
-                                <div key={request.id} className="rounded-xl bg-white/80 border border-orange-100 p-3">
-                                  <div className="flex items-center justify-between gap-2">
-                                    <p className="text-xs font-bold text-slate-900 capitalize">{String(request.type).replace(/_/g, ' ')}</p>
-                                    <span className="text-[10px] font-bold text-orange-700 uppercase">{request.status}</span>
-                                  </div>
-                                  <p className="text-[11px] text-slate-600 mt-1">{request.details?.reason}</p>
-                                  {request.status === 'pending' && currentLevel && (
-                                    <p className="text-[10px] text-slate-500 mt-2">
-                                      Level {request.currentLevel}/{request.approvers.length} · waiting for {currentLevel.role.replace(/_/g, ' ')}
-                                    </p>
-                                  )}
-                                  {request.approvers?.some((level: any) => level.decision) && (
-                                    <div className="mt-2 space-y-1">
-                                      {request.approvers.filter((level: any) => level.decision).map((level: any) => (
-                                        <p key={level.level} className="text-[10px] text-slate-500">
-                                          L{level.level}: {level.decision} by {level.decidedByName || 'Approver'}{level.comments ? ` — ${level.comments}` : ''}
-                                        </p>
-                                      ))}
-                                    </div>
-                                  )}
-                                </div>
-                              )
-                            })}
-                          </div>
-                          {activePendingApproval && !canApproveActiveOrder && (
-                            <p className="text-[10px] text-orange-700 mt-3 font-semibold">
-                              Waiting for the assigned approver before this order can be confirmed.
-                            </p>
-                          )}
-                        </div>
-                      )}
-
                       {/* Lines + Summary */}
                       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                         <div className="lg:col-span-2 flex flex-col gap-4">
@@ -1980,8 +1905,8 @@ function SalesContent() {
                           {[
                             { label: 'Quotation created', date: activeOrder.date, show: true },
                             { label: `Quotation sent${activeOrder.sentTo ? ` to ${activeOrder.sentTo}` : ''}${activeOrder.sentByName ? ` by ${activeOrder.sentByName}` : ''}`, date: activeOrder.sentAt ?? activeOrder.date, show: !!activeOrder.sentAt },
-                            { label: 'Approval requested', date: activeOrder.date, show: activeOrderApprovals.length > 0 },
-                            { label: 'Order approved', date: activeOrder.date, show: activeOrder.approvalStatus === 'approved' },
+                            { label: 'Approval requested', date: activeOrder.date, show: false },
+                            { label: 'Order approved', date: activeOrder.date, show: false },
                             { label: `Confirmed into Sales Order${activeOrder.confirmedByName ? ` by ${activeOrder.confirmedByName}` : ''}`, date: activeOrder.confirmedAt ?? activeOrder.date, show: activeOrder.status === 'sale' },
                             { label: 'Delivery validated', date: activeOrder.date, show: activeDeliveries.some(d => d.status === 'done') },
                             { label: 'Invoice created', date: activeOrder.date, show: activeInvoices.length > 0 },

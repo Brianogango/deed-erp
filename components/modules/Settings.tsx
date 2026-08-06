@@ -15,7 +15,6 @@ import {
   faPlus, faCheck, faUpload, faBullseye, faChevronRight, faCog, faKey, faEnvelope,
 } from '@fortawesome/free-solid-svg-icons'
 import PartnerApiKeys from './settings/PartnerApiKeys'
-import ApprovalRulesEditor from './settings/ApprovalRulesEditor'
 import {
   BlobCutoverPanel,
   CurrencyRatesEditor,
@@ -861,7 +860,7 @@ ACCOUNTS_EMAIL=accounts@deed.co.ke`}</pre>
               </SectionCard>
               <SectionCard title="Pricing">
                 <SettingRow label="Enable Pricelists" desc="Multiple pricing tiers per customer segment or volume"><Toggle on={ss.salesPricelists} onChange={v => updateSystemSettings({ salesPricelists: v })} /></SettingRow>
-                <SettingRow label="Discount Control" desc="Require manager approval for discounts above a threshold"><Toggle on={ss.salesDiscountControl} onChange={v => updateSystemSettings({ salesDiscountControl: v })} /></SettingRow>
+                <SettingRow label="Discount Control" desc="Track and flag discounts above threshold on quotations (sales confirmation no longer requires approval)"><Toggle on={ss.salesDiscountControl} onChange={v => updateSystemSettings({ salesDiscountControl: v })} /></SettingRow>
                 {ss.salesPricelists && <PricelistsPanel showToast={showToast} />}
               </SectionCard>
               <SectionCard title="Sales price calculator">
@@ -913,15 +912,6 @@ ACCOUNTS_EMAIL=accounts@deed.co.ke`}</pre>
                     )
                   })}
                 </div>
-              </SectionCard>
-              <SectionCard title="Approval Thresholds">
-                <p className="text-[11px] text-gray-400 pt-2 pb-1">
-                  Configurable ladders stored in Postgres. Hardcoded fallbacks remain if DB is offline — never loses approval coverage.
-                </p>
-                <ApprovalRulesEditor
-                  canWrite={currentUser?.role === 'director' || currentUser?.role === 'finance_officer'}
-                  showToast={showToast}
-                />
               </SectionCard>
               <SectionCard title="Orders">
                 <SettingRow label="Confirmed Quotes → Sales Orders" desc="Mandatory flow: quote must be confirmed before becoming an order"><Toggle on={ss.salesConfirmedQuotesToOrders} onChange={v => updateSystemSettings({ salesConfirmedQuotesToOrders: v })} /></SettingRow>
