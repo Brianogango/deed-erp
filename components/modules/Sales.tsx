@@ -1855,7 +1855,7 @@ function SalesContent() {
                         {detailTab === 'Order Lines' && (
                           <>
                           <div className="sp-table-wrap">
-                            <table data-no-responsive className="sp-table">
+                            <table className="sp-table">
                               <thead>
                                 <tr>
                                   <th>Product</th>
@@ -2716,7 +2716,7 @@ function NewQuotationForm({
                   {fieldErrors.lines}
                 </p>
               )}
-              <table className="sp-table" data-no-responsive>
+              <table className="sp-table">
                 <thead>
                   <tr>
                     <th>#</th>
@@ -3259,15 +3259,15 @@ function DeliveryNoteView({
               </form>
             )}
           </div>
-          <div className="border border-[var(--border-lt)] rounded-2xl overflow-hidden">
-            <div className="dt-scroll">
-            <table data-no-responsive className="w-full text-left border-collapse">
+          <div className="sp-panel">
+            <div className="sp-table-wrap">
+            <table className="sp-table">
               <thead>
-                <tr className="bg-[var(--bg-surface)] border-b border-[var(--border-lt)]">
-                  <th className="px-4 py-2.5 text-[10px] font-bold uppercase text-[var(--text-4)]">Product</th>
-                  <th className="px-4 py-2.5 text-[10px] font-bold uppercase text-[var(--text-4)] text-center w-28">Demand (Ordered)</th>
-                  <th className="px-4 py-2.5 text-[10px] font-bold uppercase text-[var(--text-4)] text-center w-32">{canPrepare ? 'Qty to Reserve' : canValidate ? 'Reserved Qty' : 'Delivered'}</th>
-                  <th className="px-4 py-2.5 text-[10px] font-bold uppercase text-[var(--text-4)]">Serial Numbers</th>
+                <tr>
+                  <th>Product</th>
+                  <th className="num">Demand</th>
+                  <th className="num">{canPrepare ? 'Qty to reserve' : canValidate ? 'Reserved' : 'Delivered'}</th>
+                  <th>Serial numbers</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[var(--border-lt)]">
@@ -3299,21 +3299,21 @@ function DeliveryNoteView({
                   const isFullyDelivered = delivered >= l.qty
                   const isPartial = delivered > 0 && delivered < l.qty
                   return (
-                    <tr key={l.id} className={isFullyDelivered ? 'bg-emerald-50/30' : ''}>
-                      <td className="px-4 py-3 text-xs font-medium text-[var(--text-1)]">{l.productName ?? l.description ?? 'Item'}</td>
-                      <td className="px-4 py-3 text-xs text-center font-semibold text-[var(--text-2)]">{l.qty}</td>
-                      <td className="px-4 py-3 text-xs text-center">
+                    <tr key={l.id}>
+                      <td>{l.productName ?? l.description ?? 'Item'}</td>
+                      <td className="num">{l.qty}</td>
+                      <td className="num">
                         {canPrepare ? (
                           <input type="number" aria-label={`Delivery quantity for ${l.productName ?? l.description ?? 'line item'}`} min={0} max={l.qty} value={deliveryQtys[l.id] ?? 0}
                             onChange={e => setDeliveryQtys({ ...deliveryQtys, [l.id]: Math.min(l.qty, Math.max(0, Number(e.target.value) || 0)) })}
-                            className="w-20 text-center border border-[var(--border-lt)] rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-primary-400 focus:border-primary-400" />
+                            className="w-20 text-center" />
                         ) : canValidate ? (
                           <span className="font-semibold text-blue-700">{preparedQty}</span>
                         ) : (
                           <span className={`font-semibold ${isFullyDelivered ? 'text-emerald-600' : isPartial ? 'text-amber-500' : 'text-[var(--text-4)]'}`}>{delivered}</span>
                         )}
                       </td>
-                      <td className="px-4 py-3 text-xs">
+                      <td>
                         {lineSerials.length > 0 && (
                           <div className="flex flex-wrap gap-1">
                             {lineSerials.map((s: any) => (
