@@ -792,6 +792,8 @@ model Category {
   description String?
   isActive    Boolean    @default(true) @map("is_active")
   sortOrder   Int        @default(0) @map("sort_order")
+  /** Default sales commission % for products in this category without their own override. */
+  commissionRatePercent Decimal? @map("commission_rate_percent") @db.Decimal(5, 2)
 
   parent   Category?  @relation("CategoryTree", fields: [parentId], references: [id])
   children Category[] @relation("CategoryTree")
@@ -837,6 +839,8 @@ model Product {
   costingMethod    String      @default("average") @map("costing_method") @db.VarChar(20)
   reorderLevel     Int?        @default(2) @map("reorder_level")
   reorderQty       Int?        @default(5) @map("reorder_qty")
+  /** Sales commission % for this product. Falls back to the category rate, then 0 (no commission). */
+  commissionRatePercent Decimal? @map("commission_rate_percent") @db.Decimal(5, 2)
   isActive         Boolean     @default(true) @map("is_active")
   isValidated      Boolean     @default(false) @map("is_validated")
   validatedById    String?     @map("validated_by") @db.Uuid

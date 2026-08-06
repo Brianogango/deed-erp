@@ -212,6 +212,12 @@ export async function PUT(request: Request, { params }: { params: { id: string }
       } catch (err) {
         console.error('[invoice] journal dual-write failed:', err)
       }
+      try {
+        const { postSalesCommissionForInvoice } = await import('@/lib/accounting/sales-commission')
+        await postSalesCommissionForInvoice(invoice.id)
+      } catch (err) {
+        console.error('[invoice] sales commission calculation failed:', err)
+      }
     }
 
     return NextResponse.json(invoice)
