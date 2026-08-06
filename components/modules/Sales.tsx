@@ -76,6 +76,7 @@ import {
   type DocumentPaymentDetails,
 } from '@/lib/document-payment-details'
 import PaymentDetailsPicker from '@/components/payment/PaymentDetailsPicker'
+import { SalesDocTabs, SalesDocTotals, SalesDocField } from '@/components/modules/sales/workbench'
 import ContactFormModal, { blankIndividualContact } from '@/components/contacts/ContactFormModal'
 import DocumentEmailSendHistory from '@/components/email/DocumentEmailSendHistory'
 import { resolveListPrice } from '@/lib/pricing/pricelist'
@@ -2655,6 +2656,7 @@ function NewQuotationForm({
   onCreateNewCustomer: (query: string) => void
 }) {
   const [productSearch, setProductSearch] = useState<Record<string, string>>({})
+  const [createTab, setCreateTab] = useState('Order Lines')
   // The line table lives inside an overflow container that clips absolutely
   // positioned children — the picker renders position:fixed at the trigger's
   // viewport coordinates instead, so it can never disappear under the table.
@@ -2662,6 +2664,7 @@ function NewQuotationForm({
   const [customerSearch, setCustomerSearch] = useState('')
   const [customerDropdownOpen, setCustomerDropdownOpen] = useState(false)
   const [showAdvanced, setShowAdvanced] = useState(false)
+  const selectedCustomer = customers.find(c => c.id === newCustomer?.id)
   const customerRef = useRef<HTMLDivElement>(null)
   const dropdownRef = useRef<HTMLDivElement>(null)
 
@@ -2704,164 +2707,165 @@ function NewQuotationForm({
     products.filter(p => !search || p.name.toLowerCase().includes(search.toLowerCase()) || (p.sku ?? '').toLowerCase().includes(search.toLowerCase()))
 
   return (
-    <div className="flex flex-col min-h-[600px]">
-      {/* Form header */}
-      <div className="p-4 border-b border-[var(--border-lt)] flex items-center justify-between gap-3 flex-wrap bg-[var(--bg-surface)]">
-        <div className="flex items-center gap-3">
-          <button type="button" onClick={onCancel} className="btn-outline flex items-center gap-2 text-xs"><Fa icon={faArrowLeft} /><span>Discard</span></button>
-          <div>
-            <h2 className="text-sm font-bold text-[var(--text-1)]">Create quotation</h2>
-            <p className="text-[10px] text-[var(--text-4)]">Draft — save to allocate a quotation number</p>
-          </div>
+    <div className="sales-doc-shell">
+      <div className="sales-doc-page-header">
+        <div>
+          <button type="button" className="sd-btn sd-btn-ghost" onClick={onCancel} style={{ paddingLeft: 0 }}>← Back</button>
+          <h1>Create quotation</h1>
+          <div className="sub">Customer · lines · terms · send</div>
         </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          <button type="button" onClick={onCancel} className="btn-outline text-xs">Cancel</button>
-          <button type="button" onClick={onSaveDraft} disabled={!canSave} className="btn-secondary flex items-center gap-2 text-xs disabled:opacity-50 disabled:cursor-not-allowed">
-            <Fa icon={faSave} /><span>Save as draft</span>
-          </button>
-          <button type="button" onClick={onSave} disabled={!canSave} className="btn-primary flex items-center gap-2 text-xs disabled:opacity-50 disabled:cursor-not-allowed"><Fa icon={faSave} /><span>Submit quotation</span></button>
+        <div className="sales-doc-actions">
+          <button type="button" className="sd-btn" onClick={onCancel}>Discard</button>
+          <button type="button" className="sd-btn" onClick={onSaveDraft} disabled={!canSave}>Save as draft</button>
+          <button type="button" className="sd-btn sd-btn-primary" onClick={onSave} disabled={!canSave}>Submit</button>
         </div>
       </div>
 
-      {/* Form body */}
-      <div className="p-6 flex flex-col gap-6">
-        {/* Header fields */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {/* Customer picker */}
-          <div className="sm:col-span-2 relative" ref={customerRef}>
-            <Field label="Customer" required id="quote-customer" error={fieldErrors?.customer}>
-              <div
-                tabIndex={0}
-                role="button"
-                className={`form-input cursor-pointer flex items-center justify-between ${!newCustomer ? 'text-[var(--text-4)]' : 'text-[var(--text-1)]'}`}
-                onClick={() => setCustomerDropdownOpen(v => !v)}
-                onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setCustomerDropdownOpen(v => !v) } }}
-              >
-                <span className="text-xs font-medium truncate">{newCustomer ? newCustomer.name : 'Search customer…'}</span>
-                <Fa icon={faChevronDown} className={`text-[10px] text-[var(--text-4)] flex-shrink-0 transition-transform ${customerDropdownOpen ? 'rotate-180' : ''}`} />
-              </div>
-            </Field>
-            {customerDropdownOpen && (
-              <div className="absolute top-full left-0 right-0 z-[9300] mt-1 bg-[var(--bg-card)] border border-[var(--border)] rounded-xl shadow-xl overflow-hidden">
-                <div className="p-2 border-b border-[var(--border-lt)]">
-                  <input autoFocus type="text" aria-label="Search customers by name or email" placeholder="Search by name or email…" className="form-input text-xs w-full" value={customerSearch} onChange={e => setCustomerSearch(e.target.value)} />
+      <div className="sales-doc-panel sales-doc-panel-pad">
+        <div className="sales-doc-grid-2">
+          <div className="flex flex-col gap-3">
+            <SalesDocField label="Customer" htmlFor="quote-customer">
+              <div className="relative" ref={customerRef}>
+                <div
+                  id="quote-customer"
+                  tabIndex={0}
+                  role="button"
+                  className={`cursor-pointer flex items-center justify-between ${!newCustomer ? 'text-[var(--text-4)]' : ''}`}
+                  onClick={() => setCustomerDropdownOpen(v => !v)}
+                  onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setCustomerDropdownOpen(v => !v) } }}
+                >
+                  <span className="truncate">{newCustomer ? newCustomer.name : 'Search customer…'}</span>
+                  <Fa icon={faChevronDown} className={`text-[10px] text-[var(--text-4)] flex-shrink-0 transition-transform ${customerDropdownOpen ? 'rotate-180' : ''}`} />
                 </div>
-                <div className="max-h-48 overflow-y-auto">
-                  {filteredCustomers.length === 0 ? (
-                    <div className="px-3 py-2">
-                      <p className="text-xs text-[var(--text-4)] mb-2">No customers found</p>
-                      <button className="text-xs text-primary-600 font-semibold hover:underline" onClick={() => { setCustomerDropdownOpen(false); onCreateNewCustomer(customerSearch) }}>+ Create new contact</button>
+                {customerDropdownOpen && (
+                  <div className="absolute top-full left-0 right-0 z-[9300] mt-1 bg-[var(--bg-card)] border border-[var(--border)] rounded-xl shadow-xl overflow-hidden">
+                    <div className="p-2 border-b border-[var(--border-lt)]">
+                      <input autoFocus type="text" aria-label="Search customers by name or email" placeholder="Search by name or email…" className="form-input text-xs w-full" value={customerSearch} onChange={e => setCustomerSearch(e.target.value)} />
                     </div>
-                  ) : (
-                    filteredCustomers.map(c => (
-                      <button key={c.id} className="w-full text-left px-3 py-2 hover:bg-[var(--bg-surface)] transition-colors" onClick={() => { setNewCustomer({ id: c.id, name: c.name }); setCustomerDropdownOpen(false); setCustomerSearch('') }}>
-                        <p className="text-xs font-semibold text-[var(--text-1)]">{c.name}</p>
-                        <p className="text-[10px] text-[var(--text-4)]">{c.email || c.phone || 'No contact info'}</p>
-                      </button>
-                    ))
-                  )}
-                </div>
-                {filteredCustomers.length > 0 && (
-                  <div className="p-2 border-t border-[var(--border-lt)]">
-                    <button className="text-xs text-primary-600 font-semibold hover:underline" onClick={() => { setCustomerDropdownOpen(false); onCreateNewCustomer(customerSearch) }}>+ Create new contact</button>
+                    <div className="max-h-48 overflow-y-auto">
+                      {filteredCustomers.length === 0 ? (
+                        <div className="px-3 py-2">
+                          <p className="text-xs text-[var(--text-4)] mb-2">No customers found</p>
+                          <button className="text-xs text-primary-600 font-semibold hover:underline" onClick={() => { setCustomerDropdownOpen(false); onCreateNewCustomer(customerSearch) }}>+ Create new contact</button>
+                        </div>
+                      ) : (
+                        filteredCustomers.map(c => (
+                          <button key={c.id} className="w-full text-left px-3 py-2 hover:bg-[var(--bg-surface)] transition-colors" onClick={() => { setNewCustomer({ id: c.id, name: c.name }); setCustomerDropdownOpen(false); setCustomerSearch('') }}>
+                            <p className="text-xs font-semibold text-[var(--text-1)]">{c.name}</p>
+                            <p className="text-[10px] text-[var(--text-4)]">{c.email || c.phone || 'No contact info'}</p>
+                          </button>
+                        ))
+                      )}
+                    </div>
+                    {filteredCustomers.length > 0 && (
+                      <div className="p-2 border-t border-[var(--border-lt)]">
+                        <button className="text-xs text-primary-600 font-semibold hover:underline" onClick={() => { setCustomerDropdownOpen(false); onCreateNewCustomer(customerSearch) }}>+ Create new contact</button>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
+            </SalesDocField>
+            {fieldErrors?.customer && (
+              <p role="alert" className="text-[10px] text-destructive font-semibold -mt-2">{fieldErrors.customer}</p>
             )}
+            <SalesDocField label="Contact">
+              <div className="sd-value">{selectedCustomer?.type === 'individual' ? selectedCustomer.name : '—'}</div>
+            </SalesDocField>
+            <SalesDocField label="Email">
+              <div className="sd-value">{selectedCustomer?.email || '—'}</div>
+            </SalesDocField>
+            <SalesDocField label="Phone">
+              <div className="sd-value">{selectedCustomer?.phone || selectedCustomer?.mobile || '—'}</div>
+            </SalesDocField>
+          </div>
+
+          <div className="flex flex-col gap-3">
+            <SalesDocField label="Delivery date" htmlFor="quote-delivery-date">
+              <input id="quote-delivery-date" type="date" aria-label="Delivery date" value={newDeliveryDate} onChange={e => setNewDeliveryDate(e.target.value)} />
+            </SalesDocField>
+            <SalesDocField label="Payment terms" htmlFor="quote-payment-terms">
+              <select id="quote-payment-terms" aria-label="Payment terms" value={newPaymentTerms} onChange={e => setNewPaymentTerms(e.target.value)}>
+                <option value="0">Immediate</option>
+                <option value="7">7 days</option>
+                <option value="14">14 days</option>
+                <option value="30">Net 30</option>
+                <option value="45">45 days</option>
+                <option value="60">60 days</option>
+                <option value="90">90 days</option>
+              </select>
+            </SalesDocField>
+            {pricelistsEnabled && (
+              <SalesDocField label="Price list" htmlFor="quote-pricelist">
+                <select id="quote-pricelist" aria-label="Pricelist" value={newPricelist || 'RETAIL'} onChange={e => setNewPricelist(e.target.value)}>
+                  <option value="RETAIL">Retail</option>
+                  <option value="WHOLESALE">Wholesale</option>
+                  <option value="KILIMALL">Kilimall</option>
+                </select>
+              </SalesDocField>
+            )}
+            <SalesDocField label="Salesperson" htmlFor="quote-sales-team">
+              <input id="quote-sales-team" type="text" aria-label="Sales team" placeholder="Assign salesperson…" value={newSalesTeam} onChange={e => setNewSalesTeam(e.target.value)} />
+            </SalesDocField>
+            <SalesDocField label="Customer reference" htmlFor="quote-customer-ref">
+              <input id="quote-customer-ref" type="text" aria-label="Customer reference" placeholder="Customer PO / LPO no." value={newCustomerRef} onChange={e => setNewCustomerRef(e.target.value)} />
+            </SalesDocField>
           </div>
         </div>
 
-        <div className="rounded-2xl border border-[var(--border-lt)] bg-[var(--bg-surface)] p-3">
-          <button
-            className="w-full flex items-center justify-between text-left"
-            onClick={() => setShowAdvanced(v => !v)}
-          >
-            <div>
-              <p className="text-xs font-bold text-[var(--text-2)]">Advanced details</p>
-              <p className="text-[10px] text-[var(--text-4)]">Delivery date, payment terms, addresses, customer reference{pricelistsEnabled ? ', pricelist' : ''} and sales team</p>
-            </div>
-            <Fa icon={faChevronDown} className={`text-[10px] text-[var(--text-4)] transition-transform ${showAdvanced ? 'rotate-180' : ''}`} />
-          </button>
-          {showAdvanced && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
-              <div className="flex flex-col gap-1.5">
-                <label className="text-[10px] uppercase tracking-wider font-bold text-[var(--text-3)]">Delivery Date</label>
-                <input type="date" aria-label="Delivery date" className="form-input text-xs" value={newDeliveryDate} onChange={e => setNewDeliveryDate(e.target.value)} />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <label className="text-[10px] uppercase tracking-wider font-bold text-[var(--text-3)]">Payment Terms</label>
-                <select aria-label="Payment terms" className="form-select text-xs" value={newPaymentTerms} onChange={e => setNewPaymentTerms(e.target.value)}>
-                  <option value="0">Immediate</option>
-                  <option value="7">7 days</option>
-                  <option value="14">14 days</option>
-                  <option value="30">30 days</option>
-                  <option value="45">45 days</option>
-                  <option value="60">60 days</option>
-                  <option value="90">90 days</option>
-                </select>
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <label className="text-[10px] uppercase tracking-wider font-bold text-[var(--text-3)]">Customer Reference</label>
-                <input type="text" aria-label="Customer reference" className="form-input text-xs" placeholder="Customer PO / LPO no." value={newCustomerRef} onChange={e => setNewCustomerRef(e.target.value)} />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <label className="text-[10px] uppercase tracking-wider font-bold text-[var(--text-3)]">Sales Team</label>
-                <input type="text" aria-label="Sales team" className="form-input text-xs" placeholder="e.g. Direct Sales" value={newSalesTeam} onChange={e => setNewSalesTeam(e.target.value)} />
-              </div>
-              {pricelistsEnabled && (
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-[10px] uppercase tracking-wider font-bold text-[var(--text-3)]">Pricelist</label>
-                  <select
-                    aria-label="Pricelist"
-                    className="form-input text-xs"
-                    value={newPricelist || 'RETAIL'}
-                    onChange={e => setNewPricelist(e.target.value)}
-                  >
-                    <option value="RETAIL">Retail</option>
-                    <option value="WHOLESALE">Wholesale</option>
-                    <option value="KILIMALL">Kilimall</option>
-                  </select>
-                </div>
-              )}
-              <div className="flex flex-col gap-1.5">
-                <label className="text-[10px] uppercase tracking-wider font-bold text-[var(--text-3)]">Invoice Address</label>
-                <input type="text" aria-label="Invoice address" className="form-input text-xs" placeholder="Billing address" value={newInvoiceAddress} onChange={e => setNewInvoiceAddress(e.target.value)} />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <label className="text-[10px] uppercase tracking-wider font-bold text-[var(--text-3)]">Delivery Address</label>
-                <input type="text" aria-label="Delivery address" className="form-input text-xs" placeholder="Shipping address" value={newDeliveryAddress} onChange={e => setNewDeliveryAddress(e.target.value)} />
-              </div>
-            </div>
-          )}
-        </div>
+        <button
+          type="button"
+          className="w-full flex items-center justify-between text-left mt-4 pt-3 border-t border-[var(--border-lt)]"
+          onClick={() => setShowAdvanced(v => !v)}
+        >
+          <div>
+            <p className="text-xs font-bold text-[var(--text-2)]">Advanced addresses</p>
+            <p className="text-[10px] text-[var(--text-4)]">Invoice and delivery addresses</p>
+          </div>
+          <Fa icon={faChevronDown} className={`text-[10px] text-[var(--text-4)] transition-transform ${showAdvanced ? 'rotate-180' : ''}`} />
+        </button>
+        {showAdvanced && (
+          <div className="sales-doc-grid-2 mt-3">
+            <SalesDocField label="Invoice address" htmlFor="quote-invoice-address">
+              <input id="quote-invoice-address" type="text" aria-label="Invoice address" placeholder="Billing address" value={newInvoiceAddress} onChange={e => setNewInvoiceAddress(e.target.value)} />
+            </SalesDocField>
+            <SalesDocField label="Delivery address" htmlFor="quote-delivery-address">
+              <input id="quote-delivery-address" type="text" aria-label="Delivery address" placeholder="Shipping address" value={newDeliveryAddress} onChange={e => setNewDeliveryAddress(e.target.value)} />
+            </SalesDocField>
+          </div>
+        )}
+      </div>
 
-        {/* Order Lines */}
-        <div className="flex flex-col gap-3" id="quote-lines" tabIndex={-1}>
-          <h3 className="text-sm font-bold text-[var(--text-1)]">Order Lines</h3>
-          {fieldErrors?.lines && (
-            <p id="quote-lines-error" role="alert" className="text-[10px] text-destructive font-semibold">
-              {fieldErrors.lines}
-            </p>
-          )}
-          <p className="text-[10px] text-[var(--text-4)]">
-            Tax and discount changes affect posted revenue and margin. Review line-level values before saving.
-          </p>
-          <div className="border border-[var(--border-lt)] rounded-2xl overflow-hidden">
-            <div className="dt-scroll">
-              <table data-no-responsive className="w-full text-left border-collapse">
+      <div className="sales-doc-panel">
+        <SalesDocTabs
+          tabs={['Order Lines', 'Notes', 'Terms and Conditions', 'Attachments']}
+          active={createTab}
+          onChange={setCreateTab}
+        />
+
+        {createTab === 'Order Lines' && (
+          <>
+            <div className="sales-doc-table-wrap" id="quote-lines" tabIndex={-1}>
+              {fieldErrors?.lines && (
+                <p id="quote-lines-error" role="alert" className="px-4 pt-3 text-[10px] text-destructive font-semibold">
+                  {fieldErrors.lines}
+                </p>
+              )}
+              <table className="sales-doc-table" data-no-responsive>
                 <thead>
-                  <tr className="bg-[var(--bg-surface)] border-b border-[var(--border-lt)]">
-                    <th className="px-3 py-2.5 text-[10px] font-bold uppercase text-[var(--text-4)]">Product</th>
-                    <th className="px-3 py-2.5 text-[10px] font-bold uppercase text-[var(--text-4)]">Description</th>
-                    <th className="px-3 py-2.5 text-[10px] font-bold uppercase text-[var(--text-4)] text-center w-16">Qty</th>
-                    <th className="px-3 py-2.5 text-[10px] font-bold uppercase text-[var(--text-4)] text-right w-28">Unit Price</th>
-                    {canEditDiscount && <th className="px-3 py-2.5 text-[10px] font-bold uppercase text-[var(--text-4)] text-right w-20">Disc%</th>}
-                    <th className="px-3 py-2.5 text-[10px] font-bold uppercase text-[var(--text-4)] text-right w-20">Tax%</th>
-                    <th className="px-3 py-2.5 text-[10px] font-bold uppercase text-[var(--text-4)] text-right w-28">Amount</th>
-                    <th className="px-3 py-2.5 w-24"></th>
+                  <tr>
+                    <th>#</th>
+                    <th>Product</th>
+                    <th>Description</th>
+                    <th className="num">Qty</th>
+                    <th className="num">Unit price</th>
+                    {canEditDiscount && <th className="num">Disc%</th>}
+                    <th className="num">Taxes</th>
+                    <th className="num">Amount</th>
+                    <th></th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-[var(--border-lt)]">
+                <tbody>
                   {newDraftLines.map((line, lineIndex) => {
                     const filteredProds = getFilteredProducts(productSearch[line.id] ?? '')
                     const isOpen = productDropdownOpen?.id === line.id
@@ -2880,18 +2884,19 @@ function NewQuotationForm({
                     )
                     if (line.type === 'section') {
                       return (
-                        <tr key={line.id} className="bg-slate-50/70">
-                          <td className="px-3 py-2" colSpan={canEditDiscount ? 6 : 5}>
+                        <tr key={line.id}>
+                          <td className="num">{lineIndex + 1}</td>
+                          <td colSpan={canEditDiscount ? 6 : 5}>
                             <input
                               aria-label="Quote section title"
-                              className="form-input text-xs w-full font-bold"
+                              className="w-full font-bold"
                               placeholder="Section title, e.g. Hardware, Services, Accessories"
                               value={line.description}
                               onChange={e => updateDraftLine(line.id, 'description', e.target.value)}
                             />
                           </td>
-                          <td className="px-3 py-2 text-right text-[10px] font-bold text-[var(--text-4)]">Section</td>
-                          <td className="px-3 py-2">
+                          <td className="num text-[10px] font-bold text-[var(--text-4)]">Section</td>
+                          <td>
                             <div className="flex items-center justify-end gap-0.5">
                               {moveButtons}
                               <button type="button" onClick={() => removeDraftLine(line.id)} aria-label="Remove section" className="row-action-btn btn-danger"><Fa icon={faTrash} aria-hidden="true" /></button>
@@ -2901,12 +2906,12 @@ function NewQuotationForm({
                       )
                     }
                     return (
-                      <tr key={line.id} className={`hover:bg-[var(--bg-surface)]/30 ${hasInvalidQty ? 'bg-red-50/60' : ''}`}>
-                        {/* Product picker */}
-                        <td className="px-3 py-2">
+                      <tr key={line.id} className={hasInvalidQty ? 'bg-red-50/60' : undefined}>
+                        <td className="num">{lineIndex + 1}</td>
+                        <td>
                           <div className="flex items-center gap-1 cursor-pointer border border-[var(--border-lt)] rounded-lg px-2 py-1.5 hover:border-primary-400 transition-colors bg-[var(--bg-card)] min-w-[140px]"
                             onClick={e => (isOpen ? setProductDropdownOpen(null) : openProductDropdown(line.id, e.currentTarget))}>
-                            <span className="text-xs text-[var(--text-1)] flex-1 truncate min-w-0" title={line.productName || undefined}>{line.productName || <span className="text-[var(--text-4)]">Select product…</span>}</span>
+                            <span className="flex-1 truncate min-w-0" title={line.productName || undefined}>{line.productName || <span className="text-[var(--text-4)]">Select product…</span>}</span>
                             <Fa icon={faChevronDown} className={`text-[9px] text-[var(--text-4)] flex-shrink-0 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
                           </div>
                           {isOpen && productDropdownOpen && (
@@ -2940,46 +2945,39 @@ function NewQuotationForm({
                             </div>
                           )}
                         </td>
-                        {/* Description */}
-                        <td className="px-3 py-2">
-                          <input type="text" aria-label="Line item description" className="form-input text-xs w-full" placeholder="Description…" value={line.description} onChange={e => updateDraftLine(line.id, 'description', e.target.value)} />
+                        <td>
+                          <input type="text" aria-label="Line item description" className="w-full" placeholder="Description…" value={line.description} onChange={e => updateDraftLine(line.id, 'description', e.target.value)} />
                         </td>
-                        {/* Qty */}
-                        <td className="px-3 py-2">
-                          <input type="number" aria-label="Line item quantity" min={1} className="form-input text-xs text-center w-16" value={line.qty} onChange={e => updateDraftLine(line.id, 'qty', e.target.value)} />
+                        <td className="num">
+                          <input type="number" aria-label="Line item quantity" min={1} className="text-center w-16" value={line.qty} onChange={e => updateDraftLine(line.id, 'qty', e.target.value)} />
                           {hasInvalidQty && <p className="text-[9px] text-red-600 font-semibold mt-1">Qty &gt; 0</p>}
                         </td>
-                        {/* Unit Price */}
-                        <td className="px-3 py-2">
+                        <td className="num">
                           <input
                             type="number"
                             aria-label="Line item unit price"
                             min={0}
                             step="any"
                             inputMode="decimal"
-                            className="form-input text-xs text-right w-28"
+                            className="text-right w-28"
                             value={line.unitPrice}
                             onChange={e => updateDraftLine(line.id, 'unitPrice', e.target.value)}
                             onFocus={e => e.currentTarget.select()}
                           />
                         </td>
-                        {/* Discount */}
                         {canEditDiscount && (
-                          <td className="px-3 py-2">
-                            <input type="number" aria-label="Line item discount percentage" min={0} max={100} className="form-input text-xs text-right w-20" value={line.discount} onChange={e => updateDraftLine(line.id, 'discount', e.target.value)} />
+                          <td className="num">
+                            <input type="number" aria-label="Line item discount percentage" min={0} max={100} className="text-right w-20" value={line.discount} onChange={e => updateDraftLine(line.id, 'discount', e.target.value)} />
                           </td>
                         )}
-                        {/* Tax */}
-                        <td className="px-3 py-2">
-                          <select aria-label="Line item tax rate" className="form-select text-xs w-20" value={line.taxRate} onChange={e => updateDraftLine(line.id, 'taxRate', e.target.value)}>
+                        <td className="num">
+                          <select aria-label="Line item tax rate" className="w-20" value={line.taxRate} onChange={e => updateDraftLine(line.id, 'taxRate', e.target.value)}>
                             <option value="0">0%</option>
                             <option value={String(companySettings.vatRate)}>{companySettings.vatRate}% VAT</option>
                           </select>
                         </td>
-                        {/* Amount */}
-                        <td className="px-3 py-2 text-xs font-bold text-right text-[var(--text-1)]">{fmtKes(calcDraftLineTotal(line))}</td>
-                        {/* Reorder + remove */}
-                        <td className="px-3 py-2">
+                        <td className="num font-bold">{fmtKes(calcDraftLineTotal(line))}</td>
+                        <td>
                           <div className="flex items-center justify-end gap-0.5">
                             {moveButtons}
                             <button type="button" onClick={() => removeDraftLine(line.id)} aria-label="Remove line" className="row-action-btn btn-danger"><Fa icon={faTrash} aria-hidden="true" /></button>
@@ -2989,69 +2987,52 @@ function NewQuotationForm({
                     )
                   })}
                   {newDraftLines.length === 0 && (
-                    <tr><td colSpan={canEditDiscount ? 8 : 7} className="px-4 py-6 text-center text-xs text-[var(--text-4)]">No products added yet. Click "Add a product" below.</td></tr>
+                    <tr><td colSpan={canEditDiscount ? 9 : 8} className="text-center text-[var(--text-4)] py-6">No products added yet. Click &quot;Add a line&quot; below.</td></tr>
                   )}
                 </tbody>
               </table>
             </div>
-            <div className="px-3 py-2.5 border-t border-[var(--border-lt)] bg-[var(--bg-surface)]">
-              <div className="flex flex-wrap items-center gap-4">
-                <button onClick={addDraftLine} className="flex items-center gap-2 text-xs text-primary-600 hover:underline font-semibold"><Fa icon={faPlus} className="text-[10px]" />Add a product</button>
-                <button onClick={addDraftSection} className="flex items-center gap-2 text-xs text-slate-600 hover:underline font-semibold"><Fa icon={faPlus} className="text-[10px]" />Add a section</button>
-              </div>
+            <div className="sales-doc-line-actions">
+              <button type="button" onClick={addDraftLine}>Add a line</button>
+              <button type="button" onClick={addDraftSection}>Add a section</button>
             </div>
-          </div>
-        </div>
+            <SalesDocTotals rows={[
+              { label: 'Untaxed amount', value: fmtKes(draftSubtotal) },
+              { label: 'VAT', value: fmtKes(draftTaxTotal) },
+              { label: 'Total', value: fmtKes(draftTotal), grand: true },
+            ]} />
+          </>
+        )}
 
-        {/* Notes + Totals */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div className="flex flex-col gap-3">
-            <div className="flex flex-col gap-1.5">
-              <label className="text-[10px] uppercase tracking-wider font-bold text-[var(--text-3)]">Notes / Terms</label>
+        {createTab === 'Notes' && (
+          <div className="sales-doc-panel-pad flex flex-col gap-4">
+            <SalesDocField label="Notes" htmlFor="quote-notes">
               <textarea
+                id="quote-notes"
                 aria-label="Notes and payment terms"
-                className="form-input text-xs flex-1 min-h-[110px]"
                 rows={5}
                 placeholder="Payment terms, warranty conditions, special instructions…"
                 value={newNotes}
                 onChange={e => setNewNotes(e.target.value)}
               />
-              <p className="text-[10px] text-[var(--text-4)]">Shown on the quotation document below the line items.</p>
-            </div>
+            </SalesDocField>
             <PaymentDetailsPicker
               value={newPaymentDetails}
               onChange={setNewPaymentDetails}
             />
           </div>
-          <div className="sales-pilot-sticky-totals" aria-label="Document totals">
-            <h4 className="text-xs font-bold text-[var(--text-2)] mb-3">Totals</h4>
-            <div className="flex flex-col gap-2">
-              <div className="flex justify-between text-xs"><span className="text-[var(--text-3)]">Untaxed amount</span><span className="font-bold">{fmtKes(draftSubtotal)}</span></div>
-              <div className="flex justify-between text-xs"><span className="text-[var(--text-3)]">VAT</span><span className="font-bold">{fmtKes(draftTaxTotal)}</span></div>
-              <div className="border-t border-[var(--border-lt)] pt-2 flex justify-between text-sm"><span className="font-bold text-[var(--text-1)]">Total</span><span className="font-extrabold text-primary-600">{fmtKes(draftTotal)}</span></div>
-            </div>
-          </div>
-        </div>
+        )}
 
-        {/* Bottom action bar */}
-        <div className="flex items-center justify-between pt-4 border-t border-[var(--border-lt)] gap-3 flex-wrap">
-          <button type="button" onClick={onCancel} className="btn-outline text-xs">Discard</button>
-          <div className="flex flex-col items-end gap-1">
-            {saveBlockedReason && <p className="text-[10px] text-amber-600 font-semibold">{saveBlockedReason}</p>}
-            <div className="flex items-center gap-2 flex-wrap justify-end">
-              <button type="button" onClick={onSaveAndAddAnother} disabled={!canSave} className="btn-outline flex items-center gap-2 text-xs disabled:opacity-50 disabled:cursor-not-allowed">
-                <Fa icon={faSave} />
-                <span>Save &amp; add another</span>
-              </button>
-              <button type="button" onClick={onSaveDraft} disabled={!canSave} className="btn-secondary flex items-center gap-2 text-xs disabled:opacity-50 disabled:cursor-not-allowed">
-                <Fa icon={faSave} />
-                <span>Save as draft</span>
-              </button>
-              <button type="button" onClick={onSave} disabled={!canSave} className="btn-primary flex items-center gap-2 text-xs disabled:opacity-50 disabled:cursor-not-allowed"><Fa icon={faSave} /><span>Submit quotation</span></button>
-            </div>
-          </div>
-        </div>
+        {createTab === 'Terms and Conditions' && (
+          <p className="sales-doc-panel-pad text-sm text-[var(--text-4)]">Terms and conditions can be added after the quotation is saved.</p>
+        )}
+
+        {createTab === 'Attachments' && (
+          <p className="sales-doc-panel-pad text-sm text-[var(--text-4)]">Attach files after the quotation is saved.</p>
+        )}
       </div>
+
+      {saveBlockedReason && <p className="text-[10px] text-amber-600 font-semibold px-1">{saveBlockedReason}</p>}
     </div>
   )
 }
