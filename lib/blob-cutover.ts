@@ -19,6 +19,8 @@ export const DUAL_WRITE_BLOB_KEYS = [
   'deed_deposits_v1',
   'deed_holdovers',
   'deed_repairs_v2',
+  /** Cutover in progress: dual-write to delivery_notes (SO-first schema). */
+  'deed_deliveries',
 ] as const
 
 /** Relational-first catalogs that may still have a legacy blob mirror. */
@@ -36,7 +38,6 @@ export const EXTENDED_CUTOVER_BLOB_KEYS = [
   'deed_saleOrders',
   'deed_quotes',
   'deed_serials',
-  'deed_deliveries',
   'deed_receipts',
 ] as const
 
@@ -45,7 +46,6 @@ export const BLOB_SOT_KEYS = [
   'deed_purchaseOrders',
   'deed_stockMoves',
   'deed_serials',
-  'deed_deliveries',
   'deed_receipts',
 ] as const
 

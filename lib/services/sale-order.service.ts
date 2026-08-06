@@ -12,8 +12,9 @@ import { writeFinancialAudit } from '@/lib/finance-audit'
 import { loadAppState } from '@/lib/server-store'
 
 /**
- * Deliveries still live in the `deed_deliveries` blob, not the (unused)
- * Prisma `DeliveryNote` table — see docs/BLOB_PRISMA_PARITY.md. Mirrors the
+ * Deliveries dual-write to Prisma `delivery_notes` (SO-first schema) while
+ * `deed_deliveries` remains the read SoT until parity soak — see
+ * docs/BLOB_CUTOVER_PLAN.md. Mirrors the
  * lookup in app/api/sale-orders/[id]/route.ts's saleOrderBlockersFor.
  */
 async function blobDeliveriesForSaleOrder(saleOrderId: string): Promise<Array<{ status: string }>> {

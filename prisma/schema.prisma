@@ -261,6 +261,7 @@ model User {
   creditNoteCreations  CreditNote[]
   deliveryDispatches   DeliveryNote[]              @relation("DeliveryDispatcher")
   deliveryCreations    DeliveryNote[]              @relation("DeliveryCreator")
+  deliveryPreparations DeliveryNote[]              @relation("DeliveryPreparer")
   repairAssignments    Repair[]                    @relation("RepairTech")
   repairCreations      Repair[]                    @relation("RepairCreator")
   repairStageChanges   RepairStage[]
@@ -1360,7 +1361,7 @@ model SaleOrder {
   createdBy User            @relation("SaleOrderCreator", fields: [createdById], references: [id])
   items     SaleOrderItem[]
   invoices  Invoice[]       @relation("InvoiceSourceSaleOrder")
-  deliveries DeliveryNote[] @relation("DeliveryNoteSaleOrders")
+  deliveryNotes DeliveryNote[] @relation("SaleOrderDeliveries")
   customerAssets CustomerAsset[]
   reconfigurationWorkOrders ReconfigurationWorkOrder[]
 
@@ -1624,14 +1625,22 @@ model CreditNote {
 }
 
 // ── Delivery ───────────────────────────────────────────────────────────────────
+// SO-first fulfillment (Confirm SO → Delivery → Invoice). invoiceId is optional
+// so a DN can exist before any invoice. blobId bridges deed_deliveries during
+// dual-write cutover — never delete the blob without a parity certificate.
 
 model DeliveryNote {
   id              String         @id @default(uuid()) @db.Uuid
+  blobId          String?        @unique @map("blob_id") @db.VarChar(80)
   dnNumber        String         @unique @map("dn_number") @db.VarChar(30)
-  invoiceId       String         @map("invoice_id") @db.Uuid
-  clientId        String         @map("client_id") @db.Uuid
+  saleOrderId     String?        @map("sale_order_id") @db.Uuid
+  invoiceId       String?        @map("invoice_id") @db.Uuid
+  clientId        String?        @map("client_id") @db.Uuid
+  saleOrderRef    String?        @map("sale_order_ref") @db.VarChar(40)
+  customerName   String?        @map("customer_name") @db.VarChar(200)
   deliveryMethod  DeliveryMethod @default(pickup) @map("delivery_method")
-  status          String         @default("pending") @db.VarChar(30)
+  /** waiting | ready | done | cancelled | draft | pending */
+  status          String         @default("waiting") @db.VarChar(30)
   dispatchDate    DateTime?      @map("dispatch_date") @db.Date
   deliveryDate    DateTime?      @map("delivery_date") @db.Date
   courierName     String?        @map("courier_name") @db.VarChar(100)
@@ -1639,21 +1648,33 @@ model DeliveryNote {
   deliveryAddress String?        @map("delivery_address")
   recipientName   String?        @map("recipient_name") @db.VarChar(150)
   recipientPhone  String?        @map("recipient_phone") @db.VarChar(20)
+  recipientIdNumber String?      @map("recipient_id_number") @db.VarChar(40)
   signatureUrl    String?        @map("signature_url")
   notes           String?
+  warrantyCreated Boolean        @default(false) @map("warranty_created")
+  backorderOfId   String?        @map("backorder_of_id") @db.Uuid
+  backorderOfRef  String?        @map("backorder_of_ref") @db.VarChar(40)
+  preparedAt      DateTime?      @map("prepared_at")
+  preparedById    String?        @map("prepared_by") @db.Uuid
+  deliveryNoteGeneratedAt DateTime? @map("delivery_note_generated_at")
+  deliveryNoteGeneratedById String? @map("delivery_note_generated_by") @db.Uuid
   dispatchedById  String?        @map("dispatched_by") @db.Uuid
-  createdById     String         @map("created_by") @db.Uuid
+  createdById     String?        @map("created_by") @db.Uuid
   createdAt       DateTime       @default(now()) @map("created_at")
   updatedAt       DateTime       @updatedAt @map("updated_at")
 
-  invoice      Invoice            @relation(fields: [invoiceId], references: [id])
-  client       Client             @relation(fields: [clientId], references: [id])
+  saleOrder    SaleOrder?         @relation("SaleOrderDeliveries", fields: [saleOrderId], references: [id], onDelete: SetNull)
+  invoice      Invoice?           @relation(fields: [invoiceId], references: [id])
+  client       Client?            @relation(fields: [clientId], references: [id])
   dispatchedBy User?              @relation("DeliveryDispatcher", fields: [dispatchedById], references: [id])
-  createdBy    User               @relation("DeliveryCreator", fields: [createdById], references: [id])
+  createdBy    User?              @relation("DeliveryCreator", fields: [createdById], references: [id])
+  preparedBy   User?              @relation("DeliveryPreparer", fields: [preparedById], references: [id])
   items           DeliveryNoteItem[]
-  saleOrders      SaleOrder[]      @relation("DeliveryNoteSaleOrders")
   outboundRelease OutboundRelease? @relation("OrcDelivery")
 
+  @@index([saleOrderId], map: "idx_delivery_notes_sale_order")
+  @@index([status], map: "idx_delivery_notes_status")
+  @@index([clientId], map: "idx_delivery_notes_client")
   @@map("delivery_notes")
 }
 
@@ -1661,18 +1682,23 @@ model DeliveryNoteItem {
   id             String   @id @default(uuid()) @db.Uuid
   dnId           String   @map("dn_id") @db.Uuid
   invoiceItemId  String?  @map("invoice_item_id") @db.Uuid
-  productId      String   @map("product_id") @db.Uuid
+  productId      String?  @map("product_id") @db.Uuid
   serialNumberId String?  @map("serial_number_id") @db.Uuid
   description    String?
-  qty            Int
+  productName    String?  @map("product_name") @db.VarChar(200)
+  qty            Int      @default(0)
+  qtyDone        Int      @default(0) @map("qty_done")
   qtyReturned    Int      @default(0) @map("qty_returned")
-
+  serialIds      String[] @default([]) @map("serial_ids")
+  sourceLocation String?  @map("source_location") @db.VarChar(40)
+  lineOrder      Int      @default(0) @map("line_order")
 
   deliveryNote DeliveryNote  @relation(fields: [dnId], references: [id], onDelete: Cascade)
   invoiceItem  InvoiceItem?  @relation(fields: [invoiceItemId], references: [id])
-  product      Product       @relation(fields: [productId], references: [id])
+  product      Product?      @relation(fields: [productId], references: [id])
   serialNumber SerialNumber? @relation(fields: [serialNumberId], references: [id])
 
+  @@index([dnId], map: "idx_delivery_note_items_dn")
   @@map("delivery_note_items")
 }
 
