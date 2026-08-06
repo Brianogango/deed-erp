@@ -1,0 +1,5 @@
+Backup created: 2026-08-06T08:44:00Z
+Branch: cursor/ux-audit-redesign-proposal-ddc8 (at install start)
+Pre-install: .cursor/skills/ui-ux-pro-max incomplete (pycache only); .claude/skills/ui-ux-pro-max full; no hooks.json
+Full pre-install trees were captured then slimmed for git; restore instructions in CURSOR_DESIGN_SKILLS_INSTALLATION.md
+hooks.json.after-impeccable = snapshot of Cursor hooks written by impeccable install
