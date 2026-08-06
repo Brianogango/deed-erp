@@ -44,6 +44,7 @@ import {
   splitDeliveryForBackorder,
   initialDeliveryState,
   invoicePaymentStatus,
+  invoiceDocState,
   isOpenInvoice,
   invoiceResidual,
   hasValidatedDeliveryForInvoice,
@@ -16390,15 +16391,20 @@ const storeCtx: AppState = {
       let creditNoteRef: string | null = null
       if (resolution === 'credit_note' && refundAmount && refundAmount > 0) {
         // Partial invoicing means a sale order can have several customer
-        // invoices — guessing which one to credit is a financial-correctness
-        // risk, so require exactly one match rather than picking arbitrarily.
-        const candidateInvoices = invRef.current.filter(i => i.saleOrderId === rma.saleOrderId && i.type === 'customer_invoice')
+        // invoices (often one posted plus draft rows for not-yet-invoiced
+        // lines) — only posted invoices are real credit-note candidates.
+        // Guessing among multiple POSTED invoices is still a
+        // financial-correctness risk, so that case still requires exactly
+        // one match rather than picking arbitrarily.
+        const candidateInvoices = invRef.current.filter(i =>
+          i.saleOrderId === rma.saleOrderId && i.type === 'customer_invoice' && invoiceDocState(i.status) === 'posted',
+        )
         if (candidateInvoices.length === 0) {
-          showToast(`No invoice found for sale order ${rma.saleOrderRef} — cannot issue a credit note`, 'error')
+          showToast(`No posted invoice found for sale order ${rma.saleOrderRef} — cannot issue a credit note`, 'error')
           return
         }
         if (candidateInvoices.length > 1) {
-          showToast(`${rma.saleOrderRef} has ${candidateInvoices.length} invoices — issue this credit note manually from Finance so the right one is credited`, 'error')
+          showToast(`${rma.saleOrderRef} has ${candidateInvoices.length} posted invoices — issue this credit note manually from Finance so the right one is credited`, 'error')
           return
         }
         const sourceInvoice = candidateInvoices[0]

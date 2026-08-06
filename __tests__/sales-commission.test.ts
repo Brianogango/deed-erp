@@ -64,6 +64,15 @@ describe('postSalesCommissionForInvoice', () => {
     })
   })
 
+  it('releases the claim and rethrows when a later step throws, so a retry can succeed', async () => {
+    mockPrisma.invoice.findUnique.mockRejectedValue(new Error('transient db error'))
+    await expect(postSalesCommissionForInvoice(INVOICE_ID)).rejects.toThrow('transient db error')
+    expect(mockPrisma.invoice.updateMany).toHaveBeenLastCalledWith({
+      where: { id: INVOICE_ID },
+      data: { commissionComputedAt: null },
+    })
+  })
+
   it('does nothing for an invoice with no linked sale order', async () => {
     mockPrisma.invoice.findUnique.mockResolvedValue({ ...baseInvoice, saleOrderId: null })
     await postSalesCommissionForInvoice(INVOICE_ID)
