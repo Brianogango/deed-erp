@@ -90,11 +90,18 @@ async function main() {
       try {
         const id = asUuid(blobId) ?? uuidFromKey('serial', blobId)
         const status = String(r.status ?? 'available').toLowerCase() === 'in_stock' ? 'available' : String(r.status ?? 'available').slice(0, 30)
-        const barcode = String(r.barcode ?? serial).trim().slice(0, 120) || null
+        let barcode = String(r.barcode ?? serial).trim().slice(0, 120) || null
         const existing = await client.query(
           `SELECT id::text FROM serial_numbers WHERE blob_id = $1 OR id = $2::uuid OR serial_number = $3 LIMIT 1`,
           [blobId, id, serial.slice(0, 100)],
         )
+        if (barcode) {
+          const taken = await client.query(
+            `SELECT id::text FROM serial_numbers WHERE inventory_barcode = $1 AND id <> $2::uuid LIMIT 1`,
+            [barcode, existing.rows[0]?.id ?? id],
+          )
+          if (taken.rows[0]) barcode = null
+        }
         const params = [
           existing.rows[0]?.id ?? id, blobId, productId, serial.slice(0, 100), barcode,
           status, String(r.location ?? 'warehouse').slice(0, 30),
@@ -111,9 +118,11 @@ async function main() {
           )
         } else {
           await client.query(
-            `INSERT INTO serial_numbers (id, blob_id, product_id, serial_number, inventory_barcode, status, location, product_name, received_date, sold_date, notes)
-             VALUES ($1::uuid,$2,$3::uuid,$4,$5,$6,$7,$8,$9::date,$10::date,$11)
-             ON CONFLICT (serial_number) DO UPDATE SET blob_id=EXCLUDED.blob_id, location=EXCLUDED.location, status=EXCLUDED.status, updated_at=NOW()`,
+            `INSERT INTO serial_numbers (id, blob_id, product_id, serial_number, inventory_barcode, status, location, product_name, received_date, sold_date, notes, created_at, updated_at)
+             VALUES ($1::uuid,$2,$3::uuid,$4,$5,$6,$7,$8,$9::date,$10::date,$11,NOW(),NOW())
+             ON CONFLICT (serial_number) DO UPDATE SET blob_id=EXCLUDED.blob_id, location=EXCLUDED.location,
+               status=EXCLUDED.status, product_id=EXCLUDED.product_id, inventory_barcode=COALESCE(EXCLUDED.inventory_barcode, serial_numbers.inventory_barcode),
+               product_name=EXCLUDED.product_name, received_date=EXCLUDED.received_date, sold_date=EXCLUDED.sold_date, updated_at=NOW()`,
             params,
           )
         }
@@ -191,30 +200,28 @@ async function main() {
       if (!blobId || !vendorId) { fail++; continue }
       try {
         await client.query('BEGIN')
+        const vendorName = String(r.vendorName || 'Vendor').slice(0, 200)
         const supplierNumber = `V-${vendorId.replace(/-/g, '').slice(0, 12)}`.slice(0, 20)
-        await client.query(
-          `INSERT INTO suppliers (id, supplier_number, name, is_active)
-           VALUES ($1::uuid, $2, $3, true)
-           ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name`,
-          [vendorId, supplierNumber, String(r.vendorName || 'Vendor').slice(0, 200)],
-        ).catch(async () => {
-          // supplier_number conflict — update by id only if exists
+        // Ensure supplier outside fragile nested catch — use SAVEPOINT.
+        await client.query('SAVEPOINT sp_supplier')
+        try {
           await client.query(
-            `INSERT INTO suppliers (id, supplier_number, name, is_active)
-             VALUES ($1::uuid, $2, $3, true)
-             ON CONFLICT (supplier_number) DO NOTHING`,
-            [vendorId, `${supplierNumber}X`.slice(0, 20), String(r.vendorName || 'Vendor').slice(0, 200)],
+            `INSERT INTO suppliers (id, supplier_number, name, is_active, created_at, updated_at)
+             VALUES ($1::uuid, $2, $3, true, NOW(), NOW())
+             ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, updated_at = NOW()`,
+            [vendorId, supplierNumber, vendorName],
           )
-        })
-        // Ensure supplier row with vendorId exists
-        const sup = await client.query(`SELECT id::text FROM suppliers WHERE id=$1::uuid`, [vendorId])
-        if (!sup.rows[0]) {
-          const altNum = `VX${Date.now().toString(36)}`.slice(0, 20)
+        } catch (supErr) {
+          await client.query('ROLLBACK TO SAVEPOINT sp_supplier')
+          const altNum = `V${vendorId.replace(/-/g, '').slice(0, 18)}`.slice(0, 20)
           await client.query(
-            `INSERT INTO suppliers (id, supplier_number, name, is_active) VALUES ($1::uuid,$2,$3,true)`,
-            [vendorId, altNum, String(r.vendorName || 'Vendor').slice(0, 200)],
+            `INSERT INTO suppliers (id, supplier_number, name, is_active, created_at, updated_at)
+             VALUES ($1::uuid, $2, $3, true, NOW(), NOW())
+             ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, updated_at = NOW()`,
+            [vendorId, altNum, vendorName],
           )
         }
+        await client.query('RELEASE SAVEPOINT sp_supplier')
 
         const id = asUuid(blobId) ?? uuidFromKey('po', blobId)
         const poNumber = String(r.ref || blobId).slice(0, 30)
