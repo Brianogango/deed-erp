@@ -35,6 +35,8 @@ import {
   faCodeBranch,
 } from '@fortawesome/free-solid-svg-icons'
 import { downloadDeliveryNotePdf } from '@/lib/delivery-note-pdf'
+import { exportToCsv } from '@/lib/export-utils'
+import { isSaleOrderDraftEditing } from '@/lib/sale-order-draft-edits'
 import SerialMultiSelect from '@/components/SerialMultiSelect'
 import { hasModuleAccess, canCreateCustomerInvoiceFromSO } from '@/lib/auth/access'
 import {
@@ -325,6 +327,7 @@ function SalesContent() {
     companySettings, bankAccounts, confirmDeliveryWithStockDeduction,
     updateDelivery, outboundReleases, initRelease,
     getDocumentPaymentDetails, setDocumentPaymentDetails,
+    issueCreditNoteFromSaleOrder,
   } = useSalesStore()
 
   // The module lands directly on the operational order list. The old
@@ -366,7 +369,19 @@ function SalesContent() {
   // ── New Quotation form state ────────────────────────────────────────────
   const [newCustomer, setNewCustomer] = useState<{ id: string; name: string } | null>(null)
   const [newDeliveryDate, setNewDeliveryDate] = useState('')
+  const defaultValidUntil = () => {
+    const d = new Date()
+    d.setDate(d.getDate() + 30)
+    return d.toISOString().slice(0, 10)
+  }
+  const [newValidUntil, setNewValidUntil] = useState(defaultValidUntil)
+  const [newHeaderDiscount, setNewHeaderDiscount] = useState('0')
   const [newPaymentTerms, setNewPaymentTerms] = useState('30')
+  const [selectedOrderIds, setSelectedOrderIds] = useState<string[]>([])
+  const [creditNoteAmount, setCreditNoteAmount] = useState('')
+  const [creditNoteReason, setCreditNoteReason] = useState('')
+  const [showCreditNoteModal, setShowCreditNoteModal] = useState(false)
+  const [draftDirtyTick, setDraftDirtyTick] = useState(0)
   const [newNotes, setNewNotes] = useState('')
   const [newCustomerRef, setNewCustomerRef] = useState('')
   const [newSalesTeam, setNewSalesTeam] = useState('')
@@ -720,13 +735,49 @@ function SalesContent() {
     syncOrderUrl(null)
   }
   const openNewForm = () => {
-    setNewCustomer(null); setNewDeliveryDate(''); setNewPaymentTerms('30')
+    setNewCustomer(null); setNewDeliveryDate(''); setNewValidUntil(defaultValidUntil()); setNewHeaderDiscount('0')
+    setNewPaymentTerms('30')
     setNewNotes(''); setNewCustomerRef(''); setNewSalesTeam(''); setNewPricelist('')
     setNewInvoiceAddress(''); setNewDeliveryAddress('')
     setNewPaymentDetails({ ...DEFAULT_DOCUMENT_PAYMENT_DETAILS })
     setNewDraftLines([]); setView('new')
     syncOrderUrl(null)
     startUxTask('sales_quote_create', { module: 'sales' })
+  }
+
+  const exportFilteredOrdersCsv = () => {
+    const rows = filtered.map(s => [
+      s.ref,
+      s.customerName,
+      s.date,
+      s.validUntil || '',
+      s.status,
+      s.salespersonName || '',
+      s.total,
+    ])
+    exportToCsv(
+      ['Reference', 'Customer', 'Date', 'Valid until', 'Status', 'Salesperson', 'Total'],
+      rows,
+      `sales_${listTab}_${new Date().toISOString().slice(0, 10)}`,
+    )
+  }
+
+  const toggleSelectOrder = (id: string) => {
+    setSelectedOrderIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
+  }
+
+  const bulkCancelSelected = () => {
+    if (selectedOrderIds.length === 0) return
+    let n = 0
+    for (const id of selectedOrderIds) {
+      const so = saleOrders.find(s => s.id === id)
+      if (!so || so.status === 'sale') continue
+      cancelSO(id)
+      n += 1
+    }
+    setSelectedOrderIds([])
+    if (n > 0) showToast(`Cancelled ${n} quotation${n === 1 ? '' : 's'}`, 'success')
+    else showToast('No cancellable quotations selected (confirmed orders need Finance)', 'info')
   }
   /** Clone an existing quotation/sale order's customer + lines into a new draft quotation. */
   const duplicateSaleOrder = (so: SalesOrderView) => {
@@ -885,10 +936,16 @@ function SalesContent() {
       init[l.id] = serialCount > 0 ? Math.min(Number(l.qty) || 0, Math.max(demand, serialCount)) : (Number(l.qty) || demand)
     }
     setDeliveryQtys(init)
-    setDnRecipientName(target?.recipientName ?? activeOrder.customerName ?? '')
-    setDnRecipientPhone(target?.recipientPhone ?? '')
-    setDnRecipientId(target?.recipientIdNumber ?? '')
-    setDnAddress(target?.deliveryAddress ?? '')
+    const contact = contacts.find(c => c.id === activeOrder.customerId)
+    setDnRecipientName(target?.recipientName || activeOrder.customerName || contact?.name || '')
+    setDnRecipientPhone(target?.recipientPhone || contact?.phone || contact?.mobile || '')
+    setDnRecipientId(target?.recipientIdNumber || contact?.idNumber || '')
+    setDnAddress(
+      target?.deliveryAddress
+      || activeOrder.deliveryAddress
+      || [contact?.address, contact?.city].filter(Boolean).join(', ')
+      || '',
+    )
     setDnNotes(target?.notes ?? '')
     setView('delivery')
     syncOrderUrl(activeOrder.id, 'delivery')
@@ -1069,7 +1126,7 @@ function SalesContent() {
     return () => {
       if (draftAutosaveTimerRef.current) clearTimeout(draftAutosaveTimerRef.current)
     }
-  }, [view, quoteDraftKey, newCustomer, newDeliveryDate, newPaymentTerms, newNotes, newCustomerRef, newSalesTeam, newPricelist, newInvoiceAddress, newDeliveryAddress, newPaymentDetails, newDraftLines])
+  }, [view, quoteDraftKey, newCustomer, newDeliveryDate, newValidUntil, newPaymentTerms, newNotes, newCustomerRef, newSalesTeam, newPricelist, newInvoiceAddress, newDeliveryAddress, newPaymentDetails, newDraftLines])
 
   // ── Save new quotation ──────────────────────────────────────────────────
   const saveNewQuotation = async (after: 'open' | 'another' | 'list' = 'open') => {
@@ -1095,8 +1152,9 @@ function SalesContent() {
     }
     if (!newCustomer) return
     setQuoteFieldErrors({})
-    const creditStatus = getCustomerCreditStatus(newCustomer.id)
-    if (creditStatus.isLocked) { showToast(creditStatus.message, 'error'); return }
+    const draftTotalEstimate = newDraftLines.reduce((sum, l) => sum + calcDraftLineTotal(l), 0)
+    const creditStatus = getCustomerCreditStatus(newCustomer.id, draftTotalEstimate)
+    if (!creditStatus.ok) { showToast(creditStatus.message, 'error'); return }
     const builtLines = []
     for (const l of newDraftLines) {
       if (l.type === 'section') {
@@ -1148,11 +1206,13 @@ function SalesContent() {
         accountCode: product ? resolveProductAccounts(product).saleAccountCode : undefined,
       })
     }
+    const headerDisc = Math.max(0, Number(newHeaderDiscount) || 0)
     const so = await createSaleOrder(newCustomer.id, newCustomer.name, {
       lines: builtLines as any,
       ...(newDeliveryDate ? { deliveryDate: newDeliveryDate } : {}),
       paymentTerms: newPaymentTerms === '0' ? 'Immediate' : `${newPaymentTerms} days`,
-      validUntil: addDays(new Date().toISOString().slice(0, 10), Number(newPaymentTerms) || 0),
+      validUntil: newValidUntil || defaultValidUntil(),
+      discountAmount: headerDisc,
       ...(newNotes ? { notes: newNotes } : {}),
       ...(newCustomerRef ? { customerRef: newCustomerRef } : {}),
       ...(newSalesTeam ? { salesTeam: newSalesTeam } : {}),
@@ -1322,6 +1382,10 @@ function SalesContent() {
                   }}
                   newDeliveryDate={newDeliveryDate}
                   setNewDeliveryDate={setNewDeliveryDate}
+                  newValidUntil={newValidUntil}
+                  setNewValidUntil={setNewValidUntil}
+                  newHeaderDiscount={newHeaderDiscount}
+                  setNewHeaderDiscount={setNewHeaderDiscount}
                   newPaymentTerms={newPaymentTerms}
                   setNewPaymentTerms={setNewPaymentTerms}
                   newNotes={newNotes}
@@ -1377,6 +1441,7 @@ function SalesContent() {
                 <DeliveryNoteView
                   order={activeOrder}
                   deliveries={deliveries}
+                  contacts={contacts}
                   focusDeliveryId={focusDeliveryId}
                   serials={serials}
                   products={products}
@@ -1470,6 +1535,14 @@ function SalesContent() {
                       )}
                       <option value="cancelled">Cancelled</option>
                     </select>
+                    <button type="button" className="sp-btn" onClick={exportFilteredOrdersCsv} aria-label="Export CSV">
+                      <Fa icon={faDownload} className="text-xs" /> Export CSV
+                    </button>
+                    {selectedOrderIds.length > 0 && listTab === 'quotations' && (
+                      <button type="button" className="sp-btn" onClick={bulkCancelSelected}>
+                        Cancel selected ({selectedOrderIds.length})
+                      </button>
+                    )}
                     <div className="sp-list-view-toggle" role="group" aria-label="List layout">
                       <button type="button" className="sp-btn" data-active={listViewMode === 'table' ? 'true' : 'false'} onClick={() => setListViewMode('table')} aria-pressed={listViewMode === 'table'}>
                         <Fa icon={faListUl} className="text-xs" /> Table
@@ -1484,6 +1557,19 @@ function SalesContent() {
                       <table className="sp-table">
                         <thead>
                           <tr>
+                            {listTab === 'quotations' && (
+                              <th style={{ width: 36 }}>
+                                <input
+                                  type="checkbox"
+                                  aria-label="Select all quotations"
+                                  checked={filtered.length > 0 && filtered.every(s => selectedOrderIds.includes(s.id))}
+                                  onChange={e => {
+                                    if (e.target.checked) setSelectedOrderIds(filtered.map(s => s.id))
+                                    else setSelectedOrderIds([])
+                                  }}
+                                />
+                              </th>
+                            )}
                             <th>Reference</th>
                             <th>Customer</th>
                             <th>Contact</th>
@@ -1497,7 +1583,7 @@ function SalesContent() {
                         <tbody>
                           {filtered.length === 0 ? (
                             <tr>
-                              <td colSpan={8} style={{ textAlign: 'center', padding: '28px 12px', color: 'var(--sp-text-3)' }}>
+                              <td colSpan={listTab === 'quotations' ? 9 : 8} style={{ textAlign: 'center', padding: '28px 12px', color: 'var(--sp-text-3)' }}>
                                 {listTab === 'quotations' && stats.orders > 0
                                   ? 'No quotations here — switch to Orders to see confirmed sales.'
                                   : salesOrderViews.length === 0
@@ -1520,6 +1606,16 @@ function SalesContent() {
                               const contactLabel = cust?.type === 'individual' ? (cust.name || '—') : (cust?.email || cust?.name || '—')
                               return (
                                 <tr key={s.id} className="sp-row-click" onClick={() => openOrder(s.id)} style={{ cursor: 'pointer' }}>
+                                  {listTab === 'quotations' && (
+                                    <td onClick={e => e.stopPropagation()}>
+                                      <input
+                                        type="checkbox"
+                                        aria-label={`Select ${s.ref}`}
+                                        checked={selectedOrderIds.includes(s.id)}
+                                        onChange={() => toggleSelectOrder(s.id)}
+                                      />
+                                    </td>
+                                  )}
                                   <td><button type="button" className="sp-linkish" onClick={e => { e.stopPropagation(); openOrder(s.id) }}>{s.ref}</button></td>
                                   <td>{s.customerName}</td>
                                   <td>{contactLabel}</td>
@@ -1606,7 +1702,7 @@ function SalesContent() {
                           {isQuotationDraft(activeOrder.status) && !activeOrder.locked && (
                             <button
                               type="button"
-                              className="sp-btn"
+                              className={isSaleOrderDraftEditing(activeOrder.id) ? 'sp-btn sp-btn-primary' : 'sp-btn'}
                               onClick={() => {
                                 void (async () => {
                                   // Prefer store row over view snapshot — draft deletes live on saleOrders.
@@ -1633,21 +1729,24 @@ function SalesContent() {
                                   }
                                   const sub = lines.reduce((a, l) => a + (Number(l.subtotal) || 0), 0)
                                   const tax = lines.reduce((a, l) => a + Math.round((Number(l.subtotal) || 0) * (Number(l.taxRate) || 0) / 100), 0)
+                                  const headerDisc = Math.max(0, Number(latest.discountAmount) || 0)
                                   const ok = await updateSaleOrder(activeOrder.id, {
                                     lines,
                                     subtotal: sub,
                                     taxTotal: tax,
-                                    total: sub + tax,
+                                    discountAmount: headerDisc,
+                                    total: Math.max(0, sub + tax - headerDisc),
                                     notes: latest.notes,
                                     validUntil: latest.validUntil,
                                     paymentTerms: latest.paymentTerms,
                                     salespersonName: latest.salespersonName,
                                   }, { persist: true })
+                                  setDraftDirtyTick(t => t + 1)
                                   if (ok !== false) showToast('Quotation saved', 'success')
                                 })()
                               }}
                             >
-                              Save
+                              {isSaleOrderDraftEditing(activeOrder.id) ? 'Save · unsaved' : 'Save'}
                             </button>
                           )}
                           {activeOrder.status === 'quotation' && (
@@ -1664,6 +1763,26 @@ function SalesContent() {
                             items={[
                               ...(activeOrder.status === 'quotation_sent' ? [
                                 { label: 'Reset to Draft', icon: faRotateLeft, onClick: () => setShowResetDraftConfirm(true) },
+                                {
+                                  label: 'Mark accepted',
+                                  icon: faCircleCheck,
+                                  onClick: () => {
+                                    void updateSaleOrder(activeOrder.id, {
+                                      notes: `${activeOrder.notes || ''}\n[Customer accepted ${new Date().toISOString().slice(0, 10)}]`.trim(),
+                                    }, { persist: true })
+                                    showToast('Quotation marked accepted', 'success')
+                                  },
+                                },
+                                {
+                                  label: 'Mark rejected',
+                                  icon: faBan,
+                                  onClick: () => {
+                                    void updateSaleOrder(activeOrder.id, {
+                                      notes: `${activeOrder.notes || ''}\n[Customer rejected ${new Date().toISOString().slice(0, 10)}]`.trim(),
+                                    }, { persist: true })
+                                    showToast('Quotation marked rejected', 'info')
+                                  },
+                                },
                               ] : []),
                               { label: 'Preview', icon: faFileAlt, disabled: !activeOrder.lines.length, onClick: () => previewSalesDocument(activeOrder, 'Quotation', 'QUOTATION') },
                               { label: 'Print', icon: faPrint, disabled: !activeOrder.lines.length, onClick: () => downloadSalesDocument(activeOrder, 'Quotation', 'QUOTE', 'QUOTATION') },
@@ -1701,6 +1820,17 @@ function SalesContent() {
                             ...(canReverseConfirmedSO ? [
                               { label: 'Set to Quotation', icon: faRotateLeft, onClick: () => resetSOToDraft(activeOrder.id) },
                               { label: 'Cancel', icon: faBan, tone: 'danger' as const, onClick: () => setShowCancelConfirm(true) },
+                            ] : []),
+                            ...(canReverseConfirmedSO && systemSettings.accCreditNotes && activeInvoices.some(i => i.status === 'posted' || i.status === 'approved' || (i.amountPaid ?? 0) > 0) ? [
+                              {
+                                label: 'Issue credit note…',
+                                icon: faFileInvoiceDollar,
+                                onClick: () => {
+                                  setCreditNoteAmount(String(activeOrder.total))
+                                  setCreditNoteReason('')
+                                  setShowCreditNoteModal(true)
+                                },
+                              },
                             ] : []),
                           ]}
                         />
@@ -1749,7 +1879,7 @@ function SalesContent() {
                       {isQuotationStage(activeOrder.status) && quotationStockShortages.length > 0 && (
                         <div className="sp-banner-warn" role="status">
                           <span aria-hidden>!</span>
-                          <div>
+                          <div className="w-full">
                             <strong>Stock warning</strong>
                             <div>
                               {quotationStockShortages
@@ -1759,7 +1889,20 @@ function SalesContent() {
                               {quotationStockShortages.length > 3
                                 ? ` · +${quotationStockShortages.length - 3} more`
                                 : ''}
-                              {' — you can still confirm; shortage is checked again at delivery preparation.'}
+                              {' — shortage is checked again at delivery preparation.'}
+                            </div>
+                            <div className="flex flex-wrap gap-2 mt-2">
+                              <button type="button" className="sp-btn" onClick={() => router.push('/inventory')}>
+                                View stock
+                              </button>
+                              <button type="button" className="sp-btn" onClick={() => router.push('/purchasing')}>
+                                Create PO
+                              </button>
+                              {canSkipReserveOnConfirm && (
+                                <span className="text-[11px] text-[var(--sp-text-3)] self-center">
+                                  Directors may confirm without reservation in the confirm dialog.
+                                </span>
+                              )}
                             </div>
                           </div>
                         </div>
@@ -1794,8 +1937,44 @@ function SalesContent() {
                         <div>
                           <SalesDocField label={isQuotationStage(activeOrder.status) ? 'Quote date' : 'Order date'}><input readOnly value={fmtDate(activeOrder.date) || ''} /></SalesDocField>
                           <SalesDocField label={isQuotationStage(activeOrder.status) ? 'Valid until' : 'Expected delivery'}>
-                            <input readOnly value={fmtDate(isQuotationStage(activeOrder.status) ? (activeOrder.validUntil || '') : (activeOrder.deliveryDate || '')) || '—'} />
+                            {isQuotationDraft(activeOrder.status) && !activeOrder.locked ? (
+                              <input
+                                type="date"
+                                aria-label="Valid until"
+                                value={activeOrder.validUntil || ''}
+                                onChange={e => {
+                                  void updateSaleOrder(activeOrder.id, { validUntil: e.target.value || undefined })
+                                  setDraftDirtyTick(t => t + 1)
+                                }}
+                              />
+                            ) : (
+                              <input readOnly value={fmtDate(isQuotationStage(activeOrder.status) ? (activeOrder.validUntil || '') : (activeOrder.deliveryDate || '')) || '—'} />
+                            )}
                           </SalesDocField>
+                          {isQuotationStage(activeOrder.status) && (
+                            <SalesDocField label="Order discount (KES)">
+                              {isQuotationDraft(activeOrder.status) && !activeOrder.locked && canEditDiscount ? (
+                                <input
+                                  type="number"
+                                  min={0}
+                                  aria-label="Header discount"
+                                  value={String(activeOrder.discountAmount ?? 0)}
+                                  onChange={e => {
+                                    const discountAmount = Math.max(0, Number(e.target.value) || 0)
+                                    const sub = activeOrder.lines.reduce((a, l) => a + (Number(l.subtotal) || 0), 0)
+                                    const tax = activeOrder.lines.reduce((a, l) => a + Math.round((Number(l.subtotal) || 0) * (Number(l.taxRate) || 0) / 100), 0)
+                                    void updateSaleOrder(activeOrder.id, {
+                                      discountAmount,
+                                      total: Math.max(0, sub + tax - discountAmount),
+                                    })
+                                    setDraftDirtyTick(t => t + 1)
+                                  }}
+                                />
+                              ) : (
+                                <input readOnly value={salesKes(activeOrder.discountAmount ?? 0)} />
+                              )}
+                            </SalesDocField>
+                          )}
                           <SalesDocField label="Salesperson"><input readOnly value={activeOrder.salespersonName || '—'} /></SalesDocField>
                           <SalesDocField label="Payment terms"><input readOnly value={activeOrder.paymentTerms || '—'} /></SalesDocField>
                           <SalesDocField label="Currency"><input readOnly value="KES" /></SalesDocField>
@@ -2456,6 +2635,40 @@ function SalesContent() {
           onCancel={() => setShowResetDraftConfirm(false)}
         />
       )}
+      {showCreditNoteModal && activeOrder && (
+        <Modal title={`Credit note — ${activeOrder.ref}`} onClose={() => setShowCreditNoteModal(false)} width={440}>
+          <div className="flex flex-col gap-3">
+            <p className="text-xs text-[var(--text-3)]">
+              Issues a customer credit against the posted invoice for this order. Commissions post from Finance after invoice payment.
+            </p>
+            <Field label="Amount (KES)">
+              <Input value={creditNoteAmount} onChange={setCreditNoteAmount} placeholder="0" />
+            </Field>
+            <Field label="Reason">
+              <Input value={creditNoteReason} onChange={setCreditNoteReason} placeholder="Return / pricing adjustment…" />
+            </Field>
+            <div className="flex gap-2 justify-end pt-2 border-t border-[var(--border-lt)]">
+              <button type="button" className="btn-outline text-xs" onClick={() => setShowCreditNoteModal(false)}>Cancel</button>
+              <button
+                type="button"
+                className="btn-primary text-xs"
+                onClick={() => {
+                  void (async () => {
+                    const ref = await issueCreditNoteFromSaleOrder(
+                      activeOrder.id,
+                      Number(creditNoteAmount) || 0,
+                      creditNoteReason,
+                    )
+                    if (ref) setShowCreditNoteModal(false)
+                  })()
+                }}
+              >
+                Issue credit note
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
       {showConfirmQuoteDialog && activeOrder && isQuotationStage(activeOrder.status) && (
         <ConfirmQuotationDialog
           orderRef={activeOrder.ref}
@@ -2533,6 +2746,7 @@ function SalesContent() {
 // ═══════════════════════════════════════════════════════════════════════════
 function NewQuotationForm({
   customers, products, newCustomer, setNewCustomer, newDeliveryDate, setNewDeliveryDate,
+  newValidUntil, setNewValidUntil, newHeaderDiscount, setNewHeaderDiscount,
   newPaymentTerms, setNewPaymentTerms, newNotes, setNewNotes,
   newCustomerRef, setNewCustomerRef, newSalesTeam, setNewSalesTeam,
   newPricelist, setNewPricelist, newInvoiceAddress, setNewInvoiceAddress,
@@ -2545,6 +2759,8 @@ function NewQuotationForm({
   customers: any[]; products: any[]; newCustomer: { id: string; name: string } | null
   setNewCustomer: (c: { id: string; name: string } | null) => void
   newDeliveryDate: string; setNewDeliveryDate: (v: string) => void
+  newValidUntil: string; setNewValidUntil: (v: string) => void
+  newHeaderDiscount: string; setNewHeaderDiscount: (v: string) => void
   newPaymentTerms: string; setNewPaymentTerms: (v: string) => void
   newNotes: string; setNewNotes: (v: string) => void
   newCustomerRef: string; setNewCustomerRef: (v: string) => void
@@ -2703,10 +2919,48 @@ function NewQuotationForm({
                 id="quote-valid-until"
                 type="date"
                 aria-label="Valid until"
+                value={newValidUntil || ''}
+                onChange={e => setNewValidUntil(e.target.value)}
+              />
+              <div className="flex flex-wrap gap-1 mt-1">
+                {[30, 60, 90].map(days => (
+                  <button
+                    key={days}
+                    type="button"
+                    className="sp-btn"
+                    style={{ padding: '2px 8px', fontSize: 11 }}
+                    onClick={() => {
+                      const d = new Date()
+                      d.setDate(d.getDate() + days)
+                      setNewValidUntil(d.toISOString().slice(0, 10))
+                    }}
+                  >
+                    {days}d
+                  </button>
+                ))}
+              </div>
+            </SalesDocField>
+            <SalesDocField label="Expected delivery" htmlFor="quote-delivery-date">
+              <input
+                id="quote-delivery-date"
+                type="date"
+                aria-label="Expected delivery"
                 value={newDeliveryDate || ''}
                 onChange={e => setNewDeliveryDate(e.target.value)}
               />
             </SalesDocField>
+            {canEditDiscount && (
+              <SalesDocField label="Order discount (KES)" htmlFor="quote-header-discount">
+                <input
+                  id="quote-header-discount"
+                  type="number"
+                  min={0}
+                  aria-label="Order discount"
+                  value={newHeaderDiscount}
+                  onChange={e => setNewHeaderDiscount(e.target.value)}
+                />
+              </SalesDocField>
+            )}
             <SalesDocField label="Price list" htmlFor="quote-pricelist">
               <select id="quote-pricelist" aria-label="Pricelist" value={newPricelist || 'RETAIL'} onChange={e => setNewPricelist(e.target.value)} disabled={!pricelistsEnabled}>
                 <option value="RETAIL">Public · KES</option>
@@ -2894,7 +3148,14 @@ function NewQuotationForm({
               rows={[
                 { label: 'Untaxed amount', value: salesKes(draftSubtotal) },
                 { label: 'Taxes', value: salesKes(draftTaxTotal) },
-                { label: 'Total', value: salesKes(draftTotal), grand: true },
+                ...(Number(newHeaderDiscount) > 0
+                  ? [{ label: 'Discount', value: `−${salesKes(Number(newHeaderDiscount) || 0)}` }]
+                  : []),
+                {
+                  label: 'Total',
+                  value: salesKes(Math.max(0, draftTotal - (Number(newHeaderDiscount) || 0))),
+                  grand: true,
+                },
                 { label: 'Currency', value: 'KES' },
               ]}
             />
@@ -2948,13 +3209,13 @@ function NewQuotationForm({
 // DELIVERY NOTE VIEW
 // ═══════════════════════════════════════════════════════════════════════════
 function DeliveryNoteView({
-  order, deliveries, focusDeliveryId, serials, products, companySettings, bankAccounts, deliveryQtys, setDeliveryQtys, savingDelivery,
+  order, deliveries, contacts = [], focusDeliveryId, serials, products, companySettings, bankAccounts, deliveryQtys, setDeliveryQtys, savingDelivery,
   setSavingDelivery, prepareDelivery, validateDelivery, markDeliveryNoteGenerated, assignSerialsToSOLine, unassignSerialFromSOLine,
   updateDelivery, showToast, onBack,
   dnRecipientName, setDnRecipientName, dnRecipientPhone, setDnRecipientPhone,
   dnRecipientId, setDnRecipientId, dnAddress, setDnAddress, dnNotes, setDnNotes,
 }: {
-  order: SalesOrderView; deliveries: any[]; focusDeliveryId?: string | null
+  order: SalesOrderView; deliveries: any[]; contacts?: any[]; focusDeliveryId?: string | null
   serials: any[]; products: any[]
   companySettings: any; bankAccounts: any[]
   deliveryQtys: Record<string, number>; setDeliveryQtys: (v: Record<string, number>) => void
@@ -3064,10 +3325,16 @@ function DeliveryNoteView({
       init[line.id] = Math.max(0, Number(line.qty) || Number(delLine?.qty) || 0)
     }
     setDeliveryQtys(init)
-    setDnRecipientName(target.recipientName ?? order.customerName ?? '')
-    setDnRecipientPhone(target.recipientPhone ?? '')
-    setDnRecipientId(target.recipientIdNumber ?? '')
-    setDnAddress(target.deliveryAddress ?? '')
+    const contact = contacts.find(c => c.id === order.customerId)
+    setDnRecipientName(target.recipientName || order.customerName || contact?.name || '')
+    setDnRecipientPhone(target.recipientPhone || contact?.phone || contact?.mobile || '')
+    setDnRecipientId(target.recipientIdNumber || contact?.idNumber || '')
+    setDnAddress(
+      target.deliveryAddress
+      || order.deliveryAddress
+      || [contact?.address, contact?.city].filter(Boolean).join(', ')
+      || '',
+    )
     setDnNotes(target.notes ?? '')
   }
 

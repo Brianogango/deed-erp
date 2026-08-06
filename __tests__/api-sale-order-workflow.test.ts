@@ -8,10 +8,13 @@ const {
   mockGetSession,
   mockPrismaSO,
   mockPrismaInvoice,
+  mockPrismaClient,
+  mockPrismaStockReservation,
   mockResolveClientId,
   mockLoadAppState,
   mockSaveStoreKeys,
   mockWriteFinancialAudit,
+  mockReserveStock,
 } = vi.hoisted(() => ({
   mockGetSession: vi.fn(),
   mockPrismaSO: {
@@ -22,11 +25,19 @@ const {
   },
   mockPrismaInvoice: {
     findMany: vi.fn().mockResolvedValue([]),
+    aggregate: vi.fn().mockResolvedValue({ _sum: { totalAmount: 0, amountPaid: 0 } }),
+  },
+  mockPrismaClient: {
+    findUnique: vi.fn().mockResolvedValue({ creditLimit: 0, name: 'Acme' }),
+  },
+  mockPrismaStockReservation: {
+    updateMany: vi.fn().mockResolvedValue({ count: 0 }),
   },
   mockResolveClientId: vi.fn(),
   mockLoadAppState: vi.fn().mockResolvedValue({}),
   mockSaveStoreKeys: vi.fn().mockResolvedValue(undefined),
   mockWriteFinancialAudit: vi.fn().mockResolvedValue(undefined),
+  mockReserveStock: vi.fn().mockResolvedValue({ ok: true, reserved: 0 }),
 }))
 
 vi.mock('@/lib/auth/api', () => ({
@@ -41,11 +52,21 @@ vi.mock('@/lib/auth/api', () => ({
   getRequiredSession: mockGetSession,
 }))
 
-vi.mock('@/lib/prisma', () => ({ default: { saleOrder: mockPrismaSO, invoice: mockPrismaInvoice } }))
+vi.mock('@/lib/prisma', () => ({
+  default: {
+    saleOrder: mockPrismaSO,
+    invoice: mockPrismaInvoice,
+    client: mockPrismaClient,
+    stockReservation: mockPrismaStockReservation,
+  },
+}))
 vi.mock('@/lib/server-store', () => ({ loadAppState: mockLoadAppState, saveStoreKeys: mockSaveStoreKeys }))
 vi.mock('@/lib/finance-audit', () => ({ writeFinancialAudit: mockWriteFinancialAudit }))
 vi.mock('@/lib/fiscal-lock.server', () => ({
   checkFiscalLock: vi.fn().mockResolvedValue({ ok: true }),
+}))
+vi.mock('@/lib/inventory/stock-transactions', () => ({
+  reserveStockForSaleOrder: mockReserveStock,
 }))
 vi.mock('@/lib/legacy-compat', () => ({
   resolveClientId: mockResolveClientId,
@@ -95,12 +116,17 @@ beforeEach(() => {
   mockResolveClientId.mockResolvedValue(CLIENT_ID)
   mockPrismaSO.findMany.mockResolvedValue([])
   mockPrismaInvoice.findMany.mockResolvedValue([])
+  mockPrismaClient.findUnique.mockResolvedValue({ creditLimit: 0, name: 'Acme' })
+  mockReserveStock.mockResolvedValue({ ok: true, reserved: 0 })
   mockLoadAppState.mockResolvedValue({})
   mockPrismaSO.update.mockImplementation(({ data }: any) => {
     // `items` is a Prisma nested-write object, not the relation payload.
     const { items: _items, ...rest } = data
-    return Promise.resolve({ ...baseOrder, ...rest })
+    return Promise.resolve({ ...baseOrder, ...rest, items: baseOrder.items, client: baseOrder.client })
   })
+  mockPrismaSO.findUnique.mockImplementation(() =>
+    Promise.resolve({ ...baseOrder, items: baseOrder.items, client: baseOrder.client }),
+  )
 })
 
 describe('sale-order workflow enforcement (server-side)', () => {
@@ -254,10 +280,8 @@ describe('DELETE /api/sale-orders/:id', () => {
 
   it('returns 409 when confirmed SO has a linked invoice', async () => {
     mockPrismaSO.findUnique.mockResolvedValue({ ...baseOrder, status: 'sale', orderNumber: 'SO/2026/0001' })
-    mockLoadAppState.mockResolvedValue({
-      deed_deliveries: [],
-      deed_invoices: [{ id: 'inv-1', saleOrderId: ORDER_ID, status: 'posted', amountPaid: 0 }],
-    })
+    mockLoadAppState.mockResolvedValue({ deed_deliveries: [] })
+    mockPrismaInvoice.findMany.mockResolvedValue([{ status: 'posted', amountPaid: 0 }])
     const res = await DELETE(deleteReq(), params)
     expect(res.status).toBe(409)
     const body = await res.json()

@@ -29,14 +29,14 @@ Hybrid model (Admin Officer rights retained with limits):
 - Default `salesLockConfirmed: true`
 - Reversing a confirmed Sales Order ("Set to Quotation" or "Cancel") requires director or finance_officer, both client- and server-side (`lib/odoo-sales-flow.ts` `saleTransitionError`, `lib/store.tsx` `cancelSO`/`resetSOToDraft`)
 
-## Known gap: deep-discount/credit approval gate is currently disabled
+## Sales confirmation gates (Phases 1+)
 
-Commit `a701411` ("Remove sales confirmation approval workflow") turned the deep-discount/backorder/credit-override
-approval gate described above into a server-side no-op: `lib/sales-approval-enforcement.server.ts`'s
-`enforceSaleOrderApprovals` always returns `{ ok: true }`, and no `requestSalesApproval` record is ever created for
-a sale order anymore. Credit-limit checking exists only client-side (`lib/store.tsx` `getCustomerCreditStatus`),
-so it can be bypassed by calling the API directly.
+On quotation → sale, `/api/sale-orders/[id]` enforces:
 
-This is a known, accepted gap as of 2026-08 — not yet restored. If Finance needs this control back, re-enabling
-`enforceSaleOrderApprovals` (and reconnecting a `requestSalesApproval` write path) is the fix; until then, treat
-deep discounts and credit-limit overrides on confirmed sale orders as unenforced server-side.
+1. **Workflow + role** — `saleTransitionError` (sales_rep / admin_officer / director).
+2. **Expiry** — `assertQuoteNotExpired` rejects confirm when `validUntil` is past.
+3. **Credit / overdue** — `assertSaleOrderCreditOnConfirm` blocks overdue balances and credit-limit overages unless the actor is Finance or Director.
+4. **Approval thresholds** — `enforceSaleOrderApprovals` re-enabled for deep discount, credit override, special pricing, and backorder triggers (Settings rules / hardcoded fallbacks).
+5. **Stock reservation** — `reserveStockForSaleOrder` runs after confirm; failure **rolls the SO back** to the prior quotation status so the order never stays confirmed without a reservation attempt.
+
+Client `confirmSO` also checks overdue + `getCustomerCreditStatus` before calling the API (UX), but the API is authoritative.

@@ -431,6 +431,15 @@ describe('saleTransitionError role gates', () => {
     expect(saleTransitionError('quotation', 'cancelled', 'sales_rep')).toBeNull()
     expect(saleTransitionError('quotation_sent', 'quotation', 'sales_rep')).toBeNull()
   })
+
+  it('blocks sales_rep from resetting a cancelled-but-previously-confirmed order', () => {
+    expect(
+      saleTransitionError('cancelled', 'quotation', 'sales_rep', { previouslyConfirmed: true }),
+    ).toMatch(/Finance or Director/i)
+    expect(
+      saleTransitionError('cancelled', 'quotation', 'finance_officer', { previouslyConfirmed: true }),
+    ).toBeNull()
+  })
 })
 
 describe('cancellation guards', () => {

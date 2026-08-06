@@ -2807,6 +2807,8 @@ export interface AppState {
     creditAvailable: number
     message: string
   }
+  /** Issue a customer credit note against the single posted invoice on a sale order. */
+  issueCreditNoteFromSaleOrder: (saleOrderId: string, amount: number, reason?: string) => Promise<string | null>
 
   // Purchasing
   purchaseOrders: PurchaseOrder[]; receipts: Receipt[]
@@ -3069,7 +3071,7 @@ export interface AppState {
   releaseSerialToStock: (serialId: string, destination?: LocationId) => boolean
 
   // Sale Orders
-  createSaleOrder: (customerId: string, customerName: string, initial?: Partial<Pick<SaleOrder, 'lines' | 'deliveryDate' | 'notes' | 'paymentTerms' | 'validUntil' | 'customerRef' | 'invoiceAddress' | 'deliveryAddress' | 'pricelist' | 'salespersonId' | 'salespersonName' | 'salesTeam'>>) => SaleOrder | Promise<SaleOrder>
+  createSaleOrder: (customerId: string, customerName: string, initial?: Partial<Pick<SaleOrder, 'lines' | 'deliveryDate' | 'notes' | 'paymentTerms' | 'validUntil' | 'customerRef' | 'invoiceAddress' | 'deliveryAddress' | 'pricelist' | 'salespersonId' | 'salespersonName' | 'salesTeam' | 'discountAmount'>>) => SaleOrder | Promise<SaleOrder>
   updateSaleOrder: (
     id: string,
     p: Partial<SaleOrder>,
@@ -3448,6 +3450,7 @@ export type SalesStoreState = Pick<AppState,
   | 'cancelSO'
   | 'createNewSOVersion'
   | 'getCustomerCreditStatus'
+  | 'issueCreditNoteFromSaleOrder'
   | 'confirmDeliveryWithStockDeduction'
   | 'updateDelivery'
   | 'initRelease'
@@ -5944,6 +5947,7 @@ export function StoreProvider({
     cancelSO: (...args: Parameters<AppState['cancelSO']>) => storeCtxRef.current!.cancelSO(...args),
     createNewSOVersion: (...args: Parameters<AppState['createNewSOVersion']>) => storeCtxRef.current!.createNewSOVersion(...args),
     getCustomerCreditStatus: (...args: Parameters<AppState['getCustomerCreditStatus']>) => storeCtxRef.current!.getCustomerCreditStatus(...args),
+    issueCreditNoteFromSaleOrder: (...args: Parameters<AppState['issueCreditNoteFromSaleOrder']>) => storeCtxRef.current!.issueCreditNoteFromSaleOrder(...args),
     confirmDeliveryWithStockDeduction: (...args: Parameters<AppState['confirmDeliveryWithStockDeduction']>) => storeCtxRef.current!.confirmDeliveryWithStockDeduction(...args),
     updateDelivery: (...args: Parameters<AppState['updateDelivery']>) => storeCtxRef.current!.updateDelivery(...args),
     initRelease: (...args: Parameters<AppState['initRelease']>) => storeCtxRef.current!.initRelease(...args),
@@ -9497,6 +9501,7 @@ const storeCtx: AppState = {
         exchangeRateToBase: (initial as any).exchangeRateToBase,
       })
       const soRef = await storeCtxRef.current!.allocateDocRef('QUO')
+      const headerDiscount = Math.max(0, Number(initial.discountAmount) || 0)
       const so: SaleOrder = {
         id: uid(), ref: soRef, status: 'quotation', customerId, customerName,
         date: now(), validUntil: initial.validUntil ?? addDays(now(), 30), lines: initialLines, ...totals,
@@ -9509,6 +9514,9 @@ const storeCtx: AppState = {
         deliveryAddress: initial.deliveryAddress,
         pricelist: initial.pricelist || 'RETAIL',
         pricelistId: (initial as any).pricelistId,
+        discountAmount: headerDiscount,
+        total: Math.max(0, (totals.total ?? 0) - headerDiscount),
+        totalAmount: Math.max(0, (totals.totalAmount ?? totals.total ?? 0) - headerDiscount),
         ...money,
         // Odoo defaults the salesperson to the creating user; the form may override.
         salespersonId: initial.salespersonId ?? user?.id,
@@ -9527,7 +9535,9 @@ const storeCtx: AppState = {
       // Sent / confirmed documents are locked for content edits. Allow narrow
       // metadata (e.g. proformaRef) so PDF helpers still work without a reset.
       const keys = Object.keys(p)
-      const metadataOnly = keys.length > 0 && keys.every(k => k === 'proformaRef')
+      const metadataOnly = keys.length > 0 && keys.every(k =>
+        k === 'proformaRef' || k === 'notes' || k === 'validUntil',
+      )
       if (existing.status !== 'quotation' && !metadataOnly) {
         showToast(
           existing.status === 'quotation_sent'
@@ -9996,17 +10006,19 @@ const storeCtx: AppState = {
           ))
         }
 
-        const unpaidInvoices = invoices.filter(inv =>
-          inv.partnerId === so.customerId &&
-          inv.type === 'customer_invoice' &&
-          isOpenInvoice(inv)
-        )
-        const overdueBalance = unpaidInvoices
-          .filter(inv => inv.dueDate < now())
-          .reduce((sum, inv) => sum + Math.max(0, inv.total - inv.amountPaid), 0)
-        if (overdueBalance > 0) {
-          showToast(`Account locked by overdue balance of ${fmtKes(overdueBalance)}. Clear overdue invoices before confirming.`, 'error')
+        const creditStatus = storeCtxRef.current!.getCustomerCreditStatus(so.customerId, so.total)
+        const canCreditOverride = user.role === 'director' || user.role === 'finance_officer'
+        if (!creditStatus.ok && !canCreditOverride) {
+          showToast(creditStatus.message || 'Customer credit check failed — cannot confirm', 'error')
           return
+        }
+        if (so.validUntil) {
+          const until = new Date(so.validUntil)
+          until.setHours(23, 59, 59, 999)
+          if (!Number.isNaN(until.getTime()) && until.getTime() < Date.now()) {
+            showToast('This quotation has expired. Extend Valid until before confirming.', 'error')
+            return
+          }
         }
 
         const orderRef = await storeCtxRef.current!.allocateDocRef('SO')
@@ -16441,6 +16453,63 @@ const storeCtx: AppState = {
       }
 
       return { ok: !isLocked && !creditLimitExceeded, isLocked, creditLimitExceeded, outstandingBalance, overdueBalance, overdueCount, creditLimit, creditAvailable, message }
+    },
+
+    issueCreditNoteFromSaleOrder: async (saleOrderId, amount, reason) => {
+      const actor = currentUser()
+      if (!canManageFullFinanceAction(actor)) {
+        showToast('Only Finance or Director can issue credit notes', 'error')
+        return null
+      }
+      if (!systemSettings.accCreditNotes) {
+        showToast('Credit notes are disabled in Settings', 'error')
+        return null
+      }
+      const so = soRef.current.find(s => s.id === saleOrderId)
+      if (!so) return null
+      const creditAmount = Math.max(0, Number(amount) || 0)
+      if (creditAmount <= 0) {
+        showToast('Enter a credit amount greater than zero', 'error')
+        return null
+      }
+      const candidateInvoices = invRef.current.filter(i =>
+        i.saleOrderId === saleOrderId && i.type === 'customer_invoice' && invoiceDocState(i.status) === 'posted',
+      )
+      if (candidateInvoices.length === 0) {
+        showToast(`No posted invoice for ${so.ref} — cannot issue a credit note`, 'error')
+        return null
+      }
+      if (candidateInvoices.length > 1) {
+        showToast(`${so.ref} has multiple posted invoices — issue the credit note from Finance`, 'error')
+        return null
+      }
+      const sourceInvoice = candidateInvoices[0]
+      const maxCredit = Math.max(0, Number(sourceInvoice.amountPaid) || Number(sourceInvoice.total) || 0)
+      if (creditAmount > maxCredit) {
+        showToast(`Credit cannot exceed ${fmtKes(maxCredit)} for ${sourceInvoice.ref}`, 'error')
+        return null
+      }
+      const ref = await storeCtxRef.current!.allocateDocRef('CN')
+      const credit: CustomerCredit = {
+        id: uid(),
+        ref,
+        customerId: so.customerId,
+        customerName: so.customerName,
+        sourceInvoiceId: sourceInvoice.id,
+        sourceInvoiceRef: sourceInvoice.ref,
+        amount: creditAmount,
+        balance: creditAmount,
+        status: 'available',
+        createdAt: now(),
+        createdBy: actor?.name ?? 'Finance',
+        notes: reason?.trim() || `Credit note from sales order ${so.ref}`,
+        applications: [],
+      }
+      setCustomerCredits(prev => [credit, ...prev])
+      setJournalEntries(prev => [buildCustomerCreditJournal(sourceInvoice, ref, creditAmount), ...prev])
+      addAuditLog('sales_credit_note', so.ref, `Credit note ${ref} issued for ${fmtKes(creditAmount)}`)
+      showToast(`Credit note ${ref} issued for ${fmtKes(creditAmount)}`, 'success')
+      return ref
     },
     
     approveRequest: (requestId, decision, comments) => {
