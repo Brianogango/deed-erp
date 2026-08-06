@@ -6,6 +6,8 @@ const mockPrismaTransaction = vi.fn()
 const mockStockLevelFindUnique = vi.fn()
 const mockStockLevelUpdate = vi.fn()
 const mockStockLevelCreate = vi.fn()
+const mockProductFindUnique = vi.fn()
+const mockProductFindFirst = vi.fn()
 const mockStockReservationFindMany = vi.fn()
 const mockSaleOrderFindUnique = vi.fn()
 const mockMirrorReservations = vi.fn()
@@ -27,6 +29,10 @@ vi.mock('@/lib/prisma', () => ({
       update: (...args: unknown[]) => mockStockLevelUpdate(...args),
       create: (...args: unknown[]) => mockStockLevelCreate(...args),
     },
+    product: {
+      findUnique: (...args: unknown[]) => mockProductFindUnique(...args),
+      findFirst: (...args: unknown[]) => mockProductFindFirst(...args),
+    },
     stockReservation: {
       findMany: (...args: unknown[]) => mockStockReservationFindMany(...args),
     },
@@ -36,9 +42,10 @@ vi.mock('@/lib/prisma', () => ({
   },
 }))
 
-import { applyDeliveryStockMutation, reserveStockForSaleOrder } from '@/lib/inventory/stock-transactions'
+import { applyDeliveryStockMutation, applyReceiptStockMutation, reserveStockForSaleOrder } from '@/lib/inventory/stock-transactions'
 
-const PRODUCT_ID = 'aaaaaaaa-bbbb-4ccc-dddd-eeeeeeeeeeee'
+const PRODUCT_ID = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee'
+const PRISMA_PRODUCT_ID = 'bbbbbbbb-cccc-4ddd-8eee-ffffffffffff'
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -50,11 +57,17 @@ beforeEach(() => {
         update: mockStockLevelUpdate,
         create: mockStockLevelCreate,
       },
+      product: {
+        findUnique: mockProductFindUnique,
+        findFirst: mockProductFindFirst,
+      },
     })
   })
   mockStockLevelFindUnique.mockResolvedValue({ qtyOnHand: 20, qtyReserved: 0 })
   mockStockLevelUpdate.mockResolvedValue({})
   mockStockLevelCreate.mockResolvedValue({})
+  mockProductFindUnique.mockResolvedValue({ id: PRODUCT_ID })
+  mockProductFindFirst.mockResolvedValue(null)
   mockStockReservationFindMany.mockResolvedValue([])
   mockMirrorReservations.mockResolvedValue({ mirrored: 1, skipped: 0, failed: 0 })
 })
@@ -144,5 +157,42 @@ describe('reserveStockForSaleOrder()', () => {
       referenceId: 'so-1',
       status: 'reserved',
     })
+  })
+})
+
+describe('applyReceiptStockMutation() — blob/Prisma product ID mismatch', () => {
+  it('maps stock bump to the Prisma product matched by SKU', async () => {
+    const blobId = PRODUCT_ID
+    mockLoadAppState.mockResolvedValue({
+      deed_products: [{ id: blobId, name: 'SanDisk Ultra 64GB SDXC Memory Card', sku: 'SANDISKU-N670N', stockQty: 0, requiresSerial: false }],
+      deed_serials: [],
+      deed_bulkStock: [],
+      deed_stockMoves: [],
+    })
+    mockProductFindUnique.mockResolvedValue(null)
+    mockProductFindFirst.mockResolvedValue({ id: PRISMA_PRODUCT_ID })
+    mockStockLevelFindUnique.mockResolvedValue(null)
+
+    const result = await applyReceiptStockMutation({
+      receiptId: 'rec-1',
+      receiptRef: 'REC/2026/0023',
+      purchaseOrderId: 'po-1',
+      destination: 'warehouse',
+      lines: [{
+        productId: blobId,
+        productName: 'SanDisk Ultra 64GB SDXC Memory Card',
+        qtyReceived: 2,
+        requiresSerial: false,
+      }],
+      userId: 'user-1',
+    })
+
+    expect(result).toEqual(expect.objectContaining({ ok: true }))
+    expect(mockProductFindUnique).toHaveBeenCalled()
+    // Either SKU lookup or create path must target the Prisma catalogue id
+    const createArg = mockStockLevelCreate.mock.calls[0]?.[0]
+    const updateArg = mockStockLevelUpdate.mock.calls[0]?.[0]
+    const usedProductId = createArg?.data?.productId ?? updateArg?.where?.productId
+    expect(usedProductId).toBe(PRISMA_PRODUCT_ID)
   })
 })

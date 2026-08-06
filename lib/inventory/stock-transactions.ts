@@ -386,13 +386,64 @@ export async function reserveStockForSaleOrder(
   return { ok: true, reserved: reservedCount }
 }
 
+async function resolvePrismaProductIdForStock(
+  tx: Parameters<Parameters<typeof prisma.$transaction>[0]>[0],
+  productId: string,
+  hint?: { sku?: string; name?: string },
+): Promise<string | null> {
+  const byId = await tx.product.findUnique({ where: { id: productId }, select: { id: true } })
+  if (byId) return byId.id
+
+  const sku = String(hint?.sku || '').trim()
+  if (sku) {
+    const bySku = await tx.product.findFirst({
+      where: { sku: { equals: sku, mode: 'insensitive' } },
+      select: { id: true },
+    })
+    if (bySku) {
+      console.warn(`[stock] mapped blob product ${productId} → prisma ${bySku.id} via SKU ${sku}`)
+      return bySku.id
+    }
+  }
+
+  const name = String(hint?.name || '').trim()
+  if (name) {
+    const byName = await tx.product.findFirst({
+      where: { name: { equals: name, mode: 'insensitive' } },
+      select: { id: true },
+    })
+    if (byName) {
+      console.warn(`[stock] mapped blob product ${productId} → prisma ${byName.id} via name`)
+      return byName.id
+    }
+  }
+
+  return null
+}
+
 async function bumpPrismaOnHand(deltas: Map<string, number>) {
   if (deltas.size === 0) return
+  const state = await loadAppState(['deed_products'])
+  const blobProducts = Array.isArray(state.deed_products)
+    ? (state.deed_products as Array<{ id?: string; sku?: string; name?: string; sellingPrice?: number; costPrice?: number; trackingMethod?: string }>)
+    : []
+  const byBlobId = new Map(blobProducts.filter(p => p?.id).map(p => [String(p.id), p]))
+
   try {
     await prisma.$transaction(async tx => {
       for (const [productId, delta] of deltas) {
         if (!isUuid(productId) || delta === 0) continue
-        await adjustStockLevel(tx, productId, { onHand: delta })
+        const hint = byBlobId.get(productId)
+        const resolved = await resolvePrismaProductIdForStock(tx, productId, {
+          sku: hint?.sku,
+          name: hint?.name,
+        })
+        if (!resolved) {
+          throw new Error(
+            `Cannot update stock for "${hint?.name || productId}" — this product is in the app catalogue but not linked in the database (ID mismatch). Re-save/publish the product from Inventory, then retry the GRN.`,
+          )
+        }
+        await adjustStockLevel(tx, resolved, { onHand: delta })
       }
     })
   } catch (err) {
@@ -562,7 +613,12 @@ export async function applyReceiptStockMutation(params: {
     }
   }
 
-  await bumpPrismaOnHand(stockLevelDeltas)
+  try {
+    await bumpPrismaOnHand(stockLevelDeltas)
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Stock update failed'
+    return { ok: false, error: message }
+  }
   await saveStoreKeys({
     deed_products: JSON.stringify(products),
     deed_serials: JSON.stringify(serials),
