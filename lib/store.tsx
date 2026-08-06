@@ -16332,9 +16332,37 @@ const storeCtx: AppState = {
       showToast('Return received — items back in warehouse')
     },
 
-    processReturn: (id, resolution, refundAmount, processNotes, refundPaymentMethod) => {
+    processReturn: async (id, resolution, refundAmount, processNotes, refundPaymentMethod) => {
       const user = currentUser(); if (!user) return
       const rma = returnOrders.find(r => r.id === id); if (!rma) return
+
+      // Resolution 'credit_note' previously showed a "Credit note issued" toast without
+      // creating anything — no CustomerCredit, journal or audit entry. Wire it up using
+      // the same mechanism cancelInvoice() uses for a cancelled paid invoice.
+      let creditNoteRef: string | null = null
+      let creditNoteError: string | null = null
+      if (resolution === 'credit_note' && refundAmount && refundAmount > 0) {
+        const sourceInvoice = invRef.current.find(i => i.saleOrderId === rma.saleOrderId && i.type === 'customer_invoice')
+        if (!sourceInvoice) {
+          creditNoteError = `No invoice found for sale order ${rma.saleOrderRef} — cannot issue a credit note`
+        } else {
+          const ref = await storeCtxRef.current!.allocateDocRef('CN')
+          const credit: CustomerCredit = {
+            id: uid(), ref,
+            customerId: rma.customerId, customerName: rma.customerName,
+            sourceInvoiceId: sourceInvoice.id, sourceInvoiceRef: sourceInvoice.ref,
+            amount: refundAmount, balance: refundAmount, status: 'available',
+            createdAt: now(), createdBy: user.name,
+            notes: `Credit note issued from return ${rma.ref}`,
+            applications: [],
+          }
+          setCustomerCredits(prev => [credit, ...prev])
+          setJournalEntries(prev => [buildCustomerCreditJournal(sourceInvoice, ref, refundAmount), ...prev])
+          addAuditLog('rma_credit_note', rma.ref, `Credit note ${ref} issued for ${fmtKes(refundAmount)} against return ${rma.ref}`)
+          creditNoteRef = ref
+        }
+      }
+
       setReturnOrders(p => p.map(r => r.id === id
         ? { ...r, status: 'processed', resolution, refundAmount, notes: processNotes, processedDate: now(), processedByName: user.name }
         : r
@@ -16380,8 +16408,14 @@ const storeCtx: AppState = {
         setRefundPayments(p => [payment, ...p])
       }
 
-      const label = resolution === 'refund' ? 'Refund recorded' : resolution === 'replacement' ? 'Replacement issued' : resolution === 'credit_note' ? 'Credit note issued' : 'Repair initiated'
-      showToast(`Return processed — ${label}`)
+      if (creditNoteError) {
+        showToast(`Return processed, but ${creditNoteError}`, 'error')
+      } else {
+        const label = resolution === 'refund' ? 'Refund recorded'
+          : resolution === 'replacement' ? 'Replacement issued'
+          : resolution === 'credit_note' ? `Credit note ${creditNoteRef} issued` : 'Repair initiated'
+        showToast(`Return processed — ${label}`)
+      }
     },
 
     rejectReturn: (id, reason) => {
