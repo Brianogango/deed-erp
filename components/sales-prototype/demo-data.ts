@@ -84,7 +84,7 @@ export const DEMO_QUOTATIONS = [
     validUntil: '2026-08-05',
     salesperson: 'Mercy Achieng',
     total: 178_500,
-    status: { label: 'Converted', tone: 'purple' as const },
+    status: { label: 'Converted', tone: 'blue' as const },
     currency: 'KES',
   },
 ]
@@ -159,7 +159,7 @@ export const DEMO_SO = {
   id: 'so-001',
   ref: 'SO/2026/0087',
   sourceQuote: 'SQ/2026/0142',
-  status: { label: 'Confirmed', tone: 'purple' as const },
+  status: { label: 'Confirmed', tone: 'green' as const },
   customer: DEMO_CUSTOMER,
   salesperson: DEMO_SALESPERSON.name,
   orderDate: '2026-08-05',
@@ -279,7 +279,7 @@ export const DEMO_DELIVERY = {
 export const DEMO_INVOICE = {
   id: 'inv-001',
   ref: 'INV/2026/0312',
-  status: { label: 'Posted', tone: 'purple' as const },
+  status: { label: 'Posted', tone: 'blue' as const },
   customer: DEMO_CUSTOMER,
   invoiceDate: '2026-08-08',
   dueDate: '2026-09-07',

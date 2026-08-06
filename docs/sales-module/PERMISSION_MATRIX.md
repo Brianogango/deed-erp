@@ -1,14 +1,19 @@
-# Permission matrix (prototype)
+# Permission matrix (prototype note)
 
-| Action | Prototype | Production roles (existing) |
-|--------|-----------|-----------------------------|
-| Create quotation | Demo CTA | `manageSaleOrders` |
-| Send quotation | Toast only | sales_rep+ |
-| Confirm quotation | Dialog → navigate | director, sales_rep, admin_officer |
-| Reserve stock | Toast | inventory + sales flows |
-| Validate delivery | Toast | `manageDeliveries` |
-| Create invoice | Navigate | `createCustomerInvoiceFromSO` |
-| Register payment | Toast | `recordPayment` |
-| View margin | Shown on quote totals | needs explicit gate before prod |
+Prototypes are **public** (`/sales-prototype` in middleware) and do not enforce roles.
 
-**Do not** treat prototype button visibility as authorization.
+Production integration must reuse `lib/auth/authorization.ts`:
+
+| Capability | Typical roles |
+|------------|---------------|
+| Create / edit draft quotation | sales_rep, admin_officer, director |
+| Send quotation | sales_rep, admin_officer, director |
+| Confirm quotation | sales_rep, admin_officer, director |
+| Confirm without reservation | director, inventory_officer (proposed) |
+| Reserve / release stock | inventory_officer, director |
+| Validate delivery | inventory_officer, technical_lead, director |
+| Create / post invoice | finance_officer, admin_officer, director |
+| Record payment | finance_officer, admin_officer, director |
+| View cost / margin | director, finance_officer |
+
+Backend checks remain authoritative — never UI-only.

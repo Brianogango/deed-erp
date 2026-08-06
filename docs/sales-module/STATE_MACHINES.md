@@ -1,15 +1,15 @@
-# State machines / permissions / validation (prototype docs)
+# State machines (prototype vocabulary)
 
-See also production SSoT: `lib/odoo-sales-flow.ts`, `lib/auth/authorization.ts`.
+## Quotation
+`Draft` → `Sent` → `Accepted` | `Rejected` | `Expired` → `Converted`
 
-## State machines (target vocabulary)
+## Sales order
+`Confirmed` → `Reserved` → `Ready to Deliver` → `Delivered` → `Invoiced` → `Paid`
 
-Documented in the audit brief; prototypes display labels without mutating production enums.
+## Delivery
+`Awaiting Picking` → `Picking` → `Picked` → `Delivered` | `Partially Delivered` | `Cancelled`
 
-## Permission matrix (prototype display only)
+## Invoice
+`Draft` → `Posted` → `Partially Paid` → `Paid` | `Overdue` | `Cancelled`
 
-Buttons are visible for demo; production must keep backend checks for confirm, reserve, validate delivery, post invoice, register payment, view margin.
-
-## Validation rules (demo messaging)
-
-Confirm dialog lists customer/lines/expiry/stock/delivery checks. Serial picking blocks invalid/duplicate scans in UI state only.
+Prototype badges use these labels; production mapping remains `lib/odoo-sales-flow.ts` until integration is approved.

@@ -1,21 +1,24 @@
-# Design tokens — Sales prototypes
+# Design tokens (Sales prototypes)
 
-Scoped under `.sales-proto` in `components/sales-prototype/sales-prototype.css`.
+Scoped under `.sales-proto` — does **not** mutate global ERP tokens.
 
 | Token | Value | Role |
 |-------|-------|------|
-| `--sp-bg` | `#F4F5F7` | Page |
+| `--sp-bg` | `#F4F5F7` | Page canvas |
 | `--sp-surface` | `#FFFFFF` | Panels |
-| `--sp-border` | `#E5E7EB` | Borders |
+| `--sp-border` | `#E5E7EB` | Thin borders |
 | `--sp-text` | `#111827` | Primary text |
 | `--sp-text-3` | `#6B7280` | Muted |
-| `--sp-accent` | `#6D28D9` | Primary actions / tabs / active workflow |
-| `--sp-navy` | `#1A1F5E` | Sidebar (Deed) |
-| `--sp-success` | `#059669` | Completed / paid / accepted |
-| `--sp-warning` | `#D97706` | Partial / shortage |
-| `--sp-danger` | `#DC2626` | Errors |
-| `--sp-info` | `#2563EB` | Processing |
-| `--sp-radius` | `6px` | Panels |
-| `--sp-fs` / `--sp-fs-table` | `13px` / `12px` | Density |
+| `--sp-accent` | `#2563EB` | Primary CTA / active tab (Deed primary) |
+| `--sp-accent-hover` | `#1D4ED8` | Hover |
+| `--sp-navy` | `#1A1F5E` | Sidebar |
+| `--sp-success` | `#059669` | Confirmed / paid / delivered |
+| `--sp-warning` | `#D97706` | Draft / partial / warning |
+| `--sp-danger` | `#DC2626` | Error / rejected |
+| `--sp-radius` | `6px` | Controls / panels |
+| `--sp-fs` | `13px` | Body UI |
+| `--sp-fs-table` | `12px` | Tables |
+| `--sp-sidebar-w` | `220px` | Nav width |
+| `--sp-header-h` | `48px` | Compact header |
 
-Kill/production integration: do not promote these tokens into `.sales-pilot` until accent strategy is approved.
+Motion: toast fade only (~180ms); respect `prefers-reduced-motion`.

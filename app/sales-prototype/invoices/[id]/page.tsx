@@ -35,7 +35,7 @@ export default function InvoicePaymentPrototype() {
         <div className="sales-proto-actions">
           <ProtoAction>Print</ProtoAction>
           <ProtoAction>Send by email</ProtoAction>
-          <ProtoAction primary>Register payment</ProtoAction>
+          <ProtoAction primary>Record payment</ProtoAction>
         </div>
       </div>
 

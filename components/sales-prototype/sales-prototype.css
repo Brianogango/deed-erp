@@ -1,6 +1,6 @@
 /* Sales Module high-fidelity prototypes — scoped tokens (do not alter global ERP chrome).
-   Direction: compact enterprise fidelity per brief; Deed navy shell + purple sales accent
-   (hybrid) because the reference PNG was not present in-repo at build time. */
+   Direction: compact enterprise fidelity per supplied workflow reference.
+   Shell = Deed navy; primary actions = Deed blue (#2563EB) matching reference CTAs. */
 
 .sales-proto .sr-only {
   position: absolute;
@@ -22,10 +22,10 @@
   --sp-text: #111827;
   --sp-text-2: #374151;
   --sp-text-3: #6b7280;
-  --sp-accent: #6d28d9;
-  --sp-accent-hover: #5b21b6;
-  --sp-accent-soft: #f5f3ff;
-  --sp-accent-border: #ddd6fe;
+  --sp-accent: #2563eb;
+  --sp-accent-hover: #1d4ed8;
+  --sp-accent-soft: #eff6ff;
+  --sp-accent-border: #bfdbfe;
   --sp-navy: #1a1f5e;
   --sp-navy-dark: #161a50;
   --sp-success: #059669;
@@ -135,8 +135,8 @@
   margin: 8px;
   padding: 8px 10px;
   border-radius: var(--sp-radius-sm);
-  background: rgba(109, 40, 217, 0.25);
-  border: 1px solid rgba(167, 139, 250, 0.35);
+  background: rgba(37, 99, 235, 0.18);
+  border: 1px solid rgba(147, 197, 253, 0.45);
   color: #ede9fe;
   font-size: 11px;
   line-height: 1.35;

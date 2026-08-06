@@ -28,8 +28,8 @@ export default function CreateQuotationPrototype() {
         </div>
         <div className="sales-proto-actions">
           <ProtoAction>Discard</ProtoAction>
-          <ProtoAction>Save draft</ProtoAction>
-          <ProtoAction primary>Send quotation</ProtoAction>
+          <ProtoAction>Save as draft</ProtoAction>
+          <ProtoAction primary>Submit</ProtoAction>
         </div>
       </div>
 

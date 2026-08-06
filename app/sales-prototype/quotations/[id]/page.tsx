@@ -40,10 +40,10 @@ export default function QuotationDetailPrototype({ params }: { params: { id: str
           </div>
         </div>
         <div className="sales-proto-actions">
-          <ProtoAction>Print</ProtoAction>
-          <ProtoAction>Send by email</ProtoAction>
+          <ProtoAction>Edit</ProtoAction>
+          <ProtoAction primary>Send to customer</ProtoAction>
           <ProtoAction>More</ProtoAction>
-          <button type="button" className="sp-btn sp-btn-primary" onClick={() => setConfirmOpen(true)}>
+          <button type="button" className="sp-btn sp-btn-success" onClick={() => setConfirmOpen(true)}>
             Confirm quotation
           </button>
         </div>

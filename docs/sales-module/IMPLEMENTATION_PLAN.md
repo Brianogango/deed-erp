@@ -1,15 +1,21 @@
-# Implementation plan — prototypes only
+# Implementation plan
 
-1. Isolated branch `cursor/sales-module-prototypes-ddc8`
-2. Public prefix `/sales-prototype` (middleware allowlist)
-3. Seven high-fidelity pages with demo data
-4. Screenshot pack desktop / tablet / mobile
-5. Discrepancy + a11y + interaction report
-6. **Stop** — no production Sales.tsx / schema / accounting changes until approval
+## Phase A — Prototypes (this branch)
+1. Isolated `/sales-prototype/*` routes + demo data  
+2. Seven core screens + list  
+3. Screenshots (1440 / 1366 / 1024 / 390)  
+4. Discrepancy + a11y report  
+5. **Stop for approval** — no production integration  
 
-## Production integration (future, not this PR)
+## Phase B — Production (after approval)
+1. Map prototype components onto `components/modules/Sales.tsx` / shared `erp/*`  
+2. Preserve `odoo-sales-flow` transitions; extend statuses carefully  
+3. Wire confirm dialog (reserve / no-reserve) with server enforcement  
+4. Picking UX enhancements on existing DeliveryNoteView  
+5. Invoice modes without silent accounting changes  
+6. Tests for state transitions + visual regression  
 
-- Map statuses onto `lib/odoo-sales-flow.ts`
-- Reuse `erp/*` + `data-table` components
-- Resolve accent: purple vs Direction B navy/cyan
-- Wire confirm/reserve/pick/invoice to existing APIs with permission checks
+## Non-goals for Phase A
+- Schema changes  
+- Production store writes  
+- Permission / accounting / inventory logic changes  

@@ -1,9 +1,18 @@
-# Sales Module — workflow (prototype)
+# Sales workflow (prototype)
 
-Draft Quotation → Save → Send → Customer Acceptance → Confirm → Sales Order → Reserve Stock → Create Delivery → Pick Serials/Qty → Validate → Delivered → Create Invoice → Post → Record Payment → Complete.
+```
+Draft Quotation → Save → Send → Customer Acceptance → Confirm
+  → Sales Order → Reserve Stock → Create Delivery → Pick (serial/qty)
+  → Validate / Mark Delivered → Create Invoice → Post → Record Payment → Complete
+```
 
-Traceability demo links:
+## Document hierarchy
 
-- Quotation `SQ/2026/0142` → SO `SO/2026/0087` → DN `DN/2026/0044` → INV `INV/2026/0312` → PAY `PAY/2026/0881`
+Quotation → Sales Order → Delivery Order → Invoice → Payment
 
-Prototype routes under `/sales-prototype/*` use **demo data only** — no `saveStoreKeys`, Prisma writes, or production APIs.
+Each prototype detail page shows related-document links (blue).
+
+## Prototype behaviour
+
+All primary/secondary actions show a toast: **"Prototype only — not connected to production data."**  
+No `saveStoreKeys`, Prisma writes, or production APIs are called.

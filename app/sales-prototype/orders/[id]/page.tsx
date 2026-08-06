@@ -36,10 +36,10 @@ export default function SalesOrderDetailPrototype() {
           <ProtoAction>Print</ProtoAction>
           <ProtoAction>Send by email</ProtoAction>
           <ProtoAction>More</ProtoAction>
-          <Link href="/sales-prototype/deliveries/dn-001" className="sp-btn">
+          <Link href="/sales-prototype/deliveries/dn-001" className="sp-btn sp-btn-primary">
             Create delivery
           </Link>
-          <Link href="/sales-prototype/invoices/new" className="sp-btn sp-btn-primary">
+          <Link href="/sales-prototype/invoices/new" className="sp-btn">
             Create invoice
           </Link>
         </div>

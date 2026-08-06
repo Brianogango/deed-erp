@@ -79,8 +79,8 @@ export default function DeliveryPickingPrototype() {
         <div className="sales-proto-actions">
           <ProtoAction>Print</ProtoAction>
           <ProtoAction>Save progress</ProtoAction>
-          <ProtoAction primary success message="Prototype: validate delivery (no inventory post).">
-            Validate delivery
+          <ProtoAction primary message="Prototype: mark as delivered (no inventory post).">
+            Mark as delivered
           </ProtoAction>
         </div>
       </div>
