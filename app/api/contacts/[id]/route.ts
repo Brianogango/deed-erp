@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { getRequiredSession, requireRole, withApiErrorHandling } from '@/lib/auth/api'
 import { clientToContact, deleteContactById, updateContactById, type ContactInput } from '@/lib/contact-prisma'
+import { refreshDocumentBlobsForClientChange } from '@/lib/documents-broadcast.server'
 
 export const dynamic = 'force-dynamic'
 
@@ -16,6 +17,9 @@ async function updateContact(request: Request, { params }: { params: { id: strin
     if (typeof updated === 'string') {
       return NextResponse.json({ error: updated }, { status: 422 })
     }
+    // A name/address/contact-detail change must stop showing stale on every
+    // quote, sale order, and invoice already referencing this client/vendor.
+    void refreshDocumentBlobsForClientChange()
     return NextResponse.json(updated)
   })
 }
