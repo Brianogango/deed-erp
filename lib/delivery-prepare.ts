@@ -38,13 +38,27 @@ export function sumQtyByProductId(
   return out
 }
 
+export type AssignedSerialRef = {
+  id: string
+  productId?: string
+  saleOrderId?: string
+  status?: string
+}
+
 /**
- * Build a FIFO serial pool per product from all SO lines (plus any serials
- * already stamped on the delivery line).
+ * Build a FIFO serial pool per product from:
+ * - SO line serialIds
+ * - delivery line serialIds
+ * - serial inventory rows already assigned to this sales order
+ *
+ * Prisma only stores one serialNumberId per SO line, so qty≥2 lines often
+ * lose serialIds on refresh — assigned serial records + DN lines are the
+ * durable source for prepare.
  */
 export function buildSerialPoolsByProduct(
   soLines: PrepareSourceLine[] | null | undefined,
   deliveryLines: PrepareDeliveryLine[] | null | undefined = [],
+  assignedSerials: AssignedSerialRef[] | null | undefined = [],
 ): Map<string, string[]> {
   const pools = new Map<string, string[]>()
   const push = (productId: string, serialId: string) => {
@@ -60,31 +74,45 @@ export function buildSerialPoolsByProduct(
   for (const line of deliveryLines ?? []) {
     for (const serialId of line.serialIds ?? []) push(line.productId, serialId)
   }
+  for (const serial of assignedSerials ?? []) {
+    if (!serial.productId || !serial.id) continue
+    const status = String(serial.status ?? '')
+    if (status && !['assigned', 'reserved', 'sold'].includes(status)) continue
+    push(serial.productId, serial.id)
+  }
   return pools
 }
 
 /**
  * Plan qty + serials for each delivery line. Consumes requested qty and serial
  * pools so duplicate product rows do not all bind to the first SO line.
+ * Prefers serials already stamped on the delivery line when present.
  */
 export function planPrepareDeliveryLines(opts: {
   deliveryLines: PrepareDeliveryLine[]
   soLines: PrepareSourceLine[]
   requestedByProduct: Record<string, number>
   isSerialTracked: (productId: string) => boolean
+  assignedSerials?: AssignedSerialRef[] | null
 }): { ok: true; lines: PrepareLinePlan[] } | { ok: false; error: string; lines: PrepareLinePlan[] } {
   const { deliveryLines, soLines, isSerialTracked } = opts
   const requestedLeft = { ...opts.requestedByProduct }
-  const pools = buildSerialPoolsByProduct(soLines, deliveryLines)
+  const pools = buildSerialPoolsByProduct(soLines, deliveryLines, opts.assignedSerials)
   const plans: PrepareLinePlan[] = []
 
   for (const deliveryLine of deliveryLines) {
     const serialTracked = isSerialTracked(deliveryLine.productId)
     const left = Math.max(0, Number(requestedLeft[deliveryLine.productId]) || 0)
     const pool = pools.get(deliveryLine.productId) ?? []
+    const existingOnLine = (deliveryLine.serialIds ?? []).filter(Boolean)
     const requestedQty = left
     const qty = serialTracked
-      ? Math.min(deliveryLine.qty, requestedQty > 0 ? requestedQty : pool.length)
+      ? Math.min(
+          deliveryLine.qty,
+          requestedQty > 0
+            ? requestedQty
+            : Math.max(pool.length, existingOnLine.length),
+        )
       : Math.min(deliveryLine.qty, requestedQty)
     requestedLeft[deliveryLine.productId] = Math.max(0, left - qty)
 
@@ -97,15 +125,24 @@ export function planPrepareDeliveryLines(opts: {
           lines: plans,
         }
       }
-      if (pool.length < qty) {
+      // Prefer serials already on this DN line (UI assign stamps them here).
+      if (existingOnLine.length >= qty) {
+        serialIds = existingOnLine.slice(0, qty)
+        for (const id of serialIds) {
+          const idx = pool.indexOf(id)
+          if (idx >= 0) pool.splice(idx, 1)
+        }
+        pools.set(deliveryLine.productId, pool)
+      } else if (pool.length < qty) {
         return {
           ok: false,
           error: `Assign ${qty} serial number${qty === 1 ? '' : 's'} for ${deliveryLine.productName} before preparing delivery`,
           lines: plans,
         }
+      } else {
+        serialIds = pool.splice(0, qty)
+        pools.set(deliveryLine.productId, pool)
       }
-      serialIds = pool.splice(0, qty)
-      pools.set(deliveryLine.productId, pool)
     }
 
     plans.push({

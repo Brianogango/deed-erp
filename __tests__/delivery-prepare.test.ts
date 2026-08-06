@@ -87,4 +87,51 @@ describe('delivery prepare with duplicate product lines', () => {
     if (result.ok) return
     expect(result.error).toContain('Assign 2 serial')
   })
+
+  it('prepares when SO line serialIds were wiped but serial inventory is assigned', () => {
+    // Production SO/2026/0029 shape: empty SO serialIds, assigned serial records.
+    const result = planPrepareDeliveryLines({
+      deliveryLines: [
+        { productId: thinkpad, productName: 'ThinkPad T495s', qty: 1 },
+        { productId: thinkpad, productName: 'ThinkPad T495s', qty: 2 },
+        { productId: thinkpad, productName: 'ThinkPad T495s', qty: 1 },
+      ],
+      soLines: [
+        { productId: thinkpad, qty: 1, serialIds: [] },
+        { productId: thinkpad, qty: 2, serialIds: [] },
+        { productId: thinkpad, qty: 1, serialIds: [] },
+      ],
+      requestedByProduct: { [thinkpad]: 4 },
+      assignedSerials: [
+        { id: 's1', productId: thinkpad, saleOrderId: 'so1', status: 'assigned' },
+        { id: 's2', productId: thinkpad, saleOrderId: 'so1', status: 'assigned' },
+        { id: 's3', productId: thinkpad, saleOrderId: 'so1', status: 'assigned' },
+        { id: 's4', productId: thinkpad, saleOrderId: 'so1', status: 'assigned' },
+      ],
+      isSerialTracked: () => true,
+    })
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.lines.map(l => l.serialIds.length)).toEqual([1, 2, 1])
+  })
+
+  it('prefers serials already stamped on the DN qty=2 row', () => {
+    const result = planPrepareDeliveryLines({
+      deliveryLines: [
+        { productId: thinkpad, productName: 'ThinkPad T495s', qty: 1, serialIds: ['a'] },
+        { productId: thinkpad, productName: 'ThinkPad T495s', qty: 2, serialIds: ['b', 'c'] },
+        { productId: thinkpad, productName: 'ThinkPad T495s', qty: 1, serialIds: ['d'] },
+      ],
+      soLines: [
+        { productId: thinkpad, qty: 1, serialIds: [] },
+        { productId: thinkpad, qty: 2, serialIds: [] },
+        { productId: thinkpad, qty: 1, serialIds: [] },
+      ],
+      requestedByProduct: { [thinkpad]: 4 },
+      isSerialTracked: () => true,
+    })
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.lines[1].serialIds).toEqual(['b', 'c'])
+  })
 })
