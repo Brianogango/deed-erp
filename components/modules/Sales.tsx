@@ -40,7 +40,6 @@ import { hasModuleAccess, canCreateCustomerInvoiceFromSO } from '@/lib/auth/acce
 import {
   useSalesStore,
   SaleOrder,
-  fmtKes,
   fmtDate,
   LOCATIONS,
   SerialNumber,
@@ -63,10 +62,8 @@ import {
   ModuleHeader,
   TabBar,
   useMounted,
-  RecordCard,
 } from '@/components/ui'
-import { PrimaryActionButton, TablePageLayout, StatusBadge } from '@/components/erp'
-import { DataTable, type ColumnDef } from '@/components/data-table'
+import { PrimaryActionButton, StatusBadge } from '@/components/erp'
 import { Fa } from '@/components/icons'
 import type { CommercialPdfInput } from '@/lib/commercial-pdf'
 import {
@@ -167,6 +164,12 @@ type DraftLine = {
   taxRate: string
 }
 const uid = () => crypto.randomUUID()
+/** Prototype-matching currency label (KES …) — global fmtKes uses KSh. */
+const salesKes = (n: number | string | null | undefined) => {
+  const v = typeof n === 'string' ? Number(n.replace(/,/g, '')) : Number(n ?? 0)
+  const safe = Number.isFinite(v) ? v : 0
+  return `KES ${safe.toLocaleString('en-KE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+}
 const num = (value: unknown, fallback = 0) => {
   const parsed = Number(value)
   return Number.isFinite(parsed) ? parsed : fallback
@@ -1271,58 +1274,6 @@ function SalesContent() {
     return <SalesDocPill label={pill.label} tone={pill.tone} />
   }
 
-  const salesListColumns: ColumnDef<SalesOrderView>[] = useMemo(() => [
-    {
-      key: 'ref', label: listTab === 'quotations' ? 'Quote #' : 'Order #', priority: 1, width: '120px',
-      render: s => <span className="sp-linkish text-xs font-bold">{s.ref}</span>,
-      accessor: s => s.ref,
-    },
-    {
-      key: 'customer', label: 'Customer', priority: 1, width: '1.5fr',
-      render: s => <span className="text-xs text-[var(--sp-text)] truncate">{s.customerName}</span>,
-      accessor: s => s.customerName,
-    },
-    {
-      key: 'date', label: listTab === 'quotations' ? 'Quote date' : 'Order date', priority: 2, width: '110px',
-      render: s => <span className="text-xs text-[var(--sp-text-3)]">{fmtDate(s.date)}</span>,
-      accessor: s => s.date,
-      exportValue: s => s.date,
-    },
-    {
-      key: 'validUntil', label: 'Valid until', priority: 3, width: '110px',
-      render: s => <span className="text-xs text-[var(--sp-text-3)]">{s.validUntil ? fmtDate(s.validUntil) : '—'}</span>,
-      accessor: s => s.validUntil || '',
-      exportValue: s => s.validUntil || '',
-    },
-    {
-      key: 'salesperson', label: 'Salesperson', priority: 3, width: '120px',
-      render: s => <span className="text-xs text-[var(--sp-text-3)] truncate">{s.salespersonName || s.createdByName || '—'}</span>,
-      accessor: s => s.salespersonName || s.createdByName || '',
-    },
-    {
-      key: 'total', label: 'Amount', priority: 1, width: '120px', align: 'right',
-      render: s => <span className="text-xs font-bold text-[var(--sp-text)]">{fmtKes(s.total)}</span>,
-      accessor: s => s.total,
-      exportValue: s => s.total,
-    },
-    {
-      key: 'status', label: 'Status', priority: 1, width: '140px', align: 'center',
-      render: s => (
-        <span className="inline-flex flex-col items-center gap-0.5">
-          {statusPill(s)}
-          {s.status === 'sale' && saleOrderInvoiceStatus(s.status, s.lines) === 'to_invoice' && (
-            <span className="text-[9px] font-semibold text-[var(--sp-warning)]">To invoice</span>
-          )}
-          {isQuotationStage(s.status) && s.validUntil && s.validUntil < todayIso && (
-            <span className="text-[9px] font-semibold text-[var(--sp-danger)]">Expired</span>
-          )}
-        </span>
-      ),
-      accessor: s => SALE_STATUS_LABELS[s.status] ?? s.status,
-      exportValue: s => SALE_STATUS_LABELS[s.status] ?? s.status,
-    },
-  ], [todayIso, listTab])
-
   const getInvoicedQty = (so: SalesOrderView, lineProductId?: string) => {
     if (!lineProductId) return 0
     const inv = invoices.find(i => i.saleOrderId === so.id)
@@ -1485,126 +1436,102 @@ function SalesContent() {
                     }}
                     ariaLabel="Sales sections"
                   />
-                  <TablePageLayout
-                    title={listTab === 'quotations' ? 'Quotations' : 'Sales orders'}
-                  >
-                  <DataTable
-                    tableId="sales-order-list"
-                    columns={salesListColumns}
-                    rows={filtered}
-                    rowKey={s => s.id}
-                    defaultSort={{ key: 'date', direction: 'desc' }}
-                    searchValue={search}
-                    onSearchChange={setSearchAndReset}
-                    clientSearch={false}
-                    searchPlaceholder="Search order number or customer…"
-                    primaryFilters={[
-                      {
-                        key: 'status',
-                        label: 'Status',
-                        value: filter,
-                        allValue: 'all',
-                        options: [
-                          { value: 'all', label: 'All statuses' },
-                          ...(listTab === 'quotations'
-                            ? [
-                                { value: 'my_quotations', label: 'My quotations' },
-                                { value: 'quotations', label: 'Quotation' },
-                                { value: 'quotation_sent', label: 'Quotation Sent' },
-                              ]
-                            : [
-                                { value: 'sales_orders', label: 'Sales Order' },
-                                { value: 'to_invoice', label: 'To invoice' },
-                                { value: 'fully_invoiced', label: 'Fully invoiced' },
-                              ]),
-                          { value: 'cancelled', label: 'Cancelled' },
-                        ],
-                        onChange: v => setFilterAndReset(v as SalesListFilter),
-                      },
-                    ]}
-                    onClearFilters={() => {
-                      setSearchAndReset('')
-                      setFilterAndReset('all')
-                    }}
-                    layoutViews={{
-                      value: listViewMode,
-                      options: [
-                        { id: 'table', label: 'Table view', icon: <Fa icon={faListUl} className="text-xs" /> },
-                        { id: 'kanban', label: 'Kanban view', icon: <Fa icon={faThLarge} className="text-xs" /> },
-                      ],
-                      onChange: id => setListViewMode(id as 'table' | 'kanban'),
-                    }}
-                    hideColumnFilters
-                    hideBody={listViewMode === 'kanban'}
-                    perPage={50}
-                    selectable
-                    bulkActions={({ rows, clear }) => {
-                      const cancellable = rows.filter(s => isQuotationStage(s.status))
-                      return (
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="text-xs font-semibold text-[var(--text-2)]">
-                            {rows.length} selected
-                            {cancellable.length !== rows.length ? ` · ${cancellable.length} cancellable` : ''}
-                          </span>
-                          <button type="button" className="sp-btn sp-btn-ghost" onClick={clear}>Clear</button>
-                          <button
-                            type="button"
-                            className="sp-btn"
-                            disabled={cancellable.length === 0}
-                            title={cancellable.length === 0 ? 'Select draft or sent quotations to cancel in bulk' : undefined}
-                            onClick={() => {
-                              cancellable.forEach(s => cancelSO(s.id))
-                              clear()
-                            }}
-                          >
-                            <Fa icon={faBan} className="text-[10px]" />
-                            {' '}Cancel {cancellable.length || ''} quotation{cancellable.length !== 1 ? 's' : ''}
-                          </button>
-                        </div>
-                      )
-                    }}
-                    emptyMessage={
-                      listTab === 'quotations' && stats.orders > 0 && filtered.length === 0
-                        ? 'No quotations here — switch to Orders to see confirmed sales.'
-                        : filtered.length === 0 && salesOrderViews.length === 0
-                          ? 'No sale orders yet'
-                          : 'No orders match your filter'
-                    }
-                    emptyAction={
-                      listTab === 'quotations' && stats.orders > 0 && filtered.length === 0 ? (
-                        <button
-                          type="button"
-                          className="sp-btn sp-btn-primary"
-                          onClick={() => { setListTabAndReset('orders'); setFilterAndReset('sales_orders') }}
-                        >
-                          View orders ({stats.orders})
-                        </button>
-                      ) : filtered.length === 0 && salesOrderViews.length === 0 ? (
-                      <button type="button" className="sp-btn sp-btn-primary" onClick={openNewForm}>New quotation</button>
-                      ) : undefined
-                    }
-                    onRowClick={s => openOrder(s.id)}
-                    rowLabel={s => `${s.ref} ${s.customerName}`}
-                    cardAccent={s => s.status === 'quotation' ? 'var(--warning)' : s.status === 'quotation_sent' ? 'var(--primary)' : s.status === 'sale' ? 'var(--navy)' : 'var(--text-4)'}
-                    renderCard={s => (
-                      <RecordCard
-                        eyebrow={s.ref}
-                        title={s.customerName}
-                        subtitle={`${fmtDate(s.date)}${s.salespersonName ? ` · ${s.salespersonName}` : ''} · ${s.lines?.length ?? 0} item${(s.lines?.length ?? 0) !== 1 ? 's' : ''}`}
-                        amount={fmtKes(s.total)}
-                        status={statusPill(s)}
-                        accent={s.status === 'quotation' ? 'var(--warning)' : s.status === 'quotation_sent' ? 'var(--primary)' : s.status === 'sale' ? 'var(--navy)' : 'var(--text-4)'}
-                        meta={[
-                          { label: 'Status', value: SALE_STATUS_LABELS[s.status] ?? s.status },
-                          ...(s.status === 'sale' ? [{ label: 'Invoice status', value: SO_INVOICE_STATUS_LABELS[saleOrderInvoiceStatus(s.status, s.lines)] }] : []),
-                          { label: 'Amount', value: fmtKes(s.total) },
-                        ]}
-                        onClick={() => openOrder(s.id)}
-                      />
-                    )}
-                    exportTitle="Sales orders"
-                    exportFilename="sales-orders"
-                  />
+                  <div className="sp-list-toolbar">
+                    <input
+                      type="search"
+                      className="sp-list-search"
+                      aria-label="Search quotations and orders"
+                      placeholder="Search reference or customer…"
+                      value={search}
+                      onChange={e => setSearchAndReset(e.target.value)}
+                    />
+                    <select
+                      aria-label="Filter by status"
+                      value={filter}
+                      onChange={e => setFilterAndReset(e.target.value as SalesListFilter)}
+                    >
+                      <option value="all">All statuses</option>
+                      {listTab === 'quotations' ? (
+                        <>
+                          <option value="my_quotations">My quotations</option>
+                          <option value="quotations">Quotation</option>
+                          <option value="quotation_sent">Quotation Sent</option>
+                        </>
+                      ) : (
+                        <>
+                          <option value="sales_orders">Sales Order</option>
+                          <option value="to_invoice">To invoice</option>
+                          <option value="fully_invoiced">Fully invoiced</option>
+                        </>
+                      )}
+                      <option value="cancelled">Cancelled</option>
+                    </select>
+                    <div className="sp-list-view-toggle" role="group" aria-label="List layout">
+                      <button type="button" className="sp-btn" data-active={listViewMode === 'table' ? 'true' : 'false'} onClick={() => setListViewMode('table')} aria-pressed={listViewMode === 'table'}>
+                        <Fa icon={faListUl} className="text-xs" /> Table
+                      </button>
+                      <button type="button" className="sp-btn" data-active={listViewMode === 'kanban' ? 'true' : 'false'} onClick={() => setListViewMode('kanban')} aria-pressed={listViewMode === 'kanban'}>
+                        <Fa icon={faThLarge} className="text-xs" /> Kanban
+                      </button>
+                    </div>
+                  </div>
+                  {listViewMode === 'table' && (
+                    <div className="sp-table-wrap">
+                      <table className="sp-table">
+                        <thead>
+                          <tr>
+                            <th>Reference</th>
+                            <th>Customer</th>
+                            <th>Contact</th>
+                            <th>Date</th>
+                            <th>Valid until</th>
+                            <th>Salesperson</th>
+                            <th className="num">Total</th>
+                            <th>Status</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {filtered.length === 0 ? (
+                            <tr>
+                              <td colSpan={8} style={{ textAlign: 'center', padding: '28px 12px', color: 'var(--sp-text-3)' }}>
+                                {listTab === 'quotations' && stats.orders > 0
+                                  ? 'No quotations here — switch to Orders to see confirmed sales.'
+                                  : salesOrderViews.length === 0
+                                    ? 'No sale orders yet'
+                                    : 'No orders match your filter'}
+                                <div style={{ marginTop: 10 }}>
+                                  {listTab === 'quotations' && stats.orders > 0 ? (
+                                    <button type="button" className="sp-btn sp-btn-primary" onClick={() => { setListTabAndReset('orders'); setFilterAndReset('sales_orders') }}>
+                                      View orders ({stats.orders})
+                                    </button>
+                                  ) : salesOrderViews.length === 0 ? (
+                                    <button type="button" className="sp-btn sp-btn-primary" onClick={openNewForm}>New quotation</button>
+                                  ) : null}
+                                </div>
+                              </td>
+                            </tr>
+                          ) : (
+                            filtered.map(s => {
+                              const cust = contacts.find(c => c.id === s.customerId)
+                              const contactLabel = cust?.type === 'individual' ? (cust.name || '—') : (cust?.email || cust?.name || '—')
+                              return (
+                                <tr key={s.id} className="sp-row-click" onClick={() => openOrder(s.id)} style={{ cursor: 'pointer' }}>
+                                  <td><button type="button" className="sp-linkish" onClick={e => { e.stopPropagation(); openOrder(s.id) }}>{s.ref}</button></td>
+                                  <td>{s.customerName}</td>
+                                  <td>{contactLabel}</td>
+                                  <td>{fmtDate(s.date)}</td>
+                                  <td>{s.validUntil ? fmtDate(s.validUntil) : '—'}</td>
+                                  <td>{(s as any).salespersonName || s.createdByName || '—'}</td>
+                                  <td className="num">{salesKes(s.total)}</td>
+                                  <td>{statusPill(s)}</td>
+                                </tr>
+                              )
+                            })
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
                   {listViewMode === 'kanban' && (
                     <div className="p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                       {(['quotation', 'quotation_sent', 'sale', 'cancelled'] as const).map(col => {
@@ -1614,9 +1541,9 @@ function SalesContent() {
                           <div key={col} className="flex flex-col gap-2">
                             <div className="flex items-center justify-between mb-1">
                               <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: colColors[col] }}>{SALE_STATUS_LABELS[col]}</span>
-                              <span className="text-[10px] font-semibold text-[var(--text-4)] bg-[var(--bg-surface)] px-2 py-0.5 rounded-full">{colOrders.length}</span>
+                              <span className="text-[10px] font-semibold text-[var(--sp-text-3)] bg-[var(--sp-grey-bg)] px-2 py-0.5 rounded-full">{colOrders.length}</span>
                             </div>
-                            {colOrders.length === 0 && <div className="border-2 border-dashed border-[var(--border-lt)] rounded-xl p-4 text-center text-[10px] text-[var(--text-4)]">No orders</div>}
+                            {colOrders.length === 0 && <div className="border border-dashed border-[var(--sp-border)] rounded-[6px] p-4 text-center text-[10px] text-[var(--sp-text-3)]">No orders</div>}
                             {colOrders.map(s => (
                               <div
                                 key={s.id}
@@ -1624,11 +1551,11 @@ function SalesContent() {
                                 className={`card p-3 cursor-pointer sales-kanban-card sales-kanban-card--${col}`}
                               >
                                 <div className="flex items-center justify-between mb-1">
-                                  <span className="text-xs font-bold text-primary-600">{s.ref}</span>
-                                  <span className="text-[10px] font-bold text-[var(--text-1)]">{fmtKes(s.total)}</span>
+                                  <span className="text-xs font-bold sp-linkish">{s.ref}</span>
+                                  <span className="text-[10px] font-bold text-[var(--sp-text)]">{salesKes(s.total)}</span>
                                 </div>
-                                <p className="text-[11px] text-[var(--text-2)] truncate">{s.customerName}</p>
-                                <p className="text-[10px] text-[var(--text-4)] mt-1">{fmtDate(s.date)} · {s.lines?.length ?? 0} item{(s.lines?.length ?? 0) !== 1 ? 's' : ''}</p>
+                                <p className="text-[11px] text-[var(--sp-text-2)] truncate">{s.customerName}</p>
+                                <p className="text-[10px] text-[var(--sp-text-3)] mt-1">{fmtDate(s.date)} · {s.lines?.length ?? 0} item{(s.lines?.length ?? 0) !== 1 ? 's' : ''}</p>
                               </div>
                             ))}
                           </div>
@@ -1636,7 +1563,6 @@ function SalesContent() {
                       })}
                     </div>
                   )}
-                  </TablePageLayout>
                   </div>
                 </>
               ) : view === 'form' && !activeOrder && searchParams.get('id') ? (
@@ -2007,7 +1933,7 @@ function SalesContent() {
                                       )}
                                       <td className="num">
                                         {isEditing ? <input type="number" aria-label="Line item unit price" min={0} value={editLinePrice} onChange={e => setEditLinePrice(e.target.value)} className="w-20 text-right" />
-                                        : fmtKes(l.unitPrice)}
+                                        : salesKes(l.unitPrice)}
                                       </td>
                                       <td className="num">
                                         {isEditing ? <input type="number" aria-label="Line item discount percentage" min={0} max={100} value={editLineDiscount} onChange={e => setEditLineDiscount(e.target.value)} className="w-14 text-right" />
@@ -2019,8 +1945,8 @@ function SalesContent() {
                                       </td>
                                       <td className="num">
                                         {isEditing ? (
-                                          <span>{fmtKes(Math.round(Math.max(0, Number(editLineQty) || 0) * Math.max(0, Number(editLinePrice) || 0) * (1 - Math.max(0, Math.min(100, Number(editLineDiscount) || 0)) / 100)))}</span>
-                                        ) : fmtKes(l.subtotal)}
+                                          <span>{salesKes(Math.round(Math.max(0, Number(editLineQty) || 0) * Math.max(0, Number(editLinePrice) || 0) * (1 - Math.max(0, Math.min(100, Number(editLineDiscount) || 0)) / 100)))}</span>
+                                        ) : salesKes(l.subtotal)}
                                       </td>
                                       <td>
                                         {isEditing ? (
@@ -2065,9 +1991,9 @@ function SalesContent() {
                           <SalesDocTotals
                             sticky
                             rows={[
-                              { label: 'Untaxed amount', value: fmtKes(activeOrder.subtotal) },
-                              { label: 'VAT', value: fmtKes(activeOrder.taxTotal) },
-                              { label: 'Total', value: fmtKes(activeOrder.total), grand: true },
+                              { label: 'Untaxed amount', value: salesKes(activeOrder.subtotal) },
+                              { label: 'VAT', value: salesKes(activeOrder.taxTotal) },
+                              { label: 'Total', value: salesKes(activeOrder.total), grand: true },
                             ]}
                           />
                           </>
@@ -2151,7 +2077,7 @@ function SalesContent() {
                                     <tr key={inv.id}>
                                       <td>{inv.name || inv.number || inv.id}</td>
                                       <td>{inv.status || inv.state}</td>
-                                      <td className="num">{fmtKes(inv.total ?? inv.amountTotal ?? 0)}</td>
+                                      <td className="num">{salesKes(inv.total ?? inv.amountTotal ?? 0)}</td>
                                     </tr>
                                   ))}
                                 </tbody>
@@ -2226,7 +2152,7 @@ function SalesContent() {
                   <div className="w-8 h-8 rounded-lg bg-primary-50 flex items-center justify-center text-[10px] font-bold text-primary-600 flex-shrink-0">{p.name?.slice(0, 2).toUpperCase()}</div>
                   <div className="flex-1 min-w-0">
                     <p className="font-bold text-xs truncate">{p.name}</p>
-                    <p className="text-[10px] text-[var(--text-4)]">{p.category} · {fmtKes(p.salePrice)}{p.stockQty > 0 ? ` · ${p.stockQty} in stock` : ' · out of stock'}</p>
+                    <p className="text-[10px] text-[var(--text-4)]">{p.category} · {salesKes(p.salePrice)}{p.stockQty > 0 ? ` · ${p.stockQty} in stock` : ' · out of stock'}</p>
                   </div>
                 </div>
               )}
@@ -2243,9 +2169,9 @@ function SalesContent() {
               <div className="p-3 rounded-xl bg-[var(--bg-surface)] border border-[var(--border-lt)] flex items-center justify-between">
                 <div>
                   <p className="text-[10px] font-semibold text-[var(--text-3)]">Line total preview</p>
-                  <p className="text-xs text-[var(--text-4)] mt-0.5">{fmtKes(addLineProduct.salePrice)} × {Math.max(1, Number(addLineQty) || 1)}{Number(addLineDiscount) > 0 && ` − ${addLineDiscount}% disc`}{addLineVat && ` + ${companySettings.vatRate}% VAT`}</p>
+                  <p className="text-xs text-[var(--text-4)] mt-0.5">{salesKes(addLineProduct.salePrice)} × {Math.max(1, Number(addLineQty) || 1)}{Number(addLineDiscount) > 0 && ` − ${addLineDiscount}% disc`}{addLineVat && ` + ${companySettings.vatRate}% VAT`}</p>
                 </div>
-                <p className="text-sm font-extrabold text-primary-600 font-mono">{fmtKes((() => { const qty = Math.max(1, Number(addLineQty) || 1); const disc = Number(addLineDiscount) || 0; const sub = Math.round(addLineProduct.salePrice * qty * (1 - disc / 100)); return sub + (addLineVat ? Math.round(sub * (companySettings.vatRate / 100)) : 0) })())}</p>
+                <p className="text-sm font-extrabold text-primary-600 font-mono">{salesKes((() => { const qty = Math.max(1, Number(addLineQty) || 1); const disc = Number(addLineDiscount) || 0; const sub = Math.round(addLineProduct.salePrice * qty * (1 - disc / 100)); return sub + (addLineVat ? Math.round(sub * (companySettings.vatRate / 100)) : 0) })())}</p>
               </div>
             )}
             <div className="flex gap-2 justify-end pt-4 border-t border-[var(--border-lt)]">
@@ -2317,7 +2243,7 @@ function SalesContent() {
                         <StatusBadge status={v.status as any} label={SALE_STATUS_LABELS[v.status as keyof typeof SALE_STATUS_LABELS] ?? v.status} size="xs" />
                       </div>
                       <p className="text-[10px] text-[var(--text-4)] mt-1">
-                        {fmtKes(v.total)} · {fmtDate(v.createdAt)}{v.createdByName ? ` · ${v.createdByName}` : ''}
+                        {salesKes(v.total)} · {fmtDate(v.createdAt)}{v.createdByName ? ` · ${v.createdByName}` : ''}
                       </p>
                     </div>
                     <div className="flex items-center gap-2 flex-shrink-0">
@@ -2379,8 +2305,8 @@ function SalesContent() {
                         <td className="py-2 pr-2 font-semibold text-[var(--text-1)]">{r.la?.productName ?? r.lb?.productName ?? r.la?.description ?? r.lb?.description ?? '—'}</td>
                         <td className="py-2 text-right">{r.la ? r.la.qty : <span className="text-[var(--text-4)]">—</span>}</td>
                         <td className="py-2 text-right">{r.lb ? r.lb.qty : <span className="text-[var(--text-4)]">—</span>}</td>
-                        <td className="py-2 text-right">{r.la ? fmtKes(r.la.unitPrice) : <span className="text-[var(--text-4)]">—</span>}</td>
-                        <td className="py-2 text-right">{r.lb ? fmtKes(r.lb.unitPrice) : <span className="text-[var(--text-4)]">—</span>}</td>
+                        <td className="py-2 text-right">{r.la ? salesKes(r.la.unitPrice) : <span className="text-[var(--text-4)]">—</span>}</td>
+                        <td className="py-2 text-right">{r.lb ? salesKes(r.lb.unitPrice) : <span className="text-[var(--text-4)]">—</span>}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -2388,8 +2314,8 @@ function SalesContent() {
               </div>
               <div className="flex items-center justify-between p-3 rounded-xl bg-[var(--bg-surface)] border border-[var(--border-lt)] text-xs font-bold">
                 <span>Total</span>
-                <span>{fmtKes(a.total)} → {fmtKes(b.total)}{a.total !== b.total && (
-                  <span className={b.total > a.total ? 'text-emerald-600' : 'text-red-600'}> ({b.total > a.total ? '+' : ''}{fmtKes(b.total - a.total)})</span>
+                <span>{salesKes(a.total)} → {salesKes(b.total)}{a.total !== b.total && (
+                  <span className={b.total > a.total ? 'text-emerald-600' : 'text-red-600'}> ({b.total > a.total ? '+' : ''}{salesKes(b.total - a.total)})</span>
                 )}</span>
               </div>
               <div className="flex justify-end pt-2 border-t border-[var(--border-lt)]">
@@ -2642,7 +2568,7 @@ function NewQuotationForm({
     <div>
       <div className="sales-proto-page-header">
         <div>
-          <button type="button" className="sp-btn sp-btn-ghost" onClick={onCancel} style={{ paddingLeft: 0 }}>← Back</button>
+          <button type="button" className="sp-btn sp-btn-ghost" onClick={onCancel} style={{ paddingLeft: 0, marginBottom: 2 }}>← Back</button>
           <h1>Create quotation</h1>
           <div className="sub">Customer · lines · terms · send</div>
         </div>
@@ -2852,7 +2778,7 @@ function NewQuotationForm({
                                     <button key={p.id} className="w-full text-left px-3 py-2 hover:bg-[var(--sp-accent-soft)] transition-colors"
                                       onClick={() => { selectProductForDraftLine(line.id, p); setProductSearch(prev => ({ ...prev, [line.id]: '' })); setProductDropdownOpen(null) }}>
                                       <p className="text-xs font-semibold text-[var(--sp-text)]">{p.name}</p>
-                                      <p className="text-[10px] text-[var(--sp-text-3)]">{p.category} · {fmtKes(p.salePrice)} · {p.stockQty > 0 ? `${p.stockQty} in stock` : 'out of stock'}</p>
+                                      <p className="text-[10px] text-[var(--sp-text-3)]">{p.category} · {salesKes(p.salePrice)} · {p.stockQty > 0 ? `${p.stockQty} in stock` : 'out of stock'}</p>
                                     </button>
                                   ))
                                 )}
@@ -2887,7 +2813,7 @@ function NewQuotationForm({
                             <option value={String(companySettings.vatRate)}>{companySettings.vatRate}%</option>
                           </select>
                         </td>
-                        <td className="num font-bold">{fmtKes(calcDraftLineTotal(line))}</td>
+                        <td className="num font-bold">{salesKes(calcDraftLineTotal(line))}</td>
                         <td>
                           <div className="flex items-center justify-end gap-0.5">
                             {moveButtons}
@@ -2911,9 +2837,9 @@ function NewQuotationForm({
             <SalesDocTotals
               sticky
               rows={[
-                { label: 'Untaxed amount', value: fmtKes(draftSubtotal) },
-                { label: 'Taxes', value: fmtKes(draftTaxTotal) },
-                { label: 'Total', value: fmtKes(draftTotal), grand: true },
+                { label: 'Untaxed amount', value: salesKes(draftSubtotal) },
+                { label: 'Taxes', value: salesKes(draftTaxTotal) },
+                { label: 'Total', value: salesKes(draftTotal), grand: true },
                 { label: 'Currency', value: 'KES' },
               ]}
             />
