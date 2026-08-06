@@ -1821,7 +1821,7 @@ function SalesContent() {
                               { label: 'Set to Quotation', icon: faRotateLeft, onClick: () => resetSOToDraft(activeOrder.id) },
                               { label: 'Cancel', icon: faBan, tone: 'danger' as const, onClick: () => setShowCancelConfirm(true) },
                             ] : []),
-                            ...(canReverseConfirmedSO && systemSettings.accCreditNotes && activeInvoices.some(i => i.status === 'posted' || i.status === 'approved' || (i.amountPaid ?? 0) > 0) ? [
+                            ...(canReverseConfirmedSO && systemSettings.accCreditNotes && activeInvoices.some(i => i.status === 'posted' || (i.amountPaid ?? 0) > 0) ? [
                               {
                                 label: 'Issue credit note…',
                                 icon: faFileInvoiceDollar,
