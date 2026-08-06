@@ -40,7 +40,6 @@ import { normalizeCompaniesForClient } from '@/lib/company-normalization'
 import { saleOrderPersistBody } from '@/lib/sale-order-persist'
 import {
   markSaleOrderDraftEdit,
-  clearSaleOrderDraftEdit,
   hasSaleOrderDraftEdits,
   isSaleOrderDraftEditing,
   stampSaleOrderPersisted,
