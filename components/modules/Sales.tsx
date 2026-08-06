@@ -76,13 +76,21 @@ import {
   type DocumentPaymentDetails,
 } from '@/lib/document-payment-details'
 import PaymentDetailsPicker from '@/components/payment/PaymentDetailsPicker'
-import { SalesDocTabs, SalesDocTotals, SalesDocField } from '@/components/modules/sales/workbench'
+import {
+  SalesDocTabs,
+  SalesDocTotals,
+  SalesDocField,
+  SalesDocPill,
+  SalesDocWorkflow,
+  saleStatusPill,
+  deliveryStatusPill,
+  buildSoWorkflowSteps,
+} from '@/components/modules/sales/workbench'
 import ContactFormModal, { blankIndividualContact } from '@/components/contacts/ContactFormModal'
 import DocumentEmailSendHistory from '@/components/email/DocumentEmailSendHistory'
 import { resolveListPrice } from '@/lib/pricing/pricelist'
 import { pairOrderLinesWithDeliveryLines } from '@/lib/delivery-prepare'
 import Chatter from '@/components/erp/Chatter'
-import { SalesRecordHeader } from '@/components/modules/sales/SalesRecordHeader'
 import { ConfirmQuotationDialog } from '@/components/modules/sales/ConfirmQuotationDialog'
 import {
   canConfirmAndReserve,
@@ -1251,11 +1259,15 @@ function SalesContent() {
     }
   }
 
-  const statusPill = (s: SalesOrderView) => (
-    <StatusBadge status={s.status} label={SALE_STATUS_LABELS[s.status] ?? s.status} size="xs" />
-  )
-
   const todayIso = useMemo(() => new Date().toISOString().slice(0, 10), [])
+
+  const statusPill = (s: SalesOrderView) => {
+    const pill = saleStatusPill(s.status)
+    if (isQuotationStage(s.status) && s.validUntil && s.validUntil < todayIso) {
+      return <SalesDocPill label="Expired" tone="warning" />
+    }
+    return <SalesDocPill label={pill.label} tone={pill.tone} />
+  }
 
   const salesListColumns: ColumnDef<SalesOrderView>[] = useMemo(() => [
     {
@@ -1316,7 +1328,8 @@ function SalesContent() {
   if (!mounted) return <ModuleSkeleton />
 
   return (
-    <div className="mod-page sales-pilot">
+    <div className="mod-page sales-pilot sales-doc">
+      {/* ModuleHeader kept for a11y/SSR count but visually hidden via .sales-doc CSS */}
       <ModuleHeader
         title="Sales"
         subtitle="Quotations · orders · deliveries · invoicing"
@@ -1331,57 +1344,8 @@ function SalesContent() {
         }
       />
 
-      {view === 'list' && (
-        <TabBar
-          tabs={[
-            { id: 'quotations', label: `Quotations (${stats.quotations + stats.quotationsSent})` },
-            { id: 'orders', label: `Orders (${stats.orders})` },
-          ]}
-          active={listTab}
-          onChange={id => setListTabAndReset(id as 'quotations' | 'orders')}
-          maxVisibleDesktop={6}
-          ariaLabel="Sales sections"
-        />
-      )}
-
-      <div className="mod-body">
-        {view === 'list' && (
-          <div className="sales-pilot-rail" aria-label="Sales pipeline">
-            <button
-              type="button"
-              className={`sales-pilot-stat ${listTab === 'quotations' && (filter === 'all' || filter === 'quotations' || filter === 'my_quotations') ? 'is-active' : ''}`}
-              onClick={() => { setListTabAndReset('quotations'); setFilterAndReset('quotations') }}
-            >
-              <span className="sales-pilot-stat-label">Draft quotes</span>
-              <span className="sales-pilot-stat-value tabular-nums">{stats.quotations.toLocaleString()}</span>
-            </button>
-            <button
-              type="button"
-              className={`sales-pilot-stat ${listTab === 'quotations' && filter === 'quotation_sent' ? 'is-active' : ''}`}
-              onClick={() => { setListTabAndReset('quotations'); setFilterAndReset('quotation_sent') }}
-            >
-              <span className="sales-pilot-stat-label">Sent</span>
-              <span className="sales-pilot-stat-value tabular-nums">{stats.quotationsSent.toLocaleString()}</span>
-            </button>
-            <button
-              type="button"
-              className={`sales-pilot-stat ${listTab === 'orders' && filter !== 'to_invoice' ? 'is-active' : ''}`}
-              onClick={() => { setListTabAndReset('orders'); setFilterAndReset('sales_orders') }}
-            >
-              <span className="sales-pilot-stat-label">Confirmed orders</span>
-              <span className="sales-pilot-stat-value tabular-nums">{stats.orders.toLocaleString()}</span>
-            </button>
-            <button
-              type="button"
-              className={`sales-pilot-stat ${listTab === 'orders' && filter === 'to_invoice' ? 'is-active' : ''} ${stats.toInvoice > 0 ? 'tone-success' : ''}`}
-              onClick={() => { setListTabAndReset('orders'); setFilterAndReset('to_invoice') }}
-            >
-              <span className="sales-pilot-stat-label">Ready to invoice</span>
-              <span className="sales-pilot-stat-value tabular-nums">{stats.toInvoice.toLocaleString()}</span>
-            </button>
-          </div>
-        )}
-        <div className="card overflow-hidden sales-pilot-surface">
+      <div className="mod-body sales-doc-body">
+        <div className="sales-doc-shell">
           <div className="flex flex-col">
               {/* ── NEW QUOTATION FULL-PAGE FORM ──────────────────────────── */}
               {view === 'new' ? (
@@ -1481,6 +1445,38 @@ function SalesContent() {
               ) : view === 'list' ? (
                 /* ── ORDERS LIST ─────────────────────────────────────────── */
                 <>
+                  <div className="sales-doc-page-header">
+                    <div>
+                      <h1>{listTab === 'quotations' ? 'Quotations' : 'Sales orders'}</h1>
+                      <div className="sub">
+                        {listTab === 'quotations'
+                          ? 'Draft → send → accept → convert to sales order'
+                          : 'Confirmed → deliver → invoice → paid'}
+                      </div>
+                    </div>
+                    <div className="sales-doc-actions">
+                      <button type="button" className="sd-btn sd-btn-primary" onClick={openNewForm}>
+                        New quotation
+                      </button>
+                    </div>
+                  </div>
+                  <div className="sales-doc-panel">
+                  <SalesDocTabs
+                    tabs={[
+                      `Quotations (${stats.quotations + stats.quotationsSent})`,
+                      `Orders (${stats.orders})`,
+                    ]}
+                    active={
+                      listTab === 'quotations'
+                        ? `Quotations (${stats.quotations + stats.quotationsSent})`
+                        : `Orders (${stats.orders})`
+                    }
+                    onChange={tab => {
+                      if (tab.startsWith('Quotations')) setListTabAndReset('quotations')
+                      else setListTabAndReset('orders')
+                    }}
+                    ariaLabel="Sales sections"
+                  />
                   <TablePageLayout
                     title={listTab === 'quotations' ? 'Quotations' : 'Sales orders'}
                   >
@@ -1633,35 +1629,55 @@ function SalesContent() {
                     </div>
                   )}
                   </TablePageLayout>
+                  </div>
                 </>
               ) : view === 'form' && !activeOrder && searchParams.get('id') ? (
                 <ModuleSkeleton />
               ) : (
                 /* ── ORDER FORM VIEW ─────────────────────────────────────── */
-                <div className="flex flex-col">
-                  {/* Action bar */}
-                  <div className="p-4 border-b border-[var(--border-lt)] flex items-center justify-between flex-wrap gap-3">
-                    <button onClick={backToList} className="btn-outline flex items-center gap-2"><Fa icon={faArrowLeft} /><span>Back</span></button>
-                    <div className="flex items-center gap-2 flex-wrap">
-                      {/* ── Quotation / Quotation Sent (Odoo button visibility) ── */}
-                      {activeOrder && isQuotationStage(activeOrder.status) && (<>
+                <div className="flex flex-col gap-3">
+                  {activeOrder && (
+                    <>
+                  <div className="sales-doc-page-header">
+                    <div>
+                      <button type="button" className="sd-btn sd-btn-ghost" style={{ paddingLeft: 0 }} onClick={backToList}>← Back</button>
+                      <div className="sales-doc-ref-row">
+                        <h1>{activeOrder.ref}</h1>
+                        {(() => {
+                          const pill = saleStatusPill(activeOrder.status)
+                          return <SalesDocPill label={pill.label} tone={pill.tone} />
+                        })()}
+                        {activeOrder.locked && <SalesDocPill label="Locked" tone="neutral" />}
+                      </div>
+                      <div className="sub">
+                        {isQuotationStage(activeOrder.status) ? (
+                          <>Source customer {activeOrder.customerName}{activeOrder.salespersonName ? ` · Salesperson ${activeOrder.salespersonName}` : ''}</>
+                        ) : (
+                          <>
+                            Source quotation{' '}
+                            {activeOrder.quotationRef ? (
+                              <span className="sales-doc-link">{activeOrder.quotationRef}</span>
+                            ) : '—'}
+                            {' · '}{activeOrder.customerName}
+                          </>
+                        )}
+                      </div>
+                    </div>
+                    <div className="sales-doc-actions">
+                      {isQuotationStage(activeOrder.status) && (<>
                           {activeOrder.status === 'quotation' && (
-                            <button className="btn-primary flex items-center gap-2 text-xs" disabled={!activeOrder.lines.length || sendingQuoteId === activeOrder.id} title={!activeOrder.lines.length ? 'Add at least one product first' : undefined} onClick={() => openSendQuoteModal(activeOrder)}>
-                              <Fa icon={faFileInvoice} /><span>{sendingQuoteId === activeOrder.id ? 'Sending…' : 'Send by Email'}</span>
+                            <button type="button" className="sd-btn sd-btn-primary" disabled={!activeOrder.lines.length || sendingQuoteId === activeOrder.id} onClick={() => openSendQuoteModal(activeOrder)}>
+                              {sendingQuoteId === activeOrder.id ? 'Sending…' : 'Send to customer'}
                             </button>
                           )}
-                          <button
-                            type="button"
-                            className="btn-primary flex items-center gap-2 text-xs"
-                            disabled={confirmingSO}
-                            onClick={openConfirmQuoteDialog}
-                          >
-                            <Fa icon={faCheck} aria-hidden="true" /><span>{confirmingSO ? 'Confirming…' : 'Confirm quotation'}</span>
-                          </button>
+                          {activeOrder.status === 'quotation_sent' && (
+                            <button type="button" className="sd-btn" disabled={!activeOrder.lines.length || sendingQuoteId === activeOrder.id} onClick={() => openSendQuoteModal(activeOrder)}>
+                              {sendingQuoteId === activeOrder.id ? 'Sending…' : 'Send to customer'}
+                            </button>
+                          )}
                           <MoreActionsMenu
                             items={[
                               ...(activeOrder.status === 'quotation_sent' ? [
-                                { label: sendingQuoteId === activeOrder.id ? 'Sending…' : 'Send by Email', icon: faFileInvoice, disabled: !activeOrder.lines.length || sendingQuoteId === activeOrder.id, onClick: () => openSendQuoteModal(activeOrder) },
                                 { label: 'Reset to Draft', icon: faRotateLeft, onClick: () => setShowResetDraftConfirm(true) },
                               ] : []),
                               { label: 'Preview', icon: faFileAlt, disabled: !activeOrder.lines.length, onClick: () => previewSalesDocument(activeOrder, 'Quotation', 'QUOTATION') },
@@ -1674,37 +1690,23 @@ function SalesContent() {
                               { label: 'Delete', icon: faTrash, tone: 'danger', onClick: () => setShowDelConfirm(true) },
                             ]}
                           />
-                      </>)}
-                      {/* ── Sales Order ── */}
-                      {activeOrder?.status === 'sale' && (<>
-                        {canInvoiceFromSO && invoiceDeliveryReady && (activeInvoiceStatus === 'to_invoice' || activeInvoiceStatus === 'upselling') ? (
                           <button
-                            className="btn-primary flex items-center gap-2 text-xs"
-                            onClick={async () => {
-                              const soPayment = getDocumentPaymentDetails(activeOrder.id)
-                              const inv = await Promise.resolve(createInvoiceFromSO(activeOrder.id))
-                              if (inv?.id) setDocumentPaymentDetails(inv.id, soPayment)
-                            }}
+                            type="button"
+                            className="sd-btn sd-btn-success"
+                            disabled={confirmingSO}
+                            onClick={openConfirmQuoteDialog}
                           >
-                            <Fa icon={faFileInvoiceDollar} /><span>Create Invoice</span>
+                            {confirmingSO ? 'Confirming…' : 'Confirm quotation'}
                           </button>
-                        ) : canInvoiceFromSO && activeInvoices.length === 0 && !invoiceDeliveryReady ? (
-                          <button className="btn-secondary flex items-center gap-2 text-xs opacity-60 cursor-not-allowed" disabled title="Validate the delivery first">
-                            <Fa icon={faFileInvoiceDollar} /><span>Invoice after Delivery</span>
-                          </button>
-                        ) : null}
-                        {visibleDeliveries.some(d => isOpenDeliveryStatus(d.status)) ? (
-                          <button className={`${activeInvoiceStatus === 'to_invoice' ? 'btn-secondary' : 'btn-primary'} flex items-center gap-2 text-xs`} onClick={() => void openDeliveryView()}><Fa icon={faTruck} /><span>Delivery</span></button>
-                        ) : visibleDeliveries.length > 0 ? (
-                          <button className="btn-secondary flex items-center gap-2 text-xs" onClick={() => void openDeliveryView()}><Fa icon={faTruck} /><span>Deliveries</span></button>
-                        ) : (
-                          <button className="btn-primary flex items-center gap-2 text-xs" onClick={() => void openDeliveryView()}><Fa icon={faTruck} /><span>Create delivery</span></button>
-                        )}
+                      </>)}
+                      {activeOrder.status === 'sale' && (<>
+                        <button type="button" className="sd-btn" onClick={() => previewSalesDocument(activeOrder, 'Sale Order', 'SALES ORDER')}>Print</button>
+                        <button type="button" className="sd-btn" disabled={sendingQuoteId === activeOrder.id} onClick={() => openSendQuoteModal(activeOrder)}>
+                          {sendingQuoteId === activeOrder.id ? 'Sending…' : 'Send by email'}
+                        </button>
                         <MoreActionsMenu
                           items={[
-                            { label: sendingQuoteId === activeOrder.id ? 'Sending…' : 'Send by Email', icon: faFileInvoice, disabled: sendingQuoteId === activeOrder.id, onClick: () => openSendQuoteModal(activeOrder) },
                             { label: 'Preview', icon: faFileAlt, onClick: () => previewSalesDocument(activeOrder, 'Sale Order', 'SALES ORDER') },
-                            { label: 'Print', icon: faPrint, onClick: () => downloadSalesDocument(activeOrder, 'Sale Order', 'SO') },
                             ...(canInvoiceFromSO && invoiceableLinesFor(activeOrder).length > 0 ? [{ label: 'Create Partial Invoice…', icon: faFileInvoiceDollar, onClick: () => openPartialInvoiceModal(activeOrder) }] : []),
                             ...(activeDeliveries.some(d => canGenerateDeliveryNote(d)) ? [{ label: 'Print delivery note', icon: faTruck, onClick: () => { const del = activeDeliveries.find(d => canGenerateDeliveryNote(d)) ?? activeDeliveries[0]; setDnRecipientName(del.recipientName ?? activeOrder.customerName ?? ''); setDnRecipientPhone(del.recipientPhone ?? ''); setDnRecipientId(del.recipientIdNumber ?? ''); setDnAddress(del.deliveryAddress ?? ''); setDnNotes(del.notes ?? ''); setShowDnModal(true) } }] : []),
                             ...(activeOrder.locked && isAdmin ? [{ label: 'Unlock', icon: faRotateLeft, onClick: () => setSaleOrderLock(activeOrder.id, false) }] : []),
@@ -1717,42 +1719,47 @@ function SalesContent() {
                             ] : []),
                           ]}
                         />
+                        {(visibleDeliveries.some(d => isOpenDeliveryStatus(d.status)) || visibleDeliveries.length === 0) ? (
+                          <button type="button" className="sd-btn sd-btn-primary" onClick={() => void openDeliveryView()}>
+                            {visibleDeliveries.length === 0 ? 'Create delivery' : 'Delivery'}
+                          </button>
+                        ) : (
+                          <button type="button" className="sd-btn" onClick={() => void openDeliveryView()}>Deliveries</button>
+                        )}
+                        {canInvoiceFromSO && invoiceDeliveryReady && (activeInvoiceStatus === 'to_invoice' || activeInvoiceStatus === 'upselling') ? (
+                          <button
+                            type="button"
+                            className="sd-btn"
+                            onClick={async () => {
+                              const soPayment = getDocumentPaymentDetails(activeOrder.id)
+                              const inv = await Promise.resolve(createInvoiceFromSO(activeOrder.id))
+                              if (inv?.id) setDocumentPaymentDetails(inv.id, soPayment)
+                            }}
+                          >
+                            Create invoice
+                          </button>
+                        ) : null}
                       </>)}
-                      {/* ── Cancelled (exception state) ── */}
-                      {activeOrder?.status === 'cancelled' && (
-                        <button className="btn-outline flex items-center gap-2 text-xs" onClick={() => resetSOToDraft(activeOrder.id)}><Fa icon={faRotateLeft} /><span>Set to Quotation</span></button>
+                      {activeOrder.status === 'cancelled' && (
+                        <button type="button" className="sd-btn" onClick={() => resetSOToDraft(activeOrder.id)}>Set to Quotation</button>
                       )}
                     </div>
                   </div>
 
-                  {/* Order form body */}
-                  {activeOrder && (
-                    <div className="p-6 flex flex-col gap-6">
-                      <SalesRecordHeader
-                        order={activeOrder}
-                        invoiceStatus={activeInvoiceStatus}
-                        deliveriesCount={visibleDeliveries.length}
-                        invoicesCount={activeInvoices.length}
-                        paymentsCount={activePayments.length}
-                        returnsCount={activeReturns.length}
-                        canSeeFinance={canSeeFinanceRecords}
-                        canSeeReturns={canSeeReturns}
-                        onBackToList={backToList}
-                        onOpenDelivery={() => void openDeliveryView()}
-                        onOpenInvoices={() => router.push('/finance?tab=invoices')}
-                        onOpenReturns={() => router.push('/aftersales?tab=returns')}
-                        onPreview={() => previewSalesDocument(
-                          activeOrder,
-                          isQuotationStage(activeOrder.status) ? 'Quotation' : 'Sale Order',
-                          isQuotationStage(activeOrder.status) ? 'QUOTATION' : 'SALES ORDER',
-                        )}
-                        onSendQuote={() => openSendQuoteModal(activeOrder)}
-                        onConfirm={openConfirmQuoteDialog}
-                        onStepBlocked={msg => showToast(msg, 'error')}
-                      />
+                  {activeOrder.status === 'sale' && (
+                    <SalesDocWorkflow
+                      steps={buildSoWorkflowSteps({
+                        hasDelivery: visibleDeliveries.length > 0,
+                        deliveryPrepared: activeDeliveries.some(d => !!d.preparedAt || d.status === 'ready' || d.status === 'done'),
+                        deliveryDone: activeDeliveries.some(d => d.status === 'done'),
+                        invoiced: activeInvoiceStatus === 'invoiced' || activeInvoices.length > 0,
+                        paid: activePayments.length > 0 && activeInvoiceStatus === 'invoiced',
+                      })}
+                    />
+                  )}
 
                       {isQuotationStage(activeOrder.status) && quotationStockShortages.length > 0 && (
-                        <div className="sales-pilot-banner sales-pilot-banner--warn" role="status">
+                        <div className="sales-doc-banner sales-doc-banner--warn" role="status">
                           <span aria-hidden>!</span>
                           <div>
                             <strong>Stock warning</strong>
@@ -1770,7 +1777,7 @@ function SalesContent() {
                       )}
 
                       {activeOrder.status === 'sale' && activeOrder.quotationRef && (
-                        <div className="sales-pilot-banner sales-pilot-banner--ok" role="status">
+                        <div className="sales-doc-banner sales-doc-banner--ok" role="status">
                           <span aria-hidden>✓</span>
                           <div>
                             <strong>Confirmed sales order</strong>
@@ -1786,6 +1793,48 @@ function SalesContent() {
                           </div>
                         </div>
                       )}
+
+                    <div className="sales-doc-panel sales-doc-panel-pad">
+                      <div className="sales-doc-grid-2">
+                        <div>
+                          <SalesDocField label="Customer"><div className="sd-value">{activeOrder.customerName}</div></SalesDocField>
+                          <SalesDocField label="Payment terms"><div className="sd-value">{activeOrder.paymentTerms || '—'}</div></SalesDocField>
+                          <SalesDocField label="Salesperson"><div className="sd-value">{activeOrder.salespersonName || '—'}</div></SalesDocField>
+                        </div>
+                        <div>
+                          <SalesDocField label={isQuotationStage(activeOrder.status) ? 'Quote date' : 'Order date'}><div className="sd-value">{fmtDate(activeOrder.date)}</div></SalesDocField>
+                          <SalesDocField label={isQuotationStage(activeOrder.status) ? 'Valid until' : 'Expected delivery'}>
+                            <div className="sd-value">{fmtDate(isQuotationStage(activeOrder.status) ? (activeOrder.validUntil || '') : (activeOrder.deliveryDate || '')) || '—'}</div>
+                          </SalesDocField>
+                          <SalesDocField label="Order total"><div className="sd-value">{fmtKes(activeOrder.total)}</div></SalesDocField>
+                          {activeOrder.status === 'sale' && (
+                            <SalesDocField label="Related">
+                              <div className="sd-value" style={{ display: 'block', paddingTop: 6, paddingBottom: 6 }}>
+                                Deliveries:{' '}
+                                {visibleDeliveries.length
+                                  ? visibleDeliveries.map(d => (
+                                      <button key={d.id} type="button" className="sales-doc-link" style={{ marginRight: 6 }} onClick={() => void openDeliveryView(d.id)}>{d.ref}</button>
+                                    ))
+                                  : '—'}
+                                <br />
+                                Invoices:{' '}
+                                {activeInvoices.length
+                                  ? activeInvoices.map(inv => (
+                                      <button key={inv.id} type="button" className="sales-doc-link" style={{ marginRight: 6 }} onClick={() => router.push('/finance?tab=invoices')}>{inv.ref}</button>
+                                    ))
+                                  : 'None yet'}
+                              </div>
+                            </SalesDocField>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                    </>
+                  )}
+
+                  {/* Order form body */}
+                  {activeOrder && (
+                    <div className="flex flex-col gap-3">
 
                       {activeOrder.status === 'sale' && activeDeliveries.length > 0 && (
                         <div className="rounded-2xl border border-[var(--border-lt)] bg-[var(--bg-surface)] p-4 flex flex-col gap-2">
@@ -3289,56 +3338,46 @@ function DeliveryNoteView({
     })
   }
 
+  const dnPill = deliveryStatusPill(existingDelivery?.status ?? 'waiting')
+
   return (
-    <div className="flex flex-col">
-      {/* Header */}
-      <div className="p-4 border-b border-[var(--border-lt)] flex items-center justify-between flex-wrap gap-3 bg-[var(--bg-surface)]">
-        <div className="flex items-center gap-3">
-          <button onClick={onBack} className="btn-outline flex items-center gap-2 text-xs"><Fa icon={faArrowLeft} /><span>Back to Order</span></button>
-          <div>
-            <h2 className="text-sm font-bold text-[var(--text-1)]">Delivery Note — {existingDelivery?.ref ?? 'New'}</h2>
-            <p className="text-[10px] text-[var(--text-4)]">{order.ref} · {order.customerName}</p>
+    <div className="flex flex-col gap-3">
+      <div className="sales-doc-page-header">
+        <div>
+          <button type="button" className="sd-btn sd-btn-ghost" style={{ paddingLeft: 0 }} onClick={onBack}>← Back to order</button>
+          <div className="sales-doc-ref-row">
+            <h1>{existingDelivery?.ref ?? 'Delivery'}</h1>
+            <SalesDocPill label={dnPill.label} tone={dnPill.tone} />
           </div>
+          <div className="sub">Source {order.ref} · {order.customerName}</div>
         </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          {canGenerateDeliveryNote(existingDelivery) && <button onClick={handlePrintDN} className="btn-secondary flex items-center gap-2 text-xs"><Fa icon={faPrint} /><span>Download Delivery Note</span></button>}
+        <div className="sales-doc-actions">
+          {canGenerateDeliveryNote(existingDelivery) && (
+            <button type="button" className="sd-btn" onClick={handlePrintDN}>Print</button>
+          )}
           {canPrepare && (
-            <button onClick={handlePrepare} disabled={savingDelivery} className="btn-primary flex items-center gap-2 text-xs disabled:opacity-50">
-              <Fa icon={faBoxOpen} /><span>Prepare Delivery</span>
+            <button type="button" className="sd-btn sd-btn-primary" onClick={handlePrepare} disabled={savingDelivery}>
+              {savingDelivery ? 'Saving…' : 'Prepare delivery'}
             </button>
           )}
           {canValidate && (
-            <button onClick={handleValidate} disabled={savingDelivery} className="btn-primary flex items-center gap-2 text-xs disabled:opacity-50">
-              <Fa icon={faCheck} /><span>{savingDelivery ? 'Saving…' : 'Mark as delivered'}</span>
+            <button type="button" className="sd-btn sd-btn-primary" onClick={handleValidate} disabled={savingDelivery}>
+              {savingDelivery ? 'Saving…' : 'Mark as delivered'}
             </button>
           )}
         </div>
       </div>
 
-      {/* Body */}
-      <div className="p-6 flex flex-col gap-6">
-        <div className="sales-pilot-picking-summary" aria-label="Picking progress">
-          <div><span>Required</span><strong>{pickingSummary.required}</strong></div>
-          <div><span>Picked</span><strong>{pickingSummary.picked}</strong></div>
-          <div><span>Remaining</span><strong>{pickingSummary.remaining}</strong></div>
-          <div><span>Progress</span><strong>{pickingSummary.pct}%</strong></div>
+      <div className="sales-doc-panel sales-doc-panel-pad">
+        <div className="sales-doc-grid-2">
+          <SalesDocField label="Customer"><div className="sd-value">{order.customerName}</div></SalesDocField>
+          <SalesDocField label="Scheduled / order date"><div className="sd-value">{fmtDate(order.date)}</div></SalesDocField>
+          <SalesDocField label="Source order"><div className="sd-value"><span className="sales-doc-link">{order.ref}</span></div></SalesDocField>
+          <SalesDocField label="Delivery address"><div className="sd-value">{dnAddress || '—'}</div></SalesDocField>
         </div>
+      </div>
 
-        {/* DN Info card */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 p-4 rounded-2xl bg-[var(--bg-surface)] border border-[var(--border-lt)]">
-          <div className="flex flex-col gap-1"><span className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)]">Order Ref</span><span className="text-xs font-semibold text-primary-600">{order.ref}</span></div>
-          <div className="flex flex-col gap-1"><span className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)]">Customer</span><span className="text-xs font-semibold text-[var(--text-1)]">{order.customerName}</span></div>
-          <div className="flex flex-col gap-1"><span className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)]">Order Date</span><span className="text-xs text-[var(--text-2)]">{fmtDate(order.date)}</span></div>
-          <div className="flex flex-col gap-1">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)]">Delivery Status</span>
-            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold w-fit ${existingDelivery?.status === 'ready' ? 'bg-blue-50 text-blue-700 border border-blue-200' : existingDelivery?.status === 'done' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : existingDelivery?.status === 'waiting' ? 'bg-amber-50 text-amber-700 border border-amber-200' : 'bg-gray-50 text-gray-700 border border-gray-200'}`}>
-              {existingDelivery ? (DELIVERY_STATE_LABELS[existingDelivery.status as keyof typeof DELIVERY_STATE_LABELS] ?? existingDelivery.status) : 'No delivery yet'}
-            </span>
-            {existingDelivery?.backorderOfRef && (
-              <span className="text-[9px] text-[var(--text-4)]">Backorder of {existingDelivery.backorderOfRef}</span>
-            )}
-          </div>
-        </div>
+      <div className="flex flex-col gap-3">
 
         {orderDeliveries.length > 0 && (
           <div className="rounded-2xl border border-[var(--border-lt)] bg-[var(--bg-surface)] p-3 flex flex-col gap-1">
@@ -3497,21 +3536,25 @@ function DeliveryNoteView({
           <Field label="Notes"><textarea className="form-input text-xs" rows={2} placeholder="Accessories included, special instructions…" value={dnNotes} onChange={e => setDnNotes(e.target.value)} /></Field>
         </div>
 
-        {/* Bottom action bar */}
-        {(canPrepare || canValidate) && (
-          <div className="flex items-center justify-between pt-4 border-t border-[var(--border-lt)]">
-            <button onClick={onBack} className="btn-outline text-xs">Back to Order</button>
-            {canPrepare ? (
-              <button onClick={handlePrepare} disabled={savingDelivery} className="btn-primary flex items-center gap-2 text-xs disabled:opacity-50">
-                <Fa icon={faBoxOpen} /><span>Prepare Delivery</span>
+        <div className="sales-doc-footer-sticky" aria-label="Picking progress">
+          <div>
+            Required {pickingSummary.required} · Picked {pickingSummary.picked} · Remaining {pickingSummary.remaining}
+            {' — '}<span className="pct">{pickingSummary.pct}%</span>
+          </div>
+          <div className="sales-doc-actions">
+            <button type="button" className="sd-btn" onClick={onBack}>Back</button>
+            {canPrepare && (
+              <button type="button" className="sd-btn sd-btn-primary" onClick={handlePrepare} disabled={savingDelivery}>
+                {savingDelivery ? 'Saving…' : 'Complete picking'}
               </button>
-            ) : (
-              <button onClick={handleValidate} disabled={savingDelivery} className="btn-primary flex items-center gap-2 text-xs disabled:opacity-50">
-                <Fa icon={faCheck} /><span>{savingDelivery ? 'Saving…' : 'Mark as delivered'}</span>
+            )}
+            {canValidate && (
+              <button type="button" className="sd-btn sd-btn-success" onClick={handleValidate} disabled={savingDelivery}>
+                {savingDelivery ? 'Saving…' : 'Mark as delivered'}
               </button>
             )}
           </div>
-        )}
+        </div>
       </div>
     </div>
   )
