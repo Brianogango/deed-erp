@@ -96,6 +96,7 @@ import {
   isOpenDeliveryStatus,
   deliveriesForSaleOrder,
   remainingUndeliveredByProduct,
+  saleOrderLooksConfirmed,
   type SalesListFilter,
 } from '@/lib/odoo-sales-flow'
 
@@ -199,8 +200,17 @@ function normalizeSalesOrderView(raw: any): SalesOrderView {
   const taxTotal = num(raw?.taxTotal ?? raw?.taxAmount, lines.reduce((sum, line) => sum + Math.round(line.subtotal * (line.taxRate ?? 0) / 100), 0))
   const total = num(raw?.total ?? raw?.totalAmount, subtotal + taxTotal)
 
+  const looksConfirmed = saleOrderLooksConfirmed({
+    status: raw?.status,
+    confirmedAt: raw?.confirmedAt,
+    orderNumber: raw?.orderNumber ?? raw?.ref,
+    ref: raw?.ref ?? raw?.orderNumber,
+  })
+  const status = looksConfirmed && isQuotationStage(raw?.status) ? 'sale' : raw?.status
+
   return {
     ...raw,
+    status,
     ref: raw?.ref ?? raw?.orderNumber ?? raw?.id ?? '',
     customerId: raw?.customerId ?? raw?.clientId ?? '',
     customerName: raw?.customerName ?? raw?.client?.name ?? 'Customer',
@@ -284,7 +294,7 @@ function SalesContent() {
   const pathname = usePathname()
   const {
     saleOrders, contacts, products, serials, invoices, deliveries, returnOrders,
-    createSaleOrder, updateSaleOrder, confirmSO, markQuotationSent, setSaleOrderLock,
+    createSaleOrder, updateSaleOrder, confirmSO, ensureWaitingDeliveryForSO, markQuotationSent, setSaleOrderLock,
     addSOLine, removeSOLine, moveSOLine, addSOSection,
     assignSerialsToSOLine, unassignSerialFromSOLine, createInvoiceFromSO, prepareDelivery, validateDelivery, markDeliveryNoteGenerated,
     deleteSaleOrder, showToast, getStockByLocation, resetSOToDraft, cancelSO,
@@ -677,10 +687,10 @@ function SalesContent() {
     syncOrderUrl(null)
     startUxTask('sales_quote_create', { module: 'sales' })
   }
-  const openDeliveryView = (deliveryId?: string) => {
+  const openDeliveryView = async (deliveryId?: string) => {
     if (!activeOrder) return
     // Heal duplicate open pickings left by concurrent confirm (keep prepared / SO-linked).
-    const open = activeDeliveries
+    let open = activeDeliveries
       .filter(d => isOpenDeliveryStatus(d.status))
       .slice()
       .sort((a, b) => String(a.date).localeCompare(String(b.date)) || String(a.ref).localeCompare(String(b.ref)))
@@ -698,13 +708,18 @@ function SalesContent() {
       })
       if (cancelled > 0) {
         showToast(`Removed ${cancelled} duplicate open delivery for ${activeOrder.ref}`, 'info')
+        open = open.filter(d => d.id === keeper.id || d.preparedAt)
       }
+    }
+    // Confirmed SO with no DN (confirm/DN sync race) — create one before opening.
+    let ensured = open[0] ?? visibleDeliveries[0] ?? activeDeliveries[0]
+    if (!deliveryId && !ensured && (activeOrder.status === 'sale' || saleOrderLooksConfirmed(activeOrder))) {
+      const created = await ensureWaitingDeliveryForSO(activeOrder.id)
+      if (created) ensured = created
     }
     const target =
       (deliveryId ? activeDeliveries.find(d => d.id === deliveryId) : undefined) ??
-      open[0] ??
-      visibleDeliveries[0] ??
-      activeDeliveries[0]
+      ensured
     setFocusDeliveryId(target?.id ?? null)
     const remaining = remainingUndeliveredByProduct(activeOrder.lines)
     const init: Record<string, number> = {}
@@ -1445,10 +1460,12 @@ function SalesContent() {
                           </button>
                         ) : null}
                         {visibleDeliveries.some(d => isOpenDeliveryStatus(d.status)) ? (
-                          <button className={`${activeInvoiceStatus === 'to_invoice' ? 'btn-secondary' : 'btn-primary'} flex items-center gap-2 text-xs`} onClick={() => openDeliveryView()}><Fa icon={faTruck} /><span>Delivery</span></button>
+                          <button className={`${activeInvoiceStatus === 'to_invoice' ? 'btn-secondary' : 'btn-primary'} flex items-center gap-2 text-xs`} onClick={() => void openDeliveryView()}><Fa icon={faTruck} /><span>Delivery</span></button>
                         ) : visibleDeliveries.length > 0 ? (
-                          <button className="btn-secondary flex items-center gap-2 text-xs" onClick={() => openDeliveryView()}><Fa icon={faTruck} /><span>Deliveries</span></button>
-                        ) : null}
+                          <button className="btn-secondary flex items-center gap-2 text-xs" onClick={() => void openDeliveryView()}><Fa icon={faTruck} /><span>Deliveries</span></button>
+                        ) : (
+                          <button className="btn-primary flex items-center gap-2 text-xs" onClick={() => void openDeliveryView()}><Fa icon={faTruck} /><span>Delivery</span></button>
+                        )}
                         <MoreActionsMenu
                           items={[
                             { label: sendingQuoteId === activeOrder.id ? 'Sending…' : 'Send by Email', icon: faFileInvoice, disabled: sendingQuoteId === activeOrder.id, onClick: () => openSendQuoteModal(activeOrder) },
@@ -1482,7 +1499,7 @@ function SalesContent() {
                         canSeeFinance={canSeeFinanceRecords}
                         canSeeReturns={canSeeReturns}
                         onBackToList={backToList}
-                        onOpenDelivery={() => openDeliveryView()}
+                        onOpenDelivery={() => void openDeliveryView()}
                         onOpenInvoices={() => router.push('/finance?tab=invoices')}
                         onOpenReturns={() => router.push('/aftersales?tab=returns')}
                         onPreview={() => previewSalesDocument(
@@ -1523,7 +1540,7 @@ function SalesContent() {
                                   key={d.id}
                                   type="button"
                                   disabled={cancelled}
-                                  onClick={() => openDeliveryView(d.id)}
+                                  onClick={() => void openDeliveryView(d.id)}
                                   className={`flex items-center justify-between gap-3 rounded-xl px-3 py-2 text-left text-xs transition-colors ${
                                     cancelled
                                       ? 'opacity-50 cursor-not-allowed'
@@ -2644,8 +2661,9 @@ function DeliveryNoteView({
     orderDeliveries.find((d: any) => d.status !== 'cancelled') ??
     orderDeliveries[0]
   const existingDelivery = selectedDelivery
-  const canPrepare = order.status === 'sale' && !!existingDelivery && isOpenDeliveryStatus(existingDelivery.status) && ['draft', 'waiting'].includes(existingDelivery.status)
-  const canValidate = order.status === 'sale' && !!existingDelivery && existingDelivery.status === 'ready' && !!existingDelivery.preparedAt
+  const orderConfirmed = order.status === 'sale' || saleOrderLooksConfirmed(order)
+  const canPrepare = orderConfirmed && !!existingDelivery && isOpenDeliveryStatus(existingDelivery.status) && ['draft', 'waiting'].includes(existingDelivery.status)
+  const canValidate = orderConfirmed && !!existingDelivery && existingDelivery.status === 'ready' && !!existingDelivery.preparedAt
 
   const selectDelivery = (deliveryId: string) => {
     const target = orderDeliveries.find((d: any) => d.id === deliveryId)
@@ -2707,7 +2725,7 @@ function DeliveryNoteView({
     setSavingDelivery(true)
     try {
       // Heal Prisma if confirm sync drifted (UI shows sale, DB still quotation).
-      if (order.status === 'sale') {
+      if (orderConfirmed) {
         await fetch(`/api/sale-orders/${order.id}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
