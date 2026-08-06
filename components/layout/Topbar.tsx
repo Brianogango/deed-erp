@@ -19,7 +19,7 @@ const GlobalSearch = dynamic(() => import('./GlobalSearch'), { ssr: false })
 const ROUTE_TITLES: Record<string, { label: string; desc: string }> = {
   '/':            { label: 'Dashboard',      desc: 'Business overview' },
   '/dashboard':   { label: 'Dashboard',      desc: 'Business overview' },
-  '/sales':       { label: 'Sales & CRM',    desc: 'Quotations, orders & invoices' },
+  '/sales':       { label: 'Selling · Sales', desc: '' },
   '/crm':         { label: 'CRM',            desc: 'Customers, opportunities & pipeline' },
   '/pos':         { label: 'Point of Sale',  desc: 'Retail till & transactions' },
   '/ecommerce':   { label: 'E-commerce',     desc: 'Online store management' },

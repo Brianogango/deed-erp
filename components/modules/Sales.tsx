@@ -63,7 +63,7 @@ import {
   useMounted,
   RecordCard,
 } from '@/components/ui'
-import { PrimaryActionButton, OperationalSummary, TablePageLayout, StatusBadge } from '@/components/erp'
+import { PrimaryActionButton, TablePageLayout, StatusBadge } from '@/components/erp'
 import { DataTable, type ColumnDef } from '@/components/data-table'
 import { Fa } from '@/components/icons'
 import type { CommercialPdfInput } from '@/lib/commercial-pdf'
@@ -1279,16 +1279,6 @@ function SalesContent() {
                 <>
                   <TablePageLayout
                     title={listTab === 'quotations' ? 'Quotations' : 'Sales orders'}
-                    summary={
-                      <OperationalSummary
-                        items={[
-                          { id: 'quotations', label: 'quotations', value: stats.quotations + stats.quotationsSent, onClick: () => { setListTabAndReset('quotations'); setFilterAndReset('all') } },
-                          { id: 'orders', label: 'sales orders', value: stats.orders, onClick: () => { setListTabAndReset('orders'); setFilterAndReset('all') } },
-                          ...(stats.pendingApproval ? [{ id: 'pending_approval', label: 'awaiting approval', value: stats.pendingApproval, tone: 'warning' as const, onClick: () => { setListTabAndReset('quotations'); setFilterAndReset('all') } }] : []),
-                          ...(stats.toInvoice ? [{ id: 'to_invoice', label: 'ready to invoice', value: stats.toInvoice, tone: 'success' as const, onClick: () => { setListTabAndReset('orders'); setFilterAndReset('to_invoice') } }] : []),
-                        ]}
-                      />
-                    }
                   >
                   <DataTable
                     tableId="sales-order-list"
@@ -1339,13 +1329,29 @@ function SalesContent() {
                     hideColumnFilters
                     hideBody={listViewMode === 'kanban'}
                     perPage={50}
-                    emptyMessage={filtered.length === 0 && salesOrderViews.length === 0 ? 'No sale orders yet' : 'No orders match your filter'}
-                    emptyAction={filtered.length === 0 && salesOrderViews.length === 0 ? (
+                    emptyMessage={
+                      listTab === 'quotations' && stats.orders > 0 && filtered.length === 0
+                        ? 'No quotations here — switch to Orders to see confirmed sales.'
+                        : filtered.length === 0 && salesOrderViews.length === 0
+                          ? 'No sale orders yet'
+                          : 'No orders match your filter'
+                    }
+                    emptyAction={
+                      listTab === 'quotations' && stats.orders > 0 && filtered.length === 0 ? (
+                        <button
+                          type="button"
+                          className="btn-primary text-xs px-4 py-1.5 mt-1"
+                          onClick={() => { setListTabAndReset('orders'); setFilterAndReset('sales_orders') }}
+                        >
+                          View orders ({stats.orders})
+                        </button>
+                      ) : filtered.length === 0 && salesOrderViews.length === 0 ? (
                       <button type="button" className="btn-primary text-xs px-4 py-1.5 mt-1" onClick={openNewForm}>New quotation</button>
-                    ) : undefined}
+                      ) : undefined
+                    }
                     onRowClick={s => openOrder(s.id)}
                     rowLabel={s => `${s.ref} ${s.customerName}`}
-                    cardAccent={s => s.status === 'quotation' ? 'var(--warning)' : s.status === 'quotation_sent' ? 'var(--primary)' : 'var(--success)'}
+                    cardAccent={s => s.status === 'quotation' ? 'var(--warning)' : s.status === 'quotation_sent' ? 'var(--primary)' : s.status === 'sale' ? 'var(--accent-cyan)' : 'var(--success)'}
                     renderCard={s => (
                       <RecordCard
                         eyebrow={s.ref}

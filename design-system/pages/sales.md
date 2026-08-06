@@ -1,31 +1,31 @@
 # Sales — page overrides
 
 > Overrides `design-system/MASTER.md` for `/sales`.  
-> Also mirrored at `design-system/deed-erp/pages/sales.md`.
+> Mirrored at `design-system/deed-erp/pages/sales.md`.
 
 **Mode:** Operate  
-**Dials:** VARIANCE 2–3 · MOTION 2 · DENSITY 8  
-**Pilot under review:** Phase 4 Directions A/B/C may replace the signature; until a direction is approved, the incumbent slate-ink + emerald pilot remains live.
+**Approved direction:** **B — Deed navy + cyan** (2026-08-06)  
+**Dials:** VARIANCE 2–3 · MOTION 2 · DENSITY 8
 
-## Incumbent signature (Direction A baseline)
+## Signature
 
-1. Slate-ink command header (`--text-1`) with white title  
-2. Emerald (`--success`) icon tile, tab underline, primary CTA, pipeline active state  
-3. **One** pipeline strip: Draft quotes · Sent · Confirmed · Ready to invoice  
-4. Do **not** also render OperationalSummary KPI cards for the same counts  
-5. Kanban: top status bar (not left borders)
+1. **Navy command header** (`--navy` / `--navy-dark`) with white title  
+2. **Cyan** (`--accent-cyan`) icon tile, tab underline, primary CTA, pipeline active rail  
+3. **One** pipeline strip only (no OperationalSummary duplicate KPIs)  
+4. Topbar crumb: `Selling · Sales` (no second subtitle competing with ModuleHeader)  
+5. Table: navy-tint headers; cyan row hover  
+6. Kanban: top status bar; sale column = cyan (success reserved for money/paid states)  
+7. Refs may use `--primary` blue in table cells  
 
-## Phase 3 rules (Sales-specific)
+## Preserve
 
-- Topbar must not duplicate an H1 “Sales” when ModuleHeader already titles the page — prefer section crumb only  
-- Quotations vs Orders: empty Quotations should surface a clear switch CTA when Orders &gt; 0  
-- Money/counts: `tabular-nums` + mono  
-- Empty CTA: **New quotation**  
-- Press feedback ~120ms; reduced-motion respected  
-- No Inventory navy copy-paste; no purple
-
-## Preserve (all directions)
-
-- Flows, tab IDs (`quotations` / `orders`), filters, kanban columns  
+- Quotation / order / delivery / invoice flows and API contracts  
+- Tab IDs (`quotations` / `orders`), list filters, kanban columns  
 - `SalesRecordHeader` stepper + permission gates  
-- APIs / dual-write / seals
+
+## Rules
+
+1. Tokens only — no purple, no slate-ink emerald chrome (legacy Direction A retired)  
+2. Emerald (`--success`) only for success/money semantic states, not module chrome  
+3. Empty Quotations with existing Orders → CTA to switch to Orders  
+4. Press ~120ms; `prefers-reduced-motion` respected  

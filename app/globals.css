@@ -4149,15 +4149,15 @@
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   Sales Operate pilot — /sales only
-   Skills: Impeccable Operate + craft-floor, frontend-design (slate-ink
-   signature distinct from Inventory navy), redesign audit, ui-ux-pro-max
-   Trust & Authority / data-dense, emil press-only motion.
+   Sales Operate pilot — /sales only · Direction B (Deed navy + cyan)
+   Skills: Impeccable Operate + craft-floor, frontend-design, design-taste
+   restraint, ui-ux-pro-max data-dense / Trust. Emerald reserved for money
+   success states — chrome accent is cyan on navy (aligned with brand tokens).
    ═══════════════════════════════════════════════════════════════════════════ */
 
 .sales-pilot.mod-page {
   background:
-    linear-gradient(180deg, color-mix(in srgb, var(--text-1) 5%, var(--bg-page)) 0 11rem, var(--bg-page) 11rem);
+    linear-gradient(180deg, color-mix(in srgb, var(--navy) 6%, var(--bg-page)) 0 11rem, var(--bg-page) 11rem);
 }
 
 .sales-pilot.mod-page > .mod-header {
@@ -4166,9 +4166,10 @@
   padding: 0.85rem 1rem;
   gap: 0.75rem;
   border-bottom: none;
-  background: linear-gradient(135deg, var(--text-1) 0%, #0b1220 55%, #07101c 100%);
+  border-radius: 0;
+  background: linear-gradient(135deg, var(--navy) 0%, var(--navy-dark) 55%, #0c1230 100%);
   color: #fff;
-  box-shadow: 0 10px 28px color-mix(in srgb, var(--text-1) 22%, transparent);
+  box-shadow: 0 8px 24px color-mix(in srgb, var(--navy) 28%, transparent);
 }
 
 .sales-pilot .mod-header-icon,
@@ -4176,8 +4177,8 @@
   width: 2.5rem !important;
   height: 2.5rem !important;
   border-radius: 0.55rem;
-  background: color-mix(in srgb, var(--success) 22%, transparent);
-  border: 1px solid color-mix(in srgb, var(--success) 40%, transparent);
+  background: color-mix(in srgb, var(--accent-cyan) 28%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent-cyan) 55%, transparent);
   color: #fff !important;
   box-shadow: none;
 }
@@ -4198,7 +4199,7 @@
 .sales-pilot .erp-module-subtitle,
 .sales-pilot.mod-page > .mod-header p {
   font-size: 0.78rem;
-  color: color-mix(in srgb, #fff 70%, transparent);
+  color: color-mix(in srgb, #fff 72%, transparent);
   font-weight: 500;
 }
 
@@ -4212,16 +4213,17 @@
 }
 
 .sales-pilot .mod-header .btn-primary {
-  background: var(--success);
-  color: #fff;
-  border-color: var(--success);
+  background: var(--accent-cyan);
+  color: #04202a;
+  border-color: var(--accent-cyan);
   box-shadow: none;
+  font-weight: 750;
 }
 
 .sales-pilot .mod-header .btn-primary:hover {
-  background: var(--success-text);
-  border-color: var(--success-text);
-  color: #fff;
+  background: color-mix(in srgb, var(--accent-cyan) 88%, #fff);
+  border-color: color-mix(in srgb, var(--accent-cyan) 88%, #fff);
+  color: #04202a;
 }
 
 .sales-pilot .mod-header .btn-secondary {
@@ -4239,7 +4241,7 @@
 .sales-pilot .mod-tabs.mod-tabs-adaptive,
 .sales-pilot .mod-tabs.mod-tabs-tablet-grid,
 .sales-pilot .mod-tabs.mod-tabs-desktop-full {
-  background: #0b1220;
+  background: var(--navy-dark);
   border-bottom: 1px solid color-mix(in srgb, #fff 8%, transparent);
   padding: 0.35rem 0.65rem 0.45rem;
   gap: 0.15rem;
@@ -4262,14 +4264,14 @@
 }
 
 .sales-pilot .mod-tab.active {
-  background: color-mix(in srgb, var(--success) 16%, transparent);
+  background: color-mix(in srgb, var(--accent-cyan) 14%, transparent);
   color: #fff;
   border-color: transparent;
   box-shadow: none;
 }
 
 .sales-pilot .mod-tab.active::after {
-  background: var(--success);
+  background: var(--accent-cyan);
   height: 3px;
   bottom: 0.05rem;
   border-radius: 2px;
@@ -4278,13 +4280,13 @@
 .sales-pilot-rail {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0;
+  gap: 0.5rem;
   margin: 0 0 0.85rem;
-  border: 1px solid color-mix(in srgb, var(--text-1) 14%, var(--border));
-  border-radius: 0.55rem;
-  overflow: hidden;
-  background: var(--bg-card);
-  box-shadow: 0 1px 2px color-mix(in srgb, var(--text-1) 6%, transparent);
+  border: 0;
+  border-radius: 0;
+  overflow: visible;
+  background: transparent;
+  box-shadow: none;
 }
 
 @media (min-width: 768px) {
@@ -4300,38 +4302,17 @@
   justify-content: space-between;
   gap: 0.65rem;
   padding: 0.8rem 0.95rem;
-  border: 0;
-  border-right: 1px solid var(--border-lt);
-  border-bottom: 1px solid var(--border-lt);
-  border-radius: 0;
-  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--bg-card);
   text-align: left;
   cursor: pointer;
-  transition: background-color 140ms ease-out, transform 120ms ease-out;
-}
-
-@media (min-width: 768px) {
-  .sales-pilot-stat {
-    border-bottom: 0;
-  }
-
-  .sales-pilot-stat:last-child {
-    border-right: 0;
-  }
-}
-
-@media (max-width: 767px) {
-  .sales-pilot-stat:nth-child(2n) {
-    border-right: 0;
-  }
-
-  .sales-pilot-stat:nth-last-child(-n + 2) {
-    border-bottom: 0;
-  }
+  transition: background-color 140ms ease-out, border-color 140ms ease-out, transform 120ms ease-out;
 }
 
 .sales-pilot-stat:hover {
-  background: color-mix(in srgb, var(--text-1) 4%, var(--bg-card));
+  background: color-mix(in srgb, var(--accent-cyan) 6%, var(--bg-card));
+  border-color: color-mix(in srgb, var(--accent-cyan) 35%, var(--border));
 }
 
 .sales-pilot-stat:active {
@@ -4339,14 +4320,15 @@
 }
 
 .sales-pilot-stat:focus-visible {
-  outline: 2px solid var(--success);
-  outline-offset: -2px;
+  outline: 2px solid var(--accent-cyan);
+  outline-offset: 1px;
   z-index: 1;
 }
 
 .sales-pilot-stat.is-active {
-  background: color-mix(in srgb, var(--success) 8%, var(--bg-card));
-  box-shadow: inset 0 -3px 0 var(--success);
+  background: color-mix(in srgb, var(--accent-cyan) 8%, var(--bg-card));
+  border-color: color-mix(in srgb, var(--accent-cyan) 55%, var(--border));
+  box-shadow: inset 0 -3px 0 var(--accent-cyan);
 }
 
 .sales-pilot-stat.tone-warning .sales-pilot-stat-value {
@@ -4363,7 +4345,7 @@
   font-weight: 750;
   line-height: 1;
   letter-spacing: -0.03em;
-  color: var(--text-1);
+  color: var(--navy);
   font-variant-numeric: tabular-nums;
   font-family: var(--font-dm-mono), ui-monospace, monospace;
 }
@@ -4380,71 +4362,31 @@
 }
 
 .sales-pilot-surface {
-  border-color: color-mix(in srgb, var(--text-1) 12%, var(--border));
+  border-color: color-mix(in srgb, var(--navy) 12%, var(--border));
   border-radius: 0.55rem;
-  box-shadow: 0 1px 2px color-mix(in srgb, var(--text-1) 6%, transparent);
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--navy) 6%, transparent);
 }
 
+/* Duplicate KPI chips are suppressed — pipeline rail is the single summary. */
 .sales-pilot .erp-ops-summary {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.4rem;
-  align-items: stretch;
-}
-
-.sales-pilot .erp-ops-summary-sep {
-  display: none;
-}
-
-.sales-pilot .erp-ops-summary-plain,
-.sales-pilot .erp-ops-summary-btn {
-  display: inline-flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 0.1rem;
-  padding: 0.5rem 0.7rem;
-  border: 1px solid var(--border);
-  border-radius: 0.4rem;
-  background: var(--bg-card);
-  min-width: 5.75rem;
-}
-
-.sales-pilot .erp-ops-summary-btn:hover {
-  border-color: var(--success);
-  background: color-mix(in srgb, var(--success) 7%, var(--bg-card));
-}
-
-.sales-pilot .erp-ops-summary-value {
-  font-size: 1rem;
-  font-weight: 750;
-  color: var(--text-1);
-  font-variant-numeric: tabular-nums;
-  font-family: var(--font-dm-mono), ui-monospace, monospace;
-}
-
-.sales-pilot .erp-ops-summary-label {
-  font-size: 0.65rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
-  color: var(--text-4);
+  display: none !important;
 }
 
 .sales-pilot .erp-table-page-title {
   font-size: 1.1rem;
   font-weight: 750;
-  color: var(--text-1);
+  color: var(--navy);
   letter-spacing: -0.02em;
 }
 
 .sales-pilot .dt-toolbar {
-  background: color-mix(in srgb, var(--text-1) 3.5%, var(--bg-surface));
+  background: color-mix(in srgb, var(--navy) 3.5%, var(--bg-surface));
   border-bottom: 1px solid var(--border-lt);
 }
 
 .sales-pilot .dt-wrap > table thead th,
 .sales-pilot .dt-scroll > table thead th {
-  background: color-mix(in srgb, var(--text-1) 5%, var(--table-head-bg));
+  background: color-mix(in srgb, var(--navy) 5%, var(--table-head-bg));
   font-size: 0.68rem;
   letter-spacing: 0.045em;
   text-transform: uppercase;
@@ -4454,7 +4396,7 @@
 
 .sales-pilot .dt-wrap > table tbody tr:hover,
 .sales-pilot .dt-scroll > table tbody tr:hover {
-  background: color-mix(in srgb, var(--success) 6%, var(--bg-card));
+  background: color-mix(in srgb, var(--accent-cyan) 7%, var(--bg-card));
 }
 
 .sales-pilot .sales-kanban-card {
@@ -4477,12 +4419,12 @@
 
 .sales-pilot .sales-kanban-card--quotation::before { background: var(--warning); }
 .sales-pilot .sales-kanban-card--quotation_sent::before { background: var(--primary); }
-.sales-pilot .sales-kanban-card--sale::before { background: var(--success); }
+.sales-pilot .sales-kanban-card--sale::before { background: var(--accent-cyan); }
 .sales-pilot .sales-kanban-card--cancelled::before { background: var(--text-4); }
 
 .sales-pilot .sales-kanban-card:hover {
-  border-color: color-mix(in srgb, var(--text-1) 22%, var(--border));
-  background: color-mix(in srgb, var(--text-1) 2%, var(--bg-card));
+  border-color: color-mix(in srgb, var(--navy) 22%, var(--border));
+  background: color-mix(in srgb, var(--accent-cyan) 4%, var(--bg-card));
 }
 
 .sales-pilot .sales-kanban-card:active {
