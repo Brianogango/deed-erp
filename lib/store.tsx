@@ -40,9 +40,9 @@ import { normalizeCompaniesForClient } from '@/lib/company-normalization'
 import { saleOrderPersistBody } from '@/lib/sale-order-persist'
 import {
   markSaleOrderDraftEdit,
-  clearSaleOrderDraftEdit,
   hasSaleOrderDraftEdits,
   isSaleOrderDraftEditing,
+  stampSaleOrderPersisted,
   mergeSaleOrdersPreservingDraftEdits,
 } from '@/lib/sale-order-draft-edits'
 import {
@@ -9541,11 +9541,22 @@ const storeCtx: AppState = {
         showToast('Unlock this quotation before editing', 'error')
         return false
       }
-      const updated = { ...existing, ...p }
       const syncLines = Object.prototype.hasOwnProperty.call(p, 'lines')
       // Line changes stay local until Save ({ persist: true }). Immediate Prisma
       // PATCH + blob SSE was restoring deleted products before the user saved.
       const persistLines = syncLines && opts?.persist === true
+
+      // Draft deletes/adds live on soRef. Never let a stale React `activeOrder.lines`
+      // (passed from Save) resurrect products the user already removed.
+      let linesForUpdate = syncLines && Array.isArray(p.lines) ? p.lines as SaleOrderLine[] : existing.lines
+      if (syncLines && Array.isArray(p.lines) && isSaleOrderDraftEditing(id)) {
+        const draft = soRef.current.find(s => s.id === id) ?? existing
+        const overlay = new Map((p.lines as SaleOrderLine[]).map(l => [l.id, l]))
+        linesForUpdate = draft.lines.map(l => overlay.get(l.id) ?? l)
+      }
+      const updated = syncLines
+        ? { ...existing, ...p, lines: linesForUpdate, ...calcSO(linesForUpdate) }
+        : { ...existing, ...p }
 
       if (syncLines && !persistLines) {
         applyLocalDraftSaleOrder(soRef, setSaleOrders, id, updated)
@@ -9560,10 +9571,15 @@ const storeCtx: AppState = {
       }
 
       const persist = async () => {
+        // Re-read draft at persist time so a delete that landed after click still wins.
+        const live = soRef.current.find(s => s.id === id) ?? updated
+        const persistPayload = persistLines
+          ? { ...live, lines: live.lines, ...calcSO(live.lines as SaleOrderLine[]) }
+          : p
         // Metadata: send only the patch so a notes keystroke cannot rewrite lines.
         // Save: send the full draft row (minus lockVersion).
         const body = persistLines
-          ? (updated as unknown as Record<string, unknown>)
+          ? (persistPayload as unknown as Record<string, unknown>)
           : (p as unknown as Record<string, unknown>)
         const result = await patchSaleOrderPersist(id, body)
         if (!result.ok) {
@@ -9580,11 +9596,39 @@ const storeCtx: AppState = {
         }
         applySaleOrderPersistResult(setSaleOrders, soRef, id, result.data, { syncLines: persistLines })
         if (persistLines) {
-          clearSaleOrderDraftEdit(id)
-          if (!hasSaleOrderDraftEdits()) {
-            delete _pendingSync['deed_saleOrders']
-            removeDirtyKeys(['deed_saleOrders'])
+          // Prefer the lines we just saved when pinning — never reopen the door
+          // for a stale blob SSE to restore deleted products after Save.
+          const savedLines = Array.isArray((persistPayload as SaleOrder).lines)
+            ? (persistPayload as SaleOrder).lines
+            : soRef.current.find(s => s.id === id)?.lines
+          // If Prisma echoed more commercial lines than we sent, keep the draft
+          // (stale server / race) — never let Save put deleted products back.
+          const serverLines = Array.isArray(result.data?.lines) ? result.data.lines : null
+          const savedCommercial = (savedLines ?? []).filter((l: any) => l?.lineType !== 'section')
+          const serverCommercial = (serverLines ?? []).filter((l: any) => l?.lineType !== 'section')
+          if (serverLines && savedCommercial.length < serverCommercial.length) {
+            const pinnedOrder = {
+              ...(soRef.current.find(s => s.id === id) ?? updated),
+              lines: savedLines ?? [],
+              ...calcSO((savedLines ?? []) as SaleOrderLine[]),
+            }
+            soRef.current = soRef.current.map(s => s.id === id ? pinnedOrder : s)
+            setSaleOrders(prev => prev.map(s => s.id === id ? pinnedOrder : s))
+            stampSaleOrderPersisted(id, pinnedOrder.lines)
+          } else {
+            stampSaleOrderPersisted(id, serverLines ?? savedLines ?? [])
           }
+          try {
+            const serialized = JSON.stringify(soRef.current)
+            _pendingSync['deed_saleOrders'] = serialized
+            addDirtyKey('deed_saleOrders')
+            if (typeof window !== 'undefined' && serialized.length <= 512 * 1024) {
+              window.localStorage.setItem('deed_saleOrders', serialized)
+            }
+          } catch { /* ignore */ }
+          // Push the saved snapshot to the blob before dropping the draft lock
+          // window; stampSaleOrderPersisted still guards SSE for ~20s.
+          void flushServerSync()
         }
         return true
       }
