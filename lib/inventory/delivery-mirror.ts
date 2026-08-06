@@ -87,7 +87,18 @@ export async function mirrorDeliveriesToPrisma(input: unknown, opts: { force?: b
             : null
 
         const lines = Array.isArray(r.lines) ? r.lines : []
-        const linePayload = lines.map((line: any, idx: number) => {
+        type LinePayload = {
+          productId: string | null
+          productName: string | null
+          description: string | null
+          qty: number
+          qtyDone: number
+          serialIds: string[]
+          serialNumberId: string | null
+          sourceLocation: string | null
+          lineOrder: number
+        }
+        const linePayload: LinePayload[] = lines.map((line: any, idx: number): LinePayload => {
           const productId =
             asUuid(line.productId) && productIds.has(String(line.productId))
               ? String(line.productId)
