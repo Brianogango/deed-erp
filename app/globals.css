@@ -4152,8 +4152,14 @@
    Sales Operate pilot — /sales only · Direction B (Deed navy + cyan)
    Skills: Impeccable Operate + craft-floor, frontend-design, design-taste
    restraint, ui-ux-pro-max data-dense / Trust. Emerald reserved for money
-   success states — chrome accent is cyan on navy (aligned with brand tokens).
+   success states — chrome accent is primary blue on navy (approved Sales prototypes).
    ═══════════════════════════════════════════════════════════════════════════ */
+
+.sales-pilot {
+  --sales-accent: var(--primary);
+  --sales-accent-hover: #1d4ed8;
+  --sales-accent-soft: color-mix(in srgb, var(--primary) 8%, var(--bg-card));
+}
 
 .sales-pilot.mod-page {
   background:
@@ -4177,8 +4183,8 @@
   width: 2.5rem !important;
   height: 2.5rem !important;
   border-radius: 0.55rem;
-  background: color-mix(in srgb, var(--accent-cyan) 28%, transparent);
-  border: 1px solid color-mix(in srgb, var(--accent-cyan) 55%, transparent);
+  background: color-mix(in srgb, var(--sales-accent) 28%, transparent);
+  border: 1px solid color-mix(in srgb, var(--sales-accent) 55%, transparent);
   color: #fff !important;
   box-shadow: none;
 }
@@ -4222,17 +4228,17 @@
 }
 
 .sales-pilot .mod-header .btn-primary {
-  background: var(--accent-cyan);
-  color: #04202a;
-  border-color: var(--accent-cyan);
+  background: var(--sales-accent);
+  color: #fff;
+  border-color: var(--sales-accent);
   box-shadow: none;
   font-weight: 750;
 }
 
 .sales-pilot .mod-header .btn-primary:hover {
-  background: color-mix(in srgb, var(--accent-cyan) 88%, #fff);
-  border-color: color-mix(in srgb, var(--accent-cyan) 88%, #fff);
-  color: #04202a;
+  background: var(--sales-accent-hover);
+  border-color: var(--sales-accent-hover);
+  color: #fff;
 }
 
 .sales-pilot .mod-header .btn-primary:active,
@@ -4279,14 +4285,14 @@
 }
 
 .sales-pilot .mod-tab.active {
-  background: color-mix(in srgb, var(--accent-cyan) 14%, transparent);
+  background: color-mix(in srgb, var(--sales-accent) 18%, transparent);
   color: #fff;
   border-color: transparent;
   box-shadow: none;
 }
 
 .sales-pilot .mod-tab.active::after {
-  background: var(--accent-cyan);
+  background: var(--sales-accent);
   height: 3px;
   bottom: 0.05rem;
   border-radius: 2px;
@@ -4326,8 +4332,8 @@
 }
 
 .sales-pilot-stat:hover {
-  background: color-mix(in srgb, var(--accent-cyan) 6%, var(--bg-card));
-  border-color: color-mix(in srgb, var(--accent-cyan) 35%, var(--border));
+  background: color-mix(in srgb, var(--sales-accent) 6%, var(--bg-card));
+  border-color: color-mix(in srgb, var(--sales-accent) 35%, var(--border));
 }
 
 .sales-pilot-stat:active {
@@ -4335,15 +4341,15 @@
 }
 
 .sales-pilot-stat:focus-visible {
-  outline: 2px solid var(--accent-cyan);
+  outline: 2px solid var(--sales-accent);
   outline-offset: 1px;
   z-index: 1;
 }
 
 .sales-pilot-stat.is-active {
-  background: color-mix(in srgb, var(--accent-cyan) 8%, var(--bg-card));
-  border-color: color-mix(in srgb, var(--accent-cyan) 55%, var(--border));
-  box-shadow: inset 0 -3px 0 var(--accent-cyan);
+  background: color-mix(in srgb, var(--sales-accent) 8%, var(--bg-card));
+  border-color: color-mix(in srgb, var(--sales-accent) 55%, var(--border));
+  box-shadow: inset 0 -3px 0 var(--sales-accent);
 }
 
 .sales-pilot-stat.tone-warning .sales-pilot-stat-value {
@@ -4411,7 +4417,7 @@
 
 .sales-pilot .dt-wrap > table tbody tr:hover,
 .sales-pilot .dt-scroll > table tbody tr:hover {
-  background: color-mix(in srgb, var(--accent-cyan) 7%, var(--bg-card));
+  background: color-mix(in srgb, var(--sales-accent) 7%, var(--bg-card));
 }
 
 .sales-pilot .sales-kanban-card {
@@ -4434,16 +4440,111 @@
 
 .sales-pilot .sales-kanban-card--quotation::before { background: var(--warning); }
 .sales-pilot .sales-kanban-card--quotation_sent::before { background: var(--primary); }
-.sales-pilot .sales-kanban-card--sale::before { background: var(--accent-cyan); }
+.sales-pilot .sales-kanban-card--sale::before { background: var(--primary); }
 .sales-pilot .sales-kanban-card--cancelled::before { background: var(--text-4); }
 
 .sales-pilot .sales-kanban-card:hover {
   border-color: color-mix(in srgb, var(--navy) 22%, var(--border));
-  background: color-mix(in srgb, var(--accent-cyan) 4%, var(--bg-card));
+  background: color-mix(in srgb, var(--sales-accent) 4%, var(--bg-card));
 }
 
 .sales-pilot .sales-kanban-card:active {
   transform: scale(0.99);
+}
+
+/* Quotation / delivery chrome aligned with approved prototypes */
+.sales-pilot-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.65rem;
+  padding: 0.7rem 0.9rem;
+  border-radius: 0.5rem;
+  border: 1px solid transparent;
+  font-size: 0.75rem;
+  line-height: 1.4;
+}
+
+.sales-pilot-banner strong {
+  display: block;
+  font-size: 0.78rem;
+  font-weight: 700;
+  margin-bottom: 0.1rem;
+}
+
+.sales-pilot-banner--ok {
+  background: #ecfdf5;
+  border-color: #a7f3d0;
+  color: #065f46;
+}
+
+.sales-pilot-banner--warn {
+  background: #fffbeb;
+  border-color: #fde68a;
+  color: #92400e;
+}
+
+.sales-pilot-sticky-totals {
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+  margin-top: 0.5rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--border-lt);
+  border-radius: 0.5rem;
+  background: color-mix(in srgb, var(--bg-card) 92%, #fff);
+  box-shadow: 0 -4px 16px color-mix(in srgb, var(--navy) 8%, transparent);
+}
+
+.sales-pilot-picking-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.5rem;
+  padding: 0.75rem 0.9rem;
+  border: 1px solid var(--border-lt);
+  border-radius: 0.5rem;
+  background: var(--bg-surface);
+}
+
+.sales-pilot-picking-summary > div {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.sales-pilot-picking-summary span {
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-4);
+}
+
+.sales-pilot-picking-summary strong {
+  font-size: 1rem;
+  font-weight: 750;
+  color: var(--navy);
+  font-variant-numeric: tabular-nums;
+}
+
+.sales-pilot-scan {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 0.4rem;
+  padding: 0.55rem 0.7rem;
+  font-size: 0.78rem;
+  font-family: var(--font-dm-mono), ui-monospace, monospace;
+  background: #fff;
+}
+
+.sales-pilot-scan:focus {
+  outline: 2px solid color-mix(in srgb, var(--sales-accent) 45%, transparent);
+  border-color: var(--sales-accent);
+}
+
+@media (max-width: 640px) {
+  .sales-pilot-picking-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

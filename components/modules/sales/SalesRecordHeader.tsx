@@ -97,7 +97,7 @@ export function SalesRecordHeader({
   if (deliveriesCount > 0) {
     smartButtons.push({
       id: 'delivery',
-      label: 'Delivery',
+      label: 'Deliveries',
       count: deliveriesCount,
       tone: 'success',
       icon: <Fa icon={faBoxOpen} className="text-[10px]" />,
@@ -106,7 +106,7 @@ export function SalesRecordHeader({
   } else if (looksConfirmed) {
     smartButtons.push({
       id: 'record-delivery',
-      label: 'Record Delivery',
+      label: 'Create delivery',
       tone: 'primary',
       icon: <Fa icon={faTruck} className="text-[10px]" />,
       onClick: onOpenDelivery,

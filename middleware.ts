@@ -20,7 +20,15 @@ const PUBLIC_ASSET_PATHS  = new Set([
   // Partner integration guide — shareable without an ERP login
   '/docs/partner-api-guide.html',
 ])
-const PUBLIC_PATH_PREFIXES = ['/track', '/portal', '/api/portal/repair', '/api/portal/quotes', '/api/portal/intake']
+const PUBLIC_PATH_PREFIXES = [
+  '/track',
+  '/portal',
+  '/api/portal/repair',
+  '/api/portal/quotes',
+  '/api/portal/intake',
+  // High-fidelity Sales UX review pack (demo data only — no production writes)
+  '/sales-prototype',
+]
 const HIGH_TRAFFIC_READ_PREFIXES = ['/api/store/stream']
 
 export const LEGACY_ROUTE_REDIRECTS: Readonly<Record<string, string>> = {
