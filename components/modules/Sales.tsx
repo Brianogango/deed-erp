@@ -77,6 +77,7 @@ import PaymentDetailsPicker from '@/components/payment/PaymentDetailsPicker'
 import ContactFormModal, { blankIndividualContact } from '@/components/contacts/ContactFormModal'
 import DocumentEmailSendHistory from '@/components/email/DocumentEmailSendHistory'
 import { resolveListPrice } from '@/lib/pricing/pricelist'
+import { pairOrderLinesWithDeliveryLines } from '@/lib/delivery-prepare'
 import Chatter from '@/components/erp/Chatter'
 import { SalesRecordHeader } from '@/components/modules/sales/SalesRecordHeader'
 import { finishUxTask, startUxTask, trackUxEvent } from '@/lib/ux-telemetry'
@@ -721,15 +722,14 @@ function SalesContent() {
       (deliveryId ? activeDeliveries.find(d => d.id === deliveryId) : undefined) ??
       ensured
     setFocusDeliveryId(target?.id ?? null)
-    const remaining = remainingUndeliveredByProduct(activeOrder.lines)
     const init: Record<string, number> = {}
-    activeOrder.lines.forEach(l => {
-      if ((l as any).lineType === 'section') return
-      const delLine = target?.lines?.find((line: any) => line.productId === l.productId)
-      const demand = Math.max(0, Number(delLine?.qty) || remaining[l.productId ?? ''] || Number(l.qty) || 0)
+    for (const { orderLine: l, deliveryLine: delLine } of pairOrderLinesWithDeliveryLines(activeOrder.lines, target?.lines ?? [])) {
+      const demand = Math.max(0, Number(delLine?.qty) || Number(l.qty) || 0)
       const serialCount = Array.isArray(l.serialIds) ? l.serialIds.length : 0
-      init[l.id] = serialCount > 0 ? Math.min(demand, serialCount) : demand
-    })
+      // Always prefer full line qty when serials cover it — never borrow another
+      // duplicate product row's DN qty via .find(productId).
+      init[l.id] = serialCount > 0 ? Math.min(Number(l.qty) || 0, Math.max(demand, serialCount)) : (Number(l.qty) || demand)
+    }
     setDeliveryQtys(init)
     setDnRecipientName(target?.recipientName ?? activeOrder.customerName ?? '')
     setDnRecipientPhone(target?.recipientPhone ?? '')
@@ -2662,21 +2662,18 @@ function DeliveryNoteView({
     orderDeliveries[0]
   const existingDelivery = selectedDelivery
   const orderConfirmed = order.status === 'sale' || saleOrderLooksConfirmed(order)
-  const canPrepare = orderConfirmed && !!existingDelivery && isOpenDeliveryStatus(existingDelivery.status) && ['draft', 'waiting'].includes(existingDelivery.status)
+  // Allow re-prepare on Ready so duplicate-product qty mistakes can be corrected.
+  const canPrepare = orderConfirmed && !!existingDelivery && isOpenDeliveryStatus(existingDelivery.status) && ['draft', 'waiting', 'ready'].includes(existingDelivery.status)
   const canValidate = orderConfirmed && !!existingDelivery && existingDelivery.status === 'ready' && !!existingDelivery.preparedAt
 
   const selectDelivery = (deliveryId: string) => {
     const target = orderDeliveries.find((d: any) => d.id === deliveryId)
     if (!target || target.status === 'cancelled') return
     setSelectedDeliveryId(deliveryId)
-    const remaining = remainingUndeliveredByProduct(order.lines)
     const init: Record<string, number> = {}
-    order.lines.forEach(line => {
-      if ((line as any).lineType === 'section') return
-      const delLine = target.lines?.find((l: any) => l.productId === line.productId)
-      const demand = Math.max(0, Number(delLine?.qty) || remaining[line.productId ?? ''] || Number(line.qty) || 0)
-      init[line.id] = demand
-    })
+    for (const { orderLine: line, deliveryLine: delLine } of pairOrderLinesWithDeliveryLines(order.lines, target.lines ?? [])) {
+      init[line.id] = Math.max(0, Number(line.qty) || Number(delLine?.qty) || 0)
+    }
     setDeliveryQtys(init)
     setDnRecipientName(target.recipientName ?? order.customerName ?? '')
     setDnRecipientPhone(target.recipientPhone ?? '')
@@ -2688,11 +2685,15 @@ function DeliveryNoteView({
   const requestedByProduct = () => {
     const quantities: Record<string, number> = {}
     order.lines.forEach(line => {
+      if ((line as any).lineType === 'section' || !line.productId) return
       const typed = Math.max(0, deliveryQtys[line.id] ?? 0)
       const serialCount = Array.isArray(line.serialIds) ? line.serialIds.length : 0
-      // Prefer typed qty; if left at 0 but serials are assigned, ship those.
-      const qty = Math.min(line.qty, typed > 0 ? typed : serialCount)
-      if (line.productId) quantities[line.productId] = (quantities[line.productId] ?? 0) + qty
+      // Fully-serialized lines always ship their full qty — do not let a stale
+      // qty input (from duplicate-product .find bugs) under-reserve them.
+      const qty = serialCount >= line.qty
+        ? line.qty
+        : Math.min(line.qty, typed > 0 ? typed : serialCount)
+      quantities[line.productId] = (quantities[line.productId] ?? 0) + qty
     })
     return quantities
   }
@@ -2709,12 +2710,11 @@ function DeliveryNoteView({
     if (!existingDelivery || existingDelivery.status !== 'ready') {
       showToast('No pending delivery to validate', 'error'); return
     }
-    const lines = order.lines.map(l => {
-      const delLine = existingDelivery.lines.find((line: any) => line.productId === l.productId)
+    const lines = pairOrderLinesWithDeliveryLines(order.lines, existingDelivery.lines).map(({ orderLine: l, deliveryLine: delLine }) => {
       const preparedQty = effectiveDeliveryLineQty({
         qty: Number(delLine?.qty) || Number(l.qty) || 0,
         qtyDone: delLine?.qtyDone,
-        serialIds: delLine?.serialIds?.length ? delLine.serialIds : l.serialIds,
+        serialIds: (delLine?.serialIds?.length ? delLine.serialIds : l.serialIds) ?? [],
       })
       return {
         id: l.id,
@@ -2901,8 +2901,11 @@ function DeliveryNoteView({
                 </tr>
               </thead>
               <tbody className="divide-y divide-[var(--border-lt)]">
-                {order.lines.map(l => {
-                  const lineSerials = serials.filter((s: any) => l.serialIds?.includes(s.id))
+                {pairOrderLinesWithDeliveryLines(order.lines, existingDelivery?.lines ?? []).map(({ orderLine: l, deliveryLine: delLine }) => {
+                  const serialIdsForDisplay = (Array.isArray(l.serialIds) && l.serialIds.length
+                    ? l.serialIds
+                    : (delLine?.serialIds ?? [])) as string[]
+                  const lineSerials = serials.filter((s: any) => serialIdsForDisplay.includes(s.id))
                   const product = products.find((item: any) => item.id === l.productId)
                   const serialTracked = Boolean(product?.requiresSerial)
                   const assignableSerials = serialTracked
@@ -2912,7 +2915,6 @@ function DeliveryNoteView({
                         serial.status === 'available',
                       )
                     : []
-                  const delLine = (existingDelivery?.lines ?? []).find((line: any) => line.productId === l.productId)
                   const effectiveDone = effectiveDeliveryLineQty({
                     qty: Number(delLine?.qty) || Number(l.qty) || 0,
                     qtyDone: delLine?.qtyDone,

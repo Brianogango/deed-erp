@@ -118,3 +118,39 @@ export function planPrepareDeliveryLines(opts: {
 
   return { ok: true, lines: plans }
 }
+
+/**
+ * Pair each order line to a unique delivery line for the same product.
+ * Prefers matching qty so duplicate ThinkPad rows (1, 2, 1) do not all bind
+ * to the first DN line via `.find(productId)`.
+ */
+export function pairOrderLinesWithDeliveryLines<
+  OL extends { productId?: string; qty?: number; lineType?: string },
+  DL extends { productId?: string; qty?: number },
+>(
+  orderLines: OL[] | null | undefined,
+  deliveryLines: DL[] | null | undefined,
+): Array<{ orderLine: OL; deliveryLine: DL | undefined }> {
+  const queues = new Map<string, DL[]>()
+  for (const d of deliveryLines ?? []) {
+    if (!d.productId) continue
+    const list = queues.get(d.productId) ?? []
+    list.push(d)
+    queues.set(d.productId, list)
+  }
+
+  const pairs: Array<{ orderLine: OL; deliveryLine: DL | undefined }> = []
+  for (const orderLine of orderLines ?? []) {
+    if (orderLine.lineType === 'section') continue
+    if (!orderLine.productId) {
+      pairs.push({ orderLine, deliveryLine: undefined })
+      continue
+    }
+    const q = queues.get(orderLine.productId) ?? []
+    let idx = q.findIndex(d => Number(d.qty) === Number(orderLine.qty))
+    if (idx < 0) idx = q.length ? 0 : -1
+    const deliveryLine = idx >= 0 ? q.splice(idx, 1)[0] : undefined
+    pairs.push({ orderLine, deliveryLine })
+  }
+  return pairs
+}

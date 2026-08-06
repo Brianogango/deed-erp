@@ -53,7 +53,7 @@ import {
   saleOrderLooksConfirmed,
   type InvoicePolicy,
 } from '@/lib/odoo-sales-flow'
-import { planPrepareDeliveryLines, sumQtyByProductId } from '@/lib/delivery-prepare'
+import { pairOrderLinesWithDeliveryLines, planPrepareDeliveryLines, sumQtyByProductId } from '@/lib/delivery-prepare'
 import {
   normalizeDocumentPaymentDetails,
   type DocumentPaymentDetails,
@@ -9593,8 +9593,12 @@ const storeCtx: AppState = {
         d.saleOrderId === orderId && ['draft', 'waiting', 'ready'].includes(d.status),
       )
       if (pendingDelivery) {
+        // Pair SO lines → DN lines so duplicate products update only this row.
+        const pairs = pairOrderLinesWithDeliveryLines(so.lines, pendingDelivery.lines)
+        const targetPair = pairs.find(p => (p.orderLine as any).id === lineId)
+        const targetDn = targetPair?.deliveryLine
         const lines = pendingDelivery.lines.map(deliveryLine =>
-          deliveryLine.productId === line.productId
+          targetDn && deliveryLine === targetDn
             ? { ...deliveryLine, serialIds: nextSerialIds }
             : deliveryLine,
         )
@@ -9630,8 +9634,10 @@ const storeCtx: AppState = {
         d.saleOrderId === orderId && ['draft', 'waiting', 'ready'].includes(d.status),
       )
       if (pendingDelivery && line) {
+        const pairs = pairOrderLinesWithDeliveryLines(so?.lines ?? [], pendingDelivery.lines)
+        const targetDn = pairs.find(p => (p.orderLine as any).id === lineId)?.deliveryLine
         const lines = pendingDelivery.lines.map(deliveryLine =>
-          deliveryLine.productId === line.productId
+          targetDn && deliveryLine === targetDn
             ? { ...deliveryLine, serialIds: nextSerialIds }
             : deliveryLine,
         )
