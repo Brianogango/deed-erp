@@ -3,6 +3,7 @@ import { getServerSession } from '@/lib/auth/server'
 import { loadAppState, saveStoreKeys, withAppStateKeyLock } from '@/lib/server-store'
 import { postDeliveryValuationFromPayload } from '@/lib/inventory/valuation-hooks'
 import { applyDeliveryStockMutation } from '@/lib/inventory/stock-transactions'
+import { mirrorDeliveryToPrisma } from '@/lib/delivery-mirror'
 import {
   deliveryDeliveredTotal,
   deliveryFulfillmentWriteError,
@@ -109,6 +110,11 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       console.error('[deliveries/validate] valuation dual-write failed:', err)
     }
   }
+
+  // Best-effort dual-write into delivery_notes/delivery_note_items — see
+  // lib/delivery-mirror.ts. Runs outside the lock, after the response data
+  // is already finalized; never blocks or fails validation.
+  void mirrorDeliveryToPrisma(outcome.item).catch(() => {})
 
   return NextResponse.json({ item: outcome.item, valuation })
 }

@@ -17,6 +17,7 @@
     "migrate:reconfiguration-reservation-id-width:safe": "node scripts/run-safe-reconfiguration-reservation-id-width.mjs",
     "migrate:bulk-stock-levels:safe": "node scripts/run-safe-bulk-stock-levels.mjs",
     "migrate:sale-order-item-discount-pct:safe": "node scripts/run-safe-sale-order-item-discount-pct.mjs",
+    "migrate:delivery-notes-mirror:safe": "node scripts/run-safe-delivery-notes-mirror.mjs",
     "backfill:accounting": "node scripts/backfill-accounting-to-prisma.mjs",
     "screenshots:core": "node scripts/capture-visual-regression.mjs",
     "analyze": "ANALYZE=true npm run build",

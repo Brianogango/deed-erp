@@ -1406,6 +1406,7 @@ model SaleOrder {
   items     SaleOrderItem[]
   invoices  Invoice[]       @relation("InvoiceSourceSaleOrder")
   deliveries DeliveryNote[] @relation("DeliveryNoteSaleOrders")
+  deliveryNotesDirect DeliveryNote[] @relation("DeliveryNoteSaleOrder")
   customerAssets CustomerAsset[]
   reconfigurationWorkOrders ReconfigurationWorkOrder[]
 
@@ -1682,6 +1683,15 @@ model CreditNote {
 model DeliveryNote {
   id              String         @id @default(uuid()) @db.Uuid
   dnNumber        String         @unique @map("dn_number") @db.VarChar(30)
+  // deed_deliveries blob id this row mirrors — lets the dual-write be an
+  // idempotent upsert instead of deleteMany+create (keeps id stable across
+  // mirror passes). Null for any DeliveryNote created directly in Prisma.
+  blobId          String?        @unique @map("blob_id") @db.VarChar(80)
+  // Scalar FK (in addition to the existing implicit "DeliveryNoteSaleOrders"
+  // M2M) — the blob model is one delivery per one sale order, so a direct
+  // column supports the common "this delivery's SO" lookup without a join
+  // table round-trip.
+  saleOrderId     String?        @map("sale_order_id") @db.Uuid
   // Nullable: real flow is Confirm SO → Delivery → Invoice. Requiring an
   // invoice blocked Prisma cutover from the deed_deliveries blob.
   invoiceId       String?        @map("invoice_id") @db.Uuid
@@ -1703,6 +1713,7 @@ model DeliveryNote {
   updatedAt       DateTime       @updatedAt @map("updated_at")
 
   invoice      Invoice?           @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
+  saleOrder    SaleOrder?         @relation("DeliveryNoteSaleOrder", fields: [saleOrderId], references: [id], onDelete: SetNull)
   client       Client             @relation(fields: [clientId], references: [id])
   dispatchedBy User?              @relation("DeliveryDispatcher", fields: [dispatchedById], references: [id])
   createdBy    User               @relation("DeliveryCreator", fields: [createdById], references: [id])
@@ -1712,6 +1723,7 @@ model DeliveryNote {
 
   @@index([invoiceId], map: "idx_delivery_notes_invoice")
   @@index([clientId], map: "idx_delivery_notes_client")
+  @@index([saleOrderId], map: "idx_delivery_notes_sale_order")
   @@map("delivery_notes")
 }
 
@@ -1724,7 +1736,11 @@ model DeliveryNoteItem {
   description    String?
   qty            Int
   qtyReturned    Int      @default(0) @map("qty_returned")
-
+  // Actually-shipped qty this line, distinct from `qty` (ordered/demanded).
+  // The blob's delivery lines track qtyDone separately from qty (partial
+  // delivery / backorder support) — without this column that distinction
+  // was lost on cutover.
+  qtyDone        Int      @default(0) @map("qty_done")
 
   deliveryNote DeliveryNote  @relation(fields: [dnId], references: [id], onDelete: Cascade)
   invoiceItem  InvoiceItem?  @relation(fields: [invoiceItemId], references: [id])
