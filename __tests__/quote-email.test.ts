@@ -64,4 +64,22 @@ describe('generateQuoteEmail', () => {
     expect(email.html).toContain('https://erp.deed.co.ke/quote.pdf')
     expect(email.text).toContain('Download PDF: https://erp.deed.co.ke/quote.pdf')
   })
+
+  it('renders a View & Respond Online button when a portal link is provided', () => {
+    const email = generateQuoteEmail({
+      ...baseQuote,
+      kind: 'initial',
+      pdfAttached: true,
+      portalLink: 'https://erp.deed.co.ke/portal/quotes/so-1?token=abc',
+    })
+
+    expect(email.html).toContain('View &amp; Respond Online')
+    expect(email.html).toContain('https://erp.deed.co.ke/portal/quotes/so-1?token=abc')
+    expect(email.text).toContain('View & respond online: https://erp.deed.co.ke/portal/quotes/so-1?token=abc')
+  })
+
+  it('omits the portal button entirely when no link is provided (Online Acceptance off)', () => {
+    const email = generateQuoteEmail({ ...baseQuote, kind: 'initial', pdfAttached: true })
+    expect(email.html).not.toContain('Respond Online')
+  })
 })

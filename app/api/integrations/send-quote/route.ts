@@ -4,6 +4,8 @@ import { sendEmail, generateQuoteEmail, logEmailForDev } from '@/lib/integration
 import { sendQuoteViaWhatsApp, logWhatsAppForDev } from '@/lib/integrations/whatsapp'
 import { generateQuotePdfBuffer } from '@/lib/integrations/quote-pdf'
 import { appendDocumentEmailSend, parseEmailList } from '@/lib/document-email-sends'
+import { generateQuoteToken } from '@/lib/quote-token'
+import { loadAppState } from '@/lib/server-store'
 
 /**
  * POST /api/integrations/send-quote
@@ -61,11 +63,22 @@ export async function POST(request: Request) {
     // Send by Email attaches the quotation document).
     if (payload.channels.includes('email')) {
       const isDev = process.env.NODE_ENV !== 'production'
+      // "Online Acceptance" setting: quoteId works for both a CRM Quote and
+      // a Sales module SaleOrder — generateQuoteToken/the portal route are
+      // both keyed purely on the id string, not the entity type, so the
+      // SAME link works for either without this route needing to know which.
+      const settings = await loadAppState(['deed_systemSettings']).catch(() => ({}))
+      const onlineAcceptanceEnabled = Boolean((settings as any)?.deed_systemSettings?.salesOnlineAcceptance)
+      const portalLink = onlineAcceptanceEnabled
+        ? `${(process.env.NEXT_PUBLIC_APP_URL || '').replace(/\/$/, '')}/portal/quotes/${payload.quoteId}?token=${encodeURIComponent(generateQuoteToken(payload.quoteId))}`
+        : undefined
+
       const emailContent = generateQuoteEmail({
         ...payload.quote,
         message: payload.message,
         kind,
         pdfAttached: true,
+        portalLink,
       })
 
       let attachments: Array<{ filename: string; content: Buffer; contentType: string }> = []
@@ -89,6 +102,7 @@ export async function POST(request: Request) {
             message: payload.message,
             kind,
             pdfAttached: false,
+            portalLink,
           })
 
       if (isDev) {

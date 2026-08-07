@@ -1,12 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { verifyQuoteToken } from '@/lib/quote-token'
-import { loadAppState, saveStoreKeys } from '@/lib/server-store'
 import { sendEmail } from '@/lib/integrations/email'
-
+import {
+  findPortalDocument,
+  savePortalDocument,
+  QUOTE_ACCEPTABLE_STATUSES,
+  SALE_ORDER_ACCEPTABLE_STATUSES,
+} from '@/lib/portal-document-lookup'
 
 /**
  * POST /api/portal/quotes/[id]/accept?token=<signed-token>
- * Customer accepts their own quote — token proves they own the link.
+ * Customer accepts their own quote — token proves they own the link. Works
+ * for both a CRM Quote and a Sales module SaleOrder (see
+ * lib/portal-document-lookup.ts).
  */
 export async function POST(
   request: NextRequest,
@@ -20,38 +26,49 @@ export async function POST(
       return NextResponse.json({ error: 'Invalid or expired link.' }, { status: 401 })
     }
 
-    const state  = await loadAppState()
-    const quotes = (state['deed_quotes'] ?? []) as Array<Record<string, unknown>>
-    const idx    = quotes.findIndex(q => q.id === quoteId)
-
-    if (idx === -1) {
+    const found = await findPortalDocument(quoteId)
+    if (!found) {
       return NextResponse.json({ error: 'Quote not found.' }, { status: 404 })
     }
 
-    const quote = quotes[idx]
-    const acceptableStatuses = new Set(['sent', 'viewed', 'pending_approval'])
-    if (!acceptableStatuses.has(String(quote.status))) {
-      return NextResponse.json(
-        { error: `Quote cannot be accepted — current status is "${quote.status}".` },
-        { status: 409 }
-      )
+    const doc = found.doc
+    const ref = String(doc.ref ?? doc.quoteNumber ?? quoteId)
+    const partyName = String(doc.companyName ?? doc.customerName ?? 'A customer')
+
+    if (found.source === 'quote') {
+      if (!QUOTE_ACCEPTABLE_STATUSES.has(String(doc.status))) {
+        return NextResponse.json(
+          { error: `Quote cannot be accepted — current status is "${doc.status}".` },
+          { status: 409 },
+        )
+      }
+      await savePortalDocument(found, { ...doc, status: 'accepted', acceptedDate: new Date().toISOString().slice(0, 10) })
+    } else {
+      // A SaleOrder is never auto-confirmed by a customer's portal click —
+      // confirming reserves stock and runs credit checks that need staff
+      // review. Instead this records the acceptance the same way the
+      // internal "Mark accepted" staff action does (an append-only note),
+      // and notifies the sales team to confirm the order themselves.
+      if (!SALE_ORDER_ACCEPTABLE_STATUSES.has(String(doc.status))) {
+        return NextResponse.json(
+          { error: `Quotation cannot be accepted — current status is "${doc.status}".` },
+          { status: 409 },
+        )
+      }
+      const notes = `${String(doc.notes ?? '')}\n[Customer accepted online ${new Date().toISOString().slice(0, 10)}]`.trim()
+      await savePortalDocument(found, { ...doc, notes })
     }
 
-    // Update the quote status in the store
-    quotes[idx] = { ...quote, status: 'accepted', acceptedDate: new Date().toISOString().slice(0, 10) }
-    await saveStoreKeys({ deed_quotes: JSON.stringify(quotes) })
-
-    // Notify the sales team
     await sendEmail({
       to: process.env.SALES_TEAM_EMAIL ?? 'sales@deed.co.ke',
       mailbox: 'sales',
       replyTo: process.env.SALES_EMAIL || undefined,
-      subject: `Quote Accepted: ${quote.ref ?? quote.quoteNumber ?? quoteId}`,
+      subject: `Quote Accepted: ${ref}`,
       html: `<h2>Quote Accepted</h2>
-<p><strong>${quote.companyName ?? 'A customer'}</strong> has accepted quote <strong>${quote.ref ?? quote.quoteNumber ?? quoteId}</strong>.</p>
-<p>Please follow up to process the order.</p>
-<p><a href="${process.env.NEXT_PUBLIC_APP_URL ?? ''}/crm">View in CRM →</a></p>`,
-      text: `${quote.companyName ?? 'A customer'} accepted quote ${quote.ref ?? quote.quoteNumber ?? quoteId}. Please follow up.`,
+<p><strong>${partyName}</strong> has accepted quote <strong>${ref}</strong> online.</p>
+<p>Please follow up to confirm and process the order.</p>
+<p><a href="${process.env.NEXT_PUBLIC_APP_URL ?? ''}/${found.source === 'quote' ? 'crm' : 'sales'}">View →</a></p>`,
+      text: `${partyName} accepted quote ${ref} online. Please follow up.`,
     }).catch(() => {}) // Email failure shouldn't block the acceptance
 
     return NextResponse.json({ success: true, message: 'Quote accepted successfully.' })

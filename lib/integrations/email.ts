@@ -471,6 +471,8 @@ export const generateQuoteEmail = (quote: {
   pdfAttached?: boolean
   /** Optional public/signed URL for an in-email Download PDF button. */
   pdfDownloadUrl?: string
+  /** Optional signed customer-portal URL — lets the recipient accept/reject online. */
+  portalLink?: string
 }) => {
   const brand = quoteCompanyName()
   const salesEmail = quoteSalesEmail()
@@ -504,6 +506,17 @@ export const generateQuoteEmail = (quote: {
     : pdfAttached
       ? `<p style="margin:20px 0 0 0;font-size:14px;">The full quotation PDF is <strong>attached</strong> to this email — open the attachment to download.</p>`
       : ''
+
+  const portalHtml = quote.portalLink
+    ? `
+            <p style="margin: 20px 0 8px 0;">
+              <a href="${escapeHtml(quote.portalLink)}"
+                 style="display:inline-block;background:#00AEEF;color:#fff;text-decoration:none;padding:12px 20px;border-radius:8px;font-weight:600;font-size:14px;">
+                View &amp; Respond Online
+              </a>
+            </p>
+            <p style="margin:0;font-size:13px;color:#64748B;">Accept or decline this quotation directly from your browser — no account needed.</p>`
+    : ''
 
   const lineRows = quote.lines.map(line => `
                     <tr>
@@ -574,6 +587,7 @@ export const generateQuoteEmail = (quote: {
               <p style="margin: 16px 0 0 0; font-size: 13px; color: #64748B;"><strong>Valid until:</strong> ${validUntil}</p>
             </div>
 
+            ${portalHtml}
             ${downloadHtml}
 
             <p style="margin: 28px 0 0 0;">Best regards,<br>
@@ -605,6 +619,7 @@ export const generateQuoteEmail = (quote: {
       `TOTAL (incl. VAT): KES ${Number(quote.total || 0).toLocaleString()}`,
       `Valid until: ${quote.validUntil}`,
       '',
+      quote.portalLink ? `View & respond online: ${quote.portalLink}` : '',
       quote.pdfDownloadUrl ? `Download PDF: ${quote.pdfDownloadUrl}` : '',
       pdfAttached ? 'The full quotation PDF is attached to this email.' : '',
       '',
