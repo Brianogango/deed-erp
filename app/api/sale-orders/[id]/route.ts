@@ -22,11 +22,20 @@ import { assertQuoteNotExpired } from '@/lib/sale-order-expiry'
 import { calcSaleOrderTotals, calcSaleOrderTotalsFromPersistedLines } from '@/lib/sales/line-calc'
 import { quotationPaymentTermsDays, serializeQuotationPaymentTerms } from '@/lib/sales/quotation-defaults'
 
+/** Serialize blob rewrites so a slower soft/findMany cannot overwrite a newer Save. */
+let broadcastSaleOrdersChain: Promise<void> = Promise.resolve()
+
 async function broadcastSaleOrders() {
-  try {
-    const all = await prisma.saleOrder.findMany({ include: { client: true, items: true }, orderBy: { createdAt: 'desc' } })
-    void saveStoreKeys({ deed_saleOrders: JSON.stringify(all.map(mapSaleOrderToClient)) })
-  } catch {}
+  broadcastSaleOrdersChain = broadcastSaleOrdersChain
+    .catch(() => {})
+    .then(async () => {
+      const all = await prisma.saleOrder.findMany({
+        include: { client: true, items: true },
+        orderBy: { createdAt: 'desc' },
+      })
+      await saveStoreKeys({ deed_saleOrders: JSON.stringify(all.map(mapSaleOrderToClient)) })
+    })
+  await broadcastSaleOrdersChain
 }
 
 // technical_lead: repair-quote revisions PATCH the linked sale order totals.
@@ -483,9 +492,12 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
     // Metadata-only PATCH (notes / validUntil / discount / …) must not rewrite
     // the whole deed_saleOrders blob from Prisma — that was racing draft line
     // edits in the browser and snapping removed products back onto the quote.
+    // Soft auto-persist also skips broadcast; only explicit Save / status
+    // changes rewrite the shared blob (after the write commits).
     const touchedLines = Array.isArray(body.items ?? body.lines)
-    if (touchedLines || confirming || to !== from) {
-      void broadcastSaleOrders()
+    const skipBroadcast = body.skipBroadcast === true || body._softPersist === true
+    if (!skipBroadcast && (touchedLines || confirming || to !== from)) {
+      await broadcastSaleOrders()
     }
     const fresh = confirming
       ? await prisma.saleOrder.findUnique({

@@ -8,8 +8,9 @@ function shouldBroadcastSaleOrders(body: Record<string, unknown>, opts: {
   confirming: boolean
   statusChanged: boolean
 }) {
+  const skipBroadcast = body.skipBroadcast === true || body._softPersist === true
   const touchedLines = Array.isArray(body.items ?? body.lines)
-  return touchedLines || opts.confirming || opts.statusChanged
+  return !skipBroadcast && (touchedLines || opts.confirming || opts.statusChanged)
 }
 
 describe('sale-order broadcast guard', () => {
@@ -24,5 +25,16 @@ describe('sale-order broadcast guard', () => {
     expect(shouldBroadcastSaleOrders({ items: [{ id: 'a' }] }, { confirming: false, statusChanged: false })).toBe(true)
     expect(shouldBroadcastSaleOrders({ notes: 'x' }, { confirming: true, statusChanged: true })).toBe(true)
     expect(shouldBroadcastSaleOrders({}, { confirming: false, statusChanged: true })).toBe(true)
+  })
+
+  it('skips blob broadcast for soft auto-persist line flushes', () => {
+    expect(shouldBroadcastSaleOrders(
+      { lines: [{ id: 'a' }], skipBroadcast: true },
+      { confirming: false, statusChanged: false },
+    )).toBe(false)
+    expect(shouldBroadcastSaleOrders(
+      { lines: [{ id: 'a' }], _softPersist: true },
+      { confirming: false, statusChanged: false },
+    )).toBe(false)
   })
 })
