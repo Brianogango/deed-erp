@@ -31,6 +31,21 @@ typography:
     fontSize: "12px"
     fontWeight: 400
     lineHeight: 1.35
+  caption:
+    fontFamily: "var(--font-inter), Inter, system-ui, sans-serif"
+    fontSize: "11px"
+    fontWeight: 500
+    lineHeight: 1.3
+  micro:
+    fontFamily: "var(--font-inter), Inter, system-ui, sans-serif"
+    fontSize: "10px"
+    fontWeight: 600
+    lineHeight: 1.25
+  nano:
+    fontFamily: "var(--font-inter), Inter, system-ui, sans-serif"
+    fontSize: "9px"
+    fontWeight: 600
+    lineHeight: 1.2
   mono:
     fontFamily: "var(--font-dm-mono), ui-monospace, monospace"
     fontSize: "12px"

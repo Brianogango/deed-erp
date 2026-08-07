@@ -48,7 +48,9 @@ const bodyClassName = 'bg-bg text-t1 antialiased overflow-hidden selection:bg-na
 // and SSE connection all survive page transitions without remounting.
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const session = await getServerSession()
-  const visregBypassAuth = process.env.VISREG_BYPASS_AUTH === 'true'
+  const visregBypassAuth =
+    process.env.NODE_ENV !== 'production' &&
+    process.env.VISREG_BYPASS_AUTH === 'true'
 
   // Unauthenticated routes (login, portal, track) render without AppShell.
   if (!session?.user && !visregBypassAuth) {

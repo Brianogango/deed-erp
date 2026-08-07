@@ -88,6 +88,11 @@ import {
 import ContactFormModal, { blankIndividualContact } from '@/components/contacts/ContactFormModal'
 import DocumentEmailSendHistory from '@/components/email/DocumentEmailSendHistory'
 import { resolveListPrice } from '@/lib/pricing/pricelist'
+import {
+  quotationPaymentTermsDays,
+  quotationPaymentTermsLabel,
+  serializeQuotationPaymentTerms,
+} from '@/lib/sales/quotation-defaults'
 import { pairOrderLinesWithDeliveryLines } from '@/lib/delivery-prepare'
 import Chatter from '@/components/erp/Chatter'
 import { ConfirmQuotationDialog } from '@/components/modules/sales/ConfirmQuotationDialog'
@@ -369,14 +374,7 @@ function SalesContent() {
   // ── New Quotation form state ────────────────────────────────────────────
   const [newCustomer, setNewCustomer] = useState<{ id: string; name: string } | null>(null)
   const [newDeliveryDate, setNewDeliveryDate] = useState('')
-  const defaultValidUntil = () => {
-    const d = new Date()
-    d.setDate(d.getDate() + 30)
-    return d.toISOString().slice(0, 10)
-  }
-  const [newValidUntil, setNewValidUntil] = useState(defaultValidUntil)
-  const [newHeaderDiscount, setNewHeaderDiscount] = useState('0')
-  const [newPaymentTerms, setNewPaymentTerms] = useState('30')
+  const [newValidUntil, setNewValidUntil] = useState('')
   const [selectedOrderIds, setSelectedOrderIds] = useState<string[]>([])
   const [creditNoteAmount, setCreditNoteAmount] = useState('')
   const [creditNoteReason, setCreditNoteReason] = useState('')
@@ -384,13 +382,11 @@ function SalesContent() {
   const [draftDirtyTick, setDraftDirtyTick] = useState(0)
   const [newNotes, setNewNotes] = useState('')
   const [newCustomerRef, setNewCustomerRef] = useState('')
-  const [newSalesTeam, setNewSalesTeam] = useState('')
-  const [newPricelist, setNewPricelist] = useState('RETAIL')
   const [newInvoiceAddress, setNewInvoiceAddress] = useState('')
   const [newDeliveryAddress, setNewDeliveryAddress] = useState('')
   const [newPaymentDetails, setNewPaymentDetails] = useState<DocumentPaymentDetails>({ ...DEFAULT_DOCUMENT_PAYMENT_DETAILS })
   const [newDraftLines, setNewDraftLines] = useState<DraftLine[]>([])
-  const [quoteFieldErrors, setQuoteFieldErrors] = useState<{ customer?: string; lines?: string }>({})
+  const [quoteFieldErrors, setQuoteFieldErrors] = useState<{ customer?: string; validUntil?: string; lines?: string }>({})
   const draftLoadedRef = useRef(false)
   const draftAutosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const quoteDraftKey = currentUserId ? `deed_sales_quote_draft_${currentUserId}` : 'deed_sales_quote_draft'
@@ -735,9 +731,8 @@ function SalesContent() {
     syncOrderUrl(null)
   }
   const openNewForm = () => {
-    setNewCustomer(null); setNewDeliveryDate(''); setNewValidUntil(defaultValidUntil()); setNewHeaderDiscount('0')
-    setNewPaymentTerms('30')
-    setNewNotes(''); setNewCustomerRef(''); setNewSalesTeam(''); setNewPricelist('')
+    setNewCustomer(null); setNewDeliveryDate(''); setNewValidUntil('')
+    setNewNotes(''); setNewCustomerRef('')
     setNewInvoiceAddress(''); setNewDeliveryAddress('')
     setNewPaymentDetails({ ...DEFAULT_DOCUMENT_PAYMENT_DETAILS })
     setNewDraftLines([]); setView('new')
@@ -783,11 +778,9 @@ function SalesContent() {
   const duplicateSaleOrder = (so: SalesOrderView) => {
     setNewCustomer(so.customerId ? { id: so.customerId, name: so.customerName } : null)
     setNewDeliveryDate('')
-    setNewPaymentTerms('30')
+    setNewValidUntil('')
     setNewNotes(so.notes ?? '')
     setNewCustomerRef(so.customerRef ?? '')
-    setNewSalesTeam(so.salesTeam ?? '')
-    setNewPricelist(so.pricelist ?? '')
     setNewInvoiceAddress(so.invoiceAddress ?? '')
     setNewDeliveryAddress(so.deliveryAddress ?? '')
     setNewPaymentDetails({ ...DEFAULT_DOCUMENT_PAYMENT_DETAILS })
@@ -1009,7 +1002,7 @@ function SalesContent() {
     })
   const selectProductForDraftLine = (lineId: string, product: typeof products[0]) => {
     const qty = 1
-    const priced = resolveListPrice({ product, pricelist: newPricelist || 'RETAIL', qty })
+    const priced = resolveListPrice({ product, pricelist: 'RETAIL', qty })
     // Unit price on the quote = catalog sales price (via active pricelist). Keep 0 when
     // the catalog price is 0 so the field stays editable instead of looking blank/broken.
     const unitPrice = Number.isFinite(priced.unitPrice) ? Math.max(0, priced.unitPrice) : Math.max(0, Number(product.salePrice) || 0)
@@ -1034,11 +1027,13 @@ function SalesContent() {
   // real validation state instead of always being enabled.
   const quoteSaveBlockedReason = !newCustomer
     ? 'Select a customer before saving'
-    : invalidQtyDraftLines.length > 0
-      ? 'Quantity must be greater than zero for every quoted product'
-      : validDraftLines.length === 0
-        ? 'Add at least one product with quantity greater than zero'
-        : ''
+    : !newValidUntil
+      ? 'Set a valid-until date before saving'
+      : invalidQtyDraftLines.length > 0
+        ? 'Quantity must be greater than zero for every quoted product'
+        : validDraftLines.length === 0
+          ? 'Add at least one product with quantity greater than zero'
+          : ''
 
   useEffect(() => {
     if (view !== 'new' || draftLoadedRef.current) return
@@ -1051,11 +1046,9 @@ function SalesContent() {
       const parsed = JSON.parse(raw) as {
         customer: { id: string; name: string } | null
         deliveryDate: string
-        paymentTerms: string
+        validUntil?: string
         notes: string
         customerRef?: string
-        salesTeam?: string
-        pricelist?: string
         invoiceAddress?: string
         deliveryAddress?: string
         paymentDetails?: Partial<DocumentPaymentDetails>
@@ -1063,11 +1056,9 @@ function SalesContent() {
       }
       if (parsed.customer) setNewCustomer(parsed.customer)
       if (parsed.deliveryDate) setNewDeliveryDate(parsed.deliveryDate)
-      if (parsed.paymentTerms) setNewPaymentTerms(parsed.paymentTerms)
+      if (parsed.validUntil) setNewValidUntil(parsed.validUntil)
       if (parsed.notes) setNewNotes(parsed.notes)
       if (parsed.customerRef) setNewCustomerRef(parsed.customerRef)
-      if (parsed.salesTeam) setNewSalesTeam(parsed.salesTeam)
-      if (parsed.pricelist) setNewPricelist(parsed.pricelist)
       if (parsed.invoiceAddress) setNewInvoiceAddress(parsed.invoiceAddress)
       if (parsed.deliveryAddress) setNewDeliveryAddress(parsed.deliveryAddress)
       if (parsed.paymentDetails) setNewPaymentDetails(normalizeDocumentPaymentDetails(parsed.paymentDetails))
@@ -1083,22 +1074,6 @@ function SalesContent() {
     }
   }, [view, quoteDraftKey])
 
-  // Re-seed line unit prices only when the pricelist itself changes — never when
-  // the products array refreshes, or manual unit-price edits get wiped mid-typing.
-  useEffect(() => {
-    if (view !== 'new' || !systemSettings.salesPricelists) return
-    setNewDraftLines(prev => prev.map(line => {
-      if (line.type === 'section' || !line.productId) return line
-      const product = products.find(p => p.id === line.productId)
-      if (!product) return line
-      const qty = Math.max(1, Number(line.qty) || 1)
-      const priced = resolveListPrice({ product, pricelist: newPricelist || 'RETAIL', qty })
-      const unitPrice = Number.isFinite(priced.unitPrice) ? Math.max(0, priced.unitPrice) : Math.max(0, Number(product.salePrice) || 0)
-      return { ...line, unitPrice: String(unitPrice) }
-    }))
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional: only react to pricelist switches
-  }, [newPricelist])
-
   useEffect(() => {
     if (view !== 'new') return
     if (draftAutosaveTimerRef.current) clearTimeout(draftAutosaveTimerRef.current)
@@ -1106,11 +1081,9 @@ function SalesContent() {
       const payload = {
         customer: newCustomer,
         deliveryDate: newDeliveryDate,
-        paymentTerms: newPaymentTerms,
+        validUntil: newValidUntil,
         notes: newNotes,
         customerRef: newCustomerRef,
-        salesTeam: newSalesTeam,
-        pricelist: newPricelist,
         invoiceAddress: newInvoiceAddress,
         deliveryAddress: newDeliveryAddress,
         paymentDetails: newPaymentDetails,
@@ -1126,22 +1099,23 @@ function SalesContent() {
     return () => {
       if (draftAutosaveTimerRef.current) clearTimeout(draftAutosaveTimerRef.current)
     }
-  }, [view, quoteDraftKey, newCustomer, newDeliveryDate, newValidUntil, newPaymentTerms, newNotes, newCustomerRef, newSalesTeam, newPricelist, newInvoiceAddress, newDeliveryAddress, newPaymentDetails, newDraftLines])
+  }, [view, quoteDraftKey, newCustomer, newDeliveryDate, newValidUntil, newNotes, newCustomerRef, newInvoiceAddress, newDeliveryAddress, newPaymentDetails, newDraftLines])
 
   // ── Save new quotation ──────────────────────────────────────────────────
   const saveNewQuotation = async (after: 'open' | 'another' | 'list' = 'open') => {
-    const errors: { customer?: string; lines?: string } = {}
+    const errors: { customer?: string; validUntil?: string; lines?: string } = {}
     if (!newCustomer) errors.customer = 'Please select a customer'
+    if (!newValidUntil) errors.validUntil = 'Please set when this quotation expires'
     if (invalidQtyDraftLines.length > 0) {
       errors.lines = 'Quantity must be greater than zero for every quoted product'
     } else if (validDraftLines.length === 0) {
       errors.lines = 'Add at least one product with quantity greater than zero'
     }
-    if (errors.customer || errors.lines) {
+    if (errors.customer || errors.validUntil || errors.lines) {
       setQuoteFieldErrors(errors)
       showToast('Please fix the highlighted fields', 'error')
       requestAnimationFrame(() => {
-        const id = errors.customer ? 'quote-customer' : 'quote-lines'
+        const id = errors.customer ? 'quote-customer' : errors.validUntil ? 'quote-valid-until' : 'quote-lines'
         const el = document.getElementById(id)
         const target = el?.matches('input, select, textarea, button, [tabindex]')
           ? el
@@ -1152,6 +1126,8 @@ function SalesContent() {
     }
     if (!newCustomer) return
     setQuoteFieldErrors({})
+    const selectedCustomer = contacts.find(contact => contact.id === newCustomer.id)
+    const paymentTermsDays = quotationPaymentTermsDays(selectedCustomer)
     const draftTotalEstimate = newDraftLines.reduce((sum, l) => sum + calcDraftLineTotal(l), 0)
     const creditStatus = getCustomerCreditStatus(newCustomer.id, draftTotalEstimate)
     if (!creditStatus.ok) { showToast(creditStatus.message, 'error'); return }
@@ -1185,7 +1161,7 @@ function SalesContent() {
       const typedPrice = Number(l.unitPrice)
       const priced = resolveListPrice({
         product,
-        pricelist: newPricelist || 'RETAIL',
+        pricelist: 'RETAIL',
         qty,
         customPrice: Number.isFinite(typedPrice) ? typedPrice : undefined,
       })
@@ -1206,17 +1182,13 @@ function SalesContent() {
         accountCode: product ? resolveProductAccounts(product).saleAccountCode : undefined,
       })
     }
-    const headerDisc = Math.max(0, Number(newHeaderDiscount) || 0)
     const so = await createSaleOrder(newCustomer.id, newCustomer.name, {
       lines: builtLines as any,
       ...(newDeliveryDate ? { deliveryDate: newDeliveryDate } : {}),
-      paymentTerms: newPaymentTerms === '0' ? 'Immediate' : `${newPaymentTerms} days`,
-      validUntil: newValidUntil || defaultValidUntil(),
-      discountAmount: headerDisc,
+      paymentTerms: serializeQuotationPaymentTerms(paymentTermsDays),
+      validUntil: newValidUntil,
       ...(newNotes ? { notes: newNotes } : {}),
       ...(newCustomerRef ? { customerRef: newCustomerRef } : {}),
-      ...(newSalesTeam ? { salesTeam: newSalesTeam } : {}),
-      ...(newPricelist ? { pricelist: newPricelist } : {}),
       ...(newInvoiceAddress ? { invoiceAddress: newInvoiceAddress } : {}),
       ...(newDeliveryAddress ? { deliveryAddress: newDeliveryAddress } : {}),
     })
@@ -1238,11 +1210,9 @@ function SalesContent() {
     }
     setNewCustomer(null)
     setNewDeliveryDate('')
-    setNewPaymentTerms('30')
+    setNewValidUntil('')
     setNewNotes('')
     setNewCustomerRef('')
-    setNewSalesTeam('')
-    setNewPricelist('')
     setNewInvoiceAddress('')
     setNewDeliveryAddress('')
     setNewPaymentDetails({ ...DEFAULT_DOCUMENT_PAYMENT_DETAILS })
@@ -1383,26 +1353,20 @@ function SalesContent() {
                   newDeliveryDate={newDeliveryDate}
                   setNewDeliveryDate={setNewDeliveryDate}
                   newValidUntil={newValidUntil}
-                  setNewValidUntil={setNewValidUntil}
-                  newHeaderDiscount={newHeaderDiscount}
-                  setNewHeaderDiscount={setNewHeaderDiscount}
-                  newPaymentTerms={newPaymentTerms}
-                  setNewPaymentTerms={setNewPaymentTerms}
+                  setNewValidUntil={(value) => {
+                    setNewValidUntil(value)
+                    if (value) setQuoteFieldErrors(prev => ({ ...prev, validUntil: undefined }))
+                  }}
                   newNotes={newNotes}
                   setNewNotes={setNewNotes}
                   newCustomerRef={newCustomerRef}
                   setNewCustomerRef={setNewCustomerRef}
-                  newSalesTeam={newSalesTeam}
-                  setNewSalesTeam={setNewSalesTeam}
-                  newPricelist={newPricelist}
-                  setNewPricelist={setNewPricelist}
                   newInvoiceAddress={newInvoiceAddress}
                   setNewInvoiceAddress={setNewInvoiceAddress}
                   newDeliveryAddress={newDeliveryAddress}
                   setNewDeliveryAddress={setNewDeliveryAddress}
                   newPaymentDetails={newPaymentDetails}
                   setNewPaymentDetails={setNewPaymentDetails}
-                  pricelistsEnabled={systemSettings.salesPricelists}
                   newDraftLines={newDraftLines}
                   addDraftLine={addDraftLine}
                   addDraftSection={addDraftSection}
@@ -1414,7 +1378,6 @@ function SalesContent() {
                   draftSubtotal={draftSubtotal}
                   draftTaxTotal={draftTaxTotal}
                   draftTotal={draftTotal}
-                  canEditDiscount={canEditDiscount}
                   companySettings={companySettings}
                   canSave={!quoteSaveBlockedReason}
                   saveBlockedReason={quoteSaveBlockedReason}
@@ -2746,31 +2709,24 @@ function SalesContent() {
 // ═══════════════════════════════════════════════════════════════════════════
 function NewQuotationForm({
   customers, products, newCustomer, setNewCustomer, newDeliveryDate, setNewDeliveryDate,
-  newValidUntil, setNewValidUntil, newHeaderDiscount, setNewHeaderDiscount,
-  newPaymentTerms, setNewPaymentTerms, newNotes, setNewNotes,
-  newCustomerRef, setNewCustomerRef, newSalesTeam, setNewSalesTeam,
-  newPricelist, setNewPricelist, newInvoiceAddress, setNewInvoiceAddress,
+  newValidUntil, setNewValidUntil, newNotes, setNewNotes,
+  newCustomerRef, setNewCustomerRef, newInvoiceAddress, setNewInvoiceAddress,
   newDeliveryAddress, setNewDeliveryAddress, newPaymentDetails, setNewPaymentDetails,
-  pricelistsEnabled, newDraftLines,
+  newDraftLines,
   addDraftLine, addDraftSection, updateDraftLine, removeDraftLine, moveDraftLine, selectProductForDraftLine,
-  calcDraftLineTotal, draftSubtotal, draftTaxTotal, draftTotal, canEditDiscount,
+  calcDraftLineTotal, draftSubtotal, draftTaxTotal, draftTotal,
   companySettings, canSave, saveBlockedReason, fieldErrors, onSave, onSaveAndAddAnother, onSaveDraft, onCancel, onCreateNewCustomer,
 }: {
   customers: any[]; products: any[]; newCustomer: { id: string; name: string } | null
   setNewCustomer: (c: { id: string; name: string } | null) => void
   newDeliveryDate: string; setNewDeliveryDate: (v: string) => void
   newValidUntil: string; setNewValidUntil: (v: string) => void
-  newHeaderDiscount: string; setNewHeaderDiscount: (v: string) => void
-  newPaymentTerms: string; setNewPaymentTerms: (v: string) => void
   newNotes: string; setNewNotes: (v: string) => void
   newCustomerRef: string; setNewCustomerRef: (v: string) => void
-  newSalesTeam: string; setNewSalesTeam: (v: string) => void
-  newPricelist: string; setNewPricelist: (v: string) => void
   newInvoiceAddress: string; setNewInvoiceAddress: (v: string) => void
   newDeliveryAddress: string; setNewDeliveryAddress: (v: string) => void
   newPaymentDetails: DocumentPaymentDetails
   setNewPaymentDetails: (v: DocumentPaymentDetails) => void
-  pricelistsEnabled: boolean
   newDraftLines: DraftLine[]; addDraftLine: () => void; addDraftSection: () => void
   updateDraftLine: (id: string, field: keyof DraftLine, value: string) => void
   removeDraftLine: (id: string) => void
@@ -2778,9 +2734,9 @@ function NewQuotationForm({
   selectProductForDraftLine: (lineId: string, product: any) => void
   calcDraftLineTotal: (l: DraftLine) => number
   draftSubtotal: number; draftTaxTotal: number; draftTotal: number
-  canEditDiscount: boolean; companySettings: any
+  companySettings: any
   canSave: boolean; saveBlockedReason: string
-  fieldErrors?: { customer?: string; lines?: string }
+  fieldErrors?: { customer?: string; validUntil?: string; lines?: string }
   onSave: () => void; onSaveAndAddAnother: () => void; onSaveDraft: () => void; onCancel: () => void
   onCreateNewCustomer: (query: string) => void
 }) {
@@ -2794,6 +2750,7 @@ function NewQuotationForm({
   const [customerDropdownOpen, setCustomerDropdownOpen] = useState(false)
   const [showAdvanced, setShowAdvanced] = useState(false)
   const selectedCustomer = customers.find(c => c.id === newCustomer?.id)
+  const paymentTermsDays = quotationPaymentTermsDays(selectedCustomer)
   const customerRef = useRef<HTMLDivElement>(null)
   const dropdownRef = useRef<HTMLDivElement>(null)
 
@@ -2921,7 +2878,14 @@ function NewQuotationForm({
                 aria-label="Valid until"
                 value={newValidUntil || ''}
                 onChange={e => setNewValidUntil(e.target.value)}
+                aria-describedby={fieldErrors?.validUntil ? 'quote-valid-until-error' : undefined}
+                aria-invalid={fieldErrors?.validUntil ? true : undefined}
               />
+              {fieldErrors?.validUntil && (
+                <p id="quote-valid-until-error" role="alert" className="text-[11px] text-[var(--sp-danger)] font-semibold mt-1">
+                  {fieldErrors.validUntil}
+                </p>
+              )}
               <div className="flex flex-wrap gap-1 mt-1">
                 {[30, 60, 90].map(days => (
                   <button
@@ -2949,38 +2913,13 @@ function NewQuotationForm({
                 onChange={e => setNewDeliveryDate(e.target.value)}
               />
             </SalesDocField>
-            {canEditDiscount && (
-              <SalesDocField label="Order discount (KES)" htmlFor="quote-header-discount">
-                <input
-                  id="quote-header-discount"
-                  type="number"
-                  min={0}
-                  aria-label="Order discount"
-                  value={newHeaderDiscount}
-                  onChange={e => setNewHeaderDiscount(e.target.value)}
-                />
-              </SalesDocField>
-            )}
-            <SalesDocField label="Price list" htmlFor="quote-pricelist">
-              <select id="quote-pricelist" aria-label="Pricelist" value={newPricelist || 'RETAIL'} onChange={e => setNewPricelist(e.target.value)} disabled={!pricelistsEnabled}>
-                <option value="RETAIL">Public · KES</option>
-                <option value="WHOLESALE">Wholesale · KES</option>
-                <option value="KILIMALL">Kilimall · KES</option>
-              </select>
-            </SalesDocField>
             <SalesDocField label="Payment terms" htmlFor="quote-payment-terms">
-              <select id="quote-payment-terms" aria-label="Payment terms" value={newPaymentTerms} onChange={e => setNewPaymentTerms(e.target.value)}>
-                <option value="0">Immediate</option>
-                <option value="7">7 days</option>
-                <option value="14">14 days</option>
-                <option value="30">Net 30</option>
-                <option value="45">45 days</option>
-                <option value="60">60 days</option>
-                <option value="90">90 days</option>
-              </select>
-            </SalesDocField>
-            <SalesDocField label="Salesperson" htmlFor="quote-sales-team">
-              <input id="quote-sales-team" type="text" aria-label="Salesperson" placeholder="Salesperson" value={newSalesTeam} onChange={e => setNewSalesTeam(e.target.value)} />
+              <input
+                id="quote-payment-terms"
+                readOnly
+                value={quotationPaymentTermsLabel(paymentTermsDays)}
+                aria-label="Payment terms, assigned from customer"
+              />
             </SalesDocField>
           </div>
         </div>
@@ -3148,12 +3087,9 @@ function NewQuotationForm({
               rows={[
                 { label: 'Untaxed amount', value: salesKes(draftSubtotal) },
                 { label: 'Taxes', value: salesKes(draftTaxTotal) },
-                ...(Number(newHeaderDiscount) > 0
-                  ? [{ label: 'Discount', value: `−${salesKes(Number(newHeaderDiscount) || 0)}` }]
-                  : []),
                 {
                   label: 'Total',
-                  value: salesKes(Math.max(0, draftTotal - (Number(newHeaderDiscount) || 0))),
+                  value: salesKes(draftTotal),
                   grand: true,
                 },
                 { label: 'Currency', value: 'KES' },
