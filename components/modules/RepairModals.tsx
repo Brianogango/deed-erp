@@ -340,9 +340,12 @@ function ProductPicker({ value, productId, onSelect, products, requireInventory,
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
 
+  // Opening the field with no query yet browses the catalogue (sorted,
+  // capped) instead of showing nothing — the whole point of picking FROM
+  // inventory is being able to see what's there without knowing a name first.
   const matches = query.length > 0
     ? products.filter(p => p.isActive && (p.name.toLowerCase().includes(query.toLowerCase()) || p.sku.toLowerCase().includes(query.toLowerCase()))).slice(0, 8)
-    : []
+    : [...products].filter(p => p.isActive).sort((a, b) => a.name.localeCompare(b.name)).slice(0, 8)
 
   useEffect(() => { setQuery(value) }, [value])
 
@@ -377,6 +380,11 @@ function ProductPicker({ value, productId, onSelect, products, requireInventory,
       )}
       {open && matches.length > 0 && (
         <div className="absolute top-full mt-1 left-0 right-0 z-[9300] rounded-xl border border-[var(--border)] bg-[var(--bg-card)] shadow-xl overflow-hidden">
+          {query.length === 0 && (
+            <p className="px-3 py-1.5 text-[9px] font-bold text-[var(--text-4)] uppercase tracking-wide bg-[var(--bg-surface)] border-b border-[var(--border-lt)]">
+              Browse inventory — type to narrow
+            </p>
+          )}
           {matches.map(p => (
             <button
               key={p.id}
@@ -516,7 +524,7 @@ export function QuoteModal({ repair, onClose }: { repair: RepairOrder, onClose: 
                   disabled={locked}
                   onChange={e => setQuoteLines(prev => prev.map((l, j) => j === i ? { ...l, type: e.target.value as any, productId: undefined, stockQty: undefined } : l))}
                 >
-                  <option value="part">Part</option>
+                  <option value="part">Hardware Part</option>
                   <option value="labor">Labour</option>
                   <option value="software">Software</option>
                   <option value="license">License</option>
