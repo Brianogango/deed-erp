@@ -1,5 +1,5 @@
 export type QuotationPaymentTermsContact = {
-  paymentTermsDays?: number | null
+  paymentTermsDays?: number | string | null
   paymentTerms?: string | null
 }
 
@@ -10,9 +10,12 @@ export type QuotationPaymentTermsContact = {
 export function quotationPaymentTermsDays(
   contact: QuotationPaymentTermsContact | null | undefined,
 ): number {
-  const configuredDays = Number(contact?.paymentTermsDays)
-  if (Number.isFinite(configuredDays) && configuredDays >= 0) {
-    return Math.trunc(configuredDays)
+  const configuredTerms = contact?.paymentTermsDays
+  if (configuredTerms !== null && configuredTerms !== undefined && configuredTerms !== '') {
+    const configuredDays = Number(configuredTerms)
+    if (Number.isFinite(configuredDays) && configuredDays >= 0) {
+      return Math.trunc(configuredDays)
+    }
   }
 
   const legacyTerms = contact?.paymentTerms?.trim()

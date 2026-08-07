@@ -22,6 +22,8 @@ describe('quotation payment terms defaults', () => {
   it('supports legacy contact payment-term strings', () => {
     expect(quotationPaymentTermsDays({ paymentTerms: 'Net 45' })).toBe(45)
     expect(quotationPaymentTermsDays({ paymentTerms: '60 days' })).toBe(60)
+    expect(quotationPaymentTermsDays({ paymentTermsDays: null, paymentTerms: 'Net 30' })).toBe(30)
+    expect(quotationPaymentTermsDays({ paymentTermsDays: '', paymentTerms: '45 days' })).toBe(45)
     expect(quotationPaymentTermsDays({ paymentTerms: 'not configured' })).toBe(0)
   })
 })
