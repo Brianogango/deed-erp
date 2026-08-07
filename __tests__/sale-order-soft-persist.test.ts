@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest'
 import {
   markSaleOrderDraftEdit,
   isSaleOrderDraftEditing,
@@ -9,6 +9,10 @@ import {
 import {
   registerSaleOrderDraftPersistApi,
   scheduleDraftSaleOrderLinePersist,
+  beginHardSaleOrderPersist,
+  endHardSaleOrderPersist,
+  waitForDraftSaleOrderPersistIdle,
+  cancelDraftSaleOrderLinePersist,
   _resetDraftSaleOrderPersistForTests,
 } from '@/lib/sale-order-draft-persist'
 
@@ -28,20 +32,19 @@ describe('soft draft persist', () => {
     _resetSaleOrderDraftEditStateForTests()
     _resetDraftSaleOrderPersistForTests()
     vi.useFakeTimers()
-    // scheduleDraftSaleOrderLinePersist is browser-only
     Object.defineProperty(globalThis, 'window', {
       value: globalThis,
       configurable: true,
     })
   })
 
-  it('calls updateSaleOrder with persist+soft and never clears draft editing', async () => {
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('calls updateSaleOrder with persist+soft and skipBroadcast', async () => {
     markSaleOrderDraftEdit('so-1')
-    const updateSaleOrder = vi.fn(async () => {
-      // Soft persist must leave the draft mark alone (unlike stampSaleOrderPersisted).
-      expect(isSaleOrderDraftEditing('so-1')).toBe(true)
-      return true
-    })
+    const updateSaleOrder = vi.fn(async () => true)
     registerSaleOrderDraftPersistApi({
       updateSaleOrder,
       getSaleOrder: () => ({
@@ -59,11 +62,12 @@ describe('soft draft persist', () => {
     await Promise.resolve()
 
     expect(updateSaleOrder).toHaveBeenCalledTimes(1)
+    expect(updateSaleOrder.mock.calls[0][1]).toMatchObject({ skipBroadcast: true })
     expect(updateSaleOrder.mock.calls[0][2]).toEqual({ persist: true, soft: true })
     expect(isSaleOrderDraftEditing('so-1')).toBe(true)
   })
 
-  it('coalesces overlapping soft persists so only one PATCH runs at a time', async () => {
+  it('Save cancels soft timer and waits for idle before hard persist', async () => {
     markSaleOrderDraftEdit('so-1')
     let release!: () => void
     const gate = new Promise<void>(r => { release = r })
@@ -71,12 +75,11 @@ describe('soft draft persist', () => {
       await gate
       return true
     })
-    let lines = [{ id: 'a', productId: 'p1', qty: 1 }]
     registerSaleOrderDraftPersistApi({
       updateSaleOrder,
       getSaleOrder: () => ({
         id: 'so-1',
-        lines,
+        lines: [{ id: 'a', productId: 'p1', qty: 1 }],
         subtotal: 10,
         taxTotal: 0,
         discountAmount: 0,
@@ -86,18 +89,32 @@ describe('soft draft persist', () => {
 
     scheduleDraftSaleOrderLinePersist('so-1')
     await vi.advanceTimersByTimeAsync(450)
-    // First persist in flight — further schedules should queue, not start another timer PATCH.
-    lines = [{ id: 'a', productId: 'p1', qty: 1 }, { id: 'b', productId: 'p2', qty: 1 }]
-    scheduleDraftSaleOrderLinePersist('so-1')
-    scheduleDraftSaleOrderLinePersist('so-1')
     expect(updateSaleOrder).toHaveBeenCalledTimes(1)
 
+    beginHardSaleOrderPersist('so-1')
+    // Further soft schedules must no-op while hard-saving.
+    scheduleDraftSaleOrderLinePersist('so-1')
+    await vi.advanceTimersByTimeAsync(450)
+    expect(updateSaleOrder).toHaveBeenCalledTimes(1)
+
+    const idle = waitForDraftSaleOrderPersistIdle('so-1')
     release()
-    await Promise.resolve()
+    await idle
+    endHardSaleOrderPersist('so-1')
+  })
+
+  it('cancelDraftSaleOrderLinePersist prevents a pending soft flush', async () => {
+    markSaleOrderDraftEdit('so-1')
+    const updateSaleOrder = vi.fn(async () => true)
+    registerSaleOrderDraftPersistApi({
+      updateSaleOrder,
+      getSaleOrder: () => ({ id: 'so-1', lines: [] }),
+    })
+    scheduleDraftSaleOrderLinePersist('so-1')
+    cancelDraftSaleOrderLinePersist('so-1')
     await vi.advanceTimersByTimeAsync(450)
     await Promise.resolve()
-    expect(updateSaleOrder).toHaveBeenCalledTimes(2)
-    expect(updateSaleOrder.mock.calls.every(c => c[2]?.soft === true)).toBe(true)
+    expect(updateSaleOrder).not.toHaveBeenCalled()
   })
 
   it('stampSaleOrderPersisted is only for explicit Save (soft path must not call it)', () => {

@@ -1,8 +1,12 @@
 /**
- * Debounced Prisma flush for draft quotation line edits.
- * Soft auto-persist never rolls the UI back and never clears draft protection —
- * only an explicit Save stamps the row. Overlapping PATCHes are coalesced so an
- * older response cannot restore deleted lines.
+ * Single-flight draft quotation line persist.
+ *
+ * Soft auto-persist and explicit Save must never PATCH the same SO concurrently:
+ * a slower soft write was restoring previous lines in Prisma/blob after Save.
+ *
+ * Soft updates Prisma with skipBroadcast so mid-edit snapshots do not rewrite
+ * the shared deed_saleOrders blob. Save cancels soft work, waits for idle,
+ * then PATCHes and broadcasts.
  */
 
 import {
@@ -29,53 +33,96 @@ type PersistApi = {
 
 let api: PersistApi | null = null
 const timers = new Map<string, ReturnType<typeof setTimeout>>()
-const inflight = new Set<string>()
-const queued = new Set<string>()
+const inflight = new Map<string, Promise<void>>()
+const hardSaving = new Set<string>()
+/** Bumped whenever a newer edit/Save supersedes in-flight soft work. */
+const generation = new Map<string, number>()
 
 export function registerSaleOrderDraftPersistApi(next: PersistApi | null) {
   api = next
 }
 
-async function flushDraftSaleOrderLinePersist(orderId: string) {
+function bumpGeneration(orderId: string): number {
+  const next = (generation.get(orderId) ?? 0) + 1
+  generation.set(orderId, next)
+  return next
+}
+
+export function getSaleOrderPersistGeneration(orderId: string): number {
+  return generation.get(orderId) ?? 0
+}
+
+export function isSaleOrderHardSaving(orderId: string) {
+  return hardSaving.has(orderId)
+}
+
+/** Cancel debounced soft persist — does not abort an HTTP request already sent. */
+export function cancelDraftSaleOrderLinePersist(orderId: string) {
+  if (!orderId) return
+  const prev = timers.get(orderId)
+  if (prev) clearTimeout(prev)
+  timers.delete(orderId)
+  bumpGeneration(orderId)
+}
+
+/** Wait until any in-flight soft PATCH for this order finishes. */
+export async function waitForDraftSaleOrderPersistIdle(orderId: string) {
+  const pending = inflight.get(orderId)
+  if (pending) await pending
+}
+
+export function beginHardSaleOrderPersist(orderId: string) {
+  hardSaving.add(orderId)
+  cancelDraftSaleOrderLinePersist(orderId)
+}
+
+export function endHardSaleOrderPersist(orderId: string) {
+  hardSaving.delete(orderId)
+}
+
+function trackInflight(orderId: string, run: Promise<void>) {
+  const wrapped = run.catch(() => {}).finally(() => {
+    if (inflight.get(orderId) === wrapped) inflight.delete(orderId)
+  })
+  inflight.set(orderId, wrapped)
+  return wrapped
+}
+
+async function flushDraftSaleOrderLinePersist(orderId: string, startedGen: number) {
   const current = api
   if (!current || !isSaleOrderDraftEditing(orderId)) return
+  if (hardSaving.has(orderId)) return
+  if ((generation.get(orderId) ?? 0) !== startedGen) return
   const live = current.getSaleOrder?.(orderId)
   if (!live) return
-  inflight.add(orderId)
-  try {
-    await current.updateSaleOrder(orderId, {
-      lines: live.lines,
-      subtotal: live.subtotal,
-      taxTotal: live.taxTotal,
-      discountAmount: live.discountAmount,
-      total: live.total,
-    }, { persist: true, soft: true })
-  } finally {
-    inflight.delete(orderId)
-    if (queued.has(orderId)) {
-      queued.delete(orderId)
-      scheduleDraftSaleOrderLinePersist(orderId)
-    }
-  }
+  if (hardSaving.has(orderId)) return
+  if ((generation.get(orderId) ?? 0) !== startedGen) return
+
+  await current.updateSaleOrder(orderId, {
+    lines: live.lines,
+    subtotal: live.subtotal,
+    taxTotal: live.taxTotal,
+    discountAmount: live.discountAmount,
+    total: live.total,
+    // Server skips blob rewrite for soft line flushes (Save broadcasts).
+    skipBroadcast: true,
+  }, { persist: true, soft: true })
 }
 
 export function scheduleDraftSaleOrderLinePersist(orderId: string) {
   if (!orderId || typeof window === 'undefined') return
-  if (inflight.has(orderId)) {
-    queued.add(orderId)
-    return
-  }
+  if (hardSaving.has(orderId)) return
   const prev = timers.get(orderId)
   if (prev) clearTimeout(prev)
+  const startedGen = bumpGeneration(orderId)
   timers.set(orderId, setTimeout(() => {
     timers.delete(orderId)
-    void flushDraftSaleOrderLinePersist(orderId)
+    trackInflight(orderId, flushDraftSaleOrderLinePersist(orderId, startedGen))
   }, 450))
 }
 
-/** True while a soft persist PATCH is in flight for this order. */
 export function isDraftSaleOrderPersistInFlight(orderId: string) {
-  return inflight.has(orderId)
+  return inflight.has(orderId) || timers.has(orderId)
 }
 
 /** Test helper */
@@ -83,6 +130,7 @@ export function _resetDraftSaleOrderPersistForTests() {
   for (const t of timers.values()) clearTimeout(t)
   timers.clear()
   inflight.clear()
-  queued.clear()
+  hardSaving.clear()
+  generation.clear()
   api = null
 }

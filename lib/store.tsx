@@ -49,6 +49,10 @@ import {
 import {
   registerSaleOrderDraftPersistApi,
   scheduleDraftSaleOrderLinePersist,
+  beginHardSaleOrderPersist,
+  endHardSaleOrderPersist,
+  waitForDraftSaleOrderPersistIdle,
+  isSaleOrderHardSaving,
 } from '@/lib/sale-order-draft-persist'
 import {
   normalizeSaleOrdersForClient,
@@ -9640,14 +9644,20 @@ const storeCtx: AppState = {
         const body = persistLines
           ? (persistPayload as unknown as Record<string, unknown>)
           : (p as unknown as Record<string, unknown>)
+        // Soft auto-persist must not rewrite the shared blob mid-edit.
+        if (softPersist) {
+          ;(body as Record<string, unknown>).skipBroadcast = true
+        }
         const result = await patchSaleOrderPersist(id, body)
         if (!result.ok) {
           if (persistLines) {
             // Soft auto-persist must never erase the user's draft. Keep the mark
             // and retry quietly — explicit Save can still surface an error.
             if (softPersist) {
-              markSaleOrderDraftEdit(id)
-              scheduleDraftSaleOrderLinePersist(id)
+              if (!isSaleOrderHardSaving(id)) {
+                markSaleOrderDraftEdit(id)
+                scheduleDraftSaleOrderLinePersist(id)
+              }
               return false
             }
             const latest = soRef.current.find(s => s.id === id)
@@ -9678,8 +9688,8 @@ const storeCtx: AppState = {
             }
           } catch { /* ignore */ }
           if (softPersist) {
-            // Soft sync stays silent and never clears draft protection.
-            if (localMoved) scheduleDraftSaleOrderLinePersist(id)
+            // Soft sync stays silent. If Save started, do not re-arm draft soft flushes.
+            if (!isSaleOrderHardSaving(id) && localMoved) scheduleDraftSaleOrderLinePersist(id)
             return true
           }
           // Explicit Save while the user kept editing — persist the newer draft.
@@ -9749,7 +9759,18 @@ const storeCtx: AppState = {
         })
       }
 
-      if (persistLines) return persist()
+      if (persistLines) {
+        if (softPersist) return persist()
+        // Explicit Save: cancel soft work, wait for any in-flight soft PATCH,
+        // then write the latest soRef lines so a slower soft cannot win.
+        beginHardSaleOrderPersist(id)
+        await waitForDraftSaleOrderPersistIdle(id)
+        try {
+          return await persist()
+        } finally {
+          endHardSaleOrderPersist(id)
+        }
+      }
       void persist()
       return true
     },

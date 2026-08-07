@@ -5,6 +5,7 @@ import {
   CONTENT_FILTERED_STORE_KEYS, filterStoreValueForRole, hasFullStoreContentAccess, mergeFilteredStoreWrite,
 } from '@/lib/auth/authorization'
 import { preserveInvoiceLinesOnStoreWrite, enforcePostedInvoiceImmutability } from '@/lib/finance-invoice'
+import { mergeSaleOrdersStoreWrite } from '@/lib/sale-order-store-merge'
 import { loadAppState, saveStoreKeys } from '@/lib/server-store'
 import { appendStoreAudit } from '@/lib/store-audit'
 
@@ -67,6 +68,12 @@ export async function PUT(request: NextRequest, { params }: Params) {
     const guarded = enforcePostedInvoiceImmutability(currentState[key], withPreservedLines)
     value = JSON.stringify(guarded.merged)
     rejectedPostedInvoiceEdits = guarded.rejected
+  }
+  if (key === 'deed_saleOrders') {
+    let incoming: unknown
+    try { incoming = JSON.parse(value) } catch { incoming = null }
+    const currentState = await loadAppState([key])
+    value = JSON.stringify(mergeSaleOrdersStoreWrite(currentState[key], incoming))
   }
   await saveStoreKeys({ [key]: value })
   if (rejectedPostedInvoiceEdits.length > 0) {
