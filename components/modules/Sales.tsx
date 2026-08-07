@@ -301,6 +301,21 @@ function MoreActionsMenu({ items, label = 'More' }: { items: MoreAction[]; label
   )
 }
 
+/** Map contact payment terms → create-form select key. Immediate when unset. */
+function paymentTermsKeyFromContact(contact?: {
+  paymentTermsDays?: number | null
+  paymentTerms?: string | null
+} | null): string {
+  const days = Number(contact?.paymentTermsDays)
+  if (Number.isFinite(days) && days > 0) return String(Math.round(days))
+  const fromLabel = String(contact?.paymentTerms ?? '').match(/(\d+)/)
+  if (fromLabel) {
+    const n = Number(fromLabel[1])
+    if (Number.isFinite(n) && n > 0) return String(n)
+  }
+  return '0'
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // MAIN EXPORT
 // ═══════════════════════════════════════════════════════════════════════════
@@ -369,14 +384,10 @@ function SalesContent() {
   // ── New Quotation form state ────────────────────────────────────────────
   const [newCustomer, setNewCustomer] = useState<{ id: string; name: string } | null>(null)
   const [newDeliveryDate, setNewDeliveryDate] = useState('')
-  const defaultValidUntil = () => {
-    const d = new Date()
-    d.setDate(d.getDate() + 30)
-    return d.toISOString().slice(0, 10)
-  }
-  const [newValidUntil, setNewValidUntil] = useState(defaultValidUntil)
-  const [newHeaderDiscount, setNewHeaderDiscount] = useState('0')
-  const [newPaymentTerms, setNewPaymentTerms] = useState('30')
+  /** Empty until the user sets a date (or uses a 30/60/90 preset). */
+  const [newValidUntil, setNewValidUntil] = useState('')
+  /** Immediate unless the selected contact has payment terms. */
+  const [newPaymentTerms, setNewPaymentTerms] = useState('0')
   const [selectedOrderIds, setSelectedOrderIds] = useState<string[]>([])
   const [creditNoteAmount, setCreditNoteAmount] = useState('')
   const [creditNoteReason, setCreditNoteReason] = useState('')
@@ -384,8 +395,8 @@ function SalesContent() {
   const [draftDirtyTick, setDraftDirtyTick] = useState(0)
   const [newNotes, setNewNotes] = useState('')
   const [newCustomerRef, setNewCustomerRef] = useState('')
-  const [newSalesTeam, setNewSalesTeam] = useState('')
-  const [newPricelist, setNewPricelist] = useState('RETAIL')
+  /** Pricelist is automatic (retail); not shown on the create form. */
+  const newPricelist = 'RETAIL'
   const [newInvoiceAddress, setNewInvoiceAddress] = useState('')
   const [newDeliveryAddress, setNewDeliveryAddress] = useState('')
   const [newPaymentDetails, setNewPaymentDetails] = useState<DocumentPaymentDetails>({ ...DEFAULT_DOCUMENT_PAYMENT_DETAILS })
@@ -734,10 +745,15 @@ function SalesContent() {
     setEditingLineId(null)
     syncOrderUrl(null)
   }
+  const applyPaymentTermsFromContact = (contactId: string | null | undefined) => {
+    const contact = contactId ? contacts.find(c => c.id === contactId) : null
+    setNewPaymentTerms(paymentTermsKeyFromContact(contact))
+  }
+
   const openNewForm = () => {
-    setNewCustomer(null); setNewDeliveryDate(''); setNewValidUntil(defaultValidUntil()); setNewHeaderDiscount('0')
-    setNewPaymentTerms('30')
-    setNewNotes(''); setNewCustomerRef(''); setNewSalesTeam(''); setNewPricelist('')
+    setNewCustomer(null); setNewDeliveryDate(''); setNewValidUntil('')
+    setNewPaymentTerms('0')
+    setNewNotes(''); setNewCustomerRef('')
     setNewInvoiceAddress(''); setNewDeliveryAddress('')
     setNewPaymentDetails({ ...DEFAULT_DOCUMENT_PAYMENT_DETAILS })
     setNewDraftLines([]); setView('new')
@@ -783,11 +799,10 @@ function SalesContent() {
   const duplicateSaleOrder = (so: SalesOrderView) => {
     setNewCustomer(so.customerId ? { id: so.customerId, name: so.customerName } : null)
     setNewDeliveryDate('')
-    setNewPaymentTerms('30')
+    setNewValidUntil(so.validUntil ?? '')
+    applyPaymentTermsFromContact(so.customerId)
     setNewNotes(so.notes ?? '')
     setNewCustomerRef(so.customerRef ?? '')
-    setNewSalesTeam(so.salesTeam ?? '')
-    setNewPricelist(so.pricelist ?? '')
     setNewInvoiceAddress(so.invoiceAddress ?? '')
     setNewDeliveryAddress(so.deliveryAddress ?? '')
     setNewPaymentDetails({ ...DEFAULT_DOCUMENT_PAYMENT_DETAILS })
@@ -1061,13 +1076,15 @@ function SalesContent() {
         paymentDetails?: Partial<DocumentPaymentDetails>
         lines: DraftLine[]
       }
-      if (parsed.customer) setNewCustomer(parsed.customer)
+      if (parsed.customer) {
+        setNewCustomer(parsed.customer)
+        if (!parsed.paymentTerms) applyPaymentTermsFromContact(parsed.customer.id)
+      }
       if (parsed.deliveryDate) setNewDeliveryDate(parsed.deliveryDate)
+      if (typeof (parsed as any).validUntil === 'string') setNewValidUntil((parsed as any).validUntil)
       if (parsed.paymentTerms) setNewPaymentTerms(parsed.paymentTerms)
       if (parsed.notes) setNewNotes(parsed.notes)
       if (parsed.customerRef) setNewCustomerRef(parsed.customerRef)
-      if (parsed.salesTeam) setNewSalesTeam(parsed.salesTeam)
-      if (parsed.pricelist) setNewPricelist(parsed.pricelist)
       if (parsed.invoiceAddress) setNewInvoiceAddress(parsed.invoiceAddress)
       if (parsed.deliveryAddress) setNewDeliveryAddress(parsed.deliveryAddress)
       if (parsed.paymentDetails) setNewPaymentDetails(normalizeDocumentPaymentDetails(parsed.paymentDetails))
@@ -1083,22 +1100,6 @@ function SalesContent() {
     }
   }, [view, quoteDraftKey])
 
-  // Re-seed line unit prices only when the pricelist itself changes — never when
-  // the products array refreshes, or manual unit-price edits get wiped mid-typing.
-  useEffect(() => {
-    if (view !== 'new' || !systemSettings.salesPricelists) return
-    setNewDraftLines(prev => prev.map(line => {
-      if (line.type === 'section' || !line.productId) return line
-      const product = products.find(p => p.id === line.productId)
-      if (!product) return line
-      const qty = Math.max(1, Number(line.qty) || 1)
-      const priced = resolveListPrice({ product, pricelist: newPricelist || 'RETAIL', qty })
-      const unitPrice = Number.isFinite(priced.unitPrice) ? Math.max(0, priced.unitPrice) : Math.max(0, Number(product.salePrice) || 0)
-      return { ...line, unitPrice: String(unitPrice) }
-    }))
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional: only react to pricelist switches
-  }, [newPricelist])
-
   useEffect(() => {
     if (view !== 'new') return
     if (draftAutosaveTimerRef.current) clearTimeout(draftAutosaveTimerRef.current)
@@ -1106,11 +1107,10 @@ function SalesContent() {
       const payload = {
         customer: newCustomer,
         deliveryDate: newDeliveryDate,
+        validUntil: newValidUntil,
         paymentTerms: newPaymentTerms,
         notes: newNotes,
         customerRef: newCustomerRef,
-        salesTeam: newSalesTeam,
-        pricelist: newPricelist,
         invoiceAddress: newInvoiceAddress,
         deliveryAddress: newDeliveryAddress,
         paymentDetails: newPaymentDetails,
@@ -1126,7 +1126,7 @@ function SalesContent() {
     return () => {
       if (draftAutosaveTimerRef.current) clearTimeout(draftAutosaveTimerRef.current)
     }
-  }, [view, quoteDraftKey, newCustomer, newDeliveryDate, newValidUntil, newPaymentTerms, newNotes, newCustomerRef, newSalesTeam, newPricelist, newInvoiceAddress, newDeliveryAddress, newPaymentDetails, newDraftLines])
+  }, [view, quoteDraftKey, newCustomer, newDeliveryDate, newValidUntil, newPaymentTerms, newNotes, newCustomerRef, newInvoiceAddress, newDeliveryAddress, newPaymentDetails, newDraftLines])
 
   // ── Save new quotation ──────────────────────────────────────────────────
   const saveNewQuotation = async (after: 'open' | 'another' | 'list' = 'open') => {
@@ -1206,17 +1206,15 @@ function SalesContent() {
         accountCode: product ? resolveProductAccounts(product).saleAccountCode : undefined,
       })
     }
-    const headerDisc = Math.max(0, Number(newHeaderDiscount) || 0)
     const so = await createSaleOrder(newCustomer.id, newCustomer.name, {
       lines: builtLines as any,
       ...(newDeliveryDate ? { deliveryDate: newDeliveryDate } : {}),
       paymentTerms: newPaymentTerms === '0' ? 'Immediate' : `${newPaymentTerms} days`,
-      validUntil: newValidUntil || defaultValidUntil(),
-      discountAmount: headerDisc,
+      ...(newValidUntil ? { validUntil: newValidUntil } : {}),
+      pricelist: newPricelist,
+      // Salesperson is stamped from the signed-in user in createSaleOrder.
       ...(newNotes ? { notes: newNotes } : {}),
       ...(newCustomerRef ? { customerRef: newCustomerRef } : {}),
-      ...(newSalesTeam ? { salesTeam: newSalesTeam } : {}),
-      ...(newPricelist ? { pricelist: newPricelist } : {}),
       ...(newInvoiceAddress ? { invoiceAddress: newInvoiceAddress } : {}),
       ...(newDeliveryAddress ? { deliveryAddress: newDeliveryAddress } : {}),
     })
@@ -1238,11 +1236,10 @@ function SalesContent() {
     }
     setNewCustomer(null)
     setNewDeliveryDate('')
-    setNewPaymentTerms('30')
+    setNewValidUntil('')
+    setNewPaymentTerms('0')
     setNewNotes('')
     setNewCustomerRef('')
-    setNewSalesTeam('')
-    setNewPricelist('')
     setNewInvoiceAddress('')
     setNewDeliveryAddress('')
     setNewPaymentDetails({ ...DEFAULT_DOCUMENT_PAYMENT_DETAILS })
@@ -1378,31 +1375,30 @@ function SalesContent() {
                   newCustomer={newCustomer}
                   setNewCustomer={(c) => {
                     setNewCustomer(c)
-                    if (c) setQuoteFieldErrors(prev => ({ ...prev, customer: undefined }))
+                    if (c) {
+                      setQuoteFieldErrors(prev => ({ ...prev, customer: undefined }))
+                      applyPaymentTermsFromContact(c.id)
+                    } else {
+                      setNewPaymentTerms('0')
+                    }
                   }}
                   newDeliveryDate={newDeliveryDate}
                   setNewDeliveryDate={setNewDeliveryDate}
                   newValidUntil={newValidUntil}
                   setNewValidUntil={setNewValidUntil}
-                  newHeaderDiscount={newHeaderDiscount}
-                  setNewHeaderDiscount={setNewHeaderDiscount}
                   newPaymentTerms={newPaymentTerms}
                   setNewPaymentTerms={setNewPaymentTerms}
                   newNotes={newNotes}
                   setNewNotes={setNewNotes}
                   newCustomerRef={newCustomerRef}
                   setNewCustomerRef={setNewCustomerRef}
-                  newSalesTeam={newSalesTeam}
-                  setNewSalesTeam={setNewSalesTeam}
-                  newPricelist={newPricelist}
-                  setNewPricelist={setNewPricelist}
                   newInvoiceAddress={newInvoiceAddress}
                   setNewInvoiceAddress={setNewInvoiceAddress}
                   newDeliveryAddress={newDeliveryAddress}
                   setNewDeliveryAddress={setNewDeliveryAddress}
                   newPaymentDetails={newPaymentDetails}
                   setNewPaymentDetails={setNewPaymentDetails}
-                  pricelistsEnabled={systemSettings.salesPricelists}
+                  salespersonName={currentUser?.name || '—'}
                   newDraftLines={newDraftLines}
                   addDraftLine={addDraftLine}
                   addDraftSection={addDraftSection}
@@ -2369,6 +2365,7 @@ function SalesContent() {
             setShowCreateContact(false)
             setNewContactQuery('')
             setNewCustomer({ id: contact.id, name: contact.name })
+            applyPaymentTermsFromContact(contact.id)
             if (view !== 'new') {
               const so = await createSaleOrder(contact.id, contact.name)
               openOrder(so.id)
@@ -2746,12 +2743,11 @@ function SalesContent() {
 // ═══════════════════════════════════════════════════════════════════════════
 function NewQuotationForm({
   customers, products, newCustomer, setNewCustomer, newDeliveryDate, setNewDeliveryDate,
-  newValidUntil, setNewValidUntil, newHeaderDiscount, setNewHeaderDiscount,
+  newValidUntil, setNewValidUntil,
   newPaymentTerms, setNewPaymentTerms, newNotes, setNewNotes,
-  newCustomerRef, setNewCustomerRef, newSalesTeam, setNewSalesTeam,
-  newPricelist, setNewPricelist, newInvoiceAddress, setNewInvoiceAddress,
+  newCustomerRef, setNewCustomerRef, newInvoiceAddress, setNewInvoiceAddress,
   newDeliveryAddress, setNewDeliveryAddress, newPaymentDetails, setNewPaymentDetails,
-  pricelistsEnabled, newDraftLines,
+  salespersonName, newDraftLines,
   addDraftLine, addDraftSection, updateDraftLine, removeDraftLine, moveDraftLine, selectProductForDraftLine,
   calcDraftLineTotal, draftSubtotal, draftTaxTotal, draftTotal, canEditDiscount,
   companySettings, canSave, saveBlockedReason, fieldErrors, onSave, onSaveAndAddAnother, onSaveDraft, onCancel, onCreateNewCustomer,
@@ -2760,17 +2756,14 @@ function NewQuotationForm({
   setNewCustomer: (c: { id: string; name: string } | null) => void
   newDeliveryDate: string; setNewDeliveryDate: (v: string) => void
   newValidUntil: string; setNewValidUntil: (v: string) => void
-  newHeaderDiscount: string; setNewHeaderDiscount: (v: string) => void
   newPaymentTerms: string; setNewPaymentTerms: (v: string) => void
   newNotes: string; setNewNotes: (v: string) => void
   newCustomerRef: string; setNewCustomerRef: (v: string) => void
-  newSalesTeam: string; setNewSalesTeam: (v: string) => void
-  newPricelist: string; setNewPricelist: (v: string) => void
   newInvoiceAddress: string; setNewInvoiceAddress: (v: string) => void
   newDeliveryAddress: string; setNewDeliveryAddress: (v: string) => void
   newPaymentDetails: DocumentPaymentDetails
   setNewPaymentDetails: (v: DocumentPaymentDetails) => void
-  pricelistsEnabled: boolean
+  salespersonName: string
   newDraftLines: DraftLine[]; addDraftLine: () => void; addDraftSection: () => void
   updateDraftLine: (id: string, field: keyof DraftLine, value: string) => void
   removeDraftLine: (id: string) => void
@@ -2949,25 +2942,6 @@ function NewQuotationForm({
                 onChange={e => setNewDeliveryDate(e.target.value)}
               />
             </SalesDocField>
-            {canEditDiscount && (
-              <SalesDocField label="Order discount (KES)" htmlFor="quote-header-discount">
-                <input
-                  id="quote-header-discount"
-                  type="number"
-                  min={0}
-                  aria-label="Order discount"
-                  value={newHeaderDiscount}
-                  onChange={e => setNewHeaderDiscount(e.target.value)}
-                />
-              </SalesDocField>
-            )}
-            <SalesDocField label="Price list" htmlFor="quote-pricelist">
-              <select id="quote-pricelist" aria-label="Pricelist" value={newPricelist || 'RETAIL'} onChange={e => setNewPricelist(e.target.value)} disabled={!pricelistsEnabled}>
-                <option value="RETAIL">Public · KES</option>
-                <option value="WHOLESALE">Wholesale · KES</option>
-                <option value="KILIMALL">Kilimall · KES</option>
-              </select>
-            </SalesDocField>
             <SalesDocField label="Payment terms" htmlFor="quote-payment-terms">
               <select id="quote-payment-terms" aria-label="Payment terms" value={newPaymentTerms} onChange={e => setNewPaymentTerms(e.target.value)}>
                 <option value="0">Immediate</option>
@@ -2977,10 +2951,13 @@ function NewQuotationForm({
                 <option value="45">45 days</option>
                 <option value="60">60 days</option>
                 <option value="90">90 days</option>
+                {!['0', '7', '14', '30', '45', '60', '90'].includes(newPaymentTerms) && Number(newPaymentTerms) > 0 && (
+                  <option value={newPaymentTerms}>{newPaymentTerms} days</option>
+                )}
               </select>
             </SalesDocField>
-            <SalesDocField label="Salesperson" htmlFor="quote-sales-team">
-              <input id="quote-sales-team" type="text" aria-label="Salesperson" placeholder="Salesperson" value={newSalesTeam} onChange={e => setNewSalesTeam(e.target.value)} />
+            <SalesDocField label="Salesperson">
+              <input readOnly value={salespersonName || '—'} aria-label="Salesperson" title="Set automatically from the signed-in user" />
             </SalesDocField>
           </div>
         </div>
@@ -3148,14 +3125,7 @@ function NewQuotationForm({
               rows={[
                 { label: 'Untaxed amount', value: salesKes(draftSubtotal) },
                 { label: 'Taxes', value: salesKes(draftTaxTotal) },
-                ...(Number(newHeaderDiscount) > 0
-                  ? [{ label: 'Discount', value: `−${salesKes(Number(newHeaderDiscount) || 0)}` }]
-                  : []),
-                {
-                  label: 'Total',
-                  value: salesKes(Math.max(0, draftTotal - (Number(newHeaderDiscount) || 0))),
-                  grand: true,
-                },
+                { label: 'Total', value: salesKes(draftTotal), grand: true },
                 { label: 'Currency', value: 'KES' },
               ]}
             />

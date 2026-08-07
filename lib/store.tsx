@@ -9504,7 +9504,7 @@ const storeCtx: AppState = {
       const headerDiscount = Math.max(0, Number(initial.discountAmount) || 0)
       const so: SaleOrder = {
         id: uid(), ref: soRef, status: 'quotation', customerId, customerName,
-        date: now(), validUntil: initial.validUntil ?? addDays(now(), 30), lines: initialLines, ...totals,
+        date: now(), validUntil: initial.validUntil, lines: initialLines, ...totals,
         approvalStatus: 'not_required', approvalRequestIds: [], stockReservationIds: [],
         deliveryDate: initial.deliveryDate,
         paymentTerms: initial.paymentTerms,
