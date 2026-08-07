@@ -930,7 +930,7 @@ export async function recordRemoval(params: {
     disposition: dest,
   })
 
-  const moveRef = await applyStockPlan(plan, dec(line.existingCost))
+  const moveRef = await applyStockPlan(plan, dec(line.existingCost), { workOrderId: wo.id, userId: params.userId })
 
   await prisma.deviceComponentInstallation.update({
     where: { id: line.installationId },
@@ -1013,7 +1013,7 @@ export async function recordInstallation(params: {
     componentSerialId: serialId,
     componentSerialText: serialText,
   })
-  const moveRef = await applyStockPlan(plan, dec(line.unitCost))
+  const moveRef = await applyStockPlan(plan, dec(line.unitCost), { workOrderId: wo.id, userId: params.userId })
 
   // Fulfill reservation
   const state = await loadAppState(['deed_stockReservations'])
@@ -1068,7 +1068,80 @@ export async function recordInstallation(params: {
   return getWorkOrder(wo.id)
 }
 
-async function applyStockPlan(plan: ReturnType<typeof planComponentRemoval> | ReturnType<typeof planComponentInstall>, unitCost: number) {
+/**
+ * Bulk (non-serialized) component stock — e.g. RAM/SSD sticks — is written
+ * authoritatively to the relational bulk_stock_levels + stock_movements
+ * tables (not just the legacy deed_bulkStock/deed_stockMoves blob), so a
+ * reconfiguration remove/install is durably recorded in the database. The
+ * blob mirror is kept in sync in the same call so existing UI that still
+ * reads deed_bulkStock (Inventory, product pickers, availability checks
+ * elsewhere in this file) does not regress while it migrates to the new
+ * table.
+ */
+// Exported for regression testing (see __tests__/reconfiguration-bulk-stock-prisma.test.ts).
+export async function applyBulkStockPlanToPrisma(
+  plan: {
+    kind: 'return_bulk_to_testing' | 'consume_bulk'
+    productId: string
+    qty: number
+    reason: string
+    documentRef?: string
+  } & (
+    | { kind: 'return_bulk_to_testing'; to: string }
+    | { kind: 'consume_bulk'; from: string }
+  ),
+  ctx: { unitCost: number; workOrderId?: string; userId?: string; blobId?: string },
+): Promise<string> {
+  return prisma.$transaction(async tx => {
+    const location = plan.kind === 'return_bulk_to_testing' ? plan.to : plan.from
+    const existing = await tx.bulkStockLevel.findUnique({
+      where: { productId_location: { productId: plan.productId, location } },
+    })
+    const qtyBefore = existing?.qty ?? 0
+
+    if (plan.kind === 'consume_bulk' && qtyBefore < plan.qty) {
+      throw httpError(`Insufficient stock at ${location}`, 422)
+    }
+
+    const qtyAfter = plan.kind === 'return_bulk_to_testing' ? qtyBefore + plan.qty : qtyBefore - plan.qty
+    if (existing) {
+      await tx.bulkStockLevel.update({ where: { id: existing.id }, data: { qty: qtyAfter } })
+    } else {
+      await tx.bulkStockLevel.create({
+        data: { productId: plan.productId, location, qty: Math.max(0, qtyAfter) },
+      })
+    }
+
+    const move = await tx.stockMovement.create({
+      data: {
+        productId: plan.productId,
+        movementType: plan.kind === 'return_bulk_to_testing' ? 'reconfiguration_in' : 'reconfiguration_out',
+        qty: plan.qty,
+        qtyBefore,
+        qtyAfter: Math.max(0, qtyAfter),
+        unitCost: ctx.unitCost || null,
+        fromLocation: plan.kind === 'consume_bulk' ? plan.from : null,
+        toLocation: plan.kind === 'return_bulk_to_testing' ? plan.to : null,
+        referenceType: 'reconfiguration_work_order',
+        referenceId: ctx.workOrderId || null,
+        documentRef: plan.documentRef || null,
+        // Correlates this relational row with its deed_stockMoves blob mirror
+        // (same convention as the existing blob→Prisma stock-move backfill),
+        // so a future backfill/parity pass never double-imports this move.
+        blobId: ctx.blobId || null,
+        notes: plan.reason,
+        createdById: ctx.userId || null,
+      },
+    })
+    return move.id
+  })
+}
+
+async function applyStockPlan(
+  plan: ReturnType<typeof planComponentRemoval> | ReturnType<typeof planComponentInstall>,
+  unitCost: number,
+  ctx: { workOrderId?: string; userId?: string } = {},
+) {
   const state = await loadAppState(['deed_bulkStock', 'deed_serials', 'deed_stockMoves', 'deed_products'])
   let bulkStock = Array.isArray(state.deed_bulkStock) ? [...(state.deed_bulkStock as any[])] : []
   let serials = Array.isArray(state.deed_serials) ? [...(state.deed_serials as any[])] : []
@@ -1078,6 +1151,10 @@ async function applyStockPlan(plan: ReturnType<typeof planComponentRemoval> | Re
   const now = new Date().toISOString()
 
   if (plan.kind === 'return_bulk_to_testing') {
+    // Relational write first — it is now the source of truth and enforces
+    // the availability check for consume_bulk below; the blob write that
+    // follows is a display-cache mirror, not the record of what happened.
+    await applyBulkStockPlanToPrisma(plan, { unitCost, workOrderId: ctx.workOrderId, userId: ctx.userId, blobId: moveId })
     const idx = bulkStock.findIndex(b => b.productId === plan.productId && b.location === plan.to)
     if (idx >= 0) bulkStock[idx] = { ...bulkStock[idx], qty: (Number(bulkStock[idx].qty) || 0) + plan.qty }
     else bulkStock.push({ productId: plan.productId, location: plan.to, qty: plan.qty })
@@ -1094,10 +1171,14 @@ async function applyStockPlan(plan: ReturnType<typeof planComponentRemoval> | Re
       notes: plan.reason,
     })
   } else if (plan.kind === 'consume_bulk') {
+    // Throws 'Insufficient stock at <location>' if the relational bulk
+    // stock level can't cover it — checked against the DB, not the blob.
+    await applyBulkStockPlanToPrisma(plan, { unitCost, workOrderId: ctx.workOrderId, userId: ctx.userId, blobId: moveId })
     const idx = bulkStock.findIndex(b => b.productId === plan.productId && b.location === plan.from)
     const available = idx >= 0 ? Number(bulkStock[idx].qty) || 0 : 0
-    if (available < plan.qty) throw httpError(`Insufficient ${plan.productName} at ${plan.from}`, 422)
-    bulkStock[idx] = { ...bulkStock[idx], qty: available - plan.qty }
+    bulkStock[idx >= 0 ? idx : bulkStock.length] = idx >= 0
+      ? { ...bulkStock[idx], qty: Math.max(0, available - plan.qty) }
+      : { productId: plan.productId, location: plan.from, qty: 0 }
     stockMoves.push({
       id: moveId,
       type: 'out',
