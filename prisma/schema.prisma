@@ -2341,7 +2341,9 @@ model ValuationEvent {
 
 model StockReservation {
   id            String    @id @default(uuid()) @db.Uuid
-  blobId        String?   @map("blob_id") @db.VarChar(80)
+  // Reconfiguration-sourced blob ids (rsv_rcf_<uuid>_<uuid>) are 81 chars —
+  // widened alongside ReconfigurationInstallationLine.reservationId.
+  blobId        String?   @map("blob_id") @db.VarChar(120)
   saleOrderId   String?   @map("sale_order_id") @db.Uuid
   saleOrderRef  String?   @map("sale_order_ref") @db.VarChar(40)
   productId     String?   @map("product_id") @db.Uuid
@@ -2873,7 +2875,9 @@ model ReconfigurationInstallationLine {
   unitCost                Decimal           @default(0) @map("unit_cost") @db.Decimal(14, 2)
   targetSlotType          ComponentSlotType @map("target_slot_type")
   targetSlotNumber        Int               @default(1) @map("target_slot_number")
-  reservationId           String?           @map("reservation_id") @db.VarChar(80)
+  // rsv_rcf_<work-order-uuid>_<line-uuid> is 8+36+1+36 = 81 chars — VarChar(80)
+  // silently overflowed on every single reserve call ("Internal server error").
+  reservationId           String?           @map("reservation_id") @db.VarChar(120)
   reservationStatus       String            @default("none") @map("reservation_status") @db.VarChar(20)
   compatibilityResult     String            @default("pending") @map("compatibility_result") @db.VarChar(20)
   installedAt             DateTime?         @map("installed_at")

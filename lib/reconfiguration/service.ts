@@ -23,7 +23,6 @@ import {
   assertVersion,
   canTransition,
   isMutableDraftStatus,
-  nextStatus,
 } from '@/lib/reconfiguration/state-machine'
 import { QA_CHECKLIST, type DeviceConfigFields, type InstalledComponentView, type TargetConfigInput } from '@/lib/reconfiguration/types'
 import { mirrorStockReservationsToPrisma } from '@/lib/inventory/reservation-mirror'
@@ -36,6 +35,16 @@ function httpError(message: string, status = 400) {
   const err = new Error(message) as Error & { status: number }
   err.status = status
   return err
+}
+
+/**
+ * Deterministic reservation id for one installation line of one work order.
+ * Both ids are UUIDs (36 chars), so this is always exactly 8+36+1+36 = 81
+ * chars — keep ReconfigurationInstallationLine.reservationId and
+ * StockReservation.blobId wide enough to hold it (VarChar(120) currently).
+ */
+export function buildReservationId(workOrderId: string, lineId: string): string {
+  return `rsv_rcf_${workOrderId}_${lineId}`
 }
 
 async function ensureFeatureEnabled() {
@@ -692,7 +701,7 @@ export async function reserveComponents(params: {
       }
     }
 
-    const reservationId = `rsv_rcf_${wo.id}_${line.id}`
+    const reservationId = buildReservationId(wo.id, line.id)
     reservations.push({
       id: reservationId,
       productId: line.componentProductId,
@@ -717,10 +726,6 @@ export async function reserveComponents(params: {
   await saveStoreKeys({ deed_stockReservations: JSON.stringify(reservations) })
   await mirrorStockReservationsToPrisma(reservations).catch(() => null)
 
-  const next = wo.status === 'components_reserved' ? 'components_reserved' : nextStatus(
-    wo.status === 'draft' ? 'pending_stock_check' : (wo.status as any),
-    'reserve',
-  )
   // If coming from draft, step through pending_stock_check
   let status = wo.status as string
   if (status === 'draft') status = 'pending_stock_check'
