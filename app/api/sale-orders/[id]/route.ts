@@ -480,7 +480,13 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
       console.error('[sale-orders] confirm/cancel side-effect block failed:', err)
     }
 
-    void broadcastSaleOrders()
+    // Metadata-only PATCH (notes / validUntil / discount / …) must not rewrite
+    // the whole deed_saleOrders blob from Prisma — that was racing draft line
+    // edits in the browser and snapping removed products back onto the quote.
+    const touchedLines = Array.isArray(body.items ?? body.lines)
+    if (touchedLines || confirming || to !== from) {
+      void broadcastSaleOrders()
+    }
     const fresh = confirming
       ? await prisma.saleOrder.findUnique({
           where: { id: params.id },

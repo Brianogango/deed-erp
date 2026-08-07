@@ -3,8 +3,10 @@ import {
   markSaleOrderDraftEdit,
   clearSaleOrderDraftEdit,
   hasSaleOrderDraftEdits,
+  isSaleOrderDraftEditing,
   stampSaleOrderPersisted,
   mergeSaleOrdersPreservingDraftEdits,
+  hydrateSaleOrderDraftEditsFromSession,
   _resetSaleOrderDraftEditStateForTests,
 } from '@/lib/sale-order-draft-edits'
 
@@ -55,5 +57,28 @@ describe('mergeSaleOrdersPreservingDraftEdits', () => {
     }]
     const merged = mergeSaleOrdersPreservingDraftEdits(local, remote)
     expect(merged.find(s => s.id === 'so-1')?.lines).toEqual(savedLines)
+  })
+
+  it('restores draft protection from sessionStorage after a soft remount', () => {
+    const store = new Map<string, string>()
+    const fakeSession = {
+      getItem: (k: string) => store.get(k) ?? null,
+      setItem: (k: string, v: string) => { store.set(k, v) },
+      removeItem: (k: string) => { store.delete(k) },
+    }
+    Object.defineProperty(globalThis, 'sessionStorage', { value: fakeSession, configurable: true })
+    Object.defineProperty(globalThis, 'window', {
+      value: { sessionStorage: fakeSession },
+      configurable: true,
+    })
+
+    markSaleOrderDraftEdit('so-session')
+    expect(store.get('deed_so_draft_edit_ids')).toContain('so-session')
+    const saved = store.get('deed_so_draft_edit_ids')
+    _resetSaleOrderDraftEditStateForTests()
+    if (saved) store.set('deed_so_draft_edit_ids', saved)
+    hydrateSaleOrderDraftEditsFromSession()
+    expect(isSaleOrderDraftEditing('so-session')).toBe(true)
+    expect(hasSaleOrderDraftEdits()).toBe(true)
   })
 })

@@ -1,14 +1,47 @@
 /**
- * Draft quotation line edits stay local until the user clicks Save.
- * While an SO id is in this set (or was just persisted), remote blob/Prisma
- * hydration must not replace that row's lines — SSE was restoring deletes.
+ * Draft quotation line edits stay local until the user clicks Save (or an
+ * auto-persist flush lands). While an SO id is in this set (or was just
+ * persisted), remote blob/Prisma hydration must not replace that row's lines
+ * — SSE was restoring deletes.
+ *
+ * Pending ids are mirrored to sessionStorage so a soft remount / sales boot
+ * still protects in-progress edits (the in-memory Set alone did not survive).
  */
+
+const SESSION_KEY = 'deed_so_draft_edit_ids'
 
 const pendingDraftSaleOrderIds = new Set<string>()
 
 /** After Save, keep protecting the row briefly while blob/SSE catch up. */
 const recentlyPersisted = new Map<string, { at: number; lineKey: string }>()
 const PERSIST_GUARD_MS = 20_000
+
+function readSessionIds(): string[] {
+  if (typeof window === 'undefined') return []
+  try {
+    const raw = window.sessionStorage.getItem(SESSION_KEY)
+    if (!raw) return []
+    const parsed = JSON.parse(raw)
+    return Array.isArray(parsed) ? parsed.map(String).filter(Boolean) : []
+  } catch {
+    return []
+  }
+}
+
+function writeSessionIds() {
+  if (typeof window === 'undefined') return
+  try {
+    window.sessionStorage.setItem(SESSION_KEY, JSON.stringify([...pendingDraftSaleOrderIds]))
+  } catch { /* private mode / quota */ }
+}
+
+/** Hydrate in-memory set from sessionStorage (safe to call more than once). */
+export function hydrateSaleOrderDraftEditsFromSession() {
+  for (const id of readSessionIds()) pendingDraftSaleOrderIds.add(id)
+}
+
+// Pull any ids from a previous soft navigation as soon as this module loads.
+hydrateSaleOrderDraftEditsFromSession()
 
 function commercialLinesKey(lines: unknown): string {
   if (!Array.isArray(lines)) return ''
@@ -34,18 +67,23 @@ function prunePersisted() {
 }
 
 export function markSaleOrderDraftEdit(id: string) {
-  if (id) pendingDraftSaleOrderIds.add(id)
+  if (!id) return
+  pendingDraftSaleOrderIds.add(id)
+  writeSessionIds()
 }
 
 export function clearSaleOrderDraftEdit(id: string) {
   pendingDraftSaleOrderIds.delete(id)
+  writeSessionIds()
 }
 
 export function hasSaleOrderDraftEdits() {
+  hydrateSaleOrderDraftEditsFromSession()
   return pendingDraftSaleOrderIds.size > 0
 }
 
 export function isSaleOrderDraftEditing(id: string) {
+  hydrateSaleOrderDraftEditsFromSession()
   return pendingDraftSaleOrderIds.has(id)
 }
 
@@ -53,11 +91,13 @@ export function isSaleOrderDraftEditing(id: string) {
 export function stampSaleOrderPersisted(id: string, lines: unknown) {
   if (!id) return
   pendingDraftSaleOrderIds.delete(id)
+  writeSessionIds()
   recentlyPersisted.set(id, { at: Date.now(), lineKey: commercialLinesKey(lines) })
 }
 
 function shouldPreserveLocal(id: string, localRow: { lines?: unknown } | undefined): boolean {
   if (!id || !localRow) return false
+  hydrateSaleOrderDraftEditsFromSession()
   if (pendingDraftSaleOrderIds.has(id)) return true
   prunePersisted()
   const stamp = recentlyPersisted.get(id)
@@ -72,6 +112,7 @@ export function mergeSaleOrdersPreservingDraftEdits<T extends { id?: string; lin
   remote: T[],
 ): T[] {
   if (!Array.isArray(remote)) return Array.isArray(local) ? local : []
+  hydrateSaleOrderDraftEditsFromSession()
   prunePersisted()
   const protecting = pendingDraftSaleOrderIds.size > 0 || recentlyPersisted.size > 0
   if (!protecting || !Array.isArray(local) || local.length === 0) {
@@ -100,4 +141,7 @@ export function mergeSaleOrdersPreservingDraftEdits<T extends { id?: string; lin
 export function _resetSaleOrderDraftEditStateForTests() {
   pendingDraftSaleOrderIds.clear()
   recentlyPersisted.clear()
+  if (typeof window !== 'undefined') {
+    try { window.sessionStorage.removeItem(SESSION_KEY) } catch { /* ignore */ }
+  }
 }

@@ -46,6 +46,10 @@ import {
   mergeSaleOrdersPreservingDraftEdits,
 } from '@/lib/sale-order-draft-edits'
 import {
+  registerSaleOrderDraftPersistApi,
+  scheduleDraftSaleOrderLinePersist,
+} from '@/lib/sale-order-draft-persist'
+import {
   normalizeSaleOrdersForClient,
   saleOrderCancelBlockers,
   splitDeliveryForBackorder,
@@ -4777,7 +4781,12 @@ export function StoreProvider({
           const localCount = arrayCount(local)
           const remoteCount = arrayCount(remoteStr)
           const missingRemoteRows = CRITICAL_VISIBILITY_KEY_SET.has(k) && remoteHasMissingIds(local, remoteStr)
-          const shouldRecoverFromStaleEmpty = localCount === 0 && typeof remoteCount === 'number' && remoteCount > 0
+          // Draft quote line edits may omit localStorage when the blob is large
+          // (>512KB). Never treat that as "stale empty" or SSE restores deleted lines.
+          const shouldRecoverFromStaleEmpty = localCount === 0
+            && typeof remoteCount === 'number'
+            && remoteCount > 0
+            && !(k === 'deed_saleOrders' && hasSaleOrderDraftEdits())
           if (!shouldRecoverFromStaleEmpty && !missingRemoteRows) continue
           removeDirtyKeys([k])
           if (missingRemoteRows && local && typeof localCount === 'number' && localCount > 0) {
@@ -9561,9 +9570,16 @@ const storeCtx: AppState = {
       // (passed from Save) resurrect products the user already removed.
       let linesForUpdate = syncLines && Array.isArray(p.lines) ? p.lines as SaleOrderLine[] : existing.lines
       if (syncLines && Array.isArray(p.lines) && isSaleOrderDraftEditing(id)) {
+        // Prefer the live draft order (add/remove already applied). Overlay only
+        // refreshes field edits for ids still present — never resurrect deletes,
+        // and keep draft-only lines the Save payload might have omitted.
         const draft = soRef.current.find(s => s.id === id) ?? existing
         const overlay = new Map((p.lines as SaleOrderLine[]).map(l => [l.id, l]))
-        linesForUpdate = draft.lines.map(l => overlay.get(l.id) ?? l)
+        const draftIds = new Set(draft.lines.map(l => l.id))
+        linesForUpdate = [
+          ...draft.lines.map(l => overlay.get(l.id) ?? l),
+          ...(p.lines as SaleOrderLine[]).filter(l => l?.id && !draftIds.has(l.id)),
+        ]
       }
       const updated = syncLines
         ? { ...existing, ...p, lines: linesForUpdate, ...calcSO(linesForUpdate) }
@@ -9571,6 +9587,7 @@ const storeCtx: AppState = {
 
       if (syncLines && !persistLines) {
         applyLocalDraftSaleOrder(soRef, setSaleOrders, id, updated)
+        scheduleDraftSaleOrderLinePersist(id)
         return true
       }
 
@@ -9725,6 +9742,7 @@ const storeCtx: AppState = {
       }
       const updated = { ...so, lines, ...calcSO(lines) }
       applyLocalDraftSaleOrder(soRef, setSaleOrders, orderId, updated)
+      scheduleDraftSaleOrderLinePersist(orderId)
       return true
     },
     assignSerialToSOLine: (orderId, lineId, serialId) => {
@@ -9851,6 +9869,7 @@ const storeCtx: AppState = {
       const lines = so.lines.filter(l => l.id !== lineId)
       const updated = { ...so, lines, ...calcSO(lines) }
       applyLocalDraftSaleOrder(soRef, setSaleOrders, orderId, updated)
+      scheduleDraftSaleOrderLinePersist(orderId)
       return true
     },
     moveSOLine: (orderId, lineId, direction) => {
@@ -9876,6 +9895,7 @@ const storeCtx: AppState = {
       ;[lines[index], lines[target]] = [lines[target], lines[index]]
       const updated = { ...so, lines }
       applyLocalDraftSaleOrder(soRef, setSaleOrders, orderId, updated)
+      scheduleDraftSaleOrderLinePersist(orderId)
       return true
     },
     addSOSection: (orderId, title) => {
@@ -9910,6 +9930,7 @@ const storeCtx: AppState = {
       }]
       const updated = { ...so, lines, ...calcSO(lines) }
       applyLocalDraftSaleOrder(soRef, setSaleOrders, orderId, updated)
+      scheduleDraftSaleOrderLinePersist(orderId)
       return true
     },
     confirmSO: async (id) => {
@@ -17057,6 +17078,14 @@ const storeCtx: AppState = {
   }
 
   storeCtxRef.current = storeCtx
+
+  useEffect(() => {
+    registerSaleOrderDraftPersistApi({
+      updateSaleOrder: (id, patch, opts) => storeCtxRef.current!.updateSaleOrder(id, patch as any, opts),
+      getSaleOrder: (id) => soRef.current.find(s => s.id === id),
+    })
+    return () => registerSaleOrderDraftPersistApi(null)
+  }, [])
 
   const inventoryStore = useMemo<InventoryStoreState>(() => ({
     products,
