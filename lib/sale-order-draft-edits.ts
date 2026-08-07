@@ -43,20 +43,27 @@ export function hydrateSaleOrderDraftEditsFromSession() {
 // Pull any ids from a previous soft navigation as soon as this module loads.
 hydrateSaleOrderDraftEditsFromSession()
 
-function commercialLinesKey(lines: unknown): string {
+/** Stable fingerprint of commercial lines — used to detect in-flight persist races. */
+export function saleOrderLinesFingerprint(lines: unknown): string {
   if (!Array.isArray(lines)) return ''
   return lines
     .filter((l: any) => l && l.lineType !== 'section')
     .map((l: any) => [
+      String(l.id ?? ''),
       String(l.productId ?? ''),
       String(l.description ?? l.productName ?? ''),
       Number(l.qty ?? 0),
       Number(l.unitPrice ?? 0),
+      Number(l.discount ?? l.discountPercent ?? 0),
       Number(l.taxRate ?? 0),
       Number(l.lineTotal ?? l.subtotal ?? 0),
     ].join('|'))
     .sort()
     .join(';')
+}
+
+function commercialLinesKey(lines: unknown): string {
+  return saleOrderLinesFingerprint(lines)
 }
 
 function prunePersisted() {
