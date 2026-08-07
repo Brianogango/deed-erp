@@ -60,6 +60,14 @@ export interface CrudConfig<T extends object> {
    * to unset for backward compatibility with existing callers.
    */
   lockKey?: string
+  /**
+   * Optional best-effort dual-write hook fired after a successful create or
+   * patch (never on delete). Runs after the response payload is already
+   * built and must never throw or block the request — a mirror failure is
+   * a soft dual-write gap, not a reason to fail the blob write that IS the
+   * operational source of truth for this collection.
+   */
+  onWritten?: (item: T, event: 'create' | 'patch') => void | Promise<void>
 }
 
 // ─── Handler factories ────────────────────────────────────────────────────────
@@ -148,6 +156,9 @@ export function makeCreateHandler<T extends object>(config: CrudConfig<T>) {
     }
     const outcome = config.lockKey ? await withAppStateKeyLock(config.lockKey, run) : await run()
     if (outcome.error) return NextResponse.json({ error: outcome.error }, { status: 422 })
+    if (outcome.result && config.onWritten) {
+      void Promise.resolve(config.onWritten(outcome.result, 'create')).catch(() => {})
+    }
     return NextResponse.json({ item: outcome.result }, { status: 201 })
   }
 }
@@ -182,6 +193,9 @@ export function makePatchHandler<T extends object>(config: CrudConfig<T>) {
     const outcome = config.lockKey ? await withAppStateKeyLock(config.lockKey, run) : await run()
     if (outcome.notFound) return NextResponse.json({ error: 'Not found' }, { status: 404 })
     if (outcome.error) return NextResponse.json({ error: outcome.error }, { status: 422 })
+    if (outcome.result && config.onWritten) {
+      void Promise.resolve(config.onWritten(outcome.result, 'patch')).catch(() => {})
+    }
     return NextResponse.json({ item: outcome.result })
   }
 }

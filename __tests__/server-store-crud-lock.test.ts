@@ -15,7 +15,7 @@ vi.mock('@/lib/server-store', () => ({
   withAppStateKeyLock: mockWithAppStateKeyLock,
 }))
 
-import { makeDetailHandlers } from '@/lib/server-store-crud'
+import { makeCreateHandler, makeDetailHandlers } from '@/lib/server-store-crud'
 
 const session = { user: { id: 'user-1', role: 'director' } }
 
@@ -58,5 +58,75 @@ describe('makeDetailHandlers lockKey opt-in', () => {
     expect(res.status).toBe(200)
     expect(mockWithAppStateKeyLock).toHaveBeenCalledWith('deed_widgets', expect.any(Function))
     expect((await res.json()).item.name).toBe('b')
+  })
+})
+
+describe('onWritten dual-write hook opt-in', () => {
+  it('fires after a successful create, with the created item and event "create"', async () => {
+    mockLoadAppState.mockResolvedValue({ deed_widgets: [] })
+    const onWritten = vi.fn().mockResolvedValue(undefined)
+    const POST = makeCreateHandler<{ id: string; name: string }>({
+      storeKey: 'deed_widgets',
+      build: (body) => ({ id: 'new-1', name: body.name as string }),
+      onWritten,
+    })
+    const req = new NextRequest('http://localhost/api/widgets', {
+      method: 'POST',
+      body: JSON.stringify({ name: 'a' }),
+      headers: { 'Content-Type': 'application/json' },
+    })
+    const res = await POST(req)
+    expect(res.status).toBe(201)
+    expect(onWritten).toHaveBeenCalledWith({ id: 'new-1', name: 'a' }, 'create')
+  })
+
+  it('fires after a successful patch, with event "patch"', async () => {
+    mockLoadAppState.mockResolvedValue({ deed_widgets: [{ id: '1', name: 'a' }] })
+    const onWritten = vi.fn().mockResolvedValue(undefined)
+    const { PATCH } = makeDetailHandlers<{ id: string; name: string }>({
+      storeKey: 'deed_widgets',
+      build: () => 'unused' as any,
+      onWritten,
+    })
+    const req = new NextRequest('http://localhost/api/widgets/1', {
+      method: 'PATCH',
+      body: JSON.stringify({ name: 'b' }),
+      headers: { 'Content-Type': 'application/json' },
+    })
+    const res = await PATCH(req, { params: { id: '1' } })
+    expect(res.status).toBe(200)
+    expect(onWritten).toHaveBeenCalledWith({ id: '1', name: 'b' }, 'patch')
+  })
+
+  it('never fails the request when onWritten rejects', async () => {
+    mockLoadAppState.mockResolvedValue({ deed_widgets: [] })
+    const onWritten = vi.fn().mockRejectedValue(new Error('mirror boom'))
+    const POST = makeCreateHandler<{ id: string; name: string }>({
+      storeKey: 'deed_widgets',
+      build: (body) => ({ id: 'new-1', name: body.name as string }),
+      onWritten,
+    })
+    const req = new NextRequest('http://localhost/api/widgets', {
+      method: 'POST',
+      body: JSON.stringify({ name: 'a' }),
+      headers: { 'Content-Type': 'application/json' },
+    })
+    const res = await POST(req)
+    expect(res.status).toBe(201)
+  })
+
+  it('does not fire when not configured', async () => {
+    mockLoadAppState.mockResolvedValue({ deed_widgets: [] })
+    const POST = makeCreateHandler<{ id: string; name: string }>({
+      storeKey: 'deed_widgets',
+      build: (body) => ({ id: 'new-1', name: body.name as string }),
+    })
+    const req = new NextRequest('http://localhost/api/widgets', {
+      method: 'POST',
+      body: JSON.stringify({ name: 'a' }),
+      headers: { 'Content-Type': 'application/json' },
+    })
+    const res = await POST(req)
+    expect(res.status).toBe(201)
   })
 })
