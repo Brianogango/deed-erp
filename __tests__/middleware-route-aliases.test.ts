@@ -62,6 +62,7 @@ describe('legacy ERP route aliases', () => {
 
 describe('visual regression authentication bypass', () => {
   beforeEach(() => {
+    getToken.mockClear()
     getToken.mockResolvedValue(null)
   })
 
