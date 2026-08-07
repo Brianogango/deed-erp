@@ -427,7 +427,8 @@ function InventoryContent() {
     }
     const rMoves: typeof stockMoves = []
     for (const m of stockMoves) {
-      if (m.date.slice(5, 7) === reportMonth && validProductIds.has(m.productId)) {
+      const moveMonth = String(m.date ?? '').slice(5, 7)
+      if (moveMonth === reportMonth && validProductIds.has(m.productId)) {
         rMoves.push(m)
       }
     }
@@ -546,7 +547,9 @@ function InventoryContent() {
     for (const m of stockMoves) {
       const st = map.get(m.productId)
       if (st) {
-        if (m.type === 'in' && (m.documentRef === 'OPENING' || m.reason.toLowerCase().includes('opening stock'))) st.monthly.opening += m.qty
+        // Reconfiguration (and other writers) may omit `reason` and put text in
+        // `notes` instead — never call methods on reason directly here.
+        if (isOpeningStockMove(m)) st.monthly.opening += m.qty
         else if (m.type === 'in') st.monthly.purchases += m.qty
         else if (m.type === 'out') st.monthly.sales += m.qty
         else if (m.type === 'transfer') st.monthly.usage += m.qty
@@ -2383,17 +2386,17 @@ function InventoryContent() {
                 <p className="text-[10px] uppercase font-bold text-text-3">Total</p>
                 <p className="text-xl font-extrabold text-text-1">{stockAdjustments.length}</p>
               </div>
-              <div className="card p-3 flex flex-col gap-1 border-l-4 border-amber-400">
-                <p className="text-[10px] uppercase font-bold text-amber-600">Pending Approval</p>
-                <p className="text-xl font-extrabold text-amber-600">{pendingCount}</p>
+              <div className="card p-3 flex flex-col gap-1 bg-amber-50/70">
+                <p className="text-[10px] uppercase font-bold text-amber-900">Pending Approval</p>
+                <p className="text-xl font-extrabold text-amber-900">{pendingCount}</p>
               </div>
-              <div className="card p-3 flex flex-col gap-1 border-l-4 border-emerald-400">
-                <p className="text-[10px] uppercase font-bold text-emerald-600">Approved</p>
-                <p className="text-xl font-extrabold text-emerald-600">{approvedCount}</p>
+              <div className="card p-3 flex flex-col gap-1 bg-emerald-50/70">
+                <p className="text-[10px] uppercase font-bold text-emerald-900">Approved</p>
+                <p className="text-xl font-extrabold text-emerald-900">{approvedCount}</p>
               </div>
-              <div className="card p-3 flex flex-col gap-1 border-l-4 border-red-400">
-                <p className="text-[10px] uppercase font-bold text-red-500">Rejected</p>
-                <p className="text-xl font-extrabold text-red-500">{rejectedCount}</p>
+              <div className="card p-3 flex flex-col gap-1 bg-red-50/70">
+                <p className="text-[10px] uppercase font-bold text-red-900">Rejected</p>
+                <p className="text-xl font-extrabold text-red-900">{rejectedCount}</p>
               </div>
             </div>
 
@@ -3742,7 +3745,7 @@ function InventoryContent() {
                 <div key={index} className={`rounded-xl border transition-colors ${isSerial ? 'border-indigo-100 bg-indigo-50/30' : isBulk ? 'border-slate-200 bg-slate-50/40' : 'border-border-lt bg-surface/60'}`}>
                   {/* Type badge header */}
                   {lineProduct && (
-                    <div className={`px-3 py-1.5 rounded-t-xl border-b text-[10px] font-bold flex items-center gap-1.5 ${isSerial ? 'bg-indigo-50 border-indigo-100 text-indigo-700' : 'bg-slate-100 border-slate-200 text-slate-600'}`}>
+                    <div className={`px-3 py-1.5 rounded-t-xl border-b text-[10px] font-bold flex items-center gap-1.5 ${isSerial ? 'bg-[var(--navy)] border-[var(--navy)] text-white' : 'bg-[var(--navy)] border-[var(--navy)] text-white'}`}>
                       <span aria-hidden="true"><Fa icon={isSerial ? faBarcode : faBoxesStacked} /></span>
                       <span>{isSerial ? 'Serial Tracked — enter serial numbers below' : 'Bulk / Qty Only — enter quantity, no serial numbers needed'}</span>
                     </div>

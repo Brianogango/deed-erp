@@ -1168,6 +1168,8 @@ async function applyStockPlan(
       documentRef: plan.documentRef,
       date: now,
       unitCost,
+      // Inventory report memos and StockMove typing expect `reason`.
+      reason: plan.reason,
       notes: plan.reason,
     })
   } else if (plan.kind === 'consume_bulk') {
@@ -1189,6 +1191,7 @@ async function applyStockPlan(
       documentRef: plan.documentRef,
       date: now,
       unitCost,
+      reason: plan.reason,
       notes: plan.reason,
     })
   } else if (plan.kind === 'return_serial_to_testing') {
@@ -1220,6 +1223,7 @@ async function applyStockPlan(
       date: now,
       unitCost,
       serialNumbers: plan.serialNumber ? [plan.serialNumber] : [],
+      reason: plan.reason,
       notes: plan.reason,
     })
   } else if (plan.kind === 'consume_serial') {
@@ -1240,6 +1244,7 @@ async function applyStockPlan(
       date: now,
       unitCost,
       serialNumbers: [plan.serialNumber],
+      reason: plan.reason,
       notes: plan.reason,
     })
   }
