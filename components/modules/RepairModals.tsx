@@ -338,7 +338,10 @@ function ProductPicker({ value, productId, onSelect, products, requireInventory,
 }) {
   const [query, setQuery] = useState(value)
   const [open, setOpen] = useState(false)
+  const [dropdownPos, setDropdownPos] = useState<{ top: number; left: number; width: number; openUp: boolean } | null>(null)
   const ref = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
+  const dropdownRef = useRef<HTMLDivElement>(null)
 
   // Opening the field with no query yet browses the catalogue (sorted,
   // capped) instead of showing nothing — the whole point of picking FROM
@@ -349,11 +352,47 @@ function ProductPicker({ value, productId, onSelect, products, requireInventory,
 
   useEffect(() => { setQuery(value) }, [value])
 
+  // The quote-lines table this picker lives in clips overflowing content
+  // (rounded-2xl ... overflow-hidden), so a plain position:absolute dropdown
+  // gets cut off / hidden behind later rows. Rendering it position:fixed at
+  // the input's live viewport coordinates lets it escape that clipping —
+  // same technique already used for the Sales quotation product picker.
+  const openDropdown = () => {
+    const rect = inputRef.current?.getBoundingClientRect()
+    if (!rect) { setOpen(true); return }
+    const openUp = rect.bottom + 280 > window.innerHeight && rect.top > 300
+    setDropdownPos({
+      top: openUp ? rect.top - 6 : rect.bottom + 6,
+      left: rect.left,
+      width: rect.width,
+      openUp,
+    })
+    setOpen(true)
+  }
+
   useEffect(() => {
-    const handleClick = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false) }
+    const handleClick = (e: MouseEvent) => {
+      const target = e.target as Node
+      if (ref.current?.contains(target)) return
+      if (dropdownRef.current?.contains(target)) return
+      setOpen(false)
+    }
     document.addEventListener('mousedown', handleClick)
     return () => document.removeEventListener('mousedown', handleClick)
   }, [])
+
+  useEffect(() => {
+    if (!open) return
+    // A fixed-position dropdown doesn't track scroll/resize on its own —
+    // close it instead of letting it drift away from the input.
+    const close = () => setOpen(false)
+    window.addEventListener('scroll', close, true)
+    window.addEventListener('resize', close)
+    return () => {
+      window.removeEventListener('scroll', close, true)
+      window.removeEventListener('resize', close)
+    }
+  }, [open])
 
   const isError = requireInventory && submitted && !productId
 
@@ -362,11 +401,12 @@ function ProductPicker({ value, productId, onSelect, products, requireInventory,
       <div className="relative">
         <Fa icon={faSearch} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--text-4)] text-[9px] pointer-events-none" />
         <input
+          ref={inputRef}
           className="form-input bg-[var(--bg-card)] pl-7 pr-6"
           placeholder={requireInventory ? 'Search & select from inventory…' : 'Search inventory or type…'}
           value={query}
-          onChange={e => { setQuery(e.target.value); onSelect(null, e.target.value); setOpen(true) }}
-          onFocus={() => setOpen(true)}
+          onChange={e => { setQuery(e.target.value); onSelect(null, e.target.value); openDropdown() }}
+          onFocus={openDropdown}
           style={isError ? { borderColor: '#EF4444', background: 'rgba(239,68,68,0.04)' } : undefined}
         />
         {productId ? (
@@ -378,8 +418,16 @@ function ProductPicker({ value, productId, onSelect, products, requireInventory,
       {isError && (
         <p className="text-[9px] font-bold text-red-500 mt-0.5 ml-1">Must be selected from inventory</p>
       )}
-      {open && matches.length > 0 && (
-        <div className="absolute top-full mt-1 left-0 right-0 z-[9300] rounded-xl border border-[var(--border)] bg-[var(--bg-card)] shadow-xl overflow-hidden">
+      {open && dropdownPos && matches.length > 0 && (
+        <div
+          ref={dropdownRef}
+          className="fixed z-[9300] rounded-xl border border-[var(--border)] bg-[var(--bg-card)] shadow-xl overflow-hidden"
+          style={{
+            left: dropdownPos.left,
+            width: dropdownPos.width,
+            ...(dropdownPos.openUp ? { bottom: window.innerHeight - dropdownPos.top } : { top: dropdownPos.top }),
+          }}
+        >
           {query.length === 0 && (
             <p className="px-3 py-1.5 text-[9px] font-bold text-[var(--text-4)] uppercase tracking-wide bg-[var(--bg-surface)] border-b border-[var(--border-lt)]">
               Browse inventory — type to narrow
@@ -409,8 +457,16 @@ function ProductPicker({ value, productId, onSelect, products, requireInventory,
           ))}
         </div>
       )}
-      {open && query.length > 1 && matches.length === 0 && requireInventory && (
-        <div className="absolute top-full mt-1 left-0 right-0 z-[9300] rounded-xl border border-[var(--border)] bg-[var(--bg-card)] shadow-xl px-3 py-3 text-center">
+      {open && dropdownPos && query.length > 1 && matches.length === 0 && requireInventory && (
+        <div
+          ref={dropdownRef}
+          className="fixed z-[9300] rounded-xl border border-[var(--border)] bg-[var(--bg-card)] shadow-xl px-3 py-3 text-center"
+          style={{
+            left: dropdownPos.left,
+            width: dropdownPos.width,
+            ...(dropdownPos.openUp ? { bottom: window.innerHeight - dropdownPos.top } : { top: dropdownPos.top }),
+          }}
+        >
           <p className="text-[10px] font-bold text-[var(--text-3)]">No inventory match for "{query}"</p>
           <p className="text-[9px] text-[var(--text-4)] mt-0.5">Add the product to inventory first, then quote it here.</p>
         </div>
