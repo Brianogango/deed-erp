@@ -211,6 +211,15 @@ export async function middleware(request: NextRequest) {
   }
 
   // ── Page auth ─────────────────────────────────────────────────────────────
+  // Local visual regression runs use the real app shell without a database.
+  // Never honor this bypass in production, even if the variable is mis-set.
+  const visregBypass =
+    process.env.NODE_ENV !== 'production' &&
+    process.env.VISREG_BYPASS_AUTH === 'true'
+  if (visregBypass) {
+    return NextResponse.next()
+  }
+
   const token = SECRET ? await getToken({ req: request, secret: SECRET, cookieName: COOKIE_NAME }) : null
 
   if (token) {

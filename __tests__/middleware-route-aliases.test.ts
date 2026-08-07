@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { NextRequest } from 'next/server'
 
 const { getToken } = vi.hoisted(() => ({
@@ -57,5 +57,37 @@ describe('legacy ERP route aliases', () => {
 
     expect(response.status).toBe(200)
     expect(response.headers.get('x-middleware-next')).toBe('1')
+  })
+})
+
+describe('visual regression authentication bypass', () => {
+  beforeEach(() => {
+    getToken.mockResolvedValue(null)
+  })
+
+  afterEach(() => {
+    vi.unstubAllEnvs()
+  })
+
+  it('allows local visual regression pages without a session', async () => {
+    vi.stubEnv('NODE_ENV', 'development')
+    vi.stubEnv('VISREG_BYPASS_AUTH', 'true')
+
+    const response = await middleware(new NextRequest('https://erp.example.test/sales'))
+
+    expect(response.status).toBe(200)
+    expect(response.headers.get('x-middleware-next')).toBe('1')
+    expect(getToken).not.toHaveBeenCalled()
+  })
+
+  it('never bypasses page authentication in production', async () => {
+    vi.stubEnv('NODE_ENV', 'production')
+    vi.stubEnv('VISREG_BYPASS_AUTH', 'true')
+
+    const response = await middleware(new NextRequest('https://erp.example.test/sales'))
+
+    expect(response.status).toBe(307)
+    expect(response.headers.get('location')).toContain('/login')
+    expect(getToken).toHaveBeenCalled()
   })
 })
