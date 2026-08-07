@@ -15,6 +15,9 @@ type PrismaClientLike = {
     update: (args: any) => Promise<any>
     delete: (args: any) => Promise<any>
   }
+  /** Present on the real Prisma client; absent on lightweight test doubles. */
+  $transaction?: (fn: (tx: PrismaClientLike) => Promise<any>) => Promise<any>
+  $executeRawUnsafe?: (query: string, ...values: unknown[]) => Promise<number>
 }
 
 export type ContactInput = Partial<Omit<Contact, 'id' | 'createdAt'>> & {
@@ -292,7 +295,29 @@ export async function listContactClients(prisma: PrismaClientLike, searchParams?
   }
 }
 
-export async function upsertContact(prisma: PrismaClientLike, body: ContactInput): Promise<{ contact: Contact; created: boolean } | string> {
+/**
+ * Advisory-lock key for the identity signal `findExistingContact` would use
+ * to match `body` — same precedence (email > phone > name). Two concurrent
+ * upserts for the SAME signal (double-submit, a retried request) serialize
+ * on this key instead of racing: find-then-create is a classic TOCTOU gap —
+ * without a lock, both requests can see "no existing contact" and each
+ * create their own Client row for what should be one contact.
+ */
+function contactIdentityLockKey(body: ContactInput): string | null {
+  if (isUuid(body.id)) return `contact:id:${body.id}`
+  const email = normalizeEmail(body.email)
+  if (email) return `contact:email:${email}`
+  const phone = normalizePhone(body.phone || body.mobile)
+  if (phone.length >= 9) return `contact:phone:${phone.slice(-9)}`
+  const name = normalizeName(body.name)
+  if (name) return `contact:name:${body.type === 'individual' ? 'individual' : 'company'}:${name}`
+  return null
+}
+
+async function upsertContactCritical(
+  prisma: PrismaClientLike,
+  body: ContactInput,
+): Promise<{ contact: Contact; created: boolean } | string> {
   const existingClient = await findExistingContact(prisma, body)
   const existing = existingClient ? clientToContact(existingClient) : undefined
   const normalized = normalizeContact(body, existing)
@@ -302,8 +327,28 @@ export async function upsertContact(prisma: PrismaClientLike, body: ContactInput
     ? await prisma.client.update({ where: { id: existingClient.id }, data: contactToClientData(normalized) })
     : await createContactClient(prisma, normalized)
 
-  void broadcastContacts(prisma)
   return { contact: clientToContact(client), created: !existingClient }
+}
+
+export async function upsertContact(prisma: PrismaClientLike, body: ContactInput): Promise<{ contact: Contact; created: boolean } | string> {
+  const lockKey = contactIdentityLockKey(body)
+  let result: { contact: Contact; created: boolean } | string
+  if (lockKey && prisma.$transaction) {
+    result = await prisma.$transaction(async tx => {
+      // Transaction-scoped advisory lock: blocks a second concurrent upsert
+      // for the same identity from starting its own find-then-create until
+      // this one commits or rolls back — released automatically either way.
+      await tx.$executeRawUnsafe?.('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', lockKey)
+      return upsertContactCritical(tx, body)
+    })
+  } else {
+    // Test doubles / callers without $transaction: fail open rather than
+    // block the whole feature on lock infrastructure being unavailable.
+    result = await upsertContactCritical(prisma, body)
+  }
+
+  void broadcastContacts(prisma)
+  return result
 }
 
 export async function updateContactById(prisma: PrismaClientLike, id: string, body: ContactInput): Promise<Contact | null | string> {

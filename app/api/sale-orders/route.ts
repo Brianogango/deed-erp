@@ -63,6 +63,12 @@ function mapSaleOrderToClient(order: any) {
       qty: Number(item.qty ?? 0),
       unitPrice: Number(item.unitPrice ?? 0),
       taxRate: Number(item.taxRate ?? 0),
+      // discount/discountPercent both round-trip so a reopened line's edit
+      // form shows the original discount instead of resetting to 0 — before
+      // discountPct existed on the DB row, this was unrecoverable and saving
+      // an untouched line silently erased its discount.
+      discount: Number(item.discountPct ?? 0),
+      discountPercent: Number(item.discountPct ?? 0),
       subtotal: Number(item.lineTotal ?? 0),
       lineTotal: Number(item.lineTotal ?? 0),
       serialIds: item.serialNumberId ? [item.serialNumberId] : [],
@@ -85,6 +91,7 @@ function mapSaleOrderItems(lines: any[]) {
       qty,
       unitPrice: money.unitPrice,
       taxRate: money.taxRate,
+      discountPct: money.discountPct,
       lineTotal: money.lineTotal,
       notes: item.notes ?? null,
       serialNumberId: optionalUuid(item.serialNumberId ?? item.serialIds?.[0]),

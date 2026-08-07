@@ -49,6 +49,8 @@ export interface CommercialPdfInput {
   subtotal: number
   /** Sum of per-line discounts (shown on PDF totals when &gt; 0). */
   discountTotal?: number
+  /** Header-level discount applied after tax (e.g. SO/Invoice discountAmount). */
+  postTaxDiscountTotal?: number
   taxTotal: number
   total: number
   amountPaid?: number
@@ -120,6 +122,7 @@ export async function buildCommercialPdf(
     lines: input.lines,
     subtotal: input.subtotal,
     discountTotal: input.discountTotal,
+    postTaxDiscountTotal: input.postTaxDiscountTotal,
     taxTotal: input.taxTotal,
     total: input.total,
     amountPaid: input.amountPaid,

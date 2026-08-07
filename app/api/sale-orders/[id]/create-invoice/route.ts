@@ -129,11 +129,24 @@ export async function POST(
     const lines = invoiceable.map(({ item, qty }) => {
       const unit = Number(item.unitPrice) || 0
       const taxRate = Number(item.taxRate) || 0
-      const lineTotal = Math.round(unit * qty)
+      const itemQty = Number(item.qty) || 0
+      // item.lineTotal already bakes in this line's discountPct — recomputing
+      // unit x qty here would silently drop it and over-invoice a discounted
+      // line. Prorate the ORIGINAL discounted lineTotal by the fraction of
+      // the line's quantity being invoiced this round (qty === itemQty on a
+      // full/one-click invoice, so this is exact there too).
+      const fullLineTotal = Number(item.lineTotal) || Math.round(unit * itemQty)
+      const lineTotal = itemQty > 0
+        ? Math.round((fullLineTotal * qty) / itemQty)
+        : Math.round(unit * qty)
       return {
         description: `${item.description ?? 'Item'} ×${qty}`,
         qty,
-        unitPrice: unit,
+        // Effective (post-discount) unit price for this invoice line — kept
+        // consistent with lineTotal/qty so downstream unitPrice x qty math
+        // (e.g. PDF rendering) reconciles instead of re-introducing the
+        // discount gap.
+        unitPrice: qty > 0 ? Math.round((lineTotal / qty) * 100) / 100 : unit,
         taxRate,
         lineTotal,
         productId: item.productId ?? undefined,

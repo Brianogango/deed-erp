@@ -65,6 +65,15 @@ export interface DeedPdfInput {
   lines: DeedPdfLine[]
   subtotal?: number
   discountTotal?: number
+  /**
+   * A header-level discount applied AFTER tax (subtotal + tax - discount =
+   * total) — e.g. a Sales Order's discountAmount or an Invoice's prorated
+   * header discount. Distinct from discountTotal above, which is a pre-tax
+   * sum of per-line discountPct amounts already netted into `subtotal`.
+   * Shown as its own "Discount" row between VAT and TOTAL so the math the
+   * customer sees matches how the total was actually computed.
+   */
+  postTaxDiscountTotal?: number
   taxTotal?: number
   total?: number
   amountPaid?: number
@@ -441,6 +450,10 @@ export function buildDeedDocumentPdf(
       totals.push({ label: 'Subtotal', value: `${currency} ${money(net)}` })
     }
     if (input.taxTotal) totals.push({ label: vatLabel, value: `${currency} ${money(input.taxTotal)}` })
+    const postTaxDisc = Number(input.postTaxDiscountTotal) || 0
+    // Distinct label from the pre-tax "Discount" row above (line discounts)
+    // in the rare case both are present on the same document at once.
+    if (postTaxDisc > 0) totals.push({ label: disc > 0 ? 'Order Discount' : 'Discount', value: `- ${currency} ${money(postTaxDisc)}` })
     totals.push({ label: 'TOTAL', value: `${currency} ${money(input.total ?? 0)}`, bold: true, accent: true })
     if (input.amountPaid && input.amountPaid > 0) {
       totals.push({ label: 'Amount Paid', value: `- ${currency} ${money(input.amountPaid)}` })
