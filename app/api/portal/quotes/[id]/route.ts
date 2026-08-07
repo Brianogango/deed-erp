@@ -1,13 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { verifyQuoteToken } from '@/lib/quote-token'
-import { loadAppState } from '@/lib/server-store'
 import { normalizeQuoteForClient } from '@/lib/quote-normalization'
+import { findPortalDocument } from '@/lib/portal-document-lookup'
 
 export const dynamic = 'force-dynamic'
 
 /**
  * GET /api/portal/quotes/[id]?token=<signed-token>
- * Public endpoint — customers view their quote via a signed link.
+ * Public endpoint — customers view their quote (CRM Quote or Sales module
+ * SaleOrder — see lib/portal-document-lookup.ts) via a signed link.
  */
 export async function GET(
   request: NextRequest,
@@ -21,15 +22,12 @@ export async function GET(
       return NextResponse.json({ error: 'Invalid or expired link.' }, { status: 401 })
     }
 
-    const state  = await loadAppState()
-    const quotes = (state['deed_quotes'] ?? []) as Array<Record<string, unknown>>
-    const quote  = quotes.find(q => q.id === quoteId)
-
-    if (!quote) {
+    const found = await findPortalDocument(quoteId)
+    if (!found) {
       return NextResponse.json({ error: 'Quote not found.' }, { status: 404 })
     }
 
-    return NextResponse.json({ quote: normalizeQuoteForClient(quote) })
+    return NextResponse.json({ quote: normalizeQuoteForClient(found.doc) })
   } catch {
     return NextResponse.json({ error: 'Failed to load quote' }, { status: 500 })
   }

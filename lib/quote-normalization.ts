@@ -3,6 +3,11 @@ const SERVER_TO_CLIENT_STATUS: Record<string, string> = {
   approved: 'accepted',
   rejected: 'rejected',
   cancelled: 'expired',
+  // SaleOrder statuses — the portal now also serves Sales module
+  // quotations (SaleOrder), not just CRM Quote records; both status
+  // vocabularies are distinct strings so they share this table safely.
+  quotation_sent: 'sent',
+  sale: 'accepted',
 }
 
 function asNumber(value: unknown, fallback = 0) {

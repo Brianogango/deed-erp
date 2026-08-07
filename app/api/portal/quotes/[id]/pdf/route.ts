@@ -3,6 +3,7 @@ import { verifyQuoteToken } from '@/lib/quote-token'
 import { loadAppState } from '@/lib/server-store'
 import { DEFAULT_COMPANY_SETTINGS } from '@/lib/store'
 import { normalizeQuoteForClient } from '@/lib/quote-normalization'
+import { findPortalDocument } from '@/lib/portal-document-lookup'
 import { buildDeedDocumentPdf, deedPdfToBuffer } from '@/lib/deed-document-pdf'
 
 export const dynamic = 'force-dynamic'
@@ -23,15 +24,13 @@ export async function GET(
       return NextResponse.json({ error: 'Invalid or expired link.' }, { status: 401 })
     }
 
-    const state  = await loadAppState()
-    const quotes = (state['deed_quotes'] ?? []) as Array<Record<string, unknown>>
-    const quote  = quotes.find(q => q.id === quoteId)
-
-    if (!quote) {
+    const found = await findPortalDocument(quoteId)
+    if (!found) {
       return NextResponse.json({ error: 'Quote not found.' }, { status: 404 })
     }
 
-    const normalized = normalizeQuoteForClient(quote)
+    const state  = await loadAppState(['deed_companySettings', 'deed_bankAccounts'])
+    const normalized = normalizeQuoteForClient(found.doc)
     const saved    = state['deed_companySettings'] as Record<string, unknown> | undefined
     const co       = { ...DEFAULT_COMPANY_SETTINGS, ...(saved ?? {}) }
     const lines    = normalized.lines as Array<Record<string, unknown>>
