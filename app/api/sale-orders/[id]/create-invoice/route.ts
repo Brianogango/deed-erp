@@ -142,12 +142,26 @@ export async function POST(
 
     const subtotal = lines.reduce((s, l) => s + l.lineTotal, 0)
     const taxAmount = lines.reduce((s, l) => s + Math.round(l.lineTotal * (l.taxRate || 0) / 100), 0)
-    const totalAmount = subtotal + taxAmount
+
+    // Prorate the sale order's header discount across this invoice run so a
+    // discounted confirmed SO is never over-invoiced. On a partial invoice,
+    // only the discount share proportional to the invoiced subtotal applies —
+    // the remaining share still applies to whatever is invoiced later.
+    const orderSubtotalForDiscount = (confirmed.items ?? []).reduce(
+      (s, item) => s + Number(item.lineTotal ?? 0), 0,
+    )
+    const headerDiscount = Math.max(0, Number(confirmed.discountAmount ?? 0))
+    const discountAmount = orderSubtotalForDiscount > 0 && headerDiscount > 0
+      ? Math.min(subtotal + taxAmount, Math.round((headerDiscount * subtotal) / orderSubtotalForDiscount))
+      : 0
+    const totalAmount = Math.max(0, subtotal + taxAmount - discountAmount)
     if (totalAmount < 1) {
       return NextResponse.json({ error: 'Invoice total must be at least KES 1' }, { status: 400 })
     }
 
     const draftRef = await getNextDocNumber('invoice').catch(() => `DRAFT-INV-${Date.now().toString().slice(-6)}`)
+    const paymentTermsDays = Number(confirmed.paymentTermsDays)
+    const dueDate = new Date(Date.now() + (Number.isFinite(paymentTermsDays) && paymentTermsDays >= 0 ? paymentTermsDays : 30) * 86400000)
 
     const result = await prisma.$transaction(async (tx) => {
       // Re-read items inside the transaction to reduce race window
@@ -167,10 +181,16 @@ export async function POST(
           invoicePolicy: 'delivery',
         })
         if (still < qty) throw new Error('Invoiceable quantity changed — retry')
-        await tx.saleOrderItem.update({
-          where: { id: live.id },
+        // Guarded atomic update: the WHERE clause re-checks qtyInvoiced still
+        // equals what we just read, evaluated by Postgres as a single
+        // statement. If a concurrent request already bumped this line
+        // (TOCTOU race), `count` is 0 and the whole transaction rolls back
+        // instead of silently double-invoicing the same delivered quantity.
+        const updated = await tx.saleOrderItem.updateMany({
+          where: { id: live.id, qtyInvoiced: live.qtyInvoiced },
           data: { qtyInvoiced: Number(live.qtyInvoiced || 0) + qty },
         })
+        if (updated.count === 0) throw new Error('Invoiceable quantity changed — retry')
       }
 
       const invoice = await tx.invoice.create({
@@ -180,9 +200,10 @@ export async function POST(
           clientId: confirmed.clientId,
           saleOrderId: confirmed.id,
           invoiceDate: new Date(),
-          dueDate: new Date(Date.now() + 30 * 86400000),
+          dueDate,
           subtotal,
           taxAmount,
+          discountAmount,
           totalAmount,
           amountPaid: 0,
           notes: `Created from ${confirmed.orderNumber}`,
@@ -211,7 +232,6 @@ export async function POST(
 
     const clientLines = mapDbInvoiceItemsToClientLines(result.items)
     const date = new Date().toISOString().slice(0, 10)
-    const dueDate = new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10)
     const clientInvoice = {
       id: result.id,
       ref: result.invoiceNumber,
@@ -220,10 +240,11 @@ export async function POST(
       partnerId: confirmed.clientId,
       partnerName: confirmed.client?.name ?? '',
       date,
-      dueDate,
+      dueDate: dueDate.toISOString().slice(0, 10),
       lines: clientLines,
       subtotal,
       taxTotal: taxAmount,
+      discountAmount,
       total: totalAmount,
       amountPaid: 0,
       saleOrderId: confirmed.id,
