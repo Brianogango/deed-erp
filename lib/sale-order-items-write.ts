@@ -1,4 +1,5 @@
 import { optionalUuid } from '@/lib/legacy-compat'
+import { calcSaleOrderLineMoney } from '@/lib/sales/line-calc'
 
 export type SaleOrderItemRow = {
   id?: string
@@ -47,6 +48,12 @@ export function mapSaleOrderItems(lines: any[], existingItems: any[] = []): Sale
       demand,
       Math.max(Number(prev?.qtyInvoiced) || 0, incomingInvoiced),
     )
+    // lineTotal is recomputed from qty × unitPrice × (1 − discount%) rather
+    // than trusted from the client — a tampered or stale client-declared
+    // lineTotal/subtotal must never reach the database (P0 totals-integrity).
+    // Reuse the same `demand` qty computed above (defaults to 1 when omitted)
+    // so the persisted qty and lineTotal never disagree on what "qty" meant.
+    const money = calcSaleOrderLineMoney({ ...item, qty: demand })
     return {
       id: prev?.id,
       productId: optionalUuid(item.productId) ?? null,
@@ -54,9 +61,9 @@ export function mapSaleOrderItems(lines: any[], existingItems: any[] = []): Sale
       qty: demand,
       qtyDelivered,
       qtyInvoiced,
-      unitPrice: Math.max(0, Number(item.unitPrice ?? 0) || 0),
-      taxRate: Math.max(0, Number(item.taxRate ?? 0) || 0),
-      lineTotal: Math.max(0, Number(item.lineTotal ?? item.subtotal ?? 0) || 0),
+      unitPrice: money.unitPrice,
+      taxRate: money.taxRate,
+      lineTotal: money.lineTotal,
       notes: item.notes ?? null,
       serialNumberId: optionalUuid(
         item.serialNumberId ?? item.serialIds?.[0] ?? prev?.serialNumberId,

@@ -1,5 +1,5 @@
 import 'server-only'
-import { Pool } from 'pg'
+import { Pool, type PoolClient } from 'pg'
 
 let _pool: Pool | null = null
 
@@ -33,4 +33,26 @@ export const sql = async (
   const pool = getPool()
   const result = await pool.query(query, values as unknown[])
   return { rows: result.rows }
+}
+
+/**
+ * Run `fn` inside a single Postgres transaction on one dedicated connection.
+ * Needed for anything that must hold state across statements on the same
+ * session — e.g. a transaction-scoped advisory lock (pg_advisory_xact_lock),
+ * which only blocks other sessions while THIS transaction is open.
+ */
+export async function withDbTransaction<T>(fn: (client: PoolClient) => Promise<T>): Promise<T> {
+  const pool = getPool()
+  const client = await pool.connect()
+  try {
+    await client.query('BEGIN')
+    const result = await fn(client)
+    await client.query('COMMIT')
+    return result
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {})
+    throw err
+  } finally {
+    client.release()
+  }
 }

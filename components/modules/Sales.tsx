@@ -93,6 +93,7 @@ import {
   quotationPaymentTermsLabel,
   serializeQuotationPaymentTerms,
 } from '@/lib/sales/quotation-defaults'
+import { calcSaleOrderLineMoney } from '@/lib/sales/line-calc'
 import { pairOrderLinesWithDeliveryLines } from '@/lib/delivery-prepare'
 import Chatter from '@/components/erp/Chatter'
 import { ConfirmQuotationDialog } from '@/components/modules/sales/ConfirmQuotationDialog'
@@ -972,6 +973,8 @@ function SalesContent() {
         }
       }
       setShowConfirmQuoteDialog(false)
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'Could not confirm this quotation — try again', 'error')
     } finally {
       setConfirmingSO(false)
     }
@@ -1011,15 +1014,13 @@ function SalesContent() {
       unitPrice: String(unitPrice), taxRate: String(product.taxRate ?? 0),
     } : l))
   }
-  const calcDraftLineTotal = (l: DraftLine) => {
-    if (l.type === 'section') return 0
-    const qty = Math.max(0, Number(l.qty) || 0)
-    const price = Math.max(0, Number(l.unitPrice) || 0)
-    const disc = Math.max(0, Math.min(100, Number(l.discount) || 0))
-    return Math.round(qty * price * (1 - disc / 100))
-  }
-  const draftSubtotal = newDraftLines.reduce((a, l) => a + calcDraftLineTotal(l), 0)
-  const draftTaxTotal = newDraftLines.reduce((a, l) => a + Math.round(calcDraftLineTotal(l) * (Number(l.taxRate) || 0) / 100), 0)
+  // Single source of truth for line/tax math — shared with the server's
+  // authoritative recompute in lib/sales/line-calc.ts so the quotation-draft
+  // preview can never silently drift from what actually gets persisted.
+  const draftLineMoney = (l: DraftLine) => calcSaleOrderLineMoney({ ...l, lineType: l.type })
+  const calcDraftLineTotal = (l: DraftLine) => draftLineMoney(l).lineTotal
+  const draftSubtotal = newDraftLines.reduce((a, l) => a + draftLineMoney(l).lineTotal, 0)
+  const draftTaxTotal = newDraftLines.reduce((a, l) => a + draftLineMoney(l).lineTax, 0)
   const draftTotal = draftSubtotal + draftTaxTotal
   const validDraftLines = newDraftLines.filter(l => l.type !== 'section' && l.productId && Number(l.qty) > 0)
   const invalidQtyDraftLines = newDraftLines.filter(l => l.type !== 'section' && l.productId && Number(l.qty) <= 0)
@@ -1391,6 +1392,13 @@ function SalesContent() {
                       lines: newDraftLines.length,
                       hasCustomer: !!newCustomer,
                     })
+                    // Discard means discard — otherwise the abandoned draft
+                    // silently reappears the next time "New quotation" opens.
+                    try {
+                      localStorage.removeItem(quoteDraftKey)
+                    } catch {
+                      // ignore storage errors
+                    }
                     backToList()
                   }}
                   onCreateNewCustomer={(q) => {
@@ -2816,10 +2824,15 @@ function NewQuotationForm({
                   id="quote-customer"
                   tabIndex={0}
                   role="button"
+                  aria-haspopup="listbox"
+                  aria-expanded={customerDropdownOpen}
                   className={`cursor-pointer flex items-center justify-between ${!newCustomer ? 'text-[var(--sp-text-3)]' : ''}`}
                   style={{ border: '1px solid var(--sp-border-strong)', borderRadius: 4, padding: '5px 8px', fontSize: 12.5, background: '#fff', minHeight: 30, lineHeight: 1.25 }}
                   onClick={() => setCustomerDropdownOpen(v => !v)}
-                  onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setCustomerDropdownOpen(v => !v) } }}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setCustomerDropdownOpen(v => !v) }
+                    else if (e.key === 'Escape' && customerDropdownOpen) setCustomerDropdownOpen(false)
+                  }}
                 >
                   <span className="truncate">{newCustomer ? newCustomer.name : 'Search customer…'}</span>
                   <Fa icon={faChevronDown} className={`text-[10px] flex-shrink-0 transition-transform ${customerDropdownOpen ? 'rotate-180' : ''}`} />
@@ -2998,8 +3011,24 @@ function NewQuotationForm({
                       <tr key={line.id} className={hasInvalidQty ? 'bg-red-50/60' : undefined}>
                         <td className="num">{lineIndex + 1}</td>
                         <td>
-                          <div className="flex items-center gap-1 cursor-pointer min-w-[140px]" style={{ border: '1px solid var(--sp-border-strong)', borderRadius: 4, padding: '4px 6px', background: '#fff', fontSize: 12 }}
-                            onClick={e => (isOpen ? setProductDropdownOpen(null) : openProductDropdown(line.id, e.currentTarget))}>
+                          <div
+                            className="flex items-center gap-1 cursor-pointer min-w-[140px]"
+                            style={{ border: '1px solid var(--sp-border-strong)', borderRadius: 4, padding: '4px 6px', background: '#fff', fontSize: 12 }}
+                            tabIndex={0}
+                            role="button"
+                            aria-haspopup="listbox"
+                            aria-expanded={isOpen}
+                            aria-label={line.productName ? `Product: ${line.productName}` : 'Select product'}
+                            onClick={e => (isOpen ? setProductDropdownOpen(null) : openProductDropdown(line.id, e.currentTarget))}
+                            onKeyDown={e => {
+                              if (e.key === 'Enter' || e.key === ' ') {
+                                e.preventDefault()
+                                isOpen ? setProductDropdownOpen(null) : openProductDropdown(line.id, e.currentTarget)
+                              } else if (e.key === 'Escape' && isOpen) {
+                                setProductDropdownOpen(null)
+                              }
+                            }}
+                          >
                             <span className="flex-1 truncate min-w-0" title={line.productName || undefined}>{line.productName || <span className="text-[var(--sp-text-3)]">Select product…</span>}</span>
                             <Fa icon={faChevronDown} className={`text-[9px] text-[var(--sp-text-3)] flex-shrink-0 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
                           </div>
@@ -3544,7 +3573,14 @@ function DeliveryNoteView({
                         ) : canValidate ? (
                           <span className="font-semibold text-blue-700">{preparedQty}</span>
                         ) : (
-                          <span className={`font-semibold ${isFullyDelivered ? 'text-emerald-600' : isPartial ? 'text-amber-500' : 'text-[var(--text-4)]'}`}>{delivered}</span>
+                          <span
+                            className={`font-semibold ${isFullyDelivered ? 'text-emerald-600' : isPartial ? 'text-amber-500' : 'text-[var(--text-4)]'}`}
+                            aria-label={`${delivered} of ${l.qty} delivered${isFullyDelivered ? ' — fully delivered' : isPartial ? ' — partially delivered' : ' — not yet delivered'}`}
+                          >
+                            {delivered}
+                            {isFullyDelivered && <span aria-hidden="true"> ✓</span>}
+                            {isPartial && <span aria-hidden="true" className="text-[9px] font-normal"> (partial)</span>}
+                          </span>
                         )}
                       </td>
                       <td>
@@ -3562,7 +3598,10 @@ function DeliveryNoteView({
                         )}
                         {canPrepare && serialTracked && (
                           <div className="mt-2 flex items-center gap-2">
-                            <span className={`text-[10px] font-semibold ${lineSerials.length >= l.qty ? 'text-emerald-600' : 'text-amber-600'}`}>{lineSerials.length}/{l.qty}</span>
+                            <span
+                              className={`text-[10px] font-semibold ${lineSerials.length >= l.qty ? 'text-emerald-600' : 'text-amber-600'}`}
+                              aria-label={`${lineSerials.length} of ${l.qty} serials assigned`}
+                            >{lineSerials.length}/{l.qty}</span>
                             <SerialMultiSelect
                               options={assignableSerials.map((serial: any) => ({
                                 id: serial.id,

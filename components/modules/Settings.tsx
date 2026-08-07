@@ -859,7 +859,7 @@ ACCOUNTS_EMAIL=accounts@deed.co.ke`}</pre>
                 <SettingRow label="Online Acceptance" desc="Customer can approve quotes via a shareable link"><Toggle on={ss.salesOnlineAcceptance} onChange={v => updateSystemSettings({ salesOnlineAcceptance: v })} /></SettingRow>
               </SectionCard>
               <SectionCard title="Pricing">
-                <SettingRow label="Enable Pricelists" desc="Multiple pricing tiers per customer segment or volume"><Toggle on={ss.salesPricelists} onChange={v => updateSystemSettings({ salesPricelists: v })} /></SettingRow>
+                <SettingRow label="Enable Pricelists" desc="Pricing tiers used by integrations and sale orders created outside the quotation form; new quotations always price from the Public list automatically"><Toggle on={ss.salesPricelists} onChange={v => updateSystemSettings({ salesPricelists: v })} /></SettingRow>
                 <SettingRow label="Discount Control" desc="Track and flag discounts above threshold on quotations (sales confirmation no longer requires approval)"><Toggle on={ss.salesDiscountControl} onChange={v => updateSystemSettings({ salesDiscountControl: v })} /></SettingRow>
                 {ss.salesPricelists && <PricelistsPanel showToast={showToast} />}
               </SectionCard>

@@ -18,6 +18,7 @@ const {
     },
     saleOrderItem: {
       update: vi.fn(),
+      updateMany: vi.fn(),
     },
     invoice: {
       create: vi.fn(),
@@ -106,7 +107,7 @@ beforeEach(() => {
       findUnique: vi.fn().mockResolvedValue(saleOrder),
     },
     saleOrderItem: {
-      update: mockPrisma.saleOrderItem.update.mockResolvedValue({}),
+      updateMany: mockPrisma.saleOrderItem.updateMany.mockResolvedValue({ count: 1 }),
     },
     invoice: {
       create: mockPrisma.invoice.create.mockResolvedValue({
@@ -234,7 +235,7 @@ describe('POST /api/sale-orders/:id/create-invoice', () => {
     mockPrisma.saleOrder.findUnique.mockResolvedValue(partial)
     mockPrisma.$transaction.mockImplementation(async (fn: any) => fn({
       saleOrder: { findUnique: vi.fn().mockResolvedValue(partial) },
-      saleOrderItem: { update: mockPrisma.saleOrderItem.update.mockResolvedValue({}) },
+      saleOrderItem: { updateMany: mockPrisma.saleOrderItem.updateMany.mockResolvedValue({ count: 1 }) },
       invoice: { create: mockPrisma.invoice.create },
     }))
     await POST(new NextRequest('http://localhost', { method: 'POST' }), { params: { id: ORDER_ID } })
@@ -251,7 +252,7 @@ describe('POST /api/sale-orders/:id/create-invoice', () => {
       mockPrisma.saleOrder.findUnique.mockResolvedValue(partial)
       mockPrisma.$transaction.mockImplementation(async (fn: any) => fn({
         saleOrder: { findUnique: vi.fn().mockResolvedValue(partial) },
-        saleOrderItem: { update: mockPrisma.saleOrderItem.update.mockResolvedValue({}) },
+        saleOrderItem: { updateMany: mockPrisma.saleOrderItem.updateMany.mockResolvedValue({ count: 1 }) },
         invoice: { create: mockPrisma.invoice.create },
       }))
       const res = await POST(
@@ -279,7 +280,7 @@ describe('POST /api/sale-orders/:id/create-invoice', () => {
       mockPrisma.saleOrder.findUnique.mockResolvedValue(twoLine)
       mockPrisma.$transaction.mockImplementation(async (fn: any) => fn({
         saleOrder: { findUnique: vi.fn().mockResolvedValue(twoLine) },
-        saleOrderItem: { update: mockPrisma.saleOrderItem.update.mockResolvedValue({}) },
+        saleOrderItem: { updateMany: mockPrisma.saleOrderItem.updateMany.mockResolvedValue({ count: 1 }) },
         invoice: { create: mockPrisma.invoice.create },
       }))
       const res = await POST(
@@ -293,9 +294,9 @@ describe('POST /api/sale-orders/:id/create-invoice', () => {
       expect(res.status).toBe(200)
       const createData = mockPrisma.invoice.create.mock.calls.at(-1)?.[0]?.data
       expect(createData.items.create).toHaveLength(1)
-      expect(mockPrisma.saleOrderItem.update).toHaveBeenCalledTimes(1)
-      expect(mockPrisma.saleOrderItem.update).toHaveBeenCalledWith(
-        expect.objectContaining({ where: { id: ITEM_ID } }),
+      expect(mockPrisma.saleOrderItem.updateMany).toHaveBeenCalledTimes(1)
+      expect(mockPrisma.saleOrderItem.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: expect.objectContaining({ id: ITEM_ID }) }),
       )
     })
 
@@ -313,4 +314,51 @@ describe('POST /api/sale-orders/:id/create-invoice', () => {
       expect(mockPrisma.$transaction).not.toHaveBeenCalled()
     })
   })
+
+  describe('header discount proration', () => {
+    it('prorates the sale order header discount into the invoice total', async () => {
+      const discounted = { ...saleOrder, discountAmount: 1000 }
+      mockPrisma.saleOrder.findUnique.mockResolvedValue(discounted)
+      mockPrisma.$transaction.mockImplementation(async (fn: any) => fn({
+        saleOrder: { findUnique: vi.fn().mockResolvedValue(discounted) },
+        saleOrderItem: { updateMany: mockPrisma.saleOrderItem.updateMany.mockResolvedValue({ count: 1 }) },
+        invoice: { create: mockPrisma.invoice.create },
+      }))
+      await POST(new NextRequest('http://localhost', { method: 'POST' }), { params: { id: ORDER_ID } })
+      // Single line, fully invoiced this round → the full header discount applies.
+      const createData = mockPrisma.invoice.create.mock.calls.at(-1)?.[0]?.data
+      expect(createData.discountAmount).toBe(1000)
+      expect(createData.totalAmount).toBe(10000 + 1600 - 1000)
+    })
+
+    it('never lets the prorated discount push the invoice below zero', async () => {
+      const discounted = { ...saleOrder, discountAmount: 999999 }
+      mockPrisma.saleOrder.findUnique.mockResolvedValue(discounted)
+      mockPrisma.$transaction.mockImplementation(async (fn: any) => fn({
+        saleOrder: { findUnique: vi.fn().mockResolvedValue(discounted) },
+        saleOrderItem: { updateMany: mockPrisma.saleOrderItem.updateMany.mockResolvedValue({ count: 1 }) },
+        invoice: { create: mockPrisma.invoice.create },
+      }))
+      const res = await POST(new NextRequest('http://localhost', { method: 'POST' }), { params: { id: ORDER_ID } })
+      const body = await res.json()
+      expect(body.error).toMatch(/at least KES 1/i)
+    })
+  })
+
+  describe('concurrent double-invoice protection', () => {
+    it('rolls back the whole transaction when a concurrent request already bumped qtyInvoiced', async () => {
+      mockPrisma.$transaction.mockImplementation(async (fn: any) => {
+        const tx = {
+          saleOrder: { findUnique: vi.fn().mockResolvedValue(saleOrder) },
+          saleOrderItem: { updateMany: mockPrisma.saleOrderItem.updateMany.mockResolvedValue({ count: 0 }) },
+          invoice: { create: mockPrisma.invoice.create },
+        }
+        return fn(tx)
+      })
+      const res = await POST(new NextRequest('http://localhost', { method: 'POST' }), { params: { id: ORDER_ID } })
+      expect(res.status).toBe(500)
+      expect(mockPrisma.invoice.create).not.toHaveBeenCalled()
+    })
+  })
+
 })

@@ -1,6 +1,7 @@
 import 'server-only'
 import prisma from '@/lib/prisma'
 import { assertQuoteNotExpired } from '@/lib/sale-order-expiry'
+import { loadAppState } from '@/lib/server-store'
 
 export { assertQuoteNotExpired }
 
@@ -38,7 +39,7 @@ export async function assertSaleOrderCreditOnConfirm(opts: {
   const today = new Date()
   today.setHours(0, 0, 0, 0)
 
-  const [client, openInvoices] = await Promise.all([
+  const [client, openInvoices, state] = await Promise.all([
     prisma.client.findUnique({
       where: { id: clientId },
       select: { creditLimit: true, name: true },
@@ -50,6 +51,7 @@ export async function assertSaleOrderCreditOnConfirm(opts: {
       },
       select: { totalAmount: true, amountPaid: true, dueDate: true, status: true },
     }),
+    loadAppState(['deed_customerCredits']),
   ])
 
   if (!client) return { ok: true }
@@ -73,6 +75,17 @@ export async function assertSaleOrderCreditOnConfirm(opts: {
       error: `Account locked — ${overdueCount} overdue invoice${overdueCount > 1 ? 's' : ''} totalling KES ${overdueBalance.toLocaleString('en-KE')}. Clear overdue invoices or ask Finance/Director to confirm.`,
     }
   }
+
+  // Net available/partially-used store credit against outstanding before
+  // comparing to the limit — the client-side check already does this, and
+  // without it the server can reject an order the customer's real balance
+  // would cover (a false-positive block, not a security gap, but real
+  // friction that forces an unnecessary Finance/Director override).
+  const credits = Array.isArray(state?.deed_customerCredits) ? state.deed_customerCredits as any[] : []
+  const availableCredit = credits
+    .filter(c => c?.customerId === clientId && ['available', 'partially_used'].includes(c?.status))
+    .reduce((sum, c) => sum + Math.max(0, Number(c?.balance) || 0), 0)
+  outstanding = Math.max(0, outstanding - availableCredit)
 
   const creditLimit = Number(client.creditLimit ?? 0)
   if (creditLimit > 0) {

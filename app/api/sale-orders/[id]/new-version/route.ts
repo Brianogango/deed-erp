@@ -79,52 +79,67 @@ export async function POST(_request: NextRequest, { params }: { params: { id: st
     const nextVersion = Math.max(1, ...siblings.map(s => s.versionNumber)) + 1
     const newOrderNumber = `${baseRef(root.orderNumber)}-V${nextVersion}`
 
-    const created = await prisma.$transaction(async tx => {
-      if (!source.versionGroupId) {
-        await tx.saleOrder.update({ where: { id: rootId }, data: { versionGroupId: rootId } })
-      }
-      return tx.saleOrder.create({
-        data: {
-          orderNumber: newOrderNumber,
-          clientId: source.clientId,
-          status: 'quotation',
-          orderDate: new Date(),
-          validUntil: source.validUntil,
-          deliveryDate: source.deliveryDate,
-          subtotal: source.subtotal,
-          taxAmount: source.taxAmount,
-          discountAmount: source.discountAmount,
-          totalAmount: source.totalAmount,
-          notes: source.notes,
-          pricelist: source.pricelist,
-          pricelistId: source.pricelistId,
-          currencyCode: source.currencyCode,
-          baseCurrencyCode: source.baseCurrencyCode,
-          exchangeRateToBase: source.exchangeRateToBase,
-          salespersonId: source.salespersonId,
-          salespersonName: source.salespersonName,
-          salesTeam: source.salesTeam,
-          customerRef: source.customerRef,
-          invoiceAddress: source.invoiceAddress,
-          deliveryAddress: source.deliveryAddress,
-          createdById: session.user.id,
-          versionNumber: nextVersion,
-          versionGroupId: rootId,
-          items: {
-            create: source.items.map(item => ({
-              productId: item.productId,
-              description: item.description,
-              qty: item.qty,
-              unitPrice: item.unitPrice,
-              taxRate: item.taxRate,
-              lineTotal: item.lineTotal,
-              notes: item.notes,
-            })),
+    let created
+    try {
+      created = await prisma.$transaction(async tx => {
+        if (!source.versionGroupId) {
+          await tx.saleOrder.update({ where: { id: rootId }, data: { versionGroupId: rootId } })
+        }
+        return tx.saleOrder.create({
+          data: {
+            orderNumber: newOrderNumber,
+            clientId: source.clientId,
+            status: 'quotation',
+            orderDate: new Date(),
+            validUntil: source.validUntil,
+            deliveryDate: source.deliveryDate,
+            subtotal: source.subtotal,
+            taxAmount: source.taxAmount,
+            discountAmount: source.discountAmount,
+            totalAmount: source.totalAmount,
+            notes: source.notes,
+            pricelist: source.pricelist,
+            pricelistId: source.pricelistId,
+            currencyCode: source.currencyCode,
+            baseCurrencyCode: source.baseCurrencyCode,
+            exchangeRateToBase: source.exchangeRateToBase,
+            salespersonId: source.salespersonId,
+            salespersonName: source.salespersonName,
+            salesTeam: source.salesTeam,
+            customerRef: source.customerRef,
+            invoiceAddress: source.invoiceAddress,
+            deliveryAddress: source.deliveryAddress,
+            createdById: session.user.id,
+            versionNumber: nextVersion,
+            versionGroupId: rootId,
+            items: {
+              create: source.items.map(item => ({
+                productId: item.productId,
+                description: item.description,
+                qty: item.qty,
+                unitPrice: item.unitPrice,
+                taxRate: item.taxRate,
+                lineTotal: item.lineTotal,
+                notes: item.notes,
+              })),
+            },
           },
-        },
-        include: { client: true, items: true },
+          include: { client: true, items: true },
+        })
       })
-    })
+    } catch (err: any) {
+      // Unique (version_group_id, version_number) — another "New Version"
+      // request for the same lineage won the race between our read of
+      // `siblings` and this create. Ask the caller to retry rather than
+      // surfacing a raw 500 for what is really just a concurrency conflict.
+      if (err?.code === 'P2002') {
+        return NextResponse.json(
+          { error: 'Someone else just created a new version of this quotation — refresh and try again' },
+          { status: 409 },
+        )
+      }
+      throw err
+    }
 
     void broadcastSaleOrders()
     return NextResponse.json(mapSaleOrderToClient(created), { status: 201 })

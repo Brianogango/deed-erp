@@ -2,7 +2,7 @@ import 'server-only'
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from './auth/server'
 import { isRoleAllowed } from './auth/authorization'
-import { loadAppState, saveStoreKeys } from './server-store'
+import { loadAppState, saveStoreKeys, withAppStateKeyLock } from './server-store'
 import { parsePaginationParams, paginateArray } from './api-pagination'
 
 type AnyRecord = Record<string, unknown>
@@ -52,6 +52,14 @@ export interface CrudConfig<T extends object> {
   validateWrite?: (next: T, previous: T | undefined) => string | null
   /** Roles allowed to write (POST/PATCH/DELETE). GET is open to any authenticated user. */
   allowedWriteRoles?: string[]
+  /**
+   * Opt-in: serialize concurrent writers to this collection with a
+   * transaction-scoped advisory lock (see withAppStateKeyLock). Without it,
+   * two concurrent writes to the same storeKey can silently lose one
+   * writer's change (read-modify-write with no row-level locking). Defaults
+   * to unset for backward compatibility with existing callers.
+   */
+  lockKey?: string
 }
 
 // ─── Handler factories ────────────────────────────────────────────────────────
@@ -124,18 +132,23 @@ export function makeCreateHandler<T extends object>(config: CrudConfig<T>) {
       preparedBody = prepared
     }
 
-    const items = await readCollection<T>(config.storeKey)
-    const result = config.build(preparedBody, items)
-    if (typeof result === 'string') return NextResponse.json({ error: result }, { status: 422 })
+    const run = async () => {
+      const items = await readCollection<T>(config.storeKey)
+      const result = config.build(preparedBody, items)
+      if (typeof result === 'string') return { error: result }
 
-    if (config.validateWrite) {
-      const writeError = config.validateWrite(result, undefined)
-      if (writeError) return NextResponse.json({ error: writeError }, { status: 422 })
+      if (config.validateWrite) {
+        const writeError = config.validateWrite(result, undefined)
+        if (writeError) return { error: writeError }
+      }
+
+      items.push(result)
+      await writeCollection(config.storeKey, items)
+      return { result }
     }
-
-    items.push(result)
-    await writeCollection(config.storeKey, items)
-    return NextResponse.json({ item: result }, { status: 201 })
+    const outcome = config.lockKey ? await withAppStateKeyLock(config.lockKey, run) : await run()
+    if (outcome.error) return NextResponse.json({ error: outcome.error }, { status: 422 })
+    return NextResponse.json({ item: outcome.result }, { status: 201 })
   }
 }
 
@@ -150,20 +163,26 @@ export function makePatchHandler<T extends object>(config: CrudConfig<T>) {
     const body = await parseBody(request)
     if (!body) return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
 
-    const items = await readCollection<T>(config.storeKey)
-    const idx = items.findIndex(i => (i as AnyRecord)['id'] === params.id)
-    if (idx === -1) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+    const run = async () => {
+      const items = await readCollection<T>(config.storeKey)
+      const idx = items.findIndex(i => (i as AnyRecord)['id'] === params.id)
+      if (idx === -1) return { notFound: true as const }
 
-    const previous = items[idx]
-    const next = { ...previous, ...body, id: params.id } as T
-    if (config.validateWrite) {
-      const writeError = config.validateWrite(next, previous)
-      if (writeError) return NextResponse.json({ error: writeError }, { status: 422 })
+      const previous = items[idx]
+      const next = { ...previous, ...body, id: params.id } as T
+      if (config.validateWrite) {
+        const writeError = config.validateWrite(next, previous)
+        if (writeError) return { error: writeError }
+      }
+
+      items[idx] = next
+      await writeCollection(config.storeKey, items)
+      return { result: items[idx] }
     }
-
-    items[idx] = next
-    await writeCollection(config.storeKey, items)
-    return NextResponse.json({ item: items[idx] })
+    const outcome = config.lockKey ? await withAppStateKeyLock(config.lockKey, run) : await run()
+    if (outcome.notFound) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+    if (outcome.error) return NextResponse.json({ error: outcome.error }, { status: 422 })
+    return NextResponse.json({ item: outcome.result })
   }
 }
 

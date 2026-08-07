@@ -47,7 +47,6 @@ import {
 } from '@/lib/sale-order-draft-edits'
 import {
   normalizeSaleOrdersForClient,
-  invoiceableQty as odooInvoiceableQty,
   saleOrderCancelBlockers,
   splitDeliveryForBackorder,
   initialDeliveryState,
@@ -60,7 +59,6 @@ import {
   remainingUndeliveredByProduct,
   openDeliveryDemandByProduct,
   saleOrderLooksConfirmed,
-  type InvoicePolicy,
 } from '@/lib/odoo-sales-flow'
 import { pairOrderLinesWithDeliveryLines, planPrepareDeliveryLines, sumQtyByProductId } from '@/lib/delivery-prepare'
 import {
@@ -10154,6 +10152,12 @@ const storeCtx: AppState = {
 
         addAuditLog('confirm_sale_order', serverRef, `Quotation ${snapshot.ref} confirmed into Sales Order ${serverRef} by ${user.name}${systemSettings.salesLockConfirmed ? ' · order locked' : ''}`)
         showToast(`${snapshot.ref} confirmed as ${serverRef} — prepare delivery ${del.ref} to allocate stock`)
+      } catch (error) {
+        console.error('[confirmSO] failed:', error)
+        showToast(
+          error instanceof Error ? error.message : `Could not confirm ${snapshot.ref} — try again`,
+          'error',
+        )
       } finally {
         confirmingSaleOrderIds.delete(id)
       }
@@ -10797,87 +10801,26 @@ const storeCtx: AppState = {
           showToast(`Draft invoice ${local.ref} created — post it to finalize`)
           return local
         }
-        if (payload?.error) {
-          showToast(payload.error, 'error')
-          return {} as Invoice
-        }
+        showToast(payload?.error || 'Could not create the invoice — try again', 'error')
+        return {} as Invoice
       } catch {
-        // Fall through to client path if server unavailable
-      }
-
-      // A partial-invoice request must never silently fall back to invoicing
-      // everything — that would invoice quantities the user explicitly chose
-      // not to invoice this round.
-      if (lineOverrides) {
-        showToast('Could not reach the server to create the partial invoice — try again', 'error')
+        // Do NOT fall back to a client-side invoice-creation path here. The
+        // server's create-invoice endpoint atomically bumps qtyInvoiced and
+        // creates the invoice inside one transaction with a guarded update —
+        // if this request actually reached the server and committed before
+        // the network dropped, a client-side fallback would create a SECOND
+        // invoice for the same delivered quantity. Retrying this same
+        // endpoint is safe (the guard makes it idempotent): if the first
+        // attempt already invoiced everything, the retry finds nothing left
+        // to invoice instead of duplicating it.
+        showToast(
+          lineOverrides
+            ? 'Could not reach the server to create the partial invoice — check your connection and retry'
+            : 'Could not reach the server to create the invoice — check your connection and retry',
+          'error',
+        )
         return {} as Invoice
       }
-
-      // Odoo-style invoicing fallback (client) when server path unavailable.
-      const itemLines = so.lines.filter((l: any) => l.lineType !== 'section')
-      const invoiceable = itemLines.map((l: any) => ({
-        line: l,
-        qtyToInvoice: odooInvoiceableQty({
-          qty: Number(l.qty) || 0,
-          qtyDelivered: Number(l.qtyDelivered) || 0,
-          qtyInvoiced: Number(l.qtyInvoiced) || 0,
-          // This workflow invoices fulfilled quantities only.
-          invoicePolicy: 'delivery' as InvoicePolicy,
-        }),
-      })).filter(entry => entry.qtyToInvoice > 0)
-
-      if (invoiceable.length === 0) {
-        showToast('Nothing to invoice on this order — quantities are already invoiced or not yet delivered', 'error')
-        return {} as Invoice
-      }
-
-      const invLines: InvoiceLine[] = invoiceable.map(({ line: l, qtyToInvoice }) => {
-        const unitNet = (Number(l.qty) || 0) > 0 ? (Number(l.subtotal) || 0) / Number(l.qty) : Number(l.unitPrice) || 0
-        return {
-          id: uid(), lineType: 'item', description: `${l.productName} ×${qtyToInvoice}`,
-          qty: qtyToInvoice, unitPrice: l.unitPrice, taxRate: l.taxRate,
-          subtotal: Math.round(unitNet * qtyToInvoice),
-          productId: l.productId, accountCode: l.accountCode,
-        }
-      })
-      const subtotal = invLines.reduce((s, l) => s + l.subtotal, 0)
-      const taxTotal = invLines.reduce((s, l) => s + Math.round(l.subtotal * (l.taxRate || 0) / 100), 0)
-      const total = subtotal + taxTotal
-      if (total < 1) {
-        showToast('Invoice total must be at least KES 1 — invoices below KES 1 cannot be created', 'error'); return {} as Invoice;
-      }
-
-      // The invoice is created in Draft: finance reviews and posts it, which
-      // assigns the official INV number, the accounting entry, and locks
-      // financial fields. Customer, addresses, payment terms and the source
-      // document all carry forward from the order.
-      const inv: Invoice = {
-        id: uid(), ref: draftInvoiceRef('customer_invoice'), type: 'customer_invoice', status: 'draft',
-        partnerId: so.customerId, partnerName: so.customerName,
-        date: now(), dueDate: addDays(now(), parseInt(so.paymentTerms ?? '', 10) || 30),
-        lines: invLines,
-        subtotal, taxTotal, total, amountPaid: 0,
-        invoiceAddress: so.invoiceAddress,
-        deliveryAddress: so.deliveryAddress,
-        saleOrderId: orderId, notes: `Source document: ${so.ref}`,
-      }
-      setInvoices(p => [inv, ...p])
-      sync('/api/invoices', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(inv) })
-
-      // Track invoiced quantities on the order lines; the order status itself
-      // stays "Sales Order" and its invoice status is derived from the ledger.
-      const invoicedByLine = new Map(invoiceable.map(({ line, qtyToInvoice }) => [line.id, qtyToInvoice]))
-      setSaleOrders(p => p.map(s => {
-        if (s.id !== orderId) return s;
-        const lines = s.lines.map((l: any) => invoicedByLine.has(l.id)
-          ? { ...l, qtyInvoiced: (Number(l.qtyInvoiced) || 0) + invoicedByLine.get(l.id)! }
-          : l)
-        const updated = { ...s, lines, invoiceId: inv.id }
-        sync(`/api/sale-orders/${orderId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
-        return updated
-      }))
-      addAuditLog('create_invoice_from_so', inv.ref, `Draft invoice created from ${so.ref}`)
-      showToast(`Draft invoice ${inv.ref} created — post it to finalize`); return inv
     },
     deleteSaleOrder: (id) => {
       const actor = currentUser()
