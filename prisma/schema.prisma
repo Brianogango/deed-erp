@@ -1334,6 +1334,9 @@ model SaleOrder {
   salespersonId   String?       @map("salesperson_id") @db.Uuid
   salespersonName String?       @map("salesperson_name") @db.VarChar(120)
   salesTeam       String?       @map("sales_team") @db.VarChar(120)
+  // Net payment terms in days (0 = due immediately). Previously only lived on
+  // the client-store blob and was silently dropped on server sync.
+  paymentTermsDays Int?         @map("payment_terms_days")
   // Sales Order confirmation metadata.
   confirmedAt     DateTime?     @map("confirmed_at")
   confirmedById   String?       @map("confirmed_by") @db.Uuid
@@ -1364,10 +1367,13 @@ model SaleOrder {
   customerAssets CustomerAsset[]
   reconfigurationWorkOrders ReconfigurationWorkOrder[]
 
+  @@unique([versionGroupId, versionNumber], map: "ux_sale_orders_version")
   @@index([clientId], map: "idx_sale_orders_client")
   @@index([createdById], map: "idx_sale_orders_created_by")
   @@index([clientId, status], map: "idx_sale_orders_client_status")
   @@index([versionGroupId], map: "idx_sale_orders_version_group")
+  @@index([status], map: "idx_sale_orders_status")
+  @@index([salespersonId], map: "idx_sale_orders_salesperson")
   @@map("sale_orders")
 }
 

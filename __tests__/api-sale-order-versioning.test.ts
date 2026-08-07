@@ -120,6 +120,14 @@ describe('POST /api/sale-orders/:id/new-version', () => {
     const res = await newVersionPOST(new NextRequest('http://localhost', { method: 'POST' }), { params: { id: ORDER_ID } })
     expect(res.status).toBe(404)
   })
+
+  it('returns a clean 409 (not a raw 500) when a concurrent request already claimed this version number', async () => {
+    const conflict = Object.assign(new Error('Unique constraint failed'), { code: 'P2002' })
+    mockPrismaSO.create.mockRejectedValue(conflict)
+    const res = await newVersionPOST(new NextRequest('http://localhost', { method: 'POST' }), { params: { id: ORDER_ID } })
+    expect(res.status).toBe(409)
+    expect((await res.json()).error).toMatch(/refresh and try again/i)
+  })
 })
 
 describe('GET /api/sale-orders/:id/versions', () => {
