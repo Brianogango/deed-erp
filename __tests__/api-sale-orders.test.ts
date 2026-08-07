@@ -5,6 +5,7 @@ const { mockGetSession, mockPrismaSO, mockResolveClientId, mockGetNextDocNumber 
   mockGetSession: vi.fn(),
   mockPrismaSO: {
     findMany: vi.fn(),
+    findUnique: vi.fn(),
     create: vi.fn(),
     count: vi.fn(),
   },
@@ -93,6 +94,7 @@ beforeEach(() => {
   mockGetSession.mockResolvedValue(session)
   mockResolveClientId.mockResolvedValue(CLIENT_ID)
   mockPrismaSO.count.mockResolvedValue(0)
+  mockPrismaSO.findUnique.mockResolvedValue(null)
   mockGetNextDocNumber.mockResolvedValue('SO-00001')
 })
 
@@ -239,6 +241,48 @@ describe('POST /api/sale-orders', () => {
     mockGetSession.mockRejectedValue(err401())
     const res = await POST(postReq({}))
     expect(res.status).toBe(401)
+  })
+
+  it('is idempotent: a repeat POST with the same client-generated id returns the existing order without creating a duplicate', async () => {
+    const customId = 'aaaabbbb-cccc-dddd-eeee-ffffaaaabbbb'
+    mockPrismaSO.findUnique.mockResolvedValue({ ...dbOrder, id: customId })
+    const res = await POST(postReq({ id: customId, clientId: CLIENT_ID, items: [] }))
+    expect(res.status).toBe(200)
+    expect((await res.json()).id).toBe(customId)
+    expect(mockPrismaSO.create).not.toHaveBeenCalled()
+  })
+
+  it('recomputes subtotal/tax/total from line items and ignores client-declared totals', async () => {
+    mockPrismaSO.create.mockResolvedValue(dbOrder)
+    const items = [{ productName: 'Laptop', qty: 2, unitPrice: 50000, taxRate: 16 }]
+    await POST(postReq({
+      clientId: CLIENT_ID,
+      items,
+      // Tampered/stale header totals — must be ignored.
+      subtotal: 1, taxTotal: 1, total: 1, discountAmount: 0,
+    }))
+    const createData = mockPrismaSO.create.mock.calls[0][0].data
+    expect(createData.subtotal).toBe(100000)
+    expect(createData.taxAmount).toBe(16000)
+    expect(createData.totalAmount).toBe(116000)
+    expect(createData.items.create[0].lineTotal).toBe(100000)
+  })
+
+  it('applies a header discount on top of recomputed line totals', async () => {
+    mockPrismaSO.create.mockResolvedValue(dbOrder)
+    const items = [{ productName: 'Laptop', qty: 1, unitPrice: 10000, taxRate: 0 }]
+    await POST(postReq({ clientId: CLIENT_ID, items, discountAmount: 1000 }))
+    const createData = mockPrismaSO.create.mock.calls[0][0].data
+    expect(createData.subtotal).toBe(10000)
+    expect(createData.discountAmount).toBe(1000)
+    expect(createData.totalAmount).toBe(9000)
+  })
+
+  it('persists paymentTermsDays from a legacy paymentTerms string', async () => {
+    mockPrismaSO.create.mockResolvedValue(dbOrder)
+    await POST(postReq({ clientId: CLIENT_ID, paymentTerms: '45 days' }))
+    const createData = mockPrismaSO.create.mock.calls[0][0].data
+    expect(createData.paymentTermsDays).toBe(45)
   })
 })
 

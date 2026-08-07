@@ -10,6 +10,8 @@ import { enforceSaleOrderApprovals } from '@/lib/sales-approval-enforcement.serv
 import { lockVersionMismatch, nextLockVersion, readExpectedVersion } from '@/lib/optimistic-lock'
 import { parsePaginationParams, paginatedResponse } from '@/lib/api-pagination'
 import { validateSaleOrderLines } from '@/lib/sale-order-line-validation'
+import { calcSaleOrderLineMoney, calcSaleOrderTotals } from '@/lib/sales/line-calc'
+import { quotationPaymentTermsDays, serializeQuotationPaymentTerms } from '@/lib/sales/quotation-defaults'
 
 async function broadcastSaleOrders() {
   try {
@@ -33,6 +35,12 @@ function mapSaleOrderToClient(order: any) {
     salespersonName: order.salespersonName ?? undefined,
     salesTeam: order.salesTeam ?? undefined,
     sentMessage: order.sentMessage ?? undefined,
+    // paymentTermsDays is the durable column; the client historically reads a
+    // display string. Reconstruct it so the value survives a server round-trip
+    // instead of silently disappearing (it was never persisted before).
+    paymentTerms: order.paymentTermsDays != null
+      ? serializeQuotationPaymentTerms(Number(order.paymentTermsDays))
+      : undefined,
     customerId: order.clientId,
     customerName: order.client?.name ?? '',
     date: order.orderDate ? new Date(order.orderDate).toISOString().slice(0, 10) : '',
@@ -66,17 +74,23 @@ function mapSaleOrderToClient(order: any) {
 }
 
 function mapSaleOrderItems(lines: any[]) {
-  return lines.map((item: any) => ({
-    productId: optionalUuid(item.productId),
-    description: item.description ?? item.productName ?? 'Item',
-    qty: Math.max(0, Number(item.qty ?? 1) || 0),
-    unitPrice: Math.max(0, Number(item.unitPrice ?? 0) || 0),
-    taxRate: Math.max(0, Number(item.taxRate ?? 0) || 0),
-    lineTotal: Math.max(0, Number(item.lineTotal ?? item.subtotal ?? 0) || 0),
-    notes: item.notes ?? null,
-    serialNumberId: optionalUuid(item.serialNumberId ?? item.serialIds?.[0]),
-    qtyInvoiced: Math.max(0, Number(item.qtyInvoiced ?? 0) || 0),
-  }))
+  return lines.map((item: any) => {
+    const qty = Math.max(0, Number(item.qty ?? 1) || 0)
+    // lineTotal is recomputed from qty × unitPrice × (1 − discount%), never
+    // trusted from the client (P0 totals-integrity — matches PUT/PATCH).
+    const money = calcSaleOrderLineMoney({ ...item, qty })
+    return {
+      productId: optionalUuid(item.productId),
+      description: item.description ?? item.productName ?? 'Item',
+      qty,
+      unitPrice: money.unitPrice,
+      taxRate: money.taxRate,
+      lineTotal: money.lineTotal,
+      notes: item.notes ?? null,
+      serialNumberId: optionalUuid(item.serialNumberId ?? item.serialIds?.[0]),
+      qtyInvoiced: Math.max(0, Number(item.qtyInvoiced ?? 0) || 0),
+    }
+  })
 }
 
 export async function GET(request: Request) {
@@ -147,6 +161,21 @@ export async function POST(request: Request) {
     if (lineError) {
       return NextResponse.json({ error: lineError }, { status: 400 })
     }
+
+    // Idempotent create: the client generates its own id before syncing, so a
+    // retried/duplicated request (network retry, double-submit that reused
+    // the same in-flight object) returns the already-created order instead of
+    // erroring on the primary-key conflict or, worse, creating a duplicate.
+    if (isUUID(body.id)) {
+      const already = await prisma.saleOrder.findUnique({
+        where: { id: body.id },
+        include: { client: true, items: true },
+      })
+      if (already) {
+        return NextResponse.json(mapSaleOrderToClient(already), { status: 200 })
+      }
+    }
+
     const clientId = await resolveClientId(prisma, body.clientId ?? body.customerId, body)
     let orderNumber = body.orderNumber ?? body.ref
 
@@ -155,6 +184,10 @@ export async function POST(request: Request) {
       const status = normalizeSaleStatus(body.status)
       orderNumber = await getNextDocNumber(status === 'sale' || status === 'cancelled' ? 'sale_order' : 'quotation')
     }
+
+    // Totals are recomputed from the line items server-side (never trusted
+    // from the client) — mirrors lib/finance-invoice.ts's invoice totals.
+    const totals = calcSaleOrderTotals(rawItems, { headerDiscount: body.discountAmount })
 
     const order = await prisma.saleOrder.create({
       data: {
@@ -168,10 +201,10 @@ export async function POST(request: Request) {
         orderDate: new Date(body.orderDate ?? body.date ?? Date.now()),
         deliveryDate: body.deliveryDate ? new Date(body.deliveryDate) : null,
         validUntil: body.validUntil ? new Date(body.validUntil) : null,
-        subtotal: Number(body.subtotal ?? 0),
-        taxAmount: Number(body.taxAmount ?? body.taxTotal ?? 0),
-        discountAmount: Number(body.discountAmount ?? 0),
-        totalAmount: Number(body.totalAmount ?? body.total ?? 0),
+        subtotal: totals.subtotal,
+        taxAmount: totals.taxAmount,
+        discountAmount: totals.discountAmount,
+        totalAmount: totals.totalAmount,
         amountPaid: Number(body.amountPaid ?? 0),
         notes: body.notes ?? null,
         customerRef: body.customerRef ?? null,
@@ -184,6 +217,9 @@ export async function POST(request: Request) {
         salespersonId: optionalUuid(body.salespersonId),
         salespersonName: body.salespersonName ?? null,
         salesTeam: body.salesTeam ?? null,
+        paymentTermsDays: body.paymentTermsDays !== undefined || body.paymentTerms !== undefined
+          ? quotationPaymentTermsDays({ paymentTermsDays: body.paymentTermsDays, paymentTerms: body.paymentTerms })
+          : null,
         quoteId: optionalUuid(body.quoteId),
         items: {
           create: mapSaleOrderItems(rawItems),

@@ -19,6 +19,8 @@ import { validateSaleOrderLines } from '@/lib/sale-order-line-validation'
 import { buildSaleOrderItemsNestedWrite } from '@/lib/sale-order-items-write'
 import { assertSaleOrderCreditOnConfirm } from '@/lib/sale-order-credit.server'
 import { assertQuoteNotExpired } from '@/lib/sale-order-expiry'
+import { calcSaleOrderTotals, calcSaleOrderTotalsFromPersistedLines } from '@/lib/sales/line-calc'
+import { quotationPaymentTermsDays, serializeQuotationPaymentTerms } from '@/lib/sales/quotation-defaults'
 
 async function broadcastSaleOrders() {
   try {
@@ -57,6 +59,9 @@ function mapSaleOrderToClient(order: any) {
     salespersonName: order.salespersonName ?? undefined,
     salesTeam: order.salesTeam ?? undefined,
     sentMessage: order.sentMessage ?? undefined,
+    paymentTerms: order.paymentTermsDays != null
+      ? serializeQuotationPaymentTerms(Number(order.paymentTermsDays))
+      : undefined,
     customerId: order.clientId,
     customerName: order.client?.name ?? '',
     date: order.orderDate ? new Date(order.orderDate).toISOString().slice(0, 10) : '',
@@ -89,7 +94,8 @@ function mapSaleOrderToClient(order: any) {
   }
 }
 
-async function buildSaleOrderUpdateData(body: any, existingItems: any[] = []) {
+async function buildSaleOrderUpdateData(body: any, existing: any) {
+  const existingItems: any[] = existing?.items ?? []
   const data: Record<string, any> = {}
 
   if (body.orderNumber !== undefined || body.ref !== undefined) data.orderNumber = body.orderNumber ?? body.ref
@@ -111,16 +117,15 @@ async function buildSaleOrderUpdateData(body: any, existingItems: any[] = []) {
   if (body.salespersonId !== undefined) data.salespersonId = optionalUuid(body.salespersonId) ?? null
   if (body.salespersonName !== undefined) data.salespersonName = body.salespersonName ?? null
   if (body.salesTeam !== undefined) data.salesTeam = body.salesTeam ?? null
+  if (body.paymentTermsDays !== undefined || body.paymentTerms !== undefined) {
+    data.paymentTermsDays = quotationPaymentTermsDays({ paymentTermsDays: body.paymentTermsDays, paymentTerms: body.paymentTerms })
+  }
   if (body.confirmedAt !== undefined) data.confirmedAt = body.confirmedAt ? new Date(body.confirmedAt) : null
   if (body.confirmedById !== undefined) data.confirmedById = optionalUuid(body.confirmedById) ?? null
   if (body.locked !== undefined) data.locked = Boolean(body.locked)
   if (body.customerRef !== undefined) data.customerRef = body.customerRef ?? null
   if (body.invoiceAddress !== undefined) data.invoiceAddress = body.invoiceAddress ?? null
   if (body.deliveryAddress !== undefined) data.deliveryAddress = body.deliveryAddress ?? null
-  if (body.subtotal !== undefined) data.subtotal = Number(body.subtotal ?? 0)
-  if (body.taxAmount !== undefined || body.taxTotal !== undefined) data.taxAmount = Number(body.taxAmount ?? body.taxTotal ?? 0)
-  if (body.discountAmount !== undefined) data.discountAmount = Number(body.discountAmount ?? 0)
-  if (body.totalAmount !== undefined || body.total !== undefined) data.totalAmount = Number(body.totalAmount ?? body.total ?? 0)
   if (body.amountPaid !== undefined) data.amountPaid = Number(body.amountPaid ?? 0)
   if (body.notes !== undefined) data.notes = body.notes ?? null
   if (body.quoteId !== undefined) data.quoteId = optionalUuid(body.quoteId) ?? null
@@ -130,12 +135,30 @@ async function buildSaleOrderUpdateData(body: any, existingItems: any[] = []) {
   }
 
   const rawItems = body.items ?? body.lines
-  if (Array.isArray(rawItems)) {
+  const itemsChanging = Array.isArray(rawItems)
+  if (itemsChanging) {
     // Upsert by stable line id — avoid deleteMany+create UUID churn (Phase 5).
     const nested = buildSaleOrderItemsNestedWrite(rawItems, existingItems)
     data.items = Object.fromEntries(
       Object.entries(nested).filter(([, v]) => v !== undefined),
     )
+  }
+
+  // Header totals (subtotal / tax / discount / total) are ALWAYS recomputed
+  // server-side — never trusted from the client body — whenever the lines or
+  // the header discount actually change (P0 totals-integrity). A request that
+  // touches neither leaves the stored totals untouched, since nothing that
+  // could move them was submitted.
+  const discountProvided = body.discountAmount !== undefined
+  if (itemsChanging || discountProvided) {
+    const headerDiscount = discountProvided ? body.discountAmount : existing?.discountAmount ?? 0
+    const totals = itemsChanging
+      ? calcSaleOrderTotals(rawItems, { headerDiscount })
+      : calcSaleOrderTotalsFromPersistedLines(existingItems, headerDiscount)
+    data.subtotal = totals.subtotal
+    data.taxAmount = totals.taxAmount
+    data.discountAmount = totals.discountAmount
+    data.totalAmount = totals.totalAmount
   }
 
   return data
@@ -261,7 +284,12 @@ async function enforceSaleWorkflow(
   // Auto-locking during confirmation (Lock Confirmed Sales) is part of the
   // confirm action itself and does not require director rights.
   const lockingOnConfirm = to === 'sale' && from !== 'sale' && body.locked === true
-  if (lockChangeRequested && !isDirector && !lockingOnConfirm) {
+  // Resetting a locked confirmed order back to quotation ("Set to Quotation")
+  // is a documented Finance/Director action (checked separately below) and
+  // always unlocks as part of that same request — it must not be blocked
+  // here just because the requester isn't specifically a director.
+  const unlockingOnReset = to === 'quotation' && from === 'sale' && body.locked === false
+  if (lockChangeRequested && !isDirector && !lockingOnConfirm && !unlockingOnReset) {
     return NextResponse.json({ error: 'Only a director can lock or unlock a confirmed order' }, { status: 403 })
   }
   // Phase C: confirmed sales orders freeze commercial fields for everyone
@@ -366,6 +394,10 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
       }
     }
 
+    const data = await buildSaleOrderUpdateData(body, existing)
+    const workflowError = await enforceSaleWorkflow(existing, body, data, session)
+    if (workflowError) return workflowError
+
     const confirming = to === 'sale' && from !== 'sale'
     if (confirming) {
       const expiry = assertQuoteNotExpired(body.validUntil ?? existing.validUntil)
@@ -374,17 +406,35 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
       }
       const credit = await assertSaleOrderCreditOnConfirm({
         clientId: existing.clientId,
-        orderTotal: Number(body.totalAmount ?? body.total ?? existing.totalAmount ?? 0),
+        // Use the server-recomputed total (not the client-declared one) so a
+        // fabricated low total cannot sneak an order under the credit limit.
+        orderTotal: Number(data.totalAmount ?? existing.totalAmount ?? 0),
         role: session.user.role,
       })
       if (!credit.ok) {
         return NextResponse.json({ error: credit.error }, { status: credit.status })
       }
-    }
 
-    const data = await buildSaleOrderUpdateData(body, existing.items ?? [])
-    const workflowError = await enforceSaleWorkflow(existing, body, data, session)
-    if (workflowError) return workflowError
+      // Reserve stock BEFORE persisting the status flip (not after). If the
+      // process crashes between these two steps, the order is left as an
+      // unconfirmed quotation with an orphaned-but-recoverable reservation —
+      // never a "confirmed" Sales Order silently holding zero reserved stock.
+      try {
+        const reserveResult = await reserveStockForSaleOrder(params.id, session.user.id)
+        if (!reserveResult.ok) {
+          return NextResponse.json(
+            { error: reserveResult.error || 'Could not reserve stock for this order' },
+            { status: 409 },
+          )
+        }
+      } catch (err) {
+        console.error('[sale-orders] reserveStockForSaleOrder threw:', err)
+        return NextResponse.json(
+          { error: 'Stock reservation failed — order was not confirmed. Try again or confirm without reservation.' },
+          { status: 409 },
+        )
+      }
+    }
 
     data.lockVersion = nextLockVersion(existing.lockVersion)
 
@@ -394,8 +444,8 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
       include: { client: true, items: true },
     })
 
-    // Confirm/cancel side-effects. Reservation failure rolls the SO back so we
-    // never leave a "sale" with no stock held (Phase 1).
+    // Cancel side-effects (confirm side-effects already happened above, before
+    // the status flip was persisted).
     try {
       if (confirming) {
         await writeFinancialAudit({
@@ -406,43 +456,6 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
           oldValues: { status: from },
           newValues: { status: 'sale' },
         }).catch(() => {})
-        try {
-          const reserveResult = await reserveStockForSaleOrder(params.id, session.user.id)
-          if (!reserveResult.ok) {
-            await prisma.saleOrder.update({
-              where: { id: params.id },
-              data: {
-                status: from,
-                confirmedAt: null,
-                confirmedById: null,
-                locked: existing.locked,
-                lockVersion: nextLockVersion(order.lockVersion),
-              },
-            })
-            void broadcastSaleOrders()
-            return NextResponse.json(
-              { error: reserveResult.error || 'Could not reserve stock for this order' },
-              { status: 409 },
-            )
-          }
-        } catch (err) {
-          console.error('[sale-orders] reserveStockForSaleOrder threw:', err)
-          await prisma.saleOrder.update({
-            where: { id: params.id },
-            data: {
-              status: from,
-              confirmedAt: null,
-              confirmedById: null,
-              locked: existing.locked,
-              lockVersion: nextLockVersion(order.lockVersion),
-            },
-          }).catch(() => {})
-          void broadcastSaleOrders()
-          return NextResponse.json(
-            { error: 'Stock reservation failed — order was not confirmed. Try again or confirm without reservation.' },
-            { status: 409 },
-          )
-        }
       }
       if (to === 'cancelled' && from !== 'cancelled') {
         // Route already wrote cancelled; release reservations without re-validating status.

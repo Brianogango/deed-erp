@@ -248,6 +248,67 @@ describe('sale-order workflow enforcement (server-side)', () => {
     const res = await PUT(putReq({ status: 'sale' }), params)
     expect(res.status).toBe(404)
   })
+
+  it('recomputes header totals from submitted lines and ignores a tampered client total', async () => {
+    mockPrismaSO.findUnique.mockResolvedValue(baseOrder)
+    const res = await PUT(putReq({
+      lines: [{ productId: null, description: 'Laptop', qty: 2, unitPrice: 50000, taxRate: 16 }],
+      // Fabricated / stale — must be ignored.
+      total: 1, subtotal: 1, taxTotal: 1,
+    }), params)
+    expect(res.status).toBe(200)
+    const data = mockPrismaSO.update.mock.calls[0][0].data
+    expect(data.subtotal).toBe(100000)
+    expect(data.taxAmount).toBe(16000)
+    expect(data.totalAmount).toBe(116000)
+  })
+
+  it('recomputes totals from a new header discount without resubmitting lines', async () => {
+    mockPrismaSO.findUnique.mockResolvedValue(baseOrder)
+    const res = await PUT(putReq({ discountAmount: 2000 }), params)
+    expect(res.status).toBe(200)
+    const data = mockPrismaSO.update.mock.calls[0][0].data
+    // baseOrder items: persisted lineTotal 10000, 16% tax on that.
+    expect(data.subtotal).toBe(10000)
+    expect(data.taxAmount).toBe(1600)
+    expect(data.discountAmount).toBe(2000)
+    expect(data.totalAmount).toBe(9600)
+  })
+
+  it('does not touch stored totals when neither lines nor discount change', async () => {
+    mockPrismaSO.findUnique.mockResolvedValue(baseOrder)
+    await PUT(putReq({ notes: 'just a note' }), params)
+    const data = mockPrismaSO.update.mock.calls[0][0].data
+    expect(data.subtotal).toBeUndefined()
+    expect(data.totalAmount).toBeUndefined()
+  })
+
+  it('reserves stock before persisting the confirm status flip, and never writes the status if reservation fails', async () => {
+    mockPrismaSO.findUnique.mockResolvedValue(baseOrder)
+    mockReserveStock.mockResolvedValue({ ok: false, error: 'Insufficient stock' })
+    const res = await PUT(putReq({ status: 'sale' }), params)
+    expect(res.status).toBe(409)
+    expect(mockPrismaSO.update).not.toHaveBeenCalled()
+  })
+
+  it('finance_officer may reset a locked confirmed order back to quotation (unlock + reset in one request)', async () => {
+    mockGetSession.mockResolvedValue(sessionFor('finance_officer'))
+    mockPrismaSO.findUnique.mockResolvedValue({ ...baseOrder, status: 'sale', locked: true })
+    const res = await PUT(putReq({ status: 'quotation', locked: false }), params)
+    expect(res.status).toBe(200)
+  })
+
+  it('still blocks a sales_rep from resetting a locked confirmed order', async () => {
+    mockGetSession.mockResolvedValue(sessionFor('sales_rep'))
+    mockPrismaSO.findUnique.mockResolvedValue({ ...baseOrder, status: 'sale', locked: true })
+    const res = await PUT(putReq({ status: 'quotation', locked: false }), params)
+    // Blocked by the sale→quotation transition gate itself (409), before the
+    // lock-toggle exemption is ever reached — a sales_rep still cannot reset
+    // a confirmed order to quotation, locked or not.
+    expect(res.status).toBe(409)
+    expect((await res.json()).error).toMatch(/Only Finance or Director/i)
+    expect(mockPrismaSO.update).not.toHaveBeenCalled()
+  })
 })
 
 // ── DELETE /api/sale-orders/:id (FIN-001 soft-cancel) ─────────────────────────
