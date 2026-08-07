@@ -69,6 +69,11 @@ enum StockMovementType {
   transfer
   write_off
   opening_stock
+  // Device reconfiguration: a component physically removed from a device
+  // returning to bulk stock (pending_testing/quarantine), or a component
+  // consumed from bulk stock to install into a device.
+  reconfiguration_in
+  reconfiguration_out
 
   @@map("stock_movement_type")
 }
@@ -859,6 +864,7 @@ model Product {
   images             ProductImage[]
   serials            SerialNumber[]
   stockLevel         StockLevel?
+  bulkStockLevels    BulkStockLevel[]
   stockMovements     StockMovement[]
   adjItems           StockAdjustmentItem[]
   poItems            PurchaseOrderItem[]
@@ -977,6 +983,29 @@ model StockLevel {
   @@map("stock_levels")
 }
 
+/**
+ * Location/bin-level bulk stock (e.g. warehouse, shop, pending_testing,
+ * quarantine) — the relational counterpart of the legacy deed_bulkStock
+ * blob array ({productId, location, qty}). StockLevel above tracks only an
+ * aggregate qtyOnHand with no location dimension; this table is the
+ * durable, queryable source for "how much of this product is sitting in
+ * THIS specific bin right now" (used first by device reconfiguration's
+ * component remove/install stock moves).
+ */
+model BulkStockLevel {
+  id        String   @id @default(uuid()) @db.Uuid
+  productId String   @map("product_id") @db.Uuid
+  location  String   @default("warehouse") @db.VarChar(30)
+  qty       Int      @default(0)
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([productId, location], map: "uq_bulk_stock_product_location")
+  @@index([location], map: "idx_bulk_stock_location")
+  @@map("bulk_stock_levels")
+}
+
 // Synced from database/migrations/20260625_inventory_foundation_safe.sql
 model InventoryBatch {
   id                String    @id @default(uuid()) @db.Uuid
@@ -1062,14 +1091,27 @@ model StockMovement {
   notes          String?
   createdById    String?           @map("created_by") @db.Uuid
   createdAt      DateTime          @default(now()) @map("created_at")
+  // Columns below already existed on production (added out-of-band ahead of
+  // this schema catching up) — documented here so Prisma matches reality.
+  /** Blob deed_stockMoves id this row mirrors, when backfilled/synced from the blob. */
+  blobId         String?           @map("blob_id") @db.VarChar(80)
+  // Bin/location this movement moved stock out of or into (e.g. warehouse,
+  // shop, pending_testing, quarantine). Null for movements with no
+  // location dimension.
+  fromLocation   String?           @map("from_location") @db.VarChar(40)
+  toLocation     String?           @map("to_location") @db.VarChar(40)
+  documentRef    String?           @map("document_ref") @db.VarChar(80)
+  serialNumbers  String[]          @default([]) @map("serial_numbers")
 
   product      Product       @relation(fields: [productId], references: [id])
   serialNumber SerialNumber? @relation(fields: [serialNumberId], references: [id])
   createdBy    User?         @relation(fields: [createdById], references: [id])
 
+  @@unique([blobId], map: "uq_stock_movements_blob_id")
   @@index([productId], map: "idx_stock_movements_product")
   @@index([referenceType, referenceId], map: "idx_stock_movements_ref")
   @@index([createdAt], map: "idx_stock_movements_date")
+  @@index([documentRef], map: "idx_stock_movements_document_ref")
   @@map("stock_movements")
 }
 
