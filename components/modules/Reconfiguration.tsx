@@ -337,7 +337,10 @@ export default function Reconfiguration() {
                   </ul>
                 ) : (
                   <p className="text-amber-700">
-                    No installed components recorded. Seed them via the configuration API before a precise physical diff.
+                    No installed components recorded for this device. If it already has RAM/storage
+                    fitted, this reconfiguration cannot detect that and will NOT automatically return
+                    the removed parts to inventory — after completing, log them manually via
+                    Inventory → Stock Adjustment (add the removed RAM/SSD to Pending testing).
                   </p>
                 )}
               </div>
