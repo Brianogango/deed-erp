@@ -18,15 +18,19 @@ describe('appStateKeysForRoute', () => {
     expect(keys).not.toContain('deed_journalEntries')
   })
 
-  it('hydrates CRM routes with CRM entities (not full sales/stock catalogs)', () => {
+  it('hydrates CRM routes with CRM entities plus SaleOrders (not full stock catalogs)', () => {
     const keys = appStateKeysForRoute('/crm')
     expect(keys).toEqual(expect.arrayContaining([
       'deed_quotes',
       'deed_contacts',
       'deed_companies',
       'deed_opportunities',
+      // Needed so an opportunity's detail view can show the client's real
+      // Sales module quotations/orders — CRM's own deed_quotes are rarely
+      // populated since "New quotation" in Sales creates a SaleOrder, not
+      // a Quote (see components/crm/OpportunityDetail.tsx).
+      'deed_saleOrders',
     ]))
-    expect(keys).not.toContain('deed_saleOrders')
     expect(keys).not.toContain('deed_products')
   })
 

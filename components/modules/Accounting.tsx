@@ -686,9 +686,16 @@ function AccountingContent() {
       categoryRows.set(key, row)
     }
 
+    // createPOSOrder (lib/store.tsx) posts a fully-paid customer_invoice for
+    // every POS sale (notes: `POS ${order.ref}`) — that invoice's lines are
+    // NOT excluded here, they would double-count revenue/cost/cashCollected
+    // against the SAME sale's raw POSOrder record already summed below via
+    // monthPosOrders. Excluding POS-tagged invoices makes each POS sale
+    // count exactly once, via its richer original POSOrder line data.
     const postedCustomerInvoices = customerInvoices.filter(i =>
       invoiceDocState(i.status) === 'posted' &&
-      monthKey(i.date) === monthlyReportMonth
+      monthKey(i.date) === monthlyReportMonth &&
+      !i.notes?.startsWith('POS ')
     )
     postedCustomerInvoices.forEach(invoice => {
       invoice.lines.forEach(line => {

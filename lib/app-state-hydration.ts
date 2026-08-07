@@ -40,6 +40,11 @@ const ROUTE_APP_STATE_KEYS: Record<string, string[]> = {
   ],
   '/sales': ['deed_saleOrders', 'deed_quotes', 'deed_products', 'deed_serials', 'deed_invoices', 'deed_deliveries', 'deed_contacts', 'deed_warranties', 'deed_bulkStock', 'deed_stockReservations', 'deed_approvalRequests', 'deed_bankAccounts', 'deed_documentPaymentDetails'],
   // CRM needs companies/opportunities/contacts — not the full sales + stock catalogs.
+  // deed_saleOrders is included (lean fields only matter for the client-side
+  // join below) so an opportunity's detail view can show the real Sales
+  // module quotations/orders for that client — CRM's own deed_quotes are a
+  // separate, mostly-unused document type never actually created from the
+  // live Sales UI (which creates SaleOrders directly).
   '/crm': [
     'deed_quotes',
     'deed_contacts',
@@ -48,6 +53,7 @@ const ROUTE_APP_STATE_KEYS: Record<string, string[]> = {
     'deed_opportunities',
     'deed_customerContracts',
     'deed_approvalRequests',
+    'deed_saleOrders',
   ],
   '/purchases': ['deed_products', 'deed_purchaseOrders', 'deed_receipts', 'deed_invoices', 'deed_purchaseReturns', 'deed_contacts', 'deed_bulkStock', 'deed_serials'],
   '/purchase': ['deed_products', 'deed_purchaseOrders', 'deed_receipts', 'deed_invoices', 'deed_purchaseReturns', 'deed_contacts', 'deed_bulkStock', 'deed_serials'],
