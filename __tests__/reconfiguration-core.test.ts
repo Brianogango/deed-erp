@@ -11,6 +11,7 @@ import {
 } from '@/lib/reconfiguration/costing'
 import { buildDisplayName, buildSpecsString, parseSpecsString } from '@/lib/reconfiguration/display-name'
 import { canTransition, nextStatus } from '@/lib/reconfiguration/state-machine'
+import { buildReservationId } from '@/lib/reconfiguration/service'
 import type { InstalledComponentView } from '@/lib/reconfiguration/types'
 import { planComponentInstall, planComponentRemoval, isSellableLocation } from '@/lib/inventory/reconfiguration-stock'
 
@@ -273,6 +274,21 @@ describe('costing & pricing', () => {
 
   it('builds idempotent completion keys', () => {
     expect(reconfigCompletionEventKey('abc')).toBe('RCF-COMPLETE:abc')
+  })
+})
+
+describe('buildReservationId', () => {
+  // Regression: rsv_rcf_<uuid>_<uuid> is always exactly 81 chars, which
+  // overflowed the previous VarChar(80) columns on every reserve — the
+  // schema has since been widened to VarChar(120), but this pins the
+  // format's actual length so a future change can't silently regress it.
+  it('produces a stable, always-81-char id for two UUIDs, comfortably within VarChar(120)', () => {
+    const workOrderId = '570efd10-03e7-4880-8bab-276b046a70cd'
+    const lineId = '31db7ca4-a474-4873-9b7d-6f1076959120'
+    const id = buildReservationId(workOrderId, lineId)
+    expect(id).toBe(`rsv_rcf_${workOrderId}_${lineId}`)
+    expect(id.length).toBe(81)
+    expect(id.length).toBeLessThanOrEqual(120)
   })
 })
 

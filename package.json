@@ -14,6 +14,7 @@
     "migrate:device-reconfiguration:safe": "node scripts/run-safe-device-reconfiguration.mjs",
     "migrate:delivery-note-invoice-nullable:safe": "node scripts/run-safe-delivery-note-invoice-nullable.mjs",
     "migrate:sales-integrity:safe": "node scripts/run-safe-sales-integrity.mjs",
+    "migrate:reconfiguration-reservation-id-width:safe": "node scripts/run-safe-reconfiguration-reservation-id-width.mjs",
     "backfill:accounting": "node scripts/backfill-accounting-to-prisma.mjs",
     "screenshots:core": "node scripts/capture-visual-regression.mjs",
     "analyze": "ANALYZE=true npm run build",
