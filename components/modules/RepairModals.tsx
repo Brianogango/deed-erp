@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { useRepairStore, RepairOrder, fmtKes, type RepairQAItem } from '@/lib/store'
 import { DIRECT_REPAIR_WAIVER_TEXT } from '@/lib/repair-path'
 import {
@@ -354,9 +355,17 @@ function ProductPicker({ value, productId, onSelect, products, requireInventory,
 
   // The quote-lines table this picker lives in clips overflowing content
   // (rounded-2xl ... overflow-hidden), so a plain position:absolute dropdown
-  // gets cut off / hidden behind later rows. Rendering it position:fixed at
-  // the input's live viewport coordinates lets it escape that clipping —
-  // same technique already used for the Sales quotation product picker.
+  // gets cut off / hidden behind later rows. Computing viewport coordinates
+  // from the input's getBoundingClientRect() and rendering position:fixed
+  // escapes that — BUT this picker also lives inside <Modal>, whose box has
+  // `animation: modalIn ... both`. The `both` fill-mode keeps the keyframe's
+  // `transform: translateY(0) scale(1)` applied forever after the animation
+  // ends (never reverts to `transform: none`), and any non-none transform on
+  // an ancestor makes IT the containing block for fixed descendants instead
+  // of the viewport — silently breaking these getBoundingClientRect()-based
+  // coordinates (the dropdown renders, just at the wrong place, off-screen).
+  // Portalling the dropdown to document.body sidesteps that entirely: it is
+  // no longer a descendant of the transformed modal box.
   const openDropdown = () => {
     const rect = inputRef.current?.getBoundingClientRect()
     if (!rect) { setOpen(true); return }
@@ -418,10 +427,10 @@ function ProductPicker({ value, productId, onSelect, products, requireInventory,
       {isError && (
         <p className="text-[9px] font-bold text-red-500 mt-0.5 ml-1">Must be selected from inventory</p>
       )}
-      {open && dropdownPos && matches.length > 0 && (
+      {open && dropdownPos && matches.length > 0 && typeof document !== 'undefined' && createPortal(
         <div
           ref={dropdownRef}
-          className="fixed z-[9300] rounded-xl border border-[var(--border)] bg-[var(--bg-card)] shadow-xl overflow-hidden"
+          className="fixed z-[9700] rounded-xl border border-[var(--border)] bg-[var(--bg-card)] shadow-xl overflow-hidden"
           style={{
             left: dropdownPos.left,
             width: dropdownPos.width,
@@ -455,12 +464,13 @@ function ProductPicker({ value, productId, onSelect, products, requireInventory,
               </span>
             </button>
           ))}
-        </div>
+        </div>,
+        document.body,
       )}
-      {open && dropdownPos && query.length > 1 && matches.length === 0 && requireInventory && (
+      {open && dropdownPos && query.length > 1 && matches.length === 0 && requireInventory && typeof document !== 'undefined' && createPortal(
         <div
           ref={dropdownRef}
-          className="fixed z-[9300] rounded-xl border border-[var(--border)] bg-[var(--bg-card)] shadow-xl px-3 py-3 text-center"
+          className="fixed z-[9700] rounded-xl border border-[var(--border)] bg-[var(--bg-card)] shadow-xl px-3 py-3 text-center"
           style={{
             left: dropdownPos.left,
             width: dropdownPos.width,
@@ -469,7 +479,8 @@ function ProductPicker({ value, productId, onSelect, products, requireInventory,
         >
           <p className="text-[10px] font-bold text-[var(--text-3)]">No inventory match for "{query}"</p>
           <p className="text-[9px] text-[var(--text-4)] mt-0.5">Add the product to inventory first, then quote it here.</p>
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   )
