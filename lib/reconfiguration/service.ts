@@ -191,7 +191,12 @@ export async function getDeviceConfiguration(serialId: string) {
     productName: (prismaSerial as any)?.product?.name || blob?.productName || product?.name,
     location: blob?.location || 'warehouse',
     status: blob?.status || prismaSerial?.status || 'available',
-    specs: blob?.specs || current.displayName,
+    // Prefer the live structured snapshot's displayName over the denormalized
+    // blob field — the snapshot is the source of truth completeWorkOrder
+    // promotes on every reconfiguration, while deed_serials.specs is a
+    // best-effort mirror that can lag behind it (see syncBlobSpecs). Only
+    // fall back to the blob string when there is no snapshot at all.
+    specs: current.displayName || blob?.specs,
     current,
     installed: installs.map(i => mapInstallation(i, i.componentProduct?.name)),
     costBefore: cost ? dec(cost.currentCost) : dec((prismaSerial as any)?.product?.costPrice || product?.costPrice),
@@ -306,7 +311,7 @@ export async function seedInstalledComponents(params: {
     update: {},
   })
 
-  await syncBlobSpecs(device.blobSerialId || device.serialId, specsFromProposed(config))
+  await syncBlobSpecs(device.blobSerialId || device.serialId, specsFromProposed(config), device.manufacturerSerial)
 
   return { installed: created, config }
 }
@@ -315,10 +320,21 @@ async function costExists(_serialId: string) {
   return true
 }
 
-async function syncBlobSpecs(serialId: string, specs: string) {
+// Exported for regression testing (see __tests__/reconfiguration-sync-blob-specs.test.ts).
+export async function syncBlobSpecs(serialId: string, specs: string, manufacturerSerial?: string) {
   const state = await loadAppState(['deed_serials'])
   const serials = Array.isArray(state.deed_serials) ? [...(state.deed_serials as any[])] : []
-  const idx = serials.findIndex(s => s.id === serialId || s.serial === serialId)
+  // A blob deed_serials row is not guaranteed to share the Prisma serial's
+  // UUID (legacy/partially-mirrored records) — without the manufacturerSerial
+  // fallback this silently no-ops (idx < 0 → return) whenever the ids
+  // diverge, leaving deed_serials.specs stuck on the pre-reconfiguration
+  // value even though the status update a few lines below in
+  // completeWorkOrder DOES fall back to manufacturerSerial and succeeds.
+  // That mismatch is exactly what produced "status is available again but
+  // specs still show the old config" after a completed reconfiguration.
+  const idx = serials.findIndex(
+    s => s.id === serialId || s.serial === serialId || (manufacturerSerial && s.serial === manufacturerSerial),
+  )
   if (idx < 0) return
   serials[idx] = { ...serials[idx], specs }
   await saveStoreKeys({ deed_serials: JSON.stringify(serials) })
@@ -1292,6 +1308,7 @@ export async function completeWorkOrder(params: {
         storageType: proposed.storageType,
         displayName: proposed.displayName,
       } as any),
+      wo.manufacturerSerial,
     )
   }
 
