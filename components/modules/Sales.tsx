@@ -87,7 +87,7 @@ import {
 } from '@/components/modules/sales/workbench'
 import ContactFormModal, { blankIndividualContact } from '@/components/contacts/ContactFormModal'
 import DocumentEmailSendHistory from '@/components/email/DocumentEmailSendHistory'
-import { resolveListPrice } from '@/lib/pricing/pricelist'
+import { resolveListPrice, BUILTIN_PRICELISTS, pricelistSelectOptions, type PriceListDef } from '@/lib/pricing/pricelist'
 import {
   quotationPaymentTermsDays,
   quotationPaymentTermsLabel,
@@ -388,9 +388,32 @@ function SalesContent() {
   const [newPaymentDetails, setNewPaymentDetails] = useState<DocumentPaymentDetails>({ ...DEFAULT_DOCUMENT_PAYMENT_DETAILS })
   const [newDraftLines, setNewDraftLines] = useState<DraftLine[]>([])
   const [quoteFieldErrors, setQuoteFieldErrors] = useState<{ customer?: string; validUntil?: string; lines?: string }>({})
+  const [newPricelist, setNewPricelist] = useState('RETAIL')
+  const [availablePricelists, setAvailablePricelists] = useState<PriceListDef[]>(BUILTIN_PRICELISTS)
   const draftLoadedRef = useRef(false)
   const draftAutosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const quoteDraftKey = currentUserId ? `deed_sales_quote_draft_${currentUserId}` : 'deed_sales_quote_draft'
+
+  // Only fetch when the setting is on — when off, every quotation silently
+  // prices from the built-in Retail list, matching the setting's own
+  // description ("new quotations always price from the Public list").
+  useEffect(() => {
+    if (!systemSettings.salesPricelists) return
+    let cancelled = false
+    void (async () => {
+      try {
+        const res = await fetch('/api/settings/pricelists')
+        if (!res.ok) return
+        const data = await res.json()
+        if (!cancelled && Array.isArray(data.priceLists) && data.priceLists.length) {
+          setAvailablePricelists(data.priceLists)
+        }
+      } catch {
+        // Keep built-ins — pricelist selection is a UX nicety, never a blocker.
+      }
+    })()
+    return () => { cancelled = true }
+  }, [systemSettings.salesPricelists])
 
   // ── Inline editing state ────────────────────────────────────────────────
   const [editingLineId, setEditingLineId] = useState<string | null>(null)
@@ -543,16 +566,35 @@ function SalesContent() {
       customerAddress: so.invoiceAddress || [contact?.address, contact?.city, contact?.country].filter(Boolean).join(', ') || undefined,
       customerCountry: contact?.country || 'Kenya',
       customerTaxId: contact?.vatNumber || undefined,
-      lines: so.lines.map(l => ({
-        lineType: l.lineType,
-        description: l.productName ?? l.description ?? 'Item',
-        qty: l.qty,
-        unitPrice: l.unitPrice,
-        taxRate: l.taxRate ?? 0,
-        subtotal: l.subtotal,
-      })),
+      lines: so.lines.map(l => {
+        // A confirmed/delivered line may already have a serial assigned —
+        // show its live specs (e.g. after a reconfiguration) rather than
+        // leaving the customer-facing document silent on what's shipping,
+        // matching the Delivery Note's Specs column.
+        const assignedSerial = l.serialIds?.[0] ? serials.find((s: any) => s.id === l.serialIds![0]) : undefined
+        const baseDescription = l.productName ?? l.description ?? 'Item'
+        // Quotation/invoice PDFs render a fixed 6-column commercial layout
+        // (no room for a dedicated Specs column like the Delivery Note),
+        // so the specs line is appended into the description cell instead —
+        // still visible to the customer, not silently dropped.
+        const description = assignedSerial?.specs
+          ? `${baseDescription}\n${assignedSerial.specs}`
+          : baseDescription
+        return {
+          lineType: l.lineType,
+          description,
+          qty: l.qty,
+          unitPrice: l.unitPrice,
+          taxRate: l.taxRate ?? 0,
+          discountPct: l.discount ?? l.discountPercent ?? 0,
+          subtotal: l.subtotal,
+          serial: assignedSerial?.serial,
+          specs: assignedSerial?.specs,
+        }
+      }),
       subtotal: so.subtotal,
       taxTotal: so.taxTotal,
+      postTaxDiscountTotal: so.discountAmount,
       total: so.total,
       notes: so.notes,
       currency: so.currencyCode || companySettings.currency || 'KES',
@@ -736,6 +778,7 @@ function SalesContent() {
     setNewNotes(''); setNewCustomerRef('')
     setNewInvoiceAddress(''); setNewDeliveryAddress('')
     setNewPaymentDetails({ ...DEFAULT_DOCUMENT_PAYMENT_DETAILS })
+    setNewPricelist('RETAIL')
     setNewDraftLines([]); setView('new')
     syncOrderUrl(null)
     startUxTask('sales_quote_create', { module: 'sales' })
@@ -785,6 +828,7 @@ function SalesContent() {
     setNewInvoiceAddress(so.invoiceAddress ?? '')
     setNewDeliveryAddress(so.deliveryAddress ?? '')
     setNewPaymentDetails({ ...DEFAULT_DOCUMENT_PAYMENT_DETAILS })
+    setNewPricelist(so.pricelist || 'RETAIL')
     setNewDraftLines(
       (so.lines ?? [])
         .filter((l: any) => l.lineType !== 'section')
@@ -1005,7 +1049,7 @@ function SalesContent() {
     })
   const selectProductForDraftLine = (lineId: string, product: typeof products[0]) => {
     const qty = 1
-    const priced = resolveListPrice({ product, pricelist: 'RETAIL', qty })
+    const priced = resolveListPrice({ product, pricelist: newPricelist, qty, priceLists: availablePricelists })
     // Unit price on the quote = catalog sales price (via active pricelist). Keep 0 when
     // the catalog price is 0 so the field stays editable instead of looking blank/broken.
     const unitPrice = Number.isFinite(priced.unitPrice) ? Math.max(0, priced.unitPrice) : Math.max(0, Number(product.salePrice) || 0)
@@ -1162,9 +1206,10 @@ function SalesContent() {
       const typedPrice = Number(l.unitPrice)
       const priced = resolveListPrice({
         product,
-        pricelist: 'RETAIL',
+        pricelist: newPricelist,
         qty,
         customPrice: Number.isFinite(typedPrice) ? typedPrice : undefined,
+        priceLists: availablePricelists,
       })
       const unitPrice = Math.max(0, priced.unitPrice)
       const discount = Number(l.discount) || 0
@@ -1187,6 +1232,7 @@ function SalesContent() {
       lines: builtLines as any,
       ...(newDeliveryDate ? { deliveryDate: newDeliveryDate } : {}),
       paymentTerms: serializeQuotationPaymentTerms(paymentTermsDays),
+      pricelist: newPricelist,
       validUntil: newValidUntil,
       ...(newNotes ? { notes: newNotes } : {}),
       ...(newCustomerRef ? { customerRef: newCustomerRef } : {}),
@@ -1368,6 +1414,10 @@ function SalesContent() {
                   setNewDeliveryAddress={setNewDeliveryAddress}
                   newPaymentDetails={newPaymentDetails}
                   setNewPaymentDetails={setNewPaymentDetails}
+                  newPricelist={newPricelist}
+                  setNewPricelist={setNewPricelist}
+                  availablePricelists={availablePricelists}
+                  salesPricelistsEnabled={!!systemSettings.salesPricelists}
                   newDraftLines={newDraftLines}
                   addDraftLine={addDraftLine}
                   addDraftSection={addDraftSection}
@@ -2720,6 +2770,7 @@ function NewQuotationForm({
   newValidUntil, setNewValidUntil, newNotes, setNewNotes,
   newCustomerRef, setNewCustomerRef, newInvoiceAddress, setNewInvoiceAddress,
   newDeliveryAddress, setNewDeliveryAddress, newPaymentDetails, setNewPaymentDetails,
+  newPricelist, setNewPricelist, availablePricelists, salesPricelistsEnabled,
   newDraftLines,
   addDraftLine, addDraftSection, updateDraftLine, removeDraftLine, moveDraftLine, selectProductForDraftLine,
   calcDraftLineTotal, draftSubtotal, draftTaxTotal, draftTotal,
@@ -2735,6 +2786,8 @@ function NewQuotationForm({
   newDeliveryAddress: string; setNewDeliveryAddress: (v: string) => void
   newPaymentDetails: DocumentPaymentDetails
   setNewPaymentDetails: (v: DocumentPaymentDetails) => void
+  newPricelist: string; setNewPricelist: (v: string) => void
+  availablePricelists: PriceListDef[]; salesPricelistsEnabled: boolean
   newDraftLines: DraftLine[]; addDraftLine: () => void; addDraftSection: () => void
   updateDraftLine: (id: string, field: keyof DraftLine, value: string) => void
   removeDraftLine: (id: string) => void
@@ -2934,6 +2987,20 @@ function NewQuotationForm({
                 aria-label="Payment terms, assigned from customer"
               />
             </SalesDocField>
+            {salesPricelistsEnabled && availablePricelists.filter(l => l.isActive).length > 1 && (
+              <SalesDocField label="Pricelist" htmlFor="quote-pricelist">
+                <select
+                  id="quote-pricelist"
+                  value={newPricelist}
+                  onChange={e => setNewPricelist(e.target.value)}
+                  aria-label="Pricelist — determines the catalogue price lines use"
+                >
+                  {pricelistSelectOptions(availablePricelists).map(opt => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  ))}
+                </select>
+              </SalesDocField>
+            )}
           </div>
         </div>
       </div>

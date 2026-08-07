@@ -86,6 +86,10 @@ function mapSaleOrderToClient(order: any) {
       qtyInvoiced: Number(item.qtyInvoiced ?? 0),
       unitPrice: Number(item.unitPrice ?? 0),
       taxRate: Number(item.taxRate ?? 0),
+      // See app/api/sale-orders/route.ts's mapSaleOrderToClient for why this
+      // round-trips instead of being derived/omitted.
+      discount: Number(item.discountPct ?? 0),
+      discountPercent: Number(item.discountPct ?? 0),
       subtotal: Number(item.lineTotal ?? 0),
       lineTotal: Number(item.lineTotal ?? 0),
       serialIds: item.serialNumberId ? [item.serialNumberId] : [],

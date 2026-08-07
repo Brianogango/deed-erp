@@ -1429,6 +1429,12 @@ model SaleOrderItem {
   qtyInvoiced   Int       @default(0) @map("qty_invoiced")
   unitPrice     Decimal   @db.Decimal(14, 2)
   taxRate       Decimal   @default(0) @db.Decimal(5, 2)
+  // Per-line discount percent (0-100), already baked into lineTotal at write
+  // time. Persisted explicitly (not just derived from lineTotal) so the UI
+  // can show/re-edit the original discount after a reload, and so
+  // create-invoice can prorate it correctly instead of re-pricing from a
+  // bare unitPrice x qty that silently drops the discount.
+  discountPct   Decimal   @default(0) @map("discount_pct") @db.Decimal(5, 2)
   lineTotal     Decimal   @db.Decimal(14, 2)
   notes         String?   @db.Text
   serialNumberId String?  @map("serial_number_id") @db.Uuid

@@ -315,6 +315,56 @@ describe('POST /api/sale-orders/:id/create-invoice', () => {
     })
   })
 
+  describe('line discount proration', () => {
+    // Regression: item.lineTotal already bakes in a per-line discount
+    // (qty x unitPrice x (1 - discountPct/100)), but create-invoice used to
+    // rebuild each invoice line from raw unitPrice x qty, silently dropping
+    // that discount. 3 units @ 1000 with a 10% line discount => lineTotal
+    // 2700 (not 3000) on the sale order item.
+    const discountedItem = { ...saleOrder.items[0], qty: 3, qtyDelivered: 3, unitPrice: 1000, lineTotal: 2700 }
+
+    it('prorates the full discounted lineTotal, not raw unitPrice x qty, on a full invoice', async () => {
+      const withDiscount = { ...saleOrder, items: [discountedItem] }
+      mockPrisma.saleOrder.findUnique.mockResolvedValue(withDiscount)
+      mockPrisma.$transaction.mockImplementation(async (fn: any) => fn({
+        saleOrder: { findUnique: vi.fn().mockResolvedValue(withDiscount) },
+        saleOrderItem: { updateMany: mockPrisma.saleOrderItem.updateMany.mockResolvedValue({ count: 1 }) },
+        invoice: { create: mockPrisma.invoice.create },
+      }))
+      await POST(new NextRequest('http://localhost', { method: 'POST' }), { params: { id: ORDER_ID } })
+      const createData = mockPrisma.invoice.create.mock.calls.at(-1)?.[0]?.data
+      const line = createData.items.create[0]
+      expect(line.qty).toBe(3)
+      // Not 3000 (raw unitPrice x qty) — the 10% line discount must survive.
+      expect(line.lineSubtotal).toBe(2700)
+      expect(line.unitPrice).toBe(900)
+    })
+
+    it('prorates a discounted line proportionally on a partial invoice', async () => {
+      const withDiscount = { ...saleOrder, items: [discountedItem] }
+      mockPrisma.saleOrder.findUnique.mockResolvedValue(withDiscount)
+      mockPrisma.$transaction.mockImplementation(async (fn: any) => fn({
+        saleOrder: { findUnique: vi.fn().mockResolvedValue(withDiscount) },
+        saleOrderItem: { updateMany: mockPrisma.saleOrderItem.updateMany.mockResolvedValue({ count: 1 }) },
+        invoice: { create: mockPrisma.invoice.create },
+      }))
+      await POST(
+        new NextRequest('http://localhost', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ lines: [{ itemId: ITEM_ID, qty: 1 }] }),
+        }),
+        { params: { id: ORDER_ID } },
+      )
+      const createData = mockPrisma.invoice.create.mock.calls.at(-1)?.[0]?.data
+      const line = createData.items.create[0]
+      expect(line.qty).toBe(1)
+      // 1/3 of the discounted 2700 total, not 1000 (raw unitPrice).
+      expect(line.lineSubtotal).toBe(900)
+      expect(line.unitPrice).toBe(900)
+    })
+  })
+
   describe('header discount proration', () => {
     it('prorates the sale order header discount into the invoice total', async () => {
       const discounted = { ...saleOrder, discountAmount: 1000 }

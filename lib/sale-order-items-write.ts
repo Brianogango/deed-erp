@@ -10,6 +10,7 @@ export type SaleOrderItemRow = {
   qtyInvoiced: number
   unitPrice: number
   taxRate: number
+  discountPct: number
   lineTotal: number
   notes: string | null
   serialNumberId: string | null
@@ -63,6 +64,7 @@ export function mapSaleOrderItems(lines: any[], existingItems: any[] = []): Sale
       qtyInvoiced,
       unitPrice: money.unitPrice,
       taxRate: money.taxRate,
+      discountPct: money.discountPct,
       lineTotal: money.lineTotal,
       notes: item.notes ?? null,
       serialNumberId: optionalUuid(

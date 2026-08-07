@@ -45,12 +45,17 @@ export function invoicePdfInput(
       subtotal: l.subtotal,
     })),
     subtotal: inv.subtotal,
+    // Pre-tax line discounts (manually-entered invoices, e.g. Accounting.tsx's
+    // invoice form, which sets discountPct per line) — distinct from the
+    // header-level, post-tax discountAmount below (invoices created from a
+    // discounted Sales Order via create-invoice).
     discountTotal: inv.lines.reduce((sum, l) => {
       const pct = Number(l.discountPct) || 0
       if (pct <= 0) return sum
       const gross = (Number(l.qty) || 0) * (Number(l.unitPrice) || 0)
       return sum + Math.round(gross * pct) / 100
     }, 0),
+    postTaxDiscountTotal: Number(inv.discountAmount) || 0,
     taxTotal: inv.taxTotal,
     total: inv.total,
     amountPaid: inv.amountPaid,

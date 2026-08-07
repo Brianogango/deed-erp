@@ -978,6 +978,8 @@ export interface Invoice {
   partnerId: string; partnerName: string
   date: string; dueDate: string
   lines: InvoiceLine[]; subtotal: number; taxTotal: number; total: number; amountPaid: number
+  /** Header-level discount (e.g. prorated from the source SO's discountAmount), applied after tax. */
+  discountAmount?: number
   saleOrderId?: string; purchaseOrderId?: string; receiptId?: string; repairId?: string; notes: string
   payments?: InvoicePayment[]
   /** Document currency snapshot (KES-first). */
