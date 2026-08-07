@@ -44,6 +44,7 @@ import {
   isSaleOrderDraftEditing,
   stampSaleOrderPersisted,
   mergeSaleOrdersPreservingDraftEdits,
+  saleOrderLinesFingerprint,
 } from '@/lib/sale-order-draft-edits'
 import {
   registerSaleOrderDraftPersistApi,
@@ -3079,7 +3080,7 @@ export interface AppState {
   updateSaleOrder: (
     id: string,
     p: Partial<SaleOrder>,
-    opts?: { persist?: boolean },
+    opts?: { persist?: boolean; soft?: boolean },
   ) => void | Promise<boolean>
   addSOLine: (orderId: string, product: Product, qty: number, discount?: number, defaultTaxRate?: number) => void | Promise<boolean>
   assignSerialToSOLine: (orderId: string, lineId: string, serialId: string) => void
@@ -4254,6 +4255,15 @@ function removeDirtyKeys(keys: string[]) {
   } catch {}
 }
 
+/** Latest in-memory deed_saleOrders JSON — prefer over stale localStorage while drafting. */
+let _latestSaleOrdersSnapshot: string | null = null
+
+function rememberSaleOrdersSnapshot(serialized: string | null | undefined) {
+  if (typeof serialized === 'string' && serialized.length > 0) {
+    _latestSaleOrdersSnapshot = serialized
+  }
+}
+
 async function flushServerSync() {
   if (Object.keys(_pendingSync).length === 0) return
   const entries = { ..._pendingSync }
@@ -4291,13 +4301,14 @@ async function flushServerSync() {
       if (_pendingSync[k] === entries[k]) delete _pendingSync[k]
     })
     removeDirtyKeys(Object.keys(entries))
-    // Draft quotation line edits are local until Save. Keep deed_saleOrders
-    // dirty/pending so SSE + Prisma boot cannot restore deleted products.
+    // Draft quotation line edits stay dirty until Save. Prefer the in-memory
+    // snapshot — localStorage can still hold a pre-edit blob after a large write.
     if (hasSaleOrderDraftEdits()) {
       addDirtyKey('deed_saleOrders')
       try {
-        const local = typeof window !== 'undefined' ? window.localStorage.getItem('deed_saleOrders') : null
-        if (local) _pendingSync['deed_saleOrders'] = local
+        const snap = _latestSaleOrdersSnapshot
+          ?? (typeof window !== 'undefined' ? window.localStorage.getItem('deed_saleOrders') : null)
+        if (snap) _pendingSync['deed_saleOrders'] = snap
       } catch { /* ignore */ }
     }
     if (typeof window !== 'undefined') {
@@ -4526,10 +4537,16 @@ function applyLocalDraftSaleOrder(
     const next = prev.map(s => (s.id === orderId ? updated : s))
     try {
       const serialized = JSON.stringify(next)
+      rememberSaleOrdersSnapshot(serialized)
       _pendingSync['deed_saleOrders'] = serialized
       addDirtyKey('deed_saleOrders')
-      if (typeof window !== 'undefined' && serialized.length <= 512 * 1024) {
-        window.localStorage.setItem('deed_saleOrders', serialized)
+      if (typeof window !== 'undefined') {
+        if (serialized.length <= 512 * 1024) {
+          window.localStorage.setItem('deed_saleOrders', serialized)
+        } else {
+          // Drop stale pre-edit blob so sync cannot re-upload old lines.
+          try { window.localStorage.removeItem('deed_saleOrders') } catch { /* ignore */ }
+        }
       }
     } catch { /* ignore quota / circular */ }
     return next
@@ -4546,7 +4563,7 @@ function applySaleOrderPersistResult(
   soRef: React.MutableRefObject<SaleOrder[]>,
   id: string,
   data: any,
-  opts?: { syncLines?: boolean },
+  opts?: { syncLines?: boolean; expectedLinesFingerprint?: string },
 ) {
   if (!data || typeof data !== 'object') return
   const [normalized] = normalizeSaleOrdersForClient([data]) as SaleOrder[]
@@ -4559,6 +4576,13 @@ function applySaleOrderPersistResult(
         lockVersion: normalized.lockVersion ?? s.lockVersion,
       }
       if (!opts?.syncLines || !Array.isArray(normalized.lines)) return withLock
+      // A slower PATCH must not restore products the user already removed.
+      if (
+        opts.expectedLinesFingerprint
+        && saleOrderLinesFingerprint(s.lines) !== opts.expectedLinesFingerprint
+      ) {
+        return withLock
+      }
       return {
         ...withLock,
         lines: normalized.lines,
@@ -4747,7 +4771,10 @@ export function StoreProvider({
             const localCount = arrayCount(localStr)
             const remoteCount = arrayCount(remoteStr)
             const missingRemoteRows = CRITICAL_VISIBILITY_KEY_SET.has(k) && remoteHasMissingIds(localStr, remoteStr)
-            const shouldRecoverFromStaleEmpty = localCount === 0 && typeof remoteCount === 'number' && remoteCount > 0
+            const shouldRecoverFromStaleEmpty = localCount === 0
+              && typeof remoteCount === 'number'
+              && remoteCount > 0
+              && !(k === 'deed_saleOrders' && hasSaleOrderDraftEdits())
             if (!shouldRecoverFromStaleEmpty && !missingRemoteRows) continue // local unsynced write — server state is stale for this key
             // Recover from stale-empty / incomplete local cache and clear dirty flag.
             removeDirtyKeys([k])
@@ -9598,12 +9625,16 @@ const storeCtx: AppState = {
         setSaleOrders(prev => prev.map(s => s.id === id ? updated : s))
       }
 
-      const persist = async () => {
+      const softPersist = opts?.soft === true
+      const persist = async (retry = 0) => {
         // Re-read draft at persist time so a delete that landed after click still wins.
         const live = soRef.current.find(s => s.id === id) ?? updated
         const persistPayload = persistLines
           ? { ...live, lines: live.lines, ...calcSO(live.lines as SaleOrderLine[]) }
           : p
+        const sentFingerprint = persistLines
+          ? saleOrderLinesFingerprint((persistPayload as SaleOrder).lines)
+          : ''
         // Metadata: send only the patch so a notes keystroke cannot rewrite lines.
         // Save: send the full draft row (minus lockVersion).
         const body = persistLines
@@ -9612,6 +9643,13 @@ const storeCtx: AppState = {
         const result = await patchSaleOrderPersist(id, body)
         if (!result.ok) {
           if (persistLines) {
+            // Soft auto-persist must never erase the user's draft. Keep the mark
+            // and retry quietly — explicit Save can still surface an error.
+            if (softPersist) {
+              markSaleOrderDraftEdit(id)
+              scheduleDraftSaleOrderLinePersist(id)
+              return false
+            }
             const latest = soRef.current.find(s => s.id === id)
             const stillOurs = latest && latest.lines === updated.lines
             if (stillOurs) {
@@ -9619,10 +9657,40 @@ const storeCtx: AppState = {
               setSaleOrders(prev => prev.map(s => s.id === id ? existing : s))
             }
           }
-          showToast(result.error, 'error')
+          if (!softPersist) showToast(result.error, 'error')
           return false
         }
-        applySaleOrderPersistResult(setSaleOrders, soRef, id, result.data, { syncLines: persistLines })
+        const latestAfter = soRef.current.find(s => s.id === id)
+        const localMoved = persistLines
+          && !!latestAfter
+          && saleOrderLinesFingerprint(latestAfter.lines) !== sentFingerprint
+        if (persistLines && (softPersist || localMoved)) {
+          // Background sync / slower response: keep local lines, refresh lock only.
+          applySaleOrderPersistResult(setSaleOrders, soRef, id, result.data, { syncLines: false })
+          markSaleOrderDraftEdit(id)
+          try {
+            const serialized = JSON.stringify(soRef.current)
+            rememberSaleOrdersSnapshot(serialized)
+            _pendingSync['deed_saleOrders'] = serialized
+            addDirtyKey('deed_saleOrders')
+            if (typeof window !== 'undefined' && serialized.length <= 512 * 1024) {
+              window.localStorage.setItem('deed_saleOrders', serialized)
+            }
+          } catch { /* ignore */ }
+          if (softPersist) {
+            // Soft sync stays silent and never clears draft protection.
+            if (localMoved) scheduleDraftSaleOrderLinePersist(id)
+            return true
+          }
+          // Explicit Save while the user kept editing — persist the newer draft.
+          if (retry < 2) return persist(retry + 1)
+          scheduleDraftSaleOrderLinePersist(id)
+          return true
+        }
+        applySaleOrderPersistResult(setSaleOrders, soRef, id, result.data, {
+          syncLines: persistLines,
+          expectedLinesFingerprint: sentFingerprint || undefined,
+        })
         if (persistLines) {
           // Prefer the lines we just saved when pinning — never reopen the door
           // for a stale blob SSE to restore deleted products after Save.
@@ -9648,6 +9716,7 @@ const storeCtx: AppState = {
           }
           try {
             const serialized = JSON.stringify(soRef.current)
+            rememberSaleOrdersSnapshot(serialized)
             _pendingSync['deed_saleOrders'] = serialized
             addDirtyKey('deed_saleOrders')
             if (typeof window !== 'undefined' && serialized.length <= 512 * 1024) {
