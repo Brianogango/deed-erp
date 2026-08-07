@@ -30,12 +30,17 @@ function fmtMonthFull(key: string) {
 const CHART_COLORS = ['#1B2762', '#00B0D7', '#10B981', '#F59E0B', '#8B5CF6', '#EC4899', '#EF4444', '#6B7280']
 
 export default function SalesDashboard() {
-  const { saleOrders, users, currentUserId } = useSalesStore()
+  const { saleOrders, posOrders, users, currentUserId } = useSalesStore()
   const currentUser = users.find(user => user.id === currentUserId) ?? null
   const visibleOrders = useMemo(
     () => visibleDashboardSalesOrders(currentUser, saleOrders),
     [currentUser, saleOrders],
   )
+  // POS sales post a paid invoice immediately (no separate confirm/invoice
+  // stage) — SalesDashboard previously only read saleOrders, so walk-in POS
+  // revenue never showed up in the revenue chart or top products/customers
+  // even though it is real, already-recognized revenue.
+  const posSales = posOrders ?? []
 
   const [selectedMonth, setSelectedMonth] = useState<string>(() => {
     const d = new Date()
@@ -59,10 +64,14 @@ export default function SalesDashboard() {
   }, [selectedMonth])
 
   const lastMonthRevenue = useMemo(
-    () => visibleOrders
-      .filter(order => isFullyInvoiced(order) && monthKey(order.date) === lastMonth)
-      .reduce((sum, order) => sum + order.total, 0),
-    [visibleOrders, lastMonth],
+    () =>
+      visibleOrders
+        .filter(order => isFullyInvoiced(order) && monthKey(order.date) === lastMonth)
+        .reduce((sum, order) => sum + order.total, 0) +
+      posSales
+        .filter(o => monthKey(o.date) === lastMonth)
+        .reduce((sum, o) => sum + o.total, 0),
+    [visibleOrders, posSales, lastMonth],
   )
 
   // ── Monthly revenue (last 6 months) ────────────────────────────────────────
@@ -88,6 +97,15 @@ export default function SalesDashboard() {
         if (isFullyInvoiced(o)) revMap.set(mk, revMap.get(mk)! + o.total)
       }
     }
+    // POS sales are walk-in, already-paid revenue — counted the same month
+    // they happened, with no invoiced-status gate (they're paid on the spot).
+    for (const o of posSales) {
+      const mk = monthKey(o.date)
+      if (ordMap.has(mk)) {
+        ordMap.set(mk, ordMap.get(mk)! + 1)
+        revMap.set(mk, revMap.get(mk)! + o.total)
+      }
+    }
 
     return months.map(mk => ({
       month: mk,
@@ -95,7 +113,7 @@ export default function SalesDashboard() {
       revenue: revMap.get(mk) ?? 0,
       orders: ordMap.get(mk) ?? 0,
     }))
-  }, [visibleOrders, selectedMonth])
+  }, [visibleOrders, posSales, selectedMonth])
 
   const maxRev = Math.max(...monthlyRevenue.map(m => m.revenue), 1)
 
@@ -109,8 +127,15 @@ export default function SalesDashboard() {
         map.set(l.productId, { name: l.productName, revenue: e.revenue + l.subtotal, qty: e.qty + l.qty })
       }
     }
+    for (const o of posSales) {
+      if (monthKey(o.date) !== selectedMonth) continue
+      for (const l of o.lines) {
+        const e = map.get(l.productId) ?? { name: l.productName, revenue: 0, qty: 0 }
+        map.set(l.productId, { name: l.productName, revenue: e.revenue + l.subtotal, qty: e.qty + l.qty })
+      }
+    }
     return Array.from(map.values()).sort((a, b) => b.revenue - a.revenue).slice(0, 5)
-  }, [visibleOrders, selectedMonth])
+  }, [visibleOrders, posSales, selectedMonth])
 
   const maxProdRev = Math.max(...topProducts.map(p => p.revenue), 1)
 
@@ -122,8 +147,16 @@ export default function SalesDashboard() {
       const e = map.get(o.customerId) ?? { name: o.customerName, revenue: 0, orders: 0 }
       map.set(o.customerId, { ...e, revenue: e.revenue + o.total, orders: e.orders + 1 })
     }
+    // Walk-in POS sales with no recorded customer don't have anywhere
+    // meaningful to attribute in a "top customers" ranking — only counted
+    // when a customerId was captured at the till.
+    for (const o of posSales) {
+      if (!o.customerId || monthKey(o.date) !== selectedMonth) continue
+      const e = map.get(o.customerId) ?? { name: o.customerName ?? 'Walk-in', revenue: 0, orders: 0 }
+      map.set(o.customerId, { ...e, revenue: e.revenue + o.total, orders: e.orders + 1 })
+    }
     return Array.from(map.values()).sort((a, b) => b.revenue - a.revenue).slice(0, 5)
-  }, [visibleOrders, selectedMonth])
+  }, [visibleOrders, posSales, selectedMonth])
 
   // ── Sales pipeline (Odoo stages) ───────────────────────────────────────────
   const pipeline = useMemo(() => {
@@ -205,7 +238,7 @@ export default function SalesDashboard() {
             </ResponsiveContainer>
           </div>
           <div className="flex gap-4 mt-3 pt-3 border-t text-[10px] text-t3" style={{ borderColor: '#F3F4F6' }}>
-            <span>Orders this month: <strong className="text-t1">{monthlyRevenue.find(m => m.month === selectedMonth)?.orders ?? 0}</strong></span>
+            <span>Orders + POS sales this month: <strong className="text-t1">{monthlyRevenue.find(m => m.month === selectedMonth)?.orders ?? 0}</strong></span>
             <span>Last month: <strong className="text-t1">{fmtKes(lastMonthRevenue)}</strong></span>
           </div>
         </div>

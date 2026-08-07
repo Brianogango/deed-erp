@@ -3413,6 +3413,7 @@ export type SalesStoreState = Pick<AppState,
   | 'invoices'
   | 'deliveries'
   | 'returnOrders'
+  | 'posOrders'
   | 'users'
   | 'currentUserId'
   | 'systemSettings'
@@ -10023,8 +10024,13 @@ const storeCtx: AppState = {
 
         const orderRef = await storeCtxRef.current!.allocateDocRef('SO')
         const confirmedAt = new Date().toISOString()
-        // Omit lockVersion so a stale client version cannot 409 the confirm after line edits.
-        const confirmBody = {
+        // so was just re-fetched above (post-flush), so its lockVersion is
+        // fresh for THIS request — sending it lets the server catch a genuine
+        // lost-update (someone else changed this order between page load and
+        // this click) instead of silently overwriting their change. A single
+        // retry-after-refetch below absorbs the harmless case where our own
+        // flush step raced the version forward without the caller knowing.
+        const buildConfirmBody = (lockVersion: number | undefined) => ({
           ref: orderRef,
           orderNumber: orderRef,
           quotationRef: so.quotationRef ?? so.ref,
@@ -10035,16 +10041,33 @@ const storeCtx: AppState = {
           approvedBy: user.id,
           approvalStatus: 'not_required' as const,
           locked: systemSettings.salesLockConfirmed || undefined,
-        }
+          lockVersion,
+        })
 
-        const confirmRes = await fetch(`/api/sale-orders/${id}`, {
+        let confirmRes = await fetch(`/api/sale-orders/${id}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(confirmBody),
+          body: JSON.stringify(buildConfirmBody(so.lockVersion)),
         })
-        const confirmPayload = await confirmRes.json().catch(() => null)
+        let confirmPayload = await confirmRes.json().catch(() => null)
+        if (confirmRes.status === 409) {
+          const fresh = await fetch(`/api/sale-orders/${id}`).then(r => (r.ok ? r.json() : null)).catch(() => null)
+          if (fresh && fresh.status !== 'sale' && fresh.status !== 'cancelled') {
+            confirmRes = await fetch(`/api/sale-orders/${id}`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(buildConfirmBody(fresh.lockVersion)),
+            })
+            confirmPayload = await confirmRes.json().catch(() => null)
+          }
+        }
         if (!confirmRes.ok) {
-          showToast(confirmPayload?.error ?? `Could not confirm ${so.ref} — try again`, 'error')
+          showToast(
+            confirmRes.status === 409
+              ? `${so.ref} was changed elsewhere — refresh and try confirming again`
+              : confirmPayload?.error ?? `Could not confirm ${so.ref} — try again`,
+            'error',
+          )
           return
         }
 
@@ -17083,6 +17106,7 @@ const storeCtx: AppState = {
     invoices,
     deliveries,
     returnOrders,
+    posOrders,
     users,
     currentUserId,
     systemSettings,
@@ -17101,6 +17125,7 @@ const storeCtx: AppState = {
     invoices,
     deliveries,
     returnOrders,
+    posOrders,
     users,
     currentUserId,
     systemSettings,

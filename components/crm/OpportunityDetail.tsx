@@ -19,11 +19,22 @@ export default function OpportunityDetail({
   activeOppId, onClose, stageLabels,
   onMarkWon, onMarkLost, onLogActivity
 }: Props) {
-  const { opportunities, companies, contactPersons, quotes, opportunityActivities, moveOpportunityStage, users, currentUserId } = useCrmStore()
+  const { opportunities, companies, contactPersons, quotes, saleOrders, opportunityActivities, moveOpportunityStage, users, currentUserId } = useCrmStore()
   const activeOpp = opportunities.find(o => o.id === activeOppId)
   const staffName = users.find(u => u.id === currentUserId)?.name || 'Staff'
 
   if (!activeOpp) return null
+
+  // CRM's own deed_quotes document type is essentially unused in practice —
+  // the live "New quotation" flow in the Sales module creates a SaleOrder
+  // directly, not a Quote, so activeOpp.quoteIds is almost always empty even
+  // for opportunities with real, active quotations. Join on the shared
+  // Client row (clientId/companyId <-> customerId) instead of a link field
+  // that nothing populates, so this panel shows the ACTUAL quotations/orders
+  // for this opportunity's client.
+  const relatedSaleOrders = (saleOrders ?? [])
+    .filter(so => so.customerId && (so.customerId === activeOpp.clientId || so.customerId === activeOpp.companyId))
+    .sort((a, b) => (b.date ?? '').localeCompare(a.date ?? ''))
 
   return (
     <div className="flex flex-col gap-4">
@@ -151,7 +162,39 @@ export default function OpportunityDetail({
               ))}
               {(activeOpp.quoteIds?.length ?? 0) === 0 && (
                 <div className="text-center py-5 text-xs" style={{ color: 'var(--text-4)' }}>
-                  No quotes linked. Create one in the Sales module.
+                  No CRM quotes linked — see Sales Orders below for this client's actual quotations.
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Sales Orders — the real quotations/orders for this client, from the
+              Sales module (SaleOrder), joined by client rather than by a link
+              field nothing populates. */}
+          <div className="card overflow-hidden">
+            <PanelHeader title="Sales Orders" count={relatedSaleOrders.length} />
+            <div className="p-3 flex flex-col gap-2">
+              {relatedSaleOrders.slice(0, 8).map(so => (
+                <div key={so.id} className="rounded-lg p-3 flex items-start justify-between gap-3"
+                  style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap mb-1.5">
+                      <span className="text-xs font-bold" style={{ color: 'var(--text-1)' }}>{so.ref}</span>
+                      <Badge status={so.status} size="xs" />
+                    </div>
+                    <div className="text-[10px] leading-relaxed" style={{ color: 'var(--text-3)' }}>
+                      {fmtDate(so.date)}{so.validUntil ? ` – ${fmtDate(so.validUntil)}` : ''}
+                    </div>
+                  </div>
+                  <div className="text-right flex-shrink-0">
+                    <div className="text-sm font-bold" style={{ color: 'var(--text-1)' }}>{fmtKes(so.total)}</div>
+                    <div className="text-[9px] mt-0.5" style={{ color: 'var(--text-4)' }}>{so.lines?.length ?? 0} line{(so.lines?.length ?? 0) !== 1 ? 's' : ''}</div>
+                  </div>
+                </div>
+              ))}
+              {relatedSaleOrders.length === 0 && (
+                <div className="text-center py-5 text-xs" style={{ color: 'var(--text-4)' }}>
+                  No Sales Orders yet for this client. Create one in the Sales module.
                 </div>
               )}
             </div>
