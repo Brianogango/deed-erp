@@ -3587,7 +3587,11 @@ function DeliveryNoteView({
                         {lineSerials.length > 0 && (
                           <div className="flex flex-wrap gap-1">
                             {lineSerials.map((s: any) => (
-                              <span key={s.id} className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 text-[9px] font-mono border border-blue-100">
+                              <span
+                                key={s.id}
+                                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 text-[9px] font-mono border border-blue-100"
+                                title={s.specs ? `Specs: ${s.specs}` : undefined}
+                              >
                                 {s.serial ?? s.serialNumber}
                                 {canPrepare && (
                                   <button type="button" onClick={() => unassignSerialFromSOLine(order.id, l.id, s.id)} className="text-blue-700 hover:text-red-600" aria-label={`Unassign ${s.serial ?? s.id}`}>×</button>
@@ -3606,7 +3610,11 @@ function DeliveryNoteView({
                               options={assignableSerials.map((serial: any) => ({
                                 id: serial.id,
                                 label: serial.serial ?? serial.serialNumber ?? serial.id,
-                                sublabel: [serial.barcode, LOCATIONS[serial.location as keyof typeof LOCATIONS]?.name ?? serial.location].filter(Boolean).join(' · '),
+                                // specs first — this is the moment staff pick which physical
+                                // unit fulfills the line, so a reconfigured (upgraded/downgraded)
+                                // unit's CURRENT specs must be visible here to avoid shipping the
+                                // wrong configuration under a generic catalog product name.
+                                sublabel: [serial.specs, serial.barcode, LOCATIONS[serial.location as keyof typeof LOCATIONS]?.name ?? serial.location].filter(Boolean).join(' · '),
                               }))}
                               maxSelectable={Math.max(0, l.qty - lineSerials.length)}
                               onAssign={ids => assignSerialsToSOLine(order.id, l.id, ids)}
