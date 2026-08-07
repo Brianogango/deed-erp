@@ -55,6 +55,26 @@ describe('serial trace / lookup', () => {
     expect(result.relatedMoves).toHaveLength(1)
   })
 
+  it('surfaces the live per-unit specs separately from the (unchanging) catalog product name', () => {
+    // Regression: reconfiguring a device (e.g. downgrading RAM/SSD) changes
+    // this specific serial's specs without renaming the shared catalog
+    // product — before this fix, checking a serial only ever showed
+    // `Product: <name>`, which for per-config SKUs bakes in the ORIGINAL
+    // specs and never reflects a completed reconfiguration.
+    const reconfigured = {
+      ...serials[1],
+      specs: '8GB RAM (8GB), 256GB SSD',
+    }
+    const result = explainSerialWhereabouts({ serial: reconfigured })
+    expect(result.details).toContain('Current specs: 8GB RAM (8GB), 256GB SSD')
+    expect(result.details.some(d => d.startsWith('Product:'))).toBe(true)
+  })
+
+  it('omits the specs line when the serial has no specs recorded', () => {
+    const result = explainSerialWhereabouts({ serial: serials[1] })
+    expect(result.details.some(d => d.startsWith('Current specs:'))).toBe(false)
+  })
+
   it('explains assigned serials as held on SO', () => {
     const result = explainSerialWhereabouts({
       serial: serials[1],

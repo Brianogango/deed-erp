@@ -14,6 +14,13 @@ export type TraceableSerial = {
   receiptId?: string
   receivedDate?: string
   barcode?: string
+  /**
+   * Per-unit current specs (e.g. after a device reconfiguration). `productName`
+   * is the shared catalog product's name and, for per-config SKUs, can bake in
+   * the ORIGINAL specs — it is never rewritten when a specific serial's
+   * hardware changes, so it must not be the only spec info shown here.
+   */
+  specs?: string
 }
 
 export type TraceableSaleOrder = {
@@ -75,9 +82,14 @@ export function explainSerialWhereabouts(args: {
   const loc = LOCATION_LABELS[serial.location] || String(serial.location)
   const details: string[] = [
     `Product: ${serial.productName}`,
-    `Status: ${serial.status.replace(/_/g, ' ')}`,
-    `Location: ${loc}`,
   ]
+  // Shown separately from Product — a reconfiguration (upgrade/downgrade)
+  // changes this specific unit's hardware without renaming the shared
+  // catalog product, so `serial.specs` (kept current by the reconfiguration
+  // workflow) is the only reliable place to see what's actually installed
+  // right now.
+  if (serial.specs) details.push(`Current specs: ${serial.specs}`)
+  details.push(`Status: ${serial.status.replace(/_/g, ' ')}`, `Location: ${loc}`)
   if (serial.receivedDate) details.push(`Received: ${serial.receivedDate.slice(0, 10)}`)
   if (serial.soldDate) details.push(`Sold date: ${serial.soldDate.slice(0, 10)}`)
   if (serial.purchaseOrderId) details.push(`Purchase / opening ref: ${serial.purchaseOrderId}`)
