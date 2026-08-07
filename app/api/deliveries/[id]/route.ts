@@ -8,5 +8,8 @@ const config = {
   build: () => '' as unknown as Delivery,
   validateWrite: (next: Delivery, previous: Delivery | undefined) =>
     deliveryFulfillmentWriteError(next, previous ?? null),
+  // Concurrent PATCHes to different deliveries otherwise race on the same
+  // read-modify-write cycle over the shared deed_deliveries collection.
+  lockKey: 'deed_deliveries',
 }
 export const { PATCH, PUT, DELETE } = makeDetailHandlers(config)

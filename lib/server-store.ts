@@ -1,5 +1,5 @@
 import 'server-only'
-import { sql } from './auth/db'
+import { sql, withDbTransaction } from './auth/db'
 import { isBlobKey, readBlob, writeBlob } from './blob-store'
 
 let _tableReady = false
@@ -129,6 +129,35 @@ export async function loadAppStateChangesSince(sinceUpdatedAt: string): Promise<
     return { changes, latestUpdatedAt }
   } catch {
     return { changes: {}, latestUpdatedAt: sinceUpdatedAt }
+  }
+}
+
+/**
+ * Serializes concurrent read-modify-write cycles against a single app_state
+ * collection key (e.g. 'deed_deliveries'). Every write path for that key does
+ * loadAppState → mutate the in-memory array → saveStoreKeys with no row-level
+ * locking in between, so two concurrent requests touching the SAME key (even
+ * different items inside it) can silently lose one writer's change.
+ *
+ * A transaction-scoped Postgres advisory lock keyed by the collection name
+ * blocks a second caller from starting its own read until the first caller's
+ * transaction commits or rolls back — automatically released even if the
+ * process crashes mid-request, unlike a session-level lock. The lock only
+ * needs to be held for the duration of `fn`; it does not require the actual
+ * loadAppState/saveStoreKeys calls inside `fn` to share this connection.
+ */
+export async function withAppStateKeyLock<T>(key: string, fn: () => Promise<T>): Promise<T> {
+  try {
+    return await withDbTransaction(async client => {
+      await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [key])
+      return fn()
+    })
+  } catch (err) {
+    console.error(`[server-store] withAppStateKeyLock(${key}) failed, proceeding unlocked:`, err)
+    // Fail open: correctness of the guarded write matters less than the
+    // feature working at all if the lock infrastructure itself is broken
+    // (e.g. in a test environment without a real Postgres connection).
+    return fn()
   }
 }
 
