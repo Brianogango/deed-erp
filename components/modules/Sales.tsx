@@ -97,6 +97,7 @@ import { calcSaleOrderLineMoney } from '@/lib/sales/line-calc'
 import { allocateDeliveredQtyToOrderLines, pairOrderLinesWithDeliveryLines } from '@/lib/delivery-prepare'
 import Chatter from '@/components/erp/Chatter'
 import { ConfirmQuotationDialog } from '@/components/modules/sales/ConfirmQuotationDialog'
+import { SameDocumentIdentity } from '@/components/modules/sales/SameDocumentIdentity'
 import {
   canConfirmQuotation,
   canConfirmAndReserve,
@@ -1599,8 +1600,8 @@ function SalesContent() {
                       <h1>{listTab === 'quotations' ? 'Quotations' : 'Sales orders'}</h1>
                       <div className="sub">
                         {listTab === 'quotations'
-                          ? 'Same document: Draft → Sent → Accepted → Confirm becomes the Sales Order'
-                          : 'Same document after confirm: Reserve → Deliver → Invoice · Payment stays separate'}
+                          ? 'One commercial record: Draft → Sent → Accepted → Confirm renames QUO/… → SO/… (no second order)'
+                          : 'Same record after confirm (was QUO/…): Reserve → Deliver → Invoice · Payment stays separate'}
                       </div>
                     </div>
                     <div className="sales-proto-actions">
@@ -1737,7 +1738,14 @@ function SalesContent() {
                                       />
                                     </td>
                                   )}
-                                  <td><button type="button" className="sp-linkish" onClick={e => { e.stopPropagation(); openOrder(s.id) }}>{s.ref}</button></td>
+                                  <td>
+                                    <button type="button" className="sp-linkish" onClick={e => { e.stopPropagation(); openOrder(s.id) }}>{s.ref}</button>
+                                    {listTab === 'orders' && s.quotationRef ? (
+                                      <span style={{ display: 'block', marginTop: 2, fontSize: 11, color: 'var(--sp-text-3)', fontWeight: 500 }}>
+                                        was {s.quotationRef}
+                                      </span>
+                                    ) : null}
+                                  </td>
                                   <td>{s.customerName}</td>
                                   <td>{contactLabel}</td>
                                   <td>{fmtDate(s.date)}</td>
@@ -1779,6 +1787,9 @@ function SalesContent() {
                                   <span className="text-xs font-bold sp-linkish">{s.ref}</span>
                                   <span className="text-[10px] font-bold text-[var(--sp-text)]">{salesKes(s.total)}</span>
                                 </div>
+                                {s.quotationRef ? (
+                                  <p className="text-[10px] text-[var(--sp-text-3)] truncate m-0">was {s.quotationRef}</p>
+                                ) : null}
                                 <p className="text-[11px] text-[var(--sp-text-2)] truncate">{s.customerName}</p>
                                 <p className="text-[10px] text-[var(--sp-text-3)] mt-1">{fmtDate(s.date)} · {s.lines?.length ?? 0} item{(s.lines?.length ?? 0) !== 1 ? 's' : ''}</p>
                               </div>
@@ -1841,17 +1852,27 @@ function SalesContent() {
                       </div>
                       <div className="sub">
                         {isQuotationStage(activeOrder.status) ? (
-                          <>Customer {activeOrder.customerName}{activeOrder.salespersonName ? ` · Salesperson ${activeOrder.salespersonName}` : ''}</>
+                          <>
+                            Customer {activeOrder.customerName}
+                            {activeOrder.salespersonName ? ` · Salesperson ${activeOrder.salespersonName}` : ''}
+                            {' · '}One commercial document — Confirm renames this reference to SO/…
+                          </>
                         ) : (
                           <>
-                            Confirmed from quotation stage
-                            {activeOrder.quotationRef ? (
-                              <> · previous ref <span className="sp-linkish">{activeOrder.quotationRef}</span></>
-                            ) : null}
-                            {' · '}{activeOrder.customerName}
+                            Sales Order stage · {activeOrder.customerName}
+                            {activeOrder.salespersonName ? ` · Salesperson ${activeOrder.salespersonName}` : ''}
                           </>
                         )}
                       </div>
+                      {isQuotationStage(activeOrder.status) ? (
+                        <SameDocumentIdentity mode="preview" quotationRef={activeOrder.ref} />
+                      ) : activeOrder.quotationRef ? (
+                        <SameDocumentIdentity
+                          mode="done"
+                          quotationRef={activeOrder.quotationRef}
+                          salesOrderRef={activeOrder.ref}
+                        />
+                      ) : null}
                     </div>
                     <div className="sales-proto-actions">
                       {isQuotationStage(activeOrder.status) && (<>
@@ -1965,7 +1986,7 @@ function SalesContent() {
                               ? 'Add at least one product before confirming'
                               : pendingApprovals.length > 0
                                 ? `Resolve ${pendingApprovals.length} pending approval(s) first`
-                                : 'Confirm turns this quotation into the Sales Order'
+                                : 'Confirm renames this quotation to a Sales Order (same document — no second order)'
                             return (
                               <button
                                 type="button"
@@ -2084,7 +2105,7 @@ function SalesContent() {
                             <strong>Customer accepted — commercial terms locked</strong>
                             <div>
                               Accepted{activeOrder.acceptedAt ? ` ${fmtDate(activeOrder.acceptedAt)}` : ''}.
-                              Confirm to turn this quotation into the Sales Order, or create a New Version / Reset to Draft to revise terms.
+                              Confirm renames this same record to a Sales Order (QUO/… → SO/…), or create a New Version / Reset to Draft to revise terms.
                             </div>
                           </div>
                         </div>
@@ -2126,9 +2147,11 @@ function SalesContent() {
                         <div className="sp-banner-ok" role="status">
                           <span aria-hidden>✓</span>
                           <div>
-                            <strong>This document is now a Sales Order</strong>
+                            <strong>Same document — now in Sales Order stage</strong>
                             <div>
-                              {activeOrder.quotationRef ? `Previous quotation ref ${activeOrder.quotationRef}` : 'Confirmed from quotation'}
+                              {activeOrder.quotationRef
+                                ? `Reference renamed from ${activeOrder.quotationRef} to ${activeOrder.ref}`
+                                : `Confirmed — this record is now ${activeOrder.ref}`}
                               {activeOrder.confirmedAt
                                 ? ` · confirmed ${fmtDate(activeOrder.confirmedAt)}${activeOrder.confirmedByName ? ` by ${activeOrder.confirmedByName}` : ''}`
                                 : ''}
@@ -2150,6 +2173,20 @@ function SalesContent() {
                           <SalesDocField label="Phone"><input readOnly value={(() => { const c = customers.find(x => x.id === activeOrder.customerId); return c?.phone || c?.mobile || '—' })()} /></SalesDocField>
                         </div>
                         <div>
+                          <SalesDocField label="Reference">
+                            <div style={{ fontSize: 12.5, paddingTop: 4, fontVariantNumeric: 'tabular-nums' }}>
+                              <strong>{activeOrder.ref}</strong>
+                              {activeOrder.status === 'sale' && activeOrder.quotationRef ? (
+                                <span style={{ display: 'block', marginTop: 2, color: 'var(--sp-text-3)', fontSize: 11.5 }}>
+                                  Renamed from {activeOrder.quotationRef} (same document)
+                                </span>
+                              ) : isQuotationStage(activeOrder.status) ? (
+                                <span style={{ display: 'block', marginTop: 2, color: 'var(--sp-text-3)', fontSize: 11.5 }}>
+                                  Confirm renames to SO/… on this same record
+                                </span>
+                              ) : null}
+                            </div>
+                          </SalesDocField>
                           <SalesDocField label={isQuotationStage(activeOrder.status) ? 'Quote date' : 'Order date'}><input readOnly value={fmtDate(activeOrder.date) || ''} /></SalesDocField>
                           <SalesDocField label={isQuotationStage(activeOrder.status) ? 'Valid until' : 'Expected delivery'}>
                             {isQuotationDraft(activeOrder.status) && !activeOrder.locked ? (
@@ -2220,7 +2257,7 @@ function SalesContent() {
                           <span aria-hidden>!</span>
                           <div className="flex flex-wrap items-center justify-between gap-2 w-full">
                             <span>
-                              Sent to the customer — commercial lines are frozen. Reset to Draft to edit, or Mark accepted when the customer agrees. Confirm turns this same document into a Sales Order.
+                              Sent to the customer — commercial lines are frozen. Reset to Draft to edit, or Mark accepted when the customer agrees. Confirm renames this same record QUO/… → SO/… (no second order).
                             </span>
                             <button type="button" className="sp-btn" onClick={() => setShowResetDraftConfirm(true)}>Reset to Draft</button>
                           </div>
@@ -2593,7 +2630,13 @@ function SalesContent() {
                               { label: 'Quotation created', date: activeOrder.date, show: true },
                               { label: `Quotation sent${activeOrder.sentTo ? ` to ${activeOrder.sentTo}` : ''}${activeOrder.sentByName ? ` by ${activeOrder.sentByName}` : ''}`, date: activeOrder.sentAt ?? activeOrder.date, show: !!activeOrder.sentAt },
                               { label: 'Customer accepted — terms locked', date: activeOrder.acceptedAt ?? activeOrder.date, show: saleOrderIsAccepted(activeOrder) },
-                              { label: `Confirmed as Sales Order${activeOrder.confirmedByName ? ` by ${activeOrder.confirmedByName}` : ''} (same document)`, date: activeOrder.confirmedAt ?? activeOrder.date, show: activeOrder.status === 'sale' },
+                              {
+                                label: activeOrder.quotationRef
+                                  ? `Confirmed — renamed ${activeOrder.quotationRef} → ${activeOrder.ref}${activeOrder.confirmedByName ? ` by ${activeOrder.confirmedByName}` : ''} (same document)`
+                                  : `Confirmed — Sales Order stage${activeOrder.confirmedByName ? ` by ${activeOrder.confirmedByName}` : ''} (same document)`,
+                                date: activeOrder.confirmedAt ?? activeOrder.date,
+                                show: activeOrder.status === 'sale',
+                              },
                               { label: 'Delivery validated', date: activeOrder.date, show: activeDeliveries.some(d => d.status === 'done') },
                               { label: 'Invoice created', date: activeOrder.date, show: activeInvoices.length > 0 },
                             ].filter(e => e.show).map((event, idx) => (

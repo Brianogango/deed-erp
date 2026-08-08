@@ -125,7 +125,7 @@ export function saleStatusPill(status: string): { label: string; tone: SalesDocP
     case 'quotation_sent':
       return { label: 'Sent', tone: 'sent' }
     case 'sale':
-      return { label: 'Confirmed', tone: 'confirmed' }
+      return { label: 'Sales Order', tone: 'confirmed' }
     case 'cancelled':
       return { label: 'Cancelled', tone: 'danger' }
     default:

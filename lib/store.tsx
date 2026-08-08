@@ -10447,8 +10447,8 @@ const storeCtx: AppState = {
           }
         }))
 
-        addAuditLog('confirm_sale_order', serverRef, `Quotation ${snapshot.ref} confirmed into Sales Order ${serverRef} by ${user.name}${systemSettings.salesLockConfirmed ? ' · order locked' : ''}`)
-        showToast(`${snapshot.ref} confirmed as ${serverRef} — prepare delivery ${del.ref} to allocate stock`)
+        addAuditLog('confirm_sale_order', serverRef, `Same document: quotation ${snapshot.ref} renamed to sales order ${serverRef} by ${user.name}${systemSettings.salesLockConfirmed ? ' · order locked' : ''}`)
+        showToast(`Confirmed — this document is now ${serverRef} (was ${snapshot.ref}). Prepare delivery ${del.ref} to allocate stock.`)
       } catch (error) {
         console.error('[confirmSO] failed:', error)
         showToast(
