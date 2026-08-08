@@ -116,6 +116,7 @@ import {
   isQuotationStage,
   isQuotationDraft,
   matchesSalesListFilter,
+  matchesSalesListTab,
   hasValidatedDeliveryForInvoice,
   effectiveDeliveryLineQty,
   deliveryDeliveredTotal,
@@ -690,15 +691,24 @@ function SalesContent() {
   const customers = useMemo(() => contacts.filter(c => c.isCustomer), [contacts])
   const sellableProducts = useMemo(() => products.filter(p => p.canBeSold && p.isActive), [products])
   const filtered = useMemo(() => salesOrderViews.filter(s => {
-    const tabMatch = listTab === 'quotations'
-      ? (isQuotationStage(s.status) || (s.status === 'cancelled' && !s.confirmedAt))
-      : (s.status === 'sale' || (s.status === 'cancelled' && !!s.confirmedAt))
+    // Same commercial document: Quotations = unconfirmed; Orders = confirmed
+    // (including cancelled SOs). Never mix SO/… rows into Quotations.
+    const tabMatch = matchesSalesListTab({
+      status: s.status,
+      confirmedAt: s.confirmedAt,
+      orderNumber: (s as any).orderNumber,
+      ref: s.ref,
+    }, listTab)
     const mf = matchesSalesListFilter(
       { status: s.status, createdByUserId: s.createdByUserId, createdById: s.createdById, lines: s.lines },
       filter,
       currentUserId,
     )
-    const ms = !search || s.ref.toLowerCase().includes(search.toLowerCase()) || s.customerName.toLowerCase().includes(search.toLowerCase())
+    const q = search.toLowerCase()
+    const ms = !search
+      || s.ref.toLowerCase().includes(q)
+      || s.customerName.toLowerCase().includes(q)
+      || (s.quotationRef || '').toLowerCase().includes(q)
     return tabMatch && mf && ms
   }), [salesOrderViews, listTab, filter, search, currentUserId])
   const stats = useMemo(() => ({
@@ -1589,8 +1599,8 @@ function SalesContent() {
                       <h1>{listTab === 'quotations' ? 'Quotations' : 'Sales orders'}</h1>
                       <div className="sub">
                         {listTab === 'quotations'
-                          ? 'Draft → send → accept → convert to sales order'
-                          : 'Confirmed → deliver → invoice → paid'}
+                          ? 'Same document: Draft → Sent → Accepted → Confirm becomes the Sales Order'
+                          : 'Same document after confirm: Reserve → Deliver → Invoice · Payment stays separate'}
                       </div>
                     </div>
                     <div className="sales-proto-actions">
@@ -1685,7 +1695,7 @@ function SalesContent() {
                             <th>Customer</th>
                             <th>Contact</th>
                             <th>Date</th>
-                            <th>Valid until</th>
+                            <th>{listTab === 'quotations' ? 'Valid until' : 'Quotation'}</th>
                             <th>Salesperson</th>
                             <th className="num">Total</th>
                             <th>Status</th>
@@ -1731,7 +1741,11 @@ function SalesContent() {
                                   <td>{s.customerName}</td>
                                   <td>{contactLabel}</td>
                                   <td>{fmtDate(s.date)}</td>
-                                  <td>{s.validUntil ? fmtDate(s.validUntil) : '—'}</td>
+                                  <td>
+                                    {listTab === 'quotations'
+                                      ? (s.validUntil ? fmtDate(s.validUntil) : '—')
+                                      : (s.quotationRef || '—')}
+                                  </td>
                                   <td>{(s as any).salespersonName || s.createdByName || '—'}</td>
                                   <td className="num">{salesKes(s.total)}</td>
                                   <td>{statusPill(s)}</td>

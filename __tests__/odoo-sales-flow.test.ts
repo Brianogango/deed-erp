@@ -22,6 +22,7 @@ import {
   isOpenInvoice,
   saleOrderCancelBlockers,
   matchesSalesListFilter,
+  matchesSalesListTab,
   saleTransitionError,
   initialDeliveryState,
   hasGeneratedDeliveryNote,
@@ -495,5 +496,33 @@ describe('list filters', () => {
     expect(matchesSalesListFilter(so, 'to_invoice')).toBe(true)
     expect(matchesSalesListFilter(invoiced, 'to_invoice')).toBe(false)
     expect(matchesSalesListFilter(invoiced, 'fully_invoiced')).toBe(true)
+  })
+
+  it('keeps cancelled SO/… rows on Orders, not Quotations (same-document tabs)', () => {
+    const draftQuote = { status: 'quotation', ref: 'QUO/2026/0132' }
+    const sentQuote = { status: 'quotation_sent', ref: 'QUO/2026/0120' }
+    const cancelledQuote = { status: 'cancelled', ref: 'QUO/2026/0100' }
+    // Screenshot bug: cancelled sales orders with SO prefix but no confirmedAt
+    // were incorrectly listed under Quotations.
+    const cancelledSoNoConfirmedAt = { status: 'cancelled', ref: 'SO/2026/0030' }
+    const cancelledSoWithConfirmedAt = {
+      status: 'cancelled',
+      orderNumber: 'SO/2026/0028',
+      confirmedAt: '2026-07-01',
+    }
+    const liveSo = { status: 'sale', ref: 'SO/2026/0040', quotationRef: 'QUO/2026/0099' }
+
+    expect(matchesSalesListTab(draftQuote, 'quotations')).toBe(true)
+    expect(matchesSalesListTab(sentQuote, 'quotations')).toBe(true)
+    expect(matchesSalesListTab(cancelledQuote, 'quotations')).toBe(true)
+    expect(matchesSalesListTab(cancelledSoNoConfirmedAt, 'quotations')).toBe(false)
+    expect(matchesSalesListTab(cancelledSoWithConfirmedAt, 'quotations')).toBe(false)
+    expect(matchesSalesListTab(liveSo, 'quotations')).toBe(false)
+
+    expect(matchesSalesListTab(draftQuote, 'orders')).toBe(false)
+    expect(matchesSalesListTab(cancelledQuote, 'orders')).toBe(false)
+    expect(matchesSalesListTab(cancelledSoNoConfirmedAt, 'orders')).toBe(true)
+    expect(matchesSalesListTab(cancelledSoWithConfirmedAt, 'orders')).toBe(true)
+    expect(matchesSalesListTab(liveSo, 'orders')).toBe(true)
   })
 })

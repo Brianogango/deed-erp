@@ -785,6 +785,40 @@ export function matchesSalesListFilter(
   }
 }
 
+/**
+ * Quotations vs Orders tabs (Odoo same-document model).
+ *
+ * Quotations: unconfirmed commercial proposals (draft/sent), plus cancelled
+ * quotes that were never confirmed.
+ * Orders: confirmed sales (status sale) and cancelled records that already
+ * carried confirmation evidence (confirmedAt / SO number). Never park an
+ * SO/… cancelled row under Quotations just because confirmedAt is missing.
+ */
+export function matchesSalesListTab(
+  so: {
+    status?: unknown
+    confirmedAt?: unknown
+    orderNumber?: unknown
+    ref?: unknown
+  },
+  tab: 'quotations' | 'orders',
+): boolean {
+  const status = normalizeSaleStatus(so.status)
+  // saleOrderLooksConfirmed intentionally returns false for cancelled rows
+  // (cancel is terminal). For list tabs we still need confirmation evidence:
+  // confirmedAt and/or an SO/… number after the same document was confirmed.
+  const number = String(so.orderNumber ?? so.ref ?? '').trim()
+  const wasConfirmed = Boolean(so.confirmedAt) || /^SO[/\\-]/i.test(number)
+
+  if (tab === 'quotations') {
+    if (isQuotationStage(status)) return true
+    // Cancelled before confirm only — never SO-numbered leftovers.
+    return status === 'cancelled' && !wasConfirmed
+  }
+  if (status === 'sale') return true
+  return status === 'cancelled' && wasConfirmed
+}
+
 // ─── Client-side record normalization ────────────────────────────────────────
 
 /**
