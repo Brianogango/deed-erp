@@ -860,7 +860,14 @@ ACCOUNTS_EMAIL=accounts@deed.co.ke`}</pre>
               </SectionCard>
               <SectionCard title="Pricing">
                 <SettingRow label="Enable Pricelists" desc="Lets sales reps pick a pricelist (Retail/Wholesale/Kilimall/custom) on new quotations; off keeps every quotation pricing from Retail automatically"><Toggle on={ss.salesPricelists} onChange={v => updateSystemSettings({ salesPricelists: v })} /></SettingRow>
-                <SettingRow label="Discount Control" desc="Track and flag discounts above threshold on quotations (sales confirmation no longer requires approval)"><Toggle on={ss.salesDiscountControl} onChange={v => updateSystemSettings({ salesDiscountControl: v })} /></SettingRow>
+                <SettingRow label="Discount Control" desc="Restrict who can edit line discounts on quotations. High discounts, below-cost prices, and low margins still require approval before confirm."><Toggle on={ss.salesDiscountControl} onChange={v => updateSystemSettings({ salesDiscountControl: v })} /></SettingRow>
+                <SettingRow label="Minimum sales margin %" desc="Gross margin after discount below this % triggers special_pricing approval on confirm. Floor price remains product cost.">
+                  <Input
+                    type="number"
+                    value={String(ss.salesMinMarginPercent ?? 10)}
+                    onChange={v => updateSystemSettings({ salesMinMarginPercent: Math.max(0, Math.min(100, Number(v) || 0)) })}
+                  />
+                </SettingRow>
                 {ss.salesPricelists && <PricelistsPanel showToast={showToast} />}
               </SectionCard>
               <SectionCard title="Sales price calculator">
@@ -914,8 +921,8 @@ ACCOUNTS_EMAIL=accounts@deed.co.ke`}</pre>
                 </div>
               </SectionCard>
               <SectionCard title="Orders">
-                <SettingRow label="Confirmed Quotes → Sales Orders" desc="Mandatory flow: quote must be confirmed before becoming an order"><Toggle on={ss.salesConfirmedQuotesToOrders} onChange={v => updateSystemSettings({ salesConfirmedQuotesToOrders: v })} /></SettingRow>
-                <SettingRow label="Lock Confirmed Sales" desc="Confirmed sales orders are locked; only a director can unlock to edit, and every unlock is audited"><Toggle on={ss.salesLockConfirmed} onChange={v => updateSystemSettings({ salesLockConfirmed: v })} /></SettingRow>
+                <SettingRow label="Confirm quotation → Sales Order" desc="Mandatory: Confirm turns the same quotation document into a Sales Order before fulfilment or invoicing"><Toggle on={ss.salesConfirmedQuotesToOrders} onChange={v => updateSystemSettings({ salesConfirmedQuotesToOrders: v })} /></SettingRow>
+                <SettingRow label="Lock Confirmed Sales" desc="Confirmed sales orders freeze commercial fields; only a director can unlock to edit, and every unlock is audited"><Toggle on={ss.salesLockConfirmed} onChange={v => updateSystemSettings({ salesLockConfirmed: v })} /></SettingRow>
               </SectionCard>
             </>
           )}

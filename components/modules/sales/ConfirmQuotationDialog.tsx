@@ -4,6 +4,12 @@ import { Modal } from '@/components/ui'
 import { fmtDate, fmtKes } from '@/lib/store'
 import type { ConfirmQuotationMode } from '@/lib/sales/confirm-quotation'
 
+export type ConfirmApprovalBlocker = {
+  type: string
+  reason: string
+  status?: 'pending' | 'needed'
+}
+
 type Props = {
   orderRef: string
   customerName: string
@@ -12,6 +18,7 @@ type Props = {
   deliveryDate?: string
   lineCount: number
   shortages: Array<{ productName: string; qty: number; available: number }>
+  approvalBlockers?: ConfirmApprovalBlocker[]
   canReserve: boolean
   canSkipReserve: boolean
   confirming: boolean
@@ -27,18 +34,20 @@ export function ConfirmQuotationDialog({
   deliveryDate,
   lineCount,
   shortages,
+  approvalBlockers = [],
   canReserve,
   canSkipReserve,
   confirming,
   onClose,
   onConfirm,
 }: Props) {
+  const blocked = approvalBlockers.length > 0
   return (
     <Modal
       title="Confirm quotation"
       subtitle={`${orderRef} · ${customerName}`}
       onClose={confirming ? () => {} : onClose}
-      width={480}
+      width={520}
       variant="enterprise"
       footer={
         <div className="flex flex-wrap items-center justify-end gap-2">
@@ -49,33 +58,38 @@ export function ConfirmQuotationDialog({
             <button
               type="button"
               className="btn-secondary text-xs"
-              disabled={confirming}
+              disabled={confirming || blocked}
+              title={blocked ? 'Resolve approvals before confirming' : 'Confirm as Sales Order without reserving stock (Manual)'}
               onClick={() => onConfirm('no_reserve')}
             >
-              {confirming ? 'Confirming…' : 'Confirm without reservation'}
+              {confirming ? 'Confirming…' : 'Confirm · Manual reserve'}
             </button>
           )}
           <button
             type="button"
             className="btn-primary text-xs"
-            disabled={confirming}
+            disabled={confirming || blocked}
+            title={blocked ? 'Resolve approvals before confirming' : undefined}
             onClick={() => onConfirm(canReserve ? 'reserve' : 'no_reserve')}
           >
             {confirming
               ? 'Confirming…'
               : canReserve
-                ? 'Confirm and Reserve'
-                : 'Confirm quotation'}
+                ? 'Confirm · Reserve stock'
+                : 'Confirm as Sales Order'}
           </button>
         </div>
       }
     >
       <div className="flex flex-col gap-3 text-xs">
-        <p className="text-[var(--text-3)]">
-          Creates a linked sales order, locks this quotation version when configured, and opens a waiting
-          delivery. Stock is reserved only when you choose <strong>Confirm and Reserve</strong> (or when
-          you prepare the delivery later).
+        <p className="text-[var(--text-3)] m-0">
+          This quotation <strong>becomes</strong> the Sales Order (same document — no duplicate order).
+          Commercial terms lock when configured, and a waiting delivery opens for warehouse.
         </p>
+        <div className="rounded-md border border-[var(--border-lt)] bg-[var(--bg-surface)] px-3 py-2 text-[10px] text-[var(--text-3)] space-y-1">
+          <p className="m-0"><strong className="text-[var(--text-2)]">At confirmation</strong> — reserve available stock now (Confirm · Reserve stock).</p>
+          <p className="m-0"><strong className="text-[var(--text-2)]">Manual</strong> — confirm without reserving; warehouse reserves when preparing the delivery.</p>
+        </div>
         <ul className="m-0 list-disc space-y-1 pl-4 text-[var(--text-2)]">
           <li>
             {lineCount} line{lineCount === 1 ? '' : 's'} · {fmtKes(total)}
@@ -92,10 +106,21 @@ export function ConfirmQuotationDialog({
             ))
           )}
         </ul>
-        {!canReserve && (
-          <p className="rounded-md border border-[var(--border-lt)] bg-[var(--bg-surface)] px-3 py-2 text-[10px] text-[var(--text-3)]">
-            Your role confirms the sales order without reserving stock. Inventory can prepare the delivery
-            afterward.
+        {blocked && (
+          <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-900">
+            <p className="m-0 font-semibold">
+              Resolve {approvalBlockers.length} approval{approvalBlockers.length === 1 ? '' : 's'} before confirming
+            </p>
+            <ul className="m-0 mt-1 list-disc pl-4 space-y-0.5">
+              {approvalBlockers.map((b, i) => (
+                <li key={`${b.type}-${i}`}>{b.reason}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+        {!canReserve && !blocked && (
+          <p className="rounded-md border border-[var(--border-lt)] bg-[var(--bg-surface)] px-3 py-2 text-[10px] text-[var(--text-3)] m-0">
+            Your role confirms without reserving stock. Inventory can prepare the delivery afterward.
           </p>
         )}
       </div>
