@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  allocateDeliveredQtyToOrderLines,
   buildSerialPoolsByProduct,
   pairOrderLinesWithDeliveryLines,
   planPrepareDeliveryLines,
@@ -133,5 +134,29 @@ describe('delivery prepare with duplicate product lines', () => {
     expect(result.ok).toBe(true)
     if (!result.ok) return
     expect(result.lines[1].serialIds).toEqual(['b', 'c'])
+  })
+
+  it('allocates a shipment across duplicate product rows without double-counting', () => {
+    const lines = allocateDeliveredQtyToOrderLines(
+      [
+        { id: 'a', productId: thinkpad, qty: 2, qtyDelivered: 0 },
+        { id: 'b', productId: thinkpad, qty: 2, qtyDelivered: 0 },
+      ],
+      { [thinkpad]: 2 },
+      'add',
+    )
+    expect(lines.map(l => l.qtyDelivered)).toEqual([2, 0])
+  })
+
+  it('heals absolute delivered totals FIFO across duplicate product rows', () => {
+    const lines = allocateDeliveredQtyToOrderLines(
+      [
+        { id: 'a', productId: thinkpad, qty: 2, qtyDelivered: 0 },
+        { id: 'b', productId: thinkpad, qty: 2, qtyDelivered: 0 },
+      ],
+      { [thinkpad]: 2 },
+      'max',
+    )
+    expect(lines.map(l => l.qtyDelivered)).toEqual([2, 0])
   })
 })

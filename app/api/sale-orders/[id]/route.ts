@@ -287,6 +287,14 @@ async function enforceSaleWorkflow(
       data.sentAt = new Date()
       data.sentById = session.user.id
     }
+    // Reset to draft clears send stamps so a later Send is treated as initial
+    // (and edit locks stay tied to status, not a stale sentAt).
+    if (to === 'quotation' && from === 'quotation_sent') {
+      if (data.sentAt === undefined) data.sentAt = null
+      if (data.sentById === undefined) data.sentById = null
+      if (data.sentTo === undefined) data.sentTo = null
+      if (data.sentMessage === undefined) data.sentMessage = null
+    }
   }
 
   // Lock rules: only a director may lock/unlock, and a locked order's

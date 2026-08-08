@@ -9,6 +9,7 @@ import {
   invoiceableQty,
   normalizeSaleStatus,
 } from '@/lib/odoo-sales-flow'
+import { allocateDeliveredQtyToOrderLines } from '@/lib/delivery-prepare'
 import { mapDbInvoiceItemsToClientLines } from '@/lib/finance-invoice'
 import { loadAppState, saveStoreKeys } from '@/lib/server-store'
 import { ensureConfirmedSaleOrderForFulfillment } from '@/lib/sale-order-confirm-heal.server'
@@ -85,14 +86,23 @@ export async function POST(
 
     // Heal qtyDelivered from Done delivery lines (qtyDone / serials) when a
     // legacy Done DN left Prisma delivered=0 — otherwise Create Invoice is blocked.
+    // Allocate FIFO across duplicate product rows so each line does not receive
+    // the full product total (that overstated invoiceable qty).
     const healedFromDeliveries = deliveredByProductFromDoneDeliveries(deliveries, orderId)
+    const itemsForHeal = (confirmed.items ?? []).map(item => ({
+      id: item.id,
+      productId: item.productId ?? undefined,
+      qty: Number(item.qty) || 0,
+      qtyDelivered: Math.max(
+        Number(item.qtyDelivered) || 0,
+        item.serialNumberId ? 1 : 0,
+      ),
+    }))
+    const allocated = allocateDeliveredQtyToOrderLines(itemsForHeal, healedFromDeliveries, 'max')
+    const healedById = new Map(allocated.map(row => [row.id, Number(row.qtyDelivered) || 0]))
     const healedItems = await Promise.all((confirmed.items ?? []).map(async item => {
-      const productId = item.productId ?? ''
-      const fromDelivery = productId ? (healedFromDeliveries[productId] ?? 0) : 0
-      const fromSerial = item.serialNumberId ? 1 : 0
       const current = Number(item.qtyDelivered) || 0
-      const demand = Number(item.qty) || 0
-      const healed = Math.min(demand, Math.max(current, fromDelivery, fromSerial))
+      const healed = healedById.get(item.id) ?? current
       if (healed > current) {
         await prisma.saleOrderItem.update({
           where: { id: item.id },

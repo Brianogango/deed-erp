@@ -191,3 +191,44 @@ export function pairOrderLinesWithDeliveryLines<
   }
   return pairs
 }
+
+/**
+ * Allocate a per-product delivered-qty pool onto SO lines FIFO.
+ *
+ * Duplicate product rows must not each receive the full product total
+ * (that overstates qtyDelivered and unlocks phantom invoiceable qty).
+ *
+ * - `add`: increment qtyDelivered by the allocated share of this shipment
+ * - `max`: heal absolute delivered totals (set qtyDelivered = max(current, allocated))
+ */
+export function allocateDeliveredQtyToOrderLines<
+  OL extends { productId?: string; qty?: number; qtyDelivered?: number; lineType?: string },
+>(
+  orderLines: OL[] | null | undefined,
+  deliveredByProduct: Readonly<Record<string, number>>,
+  mode: 'add' | 'max' = 'add',
+): OL[] {
+  const pool: Record<string, number> = {}
+  for (const [productId, raw] of Object.entries(deliveredByProduct)) {
+    pool[productId] = Math.max(0, Number(raw) || 0)
+  }
+  return (orderLines ?? []).map(line => {
+    if (line.lineType === 'section' || !line.productId) return line
+    const available = Math.max(0, Number(pool[line.productId]) || 0)
+    if (available <= 0) return line
+    const demand = Math.max(0, Number(line.qty) || 0)
+    const current = Math.max(0, Number(line.qtyDelivered) || 0)
+    if (mode === 'add') {
+      const room = Math.max(0, demand - current)
+      const take = Math.min(room, available)
+      pool[line.productId] = available - take
+      if (take <= 0) return line
+      return { ...line, qtyDelivered: current + take }
+    }
+    // Absolute heal: consume the delivery total across lines; never exceed demand.
+    const take = Math.min(demand, available)
+    pool[line.productId] = available - take
+    const next = Math.max(current, take)
+    return next === current ? line : { ...line, qtyDelivered: next }
+  })
+}

@@ -69,7 +69,12 @@ import {
   openDeliveryDemandByProduct,
   saleOrderLooksConfirmed,
 } from '@/lib/odoo-sales-flow'
-import { pairOrderLinesWithDeliveryLines, planPrepareDeliveryLines, sumQtyByProductId } from '@/lib/delivery-prepare'
+import {
+  allocateDeliveredQtyToOrderLines,
+  pairOrderLinesWithDeliveryLines,
+  planPrepareDeliveryLines,
+  sumQtyByProductId,
+} from '@/lib/delivery-prepare'
 import {
   normalizeDocumentPaymentDetails,
   type DocumentPaymentDetails,
@@ -3102,7 +3107,7 @@ export interface AppState {
   markQuotationSent: (id: string, recipient?: string, message?: string) => void | Promise<void>
   /** Lock/unlock a confirmed sales order (Lock Confirmed Sales setting). */
   setSaleOrderLock: (id: string, locked: boolean) => void
-  resetSOToDraft: (id: string) => void
+  resetSOToDraft: (id: string) => void | Promise<boolean>
   cancelSO: (id: string) => void
   /** Quotation versioning: clone a quotation-stage SO into a new draft version (v2, v3, …). Confirmed SOs use duplicateSaleOrder in the UI instead. */
   createNewSOVersion: (orderId: string) => Promise<SaleOrder | null>
@@ -10675,14 +10680,12 @@ const storeCtx: AppState = {
       // Clamp to SO remaining after this shipment; skip if already covered or
       // another open picking already holds the remainder (avoids DN spam on qty=1).
       let backorder: Delivery | null = null
+      const shippedByProduct: Record<string, number> = {}
+      doneLines.forEach(l => {
+        shippedByProduct[l.productId] = (shippedByProduct[l.productId] ?? 0) + l.qty
+      })
       const remainingAfterShip = remainingUndeliveredByProduct(
-        (so.lines ?? []).map(line => {
-          const shipped = doneLines.find(d => d.productId === line.productId)?.qty ?? 0
-          return {
-            ...line,
-            qtyDelivered: Math.max(0, Number(line.qtyDelivered) || 0) + shipped,
-          }
-        }),
+        allocateDeliveredQtyToOrderLines(so.lines ?? [], shippedByProduct, 'add'),
       )
       const otherOpenDemand = openDeliveryDemandByProduct(
         delRef.current.filter(d => d.id !== deliveryId),
@@ -10714,9 +10717,10 @@ const storeCtx: AppState = {
         }
         sync('/api/deliveries', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(backorder) })
       }
-      const completedLines = del.lines.map(l => ({
+      // Prefer per-input-line done qty — never .find(productId) across duplicates.
+      const completedLines = del.lines.map((l, i) => ({
         ...l,
-        qtyDone: doneLines.find(x => x.productId === l.productId)?.qty ?? 0,
+        qtyDone: lineDone[i] ?? 0,
       }))
       setDeliveries(p => {
         const next = p.map(d => d.id === deliveryId ? {
@@ -10730,13 +10734,12 @@ const storeCtx: AppState = {
 
       // Track delivered quantities on the sale order lines. The order status
       // itself stays "Sales Order" — delivery progress is not a sale state.
+      // Allocate FIFO so duplicate product rows do not each get the full total.
       setSaleOrders(p => p.map(s => {
         if (s.id !== del.saleOrderId) return s;
         const doneByProduct: Record<string, number> = {}
         doneLines.forEach(l => { doneByProduct[l.productId] = (doneByProduct[l.productId] ?? 0) + l.qty })
-        const lines = s.lines.map((l: any) => doneByProduct[l.productId]
-          ? { ...l, qtyDelivered: Math.min(Number(l.qty) || 0, (Number(l.qtyDelivered) || 0) + doneByProduct[l.productId]) }
-          : l)
+        const lines = allocateDeliveredQtyToOrderLines(s.lines, doneByProduct, 'add')
         const updated = { ...s, lines }
         sync(`/api/sale-orders/${s.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
         return updated
@@ -10778,17 +10781,21 @@ const storeCtx: AppState = {
       const so = soRef.current.find(s => s.id === delivery.saleOrderId)
       if (so) {
         // Persist SO qtyDelivered so Create Invoice (delivery policy) can proceed.
+        // FIFO allocation — duplicate product rows must not each receive the full total.
         const doneByProduct: Record<string, number> = {}
         healedLines.forEach(line => {
           if ((line.qtyDone || 0) > 0) {
             doneByProduct[line.productId] = (doneByProduct[line.productId] ?? 0) + (line.qtyDone || 0)
           }
         })
-        const lineUpdates = so.lines
+        const healedSoLines = allocateDeliveredQtyToOrderLines(so.lines, doneByProduct, 'max')
+        const prevById = new Map(so.lines.map(l => [l.id, Number(l.qtyDelivered) || 0]))
+        const lineUpdates = healedSoLines
           .map(line => {
-            const add = doneByProduct[line.productId] ?? 0
-            if (add <= 0) return null
-            const next = Math.max(Number(line.qtyDelivered) || 0, Math.min(Number(line.qty) || 0, add))
+            if (!line.id) return null
+            const next = Number(line.qtyDelivered) || 0
+            const prev = prevById.get(line.id) ?? 0
+            if (next <= prev) return null
             return { id: line.id, qtyDelivered: next }
           })
           .filter(Boolean) as Array<{ id: string; qtyDelivered: number }>
@@ -10983,13 +10990,13 @@ const storeCtx: AppState = {
       addAuditLog('delete_sale_order', so.ref, `Deleted by ${actor?.name || 'user'}`)
       showToast('Order deleted')
     },
-    resetSOToDraft: (id) => {
+    resetSOToDraft: async (id) => {
       // Odoo "Set to Quotation": back to the quotation stage. Pending
       // deliveries are cancelled and reservations released so the quotation
       // carries no fulfilment side effects.
       const actor = currentUser()
       const so = soRef.current.find(s => s.id === id)
-      if (!so) return
+      if (!so) return false
       // Sent → draft: sales staff may unlock for edits. Confirmed SO → quotation
       // still requires Finance / Director.
       const salesCanResetSent = ['director', 'finance_officer', 'sales_rep', 'admin_officer'].includes(actor?.role ?? '')
@@ -10997,11 +11004,11 @@ const storeCtx: AppState = {
       if (so.status === 'quotation_sent' || so.status === 'cancelled') {
         if (!actor || !salesCanResetSent) {
           showToast('You do not have permission to reset this quotation to draft', 'error')
-          return
+          return false
         }
       } else if (!actor || !financeCanResetConfirmed) {
         showToast('Only Finance or Director can reset a sale order to quotation', 'error')
-        return
+        return false
       }
       const blockers = saleOrderCancelBlockers({
         status: so.status === 'sale' ? 'sale' : so.status,
@@ -11011,9 +11018,41 @@ const storeCtx: AppState = {
       // Always block reset when fulfilment/AR exists (same as cancel for confirmed).
       if (so.status === 'sale' && blockers.length > 0) {
         showToast(`Cannot reset ${so.ref}: ${blockers.join('; ')}`, 'error')
-        return
+        return false
       }
       const pendingDeliveries = delRef.current.filter(d => d.saleOrderId === id && ['draft', 'waiting', 'ready'].includes(d.status))
+      // Persist the status change first so a failed PATCH cannot leave the UI
+      // editable while the server still has quotation_sent / sale.
+      const updated = {
+        ...so,
+        status: 'quotation' as const,
+        savedAt: undefined,
+        deliveryId: undefined,
+        locked: undefined,
+        confirmedAt: undefined,
+        confirmedById: undefined,
+        confirmedByName: undefined,
+        // Clear send stamps so "Send" is treated as initial again after reset.
+        sentAt: undefined,
+        sentTo: undefined,
+        sentById: undefined,
+        sentByName: undefined,
+        sentMessage: undefined,
+        lines: so.lines.map((l: any) => ({ ...l, serialIds: [] })),
+      }
+      const result = await patchSaleOrderPersist(id, {
+        ...updated,
+        locked: false,
+        confirmedAt: null,
+        sentAt: null,
+        sentTo: null,
+        sentById: null,
+        sentMessage: null,
+      })
+      if (!result.ok) {
+        showToast(result.error || 'Could not reset to quotation — try again', 'error')
+        return false
+      }
       pendingDeliveries.forEach(d => {
         setDeliveries(prev => prev.map(x => x.id === d.id ? { ...x, status: 'cancelled' as const } : x))
         sync(`/api/deliveries/${d.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'cancelled' }) })
@@ -11026,24 +11065,15 @@ const storeCtx: AppState = {
       if (allSerialIds.length > 0) {
         setSerials(p => p.map(s => allSerialIds.includes(s.id) ? { ...s, status: 'available', saleOrderId: undefined } : s))
       }
-      setSaleOrders(p => p.map(s => {
-        if (s.id !== id) return s;
-        const updated = {
-          ...s,
-          status: 'quotation' as const,
-          savedAt: undefined,
-          deliveryId: undefined,
-          locked: undefined,
-          confirmedAt: undefined,
-          confirmedById: undefined,
-          confirmedByName: undefined,
-          lines: s.lines.map((l: any) => ({ ...l, serialIds: [] })),
-        }
-        sync(`/api/sale-orders/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...updated, locked: false, confirmedAt: null }) })
-        return updated
-      }))
+      const [normalized] = normalizeSaleOrdersForClient([
+        { ...updated, ...(result.data && typeof result.data === 'object' ? result.data : {}), status: 'quotation' },
+      ]) as SaleOrder[]
+      const nextRow = normalized ?? updated
+      soRef.current = soRef.current.map(s => s.id === id ? nextRow : s)
+      setSaleOrders(p => p.map(s => s.id === id ? nextRow : s))
       addAuditLog('reset_to_quotation', so.ref, `Order set back to Quotation by ${actor.name}`)
       showToast(so.status === 'quotation_sent' ? 'Quotation reset to draft — you can edit and save' : 'Order set back to Quotation')
+      return true
     },
     cancelSO: (id) => {
       const actor = currentUser()
@@ -16320,9 +16350,7 @@ const storeCtx: AppState = {
         if (so.id !== delivery.saleOrderId) return so
         const doneByProduct: Record<string, number> = {}
         delivery.lines.forEach(l => { doneByProduct[l.productId] = (doneByProduct[l.productId] ?? 0) + l.qty })
-        const lines = so.lines.map((l: any) => doneByProduct[l.productId]
-          ? { ...l, qtyDelivered: Math.min(Number(l.qty) || 0, (Number(l.qtyDelivered) || 0) + doneByProduct[l.productId]) }
-          : l)
+        const lines = allocateDeliveredQtyToOrderLines(so.lines, doneByProduct, 'add')
         return { ...so, lines }
       }))
 
