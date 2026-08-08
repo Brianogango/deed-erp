@@ -1587,7 +1587,14 @@ export function SearchPicker<T extends { id: string }>({
               onClick={() => {
                 onSelect(item)
                 setOpen(false)
-                setQuery(formatSelected ? formatSelected(item) : '')
+                // Keep a visible label after select. Clearing the input made
+                // "Add Product" look like the choice failed even when state set.
+                if (formatSelected) {
+                  setQuery(formatSelected(item))
+                } else {
+                  const anyItem = item as { name?: string; label?: string; ref?: string }
+                  setQuery(String(anyItem.name || anyItem.label || anyItem.ref || '').trim())
+                }
               }}
             >
               {renderItem(item)}

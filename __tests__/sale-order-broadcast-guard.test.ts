@@ -9,7 +9,7 @@ function shouldBroadcastSaleOrders(body: Record<string, unknown>, opts: {
   statusChanged: boolean
 }) {
   const skipBroadcast = body.skipBroadcast === true || body._softPersist === true
-  const touchedLines = Array.isArray(body.items ?? body.lines)
+  const touchedLines = Array.isArray(body.lines) || Array.isArray(body.items)
   return !skipBroadcast && (touchedLines || opts.confirming || opts.statusChanged)
 }
 

@@ -12,7 +12,7 @@ const APPROVER_ROLES = new Set([
 ])
 
 function orderLines(body: any, existing?: any): any[] {
-  const raw = body.items ?? body.lines
+  const raw = Array.isArray(body.lines) ? body.lines : body.items
   if (Array.isArray(raw)) return raw.filter((l: any) => l.lineType !== 'section')
   return (existing?.items ?? []).filter((l: any) => l.lineType !== 'section')
 }

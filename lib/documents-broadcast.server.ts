@@ -17,8 +17,9 @@ import { mapDbInvoiceItemsToClientLines } from '@/lib/finance-invoice'
 // for someone to touch the SO again."
 
 function mapSaleOrderToClient(order: any) {
+  const { items: _prismaItems, client: _client, ...orderRest } = order ?? {}
   return {
-    ...order,
+    ...orderRest,
     ref: order.orderNumber,
     quotationRef: order.quotationRef ?? undefined,
     proformaRef: order.proformaRef ?? undefined,
