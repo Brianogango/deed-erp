@@ -144,6 +144,7 @@ import {
   isOpeningStockMove,
 } from '@/lib/inventory/opening-stock'
 import { billableQty, assertBillableQty } from '@/lib/purchase/three-way-match'
+import { allocatePurchaseReturn } from '@/lib/purchase/return-allocation'
 import {
   formatStockByLocation,
   resolveBulkDeliverySourceLocation,
@@ -2379,6 +2380,41 @@ const buildInvoicePostingJournal = (
   const totalCredit = lines.reduce((s, l) => s + l.credit, 0)
   const totalDebit = lines.reduce((s, l) => s + l.debit, 0)
   return { id: uid(), ref: `JRN/${inv.ref}`, date: now(), source: 'bill', description: `Bill ${inv.ref} — ${inv.partnerName}`, status: 'posted', invoiceId: inv.id, lines, totalDebit, totalCredit }
+}
+
+// Vendor credit note (purchase return) — the mirror image of the vendor-bill
+// posting: debit AP so the amount owed to the vendor shrinks, credit the
+// purchase/cost accounts, and give back any input VAT originally claimed.
+const buildVendorCreditJournal = (
+  credit: Invoice,
+  resolveProduct?: (productId: string) => AccountableProduct | undefined,
+  chartAccounts: Array<{ code: string; name: string }> = [],
+): JournalEntry => {
+  const purchaseBuckets = aggregateLinesByAccount({
+    lines: credit.lines.map(l => ({
+      productId: l.productId,
+      subtotal: Math.abs(l.subtotal),
+      accountCode: l.accountCode,
+      lineType: l.lineType,
+    })),
+    resolveProduct,
+    side: 'purchase',
+    accounts: chartAccounts,
+  })
+  const sub = Math.abs(credit.subtotal)
+  const tax = Math.abs(credit.taxTotal)
+  const total = Math.abs(credit.total)
+  const purchaseLines = purchaseBuckets.length
+    ? purchaseBuckets.map(b => accountLine(b.account, `Purchase return: ${credit.partnerName}`, 0, b.amount))
+    : [accountLine(formatAccountLabel(COMPANY_ACCOUNT_FALLBACKS.costAccountCode, chartAccounts), `Purchase return: ${credit.partnerName}`, 0, sub)]
+  const lines = [
+    accountLine('3000 - Accounts Payable', `AP credit: ${credit.partnerName}`, total, 0),
+    ...purchaseLines,
+    ...(tax > 0 ? [accountLine('1150 - VAT Input', `VAT input reversal on ${credit.ref}`, 0, tax)] : []),
+  ]
+  const totalCredit = lines.reduce((s, l) => s + l.credit, 0)
+  const totalDebit = lines.reduce((s, l) => s + l.debit, 0)
+  return { id: uid(), ref: `JRN/${credit.ref}`, date: now(), source: 'bill', description: `Vendor credit ${credit.ref} — ${credit.partnerName}`, status: 'posted', invoiceId: credit.id, lines, totalDebit, totalCredit }
 }
 
 const buildInvoicePaymentJournal = (
@@ -12000,9 +12036,10 @@ const storeCtx: AppState = {
       const ret = purchaseReturnsRef.current.find(r => r.id === returnId)
       if (!ret) { showToast('Return not found', 'error'); return }
       if (ret.lines.length === 0) { showToast('Add at least one return line before confirming', 'error'); return }
+      const po = poRef.current.find(p => p.id === ret.poId)
+      if (!po) { showToast('Linked purchase order not found', 'error'); return }
       // Deduct stock, mark serials as returned
       ret.lines.forEach(l => {
-        const prod = prodRef.current.find(x => x.id === l.productId)
         if (l.requiresSerial) {
           l.serialIds.forEach(sid => setSerials(p => p.map(s => s.id === sid ? { ...s, status: 'returned', location: 'vendor' } : s)))
           setProducts(p => p.map(x => x.id === l.productId ? { ...x, stockQty: Math.max(0, x.stockQty - l.serialIds.length) } : x))
@@ -12013,28 +12050,151 @@ const storeCtx: AppState = {
           addMove(l.productId, l.productName, l.qty, 'return', `Return ${ret.ref}`, ret.ref, 'warehouse', 'vendor', [])
         }
       })
-      // Create credit note
-      const creditTotal = ret.lines.reduce((a, l) => {
-        const po = poRef.current.find(p => p.id === ret.poId)!
-        return a + l.qty * (po.lines.find(x => x.productId === l.productId)?.unitPrice ?? 0)
-      }, 0)
-      const creditNote: Invoice = {
-        id: uid(), ref: seq('BILL', 'inv'), type: 'vendor_bill', status: 'posted',
-        partnerId: ret.vendorId, partnerName: ret.vendorName,
-        date: now(), dueDate: now(),
-        lines: ret.lines.map(l => {
-          const po = poRef.current.find(p => p.id === ret.poId)!
-          const up = po.lines.find(x => x.productId === l.productId)?.unitPrice ?? 0
-          return { id: uid(), description: `RETURN: ${l.productName} ×${l.qty}`, qty: l.qty, unitPrice: -up, taxRate: companySettings.vatRate, subtotal: -(l.qty * up) }
-        }),
-        subtotal: -creditTotal, taxTotal: -Math.round(creditTotal * companySettings.vatRate / 100), total: -(creditTotal + Math.round(creditTotal * companySettings.vatRate / 100)), amountPaid: 0,
-        purchaseOrderId: ret.poId, notes: `Purchase return ${ret.ref}`,
+      // Decide what each returned unit does to the money trail: wind back
+      // unbilled received qty, shrink draft bills, and only credit quantities
+      // that were billed on a POSTED bill. VAT mirrors each PO line's tax rate
+      // (zero unless the line was bought with VAT).
+      const draftBills = invRef.current.filter(i =>
+        i.type === 'vendor_bill' && i.purchaseOrderId === po.id && invoiceDocState(i.status) === 'draft' && i.total > 0,
+      )
+      const allocation = allocatePurchaseReturn({
+        poLines: po.lines.map(l => ({
+          id: l.id, productId: l.productId, productName: l.productName,
+          qtyReceived: l.qtyReceived, qtyBilled: l.qtyBilled,
+          unitPrice: l.unitPrice, taxRate: l.taxRate, accountCode: l.accountCode,
+        })),
+        returnLines: ret.lines.map(l => ({ productId: l.productId, productName: l.productName, qty: l.qty })),
+        draftBills: draftBills.map(b => ({ id: b.id, lines: b.lines.map(x => ({ id: x.id, productId: x.productId, qty: x.qty })) })),
+      })
+      // Wind back the PO's received/billed counters so three-way match stays true.
+      if (allocation.poLineAdjustments.length > 0) {
+        setPurchaseOrders(p => {
+          const next = p.map(x => {
+            if (x.id !== po.id) return x
+            const lines = x.lines.map(line => {
+              const adj = allocation.poLineAdjustments.find(a => a.poLineId === line.id)
+              if (!adj) return line
+              return { ...line, qtyReceived: adj.qtyReceived, qtyBilled: adj.qtyBilled }
+            })
+            // Returned goods reopen the receiving step (vendor may re-supply).
+            const status = x.status === 'received' && lines.some(l => l.qtyReceived < l.qty) ? 'partial' as const : x.status
+            return { ...x, lines, status }
+          })
+          const updated = next.find(x => x.id === po.id)
+          if (updated) sync(`/api/purchase-orders/${po.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+          return next
+        })
       }
-      setInvoices(p => [creditNote, ...p])
-      sync('/api/invoices', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(creditNote) })
-      purchaseReturnsRef.current = purchaseReturnsRef.current.map(r => r.id === returnId ? { ...r, status: 'confirmed', creditNoteId: creditNote.id } : r)
-      setPurchaseReturns(p => p.map(r => r.id === returnId ? { ...r, status: 'confirmed', creditNoteId: creditNote.id } : r))
-      showToast(`Return confirmed · credit note ${creditNote.ref} created`)
+      // Vendor credit note for the posted-billed portion only.
+      const creditNote: Invoice | null = allocation.creditTotal > 0 ? {
+        id: uid(), ref: seq('VCN', 'inv'), type: 'vendor_bill', status: 'posted',
+        partnerId: ret.vendorId, partnerName: ret.vendorName,
+        date: now(), dueDate: now(), postedAt: now(),
+        lines: allocation.creditLines.map(l => ({
+          id: uid(), description: `RETURN: ${l.productName} ×${l.qty}`, qty: l.qty,
+          unitPrice: -l.unitPrice, taxRate: l.taxRate, subtotal: -l.subtotal,
+          productId: l.productId, accountCode: l.accountCode,
+        })),
+        subtotal: -allocation.creditSubtotal, taxTotal: -allocation.creditTaxTotal, total: -allocation.creditTotal,
+        amountPaid: 0,
+        purchaseOrderId: ret.poId, notes: `Purchase return ${ret.ref}`,
+      } : null
+      // Apply the credit against the PO's open posted bills, oldest first, so
+      // the outstanding balance actually drops.
+      const applications: Array<{ billId: string; billRef: string; amount: number }> = []
+      if (creditNote) {
+        let remaining = allocation.creditTotal
+        const openBills = invRef.current
+          .filter(i => i.type === 'vendor_bill' && i.purchaseOrderId === po.id && invoiceDocState(i.status) === 'posted' && i.total > 0 && invoiceResidual(i) > 0)
+          .sort((a, b) => a.date.localeCompare(b.date))
+        for (const bill of openBills) {
+          if (remaining <= 0) break
+          const applied = Math.min(remaining, invoiceResidual(bill))
+          if (applied <= 0) continue
+          applications.push({ billId: bill.id, billRef: bill.ref, amount: applied })
+          remaining -= applied
+        }
+      }
+      const appliedTotal = applications.reduce((s, a) => s + a.amount, 0)
+      const draftDeductionsByBill = new Map<string, typeof allocation.draftBillDeductions>()
+      allocation.draftBillDeductions.forEach(d => {
+        draftDeductionsByBill.set(d.billId, [...(draftDeductionsByBill.get(d.billId) ?? []), d])
+      })
+      const actor = currentUser()
+      setInvoices(p => {
+        let next = p.map(i => {
+          const deductions = draftDeductionsByBill.get(i.id)
+          const application = applications.find(a => a.billId === i.id)
+          if (!deductions && !application) return i
+          let inv = i
+          if (deductions) {
+            const lines = inv.lines
+              .map(line => {
+                const deduct = deductions.filter(x => x.lineId === line.id).reduce((s, x) => s + x.deductQty, 0)
+                if (deduct <= 0) return line
+                const qty = Math.max(0, line.qty - deduct)
+                return { ...line, qty, subtotal: qty * line.unitPrice, description: line.description.replace(/×\d+$/, `×${qty}`) }
+              })
+              .filter(line => line.lineType === 'section' || line.qty > 0)
+            const subtotal = lines.reduce((s, l) => s + (l.lineType === 'section' ? 0 : l.subtotal), 0)
+            const taxTotal = lines.reduce((s, l) => s + (l.lineType === 'section' ? 0 : Math.round(l.subtotal * l.taxRate / 100)), 0)
+            // A draft bill whose every unit was returned has nothing left to post.
+            const emptied = !lines.some(l => l.lineType !== 'section' && l.qty > 0)
+            inv = {
+              ...inv, lines, subtotal, taxTotal, total: subtotal + taxTotal,
+              status: emptied ? 'cancelled' : inv.status,
+              notes: `${inv.notes || ''}\n${emptied ? `Cancelled — all quantities returned via ${ret.ref}` : `Reduced by purchase return ${ret.ref}`}`.trim(),
+            }
+          }
+          if (application) {
+            const payment: InvoicePayment = {
+              id: uid(), date: new Date().toISOString(), amount: application.amount,
+              method: 'vendor_credit', reference: creditNote!.ref,
+              recordedBy: actor?.name ?? 'System',
+            }
+            inv = {
+              ...inv,
+              amountPaid: inv.amountPaid + application.amount,
+              payments: [...(inv.payments || []), payment],
+              notes: `${inv.notes || ''}\nCredit ${creditNote!.ref} applied: ${fmtKes(application.amount)} (return ${ret.ref})`.trim(),
+            }
+          }
+          sync(`/api/invoices/${inv.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(inv) })
+          return inv
+        })
+        if (creditNote) {
+          // Negative amountPaid mirrors the applied portion so the credit
+          // note's own residual nets to the unapplied remainder.
+          const finalCredit: Invoice = {
+            ...creditNote,
+            amountPaid: -appliedTotal,
+            notes: applications.length
+              ? `${creditNote.notes}\nApplied to ${applications.map(a => a.billRef).join(', ')}`
+              : creditNote.notes,
+          }
+          next = [finalCredit, ...next]
+          sync('/api/invoices', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(finalCredit) })
+        }
+        return next
+      })
+      if (creditNote) {
+        const journal = buildVendorCreditJournal(
+          creditNote,
+          (productId) => prodRef.current.find(x => x.id === productId),
+          accountRef.current.map(a => ({ code: a.code, name: a.name })),
+        )
+        setJournalEntries(prev => (prev.some(j => j.ref === journal.ref) ? prev : [journal, ...prev]))
+      }
+      purchaseReturnsRef.current = purchaseReturnsRef.current.map(r => r.id === returnId ? { ...r, status: 'confirmed', creditNoteId: creditNote?.id } : r)
+      setPurchaseReturns(p => p.map(r => r.id === returnId ? { ...r, status: 'confirmed', creditNoteId: creditNote?.id } : r))
+      addAuditLog('confirm_purchase_return', ret.ref, creditNote
+        ? `Return confirmed · credit ${creditNote.ref} for ${fmtKes(allocation.creditTotal)}${applications.length ? ` applied to ${applications.map(a => a.billRef).join(', ')}` : ''}`
+        : 'Return confirmed · unbilled/draft quantities wound back, no credit needed')
+      showToast(creditNote
+        ? (applications.length
+            ? `Return confirmed · credit ${creditNote.ref} applied to ${applications.map(a => a.billRef).join(', ')}`
+            : `Return confirmed · credit note ${creditNote.ref} created`)
+        : 'Return confirmed · billable quantities reduced, no credit note needed')
     },
     logReturnPickup: (returnId, collectedByUserId, collectedByName, collectedDate, pickupNotes) => {
       setPurchaseReturns(p => p.map(r => r.id !== returnId ? r : { ...r, collectedByUserId, collectedByName, collectedDate, pickupNotes }))
