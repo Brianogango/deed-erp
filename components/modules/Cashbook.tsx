@@ -124,8 +124,10 @@ export function buildCashbookEntries(
   })
 
   // 2. Vendor bill payments → Debit actual bank account used per payment.
+  // Vendor-credit applications (purchase return credit notes) settle AP
+  // without any cash movement, so they never belong in the cashbook.
   invoices.filter(i => i.type === 'vendor_bill' && (i.payments?.length ?? 0) > 0).forEach(inv => {
-    inv.payments!.forEach(payment => {
+    inv.payments!.filter(payment => payment.method !== 'vendor_credit').forEach(payment => {
       entries.push({
         id: `bill-pay-${inv.id}-${payment.id}`,
         date: payment.date,
