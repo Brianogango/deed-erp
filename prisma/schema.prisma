@@ -1551,6 +1551,11 @@ model Invoice {
   // Finance dispute flag — Odoo's "Blocked" payment status is derived from it.
   paymentBlocked Boolean        @default(false) @map("payment_blocked")
   isPosInvoice   Boolean        @default(false) @map("is_pos_invoice")
+  // Odoo-style down payment: deposit invoice against a Sale Order. Does not
+  // bump product qtyInvoiced; final invoice deducts unapplied downs.
+  isDownPayment          Boolean  @default(false) @map("is_down_payment")
+  downPaymentPercent     Decimal? @map("down_payment_percent") @db.Decimal(5, 2)
+  downPaymentAppliedToId String?  @map("down_payment_applied_to") @db.Uuid
   currencyCode       String  @default("KES") @map("currency_code") @db.VarChar(3)
   baseCurrencyCode   String  @default("KES") @map("base_currency_code") @db.VarChar(3)
   exchangeRateToBase Decimal @default(1) @map("exchange_rate_to_base") @db.Decimal(18, 8)

@@ -448,6 +448,11 @@ function SalesContent() {
   const [showCancelConfirm, setShowCancelConfirm] = useState(false)
   const [showResetDraftConfirm, setShowResetDraftConfirm] = useState(false)
   const [showPartialInvoiceModal, setShowPartialInvoiceModal] = useState(false)
+  const [showInvoiceWizard, setShowInvoiceWizard] = useState(false)
+  const [invoiceWizardMode, setInvoiceWizardMode] = useState<'regular' | 'down_payment_percent' | 'down_payment_fixed' | 'final'>('regular')
+  const [invoiceWizardPercent, setInvoiceWizardPercent] = useState('30')
+  const [invoiceWizardAmount, setInvoiceWizardAmount] = useState('')
+  const [creatingWizardInvoice, setCreatingWizardInvoice] = useState(false)
   const [partialInvoiceQtys, setPartialInvoiceQtys] = useState<Record<string, string>>({})
   const [creatingPartialInvoice, setCreatingPartialInvoice] = useState(false)
   const [creatingNewVersion, setCreatingNewVersion] = useState(false)
@@ -1956,14 +1961,15 @@ function SalesContent() {
                         ) : (
                           <button type="button" className="sp-btn" onClick={() => void openDeliveryView()}>Deliveries</button>
                         )}
-                        {canInvoiceFromSO && canCreateInvoiceNow && (activeInvoiceStatus === 'to_invoice' || activeInvoiceStatus === 'upselling') ? (
+                        {canInvoiceFromSO && activeOrder.status === 'sale' ? (
                           <button
                             type="button"
                             className="sp-btn"
-                            onClick={async () => {
-                              const soPayment = getDocumentPaymentDetails(activeOrder.id)
-                              const inv = await Promise.resolve(createInvoiceFromSO(activeOrder.id))
-                              if (inv?.id) setDocumentPaymentDetails(inv.id, soPayment)
+                            onClick={() => {
+                              setInvoiceWizardMode(canCreateInvoiceNow ? 'regular' : 'down_payment_percent')
+                              setInvoiceWizardPercent('30')
+                              setInvoiceWizardAmount('')
+                              setShowInvoiceWizard(true)
                             }}
                           >
                             Create invoice
@@ -2130,7 +2136,7 @@ function SalesContent() {
                         <SalesDocTabs
                           tabs={isQuotationStage(activeOrder.status)
                             ? ['Order Lines', 'Terms and Conditions', 'Notes', 'Activities', 'History']
-                            : ['Order Lines', 'Delivery and Stock', 'Invoices', 'Notes', 'History']}
+                            : ['Order Lines', 'Delivery and Stock', 'Invoices', ...(canSeeReturns ? ['Returns'] : []), 'Notes', 'History']}
                           active={detailTab}
                           onChange={setDetailTab}
                         />
@@ -2374,52 +2380,73 @@ function SalesContent() {
                             )}
                           </div>
                         )}
+                        {detailTab === 'Returns' && (
+                          <div className="sp-panel-pad">
+                            {!canSeeReturns ? (
+                              <p style={{ color: 'var(--sp-text-3)' }}>Returns are managed in After Sales.</p>
+                            ) : activeReturns.length === 0 ? (
+                              <p style={{ color: 'var(--sp-text-3)' }}>
+                                No returns yet. Create an RMA in After Sales — receive reverses delivery; credit notes are required after invoicing.
+                              </p>
+                            ) : (
+                              <table className="sp-table">
+                                <thead>
+                                  <tr>
+                                    <th>Reference</th>
+                                    <th>Status</th>
+                                    <th>Reason</th>
+                                    <th>Resolution</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {activeReturns.map((r: any) => (
+                                    <tr key={r.id}>
+                                      <td>{r.ref}</td>
+                                      <td>{r.status}</td>
+                                      <td>{r.reason || '—'}</td>
+                                      <td>{r.resolution || '—'}</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            )}
+                          </div>
+                        )}
                         {detailTab === 'Invoices' && (
                           <div className="sp-panel-pad">
                             {activeInvoices.length === 0 ? (
                               <div className="flex flex-col gap-3" style={{ maxWidth: 420 }}>
                                 <p style={{ color: 'var(--sp-text-3)', margin: 0 }}>No invoices yet.</p>
-                                {!canCreateInvoiceNow ? (
+                                {canInvoiceFromSO ? (
                                   <>
                                     <p style={{ color: 'var(--sp-text-2)', margin: 0, fontSize: 13 }}>
-                                      {invoiceDeliveryReady
-                                        ? 'Nothing is eligible to invoice yet.'
-                                        : 'Products set to Delivered Quantities need a validated delivery before invoicing. Ordered-quantity products can invoice after confirmation.'}
-                                    </p>
-                                    <div>
-                                      <button type="button" className="sp-btn sp-btn-primary" onClick={() => void openDeliveryView()}>
-                                        {visibleDeliveries.length === 0 ? 'Create delivery' : 'Go to delivery'}
-                                      </button>
-                                    </div>
-                                  </>
-                                ) : canInvoiceFromSO && (activeInvoiceStatus === 'to_invoice' || activeInvoiceStatus === 'upselling') ? (
-                                  <>
-                                    <p style={{ color: 'var(--sp-text-2)', margin: 0, fontSize: 13 }}>
-                                      Eligible quantities are ready. Create a draft invoice (finance posts it separately).
+                                      {canCreateInvoiceNow
+                                        ? 'Create a regular invoice, down payment, or final invoice (deducts deposits).'
+                                        : invoiceDeliveryReady
+                                          ? 'Nothing is eligible under delivered-qty policy yet — you can still raise a down payment.'
+                                          : 'Delivered-qty products need a validated delivery. You can still raise a down payment deposit now.'}
                                     </p>
                                     <div className="flex flex-wrap gap-2">
                                       <button
                                         type="button"
                                         className="sp-btn sp-btn-primary"
-                                        onClick={async () => {
-                                          const soPayment = getDocumentPaymentDetails(activeOrder.id)
-                                          const inv = await Promise.resolve(createInvoiceFromSO(activeOrder.id))
-                                          if (inv?.id) setDocumentPaymentDetails(inv.id, soPayment)
+                                        onClick={() => {
+                                          setInvoiceWizardMode(canCreateInvoiceNow ? 'regular' : 'down_payment_percent')
+                                          setShowInvoiceWizard(true)
                                         }}
                                       >
-                                        Create invoice
+                                        Create invoice…
                                       </button>
-                                      {invoiceableLinesFor(activeOrder).length > 0 && (
-                                        <button type="button" className="sp-btn" onClick={() => openPartialInvoiceModal(activeOrder)}>
-                                          Create partial invoice…
+                                      {!canCreateInvoiceNow && (
+                                        <button type="button" className="sp-btn" onClick={() => void openDeliveryView()}>
+                                          {visibleDeliveries.length === 0 ? 'Create delivery' : 'Go to delivery'}
                                         </button>
                                       )}
                                     </div>
                                   </>
                                 ) : (
                                   <p style={{ color: 'var(--sp-text-3)', margin: 0, fontSize: 13 }}>
-                                    Nothing left to invoice on this order
-                                    {!canInvoiceFromSO ? ' (your role cannot create customer invoices).' : '.'}
+                                    Your role cannot create customer invoices.
                                   </p>
                                 )}
                               </div>
@@ -2546,6 +2573,87 @@ function SalesContent() {
           instead of the one-click "Create Invoice" which bills everything
           currently invoiceable. Each qty is capped server-side regardless of
           what's typed here. */}
+      {showInvoiceWizard && activeOrder && (
+        <Modal title={`Create Invoice — ${activeOrder.ref}`} onClose={() => setShowInvoiceWizard(false)} width={520}>
+          <div className="flex flex-col gap-4">
+            <p className="text-xs text-[var(--text-3)]">
+              Odoo-style billing: regular quantities, down payment deposit, or final invoice that deducts prior deposits.
+            </p>
+            <label className="flex flex-col gap-1 text-xs">
+              <span className="font-semibold text-[var(--text-2)]">Invoice type</span>
+              <select
+                className="form-input text-xs"
+                value={invoiceWizardMode}
+                onChange={e => setInvoiceWizardMode(e.target.value as typeof invoiceWizardMode)}
+              >
+                <option value="regular">Regular invoice (ordered/delivered qty)</option>
+                <option value="down_payment_percent">Down payment — percentage</option>
+                <option value="down_payment_fixed">Down payment — fixed amount</option>
+                <option value="final">Final invoice (deduct down payments)</option>
+              </select>
+            </label>
+            {invoiceWizardMode === 'down_payment_percent' && (
+              <label className="flex flex-col gap-1 text-xs">
+                <span className="font-semibold text-[var(--text-2)]">Percent</span>
+                <input
+                  type="number"
+                  min={1}
+                  max={100}
+                  className="form-input text-xs w-28"
+                  value={invoiceWizardPercent}
+                  onChange={e => setInvoiceWizardPercent(e.target.value)}
+                />
+              </label>
+            )}
+            {invoiceWizardMode === 'down_payment_fixed' && (
+              <label className="flex flex-col gap-1 text-xs">
+                <span className="font-semibold text-[var(--text-2)]">Amount (KES)</span>
+                <input
+                  type="number"
+                  min={1}
+                  className="form-input text-xs w-40"
+                  value={invoiceWizardAmount}
+                  onChange={e => setInvoiceWizardAmount(e.target.value)}
+                />
+              </label>
+            )}
+            {(invoiceWizardMode === 'regular' || invoiceWizardMode === 'final') && invoiceableLinesFor(activeOrder).length > 0 && (
+              <button type="button" className="sp-btn self-start" onClick={() => { setShowInvoiceWizard(false); openPartialInvoiceModal(activeOrder) }}>
+                Or create partial invoice…
+              </button>
+            )}
+            <div className="flex gap-2 justify-end pt-4 border-t border-[var(--border-lt)]">
+              <button className="btn-outline" onClick={() => setShowInvoiceWizard(false)}>Cancel</button>
+              <button
+                className="btn-primary"
+                disabled={creatingWizardInvoice}
+                onClick={() => {
+                  void (async () => {
+                    setCreatingWizardInvoice(true)
+                    try {
+                      const soPayment = getDocumentPaymentDetails(activeOrder.id)
+                      const inv = await Promise.resolve(createInvoiceFromSO(activeOrder.id, {
+                        mode: invoiceWizardMode,
+                        percent: Number(invoiceWizardPercent) || undefined,
+                        amount: Number(invoiceWizardAmount) || undefined,
+                      }))
+                      if (inv?.id) {
+                        setDocumentPaymentDetails(inv.id, soPayment)
+                        setShowInvoiceWizard(false)
+                      }
+                    } finally {
+                      setCreatingWizardInvoice(false)
+                    }
+                  })()
+                }}
+              >
+                {creatingWizardInvoice ? 'Creating…' : 'Create draft invoice'}
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
       {showPartialInvoiceModal && activeOrder && (
         <Modal title={`Create Partial Invoice — ${activeOrder.ref}`} onClose={() => setShowPartialInvoiceModal(false)} width={520}>
           <div className="flex flex-col gap-4">
