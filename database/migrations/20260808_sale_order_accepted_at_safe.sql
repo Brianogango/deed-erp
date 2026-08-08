@@ -14,3 +14,10 @@ COMMENT ON COLUMN sale_orders.accepted_at IS
 -- Hardware-safe default: invoice delivered quantities unless product overrides.
 ALTER TABLE products
   ALTER COLUMN invoice_policy SET DEFAULT 'delivery';
+
+-- Align existing stockable products that still carry the old 'order' default.
+-- Non-stockable / service products keep Ordered Quantities.
+UPDATE products
+SET invoice_policy = 'delivery'
+WHERE track_stock = true
+  AND invoice_policy = 'order';
