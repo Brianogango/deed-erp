@@ -603,7 +603,7 @@ export default function HRSettings() {
                 <SettingRow label="Discount Control" desc="Require manager approval for discounts above a threshold"><Toggle on={ss.salesDiscountControl} onChange={v => updateSystemSettings({ salesDiscountControl: v })} /></SettingRow>
               </SectionCard>
               <SectionCard title="Orders">
-                <SettingRow label="Confirmed Quotes → Sales Orders" desc="Mandatory flow: quote must be confirmed before becoming an order"><Toggle on={ss.salesConfirmedQuotesToOrders} onChange={v => updateSystemSettings({ salesConfirmedQuotesToOrders: v })} /></SettingRow>
+                <SettingRow label="Confirm quotation → Sales Order" desc="Mandatory: Confirm turns the same quotation document into a Sales Order before fulfilment"><Toggle on={ss.salesConfirmedQuotesToOrders} onChange={v => updateSystemSettings({ salesConfirmedQuotesToOrders: v })} /></SettingRow>
               </SectionCard>
             </>
           )}

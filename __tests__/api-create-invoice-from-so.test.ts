@@ -25,6 +25,7 @@ const {
     },
     invoice: {
       create: vi.fn(),
+      findMany: vi.fn(),
     },
     $transaction: vi.fn(),
   },

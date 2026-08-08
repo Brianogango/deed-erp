@@ -149,12 +149,18 @@ export function deliveryStatusPill(status: string): { label: string; tone: Sales
   }
 }
 
+/**
+ * Operational fulfilment/billing stepper. Payment is intentionally excluded —
+ * it stays a separate dimension (see payment status pills on the SO header).
+ */
 export function buildSoWorkflowSteps(input: {
   hasDelivery: boolean
   deliveryPrepared: boolean
   deliveryDone: boolean
   invoiced: boolean
-  paid: boolean
+  /** @deprecated Payment is shown separately; ignored for step index. */
+  paid?: boolean
+  complete?: boolean
 }): Array<{ key: string; label: string; state: 'done' | 'current' | 'todo' }> {
   const keys = [
     { key: 'confirmed', label: 'Confirmed' },
@@ -162,10 +168,10 @@ export function buildSoWorkflowSteps(input: {
     { key: 'ready', label: 'Ready to Deliver' },
     { key: 'delivered', label: 'Delivered' },
     { key: 'invoiced', label: 'Invoiced' },
-    { key: 'paid', label: 'Paid' },
+    { key: 'complete', label: 'Complete' },
   ] as const
   let idx = 0
-  if (input.paid) idx = 5
+  if (input.complete) idx = 5
   else if (input.invoiced) idx = 4
   else if (input.deliveryDone) idx = 3
   else if (input.deliveryPrepared) idx = 2
