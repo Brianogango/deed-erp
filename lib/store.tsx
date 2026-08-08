@@ -9667,21 +9667,27 @@ const storeCtx: AppState = {
       // Line changes stay local until Save ({ persist: true }). Immediate Prisma
       // PATCH + blob SSE was restoring deleted products before the user saved.
       const persistLines = syncLines && opts?.persist === true
+      const softPersist = opts?.soft === true
 
       // Draft deletes/adds live on soRef. Never let a stale React `activeOrder.lines`
-      // (passed from Save) resurrect products the user already removed.
+      // (passed from Save) or a stale soft-flush payload resurrect removals.
       let linesForUpdate = syncLines && Array.isArray(p.lines) ? p.lines as SaleOrderLine[] : existing.lines
       if (syncLines && Array.isArray(p.lines) && isSaleOrderDraftEditing(id)) {
         // Prefer the live draft order (add/remove already applied). Overlay only
-        // refreshes field edits for ids still present — never resurrect deletes,
-        // and keep draft-only lines the Save payload might have omitted.
+        // refreshes field edits for ids still present.
         const draft = soRef.current.find(s => s.id === id) ?? existing
         const overlay = new Map((p.lines as SaleOrderLine[]).map(l => [l.id, l]))
         const draftIds = new Set(draft.lines.map(l => l.id))
-        linesForUpdate = [
-          ...draft.lines.map(l => overlay.get(l.id) ?? l),
-          ...(p.lines as SaleOrderLine[]).filter(l => l?.id && !draftIds.has(l.id)),
-        ]
+        linesForUpdate = draft.lines.map(l => overlay.get(l.id) ?? l)
+        // Explicit Save may carry a brand-new inline-editor line not yet on soRef.
+        // Soft auto-persist must NEVER append payload-only ids — those are almost
+        // always deleted lines being resurrected from a stale soft snapshot.
+        if (persistLines && !softPersist) {
+          linesForUpdate = [
+            ...linesForUpdate,
+            ...(p.lines as SaleOrderLine[]).filter(l => l?.id && !draftIds.has(l.id)),
+          ]
+        }
       }
       const updated = syncLines
         ? { ...existing, ...p, lines: linesForUpdate, ...calcSO(linesForUpdate) }
@@ -9700,7 +9706,6 @@ const storeCtx: AppState = {
         setSaleOrders(prev => prev.map(s => s.id === id ? updated : s))
       }
 
-      const softPersist = opts?.soft === true
       const persist = async (retry = 0) => {
         // Re-read draft at persist time so a delete that landed after click still wins.
         const live = soRef.current.find(s => s.id === id) ?? updated
@@ -9718,6 +9723,23 @@ const storeCtx: AppState = {
         // Soft auto-persist must not rewrite the shared blob mid-edit.
         if (softPersist) {
           ;(body as Record<string, unknown>).skipBroadcast = true
+        }
+        // Soft flushes are generation-gated: if Save or a newer edit superseded
+        // this snapshot, skip the HTTP write so a stale A+B cannot land after A.
+        if (softPersist && isSaleOrderHardSaving(id)) {
+          return false
+        }
+        if (softPersist && persistLines && sentFingerprint) {
+          const liveNow = soRef.current.find(s => s.id === id)
+          if (
+            liveNow
+            && saleOrderLinesFingerprint(liveNow.lines) !== sentFingerprint
+          ) {
+            // Local draft moved since this soft snapshot was built — never write
+            // the stale line set. A newer soft flush (or Save) owns persistence.
+            if (!isSaleOrderHardSaving(id)) scheduleDraftSaleOrderLinePersist(id)
+            return false
+          }
         }
         const result = await patchSaleOrderPersist(id, body)
         if (!result.ok) {
@@ -9745,6 +9767,11 @@ const storeCtx: AppState = {
         const localMoved = persistLines
           && !!latestAfter
           && saleOrderLinesFingerprint(latestAfter.lines) !== sentFingerprint
+        // Soft response after Save/hard gate: keep local draft, never re-arm from stale.
+        if (softPersist && isSaleOrderHardSaving(id)) {
+          applySaleOrderPersistResult(setSaleOrders, soRef, id, result.data, { syncLines: false })
+          return true
+        }
         if (persistLines && (softPersist || localMoved)) {
           // Background sync / slower response: keep local lines, refresh lock only.
           applySaleOrderPersistResult(setSaleOrders, soRef, id, result.data, { syncLines: false })

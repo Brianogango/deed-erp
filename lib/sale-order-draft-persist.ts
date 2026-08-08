@@ -7,6 +7,10 @@
  * Soft updates Prisma with skipBroadcast so mid-edit snapshots do not rewrite
  * the shared deed_saleOrders blob. Save cancels soft work, waits for idle,
  * then PATCHes and broadcasts.
+ *
+ * Soft flushes are chained (never overlapping). Replacing the inflight map entry
+ * without awaiting the previous PATCH allowed Soft#1 (A+B) to finish after Soft#2
+ * (A) and resurrect deleted lines in the database.
  */
 
 import {
@@ -33,6 +37,7 @@ type PersistApi = {
 
 let api: PersistApi | null = null
 const timers = new Map<string, ReturnType<typeof setTimeout>>()
+/** Tail of the soft-persist chain for each order (always awaited by the next). */
 const inflight = new Map<string, Promise<void>>()
 const hardSaving = new Set<string>()
 /** Bumped whenever a newer edit/Save supersedes in-flight soft work. */
@@ -65,7 +70,7 @@ export function cancelDraftSaleOrderLinePersist(orderId: string) {
   bumpGeneration(orderId)
 }
 
-/** Wait until any in-flight soft PATCH for this order finishes. */
+/** Wait until the entire soft-persist chain for this order finishes. */
 export async function waitForDraftSaleOrderPersistIdle(orderId: string) {
   const pending = inflight.get(orderId)
   if (pending) await pending
@@ -80,10 +85,20 @@ export function endHardSaleOrderPersist(orderId: string) {
   hardSaving.delete(orderId)
 }
 
-function trackInflight(orderId: string, run: Promise<void>) {
-  const wrapped = run.catch(() => {}).finally(() => {
-    if (inflight.get(orderId) === wrapped) inflight.delete(orderId)
-  })
+/**
+ * Enqueue soft work so PATCHes for one SO never overlap.
+ * Previous implementations replaced `inflight` and dropped the prior promise,
+ * so waitForIdle + last-writer races let stale A+B land after A.
+ */
+function enqueueSoftPersist(orderId: string, run: () => Promise<void>) {
+  const prev = inflight.get(orderId) ?? Promise.resolve()
+  const wrapped = prev
+    .catch(() => {})
+    .then(run)
+    .catch(() => {})
+    .finally(() => {
+      if (inflight.get(orderId) === wrapped) inflight.delete(orderId)
+    })
   inflight.set(orderId, wrapped)
   return wrapped
 }
@@ -95,6 +110,7 @@ async function flushDraftSaleOrderLinePersist(orderId: string, startedGen: numbe
   if ((generation.get(orderId) ?? 0) !== startedGen) return
   const live = current.getSaleOrder?.(orderId)
   if (!live) return
+  // Re-check after reading live state — a delete/Save may have landed.
   if (hardSaving.has(orderId)) return
   if ((generation.get(orderId) ?? 0) !== startedGen) return
 
@@ -117,7 +133,7 @@ export function scheduleDraftSaleOrderLinePersist(orderId: string) {
   const startedGen = bumpGeneration(orderId)
   timers.set(orderId, setTimeout(() => {
     timers.delete(orderId)
-    trackInflight(orderId, flushDraftSaleOrderLinePersist(orderId, startedGen))
+    enqueueSoftPersist(orderId, () => flushDraftSaleOrderLinePersist(orderId, startedGen))
   }, 450))
 }
 
