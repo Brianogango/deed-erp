@@ -251,7 +251,7 @@ export default function Sidebar() {
               boxShadow: `0 4px 16px rgba(31,160,208,0.45)`,
             }}
           >
-            <img src="/deed-logo.png" alt="Deed" className="w-6 h-6 object-contain brightness-0 invert" />
+            <img src="/deed-icon.svg" alt="Deed" className="w-6 h-6 object-contain brightness-0 invert" />
           </div>
 
           {/* Brand text */}
