@@ -105,7 +105,7 @@ export default function Login() {
                 boxShadow: '0 4px 16px rgba(31,160,208,0.45)',
               }}
             >
-              <img src="/deed-logo.png" alt="" aria-hidden="true"
+              <img src="/deed-icon.svg" alt="" aria-hidden="true"
                 className="h-6 w-6 object-contain brightness-0 invert" />
             </div>
             <div className="text-[15px] font-bold text-white tracking-[-0.005em]">
