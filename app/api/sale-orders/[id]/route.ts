@@ -22,11 +22,20 @@ import { assertQuoteNotExpired } from '@/lib/sale-order-expiry'
 import { calcSaleOrderTotals, calcSaleOrderTotalsFromPersistedLines } from '@/lib/sales/line-calc'
 import { quotationPaymentTermsDays, serializeQuotationPaymentTerms } from '@/lib/sales/quotation-defaults'
 
+/** Serialize blob rewrites so a slower soft/findMany cannot overwrite a newer Save. */
+let broadcastSaleOrdersChain: Promise<void> = Promise.resolve()
+
 async function broadcastSaleOrders() {
-  try {
-    const all = await prisma.saleOrder.findMany({ include: { client: true, items: true }, orderBy: { createdAt: 'desc' } })
-    void saveStoreKeys({ deed_saleOrders: JSON.stringify(all.map(mapSaleOrderToClient)) })
-  } catch {}
+  broadcastSaleOrdersChain = broadcastSaleOrdersChain
+    .catch(() => {})
+    .then(async () => {
+      const all = await prisma.saleOrder.findMany({
+        include: { client: true, items: true },
+        orderBy: { createdAt: 'desc' },
+      })
+      await saveStoreKeys({ deed_saleOrders: JSON.stringify(all.map(mapSaleOrderToClient)) })
+    })
+  await broadcastSaleOrdersChain
 }
 
 // technical_lead: repair-quote revisions PATCH the linked sale order totals.
@@ -278,6 +287,14 @@ async function enforceSaleWorkflow(
       data.sentAt = new Date()
       data.sentById = session.user.id
     }
+    // Reset to draft clears send stamps so a later Send is treated as initial
+    // (and edit locks stay tied to status, not a stale sentAt).
+    if (to === 'quotation' && from === 'quotation_sent') {
+      if (data.sentAt === undefined) data.sentAt = null
+      if (data.sentById === undefined) data.sentById = null
+      if (data.sentTo === undefined) data.sentTo = null
+      if (data.sentMessage === undefined) data.sentMessage = null
+    }
   }
 
   // Lock rules: only a director may lock/unlock, and a locked order's
@@ -483,9 +500,12 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
     // Metadata-only PATCH (notes / validUntil / discount / …) must not rewrite
     // the whole deed_saleOrders blob from Prisma — that was racing draft line
     // edits in the browser and snapping removed products back onto the quote.
+    // Soft auto-persist also skips broadcast; only explicit Save / status
+    // changes rewrite the shared blob (after the write commits).
     const touchedLines = Array.isArray(body.items ?? body.lines)
-    if (touchedLines || confirming || to !== from) {
-      void broadcastSaleOrders()
+    const skipBroadcast = body.skipBroadcast === true || body._softPersist === true
+    if (!skipBroadcast && (touchedLines || confirming || to !== from)) {
+      await broadcastSaleOrders()
     }
     const fresh = confirming
       ? await prisma.saleOrder.findUnique({

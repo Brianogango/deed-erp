@@ -14,7 +14,8 @@ const pendingDraftSaleOrderIds = new Set<string>()
 
 /** After Save, keep protecting the row briefly while blob/SSE catch up. */
 const recentlyPersisted = new Map<string, { at: number; lineKey: string }>()
-const PERSIST_GUARD_MS = 20_000
+/** Keep protecting just-saved lines long enough for blob SSE to catch up. */
+const PERSIST_GUARD_MS = 60_000
 
 function readSessionIds(): string[] {
   if (typeof window === 'undefined') return []
@@ -43,20 +44,27 @@ export function hydrateSaleOrderDraftEditsFromSession() {
 // Pull any ids from a previous soft navigation as soon as this module loads.
 hydrateSaleOrderDraftEditsFromSession()
 
-function commercialLinesKey(lines: unknown): string {
+/** Stable fingerprint of commercial lines — used to detect in-flight persist races. */
+export function saleOrderLinesFingerprint(lines: unknown): string {
   if (!Array.isArray(lines)) return ''
   return lines
     .filter((l: any) => l && l.lineType !== 'section')
     .map((l: any) => [
+      String(l.id ?? ''),
       String(l.productId ?? ''),
       String(l.description ?? l.productName ?? ''),
       Number(l.qty ?? 0),
       Number(l.unitPrice ?? 0),
+      Number(l.discount ?? l.discountPercent ?? 0),
       Number(l.taxRate ?? 0),
       Number(l.lineTotal ?? l.subtotal ?? 0),
     ].join('|'))
     .sort()
     .join(';')
+}
+
+function commercialLinesKey(lines: unknown): string {
+  return saleOrderLinesFingerprint(lines)
 }
 
 function prunePersisted() {
@@ -95,7 +103,16 @@ export function stampSaleOrderPersisted(id: string, lines: unknown) {
   recentlyPersisted.set(id, { at: Date.now(), lineKey: commercialLinesKey(lines) })
 }
 
-function shouldPreserveLocal(id: string, localRow: { lines?: unknown } | undefined): boolean {
+function commercialLineCount(lines: unknown): number {
+  if (!Array.isArray(lines)) return 0
+  return lines.filter((l: any) => l && l.lineType !== 'section').length
+}
+
+function shouldPreserveLocal(
+  id: string,
+  localRow: { lines?: unknown } | undefined,
+  remoteRow?: { lines?: unknown } | undefined,
+): boolean {
   if (!id || !localRow) return false
   hydrateSaleOrderDraftEditsFromSession()
   if (pendingDraftSaleOrderIds.has(id)) return true
@@ -103,7 +120,12 @@ function shouldPreserveLocal(id: string, localRow: { lines?: unknown } | undefin
   const stamp = recentlyPersisted.get(id)
   if (!stamp) return false
   // Keep local when it still matches what we just saved (blocks older remote copies).
-  return commercialLinesKey(localRow.lines) === stamp.lineKey
+  if (commercialLinesKey(localRow.lines) === stamp.lineKey) return true
+  // Stale blob often re-adds deleted products while the save stamp is live.
+  if (remoteRow && commercialLineCount(remoteRow.lines) > commercialLineCount(localRow.lines)) {
+    return true
+  }
+  return false
 }
 
 /** Preserve locally-edited / just-saved draft quotation rows over stale remote copies. */
@@ -126,7 +148,7 @@ export function mergeSaleOrdersPreservingDraftEdits<T extends { id?: string; lin
     const id = row?.id != null ? String(row.id) : ''
     if (id) seen.add(id)
     const localRow = id ? localById.get(id) : undefined
-    if (id && shouldPreserveLocal(id, localRow)) {
+    if (id && shouldPreserveLocal(id, localRow, row)) {
       return localRow as T
     }
     return row

@@ -59,6 +59,25 @@ describe('mergeSaleOrdersPreservingDraftEdits', () => {
     expect(merged.find(s => s.id === 'so-1')?.lines).toEqual(savedLines)
   })
 
+  it('keeps local after Save when remote blob re-adds deleted products (line-count guard)', () => {
+    const savedLines = [{ id: 'a', productId: 'p1', qty: 1, unitPrice: 10, taxRate: 0, subtotal: 10 }]
+    stampSaleOrderPersisted('so-1', savedLines)
+    // Local drifted slightly (qty edit) but still fewer lines than stale remote.
+    const local = [{
+      id: 'so-1',
+      lines: [{ id: 'a', productId: 'p1', qty: 2, unitPrice: 10, taxRate: 0, subtotal: 20 }],
+    }]
+    const remote = [{
+      id: 'so-1',
+      lines: [
+        { id: 'a', productId: 'p1', qty: 1, unitPrice: 10, taxRate: 0, subtotal: 10 },
+        { id: 'b', productId: 'p2', qty: 1, unitPrice: 20, taxRate: 0, subtotal: 20 },
+      ],
+    }]
+    const merged = mergeSaleOrdersPreservingDraftEdits(local, remote)
+    expect(merged.find(s => s.id === 'so-1')?.lines).toEqual(local[0].lines)
+  })
+
   it('restores draft protection from sessionStorage after a soft remount', () => {
     const store = new Map<string, string>()
     const fakeSession = {

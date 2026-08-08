@@ -8,6 +8,7 @@ import { loadAppState, saveStoreKeys, getAppStateVersion } from '@/lib/server-st
 import { mergeAppendOnlyJournals } from '@/lib/finance-controls'
 import { preserveInvoiceLinesOnStoreWrite, enforcePostedInvoiceImmutability, type RejectedPostedInvoiceEdit } from '@/lib/finance-invoice'
 import { mergeProductsStoreWrite } from '@/lib/catalog-merge'
+import { mergeSaleOrdersStoreWrite } from '@/lib/sale-order-store-merge'
 import { appendStoreAudit } from '@/lib/store-audit'
 import crypto from 'crypto'
 
@@ -20,6 +21,7 @@ const PROTECTED_NON_EMPTY_ARRAY_KEYS = new Set<string>([
   'deed_outsourceVendors',
   'deed_purchaseOrders',
   'deed_products',
+  'deed_saleOrders',
 ])
 
 function parseArrayLength(serializedValue: string): number | null {
@@ -216,6 +218,14 @@ export async function POST(request: Request) {
         let incoming: unknown
         try { incoming = JSON.parse(entries[key]) } catch { continue }
         entries[key] = JSON.stringify(mergeProductsStoreWrite(currentState[key], incoming))
+      }
+      // Sale orders: merge by id + lockVersion so a stale tab cannot restore
+      // deleted quotation lines after a newer Save/broadcast.
+      if (key === 'deed_saleOrders' && entries[key]) {
+        let incoming: unknown
+        try { incoming = JSON.parse(entries[key]) } catch { continue }
+        entries[key] = JSON.stringify(mergeSaleOrdersStoreWrite(currentState[key], incoming))
+        continue
       }
       // Collaborative ledgers: merge by id so a stale browser cache cannot delete
       // rows that already exist on the server (outsource jobs, repair intakes, …).

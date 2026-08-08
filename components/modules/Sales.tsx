@@ -98,6 +98,7 @@ import { pairOrderLinesWithDeliveryLines } from '@/lib/delivery-prepare'
 import Chatter from '@/components/erp/Chatter'
 import { ConfirmQuotationDialog } from '@/components/modules/sales/ConfirmQuotationDialog'
 import {
+  canConfirmQuotation,
   canConfirmAndReserve,
   canConfirmWithoutReservation,
   stockShortageLines,
@@ -357,6 +358,7 @@ function SalesContent() {
   // Reversing a confirmed Sales Order (Set to Quotation / Cancel) is Finance/Director-only —
   // matches the server-side check in enforceSaleWorkflow / cancelSO.
   const canReverseConfirmedSO = currentUser?.role === 'director' || currentUser?.role === 'finance_officer'
+  const canConfirmQuote = canConfirmQuotation(currentUser?.role)
   const canReserveOnConfirm = canConfirmAndReserve(currentUser?.role)
   const canSkipReserveOnConfirm = canConfirmWithoutReservation(currentUser?.role)
 
@@ -1815,14 +1817,16 @@ function SalesContent() {
                               { label: 'Delete', icon: faTrash, tone: 'danger', onClick: () => setShowDelConfirm(true) },
                             ]}
                           />
-                          <button
-                            type="button"
-                            className={activeOrder.status === 'quotation_sent' ? 'sp-btn sp-btn-primary' : 'sp-btn'}
-                            disabled={confirmingSO}
-                            onClick={openConfirmQuoteDialog}
-                          >
-                            {confirmingSO ? 'Confirming…' : 'Confirm quotation'}
-                          </button>
+                          {canConfirmQuote && (
+                            <button
+                              type="button"
+                              className={activeOrder.status === 'quotation_sent' ? 'sp-btn sp-btn-primary' : 'sp-btn'}
+                              disabled={confirmingSO}
+                              onClick={openConfirmQuoteDialog}
+                            >
+                              {confirmingSO ? 'Confirming…' : 'Confirm quotation'}
+                            </button>
+                          )}
                       </>)}
                       {activeOrder.status === 'sale' && (<>
                         <button type="button" className="sp-btn" onClick={() => previewSalesDocument(activeOrder, 'Sale Order', 'SALES ORDER')}>Print</button>
@@ -2652,7 +2656,12 @@ function SalesContent() {
         <Confirm
           title="Reset to Draft"
           message={`Reset ${activeOrder.ref} to draft so it can be edited? You can send it again after saving your changes.`}
-          onConfirm={() => { resetSOToDraft(activeOrder.id); setShowResetDraftConfirm(false) }}
+          onConfirm={() => {
+            void (async () => {
+              const ok = await Promise.resolve(resetSOToDraft(activeOrder.id))
+              if (ok !== false) setShowResetDraftConfirm(false)
+            })()
+          }}
           onCancel={() => setShowResetDraftConfirm(false)}
         />
       )}
