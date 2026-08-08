@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { NextRequest } from 'next/server'
 
 const {
   mockGetServerSession,
@@ -43,7 +44,7 @@ beforeEach(() => {
 
 describe('DELETE /api/purchase-orders/:id', () => {
   it('soft-cancels a draft PO (keeps record in blob)', async () => {
-    const res = await DELETE(new Request(`http://localhost/api/purchase-orders/${PO_ID}`, { method: 'DELETE' }), {
+    const res = await DELETE(new NextRequest(`http://localhost/api/purchase-orders/${PO_ID}`, { method: 'DELETE' }), {
       params: { id: PO_ID },
     })
     expect(res.status).toBe(200)
@@ -64,7 +65,7 @@ describe('DELETE /api/purchase-orders/:id', () => {
     mockLoadAppState.mockResolvedValue({
       deed_purchaseOrders: [{ ...draftPo, status: 'received' }],
     })
-    const res = await DELETE(new Request(`http://localhost/api/purchase-orders/${PO_ID}`, { method: 'DELETE' }), {
+    const res = await DELETE(new NextRequest(`http://localhost/api/purchase-orders/${PO_ID}`, { method: 'DELETE' }), {
       params: { id: PO_ID },
     })
     expect(res.status).toBe(409)
@@ -75,7 +76,7 @@ describe('DELETE /api/purchase-orders/:id', () => {
     mockLoadAppState.mockResolvedValue({
       deed_purchaseOrders: [{ ...draftPo, status: 'confirmed', receiptIds: ['rcpt-1'] }],
     })
-    const res = await DELETE(new Request(`http://localhost/api/purchase-orders/${PO_ID}`, { method: 'DELETE' }), {
+    const res = await DELETE(new NextRequest(`http://localhost/api/purchase-orders/${PO_ID}`, { method: 'DELETE' }), {
       params: { id: PO_ID },
     })
     expect(res.status).toBe(409)
@@ -84,7 +85,7 @@ describe('DELETE /api/purchase-orders/:id', () => {
 
   it('returns 404 for a missing PO', async () => {
     mockLoadAppState.mockResolvedValue({ deed_purchaseOrders: [] })
-    const res = await DELETE(new Request(`http://localhost/api/purchase-orders/${PO_ID}`, { method: 'DELETE' }), {
+    const res = await DELETE(new NextRequest(`http://localhost/api/purchase-orders/${PO_ID}`, { method: 'DELETE' }), {
       params: { id: PO_ID },
     })
     expect(res.status).toBe(404)

@@ -44,7 +44,13 @@ describe('soft draft persist', () => {
 
   it('calls updateSaleOrder with persist+soft and skipBroadcast', async () => {
     markSaleOrderDraftEdit('so-1')
-    const updateSaleOrder = vi.fn(async () => true)
+    const updateSaleOrder = vi.fn<
+      (
+        id: string,
+        patch: Record<string, unknown>,
+        opts?: { persist?: boolean; soft?: boolean },
+      ) => Promise<boolean>
+    >(async () => true)
     registerSaleOrderDraftPersistApi({
       updateSaleOrder,
       getSaleOrder: () => ({
@@ -62,8 +68,8 @@ describe('soft draft persist', () => {
     await Promise.resolve()
 
     expect(updateSaleOrder).toHaveBeenCalledTimes(1)
-    expect(updateSaleOrder.mock.calls[0][1]).toMatchObject({ skipBroadcast: true })
-    expect(updateSaleOrder.mock.calls[0][2]).toEqual({ persist: true, soft: true })
+    expect(updateSaleOrder.mock.calls[0]?.[1]).toMatchObject({ skipBroadcast: true })
+    expect(updateSaleOrder.mock.calls[0]?.[2]).toEqual({ persist: true, soft: true })
     expect(isSaleOrderDraftEditing('so-1')).toBe(true)
   })
 

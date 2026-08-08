@@ -145,9 +145,9 @@ describe('migration 20260805_stocklevel_indexes_safe.sql', () => {
     expect(sql).toMatch(/CREATE INDEX IF NOT EXISTS idx_invoices_status_date/)
     expect(sql).toMatch(/CREATE INDEX IF NOT EXISTS idx_repairs_status_created/)
     expect(sql).toMatch(/CREATE INDEX IF NOT EXISTS idx_sale_orders_client_status/)
-    expect(sql).toMatch(/WHERE NOT EXISTS \(\s*SELECT 1 FROM stock_levels/s)
+    expect(sql).toMatch(/WHERE NOT EXISTS \(\s*SELECT 1 FROM stock_levels/)
     expect(sql).toMatch(/chk_sale_orders_status/)
-    expect(sql).toMatch(/NOT EXISTS \(\s*SELECT 1 FROM pg_constraint/s)
+    expect(sql).toMatch(/NOT EXISTS \(\s*SELECT 1 FROM pg_constraint/)
   })
 
   it('backfill id matches uuidFromKey for a sample product', () => {
