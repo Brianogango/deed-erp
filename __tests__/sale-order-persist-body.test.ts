@@ -20,4 +20,15 @@ describe('saleOrderPersistBody', () => {
     expect('lockVersion' in body).toBe(false)
     expect('expectedVersion' in body).toBe(false)
   })
+
+  it('strips stale Prisma items so they cannot override edited lines', () => {
+    const body = saleOrderPersistBody({
+      id: 'so-1',
+      lines: [{ id: 'a' }],
+      items: [{ id: 'a' }, { id: 'b-deleted' }],
+      lockVersion: 1,
+    })
+    expect(body.lines).toHaveLength(1)
+    expect('items' in body).toBe(false)
+  })
 })

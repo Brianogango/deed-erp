@@ -1384,17 +1384,19 @@ function SalesContent() {
   const cancelEditLine = () => setEditingLineId(null)
   const saveEditLine = async (lineId: string) => {
     if (!activeOrder) return
+    // Prefer live store lines — a stale view snapshot can reintroduce deletes.
+    const latest = saleOrders.find(s => s.id === activeOrder.id) ?? activeOrder
     const qty = Math.max(0, Number(editLineQty) || 0)
     const unitPrice = Math.max(0, Number(editLinePrice) || 0)
     const discount = Math.max(0, Math.min(100, Number(editLineDiscount) || 0))
     const taxRate = Math.max(0, Number(editLineTax) || 0)
     const subtotal = Math.round(qty * unitPrice * (1 - discount / 100))
-    const updatedLines = activeOrder.lines.map(l => l.id !== lineId ? l : {
+    const updatedLines = latest.lines.map(l => l.id !== lineId ? l : {
       ...l, productName: editLineDesc || l.productName, description: editLineDesc || l.description,
       qty, unitPrice, discount, discountPercent: discount, taxRate, subtotal,
     })
-    const sub = updatedLines.reduce((a, l) => a + l.subtotal, 0)
-    const tax = updatedLines.reduce((a, l) => a + Math.round(l.subtotal * (l.taxRate ?? 0) / 100), 0)
+    const sub = updatedLines.reduce((a, l) => a + (Number(l.subtotal) || 0), 0)
+    const tax = updatedLines.reduce((a, l) => a + Math.round((Number(l.subtotal) || 0) * (Number(l.taxRate) || 0) / 100), 0)
     setEditingLineId(null)
     const ok = await updateSaleOrder(
       activeOrder.id,
@@ -2692,7 +2694,13 @@ function SalesContent() {
       {showAddLine && (
         <Modal title="Add Product" onClose={() => setShowAddLine(false)} width={500}>
           <div className="flex flex-col gap-4">
-            <SearchPicker label="Product *" placeholder="Search product..." items={sellableProducts} onSelect={setAddLineProduct}
+            <SearchPicker
+              label="Product *"
+              placeholder="Search product..."
+              items={sellableProducts}
+              onSelect={setAddLineProduct}
+              formatSelected={p => p.name}
+              selectedLabel={addLineProduct?.name}
               renderItem={p => (
                 <div className="flex items-center gap-3">
                   <div className="w-8 h-8 rounded-lg bg-primary-50 flex items-center justify-center text-[10px] font-bold text-primary-600 flex-shrink-0">{p.name?.slice(0, 2).toUpperCase()}</div>

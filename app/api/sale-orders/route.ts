@@ -21,8 +21,11 @@ async function broadcastSaleOrders() {
 }
 
 function mapSaleOrderToClient(order: any) {
+  // Never leave raw Prisma `items` on the client row — PATCH used to prefer
+  // that stale array over edited `lines` and resurrect deleted products.
+  const { items: _prismaItems, client: _client, ...orderRest } = order ?? {}
   return {
-    ...order,
+    ...orderRest,
     ref: order.orderNumber,
     quotationRef: order.quotationRef ?? undefined,
     proformaRef: order.proformaRef ?? undefined,
@@ -165,7 +168,7 @@ export async function POST(request: Request) {
       )
     }
 
-    const rawItems: any[] = body.items ?? body.lines ?? []
+    const rawItems: any[] = (Array.isArray(body.lines) ? body.lines : body.items) ?? []
     const lineError = validateSaleOrderLines(rawItems)
     if (lineError) {
       return NextResponse.json({ error: lineError }, { status: 400 })

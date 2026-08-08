@@ -17,6 +17,7 @@ import { writeFinancialAudit } from '@/lib/finance-audit'
 import { checkFiscalLock } from '@/lib/fiscal-lock.server'
 import { validateSaleOrderLines } from '@/lib/sale-order-line-validation'
 import { buildSaleOrderItemsNestedWrite } from '@/lib/sale-order-items-write'
+import { saleOrderLinesFromBody } from '@/lib/sale-order-body-lines'
 import { assertSaleOrderCreditOnConfirm } from '@/lib/sale-order-credit.server'
 import { assertQuoteNotExpired } from '@/lib/sale-order-expiry'
 import { calcSaleOrderTotals, calcSaleOrderTotalsFromPersistedLines } from '@/lib/sales/line-calc'
@@ -54,8 +55,11 @@ function normalizeSaleOrderStatus(status: unknown) {
 }
 
 function mapSaleOrderToClient(order: any) {
+  // Never leave raw Prisma `items` on the client row — PATCH used to prefer
+  // that stale array over edited `lines` and resurrect deleted products.
+  const { items: _prismaItems, client: _client, ...orderRest } = order ?? {}
   return {
-    ...order,
+    ...orderRest,
     ref: order.orderNumber,
     quotationRef: order.quotationRef ?? undefined,
     proformaRef: order.proformaRef ?? undefined,
@@ -151,7 +155,7 @@ async function buildSaleOrderUpdateData(body: any, existing: any) {
     data.clientId = await resolveClientId(prisma, body.clientId ?? body.customerId, body)
   }
 
-  const rawItems = body.items ?? body.lines
+  const rawItems = saleOrderLinesFromBody(body)
   const itemsChanging = Array.isArray(rawItems)
   if (itemsChanging) {
     // Upsert by stable line id — avoid deleteMany+create UUID churn (Phase 5).
@@ -219,7 +223,7 @@ function hasCommercialChange(existing: any, body: any): boolean {
   )
   if (changedScalar) return true
 
-  const rawItems = body.items ?? body.lines
+  const rawItems = Array.isArray(body.lines) ? body.lines : body.items
   if (!Array.isArray(rawItems)) return false
   const requested = rawItems
     .filter((l: any) => l.lineType !== 'section')
@@ -430,7 +434,7 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
       )
     }
 
-    const rawItems = body.items ?? body.lines
+    const rawItems = Array.isArray(body.lines) ? body.lines : body.items
     if (Array.isArray(rawItems)) {
       const lineError = validateSaleOrderLines(rawItems)
       if (lineError) {
@@ -531,7 +535,7 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
     // edits in the browser and snapping removed products back onto the quote.
     // Soft auto-persist also skips broadcast; only explicit Save / status
     // changes rewrite the shared blob (after the write commits).
-    const touchedLines = Array.isArray(body.items ?? body.lines)
+    const touchedLines = Array.isArray(body.lines) || Array.isArray(body.items)
     const skipBroadcast = body.skipBroadcast === true || body._softPersist === true
     if (!skipBroadcast && (touchedLines || confirming || to !== from)) {
       await broadcastSaleOrders()

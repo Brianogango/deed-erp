@@ -9680,12 +9680,15 @@ const storeCtx: AppState = {
         const draftIds = new Set(draft.lines.map(l => l.id))
         linesForUpdate = draft.lines.map(l => overlay.get(l.id) ?? l)
         // Explicit Save may carry a brand-new inline-editor line not yet on soRef.
-        // Soft auto-persist must NEVER append payload-only ids — those are almost
-        // always deleted lines being resurrected from a stale soft snapshot.
+        // Never re-append ids that already existed on the pre-edit row — those are
+        // deletes. Soft auto-persist must never append payload-only ids at all.
         if (persistLines && !softPersist) {
+          const preexistingIds = new Set(existing.lines.map(l => l.id))
           linesForUpdate = [
             ...linesForUpdate,
-            ...(p.lines as SaleOrderLine[]).filter(l => l?.id && !draftIds.has(l.id)),
+            ...(p.lines as SaleOrderLine[]).filter(
+              l => l?.id && !draftIds.has(l.id) && !preexistingIds.has(l.id),
+            ),
           ]
         }
       }
