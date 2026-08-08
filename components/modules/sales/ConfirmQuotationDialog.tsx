@@ -3,6 +3,7 @@
 import { Modal } from '@/components/ui'
 import { fmtDate, fmtKes } from '@/lib/store'
 import type { ConfirmQuotationMode } from '@/lib/sales/confirm-quotation'
+import { SameDocumentIdentity } from '@/components/modules/sales/SameDocumentIdentity'
 
 export type ConfirmApprovalBlocker = {
   type: string
@@ -59,7 +60,7 @@ export function ConfirmQuotationDialog({
               type="button"
               className="btn-secondary text-xs"
               disabled={confirming || blocked}
-              title={blocked ? 'Resolve approvals before confirming' : 'Confirm as Sales Order without reserving stock (Manual)'}
+              title={blocked ? 'Resolve approvals before confirming' : 'Confirm and rename this document without reserving stock'}
               onClick={() => onConfirm('no_reserve')}
             >
               {confirming ? 'Confirming…' : 'Confirm · Manual reserve'}
@@ -69,22 +70,23 @@ export function ConfirmQuotationDialog({
             type="button"
             className="btn-primary text-xs"
             disabled={confirming || blocked}
-            title={blocked ? 'Resolve approvals before confirming' : undefined}
+            title={blocked ? 'Resolve approvals before confirming' : 'Confirm — rename this quotation to a Sales Order (same document)'}
             onClick={() => onConfirm(canReserve ? 'reserve' : 'no_reserve')}
           >
             {confirming
               ? 'Confirming…'
               : canReserve
                 ? 'Confirm · Reserve stock'
-                : 'Confirm as Sales Order'}
+                : 'Confirm · Rename to SO'}
           </button>
         </div>
       }
     >
       <div className="flex flex-col gap-3 text-xs">
+        <SameDocumentIdentity mode="preview" quotationRef={orderRef} />
         <p className="text-[var(--text-3)] m-0">
-          This quotation <strong>becomes</strong> the Sales Order (same document — no duplicate order).
           Commercial terms lock when configured, and a waiting delivery opens for warehouse.
+          Fulfilment and payment stay independent of this rename.
         </p>
         <div className="rounded-md border border-[var(--border-lt)] bg-[var(--bg-surface)] px-3 py-2 text-[10px] text-[var(--text-3)] space-y-1">
           <p className="m-0"><strong className="text-[var(--text-2)]">At confirmation</strong> — reserve available stock now (Confirm · Reserve stock).</p>
