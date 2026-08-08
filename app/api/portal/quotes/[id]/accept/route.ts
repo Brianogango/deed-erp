@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { verifyQuoteToken } from '@/lib/quote-token'
 import { sendEmail } from '@/lib/integrations/email'
+import prisma from '@/lib/prisma'
 import {
   findPortalDocument,
   savePortalDocument,
@@ -46,17 +47,31 @@ export async function POST(
     } else {
       // A SaleOrder is never auto-confirmed by a customer's portal click —
       // confirming reserves stock and runs credit checks that need staff
-      // review. Instead this records the acceptance the same way the
-      // internal "Mark accepted" staff action does (an append-only note),
-      // and notifies the sales team to confirm the order themselves.
+      // review. Stamp acceptedAt as an immutable commercial snapshot and
+      // notify the sales team to confirm the order themselves.
       if (!SALE_ORDER_ACCEPTABLE_STATUSES.has(String(doc.status))) {
         return NextResponse.json(
           { error: `Quotation cannot be accepted — current status is "${doc.status}".` },
           { status: 409 },
         )
       }
-      const notes = `${String(doc.notes ?? '')}\n[Customer accepted online ${new Date().toISOString().slice(0, 10)}]`.trim()
-      await savePortalDocument(found, { ...doc, notes })
+      if (doc.acceptedAt) {
+        return NextResponse.json({ success: true, message: 'Quote already accepted.' })
+      }
+      const acceptedAt = new Date().toISOString()
+      const notes = `${String(doc.notes ?? '')}\n[Customer accepted online ${acceptedAt.slice(0, 10)}]`.trim()
+      await savePortalDocument(found, { ...doc, notes, acceptedAt })
+      // Durable Prisma stamp so server commercial freeze survives blob races.
+      // Accessing prisma can throw synchronously when DATABASE_URL is unset
+      // (tests / misconfigured hosts) — never fail the portal accept for that.
+      try {
+        await prisma.saleOrder.update({
+          where: { id: quoteId },
+          data: { acceptedAt: new Date(acceptedAt), notes },
+        })
+      } catch {
+        /* blob stamp is enough for portal UX; staff confirm heals Prisma */
+      }
     }
 
     await sendEmail({

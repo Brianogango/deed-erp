@@ -48,6 +48,8 @@ function mapSaleOrderToClient(order: any) {
     validUntil: order.validUntil ? new Date(order.validUntil).toISOString().slice(0, 10) : undefined,
     status: normalizeSaleStatus(order.status),
     sentAt: order.sentAt ? new Date(order.sentAt).toISOString() : undefined,
+    acceptedAt: order.acceptedAt ? new Date(order.acceptedAt).toISOString() : undefined,
+    acceptedById: order.acceptedById ?? undefined,
     confirmedAt: order.confirmedAt ? new Date(order.confirmedAt).toISOString() : undefined,
     total: Number(order.totalAmount ?? 0),
     taxTotal: Number(order.taxAmount ?? 0),

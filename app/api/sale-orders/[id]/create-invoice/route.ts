@@ -8,8 +8,10 @@ import {
   hasValidatedDeliveryForInvoice,
   invoiceableQty,
   normalizeSaleStatus,
+  type InvoicePolicy,
 } from '@/lib/odoo-sales-flow'
 import { allocateDeliveredQtyToOrderLines } from '@/lib/delivery-prepare'
+import { resolveInvoicePolicy } from '@/lib/sales/invoice-policy'
 import { mapDbInvoiceItemsToClientLines } from '@/lib/finance-invoice'
 import { loadAppState, saveStoreKeys } from '@/lib/server-store'
 import { ensureConfirmedSaleOrderForFulfillment } from '@/lib/sale-order-confirm-heal.server'
@@ -78,14 +80,30 @@ export async function POST(
           }> | null
         }>
       : []
-    if (!hasValidatedDeliveryForInvoice(deliveries, orderId)) {
-      return NextResponse.json({
-        error: 'Validate the delivery before creating an invoice',
-      }, { status: 409 })
+    const hasValidatedDelivery = hasValidatedDeliveryForInvoice(deliveries, orderId)
+
+    // Product invoicing policy (Ordered vs Delivered quantities).
+    const productIds = [...new Set(
+      (confirmed.items ?? []).map(i => i.productId).filter((id): id is string => !!id),
+    )]
+    const products = productIds.length > 0
+      ? await prisma.product.findMany({
+          where: { id: { in: productIds } },
+          select: { id: true, invoicePolicy: true, trackStock: true },
+        })
+      : []
+    const productById = new Map(products.map(p => [p.id, p]))
+    const policyForItem = (item: { productId?: string | null }): InvoicePolicy => {
+      const product = item.productId ? productById.get(item.productId) : undefined
+      return resolveInvoicePolicy({
+        productPolicy: product?.invoicePolicy,
+        trackStock: product?.trackStock,
+      })
     }
 
     // Heal qtyDelivered from Done delivery lines (qtyDone / serials) when a
-    // legacy Done DN left Prisma delivered=0 — otherwise Create Invoice is blocked.
+    // legacy Done DN left Prisma delivered=0 — otherwise Create Invoice is blocked
+    // for Delivered-policy lines.
     // Allocate FIFO across duplicate product rows so each line does not receive
     // the full product total (that overstated invoiceable qty).
     const healedFromDeliveries = deliveredByProductFromDoneDeliveries(deliveries, orderId)
@@ -113,26 +131,44 @@ export async function POST(
       return item
     }))
 
-    const invoiceable = healedItems.map(item => {
+    let invoiceable = healedItems.map(item => {
+      const invoicePolicy = policyForItem(item)
       const maxQty = invoiceableQty({
         qty: Number(item.qty) || 0,
         qtyDelivered: Number(item.qtyDelivered) || 0,
         qtyInvoiced: Number(item.qtyInvoiced) || 0,
-        invoicePolicy: 'delivery',
+        invoicePolicy,
       })
       // No override map: full auto-invoice (existing one-click behavior).
       // Override map present but this item absent: 0 (not selected this round).
       const qty = overrideQtyByItemId === null
         ? maxQty
         : Math.min(maxQty, overrideQtyByItemId.get(item.id) ?? 0)
-      return { item, qty }
+      return { item, qty, invoicePolicy }
     }).filter(entry => entry.qty > 0)
 
+    // Delivered-policy lines need a validated DN; Ordered-policy lines do not.
+    // If only delivery-policy qty remains and nothing is validated, give a clear error.
+    const deliveryPolicyPending = invoiceable.filter(e => e.invoicePolicy === 'delivery')
+    if (deliveryPolicyPending.length > 0 && !hasValidatedDelivery) {
+      const orderOnly = invoiceable.filter(e => e.invoicePolicy === 'order')
+      if (orderOnly.length === 0) {
+        return NextResponse.json({
+          error: 'Validate the delivery before creating an invoice',
+        }, { status: 409 })
+      }
+      // Mixed policies: invoice ordered-qty lines now; leave delivery lines for later.
+      invoiceable = orderOnly
+    }
+
     if (invoiceable.length === 0) {
+      const anyDeliveryPolicy = healedItems.some(item => policyForItem(item) === 'delivery')
       return NextResponse.json({
         error: overrideQtyByItemId
           ? 'Select at least one line with a quantity greater than zero to invoice'
-          : 'Nothing to invoice — quantities are already invoiced or not yet delivered',
+          : anyDeliveryPolicy && !hasValidatedDelivery
+            ? 'Validate the delivery before creating an invoice'
+            : 'Nothing to invoice — quantities are already invoiced or not yet eligible',
       }, { status: 409 })
     }
 
@@ -194,14 +230,14 @@ export async function POST(
       })
       if (!fresh) throw new Error('Sale order disappeared')
 
-      for (const { item, qty } of invoiceable) {
+      for (const { item, qty, invoicePolicy } of invoiceable) {
         const live = fresh.items.find(i => i.id === item.id)
         if (!live) throw new Error('Sale order line missing')
         const still = invoiceableQty({
           qty: Number(live.qty) || 0,
           qtyDelivered: Number(live.qtyDelivered) || 0,
           qtyInvoiced: Number(live.qtyInvoiced) || 0,
-          invoicePolicy: 'delivery',
+          invoicePolicy,
         })
         if (still < qty) throw new Error('Invoiceable quantity changed — retry')
         // Guarded atomic update: the WHERE clause re-checks qtyInvoiced still

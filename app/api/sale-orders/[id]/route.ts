@@ -78,6 +78,8 @@ function mapSaleOrderToClient(order: any) {
     validUntil: order.validUntil ? new Date(order.validUntil).toISOString().slice(0, 10) : undefined,
     status: normalizeSaleStatus(order.status),
     sentAt: order.sentAt ? new Date(order.sentAt).toISOString() : undefined,
+    acceptedAt: order.acceptedAt ? new Date(order.acceptedAt).toISOString() : undefined,
+    acceptedById: order.acceptedById ?? undefined,
     confirmedAt: order.confirmedAt ? new Date(order.confirmedAt).toISOString() : undefined,
     total: Number(order.totalAmount ?? 0),
     taxTotal: Number(order.taxAmount ?? 0),
@@ -122,6 +124,8 @@ async function buildSaleOrderUpdateData(body: any, existing: any) {
   if (body.sentById !== undefined) data.sentById = optionalUuid(body.sentById) ?? null
   if (body.sentTo !== undefined) data.sentTo = body.sentTo ?? null
   if (body.sentMessage !== undefined) data.sentMessage = body.sentMessage ?? null
+  if (body.acceptedAt !== undefined) data.acceptedAt = body.acceptedAt ? new Date(body.acceptedAt) : null
+  if (body.acceptedById !== undefined) data.acceptedById = optionalUuid(body.acceptedById) ?? null
   if (body.pricelist !== undefined) data.pricelist = body.pricelist ?? null
   if (body.pricelistId !== undefined) data.pricelistId = optionalUuid(body.pricelistId) ?? null
   if (body.currencyCode !== undefined) data.currencyCode = body.currencyCode || 'KES'
@@ -287,13 +291,15 @@ async function enforceSaleWorkflow(
       data.sentAt = new Date()
       data.sentById = session.user.id
     }
-    // Reset to draft clears send stamps so a later Send is treated as initial
-    // (and edit locks stay tied to status, not a stale sentAt).
-    if (to === 'quotation' && from === 'quotation_sent') {
+    // Reset to draft clears send/accept stamps so a later Send is treated as initial
+    // (and edit locks stay tied to status, not a stale sentAt/acceptedAt).
+    if (to === 'quotation' && (from === 'quotation_sent' || from === 'sale' || from === 'cancelled')) {
       if (data.sentAt === undefined) data.sentAt = null
       if (data.sentById === undefined) data.sentById = null
       if (data.sentTo === undefined) data.sentTo = null
       if (data.sentMessage === undefined) data.sentMessage = null
+      if (data.acceptedAt === undefined) data.acceptedAt = null
+      if (data.acceptedById === undefined) data.acceptedById = null
     }
   }
 
@@ -312,6 +318,23 @@ async function enforceSaleWorkflow(
   const unlockingOnReset = to === 'quotation' && from === 'sale' && body.locked === false
   if (lockChangeRequested && !isDirector && !lockingOnConfirm && !unlockingOnReset) {
     return NextResponse.json({ error: 'Only a director can lock or unlock a confirmed order' }, { status: 403 })
+  }
+  // Sent quotations are commercially frozen until Reset to Draft (Odoo Sent ≠ Draft).
+  // No director bypass — revise via Reset / New Version, not silent PATCH.
+  const sentFreeze = from === 'quotation_sent' && to === 'quotation_sent'
+  if (sentFreeze && hasCommercialChange(existing, body)) {
+    return NextResponse.json(
+      { error: 'Sent quotations are locked. Reset to draft first, then edit and save.' },
+      { status: 409 },
+    )
+  }
+  // Accepted quotations are an immutable commercial snapshot until Reset / Confirm.
+  const acceptedFreeze = Boolean(existing.acceptedAt) && isQuotationStage(from) && to !== 'quotation' && to !== 'sale'
+  if (acceptedFreeze && hasCommercialChange(existing, body)) {
+    return NextResponse.json(
+      { error: 'Accepted quotations are locked. Create a new version or reset to draft to change commercial terms.' },
+      { status: 409 },
+    )
   }
   // Phase C: confirmed sales orders freeze commercial fields for everyone
   // except directors (even when salesLockConfirmed did not set locked=true).
@@ -436,24 +459,30 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
         return NextResponse.json({ error: credit.error }, { status: credit.status })
       }
 
-      // Reserve stock BEFORE persisting the status flip (not after). If the
-      // process crashes between these two steps, the order is left as an
-      // unconfirmed quotation with an orphaned-but-recoverable reservation —
-      // never a "confirmed" Sales Order silently holding zero reserved stock.
-      try {
-        const reserveResult = await reserveStockForSaleOrder(params.id, session.user.id)
-        if (!reserveResult.ok) {
+      // Odoo "At Confirmation" vs "Manually": client may pass reserveStock:false
+      // ("Confirm without reservation"). Default remains true so Confirm and
+      // Reserve / single Confirm still allocate stock before the status flip.
+      const shouldReserve = body.reserveStock !== false
+      if (shouldReserve) {
+        // Reserve stock BEFORE persisting the status flip (not after). If the
+        // process crashes between these two steps, the order is left as an
+        // unconfirmed quotation with an orphaned-but-recoverable reservation —
+        // never a "confirmed" Sales Order silently holding zero reserved stock.
+        try {
+          const reserveResult = await reserveStockForSaleOrder(params.id, session.user.id)
+          if (!reserveResult.ok) {
+            return NextResponse.json(
+              { error: reserveResult.error || 'Could not reserve stock for this order' },
+              { status: 409 },
+            )
+          }
+        } catch (err) {
+          console.error('[sale-orders] reserveStockForSaleOrder threw:', err)
           return NextResponse.json(
-            { error: reserveResult.error || 'Could not reserve stock for this order' },
+            { error: 'Stock reservation failed — order was not confirmed. Try again or confirm without reservation.' },
             { status: 409 },
           )
         }
-      } catch (err) {
-        console.error('[sale-orders] reserveStockForSaleOrder threw:', err)
-        return NextResponse.json(
-          { error: 'Stock reservation failed — order was not confirmed. Try again or confirm without reservation.' },
-          { status: 409 },
-        )
       }
     }
 

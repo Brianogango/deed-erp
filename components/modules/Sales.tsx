@@ -94,7 +94,7 @@ import {
   serializeQuotationPaymentTerms,
 } from '@/lib/sales/quotation-defaults'
 import { calcSaleOrderLineMoney } from '@/lib/sales/line-calc'
-import { pairOrderLinesWithDeliveryLines } from '@/lib/delivery-prepare'
+import { allocateDeliveredQtyToOrderLines, pairOrderLinesWithDeliveryLines } from '@/lib/delivery-prepare'
 import Chatter from '@/components/erp/Chatter'
 import { ConfirmQuotationDialog } from '@/components/modules/sales/ConfirmQuotationDialog'
 import {
@@ -109,6 +109,7 @@ import {
   SALE_STATUS_BAR,
   SALE_STATUS_LABELS,
   SO_INVOICE_STATUS_LABELS,
+  SO_FULFILMENT_STATUS_LABELS,
   DELIVERY_STATE_LABELS,
   isQuotationStage,
   isQuotationDraft,
@@ -118,6 +119,9 @@ import {
   deliveryDeliveredTotal,
   canGenerateDeliveryNote,
   saleOrderInvoiceStatus,
+  saleOrderFulfilmentStatus,
+  saleOrderIsOperationallyComplete,
+  saleOrderIsAccepted,
   invoiceableQty,
   isOpenDeliveryStatus,
   deliveriesForSaleOrder,
@@ -125,6 +129,7 @@ import {
   saleOrderLooksConfirmed,
   type SalesListFilter,
 } from '@/lib/odoo-sales-flow'
+import { resolveInvoicePolicy } from '@/lib/sales/invoice-policy'
 
 // ═══════════════════════════════════════════════════════════════════════════
 // TYPES
@@ -325,7 +330,7 @@ function SalesContent() {
   const router = useRouter()
   const pathname = usePathname()
   const {
-    saleOrders, contacts, products, serials, invoices, deliveries, returnOrders,
+    saleOrders, contacts, products, serials, invoices, deliveries, returnOrders, stockReservations,
     createSaleOrder, updateSaleOrder, confirmSO, ensureWaitingDeliveryForSO, markQuotationSent, setSaleOrderLock,
     addSOLine, removeSOLine, moveSOLine, addSOSection,
     assignSerialsToSOLine, unassignSerialFromSOLine, createInvoiceFromSO, prepareDelivery, validateDelivery, markDeliveryNoteGenerated,
@@ -697,7 +702,6 @@ function SalesContent() {
   }), [salesOrderViews, deliveries])
 
   // Odoo-style derived statuses for the active order.
-  const activeInvoiceStatus = activeOrder ? saleOrderInvoiceStatus(activeOrder.status, activeOrder.lines) : 'no'
   const activeDeliveries = useMemo(
     () => activeOrder ? deliveriesForSaleOrder(deliveries, activeOrder.id, { includeCancelled: true }) : [],
     [deliveries, activeOrder],
@@ -708,6 +712,72 @@ function SalesContent() {
   )
   const invoiceDeliveryReady = activeOrder
     ? hasValidatedDeliveryForInvoice(activeDeliveries, activeOrder.id)
+    : false
+  const activeLineInvoicePolicy = useCallback((line: { productId?: string; invoicePolicy?: string }) => {
+    const product = products.find(p => p.id === line.productId)
+    return resolveInvoicePolicy({
+      linePolicy: line.invoicePolicy,
+      productPolicy: product?.invoicePolicy,
+      productUnit: product?.unit,
+    })
+  }, [products])
+  const activeInvoiceStatus = useMemo(() => {
+    if (!activeOrder) return 'no' as const
+    return saleOrderInvoiceStatus(
+      activeOrder.status,
+      (activeOrder.lines ?? []).map((l: any) => ({
+        qty: Number(l.qty) || 0,
+        qtyDelivered: Number(l.qtyDelivered) || 0,
+        qtyInvoiced: Number(l.qtyInvoiced) || 0,
+        invoicePolicy: activeLineInvoicePolicy(l),
+      })),
+    )
+  }, [activeOrder, activeLineInvoicePolicy])
+  /** True when at least one line can be invoiced now (respects ordered vs delivered policy). */
+  const canCreateInvoiceNow = useMemo(() => {
+    if (!activeOrder || activeOrder.status !== 'sale') return false
+    return (activeOrder.lines ?? []).some((l: any) => {
+      if (l.lineType === 'section') return false
+      return invoiceableQty({
+        qty: Number(l.qty) || 0,
+        qtyDelivered: Number(l.qtyDelivered) || 0,
+        qtyInvoiced: Number(l.qtyInvoiced) || 0,
+        invoicePolicy: activeLineInvoicePolicy(l),
+      }) > 0
+    })
+  }, [activeOrder, activeLineInvoicePolicy])
+  const reservedByLineId = useMemo(() => {
+    if (!activeOrder) return new Map<string, number>()
+    const pool: Record<string, number> = {}
+    for (const r of stockReservations ?? []) {
+      if (r.referenceId !== activeOrder.id || r.status !== 'reserved') continue
+      const remaining = Math.max(0, (Number(r.qty) || 0) - (Number(r.fulfilledQty) || 0))
+      if (!r.productId || remaining <= 0) continue
+      pool[r.productId] = (pool[r.productId] ?? 0) + remaining
+    }
+    const allocated = allocateDeliveredQtyToOrderLines(
+      (activeOrder.lines ?? []).map((l: any) => ({
+        id: l.id,
+        productId: l.productId,
+        qty: Number(l.qty) || 0,
+        qtyDelivered: 0,
+        lineType: l.lineType,
+      })),
+      pool,
+      'add',
+    )
+    return new Map(allocated.map(l => [String((l as any).id), Number((l as any).qtyDelivered) || 0]))
+  }, [activeOrder, stockReservations])
+  const activeFulfilmentStatus = activeOrder
+    ? saleOrderFulfilmentStatus(activeOrder.status, activeOrder.lines)
+    : 'nothing'
+  const activeOperationallyComplete = activeOrder
+    ? saleOrderIsOperationallyComplete(activeOrder.status, activeOrder.lines.map((l: any) => ({
+        qty: Number(l.qty) || 0,
+        qtyDelivered: Number(l.qtyDelivered) || 0,
+        qtyInvoiced: Number(l.qtyInvoiced) || 0,
+        invoicePolicy: activeLineInvoicePolicy(l),
+      })))
     : false
   const activeInvoices = useMemo(
     () => activeOrder ? invoices.filter(i => i.saleOrderId === activeOrder.id) : [],
@@ -894,14 +964,19 @@ function SalesContent() {
     }
   }
 
-  /** Invoiceable lines for the partial-invoice picker: id, label, and max qty capped by delivery/invoiced progress. */
+  /** Invoiceable lines for the partial-invoice picker: id, label, and max qty capped by policy/invoiced progress. */
   const invoiceableLinesFor = (so: SalesOrderView) =>
     (so.lines ?? [])
       .filter((l: any) => l.lineType !== 'section')
       .map((l: any) => ({
         id: String(l.id),
         label: l.productName || l.description || 'Item',
-        maxQty: invoiceableQty({ qty: Number(l.qty) || 0, qtyDelivered: Number(l.qtyDelivered) || 0, qtyInvoiced: Number(l.qtyInvoiced) || 0, invoicePolicy: 'delivery' }),
+        maxQty: invoiceableQty({
+          qty: Number(l.qty) || 0,
+          qtyDelivered: Number(l.qtyDelivered) || 0,
+          qtyInvoiced: Number(l.qtyInvoiced) || 0,
+          invoicePolicy: activeLineInvoicePolicy(l),
+        }),
       }))
       .filter(l => l.maxQty > 0)
 
@@ -1006,7 +1081,10 @@ function SalesContent() {
     if (confirmingSO) return
     setConfirmingSO(true)
     try {
-      await Promise.resolve(confirmSO(activeOrder.id))
+      // reserveStock drives server-side At Confirmation reservation.
+      // Prepare (pick) only when Confirm and Reserve — Manual mode leaves
+      // warehouse to prepare later.
+      await Promise.resolve(confirmSO(activeOrder.id, { reserveStock: mode === 'reserve' }))
       if (mode === 'reserve' && canReserveOnConfirm) {
         const del = await ensureWaitingDeliveryForSO(activeOrder.id)
         if (del) {
@@ -1705,6 +1783,15 @@ function SalesContent() {
                           return <SalesDocPill label={pill.label} tone={pill.tone} />
                         })()}
                         {activeOrder.locked && <SalesDocPill label="Locked" tone="neutral" />}
+                        {saleOrderIsAccepted(activeOrder) && isQuotationStage(activeOrder.status) && (
+                          <SalesDocPill label="Accepted" tone="success" />
+                        )}
+                        {activeOperationallyComplete && (
+                          <SalesDocPill label="Complete" tone="success" />
+                        )}
+                        {activeOrder.status === 'sale' && !activeOperationallyComplete && (
+                          <SalesDocPill label={SO_FULFILMENT_STATUS_LABELS[activeFulfilmentStatus]} tone="neutral" />
+                        )}
                       </div>
                       <div className="sub">
                         {isQuotationStage(activeOrder.status) ? (
@@ -1786,16 +1873,19 @@ function SalesContent() {
                             items={[
                               ...(activeOrder.status === 'quotation_sent' ? [
                                 { label: 'Reset to Draft', icon: faRotateLeft, onClick: () => setShowResetDraftConfirm(true) },
-                                {
+                                ...(!saleOrderIsAccepted(activeOrder) ? [{
                                   label: 'Mark accepted',
                                   icon: faCircleCheck,
                                   onClick: () => {
+                                    const acceptedAt = new Date().toISOString()
                                     void updateSaleOrder(activeOrder.id, {
-                                      notes: `${activeOrder.notes || ''}\n[Customer accepted ${new Date().toISOString().slice(0, 10)}]`.trim(),
+                                      acceptedAt,
+                                      acceptedById: currentUserId || undefined,
+                                      notes: `${activeOrder.notes || ''}\n[Customer accepted ${acceptedAt.slice(0, 10)}]`.trim(),
                                     }, { persist: true })
-                                    showToast('Quotation marked accepted', 'success')
+                                    showToast('Quotation accepted — commercial terms locked', 'success')
                                   },
-                                },
+                                }] : []),
                                 {
                                   label: 'Mark rejected',
                                   icon: faBan,
@@ -1866,7 +1956,7 @@ function SalesContent() {
                         ) : (
                           <button type="button" className="sp-btn" onClick={() => void openDeliveryView()}>Deliveries</button>
                         )}
-                        {canInvoiceFromSO && invoiceDeliveryReady && (activeInvoiceStatus === 'to_invoice' || activeInvoiceStatus === 'upselling') ? (
+                        {canInvoiceFromSO && canCreateInvoiceNow && (activeInvoiceStatus === 'to_invoice' || activeInvoiceStatus === 'upselling') ? (
                           <button
                             type="button"
                             className="sp-btn"
@@ -2052,10 +2142,13 @@ function SalesContent() {
                                 <tr>
                                   <th>Product</th>
                                   <th>Description</th>
-                                  <th className="num">Qty</th>
+                                  <th className="num">Ordered</th>
                                   <th>Unit</th>
                                   {activeOrder.status === 'sale' && (
-                                    <th className="num">Delivered</th>
+                                    <>
+                                      <th className="num">Reserved</th>
+                                      <th className="num">Delivered</th>
+                                    </>
                                   )}
                                   {(activeInvoices.length > 0 || (activeOrder.status === 'sale' && activeOrder.lines.some((l: any) => (l.qtyInvoiced ?? 0) > 0))) && (
                                     <th className="num">Invoiced</th>
@@ -2113,6 +2206,7 @@ function SalesContent() {
                                   const lineSerials = serials.filter((s: any) => l.serialIds?.includes(s.id))
                                   const isEditing = editingLineId === l.id
                                   const invoicedQty = (Number(l.qtyInvoiced) || 0) || getInvoicedQty(activeOrder, l.productId)
+                                  const reservedQty = reservedByLineId.get(String(l.id)) ?? 0
                                   const showInvoiced = activeInvoices.length > 0 || (activeOrder.status === 'sale' && activeOrder.lines.some((x: any) => (x.qtyInvoiced ?? 0) > 0))
                                   const showDelivered = activeOrder.status === 'sale'
                                   return (
@@ -2137,6 +2231,11 @@ function SalesContent() {
                                         : l.qty}
                                       </td>
                                       <td>Unit</td>
+                                      {showDelivered && (
+                                        <td className="num">
+                                          <span className={`font-semibold ${reservedQty > 0 ? 'text-sky-600' : 'text-[var(--text-4)]'}`}>{reservedQty}</span>
+                                        </td>
+                                      )}
                                       {showDelivered && (
                                         <td className="num">
                                           <span className={`font-semibold ${(l.qtyDelivered ?? 0) >= l.qty ? 'text-emerald-600' : (l.qtyDelivered ?? 0) > 0 ? 'text-amber-500' : 'text-[var(--text-4)]'}`}>{l.qtyDelivered ?? 0}</span>
@@ -2280,10 +2379,12 @@ function SalesContent() {
                             {activeInvoices.length === 0 ? (
                               <div className="flex flex-col gap-3" style={{ maxWidth: 420 }}>
                                 <p style={{ color: 'var(--sp-text-3)', margin: 0 }}>No invoices yet.</p>
-                                {!invoiceDeliveryReady ? (
+                                {!canCreateInvoiceNow ? (
                                   <>
                                     <p style={{ color: 'var(--sp-text-2)', margin: 0, fontSize: 13 }}>
-                                      Validate a delivery before creating an invoice. Invoicing follows delivered quantities.
+                                      {invoiceDeliveryReady
+                                        ? 'Nothing is eligible to invoice yet.'
+                                        : 'Products set to Delivered Quantities need a validated delivery before invoicing. Ordered-quantity products can invoice after confirmation.'}
                                     </p>
                                     <div>
                                       <button type="button" className="sp-btn sp-btn-primary" onClick={() => void openDeliveryView()}>
@@ -2294,7 +2395,7 @@ function SalesContent() {
                                 ) : canInvoiceFromSO && (activeInvoiceStatus === 'to_invoice' || activeInvoiceStatus === 'upselling') ? (
                                   <>
                                     <p style={{ color: 'var(--sp-text-2)', margin: 0, fontSize: 13 }}>
-                                      Delivery is validated. Create an invoice for the delivered quantities.
+                                      Eligible quantities are ready. Create a draft invoice (finance posts it separately).
                                     </p>
                                     <div className="flex flex-wrap gap-2">
                                       <button

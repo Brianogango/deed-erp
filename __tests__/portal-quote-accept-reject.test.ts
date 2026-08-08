@@ -46,6 +46,7 @@ describe('POST /api/portal/quotes/[id]/accept — SaleOrder support', () => {
     // status must NOT have been silently promoted to 'sale' by a portal click.
     expect(savedOrders[0].status).toBe('quotation_sent')
     expect(savedOrders[0].notes).toContain('Customer accepted online')
+    expect(savedOrders[0].acceptedAt).toBeTruthy()
     expect(mockSendEmail).toHaveBeenCalledWith(expect.objectContaining({
       subject: expect.stringContaining('SO/2026/0001'),
     }))

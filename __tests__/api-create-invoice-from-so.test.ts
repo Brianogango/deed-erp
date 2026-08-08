@@ -20,6 +20,9 @@ const {
       update: vi.fn(),
       updateMany: vi.fn(),
     },
+    product: {
+      findMany: vi.fn(),
+    },
     invoice: {
       create: vi.fn(),
     },
@@ -102,6 +105,11 @@ beforeEach(() => {
   mockWriteFinancialAudit.mockResolvedValue(undefined)
   mockPrisma.saleOrder.findUnique.mockResolvedValue(saleOrder)
   mockPrisma.saleOrder.findMany.mockResolvedValue([saleOrder])
+  // Default stockable products to delivered-qty policy (hardware-safe).
+  mockPrisma.product.findMany.mockResolvedValue([
+    { id: 'prod-1', invoicePolicy: 'delivery', trackStock: true },
+    { id: 'prod-2', invoicePolicy: 'delivery', trackStock: true },
+  ])
   mockPrisma.$transaction.mockImplementation(async (fn: any) => fn({
     saleOrder: {
       findUnique: vi.fn().mockResolvedValue(saleOrder),
@@ -196,6 +204,27 @@ describe('POST /api/sale-orders/:id/create-invoice', () => {
     expect(res.status).toBe(409)
     expect((await res.json()).error).toMatch(/Validate the delivery/i)
     expect(mockPrisma.$transaction).not.toHaveBeenCalled()
+  })
+
+  it('allows ordered-policy invoicing before any delivery is validated', async () => {
+    mockPrisma.product.findMany.mockResolvedValue([
+      { id: 'prod-1', invoicePolicy: 'order', trackStock: false },
+    ])
+    mockLoadAppState.mockResolvedValue({ deed_invoices: [], deed_deliveries: [] })
+    const undelivered = {
+      ...saleOrder,
+      items: [{ ...saleOrder.items[0], qtyDelivered: 0, qtyInvoiced: 0 }],
+    }
+    mockPrisma.saleOrder.findUnique.mockResolvedValue(undelivered)
+    mockPrisma.$transaction.mockImplementation(async (fn: any) => fn({
+      saleOrder: { findUnique: vi.fn().mockResolvedValue(undelivered) },
+      saleOrderItem: { updateMany: mockPrisma.saleOrderItem.updateMany.mockResolvedValue({ count: 1 }) },
+      invoice: { create: mockPrisma.invoice.create },
+    }))
+    const res = await POST(new NextRequest('http://localhost', { method: 'POST' }), { params: { id: ORDER_ID } })
+    expect(res.status).toBe(200)
+    const createData = mockPrisma.invoice.create.mock.calls.at(-1)?.[0]?.data
+    expect(createData.items.create[0].qty).toBe(1)
   })
 
   it('rejects a hollow Done delivery with delivered qty 0', async () => {

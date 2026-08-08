@@ -917,6 +917,10 @@ export interface SaleOrder {
   sentByName?: string
   sentTo?: string
   sentMessage?: string
+  // Customer acceptance — immutable commercial snapshot until Reset / Confirm
+  acceptedAt?: string
+  acceptedById?: string
+  acceptedByName?: string
   // Odoo sale-order commercial fields
   pricelist?: string
   pricelistId?: string
@@ -3136,7 +3140,7 @@ export interface AppState {
   moveSOLine: (orderId: string, lineId: string, direction: -1 | 1) => void | Promise<boolean>
   /** Insert a section heading on a quotation. */
   addSOSection: (orderId: string, title?: string) => void | Promise<boolean>
-  confirmSO: (id: string) => void | Promise<void>
+  confirmSO: (id: string, opts?: { reserveStock?: boolean }) => void | Promise<void>
   /** Create a waiting delivery when a confirmed SO has none (heal / retry). */
   ensureWaitingDeliveryForSO: (id: string) => Promise<Delivery | null>
   /** Send by Email succeeded → Quotation Sent (records date/user/recipient). */
@@ -3463,6 +3467,7 @@ export type SalesStoreState = Pick<AppState,
   | 'invoices'
   | 'deliveries'
   | 'returnOrders'
+  | 'stockReservations'
   | 'posOrders'
   | 'users'
   | 'currentUserId'
@@ -9618,7 +9623,8 @@ const storeCtx: AppState = {
       // metadata (e.g. proformaRef) so PDF helpers still work without a reset.
       const keys = Object.keys(p)
       const metadataOnly = keys.length > 0 && keys.every(k =>
-        k === 'proformaRef' || k === 'notes' || k === 'validUntil',
+        k === 'proformaRef' || k === 'notes' || k === 'validUntil'
+        || k === 'acceptedAt' || k === 'acceptedById' || k === 'acceptedByName',
       )
       if (existing.status !== 'quotation' && !metadataOnly) {
         showToast(
@@ -10064,11 +10070,12 @@ const storeCtx: AppState = {
       scheduleDraftSaleOrderLinePersist(orderId)
       return true
     },
-    confirmSO: async (id) => {
+    confirmSO: async (id, opts) => {
       const user = currentUser()
       if (!user || !['director', 'sales_rep', 'admin_officer'].includes(user.role)) {
         showToast('Unauthorized to confirm Sales Orders', 'error'); return;
       }
+      const reserveStock = opts?.reserveStock !== false
       let so = soRef.current.find(s => s.id === id)
       if (!so) return
 
@@ -10151,12 +10158,11 @@ const storeCtx: AppState = {
           r.status === 'pending',
         )
         if (leftoverSalesApprovals.length > 0) {
-          const leftoverIds = new Set(leftoverSalesApprovals.map(r => r.id))
-          setApprovalRequests(prev => prev.map(r =>
-            leftoverIds.has(r.id)
-              ? { ...r, status: 'cancelled' as const, notes: 'Auto-cleared: sales confirmation approvals disabled' }
-              : r,
-          ))
+          showToast(
+            `Resolve ${leftoverSalesApprovals.length} pending approval${leftoverSalesApprovals.length === 1 ? '' : 's'} before confirming`,
+            'error',
+          )
+          return
         }
 
         const creditStatus = storeCtxRef.current!.getCustomerCreditStatus(so.customerId, so.total)
@@ -10193,6 +10199,8 @@ const storeCtx: AppState = {
           approvedBy: user.id,
           approvalStatus: 'not_required' as const,
           locked: systemSettings.salesLockConfirmed || undefined,
+          // Odoo At Confirmation vs Manual reservation
+          reserveStock,
           lockVersion,
         })
 
@@ -11068,12 +11076,15 @@ const storeCtx: AppState = {
         confirmedAt: undefined,
         confirmedById: undefined,
         confirmedByName: undefined,
-        // Clear send stamps so "Send" is treated as initial again after reset.
+        // Clear send/accept stamps so "Send" is treated as initial again after reset.
         sentAt: undefined,
         sentTo: undefined,
         sentById: undefined,
         sentByName: undefined,
         sentMessage: undefined,
+        acceptedAt: undefined,
+        acceptedById: undefined,
+        acceptedByName: undefined,
         lines: so.lines.map((l: any) => ({ ...l, serialIds: [] })),
       }
       const result = await patchSaleOrderPersist(id, {
@@ -11084,6 +11095,8 @@ const storeCtx: AppState = {
         sentTo: null,
         sentById: null,
         sentMessage: null,
+        acceptedAt: null,
+        acceptedById: null,
       })
       if (!result.ok) {
         showToast(result.error || 'Could not reset to quotation — try again', 'error')
@@ -17413,6 +17426,7 @@ const storeCtx: AppState = {
     invoices,
     deliveries,
     returnOrders,
+    stockReservations,
     posOrders,
     users,
     currentUserId,
@@ -17432,6 +17446,7 @@ const storeCtx: AppState = {
     invoices,
     deliveries,
     returnOrders,
+    stockReservations,
     posOrders,
     users,
     currentUserId,

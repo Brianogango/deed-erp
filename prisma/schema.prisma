@@ -841,8 +841,8 @@ model Product {
   trackStock       Boolean         @default(true) @map("track_stock")
   trackingMethod   TrackingMethod  @default(QUANTITY) @map("tracking_method")
   // Odoo-style invoicing policy: 'order' (Ordered Quantities) or 'delivery'
-  // (Delivered Quantities). Controls when sale-order lines become invoiceable.
-  invoicePolicy    String      @default("order") @map("invoice_policy") @db.VarChar(20)
+  // (Delivered Quantities). Hardware default is delivered quantities.
+  invoicePolicy    String      @default("delivery") @map("invoice_policy") @db.VarChar(20)
   costingMethod    String      @default("average") @map("costing_method") @db.VarChar(20)
   reorderLevel     Int?        @default(2) @map("reorder_level")
   reorderQty       Int?        @default(5) @map("reorder_qty")
@@ -1369,6 +1369,10 @@ model SaleOrder {
   sentById        String?       @map("sent_by") @db.Uuid
   sentTo          String?       @map("sent_to") @db.VarChar(255)
   sentMessage     String?       @map("sent_message") @db.Text
+  // Customer acceptance (portal or staff). Distinct from Sent — freezes the
+  // commercial snapshot until Reset to Draft / new version / Confirm.
+  acceptedAt      DateTime?     @map("accepted_at")
+  acceptedById    String?       @map("accepted_by") @db.Uuid
   // Odoo sale-order commercial fields.
   pricelist       String?       @db.VarChar(120)
   pricelistId     String?       @map("pricelist_id") @db.Uuid
