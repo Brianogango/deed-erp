@@ -13,9 +13,13 @@ import { calculatePayroll } from '@/lib/payroll'
 import {
   APPROVAL_RULES,
   createApprovalRequest,
+  computeConfirmBackorderLines,
   getPendingApprovals,
   processApproval,
 } from '@/lib/sales-approvals'
+import { computeSaleOrderApprovalTriggers } from '@/lib/sales/margin-approval'
+import { allocateSalesReturn } from '@/lib/sales/return-allocation'
+import { isDownPaymentMode, normalizeCreateInvoiceMode } from '@/lib/sales/down-payment'
 import {
   advanceExpenseApproval,
   buildExpenseApprovalChain,
@@ -612,6 +616,11 @@ export interface SystemSettings {
   salesConfirmedQuotesToOrders: boolean
   /** Odoo "Lock Confirmed Sales": confirmed orders freeze commercial fields. */
   salesLockConfirmed: boolean
+  /**
+   * Minimum gross-margin % on quotation lines (after discount) before
+   * special_pricing approval is required. Floor price remains product cost.
+   */
+  salesMinMarginPercent: number
   // Inventory
   invProductsMasterOnly: boolean
   invNoDirectStockEdits: boolean
@@ -694,6 +703,7 @@ export const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
   salesQuotationTemplates: true, salesOptionalProducts: true, salesDigitalSignature: false,
   salesOnlineAcceptance: false, salesPricelists: true, salesDiscountControl: true, salesConfirmedQuotesToOrders: true,
   salesLockConfirmed: true,
+  salesMinMarginPercent: 10,
   invProductsMasterOnly: true, invNoDirectStockEdits: true, invMultiStepRoutes: true,
   invStorageLocations: ['Incoming', 'Workshop', 'Ready for Sale', 'Faulty / Scrap'],
   invSerialNumbers: true, invLots: false, invAutomatedValuation: true, invCostingMethod: 'average',
@@ -917,6 +927,10 @@ export interface SaleOrder {
   sentByName?: string
   sentTo?: string
   sentMessage?: string
+  // Customer acceptance — immutable commercial snapshot until Reset / Confirm
+  acceptedAt?: string
+  acceptedById?: string
+  acceptedByName?: string
   // Odoo sale-order commercial fields
   pricelist?: string
   pricelistId?: string
@@ -1012,6 +1026,12 @@ export interface Invoice {
   postedByUserId?: string
   postedByName?: string
   postedAt?: string
+  /** Odoo-style down payment / deposit invoice against a Sale Order. */
+  isDownPayment?: boolean
+  downPaymentPercent?: number | null
+  downPaymentAppliedToId?: string | null
+  subject?: string
+  downPaymentDeduction?: number
 }
 
 export interface Payment {
@@ -3136,7 +3156,7 @@ export interface AppState {
   moveSOLine: (orderId: string, lineId: string, direction: -1 | 1) => void | Promise<boolean>
   /** Insert a section heading on a quotation. */
   addSOSection: (orderId: string, title?: string) => void | Promise<boolean>
-  confirmSO: (id: string) => void | Promise<void>
+  confirmSO: (id: string, opts?: { reserveStock?: boolean }) => void | Promise<void>
   /** Create a waiting delivery when a confirmed SO has none (heal / retry). */
   ensureWaitingDeliveryForSO: (id: string) => Promise<Delivery | null>
   /** Send by Email succeeded → Quotation Sent (records date/user/recipient). */
@@ -3155,7 +3175,15 @@ export interface AppState {
   markDeliveryNoteGenerated: (deliveryId: string) => Promise<boolean>
   updateDelivery: (deliveryId: string, p: Partial<Pick<Delivery, 'status' | 'recipientName' | 'recipientPhone' | 'recipientIdNumber' | 'deliveryAddress' | 'notes' | 'deliveryNoteGeneratedAt' | 'deliveryNoteGeneratedByUserId'>>) => void
   /** lineOverrides: partial-invoice qty picker — { itemId, qty } per SO line, capped server-side. Omit to invoice everything currently invoiceable. */
-  createInvoiceFromSO: (orderId: string, lineOverrides?: Array<{ itemId: string; qty: number }>) => Promise<Invoice> | Invoice
+  createInvoiceFromSO: (
+    orderId: string,
+    lineOverridesOrOpts?: Array<{ itemId: string; qty: number }> | {
+      mode?: 'regular' | 'down_payment_percent' | 'down_payment_fixed' | 'final'
+      percent?: number
+      amount?: number
+      lines?: Array<{ itemId: string; qty: number }>
+    },
+  ) => Promise<Invoice> | Invoice
   deleteSaleOrder: (id: string) => void
 
   // Invoices
@@ -3463,6 +3491,7 @@ export type SalesStoreState = Pick<AppState,
   | 'invoices'
   | 'deliveries'
   | 'returnOrders'
+  | 'stockReservations'
   | 'posOrders'
   | 'users'
   | 'currentUserId'
@@ -9618,7 +9647,8 @@ const storeCtx: AppState = {
       // metadata (e.g. proformaRef) so PDF helpers still work without a reset.
       const keys = Object.keys(p)
       const metadataOnly = keys.length > 0 && keys.every(k =>
-        k === 'proformaRef' || k === 'notes' || k === 'validUntil',
+        k === 'proformaRef' || k === 'notes' || k === 'validUntil'
+        || k === 'acceptedAt' || k === 'acceptedById' || k === 'acceptedByName',
       )
       if (existing.status !== 'quotation' && !metadataOnly) {
         showToast(
@@ -10064,11 +10094,12 @@ const storeCtx: AppState = {
       scheduleDraftSaleOrderLinePersist(orderId)
       return true
     },
-    confirmSO: async (id) => {
+    confirmSO: async (id, opts) => {
       const user = currentUser()
       if (!user || !['director', 'sales_rep', 'admin_officer'].includes(user.role)) {
         showToast('Unauthorized to confirm Sales Orders', 'error'); return;
       }
+      const reserveStock = opts?.reserveStock !== false
       let so = soRef.current.find(s => s.id === id)
       if (!so) return
 
@@ -10145,20 +10176,6 @@ const storeCtx: AppState = {
           return
         }
 
-        const leftoverSalesApprovals = approvalRequests.filter(r =>
-          r.documentId === id &&
-          ['discount', 'credit_override', 'backorder', 'special_pricing'].includes(r.type) &&
-          r.status === 'pending',
-        )
-        if (leftoverSalesApprovals.length > 0) {
-          const leftoverIds = new Set(leftoverSalesApprovals.map(r => r.id))
-          setApprovalRequests(prev => prev.map(r =>
-            leftoverIds.has(r.id)
-              ? { ...r, status: 'cancelled' as const, notes: 'Auto-cleared: sales confirmation approvals disabled' }
-              : r,
-          ))
-        }
-
         const creditStatus = storeCtxRef.current!.getCustomerCreditStatus(so.customerId, so.total)
         const canCreditOverride = user.role === 'director' || user.role === 'finance_officer'
         if (!creditStatus.ok && !canCreditOverride) {
@@ -10172,6 +10189,92 @@ const storeCtx: AppState = {
             showToast('This quotation has expired. Extend Valid until before confirming.', 'error')
             return
           }
+        }
+
+        // Margin / floor / discount / backorder / credit approval automation.
+        const backorderLines = computeConfirmBackorderLines(
+          orderLines as any,
+          prodRef.current as any,
+          stockReservations as any,
+          { excludeReferenceId: id },
+        )
+        const backorderQty = backorderLines.reduce((s, l) => s + l.qtyBackordered, 0)
+        const listPriceByProductId: Record<string, number> = {}
+        for (const line of orderLines) {
+          if (!line.productId) continue
+          const product = prodRef.current.find(p => p.id === line.productId)
+          if (!product) continue
+          const resolved = resolveListPrice({
+            product,
+            pricelist: (so as any).pricelist || (so as any).pricelistCode || 'RETAIL',
+            qty: Number(line.qty) || 1,
+          })
+          listPriceByProductId[line.productId] = resolved.listPrice
+        }
+        const approvalTriggers = computeSaleOrderApprovalTriggers({
+          lines: orderLines as any,
+          products: prodRef.current as any,
+          headerDiscountAmount: Number(so.discountAmount) || 0,
+          orderTotal: so.total,
+          minMarginPercent: Number(systemSettings.salesMinMarginPercent ?? systemSettings.reconfigurationMinMarginPct ?? 10),
+          listPriceByProductId,
+          creditRequested: !creditStatus.ok ? so.total : undefined,
+          creditAvailable: !creditStatus.ok ? Number((creditStatus as any).creditAvailable) || 0 : undefined,
+          backorderQty,
+        })
+        const pricingTrigger = approvalTriggers.find(t => t.type === 'special_pricing')
+        const discountTrigger = approvalTriggers.find(t => t.type === 'discount')
+
+        // Auto-create missing pending approval requests when the confirmer
+        // cannot satisfy the required roles (Director/Finance may self-approve).
+        const existingForDoc = approvalRequests.filter(r => r.documentId === id)
+        const createdRequests: typeof approvalRequests = []
+        const unmetTriggers = approvalTriggers.filter(trigger => {
+          const roles = APPROVAL_RULES[trigger.type](trigger.details)
+          if (roles.length === 0) return false
+          // Self-satisfy only when the confirmer holds every required role.
+          if (roles.every(role => role === user.role)) return false
+          const already = existingForDoc.some(r =>
+            r.type === trigger.type && (r.status === 'pending' || r.status === 'approved'),
+          )
+          return !already
+        })
+        for (const trigger of unmetTriggers) {
+          const request = createApprovalRequest(
+            trigger.type,
+            'sales_order',
+            id,
+            so.ref,
+            user.id,
+            user.name,
+            { ...trigger.details, reason: trigger.reason },
+            users.map(u => ({ id: u.id, name: u.name, role: u.role })),
+          )
+          createdRequests.push(request)
+        }
+        if (createdRequests.length > 0) {
+          setApprovalRequests(prev => [...createdRequests, ...prev])
+          setSaleOrders(prev => prev.map(s => s.id !== id ? s : { ...s, approvalStatus: 'pending' }))
+          showToast(
+            `Approval required: ${createdRequests.map(r => r.type.replace(/_/g, ' ')).join(', ')}`,
+            'error',
+          )
+          return
+        }
+
+        const leftoverSalesApprovals = approvalRequests.filter(r =>
+          r.documentId === id &&
+          ['discount', 'credit_override', 'backorder', 'special_pricing'].includes(r.type) &&
+          r.status === 'pending',
+        )
+        // Pending approvals still block everyone — including directors — so the
+        // audit decision is explicit (approve/reject) rather than silent.
+        if (leftoverSalesApprovals.length > 0) {
+          showToast(
+            `Resolve ${leftoverSalesApprovals.length} pending approval${leftoverSalesApprovals.length === 1 ? '' : 's'} before confirming`,
+            'error',
+          )
+          return
         }
 
         const orderRef = await storeCtxRef.current!.allocateDocRef('SO')
@@ -10191,9 +10294,26 @@ const storeCtx: AppState = {
           confirmedById: user.id,
           confirmedByName: user.name,
           approvedBy: user.id,
-          approvalStatus: 'not_required' as const,
+          // Do not force not_required — server enforces + role satisfaction.
+          approvalStatus: approvalTriggers.length > 0 ? 'approved' as const : 'not_required' as const,
           locked: systemSettings.salesLockConfirmed || undefined,
+          // Odoo At Confirmation vs Manual reservation
+          reserveStock,
           lockVersion,
+          belowPricelist: pricingTrigger?.details?.belowPricelist === true,
+          belowCost: pricingTrigger?.details?.belowCost === true,
+          belowMinimumMargin: pricingTrigger?.details?.belowMargin === true,
+          specialPricing: Boolean(pricingTrigger),
+          minMarginPercent: Number(systemSettings.salesMinMarginPercent ?? 10),
+          worstMargin: pricingTrigger?.details?.worstMargin,
+          pricingExceptionProducts: pricingTrigger?.details?.products,
+          backorderQty: backorderQty > 0 ? backorderQty : undefined,
+          discountPercent: discountTrigger?.details?.discountPercent,
+          discountAmount: Number(so.discountAmount) || 0,
+          creditRequested: !creditStatus.ok ? so.total : undefined,
+          creditAvailable: !creditStatus.ok ? Number((creditStatus as any).creditAvailable) || 0 : undefined,
+          lines: orderLines,
+          total: so.total,
         })
 
         let confirmRes = await fetch(`/api/sale-orders/${id}`, {
@@ -10882,7 +11002,7 @@ const storeCtx: AppState = {
       setDeliveries(prev => prev.map(d => d.id === deliveryId ? { ...d, ...p } : d))
       sync(`/api/deliveries/${deliveryId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(p) })
     },
-    createInvoiceFromSO: async (orderId, lineOverrides) => {
+    createInvoiceFromSO: async (orderId, lineOverridesOrOpts) => {
       if (!canCreateCustomerInvoiceFromSOAction(currentUser())) {
         showToast('Only Finance or Admin Officer can create invoices from a sale order', 'error'); return {} as Invoice;
       }
@@ -10891,19 +11011,44 @@ const storeCtx: AppState = {
       if (so.status !== 'sale') {
         showToast('Only a confirmed Sales Order can be invoiced', 'error'); return {} as Invoice;
       }
-      if (!hasValidatedDeliveryForInvoice(delRef.current, orderId)) {
-        showToast('Validate the delivery before creating an invoice', 'error')
-        return {} as Invoice
+      const invoiceOpts = Array.isArray(lineOverridesOrOpts)
+        ? { mode: 'regular' as const, lines: lineOverridesOrOpts }
+        : {
+            mode: normalizeCreateInvoiceMode(lineOverridesOrOpts?.mode),
+            percent: lineOverridesOrOpts?.percent,
+            amount: lineOverridesOrOpts?.amount,
+            lines: lineOverridesOrOpts?.lines,
+          }
+      const lineOverrides = invoiceOpts.lines
+      // Down payments are commercial deposits — no delivery gate.
+      // Regular/final still defer to the server for ordered vs delivered policy.
+      if (!isDownPaymentMode(invoiceOpts.mode) && invoiceOpts.mode !== 'final') {
+        // Soft client hint only for classic regular invoices when nothing
+        // looks invoiceable yet; server is authoritative for mixed policies.
+        if (!hasValidatedDeliveryForInvoice(delRef.current, orderId)) {
+          const anyOrderPolicy = (so.lines ?? []).some((l: any) => {
+            if (l.lineType === 'section') return false
+            const product = prodRef.current.find(p => p.id === l.productId)
+            return String(product?.invoicePolicy ?? '').toLowerCase() === 'order'
+              || String(product?.unit ?? '').toLowerCase() === 'service'
+          })
+          if (!anyOrderPolicy) {
+            showToast('Validate the delivery before creating an invoice', 'error')
+            return {} as Invoice
+          }
+        }
       }
 
       // Prefer server-atomic path (qtyInvoiced bump + invoice create in one transaction).
       try {
+        const payloadBody: Record<string, unknown> = { mode: invoiceOpts.mode }
+        if (invoiceOpts.percent != null) payloadBody.percent = invoiceOpts.percent
+        if (invoiceOpts.amount != null) payloadBody.amount = invoiceOpts.amount
+        if (lineOverrides?.length) payloadBody.lines = lineOverrides
         const response = await fetch(`/api/sale-orders/${orderId}/create-invoice`, {
           method: 'POST',
-          ...(lineOverrides ? {
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ lines: lineOverrides }),
-          } : {}),
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payloadBody),
         })
         const payload = await response.json().catch(() => null) as {
           ok?: boolean
@@ -11068,12 +11213,15 @@ const storeCtx: AppState = {
         confirmedAt: undefined,
         confirmedById: undefined,
         confirmedByName: undefined,
-        // Clear send stamps so "Send" is treated as initial again after reset.
+        // Clear send/accept stamps so "Send" is treated as initial again after reset.
         sentAt: undefined,
         sentTo: undefined,
         sentById: undefined,
         sentByName: undefined,
         sentMessage: undefined,
+        acceptedAt: undefined,
+        acceptedById: undefined,
+        acceptedByName: undefined,
         lines: so.lines.map((l: any) => ({ ...l, serialIds: [] })),
       }
       const result = await patchSaleOrderPersist(id, {
@@ -11084,6 +11232,8 @@ const storeCtx: AppState = {
         sentTo: null,
         sentById: null,
         sentMessage: null,
+        acceptedAt: null,
+        acceptedById: null,
       })
       if (!result.ok) {
         showToast(result.error || 'Could not reset to quotation — try again', 'error')
@@ -16884,7 +17034,47 @@ const storeCtx: AppState = {
           }
         }
       }
-      setReturnOrders(p => p.map(r => r.id === id ? { ...r, status: 'received', receivedDate: now() } : r))
+
+      // Reverse-transfer allocation: wind back SO qtyDelivered (and draft invoice
+      // qtys). Posted-invoice qty becomes a credit-note obligation on process.
+      const so = soRef.current.find(s => s.id === ro.saleOrderId)
+      const draftInvoices = invRef.current
+        .filter(i => i.saleOrderId === ro.saleOrderId && i.type === 'customer_invoice' && invoiceDocState(i.status) === 'draft' && !i.isDownPayment)
+        .map(i => ({
+          id: i.id,
+          lines: (i.lines ?? []).map(l => ({ id: l.id, productId: l.productId, qty: Number(l.qty) || 0 })),
+        }))
+      const allocation = so
+        ? allocateSalesReturn({
+            soLines: (so.lines ?? [])
+              .filter((l: any) => l.lineType !== 'section')
+              .map((l: any) => ({
+                id: String(l.id),
+                productId: String(l.productId ?? ''),
+                productName: l.productName,
+                qty: Number(l.qty) || 0,
+                qtyDelivered: Number(l.qtyDelivered) || 0,
+                qtyInvoiced: Number(l.qtyInvoiced) || 0,
+                unitPrice: Number(l.unitPrice) || 0,
+                taxRate: Number(l.taxRate) || 0,
+              })),
+            returnLines: ro.lines.map(l => ({
+              productId: l.productId,
+              productName: l.productName,
+              qty: Number(l.qty) || 0,
+            })),
+            draftInvoices,
+          })
+        : null
+
+      setReturnOrders(p => p.map(r => r.id === id ? {
+        ...r,
+        status: 'received',
+        receivedDate: now(),
+        notes: allocation?.requiresCreditNote
+          ? `${r.notes || ''}\n[Return after invoice — credit note required: KES ${allocation.creditTotal}]`.trim()
+          : r.notes,
+      } : r))
       ro.lines.forEach(line => {
         line.serialIds.forEach(sid => {
           setSerials(p => p.map(s => s.id === sid
@@ -16899,8 +17089,47 @@ const storeCtx: AppState = {
           setProducts(p => p.map(x => x.id === line.productId ? { ...x, stockQty: x.stockQty + line.qty } : x))
         }
       })
-      addAuditLog('rma_receive', ro.ref, `Received return ${ro.ref} for ${ro.customerName}`)
-      showToast('Return received — items back in warehouse')
+
+      if (so && allocation && allocation.soLineAdjustments.length > 0) {
+        const adjById = new Map(allocation.soLineAdjustments.map(a => [a.soLineId, a]))
+        const lines = so.lines.map((l: any) => {
+          const adj = adjById.get(String(l.id))
+          if (!adj) return l
+          // On receive: reverse delivered qty. qtyInvoiced for posted goods is
+          // reduced when the credit note is processed.
+          return { ...l, qtyDelivered: adj.qtyDelivered }
+        })
+        setSaleOrders(prev => prev.map(s => s.id !== so.id ? s : { ...s, lines }))
+        sync(`/api/sale-orders/${so.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ lines }),
+        })
+      }
+      if (allocation && allocation.draftInvoiceDeductions.length > 0) {
+        setInvoices(prev => prev.map(inv => {
+          const deductions = allocation.draftInvoiceDeductions.filter(d => d.invoiceId === inv.id)
+          if (deductions.length === 0) return inv
+          const deductByLine = new Map(deductions.map(d => [d.lineId, d.deductQty]))
+          const lines = (inv.lines ?? []).map(l => {
+            const deduct = deductByLine.get(l.id) || 0
+            if (deduct <= 0) return l
+            const qty = Math.max(0, (Number(l.qty) || 0) - deduct)
+            const unit = Number(l.unitPrice) || 0
+            return { ...l, qty, subtotal: Math.round(unit * qty) }
+          }).filter(l => (Number(l.qty) || 0) > 0)
+          const subtotal = lines.reduce((s, l) => s + (Number(l.subtotal) || 0), 0)
+          const taxTotal = lines.reduce((s, l) => s + Math.round((Number(l.subtotal) || 0) * (Number(l.taxRate) || 0) / 100), 0)
+          return { ...inv, lines, subtotal, taxTotal, total: subtotal + taxTotal }
+        }))
+      }
+
+      addAuditLog('rma_receive', ro.ref, `Received return ${ro.ref} for ${ro.customerName}${allocation?.requiresCreditNote ? ' · credit note required' : ' · reverse transfer only'}`)
+      showToast(
+        allocation?.requiresCreditNote
+          ? `Return received — reverse transfer done; issue credit note for KES ${fmtKes(allocation.creditTotal)}`
+          : 'Return received — reverse transfer done (not yet invoiced)',
+      )
     },
 
     processReturn: async (id, resolution, refundAmount, processNotes, refundPaymentMethod) => {
@@ -16911,7 +17140,38 @@ const storeCtx: AppState = {
       // creating anything — no CustomerCredit, journal or audit entry. Wire it up using
       // the same mechanism cancelInvoice() uses for a cancelled paid invoice.
       let creditNoteRef: string | null = null
-      if (resolution === 'credit_note' && refundAmount && refundAmount > 0) {
+      if (resolution === 'credit_note') {
+        const so = soRef.current.find(s => s.id === rma.saleOrderId)
+        const allocation = so
+          ? allocateSalesReturn({
+              soLines: (so.lines ?? [])
+                .filter((l: any) => l.lineType !== 'section')
+                .map((l: any) => ({
+                  id: String(l.id),
+                  productId: String(l.productId ?? ''),
+                  productName: l.productName,
+                  qty: Number(l.qty) || 0,
+                  // Delivered already reversed on receive — reconstruct
+                  // pre-receive delivered as current + return qty for credit calc.
+                  qtyDelivered: (Number(l.qtyDelivered) || 0) + (rma.lines
+                    .filter(rl => rl.productId === l.productId)
+                    .reduce((s, rl) => s + (Number(rl.qty) || 0), 0)),
+                  qtyInvoiced: Number(l.qtyInvoiced) || 0,
+                  unitPrice: Number(l.unitPrice) || 0,
+                  taxRate: Number(l.taxRate) || 0,
+                })),
+              returnLines: rma.lines.map(l => ({
+                productId: l.productId,
+                productName: l.productName,
+                qty: Number(l.qty) || 0,
+              })),
+            })
+          : null
+        const amount = Math.max(0, Number(refundAmount) || allocation?.creditTotal || 0)
+        if (amount <= 0) {
+          showToast('No posted invoice quantity to credit for this return', 'error')
+          return
+        }
         // Partial invoicing means a sale order can have several customer
         // invoices (often one posted plus draft rows for not-yet-invoiced
         // lines) — only posted invoices are real credit-note candidates.
@@ -16919,7 +17179,7 @@ const storeCtx: AppState = {
         // financial-correctness risk, so that case still requires exactly
         // one match rather than picking arbitrarily.
         const candidateInvoices = invRef.current.filter(i =>
-          i.saleOrderId === rma.saleOrderId && i.type === 'customer_invoice' && invoiceDocState(i.status) === 'posted',
+          i.saleOrderId === rma.saleOrderId && i.type === 'customer_invoice' && !i.isDownPayment && invoiceDocState(i.status) === 'posted',
         )
         if (candidateInvoices.length === 0) {
           showToast(`No posted invoice found for sale order ${rma.saleOrderRef} — cannot issue a credit note`, 'error')
@@ -16935,15 +17195,44 @@ const storeCtx: AppState = {
           id: uid(), ref,
           customerId: rma.customerId, customerName: rma.customerName,
           sourceInvoiceId: sourceInvoice.id, sourceInvoiceRef: sourceInvoice.ref,
-          amount: refundAmount, balance: refundAmount, status: 'available',
+          amount, balance: amount, status: 'available',
           createdAt: now(), createdBy: user.name,
           notes: `Credit note issued from return ${rma.ref}`,
           applications: [],
         }
         setCustomerCredits(prev => [credit, ...prev])
-        setJournalEntries(prev => [buildCustomerCreditJournal(sourceInvoice, ref, refundAmount), ...prev])
-        addAuditLog('rma_credit_note', rma.ref, `Credit note ${ref} issued for ${fmtKes(refundAmount)} against return ${rma.ref}`)
+        setJournalEntries(prev => [buildCustomerCreditJournal(sourceInvoice, ref, amount), ...prev])
+        // Persist Prisma CreditNote when available (durable accounting object).
+        try {
+          await fetch(`/api/sale-orders/${rma.saleOrderId}/credit-note`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              invoiceId: sourceInvoice.id,
+              amount,
+              reason: `Return ${rma.ref}`,
+              creditNoteNumber: ref,
+              lines: allocation?.creditLines ?? [],
+            }),
+          })
+        } catch { /* blob CustomerCredit remains authoritative for UI */ }
+        if (so && allocation) {
+          const adjById = new Map(allocation.soLineAdjustments.map(a => [a.soLineId, a]))
+          const lines = so.lines.map((l: any) => {
+            const adj = adjById.get(String(l.id))
+            if (!adj) return l
+            return { ...l, qtyInvoiced: adj.qtyInvoiced }
+          })
+          setSaleOrders(prev => prev.map(s => s.id !== so.id ? s : { ...s, lines }))
+          sync(`/api/sale-orders/${so.id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ lines }),
+          })
+        }
+        addAuditLog('rma_credit_note', rma.ref, `Credit note ${ref} issued for ${fmtKes(amount)} against return ${rma.ref}`)
         creditNoteRef = ref
+        refundAmount = amount
       }
 
       // Only reached once any credit note (if requested) actually succeeded —
@@ -17413,6 +17702,7 @@ const storeCtx: AppState = {
     invoices,
     deliveries,
     returnOrders,
+    stockReservations,
     posOrders,
     users,
     currentUserId,
@@ -17432,6 +17722,7 @@ const storeCtx: AppState = {
     invoices,
     deliveries,
     returnOrders,
+    stockReservations,
     posOrders,
     users,
     currentUserId,

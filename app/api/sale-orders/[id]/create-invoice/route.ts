@@ -8,8 +8,19 @@ import {
   hasValidatedDeliveryForInvoice,
   invoiceableQty,
   normalizeSaleStatus,
+  type InvoicePolicy,
 } from '@/lib/odoo-sales-flow'
 import { allocateDeliveredQtyToOrderLines } from '@/lib/delivery-prepare'
+import { resolveInvoicePolicy } from '@/lib/sales/invoice-policy'
+import {
+  computeDownPaymentAmount,
+  downPaymentDeductionForFinal,
+  isDownPaymentMode,
+  normalizeCreateInvoiceMode,
+  saleOrderDownPaymentBase,
+  sumUnappliedDownPayments,
+  type CreateInvoiceMode,
+} from '@/lib/sales/down-payment'
 import { mapDbInvoiceItemsToClientLines } from '@/lib/finance-invoice'
 import { loadAppState, saveStoreKeys } from '@/lib/server-store'
 import { ensureConfirmedSaleOrderForFulfillment } from '@/lib/sale-order-confirm-heal.server'
@@ -18,7 +29,8 @@ const WRITE_ROLES = ['director', 'finance_officer', 'admin_officer']
 
 /**
  * Atomic SO → draft customer invoice.
- * Locks line qtyInvoiced on the Prisma sale order items in the same transaction.
+ * Locks line qtyInvoiced on the Prisma sale order items in the same transaction
+ * (except down-payment invoices, which do not consume product qtyInvoiced).
  */
 export async function POST(
   request: NextRequest,
@@ -28,12 +40,16 @@ export async function POST(
     const actor = await requireRole(WRITE_ROLES)
     const orderId = params.id
 
-    // Optional partial-invoice quantity picker: { lines: [{ itemId, qty }] }.
-    // When provided, only the listed line items are invoiced, each capped at
-    // its own invoiceable qty — never trust the client's qty beyond that cap.
-    // Omitted entirely (or no JSON body) keeps the original all-invoiceable
-    // behavior for the one-click "Create Invoice" action.
-    const body = await request.json().catch(() => null) as { lines?: Array<{ itemId?: string; qty?: number }> } | null
+    // Optional body:
+    //   { mode, percent?, amount?, lines?: [{ itemId, qty }] }
+    // mode: regular | down_payment_percent | down_payment_fixed | final
+    const body = await request.json().catch(() => null) as {
+      mode?: string
+      percent?: number
+      amount?: number
+      lines?: Array<{ itemId?: string; qty?: number }>
+    } | null
+    const mode: CreateInvoiceMode = normalizeCreateInvoiceMode(body?.mode)
     // An empty array (no explicit selection) falls back to full auto-invoice
     // rather than being treated as "invoice nothing" — only a non-empty
     // lines array is a real partial-invoice request.
@@ -65,6 +81,136 @@ export async function POST(
     const confirmed = order
 
     const state = await loadAppState(['deed_invoices', 'deed_deliveries'])
+    const blobInvoices = Array.isArray(state.deed_invoices) ? (state.deed_invoices as any[]) : []
+    const priorDownPayments = sumUnappliedDownPayments(
+      [
+        ...blobInvoices,
+        // Prisma rows win for durability when columns exist.
+      ],
+      orderId,
+    )
+    // Prefer Prisma down-payment rows when the column is available.
+    let prismaPriorDown = 0
+    try {
+      const downs = await prisma.invoice.findMany({
+        where: {
+          saleOrderId: orderId,
+          isDownPayment: true,
+          downPaymentAppliedToId: null,
+          status: { notIn: ['cancelled'] as any },
+        },
+        select: { totalAmount: true },
+      })
+      prismaPriorDown = downs.reduce((s, d) => s + Math.max(0, Math.round(Number(d.totalAmount) || 0)), 0)
+    } catch {
+      prismaPriorDown = priorDownPayments
+    }
+    const unappliedDownPayments = Math.max(priorDownPayments, prismaPriorDown)
+
+    // ── Down-payment invoice (deposit) — no product qtyInvoiced bump ────────
+    if (isDownPaymentMode(mode)) {
+      const orderTotal = saleOrderDownPaymentBase({
+        totalAmount: confirmed.totalAmount,
+        subtotal: confirmed.subtotal,
+        taxAmount: confirmed.taxAmount,
+        discountAmount: confirmed.discountAmount,
+      })
+      const computed = computeDownPaymentAmount({
+        mode,
+        orderTotal,
+        percent: body?.percent,
+        amount: body?.amount,
+        priorDownPayments: unappliedDownPayments,
+      })
+      if (!computed.ok) {
+        return NextResponse.json({ error: computed.error }, { status: 409 })
+      }
+
+      const amount = computed.amount
+      const taxRate = 16
+      const lineSubtotal = Math.round(amount / (1 + taxRate / 100))
+      const lineTax = amount - lineSubtotal
+      const draftRef = await getNextDocNumber('invoice').catch(() => `DRAFT-INV-${Date.now().toString().slice(-6)}`)
+      const dueDate = new Date(Date.now() + 7 * 86400000)
+      const subject = computed.percent != null
+        ? `[Down Payment ${computed.percent}%]`
+        : `[Down Payment fixed]`
+      const notes = `${subject} on ${confirmed.orderNumber}`
+
+      const result = await prisma.$transaction(async (tx) => {
+        return tx.invoice.create({
+          data: {
+            invoiceNumber: draftRef,
+            status: 'draft',
+            clientId: confirmed.clientId,
+            saleOrderId: confirmed.id,
+            invoiceDate: new Date(),
+            dueDate,
+            subject,
+            subtotal: lineSubtotal,
+            taxAmount: lineTax,
+            discountAmount: 0,
+            totalAmount: amount,
+            amountPaid: 0,
+            isDownPayment: true,
+            downPaymentPercent: computed.percent,
+            notes,
+            createdById: actor.id,
+            items: {
+              create: [{
+                description: `Down payment on ${confirmed.orderNumber}`,
+                qty: 1,
+                unitPrice: lineSubtotal,
+                taxRate,
+                lineSubtotal,
+                lineTax,
+                lineTotal: amount,
+              }],
+            },
+          },
+          include: { items: true, client: true },
+        })
+      })
+
+      const date = new Date().toISOString().slice(0, 10)
+      const clientInvoice = {
+        id: result.id,
+        ref: result.invoiceNumber,
+        type: 'customer_invoice' as const,
+        status: 'draft' as const,
+        partnerId: confirmed.clientId,
+        partnerName: confirmed.client?.name ?? '',
+        date,
+        dueDate: dueDate.toISOString().slice(0, 10),
+        lines: mapDbInvoiceItemsToClientLines(result.items),
+        subtotal: lineSubtotal,
+        taxTotal: lineTax,
+        discountAmount: 0,
+        total: amount,
+        amountPaid: 0,
+        saleOrderId: confirmed.id,
+        isDownPayment: true,
+        downPaymentPercent: computed.percent,
+        notes,
+        subject,
+      }
+      try {
+        const invoices = [...blobInvoices]
+        invoices.unshift(clientInvoice)
+        await saveStoreKeys({ deed_invoices: JSON.stringify(invoices) })
+      } catch { /* Prisma authoritative */ }
+
+      await writeFinancialAudit({
+        userId: actor.id,
+        action: 'create_down_payment_invoice',
+        entityType: 'invoice',
+        entityId: result.id,
+        newValues: { saleOrderId: orderId, ref: result.invoiceNumber, total: amount, mode },
+      })
+
+      return NextResponse.json({ ok: true, invoice: clientInvoice })
+    }
+
     const deliveries = Array.isArray(state.deed_deliveries)
       ? state.deed_deliveries as Array<{
           saleOrderId?: string
@@ -78,14 +224,30 @@ export async function POST(
           }> | null
         }>
       : []
-    if (!hasValidatedDeliveryForInvoice(deliveries, orderId)) {
-      return NextResponse.json({
-        error: 'Validate the delivery before creating an invoice',
-      }, { status: 409 })
+    const hasValidatedDelivery = hasValidatedDeliveryForInvoice(deliveries, orderId)
+
+    // Product invoicing policy (Ordered vs Delivered quantities).
+    const productIds = [...new Set(
+      (confirmed.items ?? []).map(i => i.productId).filter((id): id is string => !!id),
+    )]
+    const products = productIds.length > 0
+      ? await prisma.product.findMany({
+          where: { id: { in: productIds } },
+          select: { id: true, invoicePolicy: true, trackStock: true },
+        })
+      : []
+    const productById = new Map(products.map(p => [p.id, p]))
+    const policyForItem = (item: { productId?: string | null }): InvoicePolicy => {
+      const product = item.productId ? productById.get(item.productId) : undefined
+      return resolveInvoicePolicy({
+        productPolicy: product?.invoicePolicy,
+        trackStock: product?.trackStock,
+      })
     }
 
     // Heal qtyDelivered from Done delivery lines (qtyDone / serials) when a
-    // legacy Done DN left Prisma delivered=0 — otherwise Create Invoice is blocked.
+    // legacy Done DN left Prisma delivered=0 — otherwise Create Invoice is blocked
+    // for Delivered-policy lines.
     // Allocate FIFO across duplicate product rows so each line does not receive
     // the full product total (that overstated invoiceable qty).
     const healedFromDeliveries = deliveredByProductFromDoneDeliveries(deliveries, orderId)
@@ -113,26 +275,44 @@ export async function POST(
       return item
     }))
 
-    const invoiceable = healedItems.map(item => {
+    let invoiceable = healedItems.map(item => {
+      const invoicePolicy = policyForItem(item)
       const maxQty = invoiceableQty({
         qty: Number(item.qty) || 0,
         qtyDelivered: Number(item.qtyDelivered) || 0,
         qtyInvoiced: Number(item.qtyInvoiced) || 0,
-        invoicePolicy: 'delivery',
+        invoicePolicy,
       })
       // No override map: full auto-invoice (existing one-click behavior).
       // Override map present but this item absent: 0 (not selected this round).
       const qty = overrideQtyByItemId === null
         ? maxQty
         : Math.min(maxQty, overrideQtyByItemId.get(item.id) ?? 0)
-      return { item, qty }
+      return { item, qty, invoicePolicy }
     }).filter(entry => entry.qty > 0)
 
+    // Delivered-policy lines need a validated DN; Ordered-policy lines do not.
+    // If only delivery-policy qty remains and nothing is validated, give a clear error.
+    const deliveryPolicyPending = invoiceable.filter(e => e.invoicePolicy === 'delivery')
+    if (deliveryPolicyPending.length > 0 && !hasValidatedDelivery) {
+      const orderOnly = invoiceable.filter(e => e.invoicePolicy === 'order')
+      if (orderOnly.length === 0) {
+        return NextResponse.json({
+          error: 'Validate the delivery before creating an invoice',
+        }, { status: 409 })
+      }
+      // Mixed policies: invoice ordered-qty lines now; leave delivery lines for later.
+      invoiceable = orderOnly
+    }
+
     if (invoiceable.length === 0) {
+      const anyDeliveryPolicy = healedItems.some(item => policyForItem(item) === 'delivery')
       return NextResponse.json({
         error: overrideQtyByItemId
           ? 'Select at least one line with a quantity greater than zero to invoice'
-          : 'Nothing to invoice — quantities are already invoiced or not yet delivered',
+          : anyDeliveryPolicy && !hasValidatedDelivery
+            ? 'Validate the delivery before creating an invoice'
+            : 'Nothing to invoice — quantities are already invoiced or not yet eligible',
       }, { status: 409 })
     }
 
@@ -174,9 +354,19 @@ export async function POST(
       (s, item) => s + Number(item.lineTotal ?? 0), 0,
     )
     const headerDiscount = Math.max(0, Number(confirmed.discountAmount ?? 0))
-    const discountAmount = orderSubtotalForDiscount > 0 && headerDiscount > 0
+    const proratedHeaderDiscount = orderSubtotalForDiscount > 0 && headerDiscount > 0
       ? Math.min(subtotal + taxAmount, Math.round((headerDiscount * subtotal) / orderSubtotalForDiscount))
       : 0
+    // Final invoice deducts unapplied down payments (Odoo deposit deduction).
+    const downDeduction = mode === 'final'
+      ? downPaymentDeductionForFinal({
+          invoiceSubtotal: subtotal,
+          invoiceTax: taxAmount,
+          headerDiscount: proratedHeaderDiscount,
+          priorDownPayments: unappliedDownPayments,
+        })
+      : 0
+    const discountAmount = proratedHeaderDiscount + downDeduction
     const totalAmount = Math.max(0, subtotal + taxAmount - discountAmount)
     if (totalAmount < 1) {
       return NextResponse.json({ error: 'Invoice total must be at least KES 1' }, { status: 400 })
@@ -185,6 +375,9 @@ export async function POST(
     const draftRef = await getNextDocNumber('invoice').catch(() => `DRAFT-INV-${Date.now().toString().slice(-6)}`)
     const paymentTermsDays = Number(confirmed.paymentTermsDays)
     const dueDate = new Date(Date.now() + (Number.isFinite(paymentTermsDays) && paymentTermsDays >= 0 ? paymentTermsDays : 30) * 86400000)
+    const invoiceNotes = downDeduction > 0
+      ? `Created from ${confirmed.orderNumber} · Down payments deducted: KES ${downDeduction.toLocaleString()}`
+      : `Created from ${confirmed.orderNumber}`
 
     const result = await prisma.$transaction(async (tx) => {
       // Re-read items inside the transaction to reduce race window
@@ -194,14 +387,14 @@ export async function POST(
       })
       if (!fresh) throw new Error('Sale order disappeared')
 
-      for (const { item, qty } of invoiceable) {
+      for (const { item, qty, invoicePolicy } of invoiceable) {
         const live = fresh.items.find(i => i.id === item.id)
         if (!live) throw new Error('Sale order line missing')
         const still = invoiceableQty({
           qty: Number(live.qty) || 0,
           qtyDelivered: Number(live.qtyDelivered) || 0,
           qtyInvoiced: Number(live.qtyInvoiced) || 0,
-          invoicePolicy: 'delivery',
+          invoicePolicy,
         })
         if (still < qty) throw new Error('Invoiceable quantity changed — retry')
         // Guarded atomic update: the WHERE clause re-checks qtyInvoiced still
@@ -229,7 +422,7 @@ export async function POST(
           discountAmount,
           totalAmount,
           amountPaid: 0,
-          notes: `Created from ${confirmed.orderNumber}`,
+          notes: invoiceNotes,
           createdById: actor.id,
           items: {
             create: lines.map(l => {
@@ -249,6 +442,23 @@ export async function POST(
         },
         include: { items: true, client: true },
       })
+
+      // Mark unapplied down payments as consumed by this final invoice.
+      if (mode === 'final' && downDeduction > 0) {
+        try {
+          await tx.invoice.updateMany({
+            where: {
+              saleOrderId: orderId,
+              isDownPayment: true,
+              downPaymentAppliedToId: null,
+              status: { notIn: ['cancelled'] as any },
+            },
+            data: { downPaymentAppliedToId: invoice.id },
+          })
+        } catch {
+          /* column may be absent until migration — deduction still on this invoice */
+        }
+      }
 
       return invoice
     })
@@ -271,13 +481,23 @@ export async function POST(
       total: totalAmount,
       amountPaid: 0,
       saleOrderId: confirmed.id,
-      notes: `Created from ${confirmed.orderNumber}`,
+      notes: invoiceNotes,
+      downPaymentDeduction: downDeduction > 0 ? downDeduction : undefined,
     }
 
     // Mirror into client store invoices for UI
     try {
-      const invoices = Array.isArray(state.deed_invoices) ? [...(state.deed_invoices as unknown[])] : []
+      const invoices = [...blobInvoices]
       invoices.unshift(clientInvoice)
+      // Best-effort: stamp applied downs in the blob mirror too.
+      if (mode === 'final' && downDeduction > 0) {
+        for (const inv of invoices) {
+          if (inv && inv.saleOrderId === orderId && (inv.isDownPayment || /\[Down Payment/i.test(String(inv.notes ?? ''))) && !inv.downPaymentAppliedToId) {
+            inv.downPaymentAppliedToId = result.id
+            inv.notes = `${String(inv.notes ?? '')}\n[Down payment applied on ${result.invoiceNumber}]`.trim()
+          }
+        }
+      }
       await saveStoreKeys({ deed_invoices: JSON.stringify(invoices) })
     } catch {
       // Prisma invoice is authoritative; store mirror best-effort

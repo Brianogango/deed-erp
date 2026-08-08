@@ -87,11 +87,61 @@ export async function collectApprovalTriggers(
     triggers.push({ type: 'credit_override', details: credit })
   }
 
-  if (body.belowPricelist === true || body.specialPricing === true) {
+  if (
+    body.belowPricelist === true
+    || body.specialPricing === true
+    || body.belowCost === true
+    || body.belowFloor === true
+    || body.belowMinimumMargin === true
+  ) {
     triggers.push({
       type: 'special_pricing',
-      details: { value: total },
+      details: {
+        value: total,
+        belowCost: body.belowCost === true || body.belowFloor === true,
+        belowMargin: body.belowMinimumMargin === true,
+        belowPricelist: body.belowPricelist === true,
+        minMarginPercent: body.minMarginPercent,
+        worstMargin: body.worstMargin,
+        products: body.pricingExceptionProducts,
+      },
     })
+  }
+
+  // Server-side floor/margin scan when line payloads (or existing items) are present.
+  if (lines.length > 0) {
+    try {
+      const { computeSaleOrderApprovalTriggers } = await import('@/lib/sales/margin-approval')
+      const productIds = [...new Set(lines.map((l: any) => l.productId).filter(Boolean))]
+      if (productIds.length > 0) {
+        const { default: prisma } = await import('@/lib/prisma')
+        const products = await prisma.product.findMany({
+          where: { id: { in: productIds } },
+          select: { id: true, name: true, costPrice: true, trackStock: true, sellingPrice: true },
+        })
+        const marginTriggers = computeSaleOrderApprovalTriggers({
+          lines,
+          products: products.map(p => ({
+            id: p.id,
+            name: p.name,
+            costPrice: Number(p.costPrice) || 0,
+            trackStock: p.trackStock,
+            salePrice: Number(p.sellingPrice) || 0,
+            sellingPrice: Number(p.sellingPrice) || 0,
+          })),
+          headerDiscountAmount: Number(body.discountAmount ?? existing?.discountAmount ?? 0),
+          orderTotal: total,
+          minMarginPercent: Number(body.minMarginPercent ?? 10),
+        })
+        for (const t of marginTriggers) {
+          if (t.type !== 'special_pricing' && t.type !== 'discount') continue
+          if (triggers.some(x => x.type === t.type)) continue
+          triggers.push({ type: t.type, details: t.details })
+        }
+      }
+    } catch {
+      // Best-effort — client-side sync still creates approval requests.
+    }
   }
 
   const backorderQty = Number(body.backorderQty ?? 0)

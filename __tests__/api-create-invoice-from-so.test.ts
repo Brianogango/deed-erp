@@ -20,6 +20,9 @@ const {
       update: vi.fn(),
       updateMany: vi.fn(),
     },
+    product: {
+      findMany: vi.fn(),
+    },
     invoice: {
       create: vi.fn(),
     },
@@ -102,6 +105,11 @@ beforeEach(() => {
   mockWriteFinancialAudit.mockResolvedValue(undefined)
   mockPrisma.saleOrder.findUnique.mockResolvedValue(saleOrder)
   mockPrisma.saleOrder.findMany.mockResolvedValue([saleOrder])
+  // Default stockable products to delivered-qty policy (hardware-safe).
+  mockPrisma.product.findMany.mockResolvedValue([
+    { id: 'prod-1', invoicePolicy: 'delivery', trackStock: true },
+    { id: 'prod-2', invoicePolicy: 'delivery', trackStock: true },
+  ])
   mockPrisma.$transaction.mockImplementation(async (fn: any) => fn({
     saleOrder: {
       findUnique: vi.fn().mockResolvedValue(saleOrder),
@@ -196,6 +204,80 @@ describe('POST /api/sale-orders/:id/create-invoice', () => {
     expect(res.status).toBe(409)
     expect((await res.json()).error).toMatch(/Validate the delivery/i)
     expect(mockPrisma.$transaction).not.toHaveBeenCalled()
+  })
+
+  it('creates a down-payment invoice without bumping qtyInvoiced', async () => {
+    mockLoadAppState.mockResolvedValue({ deed_invoices: [], deed_deliveries: [] })
+    mockPrisma.invoice.findMany = vi.fn().mockResolvedValue([])
+    const withTotal = {
+      ...saleOrder,
+      totalAmount: 100000,
+      subtotal: 86207,
+      taxAmount: 13793,
+      discountAmount: 0,
+    }
+    mockPrisma.saleOrder.findUnique.mockResolvedValue(withTotal)
+    mockPrisma.$transaction.mockImplementation(async (fn: any) => fn({
+      invoice: {
+        create: mockPrisma.invoice.create.mockResolvedValue({
+          id: INVOICE_ID,
+          invoiceNumber: 'INV/2026/0004',
+          status: 'draft',
+          clientId: CLIENT_ID,
+          saleOrderId: ORDER_ID,
+          subtotal: 25862,
+          taxAmount: 4138,
+          totalAmount: 30000,
+          amountPaid: 0,
+          isDownPayment: true,
+          items: [{
+            id: LINE_ID,
+            description: 'Down payment on SO/2026/0001',
+            qty: 1,
+            unitPrice: 25862,
+            taxRate: 16,
+            lineSubtotal: 25862,
+            lineTax: 4138,
+            lineTotal: 30000,
+            productId: null,
+          }],
+          client: { name: 'Acme Ltd' },
+        }),
+      },
+    }))
+    const res = await POST(
+      new NextRequest('http://localhost', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode: 'down_payment_percent', percent: 30 }),
+      }),
+      { params: { id: ORDER_ID } },
+    )
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.invoice.isDownPayment).toBe(true)
+    expect(mockPrisma.saleOrderItem.updateMany).not.toHaveBeenCalled()
+  })
+
+  it('allows ordered-policy invoicing before any delivery is validated', async () => {
+    mockPrisma.product.findMany.mockResolvedValue([
+      { id: 'prod-1', invoicePolicy: 'order', trackStock: false },
+    ])
+    mockLoadAppState.mockResolvedValue({ deed_invoices: [], deed_deliveries: [] })
+    const undelivered = {
+      ...saleOrder,
+      items: [{ ...saleOrder.items[0], qtyDelivered: 0, qtyInvoiced: 0 }],
+    }
+    mockPrisma.saleOrder.findUnique.mockResolvedValue(undelivered)
+    mockPrisma.$transaction.mockImplementation(async (fn: any) => fn({
+      saleOrder: { findUnique: vi.fn().mockResolvedValue(undelivered) },
+      saleOrderItem: { updateMany: mockPrisma.saleOrderItem.updateMany.mockResolvedValue({ count: 1 }) },
+      invoice: { create: mockPrisma.invoice.create },
+    }))
+    const res = await POST(new NextRequest('http://localhost', { method: 'POST' }), { params: { id: ORDER_ID } })
+    expect(res.status).toBe(200)
+    const createData = mockPrisma.invoice.create.mock.calls.at(-1)?.[0]?.data
+    expect(createData.items.create[0].qty).toBe(1)
   })
 
   it('rejects a hollow Done delivery with delivered qty 0', async () => {

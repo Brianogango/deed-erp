@@ -216,6 +216,57 @@ export function saleOrderInvoiceStatus(
   return overDelivered ? 'upselling' : 'invoiced'
 }
 
+export type SoFulfilmentStatus = 'nothing' | 'to_deliver' | 'partial' | 'delivered'
+
+export const SO_FULFILMENT_STATUS_LABELS: Record<SoFulfilmentStatus, string> = {
+  nothing: 'Nothing to Deliver',
+  to_deliver: 'Waiting Delivery',
+  partial: 'Partially Delivered',
+  delivered: 'Fully Delivered',
+}
+
+/** Fulfilment progress from validated delivered quantities (independent of payment). */
+export function saleOrderFulfilmentStatus(
+  status: OdooSaleStatus,
+  lines: readonly InvoiceableLine[],
+): SoFulfilmentStatus {
+  if (status !== 'sale') return 'nothing'
+  const real = lines.filter(l => (Number(l.qty) || 0) > 0)
+  if (real.length === 0) return 'nothing'
+  const ordered = real.reduce((s, l) => s + (Number(l.qty) || 0), 0)
+  const delivered = real.reduce((s, l) => s + Math.min(Number(l.qty) || 0, Number(l.qtyDelivered) || 0), 0)
+  if (delivered <= 0) return 'to_deliver'
+  if (delivered < ordered) return 'partial'
+  return 'delivered'
+}
+
+/**
+ * Operational completion: confirmed SO, every ordered qty delivered (or
+ * non-deliverable), and every line fully invoiced per its policy.
+ * Payment remains a separate dimension — cash sales may still show unpaid.
+ */
+export function saleOrderIsOperationallyComplete(
+  status: OdooSaleStatus,
+  lines: readonly InvoiceableLine[],
+): boolean {
+  if (status !== 'sale') return false
+  const real = lines.filter(l => (Number(l.qty) || 0) > 0)
+  if (real.length === 0) return false
+  const fulfilment = saleOrderFulfilmentStatus(status, real)
+  if (fulfilment !== 'delivered') return false
+  return saleOrderInvoiceStatus(status, real) === 'invoiced' || saleOrderInvoiceStatus(status, real) === 'upselling'
+}
+
+/** True when a quotation has a durable customer-acceptance stamp. */
+export function saleOrderIsAccepted(order: {
+  acceptedAt?: unknown
+  notes?: unknown
+}): boolean {
+  if (order.acceptedAt) return true
+  const notes = String(order.notes ?? '')
+  return /\[Customer accepted/i.test(notes)
+}
+
 // ─── Delivery states ─────────────────────────────────────────────────────────
 
 export type DeliveryState = 'draft' | 'waiting' | 'ready' | 'done' | 'cancelled'
