@@ -1451,6 +1451,16 @@ export async function completeWorkOrder(params: {
     },
   })
 
+  // Phase E: refresh linked SO host line description to post-upgrade display name
+  if (wo.linkedSaleOrderId) {
+    try {
+      const { refreshSaleOrderHostLineAfterReconfig } = await import('@/lib/reconfiguration/sales-bridge')
+      await refreshSaleOrderHostLineAfterReconfig(wo.id)
+    } catch (err) {
+      console.error('[reconfiguration] SO line refresh after complete failed:', err)
+    }
+  }
+
   return getWorkOrder(wo.id)
 }
 

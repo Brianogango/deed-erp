@@ -918,12 +918,18 @@ Add `reconfiguration` to `MODULE_IDS` and default modules for: director, admin_o
 3. Serial Configuration tab  
 4. Sidebar / search  
 
-### Phase E — Sales integration (commit 5)
+### Phase E — Sales integration (commit 5) — **landed (partial)**
 
-1. Create RCF from quote/SO/device  
-2. Config-at-sale snapshot on delivery  
-3. PDF/spec resolution update  
-4. Post-sale upgrade path (service SO + RCF)  
+**Foolproof rule:** SO lines never mutate `serial.specs` or component stock. Only `completeWorkOrder` does.
+
+1. ~~Create RCF from quote/SO/device~~ — `lib/reconfiguration/sales-bridge.ts` + `POST /api/sale-orders/:id/reconfiguration`  
+   - Detect RAM/SSD effect products (`specs.reconfiguration` or name/capacity fallbacks)  
+   - Require a serialized host device line  
+   - Create/update linked draft RCF with computed target  
+2. ~~Gate delivery until RCF complete~~ — `app/api/deliveries/[id]/validate`  
+3. ~~Refresh SO host line description after complete~~ — from proposed snapshot displayName  
+4. Config-at-sale snapshot id on delivery note — still open  
+5. Post-sale upgrade path (service SO + RCF for sold devices) — still open  
 
 ### Phase F — QA component return + reports (commit 6)
 

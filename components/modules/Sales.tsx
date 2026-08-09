@@ -443,6 +443,12 @@ function SalesContent() {
   const [savingDelivery, setSavingDelivery] = useState(false)
   const [confirmingSO, setConfirmingSO] = useState(false)
   const [showConfirmQuoteDialog, setShowConfirmQuoteDialog] = useState(false)
+  const [reconfigLink, setReconfigLink] = useState<{
+    deliveryBlocked?: boolean
+    message?: string
+    workOrder?: { id: string; ref: string; status: string } | null
+    effects?: Array<{ productName: string }>
+  } | null>(null)
   const [detailTab, setDetailTab] = useState('Order Lines')
   const [dnRecipientName, setDnRecipientName] = useState('')
   const [dnRecipientPhone, setDnRecipientPhone] = useState('')
@@ -494,6 +500,26 @@ function SalesContent() {
   // ── Derived data ────────────────────────────────────────────────────────
   const salesOrderViews = useMemo(() => (saleOrders as any[]).map(normalizeSalesOrderView), [saleOrders])
   const activeOrder = salesOrderViews.find(s => s.id === activeId) ?? null
+
+  // Phase E: surface linked RAM/SSD reconfiguration status on the open order.
+  useEffect(() => {
+    if (!activeOrder?.id) {
+      setReconfigLink(null)
+      return
+    }
+    let cancelled = false
+    void (async () => {
+      try {
+        const res = await fetch(`/api/sale-orders/${activeOrder.id}/reconfiguration`)
+        if (!res.ok) return
+        const data = await res.json()
+        if (!cancelled) setReconfigLink(data)
+      } catch {
+        if (!cancelled) setReconfigLink(null)
+      }
+    })()
+    return () => { cancelled = true }
+  }, [activeOrder?.id, activeOrder?.lines?.length, activeOrder?.status])
   // Open the compose dialog (Odoo's Send by Email opens an email composer).
   const openSendQuoteModal = (order: SalesOrderView) => {
     const contact = contacts.find(c => c.id === order.customerId)
@@ -2074,6 +2100,46 @@ function SalesContent() {
                         complete: activeOperationallyComplete,
                       })}
                     />
+                  )}
+
+                  {reconfigLink && (reconfigLink.deliveryBlocked || (reconfigLink.effects?.length ?? 0) > 0) && (
+                    <div className={reconfigLink.deliveryBlocked ? 'sp-banner-warn' : 'sp-banner-ok'} role="status">
+                      <span aria-hidden>!</span>
+                      <div className="w-full">
+                        <strong>
+                          {reconfigLink.workOrder
+                            ? `Device reconfiguration ${reconfigLink.workOrder.ref}`
+                            : 'Device reconfiguration required'}
+                        </strong>
+                        <div>{reconfigLink.message}</div>
+                        <div className="mt-1 flex flex-wrap gap-2">
+                          {reconfigLink.workOrder && (
+                            <a className="sp-btn sp-btn-sm" href={`/reconfiguration?id=${reconfigLink.workOrder.id}`}>
+                              Open work order
+                            </a>
+                          )}
+                          <button
+                            type="button"
+                            className="sp-btn sp-btn-sm"
+                            onClick={() => {
+                              void (async () => {
+                                try {
+                                  const res = await fetch(`/api/sale-orders/${activeOrder.id}/reconfiguration`, { method: 'POST' })
+                                  const data = await res.json().catch(() => ({}))
+                                  if (!res.ok) throw new Error(data.error || 'Sync failed')
+                                  setReconfigLink(data)
+                                  showToast(data.message || 'Reconfiguration synced', 'success')
+                                } catch (err: any) {
+                                  showToast(err?.message || 'Could not sync reconfiguration', 'error')
+                                }
+                              })()
+                            }}
+                          >
+                            Sync from order lines
+                          </button>
+                        </div>
+                      </div>
+                    </div>
                   )}
 
                       {isQuotationStage(activeOrder.status) && (activeOrder.approvalStatus === 'pending' || (approvalRequests ?? []).some(r =>

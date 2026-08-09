@@ -540,13 +540,31 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
     if (!skipBroadcast && (touchedLines || confirming || to !== from)) {
       await broadcastSaleOrders()
     }
+    // Phase E: RAM/SSD lines + host serial → sync linked draft reconfiguration.
+    // Never mutates specs here — workshop completeWorkOrder owns that.
+    let reconfiguration: unknown = null
+    if (touchedLines || confirming) {
+      try {
+        const { syncReconfigurationFromSaleOrder } = await import('@/lib/reconfiguration/sales-bridge')
+        reconfiguration = await syncReconfigurationFromSaleOrder({
+          saleOrderId: params.id,
+          userId: session.user.id,
+        })
+      } catch (err) {
+        console.error('[sale-orders] reconfiguration sync failed:', err)
+      }
+    }
+
     const fresh = confirming
       ? await prisma.saleOrder.findUnique({
           where: { id: params.id },
           include: { client: true, items: true },
         })
       : order
-    return NextResponse.json(mapSaleOrderToClient(fresh ?? order))
+    return NextResponse.json({
+      ...mapSaleOrderToClient(fresh ?? order),
+      ...(reconfiguration ? { reconfiguration } : {}),
+    })
   })
 }
 
