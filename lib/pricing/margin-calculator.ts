@@ -120,6 +120,7 @@ export function calculateMarginQuote(opts: {
   buyCostKes: number
   pricingCategoryId?: string | null
   erpCategory?: string | null
+  productType?: 'new' | 'refurbished' | string | null
 }): MarginQuote {
   const policy = opts.policy
   if (!policy.enabled) return { ok: false, error: 'Margin pricing policy is disabled' }
@@ -129,13 +130,14 @@ export function calculateMarginQuote(opts: {
     return { ok: false, error: 'Buy cost must be a non-negative number' }
   }
   if (buyCost === 0) {
-    return { ok: false, error: 'Buy cost is zero — set cost before pricing' }
+    return { ok: false, error: 'Buy cost is zero - set cost before pricing' }
   }
 
   const categoryId = resolvePricingCategoryId({
     policy,
     erpCategory: opts.erpCategory,
     pricingCategoryId: opts.pricingCategoryId,
+    productType: opts.productType,
   })
   if (!categoryId) {
     return { ok: false, error: 'No pricing category mapped for this product' }

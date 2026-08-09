@@ -142,6 +142,7 @@ export async function collectApprovalTriggers(
               salePrice: Number(p.sellingPrice) || 0,
               sellingPrice: Number(p.sellingPrice) || 0,
               category: p.category?.name || null,
+              productType: p.productType || null,
               pricingCategoryId:
                 typeof specs.pricingCategoryId === 'string' ? specs.pricingCategoryId : null,
             }

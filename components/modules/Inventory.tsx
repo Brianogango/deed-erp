@@ -96,6 +96,7 @@ const blankProduct = () => {
     unit: defaultUnitForKind(productKind, trackingMethod),
     invoicePolicy: 'order' as 'order' | 'delivery',
     pricingCategoryId: '',
+    productType: 'refurbished',
     description: '', canBeSold: true, canBePurchased: true, image: '',
     isActive: true, warrantyMonths: '12',
     saleAccountCode: defaults.saleAccountCode || '',
@@ -622,6 +623,7 @@ function InventoryContent() {
     const markupSuggested = suggestSalePriceFromCost(systemSettings.invCategorySaleMarkupPct, product.category, product.costPrice, {
         policy: systemSettings.pricingMarginPolicy,
         pricingCategoryId: (product as any).pricingCategoryId,
+        productType: (product as any).productType,
         legacyMarkupMap: systemSettings.invCategorySaleMarkupPct,
       })
     // Prefill sale from category markup when cost exists but sale is still unset.
@@ -767,6 +769,7 @@ function InventoryContent() {
       unit: product.unit || defaultUnitForKind(kind),
       invoicePolicy: product.invoicePolicy === 'delivery' ? 'delivery' as const : 'order' as const,
       pricingCategoryId: (product as any).pricingCategoryId ?? '',
+      productType: (product as any).productType === 'new' ? 'new' : 'refurbished',
       description: product.description ?? '',
       canBeSold: product.canBeSold, canBePurchased: product.canBePurchased, image: product.image ?? '',
       isActive: product.isActive, warrantyMonths: String(product.warrantyMonths),
@@ -899,6 +902,7 @@ function InventoryContent() {
       barcode: productBarcode,
       parentId: form.parentId || undefined,
       pricingCategoryId: form.pricingCategoryId || undefined,
+      productType: form.productType === 'new' ? 'new' : 'refurbished',
       salePrice, costPrice,
       stockQty: 0, minStock: Number(form.minStock) || 0, taxRate: Number(form.taxRate) || 0,
       invoicePolicy: form.invoicePolicy,
@@ -1934,6 +1938,7 @@ function InventoryContent() {
                       costPrice: priceProduct.costPrice,
                       erpCategory: priceProduct.category,
                       pricingCategoryId: (priceProduct as any).pricingCategoryId,
+                      productType: (priceProduct as any).productType,
                       policy: systemSettings.pricingMarginPolicy,
                       legacyMarkupMap: systemSettings.invCategorySaleMarkupPct,
                     })
@@ -3475,6 +3480,8 @@ function InventoryContent() {
                     setForm((prev: any) => {
                       const suggested = suggestSalePriceFromCost(systemSettings.invCategorySaleMarkupPct, value, prev.costPrice, {
         policy: systemSettings.pricingMarginPolicy,
+        pricingCategoryId: prev.pricingCategoryId || undefined,
+        productType: prev.productType,
         legacyMarkupMap: systemSettings.invCategorySaleMarkupPct,
       })
                       return {
@@ -3560,6 +3567,27 @@ function InventoryContent() {
                 {form.barcode ? <Barcode value={form.barcode} width={1.2} height={42} /> : null}
               </div>
             )}
+            <Field label="Condition (pricing)">
+              <Select
+                value={form.productType === 'new' ? 'new' : 'refurbished'}
+                onChange={v => {
+                  setForm((prev: any) => {
+                    const next = { ...prev, productType: v }
+                    const suggested = suggestSalePriceFromCost(systemSettings.invCategorySaleMarkupPct, next.category, next.costPrice, {
+                      policy: systemSettings.pricingMarginPolicy,
+                      pricingCategoryId: next.pricingCategoryId || undefined,
+                      productType: v,
+                      legacyMarkupMap: systemSettings.invCategorySaleMarkupPct,
+                    })
+                    return suggested !== null ? { ...next, salePrice: String(suggested) } : next
+                  })
+                }}
+                options={[
+                  { value: 'refurbished', label: 'Refurbished' },
+                  { value: 'new', label: 'Brand new' },
+                ]}
+              />
+            </Field>
             <Field label="Pricing band">
               <Select
                 value={form.pricingCategoryId || ''}
@@ -3569,6 +3597,7 @@ function InventoryContent() {
                     const suggested = suggestSalePriceFromCost(systemSettings.invCategorySaleMarkupPct, next.category, next.costPrice, {
                       policy: systemSettings.pricingMarginPolicy,
                       pricingCategoryId: v || undefined,
+                      productType: next.productType,
                       legacyMarkupMap: systemSettings.invCategorySaleMarkupPct,
                     })
                     return suggested !== null ? { ...next, salePrice: String(suggested) } : next
@@ -3595,6 +3624,8 @@ function InventoryContent() {
                     setForm((prev: any) => {
                       const suggested = suggestSalePriceFromCost(systemSettings.invCategorySaleMarkupPct, prev.category, v, {
         policy: systemSettings.pricingMarginPolicy,
+        pricingCategoryId: prev.pricingCategoryId || undefined,
+        productType: prev.productType,
         legacyMarkupMap: systemSettings.invCategorySaleMarkupPct,
       })
                       return {
@@ -3613,6 +3644,7 @@ function InventoryContent() {
                 costPrice: form.costPrice,
                 erpCategory: form.category,
                 pricingCategoryId: form.pricingCategoryId,
+                productType: form.productType,
                 policy: systemSettings.pricingMarginPolicy,
                 legacyMarkupMap: systemSettings.invCategorySaleMarkupPct,
               })
@@ -3620,8 +3652,9 @@ function InventoryContent() {
                 return (
                   <div className="rounded-xl border border-[var(--border)] bg-[var(--info-bg)] px-3 py-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                     <p className="text-[11px] text-[var(--navy)] leading-relaxed m-0">
-                      <strong>{quote.category.name}</strong>: quote {fmtKes(quote.min.sellExVatRounded)}–{fmtKes(quote.max.sellExVatRounded)} ex VAT
-                      (overhead {quote.overheadRatePct.toFixed(1)}%). List fills at max. Settings → Sales → Margin calculator.
+                      <strong>{quote.category.name}</strong>: quote {fmtKes(quote.min.sellExVatRounded)}-{fmtKes(quote.max.sellExVatRounded)} ex VAT
+                      {' '}(invoice ~{fmtKes(Math.round(quote.min.invoiceIncVat))}-{fmtKes(Math.round(quote.max.invoiceIncVat))} inc VAT).
+                      Overhead {quote.overheadRatePct.toFixed(1)}%{quote.tierReductionPct ? `, tier -${quote.tierReductionPct}%` : ''}. List = max.
                     </p>
                     <div className="flex gap-2 flex-shrink-0">
                       <button type="button" className="btn-secondary text-[11px] px-3 py-1.5" onClick={() => setF('salePrice')(String(quote.min.sellExVatRounded))}>Min</button>

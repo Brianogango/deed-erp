@@ -35,6 +35,7 @@ export interface MarginApprovalProduct extends PricelistProductPrices {
   trackStock?: boolean | null
   category?: string | null
   pricingCategoryId?: string | null
+  productType?: 'new' | 'refurbished' | string | null
 }
 
 export interface SaleOrderApprovalTrigger {
@@ -70,6 +71,7 @@ function lineMinMarginPercent(opts: {
     buyCostKes: cost,
     erpCategory: opts.product.category,
     pricingCategoryId: opts.product.pricingCategoryId,
+    productType: opts.product.productType,
   })
   if (!quote.ok) return opts.fallbackMin
   return quote.approvalMinGrossMarginPct

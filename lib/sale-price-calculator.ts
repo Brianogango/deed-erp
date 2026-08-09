@@ -43,6 +43,7 @@ export function quoteSalePriceFromCost(opts: {
   costPrice: number | string | null | undefined
   erpCategory?: string | null
   pricingCategoryId?: string | null
+  productType?: 'new' | 'refurbished' | string | null
   policy?: PricingMarginPolicy | Partial<PricingMarginPolicy> | null
   /** Legacy markup map used only when policy is disabled or category unmapped. */
   legacyMarkupMap?: CategoryMarkupMap | null
@@ -63,6 +64,7 @@ export function quoteSalePriceFromCost(opts: {
       buyCostKes: cost,
       erpCategory: opts.erpCategory,
       pricingCategoryId: opts.pricingCategoryId,
+      productType: opts.productType,
     })
     if (quote.ok) return quote
     // Fall through to legacy markup when category is unmapped.
@@ -93,6 +95,7 @@ export function suggestSalePriceFromCost(
   opts?: {
     policy?: PricingMarginPolicy | Partial<PricingMarginPolicy> | null
     pricingCategoryId?: string | null
+    productType?: 'new' | 'refurbished' | string | null
     legacyMarkupMap?: CategoryMarkupMap | null
   },
 ): number | null {
@@ -122,6 +125,7 @@ export function suggestSalePriceFromCost(
     costPrice,
     erpCategory: category,
     pricingCategoryId: opts?.pricingCategoryId,
+    productType: opts?.productType,
     policy,
     legacyMarkupMap: legacy,
   })

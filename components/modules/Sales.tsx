@@ -88,6 +88,7 @@ import {
 import ContactFormModal, { blankIndividualContact } from '@/components/contacts/ContactFormModal'
 import DocumentEmailSendHistory from '@/components/email/DocumentEmailSendHistory'
 import { resolveListPrice, BUILTIN_PRICELISTS, pricelistSelectOptions, type PriceListDef } from '@/lib/pricing/pricelist'
+import { quoteSalePriceFromCost } from '@/lib/sale-price-calculator'
 import {
   quotationPaymentTermsDays,
   quotationPaymentTermsLabel,
@@ -2785,7 +2786,24 @@ function SalesContent() {
               <input type="checkbox" checked={addLineVat} onChange={e => setAddLineVat(e.target.checked)} className="w-4 h-4 rounded accent-primary-600" />
               <span className="text-xs text-[var(--text-2)]">Apply VAT ({companySettings.vatRate}%)</span>
             </label>
-            {addLineProduct && (
+            {addLineProduct && (() => {
+              const marginQuote = quoteSalePriceFromCost({
+                costPrice: addLineProduct.costPrice,
+                erpCategory: addLineProduct.category,
+                pricingCategoryId: (addLineProduct as any).pricingCategoryId,
+                productType: (addLineProduct as any).productType,
+                policy: systemSettings.pricingMarginPolicy,
+              })
+              return (
+              <>
+              {marginQuote.ok && (
+                <div className="p-3 rounded-xl border border-[var(--border)] bg-[color-mix(in_srgb,var(--navy)_4%,var(--bg-surface))] text-[11px] text-[var(--text-2)] leading-relaxed">
+                  <strong className="text-[var(--navy)]">{marginQuote.category.name}</strong>
+                  {' '}quote band {salesKes(marginQuote.min.sellExVatRounded)}-{salesKes(marginQuote.max.sellExVatRounded)} ex VAT
+                  {' '}(invoice ~{salesKes(Math.round(marginQuote.min.invoiceIncVat))}-{salesKes(Math.round(marginQuote.max.invoiceIncVat))}).
+                  Floor GP {marginQuote.approvalMinGrossMarginPct.toFixed(1)}%.
+                </div>
+              )}
               <div className="p-3 rounded-xl bg-[var(--bg-surface)] border border-[var(--border-lt)] flex items-center justify-between">
                 <div>
                   <p className="text-[10px] font-semibold text-[var(--text-3)]">Line total preview</p>
@@ -2793,7 +2811,9 @@ function SalesContent() {
                 </div>
                 <p className="text-sm font-extrabold text-primary-600 font-mono">{salesKes((() => { const qty = Math.max(1, Number(addLineQty) || 1); const disc = Number(addLineDiscount) || 0; const sub = Math.round(addLineProduct.salePrice * qty * (1 - disc / 100)); return sub + (addLineVat ? Math.round(sub * (companySettings.vatRate / 100)) : 0) })())}</p>
               </div>
-            )}
+              </>
+              )
+            })()}
             <div className="flex gap-2 justify-end pt-4 border-t border-[var(--border-lt)]">
               <button className="btn-outline" onClick={() => setShowAddLine(false)}>Cancel</button>
               <button className="btn-primary" onClick={handleAddLine} disabled={!addLineProduct || !Number(addLineQty)}>Add to Order</button>

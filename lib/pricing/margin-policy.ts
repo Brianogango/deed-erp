@@ -158,16 +158,20 @@ export const DEFAULT_PRICING_MARGIN_POLICY: PricingMarginPolicy = {
     { priceFromKes: 200_001, reductionPct: 14, label: 'Above KES 200,000' },
   ],
   // Deed catalog categories → spreadsheet pricing bands.
-  // Laptops/Desktops default to refurb bands (primary stock). Override per product via pricingCategoryId.
+  // Laptops/Desktops: productType new → Brand New PCs; refurbished (default) → refurb bands.
   categoryMap: [
-    { erpCategory: 'Accessories', pricingCategoryId: 'accessories' },
-    { erpCategory: 'Mobile Devices', pricingCategoryId: 'consumer_electronics' },
-    { erpCategory: 'Desktops', pricingCategoryId: 'refurb_desktops' },
-    { erpCategory: 'Laptops', pricingCategoryId: 'refurb_laptops' },
-    { erpCategory: 'Printers', pricingCategoryId: 'printers' },
-    { erpCategory: 'Networking', pricingCategoryId: 'networking' },
-    { erpCategory: 'Parts & Components', pricingCategoryId: 'repair_parts' },
-    { erpCategory: 'Software & Licences', pricingCategoryId: 'software_licenses' },
+    { erpCategory: 'Accessories', condition: 'any', pricingCategoryId: 'accessories' },
+    { erpCategory: 'Mobile Devices', condition: 'any', pricingCategoryId: 'consumer_electronics' },
+    { erpCategory: 'Laptops', condition: 'new', pricingCategoryId: 'brand_new_pcs' },
+    { erpCategory: 'Laptops', condition: 'refurbished', pricingCategoryId: 'refurb_laptops' },
+    { erpCategory: 'Laptops', condition: 'any', pricingCategoryId: 'refurb_laptops' },
+    { erpCategory: 'Desktops', condition: 'new', pricingCategoryId: 'brand_new_pcs' },
+    { erpCategory: 'Desktops', condition: 'refurbished', pricingCategoryId: 'refurb_desktops' },
+    { erpCategory: 'Desktops', condition: 'any', pricingCategoryId: 'refurb_desktops' },
+    { erpCategory: 'Printers', condition: 'any', pricingCategoryId: 'printers' },
+    { erpCategory: 'Networking', condition: 'any', pricingCategoryId: 'networking' },
+    { erpCategory: 'Parts & Components', condition: 'any', pricingCategoryId: 'repair_parts' },
+    { erpCategory: 'Software & Licences', condition: 'any', pricingCategoryId: 'software_licenses' },
   ],
 }
 
@@ -246,6 +250,8 @@ export function resolvePricingCategoryId(opts: {
   policy: PricingMarginPolicy
   erpCategory?: string | null
   pricingCategoryId?: string | null
+  /** Prisma / catalog productType — selects Brand New PCs vs refurb bands. */
+  productType?: 'new' | 'refurbished' | string | null
 }): string | null {
   const explicit = String(opts.pricingCategoryId || '').trim()
   if (explicit && opts.policy.categories.some(c => c.id === explicit)) return explicit
@@ -253,10 +259,18 @@ export function resolvePricingCategoryId(opts: {
   const erp = String(opts.erpCategory || '').trim()
   if (!erp) return null
 
-  const exact = opts.policy.categoryMap.find(r => r.erpCategory === erp && r.pricingCategoryId)
-  if (exact?.pricingCategoryId && opts.policy.categories.some(c => c.id === exact.pricingCategoryId)) {
-    return exact.pricingCategoryId
-  }
+  const condition: PricingCondition =
+    opts.productType === 'new' || opts.productType === 'refurbished'
+      ? opts.productType
+      : 'any'
+
+  const rulesForErp = opts.policy.categoryMap.filter(
+    r => r.erpCategory === erp && r.pricingCategoryId && opts.policy.categories.some(c => c.id === r.pricingCategoryId),
+  )
+  const byCondition =
+    rulesForErp.find(r => (r.condition || 'any') === condition) ||
+    rulesForErp.find(r => (r.condition || 'any') === 'any')
+  if (byCondition) return byCondition.pricingCategoryId
 
   const wildcard = opts.policy.categoryMap.find(r => r.erpCategory === '*' && r.pricingCategoryId)
   if (wildcard?.pricingCategoryId && opts.policy.categories.some(c => c.id === wildcard.pricingCategoryId)) {

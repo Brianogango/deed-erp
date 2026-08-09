@@ -8,6 +8,7 @@ import {
   type PricingMarginPolicy,
 } from '@/lib/pricing/margin-policy'
 import { Field, Input, Select } from '@/components/ui'
+import { MarginCalculatorTool } from '@/components/modules/settings/MarginCalculatorTool'
 
 function SectionCard({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -44,7 +45,9 @@ export function MarginPolicySettings({
 
   return (
     <>
-      <SectionCard title="Margin calculator (from cost)">
+      <MarginCalculatorTool policy={policy} />
+
+      <SectionCard title="Margin policy (spreadsheet source of truth)">
         <p className="text-[11.5px] text-[var(--text-3)] pt-2 pb-2 leading-relaxed m-0">
           Selling (ex VAT) = cost ÷ (1 − overhead − target profit). Target profit is the category
           min/max band after the price-tier reduction. List price rounds up to the nearest{' '}
@@ -217,35 +220,48 @@ export function MarginPolicySettings({
 
       <SectionCard title="ERP category mapping">
         <p className="text-[11px] text-[var(--text-3)] pt-2 pb-1 m-0">
-          Map Inventory categories to a pricing band. Products may still override with a pricing
-          category on the product form.
+          Map Inventory categories to spreadsheet pricing bands. Laptops/Desktops also split by
+          product type (new → Brand New PCs, refurbished → refurb band). Products may override
+          with Pricing band on the product form (Monitors, Servers, Power Backup, etc.).
         </p>
         <div className="py-1 space-y-0">
           {ALL_CATEGORIES.map(erpCat => {
-            const rule = policy.categoryMap.find(r => r.erpCategory === erpCat)
-            const value = rule?.pricingCategoryId || ''
+            const isPc = erpCat === 'Laptops' || erpCat === 'Desktops'
+            const bandOptions = [
+              { value: '', label: 'Unmapped (manual / legacy markup)' },
+              ...policy.categories.map(c => ({ value: c.id, label: c.name })),
+            ]
+            const setRule = (condition: 'any' | 'new' | 'refurbished', pricingCategoryId: string) => {
+              const rest = policy.categoryMap.filter(
+                r => !(r.erpCategory === erpCat && (r.condition || 'any') === condition),
+              )
+              const next = pricingCategoryId
+                ? [...rest, { erpCategory: erpCat as CategoryId, pricingCategoryId, condition }]
+                : rest
+              patch({ categoryMap: next })
+            }
+            const valueFor = (condition: 'any' | 'new' | 'refurbished') =>
+              policy.categoryMap.find(r => r.erpCategory === erpCat && (r.condition || 'any') === condition)?.pricingCategoryId || ''
             return (
               <div
                 key={erpCat}
-                className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 py-2.5 border-b border-[var(--border-lt)] last:border-0"
+                className="flex flex-col gap-2 py-2.5 border-b border-[var(--border-lt)] last:border-0"
               >
                 <p className="text-[12.5px] font-semibold text-[var(--text-1)] m-0">{erpCat}</p>
-                <div className="w-full sm:w-72">
-                  <Select
-                    value={value}
-                    onChange={v => {
-                      const rest = policy.categoryMap.filter(r => r.erpCategory !== erpCat)
-                      const next = v
-                        ? [...rest, { erpCategory: erpCat as CategoryId, pricingCategoryId: v, condition: 'any' as const }]
-                        : rest
-                      patch({ categoryMap: next })
-                    }}
-                    options={[
-                      { value: '', label: 'Unmapped (manual / legacy markup)' },
-                      ...policy.categories.map(c => ({ value: c.id, label: c.name })),
-                    ]}
-                  />
-                </div>
+                {isPc ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <Field label="New">
+                      <Select value={valueFor('new')} onChange={v => setRule('new', v)} options={bandOptions} />
+                    </Field>
+                    <Field label="Refurbished">
+                      <Select value={valueFor('refurbished')} onChange={v => setRule('refurbished', v)} options={bandOptions} />
+                    </Field>
+                  </div>
+                ) : (
+                  <div className="w-full sm:w-72">
+                    <Select value={valueFor('any')} onChange={v => setRule('any', v)} options={bandOptions} />
+                  </div>
+                )}
               </div>
             )
           })}

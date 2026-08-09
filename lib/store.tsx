@@ -800,6 +800,8 @@ export interface Product {
   parentId?: string          // links to a parent product — makes this a variant
   /** Optional override into pricingMarginPolicy.categories (e.g. brand_new_pcs, monitors). */
   pricingCategoryId?: string
+  /** new | refurbished — drives Brand New PCs vs refurb margin bands for Laptops/Desktops. */
+  productType?: 'new' | 'refurbished'
   priceUpdatedAt?: string
   priceUpdatedBy?: string
 }
