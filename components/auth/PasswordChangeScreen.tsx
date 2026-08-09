@@ -114,7 +114,7 @@ function PasswordChangeForm({ user }: Props) {
           style={{ background: 'radial-gradient(circle, #15193D 0%, transparent 70%)', filter: 'blur(90px)' }}
         />
         <img
-          src="/deed-icon.svg"
+          src="/deed-icon-transparent.png"
           alt=""
           aria-hidden="true"
           className="absolute pointer-events-none select-none"
@@ -133,7 +133,7 @@ function PasswordChangeForm({ user }: Props) {
       <div className="relative z-10 w-full max-w-md px-6">
         <div className="rounded-3xl bg-white/95 shadow-2xl backdrop-blur-md p-8">
           <div className="text-center mb-6">
-            <img src="/deed-icon.svg" alt="Deed" className="mx-auto h-10 mb-3" />
+            <img src="/deed-logo.png" alt="Deed Technologies" className="mx-auto h-10 mb-3 object-contain" />
             <h1 className="text-xl font-bold text-navy-500">
               {forced ? 'Set a new password' : 'Change your password'}
             </h1>
