@@ -3227,9 +3227,10 @@ export interface AppState {
   createBillFromPO: (poId: string) => Invoice | null
 
   // Purchase Returns
-  createPurchaseReturn: (receiptId: string, reason: PurchaseReturn['reason']) => PurchaseReturn
+  createPurchaseReturn: (receiptId: string, reason: PurchaseReturn['reason']) => PurchaseReturn | null
   addReturnLine: (returnId: string, productId: string, productName: string, qty: number, serialIds: string[], requiresSerial: boolean) => void
-  confirmPurchaseReturn: (returnId: string) => void
+  /** Returns false (with a toast) if a required credit note failed to save — caller must not treat the return as done. */
+  confirmPurchaseReturn: (returnId: string) => Promise<boolean>
   logReturnPickup: (returnId: string, collectedByUserId: string, collectedByName: string, collectedDate: string, pickupNotes?: string) => void
 
   // Refurbishment
@@ -12316,7 +12317,14 @@ const storeCtx: AppState = {
     },
 
     // ── Purchase Returns ───────────────────────────────────────────────────────
+    // Return-to-Vendor deducts stock and (usually) generates a real credit note
+    // against a posted bill — same class of action as confirming a PO, so it
+    // needs the same role gate. Previously unrestricted: any logged-in user
+    // could trigger it.
     createPurchaseReturn: (receiptId, reason) => {
+      if (!canManageProcurement(currentUser())) {
+        showToast('Only Inventory or Admin can create a Return to Vendor', 'error'); return null
+      }
       const receipt = recRef.current.find(r => r.id === receiptId)!
       const po = poRef.current.find(p => p.id === receipt.poId)!
       const ret: PurchaseReturn = {
@@ -12328,16 +12336,23 @@ const storeCtx: AppState = {
       setPurchaseReturns(p => [ret, ...p]); showToast(`Return ${ret.ref} created`); return ret
     },
     addReturnLine: (returnId, productId, productName, qty, serialIds, requiresSerial) => {
+      if (!canManageProcurement(currentUser())) {
+        showToast('Only Inventory or Admin can edit a Return to Vendor', 'error'); return
+      }
       const line = { productId, productName, qty, serialIds, requiresSerial }
       purchaseReturnsRef.current = purchaseReturnsRef.current.map(r => r.id !== returnId ? r : { ...r, lines: [...r.lines, line] })
       setPurchaseReturns(p => p.map(r => r.id !== returnId ? r : { ...r, lines: [...r.lines, line] }))
     },
-    confirmPurchaseReturn: (returnId) => {
+    confirmPurchaseReturn: async (returnId) => {
+      if (!canManageProcurement(currentUser())) {
+        showToast('Only Inventory or Admin can confirm a Return to Vendor', 'error'); return false
+      }
       const ret = purchaseReturnsRef.current.find(r => r.id === returnId)
-      if (!ret) { showToast('Return not found', 'error'); return }
-      if (ret.lines.length === 0) { showToast('Add at least one return line before confirming', 'error'); return }
+      if (!ret) { showToast('Return not found', 'error'); return false }
+      if (ret.status === 'confirmed') { showToast(`${ret.ref} is already confirmed`, 'info'); return false }
+      if (ret.lines.length === 0) { showToast('Add at least one return line before confirming', 'error'); return false }
       const po = poRef.current.find(p => p.id === ret.poId)
-      if (!po) { showToast('Linked purchase order not found', 'error'); return }
+      if (!po) { showToast('Linked purchase order not found', 'error'); return false }
       // Deduct stock, mark serials as returned
       ret.lines.forEach(l => {
         if (l.requiresSerial) {
@@ -12416,6 +12431,44 @@ const storeCtx: AppState = {
         }
       }
       const appliedTotal = applications.reduce((s, a) => s + a.amount, 0)
+
+      // The credit note is a negative-total document — POST it (isCreditNote
+      // opts it out of the standard non-negative money clamps server-side,
+      // see app/api/invoices/route.ts) and actually check the response before
+      // telling the user it was created. Stock/serials/PO counters above are
+      // already committed (the physical return happened); a failed credit
+      // note here means the paperwork needs Finance's attention, but must
+      // never be reported as done when it silently wasn't.
+      if (creditNote) {
+        const finalCreditPreview: Invoice = {
+          ...creditNote,
+          amountPaid: -appliedTotal,
+          notes: applications.length
+            ? `${creditNote.notes}\nApplied to ${applications.map(a => a.billRef).join(', ')}`
+            : creditNote.notes,
+        }
+        try {
+          const res = await fetch('/api/invoices', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ...finalCreditPreview, isCreditNote: true }),
+          })
+          if (!res.ok) {
+            const payload = await res.json().catch(() => null)
+            showToast(
+              `Return items were processed, but the credit note failed to save (${payload?.error ?? res.status}) — ${ret.ref} needs Finance to record it manually`,
+              'error',
+            )
+            return false
+          }
+        } catch {
+          showToast(
+            `Return items were processed, but could not reach the server to save the credit note — ${ret.ref} needs Finance to record it manually`,
+            'error',
+          )
+          return false
+        }
+      }
       const draftDeductionsByBill = new Map<string, typeof allocation.draftBillDeductions>()
       allocation.draftBillDeductions.forEach(d => {
         draftDeductionsByBill.set(d.billId, [...(draftDeductionsByBill.get(d.billId) ?? []), d])
@@ -12463,8 +12516,9 @@ const storeCtx: AppState = {
           return inv
         })
         if (creditNote) {
-          // Negative amountPaid mirrors the applied portion so the credit
-          // note's own residual nets to the unapplied remainder.
+          // Already POSTed and confirmed successful above — negative
+          // amountPaid mirrors the applied portion so the credit note's own
+          // residual nets to the unapplied remainder.
           const finalCredit: Invoice = {
             ...creditNote,
             amountPaid: -appliedTotal,
@@ -12473,7 +12527,6 @@ const storeCtx: AppState = {
               : creditNote.notes,
           }
           next = [finalCredit, ...next]
-          sync('/api/invoices', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(finalCredit) })
         }
         return next
       })
@@ -12495,8 +12548,12 @@ const storeCtx: AppState = {
             ? `Return confirmed · credit ${creditNote.ref} applied to ${applications.map(a => a.billRef).join(', ')}`
             : `Return confirmed · credit note ${creditNote.ref} created`)
         : 'Return confirmed · billable quantities reduced, no credit note needed')
+      return true
     },
     logReturnPickup: (returnId, collectedByUserId, collectedByName, collectedDate, pickupNotes) => {
+      if (!canManageProcurement(currentUser())) {
+        showToast('Only Inventory or Admin can log a return pickup', 'error'); return
+      }
       setPurchaseReturns(p => p.map(r => r.id !== returnId ? r : { ...r, collectedByUserId, collectedByName, collectedDate, pickupNotes }))
       showToast('Pickup details saved')
     },

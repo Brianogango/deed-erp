@@ -201,6 +201,7 @@ function PurchaseContent() {
 
   // ── Return ─────────────────────────────────────────────────────────────────
   const [showReturnModal,    setShowReturnModal]    = useState(false)
+  const [confirmingReturn,   setConfirmingReturn]    = useState(false)
   const [returnReceiptId,    setReturnReceiptId]    = useState('')
   const [returnReason,       setReturnReason]       = useState<'damaged' | 'wrong_supply' | 'excess' | 'other'>('damaged')
   const [returnLines,        setReturnLines]        = useState<{ productId: string; productName: string; qty: string; serials: string[]; requiresSerial: boolean }[]>([])
@@ -601,7 +602,8 @@ function PurchaseContent() {
     setReturnScanInput(p => ({ ...p, [idx]: '' }))
   }
 
-  const handleConfirmReturn = () => {
+  const handleConfirmReturn = async () => {
+    if (confirmingReturn) return
     const hasItems = returnLines.some(l => l.requiresSerial ? l.serials.length > 0 : Number(l.qty) > 0)
     if (!hasItems) { showToast('Add at least one item to return', 'error'); return }
     const preparedLines = returnLines
@@ -618,16 +620,23 @@ function PurchaseContent() {
       showToast(`Some serials for ${missingSerialLine.productName} were not found in inventory`, 'error')
       return
     }
-    const ret = createPurchaseReturn(returnReceiptId, returnReason)
-    preparedLines.forEach(l => {
-      if (l.qty > 0) addReturnLine(ret.id, l.productId, l.productName, l.qty, l.serialIds, l.requiresSerial)
-    })
-    confirmPurchaseReturn(ret.id)
-    if (returnCollectedBy) {
-      const u = users.find(x => x.id === returnCollectedBy)
-      logReturnPickup(ret.id, returnCollectedBy, u?.name ?? returnCollectedBy, returnCollectedDate, returnPickupNotes || undefined)
+    setConfirmingReturn(true)
+    try {
+      const ret = createPurchaseReturn(returnReceiptId, returnReason)
+      if (!ret) return
+      preparedLines.forEach(l => {
+        if (l.qty > 0) addReturnLine(ret.id, l.productId, l.productName, l.qty, l.serialIds, l.requiresSerial)
+      })
+      const ok = await confirmPurchaseReturn(ret.id)
+      if (!ok) return
+      if (returnCollectedBy) {
+        const u = users.find(x => x.id === returnCollectedBy)
+        logReturnPickup(ret.id, returnCollectedBy, u?.name ?? returnCollectedBy, returnCollectedDate, returnPickupNotes || undefined)
+      }
+      setShowReturnModal(false)
+    } finally {
+      setConfirmingReturn(false)
     }
-    setShowReturnModal(false)
   }
 
   // ── CSV import ─────────────────────────────────────────────────────────────
@@ -1392,8 +1401,10 @@ function PurchaseContent() {
               onChange={e => setReturnPickupNotes(e.target.value)} />
           </Field>
           <div className="flex gap-2 justify-end">
-            <button className="btn-outline" onClick={() => setShowReturnModal(false)}>Cancel</button>
-            <button className="btn-primary" style={{ background: 'var(--warning)' }} onClick={handleConfirmReturn}>Confirm Return</button>
+            <button className="btn-outline" onClick={() => setShowReturnModal(false)} disabled={confirmingReturn}>Cancel</button>
+            <button className="btn-primary" style={{ background: 'var(--warning)' }} onClick={handleConfirmReturn} disabled={confirmingReturn}>
+              {confirmingReturn ? 'Confirming…' : 'Confirm Return'}
+            </button>
           </div>
         </Modal>
       )}

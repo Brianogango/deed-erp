@@ -268,6 +268,51 @@ describe('POST /api/invoices', () => {
   })
 })
 
+// ── POST /api/invoices — vendor credit notes (isCreditNote) ──────────────────
+describe('POST /api/invoices — isCreditNote', () => {
+  it('accepts a negative-total credit note and stores negative totals + purchaseOrderId', async () => {
+    const POID = 'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee'
+    mockPrismaInvoice.create.mockImplementation(({ data }: any) => Promise.resolve({ ...baseInvoice, ...data }))
+    const res = await POST(postReq({
+      clientId: CLIENT_ID,
+      purchaseOrderId: POID,
+      isCreditNote: true,
+      total: -5800,
+      lines: [{ description: 'RETURN: Widget ×2', qty: 2, unitPrice: -2500, subtotal: -5000 }],
+    }))
+    expect(res.status).toBe(201)
+    const data = mockPrismaInvoice.create.mock.calls[0][0].data
+    expect(data.totalAmount).toBeLessThan(0)
+    expect(data.subtotal).toBeLessThan(0)
+    expect(data.purchaseOrderId).toBe(POID)
+    expect(data.items.create[0].unitPrice).toBeLessThan(0)
+    expect(data.items.create[0].qty).toBe(2)
+  })
+
+  it('rejects a credit note with a positive declared total', async () => {
+    const res = await POST(postReq({ clientId: CLIENT_ID, isCreditNote: true, total: 5800 }))
+    expect(res.status).toBe(400)
+    expect((await res.json()).error).toMatch(/must not be positive/i)
+    expect(mockPrismaInvoice.create).not.toHaveBeenCalled()
+  })
+
+  it('still rejects a near-zero credit note total', async () => {
+    const res = await POST(postReq({ clientId: CLIENT_ID, isCreditNote: true, total: -0.5 }))
+    expect(res.status).toBe(400)
+    expect(mockPrismaInvoice.create).not.toHaveBeenCalled()
+  })
+
+  it('a regular (non-credit-note) invoice still cannot be created with a negative total', async () => {
+    mockPrismaInvoice.create.mockImplementation(({ data }: any) => Promise.resolve({ ...baseInvoice, ...data }))
+    const res = await POST(postReq({ clientId: CLIENT_ID, total: -5800 }))
+    // Math.max(0, ...) in computeInvoiceTotals floors this to 0, which then
+    // fails the >= 1 minimum — negative totals never sneak through as a
+    // disguised "invoice" without isCreditNote.
+    expect(res.status).toBe(400)
+    expect(mockPrismaInvoice.create).not.toHaveBeenCalled()
+  })
+})
+
 // ── GET /api/invoices/:id ─────────────────────────────────────────────────────
 describe('GET /api/invoices/:id', () => {
   it('returns 200 with the invoice', async () => {
