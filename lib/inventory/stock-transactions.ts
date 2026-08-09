@@ -1,7 +1,7 @@
 import 'server-only'
 import { randomUUID } from 'crypto'
 import prisma from '@/lib/prisma'
-import { loadAppState, saveStoreKeys } from '@/lib/server-store'
+import { loadAppState, saveStoreKeys, withAppStateKeyLock } from '@/lib/server-store'
 import { adjustStockLevel } from '@/lib/inventory/stock-level'
 import { calcStockByLocation, upsertBulkStock } from '@/lib/business-logic'
 import type { BulkStockLevel } from '@/lib/business-logic'
@@ -386,7 +386,7 @@ export async function reserveStockForSaleOrder(
   return { ok: true, reserved: reservedCount }
 }
 
-async function resolvePrismaProductIdForStock(
+export async function resolvePrismaProductIdForStock(
   tx: Parameters<Parameters<typeof prisma.$transaction>[0]>[0],
   productId: string,
   hint?: { sku?: string; name?: string },
@@ -450,6 +450,89 @@ async function bumpPrismaOnHand(deltas: Map<string, number>) {
     console.error('[stock-transactions] prisma stockLevel bump failed:', err)
     throw err
   }
+}
+
+/**
+ * Atomic relational side of a goods receipt: bumps StockLevel, advances
+ * PurchaseOrderItem.qtyReceived (clamped, never past qtyOrdered), and writes
+ * a GoodsReceivedNote/GrnItem audit trail — all inside one prisma.$transaction
+ * so a partial failure (e.g. an unresolvable product) rolls the whole receipt
+ * back instead of leaving stock bumped with no matching PO/GRN record.
+ *
+ * Deliberately does NOT touch PurchaseOrder.lockVersion: the caller
+ * (validateReceipt in lib/store.tsx) immediately follows this with its own
+ * client-driven PATCH to /api/purchase-orders/[id] carrying the lockVersion
+ * it last fetched — bumping it here would make that PATCH 409 on every
+ * single receipt. qtyReceived is a monotonic, additive counter that's safe
+ * to advance out from under the optimistic lock.
+ */
+async function applyReceiptRelational(params: {
+  purchaseOrderId?: string
+  receiptRef: string
+  supplierInvoiceNo?: string
+  notes?: string
+  userId?: string
+  lines: Array<{ productId: string; productName: string; qty: number }>
+}): Promise<{ grnItemsByProductId: Map<string, string>; resolvedProductIds: Map<string, string> }> {
+  const grnItemsByProductId = new Map<string, string>()
+  const resolvedProductIds = new Map<string, string>()
+  const validLines = params.lines.filter(l => l.qty > 0)
+  if (validLines.length === 0) return { grnItemsByProductId, resolvedProductIds }
+
+  await prisma.$transaction(async tx => {
+    const po =
+      params.purchaseOrderId && isUuid(params.purchaseOrderId)
+        ? await tx.purchaseOrder.findUnique({ where: { id: params.purchaseOrderId }, include: { items: true } })
+        : null
+
+    const grnId =
+      po && params.userId
+        ? (
+            await tx.goodsReceivedNote.create({
+              data: {
+                grnNumber: params.receiptRef,
+                poId: po.id,
+                supplierInvoiceNo: params.supplierInvoiceNo || null,
+                notes: params.notes || null,
+                createdById: params.userId,
+              },
+            })
+          ).id
+        : null
+
+    for (const line of validLines) {
+      const resolved = await resolvePrismaProductIdForStock(tx, line.productId, { name: line.productName })
+      if (!resolved) {
+        throw new Error(
+          `Cannot update stock for "${line.productName || line.productId}" — this product is in the app catalogue but not linked in the database (ID mismatch). Re-save/publish the product from Inventory, then retry the GRN.`,
+        )
+      }
+      resolvedProductIds.set(line.productId, resolved)
+      await adjustStockLevel(tx, resolved, { onHand: line.qty })
+
+      const poItem = po?.items.find(i => i.productId === resolved)
+      if (poItem) {
+        await tx.purchaseOrderItem.update({
+          where: { id: poItem.id },
+          data: { qtyReceived: Math.min(poItem.qtyOrdered, poItem.qtyReceived + line.qty) },
+        })
+        if (grnId) {
+          const grnItem = await tx.grnItem.create({
+            data: {
+              grnId,
+              poItemId: poItem.id,
+              productId: resolved,
+              qtyReceived: line.qty,
+              unitCost: poItem.unitCost,
+            },
+          })
+          grnItemsByProductId.set(line.productId, grnItem.id)
+        }
+      }
+    }
+  })
+
+  return { grnItemsByProductId, resolvedProductIds }
 }
 
 /** Authoritative POS sale stock out. */
@@ -537,12 +620,27 @@ export async function applyPosStockMutation(params: {
   return { ok: true, moves: newMoves }
 }
 
-/** Authoritative GRN stock in (after serial validation). */
+/**
+ * Authoritative GRN stock in (after serial validation).
+ *
+ * The blob mutation (deed_products/deed_serials/deed_bulkStock/deed_stockMoves)
+ * is serialized against the same 'deed_serials' advisory lock key that
+ * POST /api/serials now takes (see app/api/serials/route.ts) — closing the
+ * race documented in scripts/heal-grn-serials.mjs, where two concurrent
+ * unlocked read-modify-writes on deed_serials could silently drop whichever
+ * writer's appended serials lost the race. The relational side (StockLevel,
+ * PurchaseOrderItem.qtyReceived, GoodsReceivedNote/GrnItem) runs inside one
+ * prisma.$transaction via applyReceiptRelational so a failure there (e.g. an
+ * unresolvable product) aborts before any blob write happens, instead of
+ * leaving stock bumped with no matching relational record.
+ */
 export async function applyReceiptStockMutation(params: {
   receiptId: string
   receiptRef: string
   purchaseOrderId?: string
   destination: string
+  supplierInvoiceNo?: string
+  notes?: string
   lines: Array<{
     productId: string
     productName: string
@@ -553,81 +651,124 @@ export async function applyReceiptStockMutation(params: {
   }>
   userId?: string
 }): Promise<{ ok: true; moves: BlobStockMove[] } | { ok: false; error: string }> {
-  const state = await loadAppState(['deed_products', 'deed_serials', 'deed_bulkStock', 'deed_stockMoves'])
-  const products: BlobProduct[] = Array.isArray(state.deed_products) ? [...(state.deed_products as BlobProduct[])] : []
-  const serials: BlobSerial[] = Array.isArray(state.deed_serials) ? [...(state.deed_serials as BlobSerial[])] : []
-  let bulkStock: BulkStockLevel[] =
-    Array.isArray(state.deed_bulkStock) ? [...(state.deed_bulkStock as BulkStockLevel[])] : []
-  const stockMoves: BlobStockMove[] = Array.isArray(state.deed_stockMoves) ? [...(state.deed_stockMoves as BlobStockMove[])] : []
-  const newMoves: BlobStockMove[] = []
-  const stockLevelDeltas = new Map<string, number>()
-  const destination = asLocationId(params.destination || 'warehouse')
-  const existingSerialKeys = new Set(serials.map(s => String(s.serial || '').toLowerCase()).filter(Boolean))
+  return withAppStateKeyLock('deed_serials', async () => {
+    const state = await loadAppState(['deed_products', 'deed_serials', 'deed_bulkStock', 'deed_stockMoves'])
+    const products: BlobProduct[] = Array.isArray(state.deed_products) ? [...(state.deed_products as BlobProduct[])] : []
+    const serials: BlobSerial[] = Array.isArray(state.deed_serials) ? [...(state.deed_serials as BlobSerial[])] : []
+    let bulkStock: BulkStockLevel[] =
+      Array.isArray(state.deed_bulkStock) ? [...(state.deed_bulkStock as BulkStockLevel[])] : []
+    const stockMoves: BlobStockMove[] = Array.isArray(state.deed_stockMoves) ? [...(state.deed_stockMoves as BlobStockMove[])] : []
+    const newMoves: BlobStockMove[] = []
+    const destination = asLocationId(params.destination || 'warehouse')
+    const existingSerialKeys = new Set(serials.map(s => String(s.serial || '').toLowerCase()).filter(Boolean))
 
-  for (const line of params.lines) {
-    const productId = String(line.productId || '')
-    const qty = Math.max(0, Math.floor(Number(line.qtyReceived) || 0))
-    if (!productId || qty <= 0) continue
-    const productName = line.productName || products.find(p => p.id === productId)?.name || 'Item'
+    for (const line of params.lines) {
+      const productId = String(line.productId || '')
+      const qty = Math.max(0, Math.floor(Number(line.qtyReceived) || 0))
+      if (!productId || qty <= 0) continue
+      const productName = line.productName || products.find(p => p.id === productId)?.name || 'Item'
 
-    if (line.requiresSerial) {
-      const tokens = Array.isArray(line.serials) ? line.serials.map(s => String(s).trim()).filter(Boolean) : []
-      if (tokens.length < qty) {
-        return { ok: false, error: `Enter all serial numbers for ${productName}` }
-      }
-      for (const token of tokens.slice(0, qty)) {
-        if (existingSerialKeys.has(token.toLowerCase())) {
-          return { ok: false, error: `Serial ${token} already exists` }
+      if (line.requiresSerial) {
+        const tokens = Array.isArray(line.serials) ? line.serials.map(s => String(s).trim()).filter(Boolean) : []
+        if (tokens.length < qty) {
+          return { ok: false, error: `Enter all serial numbers for ${productName}` }
         }
-        existingSerialKeys.add(token.toLowerCase())
-        const record = (line.serialRecords || []).find(r => String(r.serial || '').toLowerCase() === token.toLowerCase())
-        serials.push({
-          ...(record || {}),
-          id: String(record?.id || randomUUID()),
-          serial: token,
-          productId,
-          status: String(record?.status || 'available'),
-          location: String(record?.location || destination),
-        } as BlobSerial)
+        for (const token of tokens.slice(0, qty)) {
+          if (existingSerialKeys.has(token.toLowerCase())) {
+            return { ok: false, error: `Serial ${token} already exists` }
+          }
+          existingSerialKeys.add(token.toLowerCase())
+          const record = (line.serialRecords || []).find(r => String(r.serial || '').toLowerCase() === token.toLowerCase())
+          serials.push({
+            ...(record || {}),
+            id: String(record?.id || randomUUID()),
+            serial: token,
+            productId,
+            status: String(record?.status || 'available'),
+            location: String(record?.location || destination),
+          } as BlobSerial)
+        }
+        const idx = products.findIndex(p => p.id === productId)
+        if (idx >= 0) products[idx] = { ...products[idx], stockQty: Number(products[idx].stockQty ?? 0) + qty }
+        newMoves.push({
+          id: randomUUID(), type: 'in', productId, productName, qty,
+          reason: `Receipt ${params.receiptRef}`, fromLocation: 'vendor', toLocation: destination,
+          serialNumbers: tokens.slice(0, qty), date: nowIso(),
+          userId: params.userId ?? 'system', documentRef: params.receiptRef,
+        })
+      } else {
+        bulkStock = upsertBulkStock(bulkStock, productId, destination, qty)
+        const idx = products.findIndex(p => p.id === productId)
+        if (idx >= 0) products[idx] = { ...products[idx], stockQty: Number(products[idx].stockQty ?? 0) + qty }
+        newMoves.push({
+          id: randomUUID(), type: 'in', productId, productName, qty,
+          reason: `Receipt ${params.receiptRef}`, fromLocation: 'vendor', toLocation: destination,
+          serialNumbers: [], date: nowIso(),
+          userId: params.userId ?? 'system', documentRef: params.receiptRef,
+        })
       }
-      const idx = products.findIndex(p => p.id === productId)
-      if (idx >= 0) products[idx] = { ...products[idx], stockQty: Number(products[idx].stockQty ?? 0) + qty }
-      stockLevelDeltas.set(productId, (stockLevelDeltas.get(productId) ?? 0) + qty)
-      newMoves.push({
-        id: randomUUID(), type: 'in', productId, productName, qty,
-        reason: `Receipt ${params.receiptRef}`, fromLocation: 'vendor', toLocation: destination,
-        serialNumbers: tokens.slice(0, qty), date: nowIso(),
-        userId: params.userId ?? 'system', documentRef: params.receiptRef,
-      })
-    } else {
-      bulkStock = upsertBulkStock(bulkStock, productId, destination, qty)
-      const idx = products.findIndex(p => p.id === productId)
-      if (idx >= 0) products[idx] = { ...products[idx], stockQty: Number(products[idx].stockQty ?? 0) + qty }
-      stockLevelDeltas.set(productId, (stockLevelDeltas.get(productId) ?? 0) + qty)
-      newMoves.push({
-        id: randomUUID(), type: 'in', productId, productName, qty,
-        reason: `Receipt ${params.receiptRef}`, fromLocation: 'vendor', toLocation: destination,
-        serialNumbers: [], date: nowIso(),
-        userId: params.userId ?? 'system', documentRef: params.receiptRef,
-      })
     }
-  }
 
-  try {
-    await bumpPrismaOnHand(stockLevelDeltas)
-  } catch (err) {
-    const message = err instanceof Error ? err.message : 'Stock update failed'
-    return { ok: false, error: message }
-  }
-  await saveStoreKeys({
-    deed_products: JSON.stringify(products),
-    deed_serials: JSON.stringify(serials),
-    deed_bulkStock: JSON.stringify(bulkStock),
-    deed_stockMoves: JSON.stringify([...newMoves, ...stockMoves]),
+    let grnItemsByProductId = new Map<string, string>()
+    let resolvedProductIds = new Map<string, string>()
+    try {
+      const relational = await applyReceiptRelational({
+        purchaseOrderId: params.purchaseOrderId,
+        receiptRef: params.receiptRef,
+        supplierInvoiceNo: params.supplierInvoiceNo,
+        notes: params.notes,
+        userId: params.userId,
+        lines: params.lines.map(line => ({
+          productId: String(line.productId || ''),
+          productName: line.productName,
+          qty: Math.max(0, Math.floor(Number(line.qtyReceived) || 0)),
+        })),
+      })
+      grnItemsByProductId = relational.grnItemsByProductId
+      resolvedProductIds = relational.resolvedProductIds
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Stock update failed'
+      return { ok: false, error: message }
+    }
+
+    await saveStoreKeys({
+      deed_products: JSON.stringify(products),
+      deed_serials: JSON.stringify(serials),
+      deed_bulkStock: JSON.stringify(bulkStock),
+      deed_stockMoves: JSON.stringify([...newMoves, ...stockMoves]),
+    })
+
+    // Best-effort relational SerialNumber mirror — deed_serials (just written
+    // above, inside the lock) remains the source of truth for on-hand serial
+    // state; a conflict/failure here only means this row predates this write
+    // path or was already mirrored, and never blocks the GRN itself.
+    for (const line of params.lines) {
+      if (!line.requiresSerial) continue
+      const productId = String(line.productId || '')
+      const qty = Math.max(0, Math.floor(Number(line.qtyReceived) || 0))
+      if (qty <= 0) continue
+      const resolved = resolvedProductIds.get(productId)
+      if (!resolved) continue
+      const grnItemId = grnItemsByProductId.get(productId)
+      const tokens = Array.isArray(line.serials) ? line.serials.map(s => String(s).trim()).filter(Boolean).slice(0, qty) : []
+      for (const token of tokens) {
+        const record = (line.serialRecords || []).find(r => String(r.serial || '').toLowerCase() === token.toLowerCase())
+        await prisma.serialNumber.create({
+          data: {
+            id: String(record?.id || randomUUID()),
+            productId: resolved,
+            serialNumber: token,
+            inventoryBarcode: (record?.barcode as string) || null,
+            purchaseItemId: grnItemId || null,
+            status: 'in_stock',
+          },
+        }).catch(() => { /* unique conflict — blob is SoR */ })
+      }
+    }
+
+    void params.receiptId
+    return { ok: true, moves: newMoves }
   })
-  void params.receiptId
-  void params.purchaseOrderId
-  return { ok: true, moves: newMoves }
 }
 
 /** Authoritative internal transfer. */

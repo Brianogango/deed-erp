@@ -34,6 +34,8 @@ export async function POST(request: NextRequest) {
     receiptId?: string
     receiptRef?: string
     purchaseOrderId?: string
+    supplierInvoiceNo?: string
+    notes?: string
   } | null
   if (!body || !Array.isArray(body.lines)) {
     return NextResponse.json({ error: 'Expected body { lines: [...] }' }, { status: 400 })
@@ -55,6 +57,8 @@ export async function POST(request: NextRequest) {
     receiptRef: String(body.receiptRef || 'REC'),
     purchaseOrderId: body.purchaseOrderId,
     destination: String(body.destination || 'warehouse'),
+    supplierInvoiceNo: body.supplierInvoiceNo,
+    notes: body.notes,
     lines: body.lines.map(line => ({
       productId: line.productId,
       productName: line.productName || '',
