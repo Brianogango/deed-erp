@@ -243,15 +243,11 @@ export default function Sidebar() {
         className={`sidebar-section-border flex items-center h-16 flex-shrink-0 border-b transition-all duration-300 overflow-hidden ${sidebarOpen ? 'px-5' : 'justify-center px-0'}`}
       >
         <div className="flex items-center gap-3">
-          {/* Logo mark — Deed Blue gradient */}
-          <div
-            className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 shadow-lg"
-            style={{
-              background: `linear-gradient(135deg, ${DEED_BLUE}, #0090C8)`,
-              boxShadow: `0 4px 16px rgba(31,160,208,0.45)`,
-            }}
+          {/* Logo mark */}
+          <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 shadow-lg overflow-hidden"
+            style={{ background: DEED_NAVY }}
           >
-            <img src="/deed-icon.svg" alt="Deed" className="w-6 h-6 object-contain brightness-0 invert" />
+            <img src="/deed-icon-transparent.png" alt="Deed" className="w-7 h-7 object-contain brightness-0 invert" />
           </div>
 
           {/* Brand text */}
@@ -385,7 +381,7 @@ function SidebarNavItem({ item, isActive, isExpanded, isPinned, currentUserId, o
       {item.badge != null && item.badge > 0 && (
         <span
           className={`flex items-center justify-center rounded-full font-black text-white ${isExpanded ? 'ml-auto h-5 min-w-[20px] px-1.5 text-[9px]' : 'absolute -top-0.5 -right-0.5 h-4 min-w-[16px] px-1 text-[8px]'}`}
-          style={{ background: isActive ? 'rgba(255,255,255,0.30)' : DEED_BLUE, boxShadow: isActive ? 'none' : `0 2px 8px rgba(31,160,208,0.5)` }}
+          style={{ background: isActive ? 'rgba(255,255,255,0.30)' : DEED_BLUE, boxShadow: isActive ? 'none' : `0 2px 8px rgba(0,174,239,0.5)` }}
         >
           {item.badge > 99 ? '99+' : item.badge}
         </span>
@@ -405,7 +401,7 @@ function SidebarNavItem({ item, isActive, isExpanded, isPinned, currentUserId, o
           {/* Arrow */}
           <div
             className="absolute top-1/2 -translate-y-1/2 -left-1.5 w-3 h-3 rotate-45 -z-10"
-            style={{ background: DEED_NAVY, borderLeft: '1px solid rgba(31,160,208,0.30)', borderBottom: '1px solid rgba(31,160,208,0.30)' }}
+            style={{ background: DEED_NAVY, borderLeft: '1px solid rgba(0,174,239,0.30)', borderBottom: '1px solid rgba(0,174,239,0.30)' }}
           />
         </div>
       )}

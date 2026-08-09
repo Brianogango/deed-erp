@@ -99,17 +99,14 @@ export default function Login() {
           {/* Brand mark */}
           <div className="flex items-center gap-3 mb-6">
             <div
-              className="flex h-[38px] w-[38px] flex-shrink-0 items-center justify-center rounded-xl"
-              style={{
-                background: 'linear-gradient(135deg, var(--primary), #0090C8)',
-                boxShadow: '0 4px 16px rgba(31,160,208,0.45)',
-              }}
+              className="flex h-[38px] w-[38px] flex-shrink-0 items-center justify-center rounded-xl overflow-hidden"
+              style={{ background: '#20164d' }}
             >
-              <img src="/deed-icon.svg" alt="" aria-hidden="true"
-                className="h-6 w-6 object-contain brightness-0 invert" />
+              <img src="/deed-icon-transparent.png" alt="" aria-hidden="true"
+                className="h-7 w-7 object-contain brightness-0 invert" />
             </div>
             <div className="text-[15px] font-bold text-white tracking-[-0.005em]">
-              deed<span className="font-light opacity-60"> ERP</span>
+              deed<span className="font-light opacity-60"> Technologies</span>
             </div>
           </div>
 

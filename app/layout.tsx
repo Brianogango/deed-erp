@@ -6,7 +6,7 @@ import { PUBLIC_USERS } from '@/lib/auth/public-users'
 import { loadAppState } from '@/lib/server-store'
 import AppShell from '@/components/AppShell'
 import SwRegister from '@/components/SwRegister'
-import { inter, dmMono } from './fonts'
+import { robotoFlex, openSans, dmMono } from './fonts'
 
 export const metadata: Metadata = {
   title: 'Deed ERP',
@@ -20,7 +20,7 @@ export const metadata: Metadata = {
   },
   icons: {
     icon: [
-      { url: '/deed-icon.svg', type: 'image/svg+xml' },
+      { url: '/deed-icon.png', sizes: '359x359', type: 'image/png' },
       { url: '/icon-192.png', sizes: '192x192', type: 'image/png' },
     ],
     apple: '/icon-192.png',
@@ -32,12 +32,12 @@ export const viewport: Viewport = {
   initialScale: 1,
   // Deed Navy — colours the mobile browser chrome / PWA title bar.
   // Must be a literal colour: CSS var() does not resolve inside <meta theme-color>.
-  themeColor: '#1A1F5E',
+  themeColor: '#20164d',
 }
 
 // Font CSS variables live on <html> so Tailwind's preflight font-family
 // declaration (set at the html level) can resolve them.
-const htmlClassName = `${inter.variable} ${dmMono.variable}`
+const htmlClassName = `${robotoFlex.variable} ${openSans.variable} ${dmMono.variable}`
 // Shell surfaces use the design tokens (bg-bg = --bg-page, text-t1 = --text-1,
 // selection = Deed Navy) so login/portal and the authenticated app share one palette.
 const bodyClassName = 'bg-bg text-t1 antialiased overflow-hidden selection:bg-navy-500 selection:text-white'

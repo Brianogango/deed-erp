@@ -22,9 +22,9 @@ module.exports = {
         'max-xl': { max: '1279px' },
       },
       fontFamily: {
-        // Self-hosted via next/font (app/fonts.ts) — the CSS variables are set
-        // on <body> in app/layout.tsx, with system stacks as fallback.
-        sans: ['var(--font-inter)', '-apple-system', 'BlinkMacSystemFont', "'Segoe UI'", "'Helvetica Neue'", 'Arial', 'system-ui', 'sans-serif'],
+        // Self-hosted via next/font (app/fonts.ts) — brand fonts per Deed Technologies guidelines.
+        sans: ['var(--font-roboto-flex)', 'var(--font-open-sans)', '-apple-system', 'BlinkMacSystemFont', "'Segoe UI'", 'system-ui', 'sans-serif'],
+        body: ['var(--font-open-sans)', '-apple-system', "'Segoe UI'", 'sans-serif'],
         mono: ['var(--font-dm-mono)', "'Cascadia Code'", 'ui-monospace', 'monospace'],
       },
       colors: {
@@ -50,38 +50,38 @@ module.exports = {
         },
         destructive: '#DC2626',
 
-        // ── Deep Blue (#2563EB) — primary action colour ───────────────────
+        // ── Deed Sky Blue (#00aeef) — primary action / brand accent ──────
         primary: {
-          50:  '#EFF6FF',
-          100: '#DBEAFE',
-          200: '#BFDBFE',
-          300: '#93C5FD',
-          400: '#60A5FA',
-          500: '#2563EB',   // DEED Blue — buttons, links, accents
-          600: '#1D4ED8',
-          700: '#1A44C8',
-          800: '#1E40AF',
-          900: '#1E3A8A',
+          50:  '#e6f8fe',
+          100: '#ccf1fd',
+          200: '#99e3fb',
+          300: '#66d4f8',
+          400: '#33c0f3',
+          500: '#00aeef',   // Deed Sky Blue — buttons, links, accents
+          600: '#0096cc',
+          700: '#007eaa',
+          800: '#006688',
+          900: '#004e66',
         },
-        // ── Deed Navy (#1A1F5E) — corporate anchor / sidebar ─────────────
+        // ── Deed Navy / Valhalla (#20164d) — corporate anchor / sidebar ──
         navy: {
-          50:  '#F0F1FA',
-          100: '#D0D3F0',
-          200: '#9EA5DC',
-          300: '#6C75C7',
-          400: '#3A46B2',
-          500: '#1A1F5E',   // Deed Navy — sidebar, headers
-          600: '#161A50',
-          700: '#111442',
-          800: '#0C0F33',
-          900: '#080A25',
+          50:  '#eeecf5',
+          100: '#cdc8e6',
+          200: '#9b91cd',
+          300: '#6a5ab4',
+          400: '#38239b',
+          500: '#20164d',   // Valhalla — sidebar, headers
+          600: '#18103a',
+          700: '#100b27',
+          800: '#080614',
+          900: '#040308',
         },
         accent: {
-          300: '#93C5FD',
-          400: '#60A5FA',
-          500: '#2563EB',   // alias to primary blue
-          600: '#1D4ED8',
-          700: '#1E40AF',
+          300: '#66d4f8',
+          400: '#33c0f3',
+          500: '#00aeef',   // alias to primary
+          600: '#0096cc',
+          700: '#007eaa',
         },
 
         // ── Neutral black / white ────────────────────────────────────────
