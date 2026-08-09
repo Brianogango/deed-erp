@@ -116,7 +116,7 @@ const REPORT_TABS: Array<{ id: ReportTab; label: string; icon: any }> = [
   { id: 'cash_position', label: 'Cash position', icon: faMoneyBillWave },
   { id: 'fx', label: 'FX revaluation', icon: faMoneyBillWave },
 ]
-const REPORT_TAB_IDS = new Set<MainTab>(['monthly', 'pl', 'bs', 'vat', 'ageing', 'trial_balance', 'cash_position', 'fx'])
+const REPORT_TAB_IDS = new Set<ReportTab>(['monthly', 'pl', 'bs', 'vat', 'ageing', 'trial_balance', 'cash_position', 'fx'])
 
 // ── Balance Sheet group lists ─────────────────────────────────────────────────
 const CA_GROUPS = [
@@ -329,21 +329,23 @@ function AccountingContent() {
   const defaultTab: MainTab = 'invoices'
   const queryTab = searchParams.get('tab') as MainTab | null
   const queryReport = searchParams.get('report') as ReportTab | null
-  const initialReportTab: ReportTab = (queryReport && REPORT_TAB_IDS.has(queryReport as MainTab) ? queryReport : REPORT_TAB_IDS.has(queryTab as MainTab) ? queryTab : 'pl') as ReportTab
-  const initialTab: MainTab = queryTab && REPORT_TAB_IDS.has(queryTab) ? 'reports' : (queryTab ?? defaultTab)
+  const isReportTabId = (value: string | null | undefined): value is ReportTab =>
+    !!value && REPORT_TAB_IDS.has(value as ReportTab)
+  const initialReportTab: ReportTab = (isReportTabId(queryReport) ? queryReport : isReportTabId(queryTab) ? queryTab : 'pl')
+  const initialTab: MainTab = isReportTabId(queryTab) ? 'reports' : (queryTab ?? defaultTab)
 
   const [tab, setLocalTab] = useState<MainTab>(initialTab)
   const [reportTab, setReportTab] = useState<ReportTab>(initialReportTab)
   const activeTab = tab === 'reports' ? reportTab : tab
 
   const setTab = (newTab: MainTab) => {
-    const nextTab = REPORT_TAB_IDS.has(newTab) ? 'reports' : newTab
-    if (REPORT_TAB_IDS.has(newTab)) setReportTab(newTab as ReportTab)
+    const nextTab = isReportTabId(newTab) ? 'reports' : newTab
+    if (isReportTabId(newTab)) setReportTab(newTab)
     setLocalTab(nextTab)
     setSelectedInvIds(new Set())
     const params = new URLSearchParams(searchParams.toString())
     params.set('tab', nextTab)
-    if (nextTab === 'reports') params.set('report', REPORT_TAB_IDS.has(newTab) ? newTab : reportTab)
+    if (nextTab === 'reports') params.set('report', isReportTabId(newTab) ? newTab : reportTab)
     else params.delete('report')
     router.replace(`${pathname}?${params.toString()}`, { scroll: false })
   }
@@ -362,13 +364,13 @@ function AccountingContent() {
     const urlReport = searchParams.get('report') as ReportTab | null
     // URL → local only. Do not depend on `tab`/`reportTab` or optimistic clicks
     // re-apply a stale URL (e.g. Bills snaps back to Invoices).
-    if (urlTab && REPORT_TAB_IDS.has(urlTab)) {
+    if (isReportTabId(urlTab)) {
       setLocalTab('reports')
-      setReportTab(urlTab as ReportTab)
+      setReportTab(urlTab)
     } else if (urlTab) {
       setLocalTab(urlTab)
     }
-    if (urlReport && REPORT_TAB_IDS.has(urlReport as MainTab)) {
+    if (isReportTabId(urlReport)) {
       setReportTab(urlReport)
     }
   }, [searchParams])
