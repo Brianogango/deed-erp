@@ -12,7 +12,8 @@ import { Badge, Modal, Field, Input, Select, Confirm, PanelHeader, SearchPicker,
 import { DataTable, type ColumnDef, type PrimaryFilterConfig } from '@/components/data-table'
 import { PrimaryActionButton, TablePageLayout, OperationalSummary, CompactInfoNotice, StatusBadge } from '@/components/erp'
 import { Fa, faBox, faBoxesStacked, faArrowDown, faBarcode, faTriangleExclamation, faWarehouse, faWrench, faPrint, faIndustry, faMagnifyingGlass } from '@/components/icons'
-import { printProductLabels, printSerialLabels } from '@/lib/product-label'
+import { printProductLabels } from '@/lib/product-label'
+import { printLabelsForSerialUnits } from '@/lib/inventory/print-serial-device-label'
 import { guardSpreadsheetFile, guardSpreadsheetRows, SpreadsheetGuardError } from '@/lib/spreadsheet-guard'
 import { Barcode } from '@/components/modules/Barcode'
 import { inferTrackingMethod, isSerialTracking, isStockTracked, isSerialOnlyCategory, type TrackingMethod } from '@/lib/inventory-identifiers'
@@ -225,10 +226,18 @@ function InventoryContent() {
 
   useEffect(() => {
     const syncTabFromUrl = () => {
-      const requested = resolveInventoryTab(new URLSearchParams(window.location.search).get('tab'))
+      const params = new URLSearchParams(window.location.search)
+      const requested = resolveInventoryTab(params.get('tab'))
       if (requested) {
         setTab(requested)
         if (requested === 'movements') setReportTab('movements')
+      }
+      // QR deep-link from serialized-device labels: /operations?tab=reports&serial=…
+      const serialQ = params.get('serial')?.trim()
+      if (serialQ) {
+        setTab('reports')
+        setReportTab('serial_lookup')
+        setSerialLookupQuery(serialQ)
       }
     }
     syncTabFromUrl()
@@ -1577,7 +1586,7 @@ function InventoryContent() {
                     <p className="font-mono text-[9px] text-primary-700">SKU: {s.sku ?? prod?.sku ?? '—'}</p>
                   </div>
                   <div className="flex flex-wrap gap-2">
-                    <ActionBtn label={<><Fa icon={faPrint} /> Label</>} tone="primary" onClick={() => printSerialLabels([{ serial: s.serial, barcode: s.barcode, productName: s.productName, sku: s.sku ?? prod?.sku ?? '', salePrice: prod?.salePrice, category: prod?.category }])} />
+                    <ActionBtn label={<><Fa icon={faPrint} /> Label</>} tone="primary" onClick={() => { void printLabelsForSerialUnits({ serials: [s], products }) }} />
                     <ActionBtn label={<><Fa icon={faTriangleExclamation} /> Move to With Issues</>} tone="warning" onClick={() => requestMoveToIssues(s)} />
                     <ActionBtn label={<><Fa icon={faWrench} /> Send for Refurbishment</>} tone="secondary" onClick={() => requestSendForRefurbishment(s)} />
                   </div>
@@ -1721,6 +1730,14 @@ function InventoryContent() {
                   key: 'category', label: 'Category', priority: 2, width: '120px',
                   render: product => <span className="text-xs text-text-3 erp-truncate" title={product.category}>{product.category}</span>,
                   exportValue: product => product.category,
+                },
+                {
+                  key: 'condition', label: 'Condition', priority: 2, width: '90px',
+                  render: product => {
+                    const t = (product as any).productType === 'new' ? 'New' : 'Refurb'
+                    return <span className="text-xs font-semibold text-text-2">{t}</span>
+                  },
+                  exportValue: product => ((product as any).productType === 'new' ? 'New' : 'Refurbished'),
                 },
                 {
                   key: 'available', label: 'Available', priority: 1, width: '100px', align: 'right',
@@ -3301,7 +3318,8 @@ function InventoryContent() {
                 <span>✓ Product name</span>
                 <span>✓ Sale price</span>
                 <span>✓ SKU</span>
-                <span>✓ Category</span>
+                <span>✓ Category · Condition</span>
+                <span>✓ Specs / description</span>
                 <span>✓ CODE128 barcode</span>
                 <span>✓ Deed brand mark</span>
               </div>
@@ -3572,7 +3590,7 @@ function InventoryContent() {
             )}
             {form.productKind !== 'service' && form.category !== 'Services' && (
               <>
-                <Field label="Condition (pricing)">
+                <Field label="Condition" hint="Printed on labels · selects New vs Refurb pricing band">
                   <Select
                     value={form.productType === 'new' ? 'new' : 'refurbished'}
                     onChange={v => {
