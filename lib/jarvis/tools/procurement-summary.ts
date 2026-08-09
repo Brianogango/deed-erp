@@ -44,7 +44,9 @@ export const procurementSummaryTool: ToolDefinition = {
 
     const openPOs = await prisma.purchaseOrder.findMany({
       where: { status: { in: ['draft', 'pending_approval', 'approved', 'partially_received'] } },
-      include: { supplier: { select: { name: true } } },
+      // vendor (Client) is the live vendor relation; supplier is a legacy FK
+      // no code path writes anymore — kept as a fallback for any old rows.
+      include: { vendor: { select: { name: true } }, supplier: { select: { name: true } } },
       orderBy: { orderDate: 'desc' },
       take: 20,
     })
@@ -54,7 +56,7 @@ export const procurementSummaryTool: ToolDefinition = {
       lowStockProducts: belowReorder,
       openPurchaseOrders: openPOs.map(po => ({
         poNumber: po.poNumber,
-        supplier: po.supplier.name,
+        supplier: po.vendor?.name ?? po.supplier?.name ?? 'Unknown vendor',
         status: po.status,
         totalAmount: po.totalAmount.toString(),
         expectedDate: po.expectedDate?.toISOString().slice(0, 10) ?? null,
