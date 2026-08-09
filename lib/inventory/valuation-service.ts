@@ -3,20 +3,20 @@ import prisma from '@/lib/prisma'
 import { createJournalEntry } from '@/lib/accounting/journal-service'
 import { loadAppState } from '@/lib/server-store'
 import { COMPANY_ACCOUNT_FALLBACKS, formatAccountLabel } from '@/lib/product-accounts'
+import { GRNI_ACCOUNT_LABEL } from '@/lib/accounting/vendor-bill-perpetual'
 import {
   applyDeliveryAverage,
   applyReceiptAverage,
   consumeBatchesFIFO,
   stockValuationEventKey,
   stockValuationJournalRef,
+  type StockValuationKind,
 } from '@/lib/inventory/valuation-math'
 
-/**
- * Deed CoA does not have a dedicated GRNI code. Accruals (3201) is the closest
- * live liability bucket for "goods received, bill not yet posted".
- */
-const GRNI_ACCOUNT_LABEL = '3201 - Accruals'
 const DEFAULT_WAREHOUSE_ID = 'main'
+const PRICE_DIFF_LABEL = formatAccountLabel(COMPANY_ACCOUNT_FALLBACKS.priceDifferenceAccountCode, [])
+const WRITE_OFF_LABEL = formatAccountLabel(COMPANY_ACCOUNT_FALLBACKS.writeOffAccountCode, [])
+const ADJUSTMENT_LABEL = formatAccountLabel(COMPANY_ACCOUNT_FALLBACKS.adjustmentAccountCode, [])
 
 export type CostingMethod = 'average' | 'fifo' | 'standard'
 
@@ -90,6 +90,195 @@ async function resolveStockAccounts(_productId: string) {
   return {
     inventoryLabel: formatAccountLabel(COMPANY_ACCOUNT_FALLBACKS.inventoryAccountCode, []),
     cogsLabel: formatAccountLabel(COMPANY_ACCOUNT_FALLBACKS.cogsAccountCode, []),
+  }
+}
+
+async function resolveStandardCost(productId: string): Promise<number | null> {
+  try {
+    const product = await prisma.product.findUnique({
+      where: { id: productId },
+      select: { costPrice: true },
+    })
+    if (product?.costPrice == null) return null
+    return Math.max(0, Number(product.costPrice) || 0)
+  } catch {
+    return null
+  }
+}
+
+async function applyOutboundValuation(params: {
+  productId: string
+  qty: number
+  kind: StockValuationKind
+  reference?: string
+  movementId?: string | null
+  userId?: string
+  postJournal?: boolean
+  /** Journal lines override (default COGS / Inventory for delivery). */
+  journalLines?: (totalCost: number, unitCost: number) => Array<{
+    accountLabel: string
+    label: string
+    debit: number
+    credit: number
+  }>
+  journalDescription?: string
+}) {
+  if (!(await productExists(params.productId))) {
+    return { skipped: true as const, reason: 'product_not_in_prisma' }
+  }
+
+  const costingMethod = await resolveCostingMethod(params.productId)
+  const eventKey = stockValuationEventKey(params.kind, params.reference || params.movementId || '', params.productId)
+  if (await alreadyProcessed(eventKey)) {
+    const valuation = await prisma.productValuation.findUnique({ where: { productId: params.productId } })
+    return {
+      skipped: true as const,
+      reason: 'already_processed',
+      averageCost: Number(valuation?.averageCost ?? 0),
+      unitCostUsed: Number(valuation?.averageCost ?? 0),
+      totalCost: 0,
+      totalQty: valuation?.totalQty ?? 0,
+      totalValue: Number(valuation?.totalValue ?? 0),
+    }
+  }
+
+  const qty = Math.max(0, Math.floor(Number(params.qty) || 0))
+  if (qty <= 0) throw new Error('Outbound qty must be positive')
+
+  let applied: ReturnType<typeof applyDeliveryAverage>
+  let unitCostUsed = 0
+
+  if (costingMethod === 'fifo') {
+    const batches = await prisma.inventoryBatch.findMany({
+      where: { productId: params.productId, quantityAvailable: { gt: 0 } },
+      orderBy: [{ receivedAt: 'asc' }, { createdAt: 'asc' }],
+    })
+    const fifo = consumeBatchesFIFO(
+      batches.map(b => ({
+        id: b.id,
+        quantityAvailable: b.quantityAvailable,
+        unitCost: Number(b.unitCost ?? 0),
+        receivedAt: b.receivedAt,
+      })),
+      qty,
+    )
+    if (fifo.shortfall > 0) {
+      throw new Error(`Insufficient FIFO layers for product ${params.productId}: short ${fifo.shortfall}`)
+    }
+    for (const line of fifo.consumed) {
+      const batch = batches.find(b => b.id === line.batchId)
+      if (!batch) continue
+      await prisma.inventoryBatch.update({
+        where: { id: line.batchId },
+        data: { quantityAvailable: batch.quantityAvailable - line.qty },
+      })
+    }
+    const synced = await syncProductValuationFromBatches(params.productId)
+    unitCostUsed = qty > 0 ? fifo.totalCost / qty : 0
+    applied = {
+      qty,
+      unitCostUsed,
+      totalCost: fifo.totalCost,
+      averageCost: synced.averageCost,
+      totalQty: synced.totalQty,
+      totalValue: synced.totalValue,
+    }
+  } else if (costingMethod === 'standard') {
+    const standard = (await resolveStandardCost(params.productId)) ?? 0
+    const valuation = await prisma.productValuation.findUnique({ where: { productId: params.productId } })
+    applied = applyDeliveryAverage({
+      currentQty: valuation?.totalQty ?? 0,
+      currentValue: Number(valuation?.totalValue ?? 0),
+      averageCost: standard > 0 ? standard : Number(valuation?.averageCost ?? 0),
+      qty,
+    })
+    unitCostUsed = applied.unitCostUsed
+    await prisma.productValuation.upsert({
+      where: { productId: params.productId },
+      create: {
+        productId: params.productId,
+        averageCost: unitCostUsed,
+        totalQty: applied.totalQty,
+        totalValue: applied.totalValue,
+      },
+      update: {
+        averageCost: unitCostUsed,
+        totalQty: applied.totalQty,
+        totalValue: applied.totalValue,
+      },
+    })
+  } else {
+    const valuation = await prisma.productValuation.findUnique({ where: { productId: params.productId } })
+    applied = applyDeliveryAverage({
+      currentQty: valuation?.totalQty ?? 0,
+      currentValue: Number(valuation?.totalValue ?? 0),
+      averageCost: Number(valuation?.averageCost ?? 0),
+      qty,
+    })
+    unitCostUsed = applied.unitCostUsed
+    await prisma.productValuation.upsert({
+      where: { productId: params.productId },
+      create: {
+        productId: params.productId,
+        averageCost: applied.averageCost,
+        totalQty: applied.totalQty,
+        totalValue: applied.totalValue,
+      },
+      update: {
+        averageCost: applied.averageCost,
+        totalQty: applied.totalQty,
+        totalValue: applied.totalValue,
+      },
+    })
+  }
+
+  if (params.movementId) {
+    try {
+      await prisma.stockMovement.update({
+        where: { id: params.movementId },
+        data: { unitCost: unitCostUsed },
+      })
+    } catch { /* ignore */ }
+  }
+
+  if (params.postJournal !== false && applied.totalCost > 0) {
+    const { inventoryLabel, cogsLabel } = await resolveStockAccounts(params.productId)
+    const lines = params.journalLines
+      ? params.journalLines(applied.totalCost, unitCostUsed)
+      : [
+          { accountLabel: cogsLabel, label: 'COGS', debit: applied.totalCost, credit: 0 },
+          { accountLabel: inventoryLabel, label: 'Inventory reduction', debit: 0, credit: applied.totalCost },
+        ]
+    await createJournalEntry({
+      ref: stockValuationJournalRef(params.kind, params.reference || params.movementId || '', params.productId),
+      journalCode: 'STK',
+      description: params.journalDescription
+        || `Stock ${params.kind} ${applied.qty} @ ${unitCostUsed}${costingMethod === 'fifo' ? ' FIFO' : costingMethod === 'standard' ? ' std' : ' avg'}`,
+      sourceType: `stock_${params.kind}`,
+      sourceId: params.reference || params.movementId || params.productId,
+      createdById: params.userId,
+      skipIfExists: true,
+      lines,
+    })
+  }
+
+  await markProcessed({
+    eventKey,
+    kind: params.kind,
+    productId: params.productId,
+    qty: applied.qty,
+    unitCost: unitCostUsed,
+    reference: params.reference,
+  })
+
+  return {
+    skipped: false as const,
+    costingMethod,
+    averageCost: applied.averageCost,
+    unitCostUsed,
+    totalCost: applied.totalCost,
+    totalQty: applied.totalQty,
+    totalValue: applied.totalValue,
   }
 }
 
@@ -178,8 +367,15 @@ export async function processStockReceipt(params: {
   }
 
   const qty = Math.max(0, Math.floor(Number(params.qty) || 0))
-  const unitCost = Math.max(0, Number(params.unitCost) || 0)
+  const receiptCost = Math.max(0, Number(params.unitCost) || 0)
   if (qty <= 0) throw new Error('Receipt qty must be positive')
+
+  // Standard costing values inventory at product.costPrice; PO/receipt cost
+  // vs standard posts to price difference immediately (GRNI still at receipt cost).
+  const standardCost = costingMethod === 'standard'
+    ? ((await resolveStandardCost(params.productId)) ?? receiptCost)
+    : receiptCost
+  const unitCost = costingMethod === 'standard' ? standardCost : receiptCost
 
   let applied: ReturnType<typeof applyReceiptAverage>
   if (costingMethod === 'fifo') {
@@ -234,20 +430,29 @@ export async function processStockReceipt(params: {
     }
   }
 
-  if (params.postJournal !== false && applied.totalCost > 0) {
+  if (params.postJournal !== false && (applied.totalCost > 0 || receiptCost * qty > 0)) {
     const { inventoryLabel } = await resolveStockAccounts(params.productId)
+    const invDebit = applied.totalCost
+    const grniCredit = Math.round(receiptCost * qty * 100) / 100
+    const variance = Math.round((grniCredit - invDebit) * 100) / 100
+    const lines = [
+      { accountLabel: inventoryLabel, label: 'Inventory receipt', debit: invDebit, credit: 0 },
+      ...(variance > 0
+        ? [{ accountLabel: PRICE_DIFF_LABEL, label: 'Purchase price variance', debit: variance, credit: 0 }]
+        : variance < 0
+          ? [{ accountLabel: PRICE_DIFF_LABEL, label: 'Purchase price variance', debit: 0, credit: -variance }]
+          : []),
+      { accountLabel: GRNI_ACCOUNT_LABEL, label: 'GRNI / Accruals', debit: 0, credit: grniCredit || invDebit },
+    ]
     await createJournalEntry({
       ref: stockValuationJournalRef('receipt', params.reference || params.movementId || '', params.productId),
       journalCode: 'STK',
-      description: `Stock receipt ${applied.qty} @ ${applied.unitCost}${costingMethod === 'fifo' ? ' (FIFO)' : ''}`,
+      description: `Stock receipt ${applied.qty} @ ${applied.unitCost}${costingMethod === 'fifo' ? ' (FIFO)' : costingMethod === 'standard' ? ' (std)' : ''}`,
       sourceType: 'stock_receipt',
       sourceId: params.reference || params.movementId || params.productId,
       createdById: params.userId,
       skipIfExists: true,
-      lines: [
-        { accountLabel: inventoryLabel, label: 'Inventory receipt', debit: applied.totalCost, credit: 0 },
-        { accountLabel: GRNI_ACCOUNT_LABEL, label: 'GRNI / Accruals', debit: 0, credit: applied.totalCost },
-      ],
+      lines,
     })
   }
 
@@ -270,7 +475,7 @@ export async function processStockReceipt(params: {
 }
 
 /**
- * Delivery / outbound: reduce valuation at average or FIFO cost; post COGS.
+ * Delivery / outbound: reduce valuation at average, FIFO, or standard cost; post COGS.
  * Idempotent on (reference, productId). Never touches app_state blobs.
  */
 export async function processStockDelivery(params: {
@@ -281,75 +486,98 @@ export async function processStockDelivery(params: {
   userId?: string
   postJournal?: boolean
 }) {
+  return applyOutboundValuation({
+    productId: params.productId,
+    qty: params.qty,
+    kind: 'delivery',
+    reference: params.reference,
+    movementId: params.movementId,
+    userId: params.userId,
+    postJournal: params.postJournal,
+  })
+}
+
+/** POS sale — same COGS math as delivery, separate idempotency key. */
+export async function processStockPosSale(params: {
+  productId: string
+  qty: number
+  reference?: string
+  userId?: string
+  postJournal?: boolean
+}) {
+  return applyOutboundValuation({
+    productId: params.productId,
+    qty: params.qty,
+    kind: 'pos',
+    reference: params.reference,
+    userId: params.userId,
+    postJournal: params.postJournal,
+    journalDescription: `POS sale ${params.qty}`,
+  })
+}
+
+/**
+ * Customer RMA receive — reverse delivery COGS (Dr Inventory / Cr COGS).
+ */
+export async function processStockCustomerReturn(params: {
+  productId: string
+  qty: number
+  reference?: string
+  userId?: string
+  postJournal?: boolean
+  unitCost?: number
+}) {
   if (!(await productExists(params.productId))) {
     return { skipped: true as const, reason: 'product_not_in_prisma' }
   }
-
   const costingMethod = await resolveCostingMethod(params.productId)
-  const eventKey = stockValuationEventKey('delivery', params.reference || params.movementId || '', params.productId)
+  const eventKey = stockValuationEventKey('customer_return', params.reference || '', params.productId)
   if (await alreadyProcessed(eventKey)) {
     const valuation = await prisma.productValuation.findUnique({ where: { productId: params.productId } })
     return {
       skipped: true as const,
       reason: 'already_processed',
       averageCost: Number(valuation?.averageCost ?? 0),
-      unitCostUsed: Number(valuation?.averageCost ?? 0),
-      totalCost: 0,
       totalQty: valuation?.totalQty ?? 0,
       totalValue: Number(valuation?.totalValue ?? 0),
     }
   }
 
   const qty = Math.max(0, Math.floor(Number(params.qty) || 0))
-  if (qty <= 0) throw new Error('Delivery qty must be positive')
+  if (qty <= 0) throw new Error('Return qty must be positive')
 
-  let applied: ReturnType<typeof applyDeliveryAverage>
-  let unitCostUsed = 0
+  const valuation = await prisma.productValuation.findUnique({ where: { productId: params.productId } })
+  const unitCost = Math.max(
+    0,
+    Number(params.unitCost)
+      || (costingMethod === 'standard' ? ((await resolveStandardCost(params.productId)) ?? 0) : 0)
+      || Number(valuation?.averageCost ?? 0),
+  )
 
+  let applied: ReturnType<typeof applyReceiptAverage>
   if (costingMethod === 'fifo') {
-    const batches = await prisma.inventoryBatch.findMany({
-      where: { productId: params.productId, quantityAvailable: { gt: 0 } },
-      orderBy: [{ receivedAt: 'asc' }, { createdAt: 'asc' }],
-    })
-    const fifo = consumeBatchesFIFO(
-      batches.map(b => ({
-        id: b.id,
-        quantityAvailable: b.quantityAvailable,
-        unitCost: Number(b.unitCost ?? 0),
-        receivedAt: b.receivedAt,
-      })),
+    await upsertFifoBatch({
+      productId: params.productId,
       qty,
-    )
-    if (fifo.shortfall > 0) {
-      throw new Error(`Insufficient FIFO layers for product ${params.productId}: short ${fifo.shortfall}`)
-    }
-    for (const line of fifo.consumed) {
-      const batch = batches.find(b => b.id === line.batchId)
-      if (!batch) continue
-      await prisma.inventoryBatch.update({
-        where: { id: line.batchId },
-        data: { quantityAvailable: batch.quantityAvailable - line.qty },
-      })
-    }
+      unitCost,
+      reference: String(params.reference || 'crtn'),
+    })
     const synced = await syncProductValuationFromBatches(params.productId)
-    unitCostUsed = qty > 0 ? fifo.totalCost / qty : 0
     applied = {
       qty,
-      unitCostUsed,
-      totalCost: fifo.totalCost,
+      unitCost,
       averageCost: synced.averageCost,
       totalQty: synced.totalQty,
       totalValue: synced.totalValue,
+      totalCost: qty * unitCost,
     }
   } else {
-    const valuation = await prisma.productValuation.findUnique({ where: { productId: params.productId } })
-    applied = applyDeliveryAverage({
+    applied = applyReceiptAverage({
       currentQty: valuation?.totalQty ?? 0,
       currentValue: Number(valuation?.totalValue ?? 0),
-      averageCost: Number(valuation?.averageCost ?? 0),
       qty,
+      unitCost,
     })
-    unitCostUsed = applied.unitCostUsed
     await prisma.productValuation.upsert({
       where: { productId: params.productId },
       create: {
@@ -366,38 +594,29 @@ export async function processStockDelivery(params: {
     })
   }
 
-  if (params.movementId) {
-    try {
-      await prisma.stockMovement.update({
-        where: { id: params.movementId },
-        data: { unitCost: unitCostUsed },
-      })
-    } catch { /* ignore */ }
-  }
-
   if (params.postJournal !== false && applied.totalCost > 0) {
     const { inventoryLabel, cogsLabel } = await resolveStockAccounts(params.productId)
     await createJournalEntry({
-      ref: stockValuationJournalRef('delivery', params.reference || params.movementId || '', params.productId),
+      ref: stockValuationJournalRef('customer_return', params.reference || '', params.productId),
       journalCode: 'STK',
-      description: `Stock delivery ${applied.qty} @ ${unitCostUsed}${costingMethod === 'fifo' ? ' FIFO' : ' avg'}`,
-      sourceType: 'stock_delivery',
-      sourceId: params.reference || params.movementId || params.productId,
+      description: `Customer return ${applied.qty} @ ${unitCost}`,
+      sourceType: 'stock_customer_return',
+      sourceId: params.reference || params.productId,
       createdById: params.userId,
       skipIfExists: true,
       lines: [
-        { accountLabel: cogsLabel, label: 'COGS', debit: applied.totalCost, credit: 0 },
-        { accountLabel: inventoryLabel, label: 'Inventory reduction', debit: 0, credit: applied.totalCost },
+        { accountLabel: inventoryLabel, label: 'Inventory restore', debit: applied.totalCost, credit: 0 },
+        { accountLabel: cogsLabel, label: 'COGS reversal', debit: 0, credit: applied.totalCost },
       ],
     })
   }
 
   await markProcessed({
     eventKey,
-    kind: 'delivery',
+    kind: 'customer_return',
     productId: params.productId,
     qty: applied.qty,
-    unitCost: unitCostUsed,
+    unitCost,
     reference: params.reference,
   })
 
@@ -405,9 +624,220 @@ export async function processStockDelivery(params: {
     skipped: false as const,
     costingMethod,
     averageCost: applied.averageCost,
-    unitCostUsed,
+    unitCostUsed: unitCost,
     totalCost: applied.totalCost,
     totalQty: applied.totalQty,
     totalValue: applied.totalValue,
   }
+}
+
+/**
+ * Vendor RTV — remove inventory asset and restore GRNI (Dr GRNI / Cr Inventory).
+ * Pair with perpetual vendor credit note (Dr AP / Cr GRNI).
+ */
+export async function processStockVendorReturn(params: {
+  productId: string
+  qty: number
+  reference?: string
+  userId?: string
+  postJournal?: boolean
+}) {
+  const { inventoryLabel } = await resolveStockAccounts(params.productId)
+  return applyOutboundValuation({
+    productId: params.productId,
+    qty: params.qty,
+    kind: 'vendor_return',
+    reference: params.reference,
+    userId: params.userId,
+    postJournal: params.postJournal,
+    journalDescription: `Vendor return ${params.qty}`,
+    journalLines: (totalCost) => [
+      { accountLabel: GRNI_ACCOUNT_LABEL, label: 'GRNI on vendor return', debit: totalCost, credit: 0 },
+      { accountLabel: inventoryLabel, label: 'Inventory reduction', debit: 0, credit: totalCost },
+    ],
+  })
+}
+
+/** Stock adjustment add/subtract — updates valuation and posts STK journal. */
+export async function processStockAdjustment(params: {
+  productId: string
+  qty: number
+  type: 'add' | 'subtract'
+  reference?: string
+  userId?: string
+  postJournal?: boolean
+  unitCost?: number
+}) {
+  const qty = Math.max(0, Math.floor(Number(params.qty) || 0))
+  if (qty <= 0) throw new Error('Adjustment qty must be positive')
+
+  if (params.type === 'subtract') {
+    const { inventoryLabel } = await resolveStockAccounts(params.productId)
+    return applyOutboundValuation({
+      productId: params.productId,
+      qty,
+      kind: 'adjustment_sub',
+      reference: params.reference,
+      userId: params.userId,
+      postJournal: params.postJournal,
+      journalDescription: `Stock write-off ${qty}`,
+      journalLines: (totalCost) => [
+        { accountLabel: WRITE_OFF_LABEL, label: 'Stock write-off', debit: totalCost, credit: 0 },
+        { accountLabel: inventoryLabel, label: 'Inventory reduction', debit: 0, credit: totalCost },
+      ],
+    })
+  }
+
+  // add
+  if (!(await productExists(params.productId))) {
+    return { skipped: true as const, reason: 'product_not_in_prisma' }
+  }
+  const costingMethod = await resolveCostingMethod(params.productId)
+  const eventKey = stockValuationEventKey('adjustment_add', params.reference || '', params.productId)
+  if (await alreadyProcessed(eventKey)) {
+    const valuation = await prisma.productValuation.findUnique({ where: { productId: params.productId } })
+    return {
+      skipped: true as const,
+      reason: 'already_processed',
+      averageCost: Number(valuation?.averageCost ?? 0),
+      totalQty: valuation?.totalQty ?? 0,
+      totalValue: Number(valuation?.totalValue ?? 0),
+    }
+  }
+
+  const valuation = await prisma.productValuation.findUnique({ where: { productId: params.productId } })
+  const unitCost = Math.max(
+    0,
+    Number(params.unitCost)
+      || (costingMethod === 'standard' ? ((await resolveStandardCost(params.productId)) ?? 0) : 0)
+      || Number(valuation?.averageCost ?? 0),
+  )
+
+  let applied: ReturnType<typeof applyReceiptAverage>
+  if (costingMethod === 'fifo') {
+    await upsertFifoBatch({
+      productId: params.productId,
+      qty,
+      unitCost,
+      reference: String(params.reference || 'adj'),
+    })
+    const synced = await syncProductValuationFromBatches(params.productId)
+    applied = {
+      qty,
+      unitCost,
+      averageCost: synced.averageCost,
+      totalQty: synced.totalQty,
+      totalValue: synced.totalValue,
+      totalCost: qty * unitCost,
+    }
+  } else {
+    applied = applyReceiptAverage({
+      currentQty: valuation?.totalQty ?? 0,
+      currentValue: Number(valuation?.totalValue ?? 0),
+      qty,
+      unitCost,
+    })
+    await prisma.productValuation.upsert({
+      where: { productId: params.productId },
+      create: {
+        productId: params.productId,
+        averageCost: applied.averageCost,
+        totalQty: applied.totalQty,
+        totalValue: applied.totalValue,
+      },
+      update: {
+        averageCost: applied.averageCost,
+        totalQty: applied.totalQty,
+        totalValue: applied.totalValue,
+      },
+    })
+  }
+
+  if (params.postJournal !== false && applied.totalCost > 0) {
+    const { inventoryLabel } = await resolveStockAccounts(params.productId)
+    await createJournalEntry({
+      ref: stockValuationJournalRef('adjustment_add', params.reference || '', params.productId),
+      journalCode: 'STK',
+      description: `Stock gain ${applied.qty} @ ${unitCost}`,
+      sourceType: 'stock_adjustment',
+      sourceId: params.reference || params.productId,
+      createdById: params.userId,
+      skipIfExists: true,
+      lines: [
+        { accountLabel: inventoryLabel, label: 'Inventory gain', debit: applied.totalCost, credit: 0 },
+        { accountLabel: ADJUSTMENT_LABEL, label: 'Inventory variance', debit: 0, credit: applied.totalCost },
+      ],
+    })
+  }
+
+  await markProcessed({
+    eventKey,
+    kind: 'adjustment_add',
+    productId: params.productId,
+    qty: applied.qty,
+    unitCost,
+    reference: params.reference,
+  })
+
+  return {
+    skipped: false as const,
+    costingMethod,
+    averageCost: applied.averageCost,
+    unitCostUsed: unitCost,
+    totalCost: applied.totalCost,
+    totalQty: applied.totalQty,
+    totalValue: applied.totalValue,
+  }
+}
+
+/** Seed valuation for opening stock (Dr Inventory / Cr Opening equity or variance). */
+export async function processOpeningStockValuation(params: {
+  productId: string
+  qty: number
+  unitCost: number
+  reference?: string
+  userId?: string
+  postJournal?: boolean
+}) {
+  return processStockReceipt({
+    productId: params.productId,
+    qty: params.qty,
+    unitCost: params.unitCost,
+    reference: params.reference || 'OPENING',
+    userId: params.userId,
+    postJournal: false, // opening uses a dedicated journal below when enabled
+  }).then(async (result) => {
+    if (result.skipped || params.postJournal === false) return result
+    const qty = Math.max(0, Math.floor(Number(params.qty) || 0))
+    const unitCost = Math.max(0, Number(params.unitCost) || 0)
+    const total = Math.round(qty * unitCost * 100) / 100
+    if (total <= 0) return result
+    const { inventoryLabel } = await resolveStockAccounts(params.productId)
+    const eventKey = stockValuationEventKey('opening', params.reference || 'OPENING', params.productId)
+    // Receipt mark already used VAL/RCV — also mark opening journal separately via skipIfExists
+    await createJournalEntry({
+      ref: stockValuationJournalRef('opening', params.reference || 'OPENING', params.productId),
+      journalCode: 'STK',
+      description: `Opening stock ${qty} @ ${unitCost}`,
+      sourceType: 'stock_opening',
+      sourceId: params.reference || 'OPENING',
+      createdById: params.userId,
+      skipIfExists: true,
+      lines: [
+        { accountLabel: inventoryLabel, label: 'Opening inventory', debit: total, credit: 0 },
+        { accountLabel: ADJUSTMENT_LABEL, label: 'Opening stock equity/variance', debit: 0, credit: total },
+      ],
+    })
+    try {
+      await markProcessed({
+        eventKey,
+        kind: 'opening',
+        productId: params.productId,
+        qty,
+        unitCost,
+        reference: params.reference || 'OPENING',
+      })
+    } catch { /* ignore */ }
+    return result
+  })
 }

@@ -41,17 +41,38 @@ export function applyDeliveryAverage(params: {
   return { qty, unitCostUsed: avgCost, totalCost, averageCost, totalQty: newQty, totalValue: newValue }
 }
 
-/** Stable idempotency keys / journal refs for stock valuation events. */
-export function stockValuationEventKey(kind: 'receipt' | 'delivery', reference: string, productId: string) {
-  const ref = String(reference || '').trim() || 'noref'
-  const pid = String(productId || '').trim() || 'noprod'
-  return `VAL/${kind === 'receipt' ? 'RCV' : 'DEL'}/${ref}/${pid}`.slice(0, 120)
+export type StockValuationKind =
+  | 'receipt'
+  | 'delivery'
+  | 'customer_return'
+  | 'vendor_return'
+  | 'adjustment_add'
+  | 'adjustment_sub'
+  | 'opening'
+  | 'pos'
+
+const KIND_TOKEN: Record<StockValuationKind, string> = {
+  receipt: 'RCV',
+  delivery: 'DEL',
+  customer_return: 'CRTN',
+  vendor_return: 'VRTN',
+  adjustment_add: 'ADJ+',
+  adjustment_sub: 'ADJ-',
+  opening: 'OPEN',
+  pos: 'POS',
 }
 
-export function stockValuationJournalRef(kind: 'receipt' | 'delivery', reference: string, productId: string) {
+/** Stable idempotency keys / journal refs for stock valuation events. */
+export function stockValuationEventKey(kind: StockValuationKind, reference: string, productId: string) {
   const ref = String(reference || '').trim() || 'noref'
   const pid = String(productId || '').trim() || 'noprod'
-  return `JRN/STK/${kind === 'receipt' ? 'RCV' : 'DEL'}/${ref}/${pid}`.slice(0, 80)
+  return `VAL/${KIND_TOKEN[kind]}/${ref}/${pid}`.slice(0, 120)
+}
+
+export function stockValuationJournalRef(kind: StockValuationKind, reference: string, productId: string) {
+  const ref = String(reference || '').trim() || 'noref'
+  const pid = String(productId || '').trim() || 'noprod'
+  return `JRN/STK/${KIND_TOKEN[kind]}/${ref}/${pid}`.slice(0, 80)
 }
 
 export type FifoBatchLayer = {

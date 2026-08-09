@@ -1,6 +1,14 @@
 import 'server-only'
 import { loadAppState } from '@/lib/server-store'
-import { processStockDelivery, processStockReceipt } from '@/lib/inventory/valuation-service'
+import {
+  processOpeningStockValuation,
+  processStockAdjustment,
+  processStockCustomerReturn,
+  processStockDelivery,
+  processStockPosSale,
+  processStockReceipt,
+  processStockVendorReturn,
+} from '@/lib/inventory/valuation-service'
 
 type ReceiptLine = {
   productId?: string
@@ -15,7 +23,7 @@ type PoLine = {
   qty?: number
 }
 
-async function isAutomatedValuationEnabled(): Promise<boolean> {
+export async function isAutomatedValuationEnabled(): Promise<boolean> {
   try {
     const state = await loadAppState(['deed_systemSettings'])
     const ss = state.deed_systemSettings as { invAutomatedValuation?: boolean } | null
@@ -24,8 +32,16 @@ async function isAutomatedValuationEnabled(): Promise<boolean> {
   return true
 }
 
+function collectWarnings(results: any[]) {
+  return results
+    .filter((r: any) => r.error || r.result?.reason === 'product_not_in_prisma' || r.result?.skipped)
+    .map((r: any) => r.error
+      ? `${r.productId}: ${r.error}`
+      : `${r.productId}: valuation skipped (${r.result?.reason || 'unknown'})`)
+}
+
 /**
- * After a GRN is validated, post weighted-average valuation (+ STK journal)
+ * After a GRN is validated, post weighted-average / FIFO / standard valuation (+ STK journal)
  * using PO unit prices. Idempotent; never mutates app_state.
  */
 export async function postReceiptValuationFromBlobs(params: {
@@ -71,18 +87,11 @@ export async function postReceiptValuationFromBlobs(params: {
     }
   }
 
-  const warnings = results
-    .filter((r: any) => r.error || r.result?.reason === 'product_not_in_prisma' || r.result?.skipped)
-    .map((r: any) => r.error
-      ? `${r.productId}: ${r.error}`
-      : `${r.productId}: valuation skipped (${r.result?.reason || 'unknown'})`)
-
-  return { ok: true as const, receiptRef: receipt.ref, results, warnings }
+  return { ok: true as const, receiptRef: receipt.ref, results, warnings: collectWarnings(results) }
 }
 
 /**
  * After a delivery is validated (status done), reduce valuation and post COGS.
- * Uses qtyDone on lines. Idempotent; never mutates app_state.
  */
 export async function postDeliveryValuationFromPayload(params: {
   deliveryRef: string
@@ -111,10 +120,154 @@ export async function postDeliveryValuationFromPayload(params: {
       results.push({ productId, qty, error: err instanceof Error ? err.message : 'failed' })
     }
   }
-  const warnings = results
-    .filter((r: any) => r.error || r.result?.reason === 'product_not_in_prisma' || r.result?.skipped)
-    .map((r: any) => r.error
-      ? `${r.productId}: ${r.error}`
-      : `${r.productId}: valuation skipped (${r.result?.reason || 'unknown'})`)
-  return { ok: true as const, results, warnings }
+  return { ok: true as const, results, warnings: collectWarnings(results) }
+}
+
+export async function postPosValuationFromPayload(params: {
+  orderRef: string
+  lines: Array<{ productId?: string; qty?: number }>
+  userId?: string
+}) {
+  if (!(await isAutomatedValuationEnabled())) {
+    return { ok: false as const, reason: 'valuation_disabled', results: [] as any[], warnings: [] as string[] }
+  }
+  const results = []
+  for (const line of params.lines || []) {
+    const productId = String(line.productId || '').trim()
+    if (!productId) continue
+    const qty = Math.max(0, Math.floor(Number(line.qty) || 0))
+    if (qty <= 0) continue
+    try {
+      const result = await processStockPosSale({
+        productId,
+        qty,
+        reference: params.orderRef,
+        userId: params.userId,
+        postJournal: true,
+      })
+      results.push({ productId, qty, result })
+    } catch (err) {
+      results.push({ productId, qty, error: err instanceof Error ? err.message : 'failed' })
+    }
+  }
+  return { ok: true as const, results, warnings: collectWarnings(results) }
+}
+
+export async function postCustomerReturnValuation(params: {
+  returnRef: string
+  lines: Array<{ productId?: string; qty?: number }>
+  userId?: string
+}) {
+  if (!(await isAutomatedValuationEnabled())) {
+    return { ok: false as const, reason: 'valuation_disabled', results: [] as any[], warnings: [] as string[] }
+  }
+  const results = []
+  for (const line of params.lines || []) {
+    const productId = String(line.productId || '').trim()
+    if (!productId) continue
+    const qty = Math.max(0, Math.floor(Number(line.qty) || 0))
+    if (qty <= 0) continue
+    try {
+      const result = await processStockCustomerReturn({
+        productId,
+        qty,
+        reference: params.returnRef,
+        userId: params.userId,
+        postJournal: true,
+      })
+      results.push({ productId, qty, result })
+    } catch (err) {
+      results.push({ productId, qty, error: err instanceof Error ? err.message : 'failed' })
+    }
+  }
+  return { ok: true as const, results, warnings: collectWarnings(results) }
+}
+
+export async function postVendorReturnValuation(params: {
+  returnRef: string
+  lines: Array<{ productId?: string; qty?: number; serialIds?: string[]; requiresSerial?: boolean }>
+  userId?: string
+}) {
+  if (!(await isAutomatedValuationEnabled())) {
+    return { ok: false as const, reason: 'valuation_disabled', results: [] as any[], warnings: [] as string[] }
+  }
+  const results = []
+  for (const line of params.lines || []) {
+    const productId = String(line.productId || '').trim()
+    if (!productId) continue
+    const qty = line.requiresSerial
+      ? (Array.isArray(line.serialIds) ? line.serialIds.length : 0)
+      : Math.max(0, Math.floor(Number(line.qty) || 0))
+    if (qty <= 0) continue
+    try {
+      const result = await processStockVendorReturn({
+        productId,
+        qty,
+        reference: params.returnRef,
+        userId: params.userId,
+        postJournal: true,
+      })
+      results.push({ productId, qty, result })
+    } catch (err) {
+      results.push({ productId, qty, error: err instanceof Error ? err.message : 'failed' })
+    }
+  }
+  return { ok: true as const, results, warnings: collectWarnings(results) }
+}
+
+export async function postAdjustmentValuation(params: {
+  adjustmentRef: string
+  productId: string
+  type: 'add' | 'subtract'
+  qty: number
+  unitCost?: number
+  userId?: string
+}) {
+  if (!(await isAutomatedValuationEnabled())) {
+    return { ok: false as const, reason: 'valuation_disabled' }
+  }
+  try {
+    const result = await processStockAdjustment({
+      productId: params.productId,
+      qty: params.qty,
+      type: params.type,
+      reference: params.adjustmentRef,
+      userId: params.userId,
+      unitCost: params.unitCost,
+      postJournal: true,
+    })
+    return { ok: true as const, result }
+  } catch (err) {
+    return { ok: false as const, reason: err instanceof Error ? err.message : 'failed' }
+  }
+}
+
+export async function postOpeningStockValuation(params: {
+  items: Array<{ productId: string; qty: number; unitCost?: number }>
+  reference?: string
+  userId?: string
+}) {
+  if (!(await isAutomatedValuationEnabled())) {
+    return { ok: false as const, reason: 'valuation_disabled', results: [] as any[] }
+  }
+  const results = []
+  for (const item of params.items || []) {
+    const productId = String(item.productId || '').trim()
+    const qty = Math.max(0, Math.floor(Number(item.qty) || 0))
+    if (!productId || qty <= 0) continue
+    try {
+      const result = await processOpeningStockValuation({
+        productId,
+        qty,
+        unitCost: Math.max(0, Number(item.unitCost) || 0),
+        reference: params.reference || 'OPENING',
+        userId: params.userId,
+        postJournal: true,
+      })
+      results.push({ productId, qty, result })
+    } catch (err) {
+      results.push({ productId, qty, error: err instanceof Error ? err.message : 'failed' })
+    }
+  }
+  return { ok: true as const, results, warnings: collectWarnings(results) }
 }

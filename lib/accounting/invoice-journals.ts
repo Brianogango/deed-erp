@@ -1,6 +1,12 @@
 import 'server-only'
 import { persistStoreJournalEntry } from '@/lib/accounting/journal-service'
 import { COMPANY_ACCOUNT_FALLBACKS, formatAccountLabel } from '@/lib/product-accounts'
+import {
+  buildVendorBillPerpetualLines,
+  buildVendorCreditPerpetualLines,
+} from '@/lib/accounting/vendor-bill-perpetual'
+import { loadAppState } from '@/lib/server-store'
+import { inferProductKind } from '@/lib/product-kind'
 
 type InvoiceLike = {
   id: string
@@ -14,7 +20,15 @@ type InvoiceLike = {
   subtotal?: number
   taxTotal?: number
   taxAmount?: number
-  lines?: Array<{ productId?: string; subtotal?: number; accountCode?: string; description?: string }>
+  purchaseOrderId?: string
+  lines?: Array<{
+    productId?: string
+    qty?: number
+    unitPrice?: number
+    subtotal?: number
+    accountCode?: string
+    description?: string
+  }>
 }
 
 function money(n: unknown) {
@@ -31,9 +45,50 @@ function methodAccountLabel(method?: string): string {
   }
 }
 
+async function isPerpetualValuationEnabled(): Promise<boolean> {
+  try {
+    const state = await loadAppState(['deed_systemSettings'])
+    const ss = state.deed_systemSettings as { invAutomatedValuation?: boolean } | null
+    if (ss && typeof ss === 'object' && ss.invAutomatedValuation === false) return false
+  } catch { /* default on */ }
+  return true
+}
+
+async function resolveVendorBillLineMeta(invoice: InvoiceLike) {
+  const state = await loadAppState(['deed_products', 'deed_purchaseOrders'])
+  const products = Array.isArray(state.deed_products) ? state.deed_products as any[] : []
+  const pos = Array.isArray(state.deed_purchaseOrders) ? state.deed_purchaseOrders as any[] : []
+  const po = invoice.purchaseOrderId
+    ? pos.find(p => p?.id === invoice.purchaseOrderId)
+    : null
+  const poLines: any[] = Array.isArray(po?.lines) ? po.lines : []
+
+  return (invoice.lines || []).map(line => {
+    const product = products.find(p => p?.id === line.productId)
+    const kind = inferProductKind({
+      productKind: product?.productKind,
+      category: product?.category,
+      unit: product?.unit,
+      trackingMethod: product?.trackingMethod,
+      requiresSerial: product?.requiresSerial,
+    })
+    const isStocked = kind === 'storable' || kind === 'consumable'
+    const poLine = poLines.find(l => l.productId && line.productId && l.productId === line.productId)
+    return {
+      productId: line.productId,
+      qty: Math.abs(Number(line.qty) || 0),
+      unitPrice: Math.abs(Number(line.unitPrice) || 0),
+      subtotal: Math.abs(Number(line.subtotal) || 0),
+      accountCode: line.accountCode,
+      isStocked: Boolean(invoice.purchaseOrderId) && isStocked,
+      receiptUnitCost: Math.max(0, Number(poLine?.unitPrice ?? line.unitPrice) || 0),
+    }
+  })
+}
+
 /**
  * Build + persist invoice posting journal to Prisma (idempotent on ref).
- * Uses existing Deed CoA labels (1800 AR, revenue buckets, VAT) — not a greenfield CoA.
+ * Vendor bills with PO + automated valuation clear GRNI instead of double-expensing.
  */
 export async function postInvoiceJournalToPrisma(invoice: InvoiceLike, opts?: { createdById?: string }) {
   const ref = String(invoice.ref || invoice.invoiceNumber || invoice.id)
@@ -42,20 +97,41 @@ export async function postInvoiceJournalToPrisma(invoice: InvoiceLike, opts?: { 
   const subtotal = money(invoice.subtotal ?? total)
   const tax = money(invoice.taxTotal ?? invoice.taxAmount)
   const isVendor = invoice.type === 'vendor_bill'
+  const isCredit = isVendor && total < 0
 
   if (isVendor) {
-    const costLabel = formatAccountLabel(COMPANY_ACCOUNT_FALLBACKS.costAccountCode, [])
-    const lines = [
-      { account: costLabel, description: `Purchase: ${partner}`, debit: subtotal, credit: 0 },
-      ...(tax > 0 ? [{ account: '1150 - VAT Input', description: `VAT input on ${ref}`, debit: tax, credit: 0 }] : []),
-      { account: '3000 - Accounts Payable', description: `AP: ${partner}`, debit: 0, credit: total },
-    ]
+    const perpetual = Boolean(invoice.purchaseOrderId) && (await isPerpetualValuationEnabled())
+    const lineMeta = await resolveVendorBillLineMeta(invoice)
+    const built = isCredit
+      ? buildVendorCreditPerpetualLines({
+          partnerName: partner,
+          ref,
+          subtotal,
+          taxTotal: tax,
+          total,
+          lines: lineMeta,
+          perpetual,
+        })
+      : buildVendorBillPerpetualLines({
+          partnerName: partner,
+          ref,
+          subtotal,
+          taxTotal: tax,
+          total,
+          lines: lineMeta,
+          perpetual,
+        })
     return persistStoreJournalEntry({
       ref: `JRN/${ref}`,
       source: 'bill',
-      description: `Bill ${ref} — ${partner}`,
+      description: `${isCredit ? 'Vendor credit' : 'Bill'} ${ref} — ${partner}`,
       invoiceId: invoice.id,
-      lines,
+      lines: built.map(l => ({
+        account: l.account,
+        description: l.description,
+        debit: l.debit,
+        credit: l.credit,
+      })),
     }, { createdById: opts?.createdById, journalCode: 'PUR' })
   }
 
