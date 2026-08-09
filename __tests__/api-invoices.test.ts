@@ -75,6 +75,13 @@ vi.mock('@/lib/finance-audit', () => ({
 
 vi.mock('@/lib/accounting/invoice-journals', () => ({
   dualWriteInvoiceJournal: vi.fn().mockResolvedValue(undefined),
+  postInvoiceJournalToPrisma: vi.fn().mockResolvedValue(undefined),
+  reverseInvoiceJournalInPrisma: vi.fn().mockResolvedValue(null),
+  postCustomerCreditJournalToPrisma: vi.fn().mockResolvedValue(undefined),
+}))
+
+vi.mock('@/lib/accounting/resolve-invoice-mirror', () => ({
+  resolveBlobInvoiceMirror: vi.fn().mockResolvedValue({ type: 'customer_invoice' }),
 }))
 
 vi.mock('@/lib/legacy-compat', () => ({

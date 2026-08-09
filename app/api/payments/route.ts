@@ -111,16 +111,21 @@ export async function POST(request: NextRequest) {
 
     try {
       const { postInvoicePaymentJournalToPrisma } = await import('@/lib/accounting/invoice-journals')
+      const { resolveBlobInvoiceMirror } = await import('@/lib/accounting/resolve-invoice-mirror')
       for (const alloc of createdAllocations) {
         const invoice = await prisma.invoice.findUnique({ where: { id: alloc.invoiceId } })
         if (!invoice) continue
+        const mirror = await resolveBlobInvoiceMirror(invoice.id)
         await postInvoicePaymentJournalToPrisma({
           invoice: {
             id: invoice.id,
             ref: invoice.invoiceNumber,
             invoiceNumber: invoice.invoiceNumber,
             totalAmount: Number(invoice.totalAmount),
-            type: 'customer_invoice',
+            type: mirror.type,
+            purchaseOrderId: mirror.purchaseOrderId,
+            partnerName: mirror.partnerName,
+            clientName: mirror.clientName,
           },
           amount: Number(alloc.amount),
           paymentId: payment.id,

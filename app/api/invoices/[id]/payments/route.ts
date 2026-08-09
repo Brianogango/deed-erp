@@ -9,6 +9,7 @@ import {
   DEFAULT_ADMIN_OFFICER_CUSTOMER_INVOICE_LIMIT_KES,
 } from '@/lib/finance-controls'
 import { checkFiscalLock } from '@/lib/fiscal-lock.server'
+import { resolveBlobInvoiceMirror } from '@/lib/accounting/resolve-invoice-mirror'
 
 const WRITE_ROLES = ['director', 'finance_officer', 'admin_officer']
 
@@ -152,6 +153,7 @@ export async function POST(
 
     // Dual-write GL: persist payment journal to Prisma (blob journals still written by client store)
     try {
+      const mirror = await resolveBlobInvoiceMirror(invoice.id)
       const { postInvoicePaymentJournalToPrisma } = await import('@/lib/accounting/invoice-journals')
       await postInvoicePaymentJournalToPrisma({
         invoice: {
@@ -159,7 +161,10 @@ export async function POST(
           ref: invoice.invoiceNumber,
           invoiceNumber: invoice.invoiceNumber,
           totalAmount: Number(invoice.totalAmount),
-          type: 'customer_invoice',
+          type: mirror.type,
+          purchaseOrderId: mirror.purchaseOrderId,
+          partnerName: mirror.partnerName,
+          clientName: mirror.clientName,
         },
         amount: capped,
         paymentId: payment.id,

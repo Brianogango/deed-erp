@@ -178,7 +178,7 @@ function NewHoldoverModal({ onClose, onSave }: { onClose: () => void; onSave: (h
   }
 
   return (
-    <div className="fixed inset-0 z-[9100] flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }}>
+    <div className="fixed inset-0 z-[9100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
       <div style={{ animation: 'modalIn 0.2s ease both' }}
         className="bg-[var(--bg-card)] border border-[var(--border)] rounded-2xl w-full max-w-lg shadow-2xl flex flex-col max-h-[90vh]">
 
@@ -418,8 +418,8 @@ function ReturnModal({ holdover, onClose, onReturn }: { holdover: Holdover; onCl
   }
 
   return (
-    <div className="fixed inset-0 z-[9200] flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }}>
-      <div style={{ animation: 'confirmIn 0.2s cubic-bezier(0.34,1.4,0.64,1) both' }}
+    <div className="fixed inset-0 z-[9200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+      <div style={{ animation: 'confirmIn 0.2s cubic-bezier(0.16,1,0.3,1) both' }}
         className="bg-[var(--bg-card)] border border-[var(--border)] rounded-2xl w-full max-w-md shadow-2xl">
 
         <div className="px-5 py-4 border-b border-[var(--border-lt)] flex items-center justify-between">
@@ -492,7 +492,7 @@ function HoldoverDetail({ holdover, onClose, onReturn }: { holdover: Holdover; o
   const isActive = holdover.status !== 'returned'
 
   return (
-    <div className="fixed inset-0 z-[9100] flex items-end sm:items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(4px)' }}>
+    <div className="fixed inset-0 z-[9100] flex items-end sm:items-center justify-center p-4 bg-black/55 backdrop-blur-sm">
       <div style={{ animation: 'modalIn 0.2s ease both' }}
         className="bg-[var(--bg-card)] border border-[var(--border)] rounded-2xl w-full max-w-xl shadow-2xl flex flex-col max-h-[90vh]">
 
@@ -648,7 +648,7 @@ function HoldoversContent() {
     <div className="mod-page">
       <ModuleHeader
         title="Holdovers"
-        subtitle="Device loans and temporary issue log"
+        subtitle="Operations log only — not part of accounting / GL"
         icon={<Fa icon={faLaptop} />}
         count={total}
         color="var(--primary)"
@@ -663,6 +663,12 @@ function HoldoversContent() {
           </PrimaryActionButton>
         }
       />
+
+      <div className="px-3 sm:px-4 pt-2">
+        <p className="text-[11px] text-[var(--text-3)] rounded-lg border border-[var(--border-lt)] bg-[var(--bg-surface)] px-3 py-2">
+          Holdovers track temporary device loans for repairs and demos. They do not post journals, affect stock valuation, or appear on the trial balance.
+        </p>
+      </div>
 
       {/* List */}
       <div className="mod-body overflow-y-auto custom-scrollbar">
@@ -764,8 +770,7 @@ function HoldoversContent() {
                   tabIndex={0}
                   onClick={() => setDetailId(h.id)}
                   onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setDetailId(h.id) } }}
-                  className="rounded-xl border border-[var(--border-lt)] bg-[var(--bg-card)] p-3 text-left shadow-sm"
-                  style={{ borderLeft: `4px solid ${h.status === 'overdue' ? '#EF4444' : h.status === 'returned' ? '#10B981' : '#3B82F6'}` }}
+                  className={`rounded-xl border border-[var(--border-lt)] bg-[var(--bg-card)] p-3 text-left shadow-sm ${h.status === 'overdue' ? 'ring-1 ring-[var(--danger)]' : h.status === 'returned' ? 'ring-1 ring-emerald-500/40' : ''}`}
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">

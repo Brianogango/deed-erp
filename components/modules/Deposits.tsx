@@ -109,14 +109,14 @@ function NewDepositModal({ onClose, onSave }: { onClose: () => void; onSave: (d:
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
       <div
         className="relative my-0 sm:my-auto w-full max-w-2xl bg-[var(--bg-card)] rounded-2xl shadow-2xl border border-[var(--border)] flex flex-col overflow-hidden"
-        style={{ maxHeight: 'calc(100dvh - 32px)', animation: 'modalIn 0.22s cubic-bezier(0.34,1.4,0.64,1) both' }}
+        style={{ maxHeight: 'calc(100dvh - 32px)', animation: 'modalIn 0.22s cubic-bezier(0.16,1,0.3,1) both' }}
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--border)] bg-gradient-to-r from-blue-600 to-indigo-600 shrink-0">
           <div>
             <h2 className="text-sm font-black text-white uppercase tracking-wider">New Deposit / Layby</h2>
-            <p className="text-[10px] text-blue-200 mt-0.5">Reserve products with an upfront payment</p>
+            <p className="text-[10px] text-blue-200 mt-0.5">Credits 3100 Customer Deposits — not a Sales down-payment invoice</p>
           </div>
           <button onClick={onClose} className="w-8 h-8 rounded-xl bg-white/10 hover:bg-white/20 text-white flex items-center justify-center text-lg transition-all">×</button>
         </div>
@@ -256,7 +256,7 @@ function NewDepositModal({ onClose, onSave }: { onClose: () => void; onSave: (d:
               disabled={!deposit || deposit <= 0 || saving}
               onClick={handleSave}
               className="flex items-center gap-2 px-6 py-2.5 rounded-xl text-white text-xs font-black uppercase tracking-wider transition-all disabled:opacity-40 disabled:pointer-events-none shadow-lg"
-              style={{ background: 'linear-gradient(135deg,var(--primary),#4F46E5)', boxShadow: '0 8px 24px rgba(79,70,229,0.4)' }}
+              style={{ background: 'var(--primary)', boxShadow: '0 8px 24px color-mix(in srgb, var(--primary) 35%, transparent)' }}
             >
               {saving ? '...' : '✓ Create Deposit'}
             </button>
@@ -303,7 +303,7 @@ function AddPaymentModal({ deposit, onClose, onSave }: { deposit: Deposit; onClo
   return (
     <div className="fixed inset-0 z-[9050] flex h-dvh items-center justify-center overflow-y-auto overscroll-contain p-4" onClick={onClose}>
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
-      <div className="relative w-full max-w-sm bg-[var(--bg-card)] rounded-2xl shadow-2xl border border-[var(--border)] overflow-hidden" style={{ animation: 'confirmIn 0.18s cubic-bezier(0.34,1.4,0.64,1) both' }} onClick={e => e.stopPropagation()}>
+      <div className="relative w-full max-w-sm bg-[var(--bg-card)] rounded-2xl shadow-2xl border border-[var(--border)] overflow-hidden" style={{ animation: 'confirmIn 0.18s cubic-bezier(0.16,1,0.3,1) both' }} onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--border)]">
           <div>
             <h3 className="text-[13px] font-black text-[var(--text-1)]">Record Payment</h3>
@@ -404,7 +404,7 @@ function DepositDetail({ deposit, onBack, onAddPayment, onComplete, onCancel }: 
               <div className="flex items-center justify-between mb-4">
                 <div>
                   <p className="text-[9px] font-black text-[var(--text-4)] uppercase tracking-widest mb-1">Payment Progress</p>
-                  <p className="text-2xl font-black text-[var(--text-1)] font-mono">{fmtKes(deposit.totalPaid)}<span className="text-[14px] text-[var(--text-4)] font-semibold"> / {fmtKes(deposit.totalValue)}</span></p>
+                  <p className="text-2xl font-black text-[var(--text-1)] font-mono">{fmtKes(deposit.totalPaid)}<span className="text-sm text-[var(--text-4)] font-semibold"> / {fmtKes(deposit.totalValue)}</span></p>
                 </div>
                 <div className="text-right">
                   <p className="text-[9px] font-black text-[var(--text-4)] uppercase tracking-widest mb-1">Balance</p>
@@ -709,7 +709,7 @@ function DepositsContent() {
     <div className="mod-page">
       <ModuleHeader
         title="Deposits and laybys"
-        subtitle="Reserve products with upfront payments"
+        subtitle="Cash held on 3100 until goods are collected — not the same as Sale Order down-payment invoices"
         icon={<Fa icon={faCreditCard} />}
         count={deposits.length}
         color="var(--primary)"
@@ -719,6 +719,12 @@ function DepositsContent() {
           </PrimaryActionButton>
         }
       />
+
+      <div className="px-3 sm:px-4 pt-2">
+        <p className="text-[11px] text-[var(--text-3)] rounded-lg border border-[var(--border-lt)] bg-[var(--bg-surface)] px-3 py-2">
+          Use this module for layby / reservation deposits (liability 3100). For Odoo-style down payments on a confirmed Sale Order, create a down-payment invoice from Sales instead — those reduce AR on the final invoice.
+        </p>
+      </div>
 
       {/* List */}
       <div className="mod-body p-3 sm:p-4">

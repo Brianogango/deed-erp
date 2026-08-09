@@ -2581,7 +2581,7 @@ const buildCustomerCreditJournal = (inv: Invoice, creditRef: string, amount: num
   const lines = [
     accountLine('5000 - Sales Revenue', `Credit note ${creditRef}: reverse ${inv.ref}`, revenueReversal, 0),
     ...(vatReversal > 0 ? [accountLine('3301 - Output VAT Payable', `Credit VAT ${creditRef}`, vatReversal, 0)] : []),
-    accountLine('3100 - Customer Credits', `Customer credit: ${inv.partnerName}`, 0, amount),
+    accountLine('3102 - Customer Credits', `Customer credit: ${inv.partnerName}`, 0, amount),
   ]
   return {
     id: uid(),
@@ -2599,7 +2599,7 @@ const buildCustomerCreditJournal = (inv: Invoice, creditRef: string, amount: num
 
 const buildCustomerCreditApplicationJournal = (inv: Invoice, amount: number, creditRefs: string): JournalEntry => {
   const lines = [
-    accountLine('3100 - Customer Credits', `Apply credit ${creditRefs}`, amount, 0),
+    accountLine('3102 - Customer Credits', `Apply credit ${creditRefs}`, amount, 0),
     accountLine('1800 - Accounts Receivable', `Credit applied to ${inv.ref}`, 0, amount),
   ]
   return {
@@ -2897,7 +2897,7 @@ export interface AppState {
   allocatePaymentToInvoice: (paymentId: string, invoiceId: string, amount: number) => void
   generateReceipt: (paymentId: string) => void
   getCustomerCreditBalance: (customerId: string) => number
-  applyCustomerCreditToInvoice: (invoiceId: string, amount?: number) => void
+  applyCustomerCreditToInvoice: (invoiceId: string, amount?: number) => void | Promise<void>
   checkCreditLimit: (customerId: string, orderTotal: number) => { ok: boolean; message?: string; requiresApproval?: boolean; creditAvailable?: number }
   getCustomerCreditStatus: (customerId: string, newOrderTotal?: number) => {
     ok: boolean
@@ -3229,7 +3229,7 @@ export interface AppState {
   postInvoice: (id: string, forcedRef?: string) => void | Promise<void>
   /** Finance dispute flag — Odoo "Blocked" payment status. */
   setInvoicePaymentBlocked: (id: string, blocked: boolean) => void
-  registerPayment: (invoiceId: string, amount: number, method?: string, bankAccountId?: string, reference?: string, paymentDate?: string) => void
+  registerPayment: (invoiceId: string, amount: number, method?: string, bankAccountId?: string, reference?: string, paymentDate?: string) => void | Promise<void>
   resetInvoiceToDraft: (id: string) => void
   cancelInvoice: (id: string, forcedCreditRef?: string) => void
   deleteInvoice: (id: string) => void
@@ -6425,7 +6425,7 @@ const storeCtx: AppState = {
         .filter(c => c.customerId === customerId && ['available', 'partially_used'].includes(c.status))
         .reduce((sum, credit) => sum + Math.max(0, credit.balance), 0)
     },
-    applyCustomerCreditToInvoice: (invoiceId, requestedAmount) => {
+    applyCustomerCreditToInvoice: async (invoiceId, requestedAmount) => {
       const actor = currentUser()
       if (!canManageFullFinanceAction(actor)) {
         showToast('Only Finance or Director can apply customer credit', 'error')
@@ -6470,16 +6470,19 @@ const storeCtx: AppState = {
         showToast('No available customer credit for this invoice', 'info')
         return
       }
-      setCustomerCredits(nextCredits)
 
+      const paymentId = crypto.randomUUID()
       const payment: InvoicePayment = {
-        id: uid(),
+        id: paymentId,
         date: appliedAt,
         amount: applied,
         method: 'customer_credit',
         reference: applications.map(a => a.ref).join(', '),
         recordedBy: appliedBy,
       }
+      const prevCredits = customerCreditsRef.current
+      const prevInvoice = inv
+      setCustomerCredits(nextCredits)
       const updatedInvoice: Invoice = {
         ...inv,
         amountPaid: inv.amountPaid + applied,
@@ -6487,8 +6490,32 @@ const storeCtx: AppState = {
         notes: `${inv.notes || ''}\nApplied customer credit ${applications.map(a => `${a.ref} (${fmtKes(a.amount)})`).join(', ')}`.trim(),
       }
       setInvoices(prev => prev.map(i => i.id === inv.id ? updatedInvoice : i))
-      sync(`/api/invoices/${inv.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updatedInvoice) })
       setJournalEntries(prev => [buildCustomerCreditApplicationJournal(inv, applied, applications.map(a => a.ref).join(', ')), ...prev])
+
+      try {
+        const res = await fetch(`/api/invoices/${inv.id}/payments`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            amount: applied,
+            paymentMethod: 'customer_credit',
+            reference: payment.reference,
+            paidAt: appliedAt,
+            idempotencyKey: paymentId,
+          }),
+        })
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}))
+          throw new Error(err.error || `Credit apply failed (${res.status})`)
+        }
+      } catch (err: any) {
+        setCustomerCredits(prevCredits)
+        setInvoices(prev => prev.map(i => i.id === inv.id ? prevInvoice : i))
+        setJournalEntries(prev => prev.filter(j => !j.ref.startsWith(`JRN/CAPP/${inv.ref}/`)))
+        showToast(err?.message || 'Failed to apply customer credit', 'error')
+        return
+      }
+
       addAuditLog('apply_customer_credit', inv.ref, `Applied ${fmtKes(applied)} customer credit to ${inv.ref}`)
       showToast(`Applied ${fmtKes(applied)} customer credit`, 'success')
     },
@@ -7356,11 +7383,75 @@ const storeCtx: AppState = {
       showToast('Payment recorded', 'success')
     },
     completeDeposit: (depositId) => {
+      const deposit = deposits.find(d => d.id === depositId)
+      if (!deposit) return
+      if (deposit.status !== 'fully_paid') {
+        showToast('Only fully paid deposits can be marked as collected', 'error')
+        return
+      }
+      // Clear 3100 liability into AR (linked invoice) or revenue when goods are collected.
+      // Distinct from SO down-payment invoices, which reduce AR at invoice time.
+      if (deposit.totalPaid > 0) {
+        const linkedSo = saleOrders.find(s => (s.notes || '').includes(deposit.ref))
+        const linkedInv = linkedSo
+          ? invRef.current.find(i =>
+              i.type === 'customer_invoice'
+              && i.status === 'posted'
+              && i.saleOrderId === linkedSo.id
+              && (i.total - i.amountPaid) > 0)
+          : undefined
+        const amount = deposit.totalPaid
+        const clearJournal: JournalEntry = {
+          id: uid(),
+          ref: `JRN/DEPCLR/${deposit.ref}`,
+          date: now(),
+          source: 'manual',
+          description: `Deposit collected — clear liability ${deposit.ref}`,
+          status: 'posted',
+          invoiceId: linkedInv?.id,
+          lines: [
+            { id: uid(), account: '3100 - Customer Deposits', description: `Clear deposit: ${deposit.customerName}`, debit: amount, credit: 0 },
+            {
+              id: uid(),
+              account: linkedInv ? '1800 - Accounts Receivable' : '5000 - Sales Revenue',
+              description: linkedInv
+                ? `AR settlement via deposit ${deposit.ref} → ${linkedInv.ref}`
+                : `Revenue recognition on deposit collect ${deposit.ref}`,
+              debit: 0,
+              credit: amount,
+            },
+          ],
+          totalDebit: amount,
+          totalCredit: amount,
+        }
+        setJournalEntries(p => [clearJournal, ...p])
+        if (linkedInv) {
+          const payment: InvoicePayment = {
+            id: uid(),
+            date: now(),
+            amount: Math.min(amount, linkedInv.total - linkedInv.amountPaid),
+            method: 'deposit_apply',
+            reference: deposit.ref,
+            recordedBy: currentUser()?.name || 'Finance',
+          }
+          if (payment.amount > 0) {
+            setInvoices(prev => prev.map(i => {
+              if (i.id !== linkedInv.id) return i
+              return {
+                ...i,
+                amountPaid: i.amountPaid + payment.amount,
+                payments: [...(i.payments || []), payment],
+                notes: `${i.notes || ''}\nApplied deposit ${deposit.ref} (${fmtKes(payment.amount)})`.trim(),
+              }
+            }))
+          }
+        }
+      }
       setDeposits(prev => prev.map(d =>
         d.id === depositId ? { ...d, status: 'completed' as DepositStatus, completedAt: now() } : d
       ))
       sync(`/api/deposits/${depositId}/complete`, { method: 'POST' })
-      showToast('Deposit marked as collected', 'success')
+      showToast('Deposit marked as collected — liability cleared', 'success')
     },
     cancelDeposit: (depositId, reason) => {
       const deposit = deposits.find(d => d.id === depositId)
@@ -11656,7 +11747,7 @@ const storeCtx: AppState = {
       addAuditLog(blocked ? 'block_invoice_payment' : 'release_invoice_payment', inv.ref, `${blocked ? 'Payment blocked' : 'Payment released'} by ${actor?.name ?? 'Finance'}`)
       showToast(blocked ? `${inv.ref} payment blocked` : `${inv.ref} payment released`)
     },
-    registerPayment: (invoiceId, amount, method, bankAccountId, reference, paymentDate) => {
+    registerPayment: async (invoiceId, amount, method, bankAccountId, reference, paymentDate) => {
       const actor = currentUser()
       if (!canManageFinance(actor)) {
         showToast('Only Finance or Admin Officer can register payments', 'error'); return
@@ -11691,42 +11782,50 @@ const storeCtx: AppState = {
       if (journalEntries.some(j => j.ref === journal.ref)) {
         showToast('This payment journal was already posted', 'info'); return
       }
-      setInvoices(p => {
-        const next = p.map(i => {
-          if (i.id !== invoiceId) return i
-          const paid = i.amountPaid + capped
-          const newPayment: InvoicePayment = {
-            id: paymentId,
-            date: paymentDate ? new Date(paymentDate).toISOString() : new Date().toISOString(),
-            amount: capped,
-            method: method || 'cash',
-            reference: reference || undefined,
-            bankAccountId: bankAccountIdForMethod(method, bankAccountId),
-            recordedBy: actor?.name || 'Finance',
-          }
-          const append = `\nPaid ${fmtKes(capped)} via ${method || 'cash'}${bankAccountId ? ` (Bank: ${bankAccountId})` : ''}${reference ? ` Ref: ${reference}` : ''}`
-          return {
-            ...i,
-            amountPaid: paid,
-            notes: (i.notes || '') + append,
-            payments: [...(i.payments || []), newPayment],
-          }
-        })
-        return next
-      })
+      const prevInvoice = inv
+      const newPayment: InvoicePayment = {
+        id: paymentId,
+        date: paymentDate ? new Date(paymentDate).toISOString() : new Date().toISOString(),
+        amount: capped,
+        method: method || 'cash',
+        reference: reference || undefined,
+        bankAccountId: bankAccountIdForMethod(method, bankAccountId),
+        recordedBy: actor?.name || 'Finance',
+      }
+      const append = `\nPaid ${fmtKes(capped)} via ${method || 'cash'}${bankAccountId ? ` (Bank: ${bankAccountId})` : ''}${reference ? ` Ref: ${reference}` : ''}`
+      setInvoices(p => p.map(i => {
+        if (i.id !== invoiceId) return i
+        return {
+          ...i,
+          amountPaid: i.amountPaid + capped,
+          notes: (i.notes || '') + append,
+          payments: [...(i.payments || []), newPayment],
+        }
+      }))
       setJournalEntries(p => [journal, ...p])
-      fetch(`/api/invoices/${invoiceId}/payments`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          amount: capped,
-          paymentMethod: method || 'cash',
-          reference: reference || undefined,
-          paidAt: paymentDate,
-          bankAccountId,
-          idempotencyKey: paymentId,
-        }),
-      })
+      try {
+        const res = await fetch(`/api/invoices/${invoiceId}/payments`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            amount: capped,
+            paymentMethod: method || 'cash',
+            reference: reference || undefined,
+            paidAt: paymentDate,
+            bankAccountId,
+            idempotencyKey: paymentId,
+          }),
+        })
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}))
+          throw new Error(err.error || `Payment failed (${res.status})`)
+        }
+      } catch (err: any) {
+        setInvoices(p => p.map(i => i.id === invoiceId ? prevInvoice : i))
+        setJournalEntries(p => p.filter(j => j.ref !== journal.ref))
+        showToast(err?.message || 'Payment could not be registered', 'error')
+        return
+      }
       addAuditLog('register_payment', invoiceId, `Registered payment of KES ${capped} for ${inv.ref}${reference ? ` (Ref: ${reference})` : ''}`)
       showToast('Payment registered')
     },
@@ -11815,7 +11914,12 @@ const storeCtx: AppState = {
         notes: `${inv.notes || ''}\nCancelled by ${actor?.name ?? 'Finance'}${credit ? `; credit note ${credit.ref} created for ${fmtKes(credit.amount)}.` : '.'}`.trim(),
       }
       setInvoices(prev => prev.map(i => i.id === id ? cancelled : i))
-      sync(`/api/invoices/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(cancelled) })
+      // Server reverses Prisma posting journal (unpaid) or posts 3102 credit journal (paid).
+      sync(`/api/invoices/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...cancelled, creditRef: credit?.ref }),
+      })
       addAuditLog('cancel_invoice', inv.ref, credit ? `Paid invoice cancelled; credit note ${credit.ref} created for ${fmtKes(credit.amount)}` : `${inv.type === 'vendor_bill' ? 'Bill' : 'Invoice'} cancelled`)
       showToast(credit ? `Invoice cancelled — credit note ${credit.ref} created` : `${inv.type === 'vendor_bill' ? 'Bill' : 'Invoice'} cancelled`)
     },

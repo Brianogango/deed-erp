@@ -105,7 +105,7 @@ type MainTab =
   | 'monthly'
   | 'cashbook'
 
-type ReportTab = 'monthly' | 'pl' | 'bs' | 'vat' | 'ageing' | 'trial_balance' | 'cash_position'
+type ReportTab = 'monthly' | 'pl' | 'bs' | 'vat' | 'ageing' | 'trial_balance' | 'cash_position' | 'fx'
 const REPORT_TABS: Array<{ id: ReportTab; label: string; icon: any }> = [
   { id: 'monthly', label: 'Monthly', icon: faChartLine },
   { id: 'pl', label: 'P&L', icon: faChartLine },
@@ -114,8 +114,9 @@ const REPORT_TABS: Array<{ id: ReportTab; label: string; icon: any }> = [
   { id: 'ageing', label: 'Ageing', icon: faUsers },
   { id: 'trial_balance', label: 'Trial balance', icon: faBalanceScale },
   { id: 'cash_position', label: 'Cash position', icon: faMoneyBillWave },
+  { id: 'fx', label: 'FX revaluation', icon: faMoneyBillWave },
 ]
-const REPORT_TAB_IDS = new Set<MainTab>(['monthly', 'pl', 'bs', 'vat', 'ageing', 'trial_balance', 'cash_position'])
+const REPORT_TAB_IDS = new Set<MainTab>(['monthly', 'pl', 'bs', 'vat', 'ageing', 'trial_balance', 'cash_position', 'fx'])
 
 // ── Balance Sheet group lists ─────────────────────────────────────────────────
 const CA_GROUPS = [
@@ -1549,8 +1550,8 @@ function AccountingContent() {
                   <h2 className="text-lg font-bold text-[var(--text-1)]">Profit & Loss Statement</h2>
                   <p className="text-xs text-[var(--text-3)]">
                     {plSource === 'prisma'
-                      ? 'KES-only from posted Prisma journal lines (income/expense accounts).'
-                      : 'Legacy estimate from invoices, bills, and expenses.'}
+                      ? 'Official SoT: KES-only from posted Prisma journal lines (income/expense accounts).'
+                      : 'Legacy blob estimate from invoices, bills, and expenses — not official books.'}
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
@@ -1560,8 +1561,8 @@ function AccountingContent() {
                     onChange={e => setPlSource(e.target.value as 'blob' | 'prisma')}
                     aria-label="P&L source"
                   >
-                    <option value="prisma">Prisma (KES posted)</option>
-                    <option value="blob">Client blob (legacy)</option>
+                    <option value="prisma">Official: Prisma (KES posted)</option>
+                    <option value="blob">Legacy: client blob</option>
                   </select>
                   <button className="btn-secondary flex items-center gap-2" onClick={() => {
                     const rev = plSource === 'prisma'
@@ -1655,8 +1656,8 @@ function AccountingContent() {
                   <h2 className="text-lg font-bold text-[var(--text-1)]">Balance Sheet</h2>
                   <p className="text-xs text-[var(--text-3)]">
                     {bsSource === 'prisma'
-                      ? 'KES-only from posted Prisma journal lines through today.'
-                      : 'Legacy estimate from cashbook and open invoices/bills.'}
+                      ? 'Official SoT: KES-only from posted Prisma journal lines through today.'
+                      : 'Legacy blob estimate from cashbook and open invoices/bills — not official books.'}
                   </p>
                 </div>
                 <select
@@ -1665,8 +1666,8 @@ function AccountingContent() {
                   onChange={e => setBsSource(e.target.value as 'blob' | 'prisma')}
                   aria-label="Balance sheet source"
                 >
-                  <option value="prisma">Prisma (KES posted)</option>
-                  <option value="blob">Client blob (legacy)</option>
+                  <option value="prisma">Official: Prisma (KES posted)</option>
+                  <option value="blob">Legacy: client blob</option>
                 </select>
               </div>
               {bsSource === 'prisma' ? (
@@ -1754,8 +1755,8 @@ function AccountingContent() {
                   <h2 className="text-lg font-bold text-[var(--text-1)]">Trial balance</h2>
                   <p className="text-xs text-[var(--text-3)]">
                     {tbSource === 'prisma'
-                      ? 'KES-only from posted Prisma journal lines (no FX, no seed balances).'
-                      : 'Account balances from blob journals and opening balances.'}
+                      ? 'Official SoT: KES-only from posted Prisma journal lines (no FX, no seed balances).'
+                      : 'Legacy blob journals and opening balances — not official books.'}
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
@@ -1765,8 +1766,8 @@ function AccountingContent() {
                     onChange={e => setTbSource(e.target.value as 'blob' | 'prisma')}
                     aria-label="Trial balance source"
                   >
-                    <option value="prisma">Prisma (KES posted)</option>
-                    <option value="blob">Client blob</option>
+                    <option value="prisma">Official: Prisma (KES posted)</option>
+                    <option value="blob">Legacy: client blob</option>
                   </select>
                   <span className={`badge ${(tbSource === 'prisma' ? prismaReports.trialBalance?.balanced : Math.abs(financeReports.tbTotals.debit - financeReports.tbTotals.credit) < 0.01) ? 'badge-green' : 'badge-red'}`}>
                     {(tbSource === 'prisma' ? prismaReports.trialBalance?.balanced : Math.abs(financeReports.tbTotals.debit - financeReports.tbTotals.credit) < 0.01) ? 'Balanced' : 'Out of balance'}
@@ -1841,6 +1842,8 @@ function AccountingContent() {
                 exportFilename="cash-position"
               />
             </div>
+          ) : activeTab === 'fx' ? (
+            <FxRevaluationPanel showToast={showToast} />
           ) : (
             <CashbookTab accounts={accounts} />
           )}
@@ -2412,6 +2415,74 @@ function BSSectionSub({ title, children }: { title: string; children: React.Reac
     </div>
   )
 }
+function FxRevaluationPanel({ showToast }: { showToast: (msg: string, type?: 'success' | 'error' | 'info') => void }) {
+  const [ref, setRef] = useState('')
+  const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10))
+  const [balanceAccountLabel, setBalanceAccountLabel] = useState('1800 - Accounts Receivable')
+  const [amountBase, setAmountBase] = useState('')
+  const [amountForeign, setAmountForeign] = useState('')
+  const [rate, setRate] = useState('')
+  const [busy, setBusy] = useState(false)
+
+  async function submit() {
+    setBusy(true)
+    try {
+      const res = await fetch('/api/accounting/fx-revaluation', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ref: ref.trim(),
+          date,
+          balanceAccountLabel: balanceAccountLabel.trim(),
+          amountBase: Number(amountBase),
+          amountForeign: Number(amountForeign),
+          rate: Number(rate),
+        }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || `Failed (${res.status})`)
+      if (data.skipped) showToast('No FX difference — journal skipped', 'info')
+      else showToast('FX revaluation journal posted', 'success')
+    } catch (err: any) {
+      showToast(err?.message || 'FX revaluation failed', 'error')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="p-6 max-w-xl">
+      <h2 className="text-lg font-bold text-[var(--text-1)] mb-1">FX month-end revaluation</h2>
+      <p className="text-xs text-[var(--text-3)] mb-5">
+        Posts a Prisma gain/loss journal when foreign × rate differs from booked KES base. Official books only.
+      </p>
+      <div className="space-y-3">
+        <Field label="Reference">
+          <Input value={ref} onChange={setRef} placeholder="AR-USD-2026-08" />
+        </Field>
+        <Field label="Date">
+          <Input type="date" value={date} onChange={setDate} />
+        </Field>
+        <Field label="Balance account">
+          <Input value={balanceAccountLabel} onChange={setBalanceAccountLabel} placeholder="1800 - Accounts Receivable" />
+        </Field>
+        <Field label="Booked amount (KES base)">
+          <Input type="number" value={amountBase} onChange={setAmountBase} />
+        </Field>
+        <Field label="Foreign amount">
+          <Input type="number" value={amountForeign} onChange={setAmountForeign} />
+        </Field>
+        <Field label="Closing rate (foreign → KES)">
+          <Input type="number" value={rate} onChange={setRate} />
+        </Field>
+        <button type="button" className="btn-primary" disabled={busy} onClick={() => void submit()}>
+          {busy ? 'Posting…' : 'Post FX revaluation'}
+        </button>
+      </div>
+    </div>
+  )
+}
+
 function BSRow({
   label,
   amount,

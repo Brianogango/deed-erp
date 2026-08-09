@@ -5,6 +5,8 @@ import { optionalUuid, resolveClientId } from '@/lib/legacy-compat'
 import { computeInvoiceTotals, computeInvoiceLineMoney } from '@/lib/finance-invoice'
 import { writeFinancialAudit } from '@/lib/finance-audit'
 import { lockVersionMismatch, nextLockVersion, readExpectedVersion } from '@/lib/optimistic-lock'
+import { checkFiscalLock } from '@/lib/fiscal-lock.server'
+import { resolveBlobInvoiceMirror } from '@/lib/accounting/resolve-invoice-mirror'
 
 // technical_lead: repair quotes create/update their linked invoice (see recordRepairBilling).
 const WRITE_ROLES = ['director', 'finance_officer', 'admin_officer', 'technical_lead']
@@ -164,6 +166,16 @@ export async function PUT(request: Request, { params }: { params: { id: string }
       delete data.invoiceNumber
     }
 
+    const willBecomePosted = before.status === 'draft'
+      && (data.status === 'approved' || data.status === 'invoiced')
+    if (willBecomePosted) {
+      const postDate = data.invoiceDate ?? before.invoiceDate ?? new Date()
+      const lock = await checkFiscalLock(postDate)
+      if (!lock.ok) {
+        return NextResponse.json({ error: lock.error }, { status: lock.status })
+      }
+    }
+
     const invoice = await prisma.invoice.update({
       where: { id: params.id },
       data: {
@@ -188,7 +200,15 @@ export async function PUT(request: Request, { params }: { params: { id: string }
       newValues: { status: invoice.status, totalAmount: invoice.totalAmount, amountPaid: invoice.amountPaid },
     })
 
-    // When a draft becomes posted/approved, dual-write the AR/revenue journal to Prisma
+    const mirror = await resolveBlobInvoiceMirror(invoice.id)
+    const invoiceType = body.type === 'vendor_bill' || mirror.type === 'vendor_bill'
+      ? 'vendor_bill'
+      : 'customer_invoice'
+    const purchaseOrderId = optionalUuid(body.purchaseOrderId)
+      ?? mirror.purchaseOrderId
+      ?? undefined
+
+    // When a draft becomes posted/approved, dual-write the AR/revenue (or AP/expense) journal
     const becamePosted = before
       && before.status === 'draft'
       && (invoice.status === 'approved' || invoice.status === 'invoiced')
@@ -202,21 +222,83 @@ export async function PUT(request: Request, { params }: { params: { id: string }
           totalAmount: Number(invoice.totalAmount),
           subtotal: Number(invoice.subtotal),
           taxAmount: Number(invoice.taxAmount),
-          type: 'customer_invoice',
-          lines: invoice.items.map(i => ({
-            productId: i.productId ?? undefined,
-            subtotal: Number(i.lineSubtotal),
-            description: i.description,
-          })),
+          type: invoiceType,
+          purchaseOrderId,
+          partnerName: mirror.partnerName,
+          clientName: mirror.clientName,
+          lines: (mirror.lines?.length
+            ? mirror.lines
+            : invoice.items.map(i => ({
+                productId: i.productId ?? undefined,
+                qty: Number(i.qty),
+                unitPrice: Number(i.unitPrice),
+                subtotal: Number(i.lineSubtotal),
+                description: i.description,
+              }))),
         }, { createdById: actor.id })
       } catch (err) {
         console.error('[invoice] journal dual-write failed:', err)
       }
+      if (invoiceType === 'customer_invoice') {
+        try {
+          const { postSalesCommissionForInvoice } = await import('@/lib/accounting/sales-commission')
+          await postSalesCommissionForInvoice(invoice.id)
+        } catch (err) {
+          console.error('[invoice] sales commission calculation failed:', err)
+        }
+      }
+    }
+
+    // Reset draft / unpaid cancel / void → reverse the posting journal in Prisma
+    const leftPosted = before
+      && (before.status === 'approved' || before.status === 'invoiced')
+      && (invoice.status === 'draft' || invoice.status === 'cancelled' || invoice.status === 'voided')
+    if (leftPosted && Number(before.amountPaid) <= 0) {
       try {
-        const { postSalesCommissionForInvoice } = await import('@/lib/accounting/sales-commission')
-        await postSalesCommissionForInvoice(invoice.id)
+        const { reverseInvoiceJournalInPrisma } = await import('@/lib/accounting/invoice-journals')
+        await reverseInvoiceJournalInPrisma({
+          id: invoice.id,
+          ref: before.invoiceNumber || invoice.invoiceNumber,
+          invoiceNumber: before.invoiceNumber || invoice.invoiceNumber,
+        }, actor.id)
       } catch (err) {
-        console.error('[invoice] sales commission calculation failed:', err)
+        console.error('[invoice] journal reverse failed:', err)
+      }
+    }
+
+    // Paid customer invoice cancel → credit liability journal (creditRef from body/notes)
+    const paidCancel = before
+      && (before.status === 'approved' || before.status === 'invoiced')
+      && (invoice.status === 'cancelled' || invoice.status === 'voided')
+      && Number(before.amountPaid) > 0
+      && invoiceType === 'customer_invoice'
+    if (paidCancel) {
+      const creditRefMatch = String(body.notes || invoice.notes || '').match(/credit note\s+([A-Z0-9/-]+)/i)
+      const creditRef = typeof body.creditRef === 'string' && body.creditRef
+        ? body.creditRef
+        : creditRefMatch?.[1]
+      if (creditRef) {
+        try {
+          const { postCustomerCreditJournalToPrisma } = await import('@/lib/accounting/invoice-journals')
+          await postCustomerCreditJournalToPrisma({
+            invoice: {
+              id: invoice.id,
+              ref: before.invoiceNumber || invoice.invoiceNumber,
+              invoiceNumber: before.invoiceNumber || invoice.invoiceNumber,
+              totalAmount: Number(before.totalAmount),
+              subtotal: Number(before.subtotal),
+              taxAmount: Number(before.taxAmount),
+              partnerName: mirror.partnerName,
+              clientName: mirror.clientName,
+              type: 'customer_invoice',
+            },
+            creditRef,
+            amount: Math.min(Number(before.amountPaid), Number(before.totalAmount)),
+            createdById: actor.id,
+          })
+        } catch (err) {
+          console.error('[invoice] customer credit journal dual-write failed:', err)
+        }
       }
     }
 
@@ -253,6 +335,19 @@ export async function DELETE(_: Request, { params }: { params: { id: string } })
       where: { id: params.id },
       data: { status: 'voided' as any },
     })
+
+    if (Number(invoice.amountPaid) <= 0) {
+      try {
+        const { reverseInvoiceJournalInPrisma } = await import('@/lib/accounting/invoice-journals')
+        await reverseInvoiceJournalInPrisma({
+          id: invoice.id,
+          ref: invoice.invoiceNumber,
+          invoiceNumber: invoice.invoiceNumber,
+        }, actor.id)
+      } catch (err) {
+        console.error('[invoice] void journal reverse failed:', err)
+      }
+    }
 
     await writeFinancialAudit({
       userId: actor.id,

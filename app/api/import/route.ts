@@ -103,5 +103,40 @@ export async function POST(request: NextRequest) {
   }
 
   await saveStoreKeys(updates)
-  return NextResponse.json({ ok: true, summary })
+
+  // Posted opening invoices/bills must create Prisma journals so TB stays truthful.
+  let journalsPosted = 0
+  if (updates.deed_invoices) {
+    try {
+      const { postInvoiceJournalToPrisma } = await import('@/lib/accounting/invoice-journals')
+      const invoices = JSON.parse(updates.deed_invoices) as Array<Record<string, unknown>>
+      const posted = invoices.filter(inv => {
+        const status = String(inv.status || '')
+        return status === 'posted' || status === 'approved' || status === 'paid' || status === 'partially_paid'
+      })
+      for (const inv of posted) {
+        try {
+          await postInvoiceJournalToPrisma({
+            id: String(inv.id),
+            ref: String(inv.ref || inv.invoiceNumber || inv.id),
+            invoiceNumber: String(inv.ref || inv.invoiceNumber || ''),
+            type: inv.type === 'vendor_bill' ? 'vendor_bill' : 'customer_invoice',
+            purchaseOrderId: typeof inv.purchaseOrderId === 'string' ? inv.purchaseOrderId : undefined,
+            partnerName: typeof inv.partnerName === 'string' ? inv.partnerName : undefined,
+            totalAmount: Number(inv.total ?? inv.totalAmount ?? 0),
+            subtotal: Number(inv.subtotal ?? inv.total ?? 0),
+            taxAmount: Number(inv.taxTotal ?? inv.taxAmount ?? 0),
+            lines: Array.isArray(inv.lines) ? inv.lines as any[] : [],
+          })
+          journalsPosted++
+        } catch (err) {
+          console.error('[import] invoice journal failed:', inv.id, err)
+        }
+      }
+    } catch (err) {
+      console.error('[import] journal pass failed:', err)
+    }
+  }
+
+  return NextResponse.json({ ok: true, summary, journalsPosted })
 }
