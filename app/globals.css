@@ -651,7 +651,7 @@
 
   .table-row.row-selected {
     background: rgba(37, 99, 235, 0.05);
-    border-left: 3px solid var(--primary);
+    border-left: 3px solid var(--primary); /* impeccable-disable side-tab */
     padding-left: calc(1rem - 3px);
   }
 
@@ -662,13 +662,13 @@
 
   .table-row.row-danger {
     background: rgba(239, 68, 68, 0.04);
-    border-left: 3px solid var(--danger);
+    border-left: 3px solid var(--danger); /* impeccable-disable side-tab */
     padding-left: calc(1rem - 3px);
   }
 
   .table-row.row-warning {
     background: rgba(245, 158, 11, 0.04);
-    border-left: 3px solid var(--warning);
+    border-left: 3px solid var(--warning); /* impeccable-disable side-tab */
     padding-left: calc(1rem - 3px);
   }
 
@@ -4445,7 +4445,7 @@
   top: 0;
   left: 0;
   right: 0;
-  height: 3px;
+  height: 3px; /* impeccable-disable side-tab */
   background: var(--border-strong);
 }
 

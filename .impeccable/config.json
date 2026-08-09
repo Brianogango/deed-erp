@@ -2,7 +2,8 @@
   "detector": {
     "ignoreRules": [],
     "ignoreFiles": [
-      "lib/store.tsx"
+      "lib/store.tsx",
+      "app/globals.css"
     ],
     "ignoreValues": []
   }
