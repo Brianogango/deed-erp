@@ -9,6 +9,8 @@ export type ProductLabelPdfItem = {
   barcode?: string
   salePrice?: number
   category?: string
+  productType?: string
+  specs?: string
 }
 
 export type SerialLabelPdfItem = {
@@ -17,6 +19,22 @@ export type SerialLabelPdfItem = {
   productName: string
   sku: string
   category?: string
+  productType?: string
+  specs?: string
+}
+
+function conditionShort(productType?: string) {
+  const t = String(productType || '').toLowerCase()
+  if (t === 'new') return 'NEW'
+  if (t === 'refurbished') return 'REFURB'
+  return ''
+}
+
+function categoryConditionMeta(category?: string, productType?: string) {
+  const cat = String(category || '').trim()
+  const cond = conditionShort(productType)
+  if (cat && cond) return `${cat} · ${cond}`
+  return cat || cond || ''
 }
 
 function stampFilename(prefix: string) {
@@ -60,15 +78,23 @@ export async function downloadProductLabelsPdf(
     doc.text(opts?.companyName || 'deed.', x + 2.5, y + 6)
     doc.setTextColor(100, 100, 100)
     doc.setFontSize(6)
-    doc.text(String(item.category || '').toUpperCase().slice(0, 18), x + labelW - 2.5, y + 6, { align: 'right' })
-    doc.setTextColor(15, 15, 15)
+    doc.text(categoryConditionMeta(item.category, item.productType).toUpperCase().slice(0, 22), x + labelW - 2.5, y + 6, { align: 'right' })
+    doc.setTextColor(15, 23, 42)
     doc.setFontSize(8)
     doc.setFont('helvetica', 'bold')
     const nameLines = doc.splitTextToSize(item.name, labelW - 5)
     doc.text(nameLines.slice(0, 2), x + 2.5, y + 12)
+    if (item.specs) {
+      doc.setFontSize(5.5)
+      doc.setFont('helvetica', 'normal')
+      doc.setTextColor(71, 85, 105)
+      doc.text(String(item.specs).slice(0, 42), x + 2.5, y + 18)
+    }
     if (typeof item.salePrice === 'number') {
       doc.setFontSize(11)
-      doc.text(`KES ${Math.round(item.salePrice).toLocaleString('en-KE')}`, x + 2.5, y + 22)
+      doc.setFont('helvetica', 'bold')
+      doc.setTextColor(26, 31, 94)
+      doc.text(`KES ${Math.round(item.salePrice).toLocaleString('en-KE')}`, x + 2.5, y + 23)
     }
     doc.setFontSize(6)
     doc.setFont('helvetica', 'normal')
@@ -116,24 +142,34 @@ export async function downloadSerialLabelsPdf(
     doc.setLineWidth(0.2)
 
     doc.setFontSize(8)
-    doc.setTextColor(0, 174, 239)
+    doc.setTextColor(0, 176, 215)
     doc.setFont('helvetica', 'bold')
     doc.text(opts?.companyName || 'deed.', x + 3, y + 6)
-    doc.setTextColor(15, 15, 15)
+    doc.setFontSize(5.5)
+    doc.setTextColor(100, 116, 139)
+    doc.text(categoryConditionMeta(item.category, item.productType).toUpperCase().slice(0, 22), x + labelW - 3, y + 6, { align: 'right' })
+    doc.setTextColor(15, 23, 42)
     doc.setFontSize(7)
     const nameLines = doc.splitTextToSize(item.productName, labelW - 8)
-    doc.text(nameLines.slice(0, 2), x + 3, y + 12)
+    doc.text(nameLines.slice(0, 2), x + 3, y + 11)
+    if (item.specs) {
+      doc.setFontSize(5)
+      doc.setFont('helvetica', 'normal')
+      doc.setTextColor(71, 85, 105)
+      doc.text(String(item.specs).slice(0, 40), x + 3, y + 17)
+    }
     doc.setFontSize(5.5)
-    doc.setTextColor(100, 100, 100)
-    doc.text('SERIAL NO.', x + 3, y + 22)
+    doc.setTextColor(100, 116, 139)
+    doc.setFont('helvetica', 'bold')
+    doc.text('SERIAL NO.', x + 3, y + 21)
     doc.setTextColor(26, 31, 94)
-    doc.setFontSize(11)
+    doc.setFontSize(10)
     doc.setFont('courier', 'bold')
-    doc.text(item.serial.slice(0, 22), x + 3, y + 28)
+    doc.text(item.serial.slice(0, 22), x + 3, y + 27)
     doc.setFont('helvetica', 'normal')
     doc.setFontSize(6)
-    doc.setTextColor(80, 80, 80)
-    doc.text(`SKU ${item.sku}`, x + 3, y + 34)
+    doc.setTextColor(71, 85, 105)
+    doc.text(`SKU ${item.sku}`, x + 3, y + 33)
   })
 
   const filename = opts?.filename || stampFilename('inventory-serial-labels')

@@ -1577,7 +1577,7 @@ function InventoryContent() {
                     <p className="font-mono text-[9px] text-primary-700">SKU: {s.sku ?? prod?.sku ?? '—'}</p>
                   </div>
                   <div className="flex flex-wrap gap-2">
-                    <ActionBtn label={<><Fa icon={faPrint} /> Label</>} tone="primary" onClick={() => printSerialLabels([{ serial: s.serial, barcode: s.barcode, productName: s.productName, sku: s.sku ?? prod?.sku ?? '', salePrice: prod?.salePrice, category: prod?.category }])} />
+                    <ActionBtn label={<><Fa icon={faPrint} /> Label</>} tone="primary" onClick={() => printSerialLabels([{ serial: s.serial, barcode: s.barcode, productName: s.productName, sku: s.sku ?? prod?.sku ?? '', salePrice: prod?.salePrice, category: prod?.category, productType: (prod as any)?.productType, specs: s.specs }])} />
                     <ActionBtn label={<><Fa icon={faTriangleExclamation} /> Move to With Issues</>} tone="warning" onClick={() => requestMoveToIssues(s)} />
                     <ActionBtn label={<><Fa icon={faWrench} /> Send for Refurbishment</>} tone="secondary" onClick={() => requestSendForRefurbishment(s)} />
                   </div>
@@ -1721,6 +1721,14 @@ function InventoryContent() {
                   key: 'category', label: 'Category', priority: 2, width: '120px',
                   render: product => <span className="text-xs text-text-3 erp-truncate" title={product.category}>{product.category}</span>,
                   exportValue: product => product.category,
+                },
+                {
+                  key: 'condition', label: 'Condition', priority: 2, width: '90px',
+                  render: product => {
+                    const t = (product as any).productType === 'new' ? 'New' : 'Refurb'
+                    return <span className="text-xs font-semibold text-text-2">{t}</span>
+                  },
+                  exportValue: product => ((product as any).productType === 'new' ? 'New' : 'Refurbished'),
                 },
                 {
                   key: 'available', label: 'Available', priority: 1, width: '100px', align: 'right',
@@ -3301,7 +3309,8 @@ function InventoryContent() {
                 <span>✓ Product name</span>
                 <span>✓ Sale price</span>
                 <span>✓ SKU</span>
-                <span>✓ Category</span>
+                <span>✓ Category · Condition</span>
+                <span>✓ Specs / description</span>
                 <span>✓ CODE128 barcode</span>
                 <span>✓ Deed brand mark</span>
               </div>
@@ -3572,7 +3581,7 @@ function InventoryContent() {
             )}
             {form.productKind !== 'service' && form.category !== 'Services' && (
               <>
-                <Field label="Condition (pricing)">
+                <Field label="Condition" hint="Printed on labels · selects New vs Refurb pricing band">
                   <Select
                     value={form.productType === 'new' ? 'new' : 'refurbished'}
                     onChange={v => {
