@@ -1,11 +1,20 @@
 /**
  * Margin / floor-price / discount approval triggers for Sale Orders.
  * Reuses existing ApprovalType ladders (discount + special_pricing).
+ *
+ * When pricingMarginPolicy is enabled, each line's minimum classic GP% is:
+ *   overheadRate + (categoryMinTarget - tierReduction(cost))
+ * matching the Deed Margins spreadsheet identity.
  */
 
 import type { ApprovalType } from '@/lib/sales-flow-types'
 import { requiresApproval } from '@/lib/sales-approvals'
 import { needsSpecialPricingApproval, type PricelistProductPrices, type ResolveListPriceResult } from '@/lib/pricing/pricelist'
+import { calculateMarginQuote } from '@/lib/pricing/margin-calculator'
+import {
+  normalizePricingMarginPolicy,
+  type PricingMarginPolicy,
+} from '@/lib/pricing/margin-policy'
 
 export interface MarginApprovalLine {
   productId?: string
@@ -24,6 +33,9 @@ export interface MarginApprovalProduct extends PricelistProductPrices {
   costPrice?: number | null
   unit?: string | null
   trackStock?: boolean | null
+  category?: string | null
+  pricingCategoryId?: string | null
+  productType?: 'new' | 'refurbished' | string | null
 }
 
 export interface SaleOrderApprovalTrigger {
@@ -45,10 +57,30 @@ export function lineGrossMarginPercent(opts: {
   return ((net - cost) / net) * 100
 }
 
+function lineMinMarginPercent(opts: {
+  product: MarginApprovalProduct
+  fallbackMin: number
+  policy?: PricingMarginPolicy | Partial<PricingMarginPolicy> | null
+}): number {
+  const policy = opts.policy ? normalizePricingMarginPolicy(opts.policy) : null
+  if (!policy?.enabled) return opts.fallbackMin
+  const cost = Number(opts.product.costPrice) || 0
+  if (!(cost > 0)) return opts.fallbackMin
+  const quote = calculateMarginQuote({
+    policy,
+    buyCostKes: cost,
+    erpCategory: opts.product.category,
+    pricingCategoryId: opts.product.pricingCategoryId,
+    productType: opts.product.productType,
+  })
+  if (!quote.ok) return opts.fallbackMin
+  return quote.approvalMinGrossMarginPct
+}
+
 /**
  * Compute approval triggers for a quotation / SO before send or confirm.
- * Floor price = product cost. Margin uses settings.salesMinMarginPercent
- * (falls back to reconfigurationMinMarginPct / 10).
+ * Floor price = product cost. Margin uses per-category policy floors when set,
+ * else settings.salesMinMarginPercent (fallback 10).
  */
 export function computeSaleOrderApprovalTriggers(opts: {
   lines: readonly MarginApprovalLine[]
@@ -56,6 +88,7 @@ export function computeSaleOrderApprovalTriggers(opts: {
   headerDiscountAmount?: number
   orderTotal?: number
   minMarginPercent?: number
+  pricingMarginPolicy?: PricingMarginPolicy | Partial<PricingMarginPolicy> | null
   /** Effective list price per product (from resolveListPrice). */
   listPriceByProductId?: Record<string, number>
   creditRequested?: number
@@ -64,7 +97,7 @@ export function computeSaleOrderApprovalTriggers(opts: {
 }): SaleOrderApprovalTrigger[] {
   const triggers: SaleOrderApprovalTrigger[] = []
   const lines = (opts.lines ?? []).filter(l => l.lineType !== 'section')
-  const minMargin = Number.isFinite(Number(opts.minMarginPercent))
+  const fallbackMin = Number.isFinite(Number(opts.minMarginPercent))
     ? Number(opts.minMarginPercent)
     : 10
 
@@ -73,6 +106,7 @@ export function computeSaleOrderApprovalTriggers(opts: {
   let belowMargin = false
   let belowPricelist = false
   let worstMargin: number | null = null
+  let strictestFloor: number | null = null
   const offenders: string[] = []
 
   for (const line of lines) {
@@ -93,12 +127,20 @@ export function computeSaleOrderApprovalTriggers(opts: {
       offenders.push(line.productName || product.name || product.id)
     }
 
+    const lineFloor = lineMinMarginPercent({
+      product,
+      fallbackMin,
+      policy: opts.pricingMarginPolicy,
+    })
+    strictestFloor =
+      strictestFloor == null ? lineFloor : Math.max(strictestFloor, lineFloor)
+
     const margin = lineGrossMarginPercent({
       unitPrice,
       costPrice: cost,
       discountPercent: disc,
     })
-    if (margin != null && cost > 0 && margin < minMargin) {
+    if (margin != null && cost > 0 && margin + 0.0001 < lineFloor) {
       belowMargin = true
       worstMargin = worstMargin == null ? margin : Math.min(worstMargin, margin)
       offenders.push(line.productName || product.name || product.id)
@@ -144,20 +186,22 @@ export function computeSaleOrderApprovalTriggers(opts: {
     }
   }
 
+  const reportedFloor = strictestFloor == null ? fallbackMin : Math.round(strictestFloor * 100) / 100
+
   if (belowCost || belowMargin || belowPricelist) {
     const details = {
       value: Number(opts.orderTotal) || 0,
       belowCost,
       belowMargin,
       belowPricelist,
-      minMarginPercent: minMargin,
+      minMarginPercent: reportedFloor,
       worstMargin: worstMargin == null ? undefined : Math.round(worstMargin * 100) / 100,
       products: [...new Set(offenders)].slice(0, 8),
     }
     if (requiresApproval('special_pricing', details)) {
       const bits = [
         belowCost ? 'below cost (floor)' : null,
-        belowMargin ? `margin below ${minMargin}%` : null,
+        belowMargin ? `margin below ${reportedFloor}%` : null,
         belowPricelist ? 'below pricelist' : null,
       ].filter(Boolean)
       triggers.push({

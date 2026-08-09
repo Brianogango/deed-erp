@@ -465,6 +465,18 @@ export async function processStockReceipt(params: {
     reference: params.reference,
   })
 
+  // Keep product master cost (and margin-policy list) aligned with new average.
+  try {
+    const { syncProductListFromCost } = await import('@/lib/pricing/sync-product-list-from-cost.server')
+    await syncProductListFromCost({
+      productId: params.productId,
+      costPrice: applied.averageCost,
+      recalcSale: true,
+    })
+  } catch {
+    /* non-fatal — valuation already committed */
+  }
+
   return {
     skipped: false as const,
     costingMethod,

@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { requireRole, withApiErrorHandling } from '@/lib/auth/api'
 import { isSerialOnlyCategory } from '@/lib/inventory-identifiers'
+import { resolveListSaleFromMargin } from '@/lib/pricing/apply-margin-sale-price'
+import { loadServerMarginPolicy } from '@/lib/pricing/sync-product-list-from-cost.server'
 
 const WRITE_ROLES = ['director', 'admin_officer', 'inventory_officer', 'technical_lead', 'finance_officer']
 
@@ -17,7 +19,11 @@ async function findProductDuplicate(id: string, name?: string | null, sku?: stri
   })
 }
 
-function mapBody(body: any) {
+function asSpecs(raw: unknown): Record<string, unknown> {
+  return raw && typeof raw === 'object' && !Array.isArray(raw) ? { ...(raw as Record<string, unknown>) } : {}
+}
+
+function mapBody(body: any, existingSpecs: Record<string, unknown>) {
   const data: Record<string, any> = {}
   if (body.name       !== undefined) data.name         = String(body.name)
   if (body.sku        !== undefined) data.sku          = String(body.sku)
@@ -30,12 +36,42 @@ function mapBody(body: any) {
   else if (body.reorderLevel !== undefined) data.reorderLevel = Number(body.reorderLevel)
   if (body.isActive   !== undefined) data.isActive     = Boolean(body.isActive)
   if (body.trackStock !== undefined) data.trackStock   = Boolean(body.trackStock)
+  if (body.productType !== undefined) {
+    const t = String(body.productType).toLowerCase()
+    if (t === 'new' || t === 'refurbished') data.productType = t
+  }
   if (body.trackingMethod !== undefined) {
     const method = String(body.trackingMethod).toUpperCase()
     if (method === 'NONE' || method === 'QUANTITY' || method === 'BATCH' || method === 'SERIAL') {
       data.trackingMethod = method
     }
   }
+  if (body.invoicePolicy !== undefined) {
+    const policy = String(body.invoicePolicy)
+    if (policy === 'order' || policy === 'delivery') data.invoicePolicy = policy
+  }
+
+  const specs = asSpecs(existingSpecs)
+  let specsChanged = false
+  if (body.productKind !== undefined) {
+    specs.productKind = body.productKind || null
+    specsChanged = true
+  }
+  if (body.unit !== undefined) {
+    specs.unit = body.unit || null
+    specsChanged = true
+  }
+  if (body.taxRate !== undefined) {
+    specs.taxRatePct = Number(body.taxRate)
+    specsChanged = true
+  }
+  if (body.pricingCategoryId !== undefined) {
+    const band = String(body.pricingCategoryId || '').trim()
+    specs.pricingCategoryId = band || null
+    specsChanged = true
+  }
+  if (specsChanged) data.specs = specs
+
   return data
 }
 
@@ -43,13 +79,20 @@ async function handleUpdate(request: NextRequest, id: string) {
   return withApiErrorHandling(async () => {
     await requireRole(WRITE_ROLES)
     const body = await request.json()
-    const data = mapBody(body)
     const existing = await prisma.product.findUnique({
       where: { id },
-      select: { id: true, category: { select: { name: true } } },
+      select: {
+        id: true,
+        costPrice: true,
+        sellingPrice: true,
+        productType: true,
+        specs: true,
+        category: { select: { name: true } },
+      },
     })
     if (!existing) return NextResponse.json({ error: 'Product not found' }, { status: 404 })
 
+    const data = mapBody(body, asSpecs(existing.specs))
     const categoryName = body.category ?? existing.category?.name
     if (isSerialOnlyCategory(categoryName)) {
       data.trackingMethod = 'SERIAL'
@@ -68,11 +111,37 @@ async function handleUpdate(request: NextRequest, id: string) {
         { status: 409 },
       )
     }
+
+    // When cost changes and caller did not send an explicit sale, refresh list from margin policy.
+    const costChanging = body.costPrice !== undefined && Number(body.costPrice) !== Number(existing.costPrice)
+    const saleExplicit = body.salePrice !== undefined || body.sellingPrice !== undefined
+    if (costChanging && !saleExplicit) {
+      const specs = asSpecs(data.specs ?? existing.specs)
+      const { policy, legacyMarkupMap } = await loadServerMarginPolicy()
+      const resolved = resolveListSaleFromMargin({
+        costPrice: Number(body.costPrice),
+        erpCategory: categoryName,
+        pricingCategoryId: typeof specs.pricingCategoryId === 'string' ? specs.pricingCategoryId : null,
+        productType: data.productType ?? existing.productType,
+        productKind: typeof specs.productKind === 'string' ? specs.productKind : null,
+        unit: typeof specs.unit === 'string' ? specs.unit : null,
+        policy,
+        legacyMarkupMap,
+      })
+      if (resolved.salePrice != null) data.sellingPrice = resolved.salePrice
+    }
+
     const product = await prisma.product.update({ where: { id }, data })
+    const specs = asSpecs(product.specs)
     return NextResponse.json({
       ...product,
       salePrice: Number(product.sellingPrice),
       minStock: product.reorderLevel ?? 0,
+      productType: product.productType,
+      pricingCategoryId: typeof specs.pricingCategoryId === 'string' ? specs.pricingCategoryId : null,
+      productKind: typeof specs.productKind === 'string' ? specs.productKind : null,
+      taxRate: Number(specs.taxRatePct ?? 16),
+      unit: typeof specs.unit === 'string' ? specs.unit : undefined,
     })
   })
 }

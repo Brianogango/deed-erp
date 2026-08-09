@@ -1,7 +1,8 @@
 'use client'
 import { createContext, useContext, useState, useMemo, useEffect, useCallback } from 'react'
-import { useApp, fmtKes, fmtDate, ALL_CATEGORIES, type CategoryId } from '@/lib/store'
-import { calcSalePriceFromCost } from '@/lib/sale-price-calculator'
+import { useApp, fmtKes, fmtDate } from '@/lib/store'
+import { MarginPolicySettings } from '@/components/modules/settings/MarginPolicySettings'
+import { normalizePricingMarginPolicy, DEFAULT_PRICING_MARGIN_POLICY } from '@/lib/pricing/margin-policy'
 import { useHrStore } from '@/hooks/useHrStore'
 import { Badge, Confirm, Field, Input, Modal, ModuleSkeleton, PanelHeader, Select, Textarea, ExportButtons, useMounted } from '@/components/ui'
 import { ModuleChrome } from '@/components/erp'
@@ -870,56 +871,11 @@ ACCOUNTS_EMAIL=accounts@deed.co.ke`}</pre>
                 </SettingRow>
                 {ss.salesPricelists && <PricelistsPanel showToast={showToast} />}
               </SectionCard>
-              <SectionCard title="Sales price calculator">
-                <p className="text-[11.5px] text-gray-500 pt-2 pb-1 leading-relaxed">
-                  Set a markup % per product category. Inventory then fills sale price from cost automatically:
-                  {' '}<span className="font-mono text-[11px]">sale = cost × (1 + % ÷ 100)</span>, rounded to whole KES.
-                  Leave a category blank to turn auto-calc off for it.
-                </p>
-                <div className="py-2 space-y-0">
-                  {ALL_CATEGORIES.map(cat => {
-                    const map = ss.invCategorySaleMarkupPct ?? {}
-                    const raw = map[cat]
-                    const value = raw === undefined || raw === null ? '' : String(raw)
-                    const exampleCost = 10000
-                    const exampleSale = value !== '' && Number.isFinite(Number(value))
-                      ? calcSalePriceFromCost(exampleCost, Number(value))
-                      : null
-                    return (
-                      <div key={cat} className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 py-2.5 border-b border-gray-50 last:border-0">
-                        <div className="min-w-0">
-                          <p className="text-[12.5px] font-semibold text-gray-800">{cat}</p>
-                          <p className="text-[10.5px] text-gray-400 mt-0.5">
-                            {exampleSale !== null
-                              ? `Example: cost ${fmtKes(exampleCost)} → sale ${fmtKes(exampleSale)}`
-                              : 'No markup — sale price stays manual'}
-                          </p>
-                        </div>
-                        <div className="flex items-center gap-1.5 flex-shrink-0">
-                          <Input
-                            type="number"
-                            value={value}
-                            onChange={v => {
-                              const next: Partial<Record<CategoryId, number>> = { ...(ss.invCategorySaleMarkupPct ?? {}) }
-                              const trimmed = v.trim()
-                              if (trimmed === '') {
-                                delete next[cat]
-                              } else {
-                                const n = Number(trimmed)
-                                if (!Number.isFinite(n)) return
-                                next[cat] = n
-                              }
-                              updateSystemSettings({ invCategorySaleMarkupPct: next })
-                            }}
-                            placeholder="—"
-                          />
-                          <span className="text-[11px] font-semibold text-gray-400 w-4">%</span>
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-              </SectionCard>
+              <MarginPolicySettings
+                policy={normalizePricingMarginPolicy(ss.pricingMarginPolicy)}
+                onChange={next => updateSystemSettings({ pricingMarginPolicy: next })}
+                onReset={() => updateSystemSettings({ pricingMarginPolicy: DEFAULT_PRICING_MARGIN_POLICY })}
+              />
               <SectionCard title="Orders">
                 <SettingRow label="Confirm quotation → Sales Order" desc="Mandatory: Confirm turns the same quotation document into a Sales Order before fulfilment or invoicing"><Toggle on={ss.salesConfirmedQuotesToOrders} onChange={v => updateSystemSettings({ salesConfirmedQuotesToOrders: v })} /></SettingRow>
                 <SettingRow label="Lock Confirmed Sales" desc="Confirmed sales orders freeze commercial fields; only a director can unlock to edit, and every unlock is audited"><Toggle on={ss.salesLockConfirmed} onChange={v => updateSystemSettings({ salesLockConfirmed: v })} /></SettingRow>

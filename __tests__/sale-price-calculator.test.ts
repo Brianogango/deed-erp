@@ -4,6 +4,7 @@ import {
   getCategoryMarkupPct,
   suggestSalePriceFromCost,
 } from '@/lib/sale-price-calculator'
+import { DEFAULT_PRICING_MARGIN_POLICY } from '@/lib/pricing/margin-policy'
 
 describe('sale-price-calculator', () => {
   it('computes markup on cost rounded to whole KES', () => {
@@ -20,10 +21,18 @@ describe('sale-price-calculator', () => {
     expect(getCategoryMarkupPct(undefined, 'Laptops')).toBeNull()
   })
 
-  it('suggests sale price only when markup is configured', () => {
+  it('suggests sale price from legacy markup when no policy passed', () => {
     const map = { Accessories: 40 }
     expect(suggestSalePriceFromCost(map, 'Accessories', 2500)).toBe(3500)
     expect(suggestSalePriceFromCost(map, 'Laptops', 2500)).toBeNull()
     expect(suggestSalePriceFromCost(map, 'Accessories', '')).toBeNull()
+  })
+
+  it('prefers margin policy list price when policy is passed', () => {
+    expect(
+      suggestSalePriceFromCost(null, 'Parts & Components', 5000, {
+        policy: DEFAULT_PRICING_MARGIN_POLICY,
+      }),
+    ).toBe(7000)
   })
 })

@@ -7,6 +7,11 @@ import { mergeCatalogProducts, mergeProductsRemoteState } from '@/lib/catalog-me
 import { bootApiGroupsForRoute, remainingBootApiGroups, type BootApiGroup } from '@/lib/boot-apis'
 import { documentMoneySnapshot, FUNCTIONAL_CURRENCY } from '@/lib/currency'
 import { resolveListPrice } from '@/lib/pricing/pricelist'
+import {
+  DEFAULT_PRICING_MARGIN_POLICY,
+  normalizePricingMarginPolicy,
+  type PricingMarginPolicy,
+} from '@/lib/pricing/margin-policy'
 import type { CreateUserInput, ModuleId as AuthModuleId, PublicUser, UpdateUserInput, UserRole as AuthUserRole } from '@/lib/auth/types'
 import { calcStockByLocation as _calcStockByLocation, upsertBulkStock as _upsertBulkStock, aggregatePayroll } from '@/lib/business-logic'
 import { calculatePayroll } from '@/lib/payroll'
@@ -641,11 +646,15 @@ export interface SystemSettings {
    */
   reconfigurationMinMarginPct: number
   /**
-   * Per-category markup % used to auto-calculate sale price from cost:
-   * salePrice = round(costPrice × (1 + pct / 100)).
-   * Omit or leave blank for a category to disable auto-calc for it.
+   * Legacy per-category markup % (sale = cost × (1 + pct/100)).
+   * Used only when margin policy is disabled or a category is unmapped.
    */
   invCategorySaleMarkupPct: Partial<Record<CategoryId, number>>
+  /**
+   * Deed margin-from-cost policy (overhead + category GP bands + price tiers).
+   * Source of truth for Inventory sale suggestions and sales margin floors.
+   */
+  pricingMarginPolicy: PricingMarginPolicy
   // Purchase
   purPurchaseAgreements: boolean
   purVendorPricelists: boolean
@@ -713,6 +722,7 @@ export const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
   invSerialNumbers: true, invLots: false, invAutomatedValuation: true, invCostingMethod: 'average',
   reconfigurationEnabled: true, reconfigurationMinMarginPct: 10,
   invCategorySaleMarkupPct: {},
+  pricingMarginPolicy: DEFAULT_PRICING_MARGIN_POLICY,
   purPurchaseAgreements: false, purVendorPricelists: true, purRequireApprovalHighValue: true,
   purHighValueThreshold: 50000, purEnforceRFQFlow: true, purStoreLeadTimes: true,
   repRepairOrders: true, repWarrantyTracking: true, repPartsConsumption: true,
@@ -788,6 +798,10 @@ export interface Product {
   writeOffAccountCode?: string   // damage, theft, expiry, and write-off expense account code
   priceDifferenceAccountCode?: string // PO vs vendor bill price variance
   parentId?: string          // links to a parent product — makes this a variant
+  /** Optional override into pricingMarginPolicy.categories (e.g. brand_new_pcs, monitors). */
+  pricingCategoryId?: string
+  /** new | refurbished — drives Brand New PCs vs refurb margin bands for Laptops/Desktops. */
+  productType?: 'new' | 'refurbished'
   priceUpdatedAt?: string
   priceUpdatedBy?: string
 }
@@ -5124,6 +5138,16 @@ export function StoreProvider({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // Ensure margin policy always has spreadsheet defaults when missing/partial.
+  useEffect(() => {
+    const normalized = normalizePricingMarginPolicy(systemSettings.pricingMarginPolicy)
+    const prev = systemSettings.pricingMarginPolicy
+    if (!prev || JSON.stringify(prev) !== JSON.stringify(normalized)) {
+      setSystemSettings(p => ({ ...p, pricingMarginPolicy: normalized }))
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   // One-time: rewrite unpaid open repairs still stamped with legacy 1,500 / 2,500.
   useEffect(() => {
     setRepairs(prev => {
@@ -6811,7 +6835,13 @@ const storeCtx: AppState = {
     companySettings,
     updateCompanySettings: (p) => setCompanySettings(prev => ({ ...prev, ...p })),
     systemSettings,
-    updateSystemSettings: (p) => setSystemSettings(prev => ({ ...prev, ...p })),
+    updateSystemSettings: (p) => setSystemSettings(prev => {
+      const next = { ...prev, ...p }
+      if (p.pricingMarginPolicy) {
+        next.pricingMarginPolicy = normalizePricingMarginPolicy(p.pricingMarginPolicy)
+      }
+      return next
+    }),
 
     sopDocuments,
     saveSopDocuments: setSopDocuments,
@@ -9149,6 +9179,8 @@ const storeCtx: AppState = {
           category: row.category,
           productKind,
           trackingMethod,
+          productType: (row as any).productType === 'new' ? 'new' : 'refurbished',
+          pricingCategoryId: (row as any).pricingCategoryId || undefined,
           salePrice: Number(row.salePrice ?? 0),
           costPrice: Number(row.costPrice ?? 0),
           taxRate: Number(row.taxRate ?? 16),
@@ -10394,6 +10426,7 @@ const storeCtx: AppState = {
           headerDiscountAmount: Number(so.discountAmount) || 0,
           orderTotal: so.total,
           minMarginPercent: Number(systemSettings.salesMinMarginPercent ?? systemSettings.reconfigurationMinMarginPct ?? 10),
+          pricingMarginPolicy: systemSettings.pricingMarginPolicy,
           listPriceByProductId,
           creditRequested: !creditStatus.ok ? so.total : undefined,
           creditAvailable: !creditStatus.ok ? Number((creditStatus as any).creditAvailable) || 0 : undefined,

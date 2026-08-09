@@ -35,4 +35,32 @@ describe('margin / floor approval automation', () => {
     })
     expect(triggers.some(t => t.type === 'discount')).toBe(true)
   })
+
+  it('uses spreadsheet classic GP floor from margin policy', async () => {
+    const { DEFAULT_PRICING_MARGIN_POLICY } = await import('@/lib/pricing/margin-policy')
+    // Repair Parts @ 5000 → approval floor ≈ 18.2% classic GP.
+    // Sell at 5600 → GP ≈ 10.7% → below floor.
+    const triggers = computeSaleOrderApprovalTriggers({
+      lines: [
+        { productId: 'p1', productName: 'RAM 8GB', qty: 1, unitPrice: 5600, discount: 0 },
+      ],
+      products: [
+        {
+          id: 'p1',
+          name: 'RAM 8GB',
+          costPrice: 5000,
+          trackStock: true,
+          category: 'Parts & Components',
+          salePrice: 7000,
+          sellingPrice: 7000,
+        },
+      ],
+      orderTotal: 5600,
+      minMarginPercent: 10,
+      pricingMarginPolicy: DEFAULT_PRICING_MARGIN_POLICY,
+    })
+    const pricing = triggers.find(t => t.type === 'special_pricing')
+    expect(pricing?.details.belowMargin).toBe(true)
+    expect(Number(pricing?.details.minMarginPercent)).toBeGreaterThan(15)
+  })
 })

@@ -13,6 +13,10 @@ export const productSchema = z.object({
   category: z.string().min(1, "Category is required"),
   productKind: z.enum(['storable', 'consumable', 'service']).optional().nullable(),
   trackingMethod: z.enum(['NONE', 'QUANTITY', 'BATCH', 'SERIAL']).optional().nullable(),
+  /** Pricing condition — defaults refurbished (Deed stock); Prisma column defaults to new. */
+  productType: z.enum(['new', 'refurbished']).optional().nullable(),
+  /** Optional override into pricingMarginPolicy.categories (e.g. brand_new_pcs, monitors). */
+  pricingCategoryId: z.string().max(80).optional().nullable(),
   salePrice: z.number().nonnegative("Sale price cannot be negative"),
   costPrice: z.number().nonnegative("Cost price cannot be negative"),
   taxRate: z.number().min(0).max(100).default(16),

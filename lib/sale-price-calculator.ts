@@ -1,8 +1,20 @@
 /**
- * Category markup → selling price from cost.
- * Formula: salePrice = round(costPrice × (1 + markupPct / 100))
- * Returns null when markup is unset so callers can leave sale price alone.
+ * Sale price from cost.
+ *
+ * Primary engine: Deed margin calculator (overhead + category GP + tier reduction).
+ * Legacy fallback: category markup % → sale = round(cost × (1 + pct/100)).
  */
+
+import {
+  calculateMarginQuote,
+  suggestedListPriceFromQuote,
+  type MarginQuote,
+} from '@/lib/pricing/margin-calculator'
+import {
+  DEFAULT_PRICING_MARGIN_POLICY,
+  normalizePricingMarginPolicy,
+  type PricingMarginPolicy,
+} from '@/lib/pricing/margin-policy'
 
 export type CategoryMarkupMap = Partial<Record<string, number>>
 
@@ -18,7 +30,7 @@ export function getCategoryMarkupPct(
   return pct
 }
 
-/** Whole-KES selling price from cost and markup %. */
+/** Whole-KES selling price from cost and markup % (legacy). */
 export function calcSalePriceFromCost(costPrice: number, markupPct: number): number {
   const cost = Number(costPrice)
   const pct = Number(markupPct)
@@ -27,16 +39,116 @@ export function calcSalePriceFromCost(costPrice: number, markupPct: number): num
   return Math.max(0, Math.round(cost * (1 + pct / 100)))
 }
 
-/** When markup is configured and cost is valid, return suggested sale; else null. */
+export function quoteSalePriceFromCost(opts: {
+  costPrice: number | string | null | undefined
+  erpCategory?: string | null
+  pricingCategoryId?: string | null
+  productType?: 'new' | 'refurbished' | string | null
+  policy?: PricingMarginPolicy | Partial<PricingMarginPolicy> | null
+  /** Legacy markup map used only when policy is disabled or category unmapped. */
+  legacyMarkupMap?: CategoryMarkupMap | null
+}): MarginQuote | { ok: false; error: string; legacySale?: number | null } {
+  const costRaw = opts.costPrice
+  if (costRaw === '' || costRaw === null || costRaw === undefined) {
+    return { ok: false, error: 'Cost is empty' }
+  }
+  const cost = Number(costRaw)
+  if (!Number.isFinite(cost) || cost < 0) {
+    return { ok: false, error: 'Cost is invalid' }
+  }
+
+  const policy = normalizePricingMarginPolicy(opts.policy ?? DEFAULT_PRICING_MARGIN_POLICY)
+  if (policy.enabled) {
+    const quote = calculateMarginQuote({
+      policy,
+      buyCostKes: cost,
+      erpCategory: opts.erpCategory,
+      pricingCategoryId: opts.pricingCategoryId,
+      productType: opts.productType,
+    })
+    if (quote.ok) return quote
+    // Fall through to legacy markup when category is unmapped.
+    if (!/no pricing category mapped/i.test(quote.error)) {
+      return quote
+    }
+  }
+
+  const pct = getCategoryMarkupPct(opts.legacyMarkupMap, opts.erpCategory)
+  if (pct === null) {
+    return { ok: false, error: 'No margin policy mapping or legacy markup for this category' }
+  }
+  return {
+    ok: false,
+    error: 'Using legacy markup',
+    legacySale: calcSalePriceFromCost(cost, pct),
+  }
+}
+
+/**
+ * Suggested retail/list sale price from cost.
+ * Prefers rounded max band from margin policy; else legacy markup.
+ */
 export function suggestSalePriceFromCost(
-  map: CategoryMarkupMap | null | undefined,
+  mapOrPolicy: CategoryMarkupMap | PricingMarginPolicy | null | undefined,
   category: string | null | undefined,
   costPrice: number | string | null | undefined,
+  opts?: {
+    policy?: PricingMarginPolicy | Partial<PricingMarginPolicy> | null
+    pricingCategoryId?: string | null
+    productType?: 'new' | 'refurbished' | string | null
+    legacyMarkupMap?: CategoryMarkupMap | null
+  },
 ): number | null {
-  const pct = getCategoryMarkupPct(map, category)
-  if (pct === null) return null
-  if (costPrice === '' || costPrice === null || costPrice === undefined) return null
-  const cost = Number(costPrice)
-  if (!Number.isFinite(cost) || cost < 0) return null
-  return calcSalePriceFromCost(cost, pct)
+  // Back-compat: older callers pass (markupMap, category, cost).
+  const looksLikePolicy =
+    mapOrPolicy != null &&
+    typeof mapOrPolicy === 'object' &&
+    ('categories' in mapOrPolicy || 'annualOverheadKes' in mapOrPolicy || 'enabled' in mapOrPolicy)
+
+  const policy = opts?.policy ?? (looksLikePolicy ? (mapOrPolicy as PricingMarginPolicy) : null)
+  const legacy =
+    opts?.legacyMarkupMap ??
+    (!looksLikePolicy ? (mapOrPolicy as CategoryMarkupMap | null | undefined) : undefined)
+
+  // Legacy 3-arg callers (markup map only) keep markup behaviour.
+  // Inventory / Settings pass policy explicitly once margin calculator is live.
+  if (!policy) {
+    const pct = getCategoryMarkupPct(legacy, category)
+    if (pct === null) return null
+    if (costPrice === '' || costPrice === null || costPrice === undefined) return null
+    const cost = Number(costPrice)
+    if (!Number.isFinite(cost) || cost < 0) return null
+    return calcSalePriceFromCost(cost, pct)
+  }
+
+  const result = quoteSalePriceFromCost({
+    costPrice,
+    erpCategory: category,
+    pricingCategoryId: opts?.pricingCategoryId,
+    productType: opts?.productType,
+    policy,
+    legacyMarkupMap: legacy,
+  })
+
+  if (result.ok) return suggestedListPriceFromQuote(result)
+  if ('legacySale' in result && result.legacySale != null) return result.legacySale
+  return null
+}
+
+export function suggestSalePriceFromMarginPolicy(
+  policy: PricingMarginPolicy | Partial<PricingMarginPolicy> | null | undefined,
+  opts: {
+    costPrice: number | string | null | undefined
+    erpCategory?: string | null
+    pricingCategoryId?: string | null
+    productType?: 'new' | 'refurbished' | string | null
+    legacyMarkupMap?: CategoryMarkupMap | null
+  },
+): number | null {
+  return suggestSalePriceFromCost(opts.legacyMarkupMap ?? null, opts.erpCategory, opts.costPrice, {
+    policy,
+    pricingCategoryId: opts.pricingCategoryId,
+    productType: opts.productType,
+    legacyMarkupMap: opts.legacyMarkupMap,
+  })
 }
