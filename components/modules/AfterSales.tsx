@@ -67,7 +67,9 @@ function AfterSalesContent() {
   const currentUser = users.find(u => u.id === currentUserId)
   const isAdmin     = currentUser?.role === 'director'
   const isFinance   = currentUser?.role === 'finance_officer'
-  const canManage   = isAdmin || isFinance
+  const isInventory = currentUser?.role === 'inventory_officer' || currentUser?.role === 'admin_officer'
+  // Inventory officers receive RMA stock; finance/director process money outcomes.
+  const canManage   = isAdmin || isFinance || isInventory
 
   const [tabParam] = useUrlQueryState('tab', 'warranties')
   const tab: Tab = AFTER_SALES_TABS.includes(tabParam as Tab)

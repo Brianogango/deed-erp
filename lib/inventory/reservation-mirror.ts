@@ -44,7 +44,10 @@ export async function mirrorStockReservationsToPrisma(input: unknown, opts: { fo
         const serialId = Array.isArray(r.serialIds) && r.serialIds[0] && serialIds.has(r.serialIds[0])
           ? r.serialIds[0]
           : (r.serialId && serialIds.has(r.serialId) ? r.serialId : null)
-        const saleOrderId = r.referenceId && UUID_RE.test(String(r.referenceId)) && r.reservedFor === 'sale_order'
+        const reservedFor = String(r.reservedFor || '')
+        const saleOrderId = r.referenceId
+          && UUID_RE.test(String(r.referenceId))
+          && (reservedFor === 'sale_order' || reservedFor === 'sales_order')
           ? String(r.referenceId)
           : null
 

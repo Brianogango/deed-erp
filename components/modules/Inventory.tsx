@@ -26,7 +26,7 @@ import { getCategoryMarkupPct, suggestSalePriceFromCost } from '@/lib/sale-price
 import { useUrlRecordId } from '@/hooks/useUrlRecordId'
 
 type MainTab = 'warehouse_view' | 'product_master' | 'movements' | 'product_catalog' | 'opening_stock' | 'stock_in' | 'stock_out' | 'transfers' | 'adjustments' | 'stock_take' | 'reports'
-type ReportTab = 'stock_on_hand' | 'opening_closing' | 'movements' | 'serial_tracking' | 'serial_lookup' | 'low_stock'
+type ReportTab = 'stock_on_hand' | 'opening_closing' | 'movements' | 'serial_tracking' | 'serial_lookup' | 'low_stock' | 'valuation'
 const MAIN_TABS: MainTab[] = ['warehouse_view', 'product_master', 'movements', 'product_catalog', 'opening_stock', 'stock_in', 'stock_out', 'transfers', 'adjustments', 'stock_take', 'reports']
 const INVENTORY_TAB_ALIASES: Record<string, MainTab> = {
   warehouse: 'warehouse_view',
@@ -207,6 +207,13 @@ function InventoryContent() {
 
   const [tab, setTab] = useState<MainTab>('product_catalog')
   const [reportTab, setReportTab] = useState<ReportTab>('stock_on_hand')
+  const [valuationReport, setValuationReport] = useState<{
+    totals?: { onHand: number; valuationQty: number; totalValue: number; impliedListValue: number; driftLines: number }
+    rows?: Array<{ productId: string; sku: string; name: string; onHand: number; valuationQty: number; qtyDrift: number; averageCost: number; totalValue: number; listCost: number; impliedListValue: number }>
+    error?: string
+    loading?: boolean
+  } | null>(null)
+
 
   useEffect(() => {
     // One-shot heal: rewrite INV-* tags so Tag = manufacturer serial.
@@ -2076,6 +2083,9 @@ function InventoryContent() {
         )
       })()}
 
+
+
+
       {tab === 'opening_stock' && (
         <div className="flex flex-col gap-4">
           <div className="card overflow-hidden">
@@ -2747,6 +2757,7 @@ function InventoryContent() {
               ['serial_tracking', 'Serial Tracking'],
               ['serial_lookup', 'Find Serial'],
               ['low_stock', 'Low Stock'],
+              ['valuation', 'Valuation'],
             ] as [ReportTab, string][]).map(([value, label]) => (
               <button type="button" key={value} onClick={() => {
                 setReportTab(value)
@@ -3150,6 +3161,95 @@ function InventoryContent() {
                 exportFilename="inventory-low-stock"
                 perPage={20}
               />
+            </div>
+          )}
+
+          {reportTab === 'valuation' && (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-xs text-[var(--color-text-muted)]">
+                  Blob on-hand vs Prisma valuation (automated inventory asset). Drift means qty and books disagree.
+                </p>
+                <button
+                  type="button"
+                  className="btn-secondary text-[11px] px-3 py-1.5"
+                  onClick={async () => {
+                    setValuationReport(prev => ({ ...(prev || {}), loading: true, error: undefined }))
+                    try {
+                      const res = await fetch('/api/inventory/valuation-report')
+                      const data = await res.json().catch(() => ({}))
+                      if (!res.ok) {
+                        setValuationReport({ loading: false, error: data.error || 'Failed to load valuation' })
+                        return
+                      }
+                      setValuationReport({ ...data, loading: false })
+                    } catch {
+                      setValuationReport({ loading: false, error: 'Could not reach server' })
+                    }
+                  }}
+                >
+                  {valuationReport?.loading ? 'Loading…' : 'Refresh'}
+                </button>
+              </div>
+              {valuationReport?.error && (
+                <p className="text-xs text-red-700">{valuationReport.error}</p>
+              )}
+              {valuationReport?.totals && (
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
+                  <div className="border border-[var(--color-border)] p-2">
+                    <div className="text-[var(--color-text-muted)]">On hand (blob)</div>
+                    <div className="tabular-nums font-medium">{valuationReport.totals.onHand}</div>
+                  </div>
+                  <div className="border border-[var(--color-border)] p-2">
+                    <div className="text-[var(--color-text-muted)]">Valuation qty</div>
+                    <div className="tabular-nums font-medium">{valuationReport.totals.valuationQty}</div>
+                  </div>
+                  <div className="border border-[var(--color-border)] p-2">
+                    <div className="text-[var(--color-text-muted)]">Inventory value</div>
+                    <div className="tabular-nums font-medium">{fmtKes(valuationReport.totals.totalValue)}</div>
+                  </div>
+                  <div className="border border-[var(--color-border)] p-2">
+                    <div className="text-[var(--color-text-muted)]">Qty drift lines</div>
+                    <div className="tabular-nums font-medium">{valuationReport.totals.driftLines}</div>
+                  </div>
+                </div>
+              )}
+              <div className="overflow-x-auto border border-[var(--color-border)]">
+                <table className="w-full text-xs">
+                  <thead className="bg-[var(--color-surface-muted)] text-left">
+                    <tr>
+                      <th className="px-2 py-1.5 font-medium">Product</th>
+                      <th className="px-2 py-1.5 font-medium text-right">On hand</th>
+                      <th className="px-2 py-1.5 font-medium text-right">Val qty</th>
+                      <th className="px-2 py-1.5 font-medium text-right">Drift</th>
+                      <th className="px-2 py-1.5 font-medium text-right">Avg cost</th>
+                      <th className="px-2 py-1.5 font-medium text-right">Value</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(valuationReport?.rows || []).slice(0, 200).map(row => (
+                      <tr key={row.productId} className="border-t border-[var(--color-border)]">
+                        <td className="px-2 py-1.5">
+                          <div className="font-medium">{row.name}</div>
+                          <div className="text-[var(--color-text-muted)]">{row.sku}</div>
+                        </td>
+                        <td className="px-2 py-1.5 text-right tabular-nums">{row.onHand}</td>
+                        <td className="px-2 py-1.5 text-right tabular-nums">{row.valuationQty}</td>
+                        <td className={`px-2 py-1.5 text-right tabular-nums ${row.qtyDrift !== 0 ? 'text-amber-700' : ''}`}>{row.qtyDrift}</td>
+                        <td className="px-2 py-1.5 text-right tabular-nums">{fmtKes(row.averageCost)}</td>
+                        <td className="px-2 py-1.5 text-right tabular-nums">{fmtKes(row.totalValue)}</td>
+                      </tr>
+                    ))}
+                    {(!valuationReport?.rows || valuationReport.rows.length === 0) && !valuationReport?.loading && (
+                      <tr>
+                        <td colSpan={6} className="px-2 py-6 text-center text-[var(--color-text-muted)]">
+                          Click Refresh to load valuation.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
           )}
         </div>

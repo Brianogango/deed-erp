@@ -8,6 +8,7 @@ import type { BulkStockLevel } from '@/lib/business-logic'
 import type { LocationId } from '@/lib/store'
 import { mirrorStockReservationsToPrisma } from '@/lib/inventory/reservation-mirror'
 import { inferTrackingMethod, isSerialTracking } from '@/lib/inventory-identifiers'
+import { isOnHandSerialStatus } from '@/lib/inventory/serial-status'
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
@@ -570,9 +571,9 @@ export async function applyPosStockMutation(params: {
         : serials.find(s =>
             s.productId === productId
             && String(s.serial || '').toLowerCase() === String(line.serialNumber || '').toLowerCase()
-            && s.status === 'available',
+            && isOnHandSerialStatus(s.status),
           )
-      if (!serial || serial.status !== 'available') {
+      if (!serial || !isOnHandSerialStatus(serial.status)) {
         return { ok: false, error: `Serial not available for ${line.productName || productId}` }
       }
       serial.status = 'sold'
@@ -899,4 +900,162 @@ export async function applyAdjustmentStockMutation(params: {
     deed_stockMoves: JSON.stringify([move, ...stockMoves]),
   })
   return { ok: true, moves: [move] }
+}
+
+/**
+ * Customer RMA receive — restore on-hand qty / mark serials returned@warehouse.
+ * Authoritative blob + Prisma StockLevel writer (client must not re-increment).
+ */
+export async function applyCustomerReturnStockMutation(params: {
+  returnRef: string
+  lines: Array<{
+    productId: string
+    productName: string
+    qty: number
+    serialIds?: string[]
+  }>
+  userId?: string
+}): Promise<{ ok: true; moves: BlobStockMove[] } | { ok: false; error: string }> {
+  const state = await loadAppState(['deed_products', 'deed_serials', 'deed_bulkStock', 'deed_stockMoves'])
+  const products: BlobProduct[] = Array.isArray(state.deed_products) ? [...(state.deed_products as BlobProduct[])] : []
+  const serials: BlobSerial[] = Array.isArray(state.deed_serials) ? [...(state.deed_serials as BlobSerial[])] : []
+  let bulkStock: BulkStockLevel[] =
+    Array.isArray(state.deed_bulkStock) ? [...(state.deed_bulkStock as BulkStockLevel[])] : []
+  const stockMoves: BlobStockMove[] = Array.isArray(state.deed_stockMoves) ? [...(state.deed_stockMoves as BlobStockMove[])] : []
+  const newMoves: BlobStockMove[] = []
+  const stockLevelDeltas = new Map<string, number>()
+
+  for (const line of params.lines) {
+    const productId = String(line.productId || '')
+    const qty = Math.max(0, Math.floor(Number(line.qty) || 0))
+    if (!productId || qty <= 0) continue
+    const serialIds = Array.isArray(line.serialIds) ? line.serialIds : []
+    if (serialIds.length > 0) {
+      for (const sid of serialIds) {
+        const serial = serials.find(s => s.id === sid)
+        if (!serial) return { ok: false, error: `Serial missing for ${line.productName}` }
+        serial.status = 'returned'
+        serial.location = 'warehouse'
+      }
+      const idx = products.findIndex(p => p.id === productId)
+      if (idx >= 0) {
+        products[idx] = { ...products[idx], stockQty: Number(products[idx].stockQty ?? 0) + serialIds.length }
+      }
+      stockLevelDeltas.set(productId, (stockLevelDeltas.get(productId) ?? 0) + serialIds.length)
+      newMoves.push({
+        id: randomUUID(), type: 'return', productId, productName: line.productName,
+        qty: serialIds.length, reason: `Customer return ${params.returnRef}`,
+        fromLocation: 'customer', toLocation: 'warehouse',
+        serialNumbers: serialIds.map(id => serials.find(s => s.id === id)?.serial || id),
+        date: nowIso(), userId: params.userId ?? 'system', documentRef: params.returnRef,
+      })
+    } else {
+      bulkStock = upsertBulkStock(bulkStock, productId, 'warehouse', qty)
+      const idx = products.findIndex(p => p.id === productId)
+      if (idx >= 0) {
+        products[idx] = { ...products[idx], stockQty: Number(products[idx].stockQty ?? 0) + qty }
+      }
+      stockLevelDeltas.set(productId, (stockLevelDeltas.get(productId) ?? 0) + qty)
+      newMoves.push({
+        id: randomUUID(), type: 'return', productId, productName: line.productName,
+        qty, reason: `Customer return ${params.returnRef}`,
+        fromLocation: 'customer', toLocation: 'warehouse',
+        serialNumbers: [], date: nowIso(), userId: params.userId ?? 'system', documentRef: params.returnRef,
+      })
+    }
+  }
+
+  await bumpPrismaOnHand(stockLevelDeltas)
+  await saveStoreKeys({
+    deed_products: JSON.stringify(products),
+    deed_serials: JSON.stringify(serials),
+    deed_bulkStock: JSON.stringify(bulkStock),
+    deed_stockMoves: JSON.stringify([...newMoves, ...stockMoves]),
+  })
+  return { ok: true, moves: newMoves }
+}
+
+/**
+ * Vendor RTV — deduct on-hand / mark serials returned@vendor.
+ */
+export async function applyVendorReturnStockMutation(params: {
+  returnRef: string
+  lines: Array<{
+    productId: string
+    productName: string
+    qty: number
+    serialIds?: string[]
+    requiresSerial?: boolean
+  }>
+  userId?: string
+}): Promise<{ ok: true; moves: BlobStockMove[] } | { ok: false; error: string }> {
+  const state = await loadAppState(['deed_products', 'deed_serials', 'deed_bulkStock', 'deed_stockMoves'])
+  const products: BlobProduct[] = Array.isArray(state.deed_products) ? [...(state.deed_products as BlobProduct[])] : []
+  const serials: BlobSerial[] = Array.isArray(state.deed_serials) ? [...(state.deed_serials as BlobSerial[])] : []
+  let bulkStock: BulkStockLevel[] =
+    Array.isArray(state.deed_bulkStock) ? [...(state.deed_bulkStock as BulkStockLevel[])] : []
+  const stockMoves: BlobStockMove[] = Array.isArray(state.deed_stockMoves) ? [...(state.deed_stockMoves as BlobStockMove[])] : []
+  const newMoves: BlobStockMove[] = []
+  const stockLevelDeltas = new Map<string, number>()
+
+  for (const line of params.lines) {
+    const productId = String(line.productId || '')
+    if (!productId) continue
+    const serialIds = Array.isArray(line.serialIds) ? line.serialIds : []
+    const qty = line.requiresSerial || serialIds.length > 0
+      ? serialIds.length
+      : Math.max(0, Math.floor(Number(line.qty) || 0))
+    if (qty <= 0) continue
+
+    if (serialIds.length > 0) {
+      for (const sid of serialIds) {
+        const serial = serials.find(s => s.id === sid)
+        if (!serial) return { ok: false, error: `Serial missing for ${line.productName}` }
+        if (!isOnHandSerialStatus(serial.status) && serial.status !== 'assigned') {
+          return { ok: false, error: `Serial ${serial.serial || sid} is not on hand` }
+        }
+        serial.status = 'returned'
+        serial.location = 'vendor'
+      }
+      const idx = products.findIndex(p => p.id === productId)
+      if (idx >= 0) {
+        products[idx] = { ...products[idx], stockQty: Math.max(0, Number(products[idx].stockQty ?? 0) - serialIds.length) }
+      }
+      stockLevelDeltas.set(productId, (stockLevelDeltas.get(productId) ?? 0) - serialIds.length)
+      newMoves.push({
+        id: randomUUID(), type: 'return', productId, productName: line.productName,
+        qty: serialIds.length, reason: `Vendor return ${params.returnRef}`,
+        fromLocation: 'warehouse', toLocation: 'vendor',
+        serialNumbers: serialIds.map(id => serials.find(s => s.id === id)?.serial || id),
+        date: nowIso(), userId: params.userId ?? 'system', documentRef: params.returnRef,
+      })
+    } else {
+      const product = products.find(p => p.id === productId)
+      const locs = calcStockByLocation(product ?? { requiresSerial: false }, serials as any, bulkStock, productId)
+      if (Number(locs.warehouse ?? 0) < qty) {
+        return { ok: false, error: `Insufficient warehouse stock for ${line.productName}` }
+      }
+      bulkStock = upsertBulkStock(bulkStock, productId, 'warehouse', -qty)
+      const idx = products.findIndex(p => p.id === productId)
+      if (idx >= 0) {
+        products[idx] = { ...products[idx], stockQty: Math.max(0, Number(products[idx].stockQty ?? 0) - qty) }
+      }
+      stockLevelDeltas.set(productId, (stockLevelDeltas.get(productId) ?? 0) - qty)
+      newMoves.push({
+        id: randomUUID(), type: 'return', productId, productName: line.productName,
+        qty, reason: `Vendor return ${params.returnRef}`,
+        fromLocation: 'warehouse', toLocation: 'vendor',
+        serialNumbers: [], date: nowIso(), userId: params.userId ?? 'system', documentRef: params.returnRef,
+      })
+    }
+  }
+
+  await bumpPrismaOnHand(stockLevelDeltas)
+  await saveStoreKeys({
+    deed_products: JSON.stringify(products),
+    deed_serials: JSON.stringify(serials),
+    deed_bulkStock: JSON.stringify(bulkStock),
+    deed_stockMoves: JSON.stringify([...newMoves, ...stockMoves]),
+  })
+  return { ok: true, moves: newMoves }
 }

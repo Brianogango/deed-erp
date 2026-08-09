@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from '@/lib/auth/server'
 import { applyAdjustmentStockMutation } from '@/lib/inventory/stock-transactions'
+import { postAdjustmentValuation } from '@/lib/inventory/valuation-hooks'
 
 export const dynamic = 'force-dynamic'
 
@@ -20,6 +21,7 @@ export async function POST(request: NextRequest) {
     qty?: number
     reason?: string
     location?: string
+    unitCost?: number
   } | null
 
   if (!body?.adjustmentRef || !body.productId || !body.type || !body.qty) {
@@ -40,5 +42,15 @@ export async function POST(request: NextRequest) {
   if (!result.ok) {
     return NextResponse.json({ error: result.error }, { status: 422 })
   }
-  return NextResponse.json({ ok: true, moves: result.moves })
+
+  const valuation = await postAdjustmentValuation({
+    adjustmentRef: body.adjustmentRef,
+    productId: body.productId,
+    type: body.type,
+    qty: Number(body.qty),
+    unitCost: body.unitCost,
+    userId: session.user.id,
+  }).catch(err => ({ ok: false as const, reason: err instanceof Error ? err.message : 'valuation_failed' }))
+
+  return NextResponse.json({ ok: true, moves: result.moves, valuation })
 }

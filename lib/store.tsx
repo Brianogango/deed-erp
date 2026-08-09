@@ -100,6 +100,10 @@ import {
   resolveProductAccounts,
   type AccountableProduct,
 } from '@/lib/product-accounts'
+import {
+  buildVendorBillPerpetualLines,
+  buildVendorCreditPerpetualLines,
+} from '@/lib/accounting/vendor-bill-perpetual'
 import { inferProductKind, defaultTrackingForKind, defaultUnitForKind } from '@/lib/product-kind'
 import {
   canPostOrPayCustomerInvoice,
@@ -2358,10 +2362,18 @@ const expenseAccountForCategory = (category?: ExpenseCategory) => {
   return map[category ?? 'other'] ?? '6499 - Other Operating Expenses'
 }
 
+type VendorJournalOpts = {
+  /** Clear GRNI instead of expensing stocked PO-linked purchases. */
+  perpetual?: boolean
+  /** PO lines for receipt unit-cost lookup. */
+  poLines?: Array<{ productId?: string; unitPrice?: number }>
+}
+
 const buildInvoicePostingJournal = (
   inv: Invoice,
   resolveProduct?: (productId: string) => AccountableProduct | undefined,
   chartAccounts: Array<{ code: string; name: string }> = [],
+  opts: VendorJournalOpts = {},
 ): JournalEntry => {
   if (inv.type === 'customer_invoice') {
     const revenueBuckets = aggregateLinesByAccount({
@@ -2388,60 +2400,81 @@ const buildInvoicePostingJournal = (
     return { id: uid(), ref: `JRN/${inv.ref}`, date: now(), source: 'invoice', description: `Invoice ${inv.ref} — ${inv.partnerName}`, status: 'posted', invoiceId: inv.id, lines, totalDebit, totalCredit }
   }
 
-  const purchaseBuckets = aggregateLinesByAccount({
-    lines: inv.lines.map(l => ({
-      productId: l.productId,
-      subtotal: l.subtotal,
-      accountCode: l.accountCode,
-      lineType: l.lineType,
-    })),
-    resolveProduct,
-    side: 'purchase',
-    accounts: chartAccounts,
+  const perpetual = Boolean(opts.perpetual && inv.purchaseOrderId)
+  const vendorLines = buildVendorBillPerpetualLines({
+    partnerName: inv.partnerName,
+    ref: inv.ref,
+    subtotal: inv.subtotal,
+    taxTotal: inv.taxTotal,
+    total: inv.total,
+    perpetual,
+    chartAccounts,
+    lines: inv.lines.map(l => {
+      const product = l.productId ? resolveProduct?.(l.productId) : undefined
+      const kind = inferProductKind({
+        productKind: (product as any)?.productKind,
+        category: (product as any)?.category,
+        unit: (product as any)?.unit,
+        trackingMethod: (product as any)?.trackingMethod,
+        requiresSerial: (product as any)?.requiresSerial,
+      })
+      const poLine = opts.poLines?.find(p => p.productId && l.productId && p.productId === l.productId)
+      return {
+        productId: l.productId,
+        qty: Number(l.qty) || 0,
+        unitPrice: Number(l.unitPrice) || 0,
+        subtotal: Number(l.subtotal) || 0,
+        accountCode: l.accountCode,
+        isStocked: kind === 'storable' || kind === 'consumable',
+        receiptUnitCost: Math.max(0, Number(poLine?.unitPrice ?? l.unitPrice) || 0),
+      }
+    }),
   })
-  const purchaseLines = purchaseBuckets.length
-    ? purchaseBuckets.map(b => accountLine(b.account, `Purchase: ${inv.partnerName}`, b.amount, 0))
-    : [accountLine(formatAccountLabel(COMPANY_ACCOUNT_FALLBACKS.costAccountCode, chartAccounts), `Purchase: ${inv.partnerName}`, inv.subtotal, 0)]
-  const lines = [
-    ...purchaseLines,
-    ...(inv.taxTotal > 0 ? [accountLine('1150 - VAT Input', `VAT input on ${inv.ref}`, inv.taxTotal, 0)] : []),
-    accountLine('3000 - Accounts Payable', `AP: ${inv.partnerName}`, 0, inv.total),
-  ]
+  const lines = vendorLines.map(l => accountLine(l.account, l.description, l.debit, l.credit))
   const totalCredit = lines.reduce((s, l) => s + l.credit, 0)
   const totalDebit = lines.reduce((s, l) => s + l.debit, 0)
   return { id: uid(), ref: `JRN/${inv.ref}`, date: now(), source: 'bill', description: `Bill ${inv.ref} — ${inv.partnerName}`, status: 'posted', invoiceId: inv.id, lines, totalDebit, totalCredit }
 }
 
-// Vendor credit note (purchase return) — the mirror image of the vendor-bill
-// posting: debit AP so the amount owed to the vendor shrinks, credit the
-// purchase/cost accounts, and give back any input VAT originally claimed.
+// Vendor credit note (purchase return) — under perpetual inventory credits GRNI
+// (paired with stock valuation Dr GRNI / Cr Inventory) instead of purchase expense.
 const buildVendorCreditJournal = (
   credit: Invoice,
   resolveProduct?: (productId: string) => AccountableProduct | undefined,
   chartAccounts: Array<{ code: string; name: string }> = [],
+  opts: VendorJournalOpts = {},
 ): JournalEntry => {
-  const purchaseBuckets = aggregateLinesByAccount({
-    lines: credit.lines.map(l => ({
-      productId: l.productId,
-      subtotal: Math.abs(l.subtotal),
-      accountCode: l.accountCode,
-      lineType: l.lineType,
-    })),
-    resolveProduct,
-    side: 'purchase',
-    accounts: chartAccounts,
+  const perpetual = Boolean(opts.perpetual && credit.purchaseOrderId)
+  const vendorLines = buildVendorCreditPerpetualLines({
+    partnerName: credit.partnerName,
+    ref: credit.ref,
+    subtotal: credit.subtotal,
+    taxTotal: credit.taxTotal,
+    total: credit.total,
+    perpetual,
+    chartAccounts,
+    lines: credit.lines.map(l => {
+      const product = l.productId ? resolveProduct?.(l.productId) : undefined
+      const kind = inferProductKind({
+        productKind: (product as any)?.productKind,
+        category: (product as any)?.category,
+        unit: (product as any)?.unit,
+        trackingMethod: (product as any)?.trackingMethod,
+        requiresSerial: (product as any)?.requiresSerial,
+      })
+      const poLine = opts.poLines?.find(p => p.productId && l.productId && p.productId === l.productId)
+      return {
+        productId: l.productId,
+        qty: Math.abs(Number(l.qty) || 0),
+        unitPrice: Math.abs(Number(l.unitPrice) || 0),
+        subtotal: Math.abs(Number(l.subtotal) || 0),
+        accountCode: l.accountCode,
+        isStocked: kind === 'storable' || kind === 'consumable',
+        receiptUnitCost: Math.max(0, Number(poLine?.unitPrice ?? l.unitPrice) || 0),
+      }
+    }),
   })
-  const sub = Math.abs(credit.subtotal)
-  const tax = Math.abs(credit.taxTotal)
-  const total = Math.abs(credit.total)
-  const purchaseLines = purchaseBuckets.length
-    ? purchaseBuckets.map(b => accountLine(b.account, `Purchase return: ${credit.partnerName}`, 0, b.amount))
-    : [accountLine(formatAccountLabel(COMPANY_ACCOUNT_FALLBACKS.costAccountCode, chartAccounts), `Purchase return: ${credit.partnerName}`, 0, sub)]
-  const lines = [
-    accountLine('3000 - Accounts Payable', `AP credit: ${credit.partnerName}`, total, 0),
-    ...purchaseLines,
-    ...(tax > 0 ? [accountLine('1150 - VAT Input', `VAT input reversal on ${credit.ref}`, 0, tax)] : []),
-  ]
+  const lines = vendorLines.map(l => accountLine(l.account, l.description, l.debit, l.credit))
   const totalCredit = lines.reduce((s, l) => s + l.credit, 0)
   const totalDebit = lines.reduce((s, l) => s + l.debit, 0)
   return { id: uid(), ref: `JRN/${credit.ref}`, date: now(), source: 'bill', description: `Vendor credit ${credit.ref} — ${credit.partnerName}`, status: 'posted', invoiceId: credit.id, lines, totalDebit, totalCredit }
@@ -5997,10 +6030,15 @@ export function StoreProvider({
   // postInvoice action) routes through here so the AR/revenue subledger and the
   // General Ledger never drift apart. The dedup guard keys on the journal ref.
   const postInvoiceJournalOnce = (inv: Invoice) => {
+    const po = inv.purchaseOrderId ? poRef.current.find(p => p.id === inv.purchaseOrderId) : null
     const journal = buildInvoicePostingJournal(
       inv,
       (productId) => prodRef.current.find(p => p.id === productId),
       accountRef.current.map(a => ({ code: a.code, name: a.name })),
+      {
+        perpetual: systemSettings.invAutomatedValuation !== false,
+        poLines: po?.lines?.map(l => ({ productId: l.productId, unitPrice: l.unitPrice })),
+      },
     )
     setJournalEntries(p => (p.some(j => j.ref === journal.ref) ? p : [journal, ...p]))
     addAuditLog('post_invoice', inv.ref, `${inv.type === 'vendor_bill' ? 'Bill' : 'Invoice'} posted to journal ${journal.ref}`)
@@ -9453,6 +9491,22 @@ const storeCtx: AppState = {
         }
       })
       setOpeningStockPosted(true)
+      // Seed Prisma valuation + opening STK journal (non-blocking).
+      void fetch('/api/inventory/post-opening-valuation', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          reference: 'OPENING',
+          items: items.map(item => {
+            const prod = prodRef.current.find(x => x.id === item.productId)
+            return {
+              productId: item.productId,
+              qty: item.qty,
+              unitCost: Number(prod?.costPrice) || 0,
+            }
+          }),
+        }),
+      }).catch(() => { /* soak-safe */ })
       addAuditLog('opening_stock', 'OPENING', `Opening stock posted — ${items.length} product(s)`)
       showToast('Opening stock posted · locked against further changes')
     },
@@ -10825,14 +10879,38 @@ const storeCtx: AppState = {
         }
       }
 
+      // Stock deduction is server-authoritative via /api/deliveries/:id/validate
+      // (applyDeliveryStockMutation + COGS). Client only updates warranties,
+      // reservations, backorders, and delivery/SO status — never re-decrements qty.
+      const completedLines = del.lines.map((l, i) => ({
+        ...l,
+        qtyDone: lineDone[i] ?? 0,
+      }))
+
+      try {
+        const res = await fetch(`/api/deliveries/${deliveryId}/validate`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            status: 'done',
+            lines: completedLines,
+            warrantyCreated: false,
+            autoInvoice: false,
+          }),
+        })
+        if (!res.ok) {
+          const payload = await res.json().catch(() => null) as { error?: string } | null
+          showToast(payload?.error || 'Delivery validation failed', 'error')
+          return
+        }
+      } catch {
+        showToast('Could not validate delivery on server', 'error')
+        return
+      }
+
       const newWarranties: Warranty[] = []
       doneLines.forEach(l => {
         const prod = prodRef.current.find(x => x.id === l.productId)
-        if (prod && prod.unit !== 'service') {
-          if (!isSerialTracking(inferTrackingMethod(prod)) && l.sourceLocation !== undefined) setBulkStock(prev => upsertBulkStock(prev, l.productId, l.sourceLocation as LocationId, -l.qty))
-          setProducts(p => p.map(x => x.id === l.productId ? { ...x, stockQty: Math.max(0, x.stockQty - l.qty) } : x))
-          addMove(l.productId, l.productName, l.qty, 'out', `Delivery ${del.ref}`, del.ref, l.sourceLocation ?? 'warehouse', 'customer', l.serialIds.map(id => serialRef.current.find(s => s.id === id)?.serial ?? id))
-        }
         l.serialIds.forEach(sid => {
           setSerials(p => p.map(s => s.id === sid ? { ...s, status: 'sold', location: 'customer', soldDate: now(), saleOrderId: del.saleOrderId } : s))
           if (prod && prod.warrantyMonths > 0) {
@@ -10865,8 +10943,6 @@ const storeCtx: AppState = {
       }))
 
       // Backorder for the undelivered remainder (linked to the same SO).
-      // Clamp to SO remaining after this shipment; skip if already covered or
-      // another open picking already holds the remainder (avoids DN spam on qty=1).
       let backorder: Delivery | null = null
       const shippedByProduct: Record<string, number> = {}
       doneLines.forEach(l => {
@@ -10888,7 +10964,6 @@ const storeCtx: AppState = {
         })
         .filter(Boolean) as typeof backorderLines
       if (clampedBackorder.length > 0) {
-        // Ready when the remaining quantity is on hand, Waiting otherwise.
         const backorderShort = clampedBackorder.some(l => {
           const prod = prodRef.current.find(p => p.id === l.productId)
           if (!prod || prod.unit === 'service') return false
@@ -10905,11 +10980,6 @@ const storeCtx: AppState = {
         }
         sync('/api/deliveries', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(backorder) })
       }
-      // Prefer per-input-line done qty — never .find(productId) across duplicates.
-      const completedLines = del.lines.map((l, i) => ({
-        ...l,
-        qtyDone: lineDone[i] ?? 0,
-      }))
       setDeliveries(p => {
         const next = p.map(d => d.id === deliveryId ? {
           ...d,
@@ -10920,9 +10990,6 @@ const storeCtx: AppState = {
         return backorder ? [backorder, ...next] : next
       })
 
-      // Track delivered quantities on the sale order lines. The order status
-      // itself stays "Sales Order" — delivery progress is not a sale state.
-      // Allocate FIFO so duplicate product rows do not each get the full total.
       setSaleOrders(p => p.map(s => {
         if (s.id !== del.saleOrderId) return s;
         const doneByProduct: Record<string, number> = {}
@@ -10932,16 +10999,6 @@ const storeCtx: AppState = {
         sync(`/api/sale-orders/${s.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
         return updated
       }))
-      sync(`/api/deliveries/${deliveryId}/validate`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          status: 'done',
-          lines: completedLines,
-          warrantyCreated: newWarranties.length > 0,
-          autoInvoice: false,
-        }),
-      })
       addAuditLog('validate_delivery', del.ref, `Delivery validated${backorder ? ` · backorder ${backorder.ref} created` : ''}`)
       showToast(`Delivery done · stock updated${backorder ? ` · backorder ${backorder.ref} created` : ''}${newWarranties.length > 0 ? ` · ${newWarranties.length} warranty(ies) created` : ''}`)
     },
@@ -12127,18 +12184,11 @@ const storeCtx: AppState = {
         return
       }
 
+      // Server already wrote products/bulkStock/serials blobs — do not re-increment
+      // local qty (that caused double stock on sync). Only append serial rows we
+      // built for UI until the next store hydrate.
       if (newSerials.length > 0) setSerials(p => [...p, ...newSerials])
       if (newRefurbJobs.length > 0) setRefurbishmentJobs(p => [...p, ...newRefurbJobs])
-
-      // Mirror server stock into local UI state (server already persisted blobs).
-      lines.forEach(line => {
-        if (line.requiresSerial) {
-          setProducts(p => p.map(x => x.id === line.productId ? { ...x, stockQty: x.stockQty + line.serials.length } : x))
-        } else {
-          setBulkStock(prev => upsertBulkStock(prev, line.productId, destination, line.qtyReceived))
-          setProducts(p => p.map(x => x.id === line.productId ? { ...x, stockQty: x.stockQty + line.qtyReceived } : x))
-        }
-      })
 
       // Update receipt status
       setReceipts(p => {
@@ -12363,18 +12413,39 @@ const storeCtx: AppState = {
       if (ret.lines.length === 0) { showToast('Add at least one return line before confirming', 'error'); return false }
       const po = poRef.current.find(p => p.id === ret.poId)
       if (!po) { showToast('Linked purchase order not found', 'error'); return false }
-      // Deduct stock, mark serials as returned
+
+      // Authoritative stock + valuation (GRNI restore) on the server.
+      try {
+        const stockRes = await fetch('/api/inventory/apply-vendor-return-stock', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            returnRef: ret.ref,
+            lines: ret.lines.map(l => ({
+              productId: l.productId,
+              productName: l.productName,
+              qty: l.qty,
+              serialIds: l.serialIds,
+              requiresSerial: l.requiresSerial,
+            })),
+          }),
+        })
+        if (!stockRes.ok) {
+          const payload = await stockRes.json().catch(() => null) as { error?: string } | null
+          showToast(payload?.error || 'Could not apply return stock on server', 'error')
+          return false
+        }
+      } catch {
+        showToast('Could not reach server to apply return stock', 'error')
+        return false
+      }
+      // Optimistic serial status for UI until hydrate.
       ret.lines.forEach(l => {
         if (l.requiresSerial) {
           l.serialIds.forEach(sid => setSerials(p => p.map(s => s.id === sid ? { ...s, status: 'returned', location: 'vendor' } : s)))
-          setProducts(p => p.map(x => x.id === l.productId ? { ...x, stockQty: Math.max(0, x.stockQty - l.serialIds.length) } : x))
-          addMove(l.productId, l.productName, l.serialIds.length, 'return', `Return ${ret.ref}`, ret.ref, 'warehouse', 'vendor', l.serialIds.map(id => serialRef.current.find(s => s.id === id)?.serial ?? id))
-        } else {
-          setBulkStock(prev => upsertBulkStock(prev, l.productId, 'warehouse', -l.qty))
-          setProducts(p => p.map(x => x.id === l.productId ? { ...x, stockQty: Math.max(0, x.stockQty - l.qty) } : x))
-          addMove(l.productId, l.productName, l.qty, 'return', `Return ${ret.ref}`, ret.ref, 'warehouse', 'vendor', [])
         }
       })
+
       // Decide what each returned unit does to the money trail: wind back
       // unbilled received qty, shrink draft bills, and only credit quantities
       // that were billed on a POSTED bill. VAT mirrors each PO line's tax rate
@@ -12545,6 +12616,10 @@ const storeCtx: AppState = {
           creditNote,
           (productId) => prodRef.current.find(x => x.id === productId),
           accountRef.current.map(a => ({ code: a.code, name: a.name })),
+          {
+            perpetual: systemSettings.invAutomatedValuation !== false,
+            poLines: po.lines.map(l => ({ productId: l.productId, unitPrice: l.unitPrice })),
+          },
         )
         setJournalEntries(prev => (prev.some(j => j.ref === journal.ref) ? prev : [journal, ...prev]))
       }
@@ -16163,6 +16238,7 @@ const storeCtx: AppState = {
                 qty: adj.qty,
                 reason: adj.reason,
                 location: 'warehouse',
+                unitCost: prod.costPrice || 0,
               }),
             })
             if (!res.ok) {
@@ -16174,42 +16250,9 @@ const storeCtx: AppState = {
             showToast('Could not apply adjustment on server', 'error')
             return
           }
-          const delta = adj.type === 'add' ? adj.qty : -adj.qty
-          setBulkStock(prev => upsertBulkStock(prev, adj.productId, 'warehouse', delta))
-          setProducts(p => p.map(x => x.id === adj.productId ? { ...x, stockQty: Math.max(0, x.stockQty + delta) } : x))
-          const unitCost = prod.costPrice || 0
-          const value = Math.abs(adj.qty * unitCost)
-          if (value > 0 && prod.inventoryAccountCode) {
-            const offsetCode = adj.type === 'subtract'
-              ? (adj.writeOffAccountCode || adj.varianceAccountCode || prod.costAccountCode)
-              : (adj.varianceAccountCode || prod.costAccountCode)
-            if (offsetCode) {
-              const offsetAccount = accountRef.current.find(a => a.code === offsetCode)
-              const inventoryAccount = accountRef.current.find(a => a.code === prod.inventoryAccountCode)
-              const journal: JournalEntry = {
-                id: uid(),
-                ref: seq('JE', 'je'),
-                date: now(),
-                source: 'adjustment',
-                sourceId: adj.id,
-                description: `${adj.type === 'add' ? 'Stock gain' : 'Stock write-off'} · ${adj.ref} · ${adj.productName}`,
-                status: 'posted',
-                lines: adj.type === 'add' ? [
-                  { id: uid(), accountCode: prod.inventoryAccountCode, accountName: inventoryAccount?.name || 'Inventory Asset', debit: value, credit: 0, memo: adj.ref },
-                  { id: uid(), accountCode: offsetCode, accountName: offsetAccount?.name || 'Inventory Variance', debit: 0, credit: value, memo: adj.ref },
-                ] : [
-                  { id: uid(), accountCode: offsetCode, accountName: offsetAccount?.name || 'Stock Write-off', debit: value, credit: 0, memo: adj.ref },
-                  { id: uid(), accountCode: prod.inventoryAccountCode, accountName: inventoryAccount?.name || 'Inventory Asset', debit: 0, credit: value, memo: adj.ref },
-                ],
-                totalDebit: value,
-                totalCredit: value,
-                createdBy: currentUser()?.name || 'System',
-                createdDate: now(),
-              }
-              setJournalEntries(p => [journal, ...p])
-              addAuditLog('post_stock_adjustment', adj.ref, `Stock adjustment posted to journal ${journal.ref}`)
-            }
-          }
+          // Server applies blob stock + Prisma valuation/STK journal. Do not
+          // re-mutate local qty or post a second blob journal at list cost.
+          addAuditLog('post_stock_adjustment', adj.ref, `Stock adjustment applied on server`)
         }
       }
       setStockAdjustments(p => p.map(a => a.id === adjId ? { ...a, status: approved ? 'approved' : 'rejected', approvedBy: currentUser()?.name, approvedDate: now() } : a))
@@ -17115,7 +17158,7 @@ const storeCtx: AppState = {
       showToast('Return approved — customer may send back the item(s)')
     },
 
-    receiveReturn: (id) => {
+    receiveReturn: async (id) => {
       const ro = returnOrders.find(r => r.id === id)
       if (!ro) return
       if (ro.status !== 'approved') { showToast('Approve the return before receiving items', 'error'); return }
@@ -17130,6 +17173,30 @@ const storeCtx: AppState = {
             showToast(`Serial missing for ${line.productName} — re-select returned serials`, 'error'); return
           }
         }
+      }
+
+      try {
+        const res = await fetch('/api/inventory/apply-customer-return-stock', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            returnRef: ro.ref,
+            lines: ro.lines.map(l => ({
+              productId: l.productId,
+              productName: l.productName,
+              qty: l.qty,
+              serialIds: l.serialIds,
+            })),
+          }),
+        })
+        if (!res.ok) {
+          const payload = await res.json().catch(() => null) as { error?: string } | null
+          showToast(payload?.error || 'Could not apply return stock on server', 'error')
+          return
+        }
+      } catch {
+        showToast('Could not reach server to apply return stock', 'error')
+        return
       }
 
       // Reverse-transfer allocation: wind back SO qtyDelivered (and draft invoice
@@ -17172,6 +17239,7 @@ const storeCtx: AppState = {
           ? `${r.notes || ''}\n[Return after invoice — credit note required: KES ${allocation.creditTotal}]`.trim()
           : r.notes,
       } : r))
+      // Serial status UI only — qty already written by server.
       ro.lines.forEach(line => {
         line.serialIds.forEach(sid => {
           setSerials(p => p.map(s => s.id === sid
@@ -17179,12 +17247,6 @@ const storeCtx: AppState = {
             : s
           ))
         })
-        if (line.serialIds.length === 0) {
-          setProducts(p => p.map(x => x.id === line.productId ? { ...x, stockQty: x.stockQty + line.qty } : x))
-          setBulkStock(prev => upsertBulkStock(prev, line.productId, 'warehouse', line.qty))
-        } else {
-          setProducts(p => p.map(x => x.id === line.productId ? { ...x, stockQty: x.stockQty + line.qty } : x))
-        }
       })
 
       if (so && allocation && allocation.soLineAdjustments.length > 0) {
