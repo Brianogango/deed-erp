@@ -5,14 +5,13 @@ export { makeResourceHook, revalidateResource } from './use-store-resource'
 
 import { makeResourceHook, revalidateResource } from './use-store-resource'
 import type {
-  SaleOrder, RepairOrder, Invoice, PurchaseOrder,
+  SaleOrder, RepairOrder, Invoice,
   Company, Contact, Employee,
 } from '@/lib/store'
 
 export const useSaleOrders   = makeResourceHook<SaleOrder>('/api/sale-orders')
 export const useRepairs       = makeResourceHook<RepairOrder>('/api/repairs')
 export const useInvoices      = makeResourceHook<Invoice>('/api/invoices')
-export const usePurchaseOrders = makeResourceHook<PurchaseOrder>('/api/purchase-orders')
 export const useCompanies     = makeResourceHook<Company>('/api/companies')
 export const useContacts      = makeResourceHook<Contact>('/api/contacts')
 export const useEmployees     = makeResourceHook<Employee>('/api/employees')
@@ -21,7 +20,6 @@ export const useEmployees     = makeResourceHook<Employee>('/api/employees')
 export const revalidateSaleOrders    = () => revalidateResource('/api/sale-orders')
 export const revalidateRepairs       = () => revalidateResource('/api/repairs')
 export const revalidateInvoices      = () => revalidateResource('/api/invoices')
-export const revalidatePurchaseOrders = () => revalidateResource('/api/purchase-orders')
 export const revalidateCompanies     = () => revalidateResource('/api/companies')
 export const revalidateContacts      = () => revalidateResource('/api/contacts')
 export const revalidateEmployees     = () => revalidateResource('/api/employees')

@@ -71,7 +71,6 @@ const roleMatrix = {
   manageDeliveries:          ['director', 'admin_officer', 'inventory_officer', 'technical_lead', 'sales_rep'] as UserRole[],
   // Expense claims — submitters write own rows via merge; approve/reimburse is action-gated.
   manageExpenses:            ['director', 'finance_officer', 'admin_officer', 'sales_rep', 'inventory_officer', 'technical_lead', 'technician', 'kilimall_officer'] as UserRole[],
-  approvePurchaseOrder:      ['director', 'admin_officer', 'finance_officer'] as UserRole[],
   // Purchase order wholesale store writes — matches app/api/purchase-orders/[id]/route.ts's WRITE_ROLES.
   managePurchaseOrders:      ['director', 'admin_officer', 'finance_officer', 'inventory_officer', 'technical_lead'] as UserRole[],
   // Return-to-Vendor: stock-deducting and generates a vendor credit note — matches canManageProcurement.
