@@ -4,6 +4,7 @@ import { getRequiredSession, requireRole, withApiErrorHandling } from '@/lib/aut
 import { optionalUuid, resolveClientId } from '@/lib/legacy-compat'
 import { isUUID } from '@/lib/utils'
 import { computeInvoiceTotals, clampAmountPaid, computeInvoiceLineMoney } from '@/lib/finance-invoice'
+import { assertBillableQty } from '@/lib/purchase/three-way-match'
 import { writeFinancialAudit } from '@/lib/finance-audit'
 import { getNextDocNumber } from '@/lib/doc-ref-counter'
 import { checkFiscalLock } from '@/lib/fiscal-lock.server'
@@ -204,16 +205,57 @@ export async function POST(request: Request) {
       invoiceNumber = await getNextDocNumber('invoice')
     }
 
-    const invoice = await prisma.invoice.create({
-      data: {
-        ...(isUUID(body.id) ? { id: body.id } : {}),
-        ...mapInvoiceBodyToDb(body, clientId),
-        invoiceNumber,
-        createdById: actor.id,
-        items: { create: items },
-      } as any,
-      include: { items: true },
-    })
+    const invoiceData = {
+      ...(isUUID(body.id) ? { id: body.id } : {}),
+      ...mapInvoiceBodyToDb(body, clientId),
+      invoiceNumber,
+      createdById: actor.id,
+      items: { create: items },
+    } as any
+
+    // Server-side 3-way match: a vendor bill tied to a PO can only bill up to
+    // (received − already billed) per line — client-side assertBillableQty
+    // checks are UX only and a tampered POST could otherwise bill quantities
+    // that were never received. Validating and advancing qtyBilled in one
+    // transaction with the invoice create closes that gap; qtyBilled is a
+    // monotonic counter so this deliberately never touches
+    // PurchaseOrder.lockVersion (matches the GRN receiving pattern).
+    const purchaseOrderId = optionalUuid(body.purchaseOrderId)
+    let invoice
+    if (!isCreditNote && purchaseOrderId) {
+      try {
+        invoice = await prisma.$transaction(async tx => {
+          const po = await tx.purchaseOrder.findUnique({ where: { id: purchaseOrderId }, include: { items: true } })
+          const matchedItems = po
+            ? items
+                .filter(item => item.productId)
+                .map(item => ({ item, poItem: po.items.find(i => i.productId === item.productId) }))
+                .filter((m): m is { item: typeof items[number]; poItem: NonNullable<typeof m.poItem> } => Boolean(m.poItem))
+            : []
+
+          for (const { item, poItem } of matchedItems) {
+            assertBillableQty({ qtyReceived: poItem.qtyReceived, qtyBilled: poItem.qtyBilled }, Number(item.qty) || 0)
+          }
+
+          const created = await tx.invoice.create({ data: invoiceData, include: { items: true } })
+
+          for (const { item, poItem } of matchedItems) {
+            const qty = Math.max(0, Math.floor(Number(item.qty) || 0))
+            await tx.purchaseOrderItem.update({
+              where: { id: poItem.id },
+              data: { qtyBilled: Math.min(poItem.qtyOrdered, poItem.qtyBilled + qty) },
+            })
+          }
+
+          return created
+        })
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Three-way match failed'
+        return NextResponse.json({ error: message }, { status: 400 })
+      }
+    } else {
+      invoice = await prisma.invoice.create({ data: invoiceData, include: { items: true } })
+    }
 
     await writeFinancialAudit({
       userId: actor.id,

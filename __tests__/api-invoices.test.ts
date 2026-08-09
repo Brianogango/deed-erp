@@ -2,7 +2,15 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { NextRequest } from 'next/server'
 
 // ── Hoisted mocks ─────────────────────────────────────────────────────────────
-const { mockGetSession, mockRequireRole, mockPrismaInvoice, mockResolveClientId, mockGetNextDocNumber } = vi.hoisted(() => ({
+const {
+  mockGetSession,
+  mockRequireRole,
+  mockPrismaInvoice,
+  mockPrismaPurchaseOrder,
+  mockPrismaPurchaseOrderItem,
+  mockResolveClientId,
+  mockGetNextDocNumber,
+} = vi.hoisted(() => ({
   mockGetSession: vi.fn(),
   mockRequireRole: vi.fn(),
   mockPrismaInvoice: {
@@ -12,6 +20,12 @@ const { mockGetSession, mockRequireRole, mockPrismaInvoice, mockResolveClientId,
     update: vi.fn(),
     delete: vi.fn(),
     count: vi.fn(),
+  },
+  mockPrismaPurchaseOrder: {
+    findUnique: vi.fn(),
+  },
+  mockPrismaPurchaseOrderItem: {
+    update: vi.fn(),
   },
   mockResolveClientId: vi.fn(),
   mockGetNextDocNumber: vi.fn(),
@@ -41,7 +55,19 @@ vi.mock('@/lib/auth/api', () => ({
     }),
 }))
 
-vi.mock('@/lib/prisma', () => ({ default: { invoice: mockPrismaInvoice } }))
+vi.mock('@/lib/prisma', () => ({
+  default: {
+    invoice: mockPrismaInvoice,
+    purchaseOrder: mockPrismaPurchaseOrder,
+    purchaseOrderItem: mockPrismaPurchaseOrderItem,
+    $transaction: async (fn: (tx: any) => Promise<any>) =>
+      fn({
+        invoice: mockPrismaInvoice,
+        purchaseOrder: mockPrismaPurchaseOrder,
+        purchaseOrderItem: mockPrismaPurchaseOrderItem,
+      }),
+  },
+}))
 
 vi.mock('@/lib/finance-audit', () => ({
   writeFinancialAudit: vi.fn().mockResolvedValue(undefined),
@@ -416,5 +442,99 @@ describe('DELETE /api/invoices/:id', () => {
     mockRequireRole.mockRejectedValue(err401())
     const res = await DELETE(new Request(`http://localhost/api/invoices/${INVOICE_ID}`, { method: 'DELETE' }), { params: { id: INVOICE_ID } })
     expect(res.status).toBe(401)
+  })
+})
+
+// ── POST /api/invoices — server-side 3-way match ────────────────────────────
+describe('POST /api/invoices — server-side 3-way match', () => {
+  const PO_ID = 'dddddddd-dddd-dddd-dddd-dddddddddddd'
+  const PRODUCT_ID = 'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee'
+  const PO_ITEM_ID = 'ffffffff-ffff-ffff-ffff-ffffffffffff'
+
+  it('rejects a vendor bill line that exceeds received-minus-billed', async () => {
+    mockPrismaPurchaseOrder.findUnique.mockResolvedValue({
+      id: PO_ID,
+      items: [{ id: PO_ITEM_ID, productId: PRODUCT_ID, qtyOrdered: 10, qtyReceived: 3, qtyBilled: 0 }],
+    })
+
+    const res = await POST(postReq({
+      purchaseOrderId: PO_ID,
+      lines: [{ productId: PRODUCT_ID, description: 'Widget', qty: 5, unitPrice: 100 }],
+      total: 500,
+    }))
+
+    expect(res.status).toBe(400)
+    expect(mockPrismaInvoice.create).not.toHaveBeenCalled()
+    expect(mockPrismaPurchaseOrderItem.update).not.toHaveBeenCalled()
+  })
+
+  it('creates the bill and advances PurchaseOrderItem.qtyBilled atomically when qty fits', async () => {
+    mockPrismaPurchaseOrder.findUnique.mockResolvedValue({
+      id: PO_ID,
+      items: [{ id: PO_ITEM_ID, productId: PRODUCT_ID, qtyOrdered: 10, qtyReceived: 5, qtyBilled: 1 }],
+    })
+    mockPrismaInvoice.create.mockResolvedValue(baseInvoice)
+
+    const res = await POST(postReq({
+      purchaseOrderId: PO_ID,
+      lines: [{ productId: PRODUCT_ID, description: 'Widget', qty: 4, unitPrice: 100 }],
+      total: 400,
+    }))
+
+    expect(res.status).toBe(201)
+    expect(mockPrismaInvoice.create).toHaveBeenCalled()
+    expect(mockPrismaPurchaseOrderItem.update).toHaveBeenCalledWith({
+      where: { id: PO_ITEM_ID },
+      data: { qtyBilled: 5 },
+    })
+  })
+
+  it('clamps qtyBilled at qtyOrdered rather than overshooting', async () => {
+    mockPrismaPurchaseOrder.findUnique.mockResolvedValue({
+      id: PO_ID,
+      items: [{ id: PO_ITEM_ID, productId: PRODUCT_ID, qtyOrdered: 5, qtyReceived: 5, qtyBilled: 3 }],
+    })
+    mockPrismaInvoice.create.mockResolvedValue(baseInvoice)
+
+    const res = await POST(postReq({
+      purchaseOrderId: PO_ID,
+      lines: [{ productId: PRODUCT_ID, description: 'Widget', qty: 2, unitPrice: 100 }],
+      total: 200,
+    }))
+
+    expect(res.status).toBe(201)
+    expect(mockPrismaPurchaseOrderItem.update).toHaveBeenCalledWith({
+      where: { id: PO_ITEM_ID },
+      data: { qtyBilled: 5 },
+    })
+  })
+
+  it('does not enforce 3-way match for a credit note against a PO', async () => {
+    mockPrismaInvoice.create.mockResolvedValue(baseInvoice)
+
+    const res = await POST(postReq({
+      purchaseOrderId: PO_ID,
+      isCreditNote: true,
+      lines: [{ productId: PRODUCT_ID, description: 'Widget', qty: 999, unitPrice: 100 }],
+      total: -99900,
+    }))
+
+    expect(res.status).toBe(201)
+    expect(mockPrismaPurchaseOrder.findUnique).not.toHaveBeenCalled()
+    expect(mockPrismaPurchaseOrderItem.update).not.toHaveBeenCalled()
+  })
+
+  it('creates the invoice normally when the line product is not on the linked PO', async () => {
+    mockPrismaPurchaseOrder.findUnique.mockResolvedValue({ id: PO_ID, items: [] })
+    mockPrismaInvoice.create.mockResolvedValue(baseInvoice)
+
+    const res = await POST(postReq({
+      purchaseOrderId: PO_ID,
+      lines: [{ productId: PRODUCT_ID, description: 'Ad-hoc item', qty: 2, unitPrice: 50 }],
+      total: 100,
+    }))
+
+    expect(res.status).toBe(201)
+    expect(mockPrismaPurchaseOrderItem.update).not.toHaveBeenCalled()
   })
 })
