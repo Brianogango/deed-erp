@@ -195,11 +195,14 @@ enum TaxType {
   @@map("tax_type")
 }
 
+// Matches the client-side POStatus vocabulary exactly (lib/store.tsx) — no
+// unused code depended on the old draft/pending_approval/approved/
+// partially_received wording, so this redefines rather than adds aliases.
 enum PurchaseOrderStatus {
   draft
-  pending_approval
-  approved
-  partially_received
+  sent
+  confirmed
+  partial
   received
   cancelled
 
@@ -1207,6 +1210,8 @@ model PurchaseOrderItem {
   unitCost    Decimal  @map("unit_cost") @db.Decimal(14, 2)
   taxRate     Decimal  @default(0) @map("tax_rate") @db.Decimal(5, 2)
   lineTotal   Decimal  @map("line_total") @db.Decimal(14, 2)
+  // Cost account override for GL posting (e.g. '6101') — client-side POLine.accountCode.
+  accountCode String?  @map("account_code") @db.VarChar(20)
   notes       String?
 
   po       PurchaseOrder @relation(fields: [poId], references: [id], onDelete: Cascade)

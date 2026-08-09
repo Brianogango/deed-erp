@@ -43,7 +43,7 @@ export const procurementSummaryTool: ToolDefinition = {
       }))
 
     const openPOs = await prisma.purchaseOrder.findMany({
-      where: { status: { in: ['draft', 'pending_approval', 'approved', 'partially_received'] } },
+      where: { status: { in: ['draft', 'sent', 'confirmed', 'partial'] } },
       // vendor (Client) is the live vendor relation; supplier is a legacy FK
       // no code path writes anymore — kept as a fallback for any old rows.
       include: { vendor: { select: { name: true } }, supplier: { select: { name: true } } },
