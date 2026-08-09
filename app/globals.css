@@ -5116,3 +5116,375 @@ main#main-content:has(.sales-pilot.sales-doc) > .min-w-0 {
     transform: none;
   }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Reconfiguration Operate — /reconfiguration
+   Reuses inventory-pilot navy chrome; module-local workbench / wizard density.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.reconfig-module .reconfig-body {
+  padding-top: 0.85rem;
+}
+
+.reconfig-delta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.reconfig-delta.is-compact {
+  gap: 0.25rem;
+}
+
+.reconfig-delta-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.15rem 0.45rem;
+  border-radius: 0.35rem;
+  background: color-mix(in srgb, var(--navy) 5%, var(--bg-surface));
+  border: 1px solid color-mix(in srgb, var(--navy) 12%, var(--border));
+  font-size: 0.72rem;
+  color: var(--text-2);
+  line-height: 1.2;
+}
+
+.reconfig-delta-chip.is-changed {
+  background: color-mix(in srgb, var(--accent-cyan) 12%, var(--bg-card));
+  border-color: color-mix(in srgb, var(--accent-cyan) 40%, var(--border));
+  color: var(--text-1);
+}
+
+.reconfig-delta-key {
+  font-weight: 700;
+  font-size: 0.62rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-4);
+}
+
+.reconfig-delta-arrow {
+  color: var(--text-4);
+}
+
+.reconfig-wizard {
+  margin: 0 auto;
+}
+
+.reconfig-wizard-head {
+  margin-bottom: 0.75rem;
+}
+
+.reconfig-wizard-steps {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.35rem;
+  margin-bottom: 0.85rem;
+}
+
+.reconfig-wizard-step {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.55rem 0.65rem;
+  border-radius: 0.45rem;
+  border: 1px solid var(--border-lt);
+  background: var(--bg-card);
+  color: var(--text-4);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.reconfig-wizard-step.is-active {
+  border-color: color-mix(in srgb, var(--navy) 28%, var(--border));
+  color: var(--navy);
+  background: color-mix(in srgb, var(--navy) 6%, var(--bg-card));
+}
+
+.reconfig-wizard-step.is-done {
+  color: var(--text-2);
+}
+
+.reconfig-wizard-step-dot {
+  width: 1.35rem;
+  height: 1.35rem;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.68rem;
+  font-weight: 750;
+  background: var(--bg-muted);
+  color: inherit;
+  flex-shrink: 0;
+}
+
+.reconfig-wizard-step.is-active .reconfig-wizard-step-dot {
+  background: var(--navy);
+  color: #fff;
+}
+
+.reconfig-wizard-step-label {
+  white-space: nowrap;
+}
+
+.reconfig-wizard-panel {
+  border: 1px solid color-mix(in srgb, var(--navy) 14%, var(--border));
+  border-radius: 0.55rem;
+  background: var(--bg-card);
+  padding: 1rem;
+  box-shadow: var(--shadow-xs);
+}
+
+.reconfig-wizard-actions {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-top: 0.85rem;
+}
+
+.reconfig-device-card {
+  border: 1px solid var(--border-lt);
+  border-radius: 0.45rem;
+  background: color-mix(in srgb, var(--navy) 3%, var(--bg-surface));
+  padding: 0.85rem 0.95rem;
+}
+
+.reconfig-comp-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.reconfig-comp-list li {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.15rem 0.65rem;
+  font-size: 0.78rem;
+  padding: 0.4rem 0;
+  border-top: 1px solid var(--border-lt);
+}
+
+.reconfig-comp-list li > :nth-child(3) {
+  grid-column: 1 / -1;
+}
+
+.reconfig-scope-opt {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.4rem 0.75rem;
+  border-radius: 0.4rem;
+  border: 1px solid var(--border);
+  background: var(--bg-surface);
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-2);
+  cursor: pointer;
+  transition: background-color 140ms ease-out, border-color 140ms ease-out;
+}
+
+.reconfig-scope-opt.is-selected {
+  border-color: color-mix(in srgb, var(--navy) 35%, var(--border));
+  background: color-mix(in srgb, var(--navy) 8%, var(--bg-card));
+  color: var(--navy);
+}
+
+.reconfig-review-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+  margin: 0;
+}
+
+.reconfig-review-grid dt {
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: var(--text-4);
+  margin-bottom: 0.15rem;
+}
+
+.reconfig-review-grid dd {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--text-1);
+}
+
+.reconfig-review-full {
+  grid-column: 1 / -1;
+}
+
+.reconfig-workbench-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.65rem;
+  margin-bottom: 0.75rem;
+}
+
+.reconfig-back {
+  width: 2rem;
+  height: 2rem;
+  border-radius: 0.4rem;
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  color: var(--text-3);
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.reconfig-back:hover {
+  color: var(--text-1);
+  background: var(--bg-muted);
+}
+
+.reconfig-back:active {
+  transform: scale(0.98);
+}
+
+.reconfig-pipeline {
+  overflow-x: auto;
+}
+
+.reconfig-action-tray {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.reconfig-compare-pane {
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--bg-card);
+  padding: 0.85rem 0.95rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.reconfig-compare-pane.is-proposed {
+  border-color: color-mix(in srgb, var(--accent-cyan) 35%, var(--border));
+  background: color-mix(in srgb, var(--accent-cyan) 6%, var(--bg-card));
+}
+
+.reconfig-compare-label {
+  font-size: 0.68rem;
+  font-weight: 750;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-4);
+}
+
+.reconfig-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0;
+  border: 1px solid color-mix(in srgb, var(--navy) 16%, var(--border));
+  border-radius: 0.5rem;
+  overflow: hidden;
+  background: var(--bg-card);
+}
+
+.reconfig-metric {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.7rem 0.85rem;
+  border-right: 1px solid var(--border-lt);
+}
+
+.reconfig-metric:last-child {
+  border-right: 0;
+}
+
+.reconfig-metric-label {
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: var(--text-4);
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.reconfig-metric-value {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--navy);
+}
+
+.reconfig-queue {
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--bg-card);
+  overflow: hidden;
+}
+
+.reconfig-queue-title {
+  margin: 0;
+  padding: 0.65rem 0.85rem;
+  font-size: 0.8rem;
+  font-weight: 750;
+  color: var(--text-1);
+  border-bottom: 1px solid var(--border-lt);
+  background: color-mix(in srgb, var(--navy) 4%, var(--bg-card));
+}
+
+.reconfig-queue-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.reconfig-queue-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.7rem 0.85rem;
+  border-bottom: 1px solid var(--border-lt);
+}
+
+.reconfig-queue-item:last-child {
+  border-bottom: 0;
+}
+
+.reconfig-queue-empty {
+  padding: 1.25rem 0.85rem;
+  text-align: center;
+  font-size: 0.78rem;
+  color: var(--text-3);
+}
+
+@media (max-width: 639px) {
+  .reconfig-wizard-step-label {
+    display: none;
+  }
+
+  .reconfig-metrics {
+    grid-template-columns: 1fr;
+  }
+
+  .reconfig-metric {
+    border-right: 0;
+    border-bottom: 1px solid var(--border-lt);
+  }
+
+  .reconfig-metric:last-child {
+    border-bottom: 0;
+  }
+
+  .reconfig-review-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reconfig-scope-opt,
+  .reconfig-back,
+  .reconfig-back:active {
+    transition: none;
+    transform: none;
+  }
+}
