@@ -242,22 +242,19 @@ export default function Sidebar() {
       <div
         className={`sidebar-section-border flex items-center h-16 flex-shrink-0 border-b transition-all duration-300 overflow-hidden ${sidebarOpen ? 'px-5' : 'justify-center px-0'}`}
       >
-        <div className="flex items-center gap-3">
-          {/* Logo mark */}
-          <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 shadow-lg overflow-hidden"
+        <div className="flex items-center gap-3 overflow-hidden">
+          {/* Collapsed: symbol icon */}
+          <div
+            className={`rounded-xl flex items-center justify-center flex-shrink-0 shadow-lg overflow-hidden transition-all duration-300 ${sidebarOpen ? 'w-0 opacity-0 pointer-events-none' : 'w-9 h-9 opacity-100'}`}
             style={{ background: DEED_NAVY }}
           >
             <img src="/deed-icon-transparent.png" alt="Deed" className="w-7 h-7 object-contain brightness-0 invert" />
           </div>
 
-          {/* Brand text */}
-          <div className={`flex flex-col transition-all duration-500 overflow-hidden ${sidebarOpen ? 'opacity-100 w-auto' : 'opacity-0 w-0 pointer-events-none'}`}>
-            <span className="font-black text-[15px] tracking-tight leading-none whitespace-nowrap">
-              <span style={{ color: DEED_BLUE }}>DEED</span>{' '}<span style={{ color: '#FFFFFF' }}>ERP</span>
-            </span>
-            <span className="text-[9px] font-semibold tracking-[0.2em] uppercase mt-0.5 whitespace-nowrap" style={{ color: 'rgba(255,255,255,0.40)' }}>
-              Technologies
-            </span>
+          {/* Expanded: main logo + ERP label */}
+          <div className={`flex items-center gap-2 transition-all duration-500 overflow-hidden ${sidebarOpen ? 'opacity-100 max-w-full' : 'opacity-0 max-w-0 pointer-events-none'}`}>
+            <img src="/deed-logo-inverted.png" alt="Deed Technologies" className="h-8 w-auto max-w-[110px] object-contain flex-shrink-0" />
+            <span className="text-[10px] font-bold tracking-[0.2em] uppercase whitespace-nowrap" style={{ color: 'rgba(255,255,255,0.45)' }}>ERP</span>
           </div>
         </div>
       </div>

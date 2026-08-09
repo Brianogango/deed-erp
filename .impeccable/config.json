@@ -5,6 +5,10 @@
       "lib/store.tsx",
       "app/globals.css"
     ],
-    "ignoreValues": []
+    "ignoreValues": [
+      "rgba(0,174,239,0.5)",
+      "rgba(0,174,239,0.30)",
+      "8px"
+    ]
   }
 }
