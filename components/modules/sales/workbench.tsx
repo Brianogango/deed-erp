@@ -158,8 +158,6 @@ export function buildSoWorkflowSteps(input: {
   deliveryPrepared: boolean
   deliveryDone: boolean
   invoiced: boolean
-  /** @deprecated Payment is shown separately; ignored for step index. */
-  paid?: boolean
   complete?: boolean
 }): Array<{ key: string; label: string; state: 'done' | 'current' | 'todo' }> {
   const keys = [
