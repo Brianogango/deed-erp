@@ -73,7 +73,7 @@ export async function syncProductListFromCost(opts: {
   await prisma.product.update({ where: { id: opts.productId }, data })
   return {
     costPrice: cost,
-    sellingPrice: data.sellingPrice ?? Number(product.sellingPrice) || null,
+    sellingPrice: data.sellingPrice ?? (Number(product.sellingPrice) || null),
     saleRecalculated,
   }
 }
