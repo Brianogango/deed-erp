@@ -141,12 +141,14 @@ export function suggestSalePriceFromMarginPolicy(
     costPrice: number | string | null | undefined
     erpCategory?: string | null
     pricingCategoryId?: string | null
+    productType?: 'new' | 'refurbished' | string | null
     legacyMarkupMap?: CategoryMarkupMap | null
   },
 ): number | null {
   return suggestSalePriceFromCost(opts.legacyMarkupMap ?? null, opts.erpCategory, opts.costPrice, {
     policy,
     pricingCategoryId: opts.pricingCategoryId,
+    productType: opts.productType,
     legacyMarkupMap: opts.legacyMarkupMap,
   })
 }

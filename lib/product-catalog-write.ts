@@ -107,13 +107,17 @@ export async function publishProduct(validated: ValidatedProductInput): Promise<
 
   const trackingMethod = resolveTrackingMethod(validated.trackingMethod, validated.productKind, validated.category)
   const trackStock = validated.productKind === 'service' ? false : validated.trackStock
+  // Explicit productType avoids Prisma @default(new), which mis-floors refurb Laptops/Desktops.
+  const productType = validated.productType === 'new' ? 'new' : 'refurbished'
+  const pricingCategoryId = validated.pricingCategoryId?.trim() || null
   // Client/Excel fields (salePrice, minStock, productKind, unit) map onto Prisma columns.
-  // salePrice → sellingPrice, minStock → reorderLevel; kind/unit live in specs JSON.
+  // salePrice → sellingPrice, minStock → reorderLevel; kind/unit/pricing band live in specs JSON.
   const data: Record<string, unknown> = {
     name: validated.name,
     sku: requestedSku || await buildUniqueSku(validated.name),
     barcode,
     description: validated.description || null,
+    productType,
     sellingPrice: validated.salePrice,
     costPrice: validated.costPrice,
     reorderLevel: validated.minStock,
@@ -125,6 +129,7 @@ export async function publishProduct(validated: ValidatedProductInput): Promise<
       productKind: validated.productKind || null,
       unit: validated.unit || null,
       taxRatePct: validated.taxRate ?? 16,
+      pricingCategoryId,
     },
   }
 
@@ -181,11 +186,17 @@ export async function publishProduct(validated: ValidatedProductInput): Promise<
 }
 
 export function toClientProduct(product: any, categoryName?: string) {
+  const specs = product?.specs && typeof product.specs === 'object' ? product.specs as Record<string, unknown> : {}
   return {
     ...product,
     salePrice: Number(product.sellingPrice ?? product.salePrice ?? 0),
     minStock: Number(product.reorderLevel ?? product.minStock ?? 0),
     stockQty: product.stockQty ?? 0,
+    productType: product.productType === 'new' ? 'new' : product.productType === 'refurbished' ? 'refurbished' : undefined,
+    pricingCategoryId: typeof specs.pricingCategoryId === 'string' ? specs.pricingCategoryId : null,
+    productKind: typeof specs.productKind === 'string' ? specs.productKind : undefined,
+    unit: typeof specs.unit === 'string' ? specs.unit : product.unit,
+    taxRate: Number(specs.taxRatePct ?? product.taxRate ?? 16),
     category: product.category?.name
       ? product.category
       : categoryName

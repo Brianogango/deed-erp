@@ -49,7 +49,18 @@ invoiceIncVat = sellExVat × (1 + vatRate)    // default 16%
 
 `systemSettings.pricingMarginPolicy` stores overhead, category bands, tiers, and ERP category → pricing band maps. Reset restores spreadsheet defaults.
 
-Optional per-product override: `product.pricingCategoryId` (also readable from Prisma `specs.pricingCategoryId` on the server).
+Optional per-product override: `product.pricingCategoryId` stored in Prisma `specs.pricingCategoryId`. Condition is Prisma `product.productType` (`new` | `refurbished`; create defaults to **refurbished** so Laptops/Desktops map to refurb bands, not Brand New PCs).
+
+## Persistence & sync
+
+| Surface | Behaviour |
+|---------|-----------|
+| Product create / bulk | Writes `productType` + `specs.pricingCategoryId` (+ kind/unit/tax) |
+| Product PATCH | Merges specs; when **cost** changes without an explicit sale, recalculates list from policy |
+| Catalog merge (`GET /api/products`) | Hydrates `productType`, `pricingCategoryId`, `productKind` into the client store |
+| GRN / stock receipt | Updates `product.costPrice` to new average and refreshes list from policy |
+| Services | Skipped by margin suggest (manual sale); Inventory hides Condition / Pricing band |
+| Reconfiguration `cost_plus` | Recommended sell = margin-policy list (fallback 25% markup) |
 
 ## Legacy
 

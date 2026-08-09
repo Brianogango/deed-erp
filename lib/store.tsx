@@ -9179,6 +9179,8 @@ const storeCtx: AppState = {
           category: row.category,
           productKind,
           trackingMethod,
+          productType: (row as any).productType === 'new' ? 'new' : 'refurbished',
+          pricingCategoryId: (row as any).pricingCategoryId || undefined,
           salePrice: Number(row.salePrice ?? 0),
           costPrice: Number(row.costPrice ?? 0),
           taxRate: Number(row.taxRate ?? 16),

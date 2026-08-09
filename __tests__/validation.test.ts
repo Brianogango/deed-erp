@@ -73,6 +73,20 @@ describe('productSchema', () => {
     const result = await productSchema.parseAsync({ ...valid, barcode: null })
     expect(result.barcode).toBeNull()
   })
+
+  it('accepts productType and pricingCategoryId', async () => {
+    const result = await productSchema.parseAsync({
+      ...valid,
+      productType: 'refurbished',
+      pricingCategoryId: 'refurb_laptops',
+    })
+    expect(result.productType).toBe('refurbished')
+    expect(result.pricingCategoryId).toBe('refurb_laptops')
+  })
+
+  it('rejects invalid productType', async () => {
+    await expect(productSchema.parseAsync({ ...valid, productType: 'used' })).rejects.toThrow()
+  })
 })
 
 describe('userUpdateSchema', () => {

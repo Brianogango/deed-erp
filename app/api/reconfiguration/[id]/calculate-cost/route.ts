@@ -7,6 +7,9 @@ import {
 } from '@/lib/reconfiguration/costing'
 import { getWorkOrder } from '@/lib/reconfiguration/service'
 import type { PriceMethod } from '@/lib/reconfiguration/types'
+import prisma from '@/lib/prisma'
+import { resolveCostPlusListPrice } from '@/lib/pricing/apply-margin-sale-price'
+import { loadServerMarginPolicy } from '@/lib/pricing/sync-product-list-from-cost.server'
 
 /**
  * POST /api/reconfiguration/[id]/calculate-cost
@@ -53,7 +56,7 @@ export async function POST(request: Request, { params }: { params: { id: string 
     })
 
     const method = (overrides.priceMethod || wo.priceMethod || 'cost_plus') as PriceMethod
-    const price = calculateRecommendedSellingPrice({
+    let price = calculateRecommendedSellingPrice({
       method,
       costAfter: cost.costAfter,
       sellingPriceBefore: wo.sellingPriceBefore != null ? Number(wo.sellingPriceBefore) : null,
@@ -63,6 +66,34 @@ export async function POST(request: Request, { params }: { params: { id: string 
         overrides.finalSellingPrice ??
         (wo.finalSellingPrice != null ? Number(wo.finalSellingPrice) : null),
     })
+
+    // Prefer margin-policy list for cost_plus when caller did not force markupPct.
+    if (method === 'cost_plus' && overrides.markupPct == null) {
+      const { policy, legacyMarkupMap } = await loadServerMarginPolicy()
+      const host = await prisma.product.findUnique({
+        where: { id: wo.productId },
+        select: {
+          productType: true,
+          specs: true,
+          category: { select: { name: true } },
+        },
+      })
+      const specs = host?.specs && typeof host.specs === 'object' ? (host.specs as Record<string, unknown>) : {}
+      price = {
+        recommended: resolveCostPlusListPrice({
+          costPrice: cost.costAfter,
+          erpCategory: host?.category?.name,
+          pricingCategoryId: typeof specs.pricingCategoryId === 'string' ? specs.pricingCategoryId : null,
+          productType: host?.productType,
+          productKind: typeof specs.productKind === 'string' ? specs.productKind : null,
+          unit: typeof specs.unit === 'string' ? specs.unit : null,
+          policy,
+          legacyMarkupMap,
+          fallbackMarkupPct: 25,
+        }),
+        method: 'cost_plus',
+      }
+    }
 
     const selling =
       overrides.finalSellingPrice ??

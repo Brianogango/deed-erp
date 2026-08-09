@@ -81,6 +81,20 @@ describe('mergeCatalogProducts', () => {
     expect(merged[0].trackingMethod).toBe('SERIAL')
     expect(merged[0].requiresSerial).toBe(true)
   })
+
+  it('hydrates productType and pricingCategoryId from Prisma row/specs', () => {
+    const merged = mergeCatalogProducts(
+      [clientItem({ productType: 'new', pricingCategoryId: 'stale' } as any)],
+      [apiRow({
+        productType: 'refurbished',
+        specs: { pricingCategoryId: 'refurb_laptops', productKind: 'storable', unit: 'pcs', taxRatePct: 16 },
+      })],
+      CONFIG,
+    )
+    expect(merged[0].productType).toBe('refurbished')
+    expect(merged[0].pricingCategoryId).toBe('refurb_laptops')
+    expect(merged[0].productKind).toBe('storable')
+  })
 })
 
 describe('mergeProductsStoreWrite', () => {

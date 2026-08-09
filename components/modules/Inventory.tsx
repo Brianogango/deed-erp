@@ -1933,7 +1933,7 @@ function InventoryContent() {
                   <Field label="New Sale Price" required>
                     <Input type="number" value={priceForm.salePrice} onChange={v => setPriceForm(f => ({ ...f, salePrice: v }))} placeholder="0" />
                   </Field>
-                  {(() => {
+                  {priceProduct.productKind !== 'service' && priceProduct.category !== 'Services' && (() => {
                     const quote = quoteSalePriceFromCost({
                       costPrice: priceProduct.costPrice,
                       erpCategory: priceProduct.category,
@@ -3478,12 +3478,15 @@ function InventoryContent() {
                     const kind = defaults.productKind
                     const tracking = defaultTrackingForKind(kind, value)
                     setForm((prev: any) => {
-                      const suggested = suggestSalePriceFromCost(systemSettings.invCategorySaleMarkupPct, value, prev.costPrice, {
-        policy: systemSettings.pricingMarginPolicy,
-        pricingCategoryId: prev.pricingCategoryId || undefined,
-        productType: prev.productType,
-        legacyMarkupMap: systemSettings.invCategorySaleMarkupPct,
-      })
+                      const isService = kind === 'service' || value === 'Services'
+                      const suggested = isService
+                        ? null
+                        : suggestSalePriceFromCost(systemSettings.invCategorySaleMarkupPct, value, prev.costPrice, {
+                            policy: systemSettings.pricingMarginPolicy,
+                            pricingCategoryId: prev.pricingCategoryId || undefined,
+                            productType: prev.productType,
+                            legacyMarkupMap: systemSettings.invCategorySaleMarkupPct,
+                          })
                       return {
                         ...prev,
                         category: value,
@@ -3567,51 +3570,55 @@ function InventoryContent() {
                 {form.barcode ? <Barcode value={form.barcode} width={1.2} height={42} /> : null}
               </div>
             )}
-            <Field label="Condition (pricing)">
-              <Select
-                value={form.productType === 'new' ? 'new' : 'refurbished'}
-                onChange={v => {
-                  setForm((prev: any) => {
-                    const next = { ...prev, productType: v }
-                    const suggested = suggestSalePriceFromCost(systemSettings.invCategorySaleMarkupPct, next.category, next.costPrice, {
-                      policy: systemSettings.pricingMarginPolicy,
-                      pricingCategoryId: next.pricingCategoryId || undefined,
-                      productType: v,
-                      legacyMarkupMap: systemSettings.invCategorySaleMarkupPct,
-                    })
-                    return suggested !== null ? { ...next, salePrice: String(suggested) } : next
-                  })
-                }}
-                options={[
-                  { value: 'refurbished', label: 'Refurbished' },
-                  { value: 'new', label: 'Brand new' },
-                ]}
-              />
-            </Field>
-            <Field label="Pricing band">
-              <Select
-                value={form.pricingCategoryId || ''}
-                onChange={v => {
-                  setForm((prev: any) => {
-                    const next = { ...prev, pricingCategoryId: v }
-                    const suggested = suggestSalePriceFromCost(systemSettings.invCategorySaleMarkupPct, next.category, next.costPrice, {
-                      policy: systemSettings.pricingMarginPolicy,
-                      pricingCategoryId: v || undefined,
-                      productType: next.productType,
-                      legacyMarkupMap: systemSettings.invCategorySaleMarkupPct,
-                    })
-                    return suggested !== null ? { ...next, salePrice: String(suggested) } : next
-                  })
-                }}
-                options={[
-                  { value: '', label: 'Default from category mapping' },
-                  ...normalizePricingMarginPolicy(systemSettings.pricingMarginPolicy).categories.map(c => ({
-                    value: c.id,
-                    label: `${c.name} (${c.minGpMarginPct}-${c.maxGpMarginPct}%)`,
-                  })),
-                ]}
-              />
-            </Field>
+            {form.productKind !== 'service' && form.category !== 'Services' && (
+              <>
+                <Field label="Condition (pricing)">
+                  <Select
+                    value={form.productType === 'new' ? 'new' : 'refurbished'}
+                    onChange={v => {
+                      setForm((prev: any) => {
+                        const next = { ...prev, productType: v }
+                        const suggested = suggestSalePriceFromCost(systemSettings.invCategorySaleMarkupPct, next.category, next.costPrice, {
+                          policy: systemSettings.pricingMarginPolicy,
+                          pricingCategoryId: next.pricingCategoryId || undefined,
+                          productType: v,
+                          legacyMarkupMap: systemSettings.invCategorySaleMarkupPct,
+                        })
+                        return suggested !== null ? { ...next, salePrice: String(suggested) } : next
+                      })
+                    }}
+                    options={[
+                      { value: 'refurbished', label: 'Refurbished' },
+                      { value: 'new', label: 'Brand new' },
+                    ]}
+                  />
+                </Field>
+                <Field label="Pricing band">
+                  <Select
+                    value={form.pricingCategoryId || ''}
+                    onChange={v => {
+                      setForm((prev: any) => {
+                        const next = { ...prev, pricingCategoryId: v }
+                        const suggested = suggestSalePriceFromCost(systemSettings.invCategorySaleMarkupPct, next.category, next.costPrice, {
+                          policy: systemSettings.pricingMarginPolicy,
+                          pricingCategoryId: v || undefined,
+                          productType: next.productType,
+                          legacyMarkupMap: systemSettings.invCategorySaleMarkupPct,
+                        })
+                        return suggested !== null ? { ...next, salePrice: String(suggested) } : next
+                      })
+                    }}
+                    options={[
+                      { value: '', label: 'Default from category mapping' },
+                      ...normalizePricingMarginPolicy(systemSettings.pricingMarginPolicy).categories.map(c => ({
+                        value: c.id,
+                        label: `${c.name} (${c.minGpMarginPct}-${c.maxGpMarginPct}%)`,
+                      })),
+                    ]}
+                  />
+                </Field>
+              </>
+            )}
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
               <Field label="Sale Price">
                 <Input type="number" value={form.salePrice} onChange={setF('salePrice')} />
@@ -3622,12 +3629,15 @@ function InventoryContent() {
                   value={form.costPrice}
                   onChange={v => {
                     setForm((prev: any) => {
-                      const suggested = suggestSalePriceFromCost(systemSettings.invCategorySaleMarkupPct, prev.category, v, {
-        policy: systemSettings.pricingMarginPolicy,
-        pricingCategoryId: prev.pricingCategoryId || undefined,
-        productType: prev.productType,
-        legacyMarkupMap: systemSettings.invCategorySaleMarkupPct,
-      })
+                      const isService = prev.productKind === 'service' || prev.category === 'Services'
+                      const suggested = isService
+                        ? null
+                        : suggestSalePriceFromCost(systemSettings.invCategorySaleMarkupPct, prev.category, v, {
+                            policy: systemSettings.pricingMarginPolicy,
+                            pricingCategoryId: prev.pricingCategoryId || undefined,
+                            productType: prev.productType,
+                            legacyMarkupMap: systemSettings.invCategorySaleMarkupPct,
+                          })
                       return {
                         ...prev,
                         costPrice: v,
@@ -3639,7 +3649,7 @@ function InventoryContent() {
               </Field>
               <Field label="Tax Rate (%)"><Input type="number" value={form.taxRate} onChange={setF('taxRate')} /></Field>
             </div>
-            {(() => {
+            {form.productKind !== 'service' && form.category !== 'Services' && (() => {
               const quote = quoteSalePriceFromCost({
                 costPrice: form.costPrice,
                 erpCategory: form.category,

@@ -48,6 +48,14 @@ export interface CatalogApiRow {
   isActive?: boolean
   trackingMethod?: 'NONE' | 'QUANTITY' | 'BATCH' | 'SERIAL' | string | null
   invoicePolicy?: 'order' | 'delivery' | string | null
+  productType?: 'new' | 'refurbished' | string | null
+  specs?: {
+    productKind?: string | null
+    unit?: string | null
+    taxRatePct?: number | string | null
+    pricingCategoryId?: string | null
+    [key: string]: unknown
+  } | null
   category?: { name?: string | null } | null
 }
 
@@ -137,10 +145,23 @@ export function mergeCatalogProducts<P extends ClientCatalogProduct>(
       requiresSerial: categoryConfig[category]?.serialRequired,
       unit: local?.unit,
     })
+    const specs = row.specs && typeof row.specs === 'object' ? row.specs : null
+    const productType =
+      row.productType === 'new' || row.productType === 'refurbished'
+        ? row.productType
+        : ((local as any)?.productType === 'new' ? 'new' : (local as any)?.productType === 'refurbished' ? 'refurbished' : 'refurbished')
+    const pricingCategoryId =
+      typeof specs?.pricingCategoryId === 'string' && specs.pricingCategoryId
+        ? specs.pricingCategoryId
+        : (local as any)?.pricingCategoryId || undefined
+    const productKind =
+      typeof specs?.productKind === 'string' && specs.productKind
+        ? specs.productKind
+        : (local as any)?.productKind
+    const unitFromSpecs = typeof specs?.unit === 'string' && specs.unit ? specs.unit : null
+    const taxFromSpecs = specs?.taxRatePct != null ? Number(specs.taxRatePct) : NaN
     return {
-      unit: 'pcs',
       image: CATEGORY_EMOJI[category] ?? '📦',
-      taxRate: 16,
       stockQty: 0,
       canBeSold: true,
       canBePurchased: true,
@@ -165,6 +186,11 @@ export function mergeCatalogProducts<P extends ClientCatalogProduct>(
       minStock: Number(row.reorderLevel ?? local?.minStock ?? 1) || 0,
       trackingMethod,
       requiresSerial: trackingMethod === 'SERIAL' || isSerialOnlyCategory(category),
+      productType,
+      pricingCategoryId,
+      productKind: productKind || (local as any)?.productKind,
+      unit: unitFromSpecs || local?.unit || 'pcs',
+      taxRate: Number.isFinite(taxFromSpecs) ? taxFromSpecs : (local?.taxRate ?? 16),
       // Odoo invoicing policy — server value wins, defaults to Ordered Quantities.
       invoicePolicy: (row.invoicePolicy === 'delivery' || (local as any)?.invoicePolicy === 'delivery') ? 'delivery' : 'order',
       isActive: row.isActive !== false,

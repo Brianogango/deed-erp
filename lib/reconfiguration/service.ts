@@ -563,12 +563,43 @@ async function applyTargetToWorkOrder(workOrderId: string, target: TargetConfigI
     labourCost: dec(wo.labourCost),
     otherCost: dec(wo.otherCost),
   })
-  const price = calculateRecommendedSellingPrice({
-    method: (wo.priceMethod as any) || 'cost_plus',
+  const method = ((wo.priceMethod as any) || 'cost_plus') as import('@/lib/reconfiguration/types').PriceMethod
+  let price = calculateRecommendedSellingPrice({
+    method,
     costAfter: cost.costAfter,
     sellingPriceBefore: dec(wo.sellingPriceBefore),
     markupPct: 25,
   })
+  if (method === 'cost_plus') {
+    try {
+      const { resolveCostPlusListPrice } = await import('@/lib/pricing/apply-margin-sale-price')
+      const { loadServerMarginPolicy } = await import('@/lib/pricing/sync-product-list-from-cost.server')
+      const { policy, legacyMarkupMap } = await loadServerMarginPolicy()
+      const host = await prisma.product.findUnique({
+        where: { id: wo.productId },
+        select: {
+          productType: true,
+          specs: true,
+          category: { select: { name: true } },
+        },
+      })
+      const specs = host?.specs && typeof host.specs === 'object' ? (host.specs as Record<string, unknown>) : {}
+      const list = resolveCostPlusListPrice({
+        costPrice: cost.costAfter,
+        erpCategory: host?.category?.name,
+        pricingCategoryId: typeof specs.pricingCategoryId === 'string' ? specs.pricingCategoryId : null,
+        productType: host?.productType,
+        productKind: typeof specs.productKind === 'string' ? specs.productKind : null,
+        unit: typeof specs.unit === 'string' ? specs.unit : null,
+        policy,
+        legacyMarkupMap,
+        fallbackMarkupPct: 25,
+      })
+      price = { recommended: list, method: 'cost_plus' }
+    } catch {
+      /* keep 25% fallback from calculateRecommendedSellingPrice */
+    }
+  }
   const margin = calculateMargin({ sellingPrice: price.recommended, costAfter: cost.costAfter })
 
   await prisma.reconfigurationWorkOrder.update({
