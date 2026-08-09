@@ -117,21 +117,39 @@ export async function collectApprovalTriggers(
         const { default: prisma } = await import('@/lib/prisma')
         const products = await prisma.product.findMany({
           where: { id: { in: productIds } },
-          select: { id: true, name: true, costPrice: true, trackStock: true, sellingPrice: true },
+          select: {
+            id: true,
+            name: true,
+            costPrice: true,
+            trackStock: true,
+            sellingPrice: true,
+            productType: true,
+            specs: true,
+            category: { select: { name: true } },
+          },
         })
+        const appState = await loadAppState().catch(() => null as any)
+        const settings = (appState as any)?.deed_systemSettings ?? (appState as any)?.systemSettings ?? {}
         const marginTriggers = computeSaleOrderApprovalTriggers({
           lines,
-          products: products.map(p => ({
-            id: p.id,
-            name: p.name,
-            costPrice: Number(p.costPrice) || 0,
-            trackStock: p.trackStock,
-            salePrice: Number(p.sellingPrice) || 0,
-            sellingPrice: Number(p.sellingPrice) || 0,
-          })),
+          products: products.map(p => {
+            const specs = (p.specs && typeof p.specs === 'object' ? p.specs : {}) as Record<string, unknown>
+            return {
+              id: p.id,
+              name: p.name,
+              costPrice: Number(p.costPrice) || 0,
+              trackStock: p.trackStock,
+              salePrice: Number(p.sellingPrice) || 0,
+              sellingPrice: Number(p.sellingPrice) || 0,
+              category: p.category?.name || null,
+              pricingCategoryId:
+                typeof specs.pricingCategoryId === 'string' ? specs.pricingCategoryId : null,
+            }
+          }),
           headerDiscountAmount: Number(body.discountAmount ?? existing?.discountAmount ?? 0),
           orderTotal: total,
-          minMarginPercent: Number(body.minMarginPercent ?? 10),
+          minMarginPercent: Number(body.minMarginPercent ?? settings.salesMinMarginPercent ?? 10),
+          pricingMarginPolicy: settings.pricingMarginPolicy,
         })
         for (const t of marginTriggers) {
           if (t.type !== 'special_pricing' && t.type !== 'discount') continue
