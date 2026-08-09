@@ -1049,7 +1049,7 @@ function PurchaseContent() {
         subtitle="RFQs, orders, receipts and bills"
         icon={<Fa icon={faClipboardCheck} />}
         color="var(--warning)"
-        primaryAction={mainView === 'orders' ? (
+        primaryAction={mainView === 'orders' && ['director', 'admin_officer', 'inventory_officer'].includes(currentUser?.role ?? '') ? (
           <PrimaryActionButton icon={<Fa icon={faPlus} />} onClick={() => setShowNewRFQ(true)}>
             New RFQ
           </PrimaryActionButton>

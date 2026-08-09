@@ -194,7 +194,13 @@ export default function POFormView() {
     const canRevertToDraft = activePO.status === 'sent' && ['director', 'admin_officer'].includes(currentUser?.role ?? '')
     const hasDraftReceipt = receipts.some(r => r.poId === activePO.id && r.status === 'draft')
     const hasOutstandingQty = activePO.lines.some(line => line.qtyReceived < line.qty)
-    const canReceive     = (activePO.status === 'confirmed' || activePO.status === 'partial') && hasOutstandingQty && ['director', 'admin_officer', 'inventory_officer', 'technical_lead'].includes(currentUser?.role ?? '')
+    // technical_lead is deliberately excluded: validateReceipt's
+    // canValidatePurchaseReceiptAction gate (and the server's
+    // validatePurchaseReceipt permission) both reject it, so showing this
+    // button to technical_lead is a guaranteed-denied dead end that loses
+    // unsaved GRN scan progress (serials/specs are local component state
+    // until the receipt is validated).
+    const canReceive     = (activePO.status === 'confirmed' || activePO.status === 'partial') && hasOutstandingQty && ['director', 'admin_officer', 'inventory_officer'].includes(currentUser?.role ?? '')
     const canReturn      = (activePO.status === 'received' || activePO.status === 'partial') && receipts.some(r => r.poId === activePO.id && r.status === 'validated') && ['director', 'admin_officer', 'inventory_officer'].includes(currentUser?.role ?? '')
     const hasBillableQty = activePO.lines.some(line => billableQty(line) > 0)
     const canCreateBill  = (activePO.status === 'received' || activePO.status === 'partial') && hasBillableQty && ['director', 'finance_officer', 'admin_officer'].includes(currentUser?.role ?? '')

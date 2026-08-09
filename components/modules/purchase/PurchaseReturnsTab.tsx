@@ -14,7 +14,7 @@ const REASON_OPTS = [
 
 export default function PurchaseReturnsTab() {
   const {
-    purchaseReturns, serials,
+    purchaseReturns, serials, currentUser,
     retSearchSerial, setRetSearchSerial,
     retFilterStatus, setRetFilterStatus,
     retFilterReason, setRetFilterReason,
@@ -26,6 +26,9 @@ export default function PurchaseReturnsTab() {
     setPickupCollectedBy, setPickupCollectedDate, setPickupNotes,
     fmtDate,
   } = usePurchase()
+  // Matches lib/store.tsx's canManageProcurement — the actual gate behind
+  // logReturnPickup. Hidden rather than shown-then-denied for other roles.
+  const canManageProcurement = ['director', 'admin_officer', 'inventory_officer'].includes(currentUser?.role ?? '')
 
   const uniqueVendors = Array.from(new Map(purchaseReturns.map(r => [r.vendorId, r.vendorName] as [string, string])))
 
@@ -129,7 +132,7 @@ export default function PurchaseReturnsTab() {
   ]
 
   function returnRowActions(r: PurchaseReturn) {
-    return !r.collectedByName ? (
+    return !r.collectedByName && canManageProcurement ? (
       <button className="btn-primary text-[10px] py-1.5 px-3"
         onClick={e => { e.stopPropagation(); setPickupReturnId(r.id); setPickupCollectedBy(''); setPickupCollectedDate(new Date().toISOString().slice(0,10)); setPickupNotes(''); setShowPickupModal(true) }}>
         Log Pickup
@@ -179,18 +182,22 @@ export default function PurchaseReturnsTab() {
                 <div className="flex justify-between"><span className="text-t3">Collected by</span><span className="font-medium text-t1">{r.collectedByName}</span></div>
                 <div className="flex justify-between"><span className="text-t3">Collection date</span><span className="text-t2">{r.collectedDate ? fmtDate(r.collectedDate) : '—'}</span></div>
                 {r.pickupNotes && <div className="mt-1 p-2 rounded text-[10px] text-t2" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-lt)' }}>{r.pickupNotes}</div>}
-                <button className="btn-outline text-[10px] py-1 mt-1"
-                  onClick={() => { setPickupReturnId(r.id); setPickupCollectedBy(r.collectedByUserId ?? ''); setPickupCollectedDate(r.collectedDate ?? new Date().toISOString().slice(0,10)); setPickupNotes(r.pickupNotes ?? ''); setShowPickupModal(true) }}>
-                  ✏ Edit Pickup Details
-                </button>
+                {canManageProcurement && (
+                  <button className="btn-outline text-[10px] py-1 mt-1"
+                    onClick={() => { setPickupReturnId(r.id); setPickupCollectedBy(r.collectedByUserId ?? ''); setPickupCollectedDate(r.collectedDate ?? new Date().toISOString().slice(0,10)); setPickupNotes(r.pickupNotes ?? ''); setShowPickupModal(true) }}>
+                    ✏ Edit Pickup Details
+                  </button>
+                )}
               </div>
             ) : (
               <div className="flex flex-col items-center py-3 gap-2">
                 <p className="text-[11px] text-t3 text-center">Pickup not yet logged</p>
-                <button className="btn-primary text-[11px] py-1.5"
-                  onClick={() => { setPickupReturnId(r.id); setPickupCollectedBy(''); setPickupCollectedDate(new Date().toISOString().slice(0,10)); setPickupNotes(''); setShowPickupModal(true) }}>
-                  + Log Pickup
-                </button>
+                {canManageProcurement && (
+                  <button className="btn-primary text-[11px] py-1.5"
+                    onClick={() => { setPickupReturnId(r.id); setPickupCollectedBy(''); setPickupCollectedDate(new Date().toISOString().slice(0,10)); setPickupNotes(''); setShowPickupModal(true) }}>
+                    + Log Pickup
+                  </button>
+                )}
               </div>
             )}
           </div>
