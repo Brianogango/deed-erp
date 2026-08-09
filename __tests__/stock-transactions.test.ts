@@ -11,10 +11,16 @@ const mockProductFindFirst = vi.fn()
 const mockStockReservationFindMany = vi.fn()
 const mockSaleOrderFindUnique = vi.fn()
 const mockMirrorReservations = vi.fn()
+const mockPurchaseOrderFindUnique = vi.fn()
+const mockPurchaseOrderItemUpdate = vi.fn()
+const mockGoodsReceivedNoteCreate = vi.fn()
+const mockGrnItemCreate = vi.fn()
+const mockSerialNumberCreate = vi.fn()
 
 vi.mock('@/lib/server-store', () => ({
   loadAppState: (...args: unknown[]) => mockLoadAppState(...args),
   saveStoreKeys: (...args: unknown[]) => mockSaveStoreKeys(...args),
+  withAppStateKeyLock: (_key: string, fn: () => Promise<unknown>) => fn(),
 }))
 
 vi.mock('@/lib/inventory/reservation-mirror', () => ({
@@ -39,6 +45,21 @@ vi.mock('@/lib/prisma', () => ({
     saleOrder: {
       findUnique: (...args: unknown[]) => mockSaleOrderFindUnique(...args),
     },
+    purchaseOrder: {
+      findUnique: (...args: unknown[]) => mockPurchaseOrderFindUnique(...args),
+    },
+    purchaseOrderItem: {
+      update: (...args: unknown[]) => mockPurchaseOrderItemUpdate(...args),
+    },
+    goodsReceivedNote: {
+      create: (...args: unknown[]) => mockGoodsReceivedNoteCreate(...args),
+    },
+    grnItem: {
+      create: (...args: unknown[]) => mockGrnItemCreate(...args),
+    },
+    serialNumber: {
+      create: (...args: unknown[]) => mockSerialNumberCreate(...args),
+    },
   },
 }))
 
@@ -61,6 +82,18 @@ beforeEach(() => {
         findUnique: mockProductFindUnique,
         findFirst: mockProductFindFirst,
       },
+      purchaseOrder: {
+        findUnique: mockPurchaseOrderFindUnique,
+      },
+      purchaseOrderItem: {
+        update: mockPurchaseOrderItemUpdate,
+      },
+      goodsReceivedNote: {
+        create: mockGoodsReceivedNoteCreate,
+      },
+      grnItem: {
+        create: mockGrnItemCreate,
+      },
     })
   })
   mockStockLevelFindUnique.mockResolvedValue({ qtyOnHand: 20, qtyReserved: 0 })
@@ -70,6 +103,11 @@ beforeEach(() => {
   mockProductFindFirst.mockResolvedValue(null)
   mockStockReservationFindMany.mockResolvedValue([])
   mockMirrorReservations.mockResolvedValue({ mirrored: 1, skipped: 0, failed: 0 })
+  mockPurchaseOrderFindUnique.mockResolvedValue(null)
+  mockPurchaseOrderItemUpdate.mockResolvedValue({})
+  mockGoodsReceivedNoteCreate.mockResolvedValue({ id: 'grn-1' })
+  mockGrnItemCreate.mockResolvedValue({ id: 'grn-item-1' })
+  mockSerialNumberCreate.mockResolvedValue({})
 })
 
 describe('applyDeliveryStockMutation()', () => {
@@ -194,5 +232,133 @@ describe('applyReceiptStockMutation() — blob/Prisma product ID mismatch', () =
     const updateArg = mockStockLevelUpdate.mock.calls[0]?.[0]
     const usedProductId = createArg?.data?.productId ?? updateArg?.where?.productId
     expect(usedProductId).toBe(PRISMA_PRODUCT_ID)
+  })
+})
+
+describe('applyReceiptStockMutation() — atomic relational GRN', () => {
+  const PO_ID = 'cccccccc-dddd-4eee-8fff-000000000000'
+  const PO_ITEM_ID = 'dddddddd-eeee-4fff-8000-111111111111'
+
+  it('bumps PurchaseOrderItem.qtyReceived and writes a GoodsReceivedNote/GrnItem inside one transaction', async () => {
+    mockLoadAppState.mockResolvedValue({
+      deed_products: [{ id: PRODUCT_ID, name: 'Widget', stockQty: 0, requiresSerial: false }],
+      deed_serials: [],
+      deed_bulkStock: [],
+      deed_stockMoves: [],
+    })
+    mockPurchaseOrderFindUnique.mockResolvedValue({
+      id: PO_ID,
+      items: [{ id: PO_ITEM_ID, productId: PRODUCT_ID, qtyOrdered: 10, qtyReceived: 2, unitCost: 100 }],
+    })
+
+    const result = await applyReceiptStockMutation({
+      receiptId: 'rec-1',
+      receiptRef: 'REC/2026/0001',
+      purchaseOrderId: PO_ID,
+      destination: 'warehouse',
+      supplierInvoiceNo: 'INV-999',
+      lines: [{ productId: PRODUCT_ID, productName: 'Widget', qtyReceived: 3, requiresSerial: false }],
+      userId: 'user-1',
+    })
+
+    expect(result).toEqual(expect.objectContaining({ ok: true }))
+    expect(mockPurchaseOrderFindUnique).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: PO_ID } }),
+    )
+    expect(mockGoodsReceivedNoteCreate).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ poId: PO_ID, supplierInvoiceNo: 'INV-999' }) }),
+    )
+    expect(mockPurchaseOrderItemUpdate).toHaveBeenCalledWith({
+      where: { id: PO_ITEM_ID },
+      data: { qtyReceived: 5 },
+    })
+    expect(mockGrnItemCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ poItemId: PO_ITEM_ID, productId: PRODUCT_ID, qtyReceived: 3, unitCost: 100 }),
+      }),
+    )
+  })
+
+  it('clamps qtyReceived at qtyOrdered rather than overshooting', async () => {
+    mockLoadAppState.mockResolvedValue({
+      deed_products: [{ id: PRODUCT_ID, name: 'Widget', stockQty: 0, requiresSerial: false }],
+      deed_serials: [], deed_bulkStock: [], deed_stockMoves: [],
+    })
+    mockPurchaseOrderFindUnique.mockResolvedValue({
+      id: PO_ID,
+      items: [{ id: PO_ITEM_ID, productId: PRODUCT_ID, qtyOrdered: 5, qtyReceived: 4, unitCost: 100 }],
+    })
+
+    await applyReceiptStockMutation({
+      receiptId: 'rec-1', receiptRef: 'REC/2026/0002', purchaseOrderId: PO_ID, destination: 'warehouse',
+      lines: [{ productId: PRODUCT_ID, productName: 'Widget', qtyReceived: 3, requiresSerial: false }],
+      userId: 'user-1',
+    })
+
+    expect(mockPurchaseOrderItemUpdate).toHaveBeenCalledWith({
+      where: { id: PO_ITEM_ID },
+      data: { qtyReceived: 5 },
+    })
+  })
+
+  it('best-effort mirrors received serials into the relational SerialNumber table', async () => {
+    mockLoadAppState.mockResolvedValue({
+      deed_products: [{ id: PRODUCT_ID, name: 'Laptop', stockQty: 0, requiresSerial: true }],
+      deed_serials: [], deed_bulkStock: [], deed_stockMoves: [],
+    })
+    mockPurchaseOrderFindUnique.mockResolvedValue({
+      id: PO_ID,
+      items: [{ id: PO_ITEM_ID, productId: PRODUCT_ID, qtyOrdered: 5, qtyReceived: 0, unitCost: 500 }],
+    })
+
+    const result = await applyReceiptStockMutation({
+      receiptId: 'rec-1', receiptRef: 'REC/2026/0003', purchaseOrderId: PO_ID, destination: 'warehouse',
+      lines: [{ productId: PRODUCT_ID, productName: 'Laptop', qtyReceived: 1, requiresSerial: true, serials: ['SN-1'] }],
+      userId: 'user-1',
+    })
+
+    expect(result).toEqual(expect.objectContaining({ ok: true }))
+    expect(mockSerialNumberCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ serialNumber: 'SN-1', productId: PRODUCT_ID, purchaseItemId: 'grn-item-1' }),
+      }),
+    )
+  })
+
+  it('skips the relational GRN/PO-item bump when purchaseOrderId is missing but still bumps stock', async () => {
+    mockLoadAppState.mockResolvedValue({
+      deed_products: [{ id: PRODUCT_ID, name: 'Widget', stockQty: 0, requiresSerial: false }],
+      deed_serials: [], deed_bulkStock: [], deed_stockMoves: [],
+    })
+
+    const result = await applyReceiptStockMutation({
+      receiptId: 'rec-1', receiptRef: 'REC/2026/0004', destination: 'warehouse',
+      lines: [{ productId: PRODUCT_ID, productName: 'Widget', qtyReceived: 4, requiresSerial: false }],
+      userId: 'user-1',
+    })
+
+    expect(result).toEqual(expect.objectContaining({ ok: true }))
+    expect(mockPurchaseOrderFindUnique).not.toHaveBeenCalled()
+    expect(mockGoodsReceivedNoteCreate).not.toHaveBeenCalled()
+    expect(mockStockLevelUpdate).toHaveBeenCalled()
+    expect(mockSaveStoreKeys).toHaveBeenCalled()
+  })
+
+  it('aborts before any blob write when a line product cannot be resolved in Prisma', async () => {
+    mockLoadAppState.mockResolvedValue({
+      deed_products: [{ id: PRODUCT_ID, name: 'Ghost Product', stockQty: 0, requiresSerial: false }],
+      deed_serials: [], deed_bulkStock: [], deed_stockMoves: [],
+    })
+    mockProductFindUnique.mockResolvedValue(null)
+    mockProductFindFirst.mockResolvedValue(null)
+
+    const result = await applyReceiptStockMutation({
+      receiptId: 'rec-1', receiptRef: 'REC/2026/0005', destination: 'warehouse',
+      lines: [{ productId: PRODUCT_ID, productName: 'Ghost Product', qtyReceived: 2, requiresSerial: false }],
+      userId: 'user-1',
+    })
+
+    expect(result.ok).toBe(false)
+    expect(mockSaveStoreKeys).not.toHaveBeenCalled()
   })
 })

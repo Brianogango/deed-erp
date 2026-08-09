@@ -5,6 +5,12 @@ import { buildInventoryBarcode } from '@/lib/inventory-identifiers'
 const config = {
   storeKey: 'deed_serials',
   allowedWriteRoles: ['director', 'admin_officer', 'finance_officer', 'inventory_officer', 'technical_lead'],
+  // Serializes against the same advisory lock GRN receiving takes on
+  // deed_serials (lib/inventory/stock-transactions.ts) — without this, a
+  // manual serial POST here can interleave with a receipt's unlocked
+  // read-modify-write and silently drop whichever writer lost the race
+  // (the exact bug scripts/heal-grn-serials.mjs recovers from).
+  lockKey: 'deed_serials',
   build: (body: Record<string, unknown>, existing: SerialNumber[]): SerialNumber | string => {
     if (!body.productId) return 'productId is required'
     const serial = String(body.serial ?? '').trim()

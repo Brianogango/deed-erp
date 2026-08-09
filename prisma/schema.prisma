@@ -195,11 +195,14 @@ enum TaxType {
   @@map("tax_type")
 }
 
+// Matches the client-side POStatus vocabulary exactly (lib/store.tsx) — no
+// unused code depended on the old draft/pending_approval/approved/
+// partially_received wording, so this redefines rather than adds aliases.
 enum PurchaseOrderStatus {
   draft
-  pending_approval
-  approved
-  partially_received
+  sent
+  confirmed
+  partial
   received
   cancelled
 
@@ -755,6 +758,7 @@ model Client {
   customerAssets   CustomerAsset[]
   leads            Lead[]
   reconfigurationWorkOrders ReconfigurationWorkOrder[]
+  purchaseOrders   PurchaseOrder[] @relation("ClientPurchaseOrders")
 
   @@index([phone], map: "idx_clients_phone")
   @@index([email], map: "idx_clients_email")
@@ -1156,7 +1160,13 @@ model StockAdjustmentItem {
 model PurchaseOrder {
   id              String              @id @default(uuid()) @db.Uuid
   poNumber        String              @unique @map("po_number") @db.VarChar(30)
-  supplierId      String              @map("supplier_id") @db.Uuid
+  // Legacy vendor FK — the Supplier table was never actually adopted by any
+  // live code path (Purchasing's vendor concept is Client.isVendor, the same
+  // one vendor bills use). Left nullable/unused rather than dropped, so no
+  // schema churn is needed if a future migration wants to reconcile the two.
+  supplierId      String?             @map("supplier_id") @db.Uuid
+  // The vendor this PO is actually against — Client, not Supplier.
+  clientId        String?             @map("client_id") @db.Uuid
   status          PurchaseOrderStatus @default(draft)
   orderDate       DateTime            @default(now()) @map("order_date") @db.Date
   expectedDate    DateTime?           @map("expected_date") @db.Date
@@ -1175,14 +1185,17 @@ model PurchaseOrder {
   createdAt       DateTime            @default(now()) @map("created_at")
   updatedAt       DateTime            @updatedAt @map("updated_at")
 
-  supplier         Supplier            @relation(fields: [supplierId], references: [id])
+  supplier         Supplier?           @relation(fields: [supplierId], references: [id])
+  vendor           Client?             @relation("ClientPurchaseOrders", fields: [clientId], references: [id])
   approvedBy       User?               @relation("POApprover", fields: [approvedById], references: [id])
   createdBy        User                @relation("POCreator", fields: [createdById], references: [id])
   items            PurchaseOrderItem[]
   grns             GoodsReceivedNote[]
   supplierPayments SupplierPayment[]
   inventoryBatches InventoryBatch[]
+  invoices         Invoice[]           @relation("PurchaseOrderInvoices")
 
+  @@index([clientId], map: "idx_purchase_orders_client")
   @@map("purchase_orders")
 }
 
@@ -1197,6 +1210,8 @@ model PurchaseOrderItem {
   unitCost    Decimal  @map("unit_cost") @db.Decimal(14, 2)
   taxRate     Decimal  @default(0) @map("tax_rate") @db.Decimal(5, 2)
   lineTotal   Decimal  @map("line_total") @db.Decimal(14, 2)
+  // Cost account override for GL posting (e.g. '6101') — client-side POLine.accountCode.
+  accountCode String?  @map("account_code") @db.VarChar(20)
   notes       String?
 
   po       PurchaseOrder @relation(fields: [poId], references: [id], onDelete: Cascade)
@@ -1529,6 +1544,9 @@ model Invoice {
   clientId       String         @map("client_id") @db.Uuid
   quoteId        String?        @map("quote_id") @db.Uuid
   saleOrderId    String?        @map("sale_order_id") @db.Uuid
+  // Vendor bills / vendor credit notes (client-vendor Invoice rows) against a
+  // Purchase Order — needed for server-side 3-way-match enforcement.
+  purchaseOrderId String?       @map("purchase_order_id") @db.Uuid
   repairId       String?        @map("repair_id") @db.Uuid
   assignedToId   String?        @map("assigned_to") @db.Uuid
   status         DocumentStatus @default(draft)
@@ -1572,6 +1590,7 @@ model Invoice {
 
   client          Client          @relation(fields: [clientId], references: [id])
   quote           Quote?          @relation("InvoiceSourceQuote", fields: [quoteId], references: [id])
+  purchaseOrder   PurchaseOrder?  @relation("PurchaseOrderInvoices", fields: [purchaseOrderId], references: [id])
   repair          Repair?         @relation("InvoiceRepair", fields: [repairId], references: [id], onDelete: SetNull)
   assignedTo      User?           @relation("InvoiceAssignee", fields: [assignedToId], references: [id])
   approvedBy      User?           @relation("InvoiceApprover", fields: [approvedById], references: [id])
@@ -1598,6 +1617,7 @@ model Invoice {
   @@index([invoiceNumber], map: "idx_invoices_number")
   @@index([clientId, status], map: "idx_invoices_client_status")
   @@index([status, invoiceDate], map: "idx_invoices_status_date")
+  @@index([purchaseOrderId], map: "idx_invoices_purchase_order")
   @@map("invoices")
 }
 

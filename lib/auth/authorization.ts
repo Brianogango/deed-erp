@@ -72,6 +72,10 @@ const roleMatrix = {
   // Expense claims — submitters write own rows via merge; approve/reimburse is action-gated.
   manageExpenses:            ['director', 'finance_officer', 'admin_officer', 'sales_rep', 'inventory_officer', 'technical_lead', 'technician', 'kilimall_officer'] as UserRole[],
   approvePurchaseOrder:      ['director', 'admin_officer', 'finance_officer'] as UserRole[],
+  // Purchase order wholesale store writes — matches app/api/purchase-orders/[id]/route.ts's WRITE_ROLES.
+  managePurchaseOrders:      ['director', 'admin_officer', 'finance_officer', 'inventory_officer', 'technical_lead'] as UserRole[],
+  // Return-to-Vendor: stock-deducting and generates a vendor credit note — matches canManageProcurement.
+  manageProcurement:         ['director', 'admin_officer', 'inventory_officer'] as UserRole[],
   // Decide discount/credit approvals (Finance + Director + Admin Officer).
   approveDiscount:           ['director', 'admin_officer', 'finance_officer'] as UserRole[],
   // Request sales approvals (includes sales_rep so requests persist via store sync).
@@ -143,6 +147,11 @@ export const SENSITIVE_STORE_KEY_PERMISSIONS: Record<string, PermissionAction> =
   deed_saleOrders: 'manageSaleOrders',
   deed_deliveries: 'manageDeliveries',
   deed_expenses: 'manageExpenses',
+  // Purchase orders and Return-to-Vendor — previously missing here, which let
+  // the generic wholesale store endpoint bypass the dedicated routes'
+  // (and, for returns, the store action's) role gates entirely.
+  deed_purchaseOrders: 'managePurchaseOrders',
+  deed_purchaseReturns: 'manageProcurement',
   // Layby deposits and payroll — restricted to their respective back-office roles.
   deed_deposits: 'manageDeposits',
   deed_payrollRuns: 'managePayroll',

@@ -130,6 +130,9 @@ export default function POFormView() {
 
   const [sendingRfqMail, setSendingRfqMail] = useState(false)
   const [actionBusy, setActionBusy] = useState<string | null>(null)
+  const [showBillModal, setShowBillModal] = useState(false)
+  const [billQtys, setBillQtys] = useState<Record<string, string>>({})
+  const [creatingBill, setCreatingBill] = useState(false)
 
   if (!activePO) return null
 
@@ -180,6 +183,34 @@ export default function POFormView() {
     setSerialInputs({}); setSerialSpecs(preSpecs); setSubView('receive')
   }
 
+  const billableLinesFor = (po: typeof activePO) =>
+    po.lines
+      .map(l => ({ id: l.id, label: l.productName, maxQty: billableQty(l) }))
+      .filter(l => l.maxQty > 0)
+
+  const openBillModal = () => {
+    const lines = billableLinesFor(activePO)
+    setBillQtys(Object.fromEntries(lines.map(l => [l.id, String(l.maxQty)])))
+    setShowBillModal(true)
+  }
+
+  const submitPartialBill = async () => {
+    const overrides = Object.entries(billQtys)
+      .map(([lineId, qty]) => ({ lineId, qty: Math.max(0, Number(qty) || 0) }))
+      .filter(o => o.qty > 0)
+    if (overrides.length === 0) {
+      showToast('Enter a quantity greater than zero for at least one line', 'error')
+      return
+    }
+    setCreatingBill(true)
+    try {
+      const bill = await Promise.resolve(createBillFromPO(activePO.id, overrides))
+      if (bill?.id) setShowBillModal(false)
+    } finally {
+      setCreatingBill(false)
+    }
+  }
+
   const openReturnForPO = () => {
     const latest = receipts.filter(r => r.poId === activePO.id && r.status === 'validated').pop()
     if (!latest) { showToast('No validated receipt found', 'error'); return }
@@ -194,7 +225,13 @@ export default function POFormView() {
     const canRevertToDraft = activePO.status === 'sent' && ['director', 'admin_officer'].includes(currentUser?.role ?? '')
     const hasDraftReceipt = receipts.some(r => r.poId === activePO.id && r.status === 'draft')
     const hasOutstandingQty = activePO.lines.some(line => line.qtyReceived < line.qty)
-    const canReceive     = (activePO.status === 'confirmed' || activePO.status === 'partial') && hasOutstandingQty && ['director', 'admin_officer', 'inventory_officer', 'technical_lead'].includes(currentUser?.role ?? '')
+    // technical_lead is deliberately excluded: validateReceipt's
+    // canValidatePurchaseReceiptAction gate (and the server's
+    // validatePurchaseReceipt permission) both reject it, so showing this
+    // button to technical_lead is a guaranteed-denied dead end that loses
+    // unsaved GRN scan progress (serials/specs are local component state
+    // until the receipt is validated).
+    const canReceive     = (activePO.status === 'confirmed' || activePO.status === 'partial') && hasOutstandingQty && ['director', 'admin_officer', 'inventory_officer'].includes(currentUser?.role ?? '')
     const canReturn      = (activePO.status === 'received' || activePO.status === 'partial') && receipts.some(r => r.poId === activePO.id && r.status === 'validated') && ['director', 'admin_officer', 'inventory_officer'].includes(currentUser?.role ?? '')
     const hasBillableQty = activePO.lines.some(line => billableQty(line) > 0)
     const canCreateBill  = (activePO.status === 'received' || activePO.status === 'partial') && hasBillableQty && ['director', 'finance_officer', 'admin_officer'].includes(currentUser?.role ?? '')
@@ -311,12 +348,9 @@ export default function POFormView() {
                 icon={<Fa icon={faFileInvoice} />}
                 hideLabelOnMobile={false}
                 disabled={!!actionBusy}
-                onClick={async () => {
-                  setActionBusy('bill')
-                  try { await Promise.resolve(createBillFromPO(activePO.id)) } finally { setActionBusy(null) }
-                }}
+                onClick={openBillModal}
               >
-                {actionBusy === 'bill' ? 'Creating…' : 'Create Bill'}
+                Create Bill
               </PrimaryActionButton>
             )}
             {!canSend && !canConfirm && !canReceive && !canCreateBill && canValidateBill && (
@@ -360,7 +394,7 @@ export default function POFormView() {
                   id: 'bill',
                   label: 'Create bill',
                   hidden: !canCreateBill || canSend || canConfirm || canReceive,
-                  onClick: () => { void createBillFromPO(activePO.id) },
+                  onClick: openBillModal,
                 },
                 {
                   id: 'validate',
@@ -757,6 +791,42 @@ export default function POFormView() {
             )}
           </div>
         </div>
+
+        {/* Partial-bill quantity picker — bill less than the full received-and-unbilled qty per line. */}
+        {showBillModal && (
+          <Modal title={`Create Bill — ${activePO.ref}`} onClose={() => setShowBillModal(false)} width={520}>
+            <div className="flex flex-col gap-4">
+              <p className="text-xs text-t3">Choose how much of each received line to bill now. Leave a line at 0 to bill it later.</p>
+              <div className="flex flex-col gap-3">
+                {billableLinesFor(activePO).map(l => (
+                  <div key={l.id} className="flex items-center justify-between gap-3 p-3 rounded-xl" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-lt)' }}>
+                    <div className="min-w-0">
+                      <p className="text-xs font-semibold text-t1 truncate">{l.label}</p>
+                      <p className="text-[10px] text-t4">Up to {l.maxQty} billable now</p>
+                    </div>
+                    <input
+                      type="number"
+                      min={0}
+                      max={l.maxQty}
+                      className="form-input text-xs w-20 text-right"
+                      value={billQtys[l.id] ?? ''}
+                      onChange={e => {
+                        const clamped = Math.max(0, Math.min(l.maxQty, Number(e.target.value) || 0))
+                        setBillQtys(prev => ({ ...prev, [l.id]: String(clamped) }))
+                      }}
+                    />
+                  </div>
+                ))}
+              </div>
+              <div className="flex gap-2 justify-end pt-4 border-t" style={{ borderColor: 'var(--border-lt)' }}>
+                <button className="btn-outline" onClick={() => setShowBillModal(false)}>Cancel</button>
+                <button className="btn-primary" onClick={() => void submitPartialBill()} disabled={creatingBill}>
+                  {creatingBill ? 'Creating…' : 'Create Bill'}
+                </button>
+              </div>
+            </div>
+          </Modal>
+        )}
 
         {/* Add product modal */}
         {showAddLine && (

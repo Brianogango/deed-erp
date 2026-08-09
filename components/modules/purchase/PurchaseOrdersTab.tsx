@@ -44,11 +44,17 @@ function migrateLegacySavedView(stored: string): {
   return null
 }
 
+// Matches lib/store.tsx's canManageProcurement — the actual gate behind
+// createPO/confirmPO. Buttons that trigger those actions must be hidden for
+// any other role, or clicking them is a guaranteed-denied dead end.
+const CAN_MANAGE_PROCUREMENT_ROLES = ['director', 'admin_officer', 'inventory_officer']
+
 export default function PurchaseOrdersTab() {
   const {
     purchaseOrders, filteredPOs, typeFilter, setTypeFilter, statusFilter, setStatusFilter,
-    setActiveId, setSubView, setShowNewRFQ, fmtKes, fmtDate, confirmPO,
+    setActiveId, setSubView, setShowNewRFQ, fmtKes, fmtDate, confirmPO, currentUser,
   } = usePurchase()
+  const canManageProcurement = CAN_MANAGE_PROCUREMENT_ROLES.includes(currentUser?.role ?? '')
   const savedViewKey = 'deed_po_saved_view'
 
   useEffect(() => {
@@ -183,7 +189,9 @@ export default function PurchaseOrdersTab() {
       <>
         <button className="btn-outline text-[10px] py-0.5 px-2" onClick={e => { e.stopPropagation(); setActiveId(po.id); setSubView('form') }}>View</button>
         <button className="btn-outline text-[10px] py-0.5 px-2" onClick={e => { e.stopPropagation(); setActiveId(po.id); setSubView('form') }}>Edit</button>
-        <button className="btn-outline text-[10px] py-0.5 px-2" disabled={!['draft', 'sent'].includes(po.status)} onClick={e => { e.stopPropagation(); confirmPO(po.id) }}>Approve</button>
+        {canManageProcurement && (
+          <button className="btn-outline text-[10px] py-0.5 px-2" disabled={!['draft', 'sent'].includes(po.status)} onClick={e => { e.stopPropagation(); confirmPO(po.id) }}>Approve</button>
+        )}
         <button className="btn-outline text-[10px] py-0.5 px-2" onClick={e => { e.stopPropagation(); exportOrders([po]) }}>Export</button>
       </>
     )
@@ -203,7 +211,9 @@ export default function PurchaseOrdersTab() {
         hideColumnFilters
         selectable
         emptyMessage={purchaseOrders.length === 0 ? 'No purchase orders yet' : 'No orders match this view'}
-        emptyAction={<button className="btn-primary text-xs px-4 py-1.5 mt-1" onClick={() => setShowNewRFQ(true)}>+ New RFQ</button>}
+        emptyAction={canManageProcurement ? (
+          <button className="btn-primary text-xs px-4 py-1.5 mt-1" onClick={() => setShowNewRFQ(true)}>+ New RFQ</button>
+        ) : undefined}
         onRowClick={po => { setActiveId(po.id); setSubView('form') }}
         rowActions={poRowActions}
         bulkActions={({ rows }) => (
@@ -216,9 +226,11 @@ export default function PurchaseOrdersTab() {
             }}>
               View ({rows.length})
             </button>
-            <button className="btn-outline text-[10px] py-1 px-2" onClick={() => rows.filter(po => ['draft', 'sent'].includes(po.status)).forEach(po => confirmPO(po.id))}>
-              Approve
-            </button>
+            {canManageProcurement && (
+              <button className="btn-outline text-[10px] py-1 px-2" onClick={() => rows.filter(po => ['draft', 'sent'].includes(po.status)).forEach(po => confirmPO(po.id))}>
+                Approve
+              </button>
+            )}
             <button className="btn-outline text-[10px] py-1 px-2" onClick={() => exportOrders(rows)}>
               Export
             </button>
