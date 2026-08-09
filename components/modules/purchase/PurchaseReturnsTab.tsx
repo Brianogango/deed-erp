@@ -14,7 +14,7 @@ const REASON_OPTS = [
 
 export default function PurchaseReturnsTab() {
   const {
-    purchaseReturns, serials, currentUser,
+    purchaseReturns, serials, currentUser, vendorBills, setMainView,
     retSearchSerial, setRetSearchSerial,
     retFilterStatus, setRetFilterStatus,
     retFilterReason, setRetFilterReason,
@@ -129,6 +129,25 @@ export default function PurchaseReturnsTab() {
       render: r => <span className="text-[11px] text-t3">{r.collectedDate ? fmtDate(r.collectedDate) : '—'}</span>,
       exportValue: r => r.collectedDate ?? '',
     },
+    {
+      key: 'creditNote', label: 'Credit Note', priority: 3, width: '110px',
+      render: r => {
+        const credit = r.creditNoteId ? vendorBills.find(b => b.id === r.creditNoteId) : undefined
+        if (!credit) return <span className="text-[11px] text-t4 italic">{r.status === 'confirmed' ? 'None needed' : '—'}</span>
+        return (
+          <button
+            type="button"
+            className="font-mono text-[11px] font-semibold underline-offset-2 hover:underline"
+            style={{ color: 'var(--navy)' }}
+            onClick={e => { e.stopPropagation(); setMainView('bills') }}
+            title="View in Bills tab"
+          >
+            {credit.ref}
+          </button>
+        )
+      },
+      exportValue: r => (r.creditNoteId ? vendorBills.find(b => b.id === r.creditNoteId)?.ref ?? '' : ''),
+    },
   ]
 
   function returnRowActions(r: PurchaseReturn) {
@@ -177,6 +196,22 @@ export default function PurchaseReturnsTab() {
         label: 'Pickup / Dispatch',
         content: (
           <div className="rounded-lg p-3" style={{ background: '#fff', border: '1px solid var(--border-lt)' }}>
+            {r.status === 'confirmed' && (() => {
+              const credit = r.creditNoteId ? vendorBills.find(b => b.id === r.creditNoteId) : undefined
+              return (
+                <div className="flex justify-between items-center text-xs mb-2 pb-2 border-b" style={{ borderColor: 'var(--border-lt)' }}>
+                  <span className="text-t3">Vendor credit note</span>
+                  {credit ? (
+                    <button type="button" className="font-mono font-semibold underline-offset-2 hover:underline" style={{ color: 'var(--navy)' }}
+                      onClick={() => setMainView('bills')} title="View in Bills tab">
+                      {credit.ref} · {Math.abs(credit.total).toLocaleString()}
+                    </button>
+                  ) : (
+                    <span className="text-t4 italic">None needed</span>
+                  )}
+                </div>
+              )
+            })()}
             {r.collectedByName ? (
               <div className="flex flex-col gap-1.5 text-xs">
                 <div className="flex justify-between"><span className="text-t3">Collected by</span><span className="font-medium text-t1">{r.collectedByName}</span></div>

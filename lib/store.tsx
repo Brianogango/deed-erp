@@ -3224,7 +3224,8 @@ export interface AppState {
   // serialIssues: map of serial string → issue description (non-empty = received with issues → refurbishment)
   validateReceipt: (receiptId: string, lines: Receipt['lines'], destination: LocationId, serialAccessories?: Record<string, string[]>, serialAccessoryNotes?: Record<string, string>, serialSpecs?: Record<string, string>, serialIssues?: Record<string, string>) => void
   deletePO: (id: string) => void
-  createBillFromPO: (poId: string) => Invoice | null
+  /** lineOverrides caps each line's bill qty (still clamped to billableQty) — omit to bill everything billable, matching prior one-click behaviour. */
+  createBillFromPO: (poId: string, lineOverrides?: Array<{ lineId: string; qty: number }>) => Invoice | null
 
   // Purchase Returns
   createPurchaseReturn: (receiptId: string, reason: PurchaseReturn['reason']) => PurchaseReturn | null
@@ -12252,7 +12253,7 @@ const storeCtx: AppState = {
       sync(`/api/purchase-orders/${id}`, { method: 'DELETE' })
       showToast('PO deleted') 
     },
-    createBillFromPO: (poId) => {
+    createBillFromPO: (poId, lineOverrides) => {
       if (!canManageFinance(currentUser())) {
         showToast('Only Finance or Admin Officer can create vendor bills', 'error'); return null;
       }
@@ -12261,11 +12262,16 @@ const storeCtx: AppState = {
       const hasValidatedReceipt = recRef.current.some(r => r.poId === poId && r.status === 'validated')
       if (!hasValidatedReceipt) { showToast('Receive goods before creating a vendor bill', 'error'); return null }
 
+      const overrideMap = lineOverrides
+        ? new Map(lineOverrides.map(o => [o.lineId, Math.max(0, Math.floor(Number(o.qty) || 0))]))
+        : null
+
       let billableLines: Array<POLine & { billQty: number }>
       try {
         billableLines = po.lines
           .map(l => {
-            const billQty = billableQty(l)
+            const maxBillable = billableQty(l)
+            const billQty = overrideMap ? Math.min(maxBillable, overrideMap.get(l.id) ?? 0) : maxBillable
             assertBillableQty(l, billQty)
             return { ...l, billQty }
           })
@@ -12282,10 +12288,14 @@ const storeCtx: AppState = {
 
       const sub = billableLines.reduce((a, l) => a + l.billQty * l.unitPrice, 0)
       const tax = billableLines.reduce((a, l) => a + Math.round(l.billQty * l.unitPrice * l.taxRate / 100), 0)
+      // Vendor's own payment terms govern the bill due date — previously
+      // hardcoded to 30 days for every vendor regardless of what was agreed.
+      const vendor = contacts.find(c => c.id === po.vendorId)
+      const termsDays = vendor?.paymentTermsDays ?? 30
       const bill: Invoice = {
         id: uid(), ref: draftInvoiceRef('vendor_bill'), type: 'vendor_bill', status: 'draft',
         partnerId: po.vendorId, partnerName: po.vendorName,
-        date: now(), dueDate: addDays(now(), 30),
+        date: now(), dueDate: addDays(now(), termsDays),
         lines: billableLines.map(l => ({
           id: uid(), description: `${l.productName} ×${l.billQty}`, qty: l.billQty,
           unitPrice: l.unitPrice, taxRate: l.taxRate, subtotal: l.billQty * l.unitPrice,
