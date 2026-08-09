@@ -1,6 +1,7 @@
 /**
  * Deed ERP serialized-device inventory label — 100mm × 60mm landscape thermal sticker.
- * Browser print via window.print(); one label per page.
+ * Visual language aligned to Deed Technologies branding (navy + cyan) and the
+ * repair-ticket / inventory-label comps: wordmark, cyan icons, QR callout.
  */
 
 import QRCode from 'qrcode'
@@ -14,6 +15,9 @@ import { getStoredCompanyData } from '@/lib/company'
 
 export type { SerialDeviceLabelInput, SerialDeviceLabelView } from '@/lib/inventory/serial-device-label-data'
 export { buildSerialDeviceLabelView, buildSerialDeviceQrUrl } from '@/lib/inventory/serial-device-label-data'
+
+const NAVY = '#1A1F5E'
+const CYAN = '#00B0D7'
 
 function esc(s: string): string {
   return String(s ?? '')
@@ -32,11 +36,11 @@ function barcodeDataUrl(value: string): string {
     JsBarcode(canvas, value, {
       format: 'CODE128',
       width: 2,
-      height: 52,
+      height: 48,
       displayValue: false,
-      margin: 6,
+      margin: 8,
       background: '#FFFFFF',
-      lineColor: '#0F172A',
+      lineColor: NAVY,
     })
     return canvas.toDataURL('image/png')
   } catch {
@@ -51,19 +55,30 @@ async function qrDataUrl(value: string): Promise<string> {
       errorCorrectionLevel: 'M',
       margin: 2,
       width: 180,
-      color: { dark: '#0F172A', light: '#FFFFFF' },
+      color: { dark: NAVY, light: '#FFFFFF' },
     })
   } catch {
     return ''
   }
 }
 
-/** Minimal line icons (stroke) — thermal-safe, no emoji. */
-const ICONS = {
-  cpu: `<svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="#1A1F5E" stroke-width="1.8"><rect x="7" y="7" width="10" height="10" rx="1"/><path d="M9 1v3M12 1v3M15 1v3M9 20v3M12 20v3M15 20v3M1 9h3M1 12h3M1 15h3M20 9h3M20 12h3M20 15h3"/></svg>`,
-  ram: `<svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="#1A1F5E" stroke-width="1.8"><rect x="2" y="7" width="20" height="10" rx="1"/><path d="M6 17v2M10 17v2M14 17v2M18 17v2M6 5v2M10 5v2M14 5v2M18 5v2"/></svg>`,
-  storage: `<svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="#1A1F5E" stroke-width="1.8"><rect x="3" y="4" width="18" height="16" rx="1"/><path d="M7 8h4M7 12h10M7 16h6"/></svg>`,
-  display: `<svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="#1A1F5E" stroke-width="1.8"><rect x="2" y="4" width="20" height="13" rx="1"/><path d="M8 21h8M12 17v4"/></svg>`,
+/** Cyan line icons for the spec row (mockup). */
+const SPEC_ICONS = {
+  cpu: `<svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="${CYAN}" stroke-width="1.9"><rect x="7" y="7" width="10" height="10" rx="1.5"/><path d="M9 1v3M12 1v3M15 1v3M9 20v3M12 20v3M15 20v3M1 9h3M1 12h3M1 15h3M20 9h3M20 12h3M20 15h3"/></svg>`,
+  ram: `<svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="${CYAN}" stroke-width="1.9"><rect x="2" y="7" width="20" height="10" rx="1.5"/><path d="M6 17v2M10 17v2M14 17v2M18 17v2M6 5v2M10 5v2M14 5v2M18 5v2"/></svg>`,
+  storage: `<svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="${CYAN}" stroke-width="1.9"><rect x="3" y="4" width="18" height="16" rx="1.5"/><path d="M7 8h4M7 12h10M7 16h6"/></svg>`,
+  display: `<svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="${CYAN}" stroke-width="1.9"><rect x="2" y="4" width="20" height="13" rx="1.5"/><path d="M8 21h8M12 17v4"/></svg>`,
+}
+
+/** Navy rounded tiles + white glyphs (repair-ticket field icons). */
+function metaIcon(kind: 'condition' | 'warranty' | 'location'): string {
+  const glyph =
+    kind === 'condition'
+      ? `<path d="M12 5v4M12 15v4M5 12h4M15 12h4"/><circle cx="12" cy="12" r="3"/>`
+      : kind === 'warranty'
+        ? `<path d="M12 3l7 3v5c0 5-3 8-7 10-4-2-7-5-7-10V6l7-3z"/><path d="M9 12l2 2 4-4"/>`
+        : `<path d="M12 21s7-5.5 7-11a7 7 0 10-14 0c0 5.5 7 11 7 11z"/><circle cx="12" cy="10" r="2.5"/>`
+  return `<span class="meta-ico" aria-hidden="true"><svg viewBox="0 0 24 24" width="9" height="9" fill="none" stroke="#FFFFFF" stroke-width="2">${glyph}</svg></span>`
 }
 
 function labelHtml(view: SerialDeviceLabelView, barcodeSrc: string, qrSrc: string): string {
@@ -72,37 +87,41 @@ function labelHtml(view: SerialDeviceLabelView, barcodeSrc: string, qrSrc: strin
   <div class="label">
     <header class="hdr">
       <div class="brand">
-        <div class="brand-mark">D</div>
-        <div class="brand-copy">
-          <div class="brand-name">DEED ERP</div>
-          <div class="brand-sub">INVENTORY</div>
+        <div class="wordmark">
+          <div class="wm-deed"><span class="wm-d">d</span>eed</div>
+          <div class="wm-tech">TECHNOLOGIES</div>
         </div>
       </div>
+      <div class="hdr-rule" aria-hidden="true"></div>
       <div class="title-block">
         <div class="model">${esc(view.productName)}</div>
         <div class="subtitle">${esc(view.subtitle)}</div>
       </div>
-      ${showBadge ? `<div class="badge"><span class="badge-dot"></span>${esc(view.statusBadge)}</div>` : '<div class="badge-spacer"></div>'}
+      ${showBadge ? `<div class="badge">${esc(view.statusBadge)}</div>` : '<div class="badge-spacer"></div>'}
     </header>
+
+    <div class="rule" aria-hidden="true"></div>
 
     <section class="specs" aria-label="Specifications">
       <div class="spec">
-        <div class="spec-top">${ICONS.cpu}<span>CPU</span></div>
+        <div class="spec-top">${SPEC_ICONS.cpu}<span>CPU</span></div>
         <div class="spec-val">${esc(view.cpu)}</div>
       </div>
       <div class="spec">
-        <div class="spec-top">${ICONS.ram}<span>RAM</span></div>
+        <div class="spec-top">${SPEC_ICONS.ram}<span>RAM</span></div>
         <div class="spec-val">${esc(view.ram)}</div>
       </div>
       <div class="spec">
-        <div class="spec-top">${ICONS.storage}<span>STORAGE</span></div>
+        <div class="spec-top">${SPEC_ICONS.storage}<span>STORAGE</span></div>
         <div class="spec-val">${esc(view.storage)}</div>
       </div>
       <div class="spec">
-        <div class="spec-top">${ICONS.display}<span>DISPLAY</span></div>
+        <div class="spec-top">${SPEC_ICONS.display}<span>DISPLAY</span></div>
         <div class="spec-val">${esc(view.display)}</div>
       </div>
     </section>
+
+    <div class="rule" aria-hidden="true"></div>
 
     <section class="body">
       <div class="serial-col">
@@ -112,26 +131,34 @@ function labelHtml(view: SerialDeviceLabelView, barcodeSrc: string, qrSrc: strin
           ${barcodeSrc
             ? `<img src="${barcodeSrc}" alt="${esc(view.barcodeValue)}" class="barcode-img" />`
             : `<div class="barcode-fallback">${esc(view.barcodeValue)}</div>`}
+          <div class="barcode-caption">${esc(view.barcodeValue)}</div>
         </div>
       </div>
+
       <div class="qr-col">
-        ${qrSrc
-          ? `<img src="${qrSrc}" alt="Device QR" class="qr-img" />`
-          : `<div class="qr-fallback">QR</div>`}
+        <div class="qr-frame">
+          ${qrSrc
+            ? `<img src="${qrSrc}" alt="Scan to view in ERP" class="qr-img" />`
+            : `<div class="qr-fallback">QR</div>`}
+        </div>
+        <div class="qr-caption">SCAN TO VIEW IN ERP</div>
       </div>
+
       <div class="meta-col">
-        <div class="meta"><span>CONDITION</span><strong>${esc(view.condition)}</strong></div>
-        <div class="meta"><span>WARRANTY</span><strong>${esc(view.warranty)}</strong></div>
-        <div class="meta"><span>DATE IN</span><strong>${esc(view.dateIn)}</strong></div>
-        <div class="meta"><span>LOCATION</span><strong>${esc(view.location)}</strong></div>
+        <div class="meta">
+          ${metaIcon('condition')}
+          <div class="meta-text"><span>CONDITION</span><strong>${esc(view.condition)}</strong></div>
+        </div>
+        <div class="meta">
+          ${metaIcon('warranty')}
+          <div class="meta-text"><span>WARRANTY</span><strong>${esc(view.warranty)}</strong></div>
+        </div>
+        <div class="meta">
+          ${metaIcon('location')}
+          <div class="meta-text"><span>LOCATION</span><strong>${esc(view.location)}</strong></div>
+        </div>
       </div>
     </section>
-
-    <footer class="ftr">
-      <span>${esc(view.website)}</span>
-      <span class="ftr-sep">·</span>
-      <span>${esc(view.phone)}</span>
-    </footer>
   </div>`
 }
 
@@ -142,7 +169,7 @@ const LABEL_CSS = `
     width: 100mm;
     height: 60mm;
     background: #FFFFFF;
-    color: #0F172A;
+    color: ${NAVY};
     font-family: var(--font-dm-mono), ui-monospace, monospace;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
@@ -151,11 +178,10 @@ const LABEL_CSS = `
   .label {
     width: 100mm;
     height: 60mm;
-    padding: 2.2mm 2.6mm 0;
+    padding: 2.4mm 3mm 2.2mm;
     display: flex;
     flex-direction: column;
     background: #FFFFFF;
-    border: 0.2mm solid #CBD5E1;
     overflow: hidden;
     page-break-after: always;
   }
@@ -163,90 +189,80 @@ const LABEL_CSS = `
 
   .hdr {
     display: grid;
-    grid-template-columns: 22mm minmax(0, 1fr) auto;
-    gap: 2mm;
-    align-items: start;
-    min-height: 11mm;
-  }
-  .brand {
-    display: flex;
+    grid-template-columns: auto 0.3mm minmax(0, 1fr) auto;
+    gap: 2.2mm;
     align-items: center;
-    gap: 1.2mm;
-    background: #1A1F5E;
-    color: #FFFFFF;
-    border-radius: 0 0 0.5rem 0;
-    padding: 1.2mm 1.6mm;
-    margin: -2.2mm 0 0 -2.6mm;
     min-height: 10mm;
   }
-  .brand-mark {
-    width: 5.5mm;
-    height: 5.5mm;
-    border: 0.35mm solid #FFFFFF;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 7pt;
+  .brand { min-width: 0; }
+  .wordmark { line-height: 1; }
+  .wm-deed {
+    font-size: 11pt;
     font-weight: 900;
-    line-height: 1;
+    letter-spacing: -0.6pt;
+    color: ${NAVY};
+    line-height: 0.95;
   }
-  .brand-name { font-size: 6.5pt; font-weight: 900; letter-spacing: 0.2pt; line-height: 1.05; }
-  .brand-sub { font-size: 4.2pt; font-weight: 700; letter-spacing: 0.8pt; opacity: 0.9; margin-top: 0.3mm; }
-
-  .title-block { min-width: 0; padding-top: 0.4mm; }
+  .wm-d { color: ${CYAN}; }
+  .wm-tech {
+    margin-top: 0.5mm;
+    font-size: 4.2pt;
+    font-weight: 800;
+    letter-spacing: 1.1pt;
+    color: ${CYAN};
+  }
+  .hdr-rule {
+    width: 0.3mm;
+    height: 8mm;
+    background: #CBD5E1;
+  }
+  .title-block { min-width: 0; }
   .model {
     font-size: 9.5pt;
     font-weight: 900;
-    letter-spacing: -0.2pt;
+    letter-spacing: -0.15pt;
     line-height: 1.05;
-    color: #0F172A;
+    color: ${NAVY};
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
   }
   .subtitle {
-    margin-top: 0.6mm;
-    font-size: 5.5pt;
+    margin-top: 0.7mm;
+    font-size: 5.4pt;
     font-weight: 800;
-    color: #1A1F5E;
-    letter-spacing: 0.4pt;
+    color: ${NAVY};
+    letter-spacing: 0.55pt;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
   }
   .badge {
-    display: inline-flex;
-    align-items: center;
-    gap: 1mm;
-    background: #1A1F5E;
+    background: ${NAVY};
     color: #FFFFFF;
     border-radius: 0.5rem;
-    padding: 1mm 1.8mm;
+    padding: 1.1mm 2.2mm;
     font-size: 5pt;
     font-weight: 800;
-    letter-spacing: 0.4pt;
+    letter-spacing: 0.45pt;
     white-space: nowrap;
-    margin-top: 0.4mm;
-  }
-  .badge-dot {
-    width: 1.6mm;
-    height: 1.6mm;
-    border-radius: 0.5rem;
-    background: #FFFFFF;
   }
   .badge-spacer { width: 1mm; }
+
+  .rule {
+    height: 0.25mm;
+    background: #CBD5E1;
+    margin: 1.5mm 0;
+  }
 
   .specs {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
     gap: 0;
-    margin-top: 1.6mm;
-    border-top: 0.25mm solid #CBD5E1;
-    border-bottom: 0.25mm solid #CBD5E1;
-    padding: 1.3mm 0;
+    padding: 0.2mm 0;
   }
   .spec {
-    padding: 0 1.4mm;
+    padding: 0 1.6mm;
     border-right: 0.25mm solid #CBD5E1;
     min-width: 0;
   }
@@ -255,18 +271,18 @@ const LABEL_CSS = `
   .spec-top {
     display: flex;
     align-items: center;
-    gap: 0.8mm;
+    gap: 0.9mm;
     font-size: 4.4pt;
     font-weight: 800;
-    color: #1A1F5E;
-    letter-spacing: 0.45pt;
+    color: ${CYAN};
+    letter-spacing: 0.5pt;
   }
   .spec-top svg { flex-shrink: 0; }
   .spec-val {
-    margin-top: 0.6mm;
-    font-size: 6.2pt;
+    margin-top: 0.7mm;
+    font-size: 6.3pt;
     font-weight: 900;
-    color: #0F172A;
+    color: ${NAVY};
     line-height: 1.1;
     white-space: nowrap;
     overflow: hidden;
@@ -276,31 +292,32 @@ const LABEL_CSS = `
   .body {
     flex: 1;
     display: grid;
-    grid-template-columns: minmax(0, 1.35fr) 18mm minmax(0, 1fr);
-    gap: 2mm;
+    grid-template-columns: minmax(0, 1.4fr) 20mm minmax(0, 1.05fr);
+    gap: 2.2mm;
     align-items: stretch;
-    padding: 1.6mm 0 1.2mm;
     min-height: 0;
+    padding-top: 0.2mm;
   }
+
   .serial-col {
     min-width: 0;
     display: flex;
     flex-direction: column;
+    padding-right: 1.5mm;
     border-right: 0.25mm solid #CBD5E1;
-    padding-right: 2mm;
   }
   .field-label {
     font-size: 4.4pt;
     font-weight: 800;
-    color: #1A1F5E;
-    letter-spacing: 0.5pt;
+    color: ${NAVY};
+    letter-spacing: 0.55pt;
   }
   .serial-num {
-    margin-top: 0.4mm;
-    font-size: 10pt;
+    margin-top: 0.5mm;
+    font-size: 10.5pt;
     font-weight: 900;
-    color: #0F172A;
-    letter-spacing: 0.15pt;
+    color: ${NAVY};
+    letter-spacing: 0.1pt;
     line-height: 1.05;
     white-space: nowrap;
     overflow: hidden;
@@ -310,12 +327,20 @@ const LABEL_CSS = `
     margin-top: auto;
     padding-top: 1mm;
     background: #FFFFFF;
+    text-align: center;
   }
   .barcode-img {
     width: 100%;
-    height: 11mm;
+    height: 10mm;
     object-fit: fill;
     image-rendering: crisp-edges;
+  }
+  .barcode-caption {
+    margin-top: 0.4mm;
+    font-size: 4.8pt;
+    font-weight: 800;
+    letter-spacing: 0.35pt;
+    color: ${NAVY};
   }
   .barcode-fallback {
     font-size: 7pt;
@@ -327,22 +352,29 @@ const LABEL_CSS = `
 
   .qr-col {
     display: flex;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
+    gap: 1mm;
     border-right: 0.25mm solid #CBD5E1;
     padding: 0 1mm;
+  }
+  .qr-frame {
+    border: 0.35mm solid ${CYAN};
+    border-radius: 0.5rem;
+    padding: 1mm;
     background: #FFFFFF;
   }
   .qr-img {
-    width: 16mm;
-    height: 16mm;
+    width: 15mm;
+    height: 15mm;
     object-fit: contain;
     image-rendering: crisp-edges;
+    display: block;
   }
   .qr-fallback {
-    width: 16mm;
-    height: 16mm;
-    border: 0.3mm dashed #CBD5E1;
+    width: 15mm;
+    height: 15mm;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -350,51 +382,62 @@ const LABEL_CSS = `
     font-weight: 800;
     color: #64748B;
   }
+  .qr-caption {
+    font-size: 3.9pt;
+    font-weight: 800;
+    letter-spacing: 0.35pt;
+    color: ${CYAN};
+    text-align: center;
+    line-height: 1.15;
+  }
 
   .meta-col {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 1.2mm 2mm;
-    align-content: center;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 0;
     min-width: 0;
   }
-  .meta span {
+  .meta {
+    display: grid;
+    grid-template-columns: 5mm minmax(0, 1fr);
+    gap: 1.4mm;
+    align-items: center;
+    padding: 1.3mm 0;
+    border-bottom: 0.25mm solid #CBD5E1;
+  }
+  .meta:last-child { border-bottom: none; }
+  .meta-ico {
+    width: 5mm;
+    height: 5mm;
+    border-radius: 0.5rem;
+    background: ${NAVY};
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .meta-text { min-width: 0; }
+  .meta-text span {
     display: block;
-    font-size: 4.2pt;
+    font-size: 4pt;
     font-weight: 800;
-    color: #1A1F5E;
+    color: ${NAVY};
     letter-spacing: 0.4pt;
   }
-  .meta strong {
+  .meta-text strong {
     display: block;
-    margin-top: 0.35mm;
+    margin-top: 0.3mm;
     font-size: 6pt;
     font-weight: 900;
-    color: #0F172A;
+    color: ${NAVY};
     line-height: 1.1;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
   }
 
-  .ftr {
-    margin: 0 -2.6mm 0;
-    background: #1A1F5E;
-    color: #FFFFFF;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 1.5mm;
-    min-height: 5.2mm;
-    font-size: 5pt;
-    font-weight: 700;
-    letter-spacing: 0.2pt;
-  }
-  .ftr-sep { opacity: 0.7; }
-
   @media print {
     html, body, .sheet, .label { width: 100mm; height: 60mm; }
-    .label { border: none; }
   }
 `
 
