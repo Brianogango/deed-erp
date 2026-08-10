@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   combineLocalDateAndTime,
+  ensureRepairIntakeTimestamp,
   formatIntakeDateTime,
   localDateTimeParts,
   pad2,
@@ -30,9 +31,16 @@ describe('repair-datetime', () => {
     expect(d.getMinutes()).toBe(47)
   })
 
-  it('combineLocalDateAndTime defaults invalid date to now-ish ISO', () => {
-    const iso = combineLocalDateAndTime('not-a-date', '12:00')
-    expect(Number.isNaN(new Date(iso).getTime())).toBe(false)
+  it('ensureRepairIntakeTimestamp keeps full ISO datetimes', () => {
+    const iso = '2026-08-10T13:47:24.003Z'
+    expect(ensureRepairIntakeTimestamp(iso)).toBe(new Date(iso).toISOString())
+  })
+
+  it('ensureRepairIntakeTimestamp upgrades date-only to now', () => {
+    const now = new Date('2026-08-10T15:30:00.000Z')
+    expect(ensureRepairIntakeTimestamp('2026-08-10', now)).toBe(now.toISOString())
+    expect(ensureRepairIntakeTimestamp('', now)).toBe(now.toISOString())
+    expect(ensureRepairIntakeTimestamp(undefined, now)).toBe(now.toISOString())
   })
 
   it('formatIntakeDateTime keeps date-only strings date-only', () => {

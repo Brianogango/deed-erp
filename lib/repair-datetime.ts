@@ -48,3 +48,19 @@ export function formatIntakeDateTime(value: string | null | undefined): string {
     return String(value)
   }
 }
+
+/**
+ * Ensure intakeDate is always a full ISO datetime for DB persistence.
+ * Date-only YYYY-MM-DD values are replaced with "now" so booking never
+ * silently stores midnight-only timestamps.
+ */
+export function ensureRepairIntakeTimestamp(value: unknown, now = new Date()): string {
+  if (typeof value === 'string') {
+    const raw = value.trim()
+    if (raw && raw.includes('T') && !/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+      const d = new Date(raw)
+      if (!Number.isNaN(d.getTime())) return d.toISOString()
+    }
+  }
+  return now.toISOString()
+}

@@ -128,6 +128,7 @@ import { ensureArray, parseStoredState } from '@/lib/safe-local-state'
 import { repairOutsourceReadiness } from '@/lib/repair-outsource'
 import { getPreviousRepairProgressStatus } from '@/lib/repair-progress'
 import { assertFiniteSequenceNext, repairDatesWriteError } from '@/lib/data-validation'
+import { ensureRepairIntakeTimestamp } from '@/lib/repair-datetime'
 import {
   isDirectRepairPath,
   isQuoteDeclinedReopenable,
@@ -3351,7 +3352,7 @@ export interface AppState {
   submitTransfer: (from: LocationId, to: LocationId, productId: string, productName: string, qty: number, serialIds: string[], notes?: string) => boolean | Promise<boolean>
 
   // Repairs - Full Workflow
-  createRepair: (customerId: string, customerName: string, productName: string, serial: string, desc: string, intakeDate?: string) => RepairOrder
+  createRepair: (customerId: string, customerName: string, productName: string, serial: string, desc: string) => RepairOrder
   updateRepair: (id: string, p: Partial<RepairOrder>) => void
   deleteRepair: (id: string) => void
   checkWarrantyForRepair: (repairId: string, serial: string) => boolean
@@ -13097,14 +13098,13 @@ const storeCtx: AppState = {
     },
 
     // ── Repairs ───────────────────────────────────────────────────────────────
-    createRepair: (customerId, customerName, productName, serial, desc, intakeDate) => {
+    createRepair: (customerId, customerName, productName, serial, desc) => {
       const customer = contacts.find(c => c.id === customerId)
       const user = currentUser()
       // Note: ref is now fetched from server on demand via updateRepair
       // For now, use a temporary placeholder that will be replaced
-      const bookedAt = (typeof intakeDate === 'string' && intakeDate.trim())
-        ? intakeDate.trim()
-        : new Date().toISOString()
+      // Always stamp full ISO datetime (date + time) — never date-only.
+      const bookedAt = new Date().toISOString()
       const rep: RepairOrder = {
         id: uid(),
         ref: `REP-${Date.now().toString().slice(-6)}`,
@@ -13198,15 +13198,19 @@ const storeCtx: AppState = {
     updateRepair: (id, p) => {
       const existing = repairsRef.current.find(r => r.id === id)
       if (!existing) return
-      if ('intakeDate' in p || 'date' in p) {
+      const patch = { ...p }
+      if ('intakeDate' in patch && patch.intakeDate != null) {
+        patch.intakeDate = ensureRepairIntakeTimestamp(patch.intakeDate)
+      }
+      if ('intakeDate' in patch || 'date' in patch) {
         const dateErr = repairDatesWriteError({
-          intakeDate: 'intakeDate' in p ? p.intakeDate : existing.intakeDate,
-          date: 'date' in p ? p.date : existing.date,
+          intakeDate: 'intakeDate' in patch ? patch.intakeDate : existing.intakeDate,
+          date: 'date' in patch ? patch.date : existing.date,
         })
         if (dateErr) { showToast(dateErr, 'error'); return }
       }
-      const partsTotal = (p.partsUsed ?? existing.partsUsed).reduce((a, x) => a + x.qty * x.price, 0)
-      const updatedBase = { ...existing, ...p }
+      const partsTotal = (patch.partsUsed ?? existing.partsUsed).reduce((a, x) => a + x.qty * x.price, 0)
+      const updatedBase = { ...existing, ...patch }
       const feeDue = shouldChargeDiagnosisFee(updatedBase) && (updatedBase.diagnosisStopped || updatedBase.diagnosisFeeStatus === 'applicable')
         ? (updatedBase.diagnosisFee ?? 0)
         : 0
@@ -13220,14 +13224,14 @@ const storeCtx: AppState = {
       repairsRef.current = repairsRef.current.map(r => r.id === id ? updated : r)
       // Sync portal when customer-visible intake / report fields change
       if (
-        'qcReportData' in p || 'diagnosisReportData' in p || 'preRepairPhotos' in p || 'issuePhotos' in p
-        || 'repairPath' in p || 'liabilityWaiverAccepted' in p || 'notes' in p
-        || 'issueDescription' in p || 'customerName' in p || 'customerPhone' in p || 'customerEmail' in p
-        || 'intakeDate' in p
+        'qcReportData' in patch || 'diagnosisReportData' in patch || 'preRepairPhotos' in patch || 'issuePhotos' in patch
+        || 'repairPath' in patch || 'liabilityWaiverAccepted' in patch || 'notes' in patch
+        || 'issueDescription' in patch || 'customerName' in patch || 'customerPhone' in patch || 'customerEmail' in patch
+        || 'intakeDate' in patch
       ) {
         setTimeout(() => syncRepairToPortal(updated), 0)
       }
-      if ('customerName' in p || 'customerPhone' in p || 'customerEmail' in p || 'customerId' in p) {
+      if ('customerName' in patch || 'customerPhone' in patch || 'customerEmail' in patch || 'customerId' in patch) {
         const contact = contacts.find(c => c.id === updated.customerId)
         syncCustomerIdentityToDocuments({
           contactId: updated.customerId,

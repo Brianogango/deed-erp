@@ -3,7 +3,6 @@
 
 import { useState, useMemo } from 'react'
 import { useOperationsStore, RepairOrder, fmtDate, fmtDateTime } from '@/lib/store'
-import { combineLocalDateAndTime, localDateTimeParts } from '@/lib/repair-datetime'
 import { DIRECT_REPAIR_WAIVER_TEXT } from '@/lib/repair-path'
 import { diagnosisFeeAmount, isDiagnosisFeePolicyInEffect, resolveCustomerBillingType, resolveDiagnosisFee } from '@/lib/diagnosis-fee'
 import { Field, Input, Select, Textarea, Badge } from '@/components/ui'
@@ -126,8 +125,6 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
     priority: 'normal' as 'low' | 'normal' | 'high' | 'urgent',
     intakeChannel: 'walk_in' as 'walk_in' | 'website' | 'whatsapp' | 'call' | 'email' | 'rider_pickup',
     repairPath: 'diagnosis_first' as 'diagnosis_first' | 'direct_repair',
-    bookingDate: localDateTimeParts().date,
-    bookingTime: localDateTimeParts().time,
     estimatedCompletion: '',
     consentSignature: '', agreeTerms: false,
     serialWarrantyException: false,
@@ -391,8 +388,7 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
         : device.deviceType
       const productLabel = `${device.brand} ${device.model}`.trim()
 
-      const bookedAt = combineLocalDateAndTime(device.bookingDate, device.bookingTime)
-      const rep = createRepair(customerId, customerName, productLabel, device.serial, device.issueDesc, bookedAt)
+      const rep = createRepair(customerId, customerName, productLabel, device.serial, device.issueDesc)
       clearOnSubmit()
 
       const checkedItems = Array.from(device.accessoriesChecked)
@@ -403,7 +399,7 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
       const waiverAt = new Date().toISOString()
       const feeResolved = resolveDiagnosisFee({
         repairPath: device.repairPath,
-        intakeDate: bookedAt,
+        intakeDate: rep.intakeDate,
       }, systemSettings)
       const feeAmount = feeResolved.amount
       const feeApplies = !isDirect && feeResolved.status === 'applicable' && feeAmount > 0
@@ -417,7 +413,6 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
         contactPersonPhone: cpPhone || undefined,
         contactPersonEmail: cpEmail || undefined,
         contactPersonTitle: cpTitle || undefined,
-        intakeDate: bookedAt,
         intakeChannel: device.intakeChannel,
         deviceCondition: device.deviceCondition,
         clientLaptopPassword: device.clientLaptopPassword.trim() || undefined,
@@ -458,7 +453,7 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
         ref: rep.ref,
         clientName: (cpName || customerName).trim(),
         clientPhone: (cpPhone || customerPhone).trim(),
-        bookedAt,
+        bookedAt: rep.intakeDate,
       })
     } catch (err) {
       showToast('Failed to create repair job', 'error')
@@ -544,17 +539,7 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
             type="button"
             onClick={() => {
               setSuccessData(null)
-              setDevice(p => {
-                const now = localDateTimeParts()
-                return {
-                  ...p,
-                  brand: '', model: '', serial: '', issueDesc: '',
-                  accessoriesChecked: new Set<string>(), accessoriesOther: '',
-                  clientLaptopPassword: '',
-                  bookingDate: now.date,
-                  bookingTime: now.time,
-                }
-              })
+              setDevice(p => ({ ...p, brand: '', model: '', serial: '', issueDesc: '', accessoriesChecked: new Set<string>(), accessoriesOther: '', clientLaptopPassword: '' }))
             }}
             className="btn-outline px-8 py-3"
           >
@@ -1104,14 +1089,6 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
                       { value: 'email',        label: 'Email' },
                     ]} />
                 </Field>
-                <div className="grid grid-cols-2 gap-3">
-                  <Field label="Booking date">
-                    <Input type="date" value={device.bookingDate} onChange={v => setD('bookingDate', v)} />
-                  </Field>
-                  <Field label="Booking time">
-                    <Input type="time" value={device.bookingTime} onChange={v => setD('bookingTime', v)} />
-                  </Field>
-                </div>
                 <Field label="Est. Completion">
                   <Input type="date" value={device.estimatedCompletion} onChange={v => setD('estimatedCompletion', v)} />
                 </Field>
