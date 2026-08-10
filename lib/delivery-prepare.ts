@@ -9,6 +9,7 @@ export type PrepareSourceLine = {
   lineType?: string
   qty?: number
   serialIds?: string[] | null
+  serialNumberId?: string | null
 }
 
 export type PrepareDeliveryLine = {
@@ -16,6 +17,7 @@ export type PrepareDeliveryLine = {
   productName: string
   qty: number
   serialIds?: string[] | null
+  serialNumberId?: string | null
 }
 
 export type PrepareLinePlan = {
@@ -45,6 +47,82 @@ export type AssignedSerialRef = {
   status?: string
 }
 
+export type DeliveryPrepareSerial = {
+  id: string
+  productId?: string
+  saleOrderId?: string | null
+  status?: string | null
+}
+
+/**
+ * Serials listed on an SO / DN UI chip are often still `available` in inventory
+ * (Prisma wrote sale_order_items.serial_number_id; deed_serials status lagged).
+ * Prepare must claim those for this SO instead of failing "no longer reserved".
+ */
+export function isSerialHealableForDeliveryPrepare(
+  serial: DeliveryPrepareSerial | null | undefined,
+  opts: { saleOrderId: string; productId: string },
+): boolean {
+  if (!serial?.id) return false
+  if (serial.productId && serial.productId !== opts.productId) return false
+  const status = String(serial.status || '').toLowerCase()
+  const linked = String(serial.saleOrderId || '')
+  if (linked && linked !== opts.saleOrderId) return false
+  if (status === 'sold' || status === 'delivered' || status === 'scrapped' || status === 'returned') {
+    return false
+  }
+  // Already correctly reserved for this order — no heal needed.
+  if ((status === 'assigned' || status === 'reserved') && linked === opts.saleOrderId) return false
+  return status === 'available' || status === 'in_stock' || status === 'reserved' || status === 'assigned' || !status
+}
+
+export function assertSerialUsableForDeliveryPrepare(
+  serial: DeliveryPrepareSerial | null | undefined,
+  opts: { saleOrderId: string; productId: string; productName?: string },
+): { ok: true; heal: boolean } | { ok: false; error: string } {
+  const label = opts.productName || 'item'
+  if (!serial?.id) {
+    return { ok: false, error: `A selected serial for ${label} is missing from inventory` }
+  }
+  if (serial.productId && serial.productId !== opts.productId) {
+    return { ok: false, error: `A selected serial for ${label} belongs to a different product` }
+  }
+  const status = String(serial.status || '').toLowerCase()
+  const linked = String(serial.saleOrderId || '')
+  if (linked && linked !== opts.saleOrderId) {
+    return {
+      ok: false,
+      error: `A selected serial for ${label} is reserved for a different Sales Order`,
+    }
+  }
+  if (status === 'sold' || status === 'delivered') {
+    if (linked === opts.saleOrderId) return { ok: true, heal: false }
+    return { ok: false, error: `A selected serial for ${label} is already sold` }
+  }
+  if ((status === 'assigned' || status === 'reserved') && linked === opts.saleOrderId) {
+    return { ok: true, heal: false }
+  }
+  if (isSerialHealableForDeliveryPrepare(serial, opts)) {
+    return { ok: true, heal: true }
+  }
+  return {
+    ok: false,
+    error: `A selected serial for ${label} is no longer reserved for this Sales Order`,
+  }
+}
+
+/** Merge Prisma serialNumberId into client serialIds arrays for prepare pools. */
+export function coalesceLineSerialIds(line: {
+  serialIds?: string[] | null
+  serialNumberId?: string | null
+} | null | undefined): string[] {
+  const fromArray = Array.isArray(line?.serialIds) ? line!.serialIds!.filter(Boolean) : []
+  const single = line?.serialNumberId ? String(line.serialNumberId) : ''
+  if (!single) return fromArray
+  if (fromArray.includes(single)) return fromArray
+  return [...fromArray, single]
+}
+
 /**
  * Build a FIFO serial pool per product from:
  * - SO line serialIds
@@ -69,10 +147,10 @@ export function buildSerialPoolsByProduct(
   }
   for (const line of soLines ?? []) {
     if (!line.productId || line.lineType === 'section') continue
-    for (const serialId of line.serialIds ?? []) push(line.productId, serialId)
+    for (const serialId of coalesceLineSerialIds(line)) push(line.productId, serialId)
   }
   for (const line of deliveryLines ?? []) {
-    for (const serialId of line.serialIds ?? []) push(line.productId, serialId)
+    for (const serialId of coalesceLineSerialIds(line)) push(line.productId, serialId)
   }
   for (const serial of assignedSerials ?? []) {
     if (!serial.productId || !serial.id) continue
@@ -104,7 +182,7 @@ export function planPrepareDeliveryLines(opts: {
     const serialTracked = isSerialTracked(deliveryLine.productId)
     const left = Math.max(0, Number(requestedLeft[deliveryLine.productId]) || 0)
     const pool = pools.get(deliveryLine.productId) ?? []
-    const existingOnLine = (deliveryLine.serialIds ?? []).filter(Boolean)
+    const existingOnLine = coalesceLineSerialIds(deliveryLine)
     const requestedQty = left
     const qty = serialTracked
       ? Math.min(
