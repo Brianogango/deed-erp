@@ -21,7 +21,7 @@ const inputSchema = z.object({
 export const importSalesInboxLeadsTool: ToolDefinition = {
   name: 'import_sales_inbox_leads',
   description:
-    'Poll the sales@deed.co.ke mailbox via IMAP and create CRM leads from new customer emails (skips internal/auto-replies, dedupes by Message-ID, round-robin assigns sales reps when Auto-assign Leads is on). Use when the user asks to import/create leads from sales emails or check the inbox for new leads. Set dryRun=true to preview without creating. A background cron also runs this every 5 minutes.',
+    'Poll the sales@deed.co.ke mailbox via IMAP and create CRM leads from new customer emails (skips junk/noise/blocklists, queues weak mail as needs_review without paging sales, accepts RFQ-shaped mail with assign+notify, dedupes by Message-ID). Use when the user asks to import/create leads from sales emails or check the inbox for new leads. Set dryRun=true to preview without creating. A background cron also runs this every 5 minutes.',
   inputSchema: {
     type: 'object',
     properties: {
@@ -74,6 +74,7 @@ export const importSalesInboxLeadsTool: ToolDefinition = {
       fetched: result.fetched,
       created: result.created,
       skipped: result.skipped,
+      reviewQueued: result.reviewQueued,
       duplicates: result.duplicates,
       errors: result.errors.slice(0, 10),
       createdLeads: result.createdLeads.slice(0, 20),
@@ -81,7 +82,7 @@ export const importSalesInboxLeadsTool: ToolDefinition = {
       note: result.created > 0
         ? (input.dryRun
           ? 'Dry run only — no leads were written.'
-          : 'Leads were created in CRM. Assigned owners get an in-app notification.')
+          : 'Leads were created in CRM. RFQ-shaped leads notify the assigned owner; weak mail is parked as Needs review.')
         : 'No new creatable messages in this poll (empty inbox window, skips, or duplicates).',
     }
   },
