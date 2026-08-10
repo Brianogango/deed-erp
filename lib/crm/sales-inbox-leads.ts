@@ -165,17 +165,17 @@ export function buildLeadNotesFromEmail(mail: ParsedInboundEmail): string {
   const attachmentLines = (mail.attachments ?? [])
     .filter(a => a.filename)
     .map(a => `- ${a.filename} (${a.contentType || 'file'}, ${a.size || 0} bytes)`)
-  const lines = [
+  const lines: string[] = [
     `Inbound email to sales@deed.co.ke`,
     `From: ${mail.fromName ? `${mail.fromName} <${mail.fromEmail}>` : mail.fromEmail}`,
     `Subject: ${mail.subject || '(no subject)'}`,
-    mail.dateIso ? `Date: ${mail.dateIso}` : null,
-    `Message-ID: ${mail.messageId}`,
-    attachmentLines.length > 0 ? `Attachments (${attachmentLines.length}):` : null,
-    ...attachmentLines,
-    '',
-    clipped || '(empty body)',
-  ].filter(v => v != null && v !== false) as string[]
+  ]
+  if (mail.dateIso) lines.push(`Date: ${mail.dateIso}`)
+  lines.push(`Message-ID: ${mail.messageId}`)
+  if (attachmentLines.length > 0) {
+    lines.push(`Attachments (${attachmentLines.length}):`, ...attachmentLines)
+  }
+  lines.push('', clipped || '(empty body)')
   return lines.join('\n')
 }
 
