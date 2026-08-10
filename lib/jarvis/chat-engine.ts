@@ -1,11 +1,12 @@
 import 'server-only'
 
 import type { PublicUser } from '@/lib/auth/types'
-import { getAnthropicClient, JARVIS_MAX_TOKENS, JARVIS_MAX_TOOL_ROUNDS, JARVIS_MODEL } from './anthropic-client'
+import { getJarvisProvider, JARVIS_MAX_TOKENS, JARVIS_MAX_TOOL_ROUNDS } from './provider'
 import { buildSystemPrompt } from './system-prompt'
-import { anthropicToolsFor } from './tools'
+import { allTools } from './tools'
 import { allowedToolNamesForRole } from './permissions'
 import { runTool } from './run-tool'
+import type { JarvisToolDef } from './provider'
 
 export interface ChatTurnMessage {
   role: 'user' | 'assistant'
@@ -23,11 +24,25 @@ export interface ToolCallRecord {
 export interface ChatTurnResult {
   reply: string
   toolCalls: ToolCallRecord[]
+  provider?: string
+  model?: string
 }
 
-// Runs one user turn through Claude with tool-calling, executing every
-// requested tool through runTool() (permission check + audit log), and
-// looping until the model stops asking for tools or we hit the round cap.
+function toolsForRole(allowedNames: string[]): JarvisToolDef[] {
+  return allTools()
+    .filter(t => allowedNames.includes(t.name))
+    .map(t => ({
+      name: t.name,
+      description: t.description,
+      inputSchema: t.inputSchema,
+    }))
+}
+
+/**
+ * Runs one user turn through the configured LLM provider (Gemini by default)
+ * with ERP tool-calling. Tools still execute only via runTool() — permission
+ * check + audit — never arbitrary SQL or direct writes.
+ */
 export async function runChatTurn(params: {
   user: PublicUser
   conversationId: string
@@ -37,73 +52,36 @@ export async function runChatTurn(params: {
 }): Promise<ChatTurnResult> {
   const { user, conversationId, ipAddress, history, userMessage } = params
 
-  const client = getAnthropicClient()
+  const provider = getJarvisProvider()
   const allowedNames = allowedToolNamesForRole(user.role)
-  const tools = anthropicToolsFor(allowedNames)
+  const tools = toolsForRole(allowedNames)
   const system = buildSystemPrompt(user)
 
-  const messages: Array<{ role: 'user' | 'assistant'; content: any }> = [
-    ...history.map(m => ({ role: m.role, content: m.content })),
-    { role: 'user', content: userMessage },
-  ]
-
-  const toolCalls: ToolCallRecord[] = []
-
-  for (let round = 0; round < JARVIS_MAX_TOOL_ROUNDS; round += 1) {
-    const response = await client.messages.create({
-      model: JARVIS_MODEL,
-      max_tokens: JARVIS_MAX_TOKENS,
-      system,
-      messages,
-      tools: tools.length > 0 ? tools : undefined,
-    })
-
-    if (response.stop_reason !== 'tool_use') {
-      const text = response.content
-        .map(b => (b.type === 'text' ? b.text : ''))
-        .join('\n')
-        .trim()
-      return { reply: text || "I don't have a response for that.", toolCalls }
-    }
-
-    // Model wants to call one or more tools — execute each through the
-    // permission + audit choke point, then feed results back.
-    messages.push({ role: 'assistant', content: response.content })
-
-    const toolResultBlocks: Array<Record<string, unknown>> = []
-    for (const block of response.content) {
-      if (block.type !== 'tool_use') continue
-
-      const outcome = await runTool(block.name, block.input, {
+  const result = await provider.runToolLoop({
+    system,
+    history,
+    userMessage,
+    tools,
+    maxRounds: JARVIS_MAX_TOOL_ROUNDS,
+    maxTokens: JARVIS_MAX_TOKENS,
+    onToolCall: async (name, input) => {
+      const outcome = await runTool(name, input, {
         user,
         conversationId,
         ipAddress,
       })
-
-      toolCalls.push({
-        toolName: block.name,
-        input: block.input,
+      return {
         allowed: outcome.allowed,
         output: outcome.output,
         error: outcome.error,
-      })
-
-      const resultPayload = outcome.allowed
-        ? (outcome.error ? { error: outcome.error } : outcome.output)
-        : { error: outcome.error ?? 'Permission denied' }
-
-      toolResultBlocks.push({
-        type: 'tool_result',
-        tool_use_id: block.id,
-        content: JSON.stringify(resultPayload).slice(0, 8000),
-      })
-    }
-
-    messages.push({ role: 'user', content: toolResultBlocks })
-  }
+      }
+    },
+  })
 
   return {
-    reply: 'I needed too many tool calls to answer that — please narrow your question and try again.',
-    toolCalls,
+    reply: result.reply,
+    toolCalls: result.toolCalls,
+    provider: result.provider,
+    model: result.model,
   }
 }

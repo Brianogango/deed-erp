@@ -1,19 +1,16 @@
-import 'server-only'
+/**
+ * @deprecated Import from `@/lib/jarvis/provider` instead.
+ * Kept so older imports keep working while JARVIS uses the AI service layer.
+ */
+export {
+  JARVIS_MAX_TOKENS,
+  JARVIS_MAX_TOOL_ROUNDS,
+} from './provider'
 
-import Anthropic from '@anthropic-ai/sdk'
-
-let _client: Anthropic | null = null
-
-export function getAnthropicClient(): Anthropic {
-  if (_client) return _client
-  const apiKey = process.env.ANTHROPIC_API_KEY
-  if (!apiKey) {
-    throw new Error('ANTHROPIC_API_KEY is not configured — JARVIS is disabled until it is set')
-  }
-  _client = new Anthropic({ apiKey })
-  return _client
+export function getAnthropicClient(): never {
+  throw new Error(
+    'getAnthropicClient() is deprecated — use getJarvisProvider() from @/lib/jarvis/provider',
+  )
 }
 
-export const JARVIS_MODEL = process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-6'
-export const JARVIS_MAX_TOKENS = 2048
-export const JARVIS_MAX_TOOL_ROUNDS = 6
+export const JARVIS_MODEL = process.env.ANTHROPIC_MODEL || process.env.JARVIS_MODEL || 'claude-sonnet-4-6'

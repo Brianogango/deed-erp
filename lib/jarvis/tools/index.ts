@@ -37,9 +37,7 @@ export function allTools(): ToolDefinition[] {
   return REGISTRY
 }
 
-// Builds the Anthropic `tools` array, scoped to only the tools a given
-// allow-list permits — the model is never even told a disallowed tool
-// exists.
+/** @deprecated Prefer provider-agnostic tool defs via chat-engine / provider layer. */
 export function anthropicToolsFor(allowedNames: string[]) {
   return REGISTRY
     .filter(t => allowedNames.includes(t.name))
