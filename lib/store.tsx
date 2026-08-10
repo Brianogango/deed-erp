@@ -88,6 +88,7 @@ import {
 } from '@/lib/odoo-sales-flow'
 import {
   allocateDeliveredQtyToOrderLines,
+  assertSerialUsableForDeliveryPrepare,
   pairOrderLinesWithDeliveryLines,
   planPrepareDeliveryLines,
   sumQtyByProductId,
@@ -10901,6 +10902,7 @@ const storeCtx: AppState = {
       const reservations: StockReservation[] = []
       const preparedLines: DeliveryLine[] = []
       let totalPrepared = 0
+      const serialIdsToHeal = new Set<string>()
 
       for (let i = 0; i < del.lines.length; i++) {
         const deliveryLine = del.lines[i]
@@ -10913,13 +10915,18 @@ const storeCtx: AppState = {
         let sourceLocation = (deliveryLine.sourceLocation ?? 'warehouse') as LocationId
 
         if (serialTracked && qty > 0) {
-          const invalid = serialIds.find(id => {
+          for (const id of serialIds) {
             const serial = serialRef.current.find(item => item.id === id)
-            return !serial || serial.status !== 'assigned' || serial.saleOrderId !== so.id
-          })
-          if (invalid) {
-            showToast(`A selected serial for ${deliveryLine.productName} is no longer reserved for this Sales Order`, 'error')
-            return false
+            const check = assertSerialUsableForDeliveryPrepare(serial, {
+              saleOrderId: so.id,
+              productId: deliveryLine.productId,
+              productName: deliveryLine.productName,
+            })
+            if (!check.ok) {
+              showToast(check.error, 'error')
+              return false
+            }
+            if (check.heal) serialIdsToHeal.add(id)
           }
         } else if (stockTracked && qty > 0) {
           const resolved = resolveBulkDeliverySourceLocation({
@@ -10973,6 +10980,21 @@ const storeCtx: AppState = {
             notes: `Reserved while preparing delivery ${del.ref}`,
           })
         }
+      }
+
+      if (serialIdsToHeal.size > 0) {
+        // Claim SO/DN-stamped serials that inventory still shows as available/in_stock.
+        const healIds = Array.from(serialIdsToHeal)
+        setSerials(prev => prev.map(s => {
+          if (!healIds.includes(s.id)) return s
+          const updated = { ...s, status: 'assigned' as const, saleOrderId: so.id }
+          sync(`/api/serials/${s.id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(updated),
+          })
+          return updated
+        }))
       }
 
       if (totalPrepared <= 0) {

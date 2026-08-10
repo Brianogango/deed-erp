@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import {
   allocateDeliveredQtyToOrderLines,
+  assertSerialUsableForDeliveryPrepare,
   buildSerialPoolsByProduct,
+  coalesceLineSerialIds,
+  isSerialHealableForDeliveryPrepare,
   pairOrderLinesWithDeliveryLines,
   planPrepareDeliveryLines,
   sumQtyByProductId,
@@ -27,6 +30,15 @@ describe('delivery prepare with duplicate product lines', () => {
       { productId: thinkpad, qty: 1, serialIds: ['s4'] },
     ])
     expect(pools.get(thinkpad)).toEqual(['s1', 's2', 's3', 's4'])
+  })
+
+  it('pools Prisma serialNumberId when serialIds were wiped', () => {
+    const pools = buildSerialPoolsByProduct([
+      { productId: thinkpad, qty: 1, serialIds: [], serialNumberId: 'prisma-serial' },
+    ])
+    expect(pools.get(thinkpad)).toEqual(['prisma-serial'])
+    expect(coalesceLineSerialIds({ serialIds: ['a'], serialNumberId: 'a' })).toEqual(['a'])
+    expect(coalesceLineSerialIds({ serialIds: [], serialNumberId: 'b' })).toEqual(['b'])
   })
 
   it('assigns serials across duplicate ThinkPad delivery rows (the 2/2 bug)', () => {
@@ -158,5 +170,42 @@ describe('delivery prepare with duplicate product lines', () => {
       'max',
     )
     expect(lines.map(l => l.qtyDelivered)).toEqual([2, 0])
+  })
+})
+
+describe('prepare serial heal (SO chip vs inventory lag)', () => {
+  const soId = 'so-46'
+  const productId = thinkpad
+
+  it('heals available serials that are stamped on the SO', () => {
+    expect(isSerialHealableForDeliveryPrepare(
+      { id: 's1', productId, status: 'available' },
+      { saleOrderId: soId, productId },
+    )).toBe(true)
+    expect(assertSerialUsableForDeliveryPrepare(
+      { id: 's1', productId, status: 'in_stock' },
+      { saleOrderId: soId, productId, productName: 'ProBook' },
+    )).toEqual({ ok: true, heal: true })
+  })
+
+  it('does not heal serials already assigned to this SO', () => {
+    expect(isSerialHealableForDeliveryPrepare(
+      { id: 's1', productId, status: 'assigned', saleOrderId: soId },
+      { saleOrderId: soId, productId },
+    )).toBe(false)
+    expect(assertSerialUsableForDeliveryPrepare(
+      { id: 's1', productId, status: 'assigned', saleOrderId: soId },
+      { saleOrderId: soId, productId },
+    )).toEqual({ ok: true, heal: false })
+  })
+
+  it('rejects serials reserved for a different SO', () => {
+    const result = assertSerialUsableForDeliveryPrepare(
+      { id: 's1', productId, status: 'assigned', saleOrderId: 'other' },
+      { saleOrderId: soId, productId, productName: 'ProBook' },
+    )
+    expect(result.ok).toBe(false)
+    if (result.ok) return
+    expect(result.error).toMatch(/different Sales Order/)
   })
 })

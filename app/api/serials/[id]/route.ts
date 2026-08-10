@@ -5,6 +5,7 @@ import { loadAppState, saveStoreKeys } from '@/lib/server-store'
 import type { SerialNumber } from '@/lib/store'
 import { appendInventoryAuditLog } from '@/lib/inventory/audit'
 import { validateSerialEdit } from '@/lib/inventory/serial-edit'
+import { mergeSerialUpdate } from '@/lib/inventory/serial-update'
 
 async function requireSerialEditRole() {
   const session = await getServerSession()
@@ -43,15 +44,27 @@ async function updateSerial(request: NextRequest, id: string) {
   })
   if (!validated.ok) return NextResponse.json({ error: validated.error }, { status: 422 })
 
-  const next: SerialNumber = {
-    ...current,
+  const next = mergeSerialUpdate(current, body, {
     serial: validated.patch.serial,
-    barcode: validated.patch.barcode || validated.patch.serial,
+    barcode: validated.patch.barcode,
     specs: validated.patch.specs,
-    accessoryNotes: validated.patch.conditionNotes,
-  }
+    conditionNotes: validated.patch.conditionNotes,
+  })
   serials[idx] = next
   await saveStoreKeys({ deed_serials: JSON.stringify(serials) })
+
+  // Keep Prisma serial_numbers.status aligned for dual-read screens.
+  if (typeof body.status === 'string' && body.status.trim()) {
+    try {
+      const prisma = (await import('@/lib/prisma')).default
+      await prisma.serialNumber.update({
+        where: { id },
+        data: { status: String(body.status).slice(0, 30) },
+      })
+    } catch {
+      /* blob remains authoritative for saleOrderId */
+    }
+  }
   await appendInventoryAuditLog({
     action: 'serial_edit',
     documentRef: next.serial,
