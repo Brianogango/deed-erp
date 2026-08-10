@@ -130,6 +130,8 @@ const displayWebsite = (website?: string) => {
 const docNoLabel = (title: string) => {
   const t = title.toLowerCase()
   if (t.includes('receipt')) return 'Receipt No'
+  if (t.includes('request for quotation') || t.includes('rfq')) return 'RFQ No'
+  if (t.includes('purchase order')) return 'PO No'
   if (t.includes('quote') || t.includes('quotation')) return 'Quote No'
   if (t.includes('pro-forma') || t.includes('proforma')) return 'Proforma No'
   if (t.includes('delivery')) return 'DN No'
@@ -141,6 +143,9 @@ const partyLabelFor = (title: string, override?: string) => {
   if (override) return override
   const t = title.toLowerCase()
   if (t.includes('receipt')) return 'Receipt To'
+  if (t.includes('request for quotation') || t.includes('rfq') || t.includes('purchase order')) {
+    return 'Vendor'
+  }
   if (t.includes('quote') || t.includes('quotation')) return 'Quote To'
   if (t.includes('pro-forma') || t.includes('proforma')) return 'Bill To'
   if (t.includes('delivery')) return 'Deliver To'
