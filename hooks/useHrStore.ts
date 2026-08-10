@@ -232,7 +232,7 @@ export const useHrStore = create<HrState>((set, get) => ({
       const given = noticeDaysGiven(request.startDate)
       if (given < required) {
         ctx.showToast(
-          `Insufficient notice: ${request.days <= 3 ? '≤3 day leave requires 5' : '>3 day leave requires 14'} working days notice. ` +
+          `Insufficient notice: ${request.days <= 3 ? '≤3 day leave requires 3' : '>3 day leave requires 14'} working days notice. ` +
           `Only ${given} working day${given !== 1 ? 's' : ''} until your start date.`,
           'error'
         )

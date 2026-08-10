@@ -121,6 +121,11 @@ export async function POST(request: Request) {
         if (leaveType !== 'unpaid' && !isSystemGenerated) {
           const bal = await getBalance(req.employeeId, leaveType, year)
           const remaining = remainingBalance(bal)
+          if (remaining <= 0) {
+            return NextResponse.json({
+              error: `No remaining ${leaveType} balance for ${req.employeeName ?? 'employee'} — applications for this leave type are blocked`,
+            }, { status: 422 })
+          }
           if (days > remaining) {
             return NextResponse.json({
               error: `Insufficient ${leaveType} balance for ${req.employeeName ?? 'employee'}: ${Math.max(0, remaining)} day(s) remaining, ${days} requested`,
@@ -238,6 +243,9 @@ export async function POST(request: Request) {
     const year = Number(startStr.slice(0, 4))
     const bal = await getBalance(employee.id, leaveType, year)
     const remaining = remainingBalance(bal)
+    if (leaveType !== 'unpaid' && remaining <= 0) {
+      return NextResponse.json({ error: `No remaining ${leaveType} balance — applications for this leave type are blocked until HR adjusts your entitlement` }, { status: 422 })
+    }
     if (leaveType !== 'unpaid' && days > remaining) {
       return NextResponse.json({ error: `Insufficient ${leaveType} balance: ${Math.max(0, remaining)} day(s) remaining, ${days} requested` }, { status: 422 })
     }

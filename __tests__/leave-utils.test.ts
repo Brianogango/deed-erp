@@ -78,8 +78,9 @@ describe('formatLocalDate / noticeDaysGiven', () => {
 })
 
 describe('requiredNotice', () => {
-  it('requires 5 working days for short leave and 14 for long', () => {
-    expect(requiredNotice('annual', 3)).toBe(5)
+  it('requires 3 working days for short leave and 14 for long', () => {
+    expect(requiredNotice('annual', 3)).toBe(3)
+    expect(requiredNotice('annual', 1)).toBe(3)
     expect(requiredNotice('annual', 4)).toBe(14)
     expect(requiredNotice('sick', 10)).toBe(0)
   })

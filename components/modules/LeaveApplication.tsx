@@ -14,9 +14,9 @@ import {
 import {
   StoreLeaveType,
   LEAVE_LABELS, LEAVE_COLORS, LEAVE_ENTITLEMENTS,
-  CALENDAR_DAY_TYPES, NOTICE_EXEMPT_TYPES,
-  employeeLeaveTypesFor, isLeaveTypeAllowedForGender,
-  leaveDaysForRange, formatLocalDate, noticeDaysGiven, requiredNotice,
+  CALENDAR_DAY_TYPES, NOTICE_EXEMPT_TYPES, NOTICE_SHORT_DAYS, NOTICE_LONG_DAYS, NOTICE_THRESHOLD_DAYS,
+  employeeLeaveTypesFor, isLeaveTypeAllowedForGender, entitlementFor,
+  leaveDaysForRange, formatLocalDate, noticeDaysGiven, requiredNotice, remainingBalance,
 } from '@/lib/leave-utils'
 
 // ── Day calc helper (respects calendar vs working days per type) ──────────────
@@ -46,7 +46,24 @@ export default function LeaveApplication() {
   const currentMonth = new Date().getMonth() + 1 // 1–12
 
   const myLeaves   = leaveRequests.filter(r => r.employeeId === myEmployee?.id)
-  const myBalances = leaveBalances.filter(b => b.employeeId === myEmployee?.id && b.year === currentYear)
+  const storedBalances = leaveBalances.filter(b => b.employeeId === myEmployee?.id && b.year === currentYear)
+  // Always surface entitlements even before HR seeds balance rows.
+  const myBalances: LeaveBalance[] = myEmployee
+    ? employeeLeaveTypesFor(myEmployee.gender).map(leaveType => {
+        const existing = storedBalances.find(b => b.leaveType === leaveType)
+        if (existing) return existing
+        return {
+          id: `${myEmployee.id}-${leaveType}-${currentYear}`,
+          employeeId: myEmployee.id,
+          leaveType,
+          year: currentYear,
+          entitlement: entitlementFor(leaveType, myEmployee.gender),
+          carryForward: 0,
+          used: 0,
+          pending: 0,
+        }
+      })
+    : []
 
   const canDecideLeave = (req: LeaveRequest) => {
     if (isHRAdmin) return true
@@ -96,7 +113,7 @@ export default function LeaveApplication() {
   const getBalance = (type: StoreLeaveType) => {
     const b = myBalances.find(b => b.leaveType === type)
     if (!b) return null
-    return { ...b, available: b.entitlement + b.carryForward - b.used - b.pending }
+    return { ...b, available: remainingBalance(b) }
   }
 
   const computedDays = calcDaysForType(fType, fStart, fEnd)
@@ -104,7 +121,9 @@ export default function LeaveApplication() {
   const noticeReq    = requiredNotice(fType, computedDays)
   const noticeLack   = noticeReq > 0 && computedDays > 0 && noticeGiven < noticeReq
   const balanceForType = getBalance(fType)
-  const balanceLack = fType !== 'unpaid' && !!balanceForType && computedDays > 0 && computedDays > balanceForType.available
+  const balanceAvailable = balanceForType?.available ?? 0
+  const balanceExhausted = fType !== 'unpaid' && balanceAvailable <= 0
+  const balanceLack = fType !== 'unpaid' && computedDays > 0 && computedDays > balanceAvailable
   const todayLocal = formatLocalDate(new Date())
 
   const pendingAll  = managedLeaves.filter(r => r.status === 'pending_hr')
@@ -121,8 +140,16 @@ export default function LeaveApplication() {
     if (!fStart || !fEnd) { showToast('Select start and end dates', 'error'); return }
     if (computedDays <= 0) { showToast('End date must be after start date', 'error'); return }
     if (!fReason.trim()) { showToast('Please provide a reason', 'error'); return }
+    if (balanceExhausted) {
+      showToast(`No remaining ${LEAVE_LABELS[fType] ?? fType} balance — you cannot apply for this leave type`, 'error')
+      return
+    }
     if (balanceLack) {
-      showToast(`Insufficient ${fType.replace(/_/g, ' ')} balance — ${balanceForType?.available ?? 0} day(s) available, ${computedDays} requested`, 'error')
+      showToast(`Insufficient ${LEAVE_LABELS[fType] ?? fType} balance — ${balanceAvailable} day(s) available, ${computedDays} requested`, 'error')
+      return
+    }
+    if (noticeLack) {
+      showToast(`Insufficient notice: ${noticeReq} working days required before the start date (you have ${noticeGiven})`, 'error')
       return
     }
     setSubmitting(true)
@@ -153,7 +180,7 @@ export default function LeaveApplication() {
   }
 
   const statusColor = (s: LeaveRequest['status']) =>
-    s === 'approved' ? '#10B981' : s === 'rejected' ? '#EF4444' : s === 'cancelled' ? '#9CA3AF' : '#F59E0B'
+    s === 'approved' ? 'var(--success)' : s === 'rejected' ? 'var(--danger)' : s === 'cancelled' ? 'var(--text-4)' : 'var(--warning)'
   const statusIcon  = (s: LeaveRequest['status']) =>
     s === 'approved' ? faCalendarCheck : s === 'rejected' ? faCalendarXmark : s === 'cancelled' ? faBan : faHourglassHalf
   const statusLabel = (s: LeaveRequest['status']) =>
@@ -192,7 +219,7 @@ export default function LeaveApplication() {
         {myEmployee ? (
           <div className="card p-4 flex items-center gap-6 flex-wrap">
             <div className="w-12 h-12 rounded-full flex items-center justify-center text-white font-bold text-base flex-shrink-0"
-              style={{ background: 'linear-gradient(135deg, var(--accent-cyan), #0284C7)' }}>
+              style={{ background: 'linear-gradient(135deg, var(--accent-cyan), var(--navy))' }}>
               {myEmployee.fullName.slice(0, 2).toUpperCase()}
             </div>
             <div>
@@ -203,26 +230,27 @@ export default function LeaveApplication() {
           </div>
         ) : (
           <div className="card p-5 text-center" style={{ border: '1px dashed var(--border-lt)' }}>
-            <Fa icon={faCircleInfo} style={{ fontSize: 24, color: '#fec84b', marginBottom: 8 }} />
+            <Fa icon={faCircleInfo} style={{ fontSize: 24, color: 'var(--warning)', marginBottom: 8 }} />
             <p className="text-sm font-semibold mb-1">No Employee Record Found</p>
             <p className="text-xs text-t3">Your account is not linked to an employee record. Please contact HR.</p>
           </div>
         )}
 
         {/* ── Balance cards ── */}
-        {myEmployee && myBalances.length > 0 && (
+        {myEmployee && (
           <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(155px, 1fr))' }}>
             {myBalances
               .filter(b => b.leaveType !== 'december_closure' || b.used > 0)
               // Hide gender-inapplicable maternity/paternity cards (unless they hold history)
               .filter(b => isLeaveTypeAllowedForGender(b.leaveType as StoreLeaveType, myEmployee?.gender) || b.used > 0 || b.pending > 0)
               .map(b => {
-                const avail = b.entitlement + b.carryForward - b.used - b.pending
-                const color = LEAVE_COLORS[b.leaveType as StoreLeaveType] ?? '#6B7280'
+                const avail = remainingBalance(b)
+                const color = LEAVE_COLORS[b.leaveType as StoreLeaveType] ?? 'var(--text-4)'
                 const isAnnual = b.leaveType === 'annual'
                 const warn = isAnnual && currentMonth >= 10 && avail > 7
+                const exhausted = b.leaveType !== 'unpaid' && avail <= 0
                 return (
-                  <div key={b.id} className="card p-3 relative" style={{ borderTop: `3px solid ${color}` }}>
+                  <div key={b.id} className="card p-3 relative" style={{ borderTop: `3px solid ${exhausted ? 'var(--danger)' : color}` }}>
                     {warn && (
                       <div className="absolute top-2 right-2">
                         <Fa icon={faTriangleExclamation} style={{ color: 'var(--warning)', fontSize: 11 }} />
@@ -231,14 +259,16 @@ export default function LeaveApplication() {
                     <p className="text-[10px] uppercase tracking-wider mb-1 pr-4" style={{ color: 'var(--text-3)' }}>
                       {LEAVE_LABELS[b.leaveType as StoreLeaveType] ?? b.leaveType}
                     </p>
-                    <p className="text-[22px] font-bold" style={{ color }}>{avail}</p>
+                    <p className="text-xl font-bold" style={{ color: exhausted ? 'var(--danger)' : color }}>{avail}</p>
                     <p className="text-[10px] text-t3">
-                      {CALENDAR_DAY_TYPES.includes(b.leaveType as StoreLeaveType) ? 'calendar days' : 'working days'}
+                      {exhausted
+                        ? 'balance used up'
+                        : CALENDAR_DAY_TYPES.includes(b.leaveType as StoreLeaveType) ? 'calendar days left' : 'working days left'}
                     </p>
                     <div className="flex gap-3 mt-2 text-[10px] text-t3 flex-wrap">
                       <span>{b.entitlement} total</span>
                       <span>{b.used} used</span>
-                      {b.pending > 0 && <span style={{ color: '#fec84b' }}>{b.pending} pending</span>}
+                      {b.pending > 0 && <span style={{ color: 'var(--warning)' }}>{b.pending} pending</span>}
                       {b.carryForward > 0 && <span style={{ color: 'var(--success)' }}>+{b.carryForward} c/f</span>}
                     </div>
                     {b.leaveType === 'sick' && (
@@ -249,7 +279,7 @@ export default function LeaveApplication() {
                         Use by 31 Dec — no carry-over
                       </p>
                     )}
-                    {isHRAdmin && (
+                    {isHRAdmin && storedBalances.some(sb => sb.id === b.id) && (
                       <button
                         className="text-[9px] text-blue-500 hover:underline mt-1"
                         onClick={() => {
@@ -375,9 +405,9 @@ export default function LeaveApplication() {
                   <button key={f.value} onClick={() => setAdminFilter(f.value)}
                     style={{
                       fontSize: 10, padding: '3px 10px', borderRadius: 20, border: '1px solid', cursor: 'pointer',
-                      background:  adminFilter === f.value ? '#E8F3FA' : 'transparent',
+                      background:  adminFilter === f.value ? 'var(--primary-light)' : 'transparent',
                       color:       adminFilter === f.value ? 'var(--navy)'  : 'var(--text-3)',
-                      borderColor: adminFilter === f.value ? '#A8D4E8'  : 'var(--border-lt)',
+                      borderColor: adminFilter === f.value ? 'var(--border)'  : 'var(--border-lt)',
                       fontWeight:  adminFilter === f.value ? 600 : 400,
                     }}>
                     {f.label} {f.count > 0 && `(${f.count})`}
@@ -446,7 +476,7 @@ export default function LeaveApplication() {
                   <div className="flex gap-1.5">
                     {r.status === 'pending_hr' && canDecideLeave(r) ? (
                       <button
-                        style={{ background: 'var(--success-bg)', border: '1px solid #A7F3D0', cursor: 'pointer', color: 'var(--success)', fontSize: 10, borderRadius: 4, padding: '3px 9px', fontWeight: 600 }}
+                        style={{ background: 'var(--success-bg)', border: '1px solid var(--success-bg)', cursor: 'pointer', color: 'var(--success)', fontSize: 10, borderRadius: 4, padding: '3px 9px', fontWeight: 600 }}
                         onClick={() => { setDecideId(r.id); setDecideNote('') }}>
                         <Fa icon={faCheck} className="mr-0.5" /> Decide
                       </button>
@@ -492,21 +522,21 @@ export default function LeaveApplication() {
                     key: 'init' as const,
                     title: 'Initialise Year Balances',
                     desc: `Create leave balance records for all active employees for ${actionYear}. Safe to run multiple times — skips existing records.`,
-                    color: '#1B2762',
+                    color: 'var(--navy)',
                     icon: faGear,
                   },
                   {
                     key: 'closure' as const,
                     title: 'Apply December Closure',
                     desc: `Auto-create approved December closure leave (22 Dec – 2 Jan) for all active employees in ${actionYear}. Skips employees already applied.`,
-                    color: '#F59E0B',
+                    color: 'var(--warning)',
                     icon: faCalendarDays,
                   },
                   {
                     key: 'expire' as const,
                     title: 'Expire Year-End Balances',
                     desc: `Forfeit unused annual leave for ${actionYear}. Run on 31 Dec. This is irreversible — ensure all approvals are done first.`,
-                    color: '#EF4444',
+                    color: 'var(--danger)',
                     icon: faTriangleExclamation,
                   },
                 ].map(a => (
@@ -537,7 +567,7 @@ export default function LeaveApplication() {
                     .filter(([t]) => t !== 'unpaid')
                     .map(([type, days]) => (
                       <div key={type} className="text-center p-3 rounded-xl bg-white border border-[var(--border-lt)]">
-                        <p className="text-[22px] font-extrabold" style={{ color: LEAVE_COLORS[type] }}>{days}</p>
+                        <p className="text-xl font-extrabold" style={{ color: LEAVE_COLORS[type] }}>{days}</p>
                         <p className="text-[10px] text-[var(--text-3)] mt-0.5">{LEAVE_LABELS[type]}</p>
                         <p className="text-[9px] text-[var(--text-4)]">
                           {CALENDAR_DAY_TYPES.includes(type) ? 'calendar days' : 'working days'}
@@ -559,20 +589,28 @@ export default function LeaveApplication() {
                   <Select
                     value={fType}
                     onChange={v => { setFType(v as StoreLeaveType); setFStart(''); setFEnd('') }}
-                    options={employeeLeaveTypesFor(myEmployee?.gender).map(v => ({ value: v, label: LEAVE_LABELS[v] }))}
+                    options={employeeLeaveTypesFor(myEmployee?.gender).map(v => {
+                      const avail = getBalance(v)?.available
+                      const suffix = v === 'unpaid' ? '' : avail === undefined ? '' : ` (${Math.max(0, avail)} left)`
+                      return { value: v, label: `${LEAVE_LABELS[v]}${suffix}` }
+                    })}
                   />
                 </Field>
               </div>
 
+              {balanceExhausted && (
+                <div className="col-span-2 px-3 py-2 rounded-lg text-[11px] bg-red-50 border border-red-200 text-red-700">
+                  <Fa icon={faTriangleExclamation} className="mr-1" />
+                  Your <strong>{LEAVE_LABELS[fType]}</strong> balance is used up ({balanceAvailable} day(s) left). You cannot apply until HR adjusts the balance.
+                </div>
+              )}
+
               {/* Notice requirement hint */}
               {!NOTICE_EXEMPT_TYPES.includes(fType) && (
                 <div className="col-span-2 px-3 py-2 rounded-lg text-[11px]"
-                  style={{ background: 'var(--info-bg)', border: '1px solid #BFDBFE', color: 'var(--info-text)' }}>
+                  style={{ background: 'var(--info-bg)', border: '1px solid var(--border)', color: 'var(--info-text)' }}>
                   <Fa icon={faCircleInfo} className="mr-1" />
-                  {fType === 'annual' || fType === 'study' || fType === 'unpaid'
-                    ? <>Requires <strong>5 working days</strong> notice for ≤3 days, <strong>14 working days</strong> for longer periods.</>
-                    : <>No advance notice required for this leave type.</>
-                  }
+                  <>Requires <strong>{NOTICE_SHORT_DAYS} working days</strong> notice for ≤{NOTICE_THRESHOLD_DAYS} days, <strong>{NOTICE_LONG_DAYS} working days</strong> for longer periods.</>
                 </div>
               )}
 
@@ -592,13 +630,13 @@ export default function LeaveApplication() {
                   style={{ border: '1px solid' }}>
                   <p>
                     <span className="font-bold">{computedDays} {CALENDAR_DAY_TYPES.includes(fType) ? 'calendar' : 'working'} day{computedDays !== 1 ? 's' : ''}</span>
-                    {balanceForType && (
-                      <span className="ml-2" style={{ color: balanceLack ? 'var(--danger)' : 'var(--success)' }}>
-                        · {balanceForType.available} day{balanceForType.available !== 1 ? 's' : ''} available {balanceLack ? '⚠ Insufficient balance' : '✓'}
+                    {fType !== 'unpaid' && (
+                      <span className="ml-2" style={{ color: (balanceLack || balanceExhausted) ? 'var(--danger)' : 'var(--success)' }}>
+                        · {balanceAvailable} day{balanceAvailable !== 1 ? 's' : ''} available {(balanceLack || balanceExhausted) ? '(insufficient)' : ''}
                       </span>
                     )}
                   </p>
-                  <p className="mt-0.5" style={{ color: '#6B7280' }}>Working days are Monday–Saturday (Sunday and public holidays excluded).</p>
+                  <p className="mt-0.5" style={{ color: 'var(--text-4)' }}>Working days are Monday–Saturday (Sunday and public holidays excluded).</p>
                   {balanceLack && (
                     <p className="mt-1">
                       <Fa icon={faTriangleExclamation} className="mr-1" />
@@ -638,15 +676,20 @@ export default function LeaveApplication() {
               <button className="btn-outline" onClick={() => setShowForm(false)}>Cancel</button>
               <button
                 className="btn-primary"
-                disabled={submitting || computedDays <= 0 || !fReason.trim() || noticeLack || balanceLack}
+                disabled={submitting || computedDays <= 0 || !fReason.trim() || noticeLack || balanceLack || balanceExhausted}
                 onClick={handleSubmit}
                 title={
-                  balanceLack ? 'Insufficient leave balance'
+                  balanceExhausted ? 'No leave balance remaining'
+                    : balanceLack ? 'Insufficient leave balance'
                     : noticeLack ? `Insufficient notice period (${noticeGiven}/${noticeReq} working days)`
                       : undefined
                 }
               >
-                {submitting ? 'Submitting...' : 'Submit Application'}
+                {submitting ? 'Submitting...'
+                  : balanceExhausted ? 'No leave balance remaining'
+                  : balanceLack ? 'Insufficient leave balance'
+                  : noticeLack ? `Need ${noticeReq} working days notice`
+                  : 'Submit Application'}
               </button>
             </div>
           </Modal>
@@ -681,11 +724,11 @@ export default function LeaveApplication() {
               <div className="flex gap-2 justify-end pt-2">
                 <button className="btn-outline" onClick={() => setDecideId(null)}>Cancel</button>
                 <button
-                  style={{ background: 'var(--danger-bg)', border: '1px solid #FCA5A5', color: 'var(--danger)', borderRadius: 8, padding: '8px 18px', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}
+                  style={{ background: 'var(--danger-bg)', border: '1px solid var(--danger)', color: 'var(--danger)', borderRadius: 8, padding: '8px 18px', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}
                   onClick={() => handleDecide(false)}>
                   <Fa icon={faXmark} className="mr-1" /> Reject
                 </button>
-                <button className="btn-primary" style={{ background: '#12B76A' }} onClick={() => handleDecide(true)}>
+                <button className="btn-primary" style={{ background: 'var(--success)' }} onClick={() => handleDecide(true)}>
                   <Fa icon={faCheck} className="mr-1" /> Approve
                 </button>
               </div>

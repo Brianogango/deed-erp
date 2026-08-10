@@ -59,8 +59,8 @@ export const NOTICE_EXEMPT_TYPES: StoreLeaveType[] = [
 
 // Notice period thresholds (policy section 4.1)
 export const NOTICE_THRESHOLD_DAYS = 3   // ≤3 days = short; >3 days = long
-export const NOTICE_SHORT_DAYS     = 5   // working days required for short leave
-export const NOTICE_LONG_DAYS      = 14  // working days required for long leave
+export const NOTICE_SHORT_DAYS     = 3   // working days required for short leave (≤3 days)
+export const NOTICE_LONG_DAYS      = 14  // working days required for long leave (>3 days)
 
 export const LEAVE_LABELS: Record<StoreLeaveType, string> = {
   annual:           'Annual Leave',
