@@ -543,7 +543,7 @@ export default function InvoiceDetail() {
           </div>
 
           {(invoice.lines || []).length > 0 || (invoice.status === 'draft' && canManageFinance) ? (
-            <div className="dt-scroll invoice-detail__table-wrap">
+            <div className="invoice-detail__table-wrap">
               <table data-no-responsive className="invoice-detail__table">
                 <thead>
                   <tr>
@@ -610,10 +610,14 @@ export default function InvoiceDetail() {
                         </tr>
                       )
                     }
+                    const rawDesc = (line.description || '').trim()
+                    const desc = /^delivery charge$/i.test(rawDesc)
+                      ? 'Rider delivery'
+                      : (rawDesc || '—')
                     return (
                       <tr key={line.id || idx}>
                         <td className="is-num">{idx + 1}</td>
-                        <td>{line.description}</td>
+                        <td><span className="invoice-detail__line-desc">{desc}</span></td>
                         <td className="is-num">{line.qty}</td>
                         <td className="is-num">{fmtKes(line.unitPrice)}</td>
                         <td className="is-num">{(line.discountPct ?? 0) > 0 ? `${line.discountPct}%` : '0%'}</td>
@@ -711,6 +715,8 @@ export default function InvoiceDetail() {
                   View delivery
                 </button>
               </>
+            ) : invoice.deliveryJobId ? (
+              <p className="invoice-detail__info-muted">Delivery job linked — loading details…</p>
             ) : showScheduleDelivery && canManageFinance ? (
               <>
                 <p className="invoice-detail__info-muted">No rider delivery scheduled.</p>

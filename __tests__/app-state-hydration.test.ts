@@ -15,6 +15,8 @@ describe('appStateKeysForRoute', () => {
   it('uses longest prefix for nested finance invoice routes', () => {
     const keys = appStateKeysForRoute('/finance/invoices/xyz')
     expect(keys).toContain('deed_saleOrders')
+    expect(keys).toContain('deed_deliveryJobs')
+    expect(keys).toContain('deed_riders')
     expect(keys).not.toContain('deed_journalEntries')
   })
 
