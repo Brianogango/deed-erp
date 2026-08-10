@@ -21,7 +21,7 @@ function cronAuthorized(req: NextRequest): boolean {
 }
 
 /**
- * Refresh Deed AI knowledge index (SOPs + deed.africa WordPress content).
+ * Refresh DIA knowledge index (SOPs + deed.africa WordPress content).
  * Auth: Bearer CRON_SECRET, or director/admin session.
  */
 export async function POST(req: NextRequest) {

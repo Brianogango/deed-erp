@@ -25,7 +25,7 @@ export const MODULE_LABELS: Record<ModuleId, string> = {
   expenses: 'Expenses',
   leave: 'Leave Application',
   my_documents: 'My Documents',
-  jarvis: 'JARVIS AI Assistant',
+  jarvis: 'DIA — Deed Intelligence Assistant',
 }
 
 // Modules accessible to every logged-in user regardless of operational role.

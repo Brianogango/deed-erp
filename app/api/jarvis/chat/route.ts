@@ -17,7 +17,7 @@ const MAX_HISTORY_MESSAGES = 20
  * POST /api/jarvis/chat
  * Body: { conversationId?: string, message: string }
  * Creates a conversation if conversationId is omitted. Runs the message
- * through the JARVIS tool-calling engine and persists both sides plus any
+ * through the DIA tool-calling engine and persists both sides plus any
  * tool calls made, then returns the assistant's reply.
  */
 export async function POST(request: NextRequest) {
@@ -26,7 +26,7 @@ export async function POST(request: NextRequest) {
     const user = session.user
 
     if (!hasModuleAccess(user, 'jarvis')) {
-      return NextResponse.json({ error: 'JARVIS is not enabled for your account' }, { status: 403 })
+      return NextResponse.json({ error: 'DIA is not enabled for your account' }, { status: 403 })
     }
 
     const body = await request.json()

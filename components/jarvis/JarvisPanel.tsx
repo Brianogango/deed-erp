@@ -1,6 +1,13 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import {
+  DIA_ASK_PLACEHOLDER,
+  DIA_EMPTY_HINT,
+  DIA_FULL_NAME,
+  DIA_SHORT_NAME,
+  DIA_TAGLINE,
+} from '@/lib/jarvis/branding'
 
 interface AnswerSource {
   label: string
@@ -114,7 +121,7 @@ export default function JarvisPanel({ open, onClose }: JarvisPanelProps) {
       const data = await res.json()
 
       if (!res.ok) {
-        setError(data.error ?? 'JARVIS could not respond right now.')
+        setError(data.error ?? `${DIA_SHORT_NAME} could not respond right now.`)
         return
       }
 
@@ -131,7 +138,7 @@ export default function JarvisPanel({ open, onClose }: JarvisPanelProps) {
       ])
       if (typeof data.reply === 'string') speakText(data.reply)
     } catch {
-      setError('Could not reach JARVIS. Check your connection and try again.')
+      setError(`Could not reach ${DIA_SHORT_NAME}. Check your connection and try again.`)
     } finally {
       setSending(false)
     }
@@ -209,14 +216,14 @@ export default function JarvisPanel({ open, onClose }: JarvisPanelProps) {
       <div
         className="fixed right-0 top-0 z-[201] flex h-screen w-full max-w-md flex-col bg-[var(--bg-card)] shadow-2xl"
         role="dialog"
-        aria-label="JARVIS Deed AI assistant"
+        aria-label={`${DIA_SHORT_NAME} — ${DIA_FULL_NAME}`}
       >
         <div className="flex items-center justify-between gap-2 border-b border-[var(--border-lt)] px-4 py-3">
           <div className="flex items-center gap-2">
-            <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-[var(--primary)] text-xs font-extrabold text-white">AI</span>
+            <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-[var(--primary)] text-[10px] font-extrabold text-white">{DIA_SHORT_NAME}</span>
             <div>
-              <p className="text-sm font-bold text-[var(--text-1)]">JARVIS</p>
-              <p className="text-[10px] text-[var(--text-4)]">Deed AI · knowledge + live ERP · drafts only</p>
+              <p className="text-sm font-bold text-[var(--text-1)]">{DIA_SHORT_NAME}</p>
+              <p className="text-[10px] text-[var(--text-4)]">{DIA_FULL_NAME} · {DIA_TAGLINE}</p>
             </div>
           </div>
           <div className="flex items-center gap-1">
@@ -230,7 +237,7 @@ export default function JarvisPanel({ open, onClose }: JarvisPanelProps) {
             <button
               className="rounded-lg px-2 py-1 text-[11px] font-semibold text-[var(--text-3)] hover:bg-[var(--bg-surface)]"
               onClick={onClose}
-              aria-label="Close JARVIS panel"
+              aria-label={`Close ${DIA_SHORT_NAME}`}
             >
               Close
             </button>
@@ -240,9 +247,7 @@ export default function JarvisPanel({ open, onClose }: JarvisPanelProps) {
         <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
           {messages.length === 0 && (
             <div className="rounded-2xl border border-[var(--border-lt)] bg-[var(--bg-surface)] p-4 text-xs text-[var(--text-3)]">
-              Ask live ERP questions (&ldquo;how many T14s with 16GB?&rdquo;, &ldquo;track REP-…&rdquo;) or knowledge
-              questions (&ldquo;what is our warranty / returns policy?&rdquo;). Answers cite sources —
-              Inventory · live, or policy pages from the knowledge index. Use the mic to speak.
+              {DIA_EMPTY_HINT}
             </div>
           )}
 
@@ -342,7 +347,7 @@ export default function JarvisPanel({ open, onClose }: JarvisPanelProps) {
             <textarea
               className="form-input flex-1 resize-none text-xs"
               rows={2}
-              placeholder="Ask about stock, repairs, invoices, or warranty policy…"
+              placeholder={DIA_ASK_PLACEHOLDER}
               value={input}
               onChange={e => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
@@ -358,7 +363,7 @@ export default function JarvisPanel({ open, onClose }: JarvisPanelProps) {
                 }
                 onClick={toggleMic}
                 disabled={sending}
-                aria-label={listening ? 'Stop listening' : 'Speak to JARVIS'}
+                aria-label={listening ? 'Stop listening' : `Speak to ${DIA_SHORT_NAME}`}
                 title={listening ? 'Listening… click to stop' : 'Speak your question'}
               >
                 {listening ? '●' : 'Mic'}

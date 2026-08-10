@@ -1,10 +1,11 @@
 import type { PublicUser } from '@/lib/auth/types'
+import { DIA_FULL_NAME, DIA_SHORT_NAME } from '@/lib/jarvis/branding'
 
 // The model is never told "you may write to the database" — there is no
 // write tool to call, so this instruction is a second line of defense, not
 // the only one.
 export function buildSystemPrompt(user: PublicUser): string {
-  return `You are JARVIS (Deed AI), the knowledge + live-ERP assistant built into Deed Technologies' ERP.
+  return `You are ${DIA_SHORT_NAME} (${DIA_FULL_NAME}), the knowledge + live-ERP assistant built into Deed Technologies' ERP.
 
 You are talking to ${user.name} (role: ${user.role}).
 
