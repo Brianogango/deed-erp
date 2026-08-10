@@ -1,11 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { NextRequest } from 'next/server'
 
-const { mockRequireRole, mockCheckFiscalLock, mockRecordPayment, mockBlobPost } = vi.hoisted(() => ({
+const { mockRequireRole, mockCheckFiscalLock, mockRecordPayment, mockBlobPost, mockNotify } = vi.hoisted(() => ({
   mockRequireRole: vi.fn(),
   mockCheckFiscalLock: vi.fn(),
   mockRecordPayment: vi.fn(),
   mockBlobPost: vi.fn(),
+  mockNotify: vi.fn(),
 }))
 
 vi.mock('@/lib/auth/api', () => ({
@@ -30,6 +31,9 @@ vi.mock('@/lib/server-store-crud', () => ({
     GET: vi.fn(),
     POST: mockBlobPost,
   }),
+}))
+vi.mock('@/lib/finance/payment-receipt-notify', () => ({
+  notifyCustomerPaymentReceived: mockNotify,
 }))
 
 import { POST } from '@/app/api/payments/route'
@@ -62,9 +66,10 @@ describe('POST /api/payments fiscal lock', () => {
 
   it('accepts payments after the lock date', async () => {
     mockRecordPayment.mockResolvedValue({
-      payment: { id: 'pay-1' },
+      payment: { id: 'pay-1', paidAt: new Date('2026-04-15') },
       allocations: [{ invoiceId: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', amount: 500 }],
     })
+    mockNotify.mockResolvedValue({ sent: true })
     const res = await POST(new NextRequest('http://localhost/api/payments', {
       method: 'POST',
       body: JSON.stringify({
@@ -75,5 +80,36 @@ describe('POST /api/payments fiscal lock', () => {
       headers: { 'Content-Type': 'application/json' },
     }))
     expect(res.status).toBe(200)
+    expect(mockNotify).toHaveBeenCalledTimes(1)
+    expect(mockNotify).toHaveBeenCalledWith(expect.objectContaining({
+      paymentId: 'pay-1',
+      invoiceId: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+      amount: 500,
+    }))
+  })
+
+  it('notifies once per allocated invoice', async () => {
+    mockRecordPayment.mockResolvedValue({
+      payment: { id: 'pay-2', paidAt: new Date('2026-04-15') },
+      allocations: [
+        { invoiceId: 'inv-a', amount: 300 },
+        { invoiceId: 'inv-b', amount: 200 },
+      ],
+    })
+    mockNotify.mockResolvedValue({ sent: true })
+    const res = await POST(new NextRequest('http://localhost/api/payments', {
+      method: 'POST',
+      body: JSON.stringify({
+        amount: 500,
+        paidAt: '2026-04-15',
+        allocations: [
+          { invoiceId: 'inv-a', amount: 300 },
+          { invoiceId: 'inv-b', amount: 200 },
+        ],
+      }),
+      headers: { 'Content-Type': 'application/json' },
+    }))
+    expect(res.status).toBe(200)
+    expect(mockNotify).toHaveBeenCalledTimes(2)
   })
 })

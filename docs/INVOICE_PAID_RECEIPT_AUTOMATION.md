@@ -14,13 +14,18 @@ Automation #1 (sales@ → CRM) protects inbound leads. This one closes the cash 
 
 ## Behaviour
 
-On **new** payment via `POST /api/invoices/[id]/payments` (UI Pay, credit apply, portal M-PESA approve):
+On **new** payment via:
 
-1. Skip if this payment id already has a successful `payment_receipt` send log
+- `POST /api/invoices/[id]/payments` (UI Pay, credit apply, portal M-PESA approve)
+- `POST /api/payments` with allocations (multi-invoice / bulk allocation path)
+
+Behaviour:
+
+1. Skip if this payment id already has a successful `payment_receipt` send log for the same invoice ref (so one payment split across invoices can notify each)
 2. Resolve client email / phone from Prisma `Client`
 3. Email via **accounts** mailbox (required when email present)
 4. WhatsApp when phone present (best-effort)
-5. Log to `deed_documentEmailSends` (`documentType=payment_receipt`, `documentId=paymentId`)
+5. Log to `deed_documentEmailSends` (`documentType=payment_receipt`, `documentId=paymentId`, `documentRef=invoiceNumber`)
 6. **Never** fail the payment if messaging fails
 7. Idempotent payment retries (`idempotent: true`) do **not** re-notify
 
@@ -32,6 +37,5 @@ On **new** payment via `POST /api/invoices/[id]/payments` (UI Pay, credit apply,
 ## Out of scope (later)
 
 - PDF receipt attachment / RCT numbering UI
-- Auto-send from `POST /api/payments` multi-allocation bulk path (single-invoice path covers normal UI)
 - M-PESA Daraja auto-capture
 - Vendor bill payments
