@@ -4,6 +4,11 @@ import { isRoleAllowed } from '@/lib/auth/authorization'
 import { writeFinancialAudit } from '@/lib/finance-audit'
 import prisma from '@/lib/prisma'
 import { toClientAdvance, toDbAdvance } from '@/lib/hr/salary-advance-store'
+import {
+  notifySalaryAdvanceApplied,
+  queueSalaryAdvanceNotification,
+  toSalaryAdvanceNotifyPayload,
+} from '@/lib/hr/salary-advance-notifications'
 
 // HR/finance manage all advances; a regular employee sees/creates only their own.
 const HR_ROLES = ['director', 'finance_officer']
@@ -40,6 +45,12 @@ export async function POST(request: Request) {
       },
     })
     await writeFinancialAudit({ userId: session.user.id, action: 'salary_advance_apply', entityType: 'salary_advance', entityId: row.id, newValues: { amount: Number(row.amount), employeeId: row.employeeId } })
+
+    // Email HR (+ Edwin/Dennis CC) after persist — never blocks the write.
+    queueSalaryAdvanceNotification(async () => {
+      await notifySalaryAdvanceApplied(toSalaryAdvanceNotifyPayload(row as any))
+    })
+
     return NextResponse.json(toClientAdvance(row), { status: 201 })
   })
 }

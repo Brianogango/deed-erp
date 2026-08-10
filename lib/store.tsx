@@ -3972,7 +3972,7 @@ const makeC = () => ({
   so: 88, inv: 88, po: 39, rep: 0, del: 26, pos: 12, war: 10, rec: 0, tr: 0, ret: 0, adj: 0, rma: 0,
   opp: 15, quote: 24, activity: 0, outsource: 4, outsource_pay: 1, exp: 5, sop: 3, refurb: 0,
   djb: 3, rwp: 0, bbk: 0, don: 0, exc: 0, ko: 0, kd: 0, ks: 0, rfd: 0,
-  dep: 0, proc: 0, jrn_rfd: 0, orc: 0,
+  dep: 0, proc: 0, jrn_rfd: 0, orc: 0, adv: 0,
 })
 let C = makeC()
 export const seq = (prefix: string, key: keyof ReturnType<typeof makeC>) => {
@@ -8008,25 +8008,63 @@ const storeCtx: AppState = {
       if (amount <= 0) { showToast('Enter a valid advance amount', 'error'); throw new Error('Invalid amount') }
       if (!request.reason.trim()) { showToast('Enter a reason for the advance', 'error'); throw new Error('Missing reason') }
       const currentPeriod = now().slice(0, 7)
-      const advance: SalaryAdvance = {
-        ...request,
-        amount,
-        paymentTerms: request.paymentTerms ?? 'payroll_deduction',
-        repaymentMonths,
-        repaymentStartPeriod: request.repaymentStartPeriod || currentPeriod,
-        monthlyDeduction: Math.ceil(amount / repaymentMonths),
-        amountRecovered: 0,
-        outstandingAmount: amount,
-        deductions: [],
-        id: uid(),
-        ref: seq('ADV', 'adv'),
-        requestedDate: now(),
-        status: 'pending',
-        createdByUserId: user.id,
+      let advance: SalaryAdvance
+      try {
+        advance = {
+          ...request,
+          amount,
+          paymentTerms: request.paymentTerms ?? 'payroll_deduction',
+          repaymentMonths,
+          repaymentStartPeriod: request.repaymentStartPeriod || currentPeriod,
+          monthlyDeduction: Math.ceil(amount / repaymentMonths),
+          amountRecovered: 0,
+          outstandingAmount: amount,
+          deductions: [],
+          id: uid(),
+          ref: seq('ADV', 'adv'),
+          requestedDate: now(),
+          status: 'pending',
+          createdByUserId: user.id,
+        }
+      } catch (err: any) {
+        showToast(err?.message || 'Could not create salary advance reference', 'error')
+        throw err
       }
       salaryAdvancesRef.current = [advance, ...salaryAdvancesRef.current]
       setSalaryAdvances(prev => [advance, ...prev])
-      sync('/api/salary-advances', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(advance) })
+      void fetch('/api/salary-advances', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(advance),
+      })
+        .then(async res => {
+          if (!res.ok) {
+            const err = await res.json().catch(() => ({} as { error?: string }))
+            salaryAdvancesRef.current = salaryAdvancesRef.current.filter(item => item.id !== advance.id)
+            setSalaryAdvances(prev => prev.filter(item => item.id !== advance.id))
+            setWorkflowApprovals(prev => prev.filter(flow => !(flow.targetId === advance.id && flow.process === 'salary_advance')))
+            showToast(err.error || 'Failed to save salary advance', 'error')
+            return
+          }
+          const saved = await res.json() as SalaryAdvance
+          if (!saved?.id) return
+          salaryAdvancesRef.current = salaryAdvancesRef.current.map(item =>
+            item.id === advance.id ? { ...item, ...saved } : item,
+          )
+          setSalaryAdvances(prev => prev.map(item =>
+            item.id === advance.id ? { ...item, ...saved } : item,
+          ))
+          setWorkflowApprovals(prev => prev.map(flow =>
+            flow.targetId === advance.id && flow.process === 'salary_advance'
+              ? { ...flow, targetId: saved.id, ref: saved.ref || flow.ref }
+              : flow,
+          ))
+        })
+        .catch(() => {
+          salaryAdvancesRef.current = salaryAdvancesRef.current.filter(item => item.id !== advance.id)
+          setSalaryAdvances(prev => prev.filter(item => item.id !== advance.id))
+          showToast('Failed to save salary advance', 'error')
+        })
       setWorkflowApprovals(prev => [{
         id: uid(), process: 'salary_advance', ref: advance.ref, targetId: advance.id, targetName: advance.employeeName,
         stepName: 'Salary Advance Approval', approverRole: 'finance_officer', status: 'pending',

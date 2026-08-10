@@ -4,6 +4,12 @@ import { isRoleAllowed } from '@/lib/auth/authorization'
 import { writeFinancialAudit } from '@/lib/finance-audit'
 import prisma from '@/lib/prisma'
 import { toClientAdvance, toDbAdvance } from '@/lib/hr/salary-advance-store'
+import {
+  notifySalaryAdvanceDecision,
+  notifySalaryAdvanceDisbursed,
+  queueSalaryAdvanceNotification,
+  toSalaryAdvanceNotifyPayload,
+} from '@/lib/hr/salary-advance-notifications'
 
 const HR_ROLES = ['director', 'finance_officer']
 const PAY_ROLES = ['director', 'finance_officer']
@@ -32,6 +38,12 @@ export async function PUT(request: Request, { params }: { params: { id: string }
         data: { status: approved ? 'approved' : 'rejected', approvedByUserId: session.user.id, approvedByName: session.user.name, decisionDate: new Date(), decisionNote: body.note ?? null },
       })
       await writeFinancialAudit({ userId: session.user.id, action: 'salary_advance_decide', entityType: 'salary_advance', entityId: row.id, newValues: { status: row.status } })
+      queueSalaryAdvanceNotification(async () => {
+        await notifySalaryAdvanceDecision(
+          toSalaryAdvanceNotifyPayload(row as any),
+          approved ? 'approved' : 'rejected',
+        )
+      })
       return NextResponse.json(toClientAdvance(row))
     }
     if (action === 'pay') {
@@ -42,6 +54,9 @@ export async function PUT(request: Request, { params }: { params: { id: string }
         data: { status: 'paid', paidDate: body.paidDate ? new Date(body.paidDate) : new Date(), outstandingAmount: existing.outstandingAmount ?? existing.amount },
       })
       await writeFinancialAudit({ userId: session.user.id, action: 'salary_advance_paid', entityType: 'salary_advance', entityId: row.id })
+      queueSalaryAdvanceNotification(async () => {
+        await notifySalaryAdvanceDisbursed(toSalaryAdvanceNotifyPayload(row as any))
+      })
       return NextResponse.json(toClientAdvance(row))
     }
     if (action === 'cancel') {

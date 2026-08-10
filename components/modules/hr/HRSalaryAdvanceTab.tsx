@@ -78,21 +78,26 @@ export default function HRSalaryAdvanceTab() {
     const months = Number(repaymentMonths)
     if (!advanceAmount || advanceAmount <= 0) { showToast('Enter a valid amount', 'error'); return }
     if (!months || months <= 0) { showToast('Select a repayment period', 'error'); return }
-    applySalaryAdvance({
-      employeeId: myEmployee.id,
-      employeeName: myEmployee.fullName,
-      employeeNo: myEmployee.employeeNo,
-      departmentId: myEmployee.departmentId,
-      jobTitle: myEmployee.jobTitle,
-      amount: advanceAmount,
-      paymentTerms,
-      repaymentMonths: months,
-      repaymentStartPeriod,
-      neededByDate: neededByDate || undefined,
-      reason: reason.trim(),
-    })
-    resetForm()
-    setShowApply(false)
+    if (!reason.trim()) { showToast('Enter a reason for the advance', 'error'); return }
+    try {
+      applySalaryAdvance({
+        employeeId: myEmployee.id,
+        employeeName: myEmployee.fullName,
+        employeeNo: myEmployee.employeeNo,
+        departmentId: myEmployee.departmentId,
+        jobTitle: myEmployee.jobTitle,
+        amount: advanceAmount,
+        paymentTerms,
+        repaymentMonths: months,
+        repaymentStartPeriod,
+        neededByDate: neededByDate || undefined,
+        reason: reason.trim(),
+      })
+      resetForm()
+      setShowApply(false)
+    } catch {
+      // applySalaryAdvance already toasts; keep the modal open for correction
+    }
   }
 
   const decide = (approved: boolean) => {
@@ -295,8 +300,8 @@ export default function HRSalaryAdvanceTab() {
             </div>
           </div>
           <div className="flex justify-end gap-2 pt-2">
-            <button className="btn-outline" onClick={() => setShowApply(false)}>Cancel</button>
-            <button className="btn-primary" onClick={submit}>Submit Application</button>
+            <button type="button" className="btn-outline" onClick={() => setShowApply(false)}>Cancel</button>
+            <button type="button" className="btn-primary" onClick={submit}>Submit Application</button>
           </div>
         </Modal>
       )}

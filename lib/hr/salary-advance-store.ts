@@ -39,6 +39,7 @@ export function toClientAdvance(a: any): SalaryAdvance {
 // are included so it works for both create and update.
 export function toDbAdvance(a: Partial<SalaryAdvance>): Record<string, unknown> {
   const data: Record<string, unknown> = {}
+  if (a.id !== undefined && a.id) data.id = a.id
   if (a.ref !== undefined) data.reference = a.ref
   if (a.employeeId !== undefined) data.employeeId = a.employeeId
   if (a.employeeName !== undefined) data.employeeName = a.employeeName
