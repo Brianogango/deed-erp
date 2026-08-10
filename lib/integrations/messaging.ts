@@ -2,7 +2,7 @@ import { sendEmail, type EmailMessage, type EmailResult, type MailboxProfile } f
 import { sendNotification, formatPhoneNumber, type NotificationResult } from './notifications'
 
 export type MessageChannel = 'email' | 'whatsapp' | 'sms'
-export type MessagePurpose = 'invoice' | 'repair_link' | 'repair_quote' | 'credentials' | 'general'
+export type MessagePurpose = 'invoice' | 'repair_link' | 'repair_quote' | 'credentials' | 'general' | 'payment_receipt'
 
 export interface MessagingRecipient {
   name?: string

@@ -3,7 +3,7 @@ import { loadAppState, saveStoreKeys } from '@/lib/server-store'
 
 export const DOCUMENT_EMAIL_SENDS_KEY = 'deed_documentEmailSends'
 
-export type DocumentEmailDocumentType = 'quote' | 'invoice' | 'bill' | 'rfq'
+export type DocumentEmailDocumentType = 'quote' | 'invoice' | 'bill' | 'rfq' | 'payment_receipt'
 
 export type DocumentEmailSendStatus = 'success' | 'failed'
 
