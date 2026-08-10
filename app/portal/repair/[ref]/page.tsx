@@ -81,6 +81,21 @@ function fmtDate(s?: string) {
   try { return new Date(s).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) }
   catch { return s }
 }
+function fmtDateTime(s?: string) {
+  if (!s) return '—'
+  try {
+    const raw = String(s)
+    const d = new Date(raw.includes('T') ? raw : `${raw}T00:00:00`)
+    if (Number.isNaN(d.getTime())) return raw
+    if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+      return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+    }
+    return d.toLocaleString('en-GB', {
+      day: '2-digit', month: 'short', year: 'numeric',
+      hour: '2-digit', minute: '2-digit', hour12: false,
+    })
+  } catch { return s }
+}
 
 function Card({ children, accent, delay = 0, style: sx }: { children: React.ReactNode; accent?: string; delay?: number; style?: React.CSSProperties }) {
   return (
@@ -673,7 +688,7 @@ export default function RepairPortalPage() {
                 ['Device',      repair.productName],
                 ['Serial No.',  repair.serialNumber || '—'],
                 ['Condition',   repair.deviceCondition ? repair.deviceCondition.charAt(0).toUpperCase() + repair.deviceCondition.slice(1) : '—'],
-                ['Intake Date', fmtDate(repair.intakeDate)],
+                ['Booked', fmtDateTime(repair.intakeDate)],
                 ...(repair.assignedTechnicianName ? [['Technician', repair.assignedTechnicianName]] : []),
                 ...(repair.intakeChannel         ? [['Intake via',  repair.intakeChannel.replace(/_/g,' ')]] : []),
               ] as [string, string][]).map(([l, v]) => (

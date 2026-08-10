@@ -617,8 +617,16 @@ export default function RepairDetailView() {
                 action={
                   <div className="flex items-center gap-1.5 bg-[var(--bg-surface)] rounded-lg px-2.5 py-1.5 border border-[var(--border)]">
                     <Fa icon={faCalendarAlt} className="text-[var(--text-3)] text-[9px]" />
-                    <span className="text-[10px] font-bold text-[var(--text-2)] whitespace-nowrap">
-                      {new Date(r.intakeDate).toLocaleDateString('en-KE', { year: 'numeric', month: 'short', day: 'numeric' })}
+                    <span className="text-[10px] font-bold text-[var(--text-2)] whitespace-nowrap" title="Intake booking date and time">
+                      {(() => {
+                        const raw = String(r.intakeDate || '')
+                        const d = new Date(raw.includes('T') ? raw : `${raw}T00:00:00`)
+                        if (Number.isNaN(d.getTime())) return raw || '—'
+                        return d.toLocaleString('en-KE', {
+                          year: 'numeric', month: 'short', day: 'numeric',
+                          hour: '2-digit', minute: '2-digit', hour12: false,
+                        })
+                      })()}
                     </span>
                   </div>
                 }
@@ -658,6 +666,18 @@ export default function RepairDetailView() {
                 ) : (
                   <InfoField label="Technician" value={r.assignedTechnicianName ?? 'Unassigned'} highlight={!!r.assignedTechnicianId} />
                 )}
+                <InfoField
+                  label="Booked At"
+                  value={(() => {
+                    const raw = String(r.intakeDate || '')
+                    const d = new Date(raw.includes('T') ? raw : `${raw}T00:00:00`)
+                    if (Number.isNaN(d.getTime())) return raw || '—'
+                    return d.toLocaleString('en-KE', {
+                      year: 'numeric', month: 'short', day: 'numeric',
+                      hour: '2-digit', minute: '2-digit', hour12: false,
+                    })
+                  })()}
+                />
                 <InfoField label="Booked By"   value={r.bookedByName ?? r.createdBy} />
                 <InfoField label="Verified By" value={r.verifiedBy} />
               </div>

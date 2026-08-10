@@ -3351,7 +3351,7 @@ export interface AppState {
   submitTransfer: (from: LocationId, to: LocationId, productId: string, productName: string, qty: number, serialIds: string[], notes?: string) => boolean | Promise<boolean>
 
   // Repairs - Full Workflow
-  createRepair: (customerId: string, customerName: string, productName: string, serial: string, desc: string) => RepairOrder
+  createRepair: (customerId: string, customerName: string, productName: string, serial: string, desc: string, intakeDate?: string) => RepairOrder
   updateRepair: (id: string, p: Partial<RepairOrder>) => void
   deleteRepair: (id: string) => void
   checkWarrantyForRepair: (repairId: string, serial: string) => boolean
@@ -13097,11 +13097,14 @@ const storeCtx: AppState = {
     },
 
     // ── Repairs ───────────────────────────────────────────────────────────────
-    createRepair: (customerId, customerName, productName, serial, desc) => {
+    createRepair: (customerId, customerName, productName, serial, desc, intakeDate) => {
       const customer = contacts.find(c => c.id === customerId)
       const user = currentUser()
       // Note: ref is now fetched from server on demand via updateRepair
       // For now, use a temporary placeholder that will be replaced
+      const bookedAt = (typeof intakeDate === 'string' && intakeDate.trim())
+        ? intakeDate.trim()
+        : new Date().toISOString()
       const rep: RepairOrder = {
         id: uid(),
         ref: `REP-${Date.now().toString().slice(-6)}`,
@@ -13119,7 +13122,7 @@ const storeCtx: AppState = {
         
         // Intake
         intakeChannel: 'walk_in',
-        intakeDate: new Date().toISOString(),
+        intakeDate: bookedAt,
         intakeNotes: desc,
         issueDescription: desc,
         accessories: [],
@@ -13220,6 +13223,7 @@ const storeCtx: AppState = {
         'qcReportData' in p || 'diagnosisReportData' in p || 'preRepairPhotos' in p || 'issuePhotos' in p
         || 'repairPath' in p || 'liabilityWaiverAccepted' in p || 'notes' in p
         || 'issueDescription' in p || 'customerName' in p || 'customerPhone' in p || 'customerEmail' in p
+        || 'intakeDate' in p
       ) {
         setTimeout(() => syncRepairToPortal(updated), 0)
       }
@@ -18653,3 +18657,20 @@ export const fmtKes = (n: number | string | null | undefined) => {
   return `KSh ${Math.round(Number.isFinite(v) ? v : 0).toLocaleString('en-KE')}`
 }
 export const fmtDate = (d: string) => { try { return new Date(d).toLocaleDateString('en-KE', { day: '2-digit', month: 'short', year: 'numeric' }) } catch { return d } }
+export const fmtDateTime = (d: string) => {
+  try {
+    const raw = String(d || '')
+    if (!raw) return ''
+    const dt = new Date(raw.includes('T') ? raw : `${raw}T00:00:00`)
+    if (Number.isNaN(dt.getTime())) return raw
+    if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+      return dt.toLocaleDateString('en-KE', { day: '2-digit', month: 'short', year: 'numeric' })
+    }
+    return dt.toLocaleString('en-KE', {
+      day: '2-digit', month: 'short', year: 'numeric',
+      hour: '2-digit', minute: '2-digit', hour12: false,
+    })
+  } catch {
+    return d
+  }
+}

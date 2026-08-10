@@ -160,11 +160,22 @@ export async function printRepairSticker(job: RepairOrder): Promise<void> {
   const col1 = accessories.slice(0, 5)
   const col2 = accessories.slice(5)
 
-  const date = new Date(job.intakeDate).toLocaleDateString('en-GB', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-  })
+  const date = (() => {
+    const d = new Date(job.intakeDate)
+    if (Number.isNaN(d.getTime())) return String(job.intakeDate || '')
+    const raw = String(job.intakeDate || '')
+    if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+      return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+    }
+    return d.toLocaleString('en-GB', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    })
+  })()
 
   const serialModel = [job.productName, job.serialNumber].filter(Boolean).join(' / ')
   const companyPhone = formatPhoneDisplay(company.phone)
