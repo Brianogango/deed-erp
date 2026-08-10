@@ -7,8 +7,12 @@ import {
   draftLeadFromInboundEmail,
   pickRoundRobinOwner,
   pickStickyOwnerFromPriorLeads,
-  shouldSkipInboundEmail,
 } from '@/lib/crm/sales-inbox-leads'
+import {
+  classifyInboundEmail,
+  resolveInboxBlocklists,
+  triageNoteLine,
+} from '@/lib/crm/sales-inbox-relevance'
 import {
   fetchSalesInboxEmails,
   markSalesInboxUidsSeen,
@@ -27,9 +31,17 @@ export interface SalesInboxProcessResult {
   fetched: number
   created: number
   skipped: number
+  reviewQueued: number
   duplicates: number
   errors: string[]
-  createdLeads: Array<{ id: string; name: string; email: string | null; ownerId: string | null }>
+  createdLeads: Array<{
+    id: string
+    name: string
+    email: string | null
+    ownerId: string | null
+    stage?: string
+    disposition?: 'accept' | 'review'
+  }>
 }
 
 function readAutoAssignFlag(systemSettingsRaw: unknown): boolean {
@@ -60,6 +72,7 @@ export async function processSalesInboxLeads(opts?: {
     fetched: 0,
     created: 0,
     skipped: 0,
+    reviewQueued: 0,
     duplicates: 0,
     errors: [],
     createdLeads: [],
@@ -103,9 +116,11 @@ export async function processSalesInboxLeads(opts?: {
   result.fetched = messages.length
   const seenUids: number[] = []
 
+  const blocklists = resolveInboxBlocklists()
+
   for (const mail of messages) {
-    const skip = shouldSkipInboundEmail(mail)
-    if (skip.skip) {
+    const disposition = classifyInboundEmail(mail, blocklists)
+    if (disposition.action === 'skip') {
       result.skipped += 1
       seenUids.push(mail.uid)
       continue
@@ -122,8 +137,13 @@ export async function processSalesInboxLeads(opts?: {
     }
 
     const draft = draftLeadFromInboundEmail(mail)
+    draft.notes = `${triageNoteLine(disposition)}\n\n${draft.notes}`
+    const needsReview = disposition.action === 'review'
+    const stage = needsReview ? 'needs_review' : 'new'
+
     let ownerId: string | null = null
-    if (result.autoAssign) {
+    // Only auto-assign + notify RFQ-shaped mail. Weak signals stay in triage.
+    if (result.autoAssign && !needsReview) {
       // Same organization/domain always keeps the same owner when possible.
       const prior = await prisma.lead.findMany({
         where: {
@@ -148,11 +168,14 @@ export async function processSalesInboxLeads(opts?: {
 
     if (opts?.dryRun) {
       result.created += 1
+      if (needsReview) result.reviewQueued += 1
       result.createdLeads.push({
         id: 'dry-run',
         name: draft.name,
         email: draft.email,
         ownerId,
+        stage,
+        disposition: disposition.action,
       })
       seenUids.push(mail.uid)
       continue
@@ -165,7 +188,7 @@ export async function processSalesInboxLeads(opts?: {
           companyName: draft.companyName,
           email: draft.email,
           source: draft.source,
-          stage: 'new',
+          stage,
           ownerId,
           notes: draft.notes,
           inboundMessageId: draft.inboundMessageId,
@@ -194,10 +217,15 @@ export async function processSalesInboxLeads(opts?: {
       }
 
       result.created += 1
-      result.createdLeads.push(lead)
+      if (needsReview) result.reviewQueued += 1
+      result.createdLeads.push({
+        ...lead,
+        stage,
+        disposition: disposition.action,
+      })
       seenUids.push(mail.uid)
 
-      if (ownerId) {
+      if (ownerId && !needsReview) {
         try {
           const existingNotifs = Array.isArray(state.deed_notifications)
             ? state.deed_notifications as AppNotification[]
@@ -220,23 +248,25 @@ export async function processSalesInboxLeads(opts?: {
         }
       }
 
-      // Email assigned rep (+ sales team Cc) so RFQs are seen outside the ERP tab.
-      try {
-        const owner = ownerId ? salesRepById.get(ownerId) : null
-        await notifyInboundLeadCreated({
-          leadId: lead.id,
-          leadName: lead.name,
-          leadEmail: lead.email,
-          companyName: draft.companyName,
-          subject: draft.emailSubject,
-          snippet: draft.emailSnippet || draft.emailBody,
-          ownerId,
-          ownerEmail: owner?.email ?? null,
-          ownerName: owner?.username || null,
-          attachmentCount: attachmentMeta.length,
-        })
-      } catch {
-        /* email notify is best-effort */
+      // Email assigned rep (+ sales team Cc) only for accepted RFQ-shaped leads.
+      if (!needsReview) {
+        try {
+          const owner = ownerId ? salesRepById.get(ownerId) : null
+          await notifyInboundLeadCreated({
+            leadId: lead.id,
+            leadName: lead.name,
+            leadEmail: lead.email,
+            companyName: draft.companyName,
+            subject: draft.emailSubject,
+            snippet: draft.emailSnippet || draft.emailBody,
+            ownerId,
+            ownerEmail: owner?.email ?? null,
+            ownerName: owner?.username || null,
+            attachmentCount: attachmentMeta.length,
+          })
+        } catch {
+          /* email notify is best-effort */
+        }
       }
 
       // Sticky assignments intentionally do not advance the round-robin cursor.

@@ -37,6 +37,7 @@ export type LeadRow = {
 
 const STAGE_OPTIONS = [
   { value: 'new', label: 'New' },
+  { value: 'needs_review', label: 'Needs review' },
   { value: 'contacted', label: 'Contacted' },
   { value: 'qualified', label: 'Qualified' },
   { value: 'lost', label: 'Lost' },
@@ -229,7 +230,7 @@ export default function LeadsPanel({
       key: 'stage', label: 'Stage', priority: 2, width: '90px',
       render: row => (
         <span className="text-[10px] font-semibold capitalize px-2 py-0.5 rounded-full bg-[var(--bg-muted)]">
-          {row.stage.replace('_', ' ')}
+          {row.stage.replace(/_/g, ' ')}
         </span>
       ),
       exportValue: row => row.stage,
@@ -316,7 +317,7 @@ export default function LeadsPanel({
               </div>
               <div>
                 <p className="text-[10px] uppercase font-bold text-t4">Stage / Source</p>
-                <p className="text-t1 capitalize">{detail.stage.replace('_', ' ')} · {detail.source?.replace('_', ' ') ?? '—'}</p>
+                <p className="text-t1 capitalize">{detail.stage.replace(/_/g, ' ')} · {detail.source?.replace(/_/g, ' ') ?? '—'}</p>
               </div>
             </div>
 

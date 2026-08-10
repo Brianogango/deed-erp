@@ -1,6 +1,6 @@
 # First automation: Inbound sales@ → CRM → notify sales
 
-Status: **V1 shipping** (pipeline already live; email alert added).
+Status: **V2 live** — relevance filter + triage (junk skipped, weak → Needs review, RFQ → assign + notify).
 
 ## Why this one first
 
@@ -48,6 +48,50 @@ Logs: `/var/log/deed-erp-sales-inbox.log`
 
 CRM: **CRM → Leads** (filter source inbound email). DIA: “Import sales@ leads” / “Summarize email leads”.
 
+
+## Relevance filter (keep CRM clean)
+
+Three layers work together:
+
+### 1. Mailbox rules (ops — do this first)
+
+CRM only polls **`SALES_IMAP_MAILBOX`** (default `INBOX`). In the sales@ webmail / server:
+
+1. Create folders e.g. `CRM-Ignore`, `Newsletters`, `Vendor-blasts`
+2. Add server-side filters: newsletters, known spam senders, internal FYI → move **out of INBOX**
+3. Leave real buyer / procurement mail in INBOX
+
+Optional env:
+
+| Env | Purpose |
+|-----|---------|
+| `SALES_IMAP_MAILBOX` | Folder to poll (default `INBOX`) |
+| `SALES_INBOX_BLOCK_DOMAINS` | Extra comma-separated domains to never import |
+| `SALES_INBOX_BLOCK_LOCALS` | Extra local-parts to never import (`jobs`, `careers`, …) |
+
+### 2. Hard skip (no lead created)
+
+Already skipped: internal Deed domains, auto-replies / OOO, list-unsubscribe / bulk, undeliverable subjects.
+
+Also skipped now:
+
+- Blocked locals: `noreply`, `newsletter`, `marketing`, …
+- Blocked ESP domains: Mailchimp, SendGrid, SES, …
+- Promo subjects/bodies: webinar, SEO blast, crypto, “limited time”, …
+
+Skipped messages are marked seen so they are not re-polled.
+
+### 3. Triage vs accept
+
+| Disposition | Stage | Assign + notify |
+|-------------|-------|-----------------|
+| **accept** (RFQ-shaped: quote/RFQ language, products, qty, corporate domain, attachments, …) | `new` | Yes (when Auto-assign is on) |
+| **review** (weak / unclear — e.g. “Hi” from Gmail) | `needs_review` | No — park for human triage in CRM |
+
+CRM → Leads → stage **Needs review**. Promote to New / assign when real.
+
+Cron / DIA import response includes `skipped` and `reviewQueued`.
+
 ## Success metrics (lightweight)
 
 - Leads created from `inbound_email` per week
@@ -56,7 +100,7 @@ CRM: **CRM → Leads** (filter source inbound email). DIA: “Import sales@ lead
 
 ## Out of scope (later)
 
-- WhatsApp/SMS ping to rep
-- Invoice paid → automatic customer receipt (automation #2)
+- WhatsApp/SMS ping to rep on accept
+- Move skipped IMAP mail into a Junk folder automatically
 - WhatsApp Business as a lead inbox
 - Website form → lead webhook
