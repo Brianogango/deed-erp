@@ -81,7 +81,7 @@ export const summarizeSalesLeadsTool: ToolDefinition = {
           stage: true,
           inboundMessageId: true,
           createdAt: true,
-          owner: { select: { id: true, name: true, username: true } },
+          owner: { select: { id: true, username: true, email: true } },
         },
       }),
     ])
@@ -101,7 +101,7 @@ export const summarizeSalesLeadsTool: ToolDefinition = {
         source: l.source,
         stage: l.stage,
         fromSalesInbox: Boolean(l.inboundMessageId) || l.source === 'inbound_email',
-        ownerName: l.owner?.name ?? l.owner?.username ?? null,
+        ownerName: l.owner?.username ?? l.owner?.email ?? null,
         createdAt: l.createdAt.toISOString(),
       })),
       hint: 'Open CRM → Leads for full detail. To pull new messages from sales@ now, use import_sales_inbox_leads.',
