@@ -56,6 +56,14 @@ describe('POST /api/salary-advances', () => {
     expect(res.status).toBe(201)
     expect(mockPrisma.salaryAdvance.create.mock.calls[0][0].data.status).toBe('pending')
   })
+  it('persists the client-provided id when present', async () => {
+    mockGetSession.mockResolvedValue(techSession)
+    const id = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+    const res = await POST(jsonReq({ id, employeeId: 'emp-tech', amount: 5000, ref: 'ADV/0009' }))
+    expect(res.status).toBe(201)
+    expect(mockPrisma.salaryAdvance.create.mock.calls[0][0].data.id).toBe(id)
+    expect(mockPrisma.salaryAdvance.create.mock.calls[0][0].data.reference).toBe('ADV/0009')
+  })
   it('rejects non-positive amount', async () => {
     mockGetSession.mockResolvedValue(techSession)
     const res = await POST(jsonReq({ employeeId: 'emp-tech', amount: 0 }))
