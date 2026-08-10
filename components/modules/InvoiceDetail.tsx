@@ -309,7 +309,7 @@ export default function InvoiceDetail() {
   const overpay = (Number(payAmount) || 0) > balance
 
   return (
-    <div className="mod-page">
+    <div className="mod-page invoice-detail">
       <RecordHeader
         title={invoice.ref.startsWith('DRAFT/') ? displayDocRef(invoice.ref) : `${docLabel} ${invoice.ref}`}
         entity={invoice.partnerName}
@@ -383,68 +383,75 @@ export default function InvoiceDetail() {
         }
       />
 
-      <div className="mod-body">
-        <div className="card m-3 sm:m-4 p-5 max-w-3xl mx-auto flex flex-col gap-5">
-          {/* Payment progress */}
+      <div className="mod-body invoice-detail__body">
+        <div className="invoice-detail__sheet">
+          {/* Money strip — one glance: total / paid / due */}
           {invoice.status !== 'draft' && (
-            <div className="p-4 rounded-2xl bg-[var(--bg-surface)] border border-[var(--border-lt)]">
-              <div className="flex justify-between items-end mb-2">
+            <section className="invoice-detail__money" aria-label="Payment summary">
+              <div className="invoice-detail__money-grid">
                 <div>
-                  <p className="text-[10px] text-[var(--text-4)] uppercase font-bold mb-0.5">{docLabel} Total</p>
-                  <p className="text-base font-black text-[var(--text-1)] font-mono">{fmtKes(invoice.total)}</p>
+                  <p className="invoice-detail__label">{docLabel} total</p>
+                  <p className="invoice-detail__amount font-mono">{fmtKes(invoice.total)}</p>
                 </div>
-                <div className="text-right">
-                  <p className="text-[10px] text-[var(--text-4)] uppercase font-bold mb-0.5">Balance Due</p>
-                  <p className={`text-base font-black font-mono ${balance <= 0 ? 'text-emerald-600' : 'text-red-500'}`}>{fmtKes(balance)}</p>
+                <div>
+                  <p className="invoice-detail__label">Received</p>
+                  <p className="invoice-detail__amount invoice-detail__amount--muted font-mono">{fmtKes(invoice.amountPaid)}</p>
+                </div>
+                <div className="invoice-detail__money-due">
+                  <p className="invoice-detail__label">Balance due</p>
+                  <p className={`invoice-detail__amount font-mono ${balance <= 0 ? 'invoice-detail__amount--paid' : 'invoice-detail__amount--due'}`}>{fmtKes(balance)}</p>
                 </div>
               </div>
-              <div className="w-full h-2 bg-[var(--bg-muted)] rounded-full overflow-hidden">
-                <div className="h-full rounded-full transition-all duration-500" style={{ width: `${pct}%`, background: pct >= 100 ? 'var(--success)' : 'var(--warning)' }} />
+              <div className="invoice-detail__progress" role="progressbar" aria-valuenow={Math.round(pct)} aria-valuemin={0} aria-valuemax={100} aria-label="Percent paid">
+                <div
+                  className={`invoice-detail__progress-fill ${pct >= 100 ? 'is-paid' : 'is-open'}`}
+                  style={{ transform: `scaleX(${Math.max(0, Math.min(1, pct / 100))})` }}
+                />
               </div>
-              <p className="text-[10px] text-[var(--text-4)] mt-1.5 text-right">{Math.round(pct)}% paid · {fmtKes(invoice.amountPaid)} received</p>
-            </div>
+              <p className="invoice-detail__progress-caption">{Math.round(pct)}% paid</p>
+            </section>
           )}
 
-          <div className="grid grid-cols-3 gap-4">
+          <section className="invoice-detail__meta" aria-label="Invoice dates">
             <div>
-              <p className="text-[10px] text-[var(--text-4)] uppercase font-bold">Date</p>
-              <p className="text-xs font-bold text-[var(--text-1)]">{fmtDate(invoice.date)}</p>
+              <p className="invoice-detail__label">Date</p>
+              <p className="invoice-detail__meta-value">{fmtDate(invoice.date)}</p>
             </div>
             <div>
-              <p className="text-[10px] text-[var(--text-4)] uppercase font-bold">Due Date</p>
-              <p className="text-xs font-bold text-[var(--text-1)]">{fmtDate(invoice.dueDate)}</p>
+              <p className="invoice-detail__label">Due date</p>
+              <p className={`invoice-detail__meta-value ${overdue ? 'invoice-detail__meta-value--alert' : ''}`}>{fmtDate(invoice.dueDate)}</p>
             </div>
-            <div className="text-right">
-              <p className="text-[10px] text-[var(--text-4)] uppercase font-bold">Payments Made</p>
-              <p className="text-xs font-bold text-[var(--text-1)]">{(invoice.payments || []).length}</p>
+            <div>
+              <p className="invoice-detail__label">Payments</p>
+              <p className="invoice-detail__meta-value tabular-nums">{(invoice.payments || []).length}</p>
             </div>
-          </div>
+          </section>
 
           {(invoice.invoiceAddress || invoice.deliveryAddress) && (
-            <div className="grid grid-cols-2 gap-4">
+            <section className="invoice-detail__addresses" aria-label="Addresses">
               {invoice.invoiceAddress && (
                 <div>
-                  <p className="text-[10px] text-[var(--text-4)] uppercase font-bold">Invoice Address</p>
-                  <p className="text-xs text-[var(--text-2)] whitespace-pre-wrap">{invoice.invoiceAddress}</p>
+                  <p className="invoice-detail__label">Invoice address</p>
+                  <p className="invoice-detail__address">{invoice.invoiceAddress}</p>
                 </div>
               )}
               {invoice.deliveryAddress && (
                 <div>
-                  <p className="text-[10px] text-[var(--text-4)] uppercase font-bold">Delivery Address</p>
-                  <p className="text-xs text-[var(--text-2)] whitespace-pre-wrap">{invoice.deliveryAddress}</p>
+                  <p className="invoice-detail__label">Delivery address</p>
+                  <p className="invoice-detail__address">{invoice.deliveryAddress}</p>
                 </div>
               )}
-            </div>
+            </section>
           )}
 
           {linkedDeliveryJob && (
-            <div className="flex items-center gap-3 px-3.5 py-2.5 rounded-xl bg-[rgba(20,184,166,0.08)] border border-teal-500/25">
-              <div className="w-6 h-6 rounded-lg bg-teal-500 flex items-center justify-center shrink-0">
-                <Fa icon={faTruck} className="text-white text-[9px]" />
+            <div className="invoice-detail__callout">
+              <div className="invoice-detail__callout-icon" aria-hidden="true">
+                <Fa icon={faTruck} className="text-[10px]" />
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-[9px] font-black text-teal-600 uppercase tracking-widest">Rider Delivery Job</p>
-                <p className="text-[11px] font-semibold text-[var(--text-2)]">
+                <p className="invoice-detail__label">Rider delivery</p>
+                <p className="invoice-detail__callout-body">
                   {linkedDeliveryJob.ref}
                   {linkedDeliveryJob.riderName ? ` · ${linkedDeliveryJob.riderName}` : ' · Rider TBD'}
                   {` · ${fmtDate(linkedDeliveryJob.scheduledDate)}`}
@@ -452,7 +459,7 @@ export default function InvoiceDetail() {
                   {linkedDeliveryJob.deliveryFee ? ` · charge ${fmtKes(linkedDeliveryJob.deliveryFee)}` : ''}
                 </p>
               </div>
-              <span className="text-[9px] font-black text-teal-600 bg-teal-50 border border-teal-200 px-2 py-0.5 rounded-full shrink-0 uppercase">
+              <span className="invoice-detail__chip">
                 {linkedDeliveryJob.status.replace('_', ' ')}
               </span>
             </div>
@@ -460,21 +467,21 @@ export default function InvoiceDetail() {
 
           {/* Invoice Lines */}
           {(invoice.lines || []).length > 0 || (invoice.status === 'draft' && canManageFinance) ? (
-            <div>
-              <div className="flex items-center justify-between gap-2 mb-2 flex-wrap">
-                <p className="text-[10px] text-[var(--text-4)] uppercase font-bold">Line Items</p>
+            <section className="invoice-detail__section" aria-label="Line items">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <p className="invoice-detail__section-title">Line items</p>
                 {invoice.status === 'draft' && canManageFinance && (
                   <div className="flex items-center gap-3">
                     <button
                       type="button"
-                      className="text-xs font-bold text-slate-600 hover:underline flex items-center gap-1"
+                      className="invoice-detail__text-btn"
                       onClick={() => addInvoiceSection(invoice.id)}
                     >
                       <Fa icon={faPlus} className="text-[10px]" /> Add a section
                     </button>
                     <button
                       type="button"
-                      className="text-xs font-bold text-primary-600 hover:underline flex items-center gap-1"
+                      className="invoice-detail__text-btn invoice-detail__text-btn--accent"
                       onClick={() => router.push(`/finance?tab=${invoice.type === 'customer_invoice' ? 'invoices' : 'bills'}&edit=${invoice.id}`)}
                     >
                       <Fa icon={faPencil} className="text-[10px]" /> Edit lines
@@ -482,7 +489,7 @@ export default function InvoiceDetail() {
                   </div>
                 )}
               </div>
-              <div className="dt-scroll rounded-xl border border-[var(--border-lt)]">
+              <div className="dt-scroll invoice-detail__table-wrap">
                 <table data-no-responsive className="w-full text-xs">
                   <thead className="bg-[var(--bg-surface)]">
                     <tr>
@@ -575,13 +582,11 @@ export default function InvoiceDetail() {
                   </tfoot>
                 </table>
               </div>
-            </div>
+            </section>
           ) : (
-            <div className="rounded-xl border border-[var(--border-lt)] px-4 py-6 text-center">
-              <p className="text-xs text-[var(--text-3)]">
-                {hydratingLines ? 'Loading line items…' : 'No line items on this invoice.'}
-              </p>
-            </div>
+            <p className="invoice-detail__empty">
+              {hydratingLines ? 'Loading line items…' : 'No line items on this invoice.'}
+            </p>
           )}
 
           {invoice.type === 'customer_invoice' && (
@@ -593,20 +598,20 @@ export default function InvoiceDetail() {
 
           {/* Payment history */}
           {(invoice.payments || []).length > 0 && (
-            <div>
-              <p className="text-[10px] text-[var(--text-4)] uppercase font-bold mb-2">Payment History</p>
-              <div className="rounded-xl border border-[var(--border-lt)] overflow-hidden">
-                {(invoice.payments || []).map((pay, idx) => (
-                  <div key={pay.id} className={`flex items-center justify-between px-4 py-2.5 ${idx > 0 ? 'border-t border-[var(--border-lt)]' : ''} hover:bg-[var(--bg-surface)]`}>
+            <section className="invoice-detail__section" aria-label="Payment history">
+              <p className="invoice-detail__section-title">Payment history</p>
+              <div className="invoice-detail__table-wrap overflow-hidden">
+                {(invoice.payments || []).map((pay) => (
+                  <div key={pay.id} className="invoice-detail__pay-row">
                     <div>
-                      <p className="text-xs font-bold text-[var(--text-1)] capitalize">{pay.method.replace('_', ' ')}</p>
-                      <p className="text-[10px] text-[var(--text-4)]">{fmtDate(pay.date)} · {pay.recordedBy}{pay.reference ? ` · ${pay.reference}` : ''}</p>
+                      <p className="invoice-detail__pay-method">{pay.method.replace('_', ' ')}</p>
+                      <p className="invoice-detail__pay-meta">{fmtDate(pay.date)} · {pay.recordedBy}{pay.reference ? ` · ${pay.reference}` : ''}</p>
                     </div>
-                    <span className="text-xs font-black text-emerald-600 font-mono">{fmtKes(pay.amount)}</span>
+                    <span className="invoice-detail__pay-amount">{fmtKes(pay.amount)}</span>
                   </div>
                 ))}
               </div>
-            </div>
+            </section>
           )}
 
           {/* ORC badge if release exists */}
@@ -617,53 +622,55 @@ export default function InvoiceDetail() {
           )}
 
           {/* Actions */}
-          <div className="flex gap-2 justify-end pt-2 border-t border-[var(--border-lt)] flex-wrap">
+          <div className="invoice-detail__actions">
             {/* Prepare Release — shown for paid/posted invoices with serialised lines */}
             {docState === 'posted' && invoice.type === 'customer_invoice' && serialLines.length > 0 && (
               existingOrc?.status === 'released' ? (
-                <div className="flex items-center gap-1.5 text-xs text-emerald-600 font-bold">
-                  <Fa icon={faBoxOpen} /> Released ✓
+                <div className="invoice-detail__released">
+                  <Fa icon={faBoxOpen} /> Released
                 </div>
               ) : (
-                <button className="btn-primary flex items-center gap-1.5 text-xs" style={{ background: '#7C3AED' }} onClick={handlePrepareRelease}>
-                  <Fa icon={faBoxOpen} /> Prepare Release
+                <button type="button" className="btn-primary invoice-detail__btn" onClick={handlePrepareRelease}>
+                  <Fa icon={faBoxOpen} /> Prepare release
                 </button>
               )
             )}
             {showScheduleDelivery && canManageFinance && (
               <button
                 type="button"
-                className="btn-secondary flex items-center gap-1.5 text-xs"
-                style={{ color: '#0F766E', borderColor: '#99F6E4' }}
+                className="btn-secondary invoice-detail__btn"
                 onClick={() => setShowDeliveryModal(true)}
               >
-                <Fa icon={faTruck} /> Schedule Delivery
+                <Fa icon={faTruck} /> Schedule delivery
               </button>
             )}
             {invoice.type === 'customer_invoice' && balance > 0 && availableCredit > 0 && invoice.status !== 'draft' && invoice.status !== 'cancelled' && canManageFullFinance && (
               <button
-                className="btn-secondary flex items-center gap-1.5 text-emerald-700 hover:bg-emerald-50 border-emerald-200 text-xs"
+                type="button"
+                className="btn-secondary invoice-detail__btn"
                 onClick={() => applyCustomerCreditToInvoice(invoice.id)}
                 title={`Available credit: ${fmtKes(availableCredit)}`}
               >
-                <Fa icon={faCoins} className="text-[11px]" /> Apply Credit ({fmtKes(Math.min(availableCredit, balance))})
+                <Fa icon={faCoins} /> Apply credit ({fmtKes(Math.min(availableCredit, balance))})
               </button>
             )}
             {invoice.status === 'draft' && canManageFinance && (
               <>
                 <button
-                  className="btn-secondary flex items-center gap-1.5 text-red-500 hover:bg-red-50 border-red-200"
+                  type="button"
+                  className="btn-secondary invoice-detail__btn invoice-detail__btn--danger"
                   onClick={() => setShowDelete(true)}
                 >
-                  <Fa icon={faTrash} className="text-[11px]" /> Delete
+                  <Fa icon={faTrash} /> Delete
                 </button>
                 <button
-                  className="btn-secondary flex items-center gap-1.5"
+                  type="button"
+                  className="btn-secondary invoice-detail__btn"
                   onClick={() => router.push(`/finance?tab=${invoice.type === 'customer_invoice' ? 'invoices' : 'bills'}&edit=${invoice.id}`)}
                 >
-                  <Fa icon={faPencil} className="text-[11px]" /> Edit
+                  <Fa icon={faPencil} /> Edit
                 </button>
-                <button className="btn-primary" onClick={() => postInvoice(invoice.id)}>
+                <button type="button" className="btn-primary invoice-detail__btn" onClick={() => postInvoice(invoice.id)}>
                   Confirm {docLabel}
                 </button>
               </>
@@ -753,7 +760,7 @@ export default function InvoiceDetail() {
               </div>
               <div className="text-right">
                 <p className="text-[10px] text-[var(--text-4)] uppercase font-bold">Balance Due</p>
-                <p className="text-xs font-black text-red-500 font-mono">{fmtKes(balance)}</p>
+                <p className="text-xs font-black font-mono invoice-detail__amount--due">{fmtKes(balance)}</p>
               </div>
             </div>
 
