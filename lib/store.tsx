@@ -24,6 +24,12 @@ import {
 } from '@/lib/sales-approvals'
 import { computeSaleOrderApprovalTriggers } from '@/lib/sales/margin-approval'
 import { allocateSalesReturn } from '@/lib/sales/return-allocation'
+import {
+  findReleasedOrcsForReturn,
+  pickPostedInvoiceForReturn,
+  resolveReturnCreditAmount,
+  stampDeliveryReturnQtys,
+} from '@/lib/sales/return-orchestration'
 import { isDownPaymentMode, normalizeCreateInvoiceMode } from '@/lib/sales/down-payment'
 import {
   advanceExpenseApproval,
@@ -1249,7 +1255,10 @@ export interface Holdover {
 }
 
 export interface DeliveryLine {
-  productId: string; productName: string; qty: number; qtyDone: number; serialIds: string[]; sourceLocation?: LocationId
+  productId: string; productName: string; qty: number; qtyDone: number;
+  /** Cumulative qty received back via customer RMA — DN stays historical. */
+  qtyReturned?: number
+  serialIds: string[]; sourceLocation?: LocationId
 }
 
 export interface Delivery {
@@ -1860,6 +1869,11 @@ export interface ReturnOrder {
   approvedByName?: string; approvedDate?: string
   receivedDate?: string
   processedDate?: string; processedByName?: string
+  /** VAT-aware credit total computed on receive (posted-invoice slice). */
+  creditTotalHint?: number
+  requiresCreditNote?: boolean
+  sourceInvoiceId?: string
+  sourceInvoiceRef?: string
 }
 
 // ── Buy-Back (customer sells machine back to us) ──────────────────────────────
@@ -3899,6 +3913,7 @@ export type AfterSalesStoreState = Pick<AppState,
   | 'receiveReturn'
   | 'registerCustomerReturnSerial'
   | 'rejectReturn'
+  | 'releaseSerialToStock'
   | 'showToast'
   | 'stockBuyBack'
 >
@@ -5569,6 +5584,7 @@ export function StoreProvider({
   const purchaseReturnsRef = useRef(purchaseReturns); purchaseReturnsRef.current = purchaseReturns
   const warRef    = useRef(warranties); warRef.current    = warranties
   const delRef    = useRef(deliveries); delRef.current    = deliveries
+  const orcRef    = useRef(outboundReleases); orcRef.current = outboundReleases
   const adjRef    = useRef(stockAdjustments); adjRef.current = stockAdjustments
   const empRef    = useRef(employees); empRef.current = employees
   const payrollRef = useRef(payrollRuns); payrollRef.current = payrollRuns
@@ -6330,6 +6346,7 @@ export function StoreProvider({
     receiveReturn: (...args: Parameters<AppState['receiveReturn']>) => storeCtxRef.current!.receiveReturn(...args),
     registerCustomerReturnSerial: (...args: Parameters<AppState['registerCustomerReturnSerial']>) => storeCtxRef.current!.registerCustomerReturnSerial(...args),
     rejectReturn: (...args: Parameters<AppState['rejectReturn']>) => storeCtxRef.current!.rejectReturn(...args),
+    releaseSerialToStock: (...args: Parameters<AppState['releaseSerialToStock']>) => storeCtxRef.current!.releaseSerialToStock(...args),
     showToast: (...args: Parameters<AppState['showToast']>) => storeCtxRef.current!.showToast(...args),
     stockBuyBack: (...args: Parameters<AppState['stockBuyBack']>) => storeCtxRef.current!.stockBuyBack(...args),
   }), [])
@@ -17369,12 +17386,129 @@ const storeCtx: AppState = {
           })
         : null
 
+      const postedCandidates = invRef.current
+        .filter(i => i.saleOrderId === ro.saleOrderId && i.type === 'customer_invoice' && !i.isDownPayment && invoiceDocState(i.status) === 'posted')
+        .map(i => ({
+          id: i.id,
+          ref: i.ref,
+          lines: (i.lines ?? []).map(l => ({ productId: l.productId, qty: Number(l.qty) || 0 })),
+        }))
+      const invoicePick = pickPostedInvoiceForReturn({
+        invoices: postedCandidates,
+        returnLines: ro.lines.map(l => ({ productId: l.productId, qty: Number(l.qty) || 0 })),
+        preferredInvoiceId: ro.sourceInvoiceId,
+      })
+
+      // Stamp DN qtyReturned (historical DN stays done; ORC stays released).
+      const dnStamps = stampDeliveryReturnQtys({
+        deliveries: delRef.current.map(d => ({
+          id: d.id,
+          saleOrderId: d.saleOrderId,
+          status: d.status,
+          lines: (d.lines ?? []).map(l => ({
+            productId: l.productId,
+            productName: l.productName,
+            qty: Number(l.qty) || 0,
+            qtyDone: Number(l.qtyDone) || 0,
+            qtyReturned: Number(l.qtyReturned) || 0,
+            serialIds: l.serialIds ?? [],
+            sourceLocation: l.sourceLocation,
+          })),
+        })),
+        saleOrderId: ro.saleOrderId,
+        returnLines: ro.lines.map(l => ({
+          productId: l.productId,
+          qty: Number(l.qty) || 0,
+          serialIds: l.serialIds,
+        })),
+      })
+      if (dnStamps.length > 0) {
+        const stampById = new Map(dnStamps.map(s => [s.deliveryId, s.lines]))
+        setDeliveries(prev => prev.map(d => {
+          const stamped = stampById.get(d.id)
+          if (!stamped) return d
+          const lines: DeliveryLine[] = stamped.map(l => ({
+            productId: l.productId,
+            productName: l.productName || d.lines.find(x => x.productId === l.productId)?.productName || '',
+            qty: l.qty,
+            qtyDone: l.qtyDone,
+            qtyReturned: l.qtyReturned,
+            serialIds: l.serialIds ?? [],
+            sourceLocation: (l.sourceLocation as LocationId | undefined)
+              ?? d.lines.find(x => x.productId === l.productId)?.sourceLocation,
+          }))
+          const updated = { ...d, lines }
+          sync(`/api/deliveries/${d.id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(updated),
+          })
+          return updated
+        }))
+      }
+
+      const user = currentUser()
+      const orcTargets = findReleasedOrcsForReturn({
+        releases: orcRef.current.map(r => ({
+          id: r.id,
+          ref: r.ref,
+          status: r.status,
+          invoiceId: r.invoiceId,
+          deliveryNoteId: r.deliveryNoteId,
+        })),
+        deliveryIds: dnStamps.map(s => s.deliveryId),
+        invoiceIds: invoicePick.ok ? [invoicePick.invoice.id] : [],
+      })
+      if (orcTargets.length > 0) {
+        const stampedAt = now()
+        setOutboundReleases(prev => prev.map(r => {
+          const hit = orcTargets.find(t => t.releaseId === r.id)
+          if (!hit) return r
+          const log: OrcLogEntry = {
+            id: uid(),
+            releaseId: r.id,
+            action: 'partial_return',
+            fromStatus: r.status,
+            toStatus: r.status,
+            performedById: user?.id ?? '',
+            performedByName: user?.name ?? '',
+            performedAt: stampedAt,
+            notes: `Customer return ${ro.ref} received — certificate remains released`,
+            metadata: {
+              returnRef: ro.ref,
+              returnId: ro.id,
+              deliveryIds: dnStamps.map(s => s.deliveryId),
+            },
+          }
+          sync(`/api/outbound-releases/${r.id}/audit-log`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              logId: log.id,
+              action: log.action,
+              fromStatus: log.fromStatus,
+              toStatus: log.toStatus,
+              performedById: log.performedById,
+              performedByName: log.performedByName,
+              performedAt: log.performedAt,
+              notes: log.notes,
+              metadata: log.metadata,
+            }),
+          })
+          return { ...r, auditLog: [...(r.auditLog ?? []), log], updatedAt: stampedAt }
+        }))
+      }
+
       setReturnOrders(p => p.map(r => r.id === id ? {
         ...r,
         status: 'received',
         receivedDate: now(),
+        creditTotalHint: allocation?.requiresCreditNote ? allocation.creditTotal : 0,
+        requiresCreditNote: Boolean(allocation?.requiresCreditNote),
+        sourceInvoiceId: invoicePick.ok ? invoicePick.invoice.id : r.sourceInvoiceId,
+        sourceInvoiceRef: invoicePick.ok ? invoicePick.invoice.ref : r.sourceInvoiceRef,
         notes: allocation?.requiresCreditNote
-          ? `${r.notes || ''}\n[Return after invoice — credit note required: KES ${allocation.creditTotal}]`.trim()
+          ? `${r.notes || ''}\n[Return after invoice — credit note required: KES ${allocation.creditTotal}${invoicePick.ok ? ` · ${invoicePick.invoice.ref}` : ''}]`.trim()
           : r.notes,
       } : r))
       // Serial status UI only — qty already written by server.
@@ -17421,7 +17555,7 @@ const storeCtx: AppState = {
         }))
       }
 
-      addAuditLog('rma_receive', ro.ref, `Received return ${ro.ref} for ${ro.customerName}${allocation?.requiresCreditNote ? ' · credit note required' : ' · reverse transfer only'}`)
+      addAuditLog('rma_receive', ro.ref, `Received return ${ro.ref} for ${ro.customerName}${allocation?.requiresCreditNote ? ' · credit note required' : ' · reverse transfer only'}${orcTargets.length ? ` · ORC stamped (${orcTargets.length})` : ''}`)
       showToast(
         allocation?.requiresCreditNote
           ? `Return received — reverse transfer done; issue credit note for KES ${fmtKes(allocation.creditTotal)}`
@@ -17464,29 +17598,37 @@ const storeCtx: AppState = {
               })),
             })
           : null
-        const amount = Math.max(0, Number(refundAmount) || allocation?.creditTotal || 0)
+        const amount = resolveReturnCreditAmount({
+          explicitAmount: refundAmount,
+          creditTotalHint: rma.creditTotalHint,
+          allocationCreditTotal: allocation?.creditTotal,
+        })
         if (amount <= 0) {
           showToast('No posted invoice quantity to credit for this return', 'error')
           return
         }
-        // Partial invoicing means a sale order can have several customer
-        // invoices (often one posted plus draft rows for not-yet-invoiced
-        // lines) — only posted invoices are real credit-note candidates.
-        // Guessing among multiple POSTED invoices is still a
-        // financial-correctness risk, so that case still requires exactly
-        // one match rather than picking arbitrarily.
+        // Prefer RMA source invoice (stamped on receive) or uniquely covering invoice.
         const candidateInvoices = invRef.current.filter(i =>
           i.saleOrderId === rma.saleOrderId && i.type === 'customer_invoice' && !i.isDownPayment && invoiceDocState(i.status) === 'posted',
         )
-        if (candidateInvoices.length === 0) {
+        const invoicePick = pickPostedInvoiceForReturn({
+          invoices: candidateInvoices.map(i => ({
+            id: i.id,
+            ref: i.ref,
+            lines: (i.lines ?? []).map(l => ({ productId: l.productId, qty: Number(l.qty) || 0 })),
+          })),
+          returnLines: rma.lines.map(l => ({ productId: l.productId, qty: Number(l.qty) || 0 })),
+          preferredInvoiceId: rma.sourceInvoiceId,
+        })
+        if (!invoicePick.ok && invoicePick.reason === 'none') {
           showToast(`No posted invoice found for sale order ${rma.saleOrderRef} — cannot issue a credit note`, 'error')
           return
         }
-        if (candidateInvoices.length > 1) {
-          showToast(`${rma.saleOrderRef} has ${candidateInvoices.length} posted invoices — issue this credit note manually from Finance so the right one is credited`, 'error')
+        if (!invoicePick.ok) {
+          showToast(`${rma.saleOrderRef} has ${invoicePick.count} posted invoices that both cover this return — issue the credit note manually from Finance so the right one is credited`, 'error')
           return
         }
-        const sourceInvoice = candidateInvoices[0]
+        const sourceInvoice = candidateInvoices.find(i => i.id === invoicePick.invoice.id) ?? candidateInvoices[0]
         const ref = await storeCtxRef.current!.allocateDocRef('CN')
         const credit: CustomerCredit = {
           id: uid(), ref,
@@ -17527,7 +17669,7 @@ const storeCtx: AppState = {
             body: JSON.stringify({ lines }),
           })
         }
-        addAuditLog('rma_credit_note', rma.ref, `Credit note ${ref} issued for ${fmtKes(amount)} against return ${rma.ref}`)
+        addAuditLog('rma_credit_note', rma.ref, `Credit note ${ref} issued for ${fmtKes(amount)} against return ${rma.ref} · ${sourceInvoice.ref}`)
         creditNoteRef = ref
         refundAmount = amount
       }

@@ -83,6 +83,7 @@ describe('mirrorDeliveryToPrisma', () => {
         productName: 'Laptop',
         qty: 2,
         qtyDone: 2,
+        qtyReturned: 0,
         serialIds: [SERIAL_ID],
         serialNumberId: SERIAL_ID,
         lineOrder: 0,

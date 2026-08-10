@@ -80,6 +80,7 @@ export async function mirrorDeliveryToPrisma(delivery: unknown): Promise<{ mirro
         description: l?.productName ? String(l.productName) : null,
         qty: Math.max(0, Number(l?.qty) || 0),
         qtyDone: Math.max(0, Number(l?.qtyDone) || 0),
+        qtyReturned: Math.max(0, Number(l?.qtyReturned) || 0),
         serialIds: Array.isArray(l?.serialIds) ? l.serialIds.map((s: unknown) => String(s)) : [],
         serialNumberId: Array.isArray(l?.serialIds) && UUID_RE.test(String(l.serialIds[0] || ''))
           ? String(l.serialIds[0])

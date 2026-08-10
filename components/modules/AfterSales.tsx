@@ -61,6 +61,7 @@ function AfterSalesContent() {
     warranties, saleOrders, products, serials, users, currentUserId,
     returnOrders, buyBacks, donations, clientExchanges,
     createReturnOrder, approveReturn, receiveReturn, processReturn, rejectReturn,
+    releaseSerialToStock,
     showToast,
   } = useAfterSalesStore()
 
@@ -429,6 +430,25 @@ function AfterSalesContent() {
                         {line.serialIds.map(id => serials.find(s => s.id === id)?.serial ?? id).join(', ')}
                       </p>
                     )}
+                    {(rma.status === 'received' || rma.status === 'processed') && line.serialIds.length > 0 && isInventory && (
+                      <div className="flex flex-wrap gap-1.5 mt-1.5">
+                        {line.serialIds.map(sid => {
+                          const sn = serials.find(s => s.id === sid)
+                          if (!sn || sn.status !== 'returned') return null
+                          return (
+                            <button
+                              key={sid}
+                              type="button"
+                              className="btn-outline text-[10px] px-2 py-1"
+                              onClick={() => releaseSerialToStock(sid, 'warehouse')}
+                              title="QC pass — release returned serial to available stock"
+                            >
+                              QC → Available · {sn.serial}
+                            </button>
+                          )
+                        })}
+                      </div>
+                    )}
                   </div>
                   <p className="text-[11px] text-t2 sm:max-w-[40%]">{line.reason}</p>
                 </div>
@@ -457,7 +477,19 @@ function AfterSalesContent() {
             )}
             {rma.status === 'received' && (
               <button className="btn-primary text-[11px] px-4 py-2 flex items-center gap-1.5"
-                onClick={() => { setProcessRMA(rma); setResolution('refund'); setRefundAmount(String(saleOrders.find(o => o.id === rma.saleOrderId)?.total ?? '')); setProcessNotes(''); setShowProcess(true) }}>
+                onClick={() => {
+                  const defaultRes: RMAResolution = rma.requiresCreditNote || (Number(rma.creditTotalHint) || 0) > 0
+                    ? 'credit_note'
+                    : 'refund'
+                  const amount = Number(rma.creditTotalHint) > 0
+                    ? String(rma.creditTotalHint)
+                    : ''
+                  setProcessRMA(rma)
+                  setResolution(defaultRes)
+                  setRefundAmount(amount)
+                  setProcessNotes('')
+                  setShowProcess(true)
+                }}>
                 <Fa icon={faFlagCheckered} aria-hidden="true" /> Process Return
               </button>
             )}
@@ -864,7 +896,12 @@ function AfterSalesContent() {
                 <label className="text-[11px] font-semibold text-t2 block mb-2">Resolution *</label>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   {(['refund', 'replacement', 'repair', 'credit_note'] as const).map(r => (
-                    <button key={r} onClick={() => setResolution(r)}
+                    <button key={r} onClick={() => {
+                      setResolution(r)
+                      if ((r === 'credit_note' || r === 'refund') && processRMA && Number(processRMA.creditTotalHint) > 0) {
+                        setRefundAmount(String(processRMA.creditTotalHint))
+                      }
+                    }}
                       style={{
                         padding: '10px', borderRadius: 8, cursor: 'pointer', textAlign: 'center',
                         border: `1.5px solid ${resolution === r ? 'var(--navy)' : 'var(--border-lt)'}`,
@@ -884,6 +921,9 @@ function AfterSalesContent() {
                   <label className="text-[11px] font-semibold text-t2 block mb-1">Amount (KES)</label>
                   <input type="number" aria-label="Refund or credit amount" className="form-input w-full text-[12px]"
                     value={refundAmount} onChange={e => setRefundAmount(e.target.value)} />
+                  {processRMA?.sourceInvoiceRef && resolution === 'credit_note' && (
+                    <p className="text-[10px] text-t3 mt-1">Against {processRMA.sourceInvoiceRef}</p>
+                  )}
                 </div>
               )}
               {resolution === 'refund' && (
