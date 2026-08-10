@@ -52,3 +52,13 @@ describe('paymentReceiptAlreadySent', () => {
     ], 'pay-1')).toBe(false)
   })
 })
+
+describe('paymentReceiptAlreadySent multi-invoice', () => {
+  it('allows a second invoice on the same payment id', () => {
+    const prior = [
+      { documentType: 'payment_receipt', documentId: 'pay-1', status: 'success', documentRef: 'INV/1' },
+    ]
+    expect(paymentReceiptAlreadySent(prior, 'pay-1', 'INV/1')).toBe(true)
+    expect(paymentReceiptAlreadySent(prior, 'pay-1', 'INV/2')).toBe(false)
+  })
+})

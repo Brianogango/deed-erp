@@ -93,14 +93,16 @@ export function buildPaymentReceiptContent(input: {
 }
 
 export function paymentReceiptAlreadySent(
-  sends: Array<{ documentType: string; documentId: string; status: string; subject?: string }>,
+  sends: Array<{ documentType: string; documentId: string; status: string; subject?: string; documentRef?: string }>,
   paymentId: string,
+  invoiceRef?: string,
 ): boolean {
   return sends.some(
     s =>
       s.documentType === 'payment_receipt'
       && s.documentId === paymentId
-      && s.status === 'success',
+      && s.status === 'success'
+      && (!invoiceRef || !s.documentRef || s.documentRef === invoiceRef),
   )
 }
 
@@ -116,16 +118,16 @@ export async function notifyCustomerPaymentReceived(
     documentType: 'payment_receipt',
     limit: 20,
   })
-  if (paymentReceiptAlreadySent(prior, input.paymentId)) {
-    return { sent: false, skipped: 'already_sent' }
-  }
-
   const invoice = await prisma.invoice.findUnique({
     where: { id: input.invoiceId },
     include: { client: true },
   })
   if (!invoice) return { sent: false, skipped: 'invoice_missing' }
   if (!invoice.client) return { sent: false, skipped: 'client_missing' }
+
+  if (paymentReceiptAlreadySent(prior, input.paymentId, invoice.invoiceNumber)) {
+    return { sent: false, skipped: 'already_sent' }
+  }
 
   const email = String(invoice.client.email || '').trim()
   const phone = String(invoice.client.phone || invoice.client.phoneAlt || '').trim()

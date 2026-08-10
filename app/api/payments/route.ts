@@ -137,6 +137,26 @@ export async function POST(request: NextRequest) {
       console.error('[payments] journal dual-write failed:', err)
     }
 
+    // Automation #2: customer payment confirmation per allocated invoice.
+    // Never fail the payment if messaging fails. Skip on idempotent retries above.
+    try {
+      const { notifyCustomerPaymentReceived } = await import('@/lib/finance/payment-receipt-notify')
+      for (const alloc of createdAllocations) {
+        await notifyCustomerPaymentReceived({
+          invoiceId: alloc.invoiceId,
+          paymentId: payment.id,
+          amount: Number(alloc.amount),
+          paymentMethod,
+          reference,
+          paidAt: payment.paidAt ?? paidAt,
+          actorUserId: actor.id,
+          actorName: actor.name || actor.username || null,
+        })
+      }
+    } catch (err) {
+      console.error('[payments] receipt notify failed:', err)
+    }
+
     return NextResponse.json({ payment, allocations: createdAllocations })
   })
 }
