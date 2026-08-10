@@ -18,8 +18,9 @@ export interface ToolDefinition<TInput = any, TOutput = any> {
   requiredModule: ModuleId | null
   // Optional finer-grained permission action (lib/auth/authorization.ts).
   requiredPermission: PermissionAction | null
-  // Pure read or drafting only — never a direct ERP write.
-  mutates: false
+  // Pure read / draft by default. Controlled writes (e.g. sales-inbox → CRM
+  // lead import) may set mutates: true — still always go through runTool().
+  mutates: boolean
   run: (ctx: ToolContext, input: TInput) => Promise<TOutput>
 }
 

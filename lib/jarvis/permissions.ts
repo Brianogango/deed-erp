@@ -16,10 +16,12 @@ const ROLE_TOOL_ALLOWLIST: Record<UserRole, string[]> = {
     'search_customers', 'check_inventory', 'explain_invoice', 'track_repair',
     'check_warranty', 'summarize_sales', 'summarize_repairs', 'overdue_payments', 'procurement_summary',
     'draft_quotation', 'draft_message', 'search_documents',
+    'summarize_sales_leads', 'import_sales_inbox_leads',
   ],
   admin_officer: [
     'search_customers', 'check_inventory', 'explain_invoice', 'track_repair',
     'check_warranty', 'summarize_repairs', 'overdue_payments', 'draft_message', 'search_documents',
+    'summarize_sales_leads', 'import_sales_inbox_leads',
   ],
   finance_officer: [
     'search_customers', 'check_inventory', 'explain_invoice',
@@ -35,6 +37,7 @@ const ROLE_TOOL_ALLOWLIST: Record<UserRole, string[]> = {
   sales_rep: [
     'search_customers', 'check_inventory', 'explain_invoice',
     'summarize_sales', 'draft_quotation', 'draft_message', 'search_documents',
+    'summarize_sales_leads', 'import_sales_inbox_leads',
   ],
   technical_lead: [
     'check_inventory', 'track_repair', 'check_warranty', 'summarize_repairs', 'search_documents',

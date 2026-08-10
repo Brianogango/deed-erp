@@ -55,6 +55,8 @@ const LIVE_TOOL_LABELS: Record<string, string> = {
   draft_quotation: 'Quotation draft',
   draft_message: 'Message draft',
   search_documents: 'Documents',
+  summarize_sales_leads: 'Sales leads',
+  import_sales_inbox_leads: 'Sales inbox',
 }
 
 function sourceTypeLabel(sourceType: string): string {
