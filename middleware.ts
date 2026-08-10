@@ -165,6 +165,18 @@ export async function middleware(request: NextRequest) {
       return NextResponse.next()
     }
 
+    // Cron jobs authenticate with CRON_SECRET; the route re-validates.
+    const cronSecret = (process.env.CRON_SECRET || '').trim()
+    if (pathname.startsWith('/api/cron/') && cronSecret) {
+      const auth = (request.headers.get('authorization') || '').trim()
+      const bearer = auth.toLowerCase().startsWith('bearer ') ? auth.slice(7).trim() : ''
+      const alt = (request.headers.get('x-cron-secret') || '').trim()
+      const provided = bearer || alt
+      if (provided && provided === cronSecret) {
+        return NextResponse.next()
+      }
+    }
+
     const token = await getToken({ req: request, secret: SECRET, cookieName: COOKIE_NAME })
     if (!token) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
