@@ -70,7 +70,7 @@ function historyToContents(history: JarvisToolLoopArgs['history']): Content[] {
 
 export function createGeminiJarvisProvider(): JarvisLlmProvider {
   // Flash for routine ERP Q&A / drafts — cost-efficient and replaceable via env.
-  const model = process.env.GEMINI_MODEL || process.env.JARVIS_MODEL || 'gemini-2.0-flash'
+  const model = process.env.GEMINI_MODEL || process.env.JARVIS_MODEL || 'gemini-flash-latest'
 
   return {
     id: 'gemini',
