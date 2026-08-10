@@ -4132,6 +4132,7 @@
   display: grid;
   grid-template-columns: 1fr;
   gap: 0.75rem;
+  min-width: 0;
 }
 
 @media (min-width: 1100px) {
@@ -4139,6 +4140,44 @@
     grid-template-columns: repeat(3, minmax(0, 1fr));
     align-items: start;
   }
+
+  /* When only Ready for Sale has work, give it the scan width. */
+  .inventory-warehouse-board--ready-heavy {
+    grid-template-columns: minmax(0, 2.2fr) minmax(0, 0.9fr) minmax(0, 0.9fr);
+  }
+}
+
+/* Stacked row: meta always above actions — never side-by-side in narrow board columns. */
+.inventory-warehouse-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  min-width: 0;
+  position: relative;
+}
+
+.inventory-warehouse-row:hover {
+  background: var(--bg-surface);
+}
+
+.inventory-warehouse-row__meta {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.inventory-warehouse-row__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+  position: relative;
+  z-index: 1;
+}
+
+.inventory-warehouse-action {
+  max-width: 100%;
 }
 
 .inventory-pilot .inventory-pilot-search .form-input {
