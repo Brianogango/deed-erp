@@ -70,7 +70,9 @@ import { Fa } from '@/components/icons'
 import type { CommercialPdfInput } from '@/lib/commercial-pdf'
 import {
   DEFAULT_DOCUMENT_PAYMENT_DETAILS,
+  alignPaymentDetailsToTax,
   buildPaymentDetailLines,
+  documentHasVat,
   normalizeDocumentPaymentDetails,
   type DocumentPaymentDetails,
 } from '@/lib/document-payment-details'
@@ -1274,6 +1276,23 @@ function SalesContent() {
     }
   }, [view, quoteDraftKey, newCustomer, newDeliveryDate, newValidUntil, newNotes, newCustomerRef, newInvoiceAddress, newDeliveryAddress, newPaymentDetails, newDraftLines])
 
+  // Align quote payment bank: VAT → NCBA; non-VAT → ABSA / I&M
+  useEffect(() => {
+    if (view !== 'new') return
+    const isVat = newDraftLines.some(l => Number(l.taxRate) > 0) || draftTaxTotal > 0
+    setNewPaymentDetails(prev => {
+      const next = alignPaymentDetailsToTax(prev, isVat, bankAccounts)
+      const cur = normalizeDocumentPaymentDetails(prev)
+      if (
+        cur.useCompanyDefault === next.useCompanyDefault
+        && cur.includeMpesa === next.includeMpesa
+        && (cur.customNote || '') === (next.customNote || '')
+        && cur.bankAccountIds.join() === next.bankAccountIds.join()
+      ) return prev
+      return next
+    })
+  }, [view, newDraftLines, draftTaxTotal, bankAccounts])
+
   // ── Save new quotation ──────────────────────────────────────────────────
   const saveNewQuotation = async (after: 'open' | 'another' | 'list' = 'open') => {
     const errors: { customer?: string; validUntil?: string; lines?: string } = {}
@@ -1559,6 +1578,7 @@ function SalesContent() {
                   draftSubtotal={draftSubtotal}
                   draftTaxTotal={draftTaxTotal}
                   draftTotal={draftTotal}
+                  bankAccounts={bankAccounts}
                   companySettings={companySettings}
                   canSave={!quoteSaveBlockedReason}
                   saveBlockedReason={quoteSaveBlockedReason}
@@ -2539,6 +2559,8 @@ function SalesContent() {
                             <PaymentDetailsPicker
                               value={getDocumentPaymentDetails(activeOrder.id)}
                               onChange={next => setDocumentPaymentDetails(activeOrder.id, next)}
+                              bankAccounts={bankAccounts}
+                              isVat={documentHasVat(activeOrder)}
                               readOnly={!isQuotationDraft(activeOrder.status) || !!activeOrder.locked}
                             />
                             <Chatter
@@ -3280,7 +3302,7 @@ function NewQuotationForm({
   newDraftLines,
   addDraftLine, addDraftSection, updateDraftLine, removeDraftLine, moveDraftLine, selectProductForDraftLine,
   calcDraftLineTotal, draftSubtotal, draftTaxTotal, draftTotal,
-  companySettings, canSave, saveBlockedReason, fieldErrors, onSave, onSaveAndAddAnother, onSaveDraft, onCancel, onCreateNewCustomer,
+  bankAccounts, companySettings, canSave, saveBlockedReason, fieldErrors, onSave, onSaveAndAddAnother, onSaveDraft, onCancel, onCreateNewCustomer,
 }: {
   customers: any[]; products: any[]; newCustomer: { id: string; name: string } | null
   setNewCustomer: (c: { id: string; name: string } | null) => void
@@ -3301,6 +3323,7 @@ function NewQuotationForm({
   selectProductForDraftLine: (lineId: string, product: any) => void
   calcDraftLineTotal: (l: DraftLine) => number
   draftSubtotal: number; draftTaxTotal: number; draftTotal: number
+  bankAccounts: any[]
   companySettings: any
   canSave: boolean; saveBlockedReason: string
   fieldErrors?: { customer?: string; validUntil?: string; lines?: string }
@@ -3721,6 +3744,8 @@ function NewQuotationForm({
             <PaymentDetailsPicker
               value={newPaymentDetails}
               onChange={setNewPaymentDetails}
+              bankAccounts={bankAccounts}
+              isVat={newDraftLines.some(l => Number(l.taxRate) > 0)}
             />
           </div>
         )}

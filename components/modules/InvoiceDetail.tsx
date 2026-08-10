@@ -3,26 +3,21 @@
 import { useState, useEffect, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import {
-  faBoxOpen,
-  faBan,
-  faTrash,
   faPencil,
-  faDownload,
-  faEnvelope,
   faMoneyBillWave,
-  faRotateLeft,
-  faCoins,
-  faHandPaper,
-  faUnlock,
   faArrowUp,
   faArrowDown,
   faPlus,
   faTruck,
+  faCalendarDay,
+  faUser,
+  faFileInvoice,
+  faCheck,
 } from '@fortawesome/free-solid-svg-icons'
 import { useFinanceStore, useDeliveryStore, fmtKes, fmtDate } from '@/lib/store'
 import { invoiceDocState, invoicePaymentStatus, isInvoiceOverdue, displayDocRef, INVOICE_DOC_STATE_LABELS, PAYMENT_STATUS_LABELS } from '@/lib/odoo-sales-flow'
-import { Badge, Modal, Field, Input, Select, Confirm, ModuleSkeleton, useMounted } from '@/components/ui'
-import { RecordHeader, PrimaryActionButton } from '@/components/erp'
+import { Modal, Field, Input, Select, Confirm, ModuleSkeleton, useMounted } from '@/components/ui'
+import { Breadcrumbs, PrimaryActionButton, RecordHeader, SecondaryActionMenu, StatusBadge } from '@/components/erp'
 import Chatter from '@/components/erp/Chatter'
 import { Fa } from '@/components/icons'
 import { OutboundReleasePanel, OrcStatusBadge } from './OutboundReleasePanel'
@@ -31,6 +26,12 @@ import PaymentDetailsPicker from '@/components/payment/PaymentDetailsPicker'
 import DocumentEmailSendHistory from '@/components/email/DocumentEmailSendHistory'
 import { ScheduleInvoiceDeliveryModal } from './ScheduleInvoiceDeliveryModal'
 import { canScheduleInvoiceDelivery, findInvoiceDeliveryJob } from '@/lib/invoice-delivery-job'
+import {
+  alignPaymentDetailsToTax,
+  documentHasVat,
+  normalizeDocumentPaymentDetails,
+  paymentDetailsEqual,
+} from '@/lib/document-payment-details'
 
 const today = () => new Date().toISOString().slice(0, 10)
 
@@ -93,6 +94,7 @@ export default function InvoiceDetail() {
   const [emailHistoryKey, setEmailHistoryKey] = useState(0)
   const [hydratingLines, setHydratingLines] = useState(false)
   const [lookupReady, setLookupReady] = useState(false)
+  const [detailTab, setDetailTab] = useState<'notes' | 'payments' | 'activity'>('notes')
   const hydrateAttempted = useRef<string | null>(null)
 
   // Wait briefly for store hydration before declaring the invoice missing —
@@ -172,6 +174,25 @@ export default function InvoiceDetail() {
     })()
     return () => { cancelled = true }
   }, [invoice?.id, invoice?.lines?.length, updateInvoice])
+
+
+  // Keep payment bank aligned: VAT → NCBA; non-VAT → ABSA / I&M
+  useEffect(() => {
+    if (!invoice || invoice.type !== 'customer_invoice') return
+    const current = normalizeDocumentPaymentDetails(getDocumentPaymentDetails(invoice.id))
+    const next = alignPaymentDetailsToTax(current, documentHasVat(invoice), bankAccounts)
+    if (!paymentDetailsEqual(current, next)) {
+      setDocumentPaymentDetails(invoice.id, next)
+    }
+  }, [
+    invoice?.id,
+    invoice?.type,
+    invoice?.taxTotal,
+    invoice?.lines,
+    bankAccounts,
+    getDocumentPaymentDetails,
+    setDocumentPaymentDetails,
+  ])
 
   if (!mounted) return <ModuleSkeleton />
 
@@ -307,393 +328,508 @@ export default function InvoiceDetail() {
   const paying = Math.min(Number(payAmount) || 0, balance)
   const willFullyPay = paying >= balance
   const overpay = (Number(payAmount) || 0) > balance
+  const invoiceIsVat = documentHasVat(invoice)
+  const titleRef = invoice.ref.startsWith('DRAFT/') ? displayDocRef(invoice.ref) : invoice.ref
+  const partnerCountry = partnerContact?.country || 'Kenya'
+  const dueDays = (() => {
+    if (!invoice.dueDate) return null
+    const due = new Date(`${invoice.dueDate}T00:00:00`)
+    const todayDate = new Date()
+    todayDate.setHours(0, 0, 0, 0)
+    return Math.round((due.getTime() - todayDate.getTime()) / 86_400_000)
+  })()
+  const dueDaysLabel = dueDays == null
+    ? ''
+    : dueDays < 0
+      ? `${Math.abs(dueDays)} day${Math.abs(dueDays) === 1 ? '' : 's'} overdue`
+      : dueDays === 0
+        ? 'Due today'
+        : `${dueDays} day${dueDays === 1 ? '' : 's'}`
+  const circumference = 2 * Math.PI * 18
+  const donutOffset = circumference * (1 - Math.max(0, Math.min(1, pct / 100)))
+
+  const moreActions = [
+    {
+      id: 'download',
+      label: `Download ${docLabel}`,
+      onClick: () => { void handleDownloadInvoice() },
+    },
+    {
+      id: 'email',
+      label: sendingInvoice ? 'Sending…' : `Email ${docLabel}`,
+      onClick: openSendInvoiceModal,
+      disabled: sendingInvoice,
+      hidden: !(invoice.type === 'customer_invoice' && invoice.status !== 'draft'),
+    },
+    {
+      id: 'block',
+      label: invoice.paymentBlocked ? 'Release payment block' : 'Block payment (dispute)',
+      onClick: () => setInvoicePaymentBlocked(invoice.id, !invoice.paymentBlocked),
+      hidden: !(docState === 'posted' && payState !== 'paid' && canManageFullFinance),
+    },
+    {
+      id: 'reset',
+      label: 'Reset to Draft',
+      onClick: () => setShowResetDraft(true),
+      hidden: !(invoice.status !== 'draft' && invoice.status !== 'cancelled' && invoice.amountPaid <= 0 && canManageFullFinance),
+    },
+    {
+      id: 'cancel',
+      label: `Cancel ${docLabel}`,
+      onClick: () => setShowCancel(true),
+      danger: true,
+      hidden: !(invoice.status !== 'draft' && invoice.status !== 'cancelled' && canManageFullFinance),
+    },
+    {
+      id: 'release',
+      label: existingOrc ? 'View release' : 'Prepare release',
+      onClick: handlePrepareRelease,
+      hidden: !(docState === 'posted' && invoice.type === 'customer_invoice' && serialLines.length > 0 && existingOrc?.status !== 'released'),
+    },
+    {
+      id: 'delivery',
+      label: 'Schedule delivery',
+      onClick: () => setShowDeliveryModal(true),
+      hidden: !(showScheduleDelivery && canManageFinance),
+    },
+    {
+      id: 'credit',
+      label: `Apply credit (${fmtKes(Math.min(availableCredit, balance))})`,
+      onClick: () => applyCustomerCreditToInvoice(invoice.id),
+      hidden: !(invoice.type === 'customer_invoice' && balance > 0 && availableCredit > 0 && invoice.status !== 'draft' && invoice.status !== 'cancelled' && canManageFullFinance),
+    },
+    {
+      id: 'edit',
+      label: 'Edit',
+      onClick: () => router.push(`/finance?tab=${invoice.type === 'customer_invoice' ? 'invoices' : 'bills'}&edit=${invoice.id}`),
+      hidden: !(invoice.status === 'draft' && canManageFinance),
+    },
+    {
+      id: 'delete',
+      label: 'Delete',
+      onClick: () => setShowDelete(true),
+      danger: true,
+      hidden: !(invoice.status === 'draft' && canManageFinance),
+    },
+    {
+      id: 'confirm',
+      label: `Confirm ${docLabel}`,
+      onClick: () => postInvoice(invoice.id),
+      hidden: !(invoice.status === 'draft' && canManageFinance),
+    },
+  ]
 
   return (
     <div className="mod-page invoice-detail">
-      <RecordHeader
-        title={invoice.ref.startsWith('DRAFT/') ? displayDocRef(invoice.ref) : `${docLabel} ${invoice.ref}`}
-        entity={invoice.partnerName}
-        status={docState === 'draft' ? 'draft' : docState === 'cancelled' ? 'cancelled' : 'posted'}
-        statusLabel={INVOICE_DOC_STATE_LABELS[docState]}
-        onBack={() => router.push('/finance')}
-        backLabel="Back to finance"
-        primaryAction={docState === 'posted' && payState !== 'paid' && payState !== 'blocked' && canManageFinance ? (
-          <PrimaryActionButton
-            icon={<Fa icon={faMoneyBillWave} />}
-            onClick={() => { setPayAmount(String(balance)); setShowPayModal(true) }}
-            hideLabelOnMobile={false}
-          >
-            {balance > 0 ? `Register payment` : 'Register payment'}
-          </PrimaryActionButton>
-        ) : undefined}
-        secondaryActions={
-          <div className="flex items-center gap-1.5 flex-wrap justify-end">
-            {docState === 'posted' && <Badge status={badgeStatus as any} label={PAYMENT_STATUS_LABELS[payState]} />}
-            {overdue && <Badge status="cancelled" label="Overdue" />}
-            <button
-              className="icon-btn w-9 h-9"
-              onClick={handleDownloadInvoice}
-              title={`Download ${docLabel}`}
-              aria-label={`Download ${docLabel}`}
-            >
-              <Fa icon={faDownload} className="text-[12px]" />
-            </button>
-            {invoice.type === 'customer_invoice' && invoice.status !== 'draft' && (
-              <button
-                className="icon-btn w-9 h-9"
-                onClick={openSendInvoiceModal}
-                disabled={sendingInvoice}
-                title={sendingInvoice ? 'Sending…' : `Email ${docLabel}`}
-                aria-label={sendingInvoice ? 'Sending email' : `Email ${docLabel}`}
-              >
-                <Fa icon={faEnvelope} className="text-[12px]" />
-              </button>
-            )}
-            {docState === 'posted' && payState !== 'paid' && canManageFullFinance && (
-              <button
-                className="icon-btn w-9 h-9"
-                onClick={() => setInvoicePaymentBlocked(invoice.id, !invoice.paymentBlocked)}
-                title={invoice.paymentBlocked ? 'Release payment block' : 'Block payment (dispute)'}
-                aria-label={invoice.paymentBlocked ? 'Release payment block' : 'Block payment'}
-              >
-                <Fa icon={invoice.paymentBlocked ? faUnlock : faHandPaper} className="text-[12px]" />
-              </button>
-            )}
-            {invoice.status !== 'draft' && invoice.status !== 'cancelled' && invoice.amountPaid <= 0 && canManageFullFinance && (
-              <button
-                className="icon-btn w-9 h-9"
-                onClick={() => setShowResetDraft(true)}
-                title="Reset to Draft"
-                aria-label="Reset to Draft"
-              >
-                <Fa icon={faRotateLeft} className="text-[12px]" />
-              </button>
-            )}
-            {invoice.status !== 'draft' && invoice.status !== 'cancelled' && canManageFullFinance && (
-              <button
-                className="icon-btn w-9 h-9"
-                onClick={() => setShowCancel(true)}
-                title={`Cancel ${docLabel}`}
-                aria-label={`Cancel ${docLabel}`}
-              >
-                <Fa icon={faBan} className="text-[12px]" />
-              </button>
-            )}
-          </div>
-        }
-      />
+      <div className="invoice-detail__chrome">
+        <Breadcrumbs
+          items={[
+            { label: invoice.type === 'customer_invoice' ? 'Invoices' : 'Bills', onClick: () => router.push('/finance') },
+            { label: titleRef },
+          ]}
+        />
 
-      <div className="mod-body invoice-detail__body">
-        <div className="invoice-detail__sheet">
-          {/* Money strip — one glance: total / paid / due */}
-          {invoice.status !== 'draft' && (
-            <section className="invoice-detail__money" aria-label="Payment summary">
-              <div className="invoice-detail__money-grid">
-                <div>
-                  <p className="invoice-detail__label">{docLabel} total</p>
-                  <p className="invoice-detail__amount font-mono">{fmtKes(invoice.total)}</p>
-                </div>
-                <div>
-                  <p className="invoice-detail__label">Received</p>
-                  <p className="invoice-detail__amount invoice-detail__amount--muted font-mono">{fmtKes(invoice.amountPaid)}</p>
-                </div>
-                <div className="invoice-detail__money-due">
-                  <p className="invoice-detail__label">Balance due</p>
-                  <p className={`invoice-detail__amount font-mono ${balance <= 0 ? 'invoice-detail__amount--paid' : 'invoice-detail__amount--due'}`}>{fmtKes(balance)}</p>
-                </div>
-              </div>
-              <div className="invoice-detail__progress" role="progressbar" aria-valuenow={Math.round(pct)} aria-valuemin={0} aria-valuemax={100} aria-label="Percent paid">
-                <div
-                  className={`invoice-detail__progress-fill ${pct >= 100 ? 'is-paid' : 'is-open'}`}
-                  style={{ transform: `scaleX(${Math.max(0, Math.min(1, pct / 100))})` }}
+        <div className="invoice-detail__header">
+          <div className="invoice-detail__header-main">
+            <div className="invoice-detail__title-row">
+              <h1 className="invoice-detail__title">{titleRef}</h1>
+              {docState === 'posted' && (
+                <StatusBadge status="active" label={INVOICE_DOC_STATE_LABELS[docState]} />
+              )}
+              {docState === 'draft' && (
+                <StatusBadge status="draft" label={INVOICE_DOC_STATE_LABELS[docState]} />
+              )}
+              {docState === 'cancelled' && (
+                <StatusBadge status="cancelled" label={INVOICE_DOC_STATE_LABELS[docState]} />
+              )}
+              {docState === 'posted' && (
+                <StatusBadge
+                  status={badgeStatus as string}
+                  label={PAYMENT_STATUS_LABELS[payState]}
                 />
-              </div>
-              <p className="invoice-detail__progress-caption">{Math.round(pct)}% paid</p>
-            </section>
-          )}
-
-          <section className="invoice-detail__meta" aria-label="Invoice dates">
-            <div>
-              <p className="invoice-detail__label">Date</p>
-              <p className="invoice-detail__meta-value">{fmtDate(invoice.date)}</p>
-            </div>
-            <div>
-              <p className="invoice-detail__label">Due date</p>
-              <p className={`invoice-detail__meta-value ${overdue ? 'invoice-detail__meta-value--alert' : ''}`}>{fmtDate(invoice.dueDate)}</p>
-            </div>
-            <div>
-              <p className="invoice-detail__label">Payments</p>
-              <p className="invoice-detail__meta-value tabular-nums">{(invoice.payments || []).length}</p>
-            </div>
-          </section>
-
-          {(invoice.invoiceAddress || invoice.deliveryAddress) && (
-            <section className="invoice-detail__addresses" aria-label="Addresses">
-              {invoice.invoiceAddress && (
-                <div>
-                  <p className="invoice-detail__label">Invoice address</p>
-                  <p className="invoice-detail__address">{invoice.invoiceAddress}</p>
-                </div>
               )}
-              {invoice.deliveryAddress && (
-                <div>
-                  <p className="invoice-detail__label">Delivery address</p>
-                  <p className="invoice-detail__address">{invoice.deliveryAddress}</p>
-                </div>
-              )}
-            </section>
-          )}
-
-          {linkedDeliveryJob && (
-            <div className="invoice-detail__callout">
-              <div className="invoice-detail__callout-icon" aria-hidden="true">
-                <Fa icon={faTruck} className="text-[10px]" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="invoice-detail__label">Rider delivery</p>
-                <p className="invoice-detail__callout-body">
-                  {linkedDeliveryJob.ref}
-                  {linkedDeliveryJob.riderName ? ` · ${linkedDeliveryJob.riderName}` : ' · Rider TBD'}
-                  {` · ${fmtDate(linkedDeliveryJob.scheduledDate)}`}
-                  {` · fee ${fmtKes(linkedDeliveryJob.riderFee)}`}
-                  {linkedDeliveryJob.deliveryFee ? ` · charge ${fmtKes(linkedDeliveryJob.deliveryFee)}` : ''}
-                </p>
-              </div>
-              <span className="invoice-detail__chip">
-                {linkedDeliveryJob.status.replace('_', ' ')}
+              {overdue && <StatusBadge status="cancelled" label="Overdue" />}
+            </div>
+            <p className="invoice-detail__customer">{invoice.partnerName}</p>
+            <p className="invoice-detail__country">{partnerCountry}</p>
+            <div className="invoice-detail__dates">
+              <span className="invoice-detail__date-item">
+                <Fa icon={faCalendarDay} aria-hidden="true" />
+                <span>Invoice Date: <strong>{fmtDate(invoice.date)}</strong></span>
+              </span>
+              <span className={`invoice-detail__date-item ${overdue || (dueDays != null && dueDays <= 7) ? 'is-alert' : ''}`}>
+                <Fa icon={faCalendarDay} aria-hidden="true" />
+                <span>
+                  Due Date: <strong>{fmtDate(invoice.dueDate)}</strong>
+                  {dueDaysLabel ? <em> ({dueDaysLabel})</em> : null}
+                </span>
               </span>
             </div>
-          )}
+          </div>
 
-          {/* Invoice Lines */}
-          {(invoice.lines || []).length > 0 || (invoice.status === 'draft' && canManageFinance) ? (
-            <section className="invoice-detail__section" aria-label="Line items">
-              <div className="flex items-center justify-between gap-2 flex-wrap">
-                <p className="invoice-detail__section-title">Line items</p>
-                {invoice.status === 'draft' && canManageFinance && (
-                  <div className="flex items-center gap-3">
-                    <button
-                      type="button"
-                      className="invoice-detail__text-btn"
-                      onClick={() => addInvoiceSection(invoice.id)}
-                    >
-                      <Fa icon={faPlus} className="text-[10px]" /> Add a section
-                    </button>
-                    <button
-                      type="button"
-                      className="invoice-detail__text-btn invoice-detail__text-btn--accent"
-                      onClick={() => router.push(`/finance?tab=${invoice.type === 'customer_invoice' ? 'invoices' : 'bills'}&edit=${invoice.id}`)}
-                    >
-                      <Fa icon={faPencil} className="text-[10px]" /> Edit lines
-                    </button>
-                  </div>
-                )}
+          <div className="invoice-detail__header-actions">
+            {docState === 'posted' && payState !== 'paid' && payState !== 'blocked' && canManageFinance && (
+              <PrimaryActionButton
+                icon={<Fa icon={faMoneyBillWave} />}
+                onClick={() => { setPayAmount(String(balance)); setShowPayModal(true) }}
+                hideLabelOnMobile={false}
+              >
+                Register payment
+              </PrimaryActionButton>
+            )}
+            <SecondaryActionMenu actions={moreActions} label="More actions" ariaLabel="More actions" />
+          </div>
+        </div>
+      </div>
+
+      <div className="mod-body invoice-detail__body">
+        {invoice.status !== 'draft' && (
+          <section className="invoice-detail__kpi" aria-label="Payment summary">
+            <div className={`invoice-detail__kpi-card ${balance > 0 ? 'is-due' : 'is-clear'}`}>
+              <p className="invoice-detail__kpi-label">Balance due</p>
+              <p className="invoice-detail__kpi-value">{fmtKes(balance)}</p>
+              <p className="invoice-detail__kpi-sub">
+                {balance > 0 ? `Due on ${fmtDate(invoice.dueDate)}` : 'Fully paid'}
+              </p>
+            </div>
+            <div className="invoice-detail__kpi-card">
+              <p className="invoice-detail__kpi-label">Invoice total</p>
+              <p className="invoice-detail__kpi-value">{fmtKes(invoice.total)}</p>
+            </div>
+            <div className="invoice-detail__kpi-card">
+              <p className="invoice-detail__kpi-label">Received</p>
+              <p className="invoice-detail__kpi-value">{fmtKes(invoice.amountPaid)}</p>
+            </div>
+            <div className="invoice-detail__kpi-card invoice-detail__kpi-card--donut">
+              <p className="invoice-detail__kpi-label">Payment status</p>
+              <div className="invoice-detail__donut" role="img" aria-label={`${Math.round(pct)}% paid`}>
+                <svg viewBox="0 0 44 44" width="64" height="64" aria-hidden="true">
+                  <circle cx="22" cy="22" r="18" className="invoice-detail__donut-track" />
+                  <circle
+                    cx="22"
+                    cy="22"
+                    r="18"
+                    className={`invoice-detail__donut-fill ${pct >= 100 ? 'is-paid' : ''}`}
+                    style={{
+                      strokeDasharray: `${circumference}`,
+                      strokeDashoffset: `${donutOffset}`,
+                    }}
+                  />
+                </svg>
+                <span className="invoice-detail__donut-pct">{Math.round(pct)}%</span>
               </div>
-              <div className="dt-scroll invoice-detail__table-wrap">
-                <table data-no-responsive className="w-full text-xs">
-                  <thead className="bg-[var(--bg-surface)]">
-                    <tr>
-                      <th className="px-3 py-2 text-left text-[10px] font-bold uppercase text-[var(--text-4)]">Description</th>
-                      <th className="px-3 py-2 text-right text-[10px] font-bold uppercase text-[var(--text-4)]">Qty</th>
-                      <th className="px-3 py-2 text-right text-[10px] font-bold uppercase text-[var(--text-4)]">Unit Price</th>
-                      <th className="px-3 py-2 text-right text-[10px] font-bold uppercase text-[var(--text-4)]">Disc%</th>
-                      <th className="px-3 py-2 text-right text-[10px] font-bold uppercase text-[var(--text-4)]">Subtotal</th>
-                      {invoice.status === 'draft' && canManageFinance && (
-                        <th className="px-3 py-2 w-24"></th>
-                      )}
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-[var(--border-lt)]">
-                    {(invoice.lines || []).map((line, idx) => {
-                      const canReorder = invoice.status === 'draft' && canManageFinance
-                      const moveButtons = canReorder ? (
-                        <div className="flex items-center justify-end gap-0.5">
-                          <button
-                            type="button"
-                            onClick={() => moveInvoiceLine(invoice.id, line.id, -1)}
-                            disabled={idx === 0}
-                            aria-label="Move line up"
-                            className="icon-btn disabled:opacity-30 disabled:cursor-not-allowed"
-                          >
-                            <Fa icon={faArrowUp} aria-hidden="true" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => moveInvoiceLine(invoice.id, line.id, 1)}
-                            disabled={idx === (invoice.lines || []).length - 1}
-                            aria-label="Move line down"
-                            className="icon-btn disabled:opacity-30 disabled:cursor-not-allowed"
-                          >
-                            <Fa icon={faArrowDown} aria-hidden="true" />
-                          </button>
-                        </div>
-                      ) : null
-                      if (line.lineType === 'section') {
-                        return (
-                          <tr key={line.id || idx} className="bg-[var(--bg-surface)]/70">
-                            <td colSpan={5} className="px-3 py-2">
-                              {canReorder ? (
-                                <input
-                                  aria-label="Section title"
-                                  className="form-input text-xs w-full font-bold"
-                                  value={line.description || ''}
-                                  placeholder="Section title"
-                                  onChange={e => {
-                                    const title = e.target.value
-                                    const lines = (invoice.lines || []).map(l =>
-                                      l.id === line.id ? { ...l, description: title } : l,
-                                    )
-                                    updateInvoice(invoice.id, { lines })
-                                  }}
-                                />
-                              ) : (
-                                <span className="font-bold text-[var(--text-2)]">{line.description}</span>
-                              )}
-                            </td>
-                            {canReorder && <td className="px-3 py-2 text-center">{moveButtons}</td>}
-                          </tr>
-                        )
-                      }
+              <p className="invoice-detail__kpi-sub">{Math.round(pct)}% paid</p>
+            </div>
+          </section>
+        )}
+
+        <section className="invoice-detail__card" aria-label="Line items">
+          <div className="invoice-detail__card-head">
+            <h2 className="invoice-detail__card-title">Line Items</h2>
+            {invoice.status === 'draft' && canManageFinance && (
+              <div className="invoice-detail__card-tools">
+                <button type="button" className="invoice-detail__text-btn" onClick={() => addInvoiceSection(invoice.id)}>
+                  <Fa icon={faPlus} className="text-[10px]" /> Add a section
+                </button>
+                <button
+                  type="button"
+                  className="invoice-detail__text-btn invoice-detail__text-btn--accent"
+                  onClick={() => router.push(`/finance?tab=${invoice.type === 'customer_invoice' ? 'invoices' : 'bills'}&edit=${invoice.id}`)}
+                >
+                  <Fa icon={faPencil} className="text-[10px]" /> Edit lines
+                </button>
+              </div>
+            )}
+          </div>
+
+          {(invoice.lines || []).length > 0 || (invoice.status === 'draft' && canManageFinance) ? (
+            <div className="dt-scroll invoice-detail__table-wrap">
+              <table data-no-responsive className="invoice-detail__table">
+                <thead>
+                  <tr>
+                    <th className="is-num">#</th>
+                    <th>Description</th>
+                    <th className="is-num">Qty</th>
+                    <th className="is-num">Unit price</th>
+                    <th className="is-num">Discount</th>
+                    <th className="is-num">Tax</th>
+                    <th className="is-num">Subtotal</th>
+                    {invoice.status === 'draft' && canManageFinance && <th />}
+                  </tr>
+                </thead>
+                <tbody>
+                  {(invoice.lines || []).map((line, idx) => {
+                    const canReorder = invoice.status === 'draft' && canManageFinance
+                    const moveButtons = canReorder ? (
+                      <div className="flex items-center justify-end gap-0.5">
+                        <button
+                          type="button"
+                          onClick={() => moveInvoiceLine(invoice.id, line.id, -1)}
+                          disabled={idx === 0}
+                          aria-label="Move line up"
+                          className="icon-btn disabled:opacity-30 disabled:cursor-not-allowed"
+                        >
+                          <Fa icon={faArrowUp} aria-hidden="true" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => moveInvoiceLine(invoice.id, line.id, 1)}
+                          disabled={idx === (invoice.lines || []).length - 1}
+                          aria-label="Move line down"
+                          className="icon-btn disabled:opacity-30 disabled:cursor-not-allowed"
+                        >
+                          <Fa icon={faArrowDown} aria-hidden="true" />
+                        </button>
+                      </div>
+                    ) : null
+                    if (line.lineType === 'section') {
                       return (
-                        <tr key={line.id || idx} className="hover:bg-[var(--bg-surface)]">
-                          <td className="px-3 py-2 text-[var(--text-1)]">{line.description}</td>
-                          <td className="px-3 py-2 text-right text-[var(--text-3)]">{line.qty}</td>
-                          <td className="px-3 py-2 text-right text-[var(--text-3)] font-mono">{fmtKes(line.unitPrice)}</td>
-                          <td className="px-3 py-2 text-right text-[var(--text-3)] font-mono">{(line.discountPct ?? 0) > 0 ? `${line.discountPct}%` : '—'}</td>
-                          <td className="px-3 py-2 text-right font-bold text-[var(--text-1)] font-mono">{fmtKes(line.subtotal)}</td>
-                          {canReorder && <td className="px-3 py-2 text-center">{moveButtons}</td>}
+                        <tr key={line.id || idx} className="invoice-detail__section-row">
+                          <td className="is-num">{idx + 1}</td>
+                          <td colSpan={5}>
+                            {canReorder ? (
+                              <input
+                                aria-label="Section title"
+                                className="form-input text-xs w-full font-bold"
+                                value={line.description || ''}
+                                placeholder="Section title"
+                                onChange={e => {
+                                  const title = e.target.value
+                                  const lines = (invoice.lines || []).map(l =>
+                                    l.id === line.id ? { ...l, description: title } : l,
+                                  )
+                                  updateInvoice(invoice.id, { lines })
+                                }}
+                              />
+                            ) : (
+                              <span className="font-bold">{line.description}</span>
+                            )}
+                          </td>
+                          <td />
+                          {canReorder && <td>{moveButtons}</td>}
                         </tr>
                       )
-                    })}
-                    {(invoice.lines || []).length === 0 && (
-                      <tr>
-                        <td colSpan={6} className="px-4 py-6 text-center text-xs text-[var(--text-4)]">
-                          No line items yet.
-                        </td>
+                    }
+                    return (
+                      <tr key={line.id || idx}>
+                        <td className="is-num">{idx + 1}</td>
+                        <td>{line.description}</td>
+                        <td className="is-num">{line.qty}</td>
+                        <td className="is-num">{fmtKes(line.unitPrice)}</td>
+                        <td className="is-num">{(line.discountPct ?? 0) > 0 ? `${line.discountPct}%` : '0%'}</td>
+                        <td className="is-num">{(line.taxRate ?? 0) > 0 ? `${line.taxRate}%` : '0%'}</td>
+                        <td className="is-num is-strong">{fmtKes(line.subtotal)}</td>
+                        {canReorder && <td>{moveButtons}</td>}
                       </tr>
-                    )}
-                  </tbody>
-                  <tfoot className="bg-[var(--bg-surface)] border-t-2 border-[var(--border-lt)]">
+                    )
+                  })}
+                  {(invoice.lines || []).length === 0 && (
                     <tr>
-                      <td colSpan={4} className="px-3 py-2 text-right text-[10px] font-bold uppercase text-[var(--text-4)]">Total</td>
-                      <td className="px-3 py-2 text-right font-black text-[var(--text-1)] font-mono">{fmtKes(invoice.total)}</td>
-                      {invoice.status === 'draft' && canManageFinance && <td />}
+                      <td colSpan={8} className="invoice-detail__empty-cell">No line items yet.</td>
                     </tr>
-                  </tfoot>
-                </table>
-              </div>
-            </section>
+                  )}
+                </tbody>
+              </table>
+            </div>
           ) : (
             <p className="invoice-detail__empty">
               {hydratingLines ? 'Loading line items…' : 'No line items on this invoice.'}
             </p>
           )}
 
-          {invoice.type === 'customer_invoice' && (
-            <PaymentDetailsPicker
-              value={getDocumentPaymentDetails(invoice.id)}
-              onChange={next => setDocumentPaymentDetails(invoice.id, next)}
-            />
-          )}
-
-          {/* Payment history */}
-          {(invoice.payments || []).length > 0 && (
-            <section className="invoice-detail__section" aria-label="Payment history">
-              <p className="invoice-detail__section-title">Payment history</p>
-              <div className="invoice-detail__table-wrap overflow-hidden">
-                {(invoice.payments || []).map((pay) => (
-                  <div key={pay.id} className="invoice-detail__pay-row">
-                    <div>
-                      <p className="invoice-detail__pay-method">{pay.method.replace('_', ' ')}</p>
-                      <p className="invoice-detail__pay-meta">{fmtDate(pay.date)} · {pay.recordedBy}{pay.reference ? ` · ${pay.reference}` : ''}</p>
-                    </div>
-                    <span className="invoice-detail__pay-amount">{fmtKes(pay.amount)}</span>
-                  </div>
-                ))}
-              </div>
-            </section>
-          )}
-
-          {/* ORC badge if release exists */}
-          {existingOrc && (
-            <div className="flex items-center gap-2">
-              <OrcStatusBadge release={existingOrc} onClick={() => setShowOrc(true)} />
+          <div className="invoice-detail__totals">
+            <div className="invoice-detail__totals-row">
+              <span>Subtotal</span>
+              <span>{fmtKes(invoice.subtotal)}</span>
             </div>
-          )}
+            <div className="invoice-detail__totals-row">
+              <span>Tax ({invoiceIsVat ? `${companySettings.vatRate}%` : '0%'})</span>
+              <span>{fmtKes(invoice.taxTotal || 0)}</span>
+            </div>
+            <div className="invoice-detail__totals-row is-grand">
+              <span>Total</span>
+              <span>{fmtKes(invoice.total)}</span>
+            </div>
+          </div>
+        </section>
 
-          {/* Actions */}
-          <div className="invoice-detail__actions">
-            {/* Prepare Release — shown for paid/posted invoices with serialised lines */}
-            {docState === 'posted' && invoice.type === 'customer_invoice' && serialLines.length > 0 && (
-              existingOrc?.status === 'released' ? (
-                <div className="invoice-detail__released">
-                  <Fa icon={faBoxOpen} /> Released
-                </div>
-              ) : (
-                <button type="button" className="btn-primary invoice-detail__btn" onClick={handlePrepareRelease}>
-                  <Fa icon={faBoxOpen} /> Prepare release
-                </button>
-              )
-            )}
-            {showScheduleDelivery && canManageFinance && (
-              <button
-                type="button"
-                className="btn-secondary invoice-detail__btn"
-                onClick={() => setShowDeliveryModal(true)}
-              >
-                <Fa icon={faTruck} /> Schedule delivery
-              </button>
-            )}
-            {invoice.type === 'customer_invoice' && balance > 0 && availableCredit > 0 && invoice.status !== 'draft' && invoice.status !== 'cancelled' && canManageFullFinance && (
-              <button
-                type="button"
-                className="btn-secondary invoice-detail__btn"
-                onClick={() => applyCustomerCreditToInvoice(invoice.id)}
-                title={`Available credit: ${fmtKes(availableCredit)}`}
-              >
-                <Fa icon={faCoins} /> Apply credit ({fmtKes(Math.min(availableCredit, balance))})
-              </button>
-            )}
-            {invoice.status === 'draft' && canManageFinance && (
-              <>
+        <section className="invoice-detail__info-grid" aria-label="Invoice information">
+          <article className="invoice-detail__info-card">
+            <header className="invoice-detail__info-head">
+              <span className="invoice-detail__info-icon invoice-detail__info-icon--blue" aria-hidden="true">
+                <Fa icon={faUser} />
+              </span>
+              <h3>Customer &amp; Addresses</h3>
+              {invoice.status === 'draft' && canManageFinance && (
                 <button
                   type="button"
-                  className="btn-secondary invoice-detail__btn invoice-detail__btn--danger"
-                  onClick={() => setShowDelete(true)}
-                >
-                  <Fa icon={faTrash} /> Delete
-                </button>
-                <button
-                  type="button"
-                  className="btn-secondary invoice-detail__btn"
+                  className="invoice-detail__icon-edit"
+                  aria-label="Edit customer addresses"
                   onClick={() => router.push(`/finance?tab=${invoice.type === 'customer_invoice' ? 'invoices' : 'bills'}&edit=${invoice.id}`)}
                 >
-                  <Fa icon={faPencil} /> Edit
+                  <Fa icon={faPencil} />
                 </button>
-                <button type="button" className="btn-primary invoice-detail__btn" onClick={() => postInvoice(invoice.id)}>
-                  Confirm {docLabel}
+              )}
+            </header>
+            <p className="invoice-detail__info-strong">{invoice.partnerName}</p>
+            <div className="invoice-detail__info-block">
+              <p className="invoice-detail__label">Invoice address</p>
+              <p className="invoice-detail__address">{invoice.invoiceAddress || partnerCountry || '—'}</p>
+            </div>
+            <div className="invoice-detail__info-block">
+              <p className="invoice-detail__label">Delivery address</p>
+              <p className="invoice-detail__address">{invoice.deliveryAddress || invoice.invoiceAddress || partnerCountry || '—'}</p>
+            </div>
+          </article>
+
+          <article className="invoice-detail__info-card">
+            <header className="invoice-detail__info-head">
+              <span className="invoice-detail__info-icon invoice-detail__info-icon--green" aria-hidden="true">
+                <Fa icon={faTruck} />
+              </span>
+              <h3>Delivery</h3>
+              {linkedDeliveryJob && (
+                <span className="invoice-detail__chip">{linkedDeliveryJob.status.replace('_', ' ')}</span>
+              )}
+            </header>
+            {linkedDeliveryJob ? (
+              <>
+                <p className="invoice-detail__info-strong">{linkedDeliveryJob.ref}</p>
+                <p className="invoice-detail__info-muted">
+                  {linkedDeliveryJob.riderName || 'Rider TBD'}
+                </p>
+                <p className="invoice-detail__info-muted">{fmtDate(linkedDeliveryJob.scheduledDate)}</p>
+                <p className="invoice-detail__info-muted">
+                  Rider fee: {fmtKes(linkedDeliveryJob.riderFee)}
+                  {linkedDeliveryJob.deliveryFee ? ` · Charge: ${fmtKes(linkedDeliveryJob.deliveryFee)}` : ''}
+                </p>
+                <button
+                  type="button"
+                  className="invoice-detail__link-btn"
+                  onClick={() => router.push('/delivery')}
+                >
+                  View delivery
                 </button>
               </>
+            ) : showScheduleDelivery && canManageFinance ? (
+              <>
+                <p className="invoice-detail__info-muted">No rider delivery scheduled.</p>
+                <button
+                  type="button"
+                  className="invoice-detail__link-btn"
+                  onClick={() => setShowDeliveryModal(true)}
+                >
+                  Schedule delivery
+                </button>
+              </>
+            ) : (
+              <p className="invoice-detail__info-muted">No delivery job linked.</p>
             )}
+          </article>
+
+          <article className="invoice-detail__info-card">
+            <header className="invoice-detail__info-head">
+              <span className="invoice-detail__info-icon invoice-detail__info-icon--navy" aria-hidden="true">
+                <Fa icon={faFileInvoice} />
+              </span>
+              <h3>Invoice Details</h3>
+            </header>
+            <dl className="invoice-detail__dl">
+              <div><dt>Payments</dt><dd>{(invoice.payments || []).length}</dd></div>
+              <div><dt>Journal</dt><dd>{invoice.type === 'customer_invoice' ? 'Customer Invoices' : 'Vendor Bills'}</dd></div>
+              <div><dt>Tax</dt><dd>{invoiceIsVat ? `VAT ${companySettings.vatRate}%` : 'Non-VAT'}</dd></div>
+              <div><dt>Company</dt><dd>{companySettings.name}</dd></div>
+              <div><dt>Currency</dt><dd>{companySettings.currency || 'KES'}</dd></div>
+            </dl>
+            {existingOrc && (
+              <div className="mt-2">
+                <OrcStatusBadge release={existingOrc} onClick={() => setShowOrc(true)} />
+              </div>
+            )}
+            {existingOrc?.status === 'released' && (
+              <p className="invoice-detail__released-inline"><Fa icon={faCheck} /> Released</p>
+            )}
+          </article>
+        </section>
+
+        <section className="invoice-detail__tabs-card" aria-label="Notes payments and activity">
+          <div className="invoice-detail__tabs" role="tablist">
+            {([
+              ['notes', `Notes`],
+              ['payments', 'Payments'],
+              ['activity', 'Activity'],
+            ] as const).map(([id, label]) => (
+              <button
+                key={id}
+                type="button"
+                role="tab"
+                aria-selected={detailTab === id}
+                className={`invoice-detail__tab ${detailTab === id ? 'is-active' : ''}`}
+                onClick={() => setDetailTab(id)}
+              >
+                {label}
+              </button>
+            ))}
           </div>
 
-          <Chatter
-            model="invoice"
-            recordId={invoice.id}
-            staffName={currentUser?.name || 'Staff'}
-            title="Internal Notes & Activities"
-            compact
-          />
+          <div className="invoice-detail__tab-panel" role="tabpanel">
+            {detailTab === 'notes' && (
+              <div className="invoice-detail__tab-stack">
+                {invoice.type === 'customer_invoice' && (
+                  <PaymentDetailsPicker
+                    value={getDocumentPaymentDetails(invoice.id)}
+                    onChange={next => setDocumentPaymentDetails(invoice.id, next)}
+                    bankAccounts={bankAccounts}
+                    isVat={invoiceIsVat}
+                    readOnly={docState === 'cancelled' || !canManageFinance}
+                    defaultOpen
+                  />
+                )}
+                <p className="invoice-detail__info-muted">
+                  {invoice.notes?.trim() || 'No notes yet. Customer-facing notes can be set when editing the invoice.'}
+                </p>
+                {invoice.type === 'customer_invoice' && (
+                  <DocumentEmailSendHistory
+                    documentId={invoice.id}
+                    documentType="invoice"
+                    refreshKey={emailHistoryKey}
+                    title="Invoice email history"
+                  />
+                )}
+              </div>
+            )}
 
-          {invoice.type === 'customer_invoice' && (
-            <DocumentEmailSendHistory
-              documentId={invoice.id}
-              documentType="invoice"
-              refreshKey={emailHistoryKey}
-              title="Invoice email history"
-            />
-          )}
-        </div>
+            {detailTab === 'payments' && (
+              (invoice.payments || []).length > 0 ? (
+                <div className="invoice-detail__pay-list">
+                  {(invoice.payments || []).map(pay => (
+                    <div key={pay.id} className="invoice-detail__pay-row">
+                      <div>
+                        <p className="invoice-detail__pay-method">{pay.method.replace('_', ' ')}</p>
+                        <p className="invoice-detail__pay-meta">
+                          {fmtDate(pay.date)} · {pay.recordedBy}{pay.reference ? ` · ${pay.reference}` : ''}
+                        </p>
+                      </div>
+                      <span className="invoice-detail__pay-amount">{fmtKes(pay.amount)}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="invoice-detail__info-muted">No payments recorded yet.</p>
+              )
+            )}
+
+            {detailTab === 'activity' && (
+              <Chatter
+                model="invoice"
+                recordId={invoice.id}
+                staffName={currentUser?.name || 'Staff'}
+                title="Internal Notes & Activities"
+                compact
+              />
+            )}
+          </div>
+        </section>
       </div>
 
       {showSendModal && (
