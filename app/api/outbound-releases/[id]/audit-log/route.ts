@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import type { Prisma } from '@prisma/client'
 import prisma from '@/lib/prisma'
 import { requireRole, withApiErrorHandling } from '@/lib/auth/api'
 import { loadAppState, saveStoreKeys } from '@/lib/server-store'
@@ -42,6 +43,9 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
     const performedAt = body.performedAt ? new Date(body.performedAt) : new Date()
     const logId = body.logId && /^[0-9a-f-]{36}$/i.test(body.logId) ? body.logId : undefined
+    const metadata = body.metadata
+      ? (JSON.parse(JSON.stringify(body.metadata)) as Prisma.InputJsonValue)
+      : undefined
     const log = await prisma.outboundReleaseLog.create({
       data: {
         ...(logId ? { id: logId } : {}),
@@ -52,7 +56,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         performedById,
         performedAt,
         notes: body.notes ? String(body.notes) : null,
-        ...(body.metadata ? { metadata: body.metadata } : {}),
+        ...(metadata !== undefined ? { metadata } : {}),
       },
     })
 
