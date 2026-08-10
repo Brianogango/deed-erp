@@ -1,13 +1,19 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
-  DIA_ASK_PLACEHOLDER,
-  DIA_EMPTY_HINT,
   DIA_FULL_NAME,
   DIA_SHORT_NAME,
   DIA_TAGLINE,
 } from '@/lib/jarvis/branding'
+import type { DiaActionCard } from '@/lib/jarvis/actions'
+import {
+  DIA_MODES,
+  moduleFromPathname,
+  startersForMode,
+  type DiaMode,
+  type DiaPageContext,
+} from '@/lib/jarvis/modes'
 
 interface AnswerSource {
   label: string
@@ -22,12 +28,15 @@ interface ChatMessage {
   role: 'user' | 'assistant'
   content: string
   sources?: AnswerSource[]
+  actions?: DiaActionCard[]
   toolCalls?: { toolName: string; allowed: boolean; error?: string | null }[]
 }
 
 interface JarvisPanelProps {
   open: boolean
   onClose: () => void
+  onOpen?: () => void
+  pathname?: string
 }
 
 type SpeechRecognitionLike = {
@@ -58,9 +67,129 @@ function formatSourceChip(s: AnswerSource): string {
   return bits.join(' · ')
 }
 
+function formatKes(n: number): string {
+  return `KES ${Math.round(n).toLocaleString('en-KE')}`
+}
+
+async function copyText(text: string): Promise<boolean> {
+  try {
+    await navigator.clipboard.writeText(text)
+    return true
+  } catch {
+    return false
+  }
+}
+
+function ActionCards({
+  actions,
+  onCopied,
+}: {
+  actions: DiaActionCard[]
+  onCopied: (label: string) => void
+}) {
+  if (!actions.length) return null
+
+  return (
+    <div className="mt-2 space-y-2">
+      <p className="text-[10px] font-bold uppercase tracking-wide text-[var(--text-4)]">Actions</p>
+      {actions.map((action, i) => {
+        if (action.type === 'draft_message') {
+          const payload = action.subject
+            ? `Subject: ${action.subject}\n\n${action.body}`
+            : action.body
+          return (
+            <div
+              key={i}
+              className="rounded-xl border border-[var(--border-lt)] bg-[var(--bg-card)] p-2 space-y-1.5"
+            >
+              <p className="text-[10px] font-semibold text-[var(--text-2)]">
+                Draft {action.channel}
+                {action.recipientName ? ` · ${action.recipientName}` : ''}
+              </p>
+              {action.subject && (
+                <p className="text-[10px] text-[var(--text-3)]">Subject: {action.subject}</p>
+              )}
+              <pre className="max-h-32 overflow-auto whitespace-pre-wrap text-[10px] text-[var(--text-1)]">
+                {action.body}
+              </pre>
+              <button
+                type="button"
+                className="btn-secondary px-2 py-1 text-[10px]"
+                onClick={async () => {
+                  const ok = await copyText(payload)
+                  onCopied(ok ? 'Draft copied' : 'Copy failed')
+                }}
+              >
+                Copy draft
+              </button>
+            </div>
+          )
+        }
+
+        if (action.type === 'draft_quotation') {
+          return (
+            <div
+              key={i}
+              className="rounded-xl border border-[var(--border-lt)] bg-[var(--bg-card)] p-2 space-y-1.5"
+            >
+              <p className="text-[10px] font-semibold text-[var(--text-2)]">
+                Draft quotation · {action.companyName}
+              </p>
+              <p className="text-[10px] text-[var(--text-3)]">
+                {action.lineCount} line{action.lineCount === 1 ? '' : 's'} · {formatKes(action.totalAmount)}
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                <button
+                  type="button"
+                  className="btn-secondary px-2 py-1 text-[10px]"
+                  onClick={async () => {
+                    const ok = await copyText(JSON.stringify(action.draftQuote, null, 2))
+                    onCopied(ok ? 'Quote JSON copied' : 'Copy failed')
+                  }}
+                >
+                  Copy JSON
+                </button>
+                <a
+                  href="/sales"
+                  className="btn-primary px-2 py-1 text-[10px] inline-flex items-center"
+                >
+                  Open Sales
+                </a>
+              </div>
+            </div>
+          )
+        }
+
+        return (
+          <div
+            key={i}
+            className="rounded-xl border border-[var(--border-lt)] bg-[var(--bg-card)] p-2 space-y-1"
+          >
+            <p className="text-[10px] font-semibold text-[var(--text-2)]">Sales@ lead import</p>
+            <p className="text-[10px] text-[var(--text-3)]">
+              Imported {action.imported}
+              {action.skipped ? ` · skipped ${action.skipped}` : ''}
+            </p>
+            {action.message && (
+              <p className="text-[10px] text-[var(--text-3)]">{action.message}</p>
+            )}
+            <a
+              href="/crm"
+              className="btn-secondary px-2 py-1 text-[10px] inline-flex items-center"
+            >
+              Review in CRM
+            </a>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 // Slide-over chat panel. Talks only to /api/jarvis/*, never touches any
 // existing module's state — fully additive UI.
-export default function JarvisPanel({ open, onClose }: JarvisPanelProps) {
+export default function JarvisPanel({ open, onClose, pathname }: JarvisPanelProps) {
+  const [mode, setMode] = useState<DiaMode>('assist')
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [conversationId, setConversationId] = useState<string | null>(null)
   const [input, setInput] = useState('')
@@ -68,17 +197,44 @@ export default function JarvisPanel({ open, onClose }: JarvisPanelProps) {
   const [listening, setListening] = useState(false)
   const [speakReplies, setSpeakReplies] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [statusNote, setStatusNote] = useState<string | null>(null)
   const [voiceSupported, setVoiceSupported] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null)
+  const speakRepliesRef = useRef(speakReplies)
+  const modeRef = useRef(mode)
+
+  const pageContext: DiaPageContext = useMemo(
+    () => ({
+      pathname: pathname || '/',
+      module: moduleFromPathname(pathname || '/'),
+    }),
+    [pathname],
+  )
+
+  const modeMeta = DIA_MODES.find(m => m.id === mode) ?? DIA_MODES[0]
+  const starters = useMemo(() => startersForMode(mode, pageContext), [mode, pageContext])
+
+  useEffect(() => {
+    speakRepliesRef.current = speakReplies
+  }, [speakReplies])
+
+  useEffect(() => {
+    modeRef.current = mode
+  }, [mode])
 
   useEffect(() => {
     setVoiceSupported(Boolean(getSpeechRecognitionCtor()))
   }, [])
 
+  // Voice mode defaults to spoken replies; leaving Voice does not force-off if user enabled it.
+  useEffect(() => {
+    if (mode === 'voice') setSpeakReplies(true)
+  }, [mode])
+
   useEffect(() => {
     if (open) scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' })
-  }, [messages, open])
+  }, [messages, open, statusNote])
 
   useEffect(() => {
     return () => {
@@ -91,7 +247,7 @@ export default function JarvisPanel({ open, onClose }: JarvisPanelProps) {
   }, [])
 
   function speakText(text: string) {
-    if (!speakReplies || typeof window === 'undefined' || !window.speechSynthesis) return
+    if (!speakRepliesRef.current || typeof window === 'undefined' || !window.speechSynthesis) return
     try {
       window.speechSynthesis.cancel()
       const utter = new SpeechSynthesisUtterance(text.slice(0, 600))
@@ -106,6 +262,7 @@ export default function JarvisPanel({ open, onClose }: JarvisPanelProps) {
     const text = (overrideText ?? input).trim()
     if (!text || sending) return
     setError(null)
+    setStatusNote(null)
     setInput('')
     setSending(true)
 
@@ -116,7 +273,12 @@ export default function JarvisPanel({ open, onClose }: JarvisPanelProps) {
       const res = await fetch('/api/jarvis/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ conversationId, message: text }),
+        body: JSON.stringify({
+          conversationId,
+          message: text,
+          mode: modeRef.current,
+          pageContext,
+        }),
       })
       const data = await res.json()
 
@@ -133,6 +295,7 @@ export default function JarvisPanel({ open, onClose }: JarvisPanelProps) {
           role: 'assistant',
           content: data.reply,
           sources: data.sources,
+          actions: Array.isArray(data.actions) ? data.actions : [],
           toolCalls: data.toolCalls,
         },
       ])
@@ -185,6 +348,7 @@ export default function JarvisPanel({ open, onClose }: JarvisPanelProps) {
       recognition.start()
       setListening(true)
       setError(null)
+      setStatusNote('Listening…')
     } catch {
       setError('Could not start the microphone.')
       setListening(false)
@@ -202,6 +366,21 @@ export default function JarvisPanel({ open, onClose }: JarvisPanelProps) {
     setConversationId(null)
     setMessages([])
     setError(null)
+    setStatusNote(null)
+  }
+
+  function selectMode(next: DiaMode) {
+    setMode(next)
+    setStatusNote(null)
+    setError(null)
+    if (listening && recognitionRef.current) {
+      try {
+        recognitionRef.current.stop()
+      } catch {
+        /* ignore */
+      }
+      setListening(false)
+    }
   }
 
   if (!open) return null
@@ -219,14 +398,18 @@ export default function JarvisPanel({ open, onClose }: JarvisPanelProps) {
         aria-label={`${DIA_SHORT_NAME} — ${DIA_FULL_NAME}`}
       >
         <div className="flex items-center justify-between gap-2 border-b border-[var(--border-lt)] px-4 py-3">
-          <div className="flex items-center gap-2">
-            <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-[var(--primary)] text-[10px] font-extrabold text-white">{DIA_SHORT_NAME}</span>
-            <div>
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-[var(--primary)] text-[10px] font-extrabold text-white">
+              {DIA_SHORT_NAME}
+            </span>
+            <div className="min-w-0">
               <p className="text-sm font-bold text-[var(--text-1)]">{DIA_SHORT_NAME}</p>
-              <p className="text-[10px] text-[var(--text-4)]">{DIA_FULL_NAME} · {DIA_TAGLINE}</p>
+              <p className="truncate text-[10px] text-[var(--text-4)]">
+                {DIA_FULL_NAME} · {DIA_TAGLINE}
+              </p>
             </div>
           </div>
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1 shrink-0">
             <button
               className="rounded-lg px-2 py-1 text-[11px] font-semibold text-[var(--text-3)] hover:bg-[var(--bg-surface)]"
               onClick={startNewChat}
@@ -244,10 +427,63 @@ export default function JarvisPanel({ open, onClose }: JarvisPanelProps) {
           </div>
         </div>
 
+        <div
+          className="flex gap-1 overflow-x-auto border-b border-[var(--border-lt)] px-3 py-2"
+          role="tablist"
+          aria-label={`${DIA_SHORT_NAME} modes`}
+        >
+          {DIA_MODES.map(m => {
+            const active = mode === m.id
+            return (
+              <button
+                key={m.id}
+                type="button"
+                role="tab"
+                aria-selected={active}
+                title={m.description}
+                onClick={() => selectMode(m.id)}
+                className={
+                  active
+                    ? 'shrink-0 rounded-lg bg-[var(--primary)] px-2.5 py-1 text-[10px] font-bold text-white'
+                    : 'shrink-0 rounded-lg px-2.5 py-1 text-[10px] font-semibold text-[var(--text-3)] hover:bg-[var(--bg-surface)]'
+                }
+              >
+                {m.short}
+              </button>
+            )
+          })}
+        </div>
+
         <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
           {messages.length === 0 && (
-            <div className="rounded-2xl border border-[var(--border-lt)] bg-[var(--bg-surface)] p-4 text-xs text-[var(--text-3)]">
-              {DIA_EMPTY_HINT}
+            <div className="rounded-2xl border border-[var(--border-lt)] bg-[var(--bg-surface)] p-4 space-y-3">
+              <div>
+                <p className="text-xs font-bold text-[var(--text-1)]">
+                  {DIA_SHORT_NAME} {modeMeta.label}
+                </p>
+                <p className="mt-1 text-xs text-[var(--text-3)]">{modeMeta.emptyHint}</p>
+                {mode === 'assist' && pageContext.module && (
+                  <p className="mt-1 text-[10px] text-[var(--text-4)]">
+                    Context: {pageContext.module}
+                    {pageContext.pathname ? ` · ${pageContext.pathname}` : ''}
+                  </p>
+                )}
+              </div>
+              {starters.length > 0 && (
+                <div className="flex flex-wrap gap-1.5">
+                  {starters.map(s => (
+                    <button
+                      key={s.label}
+                      type="button"
+                      className="rounded-lg border border-[var(--border-lt)] bg-[var(--bg-card)] px-2 py-1 text-[10px] font-semibold text-[var(--text-2)] hover:border-[var(--primary)]"
+                      onClick={() => void sendMessage(s.prompt)}
+                      disabled={sending}
+                    >
+                      {s.label}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
@@ -263,7 +499,7 @@ export default function JarvisPanel({ open, onClose }: JarvisPanelProps) {
                 {m.content}
                 {m.sources && m.sources.length > 0 && (
                   <div className="mt-2 space-y-1">
-                    <p className="text-[9px] font-bold uppercase tracking-wide text-[var(--text-4)]">Sources</p>
+                    <p className="text-[10px] font-bold uppercase tracking-wide text-[var(--text-4)]">Sources</p>
                     <div className="flex flex-wrap gap-1">
                       {m.sources.map((s, i) => (
                         s.url ? (
@@ -274,8 +510,8 @@ export default function JarvisPanel({ open, onClose }: JarvisPanelProps) {
                             rel="noreferrer"
                             className={
                               s.kind === 'live'
-                                ? 'rounded-md bg-[var(--success-bg)] px-2 py-0.5 text-[9px] font-semibold text-[var(--success-text)]'
-                                : 'rounded-md bg-[var(--bg-card)] px-2 py-0.5 text-[9px] font-semibold text-[var(--text-2)] border border-[var(--border-lt)]'
+                                ? 'rounded-md bg-[var(--success-bg)] px-2 py-0.5 text-[10px] font-semibold text-[var(--success-text)]'
+                                : 'rounded-md bg-[var(--bg-card)] px-2 py-0.5 text-[10px] font-semibold text-[var(--text-2)] border border-[var(--border-lt)]'
                             }
                             title={formatSourceChip(s)}
                           >
@@ -286,8 +522,8 @@ export default function JarvisPanel({ open, onClose }: JarvisPanelProps) {
                             key={i}
                             className={
                               s.kind === 'live'
-                                ? 'rounded-md bg-[var(--success-bg)] px-2 py-0.5 text-[9px] font-semibold text-[var(--success-text)]'
-                                : 'rounded-md bg-[var(--bg-card)] px-2 py-0.5 text-[9px] font-semibold text-[var(--text-2)] border border-[var(--border-lt)]'
+                                ? 'rounded-md bg-[var(--success-bg)] px-2 py-0.5 text-[10px] font-semibold text-[var(--success-text)]'
+                                : 'rounded-md bg-[var(--bg-card)] px-2 py-0.5 text-[10px] font-semibold text-[var(--text-2)] border border-[var(--border-lt)]'
                             }
                             title={formatSourceChip(s)}
                           >
@@ -298,6 +534,12 @@ export default function JarvisPanel({ open, onClose }: JarvisPanelProps) {
                     </div>
                   </div>
                 )}
+                {m.actions && m.actions.length > 0 && (
+                  <ActionCards
+                    actions={m.actions}
+                    onCopied={label => setStatusNote(label)}
+                  />
+                )}
                 {m.toolCalls && m.toolCalls.length > 0 && (
                   <div className="mt-2 flex flex-wrap gap-1">
                     {m.toolCalls.map((tc, i) => (
@@ -305,8 +547,8 @@ export default function JarvisPanel({ open, onClose }: JarvisPanelProps) {
                         key={i}
                         className={
                           tc.allowed
-                            ? 'rounded-full bg-[var(--success-bg)] px-2 py-0.5 text-[9px] font-bold text-[var(--success-text)]'
-                            : 'rounded-full bg-[var(--danger-bg)] px-2 py-0.5 text-[9px] font-bold text-[var(--danger-text)]'
+                            ? 'rounded-full bg-[var(--success-bg)] px-2 py-0.5 text-[10px] font-bold text-[var(--success-text)]'
+                            : 'rounded-full bg-[var(--danger-bg)] px-2 py-0.5 text-[10px] font-bold text-[var(--danger-text)]'
                         }
                         title={tc.error ?? undefined}
                       >
@@ -327,6 +569,12 @@ export default function JarvisPanel({ open, onClose }: JarvisPanelProps) {
             </div>
           )}
 
+          {statusNote && !error && (
+            <div className="rounded-xl border border-[var(--border-lt)] bg-[var(--bg-surface)] px-3 py-2 text-xs text-[var(--text-3)]">
+              {statusNote}
+            </div>
+          )}
+
           {error && (
             <div className="rounded-xl border border-[var(--danger-bg)] bg-[var(--danger-bg)] px-3 py-2 text-xs text-[var(--danger-text)]">
               {error}
@@ -335,31 +583,38 @@ export default function JarvisPanel({ open, onClose }: JarvisPanelProps) {
         </div>
 
         <div className="border-t border-[var(--border-lt)] p-3 space-y-2">
-          <label className="flex items-center gap-2 text-[10px] text-[var(--text-4)]">
-            <input
-              type="checkbox"
-              checked={speakReplies}
-              onChange={e => setSpeakReplies(e.target.checked)}
-            />
-            Speak replies (browser voice)
-          </label>
+          {(mode === 'voice' || speakReplies) && (
+            <label className="flex items-center gap-2 text-[10px] text-[var(--text-4)]">
+              <input
+                type="checkbox"
+                checked={speakReplies}
+                onChange={e => setSpeakReplies(e.target.checked)}
+              />
+              Speak replies (browser voice)
+            </label>
+          )}
+          {mode === 'voice' && listening && (
+            <p className="text-[10px] font-semibold text-[var(--danger)]">Listening…</p>
+          )}
           <div className="flex items-end gap-2">
             <textarea
               className="form-input flex-1 resize-none text-xs"
               rows={2}
-              placeholder={DIA_ASK_PLACEHOLDER}
+              placeholder={modeMeta.placeholder}
               value={input}
               onChange={e => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
               disabled={sending}
             />
-            {voiceSupported && (
+            {(mode === 'voice' || voiceSupported) && voiceSupported && (
               <button
                 type="button"
                 className={
                   listening
                     ? 'btn-primary px-3 py-2 text-xs bg-[var(--danger)] border-[var(--danger)]'
-                    : 'btn-secondary px-3 py-2 text-xs'
+                    : mode === 'voice'
+                      ? 'btn-primary px-3 py-2 text-xs'
+                      : 'btn-secondary px-3 py-2 text-xs'
                 }
                 onClick={toggleMic}
                 disabled={sending}

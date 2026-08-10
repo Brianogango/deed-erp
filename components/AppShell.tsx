@@ -749,7 +749,7 @@ function AppContent({ children }: { children: React.ReactNode }) {
 
       {/* DIA — Deed Intelligence Assistant overlay, gated by module access like any other module */}
       {hasModuleAccess(currentUser, 'jarvis') && (
-        <JarvisPanel open={jarvisOpen} onClose={() => setJarvisOpen(false)} />
+        <JarvisPanel open={jarvisOpen} onClose={() => setJarvisOpen(false)} pathname={pathname} />
       )}
     </div>
   )

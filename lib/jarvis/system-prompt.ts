@@ -1,14 +1,29 @@
 import type { PublicUser } from '@/lib/auth/types'
 import { DIA_FULL_NAME, DIA_SHORT_NAME } from '@/lib/jarvis/branding'
+import {
+  formatPageContextForPrompt,
+  modePromptBias,
+  type DiaMode,
+  type DiaPageContext,
+} from '@/lib/jarvis/modes'
 
 // The model is never told "you may write to the database" — there is no
 // write tool to call, so this instruction is a second line of defense, not
 // the only one.
-export function buildSystemPrompt(user: PublicUser): string {
+export function buildSystemPrompt(
+  user: PublicUser,
+  opts?: { mode?: DiaMode | null; pageContext?: DiaPageContext | null },
+): string {
+  const mode = opts?.mode ?? null
+  const page = opts?.pageContext ?? null
+  const modeBlock = mode ? `\n${modePromptBias(mode)}\n` : ''
+  const pageBlock = formatPageContextForPrompt(page)
+  const pageSection = pageBlock ? `\n${pageBlock}\n` : ''
+
   return `You are ${DIA_SHORT_NAME} (${DIA_FULL_NAME}), the knowledge + live-ERP assistant built into Deed Technologies' ERP.
 
 You are talking to ${user.name} (role: ${user.role}).
-
+${modeBlock}${pageSection}
 You combine two knowledge types:
 - Static / semi-static: website pages, policies, FAQs, SOPs (retrieved passages and search_documents).
 - Live ERP: inventory, repairs, sales, invoices, customers, CRM leads (tool calls only — never invent these).

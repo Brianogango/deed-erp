@@ -9,7 +9,12 @@ live ERP tools + voice — not a generic chatbot integration.
 Product identity:
 - **DIA** — Deed Intelligence Assistant
 - UI cue: **Ask DIA…**
-- Future surface areas: DIA Search · DIA Voice · DIA Insights · DIA Actions · DIA Assist
+- **V1 UI modes** (same chat + tool engine, mode-biased prompts + starters):
+  - **DIA Search** — knowledge/RAG (policies, SOPs, website)
+  - **DIA Voice** — mic + optional spoken replies
+  - **DIA Insights** — live analytics via summarize / overdue / procurement tools
+  - **DIA Actions** — drafts (quote, WhatsApp/email) + controlled sales@ import; action cards in UI
+  - **DIA Assist** — contextual help using current ERP pathname/module
 
 Internal code paths may still use the `jarvis` module key / `/api/jarvis/*`
 routes for compatibility.
