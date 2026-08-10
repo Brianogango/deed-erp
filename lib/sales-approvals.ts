@@ -86,15 +86,22 @@ export function processApproval(
   approverId: string,
   approverName: string,
   decision: 'approved' | 'rejected',
-  comments?: string
+  comments?: string,
+  approverRole?: string,
 ): ApprovalRequest {
   const currentLevel = request.approvers.find(a => a.level === request.currentLevel)
   
   if (!currentLevel) {
     throw new Error('Invalid approval level')
   }
+
+  // Prefer the snapshot list, but also allow anyone currently holding the
+  // required role (covers stale approverIds when users were missing at create).
+  const authorized =
+    currentLevel.approverIds.includes(approverId)
+    || (Boolean(approverRole) && approverRole === currentLevel.role)
   
-  if (!currentLevel.approverIds.includes(approverId)) {
+  if (!authorized) {
     throw new Error('User not authorized to approve at this level')
   }
   
@@ -153,16 +160,10 @@ export function processApproval(
  */
 export function getPendingApprovals(
   allRequests: ApprovalRequest[],
-  userId: string
+  userId: string,
+  userRole?: string,
 ): ApprovalRequest[] {
-  return allRequests.filter(request => {
-    if (request.status !== 'pending') return false
-    
-    const currentLevel = request.approvers.find(a => a.level === request.currentLevel)
-    if (!currentLevel) return false
-    
-    return currentLevel.approverIds.includes(userId)
-  })
+  return allRequests.filter(request => canApprove(request, userId, userRole))
 }
 
 /**
@@ -170,14 +171,34 @@ export function getPendingApprovals(
  */
 export function canApprove(
   request: ApprovalRequest,
-  userId: string
+  userId: string,
+  userRole?: string,
 ): boolean {
   if (request.status !== 'pending') return false
   
   const currentLevel = request.approvers.find(a => a.level === request.currentLevel)
   if (!currentLevel) return false
-  
-  return currentLevel.approverIds.includes(userId)
+
+  if (currentLevel.approverIds.includes(userId)) return true
+  if (userRole && currentLevel.role === userRole) return true
+  return false
+}
+
+/** User ids who should be notified for the current approval level. */
+export function approvalRecipientIds(
+  request: ApprovalRequest,
+  users: Array<{ id: string; role: string }>,
+): string[] {
+  const currentLevel = request.approvers.find(a => a.level === request.currentLevel)
+  if (!currentLevel) return []
+  const fromSnapshot = currentLevel.approverIds ?? []
+  const fromRole = users.filter(u => u.role === currentLevel.role).map(u => u.id)
+  return [...new Set([...fromSnapshot, ...fromRole].filter(Boolean))]
+}
+
+export function approvalDocumentPath(request: ApprovalRequest): string {
+  if (request.documentType === 'purchase_order') return `/purchases?id=${request.documentId}`
+  return `/sales?id=${request.documentId}`
 }
 
 export type SalesOrderStockCheckOptions = {

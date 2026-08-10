@@ -21,6 +21,8 @@ import {
   computeConfirmBackorderLines,
   getPendingApprovals,
   processApproval,
+  approvalRecipientIds,
+  approvalDocumentPath,
 } from '@/lib/sales-approvals'
 import { computeSaleOrderApprovalTriggers } from '@/lib/sales/margin-approval'
 import { allocateSalesReturn } from '@/lib/sales/return-allocation'
@@ -8723,11 +8725,12 @@ const storeCtx: AppState = {
         setQuotes(prev => prev.map(q => q.id === id ? updatedQuote : q))
         sync(`/api/quotes/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updatedQuote) })
         notifyUsers({
-          recipients: request.approvers[0]?.approverIds ?? [],
+          recipients: approvalRecipientIds(request, users),
           type: 'system',
           title: `Quote approval needed: ${existing.ref ?? existing.quoteNumber}`,
           body: request.details.reason,
           module: 'sales',
+          path: `/sales?id=${id}`,
           icon: '⚠️',
           entityKey: `quote:${id}:approval:${request.id}`,
           excludeUserId: currentUserId,
@@ -10483,6 +10486,19 @@ const storeCtx: AppState = {
         if (createdRequests.length > 0) {
           setApprovalRequests(prev => [...createdRequests, ...prev])
           setSaleOrders(prev => prev.map(s => s.id !== id ? s : { ...s, approvalStatus: 'pending' }))
+          for (const request of createdRequests) {
+            notifyUsers({
+              recipients: approvalRecipientIds(request, users),
+              type: 'system',
+              title: `Approval needed: ${request.type.replace(/_/g, ' ')}`,
+              body: `${so.ref} — ${String(request.details?.reason ?? 'Special pricing / discount / credit approval required')}`,
+              module: 'sales',
+              path: approvalDocumentPath(request),
+              icon: '⚠️',
+              entityKey: `approval:${request.id}`,
+              excludeUserId: user.id,
+            })
+          }
           showToast(
             `Approval required: ${createdRequests.map(r => r.type.replace(/_/g, ' ')).join(', ')}`,
             'error',
@@ -12158,6 +12174,17 @@ const storeCtx: AppState = {
           const updated = next.find(row => row.id === id)
           if (updated) sync(`/api/purchase-orders/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
           return next
+        })
+        notifyUsers({
+          recipients: approvalRecipientIds(request, users),
+          type: 'system',
+          title: `PO approval needed: ${po.ref}`,
+          body: request.details.reason,
+          module: 'purchase',
+          path: approvalDocumentPath(request),
+          icon: '⚠️',
+          entityKey: `approval:${request.id}`,
+          excludeUserId: user!.id,
         })
         addAuditLog('purchase_approval_required', po.ref, request.details.reason)
         showToast(`Approval required — PO total exceeds ${fmtKes(threshold)}`, 'info')
@@ -17104,6 +17131,17 @@ const storeCtx: AppState = {
       )
       
       setApprovalRequests(prev => [...prev, request])
+      notifyUsers({
+        recipients: approvalRecipientIds(request, users),
+        type: 'system',
+        title: `Approval needed: ${type.replace(/_/g, ' ')}`,
+        body: String(request.details?.reason ?? `${type} approval requested`),
+        module: request.documentType === 'purchase_order' ? 'purchase' : 'sales',
+        path: approvalDocumentPath(request),
+        icon: '⚠️',
+        entityKey: `approval:${request.id}`,
+        excludeUserId: user.id,
+      })
       addAuditLog('approval_request', request.ref, `${type} approval by ${user.name}`)
       showToast('Approval request created', 'info')
       
@@ -17231,7 +17269,7 @@ const storeCtx: AppState = {
       if (!request) return
       let updatedRequest: ApprovalRequest
       try {
-        updatedRequest = processApproval(request, user.id, user.name, decision, comments)
+        updatedRequest = processApproval(request, user.id, user.name, decision, comments, user.role)
       } catch (err) {
         showToast(err instanceof Error ? err.message : 'Unable to process approval', 'error')
         return
@@ -17269,6 +17307,33 @@ const storeCtx: AppState = {
             return updated
           }))
         }
+        if (request.requestedBy && request.requestedBy !== user.id) {
+          notifyUsers({
+            recipients: [request.requestedBy],
+            type: 'system',
+            title: `Approval ${decision}: ${request.documentRef}`,
+            body: `${request.type.replace(/_/g, ' ')} ${decision} by ${user.name}${comments ? ` — ${comments}` : ''}`,
+            module: request.documentType === 'purchase_order' ? 'purchase' : 'sales',
+            path: approvalDocumentPath(request),
+            icon: decision === 'approved' ? '✅' : '❌',
+            entityKey: `approval:${request.id}:decision`,
+            excludeUserId: user.id,
+          })
+        }
+        // If multi-level and still pending, notify the next level.
+        if (updatedRequest.status === 'pending' && updatedRequest.currentLevel !== request.currentLevel) {
+          notifyUsers({
+            recipients: approvalRecipientIds(updatedRequest, users),
+            type: 'system',
+            title: `Approval needed: ${updatedRequest.type.replace(/_/g, ' ')}`,
+            body: `${updatedRequest.documentRef} — next level after ${user.name}`,
+            module: updatedRequest.documentType === 'purchase_order' ? 'purchase' : 'sales',
+            path: approvalDocumentPath(updatedRequest),
+            icon: '⚠️',
+            entityKey: `approval:${updatedRequest.id}:level:${updatedRequest.currentLevel}`,
+            excludeUserId: user.id,
+          })
+        }
         addAuditLog(`approval_${decision}`, request.ref, `${decision} by ${user.name}`)
         showToast(`Request ${decision}`, decision === 'approved' ? 'success' : 'error')
       }
@@ -17277,7 +17342,7 @@ const storeCtx: AppState = {
     getPendingApprovalsForUser: () => {
       const user = currentUser()
       if (!user) return []
-      return getPendingApprovals(approvalRequests, user.id)
+      return getPendingApprovals(approvalRequests, user.id, user.role)
     },
 
     // ── Returns / RMA ─────────────────────────────────────────────────────────

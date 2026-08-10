@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect, useMemo, useRef, Suspense, useCallback, type FormEvent } from 'react'
+import { useState, useEffect, useMemo, useRef, Suspense, useCallback, Fragment, type FormEvent } from 'react'
 import { useSearchParams, useRouter, usePathname } from 'next/navigation'
 import {
   faClipboardCheck,
@@ -108,6 +108,7 @@ import {
   stockShortageLines,
   type ConfirmQuotationMode,
 } from '@/lib/sales/confirm-quotation'
+import { canApprove } from '@/lib/sales-approvals'
 import { finishUxTask, startUxTask, trackUxEvent } from '@/lib/ux-telemetry'
 import {
   SALE_STATUS_BAR,
@@ -350,6 +351,7 @@ function SalesContent() {
     updateDelivery, outboundReleases, initRelease,
     getDocumentPaymentDetails, setDocumentPaymentDetails,
     issueCreditNoteFromSaleOrder,
+    approveRequest,
   } = useSalesStore()
 
   // The module lands directly on the operational order list. The old
@@ -2029,6 +2031,9 @@ function SalesContent() {
                               && ['discount', 'credit_override', 'backorder', 'special_pricing'].includes(r.type)
                               && r.status === 'pending',
                             )
+                            const actionableApprovals = pendingApprovals.filter(r =>
+                              canApprove(r, currentUser?.id ?? '', currentUser?.role),
+                            )
                             const noLines = !activeOrder.lines.filter((l: any) => l.lineType !== 'section').length
                             const confirmBlocked = confirmingSO || noLines || pendingApprovals.length > 0
                             const confirmTitle = noLines
@@ -2037,15 +2042,28 @@ function SalesContent() {
                                 ? `Resolve ${pendingApprovals.length} pending approval(s) first`
                                 : 'Confirm renames this quotation to a Sales Order (same document — no second order)'
                             return (
-                              <button
-                                type="button"
-                                className={activeOrder.status === 'quotation_sent' || saleOrderIsAccepted(activeOrder) ? 'sp-btn sp-btn-primary' : 'sp-btn'}
-                                disabled={confirmBlocked}
-                                title={confirmTitle}
-                                onClick={openConfirmQuoteDialog}
-                              >
-                                {confirmingSO ? 'Confirming…' : 'Confirm quotation'}
-                              </button>
+                              <>
+                                {actionableApprovals.map(r => (
+                                  <button
+                                    key={`approve-${r.id}`}
+                                    type="button"
+                                    className="sp-btn sp-btn-primary"
+                                    title={`Approve ${r.type.replace(/_/g, ' ')} for ${activeOrder.ref}`}
+                                    onClick={() => approveRequest(r.id, 'approved')}
+                                  >
+                                    Approve {r.type.replace(/_/g, ' ')}
+                                  </button>
+                                ))}
+                                <button
+                                  type="button"
+                                  className={activeOrder.status === 'quotation_sent' || saleOrderIsAccepted(activeOrder) ? 'sp-btn sp-btn-primary' : 'sp-btn'}
+                                  disabled={confirmBlocked}
+                                  title={confirmTitle}
+                                  onClick={openConfirmQuoteDialog}
+                                >
+                                  {confirmingSO ? 'Confirming…' : 'Confirm quotation'}
+                                </button>
+                              </>
                             )
                           })()}
                       </>)}
@@ -2181,8 +2199,47 @@ function SalesContent() {
                                 )
                                 .map(r => r.type.replace(/_/g, ' '))
                                 .join(' · ') || 'Pending sales approval'}
-                              {' — ask Director/Finance to approve, then confirm.'}
+                              {' — Director/Finance must approve, then confirm.'}
                             </div>
+                            {(() => {
+                              const pending = (approvalRequests ?? []).filter(r =>
+                                r.documentId === activeOrder.id
+                                && ['discount', 'credit_override', 'backorder', 'special_pricing'].includes(r.type)
+                                && r.status === 'pending',
+                              )
+                              const actionable = pending.filter(r =>
+                                canApprove(r, currentUser?.id ?? '', currentUser?.role),
+                              )
+                              if (actionable.length === 0) {
+                                return (
+                                  <div className="text-[11px] mt-1 text-[var(--sp-text-3)]">
+                                    Waiting on {pending.map(r => r.approvers.find(a => a.level === r.currentLevel)?.role ?? 'approver').join(', ') || 'approver'}.
+                                  </div>
+                                )
+                              }
+                              return (
+                                <div className="flex flex-wrap gap-2 mt-2">
+                                  {actionable.map(r => (
+                                    <Fragment key={r.id}>
+                                      <button
+                                        type="button"
+                                        className="sp-btn sp-btn-primary"
+                                        onClick={() => approveRequest(r.id, 'approved')}
+                                      >
+                                        Approve {r.type.replace(/_/g, ' ')}
+                                      </button>
+                                      <button
+                                        type="button"
+                                        className="sp-btn"
+                                        onClick={() => approveRequest(r.id, 'rejected', 'Rejected from quotation screen')}
+                                      >
+                                        Reject
+                                      </button>
+                                    </Fragment>
+                                  ))}
+                                </div>
+                              )
+                            })()}
                           </div>
                         </div>
                       )}
