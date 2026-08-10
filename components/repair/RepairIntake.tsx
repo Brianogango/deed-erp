@@ -2,7 +2,7 @@
 'use client'
 
 import { useState, useMemo } from 'react'
-import { useOperationsStore, RepairOrder, fmtDate } from '@/lib/store'
+import { useOperationsStore, RepairOrder, fmtDate, fmtDateTime } from '@/lib/store'
 import { DIRECT_REPAIR_WAIVER_TEXT } from '@/lib/repair-path'
 import { diagnosisFeeAmount, isDiagnosisFeePolicyInEffect, resolveCustomerBillingType, resolveDiagnosisFee } from '@/lib/diagnosis-fee'
 import { Field, Input, Select, Textarea, Badge } from '@/components/ui'
@@ -167,6 +167,7 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
     ref: string
     clientName: string
     clientPhone: string
+    bookedAt: string
   } | null>(null)
 
   // ── Derived lookups ────────────────────────────────────────────────────────
@@ -452,6 +453,7 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
         ref: rep.ref,
         clientName: (cpName || customerName).trim(),
         clientPhone: (cpPhone || customerPhone).trim(),
+        bookedAt: rep.intakeDate,
       })
     } catch (err) {
       showToast('Failed to create repair job', 'error')
@@ -479,8 +481,11 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
           <Fa icon={faCheckCircle} className="text-4xl" />
         </div>
         <h2 className="text-2xl font-black tracking-tight mb-2" style={{ color: NAVY }}>Repair Job Booked!</h2>
-        <p className="text-sm font-medium mb-8 max-w-sm" style={{ color: 'var(--text-3)' }}>
+        <p className="text-sm font-medium mb-2 max-w-sm" style={{ color: 'var(--text-3)' }}>
           Ticket <span className="font-bold" style={{ color: CYAN }}>{successData.ref}</span> has been created. Share the tracking link below.
+        </p>
+        <p className="text-xs font-semibold mb-8" style={{ color: 'var(--text-2)' }}>
+          Booked {fmtDateTime(successData.bookedAt)}
         </p>
         <div className="w-full max-w-md rounded-2xl p-5 mb-8 border" style={{ background: 'var(--bg-card)', borderColor: 'var(--border)' }}>
           <p className="text-[10px] font-black uppercase tracking-widest mb-3" style={{ color: 'var(--text-3)' }}>Client Portal Link</p>

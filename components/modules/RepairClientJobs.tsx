@@ -3,7 +3,7 @@ import { useState, useMemo, useEffect } from 'react'
 import { DataTable, type ActiveFilterChip, type ColumnDef, type PrimaryFilterConfig } from '@/components/data-table'
 import { useRepair } from './repair/RepairContext'
 import { STATUS_LABELS, STATUS_COLORS } from './repair-config'
-import { fmtKes, fmtDate } from '@/lib/store'
+import { fmtKes, fmtDateTime } from '@/lib/store'
 import { printRepairSticker } from '@/lib/repair-sticker'
 import { sortRepairsNewestFirst } from '@/lib/repair-list-sort'
 import { ModuleHeader } from '@/components/ui'
@@ -101,7 +101,7 @@ function MobileRepairCard({ r, onSelect, outsourceJobs }: any) {
         </div>
         <div className="flex flex-col items-end gap-2 shrink-0">
           <RepairStatusBadge status={r.status} />
-          <span className="text-[10px] text-[var(--text-4)] font-medium tabular-nums">{fmtDate(r.intakeDate)}</span>
+          <span className="text-[10px] text-[var(--text-4)] font-medium tabular-nums">{fmtDateTime(r.intakeDate)}</span>
         </div>
       </div>
       <div className="flex items-center justify-between mt-2.5 pt-2 border-t border-[var(--border-lt)]">
@@ -379,8 +379,8 @@ export default function RepairClientJobs({ onNewIntake, onSelect }: { onNewIntak
       exportValue: r => r.assignedTechnicianName ?? 'Unassigned',
     },
     {
-      key: 'intakeDate', label: 'Intake Date', priority: 3, width: '100px',
-      render: r => <span className="text-[11px] font-bold text-[var(--text-2)] tabular-nums">{fmtDate(r.intakeDate)}</span>,
+      key: 'intakeDate', label: 'Booked', priority: 3, width: '140px',
+      render: r => <span className="text-[11px] font-bold text-[var(--text-2)] tabular-nums">{fmtDateTime(r.intakeDate)}</span>,
       sortValue: r => r.intakeDate || r.createdDate || '',
       exportValue: r => r.intakeDate,
     },

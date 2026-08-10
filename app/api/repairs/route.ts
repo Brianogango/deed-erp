@@ -5,6 +5,7 @@ import { getNextRepairRef } from '@/lib/repair-ref-counter'
 import type { RepairOrder } from '@/lib/store'
 import { parsePaginationParams, paginateArray } from '@/lib/api-pagination'
 import { repairDatesWriteError } from '@/lib/data-validation'
+import { ensureRepairIntakeTimestamp } from '@/lib/repair-datetime'
 
 function publicPhotoUrl(ref: string, index: number) {
   return `/api/portal/repair/${encodeURIComponent(ref)}/photos/${index}`
@@ -115,6 +116,10 @@ export async function POST(request: NextRequest) {
     const state = await loadAppState()
     const repairs = Array.isArray(state['deed_repairs_v2']) ? state['deed_repairs_v2'] as RepairOrder[] : []
 
+    // Always persist a full ISO datetime (date + time). Date-only strings get
+    // upgraded to "now" so booking never silently stores midnight-only values.
+    const intakeDate = ensureRepairIntakeTimestamp(body.intakeDate)
+
     // Create the new repair
     const repair: RepairOrder = {
       id: typeof body.id === 'string' && body.id.trim() ? body.id.trim() : `rep_${Date.now()}`,
@@ -127,11 +132,13 @@ export async function POST(request: NextRequest) {
       productName: String(body.productName),
       serialNumber: String(body.serialNumber ?? ''),
       intakeChannel: (body.intakeChannel === 'website' || body.intakeChannel === 'whatsapp' || body.intakeChannel === 'call' || body.intakeChannel === 'email' || body.intakeChannel === 'rider_pickup') ? body.intakeChannel as RepairOrder['intakeChannel'] : 'walk_in',
-      intakeDate: new Date().toISOString().slice(0, 10),
+      intakeDate,
       intakeNotes: '',
       issueDescription: String(body.issueDescription ?? ''),
       accessories: [],
       ...(body as Partial<RepairOrder>),
+      // Force full timestamp after body spread (body may carry date-only).
+      intakeDate,
     } as RepairOrder
 
     const dateErr = repairDatesWriteError(repair)

@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect, useRef, Suspense } from 'react'
-import { useCrmStore, Contact, SaleOrder, RepairOrder, Invoice, POSOrder, fmtDate, fmtKes } from '@/lib/store'
+import { useCrmStore, Contact, SaleOrder, RepairOrder, Invoice, POSOrder, fmtDate, fmtDateTime, fmtKes } from '@/lib/store'
 import { invoiceDocState, invoicePaymentStatus, isOpenInvoice, invoiceResidual, displayDocRef, PAYMENT_STATUS_LABELS } from '@/lib/odoo-sales-flow'
 import { guardSpreadsheetFile, guardSpreadsheetRows, SpreadsheetGuardError } from '@/lib/spreadsheet-guard'
 import { Badge, Modal, InfoRow, ModuleSkeleton } from '@/components/ui'
@@ -41,7 +41,7 @@ const contactSoColumns: ColumnDef<SaleOrder>[] = [
 
 const contactRepairColumns: ColumnDef<RepairOrder>[] = [
   { key: 'ref', label: 'Ref', priority: 1, width: '100px', render: r => <span className="font-mono text-[11px] font-semibold text-primary-600">{r.ref}</span>, accessor: r => r.ref },
-  { key: 'date', label: 'Date', priority: 2, width: '100px', render: r => <span className="text-xs text-t3">{fmtDate(r.intakeDate)}</span>, accessor: r => r.intakeDate },
+  { key: 'date', label: 'Booked', priority: 2, width: '140px', render: r => <span className="text-xs text-t3">{fmtDateTime(r.intakeDate)}</span>, accessor: r => r.intakeDate },
   { key: 'device', label: 'Device', priority: 1, width: '1fr', render: r => (
     <div className="min-w-0">
       <p className="truncate text-xs text-t1" title={r.productName}>{r.productName}</p>
