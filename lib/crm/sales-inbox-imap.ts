@@ -155,6 +155,25 @@ export async function fetchSalesInboxEmails(opts: {
           autoSubmitted: headerValue(parsed.headers, 'auto-submitted'),
           listUnsubscribe: headerValue(parsed.headers, 'list-unsubscribe'),
           precedence: headerValue(parsed.headers, 'precedence'),
+          attachments: (parsed.attachments ?? [])
+            .filter(att => {
+              const name = String(att.filename || '').trim()
+              if (!name) return false
+              // Skip tiny related/inline CID images (signatures); keep real files.
+              if (att.related && (att.contentType || '').startsWith('image/') && (att.size ?? 0) < 40_000) {
+                return false
+              }
+              return (att.size ?? att.content?.length ?? 0) > 0
+            })
+            .slice(0, 10)
+            .map(att => ({
+              filename: String(att.filename || 'attachment').slice(0, 200),
+              contentType: String(att.contentType || 'application/octet-stream').slice(0, 120),
+              size: Number(att.size || att.content?.length || 0),
+              content: Buffer.isBuffer(att.content)
+                ? att.content
+                : Buffer.from(att.content || []),
+            })),
         })
       }
     } finally {

@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { getRequiredSession, withApiErrorHandling } from '@/lib/auth/api'
 import { loadAppState, saveStoreKeys } from '@/lib/server-store'
-import { pickRoundRobinOwner } from '@/lib/crm/sales-inbox-leads'
+import { pickRoundRobinOwner, pickStickyOwnerFromPriorLeads } from '@/lib/crm/sales-inbox-leads'
 
 const LEAD_INCLUDE = {
   owner: { select: { id: true, username: true, email: true } },
@@ -33,7 +33,7 @@ export async function POST(request: Request) {
     let ownerId = body.ownerId ?? session.user.id
 
     // When Auto-assign Leads is on and the client did not pick an owner,
-    // round-robin across active sales reps (same cursor as sales inbox).
+    // sticky-match same org/domain first, then round-robin.
     if (!body.ownerId) {
       const state = await loadAppState(['deed_systemSettings', 'deed_salesLeadRoundRobin'])
       const auto = state.deed_systemSettings && typeof state.deed_systemSettings === 'object'
@@ -45,15 +45,31 @@ export async function POST(request: Request) {
           select: { id: true },
           orderBy: { username: 'asc' },
         })
-        const last = state.deed_salesLeadRoundRobin && typeof state.deed_salesLeadRoundRobin === 'object'
-          ? String((state.deed_salesLeadRoundRobin as { lastOwnerId?: string }).lastOwnerId || '')
-          : ''
-        const next = pickRoundRobinOwner(reps.map(r => r.id), last || null)
-        if (next) {
-          ownerId = next
-          await saveStoreKeys({
-            deed_salesLeadRoundRobin: JSON.stringify({ lastOwnerId: next, updatedAt: new Date().toISOString() }),
-          })
+        const repIds = reps.map(r => r.id)
+        const prior = await prisma.lead.findMany({
+          where: { ownerId: { not: null } },
+          orderBy: { createdAt: 'desc' },
+          take: 200,
+          select: { ownerId: true, email: true, companyName: true },
+        })
+        const sticky = pickStickyOwnerFromPriorLeads(
+          prior,
+          { email: body.email, companyName: body.companyName },
+          repIds,
+        )
+        if (sticky) {
+          ownerId = sticky
+        } else {
+          const last = state.deed_salesLeadRoundRobin && typeof state.deed_salesLeadRoundRobin === 'object'
+            ? String((state.deed_salesLeadRoundRobin as { lastOwnerId?: string }).lastOwnerId || '')
+            : ''
+          const next = pickRoundRobinOwner(repIds, last || null)
+          if (next) {
+            ownerId = next
+            await saveStoreKeys({
+              deed_salesLeadRoundRobin: JSON.stringify({ lastOwnerId: next, updatedAt: new Date().toISOString() }),
+            })
+          }
         }
       }
     }

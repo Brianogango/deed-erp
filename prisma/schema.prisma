@@ -1349,6 +1349,13 @@ model Lead {
   notes         String?
   /** IMAP Message-ID (or synthetic key) for inbound sales-inbox dedupe. */
   inboundMessageId String? @unique @map("inbound_message_id") @db.VarChar(500)
+  /** Structured inbound email context (sales@ → CRM). */
+  emailSubject       String?   @map("email_subject") @db.VarChar(500)
+  emailSnippet       String?   @map("email_snippet") @db.VarChar(500)
+  emailBody          String?   @map("email_body")
+  emailReceivedAt    DateTime? @map("email_received_at")
+  /** [{ id, name, size, contentType }] — files under .uploads/lead-attachments/<leadId>/ */
+  emailAttachments   Json?     @map("email_attachments")
   createdAt     DateTime @default(now()) @map("created_at")
   updatedAt     DateTime @updatedAt @map("updated_at")
 

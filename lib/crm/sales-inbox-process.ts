@@ -6,6 +6,7 @@ import { buildNotifyRows, type AppNotification } from '@/lib/in-app-notification
 import {
   draftLeadFromInboundEmail,
   pickRoundRobinOwner,
+  pickStickyOwnerFromPriorLeads,
   shouldSkipInboundEmail,
 } from '@/lib/crm/sales-inbox-leads'
 import {
@@ -14,6 +15,7 @@ import {
   resolveSalesImapConfig,
   salesInboxConfigured,
 } from '@/lib/crm/sales-inbox-imap'
+import { storeLeadEmailAttachments } from '@/lib/crm/lead-attachments'
 
 const RR_KEY = 'deed_salesLeadRoundRobin'
 const SALES_ROLES = ['sales_rep', 'sales'] as const
@@ -120,8 +122,26 @@ export async function processSalesInboxLeads(opts?: {
     const draft = draftLeadFromInboundEmail(mail)
     let ownerId: string | null = null
     if (result.autoAssign) {
-      ownerId = pickRoundRobinOwner(salesRepIds, lastOwnerId)
-      if (ownerId) lastOwnerId = ownerId
+      // Same organization/domain always keeps the same owner when possible.
+      const prior = await prisma.lead.findMany({
+        where: {
+          ownerId: { not: null },
+          OR: [
+            { email: { not: null } },
+            { companyName: { not: null } },
+          ],
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 200,
+        select: { ownerId: true, email: true, companyName: true },
+      })
+      const sticky = pickStickyOwnerFromPriorLeads(prior, draft, salesRepIds)
+      if (sticky) {
+        ownerId = sticky
+      } else {
+        ownerId = pickRoundRobinOwner(salesRepIds, lastOwnerId)
+        if (ownerId) lastOwnerId = ownerId
+      }
     }
 
     if (opts?.dryRun) {
@@ -147,9 +167,30 @@ export async function processSalesInboxLeads(opts?: {
           ownerId,
           notes: draft.notes,
           inboundMessageId: draft.inboundMessageId,
+          emailSubject: draft.emailSubject,
+          emailSnippet: draft.emailSnippet,
+          emailBody: draft.emailBody,
+          emailReceivedAt: draft.emailReceivedAt ? new Date(draft.emailReceivedAt) : null,
+          emailAttachments: [],
         },
         select: { id: true, name: true, email: true, ownerId: true },
       })
+
+      let attachmentMeta: Awaited<ReturnType<typeof storeLeadEmailAttachments>> = []
+      try {
+        attachmentMeta = await storeLeadEmailAttachments(lead.id, draft.attachments)
+        if (attachmentMeta.length > 0) {
+          await prisma.lead.update({
+            where: { id: lead.id },
+            data: { emailAttachments: attachmentMeta },
+          })
+        }
+      } catch (attErr) {
+        result.errors.push(
+          `${mail.messageId}: attachments ${attErr instanceof Error ? attErr.message : 'store failed'}`,
+        )
+      }
+
       result.created += 1
       result.createdLeads.push(lead)
       seenUids.push(mail.uid)
@@ -159,11 +200,13 @@ export async function processSalesInboxLeads(opts?: {
           const existingNotifs = Array.isArray(state.deed_notifications)
             ? state.deed_notifications as AppNotification[]
             : []
+          const subjectBit = draft.emailSubject ? ` · ${draft.emailSubject}` : ''
+          const attBit = attachmentMeta.length > 0 ? ` · ${attachmentMeta.length} attachment(s)` : ''
           const { next } = buildNotifyRows(existingNotifs, {
             recipients: [ownerId],
             type: 'assignment',
             title: 'New inbound sales lead',
-            body: `${lead.name}${lead.email ? ` · ${lead.email}` : ''} — from sales inbox`,
+            body: `${lead.name}${lead.email ? ` · ${lead.email}` : ''}${subjectBit}${attBit}`,
             module: 'crm',
             path: '/crm?tab=leads',
             entityKey: `lead:${lead.id}:inbound`,
@@ -174,6 +217,8 @@ export async function processSalesInboxLeads(opts?: {
           /* notification is best-effort */
         }
       }
+
+      // Sticky assignments intentionally do not advance the round-robin cursor.
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'lead create failed'
       // Unique violation → treat as duplicate

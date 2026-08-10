@@ -2,9 +2,12 @@ import { describe, expect, it } from 'vitest'
 import {
   draftLeadFromInboundEmail,
   normalizeMessageId,
+  organizationStickyKey,
   parseFromIdentity,
   pickRoundRobinOwner,
+  pickStickyOwnerFromPriorLeads,
   shouldSkipInboundEmail,
+  hydrateEmailContextFromNotes,
 } from '@/lib/crm/sales-inbox-leads'
 import { resolveSalesImapConfig } from '@/lib/crm/sales-inbox-imap'
 
@@ -57,6 +60,59 @@ describe('parseFromIdentity / draftLeadFromInboundEmail', () => {
     expect(draft.inboundMessageId).toContain('x@y')
     expect(draft.notes).toContain('RFQ laptops')
     expect(draft.notes).toContain('Please quote 5 units')
+    expect(draft.emailSubject).toBe('RFQ laptops')
+    expect(draft.emailSnippet).toContain('Please quote 5 units')
+    expect(draft.emailBody).toContain('Please quote 5 units')
+  })
+
+  it('uses subject as name for generic procurement mailboxes', () => {
+    const draft = draftLeadFromInboundEmail({
+      messageId: '<z@y>',
+      fromEmail: 'procurement@kijabehospital.org',
+      fromName: '',
+      subject: 'Laptop RFQ — August',
+      textBody: 'Kindly quote',
+    })
+    expect(draft.name).toBe('Laptop RFQ — August')
+    expect(draft.companyName).toMatch(/kijabe/i)
+  })
+})
+
+describe('sticky organization assignment', () => {
+  it('keys corporate domains together', () => {
+    expect(organizationStickyKey({ email: 'a@acme.co.ke' })).toBe('domain:acme.co.ke')
+    expect(organizationStickyKey({ email: 'b@acme.co.ke' })).toBe('domain:acme.co.ke')
+    expect(organizationStickyKey({ email: 'person@gmail.com' })).toBe('email:person@gmail.com')
+  })
+
+  it('reuses prior owner for same domain', () => {
+    const owner = pickStickyOwnerFromPriorLeads(
+      [
+        { ownerId: 'rep-1', email: 'alice@kijabehospital.org', companyName: 'Kijabe' },
+        { ownerId: 'rep-2', email: 'bob@other.org', companyName: 'Other' },
+      ],
+      { email: 'procurement@kijabehospital.org', companyName: 'Kijabehospital' },
+      ['rep-1', 'rep-2'],
+    )
+    expect(owner).toBe('rep-1')
+  })
+
+  it('returns null when no prior org match', () => {
+    expect(pickStickyOwnerFromPriorLeads(
+      [{ ownerId: 'rep-1', email: 'x@other.org', companyName: 'Other' }],
+      { email: 'new@brandnew.co.ke', companyName: 'Brandnew' },
+      ['rep-1'],
+    )).toBeNull()
+  })
+})
+
+describe('hydrateEmailContextFromNotes', () => {
+  it('pulls subject and body from legacy notes', () => {
+    const hydrated = hydrateEmailContextFromNotes(
+      'Re: Need quotation\n\nInbound email to sales@deed.co.ke\nSubject: Need quotation\n\nHello team',
+    )
+    expect(hydrated.emailSubject).toBe('Need quotation')
+    expect(hydrated.emailBody).toContain('Hello team')
   })
 })
 
