@@ -719,7 +719,7 @@ export const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
   multiUserRoles: true, enforceDeptAccess: true, auditLogs: true, fiscalYearStart: 'January',
   crmLeads: true, crmLeadScoring: false, crmTags: true, crmSourceTracking: true,
   crmPipelineStages: ['Inquiry Received', 'Assigned', 'Contacted', 'Qualified', 'Needs Confirmed', 'Quote Sent', 'Follow-up', 'Won', 'Lost'],
-  crmEnforceNextActivity: true, crmAutoAssignLeads: false, crmAutoFollowUpAfterQuote: true,
+  crmEnforceNextActivity: true, crmAutoAssignLeads: true, crmAutoFollowUpAfterQuote: true,
   salesQuotationTemplates: true, salesOptionalProducts: true, salesDigitalSignature: false,
   salesOnlineAcceptance: false, salesPricelists: true, salesDiscountControl: true, salesConfirmedQuotesToOrders: true,
   salesLockConfirmed: true,

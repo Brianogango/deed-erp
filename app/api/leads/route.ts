@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { getRequiredSession, withApiErrorHandling } from '@/lib/auth/api'
+import { loadAppState, saveStoreKeys } from '@/lib/server-store'
+import { pickRoundRobinOwner } from '@/lib/crm/sales-inbox-leads'
 
 const LEAD_INCLUDE = {
   owner: { select: { id: true, username: true, email: true } },
@@ -28,6 +30,34 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
     const body = await request.json()
+    let ownerId = body.ownerId ?? session.user.id
+
+    // When Auto-assign Leads is on and the client did not pick an owner,
+    // round-robin across active sales reps (same cursor as sales inbox).
+    if (!body.ownerId) {
+      const state = await loadAppState(['deed_systemSettings', 'deed_salesLeadRoundRobin'])
+      const auto = state.deed_systemSettings && typeof state.deed_systemSettings === 'object'
+        ? Boolean((state.deed_systemSettings as { crmAutoAssignLeads?: boolean }).crmAutoAssignLeads)
+        : false
+      if (auto) {
+        const reps = await prisma.user.findMany({
+          where: { isActive: true, role: { in: ['sales_rep', 'sales'] } },
+          select: { id: true },
+          orderBy: { username: 'asc' },
+        })
+        const last = state.deed_salesLeadRoundRobin && typeof state.deed_salesLeadRoundRobin === 'object'
+          ? String((state.deed_salesLeadRoundRobin as { lastOwnerId?: string }).lastOwnerId || '')
+          : ''
+        const next = pickRoundRobinOwner(reps.map(r => r.id), last || null)
+        if (next) {
+          ownerId = next
+          await saveStoreKeys({
+            deed_salesLeadRoundRobin: JSON.stringify({ lastOwnerId: next, updatedAt: new Date().toISOString() }),
+          })
+        }
+      }
+    }
+
     const lead = await prisma.lead.create({
       data: {
         name: String(body.name || '').trim(),
@@ -36,7 +66,7 @@ export async function POST(request: Request) {
         phone: body.phone?.trim() || null,
         source: body.source?.trim() || null,
         stage: body.stage ?? 'new',
-        ownerId: body.ownerId ?? session.user.id,
+        ownerId,
         clientId: body.clientId ?? null,
         notes: body.notes ?? null,
       },

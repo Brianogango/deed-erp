@@ -35,6 +35,7 @@ const SOURCE_OPTIONS = [
   { value: 'cold_call', label: 'Cold call' },
   { value: 'walk_in', label: 'Walk-in' },
   { value: 'partner', label: 'Partner' },
+  { value: 'inbound_email', label: 'Sales inbox' },
 ]
 
 export default function LeadsPanel({

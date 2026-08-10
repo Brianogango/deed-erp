@@ -1347,6 +1347,8 @@ model Lead {
   opportunityId String?  @map("opportunity_id") @db.Uuid
   clientId      String?  @map("client_id") @db.Uuid
   notes         String?
+  /** IMAP Message-ID (or synthetic key) for inbound sales-inbox dedupe. */
+  inboundMessageId String? @unique @map("inbound_message_id") @db.VarChar(500)
   createdAt     DateTime @default(now()) @map("created_at")
   updatedAt     DateTime @updatedAt @map("updated_at")
 

@@ -583,7 +583,7 @@ export default function HRSettings() {
               </SectionCard>
               <SectionCard title="Activities & Automation">
                 <SettingRow label="Enforce: Next Activity Required" desc="No opportunity can sit without a scheduled follow-up"><Toggle on={ss.crmEnforceNextActivity} onChange={v => updateSystemSettings({ crmEnforceNextActivity: v })} /></SettingRow>
-                <SettingRow label="Auto-assign Leads" desc="Round-robin assignment to available sales reps"><Toggle on={ss.crmAutoAssignLeads} onChange={v => updateSystemSettings({ crmAutoAssignLeads: v })} /></SettingRow>
+                <SettingRow label="Auto-assign Leads" desc="Round-robin new leads (including sales@ inbox) across active sales reps"><Toggle on={ss.crmAutoAssignLeads} onChange={v => updateSystemSettings({ crmAutoAssignLeads: v })} /></SettingRow>
                 <SettingRow label="Auto Follow-up after Quote Sent" desc="Create a follow-up task 2 days after a quote is sent"><Toggle on={ss.crmAutoFollowUpAfterQuote} onChange={v => updateSystemSettings({ crmAutoFollowUpAfterQuote: v })} /></SettingRow>
               </SectionCard>
             </>
