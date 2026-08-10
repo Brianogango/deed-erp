@@ -81,7 +81,7 @@ export async function processSalesInboxLeads(opts?: {
       isActive: true,
       role: { in: [...SALES_ROLES] },
     },
-    select: { id: true, username: true, email: true, name: true },
+    select: { id: true, username: true, email: true },
     orderBy: { username: 'asc' },
   })
   const salesRepIds = salesReps.map(u => u.id)
@@ -232,7 +232,7 @@ export async function processSalesInboxLeads(opts?: {
           snippet: draft.emailSnippet || draft.emailBody,
           ownerId,
           ownerEmail: owner?.email ?? null,
-          ownerName: owner?.name || owner?.username || null,
+          ownerName: owner?.username || null,
           attachmentCount: attachmentMeta.length,
         })
       } catch {
