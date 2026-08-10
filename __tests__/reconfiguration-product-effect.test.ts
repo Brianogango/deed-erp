@@ -48,6 +48,19 @@ describe('parseProductReconfigEffect', () => {
       specs: { productKind: 'storable' },
     })).toBeNull()
   })
+
+  it('returns null when laptop titles include RAM+SSD specs', () => {
+    expect(parseProductReconfigEffect({
+      id: 'p5',
+      name: 'HP ProBook 450 G8 - 11th Gen Intel Core i5, 8GB RAM, 256GB SSD',
+      specs: {},
+    })).toBeNull()
+    expect(parseProductReconfigEffect({
+      id: 'p6',
+      name: 'Lenovo ThinkPad X1 Carbon Gen 6 - 8th Gen Intel Core i5, 8GB RAM, 256GB SSD',
+      specs: {},
+    })).toBeNull()
+  })
 })
 
 describe('mergeEffectsIntoTarget', () => {

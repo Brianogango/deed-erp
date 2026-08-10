@@ -56,12 +56,36 @@ function asRecord(specs: unknown): Record<string, unknown> {
   return {}
 }
 
+/** Full device titles often list "8GB RAM, 256GB SSD" — those are not upgrade parts. */
+function looksLikeCompleteDevice(name: string): boolean {
+  const n = String(name || '')
+  if (/\b(thinkpad|probook|elitebook|latitude|macbook|pavilion|inspiron|vostro|yoga|xps|surface|chromebook|precision|zbook|toughbook|ideapad|vivobook|zenbook|spectre|envy|omen|legion)\b/i.test(n)) {
+    return true
+  }
+  if (/\b(intel\s+core|amd\s+ryzen|amd\s+pro|gen\s*\d+|core\s*i[3579])\b/i.test(n)) {
+    return true
+  }
+  // Specs listed together in a sellable laptop/desktop title, not a parts SKU.
+  const hasRam = /(\d+)\s*GB\s*(DDR\d?\s*)?RAM\b/i.test(n)
+  const hasStorage = /(\d+)\s*(GB|TB)\s*(SSD|NVMe|M\.?2|HDD)\b/i.test(n)
+  if (hasRam && hasStorage && !/\b(upgrade|kit|module|add[- ]?on|additional)\b/i.test(n)) {
+    return true
+  }
+  return false
+}
+
 function inferFromName(name: string): Partial<ProductReconfigEffect> | null {
+  // Never treat a complete laptop/desktop title as a RAM/SSD reconfig line.
+  // That false positive blocks SO delivery ("no device serial assigned").
+  if (looksLikeCompleteDevice(name)) return null
+
   const ram = name.match(/(\d+)\s*GB\s*(DDR\d?\s*)?RAM\b/i) || name.match(/\bRAM\b.*?(\d+)\s*GB/i)
   const ssd = name.match(/(\d+)\s*GB\s*(SSD|NVMe|M\.?2)/i) || name.match(/(\d+)\s*TB\s*(SSD|NVMe)/i)
   const hdd = name.match(/(\d+)\s*GB\s*HDD/i) || name.match(/(\d+)\s*TB\s*HDD/i)
 
   if (ram && (ssd || hdd)) {
+    // Both capacities in one name without device cues usually means an upgrade kit.
+    if (!/\b(upgrade|kit|module|bundle|combo|add[- ]?on)\b/i.test(name)) return null
     const storageMatch = ssd || hdd!
     const storageGb = /TB/i.test(storageMatch[0])
       ? Number(storageMatch[1]) * 1024
