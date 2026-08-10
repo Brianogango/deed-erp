@@ -1,8 +1,23 @@
-# Deed AI Assistant — RAG + ERP tools + voice
+# DIA — Deed Intelligence Assistant
 
-Status: **V1 in progress**. JARVIS is the in-product name for this assistant.
+Status: **V1 in progress**. **DIA** is the in-product name for Deed’s ERP
+intelligence layer (formerly referred to as JARVIS / Deed AI in earlier docs).
+
 This document is the architecture contract for Gemini + knowledge retrieval +
 live ERP tools + voice — not a generic chatbot integration.
+
+Product identity:
+- **DIA** — Deed Intelligence Assistant
+- UI cue: **Ask DIA…**
+- **V1 UI modes** (same chat + tool engine, mode-biased prompts + starters):
+  - **DIA Search** — knowledge/RAG (policies, SOPs, website)
+  - **DIA Voice** — mic + optional spoken replies
+  - **DIA Insights** — live analytics via summarize / overdue / procurement tools
+  - **DIA Actions** — drafts (quote, WhatsApp/email) + controlled sales@ import; action cards in UI
+  - **DIA Assist** — contextual help using current ERP pathname/module
+
+Internal code paths may still use the `jarvis` module key / `/api/jarvis/*`
+routes for compatibility.
 
 ## Principle
 
@@ -20,7 +35,7 @@ Permissions from the signed-in user must carry through every tool call.
 
 ```
                  ┌───────────────────┐
-                 │    DEED AI        │
+                 │       DIA         │
                  │  Text + Voice UI  │
                  └─────────┬─────────┘
                            │

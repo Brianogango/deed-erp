@@ -55,7 +55,7 @@ describe('knowledge sources', () => {
   })
 })
 
-describe('Deed AI system prompt', () => {
+describe('DIA system prompt', () => {
   it('distinguishes knowledge vs live ERP', () => {
     const prompt = buildSystemPrompt({
       id: 'u1',
@@ -67,7 +67,8 @@ describe('Deed AI system prompt', () => {
       active: true,
       createdAt: new Date().toISOString(),
     })
-    expect(prompt).toContain('Deed AI')
+    expect(prompt).toContain('DIA')
+    expect(prompt).toContain('Deed Intelligence Assistant')
     expect(prompt).toContain('search_documents')
     expect(prompt).toContain('Sources:')
   })

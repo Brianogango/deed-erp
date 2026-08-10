@@ -1138,15 +1138,16 @@ export default function Topbar() {
 
         {/* Right Controls */}
         <div className="flex items-center gap-1.5 md:gap-2 flex-shrink-0 min-w-0">
-          {/* JARVIS AI Assistant */}
+          {/* DIA — Deed Intelligence Assistant */}
           {hasModuleAccess(currentUser, 'jarvis') && (
             <button
               onClick={() => window.dispatchEvent(new CustomEvent('jarvis:toggle'))}
-              title="JARVIS AI assistant"
+              title="DIA — Deed Intelligence Assistant"
+              aria-label="Ask DIA"
               className="flex items-center gap-1.5 px-2 sm:px-3 py-2 rounded-lg bg-[var(--bg-surface)] border border-[var(--border)] hover:bg-[var(--bg-muted)] transition-colors cursor-pointer text-[var(--text-3)] hover:text-[var(--text-1)] shrink-0"
             >
-              <span className="flex h-4 w-4 items-center justify-center rounded bg-[var(--primary)] text-[8px] font-extrabold text-white">AI</span>
-              <span className="hidden sm:block text-[11px] font-semibold">JARVIS</span>
+              <span className="flex h-4 w-4 items-center justify-center rounded bg-[var(--primary)] text-[10px] font-extrabold text-white leading-none">DIA</span>
+              <span className="hidden sm:block text-[11px] font-semibold">DIA</span>
             </button>
           )}
           {/* Global Search Button */}

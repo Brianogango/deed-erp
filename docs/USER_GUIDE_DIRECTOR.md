@@ -71,7 +71,7 @@ You can post/pay any invoice amount. Admin Officers are capped (default KES 1,00
 
 - Prefer confirming SOs before deep commercial edits — confirmed orders can be frozen by policy.
 - Use verified backups before risky admin resets or major cutovers (ops team — see [Incident Response](./INCIDENT_RESPONSE.md)).
-- JARVIS / AI assist may be available if the module is granted on your account.
+- DIA / AI assist may be available if the module is granted on your account.
 
 ## Limitations
 

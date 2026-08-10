@@ -11,7 +11,7 @@ export async function GET(_request: NextRequest, { params }: { params: { id: str
   return withApiErrorHandling(async () => {
     const session = await getRequiredSession()
     if (!hasModuleAccess(session.user, 'jarvis')) {
-      return NextResponse.json({ error: 'JARVIS is not enabled for your account' }, { status: 403 })
+      return NextResponse.json({ error: 'DIA is not enabled for your account' }, { status: 403 })
     }
 
     const conversation = await prisma.aiConversation.findFirst({
@@ -35,7 +35,7 @@ export async function DELETE(_request: NextRequest, { params }: { params: { id: 
   return withApiErrorHandling(async () => {
     const session = await getRequiredSession()
     if (!hasModuleAccess(session.user, 'jarvis')) {
-      return NextResponse.json({ error: 'JARVIS is not enabled for your account' }, { status: 403 })
+      return NextResponse.json({ error: 'DIA is not enabled for your account' }, { status: 403 })
     }
 
     const conversation = await prisma.aiConversation.findFirst({

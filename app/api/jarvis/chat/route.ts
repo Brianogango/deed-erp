@@ -3,6 +3,7 @@ import prisma from '@/lib/prisma'
 import { getRequiredSession, withApiErrorHandling } from '@/lib/auth/api'
 import { hasModuleAccess } from '@/lib/auth/access'
 import { runChatTurn, type ChatTurnMessage } from '@/lib/jarvis/chat-engine'
+import { isDiaMode, type DiaMode } from '@/lib/jarvis/modes'
 
 function getIP(req: NextRequest): string | null {
   return req.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
@@ -15,10 +16,10 @@ const MAX_HISTORY_MESSAGES = 20
 
 /**
  * POST /api/jarvis/chat
- * Body: { conversationId?: string, message: string }
+ * Body: { conversationId?, message, mode?, pageContext? }
  * Creates a conversation if conversationId is omitted. Runs the message
- * through the JARVIS tool-calling engine and persists both sides plus any
- * tool calls made, then returns the assistant's reply.
+ * through the DIA tool-calling engine and persists both sides plus any
+ * tool calls made, then returns the assistant's reply plus action cards.
  */
 export async function POST(request: NextRequest) {
   return withApiErrorHandling(async () => {
@@ -26,7 +27,7 @@ export async function POST(request: NextRequest) {
     const user = session.user
 
     if (!hasModuleAccess(user, 'jarvis')) {
-      return NextResponse.json({ error: 'JARVIS is not enabled for your account' }, { status: 403 })
+      return NextResponse.json({ error: 'DIA is not enabled for your account' }, { status: 403 })
     }
 
     const body = await request.json()
@@ -37,6 +38,16 @@ export async function POST(request: NextRequest) {
     if (message.length > MAX_MESSAGE_LENGTH) {
       return NextResponse.json({ error: `message must be under ${MAX_MESSAGE_LENGTH} characters` }, { status: 400 })
     }
+
+    const mode: DiaMode | undefined = isDiaMode(body.mode) ? body.mode : undefined
+    const pageContext =
+      body.pageContext && typeof body.pageContext === 'object'
+        ? {
+            pathname: typeof body.pageContext.pathname === 'string' ? body.pageContext.pathname : undefined,
+            module: typeof body.pageContext.module === 'string' ? body.pageContext.module : undefined,
+            title: typeof body.pageContext.title === 'string' ? body.pageContext.title : undefined,
+          }
+        : undefined
 
     let conversationId: string | undefined = body.conversationId
     if (conversationId) {
@@ -74,6 +85,8 @@ export async function POST(request: NextRequest) {
       ipAddress: getIP(request),
       history,
       userMessage: message,
+      mode,
+      pageContext,
     })
 
     await prisma.aiMessage.create({
@@ -98,6 +111,7 @@ export async function POST(request: NextRequest) {
       conversationId,
       reply: result.reply,
       sources: result.sources,
+      actions: result.actions,
       toolCalls: result.toolCalls.map(tc => ({
         toolName: tc.toolName,
         allowed: tc.allowed,

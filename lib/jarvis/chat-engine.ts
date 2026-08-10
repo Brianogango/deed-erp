@@ -13,6 +13,8 @@ import {
   type AnswerSource,
 } from './knowledge'
 import type { JarvisToolDef } from './provider'
+import { extractDiaActions, type DiaActionCard } from './actions'
+import type { DiaMode, DiaPageContext } from './modes'
 
 export interface ChatTurnMessage {
   role: 'user' | 'assistant'
@@ -31,6 +33,7 @@ export interface ChatTurnResult {
   reply: string
   toolCalls: ToolCallRecord[]
   sources: AnswerSource[]
+  actions: DiaActionCard[]
   provider?: string
   model?: string
 }
@@ -56,18 +59,23 @@ export async function runChatTurn(params: {
   ipAddress: string | null
   history: ChatTurnMessage[]
   userMessage: string
+  mode?: DiaMode | null
+  pageContext?: DiaPageContext | null
 }): Promise<ChatTurnResult> {
-  const { user, conversationId, ipAddress, history, userMessage } = params
+  const { user, conversationId, ipAddress, history, userMessage, mode, pageContext } = params
 
   const provider = getJarvisProvider()
   const allowedNames = allowedToolNamesForRole(user.role)
   const tools = toolsForRole(allowedNames)
-  const system = buildSystemPrompt(user)
+  const system = buildSystemPrompt(user, { mode, pageContext })
 
   // Auto-RAG: retrieve static knowledge before the model runs, then still
   // allow search_documents / live ERP tools for follow-up facts.
-  const passages = allowedNames.includes('search_documents')
-    ? await retrieveKnowledge(userMessage, 5)
+  // Search mode always prefers knowledge retrieval when the tool is allowed.
+  const shouldRetrieve = allowedNames.includes('search_documents')
+    && (mode === 'search' || mode === 'assist' || mode == null || mode === 'voice')
+  const passages = shouldRetrieve
+    ? await retrieveKnowledge(userMessage, mode === 'search' ? 8 : 5)
     : []
   const knowledgeBlock = formatKnowledgeForPrompt(passages)
   const augmentedMessage = knowledgeBlock
@@ -95,12 +103,15 @@ export async function runChatTurn(params: {
     },
   })
 
-  const sources = buildAnswerSources(passages, result.toolCalls)
+  const toolCalls: ToolCallRecord[] = result.toolCalls
+  const sources = buildAnswerSources(passages, toolCalls)
+  const actions = extractDiaActions(toolCalls)
 
   return {
     reply: result.reply,
-    toolCalls: result.toolCalls,
+    toolCalls,
     sources,
+    actions,
     provider: result.provider,
     model: result.model,
   }

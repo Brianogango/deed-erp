@@ -5,7 +5,7 @@
 > The sections below are the original design notes; runtime code exists under
 > `lib/jarvis/` and defaults to Gemini.
 
-Status: superseded in part by Deed AI Assistant V1. Kept for historical context.
+Status: superseded in part by **DIA (Deed Intelligence Assistant)** V1. Kept for historical context; product name is now DIA.
 
 ---
 

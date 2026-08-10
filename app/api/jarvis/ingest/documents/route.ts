@@ -17,7 +17,7 @@ function summarize(results: { status: string }[]) {
 /**
  * POST /api/jarvis/ingest/documents
  * Admin-triggered re-ingestion of SOPs + public website knowledge into the
- * JARVIS document-search index. Body optional: { source?: 'all'|'sop'|'website' }
+ * DIA document-search index. Body optional: { source?: 'all'|'sop'|'website' }
  */
 export async function POST(request: Request) {
   return withApiErrorHandling(async () => {

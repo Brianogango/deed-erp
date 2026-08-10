@@ -249,7 +249,7 @@ function AppContent({ children }: { children: React.ReactNode }) {
   const [jarvisOpen, setJarvisOpen] = useState(false)
   const hydratedRoutesRef = useRef<Set<string>>(new Set())
 
-  // Topbar dispatches this event on its JARVIS button click — kept as a
+  // Topbar dispatches this event on its DIA button click — kept as a
   // window event rather than a prop so Topbar's signature never changes.
   useEffect(() => {
     const toggle = () => setJarvisOpen(o => !o)
@@ -747,9 +747,9 @@ function AppContent({ children }: { children: React.ReactNode }) {
       {/* Toast Notifications */}
       <Toast toast={toast} />
 
-      {/* JARVIS AI assistant — additive overlay, gated by module access like any other module */}
+      {/* DIA — Deed Intelligence Assistant overlay, gated by module access like any other module */}
       {hasModuleAccess(currentUser, 'jarvis') && (
-        <JarvisPanel open={jarvisOpen} onClose={() => setJarvisOpen(false)} />
+        <JarvisPanel open={jarvisOpen} onClose={() => setJarvisOpen(false)} pathname={pathname} />
       )}
     </div>
   )
