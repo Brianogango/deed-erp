@@ -4,7 +4,7 @@ import { usePurchase } from './PurchaseContext'
 import { Modal, Field, Input, Select, Confirm, PanelHeader, StatusStepper, SearchPicker, Divider } from '@/components/ui'
 import { LOCATIONS, CATEGORY_CONFIG, type LocationId, type CategoryId, fmtKes, fmtDate } from '@/lib/store'
 import { invoiceDocState, invoicePaymentStatus, displayDocRef, PAYMENT_STATUS_LABELS } from '@/lib/odoo-sales-flow'
-import { downloadPdf, type PdfLine } from '@/lib/pdf'
+import { downloadPoPdf, downloadRfqPdf } from '@/lib/purchase-pdf'
 import Chatter from '@/components/erp/Chatter'
 import { Breadcrumbs } from '@/components/erp/Breadcrumbs'
 import { SmartButtons } from '@/components/erp/SmartButtons'
@@ -19,42 +19,6 @@ const ACCESSORIES = ['Charger', 'Bag/Case', 'Mouse', 'Box', 'Cable', 'Manual']
 const PO_STEPS = ['RFQ', 'RFQ Sent', 'Purchase Order', 'Received', 'Billed']
 const STATUS_LABEL: Record<string,string> = { draft:'RFQ', sent:'RFQ Sent', confirmed:'Purchase Order', partial:'Partially Received', received:'Fully Received', cancelled:'Cancelled' }
 const PO_STEP_IDX: Record<string,number> = { draft:0, sent:1, confirmed:2, partial:3, received:3 }
-
-function buildRfqPdfLines(po: any, companySettings: any): PdfLine[] {
-  const rows: PdfLine[] = (po.lines ?? []).flatMap((line: any, index: number) => ([
-    { text: String(index + 1), x: 40, y: 650 - index * 18, size: 8 },
-    { text: String(line.productName ?? 'Item').slice(0, 42), x: 62, y: 650 - index * 18, size: 8 },
-    { text: String(line.qty ?? 0), x: 330, y: 650 - index * 18, size: 8 },
-    { text: fmtKes(Number(line.unitPrice ?? 0)), x: 380, y: 650 - index * 18, size: 8 },
-    { text: fmtKes(Number(line.subtotal ?? 0)), x: 480, y: 650 - index * 18, size: 8 },
-  ]))
-  const totalsY = 650 - ((po.lines ?? []).length + 1) * 18
-  return [
-    { text: String(companySettings.name ?? 'Deed ERP').toUpperCase(), x: 40, y: 810, size: 14, bold: true },
-    { text: `${companySettings.address ?? ''} ${companySettings.city ?? ''}`.trim(), x: 40, y: 794, size: 8 },
-    { text: `Tel: ${companySettings.phone ?? ''} | ${companySettings.email ?? ''}`, x: 40, y: 782, size: 8 },
-    { text: 'REQUEST FOR QUOTATION', x: 380, y: 810, size: 13, bold: true },
-    { text: String(po.ref ?? ''), x: 430, y: 792, size: 10, bold: true },
-    { text: `Date: ${String(po.date ?? '')}`, x: 430, y: 778, size: 8 },
-    { text: `Expected: ${String(po.expectedDate ?? '')}`, x: 430, y: 766, size: 8 },
-    { text: 'VENDOR', x: 40, y: 742, size: 9, bold: true },
-    { text: String(po.vendorName ?? 'Vendor'), x: 40, y: 728, size: 11, bold: true },
-    { text: 'Please quote availability, lead time, payment terms, and final pricing for the items below.', x: 40, y: 704, size: 8 },
-    { text: 'No.', x: 40, y: 670, size: 8, bold: true },
-    { text: 'Item', x: 62, y: 670, size: 8, bold: true },
-    { text: 'Qty', x: 330, y: 670, size: 8, bold: true },
-    { text: 'Target Price', x: 380, y: 670, size: 8, bold: true },
-    { text: 'Line Total', x: 480, y: 670, size: 8, bold: true },
-    ...rows,
-    { text: 'Subtotal:', x: 380, y: totalsY, size: 9 },
-    { text: fmtKes(Number(po.subtotal ?? 0)), x: 480, y: totalsY, size: 9 },
-    { text: 'Tax:', x: 380, y: totalsY - 14, size: 9 },
-    { text: fmtKes(Number(po.taxTotal ?? 0)), x: 480, y: totalsY - 14, size: 9 },
-    { text: 'Expected Total:', x: 380, y: totalsY - 30, size: 10, bold: true },
-    { text: fmtKes(Number(po.total ?? 0)), x: 480, y: totalsY - 30, size: 10, bold: true },
-    ...(po.notes ? [{ text: `Notes: ${String(po.notes).slice(0, 100)}`, x: 40, y: totalsY - 58, size: 8 }] : []),
-  ]
-}
 
 function openRfqMail(po: any, vendor: any, companySettings: any) {
   const subject = `RFQ ${po.ref} from ${companySettings.name ?? 'Deed ERP'}`
@@ -377,7 +341,21 @@ export default function POFormView() {
                   id: 'download-rfq',
                   label: 'Download RFQ',
                   hidden: !(activePO.status === 'draft' || activePO.status === 'sent') || activePO.lines.length === 0,
-                  onClick: () => downloadPdf(`RFQ-${activePO.ref}.pdf`, buildRfqPdfLines(activePO, companySettings)),
+                  onClick: () => {
+                    void downloadRfqPdf(activePO, contacts, companySettings).catch(() => {
+                      showToast('RFQ PDF generation failed', 'error')
+                    })
+                  },
+                },
+                {
+                  id: 'download-po',
+                  label: 'Download PO',
+                  hidden: !['confirmed', 'partial', 'received', 'cancelled'].includes(activePO.status) || activePO.lines.length === 0,
+                  onClick: () => {
+                    void downloadPoPdf(activePO, contacts, companySettings).catch(() => {
+                      showToast('PO PDF generation failed', 'error')
+                    })
+                  },
                 },
                 {
                   id: 'mail-rfq',
