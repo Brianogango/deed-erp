@@ -24,33 +24,62 @@ function getClient(): GoogleGenerativeAI {
   return _client
 }
 
-/** Map JSON Schema → Gemini function declaration parameters (best-effort). */
-function toGeminiParameters(schema: Record<string, unknown>): FunctionDeclaration['parameters'] {
-  const propertiesIn = (schema.properties && typeof schema.properties === 'object')
-    ? schema.properties as Record<string, Record<string, unknown>>
-    : {}
-  const properties: Record<string, Schema> = {}
-
-  for (const [key, raw] of Object.entries(propertiesIn)) {
-    const t = String(raw.type || 'string').toLowerCase()
-    let type: SchemaType = SchemaType.STRING
-    if (t === 'number' || t === 'integer') type = SchemaType.NUMBER
-    else if (t === 'boolean') type = SchemaType.BOOLEAN
-    else if (t === 'array') type = SchemaType.ARRAY
-    else if (t === 'object') type = SchemaType.OBJECT
-    const prop = {
-      type,
-      description: raw.description ? String(raw.description) : undefined,
-      ...(Array.isArray(raw.enum) ? { enum: raw.enum.map(String) } : {}),
-    } as Schema
-    properties[key] = prop
+/** Map JSON Schema → Gemini function declaration parameters (recursive). */
+export function jsonSchemaToGeminiSchema(raw: Record<string, unknown> | undefined | null): Schema {
+  if (!raw || typeof raw !== 'object') {
+    return { type: SchemaType.STRING } as Schema
   }
 
+  const t = String(raw.type || 'string').toLowerCase()
+
+  if (t === 'array') {
+    const itemsRaw = (raw.items && typeof raw.items === 'object')
+      ? raw.items as Record<string, unknown>
+      : { type: 'string' }
+    return {
+      type: SchemaType.ARRAY,
+      description: raw.description ? String(raw.description) : undefined,
+      items: jsonSchemaToGeminiSchema(itemsRaw),
+    } as Schema
+  }
+
+  if (t === 'object') {
+    const propertiesIn = (raw.properties && typeof raw.properties === 'object')
+      ? raw.properties as Record<string, Record<string, unknown>>
+      : {}
+    const properties: Record<string, Schema> = {}
+    for (const [key, prop] of Object.entries(propertiesIn)) {
+      properties[key] = jsonSchemaToGeminiSchema(prop)
+    }
+    // Gemini rejects OBJECT properties that omit nested fields; always include properties.
+    return {
+      type: SchemaType.OBJECT,
+      description: raw.description ? String(raw.description) : undefined,
+      properties,
+      required: Array.isArray(raw.required) ? raw.required.map(String) : undefined,
+    } as Schema
+  }
+
+  let type: SchemaType = SchemaType.STRING
+  if (t === 'number' || t === 'integer') type = SchemaType.NUMBER
+  else if (t === 'boolean') type = SchemaType.BOOLEAN
+
   return {
-    type: SchemaType.OBJECT,
-    properties,
-    required: Array.isArray(schema.required) ? schema.required.map(String) : undefined,
-  } as FunctionDeclaration['parameters']
+    type,
+    description: raw.description ? String(raw.description) : undefined,
+    ...(Array.isArray(raw.enum) ? { enum: raw.enum.map(String) } : {}),
+  } as Schema
+}
+
+/** Top-level tool parameters must be a Gemini OBJECT schema. */
+export function toGeminiParameters(schema: Record<string, unknown>): FunctionDeclaration['parameters'] {
+  const converted = jsonSchemaToGeminiSchema({
+    type: 'object',
+    properties: (schema.properties as Record<string, unknown>) ?? {},
+    required: schema.required,
+    description: schema.description,
+  })
+  return converted as FunctionDeclaration['parameters']
 }
 
 function toGeminiTools(tools: JarvisToolDef[]): FunctionDeclaration[] {
