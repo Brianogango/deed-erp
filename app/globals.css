@@ -4199,6 +4199,465 @@
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
+   Invoice detail — /finance/invoices/[id]
+   Operate (data-dense document) + Emil (press feedback, transform-only motion)
+   Tokens: navy / primary cyan / success / danger — no purple accents.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.invoice-detail {
+  --inv-ease: cubic-bezier(0.23, 1, 0.32, 1);
+  --inv-press: 140ms;
+  gap: 1rem;
+}
+
+.invoice-detail__body {
+  padding-bottom: 2rem;
+}
+
+.invoice-detail__sheet {
+  display: flex;
+  flex-direction: column;
+  gap: 1.15rem;
+  max-width: 56rem;
+}
+
+.invoice-detail__label {
+  margin: 0 0 0.2rem;
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--text-4);
+  line-height: 1.2;
+}
+
+.invoice-detail__section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.invoice-detail__section-title {
+  margin: 0;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-4);
+}
+
+/* Money strip */
+.invoice-detail__money {
+  padding: 1rem 1.15rem 0.85rem;
+  border-radius: 0.75rem;
+  border: 1px solid color-mix(in srgb, var(--navy) 12%, var(--border));
+  background:
+    linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--navy) 5%, var(--bg-card)) 0%,
+      var(--bg-card) 45%,
+      color-mix(in srgb, var(--primary) 6%, var(--bg-card)) 100%
+    );
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--navy) 6%, transparent);
+}
+
+.invoice-detail__money-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem 1rem;
+}
+
+.invoice-detail__amount {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+  color: var(--navy);
+  line-height: 1.2;
+  font-family: var(--font-dm-mono), ui-monospace, monospace;
+}
+
+.invoice-detail__amount--muted {
+  color: var(--text-2);
+}
+
+.invoice-detail__amount--paid {
+  color: var(--success);
+}
+
+.invoice-detail__amount--due {
+  color: var(--danger);
+}
+
+.invoice-detail__money-due .invoice-detail__amount {
+  font-size: 1.2rem;
+}
+
+.invoice-detail__progress {
+  margin-top: 0.85rem;
+  height: 0.375rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--border) 65%, var(--bg-surface));
+  overflow: hidden;
+}
+
+.invoice-detail__progress-fill {
+  height: 100%;
+  width: 100%;
+  transform-origin: left center;
+  border-radius: inherit;
+  background: linear-gradient(
+    90deg,
+    var(--primary) 0%,
+    color-mix(in srgb, var(--navy) 55%, var(--primary)) 100%
+  );
+  transition: transform 220ms var(--inv-ease);
+  will-change: transform;
+}
+
+.invoice-detail__progress-fill.is-paid {
+  background: var(--success);
+}
+
+.invoice-detail__progress-caption {
+  margin: 0.4rem 0 0;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--text-4);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Meta + addresses */
+.invoice-detail__meta {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem 1.15rem;
+  padding: 0.85rem 1rem;
+  border-radius: 0.75rem;
+  border: 1px solid var(--border-lt);
+  background: var(--bg-card);
+}
+
+.invoice-detail__meta-value {
+  margin: 0;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text-1);
+  line-height: 1.35;
+}
+
+.invoice-detail__meta-value--alert {
+  color: var(--danger);
+}
+
+.invoice-detail__addresses {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.85rem 1.25rem;
+  padding: 0.85rem 1rem;
+  border-radius: 0.75rem;
+  border: 1px solid var(--border-lt);
+  background: var(--bg-card);
+}
+
+.invoice-detail__address {
+  margin: 0;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--text-2);
+  line-height: 1.45;
+  white-space: pre-wrap;
+}
+
+/* Delivery callout */
+.invoice-detail__callout {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-start;
+  padding: 0.85rem 1rem;
+  border-radius: 0.75rem;
+  border: 1px solid color-mix(in srgb, var(--primary) 32%, var(--border));
+  background: color-mix(in srgb, var(--primary) 8%, var(--bg-card));
+}
+
+.invoice-detail__callout-icon {
+  flex-shrink: 0;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 0.5rem;
+  display: grid;
+  place-items: center;
+  background: color-mix(in srgb, var(--primary) 16%, var(--bg-card));
+  color: var(--navy);
+}
+
+.invoice-detail__callout-body {
+  margin: 0;
+  font-size: 0.78rem;
+  font-weight: 550;
+  color: var(--text-2);
+  line-height: 1.4;
+}
+
+.invoice-detail__chip {
+  flex-shrink: 0;
+  align-self: center;
+  padding: 0.2rem 0.55rem;
+  border-radius: 0.375rem;
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--navy);
+  background: color-mix(in srgb, var(--primary) 14%, var(--bg-card));
+  border: 1px solid color-mix(in srgb, var(--primary) 28%, var(--border));
+  white-space: nowrap;
+}
+
+/* Text buttons (draft line tools) */
+.invoice-detail__text-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.25rem 0.15rem;
+  border: none;
+  background: transparent;
+  color: var(--text-3);
+  font-size: 0.75rem;
+  font-weight: 650;
+  cursor: pointer;
+  transition:
+    color 140ms ease,
+    transform var(--inv-press) var(--inv-ease);
+}
+
+.invoice-detail__text-btn:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+.invoice-detail__text-btn--accent {
+  color: var(--navy);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .invoice-detail__text-btn:hover:not(:disabled) {
+    color: var(--navy);
+  }
+  .invoice-detail__text-btn--accent:hover:not(:disabled) {
+    color: var(--primary-dark);
+  }
+}
+
+/* Table */
+.invoice-detail__table-wrap {
+  overflow-x: auto;
+  border-radius: 0.75rem;
+  border: 1px solid var(--border-lt);
+  background: var(--bg-card);
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--navy) 5%, transparent);
+}
+
+.invoice-detail__table-wrap table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8125rem;
+}
+
+.invoice-detail__table-wrap thead th {
+  text-align: left;
+  padding: 0.55rem 0.85rem;
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-4);
+  background: color-mix(in srgb, var(--navy) 5%, var(--bg-surface));
+  border-bottom: 1px solid var(--border-lt);
+  white-space: nowrap;
+}
+
+.invoice-detail__table-wrap tbody td {
+  padding: 0.65rem 0.85rem;
+  border-bottom: 1px solid color-mix(in srgb, var(--border-lt) 80%, transparent);
+  vertical-align: top;
+  color: var(--text-2);
+}
+
+.invoice-detail__table-wrap tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.invoice-detail__table-wrap tbody tr {
+  transition: background-color 120ms ease;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .invoice-detail__table-wrap tbody tr:hover {
+    background: color-mix(in srgb, var(--primary) 5%, var(--bg-card));
+  }
+}
+
+.invoice-detail__table-wrap tfoot td {
+  padding: 0.65rem 0.85rem;
+  background: color-mix(in srgb, var(--navy) 4%, var(--bg-surface));
+  border-top: 1px solid var(--border);
+  font-variant-numeric: tabular-nums;
+}
+
+.invoice-detail__empty {
+  margin: 0;
+  padding: 1.15rem 1rem;
+  border-radius: 0.75rem;
+  border: 1px dashed var(--border);
+  background: var(--bg-card);
+  font-size: 0.8125rem;
+  color: var(--text-3);
+  text-align: center;
+}
+
+/* Payment history */
+.invoice-detail__pay-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.7rem 1rem;
+  transition: background-color 120ms ease;
+}
+
+.invoice-detail__pay-row + .invoice-detail__pay-row {
+  border-top: 1px solid var(--border-lt);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .invoice-detail__pay-row:hover {
+    background: color-mix(in srgb, var(--primary) 5%, var(--bg-card));
+  }
+}
+
+.invoice-detail__pay-method {
+  margin: 0;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: var(--text-1);
+  text-transform: capitalize;
+}
+
+.invoice-detail__pay-meta {
+  margin: 0.15rem 0 0;
+  font-size: 0.72rem;
+  color: var(--text-4);
+  line-height: 1.35;
+}
+
+.invoice-detail__pay-amount {
+  font-size: 0.9rem;
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+  color: var(--navy);
+  font-family: var(--font-dm-mono), ui-monospace, monospace;
+  white-space: nowrap;
+}
+
+/* Actions */
+.invoice-detail__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding-top: 0.85rem;
+  margin-top: 0.15rem;
+  border-top: 1px solid var(--border-lt);
+}
+
+.invoice-detail__btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  min-height: 2.35rem;
+  padding: 0.45rem 0.9rem;
+  transition:
+    transform var(--inv-press) var(--inv-ease),
+    background-color 140ms ease,
+    border-color 140ms ease,
+    color 140ms ease,
+    box-shadow 140ms ease;
+}
+
+.invoice-detail__btn:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+.invoice-detail__btn:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.invoice-detail__btn--danger {
+  color: var(--danger-text);
+  border-color: color-mix(in srgb, var(--danger) 28%, var(--border));
+  background: var(--danger-bg);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .invoice-detail__btn--danger:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--danger) 16%, var(--bg-card));
+  }
+}
+
+.invoice-detail__released {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-height: 2.35rem;
+  padding: 0.45rem 0.9rem;
+  border-radius: 0.5rem;
+  border: 1px solid color-mix(in srgb, var(--success) 28%, var(--border));
+  background: var(--success-bg);
+  color: var(--success-text);
+  font-size: 0.8125rem;
+  font-weight: 700;
+}
+
+@media (max-width: 640px) {
+  .invoice-detail__money-grid {
+    grid-template-columns: 1fr;
+    gap: 0.65rem;
+  }
+
+  .invoice-detail__meta,
+  .invoice-detail__addresses {
+    grid-template-columns: 1fr;
+  }
+
+  .invoice-detail__actions {
+    flex-direction: column;
+  }
+
+  .invoice-detail__actions .invoice-detail__btn,
+  .invoice-detail__actions .btn-primary,
+  .invoice-detail__actions .btn-secondary {
+    width: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .invoice-detail__progress-fill,
+  .invoice-detail__btn,
+  .invoice-detail__text-btn,
+  .invoice-detail__pay-row,
+  .invoice-detail__table-wrap tbody tr {
+    transition: none;
+  }
+
+  .invoice-detail__btn:active:not(:disabled),
+  .invoice-detail__text-btn:active:not(:disabled) {
+    transform: none;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
    Sales Operate pilot — /sales only · Direction B (Deed navy + cyan)
    Skills: Impeccable Operate + craft-floor, frontend-design, design-taste
    restraint, ui-ux-pro-max data-dense / Trust. Emerald reserved for money
