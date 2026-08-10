@@ -81,7 +81,11 @@ export async function POST(request: NextRequest) {
         conversationId,
         role: 'assistant',
         content: result.reply,
-        citedSources: result.toolCalls.length > 0 ? (result.toolCalls as any) : undefined,
+        citedSources: result.sources.length > 0
+          ? (result.sources as any)
+          : result.toolCalls.length > 0
+            ? (result.toolCalls as any)
+            : undefined,
       },
     })
 
@@ -93,6 +97,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       conversationId,
       reply: result.reply,
+      sources: result.sources,
       toolCalls: result.toolCalls.map(tc => ({
         toolName: tc.toolName,
         allowed: tc.allowed,

@@ -1,8 +1,11 @@
 # JARVIS — AI Intelligence Layer for Deed ERP
 
-Status: design only. No JARVIS code has been written yet. This document is the
-result of inspecting the live codebase (not assumptions) and is the basis for
-implementation review before any code is generated.
+> **Updated:** See [`docs/DEED_AI_ASSISTANT.md`](./DEED_AI_ASSISTANT.md) for the
+> current architecture (Gemini + RAG knowledge + live ERP tools + voice).
+> The sections below are the original design notes; runtime code exists under
+> `lib/jarvis/` and defaults to Gemini.
+
+Status: superseded in part by Deed AI Assistant V1. Kept for historical context.
 
 ---
 

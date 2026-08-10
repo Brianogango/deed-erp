@@ -2,16 +2,53 @@
 
 import { useEffect, useRef, useState } from 'react'
 
+interface AnswerSource {
+  label: string
+  kind: 'live' | 'knowledge'
+  detail?: string | null
+  url?: string | null
+  updatedAt?: string | null
+}
+
 interface ChatMessage {
   id: string
   role: 'user' | 'assistant'
   content: string
+  sources?: AnswerSource[]
   toolCalls?: { toolName: string; allowed: boolean; error?: string | null }[]
 }
 
 interface JarvisPanelProps {
   open: boolean
   onClose: () => void
+}
+
+type SpeechRecognitionLike = {
+  continuous: boolean
+  interimResults: boolean
+  lang: string
+  start: () => void
+  stop: () => void
+  onresult: ((event: { results: ArrayLike<{ 0: { transcript: string }; isFinal: boolean }> }) => void) | null
+  onerror: ((event: { error?: string }) => void) | null
+  onend: (() => void) | null
+}
+
+function getSpeechRecognitionCtor(): (new () => SpeechRecognitionLike) | null {
+  if (typeof window === 'undefined') return null
+  const w = window as unknown as {
+    SpeechRecognition?: new () => SpeechRecognitionLike
+    webkitSpeechRecognition?: new () => SpeechRecognitionLike
+  }
+  return w.SpeechRecognition || w.webkitSpeechRecognition || null
+}
+
+function formatSourceChip(s: AnswerSource): string {
+  const bits = [s.label]
+  if (s.detail && s.kind === 'live') bits.push(s.detail)
+  bits.push(s.kind)
+  if (s.updatedAt) bits.push(`updated ${s.updatedAt.slice(0, 10)}`)
+  return bits.join(' · ')
 }
 
 // Slide-over chat panel. Talks only to /api/jarvis/*, never touches any
@@ -21,15 +58,45 @@ export default function JarvisPanel({ open, onClose }: JarvisPanelProps) {
   const [conversationId, setConversationId] = useState<string | null>(null)
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
+  const [listening, setListening] = useState(false)
+  const [speakReplies, setSpeakReplies] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [voiceSupported, setVoiceSupported] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
+  const recognitionRef = useRef<SpeechRecognitionLike | null>(null)
+
+  useEffect(() => {
+    setVoiceSupported(Boolean(getSpeechRecognitionCtor()))
+  }, [])
 
   useEffect(() => {
     if (open) scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' })
   }, [messages, open])
 
-  async function sendMessage() {
-    const text = input.trim()
+  useEffect(() => {
+    return () => {
+      try {
+        recognitionRef.current?.stop()
+      } catch {
+        /* ignore */
+      }
+    }
+  }, [])
+
+  function speakText(text: string) {
+    if (!speakReplies || typeof window === 'undefined' || !window.speechSynthesis) return
+    try {
+      window.speechSynthesis.cancel()
+      const utter = new SpeechSynthesisUtterance(text.slice(0, 600))
+      utter.rate = 1
+      window.speechSynthesis.speak(utter)
+    } catch {
+      /* ignore */
+    }
+  }
+
+  async function sendMessage(overrideText?: string) {
+    const text = (overrideText ?? input).trim()
     if (!text || sending) return
     setError(null)
     setInput('')
@@ -58,13 +125,62 @@ export default function JarvisPanel({ open, onClose }: JarvisPanelProps) {
           id: `a-${Date.now()}`,
           role: 'assistant',
           content: data.reply,
+          sources: data.sources,
           toolCalls: data.toolCalls,
         },
       ])
+      if (typeof data.reply === 'string') speakText(data.reply)
     } catch {
       setError('Could not reach JARVIS. Check your connection and try again.')
     } finally {
       setSending(false)
+    }
+  }
+
+  function toggleMic() {
+    const Ctor = getSpeechRecognitionCtor()
+    if (!Ctor) {
+      setError('Speech recognition is not supported in this browser. Use Chrome/Edge, or type your question.')
+      return
+    }
+
+    if (listening && recognitionRef.current) {
+      recognitionRef.current.stop()
+      setListening(false)
+      return
+    }
+
+    const recognition = new Ctor()
+    recognition.continuous = false
+    recognition.interimResults = true
+    recognition.lang = 'en-KE'
+    recognition.onresult = event => {
+      let transcript = ''
+      for (let i = 0; i < event.results.length; i++) {
+        transcript += event.results[i][0].transcript
+      }
+      setInput(transcript.trim())
+      const last = event.results[event.results.length - 1]
+      if (last?.isFinal) {
+        const finalText = transcript.trim()
+        if (finalText) void sendMessage(finalText)
+      }
+    }
+    recognition.onerror = event => {
+      setListening(false)
+      if (event.error && event.error !== 'aborted' && event.error !== 'no-speech') {
+        setError(`Microphone error: ${event.error}`)
+      }
+    }
+    recognition.onend = () => setListening(false)
+    recognitionRef.current = recognition
+    try {
+      recognition.start()
+      setListening(true)
+      setError(null)
+    } catch {
+      setError('Could not start the microphone.')
+      setListening(false)
     }
   }
 
@@ -93,14 +209,14 @@ export default function JarvisPanel({ open, onClose }: JarvisPanelProps) {
       <div
         className="fixed right-0 top-0 z-[201] flex h-screen w-full max-w-md flex-col bg-[var(--bg-card)] shadow-2xl"
         role="dialog"
-        aria-label="JARVIS AI assistant"
+        aria-label="JARVIS Deed AI assistant"
       >
         <div className="flex items-center justify-between gap-2 border-b border-[var(--border-lt)] px-4 py-3">
           <div className="flex items-center gap-2">
             <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-[var(--primary)] text-xs font-extrabold text-white">AI</span>
             <div>
               <p className="text-sm font-bold text-[var(--text-1)]">JARVIS</p>
-              <p className="text-[10px] text-[var(--text-4)]">Reads ERP data only — never sends or posts anything for you</p>
+              <p className="text-[10px] text-[var(--text-4)]">Deed AI · knowledge + live ERP · drafts only</p>
             </div>
           </div>
           <div className="flex items-center gap-1">
@@ -124,9 +240,9 @@ export default function JarvisPanel({ open, onClose }: JarvisPanelProps) {
         <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
           {messages.length === 0 && (
             <div className="rounded-2xl border border-[var(--border-lt)] bg-[var(--bg-surface)] p-4 text-xs text-[var(--text-3)]">
-              Ask me things like &ldquo;check stock for HP 240 laptops&rdquo;, &ldquo;track repair RPR-00012&rdquo;,
-              &ldquo;which invoices are overdue&rdquo;, or &ldquo;draft a quote for Acme Ltd: 5x HP 240 laptops&rdquo;.
-              I only answer from real ERP data and your company documents — I&apos;ll say so if I don&apos;t know.
+              Ask live ERP questions (&ldquo;how many T14s with 16GB?&rdquo;, &ldquo;track REP-…&rdquo;) or knowledge
+              questions (&ldquo;what is our warranty / returns policy?&rdquo;). Answers cite sources —
+              Inventory · live, or policy pages from the knowledge index. Use the mic to speak.
             </div>
           )}
 
@@ -140,6 +256,43 @@ export default function JarvisPanel({ open, onClose }: JarvisPanelProps) {
                 }
               >
                 {m.content}
+                {m.sources && m.sources.length > 0 && (
+                  <div className="mt-2 space-y-1">
+                    <p className="text-[9px] font-bold uppercase tracking-wide text-[var(--text-4)]">Sources</p>
+                    <div className="flex flex-wrap gap-1">
+                      {m.sources.map((s, i) => (
+                        s.url ? (
+                          <a
+                            key={i}
+                            href={s.url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className={
+                              s.kind === 'live'
+                                ? 'rounded-md bg-[var(--success-bg)] px-2 py-0.5 text-[9px] font-semibold text-[var(--success-text)]'
+                                : 'rounded-md bg-[var(--bg-card)] px-2 py-0.5 text-[9px] font-semibold text-[var(--text-2)] border border-[var(--border-lt)]'
+                            }
+                            title={formatSourceChip(s)}
+                          >
+                            {formatSourceChip(s)}
+                          </a>
+                        ) : (
+                          <span
+                            key={i}
+                            className={
+                              s.kind === 'live'
+                                ? 'rounded-md bg-[var(--success-bg)] px-2 py-0.5 text-[9px] font-semibold text-[var(--success-text)]'
+                                : 'rounded-md bg-[var(--bg-card)] px-2 py-0.5 text-[9px] font-semibold text-[var(--text-2)] border border-[var(--border-lt)]'
+                            }
+                            title={formatSourceChip(s)}
+                          >
+                            {formatSourceChip(s)}
+                          </span>
+                        )
+                      ))}
+                    </div>
+                  </div>
+                )}
                 {m.toolCalls && m.toolCalls.length > 0 && (
                   <div className="mt-2 flex flex-wrap gap-1">
                     {m.toolCalls.map((tc, i) => (
@@ -176,17 +329,41 @@ export default function JarvisPanel({ open, onClose }: JarvisPanelProps) {
           )}
         </div>
 
-        <div className="border-t border-[var(--border-lt)] p-3">
+        <div className="border-t border-[var(--border-lt)] p-3 space-y-2">
+          <label className="flex items-center gap-2 text-[10px] text-[var(--text-4)]">
+            <input
+              type="checkbox"
+              checked={speakReplies}
+              onChange={e => setSpeakReplies(e.target.checked)}
+            />
+            Speak replies (browser voice)
+          </label>
           <div className="flex items-end gap-2">
             <textarea
               className="form-input flex-1 resize-none text-xs"
               rows={2}
-              placeholder="Ask JARVIS about customers, stock, invoices, repairs…"
+              placeholder="Ask about stock, repairs, invoices, or warranty policy…"
               value={input}
               onChange={e => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
               disabled={sending}
             />
+            {voiceSupported && (
+              <button
+                type="button"
+                className={
+                  listening
+                    ? 'btn-primary px-3 py-2 text-xs bg-[var(--danger)] border-[var(--danger)]'
+                    : 'btn-secondary px-3 py-2 text-xs'
+                }
+                onClick={toggleMic}
+                disabled={sending}
+                aria-label={listening ? 'Stop listening' : 'Speak to JARVIS'}
+                title={listening ? 'Listening… click to stop' : 'Speak your question'}
+              >
+                {listening ? '●' : 'Mic'}
+              </button>
+            )}
             <button
               className="btn-primary px-3 py-2 text-xs disabled:opacity-50"
               onClick={() => void sendMessage()}
