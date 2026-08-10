@@ -175,6 +175,24 @@ export async function POST(
       console.error('[invoice-payment] journal dual-write failed:', err)
     }
 
+    // Automation #2: customer payment confirmation (email + WhatsApp when phone exists).
+    // Never fail the payment if messaging fails. Skip on idempotent retries above.
+    try {
+      const { notifyCustomerPaymentReceived } = await import('@/lib/finance/payment-receipt-notify')
+      await notifyCustomerPaymentReceived({
+        invoiceId,
+        paymentId: payment.id,
+        amount: capped,
+        paymentMethod,
+        reference: reference || null,
+        paidAt: payment.paidAt ?? paymentDate,
+        actorUserId: actor.id,
+        actorName: actor.name || actor.username || null,
+      })
+    } catch (err) {
+      console.error('[invoice-payment] receipt notify failed:', err)
+    }
+
     return NextResponse.json({ payment, invoice: updatedInvoice })
   })
 }
