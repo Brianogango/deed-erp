@@ -72,15 +72,20 @@ export default function Login() {
   return (
     <div className="relative min-h-screen w-full overflow-hidden">
 
-      {/* ── Full-page background image (with branded navy + network fallback) ── */}
+      {/* ── Full-page background image (with branded navy + network fallback) ──
+          Fallback gradient keeps the deep navy-blue on the left, beneath the
+          sign-in panel, so the composition holds even without the photo. */}
       <div
         className="absolute inset-0 bg-cover bg-center bg-no-repeat"
-        style={{ background: 'linear-gradient(120deg, #04080f 0%, #0b1628 42%, #0f2044 72%, #0a1a38 100%)' }}
+        style={{ background: 'linear-gradient(120deg, #0a1a38 0%, #0f2044 30%, #0b1628 62%, #04080f 100%)' }}
         aria-hidden="true"
       />
+      {/* Photo layer is mirrored (scaleX(-1)) so the navy network side of the
+          image sits on the LEFT under the login panel and the subject shows on
+          the right. */}
       <div
         className="absolute inset-0 bg-cover bg-center bg-no-repeat"
-        style={{ backgroundImage: "url('/login-bg.jpg')" }}
+        style={{ backgroundImage: "url('/login-bg.jpg')", transform: 'scaleX(-1)' }}
         aria-hidden="true"
       />
       {/* Network / plexus texture — reinforces the brand backdrop and keeps the
