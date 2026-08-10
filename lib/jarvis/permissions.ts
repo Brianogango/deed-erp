@@ -14,12 +14,12 @@ import type { ToolDefinition } from './types'
 const ROLE_TOOL_ALLOWLIST: Record<UserRole, string[]> = {
   director: [
     'search_customers', 'check_inventory', 'explain_invoice', 'track_repair',
-    'check_warranty', 'summarize_sales', 'overdue_payments', 'procurement_summary',
+    'check_warranty', 'summarize_sales', 'summarize_repairs', 'overdue_payments', 'procurement_summary',
     'draft_quotation', 'draft_message', 'search_documents',
   ],
   admin_officer: [
     'search_customers', 'check_inventory', 'explain_invoice', 'track_repair',
-    'check_warranty', 'overdue_payments', 'draft_message', 'search_documents',
+    'check_warranty', 'summarize_repairs', 'overdue_payments', 'draft_message', 'search_documents',
   ],
   finance_officer: [
     'search_customers', 'check_inventory', 'explain_invoice',
@@ -37,10 +37,10 @@ const ROLE_TOOL_ALLOWLIST: Record<UserRole, string[]> = {
     'summarize_sales', 'draft_quotation', 'draft_message', 'search_documents',
   ],
   technical_lead: [
-    'check_inventory', 'track_repair', 'check_warranty', 'search_documents',
+    'check_inventory', 'track_repair', 'check_warranty', 'summarize_repairs', 'search_documents',
   ],
   technician: [
-    'track_repair', 'check_warranty', 'search_documents',
+    'track_repair', 'check_warranty', 'summarize_repairs', 'search_documents',
   ],
 }
 

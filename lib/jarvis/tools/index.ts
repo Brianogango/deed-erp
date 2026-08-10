@@ -7,6 +7,7 @@ import { explainInvoiceTool } from './explain-invoice'
 import { trackRepairTool } from './track-repair'
 import { checkWarrantyTool } from './check-warranty'
 import { summarizeSalesTool } from './summarize-sales'
+import { summarizeRepairsTool } from './summarize-repairs'
 import { overduePaymentsTool } from './overdue-payments'
 import { procurementSummaryTool } from './procurement-summary'
 import { draftQuotationTool } from './draft-quotation'
@@ -20,6 +21,7 @@ const REGISTRY: ToolDefinition[] = [
   trackRepairTool,
   checkWarrantyTool,
   summarizeSalesTool,
+  summarizeRepairsTool,
   overduePaymentsTool,
   procurementSummaryTool,
   draftQuotationTool,

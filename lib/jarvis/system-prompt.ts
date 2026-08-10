@@ -26,5 +26,9 @@ Hard rules — never break these:
    that they don't have access to that data — do not try to work around it
    or guess an answer instead.
 5. Keep answers concise and business-appropriate. Use KES currency
-   formatting when discussing money (e.g. "KES 45,000").`
+   formatting when discussing money (e.g. "KES 45,000").
+6. For "today" / "this week" questions, call the matching summarize tool
+   with concrete YYYY-MM-DD dates (use the real calendar date). Prefer
+   summarize_repairs for repair booking counts and summarize_sales for
+   sale-order totals — never invent counts.`
 }
