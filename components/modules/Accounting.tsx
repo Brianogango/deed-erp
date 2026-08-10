@@ -76,6 +76,8 @@ import AgeingTab from './accounting/AgeingTab'
 import { usePrismaAccountingReports, bootstrapCoaClient } from '@/hooks/usePrismaAccountingReports'
 import {
   DEFAULT_DOCUMENT_PAYMENT_DETAILS,
+  alignPaymentDetailsToTax,
+  documentHasVat,
   normalizeDocumentPaymentDetails,
   type DocumentPaymentDetails,
 } from '@/lib/document-payment-details'
@@ -481,6 +483,23 @@ function AccountingContent() {
   const customers = contacts.filter(c => c.isCustomer)
   const vendors = contacts.filter(c => c.isVendor)
   const invoiceVatRate = companySettings.vatRate ?? 16
+
+  // Align manual invoice payment bank: VAT → NCBA; non-VAT → ABSA / I&M
+  useEffect(() => {
+    const isVat = applyVat || newLines.some(l => Number(l.tax) > 0)
+    setNewPaymentDetails(prev => {
+      const next = alignPaymentDetailsToTax(prev, isVat, bankAccounts)
+      const cur = normalizeDocumentPaymentDetails(prev)
+      if (
+        cur.useCompanyDefault === next.useCompanyDefault
+        && cur.includeMpesa === next.includeMpesa
+        && (cur.customNote || '') === (next.customNote || '')
+        && cur.bankAccountIds.join() === next.bankAccountIds.join()
+      ) return prev
+      return next
+    })
+  }, [applyVat, newLines, bankAccounts])
+
 
   const reportMonthOptions = useMemo(() => {
     const months = new Set<string>([today().slice(0, 7)])
@@ -2259,6 +2278,8 @@ function AccountingContent() {
                     <PaymentDetailsPicker
                       value={newPaymentDetails}
                       onChange={setNewPaymentDetails}
+                      bankAccounts={bankAccounts}
+                      isVat={applyVat || newLines.some(l => Number(l.tax) > 0)}
                     />
                   )}
                 </div>

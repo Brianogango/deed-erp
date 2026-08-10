@@ -574,8 +574,9 @@ export interface BankStatementLine {
 // Default 5 bank accounts for the company
 export const DEFAULT_BANK_ACCOUNTS: BankAccount[] = [
   { id: 'ncba',   name: 'NCBA Current Account',  bankName: 'NCBA Bank Kenya PLC',  accountNo: '1005157785', currency: 'KES', openingBalance: 0, openingDate: '2025-01-01', active: true },
-  { id: 'equity', name: 'Equity Bank Account',    bankName: 'Equity Bank Kenya',    accountNo: '0670200000', currency: 'KES', openingBalance: 0, openingDate: '2025-01-01', active: true },
-  { id: 'kcb',    name: 'KCB Current Account',    bankName: 'KCB Bank Kenya',       accountNo: '1109876543', currency: 'KES', openingBalance: 0, openingDate: '2025-01-01', active: true },
+  { id: 'absa',   name: 'ABSA Current Account',  bankName: 'ABSA Bank Kenya PLC',  accountNo: '2043953071', currency: 'KES', openingBalance: 0, openingDate: '2025-01-01', active: true },
+  { id: 'im',     name: 'I&M Current Account',   bankName: 'I & M Bank',           accountNo: '00105512776350', currency: 'KES', openingBalance: 0, openingDate: '2025-01-01', active: true },
+  { id: 'equity', name: 'Equity Bank Account',    bankName: 'Equity Bank Kenya',    accountNo: '0020284195905', currency: 'KES', openingBalance: 0, openingDate: '2025-01-01', active: true },
   { id: 'mpesa',  name: 'M-Pesa Paybill',         bankName: 'Safaricom M-Pesa',     accountNo: '880100',     currency: 'KES', openingBalance: 0, openingDate: '2025-01-01', active: true },
   { id: 'cash',   name: 'Petty Cash Float',        bankName: 'Cash',                 accountNo: 'CASH',       currency: 'KES', openingBalance: 0, openingDate: '2025-01-01', active: true },
 ]

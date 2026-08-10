@@ -1,89 +1,169 @@
 'use client'
 
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import {
+  alignPaymentDetailsToTax,
+  banksByPaymentRole,
   normalizeDocumentPaymentDetails,
+  paymentRoleLabel,
+  summarizePaymentDetails,
   type DocumentPaymentDetails,
+  type PaymentBankRole,
 } from '@/lib/document-payment-details'
+import type { BankAccount } from '@/lib/store'
 import { Fa } from '@/components/icons'
-import { faChevronDown } from '@fortawesome/free-solid-svg-icons'
+import { faChevronDown, faLock } from '@fortawesome/free-solid-svg-icons'
 
 type Props = {
   value?: Partial<DocumentPaymentDetails> | null
   onChange: (next: DocumentPaymentDetails) => void
+  bankAccounts: BankAccount[]
+  /** When true (VAT invoice/quote), bank is locked to NCBA. */
+  isVat: boolean
   className?: string
-  /** Start expanded when a note is already set (default). */
   defaultOpen?: boolean
-  /** Optional label override (defaults to Payment note). */
   label?: string
-  /** Shown under the title when expanded. */
   hint?: string
-  /** When true, note is view-only (sent / posted documents). */
   readOnly?: boolean
 }
 
 /**
- * Per-document payment note for quotation / proforma / invoice PDFs.
- * Bank / M-Pesa lines always use company defaults — no per-document bank picker.
+ * Per-document payment bank + note for quotation / proforma / invoice PDFs.
+ * VAT → NCBA (locked). Non-VAT → ABSA or I&M.
  */
 export default function PaymentDetailsPicker({
   value,
   onChange,
+  bankAccounts,
+  isVat,
   className = '',
   defaultOpen,
-  label = 'Payment note',
-  hint = 'Optional text printed under Payment Details on the PDF (quotes, proformas, and invoices). Company bank / M-Pesa defaults still apply.',
+  label = 'Payment details',
+  hint,
   readOnly = false,
 }: Props) {
-  const details = normalizeDocumentPaymentDetails(value)
+  const roles = useMemo(() => banksByPaymentRole(bankAccounts), [bankAccounts])
+  // Display value aligned to VAT rules even if parent has not persisted yet.
+  const details = useMemo(
+    () => alignPaymentDetailsToTax(value, isVat, bankAccounts),
+    [value, isVat, bankAccounts],
+  )
   const note = details.customNote ?? ''
   const [open, setOpen] = useState(() =>
     defaultOpen ?? Boolean(normalizeDocumentPaymentDetails(value).customNote?.trim()),
   )
 
+  const nonVatOptions = (['absa', 'im'] as PaymentBankRole[])
+    .map(role => ({ role, bank: roles[role] }))
+    .filter((o): o is { role: PaymentBankRole; bank: NonNullable<typeof o.bank> } => Boolean(o.bank))
+
+  const selectedId = details.bankAccountIds[0]
+  const selectedRole = (Object.entries(roles).find(([, b]) => b?.id === selectedId)?.[0] || null) as PaymentBankRole | null
+
+  const defaultHint = isVat
+    ? 'VAT invoices always use NCBA for bank transfer instructions (plus company M-Pesa).'
+    : 'Non-VAT invoices use ABSA or I&M Bank — pick one for this document.'
+
   const setNote = (customNote: string) => {
-    onChange(normalizeDocumentPaymentDetails({
-      useCompanyDefault: true,
-      bankAccountIds: [],
-      includeMpesa: true,
+    onChange({
+      ...details,
       customNote,
-    }))
+    })
   }
 
-  const preview = note.trim()
-    ? note.trim().split(/\r?\n/).map(s => s.trim()).filter(Boolean)[0]
-    : 'No custom note — company payment defaults only'
+  const selectNonVatBank = (bankId: string) => {
+    if (readOnly || isVat) return
+    onChange({
+      useCompanyDefault: false,
+      bankAccountIds: [bankId],
+      includeMpesa: true,
+      customNote: note,
+    })
+  }
+
+  const preview = summarizePaymentDetails(details, bankAccounts)
 
   return (
-    <div className={`border-t border-[var(--border-lt)] pt-3 ${className}`.trim()}>
+    <div className={`invoice-pay-picker ${className}`.trim()}>
       <button
         type="button"
         onClick={() => setOpen(o => !o)}
-        className="w-full flex items-center justify-between gap-3 text-left cursor-pointer group"
+        className="invoice-pay-picker__toggle"
         aria-expanded={open}
       >
         <div className="min-w-0">
-          <p className="text-[11px] font-bold text-[var(--text-2)]">{label}</p>
+          <p className="invoice-pay-picker__label">{label}</p>
           {!open && (
-            <p className="text-[10px] text-[var(--text-4)] mt-0.5 truncate">{preview}</p>
+            <p className="invoice-pay-picker__preview">{preview}</p>
           )}
         </div>
         <Fa
           icon={faChevronDown}
-          className={`text-[10px] text-[var(--text-4)] shrink-0 transition-transform ${open ? 'rotate-180' : ''}`}
+          className={`invoice-pay-picker__chevron ${open ? 'is-open' : ''}`}
           aria-hidden="true"
         />
       </button>
 
       {open && (
-        <div className="mt-3 flex flex-col gap-1.5">
-          <p className="text-[10px] text-[var(--text-4)]">{hint}</p>
-          <label className="sr-only" htmlFor="document-payment-note">{label}</label>
+        <div className="invoice-pay-picker__body">
+          <p className="invoice-pay-picker__hint">{hint || defaultHint}</p>
+
+          {isVat ? (
+            <div className="invoice-pay-picker__locked" role="status">
+              <Fa icon={faLock} aria-hidden="true" />
+              <div>
+                <p className="invoice-pay-picker__bank-name">
+                  {roles.ncba ? paymentRoleLabel('ncba') : 'NCBA'}
+                </p>
+                <p className="invoice-pay-picker__bank-meta">
+                  {roles.ncba
+                    ? `${roles.ncba.bankName} · ${roles.ncba.accountNo}`
+                    : 'Add an NCBA bank account in Settings to print transfer details.'}
+                </p>
+              </div>
+            </div>
+          ) : (
+            <div className="invoice-pay-picker__options" role="radiogroup" aria-label="Payment bank">
+              {nonVatOptions.length === 0 && (
+                <p className="invoice-pay-picker__hint">
+                  Add ABSA and/or I&amp;M Bank accounts in Settings to choose payment details.
+                </p>
+              )}
+              {nonVatOptions.map(({ role, bank }) => {
+                const checked = selectedId === bank.id || selectedRole === role
+                return (
+                  <label
+                    key={bank.id}
+                    className={`invoice-pay-picker__option ${checked ? 'is-selected' : ''} ${readOnly ? 'is-readonly' : ''}`}
+                  >
+                    <input
+                      type="radio"
+                      name="document-payment-bank"
+                      value={bank.id}
+                      checked={checked}
+                      disabled={readOnly}
+                      onChange={() => selectNonVatBank(bank.id)}
+                    />
+                    <span>
+                      <span className="invoice-pay-picker__bank-name">{paymentRoleLabel(role)}</span>
+                      <span className="invoice-pay-picker__bank-meta">
+                        {bank.bankName} · {bank.accountNo}
+                      </span>
+                    </span>
+                  </label>
+                )
+              })}
+            </div>
+          )}
+
+          <label className="invoice-pay-picker__note-label" htmlFor="document-payment-note">
+            Payment note (optional)
+          </label>
           <textarea
             id="document-payment-note"
             className="form-input text-xs"
             rows={3}
-            placeholder="e.g. Pay to NCBA 1005157785 · use this document number as reference"
+            placeholder="e.g. Use this document number as the payment reference"
             value={note}
             readOnly={readOnly}
             disabled={readOnly}
@@ -93,7 +173,9 @@ export default function PaymentDetailsPicker({
             }}
           />
           {readOnly && (
-            <p className="text-[10px] text-amber-700 font-semibold">Reset to draft to change the payment note.</p>
+            <p className="invoice-pay-picker__readonly-msg">
+              Reset to draft to change payment details.
+            </p>
           )}
         </div>
       )}
