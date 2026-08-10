@@ -16,6 +16,7 @@ import {
   salesInboxConfigured,
 } from '@/lib/crm/sales-inbox-imap'
 import { storeLeadEmailAttachments } from '@/lib/crm/lead-attachments'
+import { notifyInboundLeadCreated } from '@/lib/crm/sales-inbox-notifications'
 
 const RR_KEY = 'deed_salesLeadRoundRobin'
 const SALES_ROLES = ['sales_rep', 'sales'] as const
@@ -80,10 +81,11 @@ export async function processSalesInboxLeads(opts?: {
       isActive: true,
       role: { in: [...SALES_ROLES] },
     },
-    select: { id: true, username: true },
+    select: { id: true, username: true, email: true, name: true },
     orderBy: { username: 'asc' },
   })
   const salesRepIds = salesReps.map(u => u.id)
+  const salesRepById = new Map(salesReps.map(u => [u.id, u]))
 
   let messages
   try {
@@ -216,6 +218,25 @@ export async function processSalesInboxLeads(opts?: {
         } catch {
           /* notification is best-effort */
         }
+      }
+
+      // Email assigned rep (+ sales team Cc) so RFQs are seen outside the ERP tab.
+      try {
+        const owner = ownerId ? salesRepById.get(ownerId) : null
+        await notifyInboundLeadCreated({
+          leadId: lead.id,
+          leadName: lead.name,
+          leadEmail: lead.email,
+          companyName: draft.companyName,
+          subject: draft.emailSubject,
+          snippet: draft.emailSnippet || draft.emailBody,
+          ownerId,
+          ownerEmail: owner?.email ?? null,
+          ownerName: owner?.name || owner?.username || null,
+          attachmentCount: attachmentMeta.length,
+        })
+      } catch {
+        /* email notify is best-effort */
       }
 
       // Sticky assignments intentionally do not advance the round-robin cursor.
