@@ -23,7 +23,7 @@ export default function OpportunityDetail({
   const activeOpp = opportunities.find(o => o.id === activeOppId)
   const staffName = users.find(u => u.id === currentUserId)?.name || users.find(u => u.id === currentUserId)?.username || 'Staff'
   const ownerOptions = users
-    .filter(u => u.role === 'sales_rep' || u.role === 'sales' || u.id === activeOpp?.ownerId || u.id === activeOpp?.assignedToId)
+    .filter(u => u.role === 'sales_rep' || u.id === activeOpp?.ownerId || u.id === activeOpp?.assignedToId)
     .map(u => ({ value: u.id, label: u.name || u.username || u.email || u.id }))
 
   if (!activeOpp) return null
