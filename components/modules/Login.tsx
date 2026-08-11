@@ -105,7 +105,7 @@ export default function Login() {
           the copy fully on the blue. Real HTML text, crisp at any resolution.
           Vision first, Mission below. Hidden below lg where the card is full width. */}
       <div className="pointer-events-none absolute bottom-0 right-0 z-10 hidden max-w-[430px] flex-col gap-6 rounded-tl-[110px] pb-[9vh] pl-11 pr-10 pt-14 lg:flex"
-        style={{ background: 'linear-gradient(150deg, #0b82e4 0%, #0559c1 60%, #034aa6 100%)' }}>
+        style={{ background: 'linear-gradient(150deg, #0d7fb4 0%, #0a5f97 55%, #0a4a86 100%)' }}>
         {/* Our Vision */}
         <div className="max-w-[300px]">
           <div className="flex items-center gap-3">
