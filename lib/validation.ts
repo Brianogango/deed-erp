@@ -37,6 +37,7 @@ export const userUpdateSchema = z.object({
   role: z.string().optional(),
   modules: z.array(z.string()).optional(),
   active: z.boolean().optional(),
+  actsAsTechnician: z.boolean().optional(),
   password: z.string().min(MIN_PASSWORD_LENGTH, `Password must be at least ${MIN_PASSWORD_LENGTH} characters`).optional(),
   mustChangePassword: z.boolean().optional(),
 })
