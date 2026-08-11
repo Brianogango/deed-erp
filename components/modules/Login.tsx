@@ -95,15 +95,16 @@ export default function Login() {
           backgroundSize: '30px 30px',
         }}
         aria-hidden="true" />
-      {/* Right-side scrim: guarantees contrast beneath the sign-in panel on any photo */}
+      {/* Right-side scrim: darkens the busy photo behind the brand-story text on
+          the right so the white copy stays legible over the subject and accent. */}
       <div className="pointer-events-none absolute inset-0"
-        style={{ background: 'linear-gradient(90deg, rgba(4,10,24,0) 38%, rgba(4,10,24,0.28) 66%, rgba(4,10,24,0.55) 100%)' }}
+        style={{ background: 'linear-gradient(90deg, rgba(4,10,24,0) 40%, rgba(4,10,24,0.34) 60%, rgba(4,10,24,0.6) 80%, rgba(4,10,24,0.72) 100%)' }}
         aria-hidden="true" />
 
-      {/* ── Brand story overlay (left) — real HTML text, crisp at any resolution.
-          Sits over the navy network area; hidden below lg where the sign-in
-          card takes over the full width. */}
-      <div className="pointer-events-none absolute inset-y-0 left-0 z-10 hidden w-[48%] flex-col justify-center gap-9 pl-[6vw] pr-8 lg:flex xl:pl-[7vw]">
+      {/* ── Brand story overlay (right) — real HTML text, crisp at any resolution.
+          Sits over the blue curved accent on the right; hidden below lg where
+          the sign-in card takes over the full width. */}
+      <div className="pointer-events-none absolute inset-y-0 right-0 z-10 hidden w-[40%] flex-col justify-center gap-9 pl-8 pr-[6vw] lg:flex xl:pr-[7vw]">
         {/* Our Mission */}
         <div className="max-w-[440px]">
           <div className="flex items-center gap-4">
@@ -144,13 +145,13 @@ export default function Login() {
         </div>
       </div>
 
-      {/* ── Sign-in panel: right-aligned, vertically centered, responsive ── */}
-      <div className="relative z-10 flex min-h-screen w-full items-center justify-center px-5 py-10 md:justify-end md:px-[6vw] lg:px-[8vw]">
+      {/* ── Sign-in panel: left-aligned, vertically centered, responsive ── */}
+      <div className="relative z-10 flex min-h-screen w-full items-center justify-center px-5 py-10 md:justify-start md:px-[6vw] lg:px-[8vw]">
         <div className="w-full max-w-[430px] rounded-[22px] border border-white/60 bg-white/95 px-7 py-9 shadow-2xl backdrop-blur-xl sm:px-9"
           style={{ boxShadow: '0 28px 70px rgba(4,10,24,0.45)' }}>
 
           {/* Deed Technologies logo (full lockup, on the white card) */}
-          <div className="mb-6 flex justify-center">
+          <div className="mb-6 flex justify-start">
             <img
               src="/deed-logo.png"
               alt="Deed Technologies"
