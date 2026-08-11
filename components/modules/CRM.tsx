@@ -312,7 +312,7 @@ function CRMContent() {
   // Per-rep breakdown (admin only)
   const salesReps = users.filter(u =>
     u.role === 'sales_rep'
-    || u.role === 'sales'
+   
     || opportunities.some(o => o.ownerId === u.id || o.assignedToId === u.id),
   )
   const repBreakdown = salesReps.map(rep => {
