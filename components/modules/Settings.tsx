@@ -790,6 +790,11 @@ SMTP_USER=info@deed.co.ke
 SMTP_PASS=YOUR_MAILBOX_PASSWORD
 HR_EMAIL=hr@deed.co.ke
 HR_TEAM_EMAIL=hr@deed.co.ke
+# Optional — only when hr@ / accounts@ mailboxes exist in cPanel:
+# HR_SMTP_USER=hr@deed.co.ke
+# HR_SMTP_PASS=...
+# ACCOUNTS_SMTP_USER=accounts@deed.co.ke
+# ACCOUNTS_SMTP_PASS=...
 LEAVE_APPLY_CC_EMAILS=edwin@deed.co.ke,dennis@deed.co.ke
 SALES_EMAIL=sales@deed.co.ke
 ACCOUNTS_EMAIL=accounts@deed.co.ke`}</pre>

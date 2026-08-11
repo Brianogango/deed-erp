@@ -53,6 +53,7 @@ describe('pickMailbox department From/Reply-To', () => {
     'SMTP_USER', 'SMTP_PASS', 'EMAIL_FROM',
     'SALES_EMAIL', 'SALES_SMTP_USER', 'SALES_SMTP_PASS',
     'ACCOUNTS_EMAIL', 'ACCOUNTS_SMTP_USER', 'ACCOUNTS_SMTP_PASS',
+    'HR_EMAIL', 'HR_SMTP_USER', 'HR_SMTP_PASS',
   ] as const
   const prev: Record<string, string | undefined> = {}
   beforeEach(() => {
@@ -92,6 +93,50 @@ describe('pickMailbox department From/Reply-To', () => {
     expect(accounts.dedicatedAuth).toBe(true)
     expect(accounts.user).toBe('accounts@deed.co.ke')
     expect(accounts.pass).toBe('accounts-secret')
+  })
+
+  it('falls back to default SMTP for hr when HR_SMTP_* is unset', () => {
+    process.env.SMTP_USER = 'hello@deed.co.ke'
+    process.env.SMTP_PASS = 'secret'
+    process.env.EMAIL_FROM = 'hello@deed.co.ke'
+    process.env.HR_EMAIL = 'hr@deed.co.ke'
+    delete process.env.HR_SMTP_USER
+    delete process.env.HR_SMTP_PASS
+    const hr = pickMailbox('hr')
+    expect(hr.from).toBe('hello@deed.co.ke')
+    expect(hr.replyTo).toBe('hr@deed.co.ke')
+    expect(hr.user).toBe('hello@deed.co.ke')
+    expect(hr.pass).toBe('secret')
+    expect(hr.dedicatedAuth).toBe(false)
+  })
+
+  it('falls back to default SMTP for accounts when ACCOUNTS_SMTP_* is unset', () => {
+    process.env.SMTP_USER = 'hello@deed.co.ke'
+    process.env.SMTP_PASS = 'secret'
+    process.env.EMAIL_FROM = 'hello@deed.co.ke'
+    process.env.ACCOUNTS_EMAIL = 'accounts@deed.co.ke'
+    delete process.env.ACCOUNTS_SMTP_USER
+    delete process.env.ACCOUNTS_SMTP_PASS
+    const accounts = pickMailbox('accounts')
+    expect(accounts.from).toBe('hello@deed.co.ke')
+    expect(accounts.replyTo).toBe('accounts@deed.co.ke')
+    expect(accounts.user).toBe('hello@deed.co.ke')
+    expect(accounts.dedicatedAuth).toBe(false)
+  })
+
+  it('uses dedicated HR SMTP credentials when set', () => {
+    process.env.SMTP_USER = 'hello@deed.co.ke'
+    process.env.SMTP_PASS = 'secret'
+    process.env.EMAIL_FROM = 'hello@deed.co.ke'
+    process.env.HR_EMAIL = 'hr@deed.co.ke'
+    process.env.HR_SMTP_USER = 'hr@deed.co.ke'
+    process.env.HR_SMTP_PASS = 'hr-secret'
+    const hr = pickMailbox('hr')
+    expect(hr.from).toBe('hr@deed.co.ke')
+    expect(hr.replyTo).toBe('hr@deed.co.ke')
+    expect(hr.dedicatedAuth).toBe(true)
+    expect(hr.user).toBe('hr@deed.co.ke')
+    expect(hr.pass).toBe('hr-secret')
   })
 })
 

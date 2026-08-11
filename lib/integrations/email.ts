@@ -51,11 +51,9 @@ interface MailboxConfig {
 }
 
 /**
- * Department mailboxes (sales@ / accounts@ / hr@) send From + Reply-To as that
- * address. Auth prefers dedicated *_SMTP_USER/PASS; otherwise authenticates as
- * the department address using SMTP_PASS (common when all Deed mailboxes share
- * one password). Contabo rejects From≠auth-user, so we do not fall back to
- * sending From=hello@ while claiming to be sales@.
+ * Authenticate as the department address (From = Reply-To = department).
+ * Used for sales@ where the cPanel mailbox exists and shares SMTP_PASS.
+ * Contabo rejects From≠auth-user, so we do not send From=hello@ as sales@.
  */
 const departmentMailbox = (
   departmentFrom: string,
@@ -77,6 +75,40 @@ const departmentMailbox = (
   }
 }
 
+/**
+ * For hr@ / accounts@ when the mailbox is not provisioned in cPanel yet:
+ * if dedicated *_SMTP_USER + *_SMTP_PASS are unset, authenticate as the default
+ * SMTP user (hello@) and keep Reply-To on the department address so replies
+ * still route correctly. Never send From=hr@ while authenticating as hello@.
+ */
+const departmentMailboxWithDefaultFallback = (
+  departmentFrom: string,
+  dedicatedUser: string | undefined,
+  dedicatedPass: string | undefined,
+  def: MailboxConfig,
+): MailboxConfig => {
+  const department = (departmentFrom || '').trim() || def.from
+  const hasDedicated = Boolean(
+    (dedicatedUser || '').trim() && (dedicatedPass || '').trim(),
+  )
+  if (hasDedicated) {
+    return {
+      user: (dedicatedUser as string).trim(),
+      pass: (dedicatedPass as string).trim(),
+      from: department,
+      replyTo: department,
+      dedicatedAuth: true,
+    }
+  }
+  return {
+    user: def.user,
+    pass: def.pass,
+    from: def.from,
+    replyTo: department,
+    dedicatedAuth: false,
+  }
+}
+
 /** Exported for tests / diagnostics. */
 export const pickMailbox = (profile: MailboxProfile): MailboxConfig => {
   const defFrom = process.env.EMAIL_FROM ?? process.env.SMTP_USER ?? 'noreply@deed.co.ke'
@@ -88,7 +120,7 @@ export const pickMailbox = (profile: MailboxProfile): MailboxConfig => {
     dedicatedAuth: !!(process.env.SMTP_USER && process.env.SMTP_PASS),
   }
   if (profile === 'hr') {
-    return departmentMailbox(
+    return departmentMailboxWithDefaultFallback(
       process.env.HR_EMAIL || process.env.HR_SMTP_USER || 'hr@deed.co.ke',
       process.env.HR_SMTP_USER,
       process.env.HR_SMTP_PASS,
@@ -104,7 +136,7 @@ export const pickMailbox = (profile: MailboxProfile): MailboxConfig => {
     )
   }
   if (profile === 'accounts') {
-    return departmentMailbox(
+    return departmentMailboxWithDefaultFallback(
       process.env.ACCOUNTS_EMAIL || process.env.ACCOUNTS_SMTP_USER || 'accounts@deed.co.ke',
       process.env.ACCOUNTS_SMTP_USER,
       process.env.ACCOUNTS_SMTP_PASS,
