@@ -164,6 +164,7 @@ import {
   taxableQuoteSubtotal,
   diagnosisFeeAmount,
 } from '@/lib/diagnosis-fee'
+import { isAssignableTechnician } from '@/lib/repair/assignable-technicians'
 import {
   buildDefaultRepairQcItems,
   prepareRepairQcItemsForRound,
@@ -12913,6 +12914,11 @@ const storeCtx: AppState = {
     },
     assignRefurbishmentJob: (jobId, techId, techName) => {
       const job = refurbishmentJobs.find(j => j.id === jobId)
+      const tech = users.find(u => u.id === techId)
+      const exitedEmployeeIds = new Set(empRef.current.filter(e => e.status === 'exited').map(e => e.id))
+      if (!tech || !isAssignableTechnician(tech, exitedEmployeeIds)) {
+        showToast('Cannot assign an inactive or exited technician', 'error'); return
+      }
       setRefurbishmentJobs(p => p.map(j => j.id !== jobId ? j : { ...j, assignedTechnicianId: techId, assignedTechnicianName: techName, assignedDate: now(), status: 'assigned' }))
       if (job) {
         notifyUsers({
@@ -13389,6 +13395,10 @@ const storeCtx: AppState = {
       }
       const tech = users.find(u => u.id === technicianId)
       if (!tech) { showToast('Technician not found', 'error'); return }
+      const exitedEmployeeIds = new Set(empRef.current.filter(e => e.status === 'exited').map(e => e.id))
+      if (!isAssignableTechnician(tech, exitedEmployeeIds)) {
+        showToast('Cannot assign an inactive or exited technician', 'error'); return
+      }
       const repair = repairs.find(r => r.id === repairId)
 
       setRepairs(p => p.map(r => r.id === repairId ? {

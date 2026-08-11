@@ -2,6 +2,8 @@
 
 import { Suspense, useState, useMemo } from 'react'
 import { useOperationsStore, fmtDate as fmtD } from '@/lib/store'
+import { useHrStore } from '@/hooks/useHrStore'
+import { assignableTechnicians } from '@/lib/repair/assignable-technicians'
 import type { RefurbishmentJob, RefurbStatus, RefurbPart, SerialNumber } from '@/lib/store'
 import { Confirm, Modal, Field, Textarea, ModuleSkeleton, useMounted, ModuleHeader } from '@/components/ui'
 import { StatusBadge, RecordHeader, PrimaryActionButton } from '@/components/erp'
@@ -60,7 +62,8 @@ function RefurbishmentContent() {
   const currentUser = users.find(u => u.id === currentUserId)
   const isLeadTech  = ['technical_lead', 'director'].includes(currentUser?.role ?? '')
   const canAssignJobs = currentUser?.role === 'technical_lead'
-  const techs       = users.filter(u => u.role === 'technical_lead' || u.role === 'technician')
+  const employees = useHrStore(s => s.employees)
+  const techs       = assignableTechnicians(users, employees)
 
   const [activeId, setActiveId]           = useUrlRecordId()
   const [filterStatus, setFilterStatus]   = useState<RefurbStatus | 'all'>('all')
