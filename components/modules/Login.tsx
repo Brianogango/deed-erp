@@ -95,22 +95,68 @@ export default function Login() {
           backgroundSize: '30px 30px',
         }}
         aria-hidden="true" />
-      {/* Right-side scrim: guarantees contrast beneath the sign-in panel on any photo */}
+      {/* Soft right-side vignette — subtle depth without hiding the subject. */}
       <div className="pointer-events-none absolute inset-0"
-        style={{ background: 'linear-gradient(90deg, rgba(4,10,24,0) 38%, rgba(4,10,24,0.28) 66%, rgba(4,10,24,0.55) 100%)' }}
+        style={{ background: 'linear-gradient(90deg, rgba(4,10,24,0) 60%, rgba(4,10,24,0.22) 100%)' }}
         aria-hidden="true" />
 
+      {/* ── Brand-story accent panel (lower-right): a self-contained brand-blue
+          panel (rounded top-left curve) that provides the blue accent and holds
+          the copy fully on the blue. Real HTML text, crisp at any resolution.
+          Vision first, Mission below. Hidden below lg where the card is full width. */}
+      <div className="pointer-events-none absolute bottom-0 right-0 z-10 hidden max-w-[430px] flex-col gap-6 rounded-tl-[110px] pb-[9vh] pl-11 pr-10 pt-14 lg:flex"
+        style={{ background: 'linear-gradient(150deg, #20164d 0%, #20164d 34%, #163169 58%, #0e5090 82%, #00aeef 100%)' }}>
+        {/* Our Vision */}
+        <div className="max-w-[300px]">
+          <div className="flex items-center gap-3">
+            <span className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full border border-[#00aeef] text-[#00aeef]">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" className="h-[18px] w-[18px]" aria-hidden="true">
+                <path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z" strokeLinecap="round" strokeLinejoin="round" />
+                <circle cx="12" cy="12" r="3.1" />
+              </svg>
+            </span>
+            <h2 className="text-[22px] font-bold tracking-[-0.01em] text-white">Our Vision</h2>
+          </div>
+          <p className="mt-2.5 pl-[52px] text-[13px] leading-[1.55] text-white/95">
+            To be the No. 1 transformative technology partner in Kenya by 2035, driving
+            unprecedented innovation and igniting a digital revolution that empowers
+            businesses and individuals.
+          </p>
+        </div>
+
+        {/* Divider */}
+        <div className="ml-[52px] h-px w-[60%] max-w-[280px]" style={{ background: 'rgba(0,174,239,0.55)' }} aria-hidden="true" />
+
+        {/* Our Mission */}
+        <div className="max-w-[300px]">
+          <div className="flex items-center gap-3">
+            <span className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full border border-[#00aeef] text-[#00aeef]">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" className="h-[18px] w-[18px]" aria-hidden="true">
+                <circle cx="11" cy="13" r="8.2" /><circle cx="11" cy="13" r="4.4" /><circle cx="11" cy="13" r="1.4" fill="currentColor" stroke="none" />
+                <path d="M11 13 20.5 3.5" strokeLinecap="round" /><path d="M16.6 3.2 20.8 3.2 20.8 7.4" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </span>
+            <h2 className="text-[22px] font-bold tracking-[-0.01em] text-white">Our Mission</h2>
+          </div>
+          <p className="mt-2.5 pl-[52px] text-[13px] leading-[1.55] text-white/95">
+            Our mission is to ensure equitable access to transformative technology for all
+            individuals, regardless of their background or location, by delivering innovative
+            solutions and exceptional support.
+          </p>
+        </div>
+      </div>
+
       {/* ── Sign-in panel: left-aligned, vertically centered, responsive ── */}
-      <div className="relative z-10 flex min-h-screen w-full items-center justify-center px-5 py-10 sm:justify-center md:justify-end md:px-[6vw] lg:px-[8vw]">
+      <div className="relative z-10 flex min-h-screen w-full items-center justify-center px-5 py-10 md:justify-start md:px-[6vw] lg:px-[8vw]">
         <div className="w-full max-w-[430px] rounded-[22px] border border-white/60 bg-white/95 px-7 py-9 shadow-2xl backdrop-blur-xl sm:px-9"
           style={{ boxShadow: '0 28px 70px rgba(4,10,24,0.45)' }}>
 
-          {/* Full Deed Technologies logo (brand identity lives in the logo itself) */}
-          <div className="mb-7 flex justify-start">
+          {/* Deed Technologies logo (full lockup, on the white card) */}
+          <div className="mb-6 flex justify-start">
             <img
-              src="/deed-logo-transparent.png"
+              src="/deed-logo.png"
               alt="Deed Technologies"
-              className="h-[58px] w-auto object-contain"
+              className="h-[92px] w-auto object-contain"
             />
           </div>
 
