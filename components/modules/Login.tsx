@@ -100,10 +100,10 @@ export default function Login() {
         style={{ background: 'linear-gradient(90deg, rgba(4,10,24,0) 60%, rgba(4,10,24,0.22) 100%)' }}
         aria-hidden="true" />
 
-      {/* ── Brand-story accent panel (lower-right): a brand-blue panel that blends
-          into the photo's blue curved accent so the copy sits fully on the blue.
-          Real HTML text, crisp at any resolution. Vision first, Mission below.
-          Hidden below lg where the sign-in card takes over the full width. */}
+      {/* ── Brand-story accent panel (lower-right): a self-contained brand-blue
+          panel (rounded top-left curve) that provides the blue accent and holds
+          the copy fully on the blue. Real HTML text, crisp at any resolution.
+          Vision first, Mission below. Hidden below lg where the card is full width. */}
       <div className="pointer-events-none absolute bottom-0 right-0 z-10 hidden max-w-[430px] flex-col gap-6 rounded-tl-[110px] pb-[9vh] pl-11 pr-10 pt-14 lg:flex"
         style={{ background: 'linear-gradient(150deg, #0b82e4 0%, #0559c1 60%, #034aa6 100%)' }}>
         {/* Our Vision */}
