@@ -89,6 +89,17 @@ describe('leave-notifications', () => {
     expect(result.name).toBe('Ann Applicant')
   })
 
+  it('falls back to linked User.email when Employee.email is blank', async () => {
+    mockPrisma.employee.findUnique.mockResolvedValueOnce({
+      firstName: 'Ann',
+      lastName: 'Applicant',
+      email: null,
+      user: { email: 'ann.user@deed.co.ke' },
+    })
+    const result = await resolveApplicantEmail('emp-1')
+    expect(result.email).toBe('ann.user@deed.co.ke')
+  })
+
   it('emails hr@deed.co.ke To with Edwin+Dennis CC on apply', async () => {
     await notifyLeaveApplied(sample)
     expect(mockSendEmail).toHaveBeenCalledWith(expect.objectContaining({

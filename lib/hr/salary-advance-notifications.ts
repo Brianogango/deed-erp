@@ -136,7 +136,6 @@ async function sendHrMailbox(opts: {
       to: toList.length === 1 ? toList[0] : toList,
       cc: ccList.length > 0 ? ccList : undefined,
       mailbox: 'hr',
-      from: process.env.HR_EMAIL || undefined,
       subject: opts.subject,
       html: opts.html,
       text: opts.text,

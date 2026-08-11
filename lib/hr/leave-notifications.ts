@@ -146,8 +146,8 @@ export async function resolveHrApproverEmails(): Promise<string[]> {
 }
 
 /**
- * Resolve the applier's email from their HR record (`Employee.email`).
- * Decision feedback always uses this address only.
+ * Resolve the applier's email from their HR record (`Employee.email`),
+ * falling back to the linked User.email when the HR email field is blank.
  */
 export async function resolveApplicantEmail(employeeId: string, _submittedByUserId?: string | null): Promise<{
   email: string | null
@@ -160,12 +160,14 @@ export async function resolveApplicantEmail(employeeId: string, _submittedByUser
         firstName: true,
         lastName: true,
         email: true,
+        user: { select: { email: true } },
       },
     })
     const name = employee
       ? `${employee.firstName} ${employee.lastName}`.trim()
       : 'Employee'
-    return { email: normalizeEmail(employee?.email), name }
+    const email = normalizeEmail(employee?.email) || normalizeEmail(employee?.user?.email)
+    return { email, name }
   } catch (err) {
     console.error('[leave-notifications] failed to resolve applicant email', err)
     return { email: null, name: 'Employee' }
@@ -215,11 +217,12 @@ async function sendHrMailbox(opts: {
     return
   }
   try {
+    // pickMailbox('hr') falls back to hello@ auth when HR_SMTP_* is unset;
+    // do not force From=HR_EMAIL (Contabo rejects From≠auth-user).
     const result = await sendEmail({
       to: toList.length === 1 ? toList[0] : toList,
       cc: ccList.length > 0 ? ccList : undefined,
       mailbox: 'hr',
-      from: process.env.HR_EMAIL || undefined,
       subject: opts.subject,
       html: opts.html,
       text: opts.text,
