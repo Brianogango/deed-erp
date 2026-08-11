@@ -102,13 +102,13 @@ export default function Login() {
 
       {/* ── Sign-in panel: left-aligned, vertically centered, responsive ── */}
       <div className="relative z-10 flex min-h-screen w-full items-center justify-center px-5 py-10 sm:justify-center md:justify-end md:px-[6vw] lg:px-[8vw]">
-        <div className="w-full max-w-[430px] rounded-[22px] border border-white/15 px-7 py-9 shadow-2xl backdrop-blur-2xl sm:px-9"
-          style={{ background: 'rgba(10,20,44,0.55)', boxShadow: '0 28px 70px rgba(4,10,24,0.55)' }}>
+        <div className="w-full max-w-[430px] rounded-[22px] border border-white/60 bg-white/95 px-7 py-9 shadow-2xl backdrop-blur-xl sm:px-9"
+          style={{ boxShadow: '0 28px 70px rgba(4,10,24,0.45)' }}>
 
-          {/* Full Deed Technologies logo — white variant reads on the dark panel */}
+          {/* Full Deed Technologies logo (brand identity lives in the logo itself) */}
           <div className="mb-7 flex justify-start">
             <img
-              src="/deed-logo-white.png"
+              src="/deed-logo-transparent.png"
               alt="Deed Technologies"
               className="h-[58px] w-auto object-contain"
             />
@@ -116,8 +116,8 @@ export default function Login() {
 
           {/* Heading / welcome */}
           <div className="mb-6">
-            <h1 className="text-[24px] font-bold tracking-[-0.01em] text-white">Sign in</h1>
-            <p className="mt-1 text-[13px] text-white/60">Welcome back — sign in to your workspace.</p>
+            <h1 className="text-[24px] font-bold tracking-[-0.01em] text-slate-900">Sign in</h1>
+            <p className="mt-1 text-[13px] text-slate-500">Welcome back — sign in to your workspace.</p>
           </div>
 
           {/* Session-ended reason banner */}
@@ -139,11 +139,11 @@ export default function Login() {
           <form className="space-y-4" onSubmit={handleSubmit} noValidate>
             {/* Username */}
             <div>
-              <label className="mb-2 block text-[12px] font-semibold text-white/70">
+              <label className="mb-2 block text-[12px] font-semibold text-slate-600">
                 Username
               </label>
               <div className="relative">
-                <span className="pointer-events-none absolute inset-y-0 left-4 flex items-center text-white/35">
+                <span className="pointer-events-none absolute inset-y-0 left-4 flex items-center text-slate-400">
                   <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4">
                     <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
                   </svg>
@@ -157,21 +157,21 @@ export default function Login() {
                   placeholder="your.username"
                   autoFocus
                   autoComplete="username"
-                  className={`w-full rounded-2xl border bg-white/10 py-3 pl-11 pr-4 text-[13px] text-white placeholder-white/35 outline-none transition focus:border-[var(--primary)] focus:bg-white/15 focus:ring-2 focus:ring-[var(--primary)]/25 ${
-                    usernameInvalid ? 'border-red-400/60 bg-red-500/10' : 'border-white/15'
+                  className={`w-full rounded-2xl border bg-slate-50 py-3 pl-11 pr-4 text-[13px] text-slate-900 placeholder-slate-400 outline-none transition focus:border-[var(--primary)] focus:bg-white focus:ring-2 focus:ring-[var(--primary)]/25 ${
+                    usernameInvalid ? 'border-red-300 bg-red-50' : 'border-slate-200'
                   }`}
                 />
               </div>
-              {usernameInvalid && <p className="mt-1.5 text-[11px] text-red-300">Username is required</p>}
+              {usernameInvalid && <p className="mt-1.5 text-[11px] text-red-500">Username is required</p>}
             </div>
 
             {/* Password */}
             <div>
-              <label className="mb-2 block text-[12px] font-semibold text-white/70">
+              <label className="mb-2 block text-[12px] font-semibold text-slate-600">
                 Password
               </label>
               <div className="relative">
-                <span className="pointer-events-none absolute inset-y-0 left-4 flex items-center text-white/35">
+                <span className="pointer-events-none absolute inset-y-0 left-4 flex items-center text-slate-400">
                   <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4">
                     <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
                   </svg>
@@ -184,12 +184,12 @@ export default function Login() {
                   maxLength={128}
                   placeholder="••••••••••••"
                   autoComplete="current-password"
-                  className={`w-full rounded-2xl border bg-white/10 py-3 pl-11 pr-12 text-[13px] text-white placeholder-white/35 outline-none transition focus:border-[var(--primary)] focus:bg-white/15 focus:ring-2 focus:ring-[var(--primary)]/25 ${
-                    passwordInvalid ? 'border-red-400/60 bg-red-500/10' : 'border-white/15'
+                  className={`w-full rounded-2xl border bg-slate-50 py-3 pl-11 pr-12 text-[13px] text-slate-900 placeholder-slate-400 outline-none transition focus:border-[var(--primary)] focus:bg-white focus:ring-2 focus:ring-[var(--primary)]/25 ${
+                    passwordInvalid ? 'border-red-300 bg-red-50' : 'border-slate-200'
                   }`}
                 />
                 <button type="button" onClick={() => setShowPassword(v => !v)} tabIndex={-1}
-                  className="absolute inset-y-0 right-4 flex items-center text-white/40 transition hover:text-white/70">
+                  className="absolute inset-y-0 right-4 flex items-center text-slate-400 transition hover:text-slate-600">
                   {showPassword ? (
                     <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4">
                       <path d="M10 12a2 2 0 100-4 2 2 0 000 4z" />
@@ -203,7 +203,7 @@ export default function Login() {
                   )}
                 </button>
               </div>
-              {passwordInvalid && <p className="mt-1.5 text-[11px] text-red-300">Password is required</p>}
+              {passwordInvalid && <p className="mt-1.5 text-[11px] text-red-500">Password is required</p>}
             </div>
 
             {/* Sign in button */}
@@ -235,8 +235,8 @@ export default function Login() {
           </form>
 
           {/* Footer */}
-          <div className="mt-6 flex items-center justify-center border-t border-white/10 pt-5">
-            <span className="text-[11px] text-white/40">
+          <div className="mt-6 flex items-center justify-center border-t border-slate-100 pt-5">
+            <span className="text-[11px] text-slate-400">
               Access is restricted to your assigned modules
             </span>
           </div>
