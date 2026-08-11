@@ -10,6 +10,7 @@ import {
 } from '@/components/icons'
 import { BarcodeScannerModal } from '@/components/BarcodeScanner'
 import { matchPosScan, normalizeScanCode } from '@/lib/barcode-scan'
+import { isOrphanedPosSession } from '@/lib/pos-session'
 
 function ReceiptPrintView({ order, companySettings, onDone }: { order: any, companySettings: any, onDone: () => void }) {
   useEffect(() => {
@@ -266,6 +267,12 @@ export default function PointOfSale() {
 
   const [charging, setCharging] = useState(false)
   const [openingSession, setOpeningSession] = useState(false)
+  const [closingSession, setClosingSession] = useState(false)
+  const orphanedSession = isOrphanedPosSession({
+    posSessionOpen,
+    posSessionId,
+    posSessions: [], // history recovered in store close; UI treats open+missing id as orphan
+  }) || (posSessionOpen && !posSessionId)
 
   const charge = async () => {
     if (cart.length === 0) { showToast('Cart is empty', 'error'); return }
@@ -350,9 +357,9 @@ export default function PointOfSale() {
       )}
 
       {posSessionOpen && (
-        <div className="flex flex-col lg:flex-row gap-2 sm:gap-3 h-full min-h-0">
+        <div className="flex flex-col lg:flex-row lg:items-start gap-2 sm:gap-3 min-h-0">
           {/* Left — Products */}
-          <div className="flex flex-col gap-2 flex-1 min-w-0 overflow-hidden min-h-0">
+          <div className="flex flex-col gap-2 flex-1 min-w-0">
             {/* Header with History Button */}
             <div className="flex items-center justify-between gap-2 pb-1">
                <h2 className="text-xs font-bold text-t1 uppercase tracking-wider">Retail Till</h2>
@@ -365,6 +372,28 @@ export default function PointOfSale() {
                </div>
             </div>
 
+            {orphanedSession && (
+              <div className="p-3 rounded-xl text-xs border" style={{ background: '#FEF3F2', borderColor: '#FECDCA', color: '#B42318' }}>
+                <p className="font-bold mb-1">Session state is stuck</p>
+                <p className="mb-2">The till shows open but the session id is missing, so Close Session could not settle. Clear it, then open a fresh session.</p>
+                <button
+                  type="button"
+                  className="btn-primary text-[10px] py-1.5 px-3"
+                  style={{ background: '#F04438' }}
+                  disabled={closingSession}
+                  onClick={() => {
+                    setClosingSession(true)
+                    try {
+                      closePOSSession(0)
+                    } finally {
+                      setClosingSession(false)
+                    }
+                  }}
+                >
+                  {closingSession ? 'Clearing…' : 'Clear stuck session'}
+                </button>
+              </div>
+            )}
             {/* Scanner bar */}
             <div className="flex gap-2 items-center p-3 rounded-xl" style={{ background: 'var(--info-bg)', border: '1px solid #C7D2FE' }}>
               <button
@@ -449,9 +478,9 @@ export default function PointOfSale() {
             </div>
           </div>
 
-          {/* Right — Cart */}
-          <div className="w-full lg:w-80 flex flex-col bg-surface border-l border-border min-h-0">
-            <div className="p-4 border-b border-border flex items-center justify-between">
+          {/* Right — Cart: sticky panel sized to viewport, not stretched to product grid height */}
+          <div className="w-full lg:w-80 lg:sticky lg:top-0 lg:max-h-[calc(100dvh-6.5rem)] flex flex-col bg-surface border border-border rounded-xl self-start shrink-0 overflow-hidden">
+            <div className="p-4 border-b border-border flex items-center justify-between shrink-0">
               <h3 className="text-xs font-black text-t1 uppercase tracking-widest">Cart ({cart.length})</h3>
               <button className="text-[10px] text-red-600 font-bold hover:underline" onClick={() => setCart([])}>Clear All</button>
             </div>
@@ -502,14 +531,14 @@ export default function PointOfSale() {
                 </div>
               ))}
               {cart.length === 0 && (
-                <div className="py-20 text-center">
+                <div className="py-8 text-center">
                   <div className="text-3xl mb-3 opacity-20" aria-hidden="true"><Fa icon={faCartShopping} /></div>
                   <p className="text-xs text-t3 text-center px-4">Scan or click products to add to cart</p>
                 </div>
               )}
             </div>
 
-            <div className="p-4 bg-[var(--bg-muted)] border-t border-border space-y-4">
+            <div className="p-4 bg-[var(--bg-muted)] border-t border-border space-y-4 shrink-0">
               <div className="space-y-2">
                 <Field label="Customer (optional)">
                   <select className="form-input text-xs" value={customerId} onChange={e => {
@@ -616,7 +645,23 @@ export default function PointOfSale() {
                 </div>
                 <div className="flex gap-2 justify-end">
                   <button className="btn-outline" onClick={() => setShowCloseSession(false)}>Cancel</button>
-                  <button className="btn-primary" style={{ background: '#F04438' }} onClick={() => { closePOSSession(counted); setShowCloseSession(false) }}>Close Session</button>
+                  <button
+                    className="btn-primary"
+                    style={{ background: '#F04438' }}
+                    disabled={closingSession}
+                    onClick={() => {
+                      setClosingSession(true)
+                      try {
+                        closePOSSession(counted)
+                        setShowCloseSession(false)
+                        setClosingCash('')
+                      } finally {
+                        setClosingSession(false)
+                      }
+                    }}
+                  >
+                    {closingSession ? 'Closing…' : 'Close Session'}
+                  </button>
                 </div>
               </Modal>
             )
