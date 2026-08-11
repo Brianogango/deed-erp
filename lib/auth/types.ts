@@ -55,6 +55,8 @@ export interface PublicUser {
   mustChangePassword?: boolean
   employeeId?: string | null
   email?: string | null
+  /** Opt-in: non-technician roles (e.g. kilimall) may be assigned repair jobs. */
+  actsAsTechnician?: boolean
 }
 
 export interface AuthUserRecord extends PublicUser {
@@ -75,6 +77,7 @@ export interface CreateUserInput {
   password?: string
   mustChangePassword?: boolean
   email?: string | null
+  actsAsTechnician?: boolean
 }
 
 export interface UpdateUserInput {
@@ -88,6 +91,7 @@ export interface UpdateUserInput {
   mustChangePassword?: boolean
   employeeId?: string | null
   email?: string | null
+  actsAsTechnician?: boolean
 }
 
 export interface SessionPayload {

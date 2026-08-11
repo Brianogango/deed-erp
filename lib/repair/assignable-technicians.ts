@@ -1,6 +1,7 @@
 /**
  * Technicians eligible for new repair / refurb assignment.
  * Excludes deactivated system users and HR-exited employees.
+ * Includes users with the per-user actsAsTechnician flag (e.g. a chosen Kilimall officer).
  */
 
 type TechUser = {
@@ -9,6 +10,7 @@ type TechUser = {
   role: string
   active: boolean
   employeeId?: string | null
+  actsAsTechnician?: boolean
 }
 
 type TechEmployee = {
@@ -16,11 +18,21 @@ type TechEmployee = {
   status: string
 }
 
+/** True when this user should follow technician firewall rules (assigned jobs only). */
+export function isRepairTechActor(user: {
+  role: string
+  actsAsTechnician?: boolean
+}): boolean {
+  return user.role === 'technician' || user.actsAsTechnician === true
+}
+
 export function isAssignableTechnician(
   user: TechUser,
   exitedEmployeeIds?: Set<string>,
 ): boolean {
-  if (!['technician', 'technical_lead'].includes(user.role)) return false
+  const roleOk =
+    ['technician', 'technical_lead'].includes(user.role) || user.actsAsTechnician === true
+  if (!roleOk) return false
   if (user.active === false) return false
   if (user.employeeId && exitedEmployeeIds?.has(user.employeeId)) return false
   return true

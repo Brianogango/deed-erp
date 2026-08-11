@@ -30,10 +30,10 @@ type Section =
 
 type UserFormState = {
   id: string; employeeId: string; username: string; name: string; role: string
-  modules: string[]; active: boolean; password: string
+  modules: string[]; active: boolean; actsAsTechnician: boolean; password: string
 }
 const blankUser: UserFormState = {
-  id: '', employeeId: '', username: '', name: '', role: 'sales_rep', modules: ['dashboard'], active: true, password: '',
+  id: '', employeeId: '', username: '', name: '', role: 'sales_rep', modules: ['dashboard'], active: true, actsAsTechnician: false, password: '',
 }
 
 const SettingLabelContext = createContext('setting')
@@ -287,7 +287,9 @@ export default function Settings() {
       const username = userForm.id ? userForm.username.trim() : ''
       const name = userForm.id ? userForm.name.trim() : ''
       const password = userForm.id ? userForm.password : ''
-      const payload = { username, name, role: userForm.role as any, modules: userForm.modules as any, active: userForm.active, ...(password ? { password } : {}) }
+      let modules = [...userForm.modules] as any
+      if (userForm.actsAsTechnician && !modules.includes('repair')) modules = [...modules, 'repair']
+      const payload = { username, name, role: userForm.role as any, modules, active: userForm.active, actsAsTechnician: userForm.actsAsTechnician, ...(password ? { password } : {}) }
       if (!userForm.id && !selectedEmployee) {
         showToast('Select an existing active employee first.', 'error'); return
       }
@@ -696,7 +698,7 @@ export default function Settings() {
                   emptyMessage="No users"
                   rowActions={user => (
                     <div className="flex gap-1.5 flex-wrap">
-                      <button className={`text-[10px] font-medium px-2.5 py-1 rounded-lg border transition-colors ${canManageSystemUsers ? 'bg-blue-50 hover:bg-blue-100 text-navy-500 border-blue-100 cursor-pointer' : 'opacity-40 cursor-not-allowed bg-gray-50 text-gray-400 border-gray-100'}`} disabled={!canManageSystemUsers} onClick={() => { if (!canManageSystemUsers) return; const u = users.find(x => x.id === user.id); if (!u) return; setUserForm({ id: u.id, employeeId: '', username: u.username, name: u.name, role: u.role, modules: Array.isArray(u.modules) ? [...u.modules] : [], active: u.active, password: '' }); setShowUserModal(true) }}>Edit</button>
+                      <button className={`text-[10px] font-medium px-2.5 py-1 rounded-lg border transition-colors ${canManageSystemUsers ? 'bg-blue-50 hover:bg-blue-100 text-navy-500 border-blue-100 cursor-pointer' : 'opacity-40 cursor-not-allowed bg-gray-50 text-gray-400 border-gray-100'}`} disabled={!canManageSystemUsers} onClick={() => { if (!canManageSystemUsers) return; const u = users.find(x => x.id === user.id); if (!u) return; setUserForm({ id: u.id, employeeId: '', username: u.username, name: u.name, role: u.role, modules: Array.isArray(u.modules) ? [...u.modules] : [], active: u.active, actsAsTechnician: Boolean(u.actsAsTechnician), password: '' }); setShowUserModal(true) }}>Edit</button>
                       {user.lockedUntil && new Date(user.lockedUntil).getTime() > Date.now() && (
                         <button className={`text-[10px] font-medium px-2.5 py-1 rounded-lg border transition-colors ${canManageSystemUsers ? 'bg-orange-50 hover:bg-orange-100 text-orange-600 border-orange-100 cursor-pointer' : 'opacity-40 cursor-not-allowed bg-gray-50 text-gray-400 border-gray-100'}`} disabled={!canManageSystemUsers} onClick={() => { if (!canManageSystemUsers) return; void unlockUser(user.id) }}>Unlock</button>
                       )}
@@ -1167,6 +1169,17 @@ ACCOUNTS_EMAIL=accounts@deed.co.ke`}</pre>
                 <Select value={userForm.active ? 'active' : 'inactive'} onChange={v => setUserForm(p => ({ ...p, active: v === 'active' }))} options={[{ value: 'active', label: 'Active' }, { value: 'inactive', label: 'Inactive' }]} />
               </Field>
             )}
+            <Field label="Acts as technician" hint="Lets this user be assigned repair jobs without changing their primary role. Auto-enables the Repair module when on.">
+              <Select
+                value={userForm.actsAsTechnician ? 'yes' : 'no'}
+                onChange={v => setUserForm(p => ({
+                  ...p,
+                  actsAsTechnician: v === 'yes',
+                  modules: v === 'yes' && !p.modules.includes('repair') ? [...p.modules, 'repair'] : p.modules,
+                }))}
+                options={[{ value: 'no', label: 'No' }, { value: 'yes', label: 'Yes — assignable for repairs' }]}
+              />
+            </Field>
             {userForm.id && (
               <div className="sm:col-span-2">
                 <Field label="Reset Password" hint="Leave blank to keep current.">

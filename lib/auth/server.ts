@@ -27,6 +27,9 @@ export const getServerSession = async (): Promise<ServerSession | null> => {
     modules:   Array.isArray(session.user.modules) ? session.user.modules as ModuleId[] : [],
     active:    true,
     createdAt: session.user.createdAt,
+    actsAsTechnician: Boolean(
+      status.actsAsTechnician ?? (session.user as PublicUser).actsAsTechnician,
+    ),
   }
 
   return {

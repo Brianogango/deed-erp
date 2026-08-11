@@ -164,7 +164,7 @@ import {
   taxableQuoteSubtotal,
   diagnosisFeeAmount,
 } from '@/lib/diagnosis-fee'
-import { isAssignableTechnician } from '@/lib/repair/assignable-technicians'
+import { isAssignableTechnician, isRepairTechActor } from '@/lib/repair/assignable-technicians'
 import {
   buildDefaultRepairQcItems,
   prepareRepairQcItemsForRound,
@@ -15175,8 +15175,8 @@ const storeCtx: AppState = {
       const repair = repairs.find(r => r.id === repairId)
       if (!repair) return false
 
-      // Functional Firewall: Technicians can ONLY see their assigned repairs
-      if (user.role === 'technician') {
+      // Functional Firewall: Technicians (and actsAsTechnician users) only see assigned repairs
+      if (isRepairTechActor(user)) {
         return repair.assignedTechnicianId === user.id
       }
 
@@ -15191,9 +15191,12 @@ const storeCtx: AppState = {
       // Full visibility: admin, finance, lead techs see every repair
       if (['director', 'finance_officer', 'technical_lead'].includes(user.role)) return list
 
-      // Functional Firewall: Technicians see their assigned jobs + QC-pending repairs they did NOT work on (for cross-tech QA)
-      if (user.role === 'technician') {
-        return list.filter(r => r.assignedTechnicianId === user.id || (r.status === 'qc' && r.assignedTechnicianId !== user.id))
+      // Functional Firewall: Technicians / actsAsTechnician see assigned jobs + QC pool (role technicians only for peer QC)
+      if (isRepairTechActor(user)) {
+        if (user.role === 'technician') {
+          return list.filter(r => r.assignedTechnicianId === user.id || (r.status === 'qc' && r.assignedTechnicianId !== user.id))
+        }
+        return list.filter(r => r.assignedTechnicianId === user.id)
       }
 
       return list
@@ -15212,8 +15215,8 @@ const storeCtx: AppState = {
         return
       }
 
-      // Check permissions: technicians can only update their assigned repairs
-      if (user.role === 'technician' && repair.assignedTechnicianId !== user.id) {
+      // Check permissions: technicians / actsAsTechnician can only update their assigned repairs
+      if (isRepairTechActor(user) && repair.assignedTechnicianId !== user.id) {
         showToast('You can only update repairs assigned to you', 'error')
         return
       }

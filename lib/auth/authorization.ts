@@ -186,7 +186,7 @@ export const SENSITIVE_STORE_KEY_READ_PERMISSIONS: Record<string, PermissionActi
   deed_auditLogs: 'viewAuditLog',
 }
 
-type StoreReadUser = Pick<PublicUser, 'id' | 'role' | 'modules'>
+type StoreReadUser = Pick<PublicUser, 'id' | 'role' | 'modules' | 'actsAsTechnician'>
 
 type CollaborativeReadPolicy = {
   roles: readonly UserRole[]
@@ -233,9 +233,13 @@ export const canReadStoreKey = (
   const policy = COLLABORATIVE_STORE_READ_POLICIES[key]
   if (!policy) return true
   const role = normalizePermissionRole(user.role)
-  if (!role || !policy.roles.includes(role)) return false
   const grants = new Set(user.modules ?? [])
-  return policy.modules.some(module => grants.has(module))
+  const hasModule = policy.modules.some(module => grants.has(module))
+  if (!hasModule) return false
+  if (role && policy.roles.includes(role)) return true
+  // Chosen non-tech users (e.g. Kilimall) with actsAsTechnician + repair module
+  if (key === 'deed_repairs_v2' && user.actsAsTechnician) return true
+  return false
 }
 
 /**
@@ -299,7 +303,7 @@ export const hasFullStoreContentAccess = (
   if (key === 'deed_invoices') return role === 'director' || role === 'finance_officer' || role === 'admin_officer'
   if (key === 'deed_expenses') return role === 'director' || role === 'finance_officer'
   if (key === 'deed_saleOrders') return role !== 'sales_rep'
-  if (key === 'deed_repairs_v2') return role !== 'technician'
+  if (key === 'deed_repairs_v2') return role !== 'technician' && !user?.actsAsTechnician
   if (key === 'deed_opportunities') return role !== 'sales_rep'
   return true
 }
@@ -372,6 +376,7 @@ export function canAccessRecord(
   model: RecordAccessModel,
   record: StoreRow,
   userId: string | null | undefined,
+  options?: { actsAsTechnician?: boolean },
 ): boolean {
   const normalizedRole = normalizePermissionRole(role)
   if (!normalizedRole || !userId) return false
@@ -387,7 +392,9 @@ export function canAccessRecord(
       return false
     case 'repair':
       if (['director', 'admin_officer', 'finance_officer', 'technical_lead'].includes(normalizedRole)) return true
-      if (normalizedRole === 'technician') return record.assignedTechnicianId === userId
+      if (normalizedRole === 'technician' || options?.actsAsTechnician) {
+        return record.assignedTechnicianId === userId
+      }
       return false
     case 'expense':
       if (['director', 'finance_officer', 'admin_officer'].includes(normalizedRole)) return true
