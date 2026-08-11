@@ -105,11 +105,11 @@ export default function Login() {
           the copy fully on the blue. Real HTML text, crisp at any resolution.
           Vision first, Mission below. Hidden below lg where the card is full width. */}
       <div className="pointer-events-none absolute bottom-0 right-0 z-10 hidden max-w-[430px] flex-col gap-6 rounded-tl-[110px] pb-[9vh] pl-11 pr-10 pt-14 lg:flex"
-        style={{ background: 'linear-gradient(150deg, #0d7fb4 0%, #0a5f97 55%, #0a4a86 100%)' }}>
+        style={{ background: 'linear-gradient(150deg, #20164d 0%, #20164d 34%, #163169 58%, #0e5090 82%, #00aeef 100%)' }}>
         {/* Our Vision */}
         <div className="max-w-[300px]">
           <div className="flex items-center gap-3">
-            <span className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full border border-white/80 text-white">
+            <span className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full border border-[#00aeef] text-[#00aeef]">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" className="h-[18px] w-[18px]" aria-hidden="true">
                 <path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z" strokeLinecap="round" strokeLinejoin="round" />
                 <circle cx="12" cy="12" r="3.1" />
@@ -125,12 +125,12 @@ export default function Login() {
         </div>
 
         {/* Divider */}
-        <div className="ml-[52px] h-px w-[60%] max-w-[280px] bg-white/35" aria-hidden="true" />
+        <div className="ml-[52px] h-px w-[60%] max-w-[280px]" style={{ background: 'rgba(0,174,239,0.55)' }} aria-hidden="true" />
 
         {/* Our Mission */}
         <div className="max-w-[300px]">
           <div className="flex items-center gap-3">
-            <span className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full border border-white/80 text-white">
+            <span className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full border border-[#00aeef] text-[#00aeef]">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" className="h-[18px] w-[18px]" aria-hidden="true">
                 <circle cx="11" cy="13" r="8.2" /><circle cx="11" cy="13" r="4.4" /><circle cx="11" cy="13" r="1.4" fill="currentColor" stroke="none" />
                 <path d="M11 13 20.5 3.5" strokeLinecap="round" /><path d="M16.6 3.2 20.8 3.2 20.8 7.4" strokeLinecap="round" strokeLinejoin="round" />
