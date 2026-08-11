@@ -20,9 +20,11 @@ export const metadata: Metadata = {
   },
   icons: {
     icon: [
-      { url: '/deed-icon.png', sizes: '359x359', type: 'image/png' },
+      { url: '/favicon.ico', sizes: 'any' },
+      { url: '/icon-32x32.png', type: 'image/png', sizes: '32x32' },
+      { url: '/icon-16x16.png', type: 'image/png', sizes: '16x16' },
     ],
-    apple: '/deed-icon.png',
+    apple: '/icon-apple-touch.png',
   },
 }
 

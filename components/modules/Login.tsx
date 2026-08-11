@@ -73,19 +73,18 @@ export default function Login() {
     <div className="relative min-h-screen w-full overflow-hidden">
 
       {/* ── Full-page background image (with branded navy + network fallback) ──
-          Fallback gradient keeps the deep navy-blue on the left, beneath the
+          Fallback gradient keeps the deep navy-blue on the right, beneath the
           sign-in panel, so the composition holds even without the photo. */}
       <div
         className="absolute inset-0 bg-cover bg-center bg-no-repeat"
-        style={{ background: 'linear-gradient(120deg, #0a1a38 0%, #0f2044 30%, #0b1628 62%, #04080f 100%)' }}
+        style={{ background: 'linear-gradient(120deg, #04080f 0%, #0b1628 38%, #0f2044 70%, #0a1a38 100%)' }}
         aria-hidden="true"
       />
-      {/* Photo layer is mirrored (scaleX(-1)) so the navy network side of the
-          image sits on the LEFT under the login panel and the subject shows on
-          the right. */}
+      {/* Photo layer in its natural orientation: the subject sits on the left
+          and the navy network side on the right, beneath the sign-in panel. */}
       <div
         className="absolute inset-0 bg-cover bg-center bg-no-repeat"
-        style={{ backgroundImage: "url('/login-bg.jpg')", transform: 'scaleX(-1)' }}
+        style={{ backgroundImage: "url('/login-bg.jpg')" }}
         aria-hidden="true"
       />
       {/* Network / plexus texture — reinforces the brand backdrop and keeps the
@@ -96,20 +95,20 @@ export default function Login() {
           backgroundSize: '30px 30px',
         }}
         aria-hidden="true" />
-      {/* Left-side scrim: guarantees contrast beneath the sign-in panel on any photo */}
+      {/* Right-side scrim: guarantees contrast beneath the sign-in panel on any photo */}
       <div className="pointer-events-none absolute inset-0"
-        style={{ background: 'linear-gradient(90deg, rgba(4,10,24,0.55) 0%, rgba(4,10,24,0.28) 34%, rgba(4,10,24,0) 62%)' }}
+        style={{ background: 'linear-gradient(90deg, rgba(4,10,24,0) 38%, rgba(4,10,24,0.28) 66%, rgba(4,10,24,0.55) 100%)' }}
         aria-hidden="true" />
 
       {/* ── Sign-in panel: left-aligned, vertically centered, responsive ── */}
-      <div className="relative z-10 flex min-h-screen w-full items-center justify-center px-5 py-10 sm:justify-center md:justify-start md:px-[6vw] lg:px-[8vw]">
+      <div className="relative z-10 flex min-h-screen w-full items-center justify-center px-5 py-10 sm:justify-center md:justify-end md:px-[6vw] lg:px-[8vw]">
         <div className="w-full max-w-[430px] rounded-[22px] border border-white/60 bg-white/95 px-7 py-9 shadow-2xl backdrop-blur-xl sm:px-9"
           style={{ boxShadow: '0 28px 70px rgba(4,10,24,0.45)' }}>
 
           {/* Full Deed Technologies logo (brand identity lives in the logo itself) */}
           <div className="mb-7 flex justify-start">
             <img
-              src="/deed-logo.png"
+              src="/deed-logo-transparent.png"
               alt="Deed Technologies"
               className="h-[58px] w-auto object-contain"
             />
