@@ -3,6 +3,8 @@
 import { useState, useRef, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { useRepairStore, RepairOrder, fmtKes, type RepairQAItem } from '@/lib/store'
+import { useHrStore } from '@/hooks/useHrStore'
+import { assignableTechnicians } from '@/lib/repair/assignable-technicians'
 import { DIRECT_REPAIR_WAIVER_TEXT } from '@/lib/repair-path'
 import {
   DIAGNOSIS_FEE_LINE_DESCRIPTION,
@@ -61,7 +63,8 @@ function ActionBtn({ onClick, color, shadow, children, disabled }: {
  */
 export function AssignTechnicianModal({ repair, onClose }: { repair: RepairOrder, onClose: () => void }) {
   const { users, currentUserId, assignTechnicianToRepair } = useRepairStore()
-  const technicians = users.filter(u => ['technician', 'technical_lead'].includes(u.role))
+  const employees = useHrStore(s => s.employees)
+  const technicians = assignableTechnicians(users, employees)
   const isReassign = !!repair.assignedTechnicianName
 
   return (
@@ -86,6 +89,11 @@ export function AssignTechnicianModal({ repair, onClose }: { repair: RepairOrder
         )}
 
         <div className="flex flex-col gap-2 max-h-[400px] overflow-y-auto pr-1 custom-scrollbar">
+          {technicians.length === 0 && (
+            <p className="text-[11px] text-[var(--text-3)] font-medium p-3 rounded-xl border border-[var(--border)] bg-[var(--bg-muted)]">
+              No active technicians available. Exited employees and deactivated users are hidden.
+            </p>
+          )}
           {[...technicians]
             .sort((a, b) => a.id === currentUserId ? -1 : b.id === currentUserId ? 1 : 0)
             .map(tech => {
