@@ -49,6 +49,7 @@ export const authOptions: NextAuthOptions = {
       session.user.modules   = Array.isArray(token.modules) ? token.modules as ModuleId[] : []
       session.user.active    = token.active    as boolean
       session.user.createdAt = token.createdAt as string
+      session.user.actsAsTechnician = Boolean(token.actsAsTechnician)
       return session
     },
   },

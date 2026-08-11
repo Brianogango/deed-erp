@@ -83,6 +83,7 @@ export async function POST(request: NextRequest) {
   void publishSessionStatus(account.id, {
     isActive: true,
     role: account.role,
+    actsAsTechnician: Boolean(account.actsAsTechnician),
     invalidatedAt: Date.now(),
   })
 
@@ -96,6 +97,7 @@ export async function POST(request: NextRequest) {
       modules: user.modules,
       active: user.active,
       createdAt: user.createdAt,
+      actsAsTechnician: Boolean(user.actsAsTechnician),
       // Absolute session lifetime anchor (P0-DEED-001)
       sessionIssuedAt: new Date().toISOString(),
     },

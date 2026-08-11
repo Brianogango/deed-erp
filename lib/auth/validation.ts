@@ -17,6 +17,7 @@ export const normalizeCreateUserInput = (body: unknown): CreateUserInput => {
   const active = typeof payload.active === 'boolean' ? payload.active : true
   const password = typeof payload.password === 'string' ? payload.password : ''
   const email = typeof payload.email === 'string' ? payload.email.trim() : null
+  const actsAsTechnician = typeof payload.actsAsTechnician === 'boolean' ? payload.actsAsTechnician : false
   const modules = Array.isArray(payload.modules)
     ? uniqueModules(payload.modules.filter((value): value is string => typeof value === 'string'))
     : []
@@ -24,7 +25,7 @@ export const normalizeCreateUserInput = (body: unknown): CreateUserInput => {
   if (!role) throw Object.assign(new Error('A valid role is required'), { status: 400 })
 
   const normalizedModules = modules.length > 0 ? modules : ROLE_DEFAULT_MODULES[role]
-  return { employeeId, username, name, role, modules: normalizedModules, active, password, email }
+  return { employeeId, username, name, role, modules: normalizedModules, active, password, email, actsAsTechnician }
 }
 
 export const normalizeUpdateUserInput = (body: unknown): UpdateUserInput => {
@@ -94,6 +95,13 @@ export const normalizeUpdateUserInput = (body: unknown): UpdateUserInput => {
 
   if ('email' in payload) {
     update.email = typeof payload.email === 'string' && payload.email.trim() ? payload.email.trim() : null
+  }
+
+  if ('actsAsTechnician' in payload) {
+    if (typeof payload.actsAsTechnician !== 'boolean') {
+      throw Object.assign(new Error('actsAsTechnician must be a boolean'), { status: 400 })
+    }
+    update.actsAsTechnician = payload.actsAsTechnician
   }
 
   if (Object.keys(update).length === 0) {

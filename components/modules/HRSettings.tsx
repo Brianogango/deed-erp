@@ -21,10 +21,10 @@ type Section =
 
 type UserFormState = {
   id: string; username: string; name: string; role: string
-  modules: string[]; active: boolean; password: string; employeeId: string
+  modules: string[]; active: boolean; actsAsTechnician: boolean; password: string; employeeId: string
 }
 const blankUser: UserFormState = {
-  id: '', username: '', name: '', role: 'sales_rep', modules: ['dashboard'], active: true, password: '', employeeId: '',
+  id: '', username: '', name: '', role: 'sales_rep', modules: ['dashboard'], active: true, actsAsTechnician: false, password: '', employeeId: '',
 }
 
 function Toggle({ on, onChange }: { on: boolean; onChange: (v: boolean) => void }) {
@@ -191,7 +191,9 @@ export default function HRSettings() {
       const username = userForm.id ? userForm.username.trim() : ''
       const name = userForm.id ? userForm.name.trim() : ''
       const password = userForm.id ? userForm.password : ''
-      const payload = { username, name, role: userForm.role as any, modules: userForm.modules as any, active: userForm.active, ...(password ? { password } : {}) }
+      let modules = [...userForm.modules] as any
+      if (userForm.actsAsTechnician && !modules.includes('repair')) modules = [...modules, 'repair']
+      const payload = { username, name, role: userForm.role as any, modules, active: userForm.active, actsAsTechnician: userForm.actsAsTechnician, ...(password ? { password } : {}) }
       if (!userForm.id && !selectedEmployee) {
         showToast('Select an existing active employee first.', 'error'); return
       }
@@ -531,7 +533,7 @@ export default function HRSettings() {
                   emptyMessage="No users"
                   rowActions={user => (
                     <div className="flex gap-1.5 flex-wrap">
-                      <button className="text-[10px] font-medium px-2.5 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-navy-500 border border-blue-100 cursor-pointer transition-colors" onClick={() => { const u = users.find(x => x.id === user.id); if (!u) return; setUserForm({ id: u.id, username: u.username, name: u.name, role: u.role, modules: Array.isArray(u.modules) ? [...u.modules] : [], active: u.active, password: '', employeeId: u.employeeId ?? '' }); setShowUserModal(true) }}>Edit</button>
+                      <button className="text-[10px] font-medium px-2.5 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-navy-500 border border-blue-100 cursor-pointer transition-colors" onClick={() => { const u = users.find(x => x.id === user.id); if (!u) return; setUserForm({ id: u.id, username: u.username, name: u.name, role: u.role, modules: Array.isArray(u.modules) ? [...u.modules] : [], active: u.active, actsAsTechnician: Boolean(u.actsAsTechnician), password: '', employeeId: u.employeeId ?? '' }); setShowUserModal(true) }}>Edit</button>
                       {user.lockedUntil && new Date(user.lockedUntil).getTime() > Date.now() && (
                         <button className="text-[10px] font-medium px-2.5 py-1 rounded-lg bg-orange-50 hover:bg-orange-100 text-orange-600 border border-orange-100 cursor-pointer transition-colors" onClick={() => { void unlockUser(user.id) }}>Unlock</button>
                       )}
@@ -854,6 +856,17 @@ export default function HRSettings() {
             </Field>
             <Field label="Status">
               <Select value={userForm.active ? 'active' : 'inactive'} onChange={v => setUserForm(p => ({ ...p, active: v === 'active' }))} options={[{ value: 'active', label: 'Active' }, { value: 'inactive', label: 'Inactive' }]} />
+            </Field>
+            <Field label="Acts as technician" hint="Lets this user be assigned repair jobs without changing their primary role. Auto-enables the Repair module when on.">
+              <Select
+                value={userForm.actsAsTechnician ? 'yes' : 'no'}
+                onChange={v => setUserForm(p => ({
+                  ...p,
+                  actsAsTechnician: v === 'yes',
+                  modules: v === 'yes' && !p.modules.includes('repair') ? [...p.modules, 'repair'] : p.modules,
+                }))}
+                options={[{ value: 'no', label: 'No' }, { value: 'yes', label: 'Yes — assignable for repairs' }]}
+              />
             </Field>
             {userForm.id && (
               <div className="sm:col-span-2">

@@ -26,6 +26,7 @@ type UserRow = {
   locked_until?: string
   employee_id?: string | null
   email?: string | null
+  acts_as_technician?: boolean | number | null
 }
 
 const normalizeStoredRole = (role: string): AuthUserRecord['role'] => {
@@ -85,6 +86,7 @@ const toAuthUser = (row: UserRow): AuthUserRecord & { passwordHistory: string[] 
   mustChangePassword: (row.must_reset_pw ?? false) || Boolean(row.must_change_password),
   employeeId: row.employee_id ?? null,
   email: row.email ?? null,
+  actsAsTechnician: Boolean(row.acts_as_technician),
 })
 
 const toPublicUser = (user: AuthUserRecord): PublicUser => ({
@@ -99,6 +101,7 @@ const toPublicUser = (user: AuthUserRecord): PublicUser => ({
   mustChangePassword: false,
   employeeId: user.employeeId ?? null,
   email: user.email ?? null,
+  actsAsTechnician: Boolean(user.actsAsTechnician),
 })
 
 const uid = () => require("crypto").randomUUID()
@@ -212,12 +215,21 @@ const migrateEmployeeLinkFields = async () => {
   }
 }
 
+const migrateActsAsTechnician = async () => {
+  try {
+    await sql`ALTER TABLE users ADD COLUMN acts_as_technician BOOLEAN NOT NULL DEFAULT false`
+  } catch {
+    // Column probably exists
+  }
+}
+
 export const ensureUserStore = async () => {
   await ensureSchemaReady()
   await migratePasswordHistory()
   await migrateLockoutFields()
   await migrateMustChangePassword()
   await migrateEmployeeLinkFields()
+  await migrateActsAsTechnician()
   await seedUsersIfEmpty()
   await migrateRoles()
 }
@@ -231,7 +243,7 @@ export const listAuthUsers = async () => {
            active, must_change_password,
            created_at, password_hash, password_history_json,
            failed_login_attempts, locked_until,
-           employee_id, email
+           employee_id, email, acts_as_technician
     FROM users
     ORDER BY created_at DESC, username ASC
   `
@@ -253,7 +265,7 @@ export const findAuthUserById = async (id: string) => {
            active, must_change_password,
            created_at, password_hash, password_history_json,
            failed_login_attempts, locked_until,
-           employee_id, email
+           employee_id, email, acts_as_technician
     FROM users
     WHERE id = ${id}
   `
@@ -270,7 +282,7 @@ export const findAuthUserByUsername = async (username: string) => {
            active, must_change_password,
            created_at, password_hash, password_history_json,
            failed_login_attempts, locked_until,
-           employee_id, email
+           employee_id, email, acts_as_technician
     FROM users
     WHERE lower(username) = lower(${username})
   `
@@ -298,6 +310,7 @@ export const createAuthUser = async (input: CreateUserInput, passwordHash: strin
     employeeId: input.employeeId ?? null,
         // email is NOT NULL in the Prisma schema — derive a fallback if not provided
     email: input.email?.trim() || `${username}@deed.africa`,
+    actsAsTechnician: Boolean(input.actsAsTechnician),
   }
   const historyJson = JSON.stringify([passwordHash])
   const nowTs = new Date().toISOString()
@@ -309,7 +322,7 @@ export const createAuthUser = async (input: CreateUserInput, passwordHash: strin
       active, must_change_password,
       created_at, updated_at,
       password_hash, password_history_json,
-      employee_id, email
+      employee_id, email, acts_as_technician
     )
     VALUES (
       ${user.id}, ${user.username}, ${user.name}, ${user.role},
@@ -318,7 +331,7 @@ export const createAuthUser = async (input: CreateUserInput, passwordHash: strin
       ${user.active ? 1 : 0}, ${user.mustChangePassword ? 1 : 0},
       ${user.createdAt}, ${nowTs},
       ${user.passwordHash}, ${historyJson},
-      ${user.employeeId}, ${user.email}
+      ${user.employeeId}, ${user.email}, ${user.actsAsTechnician ?? false}
     )
   `
   return user
@@ -347,6 +360,9 @@ export const updateAuthUser = async (id: string, input: UpdateUserInput, passwor
     mustChangePassword: input.mustChangePassword ?? existingUser.mustChangePassword,
     employeeId: input.employeeId !== undefined ? input.employeeId : existingUser.employeeId,
     email: input.email !== undefined ? input.email : existingUser.email,
+    actsAsTechnician: input.actsAsTechnician !== undefined
+      ? Boolean(input.actsAsTechnician)
+      : Boolean(existingUser.actsAsTechnician),
   }
 
   const nowTs = new Date().toISOString()
@@ -365,16 +381,22 @@ export const updateAuthUser = async (id: string, input: UpdateUserInput, passwor
         password_history_json = ${historyJson},
         employee_id          = ${nextUser.employeeId ?? null},
         email                = ${nextUser.email ?? null},
+        acts_as_technician   = ${nextUser.actsAsTechnician ?? false},
         updated_at           = ${nowTs}
     WHERE id = ${id}
   `
 
-  // Role / active changes must revoke or refresh cached JWT claims (SEC-002).
+  // Role / active / technician-capability changes must refresh session claims.
   if (
     nextUser.role !== existingUser.role ||
-    nextUser.active !== existingUser.active
+    nextUser.active !== existingUser.active ||
+    Boolean(nextUser.actsAsTechnician) !== Boolean(existingUser.actsAsTechnician)
   ) {
-    await invalidateUserSessions(id, { isActive: nextUser.active, role: nextUser.role })
+    await invalidateUserSessions(id, {
+      isActive: nextUser.active,
+      role: nextUser.role,
+      actsAsTechnician: Boolean(nextUser.actsAsTechnician),
+    })
   }
 
   return nextUser

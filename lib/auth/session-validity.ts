@@ -14,6 +14,7 @@
 export type SessionStatus = {
   isActive: boolean
   role: string
+  actsAsTechnician?: boolean
   invalidatedAt: number
 }
 
@@ -105,6 +106,7 @@ export async function lookupSessionStatus(userId: string): Promise<SessionStatus
     const status: SessionStatus = {
       isActive: Boolean((parsed as SessionStatus).isActive),
       role: String((parsed as SessionStatus).role ?? ''),
+      actsAsTechnician: Boolean((parsed as SessionStatus).actsAsTechnician),
       invalidatedAt: Number((parsed as SessionStatus).invalidatedAt) || Date.now(),
     }
     setCachedSessionStatus(userId, status)
@@ -141,12 +143,13 @@ export async function publishSessionStatus(
  */
 export async function invalidateUserSessions(
   userId: string,
-  hint: { isActive?: boolean; role?: string } = {},
+  hint: { isActive?: boolean; role?: string; actsAsTechnician?: boolean } = {},
 ): Promise<void> {
   if (!userId) return
   const status: SessionStatus = {
     isActive: hint.isActive ?? false,
     role: hint.role ?? '',
+    actsAsTechnician: Boolean(hint.actsAsTechnician),
     invalidatedAt: Date.now(),
   }
   await publishSessionStatus(userId, status)

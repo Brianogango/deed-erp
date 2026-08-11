@@ -30,6 +30,7 @@ export async function resolveUserSessionStatus(userId: string): Promise<SessionS
     const status: SessionStatus = {
       isActive: Boolean(user.active),
       role: String(user.role ?? ''),
+      actsAsTechnician: Boolean(user.actsAsTechnician),
       invalidatedAt: Date.now(),
     }
     await publishSessionStatus(userId, status)
