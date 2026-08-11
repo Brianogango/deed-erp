@@ -102,17 +102,22 @@ export default function Login() {
 
       {/* ── Sign-in panel: left-aligned, vertically centered, responsive ── */}
       <div className="relative z-10 flex min-h-screen w-full items-center justify-center px-5 py-10 sm:justify-center md:justify-end md:px-[6vw] lg:px-[8vw]">
-        <div className="w-full max-w-[430px] rounded-[22px] border border-white/60 bg-white/95 px-7 py-9 shadow-2xl backdrop-blur-xl sm:px-9"
-          style={{ boxShadow: '0 28px 70px rgba(4,10,24,0.45)' }}>
+        <div className="flex w-full max-w-[430px] flex-col">
 
-          {/* Full Deed Technologies logo (brand identity lives in the logo itself) */}
-          <div className="mb-7 flex justify-start">
+          {/* Deed logo sits directly on the background — no card behind it.
+              White variant keeps it legible over the navy network area. */}
+          <div className="mb-6 flex justify-center md:justify-start">
             <img
-              src="/deed-logo-transparent.png"
+              src="/deed-logo-white.png"
               alt="Deed Technologies"
-              className="h-[58px] w-auto object-contain"
+              className="h-[64px] w-auto object-contain"
+              style={{ filter: 'drop-shadow(0 2px 12px rgba(4,10,24,0.45))' }}
             />
           </div>
+
+          {/* Sign-in card — form only */}
+          <div className="w-full rounded-[22px] border border-white/60 bg-white/95 px-7 py-9 shadow-2xl backdrop-blur-xl sm:px-9"
+            style={{ boxShadow: '0 28px 70px rgba(4,10,24,0.45)' }}>
 
           {/* Heading / welcome */}
           <div className="mb-6">
@@ -239,6 +244,7 @@ export default function Login() {
             <span className="text-[11px] text-slate-400">
               Access is restricted to your assigned modules
             </span>
+          </div>
           </div>
         </div>
       </div>
