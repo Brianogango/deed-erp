@@ -108,3 +108,15 @@ describe('userUpdateSchema', () => {
     expect(result).toEqual({})
   })
 })
+
+describe('userUpdateSchema actsAsTechnician', () => {
+  it('preserves actsAsTechnician instead of stripping it', async () => {
+    const result = await validate(userUpdateSchema, {
+      name: 'Cynthia',
+      actsAsTechnician: true,
+      modules: ['dashboard', 'kilimall', 'repair'],
+    })
+    expect(result.actsAsTechnician).toBe(true)
+  })
+})
+
