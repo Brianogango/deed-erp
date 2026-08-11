@@ -272,12 +272,21 @@ function CRMContent() {
       return
     }
 
+    const rawUrlTab = searchParams.get('crmTab') as Tab | null
+    const urlTab: Tab | null = rawUrlTab === 'opportunities' ? 'pipeline' : rawUrlTab
+    // User is (or just switched to) a non-pipeline tab — never yank back to
+    // pipeline over a stale opportunity id. That remount fight shook Leads.
+    if ((urlTab && urlTab !== 'pipeline') || (tab !== 'pipeline' && tab !== 'opportunities')) {
+      setUrlOppId(null)
+      return
+    }
+
     if (opportunities.some(o => o.id === urlOppId)) {
       if (tab !== 'pipeline') setLocalTab('pipeline')
       if (activeOppId !== urlOppId || tab !== 'pipeline') setActiveOppId(urlOppId)
       if (view !== 'detail') setLocalView('detail')
     }
-  }, [urlOppId, opportunities, activeOppId, view, tab, setActiveOppId])
+  }, [urlOppId, opportunities, activeOppId, view, tab, setActiveOppId, searchParams, setUrlOppId])
 
   // Pipeline metrics — scoped to owner filter
   const isAdmin = ['director', 'admin_officer', 'finance_officer'].includes(currentUser?.role ?? '')
@@ -301,7 +310,11 @@ function CRMContent() {
   const winRate = totalClosed > 0 ? Math.round((wonOpps.length / totalClosed) * 100) : 0
 
   // Per-rep breakdown (admin only)
-  const salesReps = users.filter(u => u.role === 'sales_rep' || opportunities.some(o => o.ownerId === u.id))
+  const salesReps = users.filter(u =>
+    u.role === 'sales_rep'
+    || u.role === 'sales'
+    || opportunities.some(o => o.ownerId === u.id || o.assignedToId === u.id),
+  )
   const repBreakdown = salesReps.map(rep => {
     const repOpps = opportunities.filter(o => !['closed_won', 'closed_lost'].includes(o.stage) && o.ownerId === rep.id)
     return {

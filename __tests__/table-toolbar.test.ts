@@ -110,3 +110,17 @@ describe('export menu options', () => {
     ])
   })
 })
+
+import { classifyWidthWithHysteresis } from '@/lib/data-table/use-breakpoint'
+
+describe('classifyWidthWithHysteresis', () => {
+  it('holds mobile near the 768 boundary until clearly past', () => {
+    expect(classifyWidthWithHysteresis(770, 'mobile')).toBe('mobile')
+    expect(classifyWidthWithHysteresis(790, 'mobile')).toBe('tablet')
+  })
+
+  it('holds tablet when dipping just below 768', () => {
+    expect(classifyWidthWithHysteresis(760, 'tablet')).toBe('tablet')
+    expect(classifyWidthWithHysteresis(740, 'tablet')).toBe('mobile')
+  })
+})

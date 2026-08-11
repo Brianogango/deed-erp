@@ -19,9 +19,12 @@ export default function OpportunityDetail({
   activeOppId, onClose, stageLabels,
   onMarkWon, onMarkLost, onLogActivity
 }: Props) {
-  const { opportunities, companies, contactPersons, quotes, saleOrders, opportunityActivities, moveOpportunityStage, users, currentUserId } = useCrmStore()
+  const { opportunities, companies, contactPersons, quotes, saleOrders, opportunityActivities, moveOpportunityStage, updateOpportunity, users, currentUserId } = useCrmStore()
   const activeOpp = opportunities.find(o => o.id === activeOppId)
-  const staffName = users.find(u => u.id === currentUserId)?.name || 'Staff'
+  const staffName = users.find(u => u.id === currentUserId)?.name || users.find(u => u.id === currentUserId)?.username || 'Staff'
+  const ownerOptions = users
+    .filter(u => u.role === 'sales_rep' || u.role === 'sales' || u.id === activeOpp?.ownerId || u.id === activeOpp?.assignedToId)
+    .map(u => ({ value: u.id, label: u.name || u.username || u.email || u.id }))
 
   if (!activeOpp) return null
 
@@ -91,7 +94,18 @@ export default function OpportunityDetail({
               </div>
               <div>
                 <div style={{ color: 'var(--text-3)', marginBottom: 4 }}>Owner</div>
-                <div style={{ color: 'var(--text-1)' }}>{activeOpp.ownerName ?? activeOpp.assignedTo?.name ?? ''}</div>
+                <Select
+                  value={activeOpp.ownerId || activeOpp.assignedToId || ''}
+                  onChange={v => {
+                    const rep = users.find(u => u.id === v)
+                    updateOpportunity(activeOpp.id, {
+                      ownerId: v || undefined,
+                      assignedToId: v || undefined,
+                      ownerName: rep?.name || rep?.username || undefined,
+                    })
+                  }}
+                  options={[{ value: '', label: '— Unassigned —' }, ...ownerOptions]}
+                />
               </div>
               <div>
                 <div style={{ color: 'var(--text-3)', marginBottom: 4 }}>Lead Source</div>
