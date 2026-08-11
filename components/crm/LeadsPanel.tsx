@@ -110,6 +110,7 @@ export default function LeadsPanel({
   const [showForm, setShowForm] = useState(false)
   const [detail, setDetail] = useState<LeadRow | null>(null)
   const [convertingId, setConvertingId] = useState<string | null>(null)
+  const [savingOwnerId, setSavingOwnerId] = useState<string | null>(null)
   const [form, setForm] = useState({
     name: '',
     companyName: '',
@@ -120,8 +121,9 @@ export default function LeadsPanel({
     notes: '',
   })
 
-  const load = useCallback(async () => {
-    setLoading(true)
+  const load = useCallback(async (opts?: { soft?: boolean }) => {
+    // Soft reload keeps the table mounted — full unmount caused visible shake.
+    if (!opts?.soft) setLoading(true)
     try {
       const res = await fetch('/api/leads')
       if (!res.ok) throw new Error('Failed to load leads')
@@ -135,7 +137,7 @@ export default function LeadsPanel({
     }
   }, [showToast])
 
-  useEffect(() => { void load() }, [load])
+  useEffect(() => { void load({ soft: false }) }, [load])
 
   async function createLead() {
     if (!form.name.trim()) {
@@ -155,7 +157,7 @@ export default function LeadsPanel({
       showToast('Lead created', 'success')
       setShowForm(false)
       setForm({ name: '', companyName: '', email: '', phone: '', source: 'website', ownerId: currentUserId ?? '', notes: '' })
-      await load()
+      await load({ soft: true })
     } catch (err) {
       showToast(err instanceof Error ? err.message : 'Create failed', 'error')
     }
@@ -173,13 +175,62 @@ export default function LeadsPanel({
       if (!res.ok) throw new Error(data.error || 'Convert failed')
       showToast('Lead converted — opportunity created', 'success')
       setDetail(null)
-      await load()
+      await load({ soft: true })
       const opportunityId = String(data.opportunity?.id || data.lead?.opportunityId || '')
       if (opportunityId) onConverted?.(opportunityId)
     } catch (err) {
       showToast(err instanceof Error ? err.message : 'Convert failed', 'error')
     } finally {
       setConvertingId(null)
+    }
+  }
+
+  async function updateLeadFields(id: string, patch: { ownerId?: string | null; stage?: string }) {
+    setSavingOwnerId(id)
+    try {
+      const res = await fetch(`/api/leads/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(patch),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || 'Update failed')
+
+      // Converted leads own an opportunity — keep the pipeline owner in sync.
+      const oppId = String(data.opportunityId || data.opportunity?.id || '')
+      if (oppId && patch.ownerId !== undefined) {
+        try {
+          await fetch(`/api/opportunities/${oppId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              ownerId: patch.ownerId || null,
+              assignedToId: patch.ownerId || null,
+            }),
+          })
+        } catch {
+          /* opportunity sync is best-effort; lead owner already saved */
+        }
+      }
+
+      const nextFields = {
+        ownerId: data.ownerId ?? null,
+        stage: data.stage ?? patch.stage,
+        owner: data.owner ?? undefined,
+        opportunityId: data.opportunityId ?? undefined,
+      }
+      setLeads(prev => prev.map(l => (l.id === id ? { ...l, ...nextFields } : l)))
+      setDetail(prev => (prev && prev.id === id ? { ...prev, ...nextFields } : prev))
+      showToast(
+        patch.ownerId !== undefined
+          ? (patch.ownerId ? 'Lead reassigned' : 'Lead unassigned')
+          : 'Lead updated',
+        'success',
+      )
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Update failed', 'error')
+    } finally {
+      setSavingOwnerId(null)
     }
   }
 
@@ -250,10 +301,6 @@ export default function LeadsPanel({
     },
   ]
 
-  if (loading) {
-    return <p className="text-xs text-t3 py-6 text-center">Loading leads…</p>
-  }
-
   const detailAttachments = Array.isArray(detail?.emailAttachments) ? detail!.emailAttachments! : []
 
   return (
@@ -268,6 +315,7 @@ export default function LeadsPanel({
           columns={columns}
           rows={leads}
           rowKey={r => r.id}
+          isLoading={loading}
           searchPlaceholder="Search leads…"
           emptyMessage="No leads yet"
           exportTitle="Leads"
@@ -307,8 +355,16 @@ export default function LeadsPanel({
                 <p className="text-t1">{detail.companyName || '—'}</p>
               </div>
               <div>
-                <p className="text-[10px] uppercase font-bold text-t4">Owner</p>
-                <p className="text-t1">{ownerLabel(detail, salesReps)}</p>
+                <p className="text-[10px] uppercase font-bold text-t4 mb-1">Owner</p>
+                <Select
+                  value={detail.ownerId || ''}
+                  disabled={savingOwnerId === detail.id}
+                  onChange={v => void updateLeadFields(detail.id, { ownerId: v || null })}
+                  options={[{ value: '', label: '— Unassigned —' }, ...salesReps.map(r => ({ value: r.id, label: r.name }))]}
+                />
+                {detail.stage === 'converted' && (
+                  <p className="text-[10px] text-t3 mt-1">Reassigns the linked opportunity owner too.</p>
+                )}
               </div>
               <div>
                 <p className="text-[10px] uppercase font-bold text-t4">Contact</p>
@@ -316,8 +372,14 @@ export default function LeadsPanel({
                 {detail.phone && <p className="text-t3">{detail.phone}</p>}
               </div>
               <div>
-                <p className="text-[10px] uppercase font-bold text-t4">Stage / Source</p>
-                <p className="text-t1 capitalize">{detail.stage.replace(/_/g, ' ')} · {detail.source?.replace(/_/g, ' ') ?? '—'}</p>
+                <p className="text-[10px] uppercase font-bold text-t4 mb-1">Stage</p>
+                <Select
+                  value={detail.stage}
+                  disabled={savingOwnerId === detail.id || detail.stage === 'converted'}
+                  onChange={v => void updateLeadFields(detail.id, { stage: v })}
+                  options={STAGE_OPTIONS}
+                />
+                <p className="text-[10px] text-t3 mt-1 capitalize">Source: {detail.source?.replace(/_/g, ' ') ?? '—'}</p>
               </div>
             </div>
 

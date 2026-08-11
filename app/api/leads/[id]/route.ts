@@ -47,7 +47,7 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
     if (body.phone !== undefined) data.phone = body.phone?.trim() || null
     if (body.source !== undefined) data.source = body.source?.trim() || null
     if (body.stage !== undefined) data.stage = body.stage
-    if (body.ownerId !== undefined) data.ownerId = body.ownerId
+    if (body.ownerId !== undefined) data.ownerId = body.ownerId ? body.ownerId : null
     if (body.clientId !== undefined) data.clientId = body.clientId
     if (body.notes !== undefined) data.notes = body.notes
 

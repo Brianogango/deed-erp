@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, type RefObject } from 'react'
+import { useEffect, useRef, useState, type RefObject } from 'react'
 
 export type TableBreakpoint = 'mobile' | 'tablet' | 'laptop' | 'desktop'
 
@@ -13,6 +13,28 @@ export function classifyWidth(width: number): TableBreakpoint {
   if (width < 1024) return 'tablet'
   if (width < 1440) return 'laptop'
   return 'desktop'
+}
+
+/**
+ * Hysteresis around each boundary so ResizeObserver scrollbar/layout flips
+ * near 768/1024/1440 do not thrash table ↔ cards (visual "shake").
+ */
+export function classifyWidthWithHysteresis(
+  width: number,
+  previous: TableBreakpoint,
+  pad = 20,
+): TableBreakpoint {
+  const boundaries: Array<{ from: TableBreakpoint; to: TableBreakpoint; at: number }> = [
+    { from: 'mobile', to: 'tablet', at: 768 },
+    { from: 'tablet', to: 'laptop', at: 1024 },
+    { from: 'laptop', to: 'desktop', at: 1440 },
+  ]
+  // Stay on previous until we clearly cross the pad away from the boundary.
+  for (const b of boundaries) {
+    if (previous === b.from && width >= b.at && width < b.at + pad) return previous
+    if (previous === b.to && width < b.at && width >= b.at - pad) return previous
+  }
+  return classifyWidth(width)
 }
 
 function resolveAvailableWidth(containerRef?: RefObject<HTMLElement | null>): number {
@@ -32,11 +54,18 @@ function resolveAvailableWidth(containerRef?: RefObject<HTMLElement | null>): nu
 
 export function useTableBreakpoint(containerRef?: RefObject<HTMLElement | null>): TableBreakpoint {
   const [breakpoint, setBreakpoint] = useState<TableBreakpoint>('desktop')
+  const previousRef = useRef<TableBreakpoint>('desktop')
 
   useEffect(() => {
     if (typeof window === 'undefined') return
 
-    const sync = () => setBreakpoint(classifyWidth(resolveAvailableWidth(containerRef)))
+    const sync = () => {
+      const width = resolveAvailableWidth(containerRef)
+      const next = classifyWidthWithHysteresis(width, previousRef.current)
+      if (next === previousRef.current) return
+      previousRef.current = next
+      setBreakpoint(next)
+    }
     sync()
 
     window.addEventListener('resize', sync)

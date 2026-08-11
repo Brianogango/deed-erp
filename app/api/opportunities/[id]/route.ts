@@ -25,7 +25,7 @@ function mapOpportunityToDb(body: any) {
   if (body.closeDate || body.expectedCloseDate)
     data.closeDate = new Date(body.closeDate ?? body.expectedCloseDate)
   if (body.assignedToId !== undefined || body.ownerId !== undefined)
-    data.assignedToId = body.assignedToId ?? body.ownerId ?? null
+    data.assignedToId = (body.assignedToId ?? body.ownerId) || null
   return data
 }
 
