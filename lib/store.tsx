@@ -1,6 +1,11 @@
 // @ts-nocheck
 'use client'
 import { createContext, useContext, useState, useCallback, useEffect, ReactNode, useRef, useMemo } from 'react'
+import {
+  hasActivePosSession,
+  isOrphanedPosSession,
+  resolveOpenPosSessionId,
+} from '@/lib/pos-session'
 import { requestCreateUser, requestDeleteUser, requestUpdateUser, requestDeactivateUser, requestReactivateUser } from '@/lib/auth/client-users'
 import { canManageHRRole, getFirstAllowedModule, hasModuleAccess as userHasModuleAccess, normalizeClientRole } from '@/lib/auth/access'
 import { mergeCatalogProducts, mergeProductsRemoteState } from '@/lib/catalog-merge'
@@ -16199,7 +16204,13 @@ const storeCtx: AppState = {
 
     // ── POS ───────────────────────────────────────────────────────────────────
     openPOSSession: (openingCash) => {
-      if (posSessionOpen && posSessionId) {
+      // Heal orphaned open=true with no session id (legacy stuck till) before opening.
+      if (isOrphanedPosSession({ posSessionOpen, posSessionId, posSessions })) {
+        setPosSessionOpen(false)
+        setPosSessionId(null)
+        setPosSessionOpeningCash(0)
+      }
+      if (hasActivePosSession({ posSessionOpen, posSessionId, posSessions })) {
         showToast('A POS session is already open', 'error')
         return
       }
@@ -16215,7 +16226,7 @@ const storeCtx: AppState = {
         totalMpesa: 0,
         totalCard: 0,
         orderCount: 0,
-        openedBy: user?.name,
+        openedBy: user?.name || user?.username,
       }
       setPosSessions(p => [session, ...p])
       setPosSessionId(session.id)
@@ -16226,10 +16237,22 @@ const storeCtx: AppState = {
     },
     closePOSSession: (closingCash) => {
       const user = currentUser()
-      const sessionId = posSessionId
-      if (!posSessionOpen || !sessionId) {
+      const sessionId = resolveOpenPosSessionId({ posSessionOpen, posSessionId, posSessions })
+      // Orphaned open flag (no id / no open history): clear the till so cashiers can reopen.
+      if (!sessionId) {
+        if (posSessionOpen || posSessionId) {
+          setPosSessionOpen(false)
+          setPosSessionId(null)
+          setPosSessionOpeningCash(0)
+          showToast('Cleared stuck POS session — open a new session to continue', 'info')
+          return null
+        }
         showToast('No open POS session', 'error')
         return null
+      }
+      if (!posSessionId || posSessionId !== sessionId) {
+        setPosSessionId(sessionId)
+        setPosSessionOpen(true)
       }
       // Legacy orders used sessionId 'active' — include those while this session is open.
       const orders = posOrders.filter(o => o.sessionId === sessionId || o.sessionId === 'active')
@@ -16308,7 +16331,7 @@ const storeCtx: AppState = {
         totalCard,
         orderCount: orders.length,
         openedBy: openSession?.openedBy,
-        closedBy: user?.name,
+        closedBy: user?.name || user?.username,
         journalId,
       }
       setPosSessions(p => {
@@ -16317,6 +16340,7 @@ const storeCtx: AppState = {
       })
       setPosSessionOpen(false)
       setPosSessionId(null)
+      setPosSessionOpeningCash(0)
       showToast(
         cashDifference === 0
           ? `Session closed · ${orders.length} sales · ${fmtKes(totalSales)}`
