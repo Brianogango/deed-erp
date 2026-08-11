@@ -2,12 +2,12 @@
 name: Deed ERP
 description: Operational ERP for Deed Technologies — sales, inventory, repair, finance
 colors:
-  primary: "#2563EB"
-  primary-dark: "#1D4ED8"
-  primary-light: "#DBEAFE"
-  navy: "#1A1F5E"
-  navy-dark: "#161A50"
-  accent-cyan: "#00B0D7"
+  primary: "#00AEEF"
+  primary-dark: "#0096CC"
+  primary-light: "#E0F7FE"
+  navy: "#20164D"
+  navy-dark: "#18103A"
+  accent-cyan: "#00AEEF"
   bg-page: "#F1F5F9"
   bg-surface: "#F8FAFC"
   bg-card: "#FFFFFF"
@@ -19,7 +19,7 @@ colors:
   success: "#059669"
   warning: "#D97706"
   danger: "#DC2626"
-  info: "#2563EB"
+  info: "#0096CC"
 typography:
   ui:
     fontFamily: "var(--font-inter), Inter, system-ui, sans-serif"
@@ -91,7 +91,7 @@ This file **documents the incumbent system** before Phase 3–4 redesign choices
 
 ## Colors
 
-Brand: primary blue, Deed navy, cyan accent. Surfaces: cool slate page/card stack. Status: success / warning / danger / info with dedicated `*-bg` / `*-text` for badges.
+Brand: Deed cyan (`--primary` / `--accent-cyan` `#00AEEF`) and Deed navy (`--navy` `#20164D`). Surfaces: cool slate page/card stack. Status: success / warning / danger / info with dedicated `*-bg` / `*-text` for badges.
 
 **Sales pilot** remaps primary CTA and active chrome to **emerald (`--success`)** on a **slate-ink header** — deliberately distinct from Inventory’s navy band.
 
