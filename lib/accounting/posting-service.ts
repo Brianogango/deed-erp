@@ -140,6 +140,125 @@ export function buildInvoicePaymentLines(params: {
 }
 
 /**
+ * Customer receipt / vendor payment with optional unallocated (outstanding) remainder.
+ * Dr/Cr bank for full amount; settle AR/AP for allocated; park remainder on outstanding clearing.
+ */
+export function buildPaymentWithOutstandingLines(params: {
+  partnerName: string
+  paymentRef: string
+  method?: string
+  isVendor?: boolean
+  allocations: Array<{ invoiceRef: string; amount: number }>
+  unallocatedAmount: number
+}): PostingLineInput[] {
+  const allocated = roundMoney(
+    params.allocations.reduce((s, a) => s + Number(a.amount || 0), 0),
+  )
+  const unallocated = roundMoney(params.unallocatedAmount)
+  const total = roundMoney(allocated + unallocated)
+  if (total <= 0) return []
+
+  const cashRole = cashAccountRoleForMethod(params.method)
+  const lines: PostingLineInput[] = []
+
+  if (params.isVendor) {
+    lines.push({
+      role: cashRole,
+      description: `Payment out: ${params.paymentRef}`,
+      debit: 0,
+      credit: total,
+    })
+    for (const alloc of params.allocations) {
+      const amt = roundMoney(alloc.amount)
+      if (amt <= 0) continue
+      lines.push({
+        role: 'ap',
+        description: `AP settlement: ${alloc.invoiceRef}`,
+        debit: amt,
+        credit: 0,
+      })
+    }
+    if (unallocated > 0) {
+      lines.push({
+        role: 'outstanding_payments',
+        description: `Outstanding payment: ${params.partnerName}`,
+        debit: unallocated,
+        credit: 0,
+      })
+    }
+    return lines
+  }
+
+  lines.push({
+    role: cashRole,
+    description: `Received from ${params.partnerName}`,
+    debit: total,
+    credit: 0,
+  })
+  for (const alloc of params.allocations) {
+    const amt = roundMoney(alloc.amount)
+    if (amt <= 0) continue
+    lines.push({
+      role: 'ar',
+      description: `AR settlement: ${alloc.invoiceRef}`,
+      debit: 0,
+      credit: amt,
+    })
+  }
+  if (unallocated > 0) {
+    lines.push({
+      role: 'outstanding_receipts',
+      description: `Outstanding receipt: ${params.partnerName}`,
+      debit: 0,
+      credit: unallocated,
+    })
+  }
+  return lines
+}
+
+/** Apply previously outstanding cash onto invoices/bills (clearing → AR/AP). */
+export function buildAllocateOutstandingLines(params: {
+  partnerName: string
+  paymentRef: string
+  isVendor?: boolean
+  allocations: Array<{ invoiceRef: string; amount: number }>
+}): PostingLineInput[] {
+  const lines: PostingLineInput[] = []
+  for (const alloc of params.allocations) {
+    const amt = roundMoney(alloc.amount)
+    if (amt <= 0) continue
+    if (params.isVendor) {
+      lines.push({
+        role: 'outstanding_payments',
+        description: `Clear outstanding: ${params.paymentRef}`,
+        debit: 0,
+        credit: amt,
+      })
+      lines.push({
+        role: 'ap',
+        description: `AP settlement: ${alloc.invoiceRef}`,
+        debit: amt,
+        credit: 0,
+      })
+    } else {
+      lines.push({
+        role: 'outstanding_receipts',
+        description: `Clear outstanding: ${params.paymentRef}`,
+        debit: amt,
+        credit: 0,
+      })
+      lines.push({
+        role: 'ar',
+        description: `AR settlement: ${alloc.invoiceRef}`,
+        debit: 0,
+        credit: amt,
+      })
+    }
+  }
+  return lines
+}
+
+/**
  * Resolve labels, assert balance, persist via journal-service (fiscal lock + idempotent ref).
  */
 export async function commitPosting(input: CommitPostingInput) {
@@ -226,6 +345,69 @@ export async function postInvoicePayment(params: {
     lines,
     createdById: params.createdById,
     journalCode,
+  })
+}
+
+/** Single journal for a receipt/payment that may leave an outstanding remainder. */
+export async function postPaymentWithOutstanding(params: {
+  paymentId: string
+  paymentRef: string
+  partnerName: string
+  method?: string
+  isVendor?: boolean
+  allocations: Array<{ invoiceId?: string; invoiceRef: string; amount: number }>
+  unallocatedAmount: number
+  createdById?: string
+}) {
+  const method = String(params.method || '').toLowerCase()
+  const lines = buildPaymentWithOutstandingLines({
+    partnerName: params.partnerName,
+    paymentRef: params.paymentRef,
+    method: params.method,
+    isVendor: params.isVendor,
+    allocations: params.allocations,
+    unallocatedAmount: params.unallocatedAmount,
+  })
+  if (lines.length === 0) return null
+  const primaryInvoiceId = params.allocations[0]?.invoiceId ?? null
+  return commitPosting({
+    ref: `JRN/PAY/${params.paymentRef}/${params.paymentId}`.slice(0, 80),
+    source: params.isVendor ? 'purchase_payment' : 'payment',
+    description: `Payment ${params.paymentRef} — ${params.partnerName}`,
+    invoiceId: primaryInvoiceId || undefined,
+    paymentId: params.paymentId,
+    lines,
+    createdById: params.createdById,
+    journalCode: params.isVendor ? 'PUR' : (method === 'cash' ? 'CSH' : 'BNK'),
+  })
+}
+
+/** Clear outstanding receipts/payments onto invoices after a later allocation. */
+export async function postAllocateOutstanding(params: {
+  paymentId: string
+  paymentRef: string
+  partnerName: string
+  isVendor?: boolean
+  allocations: Array<{ invoiceId: string; invoiceRef: string; amount: number }>
+  createdById?: string
+}) {
+  const lines = buildAllocateOutstandingLines({
+    partnerName: params.partnerName,
+    paymentRef: params.paymentRef,
+    isVendor: params.isVendor,
+    allocations: params.allocations,
+  })
+  if (lines.length === 0) return null
+  const stamp = Date.now().toString(36)
+  return commitPosting({
+    ref: `JRN/PAYALC/${params.paymentRef}/${stamp}`.slice(0, 80),
+    source: params.isVendor ? 'purchase_payment' : 'payment',
+    description: `Allocate outstanding ${params.paymentRef} — ${params.partnerName}`,
+    invoiceId: params.allocations[0]?.invoiceId,
+    paymentId: params.paymentId,
+    lines,
+    createdById: params.createdById,
+    journalCode: params.isVendor ? 'PUR' : 'BNK',
   })
 }
 

@@ -99,9 +99,9 @@ Legend: **HAVE** · **PARTIAL** · **MISSING**
 | Item | Status | Evidence |
 |------|--------|----------|
 | Payment ↔ invoice allocations | **HAVE** | `PaymentAllocation` model + `payment-allocations.ts` |
-| Invoice residual / amount due | **PARTIAL** | Computed from allocations + status flags; PAID still used operationally |
-| Outstanding customer receipts (unallocated cash) | **MISSING** | No first-class outstanding receipt doc |
-| Outstanding vendor payments | **MISSING** | |
+| Invoice residual / amount due | **HAVE** | Derived via `invoiceResidual` / `invoicePaymentStatus` (not stored PAID) |
+| Outstanding customer receipts (unallocated cash) | **PARTIAL** | Phase 2: under-allocation + `GET ?outstanding=1` + allocate API; clearing **1805** when engine on |
+| Outstanding vendor payments | **PARTIAL** | Same payment model with `direction:outbound` + clearing **3005** when engine on |
 | Ageing reports | **PARTIAL** | `lib/accounting/ageing.ts` |
 
 ### Phase 3 — Purchases / GRNI / perpetual AP

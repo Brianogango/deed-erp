@@ -19,6 +19,8 @@ export type CoaRole =
   | 'bank_equity'
   | 'cash_mobile'
   | 'employee_reimbursements'
+  | 'outstanding_receipts'
+  | 'outstanding_payments'
 
 /** Canonical live codes — keep stable. */
 export const COA_ROLE_CODES: Record<CoaRole, string> = {
@@ -35,6 +37,8 @@ export const COA_ROLE_CODES: Record<CoaRole, string> = {
   bank_equity: '2202',
   cash_mobile: '2211',
   employee_reimbursements: '3105',
+  outstanding_receipts: '1805',
+  outstanding_payments: '3005',
 }
 
 /**
@@ -55,6 +59,8 @@ export const COA_ROLE_LABELS: Record<CoaRole, string> = {
   bank_equity: '2202 - Equity Bank',
   cash_mobile: '2211 - Petty Cash / Mobile Money',
   employee_reimbursements: '3105 - Employee Reimbursements Payable',
+  outstanding_receipts: '1805 - Outstanding Receipts',
+  outstanding_payments: '3005 - Outstanding Payments',
 }
 
 export function labelForRole(role: CoaRole): string {
