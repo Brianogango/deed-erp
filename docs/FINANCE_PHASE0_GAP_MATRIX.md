@@ -137,8 +137,10 @@ Legend: **HAVE** · **PARTIAL** · **MISSING**
 
 | Item | Status | Evidence |
 |------|--------|----------|
-| Output VAT on invoices | **PARTIAL** | Account **3301** + invoice lines |
-| Input VAT / full tax report / periods | **MISSING** | No dedicated tax engine |
+| Output VAT on invoices | **HAVE** | Account **3301** + invoice / posting-service lines |
+| Input VAT on vendor bills | **HAVE** | Account **1150** via `input_vat` role |
+| VAT control report (GL) | **HAVE** | Phase 6: `vat-reports` + `/api/accounting/vat-control` |
+| Tax periods / eTIMS / remittance | **MISSING** | Return draft DTO only |
 
 ### Phase 7 — Expenses / POS / edge GL
 

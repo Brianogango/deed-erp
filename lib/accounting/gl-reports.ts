@@ -177,7 +177,7 @@ export function buildBalanceSheetFromAggregates(
   }
 }
 
-async function fetchPostedLines(opts: { dateFrom?: string; dateTo?: string; asOf?: string }) {
+export async function fetchPostedLines(opts: { dateFrom?: string; dateTo?: string; asOf?: string }) {
   const entryWhere: Record<string, unknown> = { isPosted: true, isReversed: false }
   if (opts.dateFrom || opts.dateTo || opts.asOf) {
     const entryDate: Record<string, Date> = {}
