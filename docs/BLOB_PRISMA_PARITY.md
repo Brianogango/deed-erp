@@ -18,6 +18,10 @@ Audit finding **DB-001**: the ERP dual-writes critical domains (blob + Prisma). 
 | `dual_write` | Both sides should converge (invoices, quotes, sale orders, repairs, …) | Only when counts match (optionally Prisma ahead) |
 | `blob_sot` | Blob is still operational SoT (POs, serials, stock moves, deliveries, receipts) | Track coverage; do **not** certify until Prisma catches up |
 
+### Journals (`deed_journalEntries`) — Phase 9
+
+Identity key is **`ref`**, not blob `id`. Prisma may be ahead (STK / FX / reconfig / posting-engine journals). Certify when every blob ref exists in Prisma and sampled line totals match (`GET /api/admin/journal-parity`). Certify ≠ retire — see `docs/FINANCE_PHASE9_HARDENING.md`.
+
 ## How to run a check
 
 ### Director UI / API (preferred)
