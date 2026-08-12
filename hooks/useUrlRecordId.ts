@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useState, startTransition } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 
 type Options = {
@@ -10,6 +10,17 @@ type Options = {
   whenOpen?: Record<string, string>
   /** Extra query keys to remove when closing. */
   clearKeys?: string[]
+}
+
+export type SetUrlRecordIdOptions = {
+  /**
+   * Merge into the URL in the same replace as the id change.
+   * `null` deletes the key. Use this so a clear cannot clobber a concurrent
+   * tab switch that already updated local state but not searchParams yet.
+   */
+  queryPatch?: Record<string, string | null>
+  /** Skip router.replace — only update local state (URL already correct). */
+  localOnly?: boolean
 }
 
 /**
@@ -29,8 +40,10 @@ export function useUrlRecordId(options: Options = {}) {
   const queryId = searchParams.get(param)
   const [recordId, setLocalRecordId] = useState<string | null>(queryId)
 
-  const setRecordId = useCallback((id: string | null) => {
+  const setRecordId = useCallback((id: string | null, opts?: SetUrlRecordIdOptions) => {
     setLocalRecordId(id)
+    if (opts?.localOnly) return
+
     const params = new URLSearchParams(searchParams.toString())
     if (id) {
       params.set(param, id)
@@ -43,8 +56,16 @@ export function useUrlRecordId(options: Options = {}) {
       params.delete(param)
       for (const key of options.clearKeys ?? []) params.delete(key)
     }
+    if (opts?.queryPatch) {
+      for (const [key, value] of Object.entries(opts.queryPatch)) {
+        if (value === null) params.delete(key)
+        else params.set(key, value)
+      }
+    }
     const qs = params.toString()
-    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false })
+    startTransition(() => {
+      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false })
+    })
   }, [searchParams, router, pathname, param, options.whenOpen, options.clearKeys])
 
   useEffect(() => {
@@ -69,7 +90,9 @@ export function useUrlQueryState(param: string, fallback: string) {
     const params = new URLSearchParams(searchParams.toString())
     params.set(param, next)
     const qs = params.toString()
-    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false })
+    startTransition(() => {
+      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false })
+    })
   }, [searchParams, router, pathname, param])
 
   useEffect(() => {

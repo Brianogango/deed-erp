@@ -1,5 +1,5 @@
 'use client'
-import { useState, useMemo, useEffect, Suspense, useCallback } from 'react'
+import { useState, useMemo, useEffect, Suspense, useCallback, useRef, startTransition } from 'react'
 import { useSearchParams, useRouter, usePathname } from 'next/navigation'
 import { useCrmStore, OpportunityStage, LeadSource, fmtKes, fmtDate } from '@/lib/store'
 import { Badge, Modal, Field, Input, Select, Textarea, PanelHeader, ModuleSkeleton, SlidePanel, useMounted, TabBar, ModuleHeader } from '@/components/ui'
@@ -110,26 +110,47 @@ function CRMContent() {
   const initialTab = queryTab ?? defaultTab
 
   const [tab, setLocalTab] = useState<Tab>(initialTab)
+  /** Blocks stale URL→local sync while a tab click's router.replace is in flight. */
+  const pendingTabRef = useRef<Tab | null>(null)
 
   const setTab = (newTab: Tab) => {
+    pendingTabRef.current = newTab
     setLocalTab(newTab)
-    const params = new URLSearchParams(searchParams.toString())
-    params.set('crmTab', newTab)
+
     if (newTab !== 'pipeline') {
-      params.delete('id')
       setLocalActiveOppId(null)
       setLocalView('kanban')
+      // One URL write: set crmTab + clear opportunity id. Never call setUrlOppId(null)
+      // separately — that rebuilds from stale searchParams and can clobber crmTab
+      // back to pipeline (Pipeline → Leads appearing broken).
+      setUrlOppId(null, { queryPatch: { crmTab: newTab } })
+      return
     }
-    router.replace(`${pathname}?${params.toString()}`, { scroll: false })
+
+    const params = new URLSearchParams(searchParams.toString())
+    params.set('crmTab', newTab)
+    startTransition(() => {
+      router.replace(`${pathname}?${params.toString()}`, { scroll: false })
+    })
   }
 
   useEffect(() => {
     const rawUrlTab = searchParams.get('crmTab') as Tab | null
     const urlTab: Tab | null = rawUrlTab === 'opportunities' ? 'pipeline' : rawUrlTab
-    if (urlTab && urlTab !== tab) {
-      setLocalTab(urlTab)
+    const effectiveUrlTab = urlTab ?? defaultTab
+
+    if (pendingTabRef.current) {
+      if (effectiveUrlTab === pendingTabRef.current) {
+        pendingTabRef.current = null
+      }
+      // Ignore stale URL while our navigation is in flight (competing replaces).
+      return
     }
-  }, [searchParams, tab])
+
+    if (effectiveUrlTab !== tab) {
+      setLocalTab(effectiveUrlTab)
+    }
+  }, [searchParams, tab, defaultTab])
 
   const [view, setLocalView] = useState<View>('kanban')
   const [activeOppId, setLocalActiveOppId] = useState<string | null>(null)
@@ -279,7 +300,17 @@ function CRMContent() {
     // User is (or just switched to) a non-pipeline tab — never yank back to
     // pipeline over a stale opportunity id. That remount fight shook Leads.
     if ((urlTab && urlTab !== 'pipeline') || (tab !== 'pipeline' && tab !== 'opportunities')) {
-      setUrlOppId(null)
+      // Clear local detail only. URL id is already stripped in setTab's single
+      // replace; calling setUrlOppId(null) here races and can restore crmTab=pipeline.
+      if (activeOppId) setLocalActiveOppId(null)
+      if (view === 'detail') setLocalView('kanban')
+      if (searchParams.get('id')) {
+        setUrlOppId(null, {
+          queryPatch: { crmTab: tab !== 'pipeline' && tab !== 'opportunities' ? tab : (urlTab || 'pipeline') },
+        })
+      } else {
+        setUrlOppId(null, { localOnly: true })
+      }
       return
     }
 
@@ -782,8 +813,8 @@ function CRMContent() {
           if (next === 'pipeline') setView('kanban')
         }}
         maxVisibleMobile={4}
-        maxVisibleTablet={5}
-        maxVisibleDesktop={6}
+        maxVisibleTablet={6}
+        maxVisibleDesktop={9}
         ariaLabel="CRM sections"
       />
     </>
