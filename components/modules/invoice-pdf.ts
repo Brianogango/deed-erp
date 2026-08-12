@@ -10,6 +10,7 @@ import {
   buildPaymentDetailLines,
   type DocumentPaymentDetails,
 } from '@/lib/document-payment-details'
+import { customerFacingNotes } from '@/lib/customer-facing-notes'
 
 /** Map an invoice onto the shared Odoo-style PDF input. */
 export function invoicePdfInput(
@@ -59,7 +60,7 @@ export function invoicePdfInput(
     taxTotal: inv.taxTotal,
     total: inv.total,
     amountPaid: inv.amountPaid,
-    notes: inv.notes,
+    notes: customerFacingNotes(inv.notes) || undefined,
     // Odoo prints the payment communication on posted customer invoices.
     paymentCommunication,
     // Vendor bills do not show customer payment instructions.

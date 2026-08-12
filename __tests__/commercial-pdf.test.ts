@@ -176,4 +176,32 @@ describe('buildDeedDocumentPdf', () => {
     // Fallback wordmark watermark is present when no logo bytes are supplied.
     expect(asString.toLowerCase()).toContain('deed')
   })
+
+  it('omits internal reset / auto-created audit lines from Notes', () => {
+    const doc = buildDeedDocumentPdf(
+      {
+        title: 'Invoice',
+        ref: 'INV/2026/0059',
+        date: '2026-08-12',
+        customerName: 'Customer',
+        customerCountry: 'Kenya',
+        lines: [{ description: 'Repair labour', qty: 1, unitPrice: 1000, taxRate: 16, subtotal: 1000 }],
+        subtotal: 1000,
+        taxTotal: 160,
+        total: 1160,
+        notes: [
+          'Auto-created from approved repair quote lines: REP-724645',
+          'Reset to draft by Brian Ogango for changes.',
+          'Please call before delivery.',
+        ].join('\n'),
+        paymentCommunication: true,
+      },
+      company,
+      banks,
+    )
+    const asString = Buffer.from(doc.output('arraybuffer')).toString('latin1')
+    expect(asString).toContain('Please call before delivery')
+    expect(asString).not.toContain('Reset to draft')
+    expect(asString).not.toContain('Auto-created from')
+  })
 })

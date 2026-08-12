@@ -6,7 +6,11 @@
 
 import { jsPDF } from 'jspdf'
 import autoTable from 'jspdf-autotable'
+<<<<<<< HEAD
 import { resolveBankMpesa } from '@/lib/document-payment-details'
+=======
+import { customerFacingNotes } from '@/lib/customer-facing-notes'
+>>>>>>> 8d00aac (Fix invoice/quote PDF logo dropouts and hide internal Notes)
 
 export interface DeedPdfLine {
   lineType?: 'item' | 'section'
@@ -37,6 +41,8 @@ export interface DeedPdfCompany {
   logoDataUrl?: string
   logoWidth?: number
   logoHeight?: number
+  /** jsPDF addImage format — JPEG data URLs fail when forced as PNG. */
+  logoFormat?: 'PNG' | 'JPEG'
 }
 
 export interface DeedPdfBank {
@@ -189,7 +195,8 @@ function drawPageWatermark(doc: jsPDF, company: DeedPdfCompany) {
       const h = company.logoHeight * scale
       const x = (PAGE_W - w) / 2
       const y = insetY + (maxH - h) / 2
-      doc.addImage(company.logoDataUrl, 'PNG', x, y, w, h)
+      const fmt = company.logoFormat || 'PNG'
+      doc.addImage(company.logoDataUrl, fmt, x, y, w, h)
     } else {
       // Fallback wordmark — large, centered, same inset band as the logo.
       doc.setFont('helvetica', 'bold').setFontSize(120).setTextColor(230, 238, 248)
@@ -256,7 +263,8 @@ export function buildDeedDocumentPdf(
     const logoW = company.logoWidth * scale
     const logoH = company.logoHeight * scale
     try {
-      doc.addImage(company.logoDataUrl, 'PNG', MARGIN, LOGO_TOP, logoW, logoH)
+      const fmt = company.logoFormat || 'PNG'
+      doc.addImage(company.logoDataUrl, fmt, MARGIN, LOGO_TOP, logoW, logoH)
       letterheadBottom = LOGO_TOP + logoH
     } catch {
       doc.setFont('helvetica', 'bold').setFontSize(20).setTextColor(...NAVY)
@@ -439,7 +447,12 @@ export function buildDeedDocumentPdf(
 
   y = (doc as any).lastAutoTable.finalY + 18
 
-  const notesText = input.notes?.trim() || (input.sourceRef ? `Created from ${input.sourceRef}.` : '')
+  // Drop internal workflow / audit lines (reset-to-draft, auto-created, …)
+  // so customer PDFs only show commercial notes.
+  const filteredNotes = customerFacingNotes(input.notes)
+  const hadRawNotes = Boolean(String(input.notes ?? '').trim())
+  const notesText = filteredNotes
+    || (!hadRawNotes && input.sourceRef ? `Created from ${input.sourceRef}.` : '')
   const taxRates = Array.from(new Set(input.lines.filter(l => l.lineType !== 'section' && (l.taxRate ?? 0) > 0).map(l => l.taxRate)))
   const vatLabel = taxRates.length === 1 ? `VAT ${taxRates[0]}%` : 'VAT'
 

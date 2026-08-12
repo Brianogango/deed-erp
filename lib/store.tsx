@@ -12041,12 +12041,12 @@ const storeCtx: AppState = {
       const reversals = related
         .filter(j => !journalEntries.some(existingJournal => existingJournal.ref === `REV/${j.ref}`))
         .map(j => buildReversalJournal(j, inv.ref, `${inv.type === 'vendor_bill' ? 'Bill' : 'Invoice'} reset to draft`))
+      // Keep reset audit off customer-facing invoice notes / PDFs — audit log only.
       const draft: Invoice = {
         ...inv,
         status: 'draft',
         amountPaid: 0,
         payments: [],
-        notes: `${inv.notes || ''}\nReset to draft by ${actor?.name ?? 'Finance'} for changes.`.trim(),
       }
       // Optimistic UI — Edit / Confirm appear immediately; revert if the API fails.
       if (reversals.length > 0) setJournalEntries(prev => [...reversals, ...prev])

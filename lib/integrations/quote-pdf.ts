@@ -6,6 +6,8 @@ import 'server-only'
  */
 import { buildDeedDocumentPdf, deedPdfToBuffer } from '@/lib/deed-document-pdf'
 import { DEFAULT_COMPANY_SETTINGS, DEFAULT_BANK_ACCOUNTS } from '@/lib/store'
+import { loadAppState } from '@/lib/server-store'
+import { loadLogoForPdfServer } from '@/lib/pdf-logo'
 
 export interface QuotePdfInput {
   ref: string
@@ -22,8 +24,13 @@ export interface QuotePdfInput {
 }
 
 export async function generateQuotePdfBuffer(quote: QuotePdfInput): Promise<Buffer> {
-  const co = DEFAULT_COMPANY_SETTINGS
-  const banks = DEFAULT_BANK_ACCOUNTS.filter(a => a.active)
+  const state = await loadAppState(['deed_companySettings', 'deed_bankAccounts'])
+  const co = {
+    ...DEFAULT_COMPANY_SETTINGS,
+    ...((state['deed_companySettings'] as Record<string, unknown> | undefined) ?? {}),
+  }
+  const banks = ((state['deed_bankAccounts'] as any[] | undefined) ?? DEFAULT_BANK_ACCOUNTS).filter((a: any) => a.active)
+  const logo = await loadLogoForPdfServer(typeof co.logoUrl === 'string' ? co.logoUrl : null)
 
   const doc = buildDeedDocumentPdf(
     {
@@ -41,7 +48,7 @@ export async function generateQuotePdfBuffer(quote: QuotePdfInput): Promise<Buff
         description: line.productName,
         qty: line.qty,
         unitPrice: line.unitPrice ?? 0,
-        taxRate: line.taxRate ?? co.vatRate,
+        taxRate: line.taxRate ?? Number(co.vatRate ?? 16),
         subtotal: line.lineTotal,
       })),
       subtotal: quote.subtotal ?? quote.total,
@@ -53,17 +60,21 @@ export async function generateQuotePdfBuffer(quote: QuotePdfInput): Promise<Buff
       paymentCommunication: true,
     },
     {
-      name: co.name,
-      address: co.address,
-      city: co.city,
-      phone: co.phone,
-      email: co.email,
-      website: co.website,
-      kraPin: co.kraPin,
-      currency: co.currency,
-      mpesaPaybill: co.mpesaPaybill,
-      mpesaAccount: co.mpesaAccount,
-      invoiceFooter: co.invoiceFooter,
+      name: String(co.name ?? ''),
+      address: co.address ? String(co.address) : undefined,
+      city: co.city ? String(co.city) : undefined,
+      phone: co.phone ? String(co.phone) : undefined,
+      email: co.email ? String(co.email) : undefined,
+      website: co.website ? String(co.website) : undefined,
+      kraPin: co.kraPin ? String(co.kraPin) : undefined,
+      currency: String(co.currency ?? 'KES'),
+      mpesaPaybill: co.mpesaPaybill ? String(co.mpesaPaybill) : undefined,
+      mpesaAccount: co.mpesaAccount ? String(co.mpesaAccount) : undefined,
+      invoiceFooter: co.invoiceFooter ? String(co.invoiceFooter) : undefined,
+      logoDataUrl: logo?.dataUrl,
+      logoWidth: logo?.width,
+      logoHeight: logo?.height,
+      logoFormat: logo?.format,
     },
     banks,
   )

@@ -40,6 +40,7 @@ export const downloadQuotePdf = async (quote: Quote) => {
         quote.paymentTerms ? `Payment Terms: ${quote.paymentTerms}` : '',
         quote.deliveryTerms ? `Delivery Terms: ${quote.deliveryTerms}` : '',
         quote.warranty ? `Warranty: ${quote.warranty}` : '',
+        // Internal workflow lines are stripped in buildDeedDocumentPdf.
         quote.notes ?? '',
       ].filter(Boolean).join('\n') || undefined,
       paymentCommunication: true,

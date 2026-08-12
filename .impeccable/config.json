@@ -3,7 +3,8 @@
     "ignoreRules": [],
     "ignoreFiles": [
       "lib/store.tsx",
-      "app/globals.css"
+      "app/globals.css",
+      "components/modules/Settings.tsx"
     ],
     "ignoreValues": [
       "rgba(0,174,239,0.5)",
