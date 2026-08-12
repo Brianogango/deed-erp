@@ -391,8 +391,8 @@ function AccountingContent() {
   const [bsSource, setBsSource] = useState<'blob' | 'prisma'>('prisma')
   const [vatSource, setVatSource] = useState<'blob' | 'prisma'>('prisma')
   const fiscalYearStart = `${new Date().getFullYear()}-01-01`
-  const [plDateFrom, setPlDateFrom] = useState(fiscalYearStart)
-  const [plDateTo, setPlDateTo] = useState(today())
+  const [pnlDateFrom, setPnlDateFrom] = useState(fiscalYearStart)
+  const [pnlDateTo, setPnlDateTo] = useState(today())
   const prismaReportsEnabled = (tbSource === 'prisma' && reportTab === 'trial_balance')
     || (plSource === 'prisma' && reportTab === 'pl')
     || (bsSource === 'prisma' && reportTab === 'bs')
@@ -402,8 +402,8 @@ function AccountingContent() {
     profitLoss: plSource === 'prisma' && reportTab === 'pl',
     balanceSheet: bsSource === 'prisma' && reportTab === 'bs',
     vatControl: vatSource === 'prisma' && reportTab === 'vat',
-    plDateFrom: plSource === 'prisma' && reportTab === 'pl' ? plDateFrom : null,
-    plDateTo: plSource === 'prisma' && reportTab === 'pl' ? plDateTo : null,
+    plDateFrom: plSource === 'prisma' && reportTab === 'pl' ? pnlDateFrom : null,
+    plDateTo: plSource === 'prisma' && reportTab === 'pl' ? pnlDateTo : null,
     plView: 'management',
   })
 
@@ -1661,8 +1661,8 @@ function AccountingContent() {
                         <input
                           type="date"
                           className="form-input text-[11px] py-1.5"
-                          value={plDateFrom}
-                          onChange={e => setPlDateFrom(e.target.value)}
+                          value={pnlDateFrom}
+                          onChange={e => setPnlDateFrom(e.target.value)}
                           aria-label="P&L date from"
                         />
                       </label>
@@ -1671,8 +1671,8 @@ function AccountingContent() {
                         <input
                           type="date"
                           className="form-input text-[11px] py-1.5"
-                          value={plDateTo}
-                          onChange={e => setPlDateTo(e.target.value)}
+                          value={pnlDateTo}
+                          onChange={e => setPnlDateTo(e.target.value)}
                           aria-label="P&L date to"
                         />
                       </label>

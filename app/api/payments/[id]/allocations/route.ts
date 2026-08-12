@@ -67,7 +67,7 @@ export async function POST(
       newValues: {
         allocationCount: result.allocations.length,
         unallocatedAmount: result.unallocatedAmount,
-        invoiceIds: allocations.map(a => a.invoiceId),
+        invoiceIds: allocations.map((a: { invoiceId: string; amount: number }) => a.invoiceId),
       },
     })
 
