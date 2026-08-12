@@ -1,9 +1,12 @@
 import 'server-only'
 import prisma from '@/lib/prisma'
+import { invoiceResidual, roundMoney } from '@/lib/accounting/money'
 
 export function round2(n: number) {
-  return Math.round(Number(n || 0) * 100) / 100
+  return roundMoney(n)
 }
+
+export { invoiceResidual }
 
 export type AllocationInput = { invoiceId: string; amount: number }
 
@@ -64,8 +67,7 @@ export async function allocatePayment(opts: {
     const inv = invoiceMap.get(invoiceId)
     if (!inv) throw new Error(`Invoice not found: ${invoiceId}`)
     const allocated = await sumAllocationsForInvoice(invoiceId)
-    const residual = round2(Number(inv.totalAmount) - allocated)
-    residuals.set(invoiceId, residual)
+    residuals.set(invoiceId, invoiceResidual(Number(inv.totalAmount), allocated))
   }
 
   const validation = validateAllocationTotals(Number(payment.amount), opts.allocations, residuals)
@@ -129,7 +131,7 @@ export async function recordPaymentWithAllocations(opts: {
     if (!inv) throw new Error(`Invoice not found: ${invoiceId}`)
     if (inv.paymentBlocked) throw new Error(`Payments blocked on invoice ${invoiceId}`)
     const allocated = await sumAllocationsForInvoice(invoiceId)
-    residuals.set(invoiceId, round2(Number(inv.totalAmount) - allocated))
+    residuals.set(invoiceId, invoiceResidual(Number(inv.totalAmount), allocated))
   }
 
   const validation = validateAllocationTotals(opts.amount, opts.allocations, residuals)

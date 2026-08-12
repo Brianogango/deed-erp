@@ -11,6 +11,12 @@ import {
   CUSTOMER_CREDITS_ACCOUNT,
   CUSTOMER_DEPOSITS_ACCOUNT,
 } from '@/lib/accounting/liability-accounts'
+import { isAccountingPostingEngineEnabled } from '@/lib/accounting/posting-flag'
+import {
+  postCustomerInvoice,
+  postInvoicePayment,
+} from '@/lib/accounting/posting-service'
+import { labelForRole } from '@/lib/accounting/coa-roles'
 
 export type InvoiceLike = {
   id: string
@@ -153,11 +159,23 @@ export async function postInvoiceJournalToPrisma(invoice: InvoiceLike, opts?: { 
     }, { createdById: opts?.createdById, journalCode: 'PUR' })
   }
 
+  if (isAccountingPostingEngineEnabled()) {
+    return postCustomerInvoice({
+      invoiceId: invoice.id,
+      ref,
+      partnerName: partner,
+      total,
+      subtotal,
+      tax,
+      createdById: opts?.createdById,
+    })
+  }
+
   const saleLabel = formatAccountLabel(COMPANY_ACCOUNT_FALLBACKS.saleAccountCode, [])
   const lines = [
-    { account: '1800 - Accounts Receivable', description: `AR: ${partner}`, debit: total, credit: 0 },
+    { account: labelForRole('ar'), description: `AR: ${partner}`, debit: total, credit: 0 },
     { account: saleLabel, description: `Revenue: ${ref}`, debit: 0, credit: subtotal },
-    ...(tax > 0 ? [{ account: '3301 - Output VAT Payable', description: `VAT on ${ref}`, debit: 0, credit: tax }] : []),
+    ...(tax > 0 ? [{ account: labelForRole('output_vat'), description: `VAT on ${ref}`, debit: 0, credit: tax }] : []),
   ]
   return persistStoreJournalEntry({
     ref: `JRN/${ref}`,
@@ -181,6 +199,19 @@ export async function postInvoicePaymentJournalToPrisma(params: {
   const isVendor = params.invoice.type === 'vendor_bill'
   const method = String(params.method || '').toLowerCase()
 
+  if (isAccountingPostingEngineEnabled()) {
+    return postInvoicePayment({
+      invoiceId: params.invoice.id,
+      paymentId: params.paymentId,
+      ref,
+      partnerName: partner,
+      amount,
+      method: params.method,
+      isVendor,
+      createdById: params.createdById,
+    })
+  }
+
   if (!isVendor && isCustomerCreditMethod(method)) {
     return persistStoreJournalEntry({
       ref: `JRN/PAY/${ref}/${params.paymentId}`.slice(0, 80),
@@ -190,7 +221,7 @@ export async function postInvoicePaymentJournalToPrisma(params: {
       paymentId: params.paymentId,
       lines: [
         { account: CUSTOMER_CREDITS_ACCOUNT, description: `Apply credit: ${partner}`, debit: amount, credit: 0 },
-        { account: '1800 - Accounts Receivable', description: `AR settlement: ${ref}`, debit: 0, credit: amount },
+        { account: labelForRole('ar'), description: `AR settlement: ${ref}`, debit: 0, credit: amount },
       ],
     }, { createdById: params.createdById, journalCode: 'SAL' })
   }
@@ -204,7 +235,7 @@ export async function postInvoicePaymentJournalToPrisma(params: {
       paymentId: params.paymentId,
       lines: [
         { account: CUSTOMER_DEPOSITS_ACCOUNT, description: `Clear deposit liability: ${partner}`, debit: amount, credit: 0 },
-        { account: '1800 - Accounts Receivable', description: `AR settlement: ${ref}`, debit: 0, credit: amount },
+        { account: labelForRole('ar'), description: `AR settlement: ${ref}`, debit: 0, credit: amount },
       ],
     }, { createdById: params.createdById, journalCode: 'SAL' })
   }
@@ -212,12 +243,12 @@ export async function postInvoicePaymentJournalToPrisma(params: {
   const bank = methodAccountLabel(params.method)
   const lines = isVendor
     ? [
-        { account: '3000 - Accounts Payable', description: `AP settlement: ${partner}`, debit: amount, credit: 0 },
+        { account: labelForRole('ap'), description: `AP settlement: ${partner}`, debit: amount, credit: 0 },
         { account: bank, description: `Payment out: ${ref}`, debit: 0, credit: amount },
       ]
     : [
         { account: bank, description: `Received from ${partner}`, debit: amount, credit: 0 },
-        { account: '1800 - Accounts Receivable', description: `AR settlement: ${ref}`, debit: 0, credit: amount },
+        { account: labelForRole('ar'), description: `AR settlement: ${ref}`, debit: 0, credit: amount },
       ]
 
   return persistStoreJournalEntry({
@@ -257,7 +288,7 @@ export async function postCustomerCreditJournalToPrisma(params: {
     lines: [
       { account: saleLabel, description: `Credit note ${params.creditRef}: reverse ${invRef}`, debit: revenueReversal, credit: 0 },
       ...(vatReversal > 0
-        ? [{ account: '3301 - Output VAT Payable', description: `Credit VAT ${params.creditRef}`, debit: vatReversal, credit: 0 }]
+        ? [{ account: labelForRole('output_vat'), description: `Credit VAT ${params.creditRef}`, debit: vatReversal, credit: 0 }]
         : []),
       { account: CUSTOMER_CREDITS_ACCOUNT, description: `Customer credit: ${partner}`, debit: 0, credit: amount },
     ],
@@ -277,7 +308,7 @@ export async function postDepositClearJournalToPrisma(params: {
   const amount = money(params.amount)
   if (amount <= 0) return null
   const creditAccount = params.invoiceId
-    ? '1800 - Accounts Receivable'
+    ? labelForRole('ar')
     : formatAccountLabel(COMPANY_ACCOUNT_FALLBACKS.saleAccountCode, [])
   const creditDesc = params.invoiceId
     ? `AR settlement via deposit ${params.depositRef}${params.invoiceRef ? ` → ${params.invoiceRef}` : ''}`
