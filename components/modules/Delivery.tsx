@@ -30,16 +30,16 @@ function PrintJobSheet({ job, companySettings, onDone }: { job: DeliveryJob, com
   }, [onDone])
 
   return (
-    <div className="print-document-container bg-white text-black p-8 min-h-screen" style={{ fontFamily: 'Arial, sans-serif' }}>
+    <div className="print-document-container bg-white text-black p-8 min-h-screen" style={{ fontFamily: 'var(--font-inter), Inter, system-ui, sans-serif' }}>
       <div className="flex justify-between items-start border-b pb-6 mb-6" style={{ borderColor: 'var(--border-lt)' }}>
         <div>
-          {companySettings.logoUrl ? (
-             <img src={companySettings.logoUrl} style={{ maxHeight: 60, objectFit: 'contain', marginBottom: 8 }} alt="Logo" />
+          {companySettings?.logoUrl ? (
+             <img src={companySettings?.logoUrl} style={{ maxHeight: 60, objectFit: 'contain', marginBottom: 8 }} alt="Logo" />
           ) : (
-             <h2 className="text-xl font-bold mb-1">{companySettings.name}</h2>
+             <h2 className="text-xl font-bold mb-1">{companySettings?.name || 'Deed Technologies'}</h2>
           )}
-          <p className="text-sm text-gray-600">{companySettings.address}, {companySettings.city}</p>
-          <p className="text-sm text-gray-600">Tel: {companySettings.phone}</p>
+          <p className="text-sm text-gray-600">{[companySettings?.address, companySettings?.city].filter(Boolean).join(', ') || '—'}</p>
+          <p className="text-sm text-gray-600">Tel: {companySettings?.phone || '—'}</p>
         </div>
         <div className="text-right">
           <h2 className="text-2xl font-bold tracking-widest text-gray-800 uppercase mb-2">DELIVERY JOB SHEET</h2>
@@ -119,15 +119,15 @@ function PrintPaySlip({ pay, companySettings, onDone }: { pay: RiderWeeklyPay, c
   }, [onDone])
 
   return (
-    <div className="print-document-container bg-white text-black p-8 min-h-screen" style={{ fontFamily: 'Arial, sans-serif' }}>
+    <div className="print-document-container bg-white text-black p-8 min-h-screen" style={{ fontFamily: 'var(--font-inter), Inter, system-ui, sans-serif' }}>
       <div className="flex justify-between items-start border-b pb-6 mb-6" style={{ borderColor: 'var(--border-lt)' }}>
         <div>
-          {companySettings.logoUrl ? (
-             <img src={companySettings.logoUrl} style={{ maxHeight: 60, objectFit: 'contain', marginBottom: 8 }} alt="Logo" />
+          {companySettings?.logoUrl ? (
+             <img src={companySettings?.logoUrl} style={{ maxHeight: 60, objectFit: 'contain', marginBottom: 8 }} alt="Logo" />
           ) : (
-             <h2 className="text-xl font-bold mb-1">{companySettings.name}</h2>
+             <h2 className="text-xl font-bold mb-1">{companySettings?.name || 'Deed Technologies'}</h2>
           )}
-          <p className="text-sm text-gray-600">{companySettings.address}, {companySettings.city}</p>
+          <p className="text-sm text-gray-600">{[companySettings?.address, companySettings?.city].filter(Boolean).join(', ') || '—'}</p>
         </div>
         <div className="text-right">
           <h2 className="text-2xl font-bold tracking-widest text-gray-800 uppercase mb-2">RIDER PAY STATEMENT</h2>
@@ -219,9 +219,9 @@ const labelMap: Record<DeliveryJobStatus, string> = {
 
 function TypeBadge({ type }: { type: DeliveryJobType }) {
   const colors: Record<DeliveryJobType, { bg: string; color: string; border: string }> = {
-    repair_pickup:  { bg: 'var(--warning-bg)', color: 'var(--warning-text)', border: '#FDE68A' },
-    repair_dropoff: { bg: '#E8F3FA', color: 'var(--navy)', border: '#A8D4E8' },
-    sales_delivery: { bg: 'var(--success-bg)', color: 'var(--success-text)', border: '#BBF7D0' },
+    repair_pickup:  { bg: 'var(--warning-bg)', color: 'var(--warning-text)', border: 'var(--warning-border, var(--border-lt))' },
+    repair_dropoff: { bg: 'var(--info-bg, var(--bg-surface))', color: 'var(--navy)', border: 'var(--info-border, var(--border-lt))' },
+    sales_delivery: { bg: 'var(--success-bg)', color: 'var(--success-text)', border: 'var(--success-border, var(--border-lt))' },
     general:        { bg: 'var(--bg-surface)', color: 'var(--text-2)', border: 'var(--border-lt)' },
   }
   const c = colors[type] ?? colors.general
@@ -331,9 +331,9 @@ function JobModal({
               <button key={t} type="button" onClick={() => selectType(t)}
                 style={{
                   padding: '8px 12px', borderRadius: 8, fontSize: 11, fontWeight: 600, cursor: 'pointer', transition: 'all 0.15s',
-                  background: form.type === t ? '#E8F3FA' : 'var(--bg-surface)',
+                  background: form.type === t ? 'var(--info-bg, var(--bg-surface))' : 'var(--bg-surface)',
                   color: form.type === t ? 'var(--navy)' : 'var(--text-4)',
-                  border: `1px solid ${form.type === t ? '#A8D4E8' : 'var(--border-lt)'}`,
+                  border: `1px solid ${form.type === t ? 'var(--info-border, var(--border-lt))' : 'var(--border-lt)'}`,
                 }}>
                 {JOB_TYPE_LABELS[t]}
               </button>
@@ -509,11 +509,6 @@ function JobsTab() {
   } = useDeliveryStore()
 
   const [printJob, setPrintJob] = useState<DeliveryJob | null>(null)
-
-  if (printJob) {
-    return <PrintJobSheet job={printJob} companySettings={companySettings} onDone={() => setPrintJob(null)} />
-  }
-
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [assignTarget, setAssignTarget] = useState<DeliveryJob | null>(null)
   const [feeTarget, setFeeTarget] = useState<DeliveryJob | null>(null)
@@ -622,7 +617,7 @@ function JobsTab() {
         <p className="text-[10px] font-medium" style={{ color: 'var(--text-1)' }}>{job.riderName}</p>
       ) : job.status === 'pending' ? (
         <button className="text-[9px] px-2 py-0.5 rounded"
-          style={{ background: '#EDE9FE', color: '#5B21B6', border: 'none', cursor: 'pointer' }}
+          style={{ background: 'var(--bg-surface)', color: 'var(--navy)', border: 'none', cursor: 'pointer' }}
           onClick={e => { e.stopPropagation(); setAssignTarget(job) }}>
           Assign Rider
         </button>
@@ -662,7 +657,7 @@ function JobsTab() {
           onClick={() => setPrintJob(job)}><Fa icon={faPrint} /> Print</button>
         {job.status === 'pending' && !job.riderId && (
           <button className="text-[9px] px-1.5 py-0.5 rounded"
-            style={{ background: '#EDE9FE', color: '#5B21B6', border: 'none', cursor: 'pointer' }}
+            style={{ background: 'var(--bg-surface)', color: 'var(--navy)', border: 'none', cursor: 'pointer' }}
             onClick={() => setAssignTarget(job)}>Assign</button>
         )}
         {!['cancelled'].includes(job.status) && (
@@ -679,7 +674,7 @@ function JobsTab() {
         )}
         {job.status === 'in_transit' && (
           <button className="text-[9px] py-0.5 px-1.5 rounded cursor-pointer"
-            style={{ background: 'var(--danger-bg)', color: '#991B1B', border: 'none' }}
+            style={{ background: 'var(--danger-bg)', color: 'var(--danger)', border: 'none' }}
             onClick={() => setFailTarget(job)}>Failed</button>
         )}
         {['pending', 'cancelled'].includes(job.status) && (
@@ -693,8 +688,8 @@ function JobsTab() {
 
   const jobStatusColors: Record<DeliveryJobStatus, string> = {
     pending: 'var(--warning)',
-    assigned: '#8B5CF6',
-    in_transit: '#2E90FA',
+    assigned: 'var(--navy)',
+    in_transit: 'var(--info)',
     delivered: 'var(--success)',
     failed: 'var(--danger)',
     cancelled: 'var(--text-4)',
@@ -717,6 +712,16 @@ function JobsTab() {
       },
     })),
   [filtered])
+
+  if (printJob) {
+    return (
+      <PrintJobSheet
+        job={printJob}
+        companySettings={companySettings || {}}
+        onDone={() => setPrintJob(null)}
+      />
+    )
+  }
 
   return (
     <div className="flex flex-col gap-4">
@@ -750,7 +755,7 @@ function JobsTab() {
               className="text-[11px] px-3 py-1.5 rounded-lg border font-medium capitalize cursor-pointer"
               style={{
                 background: jobsView === v ? 'var(--navy)' : 'var(--bg-surface)',
-                color: jobsView === v ? '#fff' : 'var(--text-3)',
+                color: jobsView === v ? '#FFFFFF' : 'var(--text-3)',
                 borderColor: jobsView === v ? 'var(--navy)' : 'var(--border-lt)',
               }}
             >
@@ -1010,10 +1015,6 @@ function WeeklyPayTab() {
   const [printPay, setPrintPay] = useState<RiderWeeklyPay | null>(null)
   const [pendingConfirm, setPendingConfirm] = useState<{ msg: string; action: () => void } | null>(null)
 
-  if (printPay) {
-    return <PrintPaySlip pay={printPay} companySettings={companySettings} onDone={() => setPrintPay(null)} />
-  }
-
   // Default to current week Monday
   function currentWeekMonday() {
     const d = new Date()
@@ -1051,6 +1052,16 @@ function WeeklyPayTab() {
   const filteredSummaries = selectedRiderId === 'all'
     ? riderSummaries
     : riderSummaries.filter(s => s.rider.id === selectedRiderId)
+
+  if (printPay) {
+    return (
+      <PrintPaySlip
+        pay={printPay}
+        companySettings={companySettings || {}}
+        onDone={() => setPrintPay(null)}
+      />
+    )
+  }
 
   return (
     <div className="flex flex-col gap-4">
