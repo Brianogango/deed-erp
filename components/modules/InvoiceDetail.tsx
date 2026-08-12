@@ -468,6 +468,25 @@ export default function InvoiceDetail() {
           </div>
 
           <div className="invoice-detail__header-actions">
+            {docState === 'draft' && canManageFinance && (
+              <>
+                <PrimaryActionButton
+                  icon={<Fa icon={faCheck} />}
+                  onClick={() => postInvoice(invoice.id)}
+                  hideLabelOnMobile={false}
+                >
+                  Confirm {docLabel}
+                </PrimaryActionButton>
+                <PrimaryActionButton
+                  icon={<Fa icon={faPencil} />}
+                  variant="secondary"
+                  onClick={() => router.push(`/finance?tab=${invoice.type === 'customer_invoice' ? 'invoices' : 'bills'}&edit=${invoice.id}`)}
+                  hideLabelOnMobile={false}
+                >
+                  Edit
+                </PrimaryActionButton>
+              </>
+            )}
             {docState === 'posted' && payState !== 'paid' && payState !== 'blocked' && canManageFinance && (
               <PrimaryActionButton
                 icon={<Fa icon={faMoneyBillWave} />}

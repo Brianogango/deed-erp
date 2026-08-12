@@ -11998,6 +11998,10 @@ const storeCtx: AppState = {
         showToast('Cancelled invoices cannot be reset to draft', 'error')
         return
       }
+      if (inv.status === 'draft') {
+        showToast('Document is already a draft', 'info')
+        return
+      }
       if (inv.amountPaid > 0) {
         showToast('Invoices with payments cannot be reset. Cancel to create credit instead.', 'error')
         return
@@ -12006,7 +12010,6 @@ const storeCtx: AppState = {
       const reversals = related
         .filter(j => !journalEntries.some(existingJournal => existingJournal.ref === `REV/${j.ref}`))
         .map(j => buildReversalJournal(j, inv.ref, `${inv.type === 'vendor_bill' ? 'Bill' : 'Invoice'} reset to draft`))
-      if (reversals.length > 0) setJournalEntries(prev => [...reversals, ...prev])
       const draft: Invoice = {
         ...inv,
         status: 'draft',
@@ -12014,10 +12017,47 @@ const storeCtx: AppState = {
         payments: [],
         notes: `${inv.notes || ''}\nReset to draft by ${actor?.name ?? 'Finance'} for changes.`.trim(),
       }
-      setInvoices(prev => prev.map(i => i.id === id ? draft : i))
-      sync(`/api/invoices/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(draft) })
-      addAuditLog('reset_invoice_draft', inv.ref, `${inv.type === 'vendor_bill' ? 'Bill' : 'Invoice'} reset to draft${reversals.length ? ` with ${reversals.length} reversal journal${reversals.length === 1 ? '' : 's'}` : ''}`)
-      showToast(`${inv.type === 'vendor_bill' ? 'Bill' : 'Invoice'} reset to draft`)
+      // Optimistic UI — Edit / Confirm appear immediately; revert if the API fails.
+      if (reversals.length > 0) setJournalEntries(prev => [...reversals, ...prev])
+      setInvoices(prev => {
+        const next = prev.map(i => i.id === id ? draft : i)
+        invRef.current = next
+        return next
+      })
+      void (async () => {
+        try {
+          const res = await fetch(`/api/invoices/${id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(draft),
+          })
+          if (!res.ok) {
+            const data = await res.json().catch(() => null) as { error?: string } | null
+            setInvoices(prev => {
+              const next = prev.map(i => i.id === id ? inv : i)
+              invRef.current = next
+              return next
+            })
+            if (reversals.length > 0) {
+              setJournalEntries(prev => prev.filter(j => !reversals.some(r => r.id === j.id)))
+            }
+            showToast(data?.error || `Could not reset ${inv.type === 'vendor_bill' ? 'bill' : 'invoice'} to draft`, 'error')
+            return
+          }
+          addAuditLog('reset_invoice_draft', inv.ref, `${inv.type === 'vendor_bill' ? 'Bill' : 'Invoice'} reset to draft${reversals.length ? ` with ${reversals.length} reversal journal${reversals.length === 1 ? '' : 's'}` : ''}`)
+          showToast(`${inv.type === 'vendor_bill' ? 'Bill' : 'Invoice'} reset to draft — you can edit and confirm`)
+        } catch {
+          setInvoices(prev => {
+            const next = prev.map(i => i.id === id ? inv : i)
+            invRef.current = next
+            return next
+          })
+          if (reversals.length > 0) {
+            setJournalEntries(prev => prev.filter(j => !reversals.some(r => r.id === j.id)))
+          }
+          showToast(`Could not reset ${inv.type === 'vendor_bill' ? 'bill' : 'invoice'} to draft — check your connection`, 'error')
+        }
+      })()
     },
     cancelInvoice: async (id, forcedCreditRef) => {
       const actor = currentUser()

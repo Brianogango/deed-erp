@@ -260,9 +260,10 @@ export async function POST(request: Request) {
   // mirror that already has line items (SO→invoice race / stale client).
   // Posted-invoice immutability (FIN-001): once an invoice is posted, its
   // financial substance (lines/totals/dates/customer/type/ref) can never
-  // change through this sync path — only via a credit note, reversal, or
-  // the posted→cancelled transition. This runs after the empty-shell guard
-  // so a posted invoice is protected regardless of which defect it hit.
+  // change through this sync path — only via a credit note, reversal,
+  // unpaid posted→draft (Reset to Draft), or the posted→cancelled
+  // transition. This runs after the empty-shell guard so a posted invoice
+  // is protected regardless of which defect it hit.
   let rejectedPostedInvoiceEdits: RejectedPostedInvoiceEdit[] = []
   if (entries.deed_invoices) {
     const currentInvoices = await loadAppState(['deed_invoices'])

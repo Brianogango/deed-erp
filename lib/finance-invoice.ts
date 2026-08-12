@@ -168,8 +168,8 @@ export function mapDbInvoiceItemsToClientLines(
 /**
  * Fields that make up the financial substance of a posted invoice. Once an
  * invoice's stored status is 'posted', none of these may change via a sync
- * write — corrections must go through a credit note, reversal, or the
- * cancellation transition, never a silent field edit.
+ * write — corrections must go through a credit note, reversal, Reset to Draft,
+ * or the cancellation transition, never a silent field edit.
  */
 const POSTED_INVOICE_PROTECTED_FIELDS = [
   'lines', 'subtotal', 'taxTotal', 'total', 'date', 'dueDate',
@@ -177,8 +177,11 @@ const POSTED_INVOICE_PROTECTED_FIELDS = [
   'type', 'ref',
 ] as const
 
-/** Status transitions a posted invoice may still make (nothing else). */
-const ALLOWED_POSTED_STATUS_TRANSITIONS = new Set(['posted', 'cancelled'])
+/**
+ * Status transitions a posted invoice may still make (nothing else).
+ * `draft` is the deliberate Finance "Reset to Draft" path (unpaid only).
+ */
+const ALLOWED_POSTED_STATUS_TRANSITIONS = new Set(['posted', 'cancelled', 'draft'])
 
 export interface RejectedPostedInvoiceEdit {
   id: string
@@ -192,16 +195,23 @@ function fieldsDiffer(a: unknown, b: unknown): boolean {
   return JSON.stringify(a) !== JSON.stringify(b)
 }
 
+function isPostedToDraftAllowed(prev: Record<string, unknown>, incomingStatus: string): boolean {
+  if (!ALLOWED_POSTED_STATUS_TRANSITIONS.has(incomingStatus)) return false
+  // Paid invoices cannot be reset to draft — cancel / credit instead.
+  if (incomingStatus === 'draft' && Number(prev.amountPaid ?? 0) > 0) return false
+  return true
+}
+
 /**
  * Reject mutations to a posted invoice's financial substance arriving via any
  * whole-array sync write (POST /api/store, PUT /api/store/[key]). Draft
  * invoices, and non-protected fields on posted invoices (amountPaid,
- * paymentBlocked, notes, postedBy*, status→cancelled), pass through
- * unchanged. When a protected field differs, every protected field on that
- * invoice is restored to the currently-stored value — the invoice is not
- * dropped from the batch, only its protected fields are pinned — and the
- * invoice id/ref plus the attempted field names are reported in `rejected`
- * so the caller can write an audit entry.
+ * paymentBlocked, notes, postedBy*, status→cancelled, unpaid status→draft),
+ * pass through unchanged. When a protected field differs, every protected
+ * field on that invoice is restored to the currently-stored value — the
+ * invoice is not dropped from the batch, only its protected fields are pinned
+ * — and the invoice id/ref plus the attempted field names are reported in
+ * `rejected` so the caller can write an audit entry.
  */
 export function enforcePostedInvoiceImmutability(
   current: unknown,
@@ -225,8 +235,8 @@ export function enforcePostedInvoiceImmutability(
     // No stored counterpart (new invoice) or stored copy is not posted — fully editable.
     if (!prev || prev.status !== 'posted') return row
 
-    const incomingStatus = typeof next.status === 'string' ? next.status : prev.status
-    const statusChangeAllowed = ALLOWED_POSTED_STATUS_TRANSITIONS.has(incomingStatus)
+    const incomingStatus = typeof next.status === 'string' ? next.status : String(prev.status ?? '')
+    const statusChangeAllowed = isPostedToDraftAllowed(prev, incomingStatus)
 
     const changedFields = POSTED_INVOICE_PROTECTED_FIELDS.filter(field => fieldsDiffer(prev[field], next[field]))
     if (changedFields.length === 0 && statusChangeAllowed) return row

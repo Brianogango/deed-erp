@@ -294,6 +294,17 @@ export async function PUT(request: Request, { params }: { params: { id: string }
       }
     }
 
+    // Keep the deed_invoices blob aligned with Prisma after Reset to Draft /
+    // cancel so a later store sync does not resurrect the posted status.
+    if (leftPosted) {
+      try {
+        const { refreshInvoicesBlob } = await import('@/lib/documents-broadcast.server')
+        await refreshInvoicesBlob()
+      } catch (err) {
+        console.error('[invoice] invoices blob refresh failed:', err)
+      }
+    }
+
     // Paid customer invoice cancel → credit liability journal (creditRef from body/notes)
     const paidCancel = before
       && (before.status === 'approved' || before.status === 'invoiced')
