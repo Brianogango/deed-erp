@@ -3,6 +3,7 @@ import { loadAppState } from '@/lib/server-store'
 import { findRepairLinkedInvoice } from '@/lib/portal-invoice-link'
 import { DEFAULT_COMPANY_SETTINGS, DEFAULT_BANK_ACCOUNTS } from '@/lib/store'
 import { buildDeedDocumentPdf, deedPdfToBuffer } from '@/lib/deed-document-pdf'
+import { loadLogoForPdfServer } from '@/lib/pdf-logo'
 
 export const dynamic = 'force-dynamic'
 
@@ -17,6 +18,7 @@ export async function GET(
     const invoices = (state.deed_invoices ?? []) as any[]
     const co = { ...DEFAULT_COMPANY_SETTINGS, ...((state.deed_companySettings as Record<string, unknown> | undefined) ?? {}) }
     const banks = (state.deed_bankAccounts ?? DEFAULT_BANK_ACCOUNTS) as any[]
+    const logo = await loadLogoForPdfServer(typeof co.logoUrl === 'string' ? co.logoUrl : null)
 
     const repair = repairs.find((r: any) => r.ref?.toLowerCase() === ref.toLowerCase())
     if (!repair) return NextResponse.json({ error: 'Repair not found.' }, { status: 404 })
@@ -69,6 +71,10 @@ export async function GET(
         mpesaPaybill: co.mpesaPaybill,
         mpesaAccount: co.mpesaAccount,
         invoiceFooter: co.invoiceFooter || `Thank you for choosing ${co.name}.`,
+        logoDataUrl: logo?.dataUrl,
+        logoWidth: logo?.width,
+        logoHeight: logo?.height,
+        logoFormat: logo?.format,
       },
       banks,
     )

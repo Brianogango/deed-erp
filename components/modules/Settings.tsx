@@ -22,6 +22,7 @@ import {
   PricelistsPanel,
 } from './settings/CurrencyPricelistCutover'
 import { readGuardedImageAsDataUrl } from '@/lib/client-image-guard'
+import { compressCompanyLogoDataUrl } from '@/lib/pdf-logo'
 import { resolveSettingsSection } from '@/lib/dashboard-priority'
 type Section =
   | 'general' | 'banks' | 'access' | 'email'
@@ -512,7 +513,11 @@ export default function Settings() {
                         if (!file) return
                         try {
                           const dataUrl = await readGuardedImageAsDataUrl(file, { label: 'Company logo', maxBytes: 2 * 1024 * 1024, maxPixels: 12_000_000 })
-                          updateCompanySettings({ logoUrl: dataUrl })
+                          // Compress before save — large data URLs blow the 512KB
+                          // localStorage ceiling and wipe company settings (logo "disappears").
+                          const compressed = await compressCompanyLogoDataUrl(dataUrl)
+                          updateCompanySettings({ logoUrl: compressed })
+                          showToast('Logo updated')
                         } catch (err) {
                           showToast(err instanceof Error ? err.message : 'Company logo could not be validated', 'error')
                         } finally {
@@ -523,7 +528,7 @@ export default function Settings() {
                     {companySettings.logoUrl && (
                       <button className="block text-[10px] mt-1.5 text-red-400 hover:text-red-600 bg-transparent border-none cursor-pointer p-0 transition-colors" onClick={() => updateCompanySettings({ logoUrl: '' })}>Remove</button>
                     )}
-                    <p className="text-[10px] text-gray-400 mt-1">JPG, PNG, or WebP · max 2 MB · shown on invoices &amp; PDFs</p>
+                    <p className="text-[10px] text-gray-400 mt-1">JPG, PNG, or WebP · max 2 MB · compressed for PDFs</p>
                   </div>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 py-3">

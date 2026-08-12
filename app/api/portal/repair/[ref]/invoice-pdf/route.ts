@@ -3,6 +3,8 @@ import { loadAppState } from '@/lib/server-store'
 import { findRepairLinkedInvoice } from '@/lib/portal-invoice-link'
 import { DEFAULT_COMPANY_SETTINGS, DEFAULT_BANK_ACCOUNTS } from '@/lib/store'
 import { buildDeedDocumentPdf, deedPdfToBuffer } from '@/lib/deed-document-pdf'
+import { loadLogoForPdfServer } from '@/lib/pdf-logo'
+import { customerFacingNotes } from '@/lib/customer-facing-notes'
 
 export const dynamic = 'force-dynamic'
 
@@ -25,6 +27,7 @@ export async function GET(
     const savedBankAccounts = (state['deed_bankAccounts'] ?? DEFAULT_BANK_ACCOUNTS) as any[]
 
     const co = { ...DEFAULT_COMPANY_SETTINGS, ...(savedSettings ?? {}) }
+    const logo = await loadLogoForPdfServer(typeof co.logoUrl === 'string' ? co.logoUrl : null)
 
     const repair = repairs.find((r: any) => r.ref.toLowerCase() === ref.toLowerCase())
     if (!repair) {
@@ -38,10 +41,11 @@ export async function GET(
 
     const lines = (invoice.lines ?? []) as any[]
     const deviceDesc = [repair.deviceBrand, repair.deviceModel, repair.deviceColor].filter(Boolean).join(' ')
+    const commercialNotes = customerFacingNotes(invoice.notes)
     const notes = [
       deviceDesc ? `Device: ${deviceDesc}` : '',
       repair.deviceSerial ? `S/N: ${repair.deviceSerial}` : '',
-      invoice.notes ? String(invoice.notes) : '',
+      commercialNotes,
     ].filter(Boolean).join('\n') || undefined
 
     const doc = buildDeedDocumentPdf(
@@ -81,6 +85,10 @@ export async function GET(
         mpesaPaybill: co.mpesaPaybill,
         mpesaAccount: co.mpesaAccount,
         invoiceFooter: co.invoiceFooter,
+        logoDataUrl: logo?.dataUrl,
+        logoWidth: logo?.width,
+        logoHeight: logo?.height,
+        logoFormat: logo?.format,
       },
       savedBankAccounts,
     )

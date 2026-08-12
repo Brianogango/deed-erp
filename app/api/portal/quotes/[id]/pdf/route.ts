@@ -5,6 +5,7 @@ import { DEFAULT_COMPANY_SETTINGS } from '@/lib/store'
 import { normalizeQuoteForClient } from '@/lib/quote-normalization'
 import { findPortalDocument } from '@/lib/portal-document-lookup'
 import { buildDeedDocumentPdf, deedPdfToBuffer } from '@/lib/deed-document-pdf'
+import { loadLogoForPdfServer } from '@/lib/pdf-logo'
 
 export const dynamic = 'force-dynamic'
 
@@ -35,6 +36,7 @@ export async function GET(
     const co       = { ...DEFAULT_COMPANY_SETTINGS, ...(saved ?? {}) }
     const lines    = normalized.lines as Array<Record<string, unknown>>
     const banks    = ((state['deed_bankAccounts'] ?? []) as any[]).filter(a => a.active)
+    const logo     = await loadLogoForPdfServer(typeof co.logoUrl === 'string' ? co.logoUrl : null)
 
     const doc = buildDeedDocumentPdf(
       {
@@ -73,6 +75,10 @@ export async function GET(
         mpesaPaybill: co.mpesaPaybill,
         mpesaAccount: co.mpesaAccount,
         invoiceFooter: co.invoiceFooter,
+        logoDataUrl: logo?.dataUrl,
+        logoWidth: logo?.width,
+        logoHeight: logo?.height,
+        logoFormat: logo?.format,
       },
       banks,
     )

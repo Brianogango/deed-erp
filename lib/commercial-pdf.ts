@@ -11,6 +11,7 @@ import {
   buildDeedDocumentPdf,
   type DeedPdfInput,
 } from '@/lib/deed-document-pdf'
+import { loadLogoForPdfClient } from '@/lib/pdf-logo'
 
 export interface CommercialPdfLine {
   lineType?: 'item' | 'section'
@@ -73,36 +74,12 @@ export interface CommercialPdfInput {
   paymentDetailLines?: string[]
 }
 
-/** Load the company logo (uploaded data URL or same-origin URL) for jsPDF. */
-async function loadLogo(logoUrl?: string): Promise<{ dataUrl: string; width: number; height: number } | null> {
-  if (!logoUrl || typeof window === 'undefined') return null
-  try {
-    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
-      const el = new Image()
-      el.crossOrigin = 'anonymous'
-      const timer = window.setTimeout(() => reject(new Error('logo timeout')), 4000)
-      el.onload = () => { window.clearTimeout(timer); resolve(el) }
-      el.onerror = () => { window.clearTimeout(timer); reject(new Error('logo failed')) }
-      el.src = logoUrl
-    })
-    const canvas = document.createElement('canvas')
-    canvas.width = img.naturalWidth || 1
-    canvas.height = img.naturalHeight || 1
-    const ctx = canvas.getContext('2d')
-    if (!ctx) return null
-    ctx.drawImage(img, 0, 0)
-    return { dataUrl: canvas.toDataURL('image/png'), width: canvas.width, height: canvas.height }
-  } catch {
-    return null
-  }
-}
-
 export async function buildCommercialPdf(
   input: CommercialPdfInput,
   company: CompanySettings,
   bankAccounts: BankAccount[] = [],
 ): Promise<jsPDF> {
-  const logo = await loadLogo(company.logoUrl)
+  const logo = await loadLogoForPdfClient(company.logoUrl)
   const deedInput: DeedPdfInput = {
     title: input.title,
     ref: input.ref,
@@ -153,6 +130,7 @@ export async function buildCommercialPdf(
       logoDataUrl: logo?.dataUrl,
       logoWidth: logo?.width,
       logoHeight: logo?.height,
+      logoFormat: logo?.format,
     },
     bankAccounts,
   )
