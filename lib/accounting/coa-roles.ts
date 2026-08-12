@@ -24,6 +24,8 @@ export type CoaRole =
   | 'input_vat'
   | 'bank_charges'
   | 'interest_income'
+  | 'trade_in_clearing'
+  | 'current_year_pl'
 
 /** Canonical live codes — keep stable. */
 export const COA_ROLE_CODES: Record<CoaRole, string> = {
@@ -45,6 +47,8 @@ export const COA_ROLE_CODES: Record<CoaRole, string> = {
   input_vat: '1150',
   bank_charges: '6401',
   interest_income: '5105',
+  trade_in_clearing: '1250',
+  current_year_pl: '4003',
 }
 
 /**
@@ -70,6 +74,8 @@ export const COA_ROLE_LABELS: Record<CoaRole, string> = {
   input_vat: '1150 - VAT Input',
   bank_charges: '6401 - Bank Charges',
   interest_income: '5105 - Interest Income',
+  trade_in_clearing: '1250 - Trade-in Inventory Clearing',
+  current_year_pl: '4003 - Current Year P&L',
 }
 
 export function labelForRole(role: CoaRole): string {

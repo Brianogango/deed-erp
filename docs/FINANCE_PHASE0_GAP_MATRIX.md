@@ -253,3 +253,9 @@ Suggested first slice:
 - [ ] Parity job ownership for journals before any certify/retire.
 
 When checked, open Phase 1 implementation on a new branch from `master`.
+
+---
+
+## 11. Phase 12 domain gaps
+
+See `docs/FINANCE_PHASE12_DOMAIN_GAPS.md` for buy-back GL, analytics/budgets, serial COGS, OFX/CSV, tax periods / VAT remittance / YE→4003, partner ledger & ageing Prisma APIs, CoA display aliases, and cashbook Prisma read API.

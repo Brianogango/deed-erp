@@ -66,6 +66,7 @@ import { PrimaryActionButton } from '@/components/erp'
 import { DataTable, type ColumnDef, type PrimaryFilterConfig } from '@/components/data-table'
 import { Fa } from '@/components/icons'
 import CashbookTab, { buildCashbookEntries } from './Cashbook'
+import { BankStatementImportPanel } from './cashbook/BankStatementImportPanel'
 import { computeCashbookTotals, cashPositionFromTotals } from '@/lib/finance-alerts'
 import { AccountingProvider } from './accounting/AccountingContext'
 import JournalsTab from './accounting/JournalsTab'
@@ -2055,8 +2056,20 @@ function AccountingContent() {
               />
             </div>
           ) : activeTab === 'cash_position' ? (
-            <div className="p-6">
-              <h2 className="text-lg font-bold text-[var(--text-1)] mb-5">Cash position</h2>
+            <div className="p-6 space-y-6">
+              <h2 className="text-lg font-bold text-[var(--text-1)] mb-1">Cash position</h2>
+              <p className="text-xs text-[var(--text-3)] mb-4">
+                Operational cash view. Prisma cashbook lines: <code className="text-[11px]">GET /api/cashbook/entries</code>.
+              </p>
+              {canManageFullFinance && (
+                <div className="rounded-xl border border-[var(--border-lt)] p-4">
+                  <h3 className="text-sm font-semibold text-[var(--text-1)] mb-2">Bank statement import (OFX/CSV)</h3>
+                  <BankStatementImportPanel
+                    bankAccountId={primaryBank?.id || bankAccounts.find(a => a.active)?.id || ''}
+                    showToast={showToast}
+                  />
+                </div>
+              )}
               <DataTable
                 tableId="finance-cash-position"
                 hideSearch

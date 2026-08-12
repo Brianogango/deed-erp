@@ -152,6 +152,8 @@ async function applyOutboundValuation(params: {
   movementId?: string | null
   userId?: string
   postJournal?: boolean
+  /** When provided, prefer DeviceSerialCost for COGS (Phase 12). */
+  serialIds?: string[] | null
   /** Journal lines override (default COGS / Inventory for delivery). */
   journalLines?: (totalCost: number, unitCost: number) => Array<{
     accountLabel: string
@@ -185,8 +187,56 @@ async function applyOutboundValuation(params: {
 
   let applied: ReturnType<typeof applyDeliveryAverage>
   let unitCostUsed = 0
+  let serialCogsMode: 'serial' | 'average' | 'mixed' | null = null
 
-  if (costingMethod === 'fifo') {
+  // Phase 12: serial-level COGS when serialIds provided (overrides FIFO/average unit cost).
+  const serialIds = (params.serialIds || []).map(String).filter(Boolean)
+  if (serialIds.length > 0) {
+    const { resolveSerialCogs } = await import('@/lib/inventory/serial-cogs')
+    const serialCostRows = await prisma.deviceSerialCost.findMany({
+      where: { serialId: { in: serialIds } },
+      select: { serialId: true, currentCost: true },
+    })
+    const valuation = await prisma.productValuation.findUnique({ where: { productId: params.productId } })
+    const averageCost = Number(valuation?.averageCost ?? 0)
+    const resolved = resolveSerialCogs({
+      qty,
+      serialIds,
+      serialCosts: serialCostRows.map(r => ({
+        serialId: r.serialId,
+        currentCost: Number(r.currentCost || 0),
+      })),
+      averageCost,
+    })
+    serialCogsMode = resolved.mode
+    unitCostUsed = resolved.unitCost
+    applied = applyDeliveryAverage({
+      currentQty: valuation?.totalQty ?? 0,
+      currentValue: Number(valuation?.totalValue ?? 0),
+      averageCost: averageCost > 0 ? averageCost : unitCostUsed,
+      qty,
+    })
+    // Keep qty/value layers consistent but use serial total for COGS journal.
+    applied = {
+      ...applied,
+      unitCostUsed: resolved.unitCost,
+      totalCost: resolved.totalCost,
+    }
+    await prisma.productValuation.upsert({
+      where: { productId: params.productId },
+      create: {
+        productId: params.productId,
+        averageCost: applied.averageCost,
+        totalQty: applied.totalQty,
+        totalValue: applied.totalValue,
+      },
+      update: {
+        averageCost: applied.averageCost,
+        totalQty: applied.totalQty,
+        totalValue: applied.totalValue,
+      },
+    })
+  } else if (costingMethod === 'fifo') {
     const batches = await prisma.inventoryBatch.findMany({
       where: { productId: params.productId, quantityAvailable: { gt: 0 } },
       orderBy: [{ receivedAt: 'asc' }, { createdAt: 'asc' }],
@@ -290,7 +340,13 @@ async function applyOutboundValuation(params: {
     await persistStockJournal({
       ref: stockValuationJournalRef(params.kind, params.reference || params.movementId || '', params.productId),
       description: params.journalDescription
-        || `Stock ${params.kind} ${applied.qty} @ ${unitCostUsed}${costingMethod === 'fifo' ? ' FIFO' : costingMethod === 'standard' ? ' std' : ' avg'}`,
+        || `Stock ${params.kind} ${applied.qty} @ ${unitCostUsed}${
+          serialCogsMode === 'serial' ? ' serial'
+            : serialCogsMode === 'mixed' ? ' serial+avg'
+              : costingMethod === 'fifo' ? ' FIFO'
+                : costingMethod === 'standard' ? ' std'
+                  : ' avg'
+        }`,
       sourceType: `stock_${params.kind}`,
       sourceId: params.reference || params.movementId || params.productId,
       createdById: params.userId,
@@ -310,6 +366,7 @@ async function applyOutboundValuation(params: {
   return {
     skipped: false as const,
     costingMethod,
+    serialCogsMode,
     averageCost: applied.averageCost,
     unitCostUsed,
     totalCost: applied.totalCost,
@@ -531,6 +588,7 @@ export async function processStockDelivery(params: {
   reference?: string
   userId?: string
   postJournal?: boolean
+  serialIds?: string[] | null
 }) {
   return applyOutboundValuation({
     productId: params.productId,
@@ -540,6 +598,7 @@ export async function processStockDelivery(params: {
     movementId: params.movementId,
     userId: params.userId,
     postJournal: params.postJournal,
+    serialIds: params.serialIds,
   })
 }
 
@@ -550,6 +609,7 @@ export async function processStockPosSale(params: {
   reference?: string
   userId?: string
   postJournal?: boolean
+  serialIds?: string[] | null
 }) {
   return applyOutboundValuation({
     productId: params.productId,
@@ -559,6 +619,7 @@ export async function processStockPosSale(params: {
     userId: params.userId,
     postJournal: params.postJournal,
     journalDescription: `POS sale ${params.qty}`,
+    serialIds: params.serialIds,
   })
 }
 

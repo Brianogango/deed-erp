@@ -18043,6 +18043,16 @@ const storeCtx: AppState = {
       }
       setRefundPayments(prev => [payment, ...prev])
       setBuyBacks(p => p.map(b => b.id === id ? { ...b, status: 'paid', paymentMethod, paidDate: now() } : b))
+      // Phase 12: trade-in payout GL (Prisma; idempotent ref)
+      void fetch('/api/trade-in/post-journal', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          stage: 'payout',
+          paymentMethod: paymentMethod ?? 'cash',
+          buyBack: { ...bb, paymentMethod: paymentMethod ?? 'cash', status: 'paid' },
+        }),
+      }).catch(() => {})
       showToast('Payment to customer recorded')
     },
 
@@ -18082,6 +18092,14 @@ const storeCtx: AppState = {
       })
       setBuyBacks(p => p.map(b => b.id === id ? { ...b, status: 'stocked', stockedDate: now(), stockedByName: user.name } : b))
       addAuditLog('buyback_stock', bb.ref, `Stocked buy-back ${bb.ref} for ${bb.customerName}`)
+      void fetch('/api/trade-in/post-journal', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          stage: 'stock',
+          buyBack: { ...bb, status: 'stocked' },
+        }),
+      }).catch(() => {})
       showToast(`${bb.ref} stocked — inventory updated`)
     },
 

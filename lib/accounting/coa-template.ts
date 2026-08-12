@@ -73,6 +73,7 @@ export function buildZeroBalanceCoaTemplate(): CoaTemplateAccount[] {
     { code: '6101', name: 'Laptops', type: 'expense', group: 'Local Purchases', subGroup: 'Local Purchases', balance: 0 },
     { code: '6401', name: 'Bank Charges', type: 'expense', group: 'Finance Costs', subGroup: 'Bank', balance: 0 },
     { code: '1200', name: 'Inventory', type: 'asset', group: 'Inventory - Closing', subGroup: 'Finished Products', balance: 0 },
+    { code: '1250', name: 'Trade-in Inventory Clearing', type: 'asset', group: 'Inventory - Closing', subGroup: 'Trade-in', balance: 0, notes: 'Buy-back payout pending stock-in' },
   )
   return a
 }

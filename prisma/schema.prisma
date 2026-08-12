@@ -3083,3 +3083,184 @@ model ReconfigurationAttachment {
   @@index([workOrderId], map: "idx_rcf_attachments_wo")
   @@map("reconfiguration_attachments")
 }
+
+
+// ── Finance Phase 12 — domain gap foundations (additive; do not rewrite posted history) ─
+
+model AnalyticAccount {
+  id          String   @id @default(uuid()) @db.Uuid
+  code        String   @unique @db.VarChar(40)
+  name        String   @db.VarChar(200)
+  parentId    String?  @map("parent_id") @db.Uuid
+  isActive    Boolean  @default(true) @map("is_active")
+  notes       String?
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  parent   AnalyticAccount?  @relation("AnalyticTree", fields: [parentId], references: [id])
+  children AnalyticAccount[] @relation("AnalyticTree")
+  distributions JournalLineAnalytic[]
+  budgetLines BudgetLine[]
+
+  @@index([parentId], map: "idx_analytic_accounts_parent")
+  @@map("analytic_accounts")
+}
+
+model AnalyticTag {
+  id        String   @id @default(uuid()) @db.Uuid
+  code      String   @unique @db.VarChar(40)
+  name      String   @db.VarChar(200)
+  color     String?  @db.VarChar(20)
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("analytic_tags")
+}
+
+model JournalLineAnalytic {
+  id               String  @id @default(uuid()) @db.Uuid
+  journalEntryLineId String @map("journal_entry_line_id") @db.Uuid
+  analyticAccountId String @map("analytic_account_id") @db.Uuid
+  percentage       Decimal @default(100) @db.Decimal(7, 4)
+  amount           Decimal @default(0) @db.Decimal(14, 2)
+
+  analyticAccount AnalyticAccount @relation(fields: [analyticAccountId], references: [id], onDelete: Cascade)
+
+  @@index([journalEntryLineId], map: "idx_jla_line")
+  @@index([analyticAccountId], map: "idx_jla_account")
+  @@map("journal_line_analytics")
+}
+
+model Budget {
+  id          String   @id @default(uuid()) @db.Uuid
+  name        String   @db.VarChar(200)
+  fiscalYear  Int      @map("fiscal_year")
+  dateFrom    DateTime @map("date_from") @db.Date
+  dateTo      DateTime @map("date_to") @db.Date
+  status      String   @default("draft") @db.VarChar(20)
+  notes       String?
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  lines BudgetLine[]
+
+  @@index([fiscalYear], map: "idx_budgets_year")
+  @@map("budgets")
+}
+
+model BudgetLine {
+  id                String  @id @default(uuid()) @db.Uuid
+  budgetId          String  @map("budget_id") @db.Uuid
+  accountCode       String? @map("account_code") @db.VarChar(20)
+  analyticAccountId String? @map("analytic_account_id") @db.Uuid
+  amount            Decimal @default(0) @db.Decimal(14, 2)
+  notes             String?
+
+  budget          Budget           @relation(fields: [budgetId], references: [id], onDelete: Cascade)
+  analyticAccount AnalyticAccount? @relation(fields: [analyticAccountId], references: [id], onDelete: SetNull)
+
+  @@index([budgetId], map: "idx_budget_lines_budget")
+  @@map("budget_lines")
+}
+
+model TaxPeriod {
+  id          String    @id @default(uuid()) @db.Uuid
+  code        String    @unique @db.VarChar(40)
+  name        String    @db.VarChar(120)
+  dateFrom    DateTime  @map("date_from") @db.Date
+  dateTo      DateTime  @map("date_to") @db.Date
+  status      String    @default("open") @db.VarChar(20)
+  closedAt    DateTime? @map("closed_at")
+  remittedAt  DateTime? @map("remitted_at")
+  remittanceJournalRef String? @map("remittance_journal_ref") @db.VarChar(80)
+  notes       String?
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  etimsLogs EtimsSubmissionLog[]
+
+  @@index([dateFrom, dateTo], map: "idx_tax_periods_range")
+  @@map("tax_periods")
+}
+
+model EtimsSubmissionLog {
+  id           String   @id @default(uuid()) @db.Uuid
+  taxPeriodId  String?  @map("tax_period_id") @db.Uuid
+  kind         String   @default("vat_return_export") @db.VarChar(40)
+  status       String   @default("draft") @db.VarChar(20)
+  payloadJson  Json?    @map("payload_json")
+  responseJson Json?    @map("response_json")
+  externalRef  String?  @map("external_ref") @db.VarChar(120)
+  createdById  String?  @map("created_by_id") @db.Uuid
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  taxPeriod TaxPeriod? @relation(fields: [taxPeriodId], references: [id], onDelete: SetNull)
+
+  @@index([taxPeriodId], map: "idx_etims_logs_period")
+  @@map("etims_submission_logs")
+}
+
+model YearEndClose {
+  id              String   @id @default(uuid()) @db.Uuid
+  fiscalYear      Int      @unique @map("fiscal_year")
+  closedAt        DateTime @default(now()) @map("closed_at")
+  journalRef      String   @unique @map("journal_ref") @db.VarChar(80)
+  netProfit       Decimal  @default(0) @map("net_profit") @db.Decimal(14, 2)
+  targetAccount   String   @default("4003") @map("target_account") @db.VarChar(20)
+  createdById     String?  @map("created_by_id") @db.Uuid
+  notes           String?
+
+  @@map("year_end_closes")
+}
+
+model AccountAlias {
+  id           String   @id @default(uuid()) @db.Uuid
+  liveCode     String   @unique @map("live_code") @db.VarChar(20)
+  displayCode  String   @map("display_code") @db.VarChar(20)
+  guideName    String?  @map("guide_name") @db.VarChar(200)
+  notes        String?
+  isActive     Boolean  @default(true) @map("is_active")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  @@index([displayCode], map: "idx_account_aliases_display")
+  @@map("account_aliases")
+}
+
+model BankStatementImport {
+  id            String   @id @default(uuid()) @db.Uuid
+  bankAccountId String   @map("bank_account_id") @db.VarChar(80)
+  sourceFormat  String   @map("source_format") @db.VarChar(20)
+  fileName      String?  @map("file_name") @db.VarChar(255)
+  importedAt    DateTime @default(now()) @map("imported_at")
+  importedById  String?  @map("imported_by_id") @db.Uuid
+  lineCount     Int      @default(0) @map("line_count")
+  notes         String?
+
+  lines BankStatementLine[]
+
+  @@index([bankAccountId], map: "idx_bank_stmt_imports_bank")
+  @@map("bank_statement_imports")
+}
+
+model BankStatementLine {
+  id            String    @id @default(uuid()) @db.Uuid
+  importId      String    @map("import_id") @db.Uuid
+  bankAccountId String    @map("bank_account_id") @db.VarChar(80)
+  lineDate      DateTime  @map("line_date") @db.Date
+  amount        Decimal   @db.Decimal(14, 2)
+  payee         String?   @db.VarChar(300)
+  memo          String?   @db.VarChar(500)
+  fingerprint   String    @unique @db.VarChar(120)
+  fitId         String?   @map("fit_id") @db.VarChar(80)
+  matchedRef    String?   @map("matched_ref") @db.VarChar(80)
+  matchedAt     DateTime? @map("matched_at")
+  status        String    @default("imported") @db.VarChar(20)
+  createdAt     DateTime  @default(now()) @map("created_at")
+
+  import BankStatementImport @relation(fields: [importId], references: [id], onDelete: Cascade)
+
+  @@index([bankAccountId, lineDate], map: "idx_bank_stmt_lines_bank_date")
+  @@index([status], map: "idx_bank_stmt_lines_status")
+  @@map("bank_statement_lines")
+}
