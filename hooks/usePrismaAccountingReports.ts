@@ -22,15 +22,28 @@ type TrialBalanceResponse = {
 
 type PlRow = { code: string; name: string; type: string; group: string; amount: number }
 
-type ProfitLossResponse = {
+export type ProfitLossResponse = {
   currency: string
   dateFrom: string | null
   dateTo: string | null
+  view?: 'management' | 'flat'
   revenue: PlRow[]
   expenses: PlRow[]
   totalRevenue: number
   totalExpenses: number
   netProfit: number
+  /** Management view fields (Phase 8) */
+  otherIncome?: PlRow[]
+  totalOtherIncome?: number
+  totalIncome?: number
+  cogs?: PlRow[]
+  totalCogs?: number
+  grossProfit?: number
+  operatingExpenses?: PlRow[]
+  totalOperating?: number
+  financeCosts?: PlRow[]
+  totalFinance?: number
+  byGroup?: Array<{ group: string; section: string; amount: number }>
 }
 
 type BsRow = { code: string; name: string; type: string; group: string; amount: number }
@@ -71,6 +84,10 @@ export type PrismaReportFlags = {
   profitLoss?: boolean
   balanceSheet?: boolean
   vatControl?: boolean
+  /** Optional period for P&L (and future dated reports). */
+  plDateFrom?: string | null
+  plDateTo?: string | null
+  plView?: 'management' | 'flat'
 }
 
 export function usePrismaAccountingReports(enabled: boolean, flags: PrismaReportFlags = {}) {
@@ -89,7 +106,13 @@ export function usePrismaAccountingReports(enabled: boolean, flags: PrismaReport
     try {
       const fetches: Promise<Response>[] = [fetch('/api/accounting/journals?limit=300')]
       if (flags.trialBalance !== false) fetches.push(fetch('/api/accounting/trial-balance'))
-      if (flags.profitLoss) fetches.push(fetch('/api/accounting/profit-loss'))
+      if (flags.profitLoss) {
+        const qs = new URLSearchParams()
+        qs.set('view', flags.plView || 'management')
+        if (flags.plDateFrom) qs.set('dateFrom', flags.plDateFrom)
+        if (flags.plDateTo) qs.set('dateTo', flags.plDateTo)
+        fetches.push(fetch(`/api/accounting/profit-loss?${qs.toString()}`))
+      }
       if (flags.balanceSheet) fetches.push(fetch(`/api/accounting/balance-sheet?asOf=${new Date().toISOString().slice(0, 10)}`))
       if (flags.vatControl) fetches.push(fetch('/api/accounting/vat-control?draft=1'))
 
@@ -128,7 +151,16 @@ export function usePrismaAccountingReports(enabled: boolean, flags: PrismaReport
     } finally {
       setLoading(false)
     }
-  }, [enabled, flags.trialBalance, flags.profitLoss, flags.balanceSheet, flags.vatControl])
+  }, [
+    enabled,
+    flags.trialBalance,
+    flags.profitLoss,
+    flags.balanceSheet,
+    flags.vatControl,
+    flags.plDateFrom,
+    flags.plDateTo,
+    flags.plView,
+  ])
 
   useEffect(() => {
     void refresh()
