@@ -12,6 +12,7 @@ import 'server-only'
 import { persistStoreJournalEntry, reverseJournalEntry } from '@/lib/accounting/journal-service'
 import {
   type CoaRole,
+  cashAccountRoleForBankId,
   cashAccountRoleForMethod,
   labelForRole,
 } from '@/lib/accounting/coa-roles'
@@ -321,6 +322,54 @@ export function buildStockVendorReturnLines(params: { totalCost: number }): Post
   ]
 }
 
+/** Bank statement fee: Dr Bank Charges, Cr Bank. */
+export function buildBankChargeLines(params: {
+  amount: number
+  bankAccountId?: string
+  description?: string
+}): PostingLineInput[] {
+  const amount = roundMoney(params.amount)
+  const cashRole = cashAccountRoleForBankId(params.bankAccountId)
+  return [
+    {
+      role: 'bank_charges',
+      description: params.description || 'Bank charges',
+      debit: amount,
+      credit: 0,
+    },
+    {
+      role: cashRole,
+      description: params.description || 'Bank charges',
+      debit: 0,
+      credit: amount,
+    },
+  ]
+}
+
+/** Bank interest earned: Dr Bank, Cr Interest Income. */
+export function buildBankInterestLines(params: {
+  amount: number
+  bankAccountId?: string
+  description?: string
+}): PostingLineInput[] {
+  const amount = roundMoney(params.amount)
+  const cashRole = cashAccountRoleForBankId(params.bankAccountId)
+  return [
+    {
+      role: cashRole,
+      description: params.description || 'Interest earned',
+      debit: amount,
+      credit: 0,
+    },
+    {
+      role: 'interest_income',
+      description: params.description || 'Interest earned',
+      debit: 0,
+      credit: amount,
+    },
+  ]
+}
+
 /**
  * Resolve labels, assert balance, persist via journal-service (fiscal lock + idempotent ref).
  */
@@ -419,6 +468,46 @@ export async function postStockJournal(params: {
     lines: params.lines,
     createdById: params.createdById || undefined,
     journalCode: 'STK',
+  })
+}
+
+/** Post bank charge or interest adjustment from statement recon (BNK journal). */
+export async function postBankStatementAdjustment(params: {
+  kind: 'bank_charge' | 'interest_earned'
+  amount: number
+  bankAccountId: string
+  statementLineId?: string
+  month: string
+  date?: string
+  description?: string
+  createdById?: string
+}) {
+  const amount = roundMoney(params.amount)
+  if (amount <= 0) return null
+  const lines = params.kind === 'bank_charge'
+    ? buildBankChargeLines({
+        amount,
+        bankAccountId: params.bankAccountId,
+        description: params.description,
+      })
+    : buildBankInterestLines({
+        amount,
+        bankAccountId: params.bankAccountId,
+        description: params.description,
+      })
+  const stamp = params.statementLineId || `${params.month}-${params.kind}`
+  return commitPosting({
+    ref: `JRN/BNK/${params.kind}/${stamp}`.slice(0, 80),
+    source: 'bank_recon',
+    description: params.description
+      || (params.kind === 'bank_charge'
+        ? `Bank charges ${params.bankAccountId} ${params.month}`
+        : `Interest earned ${params.bankAccountId} ${params.month}`),
+    date: params.date,
+    blobId: params.statementLineId,
+    lines,
+    createdById: params.createdById,
+    journalCode: 'BNK',
   })
 }
 

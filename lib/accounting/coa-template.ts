@@ -68,8 +68,10 @@ export function buildZeroBalanceCoaTemplate(): CoaTemplateAccount[] {
     { code: '4003', name: 'Current Year P&L', type: 'equity', group: 'Equity', subGroup: 'Equity', balance: 0, isDynamic: true, dynamicKey: 'net_profit' },
     { code: '5000', name: 'Sales — Products (Invoices)', type: 'revenue', group: 'Revenue - Products', subGroup: 'Product', balance: 0, isDynamic: true, dynamicKey: 'revenue' },
     { code: '5001', name: 'Laptops', type: 'revenue', group: 'Revenue - Products', subGroup: 'Product', balance: 0 },
+    { code: '5105', name: 'Interest Income', type: 'revenue', group: 'Other Income', subGroup: 'Finance', balance: 0 },
     { code: '6001', name: 'Cost of Goods Sold', type: 'expense', group: 'Direct Expenses', subGroup: 'COGS', balance: 0 },
     { code: '6101', name: 'Laptops', type: 'expense', group: 'Local Purchases', subGroup: 'Local Purchases', balance: 0 },
+    { code: '6401', name: 'Bank Charges', type: 'expense', group: 'Finance Costs', subGroup: 'Bank', balance: 0 },
     { code: '1200', name: 'Inventory', type: 'asset', group: 'Inventory - Closing', subGroup: 'Finished Products', balance: 0 },
   )
   return a
