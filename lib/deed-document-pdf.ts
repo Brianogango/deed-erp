@@ -6,11 +6,8 @@
 
 import { jsPDF } from 'jspdf'
 import autoTable from 'jspdf-autotable'
-<<<<<<< HEAD
 import { resolveBankMpesa } from '@/lib/document-payment-details'
-=======
 import { customerFacingNotes } from '@/lib/customer-facing-notes'
->>>>>>> 8d00aac (Fix invoice/quote PDF logo dropouts and hide internal Notes)
 
 export interface DeedPdfLine {
   lineType?: 'item' | 'section'
