@@ -16,6 +16,11 @@ import {
   cashAccountRoleForMethod,
   labelForRole,
 } from '@/lib/accounting/coa-roles'
+import {
+  bankAccountIdForPaymentMethod,
+  bankAccountLabelForId,
+  expenseAccountForCategory,
+} from '@/lib/accounting/expense-pos-accounts'
 import { COMPANY_ACCOUNT_FALLBACKS, formatAccountLabel } from '@/lib/product-accounts'
 import { invoiceResidual, roundMoney } from '@/lib/accounting/money'
 import { isAccountingPostingEngineEnabled } from '@/lib/accounting/posting-flag'
@@ -370,6 +375,124 @@ export function buildBankInterestLines(params: {
   ]
 }
 
+/** Expense approval: Dr category expense, Cr reimbursement payable or bank. */
+export function buildExpenseApprovalLines(params: {
+  amount: number
+  ref: string
+  description: string
+  category?: string
+  paymentMethod?: string
+  submittedByName?: string
+  bankAccountId?: string
+}): PostingLineInput[] {
+  const amount = roundMoney(params.amount)
+  const isReimbursement = params.paymentMethod === 'reimbursement'
+  const expenseAccount = expenseAccountForCategory(params.category)
+  const creditAccount = isReimbursement
+    ? labelForRole('employee_reimbursements')
+    : bankAccountLabelForId(
+      bankAccountIdForPaymentMethod(params.paymentMethod, params.bankAccountId),
+      params.paymentMethod,
+    )
+  return [
+    {
+      accountLabel: expenseAccount,
+      description: `${params.ref}: ${params.description}`,
+      debit: amount,
+      credit: 0,
+    },
+    {
+      accountLabel: creditAccount,
+      description: isReimbursement
+        ? `Reimbursement payable: ${params.submittedByName || 'Employee'}`
+        : `Company-paid expense: ${params.ref}`,
+      debit: 0,
+      credit: amount,
+    },
+  ]
+}
+
+/** Expense reimbursement payout: Dr 3105, Cr bank. */
+export function buildExpenseReimbursementLines(params: {
+  amount: number
+  ref: string
+  submittedByName?: string
+  bankAccountId?: string
+}): PostingLineInput[] {
+  const amount = roundMoney(params.amount)
+  const bankId = bankAccountIdForPaymentMethod('bank_transfer', params.bankAccountId)
+  return [
+    {
+      role: 'employee_reimbursements',
+      description: `Settle reimbursement: ${params.submittedByName || 'Employee'}`,
+      debit: amount,
+      credit: 0,
+    },
+    {
+      accountLabel: bankAccountLabelForId(bankId),
+      description: `Cash paid for ${params.ref}`,
+      debit: 0,
+      credit: amount,
+    },
+  ]
+}
+
+/** POS sale: Dr tender (+ optional loyalty), Cr revenue (+ VAT). */
+export function buildPosSaleLines(params: {
+  total: number
+  subtotal: number
+  tax: number
+  pointsRedeemed?: number
+  orderRef: string
+  paymentMethod?: string
+  bankAccountId?: string
+  revenueLines?: Array<{ account: string; amount: number }>
+}): PostingLineInput[] {
+  const total = roundMoney(params.total)
+  const subtotal = roundMoney(params.subtotal)
+  const tax = roundMoney(params.tax)
+  const points = roundMoney(params.pointsRedeemed)
+  const bankId = bankAccountIdForPaymentMethod(params.paymentMethod, params.bankAccountId)
+  const lines: PostingLineInput[] = [
+    {
+      accountLabel: bankAccountLabelForId(bankId, params.paymentMethod),
+      description: `POS receipt ${params.orderRef}`,
+      debit: total,
+      credit: 0,
+    },
+  ]
+  if (points > 0) {
+    lines.push({
+      accountLabel: '5200 - Sales Discounts',
+      description: `Loyalty redemption ${params.orderRef}`,
+      debit: points,
+      credit: 0,
+    })
+  }
+  const revenue = params.revenueLines?.length
+    ? params.revenueLines
+    : [{ account: '5000 - Sales Revenue', amount: subtotal }]
+  for (const r of revenue) {
+    const amt = roundMoney(r.amount)
+    if (amt <= 0) continue
+    lines.push({
+      accountLabel: r.account,
+      description: `POS revenue ${params.orderRef}`,
+      debit: 0,
+      credit: amt,
+    })
+  }
+  if (tax > 0) {
+    lines.push({
+      role: 'output_vat',
+      description: `VAT on ${params.orderRef}`,
+      debit: 0,
+      credit: tax,
+    })
+  }
+  return lines
+}
+
 /**
  * Resolve labels, assert balance, persist via journal-service (fiscal lock + idempotent ref).
  */
@@ -608,6 +731,112 @@ export async function postAllocateOutstanding(params: {
     lines,
     createdById: params.createdById,
     journalCode: params.isVendor ? 'PUR' : 'BNK',
+  })
+}
+
+/** Expense approval journal (MISC). Idempotent on `JRN/EXP/<ref>`. */
+export async function postExpenseApproval(params: {
+  expenseId: string
+  ref: string
+  description: string
+  amount: number
+  category?: string
+  paymentMethod?: string
+  submittedByName?: string
+  bankAccountId?: string
+  date?: string
+  createdById?: string
+}) {
+  const amount = roundMoney(params.amount)
+  if (amount <= 0) return null
+  const lines = buildExpenseApprovalLines({
+    amount,
+    ref: params.ref,
+    description: params.description,
+    category: params.category,
+    paymentMethod: params.paymentMethod,
+    submittedByName: params.submittedByName,
+    bankAccountId: params.bankAccountId,
+  })
+  return commitPosting({
+    ref: `JRN/EXP/${params.ref}`,
+    source: 'expense',
+    description: `Expense approval — ${params.ref}`,
+    date: params.date,
+    blobId: params.expenseId,
+    lines,
+    createdById: params.createdById,
+    journalCode: 'MISC',
+  })
+}
+
+/** Expense reimbursement payout (MISC). Idempotent on `JRN/RIM/<ref>`. */
+export async function postExpenseReimbursement(params: {
+  expenseId: string
+  ref: string
+  amount: number
+  submittedByName?: string
+  bankAccountId?: string
+  date?: string
+  createdById?: string
+}) {
+  const amount = roundMoney(params.amount)
+  if (amount <= 0) return null
+  const lines = buildExpenseReimbursementLines({
+    amount,
+    ref: params.ref,
+    submittedByName: params.submittedByName,
+    bankAccountId: params.bankAccountId,
+  })
+  return commitPosting({
+    ref: `JRN/RIM/${params.ref}`,
+    source: 'expense',
+    description: `Expense reimbursement — ${params.ref}`,
+    date: params.date,
+    blobId: params.expenseId,
+    lines,
+    createdById: params.createdById,
+    journalCode: 'MISC',
+  })
+}
+
+/** POS sale journal. Idempotent on `JRN/<orderRef>`. */
+export async function postPosSale(params: {
+  orderId: string
+  orderRef: string
+  invoiceId?: string
+  total: number
+  subtotal: number
+  tax: number
+  pointsRedeemed?: number
+  paymentMethod?: string
+  bankAccountId?: string
+  customerName?: string
+  revenueLines?: Array<{ account: string; amount: number }>
+  date?: string
+  createdById?: string
+}) {
+  const lines = buildPosSaleLines({
+    total: params.total,
+    subtotal: params.subtotal,
+    tax: params.tax,
+    pointsRedeemed: params.pointsRedeemed,
+    orderRef: params.orderRef,
+    paymentMethod: params.paymentMethod,
+    bankAccountId: params.bankAccountId,
+    revenueLines: params.revenueLines,
+  })
+  const method = String(params.paymentMethod || '').toLowerCase()
+  return commitPosting({
+    ref: `JRN/${params.orderRef}`,
+    source: 'pos',
+    description: `POS sale ${params.orderRef}${params.customerName ? ` — ${params.customerName}` : ''}`,
+    date: params.date,
+    invoiceId: params.invoiceId,
+    blobId: params.orderId,
+    lines,
+    createdById: params.createdById,
+    journalCode: method === 'cash' || method === 'petty_cash' ? 'CSH' : 'BNK',
   })
 }
 
