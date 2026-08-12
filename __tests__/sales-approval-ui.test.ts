@@ -11,6 +11,7 @@ const users = [
   { id: 'dir-1', name: 'Brian', role: 'director' },
   { id: 'fin-1', name: 'Finance', role: 'finance_officer' },
   { id: 'sales-1', name: 'Cynthia', role: 'sales_rep' },
+  { id: 'tl-1', name: 'Lead', role: 'technical_lead' },
 ]
 
 describe('sales approval authorization', () => {
@@ -26,15 +27,34 @@ describe('sales approval authorization', () => {
       [], // no users available at create time
     )
 
+    expect(request.approvers).toHaveLength(1)
+    expect(request.approvers[0]?.roles).toEqual(['director', 'finance_officer'])
     expect(request.approvers[0]?.approverIds).toEqual([])
     expect(canApprove(request, 'dir-1', 'director')).toBe(true)
-    expect(canApprove(request, 'fin-1', 'finance_officer')).toBe(false)
+    expect(canApprove(request, 'fin-1', 'finance_officer')).toBe(true)
+    expect(canApprove(request, 'tl-1', 'technical_lead')).toBe(false)
 
     const approved = processApproval(request, 'dir-1', 'Brian', 'approved', undefined, 'director')
     expect(approved.status).toBe('approved')
   })
 
-  it('includes role-matched users in notification recipients', () => {
+  it('lets finance alone clear special_pricing without a second director step', () => {
+    const request = createApprovalRequest(
+      'special_pricing',
+      'sales_order',
+      'so-1',
+      'QUO/2026/0174',
+      'sales-1',
+      'Cynthia',
+      { reason: 'Special pricing: below pricelist', belowPricelist: true },
+      users,
+    )
+    expect(request.approvers).toHaveLength(1)
+    const approved = processApproval(request, 'fin-1', 'Finance', 'approved', undefined, 'finance_officer')
+    expect(approved.status).toBe('approved')
+  })
+
+  it('includes director and finance in notification recipients', () => {
     const request = createApprovalRequest(
       'special_pricing',
       'sales_order',
@@ -45,8 +65,26 @@ describe('sales approval authorization', () => {
       { reason: 'Below list' },
       users,
     )
-    expect(approvalRecipientIds(request, users)).toContain('dir-1')
+    const recipients = approvalRecipientIds(request, users)
+    expect(recipients).toContain('dir-1')
+    expect(recipients).toContain('fin-1')
+    expect(recipients).not.toContain('tl-1')
     expect(getPendingApprovals([request], 'dir-1', 'director')).toHaveLength(1)
+    expect(getPendingApprovals([request], 'fin-1', 'finance_officer')).toHaveLength(1)
+  })
+
+  it('does not create a backorder approval gate', () => {
+    const request = createApprovalRequest(
+      'backorder',
+      'sales_order',
+      'so-1',
+      'QUO/2026/0143',
+      'sales-1',
+      'Cynthia',
+      { backorderQty: 25 },
+      users,
+    )
+    expect(request.approvers).toEqual([])
   })
 
   it('rejects unauthorized approvers', () => {

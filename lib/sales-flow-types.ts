@@ -53,6 +53,11 @@ export interface ApprovalRequest {
 export interface ApprovalLevel {
   level: number
   role: 'sales_rep' | 'finance_officer' | 'director' | 'technical_lead'
+  /**
+   * When set, any of these roles may approve this level (Director OR Finance
+   * for price approvals). Defaults to `[role]` when omitted.
+   */
+  roles?: Array<'sales_rep' | 'finance_officer' | 'director' | 'technical_lead'>
   approverIds: string[] // Can be approved by any of these
   decision?: 'approved' | 'rejected'
   decidedBy?: string

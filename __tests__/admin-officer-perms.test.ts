@@ -83,8 +83,10 @@ describe('hybrid finance seals', () => {
 })
 
 describe('sales approval + GRN permissions', () => {
-  it('includes finance on deep discounts', () => {
+  it('lets director OR finance approve special pricing (single level)', () => {
     expect(APPROVAL_RULES.discount({ discountPercent: 55 })).toEqual(['director', 'finance_officer'])
+    expect(APPROVAL_RULES.special_pricing({})).toEqual(['director', 'finance_officer'])
+    expect(APPROVAL_RULES.backorder({ backorderQty: 12 })).toEqual([])
   })
 
   it('allows sales roles to create SO invoices drafts and keeps GRN tight', () => {

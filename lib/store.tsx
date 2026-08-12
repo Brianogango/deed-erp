@@ -29,6 +29,7 @@ import {
   approvalRecipientIds,
   approvalDocumentPath,
 } from '@/lib/sales-approvals'
+import { actorSatisfiesApprovalRoles } from '@/lib/sales-approval-rules'
 import { computeSaleOrderApprovalTriggers } from '@/lib/sales/margin-approval'
 import { allocateSalesReturn } from '@/lib/sales/return-allocation'
 import {
@@ -10563,8 +10564,8 @@ const storeCtx: AppState = {
         const unmetTriggers = approvalTriggers.filter(trigger => {
           const roles = APPROVAL_RULES[trigger.type](trigger.details)
           if (roles.length === 0) return false
-          // Self-satisfy only when the confirmer holds every required role.
-          if (roles.every(role => role === user.role)) return false
+          // Price: Director OR Finance may self-satisfy. Other types still need every role.
+          if (actorSatisfiesApprovalRoles(trigger.type, roles, user.role)) return false
           const already = existingForDoc.some(r =>
             r.type === trigger.type && (r.status === 'pending' || r.status === 'approved'),
           )
