@@ -47,10 +47,30 @@ type BalanceSheetResponse = {
   balanced: boolean
 }
 
+export type VatControlResponse = {
+  currency: string
+  dateFrom: string | null
+  dateTo: string | null
+  outputVatCode: string
+  inputVatCode: string
+  outputVat: number
+  inputVat: number
+  vatPayable: number
+  source: 'gl' | 'invoices'
+  taxableSales?: number
+  taxablePurchases?: number
+  draft?: {
+    periodLabel: string
+    boxes: Array<{ code: string; label: string; amount: number }>
+    netPayable: number
+  }
+}
+
 export type PrismaReportFlags = {
   trialBalance?: boolean
   profitLoss?: boolean
   balanceSheet?: boolean
+  vatControl?: boolean
 }
 
 export function usePrismaAccountingReports(enabled: boolean, flags: PrismaReportFlags = {}) {
@@ -58,6 +78,7 @@ export function usePrismaAccountingReports(enabled: boolean, flags: PrismaReport
   const [trialBalance, setTrialBalance] = useState<TrialBalanceResponse | null>(null)
   const [profitLoss, setProfitLoss] = useState<ProfitLossResponse | null>(null)
   const [balanceSheet, setBalanceSheet] = useState<BalanceSheetResponse | null>(null)
+  const [vatControl, setVatControl] = useState<VatControlResponse | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -70,6 +91,7 @@ export function usePrismaAccountingReports(enabled: boolean, flags: PrismaReport
       if (flags.trialBalance !== false) fetches.push(fetch('/api/accounting/trial-balance'))
       if (flags.profitLoss) fetches.push(fetch('/api/accounting/profit-loss'))
       if (flags.balanceSheet) fetches.push(fetch(`/api/accounting/balance-sheet?asOf=${new Date().toISOString().slice(0, 10)}`))
+      if (flags.vatControl) fetches.push(fetch('/api/accounting/vat-control?draft=1'))
 
       const responses = await Promise.all(fetches)
       let idx = 0
@@ -95,18 +117,24 @@ export function usePrismaAccountingReports(enabled: boolean, flags: PrismaReport
         if (!bsRes.ok) throw new Error('Failed to load Prisma balance sheet')
         setBalanceSheet(await bsRes.json())
       }
+
+      if (flags.vatControl) {
+        const vatRes = responses[idx++]
+        if (!vatRes.ok) throw new Error('Failed to load Prisma VAT control')
+        setVatControl(await vatRes.json())
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load accounting reports')
     } finally {
       setLoading(false)
     }
-  }, [enabled, flags.trialBalance, flags.profitLoss, flags.balanceSheet])
+  }, [enabled, flags.trialBalance, flags.profitLoss, flags.balanceSheet, flags.vatControl])
 
   useEffect(() => {
     void refresh()
   }, [refresh])
 
-  return { journals, trialBalance, profitLoss, balanceSheet, loading, error, refresh }
+  return { journals, trialBalance, profitLoss, balanceSheet, vatControl, loading, error, refresh }
 }
 
 export async function bootstrapCoaClient() {

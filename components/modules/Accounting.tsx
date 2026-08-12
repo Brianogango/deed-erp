@@ -389,13 +389,16 @@ function AccountingContent() {
   const [tbSource, setTbSource] = useState<'blob' | 'prisma'>('prisma')
   const [plSource, setPlSource] = useState<'blob' | 'prisma'>('prisma')
   const [bsSource, setBsSource] = useState<'blob' | 'prisma'>('prisma')
+  const [vatSource, setVatSource] = useState<'blob' | 'prisma'>('prisma')
   const prismaReportsEnabled = (tbSource === 'prisma' && reportTab === 'trial_balance')
     || (plSource === 'prisma' && reportTab === 'pl')
     || (bsSource === 'prisma' && reportTab === 'bs')
+    || (vatSource === 'prisma' && reportTab === 'vat')
   const prismaReports = usePrismaAccountingReports(prismaReportsEnabled, {
     trialBalance: tbSource === 'prisma' && reportTab === 'trial_balance',
     profitLoss: plSource === 'prisma' && reportTab === 'pl',
     balanceSheet: bsSource === 'prisma' && reportTab === 'bs',
+    vatControl: vatSource === 'prisma' && reportTab === 'vat',
   })
 
   // ── Invoice / Bill state ────────────────────────────────────────────────────
@@ -1743,29 +1746,92 @@ function AccountingContent() {
             </div>
           ) : activeTab === 'vat' ? (
             <div className="p-6">
-              <div className="flex items-center justify-between mb-5">
-                <div><h2 className="text-lg font-bold text-[var(--text-1)]">VAT Control Report</h2><p className="text-xs text-[var(--text-3)]">Output VAT less input VAT from posted sales invoices and vendor bills.</p></div>
-                <button className="btn-secondary flex items-center gap-2" onClick={() => { void exportToExcel('VAT Control Report', ['Metric', 'Amount'], [['Taxable Sales', financeReports.vat.taxableSales], ['Output VAT', financeReports.vat.outputVat], ['Taxable Purchases', financeReports.vat.taxablePurchases], ['Input VAT', financeReports.vat.inputVat], ['Net VAT Payable/(Refundable)', financeReports.vat.vatPayable]], `VAT_Report_${new Date().toISOString().slice(0, 10)}`) }}><Fa icon={faDownload} /> Export</button>
+              <div className="flex items-center justify-between mb-5 gap-3 flex-wrap">
+                <div>
+                  <h2 className="text-lg font-bold text-[var(--text-1)]">VAT Control Report</h2>
+                  <p className="text-xs text-[var(--text-3)]">
+                    {vatSource === 'prisma'
+                      ? 'Official SoT: output VAT (3301) less input VAT (1150) from posted Prisma journal lines.'
+                      : 'Legacy: sums taxTotal on posted blob sales invoices and vendor bills.'}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <select
+                    className="form-select text-[11px] py-1.5"
+                    value={vatSource}
+                    onChange={e => setVatSource(e.target.value as 'blob' | 'prisma')}
+                    aria-label="VAT report source"
+                  >
+                    <option value="prisma">Prisma GL</option>
+                    <option value="blob">Blob invoices</option>
+                  </select>
+                  <button
+                    className="btn-secondary flex items-center gap-2"
+                    onClick={() => {
+                      const vat = vatSource === 'prisma' && prismaReports.vatControl
+                        ? {
+                            taxableSales: prismaReports.vatControl.taxableSales ?? 0,
+                            outputVat: prismaReports.vatControl.outputVat,
+                            taxablePurchases: prismaReports.vatControl.taxablePurchases ?? 0,
+                            inputVat: prismaReports.vatControl.inputVat,
+                            vatPayable: prismaReports.vatControl.vatPayable,
+                          }
+                        : financeReports.vat
+                      void exportToExcel(
+                        'VAT Control Report',
+                        ['Metric', 'Amount'],
+                        [
+                          ['Taxable Sales', vat.taxableSales],
+                          ['Output VAT', vat.outputVat],
+                          ['Taxable Purchases', vat.taxablePurchases],
+                          ['Input VAT', vat.inputVat],
+                          ['Net VAT Payable/(Refundable)', vat.vatPayable],
+                        ],
+                        `VAT_Report_${new Date().toISOString().slice(0, 10)}`,
+                      )
+                    }}
+                  >
+                    <Fa icon={faDownload} /> Export
+                  </button>
+                </div>
               </div>
-              <DataTable
-                tableId="finance-vat-report"
-                hideSearch
-                perPage={20}
-                rowKey={row => row.metric}
-                rows={[
-                  { metric: 'Taxable sales', amount: financeReports.vat.taxableSales },
-                  { metric: 'Output VAT', amount: financeReports.vat.outputVat },
-                  { metric: 'Taxable purchases', amount: financeReports.vat.taxablePurchases },
-                  { metric: 'Input VAT', amount: financeReports.vat.inputVat },
-                  { metric: 'Net VAT payable / refundable', amount: financeReports.vat.vatPayable },
-                ]}
-                columns={[
-                  { key: 'metric', label: 'Metric', priority: 1, width: '2fr', render: row => <span className={row.metric.startsWith('Net') ? 'font-bold' : ''}>{row.metric}</span>, accessor: row => row.metric },
-                  { key: 'amount', label: 'Amount', priority: 1, width: '160px', align: 'right', render: row => <span className={`font-mono ${row.metric.startsWith('Net') ? 'font-bold' : ''}`}>{fmtKes(row.amount)}</span>, exportValue: row => row.amount },
-                ]}
-                exportTitle="VAT control report"
-                exportFilename="vat-report"
-              />
+              {vatSource === 'prisma' && prismaReports.loading ? (
+                <p className="text-sm text-[var(--text-3)]">Loading VAT control from journals…</p>
+              ) : vatSource === 'prisma' && prismaReports.error ? (
+                <p className="text-sm text-[var(--danger)]">{prismaReports.error}</p>
+              ) : (
+                <DataTable
+                  tableId="finance-vat-report"
+                  hideSearch
+                  perPage={20}
+                  rowKey={row => row.metric}
+                  rows={(() => {
+                    const vat = vatSource === 'prisma' && prismaReports.vatControl
+                      ? {
+                          taxableSales: prismaReports.vatControl.taxableSales,
+                          outputVat: prismaReports.vatControl.outputVat,
+                          taxablePurchases: prismaReports.vatControl.taxablePurchases,
+                          inputVat: prismaReports.vatControl.inputVat,
+                          vatPayable: prismaReports.vatControl.vatPayable,
+                        }
+                      : financeReports.vat
+                    const rows = [
+                      ...(vat.taxableSales != null ? [{ metric: 'Taxable sales', amount: vat.taxableSales }] : []),
+                      { metric: 'Output VAT', amount: vat.outputVat },
+                      ...(vat.taxablePurchases != null ? [{ metric: 'Taxable purchases', amount: vat.taxablePurchases }] : []),
+                      { metric: 'Input VAT', amount: vat.inputVat },
+                      { metric: 'Net VAT payable / refundable', amount: vat.vatPayable },
+                    ]
+                    return rows
+                  })()}
+                  columns={[
+                    { key: 'metric', label: 'Metric', priority: 1, width: '2fr', render: row => <span className={row.metric.startsWith('Net') ? 'font-bold' : ''}>{row.metric}</span>, accessor: row => row.metric },
+                    { key: 'amount', label: 'Amount', priority: 1, width: '160px', align: 'right', render: row => <span className={`font-mono ${row.metric.startsWith('Net') ? 'font-bold' : ''}`}>{fmtKes(row.amount)}</span>, exportValue: row => row.amount },
+                  ]}
+                  exportTitle="VAT control report"
+                  exportFilename="vat-report"
+                />
+              )}
             </div>
           ) : activeTab === 'ageing' ? (
             <AgeingTab customerInvoices={customerInvoices} vendorBills={vendorBills} />
