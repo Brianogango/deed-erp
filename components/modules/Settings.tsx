@@ -874,7 +874,7 @@ ACCOUNTS_EMAIL=accounts@deed.co.ke`}</pre>
               <SectionCard title="Pricing">
                 <SettingRow label="Enable Pricelists" desc="Lets sales reps pick a pricelist (Retail/Wholesale/Kilimall/custom) on new quotations; off keeps every quotation pricing from Retail automatically"><Toggle on={ss.salesPricelists} onChange={v => updateSystemSettings({ salesPricelists: v })} /></SettingRow>
                 <SettingRow label="Discount Control" desc="Restrict who can edit line discounts on quotations. High discounts, below-cost prices, and low margins still require approval before confirm."><Toggle on={ss.salesDiscountControl} onChange={v => updateSystemSettings({ salesDiscountControl: v })} /></SettingRow>
-                <SettingRow label="Minimum sales margin %" desc="Gross margin after discount below this % triggers special_pricing approval on confirm. Floor price remains product cost.">
+                <SettingRow label="Minimum sales margin %" desc="Gross margin after discount below this % triggers special_pricing approval on confirm (Director or Finance). Floor price remains product cost.">
                   <Input
                     type="number"
                     value={String(ss.salesMinMarginPercent ?? 10)}
