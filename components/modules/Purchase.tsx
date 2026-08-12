@@ -11,7 +11,6 @@ import {
 import { printSerialLabels, printProductLabels } from '@/lib/product-label'
 import { guardSpreadsheetFile, guardSpreadsheetRows, SpreadsheetGuardError } from '@/lib/spreadsheet-guard'
 import ContactFormModal, { blankCompanyContact } from '@/components/contacts/ContactFormModal'
-import TradeIn from './TradeIn'
 import { PurchaseProvider } from './purchase/PurchaseContext'
 import PurchaseOrdersTab from './purchase/PurchaseOrdersTab'
 import PurchaseReceiptsTab from './purchase/PurchaseReceiptsTab'
@@ -28,11 +27,11 @@ import {
   type PurchaseTypeFilter,
 } from '@/lib/purchases-filter'
 
-type MainView = 'orders' | 'receipts' | 'returns' | 'bills' | 'tradein'
+type MainView = 'orders' | 'receipts' | 'returns' | 'bills'
 type SubView  = 'list' | 'form' | 'receive'
 type RfqDraftLine = { id: string; productId: string; productName: string; description: string; qty: string; unitPrice: string; taxRate: string }
 
-const PURCHASE_TABS: MainView[] = ['orders', 'receipts', 'returns', 'bills', 'tradein']
+const PURCHASE_TABS: MainView[] = ['orders', 'receipts', 'returns', 'bills']
 const PURCHASE_RECORD_QUERY = { tab: 'orders' }
 
 const ACCESSORIES = ['Charger', 'Bag/Case', 'Mouse', 'Box', 'Cable', 'Manual']
@@ -1069,13 +1068,12 @@ function PurchaseContent() {
           { id: 'receipts', label: 'Receipts' },
           { id: 'returns', label: 'Returns' },
           { id: 'bills', label: 'Bills' },
-          { id: 'tradein', label: 'Trade-in' },
         ]}
         active={mainView}
         onChange={id => setMainView(id as MainView)}
         maxVisibleMobile={4}
-        maxVisibleTablet={5}
-        maxVisibleDesktop={6}
+        maxVisibleTablet={4}
+        maxVisibleDesktop={4}
         ariaLabel="Purchasing sections"
       />
 
@@ -1098,7 +1096,6 @@ function PurchaseContent() {
       {/* ── BILLS (extracted → purchase/PurchaseBillsTab.tsx) ── */}
       {mainView === 'bills' && <PurchaseBillsTab />}
 
-      {mainView === 'tradein' && <TradeIn />}
 
       </TabContent>
 
