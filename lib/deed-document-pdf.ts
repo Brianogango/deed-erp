@@ -6,6 +6,7 @@
 
 import { jsPDF } from 'jspdf'
 import autoTable from 'jspdf-autotable'
+import { resolveBankMpesa } from '@/lib/document-payment-details'
 
 export interface DeedPdfLine {
   lineType?: 'item' | 'section'
@@ -489,14 +490,19 @@ export function buildDeedDocumentPdf(
       if (input.paymentCommunication || input.ref) {
         paymentLines.unshift(`Payment Reference: ${input.ref}`)
       }
-      const primaryBank = bankAccounts.find(a => a.active && a.id !== 'cash' && a.id !== 'mpesa')
+      const primaryBank = bankAccounts.find(a => a.active && a.id !== 'cash' && a.id !== 'mpesa' && !/m-?pesa|safaricom/i.test(a.bankName || ''))
       if (primaryBank?.accountNo) {
         paymentLines.push('Bank Transfer:')
         paymentLines.push(`Account Name: ${company.name}`)
         paymentLines.push(`Account Number: ${primaryBank.accountNo} (${primaryBank.currency || currency})`)
         if (primaryBank.bankName) paymentLines.push(`Bank: ${primaryBank.bankName}`)
-      }
-      if (company.mpesaPaybill) {
+        const mpesa = resolveBankMpesa(primaryBank as any, company)
+        if (mpesa) {
+          paymentLines.push('M-PESA:')
+          paymentLines.push(`Pay Bill No: ${mpesa.paybill}`)
+          if (mpesa.account) paymentLines.push(`Account Number: ${mpesa.account} (${currency})`)
+        }
+      } else if (company.mpesaPaybill) {
         paymentLines.push('M-PESA:')
         paymentLines.push(`Pay Bill No: ${company.mpesaPaybill}`)
         if (company.mpesaAccount) paymentLines.push(`Account Number: ${company.mpesaAccount} (${currency})`)
