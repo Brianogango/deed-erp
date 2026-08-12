@@ -136,6 +136,7 @@ import { repairOutsourceReadiness } from '@/lib/repair-outsource'
 import { getPreviousRepairProgressStatus } from '@/lib/repair-progress'
 import { assertFiniteSequenceNext, repairDatesWriteError } from '@/lib/data-validation'
 import { ensureRepairIntakeTimestamp } from '@/lib/repair-datetime'
+import { mergeRepairCreatePreserveIntake } from '@/lib/repair-accessories'
 import {
   isDirectRepairPath,
   isQuoteDeclinedReopenable,
@@ -3360,7 +3361,7 @@ export interface AppState {
   submitTransfer: (from: LocationId, to: LocationId, productId: string, productName: string, qty: number, serialIds: string[], notes?: string) => boolean | Promise<boolean>
 
   // Repairs - Full Workflow
-  createRepair: (customerId: string, customerName: string, productName: string, serial: string, desc: string) => RepairOrder
+  createRepair: (customerId: string, customerName: string, productName: string, serial: string, desc: string, extras?: Partial<RepairOrder>) => RepairOrder
   updateRepair: (id: string, p: Partial<RepairOrder>) => void
   deleteRepair: (id: string) => void
   checkWarrantyForRepair: (repairId: string, serial: string) => boolean
@@ -13232,19 +13233,17 @@ const storeCtx: AppState = {
     },
 
     // ── Repairs ───────────────────────────────────────────────────────────────
-    createRepair: (customerId, customerName, productName, serial, desc) => {
+    createRepair: (customerId, customerName, productName, serial, desc, extras) => {
       const customer = contacts.find(c => c.id === customerId)
       const user = currentUser()
-      // Note: ref is now fetched from server on demand via updateRepair
-      // For now, use a temporary placeholder that will be replaced
-      // Always stamp full ISO datetime (date + time) — never date-only.
       const bookedAt = new Date().toISOString()
+      const safeExtras = { ...(extras ?? {}) } as Partial<RepairOrder>
+      delete (safeExtras as { id?: string }).id
+      delete (safeExtras as { ref?: string }).ref
       const rep: RepairOrder = {
         id: uid(),
         ref: `REP-${Date.now().toString().slice(-6)}`,
         status: 'received',
-        
-        // Customer & Device
         customerId,
         customerName,
         customerPhone: customer?.phone ?? '',
@@ -13253,43 +13252,35 @@ const storeCtx: AppState = {
         productName,
         serialNumber: serial,
         deviceCondition: 'good',
-        
-        // Intake
         intakeChannel: 'walk_in',
         intakeDate: bookedAt,
         intakeNotes: desc,
         issueDescription: desc,
         accessories: [],
-        
-        // Warranty
         underWarranty: false,
         warrantyVerificationStatus: serial.trim() ? 'not_checked' : 'pending_manual_review',
         serialWarrantyException: !serial.trim(),
         serialWarrantyExceptionReason: !serial.trim() ? 'other' : undefined,
         serialWarrantyExceptionNotes: !serial.trim() ? 'Serial number was not captured during intake.' : undefined,
-        
-        // Repair
         partsUsed: [],
         laborCost: 0,
         logisticsCost: 0,
         total: 0,
-        
-        // QA
         qcItems: [],
-        
-        // Metadata
         createdBy: user?.username ?? 'system',
         bookedByName: user?.name ?? 'System',
         createdDate: now(),
         notes: '',
         slaMissed: false,
-        
-        // Legacy fields
         date: now(),
         description: desc,
         technicianName: '',
+        // Intake must carry Direct Repair / accessories on the create POST —
+        // a bare create + later updateRepair raced and wiped them on the blob.
+        ...safeExtras,
       }
       setRepairs(p => [rep, ...p])
+      repairsRef.current = [rep, ...repairsRef.current.filter(r => r.id !== rep.id)]
       syncRepairToPortal(rep, 'Repair booked in')
       fetch('/api/repairs', {
         method: 'POST',
@@ -13302,19 +13293,23 @@ const storeCtx: AppState = {
         })
         .then(serverRepair => {
           if (!serverRepair) return
-          setRepairs(prev => prev.map(item => {
-            if (item.id !== rep.id) return item
-            // Preserve any local intake details applied immediately after createRepair
-            // (company contact person, warranty, accessories, etc.) while adopting the
-            // server-generated reference.
-            const merged = { ...serverRepair, ...item, id: serverRepair.id, ref: serverRepair.ref }
-            syncRepairToPortal(merged, 'Repair booked in')
-            return merged
-          }))
+          setRepairs(prev => {
+            const next = prev.map(item => {
+              if (item.id !== rep.id) return item
+              const merged = mergeRepairCreatePreserveIntake(
+                item as unknown as Record<string, unknown>,
+                serverRepair as unknown as Record<string, unknown>,
+              ) as unknown as RepairOrder
+              const withServerIds = { ...merged, id: serverRepair.id, ref: serverRepair.ref }
+              syncRepairToPortal(withServerIds, 'Repair booked in')
+              return withServerIds
+            })
+            repairsRef.current = next
+            return next
+          })
         })
         .catch(() => { /* local/app_state sync remains available offline */ })
       addAuditLog('create_repair', rep.ref, `Repair job created for ${customerName} - ${productName}`)
-      // Notify all lead techs of the new job
       notifyUsers({
         recipients: userIdsWithRoles(users, ['technical_lead'], currentUserId),
         type: 'repair',
@@ -13356,12 +13351,19 @@ const storeCtx: AppState = {
       }
       setRepairs(prev => prev.map(r => r.id === id ? updated : r))
       repairsRef.current = repairsRef.current.map(r => r.id === id ? updated : r)
+      // Persist intake / workflow patches to the repairs blob API as well as
+      // useLS — create+update races were wiping Direct Repair + accessories.
+      sync(`/api/repairs/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(patch),
+      })
       // Sync portal when customer-visible intake / report fields change
       if (
         'qcReportData' in patch || 'diagnosisReportData' in patch || 'preRepairPhotos' in patch || 'issuePhotos' in patch
         || 'repairPath' in patch || 'liabilityWaiverAccepted' in patch || 'notes' in patch
         || 'issueDescription' in patch || 'customerName' in patch || 'customerPhone' in patch || 'customerEmail' in patch
-        || 'intakeDate' in patch
+        || 'intakeDate' in patch || 'accessories' in patch
       ) {
         setTimeout(() => syncRepairToPortal(updated), 0)
       }

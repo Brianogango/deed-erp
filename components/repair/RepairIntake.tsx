@@ -4,6 +4,7 @@
 import { useState, useMemo } from 'react'
 import { useOperationsStore, RepairOrder, fmtDate, fmtDateTime } from '@/lib/store'
 import { DIRECT_REPAIR_WAIVER_TEXT } from '@/lib/repair-path'
+import { REPAIR_INTAKE_ACCESSORIES } from '@/lib/repair-accessories'
 import { diagnosisFeeAmount, isDiagnosisFeePolicyInEffect, resolveCustomerBillingType, resolveDiagnosisFee } from '@/lib/diagnosis-fee'
 import { Field, Input, Select, Textarea, Badge } from '@/components/ui'
 import ContactFormModal, { blankCompanyContact, blankIndividualContact } from '@/components/contacts/ContactFormModal'
@@ -388,23 +389,23 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
         : device.deviceType
       const productLabel = `${device.brand} ${device.model}`.trim()
 
-      const rep = createRepair(customerId, customerName, productLabel, device.serial, device.issueDesc)
-      clearOnSubmit()
-
       const checkedItems = Array.from(device.accessoriesChecked)
       const otherItems = device.accessoriesOther.split(',').map(n => n.trim()).filter(Boolean)
       const accessories = [...checkedItems, ...otherItems].map(name => ({ name, received: true }))
 
       const isDirect = device.repairPath === 'direct_repair'
       const waiverAt = new Date().toISOString()
+      // Placeholder intakeDate for fee resolution — createRepair stamps the real one.
+      const feeProbeDate = new Date().toISOString()
       const feeResolved = resolveDiagnosisFee({
         repairPath: device.repairPath,
-        intakeDate: rep.intakeDate,
+        intakeDate: feeProbeDate,
       }, systemSettings)
       const feeAmount = feeResolved.amount
       const feeApplies = !isDirect && feeResolved.status === 'applicable' && feeAmount > 0
       const billingType = resolveCustomerBillingType(clientType)
-      updateRepair(rep.id, {
+
+      const intakeExtras: Partial<RepairOrder> = {
         status: 'received',
         customerPhone,
         customerEmail,
@@ -444,6 +445,18 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
           : feeApplies
             ? `Device type: ${deviceTypeLabel}. Diagnosis fee: KES ${feeAmount.toLocaleString('en-KE')} (on final invoice with repair; not credited against labour).`
             : `Device type: ${deviceTypeLabel}. No mandatory diagnosis fee (intake before policy effective date).`,
+      }
+
+      // Pass extras on create so Direct Repair + accessories survive the create POST.
+      const rep = createRepair(customerId, customerName, productLabel, device.serial, device.issueDesc, intakeExtras)
+      clearOnSubmit()
+
+      // Re-apply after create so contact/warranty fields stay on the local row
+      // even if the create response merge is delayed.
+      updateRepair(rep.id, {
+        ...intakeExtras,
+        diagnosisFee: feeApplies ? feeAmount : 0,
+        diagnosisFeeStatus: isDirect || !feeApplies ? 'not_applicable' : 'applicable',
       })
 
       showToast(`Ticket ${rep.ref} created`, 'success')
@@ -1011,12 +1024,8 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
                 <Field label="Reported Issue" required>
                   <Textarea value={device.issueDesc} onChange={v => setD('issueDesc', v)} placeholder="Describe what's wrong with the device…" rows={3} />
                 </Field>
-                <Field label="Accessories Included" hint="Check all items received with the device">
+                <Field label="Accessories Included" hint="Check all items received with the device — these tick on the repair label">
                   {(() => {
-                    const COMMON_ACCESSORIES = [
-                      'Charger / Adapter', 'Laptop Bag', 'Mouse', 'Keyboard',
-                      'HDMI Cable', 'Power Cable', 'Stylus / Pen', 'External HDD',
-                    ]
                     const toggleAcc = (name: string) => {
                       setDevice(p => {
                         const next = new Set(p.accessoriesChecked)
@@ -1027,7 +1036,7 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
                     return (
                       <div className="space-y-3">
                         <div className="grid grid-cols-2 gap-2">
-                          {COMMON_ACCESSORIES.map(acc => {
+                          {REPAIR_INTAKE_ACCESSORIES.map(acc => {
                             const checked = device.accessoriesChecked.has(acc)
                             return (
                               <label
@@ -1040,7 +1049,7 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
                               >
                                 <input
                                   type="checkbox"
-                                  className="w-4 h-4 rounded accent-[#00AEEF] cursor-pointer"
+                                  className="w-4 h-4 rounded accent-[var(--accent-cyan)] cursor-pointer"
                                   checked={checked}
                                   onChange={() => toggleAcc(acc)}
                                 />

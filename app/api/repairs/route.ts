@@ -6,6 +6,7 @@ import type { RepairOrder } from '@/lib/store'
 import { parsePaginationParams, paginateArray } from '@/lib/api-pagination'
 import { repairDatesWriteError } from '@/lib/data-validation'
 import { ensureRepairIntakeTimestamp } from '@/lib/repair-datetime'
+import { mergeRepairCreatePreserveIntake } from '@/lib/repair-accessories'
 
 function publicPhotoUrl(ref: string, index: number) {
   return `/api/portal/repair/${encodeURIComponent(ref)}/photos/${index}`
@@ -120,7 +121,9 @@ export async function POST(request: NextRequest) {
     // upgraded to "now" so booking never silently stores midnight-only values.
     const intakeDate = ensureRepairIntakeTimestamp(body.intakeDate)
 
-    // Create the new repair
+    // Create the new repair. Body may already carry intake fields (repairPath,
+    // accessories, waiver). Upsert merge below preserves richer store-synced
+    // values if a shell POST races an updateRepair write.
     const repair: RepairOrder = {
       id: typeof body.id === 'string' && body.id.trim() ? body.id.trim() : `rep_${Date.now()}`,
       ref,
@@ -134,7 +137,7 @@ export async function POST(request: NextRequest) {
       intakeChannel: (body.intakeChannel === 'website' || body.intakeChannel === 'whatsapp' || body.intakeChannel === 'call' || body.intakeChannel === 'email' || body.intakeChannel === 'rider_pickup') ? body.intakeChannel as RepairOrder['intakeChannel'] : 'walk_in',
       intakeNotes: '',
       issueDescription: String(body.issueDescription ?? ''),
-      accessories: [],
+      accessories: Array.isArray(body.accessories) ? body.accessories as RepairOrder['accessories'] : [],
       ...(body as Partial<RepairOrder>),
       // Force full timestamp after body spread (body may carry date-only).
       intakeDate,
@@ -148,11 +151,25 @@ export async function POST(request: NextRequest) {
       }, { status: 422 })
     }
 
-    // Save the updated repairs list
-    const updatedRepairs = [repair, ...repairs]
+    // Upsert by id: createRepair POSTs in parallel with updateRepair / useLS
+    // sync. Blind prepend used to duplicate the row and let a bare shell wipe
+    // Direct Repair + accessories that had already landed on the blob.
+    const existingIdx = repairs.findIndex(r => r.id === repair.id)
+    let updatedRepairs: RepairOrder[]
+    let saved: RepairOrder
+    if (existingIdx >= 0) {
+      saved = mergeRepairCreatePreserveIntake(
+        repairs[existingIdx] as unknown as Record<string, unknown>,
+        repair as unknown as Record<string, unknown>,
+      ) as unknown as RepairOrder
+      updatedRepairs = repairs.map((r, i) => (i === existingIdx ? saved : r))
+    } else {
+      saved = repair
+      updatedRepairs = [repair, ...repairs]
+    }
     await saveStoreKeys({ 'deed_repairs_v2': JSON.stringify(updatedRepairs) })
 
-    return NextResponse.json(repair, { status: 201 })
+    return NextResponse.json(saved, { status: 201 })
   } catch (err) {
     console.error('[repairs POST] Error:', err)
     return NextResponse.json({ error: 'Failed to create repair' }, { status: 500 })

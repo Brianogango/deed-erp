@@ -7,22 +7,13 @@
 import QRCode from 'qrcode'
 import type { RepairOrder } from '@/lib/store'
 import { getStoredCompanyData } from '@/lib/company'
+import { isLabelAccessoryReceived, REPAIR_LABEL_ACCESSORIES } from '@/lib/repair-accessories'
 
 const NAVY = '#1A1F5E'
 const CYAN = '#00B0D7'
 const BORDER = '#CBD5E1'
 
-const CARD_ACCESSORIES = [
-  'Bag',
-  'Keyboard',
-  'Hard Disk',
-  'Processor',
-  'Battery',
-  'Adapter',
-  'Memory',
-  'Cover',
-  'DVD Drive',
-] as const
+const CARD_ACCESSORIES = REPAIR_LABEL_ACCESSORIES
 
 function esc(s: string): string {
   return String(s ?? '')
@@ -153,10 +144,11 @@ export async function printRepairSticker(job: RepairOrder): Promise<void> {
   const qrSrc = await qrDataUrl(portalUrl)
   const fonts = readAppFontVars()
 
-  const accessories = CARD_ACCESSORIES.map(name => {
-    const match = job.accessories?.find(a => a.name.toLowerCase() === name.toLowerCase())
-    return { name, checked: match?.received ?? false }
-  })
+  const accessories = CARD_ACCESSORIES.map(name => ({
+    name,
+    // Alias-aware: intake may store "Charger / Adapter" / "Laptop Bag" etc.
+    checked: isLabelAccessoryReceived(job.accessories, name),
+  }))
   const col1 = accessories.slice(0, 5)
   const col2 = accessories.slice(5)
 

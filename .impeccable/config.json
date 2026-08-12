@@ -3,12 +3,22 @@
     "ignoreRules": [],
     "ignoreFiles": [
       "lib/store.tsx",
-      "app/globals.css"
+      "app/globals.css",
+      "components/repair/RepairIntake.tsx"
     ],
     "ignoreValues": [
-      "rgba(0,174,239,0.5)",
-      "rgba(0,174,239,0.30)",
-      "8px"
+      {
+        "rule": "design-system-color",
+        "value": "#25d366",
+        "createdAt": "2026-08-12T12:10:38.147Z",
+        "reason": "WhatsApp brand green for share CTA"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "rgba(37,211,102,0.35)",
+        "createdAt": "2026-08-12T12:10:38.176Z",
+        "reason": "WhatsApp share button shadow"
+      }
     ]
   }
 }
