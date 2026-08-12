@@ -1,27 +1,7 @@
 'use client'
 
 import { useEffect } from 'react'
-import { recoverClientOnce, resetClientRecoveryFlag } from '@/lib/client-recovery'
-
-// Stale-deploy signatures: a tab from a previous build failing to load chunks
-// or RSC payloads from the new one. A single reload fixes these — do it
-// automatically instead of showing users a dead "Application error" screen.
-const STALE_BUILD_PATTERNS = [
-  /ChunkLoadError/i,
-  /Loading chunk [\w-]+ failed/i,
-  /failed to fetch dynamically imported module/i,
-  /Importing a module script failed/i,
-  /clientModules/,
-  /Unexpected token '<'/,
-  /\.filter is not a function/i,
-  /\.map is not a function/i,
-  /Cannot read propert(y|ies) of (undefined|null)/i,
-]
-
-function isRecoverableClientError(error: Error): boolean {
-  const text = `${error.name}: ${error.message}`
-  return STALE_BUILD_PATTERNS.some(re => re.test(text))
-}
+import { recoverClientOnce, resetClientRecoveryFlag, isRecoverableClientError } from '@/lib/client-recovery'
 
 export default function AppError({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {
   useEffect(() => {
@@ -31,19 +11,20 @@ export default function AppError({ error, reset }: { error: Error & { digest?: s
   }, [error])
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-6" style={{ background: 'var(--bg-page, #F4F6FB)' }}>
-      <div className="max-w-md w-full rounded-2xl border border-[var(--border-lt,#E2E8F0)] bg-white p-8 text-center shadow-sm">
-        <div className="w-12 h-12 mx-auto mb-4 rounded-2xl flex items-center justify-center text-xl"
-          style={{ background: '#FEF3C7', color: '#B45309' }}>
+    <div className="min-h-screen flex items-center justify-center p-6 bg-[var(--bg-page)]">
+      <div className="max-w-md w-full rounded-2xl border border-[var(--border-lt)] bg-[var(--bg-surface)] p-8 text-center shadow-sm">
+        <div
+          className="w-12 h-12 mx-auto mb-4 rounded-2xl flex items-center justify-center text-xl bg-[var(--warning-bg)] text-[var(--warning)]"
+        >
           !
         </div>
-        <h1 className="text-base font-extrabold text-[var(--text-1,#0F172A)]">Something went wrong</h1>
-        <p className="text-xs text-[var(--text-3,#64748B)] mt-2 leading-relaxed">
+        <h1 className="text-base font-extrabold text-[var(--text-1)]">Something went wrong</h1>
+        <p className="text-xs text-[var(--text-3)] mt-2 leading-relaxed">
           This usually happens after an app update or when local browser data got out of sync.
           Repair &amp; reload clears the local cache and signs you back into a clean workspace.
         </p>
         {error?.digest && (
-          <p className="text-[10px] text-[var(--text-4,#94A3B8)] mt-2 font-mono">Ref: {error.digest}</p>
+          <p className="text-[10px] text-[var(--text-4)] mt-2 font-mono">Ref: {error.digest}</p>
         )}
         <div className="flex gap-3 justify-center mt-6">
           <button
@@ -51,14 +32,13 @@ export default function AppError({ error, reset }: { error: Error & { digest?: s
               resetClientRecoveryFlag()
               void recoverClientOnce('app-error:manual')
             }}
-            className="px-5 py-2 rounded-xl text-xs font-bold text-white"
-            style={{ background: '#1B2762' }}
+            className="px-5 py-2 rounded-xl text-xs font-bold text-white bg-[var(--navy)]"
           >
             Repair &amp; reload
           </button>
           <button
             onClick={reset}
-            className="px-5 py-2 rounded-xl text-xs font-bold border border-[var(--border-lt,#E2E8F0)] text-[var(--text-2,#334155)]"
+            className="px-5 py-2 rounded-xl text-xs font-bold border border-[var(--border-lt)] text-[var(--text-2)]"
           >
             Try again
           </button>

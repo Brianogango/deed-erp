@@ -6,6 +6,27 @@
 
 export const CLIENT_RECOVERY_FLAG = 'deed_client_recovered'
 
+/** Stale-deploy / corrupt-cache signatures that should auto Repair & reload. */
+export const STALE_BUILD_PATTERNS: RegExp[] = [
+  /ChunkLoadError/i,
+  /Loading chunk [\w-]+ failed/i,
+  /failed to fetch dynamically imported module/i,
+  /Importing a module script failed/i,
+  /clientModules/,
+  /Unexpected token '<'/,
+  /\.filter is not a function/i,
+  /\.map is not a function/i,
+  /Cannot read propert(y|ies) of (undefined|null)/i,
+  /Failed to find Server Action/i,
+  /older or newer deployment/i,
+]
+
+export function isRecoverableClientError(error: Error | { name?: string; message?: string } | null | undefined): boolean {
+  if (!error) return false
+  const text = `${error.name || ''}: ${error.message || ''}`
+  return STALE_BUILD_PATTERNS.some(re => re.test(text))
+}
+
 export function clearDeedClientCaches(): { clearedKeys: number } {
   let clearedKeys = 0
   try {
