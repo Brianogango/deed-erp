@@ -93,7 +93,7 @@ export async function POST(request: NextRequest) {
       sourceType: String(body.sourceType || body.source || 'manual'),
       sourceId: body.sourceId ? String(body.sourceId) : null,
       createdById: actor.id,
-      skipIfExists: false,
+      skipIfExists: body.skipIfExists === true || body.skipIfExists === '1',
       lines: lines.map((l: any) => ({
         accountLabel: String(l.account || l.accountLabel || ''),
         label: l.description || l.label || undefined,

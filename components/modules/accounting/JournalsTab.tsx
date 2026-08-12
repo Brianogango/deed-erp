@@ -14,21 +14,21 @@ const emptyLine = (): DraftLine => ({ account: '', description: '', debit: '', c
 
 export default function JournalsTab() {
   const {
-    journalEntries, invFilter, journalDate, setJournalDate,
+    invFilter, journalDate, setJournalDate,
     journalSource, setJournalSource, journalRef, setJournalRef,
     setViewJournal, canViewJournals, hdr, showToast,
   } = useAccounting()
 
-  const [source, setSource] = useState<'blob' | 'prisma'>('prisma')
   const [showManual, setShowManual] = useState(false)
   const [saving, setSaving] = useState(false)
   const [manualRef, setManualRef] = useState('')
   const [manualDate, setManualDate] = useState(() => new Date().toISOString().slice(0, 10))
   const [manualDesc, setManualDesc] = useState('')
   const [manualLines, setManualLines] = useState<DraftLine[]>([emptyLine(), emptyLine()])
-  const prismaReports = usePrismaAccountingReports(source === 'prisma' && canViewJournals)
+  // Phase 11: journals list is Prisma-only (blob no longer an official SoT toggle).
+  const prismaReports = usePrismaAccountingReports(canViewJournals)
 
-  const activeJournals = source === 'prisma' ? prismaReports.journals : journalEntries
+  const activeJournals = prismaReports.journals
 
   const filteredJournals = useMemo(() => {
     const q = journalRef.toLowerCase()
@@ -152,16 +152,7 @@ export default function JournalsTab() {
   return (
     <>
       <div className="flex items-center gap-2 px-4 py-2.5 border-b flex-wrap" style={{ borderColor: 'var(--border-lt)' }}>
-        <select
-          className="form-select text-[11px] py-1.5"
-          style={{ width: 160 }}
-          value={source}
-          onChange={e => setSource(e.target.value as 'blob' | 'prisma')}
-          aria-label="Journal data source"
-        >
-          <option value="prisma">Official: Prisma (KES posted)</option>
-          <option value="blob">Legacy: client blob</option>
-        </select>
+        <span className="text-[11px] text-t3">Official: Prisma GL</span>
         <input className="form-input text-[11px] py-1.5" style={{ width: 140 }} type="date"
           value={journalDate} onChange={e => setJournalDate(e.target.value)} />
         <select className="form-select text-[11px] py-1.5" style={{ width: 130 }}
@@ -187,10 +178,10 @@ export default function JournalsTab() {
         >
           New manual journal
         </button>
-        {source === 'prisma' && prismaReports.loading && (
+        {prismaReports.loading && (
           <span className="text-[11px] text-t3">Loading posted journals…</span>
         )}
-        {source === 'prisma' && prismaReports.error && (
+        {prismaReports.error && (
           <span className="text-[11px] text-red-500">{prismaReports.error}</span>
         )}
       </div>
@@ -203,7 +194,7 @@ export default function JournalsTab() {
         rows={filteredJournals}
         rowKey={e => e.id}
         hideSearch
-        emptyMessage={source === 'prisma' ? 'No posted Prisma journals yet' : 'No journal entries found'}
+        emptyMessage="No posted Prisma journals yet"
         onRowClick={e => setViewJournal(e)}
         rowActions={e => (
           <div className="flex gap-1">

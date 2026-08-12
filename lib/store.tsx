@@ -44,6 +44,7 @@ import {
   canUserApproveExpenseStep,
   expenseChainIsComplete,
 } from '@/lib/expense-approval-chain'
+import { queueJournalPrismaPersist } from '@/lib/accounting/journal-dual-write'
 import type { ApprovalRequest, ApprovalType, StockReservation } from '@/lib/sales-flow-types'
 import {
   buildNotifyRows,
@@ -6081,6 +6082,7 @@ export function StoreProvider({
   // `posted` (from a sale order, delivery, repair-quote conversion, or the manual
   // postInvoice action) routes through here so the AR/revenue subledger and the
   // General Ledger never drift apart. The dedup guard keys on the journal ref.
+  // Phase 11: also fire-and-forget Prisma persist (idempotent on ref).
   const postInvoiceJournalOnce = (inv: Invoice) => {
     const po = inv.purchaseOrderId ? poRef.current.find(p => p.id === inv.purchaseOrderId) : null
     const journal = buildInvoicePostingJournal(
@@ -6093,7 +6095,18 @@ export function StoreProvider({
       },
     )
     setJournalEntries(p => (p.some(j => j.ref === journal.ref) ? p : [journal, ...p]))
+    queueJournalPrismaPersist(journal)
     addAuditLog('post_invoice', inv.ref, `${inv.type === 'vendor_bill' ? 'Bill' : 'Invoice'} posted to journal ${journal.ref}`)
+  }
+
+  /** Phase 11: blob mirror + Prisma dual-write (idempotent ref). */
+  const appendPostedJournal = (journal: JournalEntry) => {
+    setJournalEntries(prev => (prev.some(j => j.ref === journal.ref) ? prev : [journal, ...prev]))
+    queueJournalPrismaPersist(journal)
+  }
+
+  const appendPostedJournals = (journals: JournalEntry[]) => {
+    for (const journal of journals) appendPostedJournal(journal)
   }
 
   const storeCtxRef = useRef<AppState | null>(null)
@@ -6543,7 +6556,7 @@ const storeCtx: AppState = {
         notes: `${inv.notes || ''}\nApplied customer credit ${applications.map(a => `${a.ref} (${fmtKes(a.amount)})`).join(', ')}`.trim(),
       }
       setInvoices(prev => prev.map(i => i.id === inv.id ? updatedInvoice : i))
-      setJournalEntries(prev => [buildCustomerCreditApplicationJournal(inv, applied, applications.map(a => a.ref).join(', ')), ...prev])
+      appendPostedJournal(buildCustomerCreditApplicationJournal(inv, applied, applications.map(a => a.ref).join(', ')))
 
       try {
         const res = await fetch(`/api/invoices/${inv.id}/payments`, {
@@ -6994,7 +7007,7 @@ const storeCtx: AppState = {
         setExpenses(prev => prev.map(e => e.id === id ? reviewedExpense : e))
         if (fullyApproved && !journalEntries.some(j => j.ref === `JRN/EXP/${expense.ref}`)) {
           const journal = buildExpenseApprovalJournal(reviewedExpense)
-          setJournalEntries(prev => [journal, ...prev])
+          appendPostedJournal(journal)
           addAuditLog('post_expense', expense.ref, `Expense ${expense.ref} posted to journal ${journal.ref}`)
           void fetch('/api/expenses/post-journal', {
             method: 'POST',
@@ -7045,7 +7058,7 @@ const storeCtx: AppState = {
       setExpenses(prev => prev.map(e => e.id === id ? reviewedExpense : e))
       if (approved && !journalEntries.some(j => j.ref === `JRN/EXP/${expense.ref}`)) {
         const journal = buildExpenseApprovalJournal(reviewedExpense)
-        setJournalEntries(prev => [journal, ...prev])
+        appendPostedJournal(journal)
         addAuditLog('post_expense', expense.ref, `Expense ${expense.ref} posted to journal ${journal.ref}`)
         void fetch('/api/expenses/post-journal', {
           method: 'POST',
@@ -7102,7 +7115,7 @@ const storeCtx: AppState = {
       setExpenses(prev => prev.map(e => e.id === id ? reimbursedExpense : e))
       if (!journalEntries.some(j => j.ref === `JRN/RIM/${expense.ref}`)) {
         const journal = buildExpenseReimbursementJournal(reimbursedExpense, actualBankId)
-        setJournalEntries(prev => [journal, ...prev])
+        appendPostedJournal(journal)
         addAuditLog('post_reimbursement', expense.ref, `Expense reimbursement ${expense.ref} posted to journal ${journal.ref}${reference ? ` (Ref: ${reference})` : ''}`)
         void fetch('/api/expenses/post-journal', {
           method: 'POST',
@@ -7387,7 +7400,7 @@ const storeCtx: AppState = {
         createdBy: user.name,
       }
       setDeposits(p => [deposit, ...p])
-      if (payment) setJournalEntries(p => [buildDepositPaymentJournal(deposit, payment), ...p])
+      if (payment) appendPostedJournal(buildDepositPaymentJournal(deposit, payment))
       sync('/api/deposits', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -7450,7 +7463,7 @@ const storeCtx: AppState = {
         return updatedDeposit
       }))
       if (updatedDeposit && paymentToSync) {
-        setJournalEntries(prev => [buildDepositPaymentJournal(updatedDeposit!, paymentToSync!), ...prev])
+        appendPostedJournal(buildDepositPaymentJournal(updatedDeposit!, paymentToSync!))
         sync(`/api/deposits/${depositId}/payments`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -7505,7 +7518,7 @@ const storeCtx: AppState = {
           totalDebit: amount,
           totalCredit: amount,
         }
-        setJournalEntries(p => [clearJournal, ...p])
+        appendPostedJournal(clearJournal)
         if (linkedInv) {
           const payment: InvoicePayment = {
             id: uid(),
@@ -7547,7 +7560,7 @@ const storeCtx: AppState = {
           ],
           totalDebit: deposit.totalPaid, totalCredit: deposit.totalPaid,
         }
-        setJournalEntries(p => [refundJournal, ...p])
+        appendPostedJournal(refundJournal)
       }
       setDeposits(prev => prev.map(d =>
         d.id === depositId ? { ...d, status: 'cancelled' as DepositStatus, cancelledAt: now(), cancelReason: reason } : d
@@ -8020,7 +8033,7 @@ const storeCtx: AppState = {
         totalDebit: payroll.totalGross,
         totalCredit: payroll.totalGross,
       }
-      setJournalEntries(prev => [journal, ...prev])
+      appendPostedJournal(journal)
           setPayrollRuns(prev => {
             const next = prev.map(run => run.id === id ? { ...run, status: 'posted' as const, postedJournalId: journal.id } : run)
             sync(`/api/payroll/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'posted', postedJournalId: journal.id }) })
@@ -11782,7 +11795,7 @@ const storeCtx: AppState = {
           .filter(j => !journalEntries.some(existingJournal => existingJournal.ref === `REV/${j.ref}`))
           .map(j => buildReversalJournal(j, existing.ref, `${existing.type === 'vendor_bill' ? 'Bill' : 'Invoice'} cancelled`))
         if (reversals.length > 0) {
-          setJournalEntries(prev => [...reversals, ...prev])
+          appendPostedJournals(reversals)
           addAuditLog('reverse_invoice', existing.ref, `${existing.type === 'vendor_bill' ? 'Bill' : 'Invoice'} cancelled with ${reversals.length} reversal journal${reversals.length === 1 ? '' : 's'}`)
         } else {
           addAuditLog('cancel_invoice', existing.ref, `${existing.type === 'vendor_bill' ? 'Bill' : 'Invoice'} cancelled`)
@@ -11959,7 +11972,7 @@ const storeCtx: AppState = {
           payments: [...(i.payments || []), newPayment],
         }
       }))
-      setJournalEntries(p => [journal, ...p])
+      appendPostedJournal(journal)
       try {
         const res = await fetch(`/api/invoices/${invoiceId}/payments`, {
           method: 'POST',
@@ -12006,7 +12019,7 @@ const storeCtx: AppState = {
       const reversals = related
         .filter(j => !journalEntries.some(existingJournal => existingJournal.ref === `REV/${j.ref}`))
         .map(j => buildReversalJournal(j, inv.ref, `${inv.type === 'vendor_bill' ? 'Bill' : 'Invoice'} reset to draft`))
-      if (reversals.length > 0) setJournalEntries(prev => [...reversals, ...prev])
+      if (reversals.length > 0) appendPostedJournals(reversals)
       const draft: Invoice = {
         ...inv,
         status: 'draft',
@@ -12056,13 +12069,13 @@ const storeCtx: AppState = {
           applications: [],
         }
         setCustomerCredits(prev => [credit!, ...prev])
-        setJournalEntries(prev => [buildCustomerCreditJournal(inv, credit!.ref, creditAmount), ...prev])
+        appendPostedJournal(buildCustomerCreditJournal(inv, credit!.ref, creditAmount))
       } else {
         const related = journalEntries.filter(j => j.invoiceId === id && !j.ref.startsWith('REV/'))
         const reversals = related
           .filter(j => !journalEntries.some(existingJournal => existingJournal.ref === `REV/${j.ref}`))
           .map(j => buildReversalJournal(j, inv.ref, `${inv.type === 'vendor_bill' ? 'Bill' : 'Invoice'} cancelled`))
-        if (reversals.length > 0) setJournalEntries(prev => [...reversals, ...prev])
+        if (reversals.length > 0) appendPostedJournals(reversals)
       }
 
       const cancelled: Invoice = {
@@ -12893,7 +12906,7 @@ const storeCtx: AppState = {
             poLines: po.lines.map(l => ({ productId: l.productId, unitPrice: l.unitPrice })),
           },
         )
-        setJournalEntries(prev => (prev.some(j => j.ref === journal.ref) ? prev : [journal, ...prev]))
+        appendPostedJournal(journal)
       }
       purchaseReturnsRef.current = purchaseReturnsRef.current.map(r => r.id === returnId ? { ...r, status: 'confirmed', creditNoteId: creditNote?.id } : r)
       setPurchaseReturns(p => p.map(r => r.id === returnId ? { ...r, status: 'confirmed', creditNoteId: creditNote?.id } : r))
@@ -14859,7 +14872,7 @@ const storeCtx: AppState = {
             ],
             totalDebit: inv.total, totalCredit: inv.total,
           }
-          setJournalEntries(p => [journal, ...p])
+          appendPostedJournal(journal)
           addAuditLog('post_invoice', inv.ref, `Auto-posted on repair ready — ${repair.ref}`)
         }
       }
@@ -15112,7 +15125,7 @@ const storeCtx: AppState = {
         ],
         totalDebit: invoice.total, totalCredit: invoice.total,
       }
-      setJournalEntries(p => [glJournal, ...p])
+      appendPostedJournal(glJournal)
 
       setRepairs(p => p.map(r => r.id === repairId ? {
         ...r,
@@ -16347,7 +16360,7 @@ const storeCtx: AppState = {
           totalCredit: credit,
         }
         journalId = journal.id
-        setJournalEntries(p => [journal, ...p])
+        appendPostedJournal(journal)
         addAuditLog('close_pos_session', sessionRef, journal.description)
       }
 
@@ -16496,7 +16509,7 @@ const storeCtx: AppState = {
         totalDebit: posInv.total + pointsRedeemed,
         totalCredit: sub + tax,
       }
-      setJournalEntries(p => [posJournal, ...p])
+      appendPostedJournal(posJournal)
       addAuditLog('post_pos', order.ref, `POS sale posted to journal ${posJournal.ref}`)
       void fetch('/api/pos/post-sale-journal', {
         method: 'POST',
@@ -16828,7 +16841,7 @@ const storeCtx: AppState = {
             totalDebit: deltaTotal,
             totalCredit: deltaTotal,
           }
-          setJournalEntries(p => (p.some(j => j.ref === adj.ref) ? p : [adj, ...p]))
+          appendPostedJournal(adj)
           addAuditLog('post_invoice', inv.ref, `Delivery charge ${deltaTotal} posted to journal ${adj.ref}`)
         }
       } else {
@@ -17404,7 +17417,7 @@ const storeCtx: AppState = {
         applications: [],
       }
       setCustomerCredits(prev => [credit, ...prev])
-      setJournalEntries(prev => [buildCustomerCreditJournal(sourceInvoice, ref, creditAmount), ...prev])
+      appendPostedJournal(buildCustomerCreditJournal(sourceInvoice, ref, creditAmount))
       addAuditLog('sales_credit_note', so.ref, `Credit note ${ref} issued for ${fmtKes(creditAmount)}`)
       showToast(`Credit note ${ref} issued for ${fmtKes(creditAmount)}`, 'success')
       return ref
@@ -17853,7 +17866,7 @@ const storeCtx: AppState = {
           applications: [],
         }
         setCustomerCredits(prev => [credit, ...prev])
-        setJournalEntries(prev => [buildCustomerCreditJournal(sourceInvoice, ref, amount), ...prev])
+        appendPostedJournal(buildCustomerCreditJournal(sourceInvoice, ref, amount))
         // Persist Prisma CreditNote when available (durable accounting object).
         try {
           await fetch(`/api/sale-orders/${rma.saleOrderId}/credit-note`, {
@@ -17914,7 +17927,7 @@ const storeCtx: AppState = {
           totalDebit: refundAmount,
           totalCredit: refundAmount,
         }
-        setJournalEntries(p => [journal, ...p])
+        appendPostedJournal(journal)
 
         const payment: RefundPayment = {
           id: uid(),

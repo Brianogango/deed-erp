@@ -15,7 +15,7 @@
 
 Today `storeStillBlobWrites=true` and `writersMigratedOffBlob=false` are hardcoded, so **`retireReady` stays false**. Typed `RETIRE deed_journalEntries` alone cannot delete the live key.
 
-Future writer cutover must flip those flags (and preferably soak the engine) before retire can succeed.
+Future writer cutover must set `JOURNAL_WRITERS_MIGRATED=true` (see Phase 11) after dual-write soak and Finance sign-off before retire can succeed.
 
 ## Engine soak (staging)
 

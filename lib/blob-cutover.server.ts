@@ -14,6 +14,7 @@ import {
 } from '@/lib/blob-cutover'
 import { evaluateJournalDeepParity, extractJournalRefs } from '@/lib/accounting/journal-parity'
 import { evaluateJournalRetireReadiness } from '@/lib/accounting/journal-retire-readiness'
+import { areJournalWritersMigratedOffBlob } from '@/lib/accounting/journal-writers-flag'
 import { isAccountingPostingEngineEnabled } from '@/lib/accounting/posting-flag'
 
 async function readAppState(key: string): Promise<string | null> {
@@ -225,10 +226,10 @@ export async function verifyJournalParityReport() {
     certificateStatus: journalCert?.status ?? null,
     certificateParityOk: journalCert?.parityOk ?? null,
     archiveKey: journalCert?.archiveKey ?? null,
-    // Until store writers are migrated, keep this true so retire stays blocked.
-    storeStillBlobWrites: true,
+    // Phase 11: env JOURNAL_WRITERS_MIGRATED=true after dual-write soak + Finance sign-off.
+    storeStillBlobWrites: !areJournalWritersMigratedOffBlob(),
     postingEngineEnabled: isAccountingPostingEngineEnabled(),
-    writersMigratedOffBlob: false,
+    writersMigratedOffBlob: areJournalWritersMigratedOffBlob(),
   })
   return {
     blobKey: 'deed_journalEntries',

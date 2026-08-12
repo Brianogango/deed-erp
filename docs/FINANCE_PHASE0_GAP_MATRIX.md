@@ -253,3 +253,15 @@ Suggested first slice:
 - [ ] Parity job ownership for journals before any certify/retire.
 
 When checked, open Phase 1 implementation on a new branch from `master`.
+
+---
+
+## 11. Phase progress (living)
+
+| Phase | Status | Notes |
+|-------|--------|-------|
+| 0–10 | Merged | Engine + GRNI + COGS + bank + VAT + expense/POS + mgmt P&L + ref parity + retire soak |
+| **11** | This branch | Dual-write store→Prisma; reports Prisma-only; coverage UI; writers flag default off |
+| Later | Deferred | Buy-back GL, analytics/budgets, serial COGS SoT, OFX, eTIMS, YE 4003, partner ledger→Prisma, CoA renumber, cashbook rewrite |
+
+Production: keep `ACCOUNTING_POSTING_ENGINE` **off**. Do not set `JOURNAL_WRITERS_MIGRATED` until dual-write soak + Finance sign-off.
