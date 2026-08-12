@@ -123,6 +123,7 @@ import {
   buildVendorBillPerpetualLines,
   buildVendorCreditPerpetualLines,
 } from '@/lib/accounting/vendor-bill-perpetual'
+import { autoMatchStatementLines } from '@/lib/accounting/bank-statement-match'
 import { inferProductKind, defaultTrackingForKind, defaultUnitForKind } from '@/lib/product-kind'
 import {
   canPostOrPayCustomerInvoice,
@@ -6782,41 +6783,18 @@ const storeCtx: AppState = {
     autoMatchStatements: (bankAccountId, month, cashbookEntries) => {
       const locked = systemSettings.accLockDates && bankRecons.some(r => r.bankAccountId === bankAccountId && r.month === month && r.status === 'reconciled')
       if (locked) { showToast('This reconciled bank period is locked. Reopen it before auto-matching.', 'error'); return 0 }
-      const stmtLines = bankStatementLines.filter(
-        l => l.bankAccountId === bankAccountId && l.month === month && !l.matchedEntryId
+      const scoped = bankStatementLines.filter(
+        l => l.bankAccountId === bankAccountId && l.month === month,
       )
-      const usedEntries = new Set(
-        bankStatementLines
-          .filter(l => l.bankAccountId === bankAccountId && l.month === month && l.matchedEntryId)
-          .map(l => l.matchedEntryId as string)
-      )
-      let matched = 0
-      const newLines = bankStatementLines.map(stmt => {
-        if (stmt.bankAccountId !== bankAccountId || stmt.month !== month || stmt.matchedEntryId) return stmt
-        // Find best cashbook entry match
-        const direction = stmt.credit > 0 ? 'credit' : 'debit'
-        const stmtAmt   = direction === 'credit' ? stmt.credit : stmt.debit
-        let best: { id: string; score: number } | null = null
-        for (const entry of cashbookEntries) {
-          if (usedEntries.has(entry.id)) continue
-          const entryAmt = direction === 'credit' ? entry.credit : entry.debit
-          if (entryAmt === 0) continue
-          const amtDiff  = Math.abs(entryAmt - stmtAmt)
-          const dayDiff  = Math.abs(new Date(entry.date).getTime() - new Date(stmt.date).getTime()) / 86400000
-          if (amtDiff <= 1 && dayDiff <= 5) {
-            const score = amtDiff * 10 + dayDiff
-            if (!best || score < best.score) best = { id: entry.id, score }
-          }
-        }
-        if (best) {
-          usedEntries.add(best.id)
-          matched++
-          return { ...stmt, matchedEntryId: best.id }
-        }
-        return stmt
+      const { lines: matchedScoped, matchedCount } = autoMatchStatementLines({
+        statementLines: scoped,
+        cashbookEntries,
+        bankAccountId,
+        month,
       })
-      setBankStatementLines(newLines)
-      return matched
+      const byId = new Map(matchedScoped.map(l => [l.id, l]))
+      setBankStatementLines(prev => prev.map(l => byId.get(l.id) ?? l))
+      return matchedCount
     },
     saveBankRecon: (recon) => {
       if (!canManageFullFinanceAction(currentUser())) {

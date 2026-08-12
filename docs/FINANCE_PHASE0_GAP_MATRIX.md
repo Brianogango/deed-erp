@@ -127,9 +127,11 @@ Legend: **HAVE** · **PARTIAL** · **MISSING**
 
 | Item | Status | Evidence |
 |------|--------|----------|
-| Cashbook UI + month bank recon | **PARTIAL** | `Cashbook.tsx` + store recon APIs; finance seal |
-| Statement import / line-level match | **MISSING** | |
-| Outstanding payments clearing via bank | **MISSING** | Depends on Phase 2 docs |
+| Cashbook UI + month bank recon | **HAVE** | `Cashbook.tsx` + store recon; finance seal |
+| Statement line matching helpers | **HAVE** | `bank-statement-match.ts` + store auto-match |
+| Statement import (OFX/CSV) | **MISSING** | Manual lines only |
+| Bank charge / interest GL | **PARTIAL** | Phase 5 API when engine on (`6401` / `5105`) |
+| Outstanding payments clearing via bank | **PARTIAL** | Suggest API links statement ↔ Phase 2 unallocated; allocate still via payments API |
 
 ### Phase 6 — Tax
 
