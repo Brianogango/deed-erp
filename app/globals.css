@@ -450,37 +450,21 @@
   }
 
   .table-scroll {
-    @apply w-full max-w-full min-w-0 overflow-x-auto overscroll-x-contain;
+    @apply w-full max-w-full min-w-0 overflow-x-hidden overscroll-x-contain;
     border: 1px solid var(--border-lt);
     border-radius: 1rem;
     background: var(--bg-card);
     box-shadow: var(--shadow-xs);
-    scrollbar-width: thin;
-    scrollbar-color: var(--border-strong) transparent;
-    -webkit-overflow-scrolling: touch;
   }
 
-  .table-scroll::-webkit-scrollbar {
-    height: 8px;
-  }
-
-  .table-scroll::-webkit-scrollbar-track {
-    background: transparent;
-  }
-
-  .table-scroll::-webkit-scrollbar-thumb {
-    background: var(--border-strong);
-    border-radius: 999px;
-  }
-
-  /* Match DataTable JS breakpoint (<768 = mobile cards). Keep desktop
-     fill-width only at tablet+ so phone/card mode can collapse min-widths. */
+  /* Match DataTable JS breakpoint (<768 = mobile cards). Tables always fill
+     the card width — columns shrink/truncate instead of sideways scroll. */
   @media (min-width: 768px) {
     .table-scroll > .flex,
     .table-scroll > div {
-      /* Fill wide layouts while still allowing overflow for many columns */
-      min-width: 100%;
+      min-width: 0;
       width: 100%;
+      max-width: 100%;
     }
   }
 
@@ -685,25 +669,13 @@
     @apply w-full;
     display: block;
     max-width: 100%;
-    overflow-x: auto;
+    overflow-x: hidden;
     border-collapse: separate;
     border-spacing: 0;
     border: 1px solid var(--border-lt);
     border-radius: 1rem;
     background: var(--bg-card);
-    scrollbar-width: thin;
-    scrollbar-color: var(--border-strong) transparent;
-    -webkit-overflow-scrolling: touch;
     font-size: var(--fs-table);
-  }
-
-  .data-table::-webkit-scrollbar {
-    height: 8px;
-  }
-
-  .data-table::-webkit-scrollbar-thumb {
-    background: var(--border-strong);
-    border-radius: 999px;
   }
 
   .data-table thead,
@@ -711,14 +683,14 @@
   .data-table tfoot {
     display: table;
     width: 100%;
-    table-layout: auto;
+    table-layout: fixed;
   }
 
   @media (min-width: 768px) {
     .data-table thead,
     .data-table tbody,
     .data-table tfoot {
-      min-width: 680px;
+      min-width: 0;
     }
   }
 
@@ -3156,23 +3128,16 @@
   }
 
   /* ── dt-wrap: styled table container for standard module tables ── */
-  /* Allow horizontal overflow for wide desktop tables to avoid clipped columns. */
+  /* Fit the card — truncate cells instead of sideways scroll. */
   .dt-wrap {
     @apply w-full;
     border: 1px solid var(--border-lt);
     border-radius: 1rem;
     background: var(--bg-card);
     box-shadow: var(--shadow-xs);
-    overflow-x: auto;
+    overflow-x: hidden;
     overflow-y: hidden;
-    overscroll-behavior-x: contain;
-    scrollbar-width: thin;
-    scrollbar-color: var(--border-strong) transparent;
   }
-
-  .dt-wrap::-webkit-scrollbar { height: 8px; }
-  .dt-wrap::-webkit-scrollbar-track { background: transparent; }
-  .dt-wrap::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 999px; }
 
   /* ── dt-scroll: use ONLY for large analytical reports that cannot be redesigned ── */
   .dt-scroll {
@@ -3191,7 +3156,14 @@
   .dt-scroll::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 999px; }
 
   /* Any HTML <table> nested directly inside dt-wrap or dt-scroll gets consistent styling */
-  .dt-wrap > table,
+  .dt-wrap > table {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+  }
+
   .dt-scroll > table {
     width: max-content;
     min-width: 100%;
@@ -3234,6 +3206,17 @@
   .dt-scroll > table td {
     color: var(--text-2);
     vertical-align: middle;
+  }
+
+  .dt-wrap > table th,
+  .dt-wrap > table td {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 0; /* with table-layout:fixed, share columns evenly and ellipsize */
+  }
+
+  .dt-wrap > table th {
+    max-width: none;
   }
 
   /* ── Row action group ───────────────────────────────────────────────────── */

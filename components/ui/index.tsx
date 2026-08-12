@@ -987,10 +987,6 @@ export function Table({
 
   const columnKey = useCallback((col: { label: string }, index: number) => `${index}:${col.label}`, [])
 
-  const hasFluidColumn = useMemo(
-    () => cols.some(col => col.width && !/^\d+px$/.test(col.width)),
-    [cols],
-  )
 
   const grid = useMemo(() => {
     return cols
@@ -1003,22 +999,24 @@ export function Table({
           && stored >= MIN_PERSISTED_COL_WIDTH
           && stored <= MAX_PERSISTED_COL_WIDTH
         ) {
-          return `${Math.max(stored, col.minWidth ?? MIN_PERSISTED_COL_WIDTH)}px`
+          // Cap persisted widths so they can shrink inside the card (no h-scroll).
+          const px = Math.max(stored, col.minWidth ?? MIN_PERSISTED_COL_WIDTH)
+          return `minmax(0, ${px}px)`
         }
-        const width = col.width ?? 'minmax(8rem, 1fr)'
-        // Fixed px tracks stay fixed — never grow with minmax(..., 1fr), which
-        // caused Partner/Date overlap when many columns competed for space.
-        if (/^\d+px$/.test(width)) return width
+        const width = col.width ?? 'minmax(0, 1fr)'
+        // Fixed px → shrinkable max so dense tables fit without sideways scroll.
+        if (/^\d+px$/.test(width)) {
+          const px = Number.parseInt(width, 10)
+          return `minmax(0, ${Number.isFinite(px) ? px : 96}px)`
+        }
         if (/^\d+fr$/.test(width)) {
-          const fr = Number(width.replace('fr', ''))
-          // Give fr tracks a usable minimum so names don't collapse to zero.
-          return `minmax(${Math.max(6, Math.round(fr * 5))}rem, ${width})`
+          return `minmax(0, ${width})`
         }
-        // Prefer tighter minmax floors so dense ERP tables fit the card.
+        // Prefer zero-floor minmax so columns share space instead of overflowing.
         if (width.startsWith('minmax(')) {
           return width
-            .replace('minmax(14rem,', 'minmax(8rem,')
-            .replace('minmax(12rem,', 'minmax(7rem,')
+            .replace(/minmax\(\s*[\d.]+rem\s*,/g, 'minmax(0,')
+            .replace(/minmax\(\s*[\d.]+px\s*,/g, 'minmax(0,')
         }
         return width
       })
@@ -1165,9 +1163,10 @@ export function Table({
       <div
         className="flex flex-col"
         style={{
-          // Fluid grids fill the card; only fixed-heavy tables keep a scroll floor.
+          // Always fill the card — never force a wider minWidth that creates h-scroll.
           width: '100%',
-          minWidth: hasFluidColumn ? '100%' : `max(${minWidth}px, 100%)`,
+          minWidth: 0,
+          maxWidth: '100%',
           '--table-cols': grid,
         } as React.CSSProperties}
         role="grid"
