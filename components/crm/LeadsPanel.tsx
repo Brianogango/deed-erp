@@ -110,6 +110,7 @@ export default function LeadsPanel({
   const [showForm, setShowForm] = useState(false)
   const [detail, setDetail] = useState<LeadRow | null>(null)
   const [convertingId, setConvertingId] = useState<string | null>(null)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
   const [savingOwnerId, setSavingOwnerId] = useState<string | null>(null)
   const [form, setForm] = useState({
     name: '',
@@ -182,6 +183,28 @@ export default function LeadsPanel({
       showToast(err instanceof Error ? err.message : 'Convert failed', 'error')
     } finally {
       setConvertingId(null)
+    }
+  }
+
+  async function deleteLead(row: LeadRow) {
+    const label = row.name || 'this lead'
+    const convertedNote = row.stage === 'converted'
+      ? ' This lead is already converted — the opportunity will stay; only the lead record is removed.'
+      : ''
+    if (!window.confirm(`Delete “${label}”? This cannot be undone.${convertedNote}`)) return
+
+    setDeletingId(row.id)
+    try {
+      const res = await fetch(`/api/leads/${row.id}`, { method: 'DELETE' })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || 'Delete failed')
+      showToast('Lead deleted', 'success')
+      if (detail?.id === row.id) setDetail(null)
+      setLeads(prev => prev.filter(l => l.id !== row.id))
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Delete failed', 'error')
+    } finally {
+      setDeletingId(null)
     }
   }
 
@@ -333,12 +356,21 @@ export default function LeadsPanel({
                 <button
                   type="button"
                   className="btn-primary text-[10px] py-1 px-2"
-                  disabled={convertingId === row.id}
+                  disabled={convertingId === row.id || deletingId === row.id}
                   onClick={() => void convertLead(row.id)}
                 >
                   {convertingId === row.id ? 'Converting…' : 'Convert'}
                 </button>
               ) : null}
+              <button
+                type="button"
+                className="btn-outline text-[10px] py-1 px-2"
+                style={{ color: 'var(--danger)', borderColor: 'var(--danger)' }}
+                disabled={deletingId === row.id || convertingId === row.id}
+                onClick={() => void deleteLead(row)}
+              >
+                {deletingId === row.id ? 'Deleting…' : 'Delete'}
+              </button>
             </div>
           )}
         />
@@ -425,18 +457,29 @@ export default function LeadsPanel({
               </div>
             )}
           </div>
-          <div className="flex justify-end gap-2 mt-4">
-            <button type="button" className="btn-outline text-xs" onClick={() => setDetail(null)}>Close</button>
-            {detail.stage !== 'converted' && detail.stage !== 'lost' && (
-              <button
-                type="button"
-                className="btn-primary text-xs"
-                disabled={convertingId === detail.id}
-                onClick={() => void convertLead(detail.id)}
-              >
-                {convertingId === detail.id ? 'Converting…' : 'Convert'}
-              </button>
-            )}
+          <div className="flex justify-between gap-2 mt-4">
+            <button
+              type="button"
+              className="btn-outline text-xs"
+              style={{ color: 'var(--danger)', borderColor: 'var(--danger)' }}
+              disabled={deletingId === detail.id || convertingId === detail.id}
+              onClick={() => void deleteLead(detail)}
+            >
+              {deletingId === detail.id ? 'Deleting…' : 'Delete'}
+            </button>
+            <div className="flex gap-2">
+              <button type="button" className="btn-outline text-xs" onClick={() => setDetail(null)}>Close</button>
+              {detail.stage !== 'converted' && detail.stage !== 'lost' && (
+                <button
+                  type="button"
+                  className="btn-primary text-xs"
+                  disabled={convertingId === detail.id || deletingId === detail.id}
+                  onClick={() => void convertLead(detail.id)}
+                >
+                  {convertingId === detail.id ? 'Converting…' : 'Convert'}
+                </button>
+              )}
+            </div>
           </div>
         </Modal>
         )
