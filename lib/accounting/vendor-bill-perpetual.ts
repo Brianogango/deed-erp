@@ -7,8 +7,9 @@
  */
 
 import { COMPANY_ACCOUNT_FALLBACKS, formatAccountLabel } from '@/lib/product-accounts'
+import { labelForRole } from '@/lib/accounting/coa-roles'
 
-export const GRNI_ACCOUNT_LABEL = '3201 - Accruals'
+export const GRNI_ACCOUNT_LABEL = labelForRole('grni')
 export const PRICE_DIFF_ACCOUNT_CODE = COMPANY_ACCOUNT_FALLBACKS.priceDifferenceAccountCode
 
 export type VendorBillLineInput = {

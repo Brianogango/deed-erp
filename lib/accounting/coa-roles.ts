@@ -1,0 +1,79 @@
+/**
+ * Live CoA role → code/label map (Finance Phase 1).
+ *
+ * Do NOT renumber production accounts. Guide concepts resolve through these roles.
+ * Labels match historical posting strings in invoice-journals (not always full CoA names).
+ */
+
+export type CoaRole =
+  | 'ar'
+  | 'ap'
+  | 'output_vat'
+  | 'customer_deposits'
+  | 'customer_credits'
+  | 'inventory'
+  | 'cogs'
+  | 'grni'
+  | 'revenue_products'
+  | 'bank_absa'
+  | 'bank_equity'
+  | 'cash_mobile'
+  | 'employee_reimbursements'
+
+/** Canonical live codes — keep stable. */
+export const COA_ROLE_CODES: Record<CoaRole, string> = {
+  ar: '1800',
+  ap: '3000',
+  output_vat: '3301',
+  customer_deposits: '3100',
+  customer_credits: '3102',
+  inventory: '1200',
+  cogs: '6001',
+  grni: '3201',
+  revenue_products: '5000',
+  bank_absa: '2201',
+  bank_equity: '2202',
+  cash_mobile: '2211',
+  employee_reimbursements: '3105',
+}
+
+/**
+ * Labels used on journal lines today.
+ * Prefer these over CoA template display names so dual-write refs stay consistent.
+ */
+export const COA_ROLE_LABELS: Record<CoaRole, string> = {
+  ar: '1800 - Accounts Receivable',
+  ap: '3000 - Accounts Payable',
+  output_vat: '3301 - Output VAT Payable',
+  customer_deposits: '3100 - Customer Deposits',
+  customer_credits: '3102 - Customer Credits',
+  inventory: '1200 - Inventory',
+  cogs: '6001 - Cost of Goods Sold',
+  grni: '3201 - Accruals',
+  revenue_products: '5000',
+  bank_absa: '2201 - ABSA Bank',
+  bank_equity: '2202 - Equity Bank',
+  cash_mobile: '2211 - Petty Cash / Mobile Money',
+  employee_reimbursements: '3105 - Employee Reimbursements Payable',
+}
+
+export function labelForRole(role: CoaRole): string {
+  return COA_ROLE_LABELS[role]
+}
+
+export function codeForRole(role: CoaRole): string {
+  return COA_ROLE_CODES[role]
+}
+
+/** Resolve payment method → bank/cash role (customer receipts / vendor payouts). */
+export function cashAccountRoleForMethod(method?: string): CoaRole {
+  switch (String(method || '').toLowerCase()) {
+    case 'bank_transfer':
+    case 'bank':
+      return 'bank_absa'
+    case 'mpesa':
+    case 'cash':
+    default:
+      return 'cash_mobile'
+  }
+}
