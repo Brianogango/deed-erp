@@ -12,6 +12,7 @@ import {
   extractBlobIds,
   type BlobParityCheck,
 } from '@/lib/blob-cutover'
+import { evaluateJournalDeepParity, extractJournalRefs } from '@/lib/accounting/journal-parity'
 
 async function readAppState(key: string): Promise<string | null> {
   try {
@@ -67,6 +68,8 @@ function mappings(): Record<string, Mapping> {
     deed_journalEntries: {
       prismaTable: 'journal_entries',
       count: () => prisma.journalEntry.count(),
+      // Engine / STK / FX / reconfig write Prisma-only journals — blob ⊆ Prisma is the gate.
+      allowPrismaAhead: true,
     },
     deed_stockReservations: {
       prismaTable: 'stock_reservations',
@@ -170,7 +173,7 @@ export async function verifyBlobParity(keys?: string[]): Promise<BlobParityCheck
       idOverlap = await sampleIdOverlap(raw, mapping.overlap)
     }
 
-    checks.push(evaluateParity({
+    let check = evaluateParity({
       blobKey,
       prismaTable: mapping.prismaTable,
       blobCount,
@@ -179,10 +182,100 @@ export async function verifyBlobParity(keys?: string[]): Promise<BlobParityCheck
       allowPrismaAhead: mapping.allowPrismaAhead,
       hardStopWhenUnequal: mapping.hardStopWhenUnequal,
       idOverlap,
-    }))
+    })
+
+    // Phase 9: journals certify on ref coverage (blob ⊆ Prisma), not count equality alone.
+    if (blobKey === 'deed_journalEntries') {
+      const deep = await runJournalDeepParity(raw, prismaCount)
+      check = {
+        ...check,
+        parityOk: check.parityOk && deep.ok,
+        blockedReason: !deep.ok
+          ? deep.blockedReason
+          : check.parityOk
+            ? undefined
+            : check.blockedReason,
+        details: {
+          ...(check.details || {}),
+          journalDeepParity: deep,
+          allowPrismaAhead: true,
+          identityKey: 'ref',
+        },
+      }
+    }
+
+    checks.push(check)
   }
 
   return checks
+}
+
+/** Director-facing deep journal parity (read-only). */
+export async function verifyJournalParityReport() {
+  const raw = await readAppState('deed_journalEntries')
+  const prismaCount = await safeCount(() => prisma.journalEntry.count())
+  const deep = await runJournalDeepParity(raw, prismaCount)
+  const certificates = await listCutoverCertificates()
+  const journalCert = certificates.find(c => c.blobKey === 'deed_journalEntries') ?? null
+  return {
+    blobKey: 'deed_journalEntries',
+    prismaTable: 'journal_entries',
+    ...deep,
+    certificate: journalCert
+      ? {
+          id: journalCert.id,
+          status: journalCert.status,
+          parityOk: journalCert.parityOk,
+          certifiedAt: journalCert.certifiedAt,
+          certifiedBy: journalCert.certifiedBy,
+          notes: journalCert.notes,
+        }
+      : null,
+    note: 'Certify ≠ retire. Prisma-ahead refs (STK/FX/engine) are allowed; every blob ref must exist in Prisma.',
+  }
+}
+
+async function runJournalDeepParity(raw: string | null, prismaCount: number | null) {
+  const prismaRefRows = await prisma.journalEntry.findMany({
+    select: { ref: true },
+  }).catch(() => [] as Array<{ ref: string }>)
+
+  const prismaRefs = prismaRefRows.map(r => r.ref)
+  const blobRefs = extractJournalRefs(raw)
+
+  // Sample overlapping refs for amount drift (avoid loading every line).
+  const prismaRefSet = new Set(prismaRefs)
+  const overlapSample = blobRefs.filter(r => prismaRefSet.has(r)).slice(0, 25)
+  const prismaTotalsByRef = new Map<string, { debit: number; credit: number }>()
+  if (overlapSample.length > 0) {
+    const sampleRows = await prisma.journalEntry.findMany({
+      where: { ref: { in: overlapSample } },
+      select: {
+        ref: true,
+        lines: { select: { debit: true, credit: true } },
+      },
+    }).catch(() => [] as Array<{ ref: string; lines: Array<{ debit: unknown; credit: unknown }> }>)
+    for (const row of sampleRows) {
+      let debit = 0
+      let credit = 0
+      for (const line of row.lines) {
+        debit += Number(line.debit || 0)
+        credit += Number(line.credit || 0)
+      }
+      prismaTotalsByRef.set(row.ref, {
+        debit: Math.round(debit * 100) / 100,
+        credit: Math.round(credit * 100) / 100,
+      })
+    }
+  }
+
+  return evaluateJournalDeepParity({
+    blobRaw: raw,
+    prismaRefs,
+    prismaTotalsByRef,
+    prismaCount: prismaCount ?? prismaRefs.length,
+    amountSampleSize: 25,
+  })
 }
 
 export async function listCutoverCertificates() {
