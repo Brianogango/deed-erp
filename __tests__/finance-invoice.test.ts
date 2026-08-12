@@ -181,9 +181,20 @@ describe('enforcePostedInvoiceImmutability (FIN-001)', () => {
     expect(rejected[0].fields).toEqual(expect.arrayContaining(['total', 'subtotal', 'date', 'partnerName']))
   })
 
-  it('rejects an invalid status transition away from posted (e.g. back to draft)', () => {
-    const current = [postedInvoice()]
-    const incoming = [postedInvoice({ status: 'draft' })]
+  it('allows unpaid posted → draft (Reset to Draft)', () => {
+    const current = [postedInvoice({ amountPaid: 0 })]
+    const incoming = [postedInvoice({ status: 'draft', amountPaid: 0 })]
+    const { merged, rejected } = enforcePostedInvoiceImmutability(current, incoming) as {
+      merged: typeof current
+      rejected: unknown[]
+    }
+    expect(merged[0].status).toBe('draft')
+    expect(rejected).toHaveLength(0)
+  })
+
+  it('rejects paid posted → draft (must cancel / credit instead)', () => {
+    const current = [postedInvoice({ amountPaid: 1000 })]
+    const incoming = [postedInvoice({ status: 'draft', amountPaid: 0 })]
     const { merged, rejected } = enforcePostedInvoiceImmutability(current, incoming) as {
       merged: typeof current
       rejected: { id: string; fields: string[] }[]
