@@ -20,6 +20,8 @@ export interface ParsedInboundEmail {
   dateIso?: string
   inReplyTo?: string
   references?: string
+  /** Provider-native thread id when available (e.g. Gmail X-GM-THRID). */
+  providerThreadId?: string
   autoSubmitted?: string
   listUnsubscribe?: string
   precedence?: string

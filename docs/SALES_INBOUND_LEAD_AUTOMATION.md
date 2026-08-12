@@ -1,6 +1,7 @@
 # First automation: Inbound sales@ → CRM → notify sales
 
-Status: **V2 live** — relevance filter + triage (junk skipped, weak → Needs review, RFQ → assign + notify).
+Status: **V3 foolproof pipeline** — idempotency, hard exclusions, thread resolution,
+intent classification (money ≠ lead), contact match, confidence bands, review queue.
 
 ## Why this one first
 
@@ -12,25 +13,44 @@ Using the 3-question filter (frequency · same steps · delay costs money):
 | Same steps? | Yes — fetch → skip noise → create lead → assign → notify |
 | Delay costs? | Yes — cold leads / missed quotes |
 
-**Not first:** invoice-paid customer receipts (channels exist; auto-send does not). Do that as automation #2.
+## Pipeline (V3)
 
-## What already runs in production
+```
+IMAP message
+  → Idempotency (provider message id unique)
+  → Normalize (email / phone / subject / clean body / thread id)
+  → Hard exclusion (bank / payment / marketing / internal…)
+  → Thread resolution (one active lead per provider thread)
+  → Sales-intent classification (rules + optional Gemini; money ≠ lead)
+  → Confidence: auto ≥0.90 · review 0.75–0.89 · else ignore
+  → Contact resolution (exact email/phone; enrich only empty fields)
+  → Create lead / link thread / needs_review / skip
+  → Audit row in sales_inbound_emails
+  → Advisory lock around mailbox poll
+```
+
+**Invariants**
+
+1. Presence of money does not imply sales intent.
+2. Buying intent can exist without an amount.
+3. Exact normalized email reuses the existing Client.
+4. Same provider message never processed twice.
+5. One provider thread → at most one active lead (unless human splits).
+6. Classifier failure → `REVIEW_REQUIRED`, never auto-lead.
+7. Conflicting contact data is not silently overwritten.
+
+## What runs in production
 
 - Contabo cron every 5 minutes: `/etc/cron.d/deed-erp-sales-inbox` → `POST /api/cron/sales-inbox-leads`
 - IMAP poll of `sales@` → CRM `Lead` (`source=inbound_email`)
-- Skip internal/auto-replies; dedupe by Message-ID
-- Auto-assign (sticky by org + round-robin) when Settings → Auto-assign Leads is on
-- In-app bell for the assigned owner
+- Auto-assign (sticky by org + round-robin) when Settings → Auto-assign Leads is on **and** disposition is auto-create
+- In-app bell + email for the assigned owner
 - DIA Actions: `import_sales_inbox_leads` / Insights: `summarize_sales_leads`
-
-## V1 gap closed in this change
-
-Email the **assigned sales rep** (To) and **sales team mailbox** (Cc when different) when a lead is created from IMAP, so reps see RFQs without keeping the ERP open.
 
 ## How to operate
 
 ```bash
-# Dry-run (director session or CRON_SECRET)
+# Dry-run (director session or CRON_SECRET) — no CRM mutation from pipeline creates
 curl -sS -X POST -H "Authorization: Bearer $CRON_SECRET" \
   -H "Content-Type: application/json" \
   -d '{"dryRun":true}' \
@@ -42,65 +62,65 @@ curl -sS -X POST -H "Authorization: Bearer $CRON_SECRET" \
   http://127.0.0.1:3000/api/cron/sales-inbox-leads
 ```
 
-Env (Contabo `.env`): `SALES_EMAIL`, `SALES_SMTP_PASS` / `SALES_IMAP_PASS`, `CRON_SECRET`, `SALES_TEAM_EMAIL`, `NEXT_PUBLIC_APP_URL`.
+Apply DB migration (additive):
 
-Logs: `/var/log/deed-erp-sales-inbox.log`
+```bash
+cd /var/www/deed-erp
+DATABASE_URL=… node scripts/run-safe-sales-inbound-email-pipeline.mjs
+```
 
-CRM: **CRM → Leads** (filter source inbound email). DIA: “Import sales@ leads” / “Summarize email leads”.
-
-
-## Relevance filter (keep CRM clean)
-
-Three layers work together:
-
-### 1. Mailbox rules (ops — do this first)
-
-CRM only polls **`SALES_IMAP_MAILBOX`** (default `INBOX`). In the sales@ webmail / server:
-
-1. Create folders e.g. `CRM-Ignore`, `Newsletters`, `Vendor-blasts`
-2. Add server-side filters: newsletters, known spam senders, internal FYI → move **out of INBOX**
-3. Leave real buyer / procurement mail in INBOX
-
-Optional env:
+## Configuration
 
 | Env | Purpose |
 |-----|---------|
-| `SALES_IMAP_MAILBOX` | Folder to poll (default `INBOX`) |
-| `SALES_INBOX_BLOCK_DOMAINS` | Extra comma-separated domains to never import |
-| `SALES_INBOX_BLOCK_LOCALS` | Extra local-parts to never import (`jobs`, `careers`, …) |
+| `SALES_IMAP_*` | Mailbox connection |
+| `SALES_INBOX_MODE` | `shadow` \| `review` \| `auto` |
+| `SALES_INBOX_AUTO_CREATE_THRESHOLD` | Default `0.9` |
+| `SALES_INBOX_REVIEW_THRESHOLD` | Default `0.75` |
+| `SALES_INBOX_AUTO_CREATE_ENABLED` | Default `true` |
+| `SALES_INBOX_BLOCK_DOMAINS` / `SALES_INBOX_BLOCK_LOCALS` | Extra hard skips |
+| `SALES_INBOX_INTERNAL_DOMAINS` | Deed-controlled domains |
+| `SALES_INBOX_BANK_SENDERS` / `SALES_INBOX_SUPPLIER_SENDERS` | Known domains |
+| `SALES_INBOX_AI_CLASSIFIER` | `auto` (default) \| `true` \| `false` — Gemini when key present |
+| `SALES_INBOX_GEMINI_MODEL` | Optional override (else `GEMINI_MODEL`) |
+| `SALES_INBOX_CLASSIFIER_VERSION` | Audit label override |
+| `CRON_SECRET` | Cron auth |
+| `SALES_TEAM_EMAIL` | Cc / fallback notify |
 
-### 2. Hard skip (no lead created)
+Logs: `/var/log/deed-erp-sales-inbox.log`
 
-Already skipped: internal Deed domains, auto-replies / OOO, list-unsubscribe / bulk, undeliverable subjects.
+CRM:
 
-Also skipped now:
+- **CRM → Leads** — stage **Needs review** for medium confidence / conflicts
+- **CRM → Email review** — accept / reject / not-sales + 72h dry-run report
+- **CRM → Duplicates** — merge same email/phone contacts
 
-- Blocked locals: `noreply`, `newsletter`, `marketing`, …
-- Blocked ESP domains: Mailchimp, SendGrid, SES, …
-- Promo subjects/bodies: webinar, SEO blast, crypto, “limited time”, …
+## Disposition matrix
 
-Skipped messages are marked seen so they are not re-polled.
+| Decision | Stage | Assign + notify |
+|----------|-------|-----------------|
+| HARD_FILTERED / NON_SALES | none | no |
+| LINK_EXISTING_LEAD | existing | no (notes appended) |
+| REVIEW_REQUIRED | `needs_review` | no |
+| LEAD_CREATED | `new` | yes when Auto-assign on |
+| SHADOW_RECORDED | none | no (classification only) |
 
-### 3. Triage vs accept
+## Tests
 
-| Disposition | Stage | Assign + notify |
-|-------------|-------|-----------------|
-| **accept** (RFQ-shaped: quote/RFQ language, products, qty, corporate domain, attachments, …) | `new` | Yes (when Auto-assign is on) |
-| **review** (weak / unclear — e.g. “Hi” from Gmail) | `needs_review` | No — park for human triage in CRM |
+`npm test -- --run __tests__/sales-inbox-pipeline.test.ts`
 
-CRM → Leads → stage **Needs review**. Promote to New / assign when real.
+Covers RFQ, bank/payment/marketing false positives, thread reuse, email/phone match,
+enrichment vs conflict, prompt-injection ignore, AI failure → review, shadow mode,
+attachment evidence, advisory lock key.
 
-Cron / DIA import response includes `skipped` and `reviewQueued`.
+## Ops extras
 
-## Success metrics (lightweight)
+```bash
+# Historical dry-run report (no CRM writes)
+curl -sS -X POST -H "Authorization: Bearer $CRON_SECRET" \
+  -H "Content-Type: application/json" \
+  -d '{"lookbackHours":72,"limit":50}' \
+  http://127.0.0.1:3000/api/cron/sales-inbox-dry-run
+```
 
-- Leads created from `inbound_email` per week
-- Time from email received → lead in CRM (should be ≤ 5 min)
-- Rep response: open CRM / reply to customer
-
-## Out of scope (later)
-
-- WhatsApp/SMS ping to rep on accept
-- Move skipped IMAP mail into a Junk folder automatically
-- WhatsApp Business as a lead inbox
-- Website form → lead webhook
+Mailbox processor takes a Postgres advisory lock so overlapping crons do not double-create.

@@ -152,6 +152,7 @@ export async function fetchSalesInboxEmails(opts: {
           references: parsed.references
             ? (Array.isArray(parsed.references) ? parsed.references.join(' ') : String(parsed.references))
             : undefined,
+          providerThreadId: headerValue(parsed.headers, 'x-gm-thrid') || undefined,
           autoSubmitted: headerValue(parsed.headers, 'auto-submitted'),
           listUnsubscribe: headerValue(parsed.headers, 'list-unsubscribe'),
           precedence: headerValue(parsed.headers, 'precedence'),
