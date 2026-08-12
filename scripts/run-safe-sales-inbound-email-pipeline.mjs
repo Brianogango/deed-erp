@@ -4,9 +4,13 @@
  * Usage (Contabo as postgres OS user or with DATABASE_URL):
  *   node scripts/run-safe-sales-inbound-email-pipeline.mjs
  */
-const { readFileSync } = require('fs')
-const { join } = require('path')
-const { Client } = require('pg')
+import { readFileSync } from 'fs'
+import { dirname, join } from 'path'
+import { fileURLToPath } from 'url'
+import pg from 'pg'
+
+const { Client } = pg
+const __dirname = dirname(fileURLToPath(import.meta.url))
 
 async function main() {
   const url = process.env.DATABASE_URL
