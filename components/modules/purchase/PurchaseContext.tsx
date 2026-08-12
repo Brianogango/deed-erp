@@ -6,7 +6,7 @@ import {
   type Receipt, type LocationId, type POLine, type Account,
 } from '@/lib/store'
 
-type MainView = 'orders' | 'receipts' | 'returns' | 'bills' | 'tradein'
+type MainView = 'orders' | 'receipts' | 'returns' | 'bills'
 type SubView  = 'list' | 'form' | 'receive'
 type ImportRow = {
   raw: Record<string, string>; productId: string; productName: string; accountCode?: string
