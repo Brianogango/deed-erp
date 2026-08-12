@@ -366,6 +366,10 @@ export const useHrStore = create<HrState>((set, get) => ({
     const leave = get().leaveRequests.find(req => req.id === id)
     if (!leave) return
     const user = ctx.currentUser()
+    if (!approved && !String(note ?? '').trim()) {
+      ctx.showToast('Add a note explaining why the leave was declined', 'error')
+      return
+    }
 
     // Nobody decides their own leave — not even directors/HR.
     const leaveEmp = get().employees.find(e => e.id === leave.employeeId)
@@ -422,7 +426,7 @@ export const useHrStore = create<HrState>((set, get) => ({
       ctx.pushNotif({
         userId: empUserId, type: 'leave',
         title: approved ? 'Leave request approved ✓' : 'Leave request rejected',
-        body: `Your ${leave.leaveType.replace(/_/g, ' ')} request (${leave.days} day${leave.days !== 1 ? 's' : ''}, ${leave.startDate} – ${leave.endDate}) has been ${approved ? 'approved' : 'rejected'} by ${user!.name}.`,
+        body: `Your ${leave.leaveType.replace(/_/g, ' ')} request (${leave.days} day${leave.days !== 1 ? 's' : ''}, ${leave.startDate} – ${leave.endDate}) has been ${approved ? 'approved' : 'rejected'} by ${user!.name}.${note?.trim() ? ` Note: ${note.trim()}` : ''}`,
         module: 'hr', path: '?tab=self_service', icon: approved ? '✅' : '❌',
         entityKey: `leave:${id}:decided`,
         excludeUserId: user!.id,

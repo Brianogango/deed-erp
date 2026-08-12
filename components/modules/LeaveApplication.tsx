@@ -2,7 +2,7 @@
 import { useState } from 'react'
 import { useApp, fmtDate, LeaveRequest, LeaveBalance } from '@/lib/store'
 import { useHrStore } from '@/hooks/useHrStore'
-import { Badge, Field, Input, Modal, Select, ModuleHeader } from '@/components/ui'
+import { Badge, Field, Input, Textarea, Modal, Select, ModuleHeader } from '@/components/ui'
 import { PrimaryActionButton } from '@/components/erp'
 import { DataTable, type ColumnDef } from '@/components/data-table'
 import { Fa } from '@/components/icons'
@@ -97,6 +97,7 @@ export default function LeaveApplication() {
   // Admin approve/reject
   const [decideId, setDecideId]   = useState<string | null>(null)
   const [decideNote, setDecideNote] = useState('')
+  const [decideError, setDecideError] = useState('')
 
   // Admin list filter
   const [adminFilter, setAdminFilter] = useState<'all' | LeaveRequest['status']>('all')
@@ -175,8 +176,13 @@ export default function LeaveApplication() {
 
   const handleDecide = (approved: boolean) => {
     if (!decideId) return
-    decideLeaveRequest(decideId, approved, decideNote)
-    setDecideId(null); setDecideNote('')
+    const note = decideNote.trim()
+    if (!approved && !note) {
+      setDecideError('Add a note so the applicant knows why the leave was declined.')
+      return
+    }
+    decideLeaveRequest(decideId, approved, note || undefined)
+    setDecideId(null); setDecideNote(''); setDecideError('')
   }
 
   const statusColor = (s: LeaveRequest['status']) =>
@@ -365,6 +371,11 @@ export default function LeaveApplication() {
                   exportValue: (r: LeaveRequest) => r.reason,
                 },
                 {
+                  key: 'hrNote', label: 'HR note', priority: 2, width: '1fr',
+                  render: (r: LeaveRequest) => <span className="text-[11px] text-t3 truncate">{r.reviewNotes || '—'}</span>,
+                  exportValue: (r: LeaveRequest) => r.reviewNotes ?? '',
+                },
+                {
                   key: 'submitted', label: 'Submitted', priority: 3, width: '90px',
                   render: (r: LeaveRequest) => <span className="text-[10px] text-t3">{fmtDate(r.submittedDate)}</span>,
                   exportValue: (r: LeaveRequest) => r.submittedDate,
@@ -467,6 +478,11 @@ export default function LeaveApplication() {
                     render: (r: LeaveRequest) => <span className="text-[11px] text-t3 truncate">{r.reason}</span>,
                     exportValue: (r: LeaveRequest) => r.reason,
                   },
+                  {
+                    key: 'hrNote', label: 'HR note', priority: 2, width: '1fr',
+                    render: (r: LeaveRequest) => <span className="text-[11px] text-t3 truncate">{r.reviewNotes || '—'}</span>,
+                    exportValue: (r: LeaveRequest) => r.reviewNotes ?? '',
+                  },
                 ] as ColumnDef<LeaveRequest>[]}
                 rows={filteredAll}
                 rowKey={r => r.id}
@@ -477,7 +493,7 @@ export default function LeaveApplication() {
                     {r.status === 'pending_hr' && canDecideLeave(r) ? (
                       <button
                         style={{ background: 'var(--success-bg)', border: '1px solid var(--success-bg)', cursor: 'pointer', color: 'var(--success)', fontSize: 10, borderRadius: 4, padding: '3px 9px', fontWeight: 600 }}
-                        onClick={() => { setDecideId(r.id); setDecideNote('') }}>
+                        onClick={() => { setDecideId(r.id); setDecideNote(''); setDecideError('') }}>
                         <Fa icon={faCheck} className="mr-0.5" /> Decide
                       </button>
                     ) : (
@@ -718,11 +734,19 @@ export default function LeaveApplication() {
                   <p>{req.reason}</p>
                 </div>
               </div>
-              <Field label="Decision Note (optional)">
-                <Input value={decideNote} onChange={setDecideNote} placeholder="Optional note to employee..." />
+              <Field label="Note to applicant" hint="Required when declining. Included in the decision email and leave history.">
+                <Textarea
+                  value={decideNote}
+                  onChange={v => { setDecideNote(v); if (decideError) setDecideError('') }}
+                  rows={3}
+                  placeholder="e.g. Approved — cover confirmed / Declined — insufficient cover that week"
+                />
               </Field>
+              {decideError && (
+                <p className="text-[11px] mt-2" style={{ color: 'var(--danger)' }}>{decideError}</p>
+              )}
               <div className="flex gap-2 justify-end pt-2">
-                <button className="btn-outline" onClick={() => setDecideId(null)}>Cancel</button>
+                <button className="btn-outline" onClick={() => { setDecideId(null); setDecideError('') }}>Cancel</button>
                 <button
                   style={{ background: 'var(--danger-bg)', border: '1px solid var(--danger)', color: 'var(--danger)', borderRadius: 8, padding: '8px 18px', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}
                   onClick={() => handleDecide(false)}>
