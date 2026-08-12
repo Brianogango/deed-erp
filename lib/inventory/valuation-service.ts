@@ -1,6 +1,9 @@
 import 'server-only'
 import prisma from '@/lib/prisma'
 import { createJournalEntry } from '@/lib/accounting/journal-service'
+import { isAccountingPostingEngineEnabled } from '@/lib/accounting/posting-flag'
+import { postStockJournal } from '@/lib/accounting/posting-service'
+import { labelForRole } from '@/lib/accounting/coa-roles'
 import { loadAppState } from '@/lib/server-store'
 import { COMPANY_ACCOUNT_FALLBACKS, formatAccountLabel } from '@/lib/product-accounts'
 import { GRNI_ACCOUNT_LABEL } from '@/lib/accounting/vendor-bill-perpetual'
@@ -17,6 +20,41 @@ const DEFAULT_WAREHOUSE_ID = 'main'
 const PRICE_DIFF_LABEL = formatAccountLabel(COMPANY_ACCOUNT_FALLBACKS.priceDifferenceAccountCode, [])
 const WRITE_OFF_LABEL = formatAccountLabel(COMPANY_ACCOUNT_FALLBACKS.writeOffAccountCode, [])
 const ADJUSTMENT_LABEL = formatAccountLabel(COMPANY_ACCOUNT_FALLBACKS.adjustmentAccountCode, [])
+
+async function persistStockJournal(params: {
+  ref: string
+  description: string
+  sourceType: string
+  sourceId?: string | null
+  lines: Array<{ accountLabel: string; label: string; debit: number; credit: number }>
+  createdById?: string | null
+}) {
+  if (isAccountingPostingEngineEnabled()) {
+    return postStockJournal({
+      ref: params.ref,
+      description: params.description,
+      sourceType: params.sourceType,
+      sourceId: params.sourceId,
+      createdById: params.createdById,
+      lines: params.lines.map(l => ({
+        accountLabel: l.accountLabel,
+        description: l.label,
+        debit: l.debit,
+        credit: l.credit,
+      })),
+    })
+  }
+  return createJournalEntry({
+    ref: params.ref,
+    journalCode: 'STK',
+    description: params.description,
+    sourceType: params.sourceType,
+    sourceId: params.sourceId,
+    createdById: params.createdById,
+    skipIfExists: true,
+    lines: params.lines,
+  })
+}
 
 export type CostingMethod = 'average' | 'fifo' | 'standard'
 
@@ -88,8 +126,8 @@ async function markProcessed(params: {
 
 async function resolveStockAccounts(_productId: string) {
   return {
-    inventoryLabel: formatAccountLabel(COMPANY_ACCOUNT_FALLBACKS.inventoryAccountCode, []),
-    cogsLabel: formatAccountLabel(COMPANY_ACCOUNT_FALLBACKS.cogsAccountCode, []),
+    inventoryLabel: labelForRole('inventory'),
+    cogsLabel: labelForRole('cogs'),
   }
 }
 
@@ -249,15 +287,13 @@ async function applyOutboundValuation(params: {
           { accountLabel: cogsLabel, label: 'COGS', debit: applied.totalCost, credit: 0 },
           { accountLabel: inventoryLabel, label: 'Inventory reduction', debit: 0, credit: applied.totalCost },
         ]
-    await createJournalEntry({
+    await persistStockJournal({
       ref: stockValuationJournalRef(params.kind, params.reference || params.movementId || '', params.productId),
-      journalCode: 'STK',
       description: params.journalDescription
         || `Stock ${params.kind} ${applied.qty} @ ${unitCostUsed}${costingMethod === 'fifo' ? ' FIFO' : costingMethod === 'standard' ? ' std' : ' avg'}`,
       sourceType: `stock_${params.kind}`,
       sourceId: params.reference || params.movementId || params.productId,
       createdById: params.userId,
-      skipIfExists: true,
       lines,
     })
   }
@@ -444,14 +480,12 @@ export async function processStockReceipt(params: {
           : []),
       { accountLabel: GRNI_ACCOUNT_LABEL, label: 'GRNI / Accruals', debit: 0, credit: grniCredit || invDebit },
     ]
-    await createJournalEntry({
+    await persistStockJournal({
       ref: stockValuationJournalRef('receipt', params.reference || params.movementId || '', params.productId),
-      journalCode: 'STK',
       description: `Stock receipt ${applied.qty} @ ${applied.unitCost}${costingMethod === 'fifo' ? ' (FIFO)' : costingMethod === 'standard' ? ' (std)' : ''}`,
       sourceType: 'stock_receipt',
       sourceId: params.reference || params.movementId || params.productId,
       createdById: params.userId,
-      skipIfExists: true,
       lines,
     })
   }
@@ -608,14 +642,12 @@ export async function processStockCustomerReturn(params: {
 
   if (params.postJournal !== false && applied.totalCost > 0) {
     const { inventoryLabel, cogsLabel } = await resolveStockAccounts(params.productId)
-    await createJournalEntry({
+    await persistStockJournal({
       ref: stockValuationJournalRef('customer_return', params.reference || '', params.productId),
-      journalCode: 'STK',
       description: `Customer return ${applied.qty} @ ${unitCost}`,
       sourceType: 'stock_customer_return',
       sourceId: params.reference || params.productId,
       createdById: params.userId,
-      skipIfExists: true,
       lines: [
         { accountLabel: inventoryLabel, label: 'Inventory restore', debit: applied.totalCost, credit: 0 },
         { accountLabel: cogsLabel, label: 'COGS reversal', debit: 0, credit: applied.totalCost },
@@ -767,14 +799,12 @@ export async function processStockAdjustment(params: {
 
   if (params.postJournal !== false && applied.totalCost > 0) {
     const { inventoryLabel } = await resolveStockAccounts(params.productId)
-    await createJournalEntry({
+    await persistStockJournal({
       ref: stockValuationJournalRef('adjustment_add', params.reference || '', params.productId),
-      journalCode: 'STK',
       description: `Stock gain ${applied.qty} @ ${unitCost}`,
       sourceType: 'stock_adjustment',
       sourceId: params.reference || params.productId,
       createdById: params.userId,
-      skipIfExists: true,
       lines: [
         { accountLabel: inventoryLabel, label: 'Inventory gain', debit: applied.totalCost, credit: 0 },
         { accountLabel: ADJUSTMENT_LABEL, label: 'Inventory variance', debit: 0, credit: applied.totalCost },
@@ -827,14 +857,12 @@ export async function processOpeningStockValuation(params: {
     const { inventoryLabel } = await resolveStockAccounts(params.productId)
     const eventKey = stockValuationEventKey('opening', params.reference || 'OPENING', params.productId)
     // Receipt mark already used VAL/RCV — also mark opening journal separately via skipIfExists
-    await createJournalEntry({
+    await persistStockJournal({
       ref: stockValuationJournalRef('opening', params.reference || 'OPENING', params.productId),
-      journalCode: 'STK',
       description: `Opening stock ${qty} @ ${unitCost}`,
       sourceType: 'stock_opening',
       sourceId: params.reference || 'OPENING',
       createdById: params.userId,
-      skipIfExists: true,
       lines: [
         { accountLabel: inventoryLabel, label: 'Opening inventory', debit: total, credit: 0 },
         { accountLabel: ADJUSTMENT_LABEL, label: 'Opening stock equity/variance', debit: 0, credit: total },

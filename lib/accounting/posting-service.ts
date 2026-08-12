@@ -258,6 +258,69 @@ export function buildAllocateOutstandingLines(params: {
   return lines
 }
 
+/** Pure builder — GRN / stock receipt (Dr Inventory [+ variance], Cr GRNI). */
+export function buildStockReceiptLines(params: {
+  inventoryDebit: number
+  grniCredit: number
+  priceDiffLabel?: string
+}): PostingLineInput[] {
+  const invDebit = roundMoney(params.inventoryDebit)
+  const grniCredit = roundMoney(params.grniCredit)
+  const variance = roundMoney(grniCredit - invDebit)
+  const lines: PostingLineInput[] = [
+    { role: 'inventory', description: 'Inventory receipt', debit: invDebit, credit: 0 },
+  ]
+  if (variance > 0 && params.priceDiffLabel) {
+    lines.push({
+      accountLabel: params.priceDiffLabel,
+      description: 'Purchase price variance',
+      debit: variance,
+      credit: 0,
+    })
+  } else if (variance < 0 && params.priceDiffLabel) {
+    lines.push({
+      accountLabel: params.priceDiffLabel,
+      description: 'Purchase price variance',
+      debit: 0,
+      credit: roundMoney(-variance),
+    })
+  }
+  lines.push({
+    role: 'grni',
+    description: 'GRNI / Accruals',
+    debit: 0,
+    credit: grniCredit || invDebit,
+  })
+  return lines
+}
+
+/** Pure builder — delivery / POS COGS (Dr COGS, Cr Inventory). */
+export function buildStockCogsLines(params: { totalCost: number }): PostingLineInput[] {
+  const total = roundMoney(params.totalCost)
+  return [
+    { role: 'cogs', description: 'COGS', debit: total, credit: 0 },
+    { role: 'inventory', description: 'Inventory reduction', debit: 0, credit: total },
+  ]
+}
+
+/** Pure builder — customer return (Dr Inventory, Cr COGS). */
+export function buildStockCustomerReturnLines(params: { totalCost: number }): PostingLineInput[] {
+  const total = roundMoney(params.totalCost)
+  return [
+    { role: 'inventory', description: 'Inventory restore', debit: total, credit: 0 },
+    { role: 'cogs', description: 'COGS reversal', debit: 0, credit: total },
+  ]
+}
+
+/** Pure builder — vendor RTV (Dr GRNI, Cr Inventory). */
+export function buildStockVendorReturnLines(params: { totalCost: number }): PostingLineInput[] {
+  const total = roundMoney(params.totalCost)
+  return [
+    { role: 'grni', description: 'GRNI on vendor return', debit: total, credit: 0 },
+    { role: 'inventory', description: 'Inventory reduction', debit: 0, credit: total },
+  ]
+}
+
 /**
  * Resolve labels, assert balance, persist via journal-service (fiscal lock + idempotent ref).
  */
@@ -333,6 +396,29 @@ export async function postVendorBill(params: {
     })),
     createdById: params.createdById,
     journalCode: 'PUR',
+  })
+}
+
+/**
+ * Stock valuation journal (STK). Prefer role-based builders; accepts accountLabel escape hatches
+ * for price-diff / write-off / adjustment accounts.
+ */
+export async function postStockJournal(params: {
+  ref: string
+  description: string
+  sourceType: string
+  sourceId?: string | null
+  lines: PostingLineInput[]
+  createdById?: string | null
+}) {
+  return commitPosting({
+    ref: params.ref,
+    source: params.sourceType,
+    description: params.description,
+    blobId: params.sourceId || undefined,
+    lines: params.lines,
+    createdById: params.createdById || undefined,
+    journalCode: 'STK',
   })
 }
 

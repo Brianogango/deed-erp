@@ -118,9 +118,10 @@ Legend: **HAVE** · **PARTIAL** · **MISSING**
 | Item | Status | Evidence |
 |------|--------|----------|
 | Product average cost + valuation events | **HAVE** | `ProductValuation`, `ValuationEvent`, `valuation-service.ts` |
-| Perpetual inventory JE on receipt/issue | **PARTIAL** | Posted when enabled; not all stock paths covered |
-| Serial-level COGS / cost layer | **MISSING** / weak | Serials still largely blob_sot |
+| Perpetual inventory JE on receipt/issue | **HAVE** | STK via `persistStockJournal` / engine when flagged; hooks when automated valuation on |
+| Serial-level COGS / cost layer | **MISSING** / weak | Serials still largely blob_sot; COGS uses product avg |
 | Stock moves Prisma SoT | **MISSING** | blob_sot lag |
+| Engine-routed STK journals | **PARTIAL** | Phase 4: flag-gated `postStockJournal` |
 
 ### Phase 5 — Bank & cash
 
