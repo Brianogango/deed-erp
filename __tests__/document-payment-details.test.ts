@@ -5,6 +5,7 @@ import {
   buildPaymentDetailLines,
   documentHasVat,
   normalizeDocumentPaymentDetails,
+  resolveBankMpesa,
   resolvePaymentBankRole,
   summarizePaymentDetails,
   DEFAULT_DOCUMENT_PAYMENT_DETAILS,
@@ -114,7 +115,7 @@ describe('document payment details', () => {
     })
   })
 
-  it('builds default payment lines from first bank + M-Pesa', () => {
+  it('builds default payment lines from first bank + that bank\'s M-Pesa', () => {
     const lines = buildPaymentDetailLines({
       details: { useCompanyDefault: true },
       company,
@@ -126,7 +127,43 @@ describe('document payment details', () => {
     expect(lines).toContain('Account Number: 1005157785 (KES)')
     expect(lines).toContain('M-PESA:')
     expect(lines).toContain('Pay Bill No: 880100')
+    expect(lines).toContain('Account Number: 468778 (KES)')
     expect(lines.join('\n')).not.toContain('0123456789')
+  })
+
+  it('pairs I&M bank transfer with I&M paybill — not NCBA 880100', () => {
+    const lines = buildPaymentDetailLines({
+      details: {
+        useCompanyDefault: false,
+        bankAccountIds: ['kcb'],
+        includeMpesa: true,
+      },
+      company,
+      bankAccounts: prodStyleBanks,
+      documentRef: 'INV/2026/0064',
+    })
+    expect(lines).toContain('Account Number: 00105512776350 (KES)')
+    expect(lines).toContain('Bank: I & M Bank')
+    expect(lines).toContain('Pay Bill No: 542542')
+    expect(lines).toContain('Account Number: 391572 (KES)')
+    expect(lines.join('\n')).not.toContain('880100')
+    expect(lines.join('\n')).not.toContain('468778')
+  })
+
+  it('pairs Equity bank transfer with Equity paybill 247247', () => {
+    const lines = buildPaymentDetailLines({
+      details: {
+        useCompanyDefault: false,
+        bankAccountIds: ['equity'],
+        includeMpesa: true,
+      },
+      company,
+      bankAccounts: prodStyleBanks,
+      documentRef: 'INV/2026/0065',
+    })
+    expect(lines).toContain('Pay Bill No: 247247')
+    expect(lines).toContain('Account Number: 0020284195905 (KES)')
+    expect(lines.join('\n')).not.toContain('880100')
   })
 
   it('builds custom selection with second bank only and no M-Pesa', () => {
@@ -153,12 +190,17 @@ describe('document payment details', () => {
     expect(documentHasVat({ taxTotal: 0, lines: [{ taxRate: 0 }] })).toBe(false)
   })
 
-  it('resolves NCBA / ABSA / I&M by bank name even with legacy ids', () => {
+  it('resolves NCBA / ABSA / I&M / Equity by bank name even with legacy ids', () => {
     const roles = banksByPaymentRole(prodStyleBanks)
     expect(roles.ncba?.accountNo).toBe('1005157785')
     expect(roles.absa?.id).toBe('mpesa')
     expect(roles.im?.id).toBe('kcb')
+    expect(roles.equity?.id).toBe('equity')
     expect(resolvePaymentBankRole(prodStyleBanks[3]!)).toBe('absa')
+    expect(resolveBankMpesa(prodStyleBanks[2]!, company)).toEqual({
+      paybill: '542542',
+      account: '391572',
+    })
   })
 
   it('forces NCBA for VAT documents and ABSA default for non-VAT', () => {
@@ -184,7 +226,7 @@ describe('document payment details', () => {
     expect(keepIm.bankAccountIds).toEqual(['kcb'])
   })
 
-  it('builds VAT invoice lines for NCBA + M-Pesa', () => {
+  it('builds VAT invoice lines for NCBA + NCBA M-Pesa', () => {
     const details = alignPaymentDetailsToTax(null, true, prodStyleBanks)
     const lines = buildPaymentDetailLines({
       details,
@@ -195,6 +237,7 @@ describe('document payment details', () => {
     expect(lines).toContain('Account Number: 1005157785 (KES)')
     expect(lines).toContain('Bank: NCBA Bank Kenya PLC')
     expect(lines).toContain('M-PESA:')
+    expect(lines).toContain('Pay Bill No: 880100')
     expect(lines.join('\n')).not.toContain('2043953071')
   })
 

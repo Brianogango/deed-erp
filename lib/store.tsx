@@ -543,6 +543,10 @@ export interface BankAccount {
   openingBalance: number
   openingDate: string
   active: boolean
+  /** Bank-specific M-Pesa paybill (must match this bank — never mix with another bank's). */
+  mpesaPaybill?: string
+  /** Account / till reference for that paybill. */
+  mpesaAccount?: string
 }
 
 export interface BankRecon {
@@ -588,14 +592,41 @@ export interface BankStatementLine {
   matchedEntryId?: string  // cashbook entry id it's matched to
 }
 
-// Default 5 bank accounts for the company
+// Default bank accounts — each row carries its own M-Pesa paybill/account pair
+// so invoice PDFs never mix e.g. I&M transfer details with NCBA paybill 880100.
 export const DEFAULT_BANK_ACCOUNTS: BankAccount[] = [
-  { id: 'ncba',   name: 'NCBA Current Account',  bankName: 'NCBA Bank Kenya PLC',  accountNo: '1005157785', currency: 'KES', openingBalance: 0, openingDate: '2025-01-01', active: true },
-  { id: 'absa',   name: 'ABSA Current Account',  bankName: 'ABSA Bank Kenya PLC',  accountNo: '2043953071', currency: 'KES', openingBalance: 0, openingDate: '2025-01-01', active: true },
-  { id: 'im',     name: 'I&M Current Account',   bankName: 'I & M Bank',           accountNo: '00105512776350', currency: 'KES', openingBalance: 0, openingDate: '2025-01-01', active: true },
-  { id: 'equity', name: 'Equity Bank Account',    bankName: 'Equity Bank Kenya',    accountNo: '0020284195905', currency: 'KES', openingBalance: 0, openingDate: '2025-01-01', active: true },
-  { id: 'mpesa',  name: 'M-Pesa Paybill',         bankName: 'Safaricom M-Pesa',     accountNo: '880100',     currency: 'KES', openingBalance: 0, openingDate: '2025-01-01', active: true },
-  { id: 'cash',   name: 'Petty Cash Float',        bankName: 'Cash',                 accountNo: 'CASH',       currency: 'KES', openingBalance: 0, openingDate: '2025-01-01', active: true },
+  {
+    id: 'ncba', name: 'NCBA Current Account', bankName: 'NCBA Bank Kenya PLC',
+    accountNo: '1005157785', currency: 'KES', openingBalance: 0, openingDate: '2025-01-01', active: true,
+    mpesaPaybill: '880100', mpesaAccount: '468778',
+  },
+  {
+    id: 'absa', name: 'ABSA Current Account', bankName: 'ABSA Bank Kenya PLC',
+    accountNo: '2043953071', currency: 'KES', openingBalance: 0, openingDate: '2025-01-01', active: true,
+    mpesaPaybill: '303030', mpesaAccount: '2043953071',
+  },
+  {
+    id: 'im', name: 'I&M Current Account', bankName: 'I & M Bank',
+    accountNo: '00105512776350', currency: 'KES', openingBalance: 0, openingDate: '2025-01-01', active: true,
+    mpesaPaybill: '542542', mpesaAccount: '391572',
+  },
+  {
+    id: 'equity', name: 'Equity Bank Account', bankName: 'Equity Bank Kenya',
+    accountNo: '0020284195905', currency: 'KES', openingBalance: 0, openingDate: '2025-01-01', active: true,
+    mpesaPaybill: '247247', mpesaAccount: '0020284195905',
+  },
+  {
+    id: 'credit', name: 'Credit Bank Current', bankName: 'Credit Bank',
+    accountNo: '0131006000351', currency: 'KES', openingBalance: 0, openingDate: '2025-01-01', active: true,
+    mpesaPaybill: '972700', mpesaAccount: '0131006000351',
+  },
+  // Ledger / cashbook sink for M-Pesa receipts — excluded from PDF bank pickers.
+  {
+    id: 'mpesa', name: 'M-Pesa Paybill', bankName: 'Safaricom M-Pesa',
+    accountNo: '880100', currency: 'KES', openingBalance: 0, openingDate: '2025-01-01', active: true,
+    mpesaPaybill: '880100', mpesaAccount: '468778',
+  },
+  { id: 'cash', name: 'Petty Cash Float', bankName: 'Cash', accountNo: 'CASH', currency: 'KES', openingBalance: 0, openingDate: '2025-01-01', active: true },
 ]
 
 export interface CompanySettings {
@@ -3044,7 +3075,7 @@ export interface AppState {
   bankStatementLines: BankStatementLine[]
   saveBankRecon: (recon: Omit<BankRecon, 'id' | 'reconciledBy' | 'reconciledAt'>) => void
   updateBankRecon: (id: string, p: Partial<BankRecon>) => void
-  updateBankAccount: (id: string, p: Partial<Pick<BankAccount, 'name' | 'bankName' | 'accountNo' | 'openingBalance' | 'openingDate' | 'active'>>) => void
+  updateBankAccount: (id: string, p: Partial<Pick<BankAccount, 'name' | 'bankName' | 'accountNo' | 'openingBalance' | 'openingDate' | 'active' | 'mpesaPaybill' | 'mpesaAccount'>>) => void
   addBankAccount: (a: Omit<BankAccount, 'id'>) => string
   deleteBankAccount: (id: string) => void
   /** Per-document bank/M-Pesa selection for quote / proforma / invoice PDFs. */

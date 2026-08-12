@@ -29,7 +29,8 @@ type Props = {
 
 /**
  * Per-document payment bank + note for quotation / proforma / invoice PDFs.
- * VAT → NCBA (locked). Non-VAT → ABSA or I&M.
+ * VAT → NCBA (locked). Non-VAT → ABSA, I&M, Equity, or Credit Bank.
+ * M-Pesa on the PDF always belongs to the selected bank (not a global NCBA default).
  */
 export default function PaymentDetailsPicker({
   value,
@@ -53,7 +54,7 @@ export default function PaymentDetailsPicker({
     defaultOpen ?? Boolean(normalizeDocumentPaymentDetails(value).customNote?.trim()),
   )
 
-  const nonVatOptions = (['absa', 'im'] as PaymentBankRole[])
+  const nonVatOptions = (['absa', 'im', 'equity', 'credit'] as PaymentBankRole[])
     .map(role => ({ role, bank: roles[role] }))
     .filter((o): o is { role: PaymentBankRole; bank: NonNullable<typeof o.bank> } => Boolean(o.bank))
 
@@ -61,8 +62,8 @@ export default function PaymentDetailsPicker({
   const selectedRole = (Object.entries(roles).find(([, b]) => b?.id === selectedId)?.[0] || null) as PaymentBankRole | null
 
   const defaultHint = isVat
-    ? 'VAT invoices always use NCBA for bank transfer instructions (plus company M-Pesa).'
-    : 'Non-VAT invoices use ABSA or I&M Bank — pick one for this document.'
+    ? 'VAT invoices always use NCBA for bank transfer + NCBA M-Pesa (Paybill 880100).'
+    : 'Non-VAT: pick ABSA, I&M, Equity, or Credit Bank — M-Pesa shown matches that bank.'
 
   const setNote = (customNote: string) => {
     onChange({
@@ -126,7 +127,7 @@ export default function PaymentDetailsPicker({
             <div className="invoice-pay-picker__options" role="radiogroup" aria-label="Payment bank">
               {nonVatOptions.length === 0 && (
                 <p className="invoice-pay-picker__hint">
-                  Add ABSA and/or I&amp;M Bank accounts in Settings to choose payment details.
+                  Add ABSA, I&amp;M, Equity, and/or Credit Bank accounts in Settings to choose payment details.
                 </p>
               )}
               {nonVatOptions.map(({ role, bank }) => {
