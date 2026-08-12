@@ -11,6 +11,7 @@ export type AggregatedAccount = {
   name: string
   type: string
   group: string
+  subGroup: string
   debit: number
   credit: number
 }
@@ -26,6 +27,7 @@ export function aggregateJournalLines(
       name: string
       accountType: string
       accountGroup: string | null
+      subGroup?: string | null
     } | null
   }>,
 ): Map<string, AggregatedAccount> {
@@ -37,8 +39,11 @@ export function aggregateJournalLines(
       : line.accountLabel)
     const type = line.account?.accountType || 'asset'
     const group = line.account?.accountGroup || ''
+    const subGroup = line.account?.subGroup || ''
     const key = code
-    const row = map.get(key) || { id: key, code, name, type, group, debit: 0, credit: 0 }
+    const row = map.get(key) || { id: key, code, name, type, group, subGroup, debit: 0, credit: 0 }
+    if (!row.subGroup && subGroup) row.subGroup = subGroup
+    if (!row.group && group) row.group = group
     row.debit += Number(line.debit || 0)
     row.credit += Number(line.credit || 0)
     map.set(key, row)
@@ -194,7 +199,15 @@ export async function fetchPostedLines(opts: { dateFrom?: string; dateTo?: strin
       accountLabel: true,
       debit: true,
       credit: true,
-      account: { select: { code: true, name: true, accountType: true, accountGroup: true } },
+      account: {
+        select: {
+          code: true,
+          name: true,
+          accountType: true,
+          accountGroup: true,
+          subGroup: true,
+        },
+      },
     },
   })
 }
@@ -203,6 +216,13 @@ export async function buildProfitAndLoss(opts: { dateFrom?: string; dateTo?: str
   const lines = await fetchPostedLines(opts)
   const aggregates = aggregateJournalLines(lines)
   return buildProfitAndLossFromAggregates(aggregates, opts)
+}
+
+export async function buildManagementProfitAndLoss(opts: { dateFrom?: string; dateTo?: string }) {
+  const { buildManagementProfitAndLossFromAggregates } = await import('@/lib/accounting/management-pl')
+  const lines = await fetchPostedLines(opts)
+  const aggregates = aggregateJournalLines(lines)
+  return buildManagementProfitAndLossFromAggregates(aggregates, opts)
 }
 
 export async function buildBalanceSheet(opts: { asOf: string }) {

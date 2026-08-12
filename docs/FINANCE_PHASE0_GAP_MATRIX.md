@@ -154,9 +154,10 @@ Legend: **HAVE** · **PARTIAL** · **MISSING**
 
 | Item | Status | Evidence |
 |------|--------|----------|
-| GL trial / ledger queries | **PARTIAL** | `gl-reports.ts` |
-| Analytic accounts / tags / budgets | **MISSING** | |
-| Unified P&L SoT (Prisma-only) | **MISSING** | UI still hybrid |
+| GL trial / ledger queries | **HAVE** | `gl-reports.ts` TB / GL / BS / P&L |
+| Management P&L (period, CoA groups) | **HAVE** | Phase 8: `management-pl` + `/api/accounting/profit-loss?view=management` |
+| Analytic accounts / tags / budgets | **MISSING** | Deferred |
+| Unified P&L SoT (Prisma-only) | **PARTIAL** | Prisma management P&L default; blob Monthly / legacy toggle remain |
 
 ### Phase 9 — Hardening & cutover
 

@@ -390,6 +390,9 @@ function AccountingContent() {
   const [plSource, setPlSource] = useState<'blob' | 'prisma'>('prisma')
   const [bsSource, setBsSource] = useState<'blob' | 'prisma'>('prisma')
   const [vatSource, setVatSource] = useState<'blob' | 'prisma'>('prisma')
+  const fiscalYearStart = `${new Date().getFullYear()}-01-01`
+  const [plDateFrom, setPlDateFrom] = useState(fiscalYearStart)
+  const [plDateTo, setPlDateTo] = useState(today())
   const prismaReportsEnabled = (tbSource === 'prisma' && reportTab === 'trial_balance')
     || (plSource === 'prisma' && reportTab === 'pl')
     || (bsSource === 'prisma' && reportTab === 'bs')
@@ -399,6 +402,9 @@ function AccountingContent() {
     profitLoss: plSource === 'prisma' && reportTab === 'pl',
     balanceSheet: bsSource === 'prisma' && reportTab === 'bs',
     vatControl: vatSource === 'prisma' && reportTab === 'vat',
+    plDateFrom: plSource === 'prisma' && reportTab === 'pl' ? plDateFrom : null,
+    plDateTo: plSource === 'prisma' && reportTab === 'pl' ? plDateTo : null,
+    plView: 'management',
   })
 
   // ── Invoice / Bill state ────────────────────────────────────────────────────
@@ -1456,6 +1462,10 @@ function AccountingContent() {
               <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4">
                 <div>
                   <h2 className="text-lg font-bold text-[var(--text-1)]">Monthly Management Report</h2>
+                  <p className="text-xs text-[var(--text-3)] mt-1">
+                    Operational estimate from invoices / POS / expenses. Official books: Accounting → P&amp;L (Prisma).
+                  </p>
+                  <p className="text-xs text-[var(--text-3)] mt-1">Sales by category, estimated profit, expenses, supplier bills, and collections.</p>
                   <p className="text-xs text-[var(--text-3)] mt-1">Sales by category, estimated profit, expenses, supplier bills, and collections.</p>
                 </div>
                 <div className="flex flex-col sm:flex-row gap-2 sm:items-end">
@@ -1574,11 +1584,35 @@ function AccountingContent() {
                   <h2 className="text-lg font-bold text-[var(--text-1)]">Profit & Loss Statement</h2>
                   <p className="text-xs text-[var(--text-3)]">
                     {plSource === 'prisma'
-                      ? 'Official SoT: KES-only from posted Prisma journal lines (income/expense accounts).'
+                      ? 'Official management P&L: KES from posted Prisma journal lines (revenue → COGS → gross → opex/finance → net).'
                       : 'Legacy blob estimate from invoices, bills, and expenses — not official books.'}
                   </p>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
+                  {plSource === 'prisma' && (
+                    <>
+                      <label className="text-[11px] text-[var(--text-3)] flex items-center gap-1">
+                        From
+                        <input
+                          type="date"
+                          className="form-input text-[11px] py-1.5"
+                          value={plDateFrom}
+                          onChange={e => setPlDateFrom(e.target.value)}
+                          aria-label="P&L date from"
+                        />
+                      </label>
+                      <label className="text-[11px] text-[var(--text-3)] flex items-center gap-1">
+                        To
+                        <input
+                          type="date"
+                          className="form-input text-[11px] py-1.5"
+                          value={plDateTo}
+                          onChange={e => setPlDateTo(e.target.value)}
+                          aria-label="P&L date to"
+                        />
+                      </label>
+                    </>
+                  )}
                   <select
                     className="form-select text-[11px] py-1.5"
                     value={plSource}
@@ -1589,23 +1623,29 @@ function AccountingContent() {
                     <option value="blob">Legacy: client blob</option>
                   </select>
                   <button className="btn-secondary flex items-center gap-2" onClick={() => {
+                    const pl = prismaReports.profitLoss
                     const rev = plSource === 'prisma'
-                      ? (prismaReports.profitLoss?.totalRevenue ?? 0)
+                      ? (pl?.totalIncome ?? pl?.totalRevenue ?? 0)
                       : customerInvoices.reduce((s, i) => s + i.subtotal, 0)
                     const cogs = plSource === 'prisma'
-                      ? (prismaReports.profitLoss?.totalExpenses ?? 0)
+                      ? (pl?.totalCogs ?? 0)
                       : vendorBills.reduce((s, i) => s + i.subtotal, 0)
-                    const opex = plSource === 'prisma' ? 0 : expenses.reduce((s, e) => s + e.amount, 0)
+                    const opex = plSource === 'prisma'
+                      ? ((pl?.totalOperating ?? 0) + (pl?.totalFinance ?? 0))
+                      : expenses.reduce((s, e) => s + e.amount, 0)
                     const net = plSource === 'prisma'
-                      ? (prismaReports.profitLoss?.netProfit ?? 0)
+                      ? (pl?.netProfit ?? 0)
                       : rev - cogs - opex
                     exportToPDF(
                       'Profit & Loss Statement',
                       ['Category', 'Amount (KES)'],
                       plSource === 'prisma'
                         ? [
-                            ['Total Revenue', fmtKes(rev)],
-                            ['Total Expenses', fmtKes(cogs)],
+                            ['Total Income', fmtKes(rev)],
+                            ['Cost of Goods Sold', fmtKes(cogs)],
+                            ['Gross Profit', fmtKes(pl?.grossProfit ?? rev - cogs)],
+                            ['Operating Expenses', fmtKes(pl?.totalOperating ?? 0)],
+                            ['Finance Costs', fmtKes(pl?.totalFinance ?? 0)],
                             ['Net Profit', fmtKes(net)],
                           ]
                         : [
@@ -1632,21 +1672,75 @@ function AccountingContent() {
                   prismaReports.loading ? (
                     <p className="text-sm text-[var(--text-3)]">Loading Prisma P&L…</p>
                   ) : (
-                    <>
-                      <PLSection title="Revenue">
-                        {(prismaReports.profitLoss?.revenue ?? []).map(r => (
-                          <PLRow key={r.code} label={`${r.code} — ${r.name}`} amount={r.amount} />
-                        ))}
-                        <PLRow label="Total Revenue" amount={prismaReports.profitLoss?.totalRevenue ?? 0} bold />
-                      </PLSection>
-                      <PLSection title="Expenses" className="mt-6">
-                        {(prismaReports.profitLoss?.expenses ?? []).map(r => (
-                          <PLRow key={r.code} label={`${r.code} — ${r.name}`} amount={r.amount} />
-                        ))}
-                        <PLRow label="Total Expenses" amount={prismaReports.profitLoss?.totalExpenses ?? 0} bold />
-                      </PLSection>
-                      <PLRow label="Net Profit" amount={prismaReports.profitLoss?.netProfit ?? 0} bold />
-                    </>
+                    (() => {
+                      const pl = prismaReports.profitLoss
+                      const isMgmt = pl?.view === 'management' || Boolean(pl?.cogs)
+                      if (!isMgmt) {
+                        return (
+                          <>
+                            <PLSection title="Revenue">
+                              {(pl?.revenue ?? []).map(r => (
+                                <PLRow key={r.code} label={`${r.code} — ${r.name}`} amount={r.amount} />
+                              ))}
+                              <PLRow label="Total Revenue" amount={pl?.totalRevenue ?? 0} bold />
+                            </PLSection>
+                            <PLSection title="Expenses" className="mt-6">
+                              {(pl?.expenses ?? []).map(r => (
+                                <PLRow key={r.code} label={`${r.code} — ${r.name}`} amount={r.amount} />
+                              ))}
+                              <PLRow label="Total Expenses" amount={pl?.totalExpenses ?? 0} bold />
+                            </PLSection>
+                            <PLRow label="Net Profit" amount={pl?.netProfit ?? 0} bold />
+                          </>
+                        )
+                      }
+                      return (
+                        <>
+                          <PLSection title="Revenue">
+                            {(pl?.revenue ?? []).map(r => (
+                              <PLRow key={r.code} label={`${r.code} — ${r.name}`} amount={r.amount} />
+                            ))}
+                            <PLRow label="Total Revenue" amount={pl?.totalRevenue ?? 0} bold />
+                          </PLSection>
+                          {(pl?.otherIncome?.length ?? 0) > 0 && (
+                            <PLSection title="Other Income" className="mt-6">
+                              {(pl?.otherIncome ?? []).map(r => (
+                                <PLRow key={r.code} label={`${r.code} — ${r.name}`} amount={r.amount} />
+                              ))}
+                              <PLRow label="Total Other Income" amount={pl?.totalOtherIncome ?? 0} bold />
+                            </PLSection>
+                          )}
+                          <PLRow label="Total Income" amount={pl?.totalIncome ?? pl?.totalRevenue ?? 0} bold />
+                          <PLSection title="Cost of Goods Sold" className="mt-6">
+                            {(pl?.cogs ?? []).map(r => (
+                              <PLRow key={r.code} label={`${r.code} — ${r.name}`} amount={r.amount} />
+                            ))}
+                            <PLRow label="Total COGS" amount={pl?.totalCogs ?? 0} bold />
+                          </PLSection>
+                          <PLRow label="Gross Profit" amount={pl?.grossProfit ?? 0} bold />
+                          <PLSection title="Operating Expenses" className="mt-6">
+                            {(pl?.operatingExpenses ?? []).map(r => (
+                              <PLRow key={r.code} label={`${r.code} — ${r.name}`} amount={r.amount} />
+                            ))}
+                            <PLRow label="Total Operating" amount={pl?.totalOperating ?? 0} bold />
+                          </PLSection>
+                          {(pl?.financeCosts?.length ?? 0) > 0 && (
+                            <PLSection title="Finance Costs" className="mt-6">
+                              {(pl?.financeCosts ?? []).map(r => (
+                                <PLRow key={r.code} label={`${r.code} — ${r.name}`} amount={r.amount} />
+                              ))}
+                              <PLRow label="Total Finance Costs" amount={pl?.totalFinance ?? 0} bold />
+                            </PLSection>
+                          )}
+                          <PLRow label="Net Profit" amount={pl?.netProfit ?? 0} bold />
+                          {pl?.dateFrom || pl?.dateTo ? (
+                            <p className="text-[11px] text-[var(--text-3)] mt-4">
+                              Period: {pl?.dateFrom || '…'} → {pl?.dateTo || '…'}
+                            </p>
+                          ) : null}
+                        </>
+                      )
+                    })()
                   )
                 ) : (
                   (() => {
