@@ -34,32 +34,12 @@ function isInteractiveTarget(target: EventTarget | null): boolean {
   ))
 }
 
-/** Minimum scroll width from *fixed* tracks only. Fluid `fr`/`minmax` columns
- *  absorb leftover space so typical invoice/sales lists fit without page scroll. */
+/** Tables fill the card — no artificial scroll floor. */
 function estimateTableMinWidth(
-  columns: Array<{ key: string; width?: string }>,
-  options: { selectable?: boolean; hasRowActions?: boolean },
+  _columns: Array<{ key: string; width?: string }>,
+  _options: { selectable?: boolean; hasRowActions?: boolean },
 ): number {
-  let total = options.selectable ? 36 : 0
-  let hasFluid = false
-  for (const column of columns) {
-    if (column.key.toLowerCase().includes('status')) {
-      total += 140
-      continue
-    }
-    if (column.width?.endsWith('px')) {
-      const parsed = Number.parseInt(column.width, 10)
-      total += Number.isFinite(parsed) ? parsed : 96
-      continue
-    }
-    // fr / minmax / rem — contribute a small floor; grid fills the rest.
-    hasFluid = true
-    total += 96
-  }
-  if (options.hasRowActions) total += 120
-  // With a fluid column, keep the floor modest so the table can shrink to the
-  // card width; fixed-only tables keep a stronger scroll floor.
-  return Math.max(hasFluid ? 280 : 320, total)
+  return 0
 }
 
 export interface DataTableProps<T> {
