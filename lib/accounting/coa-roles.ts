@@ -21,6 +21,7 @@ export type CoaRole =
   | 'employee_reimbursements'
   | 'outstanding_receipts'
   | 'outstanding_payments'
+  | 'input_vat'
 
 /** Canonical live codes — keep stable. */
 export const COA_ROLE_CODES: Record<CoaRole, string> = {
@@ -39,6 +40,7 @@ export const COA_ROLE_CODES: Record<CoaRole, string> = {
   employee_reimbursements: '3105',
   outstanding_receipts: '1805',
   outstanding_payments: '3005',
+  input_vat: '1150',
 }
 
 /**
@@ -61,6 +63,7 @@ export const COA_ROLE_LABELS: Record<CoaRole, string> = {
   employee_reimbursements: '3105 - Employee Reimbursements Payable',
   outstanding_receipts: '1805 - Outstanding Receipts',
   outstanding_payments: '3005 - Outstanding Payments',
+  input_vat: '1150 - VAT Input',
 }
 
 export function labelForRole(role: CoaRole): string {

@@ -108,9 +108,10 @@ Legend: **HAVE** · **PARTIAL** · **MISSING**
 
 | Item | Status | Evidence |
 |------|--------|----------|
-| Accrual / GRNI account in use | **PARTIAL** | **3201** Accruals used as stand-in |
-| Dedicated GRNI + 3-way match | **MISSING** | PO still blob_sot |
-| Vendor bill perpetual helper | **PARTIAL** | `vendor-bill-perpetual.ts` |
+| Accrual / GRNI account in use | **HAVE** | Role `grni` → **3201**; valuation + vendor-bill-perpetual |
+| Dedicated GRNI + 3-way match | **PARTIAL** | Server 3-way on bill post (`assert-bill-match.server`); PO still blob_sot; GRNI stays **3201** (mapped) |
+| Vendor bill perpetual helper | **HAVE** | `vendor-bill-perpetual.ts` + `postVendorBill` when engine on |
+| Input VAT role | **HAVE** | `input_vat` → **1150** |
 
 ### Phase 4 — Inventory valuation & COGS
 

@@ -38,6 +38,20 @@ describe('vendor bill perpetual posting', () => {
     expect(lines.find(l => l.account.includes('3000'))?.credit).toBe(1100)
   })
 
+  it('uses input VAT and AP role labels', () => {
+    const lines = buildVendorBillPerpetualLines({
+      partnerName: 'Acme',
+      ref: 'BILL/3',
+      subtotal: 1000,
+      taxTotal: 160,
+      total: 1160,
+      perpetual: false,
+      lines: [{ qty: 1, unitPrice: 1000, subtotal: 1000 }],
+    })
+    expect(lines.some(l => l.account === '1150 - VAT Input' && l.debit === 160)).toBe(true)
+    expect(lines.some(l => l.account === '3000 - Accounts Payable' && l.credit === 1160)).toBe(true)
+  })
+
   it('vendor credit under perpetual credits GRNI not purchase expense', () => {
     const lines = buildVendorCreditPerpetualLines({
       partnerName: 'Acme',

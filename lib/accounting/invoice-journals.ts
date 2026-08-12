@@ -15,6 +15,7 @@ import { isAccountingPostingEngineEnabled } from '@/lib/accounting/posting-flag'
 import {
   postCustomerInvoice,
   postInvoicePayment,
+  postVendorBill,
 } from '@/lib/accounting/posting-service'
 import { labelForRole } from '@/lib/accounting/coa-roles'
 
@@ -145,6 +146,16 @@ export async function postInvoiceJournalToPrisma(invoice: InvoiceLike, opts?: { 
           lines: lineMeta,
           perpetual,
         })
+    if (isAccountingPostingEngineEnabled()) {
+      return postVendorBill({
+        invoiceId: invoice.id,
+        ref,
+        partnerName: partner,
+        isCredit,
+        lines: built,
+        createdById: opts?.createdById,
+      })
+    }
     return persistStoreJournalEntry({
       ref: `JRN/${ref}`,
       source: 'bill',

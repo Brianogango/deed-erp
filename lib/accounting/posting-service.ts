@@ -311,6 +311,31 @@ export async function postCustomerInvoice(params: {
   })
 }
 
+/** Vendor bill / credit — lines already built by vendor-bill-perpetual. */
+export async function postVendorBill(params: {
+  invoiceId: string
+  ref: string
+  partnerName: string
+  isCredit?: boolean
+  lines: Array<{ account: string; description: string; debit: number; credit: number }>
+  createdById?: string
+}) {
+  return commitPosting({
+    ref: `JRN/${params.ref}`,
+    source: 'bill',
+    description: `${params.isCredit ? 'Vendor credit' : 'Bill'} ${params.ref} — ${params.partnerName}`,
+    invoiceId: params.invoiceId,
+    lines: params.lines.map(l => ({
+      accountLabel: l.account,
+      description: l.description,
+      debit: l.debit,
+      credit: l.credit,
+    })),
+    createdById: params.createdById,
+    journalCode: 'PUR',
+  })
+}
+
 export async function postInvoicePayment(params: {
   invoiceId: string
   paymentId: string

@@ -67,8 +67,8 @@ export function buildVendorBillPerpetualLines(params: {
     const expense = money(params.subtotal)
     return [
       { account: purchaseFallback, description: `Purchase: ${partner}`, debit: expense, credit: 0 },
-      ...(tax > 0 ? [{ account: '1150 - VAT Input', description: `VAT input on ${ref}`, debit: tax, credit: 0 }] : []),
-      { account: '3000 - Accounts Payable', description: `AP: ${partner}`, debit: 0, credit: total },
+      ...(tax > 0 ? [{ account: labelForRole('input_vat'), description: `VAT input on ${ref}`, debit: tax, credit: 0 }] : []),
+      { account: labelForRole('ap'), description: `AP: ${partner}`, debit: 0, credit: total },
     ]
   }
 
@@ -94,8 +94,8 @@ export function buildVendorBillPerpetualLines(params: {
     const expense = money(params.subtotal)
     return [
       { account: purchaseFallback, description: `Purchase: ${partner}`, debit: expense, credit: 0 },
-      ...(tax > 0 ? [{ account: '1150 - VAT Input', description: `VAT input on ${ref}`, debit: tax, credit: 0 }] : []),
-      { account: '3000 - Accounts Payable', description: `AP: ${partner}`, debit: 0, credit: total },
+      ...(tax > 0 ? [{ account: labelForRole('input_vat'), description: `VAT input on ${ref}`, debit: tax, credit: 0 }] : []),
+      { account: labelForRole('ap'), description: `AP: ${partner}`, debit: 0, credit: total },
     ]
   }
 
@@ -134,9 +134,9 @@ export function buildVendorBillPerpetualLines(params: {
     })
   }
   if (tax > 0) {
-    lines.push({ account: '1150 - VAT Input', description: `VAT input on ${ref}`, debit: tax, credit: 0 })
+    lines.push({ account: labelForRole('input_vat'), description: `VAT input on ${ref}`, debit: tax, credit: 0 })
   }
-  lines.push({ account: '3000 - Accounts Payable', description: `AP: ${partner}`, debit: 0, credit: total })
+  lines.push({ account: labelForRole('ap'), description: `AP: ${partner}`, debit: 0, credit: total })
 
   return lines
 }
@@ -167,9 +167,9 @@ export function buildVendorCreditPerpetualLines(params: {
   if (!params.perpetual) {
     const expense = money(Math.abs(params.subtotal))
     return [
-      { account: '3000 - Accounts Payable', description: `AP credit: ${partner}`, debit: total, credit: 0 },
+      { account: labelForRole('ap'), description: `AP credit: ${partner}`, debit: total, credit: 0 },
       { account: purchaseFallback, description: `Purchase return: ${partner}`, debit: 0, credit: expense },
-      ...(tax > 0 ? [{ account: '1150 - VAT Input', description: `VAT input reversal on ${ref}`, debit: 0, credit: tax }] : []),
+      ...(tax > 0 ? [{ account: labelForRole('input_vat'), description: `VAT input reversal on ${ref}`, debit: 0, credit: tax }] : []),
     ]
   }
 
@@ -193,15 +193,15 @@ export function buildVendorCreditPerpetualLines(params: {
   if (grniCredit <= 0 && billStocked <= 0) {
     const expense = money(Math.abs(params.subtotal))
     return [
-      { account: '3000 - Accounts Payable', description: `AP credit: ${partner}`, debit: total, credit: 0 },
+      { account: labelForRole('ap'), description: `AP credit: ${partner}`, debit: total, credit: 0 },
       { account: purchaseFallback, description: `Purchase return: ${partner}`, debit: 0, credit: expense },
-      ...(tax > 0 ? [{ account: '1150 - VAT Input', description: `VAT input reversal on ${ref}`, debit: 0, credit: tax }] : []),
+      ...(tax > 0 ? [{ account: labelForRole('input_vat'), description: `VAT input reversal on ${ref}`, debit: 0, credit: tax }] : []),
     ]
   }
 
   const variance = money(billStocked - grniCredit)
   const lines: VendorBillJournalLine[] = [
-    { account: '3000 - Accounts Payable', description: `AP credit: ${partner}`, debit: total, credit: 0 },
+    { account: labelForRole('ap'), description: `AP credit: ${partner}`, debit: total, credit: 0 },
   ]
   if (grniCredit > 0) {
     lines.push({
@@ -235,7 +235,7 @@ export function buildVendorCreditPerpetualLines(params: {
     })
   }
   if (tax > 0) {
-    lines.push({ account: '1150 - VAT Input', description: `VAT input reversal on ${ref}`, debit: 0, credit: tax })
+    lines.push({ account: labelForRole('input_vat'), description: `VAT input reversal on ${ref}`, debit: 0, credit: tax })
   }
   return lines
 }

@@ -32,8 +32,10 @@ describe('CoA role map', () => {
     expect(COA_ROLE_CODES.ap).toBe('3000')
     expect(COA_ROLE_CODES.grni).toBe('3201')
     expect(COA_ROLE_CODES.output_vat).toBe('3301')
+    expect(COA_ROLE_CODES.input_vat).toBe('1150')
     expect(labelForRole('ar')).toBe('1800 - Accounts Receivable')
     expect(labelForRole('customer_deposits')).toBe('3100 - Customer Deposits')
+    expect(labelForRole('input_vat')).toBe('1150 - VAT Input')
   })
 })
 
@@ -141,5 +143,25 @@ describe('commitPosting', () => {
       ],
     })).rejects.toThrow(/Unbalanced/)
     expect(mockPersist).not.toHaveBeenCalled()
+  })
+
+  it('posts vendor bill lines through commitPosting (PUR)', async () => {
+    const { postVendorBill } = await import('@/lib/accounting/posting-service')
+    await postVendorBill({
+      invoiceId: 'bill-1',
+      ref: 'BILL/1',
+      partnerName: 'Vendor Co',
+      lines: [
+        { account: '3201 - Accruals', description: 'Clear GRNI', debit: 1000, credit: 0 },
+        { account: '3000 - Accounts Payable', description: 'AP', debit: 0, credit: 1000 },
+      ],
+    })
+    expect(mockPersist).toHaveBeenCalledWith(
+      expect.objectContaining({
+        ref: 'JRN/BILL/1',
+        source: 'bill',
+      }),
+      expect.objectContaining({ journalCode: 'PUR' }),
+    )
   })
 })
