@@ -167,8 +167,9 @@ Legend: **HAVE** · **PARTIAL** · **MISSING**
 | FIN-001 posted invoice immutability | **HAVE** | store API guards |
 | Finance seals (bank recon, cancel, reimburse) | **HAVE** | `finance-controls.ts` |
 | Payment receipt notify on paid | **HAVE** | invoice paid receipt automation |
-| Certify / retire `deed_journalEntries` | **PARTIAL** | Phase 9: ref deep-parity + certify readiness; **retire deferred** |
+| Certify / retire `deed_journalEntries` | **PARTIAL** | Phase 9 certify by ref; Phase 10 retire gated (`retireReady=false` while store blob-writes) |
 | Single report SoT | **PARTIAL** | Prisma default + certified/provisional banner; blob toggles remain |
+| Engine soak tooling | **HAVE** | Phase 10: `GET /api/admin/posting-engine-soak` (flag still default off) |
 
 ---
 
