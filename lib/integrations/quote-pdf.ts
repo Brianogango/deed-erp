@@ -7,7 +7,7 @@ import 'server-only'
 import { buildDeedDocumentPdf, deedPdfToBuffer } from '@/lib/deed-document-pdf'
 import { DEFAULT_COMPANY_SETTINGS, DEFAULT_BANK_ACCOUNTS } from '@/lib/store'
 import { loadAppState } from '@/lib/server-store'
-import { loadLogoForPdfServer } from '@/lib/pdf-logo'
+import { loadLogoForPdfServer } from '@/lib/pdf-logo.server'
 
 export interface QuotePdfInput {
   ref: string

@@ -506,7 +506,10 @@ export function buildDeedDocumentPdf(
         paymentLines.push(`Account Name: ${company.name}`)
         paymentLines.push(`Account Number: ${primaryBank.accountNo} (${primaryBank.currency || currency})`)
         if (primaryBank.bankName) paymentLines.push(`Bank: ${primaryBank.bankName}`)
-        const mpesa = resolveBankMpesa(primaryBank as any, company)
+        const mpesa = resolveBankMpesa(primaryBank as any, {
+          mpesaPaybill: company.mpesaPaybill || '',
+          mpesaAccount: company.mpesaAccount || '',
+        })
         if (mpesa) {
           paymentLines.push('M-PESA:')
           paymentLines.push(`Pay Bill No: ${mpesa.paybill}`)

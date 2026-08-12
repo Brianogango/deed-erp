@@ -1,8 +1,7 @@
 /**
- * Resolve a company logo for commercial PDFs (client + server).
- * - Prefer the uploaded data URL / URL from company settings
- * - Fall back to the packaged Deed mark so letterhead never goes blank
- * - Detect JPEG vs PNG so jsPDF addImage does not silently fail
+ * Client-safe company logo helpers for commercial PDFs and Settings upload.
+ * Server PDF loading lives in `lib/pdf-logo.server.ts` so sharp/fs never
+ * enter the browser bundle via Settings / commercial-pdf.
  */
 
 export type PdfLogo = {
@@ -118,59 +117,6 @@ export async function loadLogoForPdfClient(logoUrl?: string | null): Promise<Pdf
     if (loaded) return loaded
   }
   return null
-}
-
-/**
- * Server PDF path (portal / email attachments). Reads uploaded data URLs or
- * falls back to public/deed-logo.png on disk via sharp.
- */
-export async function loadLogoForPdfServer(logoUrl?: string | null): Promise<PdfLogo | null> {
-  if (logoUrl && logoUrl.startsWith('data:image/')) {
-    const parsed = parseDataUrl(logoUrl)
-    if (parsed) {
-      try {
-        const sharp = (await import('sharp')).default
-        const buf = Buffer.from(parsed.base64, 'base64')
-        const meta = await sharp(buf).metadata()
-        const format = formatFromMime(parsed.mime)
-        // jsPDF is happiest with PNG/JPEG — re-encode webp/other.
-        if (!parsed.mime.toLowerCase().includes('png') && !parsed.mime.toLowerCase().includes('jpeg') && !parsed.mime.toLowerCase().includes('jpg')) {
-          const png = await sharp(buf).png().toBuffer()
-          return {
-            dataUrl: `data:image/png;base64,${png.toString('base64')}`,
-            width: meta.width || 1,
-            height: meta.height || 1,
-            format: 'PNG',
-          }
-        }
-        return {
-          dataUrl: logoUrl,
-          width: meta.width || 1,
-          height: meta.height || 1,
-          format,
-        }
-      } catch {
-        /* fall through to packaged logo */
-      }
-    }
-  }
-
-  try {
-    const fs = await import('fs/promises')
-    const path = await import('path')
-    const sharp = (await import('sharp')).default
-    const filePath = path.join(process.cwd(), 'public', 'deed-logo.png')
-    const buf = await fs.readFile(filePath)
-    const meta = await sharp(buf).metadata()
-    return {
-      dataUrl: `data:image/png;base64,${buf.toString('base64')}`,
-      width: meta.width || 200,
-      height: meta.height || 60,
-      format: 'PNG',
-    }
-  } catch {
-    return null
-  }
 }
 
 /**
