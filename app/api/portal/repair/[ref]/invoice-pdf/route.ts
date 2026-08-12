@@ -3,7 +3,7 @@ import { loadAppState } from '@/lib/server-store'
 import { findRepairLinkedInvoice } from '@/lib/portal-invoice-link'
 import { DEFAULT_COMPANY_SETTINGS, DEFAULT_BANK_ACCOUNTS } from '@/lib/store'
 import { buildDeedDocumentPdf, deedPdfToBuffer } from '@/lib/deed-document-pdf'
-import { loadLogoForPdfServer } from '@/lib/pdf-logo'
+import { loadLogoForPdfServer } from '@/lib/pdf-logo.server'
 import { customerFacingNotes } from '@/lib/customer-facing-notes'
 
 export const dynamic = 'force-dynamic'

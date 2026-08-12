@@ -5,7 +5,7 @@ import { DEFAULT_COMPANY_SETTINGS } from '@/lib/store'
 import { normalizeQuoteForClient } from '@/lib/quote-normalization'
 import { findPortalDocument } from '@/lib/portal-document-lookup'
 import { buildDeedDocumentPdf, deedPdfToBuffer } from '@/lib/deed-document-pdf'
-import { loadLogoForPdfServer } from '@/lib/pdf-logo'
+import { loadLogoForPdfServer } from '@/lib/pdf-logo.server'
 
 export const dynamic = 'force-dynamic'
 
