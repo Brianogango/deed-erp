@@ -1,4 +1,5 @@
 import 'server-only'
+import { randomUUID } from 'crypto'
 import prisma from '@/lib/prisma'
 import { loadAppState, saveStoreKeys } from '@/lib/server-store'
 import { buildNotifyRows, type AppNotification } from '@/lib/in-app-notifications'
@@ -12,6 +13,7 @@ import {
   fetchSalesInboxEmails,
   markSalesInboxUidsSeen,
   resolveSalesImapConfig,
+  salesInboxConfigured,
 } from '@/lib/crm/sales-inbox-imap'
 import { storeLeadEmailAttachments } from '@/lib/crm/lead-attachments'
 import { notifyInboundLeadCreated } from '@/lib/crm/sales-inbox-notifications'
@@ -21,8 +23,22 @@ import {
   pipelineAuditNote,
   type ExistingLeadRef,
 } from '@/lib/crm/inbox/pipeline'
-import { normalizeEmail, normalizePhoneE164, phoneMatchKey, resolveThreadId } from '@/lib/crm/inbox/normalize'
+import type { IntentClassification } from '@/lib/crm/inbox/classify-rules'
+import {
+  extractPhonesFromText,
+  normalizeEmail,
+  normalizePhoneE164,
+  phoneMatchKey,
+  resolveThreadId,
+} from '@/lib/crm/inbox/normalize'
 import type { ContactCandidate } from '@/lib/crm/inbox/contact-resolve'
+import { hardExcludeInboundEmail } from '@/lib/crm/inbox/hard-exclude'
+import {
+  extractAttachmentEvidence,
+  withAttachmentEvidenceBody,
+} from '@/lib/crm/inbox/attachment-evidence'
+import { maybeClassifyWithAi } from '@/lib/crm/inbox/classify-ai'
+import { withSalesInboxAdvisoryLock } from '@/lib/crm/inbox/advisory-lock'
 
 const RR_KEY = 'deed_salesLeadRoundRobin'
 const SALES_ROLES = ['sales_rep', 'sales'] as const
@@ -128,6 +144,7 @@ async function recordInboundEmail(opts: {
   leadId?: string | null
   clientId?: string | null
   dryRun?: boolean
+  attachmentEvidenceSources?: Array<{ filename: string; kind: string; chars: number }>
 }): Promise<'ok' | 'duplicate' | 'unavailable'> {
   if (opts.dryRun) return 'ok'
   try {
@@ -154,6 +171,7 @@ async function recordInboundEmail(opts: {
         rawMeta: {
           hasAttachments: (opts.mail.attachments ?? []).length > 0,
           attachmentNames: (opts.mail.attachments ?? []).map(a => a.filename).slice(0, 10),
+          attachmentEvidence: opts.attachmentEvidenceSources || undefined,
         },
       },
     })
@@ -173,6 +191,36 @@ async function recordInboundEmail(opts: {
  * idempotency → normalize → hard exclude → thread → classify → contact → create/review/ignore.
  */
 export async function processSalesInboxLeads(opts?: {
+  limit?: number
+  includeRecentSeen?: boolean
+  lookbackHours?: number
+  dryRun?: boolean
+  /** Skip mailbox advisory lock (tests / nested dry-run). */
+  skipLock?: boolean
+}): Promise<SalesInboxProcessResult> {
+  if (opts?.skipLock) return processSalesInboxLeadsUnlocked(opts)
+
+  const locked = await withSalesInboxAdvisoryLock(() => processSalesInboxLeadsUnlocked(opts))
+  if (!locked.acquired) {
+    return {
+      configured: salesInboxConfigured(),
+      autoAssign: true,
+      mode: resolveSalesInboxPipelineConfig().mode,
+      fetched: 0,
+      created: 0,
+      skipped: 0,
+      reviewQueued: 0,
+      duplicates: 0,
+      linked: 0,
+      nonSales: 0,
+      errors: ['Sales inbox processor already running (advisory lock)'],
+      createdLeads: [],
+    }
+  }
+  return locked.result
+}
+
+async function processSalesInboxLeadsUnlocked(opts?: {
   limit?: number
   includeRecentSeen?: boolean
   lookbackHours?: number
@@ -262,18 +310,50 @@ export async function processSalesInboxLeads(opts?: {
     }
 
     const threadLead = await findThreadLead(threadId)
-    const draftPreview = draftLeadFromInboundEmail(mail)
+    const phones = extractPhonesFromText(mail.textBody || '')
     const candidates = await loadContactCandidates(
       normalizeEmail(mail.fromEmail),
-      null,
+      phones[0] || null,
     )
 
+    const evidence = extractAttachmentEvidence(mail.attachments)
+    const mailForClassify = {
+      ...mail,
+      textBody: withAttachmentEvidenceBody(mail.textBody || '', evidence),
+    }
+
+    let aiClassification: IntentClassification | null = null
+    let aiFailed = false
+    const hard = !alreadyProcessed
+      ? hardExcludeInboundEmail(mail, pipelineConfig)
+      : { exclude: true as const }
+    const closedStages = new Set(['won', 'lost', 'cancelled', 'converted', 'dead'])
+    const skipAi = alreadyProcessed
+      || Boolean(hard.exclude)
+      || Boolean(
+        threadLead
+        && !closedStages.has(String(threadLead.stage || '').toLowerCase()),
+      )
+
+    if (!skipAi) {
+      const ai = await maybeClassifyWithAi(mailForClassify, {
+        attachmentEvidence: evidence.text,
+      })
+      if (ai.ok) aiClassification = ai.classification
+      else if ('failed' in ai && ai.failed) {
+        aiFailed = true
+        result.errors.push(`classifier:${ai.error}`)
+      }
+    }
+
     const decision = decideInboundEmailPipeline({
-      mail,
+      mail: mailForClassify,
       alreadyProcessed,
       threadLead,
       contactCandidates: candidates,
       config: pipelineConfig,
+      aiClassification,
+      aiFailed,
     })
 
     if (decision.decision === 'ALREADY_PROCESSED') {
@@ -295,6 +375,7 @@ export async function processSalesInboxLeads(opts?: {
         classification: decision.classification?.classification,
         confidence: decision.classification?.confidence,
         classifierVersion: pipelineConfig.classifierVersion,
+        attachmentEvidenceSources: evidence.sources,
         dryRun: opts?.dryRun,
       })
       seenUids.push(mail.uid)
@@ -331,6 +412,7 @@ export async function processSalesInboxLeads(opts?: {
         classification: decision.classification?.classification,
         confidence: decision.classification?.confidence,
         classifierVersion: pipelineConfig.classifierVersion,
+        attachmentEvidenceSources: evidence.sources,
         leadId: decision.shouldLinkLeadId,
         dryRun: opts?.dryRun,
       })
@@ -350,6 +432,7 @@ export async function processSalesInboxLeads(opts?: {
         classification: decision.classification?.classification,
         confidence: decision.classification?.confidence,
         classifierVersion: pipelineConfig.classifierVersion,
+        attachmentEvidenceSources: evidence.sources,
         dryRun: opts?.dryRun,
       })
       seenUids.push(mail.uid)
@@ -461,6 +544,7 @@ export async function processSalesInboxLeads(opts?: {
         classification: decision.classification?.classification,
         confidence: decision.classification?.confidence,
         classifierVersion: pipelineConfig.classifierVersion,
+        attachmentEvidenceSources: evidence.sources,
         leadId: lead.id,
         clientId,
       })
@@ -479,28 +563,33 @@ export async function processSalesInboxLeads(opts?: {
 
       if (ownerId && decision.shouldNotifyAssign) {
         const owner = salesRepById.get(ownerId)
-        const notif: Omit<AppNotification, 'id' | 'createdAt' | 'read' | 'readAt'> = {
-          userId: ownerId,
-          type: 'system',
-          title: 'New inbound lead',
-          body: `${lead.name}${lead.companyName ? ` · ${lead.companyName}` : ''}`,
-          module: 'crm',
-          path: `/crm?tab=leads&leadId=${lead.id}`,
-          icon: '📧',
-          entityKey: `lead:${lead.id}`,
-        }
-        const rows = buildNotifyRows([ownerId], notif)
-        const existing = Array.isArray(state.deed_notifications) ? state.deed_notifications as AppNotification[] : []
-        state.deed_notifications = [...rows, ...existing].slice(0, 500)
+        const existing = Array.isArray(state.deed_notifications)
+          ? state.deed_notifications as AppNotification[]
+          : []
+        const { next } = buildNotifyRows(
+          existing,
+          {
+            recipients: [ownerId],
+            type: 'system',
+            title: 'New inbound lead',
+            body: `${lead.name}${lead.companyName ? ` · ${lead.companyName}` : ''}`,
+            module: 'crm',
+            path: `/crm?crmTab=leads&leadId=${lead.id}`,
+            icon: '📧',
+            entityKey: `lead:${lead.id}`,
+          },
+          () => randomUUID(),
+        )
+        state.deed_notifications = next.slice(0, 500)
         try {
           await notifyInboundLeadCreated({
-            lead: {
-              id: lead.id,
-              name: lead.name,
-              companyName: lead.companyName,
-              email: lead.email,
-              emailSubject: lead.emailSubject,
-            },
+            leadId: lead.id,
+            leadName: lead.name,
+            companyName: lead.companyName,
+            leadEmail: lead.email,
+            subject: lead.emailSubject,
+            snippet: lead.emailSnippet,
+            ownerId,
             ownerEmail: owner?.email || null,
             ownerName: owner?.username || null,
           })
@@ -530,11 +619,13 @@ export async function processSalesInboxLeads(opts?: {
 
   if (!opts?.dryRun && lastOwnerId) {
     try {
-      await saveStoreKeys({ [RR_KEY]: { lastOwnerId } })
+      await saveStoreKeys({
+        [RR_KEY]: JSON.stringify({ lastOwnerId, updatedAt: new Date().toISOString() }),
+      })
     } catch { /* ignore */ }
     if (Array.isArray(state.deed_notifications)) {
       try {
-        await saveStoreKeys({ deed_notifications: state.deed_notifications })
+        await saveStoreKeys({ deed_notifications: JSON.stringify(state.deed_notifications) })
       } catch { /* ignore */ }
     }
   }

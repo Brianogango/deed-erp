@@ -67,7 +67,15 @@ export function resolveSalesInboxPipelineConfig(
     autoCreateEnabled: mode === 'auto' && autoCreateEnabled,
     autoCreateThreshold,
     reviewThreshold,
-    classifierVersion: String(env.SALES_INBOX_CLASSIFIER_VERSION || 'rules-v3').trim(),
+    classifierVersion: String(
+      env.SALES_INBOX_CLASSIFIER_VERSION
+        || (
+          !['0', 'false', 'no', 'off'].includes(String(env.SALES_INBOX_AI_CLASSIFIER ?? 'auto').toLowerCase())
+          && Boolean((env.GEMINI_API_KEY || env.GOOGLE_AI_API_KEY || '').trim())
+            ? 'rules+gemini-v3'
+            : 'rules-v3'
+        ),
+    ).trim(),
     publicEmailDomains: csvSet(env.SALES_INBOX_PUBLIC_DOMAINS, DEFAULT_PUBLIC),
     internalDomains: csvSet(env.SALES_INBOX_INTERNAL_DOMAINS, DEFAULT_INTERNAL),
     knownBankSenders: csvSet(env.SALES_INBOX_BANK_SENDERS, DEFAULT_BANKS),

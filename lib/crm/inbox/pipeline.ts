@@ -224,20 +224,16 @@ export function decideInboundEmailPipeline(input: PipelineInput): PipelineResult
       requestSummary: null,
       products: [],
     }
-    return {
-      decision: 'REVIEW_REQUIRED',
-      processingStatus: 'REVIEW_REQUIRED',
+    // Invariant 6: never auto-create; park for human review.
+    return finishReview(
       classification,
       threadId,
-      contact: emptyContact,
+      emptyContact,
       companyName,
-      leadTitle: null,
-      shouldCreateLead: false,
-      shouldLinkLeadId: null,
-      shouldNotifyAssign: false,
-      processingReason: 'CLASSIFIER_FAILURE',
+      null,
       identity,
-    }
+      'CLASSIFIER_FAILURE',
+    )
   }
 
   classification = input.aiClassification && isValidClassification(input.aiClassification)
@@ -377,7 +373,7 @@ function finishReview(
   }
 }
 
-function isValidClassification(c: IntentClassification): boolean {
+export function isValidClassification(c: IntentClassification): boolean {
   if (!c || typeof c !== 'object') return false
   if (typeof c.confidence !== 'number' || c.confidence < 0 || c.confidence > 1) return false
   if (typeof c.buyingIntent !== 'boolean') return false

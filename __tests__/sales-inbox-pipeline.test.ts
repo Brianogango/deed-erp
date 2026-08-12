@@ -15,6 +15,14 @@ import {
 } from '@/lib/crm/inbox/contact-resolve'
 import { decideInboundEmailPipeline } from '@/lib/crm/inbox/pipeline'
 import type { ParsedInboundEmail } from '@/lib/crm/sales-inbox-leads'
+import {
+  extractAttachmentEvidence,
+  withAttachmentEvidenceBody,
+} from '@/lib/crm/inbox/attachment-evidence'
+import {
+  SALES_INBOX_LOCK_KEY,
+  salesInboxMessageLockKey,
+} from '@/lib/crm/inbox/lock-keys'
 
 const config = resolveSalesInboxPipelineConfig({
   SALES_INBOX_MODE: 'auto',
@@ -256,7 +264,8 @@ describe('thread + contact resolution', () => {
     const d = decideInboundEmailPipeline({ mail: m, config, aiFailed: true })
     expect(d.decision).toBe('REVIEW_REQUIRED')
     expect(d.processingReason).toBe('CLASSIFIER_FAILURE')
-    // Review still parks a needs_review lead rather than inventing high-confidence sales
+    // Parks needs_review lead; never auto-assigns
+    expect(d.shouldCreateLead).toBe(true)
     expect(d.shouldNotifyAssign).toBe(false)
   })
 
@@ -298,5 +307,23 @@ describe('mode gates', () => {
     const d = decideInboundEmailPipeline({ mail: m, config: shadow })
     expect(d.decision).toBe('SHADOW_RECORDED')
     expect(d.shouldCreateLead).toBe(false)
+  })
+})
+
+describe('phase-2 classifiers + evidence', () => {
+  it('extracts crude PDF attachment evidence', () => {
+    const pdf = Buffer.from('%PDF-1.4\nBT /F1 12 Tf (Please quote 15 ThinkPad laptops) Tj ET\n')
+    const evidence = extractAttachmentEvidence([
+      { filename: 'rfq.pdf', contentType: 'application/pdf', size: pdf.length, content: pdf },
+    ])
+    expect(evidence.sources[0]?.kind).toBe('pdf')
+    expect(evidence.text.toLowerCase()).toMatch(/thinkpad|laptops|quote/)
+    const enriched = withAttachmentEvidenceBody('Hello', evidence)
+    expect(enriched).toContain('attachment evidence')
+  })
+
+  it('advisory lock key is stable', () => {
+    expect(SALES_INBOX_LOCK_KEY).toBe(872_014_355)
+    expect(salesInboxMessageLockKey('IMAP', 'INBOX', '<a@b>')).toContain('sales-inbox:IMAP:INBOX:')
   })
 })

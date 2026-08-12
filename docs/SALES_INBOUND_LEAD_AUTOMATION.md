@@ -21,11 +21,12 @@ IMAP message
   → Normalize (email / phone / subject / clean body / thread id)
   → Hard exclusion (bank / payment / marketing / internal…)
   → Thread resolution (one active lead per provider thread)
-  → Sales-intent classification (rules; AI optional later)
+  → Sales-intent classification (rules + optional Gemini; money ≠ lead)
   → Confidence: auto ≥0.90 · review 0.75–0.89 · else ignore
   → Contact resolution (exact email/phone; enrich only empty fields)
   → Create lead / link thread / needs_review / skip
   → Audit row in sales_inbound_emails
+  → Advisory lock around mailbox poll
 ```
 
 **Invariants**
@@ -80,12 +81,19 @@ DATABASE_URL=… node scripts/run-safe-sales-inbound-email-pipeline.mjs
 | `SALES_INBOX_BLOCK_DOMAINS` / `SALES_INBOX_BLOCK_LOCALS` | Extra hard skips |
 | `SALES_INBOX_INTERNAL_DOMAINS` | Deed-controlled domains |
 | `SALES_INBOX_BANK_SENDERS` / `SALES_INBOX_SUPPLIER_SENDERS` | Known domains |
+| `SALES_INBOX_AI_CLASSIFIER` | `auto` (default) \| `true` \| `false` — Gemini when key present |
+| `SALES_INBOX_GEMINI_MODEL` | Optional override (else `GEMINI_MODEL`) |
+| `SALES_INBOX_CLASSIFIER_VERSION` | Audit label override |
 | `CRON_SECRET` | Cron auth |
 | `SALES_TEAM_EMAIL` | Cc / fallback notify |
 
 Logs: `/var/log/deed-erp-sales-inbox.log`
 
-CRM: **CRM → Leads** (stage **Needs review** for medium confidence / conflicts).
+CRM:
+
+- **CRM → Leads** — stage **Needs review** for medium confidence / conflicts
+- **CRM → Email review** — accept / reject / not-sales + 72h dry-run report
+- **CRM → Duplicates** — merge same email/phone contacts
 
 ## Disposition matrix
 
@@ -102,12 +110,17 @@ CRM: **CRM → Leads** (stage **Needs review** for medium confidence / conflicts
 `npm test -- --run __tests__/sales-inbox-pipeline.test.ts`
 
 Covers RFQ, bank/payment/marketing false positives, thread reuse, email/phone match,
-enrichment vs conflict, prompt-injection ignore, AI failure → review, shadow mode.
+enrichment vs conflict, prompt-injection ignore, AI failure → review, shadow mode,
+attachment evidence, advisory lock key.
 
-## Remaining (Phase 2)
+## Ops extras
 
-- Optional Gemini structured classifier behind the same confidence policy
-- Dedicated CRM Email Review UI (today: Needs review stage + audit note)
-- Duplicate Contacts review board
-- Attachment text extraction for RFQ.pdf
-- Historical dry-run report job against mailbox sample
+```bash
+# Historical dry-run report (no CRM writes)
+curl -sS -X POST -H "Authorization: Bearer $CRON_SECRET" \
+  -H "Content-Type: application/json" \
+  -d '{"lookbackHours":72,"limit":50}' \
+  http://127.0.0.1:3000/api/cron/sales-inbox-dry-run
+```
+
+Mailbox processor takes a Postgres advisory lock so overlapping crons do not double-create.

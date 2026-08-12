@@ -6,6 +6,8 @@ import { Badge, Modal, Field, Input, Select, Textarea, PanelHeader, ModuleSkelet
 import { PrimaryActionButton } from '@/components/erp'
 import ClientDetail from '@/components/crm/ClientDetail'
 import LeadsPanel from '@/components/crm/LeadsPanel'
+import EmailReviewPanel from '@/components/crm/EmailReviewPanel'
+import DuplicateContactsPanel from '@/components/crm/DuplicateContactsPanel'
 import { PivotView } from '@/components/erp/PivotView'
 import { DataTable, type ColumnDef } from '@/components/data-table'
 import {
@@ -26,7 +28,7 @@ const ACTIVITY_ICONS: Record<string, IconProp> = {
   task: faCircleCheck,
 }
 
-type Tab = 'pipeline' | 'opportunities' | 'companies' | 'contacts' | 'activities' | 'contracts' | 'sla' | 'leads'
+type Tab = 'pipeline' | 'opportunities' | 'companies' | 'contacts' | 'activities' | 'contracts' | 'sla' | 'leads' | 'email_review' | 'dup_contacts'
 type View = 'kanban' | 'list' | 'detail'
 
 const CRM_RECORD_QUERY = { crmTab: 'pipeline' }
@@ -45,11 +47,11 @@ const STAGE_LABELS: Record<OpportunityStage, string> = {
 
 const STAGE_COLORS: Record<OpportunityStage, string> = {
   prospecting: 'var(--text-3)',
-  qualification: '#2E90FA',
+  qualification: 'var(--info)',
   proposal: 'var(--warning)',
-  negotiation: '#8B5CF6',
-  closed_won: '#12B76A',
-  closed_lost: '#F04438',
+  negotiation: 'var(--primary)',
+  closed_won: 'var(--success)',
+  closed_lost: 'var(--danger)',
   on_hold: 'var(--text-3)',
 }
 
@@ -762,7 +764,11 @@ function CRMContent() {
       <TabBar
         tabs={[
           { id: 'pipeline', label: 'Pipeline' },
-          ...(systemSettings?.crmLeads ? [{ id: 'leads' as const, label: 'Leads' }] : []),
+          ...(systemSettings?.crmLeads ? [
+            { id: 'leads' as const, label: 'Leads' },
+            { id: 'email_review' as const, label: 'Email review' },
+            { id: 'dup_contacts' as const, label: 'Duplicates' },
+          ] : []),
           { id: 'companies', label: 'Companies' },
           { id: 'contacts', label: 'Contacts' },
           { id: 'activities', label: 'Activities' },
@@ -799,8 +805,8 @@ function CRMContent() {
                 style={{
                   fontSize: 11, padding: '5px 13px', borderRadius: 20, cursor: 'pointer',
                   background: ownerFilter === opt.id ? 'var(--info-bg)' : 'var(--bg-surface)',
-                  border: `1px solid ${ownerFilter === opt.id ? '#C7D2FE' : 'var(--border-lt)'}`,
-                  color: ownerFilter === opt.id ? '#4F46E5' : 'var(--text-4)', fontWeight: ownerFilter === opt.id ? 700 : 400,
+                  border: `1px solid ${ownerFilter === opt.id ? 'var(--info)' : 'var(--border-lt)'}`,
+                  color: ownerFilter === opt.id ? 'var(--info-text)' : 'var(--text-4)', fontWeight: ownerFilter === opt.id ? 700 : 400,
                   transition: 'all 0.15s',
                 }}>
                 {opt.label}
@@ -813,8 +819,8 @@ function CRMContent() {
         {isAdmin && ownerFilter === 'all' && repBreakdown.length > 0 && (
           <div className="card p-4 flex flex-col gap-2">
             <div className="flex items-center gap-2 pb-2 mb-1" style={{ borderBottom: '1px solid var(--bg-muted)' }}>
-              <div className="w-1.5 h-4 rounded-full flex-shrink-0" style={{ background: '#4F46E5' }} />
-              <p className="text-[10px] uppercase tracking-wider font-semibold" style={{ color: '#4F46E5' }}>Pipeline Value by Rep</p>
+              <div className="w-1.5 h-4 rounded-full flex-shrink-0" style={{ background: 'var(--primary)' }} />
+              <p className="text-[10px] uppercase tracking-wider font-semibold" style={{ color: 'var(--primary)' }}>Pipeline Value by Rep</p>
             </div>
             {repBreakdown.map(rep => (
               <div key={rep.id} className="flex items-center gap-3">
@@ -935,7 +941,7 @@ function CRMContent() {
                           <div className="mt-2 text-[10px]">
                             <span style={{ color: 'var(--text-3)' }}>Lead Score: </span>
                             <span style={{ 
-                              color: opp.leadScore >= 80 ? '#12B76A' : opp.leadScore >= 60 ? '#F79009' : 'var(--text-3)',
+                              color: opp.leadScore >= 80 ? 'var(--success)' : opp.leadScore >= 60 ? 'var(--warning)' : 'var(--text-3)',
                               fontWeight: 700,
                             }}>
                               {opp.leadScore}/100
@@ -1097,6 +1103,28 @@ function CRMContent() {
     )
   }
 
+  if (tab === 'email_review' && systemSettings?.crmLeads) {
+    return (
+      <div className="mod-page">
+        {moduleHeader}
+        <div className="mod-body p-3 sm:p-4 flex flex-col gap-4">
+          <EmailReviewPanel showToast={showToast} salesReps={salesReps} />
+        </div>
+      </div>
+    )
+  }
+
+  if (tab === 'dup_contacts' && systemSettings?.crmLeads) {
+    return (
+      <div className="mod-page">
+        {moduleHeader}
+        <div className="mod-body p-3 sm:p-4 flex flex-col gap-4">
+          <DuplicateContactsPanel showToast={showToast} />
+        </div>
+      </div>
+    )
+  }
+
   // Contracts Tab
   if (tab === 'contracts') {
     return (
@@ -1120,7 +1148,7 @@ function CRMContent() {
               return !s || c.ref.toLowerCase().includes(s) || c.companyName.toLowerCase().includes(s) ||
                 c.type.toLowerCase().includes(s) || c.contactPersonName.toLowerCase().includes(s)
             }).map(contract => (
-              <div key={contract.id} className="p-4 transition-colors" onMouseEnter={e=>{(e.currentTarget as HTMLElement).style.background='#F8F9FC'}} onMouseLeave={e=>{(e.currentTarget as HTMLElement).style.background=''}}>
+              <div key={contract.id} className="p-4 transition-colors" onMouseEnter={e=>{(e.currentTarget as HTMLElement).style.background='var(--bg-muted)'}} onMouseLeave={e=>{(e.currentTarget as HTMLElement).style.background=''}}>
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1 flex-wrap">
@@ -1141,7 +1169,7 @@ function CRMContent() {
                     <div className="text-[10px] mt-1" style={{ color: 'var(--text-3)' }}>{contract.paymentSchedule}</div>
                     <div className="mt-2 flex gap-1 justify-end">
                       <button className="btn-outline text-[9px] py-1 px-2" onClick={() => renewCustomerContract(contract.id)}>Renew</button>
-                      <button className="btn-outline text-[9px] py-1 px-2" style={{ color: '#F04438' }} onClick={() => terminateCustomerContract(contract.id, 'Manual termination')}>Terminate</button>
+                      <button className="btn-outline text-[9px] py-1 px-2" style={{ color: 'var(--danger)' }} onClick={() => terminateCustomerContract(contract.id, 'Manual termination')}>Terminate</button>
                     </div>
                   </div>
                 </div>
@@ -1296,7 +1324,7 @@ function CRMContent() {
             }).map(activity => {
               const opp = opportunities.find(o => o.id === activity.opportunityId)
               return (
-                <div key={activity.id} className="p-4 transition-colors" onMouseEnter={e=>{(e.currentTarget as HTMLElement).style.background='#F8F9FC'}} onMouseLeave={e=>{(e.currentTarget as HTMLElement).style.background=''}}>
+                <div key={activity.id} className="p-4 transition-colors" onMouseEnter={e=>{(e.currentTarget as HTMLElement).style.background='var(--bg-muted)'}} onMouseLeave={e=>{(e.currentTarget as HTMLElement).style.background=''}}>
                   <div className="flex items-start gap-3">
                     <span style={{ fontSize: 18, color: 'var(--text-3)' }} aria-hidden="true">
                       <Fa icon={ACTIVITY_ICONS[activity.type] ?? faNoteSticky} />
@@ -1441,7 +1469,7 @@ function OpportunityDetail({ activeOppId, onClose, stageLabels, onMarkWon, onMar
           {!['closed_won', 'closed_lost'].includes(opp.stage) && (
             <>
               <button className="btn-primary" style={{ background: 'var(--success)' }} onClick={onMarkWon}>✓ Mark Won</button>
-              <button className="btn-outline" style={{ color: 'var(--danger)', borderColor: '#FCA5A5' }} onClick={onMarkLost}>✗ Mark Lost</button>
+              <button className="btn-outline" style={{ color: 'var(--danger)', borderColor: 'var(--danger)' }} onClick={onMarkLost}>✗ Mark Lost</button>
             </>
           )}
         </div>
