@@ -174,6 +174,34 @@ export async function PUT(request: Request, { params }: { params: { id: string }
       if (!lock.ok) {
         return NextResponse.json({ error: lock.error }, { status: lock.status })
       }
+
+      // Phase 3: server 3-way match before posting a vendor bill linked to a PO.
+      const preMirror = await resolveBlobInvoiceMirror(params.id)
+      const willBeVendor = body.type === 'vendor_bill' || preMirror.type === 'vendor_bill'
+      const poId = optionalUuid(body.purchaseOrderId)
+        ?? preMirror.purchaseOrderId
+        ?? null
+      if (willBeVendor && poId) {
+        try {
+          const { assertVendorBillThreeWayMatchServer } = await import('@/lib/purchase/assert-bill-match.server')
+          const billLines = (lines ?? preMirror.lines ?? before.items.map(i => ({
+            productId: i.productId ?? undefined,
+            qty: Number(i.qty),
+            description: i.description,
+          }))).map((l: any) => ({
+            productId: l?.productId,
+            qty: Number(l?.qty) || 0,
+            description: l?.description,
+          }))
+          await assertVendorBillThreeWayMatchServer({
+            purchaseOrderId: poId,
+            billLines,
+          })
+        } catch (err: any) {
+          const status = typeof err?.status === 'number' ? err.status : 409
+          return NextResponse.json({ error: err?.message || '3-way match failed' }, { status })
+        }
+      }
     }
 
     const invoice = await prisma.invoice.update({

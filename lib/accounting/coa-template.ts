@@ -46,6 +46,7 @@ export function buildZeroBalanceCoaTemplate(): CoaTemplateAccount[] {
   a.push(...productCodes('16', 'Inventory - Closing', 'Finished Products'))
 
   a.push(
+    { code: '1150', name: 'VAT Input', type: 'asset', group: 'Receivables - Tax', subGroup: 'VAT', balance: 0, notes: 'Input VAT recoverable on vendor bills' },
     { code: '1701', name: 'Computer & Accessories', type: 'asset', group: 'PPE - Cost', subGroup: 'Cost', balance: 0 },
     { code: '1702', name: 'Furniture & Fittings', type: 'asset', group: 'PPE - Cost', subGroup: 'Cost', balance: 0 },
     { code: '1703', name: 'Office Equipment', type: 'asset', group: 'PPE - Cost', subGroup: 'Cost', balance: 0 },
