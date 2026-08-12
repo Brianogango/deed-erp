@@ -167,8 +167,8 @@ Legend: **HAVE** · **PARTIAL** · **MISSING**
 | FIN-001 posted invoice immutability | **HAVE** | store API guards |
 | Finance seals (bank recon, cancel, reimburse) | **HAVE** | `finance-controls.ts` |
 | Payment receipt notify on paid | **HAVE** | invoice paid receipt automation |
-| Certify / retire `deed_journalEntries` | **PARTIAL** | dual_write trackable; not certified |
-| Single report SoT | **MISSING** | |
+| Certify / retire `deed_journalEntries` | **PARTIAL** | Phase 9: ref deep-parity + certify readiness; **retire deferred** |
+| Single report SoT | **PARTIAL** | Prisma default + certified/provisional banner; blob toggles remain |
 
 ---
 

@@ -407,6 +407,36 @@ function AccountingContent() {
     plView: 'management',
   })
 
+  const [journalSot, setJournalSot] = useState<{
+    ok: boolean
+    certified: boolean
+    certifiedAt?: string | null
+    coveragePct?: number | null
+  } | null>(null)
+
+  useEffect(() => {
+    if (tab !== 'reports') return
+    let cancelled = false
+    void fetch('/api/admin/journal-parity')
+      .then(async res => {
+        if (!res.ok) return null
+        return res.json()
+      })
+      .then(data => {
+        if (cancelled || !data) return
+        const coverage = data.refs?.coveragePct ?? null
+        const certified = data.certificate?.status === 'certified' || data.certificate?.status === 'archived'
+        setJournalSot({
+          ok: Boolean(data.ok),
+          certified: Boolean(certified && data.certificate?.parityOk),
+          certifiedAt: data.certificate?.certifiedAt ?? null,
+          coveragePct: coverage,
+        })
+      })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [tab])
+
   // ── Invoice / Bill state ────────────────────────────────────────────────────
   const [invFilter, setInvFilter] = useState('all')
   const [invSearch, setInvSearch] = useState('')
@@ -1212,18 +1242,48 @@ function AccountingContent() {
 
         <div className="mod-body">
         {tab === 'reports' && (
-          <div className="mb-3 rounded-xl border border-border-lt bg-card p-2">
-            <div className="px-1 pb-1 text-xs font-semibold text-text-3">Reports</div>
-            <TabBar
-              tabs={REPORT_TABS.map(t => ({ id: t.id, label: t.label }))}
-              active={reportTab}
-              onChange={id => setReport(id as ReportTab)}
-              className="border-0 px-0 py-0 bg-transparent"
-              maxVisibleMobile={4}
-              maxVisibleTablet={7}
-              maxVisibleDesktop={7}
-              ariaLabel="Report types"
-            />
+          <div className="mb-3 space-y-2">
+            <div className="rounded-xl border border-border-lt bg-card p-2">
+              <div className="px-1 pb-1 text-xs font-semibold text-text-3">Reports</div>
+              <TabBar
+                tabs={REPORT_TABS.map(t => ({ id: t.id, label: t.label }))}
+                active={reportTab}
+                onChange={id => setReport(id as ReportTab)}
+                className="border-0 px-0 py-0 bg-transparent"
+                maxVisibleMobile={4}
+                maxVisibleTablet={7}
+                maxVisibleDesktop={7}
+                ariaLabel="Report types"
+              />
+            </div>
+            {journalSot && (
+              <div
+                className={`rounded-xl border px-3 py-2 text-xs ${
+                  journalSot.certified
+                    ? 'border-emerald-200 bg-emerald-50 text-emerald-950'
+                    : 'border-amber-200 bg-amber-50 text-amber-950'
+                }`}
+                role="status"
+              >
+                {journalSot.certified ? (
+                  <>
+                    Report SoT: Prisma GL journals <strong>certified</strong>
+                    {journalSot.certifiedAt
+                      ? ` (${new Date(journalSot.certifiedAt).toLocaleDateString('en-KE')})`
+                      : ''}. Blob legacy toggles remain available until retire.
+                  </>
+                ) : (
+                  <>
+                    Report SoT: Prisma GL is <strong>provisional</strong> until{' '}
+                    <code className="text-[11px]">deed_journalEntries</code> is certified
+                    {journalSot.coveragePct != null
+                      ? ` (ref coverage ${Math.round(journalSot.coveragePct * 100)}%)`
+                      : ''}
+                    . Certify from Settings → Data Cutover after verify.
+                  </>
+                )}
+              </div>
+            )}
           </div>
         )}
         {/* ── Tab Content ────────────────────────────────────────────────────── */}
