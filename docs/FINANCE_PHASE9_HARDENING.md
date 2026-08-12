@@ -19,6 +19,8 @@
 - **Report banner:** Prisma reports stay usable; banner shows provisional until journals are certified.
 - `ACCOUNTING_POSTING_ENGINE` remains **off** by default.
 
+Follow-up: [Phase 10 — retire readiness + soak](./FINANCE_PHASE10_RETIRE_SOAK.md).
+
 ## Tests
 
 ```bash

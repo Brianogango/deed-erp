@@ -16,6 +16,7 @@ import {
   retireLiveBlobKey,
   upsertCutoverCertificate,
   verifyBlobParity,
+  verifyJournalParityReport,
 } from '@/lib/blob-cutover.server'
 
 export const dynamic = 'force-dynamic'
@@ -226,6 +227,19 @@ export async function POST(req: NextRequest) {
         ok: false,
         error: 'Archive+certify required before retiring the live key',
       }, { status: 409 })
+    }
+
+    // Phase 10: journals require deep readiness (writers still blob-backed → 409).
+    if (blobKey === 'deed_journalEntries') {
+      const journalReport = await verifyJournalParityReport()
+      if (!journalReport.retireReadiness?.retireReady) {
+        return NextResponse.json({
+          ok: false,
+          error: 'Journal retire readiness failed — live key not deleted',
+          retireReadiness: journalReport.retireReadiness,
+          blockers: journalReport.retireReadiness?.blockers,
+        }, { status: 409 })
+      }
     }
 
     const retired = await retireLiveBlobKey(blobKey, cert.archiveKey!)

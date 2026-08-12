@@ -13,6 +13,8 @@ import {
   type BlobParityCheck,
 } from '@/lib/blob-cutover'
 import { evaluateJournalDeepParity, extractJournalRefs } from '@/lib/accounting/journal-parity'
+import { evaluateJournalRetireReadiness } from '@/lib/accounting/journal-retire-readiness'
+import { isAccountingPostingEngineEnabled } from '@/lib/accounting/posting-flag'
 
 async function readAppState(key: string): Promise<string | null> {
   try {
@@ -217,6 +219,17 @@ export async function verifyJournalParityReport() {
   const deep = await runJournalDeepParity(raw, prismaCount)
   const certificates = await listCutoverCertificates()
   const journalCert = certificates.find(c => c.blobKey === 'deed_journalEntries') ?? null
+  const retireReadiness = evaluateJournalRetireReadiness({
+    deepParityOk: deep.ok,
+    deepParityReason: deep.blockedReason,
+    certificateStatus: journalCert?.status ?? null,
+    certificateParityOk: journalCert?.parityOk ?? null,
+    archiveKey: journalCert?.archiveKey ?? null,
+    // Until store writers are migrated, keep this true so retire stays blocked.
+    storeStillBlobWrites: true,
+    postingEngineEnabled: isAccountingPostingEngineEnabled(),
+    writersMigratedOffBlob: false,
+  })
   return {
     blobKey: 'deed_journalEntries',
     prismaTable: 'journal_entries',
@@ -228,10 +241,12 @@ export async function verifyJournalParityReport() {
           parityOk: journalCert.parityOk,
           certifiedAt: journalCert.certifiedAt,
           certifiedBy: journalCert.certifiedBy,
+          archiveKey: journalCert.archiveKey,
           notes: journalCert.notes,
         }
       : null,
-    note: 'Certify ≠ retire. Prisma-ahead refs (STK/FX/engine) are allowed; every blob ref must exist in Prisma.',
+    retireReadiness,
+    note: 'Certify ≠ retire. Prisma-ahead refs (STK/FX/engine) are allowed; every blob ref must exist in Prisma. Retire stays blocked while storeStillBlobWrites=true.',
   }
 }
 

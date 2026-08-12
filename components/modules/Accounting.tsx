@@ -412,6 +412,7 @@ function AccountingContent() {
     certified: boolean
     certifiedAt?: string | null
     coveragePct?: number | null
+    retireReady?: boolean
   } | null>(null)
 
   useEffect(() => {
@@ -431,6 +432,7 @@ function AccountingContent() {
           certified: Boolean(certified && data.certificate?.parityOk),
           certifiedAt: data.certificate?.certifiedAt ?? null,
           coveragePct: coverage,
+          retireReady: Boolean(data.retireReadiness?.retireReady),
         })
       })
       .catch(() => {})
@@ -1270,7 +1272,10 @@ function AccountingContent() {
                     Report SoT: Prisma GL journals <strong>certified</strong>
                     {journalSot.certifiedAt
                       ? ` (${new Date(journalSot.certifiedAt).toLocaleDateString('en-KE')})`
-                      : ''}. Blob legacy toggles remain available until retire.
+                      : ''}.
+                    {journalSot.retireReady
+                      ? ' Live blob key is retire-ready (Director cutover API).'
+                      : ' Live blob key is not retire-ready while store still writes journals.'}
                   </>
                 ) : (
                   <>
