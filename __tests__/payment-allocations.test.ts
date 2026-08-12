@@ -14,7 +14,29 @@ describe('payment allocation math', () => {
       { invoiceId: 'inv-2', amount: 3000 },
     ], residuals)
     expect(result.ok).toBe(false)
-    if (!result.ok) expect(result.error).toContain('exceed payment amount')
+    if (!result.ok) expect(result.error).toContain('exceed available amount')
+  })
+
+  it('allows under-allocation (outstanding remainder)', () => {
+    const residuals = new Map([['inv-1', 5000]])
+    const result = validateAllocationTotals(6000, [
+      { invoiceId: 'inv-1', amount: 4000 },
+    ], residuals)
+    expect(result).toEqual({ ok: true })
+  })
+
+  it('allows empty allocations when allowEmpty is set', () => {
+    const result = validateAllocationTotals(1500, [], new Map(), { allowEmpty: true })
+    expect(result).toEqual({ ok: true })
+  })
+
+  it('caps new allocations to remaining unallocated ceiling', () => {
+    const residuals = new Map([['inv-1', 5000]])
+    const result = validateAllocationTotals(10000, [
+      { invoiceId: 'inv-1', amount: 500 },
+    ], residuals, { allocationCeiling: 400 })
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.error).toContain('exceed available amount')
   })
 
   it('rejects allocation exceeding invoice residual', () => {

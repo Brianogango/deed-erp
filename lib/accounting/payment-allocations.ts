@@ -1,26 +1,46 @@
 import 'server-only'
 import prisma from '@/lib/prisma'
 import { invoiceResidual, roundMoney } from '@/lib/accounting/money'
+import {
+  paymentAllocatedSum,
+  paymentUnallocated,
+} from '@/lib/accounting/residuals'
 
 export function round2(n: number) {
   return roundMoney(n)
 }
 
-export { invoiceResidual }
+export { invoiceResidual, paymentAllocatedSum, paymentUnallocated }
 
 export type AllocationInput = { invoiceId: string; amount: number }
+
+export type ValidateAllocationOptions = {
+  /** Allow sum(allocations) === 0 (standalone outstanding receipt/payment). */
+  allowEmpty?: boolean
+  /**
+   * Ceiling for new allocations. Defaults to paymentAmount.
+   * When allocating onto an existing payment, pass the unallocated remainder.
+   */
+  allocationCeiling?: number
+}
 
 export function validateAllocationTotals(
   paymentAmount: number,
   allocations: AllocationInput[],
   invoiceResiduals: Map<string, number>,
+  opts?: ValidateAllocationOptions,
 ): { ok: true } | { ok: false; error: string } {
   const totalAllocated = round2(allocations.reduce((s, a) => s + Number(a.amount || 0), 0))
   if (totalAllocated <= 0) {
+    if (opts?.allowEmpty && round2(paymentAmount) > 0) return { ok: true }
     return { ok: false, error: 'At least one positive allocation is required' }
   }
-  if (totalAllocated > round2(paymentAmount) + 0.01) {
-    return { ok: false, error: `Allocations (${totalAllocated}) exceed payment amount (${paymentAmount})` }
+  const ceiling = round2(opts?.allocationCeiling ?? paymentAmount)
+  if (totalAllocated > ceiling + 0.01) {
+    return {
+      ok: false,
+      error: `Allocations (${totalAllocated}) exceed available amount (${ceiling})`,
+    }
   }
   for (const alloc of allocations) {
     const residual = invoiceResiduals.get(alloc.invoiceId)
@@ -42,6 +62,25 @@ export async function sumAllocationsForInvoice(invoiceId: string): Promise<numbe
   return round2(rows.reduce((s, r) => s + Number(r.amount || 0), 0))
 }
 
+export async function sumAllocationsForPayment(paymentId: string): Promise<number> {
+  const rows = await prisma.paymentAllocation.findMany({
+    where: { paymentId, payment: { isVoided: false } },
+    select: { amount: true },
+  })
+  return round2(rows.reduce((s, r) => s + Number(r.amount || 0), 0))
+}
+
+async function sumAllocationsForInvoiceInTx(
+  tx: Pick<typeof prisma, 'paymentAllocation'>,
+  invoiceId: string,
+): Promise<number> {
+  const rows = await tx.paymentAllocation.findMany({
+    where: { invoiceId, payment: { isVoided: false } },
+    select: { amount: true },
+  })
+  return round2(rows.reduce((s, r) => s + Number(r.amount || 0), 0))
+}
+
 export async function allocatePayment(opts: {
   paymentId: string
   allocations: AllocationInput[]
@@ -55,10 +94,18 @@ export async function allocatePayment(opts: {
     throw new Error('Cannot allocate a voided payment')
   }
 
+  const alreadyAllocated = paymentAllocatedSum(
+    payment.allocations.map(a => ({ amount: Number(a.amount) })),
+  )
+  const available = paymentUnallocated(Number(payment.amount), alreadyAllocated)
+  if (available <= 0.009) {
+    throw new Error('Payment has no unallocated amount remaining')
+  }
+
   const invoiceIds = [...new Set(opts.allocations.map(a => a.invoiceId))]
   const invoices = await prisma.invoice.findMany({
     where: { id: { in: invoiceIds } },
-    select: { id: true, totalAmount: true, amountPaid: true },
+    select: { id: true, totalAmount: true, amountPaid: true, paymentBlocked: true },
   })
   const invoiceMap = new Map(invoices.map(i => [i.id, i]))
 
@@ -66,14 +113,20 @@ export async function allocatePayment(opts: {
   for (const invoiceId of invoiceIds) {
     const inv = invoiceMap.get(invoiceId)
     if (!inv) throw new Error(`Invoice not found: ${invoiceId}`)
+    if (inv.paymentBlocked) throw new Error(`Payments blocked on invoice ${invoiceId}`)
     const allocated = await sumAllocationsForInvoice(invoiceId)
     residuals.set(invoiceId, invoiceResidual(Number(inv.totalAmount), allocated))
   }
 
-  const validation = validateAllocationTotals(Number(payment.amount), opts.allocations, residuals)
+  const validation = validateAllocationTotals(
+    Number(payment.amount),
+    opts.allocations,
+    residuals,
+    { allocationCeiling: available },
+  )
   if (!validation.ok) throw new Error(validation.error)
 
-  return prisma.$transaction(async (tx) => {
+  const result = await prisma.$transaction(async (tx) => {
     const created = []
     for (const alloc of opts.allocations) {
       const row = await tx.paymentAllocation.create({
@@ -93,17 +146,14 @@ export async function allocatePayment(opts: {
     }
     return { payment, allocations: created }
   })
-}
 
-async function sumAllocationsForInvoiceInTx(
-  tx: Pick<typeof prisma, 'paymentAllocation'>,
-  invoiceId: string,
-): Promise<number> {
-  const rows = await tx.paymentAllocation.findMany({
-    where: { invoiceId, payment: { isVoided: false } },
-    select: { amount: true },
-  })
-  return round2(rows.reduce((s, r) => s + Number(r.amount || 0), 0))
+  const newAllocated = round2(alreadyAllocated + paymentAllocatedSum(
+    result.allocations.map(a => ({ amount: Number(a.amount) })),
+  ))
+  return {
+    ...result,
+    unallocatedAmount: paymentUnallocated(Number(payment.amount), newAllocated),
+  }
 }
 
 export async function recordPaymentWithAllocations(opts: {
@@ -117,12 +167,16 @@ export async function recordPaymentWithAllocations(opts: {
   invoiceId?: string | null
   idempotencyKey?: string
   allocations: AllocationInput[]
+  /** Allow zero allocations (outstanding receipt/payment). */
+  allowUnallocated?: boolean
 }) {
   const invoiceIds = [...new Set(opts.allocations.map(a => a.invoiceId))]
-  const invoices = await prisma.invoice.findMany({
-    where: { id: { in: invoiceIds } },
-    select: { id: true, totalAmount: true, amountPaid: true, status: true, paymentBlocked: true },
-  })
+  const invoices = invoiceIds.length
+    ? await prisma.invoice.findMany({
+        where: { id: { in: invoiceIds } },
+        select: { id: true, totalAmount: true, amountPaid: true, status: true, paymentBlocked: true },
+      })
+    : []
   const invoiceMap = new Map(invoices.map(i => [i.id, i]))
 
   const residuals = new Map<string, number>()
@@ -134,12 +188,14 @@ export async function recordPaymentWithAllocations(opts: {
     residuals.set(invoiceId, invoiceResidual(Number(inv.totalAmount), allocated))
   }
 
-  const validation = validateAllocationTotals(opts.amount, opts.allocations, residuals)
+  const validation = validateAllocationTotals(opts.amount, opts.allocations, residuals, {
+    allowEmpty: Boolean(opts.allowUnallocated),
+  })
   if (!validation.ok) throw new Error(validation.error)
 
   const primaryInvoiceId = opts.invoiceId ?? invoiceIds[0] ?? null
 
-  return prisma.$transaction(async (tx) => {
+  const created = await prisma.$transaction(async (tx) => {
     const payment = await tx.payment.create({
       data: {
         ...(opts.idempotencyKey && /^[0-9a-f-]{36}$/i.test(opts.idempotencyKey)
@@ -176,4 +232,12 @@ export async function recordPaymentWithAllocations(opts: {
 
     return { payment, allocations }
   })
+
+  const allocatedSum = paymentAllocatedSum(
+    created.allocations.map(a => ({ amount: Number(a.amount) })),
+  )
+  return {
+    ...created,
+    unallocatedAmount: paymentUnallocated(opts.amount, allocatedSum),
+  }
 }
