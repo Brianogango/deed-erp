@@ -3,13 +3,20 @@
 import type { ApprovalRequest, ApprovalLevel, ApprovalType } from './sales-flow-types'
 import {
   APPROVAL_RULES,
+  approvalRolesAreAnyOf,
   extractApprovalValue,
   getApprovalRolesSync,
   rolesFromThresholds,
   type ApprovalThreshold,
 } from '@/lib/sales-approval-rules'
 
-export { APPROVAL_RULES, extractApprovalValue, getApprovalRolesSync, rolesFromThresholds }
+export {
+  APPROVAL_RULES,
+  approvalRolesAreAnyOf,
+  extractApprovalValue,
+  getApprovalRolesSync,
+  rolesFromThresholds,
+}
 export type { ApprovalThreshold }
 
 /**
@@ -25,8 +32,15 @@ export function requiresApproval(
   return requiredRoles.length > 0
 }
 
+function levelRoles(level: ApprovalLevel): string[] {
+  if (Array.isArray(level.roles) && level.roles.length > 0) return level.roles
+  return level.role ? [level.role] : []
+}
+
 /**
- * Get required approval levels
+ * Get required approval levels.
+ * Price types collapse into a single any-of level (Director OR Finance).
+ * Other types keep a sequential role chain.
  */
 export function getApprovalLevels(
   type: ApprovalType,
@@ -34,13 +48,24 @@ export function getApprovalLevels(
   availableApprovers: { id: string; name: string; role: string }[]
 ): ApprovalLevel[] {
   const requiredRoles = getApprovalRolesSync(type, details)
-  
+  if (requiredRoles.length === 0) return []
+
+  if (approvalRolesAreAnyOf(type)) {
+    const approvers = availableApprovers.filter(a => requiredRoles.includes(a.role))
+    return [{
+      level: 1,
+      role: requiredRoles[0] as ApprovalLevel['role'],
+      roles: requiredRoles as ApprovalLevel['roles'],
+      approverIds: approvers.map(a => a.id),
+    }]
+  }
+
   return requiredRoles.map((role, index) => {
     const approvers = availableApprovers.filter(a => a.role === role)
-    
     return {
       level: index + 1,
-      role: role as any,
+      role: role as ApprovalLevel['role'],
+      roles: [role as ApprovalLevel['role']],
       approverIds: approvers.map(a => a.id),
     }
   })
@@ -95,11 +120,11 @@ export function processApproval(
     throw new Error('Invalid approval level')
   }
 
-  // Prefer the snapshot list, but also allow anyone currently holding the
-  // required role (covers stale approverIds when users were missing at create).
+  // Prefer the snapshot list, but also allow anyone currently holding a
+  // required role for this level (covers stale approverIds / any-of price roles).
   const authorized =
     currentLevel.approverIds.includes(approverId)
-    || (Boolean(approverRole) && approverRole === currentLevel.role)
+    || (Boolean(approverRole) && levelRoles(currentLevel).includes(String(approverRole)))
   
   if (!authorized) {
     throw new Error('User not authorized to approve at this level')
@@ -180,7 +205,7 @@ export function canApprove(
   if (!currentLevel) return false
 
   if (currentLevel.approverIds.includes(userId)) return true
-  if (userRole && currentLevel.role === userRole) return true
+  if (userRole && levelRoles(currentLevel).includes(userRole)) return true
   return false
 }
 
@@ -192,7 +217,8 @@ export function approvalRecipientIds(
   const currentLevel = request.approvers.find(a => a.level === request.currentLevel)
   if (!currentLevel) return []
   const fromSnapshot = currentLevel.approverIds ?? []
-  const fromRole = users.filter(u => u.role === currentLevel.role).map(u => u.id)
+  const allowed = new Set(levelRoles(currentLevel))
+  const fromRole = users.filter(u => allowed.has(u.role)).map(u => u.id)
   return [...new Set([...fromSnapshot, ...fromRole].filter(Boolean))]
 }
 

@@ -27,10 +27,13 @@ describe('accounting ids', () => {
 })
 
 describe('approval thresholds', () => {
-  it('keeps hardcoded discount ladders', () => {
+  it('keeps price approvals as Director OR Finance (not a chain)', () => {
     expect(APPROVAL_RULES.discount({ discountPercent: 5 })).toEqual([])
-    expect(APPROVAL_RULES.discount({ discountPercent: 15 })).toEqual(['director'])
+    expect(APPROVAL_RULES.discount({ discountPercent: 15 })).toEqual(['director', 'finance_officer'])
     expect(APPROVAL_RULES.discount({ discountPercent: 55 })).toEqual(['director', 'finance_officer'])
+    expect(APPROVAL_RULES.special_pricing({})).toEqual(['director', 'finance_officer'])
+    expect(APPROVAL_RULES.backorder({ backorderQty: 3 })).toEqual([])
+    expect(APPROVAL_RULES.backorder({ backorderQty: 50 })).toEqual([])
   })
 
   it('resolves DB-style thresholds by value', () => {

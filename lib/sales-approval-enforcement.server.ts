@@ -216,6 +216,19 @@ function rolesSatisfied(requiredRoles: string[], approvedRoles: string[]): boole
   return requiredRoles.every(r => approved.has(r))
 }
 
+function triggerRolesSatisfied(
+  type: ApprovalType,
+  requiredRoles: string[],
+  approvedRoles: string[],
+): boolean {
+  if (requiredRoles.length === 0) return true
+  const approved = new Set(approvedRoles)
+  if (type === 'discount' || type === 'special_pricing') {
+    return requiredRoles.some(r => approved.has(r))
+  }
+  return rolesSatisfied(requiredRoles, approvedRoles)
+}
+
 async function hasApprovedRequest(orderId: string, type: ApprovalType): Promise<boolean> {
   try {
     const state = await loadAppState(['deed_approvalRequests'])
@@ -269,12 +282,14 @@ export async function enforceSaleOrderApprovals(opts: {
   const triggers = await collectApprovalTriggers(body, existing)
   const requiredTypes: ApprovalType[] = []
   const requiredRoles: string[] = []
+  const triggerRoleSets: Array<{ type: ApprovalType; roles: string[] }> = []
 
   for (const trigger of triggers) {
     const needs = await requiresApprovalAsync(trigger.type, trigger.details)
     if (!needs) continue
     requiredTypes.push(trigger.type)
     const roles = await getApprovalRoles(trigger.type, trigger.details)
+    triggerRoleSets.push({ type: trigger.type, roles })
     roles.forEach(r => {
       if (!requiredRoles.includes(r)) requiredRoles.push(r)
     })
@@ -299,12 +314,14 @@ export async function enforceSaleOrderApprovals(opts: {
     approvedRoles.push(opts.sessionRole)
   }
 
-  if (!rolesSatisfied(requiredRoles, [...new Set(approvedRoles)])) {
+  const uniqApproved = [...new Set(approvedRoles)]
+  const unmet = triggerRoleSets.filter(t => !triggerRolesSatisfied(t.type, t.roles, uniqApproved))
+  if (unmet.length > 0) {
     return {
       ok: false,
       status: 403,
       error: 'Approval required for discount, credit override, or pricing exception',
-      requiredRoles,
+      requiredRoles: [...new Set(unmet.flatMap(t => t.roles))],
     }
   }
 
