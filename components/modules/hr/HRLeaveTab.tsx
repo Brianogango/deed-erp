@@ -63,8 +63,13 @@ export default function HRLeaveTab() {
   const currentUser = users.find(u => u.id === currentUserId) ?? null
   const isAdmin     = currentUser?.role === 'director'
   const isFinance   = currentUser?.role === 'finance_officer'
+  const isAdminOfficer = currentUser?.role === 'admin_officer'
   const isLeadTech  = currentUser?.role === 'technical_lead'
-  const canViewTeamHR = isAdmin || isFinance || isLeadTech
+  const canViewTeamHR = isAdmin || isFinance || isAdminOfficer || isLeadTech
+
+  const [decideId, setDecideId] = useState<string | null>(null)
+  const [decideNote, setDecideNote] = useState('')
+  const [decideError, setDecideError] = useState('')
 
   const myEmployee      = employees.find(e => e.userId === currentUserId) ?? null
   const myLeaves        = leaveRequests.filter(r => r.employeeId === myEmployee?.id)
@@ -75,7 +80,7 @@ export default function HRLeaveTab() {
   const canDecideLeaveFor = (req: { employeeId: string }) => {
     // Own requests are decided by someone else, whatever the caller's role.
     if (myEmployee && req.employeeId === myEmployee.id) return false
-    if (isAdmin || isFinance) return true
+    if (isAdmin || isFinance || isAdminOfficer) return true
     if (isLeadTech) {
       const emp = employees.find(e => e.id === req.employeeId)
       const u   = users.find(u => u.id === emp?.userId)
@@ -210,26 +215,23 @@ export default function HRLeaveTab() {
       render: req => <span style={{ fontSize: 11, color: 'var(--text-4)' }} className="truncate">{req.reason || '—'}</span>,
       exportValue: req => req.reason ?? '',
     },
+    {
+      key: 'hrNote', label: 'HR note', priority: 3, width: '1.2fr',
+      render: req => <span style={{ fontSize: 11, color: 'var(--text-3)' }} className="truncate">{req.reviewNotes || '—'}</span>,
+      exportValue: req => req.reviewNotes ?? '',
+    },
   ]
 
   function leaveRowActions(req: LeaveRequestRow) {
     return (
       <span className="flex gap-1 items-center flex-wrap">
         {req.status === 'pending_hr' && canDecideLeaveFor(req) && (
-          <>
-            <button
-              style={{ background: 'var(--success-bg)', border: 'none', borderRadius: 6, color: 'var(--success)', padding: '3px 8px', fontSize: 10, cursor: 'pointer', fontWeight: 500, display: 'inline-flex', alignItems: 'center', gap: 4 }}
-              onClick={e => { e.stopPropagation(); decideLeaveRequest(req.id, true) }}
-            >
-              <Fa icon={faCheck} style={{ fontSize: 9 }} /> Approve
-            </button>
-            <button
-              style={{ background: 'var(--danger-bg)', border: 'none', borderRadius: 6, color: 'var(--danger)', padding: '3px 8px', fontSize: 10, cursor: 'pointer', fontWeight: 500, display: 'inline-flex', alignItems: 'center', gap: 4 }}
-              onClick={e => { e.stopPropagation(); decideLeaveRequest(req.id, false) }}
-            >
-              <Fa icon={faXmark} style={{ fontSize: 9 }} /> Reject
-            </button>
-          </>
+          <button
+            style={{ background: 'var(--primary-light)', border: 'none', borderRadius: 6, color: 'var(--navy)', padding: '3px 8px', fontSize: 10, cursor: 'pointer', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 4 }}
+            onClick={e => { e.stopPropagation(); setDecideId(req.id); setDecideNote(''); setDecideError('') }}
+          >
+            <Fa icon={faCheck} style={{ fontSize: 9 }} /> Decide
+          </button>
         )}
         {req.status === 'approved' && (
           <span className="flex items-center gap-1" style={{ color: 'var(--success)', fontSize: 10 }}>
@@ -237,7 +239,7 @@ export default function HRLeaveTab() {
           </span>
         )}
         {req.status === 'rejected' && (
-          <span className="flex items-center gap-1" style={{ color: 'var(--danger)', fontSize: 10 }}>
+          <span className="flex items-center gap-1" style={{ color: 'var(--danger)', fontSize: 10 }} title={req.reviewNotes || undefined}>
             <Fa icon={faCircleXmark} style={{ fontSize: 10 }} /> Rejected
           </span>
         )}
@@ -448,6 +450,64 @@ export default function HRLeaveTab() {
           </div>
         </Modal>
       )}
+      {decideId && (() => {
+        const req = leaveRequests.find(r => r.id === decideId)
+        if (!req) return null
+        const submit = (approved: boolean) => {
+          const note = decideNote.trim()
+          if (!approved && !note) {
+            setDecideError('Add a note so the applicant knows why the leave was declined.')
+            return
+          }
+          decideLeaveRequest(req.id, approved, note || undefined)
+          setDecideId(null)
+          setDecideNote('')
+          setDecideError('')
+        }
+        return (
+          <Modal title="Leave decision" subtitle={`${req.ref} · ${req.employeeName}`} onClose={() => { setDecideId(null); setDecideError('') }} width={480}>
+            <div className="grid grid-cols-2 gap-3 text-xs mb-3">
+              <div className="p-3 rounded-lg" style={{ background: 'var(--bg-surface)' }}>
+                <p className="text-[10px] mb-1" style={{ color: 'var(--text-3)' }}>Leave type</p>
+                <p className="font-semibold" style={{ textTransform: 'capitalize' }}>{req.leaveType.replace(/_/g, ' ')}</p>
+              </div>
+              <div className="p-3 rounded-lg" style={{ background: 'var(--bg-surface)' }}>
+                <p className="text-[10px] mb-1" style={{ color: 'var(--text-3)' }}>Period</p>
+                <p className="font-semibold">{fmtDate(req.startDate)} → {fmtDate(req.endDate)}</p>
+                <p style={{ color: 'var(--text-3)' }}>{req.days} day{req.days !== 1 ? 's' : ''}</p>
+              </div>
+              <div className="col-span-2 p-3 rounded-lg" style={{ background: 'var(--bg-surface)' }}>
+                <p className="text-[10px] mb-1" style={{ color: 'var(--text-3)' }}>Applicant reason</p>
+                <p>{req.reason || '—'}</p>
+              </div>
+            </div>
+            <Field label="Note to applicant" hint="Required when declining. Shown in their leave email and leave history.">
+              <Textarea
+                value={decideNote}
+                onChange={v => { setDecideNote(v); if (decideError) setDecideError('') }}
+                rows={3}
+                placeholder="e.g. Approved — enjoy your time off / Declined — insufficient cover that week"
+              />
+            </Field>
+            {decideError && (
+              <p className="text-[11px] mt-2" style={{ color: 'var(--danger)' }}>{decideError}</p>
+            )}
+            <div className="flex gap-2 justify-end pt-3">
+              <button className="btn-outline" onClick={() => { setDecideId(null); setDecideError('') }}>Cancel</button>
+              <button
+                style={{ background: 'var(--danger-bg)', border: '1px solid var(--danger)', color: 'var(--danger)', borderRadius: 8, padding: '8px 16px', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}
+                onClick={() => submit(false)}
+              >
+                <Fa icon={faXmark} style={{ fontSize: 10, marginRight: 4 }} /> Decline
+              </button>
+              <button className="btn-primary" style={{ background: 'var(--success)' }} onClick={() => submit(true)}>
+                <Fa icon={faCheck} style={{ fontSize: 10, marginRight: 4 }} /> Approve
+              </button>
+            </div>
+          </Modal>
+        )
+      })()}
+
     </div>
   )
 }
