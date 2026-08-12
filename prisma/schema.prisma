@@ -1349,6 +1349,8 @@ model Lead {
   notes         String?
   /** IMAP Message-ID (or synthetic key) for inbound sales-inbox dedupe. */
   inboundMessageId String? @unique @map("inbound_message_id") @db.VarChar(500)
+  /** Provider thread id — one active lead per thread (Invariant 5). */
+  inboundThreadId  String? @map("inbound_thread_id") @db.VarChar(500)
   /** Structured inbound email context (sales@ → CRM). */
   emailSubject       String?   @map("email_subject") @db.VarChar(500)
   emailSnippet       String?   @map("email_snippet") @db.VarChar(500)
@@ -1362,10 +1364,45 @@ model Lead {
   owner       User?        @relation("LeadOwner", fields: [ownerId], references: [id])
   client      Client?      @relation(fields: [clientId], references: [id])
   opportunity Opportunity? @relation(fields: [opportunityId], references: [id])
+  inboundEmails SalesInboundEmail[]
 
   @@index([stage], map: "idx_leads_stage")
   @@index([ownerId], map: "idx_leads_owner")
+  @@index([inboundThreadId], map: "idx_leads_inbound_thread_id")
   @@map("leads")
+}
+
+/** Idempotent record of every processed sales@ message (Invariant 6 + audit). */
+model SalesInboundEmail {
+  id                 String   @id @default(uuid()) @db.Uuid
+  provider           String   @default("IMAP") @db.VarChar(20)
+  mailbox            String   @db.VarChar(200)
+  providerMessageId  String   @map("provider_message_id") @db.VarChar(500)
+  providerThreadId   String?  @map("provider_thread_id") @db.VarChar(500)
+  internetMessageId  String?  @map("internet_message_id") @db.VarChar(500)
+  fromEmail          String?  @map("from_email") @db.VarChar(150)
+  fromName           String?  @map("from_name") @db.VarChar(200)
+  subject            String?  @db.VarChar(500)
+  receivedAt         DateTime? @map("received_at")
+  processingStatus   String   @default("RECEIVED") @map("processing_status") @db.VarChar(40)
+  processingReason   String?  @map("processing_reason") @db.VarChar(200)
+  classification     String?  @db.VarChar(60)
+  confidence         Decimal? @db.Decimal(5, 4)
+  classifierVersion  String?  @map("classifier_version") @db.VarChar(40)
+  leadId             String?  @map("lead_id") @db.Uuid
+  clientId           String?  @map("client_id") @db.Uuid
+  decision           String?  @db.VarChar(40)
+  rawMeta            Json?    @map("raw_meta")
+  processedAt        DateTime? @map("processed_at")
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+
+  lead Lead? @relation(fields: [leadId], references: [id], onDelete: SetNull)
+
+  @@unique([provider, mailbox, providerMessageId], map: "sales_inbound_emails_provider_msg_uniq")
+  @@index([providerThreadId], map: "idx_sales_inbound_emails_thread")
+  @@index([processingStatus], map: "idx_sales_inbound_emails_status")
+  @@map("sales_inbound_emails")
 }
 
 model SaleOrder {
