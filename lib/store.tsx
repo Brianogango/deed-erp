@@ -6996,6 +6996,22 @@ const storeCtx: AppState = {
           const journal = buildExpenseApprovalJournal(reviewedExpense)
           setJournalEntries(prev => [journal, ...prev])
           addAuditLog('post_expense', expense.ref, `Expense ${expense.ref} posted to journal ${journal.ref}`)
+          void fetch('/api/expenses/post-journal', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              kind: 'approval',
+              expenseId: reviewedExpense.id,
+              ref: reviewedExpense.ref,
+              amount: reviewedExpense.amount,
+              description: reviewedExpense.description,
+              category: reviewedExpense.category,
+              paymentMethod: reviewedExpense.paymentMethod,
+              submittedByName: reviewedExpense.submittedByName,
+              bankAccountId: journal.bankAccountId,
+              date: journal.date,
+            }),
+          }).catch(() => {})
         }
         if (expense?.submittedByUserId) {
           const pending = nextChain.find(s => s.status === 'pending')
@@ -7031,6 +7047,22 @@ const storeCtx: AppState = {
         const journal = buildExpenseApprovalJournal(reviewedExpense)
         setJournalEntries(prev => [journal, ...prev])
         addAuditLog('post_expense', expense.ref, `Expense ${expense.ref} posted to journal ${journal.ref}`)
+        void fetch('/api/expenses/post-journal', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            kind: 'approval',
+            expenseId: reviewedExpense.id,
+            ref: reviewedExpense.ref,
+            amount: reviewedExpense.amount,
+            description: reviewedExpense.description,
+            category: reviewedExpense.category,
+            paymentMethod: reviewedExpense.paymentMethod,
+            submittedByName: reviewedExpense.submittedByName,
+            bankAccountId: journal.bankAccountId,
+            date: journal.date,
+          }),
+        }).catch(() => {})
       }
       if (expense?.submittedByUserId) {
         notifyUsers({
@@ -7072,6 +7104,19 @@ const storeCtx: AppState = {
         const journal = buildExpenseReimbursementJournal(reimbursedExpense, actualBankId)
         setJournalEntries(prev => [journal, ...prev])
         addAuditLog('post_reimbursement', expense.ref, `Expense reimbursement ${expense.ref} posted to journal ${journal.ref}${reference ? ` (Ref: ${reference})` : ''}`)
+        void fetch('/api/expenses/post-journal', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            kind: 'reimbursement',
+            expenseId: reimbursedExpense.id,
+            ref: reimbursedExpense.ref,
+            amount: reimbursedExpense.amount,
+            submittedByName: reimbursedExpense.submittedByName,
+            bankAccountId: actualBankId,
+            date: journal.date,
+          }),
+        }).catch(() => {})
       }
       showToast('Expense reimbursed and posted', 'success')
     },
@@ -16453,6 +16498,26 @@ const storeCtx: AppState = {
       }
       setJournalEntries(p => [posJournal, ...p])
       addAuditLog('post_pos', order.ref, `POS sale posted to journal ${posJournal.ref}`)
+      void fetch('/api/pos/post-sale-journal', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          orderId: order.id,
+          orderRef: order.ref,
+          invoiceId: posInv.id,
+          total: posInv.total,
+          subtotal: sub,
+          tax,
+          pointsRedeemed,
+          paymentMethod: payment,
+          bankAccountId: posJournal.bankAccountId,
+          customerName: order.customerName,
+          revenueLines: revenueBuckets.length
+            ? revenueBuckets.map(b => ({ account: b.account, amount: b.amount }))
+            : undefined,
+          date: posJournal.date,
+        }),
+      }).catch(() => {})
       showToast(`${order.ref} · ${fmtKes(order.total)} via ${payment.toUpperCase()}`)
       return order
     },

@@ -63,8 +63,8 @@ There is **no** single `AccountingPostingService`. Callers build lines then pers
 | Stock receipt / issue / adjust | `lib/inventory/valuation-service.ts` | `createJournalEntry` | Yes | Event-keyed; COGS/inventory |
 | Reconfiguration | `lib/reconfiguration/service.ts` | `createJournalEntry` | Yes | Install / cost moves |
 | FX revaluation | `lib/accounting/fx-journals.ts` | JE | Yes | |
-| Expense approve / reimburse | store `buildExpense*` | Blob-first | Incomplete Prisma GL | Gap |
-| POS sale | store POS journal builders | Blob-first | Incomplete | Gap |
+| Expense approve / reimburse | store `buildExpense*` + engine | Blob-first + `POST /api/expenses/post-journal` when flagged | Dual-write when engine on | Phase 7 |
+| POS sale | store POS journal + engine | Blob-first + `POST /api/pos/post-sale-journal` when flagged | Dual-write when engine on | Phase 7 |
 | Buy-back / trade-in GL | store / aftersales paths | Blob-first | Incomplete | Gap |
 | Manual / cashbook | Accounting + Cashbook UI | Blob recon + some JE | Bank recon mostly blob | |
 | Journal reverse | `journal-service.reverseJournalEntry` | New JE + flags | Yes | Append-only pattern |
@@ -146,9 +146,9 @@ Legend: **HAVE** · **PARTIAL** · **MISSING**
 
 | Item | Status | Evidence |
 |------|--------|----------|
-| Expense journals in store | **PARTIAL** | Blob builders; Prisma GL incomplete |
-| POS journals | **PARTIAL** | Blob-first |
-| Buy-back / aftersales GL completeness | **PARTIAL** | |
+| Expense journals in store | **PARTIAL** | Blob builders + engine dual-write (`postExpense*`) when flagged |
+| POS journals | **PARTIAL** | Blob-first + `postPosSale` / `/api/pos/post-sale-journal` when flagged |
+| Buy-back / aftersales GL completeness | **PARTIAL** | Deferred |
 
 ### Phase 8 — Analytics / management accounts
 
