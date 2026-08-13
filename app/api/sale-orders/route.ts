@@ -60,32 +60,52 @@ function mapSaleOrderToClient(order: any) {
     discountAmount: Number(order.discountAmount ?? 0),
     amountPaid: Number(order.amountPaid ?? 0),
     lockVersion: Number(order.lockVersion ?? 0),
-    lines: (order.items ?? []).map((item: any) => ({
-      id: item.id,
-      productId: item.productId ?? '',
-      productName: item.description ?? '',
-      description: item.description ?? '',
-      qty: Number(item.qty ?? 0),
-      unitPrice: Number(item.unitPrice ?? 0),
-      taxRate: Number(item.taxRate ?? 0),
-      // discount/discountPercent both round-trip so a reopened line's edit
-      // form shows the original discount instead of resetting to 0 — before
-      // discountPct existed on the DB row, this was unrecoverable and saving
-      // an untouched line silently erased its discount.
-      discount: Number(item.discountPct ?? 0),
-      discountPercent: Number(item.discountPct ?? 0),
-      subtotal: Number(item.lineTotal ?? 0),
-      lineTotal: Number(item.lineTotal ?? 0),
-      serialIds: item.serialNumberId ? [item.serialNumberId] : [],
-      notes: item.notes ?? undefined,
-      qtyDelivered: Number(item.qtyDelivered ?? 0),
-      qtyInvoiced: Number(item.qtyInvoiced ?? 0),
-    })),
+    lines: (order.items ?? []).map((item: any) => {
+      const qty = Number(item.qty ?? 0)
+      const productId = item.productId ?? ''
+      const lineType = qty === 0 && !productId && !(Number(item.unitPrice ?? 0) > 0) ? 'section' as const : undefined
+      return {
+        id: item.id,
+        productId,
+        productName: item.description ?? '',
+        description: item.description ?? '',
+        qty,
+        unitPrice: Number(item.unitPrice ?? 0),
+        taxRate: Number(item.taxRate ?? 0),
+        // discount/discountPercent both round-trip so a reopened line's edit
+        // form shows the original discount instead of resetting to 0 — before
+        // discountPct existed on the DB row, this was unrecoverable and saving
+        // an untouched line silently erased its discount.
+        discount: Number(item.discountPct ?? 0),
+        discountPercent: Number(item.discountPct ?? 0),
+        subtotal: Number(item.lineTotal ?? 0),
+        lineTotal: Number(item.lineTotal ?? 0),
+        serialIds: item.serialNumberId ? [item.serialNumberId] : [],
+        notes: item.notes ?? undefined,
+        qtyDelivered: Number(item.qtyDelivered ?? 0),
+        qtyInvoiced: Number(item.qtyInvoiced ?? 0),
+        ...(lineType ? { lineType } : {}),
+      }
+    }),
   }
 }
 
 function mapSaleOrderItems(lines: any[], knownProductIds?: Set<string>) {
   return lines.map((item: any) => {
+    if (item?.lineType === 'section' || (Number(item?.qty ?? 0) === 0 && !item?.productId && !(Number(item?.unitPrice) > 0))) {
+      return {
+        productId: null,
+        description: item.description ?? item.productName ?? 'Section',
+        qty: 0,
+        unitPrice: 0,
+        taxRate: 0,
+        discountPct: 0,
+        lineTotal: 0,
+        notes: item.notes ?? null,
+        serialNumberId: null,
+        qtyInvoiced: 0,
+      }
+    }
     const qty = Math.max(0, Number(item.qty ?? 1) || 0)
     // lineTotal is recomputed from qty × unitPrice × (1 − discount%), never
     // trusted from the client (P0 totals-integrity — matches PUT/PATCH).

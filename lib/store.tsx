@@ -61,6 +61,7 @@ import { normalizeQuotesForClient } from '@/lib/quote-normalization'
 import { normalizeOpportunitiesForClient } from '@/lib/opportunity-normalization'
 import { normalizeCompaniesForClient } from '@/lib/company-normalization'
 import { saleOrderPersistBody } from '@/lib/sale-order-persist'
+import { resolveAddSaleOrderLineTaxRate } from '@/lib/sale-order-line-tax'
 import {
   markSaleOrderDraftEdit,
   hasSaleOrderDraftEdits,
@@ -10231,6 +10232,12 @@ const storeCtx: AppState = {
       })
       const unitPrice = priced.unitPrice
       const ex = so.lines.find(l => l.productId === product.id)
+      // Add Product VAT checkbox is authoritative (see resolveAddSaleOrderLineTaxRate).
+      const taxRate = resolveAddSaleOrderLineTaxRate({
+        explicitTaxRate: defaultTaxRate,
+        existingTaxRate: ex?.taxRate,
+        merging: Boolean(ex),
+      })
       let lines: SaleOrderLine[]
       if (ex) {
         const nextQty = ex.qty + qty
@@ -10240,6 +10247,7 @@ const storeCtx: AppState = {
           qty: nextQty,
           unitPrice: nextPriced.unitPrice,
           listPrice: nextPriced.listPrice,
+          taxRate,
           subtotal: Math.round(nextPriced.unitPrice * nextQty * (1 - l.discount / 100)),
         } : l)
       } else {
@@ -10252,7 +10260,7 @@ const storeCtx: AppState = {
           unitPrice,
           listPrice: priced.listPrice,
           discount,
-          taxRate: product.taxRate > 0 ? product.taxRate : defaultTaxRate,
+          taxRate,
           subtotal: sub,
           serialIds: [],
           accountCode: resolveProductAccounts(product).saleAccountCode,
