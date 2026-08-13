@@ -10758,8 +10758,8 @@ const storeCtx: AppState = {
               } else if (selectedSource) {
                 sourceLocation = selectedSource
               } else if (prod && isSerialTracking(inferTrackingMethod(prod))) {
-                const shopAvailable = serialRef.current.filter(s => s.productId === l.productId && s.status === 'available' && s.location === 'shop').length
-                sourceLocation = shopAvailable >= l.qty ? 'shop' : 'warehouse'
+                const warehouseAvailable = serialRef.current.filter(s => s.productId === l.productId && s.status === 'available' && s.location === 'warehouse').length
+                sourceLocation = warehouseAvailable >= l.qty ? 'warehouse' : 'shop'
               } else {
                 const qty = Math.max(0, Math.floor(Number(l.qty) || 0))
                 sourceLocation = resolveBulkDeliverySourceLocation({
@@ -10885,8 +10885,8 @@ const storeCtx: AppState = {
           if (prod?.unit === 'service') {
             sourceLocation = undefined
           } else if (prod && isSerialTracking(inferTrackingMethod(prod))) {
-            const shopAvailable = serialRef.current.filter(s => s.productId === l.productId && s.status === 'available' && s.location === 'shop').length
-            sourceLocation = shopAvailable >= l.qty ? 'shop' : 'warehouse'
+            const warehouseAvailable = serialRef.current.filter(s => s.productId === l.productId && s.status === 'available' && s.location === 'warehouse').length
+            sourceLocation = warehouseAvailable >= l.qty ? 'warehouse' : 'shop'
           } else {
             const qty = Math.max(0, Math.floor(Number(l.qty) || 0))
             sourceLocation = resolveBulkDeliverySourceLocation({
@@ -16532,17 +16532,15 @@ const storeCtx: AppState = {
         createdByUserId: user?.id, createdByName: user?.name, pointsEarned, pointsRedeemed,
       }
       // Authoritative stock deduction on the server before local UI mirror.
-      const stockLines = normalizedLines.map(l => {
-        const serialSource = l.serialId ? serialRef.current.find(s => s.id === l.serialId)?.location : undefined
-        return {
-          productId: l.productId,
-          productName: l.productName,
-          qty: l.qty,
-          serialId: l.serialId,
-          serialNumber: l.serialNumber,
-          sourceLocation: (serialSource ?? 'shop') as string,
-        }
-      })
+      const stockLines = normalizedLines.map(l => ({
+        productId: l.productId,
+        productName: l.productName,
+        qty: l.qty,
+        serialId: l.serialId,
+        serialNumber: l.serialNumber,
+        // POS always sells from warehouse (shop is "With Issues").
+        sourceLocation: 'warehouse',
+      }))
       try {
         const res = await fetch('/api/inventory/apply-pos-stock', {
           method: 'POST',
@@ -16561,8 +16559,7 @@ const storeCtx: AppState = {
       // Mirror server stock into local UI (moves already persisted server-side).
       normalizedLines.forEach(l => {
         const product = prodRef.current.find(x => x.id === l.productId)
-        const serialSource = l.serialId ? serialRef.current.find(s => s.id === l.serialId)?.location : undefined
-        const sourceLocation = (serialSource ?? 'shop') as LocationId
+        const sourceLocation: LocationId = 'warehouse'
         if (!product?.requiresSerial) setBulkStock(prev => upsertBulkStock(prev, l.productId, sourceLocation, -l.qty))
         setProducts(p => p.map(x => x.id === l.productId ? { ...x, stockQty: Math.max(0, x.stockQty - l.qty) } : x))
         if (l.serialId) setSerials(p => p.map(s => s.id === l.serialId ? { ...s, status: 'sold', location: 'customer', soldDate: now() } : s))
@@ -17113,8 +17110,8 @@ const storeCtx: AppState = {
           } else if (selectedSource) {
             sourceLocation = selectedSource
           } else if (prod && isSerialTracking(inferTrackingMethod(prod))) {
-            const shopAvailable = serialRef.current.filter(s => s.productId === line.productId && s.status === 'available' && s.location === 'shop').length
-            sourceLocation = shopAvailable >= qty ? 'shop' : 'warehouse'
+            const warehouseAvailable = serialRef.current.filter(s => s.productId === line.productId && s.status === 'available' && s.location === 'warehouse').length
+            sourceLocation = warehouseAvailable >= qty ? 'warehouse' : 'shop'
           } else {
             sourceLocation = resolveBulkDeliverySourceLocation({
               product: prod,

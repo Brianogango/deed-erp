@@ -227,11 +227,11 @@ test.describe('4. POS session → transaction → close session', () => {
     productId = product.id
     const vendor = await createE2eVendor(api, `E2E POS Vendor ${tag}`)
 
-    // Seed 3 units into shop so POS can deduct.
+    // Seed 3 units into warehouse so POS can deduct.
     const receive = await api.post('/api/inventory/validate-receipt', {
       data: {
         applyStock: true,
-        destination: 'shop',
+        destination: 'warehouse',
         receiptId: `rec_${tag}`,
         receiptRef: `REC/${tag}`,
         lines: [{
@@ -276,7 +276,7 @@ test.describe('4. POS session → transaction → close session', () => {
           productId: product.id,
           productName: product.name,
           qty: 1,
-          sourceLocation: 'shop',
+          sourceLocation: 'warehouse',
         }],
       },
     })

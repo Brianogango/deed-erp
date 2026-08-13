@@ -63,7 +63,7 @@ vi.mock('@/lib/prisma', () => ({
   },
 }))
 
-import { applyDeliveryStockMutation, applyReceiptStockMutation, reserveStockForSaleOrder } from '@/lib/inventory/stock-transactions'
+import { applyDeliveryStockMutation, applyReceiptStockMutation, applyPosStockMutation, reserveStockForSaleOrder } from '@/lib/inventory/stock-transactions'
 
 const PRODUCT_ID = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee'
 const PRISMA_PRODUCT_ID = 'bbbbbbbb-cccc-4ddd-8eee-ffffffffffff'
@@ -359,6 +359,59 @@ describe('applyReceiptStockMutation() — atomic relational GRN', () => {
     })
 
     expect(result.ok).toBe(false)
+    expect(mockSaveStoreKeys).not.toHaveBeenCalled()
+  })
+})
+
+
+describe('applyPosStockMutation()', () => {
+  it('deducts from warehouse even when client sends shop', async () => {
+    mockLoadAppState.mockResolvedValue({
+      deed_products: [{ id: PRODUCT_ID, name: 'Adapter', stockQty: 5, requiresSerial: false, unit: 'pcs' }],
+      deed_serials: [],
+      deed_bulkStock: [
+        { productId: PRODUCT_ID, location: 'warehouse', qty: 4 },
+        { productId: PRODUCT_ID, location: 'shop', qty: 1 },
+      ],
+      deed_stockMoves: [],
+    })
+
+    const result = await applyPosStockMutation({
+      orderRef: 'POS/2026/0001',
+      lines: [{ productId: PRODUCT_ID, productName: 'Adapter', qty: 1, sourceLocation: 'shop' }],
+      userId: 'user-1',
+    })
+
+    expect(result).toEqual(expect.objectContaining({ ok: true }))
+    const payload = mockSaveStoreKeys.mock.calls[0][0]
+    const bulk = JSON.parse(payload.deed_bulkStock)
+    expect(bulk.find((b: { location: string }) => b.location === 'warehouse').qty).toBe(3)
+    expect(bulk.find((b: { location: string }) => b.location === 'shop').qty).toBe(1)
+    const moves = JSON.parse(payload.deed_stockMoves)
+    expect(moves[0].fromLocation).toBe('warehouse')
+  })
+
+  it('fails when warehouse is empty even if shop has stock', async () => {
+    mockLoadAppState.mockResolvedValue({
+      deed_products: [{ id: PRODUCT_ID, name: 'Adapter', stockQty: 2, requiresSerial: false, unit: 'pcs' }],
+      deed_serials: [],
+      deed_bulkStock: [
+        { productId: PRODUCT_ID, location: 'warehouse', qty: 0 },
+        { productId: PRODUCT_ID, location: 'shop', qty: 2 },
+      ],
+      deed_stockMoves: [],
+    })
+
+    const result = await applyPosStockMutation({
+      orderRef: 'POS/2026/0002',
+      lines: [{ productId: PRODUCT_ID, productName: 'Adapter', qty: 1 }],
+      userId: 'user-1',
+    })
+
+    expect(result).toEqual({
+      ok: false,
+      error: 'Insufficient stock for Adapter at warehouse',
+    })
     expect(mockSaveStoreKeys).not.toHaveBeenCalled()
   })
 })
