@@ -123,9 +123,7 @@ export async function POST(request: NextRequest) {
     // Create the new repair — body may include full intake (path, warranty, waiver).
     // Spread body after defaults so booking fields are not dropped by a thin client.
     const repairId = typeof body.id === 'string' && body.id.trim() ? body.id.trim() : `rep_${Date.now()}`
-    const repair: RepairOrder = {
-      id: repairId,
-      ref,
+    const repair = {
       status: String(body.status ?? 'received') as RepairOrder['status'],
       customerId: String(body.customerId ?? ''),
       customerName: String(body.customerName),
@@ -136,7 +134,7 @@ export async function POST(request: NextRequest) {
       intakeChannel: (body.intakeChannel === 'website' || body.intakeChannel === 'whatsapp' || body.intakeChannel === 'call' || body.intakeChannel === 'email' || body.intakeChannel === 'rider_pickup') ? body.intakeChannel as RepairOrder['intakeChannel'] : 'walk_in',
       intakeNotes: '',
       issueDescription: String(body.issueDescription ?? ''),
-      accessories: [],
+      accessories: [] as RepairOrder['accessories'],
       ...(body as Partial<RepairOrder>),
       // Force server-owned identity + full timestamp after body spread.
       id: repairId,
