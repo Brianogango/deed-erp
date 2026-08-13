@@ -17,9 +17,11 @@ export function monthLabel(ym: string) {
 
 export function toYM(d: string) { return d.slice(0, 7) }
 
-function posBank(payment: 'cash' | 'mpesa' | 'card'): string {
+function posBank(payment: string, bankAccountId?: string): string {
+  if (bankAccountId) return bankAccountId
   if (payment === 'cash')  return 'cash'
   if (payment === 'mpesa') return 'mpesa'
+  // bank / card (legacy) / other bank tenders
   return 'ncba'
 }
 
@@ -171,7 +173,7 @@ export function buildCashbookEntries(
       ref: pos.ref,
       description: `POS Sale${pos.customerName ? ` — ${pos.customerName}` : ' — Walk-in'}`,
       category: getCOACategory('pos', accounts),
-      bankAccountId: posBank(pos.payment),
+      bankAccountId: posBank(pos.payment, pos.bankAccountId),
       debit: 0,
       credit: pos.total,
       sourceType: 'pos',

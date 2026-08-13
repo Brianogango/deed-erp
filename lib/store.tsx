@@ -4,8 +4,10 @@ import { createContext, useContext, useState, useCallback, useEffect, ReactNode,
 import {
   hasActivePosSession,
   isOrphanedPosSession,
+  isPosBankPayment,
   resolveOpenPosSessionId,
 } from '@/lib/pos-session'
+export { isPosBankPayment }
 import { requestCreateUser, requestDeleteUser, requestUpdateUser, requestDeactivateUser, requestReactivateUser } from '@/lib/auth/client-users'
 import { canManageHRRole, getFirstAllowedModule, hasModuleAccess as userHasModuleAccess, normalizeClientRole } from '@/lib/auth/access'
 import { mergeCatalogProducts, mergeProductsRemoteState } from '@/lib/catalog-merge'
@@ -2012,7 +2014,12 @@ export interface POSOrder {
     qty: number; price: number; subtotal: number; serialId?: string; serialNumber?: string
   }[]
   subtotal: number; taxTotal: number; total: number
-  payment: 'cash' | 'mpesa' | 'card'
+  /** `card` kept for legacy sessions; new charges use `bank`. */
+  payment: 'cash' | 'mpesa' | 'bank' | 'card'
+  /** Selected company bank when payment is `bank`. */
+  bankAccountId?: string
+  /** Optional transfer / deposit reference for bank (or M-Pesa code). */
+  paymentReference?: string
   customerId?: string; customerName?: string; date: string
   createdByUserId?: string; createdByName?: string
   pointsEarned?: number
@@ -2033,7 +2040,10 @@ export interface POSSession {
   totalSales: number
   totalCash: number
   totalMpesa: number
+  /** Bank tender total (includes legacy `card` payments). */
   totalCard: number
+  /** Alias of totalCard for new closes; optional on older sessions. */
+  totalBank?: number
   orderCount: number
   openedBy?: string
   closedBy?: string
@@ -2418,6 +2428,7 @@ const bankAccountIdForMethod = (method?: string, bankAccountId?: string) => {
   if (bankAccountId) return bankAccountId
   if (method === 'mpesa' || method === 'mpesa_company') return 'mpesa'
   if (method === 'cash' || method === 'petty_cash') return 'cash'
+  // bank / bank_transfer / card (legacy POS) → default NCBA when no bank chosen
   return 'ncba'
 }
 
@@ -3486,7 +3497,15 @@ export interface AppState {
   // POS
   openPOSSession: (openingCash: number) => void
   closePOSSession: (closingCash: number) => POSSession | null
-  createPOSOrder: (lines: POSOrder['lines'], payment: POSOrder['payment'], customerId?: string, customerName?: string, pointsRedeemed?: number, applyVat?: boolean) => POSOrder | null | Promise<POSOrder | null>
+  createPOSOrder: (
+    lines: POSOrder['lines'],
+    payment: POSOrder['payment'],
+    customerId?: string,
+    customerName?: string,
+    pointsRedeemed?: number,
+    applyVat?: boolean,
+    paymentMeta?: { bankAccountId?: string; paymentReference?: string },
+  ) => POSOrder | null | Promise<POSOrder | null>
 
   // Inventory reports
   getStockByLocation: (productId: string) => Record<LocationId, number>
@@ -3919,6 +3938,7 @@ export type CommerceStoreState = Pick<AppState,
   | 'saleOrders'
   | 'serials'
   | 'users'
+  | 'bankAccounts'
   | 'closePOSSession'
   | 'confirmKilimallDispatch'
   | 'createKilimallOrder'
@@ -16439,7 +16459,8 @@ const storeCtx: AppState = {
       const orders = posOrders.filter(o => o.sessionId === sessionId || o.sessionId === 'active')
       const totalCash = orders.filter(o => o.payment === 'cash').reduce((a, o) => a + o.total, 0)
       const totalMpesa = orders.filter(o => o.payment === 'mpesa').reduce((a, o) => a + o.total, 0)
-      const totalCard = orders.filter(o => o.payment === 'card').reduce((a, o) => a + o.total, 0)
+      const totalBank = orders.filter(o => isPosBankPayment(o.payment)).reduce((a, o) => a + o.total, 0)
+      const totalCard = totalBank // legacy field: bank + historical card
       const totalSales = orders.reduce((a, o) => a + o.total, 0)
       const counted = Math.max(0, Number(closingCash) || 0)
       const expectedCash = posSessionOpeningCash + totalCash
@@ -16469,9 +16490,17 @@ const storeCtx: AppState = {
         controlLines.push(accountLine('2210 - M-Pesa Paybill', `Session M-Pesa sales ${fmtKes(totalMpesa)}`, totalMpesa, 0))
         controlLines.push(accountLine('2210 - M-Pesa Paybill', `Session M-Pesa sales cleared`, 0, totalMpesa))
       }
-      if (totalCard > 0) {
-        controlLines.push(accountLine('2201 - NCBA Bank', `Session card sales ${fmtKes(totalCard)}`, totalCard, 0))
-        controlLines.push(accountLine('2201 - NCBA Bank', `Session card sales cleared`, 0, totalCard))
+      const bankByAccount = new Map<string, number>()
+      for (const o of orders) {
+        if (!isPosBankPayment(o.payment)) continue
+        const id = o.bankAccountId || bankAccountIdForMethod(o.payment)
+        bankByAccount.set(id, (bankByAccount.get(id) || 0) + o.total)
+      }
+      for (const [bankId, amt] of bankByAccount) {
+        if (amt <= 0) continue
+        const label = bankAccountLabel(bankId)
+        controlLines.push(accountLine(label, `Session bank sales ${fmtKes(amt)}`, amt, 0))
+        controlLines.push(accountLine(label, `Session bank sales cleared`, 0, amt))
       }
 
       const openSession = posSessions.find(s => s.id === sessionId)
@@ -16484,7 +16513,7 @@ const storeCtx: AppState = {
           ref: `JRN/${sessionRef}`,
           date: now(),
           source: 'pos_session',
-          description: `POS session close ${sessionRef} · sales ${fmtKes(totalSales)} · cash ${fmtKes(totalCash)} · mpesa ${fmtKes(totalMpesa)} · card ${fmtKes(totalCard)} · variance ${fmtKes(cashDifference)}`,
+          description: `POS session close ${sessionRef} · sales ${fmtKes(totalSales)} · cash ${fmtKes(totalCash)} · mpesa ${fmtKes(totalMpesa)} · bank ${fmtKes(totalBank)} · variance ${fmtKes(cashDifference)}`,
           status: 'posted',
           bankAccountId: 'cash',
           lines: controlLines,
@@ -16510,6 +16539,7 @@ const storeCtx: AppState = {
         totalCash,
         totalMpesa,
         totalCard,
+        totalBank,
         orderCount: orders.length,
         openedBy: openSession?.openedBy,
         closedBy: user?.name || user?.username,
@@ -16530,7 +16560,7 @@ const storeCtx: AppState = {
       )
       return closed
     },
-    createPOSOrder: async (lines, payment, customerId, customerName, pointsRedeemed = 0, applyVat = false) => {
+    createPOSOrder: async (lines, payment, customerId, customerName, pointsRedeemed = 0, applyVat = false, paymentMeta) => {
       if (!posSessionOpen) {
         showToast('Open a POS session before charging', 'error')
         return null
@@ -16547,9 +16577,15 @@ const storeCtx: AppState = {
         pointsEarned = Math.floor(total / 100) // 1 point per 100 KES
         setContacts(prev => prev.map(c => c.id === customerId ? { ...c, loyaltyPoints: Math.max(0, (c.loyaltyPoints || 0) - pointsRedeemed) + pointsEarned } : c))
       }
+      const resolvedBankId = isPosBankPayment(payment)
+        ? (paymentMeta?.bankAccountId || bankAccountIdForMethod(payment))
+        : undefined
+      const paymentReference = (paymentMeta?.paymentReference || '').trim() || undefined
       const order: POSOrder = {
         id: uid(), ref: seq('POS', 'pos'), sessionId,
         lines: normalizedLines, subtotal: sub, taxTotal: tax, total, payment,
+        bankAccountId: resolvedBankId,
+        paymentReference,
         customerId, customerName, date: now(), createdAt: new Date().toISOString(),
         createdByUserId: user?.id, createdByName: user?.name, pointsEarned, pointsRedeemed,
       }
@@ -16605,7 +16641,8 @@ const storeCtx: AppState = {
             accountCode: product ? resolveProductAccounts(product).saleAccountCode : undefined,
           }
         }),
-        subtotal: sub, taxTotal: tax, total, amountPaid: total, notes: `POS ${order.ref}`,
+        subtotal: sub, taxTotal: tax, total, amountPaid: total,
+        notes: paymentReference ? `POS ${order.ref} · Ref ${paymentReference}` : `POS ${order.ref}`,
       }
       setInvoices(p => [posInv, ...p])
       sync('/api/invoices', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(posInv) })
@@ -16628,9 +16665,14 @@ const storeCtx: AppState = {
         status: 'posted',
         invoiceId: posInv.id,
         posOrderId: order.id,
-        bankAccountId: bankAccountIdForMethod(payment),
+        bankAccountId: bankAccountIdForMethod(payment, resolvedBankId),
         lines: [
-          accountLine(bankAccountLabel(bankAccountIdForMethod(payment), payment), `POS receipt ${order.ref}`, posInv.total, 0),
+          accountLine(
+            bankAccountLabel(bankAccountIdForMethod(payment, resolvedBankId), payment),
+            paymentReference ? `POS receipt ${order.ref} · ${paymentReference}` : `POS receipt ${order.ref}`,
+            posInv.total,
+            0,
+          ),
           ...(pointsRedeemed > 0 ? [accountLine('5200 - Sales Discounts', `Loyalty redemption ${order.ref}`, pointsRedeemed, 0)] : []),
           ...revenueLines,
           ...(tax > 0 ? [accountLine('3301 - Output VAT Payable', `VAT on ${order.ref}`, 0, tax)] : []),
@@ -16660,7 +16702,15 @@ const storeCtx: AppState = {
           date: posJournal.date,
         }),
       }).catch(() => {})
-      showToast(`${order.ref} · ${fmtKes(order.total)} via ${payment.toUpperCase()}`)
+      const bankLabel = resolvedBankId
+        ? (bankAccounts.find(b => b.id === resolvedBankId)?.name || resolvedBankId)
+        : undefined
+      const payLabel = isPosBankPayment(payment) ? 'BANK' : payment.toUpperCase()
+      showToast(
+        `${order.ref} · ${fmtKes(order.total)} via ${payLabel}`
+          + (bankLabel ? ` (${bankLabel})` : '')
+          + (paymentReference ? ` · ${paymentReference}` : ''),
+      )
       return order
     },
 
@@ -18755,6 +18805,7 @@ const storeCtx: AppState = {
     saleOrders,
     serials,
     users,
+    bankAccounts,
     ...commerceActions,
   }), [
     companySettings,
@@ -18774,6 +18825,7 @@ const storeCtx: AppState = {
     saleOrders,
     serials,
     users,
+    bankAccounts,
     commerceActions,
   ])
 
