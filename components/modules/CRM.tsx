@@ -1122,11 +1122,21 @@ function CRMContent() {
             showToast={showToast}
             salesReps={salesReps}
             currentUserId={currentUserId ?? undefined}
-            onConverted={opportunityId => {
-              // Server broadcasts deed_opportunities; SSE refreshes the store.
+            onConverted={(opportunityId, meta) => {
+              // Server broadcasts deed_opportunities + contacts; SSE refreshes the store.
               setTab('pipeline')
               setActiveOppId(opportunityId)
               setView('detail')
+              // Soft-stash client so the opportunity "Create quotation" CTA can deep-link
+              // into Sales even before the opportunity blob hydrates clientId.
+              if (meta?.clientId && typeof window !== 'undefined') {
+                try {
+                  sessionStorage.setItem(
+                    `crm:convert:${opportunityId}`,
+                    JSON.stringify({ clientId: meta.clientId, clientName: meta.clientName || '' }),
+                  )
+                } catch { /* ignore */ }
+              }
             }}
           />
         </div>
@@ -1483,12 +1493,43 @@ function PipelineKanban({ effectiveOwner, stageLabels, onSelectOpp }: { effectiv
 }
 
 function OpportunityDetail({ activeOppId, onClose, stageLabels, onMarkWon, onMarkLost, onLogActivity }: any) {
-  const { opportunities, opportunityActivities, quotes, moveOpportunityStage } = useCrmStore()
+  const router = useRouter()
+  const { opportunities, opportunityActivities, quotes, moveOpportunityStage, contacts } = useCrmStore()
   const opp = opportunities.find(o => o.id === activeOppId)
   if (!opp) return null
 
   const acts = opportunityActivities.filter(a => a.opportunityId === opp.id).sort((a,b) => (b.createdDate ?? b.createdAt).localeCompare(a.createdDate ?? a.createdAt))
   const oppQuotes = quotes.filter(q => (opp.quoteIds ?? []).includes(q.id))
+
+  const clientId = opp.clientId || opp.companyId || (() => {
+    try {
+      const raw = sessionStorage.getItem(`crm:convert:${opp.id}`)
+      if (!raw) return ''
+      return String(JSON.parse(raw)?.clientId || '')
+    } catch { return '' }
+  })()
+  const clientName = opp.companyName
+    || contacts?.find((c: { id: string }) => c.id === clientId)?.name
+    || (() => {
+      try {
+        const raw = sessionStorage.getItem(`crm:convert:${opp.id}`)
+        if (!raw) return opp.name
+        return String(JSON.parse(raw)?.clientName || opp.name)
+      } catch { return opp.name }
+    })()
+
+  const openSalesQuote = () => {
+    if (!clientId) {
+      router.push('/sales?new=1')
+      return
+    }
+    const params = new URLSearchParams()
+    params.set('new', '1')
+    params.set('customerId', clientId)
+    if (clientName) params.set('customerName', clientName)
+    params.set('opportunityId', opp.id)
+    router.push(`/sales?${params.toString()}`)
+  }
 
   return (
     <div className="card p-4 flex flex-col gap-4">
@@ -1496,9 +1537,12 @@ function OpportunityDetail({ activeOppId, onClose, stageLabels, onMarkWon, onMar
         <button className="btn-outline text-[11px] py-1 px-2.5" onClick={onClose}>← Back</button>
         <span className="text-sm font-bold text-t1">{opp.ref}</span>
         <Badge status={opp.stage} label={stageLabels[opp.stage]} />
-        <div className="ml-auto flex gap-2">
+        <div className="ml-auto flex gap-2 flex-wrap justify-end">
           {!['closed_won', 'closed_lost'].includes(opp.stage) && (
             <>
+              <button type="button" className="btn-primary text-[11px]" onClick={openSalesQuote}>
+                Create quotation
+              </button>
               <button className="btn-primary" style={{ background: 'var(--success)' }} onClick={onMarkWon}>✓ Mark Won</button>
               <button className="btn-outline" style={{ color: 'var(--danger)', borderColor: 'var(--danger)' }} onClick={onMarkLost}>✗ Mark Lost</button>
             </>
@@ -1568,7 +1612,14 @@ function OpportunityDetail({ activeOppId, onClose, stageLabels, onMarkWon, onMar
           </div>
           
           <div className="p-4 rounded-xl border" style={{ borderColor: 'var(--border-lt)' }}>
-            <h4 className="text-sm font-bold mb-3">Quotes ({oppQuotes.length})</h4>
+            <div className="flex items-center justify-between mb-3 gap-2">
+              <h4 className="text-sm font-bold">Quotes ({oppQuotes.length})</h4>
+              {!['closed_won', 'closed_lost'].includes(opp.stage) && (
+                <button type="button" className="btn-outline text-[10px] py-1 px-2" onClick={openSalesQuote}>
+                  New quotation
+                </button>
+              )}
+            </div>
             <div className="flex flex-col gap-2 text-xs">
               {oppQuotes.map(q => (
                 <div key={q.id} className="flex justify-between items-center p-2 bg-gray-50 rounded border border-gray-100">
@@ -1576,7 +1627,11 @@ function OpportunityDetail({ activeOppId, onClose, stageLabels, onMarkWon, onMar
                   <span className="font-mono font-semibold">{fmtKes(q.totalAmount)}</span>
                 </div>
               ))}
-              {oppQuotes.length === 0 && <p className="text-t3">No quotes yet</p>}
+              {oppQuotes.length === 0 && (
+                <p className="text-t3">
+                  No quotes yet — use <strong>Create quotation</strong> to open Sales with this customer.
+                </p>
+              )}
             </div>
           </div>
         </div>
