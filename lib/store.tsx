@@ -8,6 +8,7 @@ import {
   resolveOpenPosSessionId,
 } from '@/lib/pos-session'
 export { isPosBankPayment }
+import { loyaltyPointsEarned } from '@/lib/loyalty'
 import { requestCreateUser, requestDeleteUser, requestUpdateUser, requestDeactivateUser, requestReactivateUser } from '@/lib/auth/client-users'
 import { canManageHRRole, getFirstAllowedModule, hasModuleAccess as userHasModuleAccess, normalizeClientRole } from '@/lib/auth/access'
 import { mergeCatalogProducts, mergeProductsRemoteState } from '@/lib/catalog-merge'
@@ -16574,7 +16575,7 @@ const storeCtx: AppState = {
       const user = currentUser()
       let pointsEarned = 0
       if (customerId) {
-        pointsEarned = Math.floor(total / 100) // 1 point per 100 KES
+        pointsEarned = loyaltyPointsEarned(total) // 1 point per 2000 KES
         setContacts(prev => prev.map(c => c.id === customerId ? { ...c, loyaltyPoints: Math.max(0, (c.loyaltyPoints || 0) - pointsRedeemed) + pointsEarned } : c))
       }
       const resolvedBankId = isPosBankPayment(payment)

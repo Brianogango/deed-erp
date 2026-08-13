@@ -11,6 +11,7 @@ import {
 import { BarcodeScannerModal } from '@/components/BarcodeScanner'
 import { matchPosScan, normalizeScanCode } from '@/lib/barcode-scan'
 import { isOrphanedPosSession } from '@/lib/pos-session'
+import { loyaltyPointsEarned } from '@/lib/loyalty'
 
 function ReceiptPrintView({ order, companySettings, bankAccounts, onDone }: { order: any, companySettings: any, bankAccounts?: { id: string; name: string }[], onDone: () => void }) {
   useEffect(() => {
@@ -252,7 +253,7 @@ export default function PointOfSale() {
   const maxPoints = customerInfo ? Math.min(customerInfo.loyaltyPoints || 0, cartTotalBeforePoints) : 0
   const pointsToRedeem = Math.min(Number(redeemPoints) || 0, maxPoints)
   const cartTotal = cartTotalBeforePoints - pointsToRedeem
-  const pointsToEarn = customerId ? Math.floor(cartTotal / 100) : 0
+  const pointsToEarn = customerId ? loyaltyPointsEarned(cartTotal) : 0
 
   const processScan = (code: string) => {
     const trimmed = normalizeScanCode(code)
