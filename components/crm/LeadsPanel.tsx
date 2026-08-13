@@ -103,7 +103,7 @@ export default function LeadsPanel({
   salesReps: { id: string; name: string }[]
   currentUserId?: string
   /** Called after a successful convert so CRM can open the new opportunity / pipeline. */
-  onConverted?: (opportunityId: string, meta?: { clientId?: string; clientName?: string }) => void
+  onConverted?: (opportunityId: string, meta?: { clientId?: string; clientName?: string; opportunity?: unknown }) => void
 }) {
   const [leads, setLeads] = useState<LeadRow[]>([])
   const [loading, setLoading] = useState(true)
@@ -180,7 +180,7 @@ export default function LeadsPanel({
       const opportunityId = String(data.opportunity?.id || data.lead?.opportunityId || '')
       const clientId = String(data.clientId || data.lead?.clientId || '')
       const clientName = String(data.clientName || data.lead?.companyName || data.lead?.name || '')
-      if (opportunityId) onConverted?.(opportunityId, { clientId, clientName })
+      if (opportunityId) onConverted?.(opportunityId, { clientId, clientName, opportunity: data.opportunity })
     } catch (err) {
       showToast(err instanceof Error ? err.message : 'Convert failed', 'error')
     } finally {

@@ -3,11 +3,12 @@ import prisma from '@/lib/prisma'
 import { withApiErrorHandling, getRequiredSession } from '@/lib/auth/api'
 import { canAccessRecord } from '@/lib/auth/authorization'
 import { saveStoreKeys } from '@/lib/server-store'
+import { normalizeOpportunitiesForClient } from '@/lib/opportunity-normalization'
 
 async function broadcastOpportunities() {
   try {
     const all = await prisma.opportunity.findMany({ include: { client: true, assignedTo: true, activities: true }, orderBy: { createdAt: 'desc' } })
-    void saveStoreKeys({ deed_opportunities: JSON.stringify(all) })
+    void saveStoreKeys({ deed_opportunities: JSON.stringify(normalizeOpportunitiesForClient(all)) })
   } catch {}
 }
 
