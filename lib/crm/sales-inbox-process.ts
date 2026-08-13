@@ -40,8 +40,9 @@ import {
 import { maybeClassifyWithAi } from '@/lib/crm/inbox/classify-ai'
 import { withSalesInboxAdvisoryLock } from '@/lib/crm/inbox/advisory-lock'
 
+import { LEAD_ASSIGNEE_ROLES } from '@/lib/crm/lead-assignees'
+
 const RR_KEY = 'deed_salesLeadRoundRobin'
-const SALES_ROLES = ['sales_rep', 'sales'] as const
 
 export interface SalesInboxProcessResult {
   configured: boolean
@@ -254,7 +255,7 @@ async function processSalesInboxLeadsUnlocked(opts?: {
   let lastOwnerId = readLastOwnerId(state[RR_KEY])
 
   const salesReps = await prisma.user.findMany({
-    where: { isActive: true, role: { in: [...SALES_ROLES] } },
+    where: { isActive: true, role: { in: [...LEAD_ASSIGNEE_ROLES] } },
     select: { id: true, username: true, email: true },
     orderBy: { username: 'asc' },
   })

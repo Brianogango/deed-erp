@@ -233,7 +233,7 @@ export default function EmailReviewPanel({
       </div>
 
       {salesReps.length === 0 && (
-        <p className="text-[11px] text-text-3">No sales reps available for auto-assign on accept.</p>
+        <p className="text-[11px] text-text-3">No directors or sales reps available for auto-assign on accept.</p>
       )}
     </div>
   )
