@@ -28,6 +28,7 @@ export interface AccountingCtxValue {
   postInvoice: ReturnType<typeof useFinanceStore>['postInvoice']
   addAccount: ReturnType<typeof useFinanceStore>['addAccount']
   updateAccount: ReturnType<typeof useFinanceStore>['updateAccount']
+  addBankAccount: ReturnType<typeof useFinanceStore>['addBankAccount']
   showToast: ReturnType<typeof useFinanceStore>['showToast']
   // Derived
   currentUser: ReturnType<typeof useFinanceStore>['users'][0] | null
