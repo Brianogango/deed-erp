@@ -138,6 +138,7 @@ import { repairOutsourceReadiness } from '@/lib/repair-outsource'
 import { getPreviousRepairProgressStatus } from '@/lib/repair-progress'
 import { assertFiniteSequenceNext, repairDatesWriteError } from '@/lib/data-validation'
 import { ensureRepairIntakeTimestamp } from '@/lib/repair-datetime'
+import { EXCHANGE_RETURN_LOCATION } from '@/lib/aftersales/exchange-stock'
 import {
   isDirectRepairPath,
   isQuoteDeclinedReopenable,
@@ -18402,18 +18403,20 @@ const storeCtx: AppState = {
         }
       }
 
-      // Return items → back to stock as available
+      // Return items → With Issues (shop). Exchanged units are assumed faulty /
+      // customer-issue and must not land in Ready for Sale / warehouse.
+      const returnLocation: LocationId = EXCHANGE_RETURN_LOCATION
       exc.returnLines.forEach(line => {
         line.serialIds.forEach(sid => {
-          setSerials(p => p.map(s => s.id === sid ? { ...s, status: 'available', location: 'warehouse' as LocationId, soldDate: undefined, saleOrderId: undefined } : s))
+          setSerials(p => p.map(s => s.id === sid ? { ...s, status: 'available', location: returnLocation, soldDate: undefined, saleOrderId: undefined } : s))
         })
         if (line.serialIds.length === 0) {
           setProducts(p => p.map(x => x.id === line.productId ? { ...x, stockQty: x.stockQty + line.qty } : x))
-          setBulkStock(prev => upsertBulkStock(prev, line.productId, 'warehouse', line.qty))
+          setBulkStock(prev => upsertBulkStock(prev, line.productId, returnLocation, line.qty))
         } else {
           setProducts(p => p.map(x => x.id === line.productId ? { ...x, stockQty: x.stockQty + line.qty } : x))
         }
-        addMove(line.productId, line.productName, line.qty, 'in', `Exchange return ${exc.ref}`, exc.ref, 'customer', 'warehouse', line.serialIds.map(id => serialRef.current.find(s => s.id === id)?.serial ?? id))
+        addMove(line.productId, line.productName, line.qty, 'in', `Exchange return ${exc.ref}`, exc.ref, 'customer', returnLocation, line.serialIds.map(id => serialRef.current.find(s => s.id === id)?.serial ?? id))
       })
 
       // New items → out to customer
@@ -18427,8 +18430,8 @@ const storeCtx: AppState = {
       })
 
       setClientExchanges(p => p.map(e => e.id === id ? { ...e, status: 'completed', completedDate: now(), completedByName: user.name } : e))
-      addAuditLog('exchange_complete', exc.ref, `Completed exchange ${exc.ref} for ${exc.customerName}`)
-      showToast(`Exchange ${exc.ref} completed — stock updated`)
+      addAuditLog('exchange_complete', exc.ref, `Completed exchange ${exc.ref} for ${exc.customerName} — returns to ${LOCATIONS[returnLocation].name}`)
+      showToast(`Exchange ${exc.ref} completed — returned items moved to ${LOCATIONS[returnLocation].name}`)
     },
 
     cancelExchange: (id) => {
