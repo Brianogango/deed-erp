@@ -33,7 +33,23 @@ function ReceiptPrintView({ order, companySettings, bankAccounts, onDone }: { or
     >
       <div className="text-center pb-4 mb-4" style={{ borderBottom: '1px dashed var(--border)' }}>
         {companySettings.logoUrl ? (
-          <img src={companySettings.logoUrl} style={{ maxHeight: 60, margin: '0 auto 8px', objectFit: 'contain' }} alt="Logo" />
+          <img
+            src={companySettings.logoUrl}
+            className="print-receipt-logo"
+            style={{
+              display: 'block',
+              maxHeight: 110,
+              maxWidth: '92%',
+              width: 'auto',
+              height: 'auto',
+              margin: '0 auto 10px',
+              objectFit: 'contain',
+              // Darken light/brand logos so they read clearly on thermal print.
+              filter: 'grayscale(1) contrast(1.45) brightness(0.45)',
+              WebkitFilter: 'grayscale(1) contrast(1.45) brightness(0.45)',
+            }}
+            alt="Logo"
+          />
         ) : (
           <h2 className="font-bold text-lg mb-1">{companySettings.name}</h2>
         )}
@@ -138,6 +154,16 @@ function ReceiptPrintView({ order, companySettings, bankAccounts, onDone }: { or
             color: var(--text-1) !important;
             background: white !important;
             box-shadow: none !important;
+          }
+          .print-receipt-logo {
+            max-height: 28mm !important;
+            max-width: 70mm !important;
+            width: auto !important;
+            height: auto !important;
+            filter: grayscale(1) contrast(1.45) brightness(0.45) !important;
+            -webkit-filter: grayscale(1) contrast(1.45) brightness(0.45) !important;
+            print-color-adjust: exact !important;
+            -webkit-print-color-adjust: exact !important;
           }
           .no-print-area,
           .no-print-area * {
