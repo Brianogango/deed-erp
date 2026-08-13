@@ -17,6 +17,7 @@ import {
 } from '@/components/icons'
 import type { IconProp } from '@fortawesome/fontawesome-svg-core'
 import { useUrlRecordId } from '@/hooks/useUrlRecordId'
+import { isLeadAssigneeRole } from '@/lib/crm/lead-assignees'
 
 const ACTIVITY_ICONS: Record<string, IconProp> = {
   call: faPhone,
@@ -342,10 +343,10 @@ function CRMContent() {
   const totalClosed = wonOpps.length + lostOpps.length
   const winRate = totalClosed > 0 ? Math.round((wonOpps.length / totalClosed) * 100) : 0
 
-  // Per-rep breakdown (admin only)
+  // Lead / pipeline assignees: directors + sales reps (not sales-only — that
+  // forced every inbound lead onto the sole sales_rep).
   const salesReps = users.filter(u =>
-    u.role === 'sales_rep'
-   
+    isLeadAssigneeRole(u.role)
     || opportunities.some(o => o.ownerId === u.id || o.assignedToId === u.id),
   )
   const repBreakdown = salesReps.map(rep => {

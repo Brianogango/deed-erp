@@ -3,6 +3,7 @@ import { randomUUID } from 'crypto'
 import prisma from '@/lib/prisma'
 import { getRequiredSession, requireRole, withApiErrorHandling } from '@/lib/auth/api'
 import { pickRoundRobinOwner } from '@/lib/crm/sales-inbox-leads'
+import { LEAD_ASSIGNEE_ROLES } from '@/lib/crm/lead-assignees'
 import { loadAppState, saveStoreKeys } from '@/lib/server-store'
 import { buildNotifyRows } from '@/lib/in-app-notifications'
 import { notifyInboundLeadCreated } from '@/lib/crm/sales-inbox-notifications'
@@ -120,7 +121,7 @@ export async function POST(req: NextRequest) {
       let ownerId = body.ownerId || lead.ownerId || null
       if (!ownerId) {
         const reps = await prisma.user.findMany({
-          where: { isActive: true, role: { in: ['sales_rep', 'sales'] } },
+          where: { isActive: true, role: { in: [...LEAD_ASSIGNEE_ROLES] } },
           select: { id: true },
           orderBy: { username: 'asc' },
         })
