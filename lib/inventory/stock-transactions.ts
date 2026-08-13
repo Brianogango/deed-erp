@@ -563,7 +563,8 @@ export async function applyPosStockMutation(params: {
     const qty = Math.max(0, Math.floor(Number(line.qty) || 0))
     if (!productId || qty <= 0) continue
     const product = products.find(p => p.id === productId)
-    const location = asLocationId(line.sourceLocation || 'shop')
+    // POS always sells from warehouse (shop = "With Issues", not a sales floor).
+    const location: LocationId = 'warehouse'
 
     if (line.serialId || (product && isSerialTracking(inferTrackingMethod(product)))) {
       const serial = line.serialId
@@ -575,6 +576,12 @@ export async function applyPosStockMutation(params: {
           )
       if (!serial || !isOnHandSerialStatus(serial.status)) {
         return { ok: false, error: `Serial not available for ${line.productName || productId}` }
+      }
+      if (String(serial.location || '') !== 'warehouse') {
+        return {
+          ok: false,
+          error: `Serial for ${line.productName || productId} is not at warehouse (at ${serial.location || 'unknown'})`,
+        }
       }
       serial.status = 'sold'
       serial.location = 'customer'

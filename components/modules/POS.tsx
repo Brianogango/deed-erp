@@ -1,6 +1,6 @@
 'use client'
 import { useState, useRef, useEffect } from 'react'
-import { useCommerceStore, fmtKes, fmtDate } from '@/lib/store'
+import { useCommerceStore, useInventoryStore, fmtKes, fmtDate } from '@/lib/store'
 import { Modal, Field, Input, Badge, ModuleSkeleton } from '@/components/ui'
 import { DataTable, type ColumnDef } from '@/components/data-table'
 import {
@@ -101,6 +101,7 @@ export default function PointOfSale() {
   useEffect(() => { setMounted(true) }, [])
 
   const { products, serials, contacts, createPOSOrder, posOrders, openPOSSession, closePOSSession, posSessionOpen, posSessionOpeningCash, posSessionId, showToast, companySettings, getCustomerCreditStatus } = useCommerceStore()
+  const { getStockByLocation } = useInventoryStore()
 
   const [cart, setCart] = useState<{ lineId: string; productId: string; productName: string; barcode: string; price: number; listPrice: number; qty: number; image: string; serialId?: string; serialNumber?: string }[]>([])
   const [scanInput, setScanInput] = useState('')
@@ -122,10 +123,11 @@ export default function PointOfSale() {
   const [showCamera, setShowCamera] = useState(false)
   const scanRef = useRef<HTMLInputElement>(null)
 
-  const sellableLocations = new Set(['warehouse', 'shop'])
+  // Sell only from warehouse — shop is the "With Issues" bin, not a sales floor.
+  const sellableLocations = new Set(['warehouse'])
   const getSellableQty = (productId: string, requiresSerial: boolean) => requiresSerial
     ? serials.filter(s => s.productId === productId && s.status === 'available' && sellableLocations.has(s.location)).length
-    : (products.find(p => p.id === productId)?.stockQty ?? 0)
+    : (getStockByLocation(productId).warehouse ?? 0)
 
   const sellable = products.filter(p =>
     p.canBeSold &&
