@@ -908,6 +908,44 @@ function SalesContent() {
     startUxTask('sales_quote_create', { module: 'sales' })
   }
 
+  // CRM lead convert / opportunity "Create quotation" deep-link:
+  // /sales?new=1&customerId=<uuid>&customerName=...
+  useEffect(() => {
+    if (searchParams.get('new') !== '1') return
+    const customerId = searchParams.get('customerId') || ''
+    const customerName = searchParams.get('customerName') || ''
+    const fromContacts = customerId
+      ? contacts.find(c => c.id === customerId)
+      : undefined
+    setNewCustomer(
+      customerId
+        ? { id: customerId, name: fromContacts?.name || customerName || 'Customer' }
+        : null,
+    )
+    setNewDeliveryDate('')
+    setNewValidUntil('')
+    setNewNotes('')
+    setNewCustomerRef('')
+    setNewInvoiceAddress('')
+    setNewDeliveryAddress('')
+    setNewPaymentDetails({ ...DEFAULT_DOCUMENT_PAYMENT_DETAILS })
+    setNewPricelist('RETAIL')
+    setNewDraftLines([])
+    setActiveId(null)
+    setView('new')
+    startUxTask('sales_quote_create', { module: 'sales', source: 'crm_convert' })
+
+    const params = new URLSearchParams(searchParams.toString())
+    params.delete('new')
+    params.delete('customerId')
+    params.delete('customerName')
+    params.delete('opportunityId')
+    params.delete('id')
+    params.delete('view')
+    const qs = params.toString()
+    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false })
+  }, [searchParams, contacts, pathname, router]) // eslint-disable-line react-hooks/exhaustive-deps
+
   const exportFilteredOrdersCsv = () => {
     const rows = filtered.map(s => [
       s.ref,

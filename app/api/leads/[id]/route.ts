@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { getRequiredSession, withApiErrorHandling } from '@/lib/auth/api'
 import { saveStoreKeys } from '@/lib/server-store'
+import { broadcastContacts, upsertContact } from '@/lib/contact-prisma'
+import { clip, splitContactName } from '@/lib/crm/lead-convert'
 
 const LEAD_INCLUDE = {
   owner: { select: { id: true, username: true, email: true } },
@@ -90,44 +92,42 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       return NextResponse.json({ error: 'Lead already converted' }, { status: 409 })
     }
 
+    // Resolve / create the CRM contact (Client row) via the same path Sales uses,
+    // so the new customer appears in the contacts store immediately.
     let clientId = lead.clientId
-    if (!clientId && lead.companyName) {
-      const client = await prisma.client.create({
-        data: {
-          clientNumber: `CLT-${Date.now().toString().slice(-8)}`,
-          clientType: 'company',
-          name: lead.companyName,
-          email: lead.email,
-          phone: lead.phone,
-        },
-      })
-      clientId = client.id
-    }
+    let clientName = lead.companyName?.trim() || lead.name.trim()
     if (!clientId) {
-      const client = await prisma.client.create({
-        data: {
-          clientNumber: `CLT-${Date.now().toString().slice(-8)}`,
-          clientType: 'individual',
-          name: lead.name,
-          email: lead.email,
-          phone: lead.phone,
-        },
+      const contactResult = await upsertContact(prisma, {
+        name: clip(clientName, 200) || 'Customer',
+        companyName: clip(lead.companyName, 200) || undefined,
+        email: clip(lead.email, 150) || undefined,
+        phone: clip(lead.phone, 20) || undefined,
+        type: lead.companyName ? 'company' : 'individual',
+        isCustomer: true,
+        notes: clip(lead.notes, 2000) || undefined,
       })
-      clientId = client.id
+      if (typeof contactResult === 'string') {
+        return NextResponse.json({ error: contactResult }, { status: 422 })
+      }
+      clientId = contactResult.contact.id
+      clientName = contactResult.contact.name || clientName
+    } else {
+      const existing = await prisma.client.findUnique({ where: { id: clientId } })
+      if (existing?.name) clientName = existing.name
     }
 
     let contactPersonId: string | null = null
     if (body.createContact !== false && clientId) {
-      const parts = lead.name.trim().split(/\s+/)
-      const firstName = parts[0] || lead.name
-      const lastName = parts.slice(1).join(' ') || '—'
+      const { firstName, lastName } = splitContactName(lead.name)
+      // Inbound email leads often use the whole subject/product line as the
+      // lead name — ContactPerson columns are short (80/80/20/150), so clip.
       const contact = await prisma.contactPerson.create({
         data: {
           clientId,
           firstName,
           lastName,
-          email: lead.email,
-          phone: lead.phone,
+          email: clip(lead.email, 150),
+          phone: clip(lead.phone, 20),
           position: 'Contact',
         },
       })
@@ -137,7 +137,10 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     const opportunity = await prisma.opportunity.create({
       data: {
         clientId,
-        name: lead.companyName ? `${lead.companyName} — ${lead.name}` : lead.name,
+        name: clip(
+          lead.companyName ? `${lead.companyName} — ${lead.name}` : lead.name,
+          200,
+        ) || lead.name.slice(0, 200),
         description: lead.notes,
         stage: 'qualification',
         probability: 20,
@@ -158,14 +161,16 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       include: LEAD_INCLUDE,
     })
 
-    // Push the new opportunity into the CRM blob so the pipeline updates without a full reload.
+    // Keep CRM pipeline + Sales contacts in sync without a full page reload.
     void broadcastOpportunities()
+    void broadcastContacts(prisma)
 
     return NextResponse.json({
       lead: updatedLead,
       opportunity,
       contactPersonId,
       clientId,
+      clientName,
     })
   })
 }
