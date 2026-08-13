@@ -27,8 +27,11 @@ function ReceiptPrintView({ order, companySettings, bankAccounts, onDone }: { or
   }, [onDone])
 
   return (
-    <div className="print-receipt-container bg-white text-black" style={{ fontFamily: 'monospace', fontSize: '12px', width: '300px', margin: '0 auto', padding: '16px' }}>
-      <div className="text-center pb-4 mb-4" style={{ borderBottom: '1px dashed #ccc' }}>
+    <div
+      className="print-receipt-container bg-white"
+      style={{ fontFamily: 'monospace', fontSize: '12px', width: '300px', margin: '0 auto', padding: '16px', color: 'var(--text-1)' }}
+    >
+      <div className="text-center pb-4 mb-4" style={{ borderBottom: '1px dashed var(--border)' }}>
         {companySettings.logoUrl ? (
           <img src={companySettings.logoUrl} style={{ maxHeight: 60, margin: '0 auto 8px', objectFit: 'contain' }} alt="Logo" />
         ) : (
@@ -51,23 +54,26 @@ function ReceiptPrintView({ order, companySettings, bankAccounts, onDone }: { or
         </div>
       </div>
       <div className="flex flex-col gap-1.5 mb-4">
-        <div className="flex justify-between font-bold pb-1 mb-1" style={{ borderBottom: '1px solid #eee' }}>
+        <div className="flex justify-between font-bold pb-1 mb-1" style={{ borderBottom: '1px solid var(--border-lt)' }}>
           <span>Item</span>
           <span>Total</span>
         </div>
         {order.lines.map((l: any, i: number) => (
           <div key={i} className="flex justify-between">
-            <span>{l.productName} <br/><span className="text-[10px] text-gray-500">{l.qty} × {fmtKes(l.price)}</span></span>
+            <span>{l.productName} <br/><span className="text-[10px] text-t3">{l.qty} × {fmtKes(l.price)}</span></span>
             <span className="font-semibold">{fmtKes(l.subtotal)}</span>
           </div>
         ))}
       </div>
-      <div className="pt-2 mb-4" style={{ borderTop: '1px dashed #ccc' }}>
+      <div className="pt-2 mb-4" style={{ borderTop: '1px dashed var(--border)' }}>
         <div className="flex justify-between mb-1"><span>Subtotal</span><span>{fmtKes(order.subtotal)}</span></div>
         {order.taxTotal > 0 && <div className="flex justify-between mb-1"><span>VAT</span><span>{fmtKes(order.taxTotal)}</span></div>}
-        {order.pointsRedeemed ? (<div className="flex justify-between mb-1 text-red-600"><span>Points Redeemed</span><span>-{fmtKes(order.pointsRedeemed)}</span></div>) : null}
-        <div className="flex justify-between font-bold text-sm pt-2 mt-2" style={{ borderTop: '1px solid #ccc' }}>
+        {order.pointsRedeemed ? (<div className="flex justify-between mb-1" style={{ color: 'var(--danger)' }}><span>Points Redeemed</span><span>-{fmtKes(order.pointsRedeemed)}</span></div>) : null}
+        <div className="flex justify-between font-bold text-sm pt-2 mt-2" style={{ borderTop: '1px solid var(--border)' }}>
           <span>FINAL TOTAL</span><span>{fmtKes(order.total)}</span>
+        </div>
+        <div className="flex justify-between mt-1 font-bold">
+          <span>Amount Paid</span><span>{fmtKes(order.total)}</span>
         </div>
         <div className="flex justify-between mt-2">
           <span>Payment Mode</span>
@@ -85,23 +91,61 @@ function ReceiptPrintView({ order, companySettings, bankAccounts, onDone }: { or
           </div>
         ) : null}
       </div>
-      <div className="text-center pt-4" style={{ borderTop: '1px dashed #ccc' }}>
+      <div className="text-center pt-4" style={{ borderTop: '1px dashed var(--border)' }}>
         {order.pointsEarned ? (
           <p className="font-semibold mb-2">+{order.pointsEarned} Loyalty Points Earned!</p>
         ) : null}
         <p>{companySettings.invoiceFooter || 'Thank you for your business!'}</p>
       </div>
       <div className="no-print-area text-center mt-6">
-        <p className="text-xs text-gray-500">Printing receipt...</p>
+        <p className="text-xs text-t3">Printing receipt...</p>
         <button className="btn-outline mt-2" onClick={onDone}>Cancel / Done</button>
       </div>
       <style>{`
-        @media print { 
-          @page { margin: 0; }
-          body * { visibility: hidden; } 
-          .print-receipt-container, .print-receipt-container * { visibility: visible; } 
-          .print-receipt-container { position: absolute; left: 0; top: 0; width: 80mm; margin: 0; padding: 4mm; font-family: monospace; font-size: 12px; color: #000; } 
-          .no-print-area, .no-print-area * { display: none !important; } 
+        @media print {
+          /* Thermal / roll: page height follows receipt content, not A4. */
+          @page {
+            size: 80mm auto;
+            margin: 0;
+          }
+          html, body {
+            width: 80mm !important;
+            height: auto !important;
+            min-height: 0 !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            background: white !important;
+            overflow: hidden !important;
+          }
+          body * {
+            display: none !important;
+          }
+          .print-receipt-container,
+          .print-receipt-container * {
+            display: revert !important;
+            visibility: visible !important;
+          }
+          .print-receipt-container {
+            display: block !important;
+            position: static !important;
+            left: auto !important;
+            top: auto !important;
+            width: 80mm !important;
+            max-width: 80mm !important;
+            height: auto !important;
+            margin: 0 !important;
+            padding: 3mm 4mm 6mm !important;
+            font-family: monospace !important;
+            font-size: 12px !important;
+            color: var(--text-1) !important;
+            background: white !important;
+            box-shadow: none !important;
+            overflow: visible !important;
+          }
+          .no-print-area,
+          .no-print-area * {
+            display: none !important;
+          }
         }
       `}</style>
     </div>
