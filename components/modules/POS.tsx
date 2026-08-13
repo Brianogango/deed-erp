@@ -103,7 +103,8 @@ function ReceiptPrintView({ order, companySettings, bankAccounts, onDone }: { or
       </div>
       <style>{`
         @media print {
-          /* Thermal / roll: page height follows receipt content, not A4. */
+          /* visibility (not display:none) so ancestors in the app shell do not
+             blank the receipt — display:none on parents hides children forever. */
           @page {
             size: 80mm auto;
             margin: 0;
@@ -115,21 +116,18 @@ function ReceiptPrintView({ order, companySettings, bankAccounts, onDone }: { or
             margin: 0 !important;
             padding: 0 !important;
             background: white !important;
-            overflow: hidden !important;
           }
           body * {
-            display: none !important;
+            visibility: hidden !important;
           }
           .print-receipt-container,
           .print-receipt-container * {
-            display: revert !important;
             visibility: visible !important;
           }
           .print-receipt-container {
-            display: block !important;
-            position: static !important;
-            left: auto !important;
-            top: auto !important;
+            position: absolute !important;
+            left: 0 !important;
+            top: 0 !important;
             width: 80mm !important;
             max-width: 80mm !important;
             height: auto !important;
@@ -140,11 +138,11 @@ function ReceiptPrintView({ order, companySettings, bankAccounts, onDone }: { or
             color: var(--text-1) !important;
             background: white !important;
             box-shadow: none !important;
-            overflow: visible !important;
           }
           .no-print-area,
           .no-print-area * {
             display: none !important;
+            visibility: hidden !important;
           }
         }
       `}</style>
