@@ -1495,7 +1495,7 @@ function PipelineKanban({ effectiveOwner, stageLabels, onSelectOpp }: { effectiv
 
 function OpportunityDetail({ activeOppId, onClose, stageLabels, onMarkWon, onMarkLost, onLogActivity }: any) {
   const router = useRouter()
-  const { opportunities, opportunityActivities, quotes, moveOpportunityStage, contacts } = useCrmStore()
+  const { opportunities, opportunityActivities, quotes, saleOrders, moveOpportunityStage, contacts } = useCrmStore()
   const opp = opportunities.find(o => o.id === activeOppId)
   if (!opp) return null
 
@@ -1519,6 +1519,11 @@ function OpportunityDetail({ activeOppId, onClose, stageLabels, onMarkWon, onMar
       } catch { return opp.name }
     })()
 
+  // Live Sales quotations/orders for this customer (SaleOrder), not the unused CRM Quote docs.
+  const relatedSaleOrders = (saleOrders ?? [])
+    .filter(so => so.customerId && (so.customerId === clientId || so.customerId === opp.clientId || so.customerId === opp.companyId))
+    .sort((a, b) => (b.date ?? '').localeCompare(a.date ?? ''))
+
   const openSalesQuote = () => {
     if (!clientId) {
       router.push('/sales?new=1')
@@ -1530,6 +1535,10 @@ function OpportunityDetail({ activeOppId, onClose, stageLabels, onMarkWon, onMar
     if (clientName) params.set('customerName', clientName)
     params.set('opportunityId', opp.id)
     router.push(`/sales?${params.toString()}`)
+  }
+
+  const openSaleOrder = (id: string) => {
+    router.push(`/sales?id=${id}`)
   }
 
   return (
@@ -1614,7 +1623,7 @@ function OpportunityDetail({ activeOppId, onClose, stageLabels, onMarkWon, onMar
           
           <div className="p-4 rounded-xl border" style={{ borderColor: 'var(--border-lt)' }}>
             <div className="flex items-center justify-between mb-3 gap-2">
-              <h4 className="text-sm font-bold">Quotes ({oppQuotes.length})</h4>
+              <h4 className="text-sm font-bold">Quotations ({relatedSaleOrders.length || oppQuotes.length})</h4>
               {!['closed_won', 'closed_lost'].includes(opp.stage) && (
                 <button type="button" className="btn-outline text-[10px] py-1 px-2" onClick={openSalesQuote}>
                   New quotation
@@ -1622,15 +1631,26 @@ function OpportunityDetail({ activeOppId, onClose, stageLabels, onMarkWon, onMar
               )}
             </div>
             <div className="flex flex-col gap-2 text-xs">
-              {oppQuotes.map(q => (
+              {relatedSaleOrders.slice(0, 10).map(so => (
+                <button
+                  key={so.id}
+                  type="button"
+                  className="flex justify-between items-center p-2 bg-gray-50 rounded border border-gray-100 text-left hover:bg-[var(--info-bg)]"
+                  onClick={() => openSaleOrder(so.id)}
+                >
+                  <span className="font-mono text-blue-600">{so.ref}</span>
+                  <span className="font-mono font-semibold">{fmtKes(so.total)}</span>
+                </button>
+              ))}
+              {relatedSaleOrders.length === 0 && oppQuotes.map(q => (
                 <div key={q.id} className="flex justify-between items-center p-2 bg-gray-50 rounded border border-gray-100">
                   <span className="font-mono text-blue-600">{q.quoteNumber}</span>
                   <span className="font-mono font-semibold">{fmtKes(q.totalAmount)}</span>
                 </div>
               ))}
-              {oppQuotes.length === 0 && (
+              {relatedSaleOrders.length === 0 && oppQuotes.length === 0 && (
                 <p className="text-t3">
-                  No quotes yet — use <strong>Create quotation</strong> to open Sales with this customer.
+                  No quotations yet — use <strong>Create quotation</strong> to open Sales with this customer.
                 </p>
               )}
             </div>

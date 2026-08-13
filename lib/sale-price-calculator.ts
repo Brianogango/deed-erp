@@ -135,6 +135,32 @@ export function suggestSalePriceFromCost(
   return null
 }
 
+/**
+ * Always returns a whole-KES list price when cost is valid.
+ * Uses margin policy / markup when available; otherwise a conservative
+ * ~30% gross-margin fallback so product forms and quote lines never sit at 0.
+ */
+export function autoSalePriceFromCost(
+  mapOrPolicy: CategoryMarkupMap | PricingMarginPolicy | null | undefined,
+  category: string | null | undefined,
+  costPrice: number | string | null | undefined,
+  opts?: {
+    policy?: PricingMarginPolicy | Partial<PricingMarginPolicy> | null
+    pricingCategoryId?: string | null
+    productType?: 'new' | 'refurbished' | string | null
+    legacyMarkupMap?: CategoryMarkupMap | null
+  },
+): number | null {
+  const suggested = suggestSalePriceFromCost(mapOrPolicy, category, costPrice, opts)
+  if (suggested != null && suggested > 0) return suggested
+  if (costPrice === '' || costPrice === null || costPrice === undefined) return null
+  const cost = Number(costPrice)
+  if (!Number.isFinite(cost) || cost < 0) return null
+  if (cost === 0) return 0
+  // Fallback: sell ≈ cost / 0.70 → ~30% classic GP when no band/markup applies.
+  return Math.max(0, Math.round(cost / 0.7))
+}
+
 export function suggestSalePriceFromMarginPolicy(
   policy: PricingMarginPolicy | Partial<PricingMarginPolicy> | null | undefined,
   opts: {

@@ -9939,7 +9939,31 @@ const storeCtx: AppState = {
         createdByUserId: user?.id, createdByName: user?.name,
       }
       setSaleOrders(p => [so, ...p])
-      sync('/api/sale-orders', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(so) })
+      try {
+        const res = await fetch('/api/sale-orders', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(so),
+        })
+        const data = await res.json().catch(() => ({}))
+        if (!res.ok) {
+          setSaleOrders(p => p.filter(x => x.id !== so.id))
+          showToast(String(data?.error || `Could not save ${so.ref}`), 'error')
+          throw new Error(String(data?.error || `Could not save ${so.ref}`))
+        }
+        // Prefer server row when returned (stable refs / resolved product links).
+        if (data && typeof data === 'object' && data.id) {
+          const normalized = normalizeSaleOrdersForClient([data])[0] as SaleOrder
+          setSaleOrders(p => p.map(x => x.id === so.id || x.id === normalized.id ? { ...so, ...normalized } : x))
+          showToast(`${normalized.ref || so.ref} created`)
+          return { ...so, ...normalized }
+        }
+      } catch (err) {
+        if (err instanceof Error && /Could not save/.test(err.message)) throw err
+        setSaleOrders(p => p.filter(x => x.id !== so.id))
+        showToast(`Could not save ${so.ref} — check connection and try again`, 'error')
+        throw err instanceof Error ? err : new Error(`Could not save ${so.ref}`)
+      }
       showToast(`${so.ref} created`)
       return so
     },

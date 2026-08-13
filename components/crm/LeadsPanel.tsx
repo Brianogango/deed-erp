@@ -396,6 +396,21 @@ export default function LeadsPanel({
                   onChange={v => void updateLeadFields(detail.id, { ownerId: v || null })}
                   options={[{ value: '', label: '— Unassigned —' }, ...salesReps.map(r => ({ value: r.id, label: r.name }))]}
                 />
+                {detail.stage === 'converted' && detail.opportunityId && (
+                  <p className="text-[10px] text-t3 mt-1">
+                    Converted —{' '}
+                    <a
+                      className="text-[var(--info)] underline"
+                      href={`/crm?crmTab=pipeline&id=${encodeURIComponent(detail.opportunityId)}`}
+                    >
+                      open opportunity
+                    </a>
+                    {' '}to create or view quotations.
+                  </p>
+                )}
+                {detail.stage === 'converted' && !detail.opportunityId && (
+                  <p className="text-[10px] text-t3 mt-1">Converted lead — open Pipeline to find the opportunity.</p>
+                )}
                 {detail.stage === 'converted' && (
                   <p className="text-[10px] text-t3 mt-1">Reassigns the linked opportunity owner too.</p>
                 )}
