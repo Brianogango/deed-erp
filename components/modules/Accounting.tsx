@@ -257,6 +257,7 @@ function AccountingContent() {
     addAccount,
     updateAccount,
     bankAccounts,
+    addBankAccount,
     bankRecons,
     bankStatementLines,
     posOrders,
@@ -1168,7 +1169,7 @@ function AccountingContent() {
   const ctxValue = {
     invoices, contacts, journalEntries, refundPayments, users, currentUserId,
     accounts, bankAccounts, posOrders, expenses, payrollRuns, purchaseOrders, companySettings,
-    registerPayment, deleteInvoice, updateInvoice, postInvoice, createManualInvoice, addAccount, updateAccount, showToast,
+    registerPayment, deleteInvoice, updateInvoice, postInvoice, createManualInvoice, addAccount, updateAccount, addBankAccount, showToast,
     currentUser, canViewJournals, canManageFinance, customers, vendors,
     allInvoices, customerInvoices, vendorBills, outstandingAR, outstandingAP, totalRevenueDynamic,
     cashAtBankBS, cashInHandBS, allCashbookEntries, cashbookTotals,
@@ -1213,6 +1214,39 @@ function AccountingContent() {
                 }}
               >
                 {tab === 'invoices' ? 'New invoice' : 'New bill'}
+              </PrimaryActionButton>
+            ) : tab === 'coa' ? (
+              <PrimaryActionButton
+                icon={<Fa icon={faPlus} />}
+                onClick={() => {
+                  const type = coaTypeFilter === 'all' ? 'asset' : coaTypeFilter
+                  const prefix =
+                    type === 'asset' ? '2'
+                    : type === 'liability' ? '3'
+                    : type === 'equity' ? '4'
+                    : type === 'revenue' ? '5'
+                    : '6'
+                  const nums = accounts
+                    .map(a => a.code)
+                    .filter(c => c.startsWith(prefix) && /^\d+$/.test(c))
+                    .map(c => Number(c))
+                    .filter(n => Number.isFinite(n))
+                  const code = String(nums.length ? Math.max(...nums) + 1 : Number(`${prefix}001`))
+                  setAccountForm({
+                    code,
+                    name: '',
+                    type,
+                    group: type === 'asset' ? 'Cash at Bank' : '',
+                    subGroup: '',
+                    isActive: true,
+                    balance: 0,
+                    notes: '',
+                  })
+                  setEditAccountId(null)
+                  setShowAccountForm(true)
+                }}
+              >
+                New account
               </PrimaryActionButton>
             ) : undefined
           }

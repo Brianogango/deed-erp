@@ -821,6 +821,8 @@ export interface Account {
   isDynamic?: boolean   // true = balance comes from invoices/journals at runtime
   dynamicKey?: 'ar' | 'ap' | 'revenue' | 'salaries' | 'net_profit'
   notes?: string
+  /** When set, this liquidity CoA line is linked to a cashbook bank wallet. */
+  bankAccountId?: string
 }
 
 export interface Product {
