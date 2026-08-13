@@ -42,3 +42,9 @@ export function hasActivePosSession(opts: {
 }): boolean {
   return Boolean(resolveOpenPosSessionId(opts))
 }
+
+/** POS tender that settles to a company bank account (`card` is legacy). */
+export function isPosBankPayment(payment?: string): boolean {
+  return payment === 'bank' || payment === 'card'
+}
+

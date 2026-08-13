@@ -1,18 +1,18 @@
 'use client'
 import { useState, useRef, useEffect } from 'react'
-import { useCommerceStore, useInventoryStore, fmtKes, fmtDate } from '@/lib/store'
-import { Modal, Field, Input, Badge, ModuleSkeleton } from '@/components/ui'
+import { useCommerceStore, useInventoryStore, fmtKes, fmtDate, isPosBankPayment } from '@/lib/store'
+import { Modal, Field, Input, Select, Badge, ModuleSkeleton } from '@/components/ui'
 import { DataTable, type ColumnDef } from '@/components/data-table'
 import {
   Fa, faCashRegister, faReceipt, faCamera, faCartShopping, faStar,
-  faCircleCheck, faPrint, faMobileScreenButton, faMoneyBillWave, faCreditCard,
+  faCircleCheck, faPrint, faMobileScreenButton, faMoneyBillWave, faBuildingColumns,
   faStore, faBox, faMagnifyingGlass, faMinus, faPlus,
 } from '@/components/icons'
 import { BarcodeScannerModal } from '@/components/BarcodeScanner'
 import { matchPosScan, normalizeScanCode } from '@/lib/barcode-scan'
 import { isOrphanedPosSession } from '@/lib/pos-session'
 
-function ReceiptPrintView({ order, companySettings, onDone }: { order: any, companySettings: any, onDone: () => void }) {
+function ReceiptPrintView({ order, companySettings, bankAccounts, onDone }: { order: any, companySettings: any, bankAccounts?: { id: string; name: string }[], onDone: () => void }) {
   useEffect(() => {
     const handleAfterPrint = () => {
       onDone()
@@ -70,8 +70,20 @@ function ReceiptPrintView({ order, companySettings, onDone }: { order: any, comp
           <span>FINAL TOTAL</span><span>{fmtKes(order.total)}</span>
         </div>
         <div className="flex justify-between mt-2">
-          <span>Payment Mode</span><span className="uppercase">{order.payment}</span>
+          <span>Payment Mode</span>
+          <span className="uppercase">{isPosBankPayment(order.payment) ? 'bank' : order.payment}</span>
         </div>
+        {order.bankAccountId ? (
+          <div className="flex justify-between mt-1 text-[11px]">
+            <span>Bank</span>
+            <span>{bankAccounts?.find(b => b.id === order.bankAccountId)?.name || order.bankAccountId}</span>
+          </div>
+        ) : null}
+        {order.paymentReference ? (
+          <div className="flex justify-between mt-1 text-[11px]">
+            <span>Reference</span><span>{order.paymentReference}</span>
+          </div>
+        ) : null}
       </div>
       <div className="text-center pt-4" style={{ borderTop: '1px dashed #ccc' }}>
         {order.pointsEarned ? (
@@ -100,14 +112,17 @@ export default function PointOfSale() {
   const [mounted, setMounted] = useState(() => typeof window !== 'undefined')
   useEffect(() => { setMounted(true) }, [])
 
-  const { products, serials, contacts, createPOSOrder, posOrders, openPOSSession, closePOSSession, posSessionOpen, posSessionOpeningCash, posSessionId, showToast, companySettings, getCustomerCreditStatus } = useCommerceStore()
+  const { products, serials, contacts, createPOSOrder, posOrders, openPOSSession, closePOSSession, posSessionOpen, posSessionOpeningCash, posSessionId, showToast, companySettings, getCustomerCreditStatus, bankAccounts } = useCommerceStore()
+  const tenderBanks = bankAccounts.filter(b => b.active && b.id !== 'mpesa' && b.id !== 'cash')
   const { getStockByLocation } = useInventoryStore()
 
   const [cart, setCart] = useState<{ lineId: string; productId: string; productName: string; barcode: string; price: number; listPrice: number; qty: number; image: string; serialId?: string; serialNumber?: string }[]>([])
   const [scanInput, setScanInput] = useState('')
   const [search, setSearch] = useState('')
   const [category, setCategory] = useState('All')
-  const [payMethod, setPayMethod] = useState<'cash' | 'mpesa' | 'card'>('mpesa')
+  const [payMethod, setPayMethod] = useState<'cash' | 'mpesa' | 'bank'>('mpesa')
+  const [bankAccountId, setBankAccountId] = useState('')
+  const [paymentReference, setPaymentReference] = useState('')
   const [customerId, setCustomerId] = useState('')
   const [customerName, setCustomerName] = useState('')
   const [showOpenSession, setShowOpenSession] = useState(false)
@@ -286,6 +301,12 @@ export default function PointOfSale() {
       if (cs.isLocked) { showToast(cs.message, 'error'); return }
     }
 
+    const selectedBankId = bankAccountId || tenderBanks.find(b => b.id === 'ncba')?.id || tenderBanks[0]?.id || ''
+    if (payMethod === 'bank' && !selectedBankId) {
+      showToast('Select a bank account before charging', 'error')
+      return
+    }
+
     setCharging(true)
     try {
       const order = await createPOSOrder(
@@ -303,7 +324,10 @@ export default function PointOfSale() {
         customerId || undefined,
         customerName || undefined,
         pointsToRedeem || 0,
-        applyVat
+        applyVat,
+        payMethod === 'bank'
+          ? { bankAccountId: selectedBankId, paymentReference: paymentReference.trim() || undefined }
+          : undefined,
       )
 
       if (order) {
@@ -311,6 +335,7 @@ export default function PointOfSale() {
         setCustomerId('')
         setCustomerName('')
         setRedeemPoints('')
+        setPaymentReference('')
         setReceiptOrder(order)
         setIsPrinting(true)
       }
@@ -323,7 +348,7 @@ export default function PointOfSale() {
   useEffect(() => { scanRef.current?.focus() }, [posSessionOpen])
 
   if (!mounted) return <ModuleSkeleton />
-  if (isPrinting && receiptOrder) return <ReceiptPrintView order={receiptOrder} companySettings={companySettings} onDone={() => setIsPrinting(false)} />
+  if (isPrinting && receiptOrder) return <ReceiptPrintView order={receiptOrder} companySettings={companySettings} bankAccounts={bankAccounts} onDone={() => setIsPrinting(false)} />
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
@@ -433,9 +458,9 @@ export default function PointOfSale() {
                 <button key={c} onClick={() => setCategory(c)}
                   className="px-3 py-1 rounded-full text-[10px] cursor-pointer flex-shrink-0 whitespace-nowrap transition-all"
                   style={{
-                    background: category === c ? '#E8F3FA' : 'var(--bg-surface)',
+                    background: category === c ? 'var(--primary-light)' : 'var(--bg-surface)',
                     color: category === c ? 'var(--navy)' : 'var(--text-3)',
-                    border: `1px solid ${category === c ? '#A8D4E8' : 'var(--border-lt)'}`,
+                    border: `1px solid ${category === c ? 'var(--primary)' : 'var(--border-lt)'}`,
                     fontWeight: category === c ? 600 : 400,
                   }}>
                   {c}
@@ -583,19 +608,42 @@ export default function PointOfSale() {
               </div>
 
               <div className="flex gap-1.5 pt-2">
-                {(['mpesa', 'cash', 'card'] as const).map(m => (
-                  <button key={m} onClick={() => setPayMethod(m)}
+                {(['mpesa', 'cash', 'bank'] as const).map(m => (
+                  <button key={m} type="button" onClick={() => {
+                    setPayMethod(m)
+                    if (m === 'bank' && !bankAccountId) {
+                      setBankAccountId(tenderBanks.find(b => b.id === 'ncba')?.id || tenderBanks[0]?.id || '')
+                    }
+                  }}
                     className="flex-1 py-2 rounded-xl text-[10px] font-semibold uppercase cursor-pointer transition-all min-h-[40px]"
                     style={{
-                      background: payMethod === m ? '#E8F3FA' : 'var(--bg-surface)',
+                      background: payMethod === m ? 'var(--primary-light)' : 'var(--bg-surface)',
                       color: payMethod === m ? 'var(--navy)' : 'var(--text-3)',
-                      border: `1px solid ${payMethod === m ? '#A8D4E8' : 'var(--border-lt)'}`,
+                      border: `1px solid ${payMethod === m ? 'var(--primary)' : 'var(--border-lt)'}`,
                       fontWeight: payMethod === m ? 600 : 400,
                     }}>
-                    {m === 'mpesa' ? <><Fa icon={faMobileScreenButton} /> M-Pesa</> : m === 'cash' ? <><Fa icon={faMoneyBillWave} /> Cash</> : <><Fa icon={faCreditCard} /> Card</>}
+                    {m === 'mpesa' ? <><Fa icon={faMobileScreenButton} /> M-Pesa</> : m === 'cash' ? <><Fa icon={faMoneyBillWave} /> Cash</> : <><Fa icon={faBuildingColumns} /> Bank</>}
                   </button>
                 ))}
               </div>
+              {payMethod === 'bank' && (
+                <div className="space-y-2 pt-1">
+                  <Field label="Bank account">
+                    <Select
+                      value={bankAccountId || tenderBanks.find(b => b.id === 'ncba')?.id || tenderBanks[0]?.id || ''}
+                      onChange={setBankAccountId}
+                      options={tenderBanks.map(b => ({ value: b.id, label: b.name }))}
+                    />
+                  </Field>
+                  <Field label="Payment reference (optional)">
+                    <Input
+                      value={paymentReference}
+                      onChange={setPaymentReference}
+                      placeholder="Transfer / deposit ref"
+                    />
+                  </Field>
+                </div>
+              )}
               <button
                 type="button"
                 className="btn-primary w-full py-3 text-sm font-semibold min-h-[48px]"
@@ -616,7 +664,7 @@ export default function PointOfSale() {
           {receiptOrder && (
             <Modal title="Order Complete" subtitle="Transaction successful" width={480} onClose={() => setReceiptOrder(null)}>
               {/* Receipt content is now in ReceiptPrintView, we can just show a summary here */}
-              <div className="text-center py-4"><div className="text-5xl mb-4" style={{ color: 'var(--success)' }} aria-hidden="true"><Fa icon={faCircleCheck} /></div><p className="text-lg font-semibold mb-2">{receiptOrder.payment.toUpperCase()} Payment Received</p><p className="text-3xl font-bold font-mono" style={{ color: 'var(--success)' }}>{fmtKes(receiptOrder.total)}</p>{receiptOrder.pointsEarned ? (<p className="text-sm font-semibold mt-2" style={{ color: '#4F46E5' }}><Fa icon={faStar} /> +{receiptOrder.pointsEarned} Loyalty Points Earned!</p>) : null}</div>
+              <div className="text-center py-4"><div className="text-5xl mb-4" style={{ color: 'var(--success)' }} aria-hidden="true"><Fa icon={faCircleCheck} /></div><p className="text-lg font-semibold mb-2">{(isPosBankPayment(receiptOrder.payment) ? 'BANK' : receiptOrder.payment.toUpperCase())} Payment Received</p>{receiptOrder.paymentReference ? <p className="text-xs text-t3 mt-1">Ref: {receiptOrder.paymentReference}</p> : null}<p className="text-3xl font-bold font-mono" style={{ color: 'var(--success)' }}>{fmtKes(receiptOrder.total)}</p>{receiptOrder.pointsEarned ? (<p className="text-sm font-semibold mt-2" style={{ color: '#4F46E5' }}><Fa icon={faStar} /> +{receiptOrder.pointsEarned} Loyalty Points Earned!</p>) : null}</div>
               <div className="flex gap-2 justify-end flex-wrap">
                 <button className="btn-outline min-h-[40px] flex-1 sm:flex-none" onClick={() => setIsPrinting(true)}><Fa icon={faPrint} /> Print Receipt</button>
                 <button className="btn-primary min-h-[40px] flex-1 sm:flex-none" onClick={() => { setReceiptOrder(null); scanRef.current?.focus() }}>New Order</button>
@@ -628,7 +676,7 @@ export default function PointOfSale() {
             const sessionOrders = posOrders.filter(o => o.sessionId === posSessionId || o.sessionId === 'active')
             const totalCash = sessionOrders.filter(o => o.payment === 'cash').reduce((a, o) => a + o.total, 0)
             const totalMpesa = sessionOrders.filter(o => o.payment === 'mpesa').reduce((a, o) => a + o.total, 0)
-            const totalCard = sessionOrders.filter(o => o.payment === 'card').reduce((a, o) => a + o.total, 0)
+            const totalBank = sessionOrders.filter(o => isPosBankPayment(o.payment)).reduce((a, o) => a + o.total, 0)
             const totalSales = sessionOrders.reduce((a, o) => a + o.total, 0)
             const expectedCash = posSessionOpeningCash + totalCash
             const counted = Number(closingCash) || 0
@@ -639,7 +687,7 @@ export default function PointOfSale() {
                 <div className="p-3 rounded text-xs space-y-1" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-lt)' }}>
                   <p>Session orders: <strong>{sessionOrders.length}</strong></p>
                   <p>Total sales: <strong className="font-mono" style={{ color: 'var(--success)' }}>{fmtKes(totalSales)}</strong></p>
-                  <p>Cash / M-Pesa / Card: <strong className="font-mono">{fmtKes(totalCash)}</strong> · <strong className="font-mono">{fmtKes(totalMpesa)}</strong> · <strong className="font-mono">{fmtKes(totalCard)}</strong></p>
+                  <p>Cash / M-Pesa / Bank: <strong className="font-mono">{fmtKes(totalCash)}</strong> · <strong className="font-mono">{fmtKes(totalMpesa)}</strong> · <strong className="font-mono">{fmtKes(totalBank)}</strong></p>
                   <p>Opening cash: <strong className="font-mono">{fmtKes(posSessionOpeningCash)}</strong></p>
                   <p>Expected cash: <strong className="font-mono">{fmtKes(expectedCash)}</strong></p>
                   <p>Variance: <strong className="font-mono" style={{ color: variance === 0 ? 'var(--success)' : '#F04438' }}>{fmtKes(variance)}</strong></p>
@@ -696,8 +744,8 @@ export default function PointOfSale() {
                   },
                   {
                     key: 'payment', label: 'Payment', priority: 2, width: '80px',
-                    render: o => <span className="text-[10px] uppercase font-semibold">{o.payment}</span>,
-                    exportValue: o => o.payment,
+                    render: o => <span className="text-[10px] uppercase font-semibold">{isPosBankPayment(o.payment) ? 'bank' : o.payment}</span>,
+                    exportValue: o => isPosBankPayment(o.payment) ? 'bank' : o.payment,
                   },
                   {
                     key: 'total', label: 'Total', priority: 1, width: '100px', align: 'right',
