@@ -84,14 +84,21 @@ function mapSaleOrderToClient(order: any) {
   }
 }
 
-function mapSaleOrderItems(lines: any[]) {
+function mapSaleOrderItems(lines: any[], knownProductIds?: Set<string>) {
   return lines.map((item: any) => {
     const qty = Math.max(0, Number(item.qty ?? 1) || 0)
     // lineTotal is recomputed from qty × unitPrice × (1 − discount%), never
     // trusted from the client (P0 totals-integrity — matches PUT/PATCH).
     const money = calcSaleOrderLineMoney({ ...item, qty })
+    const candidate = optionalUuid(item.productId)
+    // Drop productIds that are not in Prisma yet (optimistic local-only products).
+    // Keeping a description-only line lets the quotation persist instead of
+    // failing the whole create on sale_order_items_product_id_fkey.
+    const productId = candidate && (!knownProductIds || knownProductIds.has(candidate))
+      ? candidate
+      : null
     return {
-      productId: optionalUuid(item.productId),
+      productId,
       description: item.description ?? item.productName ?? 'Item',
       qty,
       unitPrice: money.unitPrice,
@@ -201,6 +208,16 @@ export async function POST(request: Request) {
     // from the client) — mirrors lib/finance-invoice.ts's invoice totals.
     const totals = calcSaleOrderTotals(rawItems, { headerDiscount: body.discountAmount })
 
+    const productIds = [...new Set(
+      rawItems
+        .map((item: any) => optionalUuid(item.productId))
+        .filter((id: string | undefined): id is string => Boolean(id)),
+    )]
+    const knownProducts = productIds.length
+      ? await prisma.product.findMany({ where: { id: { in: productIds } }, select: { id: true } })
+      : []
+    const knownProductIds = new Set(knownProducts.map(p => p.id))
+
     const order = await prisma.saleOrder.create({
       data: {
         ...(isUUID(body.id) ? { id: body.id } : {}),
@@ -219,7 +236,7 @@ export async function POST(request: Request) {
         totalAmount: totals.totalAmount,
         amountPaid: Number(body.amountPaid ?? 0),
         notes: body.notes ?? null,
-        customerRef: body.customerRef ?? null,
+        customerRef: body.customerRef ? String(body.customerRef).slice(0, 120) : null,
         invoiceAddress: body.invoiceAddress ?? null,
         deliveryAddress: body.deliveryAddress ?? null,
         pricelist: body.pricelist ?? null,
@@ -227,14 +244,14 @@ export async function POST(request: Request) {
         baseCurrencyCode: body.baseCurrencyCode ?? 'KES',
         exchangeRateToBase: Number(body.exchangeRateToBase ?? 1) || 1,
         salespersonId: optionalUuid(body.salespersonId),
-        salespersonName: body.salespersonName ?? null,
-        salesTeam: body.salesTeam ?? null,
+        salespersonName: body.salespersonName ? String(body.salespersonName).slice(0, 120) : null,
+        salesTeam: body.salesTeam ? String(body.salesTeam).slice(0, 120) : null,
         paymentTermsDays: body.paymentTermsDays !== undefined || body.paymentTerms !== undefined
           ? quotationPaymentTermsDays({ paymentTermsDays: body.paymentTermsDays, paymentTerms: body.paymentTerms })
           : null,
         quoteId: optionalUuid(body.quoteId),
         items: {
-          create: mapSaleOrderItems(rawItems),
+          create: mapSaleOrderItems(rawItems, knownProductIds),
         },
       },
       include: { client: true, items: true },

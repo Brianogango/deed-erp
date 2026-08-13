@@ -411,6 +411,9 @@ function SalesContent() {
   const [availablePricelists, setAvailablePricelists] = useState<PriceListDef[]>(BUILTIN_PRICELISTS)
   const draftLoadedRef = useRef(false)
   const draftAutosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const crmDeepLinkHandledRef = useRef<string | null>(null)
+  const savingNewQuoteRef = useRef(false)
+  const [savingNewQuote, setSavingNewQuote] = useState(false)
   const quoteDraftKey = currentUserId ? `deed_sales_quote_draft_${currentUserId}` : 'deed_sales_quote_draft'
 
   // Only fetch when the setting is on — when off, every quotation silently
@@ -914,6 +917,11 @@ function SalesContent() {
     if (searchParams.get('new') !== '1') return
     const customerId = searchParams.get('customerId') || ''
     const customerName = searchParams.get('customerName') || ''
+    const opportunityId = searchParams.get('opportunityId') || ''
+    const deepLinkKey = `${customerId}|${opportunityId}|${customerName}`
+    if (crmDeepLinkHandledRef.current === deepLinkKey) return
+    crmDeepLinkHandledRef.current = deepLinkKey
+
     const fromContacts = customerId
       ? contacts.find(c => c.id === customerId)
       : undefined
@@ -924,8 +932,8 @@ function SalesContent() {
     )
     setNewDeliveryDate('')
     setNewValidUntil('')
-    setNewNotes('')
-    setNewCustomerRef('')
+    setNewNotes(opportunityId ? `CRM opportunity ${opportunityId}` : '')
+    setNewCustomerRef(opportunityId ? `OPP:${opportunityId.slice(0, 8)}` : '')
     setNewInvoiceAddress('')
     setNewDeliveryAddress('')
     setNewPaymentDetails({ ...DEFAULT_DOCUMENT_PAYMENT_DETAILS })
@@ -1240,7 +1248,9 @@ function SalesContent() {
   const invalidQtyDraftLines = newDraftLines.filter(l => l.type !== 'section' && l.productId && Number(l.qty) <= 0)
   // Mirrors the authoritative checks in saveNewQuotation so the Save button reflects
   // real validation state instead of always being enabled.
-  const quoteSaveBlockedReason = !newCustomer
+  const quoteSaveBlockedReason = savingNewQuote
+    ? 'Saving quotation…'
+    : !newCustomer
     ? 'Select a customer before saving'
     : !newValidUntil
       ? 'Set a valid-until date before saving'
@@ -1335,6 +1345,7 @@ function SalesContent() {
 
   // ── Save new quotation ──────────────────────────────────────────────────
   const saveNewQuotation = async (after: 'open' | 'another' | 'list' = 'open') => {
+    if (savingNewQuoteRef.current) return
     const errors: { customer?: string; validUntil?: string; lines?: string } = {}
     if (!newCustomer) errors.customer = 'Please select a customer'
     if (!newValidUntil) errors.validUntil = 'Please set when this quotation expires'
@@ -1363,6 +1374,9 @@ function SalesContent() {
     const draftTotalEstimate = newDraftLines.reduce((sum, l) => sum + calcDraftLineTotal(l), 0)
     const creditStatus = getCustomerCreditStatus(newCustomer.id, draftTotalEstimate)
     if (!creditStatus.ok) { showToast(creditStatus.message, 'error'); return }
+    savingNewQuoteRef.current = true
+    setSavingNewQuote(true)
+    try {
     const builtLines = []
     for (const l of newDraftLines) {
       if (l.type === 'section') {
@@ -1453,6 +1467,12 @@ function SalesContent() {
     setNewDraftLines([])
     showToast('Quotation saved. Continue with another entry.', 'success')
     startUxTask('sales_quote_create', { module: 'sales', chained: true })
+    } catch {
+      // createSaleOrder already toasted the failure
+    } finally {
+      savingNewQuoteRef.current = false
+      setSavingNewQuote(false)
+    }
   }
   const handleSaveNewQuotation = () => saveNewQuotation('open')
   const handleSaveAndAddAnotherQuotation = () => saveNewQuotation('another')

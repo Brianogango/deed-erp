@@ -3,6 +3,7 @@ import {
   calcSalePriceFromCost,
   getCategoryMarkupPct,
   suggestSalePriceFromCost,
+  autoSalePriceFromCost,
 } from '@/lib/sale-price-calculator'
 import { DEFAULT_PRICING_MARGIN_POLICY } from '@/lib/pricing/margin-policy'
 
@@ -34,5 +35,10 @@ describe('sale-price-calculator', () => {
         policy: DEFAULT_PRICING_MARGIN_POLICY,
       }),
     ).toBe(7000)
+  })
+
+  it('always fills a sale price from cost even without category mapping', () => {
+    expect(autoSalePriceFromCost(null, 'UnknownCat', 7000)).toBe(10000)
+    expect(autoSalePriceFromCost({ Accessories: 40 }, 'Accessories', 2500)).toBe(3500)
   })
 })

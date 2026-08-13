@@ -23,7 +23,7 @@ import { isOpeningStockMove } from '@/lib/inventory/opening-stock'
 import { explainSerialWhereabouts, findSerialMatches } from '@/lib/inventory/serial-trace'
 import { ScanInputRow } from '@/components/BarcodeScanner'
 import { identityMatchesScan, parseScanPayload } from '@/lib/barcode-scan'
-import { getCategoryMarkupPct, suggestSalePriceFromCost, quoteSalePriceFromCost } from '@/lib/sale-price-calculator'
+import { getCategoryMarkupPct, suggestSalePriceFromCost, quoteSalePriceFromCost, autoSalePriceFromCost } from '@/lib/sale-price-calculator'
 import { normalizePricingMarginPolicy } from '@/lib/pricing/margin-policy'
 import { useUrlRecordId } from '@/hooks/useUrlRecordId'
 
@@ -629,7 +629,7 @@ function InventoryContent() {
   }, [products, serials, bulkStock, catalogSearch, catalogCatFilter, catalogStockFilter])
 
   const openPriceUpdate = (product: Product) => {
-    const markupSuggested = suggestSalePriceFromCost(systemSettings.invCategorySaleMarkupPct, product.category, product.costPrice, {
+    const markupSuggested = autoSalePriceFromCost(systemSettings.invCategorySaleMarkupPct, product.category, product.costPrice, {
         policy: systemSettings.pricingMarginPolicy,
         pricingCategoryId: (product as any).pricingCategoryId,
         productType: (product as any).productType,
@@ -3608,7 +3608,7 @@ function InventoryContent() {
                       const isService = kind === 'service' || value === 'Services'
                       const suggested = isService
                         ? null
-                        : suggestSalePriceFromCost(systemSettings.invCategorySaleMarkupPct, value, prev.costPrice, {
+                        : autoSalePriceFromCost(systemSettings.invCategorySaleMarkupPct, value, prev.costPrice, {
                             policy: systemSettings.pricingMarginPolicy,
                             pricingCategoryId: prev.pricingCategoryId || undefined,
                             productType: prev.productType,
@@ -3705,7 +3705,7 @@ function InventoryContent() {
                     onChange={v => {
                       setForm((prev: any) => {
                         const next = { ...prev, productType: v }
-                        const suggested = suggestSalePriceFromCost(systemSettings.invCategorySaleMarkupPct, next.category, next.costPrice, {
+                        const suggested = autoSalePriceFromCost(systemSettings.invCategorySaleMarkupPct, next.category, next.costPrice, {
                           policy: systemSettings.pricingMarginPolicy,
                           pricingCategoryId: next.pricingCategoryId || undefined,
                           productType: v,
@@ -3726,7 +3726,7 @@ function InventoryContent() {
                     onChange={v => {
                       setForm((prev: any) => {
                         const next = { ...prev, pricingCategoryId: v }
-                        const suggested = suggestSalePriceFromCost(systemSettings.invCategorySaleMarkupPct, next.category, next.costPrice, {
+                        const suggested = autoSalePriceFromCost(systemSettings.invCategorySaleMarkupPct, next.category, next.costPrice, {
                           policy: systemSettings.pricingMarginPolicy,
                           pricingCategoryId: v || undefined,
                           productType: next.productType,
@@ -3747,10 +3747,7 @@ function InventoryContent() {
               </>
             )}
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-              <Field label="Sale Price">
-                <Input type="number" value={form.salePrice} onChange={setF('salePrice')} />
-              </Field>
-              <Field label="Cost Price">
+              <Field label="Cost Price" hint="Sale price updates automatically from cost">
                 <Input
                   type="number"
                   value={form.costPrice}
@@ -3759,7 +3756,7 @@ function InventoryContent() {
                       const isService = prev.productKind === 'service' || prev.category === 'Services'
                       const suggested = isService
                         ? null
-                        : suggestSalePriceFromCost(systemSettings.invCategorySaleMarkupPct, prev.category, v, {
+                        : autoSalePriceFromCost(systemSettings.invCategorySaleMarkupPct, prev.category, v, {
                             policy: systemSettings.pricingMarginPolicy,
                             pricingCategoryId: prev.pricingCategoryId || undefined,
                             productType: prev.productType,
@@ -3773,6 +3770,9 @@ function InventoryContent() {
                     })
                   }}
                 />
+              </Field>
+              <Field label="Sale Price" hint="Editable — used on quotation lines">
+                <Input type="number" value={form.salePrice} onChange={setF('salePrice')} />
               </Field>
               <Field label="Tax Rate (%)"><Input type="number" value={form.taxRate} onChange={setF('taxRate')} /></Field>
             </div>
