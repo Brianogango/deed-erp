@@ -3182,6 +3182,8 @@ export interface AppState {
   
   // CRM - Opportunities
   createOpportunity: (opp: Omit<Opportunity, 'id' | 'ref' | 'createdDate' | 'createdAt' | 'quoteIds' | 'actualValue' | 'leadScore'>) => Opportunity
+  /** Merge a server opportunity (e.g. lead convert response) into local CRM state without re-POSTing. */
+  ingestOpportunity: (raw: unknown) => void
   updateOpportunity: (id: string, p: Partial<Opportunity>) => void
   moveOpportunityStage: (id: string, stage: OpportunityStage) => void
   markOpportunityWon: (id: string, actualValue: number) => void
@@ -3748,6 +3750,7 @@ export type CrmStoreState = Pick<AppState,
   | 'createContactPerson'
   | 'createCustomerContract'
   | 'createOpportunity'
+  | 'ingestOpportunity'
   | 'deleteCompany'
   | 'deleteContact'
   | 'deleteContactPerson'
@@ -6257,6 +6260,7 @@ export function StoreProvider({
     createContactPerson: (...args: Parameters<AppState['createContactPerson']>) => storeCtxRef.current!.createContactPerson(...args),
     createCustomerContract: (...args: Parameters<AppState['createCustomerContract']>) => storeCtxRef.current!.createCustomerContract(...args),
     createOpportunity: (...args: Parameters<AppState['createOpportunity']>) => storeCtxRef.current!.createOpportunity(...args),
+    ingestOpportunity: (...args: Parameters<AppState['ingestOpportunity']>) => storeCtxRef.current!.ingestOpportunity(...args),
     deleteCompany: (...args: Parameters<AppState['deleteCompany']>) => storeCtxRef.current!.deleteCompany(...args),
     deleteContact: (...args: Parameters<AppState['deleteContact']>) => storeCtxRef.current!.deleteContact(...args),
     deleteContactPerson: (...args: Parameters<AppState['deleteContactPerson']>) => storeCtxRef.current!.deleteContactPerson(...args),
@@ -8522,6 +8526,19 @@ const storeCtx: AppState = {
       showToast(`Opportunity ${opportunity.ref} created`)
       sync('/api/opportunities', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(opportunity) })
       return opportunity
+    },
+    ingestOpportunity: (raw) => {
+      const normalized = normalizeOpportunityForClient(raw) as Opportunity
+      if (!normalized?.id) return
+      setOpportunities(prev => {
+        const idx = prev.findIndex(o => o.id === normalized.id)
+        if (idx >= 0) {
+          const next = [...prev]
+          next[idx] = { ...prev[idx], ...normalized }
+          return next
+        }
+        return [normalized, ...prev]
+      })
     },
     updateOpportunity: (id, p) => setOpportunities(prev => {
       const next = prev.map(o => o.id === id ? { ...o, ...p, lastActivityDate: now() } : o)

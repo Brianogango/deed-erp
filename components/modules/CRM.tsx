@@ -18,6 +18,7 @@ import {
 import type { IconProp } from '@fortawesome/fontawesome-svg-core'
 import { useUrlRecordId } from '@/hooks/useUrlRecordId'
 import { isLeadAssigneeRole } from '@/lib/crm/lead-assignees'
+import { opportunityMatchesOwner } from '@/lib/opportunity-normalization'
 
 const ACTIVITY_ICONS: Record<string, IconProp> = {
   call: faPhone,
@@ -90,7 +91,7 @@ function CRMContent() {
     repairs,
     createCompany, updateCompany, deleteCompany,
     createContactPerson, updateContactPerson, deleteContactPerson,
-    createOpportunity, updateOpportunity, moveOpportunityStage, markOpportunityWon, markOpportunityLost, deleteOpportunity,
+    createOpportunity, updateOpportunity, ingestOpportunity, moveOpportunityStage, markOpportunityWon, markOpportunityLost, deleteOpportunity,
     logActivity, completeActivity,
     createCustomerContract, renewCustomerContract, terminateCustomerContract,
     showToast, systemSettings,
@@ -329,16 +330,16 @@ function CRMContent() {
 
   const pipelineOpps = opportunities.filter(o =>
     !['closed_won', 'closed_lost'].includes(o.stage) &&
-    (effectiveOwner === 'all' ? true : o.ownerId === effectiveOwner)
+    opportunityMatchesOwner(o, effectiveOwner)
   )
   const totalPipelineValue = pipelineOpps.reduce((sum, o) => sum + o.expectedValue, 0)
   const weightedPipelineValue = pipelineOpps.reduce((sum, o) => sum + (o.expectedValue * o.probability / 100), 0)
 
   const wonOpps = opportunities.filter(o =>
-    o.stage === 'closed_won' && (effectiveOwner === 'all' ? true : o.ownerId === effectiveOwner)
+    o.stage === 'closed_won' && opportunityMatchesOwner(o, effectiveOwner)
   )
   const lostOpps = opportunities.filter(o =>
-    o.stage === 'closed_lost' && (effectiveOwner === 'all' ? true : o.ownerId === effectiveOwner)
+    o.stage === 'closed_lost' && opportunityMatchesOwner(o, effectiveOwner)
   )
   const totalClosed = wonOpps.length + lostOpps.length
   const winRate = totalClosed > 0 ? Math.round((wonOpps.length / totalClosed) * 100) : 0
@@ -350,7 +351,7 @@ function CRMContent() {
     || opportunities.some(o => o.ownerId === u.id || o.assignedToId === u.id),
   )
   const repBreakdown = salesReps.map(rep => {
-    const repOpps = opportunities.filter(o => !['closed_won', 'closed_lost'].includes(o.stage) && o.ownerId === rep.id)
+    const repOpps = opportunities.filter(o => !['closed_won', 'closed_lost'].includes(o.stage) && opportunityMatchesOwner(o, rep.id))
     return {
       id: rep.id,
       name: rep.name,
@@ -882,7 +883,7 @@ function CRMContent() {
             </div>
             <PivotView
               data={opportunities
-                .filter(o => effectiveOwner === 'all' ? true : o.ownerId === effectiveOwner)
+                .filter(o => opportunityMatchesOwner(o, effectiveOwner))
                 .map(o => ({
                   stage: stageLabels[o.stage] ?? o.stage,
                   owner: o.ownerName ?? 'Unassigned',
@@ -912,7 +913,7 @@ function CRMContent() {
           <div className="card overflow-hidden">
             <PanelHeader title="All Opportunities" count={opportunities.filter(o => {
               const s = oppSearch.toLowerCase()
-              const ownerMatch = effectiveOwner === 'all' ? true : o.ownerId === effectiveOwner
+              const ownerMatch = opportunityMatchesOwner(o, effectiveOwner)
               return ownerMatch && (!s || (o.ref ?? '').toLowerCase().includes(s) || o.name.toLowerCase().includes(s) ||
                 (o.companyName ?? '').toLowerCase().includes(s) || (o.contactPersonName ?? '').toLowerCase().includes(s) || (o.ownerName ?? '').toLowerCase().includes(s))
             }).length}>
@@ -923,7 +924,7 @@ function CRMContent() {
               <div className="flex flex-col">
               {opportunities.filter(o => {
                 const s = oppSearch.toLowerCase()
-                const ownerMatch = effectiveOwner === 'all' ? true : o.ownerId === effectiveOwner
+                const ownerMatch = opportunityMatchesOwner(o, effectiveOwner)
                 return ownerMatch && (!s || (o.ref ?? '').toLowerCase().includes(s) || o.name.toLowerCase().includes(s) ||
                   (o.companyName ?? '').toLowerCase().includes(s) || (o.contactPersonName ?? '').toLowerCase().includes(s) || (o.ownerName ?? '').toLowerCase().includes(s))
               }).map(opp => {
@@ -1124,7 +1125,9 @@ function CRMContent() {
             salesReps={salesReps}
             currentUserId={currentUserId ?? undefined}
             onConverted={(opportunityId, meta) => {
-              // Server broadcasts deed_opportunities + contacts; SSE refreshes the store.
+              // Inject the convert response immediately — waiting on SSE left a blank
+              // detail view and made the deal look "missing" for the assignee.
+              if (meta?.opportunity) ingestOpportunity(meta.opportunity)
               setTab('pipeline')
               setActiveOppId(opportunityId)
               setView('detail')
@@ -1453,12 +1456,13 @@ function CRMContent() {
 
 function PipelineKanban({ effectiveOwner, stageLabels, onSelectOpp }: { effectiveOwner: string, stageLabels: Record<string, string>, onSelectOpp: (id: string) => void }) {
   const { opportunities } = useCrmStore()
-  const stages: OpportunityStage[] = ['prospecting', 'qualification', 'proposal', 'negotiation']
+  // Include Won / Lost — converted deals marked won were vanishing from the board.
+  const stages: OpportunityStage[] = ['prospecting', 'qualification', 'proposal', 'negotiation', 'closed_won', 'closed_lost']
 
   return (
     <div className="flex gap-4 overflow-x-auto pb-4 h-full">
       {stages.map(stage => {
-        const opps = opportunities.filter(o => o.stage === stage && (effectiveOwner === 'all' || o.ownerId === effectiveOwner))
+        const opps = opportunities.filter(o => o.stage === stage && opportunityMatchesOwner(o, effectiveOwner))
         return (
           <div key={stage} className="flex-shrink-0 w-72 flex flex-col gap-3">
             <div className="flex items-center justify-between px-1">

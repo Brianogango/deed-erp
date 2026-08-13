@@ -64,3 +64,13 @@ export function normalizeOpportunitiesForClient(rawOpportunities: any[]) {
     ? rawOpportunities.map(normalizeOpportunityForClient)
     : []
 }
+
+/** Pipeline / list owner chips — match either client ownerId or Prisma assignedToId. */
+export function opportunityMatchesOwner(
+  opp: { ownerId?: string | null; assignedToId?: string | null } | null | undefined,
+  ownerFilter: string,
+): boolean {
+  if (!opp) return false
+  if (ownerFilter === 'all') return true
+  return opp.ownerId === ownerFilter || opp.assignedToId === ownerFilter
+}

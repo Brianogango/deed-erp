@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { normalizeOpportunityForClient } from '@/lib/opportunity-normalization'
+import { normalizeOpportunityForClient, opportunityMatchesOwner } from '@/lib/opportunity-normalization'
 
 describe('normalizeOpportunityForClient', () => {
   it('maps assignedTo.username when name is missing', () => {
@@ -28,5 +28,13 @@ describe('normalizeOpportunityForClient', () => {
     })
     expect(row.ownerName).toBe('Edwin Kamau')
     expect(row.stage).toBe('prospecting')
+  })
+
+  it('opportunityMatchesOwner accepts assignedToId when ownerId is missing', () => {
+    expect(opportunityMatchesOwner({ assignedToId: 'rep-1' }, 'rep-1')).toBe(true)
+    expect(opportunityMatchesOwner({ ownerId: 'rep-1' }, 'rep-1')).toBe(true)
+    expect(opportunityMatchesOwner({ ownerId: 'rep-2', assignedToId: 'rep-1' }, 'rep-1')).toBe(true)
+    expect(opportunityMatchesOwner({ ownerId: 'rep-2' }, 'rep-1')).toBe(false)
+    expect(opportunityMatchesOwner({ ownerId: 'rep-2' }, 'all')).toBe(true)
   })
 })

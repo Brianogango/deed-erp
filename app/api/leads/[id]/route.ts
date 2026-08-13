@@ -4,6 +4,7 @@ import { getRequiredSession, withApiErrorHandling } from '@/lib/auth/api'
 import { saveStoreKeys } from '@/lib/server-store'
 import { broadcastContacts, upsertContact } from '@/lib/contact-prisma'
 import { clip, splitContactName } from '@/lib/crm/lead-convert'
+import { normalizeOpportunitiesForClient } from '@/lib/opportunity-normalization'
 
 const LEAD_INCLUDE = {
   owner: { select: { id: true, username: true, email: true } },
@@ -19,7 +20,8 @@ async function broadcastOpportunities() {
       include: { client: true, assignedTo: true, activities: true },
       orderBy: { createdAt: 'desc' },
     })
-    void saveStoreKeys({ deed_opportunities: JSON.stringify(all) })
+    // Normalize so CRM owner filters see ownerId (Prisma only has assignedToId).
+    void saveStoreKeys({ deed_opportunities: JSON.stringify(normalizeOpportunitiesForClient(all)) })
   } catch { /* best-effort SSE sync */ }
 }
 

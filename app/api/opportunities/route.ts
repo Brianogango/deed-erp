@@ -2,13 +2,14 @@ import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { getRequiredSession, withApiErrorHandling } from '@/lib/auth/api'
 import { saveStoreKeys } from '@/lib/server-store'
+import { normalizeOpportunitiesForClient } from '@/lib/opportunity-normalization'
 
 const OPP_INCLUDE = { client: true, assignedTo: true, activities: true } as const
 
 async function broadcastOpportunities() {
   try {
     const all = await prisma.opportunity.findMany({ include: OPP_INCLUDE, orderBy: { createdAt: 'desc' } })
-    void saveStoreKeys({ deed_opportunities: JSON.stringify(all) })
+    void saveStoreKeys({ deed_opportunities: JSON.stringify(normalizeOpportunitiesForClient(all)) })
   } catch {}
 }
 
