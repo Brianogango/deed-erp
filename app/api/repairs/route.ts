@@ -120,9 +120,11 @@ export async function POST(request: NextRequest) {
     // upgraded to "now" so booking never silently stores midnight-only values.
     const intakeDate = ensureRepairIntakeTimestamp(body.intakeDate)
 
-    // Create the new repair
+    // Create the new repair — body may include full intake (path, warranty, waiver).
+    // Spread body after defaults so booking fields are not dropped by a thin client.
+    const repairId = typeof body.id === 'string' && body.id.trim() ? body.id.trim() : `rep_${Date.now()}`
     const repair: RepairOrder = {
-      id: typeof body.id === 'string' && body.id.trim() ? body.id.trim() : `rep_${Date.now()}`,
+      id: repairId,
       ref,
       status: String(body.status ?? 'received') as RepairOrder['status'],
       customerId: String(body.customerId ?? ''),
@@ -136,7 +138,9 @@ export async function POST(request: NextRequest) {
       issueDescription: String(body.issueDescription ?? ''),
       accessories: [],
       ...(body as Partial<RepairOrder>),
-      // Force full timestamp after body spread (body may carry date-only).
+      // Force server-owned identity + full timestamp after body spread.
+      id: repairId,
+      ref,
       intakeDate,
     } as RepairOrder
 
@@ -148,11 +152,49 @@ export async function POST(request: NextRequest) {
       }, { status: 422 })
     }
 
-    // Save the updated repairs list
-    const updatedRepairs = [repair, ...repairs]
+    // If a same-id draft already landed via store sync, merge so we never
+    // clobber richer intake (repairPath / warranty) with a thinner write.
+    const existingIdx = repairs.findIndex(r => r.id === repair.id)
+    const existing = existingIdx >= 0 ? repairs[existingIdx] : null
+    const incomingHasPath =
+      body.repairPath === 'direct_repair' || body.repairPath === 'diagnosis_first'
+    const mergedRepair = {
+      ...(existing ?? {}),
+      ...repair,
+      id: repairId,
+      ref,
+      intakeDate,
+      // Thin creates (no repairPath) must not wipe intake applied by a parallel
+      // updateRepair / store sync before this POST finished.
+      ...(!incomingHasPath && existing
+        ? {
+            repairPath: existing.repairPath,
+            underWarranty: existing.underWarranty,
+            warrantyCoverage: existing.warrantyCoverage,
+            warrantyId: existing.warrantyId,
+            warrantyVerificationStatus: existing.warrantyVerificationStatus,
+            serialWarrantyException: existing.serialWarrantyException,
+            serialWarrantyExceptionReason: existing.serialWarrantyExceptionReason,
+            serialWarrantyExceptionNotes: existing.serialWarrantyExceptionNotes,
+            liabilityWaiverAccepted: existing.liabilityWaiverAccepted,
+            liabilityWaiverText: existing.liabilityWaiverText,
+            liabilityWaiverAcceptedAt: existing.liabilityWaiverAcceptedAt,
+            liabilityWaiverSignature: existing.liabilityWaiverSignature,
+            diagnosisFee: existing.diagnosisFee,
+            diagnosisFeeStatus: existing.diagnosisFeeStatus,
+            diagnosisFeeBilling: existing.diagnosisFeeBilling,
+            accessories: existing.accessories?.length ? existing.accessories : repair.accessories,
+            notes: existing.notes || repair.notes,
+          }
+        : {}),
+    } as RepairOrder
+
+    const updatedRepairs = existingIdx >= 0
+      ? repairs.map((r, i) => (i === existingIdx ? mergedRepair : r))
+      : [mergedRepair, ...repairs]
     await saveStoreKeys({ 'deed_repairs_v2': JSON.stringify(updatedRepairs) })
 
-    return NextResponse.json(repair, { status: 201 })
+    return NextResponse.json(mergedRepair, { status: 201 })
   } catch (err) {
     console.error('[repairs POST] Error:', err)
     return NextResponse.json({ error: 'Failed to create repair' }, { status: 500 })

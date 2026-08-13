@@ -72,7 +72,7 @@ const DEVICE_TYPES = [
 export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => void; onSuccess: (id: string) => void }) {
   const {
     repairs, contacts, contactPersons, warranties, systemSettings,
-    createRepair, updateRepair, createContactPerson, showToast, currentUserId,
+    createRepair, createContactPerson, showToast, currentUserId,
   } = useOperationsStore()
 
   const customers   = useMemo(() => contacts.filter(c => c.isCustomer), [contacts])
@@ -388,9 +388,6 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
         : device.deviceType
       const productLabel = `${device.brand} ${device.model}`.trim()
 
-      const rep = createRepair(customerId, customerName, productLabel, device.serial, device.issueDesc)
-      clearOnSubmit()
-
       const checkedItems = Array.from(device.accessoriesChecked)
       const otherItems = device.accessoriesOther.split(',').map(n => n.trim()).filter(Boolean)
       const accessories = [...checkedItems, ...otherItems].map(name => ({ name, received: true }))
@@ -399,12 +396,17 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
       const waiverAt = new Date().toISOString()
       const feeResolved = resolveDiagnosisFee({
         repairPath: device.repairPath,
-        intakeDate: rep.intakeDate,
+        intakeDate: new Date().toISOString(),
+        underWarranty: intakeUnderWarranty,
+        warrantyCoverage: intakeUnderWarranty ? 'full' : undefined,
       }, systemSettings)
       const feeAmount = feeResolved.amount
       const feeApplies = !isDirect && feeResolved.status === 'applicable' && feeAmount > 0
       const billingType = resolveCustomerBillingType(clientType)
-      updateRepair(rep.id, {
+
+      // Single create with full intake — do not create-then-update. The bare
+      // POST used to race store sync and drop repairPath / warranty flags.
+      const rep = createRepair(customerId, customerName, productLabel, device.serial, device.issueDesc, {
         status: 'received',
         customerPhone,
         customerEmail,
@@ -429,6 +431,7 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
         accessories,
         underWarranty: intakeUnderWarranty,
         warrantyId: intakeUnderWarranty ? matchedWarranty?.id : undefined,
+        warrantyCoverage: intakeUnderWarranty ? 'full' : undefined,
         warrantyVerificationStatus,
         serialWarrantyException: device.serialWarrantyException || undefined,
         serialWarrantyExceptionReason: device.serialWarrantyException ? device.serialWarrantyExceptionReason || undefined : undefined,
@@ -443,8 +446,11 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
           ? `[Direct Repair Consent] Signed by: ${device.consentSignature}. Liability Waiver Accepted: YES. Device type: ${deviceTypeLabel}.\nTerms Agreed: Customer declines diagnosis — work limited to the requested scope only. No diagnosis fee.`
           : feeApplies
             ? `Device type: ${deviceTypeLabel}. Diagnosis fee: KES ${feeAmount.toLocaleString('en-KE')} (on final invoice with repair; not credited against labour).`
-            : `Device type: ${deviceTypeLabel}. No mandatory diagnosis fee (intake before policy effective date).`,
+            : intakeUnderWarranty
+              ? `Device type: ${deviceTypeLabel}. Active warranty — diagnosis fee not applicable.`
+              : `Device type: ${deviceTypeLabel}. No mandatory diagnosis fee (intake before policy effective date).`,
       })
+      clearOnSubmit()
 
       showToast(`Ticket ${rep.ref} created`, 'success')
       // Prefer contact-person for company jobs (the person we actually WhatsApp)

@@ -3397,7 +3397,8 @@ export interface AppState {
   submitTransfer: (from: LocationId, to: LocationId, productId: string, productName: string, qty: number, serialIds: string[], notes?: string) => boolean | Promise<boolean>
 
   // Repairs - Full Workflow
-  createRepair: (customerId: string, customerName: string, productName: string, serial: string, desc: string) => RepairOrder
+  /** Optional `intake` is merged into the created job before the authoritative POST (path, warranty, accessories, etc.). */
+  createRepair: (customerId: string, customerName: string, productName: string, serial: string, desc: string, intake?: Partial<RepairOrder>) => RepairOrder
   updateRepair: (id: string, p: Partial<RepairOrder>) => void
   deleteRepair: (id: string) => void
   checkWarrantyForRepair: (repairId: string, serial: string) => boolean
@@ -13315,13 +13316,18 @@ const storeCtx: AppState = {
     },
 
     // ── Repairs ───────────────────────────────────────────────────────────────
-    createRepair: (customerId, customerName, productName, serial, desc) => {
+    createRepair: (customerId, customerName, productName, serial, desc, intake) => {
       const customer = contacts.find(c => c.id === customerId)
       const user = currentUser()
       // Note: ref is now fetched from server on demand via updateRepair
       // For now, use a temporary placeholder that will be replaced
       // Always stamp full ISO datetime (date + time) — never date-only.
       const bookedAt = new Date().toISOString()
+      const intakePatch = intake ? { ...intake } : {}
+      // Never let intake override identity keys or the temporary ref before the
+      // server responds — those are owned by create/POST merge.
+      delete (intakePatch as Partial<RepairOrder>).id
+      delete (intakePatch as Partial<RepairOrder>).ref
       const rep: RepairOrder = {
         id: uid(),
         ref: `REP-${Date.now().toString().slice(-6)}`,
@@ -13371,6 +13377,21 @@ const storeCtx: AppState = {
         date: now(),
         description: desc,
         technicianName: '',
+
+        // Booking extras (path, warranty, waiver, accessories, …) must be on
+        // the object BEFORE POST — a follow-up updateRepair races the create
+        // write and can leave jobs stuck on diagnosis_first / no warranty.
+        ...intakePatch,
+        customerId,
+        customerName,
+        productName,
+        serialNumber: serial,
+        issueDescription: desc,
+        description: desc,
+        intakeDate: ensureRepairIntakeTimestamp(
+          (intakePatch as Partial<RepairOrder>).intakeDate ?? bookedAt,
+        ),
+        status: (intakePatch as Partial<RepairOrder>).status ?? 'received',
       }
       setRepairs(p => [rep, ...p])
       syncRepairToPortal(rep, 'Repair booked in')
