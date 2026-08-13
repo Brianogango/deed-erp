@@ -1393,7 +1393,12 @@ function ExchangeTab({ detailId, onOpenDetail }: DetailTabProps) {
 
           <div style={{ display: 'flex', gap: 8 }}>
             {exc.status === 'draft' && canApprove && <button className="btn-primary text-[11px]" onClick={() => approveExchange(exc.id)}><Fa icon={faCheck} aria-hidden="true" /> Approve</button>}
-            {exc.status === 'approved' && <button className="btn-primary text-[11px]" onClick={() => completeExchange(exc.id)}>✅ Complete Exchange</button>}
+            {exc.status === 'approved' && (
+              <div className="flex flex-col gap-1">
+                <button className="btn-primary text-[11px]" onClick={() => completeExchange(exc.id)}>✅ Complete Exchange</button>
+                <p className="text-[10px]" style={{ color: 'var(--text-4)' }}>Returned units move to With Issues</p>
+              </div>
+            )}
             {['draft', 'approved'].includes(exc.status) && <button className="btn-secondary text-[11px]" onClick={() => { cancelExchange(exc.id); onOpenDetail(null) }}>✕ Cancel</button>}
           </div>
         </div>
