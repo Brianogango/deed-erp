@@ -31,4 +31,17 @@ describe('saleOrderPersistBody', () => {
     expect(body.lines).toHaveLength(1)
     expect('items' in body).toBe(false)
   })
+
+  it('strips orderNumber/ref so draft line saves cannot collide on unique order_number', () => {
+    const body = saleOrderPersistBody({
+      id: 'so-1',
+      ref: 'QUO/2026/0001',
+      orderNumber: 'QUO/2026/0001',
+      lines: [{ id: 'a', taxRate: 16 }],
+      lockVersion: 2,
+    })
+    expect('ref' in body).toBe(false)
+    expect('orderNumber' in body).toBe(false)
+    expect(body.lines).toEqual([{ id: 'a', taxRate: 16 }])
+  })
 })

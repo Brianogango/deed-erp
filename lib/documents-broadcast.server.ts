@@ -48,23 +48,29 @@ function mapSaleOrderToClient(order: any) {
     discountAmount: Number(order.discountAmount ?? 0),
     amountPaid: Number(order.amountPaid ?? 0),
     lockVersion: Number(order.lockVersion ?? 0),
-    lines: (order.items ?? []).map((item: any) => ({
-      id: item.id,
-      productId: item.productId ?? '',
-      productName: item.description ?? '',
-      description: item.description ?? '',
-      qty: Number(item.qty ?? 0),
-      unitPrice: Number(item.unitPrice ?? 0),
-      taxRate: Number(item.taxRate ?? 0),
-      discount: Number(item.discountPct ?? 0),
-      discountPercent: Number(item.discountPct ?? 0),
-      subtotal: Number(item.lineTotal ?? 0),
-      lineTotal: Number(item.lineTotal ?? 0),
-      serialIds: item.serialNumberId ? [item.serialNumberId] : [],
-      notes: item.notes ?? undefined,
-      qtyDelivered: Number(item.qtyDelivered ?? 0),
-      qtyInvoiced: Number(item.qtyInvoiced ?? 0),
-    })),
+    lines: (order.items ?? []).map((item: any) => {
+      const qty = Number(item.qty ?? 0)
+      const productId = item.productId ?? ''
+      const lineType = qty === 0 && !productId && !(Number(item.unitPrice ?? 0) > 0) ? 'section' as const : undefined
+      return {
+        id: item.id,
+        productId,
+        productName: item.description ?? '',
+        description: item.description ?? '',
+        qty,
+        unitPrice: Number(item.unitPrice ?? 0),
+        taxRate: Number(item.taxRate ?? 0),
+        discount: Number(item.discountPct ?? 0),
+        discountPercent: Number(item.discountPct ?? 0),
+        subtotal: Number(item.lineTotal ?? 0),
+        lineTotal: Number(item.lineTotal ?? 0),
+        serialIds: item.serialNumberId ? [item.serialNumberId] : [],
+        notes: item.notes ?? undefined,
+        qtyDelivered: Number(item.qtyDelivered ?? 0),
+        qtyInvoiced: Number(item.qtyInvoiced ?? 0),
+        ...(lineType ? { lineType } : {}),
+      }
+    }),
   }
 }
 

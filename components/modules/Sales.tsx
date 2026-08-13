@@ -2602,8 +2602,17 @@ function SalesContent() {
                                         : `${l.discount ?? l.discountPercent ?? 0}%`}
                                       </td>
                                       <td>
-                                        {isEditing ? <input type="number" aria-label="Line item tax percentage" min={0} max={100} value={editLineTax} onChange={e => setEditLineTax(e.target.value)} className="w-14 text-right" />
-                                        : `${l.taxRate ?? 0}%`}
+                                        {isEditing ? (
+                                          <select
+                                            aria-label="Line item tax percentage"
+                                            className="w-20"
+                                            value={String(editLineTax)}
+                                            onChange={e => setEditLineTax(e.target.value)}
+                                          >
+                                            <option value="0">0%</option>
+                                            <option value={String(companySettings.vatRate)}>{companySettings.vatRate}%</option>
+                                          </select>
+                                        ) : `${l.taxRate ?? 0}%`}
                                       </td>
                                       <td className="num">
                                         {isEditing ? (

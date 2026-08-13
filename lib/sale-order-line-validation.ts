@@ -12,6 +12,13 @@ export type SaleOrderLineValidationInput = {
   discountPercent?: unknown
   productName?: unknown
   description?: unknown
+  productId?: unknown
+}
+
+function isSectionLine(line: SaleOrderLineValidationInput) {
+  if (line.lineType === 'section') return true
+  // qty-0 rows without a product/price are section headings (legacy persist without lineType).
+  return Number(line.qty) === 0 && !line.productId && !(Number(line.unitPrice) > 0)
 }
 
 export function validateSaleOrderLines(
@@ -21,7 +28,7 @@ export function validateSaleOrderLines(
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i]
-    if (!line || line.lineType === 'section') continue
+    if (!line || isSectionLine(line)) continue
 
     const label = String(line.productName ?? line.description ?? `line ${i + 1}`).trim() || `line ${i + 1}`
     const qty = Number(line.qty)

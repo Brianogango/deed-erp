@@ -91,25 +91,33 @@ function mapSaleOrderToClient(order: any) {
     discountAmount: Number(order.discountAmount ?? 0),
     amountPaid: Number(order.amountPaid ?? 0),
     lockVersion: Number(order.lockVersion ?? 0),
-    lines: (order.items ?? []).map((item: any) => ({
-      id: item.id,
-      productId: item.productId ?? '',
-      productName: item.description ?? '',
-      description: item.description ?? '',
-      qty: Number(item.qty ?? 0),
-      qtyDelivered: Number(item.qtyDelivered ?? 0),
-      qtyInvoiced: Number(item.qtyInvoiced ?? 0),
-      unitPrice: Number(item.unitPrice ?? 0),
-      taxRate: Number(item.taxRate ?? 0),
-      // See app/api/sale-orders/route.ts's mapSaleOrderToClient for why this
-      // round-trips instead of being derived/omitted.
-      discount: Number(item.discountPct ?? 0),
-      discountPercent: Number(item.discountPct ?? 0),
-      subtotal: Number(item.lineTotal ?? 0),
-      lineTotal: Number(item.lineTotal ?? 0),
-      serialIds: item.serialNumberId ? [item.serialNumberId] : [],
-      notes: item.notes ?? undefined,
-    })),
+    lines: (order.items ?? []).map((item: any) => {
+      const qty = Number(item.qty ?? 0)
+      const productId = item.productId ?? ''
+      const unitPrice = Number(item.unitPrice ?? 0)
+      // Section headings were historically persisted as qty=0 rows without lineType.
+      const lineType = qty === 0 && !productId && !(unitPrice > 0) ? 'section' as const : undefined
+      return {
+        id: item.id,
+        productId,
+        productName: item.description ?? '',
+        description: item.description ?? '',
+        qty,
+        qtyDelivered: Number(item.qtyDelivered ?? 0),
+        qtyInvoiced: Number(item.qtyInvoiced ?? 0),
+        unitPrice,
+        taxRate: Number(item.taxRate ?? 0),
+        // See app/api/sale-orders/route.ts's mapSaleOrderToClient for why this
+        // round-trips instead of being derived/omitted.
+        discount: Number(item.discountPct ?? 0),
+        discountPercent: Number(item.discountPct ?? 0),
+        subtotal: Number(item.lineTotal ?? 0),
+        lineTotal: Number(item.lineTotal ?? 0),
+        serialIds: item.serialNumberId ? [item.serialNumberId] : [],
+        notes: item.notes ?? undefined,
+        ...(lineType ? { lineType } : {}),
+      }
+    }),
   }
 }
 
@@ -117,7 +125,15 @@ async function buildSaleOrderUpdateData(body: any, existing: any) {
   const existingItems: any[] = existing?.items ?? []
   const data: Record<string, any> = {}
 
-  if (body.orderNumber !== undefined || body.ref !== undefined) data.orderNumber = body.orderNumber ?? body.ref
+  // Only rewrite order_number when it actually changes (confirm allocates SO/…).
+  // Draft line persists used to re-send `ref` every time; a stale QUO ref after
+  // confirm collided with the unique constraint and silently dropped VAT edits.
+  if (body.orderNumber !== undefined || body.ref !== undefined) {
+    const nextNumber = body.orderNumber ?? body.ref
+    if (nextNumber != null && String(nextNumber) !== String(existing.orderNumber ?? '')) {
+      data.orderNumber = nextNumber
+    }
+  }
   if (body.quotationRef !== undefined) data.quotationRef = body.quotationRef ?? null
   if (body.proformaRef !== undefined) data.proformaRef = body.proformaRef ?? null
   if (body.status !== undefined) data.status = normalizeSaleOrderStatus(body.status)

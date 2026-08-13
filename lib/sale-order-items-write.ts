@@ -19,7 +19,23 @@ export type SaleOrderItemRow = {
 /**
  * Map client lines onto Prisma SaleOrderItem create/update payloads while
  * preserving fulfillment qty and stable line ids when the client sends them.
+ *
+ * Section headings may exist as qty=0 rows (no product). They are written
+ * deliberately so structure survives reload; readers restore `lineType`.
  */
+export function isSaleOrderSectionLine(item: {
+  lineType?: unknown
+  qty?: unknown
+  productId?: unknown
+  unitPrice?: unknown
+} | null | undefined) {
+  if (!item) return false
+  if (item.lineType === 'section') return true
+  // Recover sections that were previously written without lineType
+  // (qty 0, no product, no price) — do not treat zero-qty product rows as sections.
+  return Number(item.qty ?? 0) === 0 && !item.productId && !(Number(item.unitPrice) > 0)
+}
+
 export function mapSaleOrderItems(lines: any[], existingItems: any[] = []): SaleOrderItemRow[] {
   const usedExisting = new Set<string>()
   return lines.map((item: any) => {
@@ -37,6 +53,23 @@ export function mapSaleOrderItems(lines: any[], existingItems: any[] = []): Sale
             !usedExisting.has(row.id),
         ) ?? null
       if (prev) usedExisting.add(prev.id)
+    }
+    // Section headings: keep a durable qty=0 row so order/structure survives reload.
+    if (isSaleOrderSectionLine(item)) {
+      return {
+        id: prev?.id,
+        productId: null,
+        description: item.description ?? item.productName ?? 'Section',
+        qty: 0,
+        qtyDelivered: 0,
+        qtyInvoiced: 0,
+        unitPrice: 0,
+        taxRate: 0,
+        discountPct: 0,
+        lineTotal: 0,
+        notes: item.notes ?? null,
+        serialNumberId: null,
+      }
     }
     const demand = Math.max(0, Number(item.qty ?? 1) || 0)
     const incomingDelivered = Math.max(0, Number(item.qtyDelivered ?? 0) || 0)
