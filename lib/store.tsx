@@ -759,8 +759,8 @@ export interface SystemSettings {
   // or confirm payment through the portal. Set false only to temporarily reduce friction.
   secPortalRequirePhoneVerification: boolean
   /**
-   * Admin Officer may post/pay customer invoices at or under this KES total.
-   * Bank recon, cancel/reset, and expense reimbursement stay Finance/Director.
+   * @deprecated Unused for Admin Officer post/pay. Kept as the SoD threshold
+   * (poster cannot also pay above this amount unless Director).
    */
   accAdminOfficerInvoiceLimitKes: number
 }
@@ -11999,12 +11999,10 @@ const storeCtx: AppState = {
       if (inv.status === 'posted') {
         showToast(`${inv.ref} is already posted`, 'info'); return
       }
-      const limit = systemSettings.accAdminOfficerInvoiceLimitKes ?? DEFAULT_ADMIN_OFFICER_CUSTOMER_INVOICE_LIMIT_KES
       const gate = canPostOrPayCustomerInvoice({
         role: actor?.role,
         invoiceType: inv.type,
-        invoiceTotal: inv.total,
-        limitKes: limit,
+        action: 'post',
       })
       if (!gate.ok) { showToast(gate.reason || 'Cannot post invoice', 'error'); return }
       if (!inv.lines || inv.lines.length === 0) {
@@ -12085,12 +12083,11 @@ const storeCtx: AppState = {
         showToast('Only posted invoices can receive payments', 'error'); return
       }
       if (inv.paymentBlocked) { showToast('Payments are blocked on this invoice — release the block first', 'error'); return }
-      const limit = systemSettings.accAdminOfficerInvoiceLimitKes ?? DEFAULT_ADMIN_OFFICER_CUSTOMER_INVOICE_LIMIT_KES
+      const sodThreshold = systemSettings.accAdminOfficerInvoiceLimitKes ?? DEFAULT_ADMIN_OFFICER_CUSTOMER_INVOICE_LIMIT_KES
       const gate = canPostOrPayCustomerInvoice({
         role: actor?.role,
         invoiceType: inv.type,
-        invoiceTotal: inv.total,
-        limitKes: limit,
+        action: 'pay',
       })
       if (!gate.ok) { showToast(gate.reason || 'Cannot register payment', 'error'); return }
       const sod = canPayOwnPostedInvoice({
@@ -12098,7 +12095,7 @@ const storeCtx: AppState = {
         actorUserId: actor?.id,
         postedByUserId: inv.postedByUserId,
         invoiceTotal: inv.total,
-        sodThresholdKes: limit,
+        sodThresholdKes: sodThreshold,
       })
       if (!sod.ok) { showToast(sod.reason || 'Segregation of duties blocked this payment', 'error'); return }
       const balance = inv.total - inv.amountPaid

@@ -14,32 +14,39 @@ import { canValidatePurchaseReceipt } from '@/lib/inventory/permissions'
 import { APPROVAL_RULES } from '@/lib/sales-approvals'
 
 describe('hybrid finance seals', () => {
-  it('allows admin officer customer post/pay under threshold', () => {
+  it('allows admin officer to post or pay customer invoices of any amount', () => {
     expect(canPostOrPayCustomerInvoice({
       role: 'admin_officer',
       invoiceType: 'customer_invoice',
       invoiceTotal: 500_000,
-      limitKes: DEFAULT_ADMIN_OFFICER_CUSTOMER_INVOICE_LIMIT_KES,
+      action: 'post',
     }).ok).toBe(true)
-  })
-
-  it('blocks admin officer above customer invoice threshold', () => {
-    const result = canPostOrPayCustomerInvoice({
+    expect(canPostOrPayCustomerInvoice({
       role: 'admin_officer',
       invoiceType: 'customer_invoice',
       invoiceTotal: DEFAULT_ADMIN_OFFICER_CUSTOMER_INVOICE_LIMIT_KES + 1,
-      limitKes: DEFAULT_ADMIN_OFFICER_CUSTOMER_INVOICE_LIMIT_KES,
-    })
-    expect(result.ok).toBe(false)
-    expect(result.reason).toMatch(/up to KES/)
+      action: 'pay',
+    }).ok).toBe(true)
   })
 
-  it('blocks admin officer from vendor bill post/pay', () => {
+  it('allows admin officer to post vendor bills', () => {
     expect(canPostOrPayCustomerInvoice({
       role: 'admin_officer',
       invoiceType: 'vendor_bill',
       invoiceTotal: 1_000,
-    }).ok).toBe(false)
+      action: 'post',
+    }).ok).toBe(true)
+  })
+
+  it('blocks admin officer from paying vendor bills', () => {
+    const result = canPostOrPayCustomerInvoice({
+      role: 'admin_officer',
+      invoiceType: 'vendor_bill',
+      invoiceTotal: 1_000,
+      action: 'pay',
+    })
+    expect(result.ok).toBe(false)
+    expect(result.reason).toMatch(/pay vendor bills/)
   })
 
   it('keeps bank recon / cancel / expense reimbursement Finance+Director', () => {

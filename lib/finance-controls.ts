@@ -1,7 +1,8 @@
 /**
  * Client-safe finance control helpers (Phases A–C hybrid seals).
- * Admin Officer may post/pay customer invoices at or under the threshold;
- * bank recon, cancel/reset invoice, and expense reimbursement stay Finance/Director.
+ * Admin Officer may post customer invoices and vendor bills with no amount cap,
+ * and may pay customer invoices. Paying vendor bills, bank recon, cancel/reset,
+ * and expense reimbursement stay Finance/Director.
  */
 
 export const DEFAULT_ADMIN_OFFICER_CUSTOMER_INVOICE_LIMIT_KES = 1_000_000
@@ -41,33 +42,32 @@ export function resolveAdminOfficerInvoiceLimit(limitKes?: number | null): numbe
 }
 
 /**
- * Admin Officer may post/pay only customer_invoice documents whose total is
- * at or under the configured limit. Director/Finance are unlimited.
+ * Admin Officer may post customer invoices and vendor bills with no amount cap,
+ * and may pay customer invoices. Paying vendor bills stays Finance/Director.
+ * `invoiceTotal` / `limitKes` are unused here (kept for call-site compatibility);
+ * the former Admin Officer amount cap is gone. SoD still uses the threshold.
  */
 export function canPostOrPayCustomerInvoice(args: {
   role: string | null | undefined
   invoiceType: string
-  invoiceTotal: number
+  invoiceTotal?: number
   limitKes?: number | null
+  action?: 'post' | 'pay'
 }): { ok: boolean; reason?: string } {
   const role = normalizeFinanceRole(args.role)
   if (!role) return { ok: false, reason: 'Not signed in' }
 
-  if (args.invoiceType !== 'customer_invoice') {
-    if (isFullFinanceRole(role)) return { ok: true }
-    return { ok: false, reason: 'Only Finance or Director can post/pay vendor bills and other non-customer invoices' }
-  }
-
   if (isFullFinanceRole(role)) return { ok: true }
 
   if (role === 'admin_officer') {
-    const limit = resolveAdminOfficerInvoiceLimit(args.limitKes)
-    const total = Math.round(Number(args.invoiceTotal) || 0)
-    if (total <= limit) return { ok: true }
-    return {
-      ok: false,
-      reason: `Admin Officer can post/pay customer invoices up to KES ${limit.toLocaleString('en-KE')} only — this invoice is KES ${total.toLocaleString('en-KE')}`,
+    const action = args.action ?? 'post'
+    if (args.invoiceType === 'vendor_bill' && action === 'pay') {
+      return { ok: false, reason: 'Only Finance or Director can pay vendor bills' }
     }
+    if (args.invoiceType === 'customer_invoice' || args.invoiceType === 'vendor_bill') {
+      return { ok: true }
+    }
+    return { ok: false, reason: 'Only Finance or Director can post/pay this document type' }
   }
 
   return { ok: false, reason: 'Insufficient role to post or take payment' }

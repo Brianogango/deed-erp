@@ -35,7 +35,7 @@ You run day-to-day commercial and ops workflows. You do **not** manage system us
 1. **Sales** → create a quotation with lines (product or description).
 2. Send to the customer (**Quotation Sent**).
 3. When accepted, confirm to **Sales Order**.
-4. Request Finance/Director help if you need invoice posting above your limit.
+4. Request Finance/Director help if you need invoice cancel/reset or bank recon.
 
 ### 3. Purchase order and GRN
 
@@ -44,13 +44,13 @@ You run day-to-day commercial and ops workflows. You do **not** manage system us
 3. Enter qty received (and unique serials for serial-tracked items).
 4. **Validate** the receipt so stock updates — Admin Officers may validate GRNs.
 
-### 4. Post or pay a customer invoice (within limit)
+### 4. Post a customer invoice or vendor bill
 
-1. Create or open a **customer** invoice linked to the SO / delivery as required.
-2. Post and record payment if the total is within the Admin Officer invoice limit (default **KES 1,000,000**).
-3. Larger invoices → escalate to **Finance Officer** or **Director**.
+1. Create or open a **customer** invoice linked to the SO / delivery as required, or a **vendor bill** from a received PO.
+2. Post it — Admin Officers may post customer invoices and vendor bills with no amount cap.
+3. Record payment on **customer** invoices. Vendor bill payment stays **Finance/Director**.
 
-Vendor bills (supplier invoices), bank reconciliation, cancelling/resetting invoices, customer credit notes, and expense reimbursement are **Finance/Director only**.
+Vendor bills may be **posted** by Admin Officers. Paying vendor bills, bank reconciliation, cancelling/resetting invoices, customer credit notes, and expense reimbursement are **Finance/Director only**.
 
 ### 5. Delivery
 
@@ -71,7 +71,6 @@ Vendor bills (supplier invoices), bank reconciliation, cancelling/resetting invo
 |------------|-------------|
 | Create/edit system users | Director |
 | View full audit trail | Director |
-| Post/pay vendor bills | Finance / Director |
+| Pay vendor bills | Finance / Director |
 | Bank recon / invoice cancel-reset / customer credit | Finance / Director |
-| Customer invoice above Admin Officer limit | Finance / Director |
 | Manage payroll employees as HR admin | Director / Finance (payroll approve differs) |
