@@ -103,6 +103,7 @@ describe('sales approval + GRN permissions', () => {
     expect(APPROVAL_RULES.discount({ discountPercent: 55 })).toEqual(['director', 'finance_officer'])
     expect(APPROVAL_RULES.special_pricing({})).toEqual(['director', 'finance_officer'])
     expect(APPROVAL_RULES.backorder({ backorderQty: 12 })).toEqual([])
+    expect(APPROVAL_RULES.purchase_high_value({ proposedValue: 80_000, threshold: 50_000 })).toEqual([])
   })
 
   it('allows sales roles to create SO invoices drafts and keeps GRN tight', () => {

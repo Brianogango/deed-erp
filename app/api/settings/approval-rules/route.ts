@@ -23,6 +23,12 @@ export async function PUT(request: Request) {
     const body = await request.json()
     const approvalType = String(body.approvalType || '').trim()
     if (!approvalType) return NextResponse.json({ error: 'approvalType required' }, { status: 400 })
+    if (approvalType === 'purchase_high_value') {
+      return NextResponse.json(
+        { error: 'High-value PO approval was removed — confirming a purchase order is not amount-gated' },
+        { status: 400 },
+      )
+    }
     const thresholds = Array.isArray(body.thresholds) ? body.thresholds : []
     const isActive = body.isActive !== false
 

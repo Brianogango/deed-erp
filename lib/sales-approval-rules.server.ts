@@ -13,10 +13,12 @@ import {
  *
  * Policy locks:
  * - backorder never gates confirm (even if an old DB row still lists TL)
+ * - purchase_high_value never gates PO confirm (amount cap removed)
  * - special_pricing is always Director OR Finance
  */
 export async function getApprovalRoles(type: ApprovalType, details: any): Promise<string[]> {
   if (type === 'backorder') return []
+  if (type === 'purchase_high_value') return []
   if (type === 'special_pricing') return ['director', 'finance_officer']
 
   try {
