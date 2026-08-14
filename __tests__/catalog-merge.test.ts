@@ -53,7 +53,7 @@ describe('mergeCatalogProducts', () => {
   })
 
   it('keeps store-only legacy items at the end of the list', () => {
-    const legacy = clientItem({ id: 'seed-1', name: 'Old Demo Product' })
+    const legacy = clientItem({ id: 'seed-1', name: 'Old Demo Product', sku: 'SEED-OLD' })
     const merged = mergeCatalogProducts([clientItem({}), legacy], [apiRow({})], CONFIG)
     expect(merged).toHaveLength(2)
     expect(merged.at(-1)!.id).toBe('seed-1')

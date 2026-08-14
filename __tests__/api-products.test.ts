@@ -89,8 +89,13 @@ describe('POST /api/products', () => {
   })
 
   it('returns 409 when product already exists', async () => {
-    mockPrisma.product.findFirst.mockResolvedValueOnce({
-      id: 'existing', name: 'HP ProBook 450', sku: 'OLD', barcode: null,
+    mockPrisma.product.findFirst.mockImplementation(({ where }: any) => {
+      if (where?.sku) return Promise.resolve(null)
+      const nameEquals = where?.OR?.find((clause: any) => clause.name?.equals)?.name?.equals
+      if (String(nameEquals).toLowerCase() === 'hp probook 450') {
+        return Promise.resolve({ id: 'existing', name: 'HP ProBook 450', sku: 'OLD', barcode: null })
+      }
+      return Promise.resolve(null)
     })
     const res = await POST_ONE(postReq('http://localhost/api/products', {
       name: 'HP ProBook 450',
