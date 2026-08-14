@@ -67,6 +67,42 @@ const CATEGORY_EMOJI: Record<string, string> = {
 
 const normName = (s: unknown) => String(s ?? '').trim().replace(/\s+/g, ' ').toLowerCase()
 
+function identityKeys(row: { name?: unknown; sku?: unknown; barcode?: unknown; parentId?: unknown }) {
+  const name = normName(row.name)
+  const sku = normName(row.sku)
+  const barcode = normName(row.barcode)
+  const parent = String(row.parentId ?? '').trim()
+  const keys: string[] = []
+  if (sku) keys.push(`sku:${sku}`)
+  if (barcode) keys.push(`bc:${barcode}`)
+  if (name && !parent) keys.push(`name:${name}`)
+  if (name && parent) keys.push(`var:${parent}:${name}`)
+  return keys
+}
+
+/**
+ * Drop extra rows that share name/SKU/barcode (optimistic UUID + Prisma UUID).
+ * First occurrence wins — callers should put the preferred list first.
+ */
+export function collapseProductIdentityDuplicates<T extends {
+  id?: string
+  name?: unknown
+  sku?: unknown
+  barcode?: unknown
+  parentId?: unknown
+}>(rows: T[]): T[] {
+  const kept: T[] = []
+  const seen = new Set<string>()
+  for (const row of rows) {
+    if (!row || typeof row !== 'object') continue
+    const keys = identityKeys(row)
+    if (keys.some(key => seen.has(key))) continue
+    for (const key of keys) seen.add(key)
+    kept.push(row)
+  }
+  return kept
+}
+
 /** Union store writes so a stale shorter list cannot drop catalog products. */
 export function mergeProductsStoreWrite(current: unknown, incoming: unknown): unknown {
   if (!Array.isArray(incoming)) return current
@@ -97,7 +133,9 @@ export function mergeProductsStoreWrite(current: unknown, incoming: unknown): un
     seen.add(id)
     merged.push({ ...(currentById.get(id) ?? {}), ...(row as any) })
   }
-  return merged
+  // Optimistic create uses a client UUID, then Prisma returns another UUID for
+  // the same name/SKU. Blob/SSE union-by-id would otherwise keep both rows.
+  return collapseProductIdentityDuplicates(merged)
 }
 
 /**
@@ -196,11 +234,13 @@ export function mergeCatalogProducts<P extends ClientCatalogProduct>(
       isActive: row.isActive !== false,
     } as unknown as P
   })
+  const catalogKeys = new Set(merged.flatMap(p => identityKeys(p)))
   const ids = new Set(merged.map(p => p.id))
-  const names = new Set(merged.map(p => normName(p.name)))
   for (const p of prev) {
-    if (!ids.has(p.id) && !names.has(normName(p.name))) merged.push(p)
+    if (ids.has(p.id)) continue
+    if (identityKeys(p).some(key => catalogKeys.has(key))) continue
+    merged.push(p)
   }
   const ordered = opts?.preserveClientOrder ? preserveClientProductOrder(prev, merged) : merged
-  return ordered
+  return collapseProductIdentityDuplicates(ordered)
 }

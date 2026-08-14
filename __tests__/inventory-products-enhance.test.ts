@@ -115,6 +115,39 @@ describe('product filters', () => {
     }, 'Tech Supplies')
     expect(chips.map(c => c.key)).toEqual(['warehouse', 'vendor', 'tracking'])
   })
+
+  it('hides archived products unless Status is Archived or All', () => {
+    const archived = { ...product, isActive: false }
+    const qty = getProductQtySnapshot(archived, serials, [], 'all')
+    expect(productMatchesFilters({
+      product: archived,
+      filters: EMPTY_PRODUCT_FILTERS,
+      qty,
+      serials,
+    })).toBe(false)
+    expect(productMatchesFilters({
+      product: archived,
+      filters: { ...EMPTY_PRODUCT_FILTERS, status: 'archived' },
+      qty,
+      serials,
+    })).toBe(true)
+    expect(productMatchesFilters({
+      product,
+      filters: { ...EMPTY_PRODUCT_FILTERS, status: 'archived' },
+      qty: getProductQtySnapshot(product, serials, [], 'all'),
+      serials,
+    })).toBe(false)
+    expect(productMatchesFilters({
+      product: archived,
+      filters: { ...EMPTY_PRODUCT_FILTERS, status: 'all' },
+      qty,
+      serials,
+    })).toBe(true)
+
+    const chips = activeFilterChips({ ...EMPTY_PRODUCT_FILTERS, status: 'archived' })
+    expect(chips.map(c => c.key)).toContain('status')
+    expect(chips.find(c => c.key === 'status')?.valueLabel).toBe('Archived')
+  })
 })
 
 describe('serial edit validation', () => {

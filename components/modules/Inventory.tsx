@@ -195,6 +195,7 @@ function InventoryContent() {
 
   const {
     products, productPriceHistory, addProduct, publishProductBulk, updateProduct, updateProductPrice,
+    unarchiveProduct,
     serials, stockMoves, stockTransfers,
     createTransfer, addTransferLine, validateTransfer, submitTransfer,
     importOpeningStock, openingStockPosted,
@@ -268,6 +269,8 @@ function InventoryContent() {
   const [serialReportSearch, setSerialReportSearch] = useState('')
 
   const [showForm, setShowForm] = useState(false)
+  const [savingProduct, setSavingProduct] = useState(false)
+  const [openArchivedToken, setOpenArchivedToken] = useState(0)
   const [editId, setEditId] = useUrlRecordId({ param: 'edit' })
   const [form, setForm] = useState<any>(blankProduct())
   const restoredEditRef = useRef<string | null>(null)
@@ -399,7 +402,7 @@ function InventoryContent() {
   const nameSimilarProducts = useMemo(() => {
     if (!form.name || form.name.length < 3) return []
     const q = form.name.trim().toLowerCase()
-    return products.filter(p => p.isActive && p.id !== editId && p.name.toLowerCase().includes(q)).slice(0, 3)
+    return products.filter(p => p.id !== editId && p.name.toLowerCase().includes(q)).slice(0, 3)
   }, [form.name, products, editId])
 
   const { pendingReceipts, validatedReceipts } = useMemo(() => {
@@ -508,8 +511,10 @@ function InventoryContent() {
 
   const kpis = useMemo(() => {
     let activeProducts = 0
+    let archivedProducts = 0
     for (const p of products) {
       if (p.isActive) activeProducts++
+      else archivedProducts++
     }
     let availSerials = 0
     for (const s of serials) {
@@ -517,6 +522,7 @@ function InventoryContent() {
     }
     return {
       productMasters: activeProducts,
+      archivedProducts,
       stockReceipts: validatedReceipts.length,
       serialTracked: availSerials,
       lowStock: lowStockProducts.length,
@@ -861,20 +867,32 @@ function InventoryContent() {
     const skuTrimmed = form.sku.trim() || buildProductSku(form.name, products)
     if (skuTrimmed) {
       const skuConflict = products.find(p => p.sku.toLowerCase() === skuTrimmed.toLowerCase() && p.id !== editId)
-      if (skuConflict) { showToast(`SKU "${skuTrimmed}" is already used by "${skuConflict.name}"`, 'error'); return }
+      if (skuConflict?.isActive) { showToast(`SKU "${skuTrimmed}" is already used by "${skuConflict.name}"`, 'error'); return }
+      if (skuConflict && !skuConflict.isActive && !editId) {
+        showToast(`SKU "${skuTrimmed}" belongs to archived “${skuConflict.name}”. Restore it from Products → Status: Archived.`, 'error')
+        return
+      }
     }
 
     // Hard block: barcode must be unique
     const barcodeTrimmed = form.barcode.trim()
     if (barcodeTrimmed) {
       const bcConflict = products.find(p => normKey(p.barcode) === normKey(barcodeTrimmed) && p.id !== editId)
-      if (bcConflict) { showToast(`Barcode "${barcodeTrimmed}" is already assigned to "${bcConflict.name}"`, 'error'); return }
+      if (bcConflict?.isActive) { showToast(`Barcode "${barcodeTrimmed}" is already assigned to "${bcConflict.name}"`, 'error'); return }
+      if (bcConflict && !bcConflict.isActive && !editId) {
+        showToast(`Barcode "${barcodeTrimmed}" belongs to archived “${bcConflict.name}”. Restore it instead of creating a duplicate.`, 'error')
+        return
+      }
     }
 
     // Hard block exact product-master repetition. Use variants for alternate configurations.
     if (!editId && !form.parentId) {
-      const nameConflict = products.find(p => p.isActive && p.name.trim().toLowerCase() === form.name.trim().toLowerCase())
-      if (nameConflict) { setDupConfirm(true); return }
+      const nameConflict = products.find(p => p.name.trim().toLowerCase() === form.name.trim().toLowerCase())
+      if (nameConflict?.isActive) { setDupConfirm(true); return }
+      if (nameConflict && !nameConflict.isActive) {
+        showToast(`“${nameConflict.name}” is archived. Restore it from Products → Status: Archived.`, 'error')
+        return
+      }
     }
 
     const productKind = inferProductKind({
@@ -938,12 +956,18 @@ function InventoryContent() {
       restoredEditRef.current = null
       return
     }
-    const saved = await Promise.resolve(addProduct(payload))
-    if (!saved) return
-    setDupConfirm(false)
-    setShowForm(false)
-    setEditId(null)
-    restoredEditRef.current = null
+    if (savingProduct) return
+    setSavingProduct(true)
+    try {
+      const saved = await Promise.resolve(addProduct({ ...payload, isActive: true }))
+      if (!saved) return
+      setDupConfirm(false)
+      setShowForm(false)
+      setEditId(null)
+      restoredEditRef.current = null
+    } finally {
+      setSavingProduct(false)
+    }
   }
 
   const downloadProductTemplate = async () => {
@@ -1417,6 +1441,17 @@ function InventoryContent() {
         </button>
         <button
           type="button"
+          className={`inventory-pilot-stat ${tab === 'product_master' && openArchivedToken > 0 ? 'is-active' : ''}`}
+          onClick={() => {
+            setActiveTab('product_master')
+            setOpenArchivedToken(n => n + 1)
+          }}
+        >
+          <span className="inventory-pilot-stat-value tabular-nums">{kpis.archivedProducts.toLocaleString()}</span>
+          <span className="inventory-pilot-stat-label">Archived</span>
+        </button>
+        <button
+          type="button"
           className={`inventory-pilot-stat ${tab === 'warehouse_view' ? 'is-active' : ''}`}
           onClick={() => setActiveTab('warehouse_view')}
         >
@@ -1811,6 +1846,7 @@ function InventoryContent() {
             onDownloadTemplate={downloadProductTemplate}
             onImportProducts={() => productImportRef.current?.click()}
             canImportProducts={canEditStock}
+            openArchivedToken={openArchivedToken}
           />
         </div>
       )}
@@ -3477,6 +3513,7 @@ function InventoryContent() {
       {showForm && (() => {
         const parentProduct = form.parentId ? products.find((p: Product) => p.id === form.parentId) : null
         const exactDup = !editId && !form.parentId && products.find((p: Product) => p.isActive && p.name.trim().toLowerCase() === form.name.trim().toLowerCase())
+        const archivedDup = !editId && !form.parentId && products.find((p: Product) => !p.isActive && p.name.trim().toLowerCase() === form.name.trim().toLowerCase())
         return (
         <Modal title={editId ? 'Edit Product Master' : form.parentId ? 'Create Product Variant' : 'Create New Product'} onClose={closeProductForm} width={640}>
           <div className="flex flex-col gap-4">
@@ -3539,6 +3576,34 @@ function InventoryContent() {
               </div>
             )}
 
+            {archivedDup && (
+              <div className="flex items-start gap-3 px-4 py-3 rounded-xl border border-[var(--border)] bg-[var(--info-bg)]">
+                <span className="text-lg mt-0.5 text-[var(--info-text)]" aria-hidden="true"><Fa icon={faTriangleExclamation} /></span>
+                <div className="flex-1">
+                  <p className="text-[12px] font-bold text-[var(--info-text)]">This product is archived</p>
+                  <p className="text-[11px] text-text-2 mt-0.5">
+                    <strong>&ldquo;{(archivedDup as Product).name}&rdquo;</strong> already exists and is hidden from sales and purchase pickers.
+                    Restore it instead of creating a second entry.
+                  </p>
+                  <div className="flex gap-2 mt-2.5">
+                    <button
+                      type="button"
+                      className="px-3 py-1 rounded-lg text-[11px] font-bold border border-[var(--border)] bg-white text-[var(--info-text)] hover:bg-[var(--primary-light)] transition-colors"
+                      onClick={() => {
+                        unarchiveProduct((archivedDup as Product).id)
+                        closeProductForm()
+                        setActiveTab('product_master')
+                        setOpenArchivedToken(n => n + 1)
+                        openEdit({ ...(archivedDup as Product), isActive: true })
+                      }}
+                    >
+                      Restore and edit
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <Field label="Product Name" required>
@@ -3554,13 +3619,29 @@ function InventoryContent() {
                           {p.image && !/^\p{Extended_Pictographic}/u.test(p.image)
                             ? <img src={p.image} alt="" className="w-4 h-4 object-contain flex-shrink-0" />
                             : <Fa icon={faBox} className="text-slate-400 flex-shrink-0" aria-hidden="true" />}
-                          <span className="truncate" title={`${p.name} ${p.sku}`}>{p.name} <span className="text-text-4 font-mono">{p.sku}</span></span>
+                          <span className="truncate" title={`${p.name} ${p.sku}`}>
+                            {p.name} <span className="text-text-4 font-mono">{p.sku}</span>
+                            {!p.isActive && <span className="ml-1 text-[9px] font-black uppercase tracking-wider text-text-3">Archived</span>}
+                          </span>
                         </span>
                         <div className="flex gap-1 shrink-0">
+                          {p.isActive ? (
+                            <>
                           <button className="px-2 py-0.5 rounded text-[9px] font-bold bg-primary-50 text-primary-700 border border-primary-200 hover:bg-primary-100 transition-colors"
                             onClick={() => openVariant(p)}>+ Variant</button>
                           <button className="px-2 py-0.5 rounded text-[9px] font-bold bg-slate-100 text-slate-600 border border-slate-200 hover:bg-slate-200 transition-colors"
                             onClick={() => { setShowForm(false); openEdit(p) }}>Edit existing</button>
+                            </>
+                          ) : (
+                          <button className="px-2 py-0.5 rounded text-[9px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 transition-colors"
+                            onClick={() => {
+                              unarchiveProduct(p.id)
+                              setShowForm(false)
+                              setActiveTab('product_master')
+                              setOpenArchivedToken(n => n + 1)
+                              openEdit({ ...p, isActive: true })
+                            }}>Restore</button>
+                          )}
                         </div>
                       </div>
                     ))}
@@ -3683,10 +3764,12 @@ function InventoryContent() {
                 <input type="checkbox" checked={!!form.canBePurchased} onChange={e => setF('canBePurchased')(e.target.checked)} />
                 Can be Purchased
               </label>
+              {editId && (
               <label className="flex items-center gap-2 text-[12px] font-semibold text-text-2 cursor-pointer" title="Inactive products are archived — hidden from sales/purchase pickers">
                 <input type="checkbox" checked={!!form.isActive} onChange={e => setF('isActive')(e.target.checked)} />
                 Active (uncheck to archive)
               </label>
+              )}
             </div>
             {(form.barcode || form.name) && (
               <div className="rounded-xl border border-border-lt bg-white p-3 flex flex-col sm:flex-row sm:items-center gap-3">
@@ -3920,8 +4003,12 @@ function InventoryContent() {
 
             <div className="flex gap-3 justify-end mt-2">
               <button className="btn-secondary px-6" onClick={closeProductForm}>Cancel</button>
-              <button className="btn-primary px-8" onClick={() => { void saveProduct() }} disabled={dupConfirm && !!exactDup}>
-                {dupConfirm && exactDup ? 'Resolve duplicate above' : 'Save Product'}
+              <button
+                className="btn-primary px-8"
+                onClick={() => { void saveProduct() }}
+                disabled={savingProduct || (dupConfirm && !!exactDup) || !!archivedDup}
+              >
+                {archivedDup ? 'Restore archived product above' : dupConfirm && exactDup ? 'Resolve duplicate above' : savingProduct ? 'Saving…' : 'Save Product'}
               </button>
             </div>
           </div>

@@ -132,6 +132,21 @@ describe('mergeProductsStoreWrite', () => {
     expect(merged.map(p => p.id)).toEqual(['asus-1', 'asus-2', 'other', 'new'])
     expect(merged[0].stockQty).toBe(7)
   })
+
+  it('collapses optimistic UUID and Prisma UUID for the same product name', async () => {
+    const { mergeProductsStoreWrite } = await import('@/lib/catalog-merge')
+    const current = [
+      { id: 'prisma-uuid', name: 'HP ProBook 450', sku: 'HP-PROBOOK-450-ABC' },
+    ]
+    const incoming = [
+      { id: 'client-uuid', name: 'HP ProBook 450', sku: 'HP-PROBOOK-450-ABC' },
+      { id: 'other', name: 'Other Item', sku: 'OTHER-1' },
+    ]
+    const merged = mergeProductsStoreWrite(current, incoming) as any[]
+    expect(merged).toHaveLength(2)
+    expect(merged.find(p => p.name === 'HP ProBook 450')!.id).toBe('prisma-uuid')
+    expect(merged.find(p => p.id === 'other')).toBeTruthy()
+  })
 })
 
 describe('mergeProductsRemoteState', () => {
