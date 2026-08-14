@@ -15,7 +15,7 @@ import {
   faCheck,
 } from '@fortawesome/free-solid-svg-icons'
 import { useFinanceStore, useDeliveryStore, fmtKes, fmtDate } from '@/lib/store'
-import { canCancelOrResetInvoice } from '@/lib/finance-controls'
+import { canCancelOrResetInvoice, canApplyCustomerCredit } from '@/lib/finance-controls'
 import { invoiceDocState, invoicePaymentStatus, isInvoiceOverdue, displayDocRef, INVOICE_DOC_STATE_LABELS, PAYMENT_STATUS_LABELS } from '@/lib/odoo-sales-flow'
 import { Modal, Field, Input, Select, Confirm, ModuleSkeleton, useMounted } from '@/components/ui'
 import { Breadcrumbs, PrimaryActionButton, RecordHeader, SecondaryActionMenu, StatusBadge } from '@/components/erp'
@@ -75,6 +75,7 @@ export default function InvoiceDetail() {
   const canManageFinance = ['director', 'finance_officer', 'admin_officer'].includes(currentUser?.role ?? '')
   const canManageFullFinance = ['director', 'finance_officer'].includes(currentUser?.role ?? '')
   const canCancelOrReset = canCancelOrResetInvoice(currentUser?.role)
+  const canApplyCredit = canApplyCustomerCredit(currentUser?.role)
   const invoice = invoices.find(i => i.id === id)
 
   const [showPayModal, setShowPayModal] = useState(false)
@@ -398,7 +399,7 @@ export default function InvoiceDetail() {
       id: 'credit',
       label: `Apply credit (${fmtKes(Math.min(availableCredit, balance))})`,
       onClick: () => applyCustomerCreditToInvoice(invoice.id),
-      hidden: !(invoice.type === 'customer_invoice' && balance > 0 && availableCredit > 0 && invoice.status !== 'draft' && invoice.status !== 'cancelled' && canManageFullFinance),
+      hidden: !(invoice.type === 'customer_invoice' && balance > 0 && availableCredit > 0 && invoice.status !== 'draft' && invoice.status !== 'cancelled' && canApplyCredit),
     },
     {
       id: 'edit',

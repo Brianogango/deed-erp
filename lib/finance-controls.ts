@@ -1,8 +1,8 @@
 /**
  * Client-safe finance control helpers (Phases A–C hybrid seals).
  * Admin Officer may post customer invoices and vendor bills with no amount cap,
- * pay customer invoices, and cancel/reset invoices. Paying vendor bills, bank
- * recon, and expense reimbursement stay Finance/Director.
+ * pay customer invoices, cancel/reset invoices, and apply customer credit.
+ * Paying vendor bills, bank recon, and expense reimbursement stay Finance/Director.
  */
 
 export const DEFAULT_ADMIN_OFFICER_CUSTOMER_INVOICE_LIMIT_KES = 1_000_000
@@ -78,6 +78,11 @@ export function canManageBankRecon(role: string | null | undefined): boolean {
 }
 
 export function canCancelOrResetInvoice(role: string | null | undefined): boolean {
+  const r = normalizeFinanceRole(role)
+  return r === 'director' || r === 'finance_officer' || r === 'admin_officer'
+}
+
+export function canApplyCustomerCredit(role: string | null | undefined): boolean {
   const r = normalizeFinanceRole(role)
   return r === 'director' || r === 'finance_officer' || r === 'admin_officer'
 }

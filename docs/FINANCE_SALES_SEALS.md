@@ -9,8 +9,9 @@ Hybrid model:
 | Post/pay **customer** invoice | director, finance_officer, admin_officer (no amount cap) |
 | Post vendor bill | director, finance_officer, admin_officer |
 | Pay vendor bill | director, finance_officer only |
-| Bank recon / expense reimburse / apply customer credit | director, finance_officer only |
+| Bank recon / expense reimburse | director, finance_officer only |
 | Cancel / reset invoice | director, finance_officer, admin_officer |
+| Apply customer credit | director, finance_officer, admin_officer |
 | SoD (pay own post) | Required above the same threshold (director break-glass) |
 
 ## Phase A
