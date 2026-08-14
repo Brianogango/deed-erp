@@ -9,6 +9,7 @@ import { mergeAppendOnlyJournals } from '@/lib/finance-controls'
 import { preserveInvoiceLinesOnStoreWrite, enforcePostedInvoiceImmutability, type RejectedPostedInvoiceEdit } from '@/lib/finance-invoice'
 import { mergeProductsStoreWrite } from '@/lib/catalog-merge'
 import { mergeSaleOrdersStoreWrite } from '@/lib/sale-order-store-merge'
+import { mergePosOrdersStoreWrite } from '@/lib/pos-orders-merge'
 import { appendStoreAudit } from '@/lib/store-audit'
 import crypto from 'crypto'
 
@@ -22,6 +23,7 @@ const PROTECTED_NON_EMPTY_ARRAY_KEYS = new Set<string>([
   'deed_purchaseOrders',
   'deed_products',
   'deed_saleOrders',
+  'deed_posOrders',
 ])
 
 function parseArrayLength(serializedValue: string): number | null {
@@ -220,6 +222,15 @@ export async function POST(request: Request) {
         let incoming: unknown
         try { incoming = JSON.parse(entries[key]) } catch { continue }
         entries[key] = JSON.stringify(mergeProductsStoreWrite(currentState[key], incoming))
+        continue
+      }
+      // POS tickets: union-by-id so a stale till tab cannot drop sales that
+      // already posted as invoices / landed on another device.
+      if (key === 'deed_posOrders' && entries[key]) {
+        let incoming: unknown
+        try { incoming = JSON.parse(entries[key]) } catch { continue }
+        entries[key] = JSON.stringify(mergePosOrdersStoreWrite(currentState[key], incoming))
+        continue
       }
       // Sale orders: merge by id + lockVersion so a stale tab cannot restore
       // deleted quotation lines after a newer Save/broadcast.

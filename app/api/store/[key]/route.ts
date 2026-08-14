@@ -6,6 +6,7 @@ import {
 } from '@/lib/auth/authorization'
 import { preserveInvoiceLinesOnStoreWrite, enforcePostedInvoiceImmutability } from '@/lib/finance-invoice'
 import { mergeSaleOrdersStoreWrite } from '@/lib/sale-order-store-merge'
+import { mergePosOrdersStoreWrite } from '@/lib/pos-orders-merge'
 import { loadAppState, saveStoreKeys } from '@/lib/server-store'
 import { appendStoreAudit } from '@/lib/store-audit'
 
@@ -74,6 +75,12 @@ export async function PUT(request: NextRequest, { params }: Params) {
     try { incoming = JSON.parse(value) } catch { incoming = null }
     const currentState = await loadAppState([key])
     value = JSON.stringify(mergeSaleOrdersStoreWrite(currentState[key], incoming))
+  }
+  if (key === 'deed_posOrders') {
+    let incoming: unknown
+    try { incoming = JSON.parse(value) } catch { incoming = null }
+    const currentState = await loadAppState([key])
+    value = JSON.stringify(mergePosOrdersStoreWrite(currentState[key], incoming))
   }
   await saveStoreKeys({ [key]: value })
   if (rejectedPostedInvoiceEdits.length > 0) {
