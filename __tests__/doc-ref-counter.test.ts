@@ -22,6 +22,7 @@ const EXPECTED_PREFIXES: Record<string, string> = {
   receipt: 'REC',
   payment_receipt: 'RCT',
   reconfiguration: 'RCF',
+  pos: 'POS',
 }
 
 beforeEach(() => {
@@ -48,6 +49,7 @@ describe('prefixToKind()', () => {
     expect(prefixToKind('QUO')).toBe('quotation')
     expect(prefixToKind('SO')).toBe('sale_order')
     expect(prefixToKind('INV')).toBe('invoice')
+    expect(prefixToKind('POS')).toBe('pos')
   })
 })
 
@@ -108,6 +110,26 @@ describe('getNextDocNumber()', () => {
 
     const num = await getNextDocNumber('purchase_order')
     expect(num).toBe(`PO/${YEAR}/0003`)
+  })
+
+  it('keeps the legacy global POS/NNNN format for till tickets', async () => {
+    mockSql
+      .mockResolvedValueOnce(undefined)
+      .mockResolvedValueOnce({ rows: [{ current_value: 17 }] })
+
+    const num = await getNextDocNumber('pos')
+    expect(num).toBe('POS/0017')
+  })
+
+  it('seeds POS tickets from existing POS/NNNN blob refs', async () => {
+    mockSql
+      .mockResolvedValueOnce(undefined)
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [{ value: JSON.stringify([{ ref: 'POS/0016' }, { ref: 'POS/0013' }]) }] })
+      .mockResolvedValueOnce({ rows: [{ current_value: 17 }] })
+
+    const num = await getNextDocNumber('pos')
+    expect(num).toBe('POS/0017')
   })
 
   it('throws when the counter cannot be generated', async () => {

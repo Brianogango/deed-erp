@@ -4,12 +4,17 @@
  * Historical bug: `deed_posSessionOpen=true` could persist without
  * `deed_posSessionId`, so the Retail Till UI stayed open but Close Session
  * always failed with "No open POS session".
+ *
+ * A till that was opened stays open until Close Session. Missing ids are
+ * recovered from session history (including overnight); they are never
+ * treated as a reason to close the till.
  */
 
 export type PosSessionLike = {
   id: string
   status: 'open' | 'closed' | string
   openedAt?: string
+  closedAt?: string
 }
 
 /** Find a usable session id when flags and history disagree. */
@@ -47,4 +52,3 @@ export function hasActivePosSession(opts: {
 export function isPosBankPayment(payment?: string): boolean {
   return payment === 'bank' || payment === 'card'
 }
-

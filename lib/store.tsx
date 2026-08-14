@@ -3,11 +3,11 @@
 import { createContext, useContext, useState, useCallback, useEffect, ReactNode, useRef, useMemo } from 'react'
 import {
   hasActivePosSession,
-  isOrphanedPosSession,
   isPosBankPayment,
   resolveOpenPosSessionId,
 } from '@/lib/pos-session'
 export { isPosBankPayment }
+import { mergePosOrdersRemoteState, nextPosSessionRef, nextPosTicketRef } from '@/lib/pos-orders-merge'
 import { loyaltyPointsEarned } from '@/lib/loyalty'
 import { requestCreateUser, requestDeleteUser, requestUpdateUser, requestDeactivateUser, requestReactivateUser } from '@/lib/auth/client-users'
 import { canManageHRRole, getFirstAllowedModule, hasModuleAccess as userHasModuleAccess, normalizeClientRole } from '@/lib/auth/access'
@@ -2038,6 +2038,8 @@ export interface POSOrder {
   pointsEarned?: number
   pointsRedeemed?: number
   createdAt?: string
+  invoiceId?: string
+  invoiceRef?: string
 }
 
 export interface POSSession {
@@ -5511,12 +5513,22 @@ export function StoreProvider({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialUser?.id, initialUser?.role, refreshProductCatalog])
 
-  // POS
-  const [posOrders, setPosOrders]           = useLS<POSOrder[]>('deed_posOrders', []) // To be migrated
+  // POS — union-merge remote payloads so a stale SSE/tab cannot drop till tickets.
+  const [posOrders, setPosOrders] = useLS<POSOrder[]>('deed_posOrders', [], {
+    mergeRemote: (local, remote) => mergePosOrdersRemoteState(local as POSOrder[], remote as POSOrder[]),
+  })
   const [posSessionOpen, setPosSessionOpen] = useLS<boolean>('deed_posSessionOpen', false)
   const [posSessionOpeningCash, setPosSessionOpeningCash] = useLS<number>('deed_posSessionOpeningCash', 0)
   const [posSessionId, setPosSessionId] = useLS<string | null>('deed_posSessionId', null)
   const [posSessions, setPosSessions] = useLS<POSSession[]>('deed_posSessions', [])
+
+  // Keep the till open until Close Session. If the open flag survived without
+  // a session id, recover it from history so Charge / Close still work.
+  useEffect(() => {
+    if (!posSessionOpen) return
+    const recovered = resolveOpenPosSessionId({ posSessionOpen, posSessionId, posSessions })
+    if (recovered && recovered !== posSessionId) setPosSessionId(recovered)
+  }, [posSessionOpen, posSessionId, posSessions, setPosSessionId])
 
   // Approvals & Audit
   const [approvalRequests, setApprovalRequests] = useLS<ApprovalRequest[]>('deed_approvalRequests', [])
@@ -12332,6 +12344,16 @@ const storeCtx: AppState = {
     allocateDocRef: async (prefix) => {
       const { prefixToKind, allocateDocNumber, allocateDocNumberSync } = await import('@/lib/doc-numbers')
       const kind = prefixToKind(prefix)
+      if (kind === 'pos') {
+        if (typeof window !== 'undefined') {
+          try {
+            return await allocateDocNumber(kind)
+          } catch {
+            /* fall through to local POS/NNNN high-water */
+          }
+        }
+        return nextPosTicketRef(posOrders.map(o => o.ref))
+      }
       if (typeof window !== 'undefined' && kind) {
         try {
           return await allocateDocNumber(kind)
@@ -16439,12 +16461,6 @@ const storeCtx: AppState = {
 
     // ── POS ───────────────────────────────────────────────────────────────────
     openPOSSession: (openingCash) => {
-      // Heal orphaned open=true with no session id (legacy stuck till) before opening.
-      if (isOrphanedPosSession({ posSessionOpen, posSessionId, posSessions })) {
-        setPosSessionOpen(false)
-        setPosSessionId(null)
-        setPosSessionOpeningCash(0)
-      }
       if (hasActivePosSession({ posSessionOpen, posSessionId, posSessions })) {
         showToast('A POS session is already open', 'error')
         return
@@ -16452,7 +16468,7 @@ const storeCtx: AppState = {
       const user = currentUser()
       const session: POSSession = {
         id: uid(),
-        ref: seq('POSSESS', 'pos'),
+        ref: nextPosSessionRef(posSessions.map(s => s.ref)),
         status: 'open',
         openedAt: new Date().toISOString(),
         openingCash: Math.max(0, Number(openingCash) || 0),
@@ -16463,7 +16479,9 @@ const storeCtx: AppState = {
         orderCount: 0,
         openedBy: user?.name || user?.username,
       }
-      setPosSessions(p => [session, ...p])
+      setPosSessions(p => [session, ...p.map(s => (
+        s.status === 'open' ? { ...s, status: 'closed' as const, closedAt: new Date().toISOString() } : s
+      ))])
       setPosSessionId(session.id)
       setPosSessionOpen(true)
       setPosSessionOpeningCash(session.openingCash)
@@ -16538,7 +16556,7 @@ const storeCtx: AppState = {
       }
 
       const openSession = posSessions.find(s => s.id === sessionId)
-      const sessionRef = openSession?.ref || seq('POSSESS', 'pos')
+      const sessionRef = openSession?.ref || nextPosSessionRef(posSessions.map(s => s.ref))
       if (controlLines.length > 0) {
         const debit = controlLines.reduce((a, l) => a + l.debit, 0)
         const credit = controlLines.reduce((a, l) => a + l.credit, 0)
@@ -16595,11 +16613,31 @@ const storeCtx: AppState = {
       return closed
     },
     createPOSOrder: async (lines, payment, customerId, customerName, pointsRedeemed = 0, applyVat = false, paymentMeta) => {
-      if (!posSessionOpen) {
+      let sessionId = resolveOpenPosSessionId({ posSessionOpen, posSessionId, posSessions })
+      if (!sessionId && posSessionOpen) {
+        // Till is open but the id drifted — attach a real session and keep charging.
+        const user = currentUser()
+        const repaired: POSSession = {
+          id: uid(),
+          ref: nextPosSessionRef(posSessions.map(s => s.ref)),
+          status: 'open',
+          openedAt: new Date().toISOString(),
+          openingCash: posSessionOpeningCash,
+          totalSales: 0,
+          totalCash: 0,
+          totalMpesa: 0,
+          totalCard: 0,
+          orderCount: 0,
+          openedBy: user?.name || user?.username,
+        }
+        setPosSessions(p => [repaired, ...p])
+        setPosSessionId(repaired.id)
+        sessionId = repaired.id
+      }
+      if (!sessionId) {
         showToast('Open a POS session before charging', 'error')
         return null
       }
-      const sessionId = posSessionId || 'active'
       const normalizedLines = lines.map(l => ({ ...l, subtotal: Number(l.price || 0) * Number(l.qty || 0) }))
       const sub = normalizedLines.reduce((a, l) => a + l.subtotal, 0)
       const vatRate = Number(companySettings.vatRate ?? 16)
@@ -16615,13 +16653,24 @@ const storeCtx: AppState = {
         ? (paymentMeta?.bankAccountId || bankAccountIdForMethod(payment))
         : undefined
       const paymentReference = (paymentMeta?.paymentReference || '').trim() || undefined
+      let orderRef: string
+      try {
+        orderRef = await storeCtxRef.current!.allocateDocRef('POS')
+      } catch {
+        orderRef = nextPosTicketRef(posOrders.map(o => o.ref))
+      }
+      if (!/^POS\/\d+$/.test(orderRef)) {
+        orderRef = nextPosTicketRef(posOrders.map(o => o.ref))
+      }
+      const invoiceId = uid()
       const order: POSOrder = {
-        id: uid(), ref: seq('POS', 'pos'), sessionId,
+        id: uid(), ref: orderRef, sessionId,
         lines: normalizedLines, subtotal: sub, taxTotal: tax, total, payment,
         bankAccountId: resolvedBankId,
         paymentReference,
         customerId, customerName, date: now(), createdAt: new Date().toISOString(),
         createdByUserId: user?.id, createdByName: user?.name, pointsEarned, pointsRedeemed,
+        invoiceId,
       }
       // Authoritative stock deduction on the server before local UI mirror.
       const stockLines = normalizedLines.map(l => ({
@@ -16656,10 +16705,22 @@ const storeCtx: AppState = {
         setProducts(p => p.map(x => x.id === l.productId ? { ...x, stockQty: Math.max(0, x.stockQty - l.qty) } : x))
         if (l.serialId) setSerials(p => p.map(s => s.id === l.serialId ? { ...s, status: 'sold', location: 'customer', soldDate: now() } : s))
       })
+      // Persist the till ticket before the invoice so a later crash still leaves
+      // Transaction History intact. Server union-merge is the source of truth.
+      setPosOrders(p => [order, ...p])
+      try {
+        await fetch('/api/pos/record-order', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ order }),
+        })
+      } catch {
+        /* local + later blob sync still hold the ticket */
+      }
       const invRefAllocated = await storeCtxRef.current!.allocateDocRef('INV')
       const posInv: Invoice = {
         // Posted document, fully paid (amountPaid === total → derived Paid).
-        id: uid(), ref: invRefAllocated, type: 'customer_invoice', status: 'posted',
+        id: invoiceId, ref: invRefAllocated, type: 'customer_invoice', status: 'posted',
         partnerId: customerId ?? 'walk-in', partnerName: customerName ?? 'Walk-in Customer',
         date: now(), dueDate: now(),
         lines: normalizedLines.map(l => {
@@ -16678,9 +16739,9 @@ const storeCtx: AppState = {
         subtotal: sub, taxTotal: tax, total, amountPaid: total,
         notes: paymentReference ? `POS ${order.ref} · Ref ${paymentReference}` : `POS ${order.ref}`,
       }
+      setPosOrders(p => p.map(o => o.id === order.id ? { ...o, invoiceRef: posInv.ref } : o))
       setInvoices(p => [posInv, ...p])
       sync('/api/invoices', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(posInv) })
-      setPosOrders(p => [order, ...p])
       const revenueBuckets = aggregateLinesByAccount({
         lines: posInv.lines,
         resolveProduct: (productId) => prodRef.current.find(p => p.id === productId),

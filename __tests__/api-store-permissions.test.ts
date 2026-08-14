@@ -654,4 +654,22 @@ describe('POST /api/store — partial-view writes merge instead of replace', () 
     expect(saved[0].lines[0].description).toBe('ThinkPad')
     expect(saved[0].subtotal).toBe(10000)
   })
+
+  it('unions POS tickets so a stale shorter till list cannot drop sales', async () => {
+    mockGetSession.mockResolvedValue(financeSession)
+    mockLoadAppState.mockResolvedValue({
+      deed_posOrders: [
+        { id: 'a', ref: 'POS/0016', total: 1500 },
+        { id: 'b', ref: 'POS/0017', total: 32000 },
+      ],
+    })
+    const res = await STORE_POST(postReq({
+      deed_posOrders: JSON.stringify([{ id: 'a', ref: 'POS/0016', total: 1500 }]),
+    }))
+    expect(res.status).toBe(200)
+    const saved = JSON.parse(
+      mockSaveStoreKeys.mock.calls.find(c => c[0].deed_posOrders)![0].deed_posOrders,
+    )
+    expect(saved.map((o: { id: string }) => o.id).sort()).toEqual(['a', 'b'])
+  })
 })

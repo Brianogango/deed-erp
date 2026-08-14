@@ -45,4 +45,30 @@ describe('resolveOpenPosSessionId', () => {
       posSessions: [{ id: 'x', status: 'closed' }],
     })).toBe(false)
   })
+
+  it('never falls back to the legacy sessionId "active"', () => {
+    expect(resolveOpenPosSessionId({
+      posSessionOpen: true,
+      posSessionId: null,
+      posSessions: [],
+    })).toBeNull()
+    expect(resolveOpenPosSessionId({
+      posSessionOpen: true,
+      posSessionId: '   ',
+      posSessions: [],
+    })).toBeNull()
+  })
+
+  it('keeps an overnight open till recoverable until Close Session', () => {
+    expect(resolveOpenPosSessionId({
+      posSessionOpen: true,
+      posSessionId: null,
+      posSessions: [{ id: 'old', status: 'open', openedAt: '2026-08-11T08:00:00.000Z' }],
+    })).toBe('old')
+    expect(hasActivePosSession({
+      posSessionOpen: true,
+      posSessionId: 'sess-overnight',
+      posSessions: [{ id: 'sess-overnight', status: 'open', openedAt: '2026-08-13T08:00:00.000Z' }],
+    })).toBe(true)
+  })
 })
