@@ -8,7 +8,8 @@ export type ApprovalThreshold = { maxValue: number; requiredRoles: string[] }
  * CLIENT-SAFE: no Prisma / Node-only imports.
  *
  * Price types (`discount`, `special_pricing`) list Director + Finance as an
- * any-of set (one approval is enough). `backorder` no longer gates confirm.
+ * any-of set (one approval is enough). `backorder` and `purchase_high_value`
+ * no longer gate confirm.
  */
 export const APPROVAL_RULES: Record<ApprovalType, (details: any) => string[]> = {
   discount: (details) => {
@@ -29,12 +30,8 @@ export const APPROVAL_RULES: Record<ApprovalType, (details: any) => string[]> = 
   corporate_deal: () => ['director'],
   // Stock shortfalls create delivery backorders; they do not need TL approval.
   backorder: () => [],
-  purchase_high_value: (details) => {
-    const amount = Number(details?.proposedValue ?? details?.amount ?? 0)
-    const threshold = Number(details?.threshold ?? 50000)
-    if (amount <= threshold) return []
-    return ['director']
-  },
+  // High-value PO director approval was removed — confirm is not amount-gated.
+  purchase_high_value: () => [],
 }
 
 /** Types where any listed role may approve (single decision). */

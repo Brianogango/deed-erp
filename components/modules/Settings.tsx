@@ -932,16 +932,6 @@ ACCOUNTS_EMAIL=accounts@deed.co.ke`}</pre>
                 <SettingRow label="Enforce RFQ → PO → Receipt → Bill" desc="Full purchase flow — no skipping steps"><Toggle on={ss.purEnforceRFQFlow} onChange={v => updateSystemSettings({ purEnforceRFQFlow: v })} /></SettingRow>
                 <SettingRow label="Store Vendor Lead Times" desc="Record expected delivery times per vendor and product"><Toggle on={ss.purStoreLeadTimes} onChange={v => updateSystemSettings({ purStoreLeadTimes: v })} /></SettingRow>
               </SectionCard>
-              <SectionCard title="Approval Controls">
-                <SettingRow label="Require Approval for High-Value Purchases" desc="Orders above the threshold need admin sign-off before confirming"><Toggle on={ss.purRequireApprovalHighValue} onChange={v => updateSystemSettings({ purRequireApprovalHighValue: v })} /></SettingRow>
-                {ss.purRequireApprovalHighValue && (
-                  <div className="pt-3 pb-2">
-                    <Field label="High-Value Threshold (KES)">
-                      <Input type="number" value={String(ss.purHighValueThreshold)} onChange={v => updateSystemSettings({ purHighValueThreshold: Number(v) })} />
-                    </Field>
-                  </div>
-                )}
-              </SectionCard>
             </>
           )}
 

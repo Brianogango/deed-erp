@@ -68,15 +68,14 @@ export async function POST(
       const settings = (state.deed_systemSettings && typeof state.deed_systemSettings === 'object')
         ? state.deed_systemSettings as Record<string, unknown>
         : {}
-      const limit = Number(settings.accAdminOfficerInvoiceLimitKes) || DEFAULT_ADMIN_OFFICER_CUSTOMER_INVOICE_LIMIT_KES
+      const sodThreshold = Number(settings.accAdminOfficerInvoiceLimitKes) || DEFAULT_ADMIN_OFFICER_CUSTOMER_INVOICE_LIMIT_KES
       // Prisma invoices are customer AR documents; vendor bills live primarily in the store mirror.
       const invoiceType = (mirror?.type === 'vendor_bill') ? 'vendor_bill' : 'customer_invoice'
       const invoiceTotal = Number(invoice.totalAmount)
       const gate = canPostOrPayCustomerInvoice({
         role: actor.role,
         invoiceType,
-        invoiceTotal,
-        limitKes: limit,
+        action: 'pay',
       })
       if (!gate.ok) {
         return NextResponse.json({ error: gate.reason || 'Forbidden' }, { status: 403 })
@@ -86,7 +85,7 @@ export async function POST(
         actorUserId: actor.id,
         postedByUserId: typeof mirror?.postedByUserId === 'string' ? mirror.postedByUserId : null,
         invoiceTotal,
-        sodThresholdKes: limit,
+        sodThresholdKes: sodThreshold,
       })
       if (!sod.ok) {
         return NextResponse.json({ error: sod.reason || 'Segregation of duties' }, { status: 409 })

@@ -14,38 +14,45 @@ import { canValidatePurchaseReceipt } from '@/lib/inventory/permissions'
 import { APPROVAL_RULES } from '@/lib/sales-approvals'
 
 describe('hybrid finance seals', () => {
-  it('allows admin officer customer post/pay under threshold', () => {
+  it('allows admin officer to post or pay customer invoices of any amount', () => {
     expect(canPostOrPayCustomerInvoice({
       role: 'admin_officer',
       invoiceType: 'customer_invoice',
       invoiceTotal: 500_000,
-      limitKes: DEFAULT_ADMIN_OFFICER_CUSTOMER_INVOICE_LIMIT_KES,
+      action: 'post',
     }).ok).toBe(true)
-  })
-
-  it('blocks admin officer above customer invoice threshold', () => {
-    const result = canPostOrPayCustomerInvoice({
+    expect(canPostOrPayCustomerInvoice({
       role: 'admin_officer',
       invoiceType: 'customer_invoice',
       invoiceTotal: DEFAULT_ADMIN_OFFICER_CUSTOMER_INVOICE_LIMIT_KES + 1,
-      limitKes: DEFAULT_ADMIN_OFFICER_CUSTOMER_INVOICE_LIMIT_KES,
-    })
-    expect(result.ok).toBe(false)
-    expect(result.reason).toMatch(/up to KES/)
+      action: 'pay',
+    }).ok).toBe(true)
   })
 
-  it('blocks admin officer from vendor bill post/pay', () => {
+  it('allows admin officer to post vendor bills', () => {
     expect(canPostOrPayCustomerInvoice({
       role: 'admin_officer',
       invoiceType: 'vendor_bill',
       invoiceTotal: 1_000,
-    }).ok).toBe(false)
+      action: 'post',
+    }).ok).toBe(true)
   })
 
-  it('keeps bank recon / cancel / expense reimbursement Finance+Director', () => {
+  it('blocks admin officer from paying vendor bills', () => {
+    const result = canPostOrPayCustomerInvoice({
+      role: 'admin_officer',
+      invoiceType: 'vendor_bill',
+      invoiceTotal: 1_000,
+      action: 'pay',
+    })
+    expect(result.ok).toBe(false)
+    expect(result.reason).toMatch(/pay vendor bills/)
+  })
+
+  it('lets admin officer cancel or reset invoices but not bank recon or expense reimbursement', () => {
+    expect(canCancelOrResetInvoice('admin_officer')).toBe(true)
     expect(canManageBankRecon('admin_officer')).toBe(false)
     expect(canManageBankRecon('finance_officer')).toBe(true)
-    expect(canCancelOrResetInvoice('admin_officer')).toBe(false)
     expect(canReimburseExpense('admin_officer')).toBe(false)
     expect(canManageFullFinance('admin_officer')).toBe(false)
     expect(canManageMoney('admin_officer')).toBe(true)
@@ -103,6 +110,7 @@ describe('sales approval + GRN permissions', () => {
     expect(APPROVAL_RULES.discount({ discountPercent: 55 })).toEqual(['director', 'finance_officer'])
     expect(APPROVAL_RULES.special_pricing({})).toEqual(['director', 'finance_officer'])
     expect(APPROVAL_RULES.backorder({ backorderQty: 12 })).toEqual([])
+    expect(APPROVAL_RULES.purchase_high_value({ proposedValue: 80_000, threshold: 50_000 })).toEqual([])
   })
 
   it('allows sales roles to create SO invoices drafts and keeps GRN tight', () => {

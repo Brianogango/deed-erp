@@ -87,6 +87,20 @@ describe('sales approval authorization', () => {
     expect(request.approvers).toEqual([])
   })
 
+  it('does not create a high-value purchase approval gate', () => {
+    const request = createApprovalRequest(
+      'purchase_high_value',
+      'purchase_order',
+      'po-1',
+      'PO/2026/0100',
+      'dir-1',
+      'Brian',
+      { proposedValue: 250_000, threshold: 50_000 },
+      users,
+    )
+    expect(request.approvers).toEqual([])
+  })
+
   it('rejects unauthorized approvers', () => {
     const request = createApprovalRequest(
       'special_pricing',

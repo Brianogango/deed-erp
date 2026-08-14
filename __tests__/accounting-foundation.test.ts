@@ -34,6 +34,7 @@ describe('approval thresholds', () => {
     expect(APPROVAL_RULES.special_pricing({})).toEqual(['director', 'finance_officer'])
     expect(APPROVAL_RULES.backorder({ backorderQty: 3 })).toEqual([])
     expect(APPROVAL_RULES.backorder({ backorderQty: 50 })).toEqual([])
+    expect(APPROVAL_RULES.purchase_high_value({ proposedValue: 999_999, threshold: 50_000 })).toEqual([])
   })
 
   it('resolves DB-style thresholds by value', () => {

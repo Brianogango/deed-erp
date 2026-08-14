@@ -199,7 +199,7 @@ export default function POFormView() {
     const canReturn      = (activePO.status === 'received' || activePO.status === 'partial') && receipts.some(r => r.poId === activePO.id && r.status === 'validated') && ['director', 'admin_officer', 'inventory_officer'].includes(currentUser?.role ?? '')
     const hasBillableQty = activePO.lines.some(line => billableQty(line) > 0)
     const canCreateBill  = (activePO.status === 'received' || activePO.status === 'partial') && hasBillableQty && ['director', 'finance_officer', 'admin_officer'].includes(currentUser?.role ?? '')
-    const canValidateBill = linkedBill?.status === 'draft' && ['director', 'finance_officer'].includes(currentUser?.role ?? '')
+    const canValidateBill = linkedBill?.status === 'draft' && ['director', 'finance_officer', 'admin_officer'].includes(currentUser?.role ?? '')
     const canPay         = !!linkedBill && invoiceDocState(linkedBill.status) === 'posted' && (linkedBill.amountPaid ?? 0) < (linkedBill.total ?? 0) && ['director', 'finance_officer'].includes(currentUser?.role ?? '')
     const stepIdx        = linkedBill ? 4 : (PO_STEP_IDX[activePO.status] ?? 0)
     const poReceipts     = receipts.filter(r => r.poId === activePO.id)
@@ -543,7 +543,7 @@ export default function POFormView() {
                               ))}
                             </select>
                           ) : (
-                            <p className="text-[10px]" style={{ color: acct ? '#6366F1' : 'var(--text-4)' }}>
+                            <p className="text-[10px]" style={{ color: acct ? 'var(--navy)' : 'var(--text-4)' }}>
                               {acct ? `${acct.code} · ${acct.name}` : 'No account linked'}
                             </p>
                           )}
@@ -731,7 +731,7 @@ export default function POFormView() {
               <PanelHeader title="Vendor Bill" />
               <div className="p-3">
                 {linkedBill ? (
-                  <div className="p-3 rounded-lg flex flex-col gap-2" style={{ background: '#E8F3FA', border: '1px solid #A8D4E8' }}>
+                  <div className="p-3 rounded-lg flex flex-col gap-2" style={{ background: 'var(--info-bg)', border: '1px solid color-mix(in srgb, var(--info) 35%, transparent)' }}>
                     <p className="font-mono font-semibold text-xs" style={{ color: 'var(--navy)' }}>{displayDocRef(linkedBill.ref)}</p>
                     <div className="flex justify-between text-xs"><span className="text-t3">Total</span><span className="font-mono text-t1">{fmtKes(linkedBill.total)}</span></div>
                     <div className="flex justify-between text-xs"><span className="text-t3">Paid</span><span className="font-mono" style={{ color: 'var(--success)' }}>{fmtKes(linkedBill.amountPaid)}</span></div>
@@ -759,7 +759,7 @@ export default function POFormView() {
 
             {/* Serial reminder */}
             {activePO.lines.some(l => l.requiresSerial) && (
-              <div className="card p-3 text-xs" style={{ background: 'var(--warning-bg)', borderColor: '#FDE68A' }}>
+              <div className="card p-3 text-xs" style={{ background: 'var(--warning-bg)', borderColor: 'color-mix(in srgb, var(--warning) 35%, transparent)' }}>
                 <p className="font-semibold mb-1.5" style={{ color: 'var(--warning-text)' }}>Serial tracking required</p>
                 {activePO.lines.filter(l => l.requiresSerial).map(l => (
                   <p key={l.id} className="text-t3 mb-0.5">• {l.productName} — {l.qty} unit(s)</p>
@@ -840,7 +840,7 @@ export default function POFormView() {
               </>
             )}
             {addProd && Number(addQty) > 0 && Number(addPrice) > 0 && (
-              <div className="flex justify-between text-xs font-mono rounded px-3 py-2" style={{ background: '#F5F3FF', border: '1px solid #C4B5FD' }}>
+              <div className="flex justify-between text-xs font-mono rounded px-3 py-2" style={{ background: 'var(--primary-light)', border: '1px solid color-mix(in srgb, var(--primary) 35%, transparent)' }}>
                 <span className="text-t3">Total incl. VAT</span>
                 <span className="font-semibold" style={{ color: 'var(--navy)' }}>
                   {fmtKes(Number(addQty) * Number(addPrice) * (addVAT ? 1 + (companySettings.vatRate ?? 16) / 100 : 1))}

@@ -139,7 +139,7 @@ export const isRepairTech = isTechnician
 // Composite checks.
 export const canManageMoney   = (role?: string | null) =>
   ['director', 'finance_officer', 'admin_officer'].includes(normalizeClientRole(role))
-/** Full finance (bank recon, cancel/reset, expense reimburse) — excludes Admin Officer. */
+/** Full finance (bank recon, expense reimburse, apply customer credit) — excludes Admin Officer. */
 export const canManageFullFinance = (role?: string | null) =>
   ['director', 'finance_officer'].includes(normalizeClientRole(role))
 /** Draft customer invoice from confirmed SO. */

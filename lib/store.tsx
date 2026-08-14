@@ -133,6 +133,7 @@ import { inferProductKind, defaultTrackingForKind, defaultUnitForKind } from '@/
 import {
   canPostOrPayCustomerInvoice,
   canPayOwnPostedInvoice,
+  canCancelOrResetInvoice,
   paymentJournalRef,
   DEFAULT_ADMIN_OFFICER_CUSTOMER_INVOICE_LIMIT_KES,
 } from '@/lib/finance-controls'
@@ -713,7 +714,9 @@ export interface SystemSettings {
   // Purchase
   purPurchaseAgreements: boolean
   purVendorPricelists: boolean
+  /** @deprecated Unused. High-value PO director approval was removed. */
   purRequireApprovalHighValue: boolean
+  /** @deprecated Unused. High-value PO director approval was removed. */
   purHighValueThreshold: number
   purEnforceRFQFlow: boolean
   purStoreLeadTimes: boolean
@@ -757,8 +760,8 @@ export interface SystemSettings {
   // or confirm payment through the portal. Set false only to temporarily reduce friction.
   secPortalRequirePhoneVerification: boolean
   /**
-   * Admin Officer may post/pay customer invoices at or under this KES total.
-   * Bank recon, cancel/reset, and expense reimbursement stay Finance/Director.
+   * @deprecated Unused for Admin Officer post/pay. Kept as the SoD threshold
+   * (poster cannot also pay above this amount unless Director).
    */
   accAdminOfficerInvoiceLimitKes: number
 }
@@ -778,7 +781,7 @@ export const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
   reconfigurationEnabled: true, reconfigurationMinMarginPct: 10,
   invCategorySaleMarkupPct: {},
   pricingMarginPolicy: DEFAULT_PRICING_MARGIN_POLICY,
-  purPurchaseAgreements: false, purVendorPricelists: true, purRequireApprovalHighValue: true,
+  purPurchaseAgreements: false, purVendorPricelists: true, purRequireApprovalHighValue: false,
   purHighValueThreshold: 50000, purEnforceRFQFlow: true, purStoreLeadTimes: true,
   repRepairOrders: true, repWarrantyTracking: true, repPartsConsumption: true,
   repEnforceFlow: true, repOnlyAssignedTechSeesJob: true, repAdminAssignsJobs: true,
@@ -2395,7 +2398,7 @@ const canManageHRAssets = (user: User | null) =>
 const canManageFinance = (user: User | null) =>
   !!user && ['director', 'finance_officer', 'admin_officer'].includes(user.role)
 
-/** Bank recon / cancel-reset / expense reimburse — Finance + Director only. */
+/** Bank recon / expense reimburse / apply customer credit — Finance + Director only. */
 const canManageFullFinanceAction = (user: User | null) =>
   !!user && ['director', 'finance_officer'].includes(user.role)
 
@@ -5268,6 +5271,14 @@ export function StoreProvider({
   useEffect(() => {
     if (systemSettings.accAdminOfficerInvoiceLimitKes === 100000) {
       setSystemSettings(prev => ({ ...prev, accAdminOfficerInvoiceLimitKes: 1000000 }))
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // High-value PO director approval was removed; clear stored tenants that still have it on.
+  useEffect(() => {
+    if (systemSettings.purRequireApprovalHighValue) {
+      setSystemSettings(prev => ({ ...prev, purRequireApprovalHighValue: false }))
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -11989,12 +12000,10 @@ const storeCtx: AppState = {
       if (inv.status === 'posted') {
         showToast(`${inv.ref} is already posted`, 'info'); return
       }
-      const limit = systemSettings.accAdminOfficerInvoiceLimitKes ?? DEFAULT_ADMIN_OFFICER_CUSTOMER_INVOICE_LIMIT_KES
       const gate = canPostOrPayCustomerInvoice({
         role: actor?.role,
         invoiceType: inv.type,
-        invoiceTotal: inv.total,
-        limitKes: limit,
+        action: 'post',
       })
       if (!gate.ok) { showToast(gate.reason || 'Cannot post invoice', 'error'); return }
       if (!inv.lines || inv.lines.length === 0) {
@@ -12075,12 +12084,11 @@ const storeCtx: AppState = {
         showToast('Only posted invoices can receive payments', 'error'); return
       }
       if (inv.paymentBlocked) { showToast('Payments are blocked on this invoice — release the block first', 'error'); return }
-      const limit = systemSettings.accAdminOfficerInvoiceLimitKes ?? DEFAULT_ADMIN_OFFICER_CUSTOMER_INVOICE_LIMIT_KES
+      const sodThreshold = systemSettings.accAdminOfficerInvoiceLimitKes ?? DEFAULT_ADMIN_OFFICER_CUSTOMER_INVOICE_LIMIT_KES
       const gate = canPostOrPayCustomerInvoice({
         role: actor?.role,
         invoiceType: inv.type,
-        invoiceTotal: inv.total,
-        limitKes: limit,
+        action: 'pay',
       })
       if (!gate.ok) { showToast(gate.reason || 'Cannot register payment', 'error'); return }
       const sod = canPayOwnPostedInvoice({
@@ -12088,7 +12096,7 @@ const storeCtx: AppState = {
         actorUserId: actor?.id,
         postedByUserId: inv.postedByUserId,
         invoiceTotal: inv.total,
-        sodThresholdKes: limit,
+        sodThresholdKes: sodThreshold,
       })
       if (!sod.ok) { showToast(sod.reason || 'Segregation of duties blocked this payment', 'error'); return }
       const balance = inv.total - inv.amountPaid
@@ -12148,8 +12156,8 @@ const storeCtx: AppState = {
     },
     resetInvoiceToDraft: (id) => {
       const actor = currentUser()
-      if (!canManageFullFinanceAction(actor)) {
-        showToast('Only Finance or Director can reset invoices to draft', 'error')
+      if (!canCancelOrResetInvoice(actor?.role)) {
+        showToast('Only Finance, Admin Officer, or Director can reset invoices to draft', 'error')
         return
       }
       const inv = invRef.current.find(i => i.id === id)
@@ -12221,8 +12229,8 @@ const storeCtx: AppState = {
     },
     cancelInvoice: async (id, forcedCreditRef) => {
       const actor = currentUser()
-      if (!canManageFullFinanceAction(actor)) {
-        showToast('Only Finance or Director can cancel invoices', 'error')
+      if (!canCancelOrResetInvoice(actor?.role)) {
+        showToast('Only Finance, Admin Officer, or Director can cancel invoices', 'error')
         return
       }
       const inv = invRef.current.find(i => i.id === id)
@@ -12426,61 +12434,6 @@ const storeCtx: AppState = {
       const po = poRef.current.find(p => p.id === id)
       if (!po) return
 
-      const purchaseApprovals = approvalRequests.filter(r =>
-        r.documentType === 'purchase_order' && r.documentId === id && r.type === 'purchase_high_value',
-      )
-      if (purchaseApprovals.some(r => r.status === 'rejected')) {
-        showToast('Purchase approval was rejected — revise the PO before confirming', 'error')
-        return
-      }
-      if (purchaseApprovals.some(r => r.status === 'pending') || po.approvalStatus === 'pending') {
-        showToast('Purchase approval is still pending', 'error')
-        return
-      }
-
-      const requireHighValue = systemSettings.purRequireApprovalHighValue !== false
-      const threshold = Number(systemSettings.purHighValueThreshold ?? 50000)
-      const alreadyApproved = purchaseApprovals.some(r => r.status === 'approved')
-      if (requireHighValue && po.total > threshold && !alreadyApproved) {
-        const request = createApprovalRequest(
-          'purchase_high_value',
-          'purchase_order',
-          id,
-          po.ref,
-          user!.id,
-          user!.name,
-          {
-            reason: `PO total ${fmtKes(po.total)} exceeds high-value threshold ${fmtKes(threshold)}`,
-            proposedValue: po.total,
-            threshold,
-          },
-          users.map(u => ({ id: u.id, name: u.name, role: u.role })),
-        )
-        setApprovalRequests(prev => [request, ...prev])
-        setPurchaseOrders(p => {
-          const next = p.map(row => row.id === id
-            ? { ...row, approvalStatus: 'pending' as const, approvalRequestIds: [...(row.approvalRequestIds ?? []), request.id] }
-            : row)
-          const updated = next.find(row => row.id === id)
-          if (updated) sync(`/api/purchase-orders/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
-          return next
-        })
-        notifyUsers({
-          recipients: approvalRecipientIds(request, users),
-          type: 'system',
-          title: `PO approval needed: ${po.ref}`,
-          body: request.details.reason,
-          module: 'purchase',
-          path: approvalDocumentPath(request),
-          icon: '⚠️',
-          entityKey: `approval:${request.id}`,
-          excludeUserId: user!.id,
-        })
-        addAuditLog('purchase_approval_required', po.ref, request.details.reason)
-        showToast(`Approval required — PO total exceeds ${fmtKes(threshold)}`, 'info')
-        return
-      }
-
       // Auto-create incoming shipment (receipt) when PO is confirmed — Odoo behaviour
       const receiptRef = await storeCtxRef.current!.allocateDocRef('REC')
       const receipt: Receipt = {
@@ -12500,7 +12453,7 @@ const storeCtx: AppState = {
       sync('/api/receipts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(receipt) })
       setPurchaseOrders(p => {
         const next = p.map(row => row.id === id
-          ? { ...row, status: 'confirmed' as const, approvalStatus: alreadyApproved ? 'approved' as const : (row.approvalStatus ?? 'not_required') }
+          ? { ...row, status: 'confirmed' as const, approvalStatus: 'not_required' as const }
           : row)
         const updated = next.find(row => row.id === id)
         if (updated) sync(`/api/purchase-orders/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })

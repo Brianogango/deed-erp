@@ -1,14 +1,16 @@
 # Finance & sales seal controls (Phases A–C)
 
-Hybrid model (Admin Officer rights retained with limits):
+Hybrid model:
 
 | Action | Roles |
 |---|---|
 | Validate GRN | director, admin_officer, inventory_officer |
 | SO → draft invoice | director, finance_officer, admin_officer |
-| Post/pay **customer** invoice | director, finance_officer, admin_officer **≤ `accAdminOfficerInvoiceLimitKes` (default 1,000,000)** |
-| Post/pay vendor bill | director, finance_officer only |
-| Bank recon / cancel-reset invoice / expense reimburse / customer credit | director, finance_officer only |
+| Post/pay **customer** invoice | director, finance_officer, admin_officer (no amount cap) |
+| Post vendor bill | director, finance_officer, admin_officer |
+| Pay vendor bill | director, finance_officer only |
+| Bank recon / expense reimburse / apply customer credit | director, finance_officer only |
+| Cancel / reset invoice | director, finance_officer, admin_officer |
 | SoD (pay own post) | Required above the same threshold (director break-glass) |
 
 ## Phase A

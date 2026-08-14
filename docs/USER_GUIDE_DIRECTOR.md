@@ -44,7 +44,7 @@ Only directors can create, edit, or deactivate system users.
 3. Ensure delivery is validated when invoicing from a confirmed SO (Odoo-style path).
 4. **Finance** → post the customer invoice → record payment (M-Pesa, cash, bank, etc.).
 
-You can post/pay any invoice amount. Admin Officers are capped (default KES 1,000,000 — see Settings / finance seals).
+You can post/pay any invoice amount. Admin Officers can post customer invoices and vendor bills with no amount cap, and can cancel or reset invoices. Paying vendor bills stays Finance/Director.
 
 ### 3. Validate a goods receipt (GRN)
 

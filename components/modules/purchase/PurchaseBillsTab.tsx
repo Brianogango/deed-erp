@@ -12,12 +12,7 @@ export default function PurchaseBillsTab() {
     vendorBills, purchaseOrders, postInvoice, currentUser,
     fmtKes, fmtDate,
   } = usePurchase()
-  // admin_officer is deliberately excluded: postInvoice's actual gate
-  // (canPostOrPayCustomerInvoice) only allows Admin Officer to post/pay
-  // customer_invoice documents up to a threshold — vendor bills always
-  // require director/finance_officer. Showing "Validate" here to
-  // admin_officer was a guaranteed-denied dead end.
-  const canValidateBills = ['director', 'finance_officer'].includes(currentUser?.role ?? '')
+  const canValidateBills = ['director', 'finance_officer', 'admin_officer'].includes(currentUser?.role ?? '')
 
   const linkedPORef = (b: VendorBill) => b.purchaseOrderId ? (purchaseOrders.find(p => p.id === b.purchaseOrderId)?.ref ?? '—') : '—'
 
