@@ -15,6 +15,7 @@ import {
   faCheck,
 } from '@fortawesome/free-solid-svg-icons'
 import { useFinanceStore, useDeliveryStore, fmtKes, fmtDate } from '@/lib/store'
+import { canCancelOrResetInvoice } from '@/lib/finance-controls'
 import { invoiceDocState, invoicePaymentStatus, isInvoiceOverdue, displayDocRef, INVOICE_DOC_STATE_LABELS, PAYMENT_STATUS_LABELS } from '@/lib/odoo-sales-flow'
 import { Modal, Field, Input, Select, Confirm, ModuleSkeleton, useMounted } from '@/components/ui'
 import { Breadcrumbs, PrimaryActionButton, RecordHeader, SecondaryActionMenu, StatusBadge } from '@/components/erp'
@@ -73,6 +74,7 @@ export default function InvoiceDetail() {
   const currentUser = users.find(u => u.id === currentUserId)
   const canManageFinance = ['director', 'finance_officer', 'admin_officer'].includes(currentUser?.role ?? '')
   const canManageFullFinance = ['director', 'finance_officer'].includes(currentUser?.role ?? '')
+  const canCancelOrReset = canCancelOrResetInvoice(currentUser?.role)
   const invoice = invoices.find(i => i.id === id)
 
   const [showPayModal, setShowPayModal] = useState(false)
@@ -371,14 +373,14 @@ export default function InvoiceDetail() {
       id: 'reset',
       label: 'Reset to Draft',
       onClick: () => setShowResetDraft(true),
-      hidden: !(invoice.status !== 'draft' && invoice.status !== 'cancelled' && invoice.amountPaid <= 0 && canManageFullFinance),
+      hidden: !(invoice.status !== 'draft' && invoice.status !== 'cancelled' && invoice.amountPaid <= 0 && canCancelOrReset),
     },
     {
       id: 'cancel',
       label: `Cancel ${docLabel}`,
       onClick: () => setShowCancel(true),
       danger: true,
-      hidden: !(invoice.status !== 'draft' && invoice.status !== 'cancelled' && canManageFullFinance),
+      hidden: !(invoice.status !== 'draft' && invoice.status !== 'cancelled' && canCancelOrReset),
     },
     {
       id: 'release',

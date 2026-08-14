@@ -62,8 +62,8 @@ const roleMatrix = {
   postFinancial:             ['director', 'finance_officer', 'admin_officer'] as UserRole[],
   // Bank recon / bank accounts / statement lines — Finance + Director only.
   manageBankRecon:           ['director', 'finance_officer'] as UserRole[],
-  // Customer credit ledger + cancel/reset invoice authority.
-  manageCustomerCredit:      ['director', 'finance_officer'] as UserRole[],
+  // Customer credit ledger (cancel of a paid invoice writes a credit note here).
+  manageCustomerCredit:      ['director', 'finance_officer', 'admin_officer'] as UserRole[],
   // Invoice/payment cash collection writes (narrower than recordSales).
   recordPayment:             ['director', 'finance_officer', 'admin_officer'] as UserRole[],
   // Sale order / delivery wholesale store writes.

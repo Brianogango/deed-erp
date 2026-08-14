@@ -49,10 +49,10 @@ describe('hybrid finance seals', () => {
     expect(result.reason).toMatch(/pay vendor bills/)
   })
 
-  it('keeps bank recon / cancel / expense reimbursement Finance+Director', () => {
+  it('lets admin officer cancel or reset invoices but not bank recon or expense reimbursement', () => {
+    expect(canCancelOrResetInvoice('admin_officer')).toBe(true)
     expect(canManageBankRecon('admin_officer')).toBe(false)
     expect(canManageBankRecon('finance_officer')).toBe(true)
-    expect(canCancelOrResetInvoice('admin_officer')).toBe(false)
     expect(canReimburseExpense('admin_officer')).toBe(false)
     expect(canManageFullFinance('admin_officer')).toBe(false)
     expect(canManageMoney('admin_officer')).toBe(true)

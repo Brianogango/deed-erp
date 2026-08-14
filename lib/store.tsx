@@ -133,6 +133,7 @@ import { inferProductKind, defaultTrackingForKind, defaultUnitForKind } from '@/
 import {
   canPostOrPayCustomerInvoice,
   canPayOwnPostedInvoice,
+  canCancelOrResetInvoice,
   paymentJournalRef,
   DEFAULT_ADMIN_OFFICER_CUSTOMER_INVOICE_LIMIT_KES,
 } from '@/lib/finance-controls'
@@ -2397,7 +2398,7 @@ const canManageHRAssets = (user: User | null) =>
 const canManageFinance = (user: User | null) =>
   !!user && ['director', 'finance_officer', 'admin_officer'].includes(user.role)
 
-/** Bank recon / cancel-reset / expense reimburse — Finance + Director only. */
+/** Bank recon / expense reimburse / apply customer credit — Finance + Director only. */
 const canManageFullFinanceAction = (user: User | null) =>
   !!user && ['director', 'finance_officer'].includes(user.role)
 
@@ -12155,8 +12156,8 @@ const storeCtx: AppState = {
     },
     resetInvoiceToDraft: (id) => {
       const actor = currentUser()
-      if (!canManageFullFinanceAction(actor)) {
-        showToast('Only Finance or Director can reset invoices to draft', 'error')
+      if (!canCancelOrResetInvoice(actor?.role)) {
+        showToast('Only Finance, Admin Officer, or Director can reset invoices to draft', 'error')
         return
       }
       const inv = invRef.current.find(i => i.id === id)
@@ -12228,8 +12229,8 @@ const storeCtx: AppState = {
     },
     cancelInvoice: async (id, forcedCreditRef) => {
       const actor = currentUser()
-      if (!canManageFullFinanceAction(actor)) {
-        showToast('Only Finance or Director can cancel invoices', 'error')
+      if (!canCancelOrResetInvoice(actor?.role)) {
+        showToast('Only Finance, Admin Officer, or Director can cancel invoices', 'error')
         return
       }
       const inv = invRef.current.find(i => i.id === id)
