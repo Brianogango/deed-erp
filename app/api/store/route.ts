@@ -178,26 +178,28 @@ export async function POST(request: Request) {
     }
   }
 
-  // Posted journals are append-only: existing refs cannot be edited or deleted.
+  // Posted journals are append-only: existing refs are immutable and never
+  // deleted. A rejected journal payload must only drop deed_journalEntries from
+  // the batch — never fail the whole request — so co-bundled writes (POS
+  // orders, invoices, ...) still persist. Failing the batch here used to strand
+  // POS sales because every dirty key flushes together and a stale/partial
+  // journal ledger 409'd the entire sync in a retry loop.
   if (entries.deed_journalEntries) {
     const currentState = await loadAppState(['deed_journalEntries'])
+    let parsed = true
     let incoming: unknown
-    try { incoming = JSON.parse(entries.deed_journalEntries) } catch {
+    try { incoming = JSON.parse(entries.deed_journalEntries) } catch { parsed = false }
+    if (!parsed) {
       delete entries.deed_journalEntries
       deniedKeys.push('deed_journalEntries')
-    }
-    if (incoming !== undefined) {
+    } else {
       const merged = mergeAppendOnlyJournals(currentState.deed_journalEntries, incoming)
       if (!merged.ok) {
         delete entries.deed_journalEntries
         deniedKeys.push('deed_journalEntries')
-        await appendStoreAudit(session, [], [], deniedKeys)
-        return NextResponse.json(
-          { error: merged.error, deniedKeys },
-          { status: 409 },
-        )
+      } else {
+        entries.deed_journalEntries = JSON.stringify(merged.merged)
       }
-      entries.deed_journalEntries = JSON.stringify(merged.merged)
     }
   }
 

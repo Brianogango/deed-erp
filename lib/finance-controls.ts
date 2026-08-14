@@ -123,8 +123,18 @@ export function paymentJournalRef(invoiceRef: string, paymentId: string): string
 }
 
 /**
- * Append-only merge for journal ledgers: existing refs are immutable;
- * incoming may only add new refs (including REV/ reversals).
+ * Append-only merge for journal ledgers: existing refs are immutable and are
+ * never deleted. Incoming may add new refs (including REV/ reversals).
+ *
+ * A client's local ledger is frequently only a partial view of the server's:
+ * a stale snapshot, or a set that has not yet caught up on refs another user
+ * posted since the client last hydrated (especially while the key is stuck in
+ * the client's pending-sync queue, which blocks incoming SSE updates for it).
+ * Such a client is NOT trying to delete the refs it omits, so treating a
+ * missing ref as a deletion and rejecting the write is wrong: it deadlocks the
+ * client's sync and — because the store flushes every dirty key in one batch —
+ * silently drops co-bundled writes such as POS orders and invoices. We instead
+ * preserve every server ref the client omitted by unioning it back in.
  */
 export function mergeAppendOnlyJournals(
   existing: unknown,
@@ -140,9 +150,11 @@ export function mergeAppendOnlyJournals(
     if (ref) prevByRef.set(ref, row)
   }
 
+  const nextRefs = new Set<string>()
   for (const row of next) {
     const ref = typeof row?.ref === 'string' ? row.ref : ''
     if (!ref) continue
+    nextRefs.add(ref)
     if (prevByRef.has(ref)) {
       const before = JSON.stringify(prevByRef.get(ref))
       const after = JSON.stringify(row)
@@ -152,15 +164,13 @@ export function mergeAppendOnlyJournals(
     }
   }
 
-  const nextRefs = new Set(next.map(r => (typeof r?.ref === 'string' ? r.ref : '')).filter(Boolean))
-  for (const ref of prevByRef.keys()) {
-    if (!nextRefs.has(ref)) {
-      return { ok: false, error: `Cannot delete posted journal ${ref}` }
-    }
+  // Preserve server-only refs the incoming payload omitted (never delete),
+  // then keep the incoming order for everything the client did send.
+  const merged: unknown[] = [...next]
+  for (const [ref, row] of prevByRef) {
+    if (!nextRefs.has(ref)) merged.push(row)
   }
-
-  // Prefer incoming order but keep any server-only rows already validated
-  return { ok: true, merged: next }
+  return { ok: true, merged }
 }
 
 /** Normalize a date-like value to YYYY-MM-DD (UTC). */

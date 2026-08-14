@@ -135,6 +135,54 @@ describe('POST /api/store — sensitive key gating', () => {
     expect(mockSaveStoreKeys).not.toHaveBeenCalledWith(expect.objectContaining({ deed_journalEntries: '[]' }))
   })
 
+  it('preserves co-bundled POS orders when the journal ledger is a stale partial', async () => {
+    // Regression: a POS sale flushes deed_posOrders + deed_invoices +
+    // deed_journalEntries together. When the client's local journal ledger is
+    // merely behind the server (missing refs another user just posted), the
+    // append-only guard must NOT 409 the whole batch — that stranded every POS
+    // sale of the day. The omitted server ref is preserved and the co-bundled
+    // POS order / invoice still persist.
+    mockGetSession.mockResolvedValue(financeSession)
+    mockLoadAppState.mockResolvedValue({ deed_journalEntries: [{ ref: 'JRN/A', lines: [1] }] })
+    const res = await STORE_POST(postReq({
+      deed_posOrders: '[{"id":"pos1","total":5000}]',
+      deed_journalEntries: '[{"ref":"JRN/B","lines":[2]}]',
+    }))
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.deniedKeys ?? []).not.toContain('deed_journalEntries')
+
+    // appendStoreAudit also calls saveStoreKeys, so pick the entries write.
+    const saved = mockSaveStoreKeys.mock.calls
+      .map(c => c[0] as Record<string, string>)
+      .find(a => a && 'deed_posOrders' in a) as Record<string, string>
+    // Co-bundled POS order survives instead of being lost to a journal conflict.
+    expect(saved.deed_posOrders).toBe('[{"id":"pos1","total":5000}]')
+    // The server ref the client omitted is preserved, alongside the new one.
+    const journalRefs = (JSON.parse(saved.deed_journalEntries) as Array<{ ref: string }>)
+      .map(j => j.ref).sort()
+    expect(journalRefs).toEqual(['JRN/A', 'JRN/B'])
+  })
+
+  it('drops only the journal key when a client tampers with a posted ref', async () => {
+    // A genuine immutability violation (editing an existing posted ref) still
+    // drops deed_journalEntries, but no longer nukes the rest of the batch.
+    mockGetSession.mockResolvedValue(financeSession)
+    mockLoadAppState.mockResolvedValue({ deed_journalEntries: [{ ref: 'JRN/A', lines: [1] }] })
+    const res = await STORE_POST(postReq({
+      deed_posOrders: '[{"id":"pos2","total":7000}]',
+      deed_journalEntries: '[{"ref":"JRN/A","lines":[999]}]',
+    }))
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.deniedKeys).toContain('deed_journalEntries')
+    const saved = mockSaveStoreKeys.mock.calls
+      .map(c => c[0] as Record<string, string>)
+      .find(a => a && 'deed_posOrders' in a) as Record<string, string>
+    expect(saved.deed_posOrders).toBe('[{"id":"pos2","total":7000}]')
+    expect(saved).not.toHaveProperty('deed_journalEntries')
+  })
+
   // ── Finance ledger keys (regression for the store-sync bypass) ──────────────
   const financeKeys = ['deed_invoices', 'deed_payments', 'deed_posOrders', 'deed_refundPayments']
   for (const key of financeKeys) {
