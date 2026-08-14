@@ -75,10 +75,26 @@ describe('hybrid finance seals', () => {
     const existing = [{ ref: 'JRN/A', lines: [1] }]
     const ok = mergeAppendOnlyJournals(existing, [{ ref: 'JRN/A', lines: [1] }, { ref: 'JRN/B', lines: [2] }])
     expect(ok.ok).toBe(true)
+    // Editing an existing posted ref is still rejected (immutability).
     const edited = mergeAppendOnlyJournals(existing, [{ ref: 'JRN/A', lines: [9] }])
     expect(edited.ok).toBe(false)
-    const deleted = mergeAppendOnlyJournals(existing, [])
-    expect(deleted.ok).toBe(false)
+  })
+
+  it('preserves server refs a stale/partial client omits (does not treat as deletion)', () => {
+    const existing = [{ ref: 'JRN/A', lines: [1] }]
+    // A client whose ledger is missing JRN/A is not deleting it — the ref is
+    // preserved instead of rejecting the sync (which used to strand POS sales).
+    const partial = mergeAppendOnlyJournals(existing, [])
+    expect(partial.ok).toBe(true)
+    if (partial.ok) expect(partial.merged).toEqual(existing)
+
+    // New refs from a partial client merge in alongside the preserved server ref.
+    const added = mergeAppendOnlyJournals(existing, [{ ref: 'JRN/C', lines: [3] }])
+    expect(added.ok).toBe(true)
+    if (added.ok) {
+      const refs = (added.merged as Array<{ ref: string }>).map(r => r.ref).sort()
+      expect(refs).toEqual(['JRN/A', 'JRN/C'])
+    }
   })
 })
 
