@@ -2,9 +2,7 @@
 'use client'
 import { createContext, useContext, useState, useCallback, useEffect, ReactNode, useRef, useMemo } from 'react'
 import {
-  abandonStaleOpenPosSessions,
   hasActivePosSession,
-  isOrphanedPosSession,
   isPosBankPayment,
   resolveOpenPosSessionId,
 } from '@/lib/pos-session'
@@ -5524,17 +5522,13 @@ export function StoreProvider({
   const [posSessionId, setPosSessionId] = useLS<string | null>('deed_posSessionId', null)
   const [posSessions, setPosSessions] = useLS<POSSession[]>('deed_posSessions', [])
 
-  // Auto-heal: open flag with no recoverable session id, plus leftover open
-  // history rows from previous days. Must not wait for the cashier to click
-  // "Clear stuck session" — that banner used to still allow charging.
+  // Keep the till open until Close Session. If the open flag survived without
+  // a session id, recover it from history so Charge / Close still work.
   useEffect(() => {
-    if (isOrphanedPosSession({ posSessionOpen, posSessionId, posSessions })) {
-      setPosSessionOpen(false)
-      setPosSessionId(null)
-      setPosSessionOpeningCash(0)
-    }
-    setPosSessions(prev => abandonStaleOpenPosSessions(prev, posSessionId))
-  }, [posSessionOpen, posSessionId, posSessions, setPosSessionOpen, setPosSessionId, setPosSessionOpeningCash, setPosSessions])
+    if (!posSessionOpen) return
+    const recovered = resolveOpenPosSessionId({ posSessionOpen, posSessionId, posSessions })
+    if (recovered && recovered !== posSessionId) setPosSessionId(recovered)
+  }, [posSessionOpen, posSessionId, posSessions, setPosSessionId])
 
   // Approvals & Audit
   const [approvalRequests, setApprovalRequests] = useLS<ApprovalRequest[]>('deed_approvalRequests', [])
@@ -16467,12 +16461,6 @@ const storeCtx: AppState = {
 
     // ── POS ───────────────────────────────────────────────────────────────────
     openPOSSession: (openingCash) => {
-      // Heal orphaned open=true with no session id (legacy stuck till) before opening.
-      if (isOrphanedPosSession({ posSessionOpen, posSessionId, posSessions })) {
-        setPosSessionOpen(false)
-        setPosSessionId(null)
-        setPosSessionOpeningCash(0)
-      }
       if (hasActivePosSession({ posSessionOpen, posSessionId, posSessions })) {
         showToast('A POS session is already open', 'error')
         return
@@ -16491,12 +16479,9 @@ const storeCtx: AppState = {
         orderCount: 0,
         openedBy: user?.name || user?.username,
       }
-      setPosSessions(p => {
-        const closedLeftovers = abandonStaleOpenPosSessions(p).map(s => (
-          s.status === 'open' ? { ...s, status: 'closed' as const, closedAt: new Date().toISOString() } : s
-        ))
-        return [session, ...closedLeftovers]
-      })
+      setPosSessions(p => [session, ...p.map(s => (
+        s.status === 'open' ? { ...s, status: 'closed' as const, closedAt: new Date().toISOString() } : s
+      ))])
       setPosSessionId(session.id)
       setPosSessionOpen(true)
       setPosSessionOpeningCash(session.openingCash)
@@ -16628,15 +16613,28 @@ const storeCtx: AppState = {
       return closed
     },
     createPOSOrder: async (lines, payment, customerId, customerName, pointsRedeemed = 0, applyVat = false, paymentMeta) => {
-      const sessionId = resolveOpenPosSessionId({ posSessionOpen, posSessionId, posSessions })
-      if (!sessionId) {
-        if (isOrphanedPosSession({ posSessionOpen, posSessionId, posSessions })) {
-          setPosSessionOpen(false)
-          setPosSessionId(null)
-          setPosSessionOpeningCash(0)
-          showToast('Stuck POS session cleared — open a new session before charging', 'error')
-          return null
+      let sessionId = resolveOpenPosSessionId({ posSessionOpen, posSessionId, posSessions })
+      if (!sessionId && posSessionOpen) {
+        // Till is open but the id drifted — attach a real session and keep charging.
+        const user = currentUser()
+        const repaired: POSSession = {
+          id: uid(),
+          ref: nextPosSessionRef(posSessions.map(s => s.ref)),
+          status: 'open',
+          openedAt: new Date().toISOString(),
+          openingCash: posSessionOpeningCash,
+          totalSales: 0,
+          totalCash: 0,
+          totalMpesa: 0,
+          totalCard: 0,
+          orderCount: 0,
+          openedBy: user?.name || user?.username,
         }
+        setPosSessions(p => [repaired, ...p])
+        setPosSessionId(repaired.id)
+        sessionId = repaired.id
+      }
+      if (!sessionId) {
         showToast('Open a POS session before charging', 'error')
         return null
       }
