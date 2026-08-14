@@ -24,6 +24,8 @@ export type OnHandQtyFilter =
   | 'eq_zero'
   | 'range'
 
+export type ProductStatusFilter = 'active' | 'archived' | 'all'
+
 export interface ProductFilterState {
   search: string
   warehouse: LocationId | 'all'
@@ -36,7 +38,7 @@ export interface ProductFilterState {
   onHandQty: OnHandQtyFilter
   onHandMin: string
   onHandMax: string
-  includeArchived: boolean
+  status: ProductStatusFilter
 }
 
 export const EMPTY_PRODUCT_FILTERS: ProductFilterState = {
@@ -51,7 +53,7 @@ export const EMPTY_PRODUCT_FILTERS: ProductFilterState = {
   onHandQty: 'all',
   onHandMin: '',
   onHandMax: '',
-  includeArchived: false,
+  status: 'active',
 }
 
 export interface FilterableProduct {
@@ -178,7 +180,8 @@ export function productMatchesFilters(args: {
   vendorProductIds?: Set<string>
 }): boolean {
   const { product, filters, qty, serials, vendorProductIds } = args
-  if (!filters.includeArchived && !product.isActive) return false
+  if (filters.status === 'active' && !product.isActive) return false
+  if (filters.status === 'archived' && product.isActive) return false
   if (!productMatchesSearch(product, filters.search, serials)) return false
   if (filters.category !== 'All' && product.category !== filters.category) return false
 
@@ -335,8 +338,10 @@ export function activeFilterChips(filters: ProductFilterState, vendorName?: stri
         : filters.onHandQty.replace(/_/g, ' ')
     chips.push({ key: 'onHandQty', label: 'On hand', valueLabel: range })
   }
-  if (filters.includeArchived) {
-    chips.push({ key: 'includeArchived', label: 'Status', valueLabel: 'Including archived' })
+  if (filters.status === 'archived') {
+    chips.push({ key: 'status', label: 'Status', valueLabel: 'Archived' })
+  } else if (filters.status === 'all') {
+    chips.push({ key: 'status', label: 'Status', valueLabel: 'Active + archived' })
   }
   return chips
 }

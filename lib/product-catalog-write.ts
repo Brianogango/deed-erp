@@ -19,16 +19,28 @@ export async function buildUniqueSku(name: string) {
   return candidate
 }
 
-export async function findProductDuplicate(name: string, sku?: string | null, barcode?: string | null) {
+export async function findProductDuplicate(
+  name: string,
+  sku?: string | null,
+  barcode?: string | null,
+  client: { product: { findFirst: typeof prisma.product.findFirst } } = prisma,
+) {
   const or: Record<string, unknown>[] = [
     { name: { equals: name, mode: 'insensitive' } },
   ]
   if (sku) or.push({ sku: { equals: sku, mode: 'insensitive' } })
   if (barcode) or.push({ barcode: { equals: barcode, mode: 'insensitive' } })
-  return prisma.product.findFirst({
+  return client.product.findFirst({
     where: { OR: or },
     select: { id: true, name: true, sku: true, barcode: true },
   })
+}
+
+function productIdentityLockKey(name: string, sku?: string | null, barcode?: string | null) {
+  const parts = [`name:${name.trim().toLowerCase()}`]
+  if (sku?.trim()) parts.push(`sku:${sku.trim().toLowerCase()}`)
+  if (barcode?.trim()) parts.push(`bc:${barcode.trim().toLowerCase()}`)
+  return `product:${parts.join('|')}`
 }
 
 export function resolveTrackingMethod(
@@ -96,14 +108,6 @@ export type PublishProductResult =
 export async function publishProduct(validated: ValidatedProductInput): Promise<PublishProductResult> {
   const requestedSku = validated.sku?.trim() || ''
   const barcode = validated.barcode?.trim() || null
-  const duplicate = await findProductDuplicate(validated.name, requestedSku, barcode)
-  if (duplicate) {
-    return {
-      status: 'exists',
-      product: duplicate,
-      field: duplicateFieldLabel(duplicate, requestedSku, validated.name),
-    }
-  }
 
   const trackingMethod = resolveTrackingMethod(validated.trackingMethod, validated.productKind, validated.category)
   const trackStock = validated.productKind === 'service' ? false : validated.trackStock
@@ -136,14 +140,31 @@ export async function publishProduct(validated: ValidatedProductInput): Promise<
   const categoryId = await resolveCategoryId(validated.category)
   if (categoryId) data.categoryId = categoryId
 
+  const createLocked = async (tx: {
+    product: { findFirst: typeof prisma.product.findFirst; create: typeof prisma.product.create }
+    $executeRawUnsafe?: (...args: any[]) => Promise<unknown>
+  }): Promise<PublishProductResult> => {
+    if (typeof tx.$executeRawUnsafe === 'function') {
+      await tx.$executeRawUnsafe(
+        'SELECT pg_advisory_xact_lock(hashtextextended($1, 0))',
+        productIdentityLockKey(validated.name, requestedSku, barcode),
+      )
+    }
+    const duplicate = await findProductDuplicate(validated.name, requestedSku, barcode, tx)
+    if (duplicate) {
+      return {
+        status: 'exists',
+        product: duplicate,
+        field: duplicateFieldLabel(duplicate, requestedSku, validated.name),
+      }
+    }
+    const created = await tx.product.create({ data: data as any })
+    await createZeroStockLevel(tx as any, created.id)
+    return { status: 'created', product: created }
+  }
+
   try {
-    const product = await prisma.$transaction(async tx => {
-      const created = await tx.product.create({ data: data as any })
-      // Every product gets a StockLevel row atomically (DB-003 / AGENT-DB-001).
-      await createZeroStockLevel(tx, created.id)
-      return created
-    })
-    return { status: 'created', product }
+    return await prisma.$transaction(async tx => createLocked(tx as any))
   } catch (err: any) {
     const drift = schemaDriftMessage(err)
     if (drift) return { status: 'error', message: drift }

@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import {
   useInventoryStore,
   Product,
@@ -23,6 +23,7 @@ import {
   getProductQtySnapshot,
   productMatchesFilters,
   type ProductFilterState,
+  type ProductStatusFilter,
 } from '@/lib/inventory/product-filters'
 import { canArchiveProduct, canEditSerialNumber, canPrintInventoryLabels } from '@/lib/inventory/permissions'
 import { inferTrackingMethod, isSerialTracking, productOffersOnHandSerials, type TrackingMethod } from '@/lib/inventory-identifiers'
@@ -49,6 +50,8 @@ interface InventoryProductsPanelProps {
   onDownloadTemplate?: () => void
   onImportProducts?: () => void
   canImportProducts?: boolean
+  /** Increment to jump the list onto Status: Archived (from the inventory rail). */
+  openArchivedToken?: number
 }
 
 export default function InventoryProductsPanel({
@@ -58,6 +61,7 @@ export default function InventoryProductsPanel({
   onDownloadTemplate,
   onImportProducts,
   canImportProducts = false,
+  openArchivedToken = 0,
 }: InventoryProductsPanelProps) {
   const {
     products, serials, bulkStock, receipts, purchaseOrders, contacts,
@@ -72,6 +76,13 @@ export default function InventoryProductsPanel({
   const [collapsedParents, setCollapsedParents] = useState<Set<string>>(new Set())
   const [serialProduct, setSerialProduct] = useState<Product | null>(null)
   const [labelBusy, setLabelBusy] = useState(false)
+
+  useEffect(() => {
+    if (!openArchivedToken) return
+    setFilters(prev => ({ ...prev, status: 'archived' }))
+  }, [openArchivedToken])
+
+  const archivedCount = useMemo(() => products.filter(p => !p.isActive).length, [products])
 
   const vendorOptions = useMemo(() => {
     const vendors = contacts.filter(c => c.isVendor)
@@ -218,12 +229,24 @@ export default function InventoryProductsPanel({
         else if (chip.key === 'stockAvailability') setFilter('stockAvailability', 'all')
         else if (chip.key === 'onHandQty') {
           setFilters(prev => ({ ...prev, onHandQty: 'all', onHandMin: '', onHandMax: '' }))
-        } else if (chip.key === 'includeArchived') setFilter('includeArchived', false)
+        } else if (chip.key === 'status') setFilter('status', 'active')
       },
     }))
   }, [filters, vendorOptions])
 
   const primaryFilters: PrimaryFilterConfig[] = [
+    {
+      key: 'status',
+      label: 'Status',
+      value: filters.status,
+      allValue: 'active',
+      options: [
+        { value: 'active', label: 'Active' },
+        { value: 'archived', label: archivedCount > 0 ? `Archived (${archivedCount})` : 'Archived' },
+        { value: 'all', label: 'Active + archived' },
+      ],
+      onChange: v => setFilter('status', v as ProductStatusFilter),
+    },
     {
       key: 'warehouse',
       label: 'Warehouse',
@@ -358,14 +381,6 @@ export default function InventoryProductsPanel({
           </label>
         </div>
       )}
-      <label className="flex items-center gap-2 text-sm text-[var(--text-2)]">
-        <input
-          type="checkbox"
-          checked={filters.includeArchived}
-          onChange={e => setFilter('includeArchived', e.target.checked)}
-        />
-        Include archived products
-      </label>
     </div>
   )
 
@@ -574,8 +589,9 @@ export default function InventoryProductsPanel({
         title="Products"
         notice={
           <CompactInfoNotice>
-            On hand = warehouse/shop/repair including held units. Available = free to sell only. Held = reserved (SO pick), refurb, under repair.
-            Open Serials for Sold / Reserved filters, or Inventory → Reports → Find Serial to trace a unit (e.g. PF1CX9NP).
+            {filters.status === 'archived'
+              ? 'Archived products stay in history with stock and documents. Restore to sell or buy them again — they are hidden from sales and purchase pickers until then.'
+              : 'On hand = warehouse/shop/repair including held units. Available = free to sell only. Held = reserved (SO pick), refurb, under repair. Open Status → Archived to restore hidden products.'}
           </CompactInfoNotice>
         }
       >
@@ -593,7 +609,7 @@ export default function InventoryProductsPanel({
           activeFilters={chips}
           onClearFilters={clearFilters}
           hideColumnFilters
-          emptyMessage="No products match the current filters"
+          emptyMessage={filters.status === 'archived' ? 'No archived products' : 'No products match the current filters'}
           exportTitle="Product Master"
           exportFilename="inventory-products"
           perPage={20}
@@ -674,8 +690,7 @@ export default function InventoryProductsPanel({
                 {row.kind !== 'variant' && (
                   <button
                     type="button"
-                    className="px-2 py-1.5 rounded-lg text-[10px] font-extrabold border"
-                    style={{ background: 'var(--info-bg)', color: '#4338CA', borderColor: '#C7D2FE' }}
+                    className="px-2 py-1.5 rounded-lg text-[10px] font-extrabold border bg-[var(--info-bg)] text-[var(--info-text)] border-[var(--border)]"
                     onClick={() => onCreateVariant(row.product)}
                   >
                     + Variant

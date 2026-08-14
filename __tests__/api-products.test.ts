@@ -64,8 +64,9 @@ beforeEach(() => {
   )
   mockPrisma.$transaction.mockImplementation(async (fn: any) =>
     fn({
-      product: { create: mockPrisma.product.create },
+      product: { create: mockPrisma.product.create, findFirst: mockPrisma.product.findFirst },
       stockLevel: { create: mockPrisma.stockLevel.create },
+      $executeRawUnsafe: vi.fn().mockResolvedValue(undefined),
     }),
   )
 })
@@ -88,8 +89,13 @@ describe('POST /api/products', () => {
   })
 
   it('returns 409 when product already exists', async () => {
-    mockPrisma.product.findFirst.mockResolvedValueOnce({
-      id: 'existing', name: 'HP ProBook 450', sku: 'OLD', barcode: null,
+    mockPrisma.product.findFirst.mockImplementation(({ where }: any) => {
+      if (where?.sku) return Promise.resolve(null)
+      const nameEquals = where?.OR?.find((clause: any) => clause.name?.equals)?.name?.equals
+      if (String(nameEquals).toLowerCase() === 'hp probook 450') {
+        return Promise.resolve({ id: 'existing', name: 'HP ProBook 450', sku: 'OLD', barcode: null })
+      }
+      return Promise.resolve(null)
     })
     const res = await POST_ONE(postReq('http://localhost/api/products', {
       name: 'HP ProBook 450',
@@ -156,6 +162,23 @@ describe('POST /api/products', () => {
         }),
       }),
     )
+  })
+
+  it('locks product identity and returns 409 when a duplicate already exists', async () => {
+    mockPrisma.product.findFirst.mockResolvedValueOnce({
+      id: 'ex', name: 'HP ProBook 450', sku: 'HP-1', barcode: null,
+    })
+    const res = await POST_ONE(postReq('http://localhost/api/products', {
+      name: 'HP ProBook 450',
+      category: 'Laptops',
+      salePrice: 85000,
+      costPrice: 72000,
+      sku: 'HP-1',
+    }))
+    expect(res.status).toBe(409)
+    expect(mockPrisma.product.create).not.toHaveBeenCalled()
+    const body = await res.json()
+    expect(body.error).toMatch(/already used/i)
   })
 })
 

@@ -1547,6 +1547,14 @@ function findProductIdentityDuplicate(products: Product[], product: Partial<Prod
   })
 }
 
+function productCreateLockKey(product: Partial<Product>) {
+  return [
+    normalizeProductIdentity(product.name),
+    normalizeProductIdentity(product.sku),
+    normalizeProductIdentity(product.barcode),
+  ].join('|')
+}
+
 export type IntakeChannel = 'walk_in' | 'website' | 'whatsapp' | 'call' | 'email' | 'rider_pickup'
 
 export type RepairDiagnosisRevisionType = 'initial' | 'update' | 'correction'
@@ -3231,7 +3239,7 @@ export interface AppState {
   deleteQuote: (id: string) => void
 
   // Products
-  addProduct: (p: Omit<Product, 'id'>) => Product
+  addProduct: (p: Omit<Product, 'id'>) => Product | null
   /** Bulk publish: server checks exists, creates missing, then refreshes catalog into local state. */
   publishProductBulk: (rows: Array<Omit<Product, 'id'> & { skuProvided?: boolean }>) => Promise<{
     created: number
@@ -5712,6 +5720,7 @@ export function StoreProvider({
 
   // Keep refs for current state in closures
   const prodRef   = useRef(products);   prodRef.current   = products
+  const productCreateLocksRef = useRef(new Set<string>())
   const accountRef = useRef(accounts);  accountRef.current = accounts
   const serialRef = useRef(serials);    serialRef.current = serials
   const repairsRef = useRef(repairs); repairsRef.current = repairs
@@ -9289,12 +9298,23 @@ const storeCtx: AppState = {
       }
       const duplicate = findProductIdentityDuplicate(prodRef.current, p)
       if (duplicate) {
-        showToast(`Product already exists: ${duplicate.name} (${duplicate.sku || duplicate.barcode || 'same name'})`, 'error')
-        return duplicate as any
+        if (!duplicate.isActive) {
+          showToast(`“${duplicate.name}” is archived. Restore it from Products → Status: Archived.`, 'error')
+        } else {
+          showToast(`Product already exists: ${duplicate.name} (${duplicate.sku || duplicate.barcode || 'same name'})`, 'error')
+        }
+        return null as any
       }
+      const lockKey = productCreateLockKey(p)
+      if (productCreateLocksRef.current.has(lockKey)) {
+        showToast('This product is already being created', 'info')
+        return null as any
+      }
+      productCreateLocksRef.current.add(lockKey)
       // Optimistic update — add immediately so the UI responds
       const tempId = uid()
       const optimistic = { ...p, id: tempId, stockQty: 0, createdAt: new Date().toISOString() }
+      prodRef.current = [...prodRef.current, optimistic as any]
       setProducts(prev => [...prev, optimistic as any])
 
       // Background sync to database
@@ -9320,6 +9340,7 @@ const storeCtx: AppState = {
             sku: saved.sku || optimistic.sku,
           }
           setProducts(prev => prev.map(x => x.id === tempId ? reconciled as any : x))
+          prodRef.current = prodRef.current.map(x => x.id === tempId ? reconciled as any : x)
           showToast(`${p.name} created`, 'success')
           // Re-merge catalog so a concurrent SSE wipe cannot drop this product.
           void (async () => {
@@ -9335,12 +9356,16 @@ const storeCtx: AppState = {
         }
         const err = await res.json().catch(() => ({}))
         setProducts(prev => prev.filter(x => x.id !== tempId))
+        prodRef.current = prodRef.current.filter(x => x.id !== tempId)
         showToast(err?.error || err?.message || `Could not create ${p.name}`, 'error')
         return null as any
       } catch {
         setProducts(prev => prev.filter(x => x.id !== tempId))
+        prodRef.current = prodRef.current.filter(x => x.id !== tempId)
         showToast(`Could not create ${p.name}. Check your connection and try again.`, 'error')
         return null as any
+      } finally {
+        productCreateLocksRef.current.delete(lockKey)
       }
     },
 
@@ -9669,7 +9694,7 @@ const storeCtx: AppState = {
       }
       const extra = ids.length > 1 ? ` (+${ids.length - 1} variant${ids.length === 2 ? '' : 's'})` : ''
       addAuditLog('archive_product', product.sku || product.name, `Archived product ${product.name}${extra}`)
-      showToast(`Archived ${product.name}${extra}`, 'success')
+      showToast(`Archived ${product.name}${extra}. Restore from Products → Status: Archived.`, 'success')
     },
     unarchiveProduct: (id) => {
       if (!canApproveInventoryAction(currentUser())) {
