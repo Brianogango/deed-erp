@@ -4475,6 +4475,70 @@ function rememberSaleOrdersSnapshot(serialized: string | null | undefined) {
   }
 }
 
+/** Clear keys from the pending queue after the server confirms receipt. */
+function markKeysSynced(saved: Record<string, string>) {
+  // Only remove from _pendingSync once the server has confirmed receipt. If a
+  // newer write arrived for the same key while in-flight, leave it queued.
+  Object.keys(saved).forEach(k => {
+    if (_pendingSync[k] === saved[k]) delete _pendingSync[k]
+  })
+  removeDirtyKeys(Object.keys(saved))
+  // Draft quotation line edits stay dirty until Save. Prefer the in-memory
+  // snapshot — localStorage can still hold a pre-edit blob after a large write.
+  if (hasSaleOrderDraftEdits()) {
+    addDirtyKey('deed_saleOrders')
+    try {
+      const snap = _latestSaleOrdersSnapshot
+        ?? (typeof window !== 'undefined' ? window.localStorage.getItem('deed_saleOrders') : null)
+      if (snap) _pendingSync['deed_saleOrders'] = snap
+    } catch { /* ignore */ }
+  }
+  if (typeof window !== 'undefined') {
+    window.localStorage.setItem(LAST_SYNC_AT_LS, new Date().toISOString())
+  }
+}
+
+/**
+ * Fallback when the server rejects a multi-key batch wholesale (e.g. a 409
+ * optimistic-concurrency conflict, or a single malformed/append-only key).
+ * Retrying the same batch forever lets one poisoned key block every co-bundled
+ * key — exactly how a stale journal ledger once stranded POS orders and
+ * invoices. Reissue each key on its own so healthy keys still flush and only
+ * the genuinely failing key stays queued for the next retry.
+ */
+async function flushKeysIndividually(entries: Record<string, string>) {
+  const failedKeys: string[] = []
+  await Promise.all(Object.keys(entries).map(async key => {
+    try {
+      const res = await fetch('/api/store', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ [key]: entries[key] }),
+      })
+      if (res.status === 401) {
+        if (typeof window !== 'undefined') window.location.href = '/login'
+        return
+      }
+      // 2xx = saved; 403 = this session may never write the key. Either way it
+      // must leave the retry queue so it stops blocking future flushes.
+      if (res.ok || res.status === 403) {
+        markKeysSynced({ [key]: entries[key] })
+      } else {
+        failedKeys.push(key)
+      }
+    } catch {
+      failedKeys.push(key)
+    }
+  }))
+  if (failedKeys.length > 0) {
+    emitSyncStatus('error', {
+      message: `Some changes could not be saved yet: ${failedKeys.join(', ')}. Retrying automatically.`,
+    })
+  } else {
+    emitSyncStatus('synced')
+  }
+}
+
 async function flushServerSync() {
   if (Object.keys(_pendingSync).length === 0) return
   const entries = { ..._pendingSync }
@@ -4504,28 +4568,18 @@ async function flushServerSync() {
       emitSyncStatus('error', { message: `Your role cannot save: ${denied.join(', ')}` })
       return
     }
-    if (!res.ok) throw new Error(`Sync failed: ${res.status}`)
+    if (!res.ok) {
+      // The server responded but rejected the whole batch (e.g. a 409
+      // optimistic-concurrency conflict or one malformed key). Isolate the
+      // failure so a single key cannot hold every co-bundled key hostage.
+      if (Object.keys(entries).length > 1) {
+        await flushKeysIndividually(entries)
+        return
+      }
+      throw new Error(`Sync failed: ${res.status}`)
+    }
     const payload = await res.json().catch(() => null) as { skippedKeys?: string[]; deniedKeys?: string[] } | null
-    // Only remove from _pendingSync once the server has confirmed receipt.
-    // If a newer write arrived for the same key while in-flight, leave it.
-    Object.keys(entries).forEach(k => {
-      if (_pendingSync[k] === entries[k]) delete _pendingSync[k]
-    })
-    removeDirtyKeys(Object.keys(entries))
-    // Draft quotation line edits stay dirty until Save. Prefer the in-memory
-    // snapshot — localStorage can still hold a pre-edit blob after a large write.
-    if (hasSaleOrderDraftEdits()) {
-      addDirtyKey('deed_saleOrders')
-      try {
-        const snap = _latestSaleOrdersSnapshot
-          ?? (typeof window !== 'undefined' ? window.localStorage.getItem('deed_saleOrders') : null)
-        if (snap) _pendingSync['deed_saleOrders'] = snap
-      } catch { /* ignore */ }
-    }
-    if (typeof window !== 'undefined') {
-      const syncedAt = new Date().toISOString()
-      window.localStorage.setItem(LAST_SYNC_AT_LS, syncedAt)
-    }
+    markKeysSynced(entries)
     const skippedKeys = payload?.skippedKeys ?? []
     if (skippedKeys.length > 0) {
       emitSyncStatus('conflict', {
