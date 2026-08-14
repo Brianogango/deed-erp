@@ -134,6 +134,7 @@ import {
   canPostOrPayCustomerInvoice,
   canPayOwnPostedInvoice,
   canCancelOrResetInvoice,
+  canApplyCustomerCredit,
   paymentJournalRef,
   DEFAULT_ADMIN_OFFICER_CUSTOMER_INVOICE_LIMIT_KES,
 } from '@/lib/finance-controls'
@@ -2398,7 +2399,7 @@ const canManageHRAssets = (user: User | null) =>
 const canManageFinance = (user: User | null) =>
   !!user && ['director', 'finance_officer', 'admin_officer'].includes(user.role)
 
-/** Bank recon / expense reimburse / apply customer credit — Finance + Director only. */
+/** Bank recon / expense reimburse — Finance + Director only. */
 const canManageFullFinanceAction = (user: User | null) =>
   !!user && ['director', 'finance_officer'].includes(user.role)
 
@@ -6607,8 +6608,8 @@ const storeCtx: AppState = {
     },
     applyCustomerCreditToInvoice: async (invoiceId, requestedAmount) => {
       const actor = currentUser()
-      if (!canManageFullFinanceAction(actor)) {
-        showToast('Only Finance or Director can apply customer credit', 'error')
+      if (!canApplyCustomerCredit(actor?.role)) {
+        showToast('Only Finance, Admin Officer, or Director can apply customer credit', 'error')
         return
       }
       const inv = invRef.current.find(i => i.id === invoiceId)

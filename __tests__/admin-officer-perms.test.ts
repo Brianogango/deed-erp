@@ -4,6 +4,7 @@ import {
   canPayOwnPostedInvoice,
   canManageBankRecon,
   canCancelOrResetInvoice,
+  canApplyCustomerCredit,
   canReimburseExpense,
   mergeAppendOnlyJournals,
   paymentJournalRef,
@@ -49,8 +50,9 @@ describe('hybrid finance seals', () => {
     expect(result.reason).toMatch(/pay vendor bills/)
   })
 
-  it('lets admin officer cancel or reset invoices but not bank recon or expense reimbursement', () => {
+  it('lets admin officer cancel/reset invoices and apply customer credit', () => {
     expect(canCancelOrResetInvoice('admin_officer')).toBe(true)
+    expect(canApplyCustomerCredit('admin_officer')).toBe(true)
     expect(canManageBankRecon('admin_officer')).toBe(false)
     expect(canManageBankRecon('finance_officer')).toBe(true)
     expect(canReimburseExpense('admin_officer')).toBe(false)

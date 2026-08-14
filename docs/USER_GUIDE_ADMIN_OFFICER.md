@@ -35,7 +35,7 @@ You run day-to-day commercial and ops workflows. You do **not** manage system us
 1. **Sales** → create a quotation with lines (product or description).
 2. Send to the customer (**Quotation Sent**).
 3. When accepted, confirm to **Sales Order**.
-4. Request Finance/Director help if you need bank recon or to apply a customer credit.
+4. Request Finance/Director help if you need bank recon.
 
 ### 3. Purchase order and GRN
 
@@ -50,7 +50,7 @@ You run day-to-day commercial and ops workflows. You do **not** manage system us
 2. Post it — Admin Officers may post customer invoices and vendor bills with no amount cap.
 3. Record payment on **customer** invoices. Vendor bill payment stays **Finance/Director**.
 
-Vendor bills may be **posted** and invoices may be **cancelled or reset to draft** by Admin Officers. Paying vendor bills, bank reconciliation, applying customer credit notes, and expense reimbursement are **Finance/Director only**.
+Vendor bills may be **posted**, invoices may be **cancelled or reset to draft**, and existing **customer credit may be applied** by Admin Officers. Paying vendor bills, bank reconciliation, and expense reimbursement are **Finance/Director only**.
 
 ### 5. Delivery
 
@@ -73,5 +73,5 @@ Vendor bills may be **posted** and invoices may be **cancelled or reset to draft
 | View full audit trail | Director |
 | Pay vendor bills | Finance / Director |
 | Bank recon | Finance / Director |
-| Apply customer credit / expense reimbursement | Finance / Director |
+| Expense reimbursement | Finance / Director |
 | Manage payroll employees as HR admin | Director / Finance (payroll approve differs) |
