@@ -3,18 +3,35 @@
  * Display-only: never writes invoices, repairs, or company settings.
  */
 
-export const PACKAGED_POS_RECEIPT_LOGO = '/deed-logo.svg'
+/** Official Deed Technologies lockup, already black on white for 80mm thermal. */
+export const PACKAGED_POS_RECEIPT_LOGO = '/deed-logo-receipt.png'
+const PLACEHOLDER_ERP_MARK = '/deed-logo.svg'
 
 export function isWalkInCustomerName(name?: string | null): boolean {
   const normalized = (name || '').trim().toLowerCase().replace(/[_-]+/g, ' ')
   return !normalized || normalized === 'walk in' || normalized === 'walk in customer'
 }
 
-/** Prefer the packaged SVG — `/deed-logo.png` is not in the repo and 404s. */
+/**
+ * Use an uploaded Settings logo when it is a real image. Never print the
+ * three-bar "deed ERP SYSTEM" placeholder — that is not the company mark.
+ */
 export function receiptLogoSrc(logoUrl?: string | null): string {
   const url = (logoUrl || '').trim()
   if (!url) return PACKAGED_POS_RECEIPT_LOGO
-  if (url === '/deed-logo.png' || url.endsWith('/deed-logo.png')) return PACKAGED_POS_RECEIPT_LOGO
+  if (url.startsWith('data:image/')) return url
+  // Packaged brand files: print the black-on-white lockup, never the
+  // three-bar ERP mark or the dark-background 3D login art.
+  if (
+    url === PLACEHOLDER_ERP_MARK
+    || url.endsWith('/deed-logo.svg')
+    || url.endsWith('/deed-logo.png')
+    || url.endsWith('/deed-logo-square.png')
+    || url.endsWith('/deed-logo-inverted.png')
+    || url.endsWith('/deed-logo-transparent.png')
+  ) {
+    return PACKAGED_POS_RECEIPT_LOGO
+  }
   return url
 }
 
@@ -77,12 +94,18 @@ export async function darkenLogoForThermalPrint(src: string): Promise<string> {
       const alpha = data[i + 3]
       if (alpha === 0) continue
       const gray = 0.2126 * data[i] + 0.7152 * data[i + 1] + 0.0722 * data[i + 2]
-      // Push midtones down so cyan/navy marks read as black on 80mm paper.
-      const dark = Math.max(0, Math.min(255, (gray - 40) * 0.42))
-      data[i] = dark
-      data[i + 1] = dark
-      data[i + 2] = dark
-      data[i + 3] = alpha > 20 ? 255 : alpha
+      // Near-white stays paper-white; every inked pixel goes to true black.
+      if (gray > 235) {
+        data[i] = 255
+        data[i + 1] = 255
+        data[i + 2] = 255
+        data[i + 3] = 255
+      } else {
+        data[i] = 0
+        data[i + 1] = 0
+        data[i + 2] = 0
+        data[i + 3] = 255
+      }
     }
     ctx.putImageData(pixels, 0, 0)
     return canvas.toDataURL('image/png')

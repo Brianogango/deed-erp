@@ -16,9 +16,11 @@ describe('isWalkInCustomerName', () => {
 })
 
 describe('receiptLogoSrc', () => {
-  it('falls back to the packaged SVG when Settings has no logo', () => {
+  it('uses the black Deed Technologies lockup, not the ERP placeholder bars', () => {
+    expect(PACKAGED_POS_RECEIPT_LOGO).toBe('/deed-logo-receipt.png')
     expect(receiptLogoSrc('')).toBe(PACKAGED_POS_RECEIPT_LOGO)
     expect(receiptLogoSrc(null)).toBe(PACKAGED_POS_RECEIPT_LOGO)
+    expect(receiptLogoSrc('/deed-logo.svg')).toBe(PACKAGED_POS_RECEIPT_LOGO)
     expect(receiptLogoSrc('/deed-logo.png')).toBe(PACKAGED_POS_RECEIPT_LOGO)
   })
 

@@ -74,11 +74,11 @@ function ReceiptPrintView({
             className="print-receipt-logo"
             style={{
               display: 'block',
-              maxHeight: 168,
-              maxWidth: '96%',
+              maxHeight: 210,
+              maxWidth: '100%',
               width: 'auto',
               height: 'auto',
-              margin: '0 auto 8px',
+              margin: '0 auto 10px',
               objectFit: 'contain',
             }}
             alt="Logo"
@@ -203,8 +203,8 @@ function ReceiptPrintView({
           .print-receipt-logo {
             visibility: visible !important;
             display: block !important;
-            max-height: 42mm !important;
-            max-width: 72mm !important;
+            max-height: 56mm !important;
+            max-width: 74mm !important;
             width: auto !important;
             height: auto !important;
             filter: none !important;
