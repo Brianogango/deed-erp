@@ -2,7 +2,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { useCommerceStore, useInventoryStore, fmtKes, fmtDate, isPosBankPayment } from '@/lib/store'
 import { Modal, Field, Input, Select, Badge, ModuleSkeleton } from '@/components/ui'
-import { DataTable, type ColumnDef } from '@/components/data-table'
+import { PosTransactionHistory } from '@/components/pos/PosTransactionHistory'
 import {
   Fa, faCashRegister, faReceipt, faCamera, faCartShopping, faStar,
   faCircleCheck, faPrint, faMobileScreenButton, faMoneyBillWave, faBuildingColumns,
@@ -463,19 +463,19 @@ export default function PointOfSale() {
                  <button className="btn-secondary text-[10px] py-1 px-3" onClick={() => setShowHistory(true)}>
                    <Fa icon={faReceipt} /> Transaction History
                  </button>
-                 <button className="btn-outline text-[10px] py-1 px-3" style={{ color: 'var(--danger)', borderColor: '#FCA5A5' }}
+                 <button className="btn-outline text-[10px] py-1 px-3" style={{ color: 'var(--danger)', borderColor: 'color-mix(in srgb, var(--danger) 40%, transparent)' }}
                    onClick={() => setShowCloseSession(true)}>Close Session</button>
                </div>
             </div>
 
             {orphanedSession && (
-              <div className="p-3 rounded-xl text-xs border" style={{ background: '#FEF3F2', borderColor: '#FECDCA', color: '#B42318' }}>
+              <div className="p-3 rounded-xl text-xs border" style={{ background: 'var(--danger-bg)', borderColor: 'color-mix(in srgb, var(--danger) 24%, transparent)', color: 'var(--danger-text)' }}>
                 <p className="font-bold mb-1">Session state is stuck</p>
                 <p className="mb-2">The till shows open but the session id is missing, so Close Session could not settle. Clear it, then open a fresh session.</p>
                 <button
                   type="button"
                   className="btn-primary text-[10px] py-1.5 px-3"
-                  style={{ background: '#F04438' }}
+                  style={{ background: 'var(--danger)' }}
                   disabled={closingSession}
                   onClick={() => {
                     setClosingSession(true)
@@ -491,7 +491,7 @@ export default function PointOfSale() {
               </div>
             )}
             {/* Scanner bar */}
-            <div className="flex gap-2 items-center p-3 rounded-xl" style={{ background: 'var(--info-bg)', border: '1px solid #C7D2FE' }}>
+            <div className="flex gap-2 items-center p-3 rounded-xl" style={{ background: 'var(--info-bg)', border: '1px solid color-mix(in srgb, var(--info) 35%, transparent)' }}>
               <button
                 type="button"
                 className="min-w-[44px] min-h-[44px] flex items-center justify-center flex-shrink-0 hover:scale-110 transition-transform cursor-pointer"
@@ -560,7 +560,7 @@ export default function PointOfSale() {
                         <p className="text-[11px] sm:text-xs font-black text-brand-blue">{fmtKes(p.salePrice)}</p>
                         <p className="text-[9px] font-bold text-t4">{getSellableQty(p.id, p.requiresSerial)} in stock</p>
                       </div>
-                      {p.requiresSerial && <div className="absolute top-2 right-2 badge badge-indigo text-[8px] px-1 py-0">SERIAL</div>}
+                      {p.requiresSerial && <div className="absolute top-2 right-2 badge badge-indigo text-[9px] px-1 py-0">SERIAL</div>}
                     </div>
                   )
                 })}
@@ -720,7 +720,7 @@ export default function PointOfSale() {
                 disabled={cart.length === 0 || charging}
                 style={{
                   background: cart.length > 0 ? 'var(--success)' : 'var(--border-lt)',
-                  color: cart.length > 0 ? '#fff' : 'var(--text-3)',
+                  color: cart.length > 0 ? '#FFFFFF' : 'var(--text-3)',
                   cursor: cart.length > 0 && !charging ? 'pointer' : 'default',
                 }}
               >
@@ -733,7 +733,7 @@ export default function PointOfSale() {
           {receiptOrder && (
             <Modal title="Order Complete" subtitle="Transaction successful" width={480} onClose={() => setReceiptOrder(null)}>
               {/* Receipt content is now in ReceiptPrintView, we can just show a summary here */}
-              <div className="text-center py-4"><div className="text-5xl mb-4" style={{ color: 'var(--success)' }} aria-hidden="true"><Fa icon={faCircleCheck} /></div><p className="text-lg font-semibold mb-2">{(isPosBankPayment(receiptOrder.payment) ? 'BANK' : receiptOrder.payment.toUpperCase())} Payment Received</p>{receiptOrder.paymentReference ? <p className="text-xs text-t3 mt-1">Ref: {receiptOrder.paymentReference}</p> : null}<p className="text-3xl font-bold font-mono" style={{ color: 'var(--success)' }}>{fmtKes(receiptOrder.total)}</p>{receiptOrder.pointsEarned ? (<p className="text-sm font-semibold mt-2" style={{ color: '#4F46E5' }}><Fa icon={faStar} /> +{receiptOrder.pointsEarned} Loyalty Points Earned!</p>) : null}</div>
+              <div className="text-center py-4"><div className="text-5xl mb-4" style={{ color: 'var(--success)' }} aria-hidden="true"><Fa icon={faCircleCheck} /></div><p className="text-lg font-semibold mb-2">{(isPosBankPayment(receiptOrder.payment) ? 'BANK' : receiptOrder.payment.toUpperCase())} Payment Received</p>{receiptOrder.paymentReference ? <p className="text-xs text-t3 mt-1">Ref: {receiptOrder.paymentReference}</p> : null}<p className="text-3xl font-bold font-mono" style={{ color: 'var(--success)' }}>{fmtKes(receiptOrder.total)}</p>{receiptOrder.pointsEarned ? (<p className="text-sm font-semibold mt-2" style={{ color: 'var(--navy)' }}><Fa icon={faStar} /> +{receiptOrder.pointsEarned} Loyalty Points Earned!</p>) : null}</div>
               <div className="flex gap-2 justify-end flex-wrap">
                 <button className="btn-outline min-h-[40px] flex-1 sm:flex-none" onClick={() => setIsPrinting(true)}><Fa icon={faPrint} /> Print Receipt</button>
                 <button className="btn-primary min-h-[40px] flex-1 sm:flex-none" onClick={() => { setReceiptOrder(null); scanRef.current?.focus() }}>New Order</button>
@@ -759,14 +759,14 @@ export default function PointOfSale() {
                   <p>Cash / M-Pesa / Bank: <strong className="font-mono">{fmtKes(totalCash)}</strong> · <strong className="font-mono">{fmtKes(totalMpesa)}</strong> · <strong className="font-mono">{fmtKes(totalBank)}</strong></p>
                   <p>Opening cash: <strong className="font-mono">{fmtKes(posSessionOpeningCash)}</strong></p>
                   <p>Expected cash: <strong className="font-mono">{fmtKes(expectedCash)}</strong></p>
-                  <p>Variance: <strong className="font-mono" style={{ color: variance === 0 ? 'var(--success)' : '#F04438' }}>{fmtKes(variance)}</strong></p>
+                  <p>Variance: <strong className="font-mono" style={{ color: variance === 0 ? 'var(--success)' : 'var(--danger)' }}>{fmtKes(variance)}</strong></p>
                   <p className="text-[10px] text-t3 mt-1">Closing posts a session journal (tender totals + cash over/short). Each sale already decremented stock and posted revenue.</p>
                 </div>
                 <div className="flex gap-2 justify-end">
                   <button className="btn-outline" onClick={() => setShowCloseSession(false)}>Cancel</button>
                   <button
                     className="btn-primary"
-                    style={{ background: '#F04438' }}
+                    style={{ background: 'var(--danger)' }}
                     disabled={closingSession}
                     onClick={() => {
                       setClosingSession(true)
@@ -789,52 +789,9 @@ export default function PointOfSale() {
           {/* History modal */}
           {showHistory && (
             <Modal title="POS Transactions History" onClose={() => setShowHistory(false)} width={740}>
-              <DataTable
-                tableId="pos-transactions-history"
-                columns={[
-                  {
-                    key: 'ref', label: 'Receipt Ref', priority: 1, width: '110px',
-                    render: o => <span className="font-mono text-[11px] font-bold text-brand-navy">{o.ref}</span>,
-                    exportValue: o => o.ref,
-                  },
-                  {
-                    key: 'customer', label: 'Customer', priority: 1, width: '1fr',
-                    render: o => <span className="text-xs truncate">{o.customerName || 'Walk-in'}</span>,
-                    exportValue: o => o.customerName || 'Walk-in',
-                  },
-                  {
-                    key: 'date', label: 'Date & Time', priority: 2, width: '110px',
-                    render: o => (
-                      <span className="text-[10px] text-t3">
-                        {fmtDate(o.date)}{o.createdAt ? ` ${new Date(o.createdAt).toLocaleTimeString('en-KE', { hour: '2-digit', minute: '2-digit' })}` : ''}
-                      </span>
-                    ),
-                    exportValue: o => o.date,
-                  },
-                  {
-                    key: 'payment', label: 'Payment', priority: 2, width: '80px',
-                    render: o => <span className="text-[10px] uppercase font-semibold">{isPosBankPayment(o.payment) ? 'bank' : o.payment}</span>,
-                    exportValue: o => isPosBankPayment(o.payment) ? 'bank' : o.payment,
-                  },
-                  {
-                    key: 'total', label: 'Total', priority: 1, width: '100px', align: 'right',
-                    render: o => <span className="font-mono text-[11px] font-bold text-emerald-600">{fmtKes(o.total)}</span>,
-                    exportValue: o => o.total,
-                  },
-                ] as ColumnDef<(typeof posOrders)[number]>[]}
-                rows={posOrders}
-                rowKey={o => o.id}
-                searchPlaceholder="Search receipt, customer…"
-                emptyMessage="No transactions found."
-                perPage={50}
-                rowActions={o => (
-                  <button
-                    className="btn-secondary text-[10px] py-1"
-                    onClick={() => { setReceiptOrder(o); setIsPrinting(true); setShowHistory(false) }}
-                  >
-                    <Fa icon={faPrint} /> Reprint
-                  </button>
-                )}
+              <PosTransactionHistory
+                orders={posOrders}
+                onReprint={o => { setReceiptOrder(o); setIsPrinting(true); setShowHistory(false) }}
               />
             </Modal>
           )}
