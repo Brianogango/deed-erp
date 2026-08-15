@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest'
 import {
   hasActivePosSession,
   isOrphanedPosSession,
+  mergePosSessionsStoreWrite,
+  reconcileOpenPosSessionFlags,
   resolveOpenPosSessionId,
 } from '@/lib/pos-session'
 
@@ -72,5 +74,75 @@ describe('resolveOpenPosSessionId', () => {
       posSessionId: 'sess-overnight',
       posSessions: [{ id: 'sess-overnight', status: 'open', openedAt: '2026-08-13T08:00:00.000Z' }],
     })).toBe(true)
+  })
+
+  it('recovers the live open session when the explicit id was already closed', () => {
+    expect(resolveOpenPosSessionId({
+      posSessionOpen: true,
+      posSessionId: 'stale-closed',
+      posSessions: [
+        { id: 'stale-closed', status: 'closed' },
+        { id: 'live', status: 'open' },
+      ],
+    })).toBe('live')
+  })
+})
+
+describe('mergePosSessionsStoreWrite', () => {
+  it('keeps the live till a stale shorter client list omitted', () => {
+    const current = [
+      { id: 's19', ref: 'POSSESS/0019', status: 'open', openedAt: '2026-08-15T06:16:19.000Z' },
+      { id: 's13', ref: 'POSSESS/0013', status: 'closed' },
+    ]
+    const incoming = [
+      { id: 's14', ref: 'POSSESS/0014', status: 'open', openedAt: '2026-08-14T15:23:41.000Z' },
+      { id: 's13', ref: 'POSSESS/0013', status: 'closed' },
+    ]
+    const merged = mergePosSessionsStoreWrite(current, incoming)
+    expect(merged.map(s => s.id)).toEqual(['s14', 's13', 's19'])
+    expect(merged.find(s => s.id === 's19')?.status).toBe('open')
+  })
+
+  it('lets Close Session mark the live id closed', () => {
+    const current = [{ id: 's19', status: 'open' }]
+    const incoming = [{ id: 's19', status: 'closed', closedAt: '2026-08-15T08:00:00.000Z' }]
+    const merged = mergePosSessionsStoreWrite(current, incoming)
+    expect(merged).toEqual([expect.objectContaining({ id: 's19', status: 'closed' })])
+  })
+
+  it('ignores an empty incoming payload', () => {
+    const current = [{ id: 's19', status: 'open' }]
+    expect(mergePosSessionsStoreWrite(current, [])).toEqual(current)
+    expect(mergePosSessionsStoreWrite(current, null)).toEqual(current)
+  })
+})
+
+describe('reconcileOpenPosSessionFlags', () => {
+  it('pins the live till when a stale tab sends an older session id', () => {
+    const merged = mergePosSessionsStoreWrite(
+      [{ id: 's19', status: 'open' }],
+      [{ id: 's14', status: 'open' }],
+    )
+    expect(reconcileOpenPosSessionFlags({
+      currentOpen: true,
+      currentId: 's19',
+      incomingOpen: true,
+      incomingId: 's14',
+      mergedSessions: merged,
+    })).toEqual({ pinLiveTill: true, posSessionOpen: true, posSessionId: 's19' })
+  })
+
+  it('does not pin after Close Session closes the live id', () => {
+    const merged = mergePosSessionsStoreWrite(
+      [{ id: 's19', status: 'open' }],
+      [{ id: 's19', status: 'closed' }],
+    )
+    expect(reconcileOpenPosSessionFlags({
+      currentOpen: true,
+      currentId: 's19',
+      incomingOpen: false,
+      incomingId: null,
+      mergedSessions: merged,
+    })).toEqual({ pinLiveTill: false, posSessionOpen: false, posSessionId: null })
   })
 })

@@ -10,6 +10,7 @@ import { preserveInvoiceLinesOnStoreWrite, enforcePostedInvoiceImmutability, typ
 import { mergeProductsStoreWrite } from '@/lib/catalog-merge'
 import { mergeSaleOrdersStoreWrite } from '@/lib/sale-order-store-merge'
 import { mergePosOrdersStoreWrite } from '@/lib/pos-orders-merge'
+import { mergePosSessionsStoreWrite, reconcileOpenPosSessionFlags } from '@/lib/pos-session'
 import { appendStoreAudit } from '@/lib/store-audit'
 import crypto from 'crypto'
 
@@ -24,6 +25,7 @@ const PROTECTED_NON_EMPTY_ARRAY_KEYS = new Set<string>([
   'deed_products',
   'deed_saleOrders',
   'deed_posOrders',
+  'deed_posSessions',
 ])
 
 function parseArrayLength(serializedValue: string): number | null {
@@ -232,6 +234,13 @@ export async function POST(request: Request) {
         entries[key] = JSON.stringify(mergePosOrdersStoreWrite(currentState[key], incoming))
         continue
       }
+      // POS sessions: union-by-id so a stale tab cannot drop the live till.
+      if (key === 'deed_posSessions' && entries[key]) {
+        let incoming: unknown
+        try { incoming = JSON.parse(entries[key]) } catch { continue }
+        entries[key] = JSON.stringify(mergePosSessionsStoreWrite(currentState[key], incoming))
+        continue
+      }
       // Sale orders: merge by id + lockVersion so a stale tab cannot restore
       // deleted quotation lines after a newer Save/broadcast.
       if (key === 'deed_saleOrders' && entries[key]) {
@@ -266,6 +275,36 @@ export async function POST(request: Request) {
           }
         }
       }
+    }
+  }
+
+  // Keep the live till attached when a stale tab syncs an older session blob.
+  if ('deed_posSessions' in entries || 'deed_posSessionId' in entries || 'deed_posSessionOpen' in entries) {
+    const currentTill = await loadAppState(['deed_posSessions', 'deed_posSessionId', 'deed_posSessionOpen'])
+    let mergedSessions = Array.isArray(currentTill.deed_posSessions) ? currentTill.deed_posSessions : []
+    if (entries.deed_posSessions) {
+      try {
+        mergedSessions = JSON.parse(entries.deed_posSessions)
+      } catch {
+        mergedSessions = Array.isArray(currentTill.deed_posSessions) ? currentTill.deed_posSessions : []
+      }
+    }
+    const incomingId = 'deed_posSessionId' in entries
+      ? (() => { try { return JSON.parse(entries.deed_posSessionId) } catch { return undefined } })()
+      : undefined
+    const incomingOpen = 'deed_posSessionOpen' in entries
+      ? (() => { try { return JSON.parse(entries.deed_posSessionOpen) } catch { return undefined } })()
+      : undefined
+    const flags = reconcileOpenPosSessionFlags({
+      currentOpen: currentTill.deed_posSessionOpen === true,
+      currentId: typeof currentTill.deed_posSessionId === 'string' ? currentTill.deed_posSessionId : null,
+      incomingOpen: typeof incomingOpen === 'boolean' ? incomingOpen : undefined,
+      incomingId: incomingId === null || typeof incomingId === 'string' ? incomingId : undefined,
+      mergedSessions,
+    })
+    if (flags.pinLiveTill) {
+      entries.deed_posSessionOpen = JSON.stringify(true)
+      entries.deed_posSessionId = JSON.stringify(flags.posSessionId)
     }
   }
 

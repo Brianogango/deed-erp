@@ -4,6 +4,7 @@ import { createContext, useContext, useState, useCallback, useEffect, ReactNode,
 import {
   hasActivePosSession,
   isPosBankPayment,
+  mergePosSessionsRemoteState,
   resolveOpenPosSessionId,
 } from '@/lib/pos-session'
 export { isPosBankPayment }
@@ -5533,7 +5534,9 @@ export function StoreProvider({
   const [posSessionOpen, setPosSessionOpen] = useLS<boolean>('deed_posSessionOpen', false)
   const [posSessionOpeningCash, setPosSessionOpeningCash] = useLS<number>('deed_posSessionOpeningCash', 0)
   const [posSessionId, setPosSessionId] = useLS<string | null>('deed_posSessionId', null)
-  const [posSessions, setPosSessions] = useLS<POSSession[]>('deed_posSessions', [])
+  const [posSessions, setPosSessions] = useLS<POSSession[]>('deed_posSessions', [], {
+    mergeRemote: (local, remote) => mergePosSessionsRemoteState(local as POSSession[], remote as POSSession[]),
+  })
 
   // Keep the till open until Close Session. If the open flag survived without
   // a session id, recover it from history so Charge / Close still work.
