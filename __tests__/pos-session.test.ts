@@ -15,14 +15,16 @@ describe('resolveOpenPosSessionId', () => {
   })
 
   it('recovers id from open session history when flag is set', () => {
-    expect(resolveOpenPosSessionId({
+    const opts = {
       posSessionOpen: true,
-      posSessionId: null,
+      posSessionId: null as string | null,
       posSessions: [
         { id: 'closed-1', status: 'closed' },
         { id: 'open-1', status: 'open' },
       ],
-    })).toBe('open-1')
+    }
+    expect(resolveOpenPosSessionId(opts)).toBe('open-1')
+    expect(isOrphanedPosSession(opts)).toBe(false)
   })
 
   it('returns null for orphaned open flag', () => {
