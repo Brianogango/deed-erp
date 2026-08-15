@@ -112,6 +112,7 @@ function mapInvoiceItems(lines: any[]) {
       lineTotal: money.lineTotal,
       sortOrder: index,
       ...(optionalUuid(l.productId) ? { productId: optionalUuid(l.productId) } : {}),
+      ...(optionalUuid(l.serialNumberId ?? l.serialId) ? { serialNumberId: optionalUuid(l.serialNumberId ?? l.serialId) } : {}),
     }
   })
 }
