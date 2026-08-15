@@ -13,20 +13,54 @@ import { matchPosScan, normalizeScanCode } from '@/lib/barcode-scan'
 import { isOrphanedPosSession } from '@/lib/pos-session'
 import { loyaltyPointsEarned } from '@/lib/loyalty'
 import { resolvePosLineSerial } from '@/lib/pos-transaction-history'
+import {
+  darkenLogoForThermalPrint,
+  receiptLogoSrc,
+  resolvePosReceiptCustomer,
+} from '@/lib/pos-receipt-print'
 
-function ReceiptPrintView({ order, companySettings, bankAccounts, serials = [], stockMoves = [], onDone }: { order: any, companySettings: any, bankAccounts?: { id: string; name: string }[], serials?: { id: string; serial?: string }[], stockMoves?: { documentRef?: string; productId?: string; serialNumbers?: string[] }[], onDone: () => void }) {
+function ReceiptPrintView({
+  order,
+  companySettings,
+  bankAccounts,
+  serials = [],
+  stockMoves = [],
+  invoices = [],
+  onDone,
+}: {
+  order: any
+  companySettings: any
+  bankAccounts?: { id: string; name: string }[]
+  serials?: { id: string; serial?: string }[]
+  stockMoves?: { documentRef?: string; productId?: string; serialNumbers?: string[] }[]
+  invoices?: { id?: string; ref?: string; partnerName?: string; notes?: string }[]
+  onDone: () => void
+}) {
+  const [logoSrc, setLogoSrc] = useState<string | null>(null)
+  const buyerName = resolvePosReceiptCustomer(order, invoices)
+
   useEffect(() => {
+    let cancelled = false
+    const candidate = receiptLogoSrc(companySettings?.logoUrl)
+    void darkenLogoForThermalPrint(candidate).then(src => {
+      if (!cancelled) setLogoSrc(src)
+    })
+    return () => { cancelled = true }
+  }, [companySettings?.logoUrl])
+
+  useEffect(() => {
+    if (!logoSrc) return
     const handleAfterPrint = () => {
       onDone()
       window.removeEventListener('afterprint', handleAfterPrint)
     }
     window.addEventListener('afterprint', handleAfterPrint)
-    const timer = setTimeout(() => window.print(), 300)
+    const timer = setTimeout(() => window.print(), 250)
     return () => {
       clearTimeout(timer)
       window.removeEventListener('afterprint', handleAfterPrint)
     }
-  }, [onDone])
+  }, [logoSrc, onDone])
 
   return (
     <div
@@ -34,28 +68,23 @@ function ReceiptPrintView({ order, companySettings, bankAccounts, serials = [], 
       style={{ fontFamily: 'monospace', fontSize: '12px', width: '300px', margin: '0 auto', padding: '16px', color: 'var(--text-1)' }}
     >
       <div className="text-center pb-4 mb-4" style={{ borderBottom: '1px dashed var(--border)' }}>
-        {companySettings.logoUrl ? (
+        {logoSrc ? (
           <img
-            src={companySettings.logoUrl}
+            src={logoSrc}
             className="print-receipt-logo"
             style={{
               display: 'block',
-              maxHeight: 110,
-              maxWidth: '92%',
+              maxHeight: 168,
+              maxWidth: '96%',
               width: 'auto',
               height: 'auto',
-              margin: '0 auto 10px',
+              margin: '0 auto 8px',
               objectFit: 'contain',
-              // Darken light/brand logos so they read clearly on thermal print.
-              filter: 'grayscale(1) contrast(1.45) brightness(0.45)',
-              WebkitFilter: 'grayscale(1) contrast(1.45) brightness(0.45)',
             }}
             alt="Logo"
           />
-        ) : (
-          <h2 className="font-bold text-lg mb-1">{companySettings.name}</h2>
-        )}
-        {companySettings.logoUrl && <h2 className="font-bold text-sm mb-1">{companySettings.name}</h2>}
+        ) : null}
+        <h2 className="font-bold text-sm mb-1">{companySettings.name}</h2>
         <p>{companySettings.address}, {companySettings.city}</p>
         <p>Tel: {companySettings.phone}</p>
         {companySettings.kraPin && <p>PIN: {companySettings.kraPin}</p>}
@@ -64,7 +93,7 @@ function ReceiptPrintView({ order, companySettings, bankAccounts, serials = [], 
         <div>
           <p>Receipt: <strong>{order.ref}</strong></p>
           <p>Cashier: {order.createdByName || 'System'}</p>
-          {order.customerName && <p>Customer: {order.customerName}</p>}
+          <p>Customer: {buyerName}</p>
         </div>
         <div className="text-right">
           <p>Date: {fmtDate(order.date)}</p>
@@ -170,15 +199,19 @@ function ReceiptPrintView({ order, companySettings, bankAccounts, serials = [], 
             background: white !important;
             box-shadow: none !important;
           }
+          .print-receipt-container img,
           .print-receipt-logo {
-            max-height: 28mm !important;
-            max-width: 70mm !important;
+            visibility: visible !important;
+            display: block !important;
+            max-height: 42mm !important;
+            max-width: 72mm !important;
             width: auto !important;
             height: auto !important;
-            filter: grayscale(1) contrast(1.45) brightness(0.45) !important;
-            -webkit-filter: grayscale(1) contrast(1.45) brightness(0.45) !important;
+            filter: none !important;
+            -webkit-filter: none !important;
             print-color-adjust: exact !important;
             -webkit-print-color-adjust: exact !important;
+            color-adjust: exact !important;
           }
           .no-print-area,
           .no-print-area * {
@@ -195,7 +228,7 @@ export default function PointOfSale() {
   const [mounted, setMounted] = useState(() => typeof window !== 'undefined')
   useEffect(() => { setMounted(true) }, [])
 
-  const { products, serials, contacts, createPOSOrder, posOrders, openPOSSession, closePOSSession, posSessionOpen, posSessionOpeningCash, posSessionId, posSessions, showToast, companySettings, getCustomerCreditStatus, bankAccounts } = useCommerceStore()
+  const { products, serials, contacts, invoices, createPOSOrder, posOrders, openPOSSession, closePOSSession, posSessionOpen, posSessionOpeningCash, posSessionId, posSessions, showToast, companySettings, getCustomerCreditStatus, bankAccounts } = useCommerceStore()
   const tenderBanks = bankAccounts.filter(b => b.active && b.id !== 'mpesa' && b.id !== 'cash')
   const { getStockByLocation, stockMoves } = useInventoryStore()
 
@@ -208,6 +241,7 @@ export default function PointOfSale() {
   const [paymentReference, setPaymentReference] = useState('')
   const [customerId, setCustomerId] = useState('')
   const [customerName, setCustomerName] = useState('')
+  const [walkInBuyerName, setWalkInBuyerName] = useState('')
   const [showOpenSession, setShowOpenSession] = useState(false)
   const [showCloseSession, setShowCloseSession] = useState(false)
   const [openingCash, setOpeningCash] = useState('50000')
@@ -405,7 +439,7 @@ export default function PointOfSale() {
         })) as any,
         payMethod,
         customerId || undefined,
-        customerName || undefined,
+        (customerName || walkInBuyerName.trim()) || undefined,
         pointsToRedeem || 0,
         applyVat,
         payMethod === 'bank'
@@ -417,6 +451,7 @@ export default function PointOfSale() {
         setCart([])
         setCustomerId('')
         setCustomerName('')
+        setWalkInBuyerName('')
         setRedeemPoints('')
         setPaymentReference('')
         setReceiptOrder(order)
@@ -431,7 +466,7 @@ export default function PointOfSale() {
   useEffect(() => { scanRef.current?.focus() }, [posSessionOpen])
 
   if (!mounted) return <ModuleSkeleton />
-  if (isPrinting && receiptOrder) return <ReceiptPrintView order={receiptOrder} companySettings={companySettings} bankAccounts={bankAccounts} serials={serials} stockMoves={stockMoves} onDone={() => setIsPrinting(false)} />
+  if (isPrinting && receiptOrder) return <ReceiptPrintView order={receiptOrder} companySettings={companySettings} bankAccounts={bankAccounts} serials={serials} stockMoves={stockMoves} invoices={invoices} onDone={() => setIsPrinting(false)} />
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
@@ -655,11 +690,21 @@ export default function PointOfSale() {
                     const c = customers.find(x => x.id === e.target.value)
                     setCustomerId(e.target.value)
                     setCustomerName(c?.name || '')
+                    if (e.target.value) setWalkInBuyerName('')
                   }}>
                     <option value="">Walk-in Customer</option>
                     {customers.map(c => <option key={c.id} value={c.id}>{c.name} ({c.phone || 'no phone'})</option>)}
                   </select>
                 </Field>
+                {!customerId && (
+                  <Field label="Buyer name">
+                    <Input
+                      value={walkInBuyerName}
+                      onChange={setWalkInBuyerName}
+                      placeholder="Name on the receipt"
+                    />
+                  </Field>
+                )}
                 {customerInfo && (customerInfo.loyaltyPoints || 0) > 0 && (
                   <div className="p-3 rounded-xl border border-indigo-200 bg-indigo-50 animate-in zoom-in-95 duration-200">
                     <div className="flex justify-between items-center mb-2">
