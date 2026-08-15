@@ -84,7 +84,7 @@ export function mergePosSessionsStoreWrite(current: unknown, incoming: unknown):
 }
 
 export function mergePosSessionsRemoteState<P extends { id?: string }>(local: P[], remote: P[]): P[] {
-  const merged = mergePosSessionsStoreWrite(local, remote) as P[]
+  const merged = mergePosSessionsStoreWrite(local, remote) as unknown as P[]
   if (!Array.isArray(merged)) return local
   return JSON.stringify(merged) === JSON.stringify(local) ? local : merged
 }
