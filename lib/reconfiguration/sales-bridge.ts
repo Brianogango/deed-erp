@@ -1,17 +1,12 @@
 /**
- * Sale-order ↔ reconfiguration bridge (Phase E).
+ * Sale-order ↔ reconfiguration helpers.
  *
- * Foolproof rules:
- * 1. Adding a RAM/SSD (reconfig-effect) product line on an SO never mutates
- *    serial.specs or component stock by itself.
- * 2. When a serialized host device line has a serial AND the SO also has one
- *    or more reconfig-effect lines, we create/update a linked draft RCF with
- *    the computed target config.
- * 3. Delivery validate is blocked until that linked RCF is completed
- *    (or cancelled with no remaining effect lines).
- * 4. Specs + inventory change only inside completeWorkOrder (existing path).
- * 5. After RCF complete, the host SO line description is refreshed from the
- *    proposed snapshot displayName.
+ * Sales no longer auto-creates work orders or blocks delivery. Workshop
+ * owns reconfiguration from the Reconfiguration module. These helpers stay
+ * for optional /api/sale-orders/:id/reconfiguration and for refreshing the
+ * host line description after completeWorkOrder.
+ *
+ * Specs + inventory change only inside completeWorkOrder.
  */
 
 import 'server-only'
@@ -273,41 +268,10 @@ export async function syncReconfigurationFromSaleOrder(params: {
 }
 
 /**
- * Block delivery validate when the SO still needs a completed reconfiguration.
+ * Sales no longer gates delivery on reconfiguration. Kept so leftover
+ * callers stay permissive.
  */
-export async function assertSaleOrderReconfigAllowsDelivery(saleOrderId: string | null | undefined) {
-  if (!saleOrderId) return { ok: true as const }
-  const analysis = await analyzeSaleOrderReconfig(saleOrderId)
-  if (!analysis) return { ok: true as const }
-
-  if (analysis.effects.length && !analysis.hostSerialId) {
-    return {
-      ok: false as const,
-      status: 422,
-      error: 'This order has RAM/SSD reconfiguration lines but no device serial is assigned. Assign the host device before delivery.',
-    }
-  }
-
-  if (analysis.workOrder?.status === 'completed' || !analysis.deliveryBlocked) {
-    return { ok: true as const }
-  }
-
-  if (analysis.target && !analysis.workOrder) {
-    return {
-      ok: false as const,
-      status: 422,
-      error: 'This order requires device reconfiguration (RAM/SSD lines). Open the order to sync the work order, complete workshop + QA, then deliver.',
-    }
-  }
-
-  if (analysis.workOrder && analysis.workOrder.status !== 'completed') {
-    return {
-      ok: false as const,
-      status: 422,
-      error: `Cannot deliver — reconfiguration ${analysis.workOrder.ref} is still ${analysis.workOrder.status.replace(/_/g, ' ')}. Complete it so device specs and component stock are updated first.`,
-    }
-  }
-
+export async function assertSaleOrderReconfigAllowsDelivery(_saleOrderId?: string | null) {
   return { ok: true as const }
 }
 
