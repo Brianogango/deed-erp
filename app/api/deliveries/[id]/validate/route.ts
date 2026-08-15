@@ -59,22 +59,6 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
         return { status: 422 as const, error: 'Cannot validate delivery — delivered quantity is 0' }
       }
 
-      // Phase E: block delivery until linked RAM/SSD reconfiguration is completed
-      // so the customer receives the post-upgrade specs and component stock is correct.
-      const saleOrderId = String(previous?.saleOrderId ?? body.saleOrderId ?? '')
-      if (saleOrderId) {
-        try {
-          const { assertSaleOrderReconfigAllowsDelivery } = await import('@/lib/reconfiguration/sales-bridge')
-          const gate = await assertSaleOrderReconfigAllowsDelivery(saleOrderId)
-          if (!gate.ok) {
-            return { status: gate.status as 422, error: gate.error }
-          }
-        } catch (err) {
-          console.error('[deliveries/validate] reconfiguration gate failed:', err)
-          return { status: 422 as const, error: 'Could not verify device reconfiguration status before delivery' }
-        }
-      }
-
       const doneLines = healedLines
         .map((line: any) => ({
           productId: String(line.productId ?? ''),
