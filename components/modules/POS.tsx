@@ -195,7 +195,7 @@ export default function PointOfSale() {
   const [mounted, setMounted] = useState(() => typeof window !== 'undefined')
   useEffect(() => { setMounted(true) }, [])
 
-  const { products, serials, contacts, createPOSOrder, posOrders, openPOSSession, closePOSSession, posSessionOpen, posSessionOpeningCash, posSessionId, showToast, companySettings, getCustomerCreditStatus, bankAccounts } = useCommerceStore()
+  const { products, serials, contacts, createPOSOrder, posOrders, openPOSSession, closePOSSession, posSessionOpen, posSessionOpeningCash, posSessionId, posSessions, showToast, companySettings, getCustomerCreditStatus, bankAccounts } = useCommerceStore()
   const tenderBanks = bankAccounts.filter(b => b.active && b.id !== 'mpesa' && b.id !== 'cash')
   const { getStockByLocation, stockMoves } = useInventoryStore()
 
@@ -371,8 +371,8 @@ export default function PointOfSale() {
   const orphanedSession = isOrphanedPosSession({
     posSessionOpen,
     posSessionId,
-    posSessions: [], // history recovered in store close; UI treats open+missing id as orphan
-  }) || (posSessionOpen && !posSessionId)
+    posSessions,
+  })
 
   const charge = async () => {
     if (cart.length === 0) { showToast('Cart is empty', 'error'); return }
@@ -485,7 +485,7 @@ export default function PointOfSale() {
             {orphanedSession && (
               <div className="p-3 rounded-xl text-xs border" style={{ background: 'var(--danger-bg)', borderColor: 'color-mix(in srgb, var(--danger) 24%, transparent)', color: 'var(--danger-text)' }}>
                 <p className="font-bold mb-1">Session state is stuck</p>
-                <p className="mb-2">The till shows open but the session id is missing, so Close Session could not settle. Clear it, then open a fresh session.</p>
+                <p className="mb-2">The till shows open but no session can be recovered. Clear the flag, then open a fresh session. Do not use this if sales are still going through.</p>
                 <button
                   type="button"
                   className="btn-primary text-[10px] py-1.5 px-3"
