@@ -98,6 +98,15 @@ describe('resolvePosLineSerial', () => {
       serialId: 'sid-1',
     }, [{ id: 'sid-1', serial: '5CD9999XYZ' }])).toBe('5CD9999XYZ')
   })
+
+  it('falls back to the stock move for that receipt when the ticket omitted SN', () => {
+    expect(resolvePosLineSerial(
+      { productName: 'EliteBook', productId: 'elite-1' },
+      [],
+      [{ documentRef: 'POS/0017', productId: 'elite-1', serialNumbers: ['5CG1060M8D'] }],
+      'POS/0017',
+    )).toBe('5CG1060M8D')
+  })
 })
 
 describe('formatPosReceiptProduct', () => {

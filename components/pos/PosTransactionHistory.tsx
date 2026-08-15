@@ -9,15 +9,18 @@ import {
   payLabel,
   ticketLines,
   ticketWhen,
+  type PosStockMoveHint,
 } from '@/lib/pos-transaction-history'
 
 export function PosTransactionHistory({
   orders,
   serials = [],
+  stockMoves = [],
   onReprint,
 }: {
   orders: POSOrder[]
   serials?: { id: string; serial?: string }[]
+  stockMoves?: PosStockMoveHint[]
   onReprint: (order: POSOrder) => void
 }) {
   const [query, setQuery] = useState('')
@@ -53,8 +56,8 @@ export function PosTransactionHistory({
                     {ticketWhen(order)}
                     {order.invoiceRef ? ` · ${order.invoiceRef}` : ''}
                   </p>
-                  <p className="mt-1 truncate text-[12px] font-semibold text-t1" title={ticketLines(order, serials)}>
-                    {ticketLines(order, serials)}
+                  <p className="mt-1 truncate text-[12px] font-semibold text-t1" title={ticketLines(order, serials, stockMoves)}>
+                    {ticketLines(order, serials, stockMoves)}
                   </p>
                   <p className="mt-0.5 text-[11px] text-t3">
                     {order.customerName || 'Walk-in'} · {payLabel(order)}
