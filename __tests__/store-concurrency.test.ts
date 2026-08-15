@@ -139,3 +139,31 @@ describe('P1-SEC-005 — GET /api/store version exposure', () => {
     expect(body.deed_quotes).toEqual([{ id: 'q1' }])
   })
 })
+
+describe('POS till store writes', () => {
+  it('keeps the live session when a stale tab posts an older till blob', async () => {
+    mockLoadAppState.mockImplementation(async (keys?: string[]) => {
+      if (!keys || keys.includes('deed_posSessions') || keys.includes('deed_posSessionId')) {
+        return {
+          deed_posSessions: [{ id: 's19', ref: 'POSSESS/0019', status: 'open' }],
+          deed_posSessionId: 's19',
+          deed_posSessionOpen: true,
+        }
+      }
+      return {}
+    })
+    const res = await STORE_POST(postReq({
+      deed_posSessions: JSON.stringify([{ id: 's14', ref: 'POSSESS/0014', status: 'open' }]),
+      deed_posSessionId: JSON.stringify('s14'),
+      deed_posSessionOpen: JSON.stringify(true),
+    }))
+    expect(res.status).toBe(200)
+    expect(mockSaveStoreKeys).toHaveBeenCalled()
+    const saved = mockSaveStoreKeys.mock.calls[0][0] as Record<string, string>
+    const sessions = JSON.parse(saved.deed_posSessions) as Array<{ id: string; status: string }>
+    expect(sessions.map(s => s.id).sort()).toEqual(['s14', 's19'])
+    expect(sessions.find(s => s.id === 's19')?.status).toBe('open')
+    expect(JSON.parse(saved.deed_posSessionId)).toBe('s19')
+    expect(JSON.parse(saved.deed_posSessionOpen)).toBe(true)
+  })
+})
