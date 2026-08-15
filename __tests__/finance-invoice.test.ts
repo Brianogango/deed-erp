@@ -5,6 +5,7 @@ import {
   clampAmountPaid,
   mapDbInvoiceItemsToClientLines,
   preserveInvoiceLinesOnStoreWrite,
+  preservePostedInvoicePaymentProgress,
   enforcePostedInvoiceImmutability,
 } from '@/lib/finance-invoice'
 
@@ -142,6 +143,47 @@ describe('preserveInvoiceLinesOnStoreWrite', () => {
     const merged = preserveInvoiceLinesOnStoreWrite(current, incoming) as typeof incoming
     expect(merged[0].lines[0].id).toBe('l2')
     expect(merged[0].subtotal).toBe(200)
+  })
+})
+
+describe('preservePostedInvoicePaymentProgress', () => {
+  const posted = (over: Record<string, unknown> = {}) => ({
+    id: 'inv1',
+    ref: 'INV/2026/0084',
+    status: 'posted',
+    total: 20000,
+    amountPaid: 0,
+    payments: [] as Array<{ id: string; amount: number }>,
+    ...over,
+  })
+
+  it('keeps recorded amountPaid and payments when a stale tab sends 0', () => {
+    const current = [posted({
+      amountPaid: 20000,
+      payments: [{ id: 'pay1', amount: 20000 }],
+    })]
+    const incoming = [posted({ amountPaid: 0, payments: [] })]
+    const merged = preservePostedInvoicePaymentProgress(current, incoming) as typeof current
+    expect(merged[0].amountPaid).toBe(20000)
+    expect(merged[0].payments).toEqual([{ id: 'pay1', amount: 20000 }])
+  })
+
+  it('still allows amountPaid to increase when registering a payment', () => {
+    const current = [posted({ amountPaid: 0, payments: [] })]
+    const incoming = [posted({
+      amountPaid: 20000,
+      payments: [{ id: 'pay1', amount: 20000 }],
+    })]
+    const merged = preservePostedInvoicePaymentProgress(current, incoming) as typeof incoming
+    expect(merged[0].amountPaid).toBe(20000)
+    expect(merged[0].payments).toEqual([{ id: 'pay1', amount: 20000 }])
+  })
+
+  it('does not rewrite draft invoices', () => {
+    const current = [posted({ status: 'draft', amountPaid: 5000 })]
+    const incoming = [posted({ status: 'draft', amountPaid: 0 })]
+    const merged = preservePostedInvoicePaymentProgress(current, incoming) as typeof incoming
+    expect(merged[0].amountPaid).toBe(0)
   })
 })
 

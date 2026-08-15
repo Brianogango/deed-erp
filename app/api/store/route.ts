@@ -6,7 +6,7 @@ import {
 } from '@/lib/auth/authorization'
 import { loadAppState, saveStoreKeys, getAppStateVersion } from '@/lib/server-store'
 import { mergeAppendOnlyJournals } from '@/lib/finance-controls'
-import { preserveInvoiceLinesOnStoreWrite, enforcePostedInvoiceImmutability, type RejectedPostedInvoiceEdit } from '@/lib/finance-invoice'
+import { preserveInvoiceLinesOnStoreWrite, preservePostedInvoicePaymentProgress, enforcePostedInvoiceImmutability, type RejectedPostedInvoiceEdit } from '@/lib/finance-invoice'
 import { mergeProductsStoreWrite } from '@/lib/catalog-merge'
 import { mergeSaleOrdersStoreWrite } from '@/lib/sale-order-store-merge'
 import { mergePosOrdersStoreWrite } from '@/lib/pos-orders-merge'
@@ -324,7 +324,9 @@ export async function POST(request: Request) {
     if (incoming != null) {
       const withPreservedLines = preserveInvoiceLinesOnStoreWrite(currentInvoices.deed_invoices, incoming)
       const guarded = enforcePostedInvoiceImmutability(currentInvoices.deed_invoices, withPreservedLines)
-      entries.deed_invoices = JSON.stringify(guarded.merged)
+      entries.deed_invoices = JSON.stringify(
+        preservePostedInvoicePaymentProgress(currentInvoices.deed_invoices, guarded.merged),
+      )
       rejectedPostedInvoiceEdits = guarded.rejected
     }
   }
