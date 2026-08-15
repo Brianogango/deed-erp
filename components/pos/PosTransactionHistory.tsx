@@ -3,54 +3,13 @@
 import { useMemo, useState } from 'react'
 import { SearchInput } from '@/components/ui'
 import { Fa, faPrint, faReceipt } from '@/components/icons'
-import { fmtDate, fmtKes, isPosBankPayment, type POSOrder } from '@/lib/store'
-
-export function ticketWhen(order: POSOrder): string {
-  if (order.createdAt) {
-    const at = new Date(order.createdAt)
-    if (!Number.isNaN(at.getTime())) {
-      return at.toLocaleString('en-KE', {
-        day: 'numeric',
-        month: 'short',
-        hour: '2-digit',
-        minute: '2-digit',
-      })
-    }
-  }
-  return fmtDate(order.date)
-}
-
-export function ticketLines(order: POSOrder): string {
-  const names = (order.lines ?? []).map(line => line.productName).filter(Boolean)
-  if (names.length === 0) return '—'
-  if (names.length === 1) return names[0]
-  return `${names[0]} +${names.length - 1}`
-}
-
-export function payLabel(order: POSOrder): string {
-  return isPosBankPayment(order.payment) ? 'Bank' : (order.payment || '—')
-}
-
-export function filterPosHistoryOrders(orders: POSOrder[], query: string): POSOrder[] {
-  const needle = query.trim().toLowerCase()
-  const filtered = needle
-    ? orders.filter(order => {
-        const hay = [
-          order.ref,
-          order.invoiceRef,
-          order.customerName,
-          payLabel(order),
-          ...(order.lines ?? []).map(line => line.productName),
-        ].join(' ').toLowerCase()
-        return hay.includes(needle)
-      })
-    : orders
-  return [...filtered].sort((a, b) => {
-    const aAt = a.createdAt ? Date.parse(a.createdAt) : 0
-    const bAt = b.createdAt ? Date.parse(b.createdAt) : 0
-    return bAt - aAt
-  })
-}
+import { fmtKes, type POSOrder } from '@/lib/store'
+import {
+  filterPosHistoryOrders,
+  payLabel,
+  ticketLines,
+  ticketWhen,
+} from '@/lib/pos-transaction-history'
 
 export function PosTransactionHistory({
   orders,
