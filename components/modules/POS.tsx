@@ -12,8 +12,9 @@ import { BarcodeScannerModal } from '@/components/BarcodeScanner'
 import { matchPosScan, normalizeScanCode } from '@/lib/barcode-scan'
 import { isOrphanedPosSession } from '@/lib/pos-session'
 import { loyaltyPointsEarned } from '@/lib/loyalty'
+import { resolvePosLineSerial } from '@/lib/pos-transaction-history'
 
-function ReceiptPrintView({ order, companySettings, bankAccounts, onDone }: { order: any, companySettings: any, bankAccounts?: { id: string; name: string }[], onDone: () => void }) {
+function ReceiptPrintView({ order, companySettings, bankAccounts, serials = [], onDone }: { order: any, companySettings: any, bankAccounts?: { id: string; name: string }[], serials?: { id: string; serial?: string }[], onDone: () => void }) {
   useEffect(() => {
     const handleAfterPrint = () => {
       onDone()
@@ -75,12 +76,25 @@ function ReceiptPrintView({ order, companySettings, bankAccounts, onDone }: { or
           <span>Item</span>
           <span>Total</span>
         </div>
-        {order.lines.map((l: any, i: number) => (
-          <div key={i} className="flex justify-between">
-            <span>{l.productName} <br/><span className="text-[10px] text-t3">{l.qty} × {fmtKes(l.price)}</span></span>
-            <span className="font-semibold">{fmtKes(l.subtotal)}</span>
-          </div>
-        ))}
+        {order.lines.map((l: any, i: number) => {
+          const serial = resolvePosLineSerial(l, serials)
+          return (
+            <div key={i} className="flex justify-between">
+              <span>
+                {l.productName}
+                <br />
+                <span className="text-[10px] text-t3">{l.qty} × {fmtKes(l.price)}</span>
+                {serial ? (
+                  <>
+                    <br />
+                    <span className="text-[10px] font-mono">SN: {serial}</span>
+                  </>
+                ) : null}
+              </span>
+              <span className="font-semibold">{fmtKes(l.subtotal)}</span>
+            </div>
+          )
+        })}
       </div>
       <div className="pt-2 mb-4" style={{ borderTop: '1px dashed var(--border)' }}>
         <div className="flex justify-between mb-1"><span>Subtotal</span><span>{fmtKes(order.subtotal)}</span></div>
@@ -417,7 +431,7 @@ export default function PointOfSale() {
   useEffect(() => { scanRef.current?.focus() }, [posSessionOpen])
 
   if (!mounted) return <ModuleSkeleton />
-  if (isPrinting && receiptOrder) return <ReceiptPrintView order={receiptOrder} companySettings={companySettings} bankAccounts={bankAccounts} onDone={() => setIsPrinting(false)} />
+  if (isPrinting && receiptOrder) return <ReceiptPrintView order={receiptOrder} companySettings={companySettings} bankAccounts={bankAccounts} serials={serials} onDone={() => setIsPrinting(false)} />
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
@@ -791,6 +805,7 @@ export default function PointOfSale() {
             <Modal title="POS Transactions History" onClose={() => setShowHistory(false)} width={740}>
               <PosTransactionHistory
                 orders={posOrders}
+                serials={serials}
                 onReprint={o => { setReceiptOrder(o); setIsPrinting(true); setShowHistory(false) }}
               />
             </Modal>

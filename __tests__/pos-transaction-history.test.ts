@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
   filterPosHistoryOrders,
+  formatPosReceiptProduct,
+  resolvePosLineSerial,
   ticketLines,
   type PosHistoryTicket,
 } from '@/lib/pos-transaction-history'
@@ -70,5 +72,49 @@ describe('ticketLines', () => {
         { productName: 'Mouse' },
       ],
     }))).toBe('EliteBook +1')
+  })
+
+  it('includes the serial on serialized products', () => {
+    expect(ticketLines(order({
+      id: '2',
+      ref: 'POS/0002',
+      lines: [{ productName: 'HP EliteBook 845 G7', serialNumber: '5CD1234ABC' }],
+    }))).toBe('HP EliteBook 845 G7 · SN 5CD1234ABC')
+  })
+})
+
+describe('resolvePosLineSerial', () => {
+  it('prefers the number stored on the till line', () => {
+    expect(resolvePosLineSerial({
+      productName: 'EliteBook',
+      serialId: 'sid-1',
+      serialNumber: '5CD1234ABC',
+    }, [{ id: 'sid-1', serial: 'OTHER' }])).toBe('5CD1234ABC')
+  })
+
+  it('falls back to the serial catalog when the ticket only has serialId', () => {
+    expect(resolvePosLineSerial({
+      productName: 'EliteBook',
+      serialId: 'sid-1',
+    }, [{ id: 'sid-1', serial: '5CD9999XYZ' }])).toBe('5CD9999XYZ')
+  })
+})
+
+describe('formatPosReceiptProduct', () => {
+  it('leaves non-serialized lines unchanged', () => {
+    expect(formatPosReceiptProduct({ productName: 'Wireless Mouse' })).toBe('Wireless Mouse')
+  })
+})
+
+describe('filterPosHistoryOrders serial search', () => {
+  it('finds a ticket by serial number', () => {
+    const rows = filterPosHistoryOrders([
+      order({
+        id: '17',
+        ref: 'POS/0017',
+        lines: [{ productName: 'HP EliteBook 845 G7', serialNumber: '5CD1234ABC' }],
+      }),
+    ], '5cd1234')
+    expect(rows.map(r => r.ref)).toEqual(['POS/0017'])
   })
 })

@@ -13,21 +13,23 @@ import {
 
 export function PosTransactionHistory({
   orders,
+  serials = [],
   onReprint,
 }: {
   orders: POSOrder[]
+  serials?: { id: string; serial?: string }[]
   onReprint: (order: POSOrder) => void
 }) {
   const [query, setQuery] = useState('')
 
-  const rows = useMemo(() => filterPosHistoryOrders(orders, query), [orders, query])
+  const rows = useMemo(() => filterPosHistoryOrders(orders, query, serials), [orders, query, serials])
 
   return (
     <div className="flex flex-col gap-3">
       <SearchInput
         value={query}
         onChange={setQuery}
-        placeholder="Search receipt, customer, product…"
+        placeholder="Search receipt, customer, product, serial…"
         ariaLabel="Search POS receipts"
         clearable
       />
@@ -51,8 +53,8 @@ export function PosTransactionHistory({
                     {ticketWhen(order)}
                     {order.invoiceRef ? ` · ${order.invoiceRef}` : ''}
                   </p>
-                  <p className="mt-1 truncate text-[12px] font-semibold text-t1" title={ticketLines(order)}>
-                    {ticketLines(order)}
+                  <p className="mt-1 truncate text-[12px] font-semibold text-t1" title={ticketLines(order, serials)}>
+                    {ticketLines(order, serials)}
                   </p>
                   <p className="mt-0.5 text-[11px] text-t3">
                     {order.customerName || 'Walk-in'} · {payLabel(order)}
