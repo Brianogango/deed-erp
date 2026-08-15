@@ -15,7 +15,6 @@ export type PosSessionLike = {
   status: 'open' | 'closed' | string
   openedAt?: string
   closedAt?: string
-  [key: string]: unknown
 }
 
 function asSessionId(value: unknown): string | null {
