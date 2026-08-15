@@ -136,7 +136,7 @@ export default function DataTableToolbar<T>(props: DataTableToolbarProps<T>) {
   // Desktop already shows up to two primary filters inline — only open the
   // More filters surface when there is something beyond those controls.
   const hasFilterSurface = isMobile
-    ? primaryFilters.length > 0 || Boolean(props.advancedFilters) || Boolean(props.onOpenColumnFilters)
+    ? primaryFilters.length > 0 || Boolean(props.advancedFilters)
     : secondaryFilters.length > 0 || Boolean(props.advancedFilters) || Boolean(props.onOpenColumnFilters)
 
   const moreSheetActions = useMemo((): SheetAction[] => {
