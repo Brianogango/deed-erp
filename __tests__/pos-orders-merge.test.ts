@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import {
+  mergeDirtyPosOrdersBlob,
   mergePosOrdersRemoteState,
   mergePosOrdersStoreWrite,
   nextPosSessionRef,
@@ -32,6 +33,54 @@ describe('mergePosOrdersStoreWrite', () => {
     const current = [{ id: 'a', ref: 'POS/0016', total: 1500 }]
     expect(mergePosOrdersStoreWrite(current, [])).toEqual(current)
     expect(mergePosOrdersStoreWrite(current, null)).toEqual(current)
+  })
+
+  it('keeps a server serial when a stale till tab re-sends the ticket without SN', () => {
+    const current = [{
+      id: 'b',
+      ref: 'POS/0017',
+      lines: [{
+        productId: 'elite-1',
+        productName: 'HP EliteBook 845 G7',
+        serialId: 'sid-17',
+        serialNumber: '5CG1060M8D',
+      }],
+    }]
+    const incoming = [{
+      id: 'b',
+      ref: 'POS/0017',
+      invoiceRef: 'INV/2026/0082',
+      lines: [{ productId: 'elite-1', productName: 'HP EliteBook 845 G7' }],
+    }]
+    const merged = mergePosOrdersStoreWrite(current, incoming)
+    expect(merged[0].invoiceRef).toBe('INV/2026/0082')
+    expect((merged[0].lines as { serialNumber?: string; serialId?: string }[])[0]).toMatchObject({
+      serialId: 'sid-17',
+      serialNumber: '5CG1060M8D',
+    })
+  })
+})
+
+describe('mergeDirtyPosOrdersBlob', () => {
+  it('fills serials from the server onto a dirty local ticket', () => {
+    const local = JSON.stringify([{
+      id: 'b',
+      ref: 'POS/0019',
+      lines: [{ productId: 'elite-1', productName: 'HP EliteBook 845 G7' }],
+    }])
+    const remote = JSON.stringify([{
+      id: 'b',
+      ref: 'POS/0019',
+      lines: [{
+        productId: 'elite-1',
+        productName: 'HP EliteBook 845 G7',
+        serialId: 'sid-19',
+        serialNumber: '5CG1340ZXY',
+      }],
+    }])
+    const merged = JSON.parse(mergeDirtyPosOrdersBlob(local, remote))
+    expect(merged[0].lines[0].serialNumber).toBe('5CG1340ZXY')
+    expect(merged[0].lines[0].serialId).toBe('sid-19')
   })
 })
 

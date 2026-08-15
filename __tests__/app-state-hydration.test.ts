@@ -36,6 +36,15 @@ describe('appStateKeysForRoute', () => {
     expect(keys).not.toContain('deed_products')
   })
 
+  it('loads stock moves on the till so restored receipts can resolve serials', () => {
+    const keys = appStateKeysForRoute('/pos')
+    expect(keys).toEqual(expect.arrayContaining([
+      'deed_posOrders',
+      'deed_serials',
+      'deed_stockMoves',
+    ]))
+  })
+
   it('keeps the dashboard payload lean (no serials / bulk stock / workshop extras)', () => {
     const keys = appStateKeysForRoute('/')
     expect(keys).toContain('deed_saleOrders')

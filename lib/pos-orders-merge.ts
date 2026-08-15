@@ -22,6 +22,87 @@ function asId(row: PosOrderLike): string | null {
   return s || null
 }
 
+function asNonEmptyString(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined
+  const trimmed = value.trim()
+  return trimmed || undefined
+}
+
+function asLineObject(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null
+}
+
+/**
+ * Keep a serial that only one side has. A stale till tab often re-sends the
+ * restored 14 Aug tickets without SN; the server copy must not lose it.
+ */
+export function mergePosOrderLines(currentLines: unknown, incomingLines: unknown): unknown {
+  if (!Array.isArray(incomingLines)) return currentLines
+  if (!Array.isArray(currentLines) || currentLines.length === 0) return incomingLines
+
+  const used = new Set<number>()
+  return incomingLines.map((raw, index) => {
+    const incoming = asLineObject(raw)
+    if (!incoming) return raw
+
+    let prevIndex = -1
+    const incomingSerialId = asNonEmptyString(incoming.serialId)
+    const incomingProductId = asNonEmptyString(incoming.productId)
+    if (incomingSerialId) {
+      prevIndex = currentLines.findIndex((line, i) => {
+        if (used.has(i)) return false
+        return asNonEmptyString(asLineObject(line)?.serialId) === incomingSerialId
+      })
+    }
+    if (prevIndex < 0 && incomingProductId) {
+      prevIndex = currentLines.findIndex((line, i) => {
+        if (used.has(i)) return false
+        return asNonEmptyString(asLineObject(line)?.productId) === incomingProductId
+      })
+    }
+    if (prevIndex < 0 && index < currentLines.length && !used.has(index)) prevIndex = index
+    if (prevIndex >= 0) used.add(prevIndex)
+
+    const previous = prevIndex >= 0 ? asLineObject(currentLines[prevIndex]) : null
+    const next = { ...(previous ?? {}), ...incoming }
+    const currentSerial = asNonEmptyString(previous?.serialNumber)
+    const currentSerialId = asNonEmptyString(previous?.serialId)
+    if (!asNonEmptyString(incoming.serialNumber) && currentSerial) next.serialNumber = currentSerial
+    if (!asNonEmptyString(incoming.serialId) && currentSerialId) next.serialId = currentSerialId
+    return next
+  })
+}
+
+function mergePosOrderRow(current: PosOrderLike | undefined, incoming: PosOrderLike): PosOrderLike {
+  const merged: PosOrderLike = { ...(current ?? {}), ...incoming }
+  if (current && ('lines' in current || 'lines' in incoming)) {
+    merged.lines = mergePosOrderLines(current.lines, incoming.lines)
+  }
+  return merged
+}
+
+/**
+ * Reconcile a dirty till tab with the server blob. Local field updates win,
+ * but serials (and server-only tickets) are kept.
+ */
+export function mergeDirtyPosOrdersBlob(localStr: string | null | undefined, remoteStr: string): string {
+  let local: unknown = []
+  let remote: unknown = []
+  try {
+    if (localStr) local = JSON.parse(localStr)
+  } catch {
+    local = []
+  }
+  try {
+    remote = JSON.parse(remoteStr)
+  } catch {
+    return localStr || remoteStr
+  }
+  return JSON.stringify(mergePosOrdersStoreWrite(remote, local))
+}
+
 function parsePosSeq(ref: unknown, prefix: string): number {
   if (typeof ref !== 'string') return 0
   const m = new RegExp(`^${prefix}/(\\d+)$`).exec(ref.trim())
@@ -84,7 +165,7 @@ export function mergePosOrdersStoreWrite(current: unknown, incoming: unknown): P
     const id = asId(row)
     if (!id || seen.has(id)) continue
     seen.add(id)
-    merged.push({ ...(currentById.get(id) ?? {}), ...row })
+    merged.push(mergePosOrderRow(currentById.get(id), row))
   }
   for (const row of currentArr) {
     const id = asId(row)

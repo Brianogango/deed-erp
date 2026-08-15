@@ -2,9 +2,16 @@ import { isPosBankPayment } from '@/lib/pos-session'
 
 export type PosReceiptLine = {
   productName?: string
+  productId?: string
   qty?: number
   serialId?: string
   serialNumber?: string
+}
+
+export type PosStockMoveHint = {
+  documentRef?: string
+  productId?: string
+  serialNumbers?: string[]
 }
 
 export type PosHistoryTicket = {
@@ -21,18 +28,34 @@ export type PosHistoryTicket = {
 export function resolvePosLineSerial(
   line: PosReceiptLine,
   serials: { id: string; serial?: string }[] = [],
+  stockMoves: PosStockMoveHint[] = [],
+  orderRef?: string,
 ): string | undefined {
   const direct = (line.serialNumber || '').trim()
   if (direct) return direct
-  if (!line.serialId) return undefined
-  const found = serials.find(serial => serial.id === line.serialId)
-  const serial = (found?.serial || '').trim()
-  return serial || undefined
+  if (line.serialId) {
+    const found = serials.find(serial => serial.id === line.serialId)
+    const serial = (found?.serial || '').trim()
+    if (serial) return serial
+  }
+  if (!orderRef || !line.productId) return undefined
+  for (const move of stockMoves) {
+    if (move.documentRef !== orderRef) continue
+    if (move.productId && move.productId !== line.productId) continue
+    const serial = (move.serialNumbers ?? []).map(value => String(value || '').trim()).find(Boolean)
+    if (serial) return serial
+  }
+  return undefined
 }
 
-export function formatPosReceiptProduct(line: PosReceiptLine, serials?: { id: string; serial?: string }[]): string {
+export function formatPosReceiptProduct(
+  line: PosReceiptLine,
+  serials?: { id: string; serial?: string }[],
+  stockMoves?: PosStockMoveHint[],
+  orderRef?: string,
+): string {
   const name = (line.productName || '').trim() || 'Item'
-  const serial = resolvePosLineSerial(line, serials)
+  const serial = resolvePosLineSerial(line, serials, stockMoves, orderRef)
   return serial ? `${name} · SN ${serial}` : name
 }
 
@@ -59,8 +82,12 @@ export function ticketWhen(order: PosHistoryTicket): string {
   return fmtTicketDate(order.date)
 }
 
-export function ticketLines(order: PosHistoryTicket, serials?: { id: string; serial?: string }[]): string {
-  const names = (order.lines ?? []).map(line => formatPosReceiptProduct(line, serials))
+export function ticketLines(
+  order: PosHistoryTicket,
+  serials?: { id: string; serial?: string }[],
+  stockMoves?: PosStockMoveHint[],
+): string {
+  const names = (order.lines ?? []).map(line => formatPosReceiptProduct(line, serials, stockMoves, order.ref))
   if (names.length === 0) return '—'
   if (names.length === 1) return names[0]
   return `${names[0]} +${names.length - 1}`

@@ -14,7 +14,7 @@ import { isOrphanedPosSession } from '@/lib/pos-session'
 import { loyaltyPointsEarned } from '@/lib/loyalty'
 import { resolvePosLineSerial } from '@/lib/pos-transaction-history'
 
-function ReceiptPrintView({ order, companySettings, bankAccounts, serials = [], onDone }: { order: any, companySettings: any, bankAccounts?: { id: string; name: string }[], serials?: { id: string; serial?: string }[], onDone: () => void }) {
+function ReceiptPrintView({ order, companySettings, bankAccounts, serials = [], stockMoves = [], onDone }: { order: any, companySettings: any, bankAccounts?: { id: string; name: string }[], serials?: { id: string; serial?: string }[], stockMoves?: { documentRef?: string; productId?: string; serialNumbers?: string[] }[], onDone: () => void }) {
   useEffect(() => {
     const handleAfterPrint = () => {
       onDone()
@@ -77,7 +77,7 @@ function ReceiptPrintView({ order, companySettings, bankAccounts, serials = [], 
           <span>Total</span>
         </div>
         {order.lines.map((l: any, i: number) => {
-          const serial = resolvePosLineSerial(l, serials)
+          const serial = resolvePosLineSerial(l, serials, stockMoves, order.ref)
           return (
             <div key={i} className="flex justify-between">
               <span>
@@ -197,7 +197,7 @@ export default function PointOfSale() {
 
   const { products, serials, contacts, createPOSOrder, posOrders, openPOSSession, closePOSSession, posSessionOpen, posSessionOpeningCash, posSessionId, showToast, companySettings, getCustomerCreditStatus, bankAccounts } = useCommerceStore()
   const tenderBanks = bankAccounts.filter(b => b.active && b.id !== 'mpesa' && b.id !== 'cash')
-  const { getStockByLocation } = useInventoryStore()
+  const { getStockByLocation, stockMoves } = useInventoryStore()
 
   const [cart, setCart] = useState<{ lineId: string; productId: string; productName: string; barcode: string; price: number; listPrice: number; qty: number; image: string; serialId?: string; serialNumber?: string }[]>([])
   const [scanInput, setScanInput] = useState('')
@@ -431,7 +431,7 @@ export default function PointOfSale() {
   useEffect(() => { scanRef.current?.focus() }, [posSessionOpen])
 
   if (!mounted) return <ModuleSkeleton />
-  if (isPrinting && receiptOrder) return <ReceiptPrintView order={receiptOrder} companySettings={companySettings} bankAccounts={bankAccounts} serials={serials} onDone={() => setIsPrinting(false)} />
+  if (isPrinting && receiptOrder) return <ReceiptPrintView order={receiptOrder} companySettings={companySettings} bankAccounts={bankAccounts} serials={serials} stockMoves={stockMoves} onDone={() => setIsPrinting(false)} />
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
@@ -806,6 +806,7 @@ export default function PointOfSale() {
               <PosTransactionHistory
                 orders={posOrders}
                 serials={serials}
+                stockMoves={stockMoves}
                 onReprint={o => { setReceiptOrder(o); setIsPrinting(true); setShowHistory(false) }}
               />
             </Modal>

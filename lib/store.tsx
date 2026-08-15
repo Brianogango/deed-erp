@@ -7,7 +7,7 @@ import {
   resolveOpenPosSessionId,
 } from '@/lib/pos-session'
 export { isPosBankPayment }
-import { mergePosOrdersRemoteState, nextPosSessionRef, nextPosTicketRef } from '@/lib/pos-orders-merge'
+import { mergeDirtyPosOrdersBlob, mergePosOrdersRemoteState, nextPosSessionRef, nextPosTicketRef } from '@/lib/pos-orders-merge'
 import { loyaltyPointsEarned } from '@/lib/loyalty'
 import { requestCreateUser, requestDeleteUser, requestUpdateUser, requestDeactivateUser, requestReactivateUser } from '@/lib/auth/client-users'
 import { canManageHRRole, getFirstAllowedModule, hasModuleAccess as userHasModuleAccess, normalizeClientRole } from '@/lib/auth/access'
@@ -1067,6 +1067,7 @@ export interface InvoiceLine {
   discountPct?: number
   lineType?: 'item' | 'section'
   productId?: string    // original product (for account lookup)
+  serialNumberId?: string
   accountCode?: string  // revenue account code (e.g. '5001')
 }
 
@@ -5047,6 +5048,12 @@ export function StoreProvider({
           const remoteStr = typeof v === 'string' ? v : JSON.stringify(v)
           const localStr  = window.localStorage.getItem(k)
           if (dirty.has(k)) {
+            if (k === 'deed_posOrders') {
+              const merged = mergeDirtyPosOrdersBlob(localStr, remoteStr)
+              window.localStorage.setItem(k, merged)
+              window.dispatchEvent(new CustomEvent('deed_remote_update', { detail: { key: k, value: merged } }))
+              continue
+            }
             const localCount = arrayCount(localStr)
             const remoteCount = arrayCount(remoteStr)
             const missingRemoteRows = CRITICAL_VISIBILITY_KEY_SET.has(k) && remoteHasMissingIds(localStr, remoteStr)
@@ -5084,6 +5091,12 @@ export function StoreProvider({
         const remoteStr = typeof v === 'string' ? v : JSON.stringify(v)
         const local = window.localStorage.getItem(k)
         if (pendingKeys.has(k) || dirtyKeys.has(k)) {
+          if (k === 'deed_posOrders') {
+            const merged = mergeDirtyPosOrdersBlob(local, remoteStr)
+            window.localStorage.setItem(k, merged)
+            window.dispatchEvent(new CustomEvent('deed_remote_update', { detail: { key: k, value: merged } }))
+            continue
+          }
           const localCount = arrayCount(local)
           const remoteCount = arrayCount(remoteStr)
           const missingRemoteRows = CRITICAL_VISIBILITY_KEY_SET.has(k) && remoteHasMissingIds(local, remoteStr)
@@ -16735,6 +16748,7 @@ const storeCtx: AppState = {
             taxRate: applyVat ? vatRate : 0,
             subtotal: l.subtotal,
             productId: l.productId,
+            serialNumberId: l.serialId,
             accountCode: product ? resolveProductAccounts(product).saleAccountCode : undefined,
           }
         }),
