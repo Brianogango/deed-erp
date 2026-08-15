@@ -4,7 +4,7 @@ import {
   hasPermission, SENSITIVE_STORE_KEY_PERMISSIONS, CLIENT_IMMUTABLE_STORE_KEYS, canReadStoreKey,
   CONTENT_FILTERED_STORE_KEYS, filterStoreValueForRole, hasFullStoreContentAccess, mergeFilteredStoreWrite,
 } from '@/lib/auth/authorization'
-import { preserveInvoiceLinesOnStoreWrite, enforcePostedInvoiceImmutability } from '@/lib/finance-invoice'
+import { preserveInvoiceLinesOnStoreWrite, preservePostedInvoicePaymentProgress, enforcePostedInvoiceImmutability } from '@/lib/finance-invoice'
 import { mergeSaleOrdersStoreWrite } from '@/lib/sale-order-store-merge'
 import { mergePosOrdersStoreWrite } from '@/lib/pos-orders-merge'
 import { loadAppState, saveStoreKeys } from '@/lib/server-store'
@@ -67,7 +67,7 @@ export async function PUT(request: NextRequest, { params }: Params) {
     // Posted-invoice immutability (FIN-001) — same guard as POST /api/store;
     // a single-key PUT must not be a weaker path to the same tampering.
     const guarded = enforcePostedInvoiceImmutability(currentState[key], withPreservedLines)
-    value = JSON.stringify(guarded.merged)
+    value = JSON.stringify(preservePostedInvoicePaymentProgress(currentState[key], guarded.merged))
     rejectedPostedInvoiceEdits = guarded.rejected
   }
   if (key === 'deed_saleOrders') {

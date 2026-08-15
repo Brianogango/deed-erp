@@ -259,6 +259,43 @@ export function enforcePostedInvoiceImmutability(
 }
 
 /**
+ * A stale Finance tab can re-send a posted invoice with amountPaid: 0 after
+ * a payment was already recorded. Payment progress is not a protected
+ * financial-substance field (registering a payment must be allowed), but a
+ * *decrease* via whole-array sync is almost always that stale overwrite —
+ * payment voids go through the payments API, not this path.
+ */
+export function preservePostedInvoicePaymentProgress(current: unknown, incoming: unknown): unknown {
+  if (!Array.isArray(current) || !Array.isArray(incoming)) return incoming
+
+  const currentById = new Map<string, Record<string, unknown>>()
+  for (const row of current) {
+    if (row && typeof row === 'object' && (row as { id?: unknown }).id != null) {
+      currentById.set(String((row as { id: unknown }).id), row as Record<string, unknown>)
+    }
+  }
+
+  return incoming.map((row: unknown) => {
+    if (!row || typeof row !== 'object' || (row as { id?: unknown }).id == null) return row
+    const next = row as Record<string, unknown>
+    const prev = currentById.get(String(next.id))
+    if (!prev || prev.status !== 'posted') return row
+
+    const prevPaid = Number(prev.amountPaid) || 0
+    const nextPaid = Number(next.amountPaid) || 0
+    if (nextPaid >= prevPaid) return row
+
+    const prevPayments = Array.isArray(prev.payments) ? prev.payments : []
+    const nextPayments = Array.isArray(next.payments) ? next.payments : []
+    return {
+      ...next,
+      amountPaid: prevPaid,
+      payments: prevPayments.length >= nextPayments.length ? prevPayments : nextPayments,
+    }
+  })
+}
+
+/**
  * When syncing deed_invoices, refuse to wipe non-empty line items with [].
  * Protects the server mirror if a client briefly holds an empty-line shell
  * (e.g. after SO→invoice when the API response omitted lines).
