@@ -38,12 +38,6 @@ export type SaleOrderReconfigLink = {
   message: string
 }
 
-function httpError(message: string, status = 400) {
-  const err = new Error(message) as Error & { status: number }
-  err.status = status
-  return err
-}
-
 async function loadProductMap(productIds: string[]) {
   const ids = [...new Set(productIds.filter(Boolean))]
   if (!ids.length) return new Map<string, { id: string; name: string; specs: unknown; trackingMethod: string | null }>()
@@ -302,7 +296,7 @@ export async function refreshSaleOrderHostLineAfterReconfig(workOrderId: string)
   return { lineId: host.id, description: wo.proposedSnapshot.displayName }
 }
 
-/** Convenience for callers that must fail hard. */
-export function throwIfDeliveryBlocked(result: Awaited<ReturnType<typeof assertSaleOrderReconfigAllowsDelivery>>) {
-  if (!result.ok) throw httpError(result.error, result.status)
+/** Sales no longer blocks delivery on reconfiguration. */
+export function throwIfDeliveryBlocked(_result: Awaited<ReturnType<typeof assertSaleOrderReconfigAllowsDelivery>>) {
+  return
 }
