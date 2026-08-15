@@ -16727,7 +16727,9 @@ const storeCtx: AppState = {
           const product = prodRef.current.find(x => x.id === l.productId)
           return {
             id: uid(),
-            description: `${l.productName} ×${l.qty}`,
+            description: l.serialNumber
+              ? `${l.productName} ×${l.qty} · SN ${l.serialNumber}`
+              : `${l.productName} ×${l.qty}`,
             qty: l.qty,
             unitPrice: l.price,
             taxRate: applyVat ? vatRate : 0,
