@@ -116,8 +116,8 @@ export async function POST(request: NextRequest) {
     const state = await loadAppState()
     const repairs = Array.isArray(state['deed_repairs_v2']) ? state['deed_repairs_v2'] as RepairOrder[] : []
 
-    // Always persist a full ISO datetime (date + time). Date-only strings get
-    // upgraded to "now" so booking never silently stores midnight-only values.
+    // Always persist a full ISO datetime (date + time). Date-only strings keep
+    // that calendar day at local midnight; empty values become now.
     const intakeDate = ensureRepairIntakeTimestamp(body.intakeDate)
 
     // Create the new repair — body may include full intake (path, warranty, waiver).

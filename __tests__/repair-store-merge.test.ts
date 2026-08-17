@@ -98,6 +98,70 @@ describe('mergeRepairsStoreWrite', () => {
     expect(merged.map(r => r.id).sort()).toEqual(['a', 'b'])
   })
 
+  it('does not let a stale collected snapshot rewrite the booked year', () => {
+    const current = {
+      id: 'a',
+      status: 'collected',
+      intakeDate: '2026-04-28T00:00:00.000Z',
+      createdDate: '2026-04-28T00:00:00.000Z',
+      date: '2026-04-28T00:00:00.000Z',
+      collectedDate: '2026-08-05',
+    }
+    const incoming = {
+      id: 'a',
+      status: 'collected',
+      intakeDate: '2091-04-28',
+      createdDate: '2091-04-28',
+      date: '2091-04-28',
+      collectedDate: '2026-08-05',
+    }
+    const picked = pickRepairStoreRow(current, incoming)
+    expect(picked.intakeDate).toBe('2026-04-28T00:00:00.000Z')
+    expect(picked.createdDate).toBe('2026-04-28T00:00:00.000Z')
+    expect(picked.date).toBe('2026-04-28T00:00:00.000Z')
+    expect(picked.status).toBe('collected')
+  })
+
+  it('allows a same month-day year correction on a collected job (2091 → 2026)', () => {
+    const current = {
+      id: 'a',
+      status: 'collected',
+      intakeDate: '2091-04-28',
+      createdDate: '2091-04-28',
+      date: '2091-04-28',
+      collectedDate: '2026-08-05',
+    }
+    const incoming = {
+      id: 'a',
+      status: 'collected',
+      intakeDate: '2026-04-28T00:00:00.000Z',
+      createdDate: '2026-04-28T00:00:00.000Z',
+      date: '2026-04-28T00:00:00.000Z',
+      collectedDate: '2026-08-05',
+    }
+    const picked = pickRepairStoreRow(current, incoming)
+    expect(picked.intakeDate).toBe('2026-04-28T00:00:00.000Z')
+    expect(picked.createdDate).toBe('2026-04-28T00:00:00.000Z')
+    expect(picked.date).toBe('2026-04-28T00:00:00.000Z')
+  })
+
+  it('does not stamp today onto an out-of-bounds booked date', () => {
+    const current = {
+      id: 'a',
+      status: 'collected',
+      intakeDate: '2091-04-28',
+      collectedDate: '2026-08-05',
+    }
+    const incoming = {
+      id: 'a',
+      status: 'collected',
+      intakeDate: '2026-08-17T15:30:00.000Z',
+      collectedDate: '2026-08-05',
+    }
+    const picked = pickRepairStoreRow(current, incoming)
+    expect(picked.intakeDate).toBe('2091-04-28')
+  })
+
   it('allows a single in-progress Back, but pins a stale snapshot that rewinds many open jobs', () => {
     const single = mergeRepairsStoreWrite(
       [{ id: 'open', status: 'diagnosed' }],

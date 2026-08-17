@@ -46,14 +46,23 @@ export function repairDateBoundsError(
   return null
 }
 
+function sameCalendarDay(a: unknown, b: unknown): boolean {
+  const left = toDateOnly(a)
+  const right = toDateOnly(b)
+  return Boolean(left && right && left === right)
+}
+
 /** Validate intakeDate and legacy `date` on a repair payload. */
 export function repairDatesWriteError(
   next: { intakeDate?: unknown; date?: unknown },
   now: Date = new Date(),
+  previous?: { intakeDate?: unknown; date?: unknown } | null,
 ): string | null {
+  const intakeUnchanged = previous != null && sameCalendarDay(next.intakeDate, previous.intakeDate)
+  const dateUnchanged = previous != null && sameCalendarDay(next.date, previous.date)
   return (
-    repairDateBoundsError(next.intakeDate, 'intakeDate', now) ||
-    repairDateBoundsError(next.date, 'date', now)
+    (intakeUnchanged ? null : repairDateBoundsError(next.intakeDate, 'intakeDate', now)) ||
+    (dateUnchanged ? null : repairDateBoundsError(next.date, 'date', now))
   )
 }
 

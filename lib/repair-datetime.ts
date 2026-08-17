@@ -51,13 +51,18 @@ export function formatIntakeDateTime(value: string | null | undefined): string {
 
 /**
  * Ensure intakeDate is always a full ISO datetime for DB persistence.
- * Date-only YYYY-MM-DD values are replaced with "now" so booking never
- * silently stores midnight-only timestamps.
+ * Date-only YYYY-MM-DD values keep that calendar day (local midnight) —
+ * replacing them with "now" used to stamp today's year onto a booked date
+ * (REP-352227: 2091-04-28 / 2026-04-28 became "today" on the next save).
+ * Empty / unparseable values still fall back to now.
  */
 export function ensureRepairIntakeTimestamp(value: unknown, now = new Date()): string {
   if (typeof value === 'string') {
     const raw = value.trim()
-    if (raw && raw.includes('T') && !/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+    if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+      return combineLocalDateAndTime(raw, '00:00')
+    }
+    if (raw.includes('T')) {
       const d = new Date(raw)
       if (!Number.isNaN(d.getTime())) return d.toISOString()
     }

@@ -80,6 +80,12 @@ describe('repair date bounds (P1-DATA-001)', () => {
     expect(repairDatesWriteError({ date: '2010-01-01' }, now)).toMatch(/^date /)
   })
 
+  it('grandfathers an existing out-of-range intake date on unrelated updates', () => {
+    const previous = { intakeDate: '2091-04-28', date: '2091-04-28' }
+    expect(repairDatesWriteError({ intakeDate: '2091-04-28', date: '2091-04-28' }, now, previous)).toBeNull()
+    expect(repairDatesWriteError({ intakeDate: '2092-04-28', date: '2091-04-28' }, now, previous)).toMatch(/intakeDate/)
+  })
+
   it('toDateOnly normalizes ISO timestamps', () => {
     expect(toDateOnly('2026-08-06T15:30:00.000Z')).toBe('2026-08-06')
     expect(toDateOnly('bogus')).toBeNull()
