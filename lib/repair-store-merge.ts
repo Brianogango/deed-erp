@@ -3,11 +3,14 @@
  *
  * The operational ledger is a whole-array JSON blob. A stale tab (or a
  * technician slice upsert) used to *replace* that array and rewind jobs that
- * had already been finalised. Union-by-id so rows cannot disappear, and never
- * let a later sync take a finalised / terminal job backwards.
+ * had already been finalised — and also rewind in-progress jobs back to
+ * received/diagnosed. Union-by-id so rows cannot disappear.
  *
- * In-progress Back / QC-fail still persist: those statuses are not pinned.
- * The one documented finalised rewind is ORC void: verified_released → ready.
+ * Finalised / terminal jobs never rewind. In-progress Back / QC-fail still
+ * persist when they touch a single job. If one write would rewind two or more
+ * in-progress statuses, it is treated as a stale snapshot and those rows are
+ * pinned. The one documented finalised rewind is ORC void:
+ * verified_released → ready.
  */
 
 import { REPAIR_PROGRESS_ORDER } from '@/lib/repair-progress'
@@ -107,9 +110,30 @@ function isOrcVoidRewind(currentStatus: string, incomingStatus: string): boolean
   return currentStatus === 'verified_released' && incomingStatus === 'ready'
 }
 
+export type PickRepairStoreRowOptions = {
+  /** Pin in-progress status when a stale snapshot rewinds many jobs at once. */
+  pinInProgressRewind?: boolean
+}
+
+export function isInProgressStatusRewind(
+  current: RepairStoreRow | undefined,
+  incoming: RepairStoreRow,
+): boolean {
+  if (!current) return false
+  const currentStatus = asStatus(current)
+  const incomingStatus = asStatus(incoming)
+  if (!currentStatus || currentStatus === incomingStatus) return false
+  if (isOrcVoidRewind(currentStatus, incomingStatus)) return false
+  if (REPAIR_TERMINAL_STATUSES.has(currentStatus) || REPAIR_FINALIZED_STATUSES.has(currentStatus)) {
+    return false
+  }
+  return repairStatusRank(incomingStatus) < repairStatusRank(currentStatus)
+}
+
 export function pickRepairStoreRow(
   current: RepairStoreRow | undefined,
   incoming: RepairStoreRow,
+  options: PickRepairStoreRowOptions = {},
 ): RepairStoreRow {
   if (!current) return incoming
 
@@ -131,6 +155,10 @@ export function pickRepairStoreRow(
     return preserveRepairCompletionFields(current, incoming)
   }
 
+  if (options.pinInProgressRewind && isInProgressStatusRewind(current, incoming)) {
+    return preserveRepairCompletionFields(current, incoming)
+  }
+
   return preserveRepairCompletionFields(incoming, current)
 }
 
@@ -144,11 +172,20 @@ export function mergeRepairsStoreWrite(current: unknown, incoming: unknown): Rep
     const id = asId(row)
     if (id) byId.set(id, row)
   }
+
+  let inProgressRewinds = 0
+  for (const row of incomingArr) {
+    const id = asId(row)
+    if (!id) continue
+    if (isInProgressStatusRewind(byId.get(id), row)) inProgressRewinds += 1
+  }
+  const pinInProgressRewind = inProgressRewinds >= 2
+
   for (const row of incomingArr) {
     const id = asId(row)
     if (!id) continue
     const prev = byId.get(id)
-    byId.set(id, pickRepairStoreRow(prev, row))
+    byId.set(id, pickRepairStoreRow(prev, row, { pinInProgressRewind }))
   }
   return [...byId.values()]
 }

@@ -97,4 +97,28 @@ describe('mergeRepairsStoreWrite', () => {
     )
     expect(merged.map(r => r.id).sort()).toEqual(['a', 'b'])
   })
+
+  it('allows a single in-progress Back, but pins a stale snapshot that rewinds many open jobs', () => {
+    const single = mergeRepairsStoreWrite(
+      [{ id: 'open', status: 'diagnosed' }],
+      [{ id: 'open', status: 'received' }],
+    )
+    expect(single.find(r => r.id === 'open')?.status).toBe('received')
+
+    const stale = mergeRepairsStoreWrite(
+      [
+        { id: 'a', status: 'diagnosed' },
+        { id: 'b', status: 'qc' },
+        { id: 'c', status: 'assigned' },
+      ],
+      [
+        { id: 'a', status: 'received' },
+        { id: 'b', status: 'in_repair' },
+        { id: 'c', status: 'received' },
+      ],
+    )
+    expect(stale.find(r => r.id === 'a')?.status).toBe('diagnosed')
+    expect(stale.find(r => r.id === 'b')?.status).toBe('qc')
+    expect(stale.find(r => r.id === 'c')?.status).toBe('assigned')
+  })
 })
