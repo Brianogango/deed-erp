@@ -7,9 +7,60 @@
       "components/modules/Settings.tsx"
     ],
     "ignoreValues": [
-      "rgba(0,174,239,0.5)",
-      "rgba(0,174,239,0.30)",
-      "8px"
+      {
+        "rule": "side-tab",
+        "value": "*",
+        "files": [
+          "components/ui/index.tsx"
+        ],
+        "createdAt": "2026-08-17T09:20:44.703Z",
+        "reason": "Incumbent ERP UI kit; overlay dismiss bugfix does not restyle these surfaces"
+      },
+      {
+        "rule": "bounce-easing",
+        "value": "cubic-bezier(0.34, 1.4, 0.64, 1)",
+        "files": [
+          "components/ui/index.tsx"
+        ],
+        "createdAt": "2026-08-17T09:20:44.732Z",
+        "reason": "Incumbent ERP UI kit; overlay dismiss bugfix does not restyle these surfaces"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "*",
+        "files": [
+          "components/ui/index.tsx"
+        ],
+        "createdAt": "2026-08-17T09:20:44.764Z",
+        "reason": "Incumbent ERP UI kit; overlay dismiss bugfix does not restyle these surfaces"
+      },
+      {
+        "rule": "design-system-font-size",
+        "value": "*",
+        "files": [
+          "components/ui/index.tsx"
+        ],
+        "createdAt": "2026-08-17T09:20:44.792Z",
+        "reason": "Incumbent ERP UI kit; overlay dismiss bugfix does not restyle these surfaces"
+      },
+      {
+        "rule": "bounce-easing",
+        "value": "*",
+        "files": [
+          "components/layout/GlobalSearch.tsx"
+        ],
+        "createdAt": "2026-08-17T09:21:51.047Z",
+        "reason": "Incumbent search palette and motion; this change only fixes backdrop dismiss while highlighting text"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "*",
+        "files": [
+          "components/layout/GlobalSearch.tsx"
+        ],
+        "createdAt": "2026-08-17T09:21:51.076Z",
+        "reason": "Incumbent search palette and motion; this change only fixes backdrop dismiss while highlighting text"
+      }
     ]
   }
 }

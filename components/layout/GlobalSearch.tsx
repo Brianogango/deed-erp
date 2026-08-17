@@ -12,6 +12,7 @@ import {
   faArrowRight, faCashRegister, faMagnifyingGlass,
 } from '@/components/icons'
 import type { IconProp } from '@fortawesome/fontawesome-svg-core'
+import { useOverlayDismiss } from '@/lib/overlay-dismiss'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 interface SearchResult {
@@ -132,6 +133,7 @@ export default function GlobalSearch({ open, onClose }: { open: boolean; onClose
   const inputRef = useRef<HTMLInputElement>(null)
   const dialogRef = useRef<HTMLDivElement>(null)
   const resultsRef = useRef<HTMLDivElement>(null)
+  const overlayDismiss = useOverlayDismiss(onClose)
 
   // Treat the command palette as a modal: trap focus, close on Escape, and
   // restore focus to the control that launched it.
@@ -414,7 +416,7 @@ export default function GlobalSearch({ open, onClose }: { open: boolean; onClose
     <div
       className="fixed inset-0 z-[9800] flex items-start justify-center overflow-y-auto px-4 py-4 sm:pt-[10vh]"
       style={{ animation: 'backdropIn 0.15s ease both' }}
-      onClick={onClose}
+      {...overlayDismiss}
     >
       {/* Backdrop */}
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
