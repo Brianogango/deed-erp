@@ -9,8 +9,10 @@
  * Finalised / terminal jobs never rewind. In-progress Back / QC-fail still
  * persist when they touch a single job. If one write would rewind two or more
  * in-progress statuses, it is treated as a stale snapshot and those rows are
- * pinned. The one documented finalised rewind is ORC void:
- * verified_released → ready.
+ * pinned. Booked dates (intakeDate / createdDate / date) on a finished job
+ * stay put, except a same month-day year correction of an out-of-bounds
+ * booking (2091-04-28 → 2026-04-28). The one documented finalised rewind is
+ * ORC void: verified_released → ready.
  */
 
 import { repairDateBoundsError } from '@/lib/data-validation'
