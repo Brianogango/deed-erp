@@ -9,10 +9,13 @@
  * Finalised / terminal jobs never rewind. In-progress Back / QC-fail still
  * persist when they touch a single job. If one write would rewind two or more
  * in-progress statuses, it is treated as a stale snapshot and those rows are
- * pinned. The one documented finalised rewind is ORC void:
- * verified_released → ready.
+ * pinned. Booked dates (intakeDate / createdDate / date) on a finished job
+ * stay put, except a same month-day year correction of an out-of-bounds
+ * booking (2091-04-28 → 2026-04-28). The one documented finalised rewind is
+ * ORC void: verified_released → ready.
  */
 
+import { repairDateBoundsError } from '@/lib/data-validation'
 import { REPAIR_PROGRESS_ORDER } from '@/lib/repair-progress'
 
 export type RepairStoreRow = {
@@ -58,6 +61,50 @@ const COMPLETION_KEYS = [
   'deliveryRecipient',
   'deliveryRecipientPhone',
 ] as const
+
+/** Booked timestamps — a stale tab must not rewrite the year on a finished job. */
+const BOOKING_KEYS = ['intakeDate', 'createdDate', 'date'] as const
+
+function isOutOfBoundsBooking(value: unknown): boolean {
+  return isPresent(value) && repairDateBoundsError(value) != null
+}
+
+function calendarMonthDay(value: unknown): string | null {
+  const raw = String(value ?? '').trim()
+  const match = raw.match(/^(\d{4})-(\d{2}-\d{2})/)
+  return match ? match[2] : null
+}
+
+/**
+ * Keep the booked calendar date on a finalised/terminal job.
+ * The one allowed rewrite is a same month-day year correction
+ * (2091-04-28 → 2026-04-28) when the current year is out of bounds.
+ */
+export function preserveRepairBookingFields(
+  picked: RepairStoreRow,
+  current: RepairStoreRow | undefined,
+  incoming: RepairStoreRow,
+): RepairStoreRow {
+  if (!current) return picked
+  const currentStatus = asStatus(current)
+  if (!REPAIR_TERMINAL_STATUSES.has(currentStatus) && !REPAIR_FINALIZED_STATUSES.has(currentStatus)) {
+    return picked
+  }
+  const next: RepairStoreRow = { ...picked }
+  for (const key of BOOKING_KEYS) {
+    const cur = current[key]
+    const inc = incoming[key]
+    if (!isPresent(cur)) continue
+    const yearCorrection =
+      isOutOfBoundsBooking(cur)
+      && isPresent(inc)
+      && !isOutOfBoundsBooking(inc)
+      && calendarMonthDay(cur) != null
+      && calendarMonthDay(cur) === calendarMonthDay(inc)
+    next[key] = yearCorrection ? inc : cur
+  }
+  return next
+}
 
 function asId(row: RepairStoreRow): string | null {
   if (row?.id == null) return null
@@ -141,25 +188,25 @@ export function pickRepairStoreRow(
   const incomingStatus = asStatus(incoming)
 
   if (isOrcVoidRewind(currentStatus, incomingStatus)) {
-    return preserveRepairCompletionFields(incoming, current)
+    return preserveRepairBookingFields(preserveRepairCompletionFields(incoming, current), current, incoming)
   }
 
   if (REPAIR_TERMINAL_STATUSES.has(currentStatus) && incomingStatus !== currentStatus) {
-    return preserveRepairCompletionFields(current, incoming)
+    return preserveRepairBookingFields(preserveRepairCompletionFields(current, incoming), current, incoming)
   }
 
   const currentRank = repairStatusRank(currentStatus)
   const incomingRank = repairStatusRank(incomingStatus)
 
   if (REPAIR_FINALIZED_STATUSES.has(currentStatus) && incomingRank < currentRank) {
-    return preserveRepairCompletionFields(current, incoming)
+    return preserveRepairBookingFields(preserveRepairCompletionFields(current, incoming), current, incoming)
   }
 
   if (options.pinInProgressRewind && isInProgressStatusRewind(current, incoming)) {
-    return preserveRepairCompletionFields(current, incoming)
+    return preserveRepairBookingFields(preserveRepairCompletionFields(current, incoming), current, incoming)
   }
 
-  return preserveRepairCompletionFields(incoming, current)
+  return preserveRepairBookingFields(preserveRepairCompletionFields(incoming, current), current, incoming)
 }
 
 export function mergeRepairsStoreWrite(current: unknown, incoming: unknown): RepairStoreRow[] {

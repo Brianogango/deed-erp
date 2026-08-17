@@ -36,9 +36,14 @@ describe('repair-datetime', () => {
     expect(ensureRepairIntakeTimestamp(iso)).toBe(new Date(iso).toISOString())
   })
 
-  it('ensureRepairIntakeTimestamp upgrades date-only to now', () => {
+  it('ensureRepairIntakeTimestamp keeps date-only calendar days instead of stamping now', () => {
     const now = new Date('2026-08-10T15:30:00.000Z')
-    expect(ensureRepairIntakeTimestamp('2026-08-10', now)).toBe(now.toISOString())
+    const iso = ensureRepairIntakeTimestamp('2026-04-28', now)
+    const d = new Date(iso)
+    expect(Number.isNaN(d.getTime())).toBe(false)
+    expect(d.getFullYear()).toBe(2026)
+    expect(d.getMonth()).toBe(3)
+    expect(d.getDate()).toBe(28)
     expect(ensureRepairIntakeTimestamp('', now)).toBe(now.toISOString())
     expect(ensureRepairIntakeTimestamp(undefined, now)).toBe(now.toISOString())
   })
