@@ -3,6 +3,7 @@
 import { Children, useState, useEffect, useRef, ReactNode, useCallback, useId, cloneElement, isValidElement, useMemo, type ReactElement } from 'react'
 import { createPortal } from 'react-dom'
 import { useAnchoredMenu } from '@/lib/data-table/use-anchored-menu'
+import { useOverlayDismiss } from '@/lib/overlay-dismiss'
 import { fmtKes } from '@/lib/store'
 import { exportToPDF, exportToExcel, ExportRow } from '@/lib/export-utils'
 
@@ -387,6 +388,7 @@ export function Modal({
   useBodyScrollLock(true)
   const titleId = useId()
   const modalRef = useFocusTrap<HTMLDivElement>(true, onClose)
+  const overlayDismiss = useOverlayDismiss(onClose)
   const enterprise = variant === 'enterprise'
 
   return (
@@ -401,7 +403,7 @@ export function Modal({
       role="dialog"
       aria-modal="true"
       aria-labelledby={titleId}
-      onClick={onClose}
+      {...overlayDismiss}
     >
       <div
         ref={modalRef}
@@ -506,6 +508,7 @@ export function SlidePanel({
   useBodyScrollLock(true)
   const titleId = useId()
   const panelRef = useFocusTrap<HTMLDivElement>(true, onClose)
+  const overlayDismiss = useOverlayDismiss(onClose)
   return (
     <Portal>
     <div
@@ -513,7 +516,7 @@ export function SlidePanel({
       role="dialog"
       aria-modal="true"
       aria-labelledby={titleId}
-      onClick={onClose}
+      {...overlayDismiss}
     >
       <div
         ref={panelRef}
@@ -629,6 +632,7 @@ export function Confirm({
   }, [clearUndoTimers])
 
   const confirmDisabled = (requiresTyping && typedText.trim() !== expectedText) || undoSecondsLeft !== null
+  const overlayDismiss = useOverlayDismiss(dismissOnBackdrop ? onCancel : null)
 
   return (
     <Portal>
@@ -637,7 +641,7 @@ export function Confirm({
       role="dialog"
       aria-modal="true"
       aria-labelledby={title ? titleId : undefined}
-      onClick={dismissOnBackdrop ? onCancel : undefined}
+      {...(dismissOnBackdrop ? overlayDismiss : {})}
     >
       <div
         ref={confirmRef}
