@@ -9,6 +9,7 @@ import { mergeAppendOnlyJournals } from '@/lib/finance-controls'
 import { preserveInvoiceLinesOnStoreWrite, preservePostedInvoicePaymentProgress, enforcePostedInvoiceImmutability, type RejectedPostedInvoiceEdit } from '@/lib/finance-invoice'
 import { mergeProductsStoreWrite } from '@/lib/catalog-merge'
 import { mergeSaleOrdersStoreWrite } from '@/lib/sale-order-store-merge'
+import { mergeRepairsStoreWrite } from '@/lib/repair-store-merge'
 import { mergePosOrdersStoreWrite } from '@/lib/pos-orders-merge'
 import { mergePosSessionsStoreWrite, reconcileOpenPosSessionFlags } from '@/lib/pos-session'
 import { appendStoreAudit } from '@/lib/store-audit'
@@ -249,6 +250,15 @@ export async function POST(request: Request) {
         entries[key] = JSON.stringify(mergeSaleOrdersStoreWrite(currentState[key], incoming))
         continue
       }
+      // Repairs: always union-by-id and never rewind a finalised job. The
+      // previous "merge only when ids are missing" guard still let a stale
+      // full snapshot replace collected/ready rows with older statuses.
+      if (key === 'deed_repairs_v2' && entries[key]) {
+        let incoming: unknown
+        try { incoming = JSON.parse(entries[key]) } catch { continue }
+        entries[key] = JSON.stringify(mergeRepairsStoreWrite(currentState[key], incoming))
+        continue
+      }
       // Collaborative ledgers: merge by id so a stale browser cache cannot delete
       // rows that already exist on the server (outsource jobs, repair intakes, …).
       if (
@@ -256,7 +266,6 @@ export async function POST(request: Request) {
           key === 'deed_outsourceJobs'
           || key === 'deed_outsourcePayments'
           || key === 'deed_outsourceVendors'
-          || key === 'deed_repairs_v2'
         )
         && entries[key]
         && Array.isArray(currentState[key])
