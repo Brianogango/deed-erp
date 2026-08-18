@@ -3,6 +3,8 @@ import {
   hasActivePosSession,
   isOrphanedPosSession,
   mergePosSessionsStoreWrite,
+  posOrderBelongsToSession,
+  posOrdersForSession,
   reconcileOpenPosSessionFlags,
   resolveOpenPosSessionId,
 } from '@/lib/pos-session'
@@ -144,5 +146,31 @@ describe('reconcileOpenPosSessionFlags', () => {
       incomingId: null,
       mergedSessions: merged,
     })).toEqual({ pinLiveTill: false, posSessionOpen: false, posSessionId: null })
+  })
+})
+
+describe('posOrdersForSession', () => {
+  const openedAt = '2026-08-18T09:47:43.048Z'
+  const orders = [
+    { id: 'a', sessionId: 'sess-21', createdAt: '2026-08-18T10:20:30.000Z', total: 15900 },
+    { id: 'b', sessionId: 'active', createdAt: '2026-08-13T12:33:09.818Z', total: 22900 },
+    { id: 'c', sessionId: 'active', createdAt: '2026-08-18T09:50:00.000Z', total: 700 },
+    { id: 'd', sessionId: 'other', createdAt: '2026-08-18T11:00:00.000Z', total: 98000 },
+  ]
+
+  it('does not pull a leftover active ticket from an earlier day into today\'s close', () => {
+    const scoped = posOrdersForSession(orders, 'sess-21', openedAt)
+    expect(scoped.map(o => o.id)).toEqual(['a', 'c'])
+    expect(posOrderBelongsToSession(orders[1], 'sess-21', openedAt)).toBe(false)
+  })
+
+  it('counts a ticket stamped on the session even if it was taken before openedAt', () => {
+    const orphan = {
+      id: 'cash-orphan',
+      sessionId: 'sess-21',
+      createdAt: '2026-08-18T06:06:15.576Z',
+      total: 31000,
+    }
+    expect(posOrderBelongsToSession(orphan, 'sess-21', openedAt)).toBe(true)
   })
 })

@@ -153,3 +153,37 @@ export function hasActivePosSession(opts: {
 export function isPosBankPayment(payment?: string): boolean {
   return payment === 'bank' || payment === 'card'
 }
+
+export type PosOrderSessionRef = {
+  sessionId?: string | null
+  createdAt?: string
+  date?: string
+}
+
+/**
+ * Tickets for one till session. Legacy rows used sessionId `"active"`; those
+ * only belong to a session if they were taken after it opened. Counting every
+ * `"active"` ticket forever double-counted old sales on every Close Session.
+ */
+export function posOrderBelongsToSession(
+  order: PosOrderSessionRef,
+  sessionId: string,
+  openedAt?: string | null,
+): boolean {
+  if (!sessionId) return false
+  if (order.sessionId === sessionId) return true
+  if (order.sessionId !== 'active') return false
+  if (!openedAt) return false
+  const created = Date.parse(String(order.createdAt || order.date || ''))
+  const opened = Date.parse(openedAt)
+  if (!Number.isFinite(created) || !Number.isFinite(opened)) return false
+  return created >= opened
+}
+
+export function posOrdersForSession<T extends PosOrderSessionRef>(
+  orders: T[] | null | undefined,
+  sessionId: string,
+  openedAt?: string | null,
+): T[] {
+  return (orders ?? []).filter(order => posOrderBelongsToSession(order, sessionId, openedAt))
+}

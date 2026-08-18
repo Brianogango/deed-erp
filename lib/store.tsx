@@ -5,6 +5,7 @@ import {
   hasActivePosSession,
   isPosBankPayment,
   mergePosSessionsRemoteState,
+  posOrdersForSession,
   resolveOpenPosSessionId,
 } from '@/lib/pos-session'
 export { isPosBankPayment }
@@ -16523,8 +16524,8 @@ const storeCtx: AppState = {
         setPosSessionId(sessionId)
         setPosSessionOpen(true)
       }
-      // Legacy orders used sessionId 'active' — include those while this session is open.
-      const orders = posOrders.filter(o => o.sessionId === sessionId || o.sessionId === 'active')
+      const openSession = posSessions.find(s => s.id === sessionId)
+      const orders = posOrdersForSession(posOrders, sessionId, openSession?.openedAt)
       const totalCash = orders.filter(o => o.payment === 'cash').reduce((a, o) => a + o.total, 0)
       const totalMpesa = orders.filter(o => o.payment === 'mpesa').reduce((a, o) => a + o.total, 0)
       const totalBank = orders.filter(o => isPosBankPayment(o.payment)).reduce((a, o) => a + o.total, 0)
@@ -16571,8 +16572,13 @@ const storeCtx: AppState = {
         controlLines.push(accountLine(label, `Session bank sales cleared`, 0, amt))
       }
 
-      const openSession = posSessions.find(s => s.id === sessionId)
       const sessionRef = openSession?.ref || nextPosSessionRef(posSessions.map(s => s.ref))
+      const claimedIds = new Set(
+        orders.filter(o => o.sessionId === 'active').map(o => o.id).filter(Boolean),
+      )
+      if (claimedIds.size > 0) {
+        setPosOrders(prev => prev.map(o => claimedIds.has(o.id) ? { ...o, sessionId } : o))
+      }
       if (controlLines.length > 0) {
         const debit = controlLines.reduce((a, l) => a + l.debit, 0)
         const credit = controlLines.reduce((a, l) => a + l.credit, 0)

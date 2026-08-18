@@ -10,7 +10,7 @@ import {
 } from '@/components/icons'
 import { BarcodeScannerModal } from '@/components/BarcodeScanner'
 import { matchPosScan, normalizeScanCode } from '@/lib/barcode-scan'
-import { isOrphanedPosSession } from '@/lib/pos-session'
+import { isOrphanedPosSession, posOrdersForSession } from '@/lib/pos-session'
 import { loyaltyPointsEarned } from '@/lib/loyalty'
 import { resolvePosLineSerial } from '@/lib/pos-transaction-history'
 import {
@@ -801,7 +801,8 @@ export default function PointOfSale() {
           )}
 
           {showCloseSession && (() => {
-            const sessionOrders = posOrders.filter(o => o.sessionId === posSessionId || o.sessionId === 'active')
+            const liveSession = posSessions.find(s => s.id === posSessionId)
+            const sessionOrders = posOrdersForSession(posOrders, posSessionId || '', liveSession?.openedAt)
             const totalCash = sessionOrders.filter(o => o.payment === 'cash').reduce((a, o) => a + o.total, 0)
             const totalMpesa = sessionOrders.filter(o => o.payment === 'mpesa').reduce((a, o) => a + o.total, 0)
             const totalBank = sessionOrders.filter(o => isPosBankPayment(o.payment)).reduce((a, o) => a + o.total, 0)
