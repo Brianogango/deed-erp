@@ -60,6 +60,15 @@
         ],
         "createdAt": "2026-08-17T09:21:51.076Z",
         "reason": "Incumbent search palette and motion; this change only fixes backdrop dismiss while highlighting text"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "*",
+        "files": [
+          "components/modules/TradeIn.tsx"
+        ],
+        "createdAt": "2026-08-19T20:09:09.740Z",
+        "reason": "Incumbent Trade-in operate UI; Pay vs Add as credit is a settlement action, not a visual redesign of existing condition/bulk-upload colors"
       }
     ]
   }

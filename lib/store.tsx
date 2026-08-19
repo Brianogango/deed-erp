@@ -140,6 +140,14 @@ import {
   paymentJournalRef,
   DEFAULT_ADMIN_OFFICER_CUSTOMER_INVOICE_LIMIT_KES,
 } from '@/lib/finance-controls'
+// Buy-back settlement: Pay (cash) XOR Add as credit (3102). Shared by store + tests.
+import {
+  BUYBACK_STORE_CREDIT_METHOD,
+  buildBuyBackStoreCreditJournalLines,
+  buyBackStoreCreditAmount,
+  canCreditBuyBack,
+  canPayBuyBackCash,
+} from '@/lib/buyback-credit'
 import { ensureArray, parseStoredState } from '@/lib/safe-local-state'
 import { repairOutsourceReadiness } from '@/lib/repair-outsource'
 import { getPreviousRepairProgressStatus } from '@/lib/repair-progress'
@@ -1139,8 +1147,13 @@ export interface CustomerCredit {
   ref: string
   customerId: string
   customerName: string
-  sourceInvoiceId: string
-  sourceInvoiceRef: string
+  /** Invoice credit notes vs buy-back "Add as credit". Older rows omit this and are invoice-sourced. */
+  sourceType?: 'invoice' | 'buyback'
+  sourceInvoiceId?: string
+  sourceInvoiceRef?: string
+  /** Set when the credit is the buy-back payout (not a cash/M-Pesa/bank payment). */
+  sourceBuyBackId?: string
+  sourceBuyBackRef?: string
   amount: number
   balance: number
   status: 'available' | 'partially_used' | 'used' | 'void'
@@ -1964,11 +1977,15 @@ export interface BuyBack {
   date: string
   lines: BuyBackLine[]
   total: number
-  paymentMethod?: 'cash' | 'bank_transfer' | 'mpesa'
+  /** How the approved BBK was settled. `store_credit` means 3102, not cash out. Mutually exclusive with cash/M-Pesa/bank. */
+  paymentMethod?: 'cash' | 'bank_transfer' | 'mpesa' | 'store_credit'
   destinationLocation: LocationId
   notes?: string
   approvedByName?: string; approvedDate?: string
   paidDate?: string
+  /** CustomerCredit created by Add as credit; absent when the customer was paid in cash. */
+  creditId?: string
+  creditRef?: string
   stockedDate?: string; stockedByName?: string
 }
 
@@ -3566,7 +3583,11 @@ export interface AppState {
   buyBacks: BuyBack[]
   createBuyBack: (customerId: string, customerName: string, lines: Omit<BuyBackLine, 'id'>[], destination: LocationId, notes?: string, originalSOId?: string, originalSORef?: string) => BuyBack
   approveBuyBack: (id: string) => void
+  /** Cash / M-Pesa / bank payout. Refuses `store_credit` — that path is `creditBuyBack`. */
   payBuyBack: (id: string, paymentMethod: BuyBack['paymentMethod']) => void
+  /** After approve: add the buy-back amount as store credit (3102) instead of paying cash. Marks the BBK paid so stocking can follow. */
+  creditBuyBack: (id: string) => void | Promise<void>
+  /** Intake serials/qty after either pay or add-as-credit (`status === 'paid'`). */
   stockBuyBack: (id: string) => void
   deleteBuyBack: (id: string) => void
   /** Register a serial that is not yet in Deed for a customer return / buyback / exchange / RMA. */
@@ -3995,6 +4016,7 @@ export type AfterSalesStoreState = Pick<AppState,
   | 'createDonation'
   | 'createExchange'
   | 'createReturnOrder'
+  | 'creditBuyBack'
   | 'deleteBuyBack'
   | 'deleteDonation'
   | 'payBuyBack'
@@ -6513,6 +6535,7 @@ export function StoreProvider({
     completeExchange: (...args: Parameters<AppState['completeExchange']>) => storeCtxRef.current!.completeExchange(...args),
     confirmDonation: (...args: Parameters<AppState['confirmDonation']>) => storeCtxRef.current!.confirmDonation(...args),
     createBuyBack: (...args: Parameters<AppState['createBuyBack']>) => storeCtxRef.current!.createBuyBack(...args),
+    creditBuyBack: (...args: Parameters<AppState['creditBuyBack']>) => storeCtxRef.current!.creditBuyBack(...args),
     createDonation: (...args: Parameters<AppState['createDonation']>) => storeCtxRef.current!.createDonation(...args),
     createExchange: (...args: Parameters<AppState['createExchange']>) => storeCtxRef.current!.createExchange(...args),
     createReturnOrder: (...args: Parameters<AppState['createReturnOrder']>) => storeCtxRef.current!.createReturnOrder(...args),
@@ -16472,7 +16495,7 @@ const storeCtx: AppState = {
         excludeUserId: user.id,
       })
 
-      showToast(`${repair.ref} → trade-in ${bb.ref} (draft). Approve & pay in Trade-in.`, 'success')
+      showToast(`${repair.ref} → trade-in ${bb.ref} (draft). Approve, then pay or add as credit in Trade-in.`, 'success')
       return { ok: true, message: noteLine, buyBackId: bb.id, buyBackRef: bb.ref }
     },
 
@@ -18334,10 +18357,12 @@ const storeCtx: AppState = {
       showToast('Buy-back approved')
     },
 
+    // Pay path: cash leaves till/bank. Blocked if already credited or not yet approved.
     payBuyBack: (id, paymentMethod) => {
       const user = currentUser(); if (!user) return
       const bb = buyBacks.find(b => b.id === id)
-      if (!bb || bb.status !== 'approved') { showToast('Approve the buy-back before recording payment', 'error'); return }
+      const allowed = canPayBuyBackCash(bb, paymentMethod)
+      if (!allowed.ok) { showToast(allowed.error || 'Cannot record buy-back payment', 'error'); return }
       const payment: RefundPayment = {
         id: uid(),
         ref: seq('RFD', 'rfd'),
@@ -18358,11 +18383,69 @@ const storeCtx: AppState = {
       showToast('Payment to customer recorded')
     },
 
+    // Credit path: same KES onto 3102. No RefundPayment, no petty cash. Status stays `paid` so Add to stock still works.
+    creditBuyBack: async (id) => {
+      const user = currentUser(); if (!user) return
+      const bb = buyBacks.find(b => b.id === id)
+      const allowed = canCreditBuyBack(bb)
+      if (!allowed.ok) { showToast(allowed.error || 'Cannot add buy-back as credit', 'error'); return }
+      const amount = buyBackStoreCreditAmount(bb)
+      const at = now()
+      let creditRef: string
+      try {
+        creditRef = await storeCtxRef.current!.allocateDocRef('CN')
+      } catch {
+        creditRef = seq('CN', 'inv')
+      }
+      const credit: CustomerCredit = {
+        id: uid(),
+        ref: creditRef,
+        customerId: bb.customerId,
+        customerName: bb.customerName,
+        sourceType: 'buyback',
+        sourceBuyBackId: bb.id,
+        sourceBuyBackRef: bb.ref,
+        amount,
+        balance: amount,
+        status: 'available',
+        createdAt: at,
+        createdBy: user.name,
+        notes: `Store credit from buy-back ${bb.ref}`,
+        applications: [],
+      }
+      const journalLines = buildBuyBackStoreCreditJournalLines({
+        buyBackRef: bb.ref,
+        creditRef,
+        customerName: bb.customerName,
+        amount,
+      }).map(line => accountLine(line.account, line.description, line.debit, line.credit))
+      const debit = journalLines.reduce((s, l) => s + l.debit, 0)
+      const creditTotal = journalLines.reduce((s, l) => s + l.credit, 0)
+      const journal: JournalEntry = {
+        id: uid(),
+        ref: `JRN/${creditRef}`,
+        date: at,
+        source: 'manual',
+        description: `Buy-back ${bb.ref} settled as store credit ${creditRef}`,
+        status: 'posted',
+        lines: journalLines,
+        totalDebit: debit,
+        totalCredit: creditTotal,
+      }
+      setCustomerCredits(prev => [credit, ...prev])
+      setJournalEntries(prev => [journal, ...prev])
+      setBuyBacks(p => p.map(b => b.id === id
+        ? { ...b, status: 'paid', paymentMethod: BUYBACK_STORE_CREDIT_METHOD, paidDate: at, creditId: credit.id, creditRef }
+        : b))
+      addAuditLog('buyback_credit', bb.ref, `Store credit ${creditRef} for ${fmtKes(amount)} — ${bb.customerName}`)
+      showToast(`${bb.ref} added as store credit ${creditRef} (${fmtKes(amount)})`)
+    },
+
     stockBuyBack: (id) => {
       const user = currentUser(); if (!user) return
       const bb = buyBacks.find(b => b.id === id)
       if (!bb) return
-      if (bb.status !== 'paid') { showToast('Record customer payment before stocking buy-back items', 'error'); return }
+      if (bb.status !== 'paid') { showToast('Settle the buy-back (pay or add as credit) before stocking items', 'error'); return }
       for (const line of bb.lines) {
         const product = prodRef.current.find(p => p.id === line.productId)
         if (!product) { showToast(`Product not found: ${line.productName}`, 'error'); return }
