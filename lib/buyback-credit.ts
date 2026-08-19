@@ -35,6 +35,7 @@ export function canSettleApprovedBuyBack(bb: BuyBackSettleLike | null | undefine
   error?: string
 } {
   if (!bb) return { ok: false, error: 'Buy-back not found' }
+  // `paid` covers both cash payout and store credit; `creditId` catches a partial write.
   if (bb.status === 'paid' || bb.status === 'stocked' || bb.creditId) {
     return { ok: false, error: 'This buy-back is already settled' }
   }
@@ -44,6 +45,7 @@ export function canSettleApprovedBuyBack(bb: BuyBackSettleLike | null | undefine
   return { ok: true }
 }
 
+/** Record Payment — cash/M-Pesa/bank only. `store_credit` must use Add as credit. */
 export function canPayBuyBackCash(
   bb: BuyBackSettleLike | null | undefined,
   method?: string | null,
@@ -59,6 +61,7 @@ export function canPayBuyBackCash(
   return { ok: true }
 }
 
+/** Add as credit — same total onto 3102. Zero-value BBKs have nothing to credit. */
 export function canCreditBuyBack(bb: BuyBackSettleLike | null | undefined): {
   ok: boolean
   error?: string
@@ -83,6 +86,7 @@ export function buildBuyBackStoreCreditJournalLines(opts: {
   amount: number
 }): { account: string; description: string; debit: number; credit: number }[] {
   const amount = Math.round(Number(opts.amount) || 0)
+  // Do not touch 2211 Petty Cash — this settlement is not a till payout.
   return [
     {
       account: TRADE_IN_PURCHASES_ACCOUNT,

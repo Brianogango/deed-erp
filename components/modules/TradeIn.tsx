@@ -457,6 +457,7 @@ function BuyBackTab({ detailId, onOpenDetail }: DetailTabProps) {
           <div style={{ textAlign: 'right', marginBottom: 16, fontSize: 14, fontWeight: 700 }}>Total We Pay: {fmtKes(bb.total)}</div>
           {bb.notes && <p style={{ fontSize: 11, color: 'var(--text-4)', marginBottom: 12 }}>Note: {bb.notes}</p>}
           {bb.approvedByName && <p style={{ fontSize: 10, color: 'var(--text-4)' }}>Approved by {bb.approvedByName} on {fmtDate(bb.approvedDate!)}</p>}
+          {/* After Approve: Pay XOR Add as credit. Both mark the BBK paid so Add to stock can follow. */}
           {bb.paymentMethod === 'store_credit' && bb.creditRef && (
             <p style={{ fontSize: 12, color: 'var(--navy)', fontWeight: 600, marginTop: 8 }}>
               Settled as store credit {bb.creditRef} — no cash left the till. Apply this credit on the customer&apos;s next invoice.
@@ -478,6 +479,7 @@ function BuyBackTab({ detailId, onOpenDetail }: DetailTabProps) {
                 <Fa icon={faMoneyBillWave} aria-hidden="true" /> Pay
               </button>
             )}
+            {/* Same approved state: Add as credit instead of Pay. Choosing one settles the BBK. */}
             {bb.status === 'approved' && (
               <button type="button" className="btn-secondary text-[11px] flex items-center gap-1.5" onClick={() => setCreditModal(bb.id)}>
                 <Fa icon={faCreditCard} aria-hidden="true" /> Add as credit

@@ -60,7 +60,6 @@ export function buildZeroBalanceCoaTemplate(): CoaTemplateAccount[] {
     { code: '3005', name: 'Outstanding Payments', type: 'liability', group: 'Payables - Clearing', subGroup: 'Outstanding', balance: 0, notes: 'Unallocated vendor payments awaiting bill application' },
     { code: '3100', name: 'Customer Deposits', type: 'liability', group: 'Customer Liabilities', subGroup: 'Deposits', balance: 0, notes: 'Layby / deposit cash held until goods collected' },
     { code: '3102', name: 'Customer Credits', type: 'liability', group: 'Customer Liabilities', subGroup: 'Credits', balance: 0, notes: 'Credit notes, cancelled paid-invoice credits, and buy-back store credit' },
-    { code: '6108', name: 'Trade-in Purchases', type: 'expense', group: 'Local Purchases', subGroup: 'Trade-in', balance: 0, notes: 'Buy-back amount when settled as store credit instead of cash' },
     { code: '3105', name: 'Employee Reimbursements Payable', type: 'liability', group: 'Accruals', subGroup: 'Accruals', balance: 0 },
     { code: '3201', name: 'Accruals', type: 'liability', group: 'Accruals', subGroup: 'Accruals', balance: 0 },
     { code: '3301', name: 'Output VAT Payable (16%)', type: 'liability', group: 'Statutory Liabilities', subGroup: 'Current Liabilities', balance: 0 },
@@ -72,6 +71,8 @@ export function buildZeroBalanceCoaTemplate(): CoaTemplateAccount[] {
     { code: '5105', name: 'Interest Income', type: 'revenue', group: 'Other Income', subGroup: 'Finance', balance: 0 },
     { code: '6001', name: 'Cost of Goods Sold', type: 'expense', group: 'Direct Expenses', subGroup: 'COGS', balance: 0 },
     { code: '6101', name: 'Laptops', type: 'expense', group: 'Local Purchases', subGroup: 'Local Purchases', balance: 0 },
+    // Debit when a buy-back is added as 3102 credit instead of paid in cash.
+    { code: '6108', name: 'Trade-in Purchases', type: 'expense', group: 'Local Purchases', subGroup: 'Trade-in', balance: 0, notes: 'Buy-back amount when settled as store credit instead of cash' },
     { code: '6401', name: 'Bank Charges', type: 'expense', group: 'Finance Costs', subGroup: 'Bank', balance: 0 },
     { code: '1200', name: 'Inventory', type: 'asset', group: 'Inventory - Closing', subGroup: 'Finished Products', balance: 0 },
   )
