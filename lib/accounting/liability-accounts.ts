@@ -1,7 +1,7 @@
 /**
  * Customer liability account codes.
  * 3100 = deposits / layby cash held (goods not yet collected)
- * 3102 = customer credits from cancelled paid invoices / credit notes
+ * 3102 = customer credits from cancelled paid invoices / credit notes / buy-back store credit
  *
  * Labels sourced from CoA role map (Finance Phase 1) — do not renumber.
  */

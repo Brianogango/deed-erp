@@ -14,7 +14,7 @@ import { DataTable, type ColumnDef } from '@/components/data-table'
 import { CustomerPickerField } from '@/components/tradein/CustomerPickerField'
 import { SerialReturnPicker } from '@/components/tradein/SerialReturnPicker'
 import { StatusBadge } from '@/components/erp'
-import { Fa, faBox, faCheck, faMoneyBillWave, faTrash, faUpload } from '@/components/icons'
+import { Fa, faBox, faCheck, faCreditCard, faMoneyBillWave, faTrash, faUpload } from '@/components/icons'
 import { useUrlQueryState, useUrlRecordId } from '@/hooks/useUrlRecordId'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -244,7 +244,7 @@ function downloadBuyBackBulkTemplate() {
 }
 
 function BuyBackTab({ detailId, onOpenDetail }: DetailTabProps) {
-  const { buyBacks, createBuyBack, approveBuyBack, payBuyBack, stockBuyBack, deleteBuyBack,
+  const { buyBacks, createBuyBack, approveBuyBack, payBuyBack, creditBuyBack, stockBuyBack, deleteBuyBack,
     contacts, products, saleOrders, serials, users, currentUserId, showToast, registerCustomerReturnSerial } = useAfterSalesStore()
 
   const currentRole = users.find(u => u.id === currentUserId)?.role
@@ -260,6 +260,8 @@ function BuyBackTab({ detailId, onOpenDetail }: DetailTabProps) {
   const [lines, setLines]             = useState<BBLine[]>([])
   const [payModal, setPayModal]       = useState<string | null>(null)
   const [payMethod, setPayMethod]     = useState('cash')
+  const [creditModal, setCreditModal] = useState<string | null>(null)
+  const [crediting, setCrediting]     = useState(false)
   const [showBulk, setShowBulk]       = useState(false)
   const [bulkRows, setBulkRows]       = useState<BuyBackBulkRow[]>([])
   const [bulkImporting, setBulkImporting] = useState(false)
@@ -455,9 +457,17 @@ function BuyBackTab({ detailId, onOpenDetail }: DetailTabProps) {
           <div style={{ textAlign: 'right', marginBottom: 16, fontSize: 14, fontWeight: 700 }}>Total We Pay: {fmtKes(bb.total)}</div>
           {bb.notes && <p style={{ fontSize: 11, color: 'var(--text-4)', marginBottom: 12 }}>Note: {bb.notes}</p>}
           {bb.approvedByName && <p style={{ fontSize: 10, color: 'var(--text-4)' }}>Approved by {bb.approvedByName} on {fmtDate(bb.approvedDate!)}</p>}
+          {bb.paymentMethod === 'store_credit' && bb.creditRef && (
+            <p style={{ fontSize: 12, color: 'var(--navy)', fontWeight: 600, marginTop: 8 }}>
+              Settled as store credit {bb.creditRef} — no cash left the till. Apply this credit on the customer&apos;s next invoice.
+            </p>
+          )}
+          {bb.status === 'paid' && bb.paymentMethod && bb.paymentMethod !== 'store_credit' && (
+            <p style={{ fontSize: 10, color: 'var(--text-4)' }}>Paid to customer by {bb.paymentMethod.replace('_', ' ')} on {fmtDate(bb.paidDate!)}</p>
+          )}
           {bb.stockedByName && <p style={{ fontSize: 10, color: 'var(--text-4)' }}>Stocked by {bb.stockedByName} on {fmtDate(bb.stockedDate!)}</p>}
 
-          <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
+          <div style={{ display: 'flex', gap: 8, marginTop: 14, flexWrap: 'wrap' }}>
             {bb.status === 'draft' && canApprove && (
               <button type="button" className="btn-primary text-[11px] flex items-center gap-1.5" onClick={() => approveBuyBack(bb.id)}>
                 <Fa icon={faCheck} aria-hidden="true" /> Approve
@@ -465,7 +475,12 @@ function BuyBackTab({ detailId, onOpenDetail }: DetailTabProps) {
             )}
             {bb.status === 'approved' && (
               <button type="button" className="btn-primary text-[11px] flex items-center gap-1.5" onClick={() => setPayModal(bb.id)}>
-                <Fa icon={faMoneyBillWave} aria-hidden="true" /> Record Payment
+                <Fa icon={faMoneyBillWave} aria-hidden="true" /> Pay
+              </button>
+            )}
+            {bb.status === 'approved' && (
+              <button type="button" className="btn-secondary text-[11px] flex items-center gap-1.5" onClick={() => setCreditModal(bb.id)}>
+                <Fa icon={faCreditCard} aria-hidden="true" /> Add as credit
               </button>
             )}
             {bb.status === 'paid' && (
@@ -603,7 +618,10 @@ function BuyBackTab({ detailId, onOpenDetail }: DetailTabProps) {
       )}
 
       {payModal && (
-        <Modal title="Record Payment to Customer" onClose={() => setPayModal(null)}>
+        <Modal title="Pay customer" onClose={() => setPayModal(null)}>
+          <p style={{ fontSize: 12, color: 'var(--text-3)', marginBottom: 12 }}>
+            Cash leaves the till or bank. This buy-back cannot also be added as store credit.
+          </p>
           <Field label="Payment Method">
             <Select value={payMethod} onChange={setPayMethod} options={PAY_OPTS} />
           </Field>
@@ -613,6 +631,38 @@ function BuyBackTab({ detailId, onOpenDetail }: DetailTabProps) {
           </div>
         </Modal>
       )}
+
+      {creditModal && (() => {
+        const creditBb = buyBacks.find(b => b.id === creditModal)
+        return (
+          <Modal title="Add as store credit" onClose={() => { if (!crediting) setCreditModal(null) }}>
+            <p style={{ fontSize: 13, color: 'var(--text-2)', marginBottom: 8 }}>
+              Add <strong>{fmtKes(creditBb?.total ?? 0)}</strong> as store credit for <strong>{creditBb?.customerName}</strong>.
+            </p>
+            <p style={{ fontSize: 12, color: 'var(--text-3)', marginBottom: 12 }}>
+              No cash leaves the till. They can spend it on a later invoice (and top up any balance). This buy-back cannot also be paid out.
+            </p>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>
+              <button className="btn-secondary text-[11px]" disabled={crediting} onClick={() => setCreditModal(null)}>Cancel</button>
+              <button
+                className="btn-primary text-[11px]"
+                disabled={crediting}
+                onClick={async () => {
+                  setCrediting(true)
+                  try {
+                    await creditBuyBack(creditModal)
+                    setCreditModal(null)
+                  } finally {
+                    setCrediting(false)
+                  }
+                }}
+              >
+                {crediting ? 'Adding…' : 'Add as credit'}
+              </button>
+            </div>
+          </Modal>
+        )
+      })()}
     </div>
   )
 }

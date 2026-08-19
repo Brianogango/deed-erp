@@ -38,6 +38,15 @@ Exchange **New Items** stay search-only against warehouse `available` / `refurbi
 - Exchange `completeExchange`: return serials → warehouse `available`; issue serials → `sold` @ customer.
 - RMA `receiveReturn`: requires approve first; serialized lines must have matching serial count; serials → `returned` @ warehouse.
 
+## Buy-back settlement
+
+After **Approve**, settle the BBK **once**:
+
+1. **Pay** — cash / M-Pesa / bank to the customer (cash leaves the till).
+2. **Add as credit** — the same amount becomes customer store credit (**3102**). No cash leaves the till. Apply it later on a posted invoice (`Apply credit`); take a top-up for any remaining balance.
+
+Never both. **Add to stock** still runs after either choice.
+
 ## Bulk import
 
 Buyback / exchange spreadsheet serial columns accept unknown return serials when they can be registered via intake. Issue (new) serials must already exist in warehouse stock.
