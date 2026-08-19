@@ -5,6 +5,7 @@
  */
 
 import { parseSpecsString } from '@/lib/reconfiguration/display-name'
+import { catalogBaseName } from '@/lib/reconfiguration/unit-selling-name'
 import type { DeviceConfigFields } from '@/lib/reconfiguration/types'
 import { formatConditionLabel } from '@/lib/product-label-meta'
 
@@ -213,7 +214,9 @@ export function buildSerialDeviceLabelView(input: SerialDeviceLabelInput): Seria
     serialId: input.serialId,
     serial,
     barcodeValue: serial || String(input.barcode || '').trim(),
-    productName: upper(input.productName || 'DEVICE'),
+    // Title is brand/model only — RAM/SSD print from currentConfig so a
+    // reconfigured unit cannot keep a stale 16GB in the name line.
+    productName: upper(catalogBaseName(input.productName) || input.productName || 'DEVICE'),
     subtitle: upper(input.subtitle || defaultSubtitle(input.productCategory, input.productDescription)),
     statusBadge: STATUS_BADGE[statusKey] || upper(statusKey.replace(/_/g, ' ')),
     cpu: formatCpu(config, specsText),

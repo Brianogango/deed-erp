@@ -13,6 +13,7 @@ import { matchPosScan, normalizeScanCode } from '@/lib/barcode-scan'
 import { isOrphanedPosSession, posOrdersForSession } from '@/lib/pos-session'
 import { loyaltyPointsEarned } from '@/lib/loyalty'
 import { resolvePosLineSerial } from '@/lib/pos-transaction-history'
+import { unitSellingName } from '@/lib/reconfiguration/unit-selling-name'
 import {
   darkenLogoForThermalPrint,
   receiptLogoSrc,
@@ -361,14 +362,23 @@ export default function PointOfSale() {
         showToast(`Scan/select the exact serial barcode for ${product.name}`, 'info')
         return
       }
+      // Prefer this serial's live specs/price after a RAM or SSD change —
+      // the catalog product name may still say 16GB/512GB.
+      const unitName = unitSellingName({
+        productName: product.name,
+        specs: chosen.specs,
+      })
+      const unitPrice = Number(chosen.salePriceOverride) > 0 ? Number(chosen.salePriceOverride) : product.salePrice
+      let added = false
       setCart(prev => {
         if (prev.some(i => i.serialId === chosen.id)) {
           showToast(`${chosen.serial} is already in cart`, 'info')
           return prev
         }
-        return [...prev, { lineId: chosen.id, productId: product.id, productName: product.name, barcode: product.barcode, price: product.salePrice, listPrice: product.salePrice, qty: 1, image: product.image ?? '', serialId: chosen.id, serialNumber: chosen.serial }]
+        added = true
+        return [...prev, { lineId: chosen.id, productId: product.id, productName: unitName, barcode: product.barcode, price: unitPrice, listPrice: product.salePrice, qty: 1, image: product.image ?? '', serialId: chosen.id, serialNumber: chosen.serial }]
       })
-      showToast(`${product.name} (${chosen.serial}) added`, 'success')
+      if (added) showToast(`${unitName} (${chosen.serial}) added`, 'success')
     } else {
       setCart(prev => {
         const ex = prev.find(i => i.productId === product.id)

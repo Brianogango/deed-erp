@@ -1,5 +1,13 @@
 'use client'
 
+/**
+ * Device reconfiguration — bench flow.
+ *
+ * RAM and SSD use the same four moves: leave / pull one / swap / add.
+ * Apply now creates the work order, moves parts stock, and rewrites this
+ * unit's selling name (serial.specs). The catalog SKU name is not changed.
+ */
+
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { ModuleHeader, TabBar } from '@/components/ui'
 import { StatusBadge, TablePageLayout } from '@/components/erp'
@@ -11,6 +19,8 @@ import {
   type ReconfigStatus,
   type ReconfigTransactionType,
 } from '@/lib/reconfiguration/types'
+import { applyBenchJob, type BenchActionKind } from '@/lib/reconfiguration/bench-action'
+import { partCapacityGb } from '@/lib/reconfiguration/product-effect'
 
 type WorkOrderListItem = {
   id: string
@@ -28,6 +38,13 @@ type WorkOrderListItem = {
   version: number
 }
 
+type SlotDraft = {
+  action: BenchActionKind
+  moduleCount: number
+  outgoingProductId: string
+  incomingProductId: string
+}
+
 async function api<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, {
     ...init,
@@ -39,6 +56,17 @@ async function api<T>(url: string, init?: RequestInit): Promise<T> {
 }
 
 const CREATE_ROLES = ['director', 'admin_officer', 'sales_rep', 'technical_lead', 'kilimall_officer']
+
+const ACTIONS: Array<{ value: BenchActionKind; label: string }> = [
+  { value: 'none', label: 'Leave as-is' },
+  { value: 'pull_one', label: 'Pull one' },
+  { value: 'swap', label: 'Swap' },
+  { value: 'add_one', label: 'Add one' },
+]
+
+function emptySlot(): SlotDraft {
+  return { action: 'none', moduleCount: 1, outgoingProductId: '', incomingProductId: '' }
+}
 
 export default function Reconfiguration() {
   const { currentUserId, users, serials, products, systemSettings } = useOperationsStore()
@@ -55,15 +83,11 @@ export default function Reconfiguration() {
   const [q, setQ] = useState('')
 
   const [wizSerialId, setWizSerialId] = useState('')
-  const [wizType, setWizType] = useState<ReconfigTransactionType>('downgrade_for_sale')
-  const [wizScope, setWizScope] = useState<'ram' | 'storage' | 'both'>('both')
-  const [wizReason, setWizReason] = useState('')
-  const [wizRam, setWizRam] = useState(8)
-  const [wizStorage, setWizStorage] = useState(256)
-  const [wizRamProductId, setWizRamProductId] = useState('')
-  const [wizStorageProductId, setWizStorageProductId] = useState('')
-  const [wizAdditive, setWizAdditive] = useState(false)
   const [deviceConfig, setDeviceConfig] = useState<any>(null)
+  const [ram, setRam] = useState<SlotDraft>(emptySlot)
+  const [storage, setStorage] = useState<SlotDraft>(emptySlot)
+  const [price, setPrice] = useState('')
+  const [doneHint, setDoneHint] = useState<string | null>(null)
 
   const canCreate = CREATE_ROLES.includes(role)
   const enabled = systemSettings?.reconfigurationEnabled !== false
@@ -74,9 +98,20 @@ export default function Reconfiguration() {
         (p: any) =>
           p.isActive !== false &&
           (String(p.category || '').includes('Parts') ||
-            /ram|ssd|hdd|memory|storage/i.test(String(p.name || ''))),
+            /ram|ssd|hdd|memory|storage|nvme/i.test(String(p.name || ''))),
       ),
     [products],
+  )
+
+  const ramParts = useMemo(
+    () =>
+      partProducts.filter((p: any) => /ram|memory|ddr/i.test(String(p.name || ''))),
+    [partProducts],
+  )
+  const storageParts = useMemo(
+    () =>
+      partProducts.filter((p: any) => /ssd|hdd|nvme|storage/i.test(String(p.name || ''))),
+    [partProducts],
   )
 
   const availableDevices = useMemo(
@@ -125,6 +160,7 @@ export default function Reconfiguration() {
 
   async function loadDevice(serialId: string) {
     setWizSerialId(serialId)
+    setDoneHint(null)
     if (!serialId) {
       setDeviceConfig(null)
       return
@@ -132,39 +168,100 @@ export default function Reconfiguration() {
     try {
       const cfg = await api<any>(`/api/reconfiguration/device/${encodeURIComponent(serialId)}/configuration`)
       setDeviceConfig(cfg)
-      if (cfg?.current?.totalRamGb) setWizRam(cfg.current.totalRamGb)
-      if (cfg?.current?.primaryStorageGb) setWizStorage(cfg.current.primaryStorageGb)
+      const ramCount = (cfg?.installed || []).filter(
+        (i: any) => i.category === 'ram' || i.slotType === 'ram_slot',
+      ).length
+      const ssdCount = (cfg?.installed || []).filter(
+        (i: any) => i.category === 'storage' || i.slotType === 'm2_slot' || i.slotType === 'sata_bay',
+      ).length
+      setRam({ ...emptySlot(), moduleCount: ramCount || 1 })
+      setStorage({ ...emptySlot(), moduleCount: ssdCount || 1 })
     } catch (e: any) {
       setError(e.message)
     }
   }
 
-  async function createWorkOrder() {
+  const preview = useMemo(() => {
+    if (!deviceConfig) return null
+    const ramIn = ramParts.concat(partProducts).find((p: any) => p.id === ram.incomingProductId)
+    const ssdIn = storageParts.concat(partProducts).find((p: any) => p.id === storage.incomingProductId)
+    return applyBenchJob({
+      productName: deviceConfig.productName,
+      current: deviceConfig.current || {
+        totalRamGb: 0,
+        ramComposition: [],
+        primaryStorageGb: 0,
+        storageType: 'SSD',
+        displayName: deviceConfig.specs || '',
+      },
+      ram: {
+        action: ram.action,
+        currentTotalGb: Number(deviceConfig.current?.totalRamGb) || 0,
+        moduleCount: ram.action === 'pull_one' ? Math.max(2, ram.moduleCount) : ram.moduleCount,
+        outgoingProductId: ram.outgoingProductId || undefined,
+        incoming:
+          ram.incomingProductId
+            ? {
+                productId: ram.incomingProductId,
+                capacityGb: partCapacityGb(ramIn || { id: ram.incomingProductId, name: ramIn?.name }) || 0,
+                productName: ramIn?.name,
+              }
+            : undefined,
+      },
+      storage: {
+        action: storage.action,
+        currentTotalGb: Number(deviceConfig.current?.primaryStorageGb) || 0,
+        moduleCount: storage.action === 'pull_one' ? Math.max(2, storage.moduleCount) : storage.moduleCount,
+        outgoingProductId: storage.outgoingProductId || undefined,
+        incoming:
+          storage.incomingProductId
+            ? {
+                productId: storage.incomingProductId,
+                capacityGb: partCapacityGb(ssdIn || { id: storage.incomingProductId, name: ssdIn?.name }) || 0,
+                productName: ssdIn?.name,
+              }
+            : undefined,
+        storageType: deviceConfig.current?.storageType || 'SSD',
+      },
+    })
+  }, [deviceConfig, ram, storage, ramParts, storageParts, partProducts])
+
+  async function applyNow() {
+    if (!wizSerialId || !preview || preview.error) return
     setLoading(true)
     setError(null)
+    setDoneHint(null)
     try {
-      const wo = await api<any>('/api/reconfiguration', {
+      const ramIn = ramParts.concat(partProducts).find((p: any) => p.id === ram.incomingProductId)
+      const ssdIn = storageParts.concat(partProducts).find((p: any) => p.id === storage.incomingProductId)
+      const wo = await api<any>('/api/reconfiguration/bench', {
         method: 'POST',
         body: JSON.stringify({
           serialId: wizSerialId,
-          transactionType: wizType,
-          reason: wizReason,
-          target: {
-            changeScope: wizScope,
-            totalRamGb: wizScope === 'storage'
-              ? (deviceConfig?.current?.totalRamGb ?? wizRam)
-              : wizRam,
-            primaryStorageGb: wizScope === 'ram'
-              ? (deviceConfig?.current?.primaryStorageGb ?? wizStorage)
-              : wizStorage,
-            storageType: 'SSD',
-            ramProductId: wizScope === 'storage' ? undefined : (wizRamProductId || undefined),
-            storageProductId: wizScope === 'ram' ? undefined : (wizStorageProductId || undefined),
-            additiveRam: wizScope === 'storage' ? false : wizAdditive,
+          ram: {
+            action: ram.action,
+            moduleCount: ram.action === 'pull_one' ? Math.max(2, ram.moduleCount) : ram.moduleCount,
+            outgoingProductId: ram.outgoingProductId || undefined,
+            incomingProductId: ram.incomingProductId || undefined,
+            incomingCapacityGb: ram.incomingProductId
+              ? partCapacityGb(ramIn || { id: ram.incomingProductId, name: ramIn?.name })
+              : undefined,
           },
+          storage: {
+            action: storage.action,
+            moduleCount: storage.action === 'pull_one' ? Math.max(2, storage.moduleCount) : storage.moduleCount,
+            outgoingProductId: storage.outgoingProductId || undefined,
+            incomingProductId: storage.incomingProductId || undefined,
+            incomingCapacityGb: storage.incomingProductId
+              ? partCapacityGb(ssdIn || { id: storage.incomingProductId, name: ssdIn?.name })
+              : undefined,
+            storageType: deviceConfig?.current?.storageType || 'SSD',
+          },
+          finalSellingPrice: price.trim() ? Number(price) : undefined,
         }),
       })
       setDetail(wo)
+      setDoneHint(`Reprint the serial label. This unit is now: ${preview.after.displayName}`)
       setTab('detail')
       await loadOrders()
     } catch (e: any) {
@@ -207,12 +304,12 @@ export default function Reconfiguration() {
     <div className="flex flex-col h-full min-h-0">
       <ModuleHeader
         title="Device Reconfiguration"
-        subtitle="Upgrade / downgrade serialized machines with inventory-backed component moves"
+        subtitle="Pull, swap, or add RAM and SSD. This unit’s name follows the new config — the catalog SKU does not."
         count={orders.length}
         primaryAction={
           canCreate ? (
-            <button type="button" className="btn-primary" onClick={() => { setTab('new'); setError(null) }}>
-              New Work Order
+            <button type="button" className="btn-primary" onClick={() => { setTab('new'); setError(null); setDoneHint(null) }}>
+              New job
             </button>
           ) : undefined
         }
@@ -229,8 +326,13 @@ export default function Reconfiguration() {
       />
 
       {error && (
-        <div className="mx-4 mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+        <div className="mx-4 mt-3 rounded-md border border-[var(--border)] bg-[var(--bg-muted)] px-3 py-2 text-sm text-[var(--text-1)]">
           {error}
+        </div>
+      )}
+      {doneHint && (
+        <div className="mx-4 mt-3 rounded-md border border-[var(--border)] bg-[var(--bg-surface)] px-3 py-2 text-sm text-[var(--text-1)]">
+          {doneHint}
         </div>
       )}
 
@@ -302,8 +404,13 @@ export default function Reconfiguration() {
       )}
 
       {tab === 'new' && (
-        <div className="p-4 max-w-3xl space-y-4 overflow-auto">
-          <h2 className="text-lg font-semibold text-[var(--text-1)]">New reconfiguration</h2>
+        <div className="p-4 max-w-3xl space-y-5 overflow-auto">
+          <div>
+            <h2 className="text-lg font-semibold text-[var(--text-1)]">Bench job</h2>
+            <p className="text-sm text-[var(--text-2)] mt-1">
+              Pull one stick/drive so one remains, or swap the module (16↔8, 512↔256). Same for RAM and SSD.
+            </p>
+          </div>
 
           <label className="block">
             <span className="text-sm text-[var(--text-2)]">Device serial</span>
@@ -321,127 +428,65 @@ export default function Reconfiguration() {
             <div className="rounded-md border border-[var(--border)] bg-[var(--bg-surface)] p-3 text-sm">
               <div className="font-medium">{deviceConfig.current?.displayName || deviceConfig.specs}</div>
               <div className="text-[var(--text-2)] mt-1">
-                Status: {deviceConfig.status} · Location: {deviceConfig.location} · Cost:{' '}
-                {Number(deviceConfig.costBefore || 0).toLocaleString()}
-              </div>
-              <div className="mt-2">
-                <div className="text-xs uppercase tracking-wide text-[var(--text-3)] mb-1">Installed components</div>
-                {deviceConfig.installed?.length ? (
-                  <ul className="list-disc pl-5">
-                    {deviceConfig.installed.map((i: any) => (
-                      <li key={i.id}>
-                        {i.slotType} #{i.slotNumber}: {i.capacityGb}GB {i.category}
-                        {i.removable ? '' : ' (onboard)'} — {i.componentProductName || i.componentProductId}
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p className="text-amber-700">
-                    No installed components recorded for this device. If it already has RAM/storage
-                    fitted, this reconfiguration cannot detect that and will NOT automatically return
-                    the removed parts to inventory — after completing, log them manually via
-                    Inventory → Stock Adjustment (add the removed RAM/SSD to Pending testing).
-                  </p>
-                )}
+                RAM {deviceConfig.current?.totalRamGb || 0}GB · Storage {deviceConfig.current?.primaryStorageGb || 0}GB
+                {deviceConfig.current?.storageType ? ` ${deviceConfig.current.storageType}` : ''}
+                {' · '}Cost {Number(deviceConfig.costBefore || 0).toLocaleString()}
               </div>
             </div>
           )}
 
-          <label className="block">
-            <span className="text-sm text-[var(--text-2)]">Transaction type</span>
-            <select className="form-select w-full mt-1" value={wizType} onChange={e => setWizType(e.target.value as ReconfigTransactionType)}>
-              {Object.entries(TRANSACTION_TYPE_LABELS).map(([k, v]) => (
-                <option key={k} value={k}>{v}</option>
-              ))}
-            </select>
-          </label>
-
-          <fieldset className="block">
-            <legend className="text-sm text-[var(--text-2)]">Change scope</legend>
-            <div className="mt-2 flex flex-wrap gap-3 text-sm">
-              {([
-                ['ram', 'RAM only'],
-                ['storage', 'SSD / storage only'],
-                ['both', 'RAM and storage'],
-              ] as const).map(([value, label]) => (
-                <label key={value} className="inline-flex items-center gap-2">
-                  <input
-                    type="radio"
-                    name="changeScope"
-                    checked={wizScope === value}
-                    onChange={() => setWizScope(value)}
-                  />
-                  {label}
-                </label>
-              ))}
+          {deviceConfig && (
+            <div className="grid md:grid-cols-2 gap-4">
+              <SlotEditor
+                title="RAM"
+                hint="Pull one stick, or swap 16 for 8 (and the reverse)."
+                draft={ram}
+                onChange={setRam}
+                parts={(ramParts.length ? ramParts : partProducts) as any[]}
+              />
+              <SlotEditor
+                title="SSD / storage"
+                hint="Pull one drive, or swap 512 for 256 (and the reverse)."
+                draft={storage}
+                onChange={setStorage}
+                parts={(storageParts.length ? storageParts : partProducts) as any[]}
+              />
             </div>
-            <p className="text-xs text-[var(--text-3)] mt-1">
-              {wizScope === 'ram'
-                ? 'Storage stays as-is. Only RAM removal/install movements are created.'
-                : wizScope === 'storage'
-                  ? 'RAM stays as-is. Only storage removal/install movements are created.'
-                  : 'Either or both components may change in this work order.'}
-            </p>
-          </fieldset>
-
-          <label className="block">
-            <span className="text-sm text-[var(--text-2)]">Reason</span>
-            <textarea className="form-input w-full mt-1" rows={2} value={wizReason} onChange={e => setWizReason(e.target.value)} />
-          </label>
-
-          <div className="grid grid-cols-2 gap-3">
-            {(wizScope === 'ram' || wizScope === 'both') && (
-              <label className="block">
-                <span className="text-sm text-[var(--text-2)]">Target RAM (GB)</span>
-                <input type="number" className="form-input w-full mt-1" value={wizRam} onChange={e => setWizRam(Number(e.target.value))} />
-              </label>
-            )}
-            {(wizScope === 'storage' || wizScope === 'both') && (
-              <label className="block">
-                <span className="text-sm text-[var(--text-2)]">Target storage (GB)</span>
-                <input type="number" className="form-input w-full mt-1" value={wizStorage} onChange={e => setWizStorage(Number(e.target.value))} />
-              </label>
-            )}
-          </div>
-
-          {(wizScope === 'ram' || wizScope === 'both') && (
-            <label className="flex items-center gap-2 text-sm">
-              <input type="checkbox" checked={wizAdditive} onChange={e => setWizAdditive(e.target.checked)} />
-              Additive RAM upgrade (keep existing modules)
-            </label>
           )}
 
-          {(wizScope === 'ram' || wizScope === 'both') && (
-            <label className="block">
-              <span className="text-sm text-[var(--text-2)]">RAM component product</span>
-              <select className="form-select w-full mt-1" value={wizRamProductId} onChange={e => setWizRamProductId(e.target.value)}>
-                <option value="">Select…</option>
-                {partProducts.map((p: any) => (
-                  <option key={p.id} value={p.id}>{p.name} ({p.sku})</option>
-                ))}
-              </select>
-            </label>
+          {deviceConfig && preview && (
+            <div className="rounded-md border border-[var(--border)] p-3 text-sm space-y-2">
+              <div className="text-xs uppercase tracking-wide text-[var(--text-3)]">Name after this job</div>
+              <p className="text-[var(--text-2)]">{preview.before.displayName}</p>
+              <p className="font-medium text-[var(--text-1)]">{preview.after.displayName}</p>
+              <p className="text-[var(--text-3)] text-xs">
+                Catalog SKU name is unchanged. This serial’s specs, labels, POS, and sale line use the new name.
+              </p>
+              {preview.error && <p className="text-[var(--text-2)]">{preview.error}</p>}
+            </div>
           )}
 
-          {(wizScope === 'storage' || wizScope === 'both') && (
+          {deviceConfig && (
             <label className="block">
-              <span className="text-sm text-[var(--text-2)]">Storage component product</span>
-              <select className="form-select w-full mt-1" value={wizStorageProductId} onChange={e => setWizStorageProductId(e.target.value)}>
-                <option value="">Select…</option>
-                {partProducts.map((p: any) => (
-                  <option key={p.id} value={p.id}>{p.name} ({p.sku})</option>
-                ))}
-              </select>
+              <span className="text-sm text-[var(--text-2)]">Selling price for this unit (optional)</span>
+              <input
+                type="number"
+                className="form-input w-full mt-1"
+                value={price}
+                onChange={e => setPrice(e.target.value)}
+                min={0}
+                placeholder="Leave blank to keep the recommended price"
+              />
             </label>
           )}
 
           <button
             type="button"
             className="btn-primary"
-            disabled={!wizSerialId || !wizReason.trim() || loading}
-            onClick={() => void createWorkOrder()}
+            disabled={!wizSerialId || !preview || Boolean(preview.error) || loading}
+            onClick={() => void applyNow()}
           >
-            Create work order
+            Apply now
           </button>
         </div>
       )}
@@ -499,11 +544,11 @@ export default function Reconfiguration() {
 
           <div className="grid md:grid-cols-2 gap-4 text-sm">
             <div className="rounded-md border border-[var(--border)] p-3">
-              <div className="font-medium mb-2">Current</div>
+              <div className="font-medium mb-2">Before</div>
               <p>{detail.currentSnapshot?.displayName || '—'}</p>
             </div>
             <div className="rounded-md border border-[var(--border)] p-3">
-              <div className="font-medium mb-2">Proposed</div>
+              <div className="font-medium mb-2">After (this unit’s name)</div>
               <p>{detail.proposedSnapshot?.displayName || '—'}</p>
             </div>
           </div>
@@ -524,13 +569,13 @@ export default function Reconfiguration() {
           </div>
 
           <section>
-            <h3 className="font-medium mb-2">Components to remove</h3>
+            <h3 className="font-medium mb-2">Removed (back to parts)</h3>
             <ul className="space-y-2 text-sm">
               {(detail.removalLines || []).map((l: any) => (
                 <li key={l.id} className="flex flex-wrap items-center justify-between gap-2 border border-[var(--border)] rounded-md px-3 py-2">
                   <span>
                     {l.componentProduct?.name} · {l.slotType} #{l.slotNumber}
-                    {l.actualRemovedAt ? ' ✓ removed' : ''}
+                    {l.actualRemovedAt ? ' — recorded' : ''}
                   </span>
                   {detail.status === 'in_progress' && !l.actualRemovedAt && (
                     <button
@@ -557,13 +602,13 @@ export default function Reconfiguration() {
           </section>
 
           <section>
-            <h3 className="font-medium mb-2">Components to install</h3>
+            <h3 className="font-medium mb-2">Installed from parts</h3>
             <ul className="space-y-2 text-sm">
               {(detail.installationLines || []).map((l: any) => (
                 <li key={l.id} className="flex flex-wrap items-center justify-between gap-2 border border-[var(--border)] rounded-md px-3 py-2">
                   <span>
                     {l.componentProduct?.name} → {l.targetSlotType} #{l.targetSlotNumber}
-                    {l.installedAt ? ' ✓ installed' : ''} · {l.reservationStatus}
+                    {l.installedAt ? ' — recorded' : ''}
                   </span>
                   {detail.status === 'in_progress' && !l.installedAt && (
                     <button
@@ -582,5 +627,89 @@ export default function Reconfiguration() {
         </div>
       )}
     </div>
+  )
+}
+
+function SlotEditor(props: {
+  title: string
+  hint: string
+  draft: SlotDraft
+  onChange: (next: SlotDraft) => void
+  parts: Array<{ id: string; name?: string; sku?: string }>
+}) {
+  const { title, hint, draft, onChange, parts } = props
+  const needsOut = draft.action === 'pull_one' || draft.action === 'swap'
+  const needsIn = draft.action === 'swap' || draft.action === 'add_one'
+
+  return (
+    <fieldset className="rounded-md border border-[var(--border)] p-3 space-y-3">
+      <legend className="text-sm font-medium px-1">{title}</legend>
+      <p className="text-xs text-[var(--text-3)]">{hint}</p>
+      <div className="flex flex-wrap gap-2">
+        {ACTIONS.map(a => (
+          <label key={a.value} className="inline-flex items-center gap-1.5 text-sm">
+            <input
+              type="radio"
+              name={`action-${title}`}
+              checked={draft.action === a.value}
+              onChange={() =>
+                onChange({
+                  ...draft,
+                  action: a.value,
+                  moduleCount: a.value === 'pull_one' ? Math.max(2, draft.moduleCount) : draft.moduleCount,
+                })
+              }
+            />
+            {a.label}
+          </label>
+        ))}
+      </div>
+
+      {draft.action !== 'none' && (
+        <label className="block text-sm">
+          <span className="text-[var(--text-2)]">How many are fitted now?</span>
+          <select
+            className="form-select w-full mt-1"
+            value={draft.moduleCount}
+            onChange={e => onChange({ ...draft, moduleCount: Number(e.target.value) })}
+          >
+            <option value={1}>1</option>
+            <option value={2}>2</option>
+          </select>
+        </label>
+      )}
+
+      {needsOut && (
+        <label className="block text-sm">
+          <span className="text-[var(--text-2)]">Pulled module becomes this part in stock</span>
+          <select
+            className="form-select w-full mt-1"
+            value={draft.outgoingProductId}
+            onChange={e => onChange({ ...draft, outgoingProductId: e.target.value })}
+          >
+            <option value="">Select…</option>
+            {parts.map(p => (
+              <option key={p.id} value={p.id}>{p.name} {p.sku ? `(${p.sku})` : ''}</option>
+            ))}
+          </select>
+        </label>
+      )}
+
+      {needsIn && (
+        <label className="block text-sm">
+          <span className="text-[var(--text-2)]">Fit this part from warehouse</span>
+          <select
+            className="form-select w-full mt-1"
+            value={draft.incomingProductId}
+            onChange={e => onChange({ ...draft, incomingProductId: e.target.value })}
+          >
+            <option value="">Select…</option>
+            {parts.map(p => (
+              <option key={p.id} value={p.id}>{p.name} {p.sku ? `(${p.sku})` : ''}</option>
+            ))}
+          </select>
+        </label>
+      )}
+    </fieldset>
   )
 }

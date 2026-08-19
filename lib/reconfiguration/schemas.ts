@@ -114,6 +114,33 @@ export const completeSchema = z.object({
   priceMethod: z.enum(PRICE_METHODS).optional(),
 })
 
+/** One slot on the bench form — RAM and SSD share this shape. */
+export const benchSlotSchema = z.object({
+  action: z.enum(['none', 'pull_one', 'swap', 'add_one']),
+  moduleCount: z.number().int().min(1).max(4).optional(),
+  pullCapacityGb: z.number().int().min(1).optional(),
+  incomingProductId: z.string().uuid().optional(),
+  incomingCapacityGb: z.number().int().min(1).optional(),
+  outgoingProductId: z.string().uuid().optional(),
+  storageType: z.string().max(40).nullable().optional(),
+})
+
+/**
+ * POST /api/reconfiguration/bench — create + complete in one step.
+ * Catalog product name is not sent: the server rewrites unit specs only.
+ */
+export const applyBenchSchema = z.object({
+  serialId: z.string().min(1),
+  ram: benchSlotSchema.default({ action: 'none' }),
+  storage: benchSlotSchema.default({ action: 'none' }),
+  reason: z.string().max(2000).optional(),
+  warehouseLocation: z.string().max(30).optional(),
+  linkedSaleOrderId: z.string().uuid().optional().nullable(),
+  finalSellingPrice: z.number().min(0).optional().nullable(),
+  labourCost: z.number().min(0).optional(),
+  otherCost: z.number().min(0).optional(),
+})
+
 export const cancelSchema = z.object({
   version: z.number().int().min(1),
   reason: z.string().min(1).max(2000),

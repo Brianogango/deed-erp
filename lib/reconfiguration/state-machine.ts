@@ -1,5 +1,7 @@
 /**
- * Pure state-machine helpers for Device Reconfiguration work orders.
+ * Historic work orders still walk draft → reserve → approve → QA → complete.
+ * Bench jobs (POST /api/reconfiguration/bench) write completed in one step
+ * and do not use these transitions.
  */
 
 import type { ReconfigStatus } from './types'

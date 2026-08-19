@@ -75,21 +75,27 @@ export function buildSpecsString(config: Pick<
 
 /**
  * Best-effort parse of legacy free-text specs into structured fields.
- * Does not invent installed modules — marks composition empty when unknown.
+ * Accepts 512GB SSD and 1TB SSD (TB → GB). Does not invent installed modules.
  */
 export function parseSpecsString(specs: string | null | undefined): Partial<DeviceConfigFields> {
   const text = String(specs || '').trim()
   if (!text) return { totalRamGb: 0, ramComposition: [], displayName: '' }
 
-  const ramMatch = text.match(/(\d+)\s*GB\s*RAM/i)
-  const storageMatch = text.match(/(\d+)\s*GB\s*(NVMe\s*)?(SSD|HDD)/i)
+  const ramMatch = text.match(/(\d+)\s*GB\s*RAM/i) || text.match(/\b(\d+)\s*GB\b(?![\s]*(TB|SSD|HDD|NVMe))/i)
+  const storageMatch = text.match(/(\d+(?:\.\d+)?)\s*(TB|GB)\s*(NVMe\s*)?(SSD|HDD|NVMe)/i)
   const genMatch = text.match(/(\d+(?:st|nd|rd|th)\s*Gen)/i)
   const cpuMatch = text.match(/(Intel\s+Core\s+i[3579]|AMD\s+Ryzen\s+\d+|Apple\s+M\d+)/i)
 
   const totalRamGb = ramMatch ? Number(ramMatch[1]) : 0
-  const primaryStorageGb = storageMatch ? Number(storageMatch[1]) : null
+  let primaryStorageGb: number | null = null
+  if (storageMatch) {
+    const n = Number(storageMatch[1])
+    primaryStorageGb = /TB/i.test(storageMatch[2]) ? Math.round(n * 1024) : n
+  }
   const storageType = storageMatch
-    ? (storageMatch[2] ? 'NVMe SSD' : storageMatch[3].toUpperCase())
+    ? /nvme/i.test(`${storageMatch[3] || ''} ${storageMatch[4] || ''}`)
+      ? 'NVMe SSD'
+      : String(storageMatch[4] || 'SSD').toUpperCase()
     : null
 
   return {
