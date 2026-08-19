@@ -10195,7 +10195,8 @@ const storeCtx: AppState = {
       const keys = Object.keys(p)
       const metadataOnly = keys.length > 0 && keys.every(k =>
         k === 'proformaRef' || k === 'notes' || k === 'validUntil'
-        || k === 'acceptedAt' || k === 'acceptedById' || k === 'acceptedByName',
+        || k === 'acceptedAt' || k === 'acceptedById' || k === 'acceptedByName'
+        || k === 'salespersonId' || k === 'salespersonName',
       )
       if (existing.status !== 'quotation' && !metadataOnly) {
         showToast(

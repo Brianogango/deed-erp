@@ -37,6 +37,7 @@ const PROTECTED_ROUTES = [
   '/api/leads',
   '/api/opportunities',
   '/api/sale-orders',
+  '/api/salespeople',
   '/api/employees',
   '/api/payroll',
   '/api/salary-advances',

@@ -122,8 +122,9 @@ describe('dashboard role + per-user module gating', () => {
     const orders = [
       { id: 'mine', createdByUserId: 'rep-1' },
       { id: 'other', createdByUserId: 'rep-2' },
+      { id: 'assigned', createdByUserId: 'rep-2', salespersonId: 'rep-1' },
     ]
-    expect(visibleDashboardSalesOrders(salesRep, orders).map(order => order.id)).toEqual(['mine'])
+    expect(visibleDashboardSalesOrders(salesRep, orders).map(order => order.id)).toEqual(['mine', 'assigned'])
     expect(visibleDashboardRepUsers(salesRep, [{ id: 'rep-1' }, { id: 'rep-2' }])).toEqual([{ id: 'rep-1' }])
     expect(visibleDashboardSalesOrders(user('sales_rep', ['dashboard'], 'rep-1'), orders)).toEqual([])
   })

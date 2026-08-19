@@ -141,7 +141,7 @@ function RepPerformanceContent() {
   const repUsers = useMemo(() => {
     const candidates = users.filter(u =>
       ['director', 'sales_rep', 'finance_officer'].includes(u.role ?? '') ||
-      visibleOrders.some(o => o.createdByUserId === u.id)
+      visibleOrders.some(o => o.createdByUserId === u.id || o.salespersonId === u.id)
     )
     return visibleDashboardRepUsers(currentUser, candidates)
   }, [users, visibleOrders, currentUser])
@@ -149,7 +149,7 @@ function RepPerformanceContent() {
   // Compute per-rep stats for the selected period
   const repStats: RepStats[] = useMemo(() => {
     return repUsers.map(u => {
-      const myOrders = visibleOrders.filter(o => o.createdByUserId === u.id && inPeriod(o.date))
+      const myOrders = visibleOrders.filter(o => (o.salespersonId || o.createdByUserId) === u.id && inPeriod(o.date))
       const quotes   = myOrders.length
       const closed   = myOrders.filter(o => ['confirmed', 'delivered', 'invoiced'].includes(o.status))
       const revenue  = closed.reduce((s, o) => s + o.total, 0)

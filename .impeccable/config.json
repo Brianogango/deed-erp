@@ -69,6 +69,33 @@
         ],
         "createdAt": "2026-08-19T20:09:09.740Z",
         "reason": "Incumbent Trade-in operate UI; Pay vs Add as credit is a settlement action, not a visual redesign of existing condition/bulk-upload colors"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "*",
+        "files": [
+          "components/modules/RepPerformance.tsx"
+        ],
+        "createdAt": "2026-08-19T22:57:01.448Z",
+        "reason": "Incumbent Rep performance operate UI; this change only attributes stats to salespersonId instead of restyling"
+      },
+      {
+        "rule": "design-system-radius",
+        "value": "*",
+        "files": [
+          "components/modules/RepPerformance.tsx"
+        ],
+        "createdAt": "2026-08-19T22:57:01.476Z",
+        "reason": "Incumbent Rep performance operate UI; logic-only closer attribution"
+      },
+      {
+        "rule": "layout-transition",
+        "value": "*",
+        "files": [
+          "components/modules/RepPerformance.tsx"
+        ],
+        "createdAt": "2026-08-19T22:57:01.504Z",
+        "reason": "Incumbent Rep performance operate UI; logic-only closer attribution"
       }
     ]
   }

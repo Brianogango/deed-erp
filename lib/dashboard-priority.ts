@@ -161,13 +161,15 @@ export function canShowDashboardLeaveApprovals(
   return dashboardSectionsForUser(user).leaveApprovals
 }
 
-export function visibleDashboardSalesOrders<T extends { createdByUserId?: string }>(
+export function visibleDashboardSalesOrders<T extends { createdByUserId?: string; salespersonId?: string }>(
   user: DashboardUser | null | undefined,
   orders: readonly T[],
 ): T[] {
   if (!dashboardSectionsForUser(user).sales) return []
   const list = Array.isArray(orders) ? orders : []
-  if (user?.role === 'sales_rep') return list.filter(order => order.createdByUserId === user.id)
+  if (user?.role === 'sales_rep') {
+    return list.filter(order => order.createdByUserId === user.id || order.salespersonId === user.id)
+  }
   return [...list]
 }
 

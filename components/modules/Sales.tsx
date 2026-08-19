@@ -96,7 +96,7 @@ import {
   quotationPaymentTermsLabel,
   serializeQuotationPaymentTerms,
 } from '@/lib/sales/quotation-defaults'
-import { calcSaleOrderLineMoney } from '@/lib/sales/line-calc'
+import { SalespersonCloserField } from '@/components/sales/SalespersonCloserField'
 import { allocateDeliveredQtyToOrderLines, pairOrderLinesWithDeliveryLines } from '@/lib/delivery-prepare'
 import Chatter from '@/components/erp/Chatter'
 import { ConfirmQuotationDialog } from '@/components/modules/sales/ConfirmQuotationDialog'
@@ -408,6 +408,8 @@ function SalesContent() {
   const [newDraftLines, setNewDraftLines] = useState<DraftLine[]>([])
   const [quoteFieldErrors, setQuoteFieldErrors] = useState<{ customer?: string; validUntil?: string; lines?: string }>({})
   const [newPricelist, setNewPricelist] = useState('RETAIL')
+  const [newSalespersonId, setNewSalespersonId] = useState('')
+  const [newSalespersonName, setNewSalespersonName] = useState('')
   const [availablePricelists, setAvailablePricelists] = useState<PriceListDef[]>(BUILTIN_PRICELISTS)
   const draftLoadedRef = useRef(false)
   const draftAutosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -415,6 +417,13 @@ function SalesContent() {
   const savingNewQuoteRef = useRef(false)
   const [savingNewQuote, setSavingNewQuote] = useState(false)
   const quoteDraftKey = currentUserId ? `deed_sales_quote_draft_${currentUserId}` : 'deed_sales_quote_draft'
+
+  useEffect(() => {
+    if (view !== 'new') return
+    if (newSalespersonId || !currentUser) return
+    setNewSalespersonId(currentUser.id)
+    setNewSalespersonName(currentUser.name)
+  }, [view, newSalespersonId, currentUser])
 
   // Only fetch when the setting is on — when off, every quotation silently
   // prices from the built-in Retail list, matching the setting's own
@@ -881,6 +890,8 @@ function SalesContent() {
     setNewInvoiceAddress(''); setNewDeliveryAddress('')
     setNewPaymentDetails({ ...DEFAULT_DOCUMENT_PAYMENT_DETAILS })
     setNewPricelist('RETAIL')
+    setNewSalespersonId(currentUser?.id || '')
+    setNewSalespersonName(currentUser?.name || '')
     setNewDraftLines([]); setView('new')
     syncOrderUrl(null)
     startUxTask('sales_quote_create', { module: 'sales' })
@@ -1410,6 +1421,8 @@ function SalesContent() {
       paymentTerms: serializeQuotationPaymentTerms(paymentTermsDays),
       pricelist: newPricelist,
       validUntil: newValidUntil,
+      salespersonId: newSalespersonId || currentUser?.id,
+      salespersonName: newSalespersonName || currentUser?.name,
       ...(newNotes ? { notes: newNotes } : {}),
       ...(newCustomerRef ? { customerRef: newCustomerRef } : {}),
       ...(newInvoiceAddress ? { invoiceAddress: newInvoiceAddress } : {}),
@@ -1602,6 +1615,10 @@ function SalesContent() {
                   setNewPricelist={setNewPricelist}
                   availablePricelists={availablePricelists}
                   salesPricelistsEnabled={!!systemSettings.salesPricelists}
+                  newSalespersonId={newSalespersonId}
+                  newSalespersonName={newSalespersonName}
+                  setNewSalesperson={(id, name) => { setNewSalespersonId(id); setNewSalespersonName(name) }}
+                  createdByName={currentUser?.name}
                   newDraftLines={newDraftLines}
                   addDraftLine={addDraftLine}
                   addDraftSection={addDraftSection}
@@ -2366,7 +2383,18 @@ function SalesContent() {
                               )}
                             </SalesDocField>
                           )}
-                          <SalesDocField label="Salesperson"><input readOnly value={activeOrder.salespersonName || '—'} /></SalesDocField>
+                          <SalespersonCloserField
+                            valueId={activeOrder.salespersonId}
+                            valueName={activeOrder.salespersonName}
+                            createdByName={activeOrder.createdByName}
+                            disabled={
+                              activeOrder.status === 'cancelled'
+                              || activeInvoices.some(i => !['draft', 'cancelled', 'voided', 'canceled'].includes(String(i.status)))
+                            }
+                            onChange={(id, name) => {
+                              void updateSaleOrder(activeOrder.id, { salespersonId: id, salespersonName: name })
+                            }}
+                          />
                           <SalesDocField label="Payment terms"><input readOnly value={activeOrder.paymentTerms || '—'} /></SalesDocField>
                           <SalesDocField label="Currency"><input readOnly value="KES" /></SalesDocField>
                           {activeOrder.status === 'sale' && (
@@ -3358,6 +3386,7 @@ function NewQuotationForm({
   newCustomerRef, setNewCustomerRef, newInvoiceAddress, setNewInvoiceAddress,
   newDeliveryAddress, setNewDeliveryAddress, newPaymentDetails, setNewPaymentDetails,
   newPricelist, setNewPricelist, availablePricelists, salesPricelistsEnabled,
+  newSalespersonId, newSalespersonName, setNewSalesperson, createdByName,
   newDraftLines,
   addDraftLine, addDraftSection, updateDraftLine, removeDraftLine, moveDraftLine, selectProductForDraftLine,
   calcDraftLineTotal, draftSubtotal, draftTaxTotal, draftTotal,
@@ -3375,6 +3404,10 @@ function NewQuotationForm({
   setNewPaymentDetails: (v: DocumentPaymentDetails) => void
   newPricelist: string; setNewPricelist: (v: string) => void
   availablePricelists: PriceListDef[]; salesPricelistsEnabled: boolean
+  newSalespersonId: string
+  newSalespersonName: string
+  setNewSalesperson: (id: string, name: string) => void
+  createdByName?: string
   newDraftLines: DraftLine[]; addDraftLine: () => void; addDraftSection: () => void
   updateDraftLine: (id: string, field: keyof DraftLine, value: string) => void
   removeDraftLine: (id: string) => void
@@ -3575,6 +3608,12 @@ function NewQuotationForm({
                 aria-label="Payment terms, assigned from customer"
               />
             </SalesDocField>
+            <SalespersonCloserField
+              valueId={newSalespersonId}
+              valueName={newSalespersonName}
+              createdByName={createdByName}
+              onChange={setNewSalesperson}
+            />
             {salesPricelistsEnabled && availablePricelists.filter(l => l.isActive).length > 1 && (
               <SalesDocField label="Pricelist" htmlFor="quote-pricelist">
                 <select
