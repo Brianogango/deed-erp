@@ -1,5 +1,5 @@
 import { isSerialOnlyCategory, inferTrackingMethod } from '@/lib/inventory-identifiers'
-import { deviceConfigFromProductSpecs } from '@/lib/reconfiguration/unit-config'
+import { catalogDeviceConfig, deviceConfigFromProductSpecs } from '@/lib/reconfiguration/unit-config'
 
 // Merge the relational product catalog (GET /api/products rows) into the
 // client-side product list kept in the synced JSON store.
@@ -230,7 +230,10 @@ export function mergeCatalogProducts<P extends ClientCatalogProduct>(
       productKind: productKind || (local as any)?.productKind,
       unit: unitFromSpecs || local?.unit || 'pcs',
       taxRate: Number.isFinite(taxFromSpecs) ? taxFromSpecs : (local?.taxRate ?? 16),
-      deviceConfig: deviceConfigFromProductSpecs(specs) || (local as any)?.deviceConfig || null,
+      deviceConfig: deviceConfigFromProductSpecs(specs)
+        || catalogDeviceConfig(String(row.name ?? local?.name ?? ''), category)
+        || (local as any)?.deviceConfig
+        || null,
       // Odoo invoicing policy — server value wins, defaults to Ordered Quantities.
       invoicePolicy: (row.invoicePolicy === 'delivery' || (local as any)?.invoicePolicy === 'delivery') ? 'delivery' : 'order',
       isActive: row.isActive !== false,

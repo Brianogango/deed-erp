@@ -109,6 +109,18 @@ describe('mergeCatalogProducts', () => {
     )
     expect(merged[0].deviceConfig).toMatchObject({ totalRamGb: 8, primaryStorageGb: 256 })
   })
+
+  it('parses RAM/SSD from an existing catalog title when specs.deviceConfig is missing', () => {
+    const merged = mergeCatalogProducts(
+      [clientItem({ name: 'Dell Latitude 5410 - 10th Gen Intel Core i5, 8GB RAM, 256GB SSD' })],
+      [apiRow({
+        name: 'Dell Latitude 5410 - 10th Gen Intel Core i5, 8GB RAM, 256GB SSD',
+        specs: { productKind: 'storable' },
+      })],
+      CONFIG,
+    )
+    expect(merged[0].deviceConfig).toMatchObject({ totalRamGb: 8, primaryStorageGb: 256 })
+  })
 })
 
 describe('mergeProductsStoreWrite', () => {

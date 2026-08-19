@@ -3,6 +3,8 @@ import { parseSpecsString } from '@/lib/reconfiguration/display-name'
 import {
   catalogDeviceConfig,
   compactSpecsString,
+  fillEmptySerialSpecs,
+  fillMissingCatalogDeviceConfig,
   resolveUnitConfig,
   seedSerialSpecs,
   withCatalogDeviceConfig,
@@ -115,6 +117,47 @@ describe('catalogDeviceConfig / seedSerialSpecs', () => {
 
   it('compactSpecsString skips empty config', () => {
     expect(compactSpecsString({ totalRamGb: 0, primaryStorageGb: null })).toBe('')
+  })
+
+  it('fillMissingCatalogDeviceConfig writes RAM/SSD from an existing laptop title', () => {
+    const result = fillMissingCatalogDeviceConfig(
+      { productKind: 'storable', taxRatePct: 16 },
+      'Dell Latitude 5410 - 10th Gen Intel Core i5, 8GB RAM, 256GB SSD',
+      'Laptops',
+    )
+    expect(result.changed).toBe(true)
+    expect(result.specs.productKind).toBe('storable')
+    expect(result.deviceConfig).toMatchObject({ totalRamGb: 8, primaryStorageGb: 256 })
+  })
+
+  it('fillMissingCatalogDeviceConfig is a no-op when specs already match the title', () => {
+    const specs = {
+      productKind: 'storable',
+      deviceConfig: { totalRamGb: 8, primaryStorageGb: 256, storageType: 'SSD' },
+    }
+    const result = fillMissingCatalogDeviceConfig(
+      specs,
+      'Dell Latitude 5410 - 10th Gen Intel Core i5, 8GB RAM, 256GB SSD',
+      'Laptops',
+    )
+    expect(result.changed).toBe(false)
+  })
+
+  it('fillMissingCatalogDeviceConfig does not clear a bare SKU', () => {
+    const specs = { productKind: 'storable', deviceConfig: { totalRamGb: 16, primaryStorageGb: 512, storageType: 'SSD' } }
+    const result = fillMissingCatalogDeviceConfig(specs, 'HP EliteBook 830 G8', 'Laptops')
+    expect(result.changed).toBe(false)
+    expect(result.deviceConfig).toMatchObject({ totalRamGb: 16, primaryStorageGb: 512 })
+  })
+
+  it('fillEmptySerialSpecs stamps blank serials and leaves live specs alone', () => {
+    const product = { name: 'Dell Latitude 5410 - 10th Gen Intel Core i5, 8GB RAM, 256GB SSD' }
+    expect(fillEmptySerialSpecs({ specs: '' }, product).changed).toBe(true)
+    expect(fillEmptySerialSpecs({ specs: '' }, product).specs).toMatch(/8GB RAM/)
+    expect(fillEmptySerialSpecs({ specs: '16GB RAM, 512GB SSD' }, product)).toEqual({
+      specs: '16GB RAM, 512GB SSD',
+      changed: false,
+    })
   })
 })
 

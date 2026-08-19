@@ -5435,9 +5435,18 @@ export function StoreProvider({
       bootedApiGroupsRef.current.add(group)
       try {
         switch (group) {
-          case 'products':
+          case 'products': {
+            await fetch('/api/products/normalize-serial-tracking', { method: 'POST' }).catch(() => null)
+            const deviceConfigRes = await fetch('/api/products/normalize-device-config', { method: 'POST' }).catch(() => null)
+            if (deviceConfigRes?.ok) {
+              const healed = await deviceConfigRes.json().catch(() => null) as { serials?: SerialNumber[]; serialsUpdated?: number } | null
+              if (Number(healed?.serialsUpdated) > 0 && Array.isArray(healed?.serials)) {
+                setSerials(healed.serials as SerialNumber[])
+              }
+            }
             refreshProductCatalog()
             break
+          }
           case 'contacts': {
             const results = await Promise.allSettled([
               fetch('/api/contacts').then(r => r.ok ? r.json() : null),
@@ -9439,6 +9448,15 @@ const storeCtx: AppState = {
       try {
         // Idempotent: force SERIAL on all Laptops / machine-category products.
         await fetch('/api/products/normalize-serial-tracking', { method: 'POST' }).catch(() => null)
+        // Idempotent: copy RAM/SSD from existing product names onto catalog specs
+        // and blank serial.specs so already-received units match new intake.
+        const deviceConfigRes = await fetch('/api/products/normalize-device-config', { method: 'POST' }).catch(() => null)
+        if (deviceConfigRes?.ok) {
+          const healed = await deviceConfigRes.json().catch(() => null) as { serials?: SerialNumber[]; serialsUpdated?: number } | null
+          if (Number(healed?.serialsUpdated) > 0 && Array.isArray(healed?.serials)) {
+            setSerials(healed.serials as SerialNumber[])
+          }
+        }
         // Idempotent: rewrite legacy INV-* tags to manufacturer serial.
         await storeCtxRef.current!.normalizeInventoryTags().catch(() => 0)
         const res = await fetch('/api/products?lite=1')

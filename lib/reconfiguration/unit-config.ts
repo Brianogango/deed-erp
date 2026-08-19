@@ -141,6 +141,60 @@ export function withCatalogDeviceConfig(
   return next
 }
 
+function configEquals(a: DeviceConfigDefault | null, b: DeviceConfigDefault | null): boolean {
+  if (!a && !b) return true
+  if (!a || !b) return false
+  return a.totalRamGb === b.totalRamGb
+    && Number(a.primaryStorageGb || 0) === Number(b.primaryStorageGb || 0)
+    && String(a.storageType || '') === String(b.storageType || '')
+}
+
+/**
+ * Fill SKU default RAM/SSD from the product name when missing or stale.
+ * Does not clear a manual override on a bare title that does not parse.
+ */
+export function fillMissingCatalogDeviceConfig(
+  specs: unknown,
+  name: string,
+  category?: string | null,
+): { specs: Record<string, unknown>; deviceConfig: DeviceConfigDefault | null; changed: boolean } {
+  const current = asRecord(specs)
+  const parsed = catalogDeviceConfig(name, category)
+  const existing = deviceConfigFromProductSpecs(current)
+  if (!parsed) {
+    return { specs: current, deviceConfig: existing, changed: false }
+  }
+  if (configEquals(existing, parsed)) {
+    return { specs: current, deviceConfig: existing || parsed, changed: false }
+  }
+  return {
+    specs: { ...current, deviceConfig: parsed },
+    deviceConfig: parsed,
+    changed: true,
+  }
+}
+
+export type SerialSpecsBackfillRow = {
+  specs?: string | null
+  productName?: string | null
+  productId?: string | null
+}
+
+export function fillEmptySerialSpecs(
+  serial: SerialSpecsBackfillRow,
+  product?: { name?: string | null; specs?: unknown; deviceConfig?: DeviceConfigDefault | null } | null,
+): { specs: string | undefined; changed: boolean } {
+  const existing = String(serial.specs || '').trim()
+  if (existing) return { specs: existing, changed: false }
+  const seeded = seedSerialSpecs({
+    productName: product?.name || serial.productName,
+    productSpecs: product?.specs,
+    deviceConfig: product?.deviceConfig,
+  })
+  if (!seeded) return { specs: undefined, changed: false }
+  return { specs: seeded, changed: true }
+}
+
 export function compactSpecsString(config: Partial<DeviceConfigFields> | DeviceConfigDefault | null | undefined): string {
   if (!config || !hasCapacity(config)) return ''
   return buildSpecsString({
