@@ -73,38 +73,76 @@ export function buildSpecsString(config: Pick<
   return parts.join(', ')
 }
 
+const TYPICAL_RAM_GB = new Set([2, 4, 6, 8, 12, 16, 20, 24, 32, 36, 40, 48, 64, 96, 128])
+
+function toGb(n: number, unit: string): number {
+  return /TB/i.test(unit) ? Math.round(n * 1024) : n
+}
+
+function storageTypeFrom(text: string): 'HDD' | 'NVMe SSD' | 'SSD' {
+  if (/\bhdd\b/i.test(text)) return 'HDD'
+  if (/\bnvme\b/i.test(text)) return 'NVMe SSD'
+  return 'SSD'
+}
+
 /**
- * Best-effort parse of legacy free-text specs into structured fields.
- * Accepts 512GB SSD and 1TB SSD (TB → GB). Does not invent installed modules.
+ * Best-effort parse of a catalog title or free-text specs into RAM / storage.
+ * Accepts the live naming styles (8GB RAM, 256GB SSD; 8G 256GB; 1TB; M.2 NVMe).
+ * Does not invent stick/drive count.
  */
 export function parseSpecsString(specs: string | null | undefined): Partial<DeviceConfigFields> {
-  const text = String(specs || '').trim()
-  if (!text) return { totalRamGb: 0, ramComposition: [], displayName: '' }
+  const raw = String(specs || '').trim()
+  if (!raw) return { totalRamGb: 0, ramComposition: [], displayName: '' }
 
-  const ramMatch = text.match(/(\d+)\s*GB\s*RAM/i) || text.match(/\b(\d+)\s*GB\b(?![\s]*(TB|SSD|HDD|NVMe))/i)
-  const storageMatch = text.match(/(\d+(?:\.\d+)?)\s*(TB|GB)\s*(NVMe\s*)?(SSD|HDD|NVMe)/i)
+  // Screen size is not capacity ("13\"", "15.6 inch").
+  const text = raw.replace(/\b\d+(?:\.\d+)?\s*(?:["”]|inch(?:es)?)\b/gi, ' ')
+
   const genMatch = text.match(/(\d+(?:st|nd|rd|th)\s*Gen)/i)
   const cpuMatch = text.match(/(Intel\s+Core\s+i[3579]|AMD\s+Ryzen\s+\d+|Apple\s+M\d+)/i)
 
-  const totalRamGb = ramMatch ? Number(ramMatch[1]) : 0
   let primaryStorageGb: number | null = null
+  let storageType: string | null = null
+
+  const storageMatch = text.match(
+    /(\d+(?:\.\d+)?)\s*(TB|GB)\s*(?:(?:M\.?2|PCI-?E|PCIe|NVMe|SATA|[\w.-]+)\s+){0,6}(SSD|HDD|NVMe|Storage)\b/i,
+  )
   if (storageMatch) {
-    const n = Number(storageMatch[1])
-    primaryStorageGb = /TB/i.test(storageMatch[2]) ? Math.round(n * 1024) : n
+    primaryStorageGb = toGb(Number(storageMatch[1]), storageMatch[2])
+    storageType = storageTypeFrom(storageMatch[0])
+  } else {
+    const tbMatch = text.match(/(\d+(?:\.\d+)?)\s*TB\b/i)
+    if (tbMatch) {
+      primaryStorageGb = toGb(Number(tbMatch[1]), 'TB')
+      storageType = 'SSD'
+    }
   }
-  const storageType = storageMatch
-    ? /nvme/i.test(`${storageMatch[3] || ''} ${storageMatch[4] || ''}`)
-      ? 'NVMe SSD'
-      : String(storageMatch[4] || 'SSD').toUpperCase()
-    : null
+
+  let totalRamGb = 0
+  const ramExplicit = text.match(/(\d+)\s*G(?:B)?\s*(?:RAM|DDR\d*|SO-?DIMM)/i)
+  if (ramExplicit) {
+    totalRamGb = Number(ramExplicit[1])
+  } else {
+    const pair = text.match(/(\d+)\s*G(?:B)?\s*[/|, ]+\s*(\d+)\s*(TB|GB|G)?/i)
+    if (pair) {
+      totalRamGb = Number(pair[1])
+      if (primaryStorageGb == null) {
+        primaryStorageGb = toGb(Number(pair[2]), pair[3] || 'GB')
+        storageType = storageType || 'SSD'
+      }
+    } else {
+      const gbValues = [...text.matchAll(/\b(\d+)\s*GB\b/gi)].map(m => Number(m[1]))
+      const ramHit = gbValues.find(n => TYPICAL_RAM_GB.has(n) && n !== primaryStorageGb)
+      if (ramHit) totalRamGb = ramHit
+    }
+  }
 
   return {
     totalRamGb,
+    ramComposition: [],
     primaryStorageGb,
     storageType,
     processor: cpuMatch?.[1] || null,
     processorGeneration: genMatch?.[1] || null,
-    ramComposition: [],
-    displayName: text,
+    displayName: raw,
   }
 }

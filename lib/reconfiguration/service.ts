@@ -17,7 +17,8 @@ import {
   reconfigValuationJournalRef,
 } from '@/lib/reconfiguration/costing'
 import { calculateConfigurationDiff, specsFromProposed } from '@/lib/reconfiguration/diff-engine'
-import { buildDisplayName, parseSpecsString } from '@/lib/reconfiguration/display-name'
+import { buildDisplayName } from '@/lib/reconfiguration/display-name'
+import { resolveUnitConfig } from '@/lib/reconfiguration/unit-config'
 import { planComponentInstall, planComponentRemoval } from '@/lib/inventory/reconfiguration-stock'
 import {
   assertVersion,
@@ -138,8 +139,8 @@ export async function getDeviceConfiguration(serialId: string) {
     : null
 
   const product = products.find((p: any) => p.id === (prismaSerial?.productId || blob?.productId))
-  const parsed = parseSpecsString(blob?.specs || snapshot?.displayName || '')
-  const current: DeviceConfigFields = snapshot
+  const productName = (prismaSerial as any)?.product?.name || blob?.productName || product?.name
+  const snapshotConfig = snapshot
     ? {
         processor: snapshot.processor,
         processorGeneration: snapshot.processorGeneration,
@@ -160,29 +161,23 @@ export async function getDeviceConfiguration(serialId: string) {
         grade: snapshot.grade,
         displayName: snapshot.displayName,
       }
-    : {
-        totalRamGb: parsed.totalRamGb || 0,
-        ramComposition: [],
-        primaryStorageGb: parsed.primaryStorageGb ?? null,
-        storageType: parsed.storageType ?? null,
-        processor: parsed.processor ?? null,
-        processorGeneration: parsed.processorGeneration ?? null,
-        displayName:
-          parsed.displayName ||
-          buildDisplayName({
-            brand: (prismaSerial as any)?.product?.brand?.name,
-            model: (prismaSerial as any)?.product?.modelNumber,
-            productName: (prismaSerial as any)?.product?.name || blob?.productName || product?.name,
-            config: {
-              processor: parsed.processor,
-              processorGeneration: parsed.processorGeneration,
-              totalRamGb: parsed.totalRamGb || 0,
-              ramComposition: [],
-              primaryStorageGb: parsed.primaryStorageGb,
-              storageType: parsed.storageType,
-            },
-          }),
-      }
+    : null
+  const installedViews = installs.map(i => mapInstallation(i, i.componentProduct?.name))
+  const { current, source: configSource } = resolveUnitConfig({
+    installed: installedViews,
+    snapshot: snapshotConfig,
+    serialSpecs: blob?.specs,
+    productSpecs: (prismaSerial as any)?.product?.specs ?? product?.specs ?? product?.deviceConfig,
+    productName,
+  })
+  if (!current.displayName) {
+    current.displayName = buildDisplayName({
+      brand: (prismaSerial as any)?.product?.brand?.name,
+      model: (prismaSerial as any)?.product?.modelNumber,
+      productName,
+      config: current,
+    })
+  }
 
   return {
     serialId: effectiveSerialId,
@@ -198,7 +193,8 @@ export async function getDeviceConfiguration(serialId: string) {
     // fall back to the blob string when there is no snapshot at all.
     specs: current.displayName || blob?.specs,
     current,
-    installed: installs.map(i => mapInstallation(i, i.componentProduct?.name)),
+    configSource,
+    installed: installedViews,
     costBefore: cost ? dec(cost.currentCost) : dec((prismaSerial as any)?.product?.costPrice || product?.costPrice),
     sellingPriceBefore: dec((prismaSerial as any)?.product?.sellingPrice || product?.salePrice || product?.sellingPrice),
     activeWorkOrder: activeWo,

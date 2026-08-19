@@ -14,6 +14,7 @@ import { loyaltyPointsEarned } from '@/lib/loyalty'
 import { requestCreateUser, requestDeleteUser, requestUpdateUser, requestDeactivateUser, requestReactivateUser } from '@/lib/auth/client-users'
 import { canManageHRRole, getFirstAllowedModule, hasModuleAccess as userHasModuleAccess, normalizeClientRole } from '@/lib/auth/access'
 import { mergeCatalogProducts, mergeProductsRemoteState } from '@/lib/catalog-merge'
+import { seedSerialSpecs } from '@/lib/reconfiguration/unit-config'
 import { bootApiGroupsForRoute, remainingBootApiGroups, type BootApiGroup } from '@/lib/boot-apis'
 import { documentMoneySnapshot, FUNCTIONAL_CURRENCY } from '@/lib/currency'
 import { resolveListPrice } from '@/lib/pricing/pricelist'
@@ -873,6 +874,17 @@ export interface Product {
   pricingCategoryId?: string
   /** new | refurbished — drives Brand New PCs vs refurb margin bands for Laptops/Desktops. */
   productType?: 'new' | 'refurbished'
+  /**
+   * Default RAM/SSD for this SKU, parsed from the name on save.
+   * Per-serial live config lives on serial.specs after intake or reconfig.
+   */
+  deviceConfig?: {
+    totalRamGb: number
+    primaryStorageGb?: number | null
+    storageType?: string | null
+    processor?: string | null
+    processorGeneration?: string | null
+  } | null
   priceUpdatedAt?: string
   priceUpdatedBy?: string
 }
@@ -9888,6 +9900,10 @@ const storeCtx: AppState = {
               receivedDate: now(),
               // Internal inventory barcode is distinct from manufacturer serial.
               barcode: buildInventoryBarcodeForProduct(item.productId, s),
+              specs: seedSerialSpecs({
+                productName: prod.name,
+                deviceConfig: prod.deviceConfig,
+              }),
             }
             newSerials.push(newSerial)
           })
@@ -12649,7 +12665,11 @@ const storeCtx: AppState = {
             barcode: buildInventoryBarcodeForProduct(line.productId, s),
             accessories: serialAccessories?.[s] ?? [],
             accessoryNotes: serialAccessoryNotes?.[s],
-            specs: serialSpecs?.[s],
+            specs: seedSerialSpecs({
+              typedSpecs: serialSpecs?.[s],
+              productName: line.productName,
+              deviceConfig: prodRef.current.find(p => p.id === line.productId)?.deviceConfig,
+            }),
           }
           newSerials.push(newSerial)
           if (hasIssue) {
@@ -12658,7 +12678,11 @@ const storeCtx: AppState = {
               status: 'queued',
               serialId: newSerial.id, serialNumber: s,
               productId: line.productId, productName: line.productName,
-              specs: serialSpecs?.[s],
+              specs: seedSerialSpecs({
+                typedSpecs: serialSpecs?.[s],
+                productName: line.productName,
+                deviceConfig: prodRef.current.find(p => p.id === line.productId)?.deviceConfig,
+              }),
               receiptId, receiptRef: receipt.ref,
               intakeDate: new Date().toISOString(),
               intakeIssueDescription: issueDesc,

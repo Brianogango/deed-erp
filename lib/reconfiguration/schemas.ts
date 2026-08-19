@@ -133,6 +133,9 @@ export const applyBenchSchema = z.object({
   serialId: z.string().min(1),
   ram: benchSlotSchema.default({ action: 'none' }),
   storage: benchSlotSchema.default({ action: 'none' }),
+  /** Manual current GB when the unit/product name could not be parsed. */
+  currentRamGb: z.number().int().min(0).optional(),
+  currentStorageGb: z.number().int().min(0).optional(),
   reason: z.string().max(2000).optional(),
   warehouseLocation: z.string().max(30).optional(),
   linkedSaleOrderId: z.string().uuid().optional().nullable(),

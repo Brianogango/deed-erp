@@ -75,6 +75,8 @@ export type ApplyBenchParams = {
   finalSellingPrice?: number | null
   labourCost?: number
   otherCost?: number
+  currentRamGb?: number
+  currentStorageGb?: number
 }
 
 async function partMeta(productId: string) {
@@ -169,9 +171,26 @@ export async function applyBenchAndComplete(params: ApplyBenchParams) {
   const ramInstalled = modulesFromInstalled(device.installed, 'ram')
   const storageInstalled = modulesFromInstalled(device.installed, 'storage')
   const currentRam =
-    Number(device.current.totalRamGb) || ramInstalled.reduce((s, m) => s + m.capacityGb, 0)
+    Number(params.currentRamGb) > 0
+      ? Number(params.currentRamGb)
+      : Number(device.current.totalRamGb) || ramInstalled.reduce((s, m) => s + m.capacityGb, 0)
   const currentStorage =
-    Number(device.current.primaryStorageGb) || storageInstalled.reduce((s, m) => s + m.capacityGb, 0)
+    Number(params.currentStorageGb) > 0
+      ? Number(params.currentStorageGb)
+      : Number(device.current.primaryStorageGb) || storageInstalled.reduce((s, m) => s + m.capacityGb, 0)
+
+  const current = {
+    ...device.current,
+    totalRamGb: currentRam,
+    primaryStorageGb: currentStorage || device.current.primaryStorageGb,
+  }
+
+  if ((params.ram.action || 'none') !== 'none' && currentRam <= 0) {
+    throw httpError('Could not read RAM from this unit or its product name. Enter current RAM GB.', 422)
+  }
+  if ((params.storage.action || 'none') !== 'none' && currentStorage <= 0) {
+    throw httpError('Could not read SSD from this unit or its product name. Enter current storage GB.', 422)
+  }
 
   const ramOut = params.ram.outgoingProductId ? await partMeta(params.ram.outgoingProductId) : null
   const ramIn = params.ram.incomingProductId ? await partMeta(params.ram.incomingProductId) : null
@@ -208,7 +227,7 @@ export async function applyBenchAndComplete(params: ApplyBenchParams) {
 
   const job = applyBenchJob({
     productName: device.productName,
-    current: device.current,
+    current,
     ram: ramReq,
     storage: storageReq,
   })

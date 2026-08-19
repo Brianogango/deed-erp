@@ -4,6 +4,7 @@ import { requireRole, withApiErrorHandling } from '@/lib/auth/api'
 import { isSerialOnlyCategory } from '@/lib/inventory-identifiers'
 import { resolveListSaleFromMargin } from '@/lib/pricing/apply-margin-sale-price'
 import { loadServerMarginPolicy } from '@/lib/pricing/sync-product-list-from-cost.server'
+import { deviceConfigFromProductSpecs, withCatalogDeviceConfig } from '@/lib/reconfiguration/unit-config'
 
 const WRITE_ROLES = ['director', 'admin_officer', 'inventory_officer', 'technical_lead', 'finance_officer']
 
@@ -83,6 +84,7 @@ async function handleUpdate(request: NextRequest, id: string) {
       where: { id },
       select: {
         id: true,
+        name: true,
         costPrice: true,
         sellingPrice: true,
         productType: true,
@@ -96,6 +98,29 @@ async function handleUpdate(request: NextRequest, id: string) {
     const categoryName = body.category ?? existing.category?.name
     if (isSerialOnlyCategory(categoryName)) {
       data.trackingMethod = 'SERIAL'
+    }
+
+    const nameForConfig = data.name != null ? String(data.name) : existing.name
+    const deviceRamGb = body.deviceRamGb != null ? Number(body.deviceRamGb) : undefined
+    const deviceStorageGb = body.deviceStorageGb != null ? Number(body.deviceStorageGb) : undefined
+    const deviceStorageType = body.deviceStorageType != null ? String(body.deviceStorageType) : undefined
+    const shouldRefreshDeviceConfig =
+      body.name !== undefined
+      || body.category !== undefined
+      || body.deviceRamGb !== undefined
+      || body.deviceStorageGb !== undefined
+      || body.deviceStorageType !== undefined
+    if (shouldRefreshDeviceConfig) {
+      data.specs = withCatalogDeviceConfig(
+        asSpecs(data.specs ?? existing.specs),
+        nameForConfig,
+        categoryName,
+        {
+          totalRamGb: deviceRamGb,
+          primaryStorageGb: deviceStorageGb,
+          storageType: deviceStorageType,
+        },
+      )
     }
 
     const duplicate = await findProductDuplicate(id, data.name, data.sku, data.barcode)
@@ -142,6 +167,7 @@ async function handleUpdate(request: NextRequest, id: string) {
       productKind: typeof specs.productKind === 'string' ? specs.productKind : null,
       taxRate: Number(specs.taxRatePct ?? 16),
       unit: typeof specs.unit === 'string' ? specs.unit : undefined,
+      deviceConfig: deviceConfigFromProductSpecs(specs),
     })
   })
 }

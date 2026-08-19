@@ -14,6 +14,7 @@ import {
 import { isOpeningStockLocked } from '@/lib/inventory/opening-stock'
 import prisma from '@/lib/prisma'
 import { writeFinancialAudit } from '@/lib/finance-audit'
+import { seedSerialSpecs } from '@/lib/reconfiguration/unit-config'
 
 export const dynamic = 'force-dynamic'
 
@@ -30,6 +31,7 @@ type BlobSerial = {
   receivedDate: string
   barcode: string
   accessoryNotes?: string
+  specs?: string
 }
 
 type BlobProduct = {
@@ -39,6 +41,14 @@ type BlobProduct = {
   stockQty?: number
   requiresSerial?: boolean
   trackingMethod?: string
+  specs?: unknown
+  deviceConfig?: {
+    totalRamGb: number
+    primaryStorageGb?: number | null
+    storageType?: string | null
+    processor?: string | null
+    processorGeneration?: string | null
+  } | null
 }
 
 type BlobMove = {
@@ -126,6 +136,21 @@ export async function POST(request: NextRequest) {
     ? `Opening balance: ${validation.reason}`
     : `Stock intake: ${validation.reason}`
 
+  let productSpecs = product.specs
+  let productName = product.name
+  try {
+    const row = await prisma.product.findUnique({
+      where: { id: product.id },
+      select: { name: true, specs: true },
+    })
+    if (row) {
+      productName = row.name || productName
+      productSpecs = row.specs ?? productSpecs
+    }
+  } catch {
+    /* blob-only catalog */
+  }
+
   const batchBarcodes: string[] = []
   const finalCreated: BlobSerial[] = validation.serials.map(serial => {
     const barcode = buildInventoryBarcode({
@@ -148,6 +173,11 @@ export async function POST(request: NextRequest) {
       receivedDate,
       barcode,
       accessoryNotes: reasonLabel,
+      specs: seedSerialSpecs({
+        productName,
+        productSpecs,
+        deviceConfig: product.deviceConfig,
+      }),
     }
   })
 

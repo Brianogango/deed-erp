@@ -95,6 +95,20 @@ describe('mergeCatalogProducts', () => {
     expect(merged[0].pricingCategoryId).toBe('refurb_laptops')
     expect(merged[0].productKind).toBe('storable')
   })
+
+  it('hydrates deviceConfig from Prisma specs for reconfiguration', () => {
+    const merged = mergeCatalogProducts(
+      [clientItem({})],
+      [apiRow({
+        specs: {
+          productKind: 'storable',
+          deviceConfig: { totalRamGb: 8, primaryStorageGb: 256, storageType: 'SSD' },
+        },
+      })],
+      CONFIG,
+    )
+    expect(merged[0].deviceConfig).toMatchObject({ totalRamGb: 8, primaryStorageGb: 256 })
+  })
 })
 
 describe('mergeProductsStoreWrite', () => {

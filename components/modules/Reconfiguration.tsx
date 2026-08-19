@@ -21,6 +21,7 @@ import {
 } from '@/lib/reconfiguration/types'
 import { applyBenchJob, type BenchActionKind } from '@/lib/reconfiguration/bench-action'
 import { partCapacityGb } from '@/lib/reconfiguration/product-effect'
+import { UNIT_CONFIG_SOURCE_LABEL, type UnitConfigSource } from '@/lib/reconfiguration/unit-config'
 
 type WorkOrderListItem = {
   id: string
@@ -99,6 +100,8 @@ export default function Reconfiguration() {
   const [storage, setStorage] = useState<SlotDraft>(emptySlot)
   const [price, setPrice] = useState('')
   const [doneHint, setDoneHint] = useState<string | null>(null)
+  const [manualRamGb, setManualRamGb] = useState('')
+  const [manualStorageGb, setManualStorageGb] = useState('')
 
   const canCreate = CREATE_ROLES.includes(role)
   const enabled = systemSettings?.reconfigurationEnabled !== false
@@ -172,6 +175,8 @@ export default function Reconfiguration() {
   async function loadDevice(serialId: string) {
     setWizSerialId(serialId)
     setDoneHint(null)
+    setManualRamGb('')
+    setManualStorageGb('')
     if (!serialId) {
       setDeviceConfig(null)
       return
@@ -192,22 +197,31 @@ export default function Reconfiguration() {
     }
   }
 
+  const configSource = (deviceConfig?.configSource || 'unresolved') as UnitConfigSource
+  const unresolved = configSource === 'unresolved'
+  const currentRamGb = Number(deviceConfig?.current?.totalRamGb) || Number(manualRamGb) || 0
+  const currentStorageGb = Number(deviceConfig?.current?.primaryStorageGb) || Number(manualStorageGb) || 0
+
   const preview = useMemo(() => {
     if (!deviceConfig) return null
     const ramIn = findPart(ram.incomingProductId, [ramParts, partProducts])
     const ssdIn = findPart(storage.incomingProductId, [storageParts, partProducts])
     return applyBenchJob({
       productName: deviceConfig.productName,
-      current: deviceConfig.current || {
-        totalRamGb: 0,
-        ramComposition: [],
-        primaryStorageGb: 0,
-        storageType: 'SSD',
-        displayName: deviceConfig.specs || '',
+      current: {
+        ...(deviceConfig.current || {
+          totalRamGb: 0,
+          ramComposition: [],
+          primaryStorageGb: 0,
+          storageType: 'SSD',
+          displayName: deviceConfig.specs || '',
+        }),
+        totalRamGb: currentRamGb,
+        primaryStorageGb: currentStorageGb,
       },
       ram: {
         action: ram.action,
-        currentTotalGb: Number(deviceConfig.current?.totalRamGb) || 0,
+        currentTotalGb: currentRamGb,
         moduleCount: ram.action === 'pull_one' ? Math.max(2, ram.moduleCount) : ram.moduleCount,
         outgoingProductId: ram.outgoingProductId || undefined,
         incoming:
@@ -225,7 +239,7 @@ export default function Reconfiguration() {
       },
       storage: {
         action: storage.action,
-        currentTotalGb: Number(deviceConfig.current?.primaryStorageGb) || 0,
+        currentTotalGb: currentStorageGb,
         moduleCount: storage.action === 'pull_one' ? Math.max(2, storage.moduleCount) : storage.moduleCount,
         outgoingProductId: storage.outgoingProductId || undefined,
         incoming:
@@ -243,7 +257,7 @@ export default function Reconfiguration() {
         storageType: deviceConfig.current?.storageType || 'SSD',
       },
     })
-  }, [deviceConfig, ram, storage, ramParts, storageParts, partProducts])
+  }, [deviceConfig, ram, storage, ramParts, storageParts, partProducts, currentRamGb, currentStorageGb])
 
   async function applyNow() {
     if (!wizSerialId || !preview || preview.error) return
@@ -284,6 +298,8 @@ export default function Reconfiguration() {
               : undefined,
             storageType: deviceConfig?.current?.storageType || 'SSD',
           },
+          currentRamGb: currentRamGb || undefined,
+          currentStorageGb: currentStorageGb || undefined,
           finalSellingPrice: price.trim() ? Number(price) : undefined,
         }),
       })
@@ -453,12 +469,41 @@ export default function Reconfiguration() {
 
           {deviceConfig && (
             <div className="rounded-md border border-[var(--border)] bg-[var(--bg-surface)] p-3 text-sm">
-              <div className="font-medium">{deviceConfig.current?.displayName || deviceConfig.specs}</div>
+              <div className="font-medium">{deviceConfig.current?.displayName || deviceConfig.specs || deviceConfig.productName}</div>
               <div className="text-[var(--text-2)] mt-1">
-                RAM {deviceConfig.current?.totalRamGb || 0}GB · Storage {deviceConfig.current?.primaryStorageGb || 0}GB
+                RAM {currentRamGb || 0}GB · Storage {currentStorageGb || 0}GB
                 {deviceConfig.current?.storageType ? ` ${deviceConfig.current.storageType}` : ''}
                 {' · '}Cost {Number(deviceConfig.costBefore || 0).toLocaleString()}
               </div>
+              <p className="text-xs text-[var(--text-3)] mt-1">
+                {UNIT_CONFIG_SOURCE_LABEL[configSource]}
+              </p>
+              {unresolved && (
+                <div className="grid grid-cols-2 gap-2 mt-3">
+                  <label className="block text-sm">
+                    <span className="text-[var(--text-2)]">Current RAM (GB)</span>
+                    <input
+                      type="number"
+                      min={0}
+                      className="form-input w-full mt-1"
+                      value={manualRamGb}
+                      onChange={e => setManualRamGb(e.target.value)}
+                      placeholder="e.g. 8"
+                    />
+                  </label>
+                  <label className="block text-sm">
+                    <span className="text-[var(--text-2)]">Current SSD (GB)</span>
+                    <input
+                      type="number"
+                      min={0}
+                      className="form-input w-full mt-1"
+                      value={manualStorageGb}
+                      onChange={e => setManualStorageGb(e.target.value)}
+                      placeholder="e.g. 256"
+                    />
+                  </label>
+                </div>
+              )}
             </div>
           )}
 
@@ -510,7 +555,13 @@ export default function Reconfiguration() {
           <button
             type="button"
             className="btn-primary"
-            disabled={!wizSerialId || !preview || Boolean(preview.error) || loading}
+            disabled={
+              !wizSerialId
+              || !preview
+              || Boolean(preview.error)
+              || loading
+              || (unresolved && (ram.action !== 'none' || storage.action !== 'none') && (!currentRamGb || !currentStorageGb))
+            }
             onClick={() => void applyNow()}
           >
             Apply now

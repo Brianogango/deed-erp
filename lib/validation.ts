@@ -28,6 +28,10 @@ export const productSchema = z.object({
   canBeSold: z.boolean().optional(),
   canBePurchased: z.boolean().optional(),
   invoicePolicy: z.enum(['order', 'delivery']).optional().nullable(),
+  /** Manual RAM/SSD when the product name has no capacities (bare model SKU). */
+  deviceRamGb: z.number().int().nonnegative().optional().nullable(),
+  deviceStorageGb: z.number().int().nonnegative().optional().nullable(),
+  deviceStorageType: z.string().max(40).optional().nullable(),
 })
 
 export const userUpdateSchema = z.object({

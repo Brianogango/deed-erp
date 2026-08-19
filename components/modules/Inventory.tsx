@@ -18,6 +18,7 @@ import { guardSpreadsheetFile, guardSpreadsheetRows, SpreadsheetGuardError } fro
 import { Barcode } from '@/components/modules/Barcode'
 import { inferTrackingMethod, isSerialTracking, isStockTracked, isSerialOnlyCategory, type TrackingMethod } from '@/lib/inventory-identifiers'
 import { unitSellingName } from '@/lib/reconfiguration/unit-selling-name'
+import { catalogDeviceConfig, compactSpecsString, isReconfigurableCatalogCategory } from '@/lib/reconfiguration/unit-config'
 import InventoryProductsPanel from '@/components/inventory/InventoryProductsPanel'
 import { canValidatePurchaseReceipt, canReleaseHeldSerial } from '@/lib/inventory/permissions'
 import { isOpeningStockMove } from '@/lib/inventory/opening-stock'
@@ -109,6 +110,8 @@ const blankProduct = () => {
     writeOffAccountCode: defaults.writeOffAccountCode || '',
     priceDifferenceAccountCode: defaults.priceDifferenceAccountCode || '',
     parentId: '',
+    deviceRamGb: '',
+    deviceStorageGb: '',
   }
 }
 
@@ -794,6 +797,12 @@ function InventoryContent() {
       adjustmentAccountCode: product.adjustmentAccountCode ?? '', writeOffAccountCode: product.writeOffAccountCode ?? '',
       priceDifferenceAccountCode: product.priceDifferenceAccountCode ?? '',
       parentId: product.parentId ?? '',
+      deviceRamGb: product.deviceConfig && !catalogDeviceConfig(product.name, product.category)
+        ? String(product.deviceConfig.totalRamGb || '')
+        : '',
+      deviceStorageGb: product.deviceConfig && !catalogDeviceConfig(product.name, product.category)
+        ? String(product.deviceConfig.primaryStorageGb || '')
+        : '',
     })
     setDupConfirm(false)
     setShowAcctMapping(!!(product.saleAccountCode || product.costAccountCode || product.inventoryAccountCode || product.cogsAccountCode))
@@ -948,6 +957,8 @@ function InventoryContent() {
       adjustmentAccountCode: form.adjustmentAccountCode || resolved.adjustmentAccountCode,
       writeOffAccountCode: form.writeOffAccountCode || resolved.writeOffAccountCode,
       priceDifferenceAccountCode: form.priceDifferenceAccountCode || resolved.priceDifferenceAccountCode,
+      deviceRamGb: form.deviceRamGb === '' ? undefined : Number(form.deviceRamGb),
+      deviceStorageGb: form.deviceStorageGb === '' ? undefined : Number(form.deviceStorageGb),
     }
     if (editId) {
       updateProduct(editId, payload)
@@ -3610,6 +3621,35 @@ function InventoryContent() {
                 <Field label="Product Name" required>
                   <Input value={form.name} onChange={(v: string) => { setF('name')(v); setDupConfirm(false) }} placeholder="e.g. HP ProBook 450 G9" />
                 </Field>
+                {isReconfigurableCatalogCategory(form.category) && (() => {
+                  const detected = catalogDeviceConfig(form.name, form.category, {
+                    totalRamGb: form.deviceRamGb === '' ? undefined : Number(form.deviceRamGb),
+                    primaryStorageGb: form.deviceStorageGb === '' ? undefined : Number(form.deviceStorageGb),
+                  })
+                  return (
+                    <div className="mt-1.5 rounded-lg border border-[var(--border)] bg-[var(--bg-muted)] px-3 py-2">
+                      {detected ? (
+                        <p className="text-[11px] text-[var(--text-2)] m-0">
+                          Detected for reconfiguration: {compactSpecsString(detected) || `${detected.totalRamGb}GB RAM`}
+                        </p>
+                      ) : (
+                        <>
+                          <p className="text-[11px] text-[var(--text-2)] m-0">
+                            Name has no RAM/SSD. Optional — used when this SKU is a bare model.
+                          </p>
+                          <div className="grid grid-cols-2 gap-2 mt-2">
+                            <Field label="RAM (GB)">
+                              <Input type="number" value={form.deviceRamGb} onChange={setF('deviceRamGb')} placeholder="e.g. 8" />
+                            </Field>
+                            <Field label="Storage (GB)">
+                              <Input type="number" value={form.deviceStorageGb} onChange={setF('deviceStorageGb')} placeholder="e.g. 256" />
+                            </Field>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  )
+                })()}
                 {/* Live similar-name hint */}
                 {nameSimilarProducts.length > 0 && !dupConfirm && !editId && (
                   <div className="mt-1.5 px-3 py-2 rounded-lg border border-[var(--border)] bg-[var(--info-bg)] text-[10px]">

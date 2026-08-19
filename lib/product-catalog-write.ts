@@ -3,6 +3,7 @@ import type { z } from 'zod'
 import type { productSchema } from '@/lib/validation'
 import { isSerialOnlyCategory } from '@/lib/inventory-identifiers'
 import { createZeroStockLevel } from '@/lib/inventory/stock-level'
+import { deviceConfigFromProductSpecs, withCatalogDeviceConfig } from '@/lib/reconfiguration/unit-config'
 
 export type ValidatedProductInput = z.infer<typeof productSchema>
 
@@ -129,12 +130,21 @@ export async function publishProduct(validated: ValidatedProductInput): Promise<
     trackingMethod,
     isActive: validated.isActive,
     invoicePolicy: validated.invoicePolicy || 'order',
-    specs: {
-      productKind: validated.productKind || null,
-      unit: validated.unit || null,
-      taxRatePct: validated.taxRate ?? 16,
-      pricingCategoryId,
-    },
+    specs: withCatalogDeviceConfig(
+      {
+        productKind: validated.productKind || null,
+        unit: validated.unit || null,
+        taxRatePct: validated.taxRate ?? 16,
+        pricingCategoryId,
+      },
+      validated.name,
+      validated.category,
+      {
+        totalRamGb: validated.deviceRamGb,
+        primaryStorageGb: validated.deviceStorageGb,
+        storageType: validated.deviceStorageType,
+      },
+    ),
   }
 
   const categoryId = await resolveCategoryId(validated.category)
@@ -218,6 +228,7 @@ export function toClientProduct(product: any, categoryName?: string) {
     productKind: typeof specs.productKind === 'string' ? specs.productKind : undefined,
     unit: typeof specs.unit === 'string' ? specs.unit : product.unit,
     taxRate: Number(specs.taxRatePct ?? product.taxRate ?? 16),
+    deviceConfig: deviceConfigFromProductSpecs(specs),
     category: product.category?.name
       ? product.category
       : categoryName

@@ -9,6 +9,7 @@ import type { LocationId } from '@/lib/store'
 import { mirrorStockReservationsToPrisma } from '@/lib/inventory/reservation-mirror'
 import { inferTrackingMethod, isSerialTracking } from '@/lib/inventory-identifiers'
 import { isOnHandSerialStatus } from '@/lib/inventory/serial-status'
+import { seedSerialSpecs } from '@/lib/reconfiguration/unit-config'
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
@@ -28,6 +29,12 @@ type BlobProduct = {
   category?: string
   unit?: string
   warrantyMonths?: number
+  specs?: unknown
+  deviceConfig?: {
+    totalRamGb: number
+    primaryStorageGb?: number | null
+    storageType?: string | null
+  } | null
 }
 
 type BlobSerial = {
@@ -38,6 +45,7 @@ type BlobSerial = {
   location?: string
   saleOrderId?: string
   soldDate?: string
+  specs?: string
 }
 
 type BlobReservation = {
@@ -687,6 +695,7 @@ export async function applyReceiptStockMutation(params: {
           }
           existingSerialKeys.add(token.toLowerCase())
           const record = (line.serialRecords || []).find(r => String(r.serial || '').toLowerCase() === token.toLowerCase())
+          const product = products.find(p => p.id === productId)
           serials.push({
             ...(record || {}),
             id: String(record?.id || randomUUID()),
@@ -694,6 +703,12 @@ export async function applyReceiptStockMutation(params: {
             productId,
             status: String(record?.status || 'available'),
             location: String(record?.location || destination),
+            specs: String(record?.specs || '').trim() || seedSerialSpecs({
+              typedSpecs: record?.specs as string | undefined,
+              productName,
+              productSpecs: product?.specs,
+              deviceConfig: product?.deviceConfig,
+            }),
           } as BlobSerial)
         }
         const idx = products.findIndex(p => p.id === productId)
