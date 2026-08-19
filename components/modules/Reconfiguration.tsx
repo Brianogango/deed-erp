@@ -68,6 +68,17 @@ function emptySlot(): SlotDraft {
   return { action: 'none', moduleCount: 1, outgoingProductId: '', incomingProductId: '' }
 }
 
+function findPart(
+  id: string,
+  lists: Array<Array<{ id: string; name?: string; specs?: unknown }>>,
+): { id: string; name?: string; specs?: unknown } | undefined {
+  for (const list of lists) {
+    const found = list.find(p => p.id === id)
+    if (found) return found
+  }
+  return undefined
+}
+
 export default function Reconfiguration() {
   const { currentUserId, users, serials, products, systemSettings } = useOperationsStore()
   const currentUser = users.find(u => u.id === currentUserId)
@@ -183,8 +194,8 @@ export default function Reconfiguration() {
 
   const preview = useMemo(() => {
     if (!deviceConfig) return null
-    const ramIn = ramParts.concat(partProducts).find((p: any) => p.id === ram.incomingProductId)
-    const ssdIn = storageParts.concat(partProducts).find((p: any) => p.id === storage.incomingProductId)
+    const ramIn = findPart(ram.incomingProductId, [ramParts, partProducts])
+    const ssdIn = findPart(storage.incomingProductId, [storageParts, partProducts])
     return applyBenchJob({
       productName: deviceConfig.productName,
       current: deviceConfig.current || {
@@ -203,7 +214,11 @@ export default function Reconfiguration() {
           ram.incomingProductId
             ? {
                 productId: ram.incomingProductId,
-                capacityGb: partCapacityGb(ramIn || { id: ram.incomingProductId, name: ramIn?.name }) || 0,
+                capacityGb: partCapacityGb({
+                  id: ram.incomingProductId,
+                  name: ramIn?.name,
+                  specs: ramIn?.specs,
+                }) || 0,
                 productName: ramIn?.name,
               }
             : undefined,
@@ -217,7 +232,11 @@ export default function Reconfiguration() {
           storage.incomingProductId
             ? {
                 productId: storage.incomingProductId,
-                capacityGb: partCapacityGb(ssdIn || { id: storage.incomingProductId, name: ssdIn?.name }) || 0,
+                capacityGb: partCapacityGb({
+                  id: storage.incomingProductId,
+                  name: ssdIn?.name,
+                  specs: ssdIn?.specs,
+                }) || 0,
                 productName: ssdIn?.name,
               }
             : undefined,
@@ -232,8 +251,8 @@ export default function Reconfiguration() {
     setError(null)
     setDoneHint(null)
     try {
-      const ramIn = ramParts.concat(partProducts).find((p: any) => p.id === ram.incomingProductId)
-      const ssdIn = storageParts.concat(partProducts).find((p: any) => p.id === storage.incomingProductId)
+      const ramIn = findPart(ram.incomingProductId, [ramParts, partProducts])
+      const ssdIn = findPart(storage.incomingProductId, [storageParts, partProducts])
       const wo = await api<any>('/api/reconfiguration/bench', {
         method: 'POST',
         body: JSON.stringify({
@@ -244,7 +263,11 @@ export default function Reconfiguration() {
             outgoingProductId: ram.outgoingProductId || undefined,
             incomingProductId: ram.incomingProductId || undefined,
             incomingCapacityGb: ram.incomingProductId
-              ? partCapacityGb(ramIn || { id: ram.incomingProductId, name: ramIn?.name })
+              ? partCapacityGb({
+                  id: ram.incomingProductId,
+                  name: ramIn?.name,
+                  specs: ramIn?.specs,
+                })
               : undefined,
           },
           storage: {
@@ -253,7 +276,11 @@ export default function Reconfiguration() {
             outgoingProductId: storage.outgoingProductId || undefined,
             incomingProductId: storage.incomingProductId || undefined,
             incomingCapacityGb: storage.incomingProductId
-              ? partCapacityGb(ssdIn || { id: storage.incomingProductId, name: ssdIn?.name })
+              ? partCapacityGb({
+                  id: storage.incomingProductId,
+                  name: ssdIn?.name,
+                  specs: ssdIn?.specs,
+                })
               : undefined,
             storageType: deviceConfig?.current?.storageType || 'SSD',
           },
