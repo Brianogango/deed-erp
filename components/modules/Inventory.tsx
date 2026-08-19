@@ -17,6 +17,7 @@ import { printLabelsForSerialUnits } from '@/lib/inventory/print-serial-device-l
 import { guardSpreadsheetFile, guardSpreadsheetRows, SpreadsheetGuardError } from '@/lib/spreadsheet-guard'
 import { Barcode } from '@/components/modules/Barcode'
 import { inferTrackingMethod, isSerialTracking, isStockTracked, isSerialOnlyCategory, type TrackingMethod } from '@/lib/inventory-identifiers'
+import { unitSellingName } from '@/lib/reconfiguration/unit-selling-name'
 import InventoryProductsPanel from '@/components/inventory/InventoryProductsPanel'
 import { canValidatePurchaseReceipt, canReleaseHeldSerial } from '@/lib/inventory/permissions'
 import { isOpeningStockMove } from '@/lib/inventory/opening-stock'
@@ -3176,8 +3177,8 @@ function InventoryContent() {
                   },
                   {
                     key: 'product', label: 'Product', priority: 1, width: '1.5fr',
-                    render: serial => <span className="text-xs text-text-1 font-medium">{serial.productName}</span>,
-                    exportValue: serial => serial.productName,
+                    render: serial => <span className="text-xs text-text-1 font-medium">{unitSellingName({ productName: serial.productName, specs: serial.specs })}</span>,
+                    exportValue: serial => unitSellingName({ productName: serial.productName, specs: serial.specs }),
                   },
                   {
                     key: 'purchaseRef', label: 'Purchase ref', priority: 2, width: '120px',

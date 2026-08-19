@@ -181,6 +181,20 @@ export function parseProductReconfigEffect(product: {
   }
 }
 
+/**
+ * Capacity in GB of a parts SKU (8GB RAM stick, 256GB SSD, …).
+ * Used by the bench UI so the technician does not re-type the size.
+ */
+export function partCapacityGb(product: {
+  id: string
+  name?: string | null
+  specs?: unknown
+}): number | undefined {
+  const effect = parseProductReconfigEffect(product)
+  if (!effect) return undefined
+  return effect.targetRamGb || effect.addRamGb || effect.targetStorageGb || effect.addStorageGb
+}
+
 export function mergeEffectsIntoTarget(params: {
   current: { totalRamGb: number; primaryStorageGb?: number | null; storageType?: string | null; processor?: string | null; processorGeneration?: string | null }
   effects: ProductReconfigEffect[]

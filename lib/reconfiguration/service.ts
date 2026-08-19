@@ -1495,7 +1495,7 @@ export async function completeWorkOrder(params: {
   return getWorkOrder(wo.id)
 }
 
-async function postReconfigurationValuation(params: {
+export async function postReconfigurationValuation(params: {
   workOrder: Awaited<ReturnType<typeof getWorkOrder>>
   eventKey: string
   userId?: string
@@ -1673,4 +1673,4 @@ export async function calculateDiffForDevice(params: {
   return { device, diff, compat }
 }
 
-export { applyTargetToWorkOrder }
+export { applyTargetToWorkOrder, applyStockPlan }

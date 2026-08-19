@@ -906,6 +906,8 @@ export interface SerialNumber {
   accessories?: string[]   // accessories received with unit e.g. ['Charger', 'Bag']
   accessoryNotes?: string  // free-text note about condition / missing items
   specs?: string           // freetext specs e.g. "8GB RAM, 512GB SSD, Intel i5-12th Gen"
+  /** Unit selling price after reconfiguration; POS uses this over catalog list price. */
+  salePriceOverride?: number
 }
 
 // Refurbishment job — unit received with issues, needs work before going to sales floor

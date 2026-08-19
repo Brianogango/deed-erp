@@ -17,6 +17,11 @@ export const RECONFIG_TRANSACTION_TYPES = [
 
 export type ReconfigTransactionType = (typeof RECONFIG_TRANSACTION_TYPES)[number]
 
+/**
+ * Statuses for the historic multi-step pipeline.
+ * Bench jobs (pull / swap / add) write `completed` in one post and skip the
+ * middle states.
+ */
 export const RECONFIG_STATUSES = [
   'draft',
   'pending_stock_check',
