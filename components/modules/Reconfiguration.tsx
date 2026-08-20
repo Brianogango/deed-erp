@@ -10,8 +10,9 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { ModuleHeader, TabBar } from '@/components/ui'
-import { StatusBadge, TablePageLayout } from '@/components/erp'
-import { useOperationsStore } from '@/lib/store'
+import { PrimaryActionButton, StatusBadge, TablePageLayout } from '@/components/erp'
+import { Fa, faArrowRight, faHardDrive, faMemory, faMicrochip } from '@/components/icons'
+import { fmtKes, useOperationsStore } from '@/lib/store'
 import {
   STATUS_LABELS,
   TRANSACTION_TYPE_LABELS,
@@ -322,26 +323,40 @@ export default function Reconfiguration() {
 
   if (!enabled) {
     return (
-      <div className="p-6">
-        <ModuleHeader title="Device Reconfiguration" subtitle="Feature disabled in system settings" />
-        <p className="text-[var(--text-2)] mt-4">
-          Enable reconfiguration in system settings to use this module.
-        </p>
+      <div className="mod-page inventory-pilot reconfig-page">
+        <ModuleHeader
+          title="Device Reconfiguration"
+          subtitle="Feature disabled in system settings"
+          icon={<Fa icon={faMicrochip} />}
+          color="#FFFFFF"
+          subtitleMode="visible"
+        />
+        <div className="mod-body">
+          <p className="reconfig-disabled-copy">
+            Enable reconfiguration in system settings to use this module.
+          </p>
+        </div>
       </div>
     )
   }
 
   return (
-    <div className="flex flex-col h-full min-h-0">
+    <div className="mod-page inventory-pilot reconfig-page">
       <ModuleHeader
         title="Device Reconfiguration"
         subtitle="Pull, swap, or add RAM and SSD. This unit’s name follows the new config — the catalog SKU does not."
+        icon={<Fa icon={faMicrochip} />}
+        color="#FFFFFF"
+        subtitleMode="visible"
         count={orders.length}
         primaryAction={
           canCreate ? (
-            <button type="button" className="btn-primary" onClick={() => { setTab('new'); setError(null); setDoneHint(null) }}>
+            <PrimaryActionButton
+              hideLabelOnMobile={false}
+              onClick={() => { setTab('new'); setError(null); setDoneHint(null) }}
+            >
               New job
-            </button>
+            </PrimaryActionButton>
           ) : undefined
         }
       />
@@ -354,24 +369,26 @@ export default function Reconfiguration() {
         ]}
         active={tab}
         onChange={id => setTab(id as typeof tab)}
+        ariaLabel="Reconfiguration sections"
       />
 
+      <div className="mod-body" aria-busy={loading}>
       {error && (
-        <div className="mx-4 mt-3 rounded-md border border-[var(--border)] bg-[var(--bg-muted)] px-3 py-2 text-sm text-[var(--text-1)]">
+        <div className="reconfig-banner reconfig-banner--danger" role="alert">
           {error}
         </div>
       )}
       {doneHint && (
-        <div className="mx-4 mt-3 rounded-md border border-[var(--border)] bg-[var(--bg-surface)] px-3 py-2 text-sm text-[var(--text-1)]">
+        <div className="reconfig-banner reconfig-banner--success" role="status">
           {doneHint}
         </div>
       )}
 
       {tab === 'orders' && (
         <TablePageLayout title="Work orders">
-          <div className="flex flex-wrap gap-2 items-center p-3 border-b border-[var(--border)]">
+          <div className="reconfig-toolbar">
             <input
-              className="form-input"
+              className="form-input reconfig-toolbar-search"
               placeholder="Search ref or serial…"
               value={q}
               onChange={e => setQ(e.target.value)}
@@ -386,46 +403,50 @@ export default function Reconfiguration() {
               Refresh
             </button>
           </div>
-          <div className="responsive-table overflow-auto">
-            <table className="w-full text-sm">
+          <div className="reconfig-table-wrap">
+            <table className="reconfig-table">
               <thead>
                 <tr>
-                  <th className="text-left p-2">Ref</th>
-                  <th className="text-left p-2">Serial</th>
-                  <th className="text-left p-2">Type</th>
-                  <th className="text-left p-2">Status</th>
-                  <th className="text-left p-2">Config</th>
-                  <th className="text-left p-2">Cost</th>
+                  <th>Ref</th>
+                  <th>Serial</th>
+                  <th>Type</th>
+                  <th>Status</th>
+                  <th>Config</th>
+                  <th>Cost</th>
                 </tr>
               </thead>
               <tbody>
                 {orders.map(o => (
                   <tr
                     key={o.id}
-                    className="cursor-pointer hover:bg-[var(--bg-muted)] border-t border-[var(--border)]"
+                    className="reconfig-table-row"
                     onClick={() => void loadDetail(o.id)}
                   >
-                    <td className="p-2 font-medium">{o.ref}</td>
-                    <td className="p-2">{o.manufacturerSerial}</td>
-                    <td className="p-2">{TRANSACTION_TYPE_LABELS[o.transactionType] || o.transactionType}</td>
-                    <td className="p-2">
+                    <td data-label="Ref" className="reconfig-table-ref">{o.ref}</td>
+                    <td data-label="Serial" className="reconfig-table-serial">{o.manufacturerSerial}</td>
+                    <td data-label="Type">{TRANSACTION_TYPE_LABELS[o.transactionType] || o.transactionType}</td>
+                    <td data-label="Status">
                       <StatusBadge status={o.status} label={STATUS_LABELS[o.status] || o.status} />
                     </td>
-                    <td className="p-2 text-[var(--text-2)]">
-                      {o.currentSnapshot?.totalRamGb ?? '—'}GB/{o.currentSnapshot?.primaryStorageGb ?? '—'}GB
-                      {' → '}
-                      {o.proposedSnapshot?.totalRamGb ?? '—'}GB/{o.proposedSnapshot?.primaryStorageGb ?? '—'}GB
+                    <td data-label="Config">
+                      <span className="reconfig-table-config">
+                        <span>{o.currentSnapshot?.totalRamGb ?? '—'}GB/{o.currentSnapshot?.primaryStorageGb ?? '—'}GB</span>
+                        <Fa icon={faArrowRight} className="reconfig-table-arrow" />
+                        <span>{o.proposedSnapshot?.totalRamGb ?? '—'}GB/{o.proposedSnapshot?.primaryStorageGb ?? '—'}GB</span>
+                      </span>
                     </td>
-                    <td className="p-2">
-                      {Number(o.costBefore || 0).toLocaleString()} → {Number(o.costAfter || 0).toLocaleString()}
+                    <td data-label="Cost">
+                      <span className="reconfig-table-cost">
+                        {fmtKes(o.costBefore)}
+                        <Fa icon={faArrowRight} className="reconfig-table-arrow" />
+                        {fmtKes(o.costAfter)}
+                      </span>
                     </td>
                   </tr>
                 ))}
                 {!loading && orders.length === 0 && (
-                  <tr>
-                    <td colSpan={6} className="text-center text-[var(--text-3)] py-8">
-                      No reconfiguration work orders yet.
-                    </td>
+                  <tr className="reconfig-table-empty">
+                    <td colSpan={6}>No reconfiguration work orders yet.</td>
                   </tr>
                 )}
               </tbody>
@@ -435,13 +456,13 @@ export default function Reconfiguration() {
       )}
 
       {tab === 'new' && (
-        <div className="p-4 max-w-3xl space-y-5 overflow-auto">
-          <div>
-            <h2 className="text-lg font-semibold text-[var(--text-1)]">Bench job</h2>
-            <p className="text-sm text-[var(--text-2)] mt-1">
+        <div className="reconfig-bench">
+          <header className="reconfig-bench-intro">
+            <h2>Bench job</h2>
+            <p>
               Pull one stick/drive so one remains, or swap the module (16↔8, 512↔256). Same for RAM and SSD.
             </p>
-          </div>
+          </header>
 
           <SearchablePick
             label="Device serial"
@@ -456,35 +477,44 @@ export default function Reconfiguration() {
           />
 
           {deviceConfig && (
-            <div className="rounded-md border border-[var(--border)] bg-[var(--bg-surface)] p-3 text-sm">
-              <div className="font-medium">{deviceConfig.current?.displayName || deviceConfig.specs || deviceConfig.productName}</div>
-              <div className="text-[var(--text-2)] mt-1">
-                RAM {currentRamGb || 0}GB · Storage {currentStorageGb || 0}GB
-                {deviceConfig.current?.storageType ? ` ${deviceConfig.current.storageType}` : ''}
-                {' · '}Cost {Number(deviceConfig.costBefore || 0).toLocaleString()}
+            <div className="reconfig-device">
+              <div className="reconfig-device-name">
+                {deviceConfig.current?.displayName || deviceConfig.specs || deviceConfig.productName}
               </div>
-              <p className="text-xs text-[var(--text-3)] mt-1">
+              <div className="reconfig-spec-row">
+                <span className="reconfig-spec">
+                  <strong>RAM</strong> {currentRamGb || 0}GB
+                </span>
+                <span className="reconfig-spec">
+                  <strong>Storage</strong> {currentStorageGb || 0}GB
+                  {deviceConfig.current?.storageType ? ` ${deviceConfig.current.storageType}` : ''}
+                </span>
+                <span className="reconfig-spec">
+                  <strong>Cost</strong> {fmtKes(deviceConfig.costBefore)}
+                </span>
+              </div>
+              <p className="reconfig-device-source">
                 {UNIT_CONFIG_SOURCE_LABEL[configSource]}
               </p>
               {unresolved && (
-                <div className="grid grid-cols-2 gap-2 mt-3">
-                  <label className="block text-sm">
-                    <span className="text-[var(--text-2)]">Current RAM (GB)</span>
+                <div className="reconfig-manual-grid">
+                  <label className="reconfig-field">
+                    <span>Current RAM (GB)</span>
                     <input
                       type="number"
                       min={0}
-                      className="form-input w-full mt-1"
+                      className="form-input w-full"
                       value={manualRamGb}
                       onChange={e => setManualRamGb(e.target.value)}
                       placeholder="e.g. 8"
                     />
                   </label>
-                  <label className="block text-sm">
-                    <span className="text-[var(--text-2)]">Current SSD (GB)</span>
+                  <label className="reconfig-field">
+                    <span>Current SSD (GB)</span>
                     <input
                       type="number"
                       min={0}
-                      className="form-input w-full mt-1"
+                      className="form-input w-full"
                       value={manualStorageGb}
                       onChange={e => setManualStorageGb(e.target.value)}
                       placeholder="e.g. 256"
@@ -496,7 +526,7 @@ export default function Reconfiguration() {
           )}
 
           {deviceConfig && (
-            <div className="grid md:grid-cols-2 gap-4">
+            <div className="reconfig-slots">
               <SlotEditor
                 title="RAM"
                 hint="Pull one stick, or swap 16 for 8 (and the reverse)."
@@ -515,23 +545,32 @@ export default function Reconfiguration() {
           )}
 
           {deviceConfig && preview && (
-            <div className="rounded-md border border-[var(--border)] p-3 text-sm space-y-2">
-              <div className="text-xs uppercase tracking-wide text-[var(--text-3)]">Name after this job</div>
-              <p className="text-[var(--text-2)]">{preview.before.displayName}</p>
-              <p className="font-medium text-[var(--text-1)]">{preview.after.displayName}</p>
-              <p className="text-[var(--text-3)] text-xs">
+            <div className="reconfig-compare">
+              <h3>This unit’s name</h3>
+              <div className="reconfig-compare-grid">
+                <div className="reconfig-compare-col">
+                  <p className="reconfig-compare-heading">Now</p>
+                  <p className="reconfig-compare-value">{preview.before.displayName}</p>
+                </div>
+                <Fa icon={faArrowRight} className="reconfig-compare-arrow" />
+                <div className="reconfig-compare-col is-after">
+                  <p className="reconfig-compare-heading">After this job</p>
+                  <p className="reconfig-compare-value">{preview.after.displayName}</p>
+                </div>
+              </div>
+              <p className="reconfig-compare-hint">
                 Catalog SKU name is unchanged. This serial’s specs, labels, POS, and sale line use the new name.
               </p>
-              {preview.error && <p className="text-[var(--text-2)]">{preview.error}</p>}
+              {preview.error && <p className="reconfig-compare-error">{preview.error}</p>}
             </div>
           )}
 
           {deviceConfig && (
-            <label className="block">
-              <span className="text-sm text-[var(--text-2)]">Selling price for this unit (optional)</span>
+            <label className="reconfig-field">
+              <span>Selling price for this unit (optional)</span>
               <input
                 type="number"
-                className="form-input w-full mt-1"
+                className="form-input w-full"
                 value={price}
                 onChange={e => setPrice(e.target.value)}
                 min={0}
@@ -540,36 +579,38 @@ export default function Reconfiguration() {
             </label>
           )}
 
-          <button
-            type="button"
-            className="btn-primary"
-            disabled={
-              !wizSerialId
-              || !preview
-              || Boolean(preview.error)
-              || loading
-              || (unresolved && (ram.action !== 'none' || storage.action !== 'none') && (!currentRamGb || !currentStorageGb))
-            }
-            onClick={() => void applyNow()}
-          >
-            Apply now
-          </button>
+          <div className="reconfig-apply-bar">
+            <button
+              type="button"
+              className="btn-primary"
+              disabled={
+                !wizSerialId
+                || !preview
+                || Boolean(preview.error)
+                || loading
+                || (unresolved && (ram.action !== 'none' || storage.action !== 'none') && (!currentRamGb || !currentStorageGb))
+              }
+              onClick={() => void applyNow()}
+            >
+              Apply now
+            </button>
+          </div>
         </div>
       )}
 
       {tab === 'detail' && detail && (
-        <div className="p-4 space-y-4 overflow-auto">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <h2 className="text-lg font-semibold">{detail.ref}</h2>
-              <p className="text-sm text-[var(--text-2)]">
+        <div className="reconfig-detail">
+          <div className="reconfig-detail-head">
+            <div className="reconfig-detail-titleblock">
+              <h2>{detail.ref}</h2>
+              <p>
                 {detail.manufacturerSerial} · {TRANSACTION_TYPE_LABELS[detail.transactionType as ReconfigTransactionType]}
               </p>
-              <div className="mt-1">
+              <div className="reconfig-detail-status">
                 <StatusBadge status={detail.status} label={STATUS_LABELS[detail.status as ReconfigStatus] || detail.status} />
               </div>
             </div>
-            <div className="flex flex-wrap gap-2">
+            <div className="reconfig-action-bar">
               {['pending_stock_check', 'draft', 'components_reserved'].includes(detail.status) && (
                 <button type="button" className="btn-secondary" onClick={() => void runAction('reserve')} disabled={loading}>Reserve</button>
               )}
@@ -608,37 +649,45 @@ export default function Reconfiguration() {
             </div>
           </div>
 
-          <div className="grid md:grid-cols-2 gap-4 text-sm">
-            <div className="rounded-md border border-[var(--border)] p-3">
-              <div className="font-medium mb-2">Before</div>
-              <p>{detail.currentSnapshot?.displayName || '—'}</p>
-            </div>
-            <div className="rounded-md border border-[var(--border)] p-3">
-              <div className="font-medium mb-2">After (this unit’s name)</div>
-              <p>{detail.proposedSnapshot?.displayName || '—'}</p>
+          <div className="reconfig-compare">
+            <h3>This unit’s name</h3>
+            <div className="reconfig-compare-grid">
+              <div className="reconfig-compare-col">
+                <p className="reconfig-compare-heading">Before</p>
+                <p className="reconfig-compare-value">{detail.currentSnapshot?.displayName || '—'}</p>
+              </div>
+              <Fa icon={faArrowRight} className="reconfig-compare-arrow" />
+              <div className="reconfig-compare-col is-after">
+                <p className="reconfig-compare-heading">After (this unit’s name)</p>
+                <p className="reconfig-compare-value">{detail.proposedSnapshot?.displayName || '—'}</p>
+              </div>
             </div>
           </div>
 
-          <div className="grid md:grid-cols-3 gap-3 text-sm">
-            <div className="rounded-md bg-[var(--bg-muted)] p-3">
-              <div className="text-[var(--text-3)] text-xs">Cost</div>
-              <div>{Number(detail.costBefore || 0).toLocaleString()} → {Number(detail.costAfter || 0).toLocaleString()}</div>
+          <div className="reconfig-metrics">
+            <div className="reconfig-metric">
+              <p>Cost</p>
+              <div>
+                {fmtKes(detail.costBefore)}
+                <Fa icon={faArrowRight} className="reconfig-table-arrow" />
+                {fmtKes(detail.costAfter)}
+              </div>
             </div>
-            <div className="rounded-md bg-[var(--bg-muted)] p-3">
-              <div className="text-[var(--text-3)] text-xs">Selling price</div>
-              <div>{Number(detail.finalSellingPrice ?? detail.recommendedSellingPrice ?? 0).toLocaleString()}</div>
+            <div className="reconfig-metric">
+              <p>Selling price</p>
+              <div>{fmtKes(detail.finalSellingPrice ?? detail.recommendedSellingPrice ?? 0)}</div>
             </div>
-            <div className="rounded-md bg-[var(--bg-muted)] p-3">
-              <div className="text-[var(--text-3)] text-xs">Gross margin</div>
+            <div className="reconfig-metric">
+              <p>Gross margin</p>
               <div>{Number(detail.grossMarginPct || 0).toFixed(1)}%</div>
             </div>
           </div>
 
-          <section>
-            <h3 className="font-medium mb-2">Removed (back to parts)</h3>
-            <ul className="space-y-2 text-sm">
+          <section className="reconfig-lines">
+            <h3>Removed (back to parts)</h3>
+            <ul>
               {(detail.removalLines || []).map((l: any) => (
-                <li key={l.id} className="flex flex-wrap items-center justify-between gap-2 border border-[var(--border)] rounded-md px-3 py-2">
+                <li key={l.id}>
                   <span>
                     {l.componentProduct?.name} · {l.slotType} #{l.slotNumber}
                     {l.actualRemovedAt ? ' — recorded' : ''}
@@ -663,15 +712,15 @@ export default function Reconfiguration() {
                   )}
                 </li>
               ))}
-              {!detail.removalLines?.length && <li className="text-[var(--text-3)]">None</li>}
+              {!detail.removalLines?.length && <li className="reconfig-lines-empty">None</li>}
             </ul>
           </section>
 
-          <section>
-            <h3 className="font-medium mb-2">Installed from parts</h3>
-            <ul className="space-y-2 text-sm">
+          <section className="reconfig-lines">
+            <h3>Installed from parts</h3>
+            <ul>
               {(detail.installationLines || []).map((l: any) => (
-                <li key={l.id} className="flex flex-wrap items-center justify-between gap-2 border border-[var(--border)] rounded-md px-3 py-2">
+                <li key={l.id}>
                   <span>
                     {l.componentProduct?.name} → {l.targetSlotType} #{l.targetSlotNumber}
                     {l.installedAt ? ' — recorded' : ''}
@@ -687,11 +736,12 @@ export default function Reconfiguration() {
                   )}
                 </li>
               ))}
-              {!detail.installationLines?.length && <li className="text-[var(--text-3)]">None</li>}
+              {!detail.installationLines?.length && <li className="reconfig-lines-empty">None</li>}
             </ul>
           </section>
         </div>
       )}
+      </div>
     </div>
   )
 }
@@ -708,12 +758,18 @@ function SlotEditor(props: {
   const needsIn = draft.action === 'swap' || draft.action === 'add_one'
 
   return (
-    <fieldset className="rounded-md border border-[var(--border)] p-3 space-y-3">
-      <legend className="text-sm font-medium px-1">{title}</legend>
-      <p className="text-xs text-[var(--text-3)]">{hint}</p>
-      <div className="flex flex-wrap gap-2">
+    <fieldset className="reconfig-slot">
+      <legend className="reconfig-slot-legend">
+        <Fa icon={title.startsWith('RAM') ? faMemory : faHardDrive} />
+        {title}
+      </legend>
+      <p className="reconfig-slot-hint">{hint}</p>
+      <div className="reconfig-seg" role="radiogroup" aria-label={`${title} action`}>
         {ACTIONS.map(a => (
-          <label key={a.value} className="inline-flex items-center gap-1.5 text-sm">
+          <label
+            key={a.value}
+            className={`reconfig-seg-item${draft.action === a.value ? ' is-active' : ''}`}
+          >
             <input
               type="radio"
               name={`action-${title}`}
@@ -726,16 +782,16 @@ function SlotEditor(props: {
                 })
               }
             />
-            {a.label}
+            <span>{a.label}</span>
           </label>
         ))}
       </div>
 
       {draft.action !== 'none' && (
-        <label className="block text-sm">
-          <span className="text-[var(--text-2)]">How many are fitted now?</span>
+        <label className="reconfig-field">
+          <span>How many are fitted now?</span>
           <select
-            className="form-select w-full mt-1"
+            className="form-select w-full"
             value={draft.moduleCount}
             onChange={e => onChange({ ...draft, moduleCount: Number(e.target.value) })}
           >
