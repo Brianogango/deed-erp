@@ -7,6 +7,7 @@ import { writeFinancialAudit } from '@/lib/finance-audit'
 import { lockVersionMismatch, nextLockVersion, readExpectedVersion } from '@/lib/optimistic-lock'
 import { checkFiscalLock } from '@/lib/fiscal-lock.server'
 import { resolveBlobInvoiceMirror } from '@/lib/accounting/resolve-invoice-mirror'
+import { salesCommissionAppliesToInvoice } from '@/lib/sales/commission-closer'
 
 // technical_lead: repair quotes create/update their linked invoice (see recordRepairBilling).
 const WRITE_ROLES = ['director', 'finance_officer', 'admin_officer', 'technical_lead']
@@ -268,7 +269,7 @@ export async function PUT(request: Request, { params }: { params: { id: string }
       } catch (err) {
         console.error('[invoice] journal dual-write failed:', err)
       }
-      if (invoiceType === 'customer_invoice') {
+      if (invoiceType === 'customer_invoice' && salesCommissionAppliesToInvoice(invoice)) {
         try {
           const { postSalesCommissionForInvoice } = await import('@/lib/accounting/sales-commission')
           await postSalesCommissionForInvoice(invoice.id)

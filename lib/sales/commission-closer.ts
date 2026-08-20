@@ -20,6 +20,21 @@ export function isPosInvoiceWrite(body?: Record<string, unknown> | null): boolea
   return body?.isPosInvoice === true
 }
 
+/** Workshop repair billing never earns sales commission, even if a Sale Order was created to invoice the job. */
+export function salesCommissionAppliesToInvoice(invoice: {
+  repairId?: string | null
+}): boolean {
+  return !invoice.repairId
+}
+
+export function isRepairLinkedSaleOrder(
+  order: { notes?: string | null },
+  invoices: readonly { repairId?: string | null }[] = [],
+): boolean {
+  if (invoices.some(inv => Boolean(inv.repairId))) return true
+  return /^Repair order\b/i.test(String(order.notes || '').trim())
+}
+
 export const COMMISSION_CLOSER_ROLES = [
   'sales_rep',
   'director',

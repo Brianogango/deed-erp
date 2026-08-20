@@ -9,7 +9,7 @@ import { writeFinancialAudit } from '@/lib/finance-audit'
 import { getNextDocNumber } from '@/lib/doc-ref-counter'
 import { checkFiscalLock } from '@/lib/fiscal-lock.server'
 import { parsePaginationParams, paginatedResponse } from '@/lib/api-pagination'
-import { isPosInvoiceWrite, POS_INVOICE_WRITE_ROLES } from '@/lib/sales/commission-closer'
+import { isPosInvoiceWrite, POS_INVOICE_WRITE_ROLES, salesCommissionAppliesToInvoice } from '@/lib/sales/commission-closer'
 
 // technical_lead: repair quotes create/update their linked invoice (see recordRepairBilling).
 const WRITE_ROLES = ['director', 'finance_officer', 'admin_officer', 'technical_lead']
@@ -277,7 +277,7 @@ export async function POST(request: Request) {
     // draft → approved PATCH that posts commission for quotations.
     const createdPosted = invoice.status === 'approved' || invoice.status === 'invoiced'
     const isVendor = Boolean(isCreditNote) || body.type === 'vendor_bill'
-    if (createdPosted && !isVendor && (isPosInvoiceWrite(body) || invoice.saleOrderId)) {
+    if (createdPosted && !isVendor && salesCommissionAppliesToInvoice(invoice) && (isPosInvoiceWrite(body) || invoice.saleOrderId)) {
       try {
         const { postSalesCommissionForInvoice } = await import('@/lib/accounting/sales-commission')
         await postSalesCommissionForInvoice(invoice.id, {

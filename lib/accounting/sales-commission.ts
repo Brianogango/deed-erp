@@ -1,5 +1,6 @@
 import 'server-only'
 import prisma from '@/lib/prisma'
+import { salesCommissionAppliesToInvoice } from '@/lib/sales/commission-closer'
 
 const round2 = (n: number) => Math.round((Number.isFinite(n) ? n : 0) * 100) / 100
 
@@ -43,6 +44,7 @@ export async function postSalesCommissionForInvoice(
       include: { items: true },
     })
     if (!invoice) return
+    if (!salesCommissionAppliesToInvoice(invoice)) return
 
     let salespersonId = opts?.salespersonUserId || null
     if (invoice.saleOrderId) {

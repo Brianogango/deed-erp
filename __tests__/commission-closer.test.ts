@@ -5,6 +5,8 @@ import {
   commissionCloserSelectOptions,
   isCommissionCloserRole,
   isPosInvoiceWrite,
+  isRepairLinkedSaleOrder,
+  salesCommissionAppliesToInvoice,
 } from '@/lib/sales/commission-closer'
 
 const users = [
@@ -56,6 +58,18 @@ describe('commission closer eligibility', () => {
     expect(isPosInvoiceWrite({ isPosInvoice: true })).toBe(true)
     expect(isPosInvoiceWrite({ notes: 'POS POS/0017' })).toBe(false)
     expect(isPosInvoiceWrite({})).toBe(false)
+  })
+
+  it('never applies sales commission to repair invoices', () => {
+    expect(salesCommissionAppliesToInvoice({ repairId: 'rep-1' })).toBe(false)
+    expect(salesCommissionAppliesToInvoice({ repairId: null })).toBe(true)
+    expect(salesCommissionAppliesToInvoice({})).toBe(true)
+  })
+
+  it('treats a repair-order SO as workshop billing, not a sales closer document', () => {
+    expect(isRepairLinkedSaleOrder({ notes: 'Repair order REP/2026/001' })).toBe(true)
+    expect(isRepairLinkedSaleOrder({ notes: 'Urgent laptop' }, [{ repairId: 'rep-1' }])).toBe(true)
+    expect(isRepairLinkedSaleOrder({ notes: 'Walk-in quote' }, [{ repairId: null }])).toBe(false)
   })
 
   it('warns when the chosen closer cannot receive commission', () => {

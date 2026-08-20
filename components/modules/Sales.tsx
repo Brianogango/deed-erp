@@ -97,6 +97,7 @@ import {
   serializeQuotationPaymentTerms,
 } from '@/lib/sales/quotation-defaults'
 import { calcSaleOrderLineMoney } from '@/lib/sales/line-calc'
+import { isRepairLinkedSaleOrder } from '@/lib/sales/commission-closer'
 import { SalespersonCloserField } from '@/components/sales/SalespersonCloserField'
 import { allocateDeliveredQtyToOrderLines, pairOrderLinesWithDeliveryLines } from '@/lib/delivery-prepare'
 import Chatter from '@/components/erp/Chatter'
@@ -822,6 +823,10 @@ function SalesContent() {
   const activeInvoices = useMemo(
     () => activeOrder ? invoices.filter(i => i.saleOrderId === activeOrder.id) : [],
     [invoices, activeOrder],
+  )
+  const activeIsRepairBilling = useMemo(
+    () => activeOrder ? isRepairLinkedSaleOrder(activeOrder, activeInvoices) : false,
+    [activeOrder, activeInvoices],
   )
   const activePayments = useMemo(
     () => activeInvoices.flatMap(i => i.payments ?? []),
@@ -1956,13 +1961,13 @@ function SalesContent() {
                         {isQuotationStage(activeOrder.status) ? (
                           <>
                             Customer {activeOrder.customerName}
-                            {activeOrder.salespersonName ? ` · Salesperson ${activeOrder.salespersonName}` : ''}
+                            {!activeIsRepairBilling && activeOrder.salespersonName ? ` · Salesperson ${activeOrder.salespersonName}` : ''}
                             {' · '}One commercial document — Confirm renames this reference to SO/…
                           </>
                         ) : (
                           <>
                             Sales Order stage · {activeOrder.customerName}
-                            {activeOrder.salespersonName ? ` · Salesperson ${activeOrder.salespersonName}` : ''}
+                            {!activeIsRepairBilling && activeOrder.salespersonName ? ` · Salesperson ${activeOrder.salespersonName}` : ''}
                           </>
                         )}
                       </div>
@@ -2384,6 +2389,7 @@ function SalesContent() {
                               )}
                             </SalesDocField>
                           )}
+                          {!activeIsRepairBilling && (
                           <SalespersonCloserField
                             valueId={activeOrder.salespersonId}
                             valueName={activeOrder.salespersonName}
@@ -2396,6 +2402,7 @@ function SalesContent() {
                               void updateSaleOrder(activeOrder.id, { salespersonId: id, salespersonName: name })
                             }}
                           />
+                          )}
                           <SalesDocField label="Payment terms"><input readOnly value={activeOrder.paymentTerms || '—'} /></SalesDocField>
                           <SalesDocField label="Currency"><input readOnly value="KES" /></SalesDocField>
                           {activeOrder.status === 'sale' && (

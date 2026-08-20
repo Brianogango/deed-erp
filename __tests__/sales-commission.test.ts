@@ -31,9 +31,12 @@ const SALESPERSON_USER_ID = 'cccccccc-cccc-cccc-cccc-cccccccccccc'
 const EMPLOYEE_ID = 'dddddddd-dddd-dddd-dddd-dddddddddddd'
 const PRODUCT_ID = 'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee'
 
+const REPAIR_ID = 'ffffffff-ffff-ffff-ffff-ffffffffffff'
+
 const baseInvoice = {
   id: INVOICE_ID,
   saleOrderId: SALE_ORDER_ID,
+  repairId: null,
   items: [{ productId: PRODUCT_ID, lineSubtotal: 10000 }],
 }
 
@@ -76,6 +79,13 @@ describe('postSalesCommissionForInvoice', () => {
   it('does nothing for an invoice with no linked sale order', async () => {
     mockPrisma.invoice.findUnique.mockResolvedValue({ ...baseInvoice, saleOrderId: null })
     await postSalesCommissionForInvoice(INVOICE_ID)
+    expect(mockPrisma.saleOrder.findUnique).not.toHaveBeenCalled()
+    expect(mockPrisma.salesCommission.createMany).not.toHaveBeenCalled()
+  })
+
+  it('does nothing for a repair invoice even when a sale order closer is present', async () => {
+    mockPrisma.invoice.findUnique.mockResolvedValue({ ...baseInvoice, repairId: REPAIR_ID })
+    await postSalesCommissionForInvoice(INVOICE_ID, { salespersonUserId: SALESPERSON_USER_ID })
     expect(mockPrisma.saleOrder.findUnique).not.toHaveBeenCalled()
     expect(mockPrisma.salesCommission.createMany).not.toHaveBeenCalled()
   })

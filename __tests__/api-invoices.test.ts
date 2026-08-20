@@ -327,6 +327,26 @@ describe('POST /api/invoices', () => {
     expect(mockPostSalesCommissionForInvoice).not.toHaveBeenCalled()
   })
 
+  it('does not post commission for a posted repair invoice even with a sale order', async () => {
+    const soId = 'ffffffff-ffff-ffff-ffff-ffffffffffff'
+    const repairId = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee'
+    mockPrismaInvoice.create.mockResolvedValue({
+      ...baseInvoice,
+      status: 'approved',
+      saleOrderId: soId,
+      repairId,
+    })
+    const res = await POST(postReq({
+      clientId: CLIENT_ID,
+      status: 'posted',
+      saleOrderId: soId,
+      repairId,
+      notes: 'Repair REP/2026/001',
+    }))
+    expect(res.status).toBe(201)
+    expect(mockPostSalesCommissionForInvoice).not.toHaveBeenCalled()
+  })
+
   it('returns 401 when unauthenticated', async () => {
     mockRequireRole.mockRejectedValue(err401())
     const res = await POST(postReq({}))
