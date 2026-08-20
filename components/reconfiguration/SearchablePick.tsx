@@ -2,6 +2,7 @@
 
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
+import { Fa, faChevronDown } from '@/components/icons'
 
 export type SearchablePickOption = {
   id: string
@@ -106,9 +107,9 @@ export default function SearchablePick({
   }, [filtered.length, activeIndex])
 
   return (
-    <div ref={wrapRef} className="block text-sm">
-      <span className="text-[var(--text-2)]">{label}</span>
-      <div className="relative mt-1">
+    <div ref={wrapRef} className="reconfig-pick">
+      <span className="reconfig-pick-label">{label}</span>
+      <div className="reconfig-pick-control">
         <input
           ref={inputRef}
           type="text"
@@ -119,7 +120,7 @@ export default function SearchablePick({
           aria-autocomplete="list"
           autoComplete="off"
           disabled={disabled}
-          className="form-input w-full pr-16"
+          className={`form-input reconfig-pick-input ${value ? 'has-clear' : ''}`}
           placeholder={placeholder}
           value={display}
           onChange={e => {
@@ -150,7 +151,7 @@ export default function SearchablePick({
         {value && !disabled && (
           <button
             type="button"
-            className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-[var(--text-3)] hover:text-[var(--text-1)]"
+            className="reconfig-pick-clear"
             onClick={() => {
               onChange('')
               setQuery('')
@@ -161,6 +162,9 @@ export default function SearchablePick({
             Clear
           </button>
         )}
+        <span className={`reconfig-pick-chevron ${open ? 'is-open' : ''}`} aria-hidden="true">
+          <Fa icon={faChevronDown} />
+        </span>
       </div>
       {open && menuPos && typeof document !== 'undefined' && createPortal(
         <div
@@ -168,7 +172,7 @@ export default function SearchablePick({
           id={listId}
           role="listbox"
           aria-label={label}
-          className="fixed z-[80] overflow-y-auto rounded-md border border-[var(--border)] bg-[var(--bg-card)] shadow-lg"
+          className="reconfig-pick-menu"
           style={{
             top: menuPos.top,
             left: menuPos.left,
@@ -177,7 +181,7 @@ export default function SearchablePick({
           }}
         >
           {filtered.length === 0 ? (
-            <p className="px-3 py-2 text-sm text-[var(--text-3)]">{emptyText}</p>
+            <p className="reconfig-pick-empty">{emptyText}</p>
           ) : filtered.map((option, index) => {
             const active = index === activeIndex
             const chosen = option.id === value
@@ -187,9 +191,7 @@ export default function SearchablePick({
                 type="button"
                 role="option"
                 aria-selected={chosen}
-                className={`block w-full truncate px-3 py-2 text-left text-sm ${
-                  active ? 'bg-[var(--bg-muted)] text-[var(--text-1)]' : 'text-[var(--text-1)]'
-                } ${chosen ? 'font-medium' : 'font-normal'}`}
+                className={`reconfig-pick-option${active ? ' is-active' : ''}${chosen ? ' is-chosen' : ''}`}
                 onMouseEnter={() => setActiveIndex(index)}
                 onMouseDown={e => e.preventDefault()}
                 onClick={() => pick(option.id)}

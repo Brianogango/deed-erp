@@ -33,6 +33,7 @@ export {
 export {
   faLaptop, faDesktop, faPrint, faServer,
   faScrewdriverWrench, faWrench, faToolbox,
+  faMicrochip, faMemory, faHardDrive,
 } from '@fortawesome/free-solid-svg-icons'
 
 export {

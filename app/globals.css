@@ -6004,3 +6004,720 @@ main#main-content:has(.sales-pilot.sales-doc) > .min-w-0 {
     transform: none;
   }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Reconfiguration bench — Inventory navy chrome, Operate density.
+   Scoped visual restyle only; handlers and tab IDs stay in the module.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.reconfig-page .mod-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 0.75rem 0.85rem 1.1rem;
+}
+
+.reconfig-disabled-copy {
+  margin: 0.5rem 0 0;
+  color: var(--text-2);
+  font-size: var(--fs-ui);
+}
+
+.reconfig-banner {
+  border-radius: var(--radius-sm);
+  padding: 0.7rem 0.9rem;
+  font-size: var(--fs-ui);
+  line-height: 1.4;
+}
+
+.reconfig-banner--danger {
+  background: var(--danger-bg);
+  color: var(--danger-text);
+  border: 1px solid color-mix(in srgb, var(--danger) 28%, var(--border));
+}
+
+.reconfig-banner--success {
+  background: var(--success-bg);
+  color: var(--success-text);
+  border: 1px solid color-mix(in srgb, var(--success) 28%, var(--border));
+}
+
+.reconfig-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 0.85rem;
+  background: color-mix(in srgb, var(--navy) 4%, var(--bg-surface));
+  border-bottom: 1px solid var(--border-lt);
+}
+
+.reconfig-toolbar-search {
+  flex: 1 1 14rem;
+  min-width: 10rem;
+}
+
+.reconfig-table-wrap {
+  overflow: auto;
+}
+
+.reconfig-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--fs-table);
+}
+
+.reconfig-table thead th {
+  background: color-mix(in srgb, var(--navy) 6%, var(--table-head-bg, var(--bg-surface)));
+  color: var(--navy);
+  font-size: 0.68rem;
+  font-weight: 750;
+  letter-spacing: 0.045em;
+  text-transform: uppercase;
+  text-align: left;
+  padding: 0.7rem 0.85rem;
+  white-space: nowrap;
+}
+
+.reconfig-table-row {
+  cursor: pointer;
+  border-top: 1px solid var(--border-lt);
+  transition: background-color 140ms ease-out;
+}
+
+.reconfig-table-row:hover {
+  background: color-mix(in srgb, var(--navy) 5%, var(--bg-card));
+}
+
+.reconfig-table td {
+  padding: 0.75rem 0.85rem;
+  vertical-align: middle;
+  color: var(--text-2);
+}
+
+.reconfig-table-ref {
+  font-weight: 700;
+  color: var(--navy);
+}
+
+.reconfig-table-serial {
+  font-family: var(--font-dm-mono), ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+.reconfig-table-config,
+.reconfig-table-cost {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.reconfig-table-cost {
+  font-variant-numeric: tabular-nums;
+  font-family: var(--font-dm-mono), ui-monospace, monospace;
+  white-space: nowrap;
+}
+
+.reconfig-table-arrow {
+  width: 0.7rem;
+  height: 0.7rem;
+  color: var(--text-4);
+  flex-shrink: 0;
+}
+
+.reconfig-table-empty td {
+  text-align: center;
+  color: var(--text-3);
+  padding: 2.5rem 1rem;
+  cursor: default;
+}
+
+@media (max-width: 767px) {
+  .reconfig-table thead {
+    display: none;
+  }
+
+  .reconfig-table,
+  .reconfig-table tbody,
+  .reconfig-table-row,
+  .reconfig-table td {
+    display: block;
+    width: 100%;
+  }
+
+  .reconfig-table-wrap {
+    padding: 0.65rem;
+  }
+
+  .reconfig-table-row {
+    margin-bottom: 0.65rem;
+    border: 1px solid color-mix(in srgb, var(--navy) 12%, var(--border));
+    border-radius: var(--radius-sm);
+    background: var(--bg-card);
+    box-shadow: var(--shadow-xs);
+  }
+
+  .reconfig-table-row:last-child {
+    margin-bottom: 0;
+  }
+
+  .reconfig-table td {
+    display: grid;
+    grid-template-columns: 7.5rem minmax(0, 1fr);
+    gap: 0.5rem;
+    align-items: start;
+    padding: 0.45rem 0.8rem;
+    border-top: 0;
+    border-bottom: 1px dashed var(--border-lt);
+  }
+
+  .reconfig-table td:last-child {
+    border-bottom: 0;
+  }
+
+  .reconfig-table td::before {
+    content: attr(data-label);
+    color: var(--text-4);
+    font-size: var(--fs-label);
+    font-weight: 750;
+  }
+
+  .reconfig-table-empty td {
+    display: block;
+    padding: 1.75rem 1rem;
+  }
+
+  .reconfig-table-empty td::before {
+    content: none;
+  }
+}
+
+.reconfig-bench {
+  display: flex;
+  flex-direction: column;
+  gap: 1.1rem;
+  max-width: 52rem;
+  padding: 0.15rem 0.15rem 0.5rem;
+}
+
+.reconfig-bench-intro h2,
+.reconfig-detail-titleblock h2,
+.reconfig-compare > h3,
+.reconfig-lines > h3 {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 750;
+  letter-spacing: -0.02em;
+  color: var(--navy);
+}
+
+.reconfig-bench-intro p {
+  margin: 0.35rem 0 0;
+  color: var(--text-2);
+  font-size: var(--fs-ui);
+  max-width: 46rem;
+}
+
+.reconfig-device {
+  border: 1px solid color-mix(in srgb, var(--navy) 14%, var(--border));
+  border-radius: 0.55rem;
+  background: var(--bg-card);
+  padding: 0.9rem 1rem;
+  box-shadow: var(--shadow-xs);
+}
+
+.reconfig-device-name {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--text-1);
+  letter-spacing: -0.015em;
+}
+
+.reconfig-spec-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.7rem;
+}
+
+.reconfig-spec {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.35rem;
+  min-height: 1.85rem;
+  padding: 0.2rem 0.55rem;
+  border-radius: 0.35rem;
+  background: color-mix(in srgb, var(--navy) 6%, var(--bg-surface));
+  color: var(--text-2);
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.reconfig-spec strong {
+  font-size: 0.65rem;
+  font-weight: 750;
+  color: var(--navy);
+}
+
+.reconfig-device-source {
+  margin: 0.55rem 0 0;
+  color: var(--text-3);
+  font-size: 0.75rem;
+}
+
+.reconfig-manual-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.75rem;
+  margin-top: 0.85rem;
+}
+
+@media (min-width: 640px) {
+  .reconfig-manual-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.reconfig-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+.reconfig-field > span,
+.reconfig-pick-label {
+  color: var(--text-2);
+  font-size: 0.78rem;
+  font-weight: 650;
+}
+
+.reconfig-page .form-input,
+.reconfig-page .form-select,
+.reconfig-pick-input {
+  min-height: 2.75rem;
+}
+
+.reconfig-slots {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.85rem;
+}
+
+@media (min-width: 860px) {
+  .reconfig-slots {
+    grid-template-columns: 1fr 1fr;
+    align-items: start;
+  }
+}
+
+.reconfig-slot {
+  margin: 0;
+  min-width: 0;
+  padding: 0.95rem 1rem 1.05rem;
+  border: 1px solid color-mix(in srgb, var(--navy) 12%, var(--border));
+  border-radius: 0.55rem;
+  background: var(--bg-card);
+  box-shadow: var(--shadow-xs);
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.reconfig-slot-legend {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  float: left;
+  width: 100%;
+  padding: 0;
+  font-size: 0.95rem;
+  font-weight: 750;
+  color: var(--navy);
+  letter-spacing: -0.015em;
+}
+
+.reconfig-slot-legend svg {
+  width: 0.9rem;
+  height: 0.9rem;
+  color: var(--accent-cyan);
+}
+
+.reconfig-slot-hint {
+  margin: 0;
+  clear: both;
+  color: var(--text-3);
+  font-size: 0.75rem;
+  line-height: 1.4;
+}
+
+.reconfig-seg {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.25rem;
+  padding: 0.22rem;
+  background: var(--bg-muted);
+  border-radius: var(--radius-sm);
+}
+
+.reconfig-seg-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.5rem;
+  padding: 0.35rem 0.45rem;
+  border-radius: 0.35rem;
+  color: var(--text-3);
+  font-size: 0.74rem;
+  font-weight: 650;
+  text-align: center;
+  cursor: pointer;
+  transition: background-color 140ms ease-out, color 140ms ease-out, box-shadow 140ms ease-out;
+}
+
+.reconfig-seg-item input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+  margin: 0;
+}
+
+.reconfig-seg-item.is-active {
+  background: var(--bg-card);
+  color: var(--navy);
+  box-shadow: var(--shadow-xs);
+}
+
+.reconfig-seg-item:hover:not(.is-active) {
+  color: var(--text-1);
+  background: color-mix(in srgb, var(--navy) 4%, transparent);
+}
+
+.reconfig-seg-item:focus-within {
+  outline: 2px solid var(--primary);
+  outline-offset: 1px;
+}
+
+.reconfig-compare {
+  border: 1px solid color-mix(in srgb, var(--navy) 12%, var(--border));
+  border-radius: 0.55rem;
+  background: var(--bg-card);
+  padding: 0.95rem 1rem;
+  box-shadow: var(--shadow-xs);
+}
+
+.reconfig-compare > h3 {
+  margin-bottom: 0.75rem;
+}
+
+.reconfig-compare-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.65rem;
+}
+
+@media (min-width: 640px) {
+  .reconfig-compare-grid {
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    align-items: start;
+    gap: 0.85rem;
+  }
+}
+
+.reconfig-compare-col {
+  min-width: 0;
+  padding: 0.7rem 0.8rem;
+  border-radius: 0.4rem;
+  background: var(--bg-surface);
+}
+
+.reconfig-compare-col.is-after {
+  background: color-mix(in srgb, var(--accent-cyan) 8%, var(--bg-surface));
+}
+
+.reconfig-compare-heading {
+  margin: 0 0 0.3rem;
+  color: var(--text-3);
+  font-size: 0.78rem;
+  font-weight: 650;
+}
+
+.reconfig-compare-value {
+  margin: 0;
+  color: var(--text-1);
+  font-size: 0.88rem;
+  font-weight: 650;
+  line-height: 1.4;
+}
+
+.reconfig-compare-col.is-after .reconfig-compare-value {
+  color: var(--navy);
+}
+
+.reconfig-compare-arrow {
+  display: none;
+  width: 0.85rem;
+  height: 0.85rem;
+  margin-top: 1.35rem;
+  color: var(--text-4);
+}
+
+@media (min-width: 640px) {
+  .reconfig-compare-arrow {
+    display: block;
+  }
+}
+
+.reconfig-compare-hint {
+  margin: 0.7rem 0 0;
+  color: var(--text-3);
+  font-size: 0.75rem;
+  line-height: 1.4;
+}
+
+.reconfig-compare-error {
+  margin: 0.55rem 0 0;
+  color: var(--danger-text);
+  font-size: 0.8rem;
+  font-weight: 650;
+}
+
+.reconfig-apply-bar {
+  position: sticky;
+  bottom: 0;
+  z-index: 4;
+  display: flex;
+  justify-content: flex-end;
+  padding: 0.85rem 0 0.15rem;
+  background: linear-gradient(180deg, transparent, var(--bg-page) 32%);
+}
+
+.reconfig-apply-bar .btn-primary {
+  min-width: 8.5rem;
+}
+
+.reconfig-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  max-width: 56rem;
+  padding: 0.15rem 0.15rem 0.5rem;
+}
+
+.reconfig-detail-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.85rem;
+  padding: 0.95rem 1rem;
+  border: 1px solid color-mix(in srgb, var(--navy) 12%, var(--border));
+  border-radius: 0.55rem;
+  background: var(--bg-card);
+  box-shadow: var(--shadow-xs);
+}
+
+.reconfig-detail-titleblock p {
+  margin: 0.3rem 0 0;
+  color: var(--text-2);
+  font-size: 0.82rem;
+}
+
+.reconfig-detail-status {
+  margin-top: 0.45rem;
+}
+
+.reconfig-action-bar {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.45rem;
+}
+
+.reconfig-metrics {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.55rem;
+}
+
+@media (min-width: 720px) {
+  .reconfig-metrics {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+.reconfig-metric {
+  padding: 0.8rem 0.9rem;
+  border: 1px solid var(--border-lt);
+  border-radius: 0.45rem;
+  background: var(--bg-card);
+}
+
+.reconfig-metric p {
+  margin: 0 0 0.3rem;
+  color: var(--text-3);
+  font-size: 0.75rem;
+  font-weight: 650;
+}
+
+.reconfig-metric div {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  color: var(--navy);
+  font-size: 0.92rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  font-family: var(--font-dm-mono), ui-monospace, monospace;
+}
+
+.reconfig-lines {
+  border: 1px solid color-mix(in srgb, var(--navy) 12%, var(--border));
+  border-radius: 0.55rem;
+  background: var(--bg-card);
+  padding: 0.95rem 1rem;
+  box-shadow: var(--shadow-xs);
+}
+
+.reconfig-lines ul {
+  list-style: none;
+  margin: 0.7rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.reconfig-lines li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.55rem;
+  min-height: 2.75rem;
+  padding: 0.55rem 0.7rem;
+  border: 1px solid var(--border-lt);
+  border-radius: 0.4rem;
+  background: var(--bg-surface);
+  color: var(--text-2);
+  font-size: var(--fs-ui);
+}
+
+.reconfig-lines-empty {
+  border: 0 !important;
+  background: transparent !important;
+  color: var(--text-3) !important;
+  min-height: 0 !important;
+  padding: 0.15rem 0 !important;
+}
+
+.reconfig-pick {
+  display: block;
+  min-width: 0;
+}
+
+.reconfig-pick-control {
+  position: relative;
+  margin-top: 0.35rem;
+}
+
+.reconfig-pick-input {
+  width: 100%;
+  padding-right: 2.4rem;
+}
+
+.reconfig-pick-input.has-clear {
+  padding-right: 5.1rem;
+}
+
+.reconfig-pick-clear {
+  position: absolute;
+  right: 2.15rem;
+  top: 50%;
+  transform: translateY(-50%);
+  min-height: 1.75rem;
+  padding: 0 0.35rem;
+  border: 0;
+  background: transparent;
+  color: var(--text-4);
+  font-size: 0.72rem;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.reconfig-pick-clear:hover {
+  color: var(--text-1);
+}
+
+.reconfig-pick-chevron {
+  position: absolute;
+  right: 0.7rem;
+  top: 50%;
+  display: flex;
+  transform: translateY(-50%);
+  color: var(--text-4);
+  pointer-events: none;
+  transition: transform 140ms ease-out;
+}
+
+.reconfig-pick-chevron.is-open {
+  transform: translateY(-50%) rotate(180deg);
+}
+
+.reconfig-pick-chevron svg {
+  width: 0.75rem;
+  height: 0.75rem;
+}
+
+.reconfig-pick-menu {
+  position: fixed;
+  z-index: 80;
+  overflow-y: auto;
+  border: 1px solid color-mix(in srgb, var(--navy) 16%, var(--border));
+  border-radius: var(--radius-sm);
+  background: var(--bg-card);
+  box-shadow: 0 10px 28px color-mix(in srgb, var(--navy) 16%, transparent);
+}
+
+.reconfig-pick-empty {
+  margin: 0;
+  padding: 0.7rem 0.85rem;
+  color: var(--text-3);
+  font-size: var(--fs-ui);
+}
+
+.reconfig-pick-option {
+  display: block;
+  width: 100%;
+  padding: 0.65rem 0.85rem;
+  border: 0;
+  background: transparent;
+  color: var(--text-1);
+  font-size: var(--fs-ui);
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.reconfig-pick-option.is-active {
+  background: color-mix(in srgb, var(--navy) 7%, var(--bg-card));
+}
+
+.reconfig-pick-option.is-chosen {
+  font-weight: 700;
+  color: var(--navy);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reconfig-table-row,
+  .reconfig-seg-item,
+  .reconfig-pick-chevron {
+    transition: none;
+  }
+}
