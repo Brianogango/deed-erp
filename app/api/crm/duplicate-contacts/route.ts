@@ -3,6 +3,7 @@ import { requireRole, withApiErrorHandling } from '@/lib/auth/api'
 import {
   findDuplicateContactGroups,
   mergeDuplicateContacts,
+  mergeObviousDuplicateContacts,
 } from '@/lib/crm/inbox/duplicate-contacts'
 
 const READ_ROLES = ['director', 'admin_officer', 'sales_rep', 'sales', 'finance_officer', 'super_admin']
@@ -19,7 +20,15 @@ export async function GET() {
 export async function POST(request: Request) {
   return withApiErrorHandling(async () => {
     await requireRole(WRITE_ROLES)
-    const body = await request.json() as { keepId?: string; mergeId?: string }
+    const body = await request.json() as {
+      action?: string
+      keepId?: string
+      mergeId?: string
+    }
+    if (body.action === 'mergeObvious') {
+      const result = await mergeObviousDuplicateContacts()
+      return NextResponse.json(result)
+    }
     if (!body.keepId || !body.mergeId) {
       return NextResponse.json({ error: 'keepId and mergeId required' }, { status: 400 })
     }

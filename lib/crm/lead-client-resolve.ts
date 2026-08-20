@@ -37,11 +37,21 @@ function toMatch(row: any | null | undefined): LeadClientMatch | null {
   }
 }
 
+function withExcludeId<T extends Record<string, unknown>>(
+  where: T,
+  excludeId?: string,
+): T {
+  if (!excludeId) return where
+  return { ...where, id: { not: excludeId } }
+}
+
 export async function findExistingClientForLead(
   prisma: Pick<ClientLookup, 'client'>,
   lead: LeadIdentity,
+  opts?: { excludeId?: string },
 ): Promise<LeadClientMatch | null> {
-  if (lead.clientId) {
+  const excludeId = opts?.excludeId
+  if (lead.clientId && lead.clientId !== excludeId) {
     const linked = await prisma.client.findUnique({
       where: { id: lead.clientId },
       select: { id: true, name: true, email: true, phone: true, isActive: true },
@@ -52,7 +62,10 @@ export async function findExistingClientForLead(
   const email = String(lead.email || '').trim().toLowerCase()
   if (email) {
     const byEmail = await prisma.client.findFirst({
-      where: { isActive: true, email: { equals: email, mode: 'insensitive' } },
+      where: withExcludeId(
+        { isActive: true, email: { equals: email, mode: 'insensitive' } },
+        excludeId,
+      ),
       orderBy: { createdAt: 'asc' },
       select: { id: true, name: true, email: true, phone: true },
     })
@@ -63,13 +76,16 @@ export async function findExistingClientForLead(
   if (phone.length >= 9) {
     const last9 = phone.slice(-9)
     const byPhone = await prisma.client.findFirst({
-      where: {
-        isActive: true,
-        OR: [
-          { phone: { contains: last9 } },
-          { phoneAlt: { contains: last9 } },
-        ],
-      },
+      where: withExcludeId(
+        {
+          isActive: true,
+          OR: [
+            { phone: { contains: last9 } },
+            { phoneAlt: { contains: last9 } },
+          ],
+        },
+        excludeId,
+      ),
       orderBy: { createdAt: 'asc' },
       select: { id: true, name: true, email: true, phone: true },
     })
@@ -79,13 +95,16 @@ export async function findExistingClientForLead(
   const company = String(lead.companyName || '').trim()
   if (company.length >= 2) {
     const byCompany = await prisma.client.findFirst({
-      where: {
-        isActive: true,
-        OR: [
-          { name: { equals: company, mode: 'insensitive' } },
-          { companyName: { equals: company, mode: 'insensitive' } },
-        ],
-      },
+      where: withExcludeId(
+        {
+          isActive: true,
+          OR: [
+            { name: { equals: company, mode: 'insensitive' } },
+            { companyName: { equals: company, mode: 'insensitive' } },
+          ],
+        },
+        excludeId,
+      ),
       orderBy: { createdAt: 'asc' },
       select: { id: true, name: true, email: true, phone: true },
     })
@@ -95,13 +114,16 @@ export async function findExistingClientForLead(
   const domain = corporateEmailDomain(lead.email)
   if (domain) {
     const byDomain = await prisma.client.findFirst({
-      where: {
-        isActive: true,
-        OR: [
-          { email: { endsWith: `@${domain}`, mode: 'insensitive' } },
-          { website: { contains: domain, mode: 'insensitive' } },
-        ],
-      },
+      where: withExcludeId(
+        {
+          isActive: true,
+          OR: [
+            { email: { endsWith: `@${domain}`, mode: 'insensitive' } },
+            { website: { contains: domain, mode: 'insensitive' } },
+          ],
+        },
+        excludeId,
+      ),
       orderBy: { createdAt: 'asc' },
       select: { id: true, name: true, email: true, phone: true },
     })
