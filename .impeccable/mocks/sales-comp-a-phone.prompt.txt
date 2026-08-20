@@ -1,0 +1,1 @@
+Phone Quotations stacked cards, no table overflow, no horizontal scroll.

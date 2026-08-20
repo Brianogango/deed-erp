@@ -1,0 +1,1 @@
+Desktop Create quotation two-column canvas that fits width, no horizontal scroll.

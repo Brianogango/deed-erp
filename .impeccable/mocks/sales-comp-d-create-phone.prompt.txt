@@ -1,0 +1,1 @@
+Phone Create quotation one-column 44px fields, wrapping tabs, no horizontal scroll.

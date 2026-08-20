@@ -1,0 +1,1 @@
+Tablet 768 portrait SO/2026/0071 stacked fields, wrapping stepper chips, no horizontal scroll.
