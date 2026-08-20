@@ -35,14 +35,16 @@ export function SalesDocTabs({
   active,
   onChange,
   ariaLabel = 'Document sections',
+  className = '',
 }: {
   tabs: string[]
   active: string
   onChange: (tab: string) => void
   ariaLabel?: string
+  className?: string
 }) {
   return (
-    <div className="sp-tabs" role="tablist" aria-label={ariaLabel}>
+    <div className={`sp-tabs ${className}`.trim()} role="tablist" aria-label={ariaLabel}>
       {tabs.map(tab => (
         <button
           key={tab}

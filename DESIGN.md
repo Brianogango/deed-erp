@@ -8,6 +8,9 @@ colors:
   navy: "#20164D"
   navy-dark: "#18103A"
   accent-cyan: "#00AEEF"
+  sales-blue: "#2563EB"
+  sales-blue-hover: "#1D4ED8"
+  sales-blue-soft: "#DBEAFE"
   bg-page: "#F1F5F9"
   bg-surface: "#F8FAFC"
   bg-card: "#FFFFFF"
@@ -72,7 +75,7 @@ components:
     backgroundColor: "{colors.primary-dark}"
     textColor: "#FFFFFF"
   sales-pilot-cta:
-    backgroundColor: "{colors.success}"
+    backgroundColor: "{colors.sales-blue}"
     textColor: "#FFFFFF"
     rounded: "{rounded.sm}"
 ---
@@ -83,7 +86,7 @@ components:
 
 ## Overview
 
-Deed ERP is an **Operate**-mode product UI: dense tables, document steppers, role-gated actions. Visual authority lives in `app/globals.css` CSS variables, shared `components/ui` + `components/erp` + `components/data-table`, and module pilots (Sales slate-ink + emerald; Inventory navy + cyan).
+Deed ERP is an **Operate**-mode product UI: dense tables, document steppers, role-gated actions. Visual authority lives in `app/globals.css` CSS variables, shared `components/ui` + `components/erp` + `components/data-table`, and module pilots (Sales navy command + Deed blue; Inventory navy + cyan).
 
 This file **documents the incumbent system** before Phase 3–4 redesign choices. It is not permission to invent a marketing aesthetic.
 
@@ -93,7 +96,7 @@ This file **documents the incumbent system** before Phase 3–4 redesign choices
 
 Brand: Deed cyan (`--primary` / `--accent-cyan` `#00AEEF`) and Deed navy (`--navy` `#20164D`). Surfaces: cool slate page/card stack. Status: success / warning / danger / info with dedicated `*-bg` / `*-text` for badges.
 
-**Sales pilot** remaps primary CTA and active chrome to **emerald (`--success`)** on a **slate-ink header** — deliberately distinct from Inventory’s navy band.
+**Sales** uses the same **navy command band** as Inventory (`--navy` `#20164D`). Primary actions, active tabs, and document refs are **Deed blue (`--sales-blue` `#2563EB`)**. Cyan (`#00AEEF`) is only the header icon spark. Emerald/orange stay on delivered, paid, not-paid, and expired pills — not chrome.
 
 **Avoid in product modules:** purple/indigo decorative accents (`#8B5CF6`, `#4F46E5`), glassmorphism, full-bleed hero gradients, dark-mode-first shells.
 
@@ -147,5 +150,5 @@ Sales-specific: `.sales-pilot`, `.sales-pilot-rail`, `.sales-pilot-stat`, `.sale
 
 - Add hero sections, glass panels, or decorative motion on tables/money
 - Fork a second button/badge system inside a module
-- Copy Inventory navy onto Sales (or vice versa) without an explicit direction decision
+- Split Sales onto a different command chrome than Inventory — both use navy; Sales actions are Deed blue
 - Change APIs, permissions, or dual-write behaviour for visual work
