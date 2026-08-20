@@ -9,7 +9,13 @@
 import 'dotenv/config'
 import { mergeObviousDuplicateContacts } from '../lib/crm/inbox/duplicate-contacts'
 
-const dryRun = process.argv.includes('--dry-run')
+async function main() {
+  const dryRun = process.argv.includes('--dry-run')
+  const result = await mergeObviousDuplicateContacts({ dryRun })
+  console.log(JSON.stringify(result))
+}
 
-const result = await mergeObviousDuplicateContacts({ dryRun })
-console.log(JSON.stringify(result))
+main().catch((error) => {
+  console.error(error instanceof Error ? error.message : 'Merge failed')
+  process.exitCode = 1
+})
