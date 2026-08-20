@@ -8,6 +8,7 @@ function prismaWithClients(rows: any[]) {
       findFirst: vi.fn(async (args: any) => {
         const where = args.where || {}
         return rows.find(r => {
+          if (where.id?.not && r.id === where.id.not) return false
           if (where.isActive && r.isActive === false) return false
           if (where.email?.equals) {
             return String(r.email || '').toLowerCase() === String(where.email.equals).toLowerCase()
@@ -87,6 +88,18 @@ describe('findExistingClientForLead', () => {
       companyName: 'Safaricom',
       email: 'buyer@other.co.ke',
     })
+    expect(match?.id).toBe('c1')
+  })
+
+  it('skips the current row when excludeId is set', async () => {
+    const prisma = prismaWithClients([
+      { id: 'dup', name: 'Need 10 laptops RFQ', email: 'info@acme.co.ke', isActive: true },
+      { id: 'c1', name: 'Acme Ltd', email: 'info@acme.co.ke', isActive: true },
+    ])
+    const match = await findExistingClientForLead(prisma, {
+      name: 'Need 10 laptops RFQ',
+      email: 'info@acme.co.ke',
+    }, { excludeId: 'dup' })
     expect(match?.id).toBe('c1')
   })
 })
