@@ -1,7 +1,8 @@
 'use client'
 import { useMemo } from 'react'
 import { useAccounting } from './AccountingContext'
-import { fmtDate, fmtKes } from '@/lib/store'
+import { fmtDate, fmtKes, useFinanceStore } from '@/lib/store'
+import { customerCreditBalance } from '@/lib/customer-credit-view'
 import { Fa } from '@/components/icons'
 import { faUsers } from '@fortawesome/free-solid-svg-icons'
 import { Badge, Select } from '@/components/ui'
@@ -24,6 +25,7 @@ export default function PartnerLedgerTab() {
     allInvoices, contacts,
     plPartner, setPlPartner, plDateFrom, setPlDateFrom, plDateTo, setPlDateTo,
   } = useAccounting()
+  const { customerCredits } = useFinanceStore()
 
   const partnerTransactions = useMemo(() => {
     if (!plPartner) return [] as PartnerTxn[]
@@ -118,6 +120,7 @@ export default function PartnerLedgerTab() {
               const totalInvoiced = filteredPartnerTransactions.filter(t => t.type === 'customer_invoice').reduce((s, t) => s + t.total, 0)
               const totalBilled   = filteredPartnerTransactions.filter(t => t.type === 'vendor_bill').reduce((s, t) => s + t.total, 0)
               const outstanding   = partnerTransactions.reduce((s, t) => s + t.outstanding, 0)
+              const storeCredit = contact ? customerCreditBalance(customerCredits, contact.id) : 0
               return (
                 <>
                   <div>
@@ -127,7 +130,8 @@ export default function PartnerLedgerTab() {
                   </div>
                   {totalInvoiced > 0 && <div><p className="text-[10px] text-t3 mb-0.5">Total Invoiced (Period)</p><p className="text-[12px] font-mono font-semibold" style={{ color: 'var(--success)' }}>{fmtKes(totalInvoiced)}</p></div>}
                   {totalBilled > 0 && <div><p className="text-[10px] text-t3 mb-0.5">Total Billed (Period)</p><p className="text-[12px] font-mono font-semibold" style={{ color: '#fec84b' }}>{fmtKes(totalBilled)}</p></div>}
-                  <div><p className="text-[10px] text-t3 mb-0.5">Overall Outstanding</p><p className="text-[12px] font-mono font-semibold" style={{ color: outstanding > 0 ? 'var(--danger)' : 'var(--success)' }}>{fmtKes(outstanding)}</p></div>
+                  <div><p className="text-[10px] text-t3 mb-0.5">Overall Outstanding</p><p className="text-xs font-mono font-semibold" style={{ color: outstanding > 0 ? 'var(--danger)' : 'var(--success)' }}>{fmtKes(outstanding)}</p></div>
+                  <div><p className="text-[10px] text-t3 mb-0.5">Store credit</p><p className="text-xs font-mono font-semibold" style={{ color: storeCredit > 0 ? 'var(--success)' : 'var(--text-1)' }}>{fmtKes(storeCredit)}</p></div>
                 </>
               )
             })()}

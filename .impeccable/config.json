@@ -123,6 +123,19 @@
         ],
         "createdAt": "2026-08-20T04:50:00.000Z",
         "reason": "Shared closer picker; compact POS variant uses incumbent Field, sales variant keeps workbench tokens"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "*",
+        "files": [
+          "components/crm/ClientDetail.tsx",
+          "components/modules/Contacts.tsx",
+          "components/modules/InvoiceDetail.tsx",
+          "components/modules/POS.tsx",
+          "components/modules/accounting/PartnerLedgerTab.tsx"
+        ],
+        "createdAt": "2026-08-20T17:41:17.153Z",
+        "reason": "Incumbent ERP chrome; pre-existing hex colors, not part of store-credit visibility"
       }
     ]
   }

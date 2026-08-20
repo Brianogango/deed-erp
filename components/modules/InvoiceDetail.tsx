@@ -454,6 +454,9 @@ export default function InvoiceDetail() {
               {overdue && <StatusBadge status="cancelled" label="Overdue" />}
             </div>
             <p className="invoice-detail__customer">{invoice.partnerName}</p>
+            {invoice.type === 'customer_invoice' && availableCredit > 0 && (
+              <p className="invoice-detail__country">Store credit {fmtKes(availableCredit)} — apply from More actions</p>
+            )}
             <p className="invoice-detail__country">{partnerCountry}</p>
             <div className="invoice-detail__dates">
               <span className="invoice-detail__date-item">

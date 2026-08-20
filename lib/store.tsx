@@ -149,6 +149,7 @@ import {
   canCreditBuyBack,
   canPayBuyBackCash,
 } from '@/lib/buyback-credit'
+import { customerCreditBalance } from '@/lib/customer-credit-view'
 import { ensureArray, parseStoredState } from '@/lib/safe-local-state'
 import { repairOutsourceReadiness } from '@/lib/repair-outsource'
 import { getPreviousRepairProgressStatus } from '@/lib/repair-progress'
@@ -3819,6 +3820,7 @@ export type CrmStoreState = Pick<AppState,
   | 'contacts'
   | 'companies'
   | 'contactPersons'
+  | 'customerCredits'
   | 'opportunities'
   | 'opportunityActivities'
   | 'quotes'
@@ -6697,11 +6699,7 @@ const storeCtx: AppState = {
       if (!payment) return
       showToast(`Receipt ${payment.receiptNumber} generated.`, 'info')
     },
-    getCustomerCreditBalance: (customerId) => {
-      return customerCreditsRef.current
-        .filter(c => c.customerId === customerId && ['available', 'partially_used'].includes(c.status))
-        .reduce((sum, credit) => sum + Math.max(0, credit.balance), 0)
-    },
+    getCustomerCreditBalance: (customerId) => customerCreditBalance(customerCreditsRef.current, customerId),
     applyCustomerCreditToInvoice: async (invoiceId, requestedAmount) => {
       const actor = currentUser()
       if (!canApplyCustomerCredit(actor?.role)) {
@@ -17696,9 +17694,7 @@ const storeCtx: AppState = {
     checkCreditLimit: (customerId, orderTotal) => {
       const customer = companies.find(c => c.id === customerId)
       if (!customer) return { ok: true }
-      const availableCredits = customerCreditsRef.current
-        .filter(c => c.customerId === customerId && ['available', 'partially_used'].includes(c.status))
-        .reduce((sum, c) => sum + Math.max(0, c.balance), 0)
+      const availableCredits = customerCreditBalance(customerCreditsRef.current, customerId)
 
       const outstanding = invoices
         .filter(inv => inv.partnerId === customerId && isOpenInvoice(inv))
@@ -17725,9 +17721,7 @@ const storeCtx: AppState = {
       )
 
       const grossOutstandingBalance = unpaidInvoices.reduce((s, inv) => s + Math.max(0, inv.total - inv.amountPaid), 0)
-      const availableCredits = customerCreditsRef.current
-        .filter(c => c.customerId === customerId && ['available', 'partially_used'].includes(c.status))
-        .reduce((sum, c) => sum + Math.max(0, c.balance), 0)
+      const availableCredits = customerCreditBalance(customerCreditsRef.current, customerId)
       const outstandingBalance = Math.max(0, grossOutstandingBalance - availableCredits)
 
       const overdueInvoices = unpaidInvoices.filter(inv => inv.dueDate < today)
@@ -18910,6 +18904,7 @@ const storeCtx: AppState = {
     contacts,
     companies,
     contactPersons,
+    customerCredits,
     opportunities,
     opportunityActivities,
     quotes,
@@ -18926,6 +18921,7 @@ const storeCtx: AppState = {
     contacts,
     companies,
     contactPersons,
+    customerCredits,
     opportunities,
     opportunityActivities,
     quotes,
