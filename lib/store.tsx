@@ -1130,6 +1130,10 @@ export interface Invoice {
   postedByUserId?: string
   postedByName?: string
   postedAt?: string
+  /** POS till invoice created already posted; commission uses salespersonId. */
+  isPosInvoice?: boolean
+  salespersonId?: string
+  salespersonName?: string
   /** Odoo-style down payment / deposit invoice against a Sale Order. */
   isDownPayment?: boolean
   downPaymentPercent?: number | null
@@ -2069,6 +2073,9 @@ export interface POSOrder {
   paymentReference?: string
   customerId?: string; customerName?: string; date: string
   createdByUserId?: string; createdByName?: string
+  /** Person who closed the sale for commission (may differ from cashier). */
+  salespersonId?: string
+  salespersonName?: string
   pointsEarned?: number
   pointsRedeemed?: number
   createdAt?: string
@@ -3553,7 +3560,12 @@ export interface AppState {
     customerName?: string,
     pointsRedeemed?: number,
     applyVat?: boolean,
-    paymentMeta?: { bankAccountId?: string; paymentReference?: string },
+    paymentMeta?: {
+      bankAccountId?: string
+      paymentReference?: string
+      salespersonId?: string
+      salespersonName?: string
+    },
   ) => POSOrder | null | Promise<POSOrder | null>
 
   // Inventory reports
@@ -16760,6 +16772,8 @@ const storeCtx: AppState = {
         paymentReference,
         customerId, customerName, date: now(), createdAt: new Date().toISOString(),
         createdByUserId: user?.id, createdByName: user?.name, pointsEarned, pointsRedeemed,
+        salespersonId: paymentMeta?.salespersonId || user?.id,
+        salespersonName: paymentMeta?.salespersonName || user?.name,
         invoiceId,
       }
       // Authoritative stock deduction on the server before local UI mirror.
@@ -16831,6 +16845,9 @@ const storeCtx: AppState = {
         }),
         subtotal: sub, taxTotal: tax, total, amountPaid: total,
         notes: paymentReference ? `POS ${order.ref} · Ref ${paymentReference}` : `POS ${order.ref}`,
+        isPosInvoice: true,
+        salespersonId: order.salespersonId,
+        salespersonName: order.salespersonName,
       }
       setPosOrders(p => p.map(o => o.id === order.id ? { ...o, invoiceRef: posInv.ref } : o))
       setInvoices(p => [posInv, ...p])

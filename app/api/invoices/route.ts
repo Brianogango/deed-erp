@@ -9,6 +9,7 @@ import { writeFinancialAudit } from '@/lib/finance-audit'
 import { getNextDocNumber } from '@/lib/doc-ref-counter'
 import { checkFiscalLock } from '@/lib/fiscal-lock.server'
 import { parsePaginationParams, paginatedResponse } from '@/lib/api-pagination'
+import { isPosInvoiceWrite, POS_INVOICE_WRITE_ROLES } from '@/lib/sales/commission-closer'
 
 // technical_lead: repair quotes create/update their linked invoice (see recordRepairBilling).
 const WRITE_ROLES = ['director', 'finance_officer', 'admin_officer', 'technical_lead']
@@ -18,6 +19,12 @@ const REPAIR_WRITE_ROLES = [...WRITE_ROLES, 'technician']
 
 function isRepairLinked(body: any) {
   return Boolean(body?.repairId || body?.repairRef || /repair/i.test(String(body?.notes ?? '')))
+}
+
+function invoiceWriteRoles(body: any) {
+  if (isRepairLinked(body)) return REPAIR_WRITE_ROLES
+  if (isPosInvoiceWrite(body)) return [...POS_INVOICE_WRITE_ROLES]
+  return WRITE_ROLES
 }
 
 // Map frontend status aliases to valid DocumentStatus enum values. The stored
@@ -83,6 +90,7 @@ function mapInvoiceBodyToDb(body: any, clientId: string) {
     invoiceAddress: body.invoiceAddress ?? null,
     deliveryAddress: body.deliveryAddress ?? null,
     paymentBlocked: Boolean(body.paymentBlocked),
+    isPosInvoice: Boolean(body.isPosInvoice),
   }
 }
 
@@ -174,8 +182,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   return withApiErrorHandling(async () => {
     const body = await request.json()
-    const allowedRoles = isRepairLinked(body) ? REPAIR_WRITE_ROLES : WRITE_ROLES
-    const actor = await requireRole(allowedRoles)
+    const actor = await requireRole(invoiceWriteRoles(body))
     const lines: any[] = body.lines ?? body.items ?? []
     const isCreditNote = Boolean(body.isCreditNote)
 
@@ -265,6 +272,21 @@ export async function POST(request: Request) {
       entityId: invoice.id,
       newValues: { invoiceNumber: invoice.invoiceNumber, totalAmount: invoice.totalAmount, status: invoice.status },
     })
+
+    // POS invoices are created already posted, so they never hit the
+    // draft → approved PATCH that posts commission for quotations.
+    const createdPosted = invoice.status === 'approved' || invoice.status === 'invoiced'
+    const isVendor = Boolean(isCreditNote) || body.type === 'vendor_bill'
+    if (createdPosted && !isVendor && (isPosInvoiceWrite(body) || invoice.saleOrderId)) {
+      try {
+        const { postSalesCommissionForInvoice } = await import('@/lib/accounting/sales-commission')
+        await postSalesCommissionForInvoice(invoice.id, {
+          salespersonUserId: optionalUuid(body.salespersonId) ?? null,
+        })
+      } catch (err) {
+        console.error('[invoice] sales commission calculation failed:', err)
+      }
+    }
 
     return NextResponse.json(invoice, { status: 201 })
   })

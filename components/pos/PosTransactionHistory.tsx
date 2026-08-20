@@ -61,6 +61,7 @@ export function PosTransactionHistory({
                   </p>
                   <p className="mt-0.5 text-[11px] text-t3">
                     {order.customerName || 'Walk-in'} · {payLabel(order)}
+                    {order.salespersonName ? ` · ${order.salespersonName}` : ''}
                   </p>
                 </div>
                 <div className="flex flex-col items-end gap-2 shrink-0">

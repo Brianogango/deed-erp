@@ -2,7 +2,23 @@
  * The document creator and the person who closed the sale are different
  * fields. Commission posts to SaleOrder.salespersonId when the customer
  * invoice is posted — never to createdBy.
+ *
+ * POS has no sale order. The till cashier stays createdBy; the chosen closer
+ * is stored on the ticket and passed as salespersonId when the POS invoice is
+ * created already posted. Commission then writes sales_commissions on Charge.
  */
+
+export const POS_INVOICE_WRITE_ROLES = [
+  'director',
+  'finance_officer',
+  'admin_officer',
+  'sales_rep',
+  'kilimall_officer',
+] as const
+
+export function isPosInvoiceWrite(body: { isPosInvoice?: unknown } | null | undefined): boolean {
+  return body?.isPosInvoice === true
+}
 
 export const COMMISSION_CLOSER_ROLES = [
   'sales_rep',
@@ -58,10 +74,20 @@ export function commissionCloserSelectOptions(closers: readonly CommissionCloser
 export function commissionCloserHint(opts: {
   closer?: CommissionCloserOption | null
   createdByName?: string | null
+  earnWhen?: 'invoice-post' | 'pos-charge'
 }): string {
   const created = String(opts.createdByName || '').trim()
+  const pos = opts.earnWhen === 'pos-charge'
   if (opts.closer && !opts.closer.hasEmployee) {
-    return `${opts.closer.name} has no Employee record in HR. Posting the invoice will not create commission until that login is linked.`
+    return pos
+      ? `${opts.closer.name} has no Employee record in HR. Charging will not create commission until that login is linked.`
+      : `${opts.closer.name} has no Employee record in HR. Posting the invoice will not create commission until that login is linked.`
+  }
+  if (pos && created) {
+    return `Cashier stays ${created}. Commission goes to the person chosen here when you Charge.`
+  }
+  if (pos) {
+    return 'Commission goes to the person chosen here when you Charge.'
   }
   if (created) {
     return `Creator stays ${created}. Commission goes to the person chosen here when the customer invoice is posted — not when the quote is saved.`

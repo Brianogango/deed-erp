@@ -3,6 +3,7 @@ import { useState, useRef, useEffect } from 'react'
 import { useCommerceStore, useInventoryStore, fmtKes, fmtDate, isPosBankPayment } from '@/lib/store'
 import { Modal, Field, Input, Select, Badge, ModuleSkeleton } from '@/components/ui'
 import { PosTransactionHistory } from '@/components/pos/PosTransactionHistory'
+import { SalespersonCloserField } from '@/components/sales/SalespersonCloserField'
 import {
   Fa, faCashRegister, faReceipt, faCamera, faCartShopping, faStar,
   faCircleCheck, faPrint, faMobileScreenButton, faMoneyBillWave, faBuildingColumns,
@@ -94,6 +95,9 @@ function ReceiptPrintView({
         <div>
           <p>Receipt: <strong>{order.ref}</strong></p>
           <p>Cashier: {order.createdByName || 'System'}</p>
+          {order.salespersonName && order.salespersonId && order.salespersonId !== order.createdByUserId ? (
+            <p>Salesperson: {order.salespersonName}</p>
+          ) : null}
           <p>Customer: {buyerName}</p>
         </div>
         <div className="text-right">
@@ -229,7 +233,7 @@ export default function PointOfSale() {
   const [mounted, setMounted] = useState(() => typeof window !== 'undefined')
   useEffect(() => { setMounted(true) }, [])
 
-  const { products, serials, contacts, invoices, createPOSOrder, posOrders, openPOSSession, closePOSSession, posSessionOpen, posSessionOpeningCash, posSessionId, posSessions, showToast, companySettings, getCustomerCreditStatus, bankAccounts } = useCommerceStore()
+  const { products, serials, contacts, invoices, createPOSOrder, posOrders, openPOSSession, closePOSSession, posSessionOpen, posSessionOpeningCash, posSessionId, posSessions, showToast, companySettings, getCustomerCreditStatus, bankAccounts, users, currentUserId } = useCommerceStore()
   const tenderBanks = bankAccounts.filter(b => b.active && b.id !== 'mpesa' && b.id !== 'cash')
   const { getStockByLocation, stockMoves } = useInventoryStore()
 
@@ -254,7 +258,16 @@ export default function PointOfSale() {
   const [applyVat, setApplyVat] = useState(false)
   const [showHistory, setShowHistory] = useState(false)
   const [showCamera, setShowCamera] = useState(false)
+  const [salespersonId, setSalespersonId] = useState('')
+  const [salespersonName, setSalespersonName] = useState('')
   const scanRef = useRef<HTMLInputElement>(null)
+  const cashier = users.find(u => u.id === currentUserId)
+
+  useEffect(() => {
+    if (salespersonId || !cashier?.id) return
+    setSalespersonId(cashier.id)
+    setSalespersonName(cashier.name || '')
+  }, [cashier, salespersonId])
 
   // Sell only from warehouse — shop is the "With Issues" bin, not a sales floor.
   const sellableLocations = new Set(['warehouse'])
@@ -452,9 +465,13 @@ export default function PointOfSale() {
         (customerName || walkInBuyerName.trim()) || undefined,
         pointsToRedeem || 0,
         applyVat,
-        payMethod === 'bank'
-          ? { bankAccountId: selectedBankId, paymentReference: paymentReference.trim() || undefined }
-          : undefined,
+        {
+          ...(payMethod === 'bank'
+            ? { bankAccountId: selectedBankId, paymentReference: paymentReference.trim() || undefined }
+            : {}),
+          salespersonId: salespersonId || cashier?.id,
+          salespersonName: salespersonName || cashier?.name,
+        },
       )
 
       if (order) {
@@ -706,6 +723,17 @@ export default function PointOfSale() {
                     {customers.map(c => <option key={c.id} value={c.id}>{c.name} ({c.phone || 'no phone'})</option>)}
                   </select>
                 </Field>
+                <SalespersonCloserField
+                  variant="compact"
+                  id="pos-closer"
+                  valueId={salespersonId}
+                  valueName={salespersonName}
+                  createdByName={cashier?.name}
+                  onChange={(id, name) => {
+                    setSalespersonId(id)
+                    setSalespersonName(name)
+                  }}
+                />
                 {!customerId && (
                   <Field label="Buyer name">
                     <Input

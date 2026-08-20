@@ -22,8 +22,15 @@ const round2 = (n: number) => Math.round((Number.isFinite(n) ? n : 0) * 100) / 1
  * transient failure. The early "legitimately nothing to pay" returns below
  * (no sale order, no salesperson, no employee, no rate) are not errors —
  * those keep the claim, since a retry would reach the same conclusion.
+ *
+ * POS invoices have no sale order. Pass salespersonUserId (the closer chosen
+ * on the till). Without a sale-order salesperson and without that override,
+ * this is a silent no-op — cashier createdBy is never treated as the closer.
  */
-export async function postSalesCommissionForInvoice(invoiceId: string): Promise<void> {
+export async function postSalesCommissionForInvoice(
+  invoiceId: string,
+  opts?: { salespersonUserId?: string | null },
+): Promise<void> {
   const claim = await prisma.invoice.updateMany({
     where: { id: invoiceId, commissionComputedAt: null },
     data: { commissionComputedAt: new Date() },
@@ -35,16 +42,20 @@ export async function postSalesCommissionForInvoice(invoiceId: string): Promise<
       where: { id: invoiceId },
       include: { items: true },
     })
-    if (!invoice || !invoice.saleOrderId) return
+    if (!invoice) return
 
-    const saleOrder = await prisma.saleOrder.findUnique({
-      where: { id: invoice.saleOrderId },
-      select: { salespersonId: true },
-    })
-    if (!saleOrder?.salespersonId) return
+    let salespersonId = opts?.salespersonUserId || null
+    if (invoice.saleOrderId) {
+      const saleOrder = await prisma.saleOrder.findUnique({
+        where: { id: invoice.saleOrderId },
+        select: { salespersonId: true },
+      })
+      salespersonId = saleOrder?.salespersonId || salespersonId
+    }
+    if (!salespersonId) return
 
     const salesperson = await prisma.user.findUnique({
-      where: { id: saleOrder.salespersonId },
+      where: { id: salespersonId },
       select: { employeeId: true },
     })
     if (!salesperson?.employeeId) return

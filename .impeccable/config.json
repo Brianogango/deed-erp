@@ -96,6 +96,33 @@
         ],
         "createdAt": "2026-08-19T22:57:01.504Z",
         "reason": "Incumbent Rep performance operate UI; logic-only closer attribution"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "*",
+        "files": [
+          "components/modules/POS.tsx"
+        ],
+        "createdAt": "2026-08-20T04:50:00.000Z",
+        "reason": "Incumbent POS operate UI; Salesperson closer picker reuses existing Field tokens, not a till redesign"
+      },
+      {
+        "rule": "design-system-font-size",
+        "value": "*",
+        "files": [
+          "components/modules/POS.tsx"
+        ],
+        "createdAt": "2026-08-20T04:50:00.000Z",
+        "reason": "Incumbent POS operate UI; closer picker matches checkout Field type scale"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "*",
+        "files": [
+          "components/sales/SalespersonCloserField.tsx"
+        ],
+        "createdAt": "2026-08-20T04:50:00.000Z",
+        "reason": "Shared closer picker; compact POS variant uses incumbent Field, sales variant keeps workbench tokens"
       }
     ]
   }

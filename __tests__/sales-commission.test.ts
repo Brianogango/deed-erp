@@ -80,6 +80,29 @@ describe('postSalesCommissionForInvoice', () => {
     expect(mockPrisma.salesCommission.createMany).not.toHaveBeenCalled()
   })
 
+  it('posts POS commission from salespersonUserId when there is no sale order', async () => {
+    mockPrisma.invoice.findUnique.mockResolvedValue({ ...baseInvoice, saleOrderId: null })
+    await postSalesCommissionForInvoice(INVOICE_ID, { salespersonUserId: SALESPERSON_USER_ID })
+    expect(mockPrisma.saleOrder.findUnique).not.toHaveBeenCalled()
+    expect(mockPrisma.salesCommission.createMany).toHaveBeenCalledWith({
+      data: [expect.objectContaining({
+        employeeId: EMPLOYEE_ID,
+        invoiceId: INVOICE_ID,
+        saleAmount: 10000,
+        commissionRate: 5,
+        commissionAmount: 500,
+      })],
+    })
+  })
+
+  it('prefers the sale-order closer over a POS override', async () => {
+    await postSalesCommissionForInvoice(INVOICE_ID, { salespersonUserId: 'ignored-user' })
+    expect(mockPrisma.user.findUnique).toHaveBeenCalledWith({
+      where: { id: SALESPERSON_USER_ID },
+      select: { employeeId: true },
+    })
+  })
+
   it('does nothing when the sale order has no salesperson', async () => {
     mockPrisma.saleOrder.findUnique.mockResolvedValue({ salespersonId: null })
     await postSalesCommissionForInvoice(INVOICE_ID)

@@ -96,6 +96,14 @@ vi.mock('@/lib/fiscal-lock.server', () => ({
   checkFiscalLock: vi.fn().mockResolvedValue({ ok: true }),
 }))
 
+const { mockPostSalesCommissionForInvoice } = vi.hoisted(() => ({
+  mockPostSalesCommissionForInvoice: vi.fn(),
+}))
+
+vi.mock('@/lib/accounting/sales-commission', () => ({
+  postSalesCommissionForInvoice: mockPostSalesCommissionForInvoice,
+}))
+
 // ── Imports (after mocks) ─────────────────────────────────────────────────────
 import { GET, POST } from '@/app/api/invoices/route'
 import { GET as GET_ONE, PUT, DELETE } from '@/app/api/invoices/[id]/route'
@@ -150,6 +158,7 @@ beforeEach(() => {
   mockResolveClientId.mockResolvedValue(CLIENT_ID)
   mockPrismaInvoice.count.mockResolvedValue(0)
   mockGetNextDocNumber.mockResolvedValue('INV-00001')
+  mockPostSalesCommissionForInvoice.mockResolvedValue(undefined)
 })
 
 // ── GET /api/invoices ─────────────────────────────────────────────────────────
@@ -292,6 +301,30 @@ describe('POST /api/invoices', () => {
     mockPrismaInvoice.create.mockResolvedValue(baseInvoice)
     await POST(postReq({ clientId: CLIENT_ID, repairId: 'rep_1', notes: 'Repair REP/2026/001' }))
     expect(mockRequireRole).toHaveBeenCalledWith(expect.arrayContaining(['technical_lead', 'technician']))
+  })
+
+  it('extends allowed roles for POS till invoices and posts commission on create', async () => {
+    const closerId = 'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee'
+    mockPrismaInvoice.create.mockResolvedValue({ ...baseInvoice, status: 'approved', saleOrderId: null })
+    const res = await POST(postReq({
+      clientId: CLIENT_ID,
+      isPosInvoice: true,
+      status: 'posted',
+      salespersonId: closerId,
+      notes: 'POS POS/0017',
+    }))
+    expect(res.status).toBe(201)
+    expect(mockRequireRole).toHaveBeenCalledWith(expect.arrayContaining(['sales_rep', 'kilimall_officer']))
+    expect(mockPrismaInvoice.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ isPosInvoice: true }) }),
+    )
+    expect(mockPostSalesCommissionForInvoice).toHaveBeenCalledWith(INVOICE_ID, { salespersonUserId: closerId })
+  })
+
+  it('does not post commission for a draft invoice create', async () => {
+    mockPrismaInvoice.create.mockResolvedValue(baseInvoice)
+    await POST(postReq({ clientId: CLIENT_ID, isPosInvoice: true, status: 'draft' }))
+    expect(mockPostSalesCommissionForInvoice).not.toHaveBeenCalled()
   })
 
   it('returns 401 when unauthenticated', async () => {

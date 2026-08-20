@@ -4,6 +4,7 @@ import {
   commissionCloserOptions,
   commissionCloserSelectOptions,
   isCommissionCloserRole,
+  isPosInvoiceWrite,
 } from '@/lib/sales/commission-closer'
 
 const users = [
@@ -39,6 +40,22 @@ describe('commission closer eligibility', () => {
     })
     expect(hint).toMatch(/Creator stays Brian/)
     expect(hint).toMatch(/invoice is posted/)
+  })
+
+  it('explains that the POS cashier is not the commission earner', () => {
+    const hint = commissionCloserHint({
+      closer: { id: 'rep', name: 'Jane Rep', role: 'sales_rep', hasEmployee: true },
+      createdByName: 'Till Cashier',
+      earnWhen: 'pos-charge',
+    })
+    expect(hint).toMatch(/Cashier stays Till Cashier/)
+    expect(hint).toMatch(/Charge/)
+  })
+
+  it('only treats an explicit POS invoice flag as a till write', () => {
+    expect(isPosInvoiceWrite({ isPosInvoice: true })).toBe(true)
+    expect(isPosInvoiceWrite({ notes: 'POS POS/0017' })).toBe(false)
+    expect(isPosInvoiceWrite({})).toBe(false)
   })
 
   it('warns when the chosen closer cannot receive commission', () => {
