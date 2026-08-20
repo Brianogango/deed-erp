@@ -1703,12 +1703,15 @@ function SalesContent() {
                 /* ── ORDERS LIST ─────────────────────────────────────────── */
                 <>
                   <div className="sales-proto-page-header">
-                    <div>
+                    <div className="sales-proto-header-copy">
+                      <span className="sales-proto-header-icon" aria-hidden="true" />
+                      <div>
                       <h1>{listTab === 'quotations' ? 'Quotations' : 'Sales orders'}</h1>
                       <div className="sub">
                         {listTab === 'quotations'
-                          ? 'One commercial record: Draft → Sent → Accepted → Confirm renames QUO/… → SO/… (no second order)'
-                          : 'Same record after confirm (was QUO/…): Reserve → Deliver → Invoice · Payment stays separate'}
+                          ? 'Draft → Sent → Accepted → Confirm becomes SO/…'
+                          : 'Reserve → Deliver → Invoice · Payment stays separate'}
+                      </div>
                       </div>
                     </div>
                     <div className="sales-proto-actions">
@@ -1717,8 +1720,8 @@ function SalesContent() {
                       </button>
                     </div>
                   </div>
-                  <div className="sp-panel">
                   <SalesDocTabs
+                    className="sp-tabs-command"
                     tabs={[
                       `Quotations (${stats.quotations + stats.quotationsSent})`,
                       `Orders (${stats.orders})`,
@@ -1734,6 +1737,7 @@ function SalesContent() {
                     }}
                     ariaLabel="Sales sections"
                   />
+                  <div className="sp-panel">
                   <div className="sp-list-toolbar">
                     <input
                       type="search"
@@ -1916,7 +1920,7 @@ function SalesContent() {
                   {activeOrder && (
                     <>
                   <div className="sales-proto-page-header">
-                    <div>
+                    <div className="sales-proto-header-copy">
                       <button type="button" className="sp-btn sp-btn-ghost" style={{ paddingLeft: 0 }} onClick={backToList}>← Back</button>
                       <div className="sp-ref-row">
                         <h1>{activeOrder.ref}</h1>
@@ -1971,17 +1975,8 @@ function SalesContent() {
                           </>
                         )}
                       </div>
-                      {isQuotationStage(activeOrder.status) ? (
-                        <SameDocumentIdentity mode="preview" quotationRef={activeOrder.ref} />
-                      ) : activeOrder.quotationRef ? (
-                        <SameDocumentIdentity
-                          mode="done"
-                          quotationRef={activeOrder.quotationRef}
-                          salesOrderRef={activeOrder.ref}
-                        />
-                      ) : null}
                     </div>
-                    <div className="sales-proto-actions">
+                    <div className="sales-proto-actions sales-proto-actions--dock">
                       {isQuotationStage(activeOrder.status) && (<>
                           {isQuotationDraft(activeOrder.status) && !activeOrder.locked && (
                             <button
@@ -2184,6 +2179,16 @@ function SalesContent() {
                       )}
                     </div>
                   </div>
+
+                  {isQuotationStage(activeOrder.status) ? (
+                    <SameDocumentIdentity mode="preview" quotationRef={activeOrder.ref} />
+                  ) : activeOrder.quotationRef ? (
+                    <SameDocumentIdentity
+                      mode="done"
+                      quotationRef={activeOrder.quotationRef}
+                      salesOrderRef={activeOrder.ref}
+                    />
+                  ) : null}
 
                   {activeOrder.status === 'sale' && (
                     <SalesDocWorkflow
@@ -3485,12 +3490,15 @@ function NewQuotationForm({
   return (
     <div>
       <div className="sales-proto-page-header">
-        <div>
+        <div className="sales-proto-header-copy">
+          <span className="sales-proto-header-icon" aria-hidden="true" />
+          <div>
           <button type="button" className="sp-btn sp-btn-ghost" onClick={onCancel} style={{ paddingLeft: 0, marginBottom: 2 }}>← Back</button>
           <h1>Create quotation</h1>
           <div className="sub">Customer · lines · terms · send</div>
+          </div>
         </div>
-        <div className="sales-proto-actions">
+        <div className="sales-proto-actions sales-proto-actions--dock">
           <button type="button" className="sp-btn" onClick={onCancel}>Discard</button>
           <button type="button" className="sp-btn" onClick={onSaveDraft} disabled={!canSave}>Save as draft</button>
           <button type="button" className="sp-btn sp-btn-primary" onClick={onSave} disabled={!canSave}>Submit</button>
@@ -4137,7 +4145,7 @@ function DeliveryNoteView({
   return (
     <div className="flex flex-col gap-3">
       <div className="sales-proto-page-header">
-        <div>
+        <div className="sales-proto-header-copy">
           <button type="button" className="sp-btn sp-btn-ghost" style={{ paddingLeft: 0 }} onClick={onBack}>← Back to order</button>
           <div className="sp-ref-row">
             <h1>{existingDelivery?.ref ?? 'Delivery'}</h1>
@@ -4162,22 +4170,10 @@ function DeliveryNoteView({
         </div>
       </div>
 
-      <div className="sp-panel sp-panel-pad">
-        <div className="sp-grid-2">
-          <SalesDocField label="Customer"><div className="sp-value">{order.customerName}</div></SalesDocField>
-          <SalesDocField label="Scheduled / order date"><div className="sp-value">{fmtDate(order.date)}</div></SalesDocField>
-          <SalesDocField label="Source order"><div className="sp-value"><span className="sp-linkish">{order.ref}</span></div></SalesDocField>
-          <SalesDocField label="Delivery address"><div className="sp-value">{dnAddress || '—'}</div></SalesDocField>
-        </div>
-      </div>
-
-      <div className="flex flex-col gap-3">
-
+      <div className="sp-delivery-work">
         {orderDeliveries.length > 0 && (
-          <div className="rounded-2xl border border-[var(--border-lt)] bg-[var(--bg-surface)] p-3 flex flex-col gap-1">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)]">
-              All deliveries for {order.ref} — select one to work on
-            </span>
+          <aside className="sp-delivery-rail" aria-label={`Deliveries for ${order.ref}`}>
+            <span className="sp-delivery-rail-title">Deliveries for {order.ref}</span>
             {orderDeliveries.map((d: any) => {
               const selected = existingDelivery?.id === d.id
               const cancelled = d.status === 'cancelled'
@@ -4186,13 +4182,9 @@ function DeliveryNoteView({
                   key={d.id}
                   type="button"
                   disabled={cancelled}
+                  data-viewing={selected ? 'true' : 'false'}
                   onClick={() => selectDelivery(d.id)}
-                  className={`flex items-center justify-between text-xs rounded-lg px-2 py-1.5 text-left transition-colors ${
-                    cancelled ? 'opacity-40 cursor-not-allowed'
-                      : selected
-                        ? 'bg-primary-50 border border-primary-200 text-primary-800'
-                        : 'hover:bg-[var(--bg-muted)] border border-transparent'
-                  }`}
+                  className="sp-delivery-item"
                 >
                   <span className="font-semibold">
                     {d.ref}{d.backorderOfRef ? ` (backorder of ${d.backorderOfRef})` : ''}
@@ -4204,8 +4196,18 @@ function DeliveryNoteView({
                 </button>
               )
             })}
-          </div>
+          </aside>
         )}
+
+        <div className="sp-delivery-main">
+      <div className="sp-panel sp-panel-pad">
+        <div className="sp-grid-2">
+          <SalesDocField label="Customer"><div className="sp-value">{order.customerName}</div></SalesDocField>
+          <SalesDocField label="Scheduled / order date"><div className="sp-value">{fmtDate(order.date)}</div></SalesDocField>
+          <SalesDocField label="Source order"><div className="sp-value"><span className="sp-linkish">{order.ref}</span></div></SalesDocField>
+          <SalesDocField label="Delivery address"><div className="sp-value">{dnAddress || '—'}</div></SalesDocField>
+        </div>
+      </div>
 
         {/* Delivery lines */}
         <div className="flex flex-col gap-3">
@@ -4366,6 +4368,7 @@ function DeliveryNoteView({
               </button>
             )}
           </div>
+        </div>
         </div>
       </div>
     </div>
