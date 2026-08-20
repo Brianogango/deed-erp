@@ -57,9 +57,9 @@ function asRecord(specs: unknown): Record<string, unknown> {
 }
 
 /** Full device titles often list "8GB RAM, 256GB SSD" — those are not upgrade parts. */
-function looksLikeCompleteDevice(name: string): boolean {
+export function looksLikeCompleteDevice(name: string): boolean {
   const n = String(name || '')
-  if (/\b(thinkpad|probook|elitebook|latitude|macbook|pavilion|inspiron|vostro|yoga|xps|surface|chromebook|precision|zbook|toughbook|ideapad|vivobook|zenbook|spectre|envy|omen|legion)\b/i.test(n)) {
+  if (/\b(thinkpad|probook|elitebook|latitude|macbook|pavilion|inspiron|vostro|yoga|xps|surface|chromebook|precision|zbook|toughbook|ideapad|vivobook|zenbook|spectre|envy|omen|legion|travelmate|matebook|aspire|tuf|predator)\b/i.test(n)) {
     return true
   }
   if (/\b(intel\s+core|amd\s+ryzen|amd\s+pro|gen\s*\d+|core\s*i[3579])\b/i.test(n)) {

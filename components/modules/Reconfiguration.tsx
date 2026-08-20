@@ -20,8 +20,11 @@ import {
   type ReconfigTransactionType,
 } from '@/lib/reconfiguration/types'
 import { applyBenchJob, type BenchActionKind } from '@/lib/reconfiguration/bench-action'
+import { ramComponentProducts, storageComponentProducts } from '@/lib/reconfiguration/part-catalog'
 import { partCapacityGb } from '@/lib/reconfiguration/product-effect'
+import { unitSellingName } from '@/lib/reconfiguration/unit-selling-name'
 import { UNIT_CONFIG_SOURCE_LABEL, type UnitConfigSource } from '@/lib/reconfiguration/unit-config'
+import SearchablePick from '@/components/reconfiguration/SearchablePick'
 
 type WorkOrderListItem = {
   id: string
@@ -106,26 +109,11 @@ export default function Reconfiguration() {
   const canCreate = CREATE_ROLES.includes(role)
   const enabled = systemSettings?.reconfigurationEnabled !== false
 
+  const ramParts = useMemo(() => ramComponentProducts(products), [products])
+  const storageParts = useMemo(() => storageComponentProducts(products), [products])
   const partProducts = useMemo(
-    () =>
-      (products || []).filter(
-        (p: any) =>
-          p.isActive !== false &&
-          (String(p.category || '').includes('Parts') ||
-            /ram|ssd|hdd|memory|storage|nvme/i.test(String(p.name || ''))),
-      ),
-    [products],
-  )
-
-  const ramParts = useMemo(
-    () =>
-      partProducts.filter((p: any) => /ram|memory|ddr/i.test(String(p.name || ''))),
-    [partProducts],
-  )
-  const storageParts = useMemo(
-    () =>
-      partProducts.filter((p: any) => /ssd|hdd|nvme|storage/i.test(String(p.name || ''))),
-    [partProducts],
+    () => [...ramParts, ...storageParts.filter(p => !ramParts.some(r => r.id === p.id))],
+    [ramParts, storageParts],
   )
 
   const availableDevices = useMemo(
@@ -455,17 +443,17 @@ export default function Reconfiguration() {
             </p>
           </div>
 
-          <label className="block">
-            <span className="text-sm text-[var(--text-2)]">Device serial</span>
-            <select className="form-select w-full mt-1" value={wizSerialId} onChange={e => void loadDevice(e.target.value)}>
-              <option value="">Select device…</option>
-              {availableDevices.map((s: any) => (
-                <option key={s.id} value={s.id}>
-                  {s.serial} — {s.productName} ({s.specs || 'no specs'})
-                </option>
-              ))}
-            </select>
-          </label>
+          <SearchablePick
+            label="Device serial"
+            value={wizSerialId}
+            placeholder="Search serial or model…"
+            emptyText="No matching devices in stock"
+            options={availableDevices.map((s: any) => ({
+              id: s.id,
+              label: `${s.serial} — ${unitSellingName({ productName: s.productName, specs: s.specs })}`,
+            }))}
+            onChange={id => void loadDevice(id)}
+          />
 
           {deviceConfig && (
             <div className="rounded-md border border-[var(--border)] bg-[var(--bg-surface)] p-3 text-sm">
@@ -514,14 +502,14 @@ export default function Reconfiguration() {
                 hint="Pull one stick, or swap 16 for 8 (and the reverse)."
                 draft={ram}
                 onChange={setRam}
-                parts={(ramParts.length ? ramParts : partProducts) as any[]}
+                parts={ramParts as any[]}
               />
               <SlotEditor
                 title="SSD / storage"
                 hint="Pull one drive, or swap 512 for 256 (and the reverse)."
                 draft={storage}
                 onChange={setStorage}
-                parts={(storageParts.length ? storageParts : partProducts) as any[]}
+                parts={storageParts as any[]}
               />
             </div>
           )}
@@ -758,35 +746,31 @@ function SlotEditor(props: {
       )}
 
       {needsOut && (
-        <label className="block text-sm">
-          <span className="text-[var(--text-2)]">Pulled module becomes this part in stock</span>
-          <select
-            className="form-select w-full mt-1"
-            value={draft.outgoingProductId}
-            onChange={e => onChange({ ...draft, outgoingProductId: e.target.value })}
-          >
-            <option value="">Select…</option>
-            {parts.map(p => (
-              <option key={p.id} value={p.id}>{p.name} {p.sku ? `(${p.sku})` : ''}</option>
-            ))}
-          </select>
-        </label>
+        <SearchablePick
+          label="Pulled module becomes this part in stock"
+          value={draft.outgoingProductId}
+          placeholder={title.startsWith('RAM') ? 'Search RAM module…' : 'Search SSD or HDD…'}
+          emptyText={title.startsWith('RAM') ? 'No RAM modules in the catalogue' : 'No SSD/HDD parts in the catalogue'}
+          options={parts.map(p => ({
+            id: p.id,
+            label: `${p.name || 'Part'}${p.sku ? ` (${p.sku})` : ''}`,
+          }))}
+          onChange={id => onChange({ ...draft, outgoingProductId: id })}
+        />
       )}
 
       {needsIn && (
-        <label className="block text-sm">
-          <span className="text-[var(--text-2)]">Fit this part from warehouse</span>
-          <select
-            className="form-select w-full mt-1"
-            value={draft.incomingProductId}
-            onChange={e => onChange({ ...draft, incomingProductId: e.target.value })}
-          >
-            <option value="">Select…</option>
-            {parts.map(p => (
-              <option key={p.id} value={p.id}>{p.name} {p.sku ? `(${p.sku})` : ''}</option>
-            ))}
-          </select>
-        </label>
+        <SearchablePick
+          label="Fit this part from warehouse"
+          value={draft.incomingProductId}
+          placeholder={title.startsWith('RAM') ? 'Search RAM module…' : 'Search SSD or HDD…'}
+          emptyText={title.startsWith('RAM') ? 'No RAM modules in the catalogue' : 'No SSD/HDD parts in the catalogue'}
+          options={parts.map(p => ({
+            id: p.id,
+            label: `${p.name || 'Part'}${p.sku ? ` (${p.sku})` : ''}`,
+          }))}
+          onChange={id => onChange({ ...draft, incomingProductId: id })}
+        />
       )}
     </fieldset>
   )
