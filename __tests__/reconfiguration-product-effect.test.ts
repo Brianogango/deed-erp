@@ -60,6 +60,11 @@ describe('parseProductReconfigEffect', () => {
       name: 'Lenovo ThinkPad X1 Carbon Gen 6 - 8th Gen Intel Core i5, 8GB RAM, 256GB SSD',
       specs: {},
     })).toBeNull()
+    expect(parseProductReconfigEffect({
+      id: 'p7',
+      name: 'Acer TravelMate P645',
+      specs: {},
+    })).toBeNull()
   })
 })
 
