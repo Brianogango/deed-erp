@@ -9,6 +9,7 @@ import { broadcastContacts } from '@/lib/contact-prisma'
 import {
   isEnquiryTitledContact,
   isObviousDuplicatePair,
+  normalizeContactName,
   pickKeepContact,
 } from '@/lib/crm/duplicate-contact-policy'
 import { findExistingClientForLead } from '@/lib/crm/lead-client-resolve'
@@ -22,13 +23,14 @@ export interface DuplicateContactMember {
   phone: string | null
   phoneAlt: string | null
   companyName: string | null
+  clientType: string | null
   createdAt: string
   leadCount: number
 }
 
 export interface DuplicateContactGroup {
   key: string
-  kind: 'email' | 'phone'
+  kind: 'email' | 'phone' | 'name'
   members: DuplicateContactMember[]
 }
 
@@ -87,6 +89,7 @@ export async function findDuplicateContactGroups(opts?: {
       phone: true,
       phoneAlt: true,
       companyName: true,
+      clientType: true,
       createdAt: true,
       _count: { select: { leads: true } },
     },
@@ -95,6 +98,7 @@ export async function findDuplicateContactGroups(opts?: {
 
   const byEmail = new Map<string, typeof clients>()
   const byPhone = new Map<string, typeof clients>()
+  const byName = new Map<string, typeof clients>()
 
   for (const c of clients) {
     const email = normalizeEmail(c.email)
@@ -109,6 +113,12 @@ export async function findDuplicateContactGroups(opts?: {
       const list = byPhone.get(key) || []
       if (!list.some(x => x.id === c.id)) list.push(c)
       byPhone.set(key, list)
+    }
+    const name = normalizeContactName(c.name)
+    if (name.length >= 3) {
+      const list = byName.get(name) || []
+      if (!list.some(x => x.id === c.id)) list.push(c)
+      byName.set(name, list)
     }
   }
 
@@ -145,6 +155,22 @@ export async function findDuplicateContactGroups(opts?: {
     })
   }
 
+  for (const [name, members] of byName) {
+    if (members.length < 2) continue
+    const ids = members.map(m => m.id).sort().join(',')
+    let covered = false
+    for (const g of groups) {
+      const gIds = g.members.map(m => m.id).sort().join(',')
+      if (gIds === ids) { covered = true; break }
+    }
+    if (covered) continue
+    groups.push({
+      key: `name:${name}`,
+      kind: 'name',
+      members: members.map(toMember),
+    })
+  }
+
   groups.sort((a, b) => b.members.length - a.members.length || a.key.localeCompare(b.key))
   return groups.slice(0, limit)
 }
@@ -156,6 +182,7 @@ function toMember(m: {
   phone: string | null
   phoneAlt: string | null
   companyName: string | null
+  clientType: string
   createdAt: Date
   _count: { leads: number }
 }): DuplicateContactMember {
@@ -166,6 +193,7 @@ function toMember(m: {
     phone: m.phone,
     phoneAlt: m.phoneAlt,
     companyName: m.companyName,
+    clientType: m.clientType,
     createdAt: m.createdAt.toISOString(),
     leadCount: m._count.leads,
   }
@@ -348,6 +376,7 @@ export async function mergeObviousDuplicateContacts(opts?: {
       id: true,
       name: true,
       companyName: true,
+      clientType: true,
       email: true,
       phone: true,
       phoneAlt: true,

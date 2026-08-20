@@ -37,10 +37,24 @@ describe('duplicate contact policy', () => {
     )).toBe(false)
   })
 
-  it('auto-merges the same customer stored twice', () => {
+  it('auto-merges the same organisation stored twice', () => {
     expect(isObviousDuplicatePair(
       { id: 'a', name: 'Safaricom PLC', companyName: 'Safaricom', createdAt: '2026-01-01T00:00:00.000Z' },
       { id: 'b', name: 'safaricom plc', createdAt: '2026-02-01T00:00:00.000Z' },
+    )).toBe(true)
+  })
+
+  it('does not auto-merge two people who happen to share a name', () => {
+    expect(isObviousDuplicatePair(
+      { id: 'a', name: 'John Mwangi', createdAt: '2026-01-01T00:00:00.000Z' },
+      { id: 'b', name: 'john mwangi', createdAt: '2026-02-01T00:00:00.000Z' },
+    )).toBe(false)
+  })
+
+  it('auto-merges identical company-type records even without Ltd in the name', () => {
+    expect(isObviousDuplicatePair(
+      { id: 'a', name: 'Naivas', clientType: 'company', createdAt: '2026-01-01T00:00:00.000Z' },
+      { id: 'b', name: 'Naivas', clientType: 'company', createdAt: '2026-02-01T00:00:00.000Z' },
     )).toBe(true)
   })
 })

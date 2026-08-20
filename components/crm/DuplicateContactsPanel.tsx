@@ -11,13 +11,14 @@ type DuplicateContactMember = {
   phone: string | null
   phoneAlt: string | null
   companyName: string | null
+  clientType?: string | null
   createdAt: string
   leadCount: number
 }
 
 type DuplicateContactGroup = {
   key: string
-  kind: 'email' | 'phone'
+  kind: 'email' | 'phone' | 'name'
   members: DuplicateContactMember[]
 }
 
@@ -110,7 +111,7 @@ export default function DuplicateContactsPanel({
 
   const mergeObvious = async () => {
     const ok = window.confirm(
-      'Merge RFQ-titled and identical-name duplicates into the real customer? Shared phone numbers with different people are left for you to review.',
+      'Merge RFQ-titled and repeated organisation-name duplicates into the real customer? Different people who share a name or phone number are left for you to review.',
     )
     if (!ok) return
     setBusyKey('obvious')
@@ -165,8 +166,8 @@ export default function DuplicateContactsPanel({
       </div>
 
       <CompactInfoNotice>
-        Merge obvious duplicates collapses RFQ subject lines and repeated names onto the real customer.
-        Different people who share a reception number stay here for a manual keep/merge.
+        Merge obvious duplicates collapses RFQ subject lines and repeated organisation names onto the real customer.
+        Different people who share a name or reception number stay here for a manual keep/merge.
       </CompactInfoNotice>
 
       {loading ? (
@@ -180,7 +181,9 @@ export default function DuplicateContactsPanel({
             <div key={group.key} className="card overflow-hidden">
               <div className="px-3 py-2 border-b border-border flex flex-wrap items-center justify-between gap-2">
                 <div className="text-[10px] uppercase tracking-wider font-semibold text-text-3">
-                  {group.kind} · {group.key.replace(/^(email|phone):/, '')}
+                  {group.kind === 'name' ? 'same name' : group.kind}
+                  {' · '}
+                  {group.key.replace(/^(email|phone|name):/, '')}
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
                   <label className="text-[11px] text-text-2 flex items-center gap-1.5">

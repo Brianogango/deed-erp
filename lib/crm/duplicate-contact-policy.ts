@@ -13,6 +13,7 @@ export type DuplicatePolicyMember = {
   companyName?: string | null
   createdAt: string
   leadCount?: number
+  clientType?: string | null
 }
 
 export function normalizeContactName(value: unknown): string {
@@ -29,9 +30,14 @@ function companyOrName(member: DuplicatePolicyMember): string {
   return normalizeContactName(member.name)
 }
 
+export function isOrganizationContactName(name: string | null | undefined): boolean {
+  return /\b(ltd|limited|plc|llc|inc|corp|hospital|school|university|college|company|group|enterprises|services|kenya|bank|church|parish|clinic|ministr(?:y|ies)|county|government)\b/i
+    .test(String(name || ''))
+}
+
 /**
  * True when merging `merge` into `keep` is the RFQ-duplicate case or the
- * same customer stored twice, not two different people on one shared phone.
+ * same organisation stored twice, not two different people on one shared phone.
  */
 export function isObviousDuplicatePair(
   keep: DuplicatePolicyMember,
@@ -41,10 +47,18 @@ export function isObviousDuplicatePair(
   if (isEnquiryTitledContact(keep.name) || isEnquiryTitledContact(merge.name)) return true
   const keepName = normalizeContactName(keep.name)
   const mergeName = normalizeContactName(merge.name)
-  if (keepName && mergeName && keepName === mergeName) return true
+  const sameName = Boolean(keepName && mergeName && keepName === mergeName)
   const keepCompany = companyOrName(keep)
   const mergeCompany = companyOrName(merge)
-  if (keepCompany && mergeCompany && keepCompany === mergeCompany) return true
+  const sameCompany = Boolean(keepCompany && mergeCompany && keepCompany === mergeCompany)
+  if ((sameName || sameCompany) && (
+    keep.clientType === 'company'
+    || merge.clientType === 'company'
+    || isOrganizationContactName(keep.name)
+    || isOrganizationContactName(merge.name)
+    || isOrganizationContactName(keep.companyName)
+    || isOrganizationContactName(merge.companyName)
+  )) return true
   return false
 }
 
