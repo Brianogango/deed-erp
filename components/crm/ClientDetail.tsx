@@ -2,6 +2,7 @@
 
 import { useMemo } from 'react'
 import { useCrmStore, fmtKes, fmtDate } from '@/lib/store'
+import { customerCreditBalance } from '@/lib/customer-credit-view'
 import { saleOrderInvoiceStatus } from '@/lib/odoo-sales-flow'
 import { Badge, PanelHeader, Divider, InfoRow } from '@/components/ui'
 import { Fa } from '@/components/icons'
@@ -17,7 +18,7 @@ import {
 } from '@fortawesome/free-solid-svg-icons'
 
 export default function ClientDetail({ clientId, onClose }: { clientId: string, onClose: () => void }) {
-  const { companies, saleOrders, opportunities, contactPersons } = useCrmStore()
+  const { companies, saleOrders, opportunities, contactPersons, contacts, customerCredits } = useCrmStore()
 
   const client = useMemo(() => companies.find(c => c.id === clientId), [companies, clientId])
 
@@ -55,6 +56,10 @@ export default function ClientDetail({ clientId, onClose }: { clientId: string, 
 
   const creditUsagePercent = (client.creditLimit ?? 0) > 0 ? Math.min(100, Math.round((client.creditUsed / (client.creditLimit ?? 1)) * 100)) : 0
   const creditColor = creditUsagePercent > 90 ? 'var(--danger)' : creditUsagePercent > 70 ? 'var(--warning)' : 'var(--success)'
+  const linkedContact = contacts.find(c =>
+    (client.taxId && c.vatNumber && c.vatNumber === client.taxId) || c.name === client.name,
+  )
+  const storeCredit = customerCreditBalance(customerCredits, linkedContact?.id)
 
   return (
     <div className="flex flex-col gap-6 animate-in fade-in slide-in-from-right-4 duration-300">
@@ -114,6 +119,7 @@ export default function ClientDetail({ clientId, onClose }: { clientId: string, 
                 </div>
               </div>
               <Divider />
+              <InfoRow label="Store credit" value={fmtKes(storeCredit)} />
               <InfoRow label="Payment Terms" value={`${client.paymentTerms ?? 30} Days`} />
               <InfoRow label="Total Orders" value={clientOrders.length} />
             </div>

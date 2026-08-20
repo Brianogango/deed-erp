@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect, useRef, Suspense } from 'react'
+import { useState, useEffect, useRef, useMemo, Suspense } from 'react'
 import { useCrmStore, Contact, SaleOrder, RepairOrder, Invoice, POSOrder, fmtDate, fmtDateTime, fmtKes } from '@/lib/store'
 import { invoiceDocState, invoicePaymentStatus, isOpenInvoice, invoiceResidual, displayDocRef, PAYMENT_STATUS_LABELS } from '@/lib/odoo-sales-flow'
 import { guardSpreadsheetFile, guardSpreadsheetRows, SpreadsheetGuardError } from '@/lib/spreadsheet-guard'
@@ -18,6 +18,12 @@ import {
   faCashRegister, faInbox, faFileArrowDown, faCheck, faTriangleExclamation, faXmark,
 } from '@/components/icons'
 import { useUrlRecordId } from '@/hooks/useUrlRecordId'
+import {
+  creditBalancesByCustomer,
+  creditsForCustomer,
+  customerCreditSourceLabel,
+  customerCreditStatusLabel,
+} from '@/lib/customer-credit-view'
 
 type FilterTab = 'all' | 'companies' | 'individuals' | 'customers' | 'vendors'
 type ViewTab   = 'info' | 'financial' | 'persons' | 'history' | 'chatter'
@@ -148,7 +154,7 @@ function ContactsInner() {
   useEffect(() => { setMounted(true) }, [])
 
   const { contacts, addContact, deleteContact,
-    saleOrders, invoices, repairs, posOrders, showToast, users, currentUserId } = useCrmStore()
+    saleOrders, invoices, repairs, posOrders, customerCredits, showToast, users, currentUserId } = useCrmStore()
   const currentUser = users.find(u => u.id === currentUserId)
   const [tab, setTab] = useState<FilterTab>('all')
   const [search, setSearch] = useState('')
@@ -185,6 +191,8 @@ function ContactsInner() {
       tab === 'vendors'     ? c.isVendor : true
     return matchSearch && matchTab
   })
+
+  const creditByCustomer = useMemo(() => creditBalancesByCustomer(customerCredits), [customerCredits])
 
   const getCompany = (id?: string) => id ? contacts.find(c => c.id === id) : null
   const getLinkedPersons = (companyId: string) => contacts.filter(c => c.companyId === companyId)
@@ -338,6 +346,18 @@ function ContactsInner() {
       exportValue: c => [c.isCustomer && 'Customer', c.isVendor && 'Vendor'].filter(Boolean).join(', '),
     },
     {
+      key: 'storeCredit', label: 'Store credit', priority: 2, width: '110px', align: 'right',
+      render: c => {
+        const amount = creditByCustomer.get(c.id) ?? 0
+        return (
+          <span className="font-mono text-[11px]" style={{ color: amount > 0 ? 'var(--success)' : 'var(--text-4)' }}>
+            {amount > 0 ? fmtKes(amount) : '—'}
+          </span>
+        )
+      },
+      exportValue: c => creditByCustomer.get(c.id) ?? 0,
+    },
+    {
       key: 'phone', label: 'Phone', priority: 2, width: '110px',
       render: c => <span className="text-[11px] text-t2">{c.phone || '—'}</span>,
       exportValue: c => c.phone,
@@ -426,6 +446,11 @@ function ContactsInner() {
           <span className="truncate flex-1" style={{ color: c.email ? 'var(--text-1)' : 'var(--text-4)' }}>{c.email || 'No email'}</span>
           <span className="flex-shrink-0 font-mono" style={{ color: c.phone ? 'var(--text-1)' : 'var(--text-4)' }}>{c.phone || 'No phone'}</span>
         </div>
+        {(creditByCustomer.get(c.id) ?? 0) > 0 && (
+          <p className="text-[11px] font-mono font-semibold mb-3" style={{ color: 'var(--success)' }}>
+            Store credit {fmtKes(creditByCustomer.get(c.id))}
+          </p>
+        )}
         <div className="flex gap-2">
           <button className="flex-1 text-[11px] font-medium py-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-navy-500 border border-blue-100 cursor-pointer transition-colors" onClick={e => { e.stopPropagation(); openEdit(c) }}>Edit</button>
         </div>
@@ -518,6 +543,8 @@ function ContactsInner() {
         const openBalance    = clientInvoices.filter(i => isOpenInvoice(i))
                                              .reduce((s, i) => s + invoiceResidual(i), 0)
         const repairRevenue  = clientRepairs.filter(r => r.invoiceId).reduce((s, r) => s + r.total, 0)
+        const clientCredits = creditsForCustomer(customerCredits, vc.id)
+        const storeCredit = creditByCustomer.get(vc.id) ?? 0
         const historyCount   = clientSOs.length + clientRepairs.length + clientPOS.length + clientInvoices.length
 
         return (
@@ -546,6 +573,7 @@ function ContactsInner() {
                   <Badge status={vc.type} />
                   {vc.isCustomer && <span className="badge badge-green">Customer</span>}
                   {vc.isVendor && <span className="badge badge-amber">Vendor</span>}
+                  {storeCredit > 0 && <span className="badge badge-green">Credit {fmtKes(storeCredit)}</span>}
                   {vc.tags.map(t => <span key={t} className="badge badge-purple">{t}</span>)}
                 </div>
               </div>
@@ -629,6 +657,38 @@ function ContactsInner() {
             {/* Tab: Financial */}
             {viewTab === 'financial' && (
               <div className="flex flex-col gap-3">
+                <div>
+                  <p className="text-[10px] uppercase tracking-wider font-semibold mb-2 text-t3">Store credit</p>
+                  <div className="rounded-xl p-3" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-lt)' }}>
+                    <p className="text-[10px] uppercase tracking-wider text-t3">Available for next purchase</p>
+                    <p className="text-xl font-bold font-mono mt-1" style={{ color: storeCredit > 0 ? 'var(--success)' : 'var(--text-1)' }}>{fmtKes(storeCredit)}</p>
+                    <p className="text-[11px] text-t3 mt-1">From laptops / buy-backs, returns, and cancelled paid invoices. Apply on a posted unpaid invoice in Finance.</p>
+                  </div>
+                  {clientCredits.length > 0 && (
+                    <div className="mt-2 rounded-xl overflow-hidden" style={{ border: '1px solid var(--border-lt)' }}>
+                      <table className="w-full text-left border-collapse">
+                        <thead>
+                          <tr className="bg-[var(--bg-surface)] border-b border-[var(--border-lt)]">
+                            <th className="px-3 py-2 text-[10px] font-bold uppercase text-t3">Credit</th>
+                            <th className="px-3 py-2 text-[10px] font-bold uppercase text-t3">Source</th>
+                            <th className="px-3 py-2 text-[10px] font-bold uppercase text-t3 text-right">Remaining</th>
+                            <th className="px-3 py-2 text-[10px] font-bold uppercase text-t3">Status</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-[var(--border-lt)]">
+                          {clientCredits.map(credit => (
+                            <tr key={String(credit.id || credit.ref)}>
+                              <td className="px-3 py-2 font-mono text-[11px] font-semibold text-primary-600">{credit.ref}</td>
+                              <td className="px-3 py-2 text-[11px] text-t2">{customerCreditSourceLabel(credit)}</td>
+                              <td className="px-3 py-2 font-mono text-[11px] text-right">{fmtKes(credit.balance)}</td>
+                              <td className="px-3 py-2"><Badge status={credit.status === 'available' ? 'active' : credit.status === 'partially_used' ? 'warning' : 'draft'} label={customerCreditStatusLabel(credit.status)} size="xs" /></td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
                 <div>
                   <p className="text-[10px] uppercase tracking-wider font-semibold mb-2 text-t3">Payment Terms</p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -714,10 +774,10 @@ function ContactsInner() {
                 {/* Revenue summary */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                   {[
+                    { label: 'Store Credit',  value: fmtKes(storeCredit),           sub: 'ready to apply', color: storeCredit > 0 ? 'var(--success)' : 'var(--text-1)' },
                     { label: 'Total Revenue', value: fmtKes(totalRevenue),         sub: 'invoices paid',  color: 'var(--success)' },
                     { label: 'Open Balance',  value: fmtKes(openBalance),          sub: 'outstanding',    color: openBalance > 0 ? 'var(--danger)' : 'var(--success)' },
                     { label: 'Orders',        value: String(clientSOs.length + clientPOS.length), sub: 'sales & POS', color: 'var(--navy)' },
-                    { label: 'Repairs',       value: String(clientRepairs.length), sub: fmtKes(repairRevenue) + ' billed', color: 'var(--primary)' },
                   ].map(s => (
                     <div key={s.label} className="rounded-xl p-3" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-lt)' }}>
                       <p className="text-[10px] uppercase tracking-wider mb-1 text-t3">{s.label}</p>

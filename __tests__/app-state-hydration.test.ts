@@ -36,6 +36,15 @@ describe('appStateKeysForRoute', () => {
     expect(keys).not.toContain('deed_products')
   })
 
+  it('hydrates customer store credit on contacts, finance, sales, and POS', () => {
+    expect(appStateKeysForRoute('/contacts')).toContain('deed_customerCredits')
+    expect(appStateKeysForRoute('/finance')).toContain('deed_customerCredits')
+    expect(appStateKeysForRoute('/finance/invoices/xyz')).toContain('deed_customerCredits')
+    expect(appStateKeysForRoute('/sales')).toContain('deed_customerCredits')
+    expect(appStateKeysForRoute('/pos')).toContain('deed_customerCredits')
+    expect(appStateKeysForRoute('/crm')).toContain('deed_customerCredits')
+  })
+
   it('loads stock moves on the till so restored receipts can resolve serials', () => {
     const keys = appStateKeysForRoute('/pos')
     expect(keys).toEqual(expect.arrayContaining([

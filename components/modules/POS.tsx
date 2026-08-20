@@ -13,6 +13,7 @@ import { BarcodeScannerModal } from '@/components/BarcodeScanner'
 import { matchPosScan, normalizeScanCode } from '@/lib/barcode-scan'
 import { isOrphanedPosSession, posOrdersForSession } from '@/lib/pos-session'
 import { loyaltyPointsEarned } from '@/lib/loyalty'
+import { customerCreditBalance } from '@/lib/customer-credit-view'
 import { resolvePosLineSerial } from '@/lib/pos-transaction-history'
 import { unitSellingName } from '@/lib/reconfiguration/unit-selling-name'
 import {
@@ -233,7 +234,7 @@ export default function PointOfSale() {
   const [mounted, setMounted] = useState(() => typeof window !== 'undefined')
   useEffect(() => { setMounted(true) }, [])
 
-  const { products, serials, contacts, invoices, createPOSOrder, posOrders, openPOSSession, closePOSSession, posSessionOpen, posSessionOpeningCash, posSessionId, posSessions, showToast, companySettings, getCustomerCreditStatus, bankAccounts, users, currentUserId } = useCommerceStore()
+  const { products, serials, contacts, invoices, createPOSOrder, posOrders, openPOSSession, closePOSSession, posSessionOpen, posSessionOpeningCash, posSessionId, posSessions, showToast, companySettings, getCustomerCreditStatus, bankAccounts, users, currentUserId, customerCredits } = useCommerceStore()
   const tenderBanks = bankAccounts.filter(b => b.active && b.id !== 'mpesa' && b.id !== 'cash')
   const { getStockByLocation, stockMoves } = useInventoryStore()
 
@@ -312,6 +313,7 @@ export default function PointOfSale() {
   const cartTax = applyVat && companySettings.vatRate > 0 ? Math.round(cartSubtotal * companySettings.vatRate / 100) : 0
   const cartTotalBeforePoints = cartSubtotal + cartTax
   const customerInfo = customers.find(c => c.id === customerId)
+  const storeCredit = customerCreditBalance(customerCredits, customerId)
   const maxPoints = customerInfo ? Math.min(customerInfo.loyaltyPoints || 0, cartTotalBeforePoints) : 0
   const pointsToRedeem = Math.min(Number(redeemPoints) || 0, maxPoints)
   const cartTotal = cartTotalBeforePoints - pointsToRedeem
@@ -723,6 +725,11 @@ export default function PointOfSale() {
                     {customers.map(c => <option key={c.id} value={c.id}>{c.name} ({c.phone || 'no phone'})</option>)}
                   </select>
                 </Field>
+                {storeCredit > 0 && (
+                  <p className="text-[11px] font-medium" style={{ color: 'var(--success)' }}>
+                    Store credit {fmtKes(storeCredit)} — apply on the invoice in Finance
+                  </p>
+                )}
                 <SalespersonCloserField
                   variant="compact"
                   id="pos-closer"
