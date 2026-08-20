@@ -16,7 +16,7 @@ export const POS_INVOICE_WRITE_ROLES = [
   'kilimall_officer',
 ] as const
 
-export function isPosInvoiceWrite(body: { isPosInvoice?: unknown } | null | undefined): boolean {
+export function isPosInvoiceWrite(body?: Record<string, unknown> | null): boolean {
   return body?.isPosInvoice === true
 }
 
