@@ -4,7 +4,8 @@
     "ignoreFiles": [
       "lib/store.tsx",
       "app/globals.css",
-      "components/modules/Settings.tsx"
+      "components/modules/Settings.tsx",
+      ".impeccable/mocks/**"
     ],
     "ignoreValues": [
       {
