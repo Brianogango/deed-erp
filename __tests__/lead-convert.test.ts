@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { clip, salesQuoteHref, splitContactName } from '@/lib/crm/lead-convert'
+import { clip, leadCustomerDisplayName, looksLikeEnquiryTitle, salesQuoteHref, splitContactName } from '@/lib/crm/lead-convert'
 
 describe('lead-convert helpers', () => {
   it('clips oversized contact fields that caused LengthMismatch on convert', () => {
@@ -18,5 +18,22 @@ describe('lead-convert helpers', () => {
       customerName: 'Acme',
       opportunityId: 'opp-9',
     })).toBe('/sales?new=1&customerId=cust-1&customerName=Acme&opportunityId=opp-9')
+  })
+
+  it('does not use an inbound RFQ subject as the customer name', () => {
+    expect(looksLikeEnquiryTitle('K-elec — 1 × External portable disc 2TB')).toBe(true)
+    expect(leadCustomerDisplayName({
+      name: 'K-elec — 1 × External portable disc 2TB (DW or Sandisk SSD)',
+      companyName: 'Kijabe Hospital',
+      email: 'procurement@kijabehospital.org',
+    })).toBe('Kijabe Hospital')
+    expect(leadCustomerDisplayName({
+      name: 'Need 10 laptops RFQ',
+      email: 'jane.doe@acme.co.ke',
+    })).toBe('Jane Doe')
+    expect(leadCustomerDisplayName({
+      name: 'Jane Doe',
+      email: 'jane@gmail.com',
+    })).toBe('Jane Doe')
   })
 })

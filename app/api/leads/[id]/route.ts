@@ -3,7 +3,8 @@ import prisma from '@/lib/prisma'
 import { getRequiredSession, withApiErrorHandling } from '@/lib/auth/api'
 import { saveStoreKeys } from '@/lib/server-store'
 import { broadcastContacts, upsertContact } from '@/lib/contact-prisma'
-import { clip, splitContactName } from '@/lib/crm/lead-convert'
+import { clip, leadCustomerDisplayName, looksLikeEnquiryTitle, splitContactName } from '@/lib/crm/lead-convert'
+import { findExistingClientForLead, findExistingContactPerson } from '@/lib/crm/lead-client-resolve'
 import { normalizeOpportunitiesForClient } from '@/lib/opportunity-normalization'
 
 const LEAD_INCLUDE = {
@@ -94,10 +95,14 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       return NextResponse.json({ error: 'Lead already converted' }, { status: 409 })
     }
 
-    // Resolve / create the CRM contact (Client row) via the same path Sales uses,
-    // so the new customer appears in the contacts store immediately.
-    let clientId = lead.clientId
-    let clientName = lead.companyName?.trim() || lead.name.trim()
+    // Reuse an existing customer whenever email, phone, company, or corporate
+    // domain already matches. Creating a Client per inbound RFQ is what filled
+    // Contacts with duplicates. Do not overwrite the matched record's name.
+    const existingClient = await findExistingClientForLead(prisma, lead)
+    let clientId = existingClient?.id || null
+    let clientName = existingClient?.name || leadCustomerDisplayName(lead)
+    let createdClient = false
+
     if (!clientId) {
       const contactResult = await upsertContact(prisma, {
         name: clip(clientName, 200) || 'Customer',
@@ -107,33 +112,52 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
         type: lead.companyName ? 'company' : 'individual',
         isCustomer: true,
         notes: clip(lead.notes, 2000) || undefined,
-      })
+      }, { matchByName: false })
       if (typeof contactResult === 'string') {
         return NextResponse.json({ error: contactResult }, { status: 422 })
       }
       clientId = contactResult.contact.id
       clientName = contactResult.contact.name || clientName
-    } else {
-      const existing = await prisma.client.findUnique({ where: { id: clientId } })
-      if (existing?.name) clientName = existing.name
+      createdClient = contactResult.created
+    } else if (lead.phone && !existingClient?.phone) {
+      const phone = clip(lead.phone, 20)
+      if (phone) {
+        await prisma.client.update({
+          where: { id: clientId },
+          data: { phone },
+        }).catch(() => {})
+      }
+    }
+
+    if (!clientId) {
+      return NextResponse.json({ error: 'Could not resolve a customer for this lead' }, { status: 422 })
     }
 
     let contactPersonId: string | null = null
     if (body.createContact !== false && clientId) {
-      const { firstName, lastName } = splitContactName(lead.name)
-      // Inbound email leads often use the whole subject/product line as the
-      // lead name — ContactPerson columns are short (80/80/20/150), so clip.
-      const contact = await prisma.contactPerson.create({
-        data: {
-          clientId,
-          firstName,
-          lastName,
-          email: clip(lead.email, 150),
-          phone: clip(lead.phone, 20),
-          position: 'Contact',
-        },
+      const already = await findExistingContactPerson(prisma, {
+        clientId,
+        email: lead.email,
+        phone: lead.phone,
       })
-      contactPersonId = contact.id
+      if (already) {
+        contactPersonId = already.id
+      } else {
+        const { firstName, lastName } = splitContactName(
+          looksLikeEnquiryTitle(lead.name) ? (lead.email || lead.companyName || lead.name) : lead.name,
+        )
+        const contact = await prisma.contactPerson.create({
+          data: {
+            clientId,
+            firstName,
+            lastName,
+            email: clip(lead.email, 150),
+            phone: clip(lead.phone, 20),
+            position: 'Contact',
+          },
+        })
+        contactPersonId = contact.id
+      }
     }
 
     const opportunity = await prisma.opportunity.create({
@@ -173,6 +197,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       contactPersonId,
       clientId,
       clientName,
+      createdClient,
     })
   })
 }

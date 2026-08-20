@@ -199,7 +199,11 @@ export function contactToClientData(contact: Contact, includeCreateFields = fals
   }
 }
 
-export async function findExistingContact(prisma: PrismaClientLike, body: ContactInput): Promise<any | null> {
+export async function findExistingContact(
+  prisma: PrismaClientLike,
+  body: ContactInput,
+  opts?: { matchByName?: boolean },
+): Promise<any | null> {
   if (isUuid(body.id)) {
     const byId = await prisma.client.findUnique({ where: { id: body.id } })
     if (byId) return byId
@@ -227,7 +231,7 @@ export async function findExistingContact(prisma: PrismaClientLike, body: Contac
   }
 
   const name = normalizeName(body.name)
-  if (!name) return null
+  if (opts?.matchByName === false || !name) return null
   const type = body.type === 'individual' ? 'individual' : 'company'
   return prisma.client.findFirst({
     where: {
@@ -317,8 +321,9 @@ function contactIdentityLockKey(body: ContactInput): string | null {
 async function upsertContactCritical(
   prisma: PrismaClientLike,
   body: ContactInput,
+  opts?: { matchByName?: boolean },
 ): Promise<{ contact: Contact; created: boolean } | string> {
-  const existingClient = await findExistingContact(prisma, body)
+  const existingClient = await findExistingContact(prisma, body, opts)
   const existing = existingClient ? clientToContact(existingClient) : undefined
   const normalized = normalizeContact(body, existing)
   if (typeof normalized === 'string') return normalized
@@ -330,7 +335,11 @@ async function upsertContactCritical(
   return { contact: clientToContact(client), created: !existingClient }
 }
 
-export async function upsertContact(prisma: PrismaClientLike, body: ContactInput): Promise<{ contact: Contact; created: boolean } | string> {
+export async function upsertContact(
+  prisma: PrismaClientLike,
+  body: ContactInput,
+  opts?: { matchByName?: boolean },
+): Promise<{ contact: Contact; created: boolean } | string> {
   const lockKey = contactIdentityLockKey(body)
   let result: { contact: Contact; created: boolean } | string
   if (lockKey && prisma.$transaction) {
@@ -339,12 +348,12 @@ export async function upsertContact(prisma: PrismaClientLike, body: ContactInput
       // for the same identity from starting its own find-then-create until
       // this one commits or rolls back — released automatically either way.
       await tx.$executeRawUnsafe?.('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', lockKey)
-      return upsertContactCritical(tx, body)
+      return upsertContactCritical(tx, body, opts)
     })
   } else {
     // Test doubles / callers without $transaction: fail open rather than
     // block the whole feature on lock infrastructure being unavailable.
-    result = await upsertContactCritical(prisma, body)
+    result = await upsertContactCritical(prisma, body, opts)
   }
 
   void broadcastContacts(prisma)

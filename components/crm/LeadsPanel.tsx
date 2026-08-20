@@ -174,7 +174,12 @@ export default function LeadsPanel({
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(data.error || 'Convert failed')
-      showToast('Lead converted — create a quotation when ready', 'success')
+      showToast(
+        data.createdClient
+          ? 'Lead converted — new customer created'
+          : 'Lead converted — linked to existing customer',
+        'success',
+      )
       setDetail(null)
       await load({ soft: true })
       const opportunityId = String(data.opportunity?.id || data.lead?.opportunityId || '')
