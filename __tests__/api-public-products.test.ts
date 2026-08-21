@@ -95,8 +95,9 @@ describe('GET /api/public/v1/products — partner catalog', () => {
         category: { name: 'Parts & Components' },
       }),
     ])
-    const res = await GET(req())
+    const res = await GET(req('?inStock=all'))
     const body = await res.json()
+    expect(body.items).toHaveLength(1)
     expect(body.items[0].price).toBe(6500)
     expect(body.items[0]).not.toHaveProperty('costPrice')
   })

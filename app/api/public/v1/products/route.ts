@@ -155,9 +155,9 @@ export async function GET(request: Request) {
     const jsonPricingBand = typeof jsonProduct?.pricingCategoryId === 'string' ? jsonProduct.pricingCategoryId : null
     const specPricingBand = typeof specs.pricingCategoryId === 'string' ? specs.pricingCategoryId : null
     const reseller = resolveResellerPrice({
-      cost: jsonProduct?.costPrice ?? row.costPrice,
-      salePrice: jsonProduct?.salePrice ?? jsonProduct?.sellingPrice ?? row.sellingPrice,
-      wholesalePrice: jsonProduct?.wholesalePrice ?? row.wholesalePrice,
+      cost: jsonProduct?.costPrice ?? Number(row.costPrice),
+      salePrice: jsonProduct?.salePrice ?? jsonProduct?.sellingPrice ?? Number(row.sellingPrice),
+      wholesalePrice: jsonProduct?.wholesalePrice ?? (row.wholesalePrice != null ? Number(row.wholesalePrice) : null),
       category: jsonProduct?.category ?? row.category?.name,
       pricingCategoryId: jsonPricingBand || specPricingBand,
       productType: jsonProduct?.productType ?? row.productType,
