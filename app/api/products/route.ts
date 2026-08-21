@@ -50,6 +50,9 @@ export async function POST(request: Request) {
       wholesalePrice: body.wholesalePrice === '' || body.wholesalePrice == null
         ? undefined
         : Number(body.wholesalePrice),
+      commissionRatePercent: body.commissionRatePercent === '' || body.commissionRatePercent == null
+        ? undefined
+        : Number(body.commissionRatePercent),
       minStock: Number(body.minStock ?? body.reorderLevel ?? 5),
       taxRate: Number(body.taxRate ?? 16),
     })

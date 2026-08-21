@@ -3277,7 +3277,7 @@ function SalesContent() {
         <Modal title={`Credit note — ${activeOrder.ref}`} onClose={() => setShowCreditNoteModal(false)} width={440}>
           <div className="flex flex-col gap-3">
             <p className="text-xs text-[var(--text-3)]">
-              Issues a customer credit against the posted invoice for this order. Commissions post from Finance after invoice payment.
+              Issues a customer credit against the posted invoice for this order. Commission was already earned when the invoice was posted.
             </p>
             <Field label="Amount (KES)">
               <Input value={creditNoteAmount} onChange={setCreditNoteAmount} placeholder="0" />

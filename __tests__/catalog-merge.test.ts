@@ -72,6 +72,15 @@ describe('mergeCatalogProducts', () => {
     expect(merged[0].isActive).toBe(false)
   })
 
+  it('copies commissionRatePercent from the catalog row', () => {
+    const merged = mergeCatalogProducts(
+      [clientItem({})],
+      [apiRow({ commissionRatePercent: '4.5' })],
+      CONFIG,
+    )
+    expect(merged[0].commissionRatePercent).toBe(4.5)
+  })
+
   it('copies trackingMethod from the catalog row', () => {
     const merged = mergeCatalogProducts(
       [clientItem({})],

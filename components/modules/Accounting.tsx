@@ -73,6 +73,7 @@ import ChartOfAccountsTab from './accounting/ChartOfAccountsTab'
 import GeneralLedgerTab from './accounting/GeneralLedgerTab'
 import PartnerLedgerTab from './accounting/PartnerLedgerTab'
 import CustomerCreditsTab from './accounting/CustomerCreditsTab'
+import CommissionsTab from './accounting/CommissionsTab'
 import AgeingTab from './accounting/AgeingTab'
 import { usePrismaAccountingReports, bootstrapCoaClient } from '@/hooks/usePrismaAccountingReports'
 import {
@@ -95,6 +96,7 @@ type MainTab =
   | 'journals'
   | 'refunds'
   | 'credits'
+  | 'commissions'
   | 'coa'
   | 'gl'
   | 'partner_ledger'
@@ -1262,6 +1264,7 @@ function AccountingContent() {
             { id: 'invoices', label: 'Invoices' },
             { id: 'bills', label: 'Bills' },
             { id: 'credits', label: 'Credits' },
+            { id: 'commissions', label: 'Commissions' },
             { id: 'refunds', label: 'Refunds' },
             { id: 'journals', label: 'Journals' },
             { id: 'reports', label: 'Reports' },
@@ -1497,6 +1500,8 @@ function AccountingContent() {
             </div>
           ) : tab === 'credits' ? (
             <CustomerCreditsTab />
+          ) : tab === 'commissions' ? (
+            <CommissionsTab />
           ) : tab === 'journals' ? (
             <JournalsTab />
           ) : tab === 'coa' ? (

@@ -44,6 +44,7 @@ export interface CatalogApiRow {
   sellingPrice?: number | string | null
   costPrice?: number | string | null
   wholesalePrice?: number | string | null
+  commissionRatePercent?: number | string | null
   kilimallPrice?: number | string | null
   reorderLevel?: number | null
   isActive?: boolean
@@ -219,6 +220,9 @@ export function mergeCatalogProducts<P extends ClientCatalogProduct>(
       wholesalePrice: row.wholesalePrice != null
         ? Number(row.wholesalePrice) || 0
         : (local as any)?.wholesalePrice,
+      commissionRatePercent: row.commissionRatePercent != null
+        ? Number(row.commissionRatePercent)
+        : (local as any)?.commissionRatePercent,
       kilimallPrice: row.kilimallPrice != null
         ? Number(row.kilimallPrice) || 0
         : (local as any)?.kilimallPrice,

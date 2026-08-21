@@ -6,6 +6,8 @@ import { DataTable, type ColumnDef } from '@/components/data-table'
 import { visibleDashboardRepUsers, visibleDashboardSalesOrders } from '@/lib/dashboard-priority'
 import { SALE_STATUS_LABELS } from '@/lib/odoo-sales-flow'
 import { useUrlRecordId } from '@/hooks/useUrlRecordId'
+import { periodMonthsFromKey } from '@/lib/accounting/sales-commission-view'
+import Link from 'next/link'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -59,25 +61,6 @@ function fmtPeriodLabel(key: string): string {
   return new Date(Number(yr), Number(mo) - 1).toLocaleDateString('en-KE', { month: 'long', year: 'numeric' })
 }
 
-// ── Commission tiers (applied to monthly revenue) ────────────────────────────
-// Tier 1: 0–100k  → 2%
-// Tier 2: 100k–300k → 3%
-// Tier 3: 300k+  → 4%
-function calcCommission(revenue: number): number {
-  if (revenue <= 0) return 0
-  let commission = 0
-  const tier1 = Math.min(revenue, 100_000)
-  commission += tier1 * 0.02
-  if (revenue > 100_000) {
-    const tier2 = Math.min(revenue - 100_000, 200_000)
-    commission += tier2 * 0.03
-  }
-  if (revenue > 300_000) {
-    commission += (revenue - 300_000) * 0.04
-  }
-  return Math.round(commission)
-}
-
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface RepStats {
   userId: string
@@ -114,6 +97,7 @@ function RepPerformanceContent() {
     periodMode === 'month' ? currentMonthKey() : currentQuarterKey()
   )
   const [selectedRep, setSelectedRep] = useUrlRecordId({ param: 'rep' })
+  const [ledgerByEmployee, setLedgerByEmployee] = useState<Record<string, number>>({})
 
   const currentUser = users.find(u => u.id === currentUserId) ?? null
   const visibleOrders = useMemo(
@@ -137,6 +121,38 @@ function RepPerformanceContent() {
   const { start, end } = periodBounds(periodKey)
   const inPeriod = (d?: string) => !!d && d >= start && d <= end
 
+  useEffect(() => {
+    let cancelled = false
+    const months = periodMonthsFromKey(periodKey)
+    if (months.length === 0) {
+      setLedgerByEmployee({})
+      return
+    }
+    Promise.all(
+      months.map(({ year, month }) =>
+        fetch(`/api/sales-commissions?summary=1&periodYear=${year}&periodMonth=${month}`).then(r =>
+          r.ok ? r.json() : { summary: { byEmployee: [] } },
+        ),
+      ),
+    )
+      .then(payloads => {
+        if (cancelled) return
+        const totals: Record<string, number> = {}
+        for (const payload of payloads) {
+          for (const row of payload.summary?.byEmployee ?? []) {
+            totals[row.employeeId] = (totals[row.employeeId] ?? 0) + Number(row.commissionAmount ?? 0)
+          }
+        }
+        setLedgerByEmployee(totals)
+      })
+      .catch(() => {
+        if (!cancelled) setLedgerByEmployee({})
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [periodKey])
+
   // Sales reps: all users who created orders, or have sales/admin role
   const repUsers = useMemo(() => {
     const candidates = users.filter(u =>
@@ -155,7 +171,8 @@ function RepPerformanceContent() {
       const revenue  = closed.reduce((s, o) => s + o.total, 0)
       const conv     = quotes === 0 ? 0 : Math.round((closed.length / quotes) * 100)
       const avg      = closed.length === 0 ? 0 : Math.round(revenue / closed.length)
-      const commission = calcCommission(revenue)
+      const empId = u.employeeId
+      const commission = empId ? ledgerByEmployee[empId] ?? 0 : 0
 
       // SOP targets
       const sop = sops.find(s => s.userId === u.id && s.active)
@@ -177,7 +194,7 @@ function RepPerformanceContent() {
       }
     }).sort((a, b) => b.revenue - a.revenue)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [repUsers, visibleOrders, sops, periodKey])
+  }, [repUsers, visibleOrders, sops, periodKey, ledgerByEmployee])
 
   // Trend: last 6 months per selected rep
   const repTrend = useMemo(() => {
@@ -281,38 +298,24 @@ function RepPerformanceContent() {
           )}
         </div>
 
-        {/* Commission breakdown */}
+        {/* Commission earned on posted invoices */}
         <div style={{ background: '#fff', border: '1px solid var(--border-lt)', borderRadius: 12, padding: 20 }}>
-          <p style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-1)', marginBottom: 12 }}>Commission Breakdown</p>
+          <p style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-1)', marginBottom: 12 }}>Posted-invoice commission</p>
           <div style={{ fontSize: 11, color: 'var(--text-3)', lineHeight: 2 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid var(--bg-muted)', paddingBottom: 4, marginBottom: 4 }}>
-              <span>Revenue this period</span>
+              <span>Closed-order revenue this period</span>
               <span style={{ fontWeight: 600 }}>{fmtKes(detail.revenue)}</span>
             </div>
-            {detail.revenue > 0 && (
-              <>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span>Tier 1 (0–100k @ 2%)</span>
-                  <span>{fmtKes(Math.min(detail.revenue, 100_000) * 0.02)}</span>
-                </div>
-                {detail.revenue > 100_000 && (
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span>Tier 2 (100k–300k @ 3%)</span>
-                    <span>{fmtKes(Math.min(detail.revenue - 100_000, 200_000) * 0.03)}</span>
-                  </div>
-                )}
-                {detail.revenue > 300_000 && (
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span>Tier 3 (300k+ @ 4%)</span>
-                    <span>{fmtKes((detail.revenue - 300_000) * 0.04)}</span>
-                  </div>
-                )}
-              </>
-            )}
+            <p style={{ margin: '8px 0', lineHeight: 1.5 }}>
+              Commission is earned when a customer invoice is posted (product override, else category %, else none) — not from SO totals or payment. Accrued + paid for this period.
+            </p>
             <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid var(--border-lt)', paddingTop: 8, marginTop: 4, fontWeight: 700, color: 'var(--warning-text)', fontSize: 13 }}>
-              <span>Total Commission</span>
+              <span>Ledger commission</span>
               <span>{fmtKes(detail.commission)}</span>
             </div>
+            <Link href="/finance?tab=commissions" className="mt-2 inline-block text-[11px] underline underline-offset-2">
+              Open Finance → Commissions
+            </Link>
           </div>
         </div>
 
@@ -508,11 +511,11 @@ function RepPerformanceContent() {
       </div>
 
       {/* Commission summary */}
-      <div style={{ background: 'var(--warning-bg)', border: '1px solid #FDE68A', borderRadius: 12, padding: 16 }}>
+      <div style={{ background: 'var(--warning-bg)', border: '1px solid var(--warning)', borderRadius: 12, padding: 16 }}>
         <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--warning-text)', marginBottom: 10 }}>Commission Summary — {fmtPeriodLabel(periodKey)}</p>
         <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap' }}>
           {repStats.filter(r => r.commission > 0).map(r => (
-            <div key={r.userId} style={{ fontSize: 11, color: '#78350F' }}>
+            <div key={r.userId} style={{ fontSize: 11, color: 'var(--warning-text)' }}>
               <span style={{ fontWeight: 600 }}>{r.name}</span>: {fmtKes(r.commission)}
             </div>
           ))}
@@ -523,8 +526,9 @@ function RepPerformanceContent() {
             Total: {fmtKes(repStats.reduce((s, r) => s + r.commission, 0))}
           </div>
         </div>
-        <p style={{ fontSize: 9, color: '#B45309', marginTop: 8 }}>
-          Tiers: 0–100k @ 2% · 100k–300k @ 3% · 300k+ @ 4%
+        <p style={{ fontSize: 9, color: 'var(--warning-text)', marginTop: 8 }}>
+          Posted-invoice ledger (accrued + paid). Invoice-level breakdown in{' '}
+          <Link href="/finance?tab=commissions" className="underline underline-offset-2">Finance → Commissions</Link>.
         </p>
       </div>
 

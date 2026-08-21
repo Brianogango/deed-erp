@@ -37,6 +37,10 @@ function mapBody(body: any, existingSpecs: Record<string, unknown>) {
     const wholesale = Number(body.wholesalePrice)
     data.wholesalePrice = Number.isFinite(wholesale) && wholesale > 0 ? wholesale : null
   }
+  if (body.commissionRatePercent !== undefined) {
+    const rate = Number(body.commissionRatePercent)
+    data.commissionRatePercent = Number.isFinite(rate) && rate > 0 ? rate : null
+  }
   if (body.minStock   !== undefined) data.reorderLevel = Number(body.minStock)
   else if (body.reorderLevel !== undefined) data.reorderLevel = Number(body.reorderLevel)
   if (body.isActive   !== undefined) data.isActive     = Boolean(body.isActive)
