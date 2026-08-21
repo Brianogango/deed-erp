@@ -129,7 +129,7 @@ Both are equivalent. Prefer `Authorization: Bearer` unless your stack makes cust
 
 ### `GET /api/public/v1/products`
 
-Returns the sellable catalog (active, priced products). By default only items with **quantityAvailable ≥ 1** are returned — the same on-hand figure Inventory shows (available serials, or bulk at warehouse / shop / repair). Historical Prisma `in_stock` serials that were already sold in the shop do **not** count.
+Returns the sellable catalog (active, priced products). By default only items with **quantityAvailable ≥ 1 in Warehouse (Main)** are returned. With Issues and Repair Unit stock is never included. Historical Prisma `in_stock` serials that were already sold do **not** count.
 
 | Query param | Default | Description |
 |---|---|---|
@@ -199,7 +199,7 @@ Responses may be cached at the edge/server for up to **60 seconds** (`Cache-Cont
 | `price` | number | Retail selling price |
 | `currency` | string | Always `KES` today |
 | `warrantyMonths` | number \| null | Warranty in months when configured |
-| `quantityAvailable` | number | Shop on-hand units (available serials, or bulk at warehouse/shop/repair). Default responses omit 0. |
+| `quantityAvailable` | number | Warehouse (Main) units only (available serials, or bulk at warehouse). Default responses omit 0. |
 | `inStock` | boolean | `true` when `quantityAvailable` is 1 or more |
 | `updatedAt` | string (ISO 8601) | Last product update timestamp |
 

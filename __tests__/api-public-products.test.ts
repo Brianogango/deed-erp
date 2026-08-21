@@ -42,9 +42,9 @@ beforeEach(() => {
   mockPrisma.product.findMany.mockResolvedValue([productRow()])
   mockLoadAppState.mockResolvedValue({
     deed_serials: [
-      { productId: 'prod-1', status: 'available' },
-      { productId: 'prod-1', status: 'available' },
-      { productId: 'prod-1', status: 'sold' },
+      { productId: 'prod-1', status: 'available', location: 'warehouse' },
+      { productId: 'prod-1', status: 'available', location: 'warehouse' },
+      { productId: 'prod-1', status: 'sold', location: 'customer' },
     ],
     deed_bulkStock: [],
     deed_products: [{ id: 'prod-1', warrantyMonths: 6 }],
@@ -122,7 +122,7 @@ describe('GET /api/public/v1/products — partner catalog', () => {
     mockPrisma.product.findMany.mockResolvedValue(
       Array.from({ length: 7 }, (_, i) => productRow({ id: `prod-${i}`, sku: `SKU-${i}`, name: `Item ${i}` })))
     mockLoadAppState.mockResolvedValue({
-      deed_serials: Array.from({ length: 7 }, (_, i) => ({ productId: `prod-${i}`, status: 'available' })),
+      deed_serials: Array.from({ length: 7 }, (_, i) => ({ productId: `prod-${i}`, status: 'available', location: 'warehouse' })),
       deed_bulkStock: [], deed_products: [],
     })
     const res = await GET(req('?page=2&pageSize=3'))
@@ -131,7 +131,7 @@ describe('GET /api/public/v1/products — partner catalog', () => {
     expect(body.items).toHaveLength(3)
   })
 
-  it('counts bulk stock from JSON sellable locations, not Prisma stock_levels', async () => {
+  it('counts bulk stock from warehouse only, not With Issues or Prisma stock_levels', async () => {
     mockPrisma.product.findMany.mockResolvedValue([productRow({ category: { name: 'Accessories' } })])
     mockPrisma.stockLevel.findMany.mockResolvedValue([{ productId: 'prod-1', qtyOnHand: 10, qtyReserved: 4 }])
     mockLoadAppState.mockResolvedValue({
@@ -139,13 +139,27 @@ describe('GET /api/public/v1/products — partner catalog', () => {
       deed_bulkStock: [
         { productId: 'prod-1', location: 'warehouse', qty: 5 },
         { productId: 'prod-1', location: 'shop', qty: 1 },
+        { productId: 'prod-1', location: 'repair_unit', qty: 4 },
         { productId: 'prod-1', location: 'quarantine', qty: 9 },
       ],
       deed_products: [{ id: 'prod-1', category: 'Accessories', requiresSerial: false }],
     })
     const res = await GET(req())
     const body = await res.json()
-    expect(body.items[0].quantityAvailable).toBe(6)
+    expect(body.items[0].quantityAvailable).toBe(5)
+  })
+
+  it('hides laptops that are only available in With Issues or Repair Unit', async () => {
+    mockLoadAppState.mockResolvedValue({
+      deed_serials: [
+        { productId: 'prod-1', status: 'available', location: 'shop' },
+        { productId: 'prod-1', status: 'available', location: 'repair_unit' },
+      ],
+      deed_bulkStock: [],
+      deed_products: [{ id: 'prod-1', requiresSerial: true, category: 'Laptops' }],
+    })
+    const res = await GET(req())
+    expect((await res.json()).items).toHaveLength(0)
   })
 
   it('answers CORS preflight', async () => {
