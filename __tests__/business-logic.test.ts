@@ -10,6 +10,7 @@ import { describe, it, expect } from 'vitest'
 import {
   calcStockByLocation,
   availableSellableQty,
+  isListedInProductCatalog,
   upsertBulkStock,
   computePayrollLine,
   aggregatePayroll,
@@ -151,6 +152,28 @@ describe('availableSellableQty()', () => {
       [{ productId: 'prod-1', location: 'warehouse', qty: 4 }],
       'prod-1',
     )).toBe(0)
+  })
+})
+
+describe('isListedInProductCatalog()', () => {
+  const laptop = { category: 'Laptops', requiresSerial: true, isActive: true, canBeSold: true }
+  const warehouseSerial: SerialNumber = { productId: 'prod-1', location: 'warehouse', status: 'available' }
+
+  it('lists a laptop with warehouse stock', () => {
+    expect(isListedInProductCatalog(laptop, [warehouseSerial], [], 'prod-1')).toBe(true)
+  })
+
+  it('hides zero-stock, With Issues only, archived, not-for-sale, and services', () => {
+    expect(isListedInProductCatalog(laptop, [], [], 'prod-1')).toBe(false)
+    expect(isListedInProductCatalog(laptop, [{ productId: 'prod-1', location: 'shop', status: 'available' }], [], 'prod-1')).toBe(false)
+    expect(isListedInProductCatalog({ ...laptop, isActive: false }, [warehouseSerial], [], 'prod-1')).toBe(false)
+    expect(isListedInProductCatalog({ ...laptop, canBeSold: false }, [warehouseSerial], [], 'prod-1')).toBe(false)
+    expect(isListedInProductCatalog(
+      { unit: 'service', isActive: true, canBeSold: true },
+      [warehouseSerial],
+      [{ productId: 'prod-1', location: 'warehouse', qty: 4 }],
+      'prod-1',
+    )).toBe(false)
   })
 })
 

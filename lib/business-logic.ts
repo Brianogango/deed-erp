@@ -124,6 +124,22 @@ export function availableSellableQty(
 }
 
 /**
+ * Product Catalog / price list: only SKUs with warehouse stock ready to sell.
+ * Services, archived products, not-for-sale, With Issues, Repair, and zero-qty
+ * SKUs stay in Product Master — they are not catalog items.
+ */
+export function isListedInProductCatalog(
+  product: (StockProduct & { isActive?: boolean; canBeSold?: boolean }) | undefined,
+  serials: SerialNumber[],
+  bulkStock: BulkStockLevel[],
+  productId: string,
+): boolean {
+  if (!product) return false
+  if (product.isActive === false || product.canBeSold === false) return false
+  return availableSellableQty(product, serials, bulkStock, productId) >= 1
+}
+
+/**
  * Adds `delta` units to a product at a location in a bulk-stock level list.
  * Result quantity is floored at 0 (never goes negative).
  * Returns a new array — does not mutate the input.
