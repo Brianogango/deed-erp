@@ -85,6 +85,45 @@ export function calcStockByLocation(
   return locs
 }
 
+const SELLABLE_LOCATIONS: LocationId[] = ['warehouse', 'shop', 'repair_unit']
+
+/**
+ * Units a partner/storefront can actually sell — same rule as Inventory's
+ * catalog "available" column, not Prisma leftover `in_stock` serials.
+ *
+ * Serial SKUs: JSON/blob serials with status `available` only (sold / assigned
+ * / repair are excluded). Bulk SKUs: on-hand at warehouse + shop + repair_unit.
+ * Services have no physical stock and return 0.
+ */
+export function availableSellableQty(
+  product: StockProduct | undefined,
+  serials: SerialNumber[],
+  bulkStock: BulkStockLevel[],
+  productId: string,
+): number {
+  if (!product) return 0
+  if (String(product.unit ?? '').toLowerCase() === 'service') return 0
+
+  const serialTracked = isSerialTracking(inferTrackingMethod({
+    trackingMethod: product.trackingMethod,
+    category: product.category,
+    requiresSerial: product.requiresSerial,
+    unit: product.unit,
+  }))
+
+  if (serialTracked) {
+    return serials.filter(s =>
+      s.productId === productId && String(s.status || '').toLowerCase() === 'available',
+    ).length
+  }
+
+  const byLocation = calcStockByLocation(product, serials, bulkStock, productId)
+  return SELLABLE_LOCATIONS.reduce(
+    (sum, loc) => sum + Math.max(0, Number(byLocation[loc]) || 0),
+    0,
+  )
+}
+
 /**
  * Adds `delta` units to a product at a location in a bulk-stock level list.
  * Result quantity is floored at 0 (never goes negative).

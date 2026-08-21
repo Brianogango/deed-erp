@@ -2,21 +2,24 @@ import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { authenticatePartnerRequest, partnerCorsHeaders } from '@/lib/partner-api'
 import { loadAppState } from '@/lib/server-store'
+import { availableSellableQty, type BulkStockLevel, type SerialNumber, type StockProduct } from '@/lib/business-logic'
+import type { LocationId } from '@/lib/store'
 
 export const dynamic = 'force-dynamic'
 
 // ── Public partner catalog — GET /api/public/v1/products ─────────────────────
 // Authenticated with a partner API key (Authorization: Bearer <key> or
 // X-API-Key). Returns only reseller-safe fields: no cost prices, no supplier
-// data, no internal accounts. "Ready for sale" means active, priced, and (by
-// default) in stock.
+// data, no internal accounts. Default: active, priced, and quantityAvailable
+// >= 1 using the same on-hand rule as Inventory (JSON available serials /
+// sellable bulk), not leftover Prisma in_stock serials.
 //
 // Query params:
 //   page          1-based page number                     (default 1)
 //   pageSize      items per page, max 100                 (default 50)
 //   category      exact category name filter              (optional)
 //   q             search in name/SKU/description          (optional)
-//   inStock       'all' to include out-of-stock items     (default: in-stock only)
+//   inStock       'all' to include out-of-stock items     (default: qty >= 1)
 
 const json = (body: unknown, request: Request, init?: ResponseInit) =>
   NextResponse.json(body, {
@@ -28,57 +31,34 @@ export async function OPTIONS(request: Request) {
   return new NextResponse(null, { status: 204, headers: partnerCorsHeaders(request) })
 }
 
-type JsonSerial = { productId?: string; status?: string }
-type JsonBulkLevel = { productId?: string; qty?: number | string }
-type JsonProduct = { id?: string; warrantyMonths?: number | string }
+type JsonSerial = { productId?: string; status?: string; location?: string }
+type JsonBulkLevel = { productId?: string; location?: string; qty?: number | string }
+type JsonProduct = {
+  id?: string
+  warrantyMonths?: number | string
+  unit?: string
+  requiresSerial?: boolean
+  trackingMethod?: string
+  category?: string
+}
 
-/** Units available per product, combining the relational stock tables with the
- *  synced JSON store (which is where serials/bulk levels currently live). */
-async function availabilityByProduct(): Promise<Map<string, number>> {
-  const [relSerials, stockLevels, appState] = await Promise.all([
-    prisma.serialNumber.groupBy({
-      by: ['productId'],
-      where: { status: { in: ['in_stock', 'available'] } },
-      _count: { _all: true },
-    }).catch(() => [] as { productId: string; _count: { _all: number } }[]),
-    prisma.stockLevel.findMany({ select: { productId: true, qtyOnHand: true, qtyReserved: true } }).catch(() => []),
-    loadAppState(['deed_serials', 'deed_bulkStock']),
-  ])
+function asLocation(value: string | undefined): LocationId {
+  return (value || 'warehouse') as LocationId
+}
 
-  const rel = new Map<string, number>()
-  for (const row of relSerials) rel.set(row.productId, row._count._all)
-
-  const jsonSerialCounts = new Map<string, number>()
-  const jsonSerials = appState.deed_serials
-  if (Array.isArray(jsonSerials)) {
-    for (const s of jsonSerials as JsonSerial[]) {
-      if (s?.status === 'available' && s.productId) {
-        jsonSerialCounts.set(s.productId, (jsonSerialCounts.get(s.productId) ?? 0) + 1)
-      }
-    }
+function partnerQtyForProduct(
+  row: { id: string; trackingMethod?: string | null; category?: { name: string } | null },
+  jsonProduct: JsonProduct | undefined,
+  serials: SerialNumber[],
+  bulkStock: BulkStockLevel[],
+): number {
+  const product: StockProduct = {
+    trackingMethod: jsonProduct?.trackingMethod ?? row.trackingMethod,
+    category: jsonProduct?.category ?? row.category?.name ?? null,
+    requiresSerial: jsonProduct?.requiresSerial,
+    unit: jsonProduct?.unit,
   }
-
-  const bulk = new Map<string, number>()
-  for (const level of stockLevels) {
-    bulk.set(level.productId, (bulk.get(level.productId) ?? 0) + Math.max(0, level.qtyOnHand - level.qtyReserved))
-  }
-  const jsonBulk = appState.deed_bulkStock
-  if (Array.isArray(jsonBulk)) {
-    for (const level of jsonBulk as JsonBulkLevel[]) {
-      const qty = Number(level?.qty) || 0
-      if (level?.productId && qty > 0) bulk.set(level.productId, Math.max(bulk.get(level.productId) ?? 0, qty))
-    }
-  }
-
-  const result = new Map<string, number>()
-  const ids = new Set([...rel.keys(), ...jsonSerialCounts.keys(), ...bulk.keys()])
-  for (const id of ids) {
-    // Serialized stock may exist in both stores for the same units — take the
-    // larger count rather than double-counting.
-    const serialised = Math.max(rel.get(id) ?? 0, jsonSerialCounts.get(id) ?? 0)
-    result.set(id, serialised + (bulk.get(id) ?? 0))
-  }
-  return result
+  return availableSellableQty(product, serials, bulkStock, row.id)
 }
 
 export async function GET(request: Request) {
@@ -92,7 +72,7 @@ export async function GET(request: Request) {
   const q = url.searchParams.get('q')?.trim() || null
   const includeOutOfStock = url.searchParams.get('inStock') === 'all'
 
-  const [rows, availability, appState] = await Promise.all([
+  const [rows, appState] = await Promise.all([
     prisma.product.findMany({
       where: {
         isActive: true,
@@ -108,26 +88,48 @@ export async function GET(request: Request) {
       },
       select: {
         id: true, sku: true, barcode: true, name: true, description: true,
-        sellingPrice: true, updatedAt: true,
+        sellingPrice: true, updatedAt: true, trackingMethod: true,
         category: { select: { name: true } },
       },
       orderBy: { name: 'asc' },
     }),
-    availabilityByProduct(),
-    loadAppState(['deed_products']),
+    loadAppState(['deed_products', 'deed_serials', 'deed_bulkStock']),
   ])
 
+  const jsonById = new Map<string, JsonProduct>()
   const warrantyById = new Map<string, number>()
   const jsonProducts = appState.deed_products
   if (Array.isArray(jsonProducts)) {
     for (const p of jsonProducts as JsonProduct[]) {
-      const months = Number(p?.warrantyMonths)
-      if (p?.id && Number.isFinite(months) && months > 0) warrantyById.set(p.id, months)
+      if (!p?.id) continue
+      jsonById.set(p.id, p)
+      const months = Number(p.warrantyMonths)
+      if (Number.isFinite(months) && months > 0) warrantyById.set(p.id, months)
     }
   }
 
+  const serials: SerialNumber[] = Array.isArray(appState.deed_serials)
+    ? (appState.deed_serials as JsonSerial[])
+        .filter((s): s is JsonSerial & { productId: string } => Boolean(s?.productId))
+        .map(s => ({
+          productId: s.productId,
+          status: String(s.status || ''),
+          location: asLocation(s.location),
+        }))
+    : []
+
+  const bulkStock: BulkStockLevel[] = Array.isArray(appState.deed_bulkStock)
+    ? (appState.deed_bulkStock as JsonBulkLevel[])
+        .filter((level): level is JsonBulkLevel & { productId: string } => Boolean(level?.productId))
+        .map(level => ({
+          productId: level.productId,
+          location: asLocation(level.location),
+          qty: Math.max(0, Number(level.qty) || 0),
+        }))
+    : []
+
   const catalog = rows.map(row => {
-    const quantityAvailable = availability.get(row.id) ?? 0
+    const quantityAvailable = partnerQtyForProduct(row, jsonById.get(row.id), serials, bulkStock)
     return {
       id: row.id,
       sku: row.sku,
@@ -139,7 +141,7 @@ export async function GET(request: Request) {
       currency: 'KES',
       warrantyMonths: warrantyById.get(row.id) ?? null,
       quantityAvailable,
-      inStock: quantityAvailable > 0,
+      inStock: quantityAvailable >= 1,
       updatedAt: row.updatedAt.toISOString(),
     }
   }).filter(item => includeOutOfStock || item.inStock)

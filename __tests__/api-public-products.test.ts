@@ -40,8 +40,6 @@ beforeEach(() => {
       : null))
   mockPrisma.partnerApiKey.update.mockResolvedValue({})
   mockPrisma.product.findMany.mockResolvedValue([productRow()])
-  mockPrisma.serialNumber.groupBy.mockResolvedValue([])
-  mockPrisma.stockLevel.findMany.mockResolvedValue([])
   mockLoadAppState.mockResolvedValue({
     deed_serials: [
       { productId: 'prod-1', status: 'available' },
@@ -105,6 +103,21 @@ describe('GET /api/public/v1/products — partner catalog', () => {
     expect(body.items[0].inStock).toBe(false)
   })
 
+  it('hides sold-out serial products even when Prisma still has leftover in_stock rows', async () => {
+    mockPrisma.serialNumber.groupBy.mockResolvedValue([{ productId: 'prod-1', _count: { _all: 8 } }])
+    mockPrisma.stockLevel.findMany.mockResolvedValue([{ productId: 'prod-1', qtyOnHand: 8, qtyReserved: 0 }])
+    mockLoadAppState.mockResolvedValue({
+      deed_serials: [
+        { productId: 'prod-1', status: 'sold', location: 'customer' },
+        { productId: 'prod-1', status: 'sold', location: 'customer' },
+      ],
+      deed_bulkStock: [{ productId: 'prod-1', location: 'warehouse', qty: 4 }],
+      deed_products: [{ id: 'prod-1', requiresSerial: true, category: 'Laptops' }],
+    })
+    const res = await GET(req())
+    expect((await res.json()).items).toHaveLength(0)
+  })
+
   it('paginates', async () => {
     mockPrisma.product.findMany.mockResolvedValue(
       Array.from({ length: 7 }, (_, i) => productRow({ id: `prod-${i}`, sku: `SKU-${i}`, name: `Item ${i}` })))
@@ -118,9 +131,18 @@ describe('GET /api/public/v1/products — partner catalog', () => {
     expect(body.items).toHaveLength(3)
   })
 
-  it('counts bulk stock from stock_levels net of reservations', async () => {
+  it('counts bulk stock from JSON sellable locations, not Prisma stock_levels', async () => {
+    mockPrisma.product.findMany.mockResolvedValue([productRow({ category: { name: 'Accessories' } })])
     mockPrisma.stockLevel.findMany.mockResolvedValue([{ productId: 'prod-1', qtyOnHand: 10, qtyReserved: 4 }])
-    mockLoadAppState.mockResolvedValue({ deed_serials: [], deed_bulkStock: [], deed_products: [] })
+    mockLoadAppState.mockResolvedValue({
+      deed_serials: [],
+      deed_bulkStock: [
+        { productId: 'prod-1', location: 'warehouse', qty: 5 },
+        { productId: 'prod-1', location: 'shop', qty: 1 },
+        { productId: 'prod-1', location: 'quarantine', qty: 9 },
+      ],
+      deed_products: [{ id: 'prod-1', category: 'Accessories', requiresSerial: false }],
+    })
     const res = await GET(req())
     const body = await res.json()
     expect(body.items[0].quantityAvailable).toBe(6)
