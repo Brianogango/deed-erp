@@ -9,6 +9,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   calcStockByLocation,
+  availableSellableQty,
   upsertBulkStock,
   computePayrollLine,
   aggregatePayroll,
@@ -106,6 +107,48 @@ describe('calcStockByLocation()', () => {
       const result = calcStockByLocation(undefined, [], [], 'prod-1')
       expect(result).toEqual({ warehouse: 0, shop: 0, repair_unit: 0, vendor: 0, customer: 0, employee: 0, pending_testing: 0, quarantine: 0 })
     })
+  })
+})
+
+describe('availableSellableQty()', () => {
+  it('counts only available serials for laptops, ignoring sold and Prisma-style in_stock leftovers', () => {
+    const serials: SerialNumber[] = [
+      { productId: 'prod-1', location: 'warehouse', status: 'available' },
+      { productId: 'prod-1', location: 'warehouse', status: 'available' },
+      { productId: 'prod-1', location: 'warehouse', status: 'sold' },
+      { productId: 'prod-1', location: 'warehouse', status: 'in_stock' },
+      { productId: 'prod-1', location: 'warehouse', status: 'assigned' },
+    ]
+    expect(availableSellableQty(
+      { category: 'Laptops', requiresSerial: true },
+      serials,
+      [{ productId: 'prod-1', location: 'warehouse', qty: 99 }],
+      'prod-1',
+    )).toBe(2)
+  })
+
+  it('sums bulk qty at warehouse, shop, and repair_unit only', () => {
+    const bulk: BulkStockLevel[] = [
+      { productId: 'prod-1', location: 'warehouse', qty: 3 },
+      { productId: 'prod-1', location: 'shop', qty: 2 },
+      { productId: 'prod-1', location: 'repair_unit', qty: 1 },
+      { productId: 'prod-1', location: 'quarantine', qty: 8 },
+    ]
+    expect(availableSellableQty(
+      { category: 'Accessories', requiresSerial: false },
+      [],
+      bulk,
+      'prod-1',
+    )).toBe(6)
+  })
+
+  it('returns 0 for services', () => {
+    expect(availableSellableQty(
+      { category: 'Services', unit: 'service' },
+      [{ productId: 'prod-1', location: 'warehouse', status: 'available' }],
+      [{ productId: 'prod-1', location: 'warehouse', qty: 4 }],
+      'prod-1',
+    )).toBe(0)
   })
 })
 

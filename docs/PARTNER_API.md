@@ -33,7 +33,7 @@ Deed’s Partner API lets approved resellers **pull the sellable catalog** — a
 | Category | Supplier details |
 | Retail selling price (KES) | Internal accounts or users |
 | Warranty months (when set) | Draft / inactive products |
-| Live quantity available | Order placement |
+| Live quantity available (1 or more) | Order placement |
 
 This API is **read-only**. To place purchase orders with Deed Technologies, contact your Deed account contact — do not attempt write calls against this API.
 
@@ -129,7 +129,7 @@ Both are equivalent. Prefer `Authorization: Bearer` unless your stack makes cust
 
 ### `GET /api/public/v1/products`
 
-Returns the sellable catalog (active, priced products). By default only **in-stock** items are returned.
+Returns the sellable catalog (active, priced products). By default only items with **quantityAvailable ≥ 1** are returned — the same on-hand figure Inventory shows (available serials, or bulk at warehouse / shop / repair). Historical Prisma `in_stock` serials that were already sold in the shop do **not** count.
 
 | Query param | Default | Description |
 |---|---|---|
@@ -137,7 +137,7 @@ Returns the sellable catalog (active, priced products). By default only **in-sto
 | `pageSize` | `50` | Items per page (maximum `100`) |
 | `category` | — | Exact category name (case-insensitive), e.g. `Laptops`, `Accessories` |
 | `q` | — | Free-text search across name, SKU, and description |
-| `inStock` | in-stock only | Pass `inStock=all` to include out-of-stock items |
+| `inStock` | qty ≥ 1 only | Pass `inStock=all` to include zero-qty items |
 
 **Example**
 
@@ -199,8 +199,8 @@ Responses may be cached at the edge/server for up to **60 seconds** (`Cache-Cont
 | `price` | number | Retail selling price |
 | `currency` | string | Always `KES` today |
 | `warrantyMonths` | number \| null | Warranty in months when configured |
-| `quantityAvailable` | number | Live units available for sale |
-| `inStock` | boolean | `true` when `quantityAvailable > 0` |
+| `quantityAvailable` | number | Shop on-hand units (available serials, or bulk at warehouse/shop/repair). Default responses omit 0. |
+| `inStock` | boolean | `true` when `quantityAvailable` is 1 or more |
 | `updatedAt` | string (ISO 8601) | Last product update timestamp |
 
 ### Pagination object
