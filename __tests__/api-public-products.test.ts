@@ -95,7 +95,12 @@ describe('GET /api/public/v1/products — partner catalog', () => {
         category: { name: 'Parts & Components' },
       }),
     ])
-    const res = await GET(req('?inStock=all'))
+    mockLoadAppState.mockResolvedValue({
+      deed_serials: [],
+      deed_bulkStock: [{ productId: 'prod-1', location: 'warehouse', qty: 3 }],
+      deed_products: [{ id: 'prod-1', category: 'Parts & Components', requiresSerial: false }],
+    })
+    const res = await GET(req())
     const body = await res.json()
     expect(body.items).toHaveLength(1)
     expect(body.items[0].price).toBe(6500)
@@ -106,7 +111,7 @@ describe('GET /api/public/v1/products — partner catalog', () => {
     mockPrisma.product.findMany.mockResolvedValue([
       productRow({ sellingPrice: 30000, costPrice: 0, wholesalePrice: 0 }),
     ])
-    const res = await GET(req('?inStock=all'))
+    const res = await GET(req())
     expect((await res.json()).items).toHaveLength(0)
   })
 
@@ -118,15 +123,23 @@ describe('GET /api/public/v1/products — partner catalog', () => {
     expect(res.headers.get('Access-Control-Allow-Headers') ?? '').not.toMatch(/Authorization/i)
   })
 
-  it('hides out-of-stock items by default and includes them with inStock=all', async () => {
+  it('never returns out-of-stock items, even if inStock=all is passed', async () => {
     mockLoadAppState.mockResolvedValue({ deed_serials: [], deed_bulkStock: [], deed_products: [] })
     const hidden = await GET(req())
     expect((await hidden.json()).items).toHaveLength(0)
 
-    const shown = await GET(req('?inStock=all'))
-    const body = await shown.json()
-    expect(body.items).toHaveLength(1)
-    expect(body.items[0].inStock).toBe(false)
+    const stillHidden = await GET(req('?inStock=all'))
+    expect((await stillHidden.json()).items).toHaveLength(0)
+  })
+
+  it('hides not-for-sale SKUs even when warehouse stock exists', async () => {
+    mockLoadAppState.mockResolvedValue({
+      deed_serials: [{ productId: 'prod-1', status: 'available', location: 'warehouse' }],
+      deed_bulkStock: [],
+      deed_products: [{ id: 'prod-1', canBeSold: false, requiresSerial: true, category: 'Laptops' }],
+    })
+    const res = await GET(req())
+    expect((await res.json()).items).toHaveLength(0)
   })
 
   it('hides sold-out serial products even when Prisma still has leftover in_stock rows', async () => {
