@@ -5783,7 +5783,7 @@ main#main-content:has(.sales-pilot.sales-doc) > .min-w-0 {
     bottom: 0;
     z-index: 40;
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
     gap: 0.45rem;
     margin: 0;
     padding: 0.75rem 0.85rem calc(0.75rem + env(safe-area-inset-bottom, 0px));
@@ -5879,16 +5879,20 @@ main#main-content:has(.sales-pilot.sales-doc) > .min-w-0 {
     display: none !important;
   }
 
-  .sales-pilot.sales-doc .sp-list-table tbody tr.sp-row-click {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    align-items: start;
-    gap: 0.2rem 0.7rem;
+  .sales-pilot.sales-doc .sp-list-table tbody tr {
+    display: block;
     margin: 0.55rem 0.65rem;
     padding: 0.75rem 0.8rem;
     border: 1px solid var(--border-lt);
     border-radius: 0.5rem;
     background: var(--bg-card);
+  }
+
+  .sales-pilot.sales-doc .sp-list-table tbody tr.sp-row-click {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: start;
+    gap: 0.2rem 0.7rem;
   }
 
   .sales-pilot.sales-doc .sp-list-table tbody td {
@@ -5954,6 +5958,119 @@ main#main-content:has(.sales-pilot.sales-doc) > .min-w-0 {
   .sales-pilot.sales-doc .sp-list-table tbody td[colspan] {
     grid-column: 1 / -1;
     text-align: center !important;
+  }
+
+  .sales-pilot.sales-doc .mobile-row-toggle {
+    display: none !important;
+  }
+
+  .sales-pilot.sales-doc .sp-line-table,
+  .sales-pilot.sales-doc .sp-line-table tbody {
+    display: block;
+    width: 100%;
+  }
+
+  .sales-pilot.sales-doc .sp-line-table thead {
+    display: none !important;
+  }
+
+  .sales-pilot.sales-doc .sp-line-table tbody tr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: start;
+    gap: 0.15rem 0.7rem;
+    margin: 0.5rem 0.65rem;
+    padding: 0.7rem 0.75rem;
+    border: 1px solid var(--border-lt);
+    border-radius: 0.5rem;
+    background: var(--bg-card);
+  }
+
+  .sales-pilot.sales-doc .sp-line-table tbody td {
+    min-width: 0;
+    padding: 0.1rem 0 !important;
+    border: 0 !important;
+    background: transparent !important;
+    white-space: normal !important;
+    text-align: left !important;
+  }
+
+  .sales-pilot.sales-doc .sp-line-table tbody td::before {
+    content: none !important;
+  }
+
+  .sales-pilot.sales-doc .sp-line-table tbody td[data-col='description'],
+  .sales-pilot.sales-doc .sp-line-table tbody td[data-col='unit'],
+  .sales-pilot.sales-doc .sp-line-table tbody td[data-col='policy'],
+  .sales-pilot.sales-doc .sp-line-table tbody td[data-col='discount'],
+  .sales-pilot.sales-doc .sp-line-table tbody td[data-col='tax'],
+  .sales-pilot.sales-doc .sp-line-table tbody td[data-col='index'],
+  .sales-pilot.sales-doc .sp-line-table tbody td[data-col='reserved'],
+  .sales-pilot.sales-doc .sp-line-table tbody td[data-col='delivered'],
+  .sales-pilot.sales-doc .sp-line-table tbody td[data-col='invoiced'] {
+    display: none !important;
+  }
+
+  .sales-pilot.sales-doc .sp-line-table tbody td[data-col='product'] {
+    grid-column: 1;
+    grid-row: 1;
+    font-weight: 650;
+    color: var(--navy);
+  }
+
+  .sales-pilot.sales-doc .sp-line-table tbody td[data-col='amount'] {
+    grid-column: 2;
+    grid-row: 1;
+    justify-self: end;
+    font-variant-numeric: tabular-nums;
+    font-weight: 700;
+    color: var(--navy);
+  }
+
+  .sales-pilot.sales-doc .sp-line-table tbody td[data-col='qty'] {
+    grid-column: 1;
+    grid-row: 2;
+    color: var(--text-3);
+    font-size: 0.75rem;
+  }
+
+  .sales-pilot.sales-doc .sp-line-table tbody td[data-col='qty']:not(:has(input))::after {
+    content: ' ordered';
+  }
+
+  .sales-pilot.sales-doc .sp-line-table tbody td[data-col='price'] {
+    grid-column: 2;
+    grid-row: 2;
+    justify-self: end;
+    color: var(--text-3);
+    font-size: 0.75rem;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .sales-pilot.sales-doc .sp-line-table tbody td[data-col='demand'],
+  .sales-pilot.sales-doc .sp-line-table tbody td[data-col='reserve'] {
+    grid-column: 1 / -1;
+    color: var(--text-3);
+    font-size: 0.75rem;
+  }
+
+  .sales-pilot.sales-doc .sp-line-table tbody td[data-col='serials'] {
+    grid-column: 1 / -1;
+    font-size: 0.75rem;
+  }
+
+  .sales-pilot.sales-doc .sp-line-table tbody td[data-col='actions'] {
+    grid-column: 1 / -1;
+    grid-row: 3;
+    padding-top: 0.35rem !important;
+  }
+
+  .sales-pilot.sales-doc .sp-line-table tbody td[data-col='actions'] .flex {
+    justify-content: flex-start;
+  }
+
+  .sales-pilot.sales-doc .sp-line-table tbody td[colspan] {
+    grid-column: 1 / -1;
   }
 }
 
