@@ -1787,7 +1787,7 @@ function SalesContent() {
                   </div>
                   {listViewMode === 'table' && (
                     <div className="sp-table-wrap">
-                      <table className="sp-table">
+                      <table className="sp-table sp-list-table" data-no-responsive>
                         <thead>
                           <tr>
                             {listTab === 'quotations' && (
@@ -1840,7 +1840,7 @@ function SalesContent() {
                               return (
                                 <tr key={s.id} className="sp-row-click" onClick={() => openOrder(s.id)} style={{ cursor: 'pointer' }}>
                                   {listTab === 'quotations' && (
-                                    <td onClick={e => e.stopPropagation()}>
+                                    <td data-col="select" onClick={e => e.stopPropagation()}>
                                       <input
                                         type="checkbox"
                                         aria-label={`Select ${s.ref}`}
@@ -1849,7 +1849,7 @@ function SalesContent() {
                                       />
                                     </td>
                                   )}
-                                  <td>
+                                  <td data-col="ref">
                                     <button type="button" className="sp-linkish" onClick={e => { e.stopPropagation(); openOrder(s.id) }}>{s.ref}</button>
                                     {listTab === 'orders' && s.quotationRef ? (
                                       <span style={{ display: 'block', marginTop: 2, fontSize: 11, color: 'var(--sp-text-3)', fontWeight: 500 }}>
@@ -1857,17 +1857,17 @@ function SalesContent() {
                                       </span>
                                     ) : null}
                                   </td>
-                                  <td>{s.customerName}</td>
-                                  <td>{contactLabel}</td>
-                                  <td>{fmtDate(s.date)}</td>
-                                  <td>
+                                  <td data-col="customer" data-label="Customer">{s.customerName}</td>
+                                  <td data-col="contact" data-label="Contact">{contactLabel}</td>
+                                  <td data-col="date" data-label="Date">{fmtDate(s.date)}</td>
+                                  <td data-col="valid" data-label={listTab === 'quotations' ? 'Valid until' : 'Quotation'}>
                                     {listTab === 'quotations'
                                       ? (s.validUntil ? fmtDate(s.validUntil) : '—')
                                       : (s.quotationRef || '—')}
                                   </td>
-                                  <td>{(s as any).salespersonName || s.createdByName || '—'}</td>
-                                  <td className="num">{salesKes(s.total)}</td>
-                                  <td>{statusPill(s)}</td>
+                                  <td data-col="salesperson" data-label="Salesperson">{(s as any).salespersonName || s.createdByName || '—'}</td>
+                                  <td className="num" data-col="total" data-label="Total">{salesKes(s.total)}</td>
+                                  <td data-col="status">{statusPill(s)}</td>
                                 </tr>
                               )
                             })
