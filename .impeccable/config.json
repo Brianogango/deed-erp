@@ -136,6 +136,42 @@
         ],
         "createdAt": "2026-08-20T17:41:17.153Z",
         "reason": "Incumbent ERP chrome; pre-existing hex colors, not part of store-credit visibility"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "*",
+        "files": [
+          "components/modules/Refurbishment.tsx"
+        ],
+        "createdAt": "2026-08-21T13:45:52.220Z",
+        "reason": "Incumbent Refurbishment operate UI; add vs swap on RAM/SSD parts is a fit action, not a restyle of existing status/stock colors"
+      },
+      {
+        "rule": "side-tab",
+        "value": "*",
+        "files": [
+          "components/modules/Refurbishment.tsx"
+        ],
+        "createdAt": "2026-08-21T13:45:52.251Z",
+        "reason": "Incumbent Refurbishment operate UI; pre-existing list accent, not part of add vs swap fit field"
+      },
+      {
+        "rule": "design-system-font-size",
+        "value": "*",
+        "files": [
+          "components/modules/Refurbishment.tsx"
+        ],
+        "createdAt": "2026-08-21T13:45:52.281Z",
+        "reason": "Incumbent Refurbishment operate UI; existing 9px status pills, not a type restyle"
+      },
+      {
+        "rule": "design-system-radius",
+        "value": "*",
+        "files": [
+          "components/modules/Refurbishment.tsx"
+        ],
+        "createdAt": "2026-08-21T13:45:52.313Z",
+        "reason": "Incumbent Refurbishment operate UI; existing pill radii, not a restyle"
       }
     ]
   }

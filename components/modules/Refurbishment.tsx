@@ -4,6 +4,13 @@ import { Suspense, useState, useMemo } from 'react'
 import { useOperationsStore, fmtDate as fmtD } from '@/lib/store'
 import { useHrStore } from '@/hooks/useHrStore'
 import { assignableTechnicians } from '@/lib/repair/assignable-technicians'
+import { RefurbInstallActionField, refurbFitSlotForForm } from '@/components/refurbishment/RefurbInstallActionField'
+import {
+  applyRefurbPartsToUnitName,
+  defaultRefurbInstallAction,
+  refurbInstallActionLabel,
+  resolveRefurbInstallAction,
+} from '@/lib/refurbishment/apply-upgrade-specs'
 import type { RefurbishmentJob, RefurbStatus, RefurbPart, SerialNumber } from '@/lib/store'
 import { Confirm, Modal, Field, Textarea, ModuleSkeleton, useMounted, ModuleHeader } from '@/components/ui'
 import { StatusBadge, RecordHeader, PrimaryActionButton } from '@/components/erp'
@@ -85,7 +92,7 @@ function RefurbishmentContent() {
   const [writeOffReason, setWriteOffReason] = useState('')
   const [pendingConfirm, setPendingConfirm] = useState<{ msg: string; action: () => void } | null>(null)
   const [partForm, setPartForm] = useState<Omit<RefurbPart, 'id'>>({
-    partName: '', productId: undefined, qty: 1, estimatedCost: 0, status: 'needed', notes: '',
+    partName: '', productId: undefined, qty: 1, estimatedCost: 0, status: 'needed', notes: '', installAction: undefined,
   })
 
   const job = activeId ? refurbishmentJobs.find(j => j.id === activeId) ?? null : null
@@ -317,7 +324,7 @@ function RefurbishmentContent() {
                 <button className="btn-primary text-xs py-1"
                   onClick={() => {
                     setEditPartId(null)
-                    setPartForm({ partName: '', qty: 1, estimatedCost: 0, status: 'needed', notes: '' })
+                    setPartForm({ partName: '', qty: 1, estimatedCost: 0, status: 'needed', notes: '', installAction: undefined })
                     setShowPartModal(true)
                   }}>
                   <Fa icon={faPlus} className="mr-1" />Add Part
@@ -334,7 +341,12 @@ function RefurbishmentContent() {
                     return (
                       <div className="min-w-0">
                         <p className="text-xs font-medium text-t1">{p.partName}</p>
-                        {linkedProd && <p className="text-[10px] text-blue-500">{linkedProd.name}</p>}
+                        {linkedProd && <p className="text-[10px] text-t3">{linkedProd.name}</p>}
+                        {(() => {
+                          const slot = refurbFitSlotForForm({ partName: p.partName, productId: p.productId, products })
+                          if (!slot) return null
+                          return <p className="text-[10px] text-t3">{refurbInstallActionLabel(resolveRefurbInstallAction(p, slot))}</p>
+                        })()}
                         {p.notes && <p className="text-[10px] text-t3">{p.notes}</p>}
                         {p.allocatedByName && <p className="text-[10px] text-green-600">Allocated by {p.allocatedByName}</p>}
                         {p.notifiedTechDate && <p className="text-[10px] text-emerald-600 inline-flex items-center gap-1"><Fa icon={faCheck} aria-hidden="true" /> Ready — notified {fmtD(p.notifiedTechDate)}</p>}
@@ -414,7 +426,7 @@ function RefurbishmentContent() {
                       <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--primary)', fontSize: 11 }}
                         onClick={() => {
                           setEditPartId(p.id)
-                          setPartForm({ partName: p.partName, productId: p.productId, qty: p.qty, estimatedCost: p.estimatedCost, status: p.status, notes: p.notes ?? '' })
+                          setPartForm({ partName: p.partName, productId: p.productId, qty: p.qty, estimatedCost: p.estimatedCost, status: p.status, notes: p.notes ?? '', installAction: p.installAction })
                           setShowPartModal(true)
                         }}
                         aria-label="Edit part"><Fa icon={faPencil} /></button>
@@ -509,11 +521,14 @@ function RefurbishmentContent() {
                     value={partForm.productId ?? ''}
                     onChange={e => {
                       const prod = products.find(x => x.id === e.target.value)
+                      const nextName = prod ? prod.name : partForm.partName
+                      const slot = refurbFitSlotForForm({ partName: nextName, productId: e.target.value || undefined, products })
                       setPartForm(p => ({
                         ...p,
                         productId: e.target.value || undefined,
-                        partName: prod ? prod.name : p.partName,
+                        partName: nextName,
                         estimatedCost: prod ? prod.costPrice : p.estimatedCost,
+                        installAction: slot ? (p.installAction || defaultRefurbInstallAction(slot)) : undefined,
                       }))
                     }}>
                     <option value="">— No link (freeform) —</option>
@@ -531,7 +546,17 @@ function RefurbishmentContent() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <Field label="Part Name *">
                   <input className="form-input" value={partForm.partName}
-                    onChange={e => setPartForm(p => ({ ...p, partName: e.target.value }))} />
+                    onChange={e => {
+                      const name = e.target.value
+                      setPartForm(p => {
+                        const slot = refurbFitSlotForForm({ partName: name, productId: p.productId, products })
+                        return {
+                          ...p,
+                          partName: name,
+                          installAction: slot ? (p.installAction || defaultRefurbInstallAction(slot)) : undefined,
+                        }
+                      })
+                    }} />
                 </Field>
                 <Field label="Qty">
                   <input className="form-input" type="number" min={1} value={partForm.qty}
@@ -542,14 +567,41 @@ function RefurbishmentContent() {
                 <input className="form-input" value={partForm.notes ?? ''}
                   onChange={e => setPartForm(p => ({ ...p, notes: e.target.value }))} />
               </Field>
+              {(() => {
+                const slot = refurbFitSlotForForm({ partName: partForm.partName, productId: partForm.productId, products })
+                if (!slot) return null
+                const draftParts = [
+                  ...job.partsNeeded.filter(p => p.id !== editPartId),
+                  { ...partForm, status: partForm.status || 'needed' },
+                ]
+                const preview = applyRefurbPartsToUnitName({
+                  productName: job.productName,
+                  specsAtIntake: typeof job.specsAtIntake === 'string' ? job.specsAtIntake : job.specs,
+                  parts: draftParts,
+                  products,
+                })
+                return (
+                  <RefurbInstallActionField
+                    slot={slot}
+                    value={partForm.installAction}
+                    onChange={action => setPartForm(p => ({ ...p, installAction: action }))}
+                    afterName={preview?.sellingName}
+                  />
+                )
+              })()}
               <div className="flex gap-2 justify-end mt-4">
                 <button className="btn-outline" onClick={() => setShowPartModal(false)}>Cancel</button>
                 <button className="btn-primary" onClick={() => {
                   if (!partForm.partName.trim()) { showToast('Enter part name', 'error'); return }
+                  const slot = refurbFitSlotForForm({ partName: partForm.partName, productId: partForm.productId, products })
+                  const payload = {
+                    ...partForm,
+                    installAction: slot ? (partForm.installAction || defaultRefurbInstallAction(slot)) : undefined,
+                  }
                   if (editPartId) {
-                    updateRefurbishmentPart(job.id, editPartId, partForm)
+                    updateRefurbishmentPart(job.id, editPartId, payload)
                   } else {
-                    addRefurbishmentPart(job.id, partForm)
+                    addRefurbishmentPart(job.id, payload)
                   }
                   setShowPartModal(false)
                 }}>Save Part</button>
