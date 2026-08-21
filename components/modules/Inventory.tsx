@@ -119,7 +119,7 @@ const blankProduct = () => {
     name: '', sku: '', barcode: '', category,
     productKind,
     trackingMethod,
-    salePrice: '', costPrice: '', wholesalePrice: '', taxRate: '16', minStock: '5',
+    salePrice: '', costPrice: '', wholesalePrice: '', commissionRatePercent: '', taxRate: '16', minStock: '5',
     unit: defaultUnitForKind(productKind, trackingMethod),
     invoicePolicy: 'order' as 'order' | 'delivery',
     pricingCategoryId: '',
@@ -809,6 +809,7 @@ function InventoryContent() {
       }),
       salePrice: String(product.salePrice), costPrice: String(product.costPrice),
       wholesalePrice: Number(product.wholesalePrice) > 0 ? String(product.wholesalePrice) : '',
+      commissionRatePercent: Number(product.commissionRatePercent) > 0 ? String(product.commissionRatePercent) : '',
       taxRate: String(product.taxRate),
       minStock: String(product.minStock),
       unit: product.unit || defaultUnitForKind(kind),
@@ -959,7 +960,12 @@ function InventoryContent() {
     const salePrice = Number(form.salePrice) || 0
     const costPrice = Number(form.costPrice) || 0
     const wholesalePrice = form.wholesalePrice === '' ? 0 : Number(form.wholesalePrice) || 0
+    const commissionRatePercent = form.commissionRatePercent === '' ? null : Number(form.commissionRatePercent)
     if (salePrice < 0 || costPrice < 0 || wholesalePrice < 0) { showToast('Prices cannot be negative', 'error'); return }
+    if (commissionRatePercent != null && (Number.isNaN(commissionRatePercent) || commissionRatePercent < 0 || commissionRatePercent > 100)) {
+      showToast('Commission % must be between 0 and 100', 'error')
+      return
+    }
     const payload = {
       ...form,
       sku: skuTrimmed,
@@ -968,6 +974,7 @@ function InventoryContent() {
       pricingCategoryId: form.pricingCategoryId || undefined,
       productType: form.productType === 'new' ? 'new' : 'refurbished',
       salePrice, costPrice, wholesalePrice,
+      commissionRatePercent,
       stockQty: 0, minStock: Number(form.minStock) || 0, taxRate: Number(form.taxRate) || 0,
       invoicePolicy: form.invoicePolicy,
       warrantyMonths: Number(form.warrantyMonths) || 0,
@@ -3899,6 +3906,9 @@ function InventoryContent() {
                 />
               </Field>
               <Field label="Tax Rate (%)"><Input type="number" value={form.taxRate} onChange={setF('taxRate')} /></Field>
+              <Field label="Commission %" hint="Blank uses the category rate from Settings → Sales">
+                <Input type="number" value={form.commissionRatePercent} onChange={setF('commissionRatePercent')} placeholder="Category default" />
+              </Field>
             </div>
             {form.productKind !== 'service' && form.category !== 'Services' && (() => {
               const quote = quoteSalePriceFromCost({

@@ -2,6 +2,7 @@
 import { createContext, useContext, useState, useMemo, useEffect, useCallback } from 'react'
 import { useApp, fmtKes, fmtDate } from '@/lib/store'
 import { MarginPolicySettings } from '@/components/modules/settings/MarginPolicySettings'
+import { CommissionRatesSettings } from '@/components/modules/settings/CommissionRatesSettings'
 import { normalizePricingMarginPolicy, DEFAULT_PRICING_MARGIN_POLICY } from '@/lib/pricing/margin-policy'
 import { useHrStore } from '@/hooks/useHrStore'
 import { Badge, Confirm, Field, Input, Modal, ModuleSkeleton, PanelHeader, Select, Textarea, ExportButtons, useMounted } from '@/components/ui'
@@ -882,6 +883,9 @@ ACCOUNTS_EMAIL=accounts@deed.co.ke`}</pre>
                   />
                 </SettingRow>
                 {ss.salesPricelists && <PricelistsPanel showToast={showToast} />}
+              </SectionCard>
+              <SectionCard title="Sales commission">
+                <CommissionRatesSettings showToast={showToast} />
               </SectionCard>
               <MarginPolicySettings
                 policy={normalizePricingMarginPolicy(ss.pricingMarginPolicy)}

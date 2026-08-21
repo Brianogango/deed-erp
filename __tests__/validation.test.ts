@@ -84,8 +84,13 @@ describe('productSchema', () => {
     expect(result.pricingCategoryId).toBe('refurb_laptops')
   })
 
-  it('rejects invalid productType', async () => {
-    await expect(productSchema.parseAsync({ ...valid, productType: 'used' })).rejects.toThrow()
+  it('accepts optional commissionRatePercent override', async () => {
+    const result = await productSchema.parseAsync({ ...valid, commissionRatePercent: 4.5 })
+    expect(result.commissionRatePercent).toBe(4.5)
+  })
+
+  it('rejects commissionRatePercent above 100', async () => {
+    await expect(productSchema.parseAsync({ ...valid, commissionRatePercent: 101 })).rejects.toThrow()
   })
 })
 

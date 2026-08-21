@@ -45,6 +45,9 @@ export async function POST(request: Request) {
           wholesalePrice: raw.wholesalePrice === '' || raw.wholesalePrice == null
             ? undefined
             : Number(raw.wholesalePrice),
+          commissionRatePercent: raw.commissionRatePercent === '' || raw.commissionRatePercent == null
+            ? undefined
+            : Number(raw.commissionRatePercent),
           minStock: Number(raw.minStock ?? raw.reorderLevel ?? 5),
           taxRate: Number(raw.taxRate ?? 16),
           sku: raw.skuProvided === false ? '' : (raw.sku ?? ''),

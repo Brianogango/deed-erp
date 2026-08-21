@@ -24,6 +24,8 @@ import {
   type PricingMarginPolicy,
 } from '@/lib/pricing/margin-policy'
 import type { CreateUserInput, ModuleId as AuthModuleId, PublicUser, UpdateUserInput, UserRole as AuthUserRole } from '@/lib/auth/types'
+import { CATEGORY_CONFIG, ALL_CATEGORIES, type CategoryId } from '@/lib/product-categories'
+export { CATEGORY_CONFIG, ALL_CATEGORIES, type CategoryId }
 import { calcStockByLocation as _calcStockByLocation, upsertBulkStock as _upsertBulkStock, aggregatePayroll } from '@/lib/business-logic'
 import { calculatePayroll } from '@/lib/payroll'
 import {
@@ -244,23 +246,6 @@ export const LOCATIONS: Record<LocationId, { name: string; icon: string; color: 
   pending_testing:   { name: 'Pending Testing',   icon: '🧪', color: '#0EA5E9' },
   quarantine:        { name: 'Quarantine',        icon: '🚫', color: '#DC2626' },
 }
-
-// ─── Category Config ──────────────────────────────────────────────────────────
-export type CategoryId = 'Laptops' | 'Desktops' | 'Parts & Components' | 'Accessories' | 'Printers' | 'Networking' | 'Mobile Devices' | 'Software & Licences' | 'Services'
-
-export const CATEGORY_CONFIG: Record<CategoryId, { serialRequired: boolean; trackStock: boolean }> = {
-  Laptops:               { serialRequired: true,  trackStock: true  },
-  Desktops:              { serialRequired: true,  trackStock: true  },
-  'Parts & Components':  { serialRequired: false, trackStock: true  },
-  Accessories:           { serialRequired: false, trackStock: true  },
-  Printers:              { serialRequired: true,  trackStock: true  },
-  Networking:            { serialRequired: true,  trackStock: true  },
-  'Mobile Devices':      { serialRequired: true,  trackStock: true  },
-  'Software & Licences': { serialRequired: false, trackStock: false },
-  Services:              { serialRequired: false, trackStock: false },
-}
-
-export const ALL_CATEGORIES = Object.keys(CATEGORY_CONFIG) as CategoryId[]
 
 export type { ProductKind } from '@/lib/product-kind'
 export { PRODUCT_KIND_OPTIONS, UOM_OPTIONS, inferProductKind, defaultTrackingForKind, defaultUnitForKind, kindRequiresInventoryAccounts } from '@/lib/product-kind'
@@ -852,6 +837,8 @@ export interface Product {
   /** Optional channel prices — used by WHOLESALE / KILIMALL pricelists. */
   wholesalePrice?: number
   kilimallPrice?: number
+  /** Product override for sales commission %. Empty → category rate, else 0. */
+  commissionRatePercent?: number
   /** Odoo-style commercial type: storable | consumable | service */
   productKind?: import('@/lib/product-kind').ProductKind
   trackingMethod?: TrackingMethod
