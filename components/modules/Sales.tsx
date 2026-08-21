@@ -2484,7 +2484,7 @@ function SalesContent() {
                                   if (l.lineType === 'section') {
                                     return (
                                       <tr key={l.id} className="bg-slate-50/70">
-                                        <td className="px-3 py-2" colSpan={canEdit ? 7 : 8}>
+                                        <td className="px-3 py-2" colSpan={canEdit ? 7 : 8} data-col="product">
                                           {canEdit ? (
                                             <input
                                               aria-label="Section title"
@@ -2506,7 +2506,7 @@ function SalesContent() {
                                           )}
                                         </td>
                                         {canEdit && (
-                                          <td className="px-3 py-2 text-center">
+                                          <td className="px-3 py-2 text-center" data-col="actions">
                                             <div className="flex items-center justify-end gap-0.5">
                                               <button type="button" onClick={() => moveSOLine(activeOrder.id, l.id, -1)} disabled={lineIndex === 0} aria-label="Move section up" className="icon-btn disabled:opacity-30 disabled:cursor-not-allowed">
                                                 <Fa icon={faArrowUp} aria-hidden="true" />
@@ -3697,8 +3697,8 @@ function NewQuotationForm({
                     if (line.type === 'section') {
                       return (
                         <tr key={line.id}>
-                          <td className="num">{lineIndex + 1}</td>
-                          <td colSpan={6}>
+                          <td className="num" data-col="index">{lineIndex + 1}</td>
+                          <td colSpan={6} data-col="product">
                             <input
                               aria-label="Quote section title"
                               className="w-full font-bold"
@@ -3707,8 +3707,8 @@ function NewQuotationForm({
                               onChange={e => updateDraftLine(line.id, 'description', e.target.value)}
                             />
                           </td>
-                          <td className="num text-[10px] font-bold text-[var(--sp-text-3)]">Section</td>
-                          <td>
+                          <td className="num text-[10px] font-bold text-[var(--sp-text-3)]" data-col="index">Section</td>
+                          <td data-col="actions">
                             <div className="flex items-center justify-end gap-0.5">
                               {moveButtons}
                               <button type="button" onClick={() => removeDraftLine(line.id)} aria-label="Remove section" className="row-action-btn btn-danger"><Fa icon={faTrash} aria-hidden="true" /></button>
