@@ -2456,7 +2456,7 @@ function SalesContent() {
                         {detailTab === 'Order Lines' && (
                           <>
                           <div className="sp-table-wrap">
-                            <table className="sp-table">
+                            <table className="sp-table sp-line-table" data-no-responsive>
                               <thead>
                                 <tr>
                                   <th>Product</th>
@@ -2529,7 +2529,7 @@ function SalesContent() {
                                   const linePolicy = activeLineInvoicePolicy(l)
                                   return (
                                     <tr key={l.id} className={isEditing ? 'row-editing' : ''}>
-                                      <td>
+                                      <td data-col="product">
                                         {isEditing ? (
                                           <input type="text" aria-label="Line item product" value={editLineDesc} onChange={e => setEditLineDesc(e.target.value)} />
                                         ) : (
@@ -2543,41 +2543,41 @@ function SalesContent() {
                                           </div>
                                         )}
                                       </td>
-                                      <td>{l.description || '—'}</td>
-                                      <td className="num">
+                                      <td data-col="description">{l.description || '—'}</td>
+                                      <td className="num" data-col="qty">
                                         {isEditing ? <input type="number" aria-label="Line item quantity" min={1} value={editLineQty} onChange={e => setEditLineQty(e.target.value)} className="w-14 text-center" />
                                         : l.qty}
                                       </td>
-                                      <td>Unit</td>
+                                      <td data-col="unit">Unit</td>
                                       {showDelivered && (
-                                        <td className="num">
+                                        <td className="num" data-col="reserved">
                                           <span className={`font-semibold ${reservedQty > 0 ? 'text-sky-600' : 'text-[var(--text-4)]'}`}>{reservedQty}</span>
                                         </td>
                                       )}
                                       {showDelivered && (
-                                        <td className="num">
+                                        <td className="num" data-col="delivered">
                                           <span className={`font-semibold ${(l.qtyDelivered ?? 0) >= l.qty ? 'text-emerald-600' : (l.qtyDelivered ?? 0) > 0 ? 'text-amber-500' : 'text-[var(--text-4)]'}`}>{l.qtyDelivered ?? 0}</span>
                                         </td>
                                       )}
                                       {showDelivered && (
-                                        <td className="num">
+                                        <td className="num" data-col="invoiced">
                                           <span className={`font-semibold ${invoicedQty > 0 ? 'text-violet-600' : 'text-[var(--text-4)]'}`}>{invoicedQty}</span>
                                         </td>
                                       )}
-                                      <td>
+                                      <td data-col="policy">
                                         <span style={{ fontSize: 10, color: 'var(--sp-text-3)' }} title={INVOICE_POLICY_LABELS[linePolicy]}>
                                           {linePolicy === 'delivery' ? 'Delivered' : 'Ordered'}
                                         </span>
                                       </td>
-                                      <td className="num">
+                                      <td className="num" data-col="price">
                                         {isEditing ? <input type="number" aria-label="Line item unit price" min={0} value={editLinePrice} onChange={e => setEditLinePrice(e.target.value)} className="w-20 text-right" />
                                         : salesKes(l.unitPrice)}
                                       </td>
-                                      <td className="num">
+                                      <td className="num" data-col="discount">
                                         {isEditing ? <input type="number" aria-label="Line item discount percentage" min={0} max={100} value={editLineDiscount} onChange={e => setEditLineDiscount(e.target.value)} className="w-14 text-right" />
                                         : `${l.discount ?? l.discountPercent ?? 0}%`}
                                       </td>
-                                      <td>
+                                      <td data-col="tax">
                                         {isEditing ? (
                                           <select
                                             aria-label="Line item tax percentage"
@@ -2590,12 +2590,12 @@ function SalesContent() {
                                           </select>
                                         ) : `${l.taxRate ?? 0}%`}
                                       </td>
-                                      <td className="num">
+                                      <td className="num" data-col="amount">
                                         {isEditing ? (
                                           <span>{salesKes(Math.round(Math.max(0, Number(editLineQty) || 0) * Math.max(0, Number(editLinePrice) || 0) * (1 - Math.max(0, Math.min(100, Number(editLineDiscount) || 0)) / 100)))}</span>
                                         ) : salesKes(l.subtotal)}
                                       </td>
-                                      <td>
+                                      <td data-col="actions">
                                         {isEditing ? (
                                           <div className="flex items-center gap-1">
                                             <button type="button" onClick={() => saveEditLine(l.id)} className="row-action-btn btn-success" aria-label="Save line"><Fa icon={faCheck} aria-hidden="true" /></button>
@@ -2687,7 +2687,7 @@ function SalesContent() {
                             {activeDeliveries.length === 0 ? (
                               <p style={{ color: 'var(--sp-text-3)' }}>No deliveries yet.</p>
                             ) : (
-                              <table className="sp-table">
+                              <table className="sp-table" data-no-responsive>
                                 <thead>
                                   <tr>
                                     <th>Reference</th>
@@ -2719,7 +2719,7 @@ function SalesContent() {
                               {activeReturns.length === 0 ? (
                                 <p style={{ color: 'var(--sp-text-3)', margin: 0 }}>No returns linked to this order yet.</p>
                               ) : (
-                                <table className="sp-table">
+                                <table className="sp-table" data-no-responsive>
                                   <thead>
                                     <tr>
                                       <th>Reference</th>
@@ -2789,7 +2789,7 @@ function SalesContent() {
                                 )}
                               </div>
                             ) : (
-                              <table className="sp-table">
+                              <table className="sp-table" data-no-responsive>
                                 <thead>
                                   <tr>
                                     <th>Reference</th>
@@ -3663,7 +3663,7 @@ function NewQuotationForm({
                   {fieldErrors.lines}
                 </p>
               )}
-              <table className="sp-table">
+              <table className="sp-table sp-line-table" data-no-responsive>
                 <thead>
                   <tr>
                     <th>#</th>
@@ -3719,8 +3719,8 @@ function NewQuotationForm({
                     }
                     return (
                       <tr key={line.id} className={hasInvalidQty ? 'bg-red-50/60' : undefined}>
-                        <td className="num">{lineIndex + 1}</td>
-                        <td>
+                        <td className="num" data-col="index">{lineIndex + 1}</td>
+                        <td data-col="product">
                           <div
                             className="flex items-center gap-1 cursor-pointer min-w-[140px]"
                             style={{ border: '1px solid var(--sp-border-strong)', borderRadius: 4, padding: '4px 6px', background: '#fff', fontSize: 12 }}
@@ -3773,15 +3773,15 @@ function NewQuotationForm({
                             </div>
                           )}
                         </td>
-                        <td>
+                        <td data-col="description">
                           <input type="text" aria-label="Line item description" className="w-full" placeholder="Description…" value={line.description} onChange={e => updateDraftLine(line.id, 'description', e.target.value)} />
                         </td>
-                        <td className="num">
+                        <td className="num" data-col="qty">
                           <input type="number" aria-label="Line item quantity" min={1} className="text-center w-16" value={line.qty} onChange={e => updateDraftLine(line.id, 'qty', e.target.value)} />
                           {hasInvalidQty && <p className="text-[9px] text-red-600 font-semibold mt-1">Qty &gt; 0</p>}
                         </td>
-                        <td>Unit</td>
-                        <td className="num">
+                        <td data-col="unit">Unit</td>
+                        <td className="num" data-col="price">
                           <input
                             type="number"
                             aria-label="Line item unit price"
@@ -3794,14 +3794,14 @@ function NewQuotationForm({
                             onFocus={e => e.currentTarget.select()}
                           />
                         </td>
-                        <td>
+                        <td data-col="tax">
                           <select aria-label="Line item tax rate" className="w-20" value={line.taxRate} onChange={e => updateDraftLine(line.id, 'taxRate', e.target.value)}>
                             <option value="0">0%</option>
                             <option value={String(companySettings.vatRate)}>{companySettings.vatRate}%</option>
                           </select>
                         </td>
-                        <td className="num font-bold">{salesKes(calcDraftLineTotal(line))}</td>
-                        <td>
+                        <td className="num font-bold" data-col="amount">{salesKes(calcDraftLineTotal(line))}</td>
+                        <td data-col="actions">
                           <div className="flex items-center justify-end gap-0.5">
                             {moveButtons}
                             <button type="button" onClick={() => removeDraftLine(line.id)} aria-label="Remove line" className="row-action-btn btn-danger"><Fa icon={faTrash} aria-hidden="true" /></button>
@@ -4230,7 +4230,7 @@ function DeliveryNoteView({
           </div>
           <div className="sp-panel">
             <div className="sp-table-wrap">
-            <table className="sp-table">
+            <table className="sp-table sp-line-table" data-no-responsive>
               <thead>
                 <tr>
                   <th>Product</th>
@@ -4269,9 +4269,9 @@ function DeliveryNoteView({
                   const isPartial = delivered > 0 && delivered < l.qty
                   return (
                     <tr key={l.id}>
-                      <td>{l.productName ?? l.description ?? 'Item'}</td>
-                      <td className="num">{l.qty}</td>
-                      <td className="num">
+                      <td data-col="product">{l.productName ?? l.description ?? 'Item'}</td>
+                      <td className="num" data-col="demand">{l.qty}</td>
+                      <td className="num" data-col="reserve">
                         {canPrepare ? (
                           <input type="number" aria-label={`Delivery quantity for ${l.productName ?? l.description ?? 'line item'}`} min={0} max={l.qty} value={deliveryQtys[l.id] ?? 0}
                             onChange={e => setDeliveryQtys({ ...deliveryQtys, [l.id]: Math.min(l.qty, Math.max(0, Number(e.target.value) || 0)) })}
@@ -4289,7 +4289,7 @@ function DeliveryNoteView({
                           </span>
                         )}
                       </td>
-                      <td>
+                      <td data-col="serials">
                         {lineSerials.length > 0 && (
                           <div className="flex flex-wrap gap-1">
                             {lineSerials.map((s: any) => (
