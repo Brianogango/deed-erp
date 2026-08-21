@@ -19,6 +19,8 @@ export const productSchema = z.object({
   pricingCategoryId: z.string().max(80).optional().nullable(),
   salePrice: z.number().nonnegative("Sale price cannot be negative"),
   costPrice: z.number().nonnegative("Cost price cannot be negative"),
+  /** Optional reseller override. Empty / 0 → Partner API uses min GP band from cost. */
+  wholesalePrice: z.number().nonnegative("Wholesale price cannot be negative").optional().nullable(),
   taxRate: z.number().min(0).max(100).default(16),
   minStock: z.number().int().nonnegative().default(5),
   unit: z.string().max(40).optional().nullable(),

@@ -8,6 +8,7 @@
 import {
   calculateMarginQuote,
   suggestedListPriceFromQuote,
+  suggestedWholesalePriceFromQuote,
   type MarginQuote,
 } from '@/lib/pricing/margin-calculator'
 import {
@@ -132,6 +133,41 @@ export function suggestSalePriceFromCost(
 
   if (result.ok) return suggestedListPriceFromQuote(result)
   if ('legacySale' in result && result.legacySale != null) return result.legacySale
+  return null
+}
+
+/**
+ * Suggested wholesale / reseller price from cost.
+ * Uses the rounded min GP band only — never legacy markup or retail fallback.
+ */
+export function suggestWholesalePriceFromCost(
+  mapOrPolicy: CategoryMarkupMap | PricingMarginPolicy | null | undefined,
+  category: string | null | undefined,
+  costPrice: number | string | null | undefined,
+  opts?: {
+    policy?: PricingMarginPolicy | Partial<PricingMarginPolicy> | null
+    pricingCategoryId?: string | null
+    productType?: 'new' | 'refurbished' | string | null
+    legacyMarkupMap?: CategoryMarkupMap | null
+  },
+): number | null {
+  const looksLikePolicy =
+    mapOrPolicy != null &&
+    typeof mapOrPolicy === 'object' &&
+    ('categories' in mapOrPolicy || 'annualOverheadKes' in mapOrPolicy || 'enabled' in mapOrPolicy)
+
+  const policy = opts?.policy ?? (looksLikePolicy ? (mapOrPolicy as PricingMarginPolicy) : null)
+  if (!policy) return null
+
+  const result = quoteSalePriceFromCost({
+    costPrice,
+    erpCategory: category,
+    pricingCategoryId: opts?.pricingCategoryId,
+    productType: opts?.productType,
+    policy,
+    legacyMarkupMap: opts?.legacyMarkupMap,
+  })
+  if (result.ok) return suggestedWholesalePriceFromQuote(result)
   return null
 }
 

@@ -47,6 +47,9 @@ export async function POST(request: Request) {
       ...body,
       salePrice: Number(body.salePrice ?? body.sellingPrice ?? 0),
       costPrice: Number(body.costPrice ?? 0),
+      wholesalePrice: body.wholesalePrice === '' || body.wholesalePrice == null
+        ? undefined
+        : Number(body.wholesalePrice),
       minStock: Number(body.minStock ?? body.reorderLevel ?? 5),
       taxRate: Number(body.taxRate ?? 16),
     })

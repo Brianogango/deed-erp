@@ -7,6 +7,8 @@ import { faKey, faPlus, faCopy, faCircleInfo, faDownload, faFileLines, faBookOpe
 
 const GUIDE_HTML = '/docs/partner-api-guide.html'
 const GUIDE_MD = '/api/public/v1/guide'
+const INFO_BORDER = '1px solid color-mix(in srgb, var(--info) 28%, transparent)'
+const WARNING_BORDER = '1px solid color-mix(in srgb, var(--warning) 28%, transparent)'
 
 interface PartnerKey {
   id: string
@@ -105,7 +107,7 @@ export default function PartnerApiKeys() {
           </div>
         }
       >
-        <div className="rounded-xl p-3 my-3 flex gap-2.5 items-start" style={{ background: 'var(--info-bg)', border: '1px solid #BFDBFE' }}>
+        <div className="rounded-xl p-3 my-3 flex gap-2.5 items-start" style={{ background: 'var(--info-bg)', border: INFO_BORDER }}>
           <Fa icon={faFileLines} style={{ fontSize: 12, color: 'var(--navy)', marginTop: 2 }} />
           <div className="text-[11.5px] leading-relaxed" style={{ color: 'var(--navy-dark)' }}>
             <p className="m-0">
@@ -131,13 +133,15 @@ export default function PartnerApiKeys() {
           </button>
         }
       >
-        <div className="rounded-xl p-3 my-3 flex gap-2.5 items-start" style={{ background: 'var(--info-bg)', border: '1px solid #BFDBFE' }}>
+        <div className="rounded-xl p-3 my-3 flex gap-2.5 items-start" style={{ background: 'var(--info-bg)', border: INFO_BORDER }}>
           <Fa icon={faCircleInfo} style={{ fontSize: 12, color: 'var(--navy)', marginTop: 2 }} />
           <p className="text-[11.5px] leading-relaxed" style={{ color: 'var(--navy-dark)' }}>
             Partners use these keys to read your sellable catalog at{' '}
             <code className="font-mono text-[10.5px] px-1 py-0.5 rounded bg-white border border-gray-200">GET /api/public/v1/products</code>{' '}
-            — active, priced, in-stock products only, with no cost prices or internal data.
-            Each key is shown <strong>once</strong> at creation; share it with exactly one partner so access can be revoked individually.
+            — active, in-stock products with the wholesale / reseller price (saved wholesale, or the
+            min GP band from cost when wholesale is not set). Walk-in sale price and cost are never
+            returned. Each key is shown <strong>once</strong> at creation; share it with exactly one
+            partner so access can be revoked individually.
           </p>
         </div>
 
@@ -193,7 +197,7 @@ export default function PartnerApiKeys() {
 
       {freshKey && (
         <Modal title={`API Key for ${freshKey.name}`} onClose={() => setFreshKey(null)} width={520}>
-          <div className="rounded-xl p-3 mb-3" style={{ background: 'var(--warning-bg)', border: '1px solid #FDE68A' }}>
+          <div className="rounded-xl p-3 mb-3" style={{ background: 'var(--warning-bg)', border: WARNING_BORDER }}>
             <p className="text-[11.5px] font-semibold" style={{ color: 'var(--warning-text)' }}>
               This key is shown only once — copy it now and share it with the partner over a secure channel.
             </p>

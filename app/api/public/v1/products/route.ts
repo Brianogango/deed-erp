@@ -4,14 +4,18 @@ import { authenticatePartnerRequest, partnerCorsHeaders } from '@/lib/partner-ap
 import { loadAppState } from '@/lib/server-store'
 import { availableSellableQty, type BulkStockLevel, type SerialNumber, type StockProduct } from '@/lib/business-logic'
 import type { LocationId } from '@/lib/store'
+import { resolveResellerPrice } from '@/lib/pricing/reseller-price'
+import { loadServerMarginPolicy } from '@/lib/pricing/sync-product-list-from-cost.server'
 
 export const dynamic = 'force-dynamic'
 
 // ── Public partner catalog — GET /api/public/v1/products ─────────────────────
 // Authenticated with a partner API key (Authorization: Bearer <key> or
 // X-API-Key). Returns only reseller-safe fields: no cost prices, no supplier
-// data, no internal accounts. Default: active, priced, and quantityAvailable
-// >= 1 from Warehouse (Main) only — not With Issues or Repair Unit.
+// data, no internal accounts. `price` is wholesale / reseller (saved wholesale
+// or min GP band from cost) — never walk-in retail. Default: active, priced,
+// and quantityAvailable >= 1 from Warehouse (Main) only — not With Issues or
+// Repair Unit.
 //
 // Query params:
 //   page          1-based page number                     (default 1)
@@ -39,6 +43,17 @@ type JsonProduct = {
   requiresSerial?: boolean
   trackingMethod?: string
   category?: string
+  costPrice?: number | string
+  wholesalePrice?: number | string
+  salePrice?: number | string
+  sellingPrice?: number | string
+  pricingCategoryId?: string
+  productType?: string
+  productKind?: string
+}
+
+function specsRecord(raw: unknown): Record<string, unknown> {
+  return raw && typeof raw === 'object' && !Array.isArray(raw) ? (raw as Record<string, unknown>) : {}
 }
 
 function asLocation(value: string | undefined): LocationId {
@@ -71,28 +86,35 @@ export async function GET(request: Request) {
   const q = url.searchParams.get('q')?.trim() || null
   const includeOutOfStock = url.searchParams.get('inStock') === 'all'
 
-  const [rows, appState] = await Promise.all([
+  const [rows, appState, { policy }] = await Promise.all([
     prisma.product.findMany({
       where: {
         isActive: true,
-        sellingPrice: { gt: 0 },
+        OR: [
+          { wholesalePrice: { gt: 0 } },
+          { costPrice: { gt: 0 } },
+        ],
         ...(category ? { category: { is: { name: { equals: category, mode: 'insensitive' } } } } : {}),
         ...(q ? {
-          OR: [
-            { name: { contains: q, mode: 'insensitive' } },
-            { sku: { contains: q, mode: 'insensitive' } },
-            { description: { contains: q, mode: 'insensitive' } },
-          ],
+          AND: [{
+            OR: [
+              { name: { contains: q, mode: 'insensitive' } },
+              { sku: { contains: q, mode: 'insensitive' } },
+              { description: { contains: q, mode: 'insensitive' } },
+            ],
+          }],
         } : {}),
       },
       select: {
         id: true, sku: true, barcode: true, name: true, description: true,
-        sellingPrice: true, updatedAt: true, trackingMethod: true,
+        sellingPrice: true, costPrice: true, wholesalePrice: true,
+        productType: true, specs: true, updatedAt: true, trackingMethod: true,
         category: { select: { name: true } },
       },
       orderBy: { name: 'asc' },
     }),
     loadAppState(['deed_products', 'deed_serials', 'deed_bulkStock']),
+    loadServerMarginPolicy(),
   ])
 
   const jsonById = new Map<string, JsonProduct>()
@@ -127,22 +149,38 @@ export async function GET(request: Request) {
         }))
     : []
 
-  const catalog = rows.map(row => {
-    const quantityAvailable = partnerQtyForProduct(row, jsonById.get(row.id), serials, bulkStock)
-    return {
+  const catalog = rows.flatMap(row => {
+    const jsonProduct = jsonById.get(row.id)
+    const specs = specsRecord(row.specs)
+    const jsonPricingBand = typeof jsonProduct?.pricingCategoryId === 'string' ? jsonProduct.pricingCategoryId : null
+    const specPricingBand = typeof specs.pricingCategoryId === 'string' ? specs.pricingCategoryId : null
+    const reseller = resolveResellerPrice({
+      cost: jsonProduct?.costPrice ?? Number(row.costPrice),
+      salePrice: jsonProduct?.salePrice ?? jsonProduct?.sellingPrice ?? Number(row.sellingPrice),
+      wholesalePrice: jsonProduct?.wholesalePrice ?? (row.wholesalePrice != null ? Number(row.wholesalePrice) : null),
+      category: jsonProduct?.category ?? row.category?.name,
+      pricingCategoryId: jsonPricingBand || specPricingBand,
+      productType: jsonProduct?.productType ?? row.productType,
+      productKind: jsonProduct?.productKind ?? (typeof specs.productKind === 'string' ? specs.productKind : null),
+      unit: jsonProduct?.unit ?? (typeof specs.unit === 'string' ? specs.unit : null),
+      policy,
+    })
+    if (!reseller) return []
+    const quantityAvailable = partnerQtyForProduct(row, jsonProduct, serials, bulkStock)
+    return [{
       id: row.id,
       sku: row.sku,
       barcode: row.barcode || null,
       name: row.name,
       description: row.description || '',
       category: row.category?.name ?? null,
-      price: Number(row.sellingPrice) || 0,
+      price: reseller.price,
       currency: 'KES',
       warrantyMonths: warrantyById.get(row.id) ?? null,
       quantityAvailable,
       inStock: quantityAvailable >= 1,
       updatedAt: row.updatedAt.toISOString(),
-    }
+    }]
   }).filter(item => includeOutOfStock || item.inStock)
 
   const total = catalog.length

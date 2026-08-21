@@ -4,6 +4,7 @@ import {
   getCategoryMarkupPct,
   suggestSalePriceFromCost,
   autoSalePriceFromCost,
+  suggestWholesalePriceFromCost,
 } from '@/lib/sale-price-calculator'
 import { DEFAULT_PRICING_MARGIN_POLICY } from '@/lib/pricing/margin-policy'
 
@@ -40,5 +41,14 @@ describe('sale-price-calculator', () => {
   it('always fills a sale price from cost even without category mapping', () => {
     expect(autoSalePriceFromCost(null, 'UnknownCat', 7000)).toBe(10000)
     expect(autoSalePriceFromCost({ Accessories: 40 }, 'Accessories', 2500)).toBe(3500)
+  })
+
+  it('suggests wholesale from the min GP band and not from legacy markup', () => {
+    expect(
+      suggestWholesalePriceFromCost(null, 'Parts & Components', 5000, {
+        policy: DEFAULT_PRICING_MARGIN_POLICY,
+      }),
+    ).toBe(6500)
+    expect(suggestWholesalePriceFromCost({ Accessories: 40 }, 'Accessories', 2500)).toBeNull()
   })
 })
