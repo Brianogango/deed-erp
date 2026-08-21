@@ -48,6 +48,30 @@ describe('refurbishment unit selling name', () => {
     expect(result?.sellingName).not.toMatch(/HDD/)
   })
 
+  it('swaps RAM when the tech pulls the old stick (4GB → 8GB)', () => {
+    const result = applyRefurbPartsToUnitName({
+      productName: 'HP EliteBook 840 G5 - i5, 4GB RAM, 256GB SSD',
+      specs: 'i5, 4GB RAM, 256GB SSD',
+      parts: [{ partName: ram8.name, productId: ram8.id, status: 'used', installAction: 'swap' }],
+      products: [ram8],
+    })
+    expect(result?.ramGb).toBe(8)
+    expect(result?.sellingName).toMatch(/8GB RAM/)
+    expect(result?.sellingName).not.toMatch(/12GB RAM/)
+    expect(result?.sellingName).not.toMatch(/4GB RAM/)
+  })
+
+  it('adds a second SSD when installAction is add (256 + 256 → 512)', () => {
+    const result = applyRefurbPartsToUnitName({
+      productName: 'HP EliteBook 840 G5 - i5, 4GB RAM, 256GB SSD',
+      specs: 'i5, 4GB RAM, 256GB SSD',
+      parts: [{ partName: ssd256.name, productId: ssd256.id, status: 'used', installAction: 'add' }],
+      products: [ssd256],
+    })
+    expect(result?.storageGb).toBe(512)
+    expect(result?.sellingName).toMatch(/512GB SSD/)
+  })
+
   it('does not rewrite the name for a battery or keyboard', () => {
     expect(
       applyRefurbPartsToUnitName({

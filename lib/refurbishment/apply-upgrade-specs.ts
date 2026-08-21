@@ -5,9 +5,12 @@
  * quotes, POS, labels, and invoices show the machine as it now is. The catalog
  * Product.name / SKU is left alone — other units on that SKU may still be 4GB.
  *
- * Physical defaults on a refurb job (no pull/swap/add picker):
- *   RAM stick  → additive (4GB in the machine + 8GB fitted = 12GB RAM)
- *   SSD / HDD  → replaces primary storage (typical HDD → 256GB SSD)
+ * Each RAM/SSD part records how it was fitted:
+ *   add  — leave what is in the machine, fit this next to it (4GB + 8GB → 12GB)
+ *   swap — pull the old module, put this in (4GB → 8GB)
+ *
+ * When the tech has not picked yet: RAM defaults to add, storage defaults to swap
+ * (typical HDD → SSD).
  */
 
 import { parseSpecsString } from '@/lib/reconfiguration/display-name'
@@ -19,11 +22,15 @@ import {
 } from '@/lib/reconfiguration/product-effect'
 import { unitSellingName } from '@/lib/reconfiguration/unit-selling-name'
 
+export type RefurbInstallAction = 'add' | 'swap'
+export type RefurbCapacitySlot = 'ram' | 'storage'
+
 export type RefurbNamePart = {
   partName: string
   productId?: string
   status: string
   qty?: number
+  installAction?: RefurbInstallAction
 }
 
 export type RefurbNameProduct = {
@@ -62,6 +69,56 @@ function qtyOf(part: RefurbNamePart): number {
   return Number.isFinite(n) && n > 0 ? Math.round(n) : 1
 }
 
+function probeFromPart(
+  part: Pick<RefurbNamePart, 'partName' | 'productId'>,
+  products: RefurbNameProduct[] | undefined,
+) {
+  const linked = part.productId ? (products || []).find(p => p.id === part.productId) : undefined
+  const name = String(linked?.name || part.partName || '').trim()
+  return {
+    linked,
+    name,
+    probe: {
+      id: linked?.id || part.productId || `refurb-part:${name}`,
+      name,
+      category: linked?.category,
+      specs: linked?.specs,
+      trackingMethod: linked?.trackingMethod,
+      requiresSerial: linked?.requiresSerial,
+    },
+  }
+}
+
+export function refurbPartCapacitySlot(
+  part: Pick<RefurbNamePart, 'partName' | 'productId'>,
+  products?: RefurbNameProduct[],
+): RefurbCapacitySlot | null {
+  const { probe, name } = probeFromPart(part, products)
+  if (!name) return null
+  const parsed = parseProductReconfigEffect(probe)
+  if (parsed?.slot === 'storage') return 'storage'
+  if (parsed?.slot === 'ram' || parsed?.slot === 'both') return 'ram'
+  if (isRamComponentProduct(probe)) return 'ram'
+  if (isStorageComponentProduct(probe)) return 'storage'
+  return null
+}
+
+export function defaultRefurbInstallAction(slot: RefurbCapacitySlot): RefurbInstallAction {
+  return slot === 'ram' ? 'add' : 'swap'
+}
+
+export function resolveRefurbInstallAction(
+  part: Pick<RefurbNamePart, 'installAction'>,
+  slot: RefurbCapacitySlot,
+): RefurbInstallAction {
+  if (part.installAction === 'add' || part.installAction === 'swap') return part.installAction
+  return defaultRefurbInstallAction(slot)
+}
+
+export function refurbInstallActionLabel(action: RefurbInstallAction): string {
+  return action === 'add' ? 'Add next to existing' : 'Swap (take the old one out)'
+}
+
 /** RAM/SSD parts that have actually reached the bench (not still on order). */
 export function refurbPartsThatChangeSpecs(parts: RefurbNamePart[] | null | undefined): RefurbNamePart[] {
   return (parts || []).filter(part => !SKIP_PART_STATUSES.has(String(part.status || 'needed')))
@@ -71,55 +128,53 @@ function effectFromRefurbPart(
   part: RefurbNamePart,
   products: RefurbNameProduct[] | undefined,
 ): ProductReconfigEffect | null {
-  const linked = part.productId ? (products || []).find(p => p.id === part.productId) : undefined
-  const name = String(linked?.name || part.partName || '').trim()
-  if (!name) return null
+  const slot = refurbPartCapacitySlot(part, products)
+  if (!slot) return null
+  const { probe, name } = probeFromPart(part, products)
+  const parsed = parseProductReconfigEffect(probe)
+  const gb = (parsed?.addRamGb || parsed?.targetRamGb || parsed?.targetStorageGb || parsed?.addStorageGb || firstCapacityGb(name) || 0) * qtyOf(part)
+  if (gb <= 0) return null
+  const action = resolveRefurbInstallAction(part, slot)
 
-  const probe = {
-    id: linked?.id || part.productId || `refurb-part:${name}`,
-    name,
-    category: linked?.category,
-    specs: linked?.specs,
-    trackingMethod: linked?.trackingMethod,
-    requiresSerial: linked?.requiresSerial,
-  }
-
-  const parsed = linked ? parseProductReconfigEffect(linked) : parseProductReconfigEffect(probe)
-  const ramLike = isRamComponentProduct(probe)
-  const storageLike = isStorageComponentProduct(probe)
-  const gb = firstCapacityGb(name)
-  const qty = qtyOf(part)
-
-  if (parsed?.slot === 'ram' || parsed?.slot === 'both' || ramLike) {
-    const addGb = (parsed?.addRamGb || parsed?.targetRamGb || gb || 0) * qty
-    if (addGb <= 0) return null
+  if (slot === 'ram') {
+    if (action === 'add') {
+      return {
+        slot: 'ram',
+        addRamGb: gb,
+        additiveRam: true,
+        productId: probe.id,
+        productName: name,
+        source: parsed?.source || 'name',
+      }
+    }
     return {
-      slot: parsed?.slot === 'both' ? 'both' : 'ram',
-      addRamGb: addGb,
-      additiveRam: true,
-      targetStorageGb: parsed?.slot === 'both' ? parsed.targetStorageGb : undefined,
-      addStorageGb: parsed?.slot === 'both' ? parsed.addStorageGb : undefined,
-      storageType: parsed?.storageType,
+      slot: 'ram',
+      targetRamGb: gb,
       productId: probe.id,
       productName: name,
       source: parsed?.source || 'name',
     }
   }
 
-  if (parsed?.slot === 'storage' || storageLike) {
-    const storageGb = parsed?.targetStorageGb || parsed?.addStorageGb || gb
-    if (!storageGb) return null
+  const storageType = parsed?.storageType || (/hdd/i.test(name) ? 'HDD' : 'SSD')
+  if (action === 'add') {
     return {
       slot: 'storage',
-      targetStorageGb: storageGb,
-      storageType: parsed?.storageType || (/hdd/i.test(name) ? 'HDD' : 'SSD'),
+      addStorageGb: gb,
+      storageType,
       productId: probe.id,
       productName: name,
       source: parsed?.source || 'name',
     }
   }
-
-  return null
+  return {
+    slot: 'storage',
+    targetStorageGb: gb,
+    storageType,
+    productId: probe.id,
+    productName: name,
+    source: parsed?.source || 'name',
+  }
 }
 
 export function applyRefurbPartsToUnitName(opts: {

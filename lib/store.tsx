@@ -933,6 +933,8 @@ export interface RefurbPart {
   notifiedTechDate?: string   // when lead tech flagged it ready for the tech
   poId?: string               // linked purchase order (if ordered)
   notes?: string
+  /** How this RAM/SSD was fitted. Battery/keyboard leave this unset. */
+  installAction?: 'add' | 'swap'
 }
 
 export interface RefurbishmentJob {
