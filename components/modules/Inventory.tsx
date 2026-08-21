@@ -17,6 +17,7 @@ import { printLabelsForSerialUnits } from '@/lib/inventory/print-serial-device-l
 import { guardSpreadsheetFile, guardSpreadsheetRows, SpreadsheetGuardError } from '@/lib/spreadsheet-guard'
 import { Barcode } from '@/components/modules/Barcode'
 import { inferTrackingMethod, isSerialTracking, isStockTracked, isSerialOnlyCategory, type TrackingMethod } from '@/lib/inventory-identifiers'
+import { availableSellableQty, isListedInProductCatalog } from '@/lib/business-logic'
 import { unitSellingName } from '@/lib/reconfiguration/unit-selling-name'
 import { catalogDeviceConfig, compactSpecsString, isReconfigurableCatalogCategory } from '@/lib/reconfiguration/unit-config'
 import InventoryProductsPanel from '@/components/inventory/InventoryProductsPanel'
@@ -288,8 +289,6 @@ function InventoryContent() {
   const [catFilter, setCatFilter] = useState('All')
   const [catalogSearch, setCatalogSearch] = useState('')
   const [catalogCatFilter, setCatalogCatFilter] = useState('All')
-  /** All = full sellable catalog (incl. zero stock). In stock / Out of stock narrow the list. */
-  const [catalogStockFilter, setCatalogStockFilter] = useState<'all' | 'in_stock' | 'out_of_stock'>('all')
   const [reportMonth, setReportMonth] = useState(new Date().toISOString().slice(5, 7))
   const [reportProductId, setReportProductId] = useState('All')
   const [serialLookupQuery, setSerialLookupQuery] = useState('')
@@ -637,30 +636,33 @@ function InventoryContent() {
     return map
   }, [productPriceHistory])
 
-  const getAvailableQty = (product: Product) => {
-    if (product.unit === 'service') return Number.POSITIVE_INFINITY
-    if (product.requiresSerial) {
-      return serials.filter(s => s.productId === product.id && s.status === 'available').length
-    }
-    const byLocation = getStockByLocation(product.id)
-    return (byLocation.warehouse ?? 0) + (byLocation.shop ?? 0) + (byLocation.repair_unit ?? 0)
-  }
+  const catalogQty = (product: Product) => availableSellableQty({
+    trackingMethod: product.trackingMethod,
+    category: product.category,
+    requiresSerial: product.requiresSerial,
+    unit: product.unit,
+  }, serials, bulkStock, product.id)
 
   const catalogProducts = useMemo(() => {
     const q = catalogSearch.trim().toLowerCase()
     return products
-      .filter(product => product.isActive && product.canBeSold)
-      .filter(product => {
-        if (product.unit === 'service') return catalogStockFilter !== 'out_of_stock'
-        const qty = getAvailableQty(product)
-        if (catalogStockFilter === 'in_stock') return qty > 0
-        if (catalogStockFilter === 'out_of_stock') return qty <= 0
-        return true
-      })
+      .filter(product => isListedInProductCatalog(
+        {
+          trackingMethod: product.trackingMethod,
+          category: product.category,
+          requiresSerial: product.requiresSerial,
+          unit: product.unit,
+          isActive: product.isActive,
+          canBeSold: product.canBeSold,
+        },
+        serials,
+        bulkStock,
+        product.id,
+      ))
       .filter(product => catalogCatFilter === 'All' || product.category === catalogCatFilter)
       .filter(product => !q || product.name.toLowerCase().includes(q) || product.sku.toLowerCase().includes(q) || product.barcode?.toLowerCase().includes(q))
       .sort((a, b) => a.name.localeCompare(b.name))
-  }, [products, serials, bulkStock, catalogSearch, catalogCatFilter, catalogStockFilter])
+  }, [products, serials, bulkStock, catalogSearch, catalogCatFilter])
 
   const openPriceUpdate = (product: Product) => {
     const markupSuggested = autoSalePriceFromCost(systemSettings.invCategorySaleMarkupPct, product.category, product.costPrice, {
@@ -1899,7 +1901,6 @@ function InventoryContent() {
 
       {tab === 'product_catalog' && (() => {
         const validPriceRows = priceRows.filter(row => row.status === 'valid')
-        const serviceCount = catalogProducts.filter(p => p.unit === 'service').length
         const pendingPriceUpdates = 0
         return (
           <div className="overflow-hidden">
@@ -1932,8 +1933,8 @@ function InventoryContent() {
                 },
                 {
                   key: 'available', label: 'Available', priority: 1, width: '100px', align: 'right',
-                  render: product => <span className="text-xs font-bold text-primary-700 tabular-nums">{product.unit === 'service' ? 'Service' : getAvailableQty(product)}</span>,
-                  exportValue: product => product.unit === 'service' ? 'Service' : getAvailableQty(product),
+                  render: product => <span className="text-xs font-bold text-primary-700 tabular-nums">{catalogQty(product)}</span>,
+                  exportValue: product => catalogQty(product),
                 },
                 {
                   key: 'cost', label: 'Cost', priority: 2, width: '110px', align: 'right',
@@ -1994,8 +1995,6 @@ function InventoryContent() {
                   },
                 },
               ]
-              const inStockCount = catalogProducts.filter(p => p.unit === 'service' || getAvailableQty(p) > 0).length
-              const outOfStockCount = catalogProducts.filter(p => p.unit !== 'service' && getAvailableQty(p) <= 0).length
               const catalogPrimaryFilters: PrimaryFilterConfig[] = [
                 {
                   key: 'category',
@@ -2009,19 +2008,6 @@ function InventoryContent() {
                   ],
                   onChange: setCatalogCatFilter,
                 },
-                {
-                  key: 'stock',
-                  label: 'Stock',
-                  placeholder: 'All stock levels',
-                  value: catalogStockFilter,
-                  allValue: 'all',
-                  options: [
-                    { value: 'all', label: 'All products' },
-                    { value: 'in_stock', label: 'In stock only' },
-                    { value: 'out_of_stock', label: 'Out of stock only' },
-                  ],
-                  onChange: value => setCatalogStockFilter(value as 'all' | 'in_stock' | 'out_of_stock'),
-                },
               ]
               return (
                 <TablePageLayout
@@ -2031,25 +2017,11 @@ function InventoryContent() {
                       items={[
                         {
                           id: 'catalog',
-                          label: 'catalog items',
+                          label: 'in stock',
                           value: catalogProducts.length,
-                          onClick: () => { setCatalogStockFilter('all'); setCatalogCatFilter('All') },
-                        },
-                        {
-                          id: 'in-stock',
-                          label: 'in stock / service',
-                          value: inStockCount,
                           tone: 'success',
-                          onClick: () => setCatalogStockFilter('in_stock'),
+                          onClick: () => { setCatalogSearch(''); setCatalogCatFilter('All') },
                         },
-                        {
-                          id: 'out-stock',
-                          label: 'out of stock',
-                          value: outOfStockCount,
-                          tone: outOfStockCount > 0 ? 'danger' : 'default',
-                          onClick: () => setCatalogStockFilter('out_of_stock'),
-                        },
-                        { id: 'services', label: 'services', value: serviceCount },
                         {
                           id: 'pending',
                           label: 'pending price updates',
@@ -2061,7 +2033,7 @@ function InventoryContent() {
                   }
                   notice={
                     <CompactInfoNotice dismissible storageKey="inventory-catalog-price-notice">
-                      Catalog export includes every active sellable product (including zero stock). Use the Stock filter for in-stock only.
+                      Catalog lists only products with warehouse stock ready to sell. Zero-stock SKUs, With Issues, Repair, and services stay in Product Master.
                       Price changes apply only to future sales. Historical invoices and POS receipts remain unchanged.
                       {!canUpdatePrice ? ' Price editing is read-only for your role.' : ''}
                     </CompactInfoNotice>
@@ -2077,15 +2049,15 @@ function InventoryContent() {
                     searchPlaceholder="Search product, SKU or barcode…"
                     clientSearch={false}
                     primaryFilters={catalogPrimaryFilters}
-                    onClearFilters={() => { setCatalogSearch(''); setCatalogCatFilter('All'); setCatalogStockFilter('all') }}
+                    onClearFilters={() => { setCatalogSearch(''); setCatalogCatFilter('All') }}
                     hideColumnFilters
                     emptyMessage={
-                      catalogSearch || catalogCatFilter !== 'All' || catalogStockFilter !== 'all'
-                        ? 'No catalog products match these filters'
-                        : 'No catalog products yet'
+                      catalogSearch || catalogCatFilter !== 'All'
+                        ? 'No in-stock products match these filters'
+                        : 'No in-stock products in the catalog'
                     }
                     emptyAction={
-                      canEditStock && !catalogSearch && catalogCatFilter === 'All' && catalogStockFilter === 'all' ? (
+                      canEditStock && !catalogSearch && catalogCatFilter === 'All' ? (
                         <PrimaryActionButton onClick={openNew}>New product</PrimaryActionButton>
                       ) : undefined
                     }
