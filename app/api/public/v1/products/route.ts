@@ -11,8 +11,7 @@ export const dynamic = 'force-dynamic'
 // Authenticated with a partner API key (Authorization: Bearer <key> or
 // X-API-Key). Returns only reseller-safe fields: no cost prices, no supplier
 // data, no internal accounts. Default: active, priced, and quantityAvailable
-// >= 1 using the same on-hand rule as Inventory (JSON available serials /
-// sellable bulk), not leftover Prisma in_stock serials.
+// >= 1 from Warehouse (Main) only — not With Issues or Repair Unit.
 //
 // Query params:
 //   page          1-based page number                     (default 1)

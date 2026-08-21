@@ -85,14 +85,14 @@ export function calcStockByLocation(
   return locs
 }
 
-const SELLABLE_LOCATIONS: LocationId[] = ['warehouse', 'shop', 'repair_unit']
+const PARTNER_STOCK_LOCATION: LocationId = 'warehouse'
 
 /**
- * Units a partner/storefront can actually sell — same rule as Inventory's
- * catalog "available" column, not Prisma leftover `in_stock` serials.
+ * Units a partner/storefront can actually sell: Warehouse (Main) only.
+ * With Issues (`shop`) and Repair Unit are not listed to resellers.
  *
- * Serial SKUs: JSON/blob serials with status `available` only (sold / assigned
- * / repair are excluded). Bulk SKUs: on-hand at warehouse + shop + repair_unit.
+ * Serial SKUs: JSON serials with status `available` at warehouse.
+ * Bulk SKUs: on-hand at warehouse only.
  * Services have no physical stock and return 0.
  */
 export function availableSellableQty(
@@ -113,15 +113,14 @@ export function availableSellableQty(
 
   if (serialTracked) {
     return serials.filter(s =>
-      s.productId === productId && String(s.status || '').toLowerCase() === 'available',
+      s.productId === productId
+      && String(s.status || '').toLowerCase() === 'available'
+      && s.location === PARTNER_STOCK_LOCATION,
     ).length
   }
 
   const byLocation = calcStockByLocation(product, serials, bulkStock, productId)
-  return SELLABLE_LOCATIONS.reduce(
-    (sum, loc) => sum + Math.max(0, Number(byLocation[loc]) || 0),
-    0,
-  )
+  return Math.max(0, Number(byLocation[PARTNER_STOCK_LOCATION]) || 0)
 }
 
 /**

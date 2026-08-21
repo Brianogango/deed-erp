@@ -111,10 +111,12 @@ describe('calcStockByLocation()', () => {
 })
 
 describe('availableSellableQty()', () => {
-  it('counts only available serials for laptops, ignoring sold and Prisma-style in_stock leftovers', () => {
+  it('counts only available warehouse serials for laptops, ignoring sold, With Issues, and repair', () => {
     const serials: SerialNumber[] = [
       { productId: 'prod-1', location: 'warehouse', status: 'available' },
       { productId: 'prod-1', location: 'warehouse', status: 'available' },
+      { productId: 'prod-1', location: 'shop', status: 'available' },
+      { productId: 'prod-1', location: 'repair_unit', status: 'available' },
       { productId: 'prod-1', location: 'warehouse', status: 'sold' },
       { productId: 'prod-1', location: 'warehouse', status: 'in_stock' },
       { productId: 'prod-1', location: 'warehouse', status: 'assigned' },
@@ -127,7 +129,7 @@ describe('availableSellableQty()', () => {
     )).toBe(2)
   })
 
-  it('sums bulk qty at warehouse, shop, and repair_unit only', () => {
+  it('counts bulk qty at warehouse only', () => {
     const bulk: BulkStockLevel[] = [
       { productId: 'prod-1', location: 'warehouse', qty: 3 },
       { productId: 'prod-1', location: 'shop', qty: 2 },
@@ -139,7 +141,7 @@ describe('availableSellableQty()', () => {
       [],
       bulk,
       'prod-1',
-    )).toBe(6)
+    )).toBe(3)
   })
 
   it('returns 0 for services', () => {
