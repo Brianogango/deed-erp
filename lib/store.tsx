@@ -15,6 +15,7 @@ import { requestCreateUser, requestDeleteUser, requestUpdateUser, requestDeactiv
 import { canManageHRRole, getFirstAllowedModule, hasModuleAccess as userHasModuleAccess, normalizeClientRole } from '@/lib/auth/access'
 import { mergeCatalogProducts, mergeProductsRemoteState } from '@/lib/catalog-merge'
 import { seedSerialSpecs } from '@/lib/reconfiguration/unit-config'
+import { refurbishmentSellingNamePatch } from '@/lib/refurbishment/apply-upgrade-specs'
 import { bootApiGroupsForRoute, remainingBootApiGroups, type BootApiGroup } from '@/lib/boot-apis'
 import { documentMoneySnapshot, FUNCTIONAL_CURRENCY } from '@/lib/currency'
 import { resolveListPrice } from '@/lib/pricing/pricelist'
@@ -943,6 +944,8 @@ export interface RefurbishmentJob {
   productId: string
   productName: string
   specs?: string
+  /** Frozen unit specs at intake so RAM/SSD parts can be reapplied without stacking. */
+  specsAtIntake?: string
   receiptId?: string
   receiptRef?: string
   intakeDate: string
@@ -12690,16 +12693,18 @@ const storeCtx: AppState = {
           }
           newSerials.push(newSerial)
           if (hasIssue) {
+            const intakeSpecs = seedSerialSpecs({
+              typedSpecs: serialSpecs?.[s],
+              productName: line.productName,
+              deviceConfig: prodRef.current.find(p => p.id === line.productId)?.deviceConfig,
+            })
             newRefurbJobs.push({
               id: uid(), ref: seq('REF', 'refurb'),
               status: 'queued',
               serialId: newSerial.id, serialNumber: s,
               productId: line.productId, productName: line.productName,
-              specs: seedSerialSpecs({
-                typedSpecs: serialSpecs?.[s],
-                productName: line.productName,
-                deviceConfig: prodRef.current.find(p => p.id === line.productId)?.deviceConfig,
-              }),
+              specs: intakeSpecs,
+              specsAtIntake: intakeSpecs || '',
               receiptId, receiptRef: receipt.ref,
               intakeDate: new Date().toISOString(),
               intakeIssueDescription: issueDesc,
@@ -13209,7 +13214,8 @@ const storeCtx: AppState = {
         status: 'queued',
         serialId, serialNumber: ser.serial,
         productId: ser.productId, productName: ser.productName,
-        specs: prod?.description,
+        specs: ser.specs || prod?.description,
+        specsAtIntake: ser.specs || prod?.description || '',
         intakeDate: new Date().toISOString(),
         intakeIssueDescription: issueDescription,
         partsNeeded: [],
@@ -13349,15 +13355,58 @@ const storeCtx: AppState = {
     markRefurbishmentReady: (jobId) => {
       const job = refurbishmentJobs.find(j => j.id === jobId)
       if (!job) return
-      setRefurbishmentJobs(p => p.map(j => j.id !== jobId ? j : { ...j, status: 'ready', completedDate: now() }))
+      const serial = serialRef.current.find(s => s.id === job.serialId)
+      const upgrade = refurbishmentSellingNamePatch({
+        job,
+        serial,
+        products: prodRef.current,
+      })
+      const intake = typeof job.specsAtIntake === 'string'
+        ? job.specsAtIntake
+        : (job.specs || serial?.specs || '')
+      setRefurbishmentJobs(p => p.map(j => j.id !== jobId ? j : {
+        ...j,
+        status: 'ready',
+        completedDate: now(),
+        specsAtIntake: typeof j.specsAtIntake === 'string' ? j.specsAtIntake : intake,
+        ...(upgrade ? { specs: upgrade.specs, productName: upgrade.sellingName } : {}),
+      }))
+      if (upgrade) {
+        setSerials(p => p.map(s => s.id === job.serialId ? { ...s, specs: upgrade.specs } : s))
+        showToast(`Ready to sell as ${upgrade.sellingName}. Reprint the serial label.`)
+        return
+      }
       showToast(`${job.serialNumber} marked as ready — transfer to sales when needed`)
     },
     transferToSell: (jobId) => {
       const job = refurbishmentJobs.find(j => j.id === jobId)
       if (!job) return
-      // Move serial to warehouse, mark available
-      setSerials(p => p.map(s => s.id !== job.serialId ? s : { ...s, status: 'available', location: 'warehouse' }))
-      setRefurbishmentJobs(p => p.map(j => j.id !== jobId ? j : { ...j, status: 'transferred', transferDate: now() }))
+      const serial = serialRef.current.find(s => s.id === job.serialId)
+      const intake = typeof job.specsAtIntake === 'string'
+        ? job.specsAtIntake
+        : (job.specs || serial?.specs || '')
+      const upgrade = refurbishmentSellingNamePatch({
+        job: { ...job, specsAtIntake: intake },
+        serial,
+        products: prodRef.current,
+      })
+      setSerials(p => p.map(s => s.id !== job.serialId ? s : {
+        ...s,
+        status: 'available',
+        location: 'warehouse',
+        ...(upgrade ? { specs: upgrade.specs } : {}),
+      }))
+      setRefurbishmentJobs(p => p.map(j => j.id !== jobId ? j : {
+        ...j,
+        status: 'transferred',
+        transferDate: now(),
+        specsAtIntake: typeof j.specsAtIntake === 'string' ? j.specsAtIntake : intake,
+        ...(upgrade ? { specs: upgrade.specs, productName: upgrade.sellingName } : {}),
+      }))
+      if (upgrade) {
+        showToast(`${job.serialNumber} transferred — selling name is now ${upgrade.sellingName}`)
+        return
+      }
       showToast(`${job.serialNumber} transferred to ready-to-sell inventory`)
     },
     writeOffRefurbishmentJob: (jobId, reason) => {
