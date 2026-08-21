@@ -130,7 +130,7 @@ Both are equivalent. Prefer `Authorization: Bearer` unless your stack makes cust
 
 ### `GET /api/public/v1/products`
 
-Returns the sellable catalog (active products with a wholesale / reseller price). By default only items with **quantityAvailable ≥ 1 in Warehouse (Main)** are returned. With Issues and Repair Unit stock is never included. Historical Prisma `in_stock` serials that were already sold do **not** count.
+Returns the sellable catalog (active products with a wholesale / reseller price). **Only items with quantityAvailable ≥ 1 in Warehouse (Main)** are returned — there is no out-of-stock listing. With Issues, Repair Unit, zero-qty SKUs, and services are never included. Historical Prisma `in_stock` serials that were already sold do **not** count. `inStock=all` is ignored.
 
 `price` is **not** the walk-in sale price. It is:
 
@@ -144,7 +144,6 @@ Returns the sellable catalog (active products with a wholesale / reseller price)
 | `pageSize` | `50` | Items per page (maximum `100`) |
 | `category` | — | Exact category name (case-insensitive), e.g. `Laptops`, `Accessories` |
 | `q` | — | Free-text search across name, SKU, and description |
-| `inStock` | qty ≥ 1 only | Pass `inStock=all` to include zero-qty items |
 
 **Example**
 
@@ -206,8 +205,8 @@ Responses may be cached at the edge/server for up to **60 seconds** (`Cache-Cont
 | `price` | number | Wholesale / reseller price (KES). Saved wholesale if set; otherwise min GP band from cost. Never cost, never walk-in retail. |
 | `currency` | string | Always `KES` today |
 | `warrantyMonths` | number \| null | Warranty in months when configured |
-| `quantityAvailable` | number | Warehouse (Main) units only (available serials, or bulk at warehouse). Default responses omit 0. |
-| `inStock` | boolean | `true` when `quantityAvailable` is 1 or more |
+| `quantityAvailable` | number | Warehouse (Main) units only (available serials, or bulk at warehouse). Always ≥ 1; zero-qty SKUs are omitted. |
+| `inStock` | boolean | Always `true` on returned items |
 | `updatedAt` | string (ISO 8601) | Last product update timestamp |
 
 ### Pagination object
@@ -253,7 +252,7 @@ Create a server route or cron job that:
 ### Step 3 — Render on your storefront
 
 - Show `name`, `description`, `price`, and stock status from **your** database/cache.
-- Hide or mark “Out of stock” when `inStock` is false / `quantityAvailable` is 0.
+- Treat products missing from the latest sync as unavailable. The catalog never includes zero-qty SKUs.
 - Do not invent cost or margin fields from this API — they are not provided.
 
 ### Step 4 — Keep stock fresh
@@ -478,7 +477,7 @@ Missing-key style message:
 - [ ] Key stored in server secrets / env vars (not in the browser)
 - [ ] Smoke-tested with cURL and confirmed JSON products return
 - [ ] Backend syncs all pages (`page` through `totalPages`)
-- [ ] Storefront shows price in KES and hides/marks out-of-stock items
+- [ ] Storefront shows price in KES; products missing from the latest sync are treated as unavailable
 - [ ] Client-side cache ≥ 60 seconds; sync job is not hammering the API
 - [ ] `401` / `429` handling implemented
 - [ ] Know who at Deed to contact for key rotation and orders

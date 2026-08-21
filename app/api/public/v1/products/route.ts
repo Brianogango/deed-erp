@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { authenticatePartnerRequest, partnerCorsHeaders } from '@/lib/partner-api'
 import { loadAppState } from '@/lib/server-store'
-import { availableSellableQty, type BulkStockLevel, type SerialNumber, type StockProduct } from '@/lib/business-logic'
+import { availableSellableQty, isListedInProductCatalog, type BulkStockLevel, type SerialNumber, type StockProduct } from '@/lib/business-logic'
 import type { LocationId } from '@/lib/store'
 import { resolveResellerPrice } from '@/lib/pricing/reseller-price'
 import { loadServerMarginPolicy } from '@/lib/pricing/sync-product-list-from-cost.server'
@@ -14,15 +14,14 @@ export const dynamic = 'force-dynamic'
 // X-API-Key). Returns only reseller-safe fields: no cost prices, no supplier
 // data, no internal accounts. `price` is wholesale / reseller (saved wholesale
 // or min GP band from cost) — never walk-in retail. Default: active, priced,
-// and quantityAvailable >= 1 from Warehouse (Main) only — not With Issues or
-// Repair Unit.
+// and quantityAvailable >= 1 from Warehouse (Main) only — not With Issues,
+// Repair Unit, zero-qty SKUs, or services. `inStock=all` is ignored.
 //
 // Query params:
 //   page          1-based page number                     (default 1)
 //   pageSize      items per page, max 100                 (default 50)
 //   category      exact category name filter              (optional)
 //   q             search in name/SKU/description          (optional)
-//   inStock       'all' to include out-of-stock items     (default: qty >= 1)
 
 const json = (body: unknown, request: Request, init?: ResponseInit) =>
   NextResponse.json(body, {
@@ -50,6 +49,8 @@ type JsonProduct = {
   pricingCategoryId?: string
   productType?: string
   productKind?: string
+  isActive?: boolean
+  canBeSold?: boolean
 }
 
 function specsRecord(raw: unknown): Record<string, unknown> {
@@ -60,19 +61,18 @@ function asLocation(value: string | undefined): LocationId {
   return (value || 'warehouse') as LocationId
 }
 
-function partnerQtyForProduct(
+function partnerStockProduct(
   row: { id: string; trackingMethod?: string | null; category?: { name: string } | null },
   jsonProduct: JsonProduct | undefined,
-  serials: SerialNumber[],
-  bulkStock: BulkStockLevel[],
-): number {
-  const product: StockProduct = {
+): StockProduct & { isActive?: boolean; canBeSold?: boolean } {
+  return {
     trackingMethod: jsonProduct?.trackingMethod ?? row.trackingMethod,
     category: jsonProduct?.category ?? row.category?.name ?? null,
     requiresSerial: jsonProduct?.requiresSerial,
     unit: jsonProduct?.unit,
+    isActive: jsonProduct?.isActive,
+    canBeSold: jsonProduct?.canBeSold,
   }
-  return availableSellableQty(product, serials, bulkStock, row.id)
 }
 
 export async function GET(request: Request) {
@@ -84,7 +84,6 @@ export async function GET(request: Request) {
   const pageSize = Math.min(100, Math.max(1, Number(url.searchParams.get('pageSize')) || 50))
   const category = url.searchParams.get('category')?.trim() || null
   const q = url.searchParams.get('q')?.trim() || null
-  const includeOutOfStock = url.searchParams.get('inStock') === 'all'
 
   const [rows, appState, { policy }] = await Promise.all([
     prisma.product.findMany({
@@ -166,7 +165,9 @@ export async function GET(request: Request) {
       policy,
     })
     if (!reseller) return []
-    const quantityAvailable = partnerQtyForProduct(row, jsonProduct, serials, bulkStock)
+    const stockProduct = partnerStockProduct(row, jsonProduct)
+    if (!isListedInProductCatalog(stockProduct, serials, bulkStock, row.id)) return []
+    const quantityAvailable = availableSellableQty(stockProduct, serials, bulkStock, row.id)
     return [{
       id: row.id,
       sku: row.sku,
@@ -178,10 +179,10 @@ export async function GET(request: Request) {
       currency: 'KES',
       warrantyMonths: warrantyById.get(row.id) ?? null,
       quantityAvailable,
-      inStock: quantityAvailable >= 1,
+      inStock: true,
       updatedAt: row.updatedAt.toISOString(),
     }]
-  }).filter(item => includeOutOfStock || item.inStock)
+  })
 
   const total = catalog.length
   const items = catalog.slice((page - 1) * pageSize, page * pageSize)
