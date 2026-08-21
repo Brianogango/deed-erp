@@ -185,6 +185,12 @@ export function suggestedListPriceFromQuote(quote: MarginQuote): number | null {
   return quote.max.sellExVatRounded
 }
 
+/** Default wholesale / reseller suggestion = rounded min GP band. */
+export function suggestedWholesalePriceFromQuote(quote: MarginQuote): number | null {
+  if (!quote.ok) return null
+  return quote.min.sellExVatRounded
+}
+
 export function classicGrossMarginPct(sellExVat: number, costKes: number): number | null {
   const sell = Number(sellExVat)
   const cost = Number(costKes)

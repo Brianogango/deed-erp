@@ -51,7 +51,9 @@ export function MarginPolicySettings({
         <p className="text-[11.5px] text-[var(--text-3)] pt-2 pb-2 leading-relaxed m-0">
           Selling (ex VAT) = cost ÷ (1 − overhead − target profit). Target profit is the category
           min/max band after the price-tier reduction. List price rounds up to the nearest{' '}
-          {policy.roundUpKes} KES. Quote between min and max; Inventory fills list at the max band.
+          {policy.roundUpKes} KES. Quote between min and max; Inventory fills retail/list at the
+          max band. Partner API wholesale uses the min band unless a wholesale price is saved on
+          the product.
         </p>
         <div className="flex flex-wrap items-center gap-3 py-2">
           <label className="inline-flex items-center gap-2 text-[12px] font-semibold text-[var(--text-1)]">
@@ -105,7 +107,7 @@ export function MarginPolicySettings({
           <p className="text-[11px] text-[var(--text-3)] m-0 mt-1">
             Flows into every selling price. Example cost {fmtKes(exampleCost)}
             {exampleQuote?.ok
-              ? ` → list ${fmtKes(exampleQuote.max.sellExVatRounded)} (min ${fmtKes(exampleQuote.min.sellExVatRounded)}) for ${exampleQuote.category.name}`
+              ? ` → list ${fmtKes(exampleQuote.max.sellExVatRounded)} (reseller min ${fmtKes(exampleQuote.min.sellExVatRounded)}) for ${exampleQuote.category.name}`
               : ' · pick a category below to preview'}
           </p>
         </div>

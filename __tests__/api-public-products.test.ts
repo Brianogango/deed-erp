@@ -23,7 +23,9 @@ const VALID_HASH = createHash('sha256').update(VALID_KEY).digest('hex')
 const productRow = (over: Record<string, unknown> = {}) => ({
   id: 'prod-1', sku: 'SKU-1', barcode: null,
   name: 'HP EliteBook 830 G5', description: 'A laptop',
-  sellingPrice: 30000, updatedAt: new Date('2026-07-22T00:00:00Z'),
+  sellingPrice: 30000, costPrice: 22000, wholesalePrice: 25000,
+  productType: 'refurbished', specs: {},
+  updatedAt: new Date('2026-07-22T00:00:00Z'),
   category: { name: 'Laptops' },
   ...over,
 })
@@ -76,12 +78,35 @@ describe('GET /api/public/v1/products — partner catalog', () => {
     const item = body.items[0]
     expect(item).toMatchObject({
       sku: 'SKU-1', name: 'HP EliteBook 830 G5', category: 'Laptops',
-      price: 30000, currency: 'KES', warrantyMonths: 6,
+      price: 25000, currency: 'KES', warrantyMonths: 6,
       quantityAvailable: 2, inStock: true,
     })
     expect(item).not.toHaveProperty('costPrice')
     expect(item).not.toHaveProperty('cost_price')
     expect(item).not.toHaveProperty('wholesalePrice')
+  })
+
+  it('uses the min GP band when wholesale is not saved, not retail', async () => {
+    mockPrisma.product.findMany.mockResolvedValue([
+      productRow({
+        sellingPrice: 7000,
+        costPrice: 5000,
+        wholesalePrice: 0,
+        category: { name: 'Parts & Components' },
+      }),
+    ])
+    const res = await GET(req())
+    const body = await res.json()
+    expect(body.items[0].price).toBe(6500)
+    expect(body.items[0]).not.toHaveProperty('costPrice')
+  })
+
+  it('omits SKUs that have retail but no wholesale and no cost', async () => {
+    mockPrisma.product.findMany.mockResolvedValue([
+      productRow({ sellingPrice: 30000, costPrice: 0, wholesalePrice: 0 }),
+    ])
+    const res = await GET(req('?inStock=all'))
+    expect((await res.json()).items).toHaveLength(0)
   })
 
   it('accepts the key via X-API-Key and does not use wildcard CORS', async () => {

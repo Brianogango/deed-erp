@@ -25,15 +25,16 @@
 
 ## 1. What this API provides
 
-Deed’s Partner API lets approved resellers **pull the sellable catalog** — active products with retail price and live stock availability — and display them on their own storefront.
+Deed’s Partner API lets approved resellers **pull the sellable catalog** — active products with wholesale / reseller price and live stock availability — and display them on their own storefront.
 
 | Included | Never included |
 |---|---|
 | Product name, SKU, barcode, description | Cost / purchase prices |
 | Category | Supplier details |
-| Retail selling price (KES) | Internal accounts or users |
-| Warranty months (when set) | Draft / inactive products |
-| Live quantity available (1 or more) | Order placement |
+| Wholesale / reseller price (KES) | Walk-in retail / sale price |
+| Warranty months (when set) | Internal accounts or users |
+| Live quantity available (1 or more) | Draft / inactive products |
+| | Order placement |
 
 This API is **read-only**. To place purchase orders with Deed Technologies, contact your Deed account contact — do not attempt write calls against this API.
 
@@ -129,7 +130,13 @@ Both are equivalent. Prefer `Authorization: Bearer` unless your stack makes cust
 
 ### `GET /api/public/v1/products`
 
-Returns the sellable catalog (active, priced products). By default only items with **quantityAvailable ≥ 1 in Warehouse (Main)** are returned. With Issues and Repair Unit stock is never included. Historical Prisma `in_stock` serials that were already sold do **not** count.
+Returns the sellable catalog (active products with a wholesale / reseller price). By default only items with **quantityAvailable ≥ 1 in Warehouse (Main)** are returned. With Issues and Repair Unit stock is never included. Historical Prisma `in_stock` serials that were already sold do **not** count.
+
+`price` is **not** the walk-in sale price. It is:
+
+1. The product’s saved **wholesale / reseller** price, when that field is greater than zero.
+2. Otherwise the margin-policy **min GP band** computed from cost (same spreadsheet Inventory uses for list price — list/sale uses the **max** band).
+3. SKUs with no saved wholesale and no computable min band (no cost, unmapped category, or services) are omitted. Retail is never used as a fallback.
 
 | Query param | Default | Description |
 |---|---|---|
@@ -159,7 +166,7 @@ curl -sS \
       "name": "HP EliteBook 830 G5 - 8th Gen Intel Core i5, 8GB RAM, 256GB SSD",
       "description": "HP EliteBook 830 G5 configured with 8th Gen Intel Core i5, 8GB RAM, 256GB SSD.",
       "category": "Laptops",
-      "price": 30000,
+      "price": 26500,
       "currency": "KES",
       "warrantyMonths": 6,
       "quantityAvailable": 4,
@@ -196,7 +203,7 @@ Responses may be cached at the edge/server for up to **60 seconds** (`Cache-Cont
 | `name` | string | Display name |
 | `description` | string | May be empty |
 | `category` | string \| null | Category display name |
-| `price` | number | Retail selling price |
+| `price` | number | Wholesale / reseller price (KES). Saved wholesale if set; otherwise min GP band from cost. Never cost, never walk-in retail. |
 | `currency` | string | Always `KES` today |
 | `warrantyMonths` | number \| null | Warranty in months when configured |
 | `quantityAvailable` | number | Warehouse (Main) units only (available serials, or bulk at warehouse). Default responses omit 0. |

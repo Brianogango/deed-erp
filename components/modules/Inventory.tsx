@@ -25,7 +25,7 @@ import { isOpeningStockMove } from '@/lib/inventory/opening-stock'
 import { explainSerialWhereabouts, findSerialMatches } from '@/lib/inventory/serial-trace'
 import { ScanInputRow } from '@/components/BarcodeScanner'
 import { identityMatchesScan, parseScanPayload } from '@/lib/barcode-scan'
-import { getCategoryMarkupPct, suggestSalePriceFromCost, quoteSalePriceFromCost, autoSalePriceFromCost } from '@/lib/sale-price-calculator'
+import { getCategoryMarkupPct, quoteSalePriceFromCost, autoSalePriceFromCost, suggestWholesalePriceFromCost } from '@/lib/sale-price-calculator'
 import { normalizePricingMarginPolicy } from '@/lib/pricing/margin-policy'
 import { useUrlRecordId } from '@/hooks/useUrlRecordId'
 
@@ -86,6 +86,30 @@ const INTERNAL_LOCS = (['warehouse', 'shop', 'repair_unit'] as LocationId[]).map
   label: `${LOCATIONS[k].icon} ${LOCATIONS[k].name}`,
 }))
 
+function applyCostBandPrices<T extends Record<string, any>>(
+  next: T,
+  systemSettings: {
+    pricingMarginPolicy?: unknown
+    invCategorySaleMarkupPct?: Partial<Record<string, number>>
+  },
+): T {
+  const isService = next.productKind === 'service' || next.category === 'Services'
+  if (isService) return next
+  const opts = {
+    policy: systemSettings.pricingMarginPolicy as any,
+    pricingCategoryId: next.pricingCategoryId || undefined,
+    productType: next.productType,
+    legacyMarkupMap: systemSettings.invCategorySaleMarkupPct,
+  }
+  const suggested = autoSalePriceFromCost(systemSettings.invCategorySaleMarkupPct, next.category, next.costPrice, opts)
+  const wholesale = suggestWholesalePriceFromCost(systemSettings.invCategorySaleMarkupPct, next.category, next.costPrice, opts)
+  return {
+    ...next,
+    ...(suggested !== null ? { salePrice: String(suggested) } : {}),
+    ...(wholesale !== null ? { wholesalePrice: String(wholesale) } : {}),
+  }
+}
+
 const blankProduct = () => {
   const category = 'Laptops' as CategoryId
   const defaults = applyCategoryAccountDefaults(category, {})
@@ -95,7 +119,7 @@ const blankProduct = () => {
     name: '', sku: '', barcode: '', category,
     productKind,
     trackingMethod,
-    salePrice: '', costPrice: '', taxRate: '16', minStock: '5',
+    salePrice: '', costPrice: '', wholesalePrice: '', taxRate: '16', minStock: '5',
     unit: defaultUnitForKind(productKind, trackingMethod),
     invoicePolicy: 'order' as 'order' | 'delivery',
     pricingCategoryId: '',
@@ -783,7 +807,9 @@ function InventoryContent() {
         requiresSerial: product.requiresSerial,
         unit: product.unit,
       }),
-      salePrice: String(product.salePrice), costPrice: String(product.costPrice), taxRate: String(product.taxRate),
+      salePrice: String(product.salePrice), costPrice: String(product.costPrice),
+      wholesalePrice: Number(product.wholesalePrice) > 0 ? String(product.wholesalePrice) : '',
+      taxRate: String(product.taxRate),
       minStock: String(product.minStock),
       unit: product.unit || defaultUnitForKind(kind),
       invoicePolicy: product.invoicePolicy === 'delivery' ? 'delivery' as const : 'order' as const,
@@ -932,7 +958,8 @@ function InventoryContent() {
     }
     const salePrice = Number(form.salePrice) || 0
     const costPrice = Number(form.costPrice) || 0
-    if (salePrice < 0 || costPrice < 0) { showToast('Prices cannot be negative', 'error'); return }
+    const wholesalePrice = form.wholesalePrice === '' ? 0 : Number(form.wholesalePrice) || 0
+    if (salePrice < 0 || costPrice < 0 || wholesalePrice < 0) { showToast('Prices cannot be negative', 'error'); return }
     const payload = {
       ...form,
       sku: skuTrimmed,
@@ -940,7 +967,7 @@ function InventoryContent() {
       parentId: form.parentId || undefined,
       pricingCategoryId: form.pricingCategoryId || undefined,
       productType: form.productType === 'new' ? 'new' : 'refurbished',
-      salePrice, costPrice,
+      salePrice, costPrice, wholesalePrice,
       stockQty: 0, minStock: Number(form.minStock) || 0, taxRate: Number(form.taxRate) || 0,
       invoicePolicy: form.invoicePolicy,
       warrantyMonths: Number(form.warrantyMonths) || 0,
@@ -3726,17 +3753,7 @@ function InventoryContent() {
                     })
                     const kind = defaults.productKind
                     const tracking = defaultTrackingForKind(kind, value)
-                    setForm((prev: any) => {
-                      const isService = kind === 'service' || value === 'Services'
-                      const suggested = isService
-                        ? null
-                        : autoSalePriceFromCost(systemSettings.invCategorySaleMarkupPct, value, prev.costPrice, {
-                            policy: systemSettings.pricingMarginPolicy,
-                            pricingCategoryId: prev.pricingCategoryId || undefined,
-                            productType: prev.productType,
-                            legacyMarkupMap: systemSettings.invCategorySaleMarkupPct,
-                          })
-                      return {
+                    setForm((prev: any) => applyCostBandPrices({
                         ...prev,
                         category: value,
                         productKind: kind,
@@ -3749,9 +3766,7 @@ function InventoryContent() {
                         adjustmentAccountCode: defaults.adjustmentAccountCode,
                         writeOffAccountCode: defaults.writeOffAccountCode,
                         priceDifferenceAccountCode: defaults.priceDifferenceAccountCode,
-                        ...(suggested !== null ? { salePrice: String(suggested) } : {}),
-                      }
-                    })
+                      }, systemSettings))
                   }}
                   options={ALL_CATEGORIES.map(c => ({ value: c, label: c }))}
                 />
@@ -3827,16 +3842,7 @@ function InventoryContent() {
                   <Select
                     value={form.productType === 'new' ? 'new' : 'refurbished'}
                     onChange={v => {
-                      setForm((prev: any) => {
-                        const next = { ...prev, productType: v }
-                        const suggested = autoSalePriceFromCost(systemSettings.invCategorySaleMarkupPct, next.category, next.costPrice, {
-                          policy: systemSettings.pricingMarginPolicy,
-                          pricingCategoryId: next.pricingCategoryId || undefined,
-                          productType: v,
-                          legacyMarkupMap: systemSettings.invCategorySaleMarkupPct,
-                        })
-                        return suggested !== null ? { ...next, salePrice: String(suggested) } : next
-                      })
+                      setForm((prev: any) => applyCostBandPrices({ ...prev, productType: v }, systemSettings))
                     }}
                     options={[
                       { value: 'refurbished', label: 'Refurbished' },
@@ -3848,16 +3854,7 @@ function InventoryContent() {
                   <Select
                     value={form.pricingCategoryId || ''}
                     onChange={v => {
-                      setForm((prev: any) => {
-                        const next = { ...prev, pricingCategoryId: v }
-                        const suggested = autoSalePriceFromCost(systemSettings.invCategorySaleMarkupPct, next.category, next.costPrice, {
-                          policy: systemSettings.pricingMarginPolicy,
-                          pricingCategoryId: v || undefined,
-                          productType: next.productType,
-                          legacyMarkupMap: systemSettings.invCategorySaleMarkupPct,
-                        })
-                        return suggested !== null ? { ...next, salePrice: String(suggested) } : next
-                      })
+                      setForm((prev: any) => applyCostBandPrices({ ...prev, pricingCategoryId: v }, systemSettings))
                     }}
                     options={[
                       { value: '', label: 'Default from category mapping' },
@@ -3870,33 +3867,36 @@ function InventoryContent() {
                 </Field>
               </>
             )}
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-              <Field label="Cost Price" hint="Sale price updates automatically from cost">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+              <Field label="Cost Price" hint="Sale and wholesale update from cost">
                 <Input
                   type="number"
                   value={form.costPrice}
                   onChange={v => {
-                    setForm((prev: any) => {
-                      const isService = prev.productKind === 'service' || prev.category === 'Services'
-                      const suggested = isService
-                        ? null
-                        : autoSalePriceFromCost(systemSettings.invCategorySaleMarkupPct, prev.category, v, {
-                            policy: systemSettings.pricingMarginPolicy,
-                            pricingCategoryId: prev.pricingCategoryId || undefined,
-                            productType: prev.productType,
-                            legacyMarkupMap: systemSettings.invCategorySaleMarkupPct,
-                          })
-                      return {
-                        ...prev,
-                        costPrice: v,
-                        ...(suggested !== null ? { salePrice: String(suggested) } : {}),
-                      }
-                    })
+                    setForm((prev: any) => applyCostBandPrices({ ...prev, costPrice: v }, systemSettings))
                   }}
                 />
               </Field>
-              <Field label="Sale Price" hint="Editable — used on quotation lines">
+              <Field label="Sale Price" hint="Walk-in / quotation list (max band)">
                 <Input type="number" value={form.salePrice} onChange={setF('salePrice')} />
+              </Field>
+              <Field label="Wholesale / reseller" hint="Partner API price. Blank uses min GP band">
+                <Input
+                  type="number"
+                  value={form.wholesalePrice}
+                  onChange={setF('wholesalePrice')}
+                  placeholder={(() => {
+                    const quote = quoteSalePriceFromCost({
+                      costPrice: form.costPrice,
+                      erpCategory: form.category,
+                      pricingCategoryId: form.pricingCategoryId,
+                      productType: form.productType,
+                      policy: systemSettings.pricingMarginPolicy,
+                      legacyMarkupMap: systemSettings.invCategorySaleMarkupPct,
+                    })
+                    return quote.ok ? String(quote.min.sellExVatRounded) : ''
+                  })()}
+                />
               </Field>
               <Field label="Tax Rate (%)"><Input type="number" value={form.taxRate} onChange={setF('taxRate')} /></Field>
             </div>
@@ -3915,11 +3915,13 @@ function InventoryContent() {
                     <p className="text-[11px] text-[var(--navy)] leading-relaxed m-0">
                       <strong>{quote.category.name}</strong>: quote {fmtKes(quote.min.sellExVatRounded)}-{fmtKes(quote.max.sellExVatRounded)} ex VAT
                       {' '}(invoice ~{fmtKes(Math.round(quote.min.invoiceIncVat))}-{fmtKes(Math.round(quote.max.invoiceIncVat))} inc VAT).
-                      Overhead {quote.overheadRatePct.toFixed(1)}%{quote.tierReductionPct ? `, tier -${quote.tierReductionPct}%` : ''}. List = max.
+                      Overhead {quote.overheadRatePct.toFixed(1)}%{quote.tierReductionPct ? `, tier -${quote.tierReductionPct}%` : ''}.
+                      List/sale = max. Reseller (Partner API) = min unless wholesale is saved.
                     </p>
                     <div className="flex gap-2 flex-shrink-0">
-                      <button type="button" className="btn-secondary text-[11px] px-3 py-1.5" onClick={() => setF('salePrice')(String(quote.min.sellExVatRounded))}>Min</button>
-                      <button type="button" className="btn-secondary text-[11px] px-3 py-1.5" onClick={() => setF('salePrice')(String(quote.max.sellExVatRounded))}>Max</button>
+                      <button type="button" className="btn-secondary text-[11px] px-3 py-1.5" onClick={() => setF('salePrice')(String(quote.min.sellExVatRounded))}>Sale min</button>
+                      <button type="button" className="btn-secondary text-[11px] px-3 py-1.5" onClick={() => setF('salePrice')(String(quote.max.sellExVatRounded))}>Sale max</button>
+                      <button type="button" className="btn-secondary text-[11px] px-3 py-1.5" onClick={() => setF('wholesalePrice')(String(quote.min.sellExVatRounded))}>Reseller min</button>
                     </div>
                   </div>
                 )

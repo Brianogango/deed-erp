@@ -125,6 +125,7 @@ export async function publishProduct(validated: ValidatedProductInput): Promise<
     productType,
     sellingPrice: validated.salePrice,
     costPrice: validated.costPrice,
+    wholesalePrice: Number(validated.wholesalePrice) > 0 ? Number(validated.wholesalePrice) : null,
     reorderLevel: validated.minStock,
     trackStock,
     trackingMethod,
@@ -221,6 +222,7 @@ export function toClientProduct(product: any, categoryName?: string) {
   return {
     ...product,
     salePrice: Number(product.sellingPrice ?? product.salePrice ?? 0),
+    wholesalePrice: product.wholesalePrice != null ? Number(product.wholesalePrice) || 0 : undefined,
     minStock: Number(product.reorderLevel ?? product.minStock ?? 0),
     stockQty: product.stockQty ?? 0,
     productType: product.productType === 'new' ? 'new' : product.productType === 'refurbished' ? 'refurbished' : undefined,

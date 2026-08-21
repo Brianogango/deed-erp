@@ -4,6 +4,7 @@ import {
   lookupTierReduction,
   roundUpKes,
   suggestedListPriceFromQuote,
+  suggestedWholesalePriceFromQuote,
 } from '@/lib/pricing/margin-calculator'
 import { DEFAULT_PRICING_MARGIN_POLICY, overheadRateFromPolicy } from '@/lib/pricing/margin-policy'
 import { suggestSalePriceFromCost, quoteSalePriceFromCost } from '@/lib/sale-price-calculator'
@@ -100,6 +101,7 @@ describe('margin-calculator (Deed spreadsheet)', () => {
       pricingCategoryId: 'repair_parts',
     })
     expect(suggestedListPriceFromQuote(quote)).toBe(7000)
+    expect(suggestedWholesalePriceFromQuote(quote)).toBe(6500)
     expect(
       suggestSalePriceFromCost(null, 'Parts & Components', 5000, {
         policy: DEFAULT_PRICING_MARGIN_POLICY,

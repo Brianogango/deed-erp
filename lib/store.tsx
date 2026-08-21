@@ -9420,6 +9420,7 @@ const storeCtx: AppState = {
             createdAt: saved.createdAt ?? optimistic.createdAt,
             salePrice: Number(saved.salePrice ?? saved.sellingPrice ?? optimistic.salePrice),
             costPrice: Number(saved.costPrice ?? optimistic.costPrice),
+            wholesalePrice: Number(saved.wholesalePrice ?? optimistic.wholesalePrice ?? 0) || 0,
             minStock: Number(saved.minStock ?? saved.reorderLevel ?? optimistic.minStock),
             stockQty: saved.stockQty ?? optimistic.stockQty ?? 0,
             sku: saved.sku || optimistic.sku,
