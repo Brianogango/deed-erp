@@ -5806,70 +5806,154 @@ main#main-content:has(.sales-pilot.sales-doc) > .min-w-0 {
   }
 
   .sales-pilot.sales-doc .sales-workbench .sp-table-wrap {
-    overflow: visible;
+    overflow-x: auto;
+    width: 100%;
+    max-width: 100%;
+  }
+}
+
+@media (min-width: 768px) {
+  .sales-pilot.sales-doc .sales-workbench .sales-proto-page-header {
+    flex-wrap: nowrap;
+    align-items: center;
+  }
+
+  .sales-pilot.sales-doc .sales-workbench .sales-proto-page-header .sales-proto-actions {
+    flex: 0 0 auto;
+  }
+}
+
+@media (max-width: 767px) {
+  .sales-pilot.sales-doc .sales-workbench .sales-proto-page-header {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: start;
+    gap: 0.55rem 0.7rem;
+  }
+
+  .sales-pilot.sales-doc .sales-workbench .sales-proto-header-copy {
+    grid-column: 1;
+    min-width: 0;
+  }
+
+  .sales-pilot.sales-doc .sales-workbench .sales-proto-page-header .sales-proto-actions:not(.sales-proto-actions--dock) {
+    grid-column: 2;
+    grid-row: 1;
+    width: auto;
+    display: flex;
+    margin: 0;
+  }
+
+  .sales-pilot.sales-doc .sales-workbench .sales-proto-page-header .sales-proto-actions:not(.sales-proto-actions--dock) .sp-btn,
+  .sales-pilot.sales-doc .sales-workbench .sales-proto-page-header .sales-proto-actions:not(.sales-proto-actions--dock) button.sp-btn {
+    width: auto !important;
+    min-height: 2.5rem !important;
+    white-space: nowrap;
+  }
+
+  .sales-pilot.sales-doc .sp-list-toolbar {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    gap: 0.45rem;
+    align-items: center;
+  }
+
+  .sales-pilot.sales-doc .sp-list-search {
+    grid-column: 1 / -1;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .sales-pilot.sales-doc .sp-list-view-toggle {
+    margin-left: 0;
+    justify-self: end;
+  }
+
+  .sales-pilot.sales-doc .sp-list-table,
+  .sales-pilot.sales-doc .sp-list-table tbody {
+    display: block;
     width: 100%;
   }
 
-  .sales-pilot.sales-doc .sales-workbench .sp-table.erp-responsive-table,
-  .sales-pilot.sales-doc .sales-workbench table.sp-table.erp-responsive-table {
-    width: 100% !important;
-    min-width: 0 !important;
-    display: block;
-    border-collapse: separate;
-    border-spacing: 0;
-  }
-
-  .sales-pilot.sales-doc .sales-workbench .sp-table.erp-responsive-table thead {
+  .sales-pilot.sales-doc .sp-list-table thead {
     display: none !important;
   }
 
-  .sales-pilot.sales-doc .sales-workbench .sp-table.erp-responsive-table tbody {
-    display: block;
-    width: 100%;
-  }
-
-  .sales-pilot.sales-doc .sales-workbench .sp-table.erp-responsive-table tbody tr {
-    display: block;
-    margin: 0.5rem 0;
-    padding: 0.25rem 0.65rem 0.5rem;
+  .sales-pilot.sales-doc .sp-list-table tbody tr.sp-row-click {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: start;
+    gap: 0.2rem 0.7rem;
+    margin: 0.55rem 0.65rem;
+    padding: 0.75rem 0.8rem;
     border: 1px solid var(--border-lt);
     border-radius: 0.5rem;
     background: var(--bg-card);
   }
 
-  .sales-pilot.sales-doc .sales-workbench .sp-table.erp-responsive-table tbody td {
-    width: 100% !important;
-    display: grid !important;
-    grid-template-columns: minmax(0, 36%) minmax(0, 1fr);
-    align-items: start;
-    gap: 0.5rem;
-    padding: 0.5rem 0 !important;
-    border-bottom: 1px dashed var(--border-lt) !important;
-    text-align: left !important;
+  .sales-pilot.sales-doc .sp-list-table tbody td {
+    min-width: 0;
+    padding: 0.15rem 0 !important;
+    border: 0 !important;
+    background: transparent !important;
     white-space: normal !important;
+    text-align: left !important;
   }
 
-  .sales-pilot.sales-doc .sales-workbench .sp-table.erp-responsive-table tbody td:last-child {
-    border-bottom: 0 !important;
+  .sales-pilot.sales-doc .sp-list-table tbody td[data-col='select'],
+  .sales-pilot.sales-doc .sp-list-table tbody td[data-col='contact'],
+  .sales-pilot.sales-doc .sp-list-table tbody td[data-col='valid'] {
+    display: none !important;
   }
 
-  .sales-pilot.sales-doc .sales-workbench .sp-table.erp-responsive-table tbody td::before {
+  .sales-pilot.sales-doc .sp-list-table tbody td[data-col='ref'] {
+    grid-column: 1;
+    grid-row: 1;
+    font-weight: 700;
+  }
+
+  .sales-pilot.sales-doc .sp-list-table tbody td[data-col='status'] {
+    grid-column: 2;
+    grid-row: 1;
+    justify-self: end;
+  }
+
+  .sales-pilot.sales-doc .sp-list-table tbody td[data-col='customer'],
+  .sales-pilot.sales-doc .sp-list-table tbody td[data-col='date'],
+  .sales-pilot.sales-doc .sp-list-table tbody td[data-col='salesperson'],
+  .sales-pilot.sales-doc .sp-list-table tbody td[data-col='total'] {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: 6.5rem minmax(0, 1fr);
+    gap: 0.45rem;
+    align-items: baseline;
+  }
+
+  .sales-pilot.sales-doc .sp-list-table tbody td[data-col='customer']::before,
+  .sales-pilot.sales-doc .sp-list-table tbody td[data-col='date']::before,
+  .sales-pilot.sales-doc .sp-list-table tbody td[data-col='salesperson']::before,
+  .sales-pilot.sales-doc .sp-list-table tbody td[data-col='total']::before {
     content: attr(data-label);
     color: var(--text-3);
-    font-size: 0.625rem;
+    font-size: 0.6875rem;
+    font-weight: 650;
+  }
+
+  .sales-pilot.sales-doc .sp-list-table tbody td[data-col='total'] {
+    font-variant-numeric: tabular-nums;
     font-weight: 700;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
-    line-height: 1.3;
-    padding-top: 0.125rem;
+    color: var(--sales-blue);
   }
 
-  .sales-pilot.sales-doc .sales-workbench .sp-table.erp-responsive-table tbody td[colspan]:not([colspan='1']) {
-    grid-template-columns: minmax(0, 1fr);
+  .sales-pilot.sales-doc .sp-list-table .sp-pill {
+    width: max-content;
+    max-width: 100%;
+    display: inline-flex;
   }
 
-  .sales-pilot.sales-doc .sales-workbench .sp-table.erp-responsive-table tbody td[colspan]:not([colspan='1'])::before {
-    content: none;
+  .sales-pilot.sales-doc .sp-list-table tbody td[colspan] {
+    grid-column: 1 / -1;
+    text-align: center !important;
   }
 }
 
