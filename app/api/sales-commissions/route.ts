@@ -14,7 +14,7 @@ function employeeDisplayName(employee: { firstName?: string | null; lastName?: s
   return name || fallback
 }
 
-export function mapCommissionToClient(
+function mapCommissionToClient(
   row: {
     id: string
     employeeId: string
