@@ -10,7 +10,7 @@ type CategoryRate = {
   commissionRatePercent: number | null
 }
 
-export function CommissionRatesSettings({ showToast }: { showToast: (msg: string, type?: string) => void }) {
+export function CommissionRatesSettings({ showToast }: { showToast: (msg: string, type?: 'success' | 'error' | 'info') => void }) {
   const [items, setItems] = useState<CategoryRate[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)

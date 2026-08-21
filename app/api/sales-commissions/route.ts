@@ -94,20 +94,7 @@ export async function GET(request: Request) {
       }),
     ])
 
-    const employeeIds = [...new Set(rows.map(row => row.employeeId))]
-    const users = employeeIds.length
-      ? await prisma.user.findMany({
-          where: { employeeId: { in: employeeIds } },
-          select: { employeeId: true, name: true },
-        })
-      : []
-    const nameByEmployee = new Map(
-      users
-        .filter(user => user.employeeId)
-        .map(user => [user.employeeId as string, user.name]),
-    )
-
-    const items = rows.map(row => mapCommissionToClient(row, nameByEmployee.get(row.employeeId)))
+    const items = rows.map(row => mapCommissionToClient(row))
     const body = wantSummary
       ? { items, total: items.length, page: 1, limit: items.length, totalPages: 1, summary: summarizeCommissions(items) }
       : { ...paginatedResponse(items, total, page, limit) }

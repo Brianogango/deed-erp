@@ -23,7 +23,7 @@ export async function GET() {
       orderBy: { name: 'asc' },
     })
     const byName = new Map(rows.map(row => [row.name.trim().toLowerCase(), row]))
-    const items = ALL_CATEGORIES.map(name => {
+    const items: Array<{ id: string | null; name: string; commissionRatePercent: number | null }> = ALL_CATEGORIES.map(name => {
       const row = byName.get(name.toLowerCase())
       return {
         id: row?.id ?? null,

@@ -49,7 +49,6 @@ beforeEach(() => {
   mockGetSession.mockResolvedValue({ user: { id: 'u1', role: 'director', name: 'Dir', username: 'dir' } })
   mockPrisma.salesCommission.count.mockResolvedValue(1)
   mockPrisma.salesCommission.findMany.mockResolvedValue([ledgerRow])
-  mockPrisma.user.findMany.mockResolvedValue([{ employeeId: EMP_ID, name: 'Ada Closer' }])
 })
 
 describe('GET /api/sales-commissions', () => {
@@ -60,7 +59,7 @@ describe('GET /api/sales-commissions', () => {
     expect(body.items).toHaveLength(1)
     expect(body.items[0]).toMatchObject({
       employeeId: EMP_ID,
-      employeeName: 'Ada Closer',
+      employeeName: 'Ada Sales',
       invoiceRef: 'INV/2026/0001',
       saleAmount: 10000,
       commissionRate: 5,
