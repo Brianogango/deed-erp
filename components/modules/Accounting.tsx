@@ -1264,7 +1264,7 @@ function AccountingContent() {
             { id: 'invoices', label: 'Invoices' },
             { id: 'bills', label: 'Bills' },
             { id: 'credits', label: 'Credits' },
-            { id: 'commissions', label: 'Commissions' },
+            { id: 'commissions', label: 'Salespeople' },
             { id: 'refunds', label: 'Refunds' },
             { id: 'journals', label: 'Journals' },
             { id: 'reports', label: 'Reports' },

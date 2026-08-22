@@ -1,12 +1,19 @@
 'use client'
 import { Suspense, useMemo, useState, useEffect } from 'react'
-import { useSalesStore, fmtKes, fmtDate, type SaleOrder } from '@/lib/store'
+import { useSalesStore, fmtKes, fmtDate } from '@/lib/store'
 import { ModuleSkeleton } from '@/components/ui'
 import { DataTable, type ColumnDef } from '@/components/data-table'
 import { visibleDashboardRepUsers, visibleDashboardSalesOrders } from '@/lib/dashboard-priority'
-import { SALE_STATUS_LABELS } from '@/lib/odoo-sales-flow'
 import { useUrlRecordId } from '@/hooks/useUrlRecordId'
 import { periodMonthsFromKey } from '@/lib/accounting/sales-commission-view'
+import {
+  attributedSales,
+  isRepCandidateRole,
+  salesForCloser,
+  salesVisibleToViewer,
+  summarizeCloserSales,
+  type AttributedSale,
+} from '@/lib/sales/rep-sales'
 import Link from 'next/link'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -87,7 +94,7 @@ export default function RepPerformance() {
 }
 
 function RepPerformanceContent() {
-  const { saleOrders, users, currentUserId, sops } = useSalesStore()
+  const { saleOrders, posOrders, users, currentUserId, sops } = useSalesStore()
 
   const [mounted, setMounted] = useState(() => typeof window !== 'undefined')
   useEffect(() => { setMounted(true) }, [])
@@ -103,6 +110,14 @@ function RepPerformanceContent() {
   const visibleOrders = useMemo(
     () => visibleDashboardSalesOrders(currentUser, saleOrders),
     [currentUser, saleOrders],
+  )
+  const visibleTickets = useMemo(
+    () => salesVisibleToViewer(currentUser, posOrders ?? []),
+    [currentUser, posOrders],
+  )
+  const allAttributed = useMemo(
+    () => attributedSales({ saleOrders: visibleOrders, posOrders: visibleTickets }),
+    [visibleOrders, visibleTickets],
   )
 
   // Period options
@@ -153,28 +168,29 @@ function RepPerformanceContent() {
     }
   }, [periodKey])
 
-  // Sales reps: all users who created orders, or have sales/admin role
+  const periodSales = useMemo(
+    () => allAttributed.filter(sale => inPeriod(sale.date)),
+    [allAttributed, start, end],
+  )
+
+  // Closers on till/SO plus commission-eligible logins
   const repUsers = useMemo(() => {
+    const closerIds = new Set(periodSales.map(sale => sale.closerId))
     const candidates = users.filter(u =>
-      ['director', 'sales_rep', 'finance_officer'].includes(u.role ?? '') ||
-      visibleOrders.some(o => o.createdByUserId === u.id || o.salespersonId === u.id)
+      isRepCandidateRole(u.role) || closerIds.has(u.id)
     )
     return visibleDashboardRepUsers(currentUser, candidates)
-  }, [users, visibleOrders, currentUser])
+  }, [users, periodSales, currentUser])
 
-  // Compute per-rep stats for the selected period
   const repStats: RepStats[] = useMemo(() => {
     return repUsers.map(u => {
-      const myOrders = visibleOrders.filter(o => (o.salespersonId || o.createdByUserId) === u.id && inPeriod(o.date))
-      const quotes   = myOrders.length
-      const closed   = myOrders.filter(o => ['confirmed', 'delivered', 'invoiced'].includes(o.status))
-      const revenue  = closed.reduce((s, o) => s + o.total, 0)
-      const conv     = quotes === 0 ? 0 : Math.round((closed.length / quotes) * 100)
-      const avg      = closed.length === 0 ? 0 : Math.round(revenue / closed.length)
+      const closed = salesForCloser(periodSales, u.id)
+      const quotes = visibleOrders.filter(o => (o.salespersonId || o.createdByUserId) === u.id && inPeriod(o.date)).length
+      const { salesCount, saleAmount } = summarizeCloserSales(closed)
+      const conv = quotes === 0 ? 0 : Math.round((salesCount / quotes) * 100)
+      const avg = salesCount === 0 ? 0 : Math.round(saleAmount / salesCount)
       const empId = u.employeeId
       const commission = empId ? ledgerByEmployee[empId] ?? 0 : 0
-
-      // SOP targets
       const sop = sops.find(s => s.userId === u.id && s.active)
       const targetRevenue = sop?.metrics.find(m => m.metricType === 'sales_revenue')?.target ?? 0
       const targetOrders  = sop?.metrics.find(m => m.metricType === 'sales_orders')?.target ?? 0
@@ -183,9 +199,9 @@ function RepPerformanceContent() {
         userId: u.id,
         name: u.name,
         role: u.role ?? '',
-        ordersCount: closed.length,
+        ordersCount: salesCount,
         quotesCount: quotes,
-        revenue,
+        revenue: saleAmount,
         conversionRate: conv,
         avgOrderValue: avg,
         commission,
@@ -193,23 +209,16 @@ function RepPerformanceContent() {
         targetOrders,
       }
     }).sort((a, b) => b.revenue - a.revenue)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [repUsers, visibleOrders, sops, periodKey, ledgerByEmployee])
+  }, [repUsers, periodSales, visibleOrders, sops, ledgerByEmployee, start, end])
 
-  // Trend: last 6 months per selected rep
   const repTrend = useMemo(() => {
     if (!selectedRep) return []
     return lastNMonths(6).map(mk => {
       const { start: s, end: e } = periodBounds(mk)
-      const inM = (d?: string) => !!d && d >= s && d <= e
-      const orders = visibleOrders.filter(o =>
-        o.createdByUserId === selectedRep &&
-        ['confirmed', 'delivered', 'invoiced'].includes(o.status) &&
-        inM(o.date)
-      )
-      return { month: mk, revenue: orders.reduce((sum, o) => sum + o.total, 0), count: orders.length }
+      const orders = salesForCloser(allAttributed, selectedRep, s, e)
+      return { month: mk, revenue: summarizeCloserSales(orders).saleAmount, count: orders.length }
     })
-  }, [selectedRep, visibleOrders])
+  }, [selectedRep, allAttributed])
 
   const detail = selectedRep ? repStats.find(r => r.userId === selectedRep) : null
 
@@ -234,10 +243,9 @@ function RepPerformanceContent() {
   // ── Detail view ───────────────────────────────────────────────────────────────
   if (detail) {
     const maxRev = Math.max(...repTrend.map(t => t.revenue), 1)
-    const repOrders = visibleOrders
-      .filter(o => o.createdByUserId === selectedRep && inPeriod(o.date))
-      .sort((a, b) => b.date.localeCompare(a.date))
-      .slice(0, 10)
+    const repOrders = salesForCloser(periodSales, selectedRep)
+      .sort((a, b) => b.date.localeCompare(a.date) || b.ref.localeCompare(a.ref))
+      .slice(0, 20)
 
     return (
       <div className="flex flex-col gap-4">
@@ -264,9 +272,9 @@ function RepPerformanceContent() {
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 12 }}>
             {[
-              { label: 'Revenue', value: fmtKes(detail.revenue) },
-              { label: 'Closed Orders', value: detail.ordersCount },
-              { label: 'Quotes Created', value: detail.quotesCount },
+              { label: 'Sales total', value: fmtKes(detail.revenue) },
+              { label: 'Sales', value: detail.ordersCount },
+              { label: 'Quotes', value: detail.quotesCount },
               { label: 'Conversion', value: `${detail.conversionRate}%` },
               { label: 'Commission', value: fmtKes(detail.commission), highlight: true },
             ].map(kpi => (
@@ -300,14 +308,14 @@ function RepPerformanceContent() {
 
         {/* Commission earned on posted invoices */}
         <div style={{ background: '#fff', border: '1px solid var(--border-lt)', borderRadius: 12, padding: 20 }}>
-          <p style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-1)', marginBottom: 12 }}>Posted-invoice commission</p>
+          <p style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-1)', marginBottom: 12 }}>Sales and commission</p>
           <div style={{ fontSize: 11, color: 'var(--text-3)', lineHeight: 2 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid var(--bg-muted)', paddingBottom: 4, marginBottom: 4 }}>
-              <span>Closed-order revenue this period</span>
+              <span>POS + confirmed sale orders this period</span>
               <span style={{ fontWeight: 600 }}>{fmtKes(detail.revenue)}</span>
             </div>
             <p style={{ margin: '8px 0', lineHeight: 1.5 }}>
-              Commission is earned when a customer invoice is posted (product override, else category %, else none) — not from SO totals or payment. Accrued + paid for this period.
+              Sales total includes every till ticket and confirmed sale order closed by this person, even when commission is zero. Commission posts only when the invoice has a product or category rate.
             </p>
             <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid var(--border-lt)', paddingTop: 8, marginTop: 4, fontWeight: 700, color: 'var(--warning-text)', fontSize: 13 }}>
               <span>Ledger commission</span>
@@ -338,35 +346,23 @@ function RepPerformanceContent() {
 
         {/* Recent orders */}
         <div style={{ background: '#fff', border: '1px solid var(--border-lt)', borderRadius: 12, padding: 20, overflow: 'hidden' }}>
-          <p style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-1)', marginBottom: 12 }}>Orders This Period</p>
+          <p style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-1)', marginBottom: 12 }}>Sales this period</p>
           <DataTable
             tableId="rep-performance-orders"
             columns={[
-              { key: 'ref', label: 'Ref', priority: 1, width: '100px', render: (o: SaleOrder) => <span style={{ fontWeight: 600, color: 'var(--navy)' }}>{o.ref}</span>, exportValue: (o: SaleOrder) => o.ref },
-              { key: 'customer', label: 'Customer', priority: 1, width: '1.4fr', render: (o: SaleOrder) => <span style={{ color: 'var(--text-3)' }}>{o.customerName}</span>, exportValue: (o: SaleOrder) => o.customerName },
-              { key: 'date', label: 'Date', priority: 2, width: '100px', render: (o: SaleOrder) => <span style={{ color: 'var(--text-4)' }}>{fmtDate(o.date)}</span>, exportValue: (o: SaleOrder) => o.date },
-              {
-                key: 'status', label: 'Status', priority: 1, width: '100px',
-                render: (o: SaleOrder) => (
-                  <span style={{
-                    fontSize: 9, fontWeight: 700, padding: '2px 7px', borderRadius: 20,
-                    background: o.status === 'sale' ? 'var(--success-bg)' : o.status === 'quotation_sent' ? 'var(--primary-light)' : o.status === 'quotation' ? '#FEF9C3' : 'var(--bg-muted)',
-                    color: o.status === 'sale' ? 'var(--success-text)' : o.status === 'quotation_sent' ? 'var(--info-text)' : o.status === 'quotation' ? '#854D0E' : 'var(--text-3)',
-                  }}>
-                    {SALE_STATUS_LABELS[o.status] ?? o.status}
-                  </span>
-                ),
-                exportValue: (o: SaleOrder) => SALE_STATUS_LABELS[o.status] ?? o.status,
-              },
-              { key: 'total', label: 'Total', priority: 1, width: '110px', align: 'right', render: (o: SaleOrder) => <span style={{ fontWeight: 600 }}>{fmtKes(o.total)}</span>, exportValue: (o: SaleOrder) => o.total },
-            ] as ColumnDef<SaleOrder>[]}
+              { key: 'ref', label: 'Ref', priority: 1, width: '110px', render: (o: AttributedSale) => <span style={{ fontWeight: 600, color: 'var(--navy)' }}>{o.ref}</span>, exportValue: (o: AttributedSale) => o.ref },
+              { key: 'source', label: 'Source', priority: 2, width: '90px', render: (o: AttributedSale) => <span style={{ color: 'var(--text-3)' }}>{o.source === 'pos' ? 'POS' : 'Sale order'}</span>, exportValue: (o: AttributedSale) => o.source },
+              { key: 'customer', label: 'Customer', priority: 1, width: '1.4fr', render: (o: AttributedSale) => <span style={{ color: 'var(--text-3)' }}>{o.customerName}</span>, exportValue: (o: AttributedSale) => o.customerName },
+              { key: 'date', label: 'Date', priority: 2, width: '100px', render: (o: AttributedSale) => <span style={{ color: 'var(--text-4)' }}>{fmtDate(o.date)}</span>, exportValue: (o: AttributedSale) => o.date },
+              { key: 'total', label: 'Total', priority: 1, width: '110px', align: 'right', render: (o: AttributedSale) => <span style={{ fontWeight: 600 }}>{fmtKes(o.total)}</span>, exportValue: (o: AttributedSale) => o.total },
+            ] as ColumnDef<AttributedSale>[]}
             rows={repOrders}
             rowKey={o => o.id}
             hideSearch
-            emptyMessage="No orders in this period."
+            emptyMessage="No sales linked to this person in this period."
             perPage={10}
-            exportTitle="Rep Orders"
-            exportFilename="rep-orders"
+            exportTitle="Rep Sales"
+            exportFilename="rep-sales"
           />
         </div>
       </div>
@@ -417,7 +413,7 @@ function RepPerformanceContent() {
       {/* Leaderboard table */}
       <div style={{ background: '#fff', border: '1px solid var(--border-lt)', borderRadius: 12, overflow: 'hidden' }}>
         <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--bg-muted)' }}>
-          <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-1)' }}>Rep Performance — {fmtPeriodLabel(periodKey)}</p>
+          <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-1)' }}>Sales by closer — {fmtPeriodLabel(periodKey)}</p>
         </div>
         <DataTable
           tableId="rep-performance-leaderboard"
@@ -452,7 +448,7 @@ function RepPerformanceContent() {
               exportValue: (r: RepStats) => r.name,
             },
             { key: 'quotes', label: 'Quotes', priority: 2, width: '70px', align: 'center', render: (r: RepStats) => <span style={{ color: 'var(--text-3)' }}>{r.quotesCount}</span>, exportValue: (r: RepStats) => r.quotesCount },
-            { key: 'closed', label: 'Closed', priority: 1, width: '70px', align: 'center', render: (r: RepStats) => <span style={{ fontWeight: 600, color: 'var(--navy)' }}>{r.ordersCount}</span>, exportValue: (r: RepStats) => r.ordersCount },
+            { key: 'closed', label: 'Sales', priority: 1, width: '70px', align: 'center', render: (r: RepStats) => <span style={{ fontWeight: 600, color: 'var(--navy)' }}>{r.ordersCount}</span>, exportValue: (r: RepStats) => r.ordersCount },
             {
               key: 'conv', label: 'Conv.', priority: 2, width: '70px', align: 'center',
               render: (r: RepStats) => (
@@ -496,14 +492,14 @@ function RepPerformanceContent() {
             },
             {
               key: 'commission', label: 'Commission', priority: 1, width: '100px',
-              render: (r: RepStats) => <span style={{ fontWeight: 700, color: r.commission > 0 ? 'var(--warning-text)' : 'var(--text-4)' }}>{r.commission > 0 ? fmtKes(r.commission) : '—'}</span>,
+              render: (r: RepStats) => <span style={{ fontWeight: 700, color: r.commission > 0 ? 'var(--warning-text)' : 'var(--text-3)' }}>{fmtKes(r.commission)}</span>,
               exportValue: (r: RepStats) => r.commission,
             },
           ] as ColumnDef<RepStats>[]}
           rows={repStats}
           rowKey={r => r.userId}
           hideSearch
-          emptyMessage="No sales activity for this period."
+          emptyMessage="No POS or sale-order activity for this period."
           onRowClick={r => setSelectedRep(r.userId)}
           exportTitle="Rep Performance"
           exportFilename="rep-performance"
@@ -527,8 +523,8 @@ function RepPerformanceContent() {
           </div>
         </div>
         <p style={{ fontSize: 9, color: 'var(--warning-text)', marginTop: 8 }}>
-          Posted-invoice ledger (accrued + paid). Invoice-level breakdown in{' '}
-          <Link href="/finance?tab=commissions" className="underline underline-offset-2">Finance → Commissions</Link>.
+          Commission is zero until a product or category rate is set. Sales totals still count. Breakdown in{' '}
+          <Link href="/finance?tab=commissions" className="underline underline-offset-2">Finance → Salespeople</Link>.
         </p>
       </div>
 
