@@ -201,6 +201,39 @@ describe('GET /api/public/v1/products — partner catalog', () => {
     expect((await res.json()).items).toHaveLength(0)
   })
 
+  it('hides products in categories the merchant marked hidden for partners', async () => {
+    mockLoadAppState.mockResolvedValue({
+      deed_serials: [
+        { productId: 'prod-1', status: 'available', location: 'warehouse' },
+        { productId: 'prod-1', status: 'available', location: 'warehouse' },
+      ],
+      deed_bulkStock: [],
+      deed_products: [{ id: 'prod-1', category: 'Laptops', requiresSerial: true }],
+      deed_companySettings: { partnerHiddenCategories: ['Laptops'] },
+    })
+    const res = await GET(req())
+    expect((await res.json()).items).toHaveLength(0)
+  })
+
+  it('hides categories case-insensitively and leaves other categories visible', async () => {
+    mockPrisma.product.findMany.mockResolvedValue([
+      productRow(),
+      productRow({ id: 'prod-2', sku: 'SKU-2', name: 'Wireless Mouse', category: { name: 'Accessories' } }),
+    ])
+    mockLoadAppState.mockResolvedValue({
+      deed_serials: [{ productId: 'prod-1', status: 'available', location: 'warehouse' }],
+      deed_bulkStock: [{ productId: 'prod-2', location: 'warehouse', qty: 4 }],
+      deed_products: [
+        { id: 'prod-1', category: 'Laptops', requiresSerial: true },
+        { id: 'prod-2', category: 'Accessories', requiresSerial: false },
+      ],
+      deed_companySettings: { partnerHiddenCategories: ['accessories'] },
+    })
+    const res = await GET(req())
+    const body = await res.json()
+    expect(body.items.map((i: { category: string }) => i.category)).toEqual(['Laptops'])
+  })
+
   it('answers CORS preflight', async () => {
     const res = await OPTIONS(new Request('http://localhost/api/public/v1/products'))
     expect(res.status).toBe(204)
