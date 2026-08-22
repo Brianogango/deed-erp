@@ -91,10 +91,11 @@ export function attributedSales(opts: {
 
 export function salesForCloser(
   sales: readonly AttributedSale[],
-  closerId: string,
+  closerId: string | null | undefined,
   start?: string,
   end?: string,
 ): AttributedSale[] {
+  if (!closerId) return []
   return sales.filter(sale => {
     if (sale.closerId !== closerId) return false
     if (start && end) return dateInInclusiveRange(sale.date, start, end)
