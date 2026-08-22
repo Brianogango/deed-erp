@@ -31,7 +31,7 @@ beforeEach(() => {
     ],
   })
   mockPrisma.user.findMany.mockResolvedValue([
-    { id: 'joseph', employeeId: 'emp-j', name: 'Joseph' },
+    { id: 'joseph', employeeId: 'emp-j' },
   ])
   mockPrisma.salesCommission.findMany.mockResolvedValue([
     { employeeId: 'emp-j', commissionAmount: 150 },

@@ -43,7 +43,7 @@ export async function GET(request: Request) {
 
     const users = await prisma.user.findMany({
       where: { id: { in: [...new Set(items.map(item => item.closerId))] } },
-      select: { id: true, employeeId: true, name: true },
+      select: { id: true, employeeId: true },
     })
     const employeeByUser = new Map(users.map(user => [user.id, user.employeeId]))
     const employeeIds = [...new Set(users.map(user => user.employeeId).filter((id): id is string => Boolean(id)))]
