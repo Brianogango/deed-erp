@@ -112,9 +112,19 @@ export async function GET(request: Request) {
       },
       orderBy: { name: 'asc' },
     }),
-    loadAppState(['deed_products', 'deed_serials', 'deed_bulkStock']),
+    loadAppState(['deed_products', 'deed_serials', 'deed_bulkStock', 'deed_companySettings']),
     loadServerMarginPolicy(),
   ])
+
+  // Merchant-hidden categories: whole categories (e.g. Parts, Components,
+  // Accessories) the merchant chose to keep out of the reseller feed. Matched
+  // case-insensitively by category name. Empty/unset → nothing hidden.
+  const companySettings = appState.deed_companySettings as { partnerHiddenCategories?: unknown } | undefined
+  const hiddenCategories = new Set(
+    (Array.isArray(companySettings?.partnerHiddenCategories) ? companySettings!.partnerHiddenCategories : [])
+      .map(name => String(name).trim().toLowerCase())
+      .filter(Boolean),
+  )
 
   const jsonById = new Map<string, JsonProduct>()
   const warrantyById = new Map<string, number>()
@@ -150,6 +160,9 @@ export async function GET(request: Request) {
 
   const catalog = rows.flatMap(row => {
     const jsonProduct = jsonById.get(row.id)
+    // Drop whole categories the merchant hid from the partner feed.
+    const effectiveCategory = jsonProduct?.category ?? row.category?.name ?? null
+    if (effectiveCategory && hiddenCategories.has(effectiveCategory.trim().toLowerCase())) return []
     const specs = specsRecord(row.specs)
     const jsonPricingBand = typeof jsonProduct?.pricingCategoryId === 'string' ? jsonProduct.pricingCategoryId : null
     const specPricingBand = typeof specs.pricingCategoryId === 'string' ? specs.pricingCategoryId : null

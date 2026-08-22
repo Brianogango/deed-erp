@@ -653,6 +653,13 @@ export interface CompanySettings {
   functionalCurrency?: 'KES'
   invoiceFooter: string
   printTemplate?: 'classic' | 'modern' | 'compact'
+  /**
+   * Product category names hidden from the public partner catalog
+   * (GET /api/public/v1/products). Case-insensitive. Lets the merchant keep
+   * whole categories such as Parts / Components / Accessories out of the
+   * reseller feed without touching individual products. Empty/unset = show all.
+   */
+  partnerHiddenCategories?: string[]
 }
 
 export interface SystemSettings {
@@ -811,6 +818,7 @@ export const DEFAULT_COMPANY_SETTINGS: CompanySettings = {
   functionalCurrency: 'KES',
   invoiceFooter: 'Thank you for your business.',
   printTemplate: 'classic',
+  partnerHiddenCategories: [],
 }
 
 // ── Chart of Accounts ─────────────────────────────────────────────────────────

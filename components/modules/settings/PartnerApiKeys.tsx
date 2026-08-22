@@ -1,9 +1,9 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useApp, fmtDate } from '@/lib/store'
 import { Badge, Confirm, Field, Input, Modal } from '@/components/ui'
 import { Fa } from '@/components/icons'
-import { faKey, faPlus, faCopy, faCircleInfo, faDownload, faFileLines, faBookOpen } from '@fortawesome/free-solid-svg-icons'
+import { faKey, faPlus, faCopy, faCircleInfo, faDownload, faFileLines, faBookOpen, faEye, faEyeSlash, faLayerGroup } from '@fortawesome/free-solid-svg-icons'
 
 const GUIDE_HTML = '/docs/partner-api-guide.html'
 const GUIDE_MD = '/api/public/v1/guide'
@@ -33,7 +33,7 @@ function SectionCard({ title, action, children }: { title: string; action?: Reac
 }
 
 export default function PartnerApiKeys() {
-  const { showToast } = useApp()
+  const { showToast, products, companySettings, updateCompanySettings } = useApp()
   const [keys, setKeys] = useState<PartnerKey[]>([])
   const [loading, setLoading] = useState(true)
   const [showCreate, setShowCreate] = useState(false)
@@ -41,6 +41,36 @@ export default function PartnerApiKeys() {
   const [creating, setCreating] = useState(false)
   const [freshKey, setFreshKey] = useState<{ name: string; key: string } | null>(null)
   const [revokeTarget, setRevokeTarget] = useState<PartnerKey | null>(null)
+
+  // ── Partner catalog visibility (hide whole categories from the feed) ─────────
+  const productCategories = useMemo(() => {
+    const counts = new Map<string, number>()
+    for (const p of products) {
+      const cat = (p.category || '').trim()
+      if (!cat) continue
+      counts.set(cat, (counts.get(cat) ?? 0) + 1)
+    }
+    return Array.from(counts.entries())
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => a.name.localeCompare(b.name))
+  }, [products])
+
+  const hiddenCategories = useMemo(
+    () => (companySettings.partnerHiddenCategories ?? []).map(c => c.trim().toLowerCase()),
+    [companySettings.partnerHiddenCategories],
+  )
+  const isCategoryHidden = (name: string) => hiddenCategories.includes(name.trim().toLowerCase())
+
+  const toggleCategory = (name: string) => {
+    const key = name.trim().toLowerCase()
+    const current = companySettings.partnerHiddenCategories ?? []
+    const hidden = isCategoryHidden(name)
+    const next = hidden
+      ? current.filter(c => c.trim().toLowerCase() !== key)
+      : [...current, name.trim()]
+    updateCompanySettings({ partnerHiddenCategories: next })
+    showToast(hidden ? `"${name}" is now visible to partners` : `"${name}" is now hidden from partners`)
+  }
 
   const refresh = () => {
     fetch('/api/partner-keys')
@@ -176,6 +206,56 @@ export default function PartnerApiKeys() {
                 </div>
               </div>
             ))}
+          </div>
+        )}
+      </SectionCard>
+
+      <SectionCard
+        title="Partner catalog visibility"
+        action={
+          hiddenCategories.length > 0
+            ? <span className="text-[11px] font-semibold text-gray-500">{hiddenCategories.length} categor{hiddenCategories.length === 1 ? 'y' : 'ies'} hidden</span>
+            : undefined
+        }
+      >
+        <div className="rounded-xl p-3 my-3 flex gap-2.5 items-start bg-gray-50 border border-gray-200">
+          <Fa icon={faLayerGroup} style={{ fontSize: 12, marginTop: 2 }} className="text-gray-500" />
+          <p className="text-[11.5px] leading-relaxed text-gray-600 m-0">
+            Hide whole categories (e.g. Parts, Components, Accessories) from the partner catalog in one click.
+            Hidden categories never appear in{' '}
+            <code className="font-mono text-[10.5px] px-1 py-0.5 rounded bg-white border border-gray-200">GET /api/public/v1/products</code>,
+            but the products stay fully usable inside the ERP (POS, repairs, purchasing). Changes apply within about a minute.
+          </p>
+        </div>
+
+        {productCategories.length === 0 ? (
+          <p className="text-[11.5px] text-gray-400 py-4 italic">No product categories found yet.</p>
+        ) : (
+          <div className="py-1">
+            {productCategories.map(({ name, count }) => {
+              const hidden = isCategoryHidden(name)
+              return (
+                <div key={name} className="flex items-center justify-between py-3 border-b border-gray-50 last:border-0 gap-2">
+                  <div className="min-w-0">
+                    <p className="text-[12.5px] font-semibold text-gray-800 leading-tight truncate">{name}</p>
+                    <p className="text-[10.5px] text-gray-400 mt-0.5">{count} product{count === 1 ? '' : 's'}</p>
+                  </div>
+                  <button
+                    onClick={() => toggleCategory(name)}
+                    aria-pressed={hidden}
+                    title={hidden ? 'Hidden from partners — click to show' : 'Visible to partners — click to hide'}
+                    className={`text-[10.5px] px-3 py-1.5 rounded-lg border font-semibold cursor-pointer transition-colors inline-flex items-center gap-1.5 ${
+                      hidden
+                        ? 'border-gray-200 bg-gray-100 text-gray-600 hover:bg-gray-200'
+                        : 'border-emerald-100 bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
+                    }`}
+                  >
+                    <Fa icon={hidden ? faEyeSlash : faEye} style={{ fontSize: 10 }} />
+                    {hidden ? 'Hidden' : 'Visible'}
+                  </button>
+                </div>
+              )
+            })}
           </div>
         )}
       </SectionCard>
