@@ -4,6 +4,7 @@ import { useCommerceStore, useInventoryStore, fmtKes, fmtDate, isPosBankPayment 
 import { Modal, Field, Input, Select, Badge, ModuleSkeleton } from '@/components/ui'
 import { PosTransactionHistory } from '@/components/pos/PosTransactionHistory'
 import { SalespersonCloserField } from '@/components/sales/SalespersonCloserField'
+import { CustomerPickerField } from '@/components/tradein/CustomerPickerField'
 import {
   Fa, faCashRegister, faReceipt, faCamera, faCartShopping, faStar,
   faCircleCheck, faPrint, faMobileScreenButton, faMoneyBillWave, faBuildingColumns,
@@ -715,15 +716,21 @@ export default function PointOfSale() {
             <div className="p-4 bg-[var(--bg-muted)] border-t border-border space-y-4 shrink-0">
               <div className="space-y-2">
                 <Field label="Customer (optional)">
-                  <select className="form-input text-xs" value={customerId} onChange={e => {
-                    const c = customers.find(x => x.id === e.target.value)
-                    setCustomerId(e.target.value)
-                    setCustomerName(c?.name || '')
-                    if (e.target.value) setWalkInBuyerName('')
-                  }}>
-                    <option value="">Walk-in Customer</option>
-                    {customers.map(c => <option key={c.id} value={c.id}>{c.name} ({c.phone || 'no phone'})</option>)}
-                  </select>
+                  <CustomerPickerField
+                    compact
+                    allowWalkIn
+                    customerId={customerId}
+                    customerName={customerName}
+                    onSelect={(id, name) => {
+                      setCustomerId(id)
+                      setCustomerName(name)
+                      setWalkInBuyerName('')
+                    }}
+                    onClear={() => {
+                      setCustomerId('')
+                      setCustomerName('')
+                    }}
+                  />
                 </Field>
                 {storeCredit > 0 && (
                   <p className="text-[11px] font-medium" style={{ color: 'var(--success)' }}>

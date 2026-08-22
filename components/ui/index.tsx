@@ -1524,14 +1524,17 @@ export function SearchPicker<T extends { id: string }>({
 
   return (
     <div className="flex flex-col gap-1.5 relative w-full" ref={ref}>
-      <label htmlFor={inputId} className={labelClassName ?? 'text-[10px] uppercase tracking-wider font-bold text-text-3'}>
-        {label}
-      </label>
+      {label ? (
+        <label htmlFor={inputId} className={labelClassName ?? 'text-[10px] uppercase tracking-wider font-bold text-text-3'}>
+          {label}
+        </label>
+      ) : null}
       <div className="relative">
         <input
           id={inputId}
           className={`form-input w-full pr-10 ${inputClassName ?? ''}`}
           placeholder={placeholder}
+          aria-label={label || placeholder}
           value={query}
           onChange={e => {
             setQuery(e.target.value)
