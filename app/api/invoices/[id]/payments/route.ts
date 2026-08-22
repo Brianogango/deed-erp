@@ -10,13 +10,21 @@ import {
 } from '@/lib/finance-controls'
 import { checkFiscalLock } from '@/lib/fiscal-lock.server'
 import { resolveBlobInvoiceMirror } from '@/lib/accounting/resolve-invoice-mirror'
+import { invoiceDocState } from '@/lib/odoo-sales-flow'
 
 const WRITE_ROLES = ['director', 'finance_officer', 'admin_officer']
 
-function mapDbStatusToClient(status: string): string {
-  if (status === 'approved') return 'posted'
-  if (status === 'pending_approval') return 'draft'
-  return status
+// A DB status is payable when it represents a validated (posted) AR document.
+// This mirrors the client-side `invoiceDocState()` projection so the "Register
+// payment" button and this guard never disagree: posting stores the status as
+// 'approved'/'invoiced' (see INVOICE_STATUS_MAP), and legacy payment-progress
+// values ('paid', 'partially_paid', 'overdue', …) are still posted documents.
+// 'pending_approval' and 'rejected' are explicitly excluded — they are not yet
+// (or never were) posted, even though invoiceDocState() would otherwise treat
+// any non-draft/cancelled status as posted.
+function isPayableInvoiceStatus(status: string): boolean {
+  if (status === 'pending_approval' || status === 'rejected') return false
+  return invoiceDocState(status) === 'posted'
 }
 
 export async function POST(
@@ -52,8 +60,7 @@ export async function POST(
       return NextResponse.json({ error: 'Invoice not found' }, { status: 404 })
     }
 
-    const clientStatus = mapDbStatusToClient(String(invoice.status))
-    if (clientStatus !== 'posted') {
+    if (!isPayableInvoiceStatus(String(invoice.status))) {
       return NextResponse.json({ error: 'Only posted invoices can receive payments' }, { status: 409 })
     }
     if (invoice.paymentBlocked) {

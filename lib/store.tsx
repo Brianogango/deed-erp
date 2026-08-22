@@ -12179,7 +12179,7 @@ const storeCtx: AppState = {
         showToast('Only Finance or Director can block or release invoice payments', 'error'); return
       }
       const inv = invRef.current.find(i => i.id === id)
-      if (!inv || inv.status !== 'posted') {
+      if (!inv || invoiceDocState(inv.status) !== 'posted') {
         showToast('Only posted invoices can be blocked', 'error'); return
       }
       setInvoices(p => {
@@ -12198,7 +12198,12 @@ const storeCtx: AppState = {
       }
       const inv = invRef.current.find(i => i.id === invoiceId)
       if (!inv) return
-      if (inv.status !== 'posted') {
+      // Use the shared document-state projection (not a raw === 'posted' check):
+      // a posted invoice hydrated from Prisma carries status 'approved'/'invoiced',
+      // which the header badge and "Register payment" button already treat as
+      // Posted. A raw equality here rejected those, so the button appeared but the
+      // payment failed with "Only posted invoices can receive payments".
+      if (invoiceDocState(inv.status) !== 'posted') {
         showToast('Only posted invoices can receive payments', 'error'); return
       }
       if (inv.paymentBlocked) { showToast('Payments are blocked on this invoice — release the block first', 'error'); return }
