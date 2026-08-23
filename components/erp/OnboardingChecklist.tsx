@@ -124,37 +124,44 @@ export function OnboardingChecklist({
   }
 
   const doneCount = items.filter(i => i.done).length
+  const nextItem = items.find(item => !item.done)
+  const progress = Math.round((doneCount / items.length) * 100)
 
   return (
-    <section className="dashboard-panel overflow-hidden onboarding-checklist">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-4 sm:px-5 py-4 border-b border-[var(--border-lt)]">
-        <div>
-          <h3 className="text-[15px] font-extrabold text-[var(--text-1)]">Getting started</h3>
-          <p className="text-xs text-[var(--text-3)] mt-0.5">
-            {doneCount} of {items.length} setup steps complete
-          </p>
-        </div>
-        <button type="button" className="btn-ghost text-xs self-start sm:self-auto" onClick={dismiss}>
-          Dismiss
-        </button>
+    <section className="dashboard-setup-strip" aria-label="Workspace setup">
+      <div className="dashboard-setup-summary">
+        <span className="dashboard-setup-title">Workspace setup</span>
+        <span className="dashboard-setup-count">{doneCount} of {items.length} complete</span>
       </div>
-      <ul className="p-4 flex flex-col gap-2">
-        {items.map(item => (
-          <li key={item.id}>
-            <button
-              type="button"
-              className={`onboarding-checklist-item ${item.done ? 'is-done' : ''}`}
-              onClick={() => !item.done && go(item.path)}
-              disabled={item.done}
-            >
-              <span className="onboarding-checklist-mark" aria-hidden="true">
-                {item.done ? '✓' : '○'}
-              </span>
-              <span className="text-sm text-[var(--text-2)]">{item.label}</span>
-            </button>
-          </li>
-        ))}
-      </ul>
+      <div
+        className="dashboard-setup-progress"
+        role="progressbar"
+        aria-label="Workspace setup progress"
+        aria-valuemin={0}
+        aria-valuemax={items.length}
+        aria-valuenow={doneCount}
+      >
+        <span style={{ width: `${progress}%` }} />
+      </div>
+      {nextItem && (
+        <button
+          type="button"
+          className="dashboard-setup-continue"
+          onClick={() => go(nextItem.path)}
+        >
+          Continue setup
+          <span aria-hidden="true">›</span>
+        </button>
+      )}
+      <button
+        type="button"
+        className="dashboard-setup-dismiss"
+        onClick={dismiss}
+        aria-label="Dismiss workspace setup"
+        title="Dismiss"
+      >
+        ×
+      </button>
     </section>
   )
 }
