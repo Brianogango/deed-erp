@@ -198,7 +198,7 @@ export default function PurchaseOrdersTab() {
   }
 
   return (
-    <div className="card overflow-hidden">
+    <div className="card overflow-hidden purchase-directory purchase-orders-panel">
       <PanelHeader title="Purchase Orders / RFQs" count={filteredPOs.length} />
       <DataTable
         tableId="purchase_orders"
