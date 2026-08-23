@@ -2111,13 +2111,12 @@ function SalesContent() {
                           })()}
                       </>)}
                       {activeOrder.status === 'sale' && (<>
-                        <button type="button" className="sp-btn" onClick={() => previewSalesDocument(activeOrder, 'Sale Order', 'SALES ORDER')}>Print</button>
-                        <button type="button" className="sp-btn" disabled={sendingQuoteId === activeOrder.id} onClick={() => openSendQuoteModal(activeOrder)}>
-                          {sendingQuoteId === activeOrder.id ? 'Sending…' : 'Send by email'}
-                        </button>
                         <MoreActionsMenu
                           items={[
+                            { label: 'Print', icon: faPrint, onClick: () => previewSalesDocument(activeOrder, 'Sale Order', 'SALES ORDER') },
+                            { label: sendingQuoteId === activeOrder.id ? 'Sending…' : 'Send by email', icon: faFileAlt, disabled: sendingQuoteId === activeOrder.id, onClick: () => openSendQuoteModal(activeOrder) },
                             { label: 'Preview', icon: faFileAlt, onClick: () => previewSalesDocument(activeOrder, 'Sale Order', 'SALES ORDER') },
+                            { label: visibleDeliveries.length === 0 ? 'Create delivery' : 'Open deliveries', icon: faTruck, onClick: () => void openDeliveryView() },
                             ...(canInvoiceFromSO && invoiceableLinesFor(activeOrder).length > 0 ? [{ label: 'Create Partial Invoice…', icon: faFileInvoiceDollar, onClick: () => openPartialInvoiceModal(activeOrder) }] : []),
                             ...(activeDeliveries.some(d => canGenerateDeliveryNote(d)) ? [{ label: 'Print delivery note', icon: faTruck, onClick: () => { const del = activeDeliveries.find(d => canGenerateDeliveryNote(d)) ?? activeDeliveries[0]; setDnRecipientName(del.recipientName ?? activeOrder.customerName ?? ''); setDnRecipientPhone(del.recipientPhone ?? ''); setDnRecipientId(del.recipientIdNumber ?? ''); setDnAddress(del.deliveryAddress ?? ''); setDnNotes(del.notes ?? ''); setShowDnModal(true) } }] : []),
                             ...(activeOrder.locked && isAdmin ? [{ label: 'Unlock', icon: faRotateLeft, onClick: () => setSaleOrderLock(activeOrder.id, false) }] : []),
@@ -2141,17 +2140,10 @@ function SalesContent() {
                             ] : []),
                           ]}
                         />
-                        {(visibleDeliveries.some(d => isOpenDeliveryStatus(d.status)) || visibleDeliveries.length === 0) ? (
-                          <button type="button" className="sp-btn sp-btn-primary" onClick={() => void openDeliveryView()}>
-                            {visibleDeliveries.length === 0 ? 'Create delivery' : 'Delivery'}
-                          </button>
-                        ) : (
-                          <button type="button" className="sp-btn" onClick={() => void openDeliveryView()}>Deliveries</button>
-                        )}
                         {canInvoiceFromSO && activeOrder.status === 'sale' ? (
                           <button
                             type="button"
-                            className="sp-btn"
+                            className="sp-btn sp-btn-primary"
                             onClick={() => {
                               setInvoiceWizardMode(canCreateInvoiceNow ? 'regular' : 'down_payment_percent')
                               setInvoiceWizardPercent('30')
@@ -2161,7 +2153,11 @@ function SalesContent() {
                           >
                             Create invoice
                           </button>
-                        ) : null}
+                        ) : (
+                          <button type="button" className="sp-btn sp-btn-primary" onClick={() => void openDeliveryView()}>
+                            {visibleDeliveries.length === 0 ? 'Create delivery' : 'Delivery'}
+                          </button>
+                        )}
                       </>)}
                       {activeOrder.status === 'cancelled' && (
                         // Confirmed-then-cancelled needs Finance/Director; draft/sent cancel can be reset by sales.
@@ -3495,8 +3491,12 @@ function NewQuotationForm({
           </div>
         </div>
         <div className="sales-proto-actions sales-proto-actions--dock">
-          <button type="button" className="sp-btn" onClick={onCancel}>Discard</button>
-          <button type="button" className="sp-btn" onClick={onSaveDraft} disabled={!canSave}>Save as draft</button>
+          <MoreActionsMenu
+            items={[
+              { label: 'Save as draft', icon: faSave, disabled: !canSave, onClick: onSaveDraft },
+              { label: 'Discard', icon: faXmark, onClick: onCancel },
+            ]}
+          />
           <button type="button" className="sp-btn sp-btn-primary" onClick={onSave} disabled={!canSave}>Submit</button>
         </div>
       </div>
@@ -4154,7 +4154,7 @@ function DeliveryNoteView({
         </div>
         <div className="sales-proto-actions">
           {canGenerateDeliveryNote(existingDelivery) && (
-            <button type="button" className="sp-btn" onClick={handlePrintDN}>Print</button>
+            <MoreActionsMenu items={[{ label: 'Print delivery note', icon: faPrint, onClick: handlePrintDN }]} />
           )}
           {canPrepare && (
             <button type="button" className="sp-btn sp-btn-primary" onClick={handlePrepare} disabled={savingDelivery}>
