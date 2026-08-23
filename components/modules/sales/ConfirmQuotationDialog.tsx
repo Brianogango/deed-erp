@@ -51,7 +51,7 @@ export function ConfirmQuotationDialog({
       width={520}
       variant="enterprise"
       footer={
-        <div className="flex flex-wrap items-center justify-end gap-2">
+        <div className="sales-confirm-dialog__actions">
           <button type="button" className="btn-outline text-xs" disabled={confirming} onClick={onClose}>
             Cancel
           </button>
@@ -82,47 +82,59 @@ export function ConfirmQuotationDialog({
         </div>
       }
     >
-      <div className="flex flex-col gap-3 text-xs">
-        <SameDocumentIdentity mode="preview" quotationRef={orderRef} />
-        <p className="text-[var(--text-3)] m-0">
-          Commercial terms lock when configured, and a waiting delivery opens for warehouse.
-          Fulfilment and payment stay independent of this rename.
-        </p>
-        <div className="rounded-md border border-[var(--border-lt)] bg-[var(--bg-surface)] px-3 py-2 text-[10px] text-[var(--text-3)] space-y-1">
-          <p className="m-0"><strong className="text-[var(--text-2)]">At confirmation</strong> — reserve available stock now (Confirm · Reserve stock).</p>
-          <p className="m-0"><strong className="text-[var(--text-2)]">Manual</strong> — confirm without reserving; warehouse reserves when preparing the delivery.</p>
-        </div>
-        <ul className="m-0 list-disc space-y-1 pl-4 text-[var(--text-2)]">
-          <li>
-            {lineCount} line{lineCount === 1 ? '' : 's'} · {fmtKes(total)}
-          </li>
-          {validUntil ? <li>Valid until {fmtDate(validUntil)}</li> : null}
-          {deliveryDate ? <li>Expected delivery {fmtDate(deliveryDate)}</li> : null}
-          {shortages.length === 0 ? (
-            <li>No free-stock shortfalls detected at Warehouse + Shop</li>
-          ) : (
-            shortages.map(s => (
-              <li key={s.productName} className="text-amber-700">
-                Stock shortfall: {s.productName} needs {s.qty}, free {s.available}
-              </li>
-            ))
-          )}
-        </ul>
+      <div className="sales-confirm-dialog">
+        <section className="sales-confirm-dialog__summary" aria-label="Confirmation summary">
+          <div className="sales-confirm-dialog__amount">
+            <span>Total</span>
+            <strong>{fmtKes(total)}</strong>
+            <small>{customerName}</small>
+          </div>
+          <dl>
+            <div><dt>Lines</dt><dd>{lineCount}</dd></div>
+            <div><dt>Stock</dt><dd>{shortages.length ? `${shortages.length} warning${shortages.length === 1 ? '' : 's'}` : 'Available'}</dd></div>
+            <div><dt>Approval</dt><dd>{blocked ? 'Required' : 'Clear'}</dd></div>
+          </dl>
+        </section>
+
         {blocked && (
-          <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-900">
-            <p className="m-0 font-semibold">
-              Resolve {approvalBlockers.length} approval{approvalBlockers.length === 1 ? '' : 's'} before confirming
-            </p>
-            <ul className="m-0 mt-1 list-disc pl-4 space-y-0.5">
-              {approvalBlockers.map((b, i) => (
-                <li key={`${b.type}-${i}`}>{b.reason}</li>
+          <section className="sales-confirm-dialog__alert" role="alert">
+            <strong>Resolve {approvalBlockers.length} approval{approvalBlockers.length === 1 ? '' : 's'} first</strong>
+            <ul>
+              {approvalBlockers.map((blocker, index) => (
+                <li key={`${blocker.type}-${index}`}>{blocker.reason}</li>
               ))}
             </ul>
-          </div>
+          </section>
         )}
+
+        {shortages.length > 0 && (
+          <section className="sales-confirm-dialog__stock" aria-label="Stock warnings">
+            <strong>Stock check</strong>
+            <ul>
+              {shortages.map(shortage => (
+                <li key={shortage.productName}>
+                  {shortage.productName}: need {shortage.qty}, free {shortage.available}
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+
+        <section className="sales-confirm-dialog__details">
+          <SameDocumentIdentity mode="preview" quotationRef={orderRef} className="sales-confirm-dialog__identity" />
+          <dl className="sales-confirm-dialog__dates">
+            {validUntil ? <div><dt>Valid until</dt><dd>{fmtDate(validUntil)}</dd></div> : null}
+            {deliveryDate ? <div><dt>Expected delivery</dt><dd>{fmtDate(deliveryDate)}</dd></div> : null}
+          </dl>
+          <p>
+            Confirming locks configured commercial terms and opens the warehouse delivery workflow.
+            Fulfilment and payment remain independent.
+          </p>
+        </section>
+
         {!canReserve && !blocked && (
-          <p className="rounded-md border border-[var(--border-lt)] bg-[var(--bg-surface)] px-3 py-2 text-[10px] text-[var(--text-3)] m-0">
-            Your role confirms without reserving stock. Inventory can prepare the delivery afterward.
+          <p className="sales-confirm-dialog__note">
+            Your role confirms without reserving stock. Inventory can reserve it during delivery preparation.
           </p>
         )}
       </div>

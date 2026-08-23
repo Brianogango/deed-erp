@@ -2173,6 +2173,57 @@ function SalesContent() {
                     </div>
                   </div>
 
+                  <section className="sales-record-summary" aria-label="Sales document summary">
+                    <div className="sales-record-summary__primary">
+                      <span>{isQuotationStage(activeOrder.status) ? 'Quotation total' : 'Order total'}</span>
+                      <strong>{salesKes(activeOrder.total)}</strong>
+                      <small>{activeOrder.customerName}</small>
+                    </div>
+                    <dl className="sales-record-summary__facts">
+                      <div>
+                        <dt>Stage</dt>
+                        <dd>{SALE_STATUS_LABELS[activeOrder.status] ?? activeOrder.status}</dd>
+                      </div>
+                      <div>
+                        <dt>{isQuotationStage(activeOrder.status) ? 'Valid until' : 'Fulfilment'}</dt>
+                        <dd>
+                          {isQuotationStage(activeOrder.status)
+                            ? (activeOrder.validUntil ? fmtDate(activeOrder.validUntil) : 'Not set')
+                            : SO_FULFILMENT_STATUS_LABELS[activeFulfilmentStatus]}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>Lines</dt>
+                        <dd>{activeOrder.lines.filter(line => line.lineType !== 'section').length}</dd>
+                      </div>
+                    </dl>
+                    <div className="sales-record-summary__next">
+                      <span>Next action</span>
+                      <strong>
+                        {isQuotationStage(activeOrder.status)
+                          ? activeOrder.approvalStatus === 'pending'
+                            ? 'Resolve approval'
+                            : activeOrder.status === 'quotation'
+                              ? 'Send to customer'
+                              : saleOrderIsAccepted(activeOrder)
+                                ? 'Confirm quotation'
+                                : 'Record customer response'
+                          : activeOperationallyComplete
+                            ? 'Order complete'
+                            : visibleDeliveries.length === 0
+                              ? 'Create delivery'
+                              : activeFulfilmentStatus === 'delivered'
+                                ? 'Create invoice'
+                                : 'Complete delivery'}
+                      </strong>
+                      <small>
+                        {isQuotationStage(activeOrder.status)
+                          ? `${activeOrder.lines.length} item${activeOrder.lines.length === 1 ? '' : 's'} ready for review`
+                          : `${visibleDeliveries.length} delivery record${visibleDeliveries.length === 1 ? '' : 's'}`}
+                      </small>
+                    </div>
+                  </section>
+
                   {isQuotationStage(activeOrder.status) ? (
                     <SameDocumentIdentity className="sales-document-identity" mode="preview" quotationRef={activeOrder.ref} />
                   ) : activeOrder.quotationRef ? (
@@ -4176,7 +4227,7 @@ function DeliveryNoteView({
           </div>
           <div className="sub">Source {order.ref} · {order.customerName}</div>
         </div>
-        <div className="sales-proto-actions">
+        <div className="sales-proto-actions sales-delivery-header-actions">
           {canGenerateDeliveryNote(existingDelivery) && (
             <MoreActionsMenu items={[{ label: 'Print delivery note', icon: faPrint, onClick: handlePrintDN }]} />
           )}
@@ -4192,6 +4243,24 @@ function DeliveryNoteView({
           )}
         </div>
       </div>
+
+      <section className="sales-delivery-summary" aria-label="Delivery summary">
+        <div className="sales-delivery-summary__primary">
+          <span>Picking progress</span>
+          <strong>{pickingSummary.pct}%</strong>
+          <small>{pickingSummary.remaining} item{pickingSummary.remaining === 1 ? '' : 's'} remaining</small>
+        </div>
+        <dl>
+          <div><dt>Customer</dt><dd>{order.customerName}</dd></div>
+          <div><dt>Source</dt><dd>{order.ref}</dd></div>
+          <div><dt>Required</dt><dd>{pickingSummary.required}</dd></div>
+          <div><dt>Picked</dt><dd>{pickingSummary.picked}</dd></div>
+        </dl>
+        <div className="sales-delivery-summary__next">
+          <span>Next action</span>
+          <strong>{canPrepare ? 'Reserve stock' : canValidate ? 'Validate delivery' : 'Delivery complete'}</strong>
+        </div>
+      </section>
 
       <div className="sp-delivery-work">
         {orderDeliveries.length > 0 && (
@@ -4223,7 +4292,7 @@ function DeliveryNoteView({
         )}
 
         <div className="sp-delivery-main">
-      <div className="sp-panel sp-panel-pad">
+      <div className="sp-panel sp-panel-pad sales-delivery-support">
         <div className="sp-grid-2">
           <SalesDocField label="Customer"><div className="sp-value">{order.customerName}</div></SalesDocField>
           <SalesDocField label="Scheduled / order date"><div className="sp-value">{fmtDate(order.date)}</div></SalesDocField>
@@ -4233,7 +4302,7 @@ function DeliveryNoteView({
       </div>
 
         {/* Delivery lines */}
-        <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-3 sales-delivery-operations">
           <div className="flex items-center justify-between gap-3 flex-wrap">
             <h3 className="text-sm font-bold text-[var(--text-1)]">Products to Deliver</h3>
             {canPrepare && (
@@ -4362,7 +4431,7 @@ function DeliveryNoteView({
         </div>
 
         {/* Recipient info */}
-        <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-3 sales-delivery-recipient">
           <h3 className="text-sm font-bold text-[var(--text-1)]">Recipient Details</h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Field label="Received By (Full Name)"><Input value={dnRecipientName} onChange={setDnRecipientName} placeholder="e.g. John Kamau" /></Field>
