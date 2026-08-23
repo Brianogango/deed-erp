@@ -107,8 +107,8 @@ export default function EmailReviewPanel({
   }
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-center gap-2 justify-between">
+    <div className="crm-email-review flex flex-col gap-4">
+      <div className="crm-submodule-header">
         <div>
           <h2 className="text-sm font-semibold">Email review</h2>
           <p className="text-[11px] text-text-3 mt-0.5">
@@ -148,7 +148,7 @@ export default function EmailReviewPanel({
         </div>
       )}
 
-      <div className="card overflow-hidden">
+      <div className="card overflow-hidden crm-directory-card">
         <div className="px-3 py-2 border-b border-border text-[10px] uppercase tracking-wider font-semibold text-text-3">
           Needs review leads ({reviewLeads.length})
         </div>
@@ -159,7 +159,7 @@ export default function EmailReviewPanel({
         ) : (
           <ul className="divide-y divide-border">
             {reviewLeads.map(row => (
-              <li key={row.id} className="px-3 py-2.5 flex flex-wrap items-center justify-between gap-2">
+              <li key={row.id} className="crm-review-row">
                 <div className="min-w-0">
                   <div className="text-sm font-medium truncate">{row.name}</div>
                   <div className="text-[11px] text-text-3 truncate">
@@ -202,7 +202,7 @@ export default function EmailReviewPanel({
         )}
       </div>
 
-      <div className="card overflow-hidden">
+      <div className="card overflow-hidden crm-directory-card">
         <div className="px-3 py-2 border-b border-border text-[10px] uppercase tracking-wider font-semibold text-text-3">
           Inbound audit ({inbound.length})
         </div>
@@ -213,7 +213,7 @@ export default function EmailReviewPanel({
         ) : (
           <ul className="divide-y divide-border">
             {inbound.map(row => (
-              <li key={row.id} className="px-3 py-2.5 flex flex-wrap items-start justify-between gap-2">
+              <li key={row.id} className="crm-review-row crm-review-row--inbound">
                 <div className="min-w-0">
                   <div className="text-sm truncate">{row.fromName || row.fromEmail || '—'}</div>
                   <div className="text-[11px] text-text-3 truncate">{row.fromEmail}</div>
