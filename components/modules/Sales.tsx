@@ -1702,16 +1702,18 @@ function SalesContent() {
               ) : view === 'list' ? (
                 /* ── ORDERS LIST ─────────────────────────────────────────── */
                 <>
-                  <div className="sales-proto-page-header">
+                  <div className="sales-proto-page-header sales-list-page-header">
                     <div className="sales-proto-header-copy">
                       <span className="sales-proto-header-icon" aria-hidden="true" />
                       <div>
-                      <h1>{listTab === 'quotations' ? 'Quotations' : 'Sales orders'}</h1>
-                      <div className="sub">
-                        {listTab === 'quotations'
-                          ? 'Draft → Sent → Accepted → Confirm becomes SO/…'
-                          : 'Reserve → Deliver → Invoice · Payment stays separate'}
-                      </div>
+                        <div className="sales-page-eyebrow">Sales / Customer documents</div>
+                        <h1>{listTab === 'quotations' ? 'Quotations' : 'Sales orders'}</h1>
+                        <div className="sales-proto-count">{filtered.length} record{filtered.length === 1 ? '' : 's'}</div>
+                        <div className="sub">
+                          {listTab === 'quotations'
+                            ? 'Draft → Sent → Accepted → Confirm becomes SO/…'
+                            : 'Reserve → Deliver → Invoice · Payment stays separate'}
+                        </div>
                       </div>
                     </div>
                     <div className="sales-proto-actions">
@@ -1722,17 +1724,10 @@ function SalesContent() {
                   </div>
                   <SalesDocTabs
                     className="sp-tabs-command"
-                    tabs={[
-                      `Quotations (${stats.quotations + stats.quotationsSent})`,
-                      `Orders (${stats.orders})`,
-                    ]}
-                    active={
-                      listTab === 'quotations'
-                        ? `Quotations (${stats.quotations + stats.quotationsSent})`
-                        : `Orders (${stats.orders})`
-                    }
+                    tabs={['Quotations', 'Sales orders']}
+                    active={listTab === 'quotations' ? 'Quotations' : 'Sales orders'}
                     onChange={tab => {
-                      if (tab.startsWith('Quotations')) setListTabAndReset('quotations')
+                      if (tab === 'Quotations') setListTabAndReset('quotations')
                       else setListTabAndReset('orders')
                     }}
                     ariaLabel="Sales sections"
@@ -1768,22 +1763,16 @@ function SalesContent() {
                       )}
                       <option value="cancelled">Cancelled</option>
                     </select>
-                    <button type="button" className="sp-btn" onClick={exportFilteredOrdersCsv} aria-label="Export CSV">
-                      <Fa icon={faDownload} className="text-xs" /> Export CSV
-                    </button>
-                    {selectedOrderIds.length > 0 && listTab === 'quotations' && (
-                      <button type="button" className="sp-btn" onClick={bulkCancelSelected}>
-                        Cancel selected ({selectedOrderIds.length})
-                      </button>
-                    )}
-                    <div className="sp-list-view-toggle" role="group" aria-label="List layout">
-                      <button type="button" className="sp-btn" data-active={listViewMode === 'table' ? 'true' : 'false'} onClick={() => setListViewMode('table')} aria-pressed={listViewMode === 'table'}>
-                        <Fa icon={faListUl} className="text-xs" /> Table
-                      </button>
-                      <button type="button" className="sp-btn" data-active={listViewMode === 'kanban' ? 'true' : 'false'} onClick={() => setListViewMode('kanban')} aria-pressed={listViewMode === 'kanban'}>
-                        <Fa icon={faThLarge} className="text-xs" /> Kanban
-                      </button>
-                    </div>
+                    <MoreActionsMenu
+                      items={[
+                        { label: 'Export CSV', icon: faDownload, onClick: exportFilteredOrdersCsv },
+                        ...(selectedOrderIds.length > 0 && listTab === 'quotations'
+                          ? [{ label: `Cancel selected (${selectedOrderIds.length})`, icon: faBan, onClick: bulkCancelSelected }]
+                          : []),
+                        { label: 'Table view', icon: faListUl, onClick: () => setListViewMode('table') },
+                        { label: 'Kanban view', icon: faThLarge, onClick: () => setListViewMode('kanban') },
+                      ]}
+                    />
                   </div>
                   {listViewMode === 'table' && (
                     <div className="sp-table-wrap">
@@ -1791,7 +1780,7 @@ function SalesContent() {
                         <thead>
                           <tr>
                             {listTab === 'quotations' && (
-                              <th style={{ width: 36 }}>
+                              <th data-col="select" style={{ width: 36 }}>
                                 <input
                                   type="checkbox"
                                   aria-label="Select all quotations"
@@ -1803,14 +1792,14 @@ function SalesContent() {
                                 />
                               </th>
                             )}
-                            <th>Reference</th>
-                            <th>Customer</th>
-                            <th>Contact</th>
-                            <th>Date</th>
-                            <th>{listTab === 'quotations' ? 'Valid until' : 'Quotation'}</th>
-                            <th>Salesperson</th>
-                            <th className="num">Total</th>
-                            <th>Status</th>
+                            <th data-col="ref">Reference</th>
+                            <th data-col="customer">Customer</th>
+                            <th data-col="contact">Contact</th>
+                            <th data-col="date">Date</th>
+                            <th data-col="valid">{listTab === 'quotations' ? 'Valid until' : 'Quotation'}</th>
+                            <th data-col="salesperson">Salesperson</th>
+                            <th data-col="total" className="num">Total</th>
+                            <th data-col="status">Status</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -1923,7 +1912,10 @@ function SalesContent() {
                     <div className="sales-proto-header-copy">
                       <button type="button" className="sp-btn sp-btn-ghost" style={{ paddingLeft: 0 }} onClick={backToList}>← Back</button>
                       <div className="sp-ref-row">
-                        <h1>{activeOrder.ref}</h1>
+                        <div className="sales-record-title-block">
+                          <h1>{isQuotationStage(activeOrder.status) ? 'Quotation' : 'Sales order'}</h1>
+                          <span className="sales-record-ref">{activeOrder.ref}</span>
+                        </div>
                         {(() => {
                           const pill = saleStatusPill(activeOrder.status)
                           return <SalesDocPill label={pill.label} tone={pill.tone} />
@@ -2181,10 +2173,11 @@ function SalesContent() {
                   </div>
 
                   {isQuotationStage(activeOrder.status) ? (
-                    <SameDocumentIdentity mode="preview" quotationRef={activeOrder.ref} />
+                    <SameDocumentIdentity className="sales-document-identity" mode="preview" quotationRef={activeOrder.ref} />
                   ) : activeOrder.quotationRef ? (
                     <SameDocumentIdentity
                       mode="done"
+                      className="sales-document-identity"
                       quotationRef={activeOrder.quotationRef}
                       salesOrderRef={activeOrder.ref}
                     />
@@ -3494,7 +3487,10 @@ function NewQuotationForm({
           <span className="sales-proto-header-icon" aria-hidden="true" />
           <div>
           <button type="button" className="sp-btn sp-btn-ghost" onClick={onCancel} style={{ paddingLeft: 0, marginBottom: 2 }}>← Back</button>
-          <h1>Create quotation</h1>
+          <div className="sales-record-title-block">
+            <h1>Quotation</h1>
+            <span className="sales-record-ref">New</span>
+          </div>
           <div className="sub">Customer · lines · terms · send</div>
           </div>
         </div>
@@ -4148,7 +4144,10 @@ function DeliveryNoteView({
         <div className="sales-proto-header-copy">
           <button type="button" className="sp-btn sp-btn-ghost" style={{ paddingLeft: 0 }} onClick={onBack}>← Back to order</button>
           <div className="sp-ref-row">
-            <h1>{existingDelivery?.ref ?? 'Delivery'}</h1>
+            <div className="sales-record-title-block">
+              <h1>Delivery</h1>
+              <span className="sales-record-ref">{existingDelivery?.ref ?? 'Draft'}</span>
+            </div>
             <SalesDocPill label={dnPill.label} tone={dnPill.tone} />
           </div>
           <div className="sub">Source {order.ref} · {order.customerName}</div>
