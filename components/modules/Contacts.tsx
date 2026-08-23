@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect, useRef, useMemo, Suspense } from 'react'
 import { useCrmStore, Contact, SaleOrder, RepairOrder, Invoice, POSOrder, fmtDate, fmtDateTime, fmtKes } from '@/lib/store'
-import { invoiceDocState, invoicePaymentStatus, isOpenInvoice, invoiceResidual, displayDocRef, PAYMENT_STATUS_LABELS } from '@/lib/odoo-sales-flow'
+import { invoiceDocState, invoicePaymentStatus, isOpenInvoice, invoiceResidual, displayDocRef, PAYMENT_STATUS_LABELS, isQuotationStage } from '@/lib/odoo-sales-flow'
 import { guardSpreadsheetFile, guardSpreadsheetRows, SpreadsheetGuardError } from '@/lib/spreadsheet-guard'
 import { Badge, Modal, InfoRow, ModuleSkeleton } from '@/components/ui'
 import { PrimaryActionButton, SecondaryActionMenu, ModuleChrome, PageToolbar } from '@/components/erp'
@@ -540,7 +540,7 @@ function ContactsInner() {
         const historyCount   = clientSOs.length + clientRepairs.length + clientPOS.length + clientInvoices.length
         const recentBusiness = [
           ...clientSOs.map(order => ({
-            kind: order.status === 'draft' ? 'Quotation' : 'Sales order',
+            kind: isQuotationStage(order.status) ? 'Quotation' : 'Sales order',
             ref: order.ref ?? order.orderNumber ?? order.id.slice(0, 8),
             date: order.date,
             amount: order.total,
