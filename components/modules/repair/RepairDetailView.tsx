@@ -1700,7 +1700,7 @@ export default function RepairDetailView() {
 
       {/* Warranty Claim Modal */}
       {showClaimModal && (
-        <Modal title="File Warranty Claim" onClose={() => { setShowClaimModal(false); setClaimNotes('') }}>
+        <Modal variant="enterprise" title="File Warranty Claim" onClose={() => { setShowClaimModal(false); setClaimNotes('') }}>
           <div className="p-5 space-y-4">
             <div className="flex items-start gap-3 p-3.5 rounded-xl bg-emerald-50 border border-emerald-200">
               <Fa icon={faShieldAlt} className="text-emerald-600 mt-0.5" />
@@ -1736,7 +1736,7 @@ export default function RepairDetailView() {
 
       {/* Mark Unrepairable Modal */}
       {showUnrepairableModal && (
-        <Modal title="Mark Unrepairable" onClose={() => { setShowUnrepairableModal(false); setUnrepairableReason('') }}>
+        <Modal variant="enterprise" title="Mark Unrepairable" onClose={() => { setShowUnrepairableModal(false); setUnrepairableReason('') }}>
           <div className="p-5 space-y-4">
             <div className="flex items-start gap-3 p-3.5 rounded-xl bg-red-50 border border-red-200">
               <Fa icon={faBan} className="text-red-600 mt-0.5" />
@@ -1780,7 +1780,7 @@ export default function RepairDetailView() {
 
       {/* Customer leaves device with Deed */}
       {showLeaveDeviceModal && (
-        <Modal title="Customer Leaves Device" onClose={() => setShowLeaveDeviceModal(false)}>
+        <Modal variant="enterprise" title="Customer Leaves Device" onClose={() => setShowLeaveDeviceModal(false)}>
           <div className="p-5 space-y-4">
             <div className="flex items-start gap-3 p-3.5 rounded-xl bg-stone-50 border border-stone-200">
               <Fa icon={faBoxOpen} className="text-stone-600 mt-0.5" />
@@ -1855,7 +1855,7 @@ export default function RepairDetailView() {
 
       {/* Paid trade-in after evaluation */}
       {showTradeInModal && (
-        <Modal title="Trade-in after evaluation" subtitle={r.ref} onClose={() => setShowTradeInModal(false)} width={460}>
+        <Modal variant="enterprise" title="Trade-in after evaluation" subtitle={r.ref} onClose={() => setShowTradeInModal(false)} width={460}>
           <div className="flex flex-col gap-4">
             <div className="flex items-start gap-3 p-3.5 rounded-xl" style={{ background: 'var(--info-bg)', border: '1px solid #BFDBFE' }}>
               <Fa icon={faBoxOpen} className="mt-0.5" style={{ color: 'var(--navy)' }} />
@@ -1933,7 +1933,7 @@ export default function RepairDetailView() {
       )}
 
       {showWaiveFeeModal && (
-        <Modal title="Waive Diagnosis Fee" subtitle={r.ref} onClose={() => setShowWaiveFeeModal(false)} width={440}>
+        <Modal variant="enterprise" title="Waive Diagnosis Fee" subtitle={r.ref} onClose={() => setShowWaiveFeeModal(false)} width={440}>
           <div className="flex flex-col gap-4">
             <p className="text-[11px] text-[var(--text-2)] leading-relaxed">
               Waiving removes the diagnosis fee from this job. Labour and parts stay separate and are still billed if applicable.
@@ -1963,7 +1963,7 @@ export default function RepairDetailView() {
       )}
 
       {showNoChargeModal && (
-        <Modal title="Mark No-Charge" subtitle={r.ref} onClose={() => setShowNoChargeModal(false)} width={460}>
+        <Modal variant="enterprise" title="Mark No-Charge" subtitle={r.ref} onClose={() => setShowNoChargeModal(false)} width={460}>
           <div className="flex flex-col gap-4">
             <p className="text-[11px] text-[var(--text-2)] leading-relaxed">
               Use for company-mistake rework or goodwill. This skips customer quote approval and invoicing,
