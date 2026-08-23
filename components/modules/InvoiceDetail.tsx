@@ -13,6 +13,7 @@ import {
   faUser,
   faFileInvoice,
   faCheck,
+  faChevronDown,
 } from '@fortawesome/free-solid-svg-icons'
 import { useFinanceStore, useDeliveryStore, fmtKes, fmtDate } from '@/lib/store'
 import { canCancelOrResetInvoice, canApplyCustomerCredit } from '@/lib/finance-controls'
@@ -97,7 +98,7 @@ export default function InvoiceDetail() {
   const [emailHistoryKey, setEmailHistoryKey] = useState(0)
   const [hydratingLines, setHydratingLines] = useState(false)
   const [lookupReady, setLookupReady] = useState(false)
-  const [detailTab, setDetailTab] = useState<'notes' | 'payments' | 'activity'>('notes')
+  const [detailTab, setDetailTab] = useState<'payments' | 'notes' | 'activity' | 'instructions'>('payments')
   const hydrateAttempted = useRef<string | null>(null)
 
   // Wait briefly for store hydration before declaring the invoice missing —
@@ -348,9 +349,6 @@ export default function InvoiceDetail() {
       : dueDays === 0
         ? 'Due today'
         : `${dueDays} day${dueDays === 1 ? '' : 's'}`
-  const circumference = 2 * Math.PI * 18
-  const donutOffset = circumference * (1 - Math.max(0, Math.min(1, pct / 100)))
-
   const moreActions = [
     {
       id: 'download',
@@ -511,45 +509,47 @@ export default function InvoiceDetail() {
       </div>
 
       <div className="mod-body invoice-detail__body">
-        {invoice.status !== 'draft' && (
-          <section className="invoice-detail__kpi" aria-label="Payment summary">
-            <div className={`invoice-detail__kpi-card ${balance > 0 ? 'is-due' : 'is-clear'}`}>
-              <p className="invoice-detail__kpi-label">Balance due</p>
-              <p className="invoice-detail__kpi-value">{fmtKes(balance)}</p>
-              <p className="invoice-detail__kpi-sub">
-                {balance > 0 ? `Due on ${fmtDate(invoice.dueDate)}` : 'Fully paid'}
-              </p>
+        <section className={`invoice-detail__summary ${balance > 0 ? 'has-balance' : 'is-settled'}`} aria-label="Invoice financial summary">
+          <div className="invoice-detail__summary-primary">
+            <div className="invoice-detail__summary-label-row">
+              <p className="invoice-detail__summary-label">{balance > 0 ? 'Balance due' : 'Invoice total'}</p>
+              <span className={`invoice-detail__summary-status ${balance > 0 ? 'is-due' : 'is-paid'}`}>
+                {PAYMENT_STATUS_LABELS[payState]}
+              </span>
             </div>
-            <div className="invoice-detail__kpi-card">
-              <p className="invoice-detail__kpi-label">Invoice total</p>
-              <p className="invoice-detail__kpi-value">{fmtKes(invoice.total)}</p>
+            <p className="invoice-detail__summary-amount">{fmtKes(balance > 0 ? balance : invoice.total)}</p>
+            <p className="invoice-detail__summary-context">
+              {balance > 0
+                ? `Due ${fmtDate(invoice.dueDate)}${dueDaysLabel ? ` · ${dueDaysLabel}` : ''}`
+                : `Paid in full · ${fmtKes(invoice.amountPaid)} received`}
+            </p>
+          </div>
+
+          <dl className="invoice-detail__summary-stats">
+            <div>
+              <dt>{balance > 0 ? 'Invoice total' : 'Balance'}</dt>
+              <dd>{fmtKes(balance > 0 ? invoice.total : balance)}</dd>
             </div>
-            <div className="invoice-detail__kpi-card">
-              <p className="invoice-detail__kpi-label">Received</p>
-              <p className="invoice-detail__kpi-value">{fmtKes(invoice.amountPaid)}</p>
+            <div>
+              <dt>Received</dt>
+              <dd>{fmtKes(invoice.amountPaid)}</dd>
             </div>
-            <div className="invoice-detail__kpi-card invoice-detail__kpi-card--donut">
-              <p className="invoice-detail__kpi-label">Payment status</p>
-              <div className="invoice-detail__donut" role="img" aria-label={`${Math.round(pct)}% paid`}>
-                <svg viewBox="0 0 44 44" width="64" height="64" aria-hidden="true">
-                  <circle cx="22" cy="22" r="18" className="invoice-detail__donut-track" />
-                  <circle
-                    cx="22"
-                    cy="22"
-                    r="18"
-                    className={`invoice-detail__donut-fill ${pct >= 100 ? 'is-paid' : ''}`}
-                    style={{
-                      strokeDasharray: `${circumference}`,
-                      strokeDashoffset: `${donutOffset}`,
-                    }}
-                  />
-                </svg>
-                <span className="invoice-detail__donut-pct">{Math.round(pct)}%</span>
-              </div>
-              <p className="invoice-detail__kpi-sub">{Math.round(pct)}% paid</p>
+            <div>
+              <dt>Due date</dt>
+              <dd className={overdue && balance > 0 ? 'is-overdue' : ''}>{fmtDate(invoice.dueDate)}</dd>
             </div>
-          </section>
-        )}
+          </dl>
+
+          <div className="invoice-detail__summary-progress" aria-label={`${Math.round(pct)}% paid`}>
+            <div className="invoice-detail__summary-progress-copy">
+              <span>Payment progress</span>
+              <strong>{Math.round(pct)}%</strong>
+            </div>
+            <div className="invoice-detail__summary-track" aria-hidden="true">
+              <span style={{ width: `${Math.max(0, Math.min(100, pct))}%` }} />
+            </div>
+          </div>
+        </section>
 
         <section className="invoice-detail__card" aria-label="Line items">
           <div className="invoice-detail__card-head">
@@ -685,7 +685,15 @@ export default function InvoiceDetail() {
           </div>
         </section>
 
-        <section className="invoice-detail__info-grid" aria-label="Invoice information">
+        <details className="invoice-detail__supporting">
+          <summary className="invoice-detail__supporting-toggle">
+            <span>
+              <strong>Supporting details</strong>
+              <small>Customer addresses, delivery and accounting setup</small>
+            </span>
+            <Fa icon={faChevronDown} aria-hidden="true" />
+          </summary>
+          <section className="invoice-detail__info-grid" aria-label="Invoice information">
           <article className="invoice-detail__info-card">
             <header className="invoice-detail__info-head">
               <span className="invoice-detail__info-icon invoice-detail__info-icon--blue" aria-hidden="true">
@@ -784,15 +792,17 @@ export default function InvoiceDetail() {
               <p className="invoice-detail__released-inline"><Fa icon={faCheck} /> Released</p>
             )}
           </article>
-        </section>
+          </section>
+        </details>
 
         <section className="invoice-detail__tabs-card" aria-label="Notes payments and activity">
           <div className="invoice-detail__tabs" role="tablist">
             {([
-              ['notes', `Notes`],
               ['payments', 'Payments'],
+              ['notes', `Notes`],
               ['activity', 'Activity'],
-            ] as const).map(([id, label]) => (
+              ['instructions', 'Payment instructions'],
+            ] as const).filter(([id]) => id !== 'instructions' || invoice.type === 'customer_invoice').map(([id, label]) => (
               <button
                 key={id}
                 type="button"
@@ -809,16 +819,6 @@ export default function InvoiceDetail() {
           <div className="invoice-detail__tab-panel" role="tabpanel">
             {detailTab === 'notes' && (
               <div className="invoice-detail__tab-stack">
-                {invoice.type === 'customer_invoice' && (
-                  <PaymentDetailsPicker
-                    value={getDocumentPaymentDetails(invoice.id)}
-                    onChange={next => setDocumentPaymentDetails(invoice.id, next)}
-                    bankAccounts={bankAccounts}
-                    isVat={invoiceIsVat}
-                    readOnly={docState === 'cancelled' || !canManageFinance}
-                    defaultOpen
-                  />
-                )}
                 <p className="invoice-detail__info-muted">
                   {invoice.notes?.trim() || 'No notes yet. Customer-facing notes can be set when editing the invoice.'}
                 </p>
@@ -851,6 +851,19 @@ export default function InvoiceDetail() {
               ) : (
                 <p className="invoice-detail__info-muted">No payments recorded yet.</p>
               )
+            )}
+
+            {detailTab === 'instructions' && invoice.type === 'customer_invoice' && (
+              <PaymentDetailsPicker
+                className="invoice-detail__pay-settings"
+                value={getDocumentPaymentDetails(invoice.id)}
+                onChange={next => setDocumentPaymentDetails(invoice.id, next)}
+                bankAccounts={bankAccounts}
+                isVat={invoiceIsVat}
+                readOnly={docState === 'cancelled' || !canManageFinance}
+                defaultOpen
+                label="Payment instructions printed on this invoice"
+              />
             )}
 
             {detailTab === 'activity' && (
