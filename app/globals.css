@@ -17725,3 +17725,1430 @@ body:has(.crm-workspace) [role="dialog"] > div {
   }
 }
 
+
+
+/* ── Reconfiguration, Outsource and After-sales workspace redesign ── */
+:is(.reconfig-page, .outsource-workspace, .aftersales-workspace, .tradein-workspace, .aftersales-detail) {
+  --flow-ink: #12213f;
+  --flow-muted: #667085;
+  --flow-soft: #f6f8fb;
+  --flow-border: #dce3ea;
+  --flow-cyan: #16a6c9;
+  --flow-cyan-soft: #eaf8fb;
+  --flow-warning: #b76e00;
+  --flow-warning-soft: #fff8e8;
+  --flow-success: #087f5b;
+  --flow-success-soft: #edf9f4;
+  --flow-radius: 0.7rem;
+  color: var(--flow-ink);
+}
+
+:is(.reconfig-page, .outsource-workspace, .aftersales-workspace) {
+  min-width: 0;
+  background: var(--flow-soft);
+}
+
+:is(.reconfig-page, .outsource-workspace, .aftersales-workspace) > .mod-header {
+  min-height: 5.25rem;
+  padding: 1.1rem clamp(0.85rem, 2vw, 1.5rem);
+  border-bottom: 1px solid var(--flow-border);
+  background: #fff;
+  box-shadow: none;
+}
+
+:is(.reconfig-page, .outsource-workspace, .aftersales-workspace) > .mod-header .mod-header-icon {
+  color: var(--flow-ink) !important;
+  border: 1px solid #d6e6ee;
+  background: #eff8fb !important;
+}
+
+:is(.reconfig-page, .outsource-workspace, .aftersales-workspace) > .mod-header .erp-module-title {
+  color: var(--flow-ink);
+  font-size: clamp(1.15rem, 1.6vw, 1.55rem);
+  font-weight: 760;
+  letter-spacing: -0.025em;
+  line-height: 1.15;
+}
+
+:is(.reconfig-page, .outsource-workspace, .aftersales-workspace) > .mod-header .mod-header-subtitle {
+  display: block !important;
+  max-width: 60ch;
+  margin-top: 0.2rem;
+  color: var(--flow-muted);
+  font-size: clamp(0.68rem, 0.8vw, 0.78rem);
+  line-height: 1.35;
+}
+
+:is(.reconfig-page, .outsource-workspace, .aftersales-workspace) > .mod-header .section-actions {
+  flex: 0 0 auto;
+}
+
+:is(.reconfig-page, .outsource-workspace, .aftersales-workspace) > .mod-header .erp-action-btn,
+:is(.reconfig-page, .outsource-workspace, .aftersales-workspace) > .mod-header .btn-primary {
+  min-height: 2.6rem;
+  padding: 0.6rem 0.9rem;
+  border-color: var(--flow-ink);
+  border-radius: 0.55rem;
+  background: var(--flow-ink);
+  box-shadow: none;
+  font-size: 0.75rem;
+}
+
+:is(.reconfig-page, .outsource-workspace, .aftersales-workspace) > .mod-tabs {
+  width: 100%;
+  min-height: 2.75rem;
+  padding: 0 clamp(0.75rem, 2vw, 1.5rem);
+  gap: 0;
+  overflow-x: auto;
+  border-bottom: 1px solid var(--flow-border);
+  background: #fff;
+}
+
+:is(.reconfig-page, .outsource-workspace, .aftersales-workspace) > .mod-tabs .mod-tab {
+  min-height: 2.75rem;
+  padding: 0.72rem 0.9rem;
+  border-radius: 0;
+  background: transparent;
+  color: var(--flow-muted);
+  font-size: 0.72rem;
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+:is(.reconfig-page, .outsource-workspace, .aftersales-workspace) > .mod-tabs .mod-tab:hover,
+:is(.reconfig-page, .outsource-workspace, .aftersales-workspace) > .mod-tabs .mod-tab.active {
+  color: var(--flow-ink);
+  background: transparent;
+}
+
+:is(.reconfig-page, .outsource-workspace, .aftersales-workspace) > .mod-tabs .mod-tab.active {
+  box-shadow: inset 0 -2px 0 var(--flow-cyan);
+}
+
+.reconfig-body,
+.outsource-body,
+.aftersales-body {
+  width: 100%;
+  min-width: 0;
+  gap: 0.75rem !important;
+  padding: clamp(0.65rem, 1.4vw, 1rem) !important;
+  background: var(--flow-soft);
+}
+
+.reconfig-summary,
+.outsource-summary,
+.aftersales-summary,
+.tradein-summary {
+  display: grid;
+  width: 100%;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  overflow: hidden;
+  border: 1px solid var(--flow-border);
+  border-radius: var(--flow-radius);
+  background: #fff;
+}
+
+.reconfig-summary > button,
+.outsource-summary__item,
+.aftersales-summary__item,
+.tradein-summary__item {
+  display: grid;
+  min-width: 0;
+  min-height: 5.1rem;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-content: center;
+  gap: 0.15rem 0.6rem;
+  padding: 0.8rem 0.95rem;
+  border: 0;
+  border-right: 1px solid var(--flow-border);
+  background: transparent;
+  color: var(--flow-ink);
+  text-align: left;
+  cursor: pointer;
+}
+
+.reconfig-summary > button:last-child,
+.outsource-summary__item:last-child,
+.aftersales-summary__item:last-child,
+.tradein-summary__item:last-child {
+  border-right: 0;
+}
+
+.reconfig-summary > button:hover,
+.outsource-summary__item:hover,
+.aftersales-summary__item:hover,
+.tradein-summary__item:hover {
+  background: #f8fbfd;
+}
+
+.reconfig-summary span,
+.outsource-summary__item > span,
+.aftersales-summary__item > span,
+.tradein-summary__item > span {
+  align-self: end;
+  color: var(--flow-muted);
+  font-size: 0.62rem;
+  font-weight: 720;
+  letter-spacing: 0.055em;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+.reconfig-summary strong,
+.outsource-summary__item > strong,
+.aftersales-summary__item > strong,
+.tradein-summary__item > strong {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  align-self: center;
+  color: var(--flow-ink);
+  font-size: clamp(1.05rem, 1.5vw, 1.35rem);
+  font-weight: 780;
+  letter-spacing: -0.025em;
+  overflow-wrap: anywhere;
+  text-align: right;
+}
+
+.reconfig-summary small,
+.outsource-summary__item > small,
+.aftersales-summary__item > small,
+.tradein-summary__item > small {
+  min-width: 0;
+  color: var(--flow-muted);
+  font-size: 0.66rem;
+  line-height: 1.3;
+}
+
+.outsource-summary__item.is-warning,
+.aftersales-summary__item.is-warning,
+.tradein-summary__item.is-warning {
+  box-shadow: inset 0 2px 0 #e5a431;
+}
+
+/* Reconfiguration */
+.reconfig-page .reconfig-summary + .reconfig-banner,
+.reconfig-page .reconfig-summary + .reconfig-banner + .reconfig-banner {
+  margin-top: 0;
+}
+
+.reconfig-page .reconfig-toolbar {
+  display: grid;
+  grid-template-columns: minmax(14rem, 1fr) minmax(10rem, 13rem) auto;
+  gap: 0.55rem;
+  padding: 0.7rem;
+  border: 1px solid var(--flow-border);
+  border-bottom: 0;
+  border-radius: var(--flow-radius) var(--flow-radius) 0 0;
+  background: #fff;
+}
+
+.reconfig-page .reconfig-toolbar > * {
+  min-width: 0;
+  min-height: 2.5rem;
+  font-size: 0.75rem;
+}
+
+.reconfig-page .reconfig-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--flow-border);
+  border-radius: 0 0 var(--flow-radius) var(--flow-radius);
+  background: #fff;
+}
+
+.reconfig-page .reconfig-table {
+  width: 100%;
+  min-width: 62rem;
+  table-layout: fixed;
+  border-collapse: collapse;
+}
+
+.reconfig-page .reconfig-table th {
+  height: 2.45rem;
+  padding: 0.55rem 0.7rem;
+  border-bottom: 1px solid var(--flow-border);
+  background: #f8fafc;
+  color: #526178;
+  font-size: 0.58rem;
+  font-weight: 750;
+  letter-spacing: 0.06em;
+  text-align: left;
+  text-transform: uppercase;
+}
+
+.reconfig-page .reconfig-table td {
+  min-width: 0;
+  padding: 0.7rem;
+  border-bottom: 1px solid #e8edf2;
+  color: #26354e;
+  font-size: 0.72rem;
+  vertical-align: middle;
+  overflow-wrap: anywhere;
+}
+
+.reconfig-page .reconfig-table tr:last-child td {
+  border-bottom: 0;
+}
+
+.reconfig-page .reconfig-table-row:hover {
+  background: #f8fbfd;
+}
+
+.reconfig-page .reconfig-table th:nth-child(1) { width: 8rem; }
+.reconfig-page .reconfig-table th:nth-child(2) { width: 9.5rem; }
+.reconfig-page .reconfig-table th:nth-child(3) { width: 15rem; }
+.reconfig-page .reconfig-table th:nth-child(4) { width: 8rem; }
+.reconfig-page .reconfig-table th:nth-child(5) { width: 10rem; }
+.reconfig-page .reconfig-table th:nth-child(6) { width: 10rem; }
+.reconfig-page .reconfig-table th:nth-child(7) { width: 8rem; }
+
+.reconfig-table-device {
+  display: grid;
+  gap: 0.16rem;
+}
+
+.reconfig-table-device strong {
+  min-width: 0;
+  color: var(--flow-ink);
+  font-weight: 680;
+  line-height: 1.3;
+  white-space: normal;
+}
+
+.reconfig-table-device small {
+  color: var(--flow-muted);
+  font-size: 0.64rem;
+}
+
+.reconfig-next-action {
+  display: inline-flex;
+  min-height: 1.75rem;
+  align-items: center;
+  justify-content: center;
+  padding: 0.3rem 0.55rem;
+  border: 1px solid #cfe0e8;
+  border-radius: 0.45rem;
+  background: #f3fafc;
+  color: var(--flow-ink);
+  font-size: 0.65rem;
+  font-weight: 680;
+  white-space: nowrap;
+}
+
+.reconfig-selected-device {
+  border: 1px solid #cfe0e8 !important;
+  border-radius: var(--flow-radius) !important;
+  background: #f7fbfd !important;
+  box-shadow: none !important;
+}
+
+.reconfig-bench-action-bar {
+  position: static !important;
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.55rem;
+  margin-top: 0.25rem;
+  padding: 0.75rem;
+  border: 1px solid var(--flow-border);
+  border-radius: var(--flow-radius);
+  background: #fff;
+  box-shadow: none;
+}
+
+.reconfig-page .reconfig-bench,
+.reconfig-page .reconfig-detail {
+  width: 100%;
+  min-width: 0;
+  max-width: 84rem;
+  margin-inline: auto;
+}
+
+.reconfig-page .reconfig-bench-intro,
+.reconfig-page .reconfig-detail-header,
+.reconfig-page .reconfig-panel,
+.reconfig-page .reconfig-metric,
+.reconfig-page .reconfig-compare {
+  border-color: var(--flow-border);
+  border-radius: var(--flow-radius);
+  box-shadow: none;
+}
+
+/* Outsource */
+.outsource-surface {
+  min-width: 0;
+  overflow: visible !important;
+  border: 1px solid var(--flow-border);
+  border-radius: var(--flow-radius);
+  background: #fff;
+  box-shadow: none;
+}
+
+.outsource-jobs-layout,
+.aftersales-list-layout {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr) minmax(15.5rem, 19rem);
+  align-items: start;
+}
+
+.outsource-directory,
+.aftersales-directory {
+  min-width: 0;
+  overflow: hidden;
+  border-right: 1px solid var(--flow-border);
+  background: #fff;
+}
+
+.outsource-directory .table-head,
+.aftersales-directory .table-head {
+  min-height: 2.45rem;
+  padding-inline: 0.8rem;
+  background: #f8fafc;
+  color: #526178;
+  font-size: 0.58rem;
+  font-weight: 750;
+  letter-spacing: 0.055em;
+  text-transform: uppercase;
+}
+
+.outsource-directory .table-row,
+.aftersales-directory .table-row {
+  min-height: 3.55rem;
+  padding-inline: 0.8rem;
+  border-color: #e8edf2;
+  background: #fff;
+}
+
+.outsource-directory .table-row:hover,
+.aftersales-directory .table-row:hover {
+  background: #f8fbfd;
+}
+
+.outsource-attention,
+.aftersales-care-queue {
+  position: sticky;
+  top: 0.75rem;
+  min-width: 0;
+  background: #fbfcfe;
+}
+
+.outsource-attention__header,
+.aftersales-care-queue__header {
+  display: flex;
+  min-height: 4.2rem;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.8rem 0.9rem;
+  border-bottom: 1px solid var(--flow-border);
+  background: #fff;
+}
+
+.outsource-attention__header span,
+.aftersales-care-queue__header span {
+  color: var(--flow-cyan);
+  font-size: 0.58rem;
+  font-weight: 750;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.outsource-attention__header h3,
+.aftersales-care-queue__header h3 {
+  margin-top: 0.1rem;
+  color: var(--flow-ink);
+  font-size: 0.83rem;
+  font-weight: 730;
+}
+
+.outsource-attention__header > strong,
+.aftersales-care-queue__header > strong {
+  display: inline-flex;
+  min-width: 1.8rem;
+  min-height: 1.8rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: #e9eef3;
+  color: var(--flow-ink);
+  font-size: 0.7rem;
+}
+
+.outsource-attention__group {
+  padding: 0.72rem;
+  border-bottom: 1px solid var(--flow-border);
+}
+
+.outsource-attention__group > p {
+  margin: 0 0 0.45rem;
+  color: var(--flow-muted);
+  font-size: 0.58rem;
+  font-weight: 720;
+  letter-spacing: 0.055em;
+  text-transform: uppercase;
+}
+
+.outsource-attention__group > button,
+.aftersales-care-queue__items > button {
+  display: grid;
+  width: 100%;
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.12rem 0.55rem;
+  padding: 0.58rem 0.62rem;
+  border: 0;
+  border-bottom: 1px solid #e8edf2;
+  background: transparent;
+  color: var(--flow-ink);
+  text-align: left;
+  cursor: pointer;
+}
+
+.outsource-attention__group > button:last-of-type,
+.aftersales-care-queue__items > button:last-of-type {
+  border-bottom: 0;
+}
+
+.outsource-attention__group > button:hover,
+.aftersales-care-queue__items > button:hover {
+  background: #f2f7fa;
+}
+
+.outsource-attention__group > button > span,
+.aftersales-care-queue__items > button > span {
+  color: var(--flow-cyan);
+  font-size: 0.61rem;
+  font-weight: 700;
+}
+
+.outsource-attention__group > button > strong,
+.aftersales-care-queue__items > button > strong {
+  min-width: 0;
+  color: var(--flow-ink);
+  font-size: 0.7rem;
+  font-weight: 680;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+.outsource-attention__group > button > small,
+.aftersales-care-queue__items > button > small {
+  grid-column: 1 / -1;
+  min-width: 0;
+  color: var(--flow-muted);
+  font-size: 0.61rem;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+.outsource-attention__empty,
+.aftersales-care-queue__empty {
+  display: block;
+  padding: 0.8rem 0.6rem;
+  color: var(--flow-muted);
+  font-size: 0.67rem;
+}
+
+.outsource-job-card {
+  min-width: 0;
+  border-radius: 0.65rem !important;
+  border-color: var(--flow-border) !important;
+  border-left: 3px solid var(--flow-ink) !important;
+  box-shadow: none !important;
+}
+
+.outsource-wrap,
+.aftersales-wrap {
+  min-width: 0;
+  white-space: normal !important;
+  overflow: visible !important;
+  overflow-wrap: anywhere;
+  text-overflow: clip !important;
+}
+
+.outsource-vendor-list {
+  background: #fff;
+}
+
+.outsource-vendor-row {
+  display: grid !important;
+  grid-template-columns: auto minmax(13rem, 1fr) minmax(27rem, auto) auto;
+  align-items: center !important;
+  gap: 0.8rem !important;
+  padding: 0.8rem !important;
+  border-color: #e8edf2;
+}
+
+.outsource-vendor-row > div:nth-child(2) p {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.outsource-vendor-row > div:nth-child(3) {
+  display: grid !important;
+  grid-template-columns: repeat(6, minmax(4.1rem, 1fr));
+  gap: 0.7rem !important;
+}
+
+.outsource-vendor-row > div:nth-child(4) {
+  justify-content: flex-end;
+}
+
+.outsource-vendor-row > div:nth-child(4) button {
+  min-height: 2rem;
+}
+
+.outsource-vendor-detail__header {
+  display: grid !important;
+  grid-template-columns: auto minmax(12rem, 1fr) auto auto;
+  align-items: center !important;
+}
+
+.outsource-vendor-detail__header > div:nth-child(3) {
+  display: grid !important;
+  grid-template-columns: repeat(3, minmax(5rem, auto));
+}
+
+.outsource-vendor-detail {
+  min-width: 0;
+}
+
+/* After-sales */
+.aftersales-list-layout {
+  overflow: hidden;
+  border: 1px solid var(--flow-border);
+  border-radius: var(--flow-radius);
+  background: #fff;
+}
+
+.aftersales-care-queue__items {
+  padding: 0.55rem;
+}
+
+.aftersales-mobile-card {
+  min-width: 0;
+  border-radius: 0.65rem !important;
+  border-color: var(--flow-border) !important;
+  box-shadow: none !important;
+}
+
+.aftersales-detail {
+  width: min(100%, 76rem);
+  min-width: 0;
+  max-width: 76rem !important;
+  margin: 0 auto !important;
+  padding: clamp(0.7rem, 2vw, 1.2rem);
+  background: var(--flow-soft);
+}
+
+.aftersales-detail__header {
+  display: grid !important;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  min-width: 0;
+  padding: 0.8rem 0.9rem;
+  border: 1px solid var(--flow-border);
+  border-radius: var(--flow-radius);
+  background: #fff;
+}
+
+.aftersales-detail__header > div {
+  min-width: 0;
+}
+
+.aftersales-detail__header h2,
+.aftersales-detail__header p {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.aftersales-detail__facts {
+  align-items: stretch;
+}
+
+.aftersales-detail__facts > .card,
+.aftersales-progress,
+.aftersales-return-lines {
+  min-width: 0;
+  border-color: var(--flow-border);
+  border-radius: var(--flow-radius);
+  box-shadow: none;
+}
+
+.aftersales-detail__facts .flex.justify-between {
+  gap: 1rem;
+}
+
+.aftersales-detail__facts .flex.justify-between > :last-child {
+  min-width: 0;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+.aftersales-progress {
+  overflow: hidden;
+}
+
+.aftersales-return-lines p {
+  overflow-wrap: anywhere;
+}
+
+.aftersales-detail__actions {
+  position: static !important;
+  display: grid !important;
+  grid-template-columns: repeat(auto-fit, minmax(9rem, max-content));
+  width: 100%;
+  padding: 0.7rem;
+  border: 1px solid var(--flow-border);
+  border-radius: var(--flow-radius);
+  background: #fff;
+  box-shadow: none !important;
+}
+
+.aftersales-detail__actions button {
+  min-height: 2.55rem;
+  justify-content: center;
+}
+
+/* Trade-in nested workspace */
+.tradein-workspace {
+  width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--flow-border);
+  border-radius: var(--flow-radius);
+  background: #fff;
+}
+
+.tradein-workspace > .mod-header {
+  min-height: 4.6rem;
+  padding: 0.8rem 0.9rem;
+  border-bottom: 1px solid var(--flow-border);
+  background: #fff;
+  box-shadow: none;
+}
+
+.tradein-workspace > .mod-header .erp-module-title {
+  color: var(--flow-ink);
+  font-size: clamp(1rem, 1.3vw, 1.25rem);
+}
+
+.tradein-workspace > .mod-header .mod-header-subtitle {
+  display: block !important;
+  color: var(--flow-muted);
+  font-size: 0.68rem;
+}
+
+.tradein-workspace > .mod-tabs {
+  min-height: 2.65rem;
+  padding: 0 0.8rem;
+  overflow-x: auto;
+  border-bottom: 1px solid var(--flow-border);
+  background: #fff;
+}
+
+.tradein-workspace > .mod-tabs .mod-tab {
+  min-height: 2.65rem;
+  padding: 0.65rem 0.8rem;
+  border-radius: 0;
+  background: transparent;
+  font-size: 0.7rem;
+  white-space: nowrap;
+}
+
+.tradein-workspace > .mod-tabs .mod-tab.active {
+  color: var(--flow-ink);
+  background: transparent;
+  box-shadow: inset 0 -2px 0 var(--flow-cyan);
+}
+
+.tradein-body {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 0.75rem;
+  background: var(--flow-soft);
+}
+
+.tradein-content {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--flow-border);
+  border-radius: var(--flow-radius);
+  background: #fff;
+}
+
+.tradein-workspace .table-head {
+  min-height: 2.4rem;
+  background: #f8fafc;
+  color: #526178;
+  font-size: 0.58rem;
+  letter-spacing: 0.055em;
+  text-transform: uppercase;
+}
+
+.tradein-workspace .table-row {
+  min-height: 3.5rem;
+  border-color: #e8edf2;
+}
+
+.tradein-workspace .card {
+  box-shadow: none;
+}
+
+/* Tablet */
+@media (max-width: 1100px) {
+  .outsource-jobs-layout,
+  .aftersales-list-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .outsource-directory,
+  .aftersales-directory {
+    border-right: 0;
+    border-bottom: 1px solid var(--flow-border);
+  }
+
+  .outsource-attention,
+  .aftersales-care-queue {
+    position: static;
+  }
+
+  .outsource-attention__group,
+  .aftersales-care-queue__items {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.35rem;
+  }
+
+  .outsource-attention__group > p {
+    grid-column: 1 / -1;
+  }
+
+  .outsource-vendor-row {
+    grid-template-columns: auto minmax(0, 1fr) !important;
+  }
+
+  .outsource-vendor-row > div:nth-child(3),
+  .outsource-vendor-row > div:nth-child(4) {
+    grid-column: 2;
+  }
+
+  .outsource-vendor-row > div:nth-child(3) {
+    width: 100%;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    text-align: left !important;
+  }
+
+  .outsource-vendor-row > div:nth-child(4) {
+    justify-content: flex-start;
+  }
+
+  .outsource-vendor-detail__header {
+    grid-template-columns: auto minmax(0, 1fr) !important;
+  }
+
+  .outsource-vendor-detail__header > div:nth-child(3),
+  .outsource-vendor-detail__header > button:last-child {
+    grid-column: 2;
+    justify-self: start;
+  }
+}
+
+/* Phone */
+@media (max-width: 767px) {
+  :is(.reconfig-page, .outsource-workspace, .aftersales-workspace) > .mod-header {
+    display: grid;
+    min-height: 0;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 0.55rem;
+    padding: 0.75rem;
+  }
+
+  :is(.reconfig-page, .outsource-workspace, .aftersales-workspace) > .mod-header .mod-header-icon {
+    display: none;
+  }
+
+  :is(.reconfig-page, .outsource-workspace, .aftersales-workspace) > .mod-header .erp-module-title {
+    font-size: clamp(1.02rem, 5.3vw, 1.28rem);
+  }
+
+  :is(.reconfig-page, .outsource-workspace, .aftersales-workspace) > .mod-header .mod-header-subtitle {
+    max-width: 42ch;
+    font-size: clamp(0.64rem, 2.9vw, 0.72rem);
+  }
+
+  :is(.reconfig-page, .outsource-workspace, .aftersales-workspace) > .mod-header .section-actions {
+    width: auto;
+    min-width: 0;
+  }
+
+  :is(.reconfig-page, .outsource-workspace, .aftersales-workspace) > .mod-header .erp-action-btn,
+  :is(.reconfig-page, .outsource-workspace, .aftersales-workspace) > .mod-header .btn-primary {
+    min-width: 2.65rem;
+    min-height: 2.65rem;
+    padding: 0.58rem 0.7rem;
+    font-size: 0.7rem;
+    white-space: nowrap;
+  }
+
+  :is(.reconfig-page, .outsource-workspace, .aftersales-workspace) > .mod-tabs {
+    padding-inline: 0.35rem;
+  }
+
+  :is(.reconfig-page, .outsource-workspace, .aftersales-workspace) > .mod-tabs .mod-tab {
+    flex: 0 0 auto;
+    min-width: 0;
+    padding-inline: 0.72rem;
+  }
+
+  .reconfig-body,
+  .outsource-body,
+  .aftersales-body,
+  .tradein-body {
+    padding: 0.5rem !important;
+  }
+
+  .reconfig-summary,
+  .outsource-summary,
+  .aftersales-summary,
+  .tradein-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .reconfig-summary > button,
+  .outsource-summary__item,
+  .aftersales-summary__item,
+  .tradein-summary__item {
+    min-height: 4.25rem;
+    padding: 0.62rem 0.68rem;
+    border-bottom: 1px solid var(--flow-border);
+  }
+
+  .reconfig-summary > button:nth-child(2),
+  .outsource-summary__item:nth-child(2),
+  .aftersales-summary__item:nth-child(2),
+  .tradein-summary__item:nth-child(2) {
+    border-right: 0;
+  }
+
+  .reconfig-summary > button:nth-child(n + 3),
+  .outsource-summary__item:nth-child(n + 3),
+  .aftersales-summary__item:nth-child(n + 3),
+  .tradein-summary__item:nth-child(n + 3) {
+    border-bottom: 0;
+  }
+
+  .reconfig-summary strong,
+  .outsource-summary__item > strong,
+  .aftersales-summary__item > strong,
+  .tradein-summary__item > strong {
+    font-size: clamp(0.9rem, 4.8vw, 1.1rem);
+  }
+
+  .reconfig-summary span,
+  .outsource-summary__item > span,
+  .aftersales-summary__item > span,
+  .tradein-summary__item > span {
+    font-size: clamp(0.54rem, 2.5vw, 0.62rem);
+  }
+
+  .reconfig-summary small,
+  .outsource-summary__item > small,
+  .aftersales-summary__item > small,
+  .tradein-summary__item > small {
+    font-size: clamp(0.58rem, 2.65vw, 0.65rem);
+  }
+
+  .reconfig-page .reconfig-toolbar {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 0.45rem;
+    padding: 0.5rem;
+  }
+
+  .reconfig-page .reconfig-toolbar-search {
+    grid-column: 1 / -1;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .reconfig-page .reconfig-toolbar > * {
+    min-height: 2.55rem;
+  }
+
+  .reconfig-page .reconfig-table-wrap {
+    overflow: visible;
+    border: 0;
+    background: transparent;
+  }
+
+  .reconfig-page .reconfig-table {
+    display: block;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .reconfig-page .reconfig-table thead {
+    display: none;
+  }
+
+  .reconfig-page .reconfig-table tbody {
+    display: grid;
+    width: 100%;
+    gap: 0.5rem;
+  }
+
+  .reconfig-page .reconfig-table tr {
+    display: grid;
+    width: 100%;
+    min-width: 0;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 0.52rem 0.75rem;
+    padding: 0.72rem;
+    overflow: hidden;
+    border: 1px solid var(--flow-border);
+    border-radius: 0.65rem;
+    background: #fff;
+  }
+
+  .reconfig-page .reconfig-table td {
+    display: block;
+    min-width: 0;
+    padding: 0;
+    border: 0;
+    font-size: clamp(0.68rem, 3.1vw, 0.76rem);
+    overflow-wrap: anywhere;
+  }
+
+  .reconfig-page .reconfig-table td::before {
+    display: block;
+    margin-bottom: 0.14rem;
+    color: var(--flow-muted);
+    content: attr(data-label);
+    font-size: 0.53rem;
+    font-weight: 720;
+    letter-spacing: 0.055em;
+    text-transform: uppercase;
+  }
+
+  .reconfig-page .reconfig-table td:nth-child(1),
+  .reconfig-page .reconfig-table td:nth-child(4) {
+    grid-row: 1;
+  }
+
+  .reconfig-page .reconfig-table td:nth-child(4),
+  .reconfig-page .reconfig-table td:nth-child(7) {
+    justify-self: end;
+    text-align: right;
+  }
+
+  .reconfig-page .reconfig-table td:nth-child(2),
+  .reconfig-page .reconfig-table td:nth-child(3),
+  .reconfig-page .reconfig-table td:nth-child(5),
+  .reconfig-page .reconfig-table td:nth-child(6) {
+    grid-column: 1 / -1;
+  }
+
+  .reconfig-page .reconfig-table td:nth-child(7) {
+    grid-column: 2;
+  }
+
+  .reconfig-page .reconfig-table-empty td {
+    grid-column: 1 / -1;
+    text-align: center;
+  }
+
+  .reconfig-page .reconfig-table-empty td::before {
+    display: none;
+  }
+
+  .reconfig-page .reconfig-bench,
+  .reconfig-page .reconfig-detail {
+    gap: 0.55rem;
+  }
+
+  .reconfig-page .reconfig-slots-grid,
+  .reconfig-page .reconfig-comparison,
+  .reconfig-page .reconfig-detail-grid,
+  .reconfig-page .reconfig-metrics {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .reconfig-bench-action-bar {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    padding: 0.55rem;
+  }
+
+  .reconfig-bench-action-bar button {
+    width: 100%;
+    min-height: 2.65rem;
+  }
+
+  .outsource-jobs-layout,
+  .aftersales-list-layout {
+    display: flex;
+    width: 100%;
+    flex-direction: column;
+    overflow: visible;
+    border-radius: 0.6rem;
+  }
+
+  .outsource-attention,
+  .aftersales-care-queue {
+    order: -1;
+    width: 100%;
+    border-bottom: 1px solid var(--flow-border);
+  }
+
+  .outsource-directory,
+  .aftersales-directory {
+    width: 100%;
+    min-width: 0;
+    overflow: visible;
+    border-right: 0;
+    border-bottom: 0;
+  }
+
+  .outsource-attention__group,
+  .aftersales-care-queue__items {
+    grid-template-columns: minmax(0, 1fr);
+    padding: 0.45rem;
+  }
+
+  .outsource-directory .mobile-card-list,
+  .aftersales-directory .mobile-card-list,
+  .tradein-workspace .mobile-card-list {
+    width: 100%;
+    min-width: 0;
+    gap: 0.5rem;
+    padding: 0.5rem !important;
+  }
+
+  .outsource-directory .record-card,
+  .aftersales-directory .record-card,
+  .tradein-workspace .record-card {
+    width: 100% !important;
+    min-width: 0 !important;
+    margin: 0 !important;
+    padding: 0.72rem !important;
+  }
+
+  .outsource-job-card > .flex:first-child {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .outsource-vendor-row {
+    grid-template-columns: auto minmax(0, 1fr) !important;
+    gap: 0.65rem !important;
+    padding: 0.72rem !important;
+  }
+
+  .outsource-vendor-row > div:nth-child(3),
+  .outsource-vendor-row > div:nth-child(4) {
+    grid-column: 1 / -1;
+  }
+
+  .outsource-vendor-row > div:nth-child(3) {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    padding-top: 0.58rem;
+    border-top: 1px solid var(--flow-border);
+  }
+
+  .outsource-vendor-row > div:nth-child(3) p {
+    min-width: 0;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .outsource-vendor-row > div:nth-child(4) {
+    display: grid !important;
+    width: 100%;
+    grid-template-columns: repeat(auto-fit, minmax(5.5rem, 1fr));
+  }
+
+  .outsource-vendor-row > div:nth-child(4) button {
+    width: 100%;
+    min-height: 2.45rem;
+  }
+
+  .outsource-vendor-detail__header {
+    grid-template-columns: auto minmax(0, 1fr) !important;
+    gap: 0.6rem !important;
+    padding: 0.72rem !important;
+  }
+
+  .outsource-vendor-detail__header > div:nth-child(3),
+  .outsource-vendor-detail__header > button:last-child {
+    grid-column: 1 / -1;
+    width: 100%;
+  }
+
+  .outsource-vendor-detail__header > div:nth-child(3) {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    gap: 0.5rem !important;
+    text-align: left !important;
+  }
+
+  .outsource-vendor-detail__header > button:last-child {
+    min-height: 2.65rem;
+  }
+
+  .outsource-vendor-detail {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .outsource-vendor-detail > div {
+    min-width: 0;
+    border-right: 0 !important;
+  }
+
+  .aftersales-detail {
+    width: 100%;
+    padding: 0.5rem;
+  }
+
+  .aftersales-detail__header {
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 0.55rem;
+    padding: 0.7rem;
+  }
+
+  .aftersales-detail__header > span {
+    grid-column: 2;
+    justify-self: start;
+    margin-left: 0 !important;
+  }
+
+  .aftersales-detail__facts {
+    grid-template-columns: minmax(0, 1fr) !important;
+    gap: 0.5rem !important;
+  }
+
+  .aftersales-detail__facts > .card {
+    padding: 0.75rem !important;
+  }
+
+  .aftersales-progress {
+    padding: 0.75rem 0.6rem !important;
+  }
+
+  .aftersales-progress .flex.items-center.gap-0 {
+    align-items: flex-start;
+    overflow-x: auto;
+    padding-bottom: 0.2rem;
+  }
+
+  .aftersales-progress .flex.items-center.flex-1 {
+    min-width: 4.5rem;
+  }
+
+  .aftersales-return-lines > div:last-child > div {
+    padding: 0.72rem !important;
+  }
+
+  .aftersales-detail__actions {
+    grid-template-columns: repeat(auto-fit, minmax(7.5rem, 1fr));
+    padding: 0.5rem;
+  }
+
+  .aftersales-detail__actions button {
+    width: 100%;
+    min-width: 0;
+    min-height: 2.65rem;
+  }
+
+  .tradein-workspace {
+    border-radius: 0.6rem;
+  }
+
+  .tradein-workspace > .mod-header {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    padding: 0.7rem;
+  }
+
+  .tradein-workspace > .mod-header .mod-header-icon {
+    display: none;
+  }
+
+  .tradein-workspace > .mod-tabs {
+    padding-inline: 0.3rem;
+  }
+
+  .tradein-content {
+    overflow: visible;
+    border-radius: 0.6rem;
+  }
+
+  :is(.outsource-workspace, .aftersales-workspace, .tradein-workspace) :is(input, select, textarea, button) {
+    max-width: 100%;
+  }
+
+  :is(.outsource-workspace, .aftersales-workspace, .tradein-workspace) .modal-overlay {
+    padding: 0.5rem;
+  }
+
+  :is(.outsource-workspace, .aftersales-workspace, .tradein-workspace) .modal-box {
+    width: calc(100vw - 1rem) !important;
+    max-width: calc(100vw - 1rem) !important;
+    max-height: calc(100dvh - 1rem) !important;
+    margin: 0 !important;
+    overflow-y: auto !important;
+    border-radius: 0.75rem !important;
+  }
+
+  body:has(.outsource-workspace) > .tab-overflow-menu,
+  body:has(.aftersales-workspace) > .tab-overflow-menu,
+  body:has(.tradein-workspace) > .tab-overflow-menu {
+    position: fixed !important;
+    z-index: 9999 !important;
+    top: auto !important;
+    right: 0.5rem !important;
+    bottom: max(0.5rem, env(safe-area-inset-bottom)) !important;
+    left: 0.5rem !important;
+    width: auto !important;
+    max-width: none !important;
+    max-height: min(70dvh, 24rem) !important;
+    padding: 0.4rem !important;
+    overflow-y: auto !important;
+    border: 1px solid var(--flow-border) !important;
+    border-radius: 0.75rem !important;
+    background: #fff !important;
+    box-shadow: 0 18px 48px rgb(16 24 40 / 0.22) !important;
+  }
+
+  body:has(.outsource-workspace) > .tab-overflow-menu .tab-overflow-item,
+  body:has(.aftersales-workspace) > .tab-overflow-menu .tab-overflow-item,
+  body:has(.tradein-workspace) > .tab-overflow-menu .tab-overflow-item {
+    width: 100%;
+    min-height: 2.8rem;
+    padding: 0.7rem 0.75rem;
+    border-radius: 0.5rem;
+    font-size: 0.76rem;
+    text-align: left;
+  }
+}
+
+@media (max-width: 479px) {
+  .outsource-summary__item,
+  .aftersales-summary__item,
+  .tradein-summary__item,
+  .reconfig-summary > button {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .outsource-summary__item > strong,
+  .aftersales-summary__item > strong,
+  .tradein-summary__item > strong,
+  .reconfig-summary strong {
+    grid-column: 1;
+    grid-row: 2;
+    justify-self: start;
+    text-align: left;
+  }
+
+  .outsource-summary__item > small,
+  .aftersales-summary__item > small,
+  .tradein-summary__item > small,
+  .reconfig-summary small {
+    display: none;
+  }
+
+  .reconfig-page .reconfig-table tr {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .reconfig-page .reconfig-table td:nth-child(1),
+  .reconfig-page .reconfig-table td:nth-child(2),
+  .reconfig-page .reconfig-table td:nth-child(3),
+  .reconfig-page .reconfig-table td:nth-child(4),
+  .reconfig-page .reconfig-table td:nth-child(5),
+  .reconfig-page .reconfig-table td:nth-child(6),
+  .reconfig-page .reconfig-table td:nth-child(7) {
+    grid-column: 1;
+    grid-row: auto;
+    justify-self: stretch;
+    text-align: left;
+  }
+
+  .reconfig-page .reconfig-table td:nth-child(1),
+  .reconfig-page .reconfig-table td:nth-child(4) {
+    display: inline-block;
+    width: max-content;
+  }
+
+  .reconfig-page .reconfig-table td:nth-child(4) {
+    justify-self: end;
+    margin-top: -2.2rem;
+  }
+
+  .reconfig-page .reconfig-table td:nth-child(7) {
+    padding-top: 0.5rem;
+    border-top: 1px solid var(--flow-border);
+  }
+
+  .reconfig-next-action {
+    width: 100%;
+  }
+
+  .outsource-vendor-row > div:nth-child(3) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .aftersales-detail__facts .flex.justify-between {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 0.15rem;
+  }
+
+  .aftersales-detail__facts .flex.justify-between > :last-child {
+    text-align: left;
+  }
+}
+
+@media (max-width: 359px) {
+  .reconfig-summary,
+  .outsource-summary,
+  .aftersales-summary,
+  .tradein-summary {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .reconfig-summary > button,
+  .outsource-summary__item,
+  .aftersales-summary__item,
+  .tradein-summary__item {
+    min-height: 3.8rem;
+    border-right: 0 !important;
+    border-bottom: 1px solid var(--flow-border) !important;
+  }
+
+  .reconfig-summary > button:last-child,
+  .outsource-summary__item:last-child,
+  .aftersales-summary__item:last-child,
+  .tradein-summary__item:last-child {
+    border-bottom: 0 !important;
+  }
+
+  .outsource-vendor-row {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .outsource-vendor-row > div {
+    grid-column: 1 !important;
+  }
+
+  .outsource-vendor-row > div:first-child {
+    width: 2.25rem;
+  }
+
+  .outsource-vendor-row > div:nth-child(3),
+  .outsource-vendor-row > div:nth-child(4),
+  .aftersales-detail__actions {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
