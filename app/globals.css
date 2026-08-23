@@ -16859,7 +16859,7 @@ body:has(.crm-workspace) [role="dialog"] > div {
 }
 
 .crm-workspace .mod-body > .card > div > div > .p-4,
-.crm-workspace .mod-body > .card > .w-full > .flex > .p-4 {
+.crm-workspace .mod-body > .card > .w-full > [class~="flex"] > .p-4 {
   padding: 12px !important;
 }
 
@@ -16921,7 +16921,7 @@ body:has(.crm-workspace) [role="dialog"] > div {
     gap: 10px;
   }
 
-  .crm-workspace > .mod-header > .flex {
+  .crm-workspace > .mod-header > div:first-child {
     min-width: 0;
   }
 
@@ -17333,15 +17333,15 @@ body:has(.crm-workspace) [role="dialog"] > div {
     min-height: 44px;
   }
 
-  .crm-opportunity-list > div > .flex > .p-4,
-  .crm-workspace .mod-body > .card > .w-full > .flex > .p-4 {
+  .crm-opportunity-list > div > [class~="flex"] > .p-4,
+  .crm-workspace .mod-body > .card > .w-full > [class~="flex"] > .p-4 {
     width: 100%;
     max-width: 100%;
     padding: 12px !important;
   }
 
-  .crm-opportunity-list .flex.items-start.justify-between,
-  .crm-workspace .mod-body > .card .flex.items-start.justify-between {
+  .crm-opportunity-list [class~="items-start"][class~="justify-between"],
+  .crm-workspace .mod-body > .card [class~="items-start"][class~="justify-between"] {
     min-width: 0;
     align-items: flex-start;
   }
