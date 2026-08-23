@@ -261,8 +261,8 @@ function AfterSalesContent() {
     const meta = WARRANTY_STATUS_META[w.status]
     const days = w.daysLeft
     return (
-      <div className="flex flex-col gap-3 max-w-3xl mx-auto">
-        <div className="flex items-center gap-3">
+      <div className="aftersales-detail aftersales-warranty-detail flex flex-col gap-3 max-w-3xl mx-auto">
+        <div className="aftersales-detail__header flex items-center gap-3">
           <button onClick={() => setDetailId(null)}
             style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-4)', fontSize: 20, lineHeight: 1 }}>←</button>
           <div>
@@ -274,7 +274,7 @@ function AfterSalesContent() {
           </span>
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="aftersales-detail__facts grid grid-cols-2 gap-3">
           <div className="card p-4 space-y-3">
             <p className="text-[10px] font-semibold text-t3 uppercase tracking-wider">Warranty Details</p>
             <div className="space-y-2 text-[12px]">
@@ -333,8 +333,8 @@ function AfterSalesContent() {
     const currentStep = rma.status === 'rejected' ? -1 : RMA_STATUS_META[rma.status].step
 
     return (
-      <div className="flex flex-col gap-3 max-w-3xl mx-auto">
-        <div className="flex items-center gap-3">
+      <div className="aftersales-detail aftersales-rma-detail flex flex-col gap-3 max-w-3xl mx-auto">
+        <div className="aftersales-detail__header flex items-center gap-3">
           <button onClick={() => setDetailId(null)}
             style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-4)', fontSize: 20, lineHeight: 1 }}>←</button>
           <div>
@@ -348,7 +348,7 @@ function AfterSalesContent() {
 
         {/* Progress stepper */}
         {rma.status !== 'rejected' && (
-          <div className="card px-6 py-4">
+          <div className="card aftersales-progress px-6 py-4">
             <div className="flex items-center gap-0">
               {STEPS.map((s, i) => {
                 const done = RMA_STATUS_META[s.status].step <= currentStep
@@ -382,7 +382,7 @@ function AfterSalesContent() {
           </div>
         )}
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="aftersales-detail__facts grid grid-cols-2 gap-3">
           {/* Details */}
           <div className="card p-4 space-y-2 text-[12px]">
             <p className="text-[10px] font-semibold text-t3 uppercase tracking-wider mb-2">Return Details</p>
@@ -415,7 +415,7 @@ function AfterSalesContent() {
         </div>
 
         {/* Lines */}
-        <div className="card overflow-hidden">
+        <div className="card aftersales-return-lines overflow-hidden">
           <div className="px-4 py-2.5 border-b text-[11px] font-semibold text-t2" style={{ borderColor: 'var(--bg-muted)' }}>
             Return Lines
           </div>
@@ -458,7 +458,7 @@ function AfterSalesContent() {
 
         {/* Actions */}
         {canManage && (
-          <div className="flex gap-2 flex-wrap">
+          <div className="aftersales-detail__actions flex gap-2 flex-wrap">
             {rma.status === 'requested' && (
               <>
                 <button className="btn-primary text-[11px] px-4 py-2" onClick={() => approveReturn(rma.id)}>
@@ -559,13 +559,13 @@ function AfterSalesContent() {
     const meta = WARRANTY_STATUS_META[w.status]
     const days = w.daysLeft
     return (
-      <div key={w.id} className="p-4 cursor-pointer rounded-xl border border-[var(--border-lt)]" onClick={() => setDetailId(w.id)}>
+      <div key={w.id} className="record-card aftersales-mobile-card p-4 cursor-pointer rounded-xl border border-[var(--border-lt)]" onClick={() => setDetailId(w.id)}>
         <div className="flex items-start justify-between gap-2 mb-1">
           <span className="font-mono text-[11px] font-bold" style={{ color: 'var(--navy)' }}>{w.ref}</span>
           <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 20, background: meta.bg, color: meta.color, fontWeight: 600, whiteSpace: 'nowrap' }}>{meta.label}</span>
         </div>
         <p className="text-xs font-semibold text-t1">{w.customerName}</p>
-        <p className="text-[10px] text-t2 truncate" title={`${w.productName} · ${w.serialNumber}`}>{w.productName} · <span className="font-mono">{w.serialNumber}</span></p>
+        <p className="aftersales-wrap text-[10px] text-t2" title={`${w.productName} · ${w.serialNumber}`}>{w.productName} · <span className="font-mono">{w.serialNumber}</span></p>
         <p className="text-[10px] text-t3 mt-0.5">{w.months}mo · {fmtDate(w.startDate)} → {fmtDate(w.endDate)}</p>
         <p style={{ fontSize: 9, fontWeight: 600, color: days < 0 ? 'var(--danger)' : days <= 30 ? 'var(--warning-text)' : 'var(--success)', marginTop: 2 }}>
           {days < 0 ? `${Math.abs(days)}d overdue` : `${days}d left`}
@@ -617,29 +617,57 @@ function AfterSalesContent() {
   function rmaCard(rma: ReturnOrder) {
     const meta = RMA_STATUS_META[rma.status]
     return (
-      <div key={rma.id} className="p-4 cursor-pointer rounded-xl border border-[var(--border-lt)]" onClick={() => setDetailId(rma.id)}>
+      <div key={rma.id} className="record-card aftersales-mobile-card p-4 cursor-pointer rounded-xl border border-[var(--border-lt)]" onClick={() => setDetailId(rma.id)}>
         <div className="flex items-start justify-between gap-2 mb-1">
           <span className="font-mono text-[11px] font-bold" style={{ color: 'var(--navy)' }}>{rma.ref}</span>
           <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 20, background: meta.bg, color: meta.color, fontWeight: 600, whiteSpace: 'nowrap' }}>{meta.label}</span>
         </div>
         <p className="text-xs font-semibold text-t1">{rma.customerName}</p>
-        <p className="text-[10px] text-t3 truncate">{rma.reason}</p>
+        <p className="aftersales-wrap text-[10px] text-t3">{rma.reason}</p>
         <p className="text-[10px] text-t3 mt-0.5">{fmtDate(rma.requestDate)} · {rma.saleOrderRef}{rma.resolution ? ` · ${RESOLUTION_LABELS[rma.resolution]}` : ''}</p>
       </div>
     )
   }
 
+  const careQueuePanel = (
+    <aside className="aftersales-care-queue" aria-label="Customer care queue">
+      <div className="aftersales-care-queue__header">
+        <div><span>Customer care</span><h3>Priority queue</h3></div>
+        <strong>{tab === 'warranties' ? wStats.expiring : rmaStats.requested + rmaStats.approved + rmaStats.received}</strong>
+      </div>
+      {tab === 'warranties' ? (
+        <div className="aftersales-care-queue__items">
+          {refreshedWarranties.filter(w => w.status === 'expiring').slice(0, 5).map(w => (
+            <button key={w.id} type="button" onClick={() => setDetailId(w.id)}>
+              <span>{w.ref}</span><strong>{w.customerName}</strong><small>{w.daysLeft} days left · {w.productName}</small>
+            </button>
+          ))}
+          {wStats.expiring === 0 && <small className="aftersales-care-queue__empty">No warranties expiring soon.</small>}
+        </div>
+      ) : (
+        <div className="aftersales-care-queue__items">
+          {returnOrders.filter(r => r.status !== 'processed' && r.status !== 'rejected').slice(0, 5).map(rma => (
+            <button key={rma.id} type="button" onClick={() => setDetailId(rma.id)}>
+              <span>{rma.ref}</span><strong>{rma.customerName}</strong><small>{RMA_STATUS_META[rma.status].label} · {rma.reason}</small>
+            </button>
+          ))}
+          {rmaStats.requested + rmaStats.approved + rmaStats.received === 0 && <small className="aftersales-care-queue__empty">No open return requests.</small>}
+        </div>
+      )}
+    </aside>
+  )
+
   // ════════════════════════════════════════════════════════════════════════════
   // MAIN LIST VIEW
   // ════════════════════════════════════════════════════════════════════════════
   return (
-    <div className="mod-page">
+    <div className="mod-page aftersales-workspace">
       <ModuleHeader
         title="After-sales"
-        subtitle="Warranty, returns, buy-backs, donations and exchanges"
+        subtitle="Warranty, returns and customer value recovery"
         icon={<Fa icon={faShield} />}
         count={wStats.total + rmaStats.total + buyBacks.length + donations.length + clientExchanges.length}
-        color="var(--success)"
+        color="var(--navy)"
         primaryAction={tab === 'returns' ? (
           <PrimaryActionButton icon={<Fa icon={faPlus} />} onClick={openCreateRMA} hideLabelOnMobile={false}>
             New return
@@ -659,15 +687,28 @@ function AfterSalesContent() {
         ariaLabel="After-sales sections"
       />
 
-      <div className="mod-body p-3 sm:p-4 flex flex-col gap-4">
+      <div className="mod-body aftersales-body p-3 sm:p-4 flex flex-col gap-4">
+        <section className="aftersales-summary" aria-label="After-sales summary">
+          <button type="button" className="aftersales-summary__item" onClick={() => { selectTab('warranties'); setWFilter('active') }}>
+            <span>Active coverage</span><strong>{wStats.active}</strong><small>Protected devices</small>
+          </button>
+          <button type="button" className="aftersales-summary__item is-warning" onClick={() => { selectTab('warranties'); setWFilter('expiring') }}>
+            <span>Expiring soon</span><strong>{wStats.expiring}</strong><small>Customer follow-up</small>
+          </button>
+          <button type="button" className="aftersales-summary__item" onClick={() => { selectTab('returns'); setRmaFilter('requested') }}>
+            <span>Open returns</span><strong>{rmaStats.requested + rmaStats.approved + rmaStats.received}</strong><small>Needs processing</small>
+          </button>
+          <button type="button" className="aftersales-summary__item" onClick={() => selectTab('trade')}>
+            <span>Trade records</span><strong>{buyBacks.length + donations.length + clientExchanges.length}</strong><small>Buy-backs & exchanges</small>
+          </button>
+        </section>
 
       {tab === 'trade' && <TradeIn />}
 
       {/* ── WARRANTIES TAB ─────────────────────────────────────────────────── */}
       {tab === 'warranties' && (
-        <div className="space-y-3">
-          {/* Warranty list */}
-          <div className="card overflow-hidden">
+        <div className="aftersales-list-layout">
+          <div className="aftersales-directory card overflow-hidden">
             <DataTable
               tableId="warranties"
               columns={warrantyColumns}
@@ -701,14 +742,14 @@ function AfterSalesContent() {
               exportFilename="warranties-list"
             />
           </div>
+          {careQueuePanel}
         </div>
       )}
 
       {/* ── RETURNS / RMA TAB ──────────────────────────────────────────────── */}
       {tab === 'returns' && (
-        <div className="space-y-3">
-          {/* RMA list */}
-          <div className="card overflow-hidden">
+        <div className="aftersales-list-layout">
+          <div className="aftersales-directory card overflow-hidden">
             <DataTable
               tableId="rmas"
               columns={rmaColumns}
@@ -744,6 +785,7 @@ function AfterSalesContent() {
               exportFilename="returns-rmas"
             />
           </div>
+          {careQueuePanel}
         </div>
       )}
 
