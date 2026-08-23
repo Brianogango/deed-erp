@@ -77,7 +77,7 @@ export default function PurchaseBillsTab() {
   }
 
   return (
-    <div className="card overflow-hidden">
+    <div className="card overflow-hidden purchase-directory purchase-bills-panel">
       <PanelHeader title="Vendor Bills" count={vendorBills.length} />
       <DataTable
         tableId="vendor_bills"
