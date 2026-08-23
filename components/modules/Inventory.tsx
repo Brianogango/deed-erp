@@ -1404,7 +1404,7 @@ function InventoryContent() {
   const acctOpt = (list: Account[]) => list.map(a => ({ value: a.code, label: `[${a.code}] ${a.name}` }))
 
   return (
-    <div className="mod-page inventory-pilot">
+    <div className="mod-page inventory-pilot operations-workspace">
       {/* Hidden file inputs */}
       <input ref={productImportRef} type="file" accept=".xlsx,.xls,.csv" className="hidden"
         onChange={e => { const f = e.target.files?.[0]; if (f) handleProductImportFile(f); e.target.value = '' }} />
@@ -1412,11 +1412,11 @@ function InventoryContent() {
         onChange={e => { const f = e.target.files?.[0]; if (f) handleOpeningImportFile(f); e.target.value = '' }} />
 
       <ModuleHeader
-        title="Inventory"
-        subtitle="Catalog · warehouse · movements · stock control"
+        title="Operations"
+        subtitle="Inventory, warehouse and stock control"
         icon={<Fa icon={faBoxesStacked} />}
         count={kpis.productMasters}
-        color="#FFFFFF"
+        color="var(--navy)"
         subtitleMode="visible"
         primaryAction={
           canEditStock && (tab === 'product_master' || tab === 'product_catalog') ? (
@@ -1474,53 +1474,30 @@ function InventoryContent() {
         maxVisibleMobile={3}
         maxVisibleTablet={5}
         maxVisibleDesktop={6}
-        ariaLabel="Inventory sections"
+        ariaLabel="Operations sections"
       />
 
       <div className="mod-body">
-      <div className="inventory-pilot-rail" aria-label="Inventory overview">
-        <button
-          type="button"
-          className={`inventory-pilot-stat ${tab === 'product_catalog' ? 'is-active' : ''}`}
-          onClick={() => setActiveTab('product_catalog')}
-        >
-          <span className="inventory-pilot-stat-value tabular-nums">{kpis.productMasters.toLocaleString()}</span>
+      <div className="inventory-pilot-rail operations-summary" aria-label="Operations overview">
+        <button type="button" className={`inventory-pilot-stat ${tab === 'product_catalog' ? 'is-active' : ''}`} onClick={() => setActiveTab('product_catalog')}>
           <span className="inventory-pilot-stat-label">Active products</span>
+          <span className="inventory-pilot-stat-value tabular-nums">{kpis.productMasters.toLocaleString()}</span>
+          <span className="operations-summary__hint">Sellable catalog items</span>
         </button>
-        <button
-          type="button"
-          className={`inventory-pilot-stat ${tab === 'product_master' && openArchivedToken > 0 ? 'is-active' : ''}`}
-          onClick={() => {
-            setActiveTab('product_master')
-            setOpenArchivedToken(n => n + 1)
-          }}
-        >
-          <span className="inventory-pilot-stat-value tabular-nums">{kpis.archivedProducts.toLocaleString()}</span>
-          <span className="inventory-pilot-stat-label">Archived</span>
-        </button>
-        <button
-          type="button"
-          className={`inventory-pilot-stat ${tab === 'warehouse_view' ? 'is-active' : ''}`}
-          onClick={() => setActiveTab('warehouse_view')}
-        >
-          <span className="inventory-pilot-stat-value tabular-nums">{kpis.serialTracked.toLocaleString()}</span>
+        <button type="button" className={`inventory-pilot-stat ${tab === 'warehouse_view' ? 'is-active' : ''}`} onClick={() => setActiveTab('warehouse_view')}>
           <span className="inventory-pilot-stat-label">Available serials</span>
+          <span className="inventory-pilot-stat-value tabular-nums">{kpis.serialTracked.toLocaleString()}</span>
+          <span className="operations-summary__hint">Ready for sale</span>
         </button>
-        <button
-          type="button"
-          className={`inventory-pilot-stat ${kpis.lowStock > 0 ? 'tone-warning' : ''} ${tab === 'reports' ? 'is-active' : ''}`}
-          onClick={() => { setActiveTab('reports'); setReportTab('low_stock') }}
-        >
-          <span className="inventory-pilot-stat-value tabular-nums">{kpis.lowStock.toLocaleString()}</span>
+        <button type="button" className={`inventory-pilot-stat ${kpis.lowStock > 0 ? 'tone-warning' : ''} ${tab === 'reports' ? 'is-active' : ''}`} onClick={() => { setActiveTab('reports'); setReportTab('low_stock') }}>
           <span className="inventory-pilot-stat-label">Low stock</span>
+          <span className="inventory-pilot-stat-value tabular-nums">{kpis.lowStock.toLocaleString()}</span>
+          <span className="operations-summary__hint">Products below minimum</span>
         </button>
-        <button
-          type="button"
-          className={`inventory-pilot-stat ${tab === 'stock_in' || tab === 'movements' ? 'is-active' : ''}`}
-          onClick={() => setActiveTab(canEditStock ? 'stock_in' : 'movements')}
-        >
-          <span className="inventory-pilot-stat-value tabular-nums">{kpis.stockReceipts.toLocaleString()}</span>
+        <button type="button" className={`inventory-pilot-stat ${tab === 'stock_in' || tab === 'movements' ? 'is-active' : ''}`} onClick={() => setActiveTab(canEditStock ? 'stock_in' : 'movements')}>
           <span className="inventory-pilot-stat-label">Validated GRNs</span>
+          <span className="inventory-pilot-stat-value tabular-nums">{kpis.stockReceipts.toLocaleString()}</span>
+          <span className="operations-summary__hint">Receipts posted</span>
         </button>
       </div>
 
@@ -1661,7 +1638,7 @@ function InventoryContent() {
             : 'inventory-warehouse-board'
 
         return (
-          <div className="flex flex-col gap-4">
+          <div className="operations-warehouse">
             <form
               className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center inventory-pilot-search"
               onSubmit={e => { e.preventDefault(); applyWarehouseSearch() }}
@@ -1698,6 +1675,7 @@ function InventoryContent() {
               </p>
             )}
 
+            <div className="operations-warehouse-layout">
             <div className={boardEmphasis}>
             <Section title="Warehouse — Ready for Sale" icon={<Fa icon={faIndustry} />} tone="navy"
               count={readyCount}
@@ -1880,6 +1858,38 @@ function InventoryContent() {
                 </div>
               )}
             </Section>
+            </div>
+            <aside className="operations-attention" aria-label="Warehouse priorities">
+              <section className="operations-attention__card">
+                <div className="operations-attention__heading">
+                  <div>
+                    <p>Needs attention</p>
+                    <span>Operational exceptions</span>
+                  </div>
+                  <strong className="tabular-nums">{(issuesCount + refurbCount + kpis.lowStock).toLocaleString()}</strong>
+                </div>
+                <button type="button" onClick={() => { setActiveTab('reports'); setReportTab('low_stock') }}>
+                  <span>Low-stock products</span><strong>{kpis.lowStock.toLocaleString()}</strong>
+                </button>
+                <button type="button" onClick={() => setActiveTab('warehouse_view')}>
+                  <span>Units with issues</span><strong>{issuesCount.toLocaleString()}</strong>
+                </button>
+                <button type="button" onClick={() => setActiveTab('warehouse_view')}>
+                  <span>In refurbishment</span><strong>{refurbCount.toLocaleString()}</strong>
+                </button>
+              </section>
+              <section className="operations-attention__card">
+                <div className="operations-attention__heading">
+                  <div>
+                    <p>Locations</p>
+                    <span>Live stock distribution</span>
+                  </div>
+                </div>
+                <div className="operations-location"><span><i className="operations-location__dot operations-location__dot--ready" />Warehouse</span><strong>{readyCount.toLocaleString()}</strong></div>
+                <div className="operations-location"><span><i className="operations-location__dot operations-location__dot--issue" />With issues</span><strong>{issuesCount.toLocaleString()}</strong></div>
+                <div className="operations-location"><span><i className="operations-location__dot operations-location__dot--repair" />Refurbishment</span><strong>{refurbCount.toLocaleString()}</strong></div>
+              </section>
+            </aside>
             </div>
           </div>
         )
