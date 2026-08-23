@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Sales — Odoo grammar · Deed colors</title>
+<!--
+THESIS: Sales works like Odoo — control panel, search, dense list, sheet + statusbar + chatter — not a navy command band.
+OWN-WORLD: Deed navy fills primary actions and the current status; Deed cyan is links, active tab, selection. Light canvas, white sheet, 4px controls.
+STORY: A clerk opens Quotations, finds a customer, confirms to SO without relearning chrome.
+FIRST VIEWPORT: Breadcrumb Sales / Quotations, New on the right, search + Filters, checkbox list. No hero, no KPI cards.
+FORM: Canon / Odoo 18 Sales, user-pinned. Deed tokens only.
+FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, and DESIGN.md
+-->
+<style>
+  :root {
+    --navy: #20164D;
+    --navy-dark: #18103A;
+    --cyan: #00AEEF;
+    --cyan-dark: #0096CC;
+    --cyan-soft: #E0F7FE;
+    --page: #F1F5F9;
+    --sheet: #FFFFFF;
+    --surface: #F8FAFC;
+    --line: #CBD5E1;
+    --text: #0F172A;
+    --text-2: #1E293B;
+    --muted: #64748B;
+    --success: #059669;
+    --font: var(--font-inter), Inter, system-ui, sans-serif;
+    --radius: 4px;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body { font: 13px/1.4 var(--font); color: var(--text); background: var(--page); }
+  button, input, select { font: inherit; }
+  .reviewer {
+    position: sticky; top: 0; z-index: 20; display: flex; gap: 8px; align-items: center;
+    padding: 8px 12px; background: var(--navy-dark); color: #FFFFFF;
+  }
+  .reviewer b { font-size: 12px; margin-right: 8px; }
+  .reviewer button {
+    border: 1px solid var(--navy); background: var(--navy); color: #FFFFFF; border-radius: var(--radius); padding: 5px 10px; cursor: pointer;
+  }
+  .reviewer button[aria-pressed="true"] { background: var(--cyan); color: var(--navy); border-color: var(--cyan); }
+  .app { display: none; height: calc(100vh - 42px); background: var(--page); }
+  .app.on { display: grid; grid-template-columns: 56px 1fr; }
+  .apps {
+    background: var(--navy-dark); color: #FFFFFF; display: flex; flex-direction: column; align-items: center;
+    padding: 8px 0; gap: 6px;
+  }
+  .apps .logo {
+    width: 34px; height: 34px; border-radius: 8px; background: var(--cyan); color: var(--navy);
+    display: grid; place-items: center; font-weight: 800; font-size: 11px; margin-bottom: 8px;
+  }
+  .apps a {
+    width: 38px; height: 38px; border-radius: 8px; color: #FFFFFF;
+    display: grid; place-items: center; text-decoration: none; font-size: 9px; font-weight: 700;
+    opacity: 0.7;
+  }
+  .apps a.on { background: var(--cyan-soft); color: var(--navy); opacity: 1; }
+  .stage { display: flex; flex-direction: column; min-width: 0; background: var(--page); }
+  .top {
+    height: 46px; background: var(--navy); color: #FFFFFF; display: flex; align-items: center; padding: 0 12px; gap: 16px;
+  }
+  .top .menu { font-weight: 650; font-size: 14px; }
+  .top .search {
+    flex: 1; max-width: 420px; height: 30px; border: 0; border-radius: var(--radius);
+    background: var(--navy-dark); color: #FFFFFF; padding: 0 10px;
+  }
+  .top .who { margin-left: auto; font-size: 12px; color: #FFFFFF; }
+  .cp {
+    background: #FFFFFF; border-bottom: 1px solid var(--line); min-height: 46px;
+    display: flex; align-items: center; justify-content: space-between; padding: 6px 16px; gap: 12px;
+  }
+  .crumb { font-size: 18px; font-weight: 400; color: var(--muted); display: flex; gap: 8px; align-items: baseline; }
+  .crumb strong { color: var(--text); font-weight: 650; }
+  .actions { display: flex; gap: 4px; flex-wrap: wrap; }
+  .btn {
+    border: 1px solid var(--line); background: #FFFFFF; color: var(--text-2);
+    border-radius: var(--radius); padding: 4px 12px; height: 30px; cursor: pointer;
+  }
+  .btn:hover { background: var(--page); }
+  .btn-primary { background: var(--navy); border-color: var(--navy); color: #FFFFFF; font-weight: 650; }
+  .btn-primary:hover { background: var(--navy-dark); }
+  .sv {
+    background: #FFFFFF; border-bottom: 1px solid var(--line);
+    display: flex; align-items: center; gap: 8px; padding: 8px 16px;
+  }
+  .sv input {
+    flex: 1; height: 32px; border: 1px solid var(--line); border-radius: var(--radius); padding: 0 10px; background: var(--surface);
+  }
+  .facet { border: 0; background: transparent; color: var(--navy); font-weight: 650; cursor: pointer; padding: 4px 6px; }
+  .sv .views { margin-left: auto; display: flex; gap: 2px; }
+  .sv .views button {
+    min-width: 30px; height: 28px; border: 1px solid var(--line); background: #FFFFFF; border-radius: var(--radius);
+    cursor: pointer; color: var(--muted); padding: 0 6px; font-size: 11px; font-weight: 700;
+  }
+  .sv .views button.on { color: var(--navy); border-color: var(--navy); }
+  .list { flex: 1; overflow: auto; background: #FFFFFF; }
+  table.o-list { width: 100%; border-collapse: collapse; }
+  table.o-list th, table.o-list td { padding: 7px 12px; border-bottom: 1px solid var(--surface); text-align: left; white-space: nowrap; }
+  table.o-list th { font-weight: 650; color: var(--text-2); background: #FFFFFF; position: sticky; top: 0; border-bottom: 1px solid var(--line); }
+  table.o-list tr:hover td { background: var(--surface); cursor: pointer; }
+  table.o-list tr.sel td { background: var(--cyan-soft); }
+  .link { color: var(--cyan-dark); text-decoration: none; font-weight: 650; }
+  .num { text-align: right !important; font-variant-numeric: tabular-nums; }
+  .pager { background: #FFFFFF; border-top: 1px solid var(--line); padding: 6px 16px; color: var(--muted); display: flex; justify-content: flex-end; gap: 12px; }
+  .form-wrap { flex: 1; display: grid; grid-template-columns: 1fr 340px; min-height: 0; }
+  .sheet-col { overflow: auto; padding: 12px 16px 24px; }
+  .sheet {
+    background: var(--sheet); border: 1px solid var(--line); box-shadow: 0 1px 4px color-mix(in srgb, var(--navy) 8%, transparent);
+    padding: 18px 28px 24px; border-radius: var(--radius);
+  }
+  .title-row { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; margin-bottom: 16px; }
+  .doc-name { font-size: 26px; font-weight: 700; letter-spacing: -0.02em; margin: 0; }
+  .statusbar { display: flex; flex-wrap: wrap; }
+  .statusbar span {
+    padding: 5px 14px; background: var(--surface); color: var(--text-2); font-size: 12px; font-weight: 650;
+    border: 1px solid var(--line);
+  }
+  .statusbar span + span { border-left: 0; }
+  .statusbar span:first-child { border-radius: 4px 0 0 4px; }
+  .statusbar span:last-child { border-radius: 0 4px 4px 0; }
+  .statusbar .done { background: var(--cyan-soft); color: var(--navy); }
+  .statusbar .now { background: var(--navy); color: #FFFFFF; border-color: var(--navy); }
+  .fields { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 40px; margin-bottom: 18px; }
+  .field { display: grid; grid-template-columns: 120px 1fr; align-items: center; min-height: 30px; gap: 8px; }
+  .field label { color: var(--muted); }
+  .field .val { border-bottom: 1px solid transparent; padding: 3px 0; }
+  .field .val.edit { border-bottom-color: var(--line); }
+  .nb { border-bottom: 1px solid var(--line); display: flex; gap: 18px; margin-bottom: 0; }
+  .nb button { border: 0; background: 0; padding: 10px 0; color: var(--muted); cursor: pointer; font-weight: 650; }
+  .nb button.on { color: var(--navy); box-shadow: inset 0 -2px 0 var(--cyan); }
+  table.lines { width: 100%; border-collapse: collapse; }
+  table.lines th, table.lines td { padding: 6px 8px; border-bottom: 1px solid var(--surface); text-align: left; }
+  table.lines th { color: var(--muted); font-weight: 650; font-size: 12px; }
+  .add-line { color: var(--cyan-dark); background: 0; border: 0; padding: 8px 0; cursor: pointer; font-weight: 650; }
+  .totals { margin-left: auto; width: 280px; padding-top: 8px; }
+  .totals div { display: flex; justify-content: space-between; padding: 2px 0; }
+  .totals .grand { font-weight: 750; font-size: 16px; border-top: 1px solid var(--line); margin-top: 6px; padding-top: 8px; }
+  .chatter { background: var(--surface); border-left: 1px solid var(--line); display: flex; flex-direction: column; min-width: 0; }
+  .chatter-head { padding: 10px 12px; border-bottom: 1px solid var(--line); display: flex; gap: 8px; }
+  .chatter-head button { border: 0; background: 0; color: var(--navy); font-weight: 650; cursor: pointer; padding: 4px 6px; }
+  .chatter-head button.on { box-shadow: inset 0 -2px 0 var(--cyan); }
+  .composer { margin: 10px 12px; border: 1px solid var(--line); background: #FFFFFF; border-radius: var(--radius); padding: 8px; color: var(--muted); min-height: 64px; }
+  .log { padding: 8px 12px; font-size: 12px; }
+  .log article { padding: 8px 0; border-bottom: 1px solid var(--line); }
+  .log b { color: var(--navy); }
+  .log time { color: var(--muted); font-size: 11px; }
+  .pill { display: inline-block; padding: 1px 7px; border-radius: 10px; font-size: 11px; font-weight: 650; }
+  .pill-draft { background: var(--surface); color: var(--text-2); }
+  .pill-sent { background: var(--cyan-soft); color: var(--cyan-dark); }
+  .pill-so { background: var(--cyan-soft); color: var(--navy); }
+  @media (max-width: 960px) {
+    .form-wrap { grid-template-columns: 1fr; }
+    .chatter { border-left: 0; border-top: 1px solid var(--line); }
+    .fields { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="reviewer">
+  <b>Odoo grammar · Deed navy / cyan</b>
+  <button type="button" data-go="list" aria-pressed="true">Quotations list</button>
+  <button type="button" data-go="quote">Quotation form</button>
+  <button type="button" data-go="so">Sales order</button>
+</div>
+
+<section class="app on" id="list" aria-label="Quotations list">
+  <aside class="apps" aria-label="Apps">
+    <div class="logo">D</div>
+    <a href="#">Home</a>
+    <a class="on" href="#">Sales</a>
+    <a href="#">Stock</a>
+    <a href="#">Invoicing</a>
+  </aside>
+  <div class="stage">
+    <div class="top">
+      <div class="menu">Sales</div>
+      <input class="search" placeholder="Search…"/>
+      <div class="who">Brian · Director</div>
+    </div>
+    <div class="cp">
+      <div class="crumb">Sales / <strong>Quotations</strong></div>
+      <div class="actions"><button class="btn btn-primary" type="button">New</button></div>
+    </div>
+    <div class="sv">
+      <input placeholder="Search…"/>
+      <button class="facet" type="button">Filters</button>
+      <button class="facet" type="button">Group By</button>
+      <button class="facet" type="button">Favorites</button>
+      <div class="views">
+        <button class="on" type="button">List</button>
+        <button type="button">Kanban</button>
+      </div>
+    </div>
+    <div class="list">
+      <table class="o-list">
+        <thead>
+          <tr>
+            <th style="width:28px"><input type="checkbox" aria-label="Select all"/></th>
+            <th>Number</th>
+            <th>Creation Date</th>
+            <th>Customer</th>
+            <th>Salesperson</th>
+            <th class="num">Total</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr class="sel">
+            <td><input type="checkbox" checked/></td>
+            <td><a class="link" href="#">SQ/2026/0142</a></td>
+            <td>04 Aug 2026</td>
+            <td>Nairobi Tech Hub Ltd</td>
+            <td>Brian Oketch</td>
+            <td class="num">KES 371,211.60</td>
+            <td><span class="pill pill-sent">Quotation Sent</span></td>
+          </tr>
+          <tr>
+            <td><input type="checkbox"/></td>
+            <td><a class="link" href="#">SQ/2026/0141</a></td>
+            <td>04 Aug 2026</td>
+            <td>Beyond Matrix Limited</td>
+            <td>Cynthia Juma</td>
+            <td class="num">KES 132,000.00</td>
+            <td><span class="pill pill-so">Sales Order</span></td>
+          </tr>
+          <tr>
+            <td><input type="checkbox"/></td>
+            <td><a class="link" href="#">SQ/2026/0140</a></td>
+            <td>03 Aug 2026</td>
+            <td>Kevin Mbugua</td>
+            <td>Joseph Maina</td>
+            <td class="num">KES 51,812.00</td>
+            <td><span class="pill pill-draft">Quotation</span></td>
+          </tr>
+          <tr>
+            <td><input type="checkbox"/></td>
+            <td><a class="link" href="#">SQ/2026/0138</a></td>
+            <td>02 Aug 2026</td>
+            <td>NCBA Group</td>
+            <td>Brian Oketch</td>
+            <td class="num">KES 890,400.00</td>
+            <td><span class="pill pill-so">Sales Order</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="pager">1-4 / 4</div>
+  </div>
+</section>
+
+<section class="app" id="quote" aria-label="Quotation form">
+  <aside class="apps" aria-label="Apps">
+    <div class="logo">D</div>
+    <a href="#">Home</a>
+    <a class="on" href="#">Sales</a>
+    <a href="#">Stock</a>
+    <a href="#">Invoicing</a>
+  </aside>
+  <div class="stage">
+    <div class="top">
+      <div class="menu">Sales</div>
+      <input class="search" placeholder="Search…"/>
+      <div class="who">Brian · Director</div>
+    </div>
+    <div class="cp">
+      <div class="crumb">Sales / Quotations / <strong>SQ/2026/0142</strong></div>
+      <div class="actions">
+        <button class="btn btn-primary" type="button">Confirm</button>
+        <button class="btn" type="button">Send by Email</button>
+        <button class="btn" type="button">Print</button>
+        <button class="btn" type="button">New</button>
+      </div>
+    </div>
+    <div class="form-wrap">
+      <div class="sheet-col">
+        <div class="sheet">
+          <div class="title-row">
+            <h1 class="doc-name">SQ/2026/0142</h1>
+            <div class="statusbar" aria-label="Status">
+              <span class="done">Quotation</span>
+              <span class="now">Quotation Sent</span>
+              <span>Sales Order</span>
+            </div>
+          </div>
+          <div class="fields">
+            <div class="field"><label>Customer</label><div class="val edit">Nairobi Tech Hub Ltd</div></div>
+            <div class="field"><label>Expiration</label><div class="val edit">18 Aug 2026</div></div>
+            <div class="field"><label>Invoice Address</label><div class="val">Westlands, Nairobi</div></div>
+            <div class="field"><label>Payment Terms</label><div class="val edit">Net 30</div></div>
+            <div class="field"><label>Delivery Address</label><div class="val">Ground Floor Receiving Bay</div></div>
+            <div class="field"><label>Salesperson</label><div class="val">Brian Oketch</div></div>
+          </div>
+          <div class="nb">
+            <button class="on" type="button">Order Lines</button>
+            <button type="button">Other Info</button>
+            <button type="button">Notes</button>
+          </div>
+          <table class="lines">
+            <thead>
+              <tr>
+                <th>Product</th>
+                <th>Description</th>
+                <th class="num">Qty</th>
+                <th>UoM</th>
+                <th class="num">Unit Price</th>
+                <th>Taxes</th>
+                <th class="num">Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>HP ProBook 450 G10</td>
+                <td>i5-1335U · 16GB · 512GB SSD</td>
+                <td class="num">4</td>
+                <td>Unit</td>
+                <td class="num">52,500.00</td>
+                <td>16%</td>
+                <td class="num">210,000.00</td>
+              </tr>
+              <tr>
+                <td>Dell Latitude 5440</td>
+                <td>i7 · Refurb A</td>
+                <td class="num">2</td>
+                <td>Unit</td>
+                <td class="num">48,000.00</td>
+                <td>16%</td>
+                <td class="num">96,000.00</td>
+              </tr>
+              <tr>
+                <td>Logitech MK270 Kit</td>
+                <td>Keyboard + mouse</td>
+                <td class="num">6</td>
+                <td>Kit</td>
+                <td class="num">2,335.00</td>
+                <td>16%</td>
+                <td class="num">14,010.00</td>
+              </tr>
+            </tbody>
+          </table>
+          <button class="add-line" type="button">Add a product</button>
+          <div class="totals">
+            <div><span>Untaxed Amount</span><span>KES 320,010.00</span></div>
+            <div><span>VAT 16%</span><span>KES 51,201.60</span></div>
+            <div class="grand"><span>Total</span><span>KES 371,211.60</span></div>
+          </div>
+        </div>
+      </div>
+      <aside class="chatter">
+        <div class="chatter-head">
+          <button class="on" type="button">Send message</button>
+          <button type="button">Log note</button>
+          <button type="button">Activities</button>
+        </div>
+        <div class="composer">Write a message to the customer…</div>
+        <div class="log">
+          <article>
+            <b>Amina Wanjiku</b> accepted the quotation.<br/>
+            <time>05 Aug 2026 09:14</time>
+          </article>
+          <article>
+            <b>Brian Oketch</b> sent quotation by email.<br/>
+            <time>04 Aug 2026 16:02</time>
+          </article>
+          <article>
+            <b>System</b> quotation SQ/2026/0142 created.<br/>
+            <time>04 Aug 2026 15:40</time>
+          </article>
+        </div>
+      </aside>
+    </div>
+  </div>
+</section>
+
+<section class="app" id="so" aria-label="Sales order">
+  <aside class="apps" aria-label="Apps">
+    <div class="logo">D</div>
+    <a href="#">Home</a>
+    <a class="on" href="#">Sales</a>
+    <a href="#">Stock</a>
+    <a href="#">Invoicing</a>
+  </aside>
+  <div class="stage">
+    <div class="top">
+      <div class="menu">Sales</div>
+      <input class="search" placeholder="Search…"/>
+      <div class="who">Brian · Director</div>
+    </div>
+    <div class="cp">
+      <div class="crumb">Sales / Orders / <strong>SO/2026/0087</strong></div>
+      <div class="actions">
+        <button class="btn btn-primary" type="button">Create Invoice</button>
+        <button class="btn" type="button">Delivery</button>
+        <button class="btn" type="button">Print</button>
+      </div>
+    </div>
+    <div class="form-wrap">
+      <div class="sheet-col">
+        <div class="sheet">
+          <div class="title-row">
+            <h1 class="doc-name">SO/2026/0087</h1>
+            <div class="statusbar" aria-label="Status">
+              <span class="done">Quotation</span>
+              <span class="done">Quotation Sent</span>
+              <span class="now">Sales Order</span>
+            </div>
+          </div>
+          <div class="fields">
+            <div class="field"><label>Customer</label><div class="val">Nairobi Tech Hub Ltd</div></div>
+            <div class="field"><label>Expiration</label><div class="val">18 Aug 2026</div></div>
+            <div class="field"><label>Source</label><div class="val"><a class="link" href="#">SQ/2026/0142</a></div></div>
+            <div class="field"><label>Payment Terms</label><div class="val">Net 30</div></div>
+            <div class="field"><label>Delivery Date</label><div class="val">08 Aug 2026</div></div>
+            <div class="field"><label>Salesperson</label><div class="val">Brian Oketch</div></div>
+          </div>
+          <div class="nb">
+            <button class="on" type="button">Order Lines</button>
+            <button type="button">Other Info</button>
+            <button type="button">Notes</button>
+          </div>
+          <table class="lines">
+            <thead>
+              <tr>
+                <th>Product</th>
+                <th class="num">Ordered</th>
+                <th class="num">Delivered</th>
+                <th class="num">Invoiced</th>
+                <th class="num">Unit Price</th>
+                <th class="num">Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>HP ProBook 450 G10</td>
+                <td class="num">4</td>
+                <td class="num">0</td>
+                <td class="num">0</td>
+                <td class="num">52,500.00</td>
+                <td class="num">210,000.00</td>
+              </tr>
+              <tr>
+                <td>Dell Latitude 5440</td>
+                <td class="num">2</td>
+                <td class="num">0</td>
+                <td class="num">0</td>
+                <td class="num">48,000.00</td>
+                <td class="num">96,000.00</td>
+              </tr>
+              <tr>
+                <td>Logitech MK270 Kit</td>
+                <td class="num">6</td>
+                <td class="num">0</td>
+                <td class="num">0</td>
+                <td class="num">2,335.00</td>
+                <td class="num">14,010.00</td>
+              </tr>
+            </tbody>
+          </table>
+          <div class="totals">
+            <div><span>Untaxed Amount</span><span>KES 320,010.00</span></div>
+            <div><span>VAT 16%</span><span>KES 51,201.60</span></div>
+            <div class="grand"><span>Total</span><span>KES 371,211.60</span></div>
+            <div><span>Paid</span><span>KES 0.00</span></div>
+          </div>
+        </div>
+      </div>
+      <aside class="chatter">
+        <div class="chatter-head">
+          <button class="on" type="button">Send message</button>
+          <button type="button">Log note</button>
+          <button type="button">Activities</button>
+        </div>
+        <div class="composer">Write a message…</div>
+        <div class="log">
+          <article>
+            <b>Brian Oketch</b> confirmed quotation into SO/2026/0087.<br/>
+            <time>05 Aug 2026 10:02</time>
+          </article>
+          <article>
+            <b>System</b> reservation started for 3 products.<br/>
+            <time>05 Aug 2026 10:02</time>
+          </article>
+        </div>
+      </aside>
+    </div>
+  </div>
+</section>
+
+<script>
+  const apps = document.querySelectorAll('.app')
+  const buttons = document.querySelectorAll('.reviewer button[data-go]')
+  function show(id) {
+    apps.forEach(el => el.classList.toggle('on', el.id === id))
+    buttons.forEach(btn => btn.setAttribute('aria-pressed', btn.dataset.go === id ? 'true' : 'false'))
+  }
+  buttons.forEach(btn => btn.addEventListener('click', () => show(btn.dataset.go)))
+</script>
+</body>
+</html>

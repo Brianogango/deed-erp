@@ -1704,19 +1704,13 @@ function SalesContent() {
                 <>
                   <div className="sales-proto-page-header">
                     <div className="sales-proto-header-copy">
-                      <span className="sales-proto-header-icon" aria-hidden="true" />
-                      <div>
-                      <h1>{listTab === 'quotations' ? 'Quotations' : 'Sales orders'}</h1>
-                      <div className="sub">
-                        {listTab === 'quotations'
-                          ? 'Draft → Sent → Accepted → Confirm becomes SO/…'
-                          : 'Reserve → Deliver → Invoice · Payment stays separate'}
-                      </div>
-                      </div>
+                      <nav className="sales-odoo-crumb" aria-label="Breadcrumb">
+                        Sales / <strong>{listTab === 'quotations' ? 'Quotations' : 'Orders'}</strong>
+                      </nav>
                     </div>
                     <div className="sales-proto-actions">
                       <button type="button" className="sp-btn sp-btn-primary" onClick={openNewForm}>
-                        New quotation
+                        New
                       </button>
                     </div>
                   </div>
@@ -3491,17 +3485,14 @@ function NewQuotationForm({
     <div>
       <div className="sales-proto-page-header">
         <div className="sales-proto-header-copy">
-          <span className="sales-proto-header-icon" aria-hidden="true" />
-          <div>
-          <button type="button" className="sp-btn sp-btn-ghost" onClick={onCancel} style={{ paddingLeft: 0, marginBottom: 2 }}>← Back</button>
-          <h1>Create quotation</h1>
-          <div className="sub">Customer · lines · terms · send</div>
-          </div>
+          <nav className="sales-odoo-crumb" aria-label="Breadcrumb">
+            Sales / Quotations / <strong>New</strong>
+          </nav>
         </div>
         <div className="sales-proto-actions sales-proto-actions--dock">
           <button type="button" className="sp-btn" onClick={onCancel}>Discard</button>
           <button type="button" className="sp-btn" onClick={onSaveDraft} disabled={!canSave}>Save as draft</button>
-          <button type="button" className="sp-btn sp-btn-primary" onClick={onSave} disabled={!canSave}>Submit</button>
+          <button type="button" className="sp-btn sp-btn-primary" onClick={onSave} disabled={!canSave}>Confirm</button>
         </div>
       </div>
 
