@@ -235,6 +235,1034 @@
   }
 }
 
+/* ── Finance workspace: approved simple responsive direction ──────────────
+   Matches the Sales redesign: quiet white surfaces, Deed navy hierarchy,
+   cyan only for active navigation/progress, semantic colour only for state. */
+
+.app-topbar--finance {
+  height: 3.75rem !important;
+  gap: 1rem !important;
+  padding-inline: 1.5rem !important;
+  box-shadow: none !important;
+}
+
+.app-topbar--finance .app-topbar-title {
+  flex: 0 0 8.5rem;
+}
+
+.app-topbar--finance .app-topbar-title h1 {
+  color: var(--navy);
+  font-size: 0.9375rem;
+  font-weight: 750;
+}
+
+.app-topbar--finance .app-topbar-title p {
+  display: none !important;
+}
+
+.app-topbar--finance .app-topbar-controls {
+  flex: 1 1 auto;
+  justify-content: flex-end;
+}
+
+.app-topbar--finance .app-topbar-controls > *:not(.app-topbar-search):not(.app-topbar-account) {
+  display: none !important;
+}
+
+.app-topbar--finance .app-topbar-search {
+  width: min(23.75rem, 42vw);
+  min-height: 2.25rem;
+  margin-right: auto;
+  justify-content: flex-start;
+  border-color: #e5e7eb;
+  background: #f9fafb;
+  border-radius: 0.5rem;
+  box-shadow: none;
+}
+
+.app-topbar--finance .app-topbar-search kbd {
+  display: none !important;
+}
+
+.app-topbar--finance .app-topbar-account {
+  width: 2.25rem;
+  height: 2.25rem;
+  justify-content: center;
+  padding: 0 !important;
+  border-color: #e5e7eb;
+  background: #fff;
+}
+
+.app-topbar--finance .app-topbar-account > :not(:first-child) {
+  display: none !important;
+}
+
+.finance-workspace {
+  --finance-page: #f6f7f9;
+  --finance-surface: #fff;
+  --finance-soft: #f9fafb;
+  --finance-border: #e5e7eb;
+  --finance-border-strong: #d1d5db;
+  --finance-text: #111827;
+  --finance-text-2: #374151;
+  --finance-text-3: #6b7280;
+  --finance-radius: 0.5rem;
+  background: var(--finance-page) !important;
+}
+
+main#main-content:has(.finance-workspace) > .min-w-0 {
+  background: var(--finance-page);
+}
+
+.finance-workspace > .mod-header {
+  position: relative;
+  min-height: 6.625rem;
+  padding: 1.75rem 1.5rem 0.875rem;
+  align-items: center;
+  border-bottom: 1px solid var(--finance-border);
+  background: var(--finance-surface);
+}
+
+.finance-workspace[data-finance-tab] > .mod-header::before {
+  content: 'FINANCE / ACCOUNTING';
+  position: absolute;
+  top: 0.8rem;
+  left: 1.5rem;
+  color: var(--finance-text-3);
+  font-size: 0.5rem;
+  font-weight: 750;
+  letter-spacing: 0.08em;
+  line-height: 1.2;
+}
+
+.finance-workspace[data-finance-tab='invoices'] > .mod-header::before,
+.finance-workspace[data-finance-tab='bills'] > .mod-header::before,
+.finance-workspace[data-finance-tab='credits'] > .mod-header::before,
+.finance-workspace[data-finance-tab='refunds'] > .mod-header::before {
+  content: 'FINANCE / CUSTOMER DOCUMENTS';
+}
+
+.finance-workspace[data-finance-tab='cashbook'] > .mod-header::before {
+  content: 'FINANCE / CASHBOOK';
+}
+
+.finance-workspace[data-finance-tab='reports'] > .mod-header::before {
+  content: 'FINANCE / REPORTING';
+}
+
+.finance-workspace > .mod-header .mod-header-icon {
+  display: none;
+}
+
+.finance-workspace > .mod-header .erp-module-title {
+  color: var(--navy);
+  font-size: 1.5rem;
+  font-weight: 760;
+  letter-spacing: -0.025em;
+  line-height: 1.15;
+}
+
+.finance-workspace > .mod-header .mod-header-subtitle {
+  display: block !important;
+  margin-top: 0.3rem;
+  color: var(--finance-text-3);
+  font-size: 0.6875rem;
+  font-weight: 550;
+}
+
+.finance-workspace > .mod-header .section-actions .btn-primary,
+.finance-workspace > .mod-header .section-actions .erp-action-btn {
+  min-height: 2.5rem;
+  padding: 0.55rem 0.9rem;
+  border-color: var(--navy);
+  border-radius: var(--finance-radius);
+  background: var(--navy);
+  color: #fff;
+  font-size: 0.75rem;
+  font-weight: 700;
+  box-shadow: none;
+}
+
+.finance-workspace > .mod-tabs {
+  width: 100%;
+  min-height: 2.875rem;
+  padding: 0 1.5rem;
+  gap: 0;
+  overflow-x: auto;
+  border-bottom: 1px solid var(--finance-border);
+  background: var(--finance-surface);
+}
+
+.finance-workspace > .mod-tabs .mod-tab {
+  min-height: 2.875rem;
+  padding: 0.75rem 1rem;
+  border-radius: 0;
+  color: var(--finance-text-3);
+  background: transparent;
+  font-size: 0.6875rem;
+  font-weight: 650;
+}
+
+.finance-workspace > .mod-tabs .mod-tab:hover,
+.finance-workspace > .mod-tabs .mod-tab.active {
+  color: var(--navy);
+  background: transparent;
+}
+
+.finance-workspace > .mod-tabs .mod-tab.active::after {
+  right: 1rem;
+  bottom: 0;
+  left: 1rem;
+  height: 3px;
+  background: var(--accent-cyan);
+}
+
+.finance-workspace > .mod-body {
+  padding: 0;
+  background: var(--finance-page);
+}
+
+.finance-workspace .finance-content-card {
+  margin: 0.75rem 1.5rem 1.5rem;
+  overflow: hidden;
+  border: 1px solid var(--finance-border);
+  border-radius: var(--finance-radius);
+  background: var(--finance-surface);
+  box-shadow: none;
+}
+
+.finance-workspace .dt-toolbar {
+  min-height: 4.5rem;
+  padding: 1rem;
+  border-bottom: 1px solid var(--finance-border);
+  background: var(--finance-surface);
+}
+
+.finance-workspace .dt-toolbar-search input,
+.finance-workspace .dt-toolbar-search {
+  border-color: var(--finance-border) !important;
+  border-radius: var(--finance-radius) !important;
+  background: var(--finance-soft) !important;
+  box-shadow: none !important;
+}
+
+.finance-workspace .dt-toolbar-btn,
+.finance-workspace .dt-toolbar-select,
+.finance-workspace .btn-secondary,
+.finance-workspace .btn-outline {
+  border-color: var(--finance-border-strong);
+  border-radius: var(--finance-radius);
+  background: var(--finance-surface);
+  color: var(--finance-text-2);
+  box-shadow: none;
+}
+
+.finance-workspace .btn-primary {
+  border-color: var(--navy);
+  border-radius: var(--finance-radius);
+  background: var(--navy);
+  color: #fff;
+  box-shadow: none;
+}
+
+.finance-workspace .table-head {
+  min-height: 2.5rem;
+  padding-inline: 0.9rem;
+  background: var(--finance-soft);
+  color: var(--finance-text-3);
+  font-size: 0.5625rem;
+  font-weight: 750;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.finance-workspace .table-row {
+  min-height: 3.625rem;
+  padding-inline: 0.9rem;
+  border-bottom: 1px solid var(--finance-border);
+  background: var(--finance-surface);
+}
+
+.finance-workspace .table-row:hover {
+  background: var(--finance-soft);
+}
+
+.finance-workspace .table-row > [role='gridcell'] {
+  padding-block: 0.75rem;
+  min-width: 0;
+  color: var(--finance-text-2);
+}
+
+.finance-workspace .data-table-cell-number,
+.finance-workspace .data-table-cell-partner,
+.finance-workspace .data-table-cell-total,
+.finance-workspace .data-table-cell-balance {
+  color: var(--finance-text);
+  font-weight: 650;
+}
+
+.finance-workspace .badge {
+  border-radius: 999px;
+  box-shadow: none;
+}
+
+.finance-content-card--invoices .data-table-cell-paid,
+.finance-content-card--bills .data-table-cell-paid,
+.finance-content-card--invoices .table-head > :nth-child(7),
+.finance-content-card--bills .table-head > :nth-child(7) {
+  display: none;
+}
+
+.finance-content-card--invoices .table-head,
+.finance-content-card--invoices .table-row,
+.finance-content-card--bills .table-head,
+.finance-content-card--bills .table-row {
+  grid-template-columns: 36px 110px minmax(0, 2fr) 96px 96px 100px 100px 140px !important;
+}
+
+/* Cashbook and reconciliation */
+.finance-cashbook {
+  gap: 0.75rem;
+  padding: 1rem 1.5rem 1.5rem;
+}
+
+.finance-cashbook-filters,
+.finance-cashbook > .card,
+.finance-cashbook > .flex > .card,
+.finance-recon-panel {
+  border: 1px solid var(--finance-border);
+  border-radius: var(--finance-radius);
+  background: var(--finance-surface);
+  box-shadow: none;
+}
+
+.finance-recon-help {
+  border-color: var(--finance-border) !important;
+  background: var(--finance-soft) !important;
+  color: var(--finance-text-2) !important;
+}
+
+.finance-cashbook-filters {
+  padding: 1rem;
+}
+
+.finance-cashbook-filters .form-select,
+.finance-recon-entry-form .form-input,
+.finance-recon-entry-form .form-select {
+  border-color: var(--finance-border-strong);
+  border-radius: var(--finance-radius);
+  background: var(--finance-surface);
+  box-shadow: none;
+}
+
+.finance-cashbook-accounts {
+  gap: 0.75rem;
+}
+
+.finance-cashbook-accounts .stat-card {
+  min-height: 5.875rem;
+  padding: 0.875rem 1rem;
+  border-color: var(--finance-border) !important;
+  border-radius: var(--finance-radius);
+  background: var(--finance-surface);
+  box-shadow: none;
+}
+
+.finance-cashbook-accounts .stat-card span {
+  background: var(--finance-soft) !important;
+  color: var(--finance-text-3) !important;
+  border: 1px solid var(--finance-border);
+}
+
+.finance-cashbook-view-tabs {
+  min-height: 2.875rem;
+  gap: 0;
+  overflow-x: auto;
+  border-bottom: 1px solid var(--finance-border);
+  background: var(--finance-surface);
+}
+
+.finance-cashbook-view-tabs > button {
+  position: relative;
+  min-height: 2.875rem !important;
+  padding: 0.75rem 1rem;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--finance-text-3);
+  box-shadow: none;
+}
+
+.finance-cashbook-view-tabs > .btn-primary {
+  color: var(--navy);
+  background: transparent;
+}
+
+.finance-cashbook-view-tabs > .btn-primary::after {
+  content: '';
+  position: absolute;
+  right: 1rem;
+  bottom: 0;
+  left: 1rem;
+  height: 3px;
+  border-radius: 999px 999px 0 0;
+  background: var(--accent-cyan);
+}
+
+.finance-recon-header {
+  min-height: 4.5rem;
+  gap: 0.75rem;
+  background: var(--finance-surface);
+}
+
+.finance-recon-header > .flex:first-child > div:first-child {
+  background: var(--finance-soft) !important;
+  color: var(--navy) !important;
+  border: 1px solid var(--finance-border);
+}
+
+.finance-recon-metrics > .grid {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.finance-recon-metrics > .grid > div {
+  min-height: 5.125rem;
+  padding: 0.9rem 1rem !important;
+  text-align: left !important;
+  background: var(--finance-surface);
+}
+
+.finance-recon-tabs {
+  overflow-x: auto;
+  background: var(--finance-surface);
+}
+
+.finance-recon-tabs > button {
+  min-height: 2.75rem;
+  padding: 0.75rem 1rem !important;
+  white-space: nowrap;
+  color: var(--finance-text-3) !important;
+}
+
+.finance-recon-tabs > button[style*='border-bottom: 2px'] {
+  color: var(--navy) !important;
+}
+
+.finance-recon-entry-form {
+  align-items: stretch;
+}
+
+.finance-recon-entry-form > * {
+  min-width: 0;
+  min-height: 2.5rem;
+}
+
+/* Invoice document */
+.finance-invoice-detail {
+  gap: 0;
+  background: var(--finance-page);
+}
+
+.finance-invoice-detail .invoice-detail__chrome {
+  gap: 0.55rem;
+  padding: 0.85rem 1.5rem 1rem;
+  border-bottom: 1px solid var(--finance-border);
+  background: var(--finance-surface);
+}
+
+.finance-invoice-detail .invoice-detail__header {
+  align-items: center;
+  gap: 1rem;
+}
+
+.finance-invoice-detail .invoice-detail__title-row {
+  gap: 0.55rem 0.75rem;
+}
+
+.finance-invoice-detail .invoice-detail__identity {
+  min-width: 10rem;
+}
+
+.finance-invoice-detail .invoice-detail__title {
+  color: var(--navy);
+  font-size: 1.45rem;
+  font-weight: 760;
+}
+
+.finance-invoice-detail .invoice-detail__ref {
+  margin: 0.3rem 0 0;
+  color: var(--finance-text-3);
+  font-family: var(--font-dm-mono), ui-monospace, monospace;
+  font-size: 0.6875rem;
+  font-weight: 650;
+}
+
+.finance-invoice-detail .invoice-detail__customer {
+  margin-top: 0.55rem;
+  color: var(--finance-text);
+  font-size: 0.8rem;
+  font-weight: 650;
+}
+
+.finance-invoice-detail .invoice-detail__country {
+  font-size: 0.6875rem;
+}
+
+.finance-invoice-detail .invoice-detail__dates {
+  margin-top: 0.55rem;
+}
+
+.finance-invoice-detail .invoice-detail__header-actions {
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.finance-invoice-detail .invoice-detail__header-actions .btn-primary,
+.finance-invoice-detail .invoice-detail__header-actions .erp-action-btn {
+  min-height: 2.5rem;
+  padding: 0.55rem 0.9rem;
+  border-color: var(--navy);
+  border-radius: var(--finance-radius);
+  background: var(--navy);
+  color: #fff;
+  box-shadow: none;
+}
+
+.finance-invoice-detail .invoice-detail__body {
+  max-width: none;
+  gap: 0.875rem;
+  padding: 1rem 1.5rem 2rem;
+}
+
+.finance-invoice-detail .invoice-detail__info-grid {
+  order: 1;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.finance-invoice-detail .invoice-detail__card {
+  order: 2;
+}
+
+.finance-invoice-detail .invoice-detail__kpi {
+  order: 3;
+}
+
+.finance-invoice-detail .invoice-detail__tabs-card {
+  order: 4;
+}
+
+.finance-invoice-detail .invoice-detail__card,
+.finance-invoice-detail .invoice-detail__info-card,
+.finance-invoice-detail .invoice-detail__tabs-card,
+.finance-invoice-detail .invoice-detail__kpi-card {
+  border-color: var(--finance-border);
+  border-radius: var(--finance-radius);
+  background: var(--finance-surface);
+  box-shadow: none;
+}
+
+.finance-invoice-detail .invoice-detail__info-icon {
+  background: var(--finance-soft);
+  color: var(--navy);
+  border: 1px solid var(--finance-border);
+}
+
+.finance-invoice-detail .invoice-detail__kpi-card.is-due,
+.finance-invoice-detail .invoice-detail__kpi-card.is-clear {
+  border-color: var(--finance-border);
+  background: var(--finance-surface);
+}
+
+.finance-invoice-detail .invoice-detail__kpi-card.is-due .invoice-detail__kpi-value {
+  color: var(--navy);
+}
+
+.finance-invoice-detail .invoice-detail__kpi-card.is-due .invoice-detail__kpi-sub {
+  color: var(--finance-text-3);
+}
+
+.finance-invoice-detail .invoice-detail__table-wrap {
+  border-color: var(--finance-border);
+  border-radius: var(--finance-radius);
+}
+
+.finance-invoice-detail .invoice-detail__table th {
+  height: 2.25rem;
+  padding: 0.55rem 0.75rem;
+  background: var(--finance-soft);
+  color: var(--finance-text-3);
+  font-size: 0.5625rem;
+}
+
+.finance-invoice-detail .invoice-detail__table td {
+  min-height: 3.125rem;
+  padding: 0.75rem;
+  vertical-align: middle;
+}
+
+.finance-invoice-detail .invoice-detail__totals {
+  width: min(100%, 18rem);
+  margin-top: 1rem;
+}
+
+.finance-invoice-detail .invoice-detail__totals-row.is-grand {
+  color: var(--navy);
+}
+
+.finance-invoice-detail .invoice-detail__tabs {
+  overflow-x: auto;
+  background: var(--finance-surface);
+}
+
+.finance-invoice-detail .invoice-detail__tab.is-active::after {
+  background: var(--accent-cyan);
+}
+
+@media (min-width: 768px) and (max-width: 1199px) {
+  .app-topbar--finance {
+    padding-inline: 1.125rem !important;
+  }
+
+  .app-topbar--finance .app-topbar-title {
+    flex-basis: 7.5rem;
+  }
+
+  .app-topbar--finance .app-topbar-search {
+    width: min(15.625rem, 38vw);
+  }
+
+  .finance-workspace > .mod-header {
+    min-height: 6.625rem;
+    padding-inline: 1.25rem;
+  }
+
+  .finance-workspace[data-finance-tab] > .mod-header::before {
+    left: 1.25rem;
+  }
+
+  .finance-workspace > .mod-tabs {
+    padding-inline: 1rem;
+  }
+
+  .finance-workspace .finance-content-card {
+    margin-inline: 1.25rem;
+  }
+
+  .finance-content-card--invoices .responsive-table .table-head,
+  .finance-content-card--bills .responsive-table .table-head {
+    display: none;
+  }
+
+  .finance-content-card--invoices .responsive-table .table-row,
+  .finance-content-card--bills .responsive-table .table-row {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) auto !important;
+    gap: 0.3rem 1rem;
+    min-height: 6.25rem;
+    margin: 0.625rem 0.75rem;
+    padding: 0.75rem;
+    border: 1px solid var(--finance-border);
+    border-radius: var(--finance-radius);
+  }
+
+  .finance-content-card--invoices .responsive-table .table-row > [role='gridcell'],
+  .finance-content-card--bills .responsive-table .table-row > [role='gridcell'] {
+    display: flex;
+    align-items: center;
+    min-height: 0;
+    padding: 0;
+  }
+
+  .finance-content-card--invoices .responsive-table .table-row > [role='gridcell']:first-child,
+  .finance-content-card--bills .responsive-table .table-row > [role='gridcell']:first-child,
+  .finance-content-card--invoices .responsive-table .data-table-cell-paid,
+  .finance-content-card--bills .responsive-table .data-table-cell-paid {
+    display: none;
+  }
+
+  .finance-content-card--invoices .data-table-cell-number,
+  .finance-content-card--bills .data-table-cell-number {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .finance-content-card--invoices .data-table-cell-status,
+  .finance-content-card--bills .data-table-cell-status {
+    grid-column: 2;
+    grid-row: 1;
+    justify-content: flex-end;
+  }
+
+  .finance-content-card--invoices .data-table-cell-partner,
+  .finance-content-card--bills .data-table-cell-partner {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    font-size: 0.8125rem;
+  }
+
+  .finance-content-card--invoices .data-table-cell-date,
+  .finance-content-card--bills .data-table-cell-date,
+  .finance-content-card--invoices .data-table-cell-due,
+  .finance-content-card--bills .data-table-cell-due,
+  .finance-content-card--invoices .data-table-cell-total,
+  .finance-content-card--bills .data-table-cell-total,
+  .finance-content-card--invoices .data-table-cell-balance,
+  .finance-content-card--bills .data-table-cell-balance {
+    grid-row: 3;
+    font-size: 0.6875rem;
+  }
+
+  .finance-content-card--invoices .data-table-cell-date,
+  .finance-content-card--bills .data-table-cell-date,
+  .finance-content-card--invoices .data-table-cell-due,
+  .finance-content-card--bills .data-table-cell-due {
+    display: none !important;
+  }
+
+  .finance-content-card--invoices .data-table-cell-total,
+  .finance-content-card--bills .data-table-cell-total {
+    grid-column: 1;
+  }
+
+  .finance-content-card--invoices .data-table-cell-balance,
+  .finance-content-card--bills .data-table-cell-balance {
+    grid-column: 2;
+    justify-content: flex-end;
+  }
+
+  .finance-recon-entry-form {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .finance-recon-metrics > .grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .finance-recon-header {
+    flex-wrap: wrap;
+  }
+
+  .finance-invoice-detail .invoice-detail__header {
+    align-items: flex-start;
+  }
+
+  .finance-invoice-detail .invoice-detail__header-main {
+    flex-basis: 18rem;
+  }
+
+  .finance-invoice-detail .invoice-detail__info-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 767px) {
+  .app-topbar--finance {
+    height: 3.375rem !important;
+    gap: 0.5rem !important;
+    padding-inline: 0.75rem !important;
+  }
+
+  .app-topbar--finance .app-topbar-title {
+    flex: 1 1 auto;
+  }
+
+  .app-topbar--finance .app-topbar-search {
+    width: 2.25rem;
+    min-width: 2.25rem;
+    margin-left: auto;
+    margin-right: 0;
+    justify-content: center;
+    padding: 0 !important;
+    border: 0;
+    background: transparent;
+  }
+
+  .app-topbar--finance .app-topbar-search span {
+    display: none !important;
+  }
+
+  .finance-workspace > .mod-header {
+    min-height: 7.875rem;
+    padding: 1.75rem 0.875rem 0.875rem;
+  }
+
+  .finance-workspace[data-finance-tab] > .mod-header::before {
+    top: 0.7rem;
+    left: 0.875rem;
+  }
+
+  .finance-workspace > .mod-header .erp-module-title {
+    max-width: calc(100vw - 6.75rem);
+    font-size: 1.25rem;
+  }
+
+  .finance-workspace > .mod-header .mod-header-subtitle {
+    max-width: calc(100vw - 6.75rem);
+    white-space: normal;
+  }
+
+  .finance-workspace > .mod-header .section-actions {
+    align-self: center;
+  }
+
+  .finance-workspace > .mod-header .section-actions .erp-action-btn {
+    width: 2.5rem;
+    min-width: 2.5rem;
+    height: 2.5rem;
+    padding: 0;
+    justify-content: center;
+  }
+
+  .finance-workspace > .mod-tabs {
+    min-height: 2.875rem;
+    padding-inline: 0.5rem;
+  }
+
+  .finance-workspace > .mod-tabs .mod-tab {
+    min-height: 2.875rem;
+    padding-inline: 0.75rem;
+  }
+
+  .finance-workspace .finance-content-card {
+    margin: 0;
+    border-inline: 0;
+    border-radius: 0;
+  }
+
+  .finance-workspace .dt-toolbar {
+    min-height: 4.375rem;
+    padding: 0.875rem 0.75rem;
+  }
+
+  .finance-workspace .record-card {
+    margin-inline: 0.75rem;
+    border-color: var(--finance-border);
+    border-radius: var(--finance-radius);
+    box-shadow: none;
+  }
+
+  .finance-cashbook {
+    padding: 0.75rem;
+  }
+
+  .finance-cashbook-filters {
+    padding: 0.875rem;
+  }
+
+  .finance-cashbook-view-tabs {
+    margin-inline: -0.75rem;
+    padding-inline: 0.25rem;
+  }
+
+  .finance-recon-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .finance-recon-header > .flex {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+
+  .finance-recon-metrics > .grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .finance-recon-metrics > .grid > div {
+    min-height: 4.75rem;
+    border-bottom: 1px solid var(--finance-border);
+  }
+
+  .finance-recon-tabs > button {
+    min-height: 2.75rem;
+  }
+
+  .finance-recon-entry-form {
+    grid-template-columns: 1fr !important;
+  }
+
+  .finance-recon-entry-form > * {
+    min-height: 2.75rem;
+    width: 100%;
+  }
+
+  .finance-invoice-detail .invoice-detail__chrome {
+    padding: 0.75rem 0.875rem 1rem;
+  }
+
+  .finance-invoice-detail .invoice-detail__title-row {
+    align-items: flex-start;
+  }
+
+  .finance-invoice-detail .invoice-detail__identity {
+    width: 100%;
+  }
+
+  .finance-invoice-detail .invoice-detail__title {
+    font-size: 1.2rem;
+  }
+
+  .finance-invoice-detail .invoice-detail__dates {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 0.35rem;
+  }
+
+  .finance-invoice-detail .invoice-detail__header-actions {
+    position: fixed;
+    z-index: 9100;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    display: flex;
+    width: 100%;
+    min-height: 4.125rem;
+    padding: 0.75rem;
+    flex-direction: row-reverse;
+    flex-wrap: nowrap;
+    border-top: 1px solid var(--finance-border);
+    background: var(--finance-surface);
+    box-shadow: 0 -6px 18px rgba(17, 24, 39, 0.06);
+  }
+
+  .finance-invoice-detail .invoice-detail__header-actions > :first-child {
+    flex: 1 1 auto;
+  }
+
+  .finance-invoice-detail .invoice-detail__header-actions > :last-child {
+    flex: 0 0 5rem;
+  }
+
+  .finance-invoice-detail .invoice-detail__header-actions button {
+    width: 100%;
+    min-height: 2.5rem;
+    justify-content: center;
+  }
+
+  .finance-invoice-detail .invoice-detail__body {
+    padding: 0.75rem 0.75rem 5.75rem;
+  }
+
+  .finance-invoice-detail .invoice-detail__info-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .finance-invoice-detail .invoice-detail__info-card {
+    padding: 0.875rem;
+  }
+
+  .finance-invoice-detail .invoice-detail__kpi {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.625rem;
+  }
+
+  .finance-invoice-detail .invoice-detail__kpi-card {
+    min-height: 5.25rem;
+    padding: 0.75rem;
+  }
+
+  .finance-invoice-detail .invoice-detail__kpi-value {
+    font-size: 1rem;
+  }
+
+  .finance-invoice-detail .invoice-detail__kpi-card--donut {
+    display: block;
+  }
+
+  .finance-invoice-detail .invoice-detail__donut {
+    display: none;
+  }
+
+  .finance-invoice-detail .invoice-detail__card {
+    padding: 0.875rem;
+  }
+
+  .finance-invoice-detail .invoice-detail__table-wrap {
+    overflow: visible;
+    border: 0;
+  }
+
+  .finance-invoice-detail .invoice-detail__table,
+  .finance-invoice-detail .invoice-detail__table tbody {
+    display: block;
+    width: 100%;
+  }
+
+  .finance-invoice-detail .invoice-detail__table thead {
+    display: none;
+  }
+
+  .finance-invoice-detail .invoice-detail__table tr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 0.25rem 0.75rem;
+    margin-bottom: 0.5rem;
+    padding: 0.75rem;
+    border: 1px solid var(--finance-border);
+    border-radius: var(--finance-radius);
+    background: var(--finance-surface);
+  }
+
+  .finance-invoice-detail .invoice-detail__table td {
+    display: none;
+    width: auto !important;
+    min-height: 0;
+    padding: 0;
+    border: 0;
+  }
+
+  .finance-invoice-detail .invoice-detail__table td:nth-child(2),
+  .finance-invoice-detail .invoice-detail__table td:nth-child(3),
+  .finance-invoice-detail .invoice-detail__table td:nth-child(4),
+  .finance-invoice-detail .invoice-detail__table td:nth-child(7) {
+    display: block;
+  }
+
+  .finance-invoice-detail .invoice-detail__table td:nth-child(2) {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .finance-invoice-detail .invoice-detail__table td:nth-child(7) {
+    grid-column: 2;
+    grid-row: 1;
+    color: var(--navy);
+  }
+
+  .finance-invoice-detail .invoice-detail__table td:nth-child(3) {
+    grid-column: 1;
+    grid-row: 2;
+    color: var(--finance-text-3);
+    text-align: left;
+  }
+
+  .finance-invoice-detail .invoice-detail__table td:nth-child(3)::before {
+    content: 'Qty ';
+  }
+
+  .finance-invoice-detail .invoice-detail__table td:nth-child(4) {
+    grid-column: 2;
+    grid-row: 2;
+    color: var(--finance-text-3);
+  }
+
+  .finance-invoice-detail .invoice-detail__totals {
+    width: 100%;
+  }
+}
+
+@media (max-width: 420px) {
+  .finance-workspace > .mod-header .erp-module-title,
+  .finance-workspace > .mod-header .mod-header-subtitle {
+    max-width: calc(100vw - 6.25rem);
+  }
+
+  .finance-invoice-detail .invoice-detail__kpi {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* P1-DEED-008: Tailwind utilities like `bg-bg` / `text-t1` on <body> are still
    hardcoded light hexes in tailwind.config.js, so they win over @layer base
    token rules. Unlayered selectors below beat layered utilities and keep the
@@ -8229,3 +9257,4 @@ main#main-content:has(.sales-pilot.sales-doc) > .min-w-0 {
     padding: 0.75rem;
   }
 }
+
