@@ -824,6 +824,23 @@ function SalesContent() {
     () => activeOrder ? invoices.filter(i => i.saleOrderId === activeOrder.id) : [],
     [invoices, activeOrder],
   )
+  const activePaymentStatus = useMemo(() => {
+    if (activeInvoices.length === 0) return 'not_paid' as const
+    const statuses = activeInvoices.map(inv => invoicePaymentStatus({
+      status: inv.status,
+      total: Number(inv.total) || 0,
+      amountPaid: Number(inv.amountPaid) || 0,
+      payments: (inv.payments ?? []).map((payment: any) => ({
+        amount: Number(payment.amount) || 0,
+        cleared: payment.cleared,
+      })),
+      paymentBlocked: inv.paymentBlocked,
+    }))
+    if (statuses.includes('blocked')) return 'blocked' as const
+    if (statuses.includes('partially_paid') || statuses.includes('in_payment')) return 'partially_paid' as const
+    if (statuses.every(status => status === 'paid')) return 'paid' as const
+    return 'not_paid' as const
+  }, [activeInvoices])
   const activeIsRepairBilling = useMemo(
     () => activeOrder ? isRepairLinkedSaleOrder(activeOrder, activeInvoices) : false,
     [activeOrder, activeInvoices],
@@ -1804,8 +1821,8 @@ function SalesContent() {
                         </thead>
                         <tbody>
                           {filtered.length === 0 ? (
-                            <tr>
-                              <td colSpan={listTab === 'quotations' ? 9 : 8} style={{ textAlign: 'center', padding: '28px 12px', color: 'var(--sp-text-3)' }}>
+                            <tr className="sales-list-empty-row">
+                              <td className="sales-list-empty-cell" colSpan={listTab === 'quotations' ? 9 : 8} style={{ textAlign: 'center', padding: '28px 12px', color: 'var(--sp-text-3)' }}>
                                 {listTab === 'quotations' && stats.orders > 0
                                   ? 'No quotations here — switch to Orders to see confirmed sales.'
                                   : salesOrderViews.length === 0
@@ -1866,12 +1883,12 @@ function SalesContent() {
                     </div>
                   )}
                   {listViewMode === 'kanban' && (
-                    <div className="p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div className="p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sales-kanban-board">
                       {(['quotation', 'quotation_sent', 'sale', 'cancelled'] as const).map(col => {
                         const colOrders = filtered.filter(s => s.status === col)
                         const colColors: Record<string, string> = { quotation: 'var(--warning)', quotation_sent: 'var(--primary)', sale: 'var(--navy)', cancelled: 'var(--text-4)' }
                         return (
-                          <div key={col} className="flex flex-col gap-2">
+                          <div key={col} className="flex flex-col gap-2 sales-kanban-column">
                             <div className="flex items-center justify-between mb-1">
                               <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: colColors[col] }}>{SALE_STATUS_LABELS[col]}</span>
                               <span className="text-[10px] font-semibold text-[var(--sp-text-3)] bg-[var(--sp-grey-bg)] px-2 py-0.5 rounded-full">{colOrders.length}</span>
@@ -1919,42 +1936,36 @@ function SalesContent() {
                           <h1>{isQuotationStage(activeOrder.status) ? 'Quotation' : 'Sales order'}</h1>
                           <span className="sales-record-ref">{activeOrder.ref}</span>
                         </div>
-                        {(() => {
-                          const pill = saleStatusPill(activeOrder.status)
-                          return <SalesDocPill label={pill.label} tone={pill.tone} />
-                        })()}
-                        {activeOrder.status === 'quotation_sent' && !saleOrderIsAccepted(activeOrder) && (
-                          <SalesDocPill label="Sent — edit locked" tone="sent" />
-                        )}
-                        {saleOrderIsAccepted(activeOrder) && isQuotationStage(activeOrder.status) && (
-                          <SalesDocPill label="Accepted — terms locked" tone="success" />
-                        )}
-                        {activeOrder.status === 'sale' && activeOrder.locked && (
-                          <SalesDocPill label="Confirmed — locked" tone="neutral" />
-                        )}
-                        {activeOrder.status === 'sale' && (
-                          <SalesDocPill label={SO_INVOICE_STATUS_LABELS[activeInvoiceStatus]} tone={activeInvoiceStatus === 'to_invoice' ? 'warning' : 'neutral'} />
-                        )}
-                        {activeOrder.status === 'sale' && activeInvoices.length > 0 && (() => {
-                          const payStatuses = activeInvoices.map(inv => invoicePaymentStatus({
-                            status: inv.status,
-                            total: Number(inv.total) || 0,
-                            amountPaid: Number(inv.amountPaid) || 0,
-                            payments: (inv.payments ?? []).map((p: any) => ({ amount: Number(p.amount) || 0, cleared: p.cleared })),
-                            paymentBlocked: inv.paymentBlocked,
-                          }))
-                          const worst = payStatuses.includes('blocked') ? 'blocked'
-                            : payStatuses.includes('partially_paid') || payStatuses.includes('in_payment') ? 'partially_paid'
-                            : payStatuses.every(s => s === 'paid') ? 'paid'
-                            : 'not_paid'
-                          return <SalesDocPill label={`Payment · ${PAYMENT_STATUS_LABELS[worst]}`} tone={worst === 'paid' ? 'success' : worst === 'not_paid' ? 'warning' : 'info'} />
-                        })()}
-                        {activeOperationallyComplete && (
-                          <SalesDocPill label="Complete" tone="success" />
-                        )}
-                        {activeOrder.status === 'sale' && !activeOperationallyComplete && (
-                          <SalesDocPill label={SO_FULFILMENT_STATUS_LABELS[activeFulfilmentStatus]} tone="neutral" />
-                        )}
+                        <div className="sales-record-statuses" aria-label="Document statuses">
+                          {(() => {
+                            const pill = saleStatusPill(activeOrder.status)
+                            return <SalesDocPill label={pill.label} tone={pill.tone} />
+                          })()}
+                          {activeOrder.status === 'quotation_sent' && !saleOrderIsAccepted(activeOrder) && (
+                            <SalesDocPill label="Sent — edit locked" tone="sent" />
+                          )}
+                          {saleOrderIsAccepted(activeOrder) && isQuotationStage(activeOrder.status) && (
+                            <SalesDocPill label="Accepted — terms locked" tone="success" />
+                          )}
+                          {activeOrder.status === 'sale' && activeOrder.locked && (
+                            <SalesDocPill label="Confirmed — locked" tone="neutral" />
+                          )}
+                          {activeOrder.status === 'sale' && (
+                            <SalesDocPill label={SO_INVOICE_STATUS_LABELS[activeInvoiceStatus]} tone={activeInvoiceStatus === 'to_invoice' ? 'warning' : 'neutral'} />
+                          )}
+                          {activeOrder.status === 'sale' && activeInvoices.length > 0 && (
+                            <SalesDocPill
+                              label={`Payment · ${PAYMENT_STATUS_LABELS[activePaymentStatus]}`}
+                              tone={activePaymentStatus === 'paid' ? 'success' : activePaymentStatus === 'not_paid' ? 'warning' : 'info'}
+                            />
+                          )}
+                          {activeOperationallyComplete && (
+                            <SalesDocPill label="Complete" tone="success" />
+                          )}
+                          {activeOrder.status === 'sale' && !activeOperationallyComplete && (
+                            <SalesDocPill label={SO_FULFILMENT_STATUS_LABELS[activeFulfilmentStatus]} tone="neutral" />
+                          )}
+                        </div>
                       </div>
                       <div className="sub">
                         {isQuotationStage(activeOrder.status) ? (
@@ -2180,25 +2191,42 @@ function SalesContent() {
                     <div className="sales-record-summary__primary">
                       <span>{isQuotationStage(activeOrder.status) ? 'Quotation total' : 'Order total'}</span>
                       <strong>{salesKes(activeOrder.total)}</strong>
-                      <small>{activeOrder.customerName}</small>
+                      <small>
+                        {activeOrder.customerName} · {activeOrder.lines.filter(line => line.lineType !== 'section').length} item{activeOrder.lines.filter(line => line.lineType !== 'section').length === 1 ? '' : 's'}
+                      </small>
                     </div>
                     <dl className="sales-record-summary__facts">
-                      <div>
-                        <dt>Stage</dt>
-                        <dd>{SALE_STATUS_LABELS[activeOrder.status] ?? activeOrder.status}</dd>
-                      </div>
-                      <div>
-                        <dt>{isQuotationStage(activeOrder.status) ? 'Valid until' : 'Fulfilment'}</dt>
-                        <dd>
-                          {isQuotationStage(activeOrder.status)
-                            ? (activeOrder.validUntil ? fmtDate(activeOrder.validUntil) : 'Not set')
-                            : SO_FULFILMENT_STATUS_LABELS[activeFulfilmentStatus]}
-                        </dd>
-                      </div>
-                      <div>
-                        <dt>Lines</dt>
-                        <dd>{activeOrder.lines.filter(line => line.lineType !== 'section').length}</dd>
-                      </div>
+                      {isQuotationStage(activeOrder.status) ? (
+                        <>
+                          <div>
+                            <dt>Stage</dt>
+                            <dd>{SALE_STATUS_LABELS[activeOrder.status] ?? activeOrder.status}</dd>
+                          </div>
+                          <div>
+                            <dt>Valid until</dt>
+                            <dd>{activeOrder.validUntil ? fmtDate(activeOrder.validUntil) : 'Not set'}</dd>
+                          </div>
+                          <div>
+                            <dt>Salesperson</dt>
+                            <dd>{activeOrder.salespersonName || 'Unassigned'}</dd>
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <div>
+                            <dt>Fulfilment</dt>
+                            <dd>{SO_FULFILMENT_STATUS_LABELS[activeFulfilmentStatus]}</dd>
+                          </div>
+                          <div>
+                            <dt>Invoice</dt>
+                            <dd>{SO_INVOICE_STATUS_LABELS[activeInvoiceStatus]}</dd>
+                          </div>
+                          <div>
+                            <dt>Payment</dt>
+                            <dd>{activeInvoices.length > 0 ? PAYMENT_STATUS_LABELS[activePaymentStatus] : 'No invoice'}</dd>
+                          </div>
+                        </>
+                      )}
                     </dl>
                     <div className="sales-record-summary__next">
                       <span>Next action</span>
@@ -2744,7 +2772,8 @@ function SalesContent() {
                             {activeDeliveries.length === 0 ? (
                               <p style={{ color: 'var(--sp-text-3)' }}>No deliveries yet.</p>
                             ) : (
-                              <table className="sp-table" data-no-responsive>
+                              <div className="sp-table-wrap sales-subview-table-wrap">
+                              <table className="sp-table sales-subview-table" data-no-responsive>
                                 <thead>
                                   <tr>
                                     <th>Reference</th>
@@ -2755,19 +2784,20 @@ function SalesContent() {
                                 <tbody>
                                   {activeDeliveries.map((d: any) => (
                                     <tr key={d.id}>
-                                      <td>{d.name || d.id}</td>
-                                      <td>{d.status}</td>
-                                      <td>{d.scheduledDate ? fmtDate(d.scheduledDate) : '—'}</td>
+                                      <td data-label="Reference">{d.name || d.id}</td>
+                                      <td data-label="Status">{d.status}</td>
+                                      <td data-label="Scheduled">{d.scheduledDate ? fmtDate(d.scheduledDate) : '—'}</td>
                                     </tr>
                                   ))}
                                 </tbody>
                               </table>
+                              </div>
                             )}
                           </div>
                         )}
                         {detailTab === 'Returns' && (
                           <div className="sp-panel-pad">
-                            <div className="flex flex-col gap-3" style={{ maxWidth: 520 }}>
+                            <div className="flex flex-col gap-3 sales-returns-content">
                               <p style={{ color: 'var(--sp-text-2)', margin: 0, fontSize: 13 }}>
                                 {activeInvoices.some(i => !i.isDownPayment && (i.status === 'posted' || (i.amountPaid ?? 0) > 0))
                                   ? 'Return after invoice: receive reverses stock, then issue a credit note for invoiced quantities.'
@@ -2776,7 +2806,8 @@ function SalesContent() {
                               {activeReturns.length === 0 ? (
                                 <p style={{ color: 'var(--sp-text-3)', margin: 0 }}>No returns linked to this order yet.</p>
                               ) : (
-                                <table className="sp-table" data-no-responsive>
+                                <div className="sp-table-wrap sales-subview-table-wrap">
+                                <table className="sp-table sales-subview-table" data-no-responsive>
                                   <thead>
                                     <tr>
                                       <th>Reference</th>
@@ -2788,14 +2819,15 @@ function SalesContent() {
                                   <tbody>
                                     {activeReturns.map((r: any) => (
                                       <tr key={r.id}>
-                                        <td>{r.ref}</td>
-                                        <td>{r.status}</td>
-                                        <td>{r.reason || '—'}</td>
-                                        <td>{r.resolution || '—'}</td>
+                                        <td data-label="Reference">{r.ref}</td>
+                                        <td data-label="Status">{r.status}</td>
+                                        <td data-label="Reason">{r.reason || '—'}</td>
+                                        <td data-label="Resolution">{r.resolution || '—'}</td>
                                       </tr>
                                     ))}
                                   </tbody>
                                 </table>
+                                </div>
                               )}
                               {canSeeReturns && (
                                 <div>
@@ -2846,7 +2878,8 @@ function SalesContent() {
                                 )}
                               </div>
                             ) : (
-                              <table className="sp-table" data-no-responsive>
+                              <div className="sp-table-wrap sales-subview-table-wrap">
+                              <table className="sp-table sales-subview-table" data-no-responsive>
                                 <thead>
                                   <tr>
                                     <th>Reference</th>
@@ -2857,18 +2890,19 @@ function SalesContent() {
                                 <tbody>
                                   {activeInvoices.map((inv: any) => (
                                     <tr key={inv.id}>
-                                      <td>
+                                      <td data-label="Reference">
                                         {inv.ref || inv.name || inv.number || inv.id}
                                         {inv.isDownPayment ? (
                                           <span style={{ marginLeft: 6, fontSize: 10, color: 'var(--sp-text-3)' }}>Down payment</span>
                                         ) : null}
                                       </td>
-                                      <td>{inv.status || inv.state}</td>
-                                      <td className="num">{salesKes(inv.total ?? inv.amountTotal ?? 0)}</td>
+                                      <td data-label="Status">{inv.status || inv.state}</td>
+                                      <td className="num" data-label="Total">{salesKes(inv.total ?? inv.amountTotal ?? 0)}</td>
                                     </tr>
                                   ))}
                                 </tbody>
                               </table>
+                              </div>
                             )}
                           </div>
                         )}
@@ -3112,7 +3146,7 @@ function SalesContent() {
             <p className="text-xs text-[var(--text-3)]">Choose how much of each invoiceable line to bill now (capped by Ordered or Delivered policy). Leave a line at 0 to invoice it later.</p>
             <div className="flex flex-col gap-3">
               {invoiceableLinesFor(activeOrder).map(l => (
-                <div key={l.id} className="flex items-center justify-between gap-3 p-3 rounded-xl bg-[var(--bg-surface)] border border-[var(--border-lt)]">
+                <div key={l.id} className="flex items-center justify-between gap-3 p-3 rounded-xl bg-[var(--bg-surface)] border border-[var(--border-lt)] sales-partial-invoice-row">
                   <div className="min-w-0">
                     <p className="text-xs font-semibold text-[var(--text-1)] truncate">{l.label}</p>
                     <p className="text-[10px] text-[var(--text-4)]">Up to {l.maxQty} invoiceable now</p>
@@ -3154,7 +3188,7 @@ function SalesContent() {
               versionHistoryRows.map((v, idx) => {
                 const prev = idx > 0 ? versionHistoryRows[idx - 1] : null
                 return (
-                  <div key={v.id} className="flex items-center justify-between gap-3 p-3 rounded-xl bg-[var(--bg-surface)] border border-[var(--border-lt)]">
+                  <div key={v.id} className="flex items-center justify-between gap-3 p-3 rounded-xl bg-[var(--bg-surface)] border border-[var(--border-lt)] sales-version-card">
                     <div className="min-w-0">
                       <div className="flex items-center gap-2">
                         <span className="text-xs font-bold text-primary-600">{v.ref}</span>
@@ -3166,7 +3200,7 @@ function SalesContent() {
                         {salesKes(v.total)} · {fmtDate(v.createdAt)}{v.createdByName ? ` · ${v.createdByName}` : ''}
                       </p>
                     </div>
-                    <div className="flex items-center gap-2 flex-shrink-0">
+                    <div className="flex items-center gap-2 flex-shrink-0 sales-version-card__actions">
                       {prev && (
                         <button
                           type="button"
@@ -3208,8 +3242,8 @@ function SalesContent() {
         return (
           <Modal title={`Compare ${a.ref} → ${b.ref}`} onClose={() => setCompareVersions(null)} width={640}>
             <div className="flex flex-col gap-3">
-              <div className="overflow-x-auto">
-                <table className="w-full text-xs">
+              <div className="overflow-x-auto sales-version-compare-wrap">
+                <table className="w-full text-xs sales-version-compare-table">
                   <thead>
                     <tr className="text-[10px] uppercase tracking-wider text-[var(--text-4)] text-left">
                       <th className="pb-2">Product</th>
