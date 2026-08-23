@@ -518,7 +518,7 @@ export default function PointOfSale() {
               <Field label="Opening Cash Count (KES)"><Input value={openingCash} onChange={setOpeningCash} type="number" autoFocus /></Field>
               <button
                 type="button"
-                className="btn-primary w-full mt-4"
+                className="pos-session-submit"
                 disabled={openingSession}
                 onClick={() => {
                   setOpeningSession(true)
@@ -909,8 +909,8 @@ export default function PointOfSale() {
           {receiptOrder && (
             <Modal title="Order Complete" subtitle="Transaction successful" width={480} onClose={() => setReceiptOrder(null)}>
               {/* Receipt content is now in ReceiptPrintView, we can just show a summary here */}
-              <div className="text-center py-4"><div className="text-5xl mb-4" style={{ color: 'var(--success)' }} aria-hidden="true"><Fa icon={faCircleCheck} /></div><p className="text-lg font-semibold mb-2">{(isPosBankPayment(receiptOrder.payment) ? 'BANK' : receiptOrder.payment.toUpperCase())} Payment Received</p>{receiptOrder.paymentReference ? <p className="text-xs text-t3 mt-1">Ref: {receiptOrder.paymentReference}</p> : null}<p className="text-3xl font-bold font-mono" style={{ color: 'var(--success)' }}>{fmtKes(receiptOrder.total)}</p>{receiptOrder.pointsEarned ? (<p className="text-sm font-semibold mt-2" style={{ color: 'var(--navy)' }}><Fa icon={faStar} /> +{receiptOrder.pointsEarned} Loyalty Points Earned!</p>) : null}</div>
-              <div className="flex gap-2 justify-end flex-wrap">
+              <div className="pos-payment-success"><div className="pos-payment-success-icon" style={{ color: 'var(--success)' }} aria-hidden="true"><Fa icon={faCircleCheck} /></div><p className="text-lg font-semibold mb-2">{(isPosBankPayment(receiptOrder.payment) ? 'BANK' : receiptOrder.payment.toUpperCase())} Payment Received</p>{receiptOrder.paymentReference ? <p className="text-xs text-t3 mt-1">Ref: {receiptOrder.paymentReference}</p> : null}<p className="text-3xl font-bold font-mono" style={{ color: 'var(--success)' }}>{fmtKes(receiptOrder.total)}</p>{receiptOrder.pointsEarned ? (<p className="text-sm font-semibold mt-2" style={{ color: 'var(--navy)' }}><Fa icon={faStar} /> +{receiptOrder.pointsEarned} Loyalty Points Earned!</p>) : null}</div>
+              <div className="pos-payment-success-actions">
                 <button className="btn-outline min-h-[40px] flex-1 sm:flex-none" onClick={() => setIsPrinting(true)}><Fa icon={faPrint} /> Print Receipt</button>
                 <button className="btn-primary min-h-[40px] flex-1 sm:flex-none" onClick={() => { setReceiptOrder(null); setCartOpen(false); scanRef.current?.focus() }}>New Order</button>
               </div>
@@ -930,7 +930,7 @@ export default function PointOfSale() {
             return (
               <Modal title="Close Session" subtitle="Count till and post session settlement" width={480} onClose={() => setShowCloseSession(false)}>
                 <Field label="Closing Cash Count (KES)"><Input value={closingCash} onChange={setClosingCash} type="number" autoFocus /></Field>
-                <div className="p-3 rounded text-xs space-y-1" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-lt)' }}>
+                <div className="pos-session-close-summary">
                   <p>Session orders: <strong>{sessionOrders.length}</strong></p>
                   <p>Total sales: <strong className="font-mono" style={{ color: 'var(--success)' }}>{fmtKes(totalSales)}</strong></p>
                   <p>Cash / M-Pesa / Bank: <strong className="font-mono">{fmtKes(totalCash)}</strong> · <strong className="font-mono">{fmtKes(totalMpesa)}</strong> · <strong className="font-mono">{fmtKes(totalBank)}</strong></p>
@@ -942,8 +942,7 @@ export default function PointOfSale() {
                 <div className="flex gap-2 justify-end">
                   <button className="btn-outline" onClick={() => setShowCloseSession(false)}>Cancel</button>
                   <button
-                    className="btn-primary"
-                    style={{ background: 'var(--danger)' }}
+                    className="pos-session-close-confirm"
                     disabled={closingSession}
                     onClick={() => {
                       setClosingSession(true)
