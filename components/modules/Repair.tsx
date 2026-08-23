@@ -57,8 +57,8 @@ function RepairContent() {
             <ModuleHeader
               title="Repair management"
               subtitle={`${visibleRepairs.length} open job${visibleRepairs.length === 1 ? '' : 's'}`}
+              subtitleMode="visible"
               icon={<Fa icon={faTools} />}
-              count={visibleRepairs.length}
               color="#061B4F"
               primaryAction={canCreateIntake ? (
                 <PrimaryActionButton icon={<Fa icon={faPlus} />} onClick={() => setView('intake')} hideLabelOnMobile={false}>
