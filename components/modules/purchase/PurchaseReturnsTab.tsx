@@ -244,8 +244,8 @@ export default function PurchaseReturnsTab() {
   const drawerReturn = retExpandedId ? filtered.find(r => r.id === retExpandedId) ?? null : null
 
   return (
-    <div className="flex flex-col gap-3">
-      <div className="card overflow-hidden">
+    <div className="purchase-returns-panel flex flex-col gap-3">
+      <div className="card overflow-hidden purchase-directory">
         <PanelHeader title="Purchase Returns" count={filtered.length}>
           {filtered.length !== purchaseReturns.length && (
             <span className="text-[10px] text-t3">{purchaseReturns.length - filtered.length} hidden by filters</span>
