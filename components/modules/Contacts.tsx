@@ -13,7 +13,7 @@ import ContactFormModal, {
   type ContactFormValues,
 } from '@/components/contacts/ContactFormModal'
 import {
-  Fa, faUsers, faBuilding, faUser, faCartShopping, faBuildingColumns,
+  Fa, faUsers, faCartShopping,
   faPen, faPlus, faScrewdriverWrench, faFileInvoiceDollar,
   faCashRegister, faInbox, faFileArrowDown, faCheck, faTriangleExclamation, faXmark,
 } from '@/components/icons'
@@ -31,6 +31,15 @@ type ViewTab   = 'info' | 'financial' | 'persons' | 'history' | 'chatter'
 function contactToFormValues(c: Contact): ContactFormValues {
   const { id: _id, createdAt: _createdAt, ...rest } = c
   return rest
+}
+
+function contactInitials(name: string) {
+  return name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map(part => part[0]?.toUpperCase())
+    .join('') || 'C'
 }
 
 const contactSoColumns: ColumnDef<SaleOrder>[] = [
@@ -153,7 +162,7 @@ function ContactsInner() {
   const [mounted, setMounted] = useState(() => typeof window !== 'undefined')
   useEffect(() => { setMounted(true) }, [])
 
-  const { contacts, addContact, deleteContact,
+  const { contacts, addContact,
     saleOrders, invoices, repairs, posOrders, customerCredits, showToast, users, currentUserId } = useCrmStore()
   const currentUser = users.find(u => u.id === currentUserId)
   const [tab, setTab] = useState<FilterTab>('all')
@@ -285,42 +294,20 @@ function ContactsInner() {
   const customersCount  = contacts.filter(c => c.isCustomer).length
   const vendorsCount    = contacts.filter(c => c.isVendor).length
 
-  const tabStyle = (t: FilterTab): React.CSSProperties => ({
-    background: tab === t ? '#E8F3FA' : 'transparent',
-    border: `1px solid ${tab === t ? '#A8D4E8' : 'transparent'}`,
-    borderRadius: 8, cursor: 'pointer',
-    color: tab === t ? 'var(--navy)' : 'var(--text-3)',
-    padding: '6px 12px', fontSize: 11,
-    fontWeight: tab === t ? 600 : 400,
-    transition: 'all 0.15s', whiteSpace: 'nowrap' as const,
-  })
-
-  const viewTabStyle = (t: ViewTab): React.CSSProperties => ({
-    background: viewTab === t ? '#E8F3FA' : 'transparent',
-    border: `1px solid ${viewTab === t ? '#A8D4E8' : 'transparent'}`,
-    borderRadius: 8, cursor: 'pointer',
-    color: viewTab === t ? 'var(--navy)' : 'var(--text-3)',
-    padding: '6px 12px', fontSize: 11,
-    fontWeight: viewTab === t ? 600 : 400,
-    transition: 'all 0.15s',
-  })
-
   const contactColumns: ColumnDef<Contact>[] = [
     {
-      key: 'name', label: 'Name', priority: 1, width: '2.2fr',
+      key: 'name', label: 'Contact', priority: 1, width: '1.65fr',
       render: c => {
         const company = getCompany(c.companyId)
+        const secondary = c.type === 'company'
+          ? (c.tradingName ? `Trading as ${c.tradingName}` : 'Company')
+          : [c.jobTitle, company?.name].filter(Boolean).join(' · ') || 'Individual'
         return (
-          <div className="flex items-center gap-2 min-w-0">
-            <span style={{ fontSize: 16 }} aria-hidden="true"><Fa icon={c.type === 'company' ? faBuilding : faUser} /></span>
+          <div className="contacts-table-person">
+            <span className="contacts-avatar contacts-avatar--sm" aria-hidden="true">{contactInitials(c.name)}</span>
             <div className="min-w-0">
-              <p className="font-medium text-[12px] truncate text-t1">{c.name}</p>
-              <p className="text-[10px] truncate text-t3">
-                {c.type === 'company' && c.tradingName ? `Trading: ${c.tradingName}` : ''}
-                {c.type === 'individual' && c.jobTitle ? c.jobTitle : ''}
-                {c.type === 'individual' && company ? `${c.jobTitle ? ' · ' : ''}${company.name}` : ''}
-                {c.type === 'individual' && !c.jobTitle && !company ? 'Individual' : ''}
-              </p>
+              <p className="contacts-table-name">{c.name}</p>
+              <p className="contacts-table-meta">{secondary}</p>
             </div>
           </div>
         )
@@ -328,63 +315,66 @@ function ContactsInner() {
       exportValue: c => c.name,
     },
     {
-      key: 'classification', label: 'Classification', priority: 1, width: '130px',
+      key: 'relationship', label: 'Relationship', priority: 1, width: '150px',
       render: c => (
-        <div className="flex gap-1 flex-wrap items-center">
-          {c.isCustomer && (
-            <span style={{ fontSize: 9, padding: '1px 6px', borderRadius: 4, background: 'var(--success-bg)', color: 'var(--success)', border: '1px solid #A7F3D0', whiteSpace: 'nowrap' }}>
-              Customer
-            </span>
-          )}
-          {c.isVendor && (
-            <span style={{ fontSize: 9, padding: '1px 6px', borderRadius: 4, background: 'var(--warning-bg)', color: 'var(--warning-text)', border: '1px solid #FDE68A', whiteSpace: 'nowrap' }}>
-              Vendor
-            </span>
-          )}
+        <div className="contacts-relationship">
+          <span className="contacts-kind">{c.type === 'company' ? 'Company' : 'Individual'}</span>
+          <div className="contacts-badges">
+            {c.isCustomer && <span className="contacts-badge contacts-badge--customer">Customer</span>}
+            {c.isVendor && <span className="contacts-badge contacts-badge--vendor">Vendor</span>}
+            {c.isArchived && <span className="contacts-badge">Archived</span>}
+          </div>
         </div>
       ),
-      exportValue: c => [c.isCustomer && 'Customer', c.isVendor && 'Vendor'].filter(Boolean).join(', '),
+      exportValue: c => [c.type, c.isCustomer && 'Customer', c.isVendor && 'Vendor'].filter(Boolean).join(', '),
+    },
+    {
+      key: 'contact', label: 'Phone & email', priority: 2, width: '1.4fr',
+      render: c => (
+        <div className="contacts-table-contact">
+          <span>{c.phone || c.mobile || 'No phone'}</span>
+          <span title={c.email || undefined}>{c.email || 'No email'}</span>
+        </div>
+      ),
+      exportValue: c => `${c.phone || c.mobile || ''} ${c.email || ''}`,
+    },
+    {
+      key: 'location', label: 'Location', priority: 2, width: '120px',
+      render: c => <span className="contacts-table-location">{[c.city, c.country].filter(Boolean).join(', ') || '—'}</span>,
+      exportValue: c => [c.city, c.country].filter(Boolean).join(', '),
     },
     {
       key: 'storeCredit', label: 'Store credit', priority: 2, width: '110px', align: 'right',
       render: c => {
         const amount = creditByCustomer.get(c.id) ?? 0
-        return (
-          <span className="font-mono text-[11px]" style={{ color: amount > 0 ? 'var(--success)' : 'var(--text-4)' }}>
-            {amount > 0 ? fmtKes(amount) : '—'}
-          </span>
-        )
+        return <span className={`contacts-money ${amount > 0 ? 'contacts-money--positive' : ''}`}>{fmtKes(amount)}</span>
       },
       exportValue: c => creditByCustomer.get(c.id) ?? 0,
     },
     {
-      key: 'phone', label: 'Phone', priority: 2, width: '110px',
-      render: c => <span className="text-[11px] text-t2">{c.phone || '—'}</span>,
-      exportValue: c => c.phone,
-    },
-    {
-      key: 'email', label: 'Email', priority: 2, width: '1.1fr',
-      render: c => <span className="text-[11px] text-t2 truncate">{c.email || '—'}</span>,
-      exportValue: c => c.email,
-    },
-    {
-      key: 'idNumber', label: 'KRA PIN / ID No.', priority: 3, width: '1.3fr',
-      render: c => <span className="text-[11px] font-mono text-t3">{c.vatNumber || c.idNumber || '—'}</span>,
-      exportValue: c => c.vatNumber || c.idNumber || '',
+      key: 'activity', label: 'Activity', priority: 3, width: '130px',
+      render: c => {
+        const orders = saleOrders.filter(order => order.customerId === c.id).length
+        const jobs = repairs.filter(repair => repair.customerId === c.id).length
+        const tills = posOrders.filter(order => order.customerId === c.id).length
+        const label = orders ? `${orders} order${orders === 1 ? '' : 's'}` : jobs ? `${jobs} repair${jobs === 1 ? '' : 's'}` : tills ? `${tills} POS sale${tills === 1 ? '' : 's'}` : 'No recent activity'
+        return <span className="contacts-activity">{label}</span>
+      },
+      exportValue: c => saleOrders.filter(order => order.customerId === c.id).length + repairs.filter(repair => repair.customerId === c.id).length + posOrders.filter(order => order.customerId === c.id).length,
     },
   ]
 
   function contactRowActions(c: Contact) {
     return (
-      <div className="flex items-center gap-1">
+      <div className="contacts-row-actions">
         <button
-          style={{ background: '#E8F3FA', border: '1px solid #A8D4E8', cursor: 'pointer', color: 'var(--navy)', fontSize: 10, borderRadius: 6, padding: '2px 8px' }}
+          className="contacts-row-action"
           onClick={e => { e.stopPropagation(); openEdit(c) }}>
           Edit
         </button>
         {c.isArchived ? (
           <button
-            style={{ background: '#ECFDF5', border: '1px solid #A7F3D0', cursor: 'pointer', color: '#065F46', fontSize: 10, borderRadius: 6, padding: '2px 8px' }}
+            className="contacts-row-action contacts-row-action--success"
             onClick={async e => {
               e.stopPropagation()
               const res = await fetch(`/api/contacts/${c.id}/restore`, { method: 'POST' })
@@ -400,7 +390,7 @@ function ContactsInner() {
           </button>
         ) : (
           <button
-            style={{ background: '#FEF3C7', border: '1px solid #FDE68A', cursor: 'pointer', color: '#92400E', fontSize: 10, borderRadius: 6, padding: '2px 8px' }}
+            className="contacts-row-action"
             onClick={async e => {
               e.stopPropagation()
               if (!confirm(`Archive ${c.name}? They stay in history but leave pickers.`)) return
@@ -419,42 +409,43 @@ function ContactsInner() {
 
   function contactCard(c: Contact) {
     const company = getCompany(c.companyId)
+    const orders = saleOrders.filter(order => order.customerId === c.id).length
+    const jobs = repairs.filter(repair => repair.customerId === c.id).length
+    const tills = posOrders.filter(order => order.customerId === c.id).length
+    const activity = orders
+      ? `${orders} order${orders === 1 ? '' : 's'}`
+      : jobs
+        ? `${jobs} repair${jobs === 1 ? '' : 's'}`
+        : tills
+          ? `${tills} POS sale${tills === 1 ? '' : 's'}`
+          : 'No recent activity'
+    const secondary = c.type === 'company'
+      ? (c.tradingName ? `Trading as ${c.tradingName}` : 'Company')
+      : [c.jobTitle, company?.name].filter(Boolean).join(' · ') || 'Individual'
     return (
-      <div key={c.id} className="p-4 bg-white hover:bg-gray-50 cursor-pointer transition-colors rounded-xl border border-gray-100" onClick={() => { setViewContact(c); setViewTab('info') }}>
-        <div className="flex items-start justify-between gap-3 mb-3">
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="w-10 h-10 rounded-xl flex items-center justify-center text-xl flex-shrink-0" style={{ background: '#E8F3FA', border: '1px solid #A8D4E8' }}>
-              <Fa icon={c.type === 'company' ? faBuilding : faUser} />
-            </div>
-            <div className="min-w-0">
-              <p className="font-bold text-[13px] text-gray-900 truncate">{c.name}</p>
-              <p className="text-[11px] text-gray-500 truncate mt-0.5">
-                {c.type === 'company' && c.tradingName ? `Trading: ${c.tradingName}` : ''}
-                {c.type === 'individual' && c.jobTitle ? c.jobTitle : ''}
-                {c.type === 'individual' && company ? `${c.jobTitle ? ' · ' : ''}${company.name}` : ''}
-                {c.type === 'individual' && !c.jobTitle && !company ? 'Individual' : ''}
-              </p>
-            </div>
+      <article key={c.id} className="contacts-mobile-card" onClick={() => { setViewContact(c); setViewTab('info') }}>
+        <div className="contacts-mobile-card__header">
+          <span className="contacts-avatar" aria-hidden="true">{contactInitials(c.name)}</span>
+          <div className="contacts-mobile-card__identity">
+            <p className="contacts-mobile-card__name">{c.name}</p>
+            <p className="contacts-mobile-card__type">{secondary}</p>
+          </div>
+          <div className="contacts-badges contacts-mobile-card__badges">
+            {c.isCustomer && <span className="contacts-badge contacts-badge--customer">Customer</span>}
+            {c.isVendor && <span className="contacts-badge contacts-badge--vendor">Vendor</span>}
           </div>
         </div>
-        <div className="flex items-center gap-2 mb-3">
-          {c.isCustomer && <span className="text-[9px] px-2 py-0.5 rounded bg-green-50 text-green-600 border border-green-100 font-semibold">Customer</span>}
-          {c.isVendor && <span className="text-[9px] px-2 py-0.5 rounded bg-amber-50 text-amber-600 border border-amber-100 font-semibold">Vendor</span>}
-          <span className="text-[10px] font-mono text-gray-400 ml-auto">{c.vatNumber || c.idNumber || '—'}</span>
+        <div className="contacts-mobile-card__channels">
+          <span className={!c.phone && !c.mobile ? 'is-muted' : ''}>{c.phone || c.mobile || 'No phone'}</span>
+          <span className={!c.email ? 'is-muted' : ''}>{c.email || 'No email'}</span>
         </div>
-        <div className="flex items-center justify-between text-[11px] text-gray-500 mb-3 bg-gray-50 p-2 rounded-lg border border-gray-100">
-          <span className="truncate flex-1" style={{ color: c.email ? 'var(--text-1)' : 'var(--text-4)' }}>{c.email || 'No email'}</span>
-          <span className="flex-shrink-0 font-mono" style={{ color: c.phone ? 'var(--text-1)' : 'var(--text-4)' }}>{c.phone || 'No phone'}</span>
+        <div className="contacts-mobile-card__footer">
+          <span>{[c.city, c.country].filter(Boolean).join(', ') || 'Location not set'}</span>
+          <span className={(creditByCustomer.get(c.id) ?? 0) > 0 ? 'contacts-money--positive' : ''}>
+            {(creditByCustomer.get(c.id) ?? 0) > 0 ? `${fmtKes(creditByCustomer.get(c.id))} credit` : activity}
+          </span>
         </div>
-        {(creditByCustomer.get(c.id) ?? 0) > 0 && (
-          <p className="text-[11px] font-mono font-semibold mb-3" style={{ color: 'var(--success)' }}>
-            Store credit {fmtKes(creditByCustomer.get(c.id))}
-          </p>
-        )}
-        <div className="flex gap-2">
-          <button className="flex-1 text-[11px] font-medium py-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-navy-500 border border-blue-100 cursor-pointer transition-colors" onClick={e => { e.stopPropagation(); openEdit(c) }}>Edit</button>
-        </div>
-      </div>
+      </article>
     )
   }
 
@@ -462,6 +453,7 @@ function ContactsInner() {
 
   return (
     <ModuleChrome
+      className="contacts-workspace"
       title="Contacts"
       subtitle="Companies, individuals and vendors"
       icon={<Fa icon={faUsers} />}
@@ -479,11 +471,11 @@ function ContactsInner() {
         />
       }
       tabs={[
-        { id: 'all', label: 'All' },
-        { id: 'companies', label: 'Companies' },
-        { id: 'individuals', label: 'Individuals' },
-        { id: 'customers', label: 'Customers' },
-        { id: 'vendors', label: 'Vendors' },
+        { id: 'all', label: `All ${total}` },
+        { id: 'companies', label: `Companies ${companiesCount}` },
+        { id: 'individuals', label: `Individuals ${individualsCount}` },
+        { id: 'customers', label: `Customers ${customersCount}` },
+        { id: 'vendors', label: `Vendors ${vendorsCount}` },
       ]}
       activeTab={tab}
       onTabChange={id => setTab(id as FilterTab)}
@@ -493,15 +485,15 @@ function ContactsInner() {
       <input ref={fileInputRef} type="file" accept=".csv" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) processFile(f); e.target.value = '' }} />
       <PageToolbar
         search={
-          <div className="flex flex-wrap items-center gap-2 w-full">
+          <div className="contacts-toolbar-row">
             <input
               aria-label="Search contacts by name, email, or phone"
-              className="form-input text-[11px] py-1.5 w-full min-w-[12rem] sm:w-64"
-              placeholder="Search name, email, phone…"
+              className="form-input contacts-search"
+              placeholder="Search name, company, phone or email…"
               value={search}
               onChange={e => setSearch(e.target.value)}
             />
-            <label className="flex items-center gap-1.5 text-[10px] text-[var(--text-3)] whitespace-nowrap">
+            <label className="contacts-archived-toggle">
               <input
                 type="checkbox"
                 checked={showArchived}
@@ -513,7 +505,7 @@ function ContactsInner() {
         }
       />
       {/* Contact list */}
-      <div className="card overflow-hidden m-3 sm:m-4">
+      <div className="contacts-directory-card">
         <DataTable
           tableId="contacts"
           columns={contactColumns}
@@ -546,10 +538,40 @@ function ContactsInner() {
         const clientCredits = creditsForCustomer(customerCredits, vc.id)
         const storeCredit = creditByCustomer.get(vc.id) ?? 0
         const historyCount   = clientSOs.length + clientRepairs.length + clientPOS.length + clientInvoices.length
+        const recentBusiness = [
+          ...clientSOs.map(order => ({
+            kind: order.status === 'draft' ? 'Quotation' : 'Sales order',
+            ref: order.ref ?? order.orderNumber ?? order.id.slice(0, 8),
+            date: order.date,
+            amount: order.total,
+            status: order.status,
+          })),
+          ...clientInvoices.map(invoice => ({
+            kind: 'Invoice',
+            ref: displayDocRef(invoice.ref),
+            date: invoice.date,
+            amount: invoice.total,
+            status: invoiceDocState(invoice.status) === 'posted' ? invoicePaymentStatus(invoice) : invoiceDocState(invoice.status),
+          })),
+          ...clientRepairs.map(repair => ({
+            kind: 'Repair',
+            ref: repair.ref,
+            date: repair.intakeDate,
+            amount: repair.total,
+            status: repair.status,
+          })),
+          ...clientPOS.map(order => ({
+            kind: 'POS sale',
+            ref: order.ref,
+            date: order.date,
+            amount: order.total,
+            status: 'paid',
+          })),
+        ].sort((a, b) => String(b.date).localeCompare(String(a.date))).slice(0, 5)
 
         return (
           <Modal
-            title={vc.name}
+            title="Contact"
             subtitle={
               vc.type === 'company'
                 ? (vc.tradingName ? `${vc.tradingName} · ` : '') + (vc.industry || 'Company')
@@ -557,43 +579,70 @@ function ContactsInner() {
                   ? `${vc.jobTitle}${company ? ` · ${company.name}` : ''}`
                   : company ? company.name : 'Individual'
             }
-            width={820}
+            width={1280}
+            variant="enterprise"
             onClose={() => setViewContact(null)}
           >
+            <div className="contacts-profile">
             {/* Header */}
-            <div className="flex flex-col sm:flex-row sm:items-start gap-4 pb-3" style={{ borderBottom: '1px solid var(--border-lt)' }}>
-              <div className="w-14 h-14 rounded-xl flex items-center justify-center text-2xl flex-shrink-0"
-                style={{ background: '#E8F3FA', border: '1px solid #A8D4E8' }}>
-                <Fa icon={vc.type === 'company' ? faBuilding : faUser} />
-              </div>
-              <div className="flex-1">
-                <h3 className="text-base font-semibold text-t1">{vc.name}</h3>
-                {vc.tradingName && <p className="text-[11px] text-t3 mb-1">Trading as: {vc.tradingName}</p>}
-                <div className="flex gap-1.5 flex-wrap mt-1">
+            <div className="contacts-profile__hero">
+              <span className="contacts-avatar contacts-avatar--lg" aria-hidden="true">{contactInitials(vc.name)}</span>
+              <div className="contacts-profile__identity">
+                <h3>{vc.name}</h3>
+                <p>
+                  {vc.type === 'company'
+                    ? [vc.industry || 'Company', vc.city, vc.country].filter(Boolean).join(' · ')
+                    : [vc.jobTitle || 'Individual', company?.name, vc.city].filter(Boolean).join(' · ')}
+                </p>
+                <div className="contacts-badges">
                   <Badge status={vc.type} />
-                  {vc.isCustomer && <span className="badge badge-green">Customer</span>}
-                  {vc.isVendor && <span className="badge badge-amber">Vendor</span>}
-                  {storeCredit > 0 && <span className="badge badge-green">Credit {fmtKes(storeCredit)}</span>}
-                  {vc.tags.map(t => <span key={t} className="badge badge-purple">{t}</span>)}
+                  {vc.isCustomer && <span className="contacts-badge contacts-badge--customer">Customer</span>}
+                  {vc.isVendor && <span className="contacts-badge contacts-badge--vendor">Vendor</span>}
+                  {vc.tags.map(t => <span key={t} className="contacts-badge">{t}</span>)}
                 </div>
               </div>
-              <div className="flex gap-2 w-full sm:w-auto">
-                <button className="btn-outline text-[11px] flex-1 sm:flex-none justify-center" onClick={() => { openEdit(vc); setViewContact(null) }}>
+              <div className="contacts-profile__actions">
+                {vc.phone && <a className="btn-outline" href={`tel:${vc.phone}`}>Call</a>}
+                {vc.email && <a className="btn-outline" href={`mailto:${vc.email}`}>Email</a>}
+                <button className="btn-outline" onClick={() => { openEdit(vc); setViewContact(null) }}>
                   <Fa icon={faPen} className="mr-1" /> Edit
                 </button>
               </div>
             </div>
 
+            <div className="contacts-profile__metrics" aria-label="Account at a glance">
+              <div className="contacts-metric">
+                <span>Open balance</span>
+                <strong>{fmtKes(openBalance)}</strong>
+                <small>{clientInvoices.filter(invoice => isOpenInvoice(invoice)).length} open invoice{clientInvoices.filter(invoice => isOpenInvoice(invoice)).length === 1 ? '' : 's'}</small>
+              </div>
+              <div className="contacts-metric">
+                <span>Revenue</span>
+                <strong>{fmtKes(totalRevenue)}</strong>
+                <small>Invoices collected</small>
+              </div>
+              <div className="contacts-metric">
+                <span>Store credit</span>
+                <strong>{fmtKes(storeCredit)}</strong>
+                <small>Available to apply</small>
+              </div>
+              <div className="contacts-metric">
+                <span>Activity</span>
+                <strong>{clientSOs.length + clientPOS.length} orders · {clientRepairs.length} repairs</strong>
+                <small>{historyCount} linked records</small>
+              </div>
+            </div>
+
             {/* Sub-tabs */}
-            <div className="flex gap-1 py-2 overflow-x-auto scrollbar-hide" style={{ borderBottom: '1px solid var(--border-lt)' }}>
+            <div className="contacts-profile__tabs scrollbar-hide">
               {([
-                ['info',      'Contact Info'],
+                ['info',      'Overview'],
                 ['financial', 'Financial'],
-                ...(vc.type === 'company' ? [['persons', `Persons (${persons.length})`]] : []),
-                ['history',   `History (${historyCount})`],
-                ['chatter',   'Notes'],
+                ...(vc.type === 'company' ? [['persons', `Contact persons ${persons.length}`]] : []),
+                ['history',   `Sales & service ${historyCount}`],
+                ['chatter',   'Notes & activity'],
               ] as [ViewTab, string][]).map(([t, label]) => (
-                <button key={t} onClick={() => setViewTab(t)} style={viewTabStyle(t)}>
+                <button key={t} className={viewTab === t ? 'is-active' : ''} onClick={() => setViewTab(t)}>
                   {label}
                 </button>
               ))}
@@ -601,188 +650,214 @@ function ContactsInner() {
 
             {/* Tab: Contact Info */}
             {viewTab === 'info' && (
-              <div className="flex flex-col gap-3">
-                <div>
-                  <p className="text-[10px] uppercase tracking-wider font-semibold mb-2 text-t3">Contact Details</p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    <InfoRow label="Email" value={vc.email || '—'} />
+              <div className="contacts-overview-grid">
+                <section className="contacts-panel contacts-panel--contact">
+                  <h4>Contact details</h4>
+                  <div className="contacts-info-list">
                     <InfoRow label="Phone" value={vc.phone || '—'} />
+                    <InfoRow label="Email" value={vc.email || '—'} />
                     {vc.mobile && <InfoRow label="Mobile" value={vc.mobile} />}
                     {vc.website && <InfoRow label="Website" value={vc.website} />}
+                    <InfoRow label="Physical address" value={vc.address || '—'} />
+                    {vc.postalAddress && <InfoRow label="Postal address" value={vc.postalAddress} />}
                   </div>
-                </div>
+                </section>
 
-                <div>
-                  <p className="text-[10px] uppercase tracking-wider font-semibold mb-2 text-t3">Address</p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    <InfoRow label="Physical Address" value={vc.address || '—'} />
-                    {vc.postalAddress && <InfoRow label="Postal Address" value={vc.postalAddress} />}
-                    {vc.city && <InfoRow label="City" value={vc.city} />}
-                    {vc.country && <InfoRow label="Country" value={vc.country} />}
-                  </div>
-                </div>
-
-                <div>
-                  <p className="text-[10px] uppercase tracking-wider font-semibold mb-2 text-t3">
-                    {vc.type === 'company' ? 'Business Identity' : 'Personal Identity'}
-                  </p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    {vc.vatNumber && <InfoRow label="KRA PIN" value={vc.vatNumber} mono />}
-                    {vc.type === 'company' && vc.registrationNumber && <InfoRow label="Registration No." value={vc.registrationNumber} mono />}
-                    {vc.type === 'company' && vc.industry && <InfoRow label="Industry" value={vc.industry} />}
-                    {vc.type === 'individual' && vc.idNumber && <InfoRow label="National ID / Passport" value={vc.idNumber} mono />}
-                    {vc.type === 'individual' && vc.jobTitle && <InfoRow label="Job Title" value={vc.jobTitle} />}
+                <section className="contacts-panel contacts-panel--identity">
+                  <h4>{vc.type === 'company' ? 'Company information' : 'Personal information'}</h4>
+                  <dl className="contacts-definition-list">
+                    {vc.type === 'company' && <><dt>Trading name</dt><dd>{vc.tradingName || '—'}</dd></>}
+                    {vc.vatNumber && <><dt>KRA PIN</dt><dd className="font-mono">{vc.vatNumber}</dd></>}
+                    {vc.type === 'company' && <><dt>Registration</dt><dd className="font-mono">{vc.registrationNumber || '—'}</dd></>}
+                    {vc.type === 'company' && <><dt>Industry</dt><dd>{vc.industry || '—'}</dd></>}
+                    {vc.type === 'individual' && <><dt>ID / Passport</dt><dd className="font-mono">{vc.idNumber || '—'}</dd></>}
+                    {vc.type === 'individual' && <><dt>Job title</dt><dd>{vc.jobTitle || '—'}</dd></>}
                     {vc.type === 'individual' && company && (
-                      <InfoRow label="Company" value={
-                        <button
-                          style={{ background: 'none', border: 'none', color: 'var(--navy)', cursor: 'pointer', padding: 0, fontSize: 11, fontWeight: 600 }}
-                          onClick={() => { setViewContact(company); setViewTab('info') }}>
-                          {company.name}
-                        </button>
-                      } />
+                      <><dt>Company</dt><dd><button className="contacts-inline-link" onClick={() => { setViewContact(company); setViewTab('info') }}>{company.name}</button></dd></>
                     )}
-                    <InfoRow label="Added" value={fmtDate(vc.createdAt)} />
+                    <dt>Location</dt><dd>{[vc.city, vc.country].filter(Boolean).join(', ') || '—'}</dd>
+                    <dt>Added</dt><dd>{fmtDate(vc.createdAt)}</dd>
+                  </dl>
+                </section>
+
+                <section className="contacts-panel contacts-panel--recent">
+                  <div className="contacts-panel__heading">
+                    <h4>Recent business</h4>
+                    <button className="contacts-inline-link" onClick={() => setViewTab('history')}>View all</button>
                   </div>
-                </div>
+                  {recentBusiness.length ? (
+                    <div className="contacts-recent-list">
+                      {recentBusiness.map(item => (
+                        <div key={`${item.kind}-${item.ref}`} className="contacts-recent-row">
+                          <span>{item.kind}</span>
+                          <strong>{item.ref}</strong>
+                          <span><Badge status={item.status} size="xs" /></span>
+                          <span>{fmtDate(item.date)}</span>
+                          <b>{fmtKes(item.amount)}</b>
+                        </div>
+                      ))}
+                    </div>
+                  ) : <p className="contacts-empty-copy">No sales or service activity recorded yet.</p>}
+                </section>
+
+                {vc.type === 'company' && (
+                  <section className="contacts-panel contacts-panel--primary-person">
+                    <div className="contacts-panel__heading">
+                      <h4>Primary contact</h4>
+                      <button className="contacts-inline-link" onClick={() => setViewTab('persons')}>View persons</button>
+                    </div>
+                    {persons[0] ? (
+                      <button className="contacts-primary-person" onClick={() => { setViewContact(persons[0]); setViewTab('info') }}>
+                        <span className="contacts-avatar contacts-avatar--sm">{contactInitials(persons[0].name)}</span>
+                        <span><strong>{persons[0].name}</strong><small>{persons[0].jobTitle || 'Contact person'}</small></span>
+                        <span><small>{persons[0].phone || persons[0].email || 'No contact details'}</small></span>
+                      </button>
+                    ) : <p className="contacts-empty-copy">No contact persons linked yet.</p>}
+                  </section>
+                )}
 
                 {vc.notes && (
-                  <div className="rounded-lg p-3" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-lt)' }}>
-                    <p className="text-[10px] uppercase tracking-wider font-semibold mb-1 text-t3">Notes</p>
-                    <p className="text-[12px] text-t2 leading-relaxed">{vc.notes}</p>
-                  </div>
+                  <section className="contacts-panel contacts-panel--note">
+                    <h4>Internal note</h4>
+                    <p>{vc.notes}</p>
+                  </section>
                 )}
               </div>
             )}
 
             {/* Tab: Financial */}
             {viewTab === 'financial' && (
-              <div className="flex flex-col gap-3">
-                <div>
-                  <p className="text-[10px] uppercase tracking-wider font-semibold mb-2 text-t3">Store credit</p>
-                  <div className="rounded-xl p-3" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-lt)' }}>
-                    <p className="text-[10px] uppercase tracking-wider text-t3">Available for next purchase</p>
-                    <p className="text-xl font-bold font-mono mt-1" style={{ color: storeCredit > 0 ? 'var(--success)' : 'var(--text-1)' }}>{fmtKes(storeCredit)}</p>
-                    <p className="text-[11px] text-t3 mt-1">From laptops / buy-backs, returns, and cancelled paid invoices. Apply on a posted unpaid invoice in Finance.</p>
+              <div className="contacts-financial-layout">
+                <section className="contacts-panel contacts-panel--credit">
+                  <h4>Credit & payment</h4>
+                  <div className="contacts-credit-summary">
+                    <div><span>Available store credit</span><strong className={storeCredit > 0 ? 'is-positive' : ''}>{fmtKes(storeCredit)}</strong></div>
+                    <div><span>Payment terms</span><strong>{vc.paymentTermsDays === 0 ? 'Due immediately' : `${vc.paymentTermsDays ?? 30} days`}</strong></div>
+                    <div><span>Credit limit</span><strong>{vc.creditLimit ? fmtKes(vc.creditLimit) : '—'}</strong></div>
+                    <div><span>Open balance</span><strong>{fmtKes(openBalance)}</strong></div>
                   </div>
-                  {clientCredits.length > 0 && (
-                    <div className="mt-2 rounded-xl overflow-hidden" style={{ border: '1px solid var(--border-lt)' }}>
-                      <table className="w-full text-left border-collapse">
-                        <thead>
-                          <tr className="bg-[var(--bg-surface)] border-b border-[var(--border-lt)]">
-                            <th className="px-3 py-2 text-[10px] font-bold uppercase text-t3">Credit</th>
-                            <th className="px-3 py-2 text-[10px] font-bold uppercase text-t3">Source</th>
-                            <th className="px-3 py-2 text-[10px] font-bold uppercase text-t3 text-right">Remaining</th>
-                            <th className="px-3 py-2 text-[10px] font-bold uppercase text-t3">Status</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-[var(--border-lt)]">
+                  <p className="contacts-help-copy">Credit can be applied to posted unpaid invoices from Finance.</p>
+                </section>
+
+                <section className="contacts-panel contacts-panel--banking">
+                  <h4>Banking details</h4>
+                  <dl className="contacts-definition-list">
+                    <dt>Bank</dt><dd>{vc.bankName || '—'}</dd>
+                    <dt>Account</dt><dd className="font-mono">{vc.bankAccount || '—'}</dd>
+                    <dt>Branch</dt><dd>{vc.bankBranch || '—'}</dd>
+                    {vc.vendorRating && <><dt>Vendor rating</dt><dd>{vc.vendorRating} / 5</dd></>}
+                    {vc.isCustomer && <><dt>Loyalty points</dt><dd>{vc.loyaltyPoints || 0}</dd></>}
+                  </dl>
+                </section>
+
+                <section className="contacts-panel contacts-panel--credits">
+                  <h4>Customer credits</h4>
+                  {clientCredits.length > 0 ? (
+                    <div className="contacts-table-scroll">
+                      <table className="contacts-compact-table">
+                        <thead><tr><th>Credit</th><th>Source</th><th>Remaining</th><th>Status</th></tr></thead>
+                        <tbody>
                           {clientCredits.map(credit => (
                             <tr key={String(credit.id || credit.ref)}>
-                              <td className="px-3 py-2 font-mono text-[11px] font-semibold text-primary-600">{credit.ref}</td>
-                              <td className="px-3 py-2 text-[11px] text-t2">{customerCreditSourceLabel(credit)}</td>
-                              <td className="px-3 py-2 font-mono text-[11px] text-right">{fmtKes(credit.balance)}</td>
-                              <td className="px-3 py-2"><Badge status={credit.status === 'available' ? 'active' : credit.status === 'partially_used' ? 'warning' : 'draft'} label={customerCreditStatusLabel(credit.status)} size="xs" /></td>
+                              <td className="font-mono">{credit.ref}</td>
+                              <td>{customerCreditSourceLabel(credit)}</td>
+                              <td className="font-mono">{fmtKes(credit.balance)}</td>
+                              <td><Badge status={credit.status === 'available' ? 'active' : credit.status === 'partially_used' ? 'warning' : 'draft'} label={customerCreditStatusLabel(credit.status)} size="xs" /></td>
                             </tr>
                           ))}
                         </tbody>
                       </table>
                     </div>
-                  )}
-                </div>
-                <div>
-                  <p className="text-[10px] uppercase tracking-wider font-semibold mb-2 text-t3">Payment Terms</p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    <InfoRow
-                      label="Payment Terms"
-                      value={
-                        vc.paymentTermsDays === 0
-                          ? 'Cash / due immediately (0 days)'
-                          : vc.paymentTermsDays != null
-                            ? `${vc.paymentTermsDays} days`
-                            : '—'
-                      }
-                    />
-                    <InfoRow label="Credit Limit" value={vc.creditLimit ? `KES ${vc.creditLimit.toLocaleString()}` : '—'} />
-                    {vc.vendorRating && <InfoRow label="Vendor Rating" value={`${vc.vendorRating} / 5`} />}
-              {vc.isCustomer && <InfoRow label="Loyalty Points" value={String(vc.loyaltyPoints || 0)} />}
-                  </div>
-                </div>
-                <div>
-                  <p className="text-[10px] uppercase tracking-wider font-semibold mb-2 text-t3">Banking Details</p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    <InfoRow label="Bank Name" value={vc.bankName || '—'} />
-                    <InfoRow label="Account Number" value={vc.bankAccount || '—'} mono />
-                    <InfoRow label="Branch" value={vc.bankBranch || '—'} />
-                  </div>
-                </div>
+                  ) : <p className="contacts-empty-copy">No customer credits issued.</p>}
+                </section>
+
+                <section className="contacts-panel contacts-panel--invoices">
+                  <div className="contacts-panel__heading"><h4>Invoices</h4><button className="contacts-inline-link" onClick={() => setViewTab('history')}>Full history</button></div>
+                  {clientInvoices.length ? (
+                    <div className="contacts-table-scroll">
+                      <table className="contacts-compact-table">
+                        <thead><tr><th>Invoice</th><th>Date</th><th>Amount</th><th>Paid</th><th>Outstanding</th><th>Status</th></tr></thead>
+                        <tbody>
+                          {clientInvoices.slice(0, 5).map(invoice => {
+                            const doc = invoiceDocState(invoice.status)
+                            const payment = invoicePaymentStatus(invoice)
+                            return <tr key={invoice.id}>
+                              <td className="font-mono">{displayDocRef(invoice.ref)}</td>
+                              <td>{fmtDate(invoice.date)}</td>
+                              <td className="font-mono">{fmtKes(invoice.total)}</td>
+                              <td className="font-mono">{fmtKes(invoice.amountPaid)}</td>
+                              <td className="font-mono">{fmtKes(invoiceResidual(invoice))}</td>
+                              <td><Badge status={doc === 'posted' ? payment : doc} label={doc === 'posted' ? PAYMENT_STATUS_LABELS[payment] : undefined} size="xs" /></td>
+                            </tr>
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : <p className="contacts-empty-copy">No customer invoices recorded.</p>}
+                </section>
               </div>
             )}
 
             {/* Tab: Contact Persons (companies only) */}
             {viewTab === 'persons' && vc.type === 'company' && (
-              <div className="flex flex-col gap-2">
+              <section className="contacts-persons-section">
+                <div className="contacts-section-heading">
+                  <div><h4>Contact persons</h4><p>People linked to {vc.name}</p></div>
+                  <button
+                    className="btn-primary"
+                    onClick={() => {
+                      setFormDraft(blankIndividualContact({ companyId: vc.id }))
+                      setEditId(null)
+                      setFormKey(k => k + 1)
+                      setShowForm(true)
+                      setViewContact(null)
+                    }}>
+                    <Fa icon={faPlus} /> Add person
+                  </button>
+                </div>
                 {persons.length === 0 ? (
-                  <p className="text-[12px] text-t3 text-center py-6">No contact persons linked yet</p>
+                  <p className="contacts-empty-copy contacts-empty-copy--large">No contact persons linked yet</p>
                 ) : persons.map(p => (
                   <div
                     key={p.id}
-                    className="flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-all"
-                    style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-lt)' }}
-                    onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-hover)')}
-                    onMouseLeave={e => (e.currentTarget.style.background = 'var(--bg-surface)')}
+                    className="contacts-person-row"
                     onClick={() => { setViewContact(p); setViewTab('info') }}
                   >
-                    <div className="w-8 h-8 rounded-lg flex items-center justify-center text-sm flex-shrink-0"
-                      style={{ background: '#E8F3FA' }}>
-                      <Fa icon={faUser} />
+                    <span className="contacts-avatar contacts-avatar--sm" aria-hidden="true">{contactInitials(p.name)}</span>
+                    <div className="contacts-person-row__identity">
+                      <p>{p.name}</p>
+                      <span>{p.jobTitle || 'Contact person'}</span>
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-[12px] font-medium truncate text-t1">{p.name}</p>
-                      <p className="text-[10px] text-t3">{p.jobTitle || 'Contact Person'}</p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-[11px] text-t2">{p.phone || '—'}</p>
-                      <p className="text-[10px] text-t3 truncate">{p.email || '—'}</p>
+                    <div className="contacts-person-row__channels">
+                      <span>{p.phone || 'No phone'}</span>
+                      <span>{p.email || 'No email'}</span>
                     </div>
                     <button
-                      className="ml-2"
-                      style={{ background: '#E8F3FA', border: '1px solid #A8D4E8', cursor: 'pointer', color: 'var(--navy)', fontSize: 10, borderRadius: 6, padding: '2px 8px' }}
+                      className="contacts-row-action"
                       onClick={e => { e.stopPropagation(); openEdit(p); setViewContact(null) }}>
                       Edit
                     </button>
                   </div>
                 ))}
-                <button
-                  className="flex items-center gap-2 mt-1 text-[11px] cursor-pointer"
-                  style={{ background: '#E8F3FA', border: '1px dashed #A8D4E8', borderRadius: 8, padding: '8px 12px', color: 'var(--navy)' }}
-                  onClick={() => {
-                    setFormDraft(blankIndividualContact({ companyId: vc.id }))
-                    setEditId(null)
-                    setFormKey(k => k + 1)
-                    setShowForm(true)
-                    setViewContact(null)
-                  }}>
-                  <Fa icon={faPlus} /> Add contact person
-                </button>
-              </div>
+              </section>
             )}
 
             {/* Tab: History */}
             {viewTab === 'history' && (
-              <div className="flex flex-col gap-3">
+              <div className="contacts-history">
 
                 {/* Revenue summary */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            <div className="contacts-history__metrics">
                   {[
                     { label: 'Store Credit',  value: fmtKes(storeCredit),           sub: 'ready to apply', color: storeCredit > 0 ? 'var(--success)' : 'var(--text-1)' },
                     { label: 'Total Revenue', value: fmtKes(totalRevenue),         sub: 'invoices paid',  color: 'var(--success)' },
                     { label: 'Open Balance',  value: fmtKes(openBalance),          sub: 'outstanding',    color: openBalance > 0 ? 'var(--danger)' : 'var(--success)' },
                     { label: 'Orders',        value: String(clientSOs.length + clientPOS.length), sub: 'sales & POS', color: 'var(--navy)' },
                   ].map(s => (
-                    <div key={s.label} className="rounded-xl p-3" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-lt)' }}>
-                      <p className="text-[10px] uppercase tracking-wider mb-1 text-t3">{s.label}</p>
-                      <p className="text-base font-bold" style={{ color: s.color }}>{s.value}</p>
-                      <p className="text-[10px] mt-0.5 text-t3">{s.sub}</p>
+                    <div key={s.label} className="contacts-metric contacts-history__metric">
+                      <span>{s.label}</span>
+                      <strong style={{ color: s.color }}>{s.value}</strong>
+                      <small>{s.sub}</small>
                     </div>
                   ))}
                 </div>
@@ -889,8 +964,6 @@ function ContactsInner() {
               />
             )}
 
-            <div className="flex justify-end pt-1">
-              <button className="btn-outline text-[11px]" onClick={() => setViewContact(null)}>Close</button>
             </div>
           </Modal>
         )
@@ -912,22 +985,23 @@ function ContactsInner() {
 
       {/* ── CSV IMPORT MODAL ── */}
       {showImport && (
-        <Modal title="Import Contacts from CSV" subtitle="Preview and confirm import" width={780}
+        <Modal title="Import contacts" subtitle="Review CSV records before they are added" width={920} variant="enterprise"
           onClose={() => { setShowImport(false); setImportRows([]) }}>
-          
-          <div className="flex items-center justify-between px-4 py-3 rounded-lg mb-4" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-lt)' }}>
+
+          <div className="contacts-import">
+          <div className="contacts-import__template">
             <div>
-              <p className="text-xs font-semibold text-t1">Download Import Template</p>
-              <p className="text-[10px] text-t3 mt-0.5">CSV format. Required columns: Name</p>
+              <p>Download import template</p>
+              <span>CSV format · only Name is required</span>
             </div>
-            <button className="btn-secondary text-[11px]" onClick={downloadTemplate}><Fa icon={faFileArrowDown} /> Download Template</button>
+            <button className="btn-outline" onClick={downloadTemplate}><Fa icon={faFileArrowDown} /> Download template</button>
           </div>
 
           {importRows.length > 0 && (
             <div className="flex flex-col gap-2">
-              <div className="flex items-center justify-between">
-                <p className="text-xs font-semibold text-t1">Preview — {importRows.length} row(s)</p>
-                <div className="flex gap-3 text-[10px]">
+              <div className="contacts-import__summary">
+                <p>Preview · {importRows.length} row(s)</p>
+                <div>
                   <span className="inline-flex items-center gap-1" style={{ color: 'var(--success)' }}><Fa icon={faCheck} aria-hidden="true" /> {importRows.filter(r => r.status === 'ok').length} valid</span>
                   <span className="inline-flex items-center gap-1" style={{ color: 'var(--warning)' }}><Fa icon={faTriangleExclamation} aria-hidden="true" /> {importRows.filter(r => r.status === 'exists').length} skipped</span>
                   <span className="inline-flex items-center gap-1" style={{ color: 'var(--danger)' }}><Fa icon={faXmark} aria-hidden="true" /> {importRows.filter(r => r.status === 'error').length} errors</span>
@@ -973,6 +1047,7 @@ function ContactsInner() {
               onClick={handleConfirmImport}>
               <Fa icon={faCheck} aria-hidden="true" /> Import {importRows.filter(r => r.status === 'ok').length} Contact(s)
             </button>
+          </div>
           </div>
         </Modal>
       )}
