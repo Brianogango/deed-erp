@@ -1094,12 +1094,12 @@ export default function Topbar() {
           </button>
         </div>
       )}
-      <header className="
+      <header className={`app-topbar ${pathname?.startsWith('/sales') ? 'app-topbar--sales' : ''}
         flex items-center gap-2 sm:gap-3 md:gap-4 px-3 sm:px-4 md:px-5 py-0 flex-shrink-0
         border-b border-[var(--topbar-border)]
         bg-[var(--topbar-bg)] h-14
         shadow-sm transition-all duration-200
-      ">
+      `}>
         {/* Hamburger Menu - Mobile */}
         <button
           type="button"
@@ -1129,22 +1129,22 @@ export default function Topbar() {
         </button>
 
         {/* Page Title */}
-        <div className="flex-1 min-w-0">
-          <h1 className="text-sm font-bold text-[var(--text-1)]">{displayTitle.label}</h1>
+        <div className="app-topbar-title flex-1 min-w-0">
+          <h1 className="text-sm font-bold text-[var(--text-1)]">{pathname?.startsWith('/sales') ? 'Sales' : displayTitle.label}</h1>
           <p className="text-[10px] hidden sm:block text-[var(--text-4)]">
             {displayTitle.desc}
           </p>
         </div>
 
         {/* Right Controls */}
-        <div className="flex items-center gap-1.5 md:gap-2 flex-shrink-0 min-w-0">
+        <div className="app-topbar-controls flex items-center gap-1.5 md:gap-2 flex-shrink-0 min-w-0">
           {/* DIA — Deed Intelligence Assistant */}
           {hasModuleAccess(currentUser, 'jarvis') && (
             <button
               onClick={() => window.dispatchEvent(new CustomEvent('jarvis:toggle'))}
               title="DIA — Deed Intelligence Assistant"
               aria-label="Ask DIA"
-              className="flex items-center gap-1.5 px-2 sm:px-3 py-2 rounded-lg bg-[var(--bg-surface)] border border-[var(--border)] hover:bg-[var(--bg-muted)] transition-colors cursor-pointer text-[var(--text-3)] hover:text-[var(--text-1)] shrink-0"
+              className="app-topbar-secondary flex items-center gap-1.5 px-2 sm:px-3 py-2 rounded-lg bg-[var(--bg-surface)] border border-[var(--border)] hover:bg-[var(--bg-muted)] transition-colors cursor-pointer text-[var(--text-3)] hover:text-[var(--text-1)] shrink-0"
             >
               <span className="flex h-4 w-4 items-center justify-center rounded bg-[var(--primary)] text-[10px] font-extrabold text-white leading-none">DIA</span>
               <span className="hidden sm:block text-[11px] font-semibold">DIA</span>
@@ -1159,7 +1159,7 @@ export default function Topbar() {
               trackUxEvent('search_open', { module: activeModule })
             }}
             title="Search (Ctrl+K)"
-            className="flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-2 rounded-lg bg-[var(--bg-surface)] border border-[var(--border)] hover:bg-[var(--bg-muted)] transition-colors cursor-pointer text-[var(--text-3)] hover:text-[var(--text-1)] shrink-0"
+            className="app-topbar-search flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-2 rounded-lg bg-[var(--bg-surface)] border border-[var(--border)] hover:bg-[var(--bg-muted)] transition-colors cursor-pointer text-[var(--text-3)] hover:text-[var(--text-1)] shrink-0"
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
               <circle cx="11" cy="11" r="8" stroke="currentColor" strokeWidth="2" />
@@ -1278,7 +1278,7 @@ export default function Topbar() {
           {/* User Menu */}
           <button
             onClick={handleAvatarClick}
-            className={`flex items-center gap-2 rounded-lg px-2.5 py-1.5 border transition-all duration-150 cursor-pointer focus-ring ${panelOpen ? 'border-[var(--primary)] bg-[var(--info-bg)]' : 'bg-[var(--bg-surface)] border-[var(--border)] hover:bg-[var(--bg-muted)]'}`}
+            className={`app-topbar-account flex items-center gap-2 rounded-lg px-2.5 py-1.5 border transition-all duration-150 cursor-pointer focus-ring ${panelOpen ? 'border-[var(--primary)] bg-[var(--info-bg)]' : 'bg-[var(--bg-surface)] border-[var(--border)] hover:bg-[var(--bg-muted)]'}`}
             aria-label="Account settings"
             aria-expanded={panelOpen}
           >
