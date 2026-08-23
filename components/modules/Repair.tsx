@@ -23,12 +23,15 @@ import {
   EditRepairDetailsModal,
   StopAtDiagnosisModal
 } from './RepairModals'
-import { ModuleSkeleton, TabBar, useMounted } from '@/components/ui'
+import { ModuleHeader, ModuleSkeleton, TabBar, useMounted } from '@/components/ui'
+import { PrimaryActionButton } from '@/components/erp'
+import { Fa } from '@/components/icons'
+import { faPlus, faTools } from '@fortawesome/free-solid-svg-icons'
 import { useUrlRecordId } from '@/hooks/useUrlRecordId'
 
 function RepairContent() {
   const { 
-    view, setView, activeRepair, setActiveId, mainTab, setMainTab,
+    view, setView, activeRepair, setActiveId, mainTab, setMainTab, visibleRepairs, currentUser,
     showAssignModal, setShowAssignModal,
     showDiagnosisModal, setShowDiagnosisModal,
     showQuoteModal, setShowQuoteModal,
@@ -44,11 +47,26 @@ function RepairContent() {
     showEditDetailsModal, setShowEditDetailsModal,
     showStopDiagnosisModal, setShowStopDiagnosisModal
   } = useRepair()
+  const canCreateIntake = ['director', 'admin_officer'].includes(currentUser?.role ?? '')
 
   return (
     <div className={`mod-page repair-workspace repair-workspace--${view} h-full min-h-0`}>
       {view === 'list' && (
         <div className="repair-list-shell flex flex-col h-full overflow-hidden">
+          <div className="repair-module-header">
+            <ModuleHeader
+              title="Repair management"
+              subtitle={`${visibleRepairs.length} open job${visibleRepairs.length === 1 ? '' : 's'}`}
+              icon={<Fa icon={faTools} />}
+              count={visibleRepairs.length}
+              color="#061B4F"
+              primaryAction={canCreateIntake ? (
+                <PrimaryActionButton icon={<Fa icon={faPlus} />} onClick={() => setView('intake')} hideLabelOnMobile={false}>
+                  New repair
+                </PrimaryActionButton>
+              ) : undefined}
+            />
+          </div>
           <TabBar
             tabs={[
               { id: 'client', label: 'Active jobs' },
