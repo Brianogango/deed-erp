@@ -125,9 +125,9 @@ export function saleStatusPill(status: string): { label: string; tone: SalesDocP
     case 'quotation':
       return { label: 'Draft', tone: 'draft' }
     case 'quotation_sent':
-      return { label: 'Sent', tone: 'sent' }
+      return { label: 'Sent', tone: 'warning' }
     case 'sale':
-      return { label: 'Sales Order', tone: 'confirmed' }
+      return { label: 'Confirmed', tone: 'confirmed' }
     case 'cancelled':
       return { label: 'Cancelled', tone: 'danger' }
     default:
@@ -141,7 +141,7 @@ export function deliveryStatusPill(status: string): { label: string; tone: Sales
     case 'waiting':
       return { label: 'Waiting', tone: 'warning' }
     case 'ready':
-      return { label: 'Picking', tone: 'info' }
+      return { label: 'Ready', tone: 'success' }
     case 'done':
       return { label: 'Delivered', tone: 'success' }
     case 'cancelled':
