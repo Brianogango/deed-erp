@@ -62,9 +62,9 @@ export default function ClientDetail({ clientId, onClose }: { clientId: string, 
   const storeCredit = customerCreditBalance(customerCredits, linkedContact?.id)
 
   return (
-    <div className="flex flex-col gap-6 animate-in fade-in slide-in-from-right-4 duration-300">
+    <div className="crm-client-detail flex flex-col gap-6 animate-in fade-in slide-in-from-right-4 duration-300">
       {/* Header */}
-      <div className="flex items-center justify-between border-b pb-4 border-[var(--border-lt)]">
+      <div className="crm-client-detail__header">
         <div className="flex items-center gap-4">
           <button onClick={onClose} className="btn-outline text-xs px-3 py-1.5">← Back</button>
           <div>
@@ -78,7 +78,7 @@ export default function ClientDetail({ clientId, onClose }: { clientId: string, 
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="crm-client-detail__grid">
         {/* Left Column: Client Info & Financials */}
         <div className="lg:col-span-1 flex flex-col gap-6">
           <div className="card p-5">
