@@ -27,7 +27,7 @@ export function SecondaryActionMenu({
 }) {
   const visible = actions.filter(a => !a.hidden)
   const [open, setOpen] = useState(false)
-  const [pos, setPos] = useState<{ top: number; right: number } | null>(null)
+  const [pos, setPos] = useState<{ top?: number; right: number; bottom?: number } | null>(null)
   const btnRef = useRef<HTMLButtonElement>(null)
   const menuRef = useRef<HTMLDivElement>(null)
   const menuId = useId()
@@ -40,10 +40,15 @@ export function SecondaryActionMenu({
     const update = () => {
       const rect = btnRef.current?.getBoundingClientRect()
       if (!rect) return
-      setPos({
-        top: rect.bottom + 6,
-        right: Math.max(8, window.innerWidth - rect.right),
-      })
+      const right = Math.max(8, window.innerWidth - rect.right)
+      const estimatedMenuHeight = Math.min(320, visible.length * 40 + 12)
+      const roomBelow = window.innerHeight - rect.bottom
+
+      setPos(
+        roomBelow >= estimatedMenuHeight + 14
+          ? { top: rect.bottom + 6, right }
+          : { bottom: Math.max(8, window.innerHeight - rect.top + 6), right },
+      )
     }
     update()
     window.addEventListener('resize', update)
@@ -52,7 +57,7 @@ export function SecondaryActionMenu({
       window.removeEventListener('resize', update)
       window.removeEventListener('scroll', update, true)
     }
-  }, [open])
+  }, [open, visible.length])
 
   useEffect(() => {
     if (!open) return
@@ -99,7 +104,13 @@ export function SecondaryActionMenu({
           role="menu"
           aria-label={ariaLabel}
           className="tab-overflow-menu"
-          style={{ top: pos.top, right: pos.right }}
+          style={{
+            top: pos.top,
+            right: pos.right,
+            bottom: pos.bottom,
+            maxHeight: 'min(20rem, calc(100dvh - 1rem))',
+            overflowY: 'auto',
+          }}
         >
           {visible.map(action => (
             <button
