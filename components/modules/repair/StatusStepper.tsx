@@ -42,7 +42,7 @@ export default function StatusStepper({ currentStatus, history = [], steps, labe
   }, {})
 
   return (
-    <div className="relative select-none">
+    <div className="repair-status-stepper relative select-none">
       <style>{`
         @keyframes stepPulse {
           0%, 100% { box-shadow: 0 0 0 0 var(--pulse-color); }
@@ -66,12 +66,12 @@ export default function StatusStepper({ currentStatus, history = [], steps, labe
       `}</style>
 
       {/* Vertical track */}
-      <div className="absolute left-[11px] top-4 bottom-4 w-0.5 rounded-full bg-[var(--border)]" />
+      <div className="repair-status-stepper__track absolute left-[11px] top-4 bottom-4 w-0.5 rounded-full bg-[var(--border)]" />
 
       {/* Filled progress track */}
       {currentIndex > 0 && !isFailed && (
         <div
-          className="absolute left-[11px] top-4 w-0.5 rounded-full transition-all duration-700"
+          className="repair-status-stepper__fill absolute left-[11px] top-4 w-0.5 rounded-full transition-all duration-700"
           style={{
             height: `calc(${(currentIndex / (resolvedSteps.length - 1)) * 100}% - 8px)`,
             background: 'linear-gradient(to bottom, var(--primary), var(--success))',
@@ -80,7 +80,7 @@ export default function StatusStepper({ currentStatus, history = [], steps, labe
         />
       )}
 
-      <div className="space-y-1 relative">
+      <div className="repair-status-stepper__steps space-y-1 relative">
         {resolvedSteps.map((step, idx) => {
           const isCompleted = isFailed ? false : idx < currentIndex
           const isCurrent   = idx === currentIndex
@@ -92,7 +92,7 @@ export default function StatusStepper({ currentStatus, history = [], steps, labe
           return (
             <div
               key={step}
-              className="step-enter flex items-start gap-3.5 py-2 rounded-xl transition-all duration-200"
+              className="repair-status-stepper__step step-enter flex items-start gap-3.5 py-2 transition-all duration-200"
               style={{
                 animationDelay: `${idx * 40}ms`,
                 opacity: isPending ? 0.45 : 1,
