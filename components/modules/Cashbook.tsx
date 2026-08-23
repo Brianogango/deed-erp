@@ -403,9 +403,9 @@ function ReconPanel({
   const color = ACCT_COLOR[account.id] ?? 'var(--text-4)'
 
   return (
-    <div className="card overflow-hidden">
+    <div className="card overflow-hidden finance-recon-panel">
       {/* ── Header ─────────────────────────────────────────────────────────── */}
-      <div className="px-4 py-3 flex items-center justify-between border-b" style={{ borderColor: 'var(--border-lt)' }}>
+      <div className="finance-recon-header px-4 py-3 flex items-center justify-between border-b" style={{ borderColor: 'var(--border-lt)' }}>
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 rounded-lg flex items-center justify-center text-white text-[10px] font-bold" style={{ background: color }}>
             {account.id.toUpperCase().slice(0, 2)}
@@ -428,7 +428,7 @@ function ReconPanel({
       </div>
 
       {/* ── KPI row ─────────────────────────────────────────────────────────── */}
-      <div className="border-b" style={{ borderColor: 'var(--border-lt)' }}>
+      <div className="finance-recon-metrics border-b" style={{ borderColor: 'var(--border-lt)' }}>
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-0">
         {[
           { label: 'Book Balance',     val: bookBalance,     color: 'var(--navy)' },
@@ -448,7 +448,7 @@ function ReconPanel({
       </div>
 
       {/* ── Sub tabs ───────────────────────────────────────────────────────── */}
-      <div className="flex border-b" style={{ borderColor: 'var(--border-lt)' }}>
+      <div className="finance-recon-tabs flex border-b" style={{ borderColor: 'var(--border-lt)' }}>
         {([
           { key: 'statement', label: `Statement Lines (${stmtLines.length})` },
           { key: 'matching',  label: `Matching (${matchedPairs.length} matched)` },
@@ -481,7 +481,7 @@ function ReconPanel({
             <p className="text-[10px] font-semibold uppercase tracking-wide mb-2" style={{ color: 'var(--text-4)' }}>
               Add Statement Line
             </p>
-            <div className="grid gap-2" style={{ gridTemplateColumns: '110px 1fr 120px 90px 100px 100px 90px 80px' }}>
+            <div className="finance-recon-entry-form grid gap-2" style={{ gridTemplateColumns: '110px 1fr 120px 90px 100px 100px 90px 80px' }}>
               <input type="date" className="form-input text-[10px]"
                 value={form.date} onChange={e => setForm(p => ({ ...p, date: e.target.value }))} />
               <input type="text" className="form-input text-[10px]" placeholder="Description / Narration"
@@ -1028,13 +1028,17 @@ export default function CashbookTab({ accounts }: { accounts: Account[] }) {
     : (bankAccounts.find(a => a.id === filterAccount)?.name ?? filterAccount)
 
   return (
-    <div className="flex flex-col gap-4 py-3">
+    <div className="finance-cashbook flex flex-col gap-4 py-3">
 
       {/* Title + month / account selects (mobile-first; no pill strip) */}
-      <div className="flex flex-col gap-3">
+      <div className="finance-cashbook-filters flex flex-col gap-3">
         <div>
-          <p className="text-xs font-semibold mb-0.5" style={{ color: 'var(--text-1)' }}>Cash Book</p>
-          <p className="text-[10px]" style={{ color: 'var(--text-3)' }}>Daily transactions · bank reconciliation</p>
+          <p className="text-xs font-semibold mb-0.5" style={{ color: 'var(--text-1)' }}>
+            {visibleTab === 'reconcile' ? 'Bank reconciliation' : 'Cashbook'}
+          </p>
+          <p className="text-[10px]" style={{ color: 'var(--text-3)' }}>
+            {visibleTab === 'reconcile' ? `${monthLabel(activeMonth)} · match, review and validate` : 'Daily transactions · bank reconciliation'}
+          </p>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
           <label className="flex flex-col gap-1 min-w-0">
@@ -1058,7 +1062,7 @@ export default function CashbookTab({ accounts }: { accounts: Account[] }) {
       </div>
 
       {/* Per-account KPI cards — desktop only; mobile uses the account select + one balance line */}
-      <div className="hidden sm:grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2">
+      <div className="finance-cashbook-accounts hidden sm:grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2">
         {bankAccounts.filter(a => a.active).map(acc => {
           const closing = closingByAccount[acc.id] ?? 0
           const mCredit = monthEntries.filter(e => e.bankAccountId === acc.id).reduce((s,e) => s+e.credit, 0)
@@ -1082,7 +1086,7 @@ export default function CashbookTab({ accounts }: { accounts: Account[] }) {
       </div>
 
       {/* Section tabs */}
-      <div className="flex items-center gap-2 flex-wrap">
+      <div className="finance-cashbook-view-tabs flex items-center gap-2 flex-wrap">
         {(['cashbook', ...(reconEnabled ? ['reconcile'] as const : [])] as const).map(t => (
           <button key={t}
             className={`min-h-[44px] px-3 py-2 rounded-lg text-xs font-medium transition-all ${visibleTab === t ? 'btn-primary' : 'btn-secondary'}`}
@@ -1231,7 +1235,7 @@ export default function CashbookTab({ accounts }: { accounts: Account[] }) {
       {/* ── RECONCILIATION TAB ────────────────────────────────────────── */}
       {visibleTab === 'reconcile' && reconEnabled && (
         <div className="flex flex-col gap-3">
-          <div className="rounded-xl px-4 py-3 text-xs"
+          <div className="finance-recon-help rounded-xl px-4 py-3 text-xs"
             style={{ background: 'var(--info-bg)', border: '1px solid #BFDBFE', color: 'var(--info-text)' }}>
             <strong>How to reconcile:</strong> At month-end enter the closing balance from each bank statement.
             The system compares it against the book balance computed from all recorded transactions.
