@@ -9,7 +9,7 @@ import path from 'path'
 // small collaborative JSON state. Reads fall back to app_state for rows that
 // predate the migration (scripts/migrate-blobs-to-disk.mjs moves them over).
 
-const BLOB_KEY_PATTERNS = [/^expense_receipt_/, /^repair_photos_/, /^repair_payment_proof_/]
+const BLOB_KEY_PATTERNS = [/^expense_receipt_/, /^repair_photos_/, /^repair_payment_proof_/, /^product_photos_/]
 
 export const isBlobKey = (key: string) => BLOB_KEY_PATTERNS.some(re => re.test(key))
 

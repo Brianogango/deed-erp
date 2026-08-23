@@ -24,8 +24,15 @@ export async function GET(request: Request) {
     const lite = url.searchParams.get('lite') === '1' || url.searchParams.get('lite') === 'true'
     const products = await prisma.product.findMany({
       include: lite
-        ? { category: { select: { name: true } } }
-        : { serials: true, category: { select: { name: true } } },
+        ? {
+          category: { select: { name: true } },
+          images: { select: { imageUrl: true, isPrimary: true, sortOrder: true }, orderBy: { sortOrder: 'asc' } },
+        }
+        : {
+          serials: true,
+          category: { select: { name: true } },
+          images: { select: { imageUrl: true, isPrimary: true, sortOrder: true }, orderBy: { sortOrder: 'asc' } },
+        },
       orderBy: { name: 'asc' },
     })
     return NextResponse.json(products)

@@ -36,6 +36,24 @@ describe('mergeCatalogProducts', () => {
     expect(p.image).toBe('💻')
   })
 
+  it('uses a catalog photo URL when the API row has no upload', () => {
+    const merged = mergeCatalogProducts(
+      [] as ClientCatalogProduct[],
+      [apiRow({ name: 'Logitech M185 Wireless Mouse', category: { name: 'Accessories' } })],
+      CONFIG,
+    )
+    expect(merged[0].image).toBe('/api/public/v1/catalog-photos/logitech-m185/1')
+  })
+
+  it('uses the uploaded primary image when present', () => {
+    const merged = mergeCatalogProducts(
+      [clientItem({})],
+      [apiRow({ primaryImageUrl: '/api/public/v1/products/p-1/images/1' })],
+      CONFIG,
+    )
+    expect(merged[0].image).toBe('/api/public/v1/products/p-1/images/1')
+  })
+
   it('adds catalog rows missing from the client store with category defaults', () => {
     const merged = mergeCatalogProducts(
       [clientItem({})],

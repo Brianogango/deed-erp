@@ -6,6 +6,8 @@ import { availableSellableQty, isListedInPartnerCatalog, type BulkStockLevel, ty
 import type { LocationId } from '@/lib/store'
 import { resolveResellerPrice } from '@/lib/pricing/reseller-price'
 import { loadServerMarginPolicy } from '@/lib/pricing/sync-product-list-from-cost.server'
+import { partnerImagesFromSlots, type ProductImageSlot } from '@/lib/product-images'
+import { matchCatalogPhotoPack } from '@/lib/catalog-photos'
 
 export const dynamic = 'force-dynamic'
 
@@ -110,6 +112,7 @@ export async function GET(request: Request) {
         sellingPrice: true, costPrice: true, wholesalePrice: true,
         productType: true, specs: true, updatedAt: true, trackingMethod: true,
         category: { select: { name: true } },
+        images: { select: { sortOrder: true, isPrimary: true }, orderBy: { sortOrder: 'asc' } },
       },
       orderBy: { name: 'asc' },
     }),
@@ -182,6 +185,12 @@ export async function GET(request: Request) {
     const stockProduct = partnerStockProduct(row, jsonProduct)
     if (!isListedInPartnerCatalog(stockProduct)) return []
     const quantityAvailable = availableSellableQty(stockProduct, serials, bulkStock, row.id)
+    const uploaded: Partial<Record<ProductImageSlot, boolean>> = {}
+    for (const image of row.images ?? []) {
+      const slot = image.sortOrder === 2 ? 2 : image.isPrimary || image.sortOrder === 1 ? 1 : null
+      if (slot) uploaded[slot] = true
+    }
+    const pack = Object.keys(uploaded).length ? null : matchCatalogPhotoPack(row.name, row.sku)
     return [{
       id: row.id,
       sku: row.sku,
@@ -194,6 +203,7 @@ export async function GET(request: Request) {
       warrantyMonths: warrantyById.get(row.id) ?? null,
       quantityAvailable,
       inStock: quantityAvailable >= 1,
+      images: partnerImagesFromSlots(row.id, uploaded, pack?.id ?? null),
       updatedAt: row.updatedAt.toISOString(),
     }]
   })

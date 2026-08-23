@@ -125,9 +125,14 @@ export async function middleware(request: NextRequest) {
     const { checkRateLimit } = await import('@/lib/rate-limit')
     const presentedKey = request.headers.get('x-api-key') ?? request.headers.get('authorization') ?? ''
     const limiterId = presentedKey ? presentedKey.slice(-24) : getIP(request)
-    const { success, remaining, resetAt } = await checkRateLimit(`partner-api:${limiterId}`, 120, 60)
+    const isPublicImage =
+      /\/api\/public\/v1\/products\/[^/]+\/images\/\d+$/.test(pathname)
+      || /\/api\/public\/v1\/catalog-photos\/[^/]+\/\d+$/.test(pathname)
+    const limit = isPublicImage ? 600 : 120
+    const bucket = isPublicImage ? 'partner-images' : 'partner-api'
+    const { success, remaining, resetAt } = await checkRateLimit(`${bucket}:${limiterId}`, limit, 60)
     if (!success) {
-      return new NextResponse(JSON.stringify({ error: 'Rate limit exceeded — max 120 requests per minute' }), {
+      return new NextResponse(JSON.stringify({ error: `Rate limit exceeded — max ${limit} requests per minute` }), {
         status: 429,
         headers: {
           'Content-Type': 'application/json',

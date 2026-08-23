@@ -25,6 +25,7 @@ describe('blob-store', () => {
     expect(isBlobKey('expense_receipt_abc')).toBe(true)
     expect(isBlobKey('repair_photos_REP-123')).toBe(true)
     expect(isBlobKey('repair_payment_proof_REP-123')).toBe(true)
+    expect(isBlobKey('product_photos_abc')).toBe(true)
     expect(isBlobKey('deed_invoices')).toBe(false)
     expect(isBlobKey('deed_repairs_v2')).toBe(false)
   })

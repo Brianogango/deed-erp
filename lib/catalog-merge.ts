@@ -1,5 +1,7 @@
 import { isSerialOnlyCategory, inferTrackingMethod } from '@/lib/inventory-identifiers'
 import { catalogDeviceConfig, deviceConfigFromProductSpecs } from '@/lib/reconfiguration/unit-config'
+import { catalogPhotoPublicPath, isProductPhotoUrl } from '@/lib/product-images'
+import { matchCatalogPhotoPack } from '@/lib/catalog-photos'
 
 // Merge the relational product catalog (GET /api/products rows) into the
 // client-side product list kept in the synced JSON store.
@@ -59,6 +61,8 @@ export interface CatalogApiRow {
     [key: string]: unknown
   } | null
   category?: { name?: string | null } | null
+  primaryImageUrl?: string | null
+  images?: Array<{ imageUrl?: string | null; isPrimary?: boolean; sortOrder?: number | null }> | null
 }
 
 const CATEGORY_EMOJI: Record<string, string> = {
@@ -200,8 +204,19 @@ export function mergeCatalogProducts<P extends ClientCatalogProduct>(
         : (local as any)?.productKind
     const unitFromSpecs = typeof specs?.unit === 'string' && specs.unit ? specs.unit : null
     const taxFromSpecs = specs?.taxRatePct != null ? Number(specs.taxRatePct) : NaN
+    const heroFromCatalog =
+      row.primaryImageUrl
+      || row.images?.find(image => image.isPrimary)?.imageUrl
+      || row.images?.find(image => image.sortOrder === 1)?.imageUrl
+      || row.images?.[0]?.imageUrl
+      || null
+    const pack = !heroFromCatalog ? matchCatalogPhotoPack(row.name ?? local?.name, row.sku ?? local?.sku) : null
+    const resolvedImage = heroFromCatalog
+      || (pack ? catalogPhotoPublicPath(pack.id, 1) : null)
+      || (local?.image && isProductPhotoUrl(local.image) ? local.image : null)
+      || CATEGORY_EMOJI[category]
+      || '📦'
     return {
-      image: CATEGORY_EMOJI[category] ?? '📦',
       stockQty: 0,
       canBeSold: true,
       canBePurchased: true,
@@ -241,6 +256,7 @@ export function mergeCatalogProducts<P extends ClientCatalogProduct>(
       // Odoo invoicing policy — server value wins, defaults to Ordered Quantities.
       invoicePolicy: (row.invoicePolicy === 'delivery' || (local as any)?.invoicePolicy === 'delivery') ? 'delivery' : 'order',
       isActive: row.isActive !== false,
+      image: resolvedImage,
     } as unknown as P
   })
   const catalogKeys = new Set(merged.flatMap(p => identityKeys(p)))

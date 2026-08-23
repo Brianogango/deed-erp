@@ -64,13 +64,14 @@ export async function loadInitialAppState(): Promise<AppStateMap> {
     // Binary payloads (receipt scans, repair photos, payment screenshots) are
     // stored under their own keys and served by dedicated routes — keep them
     // out of the initial hydration payload shipped inside the page HTML.
-    const excludedKeyPatterns = ['expense_receipt_%', 'repair_photos_%', 'repair_payment_proof_%']
+    const excludedKeyPatterns = ['expense_receipt_%', 'repair_photos_%', 'repair_payment_proof_%', 'product_photos_%']
     const { rows } = await sql`
       SELECT key, value
       FROM app_state
       WHERE key NOT LIKE ${excludedKeyPatterns[0]}
         AND key NOT LIKE ${excludedKeyPatterns[1]}
         AND key NOT LIKE ${excludedKeyPatterns[2]}
+        AND key NOT LIKE ${excludedKeyPatterns[3]}
     `
     return rowsToAppState(rows as { key: string; value: string }[])
   } catch {

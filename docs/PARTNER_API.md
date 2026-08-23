@@ -1,6 +1,6 @@
 # Deed ERP Partner API — Integration Guide
 
-**Version:** 1.1  
+**Version:** 1.2  
 **Audience:** Reseller partners integrating Deed Technologies’ product catalog into their own websites or apps  
 **Scope:** Read-only catalog (products, prices, stock). Orders are not placed through this API.
 
@@ -34,7 +34,7 @@ Deed’s Partner API lets approved resellers **pull the sellable catalog** — a
 | Wholesale / reseller price (KES) | Walk-in retail / sale price |
 | Warranty months (when set) | Internal accounts or users |
 | Live warehouse quantity, including 0 | Draft / inactive products |
-| | Hidden partner categories |
+| Two public product photos when available | Hidden partner categories |
 | | Order placement |
 
 This API is **read-only**. To place purchase orders with Deed Technologies, contact your Deed account contact — do not attempt write calls against this API.
@@ -171,6 +171,10 @@ curl -sS \
       "warrantyMonths": 6,
       "quantityAvailable": 4,
       "inStock": true,
+      "images": [
+        { "url": "https://<deed-erp-host>/api/public/v1/products/0b0e8b9e-aaaa-bbbb-cccc-ddddeeeeffff/images/1", "role": "hero" },
+        { "url": "https://<deed-erp-host>/api/public/v1/products/0b0e8b9e-aaaa-bbbb-cccc-ddddeeeeffff/images/2", "role": "detail" }
+      ],
       "updatedAt": "2026-07-22T08:12:00.000Z"
     }
   ],
@@ -208,7 +212,10 @@ Responses may be cached at the edge/server for up to **60 seconds** (`Cache-Cont
 | `warrantyMonths` | number \| null | Warranty in months when configured |
 | `quantityAvailable` | number | Warehouse (Main) units only (available serials, or bulk at warehouse). May be `0`. |
 | `inStock` | boolean | `true` when `quantityAvailable >= 1` |
+| `images` | array | Zero, one, or two public photos. Each item is `{ url, role }` where `role` is `hero` or `detail`. Empty when no photo is on file. |
 | `updatedAt` | string (ISO 8601) | Last product update timestamp |
+
+Image URLs are public (no API key). Use them in `<img src>`. Do not put your partner key on those requests. Missing photos return HTTP 404; the catalog item is still listed.
 
 ### Pagination object
 
@@ -252,7 +259,7 @@ Create a server route or cron job that:
 
 ### Step 3 — Render on your storefront
 
-- Show `name`, `description`, `price`, and stock status from **your** database/cache.
+- Show `name`, `description`, `price`, `images`, and stock status from **your** database/cache.
 - Use `inStock` / `quantityAvailable` on your storefront. `inStock: false` means Deed can still list the SKU (vendor-sourced) but does not have it in Warehouse (Main) today. Do not show those as “in stock”.
 - Treat products missing from the latest sync as removed or blocked (usually a hidden category).
 - Do not invent cost or margin fields from this API — they are not provided.

@@ -291,7 +291,8 @@ X-API-Key: deed_pk_XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX</code></pre>
         <tr><td><code>currency</code></td><td>string</td><td><code>KES</code></td></tr>
         <tr><td><code>warrantyMonths</code></td><td>number|null</td><td>When configured</td></tr>
         <tr><td><code>quantityAvailable</code></td><td>number</td><td>Live units available</td></tr>
-        <tr><td><code>inStock</code></td><td>boolean</td><td><code>quantityAvailable &gt; 0</code></td></tr>
+        <tr><td><code>inStock</code></td><td>boolean</td><td><code>quantityAvailable &gt;= 1</code></td></tr>
+        <tr><td><code>images</code></td><td>array</td><td><code>{ url, role }</code> — <code>hero</code> / <code>detail</code>. Public URLs, no API key. Empty if none.</td></tr>
         <tr><td><code>updatedAt</code></td><td>ISO string</td><td>Last product update</td></tr>
       </tbody>
     </table>

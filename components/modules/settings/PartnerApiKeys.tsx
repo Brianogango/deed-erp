@@ -171,7 +171,8 @@ export default function PartnerApiKeys() {
             — active products with the wholesale / reseller price (saved wholesale, or the
             min GP band from cost when wholesale is not set), including warehouse qty 0.
             Hide a category below to keep it out of the feed. Walk-in sale price and cost are never
-            returned. Each key is shown <strong>once</strong> at creation; share it with exactly one
+            returned. Product photos are public URLs on the same item — shops hotlink them without
+            the key. Each key is shown <strong>once</strong> at creation; share it with exactly one
             partner so access can be revoked individually.
           </p>
         </div>

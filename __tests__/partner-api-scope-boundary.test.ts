@@ -92,6 +92,12 @@ describe('partner API key cannot reach internal routes (scope boundary)', () => 
     expect(res.status).not.toBe(401)
   })
 
+  it('lets public product photo URLs through without a session or key', async () => {
+    const res = await middleware(new NextRequest('https://erp.example.test/api/public/v1/products/prod-1/images/1'))
+    expect(res.status).not.toBe(401)
+    expect(getToken).not.toHaveBeenCalled()
+  })
+
   it('never calls evaluateSessionAccess for a partner-key-only request (no session to evaluate)', async () => {
     await middleware(partnerOnlyRequest('/api/invoices', 'x-api-key'))
     expect(evaluateSessionAccess).not.toHaveBeenCalled()

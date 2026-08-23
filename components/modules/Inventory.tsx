@@ -21,7 +21,10 @@ import { availableSellableQty, isListedInProductCatalog } from '@/lib/business-l
 import { unitSellingName } from '@/lib/reconfiguration/unit-selling-name'
 import { catalogDeviceConfig, compactSpecsString, isReconfigurableCatalogCategory } from '@/lib/reconfiguration/unit-config'
 import InventoryProductsPanel from '@/components/inventory/InventoryProductsPanel'
-import { canValidatePurchaseReceipt, canReleaseHeldSerial } from '@/lib/inventory/permissions'
+import ProductPhotoFields, { uploadProductPhoto } from '@/components/inventory/ProductPhotoFields'
+import ProductDuplicatesPanel from '@/components/inventory/ProductDuplicatesPanel'
+import { canValidatePurchaseReceipt, canReleaseHeldSerial, canArchiveProduct } from '@/lib/inventory/permissions'
+import type { ProductImageSlot } from '@/lib/product-images'
 import { isOpeningStockMove } from '@/lib/inventory/opening-stock'
 import { explainSerialWhereabouts, findSerialMatches } from '@/lib/inventory/serial-trace'
 import { ScanInputRow } from '@/components/BarcodeScanner'
@@ -231,6 +234,7 @@ function InventoryContent() {
     getStockByLocation, getMonthlyMovements,
     purchaseOrders, receipts,
     showToast, currentUserId, users, accounts,
+    refreshProductCatalog,
     refurbishmentJobs, createRefurbishmentJob, transferToSell,
     systemSettings,
     bulkStock,
@@ -300,6 +304,12 @@ function InventoryContent() {
   const [openArchivedToken, setOpenArchivedToken] = useState(0)
   const [editId, setEditId] = useUrlRecordId({ param: 'edit' })
   const [form, setForm] = useState<any>(blankProduct())
+  const emptyPhotoSlots = (): Record<ProductImageSlot, { url: string | null; source: 'upload' | 'catalog' | null; pending?: boolean }> => ({
+    1: { url: null, source: null },
+    2: { url: null, source: null },
+  })
+  const [photoSlots, setPhotoSlots] = useState(emptyPhotoSlots)
+  const [showDuplicates, setShowDuplicates] = useState(false)
   const restoredEditRef = useRef<string | null>(null)
 
   const [showOpening, setShowOpening] = useState(false)
@@ -627,6 +637,7 @@ function InventoryContent() {
   const canRequestAdj = !!currentUser && ['director', 'inventory_officer', 'technical_lead', 'finance_officer'].includes(currentUser.role)
   const canApproveAdj = !!currentUser && ['director', 'inventory_officer', 'technical_lead'].includes(currentUser.role)
   const canUpdatePrice = !!currentUser && ['director', 'admin_officer', 'finance_officer', 'inventory_officer'].includes(currentUser.role)
+  const canMergeProducts = canArchiveProduct(currentUser?.role)
 
   const priceHistoryByProduct = useMemo(() => {
     const map = new Map<string, typeof productPriceHistory>()
@@ -796,7 +807,31 @@ function InventoryContent() {
     return ids
   }, [refurbishmentJobs])
 
-  const openNew = () => { setForm(blankProduct()); setEditId(null); setDupConfirm(false); setShowAcctMapping(false); setShowForm(true); restoredEditRef.current = null }
+  const loadProductPhotos = async (productId: string) => {
+    try {
+      const res = await fetch(`/api/products/${productId}/images`)
+      const body = await res.json().catch(() => ({}))
+      if (!res.ok || !Array.isArray(body.images)) return
+      const next = emptyPhotoSlots()
+      for (const image of body.images) {
+        const slot = Number(image.slot) === 2 ? 2 : 1
+        next[slot] = { url: image.url || null, source: image.source || null }
+      }
+      setPhotoSlots(next)
+    } catch {
+      setPhotoSlots(emptyPhotoSlots())
+    }
+  }
+
+  const openNew = () => {
+    setForm(blankProduct())
+    setPhotoSlots(emptyPhotoSlots())
+    setEditId(null)
+    setDupConfirm(false)
+    setShowAcctMapping(false)
+    setShowForm(true)
+    restoredEditRef.current = null
+  }
 
   const fillProductForm = (product: Product) => {
     const kind = inferProductKind(product)
@@ -835,6 +870,7 @@ function InventoryContent() {
     })
     setDupConfirm(false)
     setShowAcctMapping(!!(product.saleAccountCode || product.costAccountCode || product.inventoryAccountCode || product.cogsAccountCode))
+    void loadProductPhotos(product.id)
   }
 
   const openEdit = (product: Product) => {
@@ -848,6 +884,7 @@ function InventoryContent() {
     setShowForm(false)
     setDupConfirm(false)
     setEditId(null)
+    setPhotoSlots(emptyPhotoSlots())
     restoredEditRef.current = null
   }
 
@@ -995,12 +1032,16 @@ function InventoryContent() {
       priceDifferenceAccountCode: form.priceDifferenceAccountCode || resolved.priceDifferenceAccountCode,
       deviceRamGb: form.deviceRamGb === '' ? undefined : Number(form.deviceRamGb),
       deviceStorageGb: form.deviceStorageGb === '' ? undefined : Number(form.deviceStorageGb),
+      image: photoSlots[1].url && !photoSlots[1].url.startsWith('data:')
+        ? photoSlots[1].url
+        : form.image,
     }
     if (editId) {
       updateProduct(editId, payload)
       setDupConfirm(false)
       setShowForm(false)
       setEditId(null)
+      setPhotoSlots(emptyPhotoSlots())
       restoredEditRef.current = null
       return
     }
@@ -1009,9 +1050,21 @@ function InventoryContent() {
     try {
       const saved = await Promise.resolve(addProduct({ ...payload, isActive: true }))
       if (!saved) return
+      const savedId = saved.id
+      for (const slot of [1, 2] as ProductImageSlot[]) {
+        const pending = photoSlots[slot]
+        if (savedId && pending.pending && pending.url) {
+          try {
+            await uploadProductPhoto(savedId, slot, pending.url)
+          } catch (err) {
+            showToast(err instanceof Error ? err.message : 'Product saved, but a photo failed to upload', 'error')
+          }
+        }
+      }
       setDupConfirm(false)
       setShowForm(false)
       setEditId(null)
+      setPhotoSlots(emptyPhotoSlots())
       restoredEditRef.current = null
     } finally {
       setSavingProduct(false)
@@ -1444,6 +1497,15 @@ function InventoryContent() {
               >
                 Bulk upload
               </button>
+              {canMergeProducts && (
+                <button
+                  type="button"
+                  className="btn-secondary text-[11px] px-3 py-2"
+                  onClick={() => setShowDuplicates(true)}
+                >
+                  Find duplicates
+                </button>
+              )}
             </div>
           ) : undefined
         }
@@ -3928,10 +3990,13 @@ function InventoryContent() {
               }
               return null
             })()}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <Field label="Warranty (Months)"><Input type="number" value={form.warrantyMonths} onChange={setF('warrantyMonths')} /></Field>
-              <Field label="Icon / Image"><Input value={form.image} onChange={setF('image')} placeholder="Image URL" /></Field>
-            </div>
+            <Field label="Warranty (Months)"><Input type="number" value={form.warrantyMonths} onChange={setF('warrantyMonths')} /></Field>
+            <ProductPhotoFields
+              productId={editId}
+              slots={photoSlots}
+              onSlotsChange={setPhotoSlots}
+              onToast={showToast}
+            />
             <Field label="Invoicing Policy">
               <Select value={form.invoicePolicy} onChange={setF('invoicePolicy')} options={[
                 { value: 'order', label: 'Ordered Quantities — invoice after order confirmation' },
@@ -4339,6 +4404,14 @@ function InventoryContent() {
             </div>
           </div>
         </Modal>
+      )}
+
+      {showDuplicates && (
+        <ProductDuplicatesPanel
+          onClose={() => setShowDuplicates(false)}
+          onMerged={() => { void refreshProductCatalog() }}
+          onToast={showToast}
+        />
       )}
 
       {pendingConfirm && (

@@ -84,6 +84,39 @@ describe('GET /api/public/v1/products — partner catalog', () => {
     expect(item).not.toHaveProperty('costPrice')
     expect(item).not.toHaveProperty('cost_price')
     expect(item).not.toHaveProperty('wholesalePrice')
+    expect(item.images).toEqual([])
+  })
+
+  it('returns catalog-pack images for a known SKU with no uploads', async () => {
+    mockPrisma.product.findMany.mockResolvedValue([
+      productRow({ name: 'Logitech M185 Wireless Mouse', category: { name: 'Accessories' }, images: [] }),
+    ])
+    mockLoadAppState.mockResolvedValue({
+      deed_serials: [],
+      deed_bulkStock: [{ productId: 'prod-1', location: 'warehouse', qty: 2 }],
+      deed_products: [{ id: 'prod-1', category: 'Accessories', requiresSerial: false }],
+    })
+    const res = await GET(req())
+    const body = await res.json()
+    expect(body.items[0].images).toEqual([
+      { url: '/api/public/v1/catalog-photos/logitech-m185/1', role: 'hero' },
+      { url: '/api/public/v1/catalog-photos/logitech-m185/2', role: 'detail' },
+    ])
+  })
+
+  it('prefers uploaded photos over the catalog pack', async () => {
+    mockPrisma.product.findMany.mockResolvedValue([
+      productRow({
+        name: 'Logitech M185 Wireless Mouse',
+        images: [{ sortOrder: 1, isPrimary: true }, { sortOrder: 2, isPrimary: false }],
+      }),
+    ])
+    const res = await GET(req())
+    const body = await res.json()
+    expect(body.items[0].images).toEqual([
+      { url: '/api/public/v1/products/prod-1/images/1', role: 'hero' },
+      { url: '/api/public/v1/products/prod-1/images/2', role: 'detail' },
+    ])
   })
 
   it('uses the min GP band when wholesale is not saved, not retail', async () => {
