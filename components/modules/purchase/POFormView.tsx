@@ -219,6 +219,24 @@ export default function POFormView() {
     }
 
     const backToList = () => { setSubView('list'); setActiveId(null) }
+    const receivedValue = activePO.lines.reduce((sum, line) => {
+      const receivedQty = Math.min(line.qtyReceived, line.qty)
+      return sum + receivedQty * line.unitPrice * (1 + (line.taxRate || 0) / 100)
+    }, 0)
+    const toReceiveValue = Math.max(0, activePO.total - receivedValue)
+    const nextActionLabel = canSend
+      ? 'Send RFQ'
+      : canConfirm
+        ? 'Confirm order'
+        : canReceive
+          ? 'Process GRN'
+          : canCreateBill
+            ? 'Create bill'
+            : canValidateBill
+              ? 'Validate bill'
+              : canPay
+                ? 'Register payment'
+                : 'No action due'
 
     // Helper: render an inline-editable cell
     const EditableCell = ({ lineId, field, value, formatter }: { lineId: string; field: 'qty' | 'unitPrice' | 'taxRate'; value: number; formatter: (v: number) => string }) => {
@@ -252,9 +270,9 @@ export default function POFormView() {
     }
 
     return (
-      <div className="flex flex-col gap-3">
+      <div className="purchase-order-detail">
         {/* ── Header ── */}
-        <div className="flex flex-col gap-2" style={{ background: 'var(--bg-card)', padding: '12px 0', borderBottom: '1px solid var(--bg-muted)' }}>
+        <div className="purchase-order-detail__header">
           <Breadcrumbs
             items={[
               { label: 'Purchase', onClick: backToList },
@@ -262,12 +280,14 @@ export default function POFormView() {
               { label: activePO.ref },
             ]}
           />
-          <div className="flex items-center gap-2 flex-wrap">
+          <div className="purchase-order-detail__title-row">
+          <div className="purchase-order-detail__identity">
           <button type="button" className="btn-outline text-[11px] py-1 px-2.5" onClick={backToList} aria-label="Back to orders">← Orders</button>
           <span className="text-sm font-bold text-t1">{activePO.ref}</span>
           <StatusBadge status={activePO.status} label={STATUS_LABEL[activePO.status]} />
-          {canEdit && <span className="text-[10px] text-t3">· Click any value in the table to edit</span>}
-          <div className="ml-auto flex gap-2 flex-wrap items-center">
+          {canEdit && <span className="purchase-order-detail__edit-hint">Click table values to edit</span>}
+          </div>
+          <div className="purchase-order-detail__actions">
             {canSend && (
               <PrimaryActionButton
                 icon={<Fa icon={faPaperPlane} />}
@@ -389,8 +409,27 @@ export default function POFormView() {
           </div>
         </div>
 
+        <section className="purchase-order-summary" aria-label="Purchase order priorities">
+          <div className="purchase-order-summary__item">
+            <span>Order total</span>
+            <strong>{fmtKes(activePO.total)}</strong>
+          </div>
+          <div className="purchase-order-summary__item">
+            <span>Received</span>
+            <strong>{fmtKes(receivedValue)}</strong>
+          </div>
+          <div className="purchase-order-summary__item">
+            <span>To receive</span>
+            <strong>{fmtKes(toReceiveValue)}</strong>
+          </div>
+          <div className="purchase-order-summary__item purchase-order-summary__item--next">
+            <span>Next action</span>
+            <strong>{nextActionLabel}</strong>
+          </div>
+        </section>
+
         {/* Stepper + smart buttons */}
-        <div className="card p-4 flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+        <div className="card purchase-order-detail__progress">
           <StatusStepper
             steps={PO_STEPS}
             current={PO_STEPS[stepIdx]}
@@ -426,12 +465,12 @@ export default function POFormView() {
           </div>
         )}
 
-        <div className="flex flex-col lg:flex-row gap-3">
+        <div className="purchase-order-detail__grid">
           {/* ── Left ── */}
-          <div className="flex flex-col gap-3 flex-1 min-w-0">
+          <div className="purchase-order-detail__main">
 
             {/* Order header fields */}
-            <div className="card overflow-hidden">
+            <div className="card overflow-hidden purchase-order-detail__facts">
               <PanelHeader title={canEdit ? 'Request for Quotation' : 'Purchase Order'} />
               <div className="p-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <Field label="Vendor">
@@ -469,8 +508,8 @@ export default function POFormView() {
             </div>
 
             {/* Products table */}
-            <div className="card overflow-hidden">
-              <PanelHeader title="Products" count={activePO.lines.length}>
+            <div className="card overflow-hidden purchase-order-lines">
+              <PanelHeader title="Order lines" count={activePO.lines.length}>
                 {canEdit && (
                   <div className="flex gap-1.5">
                     <button type="button" className="btn-secondary text-[10px] py-1 flex items-center gap-1.5" onClick={() => setShowImport(true)}>
@@ -678,10 +717,31 @@ export default function POFormView() {
           </div>
 
           {/* ── Right sidebar ── */}
-          <div className="flex flex-col gap-3 w-full lg:w-[300px] flex-shrink-0">
+          <div className="purchase-order-detail__side">
+            <div className="card overflow-hidden purchase-order-match">
+              <PanelHeader title="Three-way match" />
+              <div className="purchase-order-match__body">
+                <div className="purchase-order-match__row">
+                  <span>Purchase order</span>
+                  <strong className={!['draft', 'sent', 'cancelled'].includes(activePO.status) ? 'is-complete' : 'is-pending'}>
+                    {!['draft', 'sent', 'cancelled'].includes(activePO.status) ? 'Confirmed' : 'Pending'}
+                  </strong>
+                </div>
+                <div className="purchase-order-match__row">
+                  <span>Goods receipt</span>
+                  <strong className={poReceipts.some(receipt => receipt.status === 'validated') ? 'is-complete' : 'is-pending'}>
+                    {poReceipts.some(receipt => receipt.status === 'validated') ? 'Validated' : 'Pending'}
+                  </strong>
+                </div>
+                <div className="purchase-order-match__row">
+                  <span>Vendor bill</span>
+                  <strong className={linkedBill ? 'is-complete' : 'is-pending'}>{linkedBill ? 'Linked' : 'Not created'}</strong>
+                </div>
+              </div>
+            </div>
 
             {/* Vendor card */}
-            <div className="card overflow-hidden">
+            <div className="card overflow-hidden purchase-order-vendor">
               <PanelHeader title="Vendor" />
               <div className="p-4 flex flex-col gap-2">
                 {vendor ? (
