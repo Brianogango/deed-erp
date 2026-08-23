@@ -27,7 +27,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
     --text-2: #1E293B;
     --muted: #64748B;
     --success: #059669;
-    --font: var(--font-inter), Inter, system-ui, sans-serif;
+    --font: system-ui, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
     --radius: 4px;
   }
   * { box-sizing: border-box; }
@@ -163,34 +163,101 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
   .serial.sel { background: var(--cyan-soft); }
   .foot { display: flex; justify-content: space-between; align-items: center; margin-top: 14px; color: var(--muted); }
   .muted { color: var(--muted); margin: 8px 0 0; }
-  .list, .sheet-col { overflow: auto; }
-  table.o-list, table.lines { min-width: 520px; }
+  .crumb-path { color: var(--muted); }
   @media (max-width: 1024px) {
     .form-wrap { grid-template-columns: 1fr; }
-    .chatter { border-left: 0; border-top: 1px solid var(--line); min-height: 220px; }
-    .pick { grid-template-columns: 1fr 1fr; }
+    .chatter { border-left: 0; border-top: 1px solid var(--line); }
+    .pick { grid-template-columns: 1fr; }
     .sheet { padding: 16px; }
+    .desk-wide { display: none; }
   }
   @media (max-width: 768px) {
     .reviewer { flex-wrap: wrap; }
-    .app.on { grid-template-columns: 1fr; }
+    .app.on { display: flex; flex-direction: column; }
     .apps { display: none; }
-    .top { gap: 8px; padding: 0 10px; }
-    .top .search { max-width: none; }
+    .top { gap: 8px; padding: 0 12px; }
+    .top .search { display: none; }
     .top .who { display: none; }
-    .cp, .sv { flex-wrap: wrap; padding: 8px 10px; }
-    .crumb { font-size: 16px; }
-    .sv .views { margin-left: 0; }
+    .cp {
+      flex-wrap: nowrap;
+      padding: 10px 12px;
+      min-height: 48px;
+    }
+    .crumb { font-size: 18px; }
+    .crumb-path { display: none; }
+    .cp .actions { display: none; }
+    .sv { flex-wrap: wrap; padding: 8px 12px; gap: 6px; }
+    .sv .hand-hide { display: none; }
     .fields { grid-template-columns: 1fr; }
-    .field { grid-template-columns: 1fr; gap: 0; min-height: 0; padding: 6px 0; }
-    .title-row { flex-direction: column; }
-    .pick { grid-template-columns: 1fr; }
-    .sheet { padding: 12px; }
-    .sheet-col { padding: 8px; }
-    .nb { gap: 12px; overflow-x: auto; }
-    .nb button { flex-shrink: 0; }
-    .foot { flex-wrap: wrap; gap: 8px; }
+    .field { grid-template-columns: 1fr; gap: 0; min-height: 0; padding: 8px 0; border-bottom: 1px solid var(--surface); }
+    .title-row { flex-direction: column; gap: 10px; }
+    .doc-name { display: none; }
+    .sheet { padding: 16px; box-shadow: none; border: 0; }
+    .sheet-col { padding: 0; }
+    .nb { gap: 16px; overflow-x: auto; }
+    .nb button { flex-shrink: 0; min-height: 44px; }
+    .foot { display: none; }
     .totals { width: 100%; }
+    .composer { min-height: 44px; }
+    .serial { min-height: 44px; align-items: center; }
+
+    table.o-list, table.lines { min-width: 0; width: 100%; }
+    table.o-list thead, table.lines thead { display: none; }
+    table.o-list, table.o-list tbody, table.lines, table.lines tbody { display: block; }
+    table.o-list tr {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 2px 12px;
+      padding: 14px 12px;
+      border-bottom: 1px solid var(--line);
+      background: #FFFFFF;
+    }
+    table.o-list td { display: none; border: 0; padding: 0; white-space: normal; }
+    table.o-list td[data-role="partner"] { display: block; grid-column: 1; grid-row: 1; font-weight: 650; color: var(--text); }
+    table.o-list td[data-role="ref"] { display: block; grid-column: 1; grid-row: 2; }
+    table.o-list td[data-role="total"] { display: block; grid-column: 2; grid-row: 1; text-align: right; font-weight: 700; }
+    table.o-list td[data-role="status"] { display: block; grid-column: 2; grid-row: 2; text-align: right; }
+    table.o-list tr.sel td { background: transparent; }
+    table.o-list tr.sel { background: var(--cyan-soft); }
+
+    table.lines, table.lines tbody { display: block; }
+    table.lines tr {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 2px 12px;
+      padding: 12px 0;
+      border-bottom: 1px solid var(--line);
+    }
+    table.lines td { display: none; border: 0; padding: 0; white-space: normal; text-align: left !important; }
+    table.lines td[data-role="product"] { display: block; grid-column: 1; font-weight: 650; }
+    table.lines td[data-role="desc"] { display: block; grid-column: 1; color: var(--muted); }
+    table.lines td[data-role="qty"],
+    table.lines td[data-role="demand"] { display: block; grid-column: 1; color: var(--muted); }
+    table.lines td[data-role="qty"]::before { content: "Qty "; }
+    table.lines td[data-role="demand"]::before { content: "Demand "; }
+    table.lines td[data-role="amount"],
+    table.lines td[data-role="done"] { display: block; grid-column: 2; grid-row: 1; font-weight: 700; text-align: right !important; }
+    table.lines td[data-role="status"] { display: block; grid-column: 2; grid-row: 2; text-align: right !important; }
+    table.lines td[data-role="done"]::before { content: "Done "; font-weight: 400; color: var(--muted); }
+
+    .bar {
+      display: flex;
+      gap: 8px;
+      padding: 8px 12px;
+      background: #FFFFFF;
+      border-top: 1px solid var(--line);
+      position: sticky;
+      bottom: 0;
+    }
+    .bar .btn, .bar .btn-primary {
+      flex: 1;
+      min-height: 44px;
+      height: 44px;
+    }
+    .bar .btn:not(.btn-primary) { flex: 0 0 auto; }
+  }
+  @media (min-width: 769px) {
+    .bar { display: none; }
   }
 </style>
 </head>
@@ -218,15 +285,15 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       <div class="who">Brian · Director</div>
     </div>
     <div class="cp">
-      <div class="crumb">Sales / <strong>Quotations</strong></div>
+      <div class="crumb"><span class="crumb-path">Sales / </span><strong>Quotations</strong></div>
       <div class="actions"><button class="btn btn-primary" type="button">New</button></div>
     </div>
     <div class="sv">
       <input placeholder="Search…"/>
       <button class="facet" type="button">Filters</button>
-      <button class="facet" type="button">Group By</button>
-      <button class="facet" type="button">Favorites</button>
-      <div class="views">
+      <button class="facet hand-hide" type="button">Group By</button>
+      <button class="facet hand-hide" type="button">Favorites</button>
+      <div class="views hand-hide">
         <button class="on" type="button">List</button>
         <button type="button">Kanban</button>
       </div>
@@ -247,44 +314,45 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
         <tbody>
           <tr class="sel">
             <td><input type="checkbox" checked/></td>
-            <td><a class="link" href="#">SQ/2026/0142</a></td>
+            <td data-role="ref"><a class="link" href="#">SQ/2026/0142</a></td>
             <td>04 Aug 2026</td>
-            <td>Nairobi Tech Hub Ltd</td>
+            <td data-role="partner">Nairobi Tech Hub Ltd</td>
             <td>Brian Oketch</td>
-            <td class="num">KES 371,211.60</td>
-            <td><span class="pill pill-sent">Quotation Sent</span></td>
+            <td class="num" data-role="total">KES 371,211.60</td>
+            <td data-role="status"><span class="pill pill-sent">Quotation Sent</span></td>
           </tr>
           <tr>
             <td><input type="checkbox"/></td>
-            <td><a class="link" href="#">SQ/2026/0141</a></td>
+            <td data-role="ref"><a class="link" href="#">SQ/2026/0141</a></td>
             <td>04 Aug 2026</td>
-            <td>Beyond Matrix Limited</td>
+            <td data-role="partner">Beyond Matrix Limited</td>
             <td>Cynthia Juma</td>
-            <td class="num">KES 132,000.00</td>
-            <td><span class="pill pill-so">Sales Order</span></td>
+            <td class="num" data-role="total">KES 132,000.00</td>
+            <td data-role="status"><span class="pill pill-so">Sales Order</span></td>
           </tr>
           <tr>
             <td><input type="checkbox"/></td>
-            <td><a class="link" href="#">SQ/2026/0140</a></td>
+            <td data-role="ref"><a class="link" href="#">SQ/2026/0140</a></td>
             <td>03 Aug 2026</td>
-            <td>Kevin Mbugua</td>
+            <td data-role="partner">Kevin Mbugua</td>
             <td>Joseph Maina</td>
-            <td class="num">KES 51,812.00</td>
-            <td><span class="pill pill-draft">Quotation</span></td>
+            <td class="num" data-role="total">KES 51,812.00</td>
+            <td data-role="status"><span class="pill pill-draft">Quotation</span></td>
           </tr>
           <tr>
             <td><input type="checkbox"/></td>
-            <td><a class="link" href="#">SQ/2026/0138</a></td>
+            <td data-role="ref"><a class="link" href="#">SQ/2026/0138</a></td>
             <td>02 Aug 2026</td>
-            <td>NCBA Group</td>
+            <td data-role="partner">NCBA Group</td>
             <td>Brian Oketch</td>
-            <td class="num">KES 890,400.00</td>
-            <td><span class="pill pill-so">Sales Order</span></td>
+            <td class="num" data-role="total">KES 890,400.00</td>
+            <td data-role="status"><span class="pill pill-so">Sales Order</span></td>
           </tr>
         </tbody>
       </table>
     </div>
     <div class="pager">1-4 / 4</div>
+    <div class="bar"><button class="btn btn-primary" type="button">New</button></div>
   </div>
 </section>
 
@@ -303,7 +371,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       <div class="who">Brian · Director</div>
     </div>
     <div class="cp">
-      <div class="crumb">Sales / Quotations / <strong>SQ/2026/0142</strong></div>
+      <div class="crumb"><span class="crumb-path">Sales / Quotations / </span><strong>SQ/2026/0142</strong></div>
       <div class="actions">
         <button class="btn btn-primary" type="button">Confirm</button>
         <button class="btn" type="button">Send by Email</button>
@@ -349,31 +417,31 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
             </thead>
             <tbody>
               <tr>
-                <td>HP ProBook 450 G10</td>
-                <td>i5-1335U · 16GB · 512GB SSD</td>
-                <td class="num">4</td>
+                <td data-role="product">HP ProBook 450 G10</td>
+                <td data-role="desc">i5-1335U · 16GB · 512GB SSD</td>
+                <td class="num" data-role="qty">4</td>
                 <td>Unit</td>
                 <td class="num">52,500.00</td>
                 <td>16%</td>
-                <td class="num">210,000.00</td>
+                <td class="num" data-role="amount">210,000.00</td>
               </tr>
               <tr>
-                <td>Dell Latitude 5440</td>
-                <td>i7 · Refurb A</td>
-                <td class="num">2</td>
+                <td data-role="product">Dell Latitude 5440</td>
+                <td data-role="desc">i7 · Refurb A</td>
+                <td class="num" data-role="qty">2</td>
                 <td>Unit</td>
                 <td class="num">48,000.00</td>
                 <td>16%</td>
-                <td class="num">96,000.00</td>
+                <td class="num" data-role="amount">96,000.00</td>
               </tr>
               <tr>
-                <td>Logitech MK270 Kit</td>
-                <td>Keyboard + mouse</td>
-                <td class="num">6</td>
+                <td data-role="product">Logitech MK270 Kit</td>
+                <td data-role="desc">Keyboard + mouse</td>
+                <td class="num" data-role="qty">6</td>
                 <td>Kit</td>
                 <td class="num">2,335.00</td>
                 <td>16%</td>
-                <td class="num">14,010.00</td>
+                <td class="num" data-role="amount">14,010.00</td>
               </tr>
             </tbody>
           </table>
@@ -408,6 +476,10 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
         </div>
       </aside>
     </div>
+    <div class="bar">
+      <button class="btn" type="button">Print</button>
+      <button class="btn btn-primary" type="button">Confirm</button>
+    </div>
   </div>
 </section>
 
@@ -426,7 +498,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       <div class="who">Brian · Director</div>
     </div>
     <div class="cp">
-      <div class="crumb">Sales / Orders / <strong>SO/2026/0087</strong></div>
+      <div class="crumb"><span class="crumb-path">Sales / Orders / </span><strong>SO/2026/0087</strong></div>
       <div class="actions">
         <button class="btn btn-primary" type="button">Create Invoice</button>
         <button class="btn" type="button">Delivery</button>
@@ -470,28 +542,28 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
             </thead>
             <tbody>
               <tr>
-                <td>HP ProBook 450 G10</td>
-                <td class="num">4</td>
+                <td data-role="product">HP ProBook 450 G10</td>
+                <td class="num" data-role="qty">4</td>
                 <td class="num">0</td>
                 <td class="num">0</td>
                 <td class="num">52,500.00</td>
-                <td class="num">210,000.00</td>
+                <td class="num" data-role="amount">210,000.00</td>
               </tr>
               <tr>
-                <td>Dell Latitude 5440</td>
-                <td class="num">2</td>
+                <td data-role="product">Dell Latitude 5440</td>
+                <td class="num" data-role="qty">2</td>
                 <td class="num">0</td>
                 <td class="num">0</td>
                 <td class="num">48,000.00</td>
-                <td class="num">96,000.00</td>
+                <td class="num" data-role="amount">96,000.00</td>
               </tr>
               <tr>
-                <td>Logitech MK270 Kit</td>
-                <td class="num">6</td>
+                <td data-role="product">Logitech MK270 Kit</td>
+                <td class="num" data-role="qty">6</td>
                 <td class="num">0</td>
                 <td class="num">0</td>
                 <td class="num">2,335.00</td>
-                <td class="num">14,010.00</td>
+                <td class="num" data-role="amount">14,010.00</td>
               </tr>
             </tbody>
           </table>
@@ -522,6 +594,10 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
         </div>
       </aside>
     </div>
+    <div class="bar">
+      <button class="btn" type="button">Delivery</button>
+      <button class="btn btn-primary" type="button">Create Invoice</button>
+    </div>
   </div>
 </section>
 
@@ -540,7 +616,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       <div class="who">Brian · Director</div>
     </div>
     <div class="cp">
-      <div class="crumb">Sales / Orders / SO/2026/0087 / <strong>DN/2026/0044</strong></div>
+      <div class="crumb"><span class="crumb-path">Sales / Orders / SO/2026/0087 / </span><strong>DN/2026/0044</strong></div>
       <div class="actions">
         <button class="btn btn-primary" type="button">Validate</button>
         <button class="btn" type="button">Print</button>
@@ -585,23 +661,23 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
             </thead>
             <tbody>
               <tr>
-                <td>HP ProBook 450 G10</td>
-                <td class="num">4</td>
-                <td class="num">2</td>
+                <td data-role="product">HP ProBook 450 G10</td>
+                <td class="num" data-role="demand">4</td>
+                <td class="num" data-role="done">2</td>
                 <td>WH-A1</td>
-                <td><span class="pill pill-partial">Partial</span></td>
+                <td data-role="status"><span class="pill pill-partial">Partial</span></td>
               </tr>
               <tr>
-                <td>Logitech MK270 Kit</td>
-                <td class="num">6</td>
-                <td class="num">6</td>
+                <td data-role="product">Logitech MK270 Kit</td>
+                <td class="num" data-role="demand">6</td>
+                <td class="num" data-role="done">6</td>
                 <td>WH-A1</td>
-                <td><span class="pill pill-done">Done</span></td>
+                <td data-role="status"><span class="pill pill-done">Done</span></td>
               </tr>
             </tbody>
           </table>
           <div class="pick">
-            <div>
+            <div class="desk-wide">
               <h3>Product lines</h3>
               <table class="lines">
                 <thead>
@@ -668,6 +744,10 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
           </article>
         </div>
       </aside>
+    </div>
+    <div class="bar">
+      <button class="btn" type="button">Print</button>
+      <button class="btn btn-primary" type="button">Validate</button>
     </div>
   </div>
 </section>
