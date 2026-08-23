@@ -80,10 +80,10 @@ function MobileRepairCard({ r, onSelect, outsourceJobs }: any) {
   return (
     <button
       onClick={() => onSelect(r.id)}
-      className="w-full text-left px-4 py-4 hover:bg-[var(--bg-surface)] active:bg-[var(--bg-surface)] transition-colors border-b border-[var(--border-lt)] last:border-0"
+      className="repair-mobile-card w-full text-left"
       style={{ borderLeft: `3px solid ${rowColor}` }}
     >
-      <div className="flex items-start justify-between gap-3">
+      <div className="repair-mobile-card__top flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 mb-1 flex-wrap">
             <span className="text-[12px] font-black text-[var(--text-1)] font-mono">{r.ref}</span>
@@ -104,7 +104,7 @@ function MobileRepairCard({ r, onSelect, outsourceJobs }: any) {
           <span className="text-[10px] text-[var(--text-4)] font-medium tabular-nums">{fmtDateTime(r.intakeDate)}</span>
         </div>
       </div>
-      <div className="flex items-center justify-between mt-2.5 pt-2 border-t border-[var(--border-lt)]">
+      <div className="repair-mobile-card__footer flex items-center justify-between">
         <div className="flex items-center gap-3">
           {r.assignedTechnicianName ? (
             <div className="flex items-center gap-1.5">
@@ -146,6 +146,28 @@ function MobileRepairCard({ r, onSelect, outsourceJobs }: any) {
 export default function RepairClientJobs({ onNewIntake, onSelect }: { onNewIntake: () => void; onSelect: (id: string) => void }) {
   const { visibleRepairs, filter, setFilter, outsourceJobs, currentUser } = useRepair()
   const canCreateIntake = ['director', 'admin_officer'].includes(currentUser?.role ?? '')
+  const repairStats = useMemo(() => [
+    {
+      label: 'Needs action',
+      value: visibleRepairs.filter(r => ['pending_verification', 'awaiting_approval'].includes(r.status)).length,
+      tone: 'attention',
+    },
+    {
+      label: 'In progress',
+      value: visibleRepairs.filter(r => ['received', 'assigned', 'diagnosed', 'approved', 'in_repair', 'qc'].includes(r.status)).length,
+      tone: 'progress',
+    },
+    {
+      label: 'Awaiting parts',
+      value: visibleRepairs.filter(r => r.status === 'awaiting_parts').length,
+      tone: 'parts',
+    },
+    {
+      label: 'Ready for pickup',
+      value: visibleRepairs.filter(r => ['ready', 'invoiced'].includes(r.status)).length,
+      tone: 'ready',
+    },
+  ], [visibleRepairs])
 
   const [searchQuery, setSearchQuery]       = useState('')
   const [statusFilter, setStatusFilter]     = useState(filter ?? 'all')
@@ -404,10 +426,10 @@ export default function RepairClientJobs({ onNewIntake, onSelect }: { onNewIntak
   }
 
   return (
-    <div className="flex flex-col h-full bg-[var(--bg-page)]" style={{ animation: 'fadeIn 0.3s ease both' }}>
+    <div className="repair-client-jobs flex flex-col h-full bg-[var(--bg-page)]" style={{ animation: 'fadeIn 0.3s ease both' }}>
 
       {/* ── Header ── */}
-      <div className="bg-[var(--bg-card)] border-b border-[var(--border)] flex-shrink-0 shadow-sm">
+      <div className="repair-directory-header bg-[var(--bg-card)] border-b border-[var(--border)] flex-shrink-0">
         <ModuleHeader
           title="Repair management"
           subtitle={`${visibleRepairs.length} job${visibleRepairs.length !== 1 ? 's' : ''}`}
@@ -422,11 +444,23 @@ export default function RepairClientJobs({ onNewIntake, onSelect }: { onNewIntak
         />
       </div>
 
+      <div className="repair-metric-strip" aria-label="Repair workload summary">
+        {repairStats.map(stat => (
+          <div className={`repair-metric repair-metric--${stat.tone}`} key={stat.label}>
+            <span className="repair-metric__indicator" aria-hidden="true" />
+            <div>
+              <span>{stat.label}</span>
+              <strong>{stat.value}</strong>
+            </div>
+          </div>
+        ))}
+      </div>
+
       {/* ── Main Content — full width, align with ModuleHeader (no max-width / side gutters) ── */}
-      <div className="flex-1 overflow-hidden flex flex-col px-1 py-2 sm:py-3 w-full gap-2 sm:gap-3">
+      <div className="repair-directory-body flex-1 overflow-hidden flex flex-col w-full">
 
         {/* ── Table / Card list ── */}
-        <div className="flex-1 overflow-hidden bg-[var(--bg-card)] rounded-xl sm:rounded-2xl border border-[var(--border)] shadow-sm flex flex-col min-h-0">
+        <div className="repair-directory-table flex-1 overflow-hidden bg-[var(--bg-card)] border border-[var(--border)] flex flex-col min-h-0">
           <DataTable
             tableId="repair_client_jobs_v2"
             columns={repairColumns}
