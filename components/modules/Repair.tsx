@@ -46,9 +46,9 @@ function RepairContent() {
   } = useRepair()
 
   return (
-    <div className="mod-page h-full min-h-0">
+    <div className={`mod-page repair-workspace repair-workspace--${view} h-full min-h-0`}>
       {view === 'list' && (
-        <div className="flex flex-col h-full overflow-hidden">
+        <div className="repair-list-shell flex flex-col h-full overflow-hidden">
           <TabBar
             tabs={[
               { id: 'client', label: 'Active jobs' },
