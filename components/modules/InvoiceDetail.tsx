@@ -423,7 +423,7 @@ export default function InvoiceDetail() {
   ]
 
   return (
-    <div className="mod-page invoice-detail">
+    <div className="mod-page invoice-detail finance-workspace finance-invoice-detail">
       <div className="invoice-detail__chrome">
         <Breadcrumbs
           items={[
@@ -435,7 +435,10 @@ export default function InvoiceDetail() {
         <div className="invoice-detail__header">
           <div className="invoice-detail__header-main">
             <div className="invoice-detail__title-row">
-              <h1 className="invoice-detail__title">{titleRef}</h1>
+              <div className="invoice-detail__identity">
+                <h1 className="invoice-detail__title">{invoice.type === 'customer_invoice' ? 'Customer invoice' : 'Vendor bill'}</h1>
+                <p className="invoice-detail__ref">{titleRef}</p>
+              </div>
               {docState === 'posted' && (
                 <StatusBadge status="active" label={INVOICE_DOC_STATE_LABELS[docState]} />
               )}
