@@ -140,8 +140,8 @@ export default function DuplicateContactsPanel({
   }
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-center justify-between gap-2">
+    <div className="crm-duplicates flex flex-col gap-4">
+      <div className="crm-submodule-header">
         <div>
           <h2 className="text-sm font-semibold">Duplicate contacts</h2>
           <p className="text-[11px] text-text-3 mt-0.5">
@@ -178,8 +178,8 @@ export default function DuplicateContactsPanel({
         groups.map(group => {
           const extras = group.members.filter(m => m.id !== keepByGroup[group.key])
           return (
-            <div key={group.key} className="card overflow-hidden">
-              <div className="px-3 py-2 border-b border-border flex flex-wrap items-center justify-between gap-2">
+            <div key={group.key} className="card overflow-hidden crm-duplicate-group">
+              <div className="crm-duplicate-group__header">
                 <div className="text-[10px] uppercase tracking-wider font-semibold text-text-3">
                   {group.kind === 'name' ? 'same name' : group.kind}
                   {' · '}
@@ -217,7 +217,7 @@ export default function DuplicateContactsPanel({
                   const isKeep = keepByGroup[group.key] === m.id
                   const rfqTitle = isEnquiryTitledContact(m.name)
                   return (
-                    <li key={m.id} className="px-3 py-2.5 flex flex-wrap items-center justify-between gap-2">
+                    <li key={m.id} className="crm-duplicate-member">
                       <div className="min-w-0">
                         <div className="text-sm font-medium">
                           {m.name}
