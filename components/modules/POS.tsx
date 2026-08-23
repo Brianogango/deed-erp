@@ -679,6 +679,7 @@ export default function PointOfSale() {
                     </button>
                   )
                 })}
+              </div>
               {filteredProducts.length === 0 && (
                 <div className="pos-empty-products">
                   <div className="text-4xl mb-2 text-t4" aria-hidden="true"><Fa icon={faMagnifyingGlass} /></div>
@@ -844,7 +845,7 @@ export default function PointOfSale() {
                 {pointsToRedeem > 0 && <div className="flex justify-between text-[11px] text-indigo-600 font-bold"><span>Points Discount</span><span>-{fmtKes(pointsToRedeem)}</span></div>}
                 <div className="flex justify-between text-lg font-black text-t1 pt-1"><span>Total</span><span>{fmtKes(cartTotal)}</span></div>
                 {pointsToEarn > 0 && <p className="text-[10px] text-center font-bold text-indigo-600 pt-1">Earns {pointsToEarn} loyalty points</p>}
-              </div>
+              </section>
 
               <section className="pos-payment-section">
                 <h3>Payment method</h3>
@@ -892,7 +893,7 @@ export default function PointOfSale() {
                 onClick={() => { void charge() }}
                 disabled={cart.length === 0 || charging}
                 style={{
-                  background: cart.length > 0 ? 'var(--success)' : 'var(--border-lt)',
+                  background: cart.length > 0 ? 'var(--navy)' : 'var(--border-lt)',
                   color: cart.length > 0 ? '#FFFFFF' : 'var(--text-3)',
                   cursor: cart.length > 0 && !charging ? 'pointer' : 'default',
                 }}
