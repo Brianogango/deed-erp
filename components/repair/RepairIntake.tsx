@@ -558,9 +558,9 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
 
   // ── Main form ──────────────────────────────────────────────────────────────
   return (
-    <div className="flex flex-col h-full animate-in fade-in duration-300" style={{ background: 'var(--bg-page)' }}>
+    <div className="repair-intake flex flex-col h-full animate-in fade-in duration-300" style={{ background: 'var(--bg-page)' }}>
       {hasDraft && !draftPromptDismissed && meta && (
-        <div className="px-4 pt-3 sm:px-6" role="status">
+        <div className="repair-intake__draft px-4 pt-3 sm:px-6" role="status">
           <div className="max-w-5xl mx-auto mb-2 rounded-xl border px-3 py-2 text-xs flex flex-wrap items-center gap-2" style={{ borderColor: 'var(--warning)', background: 'var(--warning-bg)', color: 'var(--warning-text)' }}>
             <span>Unsaved repair intake from {new Date(meta.savedAt).toLocaleString()}.</span>
             <button type="button" className="btn-primary text-[10px] px-2 py-1" onClick={() => {
@@ -593,14 +593,14 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
         </div>
       )}
       {/* Header */}
-      <div className="border-b px-4 py-3 sm:px-6 sticky top-0 z-10 shadow-sm flex-shrink-0" style={{ background: 'var(--bg-card)', borderColor: 'var(--border)' }}>
-        <div className="max-w-5xl mx-auto flex items-center justify-between gap-4">
+      <header className="repair-intake__header border-b sticky top-0 z-10 flex-shrink-0" style={{ background: 'var(--bg-card)', borderColor: 'var(--border)' }}>
+        <div className="repair-intake__header-inner flex items-center justify-between gap-4">
           <div className="flex items-center gap-4">
             <button onClick={onCancel} aria-label="Back" className="p-2 rounded-xl transition-all active:scale-90" style={{ color: 'var(--text-3)' }}>
               <Fa icon={faArrowLeft} />
             </button>
             <div>
-              <h1 className="text-base font-bold tracking-tight" style={{ color: NAVY }}>New Repair Intake</h1>
+              <h1 className="text-base font-bold tracking-tight" style={{ color: NAVY }}>Book a repair</h1>
               <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: 'var(--text-3)' }}>Register device for service</p>
             </div>
           </div>
@@ -614,16 +614,23 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
             <span>{loading ? 'Booking...' : 'Book Repair Job'}</span>
           </button>
         </div>
-      </div>
+      </header>
 
-      <div className="flex-1 overflow-y-auto p-4 sm:p-8 custom-scrollbar">
-        <div className="max-w-5xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-8">
+      <nav className="repair-intake__steps" aria-label="Repair intake sections">
+        <a href="#repair-intake-customer"><b>1</b><span>Customer</span></a>
+        <a href="#repair-intake-device"><b>2</b><span>Device</span></a>
+        <a href="#repair-intake-service"><b>3</b><span>Service details</span></a>
+        <a href="#repair-intake-review"><b>4</b><span>Review</span></a>
+      </nav>
+
+      <div className="repair-intake__body flex-1 overflow-y-auto custom-scrollbar">
+        <div className="repair-intake__grid grid grid-cols-1 lg:grid-cols-3">
 
           {/* ── Main Column ─────────────────────────────────────────── */}
-          <div className="lg:col-span-2 space-y-6">
+          <main className="repair-intake__main lg:col-span-2">
 
             {/* 1. Client Type Toggle */}
-            <section className="card p-5">
+            <section id="repair-intake-customer" className="repair-intake__type card p-5">
               <p className="text-[10px] font-black uppercase tracking-widest mb-3" style={{ color: 'var(--text-3)' }}>
                 Client Type
               </p>
@@ -648,7 +655,7 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
 
             {/* 2a. Individual Client */}
             {clientType === 'individual' && (
-              <section className="card p-6" style={{ borderLeft: `4px solid ${CYAN}` }}>
+              <section className="repair-intake__customer card p-6">
                 <div className="flex items-center gap-2 mb-5">
                   <div className="p-1.5 rounded-lg" style={{ background: '#E0F6FE', color: CYAN }}>
                     <Fa icon={faUser} />
@@ -717,7 +724,7 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
 
             {/* 2b. Company Client */}
             {clientType === 'company' && (
-              <section className="card p-6" style={{ borderLeft: `4px solid ${NAVY}` }}>
+              <section className="repair-intake__customer card p-6">
                 <div className="flex items-center gap-2 mb-5">
                   <div className="p-1.5 rounded-lg" style={{ background: '#ECEDF8', color: NAVY }}>
                     <Fa icon={faBuilding} />
@@ -889,7 +896,7 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
             )}
 
             {/* 3. Device Section */}
-            <section className="card p-6" style={{ borderLeft: '4px solid #8B5CF6' }}>
+            <section id="repair-intake-device" className="repair-intake__device card p-6">
               <div className="flex items-center gap-2 mb-5">
                 <div className="p-1.5 rounded-lg" style={{ background: '#F5F3FF', color: '#7C3AED' }}>
                   <Fa icon={faMicrochip} />
@@ -1006,7 +1013,7 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
             </section>
 
             {/* 4. Job Details */}
-            <section className="card p-6" style={{ borderLeft: '4px solid var(--success)' }}>
+            <section id="repair-intake-service" className="repair-intake__service card p-6">
               <div className="flex items-center gap-2 mb-5">
                 <div className="p-1.5 rounded-lg" style={{ background: '#ECFDF5', color: 'var(--success)' }}>
                   <Fa icon={faClipboardList} />
@@ -1066,10 +1073,10 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
                 </Field>
               </div>
             </section>
-          </div>
+          </main>
 
           {/* ── Sidebar Column ───────────────────────────────────────── */}
-          <div className="space-y-5">
+          <aside id="repair-intake-review" className="repair-intake__rail">
 
             {/* Priority & Channel */}
             <section className="card p-5">
@@ -1192,7 +1199,7 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
                 Document all physical damage and inform the customer of the estimated completion date.
               </p>
             </div>
-          </div>
+          </aside>
         </div>
       </div>
 
