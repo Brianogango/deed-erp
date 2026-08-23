@@ -7,7 +7,7 @@
 <!--
 THESIS: Sales works like Odoo — control panel, search, dense list, sheet + statusbar + chatter — not a navy command band.
 OWN-WORLD: Deed navy fills primary actions and the current status; Deed cyan is links, active tab, selection. Light canvas, white sheet, 4px controls.
-STORY: A clerk opens Quotations, finds a customer, confirms to SO without relearning chrome.
+STORY: A clerk opens Quotations, confirms to SO, then picks and validates the delivery without relearning chrome.
 FIRST VIEWPORT: Breadcrumb Sales / Quotations, New on the right, search + Filters, checkbox list. No hero, no KPI cards.
 FORM: Canon / Odoo 18 Sales, user-pinned. Deed tokens only.
 FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, and DESIGN.md
@@ -135,6 +135,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
   table.lines { width: 100%; border-collapse: collapse; }
   table.lines th, table.lines td { padding: 6px 8px; border-bottom: 1px solid var(--surface); text-align: left; }
   table.lines th { color: var(--muted); font-weight: 650; font-size: 12px; }
+  table.lines tr.sel td { background: var(--cyan-soft); }
   .add-line { color: var(--cyan-dark); background: 0; border: 0; padding: 8px 0; cursor: pointer; font-weight: 650; }
   .totals { margin-left: auto; width: 280px; padding-top: 8px; }
   .totals div { display: flex; justify-content: space-between; padding: 2px 0; }
@@ -152,10 +153,21 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
   .pill-draft { background: var(--surface); color: var(--text-2); }
   .pill-sent { background: var(--cyan-soft); color: var(--cyan-dark); }
   .pill-so { background: var(--cyan-soft); color: var(--navy); }
+  .pill-partial { background: color-mix(in srgb, #D97706 14%, #FFFFFF); color: #D97706; }
+  .pill-done { background: color-mix(in srgb, #059669 12%, #FFFFFF); color: #059669; }
+  .pick { display: grid; grid-template-columns: 1.1fr 1fr 0.9fr; gap: 16px; margin-top: 12px; }
+  .pick h3 { margin: 0 0 8px; font-size: 13px; color: var(--navy); }
+  .serials { border: 1px solid var(--line); border-radius: 4px; overflow: hidden; background: #FFFFFF; }
+  .serials input { width: 100%; border: 0; border-bottom: 1px solid var(--line); padding: 8px 10px; background: var(--surface); }
+  .serial { display: flex; justify-content: space-between; gap: 8px; padding: 8px 10px; border-bottom: 1px solid var(--surface); }
+  .serial.sel { background: var(--cyan-soft); }
+  .foot { display: flex; justify-content: space-between; align-items: center; margin-top: 14px; color: var(--muted); }
+  .muted { color: var(--muted); margin: 8px 0 0; }
   @media (max-width: 960px) {
     .form-wrap { grid-template-columns: 1fr; }
     .chatter { border-left: 0; border-top: 1px solid var(--line); }
     .fields { grid-template-columns: 1fr; }
+    .pick { grid-template-columns: 1fr; }
   }
 </style>
 </head>
@@ -165,6 +177,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
   <button type="button" data-go="list" aria-pressed="true">Quotations list</button>
   <button type="button" data-go="quote">Quotation form</button>
   <button type="button" data-go="so">Sales order</button>
+  <button type="button" data-go="dn">Delivery</button>
 </div>
 
 <section class="app on" id="list" aria-label="Quotations list">
@@ -482,6 +495,153 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
           <article>
             <b>System</b> reservation started for 3 products.<br/>
             <time>05 Aug 2026 10:02</time>
+          </article>
+        </div>
+      </aside>
+    </div>
+  </div>
+</section>
+
+<section class="app" id="dn" aria-label="Delivery picking">
+  <aside class="apps" aria-label="Apps">
+    <div class="logo">D</div>
+    <a href="#">Home</a>
+    <a class="on" href="#">Sales</a>
+    <a href="#">Stock</a>
+    <a href="#">Invoicing</a>
+  </aside>
+  <div class="stage">
+    <div class="top">
+      <div class="menu">Sales</div>
+      <input class="search" placeholder="Search…"/>
+      <div class="who">Brian · Director</div>
+    </div>
+    <div class="cp">
+      <div class="crumb">Sales / Orders / SO/2026/0087 / <strong>DN/2026/0044</strong></div>
+      <div class="actions">
+        <button class="btn btn-primary" type="button">Validate</button>
+        <button class="btn" type="button">Print</button>
+        <button class="btn" type="button">Save</button>
+      </div>
+    </div>
+    <div class="form-wrap">
+      <div class="sheet-col">
+        <div class="sheet">
+          <div class="title-row">
+            <h1 class="doc-name">DN/2026/0044</h1>
+            <div class="statusbar" aria-label="Status">
+              <span class="done">Draft</span>
+              <span class="done">Waiting</span>
+              <span class="now">Ready</span>
+              <span>Done</span>
+            </div>
+          </div>
+          <div class="fields">
+            <div class="field"><label>Customer</label><div class="val">Nairobi Tech Hub Ltd</div></div>
+            <div class="field"><label>Scheduled Date</label><div class="val">08 Aug 2026</div></div>
+            <div class="field"><label>Source</label><div class="val"><a class="link" href="#">SO/2026/0087</a></div></div>
+            <div class="field"><label>Responsible</label><div class="val">Jane Muthoni</div></div>
+            <div class="field"><label>Delivery Address</label><div class="val">Ground Floor Receiving Bay, Westlands</div></div>
+            <div class="field"><label>Operation Type</label><div class="val">Delivery</div></div>
+          </div>
+          <div class="nb">
+            <button class="on" type="button">Operations</button>
+            <button type="button">Detailed Operations</button>
+            <button type="button">Additional Info</button>
+            <button type="button">Notes</button>
+          </div>
+          <table class="lines">
+            <thead>
+              <tr>
+                <th>Product</th>
+                <th class="num">Demand</th>
+                <th class="num">Done</th>
+                <th>From</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>HP ProBook 450 G10</td>
+                <td class="num">4</td>
+                <td class="num">2</td>
+                <td>WH-A1</td>
+                <td><span class="pill pill-partial">Partial</span></td>
+              </tr>
+              <tr>
+                <td>Logitech MK270 Kit</td>
+                <td class="num">6</td>
+                <td class="num">6</td>
+                <td>WH-A1</td>
+                <td><span class="pill pill-done">Done</span></td>
+              </tr>
+            </tbody>
+          </table>
+          <div class="pick">
+            <div>
+              <h3>Product lines</h3>
+              <table class="lines">
+                <thead>
+                  <tr>
+                    <th>Product</th>
+                    <th class="num">Req</th>
+                    <th class="num">Picked</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr class="sel">
+                    <td>HP ProBook 450 G10</td>
+                    <td class="num">4</td>
+                    <td class="num">2</td>
+                  </tr>
+                  <tr>
+                    <td>Logitech MK270 Kit</td>
+                    <td class="num">6</td>
+                    <td class="num">6</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div>
+              <h3>Available serials</h3>
+              <div class="serials">
+                <input placeholder="Scan or type serial…"/>
+                <div class="serial sel"><span>5CG8412A</span><span>Grade A · WH-A1</span></div>
+                <div class="serial sel"><span>5CG8412B</span><span>Grade A · WH-A1</span></div>
+                <div class="serial"><span>5CG8399C</span><span>Grade A · WH-A2</span></div>
+                <div class="serial"><span>5CG8401D</span><span>Grade B · WH-A2</span></div>
+              </div>
+            </div>
+            <div>
+              <h3>Selected</h3>
+              <div class="serials">
+                <div class="serial sel"><span>5CG8412A</span><span>WH-A1</span></div>
+                <div class="serial sel"><span>5CG8412B</span><span>WH-A1</span></div>
+              </div>
+              <p class="muted">From WH-A1 to Customer</p>
+            </div>
+          </div>
+          <div class="foot">
+            <span>Required 10 · Picked 8 · Remaining 2 · 80%</span>
+            <button class="btn btn-primary" type="button">Validate</button>
+          </div>
+        </div>
+      </div>
+      <aside class="chatter">
+        <div class="chatter-head">
+          <button class="on" type="button">Send message</button>
+          <button type="button">Log note</button>
+          <button type="button">Activities</button>
+        </div>
+        <div class="composer">Write a message…</div>
+        <div class="log">
+          <article>
+            <b>Jane Muthoni</b> started picking DN/2026/0044.<br/>
+            <time>08 Aug 2026 08:11</time>
+          </article>
+          <article>
+            <b>System</b> delivery created from SO/2026/0087.<br/>
+            <time>05 Aug 2026 10:03</time>
           </article>
         </div>
       </aside>

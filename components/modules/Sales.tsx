@@ -4137,12 +4137,9 @@ function DeliveryNoteView({
     <div className="flex flex-col gap-3">
       <div className="sales-proto-page-header">
         <div className="sales-proto-header-copy">
-          <button type="button" className="sp-btn sp-btn-ghost" style={{ paddingLeft: 0 }} onClick={onBack}>← Back to order</button>
-          <div className="sp-ref-row">
-            <h1>{existingDelivery?.ref ?? 'Delivery'}</h1>
-            <SalesDocPill label={dnPill.label} tone={dnPill.tone} />
-          </div>
-          <div className="sub">Source {order.ref} · {order.customerName}</div>
+          <nav className="sales-odoo-crumb" aria-label="Breadcrumb">
+            Sales / Orders / {order.ref} / <strong>{existingDelivery?.ref ?? 'Delivery'}</strong>
+          </nav>
         </div>
         <div className="sales-proto-actions">
           {canGenerateDeliveryNote(existingDelivery) && (
