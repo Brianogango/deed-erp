@@ -1910,7 +1910,10 @@ function SalesContent() {
                     <>
                   <div className="sales-proto-page-header">
                     <div className="sales-proto-header-copy">
-                      <button type="button" className="sp-btn sp-btn-ghost" style={{ paddingLeft: 0 }} onClick={backToList}>← Back</button>
+                      <button type="button" className="sp-btn sp-btn-ghost sales-back-button" aria-label="Back to quotations" onClick={backToList}>
+                        <span className="sales-back-button__icon" aria-hidden="true">←</span>
+                        <span className="sales-back-button__label">Back</span>
+                      </button>
                       <div className="sp-ref-row">
                         <div className="sales-record-title-block">
                           <h1>{isQuotationStage(activeOrder.status) ? 'Quotation' : 'Sales order'}</h1>
@@ -3545,15 +3548,17 @@ function NewQuotationForm({
     <div>
       <div className="sales-proto-page-header">
         <div className="sales-proto-header-copy">
-          <span className="sales-proto-header-icon" aria-hidden="true" />
-          <div>
-          <button type="button" className="sp-btn sp-btn-ghost" onClick={onCancel} style={{ paddingLeft: 0, marginBottom: 2 }}>← Back</button>
-          <div className="sales-record-title-block">
-            <h1>Quotation</h1>
-            <span className="sales-record-ref">New</span>
+          <button type="button" className="sp-btn sp-btn-ghost sales-back-button" aria-label="Back to quotations" onClick={onCancel}>
+            <span className="sales-back-button__icon" aria-hidden="true">←</span>
+            <span className="sales-back-button__label">Back</span>
+          </button>
+          <div className="sp-ref-row">
+            <div className="sales-record-title-block">
+              <h1>Quotation</h1>
+              <span className="sales-record-ref">New</span>
+            </div>
           </div>
           <div className="sub">Customer · lines · terms · send</div>
-          </div>
         </div>
         <div className="sales-proto-actions sales-proto-actions--dock sales-create-actions">
           <MoreActionsMenu
@@ -4217,7 +4222,10 @@ function DeliveryNoteView({
     <div className="flex flex-col gap-3">
       <div className="sales-proto-page-header">
         <div className="sales-proto-header-copy">
-          <button type="button" className="sp-btn sp-btn-ghost" style={{ paddingLeft: 0 }} onClick={onBack}>← Back to order</button>
+          <button type="button" className="sp-btn sp-btn-ghost sales-back-button" aria-label="Back to sales order" onClick={onBack}>
+            <span className="sales-back-button__icon" aria-hidden="true">←</span>
+            <span className="sales-back-button__label">Back</span>
+          </button>
           <div className="sp-ref-row">
             <div className="sales-record-title-block">
               <h1>Delivery</h1>
