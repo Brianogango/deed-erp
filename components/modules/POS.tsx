@@ -365,6 +365,7 @@ export default function PointOfSale() {
     if (e.key === 'Enter') {
       processScan(scanInput)
       setScanInput('')
+      setSearch('')
       scanRef.current?.focus()
     }
   }
@@ -433,6 +434,10 @@ export default function PointOfSale() {
     posSessionId,
     posSessions,
   })
+  const activeSession = posSessions.find(session => session.id === posSessionId)
+  const sessionOpenedTime = activeSession?.openedAt
+    ? new Date(activeSession.openedAt).toLocaleTimeString('en-KE', { hour: '2-digit', minute: '2-digit' })
+    : null
 
   const charge = async () => {
     if (cart.length === 0) { showToast('Cart is empty', 'error'); return }
@@ -499,14 +504,15 @@ export default function PointOfSale() {
   if (isPrinting && receiptOrder) return <ReceiptPrintView order={receiptOrder} companySettings={companySettings} bankAccounts={bankAccounts} serials={serials} stockMoves={stockMoves} invoices={invoices} onDone={() => setIsPrinting(false)} />
 
   return (
-    <div className="flex flex-col h-full overflow-hidden">
+    <div className="pos-page">
       {/* Boot screen if no session */}
       {!posSessionOpen && (
-        <div className="flex-1 flex flex-col items-center justify-center bg-surface p-6 text-center">
-          <div className="text-6xl mb-6 text-t4" aria-hidden="true"><Fa icon={faStore} /></div>
-          <h2 className="text-2xl font-black text-t1 mb-2">POS Terminal</h2>
-          <p className="text-t3 mb-8 max-w-sm">Open a new session to start processing retail sales and managing your till.</p>
-          <button type="button" className="btn-primary px-10 py-4 text-lg" onClick={() => setShowOpenSession(true)}>Open New Session</button>
+        <div className="pos-boot">
+          <div className="pos-boot-icon" aria-hidden="true"><Fa icon={faStore} /></div>
+          <p className="pos-boot-eyebrow">Deed retail workspace</p>
+          <h2 className="pos-boot-title">Point of Sale</h2>
+          <p className="pos-boot-copy">Open a session to start scanning products, receiving payments, and managing your till.</p>
+          <button type="button" className="pos-boot-action" onClick={() => setShowOpenSession(true)}>Open new session</button>
           {showOpenSession && (
             <Modal title="Open Session" subtitle="Enter opening cash balance" width={380} onClose={() => setShowOpenSession(false)}>
               <Field label="Opening Cash Count (KES)"><Input value={openingCash} onChange={setOpeningCash} type="number" autoFocus /></Field>
@@ -532,20 +538,34 @@ export default function PointOfSale() {
       )}
 
       {posSessionOpen && (
-        <div className="flex flex-col lg:flex-row lg:items-start gap-2 sm:gap-3 min-h-0">
+        <div className="pos-workspace">
           {/* Left — Products */}
-          <div className="flex flex-col gap-2 flex-1 min-w-0">
+          <section className={`pos-products-pane ${cartOpen ? 'is-mobile-hidden' : ''}`}>
             {/* Header with History Button */}
-            <div className="flex items-center justify-between gap-2 pb-1">
-               <h2 className="text-xs font-bold text-t1 uppercase tracking-wider">Retail Till</h2>
-               <div className="flex items-center gap-2">
-                 <button className="btn-secondary text-[10px] py-1 px-3" onClick={() => setShowHistory(true)}>
-                   <Fa icon={faReceipt} /> Transaction History
-                 </button>
-                 <button className="btn-outline text-[10px] py-1 px-3" style={{ color: 'var(--danger)', borderColor: 'color-mix(in srgb, var(--danger) 40%, transparent)' }}
-                   onClick={() => setShowCloseSession(true)}>Close Session</button>
-               </div>
-            </div>
+            <header className="pos-terminal-header">
+              <div className="pos-terminal-heading">
+                <span className="pos-terminal-icon" aria-hidden="true"><Fa icon={faCashRegister} /></span>
+                <div className="min-w-0">
+                  <h1 className="pos-terminal-title">Point of Sale</h1>
+                  <p className="pos-terminal-meta">
+                    <span>{companySettings.city || 'Nairobi'} store</span>
+                    <span aria-hidden="true">·</span>
+                    <span className="pos-session-active">Session active</span>
+                    {sessionOpenedTime ? <><span aria-hidden="true">·</span><span>Opened {sessionOpenedTime}</span></> : null}
+                  </p>
+                </div>
+              </div>
+              <div className="pos-terminal-actions">
+                <button type="button" className="pos-history-action" onClick={() => setShowHistory(true)}>
+                  <Fa icon={faReceipt} aria-hidden="true" />
+                  <span>Transaction history</span>
+                </button>
+                <button type="button" className="pos-close-action" onClick={() => setShowCloseSession(true)}>
+                  <span aria-hidden="true">×</span>
+                  <span>Close session</span>
+                </button>
+              </div>
+            </header>
 
             {orphanedSession && (
               <div className="p-3 rounded-xl text-xs border" style={{ background: 'var(--danger-bg)', borderColor: 'color-mix(in srgb, var(--danger) 24%, transparent)', color: 'var(--danger-text)' }}>
@@ -569,42 +589,52 @@ export default function PointOfSale() {
                 </button>
               </div>
             )}
-            {/* Scanner bar */}
-            <div className="flex gap-2 items-center p-3 rounded-xl" style={{ background: 'var(--info-bg)', border: '1px solid color-mix(in srgb, var(--info) 35%, transparent)' }}>
-              <button
-                type="button"
-                className="min-w-[44px] min-h-[44px] flex items-center justify-center flex-shrink-0 hover:scale-110 transition-transform cursor-pointer"
-                onClick={() => setShowCamera(true)}
-                title="Open phone camera scanner"
-                aria-label="Open phone camera scanner"
-              >
-                <Fa icon={faCamera} style={{ color: 'var(--primary)', fontSize: 20 }} />
-              </button>
-              <input ref={scanRef} className="form-input flex-1 font-mono" placeholder="Scan barcode / QR or type + Enter…"
-                value={scanInput} onChange={e => setScanInput(e.target.value)} onKeyDown={handleScanKey} />
-              <span className="badge badge-green text-[10px] hidden sm:inline">Scanner Ready</span>
+            {/* Scanner and product search */}
+            <div className="pos-scan-area">
+              <div className="pos-scan-control">
+                <span className="pos-scan-leading" aria-hidden="true"><Fa icon={faMagnifyingGlass} /></span>
+                <input
+                  ref={scanRef}
+                  className="pos-scan-input"
+                  placeholder="Scan barcode, serial, SKU or product"
+                  value={scanInput}
+                  onChange={e => {
+                    setScanInput(e.target.value)
+                    setSearch(e.target.value)
+                  }}
+                  onKeyDown={handleScanKey}
+                  aria-label="Scan or search products"
+                />
+                <button
+                  type="button"
+                  className="pos-camera-action"
+                  onClick={() => setShowCamera(true)}
+                  title="Open phone camera scanner"
+                  aria-label="Open phone camera scanner"
+                >
+                  <Fa icon={faCamera} />
+                </button>
+              </div>
+              <span className="pos-scanner-ready"><span aria-hidden="true" />Scanner ready</span>
+              <p className="pos-scan-help">Serialized stock must be scanned from the unit label.</p>
             </div>
-            <p className="text-[10px] text-t4 px-1">Phone camera or USB scanner. Serialized units: scan the serial number on the device label.</p>
 
             <BarcodeScannerModal
               open={showCamera}
               onClose={() => setShowCamera(false)}
               title="Scan product or unit label"
               hint="Use the rear camera. Good light helps. Serial stock: scan the unit QR/barcode on the device label."
-              onScan={(code) => {
+              onScan={code => {
                 processScan(code)
               }}
             />
 
-            {/* Search + Category filter */}
-            <div className="flex flex-col sm:flex-row gap-2">
-              <input aria-label="Search products by name, SKU, or serial number" className="form-input flex-1 text-[11px] py-1.5" placeholder="Search by name, SKU or serial number..."
-                value={search} onChange={e => setSearch(e.target.value)} />
-            </div>
-            <div className="flex gap-1 overflow-x-auto pb-1 scrollbar-hide">
+            <div className="pos-category-tabs" role="tablist" aria-label="Product categories">
               {categories.map(c => (
                 <button key={c} onClick={() => setCategory(c)}
-                  className="px-3 py-1 rounded-full text-[10px] cursor-pointer flex-shrink-0 whitespace-nowrap transition-all"
+                  className="pos-category-tab"
+                  role="tab"
+                  aria-selected={category === c}
                   style={{
                     background: category === c ? 'var(--primary-light)' : 'var(--bg-surface)',
                     color: category === c ? 'var(--navy)' : 'var(--text-3)',
@@ -617,104 +647,133 @@ export default function PointOfSale() {
             </div>
 
             {/* Products grid */}
-            <div className="flex-1 overflow-y-auto min-h-0 pr-1">
-              <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-2 sm:gap-3">
-                {filteredProducts.map(p => {
-                  const matchedSerial = serialMatchByProduct.get(p.id)
+            <div className="pos-product-scroll">
+              <div className="pos-product-grid">
+                {filteredProducts.map(product => {
+                  const matchedSerial = serialMatchByProduct.get(product.id)
                   return (
-                    <div key={p.id} onClick={() => addToCart(p, matchedSerial?.id)}
-                      className="group flex flex-col p-2.5 sm:p-3 rounded-2xl bg-surface border border-border hover:border-brand-blue hover:shadow-xl transition-all cursor-pointer relative overflow-hidden">
-                      <div className="text-2xl sm:text-3xl mb-2 sm:mb-3 text-t4 group-hover:opacity-80 transition-opacity duration-200" aria-hidden="true">
-                        {p.image && !/^\p{Extended_Pictographic}/u.test(String(p.image))
-                          ? <img src={p.image} alt="" className="w-10 h-10 object-contain mx-auto" />
+                    <button
+                      type="button"
+                      key={product.id}
+                      onClick={() => addToCart(product, matchedSerial?.id)}
+                      className="pos-product-card"
+                    >
+                      <div className="pos-product-media" aria-hidden="true">
+                        {product.image && !/^\p{Extended_Pictographic}/u.test(String(product.image))
+                          ? <img src={product.image} alt="" />
                           : <Fa icon={faBox} />}
                       </div>
-                      <p className="text-[11px] sm:text-xs font-bold text-t1 leading-tight mb-1 line-clamp-2">{p.name}</p>
-                      {matchedSerial && (
-                        <p className="text-[9px] font-bold text-emerald-600 font-mono truncate mb-1" title={matchedSerial.serial}>
-                          SN: {matchedSerial.serial}
-                        </p>
-                      )}
-                      <div className="mt-auto pt-2 flex items-center justify-between border-t border-border-lt">
-                        <p className="text-[11px] sm:text-xs font-black text-brand-blue">{fmtKes(p.salePrice)}</p>
-                        <p className="text-[9px] font-bold text-t4">{getSellableQty(p.id, p.requiresSerial)} in stock</p>
+                      <div className="pos-product-copy">
+                        <p className="pos-product-name" title={product.name}>{product.name}</p>
+                        {matchedSerial && (
+                          <p className="pos-product-serial" title={matchedSerial.serial}>
+                            SN: {matchedSerial.serial}
+                          </p>
+                        )}
+                        <p className="pos-product-price">{fmtKes(product.salePrice)}</p>
+                        <div className="pos-product-meta">
+                          <span>{getSellableQty(product.id, product.requiresSerial)} in stock</span>
+                          {product.requiresSerial && <span className="pos-serial-label">Serial tracked</span>}
+                        </div>
                       </div>
-                      {p.requiresSerial && <div className="absolute top-2 right-2 badge badge-indigo text-[9px] px-1 py-0">SERIAL</div>}
-                    </div>
+                    </button>
                   )
                 })}
-              </div>
               {filteredProducts.length === 0 && (
-                <div className="py-12 flex flex-col items-center justify-center opacity-40">
+                <div className="pos-empty-products">
                   <div className="text-4xl mb-2 text-t4" aria-hidden="true"><Fa icon={faMagnifyingGlass} /></div>
                   <p className="text-xs font-bold text-t3">No products found</p>
                 </div>
               )}
             </div>
-          </div>
+            <button
+              type="button"
+              className="pos-mobile-cart-bar"
+              onClick={() => setCartOpen(true)}
+              disabled={cart.length === 0}
+              aria-label={cart.length > 0 ? `View cart with ${cart.length} items, total ${fmtKes(cartTotal)}` : 'Cart is empty'}
+            >
+              <span>{cart.length} {cart.length === 1 ? 'item' : 'items'} · {fmtKes(cartTotal)}</span>
+              <strong>{cart.length > 0 ? 'View cart' : 'Cart empty'}</strong>
+            </button>
+          </section>
 
-          {/* Right — Cart: sticky panel sized to viewport, not stretched to product grid height */}
-          <div className="w-full lg:w-80 lg:sticky lg:top-0 lg:max-h-[calc(100dvh-6.5rem)] flex flex-col bg-surface border border-border rounded-xl self-start shrink-0 overflow-hidden">
-            <div className="p-4 border-b border-border flex items-center justify-between shrink-0">
-              <h3 className="text-xs font-black text-t1 uppercase tracking-widest">Cart ({cart.length})</h3>
-              <button className="text-[10px] text-red-600 font-bold hover:underline" onClick={() => setCart([])}>Clear All</button>
-            </div>
+          {/* Right — Checkout */}
+          <aside className={`pos-checkout-pane ${cartOpen ? '' : 'is-mobile-hidden'}`}>
+            <header className="pos-checkout-header">
+              <button type="button" className="pos-checkout-back" onClick={() => setCartOpen(false)} aria-label="Back to products">‹</button>
+              <div className="min-w-0">
+                <h2>Current sale</h2>
+                <p>{cart.length} {cart.length === 1 ? 'item' : 'items'} · Session active</p>
+              </div>
+              <button
+                type="button"
+                className="pos-clear-cart"
+                onClick={() => {
+                  setCart([])
+                  setCartOpen(false)
+                }}
+                disabled={cart.length === 0}
+              >
+                Clear
+              </button>
+            </header>
 
-            <div className="flex-1 overflow-y-auto p-4 space-y-3 min-h-0">
-              {cart.map(i => (
-                <div key={i.lineId} className="flex flex-col gap-2 p-3 rounded-xl bg-[var(--bg-muted)] border border-border-lt relative">
-                  <button className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-white border border-border flex items-center justify-center text-[10px] shadow-sm hover:bg-red-50 hover:text-red-600 transition-all"
-                    onClick={() => removeFromCart(i.lineId)}>✕</button>
-                  <div className="flex gap-3">
-                    <div className="text-xl text-t4" aria-hidden="true">
-                      {i.image && !/^\p{Extended_Pictographic}/u.test(String(i.image))
-                        ? <img src={i.image} alt="" className="w-8 h-8 object-contain" />
-                        : <Fa icon={faBox} />}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-[11px] font-bold text-t1 truncate" title={i.productName}>{i.productName}</p>
-                      {i.serialNumber && <p className="text-[9px] font-mono text-brand-blue font-bold">SN: {i.serialNumber}</p>}
-                      <div className="flex items-center gap-2 mt-1">
-                         <input type="number" className="bg-transparent border-none p-0 text-[11px] font-black text-brand-blue w-20 focus:ring-0"
-                           value={i.price} onChange={e => setPrice(i.lineId, Number(e.target.value))} />
-                         {i.price !== i.listPrice && <button className="text-[9px] text-t4 hover:underline" onClick={() => resetPrice(i.lineId)}>Reset</button>}
-                      </div>
+            <div className="pos-cart-lines">
+              {cart.map(item => (
+                <div key={item.lineId} className="pos-cart-line">
+                  <button
+                    type="button"
+                    className="pos-cart-remove"
+                    onClick={() => removeFromCart(item.lineId)}
+                    aria-label={`Remove ${item.productName}`}
+                  >
+                    ×
+                  </button>
+                  <div className="pos-cart-media" aria-hidden="true">
+                    {item.image && !/^\p{Extended_Pictographic}/u.test(String(item.image))
+                      ? <img src={item.image} alt="" />
+                      : <Fa icon={faBox} />}
+                  </div>
+                  <div className="pos-cart-copy">
+                    <p className="pos-cart-name" title={item.productName}>{item.productName}</p>
+                    {item.serialNumber && <p className="pos-cart-serial">SN: {item.serialNumber}</p>}
+                    <div className="pos-price-edit">
+                      <span>KSh</span>
+                      <input
+                        type="number"
+                        aria-label={`Price for ${item.productName}`}
+                        value={item.price}
+                        onChange={e => setPrice(item.lineId, Number(e.target.value))}
+                      />
+                      {item.price !== item.listPrice && <button type="button" onClick={() => resetPrice(item.lineId)}>Reset</button>}
                     </div>
                   </div>
-                  <div className="flex items-center justify-between mt-1">
-                    <div className="flex items-center gap-1">
-                      <button
-                        type="button"
-                        className="icon-btn"
-                        aria-label={`Decrease quantity of ${i.productName}`}
-                        onClick={() => setQty(i.lineId, i.qty - 1)}
-                      >
+                  <div className="pos-cart-line-actions">
+                    <p>{fmtKes(item.price * item.qty)}</p>
+                    <div className="pos-qty-control">
+                      <button type="button" aria-label={`Decrease quantity of ${item.productName}`} onClick={() => setQty(item.lineId, item.qty - 1)}>
                         <Fa icon={faMinus} aria-hidden="true" />
                       </button>
-                      <span className="w-8 text-center text-xs font-bold">{i.qty}</span>
-                      <button
-                        type="button"
-                        className="icon-btn"
-                        aria-label={`Increase quantity of ${i.productName}`}
-                        onClick={() => setQty(i.lineId, i.qty + 1)}
-                      >
+                      <span>{item.qty}</span>
+                      <button type="button" aria-label={`Increase quantity of ${item.productName}`} onClick={() => setQty(item.lineId, item.qty + 1)}>
                         <Fa icon={faPlus} aria-hidden="true" />
                       </button>
                     </div>
-                    <p className="text-[11px] font-black text-t1">{fmtKes(i.price * i.qty)}</p>
                   </div>
                 </div>
               ))}
               {cart.length === 0 && (
-                <div className="py-8 text-center">
+                <div className="pos-empty-cart">
                   <div className="text-3xl mb-3 opacity-20" aria-hidden="true"><Fa icon={faCartShopping} /></div>
                   <p className="text-xs text-t3 text-center px-4">Scan or click products to add to cart</p>
                 </div>
               )}
             </div>
 
-            <div className="p-4 bg-[var(--bg-muted)] border-t border-border space-y-4 shrink-0">
-              <div className="space-y-2">
+            <div className="pos-checkout-summary">
+              <section className="pos-customer-section">
+                <h3>Customer & sale</h3>
                 <Field label="Customer (optional)">
                   <CustomerPickerField
                     compact
@@ -758,7 +817,7 @@ export default function PointOfSale() {
                   </Field>
                 )}
                 {customerInfo && (customerInfo.loyaltyPoints || 0) > 0 && (
-                  <div className="p-3 rounded-xl border border-indigo-200 bg-indigo-50 animate-in zoom-in-95 duration-200">
+                  <div className="pos-loyalty-panel">
                     <div className="flex justify-between items-center mb-2">
                       <p className="text-[10px] font-black text-indigo-700 uppercase tracking-wider">Redeem Points</p>
                       <p className="text-[10px] font-bold text-indigo-600">{(customerInfo.loyaltyPoints || 0)} available</p>
@@ -771,15 +830,15 @@ export default function PointOfSale() {
                     {pointsToRedeem > 0 && <p className="text-[9px] text-indigo-500 mt-1 font-medium">Discount: -{fmtKes(pointsToRedeem)}</p>}
                   </div>
                 )}
-                <div className="flex items-center gap-2 cursor-pointer select-none py-1" onClick={() => setApplyVat(!applyVat)}>
+                <button type="button" className="pos-vat-toggle" onClick={() => setApplyVat(!applyVat)} aria-pressed={applyVat}>
                   <div className={`w-4 h-4 rounded border flex items-center justify-center transition-all ${applyVat ? 'bg-brand-blue border-brand-blue' : 'bg-white border-border'}`}>
                     {applyVat && <span className="text-[10px] text-white">✓</span>}
                   </div>
-                  <span className="text-[11px] font-bold text-t2">Apply {companySettings.vatRate}% VAT</span>
-                </div>
-              </div>
+                  <span>Apply {companySettings.vatRate}% VAT</span>
+                </button>
+              </section>
 
-              <div className="space-y-1.5 pt-2 border-t border-border-lt">
+              <section className="pos-order-totals">
                 <div className="flex justify-between text-[11px] text-t3"><span>Subtotal</span><span>{fmtKes(cartSubtotal)}</span></div>
                 {cartTax > 0 && <div className="flex justify-between text-[11px] text-t3"><span>VAT ({companySettings.vatRate}%)</span><span>{fmtKes(cartTax)}</span></div>}
                 {pointsToRedeem > 0 && <div className="flex justify-between text-[11px] text-indigo-600 font-bold"><span>Points Discount</span><span>-{fmtKes(pointsToRedeem)}</span></div>}
@@ -787,7 +846,9 @@ export default function PointOfSale() {
                 {pointsToEarn > 0 && <p className="text-[10px] text-center font-bold text-indigo-600 pt-1">Earns {pointsToEarn} loyalty points</p>}
               </div>
 
-              <div className="flex gap-1.5 pt-2">
+              <section className="pos-payment-section">
+                <h3>Payment method</h3>
+                <div className="pos-payment-methods">
                 {(['mpesa', 'cash', 'bank'] as const).map(m => (
                   <button key={m} type="button" onClick={() => {
                     setPayMethod(m)
@@ -795,7 +856,7 @@ export default function PointOfSale() {
                       setBankAccountId(tenderBanks.find(b => b.id === 'ncba')?.id || tenderBanks[0]?.id || '')
                     }
                   }}
-                    className="flex-1 py-2 rounded-xl text-[10px] font-semibold uppercase cursor-pointer transition-all min-h-[40px]"
+                    className="pos-payment-method"
                     style={{
                       background: payMethod === m ? 'var(--primary-light)' : 'var(--bg-surface)',
                       color: payMethod === m ? 'var(--navy)' : 'var(--text-3)',
@@ -805,9 +866,10 @@ export default function PointOfSale() {
                     {m === 'mpesa' ? <><Fa icon={faMobileScreenButton} /> M-Pesa</> : m === 'cash' ? <><Fa icon={faMoneyBillWave} /> Cash</> : <><Fa icon={faBuildingColumns} /> Bank</>}
                   </button>
                 ))}
-              </div>
+                </div>
+              </section>
               {payMethod === 'bank' && (
-                <div className="space-y-2 pt-1">
+                <div className="pos-bank-payment">
                   <Field label="Bank account">
                     <Select
                       value={bankAccountId || tenderBanks.find(b => b.id === 'ncba')?.id || tenderBanks[0]?.id || ''}
@@ -826,7 +888,7 @@ export default function PointOfSale() {
               )}
               <button
                 type="button"
-                className="btn-primary w-full py-3 text-sm font-semibold min-h-[48px]"
+                className="pos-charge-action"
                 onClick={() => { void charge() }}
                 disabled={cart.length === 0 || charging}
                 style={{
@@ -837,8 +899,10 @@ export default function PointOfSale() {
               >
                 {charging ? 'Charging…' : cart.length > 0 ? `Charge ${fmtKes(cartTotal)}` : 'Add items to cart'}
               </button>
+              <button type="button" className="pos-back-products" onClick={() => setCartOpen(false)}>Back to products</button>
+              <p className="pos-opening-cash">Opening cash <strong>{fmtKes(posSessionOpeningCash)}</strong></p>
             </div>
-          </div>
+          </aside>
 
           {/* Receipt modal */}
           {receiptOrder && (
@@ -847,7 +911,7 @@ export default function PointOfSale() {
               <div className="text-center py-4"><div className="text-5xl mb-4" style={{ color: 'var(--success)' }} aria-hidden="true"><Fa icon={faCircleCheck} /></div><p className="text-lg font-semibold mb-2">{(isPosBankPayment(receiptOrder.payment) ? 'BANK' : receiptOrder.payment.toUpperCase())} Payment Received</p>{receiptOrder.paymentReference ? <p className="text-xs text-t3 mt-1">Ref: {receiptOrder.paymentReference}</p> : null}<p className="text-3xl font-bold font-mono" style={{ color: 'var(--success)' }}>{fmtKes(receiptOrder.total)}</p>{receiptOrder.pointsEarned ? (<p className="text-sm font-semibold mt-2" style={{ color: 'var(--navy)' }}><Fa icon={faStar} /> +{receiptOrder.pointsEarned} Loyalty Points Earned!</p>) : null}</div>
               <div className="flex gap-2 justify-end flex-wrap">
                 <button className="btn-outline min-h-[40px] flex-1 sm:flex-none" onClick={() => setIsPrinting(true)}><Fa icon={faPrint} /> Print Receipt</button>
-                <button className="btn-primary min-h-[40px] flex-1 sm:flex-none" onClick={() => { setReceiptOrder(null); scanRef.current?.focus() }}>New Order</button>
+                <button className="btn-primary min-h-[40px] flex-1 sm:flex-none" onClick={() => { setReceiptOrder(null); setCartOpen(false); scanRef.current?.focus() }}>New Order</button>
               </div>
             </Modal>
           )}
