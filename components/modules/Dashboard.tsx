@@ -107,25 +107,22 @@ function KpiCard({
       style={{
         cursor: onClick ? 'pointer' : 'default',
         '--stat-accent': color,
-        '--stat-soft': `${color}14`,
       } as React.CSSProperties}
     >
-      <div className="flex items-start justify-between gap-3 w-full">
-        <p className="text-xs font-bold tracking-[0.04em] text-[var(--text-3)] leading-tight flex-1 min-w-0">
-          {label}
-        </p>
-        <div className="dashboard-stat-icon" style={{ color }}>
-          <span className="text-sm">{icon}</span>
+      <div className="dashboard-stat-layout">
+        <div className="dashboard-stat-icon" aria-hidden="true">
+          {icon}
         </div>
-      </div>
-      <div className="mt-4 w-full min-w-0">
-        <p
-          className={`dashboard-stat-value font-extrabold text-[var(--text-1)] mb-1.5 ${isCurrency ? 'is-currency font-mono tracking-tight' : ''}`}
-          title={isCurrency && typeof value === 'number' ? fmtKes(value) : String(value)}
-        >
-          {isCurrency && typeof value === 'number' ? fmtKes(value) : value}
-        </p>
-        <p className="dashboard-stat-sub text-[var(--text-4)] leading-snug">{sub}</p>
+        <div className="min-w-0">
+          <p className="dashboard-stat-label">{label}</p>
+          <p
+            className={`dashboard-stat-value ${isCurrency ? 'is-currency' : ''}`}
+            title={isCurrency && typeof value === 'number' ? fmtKes(value) : String(value)}
+          >
+            {isCurrency && typeof value === 'number' ? fmtKes(value) : value}
+          </p>
+          <p className="dashboard-stat-sub">{sub}</p>
+        </div>
       </div>
       <span className="dashboard-stat-accent" aria-hidden="true" />
     </button>
@@ -145,12 +142,7 @@ function CardHeader({ title, sub, action }: { title: string; sub?: string; actio
 }
 
 function SectionLabel({ label }: { label: string }) {
-  return (
-    <div className="flex items-center gap-2 sm:gap-3 mt-0.5 sm:mt-1">
-      <span className="w-5 sm:w-6 h-px bg-primary-500 rounded-full inline-block flex-shrink-0" />
-      <h2 className="text-[11px] sm:text-sm font-semibold text-[var(--text-3)]">{label}</h2>
-    </div>
-  )
+  return <h2 className="dashboard-section-title">{label}</h2>
 }
 
 function EmptyState({ message }: { message: string }) {
@@ -443,14 +435,14 @@ export function Dashboard() {
   const kpis = useMemo<KpiConfig[]>(() => {
     if (isDirector) {
       return [
-        { key: 'revenue', label: 'Revenue Paid', value: financeStats.revenue, sub: 'Company-wide collections', color: '#10B981', icon: <Fa icon={faMoneyBillWave} />, isCurrency: true, onClick: () => handleNav('accounting', '/finance?tab=invoices') },
+        { key: 'revenue', label: 'Revenue Paid', value: financeStats.revenue, sub: 'Company-wide collections', color: '#2563EB', icon: <Fa icon={faMoneyBillWave} />, isCurrency: true, onClick: () => handleNav('accounting', '/finance?tab=invoices') },
+        { key: 'outstanding', label: 'Outstanding', value: financeStats.outstanding, sub: `${financeStats.overdueInvoices.length} overdue invoices`, color: '#2563EB', icon: <Fa icon={faFileInvoiceDollar} />, isCurrency: true, onClick: () => handleNav('accounting', '/finance?tab=invoices') },
+        { key: 'payables', label: 'Payables', value: financeStats.payables, sub: `${financeStats.pendingBills.length} bills pending`, color: '#8B5CF6', icon: <Fa icon={faMoneyCheckDollar} />, isCurrency: true, onClick: () => handleNav('accounting', '/finance?tab=bills') },
+        { key: 'open-orders', label: 'Open Sales', value: salesStats.openOrders, sub: `${salesStats.myQuotes.length} quotations active`, color: '#00B0D7', icon: <Fa icon={faCartShopping} />, onClick: () => handleNav('sales', '/sales') },
+        { key: 'stock', label: 'Low Stock', value: inventoryStats.lowStockItems.length, sub: `${inventoryStats.totalUnits} units on hand`, color: '#F97316', icon: <Fa icon={faBoxesStacked} />, onClick: () => handleNav('inventory', '/operations') },
+        { key: 'repairs', label: 'Open Repairs', value: repairStats.active.length, sub: `${repairStats.unassigned.length} waiting assignment`, color: '#16A34A', icon: <Fa icon={faScrewdriverWrench} />, onClick: () => handleNav('repair', '/repairs') },
         { key: 'repair-revenue', label: 'Repair Revenue', value: techLeadStats.repairRevenueThisMonth, sub: `This month · actual sales ${fmtKes(techLeadStats.salesRevenueThisMonth)}`, color: '#047857', icon: <Fa icon={faScrewdriverWrench} />, isCurrency: true, onClick: () => handleNav('accounting', '/finance?tab=invoices') },
-        { key: 'outstanding', label: 'Outstanding', value: financeStats.outstanding, sub: `${financeStats.overdueInvoices.length} overdue invoices`, color: '#F59E0B', icon: <Fa icon={faArrowDown} />, isCurrency: true, onClick: () => handleNav('accounting', '/finance?tab=invoices') },
-        { key: 'payables', label: 'Payables', value: financeStats.payables, sub: `${financeStats.pendingBills.length} bills pending`, color: '#EF4444', icon: <Fa icon={faArrowUp} />, isCurrency: true, onClick: () => handleNav('accounting', '/finance?tab=bills') },
         { key: 'active-users', label: 'Active Users', value: users.filter(u => u.active).length, sub: `${employees.filter(e => e.status === 'active').length} active employees`, color: '#1B2762', icon: <Fa icon={faUsers} />, onClick: () => handleRoute('/settings?tab=users') },
-        { key: 'open-orders', label: 'Open Sales', value: salesStats.openOrders, sub: `${salesStats.myQuotes.length} quotations active`, color: '#3B82F6', icon: <Fa icon={faClipboardList} />, onClick: () => handleNav('sales', '/sales') },
-        { key: 'stock', label: 'Low Stock', value: inventoryStats.lowStockItems.length, sub: `${inventoryStats.totalUnits} units on hand`, color: '#DC2626', icon: <Fa icon={faBoxesStacked} />, onClick: () => handleNav('inventory', '/operations') },
-        { key: 'repairs', label: 'Open Repairs', value: repairStats.active.length, sub: `${repairStats.unassigned.length} waiting assignment`, color: '#8B5CF6', icon: <Fa icon={faScrewdriverWrench} />, onClick: () => handleNav('repair', '/repairs') },
         { key: 'approvals', label: 'Approvals', value: selfServiceStats.pendingLeave + selfServiceStats.pendingPayroll.length + selfServiceStats.pendingExpenseClaims.length, sub: 'Leave, payroll, and expense queues', color: '#0891B2', icon: <Fa icon={faShieldHalved} />, onClick: () => handleNav('hr', '/hr') },
         { key: 'cash-bank', label: 'Cash at Bank', value: financeDeskStats?.cashAtBank ?? 0, sub: 'Total in bank accounts', color: '#3B82F6', icon: <Fa icon={faMoneyBillWave} />, isCurrency: true, onClick: () => handleNav('accounting', '/finance?tab=cash_position') },
         { key: 'cash-hand', label: 'Cash in Hand', value: financeDeskStats?.cashInHand ?? 0, sub: 'Petty cash & M-Pesa', color: '#8B5CF6', icon: <Fa icon={faMoneyCheckDollar} />, isCurrency: true, onClick: () => handleNav('accounting', '/finance?tab=cash_position') },
@@ -571,7 +563,7 @@ export function Dashboard() {
     if (canSeeInventory) actions.unshift({ key: 'inventory', title: 'Stock Control', desc: 'Stock levels, transfers, and counts', module: 'inventory', path: '/operations', color: '#D97706', icon: <Fa icon={faBoxesStacked} /> })
     if (canSeeKilimall) actions.unshift({ key: 'kilimall', title: 'Kilimall Orders', desc: 'Allocate stock and manage returns', module: 'kilimall', path: '/kilimall', color: '#F59E0B', icon: <Fa icon={faCartShopping} /> })
 
-    return actions.filter(a => !a.module || has(a.module)).slice(0, 8)
+    return actions.filter(a => !a.module || has(a.module)).slice(0, 6)
   }, [canSeeFinance, canSeeSales, canSeeInventory, canSeeKilimall, isSalesRep, has])
 
   // P1 — "Needs attention now". Everything here is either overdue, waiting on
@@ -646,7 +638,7 @@ export function Dashboard() {
     return items
       .filter(item => !item.module || has(item.module))
       .sort((a, b) => (rank[a.tone] ?? 3) - (rank[b.tone] ?? 3))
-      .slice(0, 8)
+      .slice(0, 3)
   }, [canSeeFinance, canApproveLeave, canSeeHRAdmin, canSeeInventory, isDirector, isInventoryOfficer, isAdminOfficer, isKilimallOfficer, canSeeWorkshop, isTechnicalLead, isSalesRep, financeDeskStats, selfServiceStats, inventoryStats, kilimallStats, repairStats, salesStats, leaveRequests, saleOrders, deposits, has])
 
   const activity = useMemo<ActivityItem[]>(() => {
@@ -680,45 +672,22 @@ export function Dashboard() {
     return list.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 8)
   }, [canSeeFinance, canSeeSales, canSeeInventory, canSeeKilimall, canSeeWorkshop, invoices, visibleSalesOrders, stockTransfers, purchaseOrders, kilimallOrders, visibleRepairs, expenses, currentUserId, has])
 
-  const primaryAction = quickActions.find(a => a.key !== 'account') ?? quickActions[0]
-
   if (!mounted) return <ModuleSkeleton />
 
   return (
     <div className="dashboard-page">
       <section className="dashboard-hero">
-        <span className="dashboard-hero-orb dashboard-hero-orb-one" aria-hidden="true" />
-        <span className="dashboard-hero-orb dashboard-hero-orb-two" aria-hidden="true" />
-        <div className="relative z-[1] flex items-center gap-4 min-w-0">
-          <div className="dashboard-avatar">
-            {currentUser?.name?.slice(0, 1).toUpperCase() || '?'}
-          </div>
-          <div className="min-w-0">
-            <p className="dashboard-eyebrow">Your workspace</p>
-            <h2 className="text-2xl sm:text-3xl font-extrabold text-[var(--text-1)] truncate tracking-tight">
-              {dashboardClock.greeting}, {currentUser?.name?.split(' ')[0] || 'there'}
-            </h2>
-            <p className="text-sm text-[var(--text-3)] mt-1.5 leading-relaxed">
-              Here&apos;s what needs your attention today.
-            </p>
-          </div>
-        </div>
-        <div className="relative z-[1] flex flex-col sm:items-end gap-3">
-          <div className="flex items-center gap-2 text-xs font-semibold text-[var(--text-3)]">
-            <span className="dashboard-role-pill">{formatRoleLabel(role)}</span>
+        <div className="dashboard-hero-heading">
+          <h1 className="dashboard-hero-title">
+            {dashboardClock.greeting}, {currentUser?.name?.split(' ')[0] || 'there'}
+          </h1>
+          <p className="dashboard-hero-context">
+            <span>{formatRoleLabel(role)}</span>
+            <span aria-hidden="true">·</span>
             <span>{dashboardClock.date}</span>
-          </div>
-          {primaryAction && (
-            <button
-              type="button"
-              onClick={() => primaryAction.module ? handleNav(primaryAction.module, primaryAction.path) : handleRoute(primaryAction.path)}
-              className="dashboard-primary-action"
-            >
-              {primaryAction.icon}
-              <span>{primaryAction.title}</span>
-            </button>
-          )}
+          </p>
         </div>
+        <span className="dashboard-role-pill">{formatRoleLabel(role)}</span>
       </section>
 
       <OnboardingChecklist
@@ -741,7 +710,7 @@ export function Dashboard() {
       {focusItems.length > 0 ? (
         <section className="dashboard-panel overflow-hidden">
           <CardHeader title="Needs attention" sub="Overdue items, approvals, and blockers — most urgent first" />
-          <div className="p-2.5 sm:p-4 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-1.5 sm:gap-3">
+          <div className="dashboard-alerts-list">
             {focusItems.map(item => (
               <button
                 type="button"
@@ -771,9 +740,10 @@ export function Dashboard() {
       {/* ── P2 · Today's workload ────────────────────────────────────────── */}
       <SectionLabel label={`${formatRoleLabel(role)} overview`} />
       <div className="dashboard-kpi-grid">
-        {kpis.map(({ key, ...kpi }) => (
-          canShowDashboardKpi(currentUser, key) ? <KpiCard key={key} {...kpi} /> : null
-        ))}
+        {kpis
+          .filter(({ key }) => canShowDashboardKpi(currentUser, key))
+          .slice(0, 6)
+          .map(({ key, ...kpi }) => <KpiCard key={key} {...kpi} />)}
       </div>
 
       {(canSeeInventory || canSeeWorkshop) && (
@@ -782,9 +752,13 @@ export function Dashboard() {
           <div className="dashboard-workspace-grid">
             {canSeeInventory && (
               <section className="dashboard-panel overflow-hidden">
-                <CardHeader title="Stock health" sub="Products below their safe stock level" />
-                <div className="p-2.5 sm:p-4 flex flex-col gap-1.5 sm:gap-2.5">
-                  {inventoryStats.lowStockItems.slice(0, 6).map(p => {
+                <CardHeader
+                  title="Stock health"
+                  sub="Products below their safe stock level"
+                  action={<button type="button" className="dashboard-card-link" onClick={() => handleNav('inventory', '/operations')}>View all</button>}
+                />
+                <div className="dashboard-list-rows">
+                  {inventoryStats.lowStockItems.slice(0, 4).map(p => {
                     const isOut = p.stockQty === 0
                     return (
                       <div key={p.id} className="dashboard-list-row">
@@ -809,9 +783,13 @@ export function Dashboard() {
 
             {canSeeWorkshop && (
               <section className="dashboard-panel overflow-hidden">
-                <CardHeader title={isTechnician ? 'My repair queue' : 'Workshop queue'} sub={isTechnician ? 'Jobs currently assigned to you' : 'Active service work and ownership'} />
-                <div className="p-2.5 sm:p-4 flex flex-col gap-1.5 sm:gap-2.5">
-                  {visibleRepairs.slice(0, 6).map(r => (
+                <CardHeader
+                  title={isTechnician ? 'My repair queue' : 'Workshop queue'}
+                  sub={isTechnician ? 'Jobs currently assigned to you' : 'Active service work and ownership'}
+                  action={<button type="button" className="dashboard-card-link" onClick={() => handleNav('repair', '/repairs')}>View all</button>}
+                />
+                <div className="dashboard-list-rows">
+                  {repairStats.active.slice(0, 4).map(r => (
                     <button type="button" key={r.id} onClick={() => handleNav('repair', '/repairs')} className="dashboard-list-row text-left">
                       <div className="flex items-center gap-2 sm:gap-3 min-w-0">
                         <div className="dashboard-row-symbol is-repair"><Fa icon={faScrewdriverWrench} /></div>
@@ -823,7 +801,7 @@ export function Dashboard() {
                       <Badge status={r.status === 'ready' || r.status === 'closed' ? 'active' : r.status === 'cancelled' ? 'cancelled' : 'pending'} label={r.status.replace(/_/g, ' ')} />
                     </button>
                   ))}
-                  {visibleRepairs.length === 0 && <EmptyState message={isTechnician ? 'No jobs assigned to you yet' : 'No repair jobs require attention'} />}
+                  {repairStats.active.length === 0 && <EmptyState message={isTechnician ? 'No jobs assigned to you yet' : 'No repair jobs require attention'} />}
                 </div>
               </section>
             )}
@@ -941,7 +919,7 @@ export function Dashboard() {
       <div className="dashboard-bottom-grid">
         <section className="dashboard-panel overflow-hidden lg:col-span-8">
           <CardHeader title="Quick actions" sub="Shortcuts selected for your role and permissions" />
-          <div className="p-2.5 sm:p-4 grid grid-cols-2 xl:grid-cols-4 gap-1.5 sm:gap-3">
+          <div className="dashboard-quick-actions-grid">
             {quickActions.map(action => (
               <button
                 type="button"
