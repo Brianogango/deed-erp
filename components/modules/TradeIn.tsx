@@ -1691,6 +1691,16 @@ function TradeInContent() {
     )
   }
 
+  const awaitingReview = buyBacks.filter(item => item.status === 'draft').length
+  const approvedBuyBacks = buyBacks.filter(item => item.status === 'approved')
+  const totalToPay = approvedBuyBacks.reduce((sum, item) => sum + Number(item.total || 0), 0)
+  const monthKey = new Date().toISOString().slice(0, 7)
+  const thisMonth = [
+    ...buyBacks.map(item => item.date),
+    ...donations.map(item => item.date),
+    ...clientExchanges.map(item => item.date),
+  ].filter(date => String(date || '').slice(0, 7) === monthKey).length
+
   const tabs: { id: TradeTab; label: string; count: number }[] = [
     { id: 'buybacks',  label: 'Buy-backs',  count: buyBacks.length },
     { id: 'donations', label: 'Donations',  count: donations.length },
@@ -1698,10 +1708,10 @@ function TradeInContent() {
   ]
 
   return (
-    <div className="mod-page">
+    <div className="mod-page tradein-workspace">
       <ModuleHeader
         title="Trade-in"
-        subtitle="Buy-backs, donations and exchanges"
+        subtitle="Traceable intake, valuation and stock recovery"
         count={buyBacks.length + donations.length + clientExchanges.length}
         color="var(--navy)"
       />
@@ -1715,10 +1725,26 @@ function TradeInContent() {
         maxVisibleDesktop={6}
         ariaLabel="Trade-in sections"
       />
-      <div className="mod-body p-3 sm:p-4">
+      <div className="mod-body tradein-body p-3 sm:p-4">
+        <section className="tradein-summary" aria-label="Trade-in summary">
+          <button type="button" className="tradein-summary__item" onClick={() => selectTab('buybacks')}>
+            <span>Awaiting review</span><strong>{awaitingReview}</strong><small>Draft valuations</small>
+          </button>
+          <button type="button" className="tradein-summary__item" onClick={() => selectTab('buybacks')}>
+            <span>Approved</span><strong>{approvedBuyBacks.length}</strong><small>Ready for payout</small>
+          </button>
+          <button type="button" className="tradein-summary__item is-warning" onClick={() => selectTab('buybacks')}>
+            <span>To pay</span><strong>{fmtKes(totalToPay)}</strong><small>Approved buy-backs</small>
+          </button>
+          <button type="button" className="tradein-summary__item">
+            <span>This month</span><strong>{thisMonth}</strong><small>All trade records</small>
+          </button>
+        </section>
+        <div className="tradein-content">
         {tab === 'buybacks'  && <BuyBackTab detailId={detailId} onOpenDetail={setDetailId} />}
         {tab === 'donations' && <DonationTab detailId={detailId} onOpenDetail={setDetailId} />}
         {tab === 'exchanges' && <ExchangeTab detailId={detailId} onOpenDetail={setDetailId} />}
+        </div>
       </div>
     </div>
   )
