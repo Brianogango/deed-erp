@@ -163,11 +163,34 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
   .serial.sel { background: var(--cyan-soft); }
   .foot { display: flex; justify-content: space-between; align-items: center; margin-top: 14px; color: var(--muted); }
   .muted { color: var(--muted); margin: 8px 0 0; }
-  @media (max-width: 960px) {
+  .list, .sheet-col { overflow: auto; }
+  table.o-list, table.lines { min-width: 520px; }
+  @media (max-width: 1024px) {
     .form-wrap { grid-template-columns: 1fr; }
-    .chatter { border-left: 0; border-top: 1px solid var(--line); }
+    .chatter { border-left: 0; border-top: 1px solid var(--line); min-height: 220px; }
+    .pick { grid-template-columns: 1fr 1fr; }
+    .sheet { padding: 16px; }
+  }
+  @media (max-width: 768px) {
+    .reviewer { flex-wrap: wrap; }
+    .app.on { grid-template-columns: 1fr; }
+    .apps { display: none; }
+    .top { gap: 8px; padding: 0 10px; }
+    .top .search { max-width: none; }
+    .top .who { display: none; }
+    .cp, .sv { flex-wrap: wrap; padding: 8px 10px; }
+    .crumb { font-size: 16px; }
+    .sv .views { margin-left: 0; }
     .fields { grid-template-columns: 1fr; }
+    .field { grid-template-columns: 1fr; gap: 0; min-height: 0; padding: 6px 0; }
+    .title-row { flex-direction: column; }
     .pick { grid-template-columns: 1fr; }
+    .sheet { padding: 12px; }
+    .sheet-col { padding: 8px; }
+    .nb { gap: 12px; overflow-x: auto; }
+    .nb button { flex-shrink: 0; }
+    .foot { flex-wrap: wrap; gap: 8px; }
+    .totals { width: 100%; }
   }
 </style>
 </head>
