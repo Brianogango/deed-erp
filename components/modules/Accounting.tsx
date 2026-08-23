@@ -691,6 +691,34 @@ function AccountingContent() {
     return res.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
   }, [tab, customerInvoices, vendorBills, invFilter, invSearch])
 
+  const financeHeader: Record<MainTab, { title: string; subtitle: string }> = {
+    invoices: {
+      title: 'Customer invoices',
+      subtitle: `${customerInvoices.length} records · ${fmtKes(outstandingAR)} outstanding`,
+    },
+    bills: {
+      title: 'Vendor bills',
+      subtitle: `${vendorBills.length} records · ${fmtKes(outstandingAP)} outstanding`,
+    },
+    credits: { title: 'Customer credits', subtitle: 'Credit balances and applications' },
+    commissions: { title: 'Salespeople', subtitle: 'Commission statements and payment status' },
+    refunds: { title: 'Refunds', subtitle: 'Approved customer refund payments' },
+    journals: { title: 'Journals', subtitle: 'Posted entries and audit-ready movements' },
+    reports: { title: 'Financial reports', subtitle: 'Management, statutory and control reports' },
+    cashbook: { title: 'Cashbook', subtitle: 'Daily transactions and bank reconciliation' },
+    coa: { title: 'Chart of accounts', subtitle: 'Accounts, groups and liquidity ledgers' },
+    gl: { title: 'General ledger', subtitle: 'Account movements and running balances' },
+    partner_ledger: { title: 'Partner ledger', subtitle: 'Customer and supplier account history' },
+    migration: { title: 'Data migration', subtitle: 'Import opening balances and legacy records' },
+    monthly: { title: 'Monthly report', subtitle: 'Management performance for the selected month' },
+    pl: { title: 'Profit and loss', subtitle: 'Income and expenses for the selected period' },
+    bs: { title: 'Balance sheet', subtitle: 'Assets, liabilities and equity' },
+    vat: { title: 'VAT report', subtitle: 'Output tax, input tax and control balance' },
+    ageing: { title: 'Ageing', subtitle: 'Outstanding receivables and payables by age' },
+    trial_balance: { title: 'Trial balance', subtitle: 'Debit and credit balances by account' },
+    cash_position: { title: 'Cash position', subtitle: 'Available balances across active accounts' },
+  }
+
   const invoicePrimaryFilters: PrimaryFilterConfig[] = [
     {
       key: 'status',
@@ -1201,10 +1229,11 @@ function AccountingContent() {
 
   return (
     <AccountingProvider value={ctxValue as any}>
-      <div className="mod-page">
+      <div className="mod-page finance-workspace" data-finance-tab={tab}>
         <ModuleHeader
-          title="Accounting"
-          subtitle="Invoices, bills and financial reports"
+          title={financeHeader[tab].title}
+          subtitle={financeHeader[tab].subtitle}
+          subtitleMode="visible"
           icon={<Fa icon={faBook} />}
           color="var(--success)"
           primaryAction={
@@ -1261,8 +1290,8 @@ function AccountingContent() {
 
         <TabBar
           tabs={[
-            { id: 'invoices', label: 'Invoices' },
-            { id: 'bills', label: 'Bills' },
+            { id: 'invoices', label: 'Customer invoices' },
+            { id: 'bills', label: 'Vendor bills' },
             { id: 'credits', label: 'Credits' },
             { id: 'commissions', label: 'Salespeople' },
             { id: 'refunds', label: 'Refunds' },
@@ -1332,7 +1361,7 @@ function AccountingContent() {
           </div>
         )}
         {/* ── Tab Content ────────────────────────────────────────────────────── */}
-        <div className="card overflow-hidden rounded-xl">
+        <div className={`card overflow-hidden rounded-xl finance-content-card finance-content-card--${tab}`}>
           {tab === 'invoices' || tab === 'bills' ? (
             <div className="flex flex-col">
               <DataTable
@@ -1344,7 +1373,7 @@ function AccountingContent() {
                     accessor: (i: Invoice) => displayDocRef(i.ref),
                   },
                   {
-                    key: 'partner', label: 'Partner', priority: 1 as const, width: 'minmax(8rem, 2fr)',
+                    key: 'partner', label: tab === 'invoices' ? 'Customer' : 'Vendor', priority: 1 as const, width: 'minmax(8rem, 2fr)',
                     render: (i: Invoice) => <span className="text-xs text-[var(--text-1)] erp-truncate" title={i.partnerName}>{i.partnerName}</span>,
                     accessor: (i: Invoice) => i.partnerName,
                   },
