@@ -4189,6 +4189,7 @@
   }
 }
 
+
 /* ═══════════════════════════════════════════════════════════════════════════
    Invoice detail — /finance/invoices/[id]
    Mockup layout: KPI strip · line card · info grid · Notes/Payments/Activity
@@ -7381,5 +7382,850 @@ main#main-content:has(.sales-pilot.sales-doc) > .min-w-0 {
   .reconfig-seg-item,
   .reconfig-pick-chevron {
     transition: none;
+  }
+}
+
+/* ── Sales workspace: approved simple responsive direction ────────────────
+   Quiet white chrome, one Deed-navy action, cyan only for active progress.
+   These rules intentionally preserve the existing Sales DOM and handlers. */
+
+.app-topbar--sales {
+  height: 3.75rem !important;
+  gap: 1rem !important;
+  padding-inline: 1.5rem !important;
+  box-shadow: none !important;
+}
+
+.app-topbar--sales .app-topbar-title {
+  flex: 0 0 8.5rem;
+}
+
+.app-topbar--sales .app-topbar-title h1 {
+  color: var(--navy);
+  font-size: 0.9375rem;
+  font-weight: 750;
+}
+
+.app-topbar--sales .app-topbar-title p {
+  display: none !important;
+}
+
+.app-topbar--sales .app-topbar-controls {
+  flex: 1 1 auto;
+  justify-content: flex-end;
+}
+
+.app-topbar--sales .app-topbar-controls > *:not(.app-topbar-search):not(.app-topbar-account) {
+  display: none !important;
+}
+
+.app-topbar--sales .app-topbar-search {
+  width: min(23.75rem, 42vw);
+  min-height: 2.25rem;
+  margin-right: auto;
+  justify-content: flex-start;
+  border-color: var(--border-lt);
+  background: #f9fafb;
+  border-radius: 0.5rem;
+  box-shadow: none;
+}
+
+.app-topbar--sales .app-topbar-search kbd {
+  display: none !important;
+}
+
+.app-topbar--sales .app-topbar-account {
+  width: 2.25rem;
+  height: 2.25rem;
+  justify-content: center;
+  padding: 0 !important;
+  border-color: var(--border-lt);
+  background: var(--bg-card);
+}
+
+.app-topbar--sales .app-topbar-account > :not(:first-child) {
+  display: none !important;
+}
+
+.sales-pilot.sales-doc {
+  --sd-bg: #f6f7f9;
+  --sd-surface: #ffffff;
+  --sd-border: #e5e7eb;
+  --sd-border-strong: #d1d5db;
+  --sd-text: #111827;
+  --sd-text-2: #374151;
+  --sd-text-3: #6b7280;
+  --sd-accent: var(--navy);
+  --sd-accent-hover: var(--navy-dark);
+  --sd-accent-soft: color-mix(in srgb, var(--navy) 5%, #fff);
+  --sd-radius: 0.5rem;
+  background: var(--sd-bg) !important;
+}
+
+main#main-content:has(.sales-pilot.sales-doc) > .min-w-0 {
+  background: var(--sd-bg);
+}
+
+.sales-pilot.sales-doc .sales-workbench {
+  --sp-bg: #f6f7f9;
+  --sp-surface: #ffffff;
+  --sp-border: #e5e7eb;
+  --sp-border-strong: #d1d5db;
+  --sp-text: #111827;
+  --sp-text-2: #374151;
+  --sp-text-3: #6b7280;
+  --sp-accent: var(--navy);
+  --sp-accent-hover: var(--navy-dark);
+  --sp-accent-soft: color-mix(in srgb, var(--navy) 5%, #fff);
+  --sp-accent-border: color-mix(in srgb, var(--accent-cyan) 30%, #fff);
+  --sp-info: var(--navy);
+  --sp-info-bg: color-mix(in srgb, var(--navy) 5%, #fff);
+  padding: 0 0 1.5rem !important;
+  background: var(--sp-bg);
+}
+
+.sales-pilot.sales-doc .sales-workbench .sales-proto-page-header {
+  display: flex;
+  width: 100%;
+  min-height: 6.625rem;
+  margin: 0 !important;
+  padding: 1rem 1.5rem;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  border: 0;
+  border-bottom: 1px solid var(--sp-border);
+  background: var(--sp-surface);
+  color: var(--sp-text);
+  box-shadow: none;
+}
+
+.sales-pilot.sales-doc .sales-proto-header-copy {
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  align-items: flex-start;
+  gap: 0;
+}
+
+.sales-pilot.sales-doc .sales-proto-header-icon {
+  display: none;
+}
+
+.sales-pilot.sales-doc .sales-page-eyebrow {
+  margin-bottom: 0.35rem;
+  color: var(--sp-text-3);
+  font-size: 0.5625rem;
+  font-weight: 750;
+  letter-spacing: 0.08em;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+.sales-pilot.sales-doc .sales-workbench .sales-proto-page-header h1 {
+  margin: 0;
+  color: var(--navy);
+  font-size: 1.5rem;
+  font-weight: 760;
+  letter-spacing: -0.025em;
+  line-height: 1.15;
+}
+
+.sales-pilot.sales-doc .sales-proto-count,
+.sales-pilot.sales-doc .sales-record-ref {
+  display: block;
+  margin-top: 0.3rem;
+  color: var(--sp-text-3);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+}
+
+.sales-pilot.sales-doc .sales-workbench .sales-proto-page-header .sub {
+  display: none;
+}
+
+.sales-pilot.sales-doc .sales-record-title-block {
+  min-width: 8rem;
+}
+
+.sales-pilot.sales-doc .sales-workbench .sales-proto-page-header .sp-ref-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+.sales-pilot.sales-doc .sales-workbench .sales-proto-page-header .sp-ref-row > .sp-pill:not(:first-of-type) {
+  display: none;
+}
+
+.sales-pilot.sales-doc .sales-workbench .sales-proto-page-header .sp-btn,
+.sales-pilot.sales-doc .sales-workbench .sales-proto-page-header button.sp-btn,
+.sales-pilot.sales-doc .sales-workbench .sp-btn,
+.sales-pilot.sales-doc .sales-workbench button.sp-btn {
+  min-height: 2.5rem !important;
+  padding: 0.55rem 0.9rem !important;
+  border-radius: 0.5rem !important;
+  font-size: 0.75rem !important;
+  font-weight: 700 !important;
+  line-height: 1.2 !important;
+  box-shadow: none !important;
+}
+
+.sales-pilot.sales-doc .sales-workbench .sales-proto-page-header .sp-btn:not(.sp-btn-primary):not(.sp-btn-success),
+.sales-pilot.sales-doc .sales-workbench .sales-proto-page-header .sp-btn-ghost {
+  border-color: var(--sp-border-strong) !important;
+  background: var(--sp-surface) !important;
+  color: var(--sp-text-2) !important;
+}
+
+.sales-pilot.sales-doc .sales-workbench .sp-btn-primary,
+.sales-pilot.sales-doc .sales-workbench .btn-primary,
+.sales-pilot.sales-doc .sales-workbench .sp-btn-success {
+  border-color: var(--navy) !important;
+  background: var(--navy) !important;
+  color: #fff !important;
+}
+
+.sales-pilot.sales-doc .sales-workbench .sp-btn-primary:hover,
+.sales-pilot.sales-doc .sales-workbench .btn-primary:hover,
+.sales-pilot.sales-doc .sales-workbench .sp-btn-success:hover {
+  border-color: var(--navy-dark) !important;
+  background: var(--navy-dark) !important;
+}
+
+.sales-pilot.sales-doc .sales-workbench .sp-linkish,
+.sales-pilot.sales-doc .sales-workbench a.sp-linkish {
+  color: var(--navy) !important;
+}
+
+.sales-pilot.sales-doc .sales-workbench .sp-tabs-command {
+  width: 100%;
+  min-height: 2.875rem;
+  margin: 0 !important;
+  padding: 0 1.5rem;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  border-bottom: 1px solid var(--sp-border);
+  background: var(--sp-surface);
+}
+
+.sales-pilot.sales-doc .sales-workbench .sp-tabs-command .sp-tab {
+  min-height: 2.875rem !important;
+  padding: 0.75rem 1rem !important;
+  border-bottom: 3px solid transparent;
+  color: var(--sp-text-3);
+  font-size: 0.6875rem !important;
+  font-weight: 650;
+}
+
+.sales-pilot.sales-doc .sales-workbench .sp-tabs-command .sp-tab:hover,
+.sales-pilot.sales-doc .sales-workbench .sp-tabs-command .sp-tab[data-active='true'],
+.sales-pilot.sales-doc .sales-workbench .sp-tab[data-active='true'] {
+  border-bottom-color: var(--accent-cyan);
+  color: var(--navy);
+}
+
+.sales-pilot.sales-doc .sp-tabs-command + .sp-panel {
+  margin: 0 !important;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.sales-pilot.sales-doc .sp-list-toolbar {
+  display: flex;
+  min-height: 4.5rem;
+  padding: 1rem 1.5rem;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 0.5rem;
+  border-bottom: 1px solid var(--sp-border);
+  background: var(--sp-surface);
+}
+
+.sales-pilot.sales-doc .sp-list-search {
+  flex: 1 1 22rem;
+  width: min(26.875rem, 100%);
+  max-width: 26.875rem;
+  min-width: 10rem;
+  min-height: 2.5rem !important;
+  padding: 0.55rem 0.75rem !important;
+  border: 1px solid var(--sp-border) !important;
+  border-radius: 0.5rem !important;
+  background: #f9fafb !important;
+  font-size: 0.75rem !important;
+}
+
+.sales-pilot.sales-doc .sp-list-toolbar select {
+  width: 9.5rem;
+  min-height: 2.5rem !important;
+  padding: 0.5rem 0.7rem !important;
+  border-color: var(--sp-border-strong) !important;
+  border-radius: 0.5rem !important;
+  background: var(--sp-surface) !important;
+  font-size: 0.75rem !important;
+}
+
+.sales-pilot.sales-doc .sp-list-toolbar > .relative {
+  margin-left: auto;
+}
+
+.sales-pilot.sales-doc .sp-table-wrap:has(.sp-list-table) {
+  margin: 0.75rem 1.5rem 1.5rem;
+  overflow: hidden;
+  border: 1px solid var(--sp-border);
+  border-radius: 0.5rem;
+  background: var(--sp-surface);
+}
+
+.sales-pilot.sales-doc .sp-list-table th {
+  height: 2.5rem;
+  padding: 0.65rem 0.9rem !important;
+  background: #f9fafb;
+  color: var(--sp-text-3);
+  font-size: 0.5625rem !important;
+  font-weight: 750;
+  letter-spacing: 0.06em;
+}
+
+.sales-pilot.sales-doc .sp-list-table td {
+  height: 3.625rem;
+  padding: 0.75rem 0.9rem !important;
+  vertical-align: middle;
+  color: var(--sp-text-2);
+  font-size: 0.75rem !important;
+}
+
+.sales-pilot.sales-doc .sp-list-table tbody tr:hover td {
+  background: #f9fafb;
+}
+
+.sales-pilot.sales-doc .sp-list-table td[data-col='ref'],
+.sales-pilot.sales-doc .sp-list-table td[data-col='customer'],
+.sales-pilot.sales-doc .sp-list-table td[data-col='total'] {
+  color: var(--sp-text);
+  font-weight: 650;
+}
+
+.sales-pilot.sales-doc .sp-list-table td[data-col='total'] {
+  font-family: var(--font-dm-mono), ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+.sales-pilot.sales-doc .sp-pill {
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.625rem;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.sales-pilot.sales-doc .sp-pill::before {
+  display: none;
+}
+
+.sales-pilot.sales-doc .sales-document-identity,
+.sales-pilot.sales-doc .sales-workbench > .flex > .sp-workflow {
+  display: none;
+}
+
+.sales-pilot.sales-doc .sales-workbench > .flex > .sp-panel:not(.sp-tabs-command + .sp-panel) {
+  margin-inline: 1.5rem;
+  border-color: var(--sp-border);
+  border-radius: 0.625rem;
+  box-shadow: none;
+}
+
+.sales-pilot.sales-doc .sp-panel-pad {
+  padding: 1.25rem 1.375rem !important;
+}
+
+.sales-pilot.sales-doc .sp-grid-2 {
+  gap: 1rem 2.5rem !important;
+}
+
+.sales-pilot.sales-doc .sp-field {
+  margin-bottom: 0.75rem !important;
+}
+
+.sales-pilot.sales-doc .sp-field label {
+  margin-bottom: 0.3rem;
+  color: var(--sp-text-3);
+  font-size: 0.5625rem;
+  font-weight: 750;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.sales-pilot.sales-doc .sp-field input,
+.sales-pilot.sales-doc .sp-field select,
+.sales-pilot.sales-doc .sp-field textarea,
+.sales-pilot.sales-doc .sp-value {
+  min-height: 2.25rem !important;
+  padding: 0.45rem 0 !important;
+  border: 0 !important;
+  border-bottom: 1px solid var(--sp-border) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  color: var(--sp-text) !important;
+  font-size: 0.75rem !important;
+  font-weight: 600 !important;
+  box-shadow: none !important;
+}
+
+.sales-pilot.sales-doc .sp-field input:focus,
+.sales-pilot.sales-doc .sp-field select:focus,
+.sales-pilot.sales-doc .sp-field textarea:focus {
+  outline: 0 !important;
+  border-bottom-color: var(--accent-cyan) !important;
+}
+
+.sales-pilot.sales-doc .sales-workbench > .flex > .sp-panel > .sp-tabs,
+.sales-pilot.sales-doc .sp-delivery-main .sp-panel > .sp-tabs {
+  min-height: 2.75rem;
+  padding: 0 0.75rem;
+  flex-wrap: nowrap;
+  overflow-x: auto !important;
+  border-bottom: 1px solid var(--sp-border);
+  background: var(--sp-surface);
+}
+
+.sales-pilot.sales-doc .sales-workbench > .flex > .sp-panel > .sp-tabs .sp-tab,
+.sales-pilot.sales-doc .sp-delivery-main .sp-panel > .sp-tabs .sp-tab {
+  padding: 0.75rem 0.85rem !important;
+  color: var(--sp-text-3);
+  font-size: 0.6875rem !important;
+  font-weight: 650;
+}
+
+.sales-pilot.sales-doc .sp-table-wrap:has(.sp-line-table) {
+  overflow-x: auto;
+}
+
+.sales-pilot.sales-doc .sp-line-table th {
+  height: 2.25rem;
+  padding: 0.55rem 0.75rem !important;
+  background: #f9fafb;
+  color: var(--sp-text-3);
+  font-size: 0.5625rem !important;
+  font-weight: 750;
+  letter-spacing: 0.05em;
+}
+
+.sales-pilot.sales-doc .sp-line-table td {
+  min-height: 3.125rem;
+  padding: 0.75rem !important;
+  vertical-align: middle;
+  font-size: 0.75rem !important;
+}
+
+.sales-pilot.sales-doc .sp-line-table td[data-col='product'],
+.sales-pilot.sales-doc .sp-line-table td[data-col='amount'] {
+  color: var(--sp-text);
+  font-weight: 650;
+}
+
+.sales-pilot.sales-doc .sp-totals {
+  width: min(20rem, 100%);
+  padding: 1rem 1.25rem 1.25rem !important;
+  border-top: 0;
+  background: var(--sp-surface);
+}
+
+.sales-pilot.sales-doc .sp-totals-row {
+  padding: 0.25rem 0 !important;
+  color: var(--sp-text-2);
+  font-size: 0.6875rem !important;
+}
+
+.sales-pilot.sales-doc .sp-totals-row.grand {
+  margin-top: 0.45rem;
+  padding-top: 0.65rem !important;
+  border-top: 1px solid var(--sp-border-strong);
+  color: var(--navy);
+  font-size: 0.875rem !important;
+}
+
+.sales-pilot.sales-doc .sp-banner-ok,
+.sales-pilot.sales-doc .sp-banner-warn {
+  margin: 0.75rem 1.5rem 0;
+  padding: 0.75rem 0.875rem;
+  border-radius: 0.5rem;
+  box-shadow: none;
+  font-size: 0.6875rem;
+}
+
+.sales-pilot.sales-doc .sp-delivery-work {
+  padding: 1.125rem 1.5rem 1.5rem;
+  gap: 0.75rem;
+}
+
+.sales-pilot.sales-doc .sp-delivery-rail,
+.sales-pilot.sales-doc .sp-delivery-main .sp-panel {
+  border-color: var(--sp-border);
+  border-radius: 0.625rem;
+  box-shadow: none;
+}
+
+.sales-pilot.sales-doc .sp-delivery-item[data-viewing='true'] {
+  border-color: color-mix(in srgb, var(--accent-cyan) 45%, var(--sp-border));
+  background: color-mix(in srgb, var(--accent-cyan) 5%, #fff);
+  color: var(--navy);
+}
+
+.sales-pilot.sales-doc .sales-pilot-scan {
+  min-height: 2.5rem;
+  border: 1px solid var(--sp-border-strong);
+  border-radius: 0.5rem;
+  background: var(--sp-surface);
+  box-shadow: none;
+}
+
+.sales-pilot.sales-doc .sales-pilot-scan:focus {
+  border-color: var(--accent-cyan);
+  outline: 2px solid color-mix(in srgb, var(--accent-cyan) 18%, transparent);
+}
+
+.sales-pilot.sales-doc .sp-footer-sticky {
+  border-color: var(--sp-border);
+  border-radius: 0.5rem;
+  background: var(--sp-surface);
+  box-shadow: none;
+}
+
+.sales-pilot.sales-doc .sp-footer-sticky .pct {
+  color: var(--navy);
+}
+
+@media (min-width: 1024px) {
+  .sales-pilot.sales-doc .sp-list-table th[data-col='contact'],
+  .sales-pilot.sales-doc .sp-list-table th[data-col='date'],
+  .sales-pilot.sales-doc .sp-list-table th[data-col='valid'],
+  .sales-pilot.sales-doc .sp-list-table th[data-col='salesperson'],
+  .sales-pilot.sales-doc .sp-list-table td[data-col='contact'],
+  .sales-pilot.sales-doc .sp-list-table td[data-col='date'],
+  .sales-pilot.sales-doc .sp-list-table td[data-col='valid'],
+  .sales-pilot.sales-doc .sp-list-table td[data-col='salesperson'] {
+    display: none;
+  }
+
+  .sales-pilot.sales-doc .sp-line-table td[data-col='description'],
+  .sales-pilot.sales-doc .sp-line-table td[data-col='unit'],
+  .sales-pilot.sales-doc .sp-line-table td[data-col='policy'],
+  .sales-pilot.sales-doc .sp-line-table td[data-col='reserved'],
+  .sales-pilot.sales-doc .sp-line-table td[data-col='delivered'],
+  .sales-pilot.sales-doc .sp-line-table td[data-col='invoiced'],
+  .sales-pilot.sales-doc .sp-line-table td[data-col='discount']:not(:has(input)),
+  .sales-pilot.sales-doc .sp-line-table td[data-col='tax']:not(:has(select)):not(:has(input)) {
+    display: none;
+  }
+}
+
+@media (min-width: 768px) and (max-width: 1023px) {
+  .sales-pilot.sales-doc .sales-workbench .sales-proto-actions--dock {
+    position: static;
+    display: flex;
+    width: auto;
+    padding: 0;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 0.5rem;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+}
+
+@media (max-width: 1023px) {
+  .sales-pilot.sales-doc .sp-table-wrap:has(.sp-list-table) {
+    margin: 0;
+    overflow: visible;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+  }
+
+  .sales-pilot.sales-doc .sp-list-table,
+  .sales-pilot.sales-doc .sp-list-table tbody {
+    display: block;
+    width: 100%;
+  }
+
+  .sales-pilot.sales-doc .sp-list-table thead {
+    display: none !important;
+  }
+
+  .sales-pilot.sales-doc .sp-list-table tbody tr.sp-row-click {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 0.35rem 0.75rem;
+    margin: 0.625rem 1.25rem;
+    padding: 0.75rem;
+    border: 1px solid var(--sp-border);
+    border-radius: 0.5625rem;
+    background: var(--sp-surface);
+    box-shadow: none;
+  }
+
+  .sales-pilot.sales-doc .sp-list-table tbody td {
+    display: block;
+    width: auto;
+    height: auto;
+    min-width: 0;
+    padding: 0 !important;
+    border: 0 !important;
+    background: transparent !important;
+    white-space: normal !important;
+    text-align: left !important;
+  }
+
+  .sales-pilot.sales-doc .sp-list-table tbody td[data-col='select'],
+  .sales-pilot.sales-doc .sp-list-table tbody td[data-col='contact'],
+  .sales-pilot.sales-doc .sp-list-table tbody td[data-col='date'],
+  .sales-pilot.sales-doc .sp-list-table tbody td[data-col='valid'],
+  .sales-pilot.sales-doc .sp-list-table tbody td[data-col='salesperson'] {
+    display: none !important;
+  }
+
+  .sales-pilot.sales-doc .sp-list-table tbody td[data-col='ref'] {
+    grid-column: 1;
+    grid-row: 1;
+    color: var(--navy);
+    font-size: 0.6875rem !important;
+  }
+
+  .sales-pilot.sales-doc .sp-list-table tbody td[data-col='customer'] {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    color: var(--sp-text);
+    font-size: 0.8125rem !important;
+    font-weight: 700;
+  }
+
+  .sales-pilot.sales-doc .sp-list-table tbody td[data-col='total'] {
+    grid-column: 1;
+    grid-row: 3;
+    color: var(--sp-text);
+    font-size: 0.75rem !important;
+    font-weight: 700;
+  }
+
+  .sales-pilot.sales-doc .sp-list-table tbody td[data-col='status'] {
+    grid-column: 2;
+    grid-row: 3;
+    align-self: center;
+    justify-self: end;
+  }
+
+  .sales-pilot.sales-doc .sp-list-table tbody td::before {
+    display: none !important;
+    content: none !important;
+  }
+}
+
+@media (max-width: 767px) {
+  .app-topbar--sales {
+    height: 3.375rem !important;
+    gap: 0.625rem !important;
+    padding-inline: 0.75rem !important;
+  }
+
+  .app-topbar--sales .app-topbar-title {
+    flex: 1 1 auto;
+  }
+
+  .app-topbar--sales .app-topbar-controls {
+    flex: 0 0 auto;
+  }
+
+  .app-topbar--sales .app-topbar-search {
+    width: 2.25rem;
+    min-height: 2.25rem;
+    margin: 0;
+    padding: 0 !important;
+    justify-content: center;
+    border-color: transparent;
+    background: transparent;
+  }
+
+  .app-topbar--sales .app-topbar-search span,
+  .app-topbar--sales .app-topbar-search kbd {
+    display: none !important;
+  }
+
+  .sales-pilot.sales-doc .sales-workbench {
+    padding-bottom: calc(5.25rem + env(safe-area-inset-bottom, 0px)) !important;
+  }
+
+  .sales-pilot.sales-doc .sales-workbench .sales-proto-page-header {
+    display: grid;
+    min-height: 6.5rem;
+    padding: 0.75rem 0.875rem;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 0.5rem 0.75rem;
+  }
+
+  .sales-pilot.sales-doc .sales-workbench .sales-proto-header-copy {
+    grid-column: 1;
+    min-width: 0;
+  }
+
+  .sales-pilot.sales-doc .sales-workbench .sales-proto-page-header h1 {
+    overflow: hidden;
+    max-width: 100%;
+    font-size: 1.25rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .sales-pilot.sales-doc .sales-page-eyebrow {
+    overflow: hidden;
+    max-width: 15rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .sales-pilot.sales-doc .sales-workbench .sales-list-page-header > .sales-proto-actions:not(.sales-proto-actions--dock) {
+    grid-column: 2;
+    grid-row: 1;
+    width: auto;
+  }
+
+  .sales-pilot.sales-doc .sales-workbench .sales-list-page-header > .sales-proto-actions:not(.sales-proto-actions--dock) .sp-btn-primary {
+    position: relative;
+    width: 2.5rem !important;
+    min-width: 2.5rem !important;
+    padding: 0 !important;
+    overflow: hidden;
+    color: transparent !important;
+    white-space: nowrap;
+  }
+
+  .sales-pilot.sales-doc .sales-workbench .sales-list-page-header > .sales-proto-actions:not(.sales-proto-actions--dock) .sp-btn-primary::after {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    color: #fff;
+    content: '+';
+    font-size: 1.25rem;
+    font-weight: 500;
+  }
+
+  .sales-pilot.sales-doc .sales-record-title-block {
+    min-width: 0;
+  }
+
+  .sales-pilot.sales-doc .sales-workbench .sales-proto-page-header .sp-ref-row {
+    gap: 0.5rem;
+  }
+
+  .sales-pilot.sales-doc .sales-workbench .sales-proto-page-header .sp-ref-row .sp-pill {
+    align-self: flex-end;
+  }
+
+  .sales-pilot.sales-doc .sales-workbench .sp-tabs-command {
+    padding: 0 0.75rem;
+  }
+
+  .sales-pilot.sales-doc .sales-workbench .sp-tabs-command .sp-tab {
+    flex: 0 0 auto;
+    padding-inline: 0.8rem !important;
+  }
+
+  .sales-pilot.sales-doc .sp-list-toolbar {
+    display: grid;
+    min-height: 4.375rem;
+    padding: 0.75rem;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    gap: 0.45rem;
+  }
+
+  .sales-pilot.sales-doc .sp-list-search {
+    grid-column: 1;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .sales-pilot.sales-doc .sp-list-toolbar select {
+    grid-column: 2;
+    width: 2.5rem;
+    min-width: 2.5rem;
+    padding-inline: 0.35rem !important;
+    color: transparent;
+  }
+
+  .sales-pilot.sales-doc .sp-list-toolbar > .relative {
+    grid-column: 3;
+    margin-left: 0;
+  }
+
+  .sales-pilot.sales-doc .sp-list-toolbar > .relative > .sp-btn {
+    width: 2.5rem;
+    padding: 0 !important;
+    justify-content: center;
+  }
+
+  .sales-pilot.sales-doc .sp-list-toolbar > .relative > .sp-btn > span {
+    display: none;
+  }
+
+  .sales-pilot.sales-doc .sp-list-table tbody tr.sp-row-click {
+    margin-inline: 0.75rem;
+    padding: 0.75rem;
+  }
+
+  .sales-pilot.sales-doc .sales-workbench > .flex > .sp-panel:not(.sp-tabs-command + .sp-panel),
+  .sales-pilot.sales-doc .sp-banner-ok,
+  .sales-pilot.sales-doc .sp-banner-warn {
+    margin-inline: 0.75rem;
+  }
+
+  .sales-pilot.sales-doc .sp-panel-pad {
+    padding: 1rem 0.875rem !important;
+  }
+
+  .sales-pilot.sales-doc .sp-grid-2 {
+    grid-template-columns: 1fr !important;
+    gap: 0 !important;
+  }
+
+  .sales-pilot.sales-doc .sp-line-table tbody tr {
+    margin-bottom: 0.5rem;
+    padding: 0.75rem;
+    border-color: var(--sp-border);
+    border-radius: 0.5rem;
+    box-shadow: none;
+  }
+
+  .sales-pilot.sales-doc .sales-workbench .sales-proto-actions--dock {
+    display: grid;
+    padding: 0.75rem 0.75rem calc(0.75rem + env(safe-area-inset-bottom, 0px));
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(8rem, 1fr);
+    grid-template-columns: none;
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
+    border-top: 1px solid var(--sp-border);
+    background: var(--sp-surface);
+    box-shadow: 0 -0.25rem 1rem rgba(17, 24, 39, 0.08);
+    scrollbar-width: none;
+  }
+
+  .sales-pilot.sales-doc .sales-workbench .sales-proto-actions--dock::-webkit-scrollbar {
+    display: none;
+  }
+
+  .sales-pilot.sales-doc .sp-delivery-work {
+    padding: 0.75rem;
+  }
+
+  .sales-pilot.sales-doc .sp-delivery-rail {
+    padding: 0.75rem;
   }
 }
