@@ -1,6 +1,6 @@
 # Deed ERP Partner API — Integration Guide
 
-**Version:** 1.0  
+**Version:** 1.1  
 **Audience:** Reseller partners integrating Deed Technologies’ product catalog into their own websites or apps  
 **Scope:** Read-only catalog (products, prices, stock). Orders are not placed through this API.
 
@@ -33,7 +33,8 @@ Deed’s Partner API lets approved resellers **pull the sellable catalog** — a
 | Category | Supplier details |
 | Wholesale / reseller price (KES) | Walk-in retail / sale price |
 | Warranty months (when set) | Internal accounts or users |
-| Live quantity available (1 or more) | Draft / inactive products |
+| Live warehouse quantity, including 0 | Draft / inactive products |
+| | Hidden partner categories |
 | | Order placement |
 
 This API is **read-only**. To place purchase orders with Deed Technologies, contact your Deed account contact — do not attempt write calls against this API.
@@ -130,7 +131,7 @@ Both are equivalent. Prefer `Authorization: Bearer` unless your stack makes cust
 
 ### `GET /api/public/v1/products`
 
-Returns the sellable catalog (active products with a wholesale / reseller price). **Only items with quantityAvailable ≥ 1 in Warehouse (Main)** are returned — there is no out-of-stock listing. With Issues, Repair Unit, zero-qty SKUs, and services are never included. Historical Prisma `in_stock` serials that were already sold do **not** count. `inStock=all` is ignored.
+Returns the sellable catalog (active products with a wholesale / reseller price), **including items with warehouse quantity 0** so partners can display vendor-sourced SKUs. Categories the merchant hid in Settings → Partner API are omitted. With Issues and Repair Unit never increment `quantityAvailable`. Services are omitted unless they have a saved wholesale price. `inStock=all` is ignored because zero-qty SKUs are already included.
 
 `price` is **not** the walk-in sale price. It is:
 
@@ -205,8 +206,8 @@ Responses may be cached at the edge/server for up to **60 seconds** (`Cache-Cont
 | `price` | number | Wholesale / reseller price (KES). Saved wholesale if set; otherwise min GP band from cost. Never cost, never walk-in retail. |
 | `currency` | string | Always `KES` today |
 | `warrantyMonths` | number \| null | Warranty in months when configured |
-| `quantityAvailable` | number | Warehouse (Main) units only (available serials, or bulk at warehouse). Always ≥ 1; zero-qty SKUs are omitted. |
-| `inStock` | boolean | Always `true` on returned items |
+| `quantityAvailable` | number | Warehouse (Main) units only (available serials, or bulk at warehouse). May be `0`. |
+| `inStock` | boolean | `true` when `quantityAvailable >= 1` |
 | `updatedAt` | string (ISO 8601) | Last product update timestamp |
 
 ### Pagination object
@@ -252,7 +253,8 @@ Create a server route or cron job that:
 ### Step 3 — Render on your storefront
 
 - Show `name`, `description`, `price`, and stock status from **your** database/cache.
-- Treat products missing from the latest sync as unavailable. The catalog never includes zero-qty SKUs.
+- Use `inStock` / `quantityAvailable` on your storefront. `inStock: false` means Deed can still list the SKU (vendor-sourced) but does not have it in Warehouse (Main) today. Do not show those as “in stock”.
+- Treat products missing from the latest sync as removed or blocked (usually a hidden category).
 - Do not invent cost or margin fields from this API — they are not provided.
 
 ### Step 4 — Keep stock fresh

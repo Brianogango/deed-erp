@@ -88,8 +88,8 @@ export function calcStockByLocation(
 const PARTNER_STOCK_LOCATION: LocationId = 'warehouse'
 
 /**
- * Units a partner/storefront can actually sell: Warehouse (Main) only.
- * With Issues (`shop`) and Repair Unit are not listed to resellers.
+ * Units physically ready in Warehouse (Main).
+ * With Issues (`shop`) and Repair Unit never increment this count.
  *
  * Serial SKUs: JSON serials with status `available` at warehouse.
  * Bulk SKUs: on-hand at warehouse only.
@@ -137,6 +137,18 @@ export function isListedInProductCatalog(
   if (!product) return false
   if (product.isActive === false || product.canBeSold === false) return false
   return availableSellableQty(product, serials, bulkStock, productId) >= 1
+}
+
+/**
+ * Partner catalog: active, for-sale SKUs even when warehouse qty is 0.
+ * Category hiding is applied by the route. Stock is reported separately.
+ */
+export function isListedInPartnerCatalog(
+  product: (StockProduct & { isActive?: boolean; canBeSold?: boolean }) | undefined,
+): boolean {
+  if (!product) return false
+  if (product.isActive === false || product.canBeSold === false) return false
+  return true
 }
 
 /**

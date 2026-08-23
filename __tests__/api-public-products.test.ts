@@ -123,13 +123,12 @@ describe('GET /api/public/v1/products — partner catalog', () => {
     expect(res.headers.get('Access-Control-Allow-Headers') ?? '').not.toMatch(/Authorization/i)
   })
 
-  it('never returns out-of-stock items, even if inStock=all is passed', async () => {
+  it('returns zero-qty SKUs with inStock false so shops can still list them', async () => {
     mockLoadAppState.mockResolvedValue({ deed_serials: [], deed_bulkStock: [], deed_products: [] })
-    const hidden = await GET(req())
-    expect((await hidden.json()).items).toHaveLength(0)
-
-    const stillHidden = await GET(req('?inStock=all'))
-    expect((await stillHidden.json()).items).toHaveLength(0)
+    const res = await GET(req())
+    const body = await res.json()
+    expect(body.items).toHaveLength(1)
+    expect(body.items[0]).toMatchObject({ sku: 'SKU-1', quantityAvailable: 0, inStock: false, price: 25000 })
   })
 
   it('hides not-for-sale SKUs even when warehouse stock exists', async () => {
@@ -142,7 +141,7 @@ describe('GET /api/public/v1/products — partner catalog', () => {
     expect((await res.json()).items).toHaveLength(0)
   })
 
-  it('hides sold-out serial products even when Prisma still has leftover in_stock rows', async () => {
+  it('lists sold-out serial products at qty 0 and ignores leftover Prisma in_stock rows', async () => {
     mockPrisma.serialNumber.groupBy.mockResolvedValue([{ productId: 'prod-1', _count: { _all: 8 } }])
     mockPrisma.stockLevel.findMany.mockResolvedValue([{ productId: 'prod-1', qtyOnHand: 8, qtyReserved: 0 }])
     mockLoadAppState.mockResolvedValue({
@@ -154,7 +153,9 @@ describe('GET /api/public/v1/products — partner catalog', () => {
       deed_products: [{ id: 'prod-1', requiresSerial: true, category: 'Laptops' }],
     })
     const res = await GET(req())
-    expect((await res.json()).items).toHaveLength(0)
+    const body = await res.json()
+    expect(body.items).toHaveLength(1)
+    expect(body.items[0]).toMatchObject({ quantityAvailable: 0, inStock: false })
   })
 
   it('paginates', async () => {
@@ -188,7 +189,7 @@ describe('GET /api/public/v1/products — partner catalog', () => {
     expect(body.items[0].quantityAvailable).toBe(5)
   })
 
-  it('hides laptops that are only available in With Issues or Repair Unit', async () => {
+  it('lists laptops that are only in With Issues or Repair Unit at warehouse qty 0', async () => {
     mockLoadAppState.mockResolvedValue({
       deed_serials: [
         { productId: 'prod-1', status: 'available', location: 'shop' },
@@ -198,7 +199,9 @@ describe('GET /api/public/v1/products — partner catalog', () => {
       deed_products: [{ id: 'prod-1', requiresSerial: true, category: 'Laptops' }],
     })
     const res = await GET(req())
-    expect((await res.json()).items).toHaveLength(0)
+    const body = await res.json()
+    expect(body.items).toHaveLength(1)
+    expect(body.items[0]).toMatchObject({ quantityAvailable: 0, inStock: false })
   })
 
   it('hides products in categories the merchant marked hidden for partners', async () => {

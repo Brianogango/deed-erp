@@ -11,6 +11,7 @@ import {
   calcStockByLocation,
   availableSellableQty,
   isListedInProductCatalog,
+  isListedInPartnerCatalog,
   upsertBulkStock,
   computePayrollLine,
   aggregatePayroll,
@@ -174,6 +175,21 @@ describe('isListedInProductCatalog()', () => {
       [{ productId: 'prod-1', location: 'warehouse', qty: 4 }],
       'prod-1',
     )).toBe(false)
+  })
+})
+
+describe('isListedInPartnerCatalog()', () => {
+  const laptop = { category: 'Laptops', requiresSerial: true, isActive: true, canBeSold: true }
+
+  it('lists zero-stock and With Issues-only SKUs', () => {
+    expect(isListedInPartnerCatalog(laptop)).toBe(true)
+    expect(isListedInPartnerCatalog({ ...laptop, unit: 'pcs' })).toBe(true)
+  })
+
+  it('hides archived and not-for-sale SKUs', () => {
+    expect(isListedInPartnerCatalog({ ...laptop, isActive: false })).toBe(false)
+    expect(isListedInPartnerCatalog({ ...laptop, canBeSold: false })).toBe(false)
+    expect(isListedInPartnerCatalog(undefined)).toBe(false)
   })
 })
 

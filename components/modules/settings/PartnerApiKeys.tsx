@@ -168,8 +168,9 @@ export default function PartnerApiKeys() {
           <p className="text-[11.5px] leading-relaxed" style={{ color: 'var(--navy-dark)' }}>
             Partners use these keys to read your sellable catalog at{' '}
             <code className="font-mono text-[10.5px] px-1 py-0.5 rounded bg-white border border-gray-200">GET /api/public/v1/products</code>{' '}
-            — active, in-stock products with the wholesale / reseller price (saved wholesale, or the
-            min GP band from cost when wholesale is not set). Walk-in sale price and cost are never
+            — active products with the wholesale / reseller price (saved wholesale, or the
+            min GP band from cost when wholesale is not set), including warehouse qty 0.
+            Hide a category below to keep it out of the feed. Walk-in sale price and cost are never
             returned. Each key is shown <strong>once</strong> at creation; share it with exactly one
             partner so access can be revoked individually.
           </p>

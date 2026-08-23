@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { authenticatePartnerRequest, partnerCorsHeaders } from '@/lib/partner-api'
 import { loadAppState } from '@/lib/server-store'
-import { availableSellableQty, isListedInProductCatalog, type BulkStockLevel, type SerialNumber, type StockProduct } from '@/lib/business-logic'
+import { availableSellableQty, isListedInPartnerCatalog, type BulkStockLevel, type SerialNumber, type StockProduct } from '@/lib/business-logic'
 import type { LocationId } from '@/lib/store'
 import { resolveResellerPrice } from '@/lib/pricing/reseller-price'
 import { loadServerMarginPolicy } from '@/lib/pricing/sync-product-list-from-cost.server'
@@ -13,9 +13,10 @@ export const dynamic = 'force-dynamic'
 // Authenticated with a partner API key (Authorization: Bearer <key> or
 // X-API-Key). Returns only reseller-safe fields: no cost prices, no supplier
 // data, no internal accounts. `price` is wholesale / reseller (saved wholesale
-// or min GP band from cost) — never walk-in retail. Default: active, priced,
-// and quantityAvailable >= 1 from Warehouse (Main) only — not With Issues,
-// Repair Unit, zero-qty SKUs, or services. `inStock=all` is ignored.
+// or min GP band from cost) — never walk-in retail. Default: active, priced
+// SKUs including warehouse qty 0 so partners can list vendor-sourced items.
+// Blocked categories are omitted. `quantityAvailable` is Warehouse (Main)
+// only. `inStock` is true when that qty is >= 1. `inStock=all` is ignored.
 //
 // Query params:
 //   page          1-based page number                     (default 1)
@@ -179,7 +180,7 @@ export async function GET(request: Request) {
     })
     if (!reseller) return []
     const stockProduct = partnerStockProduct(row, jsonProduct)
-    if (!isListedInProductCatalog(stockProduct, serials, bulkStock, row.id)) return []
+    if (!isListedInPartnerCatalog(stockProduct)) return []
     const quantityAvailable = availableSellableQty(stockProduct, serials, bulkStock, row.id)
     return [{
       id: row.id,
@@ -192,7 +193,7 @@ export async function GET(request: Request) {
       currency: 'KES',
       warrantyMonths: warrantyById.get(row.id) ?? null,
       quantityAvailable,
-      inStock: true,
+      inStock: quantityAvailable >= 1,
       updatedAt: row.updatedAt.toISOString(),
     }]
   })
