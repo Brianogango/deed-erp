@@ -79,7 +79,7 @@ function RepairContent() {
           />
           <div className="flex-1 overflow-hidden flex flex-col">
             {mainTab === 'client' ? (
-              <RepairClientJobs onNewIntake={() => setView('intake')} onSelect={(id) => { setActiveId(id); setView('detail') }} />
+              <RepairClientJobs onSelect={(id) => { setActiveId(id); setView('detail') }} />
             ) : (
               <RepairRefurbJobs onSelect={(id) => { setActiveId(id); setView('detail') }} />
             )}
