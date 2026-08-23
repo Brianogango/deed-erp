@@ -68,7 +68,7 @@ export function AssignTechnicianModal({ repair, onClose }: { repair: RepairOrder
   const isReassign = !!repair.assignedTechnicianName
 
   return (
-    <Modal
+    <Modal variant="enterprise"
       title={isReassign ? 'Reassign Technician' : 'Assign Technician'}
       subtitle={`Job Reference: ${repair.ref}`}
       onClose={onClose}
@@ -182,7 +182,7 @@ export function LogDiagnosisModal({ repair, onClose }: { repair: RepairOrder, on
   }
 
   return (
-    <Modal title={isRevision ? 'Add Diagnosis Update' : 'Log Diagnosis'} subtitle={isRevision ? `${repair.ref} · Revision ${revisionCount + 1}` : repair.ref} onClose={onClose} width={560} icon={<Fa icon={faStethoscope} />} accent="#06B6D4">
+    <Modal variant="enterprise" title={isRevision ? 'Add Diagnosis Update' : 'Log Diagnosis'} subtitle={isRevision ? `${repair.ref} · Revision ${revisionCount + 1}` : repair.ref} onClose={onClose} width={560} icon={<Fa icon={faStethoscope} />} accent="#06B6D4">
       <div className="flex flex-col gap-5">
         {isRevision && existingDiagnosis && (
           <div className="rounded-2xl border border-blue-200 bg-blue-50/50 p-4 space-y-2">
@@ -365,7 +365,7 @@ function ProductPicker({ value, productId, onSelect, products, requireInventory,
   // (rounded-2xl ... overflow-hidden), so a plain position:absolute dropdown
   // gets cut off / hidden behind later rows. Computing viewport coordinates
   // from the input's getBoundingClientRect() and rendering position:fixed
-  // escapes that — BUT this picker also lives inside <Modal>, whose box has
+  // escapes that — BUT this picker also lives inside <Modal variant="enterprise">, whose box has
   // `animation: modalIn ... both`. The `both` fill-mode keeps the keyframe's
   // `transform: translateY(0) scale(1)` applied forever after the animation
   // ends (never reverts to `transform: none`), and any non-none transform on
@@ -571,7 +571,7 @@ export function QuoteModal({ repair, onClose }: { repair: RepairOrder, onClose: 
   const vatAmt = applyVat ? Math.round(taxable * (companySettings.vatRate / 100)) : 0
 
   return (
-    <Modal title={repair.quote ? 'Update Quote' : 'Generate Quote'} subtitle={`Job Ref: ${repair.ref} — ${repair.productName}`} onClose={onClose} width={760} icon={<Fa icon={faFileInvoiceDollar} />} accent="#F59E0B">
+    <Modal variant="enterprise" title={repair.quote ? 'Update Quote' : 'Generate Quote'} subtitle={`Job Ref: ${repair.ref} — ${repair.productName}`} onClose={onClose} width={760} icon={<Fa icon={faFileInvoiceDollar} />} accent="#F59E0B">
       <div className="flex flex-col gap-5">
         {chargeFee && (
           <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-800 font-semibold">
@@ -752,7 +752,7 @@ export function QAModal({ repair, onClose }: { repair: RepairOrder, onClose: () 
   }
 
   return (
-    <Modal title="Quality Assurance" subtitle={repair.ref} onClose={onClose} width={520} icon={<Fa icon={faCheckCircle} />} accent="#10B981">
+    <Modal variant="enterprise" title="Quality Assurance" subtitle={repair.ref} onClose={onClose} width={520} icon={<Fa icon={faCheckCircle} />} accent="#10B981">
       <div className="flex flex-col gap-6">
         {qcItems.length === 0 ? (
           <div className="py-12 flex flex-col items-center justify-center gap-3 text-slate-400">
@@ -861,7 +861,7 @@ export function LeaveDeviceModal({ repair, onClose }: { repair: RepairOrder, onC
   }
 
   return (
-    <Modal title="Customer Leaves Device" subtitle={repair.ref} onClose={onClose} width={440} icon={<Fa icon={faBoxOpen} />} accent="#57534E">
+    <Modal variant="enterprise" title="Customer Leaves Device" subtitle={repair.ref} onClose={onClose} width={440} icon={<Fa icon={faBoxOpen} />} accent="#57534E">
       <div className="flex flex-col gap-5">
         <div className="flex items-start gap-3 p-4 rounded-xl"
           style={{ background: 'rgba(87,83,78,0.08)', border: '1px solid rgba(87,83,78,0.22)' }}>
@@ -924,7 +924,7 @@ export function ScheduleDeliveryModal({ repair, onClose }: { repair: RepairOrder
   }
 
   return (
-    <Modal title="Schedule Delivery" subtitle={repair.ref} onClose={onClose} width={480} icon={<Fa icon={faTruck} />} accent="#0EA5E9">
+    <Modal variant="enterprise" title="Schedule Delivery" subtitle={repair.ref} onClose={onClose} width={480} icon={<Fa icon={faTruck} />} accent="#0EA5E9">
       <div className="flex flex-col gap-5">
         <div className="flex p-1 bg-[var(--bg-surface)] rounded-2xl border border-[var(--border)]">
           {(['pickup', 'delivery', 'courier'] as const).map(m => (
@@ -1027,7 +1027,7 @@ export function RepairProgressModal({ repair, onClose }: { repair: RepairOrder, 
     : null
 
   return (
-    <Modal title={cfg.title} subtitle={repair.ref} onClose={onClose} width={400} icon={<Fa icon={cfg.icon} />} accent={cfg.accent}>
+    <Modal variant="enterprise" title={cfg.title} subtitle={repair.ref} onClose={onClose} width={400} icon={<Fa icon={cfg.icon} />} accent={cfg.accent}>
       <div className="flex flex-col gap-5">
         <div
           className="flex items-center gap-4 p-4 rounded-2xl"
@@ -1083,7 +1083,7 @@ export function ProcurementModal({ repair, onClose }: { repair: RepairOrder, onC
   const urgencyColors: Record<string, string> = { low: '#6B7280', normal: '#3B82F6', high: '#F97316', urgent: '#EF4444' }
 
   return (
-    <Modal title="Request Procurement" subtitle={repair.ref} onClose={onClose} width={600} icon={<Fa icon={faCartPlus} />} accent="#F97316">
+    <Modal variant="enterprise" title="Request Procurement" subtitle={repair.ref} onClose={onClose} width={600} icon={<Fa icon={faCartPlus} />} accent="#F97316">
       <div className="flex flex-col gap-6">
         <div className="space-y-3">
           <p className="text-[10px] font-black text-[var(--text-4)] uppercase tracking-widest">Required Parts / Licenses</p>
@@ -1189,7 +1189,7 @@ export function ReturnModal({ repair, onClose }: { repair: RepairOrder, onClose:
   }
 
   return (
-    <Modal title="Return to Customer" subtitle={repair.ref} onClose={onClose} width={440} icon={<Fa icon={faUndo} />} accent="#F59E0B">
+    <Modal variant="enterprise" title="Return to Customer" subtitle={repair.ref} onClose={onClose} width={440} icon={<Fa icon={faUndo} />} accent="#F59E0B">
       <div className="flex flex-col gap-5">
         <div className="flex items-start gap-3 p-4 rounded-xl"
           style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.25)' }}>
@@ -1233,7 +1233,7 @@ export function DeclineModal({ repair, onClose }: { repair: RepairOrder, onClose
   }
 
   return (
-    <Modal title="Decline Quote" subtitle={repair.ref} onClose={onClose} width={440} icon={<Fa icon={faTimesCircle} />} accent="#EF4444">
+    <Modal variant="enterprise" title="Decline Quote" subtitle={repair.ref} onClose={onClose} width={440} icon={<Fa icon={faTimesCircle} />} accent="#EF4444">
       <div className="flex flex-col gap-5">
         <div className="flex items-start gap-3 p-4 rounded-xl"
           style={{ background: 'rgba(239,68,68,0.07)', border: '1px solid rgba(239,68,68,0.22)' }}>
@@ -1377,7 +1377,7 @@ export function EditRepairDetailsModal({ repair, onClose }: { repair: RepairOrde
   const feeInEffect = flatFee > 0
 
   return (
-    <Modal title="Edit Repair Details" subtitle={repair.ref} onClose={onClose} width={560} icon={<Fa icon={faUserGear} />} accent="#2563EB">
+    <Modal variant="enterprise" title="Edit Repair Details" subtitle={repair.ref} onClose={onClose} width={560} icon={<Fa icon={faUserGear} />} accent="#2563EB">
       <div className="flex flex-col gap-4">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <Field label="Client Name" required><Input value={form.customerName} onChange={set('customerName')} /></Field>
@@ -1467,7 +1467,7 @@ export function StopAtDiagnosisModal({ repair, onClose }: { repair: RepairOrder,
   }
 
   return (
-    <Modal title="Stop at Diagnosis" subtitle={repair.ref} onClose={onClose} width={440} icon={<Fa icon={faBan} />} accent="#F59E0B">
+    <Modal variant="enterprise" title="Stop at Diagnosis" subtitle={repair.ref} onClose={onClose} width={440} icon={<Fa icon={faBan} />} accent="#F59E0B">
       <div className="flex flex-col gap-5">
         <div className="flex items-start gap-3 p-4 rounded-xl"
           style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.25)' }}>
@@ -1533,7 +1533,7 @@ export function MarkDeliveredConfirm({ repair, onClose }: { repair: RepairOrder,
   }
 
   return (
-    <Modal title="Device Handover" subtitle={repair.ref} onClose={onClose} width={480} icon={<Fa icon={faTruck} />} accent="#10B981">
+    <Modal variant="enterprise" title="Device Handover" subtitle={repair.ref} onClose={onClose} width={480} icon={<Fa icon={faTruck} />} accent="#10B981">
       <div className="flex flex-col gap-5">
 
         {/* Collector type toggle */}
@@ -1651,7 +1651,7 @@ export function CancelRepairModal({ repair, onClose }: { repair: RepairOrder; on
   }
 
   return (
-    <Modal title="Cancel Repair" onClose={onClose}>
+    <Modal variant="enterprise" title="Cancel Repair" onClose={onClose}>
       <div className="space-y-5">
         <div className="flex flex-col items-center text-center gap-4 py-4">
           <div
@@ -1699,7 +1699,7 @@ export function DeleteRepairConfirm({ repair, onClose, onDeleted }: { repair: Re
   }
 
   return (
-    <Modal title="Delete Repair" onClose={onClose}>
+    <Modal variant="enterprise" title="Delete Repair" onClose={onClose}>
       <div className="space-y-5">
         <div className="flex flex-col items-center text-center gap-4 py-4">
           <div
