@@ -78,7 +78,7 @@ function SectionHeader({ icon, iconBg, title, subtitle, action, id }: any) {
           {subtitle && <p className="text-[9px] sm:text-[10px] text-[var(--text-3)] font-semibold mt-0.5 truncate">{subtitle}</p>}
         </div>
       </div>
-      {action && <div className="shrink-0 mt-0.5 sm:mt-0">{action}</div>}
+      {action && <div className="repair-section-header__action shrink-0 mt-0.5 sm:mt-0">{action}</div>}
     </div>
   )
 }
@@ -399,7 +399,7 @@ export default function RepairDetailView() {
         <div className="repair-detail__header-row w-full flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
 
           {/* Left: back + title */}
-          <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
+          <div className="repair-detail__identity flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
             <button
               type="button"
               aria-label="Back to repair list"
@@ -408,7 +408,7 @@ export default function RepairDetailView() {
             >
               <Fa icon={faArrowLeft} className="text-sm" />
             </button>
-            <div className="flex items-center gap-2 sm:gap-3 flex-wrap min-w-0">
+            <div className="repair-detail__identity-content flex items-center gap-2 sm:gap-3 flex-wrap min-w-0">
               <h2 className="erp-record-title shrink-0">{r.productName}</h2>
               <StatusChip status={r.status} />
               <span className="hidden md:flex items-center gap-1.5 text-xs font-medium text-[var(--text-3)] min-w-0">
@@ -418,7 +418,7 @@ export default function RepairDetailView() {
                 <span className="text-[var(--border)]">·</span>
                 <span className="text-[var(--text-3)] truncate max-w-[220px]" title={r.issueDescription}>{r.issueDescription || 'Repair assessment'}</span>
               </span>
-              <span className="md:hidden text-xs font-medium text-[var(--text-3)] truncate max-w-full">
+              <span className="repair-detail__mobile-meta md:hidden text-xs font-medium text-[var(--text-3)] truncate max-w-full">
                 <span className="font-mono">{r.ref}</span> · {r.customerName}
               </span>
               {isMyRepair && (
@@ -448,7 +448,7 @@ export default function RepairDetailView() {
           </div>
 
           {/* One primary workflow action + overflow for secondary/danger */}
-          <div className="section-actions flex flex-wrap items-center gap-2 justify-start sm:justify-end shrink-0">
+          <div className="repair-detail__actions section-actions flex flex-wrap items-center gap-2 justify-start sm:justify-end shrink-0">
             {pendingOutsourceJob && r.status === 'in_repair' && (
               <span className="badge badge-amber" title={`Waiting for ${pendingOutsourceJob.ref} to be marked returned`}>
                 Waiting outsource return
