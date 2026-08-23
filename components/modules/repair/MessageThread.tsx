@@ -56,7 +56,7 @@ export default function MessageThread({ repairRef, staffName }: { repairRef: str
   }
 
   return (
-    <div className="bg-[var(--bg-card)] rounded-xl sm:rounded-2xl border border-[var(--border)] shadow-sm border-l-4 border-l-blue-500 flex flex-col overflow-hidden" style={{ height: 'clamp(320px, 44vh, 440px)' }}>
+    <div id="repair-messages" className="repair-message-thread bg-[var(--bg-card)] border border-[var(--border)] flex flex-col overflow-hidden" style={{ height: 'clamp(320px, 44vh, 440px)' }}>
 
       {/* Header */}
       <div className="px-4 sm:px-5 py-3.5 sm:py-4 border-b border-[var(--border)] flex items-center justify-between shrink-0 bg-[var(--bg-card)]">
