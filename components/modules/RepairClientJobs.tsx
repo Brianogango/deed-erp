@@ -6,11 +6,9 @@ import { STATUS_LABELS, STATUS_COLORS } from './repair-config'
 import { fmtKes, fmtDateTime } from '@/lib/store'
 import { printRepairSticker } from '@/lib/repair-sticker'
 import { sortRepairsNewestFirst } from '@/lib/repair-list-sort'
-import { ModuleHeader } from '@/components/ui'
-import { PrimaryActionButton, StatusBadge } from '@/components/erp'
+import { StatusBadge } from '@/components/erp'
 import { Fa } from '@/components/icons'
 import {
-  faTools, faPlus,
   faMapMarkerAlt, faCalendarAlt, faChevronRight,
   faFlag, faPrint,
 } from '@fortawesome/free-solid-svg-icons'
@@ -145,7 +143,6 @@ function MobileRepairCard({ r, onSelect, outsourceJobs }: any) {
 
 export default function RepairClientJobs({ onNewIntake, onSelect }: { onNewIntake: () => void; onSelect: (id: string) => void }) {
   const { visibleRepairs, filter, setFilter, outsourceJobs, currentUser } = useRepair()
-  const canCreateIntake = ['director', 'admin_officer'].includes(currentUser?.role ?? '')
   const repairStats = useMemo(() => [
     {
       label: 'Needs action',
@@ -427,22 +424,6 @@ export default function RepairClientJobs({ onNewIntake, onSelect }: { onNewIntak
 
   return (
     <div className="repair-client-jobs flex flex-col h-full bg-[var(--bg-page)]" style={{ animation: 'fadeIn 0.3s ease both' }}>
-
-      {/* ── Header ── */}
-      <div className="repair-directory-header bg-[var(--bg-card)] border-b border-[var(--border)] flex-shrink-0">
-        <ModuleHeader
-          title="Repair management"
-          subtitle={`${visibleRepairs.length} job${visibleRepairs.length !== 1 ? 's' : ''}`}
-          icon={<Fa icon={faTools} />}
-          count={visibleRepairs.length}
-          color={NAVY}
-          primaryAction={canCreateIntake ? (
-            <PrimaryActionButton icon={<Fa icon={faPlus} />} onClick={onNewIntake} hideLabelOnMobile={false}>
-              New repair
-            </PrimaryActionButton>
-          ) : undefined}
-        />
-      </div>
 
       <div className="repair-metric-strip" aria-label="Repair workload summary">
         {repairStats.map(stat => (
