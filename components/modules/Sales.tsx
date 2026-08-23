@@ -285,11 +285,11 @@ type MoreAction = {
   tone?: 'default' | 'danger'
 }
 
-function MoreActionsMenu({ items, label = 'More' }: { items: MoreAction[]; label?: string }) {
+function MoreActionsMenu({ items, label = 'More', className = '' }: { items: MoreAction[]; label?: string; className?: string }) {
   const [open, setOpen] = useState(false)
   const firstDanger = items.findIndex(i => i.tone === 'danger')
   return (
-    <div className="relative">
+    <div className={`relative ${className}`.trim()}>
       <button
         type="button"
         className="sp-btn flex items-center gap-2"
@@ -1588,7 +1588,7 @@ function SalesContent() {
       />
 
       <div className="mod-body sales-doc-body p-0">
-        <div className="sales-workbench">
+        <div className="sales-workbench" data-sales-view={view}>
           <div className="flex flex-col">
               {/* ── NEW QUOTATION FULL-PAGE FORM ──────────────────────────── */}
               {view === 'new' ? (
@@ -1968,12 +1968,12 @@ function SalesContent() {
                         )}
                       </div>
                     </div>
-                    <div className="sales-proto-actions sales-proto-actions--dock">
+                    <div className="sales-proto-actions sales-proto-actions--dock sales-record-actions">
                       {isQuotationStage(activeOrder.status) && (<>
                           {isQuotationDraft(activeOrder.status) && !activeOrder.locked && (
                             <button
                               type="button"
-                              className={isSaleOrderDraftEditing(activeOrder.id) ? 'sp-btn sp-btn-primary' : 'sp-btn'}
+                              className={`${isSaleOrderDraftEditing(activeOrder.id) ? 'sp-btn sp-btn-primary' : 'sp-btn'} sales-action-save`}
                               onClick={() => {
                                 void (async () => {
                                   // Prefer store row over view snapshot — draft deletes live on saleOrders.
@@ -2021,16 +2021,19 @@ function SalesContent() {
                             </button>
                           )}
                           {activeOrder.status === 'quotation' && (
-                            <button type="button" className="sp-btn sp-btn-primary" disabled={!activeOrder.lines.length || sendingQuoteId === activeOrder.id} onClick={() => openSendQuoteModal(activeOrder)}>
-                              {sendingQuoteId === activeOrder.id ? 'Sending…' : 'Send to customer'}
+                            <button type="button" className="sp-btn sp-btn-primary sales-action-send" disabled={!activeOrder.lines.length || sendingQuoteId === activeOrder.id} onClick={() => openSendQuoteModal(activeOrder)}>
+                              <span className="sales-action-label--full">{sendingQuoteId === activeOrder.id ? 'Sending…' : 'Send to customer'}</span>
+                              <span className="sales-action-label--compact">{sendingQuoteId === activeOrder.id ? 'Sending…' : 'Send'}</span>
                             </button>
                           )}
                           {activeOrder.status === 'quotation_sent' && (
-                            <button type="button" className="sp-btn" disabled={!activeOrder.lines.length || sendingQuoteId === activeOrder.id} onClick={() => openSendQuoteModal(activeOrder)}>
-                              {sendingQuoteId === activeOrder.id ? 'Sending…' : 'Send to customer'}
+                            <button type="button" className="sp-btn sales-action-send" disabled={!activeOrder.lines.length || sendingQuoteId === activeOrder.id} onClick={() => openSendQuoteModal(activeOrder)}>
+                              <span className="sales-action-label--full">{sendingQuoteId === activeOrder.id ? 'Sending…' : 'Send to customer'}</span>
+                              <span className="sales-action-label--compact">{sendingQuoteId === activeOrder.id ? 'Sending…' : 'Send'}</span>
                             </button>
                           )}
                           <MoreActionsMenu
+                            className="sales-action-more"
                             items={[
                               ...(activeOrder.status === 'quotation_sent' ? [
                                 { label: 'Reset to Draft', icon: faRotateLeft, onClick: () => setShowResetDraftConfirm(true) },
@@ -2099,12 +2102,13 @@ function SalesContent() {
                                 ))}
                                 <button
                                   type="button"
-                                  className={activeOrder.status === 'quotation_sent' || saleOrderIsAccepted(activeOrder) ? 'sp-btn sp-btn-primary' : 'sp-btn'}
+                                  className={`${activeOrder.status === 'quotation_sent' || saleOrderIsAccepted(activeOrder) ? 'sp-btn sp-btn-primary' : 'sp-btn'} sales-action-confirm`}
                                   disabled={confirmBlocked}
                                   title={confirmTitle}
                                   onClick={openConfirmQuoteDialog}
                                 >
-                                  {confirmingSO ? 'Confirming…' : 'Confirm quotation'}
+                                  <span className="sales-action-label--full">{confirmingSO ? 'Confirming…' : 'Confirm quotation'}</span>
+                                  <span className="sales-action-label--compact">{confirmingSO ? 'Confirming…' : 'Confirm'}</span>
                                 </button>
                               </>
                             )
@@ -2112,6 +2116,7 @@ function SalesContent() {
                       </>)}
                       {activeOrder.status === 'sale' && (<>
                         <MoreActionsMenu
+                          className="sales-action-more"
                           items={[
                             { label: 'Print', icon: faPrint, onClick: () => previewSalesDocument(activeOrder, 'Sale Order', 'SALES ORDER') },
                             { label: sendingQuoteId === activeOrder.id ? 'Sending…' : 'Send by email', icon: faFileAlt, disabled: sendingQuoteId === activeOrder.id, onClick: () => openSendQuoteModal(activeOrder) },
@@ -2143,7 +2148,7 @@ function SalesContent() {
                         {canInvoiceFromSO && activeOrder.status === 'sale' ? (
                           <button
                             type="button"
-                            className="sp-btn sp-btn-primary"
+                            className="sp-btn sp-btn-primary sales-action-primary"
                             onClick={() => {
                               setInvoiceWizardMode(canCreateInvoiceNow ? 'regular' : 'down_payment_percent')
                               setInvoiceWizardPercent('30')
@@ -2154,7 +2159,7 @@ function SalesContent() {
                             Create invoice
                           </button>
                         ) : (
-                          <button type="button" className="sp-btn sp-btn-primary" onClick={() => void openDeliveryView()}>
+                          <button type="button" className="sp-btn sp-btn-primary sales-action-primary" onClick={() => void openDeliveryView()}>
                             {visibleDeliveries.length === 0 ? 'Create delivery' : 'Delivery'}
                           </button>
                         )}
@@ -2320,24 +2325,32 @@ function SalesContent() {
                         </div>
                       )}
 
-                    <div className="sp-panel sp-panel-pad">
-                      <div className="sp-grid-2">
-                        <div>
+                    <div className="sp-panel sp-panel-pad sales-order-meta-panel">
+                      <div className="sp-grid-2 sales-order-meta-grid">
+                        <div className="sales-order-meta-column sales-order-meta-column--customer">
+                          <div className="sales-order-section-heading">
+                            <span>Customer details</span>
+                            <small>Billing contact</small>
+                          </div>
                           <SalesDocField label="Customer"><input readOnly value={activeOrder.customerName || ''} /></SalesDocField>
                           <SalesDocField label="Contact"><input readOnly value={(() => { const c = customers.find(x => x.id === activeOrder.customerId); return c?.name || '—' })()} /></SalesDocField>
                           <SalesDocField label="Email"><input readOnly value={customers.find(c => c.id === activeOrder.customerId)?.email || '—'} /></SalesDocField>
                           <SalesDocField label="Phone"><input readOnly value={(() => { const c = customers.find(x => x.id === activeOrder.customerId); return c?.phone || c?.mobile || '—' })()} /></SalesDocField>
                         </div>
-                        <div>
+                        <div className="sales-order-meta-column sales-order-meta-column--commercial">
+                          <div className="sales-order-section-heading">
+                            <span>Commercial details</span>
+                            <small>Dates, pricing and ownership</small>
+                          </div>
                           <SalesDocField label="Reference">
-                            <div style={{ fontSize: 12.5, paddingTop: 4, fontVariantNumeric: 'tabular-nums' }}>
+                            <div className="sales-order-reference">
                               <strong>{activeOrder.ref}</strong>
                               {activeOrder.status === 'sale' && activeOrder.quotationRef ? (
-                                <span style={{ display: 'block', marginTop: 2, color: 'var(--sp-text-3)', fontSize: 11.5 }}>
+                                <span className="sales-order-reference-note">
                                   Renamed from {activeOrder.quotationRef} (same document)
                                 </span>
                               ) : isQuotationStage(activeOrder.status) ? (
-                                <span style={{ display: 'block', marginTop: 2, color: 'var(--sp-text-3)', fontSize: 11.5 }}>
+                                <span className="sales-order-reference-note">
                                   Confirm renames to SO/… on this same record
                                 </span>
                               ) : null}
@@ -2434,8 +2447,9 @@ function SalesContent() {
                       )}
 
                       {/* Lines + Summary — prototype tabbed panel */}
-                      <div className="sp-panel" style={{ marginTop: 10 }}>
+                      <div className="sp-panel sales-order-lines-panel" style={{ marginTop: 10 }}>
                         <SalesDocTabs
+                          className="sales-order-section-tabs"
                           tabs={isQuotationStage(activeOrder.status)
                             ? ['Order Lines', 'Terms and Conditions', 'Notes', 'Activities', 'History']
                             : ['Order Lines', 'Delivery and Stock', 'Invoices', ...(canSeeReturns ? ['Returns'] : []), 'Notes', 'History']}
@@ -3490,20 +3504,25 @@ function NewQuotationForm({
           <div className="sub">Customer · lines · terms · send</div>
           </div>
         </div>
-        <div className="sales-proto-actions sales-proto-actions--dock">
+        <div className="sales-proto-actions sales-proto-actions--dock sales-create-actions">
           <MoreActionsMenu
+            className="sales-action-more"
             items={[
               { label: 'Save as draft', icon: faSave, disabled: !canSave, onClick: onSaveDraft },
               { label: 'Discard', icon: faXmark, onClick: onCancel },
             ]}
           />
-          <button type="button" className="sp-btn sp-btn-primary" onClick={onSave} disabled={!canSave}>Submit</button>
+          <button type="button" className="sp-btn sp-btn-primary sales-action-primary" onClick={onSave} disabled={!canSave}>Submit</button>
         </div>
       </div>
 
-      <div className="sp-panel sp-panel-pad">
-        <div className="sp-grid-2">
-          <div>
+      <div className="sp-panel sp-panel-pad sales-order-meta-panel sales-order-meta-panel--new">
+        <div className="sp-grid-2 sales-order-meta-grid">
+          <div className="sales-order-meta-column sales-order-meta-column--customer">
+            <div className="sales-order-section-heading">
+              <span>Customer details</span>
+              <small>Choose the billing contact</small>
+            </div>
             <SalesDocField label="Customer" htmlFor="quote-customer">
               <div className="relative" ref={customerRef}>
                 <div
@@ -3566,7 +3585,11 @@ function NewQuotationForm({
             </SalesDocField>
           </div>
 
-          <div>
+          <div className="sales-order-meta-column sales-order-meta-column--commercial">
+            <div className="sales-order-section-heading">
+              <span>Commercial details</span>
+              <small>Dates, terms and ownership</small>
+            </div>
             <SalesDocField label="Quotation date" htmlFor="quote-date">
               <input id="quote-date" type="date" aria-label="Quotation date" value={new Date().toISOString().slice(0, 10)} readOnly />
             </SalesDocField>
@@ -3644,8 +3667,9 @@ function NewQuotationForm({
         </div>
       </div>
 
-      <div className="sp-panel" style={{ marginTop: 10 }}>
+      <div className="sp-panel sales-order-lines-panel" style={{ marginTop: 10 }}>
         <SalesDocTabs
+          className="sales-order-section-tabs"
           tabs={['Order Lines', 'Optional Products', 'Notes', 'Terms and Conditions', 'Attachments']}
           active={createTab}
           onChange={setCreateTab}
