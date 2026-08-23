@@ -1041,13 +1041,13 @@ function PurchaseContent() {
       </div>
     )}
     {/* List / receipts / bills view */}
-    {subView !== 'form' && <div className="mod-page">
+    {subView !== 'form' && <div className={`mod-page purchase-workspace purchase-workspace--${mainView}`}>
 
       <ModuleHeader
-        title="Purchasing"
-        subtitle="RFQs, orders, receipts and bills"
+        title="Purchases"
+        subtitle="Source, receive and pay with control"
         icon={<Fa icon={faClipboardCheck} />}
-        color="var(--warning)"
+        color="var(--navy)"
         primaryAction={mainView === 'orders' && ['director', 'admin_officer', 'inventory_officer'].includes(currentUser?.role ?? '') ? (
           <PrimaryActionButton icon={<Fa icon={faPlus} />} onClick={() => setShowNewRFQ(true)}>
             New RFQ
@@ -1074,10 +1074,32 @@ function PurchaseContent() {
         maxVisibleMobile={4}
         maxVisibleTablet={4}
         maxVisibleDesktop={4}
-        ariaLabel="Purchasing sections"
+        ariaLabel="Purchase sections"
       />
 
-      <div className="mod-body">
+      <div className="mod-body purchase-body">
+        <section className="purchase-summary" aria-label="Purchase overview">
+          <button type="button" className="purchase-summary__item purchase-summary__item--attention" onClick={() => setMainView('orders')}>
+            <span className="purchase-summary__label">Needs action</span>
+            <strong className="purchase-summary__value tabular-nums">{(stats.rfqs + stats.pendingGRNs).toLocaleString()}</strong>
+            <span className="purchase-summary__hint">RFQs and receipts waiting</span>
+          </button>
+          <button type="button" className="purchase-summary__item" onClick={() => setMainView('orders')}>
+            <span className="purchase-summary__label">Open orders</span>
+            <strong className="purchase-summary__value tabular-nums">{stats.activePOs.toLocaleString()}</strong>
+            <span className="purchase-summary__hint">Confirmed or partially received</span>
+          </button>
+          <button type="button" className="purchase-summary__item" onClick={() => setMainView('receipts')}>
+            <span className="purchase-summary__label">Awaiting receipt</span>
+            <strong className="purchase-summary__value tabular-nums">{stats.pendingGRNs.toLocaleString()}</strong>
+            <span className="purchase-summary__hint">Draft GRNs to validate</span>
+          </button>
+          <button type="button" className="purchase-summary__item purchase-summary__item--money" onClick={() => setMainView('bills')}>
+            <span className="purchase-summary__label">Bills due</span>
+            <strong className="purchase-summary__value purchase-summary__value--money">{fmtKes(stats.unpaid)}</strong>
+            <span className="purchase-summary__hint">Outstanding vendor balance</span>
+          </button>
+        </section>
 
       <TabContent active={true}>
 
