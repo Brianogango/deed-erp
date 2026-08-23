@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react'
 import type { Contact } from '@/lib/store'
 import { useCrmStore } from '@/lib/store'
-import { Modal, Field, Input, Select, Textarea } from '@/components/ui'
+import { SlidePanel, Field, Input, Select, Textarea } from '@/components/ui'
 import { Fa, faBuilding, faUser } from '@/components/icons'
 
 function focusFieldControl(fieldId: string) {
@@ -62,9 +62,8 @@ export function blankIndividualContact(overrides: Partial<ContactFormValues> = {
 
 function SectionLabel({ label }: { label: string }) {
   return (
-    <div className="col-span-2 flex items-center gap-2 mt-1">
-      <span className="text-[10px] uppercase tracking-wider font-semibold" style={{ color: 'var(--text-3)' }}>{label}</span>
-      <div className="flex-1 h-px" style={{ background: 'var(--border-lt)' }} />
+    <div className="contacts-form-section-label">
+      <span>{label}</span>
     </div>
   )
 }
@@ -176,25 +175,20 @@ export default function ContactFormModal({
   }
 
   return (
-    <Modal
-      title={editId ? `Edit — ${form.name || 'Contact'}` : form.type === 'company' ? 'New Company' : 'New Individual'}
-      width={680}
+    <SlidePanel
+      title={editId ? `Edit ${form.name || 'contact'}` : 'Add contact'}
+      subtitle={editId ? 'Update contact information' : 'Create a company or individual record'}
       onClose={onClose}
     >
+      <div className="contacts-form-sheet">
       {!editId && (
-        <div className="grid grid-cols-2 gap-2 mb-1">
+        <div className="contacts-type-switch" role="group" aria-label="Contact type">
           {(['company', 'individual'] as const).map(t => (
             <button
               key={t}
               type="button"
               onClick={() => switchType(t)}
-              className="py-2.5 rounded-lg text-xs font-medium cursor-pointer"
-              style={{
-                background: form.type === t ? '#E8F3FA' : 'var(--bg-surface)',
-                color: form.type === t ? 'var(--navy)' : 'var(--text-3)',
-                border: form.type === t ? '1px solid #A8D4E8' : '1px solid var(--border-lt)',
-                fontWeight: form.type === t ? 600 : 400,
-              }}
+              className={form.type === t ? 'is-active' : ''}
             >
               {t === 'company'
                 ? <><Fa icon={faBuilding} /> Company / Organisation</>
@@ -204,7 +198,14 @@ export default function ContactFormModal({
         </div>
       )}
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3">
+      <nav className="contacts-form-steps" aria-label="Contact form sections">
+        <span className="is-active"><b>1</b> Basic</span>
+        <span><b>2</b> Contact</span>
+        <span><b>3</b> Business</span>
+        <span><b>4</b> Notes</span>
+      </nav>
+
+      <div className="contacts-form-grid">
         <SectionLabel label="Basic Information" />
 
         {form.type === 'company' ? (
@@ -281,34 +282,30 @@ export default function ContactFormModal({
         <Field label="City"><Input value={form.city ?? ''} onChange={f('city')} placeholder="e.g. Nairobi" /></Field>
         <Field label="Country"><Input value={form.country ?? ''} onChange={f('country')} placeholder="e.g. Kenya" /></Field>
 
-        <SectionLabel label="Classification" />
+        <SectionLabel label="Business relationship" />
 
-        <div className="sm:col-span-2 flex gap-6 py-1">
-          <label className="flex items-center gap-2 text-xs cursor-pointer select-none">
+        <div className="contacts-relationship-options">
+          <label className={form.isCustomer ? 'is-selected' : ''}>
             <input
               type="checkbox"
               checked={form.isCustomer}
               disabled={forceCustomer}
               onChange={e => f('isCustomer')(e.target.checked)}
-              style={{ accentColor: 'var(--navy)', width: 14, height: 14 }}
             />
-            <span className="text-t1">Is a Customer</span>
-            <span className="text-t3 text-[10px]">(buys from us)</span>
+            <span><strong>Customer</strong><small>Buys from us</small></span>
           </label>
-          <label className="flex items-center gap-2 text-xs cursor-pointer select-none">
+          <label className={form.isVendor ? 'is-selected' : ''}>
             <input
               type="checkbox"
               checked={form.isVendor}
               disabled={forceVendor}
               onChange={e => f('isVendor')(e.target.checked)}
-              style={{ accentColor: 'var(--navy)', width: 14, height: 14 }}
             />
-            <span className="text-t1">Is a Vendor</span>
-            <span className="text-t3 text-[10px]">(supplies to us)</span>
+            <span><strong>Vendor</strong><small>Supplies to us</small></span>
           </label>
         </div>
 
-        <SectionLabel label="Financial & Banking" />
+        <SectionLabel label="Payment settings" />
 
         <Field
           label="Payment Terms (days)"
@@ -323,25 +320,30 @@ export default function ContactFormModal({
         <Field label="Credit Limit (KES)">
           <Input value={String(form.creditLimit ?? '')} onChange={v => f('creditLimit')(Number(v) || 0)} placeholder="e.g. 500000" />
         </Field>
-        <Field label="Bank Name"><Input value={form.bankName ?? ''} onChange={f('bankName')} placeholder="e.g. Equity Bank" /></Field>
-        <Field label="Account Number"><Input value={form.bankAccount ?? ''} onChange={f('bankAccount')} placeholder="e.g. 0110123456" /></Field>
-        <div className="sm:col-span-2">
-          <Field label="Branch"><Input value={form.bankBranch ?? ''} onChange={f('bankBranch')} placeholder="e.g. Westlands Branch" /></Field>
-        </div>
+        <details className="contacts-form-optional">
+          <summary>Banking details <span>Optional</span></summary>
+          <div className="contacts-form-optional__grid">
+            <Field label="Bank Name"><Input value={form.bankName ?? ''} onChange={f('bankName')} placeholder="e.g. Equity Bank" /></Field>
+            <Field label="Account Number"><Input value={form.bankAccount ?? ''} onChange={f('bankAccount')} placeholder="e.g. 0110123456" /></Field>
+            <Field label="Branch"><Input value={form.bankBranch ?? ''} onChange={f('bankBranch')} placeholder="e.g. Westlands Branch" /></Field>
+          </div>
+        </details>
 
-        <SectionLabel label="Notes" />
-
-        <div className="sm:col-span-2">
-          <Textarea value={form.notes ?? ''} onChange={f('notes')} placeholder="Any additional notes about this contact..." rows={3} />
-        </div>
+        <details className="contacts-form-optional">
+          <summary>Internal notes <span>Optional</span></summary>
+          <div className="contacts-form-optional__body">
+            <Textarea value={form.notes ?? ''} onChange={f('notes')} placeholder="Preferences, context or other useful notes..." rows={3} />
+          </div>
+        </details>
       </div>
 
-      <div className="flex flex-col sm:flex-row gap-2 justify-end pt-3">
-        <button type="button" className="btn-outline w-full sm:w-auto" onClick={onClose} disabled={saving}>Cancel</button>
-        <button type="button" className="btn-primary w-full sm:w-auto" onClick={() => void save()} disabled={saving}>
+      <div className="contacts-form-footer">
+        <button type="button" className="btn-outline" onClick={onClose} disabled={saving}>Cancel</button>
+        <button type="button" className="btn-primary" onClick={() => void save()} disabled={saving}>
           {saving ? 'Saving…' : editId ? 'Save Changes' : form.type === 'company' ? 'Create Company' : 'Create Contact'}
         </button>
       </div>
-    </Modal>
+      </div>
+    </SlidePanel>
   )
 }
