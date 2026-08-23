@@ -1094,7 +1094,7 @@ export default function Topbar() {
           </button>
         </div>
       )}
-      <header className={`app-topbar ${pathname?.startsWith('/sales') ? 'app-topbar--sales' : ''}
+      <header className={`app-topbar ${pathname?.startsWith('/sales') ? 'app-topbar--sales' : ''} ${pathname?.startsWith('/finance') || pathname?.startsWith('/accounting') ? 'app-topbar--finance' : ''}
         flex items-center gap-2 sm:gap-3 md:gap-4 px-3 sm:px-4 md:px-5 py-0 flex-shrink-0
         border-b border-[var(--topbar-border)]
         bg-[var(--topbar-bg)] h-14
