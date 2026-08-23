@@ -1287,6 +1287,7 @@ export default function RepairDetailView() {
 
           {/* ═══ Right Column ═══ */}
           <aside className="repair-detail__aside lg:col-span-4">
+            <span id="repair-delivery" className="sr-only" aria-hidden="true" />
 
             {/* Follow-up Portal */}
             <div className="relative rounded-xl sm:rounded-2xl overflow-hidden shadow-sm border" style={{ borderColor: 'var(--border)', background: 'var(--navy)' }}>
