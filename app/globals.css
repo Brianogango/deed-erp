@@ -15302,3 +15302,54 @@ main#main-content:has(.sales-pilot.sales-doc) > .min-w-0 {
     border-bottom: 0;
   }
 }
+
+
+.repair-message-thread {
+  scroll-margin-top: 170px;
+  border-color: var(--repair-border) !important;
+  border-left-width: 1px !important;
+  border-radius: 8px !important;
+  box-shadow: none !important;
+}
+
+.repair-message-thread > div:first-child {
+  min-height: 50px;
+  padding: 10px 14px;
+}
+
+.repair-message-thread > div:first-child > div > div:first-child {
+  width: 30px;
+  height: 30px;
+  border: 1px solid #d6e4ed;
+  border-radius: 7px;
+  background: #edf5f9 !important;
+  box-shadow: none;
+}
+
+.repair-message-thread > div:first-child svg {
+  color: var(--repair-navy) !important;
+}
+
+.repair-message-thread h3 {
+  color: var(--repair-text) !important;
+  font-size: 12px !important;
+  font-weight: 750 !important;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+}
+
+.repair-message-thread input {
+  min-height: 42px;
+  border-color: var(--repair-border-strong) !important;
+  border-radius: 7px !important;
+  background: #fff !important;
+  box-shadow: none !important;
+  font-size: 13px !important;
+}
+
+@media (max-width: 639px) {
+  .repair-message-thread {
+    min-height: 360px;
+    scroll-margin-top: 12px;
+  }
+}
