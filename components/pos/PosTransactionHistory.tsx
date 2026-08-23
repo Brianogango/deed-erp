@@ -28,7 +28,7 @@ export function PosTransactionHistory({
   const rows = useMemo(() => filterPosHistoryOrders(orders, query, serials), [orders, query, serials])
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="pos-history">
       <SearchInput
         value={query}
         onChange={setQuery}
@@ -40,11 +40,11 @@ export function PosTransactionHistory({
       {rows.length === 0 ? (
         <p className="py-6 text-center text-xs text-t3">No transactions found.</p>
       ) : (
-        <ul className="flex flex-col gap-2">
+        <ul className="pos-history-list">
           {rows.map(order => (
             <li
               key={order.id}
-              className="rounded-xl border border-border bg-surface px-3 py-2.5"
+              className="pos-history-row"
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
@@ -68,7 +68,7 @@ export function PosTransactionHistory({
                   <p className="font-mono text-[13px] font-bold text-[var(--success)]">{fmtKes(order.total)}</p>
                   <button
                     type="button"
-                    className="btn-secondary text-[10px] py-1"
+                    className="pos-history-reprint"
                     onClick={() => onReprint(order)}
                   >
                     <Fa icon={faPrint} /> Reprint
