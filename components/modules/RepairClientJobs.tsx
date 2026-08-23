@@ -142,7 +142,7 @@ function MobileRepairCard({ r, onSelect, outsourceJobs }: any) {
 }
 
 export default function RepairClientJobs({ onSelect }: { onSelect: (id: string) => void }) {
-  const { visibleRepairs, filter, setFilter, outsourceJobs, currentUser } = useRepair()
+  const { visibleRepairs, filter, setFilter, outsourceJobs } = useRepair()
   const repairStats = useMemo(() => [
     {
       label: 'Needs action',
