@@ -917,7 +917,7 @@ export function Dashboard() {
       {/* ── P4 · Shortcuts & activity ────────────────────────────────────── */}
       <SectionLabel label="Work faster" />
       <div className="dashboard-bottom-grid">
-        <section className="dashboard-panel overflow-hidden lg:col-span-8">
+        <section className="dashboard-panel overflow-hidden">
           <CardHeader title="Quick actions" sub="Shortcuts selected for your role and permissions" />
           <div className="dashboard-quick-actions-grid">
             {quickActions.map(action => (
@@ -939,7 +939,7 @@ export function Dashboard() {
           </div>
         </section>
 
-        <div className="lg:col-span-4 flex flex-col gap-2.5 sm:gap-5">
+        <div className="dashboard-bottom-side">
           <section className="dashboard-panel overflow-hidden">
             <CardHeader title="My self-service" sub="Your personal workspace" />
             <div className="p-2.5 sm:p-4 grid grid-cols-2 gap-1.5 sm:gap-2.5">
