@@ -1229,7 +1229,7 @@ function AccountingContent() {
 
   return (
     <AccountingProvider value={ctxValue as any}>
-      <div className="mod-page finance-workspace" data-finance-tab={tab}>
+      <div className="mod-page finance-workspace finance-workspace--accounts" data-finance-tab={tab}>
         <ModuleHeader
           title={financeHeader[tab].title}
           subtitle={financeHeader[tab].subtitle}
@@ -1311,10 +1311,10 @@ function AccountingContent() {
           ariaLabel="Accounting sections"
         />
 
-        <div className="mod-body">
+        <div className="mod-body finance-workspace__body">
         {tab === 'reports' && (
-          <div className="mb-3 space-y-2">
-            <div className="rounded-xl border border-border-lt bg-card p-2">
+          <div className="finance-report-command mb-3 space-y-2">
+            <div className="finance-report-tabs rounded-xl border border-border-lt bg-card p-2">
               <div className="px-1 pb-1 text-xs font-semibold text-text-3">Reports</div>
               <TabBar
                 tabs={REPORT_TABS.map(t => ({ id: t.id, label: t.label }))}
@@ -1329,7 +1329,7 @@ function AccountingContent() {
             </div>
             {journalSot && (
               <div
-                className={`rounded-xl border px-3 py-2 text-xs ${
+                className={`finance-sot-notice rounded-xl border px-3 py-2 text-xs ${
                   journalSot.certified
                     ? 'border-emerald-200 bg-emerald-50 text-emerald-950'
                     : 'border-amber-200 bg-amber-50 text-amber-950'
@@ -1361,7 +1361,7 @@ function AccountingContent() {
           </div>
         )}
         {/* ── Tab Content ────────────────────────────────────────────────────── */}
-        <div className={`card overflow-hidden rounded-xl finance-content-card finance-content-card--${tab}`}>
+        <div className={`card overflow-hidden rounded-xl finance-content-card finance-subcomponent-shell finance-content-card--${tab}`}>
           {tab === 'invoices' || tab === 'bills' ? (
             <div className="flex flex-col">
               <DataTable
@@ -1528,19 +1528,19 @@ function AccountingContent() {
               />
             </div>
           ) : tab === 'credits' ? (
-            <CustomerCreditsTab />
+            <div className="finance-subview finance-subview--credits"><CustomerCreditsTab /></div>
           ) : tab === 'commissions' ? (
-            <CommissionsTab />
+            <div className="finance-subview finance-subview--commissions"><CommissionsTab /></div>
           ) : tab === 'journals' ? (
-            <JournalsTab />
+            <div className="finance-subview finance-subview--journals"><JournalsTab /></div>
           ) : tab === 'coa' ? (
-            <ChartOfAccountsTab />
+            <div className="finance-subview finance-subview--coa"><ChartOfAccountsTab /></div>
           ) : tab === 'gl' ? (
-            <GeneralLedgerTab />
+            <div className="finance-subview finance-subview--ledger"><GeneralLedgerTab /></div>
           ) : tab === 'partner_ledger' ? (
-            <PartnerLedgerTab />
+            <div className="finance-subview finance-subview--partner-ledger"><PartnerLedgerTab /></div>
           ) : tab === 'migration' ? (
-            <div className="p-4 sm:p-6 space-y-5">
+            <div className="finance-subview finance-subview--migration p-4 sm:p-6 space-y-5">
               <div className="rounded-2xl border border-blue-200 bg-blue-50 p-4">
                 <p className="text-[10px] uppercase tracking-widest font-black text-blue-700">Old system migration</p>
                 <h2 className="text-base font-extrabold text-blue-950 mt-1">Import contacts, invoices, bills, and opening balances</h2>
@@ -1603,7 +1603,6 @@ function AccountingContent() {
                   <p className="text-xs text-[var(--text-3)] mt-1">
                     Operational estimate from invoices / POS / expenses. Official books: Accounting → P&amp;L (Prisma).
                   </p>
-                  <p className="text-xs text-[var(--text-3)] mt-1">Sales by category, estimated profit, expenses, supplier bills, and collections.</p>
                   <p className="text-xs text-[var(--text-3)] mt-1">Sales by category, estimated profit, expenses, supplier bills, and collections.</p>
                 </div>
                 <div className="flex flex-col sm:flex-row gap-2 sm:items-end">
@@ -2066,7 +2065,7 @@ function AccountingContent() {
               )}
             </div>
           ) : activeTab === 'ageing' ? (
-            <AgeingTab customerInvoices={customerInvoices} vendorBills={vendorBills} />
+            <div className="finance-subview finance-subview--ageing"><AgeingTab customerInvoices={customerInvoices} vendorBills={vendorBills} /></div>
           ) : activeTab === 'trial_balance' ? (
             <div className="p-6">
               <div className="flex items-center justify-between mb-5 gap-3 flex-wrap">
@@ -2164,7 +2163,7 @@ function AccountingContent() {
           ) : activeTab === 'fx' ? (
             <FxRevaluationPanel showToast={showToast} />
           ) : (
-            <CashbookTab accounts={accounts} />
+            <div className="finance-subview finance-subview--cashbook"><CashbookTab accounts={accounts} /></div>
           )}
         </div>
 
@@ -2177,7 +2176,7 @@ function AccountingContent() {
           const bulkPartnerLabel = tab === 'invoices' ? 'Customer' : 'Vendor'
           return (
             <Modal title={`Pay ${selItems.length} ${bulkLabel}${selItems.length !== 1 ? 's' : ''}`} subtitle={`Total outstanding: ${fmtKes(totalOutstanding)}`} onClose={() => setShowBulkPayModal(false)} width={500}>
-              <div className="flex flex-col gap-4">
+              <div className="finance-payment-dialog flex flex-col gap-4">
                 {/* Item list */}
                 <div className="rounded-xl border border-[var(--border-lt)] overflow-hidden">
                   <div className="bg-[var(--bg-surface)] px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)] grid grid-cols-3 gap-2">
@@ -2258,8 +2257,8 @@ function AccountingContent() {
             onClose={resetInvForm}
             width={980}
           >
-            <div className="flex flex-col min-h-[560px]">
-              <div className="p-4 -mx-6 -mt-6 mb-6 border-b border-[var(--border-lt)] bg-[var(--bg-surface)] flex items-center justify-between gap-3">
+            <div className="finance-document-editor flex flex-col min-h-[560px]">
+              <div className="finance-document-editor__intro p-4 -mx-6 -mt-6 mb-6 border-b border-[var(--border-lt)] bg-[var(--bg-surface)] flex items-center justify-between gap-3">
                 <div>
                   <p className="text-[10px] uppercase tracking-widest font-black text-primary-600">
                     {tab === 'bills' ? 'Accounts Payable' : 'Accounts Receivable'}
@@ -2277,7 +2276,7 @@ function AccountingContent() {
               </div>
 
               <div className="flex flex-col gap-6">
-              <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
+              <div className="finance-document-editor__meta grid grid-cols-1 lg:grid-cols-4 gap-4">
                 {editingInvId && newPartnerId && !changingPartner ? (
                   <div className="lg:col-span-2">
                   <Field label={tab === 'bills' ? 'Vendor *' : 'Customer *'}>
@@ -2346,7 +2345,7 @@ function AccountingContent() {
               </div>
 
               {newPartnerId && (
-                <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 flex items-center justify-between gap-3">
+                <div className="finance-document-editor__partner rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 flex items-center justify-between gap-3">
                   <div>
                     <p className="text-[10px] uppercase tracking-widest font-black text-emerald-700">
                       Selected {tab === 'bills' ? 'vendor' : 'customer'}
@@ -2368,7 +2367,7 @@ function AccountingContent() {
                 </div>
               )}
 
-              <div className="flex flex-col gap-3">
+              <div className="finance-document-editor__lines flex flex-col gap-3">
                 <div className="flex items-center justify-between gap-3">
                   <div>
                     <h4 className="text-sm font-bold text-[var(--text-1)]">Line Items</h4>
@@ -2548,8 +2547,8 @@ function AccountingContent() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <div className="flex flex-col gap-4">
+              <div className="finance-document-editor__support-grid grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div className="finance-document-editor__support flex flex-col gap-4">
                   <label className="flex items-center gap-2 cursor-pointer select-none rounded-xl border border-[var(--border-lt)] bg-[var(--bg-surface)] px-4 py-3">
                     <input
                       type="checkbox"
@@ -2582,7 +2581,7 @@ function AccountingContent() {
                   )}
                 </div>
 
-                <div className="card p-5 bg-[var(--bg-surface)] border-[var(--border-lt)]">
+                <div className="finance-document-editor__summary card p-5 bg-[var(--bg-surface)] border-[var(--border-lt)]">
                   <div className="flex items-center justify-between mb-4">
                     <h4 className="text-xs font-bold text-[var(--text-2)]">Summary</h4>
                     <Badge status={invoicePreview.canSave ? 'paid' : 'warning'} label={invoicePreview.canSave ? 'Ready' : 'Incomplete'} />
@@ -2608,7 +2607,7 @@ function AccountingContent() {
                 </div>
               </div>
 
-              <div className="flex items-center justify-between pt-4 border-t border-[var(--border-lt)]">
+              <div className="finance-document-editor__footer flex items-center justify-between pt-4 border-t border-[var(--border-lt)]">
                 <button className="btn-outline text-xs cursor-pointer" onClick={resetInvForm}>Discard</button>
                 <button
                   className="btn-primary flex items-center gap-2 text-xs disabled:opacity-50 disabled:cursor-not-allowed"
