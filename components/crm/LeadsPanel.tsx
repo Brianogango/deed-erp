@@ -334,12 +334,12 @@ export default function LeadsPanel({
   const detailAttachments = Array.isArray(detail?.emailAttachments) ? detail!.emailAttachments! : []
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex justify-end">
+    <div className="crm-leads-panel flex flex-col gap-4">
+      <div className="crm-submodule-actions">
         <PrimaryActionButton onClick={() => setShowForm(true)}>+ New lead</PrimaryActionButton>
       </div>
 
-      <div className="card overflow-hidden">
+      <div className="card overflow-hidden crm-directory-card">
         <DataTable
           tableId="crm-leads"
           columns={columns}
@@ -350,6 +350,36 @@ export default function LeadsPanel({
           emptyMessage="No leads yet"
           exportTitle="Leads"
           exportFilename="leads"
+          renderCard={row => (
+            <article className="crm-lead-card" onClick={() => setDetail(row)}>
+              <div className="crm-lead-card__header">
+                <div>
+                  <span>{row.source?.replace(/_/g, ' ') || 'Lead'}</span>
+                  <h3>{row.name}</h3>
+                  <p>{row.companyName || 'Company not set'}</p>
+                </div>
+                <em>{row.stage.replace(/_/g, ' ')}</em>
+              </div>
+              <dl className="crm-lead-card__facts">
+                <div><dt>Owner</dt><dd>{ownerLabel(row, salesReps)}</dd></div>
+                <div><dt>Contact</dt><dd>{row.email || row.phone || 'Not provided'}</dd></div>
+                <div><dt>Created</dt><dd>{fmtDate(row.createdAt.slice(0, 10))}</dd></div>
+              </dl>
+              <div className="crm-lead-card__actions">
+                <button type="button" className="btn-outline" onClick={event => { event.stopPropagation(); setDetail(row) }}>Review</button>
+                {row.stage !== 'converted' && row.stage !== 'lost' && (
+                  <button
+                    type="button"
+                    className="btn-primary"
+                    disabled={convertingId === row.id || deletingId === row.id}
+                    onClick={event => { event.stopPropagation(); void convertLead(row.id) }}
+                  >
+                    {convertingId === row.id ? 'Converting…' : 'Convert'}
+                  </button>
+                )}
+              </div>
+            </article>
+          )}
           rowActions={row => (
             <div className="flex items-center gap-1">
               <button
