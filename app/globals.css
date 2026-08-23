@@ -15647,3 +15647,323 @@ main#main-content:has(.sales-pilot.sales-doc) > .min-w-0 {
   }
 }
 
+/* Repair mobile corrections — balanced content and contained actions */
+@media (max-width: 639px) {
+  .repair-workspace,
+  .repair-list-shell,
+  .repair-client-jobs,
+  .repair-detail,
+  .repair-detail__body,
+  .repair-detail__grid,
+  .repair-detail__main,
+  .repair-detail__aside {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+  }
+
+  .repair-module-header .mod-header {
+    display: grid;
+    min-height: 68px;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 10px;
+    padding: 10px var(--repair-mobile-gutter);
+  }
+
+  .repair-module-header .mod-header > div:first-child {
+    width: auto;
+    min-width: 0;
+    gap: 0;
+  }
+
+  .repair-module-header .mod-header > div:first-child > div:last-child {
+    min-width: 0;
+  }
+
+  .repair-module-header .erp-module-title,
+  .repair-module-header h1,
+  .repair-module-header .mod-title {
+    overflow: visible;
+    font-size: clamp(18px, 5.2vw, 21px);
+    line-height: 1.12;
+    text-overflow: clip;
+    white-space: normal;
+  }
+
+  .repair-module-header .mod-header-subtitle,
+  .repair-module-header .erp-module-subtitle {
+    display: block !important;
+    margin-top: 3px;
+    color: var(--repair-muted);
+    font-size: 11px;
+    line-height: 1.2;
+  }
+
+  .repair-module-header .mod-header > .section-actions {
+    width: auto;
+    min-width: 0;
+    justify-self: end;
+  }
+
+  .repair-module-header .btn-primary,
+  .repair-workspace .primary-action-button {
+    width: auto;
+    min-width: 108px;
+    min-height: 42px;
+    justify-content: center;
+    padding-inline: 12px;
+    white-space: nowrap;
+  }
+
+  .repair-detail {
+    overflow-x: clip;
+    padding-bottom: 24px;
+  }
+
+  .repair-detail__header {
+    position: relative;
+    overflow: visible;
+  }
+
+  .repair-detail__header-row {
+    display: grid !important;
+    width: 100%;
+    grid-template-columns: minmax(0, 1fr);
+    align-items: stretch;
+    gap: 10px;
+    padding: 10px var(--repair-mobile-gutter) 12px;
+  }
+
+  .repair-detail__identity {
+    display: grid !important;
+    width: 100%;
+    min-width: 0;
+    grid-template-columns: 42px minmax(0, 1fr);
+    align-items: start !important;
+    gap: 10px;
+  }
+
+  .repair-detail__identity-content {
+    display: flex !important;
+    width: 100%;
+    min-width: 0;
+    align-items: center;
+    gap: 6px 8px !important;
+  }
+
+  .repair-detail__header .erp-record-title {
+    order: 1;
+    width: 100%;
+    max-width: none;
+    flex: 0 0 100%;
+    font-size: clamp(18px, 5.4vw, 22px);
+    line-height: 1.14;
+    overflow-wrap: anywhere;
+  }
+
+  .repair-detail__mobile-meta {
+    order: 2;
+    width: 100%;
+    max-width: none;
+    flex: 0 0 100%;
+    overflow: visible;
+    color: var(--repair-muted);
+    line-height: 1.3;
+    text-overflow: clip;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .repair-detail__identity-content > .status-badge,
+  .repair-detail__identity-content > .badge {
+    order: 3;
+  }
+
+  .repair-detail__identity-content > span:not(.repair-detail__mobile-meta) {
+    order: 4;
+    max-width: 100%;
+  }
+
+  .repair-detail__header button[aria-label="Back to repair list"] {
+    width: 42px;
+    height: 42px;
+  }
+
+  .repair-detail__header .repair-detail__actions {
+    position: static;
+    inset: auto;
+    z-index: auto;
+    display: flex;
+    width: 100%;
+    min-width: 0;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 8px;
+    border: 0;
+    border-top: 1px solid var(--repair-border);
+    border-radius: 0;
+    background: transparent;
+    padding: 10px 0 0 52px;
+    box-shadow: none;
+  }
+
+  .repair-detail__actions > .repair-action-btn {
+    width: auto;
+    max-width: 100%;
+    min-height: 42px;
+    flex: 0 1 auto;
+    justify-content: center;
+    padding-inline: 12px;
+    font-size: 12px;
+  }
+
+  .repair-detail__actions > .repair-action-btn > span {
+    display: inline !important;
+  }
+
+  .repair-detail__actions > button:not(.repair-action-btn) {
+    max-width: calc(100% - 96px);
+    min-width: 0;
+    overflow: hidden;
+    flex: 0 1 auto;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .repair-detail__actions > div.relative {
+    flex: 0 0 auto;
+    margin-left: auto;
+  }
+
+  .repair-detail__actions > div.relative > .erp-action-btn {
+    min-width: 88px;
+    min-height: 42px;
+    justify-content: center;
+  }
+
+  .repair-detail__progress,
+  .repair-detail__summary,
+  .repair-detail__tabs,
+  .repair-detail__body {
+    width: auto;
+    max-width: none;
+    margin-right: var(--repair-mobile-gutter);
+    margin-left: var(--repair-mobile-gutter);
+  }
+
+  .repair-detail__tabs {
+    margin-right: 0;
+    margin-left: 0;
+    padding-inline: var(--repair-mobile-gutter);
+  }
+
+  .repair-detail__body {
+    padding-bottom: 0;
+  }
+
+  .repair-detail__grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .repair-section-card {
+    width: 100%;
+    min-width: 0;
+    overflow: hidden;
+  }
+
+  .repair-section-header {
+    display: grid !important;
+    width: 100%;
+    min-width: 0;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center !important;
+    gap: 8px;
+  }
+
+  .repair-section-header > div:first-child {
+    min-width: 0;
+  }
+
+  .repair-section-header__action {
+    min-width: 0;
+    max-width: 48vw;
+  }
+
+  .repair-section-header__action > * {
+    max-width: 100%;
+  }
+
+  .repair-section-header__action span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .repair-section-card .grid-cols-2,
+  .repair-section-card .sm\:grid-cols-3 {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    column-gap: 14px !important;
+    row-gap: 14px !important;
+  }
+
+  .repair-info-field {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .repair-info-field > p {
+    max-width: 100%;
+    font-size: 12px !important;
+  }
+
+  body:has(.repair-workspace--detail) .tab-overflow-menu[aria-label="More repair actions"] {
+    position: fixed !important;
+    top: auto !important;
+    right: var(--repair-mobile-gutter) !important;
+    bottom: max(var(--repair-mobile-gutter), env(safe-area-inset-bottom)) !important;
+    left: var(--repair-mobile-gutter) !important;
+    z-index: 1000 !important;
+    display: grid;
+    width: auto !important;
+    min-width: 0 !important;
+    max-width: none !important;
+    max-height: min(68dvh, 520px) !important;
+    gap: 2px;
+    overflow-y: auto !important;
+    overscroll-behavior: contain;
+    border: 1px solid var(--repair-border-strong);
+    border-radius: 12px;
+    background: #fff;
+    padding: 8px;
+    box-shadow: 0 18px 48px rgba(6, 27, 79, 0.2);
+  }
+
+  body:has(.repair-workspace--detail) .tab-overflow-menu[aria-label="More repair actions"] .tab-overflow-item {
+    width: 100%;
+    min-height: 44px;
+    border-radius: 7px;
+    padding: 10px 12px;
+    font-size: 13px;
+    text-align: left;
+  }
+}
+
+@media (max-width: 359px) {
+  .repair-module-header .btn-primary,
+  .repair-workspace .primary-action-button {
+    min-width: 92px;
+    padding-inline: 9px;
+  }
+
+  .repair-detail__header .repair-detail__actions {
+    padding-left: 0;
+  }
+
+  .repair-section-card .grid-cols-2,
+  .repair-section-card .sm\:grid-cols-3,
+  .repair-detail__summary {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+}
+
