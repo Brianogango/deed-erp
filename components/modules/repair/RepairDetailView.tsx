@@ -409,16 +409,17 @@ export default function RepairDetailView() {
               <Fa icon={faArrowLeft} className="text-sm" />
             </button>
             <div className="flex items-center gap-2 sm:gap-3 flex-wrap min-w-0">
-              <h2 className="erp-record-title font-mono shrink-0">{r.ref}</h2>
+              <h2 className="erp-record-title shrink-0">{r.productName}</h2>
               <StatusChip status={r.status} />
               <span className="hidden md:flex items-center gap-1.5 text-xs font-medium text-[var(--text-3)] min-w-0">
+                <span className="font-mono text-[var(--text-2)] font-semibold truncate max-w-[150px]">{r.ref}</span>
                 <span className="text-[var(--border)]">·</span>
-                <span className="text-[var(--text-1)] font-semibold truncate max-w-[140px]">{r.customerName}</span>
+                <span className="text-[var(--text-1)] font-semibold truncate max-w-[180px]">{r.customerName}</span>
                 <span className="text-[var(--border)]">·</span>
-                <span className="text-[var(--primary)] truncate max-w-[140px]" title={r.productName}>{r.productName}</span>
+                <span className="text-[var(--text-3)] truncate max-w-[220px]" title={r.issueDescription}>{r.issueDescription || 'Repair assessment'}</span>
               </span>
               <span className="md:hidden text-xs font-medium text-[var(--text-3)] truncate max-w-full">
-                {r.customerName} · <span className="text-[var(--primary)]">{r.productName}</span>
+                <span className="font-mono">{r.ref}</span> · {r.customerName}
               </span>
               {isMyRepair && (
                 <span className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-[var(--success-bg)] text-[var(--success-text)] text-[11px] font-semibold">
