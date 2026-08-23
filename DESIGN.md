@@ -49,34 +49,12 @@ typography:
     fontSize: "9px"
     fontWeight: 600
     lineHeight: 1.2
-  topbar:
-    fontFamily: "var(--font-inter), Inter, system-ui, sans-serif"
-    fontSize: "14px"
-    fontWeight: 650
-    lineHeight: 1.3
-  breadcrumb:
-    fontFamily: "var(--font-inter), Inter, system-ui, sans-serif"
-    fontSize: "18px"
-    fontWeight: 400
-    lineHeight: 1.2
-  document:
-    fontFamily: "var(--font-inter), Inter, system-ui, sans-serif"
-    fontSize: "26px"
-    fontWeight: 700
-    lineHeight: 1.15
-  total:
-    fontFamily: "var(--font-inter), Inter, system-ui, sans-serif"
-    fontSize: "16px"
-    fontWeight: 750
-    lineHeight: 1.2
   mono:
     fontFamily: "var(--font-dm-mono), ui-monospace, monospace"
     fontSize: "12px"
     fontWeight: 500
     lineHeight: 1.3
 rounded:
-  xs: "4px"
-  pill: "10px"
   sm: "0.5rem"
   md: "0.75rem"
   lg: "1rem"
@@ -108,9 +86,9 @@ components:
 
 ## Overview
 
-Deed ERP is an **Operate**-mode product UI: dense tables, document steppers, role-gated actions. Visual authority lives in `app/globals.css` CSS variables, shared `components/ui` + `components/erp` + `components/data-table`.
+Deed ERP is an **Operate**-mode product UI: dense tables, document steppers, role-gated actions. Visual authority lives in `app/globals.css` CSS variables, shared `components/ui` + `components/erp` + `components/data-table`, and module pilots (Sales navy command + Deed blue; Inventory navy + cyan).
 
-**Sales** uses Odoo’s operate grammar (control panel, search view, dense list, form sheet, statusbar, chatter) with Deed navy + cyan. Inventory may keep its navy command band until it is migrated.
+This file **documents the incumbent system** before Phase 3–4 redesign choices. It is not permission to invent a marketing aesthetic.
 
 **Taste dials (ERP Operate):** VARIANCE **2–3** · MOTION **2** · DENSITY **8**.
 
@@ -118,7 +96,7 @@ Deed ERP is an **Operate**-mode product UI: dense tables, document steppers, rol
 
 Brand: Deed cyan (`--primary` / `--accent-cyan` `#00AEEF`) and Deed navy (`--navy` `#20164D`). Surfaces: cool slate page/card stack. Status: success / warning / danger / info with dedicated `*-bg` / `*-text` for badges.
 
-**Sales** does not use a navy command band. Navy (`#20164D`) fills the ERP app bar, primary buttons (New, Confirm), and the current statusbar pill. Cyan (`#00AEEF`) is links, active notebook underline, and selected list rows. Emerald/orange stay on delivered, paid, not-paid, and expired pills — not chrome.
+**Sales** uses the same **navy command band** as Inventory (`--navy` `#20164D`). Primary actions, active tabs, and document refs are **Deed blue (`--sales-blue` `#2563EB`)**. Cyan (`#00AEEF`) is only the header icon spark. Emerald/orange stay on delivered, paid, not-paid, and expired pills — not chrome.
 
 **Avoid in product modules:** purple/indigo decorative accents (`#8B5CF6`, `#4F46E5`), glassmorphism, full-bleed hero gradients, dark-mode-first shells.
 

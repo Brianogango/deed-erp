@@ -5514,19 +5514,19 @@ main#main-content:has(.sales-pilot.sales-doc) > .min-w-0 {
   overflow: visible;
 }
 
-/* ── Sales command restyle — Odoo grammar, Deed navy + cyan ───────────────
-   Light control panel, no navy command band. Navy = primary actions / current
-   status. Cyan = links, active tab, selected row. */
+/* ── Sales command restyle (approved comps) ───────────────────────────────
+   Navy header, Deed-blue actions/tabs/refs, cyan only on the icon spark.
+   Prototype CSS keeps density; these rules win on the live /sales canvas. */
 .sales-pilot.sales-doc .sales-workbench {
-  --sp-accent: var(--navy);
-  --sp-accent-hover: var(--navy-dark);
-  --sp-accent-soft: var(--primary-light);
-  --sp-accent-border: color-mix(in srgb, var(--primary) 35%, #fff);
-  --sp-info: var(--primary);
-  --sp-info-bg: var(--primary-light);
+  --sp-accent: var(--sales-blue);
+  --sp-accent-hover: var(--sales-blue-hover);
+  --sp-accent-soft: var(--sales-blue-soft);
+  --sp-accent-border: color-mix(in srgb, var(--sales-blue) 35%, #fff);
+  --sp-info: var(--sales-blue);
+  --sp-info-bg: var(--sales-blue-soft);
   --sp-navy: var(--navy);
   --sp-navy-dark: var(--navy-dark);
-  padding: 0 !important;
+  padding: 0 0.85rem 1.25rem !important;
   overflow-x: hidden;
   max-width: 100%;
 }
@@ -5534,78 +5534,99 @@ main#main-content:has(.sales-pilot.sales-doc) > .min-w-0 {
 .sales-pilot.sales-doc .sales-workbench .sales-proto-page-header {
   display: flex;
   flex-wrap: wrap;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
-  gap: 0.5rem 1rem;
-  width: 100%;
+  gap: 0.75rem 1rem;
+  width: calc(100% + 1.7rem);
   max-width: none;
-  margin: 0 !important;
-  padding: 0.4rem 1rem;
-  min-height: 2.85rem;
-  background: var(--bg-card);
-  color: var(--text-1);
-  border-bottom: 1px solid var(--border);
-  box-shadow: none;
+  margin: 0 -0.85rem 0 !important;
+  padding: 0.9rem 1.1rem 1rem;
+  min-height: 3.75rem;
+  background: linear-gradient(135deg, var(--navy) 0%, var(--navy-dark) 72%, #0c1230 100%);
+  color: #fff;
+  border-bottom: 1px solid color-mix(in srgb, #fff 8%, transparent);
+  box-shadow: 0 8px 24px color-mix(in srgb, var(--navy) 28%, transparent);
 }
 
 .sales-pilot.sales-doc .sales-proto-header-copy {
   display: flex;
-  align-items: baseline;
-  gap: 0.5rem;
+  align-items: flex-start;
+  gap: 0.7rem;
   min-width: 0;
   flex: 1 1 12rem;
 }
 
-.sales-pilot.sales-doc .sales-proto-header-icon,
-.sales-pilot.sales-doc .sales-workbench .sales-proto-page-header .sub {
-  display: none !important;
+.sales-pilot.sales-doc .sales-proto-header-icon {
+  width: 2.4rem;
+  height: 2.4rem;
+  border-radius: 0.55rem;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  background: color-mix(in srgb, var(--accent-cyan) 28%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent-cyan) 55%, transparent);
+}
+
+.sales-pilot.sales-doc .sales-proto-header-icon::after {
+  content: '';
+  width: 0.85rem;
+  height: 1.05rem;
+  border: 1.5px solid #fff;
+  border-radius: 0.15rem;
+  box-shadow: inset 0 0.28rem 0 0 #fff;
 }
 
 .sales-pilot.sales-doc .sales-workbench .sales-proto-page-header h1 {
   margin: 0;
-  font-size: 18px;
-  font-weight: 400;
-  letter-spacing: 0;
-  color: var(--text-4);
-  line-height: 1.2;
+  font-size: 1.28rem;
+  font-weight: 750;
+  letter-spacing: -0.025em;
+  color: #fff;
+  line-height: 1.15;
 }
 
-.sales-pilot.sales-doc .sales-workbench .sales-proto-page-header h1 strong,
-.sales-pilot.sales-doc .sales-odoo-crumb strong {
-  color: var(--text-1);
-  font-weight: 650;
-}
-
-.sales-pilot.sales-doc .sales-odoo-crumb {
-  font-size: 18px;
-  color: var(--text-4);
+.sales-pilot.sales-doc .sales-workbench .sales-proto-page-header .sub {
+  margin-top: 0.2rem;
+  font-size: 0.75rem;
+  color: color-mix(in srgb, #fff 72%, transparent);
+  max-width: 42rem;
 }
 
 .sales-pilot.sales-doc .sales-workbench .sales-proto-page-header .sp-btn,
 .sales-pilot.sales-doc .sales-workbench .sales-proto-page-header button.sp-btn {
-  min-height: 30px !important;
-  padding: 4px 12px !important;
-  font-size: 13px !important;
-  font-weight: 650 !important;
-  border-radius: 4px !important;
+  min-height: 2.5rem !important;
+  padding: 0.45rem 0.9rem !important;
+  font-size: 0.8125rem !important;
+  font-weight: 750 !important;
+}
+
+.sales-pilot.sales-doc .sales-workbench .sales-proto-page-header .sp-btn:not(.sp-btn-primary):not(.sp-btn-success) {
+  background: color-mix(in srgb, #fff 8%, transparent) !important;
+  border-color: color-mix(in srgb, #fff 28%, transparent) !important;
+  color: #fff !important;
+}
+
+.sales-pilot.sales-doc .sales-workbench .sales-proto-page-header .sp-btn-ghost {
+  background: transparent !important;
+  border-color: transparent !important;
+  color: #fff !important;
 }
 
 .sales-pilot.sales-doc .sales-workbench .sales-proto-page-header .sp-btn-primary {
-  background: var(--navy) !important;
-  border-color: var(--navy) !important;
+  background: var(--sales-blue) !important;
+  border-color: var(--sales-blue) !important;
   color: #fff !important;
 }
 
 .sales-pilot.sales-doc .sales-workbench .sp-btn-primary,
 .sales-pilot.sales-doc .sales-workbench .btn-primary {
-  background: var(--navy) !important;
-  border-color: var(--navy) !important;
-  color: #fff !important;
+  background: var(--sales-blue) !important;
+  border-color: var(--sales-blue) !important;
 }
 
 .sales-pilot.sales-doc .sales-workbench .sp-linkish,
 .sales-pilot.sales-doc .sales-workbench a.sp-linkish {
-  color: var(--primary-dark) !important;
+  color: var(--sales-blue) !important;
 }
 
 .sales-pilot.sales-doc .sales-workbench .sp-tabs {
@@ -5614,61 +5635,51 @@ main#main-content:has(.sales-pilot.sales-doc) > .min-w-0 {
 }
 
 .sales-pilot.sales-doc .sales-workbench .sp-tabs-command {
-  width: 100%;
-  margin: 0;
-  padding: 0 0.75rem;
-  background: var(--bg-card);
-  border-bottom: 1px solid var(--border);
+  width: calc(100% + 1.7rem);
+  margin: 0 -0.85rem 0.85rem;
+  padding: 0 0.5rem;
+  background: var(--navy-dark);
+  border-bottom: 1px solid color-mix(in srgb, #fff 8%, transparent);
 }
 
 .sales-pilot.sales-doc .sales-workbench .sp-tabs-command .sp-tab {
-  color: var(--text-4);
-  border-bottom: 2px solid transparent;
-  padding: 0.55rem 0.85rem !important;
-  min-height: 0 !important;
-  font-size: 13px !important;
+  color: color-mix(in srgb, #fff 55%, transparent);
+  border-bottom: 3px solid transparent;
+  padding: 0.8rem 1.1rem !important;
+  min-height: 2.5rem !important;
+  font-size: 0.8125rem !important;
   font-weight: 650;
 }
 
 .sales-pilot.sales-doc .sales-workbench .sp-tabs-command .sp-tab:hover {
-  color: var(--navy);
+  color: #fff;
 }
 
 .sales-pilot.sales-doc .sales-workbench .sp-tabs-command .sp-tab[data-active='true'] {
-  color: var(--navy);
-  border-bottom-color: var(--primary);
+  color: #fff;
+  border-bottom-color: var(--sales-blue);
 }
 
 .sales-pilot.sales-doc .sales-workbench .sp-tab[data-active='true'] {
-  color: var(--navy);
-  border-bottom-color: var(--primary);
-}
-
-.sales-pilot.sales-doc .sales-workbench .sp-list-toolbar {
-  background: var(--bg-card) !important;
+  color: var(--sales-blue);
+  border-bottom-color: var(--sales-blue);
 }
 
 .sales-pilot.sales-doc .sales-workbench .sp-workflow {
   display: flex;
   flex-wrap: wrap;
   overflow: visible;
-  gap: 0;
+  gap: 0.15rem;
 }
 
 .sales-pilot.sales-doc .sales-workbench .sp-workflow-step {
-  flex: 0 1 auto;
+  flex: 1 1 5.5rem;
   min-width: 0;
-  border-radius: 0;
 }
 
 .sales-pilot.sales-doc .sales-workbench .sp-workflow-step[data-state='current'] {
   background: var(--navy);
   color: #fff;
-}
-
-.sales-pilot.sales-doc .sales-workbench .sp-workflow-step[data-state='done'] {
-  background: var(--primary-light);
-  color: var(--navy);
 }
 
 .sales-pilot.sales-doc .sales-workbench .sp-field label {

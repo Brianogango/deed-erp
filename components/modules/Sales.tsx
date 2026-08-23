@@ -1704,13 +1704,19 @@ function SalesContent() {
                 <>
                   <div className="sales-proto-page-header">
                     <div className="sales-proto-header-copy">
-                      <nav className="sales-odoo-crumb" aria-label="Breadcrumb">
-                        Sales / <strong>{listTab === 'quotations' ? 'Quotations' : 'Orders'}</strong>
-                      </nav>
+                      <span className="sales-proto-header-icon" aria-hidden="true" />
+                      <div>
+                      <h1>{listTab === 'quotations' ? 'Quotations' : 'Sales orders'}</h1>
+                      <div className="sub">
+                        {listTab === 'quotations'
+                          ? 'Draft → Sent → Accepted → Confirm becomes SO/…'
+                          : 'Reserve → Deliver → Invoice · Payment stays separate'}
+                      </div>
+                      </div>
                     </div>
                     <div className="sales-proto-actions">
                       <button type="button" className="sp-btn sp-btn-primary" onClick={openNewForm}>
-                        New
+                        New quotation
                       </button>
                     </div>
                   </div>
@@ -3485,14 +3491,17 @@ function NewQuotationForm({
     <div>
       <div className="sales-proto-page-header">
         <div className="sales-proto-header-copy">
-          <nav className="sales-odoo-crumb" aria-label="Breadcrumb">
-            Sales / Quotations / <strong>New</strong>
-          </nav>
+          <span className="sales-proto-header-icon" aria-hidden="true" />
+          <div>
+          <button type="button" className="sp-btn sp-btn-ghost" onClick={onCancel} style={{ paddingLeft: 0, marginBottom: 2 }}>← Back</button>
+          <h1>Create quotation</h1>
+          <div className="sub">Customer · lines · terms · send</div>
+          </div>
         </div>
         <div className="sales-proto-actions sales-proto-actions--dock">
           <button type="button" className="sp-btn" onClick={onCancel}>Discard</button>
           <button type="button" className="sp-btn" onClick={onSaveDraft} disabled={!canSave}>Save as draft</button>
-          <button type="button" className="sp-btn sp-btn-primary" onClick={onSave} disabled={!canSave}>Confirm</button>
+          <button type="button" className="sp-btn sp-btn-primary" onClick={onSave} disabled={!canSave}>Submit</button>
         </div>
       </div>
 
@@ -4137,9 +4146,12 @@ function DeliveryNoteView({
     <div className="flex flex-col gap-3">
       <div className="sales-proto-page-header">
         <div className="sales-proto-header-copy">
-          <nav className="sales-odoo-crumb" aria-label="Breadcrumb">
-            Sales / Orders / {order.ref} / <strong>{existingDelivery?.ref ?? 'Delivery'}</strong>
-          </nav>
+          <button type="button" className="sp-btn sp-btn-ghost" style={{ paddingLeft: 0 }} onClick={onBack}>← Back to order</button>
+          <div className="sp-ref-row">
+            <h1>{existingDelivery?.ref ?? 'Delivery'}</h1>
+            <SalesDocPill label={dnPill.label} tone={dnPill.tone} />
+          </div>
+          <div className="sub">Source {order.ref} · {order.customerName}</div>
         </div>
         <div className="sales-proto-actions">
           {canGenerateDeliveryNote(existingDelivery) && (
