@@ -334,6 +334,13 @@ function CRMContent() {
   )
   const totalPipelineValue = pipelineOpps.reduce((sum, o) => sum + o.expectedValue, 0)
   const weightedPipelineValue = pipelineOpps.reduce((sum, o) => sum + (o.expectedValue * o.probability / 100), 0)
+  const todayIso = new Date().toISOString().slice(0, 10)
+  const followUpsDue = opportunityActivities.filter(activity =>
+    activity.status === 'scheduled'
+    && Boolean(activity.scheduledDate)
+    && String(activity.scheduledDate).slice(0, 10) <= todayIso
+    && pipelineOpps.some(opp => opp.id === activity.opportunityId)
+  ).length
 
   const wonOpps = opportunities.filter(o =>
     o.stage === 'closed_won' && opportunityMatchesOwner(o, effectiveOwner)
@@ -777,7 +784,7 @@ function CRMContent() {
   const moduleHeader = (
     <>
       <ModuleHeader
-        title="CRM and pipeline"
+        title="CRM & Pipeline"
         subtitle={`${companies.length} ${companies.length === 1 ? 'company' : 'companies'} · ${fmtKes(totalPipelineValue)} pipeline`}
         icon={<Fa icon={faChartBar} />}
         count={pipelineOpps.length}
@@ -825,78 +832,86 @@ function CRMContent() {
   // Pipeline Tab - Kanban Board
   if (tab === 'pipeline') {
     return (
-      <div className="mod-page">
+      <div className="mod-page crm-workspace">
         {moduleHeader}
-        <div className="mod-body p-3 sm:p-4 flex flex-col gap-4">
+        <div className="mod-body crm-body crm-pipeline-body p-3 sm:p-4 flex flex-col gap-4">
         {/* pipeline content start */}
+        <section className="crm-metric-strip" aria-label="Pipeline at a glance">
+          <div className="crm-metric">
+            <span>Open pipeline</span>
+            <strong>{fmtKes(stats.pipelineValue)}</strong>
+            <small>{stats.totalPipeline} active opportunit{stats.totalPipeline === 1 ? 'y' : 'ies'}</small>
+          </div>
+          <div className="crm-metric">
+            <span>Weighted value</span>
+            <strong>{fmtKes(stats.weightedValue)}</strong>
+            <small>Probability adjusted</small>
+          </div>
+          <div className="crm-metric crm-metric--attention">
+            <span>Follow-ups due</span>
+            <strong>{followUpsDue}</strong>
+            <small>{followUpsDue === 0 ? 'Nothing overdue' : 'Needs attention'}</small>
+          </div>
+          <div className="crm-metric crm-metric--success">
+            <span>Win rate</span>
+            <strong>{stats.winRate}%</strong>
+            <small>{totalClosed} closed opportunit{totalClosed === 1 ? 'y' : 'ies'}</small>
+          </div>
+        </section>
         {/* Owner filter (admin/finance only) */}
         {isAdmin && (
-          <div className="flex items-center gap-2 flex-wrap px-1">
-            <span className="text-[10px] uppercase tracking-wider font-semibold" style={{ color: 'var(--text-4)' }}>Viewing:</span>
-            {[{ id: 'me', label: 'My Pipeline' }, { id: 'all', label: 'All Reps' }, ...salesReps.map(r => ({ id: r.id, label: r.name }))].map(opt => (
-              <button key={opt.id} onClick={() => setOwnerFilter(opt.id)}
-                style={{
-                  fontSize: 11, padding: '5px 13px', borderRadius: 20, cursor: 'pointer',
-                  background: ownerFilter === opt.id ? 'var(--info-bg)' : 'var(--bg-surface)',
-                  border: `1px solid ${ownerFilter === opt.id ? 'var(--info)' : 'var(--border-lt)'}`,
-                  color: ownerFilter === opt.id ? 'var(--info-text)' : 'var(--text-4)', fontWeight: ownerFilter === opt.id ? 700 : 400,
-                  transition: 'all 0.15s',
-                }}>
-                {opt.label}
-              </button>
-            ))}
+          <div className="crm-pipeline-toolbar">
+            <label className="crm-owner-select">
+              <span>Owner</span>
+              <select value={ownerFilter} onChange={event => setOwnerFilter(event.target.value)}>
+                <option value="me">My pipeline</option>
+                <option value="all">All reps</option>
+                {salesReps.map(rep => <option key={rep.id} value={rep.id}>{rep.name}</option>)}
+              </select>
+            </label>
           </div>
         )}
 
-        {/* Per-rep breakdown (admin, all-reps view) */}
-        {isAdmin && ownerFilter === 'all' && repBreakdown.length > 0 && (
-          <div className="card p-4 flex flex-col gap-2">
-            <div className="flex items-center gap-2 pb-2 mb-1" style={{ borderBottom: '1px solid var(--bg-muted)' }}>
-              <div className="w-1.5 h-4 rounded-full flex-shrink-0" style={{ background: 'var(--primary)' }} />
-              <p className="text-[10px] uppercase tracking-wider font-semibold" style={{ color: 'var(--primary)' }}>Pipeline Value by Rep</p>
-            </div>
-            {repBreakdown.map(rep => (
-              <div key={rep.id} className="flex items-center gap-3">
-                <button className="text-[11px] font-medium text-t1 w-32 text-left truncate hover:underline"
-                  onClick={() => setOwnerFilter(rep.id)}>
-                  {rep.name}
-                </button>
-                <div className="flex-1 rounded-full h-2 overflow-hidden" style={{ background: 'var(--bg-muted)' }}>
-                  <div className="h-full rounded-full" style={{
-                    width: `${totalPipelineValue > 0 ? Math.round(rep.value / totalPipelineValue * 100) : 0}%`,
-                    background: 'var(--primary)',
-                  }} />
-                </div>
-                <span className="font-mono text-[11px] font-semibold text-t1 w-28 text-right">{fmtKes(rep.value)}</span>
-                <span className="text-[10px] text-t3 w-20 text-right">{rep.count} deal{rep.count !== 1 ? 's' : ''}</span>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* Sales analysis pivot */}
+        {/* Analysis stays available without competing with daily pipeline work. */}
         {isAdmin && opportunities.length > 0 && (
-          <div className="card p-4">
-            <div className="flex items-center gap-2 pb-2 mb-2 border-b border-[var(--border-lt)]">
-              <div className="w-1.5 h-4 rounded-full flex-shrink-0" style={{ background: 'var(--navy)' }} />
-              <p className="text-[10px] uppercase tracking-wider font-semibold text-[var(--navy)]">Sales analysis — stage × owner (KES)</p>
+          <details className="crm-analysis">
+            <summary>Pipeline analysis</summary>
+            <div className="crm-analysis__grid">
+              {ownerFilter === 'all' && repBreakdown.length > 0 && (
+                <div className="crm-analysis__panel">
+                  <h3>Pipeline value by rep</h3>
+                  <div className="crm-analysis__rows">
+                    {repBreakdown.map(rep => (
+                      <button key={rep.id} type="button" className="crm-analysis__row" onClick={() => setOwnerFilter(rep.id)}>
+                        <span>{rep.name}</span>
+                        <i><b style={{ width: `${totalPipelineValue > 0 ? Math.round(rep.value / totalPipelineValue * 100) : 0}%` }} /></i>
+                        <strong>{fmtKes(rep.value)}</strong>
+                        <small>{rep.count} deal{rep.count !== 1 ? 's' : ''}</small>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+              <div className="crm-analysis__panel">
+                <h3>Stage × owner</h3>
+                <PivotView
+                  data={opportunities
+                    .filter(o => opportunityMatchesOwner(o, effectiveOwner))
+                    .map(o => ({
+                      stage: stageLabels[o.stage] ?? o.stage,
+                      owner: o.ownerName ?? 'Unassigned',
+                      expectedValue: o.expectedValue,
+                    }))}
+                  rowKey="stage"
+                  colKey="owner"
+                  valueKey="expectedValue"
+                  rowLabel="Stage"
+                  colLabel="Owner"
+                  formatValue={n => fmtKes(n)}
+                />
+              </div>
             </div>
-            <PivotView
-              data={opportunities
-                .filter(o => opportunityMatchesOwner(o, effectiveOwner))
-                .map(o => ({
-                  stage: stageLabels[o.stage] ?? o.stage,
-                  owner: o.ownerName ?? 'Unassigned',
-                  expectedValue: o.expectedValue,
-                }))}
-              rowKey="stage"
-              colKey="owner"
-              valueKey="expectedValue"
-              rowLabel="Stage"
-              colLabel="Owner"
-              formatValue={n => fmtKes(n)}
-            />
-          </div>
+          </details>
         )}
 
         {/* Kanban Board */}
@@ -910,7 +925,7 @@ function CRMContent() {
 
         {/* List View */}
         {view === 'list' && (
-          <div className="card overflow-hidden">
+          <div className="card overflow-hidden crm-opportunity-list">
             <PanelHeader title="All Opportunities" count={opportunities.filter(o => {
               const s = oppSearch.toLowerCase()
               const ownerMatch = opportunityMatchesOwner(o, effectiveOwner)
@@ -1117,9 +1132,9 @@ function CRMContent() {
 
   if (tab === 'leads' && systemSettings?.crmLeads) {
     return (
-      <div className="mod-page">
+      <div className="mod-page crm-workspace">
         {moduleHeader}
-        <div className="mod-body p-3 sm:p-4 flex flex-col gap-4">
+        <div className="mod-body crm-body p-3 sm:p-4 flex flex-col gap-4">
           <LeadsPanel
             showToast={showToast}
             salesReps={salesReps}
@@ -1150,9 +1165,9 @@ function CRMContent() {
 
   if (tab === 'email_review' && systemSettings?.crmLeads) {
     return (
-      <div className="mod-page">
+      <div className="mod-page crm-workspace">
         {moduleHeader}
-        <div className="mod-body p-3 sm:p-4 flex flex-col gap-4">
+        <div className="mod-body crm-body p-3 sm:p-4 flex flex-col gap-4">
           <EmailReviewPanel showToast={showToast} salesReps={salesReps} />
         </div>
       </div>
@@ -1161,9 +1176,9 @@ function CRMContent() {
 
   if (tab === 'dup_contacts' && systemSettings?.crmLeads) {
     return (
-      <div className="mod-page">
+      <div className="mod-page crm-workspace">
         {moduleHeader}
-        <div className="mod-body p-3 sm:p-4 flex flex-col gap-4">
+        <div className="mod-body crm-body p-3 sm:p-4 flex flex-col gap-4">
           <DuplicateContactsPanel showToast={showToast} />
         </div>
       </div>
@@ -1173,9 +1188,9 @@ function CRMContent() {
   // Contracts Tab
   if (tab === 'contracts') {
     return (
-      <div className="mod-page">
+      <div className="mod-page crm-workspace">
         {moduleHeader}
-        <div className="mod-body p-3 sm:p-4 flex flex-col gap-4">
+        <div className="mod-body crm-body p-3 sm:p-4 flex flex-col gap-4">
 
         <div className="card overflow-hidden">
           <PanelHeader title="Customer Contracts" count={customerContracts.filter(c => {
@@ -1251,9 +1266,9 @@ function CRMContent() {
   // Companies Tab
   if (tab === 'companies') {
     return (
-      <div className="mod-page">
+      <div className="mod-page crm-workspace">
         {moduleHeader}
-        <div className="mod-body p-3 sm:p-4 flex flex-col gap-4">
+        <div className="mod-body crm-body p-3 sm:p-4 flex flex-col gap-4">
 
         {/* Company List */}
         <div className="card overflow-hidden">
@@ -1304,9 +1319,9 @@ function CRMContent() {
   // Contacts Tab
   if (tab === 'contacts') {
     return (
-      <div className="mod-page">
+      <div className="mod-page crm-workspace">
         {moduleHeader}
-        <div className="mod-body p-3 sm:p-4 flex flex-col gap-4">
+        <div className="mod-body crm-body p-3 sm:p-4 flex flex-col gap-4">
 
         {/* Contact List */}
         <div className="card overflow-hidden">
@@ -1348,9 +1363,9 @@ function CRMContent() {
   // Activities Tab
   if (tab === 'activities') {
     return (
-      <div className="mod-page">
+      <div className="mod-page crm-workspace">
         {moduleHeader}
-        <div className="mod-body p-3 sm:p-4 flex flex-col gap-4">
+        <div className="mod-body crm-body p-3 sm:p-4 flex flex-col gap-4">
         <div className="card overflow-hidden">
           <PanelHeader title="All Activities" count={opportunityActivities.filter(a => {
             const s = activitySearch.toLowerCase()
@@ -1401,9 +1416,9 @@ function CRMContent() {
   // SLA Tracker Tab
   if (tab === 'sla') {
     return (
-      <div className="mod-page">
+      <div className="mod-page crm-workspace">
         {moduleHeader}
-        <div className="mod-body p-3 sm:p-4 flex flex-col gap-4">
+        <div className="mod-body crm-body p-3 sm:p-4 flex flex-col gap-4">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             {/* Active Contracts Table */}
             <div className="card overflow-hidden">
@@ -1455,45 +1470,85 @@ function CRMContent() {
 }
 
 function PipelineKanban({ effectiveOwner, stageLabels, onSelectOpp }: { effectiveOwner: string, stageLabels: Record<string, string>, onSelectOpp: (id: string) => void }) {
-  const { opportunities } = useCrmStore()
-  // Include Won / Lost — converted deals marked won were vanishing from the board.
+  const { opportunities, opportunityActivities, systemSettings } = useCrmStore()
   const stages: OpportunityStage[] = ['prospecting', 'qualification', 'proposal', 'negotiation', 'closed_won', 'closed_lost']
+  const [mobileStage, setMobileStage] = useState<OpportunityStage>('prospecting')
 
   return (
-    <div className="flex gap-4 overflow-x-auto pb-4 h-full">
-      {stages.map(stage => {
-        const opps = opportunities.filter(o => o.stage === stage && opportunityMatchesOwner(o, effectiveOwner))
-        return (
-          <div key={stage} className="flex-shrink-0 w-72 flex flex-col gap-3">
-            <div className="flex items-center justify-between px-1">
-              <div className="flex items-center gap-2">
-                <span style={{ width: 8, height: 8, borderRadius: '50%', background: STAGE_COLORS[stage] }} />
-                <span className="text-sm font-bold text-t1">{stageLabels[stage]}</span>
-                <span className="text-xs text-t3">{opps.length}</span>
-              </div>
-              <span className="text-xs font-semibold text-t2">{fmtKes(opps.reduce((s, o) => s + o.expectedValue, 0))}</span>
-            </div>
-            <div className="flex flex-col gap-2">
-              {opps.map(opp => (
-                <div key={opp.id} className="card p-3 cursor-pointer hover:shadow-md transition-shadow border-t-[3px]"
-                  style={{ borderTopColor: STAGE_COLORS[stage] }}
-                  onClick={() => onSelectOpp(opp.id)}>
-                  <div className="flex justify-between items-start mb-2">
-                    <span className="font-semibold text-xs text-t1">{opp.name}</span>
-                    <span className="text-[10px] text-t3">{(opp.probability ?? 0)}%</span>
-                  </div>
-                  <div className="text-xs text-t2 mb-2">{opp.companyName}</div>
-                  <div className="flex justify-between items-center text-[11px]">
-                    <span className="font-mono font-semibold" style={{ color: 'var(--navy)' }}>{fmtKes(opp.expectedValue)}</span>
-                    <span className="text-t3">{fmtDate(opp.expectedCloseDate ?? '')}</span>
-                  </div>
+    <section className="crm-pipeline-board" aria-label="Opportunity pipeline">
+      <div className="crm-stage-tabs" role="tablist" aria-label="Pipeline stages">
+        {stages.map(stage => {
+          const count = opportunities.filter(o => o.stage === stage && opportunityMatchesOwner(o, effectiveOwner)).length
+          return (
+            <button
+              key={stage}
+              type="button"
+              role="tab"
+              aria-selected={mobileStage === stage}
+              className={mobileStage === stage ? 'is-active' : ''}
+              onClick={() => setMobileStage(stage)}
+            >
+              {stageLabels[stage]} <span>{count}</span>
+            </button>
+          )
+        })}
+      </div>
+
+      <div className="crm-kanban-scroll">
+        {stages.map(stage => {
+          const opps = opportunities.filter(o => o.stage === stage && opportunityMatchesOwner(o, effectiveOwner))
+          const stageValue = opps.reduce((sum, opp) => sum + opp.expectedValue, 0)
+          return (
+            <section
+              key={stage}
+              data-stage={stage}
+              className={`crm-kanban-column ${mobileStage === stage ? 'is-mobile-active' : ''}`}
+              aria-label={stageLabels[stage]}
+            >
+              <header className="crm-kanban-column__header">
+                <div>
+                  <h3>{stageLabels[stage]}</h3>
+                  <p>{opps.length} deal{opps.length === 1 ? '' : 's'} · {fmtKes(stageValue)}</p>
                 </div>
-              ))}
-            </div>
-          </div>
-        )
-      })}
-    </div>
+                <span>{opps.length}</span>
+              </header>
+
+              <div className="crm-kanban-column__cards">
+                {opps.map(opp => {
+                  const hasScheduledActivity = opportunityActivities.some(activity =>
+                    activity.opportunityId === opp.id && activity.status === 'scheduled'
+                  )
+                  const needsActivity = Boolean(systemSettings.crmEnforceNextActivity) && !hasScheduledActivity
+                  return (
+                    <button
+                      key={opp.id}
+                      type="button"
+                      className="crm-opportunity-card"
+                      onClick={() => onSelectOpp(opp.id)}
+                    >
+                      <div className="crm-opportunity-card__meta">
+                        <span>{opp.ref ?? 'Opportunity'}</span>
+                        <em>{opp.probability ?? 0}%</em>
+                      </div>
+                      <h4>{opp.name}</h4>
+                      <p>{opp.companyName || 'Customer not set'}</p>
+                      <strong>{fmtKes(opp.expectedValue)}</strong>
+                      <footer>
+                        <span className="crm-owner-avatar" aria-hidden="true">{(opp.ownerName ?? '?').slice(0, 1).toUpperCase()}</span>
+                        <span>{(opp.ownerName ?? 'Unassigned').split(' ')[0]}</span>
+                        <time>{fmtDate(opp.expectedCloseDate ?? '')}</time>
+                      </footer>
+                      {needsActivity && <small className="crm-next-action-alert">Next activity overdue</small>}
+                    </button>
+                  )
+                })}
+                {opps.length === 0 && <p className="crm-kanban-empty">No opportunities</p>}
+              </div>
+            </section>
+          )
+        })}
+      </div>
+    </section>
   )
 }
 
@@ -1503,7 +1558,12 @@ function OpportunityDetail({ activeOppId, onClose, stageLabels, onMarkWon, onMar
   const opp = opportunities.find(o => o.id === activeOppId)
   if (!opp) return null
 
-  const acts = opportunityActivities.filter(a => a.opportunityId === opp.id).sort((a,b) => (b.createdDate ?? b.createdAt).localeCompare(a.createdDate ?? a.createdAt))
+  const acts = opportunityActivities
+    .filter(a => a.opportunityId === opp.id)
+    .sort((a, b) => (b.createdDate ?? b.createdAt).localeCompare(a.createdDate ?? a.createdAt))
+  const nextActivity = opportunityActivities
+    .filter(a => a.opportunityId === opp.id && a.status === 'scheduled')
+    .sort((a, b) => String(a.scheduledDate ?? '').localeCompare(String(b.scheduledDate ?? '')))[0]
   const oppQuotes = quotes.filter(q => (opp.quoteIds ?? []).includes(q.id))
 
   const clientId = opp.clientId || opp.companyId || (() => {
@@ -1514,7 +1574,7 @@ function OpportunityDetail({ activeOppId, onClose, stageLabels, onMarkWon, onMar
     } catch { return '' }
   })()
   const clientName = opp.companyName
-    || contacts?.find((c: { id: string }) => c.id === clientId)?.name
+    || contacts?.find((contact: { id: string }) => contact.id === clientId)?.name
     || (() => {
       try {
         const raw = sessionStorage.getItem(`crm:convert:${opp.id}`)
@@ -1523,7 +1583,6 @@ function OpportunityDetail({ activeOppId, onClose, stageLabels, onMarkWon, onMar
       } catch { return opp.name }
     })()
 
-  // Live Sales quotations/orders for this customer (SaleOrder), not the unused CRM Quote docs.
   const relatedSaleOrders = (saleOrders ?? [])
     .filter(so => so.customerId && (so.customerId === clientId || so.customerId === opp.clientId || so.customerId === opp.companyId))
     .sort((a, b) => (b.date ?? '').localeCompare(a.date ?? ''))
@@ -1546,121 +1605,121 @@ function OpportunityDetail({ activeOppId, onClose, stageLabels, onMarkWon, onMar
   }
 
   return (
-    <div className="card p-4 flex flex-col gap-4">
-      <div className="flex items-center gap-3 border-b pb-3" style={{ borderColor: 'var(--border-lt)' }}>
-        <button className="btn-outline text-[11px] py-1 px-2.5" onClick={onClose}>← Back</button>
-        <span className="text-sm font-bold text-t1">{opp.ref}</span>
-        <Badge status={opp.stage} label={stageLabels[opp.stage]} />
-        <div className="ml-auto flex gap-2 flex-wrap justify-end">
+    <section className="crm-opportunity-detail">
+      <header className="crm-opportunity-detail__header">
+        <button type="button" className="crm-back-button" onClick={onClose} aria-label="Back to pipeline">←</button>
+        <div className="crm-opportunity-detail__identity">
+          <div className="crm-opportunity-detail__eyebrow">
+            <span>{opp.ref}</span>
+            <Badge status={opp.stage} label={stageLabels[opp.stage]} />
+          </div>
+          <h2>{opp.name}</h2>
+          <p>{opp.companyName || 'Customer not set'}{opp.contactPersonName ? ` · ${opp.contactPersonName}` : ''}</p>
+        </div>
+        <div className="crm-opportunity-detail__actions">
           {!['closed_won', 'closed_lost'].includes(opp.stage) && (
             <>
-              <button type="button" className="btn-primary text-[11px]" onClick={openSalesQuote}>
-                Create quotation
-              </button>
-              <button className="btn-primary" style={{ background: 'var(--success)' }} onClick={onMarkWon}>✓ Mark Won</button>
-              <button className="btn-outline" style={{ color: 'var(--danger)', borderColor: 'var(--danger)' }} onClick={onMarkLost}>✗ Mark Lost</button>
+              <button type="button" className="btn-primary" onClick={openSalesQuote}>Create quotation</button>
+              <button type="button" className="btn-outline crm-win-action" onClick={onMarkWon}>Mark won</button>
+              <button type="button" className="btn-outline crm-lost-action" onClick={onMarkLost}>Mark lost</button>
             </>
           )}
         </div>
-      </div>
+      </header>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <div className="col-span-1 lg:col-span-2 flex flex-col gap-4">
-          <div className="p-4 rounded-xl border" style={{ borderColor: 'var(--border-lt)', background: 'var(--bg-surface)' }}>
-            <h3 className="text-lg font-bold mb-1">{opp.name}</h3>
-            <p className="text-xs text-t2 mb-4">{opp.companyName} · {opp.contactPersonName}</p>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-              <div>
-                <p className="text-[10px] text-t3 uppercase">Expected Revenue</p>
-                <p className="font-mono text-sm font-semibold">{fmtKes(opp.expectedValue)}</p>
-              </div>
-              <div>
-                <p className="text-[10px] text-t3 uppercase">Probability</p>
-                <p className="font-mono text-sm font-semibold">{opp.probability}%</p>
-              </div>
-              <div>
-                <p className="text-[10px] text-t3 uppercase">Expected Close</p>
-                <p className="text-sm font-semibold">{fmtDate(opp.expectedCloseDate ?? '')}</p>
-              </div>
-            </div>
-            {opp.description && (
-              <div className="mt-4 pt-4 border-t" style={{ borderColor: 'var(--border-lt)' }}>
-                <p className="text-[10px] text-t3 uppercase mb-1">Description</p>
-                <p className="text-xs text-t1">{opp.description}</p>
-              </div>
-            )}
-          </div>
+      <section className="crm-opportunity-summary" aria-label="Opportunity summary">
+        <div><span>Expected revenue</span><strong>{fmtKes(opp.expectedValue)}</strong></div>
+        <div><span>Probability</span><strong>{opp.probability}%</strong></div>
+        <div><span>Expected close</span><strong>{fmtDate(opp.expectedCloseDate ?? '')}</strong></div>
+        <div><span>Owner</span><strong>{opp.ownerName ?? 'Unassigned'}</strong></div>
+        <button type="button" className={`crm-next-action ${nextActivity ? '' : 'is-empty'}`} onClick={onLogActivity}>
+          <span>{nextActivity ? 'Next action' : 'Action needed'}</span>
+          <strong>{nextActivity?.subject || 'Schedule a follow-up'}</strong>
+          <small>{nextActivity?.scheduledDate ? fmtDate(nextActivity.scheduledDate) : 'No next activity scheduled'}</small>
+        </button>
+      </section>
 
-          <div className="p-4 rounded-xl border" style={{ borderColor: 'var(--border-lt)' }}>
-            <div className="flex items-center justify-between mb-3">
-              <h4 className="text-sm font-bold">Activities</h4>
-              <button className="btn-outline text-[10px] py-1 px-2" onClick={onLogActivity}>+ Log Activity</button>
+      <div className="crm-opportunity-detail__grid">
+        <div className="crm-opportunity-detail__main">
+          <article className="crm-detail-card crm-customer-summary">
+            <header><h3>Customer & requirements</h3></header>
+            <div className="crm-customer-summary__grid">
+              <div><span>Customer</span><strong>{clientName}</strong></div>
+              <div><span>Primary contact</span><strong>{opp.contactPersonName || 'Not set'}</strong></div>
+              <div><span>Lead source</span><strong>{String(opp.leadSource || 'Not set').replace(/_/g, ' ')}</strong></div>
             </div>
-            <div className="flex flex-col gap-2">
-              {acts.length === 0 ? <p className="text-xs text-t3">No activities logged</p> : acts.map(a => (
-                <div key={a.id} className="p-2 rounded-lg bg-gray-50 border border-gray-100 flex gap-3 text-xs">
-                  <span className="text-lg text-t3" aria-hidden="true"><Fa icon={ACTIVITY_ICONS[a.type] ?? faNoteSticky} /></span>
+            <div className="crm-requirement-copy">
+              <span>Need summary</span>
+              <p>{opp.description || 'No requirements documented yet.'}</p>
+            </div>
+          </article>
+
+          <article className="crm-detail-card crm-activity-timeline">
+            <header>
+              <h3>Activity timeline</h3>
+              <button type="button" className="btn-outline" onClick={onLogActivity}>Log activity</button>
+            </header>
+            <div className="crm-activity-timeline__list">
+              {acts.length === 0 ? <p className="crm-empty-state">No activities logged</p> : acts.map(a => (
+                <div key={a.id} className="crm-activity-item">
+                  <span className="crm-activity-item__icon" aria-hidden="true"><Fa icon={ACTIVITY_ICONS[a.type] ?? faNoteSticky} /></span>
                   <div>
-                    <p className="font-semibold">{a.subject ?? a.type}</p>
-                    <p className="text-[10px] text-t3">{fmtDate(a.createdDate ?? a.createdAt)} by {a.createdByName ?? ''}</p>
-                    {a.description && <p className="text-t2 mt-1">{a.description}</p>}
+                    <strong>{a.subject ?? a.type}</strong>
+                    <small>{fmtDate(a.createdDate ?? a.createdAt)} · {a.createdByName ?? ''}</small>
+                    {a.description && <p>{a.description}</p>}
                   </div>
                 </div>
               ))}
             </div>
-          </div>
+          </article>
         </div>
 
-        <div className="flex flex-col gap-4">
-          <div className="p-4 rounded-xl border" style={{ borderColor: 'var(--border-lt)' }}>
-            <h4 className="text-sm font-bold mb-3">Stage</h4>
-            <div className="flex flex-col gap-2">
-              {STAGE_ORDER.map(s => (
-                <button key={s}
-                  onClick={() => moveOpportunityStage(opp.id, s)}
-                  className={`text-left text-xs px-3 py-2 rounded-lg border transition-colors ${opp.stage === s ? 'bg-blue-50 border-blue-200 text-blue-800 font-bold' : 'bg-transparent border-transparent text-t2 hover:bg-gray-50'}`}>
-                  {stageLabels[s]}
+        <aside className="crm-opportunity-detail__side">
+          <article className="crm-detail-card crm-stage-panel">
+            <header><h3>Stage</h3></header>
+            <div className="crm-stage-panel__steps">
+              {STAGE_ORDER.map((stage, index) => (
+                <button
+                  key={stage}
+                  type="button"
+                  className={opp.stage === stage ? 'is-active' : ''}
+                  onClick={() => moveOpportunityStage(opp.id, stage)}
+                >
+                  <span>{index + 1}</span>
+                  <strong>{stageLabels[stage]}</strong>
                 </button>
               ))}
             </div>
-          </div>
-          
-          <div className="p-4 rounded-xl border" style={{ borderColor: 'var(--border-lt)' }}>
-            <div className="flex items-center justify-between mb-3 gap-2">
-              <h4 className="text-sm font-bold">Quotations ({relatedSaleOrders.length || oppQuotes.length})</h4>
+          </article>
+
+          <article className="crm-detail-card crm-quotation-panel">
+            <header>
+              <h3>Quotations ({relatedSaleOrders.length || oppQuotes.length})</h3>
               {!['closed_won', 'closed_lost'].includes(opp.stage) && (
-                <button type="button" className="btn-outline text-[10px] py-1 px-2" onClick={openSalesQuote}>
-                  New quotation
-                </button>
+                <button type="button" onClick={openSalesQuote}>New quotation</button>
               )}
-            </div>
-            <div className="flex flex-col gap-2 text-xs">
+            </header>
+            <div className="crm-quotation-panel__list">
               {relatedSaleOrders.slice(0, 10).map(so => (
-                <button
-                  key={so.id}
-                  type="button"
-                  className="flex justify-between items-center p-2 bg-gray-50 rounded border border-gray-100 text-left hover:bg-[var(--info-bg)]"
-                  onClick={() => openSaleOrder(so.id)}
-                >
-                  <span className="font-mono text-blue-600">{so.ref}</span>
-                  <span className="font-mono font-semibold">{fmtKes(so.total)}</span>
+                <button key={so.id} type="button" onClick={() => openSaleOrder(so.id)}>
+                  <span><strong>{so.ref}</strong><small>{fmtDate(so.date ?? '')}</small></span>
+                  <b>{fmtKes(so.total)}</b>
                 </button>
               ))}
               {relatedSaleOrders.length === 0 && oppQuotes.map(q => (
-                <div key={q.id} className="flex justify-between items-center p-2 bg-gray-50 rounded border border-gray-100">
-                  <span className="font-mono text-blue-600">{q.quoteNumber}</span>
-                  <span className="font-mono font-semibold">{fmtKes(q.totalAmount)}</span>
+                <div key={q.id}>
+                  <span><strong>{q.quoteNumber}</strong><small>CRM quotation</small></span>
+                  <b>{fmtKes(q.totalAmount)}</b>
                 </div>
               ))}
               {relatedSaleOrders.length === 0 && oppQuotes.length === 0 && (
-                <p className="text-t3">
-                  No quotations yet — use <strong>Create quotation</strong> to open Sales with this customer.
-                </p>
+                <p className="crm-empty-state">No quotations yet.</p>
               )}
             </div>
-          </div>
-        </div>
+          </article>
+        </aside>
       </div>
-    </div>
+    </section>
   )
 }
+
