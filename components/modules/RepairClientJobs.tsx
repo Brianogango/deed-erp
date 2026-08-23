@@ -141,7 +141,7 @@ function MobileRepairCard({ r, onSelect, outsourceJobs }: any) {
   )
 }
 
-export default function RepairClientJobs({ onNewIntake, onSelect }: { onNewIntake: () => void; onSelect: (id: string) => void }) {
+export default function RepairClientJobs({ onSelect }: { onSelect: (id: string) => void }) {
   const { visibleRepairs, filter, setFilter, outsourceJobs, currentUser } = useRepair()
   const repairStats = useMemo(() => [
     {
