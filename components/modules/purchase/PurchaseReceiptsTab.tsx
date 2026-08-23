@@ -41,7 +41,7 @@ export default function PurchaseReceiptsTab() {
   ]
 
   return (
-    <div className="card overflow-hidden">
+    <div className="card overflow-hidden purchase-directory purchase-receipts-panel">
       <PanelHeader title="Goods Receipts (GRN)" count={receipts.length} />
       <DataTable
         tableId="purchase_receipts"
