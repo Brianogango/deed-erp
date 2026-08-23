@@ -1694,7 +1694,7 @@ export default function RepairDetailView() {
               </div>
             </SectionCard>
 
-          </div>
+          </aside>
         </div>
       </div>
 
