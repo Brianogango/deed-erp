@@ -5042,6 +5042,77 @@ main#main-content:has(.finance-workspace) > .min-w-0 {
     font-weight: 700;
   }
 
+  .pos-session-submit {
+    min-height: 2.75rem;
+    width: 100%;
+    margin-top: 1rem;
+    border-radius: 0.45rem;
+    background: var(--navy);
+    color: #fff;
+    font-size: 0.8rem;
+    font-weight: 750;
+  }
+
+  .pos-payment-success {
+    padding: 0.75rem 0 1rem;
+    text-align: center;
+  }
+
+  .pos-payment-success-icon {
+    margin-bottom: 0.75rem;
+    font-size: 2.5rem;
+  }
+
+  .pos-payment-success-actions {
+    display: flex;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .pos-session-close-summary {
+    display: flex;
+    flex-direction: column;
+    gap: 0.32rem;
+    margin-top: 0.75rem;
+    border: 1px solid var(--border-lt);
+    border-radius: 0.5rem;
+    padding: 0.75rem;
+    background: var(--bg-surface);
+    color: var(--text-2);
+    font-size: 0.72rem;
+  }
+
+  .pos-session-close-confirm {
+    min-height: 2.5rem;
+    border-radius: 0.45rem;
+    padding: 0.55rem 0.85rem;
+    background: var(--danger);
+    color: #fff;
+    font-size: 0.74rem;
+    font-weight: 750;
+  }
+
+  .pos-history {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .pos-history-reprint {
+    display: inline-flex;
+    min-height: 2rem;
+    align-items: center;
+    justify-content: center;
+    gap: 0.35rem;
+    border: 1px solid var(--border);
+    border-radius: 0.4rem;
+    padding: 0.35rem 0.55rem;
+    color: var(--navy);
+    font-size: 0.64rem;
+    font-weight: 700;
+  }
+
   .pos-history-list {
     display: flex;
     flex-direction: column;
