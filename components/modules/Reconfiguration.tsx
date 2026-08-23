@@ -50,6 +50,16 @@ type SlotDraft = {
   incomingProductId: string
 }
 
+function reconfigurationNextAction(status: ReconfigStatus) {
+  if (status === 'draft' || status === 'pending_stock_check') return 'Check stock'
+  if (status === 'components_reserved') return 'Submit approval'
+  if (status === 'pending_approval') return 'Review'
+  if (status === 'approved') return 'Start work'
+  if (status === 'in_progress') return 'Record work'
+  if (status === 'pending_qa') return 'Run QA'
+  return 'View'
+}
+
 async function api<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, {
     ...init,
@@ -325,10 +335,10 @@ export default function Reconfiguration() {
     return (
       <div className="mod-page inventory-pilot reconfig-page">
         <ModuleHeader
-          title="Device Reconfiguration"
+          title="Device reconfiguration"
           subtitle="Feature disabled in system settings"
           icon={<Fa icon={faMicrochip} />}
-          color="#FFFFFF"
+          color="var(--navy)"
           subtitleMode="visible"
         />
         <div className="mod-body">
@@ -343,10 +353,10 @@ export default function Reconfiguration() {
   return (
     <div className="mod-page inventory-pilot reconfig-page">
       <ModuleHeader
-        title="Device Reconfiguration"
-        subtitle="Pull, swap, or add RAM and SSD. This unit’s name follows the new config — the catalog SKU does not."
+        title="Device reconfiguration"
+        subtitle="Serialized upgrades with stock control and QA"
         icon={<Fa icon={faMicrochip} />}
-        color="#FFFFFF"
+        color="var(--navy)"
         subtitleMode="visible"
         count={orders.length}
         primaryAction={
@@ -372,7 +382,29 @@ export default function Reconfiguration() {
         ariaLabel="Reconfiguration sections"
       />
 
-      <div className="mod-body" aria-busy={loading}>
+      <div className="mod-body reconfig-body" aria-busy={loading}>
+      <section className="reconfig-summary" aria-label="Reconfiguration overview">
+        <button type="button" onClick={() => { setTab('orders'); setStatusFilter('') }}>
+          <span>Needs action</span>
+          <strong>{orders.filter(order => ['pending_stock_check', 'components_reserved', 'pending_approval', 'approved'].includes(order.status)).length}</strong>
+          <small>Stock checks and approvals</small>
+        </button>
+        <button type="button" onClick={() => { setTab('orders'); setStatusFilter('in_progress') }}>
+          <span>In progress</span>
+          <strong>{orders.filter(order => order.status === 'in_progress').length}</strong>
+          <small>Technician work underway</small>
+        </button>
+        <button type="button" onClick={() => { setTab('orders'); setStatusFilter('pending_qa') }}>
+          <span>Awaiting QA</span>
+          <strong>{orders.filter(order => order.status === 'pending_qa').length}</strong>
+          <small>Ready for verification</small>
+        </button>
+        <button type="button" onClick={() => { setTab('orders'); setStatusFilter('completed') }}>
+          <span>Completed</span>
+          <strong>{orders.filter(order => order.status === 'completed').length}</strong>
+          <small>Final configuration applied</small>
+        </button>
+      </section>
       {error && (
         <div className="reconfig-banner reconfig-banner--danger" role="alert">
           {error}
@@ -409,10 +441,11 @@ export default function Reconfiguration() {
                 <tr>
                   <th>Ref</th>
                   <th>Serial</th>
-                  <th>Type</th>
+                  <th>Device / type</th>
                   <th>Status</th>
-                  <th>Config</th>
+                  <th>Change</th>
                   <th>Cost</th>
+                  <th>Next action</th>
                 </tr>
               </thead>
               <tbody>
@@ -424,7 +457,12 @@ export default function Reconfiguration() {
                   >
                     <td data-label="Ref" className="reconfig-table-ref">{o.ref}</td>
                     <td data-label="Serial" className="reconfig-table-serial">{o.manufacturerSerial}</td>
-                    <td data-label="Type">{TRANSACTION_TYPE_LABELS[o.transactionType] || o.transactionType}</td>
+                    <td data-label="Device / type">
+                      <span className="reconfig-table-device">
+                        <strong>{o.product?.name || o.currentSnapshot?.displayName || 'Serialized device'}</strong>
+                        <small>{TRANSACTION_TYPE_LABELS[o.transactionType] || o.transactionType}</small>
+                      </span>
+                    </td>
                     <td data-label="Status">
                       <StatusBadge status={o.status} label={STATUS_LABELS[o.status] || o.status} />
                     </td>
@@ -442,11 +480,14 @@ export default function Reconfiguration() {
                         {fmtKes(o.costAfter)}
                       </span>
                     </td>
+                    <td data-label="Next action">
+                      <span className="reconfig-next-action">{reconfigurationNextAction(o.status)}</span>
+                    </td>
                   </tr>
                 ))}
                 {!loading && orders.length === 0 && (
                   <tr className="reconfig-table-empty">
-                    <td colSpan={6}>No reconfiguration work orders yet.</td>
+                    <td colSpan={7}>No reconfiguration work orders yet.</td>
                   </tr>
                 )}
               </tbody>
@@ -477,7 +518,7 @@ export default function Reconfiguration() {
           />
 
           {deviceConfig && (
-            <div className="reconfig-device">
+            <div className="reconfig-device reconfig-device--selected">
               <div className="reconfig-device-name">
                 {deviceConfig.current?.displayName || deviceConfig.specs || deviceConfig.productName}
               </div>
@@ -579,7 +620,7 @@ export default function Reconfiguration() {
             </label>
           )}
 
-          <div className="reconfig-apply-bar">
+          <div className="reconfig-apply-bar reconfig-bench-actions">
             <button
               type="button"
               className="btn-primary"

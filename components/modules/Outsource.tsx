@@ -227,6 +227,14 @@ function OutsourceContent() {
 
   // ── Counts for tab badge ──
   const outCount = outsourceJobs.filter(j => j.status === 'sent').length
+  const returnedToday = outsourceJobs.filter(job =>
+    job.returnedDate && new Date(job.returnedDate).toDateString() === new Date().toDateString()
+  ).length
+  const unresolvedCount = outsourceJobs.filter(job => job.status === 'returned_unresolved').length
+  const vendorOutstanding = outsourceVendors.reduce(
+    (sum, vendor) => sum + Math.max(0, vendorBilled(vendor.id) - vendorPaid(vendor.id)),
+    0,
+  )
 
   // ── Handlers ─────────────────────────────────────────────────────────────
 
@@ -453,20 +461,20 @@ function OutsourceContent() {
         role="button"
         tabIndex={0}
         onClick={() => setActiveJobId(job.id)}
-        className="record-card w-full rounded-xl border bg-card p-3 text-left shadow-card cursor-pointer"
+        className="record-card outsource-job-card w-full rounded-xl border bg-card p-3 text-left shadow-card cursor-pointer"
         style={{ borderColor: 'var(--border-lt)', borderLeft: '4px solid var(--navy)' }}
       >
         <div className="flex items-start justify-between gap-2.5">
           <div className="min-w-0 flex-1">
             <div className="text-[10px] font-black uppercase tracking-wider text-primary-600 mb-0.5">{job.ref}</div>
-            <div className="text-sm font-black text-t1 truncate">{job.deviceDescription}</div>
+            <div className="outsource-wrap text-sm font-black text-t1">{job.deviceDescription}</div>
             {job.repairOrderId && (() => {
               const linked = repairs.find(r => r.id === job.repairOrderId)
               return linked ? (
-                <div className="text-[11px] font-mono text-primary-600 mt-0.5 truncate">{linked.ref} · {linked.customerName}</div>
+                <div className="outsource-wrap text-[11px] font-mono text-primary-600 mt-0.5">{linked.ref} · {linked.customerName}</div>
               ) : null
             })()}
-            <div className="text-[11px] text-t3 mt-0.5 truncate">{job.vendorName} · {svcLabel(job.serviceType)}</div>
+            <div className="outsource-wrap text-[11px] text-t3 mt-0.5">{job.vendorName} · {svcLabel(job.serviceType)}</div>
           </div>
           <div className="flex-shrink-0 text-right">
             <div className="font-mono text-xs font-black text-t1">
@@ -517,13 +525,13 @@ function OutsourceContent() {
   if (!mounted) return <ModuleSkeleton />
 
   return (
-    <div className="mod-page">
+    <div className="mod-page outsource-workspace">
       <ModuleHeader
         title="Outsource repairs"
-        subtitle="Devices sent to external vendors"
+        subtitle="External repair jobs, vendor performance and costs"
         icon={<Fa icon={faScrewdriverWrench} />}
         count={outsourceJobs.length}
-        color="var(--warning)"
+        color="var(--navy)"
         primaryAction={
           <PrimaryActionButton icon={<Fa icon={faPlus} />} onClick={openNewJob} hideLabelOnMobile={false}>
             Send for repair
@@ -542,12 +550,29 @@ function OutsourceContent() {
         ariaLabel="Outsource sections"
       />
 
-      <div className="mod-body p-3 sm:p-4">
-      <div className="card overflow-hidden">
+      <div className="mod-body outsource-body p-3 sm:p-4">
+        <section className="outsource-summary" aria-label="Outsource repair summary">
+          <button type="button" className="outsource-summary__item" onClick={() => { setTab('jobs'); setJobStatusFilter('sent') }}>
+            <span>Out with vendors</span><strong>{outCount}</strong><small>Currently away</small>
+          </button>
+          <button type="button" className="outsource-summary__item is-warning" onClick={() => { setTab('jobs'); setJobStatusFilter('returned_unresolved') }}>
+            <span>Needs follow-up</span><strong>{unresolvedCount}</strong><small>Returned unresolved</small>
+          </button>
+          <button type="button" className="outsource-summary__item" onClick={() => setTab('jobs')}>
+            <span>Returned today</span><strong>{returnedToday}</strong><small>All outcomes</small>
+          </button>
+          <button type="button" className="outsource-summary__item" onClick={() => setTab('vendors')}>
+            <span>Outstanding</span><strong>{fmtKes(vendorOutstanding)}</strong><small>Vendor balances</small>
+          </button>
+        </section>
+
+      <div className="card overflow-hidden outsource-surface">
 
         {/* ── Jobs tab ── */}
         {tab === 'jobs' && (
-          <DataTable
+          <div className="outsource-jobs-layout">
+            <div className="outsource-directory">
+              <DataTable
             tableId="outsource_jobs"
             columns={jobColumns}
             rows={filteredJobs}
@@ -594,6 +619,32 @@ function OutsourceContent() {
             exportTitle="Outsource Jobs"
             exportFilename="outsource-jobs"
           />
+            </div>
+            <aside className="outsource-attention" aria-label="Needs attention">
+              <div className="outsource-attention__header">
+                <div><span>Priority</span><h3>Needs attention</h3></div>
+                <strong>{unresolvedCount + outsourceVendors.filter(v => vendorBilled(v.id) > vendorPaid(v.id)).length}</strong>
+              </div>
+              <div className="outsource-attention__group">
+                <p>Returned unresolved</p>
+                {outsourceJobs.filter(job => job.status === 'returned_unresolved').slice(0, 4).map(job => (
+                  <button key={job.id} type="button" onClick={() => setActiveJobId(job.id)}>
+                    <span>{job.ref}</span><strong>{job.deviceDescription}</strong><small>{job.vendorName}</small>
+                  </button>
+                ))}
+                {unresolvedCount === 0 && <small className="outsource-attention__empty">No unresolved returns.</small>}
+              </div>
+              <div className="outsource-attention__group">
+                <p>Vendor balances</p>
+                {outsourceVendors.filter(v => vendorBilled(v.id) > vendorPaid(v.id)).slice(0, 4).map(vendor => (
+                  <button key={vendor.id} type="button" onClick={() => setSelectedVendorId(vendor.id)}>
+                    <strong>{vendor.name}</strong><span>{fmtKes(vendorBilled(vendor.id) - vendorPaid(vendor.id))}</span>
+                  </button>
+                ))}
+                {vendorOutstanding <= 0 && <small className="outsource-attention__empty">No outstanding balances.</small>}
+              </div>
+            </aside>
+          </div>
         )}
 
         {/* ── Vendors tab ── */}
@@ -610,7 +661,7 @@ function OutsourceContent() {
                 No vendors added yet.
               </div>
             ) : (
-              <div className="divide-y" style={{ borderColor: 'var(--bg-surface)' }}>
+              <div className="outsource-vendor-list divide-y" style={{ borderColor: 'var(--bg-surface)' }}>
                 {outsourceVendors.map(vendor => {
                   const billed = vendorBilled(vendor.id)
                   const paid   = vendorPaid(vendor.id)
@@ -628,7 +679,7 @@ function OutsourceContent() {
                       }, 0) / completedJobs.filter(j => j.sentDate && j.returnedDate).length || 0)
                     : null
                   return (
-                    <div key={vendor.id} className="flex flex-col lg:flex-row lg:items-center gap-3 lg:gap-4 px-4 py-3 hover:bg-gray-50 transition-colors">
+                    <div key={vendor.id} className="outsource-vendor-row flex flex-col lg:flex-row lg:items-center gap-3 lg:gap-4 px-4 py-3 hover:bg-gray-50 transition-colors">
                       {/* Avatar */}
                       <div className="w-9 h-9 rounded-xl flex items-center justify-center font-bold text-sm text-white flex-shrink-0"
                         style={{ background: 'linear-gradient(135deg, var(--navy), var(--accent-cyan))' }}>
@@ -719,7 +770,7 @@ function OutsourceContent() {
           return (
             <>
               {/* Back + header */}
-              <div className="flex flex-wrap items-start sm:items-center gap-3 px-4 py-3 border-b" style={{ borderColor: 'var(--bg-muted)' }}>
+              <div className="outsource-vendor-detail__header flex flex-wrap items-start sm:items-center gap-3 px-4 py-3 border-b" style={{ borderColor: 'var(--bg-muted)' }}>
                 <button onClick={() => setSelectedVendorId(null)}
                   style={{ fontSize: 11, color: 'var(--text-4)', background: 'none', border: 'none', cursor: 'pointer' }}>
                   ← Back
@@ -740,7 +791,7 @@ function OutsourceContent() {
                 )}
               </div>
 
-              <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_320px]">
+              <div className="outsource-vendor-detail grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_320px]">
                 {/* Jobs for this vendor */}
                 <div className="border-r" style={{ borderColor: 'var(--bg-muted)' }}>
                   <p className="text-[10px] font-semibold text-t3 uppercase tracking-wider px-4 py-2.5 border-b" style={{ borderColor: 'var(--bg-surface)' }}>
@@ -758,7 +809,7 @@ function OutsourceContent() {
                                 <span className="font-mono text-[11px] font-semibold" style={{ color: 'var(--navy)' }}>{job.ref}</span>
                                 <OutsourceStatusBadge status={job.status} />
                               </div>
-                              <p className="font-medium text-t1 text-[12px] truncate">{job.deviceDescription}</p>
+                              <p className="outsource-wrap font-medium text-t1 text-[12px]">{job.deviceDescription}</p>
                               <p className="text-[11px] text-t3">
                                 {svcLabel(job.serviceType)} · Sent {fmtDate(job.sentDate)} by {job.sentByName}
                                 {job.repairOrderId && (() => {
