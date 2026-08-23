@@ -54,10 +54,11 @@ function StatusChip({ status }: { status: string }) {
   )
 }
 
-function SectionCard({ children, className = '', delay = 0 }: { children: React.ReactNode; className?: string; delay?: number }) {
+function SectionCard({ children, className = '', delay = 0, id }: { children: React.ReactNode; className?: string; delay?: number; id?: string }) {
   return (
     <section
-      className={`bg-[var(--bg-card)] rounded-xl sm:rounded-2xl border border-[var(--border)] shadow-sm overflow-hidden ${className}`}
+      id={id}
+      className={`repair-section-card bg-[var(--bg-card)] border border-[var(--border)] overflow-hidden ${className}`}
       style={{ animation: 'cardUp 0.5s ease both', animationDelay: `${delay}ms` }}
     >
       {children}
@@ -65,9 +66,9 @@ function SectionCard({ children, className = '', delay = 0 }: { children: React.
   )
 }
 
-function SectionHeader({ icon, iconBg, title, subtitle, action }: any) {
+function SectionHeader({ icon, iconBg, title, subtitle, action, id }: any) {
   return (
-    <div className="flex items-start sm:items-center justify-between px-4 sm:px-6 pt-4 sm:pt-5 pb-3 sm:pb-4 border-b border-[var(--border-lt)] gap-2">
+    <div id={id} className="repair-section-header flex items-start sm:items-center justify-between gap-2">
       <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
         <div className={`w-8 h-8 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl flex items-center justify-center shadow-sm shrink-0 ${iconBg}`}>
           <Fa icon={icon} className="text-white text-xs sm:text-sm" />
@@ -84,7 +85,7 @@ function SectionHeader({ icon, iconBg, title, subtitle, action }: any) {
 
 function InfoField({ label, value, highlight = false, mono = false }: any) {
   return (
-    <div className="flex flex-col gap-1 min-w-0">
+    <div className="repair-info-field flex flex-col gap-1 min-w-0">
       <span className="text-[9px] font-black text-[var(--text-4)] uppercase tracking-widest">{label}</span>
       <p className={`text-[11px] sm:text-[12px] leading-tight truncate ${highlight ? 'font-black text-blue-600' : 'font-semibold text-[var(--text-2)]'} ${mono ? 'font-mono' : ''}`}>
         {value || <span className="text-[var(--text-4)] italic text-[10px]">—</span>}
@@ -94,7 +95,7 @@ function InfoField({ label, value, highlight = false, mono = false }: any) {
 }
 
 function ActionBtn({ onClick, href, icon, label, color, shadow, pulse = false }: any) {
-  const cls = `relative flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-xl text-white text-[10px] font-black uppercase tracking-wider transition-all active:scale-95 ${color} ${shadow} shadow-lg whitespace-nowrap shrink-0`
+  const cls = `repair-action-btn relative flex items-center gap-1.5 text-white transition-all active:scale-95 ${color} whitespace-nowrap shrink-0`
   const content = (
     <>
       <Fa icon={icon} className="text-xs shrink-0" />
@@ -363,9 +364,16 @@ export default function RepairDetailView() {
     setTimeout(() => setCopiedLink(false), 2000)
   }
   const accentColor = STATUS_COLORS[r.status as keyof typeof STATUS_COLORS] ?? '#3B82F6'
+  const intakeTimestamp = new Date(r.intakeDate || Date.now()).getTime()
+  const repairAgeDays = Number.isFinite(intakeTimestamp)
+    ? Math.max(0, Math.floor((Date.now() - intakeTimestamp) / 86400000))
+    : 0
+  const scrollToRepairSection = (id: string) => {
+    document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
 
   return (
-    <div className="bg-[var(--bg-page)] pb-8" style={{ animation: 'fadeIn 0.3s ease both' }}>
+    <div className="repair-detail bg-[var(--bg-page)] pb-8" style={{ animation: 'fadeIn 0.3s ease both' }}>
       <input type="file" ref={photoInputRef} onChange={handlePhotoUpload} accept="image/jpeg,image/png,image/webp" className="hidden" />
       <input type="file" ref={diagReportInputRef} accept=".pdf,.doc,.docx" className="hidden"
         onChange={e => {
@@ -387,8 +395,8 @@ export default function RepairDetailView() {
       />
 
       {/* ── Header ── */}
-      <header className="erp-record-header sticky top-0 z-30 shadow-sm">
-        <div className="w-full max-w-[1440px] mx-auto flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
+      <header className="repair-detail__header erp-record-header sticky top-0 z-30">
+        <div className="repair-detail__header-row w-full flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
 
           {/* Left: back + title */}
           <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
@@ -600,15 +608,47 @@ export default function RepairDetailView() {
         )}
       </header>
 
+      <section className="repair-detail__progress" aria-label="Repair progress">
+        <div className="repair-detail__desktop-progress">
+          <StatusStepper
+            currentStatus={r.status}
+            history={r.statusHistory || []}
+            steps={repairProgressOrderFor(r)}
+          />
+        </div>
+        <div className="repair-detail__mobile-stage">
+          <span>Current stage</span>
+          <strong>{STATUS_LABELS[r.status as keyof typeof STATUS_LABELS] ?? r.status.replace(/_/g, ' ')}</strong>
+          <div className="repair-detail__mobile-track"><i style={{ width: `${Math.max(12, ((repairProgressOrderFor(r).indexOf(r.status) + 1) / Math.max(repairProgressOrderFor(r).length, 1)) * 100)}%` }} /></div>
+          <p><b>Next:</b> {nextActionHint || 'Continue the repair workflow'}</p>
+        </div>
+      </section>
+
+      <section className="repair-detail__summary" aria-label="Repair summary">
+        <div><span>Next action</span><strong>{nextActionHint || 'Review job activity'}</strong></div>
+        <div><span>Age</span><strong>{repairAgeDays} day{repairAgeDays === 1 ? '' : 's'}</strong></div>
+        <div><span>{r.quote ? 'Approved total' : 'Estimate'}</span><strong>{fmtKes(r.quote?.approvedTotal ?? r.quote?.total ?? r.total ?? 0)}</strong></div>
+        <div><span>Technician</span><strong>{r.assignedTechnicianName || 'Unassigned'}</strong><small>{pendingOutsourceJob ? pendingOutsourceJob.vendorName : 'In shop'}</small></div>
+      </section>
+
+      <nav className="repair-detail__tabs" aria-label="Repair record sections">
+        <button type="button" onClick={() => scrollToRepairSection('repair-overview')}>Overview</button>
+        <button type="button" onClick={() => scrollToRepairSection('repair-diagnosis')}>Diagnosis &amp; quote</button>
+        <button type="button" onClick={() => scrollToRepairSection('repair-parts')}>Parts</button>
+        <button type="button" onClick={() => scrollToRepairSection('repair-qc')}>Quality check</button>
+        <button type="button" onClick={() => scrollToRepairSection('repair-delivery')}>Delivery</button>
+        <button type="button" onClick={() => scrollToRepairSection('repair-history')}>Messages &amp; history</button>
+      </nav>
+
       {/* ── Body ── */}
-      <div className="p-3 sm:p-4 lg:p-6">
-        <div className="max-w-[1600px] mx-auto grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-5 lg:gap-6">
+      <div className="repair-detail__body">
+        <div className="repair-detail__grid grid grid-cols-1 lg:grid-cols-12">
 
           {/* ═══ Left Column ═══ */}
-          <div className="lg:col-span-8 space-y-4 sm:space-y-5 lg:space-y-6">
+          <div className="repair-detail__main lg:col-span-8">
 
             {/* Device & Client */}
-            <SectionCard delay={60}>
+            <SectionCard delay={60} id="repair-overview">
               <SectionHeader
                 icon={faMicrochip}
                 iconBg="bg-slate-800"
@@ -859,7 +899,8 @@ export default function RepairDetailView() {
                 <SectionHeader
                   icon={faStethoscope}
                   iconBg="bg-blue-600"
-                  title="Diagnosis & Technical Assessment"
+                  id="repair-diagnosis"
+              title="Diagnosis & Technical Assessment"
                   subtitle={
                     r.diagnosis?.diagnosedDate
                       ? `${new Date(r.diagnosis.diagnosedDate).toLocaleDateString('en-KE', { day: 'numeric', month: 'short', year: 'numeric' })} · ${r.diagnosis.diagnosedBy}`
@@ -1111,7 +1152,8 @@ export default function RepairDetailView() {
                 <SectionHeader
                   icon={faShieldAlt}
                   iconBg="bg-emerald-500"
-                  title="QC Report File"
+                  id="repair-qc"
+              title="QC Report File"
                   subtitle="Lightweight attachment visible to the customer portal"
                   action={
                     <button onClick={() => qcReportInputRef.current?.click()} className="btn-outline text-[10px]" disabled={uploadingQcReport}>
@@ -1243,7 +1285,7 @@ export default function RepairDetailView() {
           </div>
 
           {/* ═══ Right Column ═══ */}
-          <div className="lg:col-span-4 space-y-4 sm:space-y-5 lg:space-y-6">
+          <aside className="repair-detail__aside lg:col-span-4">
 
             {/* Follow-up Portal */}
             <div className="relative rounded-xl sm:rounded-2xl overflow-hidden shadow-sm border" style={{ borderColor: 'var(--border)', background: 'var(--navy)' }}>
@@ -1284,7 +1326,7 @@ export default function RepairDetailView() {
 
             {/* Financials */}
             <SectionCard delay={100}>
-              <SectionHeader icon={faQuoteRight} iconBg="bg-emerald-600" title="Financials" subtitle="Quote & charges" />
+              <SectionHeader id="repair-diagnosis-financials" icon={faQuoteRight} iconBg="bg-emerald-600" title="Financials" subtitle="Quote & charges" />
               <div className="px-4 sm:px-6 py-4 sm:py-5">
                 {r.quote ? (
                   <div className="space-y-3">
@@ -1474,7 +1516,8 @@ export default function RepairDetailView() {
                 <SectionHeader
                   icon={faBoxOpen}
                   iconBg="bg-orange-500"
-                  title="Parts & Procurement"
+                  id="repair-parts"
+              title="Parts & Procurement"
                   subtitle={`${r.procurementRequests.length} request${r.procurementRequests.length !== 1 ? 's' : ''}`}
                   action={
                     canProcure
@@ -1641,7 +1684,7 @@ export default function RepairDetailView() {
 
             {/* Repair Timeline */}
             <SectionCard delay={340}>
-              <SectionHeader icon={faHistory} iconBg="bg-slate-600" title="Repair Timeline" subtitle="Status & progress history" />
+              <SectionHeader id="repair-history" icon={faHistory} iconBg="bg-slate-600" title="Repair Timeline" subtitle="Status & progress history" />
               <div className="px-4 sm:px-6 py-4 sm:py-5">
                 <StatusStepper
                   currentStatus={r.status}
