@@ -791,7 +791,7 @@ function CRMContent() {
         color="var(--primary)"
         primaryAction={primaryCrmAction}
         overflowActions={tab === 'pipeline' && view !== 'detail' ? (
-          <div className="flex items-center gap-1.5">
+          <div className="crm-view-toggle">
             {(['kanban', 'list'] as const).map(v => (
               <button type="button" key={v} onClick={() => setView(v)}
                 className={`text-[11px] px-3 py-1.5 rounded-lg border font-medium capitalize cursor-pointer transition-colors ${view === v ? 'bg-primary text-white border-primary' : 'border-border text-text-2 hover:bg-surface'}`}>
@@ -834,7 +834,7 @@ function CRMContent() {
     return (
       <div className="mod-page crm-workspace">
         {moduleHeader}
-        <div className="mod-body crm-body crm-pipeline-body p-3 sm:p-4 flex flex-col gap-4">
+        <div className={`mod-body crm-body crm-pipeline-body crm-pipeline-body--${view} p-3 sm:p-4 flex flex-col gap-4`}>
         {/* pipeline content start */}
         <section className="crm-metric-strip" aria-label="Pipeline at a glance">
           <div className="crm-metric">
