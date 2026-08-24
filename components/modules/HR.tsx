@@ -526,7 +526,7 @@ function HRContent() {
               </div>
               <div className="hr-kpi-card">
                 <span className="hr-kpi-icon"><Fa icon={faCalendarCheck} /></span>
-                <span><small>Leave requests</small><strong>{leaveRequests.filter(req => req.status === 'pending').length}</strong></span>
+                <span><small>Leave requests</small><strong>{leaveRequests.filter(req => req.status === 'pending_hr').length}</strong></span>
               </div>
               <div className="hr-kpi-card">
                 <span className="hr-kpi-icon"><Fa icon={faFileSignature} /></span>
@@ -593,13 +593,13 @@ function HRContent() {
                 <div className="hr-attention__title">Needs attention</div>
                 <section>
                   <header><strong>Leave approvals</strong><button type="button" onClick={() => setTab('leave')}>View all</button></header>
-                  {leaveRequests.filter(req => req.status === 'pending').slice(0, 3).map(req => (
+                  {leaveRequests.filter(req => req.status === 'pending_hr').slice(0, 3).map(req => (
                     <button key={req.id} type="button" className="hr-attention__item" onClick={() => setTab('leave')}>
                       <span><strong>{req.employeeName}</strong><small>{req.leaveType.replaceAll('_', ' ')} leave</small></span>
                       <span>{fmtDate(req.startDate)}</span>
                     </button>
                   ))}
-                  {leaveRequests.every(req => req.status !== 'pending') && <p className="hr-attention__empty">No leave approvals pending.</p>}
+                  {leaveRequests.every(req => req.status !== 'pending_hr') && <p className="hr-attention__empty">No leave approvals pending.</p>}
                 </section>
                 <section>
                   <header><strong>Asset acknowledgements</strong><button type="button" onClick={() => setTab('assets')}>View all</button></header>
