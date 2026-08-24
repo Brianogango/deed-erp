@@ -2178,7 +2178,7 @@ export function ModuleHeader({
   const hasActions = Boolean(primaryAction || overflowActions || actions)
   return (
     <header className="mod-header">
-      <div className="flex items-center gap-3 flex-1 min-w-0">
+      <div className="mod-header__identity flex items-center gap-3 flex-1 min-w-0">
         {icon && (
           <div
             className="mod-header-icon w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0"

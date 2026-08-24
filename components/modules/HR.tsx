@@ -413,9 +413,22 @@ function HRContent() {
       exportValue: e => e.departmentId,
     },
     {
-      key: 'jobTitle', label: 'Job Title', priority: 3, width: '150px',
+      key: 'jobTitle', label: 'Job title', priority: 2, width: '150px',
       render: e => e.jobTitle,
       exportValue: e => e.jobTitle,
+    },
+    {
+      key: 'startDate', label: 'Start date', priority: 3, width: '105px',
+      render: e => <span className="whitespace-nowrap">{fmtDate(e.startDate)}</span>,
+      exportValue: e => e.startDate,
+    },
+    {
+      key: 'nextAction', label: 'Next action', priority: 3, width: '115px',
+      render: e => (
+        <button type="button" className="hr-table-link" onClick={event => { event.stopPropagation(); setViewEmpId(e.id) }}>
+          View profile
+        </button>
+      ),
     },
   ]
 
@@ -451,13 +464,13 @@ function HRContent() {
   if (!mounted) return <ModuleSkeleton />
 
   return (
-    <div className="mod-page">
+    <div className="mod-page hr-workspace">
       <ModuleHeader
         title="Human resources"
-        subtitle="Employees, payroll and leave"
+        subtitle="People, leave and payroll operations"
         icon={<Fa icon={faUsers} />}
         count={employees.length}
-        color="var(--info)"
+        color="var(--navy)"
         primaryAction={isAdmin ? (
           <PrimaryActionButton
             icon={<Fa icon={faUserPlus} />}
@@ -499,10 +512,31 @@ function HRContent() {
 
       {/* ── Content ────────────────────────────────────────────────────────── */}
       <div className="mod-body">
-      <div className="card overflow-hidden m-3 sm:m-4">
+      <div className="hr-content-shell card overflow-hidden m-3 sm:m-4">
         {tab === 'employees' && canManageHR ? (
-          <div className="flex flex-col">
-            <div className="p-4 border-b border-[var(--border-lt)] flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="hr-employees-view">
+            <div className="hr-kpi-strip" aria-label="HR overview">
+              <div className="hr-kpi-card">
+                <span className="hr-kpi-icon"><Fa icon={faUsers} /></span>
+                <span><small>Active employees</small><strong>{employees.filter(e => e.status === 'active').length}</strong></span>
+              </div>
+              <div className="hr-kpi-card">
+                <span className="hr-kpi-icon"><Fa icon={faCalendarDays} /></span>
+                <span><small>On leave</small><strong>{employees.filter(e => e.status === 'on_leave').length}</strong></span>
+              </div>
+              <div className="hr-kpi-card">
+                <span className="hr-kpi-icon"><Fa icon={faCalendarCheck} /></span>
+                <span><small>Leave requests</small><strong>{leaveRequests.filter(req => req.status === 'pending').length}</strong></span>
+              </div>
+              <div className="hr-kpi-card">
+                <span className="hr-kpi-icon"><Fa icon={faFileSignature} /></span>
+                <span><small>Payroll to review</small><strong>{payrollRuns.filter(run => run.status !== 'posted').length}</strong></span>
+              </div>
+            </div>
+            <div className="hr-employees-grid">
+              <section className="hr-directory card overflow-hidden">
+            <div className="hr-directory-toolbar p-4 border-b border-[var(--border-lt)] flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <h2>Employee directory</h2>
               <div className="relative flex-1 max-w-md">
                 <input
                   type="text"
@@ -554,6 +588,41 @@ function HRContent() {
               exportTitle="Employees"
               exportFilename="employees"
             />
+              </section>
+              <aside className="hr-attention card" aria-label="HR needs attention">
+                <div className="hr-attention__title">Needs attention</div>
+                <section>
+                  <header><strong>Leave approvals</strong><button type="button" onClick={() => setTab('leave')}>View all</button></header>
+                  {leaveRequests.filter(req => req.status === 'pending').slice(0, 3).map(req => (
+                    <button key={req.id} type="button" className="hr-attention__item" onClick={() => setTab('leave')}>
+                      <span><strong>{req.employeeName}</strong><small>{req.leaveType.replaceAll('_', ' ')} leave</small></span>
+                      <span>{fmtDate(req.startDate)}</span>
+                    </button>
+                  ))}
+                  {leaveRequests.every(req => req.status !== 'pending') && <p className="hr-attention__empty">No leave approvals pending.</p>}
+                </section>
+                <section>
+                  <header><strong>Asset acknowledgements</strong><button type="button" onClick={() => setTab('assets')}>View all</button></header>
+                  {employeeAssetAssignments.filter(a => a.status === 'assigned').slice(0, 3).map(a => (
+                    <button key={a.id} type="button" className="hr-attention__item" onClick={() => setTab('assets')}>
+                      <span><strong>{a.employeeName}</strong><small>{a.productName}</small></span>
+                      <span>Pending</span>
+                    </button>
+                  ))}
+                  {employeeAssetAssignments.every(a => a.status !== 'assigned') && <p className="hr-attention__empty">No asset acknowledgements pending.</p>}
+                </section>
+                <section>
+                  <header><strong>Payroll review</strong><button type="button" onClick={() => setTab('payroll')}>View all</button></header>
+                  {payrollRuns.filter(run => run.status !== 'posted').slice(0, 2).map(run => (
+                    <button key={run.id} type="button" className="hr-attention__item" onClick={() => setTab('payroll')}>
+                      <span><strong>{run.ref}</strong><small>{run.lines.length} employees</small></span>
+                      <span>{run.status.replaceAll('_', ' ')}</span>
+                    </button>
+                  ))}
+                  {payrollRuns.every(run => run.status === 'posted') && <p className="hr-attention__empty">No payroll reviews pending.</p>}
+                </section>
+              </aside>
+            </div>
           </div>
         ) : tab === 'leave' ? (
           <HRLeaveTab />
@@ -574,9 +643,9 @@ function HRContent() {
         ) : tab === 'assets' ? (
           <HRAssetsTab />
         ) : tab === 'self_service' ? (
-          <div className="p-6 flex flex-col gap-8">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div className="flex items-center gap-4">
+          <div className="hr-self-service p-6 flex flex-col gap-8">
+            <div className="hr-self-service__hero flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="hr-self-service__identity flex items-center gap-4">
                 <div className="w-16 h-16 rounded-2xl bg-primary-500/10 flex items-center justify-center text-primary-600 text-2xl font-bold border border-primary-500/20">
                   {currentUser?.name?.slice(0, 1).toUpperCase()}
                 </div>
@@ -587,7 +656,7 @@ function HRContent() {
                   </p>
                 </div>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="hr-self-service__actions flex items-center gap-2">
                 <button className="btn-secondary flex items-center gap-2" onClick={() => setTab('salary_advances')}>
                   <Fa icon={faMoneyBill} />
                   <span>Salary Advance</span>
@@ -599,7 +668,7 @@ function HRContent() {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="hr-self-service__grid grid grid-cols-1 md:grid-cols-3 gap-6">
               <div className="card p-5 bg-[var(--bg-surface)] border-[var(--border-lt)]">
                 <h3 className="text-sm font-bold text-[var(--text-1)] mb-4">Leave Balance</h3>
                 <div className="flex flex-col gap-3">
@@ -777,7 +846,7 @@ function HRContent() {
           onClose={() => { setViewEmpId(null); setEditEmpId(null); setEmpForm(blankEmp()) }} 
           width={editEmpId === viewEmployee.id ? 580 : 520}
         >
-          <div className="flex flex-col gap-4">
+          <div className="hr-employee-detail flex flex-col gap-4">
             {editEmpId === viewEmployee.id ? (
               // Edit Mode
               <>
@@ -880,7 +949,7 @@ function HRContent() {
             ) : (
               // View Mode
               <>
-                <div className="flex items-center gap-4 pb-3 border-b border-[var(--border-lt)]">
+                <div className="hr-employee-profile__hero flex items-center gap-4 pb-3 border-b border-[var(--border-lt)]">
                   <div className="w-14 h-14 rounded-2xl bg-primary-100 text-primary-600 flex items-center justify-center font-bold text-xl">
                     {viewEmployee.fullName.slice(0, 1)}
                   </div>
@@ -890,7 +959,7 @@ function HRContent() {
                     <p className="text-xs text-[var(--text-4)]">{viewEmployee.employeeNo}</p>
                   </div>
                 </div>
-                <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-xs">
+                <div className="hr-employee-profile__facts grid grid-cols-2 gap-x-6 gap-y-2 text-xs">
                   <div><span className="text-[var(--text-4)]">Department</span><p className="font-semibold capitalize">{viewEmployee.departmentId || '—'}</p></div>
                   <div><span className="text-[var(--text-4)]">Status</span><p className="font-semibold capitalize">{viewEmployee.status}</p></div>
                   <div><span className="text-[var(--text-4)]">Email</span><p className="font-semibold">{viewEmployee.email || '—'}</p></div>
@@ -903,7 +972,7 @@ function HRContent() {
                   <div><span className="text-[var(--text-4)]">Bank Name</span><p className="font-semibold">{viewEmployee.bankName || '—'}</p></div>
                   <div><span className="text-[var(--text-4)]">Bank Account Number</span><p className="font-semibold">{viewEmployee.bankAccount || '—'}</p></div>
                 </div>
-                <div className="flex gap-3 justify-end pt-2">
+                <div className="hr-employee-profile__actions flex gap-3 justify-end pt-2">
                   <button className="btn-secondary px-6" onClick={() => setViewEmpId(null)}>Close</button>
                   <button className="btn-primary px-6 flex items-center gap-2" onClick={() => { setEmpForm({ fullName: viewEmployee.fullName, employeeNo: viewEmployee.employeeNo, email: viewEmployee.email || '', phone: viewEmployee.phone || '', nationalId: viewEmployee.nationalId || '', kraPin: viewEmployee.kraPin || '', nssfNumber: viewEmployee.nssfNumber || '', gender: viewEmployee.gender || '', departmentId: viewEmployee.departmentId || '', jobTitle: viewEmployee.jobTitle || '', shift: viewEmployee.shift || '', startDate: viewEmployee.startDate, status: viewEmployee.status as any, basicSalary: String(viewEmployee.basicSalary), housingAllowance: String(viewEmployee.housingAllowance ?? 0), transportAllowance: String(viewEmployee.transportAllowance ?? 0), bankName: viewEmployee.bankName || '', bankAccount: viewEmployee.bankAccount || '' }); setEditEmpId(viewEmployee.id) }}>
                     <Fa icon={faPen} />
