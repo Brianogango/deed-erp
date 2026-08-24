@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   mergeEffectsIntoTarget,
   parseProductReconfigEffect,
+  partCapacityGb,
 } from '@/lib/reconfiguration/product-effect'
 
 describe('parseProductReconfigEffect', () => {
@@ -28,6 +29,28 @@ describe('parseProductReconfigEffect', () => {
     expect(effect?.slot).toBe('ram')
     expect(effect?.targetRamGb).toBe(16)
     expect(effect?.source).toBe('name')
+  })
+
+  it('treats SODIMM sticks as additive capacity (8GB + 4GB stick → 12GB)', () => {
+    const effect = parseProductReconfigEffect({
+      id: 'p2b',
+      name: '4GB DDR4 SODIMM Laptop RAM - 2666MHz',
+      specs: {},
+    })
+    expect(effect).toMatchObject({
+      slot: 'ram',
+      addRamGb: 4,
+      additiveRam: true,
+      source: 'name',
+    })
+    expect(partCapacityGb({
+      id: 'p2b',
+      name: '4GB DDR4 SODIMM Laptop RAM - 2666MHz',
+    })).toBe(4)
+    expect(mergeEffectsIntoTarget({
+      current: { totalRamGb: 8, primaryStorageGb: 256, storageType: 'SSD' },
+      effects: [effect!],
+    })?.totalRamGb).toBe(12)
   })
 
   it('infers SSD from product name', () => {

@@ -258,8 +258,21 @@ export default function Reconfiguration() {
     })
   }, [deviceConfig, ram, storage, ramParts, storageParts, partProducts, currentRamGb, currentStorageGb])
 
+  const applyBlocked = useMemo(() => {
+    if (!deviceConfig) return null
+    if (!preview) return 'Choose a RAM or SSD action.'
+    if (preview.error) return preview.error
+    if (unresolved && ram.action !== 'none' && !currentRamGb) {
+      return 'Enter the current RAM size in GB so the new total can be calculated.'
+    }
+    if (unresolved && storage.action !== 'none' && !currentStorageGb) {
+      return 'Enter the current SSD size in GB so the new total can be calculated.'
+    }
+    return null
+  }, [deviceConfig, preview, unresolved, ram.action, storage.action, currentRamGb, currentStorageGb])
+
   async function applyNow() {
-    if (!wizSerialId || !preview || preview.error) return
+    if (!wizSerialId || !preview || preview.error || applyBlocked) return
     setLoading(true)
     setError(null)
     setDoneHint(null)
@@ -624,17 +637,14 @@ export default function Reconfiguration() {
             <button
               type="button"
               className="btn-primary"
-              disabled={
-                !wizSerialId
-                || !preview
-                || Boolean(preview.error)
-                || loading
-                || (unresolved && (ram.action !== 'none' || storage.action !== 'none') && (!currentRamGb || !currentStorageGb))
-              }
+              disabled={!wizSerialId || loading || Boolean(applyBlocked)}
               onClick={() => void applyNow()}
             >
               Apply now
             </button>
+            {applyBlocked && applyBlocked !== preview?.error ? (
+              <p className="reconfig-compare-error">{applyBlocked}</p>
+            ) : null}
           </div>
         </div>
       )}

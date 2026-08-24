@@ -123,6 +123,18 @@ describe('bench-action RAM', () => {
     expect(result.installations).toHaveLength(1)
   })
 
+  it('add a 4GB stick: 8 → 12', () => {
+    const result = applyBenchSlot({
+      slot: 'ram',
+      action: 'add_one',
+      currentTotalGb: 8,
+      moduleCount: 1,
+      incoming: { productId: 'prod-ram-4', capacityGb: 4, productName: '4GB DDR4 SODIMM Laptop RAM - 2666MHz' },
+    })
+    expect(result.error).toBeUndefined()
+    expect(result.afterGb).toBe(12)
+  })
+
   it('blocks soldered RAM pull', () => {
     const result = applyBenchSlot({
       slot: 'ram',

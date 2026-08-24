@@ -97,6 +97,14 @@ function inferFromName(name: string): Partial<ProductReconfigEffect> | null {
       storageType: hdd && !ssd ? 'HDD' : 'SSD',
     }
   }
+  // "4GB DDR4 SODIMM Laptop RAM - 2666MHz" — GB sits before DDR/SODIMM, not
+  // immediately before the word RAM, so the generic RAM regex misses it.
+  // These are additive sticks, not an absolute target size for the machine.
+  const stickGb = name.match(/^(\d+)\s*GB\b/i)
+  const isRamStick = /\b(sodimm|so-dimm|udimm|dimm)\b/i.test(name) && /\b(ram|memory)\b/i.test(name)
+  if (stickGb && isRamStick) {
+    return { slot: 'ram', addRamGb: Number(stickGb[1]), additiveRam: true }
+  }
   if (ram) {
     return { slot: 'ram', targetRamGb: Number(ram[1]), additiveRam: /upgrade|add(itional)?/i.test(name) }
   }
