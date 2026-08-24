@@ -21409,3 +21409,114 @@ body:has(.crm-workspace) [role="dialog"] > div {
     gap: 0.5rem !important;
   }
 }
+
+/* Operations / Inventory theme collision fix
+   Use the same restrained surface system as Purchase and other approved
+   modules: white chrome, Deed navy hierarchy and cyan only for navigation. */
+
+.operations-workspace.inventory-pilot {
+  background: #f5f7fa !important;
+  color: var(--erp-ink) !important;
+}
+
+.operations-workspace.inventory-pilot.mod-page > .mod-header {
+  border-bottom: 1px solid var(--erp-line) !important;
+  background: var(--erp-surface) !important;
+  color: var(--erp-ink) !important;
+  box-shadow: none !important;
+}
+
+.operations-workspace.inventory-pilot .mod-header-icon,
+.operations-workspace.inventory-pilot.mod-page > .mod-header .w-9.h-9 {
+  border: 1px solid #d7e5ee !important;
+  background: #eef5fa !important;
+  color: var(--erp-brand) !important;
+}
+
+.operations-workspace.inventory-pilot .mod-header-icon *,
+.operations-workspace.inventory-pilot .mod-header-icon [style] {
+  color: inherit !important;
+}
+
+.operations-workspace.inventory-pilot .erp-module-title,
+.operations-workspace.inventory-pilot.mod-page > .mod-header h1 {
+  color: var(--erp-brand) !important;
+}
+
+.operations-workspace.inventory-pilot .erp-module-subtitle,
+.operations-workspace.inventory-pilot.mod-page > .mod-header p {
+  color: var(--erp-muted) !important;
+}
+
+.operations-workspace.inventory-pilot.mod-page > .mod-header .badge {
+  border-color: #d0d5dd !important;
+  background: #f2f4f7 !important;
+  color: var(--erp-brand) !important;
+}
+
+.operations-workspace.inventory-pilot > .mod-header :is(.btn-primary, .primary-action-button) {
+  border-color: var(--erp-brand) !important;
+  background: var(--erp-brand) !important;
+  color: #fff !important;
+  box-shadow: none !important;
+}
+
+.operations-workspace.inventory-pilot > .mod-header :is(.btn-primary, .primary-action-button):hover {
+  border-color: #170c3a !important;
+  background: #170c3a !important;
+  color: #fff !important;
+}
+
+.operations-workspace.inventory-pilot > .mod-header .btn-secondary {
+  border-color: #c8d2df !important;
+  background: var(--erp-surface) !important;
+  color: var(--erp-brand) !important;
+  box-shadow: none !important;
+}
+
+.operations-workspace.inventory-pilot > .mod-header .btn-secondary:hover {
+  border-color: #aebccc !important;
+  background: var(--erp-soft) !important;
+  color: var(--erp-brand) !important;
+}
+
+.operations-workspace.inventory-pilot > .mod-tabs,
+.operations-workspace.inventory-pilot > .mod-tabs.mod-tabs-adaptive,
+.operations-workspace.inventory-pilot > .mod-tabs.mod-tabs-tablet-grid,
+.operations-workspace.inventory-pilot > .mod-tabs.mod-tabs-desktop-full {
+  border-bottom: 1px solid var(--erp-line) !important;
+  background: var(--erp-surface) !important;
+  box-shadow: none !important;
+}
+
+.operations-workspace.inventory-pilot > .mod-tabs .mod-tab,
+.operations-workspace.inventory-pilot > .mod-tabs.mod-tabs-adaptive .mod-tab,
+.operations-workspace.inventory-pilot > .mod-tabs.mod-tabs-tablet-grid .mod-tab,
+.operations-workspace.inventory-pilot > .mod-tabs.mod-tabs-desktop-full .mod-tab {
+  border: 0 !important;
+  background: transparent !important;
+  color: #475467 !important;
+  box-shadow: none !important;
+}
+
+.operations-workspace.inventory-pilot > .mod-tabs .mod-tab:hover {
+  background: var(--erp-soft) !important;
+  color: var(--erp-brand) !important;
+}
+
+.operations-workspace.inventory-pilot > .mod-tabs .mod-tab.active,
+.operations-workspace.inventory-pilot > .mod-tabs .mod-tab[aria-selected='true'] {
+  background: transparent !important;
+  color: var(--erp-brand) !important;
+}
+
+.operations-workspace.inventory-pilot > .mod-tabs .mod-tab.active::after,
+.operations-workspace.inventory-pilot > .mod-tabs .mod-tab[aria-selected='true']::after {
+  background: var(--erp-accent) !important;
+}
+
+.operations-workspace.inventory-pilot > .mod-tabs .mod-tab:focus-visible,
+.operations-workspace.inventory-pilot > .mod-header button:focus-visible {
+  outline: 2px solid var(--erp-accent) !important;
+  outline-offset: 2px !important;
+}
