@@ -637,8 +637,15 @@ export const DEFAULT_BANK_ACCOUNTS: BankAccount[] = [
 
 export interface CompanySettings {
   name: string
+  legalName?: string
   address: string
+  streetAddress?: string
   city: string
+  county?: string
+  postalCode?: string
+  country?: string
+  language?: string
+  timezone?: string
   phone: string
   email: string
   website: string
@@ -804,8 +811,15 @@ export const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
 
 export const DEFAULT_COMPANY_SETTINGS: CompanySettings = {
   name:          'Deed Technologies LTD',
+  legalName:     'Deed Technologies Limited',
   address:       'Sanlam House, Kenyatta Avenue',
-  city:          'Nairobi 6690-20200',
+  streetAddress: 'Sanlam House, Kenyatta Avenue, 1st Floor, Suite 103',
+  city:          'Nairobi',
+  county:        'Nairobi',
+  postalCode:    '00100',
+  country:       'Kenya',
+  language:      'English (Kenya)',
+  timezone:      'Africa/Nairobi',
   phone:         '0113407964',
   email:         'info@deed.africa',
   website:       'http://deed.africa',
