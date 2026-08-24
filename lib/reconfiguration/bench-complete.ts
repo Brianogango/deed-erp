@@ -25,6 +25,7 @@ import {
   applyBenchJob,
   modulesFromInstalled,
   remainingModulesToSeed,
+  reuseSeededInstallId,
   type BenchActionKind,
   type BenchSlotRequest,
 } from '@/lib/reconfiguration/bench-action'
@@ -165,9 +166,16 @@ async function seedDeclaredModule(params: {
       slotNumber: params.slotNumber,
       status: 'installed',
     },
-    select: { id: true },
+    select: { id: true, componentProductId: true },
   })
-  if (existing) return existing.id
+  const reuseId = reuseSeededInstallId(existing, params.productId)
+  if (reuseId) return reuseId
+  if (existing) {
+    throw httpError(
+      `Slot ${slotType} ${params.slotNumber} already has another part installed. Pull or swap it before seeding this module.`,
+      409,
+    )
+  }
   const row = await prisma.deviceComponentInstallation.create({
     data: {
       serialId: params.serialId,
@@ -395,67 +403,9 @@ export async function applyBenchAndComplete(params: ApplyBenchParams) {
   let installedCost = 0
 
   try {
-    // Consume incoming parts first so a missing stick/drive fails closed
-    // before anything is pulled from the machine.
-    for (const move of [...job.ram.installations, ...job.storage.installations]) {
-      const meta = await partMeta(move.productId)
-      installedCost += meta.unitCost
-      const line = await prisma.reconfigurationInstallationLine.create({
-        data: {
-          workOrderId: wo.id,
-          componentProductId: move.productId,
-          requiredSpec: {
-            capacityGb: move.capacityGb,
-            category: move.slot,
-          },
-          sourceLocation: location,
-          quantity: 1,
-          unitCost: meta.unitCost,
-          targetSlotType: move.slot === 'ram' ? 'ram_slot' : 'm2_slot',
-          targetSlotNumber: move.slotNumber,
-          compatibilityResult: 'pass',
-        },
-      })
-
-      const plan = planComponentInstall({
-        documentRef: ref,
-        productId: move.productId,
-        productName: meta.name,
-        qty: 1,
-        from: location as any,
-      })
-      const moveRef = await applyStockPlan(plan, meta.unitCost, { workOrderId: wo.id, userId: params.userId })
-
-      const installation = await prisma.deviceComponentInstallation.create({
-        data: {
-          serialId: device.serialId,
-          componentProductId: move.productId,
-          category: move.slot === 'ram' ? 'ram' : 'storage',
-          slotType: move.slot === 'ram' ? 'ram_slot' : 'm2_slot',
-          slotNumber: move.slotNumber,
-          capacityGb: move.capacityGb,
-          quantity: 1,
-          removable: true,
-          status: 'installed',
-          costAtInstallation: meta.unitCost,
-          sourceStockMoveRef: moveRef,
-          installationWorkOrderId: wo.id,
-          installedById: params.userId || null,
-        },
-      })
-
-      await prisma.reconfigurationInstallationLine.update({
-        where: { id: line.id },
-        data: {
-          installedAt: new Date(),
-          installedById: params.userId || null,
-          resultingInstallationId: installation.id,
-          reservationStatus: 'fulfilled',
-          stockMoveRef: moveRef,
-        },
-      })
-    }
-
+    // Pull first, then fit. Incoming warehouse qty is already asserted above.
+    // Installing first on a swap reuses the same slot, so seeding the outgoing
+    // drive would pick up the new SSD and immediately mark it removed.
     for (const move of [...job.ram.removals, ...job.storage.removals]) {
       const meta = await partMeta(move.productId)
       let installationId = move.installationId
@@ -511,6 +461,65 @@ export async function applyBenchAndComplete(params: ApplyBenchParams) {
         data: {
           actualRemovedAt: new Date(),
           removedById: params.userId || null,
+          stockMoveRef: moveRef,
+        },
+      })
+    }
+
+    for (const move of [...job.ram.installations, ...job.storage.installations]) {
+      const meta = await partMeta(move.productId)
+      installedCost += meta.unitCost
+      const line = await prisma.reconfigurationInstallationLine.create({
+        data: {
+          workOrderId: wo.id,
+          componentProductId: move.productId,
+          requiredSpec: {
+            capacityGb: move.capacityGb,
+            category: move.slot,
+          },
+          sourceLocation: location,
+          quantity: 1,
+          unitCost: meta.unitCost,
+          targetSlotType: move.slot === 'ram' ? 'ram_slot' : 'm2_slot',
+          targetSlotNumber: move.slotNumber,
+          compatibilityResult: 'pass',
+        },
+      })
+
+      const plan = planComponentInstall({
+        documentRef: ref,
+        productId: move.productId,
+        productName: meta.name,
+        qty: 1,
+        from: location as any,
+      })
+      const moveRef = await applyStockPlan(plan, meta.unitCost, { workOrderId: wo.id, userId: params.userId })
+
+      const installation = await prisma.deviceComponentInstallation.create({
+        data: {
+          serialId: device.serialId,
+          componentProductId: move.productId,
+          category: move.slot === 'ram' ? 'ram' : 'storage',
+          slotType: move.slot === 'ram' ? 'ram_slot' : 'm2_slot',
+          slotNumber: move.slotNumber,
+          capacityGb: move.capacityGb,
+          quantity: 1,
+          removable: true,
+          status: 'installed',
+          costAtInstallation: meta.unitCost,
+          sourceStockMoveRef: moveRef,
+          installationWorkOrderId: wo.id,
+          installedById: params.userId || null,
+        },
+      })
+
+      await prisma.reconfigurationInstallationLine.update({
+        where: { id: line.id },
+        data: {
+          installedAt: new Date(),
+          installedById: params.userId || null,
+          resultingInstallationId: installation.id,
+          reservationStatus: 'fulfilled',
           stockMoveRef: moveRef,
         },
       })

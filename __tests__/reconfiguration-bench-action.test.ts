@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { applyBenchJob, applyBenchSlot, modulesFromInstalled, remainingModulesToSeed } from '@/lib/reconfiguration/bench-action'
+import { applyBenchJob, applyBenchSlot, modulesFromInstalled, remainingModulesToSeed, reuseSeededInstallId } from '@/lib/reconfiguration/bench-action'
 import {
   catalogBaseName,
   rewriteUnitCapacitiesInText,
@@ -182,6 +182,7 @@ describe('bench-action SSD / storage — same four moves as RAM', () => {
     expect(result.afterGb).toBe(256)
     expect(result.removals[0].productId).toBe('ssd-512')
     expect(result.installations[0].productId).toBe('ssd-256')
+    expect(result.removals[0].slotNumber).toBe(result.installations[0].slotNumber)
   })
 
   it('swap up 256 → 512', () => {
@@ -324,6 +325,14 @@ describe('unit selling name after reconfig', () => {
     expect(name).toContain('ThinkPad T14')
     expect(name).toMatch(/8GB RAM/)
     expect(name).toMatch(/256GB SSD/)
+  })
+})
+
+describe('reuseSeededInstallId', () => {
+  it('reuses only the same part in a slot, never the drive just fitted', () => {
+    expect(reuseSeededInstallId({ id: 'old-128', componentProductId: 'ssd-128' }, 'ssd-128')).toBe('old-128')
+    expect(reuseSeededInstallId({ id: 'new-256', componentProductId: 'ssd-256' }, 'ssd-128')).toBeNull()
+    expect(reuseSeededInstallId(null, 'ssd-128')).toBeNull()
   })
 })
 

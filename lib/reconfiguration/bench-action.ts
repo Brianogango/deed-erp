@@ -183,6 +183,20 @@ export function remainingModulesToSeed(
   })
 }
 
+/**
+ * Reuse a seeded installation only when it is the same part. A swap installs
+ * the new drive into the same slot — matching by slot alone would pull the
+ * incoming SSD back out.
+ */
+export function reuseSeededInstallId(
+  existing: { id: string; componentProductId?: string | null } | null | undefined,
+  productId: string,
+): string | null {
+  if (!existing) return null
+  if (existing.componentProductId === productId) return existing.id
+  return null
+}
+
 function benchUnitName(params: {
   productName?: string | null
   brand?: string | null
