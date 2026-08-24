@@ -1,3 +1,5 @@
+import { matchCatalogPhotoPack } from '@/lib/catalog-photos'
+
 export const PRODUCT_IMAGE_SLOTS = [1, 2] as const
 export type ProductImageSlot = (typeof PRODUCT_IMAGE_SLOTS)[number]
 export type ProductImageRole = 'hero' | 'detail'
@@ -59,4 +61,35 @@ export function partnerImagesFromSlots(
     }
   }
   return images
+}
+
+export type ProductThumbInput = {
+  id?: unknown
+  name?: unknown
+  sku?: unknown
+  image?: unknown
+}
+
+export type ProductThumbSource = {
+  src: string
+  /** True when the URL may 404 (upload not confirmed on the client). */
+  speculative: boolean
+}
+
+/** Hero photo for POS/catalog thumbs: uploaded URL, then name-matched pack, then the public product image route. */
+export function productThumbSource(product: ProductThumbInput): ProductThumbSource | null {
+  if (isProductPhotoUrl(product.image)) {
+    return { src: String(product.image).trim(), speculative: false }
+  }
+  const pack = matchCatalogPhotoPack(product.name, product.sku)
+  if (pack) {
+    return { src: catalogPhotoPublicPath(pack.id, 1), speculative: false }
+  }
+  const id = String(product.id ?? '').trim()
+  if (!id) return null
+  return { src: productImagePublicPath(id, 1), speculative: true }
+}
+
+export function productThumbUrl(product: ProductThumbInput): string | null {
+  return productThumbSource(product)?.src ?? null
 }

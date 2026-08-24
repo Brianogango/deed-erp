@@ -8,7 +8,7 @@ import { CustomerPickerField } from '@/components/tradein/CustomerPickerField'
 import {
   Fa, faCashRegister, faReceipt, faCamera, faCartShopping, faStar,
   faCircleCheck, faPrint, faMobileScreenButton, faMoneyBillWave, faBuildingColumns,
-  faStore, faBox, faMagnifyingGlass, faMinus, faPlus,
+  faStore, faMagnifyingGlass, faMinus, faPlus,
 } from '@/components/icons'
 import { BarcodeScannerModal } from '@/components/BarcodeScanner'
 import { matchPosScan, normalizeScanCode } from '@/lib/barcode-scan'
@@ -17,6 +17,8 @@ import { loyaltyPointsEarned } from '@/lib/loyalty'
 import { customerCreditBalance } from '@/lib/customer-credit-view'
 import { resolvePosLineSerial } from '@/lib/pos-transaction-history'
 import { unitSellingName } from '@/lib/reconfiguration/unit-selling-name'
+import { productThumbUrl } from '@/lib/product-images'
+import { PosProductThumb } from '@/components/pos/PosProductThumb'
 import {
   darkenLogoForThermalPrint,
   receiptLogoSrc,
@@ -393,14 +395,14 @@ export default function PointOfSale() {
           return prev
         }
         added = true
-        return [...prev, { lineId: chosen.id, productId: product.id, productName: unitName, barcode: product.barcode, price: unitPrice, listPrice: product.salePrice, qty: 1, image: product.image ?? '', serialId: chosen.id, serialNumber: chosen.serial }]
+        return [...prev, { lineId: chosen.id, productId: product.id, productName: unitName, barcode: product.barcode, price: unitPrice, listPrice: product.salePrice, qty: 1, image: productThumbUrl(product) ?? product.image ?? '', serialId: chosen.id, serialNumber: chosen.serial }]
       })
       if (added) showToast(`${unitName} (${chosen.serial}) added`, 'success')
     } else {
       setCart(prev => {
         const ex = prev.find(i => i.productId === product.id)
         if (ex) return prev.map(i => i.productId === product.id ? { ...i, qty: i.qty + 1 } : i)
-        return [...prev, { lineId: product.id, productId: product.id, productName: product.name, barcode: product.barcode, price: product.salePrice, listPrice: product.salePrice, qty: 1, image: product.image ?? '' }]
+        return [...prev, { lineId: product.id, productId: product.id, productName: product.name, barcode: product.barcode, price: product.salePrice, listPrice: product.salePrice, qty: 1, image: productThumbUrl(product) ?? product.image ?? '' }]
       })
     }
   }
@@ -659,9 +661,7 @@ export default function PointOfSale() {
                       className="pos-product-card"
                     >
                       <div className="pos-product-media" aria-hidden="true">
-                        {product.image && !/^\p{Extended_Pictographic}/u.test(String(product.image))
-                          ? <img src={product.image} alt="" />
-                          : <Fa icon={faBox} />}
+                        <PosProductThumb product={product} />
                       </div>
                       <div className="pos-product-copy">
                         <p className="pos-product-name" title={product.name}>{product.name}</p>
@@ -732,9 +732,7 @@ export default function PointOfSale() {
                     ×
                   </button>
                   <div className="pos-cart-media" aria-hidden="true">
-                    {item.image && !/^\p{Extended_Pictographic}/u.test(String(item.image))
-                      ? <img src={item.image} alt="" />
-                      : <Fa icon={faBox} />}
+                    <PosProductThumb product={{ id: item.productId, name: item.productName, image: item.image }} />
                   </div>
                   <div className="pos-cart-copy">
                     <p className="pos-cart-name" title={item.productName}>{item.productName}</p>

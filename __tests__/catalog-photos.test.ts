@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { matchCatalogPhotoPack, CATALOG_PHOTO_PACKS } from '@/lib/catalog-photos'
-import { partnerImagesFromSlots, productImagePublicPath, catalogPhotoPublicPath } from '@/lib/product-images'
+import { partnerImagesFromSlots, productImagePublicPath, catalogPhotoPublicPath, productThumbSource, productThumbUrl } from '@/lib/product-images'
 import { findDuplicateProductGroups, pickKeepProduct, normalizeProductIdentity } from '@/lib/inventory/duplicate-products'
 import { rewriteProductIdsInRecords } from '@/lib/inventory/duplicate-products'
 
@@ -22,6 +22,43 @@ describe('matchCatalogPhotoPack', () => {
   it('has unique pack ids', () => {
     const ids = CATALOG_PHOTO_PACKS.map(p => p.id)
     expect(new Set(ids).size).toBe(ids.length)
+  })
+})
+
+describe('productThumbSource', () => {
+  it('prefers an uploaded or catalog photo URL already on the product', () => {
+    expect(productThumbSource({
+      id: 'prod-1',
+      name: 'Dell Latitude 3190 2-in-1',
+      image: '/api/public/v1/products/prod-1/images/1',
+    })).toEqual({
+      src: productImagePublicPath('prod-1', 1),
+      speculative: false,
+    })
+  })
+
+  it('uses a name-matched catalog pack when the store still has an emoji', () => {
+    expect(productThumbSource({
+      id: 'prod-2',
+      name: 'Logitech M185 Wireless Mouse',
+      image: '📦',
+    })).toEqual({
+      src: catalogPhotoPublicPath('logitech-m185', 1),
+      speculative: false,
+    })
+  })
+
+  it('falls back to the public hero route so POS can load staff uploads', () => {
+    expect(productThumbUrl({
+      id: 'dell-3190',
+      name: 'Dell Latitude 3190 2-in-1 - Intel Pentium Silver, 4GB RAM, 512GB SSD',
+      image: '💻',
+    })).toBe(productImagePublicPath('dell-3190', 1))
+    expect(productThumbSource({
+      id: 'dell-3190',
+      name: 'Dell Latitude 3190 2-in-1',
+      image: '💻',
+    })?.speculative).toBe(true)
   })
 })
 

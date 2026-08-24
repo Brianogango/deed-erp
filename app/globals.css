@@ -5805,10 +5805,13 @@ main#main-content:has(.finance-workspace) > .min-w-0 {
 
   .pos-product-media {
     display: flex;
-    height: 4.25rem;
+    height: 5.5rem;
     align-items: center;
     justify-content: center;
     flex: 0 0 auto;
+    overflow: hidden;
+    border-radius: 0.4rem;
+    background: var(--bg-surface);
     color: var(--text-4);
     font-size: 1.8rem;
   }
@@ -5997,6 +6000,10 @@ main#main-content:has(.finance-workspace) > .min-w-0 {
     height: 2.7rem;
     align-items: center;
     justify-content: center;
+    flex: 0 0 auto;
+    overflow: hidden;
+    border-radius: 0.32rem;
+    background: var(--bg-surface);
     color: var(--text-4);
     font-size: 1.2rem;
   }
@@ -6474,7 +6481,7 @@ main#main-content:has(.finance-workspace) > .min-w-0 {
     }
 
     .pos-product-media {
-      height: 4.7rem;
+      height: 5.6rem;
     }
 
     .pos-product-name {
