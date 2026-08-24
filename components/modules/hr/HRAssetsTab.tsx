@@ -184,8 +184,8 @@ export default function HRAssetsTab() {
   }
 
   return (
-    <div className="flex flex-col">
-      <div className="p-4 border-b border-[var(--border-lt)] flex items-center justify-between bg-[var(--bg-surface)]">
+    <div className="hr-submodule hr-assets flex flex-col">
+      <div className="hr-submodule-toolbar p-4 border-b border-[var(--border-lt)] flex items-center justify-between bg-[var(--bg-surface)]">
         <h3 className="text-sm font-bold text-[var(--text-1)]">Asset Assignments</h3>
         {isAdmin && (
           <button onClick={openAssignModal} className="btn-primary py-1.5 px-4 text-[10px] flex items-center gap-2">
@@ -218,7 +218,7 @@ export default function HRAssetsTab() {
           )}
           <Field label="Handover Condition"><Select value={assignForm.handoverCondition} onChange={handoverCondition => setAssignForm(p => ({ ...p, handoverCondition: handoverCondition as EmployeeAssetAssignment['handoverCondition'] }))} options={[{ value: 'new', label: 'New' }, { value: 'good', label: 'Good' }, { value: 'fair', label: 'Fair' }, { value: 'damaged', label: 'Damaged' }]} /></Field>
           <Field label="Handover Notes"><Textarea value={assignForm.handoverNotes} onChange={handoverNotes => setAssignForm(p => ({ ...p, handoverNotes }))} placeholder="Optional handover notes or accessories issued." /></Field>
-          <div className="flex justify-end gap-2 pt-2">
+          <div className="hr-modal-actions flex justify-end gap-2 pt-2">
             <button className="btn-secondary px-4 py-2 text-xs" onClick={() => setShowAssignModal(false)}>Cancel</button>
             <button className="btn-primary px-4 py-2 text-xs" onClick={submitAssign}>Save Assignment</button>
           </div>
@@ -230,7 +230,7 @@ export default function HRAssetsTab() {
           <Field label="Return Location"><Select value={returnForm.returnLocation} onChange={returnLocation => setReturnForm(p => p ? ({ ...p, returnLocation: returnLocation as LocationId }) : p)} options={[{ value: 'warehouse', label: 'Warehouse' }, { value: 'shop', label: 'Shop' }, { value: 'repair_unit', label: 'Repair Unit' }]} /></Field>
           <Field label="Return Condition" required><Select value={returnForm.condition} onChange={condition => setReturnForm(p => p ? ({ ...p, condition: condition as ReturnForm['condition'] }) : p)} options={[{ value: 'good', label: 'Good' }, { value: 'fair', label: 'Fair' }, { value: 'damaged', label: 'Damaged' }]} /></Field>
           <Field label="Inspection Notes" required><Textarea value={returnForm.notes} onChange={notes => setReturnForm(p => p ? ({ ...p, notes }) : p)} placeholder="Record the condition and any accessories returned." /></Field>
-          <div className="flex justify-end gap-2 pt-2">
+          <div className="hr-modal-actions flex justify-end gap-2 pt-2">
             <button className="btn-secondary px-4 py-2 text-xs" onClick={() => setReturnForm(null)}>Cancel</button>
             <button className="btn-primary px-4 py-2 text-xs" onClick={submitReturn}>Confirm Return</button>
           </div>

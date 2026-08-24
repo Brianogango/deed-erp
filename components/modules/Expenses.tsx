@@ -62,15 +62,15 @@ function isReimbursable(method: ExpensePaymentMethod) { return method === 'reimb
 
 function ExpenseApprovalChain({ chain }: { chain: NonNullable<Expense['approvalChain']> }) {
   return (
-    <div className="mb-3">
+    <div className="expenses-approval-chain mb-3">
       <p className="text-[10px] font-semibold uppercase tracking-wider text-t3 mb-2">Approval chain</p>
-      <div className="flex flex-col gap-1.5">
+      <div className="expenses-approval-chain__steps flex flex-col gap-1.5">
         {chain.map((step, i) => {
           const done = step.status === 'approved'
           const rejected = step.status === 'rejected'
           const pending = step.status === 'pending'
           return (
-            <div key={`${step.role}-${i}`} className="flex items-center gap-2 text-[11px]">
+            <div key={`${step.role}-${i}`} className="expenses-approval-chain__step flex items-center gap-2 text-[11px]">
               <span
                 className="w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0"
                 style={{
@@ -515,14 +515,14 @@ function ExpensesContent() {
       {showSubmit && (
         <div className="modal-overlay expenses-modal-overlay" onClick={() => setShowSubmit(false)}>
           <div className="modal-box expenses-submit-modal w-full max-w-lg" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-4">
+            <div className="expenses-modal-header flex items-center justify-between mb-4">
               <div>
                 <h3 className="text-sm font-bold text-t1">New Expense</h3>
                 <p className="text-[10px] mt-0.5" style={{ color: 'var(--text-3)' }}>
                   Submitting as <span className="font-semibold" style={{ color: 'var(--navy)' }}>{currentUser?.name ?? '—'}</span>
                 </p>
               </div>
-              <button onClick={() => setShowSubmit(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: 'var(--text-4)' }}>×</button>
+              <button className="expenses-modal-close" aria-label="Close new expense" onClick={() => setShowSubmit(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: 'var(--text-4)' }}>×</button>
             </div>
 
             <div className="expenses-submit-form space-y-3">
@@ -564,11 +564,11 @@ function ExpensesContent() {
               {/* Payment method */}
               <div>
                 <label className="text-[11px] font-semibold text-t2 block mb-2">How was it paid? *</label>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="expenses-payment-options grid grid-cols-2 gap-2">
                   {PAYMENT_METHODS.map(pm => {
                     const active = form.paymentMethod === pm.value
                     return (
-                      <button key={pm.value} onClick={() => setForm(f => ({ ...f, paymentMethod: pm.value }))}
+                      <button type="button" key={pm.value} className={`expenses-payment-option ${active ? 'is-active' : ''}`} onClick={() => setForm(f => ({ ...f, paymentMethod: pm.value }))}
                         style={{
                           padding: '8px 12px', borderRadius: 8, cursor: 'pointer', textAlign: 'left',
                           border: `1px solid ${active ? 'var(--navy)' : 'var(--border-lt)'}`,
@@ -673,16 +673,16 @@ function ExpensesContent() {
           <div className="modal-overlay expenses-modal-overlay" onClick={() => setReviewingId(null)}>
             <div className="modal-box expenses-review-modal w-full max-w-md" onClick={e => e.stopPropagation()}>
               <div className="expenses-review-form">
-              <div className="flex items-center justify-between mb-4">
+              <div className="expenses-modal-header flex items-center justify-between mb-4">
                 <div>
                   <h3 className="text-sm font-bold text-t1">{canReview ? 'Review Expense' : 'View Expense'}</h3>
                   <p className="text-[11px] text-t3">{exp.ref} · {exp.submittedByName}</p>
                 </div>
-                <button onClick={() => setReviewingId(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: 'var(--text-4)' }}>×</button>
+                <button className="expenses-modal-close" aria-label="Close expense review" onClick={() => setReviewingId(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: 'var(--text-4)' }}>×</button>
               </div>
 
               {/* Summary */}
-              <div className="rounded-xl p-3 mb-4 space-y-1.5" style={{ background: 'var(--bg-surface)', border: '1px solid var(--bg-muted)' }}>
+              <div className="expenses-review-summary rounded-xl p-3 mb-4 space-y-1.5" style={{ background: 'var(--bg-surface)', border: '1px solid var(--bg-muted)' }}>
                 <div className="flex justify-between text-[12px]">
                   <span className="text-t3">Category</span>
                   <span className="font-semibold inline-flex items-center gap-1.5"><Fa icon={catIcon(exp.category)} aria-hidden="true" />{catLabel(exp.category)}</span>
@@ -710,21 +710,21 @@ function ExpensesContent() {
               )}
 
               {exp.receiptFileName && (
-                <button onClick={() => { openReceiptPreview(exp); setReviewingId(null) }}
+                <button className="expenses-receipt-link" onClick={() => { openReceiptPreview(exp); setReviewingId(null) }}
                   style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: 'var(--navy)', background: '#E8F3FA', border: '1px solid #A8D4E8', borderRadius: 8, padding: '6px 12px', cursor: 'pointer', marginBottom: 12 }}>
                   <Fa icon={faPaperclip} aria-hidden="true" /> View attached receipt
                 </button>
               )}
 
               {exp.reviewNotes && !canReview && (
-                <div className="mb-3 p-3 rounded-lg" style={{ background: 'var(--warning-bg)', border: '1px solid #FDE68A' }}>
+                <div className="expenses-review-note mb-3 p-3 rounded-lg" style={{ background: 'var(--warning-bg)', border: '1px solid #FDE68A' }}>
                   <p className="text-[10px] font-semibold uppercase tracking-wider text-t3 mb-1">Review Notes</p>
                   <p className="text-xs" style={{ color: 'var(--warning-text)' }}>{exp.reviewNotes}</p>
                 </div>
               )}
 
               {exp.status === 'reimbursed' && (exp.reimbursementMethod || exp.reimbursementBankAccount || exp.reimbursementReference) && (
-                <div className="mb-3 p-3 rounded-lg" style={{ background: '#ECFEFF', border: '1px solid #A5F3FC' }}>
+                <div className="expenses-reimbursement-details mb-3 p-3 rounded-lg" style={{ background: '#ECFEFF', border: '1px solid #A5F3FC' }}>
                   <p className="text-[10px] font-semibold uppercase tracking-wider text-t3 mb-2">Reimbursement Details</p>
                   <div className="space-y-1 text-[11px]">
                     <div className="flex justify-between gap-3"><span className="text-t3">Method</span><span className="font-semibold text-right">{reimbursementMethodLabel(exp.reimbursementMethod)}</span></div>
@@ -771,23 +771,23 @@ function ExpensesContent() {
         const exp = expenses.find(e => e.id === reimbursingId)
         if (!exp) return null
         return (
-          <div className="modal-overlay" onClick={() => setReimbursingId(null)}>
-            <div className="modal-box w-full max-w-sm" onClick={e => e.stopPropagation()}>
-              <div className="flex items-center justify-between mb-4">
+          <div className="modal-overlay expenses-modal-overlay" onClick={() => setReimbursingId(null)}>
+            <div className="modal-box expenses-reimburse-modal w-full max-w-sm" onClick={e => e.stopPropagation()}>
+              <div className="expenses-modal-header flex items-center justify-between mb-4">
                 <div>
                   <h3 className="text-sm font-bold text-t1">Mark as Reimbursed</h3>
                   <p className="text-[11px] text-t3">{exp.ref} · {exp.submittedByName}</p>
                 </div>
-                <button onClick={() => setReimbursingId(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: 'var(--text-4)' }}>×</button>
+                <button className="expenses-modal-close" aria-label="Close reimbursement" onClick={() => setReimbursingId(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: 'var(--text-4)' }}>×</button>
               </div>
 
-              <div className="rounded-xl p-3 mb-4 text-center" style={{ background: '#E8F3FA', border: '1px solid #A8D4E8' }}>
+              <div className="expenses-reimburse-amount rounded-xl p-3 mb-4 text-center" style={{ background: '#E8F3FA', border: '1px solid #A8D4E8' }}>
                 <p className="text-[10px] text-t3 mb-1">Amount to reimburse to {exp.submittedByName}</p>
                 <p className="text-2xl font-bold" style={{ color: 'var(--navy)' }}>{fmtKes(exp.amount)}</p>
                 <p className="text-[10px] text-t3 mt-1">{catLabel(exp.category)} · {fmtDate(exp.expenseDate)}</p>
               </div>
 
-              <div className="space-y-3 mb-4">
+              <div className="expenses-reimburse-form space-y-3 mb-4">
                 <div>
                   <label className="text-[11px] font-semibold text-t2 block mb-1">Bank Account</label>
                   <select aria-label="Reimbursement bank account" className="form-input w-full text-[12px]" value={reimburseBankAccountId} onChange={e => setReimburseBankAccountId(e.target.value)}>
@@ -816,7 +816,7 @@ function ExpensesContent() {
                 </div>
               </div>
 
-              <div className="flex gap-2 justify-end">
+              <div className="expenses-modal-actions flex gap-2 justify-end">
                 <button onClick={() => { setReimbursingId(null); setReimburseReference(''); setReimburseBankAccountId('') }} className="btn-outline text-[11px] py-2 px-4">Cancel</button>
                 <button onClick={() => {
                   reimburseExpense(reimbursingId, reimburseNote.trim() || undefined, reimburseMethod, reimburseBankAccountId || undefined, reimburseReference.trim() || undefined)
@@ -836,9 +836,9 @@ function ExpensesContent() {
 
       {/* ── Receipt Preview Modal ─────────────────────────────────────────── */}
       {previewExp && (
-        <div className="modal-overlay" onClick={closeReceiptPreview}>
-          <div className="modal-box w-full max-w-2xl" onClick={e => e.stopPropagation()} style={{ maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}>
-            <div className="flex items-center justify-between mb-3">
+        <div className="modal-overlay expenses-modal-overlay" onClick={closeReceiptPreview}>
+          <div className="modal-box expenses-receipt-preview w-full max-w-2xl" onClick={e => e.stopPropagation()} style={{ maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}>
+            <div className="expenses-modal-header expenses-receipt-preview__header flex items-center justify-between mb-3">
               <div>
                 <h3 className="text-sm font-bold text-t1">{previewExp.ref} · Receipt</h3>
                 <p className="text-[10px] text-t3">{previewExp.receiptFileName} · {previewExp.receiptFileSize ? formatSize(previewExp.receiptFileSize) : ''}</p>
@@ -850,10 +850,10 @@ function ExpensesContent() {
                     Download
                   </a>
                 )}
-                <button onClick={closeReceiptPreview} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 20, color: 'var(--text-4)' }}>×</button>
+                <button className="expenses-modal-close" aria-label="Close receipt preview" onClick={closeReceiptPreview} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 20, color: 'var(--text-4)' }}>×</button>
               </div>
             </div>
-            <div className="flex-1 overflow-auto rounded-lg" style={{ background: 'var(--bg-muted)', minHeight: 300 }}>
+            <div className="expenses-receipt-preview__body flex-1 overflow-auto rounded-lg" style={{ background: 'var(--bg-muted)', minHeight: 300 }}>
               {previewLoading ? (
                 <div className="flex items-center justify-center h-48">
                   <svg className="h-8 w-8 animate-spin" style={{ color: 'var(--navy)' }} viewBox="0 0 24 24" fill="none">
@@ -914,7 +914,7 @@ function ExpenseTable({
   onView?: (e: Expense) => void
 }) {
   const rowActions = (exp: Expense) => (
-    <div className="flex items-center gap-2">
+    <div className="expenses-row-actions flex items-center gap-2">
       {onReview && exp.status === 'submitted' && (
         <button className="btn-primary text-[10px] py-1.5 px-3" onClick={() => onReview(exp)}>Review</button>
       )}

@@ -256,7 +256,19 @@ test.describe('module render smoke', () => {
 
 
 test.describe('responsive target workspaces', () => {
-  const routes = ['/kilimall', '/sops', '/deposits', '/holdovers', '/settings']
+  const routes = [
+    '/kilimall', '/sops', '/deposits', '/holdovers', '/settings',
+    '/expenses',
+    '/hr?tab=recruitment',
+    '/hr?tab=training',
+    '/hr?tab=leave',
+    '/hr?tab=payroll',
+    '/hr?tab=salary_advances',
+    '/hr?tab=documents',
+    '/hr?tab=assets',
+    '/hr?tab=performance',
+    '/hr?tab=reports',
+  ]
   const viewports = [
     { width: 320, height: 700 },
     { width: 375, height: 812 },
@@ -269,7 +281,7 @@ test.describe('responsive target workspaces', () => {
   ]
 
   test('renders without page-level overflow or client exceptions', async ({ browser }) => {
-    test.setTimeout(300_000)
+    test.setTimeout(420_000)
     const context = await loginViaApi(browser)
     const page = await context.newPage()
     const pageErrors: string[] = []

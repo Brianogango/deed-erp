@@ -152,9 +152,9 @@ export default function HRRecruitmentTab() {
   ]
 
   return (
-    <div className="flex flex-col">
-      <div className="p-4 border-b border-[var(--border-lt)] flex items-center justify-between bg-[var(--bg-surface)]">
-        <div className="flex gap-4">
+    <div className="hr-submodule hr-recruitment flex flex-col">
+      <div className="hr-submodule-toolbar p-4 border-b border-[var(--border-lt)] flex items-center justify-between bg-[var(--bg-surface)]">
+        <div className="hr-segmented-control flex gap-4" aria-label="Recruitment views">
           <button 
             onClick={() => setSubTab('jobs')}
             className={`text-xs font-bold px-3 py-1.5 rounded-lg transition-colors ${subTab === 'jobs' ? 'bg-primary-500 text-white' : 'text-[var(--text-3)] hover:bg-[var(--bg-muted)]'}`}
@@ -176,13 +176,13 @@ export default function HRRecruitmentTab() {
         )}
       </div>
 
-      <div className="p-4">
+      <div className="hr-submodule-content p-4">
         {subTab === 'jobs' ? (
-          <div className="grid grid-cols-1 gap-4">
+          <div className="hr-job-list grid grid-cols-1 gap-4">
             {jobPostings.length > 0 ? (
               jobPostings.map(j => (
-                <div key={j.id} className="card p-4 flex items-center justify-between hover:border-primary-500/30 transition-all cursor-pointer group">
-                  <div className="flex items-center gap-4">
+                <div key={j.id} className="hr-job-card card p-4 flex items-center justify-between hover:border-primary-500/30 transition-all cursor-pointer group">
+                  <div className="hr-job-card__main flex items-center gap-4">
                     <div className="w-10 h-10 rounded-xl bg-primary-50 text-primary-600 flex items-center justify-center">
                       <Fa icon={faBriefcase} />
                     </div>
@@ -193,7 +193,7 @@ export default function HRRecruitmentTab() {
                       </p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-4">
+                  <div className="hr-job-card__meta flex items-center gap-4">
                     <div className="text-right">
                       <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${j.status === 'open' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}`}>
                         {j.status.toUpperCase()}
@@ -235,7 +235,7 @@ export default function HRRecruitmentTab() {
             <Field label="Closing Date"><Input type="date" value={jobForm.closingDate} onChange={closingDate => setJobForm(p => ({ ...p, closingDate }))} /></Field>
           </div>
           <Field label="Description" required><Textarea rows={5} value={jobForm.description} onChange={description => setJobForm(p => ({ ...p, description }))} placeholder="Summarize the role, requirements, and expectations." /></Field>
-          <div className="flex justify-end gap-2 pt-2">
+          <div className="hr-modal-actions flex justify-end gap-2 pt-2">
             <button className="btn-secondary px-4 py-2 text-xs" onClick={() => setShowJobModal(false)}>Cancel</button>
             <button className="btn-primary px-4 py-2 text-xs" onClick={submitJob}>Save Posting</button>
           </div>
@@ -254,7 +254,7 @@ export default function HRRecruitmentTab() {
             <Field label="Resume URL"><Input value={candidateForm.resumeUrl} onChange={resumeUrl => setCandidateForm(p => ({ ...p, resumeUrl }))} placeholder="Optional link" /></Field>
           </div>
           <Field label="Notes"><Textarea value={candidateForm.notes} onChange={notes => setCandidateForm(p => ({ ...p, notes }))} placeholder="Optional screening notes." /></Field>
-          <div className="flex justify-end gap-2 pt-2">
+          <div className="hr-modal-actions flex justify-end gap-2 pt-2">
             <button className="btn-secondary px-4 py-2 text-xs" onClick={() => setShowCandidateModal(false)}>Cancel</button>
             <button className="btn-primary px-4 py-2 text-xs" onClick={submitCandidate}>Save Candidate</button>
           </div>

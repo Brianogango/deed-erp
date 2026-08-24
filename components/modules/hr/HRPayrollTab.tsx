@@ -244,10 +244,10 @@ export default function HRPayrollTab() {
   }
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="hr-submodule hr-payroll flex flex-col gap-3">
       {/* Payroll Runs */}
       {canManagePayroll && (
-      <div className="card overflow-hidden">
+      <div className="hr-submodule-panel card overflow-hidden">
         <PanelHeader title="Payroll Runs" count={filteredRuns.length}>
           <input className="form-input text-[11px] py-1.5" style={{ width: 160 }}
             placeholder="Search ref, period…" value={payrollSearch} onChange={e => setPayrollSearch(e.target.value)} />
@@ -270,7 +270,7 @@ export default function HRPayrollTab() {
       )}
 
       {/* Payslips */}
-      <div className="card overflow-hidden">
+      <div className="hr-submodule-panel card overflow-hidden">
         <PanelHeader title="Payslips" count={filteredPayslips.length}>
           <input className="form-input text-[11px] py-1.5" style={{ width: 180 }}
             placeholder="Search employee, period…" value={payslipSearch} onChange={e => setPayslipSearch(e.target.value)} />
@@ -290,11 +290,11 @@ export default function HRPayrollTab() {
 
       {/* Payroll → Accounting journal postings */}
       {canManagePayroll && payrollJournals.length > 0 && (
-        <div className="card overflow-hidden">
+        <div className="hr-submodule-panel hr-payroll-journals card overflow-hidden">
           <PanelHeader title="Payroll → Accounting Journal Postings" count={payrollJournals.length} />
           <div className="p-4 space-y-3 text-[12px]">
             {payrollJournals.map(item => (
-              <div key={item.run.id} className="rounded-xl p-3" style={{ background: 'var(--success-bg)', border: '1px solid #BBF7D0' }}>
+              <div key={item.run.id} className="hr-payroll-journal rounded-xl p-3" style={{ background: 'var(--success-bg)', border: '1px solid #BBF7D0' }}>
                 <div className="flex justify-between items-center">
                   <div>
                     <div style={{ fontWeight: 700, color: 'var(--text-1)' }}>{item.run.ref}</div>
@@ -340,7 +340,7 @@ export default function HRPayrollTab() {
             </Field>
             <Field label="Year"><Input value={payrollYear} onChange={setPayrollYear} type="number" /></Field>
           </div>
-          <div className="flex justify-end gap-2 mt-2">
+          <div className="hr-modal-actions flex justify-end gap-2 mt-2">
             <button className="btn-outline" onClick={() => setShowPayrollModal(false)}>Cancel</button>
             <button className="btn-primary" onClick={createPayroll}>Create Payroll</button>
           </div>

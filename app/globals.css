@@ -24350,3 +24350,757 @@ body:has(.crm-workspace) [role="dialog"] > div {
     padding-inline: .7rem !important;
   }
 }
+/* ── HR submodules & complete Expenses workspace (PR follow-up) ─────────── */
+.hr-workspace .hr-submodule {
+  min-width: 0;
+  gap: 1rem;
+  padding: 1rem;
+  background: var(--work-page);
+}
+
+.hr-workspace .hr-submodule-panel,
+.hr-workspace .hr-job-card,
+.hr-workspace .hr-training-card,
+.hr-workspace .hr-performance-card,
+.hr-workspace .hr-report-card,
+.hr-workspace .hr-submodule-notice {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--work-border) !important;
+  border-radius: .8rem !important;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(16, 24, 40, .035);
+}
+
+.hr-workspace .hr-submodule-toolbar {
+  min-width: 0;
+  min-height: 3.8rem;
+  gap: .75rem;
+  padding: .75rem 1rem !important;
+  border-color: var(--work-border) !important;
+  background: #fff !important;
+}
+
+.hr-workspace .hr-submodule-toolbar h3,
+.hr-workspace .hr-submodule-toolbar > span:first-child {
+  min-width: 0;
+  color: var(--work-navy) !important;
+  font-size: .82rem !important;
+  font-weight: 750 !important;
+  letter-spacing: -.01em;
+}
+
+.hr-workspace .hr-submodule-toolbar h3 svg {
+  color: var(--work-accent);
+}
+
+.hr-workspace .hr-submodule-toolbar .btn-primary,
+.hr-workspace .hr-modal-actions .btn-primary,
+.hr-workspace .hr-training-card .btn-outline {
+  min-height: 2.35rem;
+  border-color: var(--work-accent);
+  border-radius: .55rem;
+}
+
+.hr-workspace .hr-submodule-toolbar .btn-primary,
+.hr-workspace .hr-modal-actions .btn-primary {
+  background: var(--work-accent);
+  color: #fff;
+}
+
+.hr-workspace .hr-submodule-content {
+  min-width: 0;
+  padding: 1rem !important;
+}
+
+.hr-workspace .hr-segmented-control {
+  min-width: 0;
+  gap: .2rem !important;
+  padding: .22rem;
+  border: 1px solid var(--work-border);
+  border-radius: .65rem;
+  background: #f1f4f7;
+}
+
+.hr-workspace .hr-segmented-control button {
+  min-height: 2.05rem;
+  padding: .4rem .8rem !important;
+  border-radius: .45rem !important;
+  color: var(--work-muted) !important;
+}
+
+.hr-workspace .hr-segmented-control button[class*="bg-primary-500"] {
+  background: #fff !important;
+  color: var(--work-navy) !important;
+  box-shadow: 0 1px 3px rgba(16, 24, 40, .12);
+}
+
+.hr-workspace .hr-submodule-kpis {
+  min-width: 0;
+  gap: .75rem !important;
+  padding: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+}
+
+.hr-workspace .hr-metric-card {
+  position: relative;
+  min-width: 0;
+  min-height: 6.1rem;
+  overflow: hidden;
+  padding: 1rem 1rem 1rem 1.15rem !important;
+  border: 1px solid var(--work-border) !important;
+  border-radius: .8rem !important;
+  background: #fff !important;
+}
+
+.hr-workspace .hr-metric-card::before {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: .22rem;
+  background: var(--work-accent);
+  content: "";
+}
+
+.hr-workspace .hr-metric-card--success::before {
+  background: #2f9e44;
+}
+
+.hr-workspace .hr-metric-card--warning::before {
+  background: #f59f00;
+}
+
+.hr-workspace .hr-metric-card--danger::before {
+  background: #e03131;
+}
+
+.hr-workspace .hr-metric-card p:first-child {
+  color: var(--work-muted) !important;
+  font-size: .6rem !important;
+  letter-spacing: .055em !important;
+}
+
+.hr-workspace .hr-metric-card p:last-child,
+.hr-workspace .hr-metric-card h3 {
+  color: var(--work-navy) !important;
+  font-size: 1.35rem !important;
+  font-weight: 780 !important;
+}
+
+.hr-workspace .hr-performance-kpis .hr-metric-card {
+  align-items: center;
+}
+
+.hr-workspace .hr-performance-kpis .hr-metric-card > div:first-child {
+  width: 2.55rem !important;
+  height: 2.55rem !important;
+  flex: 0 0 auto;
+  border-radius: .7rem !important;
+}
+
+.hr-workspace .hr-submodule-alert {
+  margin: 0;
+  border-color: #fedf89 !important;
+  border-radius: .75rem !important;
+  background: #fffaeb !important;
+}
+
+.hr-workspace .hr-submodule-notice {
+  padding: 1rem !important;
+  color: var(--work-muted) !important;
+}
+
+.hr-workspace .hr-job-list {
+  gap: .7rem !important;
+}
+
+.hr-workspace .hr-job-card {
+  min-height: 5.25rem;
+  gap: 1rem;
+  padding: .9rem 1rem !important;
+  cursor: default;
+}
+
+.hr-workspace .hr-job-card:hover,
+.hr-workspace .hr-training-card:hover,
+.hr-workspace .hr-performance-card:hover {
+  border-color: #b7e7ef !important;
+  box-shadow: 0 6px 18px rgba(19, 168, 199, .08);
+}
+
+.hr-workspace .hr-job-card__main,
+.hr-workspace .hr-job-card__main > div:last-child,
+.hr-workspace .hr-job-card__meta {
+  min-width: 0;
+}
+
+.hr-workspace .hr-job-card__main > div:first-child {
+  width: 2.35rem !important;
+  height: 2.35rem !important;
+  flex: 0 0 auto;
+  border-radius: .65rem !important;
+  background: var(--work-accent-soft) !important;
+  color: var(--work-accent) !important;
+}
+
+.hr-workspace .hr-job-card h4 {
+  color: var(--work-navy) !important;
+}
+
+.hr-workspace .hr-job-card p {
+  max-width: 38rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hr-workspace .hr-training-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: .75rem !important;
+}
+
+.hr-workspace .hr-training-card {
+  min-height: 12rem;
+  padding: 1rem !important;
+}
+
+.hr-workspace .hr-training-card > div:first-child p {
+  color: var(--work-navy) !important;
+}
+
+.hr-workspace .hr-training-card > .flex.flex-col {
+  min-height: 3rem;
+  padding: .5rem;
+  border: 1px solid var(--work-border);
+  border-radius: .55rem;
+  background: #f8fafc;
+}
+
+.hr-workspace .hr-training-card select {
+  min-height: 2rem;
+  font-size: .68rem;
+}
+
+.hr-workspace .hr-performance-list {
+  gap: .75rem !important;
+}
+
+.hr-workspace .hr-performance-card {
+  padding: 1rem !important;
+}
+
+.hr-workspace .hr-performance-card > div:first-child {
+  margin-bottom: .75rem !important;
+}
+
+.hr-workspace .hr-performance-card h4 {
+  color: var(--work-navy) !important;
+}
+
+.hr-workspace .hr-performance-card .h-2 {
+  height: .42rem;
+}
+
+.hr-workspace .hr-report-card {
+  padding: 1rem !important;
+}
+
+.hr-workspace .hr-report-card h3 {
+  color: var(--work-navy) !important;
+}
+
+.hr-workspace .hr-report-card .h-3 {
+  height: .48rem;
+  background: #edf1f5 !important;
+}
+
+.hr-workspace .hr-report-card .h-full {
+  background: var(--work-accent) !important;
+}
+
+.hr-workspace .hr-payroll-journals > .p-4 {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: .75rem;
+}
+
+.hr-workspace .hr-payroll-journal {
+  margin: 0 !important;
+  border-color: #abefc6 !important;
+  background: #f6fef9 !important;
+}
+
+.hr-workspace .hr-decision-summary > div {
+  border: 1px solid var(--work-border);
+  background: #f8fafc !important;
+}
+
+.hr-workspace .hr-modal-actions {
+  min-width: 0;
+  padding-top: .85rem !important;
+  border-top: 1px solid var(--work-border);
+}
+
+.hr-workspace .hr-modal-actions > button {
+  min-height: 2.55rem;
+  border-radius: .55rem;
+}
+
+.hr-workspace .hr-submodule .dt-wrap,
+.hr-workspace .hr-submodule .dt-card {
+  border-color: var(--work-border);
+}
+
+.hr-workspace .hr-submodule :is(input, select, textarea, button):focus-visible,
+.expenses-workspace :is(input, select, textarea, button, a):focus-visible {
+  outline: 2px solid var(--work-accent) !important;
+  outline-offset: 2px;
+}
+
+/* Expenses secondary workflows */
+.expenses-workspace .expenses-modal-header {
+  min-width: 0;
+  padding-bottom: .75rem;
+  border-bottom: 1px solid var(--work-border);
+}
+
+.expenses-workspace .expenses-modal-header > div:first-child {
+  min-width: 0;
+}
+
+.expenses-workspace .expenses-modal-header h3 {
+  color: var(--work-navy) !important;
+  font-size: .95rem !important;
+  letter-spacing: -.01em;
+}
+
+.expenses-workspace .expenses-modal-header p {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.expenses-workspace .expenses-modal-close {
+  display: inline-flex;
+  width: 2rem;
+  height: 2rem;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--work-border) !important;
+  border-radius: .55rem;
+  background: #fff !important;
+  color: var(--work-muted) !important;
+  line-height: 1;
+}
+
+.expenses-workspace .expenses-payment-options {
+  gap: .55rem !important;
+}
+
+.expenses-workspace .expenses-payment-option {
+  min-width: 0;
+  min-height: 4.2rem;
+  padding: .65rem .75rem !important;
+  border: 1px solid var(--work-border) !important;
+  border-radius: .65rem !important;
+  background: #f8fafc !important;
+  transition: border-color .15s, background .15s, box-shadow .15s;
+}
+
+.expenses-workspace .expenses-payment-option.is-active {
+  border-color: var(--work-accent) !important;
+  background: var(--work-accent-soft) !important;
+  box-shadow: 0 0 0 1px var(--work-accent);
+}
+
+.expenses-workspace .expenses-review-summary {
+  padding: .9rem !important;
+  border-color: var(--work-border) !important;
+  background: #f8fafc !important;
+}
+
+.expenses-workspace .expenses-review-summary > div {
+  min-width: 0;
+  gap: 1rem;
+  padding-block: .22rem;
+}
+
+.expenses-workspace .expenses-review-summary > div > span:last-child {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.expenses-workspace .expenses-approval-chain {
+  padding: .85rem;
+  border: 1px solid var(--work-border);
+  border-radius: .7rem;
+  background: #fff;
+}
+
+.expenses-workspace .expenses-approval-chain__steps {
+  position: relative;
+  gap: .35rem !important;
+}
+
+.expenses-workspace .expenses-approval-chain__step {
+  min-height: 2.05rem;
+  padding: .2rem .35rem;
+  border-radius: .45rem;
+}
+
+.expenses-workspace .expenses-approval-chain__step:hover {
+  background: #f8fafc;
+}
+
+.expenses-workspace .expenses-receipt-link {
+  min-height: 2.35rem;
+  border-color: #b7e7ef !important;
+  background: var(--work-accent-soft) !important;
+  color: var(--work-navy) !important;
+}
+
+.expenses-workspace .expenses-review-note,
+.expenses-workspace .expenses-reimbursement-details {
+  border-radius: .7rem !important;
+}
+
+.expenses-workspace .expenses-reimburse-modal {
+  width: min(100%, 31rem) !important;
+  max-width: 31rem !important;
+  border: 1px solid var(--work-border);
+  border-radius: .85rem !important;
+  background: #fff;
+  box-shadow: 0 24px 64px rgba(16, 24, 40, .18);
+}
+
+.expenses-workspace .expenses-reimburse-amount {
+  padding: 1rem !important;
+  border-color: #b7e7ef !important;
+  background: var(--work-accent-soft) !important;
+}
+
+.expenses-workspace .expenses-reimburse-amount p:nth-child(2) {
+  color: var(--work-navy) !important;
+}
+
+.expenses-workspace .expenses-reimburse-form {
+  padding: .1rem;
+}
+
+.expenses-workspace .expenses-receipt-preview {
+  width: min(100%, 48rem) !important;
+  max-width: 48rem !important;
+  border: 1px solid var(--work-border);
+  border-radius: .85rem !important;
+  background: #fff;
+  box-shadow: 0 24px 64px rgba(16, 24, 40, .18);
+}
+
+.expenses-workspace .expenses-receipt-preview__header {
+  gap: 1rem;
+}
+
+.expenses-workspace .expenses-receipt-preview__header > div:last-child {
+  flex: 0 0 auto;
+}
+
+.expenses-workspace .expenses-receipt-preview__body {
+  min-height: 22rem !important;
+  border: 1px solid var(--work-border);
+  background: #f2f4f7 !important;
+}
+
+.expenses-workspace .expenses-row-actions {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.expenses-workspace .expenses-row-actions > button {
+  min-height: 2rem;
+  margin: 0;
+}
+
+@media (max-width: 1100px) {
+  .hr-workspace .hr-training-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .hr-workspace .hr-payroll-journals > .p-4 {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 820px) {
+  .hr-workspace .hr-submodule {
+    padding: .8rem;
+  }
+
+  .hr-workspace .hr-submodule-toolbar {
+    flex-wrap: wrap;
+  }
+
+  .hr-workspace .hr-submodule-kpis {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .hr-workspace .hr-performance-kpis {
+    padding: 0 !important;
+  }
+}
+
+@media (max-width: 640px) {
+  .hr-workspace .hr-submodule {
+    width: 100%;
+    max-width: 100%;
+    gap: .65rem;
+    padding: .65rem;
+    overflow-x: hidden;
+  }
+
+  .hr-workspace .hr-submodule-toolbar {
+    min-height: auto;
+    align-items: stretch !important;
+    padding: .7rem !important;
+  }
+
+  .hr-workspace .hr-submodule-toolbar > .ml-auto {
+    width: 100%;
+    margin-left: 0;
+  }
+
+  .hr-workspace .hr-submodule-toolbar > .ml-auto select {
+    width: 100%;
+    min-height: 2.75rem;
+  }
+
+  .hr-workspace .hr-submodule-toolbar .btn-primary {
+    min-height: 2.75rem;
+    justify-content: center;
+  }
+
+  .hr-workspace .hr-segmented-control {
+    display: grid !important;
+    width: 100%;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .hr-workspace .hr-segmented-control button {
+    min-width: 0;
+    min-height: 2.5rem;
+    padding-inline: .45rem !important;
+  }
+
+  .hr-workspace .hr-submodule-content {
+    padding: .7rem !important;
+  }
+
+  .hr-workspace .hr-submodule-kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: .5rem !important;
+  }
+
+  .hr-workspace .hr-metric-card {
+    min-height: 5.4rem;
+    padding: .75rem .75rem .75rem .95rem !important;
+  }
+
+  .hr-workspace .hr-metric-card p:last-child,
+  .hr-workspace .hr-metric-card h3 {
+    font-size: 1.05rem !important;
+  }
+
+  .hr-workspace .hr-job-card {
+    align-items: stretch !important;
+    gap: .75rem;
+  }
+
+  .hr-workspace .hr-job-card,
+  .hr-workspace .hr-job-card__main {
+    flex-direction: column;
+  }
+
+  .hr-workspace .hr-job-card__main {
+    align-items: flex-start !important;
+    gap: .65rem;
+  }
+
+  .hr-workspace .hr-job-card p {
+    max-width: 100%;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .hr-workspace .hr-job-card__meta {
+    width: 100%;
+    justify-content: space-between;
+    padding-top: .65rem;
+    border-top: 1px solid var(--work-border);
+  }
+
+  .hr-workspace .hr-job-card__meta .text-right {
+    text-align: left;
+  }
+
+  .hr-workspace .hr-training-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .hr-workspace .hr-training-card {
+    min-height: 0;
+  }
+
+  .hr-workspace .hr-training-card .flex.items-center.justify-between {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .hr-workspace .hr-training-card select {
+    width: 100%;
+    min-height: 2.5rem;
+  }
+
+  .hr-workspace .hr-performance-card {
+    padding: .8rem !important;
+  }
+
+  .hr-workspace .hr-performance-card > div:first-child {
+    align-items: flex-start !important;
+  }
+
+  .hr-workspace .hr-performance-card > div:first-child > .text-right {
+    width: 100%;
+    text-align: left;
+  }
+
+  .hr-workspace .hr-report-card .flex.items-center.gap-3 {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .hr-workspace .hr-report-card .w-48 {
+    width: 100%;
+  }
+
+  .hr-workspace .hr-decision-summary {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .hr-workspace .hr-decision-summary > .col-span-2 {
+    grid-column: auto;
+  }
+
+  .hr-workspace .hr-form-grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .hr-workspace .hr-modal-actions {
+    position: sticky;
+    z-index: 2;
+    bottom: 0;
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: .5rem;
+    padding: .7rem 0 calc(.2rem + env(safe-area-inset-bottom)) !important;
+    background: #fff;
+  }
+
+  .hr-workspace .hr-modal-actions--decision {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .hr-workspace .hr-modal-actions > button {
+    min-width: 0;
+    min-height: 2.8rem;
+    padding-inline: .45rem !important;
+  }
+
+  .expenses-workspace .expenses-payment-options {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .expenses-workspace .expenses-reimburse-modal,
+  .expenses-workspace .expenses-receipt-preview {
+    width: 100% !important;
+    max-width: none !important;
+    height: 100dvh;
+    max-height: 100dvh !important;
+    overflow-y: auto;
+    border: 0;
+    border-radius: 0 !important;
+    padding: .9rem .85rem calc(5.4rem + env(safe-area-inset-bottom)) !important;
+  }
+
+  .expenses-workspace .expenses-receipt-preview {
+    overflow: hidden;
+    padding-bottom: calc(.85rem + env(safe-area-inset-bottom)) !important;
+  }
+
+  .expenses-workspace .expenses-receipt-preview__header {
+    flex: 0 0 auto;
+    align-items: flex-start;
+  }
+
+  .expenses-workspace .expenses-receipt-preview__header > div:last-child {
+    align-items: center;
+  }
+
+  .expenses-workspace .expenses-receipt-preview__header .btn-outline {
+    min-height: 2.5rem;
+  }
+
+  .expenses-workspace .expenses-receipt-preview__body {
+    min-height: 0 !important;
+    height: auto;
+    flex: 1 1 auto;
+  }
+
+  .expenses-workspace .expenses-receipt-preview__body iframe {
+    height: 100% !important;
+    min-height: 24rem;
+  }
+
+  .expenses-workspace .expenses-review-summary > div {
+    align-items: flex-start;
+  }
+
+  .expenses-workspace .expenses-row-actions {
+    display: grid;
+    width: 100%;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .expenses-workspace .expenses-row-actions > button {
+    min-width: 0;
+    min-height: 2.65rem;
+  }
+}
+
+@media (max-width: 380px) {
+  .hr-workspace .hr-submodule-kpis,
+  .hr-workspace .hr-modal-actions,
+  .hr-workspace .hr-modal-actions--decision,
+  .expenses-workspace .expenses-payment-options,
+  .expenses-workspace .expenses-row-actions {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .hr-workspace .hr-submodule-toolbar {
+    flex-direction: column;
+  }
+
+  .hr-workspace .hr-submodule-toolbar > button {
+    width: 100%;
+  }
+
+  .expenses-workspace .expenses-receipt-preview__header {
+    gap: .5rem;
+  }
+
+  .expenses-workspace .expenses-receipt-preview__header > div:last-child {
+    gap: .35rem;
+  }
+}
