@@ -24,6 +24,7 @@ import { specsFromProposed } from '@/lib/reconfiguration/diff-engine'
 import {
   applyBenchJob,
   modulesFromInstalled,
+  remainingModulesToSeed,
   type BenchActionKind,
   type BenchSlotRequest,
 } from '@/lib/reconfiguration/bench-action'
@@ -156,12 +157,23 @@ async function seedDeclaredModule(params: {
   slotNumber: number
   removable?: boolean
 }): Promise<string> {
+  const slotType = params.slot === 'ram' ? 'ram_slot' : 'm2_slot'
+  const existing = await prisma.deviceComponentInstallation.findFirst({
+    where: {
+      serialId: params.serialId,
+      slotType,
+      slotNumber: params.slotNumber,
+      status: 'installed',
+    },
+    select: { id: true },
+  })
+  if (existing) return existing.id
   const row = await prisma.deviceComponentInstallation.create({
     data: {
       serialId: params.serialId,
       componentProductId: params.productId,
       category: params.slot === 'ram' ? 'ram' : 'storage',
-      slotType: params.slot === 'ram' ? 'ram_slot' : 'm2_slot',
+      slotType,
       slotNumber: params.slotNumber,
       capacityGb: params.capacityGb,
       removable: params.removable !== false,
@@ -368,6 +380,17 @@ export async function applyBenchAndComplete(params: ApplyBenchParams) {
     },
   })
 
+  // Persist snapshot FKs before stock moves. If Apply fails after the stick
+  // is in, Complete can still promote the 12GB (etc.) snapshot.
+  await prisma.reconfigurationWorkOrder.update({
+    where: { id: wo.id },
+    data: {
+      currentSnapshotId: currentSnap.id,
+      proposedSnapshotId: proposedSnap.id,
+      version: { increment: 1 },
+    },
+  })
+
   let costRemoved = 0
   let installedCost = 0
 
@@ -493,8 +516,8 @@ export async function applyBenchAndComplete(params: ApplyBenchParams) {
       })
     }
 
-    for (const m of job.ram.remainingModules) {
-      if (m.installationId || !m.productId || !isUuid(m.productId)) continue
+    for (const m of remainingModulesToSeed(job.ram.remainingModules, job.ram.installations)) {
+      if (!isUuid(m.productId)) continue
       await seedDeclaredModule({
         serialId: device.serialId,
         userId: params.userId,
@@ -504,8 +527,8 @@ export async function applyBenchAndComplete(params: ApplyBenchParams) {
         slotNumber: m.slotNumber || 1,
       })
     }
-    for (const m of job.storage.remainingModules) {
-      if (m.installationId || !m.productId || !isUuid(m.productId)) continue
+    for (const m of remainingModulesToSeed(job.storage.remainingModules, job.storage.installations)) {
+      if (!isUuid(m.productId)) continue
       await seedDeclaredModule({
         serialId: device.serialId,
         userId: params.userId,

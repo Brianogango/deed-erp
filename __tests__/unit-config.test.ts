@@ -241,4 +241,37 @@ describe('resolveUnitConfig', () => {
     expect(source).toBe('installed')
     expect(current.totalRamGb).toBe(8)
   })
+
+  it('does not let a newly added stick shrink RAM below the unit snapshot', () => {
+    const { current } = resolveUnitConfig({
+      installed: [
+        {
+          id: 'i2',
+          componentProductId: 'ram-4',
+          category: 'ram',
+          slotType: 'ram_slot',
+          slotNumber: 2,
+          capacityGb: 4,
+          quantity: 1,
+          removable: true,
+          status: 'installed',
+          costAtInstallation: 0,
+        },
+      ],
+      snapshot: {
+        totalRamGb: 12,
+        primaryStorageGb: 256,
+        storageType: 'SSD',
+        ramComposition: [
+          { slotType: 'ram_slot', slotNumber: 1, capacityGb: 8, removable: true },
+          { slotType: 'ram_slot', slotNumber: 2, capacityGb: 4, removable: true },
+        ],
+        displayName: 'HP EliteBook 745 G6 - AMD Ryzen 5 PRO 3500U, 12GB RAM, 256GB SSD',
+      },
+      productName: 'HP EliteBook 745 G6 - AMD Ryzen 5 PRO 3500U, 8GB RAM, 256GB SSD',
+    })
+    expect(current.totalRamGb).toBe(12)
+    expect(current.primaryStorageGb).toBe(256)
+    expect(current.displayName).toMatch(/12GB RAM/)
+  })
 })

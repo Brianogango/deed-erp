@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { applyBenchJob, applyBenchSlot, modulesFromInstalled } from '@/lib/reconfiguration/bench-action'
+import { applyBenchJob, applyBenchSlot, modulesFromInstalled, remainingModulesToSeed } from '@/lib/reconfiguration/bench-action'
 import {
   catalogBaseName,
   rewriteUnitCapacitiesInText,
@@ -133,6 +133,9 @@ describe('bench-action RAM', () => {
     })
     expect(result.error).toBeUndefined()
     expect(result.afterGb).toBe(12)
+    expect(result.remainingModules).toHaveLength(2)
+    const toSeed = remainingModulesToSeed(result.remainingModules, result.installations)
+    expect(toSeed).toHaveLength(0)
   })
 
   it('blocks soldered RAM pull', () => {
@@ -236,11 +239,41 @@ describe('bench job RAM + SSD together', () => {
     expect(job.error).toBeUndefined()
     expect(job.after.ramGb).toBe(8)
     expect(job.after.storageGb).toBe(256)
-    expect(job.after.displayName).toMatch(/8GB RAM/)
+    expect(job.after.displayName).toMatch(/8GB/)
     expect(job.after.displayName).toMatch(/256GB SSD/)
+    expect(job.after.displayName).not.toMatch(/16GB/)
+    expect(job.after.displayName).not.toMatch(/512GB/)
     expect(job.transactionType).toBe('downgrade_for_sale')
     expect(job.reason).toMatch(/RAM/)
     expect(job.reason).toMatch(/SSD/)
+  })
+
+  it('add 4GB to 8GB rewrites the EliteBook catalog title to 12GB RAM', () => {
+    const job = applyBenchJob({
+      productName: 'HP EliteBook 745 G6 - AMD Ryzen 5 PRO 3500U, 8GB RAM, 256GB SSD',
+      current: {
+        processor: 'AMD Ryzen 5 PRO 3500U',
+        processorGeneration: null,
+        totalRamGb: 8,
+        ramComposition: [],
+        primaryStorageGb: 256,
+        storageType: 'SSD',
+        displayName: 'AMD Ryzen 5 PRO 3500U, 8GB RAM, 256GB SSD',
+      },
+      ram: {
+        action: 'add_one',
+        currentTotalGb: 8,
+        moduleCount: 1,
+        incoming: { productId: 'prod-ram-4', capacityGb: 4 },
+      },
+      storage: { action: 'none', currentTotalGb: 256, storageType: 'SSD' },
+    })
+    expect(job.error).toBeUndefined()
+    expect(job.after.ramGb).toBe(12)
+    expect(job.after.displayName).toBe(
+      'HP EliteBook 745 G6 - AMD Ryzen 5 PRO 3500U, 12GB RAM, 256GB SSD',
+    )
+    expect(job.after.displayName).not.toMatch(/8GB RAM, 256GB SSD -/)
   })
 
   it('errors when both slots are left alone', () => {

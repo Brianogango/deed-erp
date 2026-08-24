@@ -17,6 +17,7 @@
  */
 
 import { buildDisplayName } from './display-name'
+import { catalogBaseName, rewriteUnitCapacitiesInText } from './unit-selling-name'
 import type {
   DeviceConfigFields,
   InstalledComponentView,
@@ -161,6 +162,64 @@ function nextSlotNumber(modules: BenchModule[]): number {
   let n = 1
   while (used.has(n)) n += 1
   return n
+}
+
+/**
+ * Remaining modules that still need a device_component_installations row.
+ * Skip sticks we just installed in this job — reseeding them hits
+ * idx_device_installs_active_slot (serial, slot_type, slot_number).
+ */
+export function remainingModulesToSeed(
+  remaining: BenchModule[],
+  justInstalled: BenchStockMove[],
+): BenchModule[] {
+  const taken = new Set(justInstalled.map(m => m.slotNumber).filter(n => n > 0))
+  return remaining.filter(m => {
+    if (m.installationId) return false
+    if (!m.productId) return false
+    const slot = m.slotNumber || 0
+    if (slot && taken.has(slot)) return false
+    return true
+  })
+}
+
+function benchUnitName(params: {
+  productName?: string | null
+  brand?: string | null
+  model?: string | null
+  current: Pick<
+    DeviceConfigFields,
+    'processor' | 'processorGeneration' | 'totalRamGb' | 'primaryStorageGb' | 'storageType' | 'ramComposition' | 'displayName'
+  >
+  ramGb: number
+  storageGb: number
+  storageType: string | null
+}): string {
+  const catalog = String(params.productName || '').trim()
+  const rewrittenCatalog = catalog
+    ? rewriteUnitCapacitiesInText(catalog, params.ramGb || null, params.storageGb || null, params.storageType)
+    : ''
+  if (params.ramGb > 0 && rewrittenCatalog.includes(`${params.ramGb}GB`)) return rewrittenCatalog
+  const rewrittenLive = rewriteUnitCapacitiesInText(
+    params.current.displayName || '',
+    params.ramGb || null,
+    params.storageGb || null,
+    params.storageType,
+  )
+  if (params.ramGb > 0 && rewrittenLive.includes(`${params.ramGb}GB`)) return rewrittenLive
+  return buildDisplayName({
+    brand: params.brand,
+    model: params.model,
+    productName: catalogBaseName(catalog) || catalog || 'Device',
+    config: {
+      processor: params.current.processor,
+      processorGeneration: params.current.processorGeneration,
+      totalRamGb: params.ramGb,
+      ramComposition: params.current.ramComposition || [],
+      primaryStorageGb: params.storageGb,
+      storageType: params.storageType,
+    },
+  })
 }
 
 function fail(req: BenchSlotRequest, beforeGb: number, message: string): BenchSlotResult {
@@ -413,25 +472,14 @@ export function applyBenchJob(params: {
       ? params.current.storageType || null
       : storage.storageType || params.current.storageType || 'SSD'
 
-  const afterName = buildDisplayName({
+  const afterName = benchUnitName({
+    productName: params.productName,
     brand: params.brand,
     model: params.model,
-    productName: params.productName,
-    config: {
-      processor: params.current.processor,
-      processorGeneration: params.current.processorGeneration,
-      totalRamGb: afterRam,
-      ramComposition: ram.remainingModules.map(m => ({
-        slotType: 'ram_slot' as const,
-        slotNumber: m.slotNumber || 1,
-        capacityGb: m.capacityGb,
-        removable: m.removable,
-        productId: m.productId,
-        installationId: m.installationId,
-      })),
-      primaryStorageGb: afterStorage,
-      storageType: afterType,
-    },
+    current: params.current,
+    ramGb: afterRam,
+    storageGb: afterStorage || 0,
+    storageType: afterType,
   })
 
   const result: BenchJobResult = {

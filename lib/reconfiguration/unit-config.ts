@@ -306,8 +306,26 @@ export function resolveUnitConfig(input: {
   let source: UnitConfigSource = 'unresolved'
   let picked: Partial<DeviceConfigFields> | null = null
   if (fromInstalled) {
-    source = 'installed'
-    picked = fromInstalled
+    const snapshotRam = Number(fromSnapshot?.totalRamGb) || 0
+    const installedRam = Number(fromInstalled.totalRamGb) || 0
+    // Add-one often records only the new stick. The original module was never
+    // in the component graph, so installed RAM (4GB) is lower than the unit
+    // snapshot (8GB, then 12GB). Do not let that partial graph shrink the unit.
+    if (fromSnapshot && snapshotRam > installedRam) {
+      source = 'snapshot'
+      picked = {
+        ...fromSnapshot,
+        primaryStorageGb: fromInstalled.primaryStorageGb || fromSnapshot.primaryStorageGb,
+        storageType: fromInstalled.storageType || fromSnapshot.storageType,
+      }
+    } else {
+      source = 'installed'
+      picked = {
+        ...fromInstalled,
+        primaryStorageGb: fromInstalled.primaryStorageGb || fromSnapshot?.primaryStorageGb || null,
+        storageType: fromInstalled.storageType || fromSnapshot?.storageType || null,
+      }
+    }
   } else if (fromSnapshot) {
     source = 'snapshot'
     picked = fromSnapshot

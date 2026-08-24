@@ -1396,19 +1396,35 @@ export async function completeWorkOrder(params: {
   const selling = params.finalSellingPrice ?? dec(wo.finalSellingPrice ?? wo.recommendedSellingPrice)
   const margin = calculateMargin({ sellingPrice: selling, costAfter: dec(wo.costAfter) })
 
+  let proposed = wo.proposedSnapshot
+  let proposedSnapshotId = wo.proposedSnapshotId
+  let currentSnapshotId = wo.currentSnapshotId
+  if (!proposedSnapshotId) {
+    const snaps = await prisma.deviceConfigurationSnapshot.findMany({
+      where: { sourceWorkOrderId: wo.id },
+      orderBy: { createdAt: 'asc' },
+    })
+    if (snaps.length >= 2) {
+      currentSnapshotId = currentSnapshotId || snaps[0].id
+      proposed = snaps[snaps.length - 1]
+    } else {
+      proposed = snaps.find(s => !s.isCurrent) || null
+    }
+    proposedSnapshotId = proposed?.id ?? null
+  }
+
   // Promote proposed snapshot to current
-  if (wo.proposedSnapshotId) {
+  if (proposedSnapshotId) {
     await prisma.deviceConfigurationSnapshot.updateMany({
       where: { serialId: wo.serialId, isCurrent: true },
       data: { isCurrent: false },
     })
     await prisma.deviceConfigurationSnapshot.update({
-      where: { id: wo.proposedSnapshotId },
+      where: { id: proposedSnapshotId },
       data: { isCurrent: true },
     })
   }
 
-  const proposed = wo.proposedSnapshot
   if (proposed) {
     await syncBlobSpecs(
       wo.serialId,
@@ -1468,6 +1484,8 @@ export async function completeWorkOrder(params: {
     data: {
       status: 'completed',
       dateCompleted: new Date(),
+      currentSnapshotId: currentSnapshotId || undefined,
+      proposedSnapshotId: proposedSnapshotId || wo.proposedSnapshotId || undefined,
       finalSellingPrice: selling,
       grossMargin: margin.grossMargin,
       grossMarginPct: margin.grossMarginPct,
