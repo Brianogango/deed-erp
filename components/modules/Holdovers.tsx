@@ -9,6 +9,13 @@ import { DataTable, type ColumnDef, type PrimaryFilterConfig } from '@/component
 import { Fa } from '@/components/icons'
 import { faLaptop, faPlus } from '@fortawesome/free-solid-svg-icons'
 import { useUrlRecordId } from '@/hooks/useUrlRecordId'
+import {
+  holdoverLoanDays,
+  holdoverOverdueDays,
+  nairobiDateKey,
+  resolveHoldoverStatus,
+  storedDateKey,
+} from '@/lib/workspace-integrity'
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 
@@ -39,15 +46,15 @@ const uid = () => crypto.randomUUID()
 const now = () => new Date().toISOString()
 
 function nextRef(existing: Holdover[]): string {
-  const nums = existing.map(h => parseInt(h.ref.replace('LOAN/', ''), 10)).filter(n => !isNaN(n))
+  const nums = existing
+    .map(h => parseInt(h.ref.replace(/^(?:HOLD|LOAN)\//, ''), 10))
+    .filter(n => !Number.isNaN(n))
   const next = nums.length > 0 ? Math.max(...nums) + 1 : 1
-  return `LOAN/${String(next).padStart(4, '0')}`
+  return `HOLD/${String(next).padStart(4, '0')}`
 }
 
 function resolveStatus(h: Holdover): HoldoverStatus {
-  if (h.returnedDate) return 'returned'
-  if (new Date(h.expectedReturnDate) < new Date()) return 'overdue'
-  return 'active'
+  return resolveHoldoverStatus(h.expectedReturnDate, h.returnedDate)
 }
 
 function withResolvedStatus(items: Holdover[]): Holdover[] {
@@ -63,18 +70,15 @@ function HoldoverStatusBadge({ status }: { status: HoldoverStatus }) {
 
 function DaysTag({ h }: { h: Holdover }) {
   if (h.returnedDate) {
-    const issued = new Date(h.issuedDate)
-    const returned = new Date(h.returnedDate)
-    const days = Math.ceil((returned.getTime() - issued.getTime()) / 86400000)
+    const days = holdoverLoanDays(h.issuedDate, h.returnedDate)
     return <span className="text-[11px] text-[var(--text-4)]">{days}d loan</span>
   }
-  const issued = new Date(h.issuedDate)
-  const today = new Date()
-  const days = Math.ceil((today.getTime() - issued.getTime()) / 86400000)
-  const overdue = new Date(h.expectedReturnDate) < today
+
+  const loanDays = holdoverLoanDays(h.issuedDate)
+  const overdueDays = holdoverOverdueDays(h.expectedReturnDate)
   return (
-    <span className={`text-[11px] font-semibold ${overdue ? 'text-red-500' : 'text-[var(--text-3)]'}`}>
-      {overdue ? `${days}d (overdue)` : `${days}d out`}
+    <span className={`text-[11px] font-semibold ${overdueDays > 0 ? 'text-red-500' : 'text-[var(--text-3)]'}`}>
+      {overdueDays > 0 ? `${overdueDays}d overdue` : `${loanDays}d out`}
     </span>
   )
 }
@@ -158,7 +162,7 @@ function NewHoldoverModal({ onClose, onSave }: { onClose: () => void; onSave: (h
       linkedRepairId,
       linkedRepairRef: openRepairs.find(r => r.id === linkedRepairId)?.ref ?? '',
       issuedDate: now(),
-      expectedReturnDate: new Date(expectedReturnDate).toISOString(),
+      expectedReturnDate,
       returnedDate: '',
       returnCondition: '',
       returnNotes: '',
@@ -170,9 +174,9 @@ function NewHoldoverModal({ onClose, onSave }: { onClose: () => void; onSave: (h
       createdAt: now(),
     }
 
-    // Mark serial as out on loan
-    updateSerial(serialId, { status: 'assigned', location: 'customer' })
+    // Save the loan record before changing stock so a failed save cannot orphan an assigned serial.
     onSave(h)
+    updateSerial(serialId, { status: 'assigned', location: 'customer' })
     setSaving(false)
     onClose()
   }
@@ -362,7 +366,7 @@ function NewHoldoverModal({ onClose, onSave }: { onClose: () => void; onSave: (h
               <div>
                 <label className="text-[11px] font-semibold text-[var(--text-3)] block mb-1">Expected Return Date *</label>
                 <input type="date" aria-label="Expected return date" value={expectedReturnDate} onChange={e => setExpectedReturnDate(e.target.value)}
-                  min={new Date().toISOString().slice(0, 10)}
+                  min={nairobiDateKey()}
                   className="w-full px-3 py-2.5 rounded-xl bg-[var(--bg-surface)] border border-[var(--border)] text-[var(--text-1)] text-sm focus:outline-none focus:border-blue-500" />
               </div>
             </div>
@@ -405,7 +409,6 @@ function ReturnModal({ holdover, onClose, onReturn }: { holdover: Holdover; onCl
 
   const handleReturn = () => {
     setSaving(true)
-    updateSerial(holdover.serialId, { status: 'available', location: returnLocation })
     onReturn({
       returnedDate: now(),
       returnCondition: condition,
@@ -413,6 +416,7 @@ function ReturnModal({ holdover, onClose, onReturn }: { holdover: Holdover; onCl
       returnLocation,
       status: 'returned',
     })
+    updateSerial(holdover.serialId, { status: 'available', location: returnLocation })
     setSaving(false)
     onClose()
   }
@@ -611,9 +615,9 @@ function HoldoversContent() {
   const active   = items.filter(h => h.status === 'active').length
   const overdue  = items.filter(h => h.status === 'overdue').length
   const returned = items.filter(h => h.status === 'returned').length
-  const todayKey = new Date().toISOString().slice(0, 10)
+  const todayKey = nairobiDateKey()
   const monthKey = todayKey.slice(0, 7)
-  const dueToday = items.filter(h => h.status !== 'returned' && h.expectedReturnDate.slice(0, 10) === todayKey).length
+  const dueToday = items.filter(h => h.status !== 'returned' && storedDateKey(h.expectedReturnDate) === todayKey).length
   const returnedThisMonth = items.filter(h => h.returnedDate?.slice(0, 7) === monthKey).length
   const returnQueue = items
     .filter(h => h.status !== 'returned')
@@ -631,7 +635,7 @@ function HoldoversContent() {
         h.serialNumber.toLowerCase().includes(q)
       )
     }
-    return list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+    return [...list].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
   }, [items, filter, search])
 
   const holdoverPrimaryFilters: PrimaryFilterConfig[] = [
