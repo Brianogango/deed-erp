@@ -14698,3 +14698,4 @@ body:has(.settings-workspace) [role='dialog'] > div {
     border-radius: 0.4375rem !important;
     background: var(--sp-surface) !important;
   }
+}
