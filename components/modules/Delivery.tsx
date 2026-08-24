@@ -7,7 +7,7 @@ import {
   DeliveryJob, DeliveryJobType, DeliveryJobStatus, Rider, RiderWeeklyPay,
 } from '@/lib/store'
 import { Confirm, Modal, Field, Input, Select, ModuleSkeleton, ModuleHeader, TabBar } from '@/components/ui'
-import { StatusBadge } from '@/components/erp'
+import { PrimaryActionButton, SecondaryActionMenu, StatusBadge } from '@/components/erp'
 import { CalendarView } from '@/components/erp/CalendarView'
 import { Fa, faPrint, faTruck } from '@/components/icons'
 import { DataTable, type ColumnDef, type PrimaryFilterConfig } from '@/components/data-table'
@@ -501,7 +501,7 @@ function FailModal({ onConfirm, onClose }: { onConfirm: (reason: string) => void
 }
 
 // ── Jobs Tab ───────────────────────────────────────────────────────────────────
-function JobsTab() {
+function JobsTab({ createRequest = 0 }: { createRequest?: number }) {
   const {
     deliveryJobs, riders, repairs, saleOrders,
     createDeliveryJob, assignRiderToJob, updateDeliveryJob, advanceJobStatus, deleteDeliveryJob,
@@ -510,6 +510,7 @@ function JobsTab() {
 
   const [printJob, setPrintJob] = useState<DeliveryJob | null>(null)
   const [showCreateModal, setShowCreateModal] = useState(false)
+  useEffect(() => { if (createRequest > 0) setShowCreateModal(true) }, [createRequest])
   const [assignTarget, setAssignTarget] = useState<DeliveryJob | null>(null)
   const [feeTarget, setFeeTarget] = useState<DeliveryJob | null>(null)
   const [failTarget, setFailTarget] = useState<DeliveryJob | null>(null)
@@ -724,14 +725,33 @@ function JobsTab() {
   }
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex items-center justify-between gap-2 flex-wrap px-1">
-        <div className="flex items-center gap-2 flex-wrap">
+    <div className="delivery-jobs-view">
+      <div className="delivery-kpi-strip" aria-label="Delivery overview">
+        {([
+          ['Pending', stats.pending, 'Ready to dispatch'],
+          ['Assigned', stats.assigned, 'Rider confirmed'],
+          ['In transit', stats.in_transit, 'Moving now'],
+          ['Failed', stats.failed, 'Needs attention'],
+        ] as const).map(([label, value, hint]) => (
+          <button
+            key={label}
+            type="button"
+            className="delivery-kpi-card"
+            onClick={() => setFilterStatus(label === 'In transit' ? 'in_transit' : label.toLowerCase() as DeliveryJobStatus)}
+          >
+            <small>{label}</small>
+            <strong>{value}</strong>
+            <span>{hint}</span>
+          </button>
+        ))}
+      </div>
+      <div className="delivery-toolbar">
+        <div className="delivery-filter-group">
           {deliveryPrimaryFilters.map(f => (
-            <div key={f.key} className="flex items-center gap-1.5">
-              <span className="text-[10px] text-[var(--text-4)] font-medium">{f.label}</span>
+            <label key={f.key} className="delivery-filter">
+              <span>{f.label}</span>
               <select
-                className="form-input text-[11px] py-1 px-2"
+                className="form-input"
                 value={String(f.value)}
                 onChange={e => f.onChange(e.target.value)}
                 aria-label={f.label}
@@ -740,13 +760,10 @@ function JobsTab() {
                   <option key={o.value} value={o.value}>{o.label}</option>
                 ))}
               </select>
-            </div>
+            </label>
           ))}
-          <button type="button" className="btn-primary text-xs" onClick={() => setShowCreateModal(true)}>
-            + New Delivery Job
-          </button>
         </div>
-        <div className="flex items-center gap-1.5">
+        <div className="delivery-view-switch">
           {(['list', 'calendar'] as const).map(v => (
             <button
               key={v}
@@ -765,6 +782,8 @@ function JobsTab() {
         </div>
       </div>
 
+      <div className="delivery-jobs-grid">
+        <section className="delivery-jobs-main">
       {jobsView === 'calendar' ? (
         <div className="card p-4">
           <p className="text-xs font-semibold text-[var(--text-2)] mb-3">
@@ -790,6 +809,43 @@ function JobsTab() {
         />
       </div>
       )}
+        </section>
+        <aside className="delivery-dispatch-rail" aria-label="Dispatch queue">
+          <header>
+            <div>
+              <small>Live operations</small>
+              <h2>Dispatch queue</h2>
+            </div>
+            <span>{stats.pending + stats.in_transit + stats.failed}</span>
+          </header>
+          <section>
+            <div className="delivery-queue-heading"><strong>Unassigned</strong><button type="button" onClick={() => setFilterStatus('pending')}>View all</button></div>
+            {deliveryJobs.filter(job => job.status === 'pending' && !job.riderId).slice(0, 3).map(job => (
+              <button key={job.id} type="button" className="delivery-queue-item" onClick={() => setAssignTarget(job)}>
+                <span><strong>{job.customerName}</strong><small>{job.ref} · {fmtDate(job.scheduledDate)}</small></span>
+                <em>Assign</em>
+              </button>
+            ))}
+            {!deliveryJobs.some(job => job.status === 'pending' && !job.riderId) && <p className="delivery-queue-empty">All pending jobs are assigned.</p>}
+          </section>
+          <section>
+            <div className="delivery-queue-heading"><strong>In transit</strong><button type="button" onClick={() => setFilterStatus('in_transit')}>View all</button></div>
+            {deliveryJobs.filter(job => job.status === 'in_transit').slice(0, 3).map(job => (
+              <button key={job.id} type="button" className="delivery-queue-item" onClick={() => setFilterStatus('in_transit')}>
+                <span><strong>{job.customerName}</strong><small>{job.riderName || 'Unassigned'} · {job.ref}</small></span>
+                <StatusBadge status={job.status} />
+              </button>
+            ))}
+            {!deliveryJobs.some(job => job.status === 'in_transit') && <p className="delivery-queue-empty">No jobs are in transit.</p>}
+          </section>
+          {stats.failed > 0 && (
+            <section className="delivery-queue-failed">
+              <div className="delivery-queue-heading"><strong>Failed</strong><button type="button" onClick={() => setFilterStatus('failed')}>Review</button></div>
+              <p>{stats.failed} delivery {stats.failed === 1 ? 'needs' : 'deliveries need'} follow-up.</p>
+            </section>
+          )}
+        </aside>
+      </div>
 
       {/* Modals */}
       {showCreateModal && (
@@ -930,8 +986,8 @@ function RidersTab() {
   ]
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex items-center justify-between">
+    <div className="delivery-riders-view">
+      <div className="delivery-section-heading">
         <p className="text-xs font-semibold" style={{ color: 'var(--text-2)' }}>{riders.length} rider{riders.length !== 1 ? 's' : ''} registered</p>
         <button className="btn-primary text-xs" onClick={() => setShowForm(p => !p)}>
           {showForm ? 'Cancel' : '+ Add Rider'}
@@ -1064,9 +1120,9 @@ function WeeklyPayTab() {
   }
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="delivery-pay-view">
       {/* Week selector */}
-      <div className="card p-4 flex items-center gap-4 flex-wrap">
+      <div className="delivery-pay-toolbar card">
         <div>
           <p className="text-[10px] uppercase font-semibold mb-1" style={{ color: 'var(--text-4)' }}>Week Starting (Monday)</p>
           <input type="date" aria-label="Week starting date" className="form-input text-xs" value={weekStart}
@@ -1088,7 +1144,7 @@ function WeeklyPayTab() {
       </div>
 
       {/* Summary cards per rider */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
+      <div className="delivery-pay-cards">
         {filteredSummaries.map(({ rider, jobs, existingPay, totalOwed }) => (
           <div key={rider.id} className="card overflow-hidden">
             <div className="px-4 py-3 flex items-center justify-between border-b" style={{ borderColor: 'var(--border-lt)' }}>
@@ -1254,19 +1310,36 @@ export default function Delivery() {
 
   const { deliveryJobs, riderWeeklyPays } = useDeliveryStore()
   const [tab, setTab] = useState<MainTab>('jobs')
+  const [createRequest, setCreateRequest] = useState(0)
 
   const pendingPay = riderWeeklyPays.filter(p => p.status === 'pending').length
 
   if (!mounted) return <ModuleSkeleton />
 
   return (
-    <div className="mod-page">
+    <div className="mod-page delivery-workspace">
       <ModuleHeader
         title="Delivery"
-        subtitle="Pickups, deliveries and rider management"
+        subtitle="Pickups, deliveries and rider operations"
         icon={<Fa icon={faTruck} />}
         count={deliveryJobs.length}
-        color="var(--success)"
+        color="var(--navy)"
+        primaryAction={
+          <PrimaryActionButton
+            onClick={() => { setTab('jobs'); setCreateRequest(value => value + 1) }}
+          >
+            New delivery job
+          </PrimaryActionButton>
+        }
+        overflowActions={
+          <SecondaryActionMenu
+            actions={[
+              { id: 'jobs', label: 'Delivery jobs', onClick: () => setTab('jobs') },
+              { id: 'riders', label: 'Rider directory', onClick: () => setTab('riders') },
+              { id: 'pay', label: 'Weekly pay', onClick: () => setTab('weekly_pay') },
+            ]}
+          />
+        }
       />
 
       <TabBar
@@ -1281,8 +1354,8 @@ export default function Delivery() {
         ariaLabel="Delivery sections"
       />
 
-      <div className="mod-body p-3 sm:p-4 flex flex-col gap-4">
-        {tab === 'jobs'       && <JobsTab />}
+      <div className="mod-body delivery-body">
+        {tab === 'jobs'       && <JobsTab createRequest={createRequest} />}
         {tab === 'riders'     && <RidersTab />}
         {tab === 'weekly_pay' && <WeeklyPayTab />}
       </div>
