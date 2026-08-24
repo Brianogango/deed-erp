@@ -172,6 +172,15 @@
         ],
         "createdAt": "2026-08-21T13:45:52.313Z",
         "reason": "Incumbent Refurbishment operate UI; existing pill radii, not a restyle"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "*",
+        "files": [
+          "components/modules/HR.tsx"
+        ],
+        "createdAt": "2026-08-24T13:03:25.956Z",
+        "reason": "PR #445 HR workspace category colors; user asked to merge and deploy that PR. Type-only pending_hr fix should not restyle existing SOP/PERF badges."
       }
     ]
   }
