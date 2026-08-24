@@ -637,8 +637,15 @@ export const DEFAULT_BANK_ACCOUNTS: BankAccount[] = [
 
 export interface CompanySettings {
   name: string
+  legalName?: string
   address: string
+  streetAddress?: string
   city: string
+  county?: string
+  postalCode?: string
+  country?: string
+  language?: string
+  timezone?: string
   phone: string
   email: string
   website: string
@@ -804,8 +811,15 @@ export const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
 
 export const DEFAULT_COMPANY_SETTINGS: CompanySettings = {
   name:          'Deed Technologies LTD',
+  legalName:     'Deed Technologies Limited',
   address:       'Sanlam House, Kenyatta Avenue',
-  city:          'Nairobi 6690-20200',
+  streetAddress: 'Sanlam House, Kenyatta Avenue, 1st Floor, Suite 103',
+  city:          'Nairobi',
+  county:        'Nairobi',
+  postalCode:    '00100',
+  country:       'Kenya',
+  language:      'English (Kenya)',
+  timezone:      'Africa/Nairobi',
   phone:         '0113407964',
   email:         'info@deed.africa',
   website:       'http://deed.africa',
@@ -1340,6 +1354,13 @@ export interface Holdover {
   issuedByName: string
   authorizedByUserId: string
   authorizedByName: string
+  extensionHistory?: Array<{
+    previousDate: string
+    newDate: string
+    note?: string
+    extendedAt: string
+    extendedByName: string
+  }>
   createdAt: string
 }
 
@@ -1912,6 +1933,9 @@ export interface KilimallDispatch {
   isSubstitution?: boolean
   serialId: string; serialNumber: string
   status: 'dispatched' | 'delivered' | 'failed'
+  courier?: string
+  dispatchDate?: string
+  trackingReference?: string
   notes?: string
   createdBy: string; createdDate: string
 }
@@ -1924,6 +1948,7 @@ export interface KilimallSettlementLine {
   orderId?: string
   erpAmount?: number
   notes?: string
+  manuallyMatched?: boolean
 }
 
 export interface KilimallSettlement {
@@ -1937,7 +1962,7 @@ export interface KilimallSettlement {
   paymentDate?: string
   paymentRef?: string
   paymentMethod?: 'bank' | 'mpesa'
-  status: 'draft' | 'posted' | 'reconciled'
+  status: 'draft' | 'posted' | 'partially_matched' | 'reconciled'
   lines: KilimallSettlementLine[]
   createdDate: string; createdBy: string
 }
@@ -3082,17 +3107,25 @@ export interface AppState {
   kilimallOrders: KilimallOrder[]
   kilimallDispatches: KilimallDispatch[]
   kilimallSettlements: KilimallSettlement[]
-  createKilimallOrder: (p: Omit<KilimallOrder, 'id' | 'ref' | 'status' | 'createdDate' | 'createdBy'>) => KilimallOrder
+  createKilimallOrder: (p: Omit<KilimallOrder, 'id' | 'ref' | 'status' | 'createdDate' | 'createdBy'>) => KilimallOrder | null
   updateKilimallOrder: (id: string, p: Partial<KilimallOrder>) => void
   confirmKilimallDispatch: (
     orderId: string,
     serialId: string,
     serialNumber: string,
-    opts?: { fulfilledProductId?: string; substitutionReason?: string },
+    opts?: {
+      fulfilledProductId?: string
+      substitutionReason?: string
+      courier?: string
+      dispatchDate?: string
+      trackingReference?: string
+      dispatchNotes?: string
+    },
   ) => KilimallDispatch | null
-  createKilimallSettlement: (p: Omit<KilimallSettlement, 'id' | 'ref' | 'status' | 'createdDate' | 'createdBy'>) => KilimallSettlement
+  createKilimallSettlement: (p: Omit<KilimallSettlement, 'id' | 'ref' | 'status' | 'createdDate' | 'createdBy'>) => KilimallSettlement | null
   updateKilimallSettlement: (id: string, p: Partial<KilimallSettlement>) => void
   reconcileKilimallSettlement: (settlementId: string) => void
+  matchKilimallSettlementLine: (settlementId: string, lineId: string, orderId: string, note: string) => boolean
   posSessionOpen: boolean; posSessionOpeningCash: number
   posSessionId: string | null
   posSessions: POSSession[]
@@ -3197,7 +3230,7 @@ export interface AppState {
 
   // Deposits
   deposits: Deposit[]
-  createDeposit: (d: CreateDepositInput) => Deposit
+  createDeposit: (d: CreateDepositInput) => Promise<Deposit>
   addDepositPayment: (depositId: string, p: Omit<DepositPayment, 'id'>) => void
   completeDeposit: (depositId: string) => void
   cancelDeposit: (depositId: string, reason: string) => void
@@ -6556,6 +6589,7 @@ export function StoreProvider({
     getCustomerCreditStatus: (...args: Parameters<AppState['getCustomerCreditStatus']>) => storeCtxRef.current!.getCustomerCreditStatus(...args),
     openPOSSession: (...args: Parameters<AppState['openPOSSession']>) => storeCtxRef.current!.openPOSSession(...args),
     reconcileKilimallSettlement: (...args: Parameters<AppState['reconcileKilimallSettlement']>) => storeCtxRef.current!.reconcileKilimallSettlement(...args),
+    matchKilimallSettlementLine: (...args: Parameters<AppState['matchKilimallSettlementLine']>) => storeCtxRef.current!.matchKilimallSettlementLine(...args),
     setModule: (...args: Parameters<AppState['setModule']>) => storeCtxRef.current!.setModule(...args),
     showToast: (...args: Parameters<AppState['showToast']>) => storeCtxRef.current!.showToast(...args),
     updateKilimallOrder: (...args: Parameters<AppState['updateKilimallOrder']>) => storeCtxRef.current!.updateKilimallOrder(...args),
@@ -6827,11 +6861,37 @@ const storeCtx: AppState = {
     createKilimallOrder: (p) => {
       const user = currentUser()
       if (!user || !['director', 'kilimall_officer', 'sales_rep'].includes(user.role)) {
-        showToast('Unauthorized to create Kilimall orders', 'error'); return {} as KilimallOrder;
+        showToast('Unauthorized to create Kilimall orders', 'error')
+        return null
       }
+
+      const kilimallRef = p.kilimallRef.trim()
+      const qty = Number(p.qty)
+      const unitPrice = Number(p.unitPrice)
+      if (!kilimallRef || !p.productId || !p.productName.trim()) {
+        showToast('Kilimall reference and product are required', 'error')
+        return null
+      }
+      if (!Number.isFinite(qty) || qty <= 0 || !Number.isFinite(unitPrice) || unitPrice <= 0) {
+        showToast('Quantity and unit price must be greater than zero', 'error')
+        return null
+      }
+      if (kilimallOrdersRef.current.some(order => order.kilimallRef.trim().toLowerCase() === kilimallRef.toLowerCase())) {
+        showToast(`Kilimall order ${kilimallRef} already exists`, 'error')
+        return null
+      }
+
       const order: KilimallOrder = {
-        ...p, id: uid(), ref: seq('KO', 'ko'), status: 'pending',
-        createdDate: now(), createdBy: currentUserId ?? 'system',
+        ...p,
+        kilimallRef,
+        qty,
+        unitPrice,
+        total: Math.round(qty * unitPrice * 100) / 100,
+        id: uid(),
+        ref: seq('KO', 'ko'),
+        status: 'pending',
+        createdDate: now(),
+        createdBy: currentUserId ?? 'system',
       }
       setKilimallOrders(prev => [order, ...prev])
       addAuditLog('kilimall_order_create', order.id, `Order ${order.ref} — ${order.kilimallRef}`)
@@ -6863,16 +6923,22 @@ const storeCtx: AppState = {
       }
 
       const dispatch: KilimallDispatch = {
-        id: uid(), ref: seq('KD', 'kd'), date: now(),
+        id: uid(), ref: seq('KD', 'kd'), date: opts?.dispatchDate || now(),
         orderId: order.id, orderRef: order.ref, kilimallRef: order.kilimallRef,
         productId: shipProductId, productName: shipProductName,
         orderedProductId: isSubstitution ? order.productId : undefined,
         orderedProductName: isSubstitution ? order.productName : undefined,
         isSubstitution: isSubstitution || undefined,
         serialId, serialNumber, status: 'dispatched',
-        notes: isSubstitution
-          ? (opts?.substitutionReason?.trim() || `Substituted for ordered ${order.productName}`)
-          : undefined,
+        courier: opts?.courier?.trim() || undefined,
+        dispatchDate: opts?.dispatchDate || undefined,
+        trackingReference: opts?.trackingReference?.trim() || undefined,
+        notes: [
+          isSubstitution
+            ? (opts?.substitutionReason?.trim() || `Substituted for ordered ${order.productName}`)
+            : '',
+          opts?.dispatchNotes?.trim() || '',
+        ].filter(Boolean).join(' · ') || undefined,
         createdBy: currentUserId ?? 'system', createdDate: now(),
       }
       setKilimallDispatches(prev => [dispatch, ...prev])
@@ -6907,42 +6973,181 @@ const storeCtx: AppState = {
     createKilimallSettlement: (p) => {
       const user = currentUser()
       if (!user || !['director', 'finance_officer', 'kilimall_officer'].includes(user.role)) {
-        showToast('Unauthorized to manage settlements', 'error'); return {} as KilimallSettlement;
+        showToast('Unauthorized to manage settlements', 'error')
+        return null
       }
-      const s: KilimallSettlement = {
-        ...p, id: uid(), ref: seq('KS', 'ks'), status: 'draft',
-        createdDate: now(), createdBy: currentUserId ?? 'system',
+
+      const grossAmount = Number(p.grossAmount)
+      const deductions = Number(p.deductions)
+      const netPaid = Number(p.netPaid)
+      const normalizedRefs = p.lines.map(line => line.kilimallRef.trim().toLowerCase())
+      if (!p.weekPeriod.trim() || !p.weekStart || !p.weekEnd || p.weekEnd < p.weekStart) {
+        showToast('Enter a valid settlement period and date range', 'error')
+        return null
       }
-      setKilimallSettlements(prev => [s, ...prev])
-      return s
+      if (![grossAmount, deductions, netPaid].every(Number.isFinite) || grossAmount <= 0 || deductions < 0 || netPaid < 0) {
+        showToast('Settlement amounts cannot be negative and gross must be greater than zero', 'error')
+        return null
+      }
+      if (Math.abs(grossAmount - deductions - netPaid) > 1) {
+        showToast('Net paid must equal gross amount less deductions', 'error')
+        return null
+      }
+      if (
+        p.lines.length === 0 ||
+        p.lines.some(line => !line.kilimallRef.trim() || !Number.isFinite(Number(line.amount)) || Number(line.amount) <= 0)
+      ) {
+        showToast('Every settlement line needs an order reference and a positive amount', 'error')
+        return null
+      }
+      if (new Set(normalizedRefs).size !== normalizedRefs.length) {
+        showToast('A Kilimall order can appear only once in a settlement', 'error')
+        return null
+      }
+      if (kilimallSettlementsRef.current.some(existing =>
+        p.paymentRef && existing.paymentRef?.trim().toLowerCase() === p.paymentRef.trim().toLowerCase()
+      )) {
+        showToast('This settlement payment reference already exists', 'error')
+        return null
+      }
+
+      const settlement: KilimallSettlement = {
+        ...p,
+        grossAmount,
+        deductions,
+        netPaid,
+        lines: p.lines.map(line => ({
+          ...line,
+          kilimallRef: line.kilimallRef.trim(),
+          amount: Number(line.amount),
+        })),
+        id: uid(),
+        ref: seq('KS', 'ks'),
+        status: 'draft',
+        createdDate: now(),
+        createdBy: currentUserId ?? 'system',
+      }
+      setKilimallSettlements(prev => [settlement, ...prev])
+      return settlement
     },
-    updateKilimallSettlement: (id, p) => setKilimallSettlements(prev => prev.map(s => s.id === id ? { ...s, ...p } : s)),
+    updateKilimallSettlement: (id, p) => setKilimallSettlements(prev => prev.map(settlement =>
+      settlement.id === id ? { ...settlement, ...p } : settlement
+    )),
     reconcileKilimallSettlement: (settlementId) => {
       const user = currentUser()
       if (!user || !['director', 'finance_officer', 'kilimall_officer'].includes(user.role)) {
-        showToast('Unauthorized to reconcile settlements', 'error'); return;
+        showToast('Unauthorized to reconcile settlements', 'error')
+        return
       }
-      const settlement = kilimallSettlementsRef.current.find(s => s.id === settlementId)
+      const settlement = kilimallSettlementsRef.current.find(item => item.id === settlementId)
       if (!settlement) return
+
       const orders = kilimallOrdersRef.current
-      const updatedLines = settlement.lines.map(line => {
-        const match = orders.find(o => o.kilimallRef === line.kilimallRef)
-        if (!match) return { ...line, status: 'unmatched' as const }
-        if (match.status === 'returned') return { ...line, status: 'returned' as const, orderId: match.id, erpAmount: match.total }
-        const diff = Math.abs(line.amount - match.total)
-        if (diff > 1) return { ...line, status: 'mismatch' as const, orderId: match.id, erpAmount: match.total }
-        return { ...line, status: 'matched' as const, orderId: match.id, erpAmount: match.total }
+      const updatedLines: KilimallSettlementLine[] = settlement.lines.map(line => {
+        const normalizedRef = line.kilimallRef.trim().toLowerCase()
+        const match = orders.find(order => order.kilimallRef.trim().toLowerCase() === normalizedRef)
+        if (!match) return { ...line, status: 'unmatched', orderId: undefined, erpAmount: undefined }
+        if (match.settlementId && match.settlementId !== settlement.id) {
+          return {
+            ...line,
+            status: 'unmatched',
+            orderId: match.id,
+            erpAmount: match.total,
+            notes: `Already linked to ${match.settlementRef || 'another settlement'}`,
+          }
+        }
+        if (match.status === 'returned') {
+          return { ...line, status: 'returned', orderId: match.id, erpAmount: match.total }
+        }
+        const difference = Math.abs(Number(line.amount) - Number(match.total))
+        if (difference > 1) {
+          return { ...line, status: 'mismatch', orderId: match.id, erpAmount: match.total }
+        }
+        return { ...line, status: 'matched', orderId: match.id, erpAmount: match.total }
       })
-      // link matched orders to this settlement
-      updatedLines.filter(l => l.status === 'matched' || l.status === 'mismatch').forEach(l => {
-        if (l.orderId) setKilimallOrders(prev => prev.map(o =>
-          o.id === l.orderId ? { ...o, settlementId: settlement.id, settlementRef: settlement.ref } : o))
-      })
-      setKilimallSettlements(prev => prev.map(s => s.id === settlementId
-        ? { ...s, lines: updatedLines, status: 'reconciled' } : s))
-      const matched = updatedLines.filter(l => l.status === 'matched').length
-      showToast(`Reconciliation complete — ${matched}/${updatedLines.length} matched`)
-      addAuditLog('kilimall_reconcile', settlementId, `Settlement ${settlement.ref} reconciled`)
+
+      const matchedOrderIds = new Set(
+        updatedLines.filter(line => line.status === 'matched' && line.orderId).map(line => line.orderId as string),
+      )
+      setKilimallOrders(prev => prev.map(order => {
+        if (matchedOrderIds.has(order.id)) {
+          return { ...order, settlementId: settlement.id, settlementRef: settlement.ref }
+        }
+        if (order.settlementId === settlement.id) {
+          const { settlementId: _settlementId, settlementRef: _settlementRef, ...unlinked } = order
+          return unlinked
+        }
+        return order
+      }))
+
+      const allMatched = updatedLines.length > 0 && updatedLines.every(line => line.status === 'matched')
+      const nextStatus: KilimallSettlement['status'] = allMatched ? 'reconciled' : 'partially_matched'
+      setKilimallSettlements(prev => prev.map(item =>
+        item.id === settlementId ? { ...item, lines: updatedLines, status: nextStatus } : item
+      ))
+
+      const matched = updatedLines.filter(line => line.status === 'matched').length
+      const unresolved = updatedLines.length - matched
+      showToast(
+        allMatched
+          ? `Reconciliation complete — ${matched}/${updatedLines.length} matched`
+          : `Partially matched — ${matched} matched, ${unresolved} need review`,
+        allMatched ? 'success' : 'info',
+      )
+      addAuditLog(
+        'kilimall_reconcile',
+        settlementId,
+        `Settlement ${settlement.ref}: ${matched}/${updatedLines.length} matched`,
+      )
+    },
+    matchKilimallSettlementLine: (settlementId, lineId, orderId, note) => {
+      const user = currentUser()
+      if (!user || !['director', 'finance_officer', 'kilimall_officer'].includes(user.role)) {
+        showToast('Unauthorized to match settlement lines', 'error')
+        return false
+      }
+      const settlement = kilimallSettlementsRef.current.find(item => item.id === settlementId)
+      const line = settlement?.lines.find(item => item.id === lineId)
+      const order = kilimallOrdersRef.current.find(item => item.id === orderId)
+      if (!settlement || !line || !order) {
+        showToast('Settlement line or order was not found', 'error')
+        return false
+      }
+      if (order.settlementId && order.settlementId !== settlement.id) {
+        showToast(`Order is already linked to ${order.settlementRef || 'another settlement'}`, 'error')
+        return false
+      }
+      if (Math.abs(line.amount - order.total) > 1 && !note.trim()) {
+        showToast('Add a note explaining the amount difference', 'error')
+        return false
+      }
+
+      const updatedLines = settlement.lines.map(item => item.id === lineId ? {
+        ...item,
+        status: 'matched' as const,
+        orderId: order.id,
+        erpAmount: order.total,
+        notes: note.trim() || undefined,
+        manuallyMatched: true,
+      } : item)
+      const allMatched = updatedLines.every(item => item.status === 'matched')
+      setKilimallSettlements(prev => prev.map(item => item.id === settlementId ? {
+        ...item,
+        lines: updatedLines,
+        status: allMatched ? 'reconciled' : 'partially_matched',
+      } : item))
+      setKilimallOrders(prev => prev.map(item =>
+        item.id === order.id
+          ? { ...item, settlementId: settlement.id, settlementRef: settlement.ref }
+          : item
+      ))
+      addAuditLog(
+        'kilimall_manual_match',
+        settlementId,
+        `Settlement ${settlement.ref}: ${line.kilimallRef} matched to ${order.ref}`,
+      )
+      showToast('Settlement line matched', 'success')
+      return true
     },
 
     notifications, profileImages,
@@ -7586,73 +7791,94 @@ const storeCtx: AppState = {
     deposits,
     createDeposit: async (d) => {
       const user = currentUser()
-      if (!user) { showToast('Please log in to continue', 'error'); return null }
+      if (!user) throw new Error('Please log in to continue')
+
       const { initialPayment = 0, payMethod = 'cash', payRef, ...depositInput } = d
-      const paid = Math.min(Math.max(Number(initialPayment) || 0, 0), depositInput.totalValue)
-      const payment: DepositPayment | null = paid > 0 ? {
-        id: uid(),
-        date: now(),
-        amount: paid,
-        method: payMethod,
-        ref: payRef || undefined,
-        recordedBy: user.name,
-      } : null
-      const deposit: Deposit = {
-        ...depositInput,
-        id: uid(),
-        ref: seq('DEP', 'dep'),
-        totalPaid: paid,
-        balance: Math.max(0, depositInput.totalValue - paid),
-        status: paid >= depositInput.totalValue ? 'fully_paid' : paid > 0 ? 'partially_paid' : 'active',
-        payments: payment ? [payment] : [],
-        createdAt: now(),
-        createdBy: user.name,
+      const paid = Number(initialPayment)
+      if (!Number.isFinite(paid) || paid <= 0) {
+        throw new Error('Initial payment must be greater than zero')
       }
-      setDeposits(p => [deposit, ...p])
-      if (payment) setJournalEntries(p => [buildDepositPaymentJournal(deposit, payment), ...p])
-      sync('/api/deposits', {
+      if (
+        !depositInput.customerId ||
+        !depositInput.customerName.trim() ||
+        depositInput.items.length === 0 ||
+        depositInput.items.some(item =>
+          !item.productId || !item.productName.trim() || item.qty <= 0 || item.unitPrice < 0
+        )
+      ) {
+        throw new Error('Complete the customer and every reserved item before saving')
+      }
+      if (paid > depositInput.totalValue) {
+        throw new Error('Initial payment cannot exceed the order total')
+      }
+
+      // Allocate the linked quotation reference before persisting either record.
+      // If allocation fails, the deposit is not partially created.
+      const quotationRef = await storeCtxRef.current!.allocateDocRef('QUO')
+      const provisionalId = uid()
+      const provisionalRef = seq('DEP', 'dep')
+      const response = await fetch('/api/deposits', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...depositInput,
-          id: deposit.id,
-          ref: deposit.ref,
+          id: provisionalId,
+          ref: provisionalRef,
           initialPayment: paid,
           payMethod,
           payRef,
         }),
       })
-      // Auto-create a linked quotation-status Sale Order
-      if (depositInput.items?.length) {
-        const soLines = depositInput.items.map(item => ({
-          id: uid(),
-          productId: item.productId,
-          productName: item.productName,
-          qty: item.qty,
-          unitPrice: item.unitPrice,
-          discount: 0,
-          taxRate: 0,
-          subtotal: item.total,
-          serialIds: [],
-          accountCode: '',
-        }))
-        const soRef = await storeCtxRef.current!.allocateDocRef('QUO')
-        const so: SaleOrder = {
-          id: uid(),
-          ref: soRef,
-          status: 'quotation',
-          customerId: depositInput.customerId,
-          customerName: depositInput.customerName,
-          date: now(),
-          validUntil: addDays(now(), 30),
-          lines: soLines,
-          ...calcSO(soLines),
-          notes: `Linked to deposit ${deposit.ref}`,
-          createdByUserId: user.id,
-          createdByName: user.name,
-        }
-        setSaleOrders(p => [so, ...p])
-        sync('/api/sale-orders', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(so) })
+      const body = await response.json().catch(() => null)
+      if (!response.ok) {
+        throw new Error(String(body?.error ?? 'Could not save deposit'))
+      }
+
+      const deposit = body as Deposit
+      setDeposits(prev => [deposit, ...prev])
+      const payment = deposit.payments[0]
+      if (payment) {
+        setJournalEntries(prev => [buildDepositPaymentJournal(deposit, payment), ...prev])
+      }
+
+      const soLines = deposit.items.map(item => ({
+        id: uid(),
+        productId: item.productId,
+        productName: item.productName,
+        qty: item.qty,
+        unitPrice: item.unitPrice,
+        discount: 0,
+        taxRate: 0,
+        subtotal: item.total,
+        serialIds: [],
+        accountCode: '',
+      }))
+      const saleOrder: SaleOrder = {
+        id: uid(),
+        ref: quotationRef,
+        status: 'quotation',
+        customerId: deposit.customerId,
+        customerName: deposit.customerName,
+        date: now(),
+        validUntil: addDays(now(), 30),
+        lines: soLines,
+        ...calcSO(soLines),
+        notes: `Linked to deposit ${deposit.ref}`,
+        createdByUserId: user.id,
+        createdByName: user.name,
+      }
+      const quotationResponse = await fetch('/api/sale-orders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(saleOrder),
+      })
+      if (quotationResponse.ok) {
+        setSaleOrders(prev => [saleOrder, ...prev])
+      } else {
+        showToast(
+          `${deposit.ref} was created, but its linked quotation could not be saved. Please retry from Sales.`,
+          'error',
+        )
       }
       return deposit
     },
@@ -7682,8 +7908,10 @@ const storeCtx: AppState = {
             ref: paymentToSync.ref,
           }),
         })
+        showToast('Payment recorded', 'success')
+      } else {
+        showToast('Payment must be greater than zero and within the remaining balance', 'error')
       }
-      showToast('Payment recorded', 'success')
     },
     completeDeposit: (depositId) => {
       const deposit = deposits.find(d => d.id === depositId)

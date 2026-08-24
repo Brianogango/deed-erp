@@ -84,7 +84,23 @@ export async function POST(request: Request) {
         total: Math.round(qty * unitPrice * 100) / 100,
       }
     })
+    if (normalizedItems.some(item =>
+      !item.productId ||
+      !item.productName.trim() ||
+      !Number.isFinite(item.qty) ||
+      !Number.isFinite(item.unitPrice) ||
+      item.qty <= 0 ||
+      item.unitPrice < 0
+    )) {
+      return NextResponse.json(
+        { error: 'Each reserved item requires a product, positive quantity, and valid unit price' },
+        { status: 422 },
+      )
+    }
     const totalValue = Math.round(normalizedItems.reduce((sum, it) => sum + it.total, 0) * 100) / 100
+    if (totalValue <= 0) {
+      return NextResponse.json({ error: 'Deposit order total must be greater than zero' }, { status: 422 })
+    }
 
     const deposit = Number(initialPayment) || 0
     if (deposit <= 0) {

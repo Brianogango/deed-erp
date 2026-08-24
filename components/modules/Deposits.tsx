@@ -78,12 +78,19 @@ function NewDepositModal({ onClose, onSave }: { onClose: () => void; onSave: (d:
     return updated
   }))
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!customer || items.length === 0 || deposit <= 0 || saving) return
-    if (deposit > totalValue) { showToast(`Initial payment (${fmtKes(deposit)}) cannot exceed total value (${fmtKes(totalValue)})`, 'error'); return }
+    if (items.some(item => !item.productId || item.qty <= 0 || item.unitPrice < 0)) {
+      showToast('Every reserved item needs a product, a positive quantity, and a valid price.', 'error')
+      return
+    }
+    if (deposit > totalValue) {
+      showToast(`Initial payment (${fmtKes(deposit)}) cannot exceed total value (${fmtKes(totalValue)})`, 'error')
+      return
+    }
     setSaving(true)
     try {
-      const created = createDeposit({
+      const created = await createDeposit({
         customerId: customer.id,
         customerName: customer.name,
         customerPhone: customer.phone,
@@ -97,8 +104,8 @@ function NewDepositModal({ onClose, onSave }: { onClose: () => void; onSave: (d:
       })
       onSave(created)
       onClose()
-    } catch {
-      showToast('Failed to save deposit. Please try again.', 'error')
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'Failed to save deposit. Please try again.', 'error')
     } finally {
       setSaving(false)
     }
@@ -276,11 +283,14 @@ function AddPaymentModal({ deposit, onClose, onSave }: { deposit: Deposit; onClo
   const [saving, setSaving] = useState(false)
 
   const maxAmount = deposit.balance
-  const paying = Math.min(Number(amount) || 0, maxAmount)
+  const paying = Math.min(Math.max(Number(amount) || 0, 0), maxAmount)
   const newBalance = maxAmount - paying
 
   const handleSave = () => {
-    if (!paying || saving) return
+    if (paying <= 0 || saving) {
+      showToast('Enter a payment amount greater than zero.', 'error')
+      return
+    }
     setSaving(true)
     try {
       const user = users.find(u => u.id === currentUserId)
@@ -314,7 +324,7 @@ function AddPaymentModal({ deposit, onClose, onSave }: { deposit: Deposit; onClo
         <div className="deposit-modal__body p-5 space-y-3">
           <div>
             <label className="text-[10px] font-black text-[var(--text-4)] uppercase tracking-widest block mb-1.5">Amount (KSh) *</label>
-            <input type="number" aria-label="Payment amount" value={amount} onChange={e => setAmount(e.target.value)} placeholder={`Max ${fmtKes(maxAmount)}`} max={maxAmount} className="form-input w-full text-xs font-mono text-right" />
+            <input type="number" aria-label="Payment amount" value={amount} onChange={e => setAmount(e.target.value)} placeholder={`Max ${fmtKes(maxAmount)}`} min="0.01" step="0.01" max={maxAmount} className="form-input w-full text-xs font-mono text-right" />
           </div>
           <div>
             <label className="text-[10px] font-black text-[var(--text-4)] uppercase tracking-widest block mb-1.5">Method</label>
@@ -545,7 +555,7 @@ function DepositsContent() {
         d.customerPhone.toLowerCase().includes(q)
       )
     }
-    return list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+    return [...list].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
   }, [deposits, statusFilter, search])
 
   const depositPrimaryFilters: PrimaryFilterConfig[] = [

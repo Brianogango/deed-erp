@@ -9,7 +9,7 @@ import { Badge, Confirm, Field, Input, Modal, ModuleSkeleton, PanelHeader, Selec
 import { ModuleChrome } from '@/components/erp'
 import { DataTable, type ColumnDef } from '@/components/data-table'
 import { MODULE_IDS, USER_ROLES } from '@/lib/auth/types'
-import { formatRoleLabel, isAdmin } from '@/lib/auth/access'
+import { formatRoleLabel, isAdmin, normalizeClientRole } from '@/lib/auth/access'
 import { Fa } from '@/components/icons'
 import {
   faBuilding, faUsers, faBriefcase, faBoxesStacked, faCartShopping,
@@ -221,20 +221,51 @@ export default function Settings() {
   const RESET_CONFIRMATION = 'RESET DEED ERP PRODUCTION DATA'
 
   const currentUser = users.find(user => user.id === currentUserId)
+  const normalizedRole = normalizeClientRole(currentUser?.role)
+  const canAccessSettings = ['director', 'admin_officer', 'finance_officer'].includes(normalizedRole)
   const canManageSystemUsers = isAdmin(currentUser?.role)
+  const canManageBanks = ['director', 'finance_officer'].includes(normalizedRole)
+
+  useEffect(() => {
+    if (section === 'access' && !canManageSystemUsers) setSection('general')
+    if (section === 'banks' && !canManageBanks) setSection('general')
+  }, [section, canManageSystemUsers, canManageBanks])
 
   const openAddBank = () => {
+    if (!canManageBanks) {
+      showToast('Only Finance or the Director can manage bank accounts.', 'error')
+      return
+    }
     setBankForm({ name: '', bankName: '', accountNo: '', currency: 'KES', openingBalance: '0', openingDate: new Date().toISOString().slice(0, 10) })
     setEditingBankId(null); setShowBankModal(true)
   }
   const openEditBank = (id: string) => {
+    if (!canManageBanks) {
+      showToast('Only Finance or the Director can manage bank accounts.', 'error')
+      return
+    }
     const a = bankAccounts.find(b => b.id === id)
     if (!a) return
     setBankForm({ name: a.name, bankName: a.bankName, accountNo: a.accountNo, currency: a.currency, openingBalance: String(a.openingBalance), openingDate: a.openingDate })
     setEditingBankId(id); setShowBankModal(true)
   }
   const saveBank = () => {
-    const data = { name: bankForm.name, bankName: bankForm.bankName, accountNo: bankForm.accountNo, openingBalance: Number(bankForm.openingBalance), openingDate: bankForm.openingDate }
+    if (!canManageBanks) {
+      showToast('Only Finance or the Director can manage bank accounts.', 'error')
+      return
+    }
+    const openingBalance = Number(bankForm.openingBalance)
+    if (!bankForm.name.trim() || !bankForm.bankName.trim() || !bankForm.accountNo.trim() || !Number.isFinite(openingBalance)) {
+      showToast('Complete the account name, bank, account number, and opening balance.', 'error')
+      return
+    }
+    const data = {
+      name: bankForm.name.trim(),
+      bankName: bankForm.bankName.trim(),
+      accountNo: bankForm.accountNo.trim(),
+      openingBalance,
+      openingDate: bankForm.openingDate,
+    }
     if (editingBankId) updateBankAccount(editingBankId, data)
     else addBankAccount({ ...data, currency: bankForm.currency, active: true })
     setShowBankModal(false)
@@ -403,8 +434,8 @@ export default function Settings() {
 
   const nav: { id: Section; label: string; icon: any; group?: string }[] = [
     { id: 'general',    label: 'General',       icon: faBuilding,        group: 'Company' },
-    { id: 'banks',      label: 'Bank Accounts', icon: faLandmark,        group: 'Company' },
-    { id: 'access',     label: 'User Access',   icon: faUsers,           group: 'Company' },
+    ...(canManageBanks ? [{ id: 'banks' as Section, label: 'Bank Accounts', icon: faLandmark, group: 'Company' }] : []),
+    ...(canManageSystemUsers ? [{ id: 'access' as Section, label: 'User Access', icon: faUsers, group: 'Company' }] : []),
     { id: 'email',      label: 'Email / SMTP',  icon: faEnvelope,        group: 'Company' },
     { id: 'crm',        label: 'CRM',           icon: faBullseye,        group: 'Modules' },
     { id: 'sales',      label: 'Sales',         icon: faBriefcase,       group: 'Modules' },
@@ -422,6 +453,26 @@ export default function Settings() {
   const activeNav = nav.find(n => n.id === section)
 
   if (!mounted) return <ModuleSkeleton />
+  if (!canAccessSettings) {
+    return (
+      <ModuleChrome
+        title="System settings"
+        subtitle="Configuration access is restricted"
+        icon={<Fa icon={faCog} />}
+      >
+        <div className="p-6">
+          <div
+            role="alert"
+            className="max-w-xl rounded-2xl border p-5"
+            style={{ background: 'var(--warning-bg)', borderColor: 'var(--warning)', color: 'var(--warning-text)' }}
+          >
+            <p className="text-sm font-bold">You do not have permission to open System Settings.</p>
+            <p className="mt-1 text-xs">Ask the Director or Admin Officer if your role needs configuration access.</p>
+          </div>
+        </div>
+      </ModuleChrome>
+    )
+  }
 
   const roleBadgeStyle = (role: string) => {
     if (role === 'director')     return { bg: 'var(--navy)', color: '#fff',     border: 'var(--navy)' }
@@ -537,10 +588,38 @@ export default function Settings() {
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 py-3">
                   <Field label="Company Name"><Input value={companySettings.name} onChange={v => updateCompanySettings({ name: v })} /></Field>
-                  <Field label="KRA PIN"><Input value={companySettings.kraPin} onChange={v => updateCompanySettings({ kraPin: v })} /></Field>
+                  <Field label="Legal Name"><Input value={companySettings.legalName ?? ''} onChange={v => updateCompanySettings({ legalName: v })} /></Field>
                   <Field label="Phone"><Input value={companySettings.phone} type="tel" onChange={v => updateCompanySettings({ phone: v })} maxLength={20} /></Field>
                   <Field label="Email"><Input value={companySettings.email} type="email" onChange={v => updateCompanySettings({ email: v })} maxLength={100} /></Field>
                   <Field label="Website"><Input value={companySettings.website} onChange={v => updateCompanySettings({ website: v })} /></Field>
+                  <Field label="Tax PIN"><Input value={companySettings.kraPin} onChange={v => updateCompanySettings({ kraPin: v })} /></Field>
+                  <div className="sm:col-span-2 border-t border-gray-100 pt-3 mt-1">
+                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Business address</p>
+                  </div>
+                  <div className="sm:col-span-2">
+                    <Field label="Street Address"><Input value={companySettings.streetAddress ?? companySettings.address} onChange={v => updateCompanySettings({ streetAddress: v, address: v })} /></Field>
+                  </div>
+                  <Field label="City"><Input value={companySettings.city} onChange={v => updateCompanySettings({ city: v })} /></Field>
+                  <Field label="State / County"><Input value={companySettings.county ?? ''} onChange={v => updateCompanySettings({ county: v })} /></Field>
+                  <Field label="Postal Code"><Input value={companySettings.postalCode ?? ''} onChange={v => updateCompanySettings({ postalCode: v })} /></Field>
+                  <Field label="Country"><Input value={companySettings.country ?? 'Kenya'} onChange={v => updateCompanySettings({ country: v })} /></Field>
+                  <div className="sm:col-span-2 border-t border-gray-100 pt-3 mt-1">
+                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Regional settings</p>
+                  </div>
+                  <Field label="Language">
+                    <Select
+                      value={companySettings.language ?? 'English (Kenya)'}
+                      onChange={v => updateCompanySettings({ language: v })}
+                      options={[{ value: 'English (Kenya)', label: 'English (Kenya)' }]}
+                    />
+                  </Field>
+                  <Field label="Timezone">
+                    <Select
+                      value={companySettings.timezone ?? 'Africa/Nairobi'}
+                      onChange={v => updateCompanySettings({ timezone: v })}
+                      options={[{ value: 'Africa/Nairobi', label: 'Africa/Nairobi' }]}
+                    />
+                  </Field>
                   <div className="sm:col-span-2">
                     <CurrencyRatesEditor
                       canWrite={currentUser?.role === 'director' || currentUser?.role === 'finance_officer'}
@@ -549,8 +628,6 @@ export default function Settings() {
                       onCompanyCurrencyChange={v => updateCompanySettings({ currency: v, functionalCurrency: 'KES' })}
                     />
                   </div>
-                  <Field label="Address"><Input value={companySettings.address} onChange={v => updateCompanySettings({ address: v })} /></Field>
-                  <Field label="City / Postal"><Input value={companySettings.city} onChange={v => updateCompanySettings({ city: v })} /></Field>
                   <Field label="Fiscal Year Start">
                     <Select value={ss.fiscalYearStart} onChange={v => updateSystemSettings({ fiscalYearStart: v })} options={[
                       { value: 'January', label: 'January – December' },
@@ -634,7 +711,9 @@ export default function Settings() {
                   <span className="text-[13px] font-bold text-gray-800">Bank Accounts</span>
                   <span className="text-[10px] px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 font-semibold">{bankAccounts.length}</span>
                 </div>
-                <button className="text-[11px] font-semibold px-3 py-1.5 rounded-lg bg-navy-500 hover:bg-navy-600 text-white border-none cursor-pointer transition-colors" onClick={openAddBank}>+ Add Account</button>
+                {canManageBanks && (
+                  <button className="text-[11px] font-semibold px-3 py-1.5 rounded-lg bg-navy-500 hover:bg-navy-600 text-white border-none cursor-pointer transition-colors" onClick={openAddBank}>+ Add Account</button>
+                )}
               </div>
 
               <DataTable
@@ -651,14 +730,14 @@ export default function Settings() {
                 rowKey={a => a.id}
                 searchPlaceholder="Search accounts…"
                 emptyMessage="No bank accounts yet"
-                emptyAction={<button className="text-[11px] font-semibold px-4 py-2 rounded-lg bg-navy-500 text-white border-none cursor-pointer" onClick={openAddBank}>Add your first account</button>}
-                rowActions={a => (
+                emptyAction={canManageBanks ? <button className="text-[11px] font-semibold px-4 py-2 rounded-lg bg-navy-500 text-white border-none cursor-pointer" onClick={openAddBank}>Add your first account</button> : undefined}
+                rowActions={a => canManageBanks ? (
                   <div className="flex gap-1.5">
                     <button className="text-[10px] font-medium px-2.5 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-navy-500 border border-blue-100 cursor-pointer transition-colors" onClick={() => openEditBank(a.id)}>Edit</button>
                     <button className={`text-[10px] font-medium px-2.5 py-1 rounded-lg border cursor-pointer transition-colors ${a.active ? 'bg-red-50 hover:bg-red-100 text-red-600 border-red-100' : 'bg-green-50 hover:bg-green-100 text-green-700 border-green-100'}`} onClick={() => updateBankAccount(a.id, { active: !a.active })}>{a.active ? 'Disable' : 'Enable'}</button>
                     <button className="text-[10px] font-medium px-2.5 py-1 rounded-lg bg-red-50 hover:bg-red-100 text-red-600 border border-red-100 cursor-pointer transition-colors" onClick={() => setPendingConfirm({ msg: `Delete "${a.name}"?`, action: () => deleteBankAccount(a.id) })}>Del</button>
                   </div>
-                )}
+                ) : null}
                 exportTitle="Bank Accounts"
                 exportFilename="bank-accounts"
               />

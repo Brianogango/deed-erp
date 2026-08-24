@@ -11,6 +11,7 @@ import { DataTable, type ColumnDef, type PrimaryFilterConfig } from '@/component
 import { loadXlsx } from '@/lib/xlsx-lazy'
 import { guardSpreadsheetFile, guardSpreadsheetRows, SpreadsheetGuardError } from '@/lib/spreadsheet-guard'
 import { useUrlQueryState, useUrlRecordId } from '@/hooks/useUrlRecordId'
+import { nairobiDateKey } from '@/lib/workspace-integrity'
 import {
   Fa, faCartShopping, faPlus, faRotateLeft, faClipboardList,
   faMoneyBillWave, faMagnifyingGlass, faFileImport, faArrowsRotate,
@@ -40,7 +41,7 @@ function KilimallContent() {
     kilimallOrders, kilimallDispatches, kilimallSettlements,
     createKilimallOrder, updateKilimallOrder,
     confirmKilimallDispatch, createKilimallSettlement,
-    updateKilimallSettlement, reconcileKilimallSettlement,
+    updateKilimallSettlement, reconcileKilimallSettlement, matchKilimallSettlementLine,
     products, serials, setModule, showToast, currentUserId, users,
   } = useCommerceStore()
 
@@ -69,7 +70,7 @@ function KilimallContent() {
     ? kilimallOrders.find(o => o.id === detailId) ?? null
     : null
   const [newOrder, setNewOrder] = useState({
-    kilimallRef: '', orderDate: new Date().toISOString().slice(0, 10),
+    kilimallRef: '', orderDate: nairobiDateKey(),
     customerName: '', productId: '', productName: '', qty: '1',
     unitPrice: '', notes: '',
   })
@@ -80,6 +81,10 @@ function KilimallContent() {
   const [useSubstitution, setUseSubstitution] = useState(false)
   const [substituteProductId, setSubstituteProductId] = useState('')
   const [substitutionReason, setSubstitutionReason] = useState('')
+  const [dispatchCourier, setDispatchCourier] = useState('')
+  const [dispatchDate, setDispatchDate] = useState(nairobiDateKey())
+  const [dispatchTracking, setDispatchTracking] = useState('')
+  const [dispatchNotes, setDispatchNotes] = useState('')
 
   // ── Settlements ───────────────────────────────────────────────────────────────
   const [showNewSettlement, setShowNewSettlement] = useState(false)
@@ -95,6 +100,12 @@ function KilimallContent() {
     { kilimallRef: '', amount: '' },
   ])
   const settlFileRef = useRef<HTMLInputElement>(null)
+  const [manualMatch, setManualMatch] = useState<{
+    settlementId: string
+    lineId: string
+    orderId: string
+    note: string
+  } | null>(null)
 
   // ── Reports ───────────────────────────────────────────────────────────────────
   const [reportTab, setReportTab] = useState<'ops' | 'financial' | 'control'>('ops')
@@ -111,7 +122,7 @@ function KilimallContent() {
   const netReceived        = kilimallSettlements.reduce((s, x) => s + x.netPaid, 0)
   const unreconciled       = kilimallOrders.filter(o => o.status === 'delivered' && !o.settlementId).length
   const returnsRate        = totalOrders > 0 ? ((returned / totalOrders) * 100).toFixed(1) : '0'
-  const todayKey           = new Date().toISOString().slice(0, 10)
+  const todayKey           = nairobiDateKey()
   const dispatchedToday    = kilimallDispatches.filter(d => d.date?.slice(0, 10) === todayKey).length
   const unmatchedAmount    = kilimallSettlements.reduce((sum, settlement) => sum + settlement.lines
     .filter(line => line.status === 'unmatched' || line.status === 'mismatch')
@@ -306,8 +317,23 @@ function KilimallContent() {
       key: 'status', label: 'Status', priority: 1, width: '100px',
       render: s => (
         <span className="text-[10px] px-2 py-0.5 rounded font-medium capitalize"
-          style={{ background: s.status === 'reconciled' ? 'var(--success-bg)' : s.status === 'posted' ? 'var(--primary-light)' : 'var(--bg-muted)', color: s.status === 'reconciled' ? 'var(--success)' : s.status === 'posted' ? 'var(--primary-dark)' : 'var(--text-4)' }}>
-          {s.status}
+          style={{
+            background: s.status === 'reconciled'
+              ? 'var(--success-bg)'
+              : s.status === 'partially_matched'
+                ? 'var(--warning-bg)'
+                : s.status === 'posted'
+                  ? 'var(--primary-light)'
+                  : 'var(--bg-muted)',
+            color: s.status === 'reconciled'
+              ? 'var(--success)'
+              : s.status === 'partially_matched'
+                ? 'var(--warning-text)'
+                : s.status === 'posted'
+                  ? 'var(--primary-dark)'
+                  : 'var(--text-4)',
+          }}>
+          {s.status.replaceAll('_', ' ')}
         </span>
       ),
       accessor: s => s.status,
@@ -411,33 +437,49 @@ function KilimallContent() {
     setUseSubstitution(false)
     setSubstituteProductId('')
     setSubstitutionReason('')
+    setDispatchCourier('')
+    setDispatchDate(nairobiDateKey())
+    setDispatchTracking('')
+    setDispatchNotes('')
   }
 
   // ─────────────────────────────────────────────────────────────────────────────
   // Handlers
   // ─────────────────────────────────────────────────────────────────────────────
   const handleCreateOrder = () => {
-    if (!newOrder.kilimallRef || !newOrder.productId || !newOrder.unitPrice) {
-      showToast('Kilimall Ref, product, and unit price are required', 'error'); return
-    }
-    const qty = Number(newOrder.qty) || 1
+    const qty = Number(newOrder.qty)
     const unitPrice = Number(newOrder.unitPrice)
-    createKilimallOrder({
+    if (!newOrder.kilimallRef.trim() || !newOrder.productId || !newOrder.productName.trim()) {
+      showToast('Kilimall reference and a product selected from the catalogue are required', 'error')
+      return
+    }
+    if (!Number.isFinite(qty) || qty <= 0 || !Number.isFinite(unitPrice) || unitPrice <= 0) {
+      showToast('Quantity and unit price must be greater than zero', 'error')
+      return
+    }
+    const created = createKilimallOrder({
       kilimallRef: newOrder.kilimallRef.trim(),
       orderDate: newOrder.orderDate,
-      customerName: newOrder.customerName || undefined,
+      customerName: newOrder.customerName.trim() || undefined,
       productId: newOrder.productId,
       productName: newOrder.productName,
-      qty, unitPrice, total: qty * unitPrice,
-      notes: newOrder.notes || undefined,
+      qty,
+      unitPrice,
+      total: qty * unitPrice,
+      notes: newOrder.notes.trim() || undefined,
     })
+    if (!created) return
     setShowNewOrder(false)
-    setNewOrder({ kilimallRef: '', orderDate: new Date().toISOString().slice(0, 10), customerName: '', productId: '', productName: '', qty: '1', unitPrice: '', notes: '' })
+    setNewOrder({ kilimallRef: '', orderDate: nairobiDateKey(), customerName: '', productId: '', productName: '', qty: '1', unitPrice: '', notes: '' })
   }
 
   const handleDispatch = () => {
     if (!dispatchOrderId || !dispatchSerial) {
       showToast('Select an order and enter/select a serial number', 'error'); return
+    }
+    if (!dispatchCourier.trim() || !dispatchDate) {
+      showToast('Rider/courier and dispatch date are required', 'error')
+      return
     }
     if (useSubstitution && !substituteProductId) {
       showToast('Select the product to ship as a substitute', 'error'); return
@@ -448,9 +490,14 @@ function KilimallContent() {
       dispatchOrderId,
       serial.id,
       serial.serial,
-      useSubstitution
-        ? { fulfilledProductId: substituteProductId, substitutionReason: substitutionReason || undefined }
-        : undefined,
+      {
+        fulfilledProductId: useSubstitution ? substituteProductId : undefined,
+        substitutionReason: useSubstitution ? substitutionReason || undefined : undefined,
+        courier: dispatchCourier || undefined,
+        dispatchDate,
+        trackingReference: dispatchTracking || undefined,
+        dispatchNotes: dispatchNotes || undefined,
+      },
     )
     if (result) resetDispatchForm()
   }
@@ -478,25 +525,31 @@ function KilimallContent() {
   }
 
   const handleCreateSettlement = () => {
-    if (!settlForm.weekPeriod || !settlForm.grossAmount) {
-      showToast('Week period and gross amount are required', 'error'); return
-    }
+    const grossAmount = Number(settlForm.grossAmount)
+    const deductions = Number(settlForm.deductions) || 0
+    const netPaid = settlForm.netPaid === '' ? grossAmount - deductions : Number(settlForm.netPaid)
     const lines: KilimallSettlementLine[] = settlLines
-      .filter(l => l.kilimallRef && l.amount)
-      .map(l => ({ id: Math.random().toString(36).slice(2), kilimallRef: l.kilimallRef, amount: Number(l.amount), status: 'unmatched' as const }))
-    createKilimallSettlement({
-      weekPeriod: settlForm.weekPeriod,
+      .filter(line => line.kilimallRef.trim() || line.amount)
+      .map(line => ({
+        id: crypto.randomUUID(),
+        kilimallRef: line.kilimallRef.trim(),
+        amount: Number(line.amount),
+        status: 'unmatched' as const,
+      }))
+    const created = createKilimallSettlement({
+      weekPeriod: settlForm.weekPeriod.trim(),
       weekStart: settlForm.weekStart,
       weekEnd: settlForm.weekEnd,
       totalOrders: lines.length,
-      grossAmount: Number(settlForm.grossAmount),
-      deductions: Number(settlForm.deductions) || 0,
-      netPaid: Number(settlForm.netPaid) || Number(settlForm.grossAmount) - (Number(settlForm.deductions) || 0),
+      grossAmount,
+      deductions,
+      netPaid,
       paymentDate: settlForm.paymentDate || undefined,
-      paymentRef: settlForm.paymentRef || undefined,
+      paymentRef: settlForm.paymentRef.trim() || undefined,
       paymentMethod: settlForm.paymentMethod,
       lines,
     })
+    if (!created) return
     setShowNewSettlement(false)
     setSettlForm({ weekPeriod: '', weekStart: '', weekEnd: '', grossAmount: '', deductions: '', netPaid: '', paymentDate: '', paymentRef: '', paymentMethod: 'mpesa' })
     setSettlLines([{ kilimallRef: '', amount: '' }])
@@ -693,6 +746,34 @@ function KilimallContent() {
                   </>
                 )}
 
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <Field label="Rider / courier" required>
+                    <Input
+                      value={dispatchCourier}
+                      onChange={setDispatchCourier}
+                      placeholder="e.g. QuickMove"
+                    />
+                  </Field>
+                  <Field label="Dispatch date" required>
+                    <Input value={dispatchDate} onChange={setDispatchDate} type="date" />
+                  </Field>
+                </div>
+                <Field label="Tracking reference" hint="Optional">
+                  <Input
+                    value={dispatchTracking}
+                    onChange={setDispatchTracking}
+                    placeholder="Courier tracking or waybill"
+                  />
+                </Field>
+                <Field label="Dispatch notes" hint="Optional">
+                  <Textarea
+                    value={dispatchNotes}
+                    onChange={setDispatchNotes}
+                    rows={2}
+                    placeholder="Delivery instructions or handover note"
+                  />
+                </Field>
+
                 <Field
                   label="Serial Number"
                   required
@@ -717,8 +798,11 @@ function KilimallContent() {
                     </p>
                   )}
                 </Field>
+                <div role="status" aria-live="polite" className="rounded-lg px-3 py-2 text-[10px] text-t3" style={{ background: 'var(--info-bg)' }}>
+                  The selected serial is reserved and removed from available stock when dispatch is confirmed.
+                </div>
                 <button className="btn-primary inline-flex items-center gap-1.5" onClick={handleDispatch}
-                  disabled={!dispatchSerial || availableSerials.length === 0 || (useSubstitution && !substituteProductId)}>
+                  disabled={!dispatchSerial || !dispatchCourier.trim() || !dispatchDate || availableSerials.length === 0 || (useSubstitution && !substituteProductId)}>
                   <Fa icon={faCheck} aria-hidden="true" /> Confirm Dispatch
                 </button>
                 <button className="btn-outline text-[11px]" onClick={resetDispatchForm}>
@@ -860,6 +944,31 @@ function KilimallContent() {
                         },
                         accessor: (line: KilimallSettlementLine) => line.status,
                         exportValue: (line: KilimallSettlementLine) => line.status,
+                      },
+                      {
+                        key: 'review', label: '', priority: 1, width: '76px',
+                        render: (line: KilimallSettlementLine) => line.status === 'matched' ? null : (
+                          <button
+                            type="button"
+                            className="text-[10px] font-semibold underline"
+                            style={{ color: 'var(--primary)' }}
+                            onClick={event => {
+                              event.stopPropagation()
+                              const suggestedOrder = line.orderId
+                                ? kilimallOrders.find(order => order.id === line.orderId)
+                                : kilimallOrders.find(order => order.kilimallRef.trim().toLowerCase() === line.kilimallRef.trim().toLowerCase())
+                              setManualMatch({
+                                settlementId: settlement.id,
+                                lineId: line.id,
+                                orderId: suggestedOrder?.id ?? '',
+                                note: line.notes ?? '',
+                              })
+                            }}
+                          >
+                            Review
+                          </button>
+                        ),
+                        exportValue: () => '',
                       },
                     ] as ColumnDef<KilimallSettlementLine>[]}
                     rows={settlement.lines}
@@ -1063,9 +1172,14 @@ function KilimallContent() {
               <input className="form-input w-full" value={newOrder.productName}
                 onChange={e => {
                   const v = e.target.value
-                  setNewOrder(p => ({ ...p, productName: v }))
-                  const m = products.find(pr => pr.name.toLowerCase().startsWith(v.toLowerCase()))
-                  if (m) setNewOrder(p => ({ ...p, productId: m.id, unitPrice: String(m.salePrice ?? 0) }))
+                  const normalized = v.trim().toLowerCase()
+                  const match = products.find(product => product.name.trim().toLowerCase() === normalized)
+                  setNewOrder(previous => ({
+                    ...previous,
+                    productName: v,
+                    productId: match?.id ?? '',
+                    unitPrice: match ? String(match.salePrice ?? 0) : '',
+                  }))
                 }}
                 placeholder="Search product…" list="ko-products" />
               <datalist id="ko-products">
@@ -1270,6 +1384,85 @@ function KilimallContent() {
           </div>
         </Modal>
       )}
+
+      {manualMatch && (() => {
+        const settlement = kilimallSettlements.find(item => item.id === manualMatch.settlementId)
+        const line = settlement?.lines.find(item => item.id === manualMatch.lineId)
+        const order = kilimallOrders.find(item => item.id === manualMatch.orderId)
+        if (!settlement || !line) return null
+        const difference = order ? line.amount - order.total : null
+        const orderOptions = kilimallOrders
+          .filter(item =>
+            ['dispatched', 'delivered'].includes(item.status) &&
+            (!item.settlementId || item.settlementId === settlement.id)
+          )
+          .map(item => ({
+            value: item.id,
+            label: `${item.kilimallRef} · ${item.productName} · ${fmtKes(item.total)}`,
+          }))
+        return (
+          <Modal
+            title="Match settlement line"
+            subtitle={`${settlement.ref} · ${line.kilimallRef}`}
+            onClose={() => setManualMatch(null)}
+            width={520}
+          >
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="rounded-lg p-3" style={{ background: 'var(--bg-surface)' }}>
+                  <p className="text-[10px] text-t3">Expected amount</p>
+                  <p className="text-sm font-semibold">{order ? fmtKes(order.total) : '—'}</p>
+                </div>
+                <div className="rounded-lg p-3" style={{ background: 'var(--bg-surface)' }}>
+                  <p className="text-[10px] text-t3">Paid amount</p>
+                  <p className="text-sm font-semibold">{fmtKes(line.amount)}</p>
+                </div>
+                <div className="rounded-lg p-3" style={{ background: 'var(--bg-surface)' }} aria-live="polite">
+                  <p className="text-[10px] text-t3">Difference</p>
+                  <p className="text-sm font-semibold" style={{ color: difference ? 'var(--danger)' : 'var(--success)' }}>
+                    {difference == null ? '—' : fmtKes(Math.abs(difference))}
+                  </p>
+                </div>
+              </div>
+              <Field label="Match to order" required>
+                <Select
+                  value={manualMatch.orderId}
+                  onChange={orderId => setManualMatch(previous => previous ? { ...previous, orderId } : previous)}
+                  options={[{ value: '', label: 'Select delivered order…' }, ...orderOptions]}
+                />
+              </Field>
+              <Field label="Note" hint={difference && Math.abs(difference) > 1 ? 'Required when the amounts differ' : 'Optional'}>
+                <Textarea
+                  value={manualMatch.note}
+                  onChange={note => setManualMatch(previous => previous ? { ...previous, note } : previous)}
+                  rows={3}
+                  placeholder="Explain fees, deductions, or the matching decision."
+                />
+              </Field>
+              <div className="flex justify-end gap-2">
+                <button type="button" className="btn-outline" onClick={() => setManualMatch(null)}>Cancel</button>
+                <button
+                  type="button"
+                  className="btn-primary"
+                  disabled={!manualMatch.orderId || (!!difference && Math.abs(difference) > 1 && !manualMatch.note.trim())}
+                  onClick={() => {
+                    const matched = matchKilimallSettlementLine(
+                      settlement.id,
+                      line.id,
+                      manualMatch.orderId,
+                      manualMatch.note,
+                    )
+                    if (matched) setManualMatch(null)
+                  }}
+                >
+                  Confirm match
+                </button>
+              </div>
+            </div>
+          </Modal>
+        )
+      })()}
+
     </div>
   )
 }

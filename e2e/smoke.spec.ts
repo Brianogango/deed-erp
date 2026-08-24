@@ -233,7 +233,7 @@ test.describe('module render smoke', () => {
     '/', '/sales', '/contacts', '/inventory', '/operations', '/purchases',
     '/pos', '/repairs', '/refurbishment', '/delivery', '/ecommerce',
     '/kilimall', '/finance', '/hr', '/outsource', '/aftersales',
-    '/deposits', '/holdovers', '/expenses', '/settings',
+    '/deposits', '/holdovers', '/sops', '/expenses', '/settings',
   ]
 
   test('all module routes render without client-side exceptions', async ({ browser }) => {
@@ -249,6 +249,45 @@ test.describe('module render smoke', () => {
       await expect(page.getByText('Application error: a client-side exception has occurred'))
         .toHaveCount(0, { timeout: 5_000 })
     }
+    expect(pageErrors, `client-side exceptions:\n${pageErrors.join('\n')}`).toEqual([])
+    await context.close()
+  })
+})
+
+
+test.describe('responsive target workspaces', () => {
+  const routes = ['/kilimall', '/sops', '/deposits', '/holdovers', '/settings']
+  const viewports = [
+    { width: 320, height: 700 },
+    { width: 375, height: 812 },
+    { width: 390, height: 844 },
+    { width: 430, height: 932 },
+    { width: 768, height: 1024 },
+    { width: 1024, height: 768 },
+    { width: 1366, height: 768 },
+    { width: 1920, height: 1080 },
+  ]
+
+  test('renders without page-level overflow or client exceptions', async ({ browser }) => {
+    test.setTimeout(300_000)
+    const context = await loginViaApi(browser)
+    const page = await context.newPage()
+    const pageErrors: string[] = []
+    page.on('pageerror', error => pageErrors.push(`${page.url()}: ${error.message}`))
+
+    for (const viewport of viewports) {
+      await page.setViewportSize(viewport)
+      for (const route of routes) {
+        await page.goto(route, { waitUntil: 'domcontentloaded' })
+        await page.waitForTimeout(350)
+        await expect(page.getByText('Application error: a client-side exception has occurred')).toHaveCount(0)
+        const overflow = await page.evaluate(() =>
+          Math.max(0, document.documentElement.scrollWidth - window.innerWidth)
+        )
+        expect(overflow, `${route} overflows at ${viewport.width}px`).toBeLessThanOrEqual(2)
+      }
+    }
+
     expect(pageErrors, `client-side exceptions:\n${pageErrors.join('\n')}`).toEqual([])
     await context.close()
   })

@@ -9,6 +9,13 @@ import { DataTable, type ColumnDef, type PrimaryFilterConfig } from '@/component
 import { Fa } from '@/components/icons'
 import { faLaptop, faPlus } from '@fortawesome/free-solid-svg-icons'
 import { useUrlRecordId } from '@/hooks/useUrlRecordId'
+import {
+  holdoverLoanDays,
+  holdoverOverdueDays,
+  nairobiDateKey,
+  resolveHoldoverStatus,
+  storedDateKey,
+} from '@/lib/workspace-integrity'
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 
@@ -39,15 +46,15 @@ const uid = () => crypto.randomUUID()
 const now = () => new Date().toISOString()
 
 function nextRef(existing: Holdover[]): string {
-  const nums = existing.map(h => parseInt(h.ref.replace('LOAN/', ''), 10)).filter(n => !isNaN(n))
+  const nums = existing
+    .map(h => parseInt(h.ref.replace(/^(?:HOLD|LOAN)\//, ''), 10))
+    .filter(n => !Number.isNaN(n))
   const next = nums.length > 0 ? Math.max(...nums) + 1 : 1
-  return `LOAN/${String(next).padStart(4, '0')}`
+  return `HOLD/${String(next).padStart(4, '0')}`
 }
 
 function resolveStatus(h: Holdover): HoldoverStatus {
-  if (h.returnedDate) return 'returned'
-  if (new Date(h.expectedReturnDate) < new Date()) return 'overdue'
-  return 'active'
+  return resolveHoldoverStatus(h.expectedReturnDate, h.returnedDate)
 }
 
 function withResolvedStatus(items: Holdover[]): Holdover[] {
@@ -63,18 +70,15 @@ function HoldoverStatusBadge({ status }: { status: HoldoverStatus }) {
 
 function DaysTag({ h }: { h: Holdover }) {
   if (h.returnedDate) {
-    const issued = new Date(h.issuedDate)
-    const returned = new Date(h.returnedDate)
-    const days = Math.ceil((returned.getTime() - issued.getTime()) / 86400000)
+    const days = holdoverLoanDays(h.issuedDate, h.returnedDate)
     return <span className="text-[11px] text-[var(--text-4)]">{days}d loan</span>
   }
-  const issued = new Date(h.issuedDate)
-  const today = new Date()
-  const days = Math.ceil((today.getTime() - issued.getTime()) / 86400000)
-  const overdue = new Date(h.expectedReturnDate) < today
+
+  const loanDays = holdoverLoanDays(h.issuedDate)
+  const overdueDays = holdoverOverdueDays(h.expectedReturnDate)
   return (
-    <span className={`text-[11px] font-semibold ${overdue ? 'text-red-500' : 'text-[var(--text-3)]'}`}>
-      {overdue ? `${days}d (overdue)` : `${days}d out`}
+    <span className={`text-[11px] font-semibold ${overdueDays > 0 ? 'text-red-500' : 'text-[var(--text-3)]'}`}>
+      {overdueDays > 0 ? `${overdueDays}d overdue` : `${loanDays}d out`}
     </span>
   )
 }
@@ -158,7 +162,7 @@ function NewHoldoverModal({ onClose, onSave }: { onClose: () => void; onSave: (h
       linkedRepairId,
       linkedRepairRef: openRepairs.find(r => r.id === linkedRepairId)?.ref ?? '',
       issuedDate: now(),
-      expectedReturnDate: new Date(expectedReturnDate).toISOString(),
+      expectedReturnDate,
       returnedDate: '',
       returnCondition: '',
       returnNotes: '',
@@ -170,9 +174,9 @@ function NewHoldoverModal({ onClose, onSave }: { onClose: () => void; onSave: (h
       createdAt: now(),
     }
 
-    // Mark serial as out on loan
-    updateSerial(serialId, { status: 'assigned', location: 'customer' })
+    // Save the loan record before changing stock so a failed save cannot orphan an assigned serial.
     onSave(h)
+    updateSerial(serialId, { status: 'assigned', location: 'customer' })
     setSaving(false)
     onClose()
   }
@@ -362,7 +366,7 @@ function NewHoldoverModal({ onClose, onSave }: { onClose: () => void; onSave: (h
               <div>
                 <label className="text-[11px] font-semibold text-[var(--text-3)] block mb-1">Expected Return Date *</label>
                 <input type="date" aria-label="Expected return date" value={expectedReturnDate} onChange={e => setExpectedReturnDate(e.target.value)}
-                  min={new Date().toISOString().slice(0, 10)}
+                  min={nairobiDateKey()}
                   className="w-full px-3 py-2.5 rounded-xl bg-[var(--bg-surface)] border border-[var(--border)] text-[var(--text-1)] text-sm focus:outline-none focus:border-blue-500" />
               </div>
             </div>
@@ -405,7 +409,6 @@ function ReturnModal({ holdover, onClose, onReturn }: { holdover: Holdover; onCl
 
   const handleReturn = () => {
     setSaving(true)
-    updateSerial(holdover.serialId, { status: 'available', location: returnLocation })
     onReturn({
       returnedDate: now(),
       returnCondition: condition,
@@ -413,6 +416,7 @@ function ReturnModal({ holdover, onClose, onReturn }: { holdover: Holdover; onCl
       returnLocation,
       status: 'returned',
     })
+    updateSerial(holdover.serialId, { status: 'available', location: returnLocation })
     setSaving(false)
     onClose()
   }
@@ -484,11 +488,91 @@ function ReturnModal({ holdover, onClose, onReturn }: { holdover: Holdover; onCl
   )
 }
 
+// ── Extend Modal ───────────────────────────────────────────────────────────────
+
+function ExtendModal({
+  holdover,
+  onClose,
+  onExtend,
+}: {
+  holdover: Holdover
+  onClose: () => void
+  onExtend: (patch: Partial<Holdover>) => void
+}) {
+  const { users, currentUserId, showToast } = useOperationsStore()
+  const currentUser = users.find(user => user.id === currentUserId)
+  const currentDate = storedDateKey(holdover.expectedReturnDate)
+  const [newDate, setNewDate] = useState('')
+  const [note, setNote] = useState('')
+
+  const handleExtend = () => {
+    if (!newDate || newDate <= currentDate) {
+      showToast('Choose a return date after the current expected date.', 'error')
+      return
+    }
+    onExtend({
+      expectedReturnDate: newDate,
+      status: 'active',
+      extensionHistory: [
+        ...(holdover.extensionHistory ?? []),
+        {
+          previousDate: currentDate,
+          newDate,
+          note: note.trim() || undefined,
+          extendedAt: now(),
+          extendedByName: currentUser?.name ?? 'Staff',
+        },
+      ],
+    })
+    onClose()
+  }
+
+  return (
+    <div className="holdover-modal-overlay fixed inset-0 z-[9250] flex items-end sm:items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+      <div className="holdover-modal bg-[var(--bg-card)] border border-[var(--border)] rounded-2xl w-full max-w-md shadow-2xl">
+        <div className="px-5 py-4 border-b border-[var(--border-lt)] flex items-center justify-between">
+          <div>
+            <p className="text-sm font-bold text-[var(--text-1)]">Extend holdover</p>
+            <p className="text-[11px] text-[var(--text-4)]">{holdover.ref} · Current return {fmtDate(holdover.expectedReturnDate)}</p>
+          </div>
+          <button type="button" onClick={onClose} aria-label="Close extend dialog" className="w-8 h-8 rounded-lg border border-[var(--border)]">×</button>
+        </div>
+        <div className="p-5 space-y-4">
+          <div>
+            <label className="text-[11px] font-semibold text-[var(--text-3)] block mb-1">New expected return *</label>
+            <input
+              type="date"
+              value={newDate}
+              min={currentDate}
+              onChange={event => setNewDate(event.target.value)}
+              className="w-full px-3 py-2.5 rounded-xl bg-[var(--bg-surface)] border border-[var(--border)] text-sm"
+            />
+          </div>
+          <div>
+            <label className="text-[11px] font-semibold text-[var(--text-3)] block mb-1">Reason / note</label>
+            <textarea
+              value={note}
+              onChange={event => setNote(event.target.value)}
+              rows={3}
+              placeholder="Why is the loan being extended?"
+              className="w-full px-3 py-2.5 rounded-xl bg-[var(--bg-surface)] border border-[var(--border)] text-sm resize-none"
+            />
+          </div>
+        </div>
+        <div className="px-5 py-4 border-t border-[var(--border-lt)] flex gap-3">
+          <button type="button" onClick={onClose} className="btn-outline flex-1">Cancel</button>
+          <button type="button" onClick={handleExtend} disabled={!newDate} className="btn-primary flex-1">Confirm extension</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── Detail View ───────────────────────────────────────────────────────────────
 
 const fmtDate = (iso: string) => iso ? new Date(iso).toLocaleDateString('en-KE', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'
 
-function HoldoverDetail({ holdover, onClose, onReturn }: { holdover: Holdover; onClose: () => void; onReturn: () => void }) {
+function HoldoverDetail({ holdover, onClose, onExtend, onReturn }: { holdover: Holdover; onClose: () => void; onExtend: () => void; onReturn: () => void }) {
   const isActive = holdover.status !== 'returned'
 
   return (
@@ -581,10 +665,16 @@ function HoldoverDetail({ holdover, onClose, onReturn }: { holdover: Holdover; o
         <div className="holdover-modal__footer px-5 py-4 border-t border-[var(--border-lt)] flex gap-3 flex-shrink-0">
           <button onClick={onClose} className="flex-1 px-4 py-2.5 rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] text-[var(--text-2)] text-sm font-semibold hover:bg-[var(--bg-muted)] transition-colors cursor-pointer">Close</button>
           {isActive && (
-            <button onClick={onReturn}
-              className="flex-1 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-bold transition-colors cursor-pointer">
-              Record Return
-            </button>
+            <>
+              <button onClick={onExtend}
+                className="flex-1 px-4 py-2.5 rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] text-[var(--text-2)] text-sm font-bold transition-colors cursor-pointer">
+                Extend
+              </button>
+              <button onClick={onReturn}
+                className="flex-1 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-bold transition-colors cursor-pointer">
+                Process return
+              </button>
+            </>
           )}
         </div>
       </div>
@@ -596,7 +686,7 @@ function HoldoverDetail({ holdover, onClose, onReturn }: { holdover: Holdover; o
 
 function HoldoversContent() {
   const mounted = useMounted()
-  const { holdovers, addHoldover, updateHoldover } = useOperationsStore()
+  const { holdovers, addHoldover, updateHoldover, showToast } = useOperationsStore()
   const items = useMemo(() => withResolvedStatus(holdovers || []), [holdovers])
 
   const [filter, setFilter] = useState<'all' | HoldoverStatus>('all')
@@ -604,6 +694,7 @@ function HoldoversContent() {
   const [showNew, setShowNew] = useState(false)
   const [detailId, setDetailId] = useUrlRecordId()
   const [returning, setReturning] = useState<Holdover | null>(null)
+  const [extending, setExtending] = useState<Holdover | null>(null)
   const detail = detailId ? items.find(h => h.id === detailId) ?? null : null
 
   // Stats
@@ -611,9 +702,9 @@ function HoldoversContent() {
   const active   = items.filter(h => h.status === 'active').length
   const overdue  = items.filter(h => h.status === 'overdue').length
   const returned = items.filter(h => h.status === 'returned').length
-  const todayKey = new Date().toISOString().slice(0, 10)
+  const todayKey = nairobiDateKey()
   const monthKey = todayKey.slice(0, 7)
-  const dueToday = items.filter(h => h.status !== 'returned' && h.expectedReturnDate.slice(0, 10) === todayKey).length
+  const dueToday = items.filter(h => h.status !== 'returned' && storedDateKey(h.expectedReturnDate) === todayKey).length
   const returnedThisMonth = items.filter(h => h.returnedDate?.slice(0, 7) === monthKey).length
   const returnQueue = items
     .filter(h => h.status !== 'returned')
@@ -631,7 +722,7 @@ function HoldoversContent() {
         h.serialNumber.toLowerCase().includes(q)
       )
     }
-    return list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+    return [...list].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
   }, [items, filter, search])
 
   const holdoverPrimaryFilters: PrimaryFilterConfig[] = [
@@ -853,7 +944,20 @@ function HoldoversContent() {
         <HoldoverDetail
           holdover={detail}
           onClose={() => setDetailId(null)}
+          onExtend={() => { setExtending(detail); setDetailId(null) }}
           onReturn={() => { setReturning(detail); setDetailId(null) }}
+        />
+      )}
+
+      {extending && (
+        <ExtendModal
+          holdover={extending}
+          onClose={() => setExtending(null)}
+          onExtend={patch => {
+            updateHoldover(extending.id, patch)
+            showToast(`${extending.ref} return date extended`, 'success')
+            setExtending(null)
+          }}
         />
       )}
 

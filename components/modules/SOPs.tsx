@@ -12,64 +12,28 @@ import { PrimaryActionButton } from '@/components/erp'
 import { Fa, faBullseye, faCircleCheck, faCircleXmark, faTriangleExclamation, faUserSlash, faPlus } from '@/components/icons'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { useUrlQueryState, useUrlRecordId } from '@/hooks/useUrlRecordId'
+import { canManageHRRole } from '@/lib/auth/access'
+import {
+  currentTargetPeriodKey,
+  nairobiDateKey,
+  previousTargetPeriodKeys,
+  targetMetricProgress,
+  targetOverallScore,
+  targetPeriodBounds,
+} from '@/lib/workspace-integrity'
 
 // ── Period helpers ────────────────────────────────────────────────────────────
 
 function currentPeriodKey(period: SOP['period']): string {
-  const n = new Date()
-  if (period === 'monthly')   return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}`
-  if (period === 'quarterly') return `${n.getFullYear()}-Q${Math.ceil((n.getMonth() + 1) / 3)}`
-  // ISO week
-  const d = new Date(Date.UTC(n.getFullYear(), n.getMonth(), n.getDate()))
-  const day = d.getUTCDay() || 7
-  d.setUTCDate(d.getUTCDate() + 4 - day)
-  const y1 = new Date(Date.UTC(d.getUTCFullYear(), 0, 1))
-  return `${d.getUTCFullYear()}-W${String(Math.ceil(((d.getTime() - y1.getTime()) / 86400000 + 1) / 7)).padStart(2, '0')}`
+  return currentTargetPeriodKey(period)
 }
 
 function periodBounds(key: string, period: SOP['period']): { start: string; end: string } {
-  if (period === 'weekly') {
-    const [yr, wk] = key.replace('W', '').split('-').map(Number)
-    const jan4 = new Date(yr, 0, 4)
-    const ms = jan4.getTime() + (wk - 1) * 7 * 86400000 - ((jan4.getDay() + 6) % 7) * 86400000
-    return {
-      start: new Date(ms).toISOString().slice(0, 10),
-      end:   new Date(ms + 6 * 86400000).toISOString().slice(0, 10),
-    }
-  }
-  if (period === 'quarterly') {
-    const [yr, q] = key.split('-Q').map(Number)
-    const sm = (q - 1) * 3
-    return {
-      start: new Date(yr, sm, 1).toISOString().slice(0, 10),
-      end:   new Date(yr, sm + 3, 0).toISOString().slice(0, 10),
-    }
-  }
-  const [yr, mo] = key.split('-').map(Number)
-  return {
-    start: `${yr}-${String(mo).padStart(2, '0')}-01`,
-    end:   new Date(yr, mo, 0).toISOString().slice(0, 10),
-  }
+  return targetPeriodBounds(key, period)
 }
 
 function prevPeriodKeys(period: SOP['period'], count = 5): string[] {
-  const keys: string[] = []
-  const n = new Date()
-  for (let i = 1; i <= count; i++) {
-    if (period === 'monthly') {
-      const d = new Date(n.getFullYear(), n.getMonth() - i, 1)
-      keys.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`)
-    } else if (period === 'quarterly') {
-      const q = Math.ceil((n.getMonth() + 1) / 3)
-      const offset = q - i
-      const yr = n.getFullYear() + Math.floor((offset - 1) / 4)
-      const qn  = ((offset - 1 + 400) % 4) + 1
-      keys.push(`${yr}-Q${qn}`)
-    } else {
-      keys.push(currentPeriodKey('weekly')) // simplified for weekly
-    }
-  }
-  return keys
+  return previousTargetPeriodKeys(period, count)
 }
 
 function fmtPeriodKey(key: string): string {
@@ -100,7 +64,10 @@ function evalMetric(
   data: EvalInput,
 ): number {
   const { start, end } = periodBounds(periodKey, period)
-  const inPeriod = (d?: string) => !!d && d >= start && d <= end
+  const inPeriod = (d?: string) => {
+    const key = d ? nairobiDateKey(d) : ''
+    return !!key && key >= start && key <= end
+  }
 
   switch (metric.metricType) {
     case 'repairs_completed':
@@ -180,10 +147,7 @@ function isMetMet(actual: number, target: number, dir: SOPTargetDir) {
 }
 
 function pct(actual: number, target: number, dir: SOPTargetDir): number {
-  if (target === 0) return 100
-  if (dir === 'min') return Math.min(100, Math.round((actual / target) * 100))
-  // for max: 100% = within budget, going over shows as over
-  return Math.min(100, Math.round((actual / target) * 100))
+  return targetMetricProgress(actual, target, dir)
 }
 
 function fmtVal(v: number, unit: string) {
@@ -227,9 +191,9 @@ function SOPsContent() {
 
   const currentUser = users.find(u => u.id === currentUserId) ?? null
   
-  const canViewTeamHR  = ['director', 'finance_officer', 'technical_lead'].includes(currentUser?.role ?? '')
-  const canEditTargets = currentUser?.role === 'director'
-  const isAdmin        = currentUser?.role === 'director'
+  const canViewTeamHR  = canManageHRRole(currentUser?.role)
+  const canEditTargets = canManageHRRole(currentUser?.role)
+  const isAdmin        = canManageHRRole(currentUser?.role)
 
   const evalData: EvalInput = { repairs, expenses, outsourceJobs, leaveRequests, employees, sopActuals, saleOrders }
 
@@ -352,12 +316,18 @@ function SOPsContent() {
   function sopSummary(sop: SOP, periodKey: string) {
     const metrics = sop.metrics.map(m => {
       const actual = evalMetric(m, sop.id, sop.userId, periodKey, sop.period, evalData)
-      const met    = isMetMet(actual, m.target, m.targetDir)
-      return { ...m, actual, met }
+      const met = isMetMet(actual, m.target, m.targetDir)
+      const progress = targetMetricProgress(actual, m.target, m.targetDir)
+      return { ...m, actual, met, progress }
     })
     const total = metrics.length
-    const met   = metrics.filter(m => m.met).length
-    return { metrics, total, met, pctOverall: total === 0 ? 0 : Math.round((met / total) * 100) }
+    const met = metrics.filter(m => m.met).length
+    const pctOverall = targetOverallScore(metrics.map(metric => ({
+      actual: metric.actual,
+      target: metric.target,
+      direction: metric.targetDir,
+    })))
+    return { metrics, total, met, pctOverall }
   }
 
   // ── Current period view ──
