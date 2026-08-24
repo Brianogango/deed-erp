@@ -488,11 +488,91 @@ function ReturnModal({ holdover, onClose, onReturn }: { holdover: Holdover; onCl
   )
 }
 
+// ── Extend Modal ───────────────────────────────────────────────────────────────
+
+function ExtendModal({
+  holdover,
+  onClose,
+  onExtend,
+}: {
+  holdover: Holdover
+  onClose: () => void
+  onExtend: (patch: Partial<Holdover>) => void
+}) {
+  const { users, currentUserId, showToast } = useOperationsStore()
+  const currentUser = users.find(user => user.id === currentUserId)
+  const currentDate = storedDateKey(holdover.expectedReturnDate)
+  const [newDate, setNewDate] = useState('')
+  const [note, setNote] = useState('')
+
+  const handleExtend = () => {
+    if (!newDate || newDate <= currentDate) {
+      showToast('Choose a return date after the current expected date.', 'error')
+      return
+    }
+    onExtend({
+      expectedReturnDate: newDate,
+      status: 'active',
+      extensionHistory: [
+        ...(holdover.extensionHistory ?? []),
+        {
+          previousDate: currentDate,
+          newDate,
+          note: note.trim() || undefined,
+          extendedAt: now(),
+          extendedByName: currentUser?.name ?? 'Staff',
+        },
+      ],
+    })
+    onClose()
+  }
+
+  return (
+    <div className="holdover-modal-overlay fixed inset-0 z-[9250] flex items-end sm:items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+      <div className="holdover-modal bg-[var(--bg-card)] border border-[var(--border)] rounded-2xl w-full max-w-md shadow-2xl">
+        <div className="px-5 py-4 border-b border-[var(--border-lt)] flex items-center justify-between">
+          <div>
+            <p className="text-sm font-bold text-[var(--text-1)]">Extend holdover</p>
+            <p className="text-[11px] text-[var(--text-4)]">{holdover.ref} · Current return {fmtDate(holdover.expectedReturnDate)}</p>
+          </div>
+          <button type="button" onClick={onClose} aria-label="Close extend dialog" className="w-8 h-8 rounded-lg border border-[var(--border)]">×</button>
+        </div>
+        <div className="p-5 space-y-4">
+          <div>
+            <label className="text-[11px] font-semibold text-[var(--text-3)] block mb-1">New expected return *</label>
+            <input
+              type="date"
+              value={newDate}
+              min={currentDate}
+              onChange={event => setNewDate(event.target.value)}
+              className="w-full px-3 py-2.5 rounded-xl bg-[var(--bg-surface)] border border-[var(--border)] text-sm"
+            />
+          </div>
+          <div>
+            <label className="text-[11px] font-semibold text-[var(--text-3)] block mb-1">Reason / note</label>
+            <textarea
+              value={note}
+              onChange={event => setNote(event.target.value)}
+              rows={3}
+              placeholder="Why is the loan being extended?"
+              className="w-full px-3 py-2.5 rounded-xl bg-[var(--bg-surface)] border border-[var(--border)] text-sm resize-none"
+            />
+          </div>
+        </div>
+        <div className="px-5 py-4 border-t border-[var(--border-lt)] flex gap-3">
+          <button type="button" onClick={onClose} className="btn-outline flex-1">Cancel</button>
+          <button type="button" onClick={handleExtend} disabled={!newDate} className="btn-primary flex-1">Confirm extension</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── Detail View ───────────────────────────────────────────────────────────────
 
 const fmtDate = (iso: string) => iso ? new Date(iso).toLocaleDateString('en-KE', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'
 
-function HoldoverDetail({ holdover, onClose, onReturn }: { holdover: Holdover; onClose: () => void; onReturn: () => void }) {
+function HoldoverDetail({ holdover, onClose, onExtend, onReturn }: { holdover: Holdover; onClose: () => void; onExtend: () => void; onReturn: () => void }) {
   const isActive = holdover.status !== 'returned'
 
   return (
@@ -585,10 +665,16 @@ function HoldoverDetail({ holdover, onClose, onReturn }: { holdover: Holdover; o
         <div className="holdover-modal__footer px-5 py-4 border-t border-[var(--border-lt)] flex gap-3 flex-shrink-0">
           <button onClick={onClose} className="flex-1 px-4 py-2.5 rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] text-[var(--text-2)] text-sm font-semibold hover:bg-[var(--bg-muted)] transition-colors cursor-pointer">Close</button>
           {isActive && (
-            <button onClick={onReturn}
-              className="flex-1 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-bold transition-colors cursor-pointer">
-              Record Return
-            </button>
+            <>
+              <button onClick={onExtend}
+                className="flex-1 px-4 py-2.5 rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] text-[var(--text-2)] text-sm font-bold transition-colors cursor-pointer">
+                Extend
+              </button>
+              <button onClick={onReturn}
+                className="flex-1 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-bold transition-colors cursor-pointer">
+                Process return
+              </button>
+            </>
           )}
         </div>
       </div>
@@ -600,7 +686,7 @@ function HoldoverDetail({ holdover, onClose, onReturn }: { holdover: Holdover; o
 
 function HoldoversContent() {
   const mounted = useMounted()
-  const { holdovers, addHoldover, updateHoldover } = useOperationsStore()
+  const { holdovers, addHoldover, updateHoldover, showToast } = useOperationsStore()
   const items = useMemo(() => withResolvedStatus(holdovers || []), [holdovers])
 
   const [filter, setFilter] = useState<'all' | HoldoverStatus>('all')
@@ -608,6 +694,7 @@ function HoldoversContent() {
   const [showNew, setShowNew] = useState(false)
   const [detailId, setDetailId] = useUrlRecordId()
   const [returning, setReturning] = useState<Holdover | null>(null)
+  const [extending, setExtending] = useState<Holdover | null>(null)
   const detail = detailId ? items.find(h => h.id === detailId) ?? null : null
 
   // Stats
@@ -857,7 +944,20 @@ function HoldoversContent() {
         <HoldoverDetail
           holdover={detail}
           onClose={() => setDetailId(null)}
+          onExtend={() => { setExtending(detail); setDetailId(null) }}
           onReturn={() => { setReturning(detail); setDetailId(null) }}
+        />
+      )}
+
+      {extending && (
+        <ExtendModal
+          holdover={extending}
+          onClose={() => setExtending(null)}
+          onExtend={patch => {
+            updateHoldover(extending.id, patch)
+            showToast(`${extending.ref} return date extended`, 'success')
+            setExtending(null)
+          }}
         />
       )}
 
