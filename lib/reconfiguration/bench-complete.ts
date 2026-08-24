@@ -102,8 +102,25 @@ async function assertIncomingStock(productId: string, location: string, qty: num
   const row = await prisma.bulkStockLevel.findUnique({
     where: { productId_location: { productId, location } },
   })
-  const prismaQty = row?.qty ?? 0
+  let prismaQty = row?.qty ?? 0
   if (prismaQty >= qty) return
+
+  // Opening-stock / inventory UI writes deed_bulkStock (+ stock_levels).
+  // Bench Apply used to look only at bulk_stock_levels, so a part could show
+  // 1 in warehouse and still fail with "have 0".
+  const state = await loadAppState(['deed_bulkStock'])
+  const blobQty = (Array.isArray(state.deed_bulkStock) ? state.deed_bulkStock : [])
+    .filter((b: { productId?: string; location?: string }) => b.productId === productId && b.location === location)
+    .reduce((sum: number, b: { qty?: number }) => sum + (Number(b.qty) || 0), 0)
+  if (blobQty >= qty) {
+    await prisma.bulkStockLevel.upsert({
+      where: { productId_location: { productId, location } },
+      create: { productId, location, qty: blobQty },
+      update: { qty: Math.max(prismaQty, blobQty) },
+    })
+    return
+  }
+
   throw httpError(
     `Insufficient stock for ${name} at ${location} (need ${qty}, have ${prismaQty}).`,
     422,

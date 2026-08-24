@@ -386,6 +386,16 @@ async function main() {
             [randomUUID(), productId, delta],
           )
         }
+        // Reconfiguration Apply consumes bulk_stock_levels (location bins),
+        // not stock_levels.qty_on_hand. Keep the two in step.
+        await client.query(
+          `INSERT INTO bulk_stock_levels (id, product_id, location, qty, updated_at)
+           VALUES ($1::uuid, $2::uuid, $3, $4, NOW())
+           ON CONFLICT (product_id, location) DO UPDATE
+             SET qty = GREATEST(0, bulk_stock_levels.qty + EXCLUDED.qty),
+                 updated_at = NOW()`,
+          [randomUUID(), productId, location, delta],
+        )
       }
 
       await client.query('COMMIT')
