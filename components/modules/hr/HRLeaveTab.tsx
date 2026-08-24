@@ -316,10 +316,10 @@ export default function HRLeaveTab() {
     isLeaveTypeAllowedForGender(o.value as StoreLeaveType, selectedLeaveEmp?.gender))
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="hr-submodule hr-leave flex flex-col gap-3">
       {/* Pending approvals callout */}
       {pendingLeaves > 0 && canViewTeamHR && (
-        <div className="rounded-xl p-3 flex items-center gap-3" style={{ background: 'var(--warning-bg)', border: '1px solid #FDE68A' }}>
+        <div className="hr-submodule-alert rounded-xl p-3 flex items-center gap-3" style={{ background: 'var(--warning-bg)', border: '1px solid #FDE68A' }}>
           <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: 'var(--warning)', color: '#fff' }}>
             <Fa icon={faCircleExclamation} />
           </div>
@@ -331,7 +331,7 @@ export default function HRLeaveTab() {
       )}
 
       {/* Leave requests table */}
-      <div className="card overflow-hidden">
+      <div className="hr-submodule-panel card overflow-hidden">
         <PanelHeader
           title={canViewTeamHR ? 'All Leave Requests' : 'My Leave Requests'}
           count={filtered.length}
@@ -360,7 +360,7 @@ export default function HRLeaveTab() {
       </div>
 
       {/* Leave balances */}
-      <div className="card overflow-hidden">
+      <div className="hr-submodule-panel card overflow-hidden">
         <PanelHeader
           title={`Leave Balances — ${new Date().getFullYear()}`}
           count={canViewTeamHR
@@ -409,7 +409,7 @@ export default function HRLeaveTab() {
             </div>
           )}
           <Field label="Reason"><Textarea value={leaveForm.reason} onChange={v => setLeaveForm(p => ({ ...p, reason: v }))} /></Field>
-          <div className="flex justify-end gap-2">
+          <div className="hr-modal-actions flex justify-end gap-2">
             <button className="btn-outline" onClick={() => setShowLeaveModal(false)}>Cancel</button>
             <button className="btn-primary" onClick={submitLeave} disabled={!leaveForm.employeeId || leaveDays <= 0 || hrLeaveInsufficient}>Submit Leave</button>
           </div>
@@ -444,7 +444,7 @@ export default function HRLeaveTab() {
               {selfLeaveInsufficient && <> — you cannot request more days than you have available</>}
             </div>
           )}
-          <div className="flex justify-end gap-2 mt-2">
+          <div className="hr-modal-actions flex justify-end gap-2 mt-2">
             <button className="btn-outline" onClick={() => setShowSelfLeaveModal(false)}>Cancel</button>
             <button className="btn-primary" onClick={submitSelfLeave} disabled={!selfLeaveForm.reason.trim() || selfLeaveDays <= 0 || selfLeaveInsufficient}>Submit Request</button>
           </div>
@@ -466,7 +466,7 @@ export default function HRLeaveTab() {
         }
         return (
           <Modal title="Leave decision" subtitle={`${req.ref} · ${req.employeeName}`} onClose={() => { setDecideId(null); setDecideError('') }} width={480}>
-            <div className="grid grid-cols-2 gap-3 text-xs mb-3">
+            <div className="hr-decision-summary grid grid-cols-2 gap-3 text-xs mb-3">
               <div className="p-3 rounded-lg" style={{ background: 'var(--bg-surface)' }}>
                 <p className="text-[10px] mb-1" style={{ color: 'var(--text-3)' }}>Leave type</p>
                 <p className="font-semibold" style={{ textTransform: 'capitalize' }}>{req.leaveType.replace(/_/g, ' ')}</p>
@@ -492,7 +492,7 @@ export default function HRLeaveTab() {
             {decideError && (
               <p className="text-[11px] mt-2" style={{ color: 'var(--danger)' }}>{decideError}</p>
             )}
-            <div className="flex gap-2 justify-end pt-3">
+            <div className="hr-modal-actions hr-modal-actions--decision flex gap-2 justify-end pt-3">
               <button className="btn-outline" onClick={() => { setDecideId(null); setDecideError('') }}>Cancel</button>
               <button
                 style={{ background: 'var(--danger-bg)', border: '1px solid var(--danger)', color: 'var(--danger)', borderRadius: 8, padding: '8px 16px', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}
