@@ -217,6 +217,18 @@ describe('POST /api/deposits', () => {
     expect(res.status).toBe(422)
   })
 
+  it('returns 422 for a zero or negative item quantity', async () => {
+    const invalidItems = [{ ...minValidBody.items[0], qty: -1 }]
+    const res = await POST(postReq({ ...minValidBody, items: invalidItems }))
+    expect(res.status).toBe(422)
+  })
+
+  it('returns 422 for a negative unit price', async () => {
+    const invalidItems = [{ ...minValidBody.items[0], unitPrice: -80000 }]
+    const res = await POST(postReq({ ...minValidBody, items: invalidItems }))
+    expect(res.status).toBe(422)
+  })
+
   it('returns 422 when initialPayment is zero', async () => {
     const res = await POST(postReq({ ...minValidBody, initialPayment: 0 }))
     expect(res.status).toBe(422)
