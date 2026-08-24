@@ -111,6 +111,11 @@ function KilimallContent() {
   const netReceived        = kilimallSettlements.reduce((s, x) => s + x.netPaid, 0)
   const unreconciled       = kilimallOrders.filter(o => o.status === 'delivered' && !o.settlementId).length
   const returnsRate        = totalOrders > 0 ? ((returned / totalOrders) * 100).toFixed(1) : '0'
+  const todayKey           = new Date().toISOString().slice(0, 10)
+  const dispatchedToday    = kilimallDispatches.filter(d => d.date?.slice(0, 10) === todayKey).length
+  const unmatchedAmount    = kilimallSettlements.reduce((sum, settlement) => sum + settlement.lines
+    .filter(line => line.status === 'unmatched' || line.status === 'mismatch')
+    .reduce((lineSum, line) => lineSum + line.amount, 0), 0)
 
   // Filtered orders
   const filteredOrders = kilimallOrders.filter(o => {
@@ -503,7 +508,7 @@ function KilimallContent() {
   // RENDER
   // ─────────────────────────────────────────────────────────────────────────────
   return (
-    <div className="mod-page">
+    <div className="mod-page kilimall-workspace">
       <ModuleHeader
         title="Kilimall"
         subtitle="Orders, dispatch, settlements and reconciliation"
@@ -535,14 +540,26 @@ function KilimallContent() {
         ariaLabel="Kilimall sections"
       />
 
-      <div className="mod-body p-3 sm:p-4 flex flex-col gap-4">
+      <div className="mod-body kilimall-body p-3 sm:p-4 flex flex-col gap-4">
+
+      {tab === 'orders' && (
+        <div className="kilimall-kpi-strip" aria-label="Kilimall operations summary">
+          {[
+            { label: 'Pending dispatch', value: pendingDispatch, tone: 'amber' },
+            { label: 'Dispatched today', value: dispatchedToday, tone: 'blue' },
+            { label: 'Delivered', value: delivered, tone: 'green' },
+            { label: 'Unmatched settlement', value: fmtKes(unmatchedAmount), tone: 'red' },
+          ].map(stat => <article key={stat.label} className={`kilimall-kpi kilimall-kpi--${stat.tone}`}><span>{stat.label}</span><strong>{stat.value}</strong></article>)}
+        </div>
+      )}
 
       {/* ════════════════════════════════════════════════════════════════════════
           ORDERS
       ════════════════════════════════════════════════════════════════════════ */}
       {tab === 'orders' && (
-        <div className="card overflow-hidden">
-          <PanelHeader title="Kilimall Orders" count={filteredOrders.length} />
+        <div className="kilimall-workbench">
+        <section className="card kilimall-orders-card overflow-hidden">
+          <PanelHeader title="Marketplace orders" count={filteredOrders.length} />
 
           <DataTable
             tableId="kilimall-orders"
@@ -561,6 +578,27 @@ function KilimallContent() {
             exportTitle="Kilimall Orders"
             exportFilename="kilimall-orders"
           />
+        </section>
+        <aside className="kilimall-queue" aria-label="Operations queue">
+          <header><div><h2>Operations queue</h2><p>Priority marketplace actions</p></div></header>
+          <section>
+            <h3>Ready to dispatch <span>{pendingOrders.length}</span></h3>
+            {pendingOrders.slice(0, 4).map(order => (
+              <button key={order.id} type="button" onClick={() => { setDispatchOrderId(order.id); selectTab('dispatch') }}>
+                <span><strong>{order.kilimallRef || order.ref}</strong><small>{order.customerName || order.productName}</small></span><b>Dispatch ›</b>
+              </button>
+            ))}
+            {pendingOrders.length === 0 && <p>No orders awaiting dispatch.</p>}
+          </section>
+          <section>
+            <h3>Reconciliation issues <span>{kilimallSettlements.reduce((n, s) => n + s.lines.filter(l => l.status !== 'matched').length, 0)}</span></h3>
+            {kilimallSettlements.flatMap(settlement => settlement.lines.filter(line => line.status !== 'matched').map(line => ({ settlement, line }))).slice(0, 3).map(({ settlement, line }) => (
+              <button key={`${settlement.id}-${line.id}`} type="button" onClick={() => selectTab('reconciliation')}>
+                <span><strong>{settlement.ref}</strong><small>{line.status === 'mismatch' ? 'Amount differs' : 'Unmatched amount'}</small></span><b>{fmtKes(line.amount)} ›</b>
+              </button>
+            ))}
+          </section>
+        </aside>
         </div>
       )}
 
@@ -568,7 +606,7 @@ function KilimallContent() {
           DISPATCH
       ════════════════════════════════════════════════════════════════════════ */}
       {tab === 'dispatch' && (
-        <div className="grid grid-cols-2 gap-4">
+        <div className={`kilimall-dispatch-grid ${dispatchOrder ? 'has-selection' : ''} grid grid-cols-2 gap-4`}>
           {/* Pending dispatch queue */}
           <div className="card overflow-hidden">
             <PanelHeader title="Pending Dispatch" count={pendingOrders.length} />
@@ -1008,6 +1046,7 @@ function KilimallContent() {
       {/* New Order */}
       {showNewOrder && (
         <Modal title="New Kilimall Order" onClose={() => setShowNewOrder(false)} width={520}>
+          <div className="kilimall-modal-content kilimall-modal-content--order">
           <Field label="Kilimall Order ID" required>
             <Input value={newOrder.kilimallRef} onChange={v => setNewOrder(p => ({ ...p, kilimallRef: v }))} placeholder="e.g. KLM-20240419-001" />
           </Field>
@@ -1054,12 +1093,14 @@ function KilimallContent() {
             <button className="btn-outline" onClick={() => setShowNewOrder(false)}>Cancel</button>
             <button className="btn-primary" onClick={handleCreateOrder}>Create Order</button>
           </div>
+          </div>
         </Modal>
       )}
 
       {/* Order detail */}
       {viewOrder && (
         <Modal title={viewOrder.ref} subtitle={`Kilimall Ref: ${viewOrder.kilimallRef}`} onClose={() => setDetailId(null)} width={500}>
+          <div className="kilimall-modal-content kilimall-modal-content--detail">
           <div className="grid grid-cols-2 gap-3 text-xs">
             {[
               ['Ordered product', viewOrder.productName],
@@ -1102,12 +1143,14 @@ function KilimallContent() {
                 }}>Mark Returned</button>
             )}
           </div>
+          </div>
         </Modal>
       )}
 
       {/* New Settlement */}
       {showNewSettlement && (
         <Modal title="New Weekly Settlement" onClose={() => setShowNewSettlement(false)} width={600}>
+          <div className="kilimall-modal-content kilimall-modal-content--settlement">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Field label="Week Period" required hint='e.g. "1–7 Apr 2026"'>
               <Input value={settlForm.weekPeriod} onChange={v => setSettlForm(p => ({ ...p, weekPeriod: v }))} placeholder="1–7 Apr 2026" />
@@ -1167,12 +1210,14 @@ function KilimallContent() {
             <button className="btn-outline" onClick={() => setShowNewSettlement(false)}>Cancel</button>
             <button className="btn-primary" onClick={handleCreateSettlement}>Create Settlement</button>
           </div>
+          </div>
         </Modal>
       )}
 
       {/* Settlement detail */}
       {viewSettlement && (
         <Modal title={viewSettlement.ref} subtitle={viewSettlement.weekPeriod} onClose={() => setDetailId(null)} width={560}>
+          <div className="kilimall-modal-content kilimall-modal-content--reconciliation">
           <div className="grid grid-cols-3 gap-3 text-xs mb-3">
             {[['Gross Amount', fmtKes(viewSettlement.grossAmount)], ['Deductions', fmtKes(viewSettlement.deductions)], ['Net Paid', fmtKes(viewSettlement.netPaid)]].map(([k, v]) => (
               <div key={k} className="p-2.5 rounded-lg text-center" style={{ background: 'var(--bg-surface)' }}>
@@ -1221,6 +1266,7 @@ function KilimallContent() {
                 setDetailId(null)
               }}><Fa icon={faArrowsRotate} aria-hidden="true" /> Run Reconciliation</button>
             )}
+          </div>
           </div>
         </Modal>
       )}

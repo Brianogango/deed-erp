@@ -364,6 +364,16 @@ function SOPsContent() {
   const viewSOP    = selectedSopId ? (sops.find(s => s.id === selectedSopId) ?? mySOP) : mySOP
   const viewPeriod = viewSOP ? (histPeriod ?? currentPeriodKey(viewSOP.period)) : ''
   const viewSummary = viewSOP ? sopSummary(viewSOP, viewPeriod) : null
+  const teamRows = sops.filter(s => s.active).map(sop => ({
+    sop,
+    summary: sopSummary(sop, currentPeriodKey(sop.period)),
+  }))
+  const teamCompletion = teamRows.length
+    ? Math.round(teamRows.reduce((sum, row) => sum + row.summary.pctOverall, 0) / teamRows.length)
+    : 0
+  const teamOnTrack = teamRows.filter(row => row.summary.pctOverall >= 70).length
+  const teamNeedsAttention = teamRows.filter(row => row.summary.pctOverall > 0 && row.summary.pctOverall < 70).length
+  const teamNoActivity = teamRows.filter(row => row.summary.pctOverall === 0).length
 
   const tabStyle = (t: string): React.CSSProperties => ({
     background: tab === t ? '#E8F3FA' : 'transparent',
@@ -387,11 +397,12 @@ function SOPsContent() {
     : [{ id: 'my', label: 'My targets' }]
 
   return (
-    <div className="mod-page">
+    <div className="mod-page kpi-workspace">
       <ModuleHeader
         title="Performance targets"
-        subtitle="Track individual targets per staff member"
+        subtitle="Set goals, monitor progress and coach the team"
         icon={<Fa icon={faBullseye} />}
+        count={sops.length}
         color="var(--warning)"
         primaryAction={isAdmin ? (
           <PrimaryActionButton icon={<Fa icon={faPlus} />} onClick={openCreate} hideLabelOnMobile={false}>
@@ -408,12 +419,23 @@ function SOPsContent() {
         ariaLabel="Performance target sections"
       />
 
-      <div className="mod-body p-3 sm:p-4">
-      <div className="card overflow-hidden">
+      <div className="mod-body kpi-body p-3 sm:p-4">
+      {canViewTeamHR && tab !== 'my' && (
+        <div className="kpi-summary-strip" aria-label="Team performance summary">
+          {[
+            { label: 'Team completion', value: `${teamCompletion}%`, tone: 'blue' },
+            { label: 'On track', value: teamOnTrack, tone: 'green' },
+            { label: 'Needs attention', value: teamNeedsAttention, tone: 'amber' },
+            { label: 'No activity', value: teamNoActivity, tone: 'red' },
+          ].map(stat => <article key={stat.label} className={`kpi-summary-card kpi-summary-card--${stat.tone}`}><span>{stat.label}</span><strong>{stat.value}</strong><i><b style={{ width: stat.label === 'Team completion' ? `${teamCompletion}%` : stat.value ? '64%' : '0%' }} /></i></article>)}
+        </div>
+      )}
+      <div className={`kpi-workbench ${tab === 'my' ? 'kpi-workbench--single' : ''}`}>
+      <div className="card kpi-main-card overflow-hidden">
 
         {/* ── Overview (Team View) ── */}
         {tab === 'overview' && canViewTeamHR && (
-          <div className="w-full min-w-0 max-w-full">
+          <div className="kpi-overview w-full min-w-0 max-w-full">
             <div className="flex flex-col divide-y divide-gray-100">
             {sops.filter(s => s.active).length === 0 ? (
               <div className="py-14 text-center text-t3 text-sm">
@@ -479,12 +501,12 @@ function SOPsContent() {
 
         {/* ── Manage SOPs (Admins Only) ── */}
         {tab === 'manage' && canViewTeamHR && (
-          <div className="w-full min-w-0 max-w-full">
+          <div className="kpi-manage w-full min-w-0 max-w-full">
             <div className="flex flex-col divide-y divide-gray-100">
             {sops.length === 0 ? (
               <div className="py-14 text-center text-t3 text-sm">No performance targets defined yet.</div>
             ) : sops.map(sop => (
-              <div key={sop.id} className="p-4 flex items-center gap-4 hover:bg-gray-50 transition-colors">
+              <div key={sop.id} className="kpi-team-row p-4 flex items-center gap-4 hover:bg-gray-50 transition-colors">
                 <div className="flex-1 min-w-0">
                   <p className="font-semibold text-sm text-t1">{sop.userName}</p>
                   <p className="text-[11px] text-t3">{sop.period} · {sop.metrics.length} metrics{sop.notes ? ` · ${sop.notes}` : ''}</p>
@@ -531,7 +553,7 @@ function SOPsContent() {
           const canEditActuals = canEditTargets || sop.userId === currentUserId
 
           return (
-            <div>
+            <div className="kpi-my-targets">
               {/* Period selector + back */}
               <div className="flex items-center gap-3 px-4 py-2.5 border-b flex-wrap" style={{ borderColor: 'var(--border-lt)' }}>
                 {selectedSopId && canViewTeamHR && (
@@ -688,8 +710,8 @@ function SOPsContent() {
 
       {/* ── Create / Edit SOP Modal ───────────────────────────────────────── */}
       {showCreateModal && isAdmin && (
-        <div className="modal-overlay" onClick={() => setShowCreateModal(false)}>
-          <div className="modal-box w-full max-w-2xl" onClick={e => e.stopPropagation()} style={{ maxHeight: '90vh', overflowY: 'auto' }}>
+      <div className="modal-overlay kpi-modal-overlay" onClick={() => setShowCreateModal(false)}>
+          <div className="modal-box kpi-target-modal w-full max-w-2xl" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-sm font-bold text-t1">{editSopId ? 'Edit Target' : 'Set Target for Staff Member'}</h3>
               <button onClick={() => setShowCreateModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: 'var(--text-4)' }}>×</button>
@@ -728,7 +750,7 @@ function SOPsContent() {
 
                 <div className="space-y-2">
                   {sopMetrics.map(m => (
-                    <div key={m.id} className="rounded-lg p-3 flex gap-2 items-start" style={{ background: 'var(--bg-surface)', border: '1px solid var(--bg-muted)' }}>
+                    <div key={m.id} className="kpi-target-metric rounded-lg p-3 flex gap-2 items-start" style={{ background: 'var(--bg-surface)', border: '1px solid var(--bg-muted)' }}>
                       {/* Label */}
                       <div style={{ flex: '2 1 0' }}>
                         <label className="text-[9px] text-t3 block mb-0.5">Label</label>
@@ -786,7 +808,7 @@ function SOPsContent() {
               </div>
             </div>
 
-            <div className="flex gap-2 mt-4 justify-end">
+            <div className="kpi-modal-actions flex gap-2 mt-4 justify-end">
               <button className="btn-outline text-[11px] py-2 px-4" onClick={() => setShowCreateModal(false)}>Cancel</button>
               <button className="btn-primary text-[11px] py-2 px-4" onClick={saveSOP}>
                 {editSopId ? 'Save Changes' : 'Create Target'}
@@ -798,8 +820,8 @@ function SOPsContent() {
 
       {/* ── Update Custom Actual Modal ────────────────────────────────────── */}
       {updatingActual && (
-        <div className="modal-overlay" onClick={() => setUpdatingActual(null)}>
-          <div className="modal-box w-full max-w-sm" onClick={e => e.stopPropagation()}>
+        <div className="modal-overlay kpi-modal-overlay" onClick={() => setUpdatingActual(null)}>
+          <div className="modal-box kpi-target-modal w-full max-w-sm" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
               <div>
                 <h3 className="text-sm font-bold text-t1">Update Actual Value</h3>
@@ -837,6 +859,22 @@ function SOPsContent() {
           </div>
         </div>
       )}
+      {canViewTeamHR && tab !== 'my' && (
+        <aside className="kpi-coaching" aria-label="Coaching focus">
+          <header><div><h2>Coaching focus</h2><p>Team members needing follow-up</p></div></header>
+          <div>
+            {teamRows.sort((a, b) => a.summary.pctOverall - b.summary.pctOverall).slice(0, 5).map(({ sop, summary }) => (
+              <button key={sop.id} type="button" onClick={() => { setSelectedSopId(sop.id); setHistPeriod(null); selectTab('my') }}>
+                <span className="kpi-coaching__avatar">{sop.userName.slice(0, 2).toUpperCase()}</span>
+                <span><strong>{sop.userName}</strong><small>{summary.pctOverall === 0 ? 'No activity' : `${summary.met}/${summary.total} targets met`}</small></span>
+                <b>{summary.pctOverall}%</b><i>›</i>
+              </button>
+            ))}
+            {teamRows.length === 0 && <p>No active targets.</p>}
+          </div>
+        </aside>
+      )}
+      </div>{/* kpi-workbench */}
       </div>{/* mod-body */}
       {pendingConfirm && (
         <Confirm

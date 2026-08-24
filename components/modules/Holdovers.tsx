@@ -178,9 +178,9 @@ function NewHoldoverModal({ onClose, onSave }: { onClose: () => void; onSave: (h
   }
 
   return (
-    <div className="fixed inset-0 z-[9100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+    <div className="holdover-modal-overlay fixed inset-0 z-[9100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
       <div style={{ animation: 'modalIn 0.2s ease both' }}
-        className="bg-[var(--bg-card)] border border-[var(--border)] rounded-2xl w-full max-w-lg shadow-2xl flex flex-col max-h-[90vh]">
+        className="holdover-modal holdover-modal--issue bg-[var(--bg-card)] border border-[var(--border)] rounded-2xl w-full max-w-lg shadow-2xl flex flex-col max-h-[90vh]">
 
         {/* Header */}
         <div className="px-5 py-4 border-b border-[var(--border-lt)] flex items-center justify-between flex-shrink-0">
@@ -198,7 +198,7 @@ function NewHoldoverModal({ onClose, onSave }: { onClose: () => void; onSave: (h
           ))}
         </div>
 
-        <div className="flex-1 overflow-y-auto p-5 space-y-4">
+        <div className="holdover-modal__body flex-1 overflow-y-auto p-5 space-y-4">
           {step === 1 && (
             <>
               {/* Client */}
@@ -370,7 +370,7 @@ function NewHoldoverModal({ onClose, onSave }: { onClose: () => void; onSave: (h
         </div>
 
         {/* Footer */}
-        <div className="px-5 py-4 border-t border-[var(--border-lt)] flex gap-3 flex-shrink-0">
+        <div className="holdover-modal__footer px-5 py-4 border-t border-[var(--border-lt)] flex gap-3 flex-shrink-0">
           {step === 1 ? (
             <>
               <button onClick={onClose} className="flex-1 px-4 py-2.5 rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] text-[var(--text-2)] text-sm font-semibold hover:bg-[var(--bg-muted)] transition-colors cursor-pointer">Cancel</button>
@@ -418,16 +418,16 @@ function ReturnModal({ holdover, onClose, onReturn }: { holdover: Holdover; onCl
   }
 
   return (
-    <div className="fixed inset-0 z-[9200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+    <div className="holdover-modal-overlay fixed inset-0 z-[9200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
       <div style={{ animation: 'confirmIn 0.2s cubic-bezier(0.16,1,0.3,1) both' }}
-        className="bg-[var(--bg-card)] border border-[var(--border)] rounded-2xl w-full max-w-md shadow-2xl">
+        className="holdover-modal holdover-modal--return bg-[var(--bg-card)] border border-[var(--border)] rounded-2xl w-full max-w-md shadow-2xl">
 
         <div className="px-5 py-4 border-b border-[var(--border-lt)] flex items-center justify-between">
           <p className="text-sm font-bold text-[var(--text-1)]">Record Device Return</p>
           <button onClick={onClose} className="w-8 h-8 rounded-lg bg-[var(--bg-surface)] border border-[var(--border)] text-[var(--text-3)] hover:text-[var(--text-1)] transition-colors flex items-center justify-center text-lg cursor-pointer">×</button>
         </div>
 
-        <div className="p-5 space-y-4">
+        <div className="holdover-modal__body p-5 space-y-4">
           {/* Device summary */}
           <div className="p-3 rounded-xl bg-[var(--bg-surface)] border border-[var(--border)]">
             <div className="flex items-center justify-between mb-1">
@@ -472,7 +472,7 @@ function ReturnModal({ holdover, onClose, onReturn }: { holdover: Holdover; onCl
           )}
         </div>
 
-        <div className="px-5 py-4 border-t border-[var(--border-lt)] flex gap-3">
+        <div className="holdover-modal__footer px-5 py-4 border-t border-[var(--border-lt)] flex gap-3">
           <button onClick={onClose} className="flex-1 px-4 py-2.5 rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] text-[var(--text-2)] text-sm font-semibold hover:bg-[var(--bg-muted)] transition-colors cursor-pointer">Cancel</button>
           <button onClick={handleReturn} disabled={saving}
             className="flex-1 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-bold transition-colors disabled:opacity-40 cursor-pointer">
@@ -492,9 +492,9 @@ function HoldoverDetail({ holdover, onClose, onReturn }: { holdover: Holdover; o
   const isActive = holdover.status !== 'returned'
 
   return (
-    <div className="fixed inset-0 z-[9100] flex items-end sm:items-center justify-center p-4 bg-black/55 backdrop-blur-sm">
+    <div className="holdover-modal-overlay fixed inset-0 z-[9100] flex items-end sm:items-center justify-center p-4 bg-black/55 backdrop-blur-sm">
       <div style={{ animation: 'modalIn 0.2s ease both' }}
-        className="bg-[var(--bg-card)] border border-[var(--border)] rounded-2xl w-full max-w-xl shadow-2xl flex flex-col max-h-[90vh]">
+        className="holdover-modal holdover-modal--detail bg-[var(--bg-card)] border border-[var(--border)] rounded-2xl w-full max-w-xl shadow-2xl flex flex-col max-h-[90vh]">
 
         <div className="px-5 py-4 border-b border-[var(--border-lt)] flex items-center justify-between flex-shrink-0">
           <div className="flex items-center gap-3">
@@ -504,7 +504,7 @@ function HoldoverDetail({ holdover, onClose, onReturn }: { holdover: Holdover; o
           <button onClick={onClose} className="w-8 h-8 rounded-lg bg-[var(--bg-surface)] border border-[var(--border)] text-[var(--text-3)] hover:text-[var(--text-1)] transition-colors flex items-center justify-center text-lg cursor-pointer">×</button>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-5 space-y-4">
+        <div className="holdover-modal__body flex-1 overflow-y-auto p-5 space-y-4">
           {/* Device card */}
           <div className="p-4 rounded-xl bg-[var(--bg-surface)] border border-[var(--border)]">
             <div className="flex items-start gap-3">
@@ -578,7 +578,7 @@ function HoldoverDetail({ holdover, onClose, onReturn }: { holdover: Holdover; o
           </div>
         </div>
 
-        <div className="px-5 py-4 border-t border-[var(--border-lt)] flex gap-3 flex-shrink-0">
+        <div className="holdover-modal__footer px-5 py-4 border-t border-[var(--border-lt)] flex gap-3 flex-shrink-0">
           <button onClick={onClose} className="flex-1 px-4 py-2.5 rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] text-[var(--text-2)] text-sm font-semibold hover:bg-[var(--bg-muted)] transition-colors cursor-pointer">Close</button>
           {isActive && (
             <button onClick={onReturn}
@@ -611,6 +611,14 @@ function HoldoversContent() {
   const active   = items.filter(h => h.status === 'active').length
   const overdue  = items.filter(h => h.status === 'overdue').length
   const returned = items.filter(h => h.status === 'returned').length
+  const todayKey = new Date().toISOString().slice(0, 10)
+  const monthKey = todayKey.slice(0, 7)
+  const dueToday = items.filter(h => h.status !== 'returned' && h.expectedReturnDate.slice(0, 10) === todayKey).length
+  const returnedThisMonth = items.filter(h => h.returnedDate?.slice(0, 7) === monthKey).length
+  const returnQueue = items
+    .filter(h => h.status !== 'returned')
+    .sort((a, b) => new Date(a.expectedReturnDate).getTime() - new Date(b.expectedReturnDate).getTime())
+    .slice(0, 6)
 
   const filtered = useMemo(() => {
     let list = filter === 'all' ? items : items.filter(h => h.status === filter)
@@ -645,10 +653,10 @@ function HoldoversContent() {
   if (!mounted) return <ModuleSkeleton />
 
   return (
-    <div className="mod-page">
+    <div className="mod-page holdovers-workspace">
       <ModuleHeader
         title="Holdovers"
-        subtitle="Operations log only — not part of accounting / GL"
+        subtitle="Temporary device loans for repairs and demos"
         icon={<Fa icon={faLaptop} />}
         count={total}
         color="var(--primary)"
@@ -664,14 +672,30 @@ function HoldoversContent() {
         }
       />
 
-      <div className="px-3 sm:px-4 pt-2">
+      <div className="holdover-kpi-strip" aria-label="Holdover summary">
+        {[
+          { label: 'Active', value: active, tone: 'blue' },
+          { label: 'Due today', value: dueToday, tone: 'navy' },
+          { label: 'Overdue', value: overdue, tone: 'amber' },
+          { label: 'Returned this month', value: returnedThisMonth, tone: 'green' },
+        ].map(stat => (
+          <article key={stat.label} className={`holdover-kpi holdover-kpi--${stat.tone}`}>
+            <span>{stat.label}</span><strong>{stat.value}</strong>
+          </article>
+        ))}
+      </div>
+
+      <div className="holdover-notice px-3 sm:px-4 pt-2">
         <p className="text-[11px] text-[var(--text-3)] rounded-lg border border-[var(--border-lt)] bg-[var(--bg-surface)] px-3 py-2">
           Holdovers track temporary device loans for repairs and demos. They do not post journals, affect stock valuation, or appear on the trial balance.
         </p>
       </div>
 
       {/* List */}
-      <div className="mod-body overflow-y-auto custom-scrollbar">
+      <div className="mod-body holdover-body overflow-y-auto custom-scrollbar">
+        <div className="holdover-workbench">
+        <section className="holdover-table-card" aria-label="Device loans">
+          <header className="holdover-card-header"><div><h2>Device loans</h2><p>{filtered.length} of {total} records</p></div></header>
         <DataTable
               tableId="holdovers"
               columns={[
@@ -797,6 +821,24 @@ function HoldoversContent() {
               exportTitle="Holdovers"
               exportFilename="holdovers"
             />
+        </section>
+        <aside className="holdover-return-queue" aria-label="Return queue">
+          <header><div><h2>Return queue</h2><p>Due and overdue devices</p></div><span>{returnQueue.length}</span></header>
+          <div className="holdover-return-queue__list">
+            {returnQueue.map(h => (
+              <article key={h.id} className={h.status === 'overdue' ? 'is-overdue' : ''}>
+                <button type="button" className="holdover-return-queue__open" onClick={() => setDetailId(h.id)}>
+                  <span><strong>{h.ref}</strong><small>{h.clientName}</small></span><span>›</span>
+                </button>
+                <p>{fmtDate(h.expectedReturnDate)} <b>· {h.status === 'overdue' ? 'Overdue' : h.expectedReturnDate.slice(0, 10) === todayKey ? 'Due today' : 'Upcoming'}</b></p>
+                <p>Responsible: {h.authorizedByName || h.issuedByName}</p>
+                <button type="button" onClick={() => setReturning(h)}>Process return</button>
+              </article>
+            ))}
+            {returnQueue.length === 0 && <p className="holdover-return-queue__empty">No devices are awaiting return.</p>}
+          </div>
+        </aside>
+        </div>
       </div>
 
       {/* Modals */}

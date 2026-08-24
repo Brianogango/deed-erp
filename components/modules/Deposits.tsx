@@ -105,10 +105,10 @@ function NewDepositModal({ onClose, onSave }: { onClose: () => void; onSave: (d:
   }
 
   return (
-    <div className="fixed inset-0 z-[9000] flex h-dvh items-start sm:items-center justify-center overflow-y-auto overscroll-contain p-4" onClick={onClose}>
+    <div className="deposit-modal-overlay fixed inset-0 z-[9000] flex h-dvh items-start sm:items-center justify-center overflow-y-auto overscroll-contain p-4" onClick={onClose}>
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
       <div
-        className="relative my-0 sm:my-auto w-full max-w-2xl bg-[var(--bg-card)] rounded-2xl shadow-2xl border border-[var(--border)] flex flex-col overflow-hidden"
+        className="deposit-modal deposit-modal--new relative my-0 sm:my-auto w-full max-w-2xl bg-[var(--bg-card)] rounded-2xl shadow-2xl border border-[var(--border)] flex flex-col overflow-hidden"
         style={{ maxHeight: 'calc(100dvh - 32px)', animation: 'modalIn 0.22s cubic-bezier(0.16,1,0.3,1) both' }}
         onClick={e => e.stopPropagation()}
       >
@@ -134,7 +134,7 @@ function NewDepositModal({ onClose, onSave }: { onClose: () => void; onSave: (d:
           ))}
         </div>
 
-        <div className="flex-1 overflow-y-auto custom-scrollbar px-5 py-3 space-y-4">
+        <div className="deposit-modal__body flex-1 overflow-y-auto custom-scrollbar px-5 py-3 space-y-4">
           {step === 1 && (
             <>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -238,7 +238,7 @@ function NewDepositModal({ onClose, onSave }: { onClose: () => void; onSave: (d:
         </div>
 
         {/* Footer */}
-        <div className="px-5 py-3.5 border-t border-[var(--border)] bg-[var(--bg-surface)]/50 flex gap-2 justify-between shrink-0">
+        <div className="deposit-modal__footer px-5 py-3.5 border-t border-[var(--border)] bg-[var(--bg-surface)]/50 flex gap-2 justify-between shrink-0">
           {step === 2
             ? <button onClick={() => setStep(1)} className="btn-outline min-w-[100px] text-xs">← Back</button>
             : <button onClick={onClose} className="btn-outline min-w-[100px] text-xs">Cancel</button>
@@ -301,9 +301,9 @@ function AddPaymentModal({ deposit, onClose, onSave }: { deposit: Deposit; onClo
   }
 
   return (
-    <div className="fixed inset-0 z-[9050] flex h-dvh items-center justify-center overflow-y-auto overscroll-contain p-4" onClick={onClose}>
+    <div className="deposit-modal-overlay fixed inset-0 z-[9050] flex h-dvh items-center justify-center overflow-y-auto overscroll-contain p-4" onClick={onClose}>
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
-      <div className="relative w-full max-w-sm bg-[var(--bg-card)] rounded-2xl shadow-2xl border border-[var(--border)] overflow-hidden" style={{ animation: 'confirmIn 0.18s cubic-bezier(0.16,1,0.3,1) both' }} onClick={e => e.stopPropagation()}>
+      <div className="deposit-modal deposit-modal--payment relative w-full max-w-sm bg-[var(--bg-card)] rounded-2xl shadow-2xl border border-[var(--border)] overflow-hidden" style={{ animation: 'confirmIn 0.18s cubic-bezier(0.16,1,0.3,1) both' }} onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--border)]">
           <div>
             <h3 className="text-[13px] font-black text-[var(--text-1)]">Record Payment</h3>
@@ -311,7 +311,7 @@ function AddPaymentModal({ deposit, onClose, onSave }: { deposit: Deposit; onClo
           </div>
           <button onClick={onClose} className="text-[var(--text-4)] hover:text-[var(--text-1)] text-xl transition-colors">×</button>
         </div>
-        <div className="p-5 space-y-3">
+        <div className="deposit-modal__body p-5 space-y-3">
           <div>
             <label className="text-[10px] font-black text-[var(--text-4)] uppercase tracking-widest block mb-1.5">Amount (KSh) *</label>
             <input type="number" aria-label="Payment amount" value={amount} onChange={e => setAmount(e.target.value)} placeholder={`Max ${fmtKes(maxAmount)}`} max={maxAmount} className="form-input w-full text-xs font-mono text-right" />
@@ -334,7 +334,7 @@ function AddPaymentModal({ deposit, onClose, onSave }: { deposit: Deposit; onClo
             </div>
           )}
         </div>
-        <div className="px-5 py-3 border-t border-[var(--border)] flex gap-2">
+        <div className="deposit-modal__footer px-5 py-3 border-t border-[var(--border)] flex gap-2">
           <button onClick={onClose} className="btn-outline flex-1 text-xs">Cancel</button>
           <button
             disabled={!paying || saving}
@@ -360,9 +360,9 @@ function DepositDetail({ deposit, onBack, onAddPayment, onComplete, onCancel }: 
   const pct = deposit.totalValue > 0 ? Math.min(100, (deposit.totalPaid / deposit.totalValue) * 100) : 0
 
   return (
-    <div className="flex flex-col h-full bg-[var(--bg-page)]" style={{ animation: 'fadeIn 0.3s ease both' }}>
+    <div className="deposit-detail flex flex-col h-full bg-[var(--bg-page)]" style={{ animation: 'fadeIn 0.3s ease both' }}>
       {/* Header */}
-      <header className="bg-[var(--bg-card)] border-b border-[var(--border)] px-4 sm:px-6 py-3 sm:py-4 sticky top-0 z-20 shadow-sm">
+      <header className="deposit-detail__header bg-[var(--bg-card)] border-b border-[var(--border)] px-4 sm:px-6 py-3 sm:py-4 sticky top-0 z-20 shadow-sm">
         <div className="flex items-center gap-3 flex-wrap">
           <button type="button" onClick={onBack} className="w-9 h-9 rounded-xl border border-[var(--border)] bg-[var(--bg-card)] hover:bg-[var(--bg-surface)] text-[var(--text-2)] flex items-center justify-center transition-colors shrink-0">
             ←
@@ -373,7 +373,7 @@ function DepositDetail({ deposit, onBack, onAddPayment, onComplete, onCancel }: 
             <span className="text-[var(--text-4)] hidden sm:inline">·</span>
             <span className="hidden sm:inline text-[13px] font-bold text-[var(--text-2)]">{deposit.customerName}</span>
           </div>
-          <div className="flex gap-2 shrink-0">
+          <div className="deposit-detail__actions flex gap-2 shrink-0">
             {['active', 'partially_paid'].includes(deposit.status) && (
               <button type="button" onClick={() => onAddPayment(deposit)} className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-black uppercase tracking-wider transition-colors shadow-lg shadow-emerald-100">
                 + Payment
@@ -393,8 +393,8 @@ function DepositDetail({ deposit, onBack, onAddPayment, onComplete, onCancel }: 
         </div>
       </header>
 
-      <div className="flex-1 overflow-y-auto p-4 sm:p-6">
-        <div className="max-w-4xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-4">
+      <div className="deposit-detail__body flex-1 overflow-y-auto p-4 sm:p-6">
+        <div className="deposit-detail__grid max-w-4xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-4">
 
           {/* Left: main info */}
           <div className="lg:col-span-2 space-y-4">
@@ -568,9 +568,20 @@ function DepositsContent() {
   const stats = useMemo(() => ({
     total: deposits.length,
     active: deposits.filter(d => ['active', 'partially_paid'].includes(d.status)).length,
+    partPaid: deposits.filter(d => d.status === 'partially_paid').length,
     fullyPaid: deposits.filter(d => d.status === 'fully_paid').length,
     totalValue: deposits.reduce((s, d) => s + d.totalValue, 0),
+    outstanding: deposits.filter(d => !['completed', 'cancelled'].includes(d.status)).reduce((s, d) => s + Math.max(0, d.balance), 0),
   }), [deposits])
+
+  const collectionQueue = useMemo(() => deposits
+    .filter(d => ['active', 'partially_paid', 'fully_paid'].includes(d.status))
+    .sort((a, b) => {
+      if (a.status === 'fully_paid' && b.status !== 'fully_paid') return -1
+      if (b.status === 'fully_paid' && a.status !== 'fully_paid') return 1
+      return String(a.dueDate || '9999').localeCompare(String(b.dueDate || '9999'))
+    })
+    .slice(0, 6), [deposits])
 
   const handleSaveDeposit = (d: Deposit) => {
     showToast(`Deposit ${d.ref} created for ${d.customerName}`, 'success')
@@ -706,10 +717,10 @@ function DepositsContent() {
   }
 
   return (
-    <div className="mod-page">
+    <div className="mod-page deposits-workspace">
       <ModuleHeader
         title="Deposits and laybys"
-        subtitle="Cash held on 3100 until goods are collected — not the same as Sale Order down-payment invoices"
+        subtitle="Reservations, payments and customer balances"
         icon={<Fa icon={faCreditCard} />}
         count={deposits.length}
         color="var(--primary)"
@@ -720,14 +731,28 @@ function DepositsContent() {
         }
       />
 
-      <div className="px-3 sm:px-4 pt-2">
+      <div className="deposit-notice px-3 sm:px-4 pt-2">
         <p className="text-[11px] text-[var(--text-3)] rounded-lg border border-[var(--border-lt)] bg-[var(--bg-surface)] px-3 py-2">
           Use this module for layby / reservation deposits (liability 3100). For Odoo-style down payments on a confirmed Sale Order, create a down-payment invoice from Sales instead — those reduce AR on the final invoice.
         </p>
       </div>
 
+      <div className="deposit-kpi-strip" aria-label="Deposit summary">
+        {[
+          { label: 'Active laybys', value: stats.active, tone: 'blue' },
+          { label: 'Part-paid', value: stats.partPaid, tone: 'amber' },
+          { label: 'Fully paid', value: stats.fullyPaid, tone: 'green' },
+          { label: 'Outstanding balance', value: fmtKes(stats.outstanding), tone: 'navy' },
+        ].map(stat => (
+          <article key={stat.label} className={`deposit-kpi deposit-kpi--${stat.tone}`}><span>{stat.label}</span><strong>{stat.value}</strong></article>
+        ))}
+      </div>
+
       {/* List */}
-      <div className="mod-body p-3 sm:p-4">
+      <div className="mod-body deposit-body p-3 sm:p-4">
+        <div className="deposit-workbench">
+        <section className="deposit-table-card" aria-label="Customer deposits">
+          <header className="deposit-card-header"><div><h2>Customer deposits</h2><p>{filtered.length} of {stats.total} records</p></div></header>
         <DataTable
           tableId="deposits"
           columns={depositColumns}
@@ -752,6 +777,26 @@ function DepositsContent() {
           exportTitle="Deposits & Laybys"
           exportFilename="deposits"
         />
+        </section>
+        <aside className="deposit-collections" aria-label="Collections queue">
+          <header><div><h2>Collections</h2><p>Payments and pickups</p></div><span>{collectionQueue.length}</span></header>
+          <div className="deposit-collections__list">
+            {collectionQueue.map(dep => (
+              <article key={dep.id}>
+                <button type="button" className="deposit-collections__open" onClick={() => setActiveId(dep.id)}>
+                  <span><strong>{dep.customerName}</strong><small>{dep.ref}</small></span><span>›</span>
+                </button>
+                <p>{dep.status === 'fully_paid' ? `${fmtKes(dep.totalPaid)} paid` : `${fmtKes(dep.balance)} due`}</p>
+                {dep.dueDate && <small>{new Date(dep.dueDate).toLocaleDateString('en-KE', { day: 'numeric', month: 'short', year: 'numeric' })}</small>}
+                {dep.status === 'fully_paid'
+                  ? <button type="button" onClick={() => handleComplete(dep)}>Complete</button>
+                  : <button type="button" onClick={() => setAddPaymentFor(dep)}>Record payment</button>}
+              </article>
+            ))}
+            {collectionQueue.length === 0 && <p className="deposit-collections__empty">No deposits need action.</p>}
+          </div>
+        </aside>
+        </div>
       </div>
 
       {/* Modals */}

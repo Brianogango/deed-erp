@@ -114,13 +114,13 @@ function TagEditor({ tags, onChange, placeholder = 'Add item…' }: { tags: stri
 
 function SectionCard({ title, action, children }: { title: string; action?: React.ReactNode; children: React.ReactNode }) {
   return (
-    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm mb-4 overflow-hidden">
+    <section className="settings-section-card bg-white rounded-2xl border border-gray-100 shadow-sm mb-4 overflow-hidden">
       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center px-4 sm:px-5 py-3 border-b border-gray-50 gap-2 sm:gap-0">
         <p className="text-[10.5px] font-bold text-gray-400 uppercase tracking-widest">{title}</p>
         {action && <div>{action}</div>}
       </div>
       <div className="px-4 sm:px-5 py-1">{children}</div>
-    </div>
+    </section>
   )
 }
 
@@ -433,22 +433,23 @@ export default function Settings() {
   }
 
   return (
+    <div className="settings-workspace">
     <ModuleChrome
       title="System settings"
       subtitle="Configure company info, users, and module behaviour"
       icon={<Fa icon={faCog} />}
     >
-      <div className="p-4 sm:p-5 pb-16">
-      <div className="flex flex-col lg:flex-row gap-5 items-start">
+      <div className="settings-shell p-4 sm:p-5 pb-16">
+      <div className="settings-layout flex flex-col lg:flex-row gap-5 items-start">
 
         {/* ── Desktop sidebar ── */}
-        <aside className="hidden lg:block w-52 flex-shrink-0 sticky top-4">
-          <nav className="bg-white rounded-2xl border border-gray-100 shadow-sm p-2 space-y-0.5">
+        <aside className="settings-sidebar hidden lg:block w-52 flex-shrink-0 sticky top-4">
+          <nav className="settings-sidebar__nav bg-white rounded-2xl border border-gray-100 shadow-sm p-2 space-y-0.5">
             {['Company', 'Modules', 'System'].map(group => (
               <div key={group}>
                 <p className="text-[9.5px] font-bold text-gray-300 uppercase tracking-widest px-3 pt-3 pb-1">{group}</p>
                 {nav.filter(n => n.group === group).map(item => (
-                  <button key={item.id} onClick={() => setSection(item.id)}
+                  <button key={item.id} onClick={() => setSection(item.id)} aria-current={section === item.id ? 'page' : undefined}
                     className={`flex items-center gap-2.5 w-full px-3 py-2 rounded-xl text-[11.5px] font-medium cursor-pointer transition-all border-none text-left ${
                       section === item.id
                         ? 'bg-navy-500 text-white shadow-sm'
@@ -465,10 +466,10 @@ export default function Settings() {
         </aside>
 
         {/* ── Mobile nav ── */}
-        <div className="lg:hidden w-full -mx-0">
-          <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide px-0.5">
+        <div className="settings-mobile-nav lg:hidden w-full -mx-0">
+          <div className="settings-mobile-nav__scroller flex gap-2 overflow-x-auto pb-2 scrollbar-hide px-0.5">
             {nav.map(item => (
-              <button key={item.id} onClick={() => setSection(item.id)}
+              <button key={item.id} onClick={() => setSection(item.id)} aria-current={section === item.id ? 'page' : undefined}
                 className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-[11px] font-medium whitespace-nowrap flex-shrink-0 border transition-all cursor-pointer ${
                   section === item.id
                     ? 'bg-navy-500 text-white border-transparent shadow-sm'
@@ -482,10 +483,10 @@ export default function Settings() {
         </div>
 
         {/* ── Main content ── */}
-        <div className="flex-1 min-w-0">
+        <main className="settings-main flex-1 min-w-0">
 
           {/* Section heading */}
-          <div className="flex items-center gap-2 mb-4">
+          <div className="settings-section-heading flex items-center gap-2 mb-4">
             {activeNav && (
               <div className="flex items-center gap-2">
                 <div className="w-7 h-7 rounded-lg bg-[var(--info-bg)] flex items-center justify-center">
@@ -499,6 +500,8 @@ export default function Settings() {
           {/* ════ GENERAL ════ */}
           {section === 'general' && (
             <>
+              <div className="settings-general-workbench">
+              <div className="settings-general-content">
               <SectionCard title="Company Identity">
                 <div className="flex items-start gap-4 py-4 mb-2 border-b border-gray-50">
                   <div className="w-[60px] h-[60px] rounded-xl border-2 border-gray-100 bg-gray-50 flex items-center justify-center overflow-hidden flex-shrink-0">
@@ -602,6 +605,24 @@ export default function Settings() {
                   </button>
                 </SettingRow>
               </SectionCard>
+              </div>
+              <aside className="settings-health" aria-label="Configuration health">
+                <h4>Configuration health</h4>
+                <div className="settings-health__item settings-health__item--success">
+                  <span className="settings-health__icon"><Fa icon={faEnvelope} /></span>
+                  <span><strong>{emailStatus?.ready ? 'Email configured' : 'Email setup'}</strong><small>{emailStatus?.ready ? 'SMTP is active' : 'Review SMTP configuration'}</small></span>
+                </div>
+                <div className="settings-health__item">
+                  <span className="settings-health__icon"><Fa icon={faBoxesStacked} /></span>
+                  <span><strong>{MODULE_IDS.length} active modules</strong><small>Modules are enabled</small></span>
+                </div>
+                <button type="button" className="settings-health__item settings-health__item--button" onClick={() => setSection('access')}>
+                  <span className="settings-health__icon"><Fa icon={faUsers} /></span>
+                  <span><strong>{users.length} system users</strong><small>Users with access</small></span>
+                  <Fa icon={faChevronRight} />
+                </button>
+              </aside>
+              </div>
             </>
           )}
 
@@ -712,6 +733,29 @@ export default function Settings() {
                       <button className={`text-[10px] font-medium px-2.5 py-1 rounded-lg border transition-colors ${!canManageSystemUsers || user.id === currentUserId ? 'opacity-40 cursor-not-allowed bg-gray-50 text-gray-400 border-gray-100' : 'bg-red-50 hover:bg-red-100 text-red-600 border-red-100 cursor-pointer'}`} disabled={!canManageSystemUsers || user.id === currentUserId} onClick={() => { void removeUser(user.id) }}>Del</button>
                     </div>
                   )}
+                  renderCard={user => {
+                    const modules = Array.isArray(user.modules) ? user.modules : []
+                    const rb = roleBadgeStyle(user.role)
+                    return (
+                      <article className="settings-user-card">
+                        <div className="settings-user-card__header">
+                          <span className="settings-user-card__avatar">{user.name.slice(0, 2).toUpperCase()}</span>
+                          <span className="settings-user-card__identity">
+                            <strong>{user.name}</strong>
+                            <small>@{user.username}</small>
+                          </span>
+                          <span className="settings-user-card__role" style={{ background: rb.bg, color: rb.color, borderColor: rb.border }}>{formatRoleLabel(user.role)}</span>
+                        </div>
+                        <div className="settings-user-card__state"><span className={user.active ? 'is-active' : ''} />{user.active ? 'Active' : 'Inactive'}</div>
+                        <dl>
+                          <div><dt>Modules</dt><dd>{modules.length ? modules.map(m => m === 'pos' ? 'POS' : formatRoleLabel(m)).join(', ') : 'No modules assigned'}</dd></div>
+                        </dl>
+                        <div className="settings-user-card__actions">
+                          <button type="button" disabled={!canManageSystemUsers} onClick={() => { if (!canManageSystemUsers) return; const u = users.find(x => x.id === user.id); if (!u) return; setUserForm({ id: u.id, employeeId: '', username: u.username, name: u.name, role: u.role, modules: Array.isArray(u.modules) ? [...u.modules] : [], active: u.active, actsAsTechnician: Boolean(u.actsAsTechnician), password: '' }); setShowUserModal(true) }}>Edit user</button>
+                        </div>
+                      </article>
+                    )
+                  }}
                   exportTitle="System Users"
                   exportFilename="system-users"
                 />
@@ -1117,7 +1161,14 @@ ACCOUNTS_EMAIL=accounts@deed.co.ke`}</pre>
             </SectionCard>
           )}
 
-        </div>
+          {section === 'general' && (
+            <div className="settings-save-bar">
+              <span>Company settings are saved as you edit.</span>
+              <button type="button" onClick={() => showToast('Settings saved', 'success')}>Save changes</button>
+            </div>
+          )}
+
+        </main>
       </div>
 
       {/* ── Bank Modal ── */}
@@ -1245,5 +1296,6 @@ ACCOUNTS_EMAIL=accounts@deed.co.ke`}</pre>
         />
       )}
     </ModuleChrome>
+    </div>
   )
 }
