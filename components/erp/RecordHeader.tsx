@@ -47,7 +47,7 @@ export function RecordHeader({
           {entity && <p className="erp-record-entity">{entity}</p>}
         </div>
       </div>
-      <div className="section-actions flex items-center gap-2 flex-shrink-0 flex-wrap justify-end">
+      <div className="erp-record-header__actions section-actions flex items-center gap-2 flex-shrink-0 flex-wrap justify-end">
         {primaryAction}
         {secondaryActions}
       </div>
