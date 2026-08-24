@@ -1354,6 +1354,13 @@ export interface Holdover {
   issuedByName: string
   authorizedByUserId: string
   authorizedByName: string
+  extensionHistory?: Array<{
+    previousDate: string
+    newDate: string
+    note?: string
+    extendedAt: string
+    extendedByName: string
+  }>
   createdAt: string
 }
 
