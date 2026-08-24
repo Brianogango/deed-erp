@@ -27,6 +27,11 @@ const routes = [
   { slug: 'finance', path: '/finance' },
   { slug: 'hr', path: '/hr' },
   { slug: 'repairs', path: '/repairs' },
+  { slug: 'kilimall', path: '/kilimall' },
+  { slug: 'performance-targets', path: '/sops' },
+  { slug: 'deposits', path: '/deposits' },
+  { slug: 'holdovers', path: '/holdovers' },
+  { slug: 'settings', path: '/settings' },
 ]
 
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms))
