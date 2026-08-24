@@ -6,6 +6,7 @@ import { Fa } from '@/components/icons'
 import { faLaptop, faPlus, faRotateLeft, faCheckCircle, faClock } from '@fortawesome/free-solid-svg-icons'
 import { Field, Input, Modal, Select, Textarea } from '@/components/ui'
 import { DataTable, type ColumnDef } from '@/components/data-table'
+import { normalizeClientRole } from '@/lib/auth/access'
 
 type AssignForm = {
   employeeId: string
@@ -47,12 +48,13 @@ export default function HRAssetsTab() {
     products,
     serials,
     assignAssetToEmployee,
+    acknowledgeEmployeeAsset,
     returnEmployeeAsset,
     showToast,
   } = useApp()
-  const isAdmin = currentUser?.role === 'director'
-  const isFinance = currentUser?.role === 'finance_officer'
-  const canViewAllAssignments = isAdmin || isFinance
+  const normalizedRole = normalizeClientRole(currentUser?.role)
+  const canManageAssets = ['director', 'inventory_officer', 'technical_lead'].includes(normalizedRole)
+  const canViewAllAssignments = canManageAssets || ['admin_officer', 'finance_officer'].includes(normalizedRole)
   const currentEmployee = useMemo(() => {
     if (!currentUser) return null
     const normalize = (value?: string | null) => (value ?? '').trim().toLowerCase()
@@ -81,7 +83,7 @@ export default function HRAssetsTab() {
   const [assignForm, setAssignForm] = useState<AssignForm>(() => emptyAssignForm(activeEmployees[0]?.id ?? '', assignableProducts[0]?.id ?? ''))
   const selectedProduct = assignableProducts.find(p => p.id === assignForm.productId)
   const availableSerials = serials.filter(s => s.productId === assignForm.productId && s.status === 'available')
-  const selectedReturn = returnForm && isAdmin ? employeeAssetAssignments.find(a => a.id === returnForm.assignmentId) : null
+  const selectedReturn = returnForm && canManageAssets ? employeeAssetAssignments.find(a => a.id === returnForm.assignmentId) : null
 
   const employeeOptions = activeEmployees.map(e => ({ value: e.id, label: `${e.fullName} · ${e.jobTitle}` }))
   const productOptions = assignableProducts.map(p => ({ value: p.id, label: `${p.name} (${p.requiresSerial ? `${serials.filter(s => s.productId === p.id && s.status === 'available').length} serials` : `${p.stockQty} ${p.unit}`})` }))
@@ -176,19 +178,40 @@ export default function HRAssetsTab() {
   ]
 
   function assetRowActions(a: Assignment) {
-    return a.status === 'assigned' && isAdmin ? (
-      <button onClick={e => { e.stopPropagation(); setReturnForm(emptyReturnForm(a.id)) }} className="p-1.5 text-[var(--text-4)] hover:text-primary-600 transition-colors" title="Return Asset">
-        <Fa icon={faRotateLeft} />
-      </button>
-    ) : null
+    if (a.status !== 'assigned') return null
+    const isMyAssignment = currentEmployee?.id === a.employeeId
+    return (
+      <span className="flex flex-wrap items-center gap-2">
+        {isMyAssignment && !a.acknowledgedByEmployee && (
+          <button
+            type="button"
+            className="btn-outline px-3 py-1.5 text-[10px]"
+            onClick={event => { event.stopPropagation(); acknowledgeEmployeeAsset(a.id) }}
+          >
+            Acknowledge
+          </button>
+        )}
+        {canManageAssets && (
+          <button
+            type="button"
+            onClick={event => { event.stopPropagation(); setReturnForm(emptyReturnForm(a.id)) }}
+            className="btn-outline px-3 py-1.5 text-[10px] inline-flex items-center gap-1.5"
+            aria-label={`Return ${a.productName} from ${a.employeeName}`}
+            title="Return asset"
+          >
+            <Fa icon={faRotateLeft} /> Return
+          </button>
+        )}
+      </span>
+    )
   }
 
   return (
     <div className="flex flex-col">
       <div className="p-4 border-b border-[var(--border-lt)] flex items-center justify-between bg-[var(--bg-surface)]">
         <h3 className="text-sm font-bold text-[var(--text-1)]">Asset Assignments</h3>
-        {isAdmin && (
-          <button onClick={openAssignModal} className="btn-primary py-1.5 px-4 text-[10px] flex items-center gap-2">
+        {canManageAssets && (
+          <button type="button" onClick={openAssignModal} className="btn-primary py-1.5 px-4 text-[10px] flex items-center gap-2">
             <Fa icon={faPlus} />
             <span>Assign Asset</span>
           </button>
@@ -225,7 +248,7 @@ export default function HRAssetsTab() {
         </Modal>
       )}
 
-      {returnForm && isAdmin && (
+      {returnForm && canManageAssets && (
         <Modal title="Return Asset" subtitle={selectedReturn ? `${selectedReturn.productName} assigned to ${selectedReturn.employeeName}` : undefined} onClose={() => setReturnForm(null)} width={520}>
           <Field label="Return Location"><Select value={returnForm.returnLocation} onChange={returnLocation => setReturnForm(p => p ? ({ ...p, returnLocation: returnLocation as LocationId }) : p)} options={[{ value: 'warehouse', label: 'Warehouse' }, { value: 'shop', label: 'Shop' }, { value: 'repair_unit', label: 'Repair Unit' }]} /></Field>
           <Field label="Return Condition" required><Select value={returnForm.condition} onChange={condition => setReturnForm(p => p ? ({ ...p, condition: condition as ReturnForm['condition'] }) : p)} options={[{ value: 'good', label: 'Good' }, { value: 'fair', label: 'Fair' }, { value: 'damaged', label: 'Damaged' }]} /></Field>

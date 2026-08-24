@@ -5,6 +5,7 @@ import { useHrStore } from '@/hooks/useHrStore'
 import { Fa } from '@/components/icons'
 import { faChartLine, faBullseye, faTrophy, faTriangleExclamation } from '@fortawesome/free-solid-svg-icons'
 import { Field, Input, Modal, Select, Textarea } from '@/components/ui'
+import { canManageHRRole } from '@/lib/auth/access'
 
 type TargetForm = {
   employeeId: string
@@ -39,9 +40,8 @@ const emptyTargetForm = (employeeId = ''): TargetForm => ({
 export default function HRPerformanceTab() {
   const { hrPerfTargets, currentUser, saveHrPerfTargets, showToast } = useApp()
   const { employees } = useHrStore()
-  const isAdmin = currentUser?.role === 'director'
-  const isFinance = currentUser?.role === 'finance_officer'
-  const canViewAllTargets = isAdmin || isFinance
+  const canManagePerformance = canManageHRRole(currentUser?.role)
+  const canViewAllTargets = canManagePerformance
   const currentEmployee = useMemo(() => {
     if (!currentUser) return null
     const normalize = (value?: string | null) => (value ?? '').trim().toLowerCase()
@@ -146,8 +146,8 @@ export default function HRPerformanceTab() {
       <div className="p-6">
         <div className="flex items-center justify-between mb-6">
           <h3 className="text-sm font-bold text-[var(--text-1)]">Performance Overview</h3>
-          {isAdmin && (
-            <button onClick={openTargetModal} className="btn-primary py-1.5 px-4 text-[10px]">Set New Target</button>
+          {canManagePerformance && (
+            <button type="button" onClick={openTargetModal} className="btn-primary py-1.5 px-4 text-[10px]">Set New Target</button>
           )}
         </div>
 

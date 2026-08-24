@@ -7,6 +7,7 @@ import { DataTable, type ColumnDef } from '@/components/data-table'
 import { Fa } from '@/components/icons'
 import { faCircleExclamation, faCheck, faXmark, faCircleCheck, faCircleXmark } from '@fortawesome/free-solid-svg-icons'
 import { CALENDAR_DAY_TYPES, employeeLeaveTypesFor, formatLocalDate, isLeaveTypeAllowedForGender, leaveDaysForRange, LEAVE_LABELS, type StoreLeaveType } from '@/lib/leave-utils'
+import { canApproveLeaveRole, canManageHRRole, isAdminOfficer, isDirector, isFinanceOfficer, isTechnicalLead } from '@/lib/auth/access'
 
 // Days are always derived from the date range so a request can never claim
 // more (or fewer) days than the dates cover — maternity/paternity count
@@ -61,17 +62,27 @@ export default function HRLeaveTab() {
   } = useHrStore()
 
   const currentUser = users.find(u => u.id === currentUserId) ?? null
-  const isAdmin     = currentUser?.role === 'director'
-  const isFinance   = currentUser?.role === 'finance_officer'
-  const isAdminOfficer = currentUser?.role === 'admin_officer'
-  const isLeadTech  = currentUser?.role === 'technical_lead'
-  const canViewTeamHR = isAdmin || isFinance || isAdminOfficer || isLeadTech
+  const isAdmin = isDirector(currentUser?.role)
+  const isFinance = isFinanceOfficer(currentUser?.role)
+  const isAdminOfficerRole = isAdminOfficer(currentUser?.role)
+  const isLeadTech = isTechnicalLead(currentUser?.role)
+  const canViewTeamHR = canApproveLeaveRole(currentUser?.role)
+  const canBookForEmployee = canManageHRRole(currentUser?.role)
 
   const [decideId, setDecideId] = useState<string | null>(null)
   const [decideNote, setDecideNote] = useState('')
   const [decideError, setDecideError] = useState('')
 
-  const myEmployee      = employees.find(e => e.userId === currentUserId) ?? null
+  const normalizeUserText = (value?: string | null) => (value ?? '').trim().toLowerCase()
+  const currentUsername = normalizeUserText(currentUser?.username)
+  const myEmployee = employees.find(employee => {
+    if (!currentUser) return false
+    const employeeEmailUser = normalizeUserText(employee.email?.split('@')[0])
+    return employee.userId === currentUser.id ||
+      normalizeUserText(employee.fullName) === normalizeUserText(currentUser.name) ||
+      (!!employeeEmailUser && employeeEmailUser === currentUsername) ||
+      normalizeUserText(employee.employeeNo) === currentUsername
+  }) ?? null
   const myLeaves        = leaveRequests.filter(r => r.employeeId === myEmployee?.id)
   const myLeaveBalances = leaveBalances.filter(b => b.employeeId === myEmployee?.id && b.year === new Date().getFullYear())
 
@@ -80,7 +91,7 @@ export default function HRLeaveTab() {
   const canDecideLeaveFor = (req: { employeeId: string }) => {
     // Own requests are decided by someone else, whatever the caller's role.
     if (myEmployee && req.employeeId === myEmployee.id) return false
-    if (isAdmin || isFinance || isAdminOfficer) return true
+    if (isAdmin || isFinance || isAdminOfficerRole) return true
     if (isLeadTech) {
       const emp = employees.find(e => e.id === req.employeeId)
       const u   = users.find(u => u.id === emp?.userId)
@@ -341,9 +352,10 @@ export default function HRLeaveTab() {
             placeholder="Search type, reason…"
             value={leaveSearch} onChange={e => setLeaveSearch(e.target.value)}
           />
-          <button className="btn-primary text-[11px]"
-            onClick={() => canViewTeamHR ? setShowLeaveModal(true) : setShowSelfLeaveModal(true)}>
-            {canViewTeamHR ? '+ New Request (HR)' : '+ Apply for Leave'}
+          <button type="button" className="btn-primary text-[11px]"
+            disabled={!canBookForEmployee && !myEmployee}
+            onClick={() => canBookForEmployee ? setShowLeaveModal(true) : setShowSelfLeaveModal(true)}>
+            {canBookForEmployee ? '+ New Request (HR)' : '+ Apply for Leave'}
           </button>
         </PanelHeader>
         <DataTable

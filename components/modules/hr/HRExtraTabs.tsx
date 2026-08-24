@@ -13,6 +13,7 @@ import {
 
 // ── Training ──────────────────────────────────────────────────────────────────
 export function HRTrainingTab() {
+  const { showToast } = useApp()
   const { employees, trainingPrograms, employeeTrainings, addTrainingProgram, enrollEmployeeTraining, updateTrainingStatus } = useHrStore()
   const [showProgram, setShowProgram] = useState(false)
   const [showEnroll, setShowEnroll] = useState<string | null>(null)
@@ -23,7 +24,7 @@ export function HRTrainingTab() {
   const set = (k: keyof typeof form) => (v: string) => setForm(f => ({ ...f, [k]: v }))
 
   const saveProgram = () => {
-    if (!form.title.trim()) return
+    if (!form.title.trim()) { showToast('Training program title is required', 'error'); return }
     addTrainingProgram({
       title: form.title.trim(),
       description: form.description.trim(),
@@ -123,6 +124,7 @@ const DOC_TYPES = [
 ]
 
 export function HRDocumentsTab() {
+  const { showToast } = useApp()
   const { employees, hrDocuments, addHRDocument } = useHrStore()
   const [show, setShow] = useState(false)
   const [form, setForm] = useState({ employeeId: '', type: 'contract', title: '', expiryDate: '', notes: '' })
@@ -130,17 +132,22 @@ export function HRDocumentsTab() {
   const empName = (id: string) => employees.find(e => e.id === id)?.fullName ?? '—'
 
   const save = () => {
-    if (!form.title.trim() || !form.employeeId) return
-    addHRDocument({
-      employeeId: form.employeeId,
-      type: form.type as any,
-      title: form.title.trim(),
-      expiryDate: form.expiryDate || undefined,
-      visibility: 'hr_only',
-      status: 'active',
-      notes: form.notes.trim() || undefined,
-      uploadedDate: new Date().toISOString(),
-    })
+    if (!form.employeeId) { showToast('Select an employee for this document', 'error'); return }
+    if (!form.title.trim()) { showToast('Document title is required', 'error'); return }
+    try {
+      addHRDocument({
+        employeeId: form.employeeId,
+        type: form.type as any,
+        title: form.title.trim(),
+        expiryDate: form.expiryDate || undefined,
+        visibility: 'hr_only',
+        status: 'active',
+        notes: form.notes.trim() || undefined,
+        uploadedDate: new Date().toISOString(),
+      })
+    } catch {
+      return
+    }
     setForm({ employeeId: '', type: 'contract', title: '', expiryDate: '', notes: '' })
     setShow(false)
   }
@@ -215,6 +222,24 @@ export function HRReportsTab() {
 
   return (
     <div className="p-4 flex flex-col gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3" aria-label="HR report summary">
+        <div className="card p-4 flex items-center gap-3">
+          <span className="w-10 h-10 rounded-xl bg-primary-50 text-primary-600 flex items-center justify-center"><Fa icon={faUsers} /></span>
+          <span><small className="block text-[10px] uppercase tracking-wider text-[var(--text-4)]">Active headcount</small><strong className="text-xl text-[var(--text-1)]">{stats.headcount}</strong></span>
+        </div>
+        <div className="card p-4 flex items-center gap-3">
+          <span className="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center"><Fa icon={faCalendarMinus} /></span>
+          <span><small className="block text-[10px] uppercase tracking-wider text-[var(--text-4)]">Pending leave</small><strong className="text-xl text-[var(--text-1)]">{stats.pendingLeave}</strong></span>
+        </div>
+        <div className="card p-4 flex items-center gap-3">
+          <span className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center"><Fa icon={faCircleCheck} /></span>
+          <span><small className="block text-[10px] uppercase tracking-wider text-[var(--text-4)]">Training completion</small><strong className="text-xl text-[var(--text-1)]">{stats.trainingCompletion}%</strong></span>
+        </div>
+        <div className="card p-4 flex items-center gap-3">
+          <span className="w-10 h-10 rounded-xl bg-violet-50 text-violet-600 flex items-center justify-center"><Fa icon={faMoneyBillWave} /></span>
+          <span><small className="block text-[10px] uppercase tracking-wider text-[var(--text-4)]">Latest payroll</small><strong className="text-sm text-[var(--text-1)]">{stats.latestRun ? fmtKes(stats.latestRun.totalNet) : 'Not run'}</strong></span>
+        </div>
+      </div>
       <div className="rounded-xl border border-[var(--border-lt)] p-4">
         <h3 className="text-sm font-bold text-[var(--text-1)] mb-3 flex items-center gap-2"><Fa icon={faBuilding} /> Headcount by Department</h3>
         <div className="flex flex-col gap-2">

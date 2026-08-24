@@ -43,6 +43,7 @@ import { useHrStore } from '@/hooks/useHrStore'
 import { useUrlRecordId } from '@/hooks/useUrlRecordId'
 import { downloadPdf, printPdf } from '@/lib/pdf'
 import { calculatePayroll } from '@/lib/payroll'
+import { canManageHRRole, isDirector } from '@/lib/auth/access'
 import HRLeaveTab from './hr/HRLeaveTab'
 import HRPayrollTab from './hr/HRPayrollTab'
 import HRRecruitmentTab from './hr/HRRecruitmentTab'
@@ -192,9 +193,8 @@ function HRContent() {
   } = useHrStore()
 
   const currentUser = users.find(u => u.id === currentUserId) ?? null
-  const isAdmin = currentUser?.role === 'director'
-  const isFinance = currentUser?.role === 'finance_officer'
-  const canManageHR = isAdmin || isFinance
+  const isAdmin = isDirector(currentUser?.role)
+  const canManageHR = canManageHRRole(currentUser?.role)
   const normalizeUserText = (value?: string | null) => (value ?? '').trim().toLowerCase()
   const currentUsername = normalizeUserText(currentUser?.username)
   const userMatchesEmployee = (employee: typeof employees[number]) => {
@@ -213,6 +213,19 @@ function HRContent() {
   const myAssets = employeeAssetAssignments.filter(
     a => a.employeeId === myEmployee?.id && a.status === 'assigned'
   )
+  const currentYear = new Date().getFullYear()
+  const myAnnualLeave = leaveBalances.find(
+    balance => balance.employeeId === myEmployee?.id && balance.leaveType === 'annual' && balance.year === currentYear,
+  )
+  const myAnnualEntitlement = myAnnualLeave
+    ? myAnnualLeave.entitlement + myAnnualLeave.carryForward
+    : 0
+  const myAnnualAvailable = myAnnualLeave
+    ? Math.max(0, myAnnualEntitlement - myAnnualLeave.used - myAnnualLeave.pending)
+    : 0
+  const myAnnualUsedPercent = myAnnualEntitlement > 0
+    ? Math.min(100, Math.round(((myAnnualEntitlement - myAnnualAvailable) / myAnnualEntitlement) * 100))
+    : 0
 
   const allowedTabs = useMemo<HRTab[]>(
     () => canManageHR ? [...MANAGEMENT_TABS, ...SELF_SERVICE_TABS] : SELF_SERVICE_TABS,
@@ -471,7 +484,7 @@ function HRContent() {
         icon={<Fa icon={faUsers} />}
         count={employees.length}
         color="var(--navy)"
-        primaryAction={isAdmin ? (
+        primaryAction={canManageHR ? (
           <PrimaryActionButton
             icon={<Fa icon={faUserPlus} />}
             onClick={() => { setTab('employees'); setShowEmployeeModal(true) }}
@@ -522,11 +535,11 @@ function HRContent() {
               </div>
               <div className="hr-kpi-card">
                 <span className="hr-kpi-icon"><Fa icon={faCalendarDays} /></span>
-                <span><small>On leave</small><strong>{employees.filter(e => e.status === 'on_leave').length}</strong></span>
+                <span><small>On leave today</small><strong>{onLeaveTodayCount}</strong></span>
               </div>
               <div className="hr-kpi-card">
                 <span className="hr-kpi-icon"><Fa icon={faCalendarCheck} /></span>
-                <span><small>Leave requests</small><strong>{leaveRequests.filter(req => req.status === 'pending').length}</strong></span>
+                <span><small>Leave requests</small><strong>{leaveRequests.filter(req => req.status === 'pending_hr').length}</strong></span>
               </div>
               <div className="hr-kpi-card">
                 <span className="hr-kpi-icon"><Fa icon={faFileSignature} /></span>
@@ -558,10 +571,10 @@ function HRContent() {
               rowKey={e => e.id}
               hideSearch
               emptyMessage={employees.length === 0 ? 'No employees yet' : 'No employees match your search'}
-              emptyAction={employees.length === 0 ? <button className="btn-primary text-xs px-4 py-1.5 mt-1" onClick={() => setShowEmployeeModal(true)}>+ Add Employee</button> : undefined}
+              emptyAction={employees.length === 0 ? <button type="button" className="btn-primary text-xs px-4 py-1.5 mt-1" onClick={() => setShowEmployeeModal(true)}>+ Add Employee</button> : undefined}
               onRowClick={e => setViewEmpId(e.id)}
               rowActions={e => (
-                <button className="p-1.5 text-[var(--text-4)] hover:text-primary-600 transition-colors" onClick={ev => { ev.stopPropagation(); setViewEmpId(e.id) }}>
+                <button type="button" aria-label={`View ${e.fullName}`} title={`View ${e.fullName}`} className="p-1.5 text-[var(--text-4)] hover:text-primary-600 transition-colors" onClick={ev => { ev.stopPropagation(); setViewEmpId(e.id) }}>
                   <Fa icon={faEye} />
                 </button>
               )}
@@ -593,23 +606,23 @@ function HRContent() {
                 <div className="hr-attention__title">Needs attention</div>
                 <section>
                   <header><strong>Leave approvals</strong><button type="button" onClick={() => setTab('leave')}>View all</button></header>
-                  {leaveRequests.filter(req => req.status === 'pending').slice(0, 3).map(req => (
+                  {leaveRequests.filter(req => req.status === 'pending_hr').slice(0, 3).map(req => (
                     <button key={req.id} type="button" className="hr-attention__item" onClick={() => setTab('leave')}>
                       <span><strong>{req.employeeName}</strong><small>{req.leaveType.replaceAll('_', ' ')} leave</small></span>
                       <span>{fmtDate(req.startDate)}</span>
                     </button>
                   ))}
-                  {leaveRequests.every(req => req.status !== 'pending') && <p className="hr-attention__empty">No leave approvals pending.</p>}
+                  {leaveRequests.every(req => req.status !== 'pending_hr') && <p className="hr-attention__empty">No leave approvals pending.</p>}
                 </section>
                 <section>
                   <header><strong>Asset acknowledgements</strong><button type="button" onClick={() => setTab('assets')}>View all</button></header>
-                  {employeeAssetAssignments.filter(a => a.status === 'assigned').slice(0, 3).map(a => (
+                  {employeeAssetAssignments.filter(a => a.status === 'assigned' && !a.acknowledgedByEmployee).slice(0, 3).map(a => (
                     <button key={a.id} type="button" className="hr-attention__item" onClick={() => setTab('assets')}>
                       <span><strong>{a.employeeName}</strong><small>{a.productName}</small></span>
                       <span>Pending</span>
                     </button>
                   ))}
-                  {employeeAssetAssignments.every(a => a.status !== 'assigned') && <p className="hr-attention__empty">No asset acknowledgements pending.</p>}
+                  {employeeAssetAssignments.every(a => a.status !== 'assigned' || a.acknowledgedByEmployee) && <p className="hr-attention__empty">No asset acknowledgements pending.</p>}
                 </section>
                 <section>
                   <header><strong>Payroll review</strong><button type="button" onClick={() => setTab('payroll')}>View all</button></header>
@@ -657,16 +670,23 @@ function HRContent() {
                 </div>
               </div>
               <div className="hr-self-service__actions flex items-center gap-2">
-                <button className="btn-secondary flex items-center gap-2" onClick={() => setTab('salary_advances')}>
+                <button type="button" className="btn-secondary flex items-center gap-2" onClick={() => setTab('salary_advances')} disabled={!myEmployee} title={!myEmployee ? 'Link this user to an employee record first' : undefined}>
                   <Fa icon={faMoneyBill} />
                   <span>Salary Advance</span>
                 </button>
-                <button className="btn-primary flex items-center gap-2" onClick={() => setTab('leave')}>
+                <button type="button" className="btn-primary flex items-center gap-2" onClick={() => setTab('leave')} disabled={!myEmployee} title={!myEmployee ? 'Link this user to an employee record first' : undefined}>
                   <Fa icon={faCalendarPlus} />
                   <span>Request Leave</span>
                 </button>
               </div>
             </div>
+
+            {!myEmployee && (
+              <div className="hr-self-service__notice" role="status">
+                <Fa icon={faCircleExclamation} />
+                <span>Your login is not linked to an employee record. Ask HR to add your user account to your employee profile before using leave, payslips, salary advances or assets.</span>
+              </div>
+            )}
 
             <div className="hr-self-service__grid grid grid-cols-1 md:grid-cols-3 gap-6">
               <div className="card p-5 bg-[var(--bg-surface)] border-[var(--border-lt)]">
@@ -674,10 +694,10 @@ function HRContent() {
                 <div className="flex flex-col gap-3">
                   <div className="flex justify-between text-xs">
                     <span className="text-[var(--text-3)]">Annual Leave</span>
-                    <span className="font-bold">12 / 21 days</span>
+                    <span className="font-bold">{myAnnualAvailable} / {myAnnualEntitlement} days</span>
                   </div>
                   <div className="h-2 bg-[var(--bg-muted)] rounded-full overflow-hidden">
-                    <div className="h-full bg-primary-500 rounded-full" style={{ width: '60%' }} />
+                    <div className="h-full bg-primary-500 rounded-full" style={{ width: `${myAnnualUsedPercent}%` }} />
                   </div>
                 </div>
               </div>
@@ -687,9 +707,10 @@ function HRContent() {
                   {myPayslips.slice(0, 3).map(p => (
                     <div key={p.id} className="flex items-center justify-between text-xs">
                       <span className="text-[var(--text-2)]">{p.month} {p.year}</span>
-                      <button className="text-primary-600 hover:underline" onClick={() => downloadPayslipPdf(p.id)}>Download</button>
+                      <button type="button" className="text-primary-600 hover:underline" onClick={() => downloadPayslipPdf(p.id)}>Download</button>
                     </div>
                   ))}
+                  {myPayslips.length === 0 && <p className="text-xs text-[var(--text-4)]">No published payslips yet</p>}
                 </div>
               </div>
               <button

@@ -7,6 +7,7 @@ import { Badge, Field, Input, Modal, PanelHeader, Select } from '@/components/ui
 import { DataTable, type ColumnDef } from '@/components/data-table'
 import { Fa } from '@/components/icons'
 import { faCheck, faCircleCheck, faMoneyBillWave, faDownload, faPrint } from '@fortawesome/free-solid-svg-icons'
+import { canManageHRRole, isDirector, isFinanceOfficer } from '@/lib/auth/access'
 
 export default function HRPayrollTab() {
   const {
@@ -16,9 +17,9 @@ export default function HRPayrollTab() {
   const { employees, departments } = useHrStore()
 
   const currentUser      = users.find(u => u.id === currentUserId) ?? null
-  const isAdmin          = currentUser?.role === 'director'
-  const isFinance        = currentUser?.role === 'finance_officer'
-  const canManageHR      = isAdmin
+  const isAdmin          = isDirector(currentUser?.role)
+  const isFinance        = isFinanceOfficer(currentUser?.role)
+  const canManageHR      = canManageHRRole(currentUser?.role)
   const canManagePayroll = isAdmin || isFinance
   const canApprovePayroll = canManagePayroll
   const canSeeSalary     = isFinance || !systemSettings.hrRestrictSalaryInfo
@@ -55,8 +56,12 @@ export default function HRPayrollTab() {
   const [payrollYear, setPayrollYear]   = useState(String(new Date().getFullYear()))
 
   const createPayroll = () => {
-    createPayrollRun(payrollMonth, Number(payrollYear))
-    setShowPayrollModal(false)
+    try {
+      createPayrollRun(payrollMonth, Number(payrollYear))
+      setShowPayrollModal(false)
+    } catch {
+      // The store reports duplicate-period or permission errors; keep the form open.
+    }
   }
 
   const buildPayslipLines = (payslipId: string) => {
@@ -252,7 +257,7 @@ export default function HRPayrollTab() {
           <input className="form-input text-[11px] py-1.5" style={{ width: 160 }}
             placeholder="Search ref, period…" value={payrollSearch} onChange={e => setPayrollSearch(e.target.value)} />
           {canManageHR && (
-            <button className="btn-primary text-[11px]" onClick={() => setShowPayrollModal(true)}>+ Create Payroll Run</button>
+            <button type="button" className="btn-primary text-[11px]" onClick={() => setShowPayrollModal(true)}>+ Create Payroll Run</button>
           )}
         </PanelHeader>
         <DataTable
@@ -341,8 +346,8 @@ export default function HRPayrollTab() {
             <Field label="Year"><Input value={payrollYear} onChange={setPayrollYear} type="number" /></Field>
           </div>
           <div className="flex justify-end gap-2 mt-2">
-            <button className="btn-outline" onClick={() => setShowPayrollModal(false)}>Cancel</button>
-            <button className="btn-primary" onClick={createPayroll}>Create Payroll</button>
+            <button type="button" className="btn-outline" onClick={() => setShowPayrollModal(false)}>Cancel</button>
+            <button type="button" className="btn-primary" onClick={createPayroll}>Create Payroll</button>
           </div>
         </Modal>
       )}
