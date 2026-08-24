@@ -4046,6 +4046,7 @@ export type CommerceStoreState = Pick<AppState,
   | 'createPOSOrder'
   | 'getCustomerCreditStatus'
   | 'openPOSSession'
+  | 'matchKilimallSettlementLine'
   | 'reconcileKilimallSettlement'
   | 'setModule'
   | 'showToast'
