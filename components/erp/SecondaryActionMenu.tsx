@@ -27,7 +27,7 @@ export function SecondaryActionMenu({
 }) {
   const visible = actions.filter(a => !a.hidden)
   const [open, setOpen] = useState(false)
-  const [pos, setPos] = useState<{ top?: number; right: number; bottom?: number } | null>(null)
+  const [pos, setPos] = useState<{ top?: number; right: number; bottom?: number; mobile?: boolean } | null>(null)
   const btnRef = useRef<HTMLButtonElement>(null)
   const menuRef = useRef<HTMLDivElement>(null)
   const menuId = useId()
@@ -40,6 +40,10 @@ export function SecondaryActionMenu({
     const update = () => {
       const rect = btnRef.current?.getBoundingClientRect()
       if (!rect) return
+      if (window.innerWidth <= 767) {
+        setPos({ right: 12, bottom: 12, mobile: true })
+        return
+      }
       const right = Math.max(8, window.innerWidth - rect.right)
       const estimatedMenuHeight = Math.min(320, visible.length * 40 + 12)
       const roomBelow = window.innerHeight - rect.bottom
@@ -103,11 +107,14 @@ export function SecondaryActionMenu({
           ref={menuRef}
           role="menu"
           aria-label={ariaLabel}
-          className="tab-overflow-menu"
+          className={`tab-overflow-menu${pos.mobile ? ' tab-overflow-menu--mobile' : ''}`}
           style={{
-            top: pos.top,
+            position: pos.mobile ? 'fixed' : undefined,
+            top: pos.mobile ? undefined : pos.top,
             right: pos.right,
             bottom: pos.bottom,
+            left: pos.mobile ? 12 : undefined,
+            width: pos.mobile ? 'auto' : undefined,
             maxHeight: 'min(20rem, calc(100dvh - 1rem))',
             overflowY: 'auto',
           }}

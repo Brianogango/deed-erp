@@ -592,7 +592,7 @@ export function OrcStatusBadge({ release, onClick }: { release: OutboundRelease;
   return (
     <button
       onClick={onClick}
-      className="text-[9px] font-bold px-2.5 py-1 rounded-full uppercase tracking-wider cursor-pointer hover:opacity-80 transition-opacity"
+      className="orc-status-badge text-[9px] font-bold px-2.5 py-1 rounded-full uppercase tracking-wider cursor-pointer hover:opacity-80 transition-opacity"
       style={{ background: c.bg, color: c.text }}
     >
       ORC · {release.ref} · {release.status.replace('_', ' ')}

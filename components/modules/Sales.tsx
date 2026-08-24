@@ -302,7 +302,7 @@ function MoreActionsMenu({ items, label = 'More', className = '' }: { items: Mor
       </button>
       {open && (<>
         <div className="fixed inset-0 z-[8990]" aria-hidden="true" onClick={() => setOpen(false)} />
-        <div role="menu" className="absolute right-0 top-full z-[9000] mt-2 min-w-52 rounded-[6px] border border-[var(--sp-border)] bg-[var(--sp-surface)] p-1.5 shadow-md">
+        <div role="menu" className="sales-more-menu absolute right-0 top-full z-[9000] mt-2 min-w-52 rounded-[6px] border border-[var(--sp-border)] bg-[var(--sp-surface)] p-1.5 shadow-md">
           {items.map((item, idx) => (
             <div key={item.label}>
               {idx === firstDanger && firstDanger > 0 && <div className="my-1 border-t border-[var(--sp-border)]" />}
