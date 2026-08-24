@@ -15,8 +15,18 @@ describe('matchCatalogPhotoPack', () => {
     expect(matchCatalogPhotoPack('TP-Link 300Mbps Mini Wireless N USB Adapter')?.id).toBe('tplink-usb-wifi')
   })
 
-  it('does not invent a pack for unknown machines', () => {
-    expect(matchCatalogPhotoPack('Random OEM Chromebook 14')).toBeNull()
+  it('prefers the branded Logitech pack over the generic wireless-mouse fallback', () => {
+    expect(matchCatalogPhotoPack('Logitech M185 Wireless Mouse')?.id).toBe('logitech-m185')
+    expect(matchCatalogPhotoPack('Wireless Mouse')?.id).toBe('wireless-mouse')
+    expect(matchCatalogPhotoPack('Dell Latitude 3190 2-in-1')?.id).toBe('dell-latitude-2in1')
+    expect(matchCatalogPhotoPack('NEC VersaPro 2-in-1 - 7th Gen Intel Core i5')?.id).toBe('nec-versapro')
+    expect(matchCatalogPhotoPack('Hollyland Lark M2 Wireless Lavalier Microphone')?.id).toBe('lavalier-mic')
+    expect(matchCatalogPhotoPack('Ugreen 2000mAh Two-Way Fast-Charging Power Bank')?.id).toBe('power-bank')
+    expect(matchCatalogPhotoPack('Ugreen Uno USB-C to USB-C PD Fast-Charging Cable')?.id).toBe('usb-c-cable')
+    expect(matchCatalogPhotoPack('Osmo 1.2m Invisible Selfie Stick Kit')?.id).toBe('selfie-stick')
+    expect(matchCatalogPhotoPack('Ugreen M.2 NVMe to PCIe 3.0 x4 Expansion Card')?.id).toBe('pcie-m2-adapter')
+    expect(matchCatalogPhotoPack('Ugreen M.2 NVMe SSD Enclosure')?.id).toBe('m2-enclosure')
+    expect(matchCatalogPhotoPack('Kaspersky Standard')).toBeNull()
   })
 
   it('has unique pack ids', () => {
@@ -48,15 +58,26 @@ describe('productThumbSource', () => {
     })
   })
 
-  it('falls back to the public hero route so POS can load staff uploads', () => {
-    expect(productThumbUrl({
+  it('uses the Dell 2-in-1 pack for Latitude 3190 instead of a speculative 404', () => {
+    expect(productThumbSource({
       id: 'dell-3190',
       name: 'Dell Latitude 3190 2-in-1 - Intel Pentium Silver, 4GB RAM, 512GB SSD',
       image: '💻',
-    })).toBe(productImagePublicPath('dell-3190', 1))
+    })).toEqual({
+      src: catalogPhotoPublicPath('dell-latitude-2in1', 1),
+      speculative: false,
+    })
+  })
+
+  it('falls back to the public hero route when no pack matches', () => {
+    expect(productThumbUrl({
+      id: 'unknown-1',
+      name: 'Random OEM Chromebook 14',
+      image: '💻',
+    })).toBe(productImagePublicPath('unknown-1', 1))
     expect(productThumbSource({
-      id: 'dell-3190',
-      name: 'Dell Latitude 3190 2-in-1',
+      id: 'unknown-1',
+      name: 'Random OEM Chromebook 14',
       image: '💻',
     })?.speculative).toBe(true)
   })
