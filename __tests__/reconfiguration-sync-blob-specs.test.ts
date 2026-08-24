@@ -44,11 +44,26 @@ describe('syncBlobSpecs', () => {
     })
   })
 
-  it('is a no-op (does not write) when neither the id nor manufacturerSerial match any blob row', async () => {
+  it('is a no-op (does not write) when manufacturerSerial is missing and the id does not match', async () => {
+    mockLoadAppState.mockResolvedValue({
+      deed_serials: [{ id: 'blob-legacy-id', serial: 'SN-OTHER', specs: '16GB RAM, 512GB SSD' }],
+    })
+    await syncBlobSpecs('serial-uuid-1', '8GB RAM, 256GB SSD')
+    expect(mockSaveStoreKeys).not.toHaveBeenCalled()
+  })
+
+  it('inserts a blob row when the Prisma serial is missing from deed_serials', async () => {
     mockLoadAppState.mockResolvedValue({
       deed_serials: [{ id: 'blob-legacy-id', serial: 'SN-OTHER', specs: '16GB RAM, 512GB SSD' }],
     })
     await syncBlobSpecs('serial-uuid-1', '8GB RAM, 256GB SSD', 'SN-LEGACY-1')
-    expect(mockSaveStoreKeys).not.toHaveBeenCalled()
+    expect(mockSaveStoreKeys).toHaveBeenCalledTimes(1)
+    const written = JSON.parse(mockSaveStoreKeys.mock.calls[0][0].deed_serials)
+    expect(written).toHaveLength(2)
+    expect(written[1]).toMatchObject({
+      id: 'serial-uuid-1',
+      serial: 'SN-LEGACY-1',
+      specs: '8GB RAM, 256GB SSD',
+    })
   })
 })

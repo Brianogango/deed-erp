@@ -3,7 +3,8 @@
  * Distinguishes soldered vs removable modules and additive vs replacement upgrades.
  */
 
-import { buildDisplayName, buildSpecsString } from './display-name'
+import { buildSpecsString } from './display-name'
+import { cleanUnitDisplayName } from './unit-selling-name'
 import type {
   CompatibilityIssue,
   DeviceConfigFields,
@@ -317,11 +318,16 @@ export function calculateConfigurationDiff(params: {
     grade: params.current.grade ?? null,
     displayName: '',
   }
-  proposed.displayName = buildDisplayName({
+  proposed.displayName = cleanUnitDisplayName({
     brand: params.brand,
     model: params.model,
     productName: params.productName,
-    config: proposed,
+    displayName: params.current.displayName,
+    processor: proposed.processor,
+    processorGeneration: proposed.processorGeneration,
+    totalRamGb: proposed.totalRamGb,
+    primaryStorageGb: proposed.primaryStorageGb,
+    storageType: proposed.storageType,
   })
 
   return { removals, installations, proposed, issues }

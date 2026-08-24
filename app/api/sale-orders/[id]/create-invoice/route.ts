@@ -340,6 +340,7 @@ export async function POST(
         taxRate,
         lineTotal,
         productId: item.productId ?? undefined,
+        serialNumberId: item.serialNumberId ?? undefined,
       }
     })
 
@@ -436,6 +437,7 @@ export async function POST(
                 lineTax,
                 lineTotal: l.lineTotal + lineTax,
                 productId: l.productId,
+                serialNumberId: l.serialNumberId,
               }
             }),
           },

@@ -4,6 +4,8 @@ import {
   catalogBaseName,
   rewriteUnitCapacitiesInText,
   unitSellingName,
+  cleanUnitDisplayName,
+  applyUnitNameToLineDescription,
 } from '@/lib/reconfiguration/unit-selling-name'
 import { parseSpecsString } from '@/lib/reconfiguration/display-name'
 import type { InstalledComponentView } from '@/lib/reconfiguration/types'
@@ -315,16 +317,28 @@ describe('unit selling name after reconfig', () => {
     ).toMatch(/8GB RAM/)
   })
 
-  it('builds a name from catalog + live specs when the title has no capacity clauses', () => {
-    const name = unitSellingName({
-      productName: 'Lenovo ThinkPad T14',
-      totalRamGb: 8,
-      primaryStorageGb: 256,
-      storageType: 'SSD',
-    })
-    expect(name).toContain('ThinkPad T14')
-    expect(name).toMatch(/8GB RAM/)
-    expect(name).toMatch(/256GB SSD/)
+  it('rebuilds a concatenated 16GB+8GB title from the catalog SKU', () => {
+    expect(
+      cleanUnitDisplayName({
+        productName: 'HP EliteBook 830 G7 - 10th Gen Intel Core i5, 16GB RAM, 256GB SSD',
+        displayName:
+          'HP EliteBook 830 G7 - 10th Gen Intel Core i5, 16GB RAM, 256GB SSD - 10th Gen Intel Core i5, 8GB RAM, 256GB SSD',
+        totalRamGb: 8,
+        primaryStorageGb: 256,
+        storageType: 'SSD',
+        processor: 'Intel Core i5',
+        processorGeneration: '10th Gen',
+      }),
+    ).toBe('HP EliteBook 830 G7 - 10th Gen Intel Core i5, 8GB RAM, 256GB SSD')
+  })
+
+  it('keeps the invoice ×qty suffix when rewriting a line', () => {
+    expect(
+      applyUnitNameToLineDescription(
+        'HP EliteBook 830 G7 - 10th Gen Intel Core i5, 16GB RAM, 256GB SSD ×1',
+        'HP EliteBook 830 G7 - 10th Gen Intel Core i5, 8GB RAM, 256GB SSD',
+      ),
+    ).toBe('HP EliteBook 830 G7 - 10th Gen Intel Core i5, 8GB RAM, 256GB SSD ×1')
   })
 })
 
