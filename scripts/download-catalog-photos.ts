@@ -66,9 +66,9 @@ async function saveSlot(packId: string, slot: 1 | 2, url: string) {
   const dir = path.join(process.cwd(), 'data', 'catalog-photos', packId)
   await mkdir(dir, { recursive: true })
   const dest = path.join(dir, slot === 1 ? 'hero.jpg' : 'detail.jpg')
-  let raw = await fetchBuffer(url)
+  let raw: Buffer = await fetchBuffer(url)
   const crop = PACK_CROPS[packId]?.[slot]
-  if (crop) raw = await cropFractions(raw, crop)
+  if (crop) raw = Buffer.from(await cropFractions(raw, crop))
   const jpeg = await stageJpeg(raw)
   await writeFile(dest, jpeg)
   await studioFlatten(dest)
