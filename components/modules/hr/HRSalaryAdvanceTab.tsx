@@ -204,30 +204,30 @@ export default function HRSalaryAdvanceTab() {
   const decisionTarget = decisionId ? salaryAdvances.find(item => item.id === decisionId) : null
 
   return (
-    <div className="flex flex-col gap-3">
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <div className="card p-4">
+    <div className="hr-submodule hr-salary-advance flex flex-col gap-3">
+      <div className="hr-submodule-kpis grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div className="hr-metric-card hr-metric-card--warning card p-4">
           <p className="text-[10px] uppercase tracking-wider font-bold text-text-3">Pending Review</p>
           <p className="text-xl font-black text-amber-600 mt-1">{pendingCount}</p>
         </div>
-        <div className="card p-4">
+        <div className="hr-metric-card hr-metric-card--success card p-4">
           <p className="text-[10px] uppercase tracking-wider font-bold text-text-3">Outstanding Recovery</p>
           <p className="text-xl font-black text-emerald-600 mt-1">{fmtKes(approvedOutstanding)}</p>
         </div>
-        <div className="card p-4">
+        <div className="hr-metric-card hr-metric-card--accent card p-4">
           <p className="text-[10px] uppercase tracking-wider font-bold text-text-3">My Applications</p>
           <p className="text-xl font-black text-primary-600 mt-1">{myAdvances.length}</p>
         </div>
       </div>
 
       {!myEmployee && (
-        <div className="card p-5 text-center text-sm text-text-3">
+        <div className="hr-submodule-notice card p-5 text-center text-sm text-text-3">
           No employee record is linked to your user account. Contact HR before applying for a salary advance.
         </div>
       )}
 
-      <div className="card overflow-hidden">
-        <div className="flex items-center gap-2 px-4 py-2.5 border-b border-border-lt flex-wrap">
+      <div className="hr-submodule-panel card overflow-hidden">
+        <div className="hr-submodule-toolbar flex items-center gap-2 px-4 py-2.5 border-b border-border-lt flex-wrap">
           <span className="text-[11px] font-bold text-text-1">{isApprover ? 'Salary Advance Applications' : 'My Salary Advances'}</span>
           <span className="badge badge-gray">{visibleAdvances.length}</span>
           <div className="ml-auto">
@@ -299,7 +299,7 @@ export default function HRSalaryAdvanceTab() {
               </Field>
             </div>
           </div>
-          <div className="flex justify-end gap-2 pt-2">
+          <div className="hr-modal-actions flex justify-end gap-2 pt-2">
             <button type="button" className="btn-outline" onClick={() => setShowApply(false)}>Cancel</button>
             <button type="button" className="btn-primary" onClick={submit}>Submit Application</button>
           </div>
@@ -319,7 +319,7 @@ export default function HRSalaryAdvanceTab() {
           <Field label="Decision Note">
             <Textarea value={decisionNote} onChange={setDecisionNote} placeholder="Optional note for the employee" rows={3} />
           </Field>
-          <div className="flex justify-end gap-2">
+          <div className="hr-modal-actions flex justify-end gap-2">
             <button className="btn-outline" onClick={() => decide(false)}>Reject</button>
             <button className="btn-primary" onClick={() => decide(true)}>Approve</button>
           </div>
