@@ -78,6 +78,80 @@ export function rewriteUnitCapacitiesInText(
   return out.replace(/\s{2,}/g, ' ').trim()
 }
 
+/** True when a title was concatenated (old 16GB clause plus the new 8GB clause). */
+export function looksLikeConcatenatedSpecs(text: string): boolean {
+  const ram = [...String(text || '').matchAll(new RegExp(RAM_CLAUSE.source, 'gi'))].length
+  const storage = [...String(text || '').matchAll(new RegExp(STORAGE_CLAUSE.source, 'gi'))].length
+  return ram > 1 || storage > 1
+}
+
+/**
+ * One clean customer-facing unit title after RAM/SSD change.
+ * Prefers rewriting the catalog title in place so we do not append
+ * "8GB RAM, 256GB SSD" onto a name that still says 16GB.
+ */
+export function cleanUnitDisplayName(opts: {
+  productName?: string | null
+  displayName?: string | null
+  totalRamGb?: number | null
+  primaryStorageGb?: number | null
+  storageType?: string | null
+  processor?: string | null
+  processorGeneration?: string | null
+  brand?: string | null
+  model?: string | null
+}): string {
+  const ramGb = Number(opts.totalRamGb) || 0
+  const storageGb = Number(opts.primaryStorageGb) || 0
+  const catalog = String(opts.productName || '').trim()
+
+  if (catalog) {
+    const rewritten = rewriteUnitCapacitiesInText(
+      catalog,
+      ramGb || null,
+      storageGb || null,
+      opts.storageType,
+    )
+    if (!looksLikeConcatenatedSpecs(rewritten) && (ramGb <= 0 || rewritten.includes(`${ramGb}GB`))) {
+      return rewritten
+    }
+  }
+
+  const fromLive = rewriteUnitCapacitiesInText(
+    String(opts.displayName || '').trim(),
+    ramGb || null,
+    storageGb || null,
+    opts.storageType,
+  )
+  if (fromLive && !looksLikeConcatenatedSpecs(fromLive) && (ramGb <= 0 || fromLive.includes(`${ramGb}GB`))) {
+    return fromLive
+  }
+
+  return buildDisplayName({
+    brand: opts.brand,
+    model: opts.model,
+    productName: catalogBaseName(catalog) || catalog || 'Device',
+    config: {
+      processor: opts.processor || null,
+      processorGeneration: opts.processorGeneration || null,
+      totalRamGb: ramGb,
+      ramComposition: [],
+      primaryStorageGb: storageGb || null,
+      storageType: opts.storageType || 'SSD',
+    },
+  })
+}
+
+/** Keep invoice "Name ×1" suffixes when rewriting a line description. */
+export function applyUnitNameToLineDescription(
+  existing: string | null | undefined,
+  unitName: string,
+): string {
+  const prev = String(existing || '').trim()
+  const qty = prev.match(/×\s*(\d+)\s*$/)
+  return qty ? `${unitName} ×${qty[1]}` : unitName
+}
+
 export function unitSellingName(opts: {
   productName?: string | null
   specs?: string | null
@@ -96,6 +170,14 @@ export function unitSellingName(opts: {
   const liveType = opts.storageType || parsed.storageType || 'SSD'
 
   const structured = String(opts.displayName || '').trim()
+  if (structured && looksLikeConcatenatedSpecs(structured)) {
+    return cleanUnitDisplayName({
+      ...opts,
+      totalRamGb: liveRam,
+      primaryStorageGb: liveStorage,
+      storageType: liveType,
+    })
+  }
   if (structured) {
     return rewriteUnitCapacitiesInText(structured, liveRam || null, liveStorage || null, liveType)
   }

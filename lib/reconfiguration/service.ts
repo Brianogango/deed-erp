@@ -331,7 +331,20 @@ export async function syncBlobSpecs(serialId: string, specs: string, manufacture
   const idx = serials.findIndex(
     s => s.id === serialId || s.serial === serialId || (manufacturerSerial && s.serial === manufacturerSerial),
   )
-  if (idx < 0) return
+  if (idx < 0) {
+    if (!manufacturerSerial) return
+    serials.push({
+      id: serialId,
+      serial: manufacturerSerial,
+      barcode: manufacturerSerial,
+      specs,
+      status: 'available',
+      location: 'warehouse',
+      receivedDate: new Date().toISOString().slice(0, 10),
+    })
+    await saveStoreKeys({ deed_serials: JSON.stringify(serials) })
+    return
+  }
   serials[idx] = { ...serials[idx], specs }
   await saveStoreKeys({ deed_serials: JSON.stringify(serials) })
 }
@@ -1496,14 +1509,13 @@ export async function completeWorkOrder(params: {
     },
   })
 
-  // Phase E: refresh linked SO host line description to post-upgrade display name
-  if (wo.linkedSaleOrderId) {
-    try {
-      const { refreshSaleOrderHostLineAfterReconfig } = await import('@/lib/reconfiguration/sales-bridge')
-      await refreshSaleOrderHostLineAfterReconfig(wo.id)
-    } catch (err) {
-      console.error('[reconfiguration] SO line refresh after complete failed:', err)
-    }
+  // Refresh SO / invoice / delivery descriptions from the live unit name
+  // even when the workshop job was not linked to a sale order.
+  try {
+    const { refreshSaleOrderHostLineAfterReconfig } = await import('@/lib/reconfiguration/sales-bridge')
+    await refreshSaleOrderHostLineAfterReconfig(wo.id)
+  } catch (err) {
+    console.error('[reconfiguration] commercial document refresh after complete failed:', err)
   }
 
   return getWorkOrder(wo.id)

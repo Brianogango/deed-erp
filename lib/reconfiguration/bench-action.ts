@@ -17,7 +17,7 @@
  */
 
 import { buildDisplayName } from './display-name'
-import { catalogBaseName, rewriteUnitCapacitiesInText } from './unit-selling-name'
+import { cleanUnitDisplayName } from './unit-selling-name'
 import type {
   DeviceConfigFields,
   InstalledComponentView,
@@ -209,30 +209,16 @@ function benchUnitName(params: {
   storageGb: number
   storageType: string | null
 }): string {
-  const catalog = String(params.productName || '').trim()
-  const rewrittenCatalog = catalog
-    ? rewriteUnitCapacitiesInText(catalog, params.ramGb || null, params.storageGb || null, params.storageType)
-    : ''
-  if (params.ramGb > 0 && rewrittenCatalog.includes(`${params.ramGb}GB`)) return rewrittenCatalog
-  const rewrittenLive = rewriteUnitCapacitiesInText(
-    params.current.displayName || '',
-    params.ramGb || null,
-    params.storageGb || null,
-    params.storageType,
-  )
-  if (params.ramGb > 0 && rewrittenLive.includes(`${params.ramGb}GB`)) return rewrittenLive
-  return buildDisplayName({
+  return cleanUnitDisplayName({
+    productName: params.productName,
     brand: params.brand,
     model: params.model,
-    productName: catalogBaseName(catalog) || catalog || 'Device',
-    config: {
-      processor: params.current.processor,
-      processorGeneration: params.current.processorGeneration,
-      totalRamGb: params.ramGb,
-      ramComposition: params.current.ramComposition || [],
-      primaryStorageGb: params.storageGb,
-      storageType: params.storageType,
-    },
+    displayName: params.current.displayName,
+    processor: params.current.processor,
+    processorGeneration: params.current.processorGeneration,
+    totalRamGb: params.ramGb,
+    primaryStorageGb: params.storageGb,
+    storageType: params.storageType,
   })
 }
 

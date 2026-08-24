@@ -22,6 +22,11 @@ import {
   parseProductReconfigEffect,
   type ProductReconfigEffect,
 } from '@/lib/reconfiguration/product-effect'
+import { specsFromProposed } from '@/lib/reconfiguration/diff-engine'
+import {
+  applyUnitNameToLineDescription,
+  cleanUnitDisplayName,
+} from '@/lib/reconfiguration/unit-selling-name'
 import { isMutableDraftStatus } from '@/lib/reconfiguration/state-machine'
 
 const TERMINAL = new Set(['completed', 'cancelled', 'reversed'])
@@ -270,30 +275,241 @@ export async function assertSaleOrderReconfigAllowsDelivery(_saleOrderId?: strin
 }
 
 /**
- * After RCF complete: refresh host SO line description from proposed display name.
+ * After RCF complete: rewrite the unit selling name onto every commercial
+ * document that still shows the catalog/intake specs.
+ *
+ * Workshop jobs from the Reconfiguration screen usually have no
+ * linkedSaleOrderId — matching by serial is what actually updates the
+ * invoice / SO / delivery the customer sees.
  */
 export async function refreshSaleOrderHostLineAfterReconfig(workOrderId: string) {
   const wo = await prisma.reconfigurationWorkOrder.findUnique({
     where: { id: workOrderId },
-    include: { proposedSnapshot: true },
+    include: {
+      proposedSnapshot: true,
+      product: { select: { id: true, name: true } },
+      serial: { select: { id: true, serialNumber: true, productId: true } },
+    },
   })
-  if (!wo?.linkedSaleOrderId || !wo.proposedSnapshot?.displayName) return null
+  if (!wo) return null
 
-  const order = await prisma.saleOrder.findUnique({
-    where: { id: wo.linkedSaleOrderId },
-    include: { items: true },
+  const snap = wo.proposedSnapshot
+  const unitName = cleanUnitDisplayName({
+    productName: wo.product?.name,
+    displayName: snap?.displayName,
+    processor: snap?.processor,
+    processorGeneration: snap?.processorGeneration,
+    totalRamGb: snap?.totalRamGb,
+    primaryStorageGb: snap?.primaryStorageGb,
+    storageType: snap?.storageType,
   })
-  if (!order) return null
+  if (!unitName) return null
 
-  const host = order.items.find(i => i.serialNumberId === wo.serialId)
-    || order.items.find(i => i.productId === wo.productId && i.serialNumberId)
-  if (!host) return null
+  const specs = snap
+    ? specsFromProposed({
+        processor: snap.processor,
+        processorGeneration: snap.processorGeneration,
+        totalRamGb: snap.totalRamGb,
+        ramComposition: (snap.ramComposition as any) || [],
+        primaryStorageGb: snap.primaryStorageGb,
+        storageType: snap.storageType,
+        displayName: unitName,
+      } as any)
+    : unitName
 
-  await prisma.saleOrderItem.update({
-    where: { id: host.id },
-    data: { description: wo.proposedSnapshot.displayName },
+  if (snap && snap.displayName !== unitName) {
+    await prisma.deviceConfigurationSnapshot.update({
+      where: { id: snap.id },
+      data: { displayName: unitName },
+    })
+  }
+
+  const soItems = await prisma.saleOrderItem.findMany({
+    where: {
+      OR: [
+        { serialNumberId: wo.serialId },
+        ...(wo.linkedSaleOrderId
+          ? [{ saleOrderId: wo.linkedSaleOrderId, productId: wo.productId, serialNumberId: { not: null } }]
+          : []),
+      ],
+    },
   })
-  return { lineId: host.id, description: wo.proposedSnapshot.displayName }
+  const soIds = [...new Set(soItems.map(i => i.saleOrderId))]
+  for (const item of soItems) {
+    await prisma.saleOrderItem.update({
+      where: { id: item.id },
+      data: { description: applyUnitNameToLineDescription(item.description, unitName) },
+    })
+  }
+
+  const invoiceItems = await prisma.invoiceItem.findMany({
+    where: {
+      OR: [
+        { serialNumberId: wo.serialId },
+        ...(soIds.length
+          ? [{ invoice: { saleOrderId: { in: soIds } }, productId: wo.productId }]
+          : []),
+        ...(wo.linkedInvoiceId ? [{ invoiceId: wo.linkedInvoiceId, productId: wo.productId }] : []),
+      ],
+    },
+  })
+  for (const item of invoiceItems) {
+    await prisma.invoiceItem.update({
+      where: { id: item.id },
+      data: {
+        description: applyUnitNameToLineDescription(item.description, unitName),
+        ...(item.serialNumberId ? {} : { serialNumberId: wo.serialId }),
+      },
+    })
+  }
+
+  const deliveryItems = await prisma.deliveryNoteItem.findMany({
+    where: {
+      OR: [
+        { serialNumberId: wo.serialId },
+        { serialIds: { has: wo.serialId } },
+      ],
+    },
+  })
+  for (const item of deliveryItems) {
+    await prisma.deliveryNoteItem.update({
+      where: { id: item.id },
+      data: {
+        description: unitName,
+        productName: unitName.slice(0, 200),
+        ...(item.serialNumberId ? {} : { serialNumberId: wo.serialId }),
+      },
+    })
+  }
+
+  if (!wo.linkedSaleOrderId && soIds.length === 1) {
+    await prisma.reconfigurationWorkOrder.update({
+      where: { id: wo.id },
+      data: { linkedSaleOrderId: soIds[0] },
+    })
+  }
+
+  await syncBlobCommercialDocumentsAfterReconfig({
+    serialId: wo.serialId,
+    manufacturerSerial: wo.manufacturerSerial || wo.serial?.serialNumber || '',
+    productId: wo.productId,
+    productName: wo.product?.name || unitName,
+    unitName,
+    specs,
+    saleOrderIds: soIds,
+  })
+
+  return { description: unitName, saleOrderItemIds: soItems.map(i => i.id), invoiceItemIds: invoiceItems.map(i => i.id) }
+}
+
+async function syncBlobCommercialDocumentsAfterReconfig(params: {
+  serialId: string
+  manufacturerSerial: string
+  productId: string
+  productName: string
+  unitName: string
+  specs: string
+  saleOrderIds: string[]
+}) {
+  const { loadAppState, saveStoreKeys } = await import('@/lib/server-store')
+  const state = await loadAppState(['deed_serials', 'deed_saleOrders', 'deed_invoices', 'deed_deliveries'])
+  const patch: Record<string, string> = {}
+
+  const serials = Array.isArray(state.deed_serials) ? [...(state.deed_serials as any[])] : []
+  const sidx = serials.findIndex(
+    s => s.id === params.serialId || (params.manufacturerSerial && s.serial === params.manufacturerSerial),
+  )
+  if (sidx >= 0) {
+    serials[sidx] = { ...serials[sidx], specs: params.specs }
+    patch.deed_serials = JSON.stringify(serials)
+  } else if (params.manufacturerSerial) {
+    serials.push({
+      id: params.serialId,
+      serial: params.manufacturerSerial,
+      barcode: params.manufacturerSerial,
+      productId: params.productId,
+      productName: params.productName,
+      specs: params.specs,
+      status: 'assigned',
+      location: 'warehouse',
+      receivedDate: new Date().toISOString().slice(0, 10),
+    })
+    patch.deed_serials = JSON.stringify(serials)
+  }
+
+  const saleOrders = Array.isArray(state.deed_saleOrders) ? [...(state.deed_saleOrders as any[])] : []
+  let soChanged = false
+  for (const so of saleOrders) {
+    if (!Array.isArray(so?.lines)) continue
+    let hit = false
+    so.lines = so.lines.map((line: any) => {
+      const ids = Array.isArray(line.serialIds) ? line.serialIds : []
+      if (!ids.includes(params.serialId) && line.serialNumberId !== params.serialId) return line
+      hit = true
+      return {
+        ...line,
+        productName: params.unitName,
+        description: applyUnitNameToLineDescription(line.description || line.productName, params.unitName),
+      }
+    })
+    if (hit) soChanged = true
+  }
+  if (soChanged) patch.deed_saleOrders = JSON.stringify(saleOrders)
+
+  const invoices = Array.isArray(state.deed_invoices) ? [...(state.deed_invoices as any[])] : []
+  let invChanged = false
+  const soIdSet = new Set(params.saleOrderIds)
+  for (const inv of invoices) {
+    if (!Array.isArray(inv?.lines)) continue
+    const onLinkedSo = inv.saleOrderId && soIdSet.has(inv.saleOrderId)
+    let hit = false
+    inv.lines = inv.lines.map((line: any) => {
+      const ids = Array.isArray(line.serialIds) ? line.serialIds : []
+      const matchesSerial = ids.includes(params.serialId) || line.serialNumberId === params.serialId
+      const matchesHost = onLinkedSo && line.productId === params.productId
+      if (!matchesSerial && !matchesHost) return line
+      hit = true
+      return {
+        ...line,
+        description: applyUnitNameToLineDescription(line.description, params.unitName),
+        ...(matchesSerial ? {} : { serialIds: [params.serialId] }),
+      }
+    })
+    if (hit) invChanged = true
+  }
+  if (invChanged) patch.deed_invoices = JSON.stringify(invoices)
+
+  const deliveries = Array.isArray(state.deed_deliveries) ? [...(state.deed_deliveries as any[])] : []
+  let dnChanged = false
+  for (const dn of deliveries) {
+    if (!Array.isArray(dn?.lines)) continue
+    let hit = false
+    dn.lines = dn.lines.map((line: any) => {
+      const ids = Array.isArray(line.serialIds) ? line.serialIds : []
+      if (!ids.includes(params.serialId)) return line
+      hit = true
+      return { ...line, productName: params.unitName, description: params.unitName }
+    })
+    if (hit) dnChanged = true
+  }
+  if (dnChanged) patch.deed_deliveries = JSON.stringify(deliveries)
+
+  if (Object.keys(patch).length) await saveStoreKeys(patch)
+}
+
+/** Repair sale/invoice/delivery descriptions for every completed work order. */
+export async function repairAllCompletedReconfigDocuments() {
+  const rows = await prisma.reconfigurationWorkOrder.findMany({
+    where: { status: 'completed' },
+    select: { id: true, ref: true },
+    orderBy: { dateCompleted: 'asc' },
+  })
+  const results = []
+  for (const row of rows) {
+    const refreshed = await refreshSaleOrderHostLineAfterReconfig(row.id)
+    results.push({ ref: row.ref, description: refreshed?.description || null })
+  }
+  return results
 }
 
 /** Sales no longer blocks delivery on reconfiguration. */

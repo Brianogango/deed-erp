@@ -664,13 +664,11 @@ export async function applyBenchAndComplete(params: ApplyBenchParams) {
     userId: params.userId,
   })
 
-  if (completed.linkedSaleOrderId) {
-    try {
-      const { refreshSaleOrderHostLineAfterReconfig } = await import('@/lib/reconfiguration/sales-bridge')
-      await refreshSaleOrderHostLineAfterReconfig(wo.id)
-    } catch (err) {
-      console.error('[reconfiguration] SO line refresh after bench complete failed:', err)
-    }
+  try {
+    const { refreshSaleOrderHostLineAfterReconfig } = await import('@/lib/reconfiguration/sales-bridge')
+    await refreshSaleOrderHostLineAfterReconfig(wo.id)
+  } catch (err) {
+    console.error('[reconfiguration] commercial document refresh after bench complete failed:', err)
   }
 
   return getWorkOrder(wo.id)
