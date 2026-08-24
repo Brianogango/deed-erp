@@ -11,6 +11,7 @@ import { DataTable, type ColumnDef, type PrimaryFilterConfig } from '@/component
 import { loadXlsx } from '@/lib/xlsx-lazy'
 import { guardSpreadsheetFile, guardSpreadsheetRows, SpreadsheetGuardError } from '@/lib/spreadsheet-guard'
 import { useUrlQueryState, useUrlRecordId } from '@/hooks/useUrlRecordId'
+import { nairobiDateKey } from '@/lib/workspace-integrity'
 import {
   Fa, faCartShopping, faPlus, faRotateLeft, faClipboardList,
   faMoneyBillWave, faMagnifyingGlass, faFileImport, faArrowsRotate,
@@ -69,7 +70,7 @@ function KilimallContent() {
     ? kilimallOrders.find(o => o.id === detailId) ?? null
     : null
   const [newOrder, setNewOrder] = useState({
-    kilimallRef: '', orderDate: new Date().toISOString().slice(0, 10),
+    kilimallRef: '', orderDate: nairobiDateKey(),
     customerName: '', productId: '', productName: '', qty: '1',
     unitPrice: '', notes: '',
   })
@@ -81,7 +82,7 @@ function KilimallContent() {
   const [substituteProductId, setSubstituteProductId] = useState('')
   const [substitutionReason, setSubstitutionReason] = useState('')
   const [dispatchCourier, setDispatchCourier] = useState('')
-  const [dispatchDate, setDispatchDate] = useState(new Date().toISOString().slice(0, 10))
+  const [dispatchDate, setDispatchDate] = useState(nairobiDateKey())
   const [dispatchTracking, setDispatchTracking] = useState('')
   const [dispatchNotes, setDispatchNotes] = useState('')
 
@@ -99,6 +100,12 @@ function KilimallContent() {
     { kilimallRef: '', amount: '' },
   ])
   const settlFileRef = useRef<HTMLInputElement>(null)
+  const [manualMatch, setManualMatch] = useState<{
+    settlementId: string
+    lineId: string
+    orderId: string
+    note: string
+  } | null>(null)
 
   // ── Reports ───────────────────────────────────────────────────────────────────
   const [reportTab, setReportTab] = useState<'ops' | 'financial' | 'control'>('ops')
@@ -115,7 +122,7 @@ function KilimallContent() {
   const netReceived        = kilimallSettlements.reduce((s, x) => s + x.netPaid, 0)
   const unreconciled       = kilimallOrders.filter(o => o.status === 'delivered' && !o.settlementId).length
   const returnsRate        = totalOrders > 0 ? ((returned / totalOrders) * 100).toFixed(1) : '0'
-  const todayKey           = new Date().toISOString().slice(0, 10)
+  const todayKey           = nairobiDateKey()
   const dispatchedToday    = kilimallDispatches.filter(d => d.date?.slice(0, 10) === todayKey).length
   const unmatchedAmount    = kilimallSettlements.reduce((sum, settlement) => sum + settlement.lines
     .filter(line => line.status === 'unmatched' || line.status === 'mismatch')
@@ -431,7 +438,7 @@ function KilimallContent() {
     setSubstituteProductId('')
     setSubstitutionReason('')
     setDispatchCourier('')
-    setDispatchDate(new Date().toISOString().slice(0, 10))
+    setDispatchDate(nairobiDateKey())
     setDispatchTracking('')
     setDispatchNotes('')
   }
@@ -463,12 +470,16 @@ function KilimallContent() {
     })
     if (!created) return
     setShowNewOrder(false)
-    setNewOrder({ kilimallRef: '', orderDate: new Date().toISOString().slice(0, 10), customerName: '', productId: '', productName: '', qty: '1', unitPrice: '', notes: '' })
+    setNewOrder({ kilimallRef: '', orderDate: nairobiDateKey(), customerName: '', productId: '', productName: '', qty: '1', unitPrice: '', notes: '' })
   }
 
   const handleDispatch = () => {
     if (!dispatchOrderId || !dispatchSerial) {
       showToast('Select an order and enter/select a serial number', 'error'); return
+    }
+    if (!dispatchCourier.trim() || !dispatchDate) {
+      showToast('Rider/courier and dispatch date are required', 'error')
+      return
     }
     if (useSubstitution && !substituteProductId) {
       showToast('Select the product to ship as a substitute', 'error'); return
@@ -735,6 +746,34 @@ function KilimallContent() {
                   </>
                 )}
 
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <Field label="Rider / courier" required>
+                    <Input
+                      value={dispatchCourier}
+                      onChange={setDispatchCourier}
+                      placeholder="e.g. QuickMove"
+                    />
+                  </Field>
+                  <Field label="Dispatch date" required>
+                    <Input value={dispatchDate} onChange={setDispatchDate} type="date" />
+                  </Field>
+                </div>
+                <Field label="Tracking reference" hint="Optional">
+                  <Input
+                    value={dispatchTracking}
+                    onChange={setDispatchTracking}
+                    placeholder="Courier tracking or waybill"
+                  />
+                </Field>
+                <Field label="Dispatch notes" hint="Optional">
+                  <Textarea
+                    value={dispatchNotes}
+                    onChange={setDispatchNotes}
+                    rows={2}
+                    placeholder="Delivery instructions or handover note"
+                  />
+                </Field>
+
                 <Field
                   label="Serial Number"
                   required
@@ -759,8 +798,11 @@ function KilimallContent() {
                     </p>
                   )}
                 </Field>
+                <div role="status" aria-live="polite" className="rounded-lg px-3 py-2 text-[10px] text-t3" style={{ background: 'var(--info-bg)' }}>
+                  The selected serial is reserved and removed from available stock when dispatch is confirmed.
+                </div>
                 <button className="btn-primary inline-flex items-center gap-1.5" onClick={handleDispatch}
-                  disabled={!dispatchSerial || availableSerials.length === 0 || (useSubstitution && !substituteProductId)}>
+                  disabled={!dispatchSerial || !dispatchCourier.trim() || !dispatchDate || availableSerials.length === 0 || (useSubstitution && !substituteProductId)}>
                   <Fa icon={faCheck} aria-hidden="true" /> Confirm Dispatch
                 </button>
                 <button className="btn-outline text-[11px]" onClick={resetDispatchForm}>
@@ -902,6 +944,31 @@ function KilimallContent() {
                         },
                         accessor: (line: KilimallSettlementLine) => line.status,
                         exportValue: (line: KilimallSettlementLine) => line.status,
+                      },
+                      {
+                        key: 'review', label: '', priority: 1, width: '76px',
+                        render: (line: KilimallSettlementLine) => line.status === 'matched' ? null : (
+                          <button
+                            type="button"
+                            className="text-[10px] font-semibold underline"
+                            style={{ color: 'var(--primary)' }}
+                            onClick={event => {
+                              event.stopPropagation()
+                              const suggestedOrder = line.orderId
+                                ? kilimallOrders.find(order => order.id === line.orderId)
+                                : kilimallOrders.find(order => order.kilimallRef.trim().toLowerCase() === line.kilimallRef.trim().toLowerCase())
+                              setManualMatch({
+                                settlementId: settlement.id,
+                                lineId: line.id,
+                                orderId: suggestedOrder?.id ?? '',
+                                note: line.notes ?? '',
+                              })
+                            }}
+                          >
+                            Review
+                          </button>
+                        ),
+                        exportValue: () => '',
                       },
                     ] as ColumnDef<KilimallSettlementLine>[]}
                     rows={settlement.lines}
@@ -1317,6 +1384,85 @@ function KilimallContent() {
           </div>
         </Modal>
       )}
+
+      {manualMatch && (() => {
+        const settlement = kilimallSettlements.find(item => item.id === manualMatch.settlementId)
+        const line = settlement?.lines.find(item => item.id === manualMatch.lineId)
+        const order = kilimallOrders.find(item => item.id === manualMatch.orderId)
+        if (!settlement || !line) return null
+        const difference = order ? line.amount - order.total : null
+        const orderOptions = kilimallOrders
+          .filter(item =>
+            ['dispatched', 'delivered'].includes(item.status) &&
+            (!item.settlementId || item.settlementId === settlement.id)
+          )
+          .map(item => ({
+            value: item.id,
+            label: `${item.kilimallRef} · ${item.productName} · ${fmtKes(item.total)}`,
+          }))
+        return (
+          <Modal
+            title="Match settlement line"
+            subtitle={`${settlement.ref} · ${line.kilimallRef}`}
+            onClose={() => setManualMatch(null)}
+            width={520}
+          >
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="rounded-lg p-3" style={{ background: 'var(--bg-surface)' }}>
+                  <p className="text-[10px] text-t3">Expected amount</p>
+                  <p className="text-sm font-semibold">{order ? fmtKes(order.total) : '—'}</p>
+                </div>
+                <div className="rounded-lg p-3" style={{ background: 'var(--bg-surface)' }}>
+                  <p className="text-[10px] text-t3">Paid amount</p>
+                  <p className="text-sm font-semibold">{fmtKes(line.amount)}</p>
+                </div>
+                <div className="rounded-lg p-3" style={{ background: 'var(--bg-surface)' }} aria-live="polite">
+                  <p className="text-[10px] text-t3">Difference</p>
+                  <p className="text-sm font-semibold" style={{ color: difference ? 'var(--danger)' : 'var(--success)' }}>
+                    {difference == null ? '—' : fmtKes(Math.abs(difference))}
+                  </p>
+                </div>
+              </div>
+              <Field label="Match to order" required>
+                <Select
+                  value={manualMatch.orderId}
+                  onChange={orderId => setManualMatch(previous => previous ? { ...previous, orderId } : previous)}
+                  options={[{ value: '', label: 'Select delivered order…' }, ...orderOptions]}
+                />
+              </Field>
+              <Field label="Note" hint={difference && Math.abs(difference) > 1 ? 'Required when the amounts differ' : 'Optional'}>
+                <Textarea
+                  value={manualMatch.note}
+                  onChange={note => setManualMatch(previous => previous ? { ...previous, note } : previous)}
+                  rows={3}
+                  placeholder="Explain fees, deductions, or the matching decision."
+                />
+              </Field>
+              <div className="flex justify-end gap-2">
+                <button type="button" className="btn-outline" onClick={() => setManualMatch(null)}>Cancel</button>
+                <button
+                  type="button"
+                  className="btn-primary"
+                  disabled={!manualMatch.orderId || (!!difference && Math.abs(difference) > 1 && !manualMatch.note.trim())}
+                  onClick={() => {
+                    const matched = matchKilimallSettlementLine(
+                      settlement.id,
+                      line.id,
+                      manualMatch.orderId,
+                      manualMatch.note,
+                    )
+                    if (matched) setManualMatch(null)
+                  }}
+                >
+                  Confirm match
+                </button>
+              </div>
+            </div>
+          </Modal>
+        )
+      })()}
+
     </div>
   )
 }
