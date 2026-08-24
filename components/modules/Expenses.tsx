@@ -8,7 +8,7 @@ import {
 } from '@/lib/store'
 import { canUserApproveExpenseStep } from '@/lib/expense-approval-chain'
 import { ModuleSkeleton, useMounted, RecordCard, ModuleHeader, TabBar } from '@/components/ui'
-import { PrimaryActionButton, StatusBadge } from '@/components/erp'
+import { PrimaryActionButton, SecondaryActionMenu, StatusBadge } from '@/components/erp'
 import { DataTable, type ColumnDef, type PrimaryFilterConfig } from '@/components/data-table'
 import {
   Fa, faBox, faCar, faComputer, faDesktop, faDroplet, faFileLines, faLightbulb,
@@ -360,16 +360,24 @@ function ExpensesContent() {
   // ────────────────────────────────────────────────────────────────────────────
 
   return (
-    <div className="mod-page">
+    <div className="mod-page expenses-workspace">
       <ModuleHeader
         title="Expenses"
-        subtitle="Submit and track expense claims"
+        subtitle="Submit, approve and reimburse claims"
         icon={<Fa icon={faClipboardList} />}
-        color="var(--warning)"
+        color="var(--navy)"
         primaryAction={
           <PrimaryActionButton icon={<Fa icon={faPlus} />} onClick={openSubmit}>
             New expense
           </PrimaryActionButton>
+        }
+        overflowActions={
+          <SecondaryActionMenu
+            actions={[
+              { id: 'mine', label: 'My expenses', onClick: () => setTab('mine') },
+              ...(canReviewExpenses ? [{ id: 'review', label: 'Review expenses', onClick: () => setTab('review' as const) }] : []),
+            ]}
+          />
         }
       />
 
@@ -386,11 +394,18 @@ function ExpensesContent() {
         ariaLabel="Expense sections"
       />
 
-      <div className="mod-body">
-      <div className="card overflow-hidden m-3 sm:m-4">
+      <div className="mod-body expenses-body">
+      <div className="expenses-kpi-strip" aria-label="Expense overview">
+        <div className="expenses-kpi-card"><small>My claims</small><strong>{myExpenses.length}</strong><span>{fmtKes(myTotal)} submitted</span></div>
+        <div className="expenses-kpi-card"><small>Pending review</small><strong>{canReviewExpenses ? allPending.length : myPending}</strong><span>{canReviewExpenses ? fmtKes(totalPendingAmt) : 'Awaiting approval'}</span></div>
+        <div className="expenses-kpi-card"><small>Approved to reimburse</small><strong>{isFinance ? pendingReimbursements.length : myApproved}</strong><span>{isFinance ? fmtKes(reimbDue) : 'Ready for finance'}</span></div>
+        <div className="expenses-kpi-card"><small>Reimbursed this month</small><strong>{fmtKes(myReimbursed)}</strong><span>Paid claims</span></div>
+      </div>
+      <div className="expenses-content-shell">
 
         {/* ── My Expenses tab ── */}
         {tab === 'mine' && (
+          <section className="expenses-table-panel card">
           <ExpenseTable
             rows={myExpenses}
             showSubmitter={false}
@@ -398,11 +413,14 @@ function ExpensesContent() {
             onPreview={openReceiptPreview}
             onView={e => setReviewingId(e.id)}
           />
+          </section>
         )}
 
         {/* ── Review tab (finance + chain approvers) ── */}
         {tab === 'review' && canReviewExpenses && (
-          <ExpenseTable
+          <div className="expenses-review-grid">
+            <section className="expenses-table-panel card">
+              <ExpenseTable
             rows={reviewList}
             showSubmitter
             emptyMessage="No expenses match the filter."
@@ -448,14 +466,55 @@ function ExpensesContent() {
               setReimburseReference('')
             }}
             onView={e => setReviewingId(e.id)}
-          />
+              />
+            </section>
+            <aside className="expenses-approval-rail" aria-label="Expense approval queue">
+              <header>
+                <small>Finance workflow</small>
+                <h2>Approval queue</h2>
+              </header>
+              <section>
+                <div className="expenses-queue-heading"><strong>Pending approval</strong><span>{allPending.length}</span></div>
+                {allPending.slice(0, 4).map(exp => (
+                  <button key={exp.id} type="button" className="expenses-queue-item" onClick={() => { setReviewingId(exp.id); setReviewNotes('') }}>
+                    <span><strong>{exp.submittedByName}</strong><small>{exp.description}</small></span>
+                    <em>{fmtKes(exp.amount)}</em>
+                  </button>
+                ))}
+                {allPending.length === 0 && <p className="expenses-queue-empty">No claims are waiting for approval.</p>}
+              </section>
+              {isFinance && (
+                <section>
+                  <div className="expenses-queue-heading"><strong>Ready to reimburse</strong><span>{pendingReimbursements.length}</span></div>
+                  {pendingReimbursements.slice(0, 3).map(exp => (
+                    <button
+                      key={exp.id}
+                      type="button"
+                      className="expenses-queue-item"
+                      onClick={() => {
+                        setReimbursingId(exp.id)
+                        setReimburseNote('')
+                        setReimburseMethod('bank')
+                        setReimburseBankAccountId('')
+                        setReimburseReference('')
+                      }}
+                    >
+                      <span><strong>{exp.submittedByName}</strong><small>{exp.ref}</small></span>
+                      <em>{fmtKes(exp.amount)}</em>
+                    </button>
+                  ))}
+                  {pendingReimbursements.length === 0 && <p className="expenses-queue-empty">No approved claims need payment.</p>}
+                </section>
+              )}
+            </aside>
+          </div>
         )}
       </div>
 
       {/* ── Submit Expense Modal ──────────────────────────────────────────── */}
       {showSubmit && (
-        <div className="modal-overlay" onClick={() => setShowSubmit(false)}>
-          <div className="modal-box w-full max-w-lg" onClick={e => e.stopPropagation()}>
+        <div className="modal-overlay expenses-modal-overlay" onClick={() => setShowSubmit(false)}>
+          <div className="modal-box expenses-submit-modal w-full max-w-lg" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
               <div>
                 <h3 className="text-sm font-bold text-t1">New Expense</h3>
@@ -466,7 +525,7 @@ function ExpensesContent() {
               <button onClick={() => setShowSubmit(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: 'var(--text-4)' }}>×</button>
             </div>
 
-            <div className="space-y-3">
+            <div className="expenses-submit-form space-y-3">
               {/* Category + Date */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -535,6 +594,7 @@ function ExpensesContent() {
                   <span className="font-normal text-t3 ml-1">(photo, PDF, screenshot)</span>
                 </label>
                 <div
+                  className="expenses-receipt-drop"
                   onDragOver={e => { e.preventDefault(); setDragOver(true) }}
                   onDragLeave={() => setDragOver(false)}
                   onDrop={e => { e.preventDefault(); setDragOver(false); handleFile(e.dataTransfer.files[0] ?? null) }}
@@ -592,7 +652,7 @@ function ExpensesContent() {
               </div>
             </div>
 
-            <div className="flex gap-2 mt-4 justify-end">
+            <div className="expenses-modal-actions flex gap-2 mt-4 justify-end">
               <button className="btn-outline text-[11px] py-2 px-4" onClick={() => setShowSubmit(false)}>Cancel</button>
               <button className="btn-primary text-[11px] py-2 px-4" onClick={handleSubmit}>Submit Expense</button>
             </div>
@@ -610,8 +670,9 @@ function ExpensesContent() {
             || canUserApproveExpenseStep(currentUser?.role, exp.approvalChain)
           )
         return (
-          <div className="modal-overlay" onClick={() => setReviewingId(null)}>
-            <div className="modal-box w-full max-w-md" onClick={e => e.stopPropagation()}>
+          <div className="modal-overlay expenses-modal-overlay" onClick={() => setReviewingId(null)}>
+            <div className="modal-box expenses-review-modal w-full max-w-md" onClick={e => e.stopPropagation()}>
+              <div className="expenses-review-form">
               <div className="flex items-center justify-between mb-4">
                 <div>
                   <h3 className="text-sm font-bold text-t1">{canReview ? 'Review Expense' : 'View Expense'}</h3>
@@ -682,7 +743,7 @@ function ExpensesContent() {
                 </div>
               )}
 
-              <div className="flex gap-2 justify-end">
+              <div className="expenses-modal-actions flex gap-2 justify-end">
                 {canReview ? (
                   <>
                     <button onClick={() => setReviewingId(null)} className="btn-outline text-[11px] py-2 px-4">Cancel</button>
@@ -698,6 +759,7 @@ function ExpensesContent() {
                 ) : (
                   <button onClick={() => setReviewingId(null)} className="btn-outline text-[11px] py-2 px-4">Close</button>
                 )}
+              </div>
               </div>
             </div>
           </div>
