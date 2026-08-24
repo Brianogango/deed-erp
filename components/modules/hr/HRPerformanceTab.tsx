@@ -112,9 +112,9 @@ export default function HRPerformanceTab() {
   }, [visibleTargets])
 
   return (
-    <div className="flex flex-col">
-      <div className="p-6 grid grid-cols-1 md:grid-cols-3 gap-6 bg-[var(--bg-surface)] border-b border-[var(--border-lt)]">
-        <div className="flex items-center gap-4">
+    <div className="hr-submodule hr-performance flex flex-col">
+      <div className="hr-submodule-kpis hr-performance-kpis p-6 grid grid-cols-1 md:grid-cols-3 gap-6 bg-[var(--bg-surface)] border-b border-[var(--border-lt)]">
+        <div className="hr-metric-card hr-metric-card--accent flex items-center gap-4">
           <div className="w-12 h-12 rounded-2xl bg-primary-50 text-primary-600 flex items-center justify-center text-xl">
             <Fa icon={faBullseye} />
           </div>
@@ -123,7 +123,7 @@ export default function HRPerformanceTab() {
             <h3 className="text-xl font-black text-[var(--text-1)]">{stats.total}</h3>
           </div>
         </div>
-        <div className="flex items-center gap-4">
+        <div className="hr-metric-card hr-metric-card--success flex items-center gap-4">
           <div className="w-12 h-12 rounded-2xl bg-green-50 text-green-600 flex items-center justify-center text-xl">
             <Fa icon={faTrophy} />
           </div>
@@ -132,7 +132,7 @@ export default function HRPerformanceTab() {
             <h3 className="text-xl font-black text-[var(--text-1)]">{stats.achieved}</h3>
           </div>
         </div>
-        <div className="flex items-center gap-4">
+        <div className="hr-metric-card hr-metric-card--danger flex items-center gap-4">
           <div className="w-12 h-12 rounded-2xl bg-red-50 text-red-600 flex items-center justify-center text-xl">
             <Fa icon={faTriangleExclamation} />
           </div>
@@ -143,22 +143,22 @@ export default function HRPerformanceTab() {
         </div>
       </div>
 
-      <div className="p-6">
-        <div className="flex items-center justify-between mb-6">
+      <div className="hr-submodule-content p-6">
+        <div className="hr-submodule-toolbar flex items-center justify-between mb-6">
           <h3 className="text-sm font-bold text-[var(--text-1)]">Performance Overview</h3>
           {isAdmin && (
             <button onClick={openTargetModal} className="btn-primary py-1.5 px-4 text-[10px]">Set New Target</button>
           )}
         </div>
 
-        <div className="grid grid-cols-1 gap-4">
+        <div className="hr-performance-list grid grid-cols-1 gap-4">
           {visibleTargets.length > 0 ? (
             visibleTargets.map(t => {
               const pct = Math.min(100, Math.round((t.currentValue / t.targetValue) * 100))
               const color = t.status === 'achieved' ? 'bg-green-500' : t.status === 'at_risk' ? 'bg-red-500' : 'bg-primary-500'
               
               return (
-                <div key={t.id} className="card p-5 hover:border-primary-500/30 transition-all">
+                <div key={t.id} className="hr-performance-card card p-5 hover:border-primary-500/30 transition-all">
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
                     <div className="flex items-center gap-3">
                       <div className="w-10 h-10 rounded-full bg-[var(--bg-muted)] flex items-center justify-center font-bold text-xs text-[var(--text-2)]">
@@ -226,7 +226,7 @@ export default function HRPerformanceTab() {
             <Field label="Initial Status"><Select value={targetForm.status} onChange={status => setTargetForm(p => ({ ...p, status: status as PerfStatus }))} options={[{ value: 'on_track', label: 'On Track' }, { value: 'at_risk', label: 'At Risk' }, { value: 'achieved', label: 'Achieved' }, { value: 'missed', label: 'Missed' }]} /></Field>
           </div>
           <Field label="Description"><Textarea value={targetForm.description} onChange={description => setTargetForm(p => ({ ...p, description }))} placeholder="Describe the target and any measurement rules." /></Field>
-          <div className="flex justify-end gap-2 pt-2">
+          <div className="hr-modal-actions flex justify-end gap-2 pt-2">
             <button className="btn-secondary px-4 py-2 text-xs" onClick={() => setShowTargetModal(false)}>Cancel</button>
             <button className="btn-primary px-4 py-2 text-xs" onClick={submitTarget}>Save Target</button>
           </div>
