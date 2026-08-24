@@ -42,19 +42,19 @@ export function HRTrainingTab() {
   }
 
   return (
-    <div className="flex flex-col">
-      <div className="p-4 border-b border-[var(--border-lt)] flex items-center justify-between gap-4">
+    <div className="hr-submodule hr-training flex flex-col">
+      <div className="hr-submodule-toolbar p-4 border-b border-[var(--border-lt)] flex items-center justify-between gap-4">
         <h3 className="text-sm font-bold text-[var(--text-1)] flex items-center gap-2"><Fa icon={faGraduationCap} /> Training Programs</h3>
         <button className="btn-primary flex items-center gap-2" onClick={() => setShowProgram(true)}><Fa icon={faPlus} /> New Program</button>
       </div>
 
-      <div className="p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+      <div className="hr-training-grid hr-submodule-content p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
         {trainingPrograms.length === 0 && <p className="text-xs text-[var(--text-4)] col-span-full text-center py-10">No training programs yet</p>}
         {trainingPrograms.map(p => {
           const enrollments = employeeTrainings.filter(t => t.trainingId === p.id)
           const completed = enrollments.filter(t => t.status === 'completed').length
           return (
-            <div key={p.id} className="rounded-xl border border-[var(--border-lt)] p-4 flex flex-col gap-2">
+            <div key={p.id} className="hr-training-card rounded-xl border border-[var(--border-lt)] p-4 flex flex-col gap-2">
               <div className="flex items-start justify-between gap-2">
                 <p className="text-sm font-bold text-[var(--text-1)]">{p.title}</p>
                 {p.mandatoryForNewHires && <Badge status="pending" label="Mandatory" />}
@@ -93,7 +93,7 @@ export function HRTrainingTab() {
               <input type="checkbox" checked={form.mandatoryForNewHires} onChange={e => setForm(f => ({ ...f, mandatoryForNewHires: e.target.checked }))} />
               Mandatory for new hires
             </label>
-            <div className="flex justify-end gap-2"><button className="btn-outline" onClick={() => setShowProgram(false)}>Cancel</button><button className="btn-primary" onClick={saveProgram}>Save</button></div>
+            <div className="hr-modal-actions flex justify-end gap-2"><button className="btn-outline" onClick={() => setShowProgram(false)}>Cancel</button><button className="btn-primary" onClick={saveProgram}>Save</button></div>
           </div>
         </Modal>
       )}
@@ -104,7 +104,7 @@ export function HRTrainingTab() {
             <Field label="Employee" required>
               <Select value={enrollEmp} onChange={setEnrollEmp} options={[{ value: '', label: '— Select —' }, ...employees.filter(e => e.status === 'active').map(e => ({ value: e.id, label: e.fullName }))]} />
             </Field>
-            <div className="flex justify-end gap-2"><button className="btn-outline" onClick={() => setShowEnroll(null)}>Cancel</button><button className="btn-primary" onClick={doEnroll} disabled={!enrollEmp}>Enroll</button></div>
+            <div className="hr-modal-actions flex justify-end gap-2"><button className="btn-outline" onClick={() => setShowEnroll(null)}>Cancel</button><button className="btn-primary" onClick={doEnroll} disabled={!enrollEmp}>Enroll</button></div>
           </div>
         </Modal>
       )}
@@ -154,8 +154,8 @@ export function HRDocumentsTab() {
   ]
 
   return (
-    <div className="flex flex-col">
-      <div className="p-4 border-b border-[var(--border-lt)] flex items-center justify-between gap-4">
+    <div className="hr-submodule hr-documents flex flex-col">
+      <div className="hr-submodule-toolbar p-4 border-b border-[var(--border-lt)] flex items-center justify-between gap-4">
         <h3 className="text-sm font-bold text-[var(--text-1)] flex items-center gap-2"><Fa icon={faFileLines} /> HR Documents</h3>
         <button className="btn-primary flex items-center gap-2" onClick={() => setShow(true)}><Fa icon={faPlus} /> Add Document</button>
       </div>
@@ -174,13 +174,13 @@ export function HRDocumentsTab() {
             <Field label="Employee" required>
               <Select value={form.employeeId} onChange={set('employeeId')} options={[{ value: '', label: '— Select —' }, ...employees.map(e => ({ value: e.id, label: e.fullName }))]} />
             </Field>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="hr-form-grid grid grid-cols-2 gap-4">
               <Field label="Type"><Select value={form.type} onChange={set('type')} options={DOC_TYPES} /></Field>
               <Field label="Expiry Date"><Input type="date" value={form.expiryDate} onChange={set('expiryDate')} /></Field>
             </div>
             <Field label="Title" required><Input value={form.title} onChange={set('title')} placeholder="e.g. Employment Contract 2026" /></Field>
             <Field label="Notes"><Textarea value={form.notes} onChange={set('notes')} rows={2} /></Field>
-            <div className="flex justify-end gap-2"><button className="btn-outline" onClick={() => setShow(false)}>Cancel</button><button className="btn-primary" onClick={save}>Save</button></div>
+            <div className="hr-modal-actions flex justify-end gap-2"><button className="btn-outline" onClick={() => setShow(false)}>Cancel</button><button className="btn-primary" onClick={save}>Save</button></div>
           </div>
         </Modal>
       )}
@@ -214,8 +214,8 @@ export function HRReportsTab() {
   }, [employees, leaveRequests, payrollRuns, employeeTrainings, trainingPrograms])
 
   return (
-    <div className="p-4 flex flex-col gap-4">
-      <div className="rounded-xl border border-[var(--border-lt)] p-4">
+    <div className="hr-submodule hr-reports hr-submodule-content p-4 flex flex-col gap-4">
+      <div className="hr-report-card rounded-xl border border-[var(--border-lt)] p-4">
         <h3 className="text-sm font-bold text-[var(--text-1)] mb-3 flex items-center gap-2"><Fa icon={faBuilding} /> Headcount by Department</h3>
         <div className="flex flex-col gap-2">
           {stats.byDept.length === 0 && <p className="text-xs text-[var(--text-4)]">No active employees</p>}
