@@ -90,6 +90,8 @@ export interface DataTableProps<T> {
   /** Accessible record name used for row activation and selection controls. */
   rowLabel?: (row: T) => string
   rowActions?: (row: T) => ReactNode
+  /** Desktop/tablet width reserved for the Actions column. Mobile cards ignore it. */
+  rowActionsWidth?: number
   cardAccent?: (row: T) => string
   renderCard?: (row: T) => ReactNode
   /** Per-row inline style override — e.g. a left border colored by status. */
@@ -142,6 +144,7 @@ export default function DataTable<T>({
   onRowClick,
   rowLabel,
   rowActions,
+  rowActionsWidth = 120,
   cardAccent,
   renderCard,
   rowStyle,
@@ -400,7 +403,7 @@ export default function DataTable<T>({
                     ? () => setSort(prev => nextSortState(prev, c.key, defaultSort))
                     : undefined,
                 })),
-                ...(rowActions ? [{ label: 'Actions', width: '120px', minWidth: 120, sticky: 'right' as const }] : []),
+                ...(rowActions ? [{ label: 'Actions', width: `${rowActionsWidth}px`, minWidth: rowActionsWidth, sticky: 'right' as const }] : []),
               ]}
               isLoading={isLoading}
               error={error}
