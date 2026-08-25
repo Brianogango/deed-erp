@@ -243,6 +243,85 @@ function billingMeta(repair: DiagnosisFeeRepair): {
   return { billing, customerType }
 }
 
+function formatDiagnosisFeeKes(amount: number): string {
+  return 'KES ' + Number(amount).toLocaleString('en-KE', { minimumFractionDigits: 2 })
+}
+
+export type DiagnosisFeeCustomerNotice = {
+  amount: number
+  status: 'due' | 'paid' | 'invoiced'
+  body: string
+}
+
+/**
+ * Customer-facing diagnosis charge copy for the public repair portal.
+ * Returns null when the job is Direct Repair, waived, warranty-exempt,
+ * billing-exempt, or received before the Aug 2026 policy cutoff.
+ */
+export function diagnosisFeeCustomerNotice(
+  repair: DiagnosisFeeRepair,
+  settings?: DiagnosisFeeSettings | null,
+): DiagnosisFeeCustomerNotice | null {
+  const resolved = resolveDiagnosisFee(repair, settings)
+  if (resolved.status === 'not_applicable' || resolved.status === 'waived') return null
+  const amount = Math.max(0, Number(resolved.amount) || 0)
+  if (amount <= 0) return null
+  const kes = formatDiagnosisFeeKes(amount)
+  if (resolved.status === 'paid') {
+    return {
+      amount,
+      status: 'paid',
+      body: `The diagnosis charge of ${kes} has been paid. It is not credited against labour or parts.`,
+    }
+  }
+  if (resolved.status === 'invoiced') {
+    return {
+      amount,
+      status: 'invoiced',
+      body: `A diagnosis charge of ${kes} is included on your invoice. It is not credited against labour or parts, and VAT on this fee is 0%.`,
+    }
+  }
+  return {
+    amount,
+    status: 'due',
+    body: `A diagnosis charge of ${kes} applies on this Diagnosis First job. It will be billed on your final invoice, is not credited against labour or parts, and VAT on this fee is 0%.`,
+  }
+}
+
+/** Fields the public portal needs to evaluate and display the diagnosis charge. */
+export function portalDiagnosisFeeFields(repair: DiagnosisFeeRepair): {
+  repairPath: 'diagnosis_first' | 'direct_repair'
+  deviceTier?: DeviceTier
+  diagnosisFee?: number
+  diagnosisFeeStatus?: DiagnosisFeeStatus
+  diagnosisFeeBilling?: DiagnosisFeeBilling
+  customerBillingType?: CustomerBillingType
+  diagnosisFeePaidAt?: string
+  billingExempt?: boolean
+  underWarranty?: boolean
+  warrantyCoverage?: string
+  intakeDate?: string
+} {
+  const tier = normalizeDeviceTier(repair.deviceTier)
+  return {
+    repairPath: repair.repairPath === 'direct_repair' ? 'direct_repair' : 'diagnosis_first',
+    deviceTier: tier ?? undefined,
+    diagnosisFee: repair.diagnosisFee ?? undefined,
+    diagnosisFeeStatus: (repair.diagnosisFeeStatus as DiagnosisFeeStatus | undefined) ?? undefined,
+    diagnosisFeeBilling: repair.diagnosisFeeBilling === 'upfront' || repair.diagnosisFeeBilling === 'invoice'
+      ? repair.diagnosisFeeBilling
+      : undefined,
+    customerBillingType: repair.customerBillingType === 'corporate' || repair.customerBillingType === 'walk_in'
+      ? repair.customerBillingType
+      : undefined,
+    diagnosisFeePaidAt: repair.diagnosisFeePaidAt ?? undefined,
+    billingExempt: repair.billingExempt ?? undefined,
+    underWarranty: repair.underWarranty,
+    warrantyCoverage: repair.warrantyCoverage ?? undefined,
+    intakeDate: repair.intakeDate ?? undefined,
+  }
+}
+
 export function resolveDiagnosisFee(
   repair: DiagnosisFeeRepair,
   settings?: DiagnosisFeeSettings | null,

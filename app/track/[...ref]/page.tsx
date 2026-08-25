@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import type { PortalRepair, PortalRepairStatus, RepairMessage } from '@/lib/portal-repairs'
 import { PortalPageSkeleton } from '@/components/ui'
+import { DiagnosisChargeNotice } from '@/components/portal/DiagnosisChargeNotice'
 
 // ─── Status config ────────────────────────────────────────────────────────────
 
@@ -217,6 +218,8 @@ export default function RepairTrackDetail() {
             <span style={{ fontSize: 12, color: '#555A73' }}>Deed Technologies</span>
           </div>
         </div>
+
+        <DiagnosisChargeNotice repair={repair} />
 
         {/* ── Status hero card ────────────────────────────────────────── */}
         <div className="rounded-2xl p-6" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', boxShadow: '0 8px 32px rgba(0,0,0,0.3)' }}>

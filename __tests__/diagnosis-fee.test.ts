@@ -5,8 +5,10 @@ import {
   DIAGNOSIS_FEE_POLICY_EFFECTIVE_AT,
   diagnosisFeeAmount,
   diagnosisFeeAmountForTier,
+  diagnosisFeeCustomerNotice,
   ensureDiagnosisFeeInQuoteLines,
   isDiagnosisFeeLine,
+  portalDiagnosisFeeFields,
   isDiagnosisFeePolicyInEffect,
   isDiagnosisFeeSettled,
   mustCollectDiagnosisFeeUpfront,
@@ -154,5 +156,63 @@ describe('diagnosis-fee', () => {
     const fee = buildDiagnosisFeeQuoteLine(1000)
     const labor = { type: 'labor', description: 'Labour', qty: 1, unitPrice: 5000, subtotal: 5000 }
     expect(taxableQuoteSubtotal([fee, labor])).toBe(5000)
+  })
+
+  it('builds a client-view diagnosis charge notice only when the fee applies', () => {
+    const due = diagnosisFeeCustomerNotice({ repairPath: 'diagnosis_first', intakeDate: AFTER })
+    expect(due?.status).toBe('due')
+    expect(due?.amount).toBe(1000)
+    expect(due?.body).toContain('KES 1,000.00')
+    expect(due?.body).toContain('Diagnosis First')
+    expect(due?.body).toContain('final invoice')
+
+    expect(diagnosisFeeCustomerNotice({ repairPath: 'direct_repair', intakeDate: AFTER })).toBeNull()
+    expect(diagnosisFeeCustomerNotice({
+      repairPath: 'diagnosis_first',
+      intakeDate: AFTER,
+      underWarranty: true,
+      warrantyCoverage: 'full',
+    })).toBeNull()
+    expect(diagnosisFeeCustomerNotice({
+      repairPath: 'diagnosis_first',
+      intakeDate: EARLIER,
+    })).toBeNull()
+
+    const paid = diagnosisFeeCustomerNotice({
+      repairPath: 'diagnosis_first',
+      intakeDate: AFTER,
+      diagnosisFee: 1000,
+      diagnosisFeeStatus: 'paid',
+    })
+    expect(paid?.status).toBe('paid')
+    expect(paid?.body).toContain('has been paid')
+
+    const invoiced = diagnosisFeeCustomerNotice({
+      repairPath: 'diagnosis_first',
+      intakeDate: AFTER,
+      diagnosisFee: 1000,
+      diagnosisFeeStatus: 'invoiced',
+    })
+    expect(invoiced?.status).toBe('invoiced')
+    expect(invoiced?.body).toContain('included on your invoice')
+  })
+
+  it('copies diagnosis-fee fields for the live portal mapper', () => {
+    expect(portalDiagnosisFeeFields({
+      repairPath: 'diagnosis_first',
+      intakeDate: AFTER,
+      diagnosisFee: 1000,
+      diagnosisFeeStatus: 'applicable',
+      billingExempt: false,
+      underWarranty: false,
+      warrantyCoverage: 'void',
+    })).toMatchObject({
+      repairPath: 'diagnosis_first',
+      diagnosisFee: 1000,
+      diagnosisFeeStatus: 'applicable',
+      intakeDate: AFTER,
+      warrantyCoverage: 'void',
+    })
+    expect(portalDiagnosisFeeFields({}).repairPath).toBe('diagnosis_first')
   })
 })

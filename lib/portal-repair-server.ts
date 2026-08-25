@@ -4,6 +4,7 @@ import { resolvePortalPaymentStatus } from './portal-payment'
 import { findRepairLinkedInvoice } from './portal-invoice-link'
 import { loadAppState } from './server-store'
 import type { RepairOrder } from './repair-types'
+import { portalDiagnosisFeeFields } from './diagnosis-fee'
 
 async function loadStoredPhotos(ref: string): Promise<{ url: string; name: string; date: string }[]> {
   try {
@@ -63,6 +64,7 @@ function erpToPortal(r: RepairOrder, linkedInvoice?: any): PortalRepair {
     issueDescription: r.issueDescription,
     accessories: r.accessories,
     assignedTechnicianName: r.assignedTechnicianName,
+    ...portalDiagnosisFeeFields(r),
     diagnosis: r.diagnosis
       ? {
           id: r.diagnosis.id,

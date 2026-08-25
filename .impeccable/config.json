@@ -181,6 +181,33 @@
         ],
         "createdAt": "2026-08-24T13:03:25.956Z",
         "reason": "PR #445 HR workspace category colors; user asked to merge and deploy that PR. Type-only pending_hr fix should not restyle existing SOP/PERF badges."
+      },
+      {
+        "rule": "design-system-color",
+        "value": "*",
+        "files": [
+          "app/portal/repair/**/page.tsx"
+        ],
+        "createdAt": "2026-08-25T08:22:21.369Z",
+        "reason": "Public repair portal uses its own dark client palette, not ERP DESIGN.md"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "*",
+        "files": [
+          "app/track/**/page.tsx"
+        ],
+        "createdAt": "2026-08-25T08:22:21.398Z",
+        "reason": "Public track view uses the same dark client palette as the repair portal"
+      },
+      {
+        "rule": "design-system-radius",
+        "value": "4px",
+        "files": [
+          "app/portal/repair/**/page.tsx"
+        ],
+        "createdAt": "2026-08-25T08:22:41.098Z",
+        "reason": "Existing public portal scrollbar radius, not ERP DESIGN.md"
       }
     ]
   }

@@ -5770,6 +5770,8 @@ export function StoreProvider({
       diagnosisFeeBilling: r.diagnosisFeeBilling,
       customerBillingType: r.customerBillingType,
       diagnosisFeePaidAt: r.diagnosisFeePaidAt,
+      billingExempt: r.billingExempt,
+      warrantyCoverage: r.warrantyCoverage,
       diagnosisStopped: r.diagnosisStopped,
       liabilityWaiverAccepted: r.liabilityWaiverAccepted,
       liabilityWaiverAcceptedAt: r.liabilityWaiverAcceptedAt,
