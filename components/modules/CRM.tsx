@@ -69,6 +69,12 @@ const LEAD_SOURCE_OPTIONS: { value: LeadSource; label: string }[] = [
   { value: 'walk_in', label: 'Walk-in' },
 ]
 
+function formatOptionalDate(value?: string | null) {
+  const normalized = value?.trim()
+  if (!normalized) return 'Not set'
+  return Number.isNaN(new Date(normalized).getTime()) ? 'Not set' : fmtDate(normalized)
+}
+
 export default function CRM() {
   return (
     <Suspense fallback={
@@ -935,7 +941,7 @@ function CRMContent() {
               <input aria-label="Search opportunities" className="form-input text-[11px] py-1.5" style={{ width: 220 }}
                 placeholder="Search ref, name, company…" value={oppSearch} onChange={e => setOppSearch(e.target.value)} />
             </PanelHeader>
-            <div className="w-full">
+            <div className="crm-opportunity-list__rows w-full">
               <div className="flex flex-col">
               {opportunities.filter(o => {
                 const s = oppSearch.toLowerCase()
@@ -949,13 +955,13 @@ function CRMContent() {
                 return (
                   <div
                     key={opp.id}
-                    className="p-4 cursor-pointer transition-colors"
+                    className="crm-opportunity-list__row p-4 cursor-pointer transition-colors"
                     style={{ borderBottom: '1px solid var(--border-lt)' }}
                     onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--bg-surface)' }}
                     onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent' }}
                     onClick={() => { setActiveOppId(opp.id); setView('detail') }}
                   >
-                    <div className="flex items-start justify-between gap-4">
+                    <div className="crm-opportunity-list__row-main flex items-start justify-between gap-4">
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-1 flex-wrap">
                           <span className="text-xs font-bold" style={{ color: 'var(--text-1)' }}>
@@ -968,15 +974,15 @@ function CRMContent() {
                           {opp.name}
                         </div>
                         <div className="text-xs" style={{ color: 'var(--text-3)' }}>
-                          {opp.companyName} · {opp.contactPersonName}
+                          {[opp.companyName, opp.contactPersonName].filter(Boolean).join(' · ') || 'Company not set'}
                         </div>
                         <div className="text-xs mt-1" style={{ color: 'var(--text-3)' }}>
-                          Owner: {opp.ownerName ?? ''} · Close: {fmtDate(opp.expectedCloseDate ?? '')}
+                          Owner: {opp.ownerName || 'Unassigned'} · Close: {formatOptionalDate(opp.expectedCloseDate)}
                           {oppQuotes.length > 0 && ` · ${oppQuotes.length} quote(s)`}
                           {typeof opp.leadScore === 'number' && ` · Lead Score: ${opp.leadScore}`}
                         </div>
                       </div>
-                      <div className="text-right">
+                      <div className="crm-opportunity-list__amount text-right">
                         <div className="text-sm font-bold" style={{ color: 'var(--text-1)' }}>
                           {fmtKes(opp.expectedValue)}
                         </div>
