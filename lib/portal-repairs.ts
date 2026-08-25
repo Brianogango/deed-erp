@@ -56,7 +56,12 @@ export interface PortalRepair {
   repairPath?: 'diagnosis_first' | 'direct_repair'
   deviceTier?: 'regular' | 'high_end'
   diagnosisFee?: number
-  diagnosisFeeStatus?: 'pending' | 'applicable' | 'waived' | 'invoiced' | 'not_applicable'
+  diagnosisFeeStatus?: 'pending' | 'applicable' | 'paid' | 'waived' | 'invoiced' | 'not_applicable'
+  diagnosisFeeBilling?: 'upfront' | 'invoice'
+  customerBillingType?: 'walk_in' | 'corporate'
+  diagnosisFeePaidAt?: string
+  billingExempt?: boolean
+  warrantyCoverage?: 'full' | 'partial' | 'void' | string
   diagnosisStopped?: boolean
   liabilityWaiverAccepted?: boolean
   liabilityWaiverAcceptedAt?: string

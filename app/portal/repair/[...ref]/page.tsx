@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import type { PortalRepair } from '@/lib/portal-repairs'
 import { PortalPageSkeleton } from '@/components/ui'
+import { DiagnosisChargeNotice } from '@/components/portal/DiagnosisChargeNotice'
 
 const STATUS_LABELS: Record<string, string> = {
   received:            'Device Received',
@@ -327,6 +328,7 @@ export default function RepairPortalPage() {
               }}>{STATUS_LABELS[repair.status] ?? repair.status}</span>
             </div>
           </div>
+          <DiagnosisChargeNotice repair={repair} style={{ margin: '20px 24px 0' }} />
           <div style={{ margin: '20px 24px 24px', padding: '14px 16px', borderRadius: 12, background: color + '14', border: `1px solid ${color}30` }}>
             <p style={{ fontSize: 13, color: '#E5E7EB', lineHeight: 1.65, fontWeight: 500 }}>{STATUS_MESSAGES[repair.status] ?? ''}</p>
           </div>

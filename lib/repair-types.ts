@@ -170,7 +170,9 @@ export interface RepairOrder {
   // Warranty
   warrantyId?: string
   underWarranty: boolean
+  warrantyCoverage?: 'full' | 'partial' | 'void'
   warrantyClaimId?: string  // For OEM/supplier claims
+  billingExempt?: boolean
   
   // Assignment
   assignedTechnicianId?: string
