@@ -2541,26 +2541,26 @@ function SalesContent() {
                         {detailTab === 'Order Lines' && (
                           <>
                           <div className="sp-table-wrap">
-                            <table className="sp-table sp-line-table" data-no-responsive>
+                            <table className="sp-table sp-line-table sp-line-table--order" data-no-responsive>
                               <thead>
                                 <tr>
-                                  <th>Product</th>
-                                  <th>Description</th>
-                                  <th className="num">Ordered</th>
-                                  <th>Unit</th>
+                                  <th data-col="product">Product</th>
+                                  <th data-col="description">Description</th>
+                                  <th className="num" data-col="qty">Ordered</th>
+                                  <th data-col="unit">Unit</th>
                                   {activeOrder.status === 'sale' && (
                                     <>
-                                      <th className="num">Reserved</th>
-                                      <th className="num">Delivered</th>
-                                      <th className="num">Invoiced</th>
+                                      <th className="num" data-col="reserved">Reserved</th>
+                                      <th className="num" data-col="delivered">Delivered</th>
+                                      <th className="num" data-col="invoiced">Invoiced</th>
                                     </>
                                   )}
-                                  <th>Bill on</th>
-                                  <th className="num">Unit price</th>
-                                  <th className="num">Disc%</th>
-                                  <th>Tax</th>
-                                  <th className="num">Amount</th>
-                                  <th></th>
+                                  <th data-col="policy">Bill on</th>
+                                  <th className="num" data-col="price">Unit price</th>
+                                  <th className="num" data-col="discount">Disc%</th>
+                                  <th data-col="tax">Tax</th>
+                                  <th className="num" data-col="amount">Amount</th>
+                                  <th data-col="actions"><span className="sr-only">Actions</span></th>
                                 </tr>
                               </thead>
                               <tbody className="divide-y divide-[var(--border-lt)]">
@@ -2633,7 +2633,7 @@ function SalesContent() {
                                         {isEditing ? <input type="number" aria-label="Line item quantity" min={1} value={editLineQty} onChange={e => setEditLineQty(e.target.value)} className="w-14 text-center" />
                                         : l.qty}
                                       </td>
-                                      <td data-col="unit">Unit</td>
+                                      <td data-col="unit">Unit(s)</td>
                                       {showDelivered && (
                                         <td className="num" data-col="reserved">
                                           <span className={`font-semibold ${reservedQty > 0 ? 'text-sky-600' : 'text-[var(--text-4)]'}`}>{reservedQty}</span>
@@ -3773,18 +3773,18 @@ function NewQuotationForm({
                   {fieldErrors.lines}
                 </p>
               )}
-              <table className="sp-table sp-line-table" data-no-responsive>
+              <table className="sp-table sp-line-table sp-line-table--edit" data-no-responsive>
                 <thead>
                   <tr>
-                    <th>#</th>
-                    <th>Product</th>
-                    <th>Description</th>
-                    <th className="num">Qty</th>
-                    <th>Unit</th>
-                    <th className="num">Unit price</th>
-                    <th>Taxes</th>
-                    <th className="num">Amount</th>
-                    <th></th>
+                    <th data-col="index">#</th>
+                    <th data-col="product">Product</th>
+                    <th data-col="description">Description</th>
+                    <th className="num" data-col="qty">Qty</th>
+                    <th data-col="unit">Unit</th>
+                    <th className="num" data-col="price">Unit price</th>
+                    <th data-col="tax">Taxes</th>
+                    <th className="num" data-col="amount">Amount</th>
+                    <th data-col="actions"><span className="sr-only">Actions</span></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -3890,7 +3890,7 @@ function NewQuotationForm({
                           <input type="number" aria-label="Line item quantity" min={1} className="text-center w-16" value={line.qty} onChange={e => updateDraftLine(line.id, 'qty', e.target.value)} />
                           {hasInvalidQty && <p className="text-[9px] text-red-600 font-semibold mt-1">Qty &gt; 0</p>}
                         </td>
-                        <td data-col="unit">Unit</td>
+                        <td data-col="unit">Unit(s)</td>
                         <td className="num" data-col="price">
                           <input
                             type="number"
