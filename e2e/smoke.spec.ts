@@ -232,7 +232,7 @@ test.describe('module render smoke', () => {
   const routes = [
     '/', '/sales', '/contacts', '/inventory', '/operations', '/purchases',
     '/pos', '/repairs', '/refurbishment', '/delivery', '/ecommerce',
-    '/kilimall', '/finance', '/hr', '/outsource', '/aftersales',
+    '/crm', '/kilimall', '/finance', '/hr', '/outsource', '/aftersales',
     '/deposits', '/holdovers', '/sops', '/expenses', '/settings',
   ]
 
@@ -257,6 +257,7 @@ test.describe('module render smoke', () => {
 
 test.describe('responsive target workspaces', () => {
   const routes = [
+    '/crm', '/crm?crmTab=leads',
     '/kilimall', '/sops', '/deposits', '/holdovers', '/settings',
     '/expenses',
     '/hr?tab=recruitment',
