@@ -35,7 +35,6 @@ import {
   faChartLine,
   faChevronDown,
   faChevronUp,
-  faMagnifyingGlass,
 } from '@fortawesome/free-solid-svg-icons'
 
 import { useApp, fmtKes, fmtDate } from '@/lib/store'
@@ -535,28 +534,18 @@ function HRContent() {
             </div>
             <div className="hr-employees-grid">
               <section className="hr-directory card overflow-hidden">
-            <div className="hr-directory-toolbar p-4 border-b border-[var(--border-lt)] flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="hr-directory-toolbar p-4 border-b border-[var(--border-lt)]">
               <h2>Employee directory</h2>
-              <div className="relative flex-1 max-w-md">
-                <input
-                  type="text"
-                  aria-label="Search employees"
-                  placeholder="Search employees..."
-                  className="form-input pl-9"
-                  value={empSearch}
-                  onChange={e => setEmpSearch(e.target.value)}
-                />
-                <div className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-4)]">
-                  <Fa icon={faMagnifyingGlass} aria-hidden="true" />
-                </div>
-              </div>
             </div>
             <DataTable
               tableId="hr_employees"
               columns={employeeColumns}
               rows={filteredEmployees}
               rowKey={e => e.id}
-              hideSearch
+              searchValue={empSearch}
+              onSearchChange={setEmpSearch}
+              clientSearch={false}
+              searchPlaceholder="Search employees…"
               emptyMessage={employees.length === 0 ? 'No employees yet' : 'No employees match your search'}
               emptyAction={employees.length === 0 ? <button className="btn-primary text-xs px-4 py-1.5 mt-1" onClick={() => setShowEmployeeModal(true)}>+ Add Employee</button> : undefined}
               onRowClick={e => setViewEmpId(e.id)}
