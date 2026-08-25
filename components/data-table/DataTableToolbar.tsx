@@ -299,7 +299,13 @@ export default function DataTableToolbar<T>(props: DataTableToolbarProps<T>) {
   return (
     <div className={`dt-toolbar ${props.loading ? 'is-loading' : ''}`.trim()}>
       {/* ── Main control row(s) ─────────────────────────────────────────── */}
-      <div className={`dt-toolbar-row ${isMobile ? 'dt-toolbar-row-mobile' : ''}`.trim()}>
+      <div
+        className={`dt-toolbar-row ${
+          isMobile
+            ? `dt-toolbar-row-mobile${!props.hideSearch && !hasFilterSurface ? ' dt-toolbar-row-mobile--compact' : ''}`
+            : ''
+        }`.trim()}
+      >
         {isMobile ? (
           <>
             {!props.hideSearch && (
