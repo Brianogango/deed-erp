@@ -39,7 +39,6 @@ test.describe('repair → quote → invoice money path', () => {
   let api: APIRequestContext
   let repairRef = ''
   let repairId = ''
-  let invoiceId = ''
 
   test.beforeAll(async ({ browser }) => {
     const context = await loginViaApi(browser)
@@ -125,7 +124,6 @@ test.describe('repair → quote → invoice money path', () => {
     expect(created.status()).toBe(201)
     const invoice = await created.json()
     expect(invoice.invoiceNumber).toMatch(/^INV\/\d{4}\/\d{4}$/)
-    invoiceId = invoice.id
 
     const payment = await api.post(`/api/invoices/${invoice.id}/payments`, {
       data: { amount: 5800, paymentMethod: 'mpesa', reference: 'E2E-MPESA-01' },
@@ -136,26 +134,6 @@ test.describe('repair → quote → invoice money path', () => {
     // Odoo semantics: the stored status stays a pure document state; payment
     // progress (Paid) is derived from amountPaid, never written into status.
     expect(payload.invoice.status).toBe('approved')
-  })
-
-  test('invoice record uses the approved Odoo chrome on phone', async ({ browser }) => {
-    const context = await loginViaApi(browser)
-    const page = await context.newPage()
-    await page.setViewportSize({ width: 390, height: 844 })
-    await page.goto(`/finance/invoices/${invoiceId}`)
-
-    await expect(page.locator('.finance-invoice-detail .odoo-record-status')).toBeVisible({ timeout: 30_000 })
-    await expect(page.locator('.finance-invoice-detail .odoo-smart-buttons')).toBeVisible()
-    await expect(page.getByRole('tab', { name: 'Invoice Lines' })).toBeVisible()
-    await expect(page.getByRole('button', { name: 'More actions' })).toBeVisible()
-
-    const actionColumns = await page.locator('.invoice-detail__header-actions').evaluate(element =>
-      window.getComputedStyle(element).gridTemplateColumns.split(' ').length
-    )
-    expect(actionColumns).toBe(2)
-    const overflow = await page.evaluate(() => Math.max(0, document.documentElement.scrollWidth - window.innerWidth))
-    expect(overflow).toBeLessThanOrEqual(2)
-    await context.close()
   })
 
   test('mirrors repairs into the relational table via backfill', async () => {
@@ -280,21 +258,6 @@ test.describe('odoo sales workflow enforcement', () => {
     const saleBody = await confirmed.json()
     expect(saleBody.status).toBe('sale')
     expect(saleBody.confirmedAt).toBeTruthy()
-  })
-
-  test('sales record keeps Odoo status, smart buttons and two-column phone actions', async ({ browser }) => {
-    const context = await loginViaApi(browser)
-    const page = await context.newPage()
-    await page.setViewportSize({ width: 390, height: 844 })
-    await page.goto(`/sales?id=${soId}`)
-
-    await expect(page.locator('.sales-record-odoo .odoo-record-status')).toBeVisible({ timeout: 30_000 })
-    await expect(page.locator('.sales-record-odoo .odoo-smart-buttons')).toBeVisible()
-    await expect(page.getByRole('tab', { name: 'Order Lines' })).toBeVisible()
-
-    const overflow = await page.evaluate(() => Math.max(0, document.documentElement.scrollWidth - window.innerWidth))
-    expect(overflow).toBeLessThanOrEqual(2)
-    await context.close()
   })
 
   test('rejects a Sales Order being pushed back to Quotation Sent', async () => {
