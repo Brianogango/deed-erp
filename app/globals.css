@@ -27884,3 +27884,1391 @@ body:has(.client-repair-portal) {
     line-height: 1;
   }
 }
+
+
+/* ==========================================================================
+   Odoo-inspired Sales, Invoice and Delivery records
+   Approved Deed design implementation — record chrome, smart buttons,
+   workflow status, document sheets and responsive phone cards.
+   ========================================================================== */
+
+.sales-record-odoo,
+.delivery-record-odoo,
+.finance-invoice-detail {
+  --odoo-navy: #20164d;
+  --odoo-cyan: #00aeef;
+  --odoo-cyan-dark: #008fbf;
+  --odoo-page: #f3f6f9;
+  --odoo-surface: #ffffff;
+  --odoo-soft: #f8fafc;
+  --odoo-line: #d9e1ea;
+  --odoo-line-strong: #c7d2df;
+  --odoo-ink: #101828;
+  --odoo-muted: #667085;
+  --odoo-success: #168a55;
+  --odoo-warning: #d97706;
+  min-width: 0;
+  color: var(--odoo-ink);
+}
+
+.odoo-record-breadcrumb {
+  width: 100%;
+  min-width: 0;
+  color: var(--odoo-muted);
+  font-size: 0.6875rem;
+  font-weight: 650;
+  letter-spacing: 0.01em;
+  line-height: 1.35;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.odoo-record-status {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  min-height: 3.5rem;
+  padding: 0.625rem clamp(0.875rem, 2vw, 1.5rem);
+  align-items: center;
+  justify-content: flex-end;
+  overflow-x: auto;
+  overflow-y: hidden;
+  border: 1px solid var(--odoo-line);
+  border-top: 0;
+  background: var(--odoo-surface);
+  scrollbar-width: thin;
+}
+
+.odoo-record-status__step {
+  position: relative;
+  display: inline-flex;
+  min-width: max-content;
+  align-items: center;
+  gap: 0.45rem;
+  color: #7b8494;
+  font-size: 0.6875rem;
+  font-weight: 750;
+  letter-spacing: 0.035em;
+  text-transform: uppercase;
+}
+
+.odoo-record-status__step:not(:last-child) {
+  margin-right: 0.625rem;
+  padding-right: 2.75rem;
+}
+
+.odoo-record-status__step:not(:last-child)::after {
+  position: absolute;
+  top: 50%;
+  right: 0.3rem;
+  width: 1.9rem;
+  height: 1px;
+  background: var(--odoo-line-strong);
+  content: '';
+}
+
+.odoo-record-status__marker {
+  display: inline-grid;
+  width: 1.55rem;
+  height: 1.55rem;
+  flex: 0 0 1.55rem;
+  place-items: center;
+  border: 1px solid var(--odoo-line-strong);
+  border-radius: 999px;
+  background: #fff;
+  color: #64748b;
+  font-size: 0.625rem;
+}
+
+.odoo-record-status__step[data-state='done'] {
+  color: var(--odoo-success);
+}
+
+.odoo-record-status__step[data-state='done'] .odoo-record-status__marker {
+  border-color: var(--odoo-success);
+  background: var(--odoo-success);
+  color: #fff;
+}
+
+.odoo-record-status__step[data-state='current'] {
+  color: var(--odoo-navy);
+}
+
+.odoo-record-status__step[data-state='current'] .odoo-record-status__marker {
+  border-color: var(--odoo-cyan);
+  background: #e9f9ff;
+  color: var(--odoo-navy);
+  box-shadow: 0 0 0 3px rgb(0 174 239 / 0.12);
+}
+
+.odoo-smart-buttons {
+  display: grid;
+  width: 100%;
+  min-width: 0;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  border: 1px solid var(--odoo-line);
+  border-top: 0;
+  background: var(--odoo-surface);
+}
+
+.odoo-smart-button {
+  display: flex;
+  min-width: 0;
+  min-height: 4.25rem;
+  padding: 0.65rem 0.85rem;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 0.15rem;
+  border: 0;
+  border-right: 1px solid var(--odoo-line);
+  background: #fff;
+  color: var(--odoo-ink);
+  text-align: left;
+}
+
+button.odoo-smart-button {
+  cursor: pointer;
+}
+
+button.odoo-smart-button:hover {
+  background: #f2fbff;
+}
+
+.odoo-smart-button:last-child {
+  border-right: 0;
+}
+
+.odoo-smart-button strong {
+  display: block;
+  width: 100%;
+  overflow: hidden;
+  color: var(--odoo-navy);
+  font-size: 0.9375rem;
+  font-weight: 800;
+  line-height: 1.15;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.odoo-smart-button span {
+  color: var(--odoo-muted);
+  font-size: 0.6875rem;
+  font-weight: 650;
+  line-height: 1.2;
+}
+
+.odoo-smart-button[data-emphasis='true'] {
+  border-top: 2px solid var(--odoo-cyan);
+}
+
+.odoo-record-alert {
+  display: flex;
+  min-height: 2.75rem;
+  margin-top: 0.75rem;
+  padding: 0.65rem 0.875rem;
+  align-items: center;
+  gap: 0.65rem;
+  border: 1px solid #aadff0;
+  border-radius: 0.5rem;
+  background: #effaff;
+  color: #164e63;
+  font-size: 0.75rem;
+}
+
+.odoo-record-alert > span {
+  display: inline-grid;
+  width: 1.25rem;
+  height: 1.25rem;
+  flex: 0 0 1.25rem;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--odoo-cyan);
+  color: #fff;
+  font-size: 0.6875rem;
+  font-weight: 850;
+}
+
+/* Quotation and sales order document sheet */
+.sales-record-odoo {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  padding: 0 clamp(0.75rem, 2vw, 1.5rem) 1.5rem;
+  flex-direction: column;
+  background: var(--odoo-page);
+}
+
+.sales-record-odoo > .sales-proto-page-header,
+.delivery-record-odoo > .sales-proto-page-header {
+  display: flex !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  min-height: 5rem !important;
+  margin: 0 !important;
+  padding: 0.75rem 1rem !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 1rem !important;
+  border: 1px solid var(--odoo-line) !important;
+  background: #fff !important;
+  box-shadow: none !important;
+}
+
+.sales-record-odoo > .sales-proto-page-header .sales-proto-header-copy,
+.delivery-record-odoo > .sales-proto-page-header .sales-proto-header-copy {
+  display: grid !important;
+  width: auto !important;
+  max-width: min(62rem, 72%) !important;
+  min-width: 0 !important;
+  flex: 1 1 auto !important;
+  grid-template-columns: 2.5rem minmax(0, 1fr) !important;
+  align-items: center !important;
+  gap: 0.25rem 0.75rem !important;
+}
+
+.sales-record-odoo .odoo-record-breadcrumb,
+.delivery-record-odoo .odoo-record-breadcrumb {
+  grid-column: 1 / -1;
+}
+
+.sales-record-odoo .sales-back-button,
+.delivery-record-odoo .sales-back-button {
+  grid-column: 1;
+  grid-row: 2 / span 2;
+}
+
+.sales-record-odoo .sp-ref-row,
+.delivery-record-odoo .sp-ref-row {
+  grid-column: 2;
+  grid-row: 2;
+}
+
+.sales-record-odoo .sales-proto-header-copy > .sub,
+.delivery-record-odoo .sales-proto-header-copy > .sub {
+  grid-column: 2;
+  grid-row: 3;
+}
+
+.sales-record-odoo .sales-record-title-block {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  gap: 0.65rem;
+}
+
+.sales-record-odoo .sales-record-title-block h1,
+.delivery-record-odoo .sales-record-title-block h1 {
+  margin: 0;
+  color: var(--odoo-navy);
+  font-size: 1.25rem;
+  font-weight: 800;
+  letter-spacing: -0.025em;
+}
+
+.sales-record-odoo .sales-record-ref,
+.delivery-record-odoo .sales-record-ref {
+  color: #344054;
+  font-size: 0.75rem;
+  font-weight: 750;
+}
+
+.sales-record-odoo .sales-proto-actions,
+.delivery-record-odoo .sales-delivery-header-actions {
+  width: auto !important;
+  min-width: 0 !important;
+  margin-left: auto !important;
+  flex: 0 1 auto !important;
+  flex-wrap: wrap !important;
+  justify-content: flex-end !important;
+}
+
+.sales-record-odoo .sales-proto-actions .sp-btn,
+.delivery-record-odoo .sales-delivery-header-actions .sp-btn {
+  min-height: 2.625rem;
+  border-radius: 0.5rem;
+}
+
+.sales-record-odoo .sales-proto-actions .sp-btn-primary,
+.delivery-record-odoo .sales-delivery-header-actions .sp-btn-primary {
+  border-color: var(--odoo-cyan);
+  background: var(--odoo-cyan);
+  color: #fff;
+}
+
+.sales-record-odoo > .odoo-record-status,
+.sales-record-odoo > .odoo-smart-buttons,
+.delivery-record-odoo > .odoo-record-status,
+.delivery-record-odoo > .odoo-smart-buttons {
+  margin: 0;
+}
+
+.sales-record-odoo .sales-record-summary,
+.delivery-record-odoo .sales-delivery-summary {
+  display: grid;
+  width: 100%;
+  min-width: 0;
+  margin: 0.75rem 0 0;
+  padding: 1rem 1.125rem;
+  grid-template-columns: minmax(13rem, 1.15fr) minmax(20rem, 2fr) minmax(13rem, 1fr);
+  align-items: center;
+  gap: 1rem;
+  border: 1px solid var(--odoo-line);
+  border-radius: 0.625rem;
+  background: #fff;
+  box-shadow: none;
+}
+
+.sales-record-odoo .sales-record-summary__primary strong,
+.delivery-record-odoo .sales-delivery-summary__primary strong {
+  color: var(--odoo-navy);
+  font-size: 1.35rem;
+}
+
+.sales-record-odoo .sales-record-summary__facts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.sales-record-odoo .sales-record-summary__facts > div {
+  min-width: 0;
+  padding-inline: 0.875rem;
+  border-left: 1px solid var(--odoo-line);
+}
+
+.sales-record-odoo .sales-order-meta-panel {
+  margin-top: 0.75rem;
+  padding: 1.125rem !important;
+  border: 1px solid var(--odoo-line);
+  border-radius: 0.625rem;
+  background: #fff;
+}
+
+.sales-record-odoo .sales-order-meta-grid {
+  gap: clamp(1.5rem, 4vw, 4rem);
+}
+
+.sales-record-odoo .sales-order-meta-column {
+  gap: 0.6rem;
+}
+
+.sales-record-odoo .sales-order-section-heading {
+  margin-bottom: 0.25rem;
+  padding-bottom: 0.55rem;
+  border-bottom: 1px solid var(--odoo-line);
+}
+
+.sales-record-odoo .sp-field {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: minmax(7.5rem, 0.7fr) minmax(0, 1.3fr);
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.sales-record-odoo .sp-field > label {
+  margin: 0;
+  color: var(--odoo-muted);
+  font-size: 0.6875rem;
+  font-weight: 700;
+}
+
+.sales-record-odoo .sp-field :is(input, select, textarea, .sp-value) {
+  min-width: 0;
+  min-height: 2.25rem;
+  border-color: transparent;
+  border-bottom-color: var(--odoo-line);
+  border-radius: 0;
+  background: transparent;
+  color: var(--odoo-ink);
+  font-size: 0.75rem;
+}
+
+.sales-record-odoo .sp-field :is(input, select, textarea):focus {
+  border-color: var(--odoo-cyan);
+  border-radius: 0.35rem;
+  background: #fff;
+  outline: none;
+}
+
+.sales-record-odoo .sales-order-lines-panel {
+  margin-top: 0.75rem !important;
+  overflow: hidden;
+  border: 1px solid var(--odoo-line);
+  border-radius: 0.625rem;
+  background: #fff;
+}
+
+.sales-record-odoo .sales-order-section-tabs,
+.delivery-record-odoo .delivery-record-tabs,
+.finance-invoice-detail .invoice-odoo-tabs {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  min-height: 3.25rem;
+  padding-inline: 0.75rem;
+  overflow-x: auto;
+  overflow-y: hidden;
+  border-bottom: 1px solid var(--odoo-line);
+  background: #fff;
+  scrollbar-width: thin;
+}
+
+.sales-record-odoo .sp-line-table,
+.delivery-record-odoo .sp-line-table,
+.finance-invoice-detail .invoice-detail__table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.sales-record-odoo .sp-line-table thead,
+.delivery-record-odoo .sp-line-table thead,
+.finance-invoice-detail .invoice-detail__table thead {
+  background: #f7f9fc;
+}
+
+.sales-record-odoo .sp-line-table th,
+.delivery-record-odoo .sp-line-table th,
+.finance-invoice-detail .invoice-detail__table th {
+  height: 2.75rem;
+  color: #667085;
+  font-size: 0.625rem;
+  font-weight: 800;
+  letter-spacing: 0.045em;
+  text-transform: uppercase;
+}
+
+.sales-record-odoo .sp-line-table td,
+.delivery-record-odoo .sp-line-table td,
+.finance-invoice-detail .invoice-detail__table td {
+  min-height: 3rem;
+  border-bottom: 1px solid #e7ecf2;
+  color: var(--odoo-ink);
+  font-size: 0.75rem;
+}
+
+.sales-record-odoo .sp-totals {
+  width: min(100%, 24rem);
+  margin: 1rem 1rem 1rem auto;
+  border: 0;
+  background: #fff;
+}
+
+.sales-record-odoo .sp-totals-row.grand {
+  color: var(--odoo-navy);
+  font-size: 1rem;
+}
+
+/* Delivery record */
+.delivery-record-odoo {
+  width: 100%;
+  min-width: 0;
+  padding: 0 clamp(0.75rem, 2vw, 1.5rem) 5.5rem;
+  background: var(--odoo-page);
+}
+
+.delivery-record-odoo .sp-delivery-work {
+  display: grid;
+  min-width: 0;
+  margin-top: 0.75rem;
+  grid-template-columns: minmax(13rem, 16rem) minmax(0, 1fr);
+  align-items: start;
+  gap: 0.75rem;
+}
+
+.delivery-record-odoo .sp-delivery-rail,
+.delivery-record-odoo .sp-delivery-main > .sp-panel,
+.delivery-record-odoo .sales-delivery-operations > .sp-panel,
+.delivery-record-odoo .sales-delivery-recipient,
+.delivery-record-odoo .delivery-record-additional,
+.delivery-record-odoo .delivery-record-empty {
+  border: 1px solid var(--odoo-line);
+  border-radius: 0.625rem;
+  background: #fff;
+  box-shadow: none;
+}
+
+.delivery-record-odoo .sp-delivery-main {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.delivery-record-odoo .delivery-record-tabs {
+  border: 1px solid var(--odoo-line);
+  border-radius: 0.625rem 0.625rem 0 0;
+}
+
+.delivery-record-odoo .sales-delivery-operations,
+.delivery-record-odoo .sales-delivery-recipient,
+.delivery-record-odoo .delivery-record-additional,
+.delivery-record-odoo .delivery-record-empty {
+  padding: 1rem;
+}
+
+.delivery-record-odoo .sales-pilot-scan {
+  min-height: 2.625rem;
+  border-color: var(--odoo-line-strong);
+  border-radius: 0.5rem;
+}
+
+.delivery-record-odoo .sp-footer-sticky {
+  right: clamp(0.75rem, 2vw, 1.5rem);
+  bottom: 0.75rem;
+  left: clamp(0.75rem, 2vw, 1.5rem);
+  width: auto;
+  min-width: 0;
+  padding: 0.7rem 0.875rem;
+  border: 1px solid var(--odoo-line);
+  border-radius: 0.625rem;
+  background: #fff;
+  box-shadow: 0 0.55rem 1.5rem rgb(16 24 40 / 0.12);
+}
+
+/* Finance invoice record */
+.finance-invoice-detail {
+  width: 100%;
+  min-width: 0;
+  background: var(--odoo-page);
+}
+
+.finance-invoice-detail .invoice-detail__chrome {
+  display: flex;
+  width: 100% !important;
+  max-width: none !important;
+  min-width: 0;
+  padding: 0.75rem clamp(0.75rem, 2vw, 1.5rem) 0 !important;
+  flex-direction: column;
+  background: var(--odoo-page);
+}
+
+.finance-invoice-detail .invoice-detail__header {
+  display: flex !important;
+  width: 100% !important;
+  max-width: none !important;
+  min-width: 0 !important;
+  min-height: 5.5rem;
+  padding: 0.875rem 1rem;
+  align-items: center !important;
+  justify-content: flex-start !important;
+  gap: 1rem !important;
+  border: 1px solid var(--odoo-line);
+  background: #fff;
+}
+
+.finance-invoice-detail .invoice-detail__header-main {
+  width: auto !important;
+  max-width: min(64rem, 72%) !important;
+  min-width: 0 !important;
+  flex: 1 1 auto !important;
+}
+
+.finance-invoice-detail .invoice-detail__title {
+  color: var(--odoo-navy);
+  font-size: 1.25rem;
+  font-weight: 800;
+  letter-spacing: -0.025em;
+}
+
+.finance-invoice-detail .invoice-detail__ref {
+  color: #344054;
+  font-weight: 750;
+}
+
+.finance-invoice-detail .invoice-detail__header-actions {
+  position: static !important;
+  inset: auto !important;
+  display: flex !important;
+  width: auto !important;
+  min-width: 0 !important;
+  margin: 0 0 0 auto !important;
+  flex: 0 1 auto !important;
+  flex-wrap: wrap !important;
+  align-items: center !important;
+  justify-content: flex-end !important;
+  gap: 0.5rem !important;
+}
+
+.finance-invoice-detail .invoice-detail__header-actions button {
+  min-height: 2.625rem;
+  border-radius: 0.5rem;
+}
+
+.finance-invoice-detail .invoice-detail__chrome > .odoo-record-status,
+.finance-invoice-detail .invoice-detail__chrome > .odoo-smart-buttons {
+  width: 100%;
+  margin: 0;
+}
+
+.finance-invoice-detail .invoice-detail__body {
+  display: flex;
+  width: 100% !important;
+  max-width: none !important;
+  min-width: 0 !important;
+  padding: 0.75rem clamp(0.75rem, 2vw, 1.5rem) 2rem !important;
+  flex-direction: column;
+  gap: 0.75rem !important;
+}
+
+.finance-invoice-detail .invoice-odoo-key-fields,
+.finance-invoice-detail .invoice-detail__summary,
+.finance-invoice-detail .invoice-detail__card,
+.finance-invoice-detail .invoice-detail__supporting,
+.finance-invoice-detail .invoice-detail__tabs-card,
+.finance-invoice-detail .invoice-odoo-other-notes {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--odoo-line);
+  border-radius: 0.625rem;
+  background: #fff;
+  box-shadow: none;
+}
+
+.finance-invoice-detail .invoice-odoo-key-fields {
+  display: grid;
+  padding: 1rem 1.125rem;
+  grid-template-columns: minmax(14rem, 0.8fr) minmax(0, 2fr);
+  gap: clamp(1.5rem, 4vw, 4rem);
+}
+
+.finance-invoice-detail .invoice-odoo-key-fields__identity {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.finance-invoice-detail .invoice-odoo-key-fields__identity span,
+.finance-invoice-detail .invoice-odoo-key-fields dt {
+  color: var(--odoo-muted);
+  font-size: 0.625rem;
+  font-weight: 800;
+  letter-spacing: 0.045em;
+  text-transform: uppercase;
+}
+
+.finance-invoice-detail .invoice-odoo-key-fields__identity strong {
+  color: var(--odoo-navy);
+  font-size: 1.05rem;
+  font-weight: 800;
+}
+
+.finance-invoice-detail .invoice-odoo-key-fields__identity small {
+  color: var(--odoo-muted);
+  font-size: 0.75rem;
+}
+
+.finance-invoice-detail .invoice-odoo-key-fields dl {
+  display: grid;
+  margin: 0;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.65rem 1.5rem;
+}
+
+.finance-invoice-detail .invoice-odoo-key-fields dl > div {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: minmax(7rem, 0.8fr) minmax(0, 1.2fr);
+  align-items: baseline;
+  gap: 0.75rem;
+}
+
+.finance-invoice-detail .invoice-odoo-key-fields dd {
+  min-width: 0;
+  margin: 0;
+  color: var(--odoo-ink);
+  font-size: 0.75rem;
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
+
+.finance-invoice-detail .invoice-odoo-key-fields dd.is-overdue {
+  color: #b42318;
+}
+
+.finance-invoice-detail .invoice-detail__summary {
+  display: grid;
+  padding: 1rem 1.125rem;
+  grid-template-columns: minmax(14rem, 1.2fr) minmax(20rem, 2fr) minmax(13rem, 1fr);
+  align-items: center;
+  gap: 1rem;
+}
+
+.finance-invoice-detail .invoice-detail__summary-primary {
+  padding: 0;
+}
+
+.finance-invoice-detail .invoice-detail__summary-amount {
+  color: var(--odoo-navy);
+  font-size: clamp(1.5rem, 2.2vw, 2.1rem);
+}
+
+.finance-invoice-detail .invoice-detail__summary-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.finance-invoice-detail .invoice-detail__summary-stats > div {
+  min-width: 0;
+  padding-inline: 0.875rem;
+  border-left: 1px solid var(--odoo-line);
+}
+
+.finance-invoice-detail .invoice-detail__card,
+.finance-invoice-detail .invoice-detail__tabs-card {
+  overflow: hidden;
+}
+
+.finance-invoice-detail .invoice-detail__card-head {
+  min-height: 3.25rem;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--odoo-line);
+}
+
+.finance-invoice-detail .invoice-detail__card-title {
+  color: var(--odoo-navy);
+  font-size: 0.9375rem;
+  font-weight: 800;
+}
+
+.finance-invoice-detail .invoice-detail__table-wrap {
+  overflow-x: auto;
+}
+
+.finance-invoice-detail .invoice-detail__totals {
+  width: min(100%, 24rem);
+  margin: 1rem 1rem 1rem auto;
+}
+
+.finance-invoice-detail .invoice-detail__supporting[open] > .invoice-detail__supporting-toggle {
+  border-bottom: 1px solid var(--odoo-line);
+}
+
+.finance-invoice-detail .invoice-detail__info-grid {
+  display: grid;
+  padding: 1rem;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.finance-invoice-detail .invoice-detail__info-card {
+  border: 1px solid var(--odoo-line);
+  border-radius: 0.5rem;
+  box-shadow: none;
+}
+
+.finance-invoice-detail .invoice-odoo-other-notes {
+  margin: 0 1rem 1rem;
+  width: auto;
+  padding: 1rem;
+}
+
+.finance-invoice-detail .invoice-odoo-other-notes h3 {
+  color: var(--odoo-navy);
+  font-size: 0.875rem;
+  font-weight: 800;
+}
+
+.finance-invoice-detail .invoice-odoo-other-notes > p {
+  margin: 0.35rem 0 1rem;
+  color: var(--odoo-muted);
+  font-size: 0.75rem;
+}
+
+.finance-invoice-detail .invoice-detail__document-row {
+  display: flex;
+  width: 100%;
+  min-height: 3rem;
+  padding: 0.75rem 1rem;
+  align-items: center;
+  justify-content: space-between;
+  border: 0;
+  border-bottom: 1px solid var(--odoo-line);
+  background: #fff;
+  color: var(--odoo-ink);
+  text-align: left;
+}
+
+.finance-invoice-detail .invoice-detail__document-row:hover {
+  background: #f2fbff;
+}
+
+.finance-invoice-detail .invoice-detail__document-row strong {
+  color: var(--odoo-cyan-dark);
+  font-size: 0.75rem;
+}
+
+@media (max-width: 900px) {
+  .odoo-smart-buttons {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .odoo-smart-button:nth-child(3n) {
+    border-right: 0;
+  }
+
+  .odoo-smart-button:nth-child(n + 4) {
+    border-top: 1px solid var(--odoo-line);
+  }
+
+  .sales-record-odoo .sales-record-summary,
+  .delivery-record-odoo .sales-delivery-summary,
+  .finance-invoice-detail .invoice-detail__summary {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+
+  .sales-record-odoo .sales-record-summary__next,
+  .delivery-record-odoo .sales-delivery-summary__next,
+  .finance-invoice-detail .invoice-detail__summary-progress {
+    grid-column: 1 / -1;
+  }
+
+  .delivery-record-odoo .sp-delivery-work {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .delivery-record-odoo .sp-delivery-rail {
+    display: flex;
+    overflow-x: auto;
+  }
+
+  .delivery-record-odoo .sp-delivery-item {
+    min-width: 13rem;
+  }
+
+  .finance-invoice-detail .invoice-detail__info-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 767px) {
+  .sales-record-odoo,
+  .delivery-record-odoo {
+    padding-inline: 0.75rem !important;
+  }
+
+  .sales-record-odoo {
+    padding-bottom: 1.25rem !important;
+  }
+
+  .sales-record-odoo > .sales-proto-page-header,
+  .delivery-record-odoo > .sales-proto-page-header {
+    display: grid !important;
+    min-height: 0 !important;
+    padding: 0.75rem !important;
+    grid-template-columns: minmax(0, 1fr) !important;
+    gap: 0.75rem !important;
+  }
+
+  .sales-record-odoo > .sales-proto-page-header .sales-proto-header-copy,
+  .delivery-record-odoo > .sales-proto-page-header .sales-proto-header-copy {
+    display: grid !important;
+    width: 100% !important;
+    max-width: none !important;
+    grid-template-columns: 2.75rem minmax(0, 1fr) !important;
+    gap: 0.35rem 0.65rem !important;
+  }
+
+  .sales-record-odoo .odoo-record-breadcrumb,
+  .delivery-record-odoo .odoo-record-breadcrumb {
+    grid-column: 1 / -1 !important;
+    grid-row: 1 !important;
+  }
+
+  .sales-record-odoo .sales-back-button,
+  .delivery-record-odoo .sales-back-button {
+    grid-column: 1 !important;
+    grid-row: 2 / span 2 !important;
+    width: 2.75rem !important;
+    min-width: 2.75rem !important;
+    height: 2.75rem !important;
+  }
+
+  .sales-record-odoo .sp-ref-row,
+  .delivery-record-odoo .sp-ref-row {
+    grid-column: 2 !important;
+    grid-row: 2 !important;
+  }
+
+  .sales-record-odoo .sales-proto-header-copy > .sub,
+  .delivery-record-odoo .sales-proto-header-copy > .sub {
+    grid-column: 2 !important;
+    grid-row: 3 !important;
+    min-width: 0 !important;
+    overflow-wrap: anywhere;
+  }
+
+  .sales-record-odoo .sales-record-title-block,
+  .delivery-record-odoo .sales-record-title-block {
+    display: block;
+  }
+
+  .sales-record-odoo .sales-record-title-block h1,
+  .delivery-record-odoo .sales-record-title-block h1 {
+    font-size: 1.125rem !important;
+    line-height: 1.2 !important;
+  }
+
+  .sales-record-odoo .sales-record-ref,
+  .delivery-record-odoo .sales-record-ref {
+    display: block;
+    margin-top: 0.2rem;
+    font-size: 0.6875rem !important;
+  }
+
+  .sales-record-odoo .sales-proto-actions--dock,
+  .sales-record-odoo .sales-record-actions,
+  .delivery-record-odoo .sales-delivery-header-actions {
+    position: static !important;
+    inset: auto !important;
+    display: grid !important;
+    width: 100% !important;
+    max-width: none !important;
+    margin: 0 !important;
+    padding: 0.625rem 0 0 !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    align-items: stretch !important;
+    gap: 0.5rem !important;
+    border: 0 !important;
+    border-top: 1px solid var(--odoo-line) !important;
+    background: transparent !important;
+    box-shadow: none !important;
+  }
+
+  .sales-record-odoo .sales-proto-actions--dock > *,
+  .sales-record-odoo .sales-record-actions > *,
+  .delivery-record-odoo .sales-delivery-header-actions > * {
+    width: 100% !important;
+    min-width: 0 !important;
+    margin: 0 !important;
+  }
+
+  .sales-record-odoo .sales-proto-actions--dock button,
+  .sales-record-odoo .sales-record-actions button,
+  .delivery-record-odoo .sales-delivery-header-actions button {
+    width: 100% !important;
+    min-width: 0 !important;
+    min-height: 2.75rem !important;
+    padding-inline: 0.5rem !important;
+    justify-content: center !important;
+    font-size: 0.75rem !important;
+  }
+
+  .odoo-record-status {
+    min-height: 3.25rem;
+    padding: 0.55rem 0.75rem;
+    justify-content: flex-start;
+    scroll-snap-type: x proximity;
+  }
+
+  .odoo-record-status__step {
+    scroll-snap-align: start;
+    font-size: 0.625rem;
+  }
+
+  .odoo-record-status__step:not(:last-child) {
+    padding-right: 2rem;
+  }
+
+  .odoo-record-status__step:not(:last-child)::after {
+    width: 1.2rem;
+  }
+
+  .odoo-smart-button {
+    min-height: 3.75rem;
+    padding: 0.55rem 0.625rem;
+  }
+
+  .odoo-smart-button strong {
+    font-size: 0.8125rem;
+  }
+
+  .odoo-smart-button span {
+    font-size: 0.625rem;
+  }
+
+  .sales-record-odoo .sales-record-summary,
+  .delivery-record-odoo .sales-delivery-summary,
+  .finance-invoice-detail .invoice-detail__summary {
+    display: grid !important;
+    margin-top: 0.625rem;
+    padding: 0.75rem !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 0 !important;
+  }
+
+  .sales-record-odoo .sales-record-summary__primary,
+  .delivery-record-odoo .sales-delivery-summary__primary,
+  .finance-invoice-detail .invoice-detail__summary-primary {
+    padding: 0.75rem !important;
+    grid-column: 1 / -1;
+    border-bottom: 1px solid var(--odoo-line);
+  }
+
+  .sales-record-odoo .sales-record-summary__facts,
+  .delivery-record-odoo .sales-delivery-summary dl,
+  .finance-invoice-detail .invoice-detail__summary-stats {
+    display: contents !important;
+  }
+
+  .sales-record-odoo .sales-record-summary__facts > div,
+  .delivery-record-odoo .sales-delivery-summary dl > div,
+  .finance-invoice-detail .invoice-detail__summary-stats > div {
+    min-width: 0;
+    padding: 0.65rem !important;
+    border: 0 !important;
+    border-bottom: 1px solid var(--odoo-line) !important;
+  }
+
+  .sales-record-odoo .sales-record-summary__facts > div:nth-child(odd),
+  .delivery-record-odoo .sales-delivery-summary dl > div:nth-child(odd),
+  .finance-invoice-detail .invoice-detail__summary-stats > div:nth-child(odd) {
+    border-right: 1px solid var(--odoo-line) !important;
+  }
+
+  .sales-record-odoo .sales-record-summary__next,
+  .delivery-record-odoo .sales-delivery-summary__next,
+  .finance-invoice-detail .invoice-detail__summary-progress {
+    padding: 0.75rem !important;
+    grid-column: 1 / -1;
+  }
+
+  .sales-record-odoo .sales-order-meta-panel {
+    padding: 0.75rem !important;
+  }
+
+  .sales-record-odoo .sales-order-meta-grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+    gap: 1rem !important;
+  }
+
+  .sales-record-odoo .sp-field {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.25rem;
+  }
+
+  .sales-record-odoo .sp-field :is(input, select, textarea, .sp-value) {
+    min-height: 2.75rem !important;
+    border: 1px solid var(--odoo-line-strong);
+    border-radius: 0.45rem;
+    background: #fff;
+    font-size: 1rem !important;
+  }
+
+  .sales-record-odoo .sales-order-section-tabs,
+  .delivery-record-odoo .delivery-record-tabs,
+  .finance-invoice-detail .invoice-odoo-tabs {
+    min-height: 3.125rem;
+    padding-inline: 0.5rem;
+    scroll-snap-type: x proximity;
+  }
+
+  .sales-record-odoo .sales-order-section-tabs .sp-tab,
+  .delivery-record-odoo .delivery-record-tabs .sp-tab,
+  .finance-invoice-detail .invoice-odoo-tabs .sp-tab {
+    min-width: max-content;
+    flex: 0 0 auto;
+    scroll-snap-align: start;
+  }
+
+  .sales-record-odoo .sp-line-table--order thead,
+  .delivery-record-odoo .sp-line-table thead,
+  .finance-invoice-detail .invoice-detail__table thead {
+    display: none;
+  }
+
+  .sales-record-odoo .sp-line-table--order,
+  .sales-record-odoo .sp-line-table--order tbody,
+  .delivery-record-odoo .sp-line-table,
+  .delivery-record-odoo .sp-line-table tbody,
+  .finance-invoice-detail .invoice-detail__table,
+  .finance-invoice-detail .invoice-detail__table tbody {
+    display: block;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .sales-record-odoo .sp-line-table--order tbody tr,
+  .delivery-record-odoo .sp-line-table tbody tr,
+  .finance-invoice-detail .invoice-detail__table tbody tr {
+    display: grid;
+    width: auto;
+    min-width: 0;
+    margin: 0.625rem;
+    padding: 0.75rem;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.6rem 0.75rem;
+    border: 1px solid var(--odoo-line);
+    border-left: 4px solid var(--odoo-cyan);
+    border-radius: 0.625rem;
+    background: #fff;
+  }
+
+  .sales-record-odoo .sp-line-table--order tbody td,
+  .delivery-record-odoo .sp-line-table tbody td,
+  .finance-invoice-detail .invoice-detail__table tbody td {
+    display: flex;
+    width: 100%;
+    min-width: 0;
+    min-height: 0;
+    padding: 0;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.2rem;
+    border: 0;
+    text-align: left !important;
+    overflow-wrap: anywhere;
+  }
+
+  .sales-record-odoo .sp-line-table--order tbody td::before,
+  .delivery-record-odoo .sp-line-table tbody td::before {
+    color: var(--odoo-muted);
+    font-size: 0.5625rem;
+    font-weight: 800;
+    letter-spacing: 0.045em;
+    text-transform: uppercase;
+  }
+
+  .sales-record-odoo .sp-line-table--order tbody td[data-col='product'],
+  .sales-record-odoo .sp-line-table--order tbody td[data-col='description'],
+  .sales-record-odoo .sp-line-table--order tbody td[data-col='actions'],
+  .delivery-record-odoo .sp-line-table tbody td[data-col='product'],
+  .delivery-record-odoo .sp-line-table tbody td[data-col='serials'] {
+    grid-column: 1 / -1;
+  }
+
+  .sales-record-odoo .sp-line-table--order tbody td[data-col='product']::before { content: 'Product'; }
+  .sales-record-odoo .sp-line-table--order tbody td[data-col='description']::before { content: 'Description'; }
+  .sales-record-odoo .sp-line-table--order tbody td[data-col='qty']::before { content: 'Qty'; }
+  .sales-record-odoo .sp-line-table--order tbody td[data-col='unit']::before { content: 'Unit'; }
+  .sales-record-odoo .sp-line-table--order tbody td[data-col='price']::before { content: 'Unit price'; }
+  .sales-record-odoo .sp-line-table--order tbody td[data-col='tax']::before { content: 'Tax'; }
+  .sales-record-odoo .sp-line-table--order tbody td[data-col='amount']::before { content: 'Amount'; }
+  .delivery-record-odoo .sp-line-table tbody td[data-col='product']::before { content: 'Product'; }
+  .delivery-record-odoo .sp-line-table tbody td[data-col='demand']::before { content: 'Demand'; }
+  .delivery-record-odoo .sp-line-table tbody td[data-col='reserve']::before { content: 'Reserved / Done'; }
+  .delivery-record-odoo .sp-line-table tbody td[data-col='serials']::before { content: 'Serial numbers'; }
+  .delivery-record-odoo .sp-line-table tbody td[data-col='status']::before { content: 'Status'; }
+
+  .sales-record-odoo .sp-totals,
+  .finance-invoice-detail .invoice-detail__totals {
+    width: auto;
+    margin: 0.75rem;
+  }
+
+  .delivery-record-odoo {
+    padding-bottom: calc(6.5rem + env(safe-area-inset-bottom));
+  }
+
+  .delivery-record-odoo .sp-delivery-work {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .delivery-record-odoo .sp-delivery-rail {
+    width: 100%;
+    max-width: none;
+    padding: 0.5rem;
+    border-radius: 0.625rem;
+  }
+
+  .delivery-record-odoo .sales-delivery-operations,
+  .delivery-record-odoo .sales-delivery-recipient,
+  .delivery-record-odoo .delivery-record-additional,
+  .delivery-record-odoo .delivery-record-empty {
+    padding: 0.75rem;
+  }
+
+  .delivery-record-odoo .sales-delivery-operations > div:first-child {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .delivery-record-odoo .sales-delivery-operations form {
+    width: 100%;
+    max-width: none;
+  }
+
+  .delivery-record-odoo .sp-footer-sticky {
+    position: fixed;
+    z-index: 85;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    display: grid;
+    width: 100%;
+    padding: 0.625rem 0.75rem calc(0.625rem + env(safe-area-inset-bottom));
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.5rem;
+    border-width: 1px 0 0;
+    border-radius: 0;
+  }
+
+  .delivery-record-odoo .sp-footer-sticky > .sales-proto-actions {
+    display: grid !important;
+    width: 100% !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 0.5rem !important;
+  }
+
+  .delivery-record-odoo .sp-footer-sticky button {
+    width: 100%;
+    min-height: 2.75rem;
+  }
+
+  .finance-invoice-detail .invoice-detail__chrome {
+    padding: 0.75rem 0.75rem 0 !important;
+  }
+
+  .finance-invoice-detail .invoice-detail__header {
+    display: grid !important;
+    min-height: 0 !important;
+    padding: 0.75rem !important;
+    grid-template-columns: minmax(0, 1fr) !important;
+    gap: 0.75rem !important;
+  }
+
+  .finance-invoice-detail .invoice-detail__header-main {
+    width: 100% !important;
+    max-width: none !important;
+  }
+
+  .finance-invoice-detail .invoice-detail__title-row {
+    gap: 0.35rem 0.5rem !important;
+  }
+
+  .finance-invoice-detail .invoice-detail__identity {
+    flex: 1 1 100%;
+  }
+
+  .finance-invoice-detail .invoice-detail__title {
+    font-size: 1.125rem !important;
+  }
+
+  .finance-invoice-detail .invoice-detail__dates {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 0.5rem !important;
+  }
+
+  .finance-invoice-detail .invoice-detail__header-actions {
+    display: grid !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding-top: 0.625rem !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    align-items: stretch !important;
+    gap: 0.5rem !important;
+    border-top: 1px solid var(--odoo-line) !important;
+  }
+
+  .finance-invoice-detail .invoice-detail__header-actions > *,
+  .finance-invoice-detail .invoice-detail__header-actions button {
+    width: 100% !important;
+    min-width: 0 !important;
+    min-height: 2.75rem !important;
+    margin: 0 !important;
+    justify-content: center !important;
+  }
+
+  .finance-invoice-detail .invoice-detail__body {
+    padding: 0.625rem 0.75rem 1.25rem !important;
+  }
+
+  .finance-invoice-detail .invoice-odoo-key-fields {
+    padding: 0.75rem;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.75rem;
+  }
+
+  .finance-invoice-detail .invoice-odoo-key-fields dl {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.5rem;
+  }
+
+  .finance-invoice-detail .invoice-odoo-key-fields dl > div {
+    grid-template-columns: minmax(7rem, 0.9fr) minmax(0, 1.1fr);
+    padding-top: 0.5rem;
+    border-top: 1px solid var(--odoo-line);
+  }
+
+  .finance-invoice-detail .invoice-detail__summary {
+    margin: 0;
+  }
+
+  .finance-invoice-detail .invoice-detail__summary-stats > div:last-child {
+    grid-column: 1 / -1;
+    border-right: 0 !important;
+  }
+
+  .finance-invoice-detail .invoice-detail__table tbody tr {
+    grid-template-areas:
+      'description description'
+      'qty unit'
+      'discount tax'
+      'subtotal subtotal';
+  }
+
+  .finance-invoice-detail .invoice-detail__table tbody td:nth-child(1) {
+    display: none;
+  }
+
+  .finance-invoice-detail .invoice-detail__table tbody td:nth-child(2) {
+    grid-area: description;
+    color: var(--odoo-navy);
+    font-size: 0.875rem;
+    font-weight: 800;
+  }
+
+  .finance-invoice-detail .invoice-detail__table tbody td:nth-child(3) { grid-area: qty; }
+  .finance-invoice-detail .invoice-detail__table tbody td:nth-child(4) { grid-area: unit; }
+  .finance-invoice-detail .invoice-detail__table tbody td:nth-child(5) { grid-area: discount; }
+  .finance-invoice-detail .invoice-detail__table tbody td:nth-child(6) { grid-area: tax; }
+  .finance-invoice-detail .invoice-detail__table tbody td:nth-child(7) { grid-area: subtotal; }
+
+  .finance-invoice-detail .invoice-detail__table tbody td:nth-child(3)::before { content: 'Qty'; }
+  .finance-invoice-detail .invoice-detail__table tbody td:nth-child(4)::before { content: 'Unit price'; }
+  .finance-invoice-detail .invoice-detail__table tbody td:nth-child(5)::before { content: 'Discount'; }
+  .finance-invoice-detail .invoice-detail__table tbody td:nth-child(6)::before { content: 'Tax'; }
+  .finance-invoice-detail .invoice-detail__table tbody td:nth-child(7)::before { content: 'Subtotal'; }
+
+  .finance-invoice-detail .invoice-detail__table tbody td::before {
+    color: var(--odoo-muted);
+    font-size: 0.5625rem;
+    font-weight: 800;
+    letter-spacing: 0.045em;
+    text-transform: uppercase;
+  }
+
+  .finance-invoice-detail .invoice-detail__info-grid {
+    padding: 0.75rem;
+  }
+
+  .finance-invoice-detail .invoice-odoo-other-notes {
+    margin: 0 0.75rem 0.75rem;
+  }
+}
+
+@media (max-width: 420px) {
+  .odoo-smart-buttons {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .odoo-smart-button:nth-child(n) {
+    border-right: 1px solid var(--odoo-line);
+  }
+
+  .odoo-smart-button:nth-child(even) {
+    border-right: 0;
+  }
+
+  .odoo-smart-button:nth-child(n + 3) {
+    border-top: 1px solid var(--odoo-line);
+  }
+
+  .finance-invoice-detail .invoice-detail__dates {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+}
