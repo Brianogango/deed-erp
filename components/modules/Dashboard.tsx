@@ -917,7 +917,7 @@ export function Dashboard() {
       {/* ── P4 · Shortcuts & activity ────────────────────────────────────── */}
       <SectionLabel label="Work faster" />
       <div className="dashboard-bottom-grid">
-        <section className="dashboard-panel overflow-hidden">
+        <section className="dashboard-panel dashboard-quick-actions-panel overflow-hidden">
           <CardHeader title="Quick actions" sub="Shortcuts selected for your role and permissions" />
           <div className="dashboard-quick-actions-grid">
             {quickActions.map(action => (

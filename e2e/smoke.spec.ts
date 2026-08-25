@@ -154,11 +154,36 @@ test.describe('repair → quote → invoice money path', () => {
     await anon.close()
   })
 
-  test('repairs module lists the repair in the UI', async ({ browser }) => {
+  test('repairs module keeps phone actions and overflow menus usable', async ({ browser }) => {
     const context = await loginViaApi(browser)
     const page = await context.newPage()
-    await page.goto('/repairs')
+    await page.setViewportSize({ width: 390, height: 844 })
+    await page.goto(`/repairs?id=${encodeURIComponent(repairId)}`)
+
     await expect(page.getByText(repairRef).first()).toBeVisible({ timeout: 30_000 })
+    await expect(page.getByRole('button', { name: 'Back to repair list' })).toBeVisible()
+
+    const primary = page.locator('.repair-detail__primary-action .repair-action-btn')
+    const moreActions = page.getByRole('button', { name: 'More repair actions' })
+    await expect(primary).toBeVisible()
+    await expect(moreActions).toBeVisible()
+
+    const primaryBox = await primary.boundingBox()
+    const moreBox = await moreActions.boundingBox()
+    expect(primaryBox).not.toBeNull()
+    expect(moreBox).not.toBeNull()
+    expect(Math.abs((primaryBox?.y ?? 0) - (moreBox?.y ?? 0))).toBeLessThan(4)
+    expect((primaryBox?.x ?? 0) + (primaryBox?.width ?? 0)).toBeLessThanOrEqual(moreBox?.x ?? 0)
+
+    await moreActions.click()
+    await expect(page.getByRole('menu', { name: 'More repair actions' })).toBeVisible()
+    await page.keyboard.press('Escape')
+
+    const moreSections = page.getByRole('button', { name: 'More repair sections' })
+    await expect(moreSections).toBeVisible()
+    await moreSections.click()
+    await expect(page.getByRole('menu', { name: 'More repair sections' })).toBeVisible()
+
     await context.close()
   })
 })

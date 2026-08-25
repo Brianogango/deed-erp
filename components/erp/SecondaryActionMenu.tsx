@@ -20,10 +20,12 @@ export function SecondaryActionMenu({
   actions,
   label = 'More',
   ariaLabel = 'More actions',
+  mobilePresentation = 'sheet',
 }: {
   actions: SecondaryAction[]
   label?: string
   ariaLabel?: string
+  mobilePresentation?: 'sheet' | 'anchored'
 }) {
   const visible = actions.filter(a => !a.hidden)
   const [open, setOpen] = useState(false)
@@ -40,7 +42,7 @@ export function SecondaryActionMenu({
     const update = () => {
       const rect = btnRef.current?.getBoundingClientRect()
       if (!rect) return
-      if (window.innerWidth <= 767) {
+      if (window.innerWidth <= 767 && mobilePresentation === 'sheet') {
         setPos({ right: 12, bottom: 12, mobile: true })
         return
       }
@@ -61,7 +63,7 @@ export function SecondaryActionMenu({
       window.removeEventListener('resize', update)
       window.removeEventListener('scroll', update, true)
     }
-  }, [open, visible.length])
+  }, [mobilePresentation, open, visible.length])
 
   useEffect(() => {
     if (!open) return
@@ -107,7 +109,7 @@ export function SecondaryActionMenu({
           ref={menuRef}
           role="menu"
           aria-label={ariaLabel}
-          className={`tab-overflow-menu${pos.mobile ? ' tab-overflow-menu--mobile' : ''}`}
+          className={`tab-overflow-menu${pos.mobile ? ' tab-overflow-menu--mobile' : ''}${mobilePresentation === 'anchored' ? ' tab-overflow-menu--anchored' : ''}`}
           style={{
             position: pos.mobile ? 'fixed' : undefined,
             top: pos.mobile ? undefined : pos.top,

@@ -450,8 +450,9 @@ export default function RepairDetailView() {
           </div>
 
           {/* One primary workflow action + overflow for secondary/danger */}
-          <div className="repair-detail__actions section-actions flex flex-wrap items-center gap-2 justify-start sm:justify-end shrink-0">
-            {pendingOutsourceJob && r.status === 'in_repair' && (
+          <div className="repair-detail__actions section-actions">
+            <div className="repair-detail__action-context">
+              {pendingOutsourceJob && r.status === 'in_repair' && (
               <span className="badge badge-amber" title={`Waiting for ${pendingOutsourceJob.ref} to be marked returned`}>
                 Waiting outsource return
               </span>
@@ -459,11 +460,14 @@ export default function RepairDetailView() {
             {repairOrc && (
               <OrcStatusBadge release={repairOrc} onClick={() => setShowOrcPanel(true)} />
             )}
-            {r.warrantyClaimId && (
-              <span className="badge badge-green">{r.warrantyClaimId}</span>
-            )}
+              {r.warrantyClaimId && (
+                <span className="badge badge-green">{r.warrantyClaimId}</span>
+              )}
+            </div>
 
-            {primaryActionId === 'verify' && (
+            <div className="repair-detail__action-controls" data-has-primary={Boolean(primaryActionId)}>
+              <div className="repair-detail__primary-action">
+                {primaryActionId === 'verify' && (
               <ActionBtn onClick={handleVerify} icon={faUserCheck} label="Verify intake" color="bg-emerald-600 hover:bg-emerald-700" shadow="shadow-emerald-100" />
             )}
             {primaryActionId === 'assign' && (
@@ -527,8 +531,11 @@ export default function RepairDetailView() {
               <ActionBtn onClick={() => closeRepairJob(r.id)} icon={faCheckCircle} label="Close job" color="bg-slate-800 hover:bg-slate-900" shadow="shadow-slate-200" />
             )}
 
-            <SecondaryActionMenu
-              ariaLabel="More repair actions"
+              </div>
+              <div className="repair-detail__more-action">
+                <SecondaryActionMenu
+                  ariaLabel="More repair actions"
+                  mobilePresentation="anchored"
               actions={[
                 { id: 'decline', label: 'Decline quote', onClick: () => setShowDeclineModal(true), hidden: !canDeclineQuote, danger: true },
                 { id: 'assign', label: r.assignedTechnicianId ? 'Reassign technician' : 'Assign technician', onClick: () => setShowAssignModal(true), hidden: !canAssign || primaryActionId === 'assign' },
@@ -561,8 +568,10 @@ export default function RepairDetailView() {
                 { id: 'sticker', label: 'Print sticker', onClick: () => { void printRepairSticker(r) } },
                 { id: 'cancel', label: 'Cancel repair', onClick: () => setShowCancelModal(true), hidden: !canCancel, danger: true },
                 { id: 'delete', label: 'Delete repair', onClick: () => setShowDeleteConfirm(true), hidden: !canDelete, danger: true },
-              ]}
-            />
+                  ]}
+                />
+              </div>
+            </div>
           </div>
         </div>
 
@@ -635,21 +644,27 @@ export default function RepairDetailView() {
       </section>
 
       <nav className="repair-detail__tabs" aria-label="Repair record sections">
-        <button type="button" onClick={() => scrollToRepairSection('repair-overview')}>Overview</button>
-        <button type="button" onClick={() => scrollToRepairSection('repair-diagnosis')}>
+        <button className="repair-detail__tab repair-detail__tab--primary" type="button" onClick={() => scrollToRepairSection('repair-overview')}>Overview</button>
+        <button className="repair-detail__tab repair-detail__tab--primary" type="button" onClick={() => scrollToRepairSection('repair-diagnosis')}>
           <span className="repair-tab-label--full">Diagnosis &amp; quote</span>
           <span className="repair-tab-label--compact">Quote</span>
         </button>
-        <button type="button" onClick={() => scrollToRepairSection('repair-parts')}>Parts</button>
-        <button type="button" onClick={() => scrollToRepairSection('repair-qc')}>
-          <span className="repair-tab-label--full">Quality check</span>
-          <span className="repair-tab-label--compact">QC</span>
-        </button>
-        <button type="button" onClick={() => scrollToRepairSection('repair-delivery')}>Delivery</button>
-        <button type="button" onClick={() => scrollToRepairSection('repair-history')}>
-          <span className="repair-tab-label--full">Messages &amp; history</span>
-          <span className="repair-tab-label--compact">History</span>
-        </button>
+        <button className="repair-detail__tab repair-detail__tab--primary" type="button" onClick={() => scrollToRepairSection('repair-parts')}>Parts</button>
+        <button className="repair-detail__tab repair-detail__tab--secondary" type="button" onClick={() => scrollToRepairSection('repair-qc')}>Quality check</button>
+        <button className="repair-detail__tab repair-detail__tab--secondary" type="button" onClick={() => scrollToRepairSection('repair-delivery')}>Delivery</button>
+        <button className="repair-detail__tab repair-detail__tab--secondary" type="button" onClick={() => scrollToRepairSection('repair-history')}>Messages &amp; history</button>
+        <div className="repair-detail__tab-overflow">
+          <SecondaryActionMenu
+            label="More"
+            ariaLabel="More repair sections"
+            mobilePresentation="anchored"
+            actions={[
+              { id: 'qc', label: 'Quality check', onClick: () => scrollToRepairSection('repair-qc') },
+              { id: 'delivery', label: 'Delivery', onClick: () => scrollToRepairSection('repair-delivery') },
+              { id: 'history', label: 'Messages & history', onClick: () => scrollToRepairSection('repair-history') },
+            ]}
+          />
+        </div>
       </nav>
 
       {/* ── Body ── */}
