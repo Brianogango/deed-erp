@@ -83,8 +83,6 @@ import {
   SalesDocField,
   SalesDocPill,
   SalesDocWorkflow,
-  OdooRecordStatusBar,
-  OdooSmartButtons,
   saleStatusPill,
   deliveryStatusPill,
   buildSoWorkflowSteps,
@@ -1924,14 +1922,11 @@ function SalesContent() {
                 <ModuleSkeleton />
               ) : (
                 /* ── ORDER FORM VIEW ─────────────────────────────────────── */
-                <div className="sales-record-odoo">
+                <div>
                   {activeOrder && (
                     <>
                   <div className="sales-proto-page-header">
                     <div className="sales-proto-header-copy">
-                      <div className="odoo-record-breadcrumb">
-                        Sales / {isQuotationStage(activeOrder.status) ? 'Quotations' : 'Sales orders'} / {activeOrder.ref}
-                      </div>
                       <button type="button" className="sp-btn sp-btn-ghost sales-back-button" aria-label="Back to quotations" onClick={backToList}>
                         <span className="sales-back-button__icon" aria-hidden="true">←</span>
                         <span className="sales-back-button__label">Back</span>
@@ -2191,44 +2186,6 @@ function SalesContent() {
                       )}
                     </div>
                   </div>
-
-                  <OdooRecordStatusBar
-                    ariaLabel={isQuotationStage(activeOrder.status) ? 'Quotation status' : 'Sales order status'}
-                    activeKey={
-                      activeOrder.status === 'sale'
-                        ? 'sale'
-                        : saleOrderIsAccepted(activeOrder)
-                          ? 'quote_ready'
-                          : activeOrder.status
-                    }
-                    steps={[
-                      { key: 'quotation', label: 'Quotation' },
-                      { key: 'quotation_sent', label: 'Quotation sent' },
-                      { key: 'quote_ready', label: 'Quote ready' },
-                      { key: 'sale', label: 'Sales order' },
-                    ]}
-                  />
-
-                  <OdooSmartButtons
-                    items={[
-                      { label: 'Customer', value: activeOrder.customerName, onClick: () => router.push('/contacts'), emphasis: true },
-                      { label: 'Sales order', value: activeOrder.status === 'sale' ? 1 : 0 },
-                      { label: 'Delivery', value: visibleDeliveries.length, onClick: activeOrder.status === 'sale' ? () => void openDeliveryView() : undefined },
-                      { label: 'Invoices', value: activeInvoices.length, onClick: activeInvoices.length ? () => router.push('/finance?tab=invoices') : undefined },
-                      {
-                        label: 'Activities',
-                        value: (approvalRequests ?? []).filter(request => request.documentId === activeOrder.id && request.status === 'pending').length,
-                        onClick: () => setDetailTab(isQuotationStage(activeOrder.status) ? 'Activities' : 'History'),
-                      },
-                    ]}
-                  />
-
-                  {isQuotationStage(activeOrder.status) && activeOrder.approvalStatus !== 'pending' && (
-                    <div className="odoo-record-alert" role="status">
-                      <span aria-hidden="true">i</span>
-                      <strong>Quote is ready for customer confirmation.</strong>
-                    </div>
-                  )}
 
                   <section className="sales-record-summary" aria-label="Sales document summary">
                     <div className="sales-record-summary__primary">
@@ -2576,7 +2533,7 @@ function SalesContent() {
                         <SalesDocTabs
                           className="sales-order-section-tabs"
                           tabs={isQuotationStage(activeOrder.status)
-                            ? ['Order Lines', 'Optional Products', 'Terms & Conditions', 'Notes', 'Attachments', 'History']
+                            ? ['Order Lines', 'Terms and Conditions', 'Notes', 'Activities', 'History']
                             : ['Order Lines', 'Delivery and Stock', 'Invoices', ...(canSeeReturns ? ['Returns'] : []), 'Notes', 'History']}
                           active={detailTab}
                           onChange={setDetailTab}
@@ -2800,12 +2757,7 @@ function SalesContent() {
                             />
                           </div>
                         )}
-                        {detailTab === 'Optional Products' && (
-                          <p className="sp-panel-pad" style={{ color: 'var(--sp-text-3)' }}>
-                            No optional products have been added to this quotation.
-                          </p>
-                        )}
-                        {detailTab === 'Terms & Conditions' && (
+                        {detailTab === 'Terms and Conditions' && (
                           <p className="sp-panel-pad" style={{ color: 'var(--sp-text-3)' }}>
                             Terms and conditions content.
                           </p>
@@ -4088,7 +4040,6 @@ function DeliveryNoteView({
   const canPrepare = orderConfirmed && !!existingDelivery && isOpenDeliveryStatus(existingDelivery.status) && ['draft', 'waiting', 'ready'].includes(existingDelivery.status)
   const canValidate = orderConfirmed && !!existingDelivery && existingDelivery.status === 'ready' && !!existingDelivery.preparedAt
   const [serialScan, setSerialScan] = useState('')
-  const [deliveryTab, setDeliveryTab] = useState('Operations')
 
   const pickingSummary = useMemo(() => {
     const pairs = pairOrderLinesWithDeliveryLines(order.lines, existingDelivery?.lines ?? [])
@@ -4302,10 +4253,9 @@ function DeliveryNoteView({
   const dnPill = deliveryStatusPill(existingDelivery?.status ?? 'waiting')
 
   return (
-    <div className="delivery-record-odoo flex flex-col gap-3">
+    <div className="flex flex-col gap-3">
       <div className="sales-proto-page-header">
         <div className="sales-proto-header-copy">
-          <div className="odoo-record-breadcrumb">Sales / Deliveries / {existingDelivery?.ref ?? 'Draft'}</div>
           <button type="button" className="sp-btn sp-btn-ghost sales-back-button" aria-label="Back to sales order" onClick={onBack}>
             <span className="sales-back-button__icon" aria-hidden="true">←</span>
             <span className="sales-back-button__label">Back</span>
@@ -4335,27 +4285,6 @@ function DeliveryNoteView({
           )}
         </div>
       </div>
-
-      <OdooRecordStatusBar
-        ariaLabel="Delivery status"
-        activeKey={existingDelivery?.status === 'done' ? 'done' : existingDelivery?.status === 'ready' ? 'ready' : 'waiting'}
-        steps={[
-          { key: 'waiting', label: 'Waiting' },
-          { key: 'ready', label: 'Ready' },
-          { key: 'done', label: 'Done' },
-        ]}
-      />
-
-      <OdooSmartButtons
-        items={[
-          { label: 'Sales order', value: order.ref, onClick: onBack, emphasis: true },
-          { label: 'Deliveries', value: orderDeliveries.filter((delivery: any) => delivery.status !== 'cancelled').length },
-          { label: 'Backorders', value: orderDeliveries.filter((delivery: any) => Boolean(delivery.backorderOfRef)).length },
-          { label: 'Returns', value: 0 },
-          { label: 'Delivery note', value: existingDelivery && canGenerateDeliveryNote(existingDelivery) ? 1 : 0, onClick: existingDelivery && canGenerateDeliveryNote(existingDelivery) ? handlePrintDN : undefined },
-          { label: 'Activities', value: pickingSummary.remaining > 0 ? 1 : 0 },
-        ]}
-      />
 
       <section className="sales-delivery-summary" aria-label="Delivery summary">
         <div className="sales-delivery-summary__primary">
@@ -4414,16 +4343,7 @@ function DeliveryNoteView({
         </div>
       </div>
 
-        <SalesDocTabs
-          className="delivery-record-tabs"
-          tabs={['Operations', 'Additional Info', 'Recipient & Delivery Note', 'Attachments', 'History']}
-          active={deliveryTab}
-          onChange={setDeliveryTab}
-          ariaLabel="Delivery sections"
-        />
-
         {/* Delivery lines */}
-        {deliveryTab === 'Operations' && (
         <div className="flex flex-col gap-3 sales-delivery-operations">
           <div className="flex items-center justify-between gap-3 flex-wrap">
             <h3 className="text-sm font-bold text-[var(--text-1)]">Products to Deliver</h3>
@@ -4451,7 +4371,6 @@ function DeliveryNoteView({
                   <th className="num">Demand</th>
                   <th className="num">{canPrepare ? 'Qty to reserve' : canValidate ? 'Reserved' : 'Delivered'}</th>
                   <th>Serial numbers</th>
-                  <th>Status</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[var(--border-lt)]">
@@ -4544,12 +4463,6 @@ function DeliveryNoteView({
                         )}
                         {!lineSerials.length && !(canPrepare && serialTracked) && <span className="text-[var(--text-4)]">—</span>}
                       </td>
-                      <td data-col="status">
-                        <SalesDocPill
-                          label={isFullyDelivered ? 'Done' : isPartial ? 'Partial' : canValidate ? 'Ready' : 'Waiting'}
-                          tone={isFullyDelivered ? 'success' : isPartial ? 'warning' : canValidate ? 'info' : 'neutral'}
-                        />
-                      </td>
                     </tr>
                   )
                 })}
@@ -4558,21 +4471,8 @@ function DeliveryNoteView({
             </div>
           </div>
         </div>
-        )}
-
-        {deliveryTab === 'Additional Info' && (
-          <section className="sp-panel sp-panel-pad delivery-record-additional" aria-label="Additional delivery information">
-            <div className="sp-grid-2">
-              <SalesDocField label="Warehouse"><div className="sp-value">Main warehouse</div></SalesDocField>
-              <SalesDocField label="Operation type"><div className="sp-value">Customer delivery</div></SalesDocField>
-              <SalesDocField label="Responsible"><div className="sp-value">Warehouse team</div></SalesDocField>
-              <SalesDocField label="Delivery terms"><div className="sp-value">Standard delivery</div></SalesDocField>
-            </div>
-          </section>
-        )}
 
         {/* Recipient info */}
-        {deliveryTab === 'Recipient & Delivery Note' && (
         <div className="flex flex-col gap-3 sales-delivery-recipient">
           <h3 className="text-sm font-bold text-[var(--text-1)]">Recipient Details</h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -4583,19 +4483,6 @@ function DeliveryNoteView({
           </div>
           <Field label="Notes"><textarea className="form-input text-xs" rows={2} placeholder="Accessories included, special instructions…" value={dnNotes} onChange={e => setDnNotes(e.target.value)} /></Field>
         </div>
-        )}
-
-        {deliveryTab === 'Attachments' && (
-          <section className="sp-panel sp-panel-pad delivery-record-empty">
-            Delivery-note attachments will appear here after the document is generated.
-          </section>
-        )}
-
-        {deliveryTab === 'History' && (
-          <section className="sp-panel sp-panel-pad delivery-record-empty">
-            Delivery created from {order.ref}. Picking, validation, backorder and delivery-note events are retained in the document history.
-          </section>
-        )}
 
         <div className="sp-footer-sticky" aria-label="Picking progress">
           <div>
