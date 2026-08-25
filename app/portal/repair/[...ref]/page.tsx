@@ -402,7 +402,7 @@ export default function RepairPortalPage() {
                   <input id="repair-verify-phone" value={verifyPhone} onChange={event => setVerifyPhone(event.target.value)} inputMode="tel" placeholder="+254 712 345 678" />
                 </div>
                 <div className="client-repair-quote-actions">
-                  <button type="button" className="client-repair-btn client-repair-btn--primary" disabled={acting || approvedCount === 0} onClick={submitQuoteDecisions}>
+                  <button type="button" className="client-repair-btn client-repair-btn--primary" disabled={acting || approvedCount === 0} onClick={() => { void submitQuoteDecisions() }}>
                     {acting ? 'Processing…' : 'Approve selected items'}
                   </button>
                   <button type="button" className="client-repair-btn client-repair-btn--outline" onClick={() => setShowDecline(current => !current)}>Decline quote</button>
