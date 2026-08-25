@@ -19229,7 +19229,7 @@ body:has(.crm-workspace) [role="dialog"] > div {
     font-size: 12px !important;
   }
 
-  body:has(.repair-workspace--detail) .tab-overflow-menu[aria-label="More repair actions"] {
+  body:has(.repair-workspace--detail) .tab-overflow-menu[aria-label="More repair actions"]:not(.tab-overflow-menu--anchored) {
     position: fixed !important;
     top: auto !important;
     right: var(--repair-mobile-gutter) !important;
@@ -25645,5 +25645,254 @@ body:has(.crm-workspace) [role="dialog"] > div {
 
   .repair-tab-label--compact {
     display: inline !important;
+  }
+}
+
+
+/* Approved repair header, menu and dashboard composition — 2026-08-25 */
+.dashboard-bottom-grid {
+  align-items: start !important;
+}
+
+.dashboard-quick-actions-panel {
+  height: auto !important;
+  min-height: 0 !important;
+  align-self: start !important;
+}
+
+.dashboard-quick-actions-panel .dashboard-quick-actions-grid {
+  align-content: start !important;
+}
+
+.tab-overflow-menu--anchored {
+  min-width: 12rem !important;
+  max-width: min(20rem, calc(100vw - 1.5rem)) !important;
+}
+
+.repair-detail__action-context:empty,
+.repair-detail__primary-action:empty,
+.repair-detail__more-action:empty {
+  display: none !important;
+}
+
+.repair-detail__action-context,
+.repair-detail__action-controls {
+  min-width: 0;
+}
+
+.repair-detail__action-context {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.repair-detail__action-controls {
+  display: grid;
+  grid-template-columns: auto auto;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.repair-detail__primary-action,
+.repair-detail__more-action {
+  min-width: 0;
+}
+
+.repair-detail__tab-overflow {
+  display: none;
+}
+
+@media (min-width: 768px) {
+  .repair-detail__header-row {
+    display: grid !important;
+    width: 100% !important;
+    max-width: none !important;
+    grid-template-columns: minmax(0, 1fr) auto !important;
+    align-items: center !important;
+    justify-content: stretch !important;
+    column-gap: 1rem !important;
+  }
+
+  .repair-detail__identity {
+    width: auto !important;
+    max-width: none !important;
+    min-width: 0 !important;
+    flex: none !important;
+  }
+
+  .repair-detail__actions {
+    display: flex !important;
+    width: auto !important;
+    min-width: 0 !important;
+    margin-left: auto !important;
+    padding: 0 !important;
+    justify-self: end !important;
+    align-items: center !important;
+    justify-content: flex-end !important;
+    gap: 0.75rem !important;
+    border: 0 !important;
+  }
+
+  .repair-detail__action-controls {
+    justify-content: end;
+  }
+
+  .repair-detail__primary-action > .repair-action-btn,
+  .repair-detail__more-action .erp-action-btn {
+    min-height: 2.75rem !important;
+  }
+}
+
+@media (max-width: 767px) {
+  .repair-detail__header {
+    padding: 0 !important;
+  }
+
+  .repair-detail__header-row {
+    display: grid !important;
+    width: 100% !important;
+    grid-template-columns: minmax(0, 1fr) !important;
+    align-items: start !important;
+    gap: 0.75rem !important;
+    padding: 1rem !important;
+  }
+
+  .repair-detail__identity {
+    display: grid !important;
+    width: 100% !important;
+    grid-template-columns: 3rem minmax(0, 1fr) !important;
+    align-items: start !important;
+    gap: 0.875rem !important;
+  }
+
+  .repair-detail__identity > button {
+    width: 3rem !important;
+    height: 3rem !important;
+    min-height: 3rem !important;
+  }
+
+  .repair-detail__identity-content {
+    padding-top: 0.1rem !important;
+  }
+
+  .repair-detail__actions {
+    display: block !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    margin: 0 !important;
+    padding: 0.75rem 0 0 !important;
+    border: 0 !important;
+    border-top: 1px solid var(--repair-border) !important;
+    background: transparent !important;
+  }
+
+  .repair-detail__action-context {
+    margin-bottom: 0.625rem;
+  }
+
+  .repair-detail__action-controls {
+    display: grid !important;
+    width: 100% !important;
+    grid-template-columns: minmax(0, 1fr) auto !important;
+    align-items: stretch !important;
+    gap: 0.75rem !important;
+  }
+
+  .repair-detail__action-controls[data-has-primary="false"] {
+    grid-template-columns: auto !important;
+    justify-content: end !important;
+  }
+
+  .repair-detail__primary-action {
+    width: 100% !important;
+    min-width: 0 !important;
+  }
+
+  .repair-detail__primary-action > .repair-action-btn {
+    display: flex !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    min-height: 3.25rem !important;
+    justify-content: center !important;
+    padding-inline: 1rem !important;
+    font-size: 0.9375rem !important;
+  }
+
+  .repair-detail__primary-action > .repair-action-btn > span:first-of-type {
+    display: inline !important;
+  }
+
+  .repair-detail__more-action {
+    width: auto !important;
+    min-width: 0 !important;
+  }
+
+  .repair-detail__more-action > div,
+  .repair-detail__more-action .erp-action-btn {
+    height: 100% !important;
+  }
+
+  .repair-detail__more-action .erp-action-btn {
+    width: auto !important;
+    min-width: 6.25rem !important;
+    min-height: 3.25rem !important;
+    padding-inline: 1rem !important;
+    font-size: 0.9375rem !important;
+  }
+
+  .repair-detail__tabs {
+    display: grid !important;
+    width: 100% !important;
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+    gap: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: visible !important;
+  }
+
+  .repair-detail__tabs > .repair-detail__tab {
+    display: flex !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    min-height: 2.875rem !important;
+    align-items: center !important;
+    justify-content: center !important;
+    padding: 0.7rem 0.2rem !important;
+    overflow: hidden !important;
+    font-size: 0.75rem !important;
+    line-height: 1 !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+  }
+
+  .repair-detail__tab--secondary {
+    display: none !important;
+  }
+
+  .repair-detail__tab-overflow {
+    display: block !important;
+    width: 100% !important;
+    min-width: 0 !important;
+  }
+
+  .repair-detail__tab-overflow > div {
+    width: 100% !important;
+    height: 100% !important;
+  }
+
+  .repair-detail__tab-overflow .erp-action-btn {
+    width: 100% !important;
+    min-width: 0 !important;
+    min-height: 2.875rem !important;
+    border: 0 !important;
+    border-bottom: 2px solid transparent !important;
+    border-radius: 0 !important;
+    padding: 0.7rem 0.2rem !important;
+    background: transparent !important;
+    color: var(--repair-muted) !important;
+    font-size: 0.75rem !important;
+    font-weight: 650 !important;
+    box-shadow: none !important;
   }
 }
