@@ -103,6 +103,82 @@ export function SalesDocWorkflow({
   )
 }
 
+export type OdooRecordStatusStep = {
+  key: string
+  label: string
+}
+
+export function OdooRecordStatusBar({
+  steps,
+  activeKey,
+  ariaLabel = 'Document status',
+}: {
+  steps: OdooRecordStatusStep[]
+  activeKey: string
+  ariaLabel?: string
+}) {
+  const activeIndex = Math.max(0, steps.findIndex(step => step.key === activeKey))
+  return (
+    <div className="odoo-record-status" role="list" aria-label={ariaLabel}>
+      {steps.map((step, index) => (
+        <div
+          key={step.key}
+          className="odoo-record-status__step"
+          data-state={index < activeIndex ? 'done' : index === activeIndex ? 'current' : 'todo'}
+          role="listitem"
+          aria-current={index === activeIndex ? 'step' : undefined}
+        >
+          <span className="odoo-record-status__marker" aria-hidden="true">
+            {index < activeIndex ? '✓' : index + 1}
+          </span>
+          <span>{step.label}</span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+export type OdooSmartButtonItem = {
+  label: string
+  value: ReactNode
+  onClick?: () => void
+  emphasis?: boolean
+}
+
+export function OdooSmartButtons({
+  items,
+  ariaLabel = 'Related records',
+}: {
+  items: OdooSmartButtonItem[]
+  ariaLabel?: string
+}) {
+  return (
+    <div className="odoo-smart-buttons" aria-label={ariaLabel}>
+      {items.map(item => item.onClick ? (
+        <button
+          key={item.label}
+          type="button"
+          className="odoo-smart-button"
+          data-emphasis={item.emphasis ? 'true' : 'false'}
+          onClick={item.onClick}
+        >
+          <strong>{item.value}</strong>
+          <span>{item.label}</span>
+        </button>
+      ) : (
+        <div
+          key={item.label}
+          className="odoo-smart-button"
+          data-emphasis={item.emphasis ? 'true' : 'false'}
+        >
+          <strong>{item.value}</strong>
+          <span>{item.label}</span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 export function SalesDocField({
   label,
   children,

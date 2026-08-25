@@ -26,6 +26,7 @@ import { OutboundReleasePanel, OrcStatusBadge } from './OutboundReleasePanel'
 import { downloadInvoicePdf, invoicePdfBase64 } from './invoice-pdf'
 import PaymentDetailsPicker from '@/components/payment/PaymentDetailsPicker'
 import DocumentEmailSendHistory from '@/components/email/DocumentEmailSendHistory'
+import { SalesDocTabs, OdooRecordStatusBar, OdooSmartButtons } from '@/components/modules/sales/workbench'
 import { ScheduleInvoiceDeliveryModal } from './ScheduleInvoiceDeliveryModal'
 import { canScheduleInvoiceDelivery, findInvoiceDeliveryJob } from '@/lib/invoice-delivery-job'
 import {
@@ -98,7 +99,7 @@ export default function InvoiceDetail() {
   const [emailHistoryKey, setEmailHistoryKey] = useState(0)
   const [hydratingLines, setHydratingLines] = useState(false)
   const [lookupReady, setLookupReady] = useState(false)
-  const [detailTab, setDetailTab] = useState<'payments' | 'notes' | 'activity' | 'instructions'>('payments')
+  const [detailTab, setDetailTab] = useState<'lines' | 'journal' | 'other' | 'payments' | 'attachments' | 'history'>('lines')
   const hydrateAttempted = useRef<string | null>(null)
 
   // Wait briefly for store hydration before declaring the invoice missing —
@@ -352,12 +353,12 @@ export default function InvoiceDetail() {
   const moreActions = [
     {
       id: 'download',
-      label: `Download ${docLabel}`,
+      label: 'Download PDF',
       onClick: () => { void handleDownloadInvoice() },
     },
     {
       id: 'email',
-      label: sendingInvoice ? 'Sending…' : `Email ${docLabel}`,
+      label: sendingInvoice ? 'Sending…' : `Send ${docLabel.toLowerCase()}`,
       onClick: openSendInvoiceModal,
       disabled: sendingInvoice,
       hidden: !(invoice.type === 'customer_invoice' && invoice.status !== 'draft'),
@@ -425,7 +426,8 @@ export default function InvoiceDetail() {
       <div className="invoice-detail__chrome">
         <Breadcrumbs
           items={[
-            { label: invoice.type === 'customer_invoice' ? 'Invoices' : 'Bills', onClick: () => router.push('/finance') },
+            { label: 'Finance', onClick: () => router.push('/finance') },
+            { label: invoice.type === 'customer_invoice' ? 'Customer invoices' : 'Vendor bills', onClick: () => router.push('/finance') },
             { label: titleRef },
           ]}
         />
@@ -494,21 +496,77 @@ export default function InvoiceDetail() {
                 </PrimaryActionButton>
               </>
             )}
+            {invoice.type === 'customer_invoice' && docState !== 'draft' && (
+              <PrimaryActionButton
+                icon={<Fa icon={faFileInvoice} />}
+                variant="secondary"
+                onClick={openSendInvoiceModal}
+                hideLabelOnMobile={false}
+              >
+                Send &amp; Print
+              </PrimaryActionButton>
+            )}
             {docState === 'posted' && payState !== 'paid' && payState !== 'blocked' && canManageFinance && (
               <PrimaryActionButton
                 icon={<Fa icon={faMoneyBillWave} />}
                 onClick={() => { setPayAmount(String(balance)); setShowPayModal(true) }}
                 hideLabelOnMobile={false}
               >
-                Register payment
+                Record payment
               </PrimaryActionButton>
             )}
             <SecondaryActionMenu actions={moreActions} label="More actions" ariaLabel="More actions" />
           </div>
         </div>
+
+        <OdooRecordStatusBar
+          ariaLabel="Invoice status"
+          activeKey={
+            docState === 'draft'
+              ? 'draft'
+              : payState === 'paid'
+                ? 'paid'
+                : payState === 'partially_paid' || payState === 'in_payment'
+                  ? 'part_paid'
+                  : 'posted'
+          }
+          steps={[
+            { key: 'draft', label: 'Draft' },
+            { key: 'posted', label: 'Posted' },
+            { key: 'part_paid', label: 'Part paid' },
+            { key: 'paid', label: 'Paid' },
+          ]}
+        />
+
+        <OdooSmartButtons
+          items={[
+            { label: 'Customer', value: invoice.partnerName, onClick: () => router.push('/contacts'), emphasis: true },
+            { label: 'Payments', value: (invoice.payments || []).length, onClick: () => setDetailTab('payments') },
+            { label: 'Sales order', value: saleOrders.filter(order => order.customerId === invoice.partnerId).length },
+            { label: 'Delivery', value: linkedDeliveryJob ? 1 : 0, onClick: linkedDeliveryJob ? () => router.push('/delivery') : undefined },
+            { label: 'Credit notes', value: 0 },
+            { label: 'Activities', value: invoice.notes?.trim() ? 1 : 0, onClick: () => setDetailTab('history') },
+          ]}
+        />
       </div>
 
       <div className="mod-body invoice-detail__body">
+        <section className="invoice-odoo-key-fields" aria-label="Important invoice details">
+          <div className="invoice-odoo-key-fields__identity">
+            <span>Customer</span>
+            <strong>{invoice.partnerName}</strong>
+            <small>{invoice.invoiceAddress || partnerCountry || 'No invoice address'}</small>
+          </div>
+          <dl>
+            <div><dt>Invoice date</dt><dd>{fmtDate(invoice.date)}</dd></div>
+            <div><dt>Due date</dt><dd className={overdue ? 'is-overdue' : ''}>{fmtDate(invoice.dueDate)}</dd></div>
+            <div><dt>Payment reference</dt><dd>{(invoice.payments || []).slice(-1)[0]?.reference || titleRef}</dd></div>
+            <div><dt>Journal</dt><dd>{invoice.type === 'customer_invoice' ? 'Customer Invoices' : 'Vendor Bills'}</dd></div>
+            <div><dt>Currency</dt><dd>{companySettings.currency || 'KES'}</dd></div>
+            <div><dt>Source</dt><dd>{saleOrders.find(order => order.customerId === invoice.partnerId)?.ref || 'Direct invoice'}</dd></div>
+          </dl>
+        </section>
+
         <section className={`invoice-detail__summary ${balance > 0 ? 'has-balance' : 'is-settled'}`} aria-label="Invoice financial summary">
           <div className="invoice-detail__summary-primary">
             <div className="invoice-detail__summary-label-row">
@@ -551,6 +609,33 @@ export default function InvoiceDetail() {
           </div>
         </section>
 
+        <SalesDocTabs
+          className="invoice-odoo-tabs"
+          tabs={['Invoice Lines', 'Journal Items', 'Other Info', 'Payments', 'Attachments', 'History']}
+          active={{
+            lines: 'Invoice Lines',
+            journal: 'Journal Items',
+            other: 'Other Info',
+            payments: 'Payments',
+            attachments: 'Attachments',
+            history: 'History',
+          }[detailTab]}
+          onChange={tab => {
+            const next = ({
+              'Invoice Lines': 'lines',
+              'Journal Items': 'journal',
+              'Other Info': 'other',
+              Payments: 'payments',
+              Attachments: 'attachments',
+              History: 'history',
+            } as Record<string, 'lines' | 'journal' | 'other' | 'payments' | 'attachments' | 'history'>)[tab] ?? 'lines'
+            setDetailTab(next)
+          }}
+          ariaLabel="Invoice sections"
+        />
+
+
+        {detailTab === 'lines' && (
         <section className="invoice-detail__card" aria-label="Line items">
           <div className="invoice-detail__card-head">
             <h2 className="invoice-detail__card-title">Line Items</h2>
@@ -684,8 +769,10 @@ export default function InvoiceDetail() {
             </div>
           </div>
         </section>
+        )}
 
-        <details className="invoice-detail__supporting">
+        {detailTab === 'other' && (
+        <details className="invoice-detail__supporting" open>
           <summary className="invoice-detail__supporting-toggle">
             <span>
               <strong>Supporting details</strong>
@@ -793,67 +880,10 @@ export default function InvoiceDetail() {
             )}
           </article>
           </section>
-        </details>
-
-        <section className="invoice-detail__tabs-card" aria-label="Notes payments and activity">
-          <div className="invoice-detail__tabs" role="tablist">
-            {([
-              ['payments', 'Payments'],
-              ['notes', `Notes`],
-              ['activity', 'Activity'],
-              ['instructions', 'Payment instructions'],
-            ] as const).filter(([id]) => id !== 'instructions' || invoice.type === 'customer_invoice').map(([id, label]) => (
-              <button
-                key={id}
-                type="button"
-                role="tab"
-                aria-selected={detailTab === id}
-                className={`invoice-detail__tab ${detailTab === id ? 'is-active' : ''}`}
-                onClick={() => setDetailTab(id)}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-
-          <div className="invoice-detail__tab-panel" role="tabpanel">
-            {detailTab === 'notes' && (
-              <div className="invoice-detail__tab-stack">
-                <p className="invoice-detail__info-muted">
-                  {invoice.notes?.trim() || 'No notes yet. Customer-facing notes can be set when editing the invoice.'}
-                </p>
-                {invoice.type === 'customer_invoice' && (
-                  <DocumentEmailSendHistory
-                    documentId={invoice.id}
-                    documentType="invoice"
-                    refreshKey={emailHistoryKey}
-                    title="Invoice email history"
-                  />
-                )}
-              </div>
-            )}
-
-            {detailTab === 'payments' && (
-              (invoice.payments || []).length > 0 ? (
-                <div className="invoice-detail__pay-list">
-                  {(invoice.payments || []).map(pay => (
-                    <div key={pay.id} className="invoice-detail__pay-row">
-                      <div>
-                        <p className="invoice-detail__pay-method">{pay.method.replace('_', ' ')}</p>
-                        <p className="invoice-detail__pay-meta">
-                          {fmtDate(pay.date)} · {pay.recordedBy}{pay.reference ? ` · ${pay.reference}` : ''}
-                        </p>
-                      </div>
-                      <span className="invoice-detail__pay-amount">{fmtKes(pay.amount)}</span>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="invoice-detail__info-muted">No payments recorded yet.</p>
-              )
-            )}
-
-            {detailTab === 'instructions' && invoice.type === 'customer_invoice' && (
+          <section className="invoice-odoo-other-notes" aria-label="Invoice notes and payment instructions">
+            <h3>Notes</h3>
+            <p>{invoice.notes?.trim() || 'No customer-facing notes have been added.'}</p>
+            {invoice.type === 'customer_invoice' && (
               <PaymentDetailsPicker
                 className="invoice-detail__pay-settings"
                 value={getDocumentPaymentDetails(invoice.id)}
@@ -865,18 +895,80 @@ export default function InvoiceDetail() {
                 label="Payment instructions printed on this invoice"
               />
             )}
+          </section>
+        </details>
+        )}
 
-            {detailTab === 'activity' && (
-              <Chatter
-                model="invoice"
-                recordId={invoice.id}
-                staffName={currentUser?.name || 'Staff'}
-                title="Internal Notes & Activities"
-                compact
-              />
+        {detailTab === 'journal' && (
+          <section className="invoice-detail__tabs-card invoice-odoo-journal" aria-label="Journal items">
+            <div className="invoice-detail__card-head">
+              <h2 className="invoice-detail__card-title">Journal Items</h2>
+              <span className="invoice-detail__chip">{docState === 'draft' ? 'Not posted' : 'Posted'}</span>
+            </div>
+            <div className="invoice-detail__table-wrap">
+              <table data-no-responsive className="invoice-detail__table">
+                <thead><tr><th>Account</th><th>Label</th><th className="is-num">Debit</th><th className="is-num">Credit</th></tr></thead>
+                <tbody>
+                  <tr><td>Accounts Receivable</td><td>{invoice.partnerName}</td><td className="is-num">{fmtKes(invoice.total)}</td><td className="is-num">{fmtKes(0)}</td></tr>
+                  <tr><td>Sales Revenue</td><td>Invoice revenue</td><td className="is-num">{fmtKes(0)}</td><td className="is-num">{fmtKes(invoice.subtotal)}</td></tr>
+                  {(invoice.taxTotal || 0) > 0 && <tr><td>VAT Payable</td><td>Output VAT</td><td className="is-num">{fmtKes(0)}</td><td className="is-num">{fmtKes(invoice.taxTotal || 0)}</td></tr>}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        )}
+
+        {detailTab === 'payments' && (
+          <section className="invoice-detail__tabs-card" aria-label="Payments">
+            <div className="invoice-detail__card-head">
+              <h2 className="invoice-detail__card-title">Payments</h2>
+              <span className="invoice-detail__chip">{(invoice.payments || []).length} recorded</span>
+            </div>
+            {(invoice.payments || []).length > 0 ? (
+              <div className="invoice-detail__pay-list">
+                {(invoice.payments || []).map(pay => (
+                  <div key={pay.id} className="invoice-detail__pay-row">
+                    <div>
+                      <p className="invoice-detail__pay-method">{pay.method.replace('_', ' ')}</p>
+                      <p className="invoice-detail__pay-meta">{fmtDate(pay.date)} · {pay.recordedBy}{pay.reference ? ` · ${pay.reference}` : ''}</p>
+                    </div>
+                    <span className="invoice-detail__pay-amount">{fmtKes(pay.amount)}</span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="invoice-detail__info-muted">No payments recorded yet.</p>
             )}
-          </div>
-        </section>
+          </section>
+        )}
+
+        {detailTab === 'attachments' && (
+          <section className="invoice-detail__tabs-card invoice-odoo-documents" aria-label="Invoice attachments">
+            <div className="invoice-detail__card-head">
+              <h2 className="invoice-detail__card-title">Attachments</h2>
+            </div>
+            <button type="button" className="invoice-detail__document-row" onClick={() => void handleDownloadInvoice()}>
+              <span>Invoice PDF</span><strong>Download</strong>
+            </button>
+            {invoice.type === 'customer_invoice' && (
+              <button type="button" className="invoice-detail__document-row" onClick={openSendInvoiceModal}>
+                <span>Email delivery record</span><strong>Send invoice</strong>
+              </button>
+            )}
+          </section>
+        )}
+
+        {detailTab === 'history' && (
+          <section className="invoice-detail__tabs-card" aria-label="Invoice history">
+            <Chatter
+              model="invoice"
+              recordId={invoice.id}
+              staffName={currentUser?.name || 'Staff'}
+              title="Activity & Chatter"
+              compact
+            />
+          </section>
+        )}
       </div>
 
       {showSendModal && (
