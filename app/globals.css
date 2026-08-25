@@ -25866,7 +25866,7 @@ body:has(.crm-workspace) [role="dialog"] > div {
     white-space: nowrap !important;
   }
 
-  .repair-detail__tab--secondary {
+  .repair-detail__tabs > .repair-detail__tab--secondary {
     display: none !important;
   }
 
