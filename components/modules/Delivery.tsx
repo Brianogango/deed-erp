@@ -651,7 +651,7 @@ function JobsTab({ createRequest = 0 }: { createRequest?: number }) {
   function jobRowActions(job: DeliveryJob) {
     const action = nextAction(job)
     return (
-      <div className="flex flex-col gap-1">
+      <div className="delivery-job-actions flex flex-col gap-1">
         <button className="text-[9px] py-0.5 px-1.5 rounded cursor-pointer"
           style={{ background: 'var(--bg-muted)', color: 'var(--text-3)', border: '1px solid var(--border)' }}
           title="Print Job Sheet"

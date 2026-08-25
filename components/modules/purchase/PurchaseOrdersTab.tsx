@@ -251,7 +251,7 @@ export default function PurchaseOrdersTab() {
                 { label: 'Date', value: fmtDate(po.date) },
                 { label: 'Lines', value: po.lines.length },
               ]}
-              actions={<div className="flex gap-1.5">{poRowActions(po)}</div>}
+              actions={poRowActions(po)}
               onClick={() => { setActiveId(po.id); setSubView('form') }}
             />
           )

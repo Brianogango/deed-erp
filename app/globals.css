@@ -25198,3 +25198,263 @@ body:has(.crm-workspace) [role="dialog"] > div {
     text-align: left;
   }
 }
+
+
+/* ── 2026-08-25 phone layout collision fixes ─────────────────────────── */
+@media (max-width: 767px) {
+  /* Search-only tables keep More beside the search instead of wasting a row. */
+  .dt-toolbar-row-mobile.dt-toolbar-row-mobile--compact {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) 2.75rem !important;
+    align-items: center !important;
+    gap: 0.5rem !important;
+  }
+
+  .dt-toolbar-row-mobile--compact .dt-toolbar-search {
+    width: 100% !important;
+    min-width: 0 !important;
+    grid-column: 1 !important;
+  }
+
+  .dt-toolbar-row-mobile--compact .dt-toolbar-mobile-actions {
+    display: grid !important;
+    width: 2.75rem !important;
+    min-width: 2.75rem !important;
+    grid-column: 2 !important;
+    grid-template-columns: minmax(0, 1fr) !important;
+    gap: 0 !important;
+  }
+
+  .dt-toolbar-row-mobile--compact .dt-toolbar-btn {
+    width: 2.75rem !important;
+    min-width: 2.75rem !important;
+    min-height: 2.75rem !important;
+    padding: 0 !important;
+    justify-content: center !important;
+  }
+
+  .dt-toolbar-row-mobile--compact .dt-toolbar-btn > span:not(.dt-toolbar-badge) {
+    position: absolute !important;
+    width: 1px !important;
+    height: 1px !important;
+    padding: 0 !important;
+    margin: -1px !important;
+    overflow: hidden !important;
+    clip: rect(0, 0, 0, 0) !important;
+    white-space: nowrap !important;
+    border: 0 !important;
+  }
+
+  /* Contacts: one compact control row and content-height cards. */
+  .contacts-workspace .erp-page-toolbar,
+  .contacts-workspace .erp-page-toolbar-left,
+  .contacts-workspace .erp-page-toolbar-search {
+    width: 100% !important;
+    min-width: 0 !important;
+  }
+
+  .contacts-toolbar-row {
+    display: grid !important;
+    width: 100% !important;
+    grid-template-columns: minmax(0, 1fr) auto !important;
+    align-items: center !important;
+    gap: 0.5rem !important;
+  }
+
+  .contacts-toolbar-row .contacts-search {
+    width: 100% !important;
+    min-width: 0 !important;
+    min-height: 2.75rem !important;
+  }
+
+  .contacts-archived-toggle {
+    display: inline-flex !important;
+    min-width: 0 !important;
+    min-height: 2.75rem !important;
+    padding: 0 0.7rem !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 0.4rem !important;
+    border: 1px solid var(--border-lt) !important;
+    border-radius: 0.55rem !important;
+    background: #fff !important;
+    color: var(--text-2) !important;
+    font-size: 0.72rem !important;
+    font-weight: 650 !important;
+    white-space: nowrap !important;
+  }
+
+  .contacts-archived-toggle input {
+    width: 1rem !important;
+    height: 1rem !important;
+    margin: 0 !important;
+  }
+
+  .contacts-directory-card .dt-toolbar {
+    display: none !important;
+  }
+
+  .contacts-directory-card .mobile-card-list > *,
+  .contacts-mobile-card {
+    height: auto !important;
+    min-height: 0 !important;
+    align-self: start !important;
+  }
+
+  .contacts-mobile-card {
+    align-content: start !important;
+    justify-content: flex-start !important;
+  }
+
+  .contacts-mobile-card > *,
+  .contacts-mobile-card__channels,
+  .contacts-mobile-card__footer {
+    min-height: 0 !important;
+    flex: 0 0 auto !important;
+  }
+
+  /* Delivery: actions fill the card width in a dense two-column grid. */
+  .delivery-jobs-main .record-card-actions {
+    display: block !important;
+    width: 100% !important;
+  }
+
+  .delivery-job-actions {
+    display: grid !important;
+    width: 100% !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 0.5rem !important;
+  }
+
+  .delivery-job-actions button {
+    width: 100% !important;
+    min-width: 0 !important;
+    min-height: 2.75rem !important;
+    padding: 0.5rem !important;
+    justify-content: center !important;
+    font-size: 0.72rem !important;
+  }
+
+  /* Operations: stack the identity and provide a predictable action grid. */
+  .operations-workspace > .mod-header {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) !important;
+    align-items: start !important;
+    gap: 0.65rem !important;
+    padding: 0.75rem !important;
+  }
+
+  .operations-workspace > .mod-header .mod-header__identity,
+  .operations-workspace > .mod-header .section-actions {
+    width: 100% !important;
+    min-width: 0 !important;
+  }
+
+  .operations-workspace > .mod-header .section-actions {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) !important;
+    gap: 0.5rem !important;
+  }
+
+  .operations-workspace > .mod-header .section-actions > .erp-action-btn {
+    width: 100% !important;
+    min-height: 2.75rem !important;
+    justify-content: center !important;
+    color: #fff !important;
+  }
+
+  .operations-bulk-actions {
+    display: grid !important;
+    width: 100% !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 0.5rem !important;
+  }
+
+  .operations-bulk-actions > button {
+    width: 100% !important;
+    min-width: 0 !important;
+    min-height: 2.75rem !important;
+    padding: 0.5rem 0.65rem !important;
+    justify-content: center !important;
+    white-space: normal !important;
+    line-height: 1.2 !important;
+  }
+
+  .operations-bulk-actions > button:first-child {
+    grid-column: 1 / -1 !important;
+  }
+
+  /* Outsource: each unresolved repair owns a full row on phones. */
+  .outsource-attention__group > button {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) !important;
+    align-items: start !important;
+    gap: 0.2rem !important;
+    padding: 0.7rem 0.75rem !important;
+  }
+
+  .outsource-attention__group > button > :is(span, strong, small) {
+    width: 100% !important;
+    min-width: 0 !important;
+    grid-column: 1 !important;
+    justify-self: start !important;
+    text-align: left !important;
+    overflow-wrap: anywhere !important;
+  }
+
+  /* Purchases: actions never escape the record card. */
+  .purchase-directory .record-card-actions {
+    display: grid !important;
+    width: 100% !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 0.5rem !important;
+  }
+
+  .purchase-directory .record-card-actions > button {
+    width: 100% !important;
+    min-width: 0 !important;
+    min-height: 2.75rem !important;
+    margin: 0 !important;
+    justify-content: center !important;
+  }
+
+  /* Reconfiguration must always use its light workflow shell. */
+  .reconfig-page > .mod-header {
+    background: #fff !important;
+    color: var(--flow-ink) !important;
+  }
+
+  .reconfig-page > .mod-header .erp-module-title {
+    color: var(--flow-ink) !important;
+  }
+
+  .reconfig-page > .mod-header .mod-header-subtitle {
+    color: var(--flow-muted) !important;
+  }
+
+  .reconfig-page > .mod-header .badge {
+    border-color: var(--flow-border) !important;
+    background: #f2f5f8 !important;
+    color: var(--flow-ink) !important;
+  }
+
+  .reconfig-page > .mod-header .erp-action-btn {
+    border-color: var(--flow-ink) !important;
+    background: var(--flow-ink) !important;
+    color: #fff !important;
+  }
+
+  .reconfig-page > .mod-tabs {
+    background: #fff !important;
+  }
+
+  .reconfig-page > .mod-tabs .mod-tab {
+    background: transparent !important;
+    color: var(--flow-muted) !important;
+  }
+
+  .reconfig-page > .mod-tabs .mod-tab.active {
+    color: var(--flow-ink) !important;
+    box-shadow: inset 0 -2px 0 var(--flow-cyan) !important;
+  }
+}

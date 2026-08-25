@@ -1473,7 +1473,7 @@ function InventoryContent() {
         subtitleMode="visible"
         primaryAction={
           canEditStock && (tab === 'product_master' || tab === 'product_catalog') ? (
-            <PrimaryActionButton onClick={openNew}>New product</PrimaryActionButton>
+            <PrimaryActionButton onClick={openNew} hideLabelOnMobile={false}>New product</PrimaryActionButton>
           ) : canEditStock && (tab === 'warehouse_view' || tab === 'movements' || tab === 'transfers') ? (
             <PrimaryActionButton onClick={() => setShowTransfer(true)} hideLabelOnMobile={false}>
               Transfer stock
@@ -1482,7 +1482,7 @@ function InventoryContent() {
         }
         overflowActions={
           canEditStock && (tab === 'product_master' || tab === 'product_catalog') ? (
-            <div className="flex items-center gap-2 flex-wrap justify-end">
+            <div className="operations-bulk-actions flex items-center gap-2 flex-wrap justify-end">
               <button
                 type="button"
                 className="btn-secondary text-[11px] px-3 py-2"
