@@ -263,7 +263,10 @@ export default function RepairPortalPage() {
   return (
     <div className={['client-repair-portal', (canApprove || canPay || repair.paymentStatus === 'pending_review') ? 'client-repair-portal--action' : 'client-repair-portal--overview'].join(' ')}>
       <header className="client-repair-nav">
-        <strong className="client-repair-nav__brand">DEED</strong>
+        <div className="client-repair-nav__identity">
+          <span className="client-repair-nav__menu" aria-hidden>☰</span>
+          <img className="client-repair-nav__brand" src="/deed-logo-transparent.png" alt="Deed Technologies" />
+        </div>
         <strong className="client-repair-nav__title">Track your repair</strong>
         <a className="client-repair-nav__help" href={'mailto:' + company.email}>Need help?</a>
       </header>
