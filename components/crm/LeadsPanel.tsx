@@ -342,6 +342,7 @@ export default function LeadsPanel({
       <div className="card overflow-hidden crm-directory-card">
         <DataTable
           tableId="crm-leads"
+          rowActionsWidth={176}
           columns={columns}
           rows={leads}
           rowKey={r => r.id}
@@ -381,7 +382,7 @@ export default function LeadsPanel({
             </article>
           )}
           rowActions={row => (
-            <div className="flex items-center gap-1">
+            <div className="crm-leads-row-actions flex items-center gap-1">
               <button
                 type="button"
                 className="btn-outline text-[10px] py-1 px-2"

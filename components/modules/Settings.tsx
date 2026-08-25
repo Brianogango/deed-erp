@@ -746,9 +746,9 @@ export default function Settings() {
 
           {/* ════ USER ACCESS ════ */}
           {section === 'access' && (
-            <div className="flex flex-col gap-4">
-              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between px-4 sm:px-5 py-3.5 border-b border-gray-50 gap-3 sm:gap-0">
+            <div className="settings-access-section flex flex-col gap-4">
+              <div className="settings-users-panel bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+                <div className="settings-users-panel__header flex flex-col sm:flex-row sm:items-center justify-between px-4 sm:px-5 py-3.5 border-b border-gray-50 gap-3 sm:gap-0">
                   <div className="flex items-center gap-2">
                     <span className="text-[13px] font-bold text-gray-800">System Users</span>
                     <span className="text-[10px] px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 font-semibold">{users.length}</span>
@@ -758,6 +758,7 @@ export default function Settings() {
 
                 <DataTable
                   tableId="settings-users"
+                  rowActionsWidth={216}
                   columns={[
                     { key: 'name', label: 'Name', priority: 1, width: '1.2fr', render: user => <span className="font-semibold text-gray-900">{user.name}</span>, exportValue: user => user.name },
                     { key: 'username', label: 'Username', priority: 2, width: '0.9fr', render: user => <span className="font-mono text-[11px] text-gray-500">@{user.username}</span>, exportValue: user => user.username },
@@ -775,9 +776,9 @@ export default function Settings() {
                       render: user => {
                         const modules = Array.isArray(user.modules) ? user.modules : []
                         return (
-                          <span className="flex gap-1 flex-wrap">
+                          <span className="settings-user-modules flex gap-1 flex-wrap">
                             {modules.map(m => (
-                              <span key={m} className="text-[9px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 font-medium">{m === 'pos' ? 'POS' : formatRoleLabel(m)}</span>
+                              <span key={m} className="settings-user-module text-[9px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 font-medium">{m === 'pos' ? 'POS' : formatRoleLabel(m)}</span>
                             ))}
                           </span>
                         )
@@ -803,7 +804,7 @@ export default function Settings() {
                   searchPlaceholder="Search users…"
                   emptyMessage="No users"
                   rowActions={user => (
-                    <div className="flex gap-1.5 flex-wrap">
+                    <div className="settings-user-row-actions flex gap-1.5 flex-wrap">
                       <button className={`text-[10px] font-medium px-2.5 py-1 rounded-lg border transition-colors ${canManageSystemUsers ? 'bg-blue-50 hover:bg-blue-100 text-navy-500 border-blue-100 cursor-pointer' : 'opacity-40 cursor-not-allowed bg-gray-50 text-gray-400 border-gray-100'}`} disabled={!canManageSystemUsers} onClick={() => { if (!canManageSystemUsers) return; const u = users.find(x => x.id === user.id); if (!u) return; setUserForm({ id: u.id, employeeId: '', username: u.username, name: u.name, role: u.role, modules: Array.isArray(u.modules) ? [...u.modules] : [], active: u.active, actsAsTechnician: Boolean(u.actsAsTechnician), password: '' }); setShowUserModal(true) }}>Edit</button>
                       {user.lockedUntil && new Date(user.lockedUntil).getTime() > Date.now() && (
                         <button className={`text-[10px] font-medium px-2.5 py-1 rounded-lg border transition-colors ${canManageSystemUsers ? 'bg-orange-50 hover:bg-orange-100 text-orange-600 border-orange-100 cursor-pointer' : 'opacity-40 cursor-not-allowed bg-gray-50 text-gray-400 border-gray-100'}`} disabled={!canManageSystemUsers} onClick={() => { if (!canManageSystemUsers) return; void unlockUser(user.id) }}>Unlock</button>
