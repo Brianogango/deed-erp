@@ -346,7 +346,7 @@ export default function Reconfiguration() {
 
   if (!enabled) {
     return (
-      <div className="mod-page inventory-pilot reconfig-page">
+      <div className="mod-page reconfig-page">
         <ModuleHeader
           title="Device reconfiguration"
           subtitle="Feature disabled in system settings"
@@ -364,7 +364,7 @@ export default function Reconfiguration() {
   }
 
   return (
-    <div className="mod-page inventory-pilot reconfig-page">
+    <div className="mod-page reconfig-page">
       <ModuleHeader
         title="Device reconfiguration"
         subtitle="Serialized upgrades with stock control and QA"
