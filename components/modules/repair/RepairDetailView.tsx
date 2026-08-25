@@ -427,7 +427,7 @@ export default function RepairDetailView() {
                 </span>
               )}
               <span
-                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wide border ${
+                className={`repair-detail__path-chip inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wide border ${
                   isDirectRepairPath(r.repairPath)
                     ? 'bg-violet-50 text-violet-700 border-violet-200'
                     : 'bg-sky-50 text-sky-700 border-sky-200'
@@ -634,11 +634,20 @@ export default function RepairDetailView() {
 
       <nav className="repair-detail__tabs" aria-label="Repair record sections">
         <button type="button" onClick={() => scrollToRepairSection('repair-overview')}>Overview</button>
-        <button type="button" onClick={() => scrollToRepairSection('repair-diagnosis')}>Diagnosis &amp; quote</button>
+        <button type="button" onClick={() => scrollToRepairSection('repair-diagnosis')}>
+          <span className="repair-tab-label--full">Diagnosis &amp; quote</span>
+          <span className="repair-tab-label--compact">Quote</span>
+        </button>
         <button type="button" onClick={() => scrollToRepairSection('repair-parts')}>Parts</button>
-        <button type="button" onClick={() => scrollToRepairSection('repair-qc')}>Quality check</button>
+        <button type="button" onClick={() => scrollToRepairSection('repair-qc')}>
+          <span className="repair-tab-label--full">Quality check</span>
+          <span className="repair-tab-label--compact">QC</span>
+        </button>
         <button type="button" onClick={() => scrollToRepairSection('repair-delivery')}>Delivery</button>
-        <button type="button" onClick={() => scrollToRepairSection('repair-history')}>Messages &amp; history</button>
+        <button type="button" onClick={() => scrollToRepairSection('repair-history')}>
+          <span className="repair-tab-label--full">Messages &amp; history</span>
+          <span className="repair-tab-label--compact">History</span>
+        </button>
       </nav>
 
       {/* ── Body ── */}
