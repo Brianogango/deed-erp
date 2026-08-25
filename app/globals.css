@@ -25896,3 +25896,1936 @@ body:has(.crm-workspace) [role="dialog"] > div {
     box-shadow: none !important;
   }
 }
+
+
+/* ==========================================================================
+   Client-approved sales document line alignment
+   Keeps the desktop header/cell contract exact and converts phone rows into
+   complete, readable cards without dropping operational data.
+   ========================================================================== */
+
+.sales-pilot.sales-doc .sales-order-lines-panel {
+  min-height: 0 !important;
+  overflow: hidden;
+}
+
+.sales-pilot.sales-doc .sales-order-lines-panel .sp-table-wrap {
+  min-height: 0 !important;
+  margin: 0 !important;
+}
+
+.sales-pilot.sales-doc .sales-order-lines-panel .sp-totals {
+  width: min(21rem, 100%) !important;
+  min-height: 0 !important;
+  margin: 0 0 0 auto !important;
+  padding: 0.875rem 1.25rem 1rem !important;
+}
+
+.sales-pilot.sales-doc .sales-order-lines-panel .sp-line-actions {
+  min-height: 3rem;
+  padding: 0.65rem 0.9rem !important;
+  gap: 0.5rem;
+  align-items: center;
+  border-top: 1px solid var(--sp-border);
+}
+
+.sales-pilot.sales-doc .sales-order-lines-panel .sp-line-actions button {
+  min-height: 2.5rem;
+}
+
+@media (min-width: 1024px) {
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-table-wrap {
+    overflow-x: auto !important;
+    overscroll-behavior-x: contain;
+  }
+
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table {
+    width: max-content;
+    min-width: 100%;
+    table-layout: auto;
+  }
+
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table th,
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table td {
+    display: table-cell !important;
+    box-sizing: border-box;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table th[data-col='index'],
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table td[data-col='index'] {
+    width: 3rem;
+    min-width: 3rem;
+  }
+
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table th[data-col='product'],
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table td[data-col='product'] {
+    width: 13rem;
+    min-width: 13rem;
+  }
+
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table th[data-col='description'],
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table td[data-col='description'] {
+    width: 15rem;
+    min-width: 15rem;
+  }
+
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table th[data-col='qty'],
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table td[data-col='qty'],
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table th[data-col='unit'],
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table td[data-col='unit'],
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table th[data-col='reserved'],
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table td[data-col='reserved'],
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table th[data-col='delivered'],
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table td[data-col='delivered'],
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table th[data-col='invoiced'],
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table td[data-col='invoiced'],
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table th[data-col='discount'],
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table td[data-col='discount'],
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table th[data-col='tax'],
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table td[data-col='tax'] {
+    width: 5.5rem;
+    min-width: 5.5rem;
+  }
+
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table th[data-col='policy'],
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table td[data-col='policy'] {
+    width: 6.25rem;
+    min-width: 6.25rem;
+  }
+
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table th[data-col='price'],
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table td[data-col='price'],
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table th[data-col='amount'],
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table td[data-col='amount'] {
+    width: 7.75rem;
+    min-width: 7.75rem;
+  }
+
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table th[data-col='actions'],
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table td[data-col='actions'] {
+    width: 8rem;
+    min-width: 8rem;
+  }
+
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table td input,
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table td select,
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table td [role='button'] {
+    max-width: 100%;
+    min-height: 2.5rem;
+  }
+}
+
+@media (max-width: 1023px) {
+  .sales-pilot.sales-doc .sales-order-lines-panel {
+    overflow: visible;
+    border-left: 0;
+    border-right: 0;
+    border-radius: 0;
+  }
+
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-table-wrap {
+    padding: 0.75rem !important;
+    overflow: visible !important;
+    background: #f7f9fc;
+  }
+
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table tbody tr {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    column-gap: 0.75rem !important;
+    row-gap: 0.65rem !important;
+    margin-bottom: 0.75rem !important;
+    padding: 0.9rem !important;
+    border-radius: 0.75rem !important;
+    box-shadow: 0 4px 14px rgba(15, 27, 68, 0.05);
+  }
+
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table tbody td[data-col] {
+    min-width: 0 !important;
+  }
+
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table tbody td[data-col='description'],
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table tbody td[data-col='unit'],
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table tbody td[data-col='policy'],
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table tbody td[data-col='reserved'],
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table tbody td[data-col='delivered'],
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table tbody td[data-col='invoiced'],
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table tbody td[data-col='discount'],
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table tbody td[data-col='tax'] {
+    display: flex !important;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: flex-start;
+    gap: 0.2rem;
+  }
+
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table tbody td[data-col='description']::before,
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table tbody td[data-col='qty']::before,
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table tbody td[data-col='unit']::before,
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table tbody td[data-col='reserved']::before,
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table tbody td[data-col='delivered']::before,
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table tbody td[data-col='invoiced']::before,
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table tbody td[data-col='policy']::before,
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table tbody td[data-col='price']::before,
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table tbody td[data-col='discount']::before,
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table tbody td[data-col='tax']::before,
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table tbody td[data-col='amount']::before {
+    display: block !important;
+    color: var(--sp-text-3);
+    font-size: 0.625rem;
+    font-weight: 750;
+    line-height: 1.2;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+  }
+
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table tbody td[data-col='description']::before { content: 'Description' !important; }
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table tbody td[data-col='qty']::before { content: 'Quantity' !important; }
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table tbody td[data-col='unit']::before { content: 'Unit' !important; }
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table tbody td[data-col='reserved']::before { content: 'Reserved' !important; }
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table tbody td[data-col='delivered']::before { content: 'Delivered' !important; }
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table tbody td[data-col='invoiced']::before { content: 'Invoiced' !important; }
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table tbody td[data-col='policy']::before { content: 'Bill on' !important; }
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table tbody td[data-col='price']::before { content: 'Unit price' !important; }
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table tbody td[data-col='discount']::before { content: 'Discount' !important; }
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table tbody td[data-col='tax']::before { content: 'Tax' !important; }
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table tbody td[data-col='amount']::before { content: 'Amount' !important; }
+
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table tbody td[data-col='product'] {
+    grid-column: 1 / -1 !important;
+    grid-row: 1 !important;
+    font-size: 0.9375rem !important;
+  }
+
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table tbody td[data-col='description'] {
+    grid-column: 1 / -1 !important;
+    grid-row: 2 !important;
+    color: var(--sp-text-2);
+    font-size: 0.75rem !important;
+  }
+
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table tbody td[data-col='qty'] {
+    grid-column: 1 !important;
+    grid-row: 3 !important;
+  }
+
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table tbody td[data-col='unit'] {
+    grid-column: 2 !important;
+    grid-row: 3 !important;
+  }
+
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table tbody td[data-col='reserved'] {
+    grid-column: 1 !important;
+    grid-row: 4 !important;
+  }
+
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table tbody td[data-col='delivered'] {
+    grid-column: 2 !important;
+    grid-row: 4 !important;
+  }
+
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table tbody td[data-col='invoiced'] {
+    grid-column: 1 !important;
+    grid-row: 5 !important;
+  }
+
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table tbody td[data-col='policy'] {
+    grid-column: 2 !important;
+    grid-row: 5 !important;
+  }
+
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table tbody td[data-col='price'] {
+    grid-column: 1 !important;
+    grid-row: 6 !important;
+    justify-self: stretch !important;
+  }
+
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table tbody td[data-col='discount'] {
+    grid-column: 2 !important;
+    grid-row: 6 !important;
+  }
+
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table tbody td[data-col='tax'] {
+    grid-column: 1 !important;
+    grid-row: 7 !important;
+  }
+
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table tbody td[data-col='amount'] {
+    grid-column: 2 !important;
+    grid-row: 7 !important;
+    justify-self: stretch !important;
+    align-self: stretch !important;
+    text-align: left !important;
+  }
+
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table tbody td[data-col='actions'] {
+    grid-column: 1 / -1 !important;
+    grid-row: 8 !important;
+    padding-top: 0.65rem !important;
+    border-top: 1px solid var(--sp-border) !important;
+  }
+
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table tbody tr:has(> td[data-col='index']) > td[data-col='index'] {
+    display: none !important;
+  }
+
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table tbody tr:has(> td[data-col='index']) > td[data-col='price'] {
+    grid-column: 1 !important;
+    grid-row: 4 !important;
+  }
+
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table tbody tr:has(> td[data-col='index']) > td[data-col='tax'] {
+    grid-column: 2 !important;
+    grid-row: 4 !important;
+  }
+
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table tbody tr:has(> td[data-col='index']) > td[data-col='amount'] {
+    grid-column: 1 / -1 !important;
+    grid-row: 5 !important;
+  }
+
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table tbody tr:has(> td[data-col='index']) > td[data-col='actions'] {
+    grid-row: 6 !important;
+  }
+
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table tbody td input,
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table tbody td select,
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table tbody td [role='button'] {
+    width: 100% !important;
+    min-width: 0 !important;
+    min-height: 2.75rem !important;
+    font-size: 1rem !important;
+  }
+
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table tbody td[data-col='actions'] .flex {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(2.75rem, max-content));
+    gap: 0.5rem;
+  }
+
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table tbody td[data-col='actions'] button {
+    min-width: 2.75rem;
+    min-height: 2.75rem;
+  }
+
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    padding: 0.75rem !important;
+  }
+
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-actions button {
+    width: 100%;
+    min-height: 2.75rem;
+  }
+
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-totals {
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0.875rem 1rem 1rem !important;
+    border-top: 1px solid var(--sp-border);
+  }
+}
+
+@media (max-width: 420px) {
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-table-wrap {
+    padding: 0.625rem !important;
+  }
+
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table tbody tr {
+    padding: 0.8rem !important;
+  }
+}
+
+
+/* ==========================================================================
+   Customer repair portal — approved desktop and phone compositions
+   ========================================================================== */
+
+.client-repair-portal {
+  min-height: 100vh;
+  overflow-x: hidden;
+  background: #eef4f8;
+  color: #0f1b44;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+.client-repair-portal *,
+.client-repair-portal *::before,
+.client-repair-portal *::after {
+  box-sizing: border-box;
+}
+
+.client-repair-nav {
+  position: sticky;
+  z-index: 30;
+  top: 0;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  min-height: 3.75rem;
+  padding: 0 1.5rem;
+  border-bottom: 1px solid #d8e1ec;
+  background: rgba(255, 255, 255, 0.97);
+  box-shadow: 0 1px 8px rgba(15, 27, 68, 0.05);
+}
+
+.client-repair-nav__brand {
+  color: #0f1b44;
+  font-size: 1.55rem;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+}
+
+.client-repair-nav__title {
+  font-size: 0.875rem;
+  font-weight: 800;
+}
+
+.client-repair-nav__help {
+  justify-self: end;
+  color: #005ff0;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.client-repair-grid {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 0.75rem;
+  width: min(100%, 1120px);
+  margin: 0 auto;
+  padding: 1rem 1.25rem 1.5rem;
+}
+
+.client-repair-card {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid #d8e1ec;
+  border-radius: 0.625rem;
+  background: #fff;
+  box-shadow: 0 4px 14px rgba(15, 27, 68, 0.05);
+}
+
+.client-repair-card h2 {
+  margin: 0;
+  color: #0f1b44;
+  font-size: 0.875rem;
+  font-weight: 800;
+}
+
+.client-repair-hero {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+  min-height: 8.5rem;
+  padding: 1rem 2.25rem;
+}
+
+.client-repair-hero__media {
+  display: grid;
+  flex: 0 0 9rem;
+  place-items: center;
+  width: 9rem;
+  height: 6.5rem;
+  overflow: hidden;
+  border-radius: 0.5rem;
+  background: #f4f7fb;
+  color: #00aeef;
+  font-size: 3rem;
+}
+
+.client-repair-hero__media img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.client-repair-hero__copy {
+  min-width: 0;
+}
+
+.client-repair-hero__title-row {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.client-repair-hero h1 {
+  margin: 0;
+  color: #071339;
+  font-size: clamp(1.25rem, 2.2vw, 1.65rem);
+  font-weight: 850;
+  letter-spacing: -0.02em;
+}
+
+.client-repair-status,
+.client-repair-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 1.6rem;
+  padding: 0.2rem 0.75rem;
+  border: 1px solid;
+  border-radius: 999px;
+  font-size: 0.625rem;
+  font-weight: 800;
+  letter-spacing: 0.035em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.client-repair-hero__meta {
+  margin: 0.3rem 0 0;
+  color: #475467;
+  font-size: 0.8125rem;
+}
+
+.client-repair-hero__meta span {
+  padding: 0 0.35rem;
+  color: #98a2b3;
+}
+
+.client-repair-hero__updated {
+  margin: 0.5rem 0 0;
+  color: #667085;
+  font-size: 0.6875rem;
+}
+
+.client-repair-mobile-actions {
+  display: none;
+}
+
+.client-repair-progress {
+  grid-column: 1 / span 8;
+  padding: 1rem;
+}
+
+.client-repair-latest {
+  grid-column: 9 / -1;
+  padding: 1rem;
+}
+
+.client-repair-latest strong {
+  display: block;
+  margin-top: 1rem;
+  color: #0062df;
+  font-size: 0.75rem;
+}
+
+.client-repair-latest p {
+  margin: 1rem 0 0;
+  color: #13213f;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+}
+
+.client-repair-steps {
+  display: flex;
+  align-items: flex-start;
+  margin: 1.25rem 0 1.5rem;
+}
+
+.client-repair-step {
+  position: relative;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  min-width: 0;
+  gap: 0.55rem;
+  color: #475467;
+  font-size: 0.6875rem;
+  text-align: center;
+}
+
+.client-repair-step::before,
+.client-repair-step::after {
+  position: absolute;
+  z-index: 0;
+  top: 0.75rem;
+  width: 50%;
+  height: 2px;
+  background: #d1d9e4;
+  content: "";
+}
+
+.client-repair-step::before { left: 0; }
+.client-repair-step::after { right: 0; }
+.client-repair-step:first-child::before,
+.client-repair-step:last-child::after { display: none; }
+
+.client-repair-step.is-done::before,
+.client-repair-step.is-done::after,
+.client-repair-step.is-current::before {
+  background: #159a5b;
+}
+
+.client-repair-step__dot {
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 1.55rem;
+  height: 1.55rem;
+  border: 1px solid #c6d0dd;
+  border-radius: 50%;
+  background: #fff;
+  color: #0f1b44;
+  font-size: 0.6875rem;
+  font-weight: 800;
+}
+
+.client-repair-step.is-done .client-repair-step__dot {
+  border-color: #159a5b;
+  background: #159a5b;
+  color: #fff;
+}
+
+.client-repair-step.is-current {
+  color: #d97800;
+  font-weight: 800;
+}
+
+.client-repair-step.is-current .client-repair-step__dot {
+  border: 2px solid #ed9300;
+  color: #ba6800;
+}
+
+.client-repair-notice,
+.client-repair-info-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 0.75rem 0.9rem;
+  border: 1px solid #f3c56b;
+  border-radius: 0.4rem;
+  background: #fff9ed;
+  color: #13213f;
+  font-size: 0.75rem;
+}
+
+.client-repair-notice > span,
+.client-repair-info-banner > span {
+  display: grid;
+  flex: 0 0 1.15rem;
+  place-items: center;
+  width: 1.15rem;
+  height: 1.15rem;
+  border-radius: 50%;
+  background: #ed9300;
+  color: #fff;
+  font-size: 0.6875rem;
+  font-weight: 800;
+}
+
+.client-repair-notice p,
+.client-repair-info-banner p {
+  margin: 0;
+  line-height: 1.45;
+}
+
+.client-repair-info-banner {
+  margin-bottom: 0.75rem;
+  border-color: #79b7ff;
+  background: #eef6ff;
+}
+
+.client-repair-info-banner > span {
+  background: #0062df;
+}
+
+.client-repair-info-banner pre {
+  margin: 0.4rem 0 0;
+  color: #475467;
+  font: inherit;
+  white-space: pre-wrap;
+}
+
+.client-repair-device,
+.client-repair-photos,
+.client-repair-history {
+  grid-column: 1 / span 5;
+}
+
+.client-repair-diagnosis,
+.client-repair-documents {
+  grid-column: 6 / -1;
+}
+
+.client-repair-charge {
+  grid-column: 6 / span 3;
+  padding: 0.75rem;
+}
+
+.client-repair-support {
+  grid-column: 9 / -1;
+  padding: 1rem;
+}
+
+.client-repair-delivery {
+  grid-column: 6 / -1;
+}
+
+.client-repair-disclosure > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 3rem;
+  padding: 0.75rem 1rem;
+  color: #0f1b44;
+  cursor: pointer;
+  font-size: 0.875rem;
+  font-weight: 800;
+  list-style: none;
+}
+
+.client-repair-disclosure > summary::-webkit-details-marker {
+  display: none;
+}
+
+.client-repair-disclosure > summary > span {
+  display: none;
+}
+
+.client-repair-disclosure__body {
+  display: block !important;
+  padding: 0 1rem 1rem;
+}
+
+.client-repair-details {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem 1.5rem;
+  margin: 0;
+}
+
+.client-repair-details > div {
+  display: grid;
+  grid-template-columns: minmax(6rem, 0.7fr) minmax(0, 1fr);
+  gap: 0.75rem;
+}
+
+.client-repair-details dt {
+  color: #667085;
+  font-size: 0.6875rem;
+}
+
+.client-repair-details dd {
+  margin: 0;
+  color: #13213f;
+  font-size: 0.75rem;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.client-repair-accessories {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 1rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid #e5eaf1;
+  font-size: 0.75rem;
+}
+
+.client-repair-accessories strong {
+  flex-basis: 100%;
+}
+
+.client-repair-accessories span {
+  padding: 0.3rem 0.55rem;
+  border-radius: 999px;
+  background: #eff8f3;
+  color: #16744a;
+}
+
+.client-repair-diagnosis-row {
+  display: grid;
+  grid-template-columns: 9rem minmax(0, 1fr);
+  gap: 1rem;
+  padding: 0.55rem 0;
+}
+
+.client-repair-diagnosis-row strong {
+  color: #13213f;
+  font-size: 0.75rem;
+}
+
+.client-repair-diagnosis-row p {
+  margin: 0;
+  color: #475467;
+  font-size: 0.75rem;
+  line-height: 1.45;
+}
+
+.client-repair-diagnosis-history {
+  display: grid;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid #e5eaf1;
+}
+
+.client-repair-diagnosis-history > div {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.25rem 1rem;
+  padding: 0.65rem;
+  border-radius: 0.4rem;
+  background: #f7f9fc;
+  color: #475467;
+  font-size: 0.6875rem;
+}
+
+.client-repair-diagnosis-history p,
+.client-repair-diagnosis-history small {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+
+.client-repair-photo-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.65rem;
+}
+
+.client-repair-photo-grid button {
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #13213f;
+  cursor: pointer;
+  font-size: 0.6875rem;
+}
+
+.client-repair-photo-grid img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1.45;
+  margin-bottom: 0.4rem;
+  border-radius: 0.4rem;
+  object-fit: cover;
+}
+
+.client-repair-doc-list {
+  display: grid !important;
+  gap: 0;
+}
+
+.client-repair-doc-list > a,
+.client-repair-doc-list > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 2.25rem;
+  padding: 0.4rem 0;
+  border-bottom: 1px solid #e5eaf1;
+  color: #13213f;
+  font-size: 0.75rem;
+  text-decoration: none;
+}
+
+.client-repair-doc-list > :last-child {
+  border-bottom: 0;
+}
+
+.client-repair-doc-list strong {
+  color: #168a4f;
+  font-size: 0.6875rem;
+}
+
+.client-repair-doc-list small {
+  color: #9a6400;
+}
+
+.client-repair-history-list {
+  display: grid !important;
+  gap: 0;
+}
+
+.client-repair-history-list > div {
+  display: grid;
+  grid-template-columns: 0.75rem minmax(0, 1fr) auto;
+  gap: 0.6rem;
+  align-items: start;
+  padding: 0.45rem 0;
+  color: #13213f;
+  font-size: 0.72rem;
+}
+
+.client-repair-history-list__dot {
+  width: 0.65rem;
+  height: 0.65rem;
+  margin-top: 0.15rem;
+  border-radius: 50%;
+}
+
+.client-repair-history-list p {
+  margin: 0.2rem 0 0;
+  color: #667085;
+}
+
+.client-repair-history-list time {
+  color: #667085;
+  font-size: 0.67rem;
+}
+
+.client-repair-quote {
+  grid-column: 1 / span 7;
+  padding: 1rem;
+}
+
+.client-repair-card__heading {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.client-repair-pill--success {
+  border-color: #87d1a9;
+  background: #eefaf3;
+  color: #087443;
+}
+
+.client-repair-pill--danger {
+  border-color: #f3abab;
+  background: #fff4f4;
+  color: #b42318;
+}
+
+.client-repair-quote-lines {
+  overflow: hidden;
+  margin-top: 0.75rem;
+  border: 1px solid #d8e1ec;
+  border-radius: 0.4rem;
+}
+
+.client-repair-quote-line {
+  display: grid;
+  grid-template-columns: minmax(11rem, 1.35fr) 3rem 6.25rem 6.25rem minmax(9rem, 1fr);
+  gap: 0.6rem;
+  align-items: center;
+  min-height: 3.75rem;
+  padding: 0.65rem 0.75rem;
+  border-bottom: 1px solid #e5eaf1;
+  color: #13213f;
+  font-size: 0.72rem;
+}
+
+.client-repair-quote-line:last-child {
+  border-bottom: 0;
+}
+
+.client-repair-quote-line--head {
+  min-height: 2.5rem;
+  background: #f7f9fc;
+  color: #475467;
+  font-size: 0.625rem;
+  font-weight: 800;
+}
+
+.client-repair-quote-line__item {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.client-repair-quote-line__item small {
+  display: none;
+  color: #667085;
+}
+
+.client-repair-decision {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+}
+
+.client-repair-decision button,
+.client-repair-decision > span {
+  display: grid;
+  min-height: 2rem;
+  place-items: center;
+  padding: 0.35rem;
+  border: 1px solid #d8e1ec;
+  background: #fff;
+  color: #475467;
+  font-size: 0.6875rem;
+}
+
+.client-repair-decision button:first-child {
+  border-radius: 0.35rem 0 0 0.35rem;
+}
+
+.client-repair-decision button:last-child {
+  border-radius: 0 0.35rem 0.35rem 0;
+}
+
+.client-repair-decision .is-selected {
+  border-color: #67c995;
+  background: #f0fbf5;
+  color: #087443;
+}
+
+.client-repair-decision .is-declined {
+  border-color: #f0a4a4;
+  background: #fff4f4;
+  color: #b42318;
+}
+
+.client-repair-totals {
+  width: min(15rem, 100%);
+  margin: 0.65rem 0 0 auto;
+  color: #13213f;
+  font-size: 0.72rem;
+}
+
+.client-repair-totals > div {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.25rem 0;
+}
+
+.client-repair-totals__grand {
+  margin-top: 0.35rem;
+  padding-top: 0.6rem !important;
+  border-top: 1px solid #cbd5e1;
+  font-size: 0.8125rem;
+}
+
+.client-repair-verify {
+  margin-top: 0.9rem;
+}
+
+.client-repair-verify label,
+.client-repair-payment > label,
+.client-repair-decline label {
+  display: block;
+  margin-bottom: 0.25rem;
+  color: #13213f;
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.client-repair-verify p {
+  margin: 0 0 0.45rem;
+  color: #667085;
+  font-size: 0.6875rem;
+}
+
+.client-repair-portal input,
+.client-repair-portal select,
+.client-repair-portal textarea {
+  width: 100%;
+  min-height: 2.75rem;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 0.35rem;
+  background: #fff;
+  color: #13213f;
+  font: inherit;
+}
+
+.client-repair-portal input:focus,
+.client-repair-portal select:focus,
+.client-repair-portal textarea:focus,
+.client-repair-portal button:focus-visible,
+.client-repair-portal a:focus-visible,
+.client-repair-portal summary:focus-visible {
+  outline: 3px solid rgba(0, 174, 239, 0.22);
+  outline-offset: 2px;
+}
+
+.client-repair-quote-actions {
+  display: grid;
+  grid-template-columns: 1.2fr 0.9fr;
+  gap: 0.65rem;
+  margin-top: 0.75rem;
+}
+
+.client-repair-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.75rem;
+  padding: 0.65rem 1rem;
+  border: 1px solid transparent;
+  border-radius: 0.35rem;
+  cursor: pointer;
+  font-size: 0.75rem;
+  font-weight: 800;
+}
+
+.client-repair-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.client-repair-btn--primary {
+  border-color: #0062df;
+  background: #0062df;
+  color: #fff;
+}
+
+.client-repair-btn--outline {
+  border-color: #0062df;
+  background: #fff;
+  color: #0062df;
+}
+
+.client-repair-alert {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  margin-top: 0.75rem;
+  padding: 0.75rem;
+  border: 1px solid;
+  border-radius: 0.4rem;
+  font-size: 0.72rem;
+}
+
+.client-repair-alert--success {
+  border-color: #9bd9b7;
+  background: #f1fbf5;
+  color: #087443;
+}
+
+.client-repair-alert--danger {
+  border-color: #f1aaaa;
+  background: #fff4f4;
+  color: #b42318;
+}
+
+.client-repair-alert--warning {
+  border-color: #f3c56b;
+  background: #fff9ed;
+  color: #9a6400;
+}
+
+.client-repair-decline {
+  margin-top: 0.75rem;
+  border: 1px solid #d8e1ec;
+  border-radius: 0.4rem;
+}
+
+.client-repair-decline__toggle {
+  display: flex;
+  width: 100%;
+  min-height: 2.75rem;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.65rem 0.75rem;
+  border: 0;
+  background: #fff;
+  color: #13213f;
+  font-size: 0.72rem;
+  text-align: left;
+}
+
+.client-repair-decline__body {
+  padding: 0.75rem;
+  border-top: 1px solid #d8e1ec;
+}
+
+.client-repair-decline__body > div {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.65rem;
+  margin-top: 0.65rem;
+}
+
+.client-repair-decline__body button {
+  min-height: 2.5rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 0.35rem;
+  background: #fff;
+  color: #13213f;
+  font-weight: 700;
+}
+
+.client-repair-decline__body button.is-danger {
+  border-color: #e63c3c;
+  color: #c11f1f;
+}
+
+.client-repair-payment {
+  grid-column: 8 / -1;
+  padding: 1rem;
+}
+
+.client-repair-payment__summary {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0.85rem 0;
+  padding-bottom: 0.7rem;
+  border-bottom: 1px solid #d8e1ec;
+  font-size: 0.72rem;
+}
+
+.client-repair-payment__summary > div {
+  display: flex;
+  justify-content: space-between;
+}
+
+.client-repair-payment__summary .is-due {
+  color: #d52020;
+}
+
+.client-repair-mpesa {
+  margin-bottom: 0.75rem;
+}
+
+.client-repair-mpesa h3 {
+  margin: 0 0 0.55rem;
+  font-size: 0.75rem;
+}
+
+.client-repair-mpesa > div {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr auto;
+  gap: 0.75rem;
+  align-items: center;
+  color: #475467;
+  font-size: 0.6875rem;
+}
+
+.client-repair-mpesa strong {
+  color: #0f1b44;
+}
+
+.client-repair-payment__steps {
+  margin: 0.6rem 0 0.8rem;
+  padding-left: 1rem;
+  color: #13213f;
+  font-size: 0.6875rem;
+  line-height: 1.5;
+}
+
+.client-repair-payment textarea {
+  margin-bottom: 0.65rem;
+  resize: vertical;
+}
+
+.client-repair-upload {
+  display: grid !important;
+  min-height: 4.5rem;
+  place-items: center;
+  margin: 0 0 0.65rem;
+  padding: 0.65rem;
+  border: 1px dashed #aebdcd;
+  border-radius: 0.35rem;
+  color: #0062df !important;
+  cursor: pointer;
+  text-align: center;
+}
+
+.client-repair-upload input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  min-height: 0;
+  overflow: hidden;
+  opacity: 0;
+}
+
+.client-repair-upload span {
+  color: #667085;
+  font-size: 0.65rem;
+  font-weight: 500;
+}
+
+.client-repair-payment > .client-repair-btn {
+  width: 100%;
+}
+
+.client-repair-messages {
+  display: grid;
+  gap: 0.6rem;
+  max-height: 16rem;
+  margin-top: 0.75rem;
+  overflow-y: auto;
+}
+
+.client-repair-messages > div {
+  justify-self: start;
+  max-width: 88%;
+}
+
+.client-repair-messages > div.is-customer {
+  justify-self: end;
+}
+
+.client-repair-messages p {
+  margin: 0;
+  padding: 0.65rem;
+  border: 1px solid #c9daf1;
+  border-radius: 0.45rem;
+  background: #eef6ff;
+  color: #13213f;
+  font-size: 0.72rem;
+  line-height: 1.4;
+}
+
+.client-repair-messages .is-customer p {
+  background: #f7f9fc;
+}
+
+.client-repair-messages small {
+  display: block;
+  margin-top: 0.25rem;
+  color: #667085;
+  font-size: 0.62rem;
+  text-align: right;
+}
+
+.client-repair-message-compose {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.client-repair-message-compose button {
+  min-width: 3.5rem;
+  border: 0;
+  border-radius: 0.35rem;
+  background: #0062df;
+  color: #fff;
+  font-weight: 700;
+}
+
+.client-repair-support__contacts {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid #e5eaf1;
+}
+
+.client-repair-support__contacts a {
+  color: #0f1b44;
+  font-size: 0.7rem;
+  text-decoration: none;
+}
+
+.client-repair-empty {
+  margin: 0;
+  color: #667085;
+  font-size: 0.75rem;
+  line-height: 1.45;
+}
+
+.client-repair-lightbox {
+  position: fixed;
+  z-index: 1000;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 1.25rem;
+  background: rgba(4, 11, 30, 0.92);
+}
+
+.client-repair-lightbox img {
+  max-width: 100%;
+  max-height: 88vh;
+  border-radius: 0.5rem;
+  object-fit: contain;
+}
+
+.client-repair-lightbox button {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  display: grid;
+  width: 2.75rem;
+  height: 2.75rem;
+  place-items: center;
+  border: 1px solid rgba(255,255,255,.4);
+  border-radius: 50%;
+  background: rgba(255,255,255,.1);
+  color: #fff;
+  font-size: 1.5rem;
+}
+
+.client-repair-portal--action .client-repair-hero {
+  grid-column: 1 / span 7;
+  min-height: 5rem;
+  padding: 0.75rem 1rem;
+}
+
+.client-repair-portal--action .client-repair-hero__media {
+  flex-basis: 6rem;
+  width: 6rem;
+  height: 4rem;
+}
+
+.client-repair-portal--action .client-repair-hero h1 {
+  font-size: 1rem;
+}
+
+.client-repair-portal--action .client-repair-quote {
+  grid-row: 2 / span 8;
+}
+
+.client-repair-portal--action .client-repair-payment {
+  grid-row: 1 / span 3;
+}
+
+.client-repair-portal--action .client-repair-progress,
+.client-repair-portal--action .client-repair-latest {
+  grid-column: 1 / -1;
+}
+
+.client-repair-portal--action .client-repair-device,
+.client-repair-portal--action .client-repair-diagnosis,
+.client-repair-portal--action .client-repair-photos,
+.client-repair-portal--action .client-repair-history,
+.client-repair-portal--action .client-repair-charge,
+.client-repair-portal--action .client-repair-delivery {
+  grid-column: 1 / span 7;
+}
+
+.client-repair-portal--action .client-repair-documents,
+.client-repair-portal--action .client-repair-support {
+  grid-column: 8 / -1;
+}
+
+@media (max-width: 800px) {
+  .client-repair-nav {
+    grid-template-columns: 2.75rem 1fr auto;
+    min-height: 3.5rem;
+    padding: 0 0.75rem;
+  }
+
+  .client-repair-nav__brand {
+    width: 2.75rem;
+    overflow: hidden;
+    font-size: 0;
+  }
+
+  .client-repair-nav__brand::before {
+    color: #0f1b44;
+    content: "☰";
+    font-size: 1.2rem;
+    font-weight: 500;
+  }
+
+  .client-repair-nav__title {
+    justify-self: center;
+  }
+
+  .client-repair-grid {
+    display: flex;
+    width: 100%;
+    flex-direction: column;
+    gap: 0.55rem;
+    padding: 0.65rem 0.65rem calc(1rem + env(safe-area-inset-bottom, 0px));
+  }
+
+  .client-repair-card {
+    width: 100%;
+    border-radius: 0.55rem;
+  }
+
+  .client-repair-hero,
+  .client-repair-portal--action .client-repair-hero {
+    order: 1;
+    gap: 0.75rem;
+    min-height: 7rem;
+    padding: 0.7rem 0.8rem;
+  }
+
+  .client-repair-hero__media,
+  .client-repair-portal--action .client-repair-hero__media {
+    flex-basis: 6.5rem;
+    width: 6.5rem;
+    height: 5.25rem;
+  }
+
+  .client-repair-hero__title-row {
+    gap: 0.45rem;
+  }
+
+  .client-repair-hero h1,
+  .client-repair-portal--action .client-repair-hero h1 {
+    flex-basis: 100%;
+    font-size: 1rem;
+  }
+
+  .client-repair-hero__meta,
+  .client-repair-hero__updated {
+    font-size: 0.68rem;
+  }
+
+  .client-repair-mobile-actions {
+    display: grid;
+    order: 2;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.5rem;
+  }
+
+  .client-repair-mobile-actions:empty {
+    display: none;
+  }
+
+  .client-repair-mobile-actions button,
+  .client-repair-mobile-actions a {
+    display: grid;
+    min-height: 2.75rem;
+    place-items: center;
+    border: 1px solid #0062df;
+    border-radius: 0.35rem;
+    background: #fff;
+    color: #0062df;
+    font-size: 0.75rem;
+    font-weight: 800;
+    text-decoration: none;
+  }
+
+  .client-repair-mobile-actions button {
+    background: #0062df;
+    color: #fff;
+  }
+
+  .client-repair-progress {
+    order: 3;
+    padding: 0.85rem;
+  }
+
+  .client-repair-steps {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0;
+    margin: 0.85rem 0;
+  }
+
+  .client-repair-step {
+    flex: none;
+    min-height: 2.25rem;
+    flex-direction: row;
+    gap: 0.75rem;
+    text-align: left;
+  }
+
+  .client-repair-step::before,
+  .client-repair-step::after {
+    left: 0.74rem;
+    width: 2px;
+    height: 50%;
+  }
+
+  .client-repair-step::before { top: 0; }
+  .client-repair-step::after { top: 50%; right: auto; }
+
+  .client-repair-step:first-child::before,
+  .client-repair-step:last-child::after {
+    display: none;
+  }
+
+  .client-repair-step__dot {
+    flex: 0 0 1.55rem;
+  }
+
+  .client-repair-latest {
+    order: 4;
+    padding: 0.85rem;
+  }
+
+  .client-repair-latest strong,
+  .client-repair-latest p {
+    margin-top: 0.65rem;
+  }
+
+  .client-repair-quote {
+    order: 5;
+    padding: 0.75rem;
+  }
+
+  .client-repair-payment {
+    order: 6;
+    padding: 0.75rem;
+  }
+
+  .client-repair-documents { order: 7; }
+  .client-repair-device { order: 8; }
+  .client-repair-diagnosis { order: 9; }
+  .client-repair-photos { order: 10; }
+  .client-repair-history { order: 11; }
+  .client-repair-charge { order: 12; padding: 0.65rem; }
+  .client-repair-delivery { order: 13; }
+  .client-repair-support { order: 14; padding: 0.8rem; }
+
+  .client-repair-disclosure > summary {
+    min-height: 2.75rem;
+    padding: 0.65rem 0.75rem;
+    font-size: 0.75rem;
+  }
+
+  .client-repair-disclosure > summary > span {
+    display: inline;
+    color: #667085;
+    font-size: 1.1rem;
+    transition: transform 0.2s;
+  }
+
+  .client-repair-disclosure[open] > summary > span {
+    transform: rotate(90deg);
+  }
+
+  .client-repair-disclosure:not([open]) > .client-repair-disclosure__body {
+    display: none !important;
+  }
+
+  .client-repair-disclosure__body {
+    padding: 0 0.75rem 0.75rem;
+  }
+
+  .client-repair-details {
+    grid-template-columns: 1fr;
+  }
+
+  .client-repair-details > div {
+    grid-template-columns: minmax(6rem, 0.8fr) minmax(0, 1fr);
+  }
+
+  .client-repair-diagnosis-row {
+    grid-template-columns: 1fr;
+    gap: 0.2rem;
+  }
+
+  .client-repair-photo-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .client-repair-history-list > div {
+    grid-template-columns: 0.65rem minmax(0, 1fr);
+  }
+
+  .client-repair-history-list time {
+    grid-column: 2;
+  }
+
+  .client-repair-quote-line--head {
+    display: none;
+  }
+
+  .client-repair-quote-line {
+    grid-template-columns: 1fr auto;
+    gap: 0.55rem;
+    padding: 0.7rem;
+  }
+
+  .client-repair-quote-line__item {
+    grid-column: 1;
+  }
+
+  .client-repair-quote-line__item small {
+    display: block;
+  }
+
+  .client-repair-quote-line__qty,
+  .client-repair-quote-line > span:not(.client-repair-quote-line__qty) {
+    display: none;
+  }
+
+  .client-repair-quote-line > strong {
+    grid-column: 2;
+    grid-row: 1;
+    align-self: start;
+  }
+
+  .client-repair-decision {
+    grid-column: 1 / -1;
+  }
+
+  .client-repair-totals {
+    width: 100%;
+  }
+
+  .client-repair-quote-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .client-repair-mpesa > div {
+    grid-template-columns: 1fr auto;
+  }
+
+  .client-repair-payment__steps,
+  .client-repair-payment > label:not(.client-repair-upload),
+  .client-repair-payment > textarea,
+  .client-repair-payment > input,
+  .client-repair-payment > .client-repair-upload,
+  .client-repair-payment > .client-repair-btn {
+    display: none;
+  }
+
+  .client-repair-message-compose {
+    grid-template-columns: minmax(0, 1fr) 3.5rem;
+  }
+
+  .client-repair-support__contacts {
+    flex-direction: column;
+  }
+}
+
+@media (max-width: 360px) {
+  .client-repair-grid {
+    padding-inline: 0.45rem;
+  }
+
+  .client-repair-hero__media {
+    flex-basis: 5.25rem;
+    width: 5.25rem;
+    height: 4.5rem;
+  }
+
+  .client-repair-mobile-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .client-repair-photo-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+
+.client-repair-payment-proof {
+  margin-top: 0.75rem;
+}
+
+.client-repair-payment-proof > summary {
+  display: none;
+}
+
+.client-repair-payment-proof__body {
+  display: block !important;
+}
+
+.client-repair-payment-proof__body > label {
+  display: block;
+  margin-bottom: 0.25rem;
+  color: #13213f;
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.client-repair-payment-proof__body > input {
+  margin-bottom: 0.65rem;
+}
+
+.client-repair-payment-proof__body > .client-repair-btn {
+  width: 100%;
+}
+
+@media (max-width: 800px) {
+  .client-repair-payment-proof {
+    margin: 0.75rem -0.75rem -0.75rem;
+    border-top: 1px solid #d8e1ec;
+  }
+
+  .client-repair-payment-proof > summary {
+    display: flex;
+    min-height: 3.25rem;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.75rem;
+    color: #0f1b44;
+    cursor: pointer;
+    font-size: 0.72rem;
+    list-style: none;
+  }
+
+  .client-repair-payment-proof > summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .client-repair-payment-proof > summary span {
+    color: #d97800;
+    font-size: 0.65rem;
+  }
+
+  .client-repair-payment-proof:not([open]) > .client-repair-payment-proof__body {
+    display: none !important;
+  }
+
+  .client-repair-payment-proof__body {
+    padding: 0 0.75rem 0.75rem;
+  }
+}
+
+
+/* Exact approved order-line column set and phone card composition. */
+@media (min-width: 1024px) {
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table--order th[data-col='reserved'],
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table--order td[data-col='reserved'],
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table--order th[data-col='delivered'],
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table--order td[data-col='delivered'],
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table--order th[data-col='invoiced'],
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table--order td[data-col='invoiced'],
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table--order th[data-col='policy'],
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table--order td[data-col='policy'],
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table--order th[data-col='discount'],
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table--order td[data-col='discount'],
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table--edit th[data-col='index'],
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table--edit td[data-col='index'] {
+    display: none !important;
+  }
+
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table--order th[data-col='product'],
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table--order td[data-col='product'],
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table--edit th[data-col='product'],
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table--edit td[data-col='product'] {
+    width: 16rem;
+    min-width: 16rem;
+  }
+
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table--order th[data-col='description'],
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table--order td[data-col='description'],
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table--edit th[data-col='description'],
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table--edit td[data-col='description'] {
+    width: 18rem;
+    min-width: 18rem;
+  }
+
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table--edit td[data-col='unit'] {
+    color: #13213f;
+    font-weight: 600;
+  }
+}
+
+@media (max-width: 1023px) {
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table--order tbody td[data-col='reserved'],
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table--order tbody td[data-col='delivered'],
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table--order tbody td[data-col='invoiced'],
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table--order tbody td[data-col='policy'],
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table--order tbody td[data-col='discount'] {
+    display: none !important;
+  }
+
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table--order tbody td[data-col='product'] {
+    grid-column: 1 !important;
+    grid-row: 1 !important;
+  }
+
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table--order tbody td[data-col='amount'] {
+    grid-column: 2 !important;
+    grid-row: 1 !important;
+    align-items: flex-end;
+    justify-self: stretch !important;
+    text-align: right !important;
+  }
+
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table--order tbody td[data-col='amount']::before {
+    display: none !important;
+  }
+
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table--order tbody td[data-col='description'],
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table--order tbody td[data-col='qty'],
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table--order tbody td[data-col='unit'],
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table--order tbody td[data-col='price'],
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table--order tbody td[data-col='tax'] {
+    grid-column: 1 / -1 !important;
+    display: flex !important;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    width: 100% !important;
+  }
+
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table--order tbody td[data-col='description'] { grid-row: 2 !important; }
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table--order tbody td[data-col='qty'] { grid-row: 3 !important; }
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table--order tbody td[data-col='unit'] { grid-row: 4 !important; }
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table--order tbody td[data-col='price'] { grid-row: 5 !important; }
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table--order tbody td[data-col='tax'] { grid-row: 6 !important; }
+
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table--order tbody td[data-col='actions'] {
+    grid-row: 7 !important;
+  }
+
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table--edit tbody td[data-col='product'] {
+    grid-column: 1 !important;
+    grid-row: 1 !important;
+  }
+
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table--edit tbody td[data-col='amount'] {
+    grid-column: 2 !important;
+    grid-row: 1 !important;
+    align-items: flex-end;
+    justify-self: stretch !important;
+    text-align: right !important;
+  }
+
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table--edit tbody td[data-col='amount']::before {
+    display: none !important;
+  }
+
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table--edit tbody td[data-col='description'] {
+    grid-column: 1 !important;
+    grid-row: 2 !important;
+  }
+
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table--edit tbody td[data-col='qty'] {
+    grid-column: 2 !important;
+    grid-row: 2 !important;
+  }
+
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table--edit tbody td[data-col='unit'] {
+    grid-column: 1 !important;
+    grid-row: 3 !important;
+  }
+
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table--edit tbody td[data-col='price'] {
+    grid-column: 2 !important;
+    grid-row: 3 !important;
+  }
+
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table--edit tbody td[data-col='tax'] {
+    grid-column: 1 !important;
+    grid-row: 4 !important;
+  }
+
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table--edit tbody td[data-col='actions'] {
+    grid-column: 1 / -1 !important;
+    grid-row: 5 !important;
+  }
+
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table--edit tbody td[data-col='description'],
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table--edit tbody td[data-col='qty'],
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table--edit tbody td[data-col='unit'],
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table--edit tbody td[data-col='price'],
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table--edit tbody td[data-col='tax'] {
+    display: flex !important;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.35rem;
+  }
+}
+
+@media (max-width: 1023px) {
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table--edit tbody tr:has(> td[data-col='index']) > td[data-col='price'] {
+    grid-column: 2 !important;
+    grid-row: 3 !important;
+  }
+
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table--edit tbody tr:has(> td[data-col='index']) > td[data-col='tax'] {
+    grid-column: 1 !important;
+    grid-row: 4 !important;
+  }
+
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table--edit tbody tr:has(> td[data-col='index']) > td[data-col='amount'] {
+    grid-column: 2 !important;
+    grid-row: 1 !important;
+  }
+
+  .sales-pilot.sales-doc .sales-order-lines-panel .sp-line-table--edit tbody tr:has(> td[data-col='index']) > td[data-col='actions'] {
+    grid-column: 1 / -1 !important;
+    grid-row: 5 !important;
+  }
+}

@@ -146,11 +146,30 @@ test.describe('repair → quote → invoice money path', () => {
     expect(body.failed).toBe(0)
   })
 
-  test('customer portal shows the repair without authentication', async ({ browser }) => {
-    const anon = await browser.newContext()
+  test('customer portal keeps every repair section readable on phone', async ({ browser }) => {
+    const anon = await browser.newContext({ viewport: { width: 390, height: 844 } })
     const page = await anon.newPage()
     await page.goto(`/portal/repair/${encodeURIComponent(repairRef)}`)
+
     await expect(page.getByText(repairRef).first()).toBeVisible({ timeout: 15_000 })
+    await expect(page.locator('.client-repair-hero')).toBeVisible()
+    await expect(page.locator('.client-repair-progress')).toBeVisible()
+    await expect(page.locator('.client-repair-device')).toBeVisible()
+    await expect(page.locator('.client-repair-support')).toBeVisible()
+
+    const layout = page.locator('.client-repair-grid')
+    const layoutBox = await layout.boundingBox()
+    expect(layoutBox).not.toBeNull()
+    expect((layoutBox?.x ?? 0) + (layoutBox?.width ?? 0)).toBeLessThanOrEqual(390)
+
+    const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)
+    expect(overflow).toBeLessThanOrEqual(1)
+
+    const progressDirection = await page.locator('.client-repair-steps').evaluate(
+      element => window.getComputedStyle(element).flexDirection,
+    )
+    expect(progressDirection).toBe('column')
+
     await anon.close()
   })
 
