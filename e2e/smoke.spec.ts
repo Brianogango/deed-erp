@@ -165,6 +165,22 @@ test.describe('repair → quote → invoice money path', () => {
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)
     expect(overflow).toBeLessThanOrEqual(1)
 
+    await expect(page.locator('.client-repair-nav__brand')).toHaveAttribute('src', '/deed-logo-transparent.png')
+
+    const scrollState = await page.locator('.client-repair-portal').evaluate(element => {
+      const portal = element as HTMLElement
+      portal.scrollTop = 120
+      return {
+        overflowY: window.getComputedStyle(portal).overflowY,
+        scrollTop: portal.scrollTop,
+        scrollHeight: portal.scrollHeight,
+        clientHeight: portal.clientHeight,
+      }
+    })
+    expect(scrollState.overflowY).toBe('auto')
+    expect(scrollState.scrollHeight).toBeGreaterThan(scrollState.clientHeight)
+    expect(scrollState.scrollTop).toBeGreaterThan(0)
+
     const progressDirection = await page.locator('.client-repair-steps').evaluate(
       element => window.getComputedStyle(element).flexDirection,
     )

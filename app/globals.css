@@ -27829,3 +27829,58 @@ body:has(.crm-workspace) [role="dialog"] > div {
     grid-row: 5 !important;
   }
 }
+
+
+/* PR #460 follow-up: use the real Deed lockup and restore portal-owned scrolling. */
+html:has(.client-repair-portal),
+body:has(.client-repair-portal) {
+  height: 100%;
+  overflow: hidden !important;
+}
+
+.client-repair-portal {
+  width: 100%;
+  height: 100vh;
+  height: 100dvh;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto !important;
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-gutter: stable;
+}
+
+.client-repair-nav__identity {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+}
+
+.client-repair-nav__brand {
+  display: block;
+  width: auto;
+  height: 2.25rem;
+  max-width: 8.5rem;
+  object-fit: contain;
+  object-position: left center;
+}
+
+.client-repair-nav__menu {
+  display: none;
+}
+
+@media (max-width: 800px) {
+  .client-repair-nav__brand {
+    display: none;
+  }
+
+  .client-repair-nav__menu {
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-start;
+    width: 2.75rem;
+    color: #0f1b44;
+    font-size: 1.2rem;
+    line-height: 1;
+  }
+}
