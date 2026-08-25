@@ -410,7 +410,9 @@ export default function RepairDetailView() {
             </button>
             <div className="repair-detail__identity-content flex items-center gap-2 sm:gap-3 flex-wrap min-w-0">
               <h2 className="erp-record-title shrink-0">{r.productName}</h2>
-              <StatusChip status={r.status} />
+              <span className="repair-detail__status-chip">
+                <StatusChip status={r.status} />
+              </span>
               <span className="hidden md:flex items-center gap-1.5 text-xs font-medium text-[var(--text-3)] min-w-0">
                 <span className="font-mono text-[var(--text-2)] font-semibold truncate max-w-[150px]">{r.ref}</span>
                 <span className="text-[var(--border)]">·</span>
