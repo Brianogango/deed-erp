@@ -293,7 +293,7 @@ test.describe('module render smoke', () => {
     '/', '/sales', '/contacts', '/inventory', '/operations', '/purchases',
     '/pos', '/repairs', '/refurbishment', '/delivery', '/ecommerce',
     '/crm', '/kilimall', '/finance', '/hr', '/outsource', '/aftersales',
-    '/deposits', '/holdovers', '/sops', '/expenses', '/settings',
+    '/deposits', '/holdovers', '/property', '/sops', '/expenses', '/settings',
   ]
 
   test('all module routes render without client-side exceptions', async ({ browser }) => {
@@ -318,7 +318,7 @@ test.describe('module render smoke', () => {
 test.describe('responsive target workspaces', () => {
   const routes = [
     '/crm', '/crm?crmTab=leads',
-    '/kilimall', '/sops', '/deposits', '/holdovers', '/settings',
+    '/kilimall', '/sops', '/deposits', '/holdovers', '/property', '/settings',
     '/expenses',
     '/hr',
     '/delivery',

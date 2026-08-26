@@ -62,6 +62,7 @@ const ROUTE_BOOT_APIS: Record<string, BootApiGroup[]> = {
   '/deposits': ['contacts'],
   '/documents': [],
   '/holdovers': ['products', 'contacts', 'repairs'],
+  '/property': ['employees'],
   '/settings': ['approval_rules'],
 }
 

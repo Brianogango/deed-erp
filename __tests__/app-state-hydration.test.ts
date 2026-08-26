@@ -66,4 +66,15 @@ describe('appStateKeysForRoute', () => {
     expect(keys).not.toContain('deed_stockTransfers')
     expect(keys).not.toContain('deed_posOrders')
   })
+
+  it('hydrates the company property register and COA on /property', () => {
+    const keys = appStateKeysForRoute('/property')
+    expect(keys).toEqual(expect.arrayContaining([
+      'deed_companyAssets',
+      'deed_accounts',
+      'deed_companySettings',
+    ]))
+    expect(keys).not.toContain('deed_employeeAssets')
+    expect(keys).not.toContain('deed_products')
+  })
 })

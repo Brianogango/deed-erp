@@ -237,6 +237,18 @@ describe('POST /api/store — sensitive key gating', () => {
     expect(res.status).toBe(403)
   })
 
+  it('rejects a finance officer writing company property (deed_companyAssets)', async () => {
+    mockGetSession.mockResolvedValue(financeSession)
+    const res = await STORE_POST(postReq({ deed_companyAssets: '[]' }))
+    expect(res.status).toBe(403)
+  })
+
+  it('allows a director writing company property', async () => {
+    mockGetSession.mockResolvedValue(directorSession)
+    const res = await STORE_POST(postReq({ deed_companyAssets: '[]' }))
+    expect(res.status).toBe(200)
+  })
+
   it('silently drops the server-managed audit timeline on POST (never client-writable)', async () => {
     mockGetSession.mockResolvedValue(directorSession)
     const res = await STORE_POST(postReq({ deed_audit_timeline_v1: JSON.stringify([{ tampered: true }]) }))
@@ -318,6 +330,18 @@ describe('GET /api/store — sensitive key READ gating', () => {
     const body = await res.json()
     expect(body.deed_payslips).toBeDefined()
     expect(body.deed_payrollRuns).toBeDefined()
+  })
+
+  it('returns company property to a finance officer but not a technician', async () => {
+    mockLoadAppState.mockResolvedValue({ deed_companyAssets: [{ id: 'a1', name: 'Chairs' }] })
+    mockGetSession.mockResolvedValue(financeSession)
+    const financeBody = await (await STORE_GET(getReq('deed_companyAssets'))).json()
+    expect(financeBody.deed_companyAssets).toBeDefined()
+
+    mockGetSession.mockResolvedValue(technicianSession)
+    const techRes = await STORE_GET(getReq('deed_companyAssets'))
+    const techBody = await techRes.json()
+    expect(techBody.deed_companyAssets).toBeUndefined()
   })
 
   it('403s a technician reading deed_payslips by key', async () => {

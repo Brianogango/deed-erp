@@ -9,7 +9,7 @@ import { Badge, Confirm, Field, Input, Modal, ModuleSkeleton, PanelHeader, Selec
 import { ModuleChrome } from '@/components/erp'
 import { DataTable, type ColumnDef } from '@/components/data-table'
 import { MODULE_IDS, USER_ROLES } from '@/lib/auth/types'
-import { formatRoleLabel, isAdmin, normalizeClientRole } from '@/lib/auth/access'
+import { formatModuleLabel, formatRoleLabel, isAdmin, normalizeClientRole } from '@/lib/auth/access'
 import { Fa } from '@/components/icons'
 import {
   faBuilding, faUsers, faBriefcase, faBoxesStacked, faCartShopping,
@@ -430,7 +430,7 @@ export default function Settings() {
   }
 
   const roleOptions = USER_ROLES.map(r => ({ value: r, label: formatRoleLabel(r) }))
-  const moduleOptions = MODULE_IDS.map(m => ({ value: m, label: m === 'pos' ? 'Point of Sale' : formatRoleLabel(m) }))
+  const moduleOptions = MODULE_IDS.map(m => ({ value: m, label: formatModuleLabel(m) }))
 
   const nav: { id: Section; label: string; icon: any; group?: string }[] = [
     { id: 'general',    label: 'General',       icon: faBuilding,        group: 'Company' },
@@ -778,7 +778,7 @@ export default function Settings() {
                         return (
                           <span className="settings-user-modules flex gap-1 flex-wrap">
                             {modules.map(m => (
-                              <span key={m} className="settings-user-module text-[9px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 font-medium">{m === 'pos' ? 'POS' : formatRoleLabel(m)}</span>
+                              <span key={m} className="settings-user-module text-[9px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 font-medium">{m === 'pos' ? 'POS' : formatModuleLabel(m)}</span>
                             ))}
                           </span>
                         )
@@ -828,7 +828,7 @@ export default function Settings() {
                         </div>
                         <div className="settings-user-card__state"><span className={user.active ? 'is-active' : ''} />{user.active ? 'Active' : 'Inactive'}</div>
                         <dl>
-                          <div><dt>Modules</dt><dd>{modules.length ? modules.map(m => m === 'pos' ? 'POS' : formatRoleLabel(m)).join(', ') : 'No modules assigned'}</dd></div>
+                          <div><dt>Modules</dt><dd>{modules.length ? modules.map(m => m === 'pos' ? 'POS' : formatModuleLabel(m)).join(', ') : 'No modules assigned'}</dd></div>
                         </dl>
                         <div className="settings-user-card__actions">
                           <button type="button" disabled={!canManageSystemUsers} onClick={() => { if (!canManageSystemUsers) return; const u = users.find(x => x.id === user.id); if (!u) return; setUserForm({ id: u.id, employeeId: '', username: u.username, name: u.name, role: u.role, modules: Array.isArray(u.modules) ? [...u.modules] : [], active: u.active, actsAsTechnician: Boolean(u.actsAsTechnician), password: '' }); setShowUserModal(true) }}>Edit user</button>
