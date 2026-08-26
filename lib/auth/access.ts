@@ -17,6 +17,7 @@ export const MODULE_LABELS: Record<ModuleId, string> = {
   accounting: 'Accounting',
   deposits: 'Deposits & Layby',
   holdovers: 'Device Holdovers',
+  company_property: 'Property',
   hr: 'HR Self-Service',
   outsource: 'Outsource Repairs',
   after_sales: 'After-Sales',
@@ -61,6 +62,7 @@ export const hasModuleAccess = (
   if (!user) return false
   if (SELF_SERVICE_MODULES.has(module)) return true
   if (normalizeClientRole(user.role) === 'director') return true
+  if (module === 'company_property' && ['admin_officer', 'finance_officer'].includes(normalizeClientRole(user.role))) return true
   return (user.modules ?? []).includes(module)
 }
 
@@ -71,6 +73,21 @@ export const getFirstAllowedModule = (
   if (hasModuleAccess(user, 'dashboard')) return 'dashboard'
   return (user.modules ?? [])[0] ?? 'hr'
 }
+
+export const formatModuleLabel = (moduleId: string | null | undefined) => {
+  if (!moduleId) return 'No module'
+  if (moduleId in MODULE_LABELS) return MODULE_LABELS[moduleId as ModuleId]
+  return formatRoleLabel(moduleId)
+}
+
+export const COMPANY_PROPERTY_MANAGER_ROLES: readonly UserRole[] = ['director', 'admin_officer']
+export const COMPANY_PROPERTY_VIEWER_ROLES: readonly UserRole[] = ['director', 'admin_officer', 'finance_officer']
+
+export const canManageCompanyPropertyRole = (role?: string | null) =>
+  COMPANY_PROPERTY_MANAGER_ROLES.includes(normalizeClientRole(role) as UserRole)
+
+export const canViewCompanyPropertyRole = (role?: string | null) =>
+  COMPANY_PROPERTY_VIEWER_ROLES.includes(normalizeClientRole(role) as UserRole)
 
 export const formatRoleLabel = (role: string | null | undefined) => {
   if (!role) return 'No role'

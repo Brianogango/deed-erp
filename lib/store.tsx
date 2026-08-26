@@ -25,6 +25,22 @@ import {
   type PricingMarginPolicy,
 } from '@/lib/pricing/margin-policy'
 import type { CreateUserInput, ModuleId as AuthModuleId, PublicUser, UpdateUserInput, UserRole as AuthUserRole } from '@/lib/auth/types'
+import {
+  type CompanyAsset,
+  type CompanyAssetInput,
+  type CompanyAssetStatus,
+  nextCompanyAssetRef,
+  resolvedPpeAccountCode,
+  validateCompanyAssetInput,
+  canDeleteCompanyAsset,
+  applyMove,
+  applyCustodian,
+  applyStatusChange,
+  applyDispose,
+  applyWriteOff,
+  historyEntry,
+} from '@/lib/company-property'
+export type { CompanyAsset, CompanyAssetInput, CompanyAssetStatus, CompanyAssetCategory, CompanyAssetClass, CompanyAssetCondition } from '@/lib/company-property'
 import { CATEGORY_CONFIG, ALL_CATEGORIES, type CategoryId } from '@/lib/product-categories'
 export { CATEGORY_CONFIG, ALL_CATEGORIES, type CategoryId }
 import { calcStockByLocation as _calcStockByLocation, upsertBulkStock as _upsertBulkStock, aggregatePayroll } from '@/lib/business-logic'
@@ -3240,6 +3256,17 @@ export interface AppState {
   addHoldover: (h: Holdover) => void
   updateHoldover: (id: string, patch: Partial<Holdover>) => void
 
+  // Company property (office furniture / fittings — not HR trading-stock custody)
+  companyAssets: CompanyAsset[]
+  createCompanyAsset: (input: CompanyAssetInput) => CompanyAsset | null
+  updateCompanyAsset: (id: string, input: CompanyAssetInput) => void
+  deleteCompanyAsset: (id: string) => void
+  moveCompanyAsset: (id: string, locationName: string, note?: string) => void
+  setCompanyAssetCustodian: (id: string, custodian: { employeeId?: string; name?: string }, note?: string) => void
+  setCompanyAssetStatus: (id: string, status: CompanyAssetStatus, note?: string) => void
+  disposeCompanyAsset: (id: string, qty: number, opts?: { reason?: string; proceedsKes?: number }) => void
+  writeOffCompanyAsset: (id: string, reason?: string) => void
+
   // Outsource repair
   outsourceVendors: OutsourceVendor[]
   outsourceJobs: OutsourceJob[]
@@ -3981,6 +4008,15 @@ export type FinanceStoreState = Pick<AppState,
   | 'updatePO'
   | 'updatePOLine'
   | 'validateReceipt'
+  | 'companyAssets'
+  | 'createCompanyAsset'
+  | 'updateCompanyAsset'
+  | 'deleteCompanyAsset'
+  | 'moveCompanyAsset'
+  | 'setCompanyAssetCustodian'
+  | 'setCompanyAssetStatus'
+  | 'disposeCompanyAsset'
+  | 'writeOffCompanyAsset'
 >
 
 export type HrStoreState = Pick<AppState,
@@ -5673,6 +5709,7 @@ export function StoreProvider({
   const [outsourcePayments, setOutsourcePayments] = useLS('deed_outsourcePayments', seedOutsourcePayments)
   const [outboundReleases, setOutboundReleases] = useLS<OutboundRelease[]>('deed_outboundReleases', [])
   const [deposits, setDeposits] = useLS<Deposit[]>('deed_deposits', [])
+  const [companyAssets, setCompanyAssets] = useLS<CompanyAsset[]>('deed_companyAssets', [])
   const [holdovers, setHoldovers] = useLS<Holdover[]>('deed_holdovers', (() => {
     // One-time migrate from the legacy local-only key used before store sync.
     if (typeof window === 'undefined') return [] as Holdover[]
@@ -6558,6 +6595,14 @@ export function StoreProvider({
     getDocumentPaymentDetails: (...args: Parameters<AppState['getDocumentPaymentDetails']>) => storeCtxRef.current!.getDocumentPaymentDetails(...args),
     setDocumentPaymentDetails: (...args: Parameters<AppState['setDocumentPaymentDetails']>) => storeCtxRef.current!.setDocumentPaymentDetails(...args),
     addBankAccount: (...args: Parameters<AppState['addBankAccount']>) => storeCtxRef.current!.addBankAccount(...args),
+    createCompanyAsset: (...args: Parameters<AppState['createCompanyAsset']>) => storeCtxRef.current!.createCompanyAsset(...args),
+    updateCompanyAsset: (...args: Parameters<AppState['updateCompanyAsset']>) => storeCtxRef.current!.updateCompanyAsset(...args),
+    deleteCompanyAsset: (...args: Parameters<AppState['deleteCompanyAsset']>) => storeCtxRef.current!.deleteCompanyAsset(...args),
+    moveCompanyAsset: (...args: Parameters<AppState['moveCompanyAsset']>) => storeCtxRef.current!.moveCompanyAsset(...args),
+    setCompanyAssetCustodian: (...args: Parameters<AppState['setCompanyAssetCustodian']>) => storeCtxRef.current!.setCompanyAssetCustodian(...args),
+    setCompanyAssetStatus: (...args: Parameters<AppState['setCompanyAssetStatus']>) => storeCtxRef.current!.setCompanyAssetStatus(...args),
+    disposeCompanyAsset: (...args: Parameters<AppState['disposeCompanyAsset']>) => storeCtxRef.current!.disposeCompanyAsset(...args),
+    writeOffCompanyAsset: (...args: Parameters<AppState['writeOffCompanyAsset']>) => storeCtxRef.current!.writeOffCompanyAsset(...args),
   }), [])
 
   const hrActions = useMemo(() => ({
@@ -8022,6 +8067,209 @@ const storeCtx: AppState = {
     },
     updateHoldover: (id, patch) => {
       setHoldovers(prev => prev.map(h => (h.id === id ? { ...h, ...patch } : h)))
+    },
+
+    companyAssets,
+    createCompanyAsset: (input) => {
+      const user = currentUser()
+      if (!user) { showToast('Please log in to continue', 'error'); return null }
+      if (!['director', 'admin_officer'].includes(normalizeClientRole(user.role))) {
+        showToast('Only a Director or Admin Officer can record company property', 'error')
+        return null
+      }
+      const error = validateCompanyAssetInput(input, companyAssets)
+      if (error) { showToast(error, 'error'); return null }
+      const at = new Date().toISOString()
+      const status = input.status && ['draft', 'in_use', 'in_storage'].includes(input.status) ? input.status : 'draft'
+      const record: CompanyAsset = {
+        id: uid(),
+        ref: nextCompanyAssetRef(companyAssets.map(a => a.ref)),
+        name: input.name.trim(),
+        description: input.description?.trim() || undefined,
+        category: input.category,
+        assetClass: input.assetClass,
+        ppeAccountCode: resolvedPpeAccountCode(input),
+        qty: Number(input.qty),
+        unit: (input.unit || 'each').trim() || 'each',
+        assetTag: input.assetTag?.trim() || undefined,
+        serialNumber: input.serialNumber?.trim() || undefined,
+        locationName: input.locationName.trim(),
+        custodianEmployeeId: input.custodianEmployeeId?.trim() || undefined,
+        custodianName: input.custodianName?.trim() || undefined,
+        status,
+        condition: input.condition,
+        acquiredDate: input.acquiredDate,
+        acquiredVia: input.acquiredVia,
+        supplierName: input.supplierName?.trim() || undefined,
+        purchaseOrderRef: input.purchaseOrderRef?.trim() || undefined,
+        billRef: input.billRef?.trim() || undefined,
+        expenseRef: input.expenseRef?.trim() || undefined,
+        costKes: Number(input.costKes) || 0,
+        notes: input.notes?.trim() || undefined,
+        history: [
+          historyEntry({
+            at,
+            action: 'create',
+            toStatus: status,
+            toLocation: input.locationName.trim(),
+            userId: user.id,
+            userName: user.name,
+            note: input.acquiredVia === 'opening' ? 'Opening register — no journal posted' : undefined,
+          }),
+        ],
+        createdByUserId: user.id,
+        createdByName: user.name,
+        createdAt: at,
+        updatedAt: at,
+      }
+      setCompanyAssets(prev => [record, ...prev])
+      addAuditLog('create_company_asset', record.ref, `${record.name} (${record.qty} ${record.unit}) at ${record.locationName}`)
+      showToast(`${record.ref} recorded`, 'success')
+      return record
+    },
+    updateCompanyAsset: (id, input) => {
+      const user = currentUser()
+      if (!user) { showToast('Please log in to continue', 'error'); return }
+      if (!['director', 'admin_officer'].includes(normalizeClientRole(user.role))) {
+        showToast('Only a Director or Admin Officer can edit company property', 'error')
+        return
+      }
+      const existing = companyAssets.find(a => a.id === id)
+      if (!existing) { showToast('Property item not found', 'error'); return }
+      const error = validateCompanyAssetInput(input, companyAssets, id)
+      if (error) { showToast(error, 'error'); return }
+      const at = new Date().toISOString()
+      const nextStatus = existing.status === 'draft' && input.status && ['draft', 'in_use', 'in_storage'].includes(input.status)
+        ? input.status
+        : existing.status
+      setCompanyAssets(prev => prev.map(a => a.id !== id ? a : {
+        ...a,
+        name: input.name.trim(),
+        description: input.description?.trim() || undefined,
+        category: input.category,
+        assetClass: input.assetClass,
+        ppeAccountCode: resolvedPpeAccountCode(input),
+        qty: Number(input.qty),
+        unit: (input.unit || a.unit || 'each').trim() || 'each',
+        assetTag: input.assetTag?.trim() || undefined,
+        serialNumber: input.serialNumber?.trim() || undefined,
+        locationName: input.locationName.trim(),
+        custodianEmployeeId: input.custodianEmployeeId?.trim() || undefined,
+        custodianName: input.custodianName?.trim() || undefined,
+        status: nextStatus,
+        condition: input.condition,
+        acquiredDate: input.acquiredDate,
+        acquiredVia: input.acquiredVia,
+        supplierName: input.supplierName?.trim() || undefined,
+        purchaseOrderRef: input.purchaseOrderRef?.trim() || undefined,
+        billRef: input.billRef?.trim() || undefined,
+        expenseRef: input.expenseRef?.trim() || undefined,
+        costKes: Number(input.costKes) || 0,
+        notes: input.notes?.trim() || undefined,
+        updatedAt: at,
+        history: nextStatus !== a.status
+          ? [...a.history, historyEntry({
+              at,
+              action: 'status',
+              fromStatus: a.status,
+              toStatus: nextStatus,
+              userId: user.id,
+              userName: user.name,
+            })]
+          : a.history,
+      }))
+      showToast('Property item updated', 'success')
+    },
+    deleteCompanyAsset: (id) => {
+      const user = currentUser()
+      if (!user) { showToast('Please log in to continue', 'error'); return }
+      if (!['director', 'admin_officer'].includes(normalizeClientRole(user.role))) {
+        showToast('Only a Director or Admin Officer can delete company property', 'error')
+        return
+      }
+      const existing = companyAssets.find(a => a.id === id)
+      if (!existing) return
+      if (!canDeleteCompanyAsset(existing.status)) {
+        showToast('Only draft items can be deleted. Dispose or write off live records.', 'error')
+        return
+      }
+      setCompanyAssets(prev => prev.filter(a => a.id !== id))
+      addAuditLog('delete_company_asset', existing.ref, `Deleted draft ${existing.name}`)
+      showToast(`${existing.ref} deleted`, 'info')
+    },
+    moveCompanyAsset: (id, locationName, note) => {
+      const user = currentUser()
+      if (!user) { showToast('Please log in to continue', 'error'); return }
+      if (!['director', 'admin_officer'].includes(normalizeClientRole(user.role))) {
+        showToast('Only a Director or Admin Officer can move company property', 'error')
+        return
+      }
+      const existing = companyAssets.find(a => a.id === id)
+      if (!existing) return
+      const result = applyMove(existing, locationName, { userId: user.id, userName: user.name, at: new Date().toISOString() }, note)
+      if (!result.ok) { showToast(result.error, 'error'); return }
+      setCompanyAssets(prev => prev.map(a => a.id === id ? result.asset : a))
+      addAuditLog('move_company_asset', existing.ref, `${existing.locationName} → ${result.asset.locationName}`)
+      showToast(`${existing.ref} moved to ${result.asset.locationName}`, 'success')
+    },
+    setCompanyAssetCustodian: (id, custodian, note) => {
+      const user = currentUser()
+      if (!user) { showToast('Please log in to continue', 'error'); return }
+      if (!['director', 'admin_officer'].includes(normalizeClientRole(user.role))) {
+        showToast('Only a Director or Admin Officer can change custodians', 'error')
+        return
+      }
+      const existing = companyAssets.find(a => a.id === id)
+      if (!existing) return
+      const result = applyCustodian(existing, custodian, { userId: user.id, userName: user.name, at: new Date().toISOString() }, note)
+      if (!result.ok) { showToast(result.error, 'error'); return }
+      setCompanyAssets(prev => prev.map(a => a.id === id ? result.asset : a))
+      showToast(result.asset.custodianName ? `Custodian set to ${result.asset.custodianName}` : 'Custodian cleared', 'success')
+    },
+    setCompanyAssetStatus: (id, status, note) => {
+      const user = currentUser()
+      if (!user) { showToast('Please log in to continue', 'error'); return }
+      if (!['director', 'admin_officer'].includes(normalizeClientRole(user.role))) {
+        showToast('Only a Director or Admin Officer can change property status', 'error')
+        return
+      }
+      const existing = companyAssets.find(a => a.id === id)
+      if (!existing) return
+      const result = applyStatusChange(existing, status, { userId: user.id, userName: user.name, at: new Date().toISOString() }, note)
+      if (!result.ok) { showToast(result.error, 'error'); return }
+      setCompanyAssets(prev => prev.map(a => a.id === id ? result.asset : a))
+      addAuditLog('update_company_asset', existing.ref, `${existing.status} → ${status}`)
+      showToast(`${existing.ref} marked ${status.replace(/_/g, ' ')}`, 'success')
+    },
+    disposeCompanyAsset: (id, qty, opts) => {
+      const user = currentUser()
+      if (!user) { showToast('Please log in to continue', 'error'); return }
+      if (!['director', 'admin_officer'].includes(normalizeClientRole(user.role))) {
+        showToast('Only a Director or Admin Officer can dispose company property', 'error')
+        return
+      }
+      const existing = companyAssets.find(a => a.id === id)
+      if (!existing) return
+      const result = applyDispose(existing, qty, { userId: user.id, userName: user.name, at: new Date().toISOString() }, opts)
+      if (!result.ok) { showToast(result.error, 'error'); return }
+      setCompanyAssets(prev => prev.map(a => a.id === id ? result.asset : a))
+      addAuditLog('dispose_company_asset', existing.ref, result.asset.status === 'disposed' ? 'Disposed' : `Disposed ${qty} of ${existing.qty}`)
+      showToast(result.asset.status === 'disposed' ? `${existing.ref} disposed` : `${existing.ref} quantity reduced`, 'success')
+    },
+    writeOffCompanyAsset: (id, reason) => {
+      const user = currentUser()
+      if (!user) { showToast('Please log in to continue', 'error'); return }
+      if (!['director', 'admin_officer'].includes(normalizeClientRole(user.role))) {
+        showToast('Only a Director or Admin Officer can write off company property', 'error')
+        return
+      }
+      const existing = companyAssets.find(a => a.id === id)
+      if (!existing) return
+      const result = applyWriteOff(existing, { userId: user.id, userName: user.name, at: new Date().toISOString() }, reason)
+      if (!result.ok) { showToast(result.error, 'error'); return }
+      setCompanyAssets(prev => prev.map(a => a.id === id ? result.asset : a))
+      addAuditLog('write_off_company_asset', existing.ref, reason || 'Written off')
+      showToast(`${existing.ref} written off`, 'info')
     },
 
     recordOutsourcePayment: (p) => {
@@ -19238,6 +19486,7 @@ const storeCtx: AppState = {
     expenses,
     invoices,
     journalEntries,
+    companyAssets,
     outboundReleases,
     outsourceJobs,
     outsourcePayments,
@@ -19274,6 +19523,7 @@ const storeCtx: AppState = {
     expenses,
     invoices,
     journalEntries,
+    companyAssets,
     outboundReleases,
     outsourceJobs,
     outsourcePayments,

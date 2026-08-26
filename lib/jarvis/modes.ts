@@ -218,7 +218,7 @@ export function moduleFromPathname(pathname: string): string | null {
   if (p.startsWith('/repair')) return 'repairs'
   if (p.startsWith('/sales')) return 'sales'
   if (p.startsWith('/crm')) return 'crm'
-  if (p.startsWith('/finance') || p.startsWith('/cashbook') || p.startsWith('/expenses')) return 'finance'
+  if (p.startsWith('/finance') || p.startsWith('/cashbook') || p.startsWith('/expenses') || p.startsWith('/property')) return 'finance'
   if (p.startsWith('/purchase')) return 'purchases'
   if (p.startsWith('/inventory') || p.startsWith('/operations') || p.startsWith('/refurb')) return 'inventory'
   if (p.startsWith('/hr')) return 'hr'

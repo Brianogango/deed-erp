@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { useApp } from '@/lib/store'
+import { hasModuleAccess } from '@/lib/auth/access'
 import { invoiceDocState, invoicePaymentStatus, isInvoiceOverdue, displayDocRef, PAYMENT_STATUS_LABELS } from '@/lib/odoo-sales-flow'
 import { useHrStore } from '@/hooks/useHrStore'
 import { trackUxEvent } from '@/lib/ux-telemetry'
@@ -98,6 +99,7 @@ const MODULE_SHORTCUTS: Array<{ id: string; title: string; subtitle: string; hre
   { id: 'mod-outsource', title: 'Outsource', subtitle: 'External repair vendors', href: '/outsource', module: 'outsource', aliases: ['outsource', 'external repair'] },
   { id: 'mod-aftersales', title: 'After-Sales', subtitle: 'Warranties and RMAs', href: '/aftersales', module: 'after_sales', aliases: ['after sales', 'warranty', 'rma'] },
   { id: 'mod-holdovers', title: 'Holdovers', subtitle: 'Device loans and temporary issues', href: '/holdovers', module: 'holdovers', aliases: ['holdovers', 'device loans'] },
+  { id: 'mod-property', title: 'Property', subtitle: 'Office furniture, fittings, and equipment', href: '/property', module: 'company_property', aliases: ['property', 'furniture', 'fittings', 'office assets', 'company property'] },
   { id: 'mod-finance', title: 'Finance', subtitle: 'Accounting and settlements', href: '/finance', module: 'accounting', aliases: ['finance', 'accounting', 'bills'] },
   { id: 'mod-deposits', title: 'Deposits', subtitle: 'Customer deposits and layby', href: '/deposits', module: 'deposits', aliases: ['deposits', 'layby'] },
   { id: 'mod-expenses', title: 'Expenses', subtitle: 'Staff expense claims', href: '/expenses', module: 'expenses', aliases: ['expenses', 'claims'] },
@@ -191,6 +193,7 @@ export default function GlobalSearch({ open, onClose }: { open: boolean; onClose
 
     const allowedModules = new Set<string>(['dashboard', ...(currentUser?.modules ?? [])])
     if (currentUser?.role === 'director') allowedModules.add('settings')
+    if (hasModuleAccess(currentUser, 'company_property')) allowedModules.add('company_property')
 
     const commandHits = COMMAND_ACTIONS
       .filter(cmd => allowedModules.has(cmd.module))

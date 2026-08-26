@@ -95,6 +95,9 @@ const roleMatrix = {
   recordRepairBilling:       ['director', 'finance_officer', 'admin_officer', 'sales_rep', 'kilimall_officer', 'technical_lead'] as UserRole[],
   // Layby / deposit ledger — matches the roles granted the deposits module.
   manageDeposits:            ['director', 'admin_officer', 'finance_officer'] as UserRole[],
+  // Office furniture / fittings register — not trading stock, not HR custody.
+  manageCompanyProperty:     ['director', 'admin_officer'] as UserRole[],
+  viewCompanyProperty:       ['director', 'admin_officer', 'finance_officer'] as UserRole[],
   // Payroll runs and payslips — matches the payroll API role set.
   managePayroll:             ['director', 'admin_officer', 'finance_officer'] as UserRole[],
   // Device reconfiguration work orders
@@ -153,6 +156,7 @@ export const SENSITIVE_STORE_KEY_PERMISSIONS: Record<string, PermissionAction> =
   deed_purchaseReturns: 'manageProcurement',
   // Layby deposits and payroll — restricted to their respective back-office roles.
   deed_deposits: 'manageDeposits',
+  deed_companyAssets: 'manageCompanyProperty',
   deed_payrollRuns: 'managePayroll',
   deed_payslips: 'managePayroll',
   // HR leave ledger — self-service leave is created through the dedicated
@@ -184,6 +188,7 @@ export const SENSITIVE_STORE_KEY_READ_PERMISSIONS: Record<string, PermissionActi
   deed_bankStatementLines: 'manageBankRecon',
   deed_customerCredits: 'manageCustomerCredit',
   deed_auditLogs: 'viewAuditLog',
+  deed_companyAssets: 'viewCompanyProperty',
 }
 
 type StoreReadUser = Pick<PublicUser, 'id' | 'role' | 'modules' | 'actsAsTechnician'>

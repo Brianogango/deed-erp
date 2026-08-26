@@ -8,7 +8,7 @@ import {
   faChartLine, faShoppingCart, faBuildingColumns, faUsers, faGear, faBoxesStacked, faScrewdriverWrench,
   faDesktop, faGlobe, faAddressBook, faCartShopping, faTruck, faArrowsRotate, faShieldHalved, faReceipt,
   faChevronRight, faChevronLeft, faChevronDown, faMoneyBillWave, faHandHolding, faBullseye, faFileLines,
-  faMicrochip,
+  faMicrochip, faChair,
 } from '@fortawesome/free-solid-svg-icons'
 import { useShellStore, ModuleId } from '@/lib/store'
 import { hasModuleAccess } from '@/lib/auth/access'
@@ -86,6 +86,7 @@ export default function Sidebar() {
     { label: 'Outsource',     href: '/outsource',     id: 'outsource',     icon: faArrowsRotate },
     { label: 'After-Sales',   href: '/aftersales',    id: 'after_sales',   icon: faShieldHalved },
     { label: 'Holdovers',     href: '/holdovers',     id: 'holdovers',     icon: faHandHolding },
+    { label: 'Property',      href: '/property',      id: 'company_property', icon: faChair },
     { label: 'Finance',       href: '/finance',       id: 'accounting',    icon: faBuildingColumns },
     { label: 'Deposits',      href: '/deposits',      id: 'deposits',      icon: faMoneyBillWave },
     { label: 'Expenses',      href: '/expenses',      id: 'expenses',      icon: faReceipt },
@@ -219,7 +220,7 @@ export default function Sidebar() {
     },
     {
       title: 'Finance & people',
-      items: visibleItems.filter(i => ['accounting', 'deposits', 'expenses', 'hr', 'my_documents', 'sops', 'sop_documents', 'settings'].includes(i.id) && !pinnedIds.has(i.id)),
+      items: visibleItems.filter(i => ['accounting', 'deposits', 'expenses', 'company_property', 'hr', 'my_documents', 'sops', 'sop_documents', 'settings'].includes(i.id) && !pinnedIds.has(i.id)),
     },
   ].filter(g => g.items.length > 0)
 

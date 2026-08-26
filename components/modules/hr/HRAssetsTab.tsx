@@ -186,7 +186,10 @@ export default function HRAssetsTab() {
   return (
     <div className="hr-submodule hr-assets flex flex-col">
       <div className="hr-submodule-toolbar p-4 border-b border-[var(--border-lt)] flex items-center justify-between bg-[var(--bg-surface)]">
+        <div>
         <h3 className="text-sm font-bold text-[var(--text-1)]">Asset Assignments</h3>
+        <p className="text-[11px] text-[var(--text-4)] mt-0.5">Staff equipment issued from trading stock. Office furniture and fittings are recorded under Property.</p>
+        </div>
         {isAdmin && (
           <button onClick={openAssignModal} className="btn-primary py-1.5 px-4 text-[10px] flex items-center gap-2">
             <Fa icon={faPlus} />

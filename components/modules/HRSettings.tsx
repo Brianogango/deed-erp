@@ -5,7 +5,7 @@ import { useHrStore } from '@/hooks/useHrStore'
 import { Badge, Confirm, Field, Input, Modal, PanelHeader, Select, Textarea, ExportButtons } from '@/components/ui'
 import { DataTable, type ColumnDef } from '@/components/data-table'
 import { MODULE_IDS, USER_ROLES } from '@/lib/auth/types'
-import { formatRoleLabel } from '@/lib/auth/access'
+import { formatModuleLabel, formatRoleLabel } from '@/lib/auth/access'
 import { Fa } from '@/components/icons'
 import {
   faBuilding, faUsers, faBriefcase, faBoxesStacked, faCartShopping,
@@ -254,7 +254,7 @@ export default function HRSettings() {
   }
 
   const roleOptions = USER_ROLES.map(r => ({ value: r, label: formatRoleLabel(r) }))
-  const moduleOptions = MODULE_IDS.map(m => ({ value: m, label: m === 'pos' ? 'Point of Sale' : formatRoleLabel(m) }))
+  const moduleOptions = MODULE_IDS.map(m => ({ value: m, label: formatModuleLabel(m) }))
 
   const nav: { id: Section; label: string; icon: any; group?: string }[] = [
     { id: 'general',    label: 'General',       icon: faBuilding,        group: 'Company' },
@@ -506,7 +506,7 @@ export default function HRSettings() {
                         return (
                           <span className="flex gap-1 flex-wrap">
                             {modules.map(m => (
-                              <span key={m} className="text-[9px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 font-medium">{m === 'pos' ? 'POS' : formatRoleLabel(m)}</span>
+                              <span key={m} className="text-[9px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 font-medium">{m === 'pos' ? 'POS' : formatModuleLabel(m)}</span>
                             ))}
                           </span>
                         )
