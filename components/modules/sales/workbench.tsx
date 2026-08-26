@@ -2,6 +2,7 @@
 
 import type { ReactNode } from 'react'
 import '@/components/sales-prototype/sales-prototype.css'
+import '@/components/modules/odoo-record-designs.css'
 
 export type SalesDocPillTone =
   | 'draft'
