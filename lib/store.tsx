@@ -12261,6 +12261,7 @@ const storeCtx: AppState = {
             total: total || subtotal + taxTotal,
             amountPaid: Number(remote.amountPaid) || 0,
             saleOrderId: remote.saleOrderId || so.id,
+            ...(remote.repairId ? { repairId: remote.repairId } : {}),
             notes: remote.notes || `Created from ${so.ref}`,
             invoiceAddress: so.invoiceAddress,
             deliveryAddress: so.deliveryAddress,
@@ -12272,6 +12273,16 @@ const storeCtx: AppState = {
           // Only push into local store when we have lines — empty shells overwrite the mirror.
           if (remoteLines.length > 0) {
             setInvoices(p => [local, ...p.filter(i => i.id !== local.id)])
+          }
+          if (remote.repairId) {
+            setRepairs(p => p.map(r => {
+              if (r.id !== remote.repairId || r.invoiceId) return r
+              return {
+                ...r,
+                invoiceId: local.id,
+                invoiceDate: local.date,
+              }
+            }))
           }
           addAuditLog('create_invoice_from_so', local.ref, `Draft invoice created from ${so.ref} (server atomic)`)
           showToast(`Draft invoice ${local.ref} created — post it to finalize`)

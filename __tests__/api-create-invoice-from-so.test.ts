@@ -27,6 +27,10 @@ const {
       create: vi.fn(),
       findMany: vi.fn(),
     },
+    repair: {
+      findUnique: vi.fn(),
+      update: vi.fn(),
+    },
     $transaction: vi.fn(),
   },
   mockLoadAppState: vi.fn(),
@@ -66,6 +70,7 @@ const ITEM_ID = 'cccccccc-cccc-cccc-cccc-cccccccccccc'
 const INVOICE_ID = 'dddddddd-dddd-dddd-dddd-dddddddddddd'
 const USER_ID = 'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee'
 const LINE_ID = 'ffffffff-ffff-ffff-ffff-ffffffffffff'
+const REPAIR_ID = '99999999-9999-4999-8999-999999999999'
 
 const actor = { id: USER_ID, name: 'Admin', username: 'admin', role: 'admin_officer' }
 
@@ -106,6 +111,8 @@ beforeEach(() => {
   mockWriteFinancialAudit.mockResolvedValue(undefined)
   mockPrisma.saleOrder.findUnique.mockResolvedValue(saleOrder)
   mockPrisma.saleOrder.findMany.mockResolvedValue([saleOrder])
+  mockPrisma.repair.findUnique.mockResolvedValue(null)
+  mockPrisma.repair.update.mockResolvedValue({ id: REPAIR_ID })
   // Default stockable products to delivered-qty policy (hardware-safe).
   mockPrisma.product.findMany.mockResolvedValue([
     { id: 'prod-1', invoicePolicy: 'delivery', trackStock: true },
@@ -142,6 +149,9 @@ beforeEach(() => {
         }],
         client: { name: 'Acme Ltd' },
       }),
+    },
+    repair: {
+      update: mockPrisma.repair.update,
     },
   }))
 })
@@ -475,6 +485,59 @@ describe('POST /api/sale-orders/:id/create-invoice', () => {
       // 1/3 of the discounted 2700 total, not 1000 (raw unitPrice).
       expect(line.lineSubtotal).toBe(900)
       expect(line.unitPrice).toBe(900)
+    })
+  })
+
+  it('stamps repairId when the sale order was raised from a workshop job', async () => {
+    mockLoadAppState.mockResolvedValue({
+      deed_invoices: [],
+      deed_deliveries: [{
+        id: 'delivery-1',
+        saleOrderId: ORDER_ID,
+        status: 'done',
+        deliveryNoteGeneratedAt: '2026-07-28T10:00:00.000Z',
+        lines: [{ productId: 'prod-1', qty: 1, qtyDone: 1, serialIds: [] }],
+      }],
+      deed_repairs_v2: [{
+        id: REPAIR_ID,
+        ref: 'REP/0289',
+        saleOrderId: ORDER_ID,
+        status: 'ready',
+      }],
+    })
+    mockPrisma.repair.findUnique.mockResolvedValue({ id: REPAIR_ID })
+    mockPrisma.saleOrder.findUnique.mockResolvedValue({
+      ...saleOrder,
+      notes: 'Repair quote — REP/0289 — HP SPECTRE X360 14',
+    })
+    mockPrisma.$transaction.mockImplementation(async (fn: any) => fn({
+      saleOrder: { findUnique: vi.fn().mockResolvedValue(saleOrder) },
+      saleOrderItem: { updateMany: mockPrisma.saleOrderItem.updateMany.mockResolvedValue({ count: 1 }) },
+      invoice: { create: mockPrisma.invoice.create },
+      repair: { update: mockPrisma.repair.update },
+    }))
+
+    const res = await POST(new NextRequest('http://localhost', { method: 'POST' }), { params: { id: ORDER_ID } })
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.invoice.repairId).toBe(REPAIR_ID)
+
+    const createData = mockPrisma.invoice.create.mock.calls.at(-1)?.[0]?.data
+    expect(createData.repairId).toBe(REPAIR_ID)
+    expect(mockPrisma.repair.update).toHaveBeenCalledWith({
+      where: { id: REPAIR_ID },
+      data: { invoiceId: INVOICE_ID },
+    })
+
+    const repairsCall = mockSaveStoreKeys.mock.calls.find(c => c[0].deed_repairs_v2)
+    expect(repairsCall).toBeTruthy()
+    const mirroredRepairs = JSON.parse(repairsCall![0].deed_repairs_v2)
+    expect(mirroredRepairs[0]).toMatchObject({
+      id: REPAIR_ID,
+      invoiceId: INVOICE_ID,
+      linkedInvoiceId: INVOICE_ID,
+      linkedInvoiceRef: 'INV/2026/0004',
+      status: 'ready',
     })
   })
 
