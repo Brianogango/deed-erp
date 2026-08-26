@@ -139,7 +139,7 @@ export async function applyDeliveryStockMutation(params: {
     if (qty <= 0) continue
 
     const product = products.find(p => p.id === line.productId)
-    if (isNonStockProduct(product ?? null)) continue
+    if (!product || isNonStockProduct(product)) continue
 
     const location = asLocationId(line.sourceLocation)
     const serialTracked = isSerialTracking(inferTrackingMethod(product))
@@ -352,7 +352,7 @@ export async function reserveStockForSaleOrder(
     if (!productId || qty <= 0) continue
 
     const product = products.find(p => p.id === productId)
-    if (isNonStockProduct(product ?? null)) continue
+    if (!product || isNonStockProduct(product)) continue
 
     const reservationId = randomUUID()
     reservations.push({
