@@ -2937,11 +2937,32 @@ main#main-content:has(.finance-invoice-detail) {
 
 /* Final alignment layer: keep Sales and Finance consistent with the Repair module. */
 @media (min-width: 901px) {
-  .sales-pilot.sales-doc .sales-workbench[data-sales-view='list'],
+  main#main-content:has(.sales-pilot.sales-doc),
+  main#main-content:has(.finance-invoice-detail) {
+    padding: 12px 16px 24px !important;
+  }
+
+  .sales-pilot.sales-doc .sales-workbench,
   .finance-invoice-detail .invoice-detail__chrome,
   .finance-invoice-detail .invoice-detail__body {
-    width: min(100%, 1280px) !important;
+    width: min(100%, 1600px) !important;
+    max-width: 1600px !important;
     margin-inline: auto !important;
+  }
+
+  .sales-pilot.sales-doc .sales-workbench[data-sales-view='form'] .sales-proto-page-header,
+  .sales-pilot.sales-doc .sales-workbench[data-sales-view='form'] .sales-record-summary,
+  .sales-pilot.sales-doc .sales-workbench[data-sales-view='form'] .sales-document-identity,
+  .sales-pilot.sales-doc .sales-workbench[data-sales-view='form'] .sp-workflow,
+  .sales-pilot.sales-doc .sales-workbench[data-sales-view='form'] .sales-doc-smart-row,
+  .sales-pilot.sales-doc .sales-workbench[data-sales-view='form'] .sp-banner-ok,
+  .sales-pilot.sales-doc .sales-workbench[data-sales-view='form'] .sp-banner-warn,
+  .sales-pilot.sales-doc .sales-workbench[data-sales-view='form'] .sales-order-meta-panel,
+  .sales-pilot.sales-doc .sales-workbench[data-sales-view='form'] .sales-order-lines-panel {
+    width: 100% !important;
+    max-width: none !important;
+    margin-right: 0 !important;
+    margin-left: 0 !important;
   }
 }
 
