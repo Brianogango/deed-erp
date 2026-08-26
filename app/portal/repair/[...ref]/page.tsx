@@ -399,7 +399,7 @@ export default function RepairPortalPage() {
                   <div className="client-repair-quote-line" key={key}>
                     <div className="client-repair-quote-line__item">
                       <strong>{line.description}</strong>
-                      <small>Repair item · Qty {line.qty}</small>
+                      <small>{quoteTypeLabel(line.type)} · Qty {line.qty}</small>
                     </div>
                     <span className="client-repair-quote-line__type">{quoteTypeLabel(line.type)}</span>
                     <span className="client-repair-quote-line__qty">{line.qty}</span>
