@@ -8,6 +8,8 @@
  * created already posted. Commission then writes sales_commissions on Charge.
  */
 
+import { extractRepairRefFromText } from '@/lib/repair/sale-order-link'
+
 export const POS_INVOICE_WRITE_ROLES = [
   'director',
   'finance_officer',
@@ -32,7 +34,9 @@ export function isRepairLinkedSaleOrder(
   invoices: readonly { repairId?: string | null }[] = [],
 ): boolean {
   if (invoices.some(inv => Boolean(inv.repairId))) return true
-  return /^Repair order\b/i.test(String(order.notes || '').trim())
+  const notes = String(order.notes || '').trim()
+  if (/^Repair (order|quote)\b/i.test(notes)) return true
+  return Boolean(extractRepairRefFromText(notes))
 }
 
 export const COMMISSION_CLOSER_ROLES = [

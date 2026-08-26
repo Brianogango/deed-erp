@@ -68,6 +68,8 @@ describe('commission closer eligibility', () => {
 
   it('treats a repair-order SO as workshop billing, not a sales closer document', () => {
     expect(isRepairLinkedSaleOrder({ notes: 'Repair order REP/2026/001' })).toBe(true)
+    expect(isRepairLinkedSaleOrder({ notes: 'Repair quote — REP/0289 — HP SPECTRE X360 14' })).toBe(true)
+    expect(isRepairLinkedSaleOrder({ notes: 'Created from REP/0289' })).toBe(true)
     expect(isRepairLinkedSaleOrder({ notes: 'Urgent laptop' }, [{ repairId: 'rep-1' }])).toBe(true)
     expect(isRepairLinkedSaleOrder({ notes: 'Walk-in quote' }, [{ repairId: null }])).toBe(false)
   })

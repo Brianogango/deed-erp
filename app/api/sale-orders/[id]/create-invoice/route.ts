@@ -24,6 +24,10 @@ import {
 import { mapDbInvoiceItemsToClientLines } from '@/lib/finance-invoice'
 import { loadAppState, saveStoreKeys } from '@/lib/server-store'
 import { ensureConfirmedSaleOrderForFulfillment } from '@/lib/sale-order-confirm-heal.server'
+import {
+  findRepairForSaleOrder,
+  stampInvoiceOnMatchingRepair,
+} from '@/lib/repair/sale-order-link'
 
 const WRITE_ROLES = ['director', 'finance_officer', 'admin_officer']
 
@@ -80,8 +84,26 @@ export async function POST(
 
     const confirmed = order
 
-    const state = await loadAppState(['deed_invoices', 'deed_deliveries'])
+    const state = await loadAppState(['deed_invoices', 'deed_deliveries', 'deed_repairs_v2'])
     const blobInvoices = Array.isArray(state.deed_invoices) ? (state.deed_invoices as any[]) : []
+    const blobRepairs = Array.isArray(state.deed_repairs_v2) ? (state.deed_repairs_v2 as any[]) : []
+    const linkedRepair = findRepairForSaleOrder(blobRepairs, {
+      id: confirmed.id,
+      ref: confirmed.orderNumber,
+      orderNumber: confirmed.orderNumber,
+      quotationRef: confirmed.quotationRef,
+      notes: confirmed.notes,
+    })
+    let prismaRepairId: string | undefined
+    if (linkedRepair?.id) {
+      try {
+        const row = await prisma.repair.findUnique({ where: { id: String(linkedRepair.id) }, select: { id: true } })
+        prismaRepairId = row?.id
+      } catch {
+        prismaRepairId = undefined
+      }
+    }
+    const blobRepairId = linkedRepair?.id ? String(linkedRepair.id) : undefined
     const priorDownPayments = sumUnappliedDownPayments(
       [
         ...blobInvoices,
@@ -138,12 +160,13 @@ export async function POST(
       const notes = `${subject} on ${confirmed.orderNumber}`
 
       const result = await prisma.$transaction(async (tx) => {
-        return tx.invoice.create({
+        const invoice = await tx.invoice.create({
           data: {
             invoiceNumber: draftRef,
             status: 'draft',
             clientId: confirmed.clientId,
             saleOrderId: confirmed.id,
+            ...(prismaRepairId ? { repairId: prismaRepairId } : {}),
             invoiceDate: new Date(),
             dueDate,
             subject,
@@ -170,6 +193,13 @@ export async function POST(
           },
           include: { items: true, client: true },
         })
+        if (prismaRepairId && !linkedRepair?.invoiceId) {
+          await tx.repair.update({
+            where: { id: prismaRepairId },
+            data: { invoiceId: invoice.id },
+          })
+        }
+        return invoice
       })
 
       const date = new Date().toISOString().slice(0, 10)
@@ -189,6 +219,7 @@ export async function POST(
         total: amount,
         amountPaid: 0,
         saleOrderId: confirmed.id,
+        ...(blobRepairId ? { repairId: blobRepairId } : {}),
         isDownPayment: true,
         downPaymentPercent: computed.percent,
         notes,
@@ -197,7 +228,15 @@ export async function POST(
       try {
         const invoices = [...blobInvoices]
         invoices.unshift(clientInvoice)
-        await saveStoreKeys({ deed_invoices: JSON.stringify(invoices) })
+        const nextRepairs = stampInvoiceOnMatchingRepair(
+          blobRepairs,
+          linkedRepair,
+          { id: result.id, ref: result.invoiceNumber, date },
+        )
+        await saveStoreKeys({
+          deed_invoices: JSON.stringify(invoices),
+          ...(nextRepairs !== blobRepairs ? { deed_repairs_v2: JSON.stringify(nextRepairs) } : {}),
+        })
       } catch { /* Prisma authoritative */ }
 
       await writeFinancialAudit({
@@ -424,6 +463,7 @@ export async function POST(
           status: 'draft',
           clientId: confirmed.clientId,
           saleOrderId: confirmed.id,
+          ...(prismaRepairId ? { repairId: prismaRepairId } : {}),
           invoiceDate: new Date(),
           dueDate,
           subtotal,
@@ -452,6 +492,13 @@ export async function POST(
         },
         include: { items: true, client: true },
       })
+
+      if (prismaRepairId && !linkedRepair?.invoiceId) {
+        await tx.repair.update({
+          where: { id: prismaRepairId },
+          data: { invoiceId: invoice.id },
+        })
+      }
 
       // Mark unapplied down payments as consumed by this final invoice.
       if (mode === 'final' && downDeduction > 0) {
@@ -491,6 +538,7 @@ export async function POST(
       total: totalAmount,
       amountPaid: 0,
       saleOrderId: confirmed.id,
+      ...(blobRepairId ? { repairId: blobRepairId } : {}),
       notes: invoiceNotes,
       downPaymentDeduction: downDeduction > 0 ? downDeduction : undefined,
     }
@@ -508,7 +556,15 @@ export async function POST(
           }
         }
       }
-      await saveStoreKeys({ deed_invoices: JSON.stringify(invoices) })
+      const nextRepairs = stampInvoiceOnMatchingRepair(
+        blobRepairs,
+        linkedRepair,
+        { id: result.id, ref: result.invoiceNumber, date },
+      )
+      await saveStoreKeys({
+        deed_invoices: JSON.stringify(invoices),
+        ...(nextRepairs !== blobRepairs ? { deed_repairs_v2: JSON.stringify(nextRepairs) } : {}),
+      })
     } catch {
       // Prisma invoice is authoritative; store mirror best-effort
     }
