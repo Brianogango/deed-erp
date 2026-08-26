@@ -42,9 +42,16 @@ export function kraAnnualAllowance(taxWdvKes: number, ppeAccountCode?: string | 
 export function applyKraAnnualAllowance<T extends { taxWdvKes?: number; ppeAccountCode?: string; taxLastAllowanceYear?: number; costKes?: number }>(
   asset: T,
   year: number,
-): { asset: T; allowance: number } {
+): { asset: T & { taxWdvKes: number; taxLastAllowanceYear: number }; allowance: number } {
   if (asset.taxLastAllowanceYear != null && asset.taxLastAllowanceYear >= year) {
-    return { asset, allowance: 0 }
+    return {
+      asset: {
+        ...asset,
+        taxWdvKes: moneyKes(asset.taxWdvKes ?? asset.costKes),
+        taxLastAllowanceYear: asset.taxLastAllowanceYear,
+      },
+      allowance: 0,
+    }
   }
   const opening = moneyKes(asset.taxWdvKes ?? asset.costKes)
   const allowance = kraAnnualAllowance(opening, asset.ppeAccountCode)

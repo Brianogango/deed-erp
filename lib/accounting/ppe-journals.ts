@@ -55,8 +55,8 @@ function pack(lines: PpeJournalLine[], meta: Omit<PpeJournalDraft, 'lines' | 'to
   return { ...meta, lines: cleaned, totalDebit, totalCredit }
 }
 
-export function capitaliseJournalRef(assetRef: string): string {
-  return `JRN/AST-CAP/${assetRef}`
+export function capitaliseJournalRef(assetRef?: string): string {
+  return `JRN/AST-CAP/${assetRef || 'AST'}`
 }
 
 export function depreciationJournalRef(period: string): string {
@@ -71,13 +71,14 @@ export function buildCapitaliseFromApJournal(asset: Pick<BookAsset, 'ref' | 'nam
   const cost = moneyKes(asset.costKes)
   if (cost <= 0 || !isPpeCostAccount(asset.ppeAccountCode)) return null
   const partner = asset.supplierName?.trim() || 'Vendor'
+  const ref = asset.ref || 'AST'
   return pack([
-    { account: ppeLabel(asset.ppeAccountCode), description: `Capitalise ${asset.ref} — ${asset.name}`, debit: cost, credit: 0 },
-    { account: AP_LABEL, description: `AP: ${partner} (${asset.ref})`, debit: 0, credit: cost },
+    { account: ppeLabel(asset.ppeAccountCode), description: `Capitalise ${ref} — ${asset.name}`, debit: cost, credit: 0 },
+    { account: AP_LABEL, description: `AP: ${partner} (${ref})`, debit: 0, credit: cost },
   ], {
-    ref: capitaliseJournalRef(asset.ref),
+    ref: capitaliseJournalRef(ref),
     date,
-    description: `Capitalise ${asset.ref} from purchase (PPE, not inventory 1200)`,
+    description: `Capitalise ${ref} from purchase (PPE, not inventory 1200)`,
     source: 'adjustment',
   })
 }
@@ -85,13 +86,14 @@ export function buildCapitaliseFromApJournal(asset: Pick<BookAsset, 'ref' | 'nam
 export function buildCapitaliseFromInventoryJournal(asset: Pick<BookAsset, 'ref' | 'name' | 'costKes' | 'ppeAccountCode' | 'serialNumber'>, date: string): PpeJournalDraft | null {
   const cost = moneyKes(asset.costKes)
   if (cost <= 0 || !isPpeCostAccount(asset.ppeAccountCode)) return null
+  const ref = asset.ref || 'AST'
   return pack([
-    { account: ppeLabel(asset.ppeAccountCode), description: `Capitalise demo ${asset.ref} — ${asset.name}`, debit: cost, credit: 0 },
-    { account: INVENTORY_LABEL, description: `Remove trading serial ${asset.serialNumber || asset.ref} from 1200`, debit: 0, credit: cost },
+    { account: ppeLabel(asset.ppeAccountCode), description: `Capitalise demo ${ref} — ${asset.name}`, debit: cost, credit: 0 },
+    { account: INVENTORY_LABEL, description: `Remove trading serial ${asset.serialNumber || ref} from 1200`, debit: 0, credit: cost },
   ], {
-    ref: capitaliseJournalRef(asset.ref),
+    ref: capitaliseJournalRef(ref),
     date,
-    description: `Capitalise trading serial into ${asset.ref} (Dr PPE / Cr inventory 1200)`,
+    description: `Capitalise trading serial into ${ref} (Dr PPE / Cr inventory 1200)`,
     source: 'adjustment',
   })
 }
