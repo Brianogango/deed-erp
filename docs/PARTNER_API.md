@@ -1,6 +1,6 @@
 # Deed ERP Partner API — Integration Guide
 
-**Version:** 1.2  
+**Version:** 1.3  
 **Audience:** Reseller partners integrating Deed Technologies’ product catalog into their own websites or apps  
 **Scope:** Read-only catalog (products, prices, stock). Orders are not placed through this API.
 
@@ -31,11 +31,11 @@ Deed’s Partner API lets approved resellers **pull the sellable catalog** — a
 |---|---|
 | Product name, SKU, barcode, description | Cost / purchase prices |
 | Category | Supplier details |
-| Wholesale / reseller price (KES) | Walk-in retail / sale price |
-| Warranty months (when set) | Internal accounts or users |
-| Live warehouse quantity, including 0 | Draft / inactive products |
-| Two public product photos when available | Hidden partner categories |
-| | Order placement |
+| Condition (`productType`: `new` or `refurbished`) | Walk-in retail / sale price |
+| Wholesale / reseller price (KES) | Internal accounts or users |
+| Warranty months (when set) | Draft / inactive products |
+| Live warehouse quantity, including 0 | Hidden partner categories |
+| Two public product photos when available | Order placement |
 
 This API is **read-only**. To place purchase orders with Deed Technologies, contact your Deed account contact — do not attempt write calls against this API.
 
@@ -145,6 +145,8 @@ Returns the sellable catalog (active products with a wholesale / reseller price)
 | `pageSize` | `50` | Items per page (maximum `100`) |
 | `category` | — | Exact category name (case-insensitive), e.g. `Laptops`, `Accessories` |
 | `q` | — | Free-text search across name, SKU, and description |
+| `productType` | — | `new` or `refurbished` — same as Inventory → Condition |
+| `condition` | — | Alias of `productType` |
 
 **Example**
 
@@ -166,6 +168,7 @@ curl -sS \
       "name": "HP EliteBook 830 G5 - 8th Gen Intel Core i5, 8GB RAM, 256GB SSD",
       "description": "HP EliteBook 830 G5 configured with 8th Gen Intel Core i5, 8GB RAM, 256GB SSD.",
       "category": "Laptops",
+      "productType": "refurbished",
       "price": 26500,
       "currency": "KES",
       "warrantyMonths": 6,
@@ -207,6 +210,7 @@ Responses may be cached at the edge/server for up to **60 seconds** (`Cache-Cont
 | `name` | string | Display name |
 | `description` | string | May be empty |
 | `category` | string \| null | Category display name |
+| `productType` | `"new"` \| `"refurbished"` | Inventory **Condition**. Brand-new stock is `"new"`; workshop / refurb stock is `"refurbished"`. |
 | `price` | number | Wholesale / reseller price (KES). Saved wholesale if set; otherwise min GP band from cost. Never cost, never walk-in retail. |
 | `currency` | string | Always `KES` today |
 | `warrantyMonths` | number \| null | Warranty in months when configured |
@@ -259,7 +263,8 @@ Create a server route or cron job that:
 
 ### Step 3 — Render on your storefront
 
-- Show `name`, `description`, `price`, `images`, and stock status from **your** database/cache.
+- Show `name`, `description`, `price`, `productType`, `images`, and stock status from **your** database/cache.
+- Use `productType` (`new` or `refurbished`) for a New / Refurbished badge. It comes from Deed Inventory → Condition.
 - Use `inStock` / `quantityAvailable` on your storefront. `inStock: false` means Deed can still list the SKU (vendor-sourced) but does not have it in Warehouse (Main) today. Do not show those as “in stock”.
 - Treat products missing from the latest sync as removed or blocked (usually a hidden category).
 - Do not invent cost or margin fields from this API — they are not provided.
@@ -486,7 +491,8 @@ Missing-key style message:
 - [ ] Key stored in server secrets / env vars (not in the browser)
 - [ ] Smoke-tested with cURL and confirmed JSON products return
 - [ ] Backend syncs all pages (`page` through `totalPages`)
-- [ ] Storefront shows price in KES; products missing from the latest sync are treated as unavailable
+- [ ] Storefront shows price in KES and uses `productType` (`new` / `refurbished`) for condition badges
+- [ ] Products missing from the latest sync are treated as unavailable
 - [ ] Client-side cache ≥ 60 seconds; sync job is not hammering the API
 - [ ] `401` / `429` handling implemented
 - [ ] Know who at Deed to contact for key rotation and orders

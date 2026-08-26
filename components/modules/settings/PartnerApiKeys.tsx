@@ -170,7 +170,11 @@ export default function PartnerApiKeys() {
             <code className="font-mono text-[10.5px] px-1 py-0.5 rounded bg-white border border-gray-200">GET /api/public/v1/products</code>{' '}
             — active products with the wholesale / reseller price (saved wholesale, or the
             min GP band from cost when wholesale is not set), including warehouse qty 0.
-            Hide a category below to keep it out of the feed. Walk-in sale price and cost are never
+            Hide a category below to keep it out of the feed. Each item includes{' '}
+            <code className="font-mono text-[10.5px] px-1 py-0.5 rounded bg-white border border-gray-200">productType</code>{' '}
+            (<code className="font-mono text-[10.5px]">new</code> or{' '}
+            <code className="font-mono text-[10.5px]">refurbished</code>) from Inventory → Condition — there is
+            no extra switch to turn on. Walk-in sale price and cost are never
             returned. Product photos are public URLs on the same item — shops hotlink them without
             the key. Each key is shown <strong>once</strong> at creation; share it with exactly one
             partner so access can be revoked individually.

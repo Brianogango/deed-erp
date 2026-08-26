@@ -4,6 +4,8 @@ import {
   categoryConditionLine,
   truncateLabelText,
   resolveProductSpecs,
+  normalizeProductType,
+  resolveProductType,
 } from '@/lib/product-label-meta'
 
 describe('product-label-meta', () => {
@@ -11,6 +13,16 @@ describe('product-label-meta', () => {
     expect(formatConditionLabel('new')).toBe('NEW')
     expect(formatConditionLabel('refurbished')).toBe('REFURB')
     expect(formatConditionLabel(undefined)).toBe('')
+  })
+
+  it('normalizes Inventory Condition to new or refurbished', () => {
+    expect(normalizeProductType('new')).toBe('new')
+    expect(normalizeProductType('NEW')).toBe('new')
+    expect(normalizeProductType('refurbished')).toBe('refurbished')
+    expect(normalizeProductType('')).toBe('refurbished')
+    expect(resolveProductType('new', 'refurbished')).toBe('new')
+    expect(resolveProductType(undefined, 'new')).toBe('new')
+    expect(resolveProductType(null, undefined)).toBe('refurbished')
   })
 
   it('joins category and condition', () => {

@@ -202,7 +202,7 @@
       <thead><tr><th>Included</th><th>Never included</th></tr></thead>
       <tbody>
         <tr>
-          <td>Name, SKU, barcode, description, category</td>
+          <td>Name, SKU, barcode, description, category, condition (<code>productType</code>)</td>
           <td>Cost / purchase prices</td>
         </tr>
         <tr>
@@ -271,7 +271,8 @@ X-API-Key: deed_pk_XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX</code></pre>
         <tr><td><code>pageSize</code></td><td><code>50</code></td><td>Items per page (max 100)</td></tr>
         <tr><td><code>category</code></td><td>—</td><td>Exact category name (case-insensitive)</td></tr>
         <tr><td><code>q</code></td><td>—</td><td>Search name, SKU, description</td></tr>
-        <tr><td><code>inStock</code></td><td>in-stock only</td><td>Pass <code>inStock=all</code> to include out-of-stock</td></tr>
+        <tr><td><code>productType</code></td><td>—</td><td><code>new</code> or <code>refurbished</code> (Inventory Condition)</td></tr>
+        <tr><td><code>condition</code></td><td>—</td><td>Alias of <code>productType</code></td></tr>
       </tbody>
     </table>
 <pre><code>curl -sS \
@@ -287,7 +288,8 @@ X-API-Key: deed_pk_XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX</code></pre>
         <tr><td><code>barcode</code></td><td>string|null</td><td>When present</td></tr>
         <tr><td><code>name</code> / <code>description</code></td><td>string</td><td>Display copy</td></tr>
         <tr><td><code>category</code></td><td>string|null</td><td>Category name</td></tr>
-        <tr><td><code>price</code></td><td>number</td><td>Retail selling price</td></tr>
+        <tr><td><code>productType</code></td><td><code>new</code> \| <code>refurbished</code></td><td>Inventory Condition — brand new vs refurbished</td></tr>
+        <tr><td><code>price</code></td><td>number</td><td>Wholesale / reseller price</td></tr>
         <tr><td><code>currency</code></td><td>string</td><td><code>KES</code></td></tr>
         <tr><td><code>warrantyMonths</code></td><td>number|null</td><td>When configured</td></tr>
         <tr><td><code>quantityAvailable</code></td><td>number</td><td>Live units available</td></tr>
