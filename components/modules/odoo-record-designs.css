@@ -2934,3 +2934,491 @@ main#main-content:has(.finance-invoice-detail) {
     grid-template-columns: minmax(0, 1fr) 64px;
   }
 }
+
+/* Final alignment layer: keep Sales and Finance consistent with the Repair module. */
+@media (min-width: 901px) {
+  .sales-pilot.sales-doc .sales-workbench[data-sales-view='list'],
+  .finance-invoice-detail .invoice-detail__chrome,
+  .finance-invoice-detail .invoice-detail__body {
+    width: min(100%, 1280px) !important;
+    margin-inline: auto !important;
+  }
+}
+
+@media (max-width: 767px) {
+  main#main-content:has(.sales-pilot.sales-doc),
+  main#main-content:has(.finance-invoice-detail) {
+    padding: 0 !important;
+    overflow-x: clip !important;
+  }
+
+  .sales-pilot.sales-doc .sales-workbench,
+  .finance-invoice-detail .invoice-detail__chrome,
+  .finance-invoice-detail .invoice-detail__body {
+    width: 100% !important;
+    max-width: 100% !important;
+    margin-inline: 0 !important;
+  }
+
+  .sales-pilot.sales-doc .sales-workbench[data-sales-view='list'] {
+    padding: 0 8px calc(72px + env(safe-area-inset-bottom, 0px)) !important;
+  }
+
+  .sales-pilot.sales-doc .sales-list-page-header {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) auto !important;
+    align-items: center !important;
+    min-height: 128px !important;
+    margin: 0 -8px !important;
+    padding: 22px 24px 18px !important;
+    gap: 6px 16px !important;
+    border: 0 !important;
+    border-bottom: 1px solid var(--odoo-border) !important;
+    border-radius: 0 !important;
+    background: #fff !important;
+    box-shadow: none !important;
+  }
+
+  .sales-pilot.sales-doc .sales-list-page-header .sales-proto-header-icon {
+    display: none !important;
+  }
+
+  .sales-pilot.sales-doc .sales-list-page-header .sales-proto-header-copy {
+    display: block !important;
+    min-width: 0 !important;
+  }
+
+  .sales-pilot.sales-doc .sales-list-page-header .sales-page-eyebrow {
+    margin: 0 0 4px !important;
+    color: var(--odoo-muted) !important;
+    font-size: 13px !important;
+    font-weight: 900 !important;
+    letter-spacing: 0.08em !important;
+    line-height: 1.15 !important;
+    text-transform: uppercase !important;
+    white-space: normal !important;
+  }
+
+  .sales-pilot.sales-doc .sales-list-page-header h1 {
+    margin: 0 !important;
+    color: var(--odoo-ink) !important;
+    font-size: 32px !important;
+    font-weight: 900 !important;
+    letter-spacing: -0.01em !important;
+    line-height: 1.02 !important;
+  }
+
+  .sales-pilot.sales-doc .sales-list-page-header .sales-proto-count {
+    margin-top: 2px !important;
+    color: var(--odoo-muted) !important;
+    font-size: 18px !important;
+    font-weight: 700 !important;
+    line-height: 1.2 !important;
+  }
+
+  .sales-pilot.sales-doc .sales-list-page-header .sub {
+    display: none !important;
+  }
+
+  .sales-pilot.sales-doc .sales-list-page-header .sales-proto-actions {
+    display: flex !important;
+    grid-column: 2 !important;
+    grid-row: 1 / span 3 !important;
+    align-self: center !important;
+    justify-content: flex-end !important;
+    width: auto !important;
+    min-width: 0 !important;
+  }
+
+  .sales-pilot.sales-doc .sales-list-page-header .sales-proto-actions .sp-btn {
+    display: grid !important;
+    place-items: center !important;
+    width: 104px !important;
+    min-width: 104px !important;
+    height: 58px !important;
+    padding: 0 !important;
+    border-radius: 12px !important;
+    font-size: 0 !important;
+  }
+
+  .sales-pilot.sales-doc .sales-list-page-header .sales-proto-actions .sp-btn::before {
+    content: "+";
+    font-size: 30px !important;
+    font-weight: 800 !important;
+    line-height: 1 !important;
+  }
+
+  .sales-pilot.sales-doc .sales-workbench[data-sales-view='list'] .sp-tabs-command {
+    min-height: 58px !important;
+    margin: 0 -8px 10px !important;
+    padding: 0 20px !important;
+    gap: 18px !important;
+    border-bottom: 1px solid var(--odoo-border) !important;
+    background: #fff !important;
+    overflow-x: auto !important;
+    scrollbar-width: none !important;
+  }
+
+  .sales-pilot.sales-doc .sales-workbench[data-sales-view='list'] .sp-tabs-command::-webkit-scrollbar {
+    display: none !important;
+  }
+
+  .sales-pilot.sales-doc .sales-workbench[data-sales-view='list'] .sp-tabs-command .sp-tab {
+    min-height: 58px !important;
+    min-width: max-content !important;
+    max-width: 168px !important;
+    padding: 0 0 2px !important;
+    overflow: hidden !important;
+    color: var(--odoo-muted) !important;
+    font-size: 18px !important;
+    font-weight: 800 !important;
+    line-height: 1 !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+  }
+
+  .sales-pilot.sales-doc .sales-workbench[data-sales-view='list'] .sp-tabs-command .sp-tab.is-active,
+  .sales-pilot.sales-doc .sales-workbench[data-sales-view='list'] .sp-tabs-command .sp-tab[aria-selected='true'] {
+    color: var(--odoo-ink) !important;
+  }
+
+  .sales-pilot.sales-doc .sales-workbench[data-sales-view='list'] > .flex.flex-col > .sp-panel {
+    margin: 0 0 12px !important;
+    border-radius: 12px !important;
+    overflow: hidden !important;
+    box-shadow: none !important;
+  }
+
+  .sales-pilot.sales-doc .sales-workbench[data-sales-view='list'] .sp-list-toolbar {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) 132px !important;
+    gap: 12px !important;
+    padding: 16px !important;
+    border-bottom: 1px solid var(--odoo-border) !important;
+    background: #fff !important;
+  }
+
+  .sales-pilot.sales-doc .sales-workbench[data-sales-view='list'] .sp-list-search {
+    grid-column: 1 / -1 !important;
+    width: 100% !important;
+    height: 52px !important;
+    min-height: 52px !important;
+    padding: 0 16px !important;
+    border-radius: 10px !important;
+    font-size: 16px !important;
+  }
+
+  .sales-pilot.sales-doc .sales-workbench[data-sales-view='list'] .sp-list-toolbar select,
+  .sales-pilot.sales-doc .sales-workbench[data-sales-view='list'] .sp-list-toolbar > .relative > button,
+  .sales-pilot.sales-doc .sales-workbench[data-sales-view='list'] .sp-list-toolbar > [class*='relative'] > button {
+    width: 100% !important;
+    height: 52px !important;
+    min-height: 52px !important;
+    border-radius: 10px !important;
+    font-size: 16px !important;
+    font-weight: 800 !important;
+  }
+
+  .sales-pilot.sales-doc .sales-workbench[data-sales-view='list'] .sp-list-toolbar > .relative,
+  .sales-pilot.sales-doc .sales-workbench[data-sales-view='list'] .sp-list-toolbar > [class*='relative'] {
+    width: 100% !important;
+    min-width: 0 !important;
+  }
+
+  .sales-pilot.sales-doc .sales-workbench[data-sales-view='list'] .sp-table-wrap:has(.sp-list-table) {
+    padding: 16px !important;
+    overflow: visible !important;
+    background: #f4f7fb !important;
+  }
+
+  .sales-pilot.sales-doc .sales-workbench[data-sales-view='list'] .sp-list-table,
+  .sales-pilot.sales-doc .sales-workbench[data-sales-view='list'] .sp-list-table thead,
+  .sales-pilot.sales-doc .sales-workbench[data-sales-view='list'] .sp-list-table tbody,
+  .sales-pilot.sales-doc .sales-workbench[data-sales-view='list'] .sp-list-table tr,
+  .sales-pilot.sales-doc .sales-workbench[data-sales-view='list'] .sp-list-table td {
+    display: block !important;
+    width: 100% !important;
+  }
+
+  .sales-pilot.sales-doc .sales-workbench[data-sales-view='list'] .sp-list-table thead {
+    position: absolute !important;
+    width: 1px !important;
+    height: 1px !important;
+    overflow: hidden !important;
+    clip: rect(0 0 0 0) !important;
+  }
+
+  .sales-pilot.sales-doc .sales-workbench[data-sales-view='list'] .sp-list-table tbody {
+    display: grid !important;
+    gap: 12px !important;
+  }
+
+  .sales-pilot.sales-doc .sales-workbench[data-sales-view='list'] .sp-list-table tbody tr {
+    position: relative !important;
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) auto !important;
+    gap: 8px 12px !important;
+    min-height: 0 !important;
+    margin: 0 !important;
+    padding: 18px 18px 16px 22px !important;
+    border: 1px solid var(--odoo-border) !important;
+    border-radius: 14px !important;
+    background: #fff !important;
+    box-shadow: 0 1px 2px rgba(7, 22, 76, 0.05) !important;
+    overflow: hidden !important;
+  }
+
+  .sales-pilot.sales-doc .sales-workbench[data-sales-view='list'] .sp-list-table tbody tr::before {
+    content: "";
+    position: absolute;
+    top: 16px;
+    bottom: 16px;
+    left: 0;
+    width: 4px;
+    border-radius: 999px;
+    background: var(--odoo-cyan);
+  }
+
+  .sales-pilot.sales-doc .sales-workbench[data-sales-view='list'] .sp-list-table tbody td {
+    min-height: 0 !important;
+    height: auto !important;
+    padding: 0 !important;
+    border: 0 !important;
+    color: var(--odoo-ink) !important;
+    font-size: 14px !important;
+    line-height: 1.25 !important;
+    text-align: left !important;
+  }
+
+  .sales-pilot.sales-doc .sales-workbench[data-sales-view='list'] .sp-list-table td[data-col='select'],
+  .sales-pilot.sales-doc .sales-workbench[data-sales-view='list'] .sp-list-table td[data-col='contact'],
+  .sales-pilot.sales-doc .sales-workbench[data-sales-view='list'] .sp-list-table td[data-col='date'],
+  .sales-pilot.sales-doc .sales-workbench[data-sales-view='list'] .sp-list-table td[data-col='valid'],
+  .sales-pilot.sales-doc .sales-workbench[data-sales-view='list'] .sp-list-table td[data-col='salesperson'] {
+    display: none !important;
+  }
+
+  .sales-pilot.sales-doc .sales-workbench[data-sales-view='list'] .sp-list-table td[data-col='ref'] {
+    grid-column: 1 / 2 !important;
+    grid-row: 1 !important;
+    font-size: 15px !important;
+    font-weight: 900 !important;
+  }
+
+  .sales-pilot.sales-doc .sales-workbench[data-sales-view='list'] .sp-list-table td[data-col='ref'] .sp-linkish {
+    color: var(--odoo-ink) !important;
+    font-size: 15px !important;
+    font-weight: 900 !important;
+    text-decoration: none !important;
+  }
+
+  .sales-pilot.sales-doc .sales-workbench[data-sales-view='list'] .sp-list-table td[data-col='customer'] {
+    grid-column: 1 / 2 !important;
+    grid-row: 2 !important;
+    margin-top: 8px !important;
+    padding-top: 12px !important;
+    border-top: 1px solid #e4edf4 !important;
+    font-size: 22px !important;
+    font-weight: 900 !important;
+    line-height: 1.12 !important;
+  }
+
+  .sales-pilot.sales-doc .sales-workbench[data-sales-view='list'] .sp-list-table td[data-col='total'] {
+    grid-column: 1 / -1 !important;
+    grid-row: 3 !important;
+    margin-top: 12px !important;
+    padding-top: 12px !important;
+    border-top: 1px solid #e4edf4 !important;
+    color: var(--odoo-ink) !important;
+    font-size: 23px !important;
+    font-weight: 900 !important;
+    line-height: 1.1 !important;
+    text-align: right !important;
+    white-space: nowrap !important;
+  }
+
+  .sales-pilot.sales-doc .sales-workbench[data-sales-view='list'] .sp-list-table td[data-col='status'] {
+    grid-column: 2 / 3 !important;
+    grid-row: 1 / span 2 !important;
+    align-self: start !important;
+    justify-self: end !important;
+    width: auto !important;
+  }
+
+  .sales-pilot.sales-doc .sales-workbench[data-sales-view='list'] .sp-list-table td[data-col='status'] .sp-pill {
+    min-height: 34px !important;
+    padding: 0 14px !important;
+    border-radius: 999px !important;
+    font-size: 12px !important;
+    font-weight: 900 !important;
+    line-height: 34px !important;
+  }
+
+  .finance-invoice-detail {
+    padding-bottom: calc(72px + env(safe-area-inset-bottom, 0px)) !important;
+  }
+
+  .finance-invoice-detail .invoice-detail__chrome {
+    margin: 0 !important;
+    padding: 18px 20px !important;
+    border-radius: 0 !important;
+  }
+
+  .finance-invoice-detail .invoice-detail__header {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) auto !important;
+    gap: 12px !important;
+    align-items: start !important;
+  }
+
+  .finance-invoice-detail .invoice-detail__header-main,
+  .finance-invoice-detail .invoice-detail__title-row {
+    min-width: 0 !important;
+  }
+
+  .finance-invoice-detail .invoice-detail__header-actions {
+    display: flex !important;
+    grid-column: 2 !important;
+    grid-row: 1 / span 3 !important;
+    align-self: start !important;
+    justify-content: flex-end !important;
+    width: auto !important;
+    min-width: 0 !important;
+  }
+
+  .finance-invoice-detail .invoice-detail__header-actions > *,
+  .finance-invoice-detail .invoice-detail__header-actions .erp-action-btn,
+  .finance-invoice-detail .invoice-detail__header-actions button {
+    width: auto !important;
+    min-width: 0 !important;
+  }
+
+  .finance-invoice-detail .invoice-detail__header-actions .erp-action-btn,
+  .finance-invoice-detail .invoice-detail__header-actions button {
+    max-width: 148px !important;
+    min-height: 48px !important;
+    padding-inline: 16px !important;
+    overflow: hidden !important;
+    border-radius: 10px !important;
+    font-size: 15px !important;
+    font-weight: 800 !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+  }
+
+  .finance-invoice-detail .invoice-detail__body {
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+    gap: 12px !important;
+    padding: 12px 8px calc(72px + env(safe-area-inset-bottom, 0px)) !important;
+  }
+
+  .finance-invoice-detail .invoice-detail__summary,
+  .finance-invoice-detail .invoice-detail__card,
+  .finance-invoice-detail .invoice-detail__tabs-card,
+  .finance-invoice-detail .invoice-detail__supporting {
+    width: 100% !important;
+    margin: 0 !important;
+    border-radius: 12px !important;
+  }
+
+  .finance-invoice-detail .invoice-detail__card {
+    display: block !important;
+    overflow: hidden !important;
+  }
+
+  .finance-invoice-detail .invoice-detail__card-head {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    padding: 16px !important;
+  }
+
+  .finance-invoice-detail .invoice-detail__table-wrap {
+    padding: 14px !important;
+    overflow: visible !important;
+  }
+
+  .finance-invoice-detail .invoice-detail__table tbody {
+    display: grid !important;
+    gap: 12px !important;
+  }
+
+  .finance-invoice-detail .invoice-detail__table tr {
+    margin: 0 !important;
+    padding: 16px !important;
+    border-radius: 12px !important;
+  }
+
+  .finance-invoice-detail .invoice-detail__table td {
+    display: grid !important;
+    grid-template-columns: minmax(0, 42%) minmax(0, 1fr) !important;
+    align-items: center !important;
+    justify-content: initial !important;
+    gap: 12px !important;
+    min-height: 0 !important;
+    padding: 8px 0 !important;
+    font-size: 16px !important;
+    line-height: 1.2 !important;
+    text-align: right !important;
+  }
+
+  .finance-invoice-detail .invoice-detail__table td::before {
+    flex: none !important;
+    font-size: 12px !important;
+    line-height: 1.15 !important;
+  }
+
+  .finance-invoice-detail .invoice-detail__table td:nth-child(2) {
+    display: block !important;
+    padding: 8px 0 12px !important;
+    font-size: 18px !important;
+    line-height: 1.2 !important;
+    text-align: left !important;
+  }
+
+  .finance-invoice-detail .invoice-detail__table td:nth-child(2)::before {
+    display: block !important;
+    margin: 0 0 6px !important;
+  }
+
+  .finance-invoice-detail .invoice-detail__totals {
+    width: auto !important;
+    margin: 0 14px 14px !important;
+    border-radius: 12px !important;
+  }
+
+  .finance-invoice-detail .invoice-detail__tabs-card {
+    overflow: hidden !important;
+  }
+
+  .finance-invoice-detail .invoice-detail__tabs {
+    min-height: 60px !important;
+    padding: 0 16px !important;
+    gap: 18px !important;
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
+    scrollbar-width: none !important;
+  }
+
+  .finance-invoice-detail .invoice-detail__tabs::-webkit-scrollbar {
+    display: none !important;
+  }
+
+  .finance-invoice-detail .invoice-detail__tab {
+    min-height: 60px !important;
+    min-width: max-content !important;
+    max-width: 164px !important;
+    padding: 0 0 2px !important;
+    overflow: hidden !important;
+    font-size: 17px !important;
+    font-weight: 800 !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+  }
+
+  .finance-invoice-detail .invoice-detail__tab-panel {
+    padding: 16px !important;
+    overflow-x: clip !important;
+  }
+}

@@ -5,7 +5,8 @@
       "lib/store.tsx",
       "app/globals.css",
       "components/modules/Settings.tsx",
-      "lib/product-label.ts"
+      "lib/product-label.ts",
+      "public/docs/partner-api-guide.html"
     ],
     "ignoreValues": [
       {
