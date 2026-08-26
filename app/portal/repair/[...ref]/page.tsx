@@ -28,6 +28,29 @@ const STATUS_LABELS: Record<string, string> = {
   cancelled:           'Cancelled',
 }
 
+
+const CUSTOMER_STATUS_LABELS: Record<string, string> = {
+  received: 'RECEIVED',
+  assigned: 'IN REVIEW',
+  diagnosed: 'DIAGNOSED',
+  awaiting_approval: 'QUOTE READY',
+  approved: 'APPROVED',
+  awaiting_parts: 'PARTS ORDERED',
+  in_repair: 'IN REPAIR',
+  qc: 'QUALITY CHECK',
+  ready: 'READY',
+  verified_released: 'VERIFIED FOR RELEASE',
+  invoiced: 'INVOICE ISSUED',
+  delivered: 'DELIVERED',
+  collected: 'COLLECTED',
+  closed: 'CLOSED',
+  declined: 'QUOTE DECLINED',
+  unrepairable: 'UNREPAIRABLE',
+  returned: 'RETURNED',
+  retained: 'LEFT WITH DEED',
+  cancelled: 'CANCELLED',
+}
+
 const STATUS_MESSAGES: Record<string, string> = {
   received:            'We have received your device and it is in our queue for inspection.',
   assigned:            'A technician has been assigned and will begin diagnosing your device shortly.',
@@ -61,13 +84,13 @@ const STATUS_COLOR: Record<string, string> = {
 }
 
 const STEPS = [
-  { key: 'received',  label: 'Received'  },
-  { key: 'diagnosed', label: 'Diagnosed' },
-  { key: 'approved',  label: 'Approved'  },
-  { key: 'in_repair', label: 'In Repair' },
-  { key: 'qc',        label: 'QC Check'  },
-  { key: 'ready',     label: 'Ready'     },
-  { key: 'collected', label: 'Collected' },
+  { key: 'received',  label: 'Received'      },
+  { key: 'diagnosed', label: 'Diagnosed'     },
+  { key: 'approved',  label: 'Quote ready'   },
+  { key: 'in_repair', label: 'Repair'        },
+  { key: 'qc',        label: 'Quality check' },
+  { key: 'ready',     label: 'Ready'         },
+  { key: 'collected', label: 'Collected'     },
 ]
 
 const STEP_ORDER    = STEPS.map(s => s.key)
@@ -75,7 +98,12 @@ const TERMINAL_PASS = ['ready','invoiced','verified_released','delivered','colle
 const TERMINAL_FAIL = ['declined','unrepairable','returned','cancelled']
 
 function fmtKes(n: number) {
-  return 'KES ' + n.toLocaleString('en-KE', { minimumFractionDigits: 2 })
+  return 'KSh ' + Math.round(Number(n || 0)).toLocaleString('en-KE')
+}
+
+function quoteTypeLabel(type: string) {
+  if (type === 'labor') return 'Labour'
+  return type ? type.slice(0, 1).toUpperCase() + type.slice(1) : 'Service'
 }
 function fmtDate(s?: string) {
   if (!s) return '—'
@@ -265,7 +293,7 @@ export default function RepairPortalPage() {
       <header className="client-repair-nav">
         <div className="client-repair-nav__identity">
           <span className="client-repair-nav__menu" aria-hidden>☰</span>
-          <img className="client-repair-nav__brand" src="/deed-logo-transparent.png" alt="Deed Technologies" />
+          <img className="client-repair-nav__brand" src="/deed-logo-receipt.png" alt="Deed Technologies" />
         </div>
         <strong className="client-repair-nav__title">Track your repair</strong>
         <a className="client-repair-nav__help" href={'mailto:' + company.email}>Need help?</a>
@@ -277,14 +305,14 @@ export default function RepairPortalPage() {
             {repair.issuePhotos?.[0]?.url ? (
               <img src={repair.issuePhotos[0].url} alt={repair.productName} />
             ) : (
-              <span aria-hidden>▱</span>
+              <span className="client-repair-device-art" aria-hidden><span /><span /></span>
             )}
           </div>
           <div className="client-repair-hero__copy">
             <div className="client-repair-hero__title-row">
               <h1>{repair.productName}</h1>
               <span className="client-repair-status" style={{ color, borderColor: color, background: color + '16' }}>
-                {STATUS_LABELS[repair.status] ?? repair.status}
+                {CUSTOMER_STATUS_LABELS[repair.status] ?? STATUS_LABELS[repair.status] ?? repair.status}
               </span>
             </div>
             <p className="client-repair-hero__meta">{repair.ref} <span>·</span> {repair.customerName}</p>
@@ -362,7 +390,7 @@ export default function RepairPortalPage() {
 
             <div className="client-repair-quote-lines">
               <div className="client-repair-quote-line client-repair-quote-line--head" aria-hidden>
-                <span>Item</span><span>Qty</span><span>Unit price</span><span>Total</span><span>Your decision</span>
+                <span>Item</span><span>Type</span><span>Qty</span><span>Unit price</span><span>Total</span><span>Your decision</span>
               </div>
               {repair.quote.lines.map((line, index) => {
                 const key = qLineKey(line, index)
@@ -373,6 +401,7 @@ export default function RepairPortalPage() {
                       <strong>{line.description}</strong>
                       <small>Repair item · Qty {line.qty}</small>
                     </div>
+                    <span className="client-repair-quote-line__type">{quoteTypeLabel(line.type)}</span>
                     <span className="client-repair-quote-line__qty">{line.qty}</span>
                     <span>{fmtKes(line.unitPrice)}</span>
                     <strong>{fmtKes(line.subtotal)}</strong>
@@ -402,7 +431,10 @@ export default function RepairPortalPage() {
                 <div className="client-repair-verify">
                   <label htmlFor="repair-verify-phone">Verify phone number</label>
                   <p>Enter the phone number registered on this repair.</p>
-                  <input id="repair-verify-phone" value={verifyPhone} onChange={event => setVerifyPhone(event.target.value)} inputMode="tel" placeholder="+254 712 345 678" />
+                  <div className="client-repair-phone-field">
+                    <span>+254</span>
+                    <input id="repair-verify-phone" value={verifyPhone} onChange={event => setVerifyPhone(event.target.value)} inputMode="tel" placeholder="712 345 678" />
+                  </div>
                 </div>
                 <div className="client-repair-quote-actions">
                   <button type="button" className="client-repair-btn client-repair-btn--primary" disabled={acting || approvedCount === 0} onClick={() => { void submitQuoteDecisions() }}>
@@ -602,7 +634,7 @@ export default function RepairPortalPage() {
         )}
 
         <section id="repair-support" className="client-repair-card client-repair-support">
-          <h2>Messages & support</h2>
+          <h2>Need help?</h2>
           <div className="client-repair-messages">
             {messages.length === 0 && <p className="client-repair-empty">No messages yet. Ask us anything about your repair.</p>}
             {messages.map(message => (
