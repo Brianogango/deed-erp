@@ -78,6 +78,7 @@ describe('GET /api/public/v1/products — partner catalog', () => {
     const item = body.items[0]
     expect(item).toMatchObject({
       sku: 'SKU-1', name: 'HP EliteBook 830 G5', category: 'Laptops',
+      productType: 'refurbished',
       price: 25000, currency: 'KES', warrantyMonths: 6,
       quantityAvailable: 2, inStock: true,
     })
@@ -268,6 +269,37 @@ describe('GET /api/public/v1/products — partner catalog', () => {
     const res = await GET(req())
     const body = await res.json()
     expect(body.items.map((i: { category: string }) => i.category)).toEqual(['Laptops'])
+  })
+
+  it('exposes new vs refurbished from Inventory Condition', async () => {
+    mockPrisma.product.findMany.mockResolvedValue([
+      productRow({ productType: 'new' }),
+      productRow({ id: 'prod-2', sku: 'SKU-2', name: 'ThinkPad T14', productType: 'refurbished' }),
+    ])
+    mockLoadAppState.mockResolvedValue({
+      deed_serials: [
+        { productId: 'prod-1', status: 'available', location: 'warehouse' },
+        { productId: 'prod-2', status: 'available', location: 'warehouse' },
+      ],
+      deed_bulkStock: [],
+      deed_products: [
+        { id: 'prod-1', productType: 'new' },
+        { id: 'prod-2', productType: 'refurbished' },
+      ],
+    })
+    const all = await (await GET(req())).json()
+    expect(all.items.map((i: { sku: string; productType: string }) => [i.sku, i.productType])).toEqual([
+      ['SKU-1', 'new'],
+      ['SKU-2', 'refurbished'],
+    ])
+
+    const onlyNew = await (await GET(req('?productType=new'))).json()
+    expect(onlyNew.items).toHaveLength(1)
+    expect(onlyNew.items[0]).toMatchObject({ sku: 'SKU-1', productType: 'new' })
+
+    const onlyRefurb = await (await GET(req('?condition=refurbished'))).json()
+    expect(onlyRefurb.items).toHaveLength(1)
+    expect(onlyRefurb.items[0]).toMatchObject({ sku: 'SKU-2', productType: 'refurbished' })
   })
 
   it('answers CORS preflight', async () => {

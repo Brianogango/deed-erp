@@ -2,7 +2,23 @@
  * Shared label meta helpers (no print CSS) — category, condition, specs truncation.
  */
 
-export type ProductLabelCondition = 'new' | 'refurbished' | string | null | undefined
+export type ProductTypeValue = 'new' | 'refurbished'
+export type ProductLabelCondition = ProductTypeValue | string | null | undefined
+
+/** SKU condition for labels, pricing bands, and the partner catalog. */
+export function normalizeProductType(value: unknown): ProductTypeValue {
+  return String(value ?? '').trim().toLowerCase() === 'new' ? 'new' : 'refurbished'
+}
+
+export function resolveProductType(...candidates: unknown[]): ProductTypeValue {
+  for (const value of candidates) {
+    if (value == null) continue
+    const raw = String(value).trim()
+    if (!raw) continue
+    return normalizeProductType(raw)
+  }
+  return 'refurbished'
+}
 
 export type SerialLabelItem = {
   serial: string

@@ -23,6 +23,7 @@ describe('GET /api/public/v1/guide', () => {
     expect(body).toContain('Authorization: Bearer')
     expect(body).toContain('DEED_PARTNER_API_KEY')
     expect(body).toContain('GET /api/public/v1/products')
+    expect(body).toContain('productType')
   })
 
   it('can serve the guide inline for preview', async () => {

@@ -8,6 +8,7 @@ import { resolveResellerPrice } from '@/lib/pricing/reseller-price'
 import { loadServerMarginPolicy } from '@/lib/pricing/sync-product-list-from-cost.server'
 import { partnerImagesFromSlots, type ProductImageSlot } from '@/lib/product-images'
 import { matchCatalogPhotoPack } from '@/lib/catalog-photos'
+import { resolveProductType, type ProductTypeValue } from '@/lib/product-label-meta'
 
 export const dynamic = 'force-dynamic'
 
@@ -25,6 +26,8 @@ export const dynamic = 'force-dynamic'
 //   pageSize      items per page, max 100                 (default 50)
 //   category      exact category name filter              (optional)
 //   q             search in name/SKU/description          (optional)
+//   productType   new | refurbished                       (optional)
+//   condition     alias of productType                    (optional)
 
 const json = (body: unknown, request: Request, init?: ResponseInit) =>
   NextResponse.json(body, {
@@ -60,6 +63,12 @@ function specsRecord(raw: unknown): Record<string, unknown> {
   return raw && typeof raw === 'object' && !Array.isArray(raw) ? (raw as Record<string, unknown>) : {}
 }
 
+function parsePartnerProductTypeFilter(raw: string | null): ProductTypeValue | null {
+  const value = String(raw ?? '').trim().toLowerCase()
+  if (value === 'new' || value === 'refurbished') return value
+  return null
+}
+
 function asLocation(value: string | undefined): LocationId {
   return (value || 'warehouse') as LocationId
 }
@@ -87,6 +96,9 @@ export async function GET(request: Request) {
   const pageSize = Math.min(100, Math.max(1, Number(url.searchParams.get('pageSize')) || 50))
   const category = url.searchParams.get('category')?.trim() || null
   const q = url.searchParams.get('q')?.trim() || null
+  const productTypeFilter = parsePartnerProductTypeFilter(
+    url.searchParams.get('productType') || url.searchParams.get('condition'),
+  )
 
   const [rows, appState, { policy }] = await Promise.all([
     prisma.product.findMany({
@@ -191,6 +203,7 @@ export async function GET(request: Request) {
       if (slot) uploaded[slot] = true
     }
     const pack = Object.keys(uploaded).length ? null : matchCatalogPhotoPack(row.name, row.sku)
+    const productType = resolveProductType(jsonProduct?.productType, row.productType)
     return [{
       id: row.id,
       sku: row.sku,
@@ -198,6 +211,7 @@ export async function GET(request: Request) {
       name: row.name,
       description: row.description || '',
       category: row.category?.name ?? null,
+      productType,
       price: reseller.price,
       currency: 'KES',
       warrantyMonths: warrantyById.get(row.id) ?? null,
@@ -208,8 +222,11 @@ export async function GET(request: Request) {
     }]
   })
 
-  const total = catalog.length
-  const items = catalog.slice((page - 1) * pageSize, page * pageSize)
+  const typedCatalog = productTypeFilter
+    ? catalog.filter(item => item.productType === productTypeFilter)
+    : catalog
+  const total = typedCatalog.length
+  const items = typedCatalog.slice((page - 1) * pageSize, page * pageSize)
 
   return json(
     {
