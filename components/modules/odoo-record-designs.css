@@ -1311,7 +1311,103 @@ main#main-content:has(.finance-invoice-detail) {
   }
 
   .finance-invoice-detail .invoice-detail__table td::before {
-    content: attr(data-label);
+    content: "";
+  }
+
+  .finance-invoice-detail .invoice-detail__table td:nth-child(1)::before {
+    content: "#";
+  }
+
+  .finance-invoice-detail .invoice-detail__table td:nth-child(2)::before {
+    content: "Description";
+  }
+
+  .finance-invoice-detail .invoice-detail__table td:nth-child(3)::before {
+    content: "Qty";
+  }
+
+  .finance-invoice-detail .invoice-detail__table td:nth-child(4)::before {
+    content: "Unit price";
+  }
+
+  .finance-invoice-detail .invoice-detail__table td:nth-child(5)::before {
+    content: "Discount";
+  }
+
+  .finance-invoice-detail .invoice-detail__table td:nth-child(6)::before {
+    content: "Tax";
+  }
+
+  .finance-invoice-detail .invoice-detail__table td:nth-child(7)::before {
+    content: "Subtotal";
+  }
+
+  .finance-invoice-detail .invoice-detail__table td:nth-child(8)::before {
+    content: "Actions";
+  }
+
+  .sales-pilot.sales-doc .sp-line-table td[data-col='product']::before {
+    content: "Product";
+  }
+
+  .sales-pilot.sales-doc .sp-line-table td[data-col='description']::before {
+    content: "Description";
+  }
+
+  .sales-pilot.sales-doc .sp-line-table td[data-col='qty']::before {
+    content: "Qty";
+  }
+
+  .sales-pilot.sales-doc .sp-line-table td[data-col='unit']::before {
+    content: "Unit";
+  }
+
+  .sales-pilot.sales-doc .sp-line-table td[data-col='reserved']::before {
+    content: "Reserved";
+  }
+
+  .sales-pilot.sales-doc .sp-line-table td[data-col='delivered']::before {
+    content: "Delivered";
+  }
+
+  .sales-pilot.sales-doc .sp-line-table td[data-col='invoiced']::before {
+    content: "Invoiced";
+  }
+
+  .sales-pilot.sales-doc .sp-line-table td[data-col='policy']::before {
+    content: "Bill on";
+  }
+
+  .sales-pilot.sales-doc .sp-line-table td[data-col='price']::before {
+    content: "Unit price";
+  }
+
+  .sales-pilot.sales-doc .sp-line-table td[data-col='discount']::before {
+    content: "Disc%";
+  }
+
+  .sales-pilot.sales-doc .sp-line-table td[data-col='tax']::before {
+    content: "Tax";
+  }
+
+  .sales-pilot.sales-doc .sp-line-table td[data-col='amount']::before {
+    content: "Amount";
+  }
+
+  .sales-pilot.sales-doc .sp-line-table td[data-col='demand']::before {
+    content: "Demand";
+  }
+
+  .sales-pilot.sales-doc .sp-line-table td[data-col='reserve']::before {
+    content: "Done";
+  }
+
+  .sales-pilot.sales-doc .sp-line-table td[data-col='serials']::before {
+    content: "Serial";
+  }
+
+  .sales-pilot.sales-doc .sp-line-table td[data-col='actions']::before {
+    content: "Actions";
   }
 
   .sales-pilot.sales-doc .sp-line-table td[data-col='product'],
