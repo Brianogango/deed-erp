@@ -1626,6 +1626,8 @@ export default function RepairDetailView() {
               </SectionCard>
             ) : null}
 
+            <span id="repair-history" className="sr-only" aria-hidden="true" />
+
             {/* Work Notes */}
             <SectionCard delay={160}>
               <SectionHeader
@@ -1720,17 +1722,6 @@ export default function RepairDetailView() {
               compact
             />
 
-            {/* Repair Timeline */}
-            <SectionCard delay={340}>
-              <SectionHeader id="repair-history" icon={faHistory} iconBg="bg-slate-600" title="Repair Timeline" subtitle="Status & progress history" />
-              <div className="px-4 sm:px-6 py-4 sm:py-5">
-                <StatusStepper
-                  currentStatus={r.status}
-                  history={r.statusHistory || []}
-                  steps={repairProgressOrderFor(r)}
-                />
-              </div>
-            </SectionCard>
 
           </aside>
         </div>
