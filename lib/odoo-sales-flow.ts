@@ -292,6 +292,23 @@ export function isOpenDeliveryStatus(status: unknown): boolean {
   return s === 'draft' || s === 'waiting' || s === 'ready'
 }
 
+/**
+ * True when the order is still confirmed and every linked picking is
+ * cancelled (or there is none). Used so Create delivery mints a replacement
+ * DN instead of reopening the cancelled one.
+ */
+export function shouldReplaceCancelledDelivery(opts: {
+  soStatus?: string | null
+  deliveries?: { status?: string }[] | null
+}): boolean {
+  if (String(opts.soStatus ?? '') === 'cancelled') return false
+  if (opts.soStatus !== 'sale') return false
+  const linked = opts.deliveries ?? []
+  if (linked.some(d => isOpenDeliveryStatus(d.status))) return false
+  if (linked.length === 0) return true
+  return linked.every(d => normalizeDeliveryStatus(d.status) === 'cancelled')
+}
+
 /** Deliveries linked to an SO; cancelled excluded unless requested. */
 export function deliveriesForSaleOrder<T extends { saleOrderId?: string; status?: string }>(
   deliveries: T[] | null | undefined,

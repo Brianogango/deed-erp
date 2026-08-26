@@ -43,8 +43,12 @@ describe('findInvoiceDeliveryJob', () => {
     )?.id).toBe('job-linked')
     expect(findInvoiceDeliveryJob(
       [job({ status: 'cancelled' })],
-      baseInvoice as Invoice,
+      { ...baseInvoice, deliveryJobId: 'job-1' } as Invoice,
     )).toBeUndefined()
+    expect(canScheduleInvoiceDelivery(
+      { ...baseInvoice, deliveryJobId: 'job-1' } as Invoice,
+      findInvoiceDeliveryJob([job({ status: 'cancelled' })], { ...baseInvoice, deliveryJobId: 'job-1' } as Invoice),
+    )).toBe(true)
   })
 })
 

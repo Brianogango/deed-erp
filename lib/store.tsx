@@ -205,6 +205,7 @@ import {
   taxableQuoteSubtotal,
   diagnosisFeeAmount,
 } from '@/lib/diagnosis-fee'
+import { buildRepairInvoiceCharges, repairInvoiceChargeTotal } from '@/lib/repair-invoice'
 import { isAssignableTechnician, isRepairTechActor } from '@/lib/repair/assignable-technicians'
 import {
   buildDefaultRepairQcItems,
@@ -15880,54 +15881,21 @@ const storeCtx: AppState = {
         return null
       }
       
-      const lines: InvoiceLine[] = [
-        ...repair.partsUsed.map(part => ({
-          id: uid(),
-          description: `Part: ${part.productName}`,
-          qty: part.qty,
-          unitPrice: part.price,
-          taxRate: applyVat ? companySettings.vatRate : 0,
-          subtotal: part.qty * part.price,
-        })),
-        ...(repair.laborCost > 0 ? [{
-          id: uid(),
-          description: 'Labor & Service Charges',
-          qty: 1,
-          unitPrice: repair.laborCost,
-          taxRate: 0,
-          subtotal: repair.laborCost,
-        }] : []),
-        ...(repair.logisticsCost > 0 ? [{
-          id: uid(),
-          description: 'Delivery Service',
-          qty: 1,
-          unitPrice: repair.logisticsCost,
-          taxRate: 0,
-          subtotal: repair.logisticsCost,
-        }] : []),
-        // Corporate: fee on final invoice. Walk-in already paid upfront: omit (not double-billed; not credited against labour).
-        ...((() => {
-          if (!shouldChargeDiagnosisFee(repair) || !(repair.diagnosisFee ?? 0)) return []
-          // Already collected separately (walk-in upfront) — do not re-bill on the repair invoice
-          if (repair.diagnosisFeeStatus === 'paid' || !!repair.diagnosisFeePaidAt) return []
-          if (repair.diagnosisFeeStatus === 'waived' || repair.diagnosisFeeStatus === 'not_applicable') return []
-          return [{
-            id: uid(),
-            description: repair.diagnosisStopped
-              ? 'Diagnosis Fee (repair not undertaken)'
-              : 'Diagnosis Fee',
-            qty: 1,
-            unitPrice: repair.diagnosisFee!,
-            taxRate: 0,
-            subtotal: repair.diagnosisFee!,
-          }]
-        })()),
-      ]
+      const chargeLines = buildRepairInvoiceCharges(repair, applyVat, companySettings.vatRate)
+      const lines: InvoiceLine[] = chargeLines.map(line => ({
+        id: uid(),
+        description: line.description,
+        qty: line.qty,
+        unitPrice: line.unitPrice,
+        taxRate: line.taxRate,
+        subtotal: line.subtotal,
+        productId: line.productId,
+      }))
       
       const subtotal = lines.reduce((sum, line) => sum + line.subtotal, 0)
       const taxTotal = lines.reduce((sum, line) => sum + Math.round(line.subtotal * line.taxRate / 100), 0)
 
-      if (subtotal + taxTotal < 1) {
+      if (repairInvoiceChargeTotal(chargeLines) < 1) {
         showToast('Invoice total must be at least KES 1 — invoices below KES 1 cannot be created', 'error')
         return null
       }

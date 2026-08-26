@@ -20,6 +20,7 @@ import {
   isInvoiceOverdue,
   invoiceResidual,
   isOpenInvoice,
+  shouldReplaceCancelledDelivery,
   saleOrderCancelBlockers,
   matchesSalesListFilter,
   matchesSalesListTab,
@@ -261,6 +262,25 @@ describe('delivery states, partial delivery and backorders', () => {
     expect(normalizeDeliveryStatus('pending')).toBe('waiting')
     expect(normalizeDeliveryStatus('waiting')).toBe('waiting')
     expect(normalizeDeliveryStatus('draft')).toBe('draft')
+  })
+
+  it('creates a replacement DN when the only picking was cancelled', () => {
+    expect(shouldReplaceCancelledDelivery({
+      soStatus: 'sale',
+      deliveries: [{ status: 'cancelled' }],
+    })).toBe(true)
+    expect(shouldReplaceCancelledDelivery({
+      soStatus: 'sale',
+      deliveries: [{ status: 'waiting' }],
+    })).toBe(false)
+    expect(shouldReplaceCancelledDelivery({
+      soStatus: 'sale',
+      deliveries: [{ status: 'done' }],
+    })).toBe(false)
+    expect(shouldReplaceCancelledDelivery({
+      soStatus: 'cancelled',
+      deliveries: [{ status: 'cancelled' }],
+    })).toBe(false)
   })
 
   it('full validation produces done lines and no backorder', () => {
