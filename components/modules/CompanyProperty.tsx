@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react'
 import { useFinanceStore, fmtDate, fmtKes, type CompanyAsset, type CompanyAssetInput } from '@/lib/store'
 import { useHrStore } from '@/hooks/useHrStore'
-import { canManageCompanyPropertyRole, hasModuleAccess } from '@/lib/auth/access'
+import { canManageCompanyPropertyRole, canRunCompanyAssetDepreciationRole, hasModuleAccess } from '@/lib/auth/access'
 import {
   CATEGORY_LABELS,
   CLASS_LABELS,
@@ -28,6 +28,14 @@ import {
   type CompanyAssetAcquiredVia,
   type CompanyAssetStatus,
 } from '@/lib/company-property'
+import {
+  bookNbv,
+  defaultBookMethod,
+  defaultUsefulLifeMonths,
+  periodKey,
+} from '@/lib/company-property-ppe'
+import { kraClassLabel } from '@/lib/tax/kra-capital-allowances'
+import { printAssetTags } from '@/lib/product-label'
 import { ModuleSkeleton, useMounted, ModuleHeader, Field, Input, Select, Textarea, Modal } from '@/components/ui'
 import { PrimaryActionButton, SecondaryActionMenu, StatusBadge, RecordHeader, CompactInfoNotice, PermissionDeniedState } from '@/components/erp'
 import { DataTable, type ColumnDef, type PrimaryFilterConfig } from '@/components/data-table'
@@ -56,10 +64,15 @@ type FormState = {
   purchaseOrderRef: string
   billRef: string
   costKes: string
+  usefulLifeMonths: string
+  residualKes: string
+  depreciationMethod: 'straight_line' | 'reducing_balance'
+  accumDeprKes: string
+  serialId: string
   notes: string
 }
 
-type ActionKind = 'move' | 'custodian' | 'repair' | 'dispose' | 'writeoff' | 'delete' | null
+type ActionKind = 'move' | 'custodian' | 'repair' | 'dispose' | 'writeoff' | 'delete' | 'depreciate' | 'link-serial' | null
 
 const today = () => new Date().toISOString().slice(0, 10)
 
@@ -85,6 +98,11 @@ function emptyForm(): FormState {
     purchaseOrderRef: '',
     billRef: '',
     costKes: '',
+    usefulLifeMonths: '96',
+    residualKes: '0',
+    depreciationMethod: 'straight_line',
+    accumDeprKes: '0',
+    serialId: '',
     notes: '',
   }
 }
@@ -112,6 +130,11 @@ function formFromAsset(asset: CompanyAsset): FormState {
     purchaseOrderRef: asset.purchaseOrderRef ?? '',
     billRef: asset.billRef ?? '',
     costKes: String(asset.costKes ?? ''),
+    usefulLifeMonths: String(asset.usefulLifeMonths ?? defaultUsefulLifeMonths(asset.category)),
+    residualKes: String(asset.residualKes ?? 0),
+    depreciationMethod: asset.depreciationMethod ?? defaultBookMethod(asset.category),
+    accumDeprKes: String(asset.accumDeprKes ?? 0),
+    serialId: asset.serialId ?? '',
     notes: asset.notes ?? '',
   }
 }
@@ -143,6 +166,11 @@ function toInput(form: FormState, employees: Array<{ id: string; fullName: strin
     purchaseOrderRef: form.purchaseOrderRef,
     billRef: form.billRef,
     costKes: Number(form.costKes) || 0,
+    usefulLifeMonths: Number(form.usefulLifeMonths) || undefined,
+    residualKes: Number(form.residualKes) || 0,
+    depreciationMethod: form.depreciationMethod,
+    accumDeprKes: Number(form.accumDeprKes) || 0,
+    serialId: form.serialId || undefined,
     notes: form.notes,
   }
 }
@@ -155,11 +183,13 @@ function PropertyFormFields({
   form,
   setForm,
   employeeOptions,
+  serialOptions,
   allowStatus,
 }: {
   form: FormState
   setForm: (next: FormState | ((prev: FormState) => FormState)) => void
   employeeOptions: { value: string; label: string }[]
+  serialOptions: { value: string; label: string }[]
   allowStatus: boolean
 }) {
   const patch = (partial: Partial<FormState>) => setForm(prev => ({ ...prev, ...partial }))
@@ -178,6 +208,8 @@ function PropertyFormFields({
             patch({
               category: next,
               ppeAccountCode: form.assetClass === 'capital' ? (defaultPpeAccountCode(next) ?? form.ppeAccountCode) : '',
+              usefulLifeMonths: String(defaultUsefulLifeMonths(next)),
+              depreciationMethod: defaultBookMethod(next),
             })
           }}
           options={COMPANY_ASSET_CATEGORIES.map(value => ({ value, label: CATEGORY_LABELS[value] }))}
@@ -215,8 +247,17 @@ function PropertyFormFields({
         <Input value={form.assetTag} onChange={assetTag => patch({ assetTag })} placeholder="FUR-001" />
       </Field>
       <Field label="Serial number">
-        <Input value={form.serialNumber} onChange={serialNumber => patch({ serialNumber })} />
+        <Input value={form.serialNumber} onChange={serialNumber => patch({ serialNumber })} placeholder="Manufacturer serial" />
       </Field>
+      {form.assetClass === 'capital' && (
+        <Field label="Trading serial" hint="Capitalise a demo / floor unit off inventory 1200. Leave blank for furniture bought as PPE.">
+          <Select
+            value={form.serialId}
+            onChange={serialId => patch({ serialId })}
+            options={[{ value: '', label: 'Not a stock unit' }, ...serialOptions]}
+          />
+        </Field>
+      )}
       <Field label="Location" required hint="Office rooms only — not warehouse, shop, or repair unit.">
         <Select
           value={form.locationName}
@@ -265,14 +306,50 @@ function PropertyFormFields({
           options={COMPANY_ASSET_ACQUIRED_VIA.map(value => ({ value, label: ACQUIRED_VIA_LABELS[value] }))}
         />
       </Field>
-      <Field label="Cost (KES)" hint={form.acquiredVia === 'opening' ? 'Opening items are not posted to the ledger.' : 'Total for this row. No journal is posted in v1.'}>
+      <Field label="Cost (KES)" hint={
+        form.acquiredVia === 'opening'
+          ? 'Opening items are not posted again — COA 170x already holds the seed balance.'
+          : form.serialId
+            ? 'Posts Dr PPE / Cr inventory 1200 and takes the serial off stock.'
+            : form.billRef.trim()
+              ? 'Vendor bill already posts PPE. This register row is not posted again.'
+              : 'Purchase without a bill posts Dr PPE / Cr accounts payable 3000.'
+      }>
         <Input type="number" value={form.costKes} onChange={costKes => patch({ costKes })} placeholder="0" />
       </Field>
+      {form.assetClass === 'capital' && (
+        <>
+          <Field label="Useful life (months)" hint="Furniture 96, office equipment 60, IT 36.">
+            <Input type="number" value={form.usefulLifeMonths} onChange={usefulLifeMonths => patch({ usefulLifeMonths })} />
+          </Field>
+          <Field label="Residual (KES)">
+            <Input type="number" value={form.residualKes} onChange={residualKes => patch({ residualKes })} placeholder="0" />
+          </Field>
+          <Field label="Book method" hint="KRA wear-and-tear is a separate tax track and is never posted to 6517.">
+            <Select
+              value={form.depreciationMethod}
+              onChange={depreciationMethod => patch({ depreciationMethod: depreciationMethod as FormState['depreciationMethod'] })}
+              options={[
+                { value: 'straight_line', label: 'Straight line' },
+                { value: 'reducing_balance', label: 'Reducing balance' },
+              ]}
+            />
+          </Field>
+        </>
+      )}
+      {form.acquiredVia === 'opening' && form.assetClass === 'capital' && (
+        <Field label="Opening accum. depr. (KES)" hint="Optional. Records book accum. already on 175x so NBV is right without posting.">
+          <Input type="number" value={form.accumDeprKes} onChange={accumDeprKes => patch({ accumDeprKes })} placeholder="0" />
+        </Field>
+      )}
       <Field label="Supplier">
         <Input value={form.supplierName} onChange={supplierName => patch({ supplierName })} />
       </Field>
-      <Field label="PO / bill ref">
-        <Input value={form.purchaseOrderRef || form.billRef} onChange={purchaseOrderRef => patch({ purchaseOrderRef, billRef: purchaseOrderRef })} placeholder="PO/2026/0041" />
+      <Field label="Purchase order">
+        <Input value={form.purchaseOrderRef} onChange={purchaseOrderRef => patch({ purchaseOrderRef })} placeholder="PO/2026/0041" />
+      </Field>
+      <Field label="Vendor bill" hint="If the bill posted 170x, leave this filled so the register does not post a second capitalise journal.">
+        <Input value={form.billRef} onChange={billRef => patch({ billRef })} placeholder="BILL/2026/0041" />
       </Field>
       <div className="sm:col-span-2">
         <Field label="Description">
@@ -303,11 +380,15 @@ export default function CompanyProperty() {
     setCompanyAssetStatus,
     disposeCompanyAsset,
     writeOffCompanyAsset,
+    runCompanyAssetDepreciation,
+    linkSerialToCompanyAsset,
+    serials,
   } = useFinanceStore()
   const { employees } = useHrStore()
 
   const canOpen = hasModuleAccess(currentUser, 'company_property')
   const canManage = canManageCompanyPropertyRole(currentUser?.role)
+  const canRunDepreciation = canRunCompanyAssetDepreciationRole(currentUser?.role)
 
   const [filter, setFilter] = useState<'all' | CompanyAssetStatus>('all')
   const [search, setSearch] = useState('')
@@ -321,6 +402,9 @@ export default function CompanyProperty() {
   const [actionCustodianId, setActionCustodianId] = useState('')
   const [actionQty, setActionQty] = useState('1')
   const [actionProceeds, setActionProceeds] = useState('')
+  const [actionCreateRepair, setActionCreateRepair] = useState(false)
+  const [actionSerialId, setActionSerialId] = useState('')
+  const [actionPeriod, setActionPeriod] = useState(periodKey())
 
   const items = Array.isArray(companyAssets) ? companyAssets : []
   const selected = items.find(a => a.id === recordId) ?? null
@@ -333,10 +417,19 @@ export default function CompanyProperty() {
     ]
   }, [employees])
 
+  const serialOptions = useMemo(() => {
+    const available = (Array.isArray(serials) ? serials : []).filter(s => s.status === 'available')
+    return available.slice(0, 250).map(s => ({
+      value: s.id,
+      label: `${s.serial} · ${s.productName}`,
+    }))
+  }, [serials])
+
   const inUse = items.filter(a => a.status === 'in_use')
   const inStorage = items.filter(a => a.status === 'in_storage')
   const missingLocation = items.filter(a => isLiveCompanyAsset(a) && !a.locationName.trim())
   const capitalCost = items.filter(a => a.assetClass === 'capital' && isLiveCompanyAsset(a)).reduce((sum, a) => sum + (Number(a.costKes) || 0), 0)
+  const capitalNbv = items.filter(a => a.assetClass === 'capital' && isLiveCompanyAsset(a)).reduce((sum, a) => sum + bookNbv(a), 0)
   const coaRows = capitalRegisterVsCoa(items, accounts ?? [])
   const coaMismatch = coaRows.some(row => row.register > 0 && row.delta !== 0)
 
@@ -410,6 +503,11 @@ export default function CompanyProperty() {
       exportValue: a => String(a.costKes ?? 0),
     },
     {
+      key: 'nbv', label: 'NBV', priority: 2, align: 'right',
+      render: a => a.assetClass === 'capital' ? fmtKes(bookNbv(a)) : '—',
+      exportValue: a => a.assetClass === 'capital' ? String(bookNbv(a)) : '',
+    },
+    {
       key: 'status', label: 'Status', priority: 1, width: '120px',
       render: a => <PropertyStatusBadge status={a.status} />,
       exportValue: a => STATUS_LABELS[a.status],
@@ -446,6 +544,9 @@ export default function CompanyProperty() {
     setActionCustodianId('')
     setActionQty('1')
     setActionProceeds('')
+    setActionCreateRepair(false)
+    setActionSerialId('')
+    setActionPeriod(periodKey())
   }
 
   const runAction = () => {
@@ -457,7 +558,12 @@ export default function CompanyProperty() {
       const emp = employees.find(e => e.id === actionCustodianId)
       setCompanyAssetCustodian(selected.id, { employeeId: actionCustodianId || undefined, name: emp?.fullName }, actionNote || undefined)
     } else if (action === 'repair') {
-      setCompanyAssetStatus(selected.id, selected.status === 'under_repair' ? 'in_use' : 'under_repair', actionNote || undefined)
+      setCompanyAssetStatus(
+        selected.id,
+        selected.status === 'under_repair' ? 'in_use' : 'under_repair',
+        actionNote || undefined,
+        selected.status === 'under_repair' ? undefined : { createRepair: actionCreateRepair },
+      )
     } else if (action === 'dispose') {
       disposeCompanyAsset(selected.id, Number(actionQty), { reason: actionNote || undefined, proceedsKes: Number(actionProceeds) || undefined })
     } else if (action === 'writeoff') {
@@ -465,6 +571,10 @@ export default function CompanyProperty() {
     } else if (action === 'delete') {
       deleteCompanyAsset(selected.id)
       setRecordId(null)
+    } else if (action === 'depreciate') {
+      runCompanyAssetDepreciation(actionPeriod)
+    } else if (action === 'link-serial') {
+      if (actionSerialId) linkSerialToCompanyAsset(selected.id, actionSerialId)
     }
     closeAction()
   }
@@ -504,8 +614,10 @@ export default function CompanyProperty() {
             <SecondaryActionMenu
               actions={[
                 { id: 'edit', label: 'Edit details', onClick: () => openEdit(selected), hidden: terminal },
+                { id: 'print', label: 'Print tag', onClick: () => printAssetTags([{ ref: selected.ref, name: selected.name, assetTag: selected.assetTag, category: CATEGORY_LABELS[selected.category], locationName: selected.locationName }]) },
+                { id: 'serial', label: 'Link trading serial', onClick: () => setAction('link-serial'), hidden: !canManage || Boolean(selected.serialId) || terminal || selected.assetClass !== 'capital' },
                 { id: 'custodian', label: 'Set custodian', onClick: () => { setActionCustodianId(selected.custodianEmployeeId ?? ''); setAction('custodian') }, hidden: !live },
-                { id: 'repair', label: selected.status === 'under_repair' ? 'Return from repair' : 'Mark under repair', onClick: () => setAction('repair'), hidden: !live && selected.status !== 'under_repair' },
+                { id: 'repair', label: selected.status === 'under_repair' ? 'Return from repair' : 'Mark under repair', onClick: () => { setActionCreateRepair(selected.category === 'office_equipment'); setAction('repair') }, hidden: !live && selected.status !== 'under_repair' },
                 { id: 'lost', label: 'Mark lost', onClick: () => setCompanyAssetStatus(selected.id, 'lost'), hidden: !live || selected.status === 'lost' },
                 { id: 'storage', label: 'Move to storage', onClick: () => setCompanyAssetStatus(selected.id, 'in_storage'), hidden: selected.status !== 'in_use' },
                 { id: 'use', label: 'Put in use', onClick: () => setCompanyAssetStatus(selected.id, 'in_use'), hidden: selected.status !== 'in_storage' && selected.status !== 'draft' && selected.status !== 'lost' && selected.status !== 'under_repair' },
@@ -531,7 +643,16 @@ export default function CompanyProperty() {
               ['Condition', CONDITION_LABELS[selected.condition]],
               ['Acquired', `${fmtDate(selected.acquiredDate)} · ${ACQUIRED_VIA_LABELS[selected.acquiredVia]}`],
               ['Cost', fmtKes(selected.costKes)],
+              ['Book NBV', selected.assetClass === 'capital' ? fmtKes(bookNbv(selected)) : '—'],
+              ['Accum. depr.', selected.assetClass === 'capital' ? fmtKes(selected.accumDeprKes ?? 0) : '—'],
+              ['Tax WDV', selected.assetClass === 'capital' ? fmtKes(selected.taxWdvKes ?? selected.costKes) : '—'],
+              ['KRA class', selected.assetClass === 'capital' ? kraClassLabel(selected.ppeAccountCode) : '—'],
+              ['Useful life', selected.usefulLifeMonths ? `${selected.usefulLifeMonths} months` : '—'],
+              ['Book method', selected.depreciationMethod === 'reducing_balance' ? 'Reducing balance' : selected.assetClass === 'capital' ? 'Straight line' : '—'],
               ['Supplier', selected.supplierName || '—'],
+              ['Capitalise journal', selected.capitaliseJournalRef || (selected.acquiredVia === 'opening' ? 'Opening — not posted' : selected.billRef ? `Bill ${selected.billRef}` : '—')],
+              ['Disposal journal', selected.disposalJournalRef || '—'],
+              ['Repair job', selected.repairRef || '—'],
             ].map(([label, value]) => (
               <div key={label} className="rounded-xl border border-[var(--border-lt)] bg-[var(--bg-surface)] px-3 py-2.5">
                 <dt className="text-[10px] uppercase tracking-wider font-bold text-[var(--text-4)]">{label}</dt>
@@ -542,7 +663,12 @@ export default function CompanyProperty() {
           {selected.description && <p className="text-sm text-[var(--text-2)]">{selected.description}</p>}
           {selected.notes && <p className="text-[12px] text-[var(--text-3)]">{selected.notes}</p>}
           {selected.acquiredVia === 'opening' && (
-            <CompactInfoNotice>Opening register item — this cost is not posted as a journal.</CompactInfoNotice>
+            <CompactInfoNotice>Opening register item — cost is not posted again. Disposal still clears 170x / 175x.</CompactInfoNotice>
+          )}
+          {selected.assetClass === 'capital' && (
+            <CompactInfoNotice>
+              Book depreciation posts to 6517 / 175x. KRA {kraClassLabel(selected.ppeAccountCode)} is reporting-only and is never mixed into the books.
+            </CompactInfoNotice>
           )}
           {selected.history.length > 0 && (
             <section>
@@ -578,7 +704,7 @@ export default function CompanyProperty() {
               </div>
             }
           >
-            <PropertyFormFields form={form} setForm={setForm} employeeOptions={employeeOptions} allowStatus={selected.status === 'draft'} />
+            <PropertyFormFields form={form} setForm={setForm} employeeOptions={employeeOptions} serialOptions={serialOptions} allowStatus={selected.status === 'draft'} />
           </Modal>
         )}
 
@@ -590,7 +716,9 @@ export default function CompanyProperty() {
                   : action === 'repair' ? (selected.status === 'under_repair' ? 'Return from repair' : 'Mark under repair')
                     : action === 'dispose' ? 'Dispose'
                       : action === 'writeoff' ? 'Write off'
-                        : 'Delete draft'
+                        : action === 'depreciate' ? 'Run depreciation'
+                          : action === 'link-serial' ? 'Link trading serial'
+                            : 'Delete draft'
             }
             onClose={closeAction}
             width={480}
@@ -633,11 +761,35 @@ export default function CompanyProperty() {
               </div>
             )}
             {action === 'repair' && (
-              <Field label="Note"><Textarea value={actionNote} onChange={setActionNote} rows={2} placeholder="What is being repaired?" /></Field>
+              <div className="space-y-3">
+                <Field label="Note"><Textarea value={actionNote} onChange={setActionNote} rows={2} placeholder="What is being repaired?" /></Field>
+                {selected.status !== 'under_repair' && (
+                  <label className="flex items-start gap-2 text-sm text-[var(--text-2)]">
+                    <input
+                      type="checkbox"
+                      className="mt-1"
+                      checked={actionCreateRepair}
+                      onChange={e => setActionCreateRepair(e.target.checked)}
+                    />
+                    <span>Open a Repair job for this item (uses the company contact named like the business).</span>
+                  </label>
+                )}
+              </div>
+            )}
+            {action === 'link-serial' && (
+              <Field label="Available serial" hint="Takes the unit off stock. Posts Dr PPE / Cr 1200 if this row is not already capitalised.">
+                <Select
+                  value={actionSerialId}
+                  onChange={setActionSerialId}
+                  options={[{ value: '', label: 'Select serial…' }, ...serialOptions]}
+                />
+              </Field>
             )}
             {action === 'dispose' && (
               <div className="space-y-3">
-                <p className="text-[12px] text-[var(--text-3)]">v1 does not post a disposal journal. Partial quantities stay on the register.</p>
+                <p className="text-[12px] text-[var(--text-3)]">
+                  Posts cash + accum. depr. 175x, clears cost 170x, and plugs gain 5203 or loss 6515.
+                </p>
                 <Field label="Quantity to dispose" required>
                   <Input type="number" value={actionQty} onChange={setActionQty} />
                 </Field>
@@ -649,6 +801,11 @@ export default function CompanyProperty() {
             )}
             {action === 'writeoff' && (
               <Field label="Reason" required><Textarea value={actionNote} onChange={setActionNote} rows={3} placeholder="Lost, damaged beyond repair, stolen…" /></Field>
+            )}
+            {action === 'depreciate' && (
+              <Field label="Period" hint="One combined journal JRN/AST-DEP/YYYY-MM. Tax WDV is updated once per calendar year and is not posted.">
+                <Input type="month" value={actionPeriod} onChange={setActionPeriod} />
+              </Field>
             )}
             {action === 'delete' && (
               <p className="text-sm text-[var(--text-2)]">Delete draft {selected.ref}? Live items must be disposed or written off.</p>
@@ -671,6 +828,10 @@ export default function CompanyProperty() {
           <PrimaryActionButton icon={<Fa icon={faPlus} />} onClick={openCreate} hideLabelOnMobile={false} aria-label="Record property">
             Record item
           </PrimaryActionButton>
+        ) : canRunDepreciation ? (
+          <PrimaryActionButton onClick={() => { setActionPeriod(periodKey()); setAction('depreciate') }}>
+            Run depreciation
+          </PrimaryActionButton>
         ) : undefined}
       />
 
@@ -678,23 +839,31 @@ export default function CompanyProperty() {
         <article className="kpi-summary-card kpi-summary-card--green"><span>In use</span><strong>{inUse.length}</strong></article>
         <article className="kpi-summary-card"><span>In storage</span><strong>{inStorage.length}</strong></article>
         <article className="kpi-summary-card"><span>Capital on register</span><strong>{fmtKes(capitalCost)}</strong></article>
+        <article className="kpi-summary-card"><span>Book NBV</span><strong>{fmtKes(capitalNbv)}</strong></article>
         <article className={`kpi-summary-card ${missingLocation.length ? 'kpi-summary-card--amber' : ''}`}><span>Missing location</span><strong>{missingLocation.length}</strong></article>
       </div>
 
       <div className="px-3 sm:px-6 pt-3 space-y-2">
         <CompactInfoNotice>
-          This register is for office furniture and fittings. Staff laptops and phones issued from stock stay on HR → Assets. v1 does not post journals or depreciation.
+          Office furniture and equipment — not trading stock. Staff laptops issued from stock stay on HR → Assets. Book depreciation posts 6517 / 175x; KRA capital allowances are a separate tax track.
         </CompactInfoNotice>
+        {canManage && (
+          <div className="flex flex-wrap gap-2">
+            <button type="button" className="btn-secondary" onClick={() => { setActionPeriod(periodKey()); setAction('depreciate') }}>
+              Run monthly depreciation
+            </button>
+          </div>
+        )}
         {coaMismatch && (
           <CompactInfoNotice>
-            Capital totals on this register do not match COA 1701–1703. That is expected for opening items that already sit on the ledger — do not post them again.
+            Capital totals on this register do not match COA 1701–1704. That is expected for opening items that already sit on the ledger — do not post them again.
             {coaRows.filter(row => row.register > 0).map(row => (
               <span key={row.code}> {row.code}: register {fmtKes(row.register)} vs COA {fmtKes(row.coa)}.</span>
             ))}
           </CompactInfoNotice>
         )}
         {!canManage && (
-          <CompactInfoNotice>Finance can view costs and class. Recording, moves, and disposals are Admin Officer / Director only.</CompactInfoNotice>
+          <CompactInfoNotice>Finance can view costs and run monthly depreciation. Recording, moves, and disposals are Admin Officer / Director only.</CompactInfoNotice>
         )}
       </div>
 
@@ -737,7 +906,26 @@ export default function CompanyProperty() {
             </div>
           }
         >
-          <PropertyFormFields form={form} setForm={setForm} employeeOptions={employeeOptions} allowStatus />
+          <PropertyFormFields form={form} setForm={setForm} employeeOptions={employeeOptions} serialOptions={serialOptions} allowStatus />
+        </Modal>
+      )}
+
+      {action === 'depreciate' && !selected && (
+        <Modal
+          title="Run depreciation"
+          onClose={closeAction}
+          width={480}
+          variant="enterprise"
+          footer={
+            <div className="flex justify-end gap-2">
+              <button type="button" className="btn-secondary" onClick={closeAction}>Cancel</button>
+              <button type="button" className="btn-primary" onClick={() => { runCompanyAssetDepreciation(actionPeriod); closeAction() }}>Post</button>
+            </div>
+          }
+        >
+          <Field label="Period" hint="One combined journal JRN/AST-DEP/YYYY-MM. Tax WDV is updated once per calendar year and is not posted.">
+            <Input type="month" value={actionPeriod} onChange={setActionPeriod} />
+          </Field>
         </Modal>
       )}
     </div>

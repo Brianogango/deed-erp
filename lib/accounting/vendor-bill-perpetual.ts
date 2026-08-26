@@ -8,6 +8,7 @@
 
 import { COMPANY_ACCOUNT_FALLBACKS, formatAccountLabel } from '@/lib/product-accounts'
 import { labelForRole } from '@/lib/accounting/coa-roles'
+import { isPpeCostAccount, PPE_COST_LABELS } from '@/lib/company-property-ppe'
 
 export const GRNI_ACCOUNT_LABEL = labelForRole('grni')
 export const PRICE_DIFF_ACCOUNT_CODE = COMPANY_ACCOUNT_FALLBACKS.priceDifferenceAccountCode
@@ -18,6 +19,8 @@ export type VendorBillLineInput = {
   unitPrice: number
   subtotal: number
   accountCode?: string
+  /** PPE cost account (1701–1704). Debits PPE instead of inventory 1200 / purchases 6101. */
+  ppeAccountCode?: string
   /** True when the product is inventory-tracked (storable/consumable). */
   isStocked?: boolean
   /** PO / GRN unit cost used when inventory was capitalized. Defaults to unitPrice. */
@@ -39,8 +42,18 @@ function accountLabel(code: string, chartAccounts: Array<{ code: string; name: s
   return formatAccountLabel(code, chartAccounts)
 }
 
+function ppeCodeForLine(line: VendorBillLineInput): string | undefined {
+  const code = String(line.ppeAccountCode || line.accountCode || '').trim()
+  return isPpeCostAccount(code) ? code : undefined
+}
+
+function ppeAccountLabel(code: string, chart: Array<{ code: string; name: string }>) {
+  return accountLabel(code, chart) || PPE_COST_LABELS[code as keyof typeof PPE_COST_LABELS] || `${code} — PPE`
+}
+
 /**
  * Build vendor-bill posting lines.
+ * - PPE account on a line (1701–1704) → Dr cost, never inventory 1200
  * - perpetual + stocked PO lines → clear GRNI at receipt cost + price variance
  * - otherwise → classic Dr purchase expense
  */
@@ -51,7 +64,7 @@ export function buildVendorBillPerpetualLines(params: {
   taxTotal: number
   total: number
   lines: VendorBillLineInput[]
-  /** When false, always expense (legacy). */
+  /** When false, always expense (legacy) except PPE lines. */
   perpetual: boolean
   chartAccounts?: Array<{ code: string; name: string }>
 }): VendorBillJournalLine[] {
@@ -63,24 +76,23 @@ export function buildVendorBillPerpetualLines(params: {
   const partner = params.partnerName || 'Vendor'
   const ref = params.ref
 
-  if (!params.perpetual) {
-    const expense = money(params.subtotal)
-    return [
-      { account: purchaseFallback, description: `Purchase: ${partner}`, debit: expense, credit: 0 },
-      ...(tax > 0 ? [{ account: labelForRole('input_vat'), description: `VAT input on ${ref}`, debit: tax, credit: 0 }] : []),
-      { account: labelForRole('ap'), description: `AP: ${partner}`, debit: 0, credit: total },
-    ]
-  }
-
+  const ppeByCode = new Map<string, number>()
   let grniClear = 0
   let billStocked = 0
   let expenseNonStocked = 0
+  let classified = 0
 
   for (const line of params.lines) {
     const qty = Math.max(0, Number(line.qty) || 0)
     if (qty <= 0) continue
     const billSub = money(line.subtotal)
-    if (line.isStocked) {
+    classified += billSub
+    const ppe = ppeCodeForLine(line)
+    if (ppe) {
+      ppeByCode.set(ppe, money((ppeByCode.get(ppe) ?? 0) + billSub))
+      continue
+    }
+    if (params.perpetual && line.isStocked) {
       const receiptCost = Math.max(0, Number(line.receiptUnitCost ?? line.unitPrice) || 0)
       grniClear = money(grniClear + qty * receiptCost)
       billStocked = money(billStocked + billSub)
@@ -89,8 +101,20 @@ export function buildVendorBillPerpetualLines(params: {
     }
   }
 
-  // If nothing was classified as stocked, fall back to expense posting.
-  if (grniClear <= 0 && billStocked <= 0) {
+  const ppeTotal = [...ppeByCode.values()].reduce((s, n) => s + n, 0)
+  const useLegacyExpense = !params.perpetual && ppeTotal <= 0
+
+  if (useLegacyExpense) {
+    const expense = money(params.subtotal)
+    return [
+      { account: purchaseFallback, description: `Purchase: ${partner}`, debit: expense, credit: 0 },
+      ...(tax > 0 ? [{ account: labelForRole('input_vat'), description: `VAT input on ${ref}`, debit: tax, credit: 0 }] : []),
+      { account: labelForRole('ap'), description: `AP: ${partner}`, debit: 0, credit: total },
+    ]
+  }
+
+  // Perpetual with nothing stocked and no PPE → expense the bill (legacy).
+  if (params.perpetual && grniClear <= 0 && billStocked <= 0 && ppeTotal <= 0) {
     const expense = money(params.subtotal)
     return [
       { account: purchaseFallback, description: `Purchase: ${partner}`, debit: expense, credit: 0 },
@@ -102,6 +126,15 @@ export function buildVendorBillPerpetualLines(params: {
   const variance = money(billStocked - grniClear)
   const lines: VendorBillJournalLine[] = []
 
+  for (const [code, amount] of ppeByCode) {
+    if (amount <= 0) continue
+    lines.push({
+      account: ppeAccountLabel(code, chart),
+      description: `Capitalise PPE ${code}: ${ref}`,
+      debit: amount,
+      credit: 0,
+    })
+  }
   if (grniClear > 0) {
     lines.push({
       account: GRNI_ACCOUNT_LABEL,
@@ -142,9 +175,10 @@ export function buildVendorBillPerpetualLines(params: {
 }
 
 /**
- * Vendor credit note under perpetual inventory:
- * Dr AP, Cr GRNI (for stocked cost), Cr VAT; non-stocked credits purchase expense.
- * Pair with processStockVendorReturn (Dr GRNI / Cr Inventory) so net is Dr AP / Cr Inventory.
+ * Vendor credit note:
+ * - PPE lines credit 170x (never inventory 1200)
+ * - perpetual + stocked → credit GRNI
+ * - otherwise credit purchase expense
  */
 export function buildVendorCreditPerpetualLines(params: {
   partnerName: string
@@ -164,15 +198,7 @@ export function buildVendorCreditPerpetualLines(params: {
   const partner = params.partnerName || 'Vendor'
   const ref = params.ref
 
-  if (!params.perpetual) {
-    const expense = money(Math.abs(params.subtotal))
-    return [
-      { account: labelForRole('ap'), description: `AP credit: ${partner}`, debit: total, credit: 0 },
-      { account: purchaseFallback, description: `Purchase return: ${partner}`, debit: 0, credit: expense },
-      ...(tax > 0 ? [{ account: labelForRole('input_vat'), description: `VAT input reversal on ${ref}`, debit: 0, credit: tax }] : []),
-    ]
-  }
-
+  const ppeByCode = new Map<string, number>()
   let grniCredit = 0
   let billStocked = 0
   let expenseNonStocked = 0
@@ -181,7 +207,12 @@ export function buildVendorCreditPerpetualLines(params: {
     const qty = Math.max(0, Number(line.qty) || 0)
     if (qty <= 0) continue
     const billSub = money(Math.abs(line.subtotal))
-    if (line.isStocked) {
+    const ppe = ppeCodeForLine(line)
+    if (ppe) {
+      ppeByCode.set(ppe, money((ppeByCode.get(ppe) ?? 0) + billSub))
+      continue
+    }
+    if (params.perpetual && line.isStocked) {
       const receiptCost = Math.max(0, Number(line.receiptUnitCost ?? line.unitPrice) || 0)
       grniCredit = money(grniCredit + qty * receiptCost)
       billStocked = money(billStocked + billSub)
@@ -190,7 +221,10 @@ export function buildVendorCreditPerpetualLines(params: {
     }
   }
 
-  if (grniCredit <= 0 && billStocked <= 0) {
+  const ppeTotal = [...ppeByCode.values()].reduce((s, n) => s + n, 0)
+  const useLegacyExpense = !params.perpetual && ppeTotal <= 0
+
+  if (useLegacyExpense || (params.perpetual && grniCredit <= 0 && billStocked <= 0 && ppeTotal <= 0)) {
     const expense = money(Math.abs(params.subtotal))
     return [
       { account: labelForRole('ap'), description: `AP credit: ${partner}`, debit: total, credit: 0 },
@@ -203,6 +237,15 @@ export function buildVendorCreditPerpetualLines(params: {
   const lines: VendorBillJournalLine[] = [
     { account: labelForRole('ap'), description: `AP credit: ${partner}`, debit: total, credit: 0 },
   ]
+  for (const [code, amount] of ppeByCode) {
+    if (amount <= 0) continue
+    lines.push({
+      account: ppeAccountLabel(code, chart),
+      description: `Credit PPE ${code}: ${ref}`,
+      debit: 0,
+      credit: amount,
+    })
+  }
   if (grniCredit > 0) {
     lines.push({
       account: GRNI_ACCOUNT_LABEL,

@@ -232,3 +232,65 @@ ${labels}
   win.document.write(html)
   win.document.close()
 }
+
+export type AssetTagItem = {
+  ref: string
+  name: string
+  assetTag?: string
+  category?: string
+  locationName?: string
+}
+
+export function assetTagBarcodeValue(item: Pick<AssetTagItem, 'assetTag' | 'ref'>): string {
+  return String(item.assetTag || item.ref || '').trim()
+}
+
+function assetTagHtml(item: AssetTagItem, barcodeSrc: string, barcodeValue: string): string {
+  const tag = item.assetTag?.trim()
+  return `
+    <div class="label serial-label">
+      <div class="label-top">
+        <div class="brand">deed<span>.</span></div>
+        <div class="cat">${esc((item.category || 'ASSET').toUpperCase())}</div>
+      </div>
+      <div class="name">${esc(item.name)}</div>
+      <div class="serial-block">
+        <div class="eyebrow">Asset tag</div>
+        <div class="serial-num">${esc(tag || item.ref)}</div>
+      </div>
+      ${item.locationName ? `<div class="specs">${esc(item.locationName)}</div>` : ''}
+      <div class="barcode-wrap">
+        ${barcodeSrc ? `<img src="${barcodeSrc}" alt="${esc(barcodeValue)}" class="barcode-img" />` : `<div class="barcode-placeholder"></div>`}
+        <div class="barcode-num">${esc(barcodeValue)}</div>
+      </div>
+      <div class="sku">REF: ${esc(item.ref)}</div>
+    </div>`
+}
+
+export function printAssetTags(items: AssetTagItem[]): void {
+  if (!items.length) return
+  const labels = items.map(item => {
+    const barcodeValue = assetTagBarcodeValue(item)
+    return assetTagHtml(item, barcodeDataUrl(barcodeValue), barcodeValue)
+  }).join('')
+
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Asset Tags</title>
+<style>${LABEL_PRINT_CSS}</style>
+</head>
+<body>
+<div class="sheet">
+${labels}
+</div>
+<script>window.onload = () => { window.print(); }</script>
+</body>
+</html>`
+
+  const win = window.open('', '_blank', 'width=700,height=600')
+  if (!win) return
+  win.document.write(html)
+  win.document.close()
+}
