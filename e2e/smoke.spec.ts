@@ -165,7 +165,7 @@ test.describe('repair → quote → invoice money path', () => {
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)
     expect(overflow).toBeLessThanOrEqual(1)
 
-    await expect(page.locator('.client-repair-nav__brand')).toHaveAttribute('src', '/deed-logo-transparent.png')
+    await expect(page.locator('.client-repair-nav__brand')).toHaveAttribute('src', '/deed-logo-receipt.png')
 
     const scrollState = await page.locator('.client-repair-portal').evaluate(element => {
       const portal = element as HTMLElement
