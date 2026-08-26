@@ -135,6 +135,7 @@ import {
   invoiceableQty,
   invoicePaymentStatus,
   isOpenDeliveryStatus,
+  shouldReplaceCancelledDelivery,
   deliveriesForSaleOrder,
   remainingUndeliveredByProduct,
   saleOrderLooksConfirmed,
@@ -1139,8 +1140,12 @@ function SalesContent() {
         open = open.filter(d => d.id === keeper.id || d.preparedAt)
       }
     }
-    // Confirmed SO with no DN (confirm/DN sync race) — create one before opening.
-    let ensured = open[0] ?? visibleDeliveries[0] ?? activeDeliveries[0]
+    // Confirmed SO with no open DN (never created, or the only DN was cancelled)
+    // — mint a waiting picking instead of reopening a cancelled record.
+    let ensured = open[0] ?? (shouldReplaceCancelledDelivery({
+      soStatus: activeOrder.status,
+      deliveries: activeDeliveries,
+    }) ? undefined : visibleDeliveries[0])
     if (!deliveryId && !ensured && (activeOrder.status === 'sale' || saleOrderLooksConfirmed(activeOrder))) {
       const created = await ensureWaitingDeliveryForSO(activeOrder.id)
       if (created) ensured = created

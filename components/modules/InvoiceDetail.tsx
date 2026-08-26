@@ -254,7 +254,7 @@ export default function InvoiceDetail() {
     { key: 'customer', label: invoice.type === 'customer_invoice' ? 'Customer' : 'Vendor', value: invoice.partnerName || 'Not set' },
     { key: 'payments', label: 'Payments', value: String((invoice.payments || []).length) },
     { key: 'sales-order', label: 'Sales Order', value: linkedSaleOrder ? '1' : '0' },
-    { key: 'delivery', label: 'Delivery', value: linkedDeliveryJob || invoice.deliveryJobId ? '1' : '0' },
+    { key: 'delivery', label: 'Delivery', value: linkedDeliveryJob ? '1' : '0' },
     { key: 'credit-notes', label: 'Credit Notes', value: '0' },
     { key: 'activities', label: 'Activities', value: '2' },
   ]
@@ -801,11 +801,13 @@ export default function InvoiceDetail() {
                   View delivery
                 </button>
               </>
-            ) : invoice.deliveryJobId ? (
-              <p className="invoice-detail__info-muted">Delivery job linked — loading details…</p>
             ) : showScheduleDelivery && canManageFinance ? (
               <>
-                <p className="invoice-detail__info-muted">No rider delivery scheduled.</p>
+                <p className="invoice-detail__info-muted">
+                  {invoice.deliveryJobId
+                    ? 'Previous rider delivery was cancelled. Schedule a new one.'
+                    : 'No rider delivery scheduled.'}
+                </p>
                 <button
                   type="button"
                   className="invoice-detail__link-btn"
@@ -814,6 +816,8 @@ export default function InvoiceDetail() {
                   Schedule delivery
                 </button>
               </>
+            ) : invoice.deliveryJobId ? (
+              <p className="invoice-detail__info-muted">Delivery job linked — loading details…</p>
             ) : (
               <p className="invoice-detail__info-muted">No delivery job linked.</p>
             )}
