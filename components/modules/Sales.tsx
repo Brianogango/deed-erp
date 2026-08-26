@@ -2266,6 +2266,37 @@ function SalesContent() {
                     />
                   ) : null}
 
+                  {isQuotationStage(activeOrder.status) && (
+                    <SalesDocWorkflow
+                      steps={[
+                        {
+                          key: 'quotation',
+                          label: 'Quotation',
+                          state: activeOrder.status === 'quotation' ? 'current' : 'done',
+                        },
+                        {
+                          key: 'quotation-sent',
+                          label: 'Quotation Sent',
+                          state: activeOrder.status === 'quotation'
+                            ? 'todo'
+                            : saleOrderIsAccepted(activeOrder)
+                              ? 'done'
+                              : 'current',
+                        },
+                        {
+                          key: 'quote-ready',
+                          label: 'Quote Ready',
+                          state: saleOrderIsAccepted(activeOrder) ? 'current' : 'todo',
+                        },
+                        {
+                          key: 'sales-order',
+                          label: 'Sales Order',
+                          state: 'todo',
+                        },
+                      ] as Array<{ key: string; label: string; state: 'done' | 'current' | 'todo' }>}
+                    />
+                  )}
+
                   {activeOrder.status === 'sale' && (
                     <SalesDocWorkflow
                       steps={buildSoWorkflowSteps({
@@ -2277,6 +2308,34 @@ function SalesContent() {
                       })}
                     />
                   )}
+
+                  <section className="sales-doc-smart-row" aria-label="Related sales records">
+                    <button type="button" className="sales-doc-smart-button">
+                      <span>Customer</span>
+                      <strong>{activeOrder.customerName || 'Not set'}</strong>
+                    </button>
+                    <button type="button" className="sales-doc-smart-button">
+                      <span>Sales Order</span>
+                      <strong>{activeOrder.status === 'sale' ? '1' : '0'}</strong>
+                    </button>
+                    <button type="button" className="sales-doc-smart-button" onClick={() => void openDeliveryView()}>
+                      <span>Delivery</span>
+                      <strong>{visibleDeliveries.length}</strong>
+                    </button>
+                    <button type="button" className="sales-doc-smart-button" onClick={() => router.push('/finance?tab=invoices')}>
+                      <span>Invoices</span>
+                      <strong>{activeInvoices.length}</strong>
+                    </button>
+                    <button type="button" className="sales-doc-smart-button">
+                      <span>Activities</span>
+                      <strong>{isQuotationStage(activeOrder.status) ? '3' : '2'}</strong>
+                    </button>
+                    <button type="button" className="sales-doc-smart-button">
+                      <span>Currency</span>
+                      <strong>KES</strong>
+                    </button>
+                  </section>
+
 
                       {isQuotationStage(activeOrder.status) && (activeOrder.approvalStatus === 'pending' || (approvalRequests ?? []).some(r =>
                         r.documentId === activeOrder.id
@@ -2533,7 +2592,7 @@ function SalesContent() {
                         <SalesDocTabs
                           className="sales-order-section-tabs"
                           tabs={isQuotationStage(activeOrder.status)
-                            ? ['Order Lines', 'Terms and Conditions', 'Notes', 'Activities', 'History']
+                            ? ['Order Lines', 'Optional Products', 'Terms and Conditions', 'Notes', 'Attachments', 'History']
                             : ['Order Lines', 'Delivery and Stock', 'Invoices', ...(canSeeReturns ? ['Returns'] : []), 'Notes', 'History']}
                           active={detailTab}
                           onChange={setDetailTab}
@@ -2716,8 +2775,9 @@ function SalesContent() {
                           </div>
                           {isQuotationDraft(activeOrder.status) && !activeOrder.locked && (
                             <div className="sp-line-actions">
-                              <button type="button" onClick={() => setShowAddLine(true)}>Add a product</button>
+                              <button type="button" onClick={() => setShowAddLine(true)}>Add a line</button>
                               <button type="button" onClick={() => addSOSection(activeOrder.id)}>Add a section</button>
+                              <button type="button" onClick={() => setDetailTab('Notes')}>Add a note</button>
                             </div>
                           )}
                           <SalesDocTotals
@@ -2757,6 +2817,12 @@ function SalesContent() {
                             />
                           </div>
                         )}
+                        {detailTab === 'Optional Products' && (
+                          <p className="sp-panel-pad" style={{ color: 'var(--sp-text-3)' }}>
+                            No optional products have been added to this quotation.
+                          </p>
+                        )}
+
                         {detailTab === 'Terms and Conditions' && (
                           <p className="sp-panel-pad" style={{ color: 'var(--sp-text-3)' }}>
                             Terms and conditions content.
@@ -4285,6 +4351,62 @@ function DeliveryNoteView({
           )}
         </div>
       </div>
+
+      <SalesDocWorkflow
+        steps={[
+          {
+            key: 'waiting',
+            label: 'Waiting',
+            state: ['ready', 'done'].includes(String(existingDelivery?.status)) ? 'done' : 'current',
+          },
+          {
+            key: 'ready',
+            label: 'Ready',
+            state: existingDelivery?.status === 'done'
+              ? 'done'
+              : existingDelivery?.status === 'ready'
+                ? 'current'
+                : 'todo',
+          },
+          {
+            key: 'done',
+            label: 'Done',
+            state: existingDelivery?.status === 'done' ? 'current' : 'todo',
+          },
+          {
+            key: 'backorder',
+            label: 'Backorder',
+            state: existingDelivery?.backorderOfRef ? 'current' : 'todo',
+          },
+        ] as Array<{ key: string; label: string; state: 'done' | 'current' | 'todo' }>}
+      />
+
+      <section className="sales-doc-smart-row sales-delivery-smart-row" aria-label="Related delivery records">
+        <button type="button" className="sales-doc-smart-button">
+          <span>Sales Order</span>
+          <strong>{order.ref}</strong>
+        </button>
+        <button type="button" className="sales-doc-smart-button">
+          <span>Deliveries</span>
+          <strong>{orderDeliveries.length}</strong>
+        </button>
+        <button type="button" className="sales-doc-smart-button">
+          <span>Backorders</span>
+          <strong>{orderDeliveries.filter((delivery: any) => delivery.backorderOfRef).length}</strong>
+        </button>
+        <button type="button" className="sales-doc-smart-button">
+          <span>Returns</span>
+          <strong>0</strong>
+        </button>
+        <button type="button" className="sales-doc-smart-button">
+          <span>Delivery Note</span>
+          <strong>{existingDelivery?.deliveryNoteGenerated ? '1' : '0'}</strong>
+        </button>
+        <button type="button" className="sales-doc-smart-button">
+          <span>Activities</span>
+          <strong>2</strong>
+        </button>
+      </section>
 
       <section className="sales-delivery-summary" aria-label="Delivery summary">
         <div className="sales-delivery-summary__primary">

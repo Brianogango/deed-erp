@@ -232,6 +232,33 @@ export default function InvoiceDetail() {
   const linkedDeliveryJob = findInvoiceDeliveryJob(deliveryJobs, invoice)
   const showScheduleDelivery = canScheduleInvoiceDelivery(invoice, linkedDeliveryJob)
   const companyPickup = [companySettings.name, companySettings.address, companySettings.city].filter(Boolean).join(', ')
+  const linkedSaleOrder = saleOrders.find((order: any) => (
+    order.id === (invoice as any).saleOrderId
+    || order.id === (invoice as any).salesOrderId
+    || order.ref === (invoice as any).saleOrderRef
+    || order.ref === (invoice as any).salesOrderRef
+    || order.ref === (invoice as any).sourceRef
+  ))
+  const invoiceWorkflowSteps = (() => {
+    const isPosted = docState === 'posted'
+    const isPartPaid = isPosted && (payState === 'partially_paid' || payState === 'in_payment')
+    const isPaid = isPosted && payState === 'paid'
+    return [
+      { key: 'draft', label: 'Draft', state: docState === 'draft' ? 'current' : isPosted ? 'done' : 'todo' },
+      { key: 'posted', label: 'Posted', state: docState === 'draft' ? 'todo' : isPartPaid || isPaid ? 'done' : isPosted ? 'current' : 'todo' },
+      { key: 'part-paid', label: 'Part Paid', state: isPaid ? 'done' : isPartPaid ? 'current' : 'todo' },
+      { key: 'paid', label: 'Paid', state: isPaid ? 'current' : 'todo' },
+    ] as Array<{ key: string; label: string; state: 'done' | 'current' | 'todo' }>
+  })()
+  const invoiceSmartButtons = [
+    { key: 'customer', label: invoice.type === 'customer_invoice' ? 'Customer' : 'Vendor', value: invoice.partnerName || 'Not set' },
+    { key: 'payments', label: 'Payments', value: String((invoice.payments || []).length) },
+    { key: 'sales-order', label: 'Sales Order', value: linkedSaleOrder ? '1' : '0' },
+    { key: 'delivery', label: 'Delivery', value: linkedDeliveryJob || invoice.deliveryJobId ? '1' : '0' },
+    { key: 'credit-notes', label: 'Credit Notes', value: '0' },
+    { key: 'activities', label: 'Activities', value: '2' },
+  ]
+
 
   const handlePayment = () => {
     if (!payAmount || Number(payAmount) <= 0) return
@@ -505,6 +532,29 @@ export default function InvoiceDetail() {
             )}
             <SecondaryActionMenu actions={moreActions} label="More actions" ariaLabel="More actions" />
           </div>
+        </div>
+
+        <div className="invoice-detail__workflow" role="list" aria-label="Invoice workflow">
+          {invoiceWorkflowSteps.map(step => (
+            <span
+              key={step.key}
+              className="invoice-detail__workflow-step"
+              role="listitem"
+              data-state={step.state}
+              aria-current={step.state === 'current' ? 'step' : undefined}
+            >
+              {step.label}
+            </span>
+          ))}
+        </div>
+
+        <div className="invoice-detail__smart-row" aria-label="Related invoice records">
+          {invoiceSmartButtons.map(item => (
+            <button key={item.key} type="button" className="invoice-detail__smart-button">
+              <span>{item.label}</span>
+              <strong>{item.value}</strong>
+            </button>
+          ))}
         </div>
       </div>
 

@@ -25,14 +25,14 @@ export function DiagnosisChargeNotice({
       role="status"
       data-testid="diagnosis-charge-notice"
       style={{
-        padding: '14px 16px',
-        borderRadius: 12,
-        background: accent + '14',
-        border: `1px solid ${accent}40`,
+        padding: '0',
+        borderRadius: 0,
+        background: 'transparent',
+        border: '0',
         ...style,
       }}
     >
-      <p style={{ fontSize: 13, color: '#F9FAFB', lineHeight: 1.65, fontWeight: 600, margin: 0 }}>
+      <p style={{ fontSize: 14, color: '#07164c', lineHeight: 1.55, fontWeight: 700, margin: 0 }}>
         {notice.body}
       </p>
     </div>

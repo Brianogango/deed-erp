@@ -1,4 +1,5 @@
 import './globals.css'
+import '@/components/modules/odoo-record-designs.css'
 import type { Metadata, Viewport } from 'next'
 import { getServerSession } from '@/lib/auth/server'
 import { listPublicUsers } from '@/lib/auth/users-repository'
