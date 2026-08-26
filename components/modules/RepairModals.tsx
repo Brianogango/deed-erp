@@ -6,6 +6,8 @@ import { useRepairStore, RepairOrder, fmtKes, type RepairQAItem } from '@/lib/st
 import { useHrStore } from '@/hooks/useHrStore'
 import { assignableTechnicians } from '@/lib/repair/assignable-technicians'
 import { DIRECT_REPAIR_WAIVER_TEXT } from '@/lib/repair-path'
+import { isRepairNoCharge } from '@/lib/repair-billing-exempt'
+import { shouldDefaultCloseAfterHandover } from '@/lib/repair-handover'
 import {
   DIAGNOSIS_FEE_LINE_DESCRIPTION,
   isDiagnosisFeeLine,
@@ -1510,10 +1512,12 @@ export function MarkDeliveredConfirm({ repair, onClose }: { repair: RepairOrder,
   const [phone, setPhone] = useState(repair.contactPersonPhone || repair.customerPhone || '')
   const [relationship, setRelationship] = useState('')
   const [idNumber, setIdNumber] = useState('')
+  const [closeAfter, setCloseAfter] = useState(() => shouldDefaultCloseAfterHandover(repair))
   const [loading, setLoading] = useState(false)
 
   const isRep = collectorType === 'rep'
   const canSubmit = name.trim().length > 0 && (!isRep || relationship.trim().length > 0)
+  const noCharge = isRepairNoCharge(repair)
 
   const RELATIONSHIPS = [
     { value: '', label: '— Select relationship —' },
@@ -1528,7 +1532,7 @@ export function MarkDeliveredConfirm({ repair, onClose }: { repair: RepairOrder,
   const handleConfirm = () => {
     if (!canSubmit) return
     setLoading(true)
-    deliverRepair(repair.id, name.trim(), phone.trim(), isRep, relationship.trim() || undefined, idNumber.trim() || undefined)
+    deliverRepair(repair.id, name.trim(), phone.trim(), isRep, relationship.trim() || undefined, idNumber.trim() || undefined, closeAfter)
     onClose()
   }
 
@@ -1621,6 +1625,23 @@ export function MarkDeliveredConfirm({ repair, onClose }: { repair: RepairOrder,
             </p>
           </div>
         )}
+
+        <label className="flex items-start gap-2.5 px-3.5 py-3 rounded-xl border border-[var(--border)] bg-[var(--bg-card)] cursor-pointer">
+          <input
+            type="checkbox"
+            className="mt-0.5 w-4 h-4 rounded border-[var(--border)]"
+            checked={closeAfter}
+            onChange={e => setCloseAfter(e.target.checked)}
+          />
+          <span>
+            <span className="block text-[11px] font-black text-[var(--text-1)] uppercase tracking-wider">Close job after handover</span>
+            <span className="block text-[11px] text-[var(--text-3)] mt-0.5 leading-relaxed">
+              {noCharge
+                ? 'No invoice needed — this marks the job collected and closed in one step.'
+                : 'Billed jobs need an invoice before they can close. Uncheck to collect now and close later.'}
+            </span>
+          </span>
+        </label>
 
         <div className="flex gap-2 justify-end pt-2 border-t border-[var(--border-lt)]">
           <button className="btn-outline min-w-[100px]" onClick={onClose}>Cancel</button>

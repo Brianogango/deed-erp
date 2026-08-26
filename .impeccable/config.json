@@ -208,6 +208,55 @@
         ],
         "createdAt": "2026-08-25T08:22:41.098Z",
         "reason": "Existing public portal scrollbar radius, not ERP DESIGN.md"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "*",
+        "files": [
+          "components/modules/RepairModals.tsx",
+          "components/modules/repair/RepairDetailView.tsx"
+        ],
+        "createdAt": "2026-08-26T08:26:04.783Z",
+        "reason": "Incumbent repair operate UI; collect/close CTA bugfix does not restyle existing status/quote colors"
+      },
+      {
+        "rule": "gray-on-color",
+        "value": "*",
+        "files": [
+          "components/modules/RepairModals.tsx",
+          "components/modules/repair/RepairDetailView.tsx"
+        ],
+        "createdAt": "2026-08-26T08:26:04.815Z",
+        "reason": "Incumbent repair operate UI; --text-1 on --bg-card token pairing, not a restyle"
+      },
+      {
+        "rule": "design-system-font-size",
+        "value": "*",
+        "files": [
+          "components/modules/RepairModals.tsx",
+          "components/modules/repair/RepairDetailView.tsx"
+        ],
+        "createdAt": "2026-08-26T08:26:26.571Z",
+        "reason": "Incumbent repair operate type scale; collect/close CTA bugfix does not restyle"
+      },
+      {
+        "rule": "design-system-radius",
+        "value": "*",
+        "files": [
+          "components/modules/RepairModals.tsx",
+          "components/modules/repair/RepairDetailView.tsx"
+        ],
+        "createdAt": "2026-08-26T08:26:26.604Z",
+        "reason": "Incumbent repair operate radii; collect/close CTA bugfix does not restyle"
+      },
+      {
+        "rule": "bounce-easing",
+        "value": "*",
+        "files": [
+          "components/modules/RepairModals.tsx"
+        ],
+        "createdAt": "2026-08-26T08:27:06.824Z",
+        "reason": "Incumbent repair modal motion; collect/close checkbox does not restyle existing easing"
       }
     ]
   }

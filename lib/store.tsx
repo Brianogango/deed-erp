@@ -191,6 +191,7 @@ import {
   startableStatusesWhenBillingExempt,
   type BillingExemptReason,
 } from '@/lib/repair-billing-exempt'
+import { applyRepairHandover, canCloseRepairAfterHandover } from '@/lib/repair-handover'
 import {
   ensureDiagnosisFeeInQuoteLines,
   isDiagnosisFeeLine,
@@ -3562,7 +3563,7 @@ export interface AppState {
   markPartsArrived: (repairId: string) => void
   markRepairReady: (repairId: string) => void
   scheduleDelivery: (repairId: string, method: 'pickup' | 'delivery' | 'courier', scheduledDate: string, address?: string, riderId?: string, riderName?: string) => void
-  deliverRepair: (repairId: string, recipientName: string, recipientPhone: string, isRep?: boolean, repRelationship?: string, repIdNumber?: string) => void
+  deliverRepair: (repairId: string, recipientName: string, recipientPhone: string, isRep?: boolean, repRelationship?: string, repIdNumber?: string, closeAfter?: boolean) => void
   closeRepairJob: (repairId: string) => void
   createInvoiceFromRepair: (repairId: string, applyVat?: boolean) => Invoice | null
   // Finance review of a customer-submitted portal payment confirmation.
@@ -15798,29 +15799,38 @@ const storeCtx: AppState = {
       showToast(toastMsg)
     },
     
-    deliverRepair: (repairId, recipientName, recipientPhone, isRep = false, repRelationship, repIdNumber) => {
+    deliverRepair: (repairId, recipientName, recipientPhone, isRep = false, repRelationship, repIdNumber, closeAfter = false) => {
       const repair = repairs.find(r => r.id === repairId)
+      if (!repair) return
       if (blockIfOutsourced(repairId, 'deliver this repair')) return
-      setRepairs(p => p.map(r => r.id === repairId ? {
-        ...r,
-        status: 'delivered',
-        deliveryActualDate: now(),
-        deliveryMethod: r.deliveryMethod ?? 'pickup',
-        deliveryRecipient: recipientName,
-        deliveryRecipientPhone: recipientPhone || undefined,
-        deliveryRecipientIsRep: isRep || undefined,
-        deliveryRecipientRelationship: isRep ? repRelationship : undefined,
-        deliveryRecipientIdNumber: repIdNumber || undefined,
-      } : r))
-      if (repair) syncRepairToPortal(
-        { ...repair, status: 'delivered' },
-        isRep
-          ? `Device collected by ${recipientName} (${repRelationship || 'Representative'}) on behalf of client`
-          : `Device collected by ${recipientName}`
+      const handover = applyRepairHandover(repair, {
+        recipientName,
+        recipientPhone,
+        isRep,
+        repRelationship,
+        repIdNumber,
+        closeAfter,
+        now: now(),
+      })
+      const next = { ...repair, ...handover }
+      setRepairs(p => p.map(r => r.id === repairId ? next : r))
+      const portalMsg = isRep
+        ? `Device collected by ${recipientName} (${repRelationship || 'Representative'}) on behalf of client`
+        : `Device collected by ${recipientName}`
+      syncRepairToPortal(
+        next,
+        handover.status === 'closed' ? `${portalMsg}. Repair job closed` : portalMsg,
       )
       const detail = isRep ? `${recipientName} (Rep — ${repRelationship || 'Representative'})` : recipientName
       addAuditLog('deliver_repair', repairId, `Collected by ${detail}`)
-      showToast(`Device handed over to ${recipientName}`)
+      if (handover.status === 'closed') {
+        addAuditLog('close_repair', repair.ref, 'Repair job closed')
+        showToast(`${repair.ref} collected and closed`)
+      } else if (closeAfter && !canCloseRepairAfterHandover(repair)) {
+        showToast(`Device handed over to ${recipientName}. Generate invoice before closing.`)
+      } else {
+        showToast(`Device handed over to ${recipientName}`)
+      }
     },
     
     closeRepairJob: (repairId) => {
