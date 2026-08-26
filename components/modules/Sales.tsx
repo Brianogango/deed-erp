@@ -142,6 +142,7 @@ import {
   type SalesListFilter,
 } from '@/lib/odoo-sales-flow'
 import { resolveInvoicePolicy } from '@/lib/sales/invoice-policy'
+import { isNonStockSaleLine } from '@/lib/sales/non-stock-line'
 import { sumUnappliedDownPayments } from '@/lib/sales/down-payment'
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -737,11 +738,30 @@ function SalesContent() {
     quotations: salesOrderViews.filter(s => s.status === 'quotation').length,
     quotationsSent: salesOrderViews.filter(s => s.status === 'quotation_sent').length,
     orders: salesOrderViews.filter(s => s.status === 'sale').length,
-    toInvoice: salesOrderViews.filter(s =>
-      saleOrderInvoiceStatus(s.status, s.lines) === 'to_invoice' &&
-      hasValidatedDeliveryForInvoice(deliveries, s.id)
-    ).length,
-  }), [salesOrderViews, deliveries])
+    toInvoice: salesOrderViews.filter(s => {
+      const lines = (s.lines ?? []).map((l: any) => {
+        const product = products.find(p => p.id === l.productId)
+        return {
+          qty: Number(l.qty) || 0,
+          qtyDelivered: Number(l.qtyDelivered) || 0,
+          qtyInvoiced: Number(l.qtyInvoiced) || 0,
+          invoicePolicy: resolveInvoicePolicy({
+            linePolicy: l.invoicePolicy,
+            productPolicy: product?.invoicePolicy,
+            productUnit: product?.unit,
+            productKind: (product as any)?.productKind,
+            productCategory: product?.category,
+            trackingMethod: (product as any)?.trackingMethod,
+            trackStock: (product as any)?.trackStock,
+            productId: l.productId,
+            lineType: l.lineType,
+            lineUnit: l.unit,
+          }),
+        }
+      })
+      return saleOrderInvoiceStatus(s.status, lines) === 'to_invoice'
+    }).length,
+  }), [salesOrderViews, products])
 
   // Odoo-style derived statuses for the active order.
   const activeDeliveries = useMemo(
@@ -755,12 +775,19 @@ function SalesContent() {
   const invoiceDeliveryReady = activeOrder
     ? hasValidatedDeliveryForInvoice(activeDeliveries, activeOrder.id)
     : false
-  const activeLineInvoicePolicy = useCallback((line: { productId?: string; invoicePolicy?: string }) => {
+  const activeLineInvoicePolicy = useCallback((line: { productId?: string; invoicePolicy?: string; lineType?: string; unit?: string }) => {
     const product = products.find(p => p.id === line.productId)
     return resolveInvoicePolicy({
       linePolicy: line.invoicePolicy,
       productPolicy: product?.invoicePolicy,
       productUnit: product?.unit,
+      productKind: (product as any)?.productKind,
+      productCategory: product?.category,
+      trackingMethod: (product as any)?.trackingMethod,
+      trackStock: (product as any)?.trackStock,
+      productId: line.productId,
+      lineType: line.lineType,
+      lineUnit: line.unit,
     })
   }, [products])
   const activeInvoiceStatus = useMemo(() => {
@@ -811,7 +838,11 @@ function SalesContent() {
     return new Map(allocated.map(l => [String((l as any).id), Number((l as any).qtyDelivered) || 0]))
   }, [activeOrder, stockReservations])
   const activeFulfilmentStatus = activeOrder
-    ? saleOrderFulfilmentStatus(activeOrder.status, activeOrder.lines)
+    ? saleOrderFulfilmentStatus(activeOrder.status, (activeOrder.lines ?? []).map((l: any) => ({
+        qty: Number(l.qty) || 0,
+        qtyDelivered: Number(l.qtyDelivered) || 0,
+        needsDelivery: !isNonStockSaleLine(l, products.find(p => p.id === l.productId) ?? null),
+      })))
     : 'nothing'
   const activeOperationallyComplete = activeOrder
     ? saleOrderIsOperationallyComplete(activeOrder.status, activeOrder.lines.map((l: any) => ({
@@ -1203,6 +1234,7 @@ function SalesContent() {
           const qtys: Record<string, number> = {}
           for (const line of activeOrder.lines) {
             if ((line as any).lineType === 'section' || !line.productId) continue
+            if (isNonStockSaleLine(line, products.find(p => p.id === line.productId) ?? null)) continue
             qtys[line.productId] = (qtys[line.productId] ?? 0) + (Number(line.qty) || 0)
           }
           prepareDelivery(del.id, qtys)
@@ -1221,8 +1253,8 @@ function SalesContent() {
     return stockShortageLines(activeOrder.lines as any, productId => {
       const byLoc = getStockByLocation(productId)
       return (byLoc.warehouse ?? 0) + (byLoc.shop ?? 0)
-    })
-  }, [activeOrder, getStockByLocation])
+    }, line => isNonStockSaleLine(line, products.find(p => p.id === line.productId) ?? null))
+  }, [activeOrder, getStockByLocation, products])
 
   // ── Draft line helpers ──────────────────────────────────────────────────
   const addDraftLine = () => setNewDraftLines(p => [...p, { type: 'item', id: uid(), productId: '', productName: '', description: '', qty: '1', unitPrice: '0', discount: '0', taxRate: '0' }])
@@ -4118,6 +4150,7 @@ function DeliveryNoteView({
     let picked = 0
     for (const { orderLine: l, deliveryLine: delLine } of pairs) {
       if ((l as any).lineType === 'section') continue
+      if (isNonStockSaleLine(l, products.find(p => p.id === l.productId) ?? null)) continue
       const demand = Math.max(0, Number(l.qty) || 0)
       required += demand
       const serialCount = Array.isArray(l.serialIds) ? l.serialIds.length : 0
@@ -4135,7 +4168,7 @@ function DeliveryNoteView({
     const remaining = Math.max(0, required - picked)
     const pct = required > 0 ? Math.round((picked / required) * 100) : 0
     return { required, picked, remaining, pct }
-  }, [order.lines, existingDelivery, deliveryQtys, canPrepare])
+  }, [order.lines, existingDelivery, deliveryQtys, canPrepare, products])
 
   const handleSerialScan = (e: FormEvent) => {
     e.preventDefault()
@@ -4200,6 +4233,7 @@ function DeliveryNoteView({
     const quantities: Record<string, number> = {}
     order.lines.forEach(line => {
       if ((line as any).lineType === 'section' || !line.productId) return
+      if (isNonStockSaleLine(line, products.find(p => p.id === line.productId) ?? null)) return
       const typed = Math.max(0, deliveryQtys[line.id] ?? 0)
       const serialCount = Array.isArray(line.serialIds) ? line.serialIds.length : 0
       // Fully-serialized lines always ship their full qty — do not let a stale

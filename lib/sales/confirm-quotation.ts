@@ -30,12 +30,14 @@ export function canConfirmWithoutReservation(role?: string | null): boolean {
 export type ConfirmQuotationMode = 'reserve' | 'no_reserve'
 
 export function stockShortageLines(
-  lines: Array<{ lineType?: string; productId?: string; productName?: string; description?: string; qty: number }>,
+  lines: Array<{ lineType?: string; productId?: string; productName?: string; description?: string; qty: number; unit?: string }>,
   availableOf: (productId: string) => number,
+  isNonStock?: (line: { lineType?: string; productId?: string; unit?: string }) => boolean,
 ): Array<{ productName: string; qty: number; available: number }> {
   const shortages: Array<{ productName: string; qty: number; available: number }> = []
   for (const line of lines) {
     if (line.lineType === 'section' || !line.productId) continue
+    if (isNonStock?.(line)) continue
     const available = availableOf(line.productId)
     if (available < line.qty) {
       shortages.push({

@@ -125,6 +125,8 @@ import {
   planPrepareDeliveryLines,
   sumQtyByProductId,
 } from '@/lib/delivery-prepare'
+import { isNonStockSaleLine, saleLineFieldsForRepairQuoteLine } from '@/lib/sales/non-stock-line'
+import { resolveInvoicePolicy } from '@/lib/sales/invoice-policy'
 import {
   normalizeDocumentPaymentDetails,
   type DocumentPaymentDetails,
@@ -11437,18 +11439,22 @@ const storeCtx: AppState = {
         const serverRef = String(confirmPayload?.orderNumber ?? confirmPayload?.ref ?? orderRef)
         const serverLock = confirmPayload?.lockVersion
 
+        const stockableLines = orderLines.filter(l =>
+          !isNonStockSaleLine(l, prodRef.current.find(p => p.id === l.productId) ?? null),
+        )
+
         let del = reuseDelivery
-        if (!del) {
+        if (!del && stockableLines.length > 0) {
           const dnRef = await storeCtxRef.current!.allocateDocRef('DN')
           del = {
             id: uid(), ref: dnRef, saleOrderId: id, saleOrderRef: serverRef,
             customerId: so.customerId, customerName: so.customerName,
             status: 'waiting', date: now(),
-            lines: orderLines.map(l => {
+            lines: stockableLines.map(l => {
               const prod = prodRef.current.find(p => p.id === l.productId)
               const selectedSource = (so.lines.find(line => line.id === l.id) as (SaleOrderLine & { sourceLocation?: LocationId }) | undefined)?.sourceLocation
               let sourceLocation
-              if (prod?.unit === 'service') {
+              if (isNonStockSaleLine(l, prod ?? null)) {
                 sourceLocation = undefined
               } else if (selectedSource) {
                 sourceLocation = selectedSource
@@ -11501,7 +11507,7 @@ const storeCtx: AppState = {
             return
           }
           setDeliveries(p => [del, ...p.filter(d => d.id !== del.id)])
-        } else {
+        } else if (del) {
           const patched = { ...del, saleOrderRef: serverRef }
           setDeliveries(p => p.map(d => d.id === del.id ? patched : d))
           sync(`/api/deliveries/${del.id}`, {
@@ -11533,13 +11539,17 @@ const storeCtx: AppState = {
             backorderLines: undefined,
             locked: systemSettings.salesLockConfirmed || undefined,
             stockReservationIds: s.stockReservationIds ?? [],
-            deliveryId: del.id,
+            deliveryId: del?.id,
             lockVersion: serverLock ?? s.lockVersion,
           }
         }))
 
         addAuditLog('confirm_sale_order', serverRef, `Same document: quotation ${snapshot.ref} renamed to sales order ${serverRef} by ${user.name}${systemSettings.salesLockConfirmed ? ' · order locked' : ''}`)
-        showToast(`Confirmed — this document is now ${serverRef} (was ${snapshot.ref}). Prepare delivery ${del.ref} to allocate stock.`)
+        showToast(
+          del
+            ? `Confirmed — this document is now ${serverRef} (was ${snapshot.ref}). Prepare delivery ${del.ref} to allocate stock.`
+            : `Confirmed — this document is now ${serverRef} (was ${snapshot.ref}). Service lines do not reserve stock — create an invoice from ordered quantities.`,
+        )
       } catch (error) {
         console.error('[confirmSO] failed:', error)
         showToast(
@@ -11559,9 +11569,11 @@ const storeCtx: AppState = {
       const anyActive = delRef.current.find(d => d.saleOrderId === id && d.status !== 'cancelled')
       if (anyActive) return anyActive
 
-      const orderLines = so.lines.filter((line: any) => line.lineType !== 'section')
+      const orderLines = so.lines.filter((line: any) =>
+        line.lineType !== 'section'
+        && !isNonStockSaleLine(line, prodRef.current.find(p => p.id === line.productId) ?? null),
+      )
       if (!orderLines.length) {
-        showToast('Cannot create delivery — order has no product lines', 'error')
         return null
       }
       const dnRef = await storeCtxRef.current!.allocateDocRef('DN')
@@ -11577,7 +11589,7 @@ const storeCtx: AppState = {
         lines: orderLines.map(l => {
           const prod = prodRef.current.find(p => p.id === l.productId)
           let sourceLocation: LocationId | undefined
-          if (prod?.unit === 'service') {
+          if (isNonStockSaleLine(l, prod ?? null)) {
             sourceLocation = undefined
           } else if (prod && isSerialTracking(inferTrackingMethod(prod))) {
             const warehouseAvailable = serialRef.current.filter(s => s.productId === l.productId && s.status === 'available' && s.location === 'warehouse').length
@@ -11709,12 +11721,22 @@ const storeCtx: AppState = {
       const reservations: StockReservation[] = []
       const preparedLines: DeliveryLine[] = []
       let totalPrepared = 0
+      let stockPrepared = 0
       const serialIdsToHeal = new Set<string>()
+      const hasStockableDeliveryLine = del.lines.some(line =>
+        !isNonStockSaleLine(line, prodRef.current.find(p => p.id === line.productId) ?? null),
+      )
 
       for (let i = 0; i < del.lines.length; i++) {
         const deliveryLine = del.lines[i]
         const planned = plan.lines[i]
         const product = prodRef.current.find(p => p.id === deliveryLine.productId)
+        if (isNonStockSaleLine(deliveryLine, product ?? null)) {
+          const qty = Math.max(0, Number(deliveryLine.qty) || 0)
+          preparedLines.push({ ...deliveryLine, qtyDone: qty, serialIds: [], sourceLocation: undefined })
+          totalPrepared += qty
+          continue
+        }
         const serialTracked = !!product && isSerialTracking(inferTrackingMethod(product))
         const stockTracked = !!product && isStockTracked(inferTrackingMethod(product))
         const qty = planned?.qty ?? 0
@@ -11766,6 +11788,7 @@ const storeCtx: AppState = {
 
         preparedLines.push({ ...deliveryLine, qtyDone: qty, serialIds, sourceLocation: stockTracked ? sourceLocation : deliveryLine.sourceLocation })
         totalPrepared += qty
+        stockPrepared += qty
         if (stockTracked && qty > 0) {
           reservations.push({
             id: uid(),
@@ -11804,6 +11827,10 @@ const storeCtx: AppState = {
         }))
       }
 
+      if (hasStockableDeliveryLine && stockPrepared <= 0) {
+        showToast('Enter at least one delivery quantity before preparing', 'error')
+        return false
+      }
       if (totalPrepared <= 0) {
         showToast('Enter at least one delivery quantity before preparing', 'error')
         return false
@@ -11992,7 +12019,7 @@ const storeCtx: AppState = {
       if (clampedBackorder.length > 0) {
         const backorderShort = clampedBackorder.some(l => {
           const prod = prodRef.current.find(p => p.id === l.productId)
-          if (!prod || prod.unit === 'service') return false
+          if (isNonStockSaleLine(l, prod ?? null)) return false
           return (Number(prod.stockQty) || 0) < l.qty
         })
         backorder = {
@@ -12144,8 +12171,18 @@ const storeCtx: AppState = {
           const anyOrderPolicy = (so.lines ?? []).some((l: any) => {
             if (l.lineType === 'section') return false
             const product = prodRef.current.find(p => p.id === l.productId)
-            return String(product?.invoicePolicy ?? '').toLowerCase() === 'order'
-              || String(product?.unit ?? '').toLowerCase() === 'service'
+            return resolveInvoicePolicy({
+              linePolicy: l.invoicePolicy,
+              productPolicy: product?.invoicePolicy,
+              productUnit: product?.unit,
+              productKind: product?.productKind,
+              productCategory: product?.category,
+              trackingMethod: product?.trackingMethod,
+              trackStock: product?.trackStock,
+              productId: l.productId,
+              lineType: l.lineType,
+              lineUnit: l.unit,
+            }) === 'order'
           })
           if (!anyOrderPolicy) {
             showToast('Validate the delivery before creating an invoice', 'error')
@@ -14588,9 +14625,8 @@ const storeCtx: AppState = {
       let linkedSaleOrderRef = repair.saleOrderRef ?? (repair as any).linkedSaleOrderRef ?? linkedSaleOrder?.ref ?? linkedSaleOrder?.orderNumber
 
       const soLines = quote.lines.map(l => ({
-        id: uid(), productId: l.productId ?? '', productName: l.productName ?? l.description,
-        qty: l.qty, unitPrice: l.unitPrice, discount: 0, taxRate: 0,
-        subtotal: l.subtotal, serialIds: [] as string[],
+        id: uid(),
+        ...saleLineFieldsForRepairQuoteLine(l),
       }))
 
       // Full warranty / billing-exempt = company pays; Direct Repair auto-approves
@@ -14650,7 +14686,7 @@ const storeCtx: AppState = {
         sku: '',
         description: l.description,
         qty: l.qty,
-        unit: 'pcs',
+        unit: saleLineFieldsForRepairQuoteLine(l).unit ?? 'pcs',
         listPrice: l.unitPrice,
         unitPrice: l.unitPrice,
         discount: 0,
@@ -15103,9 +15139,8 @@ const storeCtx: AppState = {
             customerId: repair.customerId, customerName: repair.customerName,
             date: now(), validUntil: addDays(now(), 30),
             lines: repair.quote.lines.map(l => ({
-              id: uid(), productId: l.productId ?? '', productName: l.productName ?? l.description,
-              qty: l.qty, unitPrice: l.unitPrice, discount: 0, taxRate: 0,
-              subtotal: l.subtotal, serialIds: [],
+              id: uid(),
+              ...saleLineFieldsForRepairQuoteLine(l),
             })),
             subtotal: repair.quote.subtotal, taxTotal: repair.quote.tax, total: repair.quote.total,
             notes: `Repair order ${repair.ref} — awaiting parts`,
@@ -15225,10 +15260,7 @@ const storeCtx: AppState = {
       // Confirm SO + create Invoice
       const soLines = repair.quote.lines.map(l => ({
         id: uid(),
-        productId: l.productId ?? '',
-        productName: l.productName ?? l.description,
-        qty: l.qty, unitPrice: l.unitPrice, discount: 0, taxRate: 0,
-        subtotal: l.subtotal, serialIds: [] as string[],
+        ...saleLineFieldsForRepairQuoteLine(l),
       }))
 
       let soId: string
@@ -17883,13 +17915,17 @@ const storeCtx: AppState = {
       }
       const remaining = remainingUndeliveredByProduct(so.lines)
       const lines = (so.lines ?? [])
-        .filter(line => (line as any).lineType !== 'section' && remaining[line.productId] > 0)
+        .filter(line =>
+          (line as any).lineType !== 'section'
+          && remaining[line.productId] > 0
+          && !isNonStockSaleLine(line, prodRef.current.find(p => p.id === line.productId) ?? null),
+        )
         .map(line => {
           const prod = prodRef.current.find(p => p.id === line.productId)
           const qty = remaining[line.productId]
           const selectedSource = (line as SaleOrderLine & { sourceLocation?: LocationId }).sourceLocation
           let sourceLocation: LocationId | undefined
-          if (prod?.unit === 'service') {
+          if (isNonStockSaleLine(line, prod ?? null)) {
             sourceLocation = undefined
           } else if (selectedSource) {
             sourceLocation = selectedSource
@@ -17918,7 +17954,16 @@ const storeCtx: AppState = {
           }
         })
       if (lines.length === 0) {
-        showToast(`${so.ref} is fully delivered — no new delivery needed`, 'info')
+        const hasStockable = (so.lines ?? []).some((line: any) =>
+          line.lineType !== 'section'
+          && !isNonStockSaleLine(line, prodRef.current.find(p => p.id === line.productId) ?? null),
+        )
+        showToast(
+          hasStockable
+            ? `${so.ref} is fully delivered — no new delivery needed`
+            : `${so.ref} has no stockable lines — create an invoice from ordered quantities`,
+          'info',
+        )
         return null
       }
 

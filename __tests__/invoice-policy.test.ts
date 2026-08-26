@@ -21,6 +21,8 @@ describe('resolveInvoicePolicy', () => {
     expect(resolveInvoicePolicy({ productUnit: 'service' })).toBe('order')
     expect(resolveInvoicePolicy({ trackStock: false })).toBe('order')
     expect(resolveInvoicePolicy({ trackStock: true })).toBe('delivery')
+    expect(resolveInvoicePolicy({ productId: null })).toBe('order')
+    expect(resolveInvoicePolicy({})).toBe('order')
   })
 })
 

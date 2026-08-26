@@ -274,7 +274,7 @@ export function computeConfirmBackorderLines(
   return (lines ?? []).flatMap(line => {
     if (!line?.productId || line.lineType === 'section') return []
     const product = products.find(p => p.id === line.productId)
-    if (!product || product.unit === 'service') return []
+    if (!product || product.unit === 'service' || (product as any).trackStock === false || (product as any).productKind === 'service') return []
     const onHand = options.freeQtyByProductId?.[product.id] ?? (Number(product.stockQty) || 0)
     const reserved = reservedQtyElsewhere(stockReservations, product.id, options.excludeReferenceId)
     const available = Math.max(0, onHand - reserved)
@@ -315,11 +315,13 @@ export function validateSalesOrderCreation(
     const product = products.find(p => p.id === line.productId)
     
     if (!product) {
+      // Unlinked / service lines cannot be reserved — not a creation blocker.
+      if (!line.productId) return
       issues.push(`Product ${line.productName} not found`)
       return
     }
 
-    if (product.unit === 'service') return
+    if (product.unit === 'service' || product.trackStock === false || product.productKind === 'service') return
     
     // Check free stock minus OTHER documents' reservations (not this order's).
     const onHand = options.freeQtyByProductId?.[product.id] ?? (Number(product.stockQty) || 0)

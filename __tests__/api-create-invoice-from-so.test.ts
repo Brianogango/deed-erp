@@ -281,6 +281,36 @@ describe('POST /api/sale-orders/:id/create-invoice', () => {
     expect(createData.items.create[0].qty).toBe(1)
   })
 
+  it('invoices unlinked service lines from ordered qty without a delivery', async () => {
+    mockPrisma.product.findMany.mockResolvedValue([])
+    mockLoadAppState.mockResolvedValue({ deed_invoices: [], deed_deliveries: [] })
+    const serviceOrder = {
+      ...saleOrder,
+      items: [{
+        id: ITEM_ID,
+        description: 'Service',
+        productId: null,
+        qty: 1,
+        qtyDelivered: 0,
+        qtyInvoiced: 0,
+        unitPrice: 1500,
+        taxRate: 0,
+        lineTotal: 1500,
+      }],
+    }
+    mockPrisma.saleOrder.findUnique.mockResolvedValue(serviceOrder)
+    mockPrisma.$transaction.mockImplementation(async (fn: any) => fn({
+      saleOrder: { findUnique: vi.fn().mockResolvedValue(serviceOrder) },
+      saleOrderItem: { updateMany: mockPrisma.saleOrderItem.updateMany.mockResolvedValue({ count: 1 }) },
+      invoice: { create: mockPrisma.invoice.create },
+    }))
+    const res = await POST(new NextRequest('http://localhost', { method: 'POST' }), { params: { id: ORDER_ID } })
+    expect(res.status).toBe(200)
+    const createData = mockPrisma.invoice.create.mock.calls.at(-1)?.[0]?.data
+    expect(createData.items.create[0].qty).toBe(1)
+    expect(createData.items.create[0].description).toMatch(/Service/)
+  })
+
   it('rejects a hollow Done delivery with delivered qty 0', async () => {
     mockLoadAppState.mockResolvedValue({
       deed_invoices: [],

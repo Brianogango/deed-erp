@@ -10,6 +10,7 @@ import { mirrorStockReservationsToPrisma } from '@/lib/inventory/reservation-mir
 import { inferTrackingMethod, isSerialTracking } from '@/lib/inventory-identifiers'
 import { isOnHandSerialStatus } from '@/lib/inventory/serial-status'
 import { seedSerialSpecs } from '@/lib/reconfiguration/unit-config'
+import { isNonStockProduct } from '@/lib/sales/non-stock-line'
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
@@ -28,6 +29,8 @@ type BlobProduct = {
   trackingMethod?: string
   category?: string
   unit?: string
+  productKind?: string
+  trackStock?: boolean
   warrantyMonths?: number
   specs?: unknown
   deviceConfig?: {
@@ -136,7 +139,7 @@ export async function applyDeliveryStockMutation(params: {
     if (qty <= 0) continue
 
     const product = products.find(p => p.id === line.productId)
-    if (!product || product.unit === 'service') continue
+    if (!product || isNonStockProduct(product)) continue
 
     const location = asLocationId(line.sourceLocation)
     const serialTracked = isSerialTracking(inferTrackingMethod(product))
@@ -198,7 +201,7 @@ export async function applyDeliveryStockMutation(params: {
     const productIdx = products.findIndex(p => p.id === line.productId)
     if (productIdx === -1) continue
     const product = products[productIdx]
-    if (product.unit === 'service') continue
+    if (isNonStockProduct(product)) continue
 
     const location = asLocationId(line.sourceLocation)
     const serialLabels: string[] = []
@@ -349,7 +352,7 @@ export async function reserveStockForSaleOrder(
     if (!productId || qty <= 0) continue
 
     const product = products.find(p => p.id === productId)
-    if (!product || product.unit === 'service') continue
+    if (!product || isNonStockProduct(product)) continue
 
     const reservationId = randomUUID()
     reservations.push({
