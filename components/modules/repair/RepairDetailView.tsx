@@ -37,6 +37,7 @@ import {
   type BillingExemptReason,
 } from '@/lib/repair-billing-exempt'
 import { resolveDiagnosisFee, shouldChargeDiagnosisFee } from '@/lib/diagnosis-fee'
+import { pickRepairPrimaryAction } from '@/lib/repair-handover'
 
 const PROC_COLORS = {
   pending:   { bg: 'bg-amber-50',   text: 'text-amber-700',   border: 'border-amber-200',   dot: '#F59E0B' },
@@ -284,6 +285,7 @@ export default function RepairDetailView() {
     : canQuote && !r.quote ? 'Generate a repair quote'
     : canQuote && r.quote ? 'Update or re-send the quote to move forward'
     : canCloseJob  ? 'Close the job after collection'
+    : canMarkCollected ? 'Record pickup — mark collected when the device is handed over'
     : r.status === 'awaiting_parts' ? 'Parts are being sourced — monitor procurement below'
     : r.status === 'diagnosed' && !hasDiagnosis ? 'Diagnosis stage has no findings — log diagnosis to continue'
     : r.status === 'diagnosed' && billingExempt ? 'No-charge job — assign/start repair without quoting'
@@ -291,21 +293,40 @@ export default function RepairDetailView() {
     : null
 
   // Exactly one dominant workflow CTA; everything else goes into More.
-  const primaryActionId = canVerify ? 'verify'
-    : canMarkPartsArrived ? 'parts_arrived'
-    : canStart ? 'start'
-    : canComplete ? 'complete'
-    : canPerformQA ? 'qc'
-    : canInvoice ? 'invoice'
-    : canPrepareRelease ? 'prepare_release'
-    : (canMarkCollected && (repairOrc?.status === 'verified' || !repairOrc)) ? 'collect'
-    : canCloseJob ? 'close'
-    : canDiagnose ? 'diagnose'
-    : (canUpdateDiagnosis && !canQuote) ? 'diagnose'
-    : (isQuoteDeclinedReopenable(r.status) && canQuote) ? 'quote'
-    : canQuote ? 'quote'
-    : canAssign ? 'assign'
-    : null
+  const primaryActionId = pickRepairPrimaryAction({
+    canVerify,
+    canMarkPartsArrived,
+    canStart,
+    canComplete,
+    canPerformQA,
+    canInvoice,
+    canPrepareRelease,
+    canMarkCollected,
+    canCloseJob,
+    canDiagnose,
+    canUpdateDiagnosis,
+    canQuote,
+    canAssign,
+    quoteDeclinedReopenable: isQuoteDeclinedReopenable(r.status),
+    noCharge,
+    serialNumber: r.serialNumber,
+    repairOrcStatus: repairOrc?.status,
+  })
+
+  const openPrepareRelease = () => {
+    const repairSerial = r.serialNumber
+      ? serials.find(s => s.id === r.serialNumber || s.serial === r.serialNumber || s.barcode === r.serialNumber)
+      : undefined
+    initRelease({
+      repairId: r.id,
+      clientId: r.customerId || '',
+      clientName: r.customerName,
+      sourceRef: r.ref,
+      sourceType: 'repair',
+      serials: r.serialNumber ? [{ serialNumberId: repairSerial?.id || '', expectedSerial: r.serialNumber }] : [],
+    })
+    setShowOrcPanel(true)
+  }
 
   const handleVerify = () => {
     verifyRepairIntake(r.id)
@@ -503,20 +524,7 @@ export default function RepairDetailView() {
             )}
             {primaryActionId === 'prepare_release' && (
               <ActionBtn
-                onClick={() => {
-                  const repairSerial = r.serialNumber
-                    ? serials.find(s => s.id === r.serialNumber || s.serial === r.serialNumber || s.barcode === r.serialNumber)
-                    : undefined
-                  initRelease({
-                    repairId: r.id,
-                    clientId: r.customerId || '',
-                    clientName: r.customerName,
-                    sourceRef: r.ref,
-                    sourceType: 'repair',
-                    serials: r.serialNumber ? [{ serialNumberId: repairSerial?.id || '', expectedSerial: r.serialNumber }] : [],
-                  })
-                  setShowOrcPanel(true)
-                }}
+                onClick={openPrepareRelease}
                 icon={faBoxOpen}
                 label="Prepare release"
                 color="bg-violet-600 hover:bg-violet-700"
@@ -562,6 +570,8 @@ export default function RepairDetailView() {
                 { id: 'unrepairable', label: 'Mark unrepairable', onClick: () => { setUnrepairableReason(''); setShowUnrepairableModal(true) }, hidden: !canMarkUnrepairable, danger: true },
                 { id: 'back', label: 'Back step', onClick: () => moveRepairToPreviousProgress(r.id), hidden: !canMoveBack },
                 { id: 'schedule', label: 'Schedule delivery', onClick: () => setShowDeliveryModal(true), hidden: !canScheduleDelivery },
+                { id: 'prepare_release', label: 'Prepare release', onClick: openPrepareRelease, hidden: !canPrepareRelease || primaryActionId === 'prepare_release' },
+                { id: 'collect', label: 'Mark collected', onClick: () => setShowMarkDeliveredConfirm(true), hidden: !canMarkCollected || primaryActionId === 'collect' },
                 { id: 'close', label: 'Close job', onClick: () => closeRepairJob(r.id), hidden: !canCloseJob || primaryActionId === 'close' },
                 { id: 'claim', label: 'File warranty claim', onClick: () => setShowClaimModal(true), hidden: !(r.underWarranty && !r.warrantyClaimId && ['director', 'admin_officer', 'finance_officer'].includes(currentUser?.role ?? '')) },
                 { id: 'edit', label: 'Edit details', onClick: () => setShowEditDetailsModal(true), hidden: !canEditDetails },
