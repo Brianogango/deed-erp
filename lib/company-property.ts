@@ -3,6 +3,11 @@
  * equipment. Separate from HR Assets (staff custody of trading inventory).
  *
  * v1 records the register only. No depreciation, no journals, no stock moves.
+ *
+ * Phase 2 is specified in docs/COMPANY_PROPERTY.md and is not implemented:
+ * monthly depr. 6517 / 175x; capitalise from vendor bill/PO (not inventory 1200);
+ * dispose with proceeds 5203 / 6515 clearing cost + accum. depr.; KRA allowances
+ * vs book; print tags; link a trading serial; optional Repair job from under_repair.
  */
 
 export const COMPANY_ASSET_CATEGORIES = [

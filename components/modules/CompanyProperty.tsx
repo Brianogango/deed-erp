@@ -683,7 +683,7 @@ export default function CompanyProperty() {
 
       <div className="px-3 sm:px-6 pt-3 space-y-2">
         <CompactInfoNotice>
-          This register is for office furniture and fittings. Staff laptops and phones issued from stock stay on HR → Assets. v1 does not post journals or depreciation.
+          This register is for office furniture and fittings. Staff laptops and phones issued from stock stay on HR → Assets. v1 does not post journals or depreciation. Monthly depreciation, bill/PO capitalisation, and disposal journals are Phase 2.
         </CompactInfoNotice>
         {coaMismatch && (
           <CompactInfoNotice>
