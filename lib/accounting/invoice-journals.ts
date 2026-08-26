@@ -7,6 +7,7 @@ import {
 } from '@/lib/accounting/vendor-bill-perpetual'
 import { loadAppState } from '@/lib/server-store'
 import { inferProductKind } from '@/lib/product-kind'
+import { isPpeCostAccount } from '@/lib/company-property-ppe'
 import {
   CUSTOMER_CREDITS_ACCOUNT,
   CUSTOMER_DEPOSITS_ACCOUNT,
@@ -95,13 +96,15 @@ async function resolveVendorBillLineMeta(invoice: InvoiceLike) {
     })
     const isStocked = kind === 'storable' || kind === 'consumable'
     const poLine = poLines.find(l => l.productId && line.productId && l.productId === line.productId)
+    const ppeAccountCode = isPpeCostAccount(line.accountCode) ? String(line.accountCode).trim() : undefined
     return {
       productId: line.productId,
       qty: Math.abs(Number(line.qty) || 0),
       unitPrice: Math.abs(Number(line.unitPrice) || 0),
       subtotal: Math.abs(Number(line.subtotal) || 0),
       accountCode: line.accountCode,
-      isStocked: Boolean(invoice.purchaseOrderId) && isStocked,
+      ppeAccountCode,
+      isStocked: Boolean(invoice.purchaseOrderId) && isStocked && !ppeAccountCode,
       receiptUnitCost: Math.max(0, Number(poLine?.unitPrice ?? line.unitPrice) || 0),
     }
   })

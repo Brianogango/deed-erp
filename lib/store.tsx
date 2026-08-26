@@ -12,7 +12,7 @@ export { isPosBankPayment }
 import { mergeDirtyPosOrdersBlob, mergePosOrdersRemoteState, nextPosSessionRef, nextPosTicketRef } from '@/lib/pos-orders-merge'
 import { loyaltyPointsEarned } from '@/lib/loyalty'
 import { requestCreateUser, requestDeleteUser, requestUpdateUser, requestDeactivateUser, requestReactivateUser } from '@/lib/auth/client-users'
-import { canManageHRRole, getFirstAllowedModule, hasModuleAccess as userHasModuleAccess, normalizeClientRole } from '@/lib/auth/access'
+import { canManageHRRole, canManageCompanyPropertyRole, canRunCompanyAssetDepreciationRole, getFirstAllowedModule, hasModuleAccess as userHasModuleAccess, normalizeClientRole } from '@/lib/auth/access'
 import { mergeCatalogProducts, mergeProductsRemoteState } from '@/lib/catalog-merge'
 import { seedSerialSpecs } from '@/lib/reconfiguration/unit-config'
 import { refurbishmentSellingNamePatch } from '@/lib/refurbishment/apply-upgrade-specs'
@@ -40,6 +40,25 @@ import {
   applyWriteOff,
   historyEntry,
 } from '@/lib/company-property'
+import {
+  applyBookDepreciationCharge,
+  canDepreciateAsset,
+  monthlyBookDepreciation,
+  periodAlreadyRun,
+  periodKey,
+  shouldPostCapitaliseJournal,
+  withBookDefaults,
+  isPpeCostAccount,
+} from '@/lib/company-property-ppe'
+import {
+  buildCapitaliseFromApJournal,
+  buildCapitaliseFromInventoryJournal,
+  buildDepreciationJournal,
+  buildDisposalJournal,
+  depreciationJournalRef,
+  type PpeJournalDraft,
+} from '@/lib/accounting/ppe-journals'
+import { applyKraAnnualAllowance, initialTaxWdv } from '@/lib/tax/kra-capital-allowances'
 export type { CompanyAsset, CompanyAssetInput, CompanyAssetStatus, CompanyAssetCategory, CompanyAssetClass, CompanyAssetCondition } from '@/lib/company-property'
 import { CATEGORY_CONFIG, ALL_CATEGORIES, type CategoryId } from '@/lib/product-categories'
 export { CATEGORY_CONFIG, ALL_CATEGORIES, type CategoryId }
@@ -941,7 +960,7 @@ export interface SerialNumber {
   id: string; serial: string; productId: string; productName: string
   sku?: string
   location: LocationId
-  status: 'available' | 'assigned' | 'sold' | 'under_repair' | 'returned' | 'written_off' | 'refurbishment' | 'reconfiguration'
+  status: 'available' | 'assigned' | 'sold' | 'under_repair' | 'returned' | 'written_off' | 'refurbishment' | 'reconfiguration' | 'capitalised'
   purchaseOrderId?: string; receiptId?: string
   saleOrderId?: string; warrantyId?: string; repairId?: string
   receivedDate: string; soldDate?: string
@@ -2517,6 +2536,26 @@ const accountLine = (account: string, description: string, debit = 0, credit = 0
   credit: Math.round(credit * 100) / 100,
 })
 
+function journalFromPpeDraft(draft: PpeJournalDraft): JournalEntry {
+  const lines = draft.lines.map(l => accountLine(l.account, l.description, l.debit, l.credit))
+  return {
+    id: uid(),
+    ref: draft.ref,
+    date: draft.date,
+    source: 'adjustment',
+    description: draft.description,
+    status: 'posted',
+    lines,
+    totalDebit: draft.totalDebit,
+    totalCredit: draft.totalCredit,
+  }
+}
+
+function ppeAccountCodeFromLine(accountCode?: string): string | undefined {
+  const code = String(accountCode || '').trim()
+  return isPpeCostAccount(code) ? code : undefined
+}
+
 const bankAccountLabel = (bankAccountId?: string, method?: string) => {
   const id = bankAccountId || (method === 'mpesa' || method === 'mpesa_company' ? 'mpesa' : method === 'cash' || method === 'petty_cash' ? 'cash' : 'ncba')
   if (id === 'mpesa') return '2210 - M-Pesa Paybill'
@@ -2608,13 +2647,15 @@ const buildInvoicePostingJournal = (
         requiresSerial: (product as any)?.requiresSerial,
       })
       const poLine = opts.poLines?.find(p => p.productId && l.productId && p.productId === l.productId)
+      const ppeAccountCode = ppeAccountCodeFromLine(l.accountCode)
       return {
         productId: l.productId,
         qty: Number(l.qty) || 0,
         unitPrice: Number(l.unitPrice) || 0,
         subtotal: Number(l.subtotal) || 0,
         accountCode: l.accountCode,
-        isStocked: kind === 'storable' || kind === 'consumable',
+        ppeAccountCode,
+        isStocked: !ppeAccountCode && (kind === 'storable' || kind === 'consumable'),
         receiptUnitCost: Math.max(0, Number(poLine?.unitPrice ?? l.unitPrice) || 0),
       }
     }),
@@ -2652,13 +2693,15 @@ const buildVendorCreditJournal = (
         requiresSerial: (product as any)?.requiresSerial,
       })
       const poLine = opts.poLines?.find(p => p.productId && l.productId && p.productId === l.productId)
+      const ppeAccountCode = ppeAccountCodeFromLine(l.accountCode)
       return {
         productId: l.productId,
         qty: Math.abs(Number(l.qty) || 0),
         unitPrice: Math.abs(Number(l.unitPrice) || 0),
         subtotal: Math.abs(Number(l.subtotal) || 0),
         accountCode: l.accountCode,
-        isStocked: kind === 'storable' || kind === 'consumable',
+        ppeAccountCode,
+        isStocked: !ppeAccountCode && (kind === 'storable' || kind === 'consumable'),
         receiptUnitCost: Math.max(0, Number(poLine?.unitPrice ?? l.unitPrice) || 0),
       }
     }),
@@ -3267,9 +3310,11 @@ export interface AppState {
   deleteCompanyAsset: (id: string) => void
   moveCompanyAsset: (id: string, locationName: string, note?: string) => void
   setCompanyAssetCustodian: (id: string, custodian: { employeeId?: string; name?: string }, note?: string) => void
-  setCompanyAssetStatus: (id: string, status: CompanyAssetStatus, note?: string) => void
+  setCompanyAssetStatus: (id: string, status: CompanyAssetStatus, note?: string, opts?: { createRepair?: boolean }) => void
   disposeCompanyAsset: (id: string, qty: number, opts?: { reason?: string; proceedsKes?: number }) => void
   writeOffCompanyAsset: (id: string, reason?: string) => void
+  runCompanyAssetDepreciation: (period?: string) => void
+  linkSerialToCompanyAsset: (assetId: string, serialId: string) => void
 
   // Outsource repair
   outsourceVendors: OutsourceVendor[]
@@ -4021,6 +4066,8 @@ export type FinanceStoreState = Pick<AppState,
   | 'setCompanyAssetStatus'
   | 'disposeCompanyAsset'
   | 'writeOffCompanyAsset'
+  | 'runCompanyAssetDepreciation'
+  | 'linkSerialToCompanyAsset'
 >
 
 export type HrStoreState = Pick<AppState,
@@ -6607,6 +6654,8 @@ export function StoreProvider({
     setCompanyAssetStatus: (...args: Parameters<AppState['setCompanyAssetStatus']>) => storeCtxRef.current!.setCompanyAssetStatus(...args),
     disposeCompanyAsset: (...args: Parameters<AppState['disposeCompanyAsset']>) => storeCtxRef.current!.disposeCompanyAsset(...args),
     writeOffCompanyAsset: (...args: Parameters<AppState['writeOffCompanyAsset']>) => storeCtxRef.current!.writeOffCompanyAsset(...args),
+    runCompanyAssetDepreciation: (...args: Parameters<AppState['runCompanyAssetDepreciation']>) => storeCtxRef.current!.runCompanyAssetDepreciation(...args),
+    linkSerialToCompanyAsset: (...args: Parameters<AppState['linkSerialToCompanyAsset']>) => storeCtxRef.current!.linkSerialToCompanyAsset(...args),
   }), [])
 
   const hrActions = useMemo(() => ({
@@ -6731,6 +6780,33 @@ const normalizedSaleOrders = useMemo(
   () => normalizeSaleOrdersForClient(saleOrders) as SaleOrder[],
   [saleOrders],
 )
+
+const pushPpeJournal = (draft: PpeJournalDraft | null): string | undefined => {
+  if (!draft || draft.lines.length === 0) return undefined
+  if (Math.abs(draft.totalDebit - draft.totalCredit) > 0.05) return undefined
+  const journal = journalFromPpeDraft(draft)
+  setJournalEntries(prev => (prev.some(j => j.ref === journal.ref) ? prev : [journal, ...prev]))
+  return journal.ref
+}
+
+const capitaliseCompanyAsset = (asset: CompanyAsset): CompanyAsset => {
+  const kind = shouldPostCapitaliseJournal(asset)
+  if (!kind) return asset
+  const date = (asset.acquiredDate || new Date().toISOString()).slice(0, 10)
+  const draft = kind === 'inventory'
+    ? buildCapitaliseFromInventoryJournal(asset, date)
+    : buildCapitaliseFromApJournal(asset, date)
+  const ref = pushPpeJournal(draft)
+  return ref ? { ...asset, capitaliseJournalRef: ref } : asset
+}
+
+const setSerialCapitalised = (serialId: string | undefined, restore = false) => {
+  if (!serialId) return
+  setSerials(prev => prev.map(s => s.id !== serialId ? s : {
+    ...s,
+    status: restore ? 'available' : 'capitalised',
+  }))
+}
 
 const storeCtx: AppState = {
     activeModule, sidebarOpen, toast,
@@ -8077,15 +8153,32 @@ const storeCtx: AppState = {
     createCompanyAsset: (input) => {
       const user = currentUser()
       if (!user) { showToast('Please log in to continue', 'error'); return null }
-      if (!['director', 'admin_officer'].includes(normalizeClientRole(user.role))) {
+      if (!canManageCompanyPropertyRole(user.role)) {
         showToast('Only a Director or Admin Officer can record company property', 'error')
         return null
       }
       const error = validateCompanyAssetInput(input, companyAssets)
       if (error) { showToast(error, 'error'); return null }
+      const serialId = input.serialId?.trim() || undefined
+      if (serialId) {
+        const serial = serialRef.current.find(s => s.id === serialId)
+        if (!serial || serial.status !== 'available') {
+          showToast('Trading serial must be available in stock', 'error')
+          return null
+        }
+      }
       const at = new Date().toISOString()
       const status = input.status && ['draft', 'in_use', 'in_storage'].includes(input.status) ? input.status : 'draft'
-      const record: CompanyAsset = {
+      const books = withBookDefaults({
+        category: input.category,
+        costKes: Number(input.costKes) || 0,
+        usefulLifeMonths: input.usefulLifeMonths,
+        residualKes: input.residualKes,
+        depreciationMethod: input.depreciationMethod,
+        accumDeprKes: input.accumDeprKes,
+      })
+      const serial = serialId ? serialRef.current.find(s => s.id === serialId) : undefined
+      let record: CompanyAsset = {
         id: uid(),
         ref: nextCompanyAssetRef(companyAssets.map(a => a.ref)),
         name: input.name.trim(),
@@ -8096,7 +8189,8 @@ const storeCtx: AppState = {
         qty: Number(input.qty),
         unit: (input.unit || 'each').trim() || 'each',
         assetTag: input.assetTag?.trim() || undefined,
-        serialNumber: input.serialNumber?.trim() || undefined,
+        serialNumber: input.serialNumber?.trim() || serial?.serial || undefined,
+        serialId,
         locationName: input.locationName.trim(),
         custodianEmployeeId: input.custodianEmployeeId?.trim() || undefined,
         custodianName: input.custodianName?.trim() || undefined,
@@ -8108,7 +8202,12 @@ const storeCtx: AppState = {
         purchaseOrderRef: input.purchaseOrderRef?.trim() || undefined,
         billRef: input.billRef?.trim() || undefined,
         expenseRef: input.expenseRef?.trim() || undefined,
-        costKes: Number(input.costKes) || 0,
+        costKes: books.costKes,
+        usefulLifeMonths: books.usefulLifeMonths,
+        residualKes: books.residualKes,
+        depreciationMethod: books.depreciationMethod,
+        accumDeprKes: books.accumDeprKes,
+        taxWdvKes: initialTaxWdv(books.costKes),
         notes: input.notes?.trim() || undefined,
         history: [
           historyEntry({
@@ -8126,15 +8225,17 @@ const storeCtx: AppState = {
         createdAt: at,
         updatedAt: at,
       }
+      if (serialId) setSerialCapitalised(serialId)
+      record = capitaliseCompanyAsset(record)
       setCompanyAssets(prev => [record, ...prev])
       addAuditLog('create_company_asset', record.ref, `${record.name} (${record.qty} ${record.unit}) at ${record.locationName}`)
-      showToast(`${record.ref} recorded`, 'success')
+      showToast(record.capitaliseJournalRef ? `${record.ref} recorded and capitalised` : `${record.ref} recorded`, 'success')
       return record
     },
     updateCompanyAsset: (id, input) => {
       const user = currentUser()
       if (!user) { showToast('Please log in to continue', 'error'); return }
-      if (!['director', 'admin_officer'].includes(normalizeClientRole(user.role))) {
+      if (!canManageCompanyPropertyRole(user.role)) {
         showToast('Only a Director or Admin Officer can edit company property', 'error')
         return
       }
@@ -8146,17 +8247,25 @@ const storeCtx: AppState = {
       const nextStatus = existing.status === 'draft' && input.status && ['draft', 'in_use', 'in_storage'].includes(input.status)
         ? input.status
         : existing.status
-      setCompanyAssets(prev => prev.map(a => a.id !== id ? a : {
-        ...a,
+      const books = withBookDefaults({
+        category: input.category,
+        costKes: Number(input.costKes) || 0,
+        usefulLifeMonths: input.usefulLifeMonths ?? existing.usefulLifeMonths,
+        residualKes: input.residualKes ?? existing.residualKes,
+        depreciationMethod: input.depreciationMethod ?? existing.depreciationMethod,
+        accumDeprKes: existing.accumDeprKes,
+      })
+      let next: CompanyAsset = {
+        ...existing,
         name: input.name.trim(),
         description: input.description?.trim() || undefined,
         category: input.category,
         assetClass: input.assetClass,
         ppeAccountCode: resolvedPpeAccountCode(input),
         qty: Number(input.qty),
-        unit: (input.unit || a.unit || 'each').trim() || 'each',
+        unit: (input.unit || existing.unit || 'each').trim() || 'each',
         assetTag: input.assetTag?.trim() || undefined,
-        serialNumber: input.serialNumber?.trim() || undefined,
+        serialNumber: input.serialNumber?.trim() || existing.serialNumber,
         locationName: input.locationName.trim(),
         custodianEmployeeId: input.custodianEmployeeId?.trim() || undefined,
         custodianName: input.custodianName?.trim() || undefined,
@@ -8168,26 +8277,32 @@ const storeCtx: AppState = {
         purchaseOrderRef: input.purchaseOrderRef?.trim() || undefined,
         billRef: input.billRef?.trim() || undefined,
         expenseRef: input.expenseRef?.trim() || undefined,
-        costKes: Number(input.costKes) || 0,
+        costKes: books.costKes,
+        usefulLifeMonths: books.usefulLifeMonths,
+        residualKes: books.residualKes,
+        depreciationMethod: books.depreciationMethod,
         notes: input.notes?.trim() || undefined,
         updatedAt: at,
-        history: nextStatus !== a.status
-          ? [...a.history, historyEntry({
+        history: nextStatus !== existing.status
+          ? [...existing.history, historyEntry({
               at,
               action: 'status',
-              fromStatus: a.status,
+              fromStatus: existing.status,
               toStatus: nextStatus,
               userId: user.id,
               userName: user.name,
             })]
-          : a.history,
-      }))
+          : existing.history,
+      }
+      if (!existing.taxWdvKes) next.taxWdvKes = initialTaxWdv(books.costKes)
+      next = capitaliseCompanyAsset(next)
+      setCompanyAssets(prev => prev.map(a => a.id === id ? next : a))
       showToast('Property item updated', 'success')
     },
     deleteCompanyAsset: (id) => {
       const user = currentUser()
       if (!user) { showToast('Please log in to continue', 'error'); return }
-      if (!['director', 'admin_officer'].includes(normalizeClientRole(user.role))) {
+      if (!canManageCompanyPropertyRole(user.role)) {
         showToast('Only a Director or Admin Officer can delete company property', 'error')
         return
       }
@@ -8197,6 +8312,10 @@ const storeCtx: AppState = {
         showToast('Only draft items can be deleted. Dispose or write off live records.', 'error')
         return
       }
+      if (existing.serialId) {
+        const serial = serialRef.current.find(s => s.id === existing.serialId)
+        if (serial?.status === 'capitalised') setSerialCapitalised(existing.serialId, true)
+      }
       setCompanyAssets(prev => prev.filter(a => a.id !== id))
       addAuditLog('delete_company_asset', existing.ref, `Deleted draft ${existing.name}`)
       showToast(`${existing.ref} deleted`, 'info')
@@ -8204,7 +8323,7 @@ const storeCtx: AppState = {
     moveCompanyAsset: (id, locationName, note) => {
       const user = currentUser()
       if (!user) { showToast('Please log in to continue', 'error'); return }
-      if (!['director', 'admin_officer'].includes(normalizeClientRole(user.role))) {
+      if (!canManageCompanyPropertyRole(user.role)) {
         showToast('Only a Director or Admin Officer can move company property', 'error')
         return
       }
@@ -8219,7 +8338,7 @@ const storeCtx: AppState = {
     setCompanyAssetCustodian: (id, custodian, note) => {
       const user = currentUser()
       if (!user) { showToast('Please log in to continue', 'error'); return }
-      if (!['director', 'admin_officer'].includes(normalizeClientRole(user.role))) {
+      if (!canManageCompanyPropertyRole(user.role)) {
         showToast('Only a Director or Admin Officer can change custodians', 'error')
         return
       }
@@ -8230,50 +8349,189 @@ const storeCtx: AppState = {
       setCompanyAssets(prev => prev.map(a => a.id === id ? result.asset : a))
       showToast(result.asset.custodianName ? `Custodian set to ${result.asset.custodianName}` : 'Custodian cleared', 'success')
     },
-    setCompanyAssetStatus: (id, status, note) => {
+    setCompanyAssetStatus: (id, status, note, opts) => {
       const user = currentUser()
       if (!user) { showToast('Please log in to continue', 'error'); return }
-      if (!['director', 'admin_officer'].includes(normalizeClientRole(user.role))) {
+      if (!canManageCompanyPropertyRole(user.role)) {
         showToast('Only a Director or Admin Officer can change property status', 'error')
         return
       }
       const existing = companyAssets.find(a => a.id === id)
       if (!existing) return
-      const result = applyStatusChange(existing, status, { userId: user.id, userName: user.name, at: new Date().toISOString() }, note)
+      const at = new Date().toISOString()
+      const result = applyStatusChange(existing, status, { userId: user.id, userName: user.name, at }, note)
       if (!result.ok) { showToast(result.error, 'error'); return }
-      setCompanyAssets(prev => prev.map(a => a.id === id ? result.asset : a))
+      let next = capitaliseCompanyAsset(result.asset)
+      if (status === 'under_repair' && opts?.createRepair && !existing.repairId) {
+        const companyName = String(companySettings.name || '').trim()
+        const self = contacts.find(c => {
+          const n = String(c.name || '').trim().toLowerCase()
+          const t = String(c.tradingName || '').trim().toLowerCase()
+          const target = companyName.toLowerCase()
+          return c.isCustomer && target && (n === target || t === target)
+        })
+        if (!self) {
+          showToast('Add a customer contact named like the company to open a repair job', 'error')
+        } else {
+          const repair = storeCtxRef.current?.createRepair(
+            self.id,
+            self.name,
+            existing.name,
+            existing.serialNumber || existing.assetTag || existing.ref,
+            note || `Company property ${existing.ref} under repair`,
+          )
+          if (repair) {
+            next = {
+              ...next,
+              repairId: repair.id,
+              repairRef: repair.ref,
+              history: [
+                ...next.history,
+                historyEntry({
+                  at,
+                  action: 'repair_job',
+                  userId: user.id,
+                  userName: user.name,
+                  note: repair.ref,
+                }),
+              ],
+            }
+          }
+        }
+      }
+      setCompanyAssets(prev => prev.map(a => a.id === id ? next : a))
       addAuditLog('update_company_asset', existing.ref, `${existing.status} → ${status}`)
       showToast(`${existing.ref} marked ${status.replace(/_/g, ' ')}`, 'success')
     },
     disposeCompanyAsset: (id, qty, opts) => {
       const user = currentUser()
       if (!user) { showToast('Please log in to continue', 'error'); return }
-      if (!['director', 'admin_officer'].includes(normalizeClientRole(user.role))) {
+      if (!canManageCompanyPropertyRole(user.role)) {
         showToast('Only a Director or Admin Officer can dispose company property', 'error')
         return
       }
       const existing = companyAssets.find(a => a.id === id)
       if (!existing) return
-      const result = applyDispose(existing, qty, { userId: user.id, userName: user.name, at: new Date().toISOString() }, opts)
+      const at = new Date().toISOString()
+      const proceeds = Number(opts?.proceedsKes) || 0
+      const suffix = qty < existing.qty ? `P${(existing.disposedQty ?? 0) + qty}` : undefined
+      const draft = existing.assetClass === 'capital'
+        ? buildDisposalJournal(existing, qty, proceeds, at.slice(0, 10), '2211 - Petty Cash', suffix)
+        : null
+      const journalRef = pushPpeJournal(draft)
+      const result = applyDispose(existing, qty, { userId: user.id, userName: user.name, at }, opts)
       if (!result.ok) { showToast(result.error, 'error'); return }
-      setCompanyAssets(prev => prev.map(a => a.id === id ? result.asset : a))
-      addAuditLog('dispose_company_asset', existing.ref, result.asset.status === 'disposed' ? 'Disposed' : `Disposed ${qty} of ${existing.qty}`)
-      showToast(result.asset.status === 'disposed' ? `${existing.ref} disposed` : `${existing.ref} quantity reduced`, 'success')
+      const next = {
+        ...result.asset,
+        disposalJournalRef: result.asset.status === 'disposed' ? (journalRef || result.asset.disposalJournalRef) : result.asset.disposalJournalRef,
+      }
+      if (next.status === 'disposed' && existing.serialId) {
+        const serial = serialRef.current.find(s => s.id === existing.serialId)
+        if (serial?.status === 'capitalised') {
+          setSerials(prev => prev.map(s => s.id === existing.serialId ? { ...s, status: 'written_off' } : s))
+        }
+      }
+      setCompanyAssets(prev => prev.map(a => a.id === id ? next : a))
+      addAuditLog('dispose_company_asset', existing.ref, next.status === 'disposed' ? 'Disposed' : `Disposed ${qty} of ${existing.qty}`)
+      showToast(next.status === 'disposed' ? `${existing.ref} disposed` : `${existing.ref} quantity reduced`, 'success')
     },
     writeOffCompanyAsset: (id, reason) => {
       const user = currentUser()
       if (!user) { showToast('Please log in to continue', 'error'); return }
-      if (!['director', 'admin_officer'].includes(normalizeClientRole(user.role))) {
+      if (!canManageCompanyPropertyRole(user.role)) {
         showToast('Only a Director or Admin Officer can write off company property', 'error')
         return
       }
       const existing = companyAssets.find(a => a.id === id)
       if (!existing) return
-      const result = applyWriteOff(existing, { userId: user.id, userName: user.name, at: new Date().toISOString() }, reason)
+      const at = new Date().toISOString()
+      const draft = existing.assetClass === 'capital'
+        ? buildDisposalJournal(existing, existing.qty, 0, at.slice(0, 10))
+        : null
+      const journalRef = pushPpeJournal(draft)
+      const result = applyWriteOff(existing, { userId: user.id, userName: user.name, at }, reason)
       if (!result.ok) { showToast(result.error, 'error'); return }
-      setCompanyAssets(prev => prev.map(a => a.id === id ? result.asset : a))
+      const next = { ...result.asset, disposalJournalRef: journalRef || result.asset.disposalJournalRef }
+      if (existing.serialId) {
+        const serial = serialRef.current.find(s => s.id === existing.serialId)
+        if (serial?.status === 'capitalised') {
+          setSerials(prev => prev.map(s => s.id === existing.serialId ? { ...s, status: 'written_off' } : s))
+        }
+      }
+      setCompanyAssets(prev => prev.map(a => a.id === id ? next : a))
       addAuditLog('write_off_company_asset', existing.ref, reason || 'Written off')
       showToast(`${existing.ref} written off`, 'info')
+    },
+    runCompanyAssetDepreciation: (period) => {
+      const user = currentUser()
+      if (!user) { showToast('Please log in to continue', 'error'); return }
+      if (!canRunCompanyAssetDepreciationRole(user.role)) {
+        showToast('Only Finance, Admin, or a Director can run depreciation', 'error')
+        return
+      }
+      const key = period && /^\d{4}-\d{2}$/.test(period) ? period : periodKey()
+      const already = journalEntries.some(j => j.ref === depreciationJournalRef(key))
+      if (already) {
+        showToast(`Depreciation ${key} is already posted`, 'info')
+        return
+      }
+      const [yearStr, monthStr] = key.split('-')
+      const year = Number(yearStr)
+      const month = Number(monthStr)
+      const date = new Date(year, month, 0).toISOString().slice(0, 10)
+      const charges: Array<{ asset: CompanyAsset; amount: number }> = []
+      const nextAssets = companyAssets.map(asset => {
+        if (!canDepreciateAsset(asset)) return asset
+        if (periodAlreadyRun(asset.lastDepreciatedPeriod, key)) return asset
+        const amount = monthlyBookDepreciation(asset)
+        let next = applyBookDepreciationCharge(asset, amount, key)
+        const kra = applyKraAnnualAllowance(next, year)
+        next = kra.asset
+        if (amount > 0) charges.push({ asset, amount })
+        return next
+      })
+      const draft = buildDepreciationJournal(key, charges, date)
+      const ref = pushPpeJournal(draft)
+      setCompanyAssets(nextAssets)
+      addAuditLog('depreciate_company_assets', key, ref ? `${charges.length} assets · ${ref}` : 'No book charge this period')
+      showToast(ref ? `Posted depreciation ${key}` : `No depreciation to post for ${key}`, ref ? 'success' : 'info')
+    },
+    linkSerialToCompanyAsset: (assetId, serialId) => {
+      const user = currentUser()
+      if (!user) { showToast('Please log in to continue', 'error'); return }
+      if (!canManageCompanyPropertyRole(user.role)) {
+        showToast('Only a Director or Admin Officer can link a trading serial', 'error')
+        return
+      }
+      const existing = companyAssets.find(a => a.id === assetId)
+      if (!existing) { showToast('Property item not found', 'error'); return }
+      if (existing.serialId) { showToast('This item already has a trading serial', 'error'); return }
+      const serial = serialRef.current.find(s => s.id === serialId)
+      if (!serial || serial.status !== 'available') {
+        showToast('Trading serial must be available in stock', 'error')
+        return
+      }
+      const at = new Date().toISOString()
+      let next: CompanyAsset = {
+        ...existing,
+        serialId: serial.id,
+        serialNumber: existing.serialNumber || serial.serial,
+        updatedAt: at,
+        history: [
+          ...existing.history,
+          historyEntry({
+            at,
+            action: 'link_serial',
+            userId: user.id,
+            userName: user.name,
+            note: serial.serial,
+          }),
+        ],
+      }
+      setSerialCapitalised(serial.id)
+      next = capitaliseCompanyAsset(next)
+      setCompanyAssets(prev => prev.map(a => a.id === assetId ? next : a))
+      showToast(`${existing.ref} linked to serial ${serial.serial}`, 'success')
     },
 
     recordOutsourcePayment: (p) => {

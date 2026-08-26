@@ -89,6 +89,10 @@ export const canManageCompanyPropertyRole = (role?: string | null) =>
 export const canViewCompanyPropertyRole = (role?: string | null) =>
   COMPANY_PROPERTY_VIEWER_ROLES.includes(normalizeClientRole(role) as UserRole)
 
+/** Monthly depreciation: Finance posts it; Admin/Director can too. */
+export const canRunCompanyAssetDepreciationRole = (role?: string | null) =>
+  canViewCompanyPropertyRole(role)
+
 export const formatRoleLabel = (role: string | null | undefined) => {
   if (!role) return 'No role'
 

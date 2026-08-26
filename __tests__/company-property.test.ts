@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { ROLE_DEFAULT_MODULES } from '@/lib/auth/types'
-import { hasModuleAccess } from '@/lib/auth/access'
+import { canManageCompanyPropertyRole, canRunCompanyAssetDepreciationRole, hasModuleAccess } from '@/lib/auth/access'
 import {
   nextCompanyAssetRef,
   defaultPpeAccountCode,
@@ -142,14 +142,20 @@ describe('applyMove / dispose / write-off', () => {
     expect(result.ok).toBe(false)
   })
 
-  it('partial dispose reduces qty and keeps the row live', () => {
-    const result = applyDispose(asset(), 4, { userId: 'u1', userName: 'Admin', at: '2026-08-26T08:00:00.000Z' }, { reason: 'Broken frames' })
+  it('partial dispose reduces qty, cost, and accum. depr. proportionally', () => {
+    const result = applyDispose(
+      asset({ accumDeprKes: 12000 }),
+      4,
+      { userId: 'u1', userName: 'Admin', at: '2026-08-26T08:00:00.000Z' },
+      { reason: 'Broken frames' },
+    )
     expect(result.ok).toBe(true)
     if (!result.ok) return
     expect(result.asset.qty).toBe(8)
     expect(result.asset.status).toBe('in_use')
     expect(result.asset.disposedQty).toBe(4)
     expect(result.asset.costKes).toBe(32000)
+    expect(result.asset.accumDeprKes).toBe(8000)
   })
 
   it('full dispose marks the row disposed', () => {
@@ -207,6 +213,13 @@ describe('role defaults', () => {
     expect(ROLE_DEFAULT_MODULES.inventory_officer).not.toContain('company_property')
     expect(ROLE_DEFAULT_MODULES.technician).not.toContain('company_property')
     expect(ROLE_DEFAULT_MODULES.sales_rep).not.toContain('company_property')
+  })
+
+  it('lets finance run depreciation even though they cannot record items', () => {
+    expect(canManageCompanyPropertyRole('finance_officer')).toBe(false)
+    expect(canRunCompanyAssetDepreciationRole('finance_officer')).toBe(true)
+    expect(canRunCompanyAssetDepreciationRole('director')).toBe(true)
+    expect(canRunCompanyAssetDepreciationRole('technician')).toBe(false)
   })
 
   it('lets admin and finance open Property even without an explicit module chip', () => {

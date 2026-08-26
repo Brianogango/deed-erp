@@ -2,12 +2,8 @@
  * Company Property register — office furniture, fittings, and non-trading
  * equipment. Separate from HR Assets (staff custody of trading inventory).
  *
- * v1 records the register only. No depreciation, no journals, no stock moves.
- *
- * Phase 2 is specified in docs/COMPANY_PROPERTY.md and is not implemented:
- * monthly depr. 6517 / 175x; capitalise from vendor bill/PO (not inventory 1200);
- * dispose with proceeds 5203 / 6515 clearing cost + accum. depr.; KRA allowances
- * vs book; print tags; link a trading serial; optional Repair job from under_repair.
+ * v1 records the register. Phase 2 posts capitalisation, monthly depreciation
+ * (6517 / 175x), and disposal journals (5203 / 6515). Tax WDV is reporting-only.
  */
 
 export const COMPANY_ASSET_CATEGORIES = [
@@ -75,6 +71,7 @@ export const PPE_ACCOUNT_LABELS: Record<string, string> = {
   '1701': '1701 — Computer & Accessories',
   '1702': '1702 — Furniture & Fittings',
   '1703': '1703 — Office Equipment',
+  '1704': '1704 — Software',
 }
 
 export const CATEGORY_LABELS: Record<CompanyAssetCategory, string> = {
@@ -163,6 +160,18 @@ export interface CompanyAsset {
   billRef?: string
   expenseRef?: string
   costKes: number
+  usefulLifeMonths?: number
+  residualKes?: number
+  depreciationMethod?: 'straight_line' | 'reducing_balance'
+  accumDeprKes?: number
+  lastDepreciatedPeriod?: string
+  taxWdvKes?: number
+  taxLastAllowanceYear?: number
+  capitaliseJournalRef?: string
+  disposalJournalRef?: string
+  serialId?: string
+  repairId?: string
+  repairRef?: string
   notes?: string
   disposedDate?: string
   disposedQty?: number
@@ -197,6 +206,11 @@ export type CompanyAssetInput = {
   billRef?: string
   expenseRef?: string
   costKes: number
+  usefulLifeMonths?: number
+  residualKes?: number
+  depreciationMethod?: 'straight_line' | 'reducing_balance'
+  accumDeprKes?: number
+  serialId?: string
   notes?: string
 }
 
@@ -290,7 +304,18 @@ export function validateCompanyAssetInput(
   const cost = Number(input.costKes)
   if (!Number.isFinite(cost) || cost < 0) return 'Enter a cost of zero or more'
   if (input.assetClass === 'capital' && !optionalText(input.ppeAccountCode) && !defaultPpeAccountCode(input.category)) {
-    return 'Capital items need a PPE account (1701, 1702, or 1703)'
+    return 'Capital items need a PPE account (1701, 1702, 1703, or 1704)'
+  }
+  if (input.usefulLifeMonths != null) {
+    const life = Number(input.usefulLifeMonths)
+    if (!Number.isFinite(life) || life < 1 || !Number.isInteger(life)) {
+      return 'Useful life must be a whole number of months'
+    }
+  }
+  if (input.residualKes != null) {
+    const residual = Number(input.residualKes)
+    if (!Number.isFinite(residual) || residual < 0) return 'Residual value cannot be negative'
+    if (residual > cost) return 'Residual value cannot exceed cost'
   }
   if (findDuplicateAssetTag(existing, input.assetTag, excludeId)) {
     return `Asset tag ${input.assetTag!.trim()} is already in use`
@@ -339,7 +364,7 @@ export type RegisterVsCoaRow = {
 export function capitalRegisterVsCoa(
   assets: Array<Pick<CompanyAsset, 'assetClass' | 'status' | 'ppeAccountCode' | 'costKes'>>,
   accounts: CoaLine[],
-  codes: readonly string[] = ['1701', '1702', '1703'],
+  codes: readonly string[] = ['1701', '1702', '1703', '1704'],
 ): RegisterVsCoaRow[] {
   const registerByCode: Record<string, number> = {}
   for (const asset of assets) {
@@ -483,13 +508,18 @@ export function applyDispose(
 
   if (n < asset.qty) {
     const remaining = asset.qty - n
-    const remainingCost = asset.costKes * (remaining / asset.qty)
+    const fraction = remaining / asset.qty
+    const remainingCost = Math.round(asset.costKes * fraction)
+    const remainingAccum = Math.round((asset.accumDeprKes ?? 0) * fraction)
+    const remainingTax = asset.taxWdvKes != null ? Math.round(asset.taxWdvKes * fraction) : undefined
     return {
       ok: true,
       asset: {
         ...asset,
         qty: remaining,
-        costKes: Math.round(remainingCost),
+        costKes: remainingCost,
+        accumDeprKes: remainingAccum,
+        taxWdvKes: remainingTax,
         disposedQty: (asset.disposedQty ?? 0) + n,
         disposalReason: reason ?? asset.disposalReason,
         disposalProceedsKes: proceedsKes ?? asset.disposalProceedsKes,

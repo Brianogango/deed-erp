@@ -22,4 +22,8 @@ Role catalogue: [role_access_design.md](../role_access_design.md).
 
 ## Other technical docs
 
+| Doc | Purpose |
+|-----|---------|
+| [COMPANY_PROPERTY.md](./COMPANY_PROPERTY.md) | Office PPE register, depreciation, KRA tax WDV |
+
 See remaining files in this folder (architecture, UI systems, Partner API, migrations). Developer onboarding and API reference are out of scope for the user-guide package.
