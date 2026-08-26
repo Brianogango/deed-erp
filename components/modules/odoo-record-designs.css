@@ -355,6 +355,50 @@ main#main-content:has(.finance-invoice-detail) {
   color: #087543 !important;
 }
 
+.sales-pilot.sales-doc .sales-doc-smart-row {
+  display: grid !important;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  overflow: hidden;
+  border: 1px solid var(--odoo-border) !important;
+  border-radius: 6px !important;
+  background: #fff !important;
+  box-shadow: var(--odoo-shadow) !important;
+}
+
+.sales-pilot.sales-doc .sales-doc-smart-button {
+  min-height: 48px;
+  display: grid;
+  align-content: center;
+  gap: 2px;
+  padding: 8px 12px;
+  border: 0;
+  border-right: 1px solid var(--odoo-border);
+  background: #fff;
+  color: var(--odoo-ink);
+  text-align: left;
+}
+
+.sales-pilot.sales-doc .sales-doc-smart-button:last-child {
+  border-right: 0;
+}
+
+.sales-pilot.sales-doc .sales-doc-smart-button span {
+  color: var(--odoo-muted);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.sales-pilot.sales-doc .sales-doc-smart-button strong {
+  color: var(--odoo-ink);
+  font-size: 13px;
+  font-weight: 900;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .finance-invoice-detail .invoice-detail__workflow {
   grid-column: 1 / -1;
   display: grid;
@@ -1122,6 +1166,21 @@ main#main-content:has(.finance-invoice-detail) {
     flex: 0 0 auto;
     padding-inline: 20px !important;
     font-size: 10px !important;
+  }
+
+  .sales-pilot.sales-doc .sales-doc-smart-row {
+    display: flex !important;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .sales-pilot.sales-doc .sales-doc-smart-row::-webkit-scrollbar {
+    display: none;
+  }
+
+  .sales-pilot.sales-doc .sales-doc-smart-button {
+    min-width: 100px;
+    flex: 0 0 auto;
   }
 
   .finance-invoice-detail .invoice-detail__workflow {
