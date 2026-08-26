@@ -169,6 +169,8 @@ export interface InvoiceableLine {
   qtyDelivered?: number
   qtyInvoiced?: number
   invoicePolicy?: InvoicePolicy
+  /** False for services / unlinked labour — they are not warehouse demand. */
+  needsDelivery?: boolean
 }
 
 /** Quantity that may be invoiced right now for a line, per its policy. */
@@ -231,7 +233,7 @@ export function saleOrderFulfilmentStatus(
   lines: readonly InvoiceableLine[],
 ): SoFulfilmentStatus {
   if (status !== 'sale') return 'nothing'
-  const real = lines.filter(l => (Number(l.qty) || 0) > 0)
+  const real = lines.filter(l => (Number(l.qty) || 0) > 0 && l.needsDelivery !== false)
   if (real.length === 0) return 'nothing'
   const ordered = real.reduce((s, l) => s + (Number(l.qty) || 0), 0)
   const delivered = real.reduce((s, l) => s + Math.min(Number(l.qty) || 0, Number(l.qtyDelivered) || 0), 0)
@@ -252,8 +254,9 @@ export function saleOrderIsOperationallyComplete(
   if (status !== 'sale') return false
   const real = lines.filter(l => (Number(l.qty) || 0) > 0)
   if (real.length === 0) return false
-  const fulfilment = saleOrderFulfilmentStatus(status, real)
-  if (fulfilment !== 'delivered') return false
+  const deliverable = real.filter(l => l.needsDelivery !== false)
+  const fulfilment = deliverable.length === 0 ? 'delivered' : saleOrderFulfilmentStatus(status, real)
+  if (fulfilment !== 'delivered' && fulfilment !== 'nothing') return false
   return saleOrderInvoiceStatus(status, real) === 'invoiced' || saleOrderInvoiceStatus(status, real) === 'upselling'
 }
 
@@ -332,11 +335,13 @@ export function remainingUndeliveredByProduct(
     qty?: number
     qtyDelivered?: number
     lineType?: string
+    unit?: string
   }> | null | undefined,
 ): Record<string, number> {
   const out: Record<string, number> = {}
   for (const line of lines ?? []) {
-    if (line.lineType === 'section' || !line.productId) continue
+    if (line.lineType === 'section' || line.lineType === 'service' || !line.productId) continue
+    if (String(line.unit ?? '').toLowerCase() === 'service') continue
     const demand = Math.max(0, Number(line.qty) || 0)
     const delivered = Math.max(0, Number(line.qtyDelivered) || 0)
     const remaining = Math.max(0, demand - delivered)

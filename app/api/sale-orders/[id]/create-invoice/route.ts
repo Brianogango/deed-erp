@@ -233,15 +233,23 @@ export async function POST(
     const products = productIds.length > 0
       ? await prisma.product.findMany({
           where: { id: { in: productIds } },
-          select: { id: true, invoicePolicy: true, trackStock: true },
+          select: { id: true, invoicePolicy: true, trackStock: true, trackingMethod: true, specs: true, category: { select: { name: true } } },
         })
       : []
     const productById = new Map(products.map(p => [p.id, p]))
     const policyForItem = (item: { productId?: string | null }): InvoicePolicy => {
       const product = item.productId ? productById.get(item.productId) : undefined
+      const specs = product?.specs && typeof product.specs === 'object' && !Array.isArray(product.specs)
+        ? product.specs as Record<string, unknown>
+        : {}
       return resolveInvoicePolicy({
         productPolicy: product?.invoicePolicy,
         trackStock: product?.trackStock,
+        trackingMethod: product?.trackingMethod,
+        productUnit: specs.unit,
+        productKind: specs.productKind,
+        productCategory: product?.category?.name ?? specs.category,
+        productId: item.productId,
       })
     }
 
