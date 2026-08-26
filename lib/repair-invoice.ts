@@ -108,7 +108,12 @@ function quoteCharges(
 }
 
 function diagnosisCharges(repair: RepairInvoiceSource): RepairInvoiceChargeLine[] {
-  if (!shouldChargeDiagnosisFee(repair) || !(repair.diagnosisFee ?? 0)) return []
+  const feeRepair = {
+    ...repair,
+    underWarranty: repair.underWarranty ?? undefined,
+    billingExempt: repair.billingExempt ?? undefined,
+  }
+  if (!shouldChargeDiagnosisFee(feeRepair) || !(repair.diagnosisFee ?? 0)) return []
   if (repair.diagnosisFeeStatus === 'paid' || repair.diagnosisFeePaidAt) return []
   if (repair.diagnosisFeeStatus === 'waived' || repair.diagnosisFeeStatus === 'not_applicable') return []
   const amount = money(repair.diagnosisFee)
