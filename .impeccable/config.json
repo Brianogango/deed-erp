@@ -298,6 +298,15 @@
         ],
         "createdAt": "2026-08-27T11:50:05.346Z",
         "reason": "Incumbent repair list status-color left border; click/open-job bugfix does not restyle existing row accents"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "*",
+        "files": [
+          "components/modules/Purchase.tsx"
+        ],
+        "createdAt": "2026-08-27T11:20:58.122Z",
+        "reason": "Incumbent GRN receive-screen hex colors; receipt-detail navigation does not restyle that form"
       }
     ]
   }

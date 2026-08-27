@@ -14,6 +14,7 @@ import ContactFormModal, { blankCompanyContact } from '@/components/contacts/Con
 import { PurchaseProvider } from './purchase/PurchaseContext'
 import PurchaseOrdersTab from './purchase/PurchaseOrdersTab'
 import PurchaseReceiptsTab from './purchase/PurchaseReceiptsTab'
+import PurchaseReceiptDetail from './purchase/PurchaseReceiptDetail'
 import PurchaseBillsTab from './purchase/PurchaseBillsTab'
 import PurchaseReturnsTab from './purchase/PurchaseReturnsTab'
 import POFormView from './purchase/POFormView'
@@ -29,7 +30,7 @@ import {
 import { invoiceResidual, isOpenInvoice } from '@/lib/odoo-sales-flow'
 
 type MainView = 'orders' | 'receipts' | 'returns' | 'bills'
-type SubView  = 'list' | 'form' | 'receive'
+type SubView  = 'list' | 'form' | 'receive' | 'receipt'
 type RfqDraftLine = { id: string; productId: string; productName: string; description: string; qty: string; unitPrice: string; taxRate: string }
 
 const PURCHASE_TABS: MainView[] = ['orders', 'receipts', 'returns', 'bills']
@@ -188,6 +189,7 @@ function PurchaseContent() {
 
   // ── GRN state ──────────────────────────────────────────────────────────────
   const [activeReceiptId,      setActiveReceiptId]      = useState<string | null>(null)
+  const [receiptOrigin,        setReceiptOrigin]        = useState<'list' | 'po'>('list')
   const [grnLines,             setGrnLines]             = useState<Receipt['lines']>([])
   const [destLocation,         setDestLocation]         = useState<LocationId>('warehouse')
   const [serialInputs,         setSerialInputs]         = useState<Record<number, string>>({})
@@ -256,16 +258,31 @@ function PurchaseContent() {
         setLocalActiveId(null)
         if (subView === 'form') setLocalSubView('list')
       }
+      if (activeReceiptId && subView === 'receipt') {
+        setActiveReceiptId(null)
+        setLocalSubView('list')
+      }
+      return
+    }
+
+    if (receipts.some(r => r.id === urlActiveId)) {
+      if (activeReceiptId !== urlActiveId) setActiveReceiptId(urlActiveId)
+      if (subView === 'list') {
+        setReceiptOrigin('list')
+        setLocalSubView('receipt')
+      }
+      if (mainView !== 'receipts' && subView !== 'receive') setMainView('receipts')
       return
     }
 
     if (purchaseOrders.some(po => po.id === urlActiveId)) {
       if (activeId !== urlActiveId) setActiveId(urlActiveId)
       // Deep-link opens the PO form from the list — but do NOT kick the user
-      // out of the GRN receive screen (Process GRN sets subView to 'receive').
+      // out of the GRN receive screen (Process GRN sets subView to 'receive')
+      // or an open GRN document.
       if (subView === 'list') setLocalSubView('form')
     }
-  }, [urlActiveId, purchaseOrders, activeId, subView, setActiveId])
+  }, [urlActiveId, purchaseOrders, receipts, activeId, activeReceiptId, subView, mainView, setActiveId, setMainView])
 
   const filteredPOs = useMemo(
     () => filterPurchaseOrders(purchaseOrders, typeFilter, statusFilter),
@@ -505,6 +522,69 @@ function PurchaseContent() {
   }, [updatePOLine, showToast])
 
   // ── GRN ────────────────────────────────────────────────────────────────────
+  const hydrateReceive = (draft: Receipt) => {
+    const preSpecs: Record<string, string> = {}
+    const preLines = draft.lines.map(l => {
+      const preSerials = (l.importedSerials ?? []).slice(0, l.qtyExpected)
+      return { ...l, qtyReceived: l.qtyReceived || l.qtyExpected, serials: l.serials.length ? l.serials : preSerials }
+    })
+    draft.lines.forEach(l => {
+      if (l.specs && l.importedSerials) {
+        l.importedSerials.forEach(s => { preSpecs[s] = l.specs! })
+      }
+    })
+    setActiveReceiptId(draft.id)
+    setGrnLines(preLines)
+    setDestLocation(draft.destinationLocation)
+    setSerialInputs({})
+    setSerialSpecs(preSpecs)
+    setSubView('receive')
+  }
+
+  const openReceiptDetail = (receiptId: string, origin: 'list' | 'po' = 'list') => {
+    const rec = receipts.find(r => r.id === receiptId)
+    if (!rec) return
+    setReceiptOrigin(origin)
+    setActiveReceiptId(receiptId)
+    setLocalSubView('receipt')
+    if (origin === 'list') {
+      setLocalActiveId(null)
+      setUrlActiveId(receiptId, { queryPatch: { tab: 'receipts' } })
+    }
+  }
+
+  const closeReceiptDetail = (to: 'list' | 'po' = receiptOrigin) => {
+    setActiveReceiptId(null)
+    if (to === 'po') {
+      setLocalSubView('form')
+      return
+    }
+    setLocalSubView('list')
+    setUrlActiveId(null, { queryPatch: { tab: 'receipts' } })
+  }
+
+  const startReceive = (receiptId: string) => {
+    const rec = receipts.find(r => r.id === receiptId)
+    if (!rec) { showToast('Receipt not found', 'error'); return }
+    if (rec.status !== 'draft') { showToast('This GRN is already validated', 'info'); return }
+    const po = purchaseOrders.find(p => p.id === rec.poId)
+    if (!po) { showToast('Purchase order not found for this GRN', 'error'); return }
+    setReceiptOrigin(receiptOrigin)
+    setActiveId(po.id)
+    hydrateReceive(rec)
+  }
+
+  const leaveReceive = () => {
+    if (receiptOrigin === 'list' && activeReceiptId) {
+      setLocalSubView('receipt')
+      setLocalActiveId(null)
+      setUrlActiveId(activeReceiptId, { queryPatch: { tab: 'receipts' } })
+      return
+    }
+    setSubView('form')
+    setActiveReceiptId(null)
+  }
+
   const openReceive = async () => {
     if (!activePO) return
     let draft = receipts.find(r => r.poId === activePO.id && r.status === 'draft') ?? null
@@ -512,26 +592,8 @@ function PurchaseContent() {
       draft = await Promise.resolve(createReceiptFromPO(activePO.id))
     }
     if (!draft) { showToast('No pending receipt found', 'error'); return }
-    setActiveReceiptId(draft.id)
-
-    // Pre-fill serials and specs from CSV import if available
-    const preSpecs: Record<string, string>   = {}
-    const preLines = draft.lines.map(l => {
-      const preSerials = (l.importedSerials ?? []).slice(0, l.qtyExpected)
-      return { ...l, qtyReceived: l.qtyExpected, serials: preSerials }
-    })
-    // Pre-fill specs state for each imported serial
-    draft.lines.forEach(l => {
-      if (l.specs && l.importedSerials) {
-        l.importedSerials.forEach(s => { preSpecs[s] = l.specs! })
-      }
-    })
-
-    setGrnLines(preLines)
-    setDestLocation(draft.destinationLocation)
-    setSerialInputs({})
-    setSerialSpecs(preSpecs)
-    setSubView('receive')
+    setReceiptOrigin('po')
+    hydrateReceive(draft)
   }
 
   const addSerial = (lineIdx: number, serial: string) => {
@@ -585,9 +647,16 @@ function PurchaseContent() {
       }
     }
     validateReceipt(activeReceiptId, grnLines, destLocation, serialAccessories, serialAccessoryNotes, serialSpecs, serialIssues)
-    setSubView('form'); setActiveReceiptId(null)
     setSerialAccessories({}); setSerialAccessoryNotes({})
     setSerialSpecs({}); setSerialIssues({})
+    if (receiptOrigin === 'list') {
+      setLocalSubView('receipt')
+      setLocalActiveId(null)
+      setUrlActiveId(activeReceiptId, { queryPatch: { tab: 'receipts' } })
+    } else {
+      setSubView('form')
+      setActiveReceiptId(null)
+    }
   }
 
   // ── Return ─────────────────────────────────────────────────────────────────
@@ -789,7 +858,7 @@ function PurchaseContent() {
     return (
       <div className="flex flex-col gap-3">
         <div className="flex items-center gap-3 flex-wrap">
-          <button className="btn-outline text-[11px] py-1 px-2.5" onClick={() => { setSubView('form'); setActiveReceiptId(null) }}>← Back to Order</button>
+          <button className="btn-outline text-[11px] py-1 px-2.5" onClick={leaveReceive}>← {receiptOrigin === 'list' ? 'Back to GRN' : 'Back to Order'}</button>
           <span className="text-xs font-semibold">GRN — {activeReceipt.ref}</span>
           <span className="text-[10px] text-t3">From: {activePO.vendorName}</span>
           <StatusBadge status={activePO.status} label={STATUS_LABEL[activePO.status]} />
@@ -955,7 +1024,7 @@ function PurchaseContent() {
               : <span className="inline-flex items-center gap-1" style={{ color: 'var(--warning)' }}><Fa icon={faTriangleExclamation} aria-hidden="true" /> Complete all serial numbers before validating</span>}
           </div>
           <div className="flex gap-2 flex-wrap">
-            <button className="btn-outline" onClick={() => { setSubView('form'); setActiveReceiptId(null) }}>Cancel</button>
+            <button className="btn-outline" onClick={leaveReceive}>Cancel</button>
             <button className="btn-outline text-[11px] py-1.5 px-3"
               style={{ borderColor: 'var(--navy)', color: 'var(--navy)' }}
               disabled={grnLines.every(l => l.serials.length === 0 && l.qtyReceived === 0)}
@@ -1004,7 +1073,7 @@ function PurchaseContent() {
     // Scan
     showScanModal, setShowScanModal, scanFile, setScanFile, isScanningScan, setIsScanningScan, scanFileRef,
     // GRN
-    activeReceiptId, setActiveReceiptId, grnLines, setGrnLines, destLocation, setDestLocation,
+    activeReceiptId, setActiveReceiptId, receiptOrigin, openReceiptDetail, closeReceiptDetail, startReceive, openReceive, grnLines, setGrnLines, destLocation, setDestLocation,
     serialInputs, setSerialInputs, serialAccessories, setSerialAccessories,
     serialAccessoryNotes, setSerialAccessoryNotes, serialSpecs, setSerialSpecs, serialIssues, setSerialIssues, serialRefs,
     // Return
@@ -1027,6 +1096,7 @@ function PurchaseContent() {
 
     {/* PO Form view — rendered inside PurchaseProvider so usePurchase() works */}
     {subView === 'form' && activePO && <POFormView />}
+    {subView === 'receipt' && activeReceipt && <PurchaseReceiptDetail />}
 
     {/* Guard: form mode without a resolvable PO used to render a blank page
         (e.g. Create RFQ set subView before awaiting createPO). Fall back to list. */}
@@ -1055,7 +1125,7 @@ function PurchaseContent() {
       </div>
     )}
     {/* List / receipts / bills view */}
-    {subView !== 'form' && <div className={`mod-page purchase-workspace purchase-workspace--${mainView}`}>
+    {subView !== 'form' && subView !== 'receipt' && <div className={`mod-page purchase-workspace purchase-workspace--${mainView}`}>
 
       <ModuleHeader
         title="Purchases"
