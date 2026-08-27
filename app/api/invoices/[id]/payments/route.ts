@@ -11,6 +11,7 @@ import {
 import { checkFiscalLock } from '@/lib/fiscal-lock.server'
 import { resolveBlobInvoiceMirror } from '@/lib/accounting/resolve-invoice-mirror'
 import { invoiceDocState } from '@/lib/odoo-sales-flow'
+import { labelForRole } from '@/lib/accounting/coa-roles'
 
 const WRITE_ROLES = ['director', 'finance_officer', 'admin_officer']
 
@@ -101,24 +102,6 @@ export async function POST(
       // If store mirror unavailable, still enforce role + posted status above
     }
 
-    if (idempotencyKey && typeof idempotencyKey === 'string') {
-      const existing = await prisma.payment.findFirst({
-        where: {
-          invoiceId,
-          isVoided: false,
-          OR: [
-            { id: idempotencyKey },
-            { reference: idempotencyKey },
-            { notes: { contains: `idempotency:${idempotencyKey}` } },
-          ],
-        },
-      })
-      if (existing) {
-        const updatedInvoice = await prisma.invoice.findUnique({ where: { id: invoiceId } })
-        return NextResponse.json({ payment: existing, invoice: updatedInvoice, idempotent: true })
-      }
-    }
-
     const balance = Number(invoice.totalAmount) - Number(invoice.amountPaid)
     if (balance <= 0) {
       return NextResponse.json({ error: 'Invoice already fully paid' }, { status: 400 })
@@ -133,57 +116,91 @@ export async function POST(
     ].filter(Boolean)
     const notes = notesParts.length ? notesParts.join(' · ') : null
 
+    // Resolve the actual cash/bank GL server-side. A caller may select a business
+    // bank account, but never supplies the GL label that will be posted.
+    let cashAccountLabel = String(paymentMethod).toLowerCase() === 'bank_transfer'
+      ? '2201 - ABSA Bank'
+      : '2211 - Petty Cash / Mobile Money'
+    if (bankAccountId) {
+      const bank = await prisma.bankAccount.findUnique({ where: { id: bankAccountId } })
+      if (!bank || !bank.isActive) {
+        return NextResponse.json({ error: 'Invalid or inactive bank account' }, { status: 400 })
+      }
+      const gl = await prisma.accountCode.findUnique({ where: { id: bank.glAccountId } })
+      if (!gl || !gl.isActive) {
+        return NextResponse.json({ error: 'Bank account is not mapped to an active GL account' }, { status: 409 })
+      }
+      cashAccountLabel = `${gl.code} - ${gl.name}`
+    }
+
     const { recordPaymentWithAllocations } = await import('@/lib/accounting/payment-allocations')
-    const { payment, allocations } = await recordPaymentWithAllocations({
+    const result = await recordPaymentWithAllocations({
       amount: capped,
       paymentMethod,
       reference: reference || null,
-      paidAt: paidAt ? new Date(paidAt) : new Date(),
+      externalReference: reference || null,
+      paidAt: paymentDate,
       notes,
       createdById: actor.id,
       invoiceId,
-      idempotencyKey: typeof idempotencyKey === 'string' ? idempotencyKey : undefined,
+      paymentType: 'customer_receipt',
+      partnerId: invoice.clientId,
+      bankAccountId: bankAccountId || null,
+      currencyCode: invoice.currencyCode,
+      exchangeRateToBase: Number(invoice.exchangeRateToBase || 1),
+      idempotencyKey: typeof idempotencyKey === 'string' && idempotencyKey.trim()
+        ? idempotencyKey.trim()
+        : undefined,
       allocations: [{ invoiceId, amount: capped }],
+      journal: paymentId => ({
+        ref: `JRN/PAY/${invoice.invoiceNumber}/${paymentId}`.slice(0, 80),
+        journalCode: String(paymentMethod).toLowerCase() === 'cash' ? 'CSH' : 'BNK',
+        date: paymentDate,
+        description: `Customer receipt for ${invoice.invoiceNumber}`,
+        sourceType: 'payment',
+        sourceId: paymentId,
+        invoiceId,
+        paymentId,
+        createdById: actor.id,
+        skipIfExists: false,
+        lines: [
+          {
+            accountLabel: cashAccountLabel,
+            label: `Receipt for ${invoice.invoiceNumber}`,
+            debit: capped,
+            credit: 0,
+            partnerId: invoice.clientId,
+          },
+          {
+            accountLabel: labelForRole('ar'),
+            label: `AR settlement ${invoice.invoiceNumber}`,
+            debit: 0,
+            credit: capped,
+            partnerId: invoice.clientId,
+          },
+        ],
+      }),
     })
+    const { payment, allocations } = result
 
     const updatedInvoice = await prisma.invoice.findUnique({ where: { id: invoiceId } })
 
-    await writeFinancialAudit({
-      userId: actor.id,
-      action: 'record_invoice_payment',
-      entityType: 'invoice',
-      entityId: invoiceId,
-      oldValues: { amountPaid: Number(invoice.amountPaid), status: invoice.status },
-      newValues: { amountPaid: Number(updatedInvoice?.amountPaid ?? 0), paymentAmount: capped, paymentMethod, idempotencyKey, allocationIds: allocations.map(a => a.id) },
-    })
-
-    // Dual-write GL: persist payment journal to Prisma (blob journals still written by client store)
-    try {
-      const mirror = await resolveBlobInvoiceMirror(invoice.id)
-      const { postInvoicePaymentJournalToPrisma } = await import('@/lib/accounting/invoice-journals')
-      await postInvoicePaymentJournalToPrisma({
-        invoice: {
-          id: invoice.id,
-          ref: invoice.invoiceNumber,
-          invoiceNumber: invoice.invoiceNumber,
-          totalAmount: Number(invoice.totalAmount),
-          type: mirror.type,
-          purchaseOrderId: mirror.purchaseOrderId,
-          partnerName: mirror.partnerName,
-          clientName: mirror.clientName,
-        },
-        amount: capped,
-        paymentId: payment.id,
-        method: paymentMethod,
-        createdById: actor.id,
+    // An idempotent retry returns the original committed payment and journal and
+    // must not emit a second audit/notification.
+    if (!result.idempotent) {
+      await writeFinancialAudit({
+        userId: actor.id,
+        action: 'record_invoice_payment',
+        entityType: 'invoice',
+        entityId: invoiceId,
+        oldValues: { amountPaid: Number(invoice.amountPaid), status: invoice.status },
+        newValues: { amountPaid: Number(updatedInvoice?.amountPaid ?? 0), paymentAmount: capped, paymentMethod, idempotencyKey, allocationIds: allocations.map(a => a.id), paymentId: payment.id },
       })
-    } catch (err) {
-      console.error('[invoice-payment] journal dual-write failed:', err)
     }
 
     // Automation #2: customer payment confirmation (email + WhatsApp when phone exists).
     // Never fail the payment if messaging fails. Skip on idempotent retries above.
-    try {
+    if (!result.idempotent) try {
       const { notifyCustomerPaymentReceived } = await import('@/lib/finance/payment-receipt-notify')
       await notifyCustomerPaymentReceived({
         invoiceId,
@@ -199,7 +216,7 @@ export async function POST(
       console.error('[invoice-payment] receipt notify failed:', err)
     }
 
-    return NextResponse.json({ payment, invoice: updatedInvoice })
+    return NextResponse.json({ payment, invoice: updatedInvoice, idempotent: result.idempotent })
   })
 }
 
