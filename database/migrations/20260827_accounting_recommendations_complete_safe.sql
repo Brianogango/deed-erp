@@ -49,6 +49,7 @@ WHERE payment_type = 'customer_receipt';
 ALTER TABLE supplier_payments
   ALTER COLUMN payment_type SET DEFAULT 'supplier_payment';
 
+DROP INDEX IF EXISTS "uq_bank_account_gl";
 ALTER TABLE bank_accounts DROP CONSTRAINT IF EXISTS uq_bank_account_gl;
 CREATE INDEX IF NOT EXISTS idx_bank_account_gl ON bank_accounts (gl_account_id);
 CREATE UNIQUE INDEX IF NOT EXISTS uq_bank_account_name ON bank_accounts (name);
