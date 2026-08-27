@@ -173,7 +173,7 @@ async function handleUpdate(request: NextRequest, id: string) {
       productType: product.productType,
       pricingCategoryId: typeof specs.pricingCategoryId === 'string' ? specs.pricingCategoryId : null,
       productKind: typeof specs.productKind === 'string' ? specs.productKind : null,
-      taxRate: Number(specs.taxRatePct ?? 16),
+      taxRate: Number(specs.taxRatePct ?? 0),
       unit: typeof specs.unit === 'string' ? specs.unit : undefined,
       deviceConfig: deviceConfigFromProductSpecs(specs),
     })
