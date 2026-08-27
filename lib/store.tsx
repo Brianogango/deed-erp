@@ -13679,14 +13679,31 @@ const storeCtx: AppState = {
         ? new Map(lineOverrides.map(o => [o.lineId, Math.max(0, Math.floor(Number(o.qty) || 0))]))
         : null
 
+      // Treat live vendor bills as the source of truth. The PO list is loaded
+      // from Prisma without the legacy billId, and old deleted draft bills can
+      // leave qtyBilled behind. Using active invoices here restores the correct
+      // Create Bill action while still preventing duplicate billing.
+      const liveBillsForPO = invRef.current.filter(inv => {
+        const belongsToPO = inv.purchaseOrderId === po.id || inv.id === po.billId
+        const isLive = !['cancelled', 'voided', 'void'].includes(String(inv.status))
+        return inv.type === 'vendor_bill' && belongsToPO && isLive
+      })
+      const activeBilledQty = (line: POLine) =>
+        liveBillsForPO.reduce((total, bill) => total + bill.lines.reduce((sum, billLine) => {
+          const sameProduct = Boolean(line.productId && billLine.productId && line.productId === billLine.productId)
+          const sameDescription = !billLine.productId && String(billLine.description ?? '').includes(line.productName)
+          return sum + (sameProduct || sameDescription ? Math.max(0, Math.floor(Number(billLine.qty) || 0)) : 0)
+        }, 0), 0)
+
       let billableLines: Array<POLine & { billQty: number }>
       try {
         billableLines = po.lines
           .map(l => {
-            const maxBillable = billableQty(l)
+            const reconciledLine = { ...l, qtyBilled: activeBilledQty(l) }
+            const maxBillable = billableQty(reconciledLine)
             const billQty = overrideMap ? Math.min(maxBillable, overrideMap.get(l.id) ?? 0) : maxBillable
-            assertBillableQty(l, billQty)
-            return { ...l, billQty }
+            assertBillableQty(reconciledLine, billQty)
+            return { ...reconciledLine, billQty }
           })
           .filter(l => l.billQty > 0)
       } catch (err) {
@@ -13725,7 +13742,7 @@ const storeCtx: AppState = {
           const lines = x.lines.map(line => {
             const match = billableLines.find(b => b.id === line.id)
             if (!match) return line
-            return { ...line, qtyBilled: (line.qtyBilled ?? 0) + match.billQty }
+            return { ...line, qtyBilled: (match.qtyBilled ?? 0) + match.billQty }
           })
           // Keep billId as latest bill for UI deep-link; further bills allowed via billable qty.
           return { ...x, billId: bill.id, lines }
