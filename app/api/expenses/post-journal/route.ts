@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireRole, withApiErrorHandling } from '@/lib/auth/api'
-import { writeFinancialAudit } from '@/lib/finance-audit'
+import { writeFinancialAuditInTx } from '@/lib/finance-audit'
 import { canReimburseExpense, canReviewExpense } from '@/lib/finance-controls'
 import { checkFiscalLock } from '@/lib/fiscal-lock.server'
 import {
@@ -8,25 +8,13 @@ import {
   postExpenseReimbursement,
 } from '@/lib/accounting/posting-service'
 import { roundMoney } from '@/lib/accounting/money'
+import prisma from '@/lib/prisma'
 
 export const dynamic = 'force-dynamic'
 
 /**
  * POST /api/expenses/post-journal
- * Dual-write expense approve / reimburse journals through the posting engine.
- *
- * Body: {
- *   kind: 'approval' | 'reimbursement',
- *   expenseId: string,
- *   ref: string,
- *   amount: number,
- *   description?: string,
- *   category?: string,
- *   paymentMethod?: string,
- *   submittedByName?: string,
- *   bankAccountId?: string,
- *   date?: string
- * }
+ * Expense approve / reimburse journals + financial audit in one transaction.
  */
 export async function POST(request: NextRequest) {
   return withApiErrorHandling(async () => {
@@ -60,41 +48,48 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const journal = kind === 'approval'
-      ? await postExpenseApproval({
-          expenseId,
-          ref,
-          description: String(body.description || ref),
-          amount,
-          category: body.category ? String(body.category) : undefined,
-          paymentMethod: body.paymentMethod ? String(body.paymentMethod) : undefined,
-          submittedByName: body.submittedByName ? String(body.submittedByName) : undefined,
-          bankAccountId: body.bankAccountId ? String(body.bankAccountId) : undefined,
-          date,
-          createdById: actor.id,
-        })
-      : await postExpenseReimbursement({
-          expenseId,
-          ref,
-          amount,
-          submittedByName: body.submittedByName ? String(body.submittedByName) : undefined,
-          bankAccountId: body.bankAccountId ? String(body.bankAccountId) : undefined,
-          date,
-          createdById: actor.id,
-        })
+    const journal = await prisma.$transaction(async tx => {
+      const posted = kind === 'approval'
+        ? await postExpenseApproval({
+            expenseId,
+            ref,
+            description: String(body.description || ref),
+            amount,
+            category: body.category ? String(body.category) : undefined,
+            paymentMethod: body.paymentMethod ? String(body.paymentMethod) : undefined,
+            submittedByName: body.submittedByName ? String(body.submittedByName) : undefined,
+            bankAccountId: body.bankAccountId ? String(body.bankAccountId) : undefined,
+            date,
+            createdById: actor.id,
+            tx,
+          })
+        : await postExpenseReimbursement({
+            expenseId,
+            ref,
+            amount,
+            submittedByName: body.submittedByName ? String(body.submittedByName) : undefined,
+            bankAccountId: body.bankAccountId ? String(body.bankAccountId) : undefined,
+            date,
+            createdById: actor.id,
+            tx,
+          })
 
-    await writeFinancialAudit({
-      userId: actor.id,
-      action: kind === 'approval' ? 'post_expense_engine' : 'post_expense_reimbursement_engine',
-      entityType: 'expense',
-      entityId: expenseId,
-      newValues: {
-        kind,
-        ref,
-        amount,
-        journalRef: journal && 'ref' in journal ? journal.ref : null,
-      },
-    })
+      await writeFinancialAuditInTx(tx, {
+        userId: actor.id,
+        action: kind === 'approval' ? 'post_expense_engine' : 'post_expense_reimbursement_engine',
+        entityType: 'expense',
+        entityId: expenseId,
+        relatedJournalId: posted && 'id' in posted ? String(posted.id) : null,
+        newValues: {
+          kind,
+          ref,
+          amount,
+          journalRef: posted && 'ref' in posted ? posted.ref : null,
+        },
+      })
+
+      return posted
+    }, { isolationLevel: 'Serializable' })
 
     return NextResponse.json({ journal, kind, skipped: false })
   })

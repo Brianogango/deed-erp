@@ -40,30 +40,42 @@ function collectWarnings(results: any[]) {
       : `${r.productId}: valuation skipped (${r.result?.reason || 'unknown'})`)
 }
 
+function isSoftSkip(result: any) {
+  return result?.skipped && result?.reason === 'already_processed'
+}
+
+/** Fail-closed: any hard line error or non-idempotent skip blocks the operational document. */
+export function finalizeValuation(results: any[]) {
+  const warnings = collectWarnings(results)
+  const hard = results.filter((r: any) => r.error || (r.result?.skipped && !isSoftSkip(r.result)))
+  if (hard.length > 0) {
+    const first = hard[0]
+    return {
+      ok: false as const,
+      reason: String(first.error || first.result?.reason || 'valuation_failed'),
+      results,
+      warnings,
+    }
+  }
+  return { ok: true as const, results, warnings }
+}
+
 /**
  * After a GRN is validated, post weighted-average / FIFO / standard valuation (+ STK journal)
  * using PO unit prices. Idempotent; never mutates app_state.
  */
-export async function postReceiptValuationFromBlobs(params: {
-  receiptId: string
+export async function postReceiptValuationFromPayload(params: {
+  receiptRef: string
+  lines: ReceiptLine[]
+  poLines?: PoLine[]
   userId?: string
 }) {
   if (!(await isAutomatedValuationEnabled())) {
-    return { ok: false as const, reason: 'valuation_disabled', results: [] as any[] }
+    return { ok: true as const, reason: 'valuation_disabled', results: [] as any[], warnings: [] as string[] }
   }
-  const state = await loadAppState(['deed_receipts', 'deed_purchaseOrders'])
-  const receipts = Array.isArray(state.deed_receipts) ? state.deed_receipts as any[] : []
-  const pos = Array.isArray(state.deed_purchaseOrders) ? state.deed_purchaseOrders as any[] : []
-  const receipt = receipts.find(r => r?.id === params.receiptId)
-  if (!receipt || receipt.status !== 'validated') {
-    return { ok: false as const, reason: 'not_validated', results: [] as any[] }
-  }
-  const po = pos.find(p => p?.id === receipt.poId)
-  const poLines: PoLine[] = Array.isArray(po?.lines) ? po.lines : []
-  const lines: ReceiptLine[] = Array.isArray(receipt.lines) ? receipt.lines : []
+  const poLines = Array.isArray(params.poLines) ? params.poLines : []
   const results = []
-
-  for (const line of lines) {
+  for (const line of params.lines || []) {
     const productId = String(line.productId || '').trim()
     if (!productId) continue
     const qty = line.requiresSerial
@@ -77,7 +89,7 @@ export async function postReceiptValuationFromBlobs(params: {
         productId,
         qty,
         unitCost,
-        reference: String(receipt.ref || receipt.id),
+        reference: params.receiptRef,
         userId: params.userId,
         postJournal: true,
       })
@@ -86,8 +98,33 @@ export async function postReceiptValuationFromBlobs(params: {
       results.push({ productId, qty, unitCost, error: err instanceof Error ? err.message : 'failed' })
     }
   }
+  return { ...finalizeValuation(results), receiptRef: params.receiptRef }
+}
 
-  return { ok: true as const, receiptRef: receipt.ref, results, warnings: collectWarnings(results) }
+/**
+ * After a GRN is validated, post weighted-average / FIFO / standard valuation (+ STK journal)
+ * using PO unit prices. Idempotent; never mutates app_state.
+ * Does not require the blob to already be marked validated — callers persist that only after success.
+ */
+export async function postReceiptValuationFromBlobs(params: {
+  receiptId: string
+  userId?: string
+  receipt?: { id?: string; ref?: string; poId?: string; lines?: ReceiptLine[] }
+}) {
+  const state = await loadAppState(['deed_receipts', 'deed_purchaseOrders'])
+  const receipts = Array.isArray(state.deed_receipts) ? state.deed_receipts as any[] : []
+  const pos = Array.isArray(state.deed_purchaseOrders) ? state.deed_purchaseOrders as any[] : []
+  const receipt = params.receipt || receipts.find(r => r?.id === params.receiptId)
+  if (!receipt) {
+    return { ok: false as const, reason: 'not_found', results: [] as any[], warnings: [] as string[] }
+  }
+  const po = pos.find(p => p?.id === receipt.poId)
+  return postReceiptValuationFromPayload({
+    receiptRef: String(receipt.ref || receipt.id || params.receiptId),
+    lines: Array.isArray(receipt.lines) ? receipt.lines : [],
+    poLines: Array.isArray(po?.lines) ? po.lines : [],
+    userId: params.userId,
+  })
 }
 
 /**
@@ -99,7 +136,7 @@ export async function postDeliveryValuationFromPayload(params: {
   userId?: string
 }) {
   if (!(await isAutomatedValuationEnabled())) {
-    return { ok: false as const, reason: 'valuation_disabled', results: [] as any[], warnings: [] as string[] }
+    return { ok: true as const, reason: 'valuation_disabled', results: [] as any[], warnings: [] as string[] }
   }
   const results = []
   for (const line of params.lines || []) {
@@ -120,7 +157,7 @@ export async function postDeliveryValuationFromPayload(params: {
       results.push({ productId, qty, error: err instanceof Error ? err.message : 'failed' })
     }
   }
-  return { ok: true as const, results, warnings: collectWarnings(results) }
+  return finalizeValuation(results)
 }
 
 export async function postPosValuationFromPayload(params: {
@@ -129,7 +166,7 @@ export async function postPosValuationFromPayload(params: {
   userId?: string
 }) {
   if (!(await isAutomatedValuationEnabled())) {
-    return { ok: false as const, reason: 'valuation_disabled', results: [] as any[], warnings: [] as string[] }
+    return { ok: true as const, reason: 'valuation_disabled', results: [] as any[], warnings: [] as string[] }
   }
   const results = []
   for (const line of params.lines || []) {
@@ -150,7 +187,7 @@ export async function postPosValuationFromPayload(params: {
       results.push({ productId, qty, error: err instanceof Error ? err.message : 'failed' })
     }
   }
-  return { ok: true as const, results, warnings: collectWarnings(results) }
+  return finalizeValuation(results)
 }
 
 export async function postCustomerReturnValuation(params: {

@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { shouldDismissOverlay } from '@/lib/overlay-dismiss'
 
-const overlay = { id: 'overlay' }
-const field = { id: 'field' }
+const overlay = { id: 'overlay' } as unknown as EventTarget
+const field = { id: 'field' } as unknown as EventTarget
 
 describe('shouldDismissOverlay', () => {
   it('closes when press and release are both on the backdrop', () => {

@@ -44,10 +44,27 @@ export async function getFiscalLockDate(): Promise<Date | null> {
 
 async function assertFiscalPeriodOpenWith(db: AccountingDb, date: Date | string): Promise<void> {
   const lockDate = await getFiscalLockDateFrom(db)
-  if (!lockDate || !isDocumentDateFiscalLocked(date, lockDate)) return
-  const err = new Error(fiscalLockConflictMessage(lockDate))
-  ;(err as Error & { status?: number }).status = 409
-  throw err
+  if (lockDate && isDocumentDateFiscalLocked(date, lockDate)) {
+    const err = new Error(fiscalLockConflictMessage(lockDate))
+    ;(err as Error & { status?: number }).status = 409
+    throw err
+  }
+
+  const when = date instanceof Date
+    ? date
+    : new Date(String(date).includes('T') ? String(date) : `${date}T00:00:00Z`)
+  const periodDelegate = (db as { fiscalPeriod?: { findFirst: typeof prisma.fiscalPeriod.findFirst } }).fiscalPeriod
+  if (periodDelegate?.findFirst) {
+    const period = await periodDelegate.findFirst({
+      where: { dateFrom: { lte: when }, dateTo: { gte: when } },
+      select: { id: true, name: true, state: true },
+    })
+    if (period && period.state !== 'open') {
+      const err = new Error(`Fiscal period ${period.name} is ${period.state} and cannot accept postings`)
+      ;(err as Error & { status?: number }).status = 409
+      throw err
+    }
+  }
 }
 
 export async function assertFiscalPeriodOpen(date: Date | string): Promise<void> {
@@ -155,18 +172,22 @@ export async function createJournalEntry(params: CreateJournalEntryInput) {
   return createJournalEntryWith(prisma, params)
 }
 
-export async function persistStoreJournalEntry(entry: {
-  id?: string
-  ref: string
-  date?: string
-  source?: string
-  description?: string
-  invoiceId?: string
-  paymentId?: string
-  lines: Array<{ account: string; description?: string; debit: number; credit: number }>
-  totalDebit?: number
-  totalCredit?: number
-}, opts?: { createdById?: string; journalCode?: string }) {
+export async function persistStoreJournalEntryInTx(
+  tx: Prisma.TransactionClient,
+  entry: {
+    id?: string
+    ref: string
+    date?: string
+    source?: string
+    description?: string
+    invoiceId?: string
+    paymentId?: string
+    lines: Array<{ account: string; description?: string; debit: number; credit: number }>
+    totalDebit?: number
+    totalCredit?: number
+  },
+  opts?: { createdById?: string; journalCode?: string },
+) {
   const source = String(entry.source ?? 'manual')
   const journalCode = opts?.journalCode
     ?? (source === 'invoice' || source === 'payment' ? 'SAL'
@@ -175,7 +196,7 @@ export async function persistStoreJournalEntry(entry: {
       : source === 'pos' ? 'CSH'
       : 'GEN')
 
-  return createJournalEntry({
+  return createJournalEntryInTx(tx, {
     ref: entry.ref,
     journalCode,
     date: entry.date,
@@ -194,6 +215,21 @@ export async function persistStoreJournalEntry(entry: {
       credit: Number(l.credit || 0),
     })),
   })
+}
+
+export async function persistStoreJournalEntry(entry: {
+  id?: string
+  ref: string
+  date?: string
+  source?: string
+  description?: string
+  invoiceId?: string
+  paymentId?: string
+  lines: Array<{ account: string; description?: string; debit: number; credit: number }>
+  totalDebit?: number
+  totalCredit?: number
+}, opts?: { createdById?: string; journalCode?: string }) {
+  return persistStoreJournalEntryInTx(prisma as unknown as Prisma.TransactionClient, entry, opts)
 }
 
 export async function reverseJournalEntry(ref: string, userId?: string) {

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from '@/lib/auth/server'
-import { applyPosStockMutation } from '@/lib/inventory/stock-transactions'
+import { applyPosStockMutation, reversePosStockMutation } from '@/lib/inventory/stock-transactions'
 import { postPosValuationFromPayload } from '@/lib/inventory/valuation-hooks'
 
 export const dynamic = 'force-dynamic'
@@ -11,8 +11,7 @@ const POS_ROLES = new Set([
 ])
 
 /**
- * Authoritative POS stock deduction (bulk/serials + stock moves).
- * Call before (or instead of) client-side qty mutation.
+ * Authoritative POS stock deduction (bulk/serials + stock moves) with fail-closed COGS.
  */
 export async function POST(request: NextRequest) {
   const session = await getServerSession()
@@ -47,16 +46,28 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: result.error }, { status: 422 })
   }
 
-  const valuation = await postPosValuationFromPayload({
-    orderRef: body.orderRef,
-    lines: body.lines.map(l => ({ productId: l.productId, qty: l.qty })),
-    userId: session.user.id,
-  }).catch(err => ({
-    ok: false as const,
-    reason: err instanceof Error ? err.message : 'valuation_failed',
-    results: [],
-    warnings: [] as string[],
-  }))
+  let valuation: Awaited<ReturnType<typeof postPosValuationFromPayload>>
+  try {
+    valuation = await postPosValuationFromPayload({
+      orderRef: body.orderRef,
+      lines: body.lines.map(l => ({ productId: l.productId, qty: l.qty })),
+      userId: session.user.id,
+    })
+  } catch (err) {
+    await reversePosStockMutation({ orderRef: body.orderRef, lines: body.lines })
+    return NextResponse.json(
+      { ok: false, error: err instanceof Error ? err.message : 'POS valuation failed' },
+      { status: 422 },
+    )
+  }
+
+  if (!valuation.ok) {
+    await reversePosStockMutation({ orderRef: body.orderRef, lines: body.lines })
+    return NextResponse.json(
+      { ok: false, error: `POS valuation failed: ${valuation.reason || 'unknown'}`, valuation },
+      { status: 422 },
+    )
+  }
 
   return NextResponse.json({ ok: true, moves: result.moves, valuation })
 }

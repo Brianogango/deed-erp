@@ -5,6 +5,7 @@ import type { SerialNumber } from '@/lib/store'
 const base: SerialNumber = {
   id: 's1',
   productId: 'p1',
+  productName: 'Laptop',
   serial: 'ABC123',
   barcode: 'ABC123',
   status: 'available',

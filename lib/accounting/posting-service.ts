@@ -9,7 +9,8 @@
  */
 
 import 'server-only'
-import { persistStoreJournalEntry, reverseJournalEntry } from '@/lib/accounting/journal-service'
+import type { Prisma } from '@prisma/client'
+import { persistStoreJournalEntry, persistStoreJournalEntryInTx, reverseJournalEntry } from '@/lib/accounting/journal-service'
 import {
   type CoaRole,
   cashAccountRoleForBankId,
@@ -51,6 +52,7 @@ export type CommitPostingInput = {
   lines: PostingLineInput[]
   createdById?: string
   journalCode?: string
+  tx?: Prisma.TransactionClient
 }
 
 export function resolvePostingAccountLabel(line: PostingLineInput): string {
@@ -505,7 +507,7 @@ export async function commitPosting(input: CommitPostingInput) {
   }))
   assertPostingBalanced(resolved, input.ref)
 
-  return persistStoreJournalEntry({
+  const persisted = {
     ref: input.ref,
     date: input.date,
     source: input.source,
@@ -514,7 +516,10 @@ export async function commitPosting(input: CommitPostingInput) {
     paymentId: input.paymentId,
     id: input.blobId,
     lines: resolved,
-  }, { createdById: input.createdById, journalCode: input.journalCode })
+  }
+  const opts = { createdById: input.createdById, journalCode: input.journalCode }
+  if (input.tx) return persistStoreJournalEntryInTx(input.tx, persisted, opts)
+  return persistStoreJournalEntry(persisted, opts)
 }
 
 export async function postCustomerInvoice(params: {
@@ -746,6 +751,7 @@ export async function postExpenseApproval(params: {
   bankAccountId?: string
   date?: string
   createdById?: string
+  tx?: Prisma.TransactionClient
 }) {
   const amount = roundMoney(params.amount)
   if (amount <= 0) return null
@@ -767,6 +773,7 @@ export async function postExpenseApproval(params: {
     lines,
     createdById: params.createdById,
     journalCode: 'MISC',
+    tx: params.tx,
   })
 }
 
@@ -779,6 +786,7 @@ export async function postExpenseReimbursement(params: {
   bankAccountId?: string
   date?: string
   createdById?: string
+  tx?: Prisma.TransactionClient
 }) {
   const amount = roundMoney(params.amount)
   if (amount <= 0) return null
@@ -797,6 +805,7 @@ export async function postExpenseReimbursement(params: {
     lines,
     createdById: params.createdById,
     journalCode: 'MISC',
+    tx: params.tx,
   })
 }
 

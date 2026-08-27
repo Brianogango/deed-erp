@@ -13,6 +13,7 @@ export type SaleOrderLineValidationInput = {
   productName?: unknown
   description?: unknown
   productId?: unknown
+  taxRate?: unknown
 }
 
 function isSectionLine(line: SaleOrderLineValidationInput) {

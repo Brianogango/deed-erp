@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { DataTable } from '@/components/data-table'
 import { fmtDate, fmtKes, type Invoice } from '@/lib/store'
@@ -211,6 +211,53 @@ export default function AgeingTab({
   vendorBills: Invoice[]
 }) {
   const [asOf, setAsOf] = useState(() => new Date().toISOString().slice(0, 10))
+  const [arApi, setArApi] = useState<Invoice[] | null>(null)
+  const [apApi, setApApi] = useState<Invoice[] | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    async function load() {
+      try {
+        const [arRes, apRes] = await Promise.all([
+          fetch(`/api/accounting/ageing?kind=ar&asOf=${asOf}`),
+          fetch(`/api/accounting/ageing?kind=ap&asOf=${asOf}`),
+        ])
+        if (cancelled) return
+        if (arRes.ok) {
+          const data = await arRes.json()
+          setArApi((data.rows || []).map((r: any) => ({
+            id: r.id,
+            ref: r.ref,
+            partnerId: r.partnerId,
+            partnerName: r.partnerName,
+            date: r.dueDate,
+            dueDate: r.dueDate,
+            total: r.balance,
+            amountPaid: 0,
+            status: 'posted',
+          })) as Invoice[])
+        }
+        if (apRes.ok) {
+          const data = await apRes.json()
+          setApApi((data.rows || []).map((r: any) => ({
+            id: r.id,
+            ref: r.ref,
+            partnerId: r.partnerId,
+            partnerName: r.partnerName,
+            date: r.dueDate,
+            dueDate: r.dueDate,
+            total: r.balance,
+            amountPaid: 0,
+            status: 'posted',
+          })) as Invoice[])
+        }
+      } catch {
+        /* blob fallback */
+      }
+    }
+    void load()
+    return () => { cancelled = true }
+  }, [asOf])
 
   return (
     <div className="p-6 space-y-6">
@@ -218,8 +265,7 @@ export default function AgeingTab({
         <div>
           <h2 className="text-lg font-bold text-[var(--text-1)]">Aged receivables &amp; payables</h2>
           <p className="text-xs text-[var(--text-3)]">
-            Outstanding balances bucketed by Current / 1–30 / 31–60 / 61–90 / 90+ days past due.
-            Click a partner to drill into invoices.
+            Historical as-of ageing from posted invoices and allocations. Blob invoices are used only if the API is unavailable.
           </p>
         </div>
         <label className="flex flex-col gap-1 text-[11px] font-semibold text-[var(--text-3)]">
@@ -232,8 +278,8 @@ export default function AgeingTab({
           />
         </label>
       </div>
-      <AgeingReport title="Receivables ageing" kind="ar" invoices={customerInvoices} asOf={asOf} />
-      <AgeingReport title="Payables ageing" kind="ap" invoices={vendorBills} asOf={asOf} />
+      <AgeingReport title="Receivables ageing" kind="ar" invoices={arApi ?? customerInvoices} asOf={asOf} />
+      <AgeingReport title="Payables ageing" kind="ap" invoices={apApi ?? vendorBills} asOf={asOf} />
     </div>
   )
 }

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from '@/lib/auth/server'
 import { loadAppState, saveStoreKeys, withAppStateKeyLock } from '@/lib/server-store'
 import { postDeliveryValuationFromPayload } from '@/lib/inventory/valuation-hooks'
-import { applyDeliveryStockMutation } from '@/lib/inventory/stock-transactions'
+import { applyDeliveryStockMutation, reverseDeliveryStockMutation } from '@/lib/inventory/stock-transactions'
 import { mirrorDeliveryToPrisma } from '@/lib/delivery-mirror'
 import {
   deliveryDeliveredTotal,
@@ -31,6 +31,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     const wasDone = previous?.status === 'done'
     const nextStatus = body.status ?? previous?.status
     const lines = Array.isArray(body.lines) ? body.lines : (previous?.lines || [])
+    let doneValuation: unknown = null
 
     // Heal qtyDone from serials before persistence so Done never stores delivered=0.
     const healedLines = (lines as any[]).map(line => {
@@ -83,38 +84,52 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       if (!stockResult.ok) {
         return { status: 409 as const, error: stockResult.error }
       }
+
+      let valuation: Awaited<ReturnType<typeof postDeliveryValuationFromPayload>>
+      try {
+        valuation = await postDeliveryValuationFromPayload({
+          deliveryRef: String(previous?.ref || params.id),
+          lines: healedLines,
+          userId: session.user?.id,
+        })
+      } catch (err) {
+        await reverseDeliveryStockMutation({
+          deliveryId: params.id,
+          deliveryRef: String(previous?.ref || params.id),
+          saleOrderId: String(previous?.saleOrderId ?? body.saleOrderId ?? ''),
+          lines: doneLines,
+        })
+        return {
+          status: 422 as const,
+          error: err instanceof Error ? err.message : 'Delivery valuation failed',
+        }
+      }
+      if (!valuation.ok) {
+        await reverseDeliveryStockMutation({
+          deliveryId: params.id,
+          deliveryRef: String(previous?.ref || params.id),
+          saleOrderId: String(previous?.saleOrderId ?? body.saleOrderId ?? ''),
+          lines: doneLines,
+        })
+        return {
+          status: 422 as const,
+          error: `Delivery valuation failed: ${valuation.reason || 'unknown'}`,
+        }
+      }
+      doneValuation = valuation
     }
 
     deliveries[idx] = next
     await saveStoreKeys({ deed_deliveries: JSON.stringify(deliveries) })
 
-    return { status: 200 as const, item: deliveries[idx], wasDone, healedLines }
+    return { status: 200 as const, item: deliveries[idx], wasDone, healedLines, valuation: doneValuation }
   })
 
   if (outcome.status !== 200) {
     return NextResponse.json({ error: outcome.error }, { status: outcome.status })
   }
 
-  // Dual-write avg-cost + COGS on first transition to done. Never deletes blobs.
-  // Idempotent via valuation_events — safe if client retries. Runs outside the
-  // lock: it does not touch deed_deliveries and does not need to block others.
-  let valuation: unknown = null
-  if (!outcome.wasDone && outcome.item.status === 'done') {
-    try {
-      valuation = await postDeliveryValuationFromPayload({
-        deliveryRef: String(outcome.item.ref || params.id),
-        lines: outcome.healedLines,
-        userId: session.user?.id,
-      })
-    } catch (err) {
-      console.error('[deliveries/validate] valuation dual-write failed:', err)
-    }
-  }
-
-  // Best-effort dual-write into delivery_notes/delivery_note_items — see
-  // lib/delivery-mirror.ts. Runs outside the lock, after the response data
-  // is already finalized; never blocks or fails validation.
   void mirrorDeliveryToPrisma(outcome.item).catch(() => {})
 
-  return NextResponse.json({ item: outcome.item, valuation })
+  return NextResponse.json({ item: outcome.item, valuation: outcome.valuation ?? null })
 }

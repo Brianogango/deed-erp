@@ -8,6 +8,7 @@ const {
   mockWithAppStateKeyLock,
   mockApplyDeliveryStockMutation,
   mockPostDeliveryValuationFromPayload,
+  mockReverseDeliveryStockMutation,
 } = vi.hoisted(() => ({
   mockGetServerSession: vi.fn(),
   mockLoadAppState: vi.fn(),
@@ -15,6 +16,7 @@ const {
   mockWithAppStateKeyLock: vi.fn(async (_key: string, fn: () => Promise<any>) => fn()),
   mockApplyDeliveryStockMutation: vi.fn(),
   mockPostDeliveryValuationFromPayload: vi.fn(),
+  mockReverseDeliveryStockMutation: vi.fn(),
 }))
 
 vi.mock('@/lib/auth/server', () => ({ getServerSession: mockGetServerSession }))
@@ -28,6 +30,7 @@ vi.mock('@/lib/inventory/valuation-hooks', () => ({
 }))
 vi.mock('@/lib/inventory/stock-transactions', () => ({
   applyDeliveryStockMutation: mockApplyDeliveryStockMutation,
+  reverseDeliveryStockMutation: mockReverseDeliveryStockMutation,
 }))
 
 import { POST } from '@/app/api/deliveries/[id]/validate/route'
@@ -62,6 +65,7 @@ beforeEach(() => {
   mockSaveStoreKeys.mockResolvedValue(undefined)
   mockApplyDeliveryStockMutation.mockResolvedValue({ ok: true })
   mockPostDeliveryValuationFromPayload.mockResolvedValue({ ok: true })
+  mockReverseDeliveryStockMutation.mockResolvedValue(undefined)
 })
 
 describe('POST /api/deliveries/:id/validate', () => {
@@ -90,8 +94,17 @@ describe('POST /api/deliveries/:id/validate', () => {
     expect(res.status).toBe(404)
   })
 
-  it('runs the valuation dual-write only after a successful lock and stock mutation', async () => {
+  it('runs valuation inside the lock and persists done only after COGS succeeds', async () => {
     await POST(postReq({ status: 'done' }), params)
     expect(mockPostDeliveryValuationFromPayload).toHaveBeenCalledTimes(1)
+    expect(mockSaveStoreKeys).toHaveBeenCalled()
+  })
+
+  it('does not persist done and returns 422 when valuation fails', async () => {
+    mockPostDeliveryValuationFromPayload.mockResolvedValue({ ok: false, reason: 'insufficient_layers' })
+    const res = await POST(postReq({ status: 'done' }), params)
+    expect(res.status).toBe(422)
+    expect(mockReverseDeliveryStockMutation).toHaveBeenCalled()
+    expect(mockSaveStoreKeys).not.toHaveBeenCalled()
   })
 })

@@ -76,6 +76,8 @@ import PartnerLedgerTab from './accounting/PartnerLedgerTab'
 import CustomerCreditsTab from './accounting/CustomerCreditsTab'
 import CommissionsTab from './accounting/CommissionsTab'
 import AgeingTab from './accounting/AgeingTab'
+import IntegrityDashboard from './accounting/IntegrityDashboard'
+import CashFlowPanel from './accounting/CashFlowPanel'
 import { usePrismaAccountingReports, bootstrapCoaClient } from '@/hooks/usePrismaAccountingReports'
 import {
   DEFAULT_DOCUMENT_PAYMENT_DETAILS,
@@ -111,8 +113,10 @@ type MainTab =
   | 'cash_position'
   | 'monthly'
   | 'cashbook'
+  | 'integrity'
+  | 'cash_flow'
 
-type ReportTab = 'monthly' | 'pl' | 'bs' | 'vat' | 'ageing' | 'trial_balance' | 'cash_position' | 'fx'
+type ReportTab = 'monthly' | 'pl' | 'bs' | 'vat' | 'ageing' | 'trial_balance' | 'cash_position' | 'fx' | 'cash_flow'
 const REPORT_TABS: Array<{ id: ReportTab; label: string; icon: any }> = [
   { id: 'monthly', label: 'Monthly', icon: faChartLine },
   { id: 'pl', label: 'P&L', icon: faChartLine },
@@ -120,10 +124,11 @@ const REPORT_TABS: Array<{ id: ReportTab; label: string; icon: any }> = [
   { id: 'vat', label: 'VAT', icon: faFileInvoiceDollar },
   { id: 'ageing', label: 'Ageing', icon: faUsers },
   { id: 'trial_balance', label: 'Trial balance', icon: faBalanceScale },
+  { id: 'cash_flow', label: 'Cash flow', icon: faMoneyBillWave },
   { id: 'cash_position', label: 'Cash position', icon: faMoneyBillWave },
   { id: 'fx', label: 'FX revaluation', icon: faMoneyBillWave },
 ]
-const REPORT_TAB_IDS = new Set<ReportTab>(['monthly', 'pl', 'bs', 'vat', 'ageing', 'trial_balance', 'cash_position', 'fx'])
+const REPORT_TAB_IDS = new Set<ReportTab>(['monthly', 'pl', 'bs', 'vat', 'ageing', 'trial_balance', 'cash_position', 'fx', 'cash_flow'])
 
 // ── Balance Sheet group lists ─────────────────────────────────────────────────
 const CA_GROUPS = [
@@ -718,6 +723,8 @@ function AccountingContent() {
     ageing: { title: 'Ageing', subtitle: 'Outstanding receivables and payables by age' },
     trial_balance: { title: 'Trial balance', subtitle: 'Debit and credit balances by account' },
     cash_position: { title: 'Cash position', subtitle: 'Available balances across active accounts' },
+    cash_flow: { title: 'Cash flow', subtitle: 'Operating, investing and financing cash movements' },
+    integrity: { title: 'Finance integrity', subtitle: 'Month-end control gates and certification' },
   }
 
   const invoicePrimaryFilters: PrimaryFilterConfig[] = [
@@ -1306,6 +1313,7 @@ function AccountingContent() {
             { id: 'refunds', label: 'Refunds' },
             { id: 'journals', label: 'Journals' },
             { id: 'reports', label: 'Reports' },
+            { id: 'integrity', label: 'Integrity' },
             { id: 'cashbook', label: 'Cashbook' },
             { id: 'coa', label: 'Accounts' },
             { id: 'gl', label: 'Ledger' },
@@ -1371,7 +1379,9 @@ function AccountingContent() {
         )}
         {/* ── Tab Content ────────────────────────────────────────────────────── */}
         <div className={`card overflow-hidden rounded-xl finance-content-card finance-subcomponent-shell finance-content-card--${tab}`}>
-          {tab === 'invoices' || tab === 'bills' ? (
+          {tab === 'integrity' ? (
+            <IntegrityDashboard />
+          ) : tab === 'invoices' || tab === 'bills' ? (
             <div className="flex flex-col">
               <DataTable
                 tableId={`finance-${tab}-list-v2`}
@@ -2135,6 +2145,8 @@ function AccountingContent() {
                 exportFilename="trial-balance"
               />
             </div>
+          ) : activeTab === 'cash_flow' ? (
+            <CashFlowPanel />
           ) : activeTab === 'cash_position' ? (
             <div className="p-6">
               <h2 className="text-lg font-bold text-[var(--text-1)] mb-5">Cash position</h2>
