@@ -1794,8 +1794,17 @@ model CreditNote {
   invoiceId        String   @map("invoice_id") @db.Uuid
   clientId         String   @map("client_id") @db.Uuid
   amount           Decimal  @db.Decimal(14, 2)
+  subtotal         Decimal  @default(0) @db.Decimal(14, 2)
+  taxAmount        Decimal  @default(0) @map("tax_amount") @db.Decimal(14, 2)
   reason           String
   status           String   @default("open") @db.VarChar(20)
+  postingStatus    String   @default("unposted") @map("posting_status") @db.VarChar(20)
+  postedJournalEntryId String? @map("posted_journal_entry_id") @db.Uuid
+  postedAt         DateTime? @map("posted_at")
+  postedById       String?  @map("posted_by_id") @db.Uuid
+  taxPoint         DateTime? @map("tax_point") @db.Date
+  etimsCreditNoteNumber String? @map("etims_credit_note_number") @db.VarChar(100)
+  etimsTransmissionStatus String @default("pending") @map("etims_transmission_status") @db.VarChar(30)
   appliedToId      String?  @map("applied_to") @db.Uuid
   createdById      String   @map("created_by") @db.Uuid
   createdAt        DateTime @default(now()) @map("created_at")
