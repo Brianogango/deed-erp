@@ -26,7 +26,9 @@ export function invoicePdfInput(
   const isCustomerInvoice = inv.type === 'customer_invoice'
   const paymentCommunication = isCustomerInvoice && invoiceDocState(inv.status) === 'posted'
   const base: CommercialPdfInput = {
-    title: isCustomerInvoice ? 'Invoice' : 'Bill',
+    title: isCustomerInvoice
+      ? ((Number(inv.taxTotal) > 0 || inv.lines.some(line => Number(line.taxRate) > 0)) ? 'Tax Invoice' : 'Invoice')
+      : 'Bill',
     ref: displayDocRef(inv.ref),
     date: inv.date,
     dueLabel: 'Due Date',
@@ -35,6 +37,8 @@ export function invoicePdfInput(
     customerName: inv.partnerName,
     customerAddress: inv.invoiceAddress || [contact?.address, contact?.city, contact?.country].filter(Boolean).join(', ') || undefined,
     customerCountry: contact?.country || 'Kenya',
+    customerPhone: contact?.phone || contact?.mobile || undefined,
+    customerEmail: contact?.email || undefined,
     customerTaxId: contact?.vatNumber || undefined,
     lines: inv.lines.map(l => ({
       lineType: l.lineType,
