@@ -175,6 +175,13 @@ export async function recordPaymentWithAllocations(opts: {
   createdById: string
   invoiceId?: string | null
   idempotencyKey?: string
+  paymentType?: string
+  partnerId?: string | null
+  bankAccountId?: string | null
+  journalId?: string | null
+  currencyCode?: string
+  exchangeRateToBase?: number
+  externalReference?: string | null
   allocations: AllocationInput[]
   allowUnallocated?: boolean
   journal?: (paymentId: string) => CreateJournalEntryInput
@@ -234,6 +241,17 @@ export async function recordPaymentWithAllocations(opts: {
           : {}),
         invoiceId: primaryInvoiceId,
         amount: round2(opts.amount),
+        amountBase: round2(opts.amount * (opts.exchangeRateToBase ?? 1)),
+        paymentType: opts.paymentType ?? 'customer_receipt',
+        partnerId: opts.partnerId ?? null,
+        bankAccountId: opts.bankAccountId ?? null,
+        journalId: opts.journalId ?? null,
+        currencyCode: opts.currencyCode ?? 'KES',
+        exchangeRateToBase: opts.exchangeRateToBase ?? 1,
+        externalReference: opts.externalReference ?? opts.reference ?? null,
+        idempotencyKey: opts.idempotencyKey ?? null,
+        reconciliationStatus: 'unreconciled',
+        postingStatus: opts.journal ? 'posted' : 'unposted',
         paymentMethod: opts.paymentMethod as any,
         reference: opts.reference ?? null,
         mpesaPhone: opts.mpesaPhone ?? null,
