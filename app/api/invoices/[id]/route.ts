@@ -3,11 +3,13 @@ import prisma from '@/lib/prisma'
 import { getRequiredSession, requireRole, withApiErrorHandling } from '@/lib/auth/api'
 import { optionalUuid, resolveClientId } from '@/lib/legacy-compat'
 import { computeInvoiceTotals, computeInvoiceLineMoney } from '@/lib/finance-invoice'
-import { writeFinancialAudit } from '@/lib/finance-audit'
+import { writeFinancialAudit, writeFinancialAuditInTx } from '@/lib/finance-audit'
 import { lockVersionMismatch, nextLockVersion, readExpectedVersion } from '@/lib/optimistic-lock'
 import { checkFiscalLock } from '@/lib/fiscal-lock.server'
 import { resolveBlobInvoiceMirror } from '@/lib/accounting/resolve-invoice-mirror'
 import { salesCommissionAppliesToInvoice } from '@/lib/sales/commission-closer'
+import { createJournalEntryInTx } from '@/lib/accounting/journal-service'
+import { buildInvoiceJournalInput } from '@/lib/accounting/invoice-journals'
 
 // technical_lead: repair quotes create/update their linked invoice (see recordRepairBilling).
 const WRITE_ROLES = ['director', 'finance_officer', 'admin_officer', 'technical_lead']
@@ -88,16 +90,37 @@ function mapInvoiceItems(lines: any[]) {
         unitPrice: 0,
         discountPct: 0,
         taxRate: 0,
+        taxCategory: 'out_of_scope',
+        taxCode: 'SECTION',
+        taxableBase: 0,
+        taxClaimEligible: false,
         lineSubtotal: 0,
         lineTax: 0,
         lineTotal: 0,
         sortOrder: index,
       }
     }
+    const requestedTaxCategory = String(l.taxCategory ?? l.taxCode ?? 'not_selected').toLowerCase()
+    const taxCategory = requestedTaxCategory === 'standard' || requestedTaxCategory === 'vat' || requestedTaxCategory === 'standard_16'
+      ? 'standard_16'
+      : requestedTaxCategory === 'zero' || requestedTaxCategory === 'zero_rated'
+        ? 'zero_rated'
+        : requestedTaxCategory === 'exempt'
+          ? 'exempt'
+          : requestedTaxCategory === 'out_of_scope'
+            ? 'out_of_scope'
+            : requestedTaxCategory === 'non_vat_supplier'
+              ? 'non_vat_supplier'
+              : 'not_selected'
+    // Numeric VAT defaults to zero. A statutory tax category must be selected
+    // before posting; 0 does not imply zero-rated.
+    const effectiveTaxRate = taxCategory === 'standard_16'
+      ? Number(l.taxRate ?? 16)
+      : 0
     const money = computeInvoiceLineMoney({
       qty: l.qty,
       unitPrice: l.unitPrice,
-      taxRate: l.taxRate,
+      taxRate: effectiveTaxRate,
       discountPct: l.discountPct ?? l.discount,
       subtotal: l.subtotal,
       lineSubtotal: l.lineSubtotal,
@@ -108,11 +131,17 @@ function mapInvoiceItems(lines: any[]) {
       unitPrice: money.unitPrice,
       discountPct: money.discountPct,
       taxRate: money.taxRate,
+      taxCategory,
+      taxCode: taxCategory === 'standard_16' ? 'VAT16' : taxCategory,
+      taxableBase: money.lineSubtotal,
+      taxClaimEligible: taxCategory === 'standard_16' || taxCategory === 'zero_rated',
       lineSubtotal: money.lineSubtotal,
       lineTax: money.lineTax,
       lineTotal: money.lineTotal,
       sortOrder: index,
       ...(optionalUuid(l.productId) ? { productId: optionalUuid(l.productId) } : {}),
+      ...(optionalUuid(l.purchaseOrderItemId ?? l.poItemId) ? { purchaseOrderItemId: optionalUuid(l.purchaseOrderItemId ?? l.poItemId) } : {}),
+      ...(optionalUuid(l.grnItemId ?? l.receiptLineId) ? { grnItemId: optionalUuid(l.grnItemId ?? l.receiptLineId) } : {}),
       ...(optionalUuid(l.serialNumberId ?? l.serialId) ? { serialNumberId: optionalUuid(l.serialNumberId ?? l.serialId) } : {}),
     }
   })
@@ -133,7 +162,9 @@ export async function GET(_: Request, { params }: { params: { id: string } }) {
 export async function PUT(request: Request, { params }: { params: { id: string } }) {
   return withApiErrorHandling(async () => {
     const body = await request.json()
-    const actor = await requireRole(isRepairLinked(body) ? REPAIR_WRITE_ROLES : WRITE_ROLES)
+    // Repair authorization is derived from the persisted Repair relation, never
+    // from caller-supplied notes/repair-looking references.
+    const actor = await requireRole(REPAIR_WRITE_ROLES)
     let lines: any[] | undefined = body.lines ?? body.items ?? undefined
     const clientId = (body.clientId !== undefined || body.partnerId !== undefined)
       ? await resolveClientId(prisma, body.clientId ?? body.partnerId, body)
@@ -144,6 +175,29 @@ export async function PUT(request: Request, { params }: { params: { id: string }
       include: { items: true },
     })
     if (!before) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+
+    if (actor.role === 'technician' && !before.repairId) {
+      return NextResponse.json({ error: 'Technicians may only update invoices linked to an actual Repair record' }, { status: 403 })
+    }
+
+    const beforeIsPosted = before.status === 'approved' || before.status === 'invoiced' ||
+      before.status === 'dispatched' || before.status === 'delivered'
+    if (beforeIsPosted) {
+      const economicFields = [
+        'clientId', 'partnerId', 'saleOrderId', 'repairId', 'subject', 'subtotal',
+        'taxAmount', 'taxTotal', 'discountAmount', 'totalAmount', 'invoiceDate',
+        'date', 'dueDate', 'currencyCode', 'exchangeRateToBase', 'lines', 'items',
+        'invoiceNumber', 'ref',
+      ]
+      const attemptedEconomicMutation = economicFields.some(k => Object.prototype.hasOwnProperty.call(body, k))
+      const attemptedStatusMutation = body.status !== undefined &&
+        (INVOICE_STATUS_MAP[body.status] ?? body.status) !== before.status
+      if (attemptedEconomicMutation || attemptedStatusMutation) {
+        return NextResponse.json({
+          error: 'Posted invoices are immutable. Use a credit/debit note or reversal workflow and issue a replacement document.',
+        }, { status: 409 })
+      }
+    }
 
     const expectedVersion = readExpectedVersion(body)
     if (lockVersionMismatch(before.lockVersion, expectedVersion)) {
@@ -206,29 +260,185 @@ export async function PUT(request: Request, { params }: { params: { id: string }
       }
     }
 
-    const invoice = await prisma.invoice.update({
-      where: { id: params.id },
-      data: {
-        ...data,
-        lockVersion: nextLockVersion(before.lockVersion),
-        ...(lines !== undefined ? {
-          items: {
-            deleteMany: {},
-            create: mapInvoiceItems(lines),
-          }
-        } : {}),
-      },
-      include: { items: true },
-    })
+    const willPostNow = before.status === 'draft'
+      && (data.status === 'approved' || data.status === 'invoiced')
 
-    await writeFinancialAudit({
-      userId: actor.id,
-      action: 'update_invoice',
-      entityType: 'invoice',
-      entityId: invoice.id,
-      oldValues: before ? { status: before.status, totalAmount: before.totalAmount, amountPaid: before.amountPaid } : undefined,
-      newValues: { status: invoice.status, totalAmount: invoice.totalAmount, amountPaid: invoice.amountPaid },
-    })
+    // Build the canonical journal from server-resolved facts before entering the
+    // transaction; persistence itself occurs inside the same DB transaction.
+    let postingJournal: Awaited<ReturnType<typeof buildInvoiceJournalInput>> | null = null
+    let postingInvoiceType: 'customer_invoice' | 'vendor_bill' = 'customer_invoice'
+    let postingPurchaseOrderId: string | null = null
+    let postingBillLines: any[] = []
+    let postingMirror: Awaited<ReturnType<typeof resolveBlobInvoiceMirror>> | null = null
+    if (willPostNow) {
+      const taxCheckItems = lines !== undefined ? mapInvoiceItems(lines) : before.items
+      const unresolvedTax = taxCheckItems.some((item: any) =>
+        Number(item.qty) !== 0 && String(item.taxCategory ?? 'not_selected') === 'not_selected'
+      )
+      if (unresolvedTax) {
+        return NextResponse.json({
+          error: 'Tax category must be selected on every posting line. A 0% amount is not automatically zero-rated VAT.',
+        }, { status: 409 })
+      }
+
+      postingMirror = await resolveBlobInvoiceMirror(before.id)
+      postingInvoiceType = body.type === 'vendor_bill' || postingMirror.type === 'vendor_bill'
+        ? 'vendor_bill'
+        : 'customer_invoice'
+      const normalizedItems = lines !== undefined
+        ? mapInvoiceItems(lines)
+        : before.items.map(i => ({
+            productId: i.productId ?? undefined,
+            qty: Number(i.qty),
+            unitPrice: Number(i.unitPrice),
+            subtotal: Number(i.lineSubtotal),
+            description: i.description,
+          }))
+      postingJournal = await buildInvoiceJournalInput({
+        id: before.id,
+        ref: String(data.invoiceNumber ?? before.invoiceNumber),
+        invoiceNumber: String(data.invoiceNumber ?? before.invoiceNumber),
+        invoiceDate: data.invoiceDate ?? before.invoiceDate,
+        totalAmount: Number(data.totalAmount ?? before.totalAmount),
+        subtotal: Number(data.subtotal ?? before.subtotal),
+        taxAmount: Number(data.taxAmount ?? before.taxAmount),
+        type: postingInvoiceType,
+        purchaseOrderId: (postingPurchaseOrderId = optionalUuid(body.purchaseOrderId) ?? postingMirror.purchaseOrderId ?? null) ?? undefined,
+        partnerName: postingMirror.partnerName,
+        clientName: postingMirror.clientName,
+        lines: normalizedItems.map((i: any) => ({
+          productId: i.productId ?? undefined,
+          qty: Number(i.qty),
+          unitPrice: Number(i.unitPrice),
+          subtotal: Number(i.lineSubtotal ?? i.subtotal),
+          description: i.description,
+        })),
+      }, { createdById: actor.id })
+      postingBillLines = normalizedItems.map((i: any) => ({
+        purchaseOrderItemId: i.purchaseOrderItemId ?? undefined,
+        grnItemId: i.grnItemId ?? undefined,
+        productId: i.productId ?? undefined,
+        qty: Number(i.qty),
+        unitPrice: Number(i.unitPrice),
+        taxRate: Number(i.taxRate),
+        description: i.description,
+      }))
+    }
+
+    const invoice = await prisma.$transaction(async tx => {
+      const claimed = await tx.invoice.updateMany({
+        where: { id: params.id, lockVersion: before.lockVersion },
+        data: {
+          ...data,
+          lockVersion: nextLockVersion(before.lockVersion),
+          ...(willPostNow ? { postingStatus: 'posting' } : {}),
+        },
+      })
+      if (claimed.count !== 1) {
+        const err = new Error('Record was modified by another user')
+        ;(err as Error & { status?: number }).status = 409
+        throw err
+      }
+
+      if (lines !== undefined) {
+        await tx.invoiceItem.deleteMany({ where: { invoiceId: params.id } })
+        const mapped = mapInvoiceItems(lines)
+        if (mapped.length) {
+          await tx.invoiceItem.createMany({
+            data: mapped.map((item: any) => ({ ...item, invoiceId: params.id })),
+          })
+        }
+      }
+
+      if (postingInvoiceType === 'vendor_bill' && postingPurchaseOrderId) {
+        const { assertVendorBillThreeWayMatchInTx } = await import('@/lib/purchase/assert-bill-match.server')
+        await assertVendorBillThreeWayMatchInTx(tx, {
+          purchaseOrderId: postingPurchaseOrderId,
+          vendorId: before.clientId,
+          billLines: postingBillLines,
+        })
+      }
+
+      let journalId: string | null = null
+      if (postingJournal) {
+        const journal = await createJournalEntryInTx(tx, postingJournal)
+        journalId = journal.id
+        await tx.invoice.update({
+          where: { id: params.id },
+          data: {
+            postingStatus: 'posted',
+            postedJournalEntryId: journal.id,
+            postedAt: new Date(),
+            postedById: actor.id,
+            documentType: postingInvoiceType,
+          },
+        })
+
+        const postedItems = await tx.invoiceItem.findMany({ where: { invoiceId: params.id } })
+        const partner = await tx.client.findUnique({ where: { id: before.clientId }, select: { kraPin: true } })
+        const taxPoint = data.invoiceDate ?? before.invoiceDate ?? new Date()
+        for (const item of postedItems) {
+          const category = String((item as any).taxCategory || 'not_selected')
+          await tx.taxTransaction.upsert({
+            where: {
+              sourceType_sourceId_sourceLineId: {
+                sourceType: postingInvoiceType === 'vendor_bill' ? 'vendor_bill' : 'invoice',
+                sourceId: params.id,
+                sourceLineId: item.id,
+              },
+            },
+            update: {
+              direction: postingInvoiceType === 'vendor_bill' ? 'input' : 'output',
+              taxCategory: category,
+              taxRate: item.taxRate,
+              taxableBase: (item as any).taxableBase ?? item.lineSubtotal,
+              taxAmount: item.lineTax,
+              taxPoint,
+              taxPeriod: new Date(taxPoint).toISOString().slice(0, 7),
+              partnerPin: partner?.kraPin ?? null,
+              transmissionStatus: postingInvoiceType === 'vendor_bill' ? 'pending_evidence' : 'pending',
+              inputClaimEligible: postingInvoiceType === 'vendor_bill'
+                ? Boolean((item as any).taxClaimEligible)
+                : false,
+              journalEntryId: journal.id,
+            },
+            create: {
+              sourceType: postingInvoiceType === 'vendor_bill' ? 'vendor_bill' : 'invoice',
+              sourceId: params.id,
+              sourceLineId: item.id,
+              direction: postingInvoiceType === 'vendor_bill' ? 'input' : 'output',
+              taxCategory: category,
+              taxRate: item.taxRate,
+              taxableBase: (item as any).taxableBase ?? item.lineSubtotal,
+              taxAmount: item.lineTax,
+              taxPoint,
+              taxPeriod: new Date(taxPoint).toISOString().slice(0, 7),
+              partnerPin: partner?.kraPin ?? null,
+              transmissionStatus: postingInvoiceType === 'vendor_bill' ? 'pending_evidence' : 'pending',
+              inputClaimEligible: postingInvoiceType === 'vendor_bill'
+                ? Boolean((item as any).taxClaimEligible)
+                : false,
+              journalEntryId: journal.id,
+            },
+          })
+        }
+      }
+
+      await writeFinancialAuditInTx(tx, {
+        userId: actor.id,
+        action: willPostNow ? 'post_invoice' : 'update_invoice',
+        entityType: 'invoice',
+        entityId: params.id,
+        relatedJournalId: journalId,
+        oldValues: { status: before.status, totalAmount: Number(before.totalAmount), amountPaid: Number(before.amountPaid), lockVersion: before.lockVersion },
+        newValues: { status: data.status ?? before.status, totalAmount: Number(data.totalAmount ?? before.totalAmount), lockVersion: nextLockVersion(before.lockVersion) },
+      })
+
+      return tx.invoice.findUniqueOrThrow({
+        where: { id: params.id },
+        include: { items: true },
+      })
+    }, { isolationLevel: 'Serializable' })
 
     const mirror = await resolveBlobInvoiceMirror(invoice.id)
     const invoiceType = body.type === 'vendor_bill' || mirror.type === 'vendor_bill'
@@ -238,44 +448,13 @@ export async function PUT(request: Request, { params }: { params: { id: string }
       ?? mirror.purchaseOrderId
       ?? undefined
 
-    // When a draft becomes posted/approved, dual-write the AR/revenue (or AP/expense) journal
-    const becamePosted = before
-      && before.status === 'draft'
-      && (invoice.status === 'approved' || invoice.status === 'invoiced')
-    if (becamePosted) {
+    const becamePosted = willPostNow
+    if (becamePosted && invoiceType === 'customer_invoice' && salesCommissionAppliesToInvoice(invoice)) {
       try {
-        const { postInvoiceJournalToPrisma } = await import('@/lib/accounting/invoice-journals')
-        await postInvoiceJournalToPrisma({
-          id: invoice.id,
-          ref: invoice.invoiceNumber,
-          invoiceNumber: invoice.invoiceNumber,
-          totalAmount: Number(invoice.totalAmount),
-          subtotal: Number(invoice.subtotal),
-          taxAmount: Number(invoice.taxAmount),
-          type: invoiceType,
-          purchaseOrderId,
-          partnerName: mirror.partnerName,
-          clientName: mirror.clientName,
-          lines: (mirror.lines?.length
-            ? mirror.lines
-            : invoice.items.map(i => ({
-                productId: i.productId ?? undefined,
-                qty: Number(i.qty),
-                unitPrice: Number(i.unitPrice),
-                subtotal: Number(i.lineSubtotal),
-                description: i.description,
-              }))),
-        }, { createdById: actor.id })
+        const { postSalesCommissionForInvoice } = await import('@/lib/accounting/sales-commission')
+        await postSalesCommissionForInvoice(invoice.id)
       } catch (err) {
-        console.error('[invoice] journal dual-write failed:', err)
-      }
-      if (invoiceType === 'customer_invoice' && salesCommissionAppliesToInvoice(invoice)) {
-        try {
-          const { postSalesCommissionForInvoice } = await import('@/lib/accounting/sales-commission')
-          await postSalesCommissionForInvoice(invoice.id)
-        } catch (err) {
-          console.error('[invoice] sales commission calculation failed:', err)
-        }
+        console.error('[invoice] sales commission calculation failed:', err)
       }
     }
 

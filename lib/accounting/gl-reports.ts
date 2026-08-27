@@ -33,13 +33,14 @@ export function aggregateJournalLines(
 ): Map<string, AggregatedAccount> {
   const map = new Map<string, AggregatedAccount>()
   for (const line of lines) {
-    const code = line.account?.code || (line.accountLabel.match(/^(\d{3,6})\b/)?.[1] ?? 'UNKNOWN')
-    const name = line.account?.name || (line.accountLabel.includes(' - ')
-      ? line.accountLabel.split(' - ').slice(1).join(' - ')
-      : line.accountLabel)
-    const type = line.account?.accountType || 'asset'
-    const group = line.account?.accountGroup || ''
-    const subGroup = line.account?.subGroup || ''
+    if (!line.account) {
+      throw new Error(`Unmapped journal account in reporting: ${line.accountLabel}`)
+    }
+    const code = line.account.code
+    const name = line.account.name
+    const type = line.account.accountType
+    const group = line.account.accountGroup || ''
+    const subGroup = line.account.subGroup || ''
     const key = code
     const row = map.get(key) || { id: key, code, name, type, group, subGroup, debit: 0, credit: 0 }
     if (!row.subGroup && subGroup) row.subGroup = subGroup
@@ -131,6 +132,7 @@ export type BalanceSheetResult = {
   totalAssets: number
   totalLiabilities: number
   totalEquity: number
+  equationDifference: number
   balanced: boolean
 }
 
@@ -144,6 +146,7 @@ export function buildBalanceSheetFromAggregates(
   let totalAssets = 0
   let totalLiabilities = 0
   let totalEquity = 0
+  let currentEarnings = 0
 
   for (const row of aggregates.values()) {
     const amount = netBalanceForType(row.type, row.debit, row.credit)
@@ -158,7 +161,23 @@ export function buildBalanceSheetFromAggregates(
     } else if (row.type === 'equity') {
       equity.push(entry)
       totalEquity += amount
+    } else if (row.type === 'revenue') {
+      currentEarnings += amount
+    } else if (row.type === 'expense') {
+      currentEarnings -= amount
     }
+  }
+
+  if (Math.abs(currentEarnings) >= 0.01) {
+    const earnings = round2(currentEarnings)
+    equity.push({
+      code: 'CURRENT_EARNINGS',
+      name: 'Current period earnings',
+      type: 'equity',
+      group: 'Current earnings',
+      amount: earnings,
+    })
+    totalEquity += earnings
   }
 
   assets.sort((a, b) => a.code.localeCompare(b.code))
@@ -168,6 +187,7 @@ export function buildBalanceSheetFromAggregates(
   totalAssets = round2(totalAssets)
   totalLiabilities = round2(totalLiabilities)
   totalEquity = round2(totalEquity)
+  const equationDifference = round2(totalAssets - (totalLiabilities + totalEquity))
 
   return {
     currency: 'KES',
@@ -178,12 +198,13 @@ export function buildBalanceSheetFromAggregates(
     totalAssets,
     totalLiabilities,
     totalEquity,
-    balanced: Math.abs(totalAssets - (totalLiabilities + totalEquity)) < 0.02,
+    equationDifference,
+    balanced: Math.abs(equationDifference) < 0.01,
   }
 }
 
 export async function fetchPostedLines(opts: { dateFrom?: string; dateTo?: string; asOf?: string }) {
-  const entryWhere: Record<string, unknown> = { isPosted: true, isReversed: false }
+  const entryWhere: Record<string, unknown> = { isPosted: true }
   if (opts.dateFrom || opts.dateTo || opts.asOf) {
     const entryDate: Record<string, Date> = {}
     if (opts.dateFrom) entryDate.gte = new Date(`${opts.dateFrom}T00:00:00Z`)
@@ -214,21 +235,18 @@ export async function fetchPostedLines(opts: { dateFrom?: string; dateTo?: strin
 
 export async function buildProfitAndLoss(opts: { dateFrom?: string; dateTo?: string }) {
   const lines = await fetchPostedLines(opts)
-  const aggregates = aggregateJournalLines(lines)
-  return buildProfitAndLossFromAggregates(aggregates, opts)
+  return buildProfitAndLossFromAggregates(aggregateJournalLines(lines), opts)
 }
 
 export async function buildManagementProfitAndLoss(opts: { dateFrom?: string; dateTo?: string }) {
   const { buildManagementProfitAndLossFromAggregates } = await import('@/lib/accounting/management-pl')
   const lines = await fetchPostedLines(opts)
-  const aggregates = aggregateJournalLines(lines)
-  return buildManagementProfitAndLossFromAggregates(aggregates, opts)
+  return buildManagementProfitAndLossFromAggregates(aggregateJournalLines(lines), opts)
 }
 
 export async function buildBalanceSheet(opts: { asOf: string }) {
   const lines = await fetchPostedLines({ asOf: opts.asOf })
-  const aggregates = aggregateJournalLines(lines)
-  return buildBalanceSheetFromAggregates(aggregates, opts.asOf)
+  return buildBalanceSheetFromAggregates(aggregateJournalLines(lines), opts.asOf)
 }
 
 export type GeneralLedgerLine = {
@@ -243,13 +261,51 @@ export type GeneralLedgerLine = {
   runningBalance: number
 }
 
+function accountDelta(type: string, debit: number, credit: number) {
+  return type === 'asset' || type === 'expense' ? debit - credit : credit - debit
+}
+
 export async function buildGeneralLedger(opts: {
   accountCode?: string
   accountId?: string
   dateFrom?: string
   dateTo?: string
 }) {
-  const entryWhere: Record<string, unknown> = { isPosted: true, isReversed: false }
+  const accountFilter: Record<string, unknown> = {}
+  if (opts.accountId) {
+    accountFilter.accountId = opts.accountId
+  } else if (opts.accountCode) {
+    accountFilter.OR = [
+      { account: { code: opts.accountCode } },
+      { accountLabel: { startsWith: `${opts.accountCode} ` } },
+      { accountLabel: { startsWith: `${opts.accountCode} -` } },
+    ]
+  }
+
+  let openingBalance = 0
+  if (opts.dateFrom) {
+    const openingLines = await prisma.journalEntryLine.findMany({
+      where: {
+        ...accountFilter,
+        journalEntry: {
+          isPosted: true,
+          entryDate: { lt: new Date(`${opts.dateFrom}T00:00:00Z`) },
+        },
+      },
+      select: {
+        debit: true,
+        credit: true,
+        account: { select: { accountType: true } },
+        accountLabel: true,
+      },
+    })
+    for (const line of openingLines) {
+      if (!line.account) throw new Error(`Unmapped journal account in GL opening balance: ${line.accountLabel}`)
+      openingBalance = round2(openingBalance + accountDelta(line.account.accountType, Number(line.debit), Number(line.credit)))
+    }
+  }
+
+  const entryWhere: Record<string, unknown> = { isPosted: true }
   if (opts.dateFrom || opts.dateTo) {
     const entryDate: Record<string, Date> = {}
     if (opts.dateFrom) entryDate.gte = new Date(`${opts.dateFrom}T00:00:00Z`)
@@ -257,19 +313,8 @@ export async function buildGeneralLedger(opts: {
     entryWhere.entryDate = entryDate
   }
 
-  const lineWhere: Record<string, unknown> = { journalEntry: entryWhere }
-  if (opts.accountId) {
-    lineWhere.accountId = opts.accountId
-  } else if (opts.accountCode) {
-    lineWhere.OR = [
-      { account: { code: opts.accountCode } },
-      { accountLabel: { startsWith: `${opts.accountCode} ` } },
-      { accountLabel: { startsWith: `${opts.accountCode} -` } },
-    ]
-  }
-
   const lines = await prisma.journalEntryLine.findMany({
-    where: lineWhere,
+    where: { ...accountFilter, journalEntry: entryWhere },
     select: {
       id: true,
       accountLabel: true,
@@ -286,17 +331,20 @@ export async function buildGeneralLedger(opts: {
         },
       },
     },
-    orderBy: [{ journalEntry: { entryDate: 'asc' } }, { sortOrder: 'asc' }],
+    orderBy: [
+      { journalEntry: { entryDate: 'asc' } },
+      { journalEntry: { ref: 'asc' } },
+      { sortOrder: 'asc' },
+    ],
   })
 
-  let running = 0
+  let running = openingBalance
   const result: GeneralLedgerLine[] = []
   for (const line of lines) {
-    const type = line.account?.accountType || 'asset'
+    if (!line.account) throw new Error(`Unmapped journal account in GL: ${line.accountLabel}`)
     const debit = Number(line.debit || 0)
     const credit = Number(line.credit || 0)
-    const delta = type === 'asset' || type === 'expense' ? debit - credit : credit - debit
-    running = round2(running + delta)
+    running = round2(running + accountDelta(line.account.accountType, debit, credit))
     result.push({
       id: line.id,
       entryRef: line.journalEntry.ref,
@@ -316,6 +364,7 @@ export async function buildGeneralLedger(opts: {
     accountId: opts.accountId ?? null,
     dateFrom: opts.dateFrom ?? null,
     dateTo: opts.dateTo ?? null,
+    openingBalance,
     lines: result,
     closingBalance: running,
   }
