@@ -1583,13 +1583,13 @@ function SalesContent() {
     }
   }
 
-  // Pro-forma invoices run their own PI/YYYY/NNNN sequence. The number is
+  // Proforma invoices run their own PFI/YYYY/NNNN sequence. The number is
   // assigned the first time a pro-forma is issued for the order and kept on
   // the record, so reprints reuse the same number.
   const downloadProformaInvoice = async (so: SalesOrderView) => {
     let piRef = so.proformaRef
     if (!piRef) {
-      piRef = docSeq('PI')
+      piRef = docSeq('PFI')
       updateSaleOrder(so.id, { proformaRef: piRef })
     }
     try {
@@ -3059,7 +3059,7 @@ function SalesContent() {
       </div>
 
       {showProformaPreview && activeOrder && (() => {
-        const proformaRef = activeOrder.ref.replace(/^(QUO|QTN|SO)/i, 'PFI')
+        const proformaRef = activeOrder.proformaRef || activeOrder.ref.replace(/^(QUO|QTN|SO)/i, 'PFI')
         const paymentLines = buildPaymentDetailLines({
           details: getDocumentPaymentDetails(activeOrder.id),
           company: companySettings,
