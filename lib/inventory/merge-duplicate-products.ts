@@ -4,6 +4,7 @@ import { loadAppState, saveStoreKeys } from '@/lib/server-store'
 import {
   findDuplicateProductGroups,
   pickKeepProduct,
+  planArchivedProductIdentity,
   rewriteProductIdsInRecords,
   type DuplicateProductGroup,
   type DuplicateProductMember,
@@ -12,7 +13,6 @@ import {
 const PRODUCT_ID_MODELS: Array<[string, string]> = [
   ['serialNumber', 'productId'],
   ['stockMovement', 'productId'],
-  ['inventoryBatch', 'productId'],
   ['stockReservation', 'productId'],
   ['stockAdjustmentItem', 'productId'],
   ['purchaseOrderItem', 'productId'],
@@ -167,6 +167,39 @@ async function reassignProductForeignKeys(tx: any, dropId: string, keepId: strin
       }
     }
   }
+  if (typeof tx.inventoryBatch?.findMany === 'function') {
+    const dropBatches = await tx.inventoryBatch.findMany({ where: { productId: dropId } })
+    for (const batch of dropBatches) {
+      const existing = await tx.inventoryBatch.findUnique({
+        where: { productId_batchNumber: { productId: keepId, batchNumber: batch.batchNumber } },
+      }).catch(() => null)
+      if (existing) {
+        await tx.inventoryBatch.update({
+          where: { id: existing.id },
+          data: {
+            quantityReceived: Number(existing.quantityReceived || 0) + Number(batch.quantityReceived || 0),
+            quantityAvailable: Number(existing.quantityAvailable || 0) + Number(batch.quantityAvailable || 0),
+          },
+        })
+        await tx.inventoryBatch.delete({ where: { id: batch.id } })
+      } else {
+        await tx.inventoryBatch.update({
+          where: { id: batch.id },
+          data: { productId: keepId },
+        })
+      }
+    }
+  }
+}
+
+function uniqueConstraintError(error: unknown): string | null {
+  if (!error || typeof error !== 'object' || (error as { code?: string }).code !== 'P2002') return null
+  const target = (error as { meta?: { target?: unknown } }).meta?.target
+  const fields = Array.isArray(target) ? target.join(', ') : typeof target === 'string' ? target : ''
+  if (fields.includes('barcode') || fields.includes('sku')) {
+    return 'Could not merge — SKU or barcode already exists on another product'
+  }
+  return 'Could not merge — a unique inventory field already exists on the keeper'
 }
 
 export async function mergeDuplicateProducts(opts: {
@@ -180,31 +213,47 @@ export async function mergeDuplicateProducts(opts: {
   ])
   if (!keep || !drop) return { ok: false, error: 'Product not found' }
 
-  await prisma.$transaction(async tx => {
-    if (typeof tx.$executeRawUnsafe === 'function') {
-      await tx.$executeRawUnsafe(
-        'SELECT pg_advisory_xact_lock(hashtextextended($1, 0))',
-        `product-merge:${[opts.keepId, opts.dropId].sort().join(':')}`,
-      )
-    }
-    await reassignProductForeignKeys(tx, drop.id, keep.id)
-    const enrich: Record<string, unknown> = {}
-    if (!keep.barcode && drop.barcode) enrich.barcode = drop.barcode
-    if (!keep.description && drop.description) enrich.description = drop.description
-    if (!keep.primaryImageUrl && drop.primaryImageUrl) enrich.primaryImageUrl = drop.primaryImageUrl
-    if (Object.keys(enrich).length) {
-      await tx.product.update({ where: { id: keep.id }, data: enrich })
-    }
-    await tx.product.update({
-      where: { id: drop.id },
-      data: {
-        isActive: false,
-        sku: `${String(drop.sku).slice(0, 40)}-MERGED-${drop.id.slice(0, 8)}`.slice(0, 60),
-        barcode: drop.barcode ? `${drop.barcode}-M`.slice(0, 60) : null,
-        name: `${drop.name} (merged)`.slice(0, 200),
-      },
-    })
+  const identityCodes = await prisma.product.findMany({ select: { sku: true, barcode: true } })
+  const archived = planArchivedProductIdentity({
+    drop: { id: drop.id, sku: drop.sku, barcode: drop.barcode, name: drop.name },
+    keep: { barcode: keep.barcode },
+    takenSkus: identityCodes.map(row => row.sku),
+    takenBarcodes: identityCodes.map(row => row.barcode).filter((code): code is string => Boolean(code)),
   })
+
+  try {
+    await prisma.$transaction(async tx => {
+      if (typeof tx.$executeRawUnsafe === 'function') {
+        await tx.$executeRawUnsafe(
+          'SELECT pg_advisory_xact_lock(hashtextextended($1, 0))',
+          `product-merge:${[opts.keepId, opts.dropId].sort().join(':')}`,
+        )
+      }
+      // Free the drop SKU/barcode before copying anything onto the keeper.
+      // Copying first hits Product.barcode / Product.sku unique constraints (P2002).
+      await tx.product.update({
+        where: { id: drop.id },
+        data: {
+          isActive: false,
+          sku: archived.sku,
+          barcode: archived.barcode,
+          name: archived.name,
+        },
+      })
+      const enrich: Record<string, unknown> = {}
+      if (archived.copyBarcodeToKeep && drop.barcode) enrich.barcode = drop.barcode
+      if (!keep.description && drop.description) enrich.description = drop.description
+      if (!keep.primaryImageUrl && drop.primaryImageUrl) enrich.primaryImageUrl = drop.primaryImageUrl
+      if (Object.keys(enrich).length) {
+        await tx.product.update({ where: { id: keep.id }, data: enrich })
+      }
+      await reassignProductForeignKeys(tx, drop.id, keep.id)
+    })
+  } catch (error) {
+    const message = uniqueConstraintError(error)
+    if (message) return { ok: false, error: message }
+    throw error
+  }
 
   try {
     await rewriteProductIdsInBlobs(drop.id, keep.id)
