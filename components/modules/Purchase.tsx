@@ -234,7 +234,20 @@ function PurchaseContent() {
 
   const activePO      = useMemo(() => purchaseOrders.find(p => p.id === activeId) ?? null, [purchaseOrders, activeId])
   const activeReceipt = useMemo(() => receipts.find(r => r.id === activeReceiptId) ?? null, [receipts, activeReceiptId])
-  const linkedBill    = useMemo(() => activePO?.billId ? (invoices.find(i => i.id === activePO.billId) ?? null) : null, [activePO, invoices])
+  const linkedBill    = useMemo(() => {
+    if (!activePO) return null
+    const isLiveBill = (bill: typeof vendorBills[number]) =>
+      !['cancelled', 'voided', 'void'].includes(String(bill.status))
+    const stored = activePO.billId
+      ? vendorBills.find(bill => bill.id === activePO.billId && isLiveBill(bill))
+      : undefined
+    // The relational PO list does not carry the legacy blob-only billId.
+    // Recover the relationship from Invoice.purchaseOrderId so a refresh
+    // cannot make an existing bill (and all of its next actions) disappear.
+    return stored
+      ?? vendorBills.find(bill => bill.purchaseOrderId === activePO.id && isLiveBill(bill))
+      ?? null
+  }, [activePO, vendorBills])
 
   useEffect(() => {
     if (!urlActiveId) {
