@@ -601,12 +601,14 @@ function SalesContent() {
       title,
       ref: so.ref,
       date: so.date,
-      dueLabel: 'Expiration',
-      dueDate: so.validUntil,
+      dueLabel: /sales? order/i.test(title) ? 'Delivery date' : 'Valid until',
+      dueDate: /sales? order/i.test(title) ? (so.deliveryDate || so.validUntil) : so.validUntil,
       salesperson: so.salespersonName ?? so.createdByName,
       customerName: so.customerName,
       customerAddress: so.invoiceAddress || [contact?.address, contact?.city, contact?.country].filter(Boolean).join(', ') || undefined,
       customerCountry: contact?.country || 'Kenya',
+      customerPhone: contact?.phone || contact?.mobile || undefined,
+      customerEmail: contact?.email || undefined,
       customerTaxId: contact?.vatNumber || undefined,
       lines: so.lines.map(l => {
         // A confirmed/delivered line may already have a serial assigned —
