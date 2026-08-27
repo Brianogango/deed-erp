@@ -1,14 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { requireRole, withApiErrorHandling } from '@/lib/auth/api'
-import { writeFinancialAudit } from '@/lib/finance-audit'
+import { writeFinancialAuditInTx } from '@/lib/finance-audit'
 import { recordPaymentWithAllocations } from '@/lib/accounting/payment-allocations'
 import { paymentAllocatedSum, paymentUnallocated } from '@/lib/accounting/residuals'
-import { isAccountingPostingEngineEnabled } from '@/lib/accounting/posting-flag'
 import { makeCollectionHandlers } from '@/lib/server-store-crud'
 import type { Payment } from '@/lib/store'
 import { checkFiscalLock } from '@/lib/fiscal-lock.server'
 import { roundMoney } from '@/lib/accounting/money'
+import {
+  buildPaymentWithOutstandingLines,
+  resolvePostingAccountLabel,
+} from '@/lib/accounting/posting-service'
 
 const blobConfig = {
   storeKey: 'deed_payments',
@@ -142,6 +145,18 @@ export async function POST(request: NextRequest) {
       unallocatedPreview > 0.009 ? (totalAllocated > 0 ? 'outstanding:partial' : 'outstanding:full') : null,
     ].filter(Boolean)
 
+    const postingLines = buildPaymentWithOutstandingLines({
+      partnerName: partnerName || 'Partner',
+      paymentRef: reference || 'receipt',
+      method: paymentMethod,
+      isVendor: direction === 'outbound',
+      allocations: allocations.map((a: { invoiceId: string; amount: number }) => ({
+        invoiceRef: a.invoiceId,
+        amount: a.amount,
+      })),
+      unallocatedAmount: unallocatedPreview,
+    })
+
     const { payment, allocations: createdAllocations, unallocatedAmount } =
       await recordPaymentWithAllocations({
         amount,
@@ -155,80 +170,45 @@ export async function POST(request: NextRequest) {
         idempotencyKey,
         allocations,
         allowUnallocated: true,
-      })
-
-    await writeFinancialAudit({
-      userId: actor.id,
-      action: unallocatedAmount > 0.009
-        ? 'record_outstanding_payment'
-        : 'record_multi_invoice_payment',
-      entityType: 'payment',
-      entityId: payment.id,
-      newValues: {
-        amount,
-        paymentMethod,
-        allocationCount: createdAllocations.length,
-        unallocatedAmount,
-        invoiceIds: allocations.map((a: { invoiceId: string }) => a.invoiceId),
-        direction,
-      },
-    })
-
-    try {
-      if (isAccountingPostingEngineEnabled()) {
-        const { postPaymentWithOutstanding } = await import('@/lib/accounting/posting-service')
-        const { resolveBlobInvoiceMirror } = await import('@/lib/accounting/resolve-invoice-mirror')
-        const allocDetails = []
-        let isVendor = direction === 'outbound'
-        for (const alloc of createdAllocations) {
-          const invoice = await prisma.invoice.findUnique({ where: { id: alloc.invoiceId } })
-          if (!invoice) continue
-          const mirror = await resolveBlobInvoiceMirror(invoice.id)
-          if (mirror.type === 'vendor_bill') isVendor = true
-          allocDetails.push({
-            invoiceId: invoice.id,
-            invoiceRef: invoice.invoiceNumber,
-            amount: Number(alloc.amount),
-          })
-        }
-        await postPaymentWithOutstanding({
-          paymentId: payment.id,
-          paymentRef: reference || payment.id.slice(0, 8),
-          partnerName: partnerName || 'Partner',
-          method: paymentMethod,
-          isVendor,
-          allocations: allocDetails,
-          unallocatedAmount,
-          createdById: actor.id,
-        })
-      } else {
-        const { postInvoicePaymentJournalToPrisma } = await import('@/lib/accounting/invoice-journals')
-        const { resolveBlobInvoiceMirror } = await import('@/lib/accounting/resolve-invoice-mirror')
-        for (const alloc of createdAllocations) {
-          const invoice = await prisma.invoice.findUnique({ where: { id: alloc.invoiceId } })
-          if (!invoice) continue
-          const mirror = await resolveBlobInvoiceMirror(invoice.id)
-          await postInvoicePaymentJournalToPrisma({
-            invoice: {
-              id: invoice.id,
-              ref: invoice.invoiceNumber,
-              invoiceNumber: invoice.invoiceNumber,
-              totalAmount: Number(invoice.totalAmount),
-              type: mirror.type,
-              purchaseOrderId: mirror.purchaseOrderId,
-              partnerName: mirror.partnerName,
-              clientName: mirror.clientName,
+        journal: postingLines.length
+          ? paymentId => ({
+              ref: `JRN/PAY/${reference || paymentId.slice(0, 8)}/${paymentId}`.slice(0, 80),
+              journalCode: direction === 'outbound' ? 'PUR' : (String(paymentMethod).toLowerCase() === 'cash' ? 'CSH' : 'BNK'),
+              date: paidAt,
+              description: `Payment ${reference || paymentId.slice(0, 8)} — ${partnerName || 'Partner'}`,
+              sourceType: direction === 'outbound' ? 'purchase_payment' : 'payment',
+              sourceId: paymentId,
+              paymentId,
+              invoiceId: allocations[0]?.invoiceId ?? null,
+              createdById: actor.id,
+              skipIfExists: false,
+              lines: postingLines.map(l => ({
+                accountLabel: resolvePostingAccountLabel(l),
+                label: l.description,
+                debit: Number(l.debit || 0),
+                credit: Number(l.credit || 0),
+              })),
+            })
+          : undefined,
+        audit: async (tx, pay, created) => {
+          await writeFinancialAuditInTx(tx, {
+            userId: actor.id,
+            action: unallocatedPreview > 0.009
+              ? 'record_outstanding_payment'
+              : 'record_multi_invoice_payment',
+            entityType: 'payment',
+            entityId: pay.id,
+            newValues: {
+              amount,
+              paymentMethod,
+              allocationCount: created.length,
+              unallocatedAmount: unallocatedPreview,
+              invoiceIds: allocations.map((a: { invoiceId: string }) => a.invoiceId),
+              direction,
             },
-            amount: Number(alloc.amount),
-            paymentId: payment.id,
-            method: paymentMethod,
-            createdById: actor.id,
           })
-        }
-      }
-    } catch (err) {
-      console.error('[payments] journal dual-write failed:', err)
-    }
+        },
+      })
 
     try {
       const { notifyCustomerPaymentReceived } = await import('@/lib/finance/payment-receipt-notify')

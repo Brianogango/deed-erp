@@ -3,7 +3,6 @@ import { requireRole, withApiErrorHandling } from '@/lib/auth/api'
 import { writeFinancialAudit } from '@/lib/finance-audit'
 import { canReimburseExpense, canReviewExpense } from '@/lib/finance-controls'
 import { checkFiscalLock } from '@/lib/fiscal-lock.server'
-import { isAccountingPostingEngineEnabled } from '@/lib/accounting/posting-flag'
 import {
   postExpenseApproval,
   postExpenseReimbursement,
@@ -15,7 +14,6 @@ export const dynamic = 'force-dynamic'
 /**
  * POST /api/expenses/post-journal
  * Dual-write expense approve / reimburse journals through the posting engine.
- * Blob UI journals remain SoT; this path fills Prisma GL when the flag is on.
  *
  * Body: {
  *   kind: 'approval' | 'reimbursement',
@@ -33,10 +31,6 @@ export const dynamic = 'force-dynamic'
 export async function POST(request: NextRequest) {
   return withApiErrorHandling(async () => {
     const actor = await requireRole(['director', 'finance_officer'])
-
-    if (!isAccountingPostingEngineEnabled()) {
-      return NextResponse.json({ skipped: true, reason: 'ACCOUNTING_POSTING_ENGINE off' })
-    }
 
     const body = await request.json().catch(() => ({}))
     const kind = body.kind === 'reimbursement' ? 'reimbursement' : body.kind === 'approval' ? 'approval' : null

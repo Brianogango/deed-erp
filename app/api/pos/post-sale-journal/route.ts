@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireRole, withApiErrorHandling } from '@/lib/auth/api'
 import { writeFinancialAudit } from '@/lib/finance-audit'
 import { checkFiscalLock } from '@/lib/fiscal-lock.server'
-import { isAccountingPostingEngineEnabled } from '@/lib/accounting/posting-flag'
 import { postPosSale } from '@/lib/accounting/posting-service'
 import { roundMoney } from '@/lib/accounting/money'
 
@@ -12,8 +11,7 @@ const POS_ROLES = ['director', 'finance_officer', 'admin_officer', 'sales_rep', 
 
 /**
  * POST /api/pos/post-sale-journal
- * Dual-write POS sale journals through the posting engine when flagged.
- * Blob POS journals remain SoT; this path fills Prisma GL.
+ * Dual-write POS sale journals through the posting engine.
  *
  * Body: {
  *   orderId: string,
@@ -33,10 +31,6 @@ const POS_ROLES = ['director', 'finance_officer', 'admin_officer', 'sales_rep', 
 export async function POST(request: NextRequest) {
   return withApiErrorHandling(async () => {
     const actor = await requireRole(POS_ROLES)
-
-    if (!isAccountingPostingEngineEnabled()) {
-      return NextResponse.json({ skipped: true, reason: 'ACCOUNTING_POSTING_ENGINE off' })
-    }
 
     const body = await request.json().catch(() => ({}))
     const orderId = String(body.orderId || '').trim()

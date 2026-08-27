@@ -80,6 +80,10 @@ describe('POST /api/payments fiscal lock', () => {
       headers: { 'Content-Type': 'application/json' },
     }))
     expect(res.status).toBe(200)
+    expect(mockRecordPayment).toHaveBeenCalledWith(expect.objectContaining({
+      journal: expect.any(Function),
+      audit: expect.any(Function),
+    }))
     expect(mockNotify).toHaveBeenCalledTimes(1)
     expect(mockNotify).toHaveBeenCalledWith(expect.objectContaining({
       paymentId: 'pay-1',

@@ -1,7 +1,5 @@
 import 'server-only'
 import prisma from '@/lib/prisma'
-import { createJournalEntry } from '@/lib/accounting/journal-service'
-import { isAccountingPostingEngineEnabled } from '@/lib/accounting/posting-flag'
 import { postStockJournal } from '@/lib/accounting/posting-service'
 import { labelForRole } from '@/lib/accounting/coa-roles'
 import { loadAppState } from '@/lib/server-store'
@@ -28,32 +26,54 @@ async function persistStockJournal(params: {
   sourceId?: string | null
   lines: Array<{ accountLabel: string; label: string; debit: number; credit: number }>
   createdById?: string | null
-}) {
-  if (isAccountingPostingEngineEnabled()) {
-    return postStockJournal({
-      ref: params.ref,
-      description: params.description,
-      sourceType: params.sourceType,
-      sourceId: params.sourceId,
-      createdById: params.createdById,
-      lines: params.lines.map(l => ({
-        accountLabel: l.accountLabel,
-        description: l.label,
-        debit: l.debit,
-        credit: l.credit,
-      })),
-    })
+  ledger?: {
+    productId: string
+    quantity: number
+    unitCost: number
+    movementType: string
+    value: number
   }
-  return createJournalEntry({
+}) {
+  const journal = await postStockJournal({
     ref: params.ref,
-    journalCode: 'STK',
     description: params.description,
     sourceType: params.sourceType,
     sourceId: params.sourceId,
     createdById: params.createdById,
-    skipIfExists: true,
-    lines: params.lines,
+    lines: params.lines.map(l => ({
+      accountLabel: l.accountLabel,
+      description: l.label,
+      debit: l.debit,
+      credit: l.credit,
+    })),
   })
+  if (params.ledger && journal?.id) {
+    const eventKey = `ledger:${params.sourceType}:${params.sourceId || params.ref}:${params.ledger.productId}`.slice(0, 160)
+    try {
+      await prisma.inventoryLedgerEntry.upsert({
+        where: { eventKey },
+        create: {
+          eventKey,
+          productId: params.ledger.productId,
+          location: 'warehouse',
+          movementType: params.ledger.movementType,
+          quantity: params.ledger.quantity,
+          unitCost: params.ledger.unitCost,
+          value: params.ledger.value,
+          documentDate: new Date(),
+          sourceType: params.sourceType.slice(0, 40),
+          sourceId: String(params.sourceId || params.ref).slice(0, 120),
+          journalEntryId: journal.id,
+        },
+        update: { journalEntryId: journal.id },
+      })
+    } catch (err) {
+      throw new Error(
+        `Inventory ledger write failed for ${eventKey}: ${err instanceof Error ? err.message : String(err)}`,
+      )
+    }
+  }
+  return journal
 }
 
 export type CostingMethod = 'average' | 'fifo' | 'standard'
@@ -295,6 +315,13 @@ async function applyOutboundValuation(params: {
       sourceId: params.reference || params.movementId || params.productId,
       createdById: params.userId,
       lines,
+      ledger: {
+        productId: params.productId,
+        quantity: -applied.qty,
+        unitCost: unitCostUsed,
+        movementType: params.kind,
+        value: -applied.totalCost,
+      },
     })
   }
 
@@ -487,6 +514,13 @@ export async function processStockReceipt(params: {
       sourceId: params.reference || params.movementId || params.productId,
       createdById: params.userId,
       lines,
+      ledger: {
+        productId: params.productId,
+        quantity: applied.qty,
+        unitCost: applied.unitCost,
+        movementType: 'receipt',
+        value: invDebit,
+      },
     })
   }
 
@@ -652,6 +686,13 @@ export async function processStockCustomerReturn(params: {
         { accountLabel: inventoryLabel, label: 'Inventory restore', debit: applied.totalCost, credit: 0 },
         { accountLabel: cogsLabel, label: 'COGS reversal', debit: 0, credit: applied.totalCost },
       ],
+      ledger: {
+        productId: params.productId,
+        quantity: applied.qty,
+        unitCost,
+        movementType: 'customer_return',
+        value: applied.totalCost,
+      },
     })
   }
 
@@ -809,6 +850,13 @@ export async function processStockAdjustment(params: {
         { accountLabel: inventoryLabel, label: 'Inventory gain', debit: applied.totalCost, credit: 0 },
         { accountLabel: ADJUSTMENT_LABEL, label: 'Inventory variance', debit: 0, credit: applied.totalCost },
       ],
+      ledger: {
+        productId: params.productId,
+        quantity: applied.qty,
+        unitCost,
+        movementType: 'adjustment',
+        value: applied.totalCost,
+      },
     })
   }
 
@@ -867,6 +915,13 @@ export async function processOpeningStockValuation(params: {
         { accountLabel: inventoryLabel, label: 'Opening inventory', debit: total, credit: 0 },
         { accountLabel: ADJUSTMENT_LABEL, label: 'Opening stock equity/variance', debit: 0, credit: total },
       ],
+      ledger: {
+        productId: params.productId,
+        quantity: qty,
+        unitCost,
+        movementType: 'opening',
+        value: total,
+      },
     })
     try {
       await markProcessed({

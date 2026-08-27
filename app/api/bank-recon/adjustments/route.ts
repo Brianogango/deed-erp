@@ -3,7 +3,6 @@ import { requireRole, withApiErrorHandling } from '@/lib/auth/api'
 import { writeFinancialAudit } from '@/lib/finance-audit'
 import { canManageBankRecon } from '@/lib/finance-controls'
 import { checkFiscalLock } from '@/lib/fiscal-lock.server'
-import { isAccountingPostingEngineEnabled } from '@/lib/accounting/posting-flag'
 import { postBankStatementAdjustment } from '@/lib/accounting/posting-service'
 import { roundMoney } from '@/lib/accounting/money'
 
@@ -12,7 +11,7 @@ export const dynamic = 'force-dynamic'
 /**
  * POST /api/bank-recon/adjustments
  * Post bank charge / interest journals for unmatched statement categories.
- * Requires ACCOUNTING_POSTING_ENGINE=true and Finance/Director seal.
+ * Requires Finance/Director seal.
  *
  * Body: {
  *   kind: 'bank_charge' | 'interest_earned',
@@ -29,12 +28,6 @@ export async function POST(request: NextRequest) {
     const actor = await requireRole(['director', 'finance_officer'])
     if (!canManageBankRecon(actor.role)) {
       return NextResponse.json({ error: 'Only Finance or Director can post bank recon adjustments' }, { status: 403 })
-    }
-
-    if (!isAccountingPostingEngineEnabled()) {
-      return NextResponse.json({
-        error: 'Bank recon GL adjustments require ACCOUNTING_POSTING_ENGINE=true',
-      }, { status: 409 })
     }
 
     const body = await request.json().catch(() => ({}))
