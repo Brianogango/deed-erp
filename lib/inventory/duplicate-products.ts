@@ -98,3 +98,45 @@ export function pickKeepProduct(members: DuplicateProductMember[]): DuplicatePro
     return String(a.createdAt ?? '').localeCompare(String(b.createdAt ?? ''))
   })[0]
 }
+
+/** Unique SKU/barcode that fits Product.sku / Product.barcode (varchar 60). */
+export function nextUniqueProductCode(desired: string, taken: Iterable<string>, maxLen = 60): string {
+  const takenSet = new Set(Array.from(taken).map(v => String(v)))
+  const raw = String(desired || '').trim() || 'MERGED'
+  const base = raw.slice(0, maxLen)
+  if (!takenSet.has(base)) return base
+  for (let n = 1; n < 1000; n += 1) {
+    const suffix = `-M${n}`
+    const candidate = `${base.slice(0, Math.max(1, maxLen - suffix.length))}${suffix}`
+    if (!takenSet.has(candidate)) return candidate
+  }
+  return `${Date.now()}`.slice(0, maxLen)
+}
+
+export function planArchivedProductIdentity(opts: {
+  drop: { id: string; sku: string; barcode: string | null; name: string }
+  keep: { barcode: string | null }
+  takenSkus: string[]
+  takenBarcodes: string[]
+}): {
+  sku: string
+  barcode: string | null
+  copyBarcodeToKeep: boolean
+  name: string
+} {
+  const sku = nextUniqueProductCode(
+    `${String(opts.drop.sku).slice(0, 40)}-MERGED-${opts.drop.id.replace(/-/g, '').slice(0, 8)}`,
+    opts.takenSkus,
+  )
+  const copyBarcodeToKeep = !opts.keep.barcode && Boolean(opts.drop.barcode)
+  let barcode: string | null = null
+  if (opts.drop.barcode) {
+    barcode = nextUniqueProductCode(`${opts.drop.barcode}-M`, opts.takenBarcodes.filter(Boolean))
+  }
+  return {
+    sku,
+    barcode,
+    copyBarcodeToKeep,
+    name: `${opts.drop.name} (merged)`.slice(0, 200),
+  }
+}
