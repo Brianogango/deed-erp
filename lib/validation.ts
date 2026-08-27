@@ -23,7 +23,7 @@ export const productSchema = z.object({
   wholesalePrice: z.number().nonnegative("Wholesale price cannot be negative").optional().nullable(),
   /** Optional sales commission % override. Empty / null → category rate, else 0. */
   commissionRatePercent: z.number().min(0).max(100).optional().nullable(),
-  taxRate: z.number().min(0).max(100).default(16),
+  taxRate: z.number().min(0).max(100).default(0),
   minStock: z.number().int().nonnegative().default(5),
   unit: z.string().max(40).optional().nullable(),
   description: z.string().max(1000).optional().nullable(),
