@@ -61,7 +61,7 @@ export async function POST(request: Request) {
         ? undefined
         : Number(body.commissionRatePercent),
       minStock: Number(body.minStock ?? body.reorderLevel ?? 5),
-      taxRate: Number(body.taxRate ?? 16),
+      taxRate: Number(body.taxRate ?? 0),
     })
 
     const result = await publishProduct(validated)
