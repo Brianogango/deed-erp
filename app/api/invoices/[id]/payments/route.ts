@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { requireRole, withApiErrorHandling } from '@/lib/auth/api'
-import { writeFinancialAudit } from '@/lib/finance-audit'
+import { writeFinancialAuditInTx } from '@/lib/finance-audit'
 import { loadAppState } from '@/lib/server-store'
 import {
   canPayOwnPostedInvoice,
@@ -180,23 +180,28 @@ export async function POST(
           },
         ],
       }),
+      audit: async (tx, paymentRow, allocationRows) => {
+        await writeFinancialAuditInTx(tx, {
+          userId: actor.id,
+          action: 'record_invoice_payment',
+          entityType: 'invoice',
+          entityId: invoiceId,
+          oldValues: { amountPaid: Number(invoice.amountPaid), status: invoice.status },
+          newValues: {
+            paymentAmount: capped,
+            paymentMethod,
+            idempotencyKey,
+            paymentId: paymentRow.id,
+            allocationIds: allocationRows.map((a: any) => a.id),
+          },
+        })
+      },
     })
     const { payment, allocations } = result
 
     const updatedInvoice = await prisma.invoice.findUnique({ where: { id: invoiceId } })
 
-    // An idempotent retry returns the original committed payment and journal and
-    // must not emit a second audit/notification.
-    if (!result.idempotent) {
-      await writeFinancialAudit({
-        userId: actor.id,
-        action: 'record_invoice_payment',
-        entityType: 'invoice',
-        entityId: invoiceId,
-        oldValues: { amountPaid: Number(invoice.amountPaid), status: invoice.status },
-        newValues: { amountPaid: Number(updatedInvoice?.amountPaid ?? 0), paymentAmount: capped, paymentMethod, idempotencyKey, allocationIds: allocations.map(a => a.id), paymentId: payment.id },
-      })
-    }
+    // Audit was committed inside the same serializable transaction as the payment and journal.
 
     // Automation #2: customer payment confirmation (email + WhatsApp when phone exists).
     // Never fail the payment if messaging fails. Skip on idempotent retries above.
