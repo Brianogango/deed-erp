@@ -84,7 +84,7 @@ export function inferLaptopDisplay(name: string): LaptopDisplayFacts {
     touch: parsed.touch != null ? parsed.touch : (chassis?.touch ?? null),
     form: parsed.form || chassis?.form || null,
     graphics: officialGpuWins
-      ? (chassis?.graphics || skuGpu)
+      ? (chassis?.graphics || skuGpu || null)
       : (skuGpu || chassis?.graphics || null),
     ports: chassis?.ports ?? null,
   }
