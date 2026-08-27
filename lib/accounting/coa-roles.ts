@@ -24,6 +24,17 @@ export type CoaRole =
   | 'input_vat'
   | 'bank_charges'
   | 'interest_income'
+  | 'salary_expense'
+  | 'employer_nssf_expense'
+  | 'employer_housing_levy_expense'
+  | 'net_payroll_payable'
+  | 'paye_payable'
+  | 'nssf_payable'
+  | 'shif_payable'
+  | 'housing_levy_payable'
+  | 'pension_payable'
+  | 'other_payroll_deductions'
+  | 'employee_advances'
 
 /** Canonical live codes — keep stable. */
 export const COA_ROLE_CODES: Record<CoaRole, string> = {
@@ -45,6 +56,17 @@ export const COA_ROLE_CODES: Record<CoaRole, string> = {
   input_vat: '1150',
   bank_charges: '6401',
   interest_income: '5105',
+  salary_expense: '6201',
+  employer_nssf_expense: '6202',
+  employer_housing_levy_expense: '6203',
+  net_payroll_payable: '3110',
+  paye_payable: '3305',
+  nssf_payable: '3306',
+  shif_payable: '3307',
+  housing_levy_payable: '3308',
+  pension_payable: '3309',
+  other_payroll_deductions: '3311',
+  employee_advances: '1810',
 }
 
 /**
@@ -70,6 +92,17 @@ export const COA_ROLE_LABELS: Record<CoaRole, string> = {
   input_vat: '1150 - VAT Input',
   bank_charges: '6401 - Bank Charges',
   interest_income: '5105 - Interest Income',
+  salary_expense: '6201 - Salaries and Wages',
+  employer_nssf_expense: '6202 - Employer NSSF Expense',
+  employer_housing_levy_expense: '6203 - Employer Housing Levy Expense',
+  net_payroll_payable: '3110 - Net Payroll Payable',
+  paye_payable: '3305 - PAYE Payable',
+  nssf_payable: '3306 - NSSF Payable',
+  shif_payable: '3307 - SHIF Payable',
+  housing_levy_payable: '3308 - Affordable Housing Levy Payable',
+  pension_payable: '3309 - Pension Payable',
+  other_payroll_deductions: '3311 - Other Payroll Deductions Payable',
+  employee_advances: '1810 - Employee Salary Advances',
 }
 
 export function labelForRole(role: CoaRole): string {
