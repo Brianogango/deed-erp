@@ -115,9 +115,12 @@ async function applyUpdates(pool: Pool, updates: PlanRow[]) {
       const products = JSON.parse(blob.rows[0].value)
       if (Array.isArray(products)) {
         const byId = new Map(updates.map(u => [u.id, u.next]))
+        const bySku = new Map(updates.map(u => [u.sku, u.next]))
         let touched = 0
         for (const product of products) {
-          const next = byId.get(String(product.id || ''))
+          const next =
+            byId.get(String(product.id || '')) ||
+            bySku.get(String(product.sku || product.code || ''))
           if (next == null) continue
           product.description = next
           touched += 1
