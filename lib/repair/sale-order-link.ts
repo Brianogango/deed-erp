@@ -56,6 +56,124 @@ export function findRepairForSaleOrder<T extends RepairSaleOrderLink>(
   return repairs.find(r => String(r.ref ?? '').toUpperCase() === repairRef)
 }
 
+export type RepairSaleOrderCandidate = SaleOrderRepairHint & {
+  status?: string | null
+  createdAt?: string | null
+  updatedAt?: string | null
+  date?: string | null
+}
+
+const activeStatusRank = (status?: string | null) => {
+  const value = String(status ?? '').toLowerCase()
+  if (value === 'cancelled' || value === 'canceled') return -1
+  if (['sale', 'confirmed', 'done'].includes(value)) return 3
+  if (['quotation_sent', 'sent'].includes(value)) return 2
+  return 1
+}
+
+const refSequence = (order: RepairSaleOrderCandidate) => {
+  const ref = String(order.ref ?? order.orderNumber ?? '')
+  const match = ref.match(/(\d+)(?!.*\d)/)
+  return match ? Number(match[1]) : 0
+}
+
+const timestamp = (order: RepairSaleOrderCandidate) => {
+  const value = order.updatedAt ?? order.createdAt ?? order.date
+  const parsed = value ? Date.parse(value) : NaN
+  return Number.isFinite(parsed) ? parsed : 0
+}
+
+const preferRepairSaleOrder = <T extends RepairSaleOrderCandidate>(left: T, right: T): T => {
+  const statusDelta = activeStatusRank(right.status) - activeStatusRank(left.status)
+  if (statusDelta !== 0) return statusDelta > 0 ? right : left
+  const timeDelta = timestamp(right) - timestamp(left)
+  if (timeDelta !== 0) return timeDelta > 0 ? right : left
+  return refSequence(right) >= refSequence(left) ? right : left
+}
+
+/**
+ * Resolve the single sale-order quotation that belongs to a repair.
+ *
+ * Explicit ids win. When an old repair blob has lost that link, the durable
+ * "Repair quote — REP/… — …" note is used so a retry updates the existing
+ * quotation instead of creating another draft.
+ */
+export function findSaleOrderForRepair<T extends RepairSaleOrderCandidate>(
+  orders: T[] | null | undefined,
+  repair: RepairSaleOrderLink | null | undefined,
+): T | undefined {
+  if (!repair || !Array.isArray(orders) || orders.length === 0) return undefined
+
+  const preferredIds = [repair.saleOrderId, repair.linkedSaleOrderId]
+    .map(value => String(value ?? '').trim())
+    .filter(Boolean)
+  for (const id of preferredIds) {
+    const match = orders.find(order => String(order.id ?? '').trim() === id)
+    if (match) return match
+  }
+
+  const preferredRefs = [repair.saleOrderRef, repair.linkedSaleOrderRef]
+    .map(value => String(value ?? '').trim())
+    .filter(Boolean)
+  for (const ref of preferredRefs) {
+    const match = orders.find(order =>
+      [order.ref, order.orderNumber, order.quotationRef]
+        .some(value => String(value ?? '').trim() === ref),
+    )
+    if (match) return match
+  }
+
+  const repairRef = String(repair.ref ?? '').trim().toUpperCase()
+  if (!repairRef) return undefined
+  const matches = orders.filter(order => extractRepairRefFromText(order.notes) === repairRef)
+  return matches.reduce<T | undefined>(
+    (winner, order) => winner ? preferRepairSaleOrder(winner, order) : order,
+    undefined,
+  )
+}
+
+/**
+ * Hide historical duplicates created by the old retry path without deleting
+ * financial records. The repair's explicit saleOrderId wins; otherwise the
+ * most authoritative/newest quotation is shown.
+ */
+export function dedupeRepairSaleOrders<T extends RepairSaleOrderCandidate>(
+  orders: T[] | null | undefined,
+  repairs: RepairSaleOrderLink[] | null | undefined = [],
+): T[] {
+  if (!Array.isArray(orders) || orders.length < 2) return orders ?? []
+
+  const groups = new Map<string, T[]>()
+  orders.forEach(order => {
+    const repairRef = extractRepairRefFromText(order.notes)
+    if (!repairRef) return
+    groups.set(repairRef, [...(groups.get(repairRef) ?? []), order])
+  })
+
+  const winners = new Map<string, T>()
+  groups.forEach((group, repairRef) => {
+    if (group.length < 2) return
+    const linkedRepair = (repairs ?? []).find(repair =>
+      String(repair.ref ?? '').toUpperCase() === repairRef,
+    )
+    const explicit = linkedRepair
+      ? findSaleOrderForRepair(group, linkedRepair)
+      : undefined
+    winners.set(
+      repairRef,
+      explicit ?? group.reduce((winner, order) => preferRepairSaleOrder(winner, order)),
+    )
+  })
+
+  return orders.filter(order => {
+    const repairRef = extractRepairRefFromText(order.notes)
+    const winner = repairRef ? winners.get(repairRef) : undefined
+    if (!winner) return true
+    if (winner.id && order.id) return winner.id === order.id
+    return winner === order
+  })
+}
+
 /** Back-link the workshop job to the customer invoice without changing repair status. */
 export function applyInvoiceLinkToRepair<T extends Record<string, unknown>>(
   repair: T,
