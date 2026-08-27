@@ -2631,6 +2631,9 @@ model Deposit {
   cancelledAt   DateTime? @map("cancelled_at")
   cancelReason  String?   @map("cancel_reason")
   createdBy     String?   @map("created_by") @db.VarChar(80)
+  createdById   String?   @map("created_by_id") @db.Uuid
+  postingStatus String    @default("unposted") @map("posting_status") @db.VarChar(20)
+  currencyCode  String    @default("KES") @map("currency_code") @db.VarChar(3)
   createdAt     DateTime  @default(now()) @map("created_at")
   updatedAt     DateTime  @updatedAt @map("updated_at")
 
@@ -2667,7 +2670,14 @@ model DepositPayment {
   amount     Decimal  @default(0) @db.Decimal(14, 2)
   method     String   @default("cash") @db.VarChar(40)
   paymentRef String?  @map("payment_ref") @db.VarChar(80)
+  externalReference String? @map("external_reference") @db.VarChar(120)
+  idempotencyKey String? @unique @map("idempotency_key") @db.VarChar(120)
+  paymentType String @default("receipt") @map("payment_type") @db.VarChar(20)
+  bankAccountId String? @map("bank_account_id") @db.Uuid
+  journalEntryId String? @map("journal_entry_id") @db.Uuid
+  currencyCode String @default("KES") @map("currency_code") @db.VarChar(3)
   recordedBy String?  @map("recorded_by") @db.VarChar(80)
+  createdById String? @map("created_by_id") @db.Uuid
   paidAt     DateTime @default(now()) @map("paid_at")
 
   deposit Deposit @relation(fields: [depositId], references: [id], onDelete: Cascade)
