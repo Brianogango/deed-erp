@@ -1713,6 +1713,8 @@ model InvoiceItem {
   id             String   @id @default(uuid()) @db.Uuid
   invoiceId      String   @map("invoice_id") @db.Uuid
   productId      String?  @map("product_id") @db.Uuid
+  purchaseOrderItemId String? @map("purchase_order_item_id") @db.Uuid
+  grnItemId      String?  @map("grn_item_id") @db.Uuid
   serialNumberId String?  @map("serial_number_id") @db.Uuid
   description    String
   qty            Int      @default(1)
