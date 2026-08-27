@@ -4179,3 +4179,347 @@ main#main-content:has(.finance-invoice-detail) {
     min-width: 600px;
   }
 }
+
+
+/* Delivery record: deterministic full-width workspace
+   Keeps the selector compact and prevents legacy Sales CSS from swapping
+   the operation content into the narrow rail at desktop/zoom breakpoints. */
+.sales-pilot.sales-doc .sales-workbench[data-sales-view='delivery'],
+.sales-pilot.sales-doc .sales-workbench[data-sales-view='delivery'] > .flex {
+  width: 100%;
+  min-width: 0;
+  max-width: none;
+}
+
+.sales-pilot.sales-doc .sales-workbench[data-sales-view='delivery'] .sales-proto-page-header,
+.sales-pilot.sales-doc .sales-workbench[data-sales-view='delivery'] .sp-workflow,
+.sales-pilot.sales-doc .sales-workbench[data-sales-view='delivery'] .sales-doc-smart-row,
+.sales-pilot.sales-doc .sales-workbench[data-sales-view='delivery'] .sales-delivery-summary,
+.sales-pilot.sales-doc .sales-workbench[data-sales-view='delivery'] .sp-delivery-work {
+  width: 100% !important;
+  max-width: none !important;
+  margin-inline: 0 !important;
+  box-sizing: border-box;
+}
+
+.sales-pilot.sales-doc .sales-workbench[data-sales-view='delivery'] .sales-delivery-summary dl {
+  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+}
+
+.sales-pilot.sales-doc .sales-workbench[data-sales-view='delivery'] .sp-delivery-work {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: stretch !important;
+  gap: 12px !important;
+}
+
+.sales-pilot.sales-doc .sales-workbench[data-sales-view='delivery'] .sp-delivery-rail {
+  order: 1 !important;
+  display: flex !important;
+  width: 100%;
+  min-width: 0;
+  max-width: none;
+  flex-flow: row wrap !important;
+  align-items: center;
+  gap: 8px !important;
+  padding: 10px 12px !important;
+}
+
+.sales-pilot.sales-doc .sales-workbench[data-sales-view='delivery'] .sp-delivery-rail-title {
+  flex: 0 0 auto;
+  margin-right: 4px;
+  white-space: nowrap;
+}
+
+.sales-pilot.sales-doc .sales-workbench[data-sales-view='delivery'] .sp-delivery-item {
+  display: flex !important;
+  min-width: 220px;
+  max-width: 360px;
+  min-height: 44px;
+  flex: 1 1 260px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  overflow: hidden;
+}
+
+.sales-pilot.sales-doc .sales-workbench[data-sales-view='delivery'] .sp-delivery-item > span:first-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sales-pilot.sales-doc .sales-workbench[data-sales-view='delivery'] .sp-delivery-item > span:last-child {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.sales-pilot.sales-doc .sales-workbench[data-sales-view='delivery'] .sp-delivery-main {
+  order: 2 !important;
+  display: flex !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: none !important;
+  flex-direction: column;
+  gap: 12px !important;
+}
+
+.sales-pilot.sales-doc .sales-workbench[data-sales-view='delivery'] .sales-delivery-support {
+  order: 1 !important;
+  width: 100%;
+  margin: 0 !important;
+}
+
+.sales-pilot.sales-doc .sales-workbench[data-sales-view='delivery'] .sales-delivery-support .sp-grid-2 {
+  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  gap: 12px 24px !important;
+}
+
+.sales-pilot.sales-doc .sales-workbench[data-sales-view='delivery'] .sales-delivery-support .sp-value {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.sales-pilot.sales-doc .sales-workbench[data-sales-view='delivery'] .sales-delivery-operations {
+  order: 2 !important;
+  width: 100%;
+  min-width: 0;
+  margin: 0 !important;
+}
+
+.sales-pilot.sales-doc .sales-workbench[data-sales-view='delivery'] .sales-delivery-operations > .sp-panel,
+.sales-pilot.sales-doc .sales-workbench[data-sales-view='delivery'] .sales-delivery-operations .sp-table-wrap {
+  width: 100%;
+  min-width: 0;
+  max-width: none;
+}
+
+.sales-pilot.sales-doc .sales-workbench[data-sales-view='delivery'] .sales-delivery-operations .sp-line-table {
+  width: 100%;
+  min-width: 680px;
+}
+
+.sales-pilot.sales-doc .sales-workbench[data-sales-view='delivery'] .sales-delivery-recipient {
+  order: 3 !important;
+  width: 100%;
+  margin: 0 !important;
+}
+
+.sales-pilot.sales-doc .sales-workbench[data-sales-view='delivery'] .sp-delivery-main > .sp-footer-sticky {
+  order: 4 !important;
+  width: 100%;
+  margin: 0 !important;
+}
+
+@media (max-width: 1024px) {
+  .sales-pilot.sales-doc .sales-workbench[data-sales-view='delivery'] .sales-delivery-summary dl,
+  .sales-pilot.sales-doc .sales-workbench[data-sales-view='delivery'] .sales-delivery-support .sp-grid-2 {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}
+
+@media (max-width: 767px) {
+  .sales-pilot.sales-doc .sales-workbench[data-sales-view='delivery'] .sp-delivery-work {
+    gap: 8px !important;
+  }
+
+  .sales-pilot.sales-doc .sales-workbench[data-sales-view='delivery'] .sp-delivery-rail {
+    flex-flow: row nowrap !important;
+    padding: 8px !important;
+    overflow-x: auto;
+    scroll-snap-type: x proximity;
+    scrollbar-width: none;
+  }
+
+  .sales-pilot.sales-doc .sales-workbench[data-sales-view='delivery'] .sp-delivery-rail::-webkit-scrollbar {
+    display: none;
+  }
+
+  .sales-pilot.sales-doc .sales-workbench[data-sales-view='delivery'] .sp-delivery-rail-title {
+    display: none !important;
+  }
+
+  .sales-pilot.sales-doc .sales-workbench[data-sales-view='delivery'] .sp-delivery-item {
+    min-width: min(78vw, 270px);
+    max-width: min(78vw, 270px);
+    flex-basis: min(78vw, 270px);
+    scroll-snap-align: start;
+  }
+
+  .sales-pilot.sales-doc .sales-workbench[data-sales-view='delivery'] .sales-delivery-summary dl,
+  .sales-pilot.sales-doc .sales-workbench[data-sales-view='delivery'] .sales-delivery-support .sp-grid-2 {
+    grid-template-columns: 1fr !important;
+  }
+
+  .sales-pilot.sales-doc .sales-workbench[data-sales-view='delivery'] .sales-delivery-operations .sp-table-wrap {
+    padding: 8px !important;
+    overflow: visible !important;
+  }
+
+  .sales-pilot.sales-doc .sales-workbench[data-sales-view='delivery'] .sales-delivery-operations .sp-line-table {
+    display: block !important;
+    min-width: 0 !important;
+    background: transparent !important;
+  }
+
+  .sales-pilot.sales-doc .sales-workbench[data-sales-view='delivery'] .sales-delivery-operations .sp-line-table thead {
+    display: none !important;
+  }
+
+  .sales-pilot.sales-doc .sales-workbench[data-sales-view='delivery'] .sales-delivery-operations .sp-line-table tbody {
+    display: grid !important;
+    gap: 8px;
+  }
+
+  .sales-pilot.sales-doc .sales-workbench[data-sales-view='delivery'] .sales-delivery-operations .sp-line-table tr {
+    display: block !important;
+    padding: 10px 12px;
+    overflow: hidden;
+    border: 1px solid var(--odoo-border);
+    border-left: 3px solid var(--odoo-cyan);
+    border-radius: 8px;
+    background: #fff;
+  }
+
+  .sales-pilot.sales-doc .sales-workbench[data-sales-view='delivery'] .sales-delivery-operations .sp-line-table td {
+    display: grid !important;
+    grid-template-columns: 96px minmax(0, 1fr);
+    min-height: 0 !important;
+    height: auto !important;
+    align-items: start;
+    gap: 10px;
+    padding: 8px 0 !important;
+    border-bottom: 1px solid var(--odoo-border) !important;
+    text-align: left !important;
+    overflow-wrap: anywhere;
+  }
+
+  .sales-pilot.sales-doc .sales-workbench[data-sales-view='delivery'] .sales-delivery-operations .sp-line-table td:last-child {
+    border-bottom: 0 !important;
+  }
+
+  .sales-pilot.sales-doc .sales-workbench[data-sales-view='delivery'] .sales-delivery-operations .sp-line-table td::before {
+    color: var(--odoo-muted);
+    font-size: 10px;
+    font-weight: 900;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+  }
+
+  .sales-pilot.sales-doc .sales-workbench[data-sales-view='delivery'] .sales-delivery-operations .sp-line-table td[data-col='product'] {
+    display: block !important;
+    padding-top: 0 !important;
+    color: var(--odoo-ink) !important;
+    font-size: 13px !important;
+    font-weight: 900;
+  }
+
+  .sales-pilot.sales-doc .sales-workbench[data-sales-view='delivery'] .sales-delivery-operations .sp-line-table td[data-col='product']::before {
+    content: none;
+  }
+
+  .sales-pilot.sales-doc .sales-workbench[data-sales-view='delivery'] .sales-delivery-operations .sp-line-table td[data-col='demand']::before {
+    content: 'Demand';
+  }
+
+  .sales-pilot.sales-doc .sales-workbench[data-sales-view='delivery'] .sales-delivery-operations .sp-line-table td[data-col='reserve']::before {
+    content: 'Quantity';
+  }
+
+  .sales-pilot.sales-doc .sales-workbench[data-sales-view='delivery'] .sales-delivery-operations .sp-line-table td[data-col='serials']::before {
+    content: 'Serial numbers';
+  }
+
+  .sales-pilot.sales-doc .sales-workbench[data-sales-view='delivery'] .sales-delivery-operations .sp-line-table td input {
+    width: 100% !important;
+    max-width: 140px;
+    text-align: left !important;
+  }
+}
+
+
+/* Invoice line items: natural-height full-width table with a separate totals summary.
+   Avoids the tall empty grid cell created when a one-row table shares a row
+   with the taller totals column. */
+.finance-invoice-detail .invoice-detail__card[aria-label='Line items'] {
+  display: block !important;
+  width: 100% !important;
+  max-width: none !important;
+  overflow: hidden !important;
+}
+
+.finance-invoice-detail .invoice-detail__card[aria-label='Line items'] .invoice-detail__card-head,
+.finance-invoice-detail .invoice-detail__card[aria-label='Line items'] .invoice-detail__table-wrap,
+.finance-invoice-detail .invoice-detail__card[aria-label='Line items'] .invoice-detail__totals {
+  grid-column: auto !important;
+  grid-row: auto !important;
+  align-self: auto !important;
+}
+
+.finance-invoice-detail .invoice-detail__card[aria-label='Line items'] .invoice-detail__table-wrap {
+  display: block !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  height: auto !important;
+  min-height: 0 !important;
+  max-width: none !important;
+  overflow-x: auto !important;
+}
+
+.finance-invoice-detail .invoice-detail__card[aria-label='Line items'] .invoice-detail__table {
+  width: 100% !important;
+  min-width: 760px;
+  table-layout: auto !important;
+}
+
+.finance-invoice-detail .invoice-detail__card[aria-label='Line items'] .invoice-detail__table th:first-child,
+.finance-invoice-detail .invoice-detail__card[aria-label='Line items'] .invoice-detail__table td:first-child {
+  width: 44px;
+}
+
+.finance-invoice-detail .invoice-detail__card[aria-label='Line items'] .invoice-detail__table th:nth-child(3),
+.finance-invoice-detail .invoice-detail__card[aria-label='Line items'] .invoice-detail__table td:nth-child(3) {
+  width: 80px;
+}
+
+.finance-invoice-detail .invoice-detail__card[aria-label='Line items'] .invoice-detail__table th:nth-child(4),
+.finance-invoice-detail .invoice-detail__card[aria-label='Line items'] .invoice-detail__table td:nth-child(4) {
+  width: 120px;
+}
+
+.finance-invoice-detail .invoice-detail__card[aria-label='Line items'] .invoice-detail__table th:nth-child(5),
+.finance-invoice-detail .invoice-detail__card[aria-label='Line items'] .invoice-detail__table td:nth-child(5),
+.finance-invoice-detail .invoice-detail__card[aria-label='Line items'] .invoice-detail__table th:nth-child(6),
+.finance-invoice-detail .invoice-detail__card[aria-label='Line items'] .invoice-detail__table td:nth-child(6) {
+  width: 90px;
+}
+
+.finance-invoice-detail .invoice-detail__card[aria-label='Line items'] .invoice-detail__table th:nth-child(7),
+.finance-invoice-detail .invoice-detail__card[aria-label='Line items'] .invoice-detail__table td:nth-child(7) {
+  width: 130px;
+}
+
+.finance-invoice-detail .invoice-detail__card[aria-label='Line items'] .invoice-detail__totals {
+  width: min(100%, 360px) !important;
+  min-height: 0 !important;
+  margin: 10px 16px 16px auto !important;
+  padding: 0 !important;
+}
+
+@media (max-width: 767px) {
+  .finance-invoice-detail .invoice-detail__card[aria-label='Line items'] .invoice-detail__table {
+    min-width: 0 !important;
+  }
+
+  .finance-invoice-detail .invoice-detail__card[aria-label='Line items'] .invoice-detail__table th,
+  .finance-invoice-detail .invoice-detail__card[aria-label='Line items'] .invoice-detail__table td {
+    width: auto !important;
+  }
+
+  .finance-invoice-detail .invoice-detail__card[aria-label='Line items'] .invoice-detail__totals {
+    width: auto !important;
+    margin: 0 8px 8px !important;
+    padding: 12px !important;
+  }
+}
