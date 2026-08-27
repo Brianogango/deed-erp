@@ -7,7 +7,8 @@ import {
 } from '@/lib/store'
 
 type MainView = 'orders' | 'receipts' | 'returns' | 'bills'
-type SubView  = 'list' | 'form' | 'receive'
+type SubView  = 'list' | 'form' | 'receive' | 'receipt'
+export type ReceiptOrigin = 'list' | 'po'
 type ImportRow = {
   raw: Record<string, string>; productId: string; productName: string; accountCode?: string
   qty: number; unitPrice: number; taxRate: number; requiresSerial: boolean
@@ -100,6 +101,11 @@ export interface PurchaseCtxValue {
   scanFileRef: React.RefObject<HTMLInputElement>
   // GRN
   activeReceiptId: string | null; setActiveReceiptId: (id: string | null) => void
+  receiptOrigin: ReceiptOrigin
+  openReceiptDetail: (receiptId: string, origin?: ReceiptOrigin) => void
+  closeReceiptDetail: (to?: ReceiptOrigin) => void
+  startReceive: (receiptId: string) => void
+  openReceive: () => void
   grnLines: Receipt['lines']; setGrnLines: (l: Receipt['lines']) => void
   destLocation: LocationId; setDestLocation: (l: LocationId) => void
   serialInputs: Record<number, string>; setSerialInputs: (v: any) => void

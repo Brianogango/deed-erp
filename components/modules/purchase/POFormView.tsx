@@ -78,7 +78,7 @@ export default function POFormView() {
     updatePO, updatePOLine, removePOLine, bulkAddPOLines, sendPO, confirmPO, createReceiptFromPO, deletePO, createBillFromPO, revertPOToDraft,
     postInvoice, registerPayment, createPurchaseReturn, addReturnLine, confirmPurchaseReturn, logReturnPickup,
     showToast, addContact,
-    setMainView, setSubView, setActiveId,
+    setSubView, setActiveId, setMainView, openReceiptDetail, openReceive,
     editCell, setEditCell, editVal, setEditVal, commitCell,
     showAddLine, setShowAddLine, addProd, setAddProd, addQty, setAddQty, addPrice, setAddPrice, addVAT, setAddVAT, handleAddLine,
     showImport, setShowImport, showScanModal, setShowScanModal, scanFile, setScanFile, isScanningScan, setIsScanningScan, scanFileRef,
@@ -142,25 +142,6 @@ export default function POFormView() {
     } finally {
       setSendingRfqMail(false)
     }
-  }
-
-  const openReceive = async () => {
-    let draft = receipts.find(r => r.poId === activePO.id && r.status === 'draft') ?? null
-    if (!draft) {
-      draft = await Promise.resolve(createReceiptFromPO(activePO.id))
-    }
-    if (!draft) { showToast('No pending receipt found', 'error'); return }
-    setActiveReceiptId(draft.id)
-    const preSpecs: Record<string, string> = {}
-    const preLines = draft.lines.map(l => {
-      const preSerials = (l.importedSerials ?? []).slice(0, l.qtyExpected)
-      return { ...l, qtyReceived: l.qtyExpected, serials: preSerials }
-    })
-    draft.lines.forEach(l => {
-      if (l.specs && l.importedSerials) l.importedSerials.forEach(s => { preSpecs[s] = l.specs! })
-    })
-    setGrnLines(preLines); setDestLocation(draft.destinationLocation)
-    setSerialInputs({}); setSerialSpecs(preSpecs); setSubView('receive')
   }
 
   const billableLinesFor = (po: typeof activePO) =>
@@ -703,32 +684,39 @@ export default function POFormView() {
             {poReceipts.length > 0 && (
               <div id="po-grn-history" className="card overflow-hidden">
                 <PanelHeader title="Goods Receipts (GRN)" count={poReceipts.length} />
-                {poReceipts.map(r => (
+                {poReceipts.map(r => {
+                  const canOpenDraft = r.status === 'draft' && canReceive
+                  const canOpenDetail = r.status === 'validated' || canOpenDraft
+                  return (
                   <div
                     key={r.id}
-                    className={`flex items-center justify-between px-4 py-3 border-b text-xs ${r.status === 'draft' ? 'cursor-pointer hover:bg-[var(--bg-surface)]' : ''}`}
+                    className={`flex items-center justify-between px-4 py-3 border-b text-xs ${canOpenDetail ? 'cursor-pointer hover:bg-[var(--bg-surface)]' : ''}`}
                     style={{ borderColor: 'var(--bg-muted)' }}
-                    onClick={() => { if (r.status === 'draft' && canReceive) void openReceive() }}
-                    role={r.status === 'draft' && canReceive ? 'button' : undefined}
-                    tabIndex={r.status === 'draft' && canReceive ? 0 : undefined}
+                    onClick={() => {
+                      if (canOpenDraft) void openReceive()
+                      else if (r.status === 'validated') openReceiptDetail(r.id, 'po')
+                    }}
+                    role={canOpenDetail ? 'button' : undefined}
+                    tabIndex={canOpenDetail ? 0 : undefined}
                     onKeyDown={e => {
-                      if ((e.key === 'Enter' || e.key === ' ') && r.status === 'draft' && canReceive) {
-                        e.preventDefault()
-                        void openReceive()
-                      }
+                      if (e.key !== 'Enter' && e.key !== ' ') return
+                      e.preventDefault()
+                      if (canOpenDraft) void openReceive()
+                      else if (r.status === 'validated') openReceiptDetail(r.id, 'po')
                     }}
                   >
                     <div>
                       <p className="font-mono font-semibold" style={{ color: 'var(--navy)' }}>{r.ref}</p>
                       <p className="text-t3 mt-0.5">
                         {fmtDate(r.date)} · {LOCATIONS[r.destinationLocation].icon} {LOCATIONS[r.destinationLocation].name}
-                        {r.status === 'validated' && ` · ${r.lines.reduce((a, l) => a + l.serials.length, 0)} serials`}
-                        {r.status === 'draft' && canReceive ? ' · Click to process' : ''}
+                        {r.status === 'validated' && ` · ${r.lines.reduce((a, l) => a + l.serials.length, 0)} serials · Click to open`}
+                        {canOpenDraft ? ' · Click to process' : ''}
                       </p>
                     </div>
                     <StatusBadge status={r.status === 'validated' ? 'done' : 'pending'} label={r.status === 'validated' ? 'Validated' : 'Pending'} />
                   </div>
-                ))}
+                  )
+                })}
               </div>
             )}
 

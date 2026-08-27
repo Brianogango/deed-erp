@@ -259,6 +259,15 @@
         ],
         "createdAt": "2026-08-26T08:27:06.824Z",
         "reason": "Incumbent repair modal motion; collect/close checkbox does not restyle existing easing"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "*",
+        "files": [
+          "components/modules/Purchase.tsx"
+        ],
+        "createdAt": "2026-08-27T11:20:58.122Z",
+        "reason": "Incumbent GRN receive-screen hex colors; receipt-detail navigation does not restyle that form"
       }
     ]
   }
