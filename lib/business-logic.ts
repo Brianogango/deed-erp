@@ -1,3 +1,4 @@
+import { calculateKenyaPayroll } from '@/lib/hr/kenya-payroll'
 /**
  * Pure business-logic functions extracted from lib/store.tsx so they can be
  * unit-tested without importing React or the full client-side store.
@@ -212,16 +213,18 @@ export function upsertBulkStock(
  *   netPay      = basicSalary + allowances − deductions
  */
 export function computePayrollLine(emp: PayrollEmployee): PayrollLine {
-  const allowances = emp.housingAllowance + emp.transportAllowance
-  const deductions = Math.round(emp.basicSalary * 0.18)
-  const netPay = emp.basicSalary + allowances - deductions
+  const calculated = calculateKenyaPayroll(
+    emp.basicSalary,
+    emp.housingAllowance,
+    emp.transportAllowance,
+  )
   return {
     employeeId: emp.id,
     employeeName: emp.fullName,
-    basicSalary: emp.basicSalary,
-    allowances,
-    deductions,
-    netPay,
+    basicSalary: calculated.basicSalary,
+    allowances: calculated.houseAllowance + calculated.transportAllowance,
+    deductions: calculated.totalDeductions,
+    netPay: calculated.netSalary,
   }
 }
 
