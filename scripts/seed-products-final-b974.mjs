@@ -232,7 +232,7 @@ try {
       unit: item.unit || "pcs",
       productKind: item.productKind || "storable",
       warrantyMonths: Number(item.warrantyMonths) || 0,
-      taxRatePct: Number(item.taxRate) || 16,
+      taxRatePct: Number(item.taxRate) || 0,
     };
 
     if (DRY) {
