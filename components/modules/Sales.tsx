@@ -498,6 +498,7 @@ function SalesContent() {
   const [addLineVat, setAddLineVat] = useState(false)
   const [addLineProduct, setAddLineProduct] = useState<(typeof products)[0] | null>(null)
   const [showDnModal, setShowDnModal] = useState(false)
+  const [showProformaPreview, setShowProformaPreview] = useState(false)
   const [showCreateContact, setShowCreateContact] = useState(false)
   const [newContactQuery, setNewContactQuery] = useState('')
   const [contactFormKey, setContactFormKey] = useState(0)
@@ -600,12 +601,14 @@ function SalesContent() {
       title,
       ref: so.ref,
       date: so.date,
-      dueLabel: 'Expiration',
-      dueDate: so.validUntil,
+      dueLabel: /sales? order/i.test(title) ? 'Delivery date' : 'Valid until',
+      dueDate: /sales? order/i.test(title) ? (so.deliveryDate || so.validUntil) : so.validUntil,
       salesperson: so.salespersonName ?? so.createdByName,
       customerName: so.customerName,
       customerAddress: so.invoiceAddress || [contact?.address, contact?.city, contact?.country].filter(Boolean).join(', ') || undefined,
       customerCountry: contact?.country || 'Kenya',
+      customerPhone: contact?.phone || contact?.mobile || undefined,
+      customerEmail: contact?.email || undefined,
       customerTaxId: contact?.vatNumber || undefined,
       lines: so.lines.map(l => {
         // A confirmed/delivered line may already have a serial assigned —
@@ -1580,13 +1583,13 @@ function SalesContent() {
     }
   }
 
-  // Pro-forma invoices run their own PI/YYYY/NNNN sequence. The number is
+  // Proforma invoices run their own PFI/YYYY/NNNN sequence. The number is
   // assigned the first time a pro-forma is issued for the order and kept on
   // the record, so reprints reuse the same number.
   const downloadProformaInvoice = async (so: SalesOrderView) => {
     let piRef = so.proformaRef
     if (!piRef) {
-      piRef = docSeq('PI')
+      piRef = docSeq('PFI')
       updateSaleOrder(so.id, { proformaRef: piRef })
     }
     try {
@@ -1959,7 +1962,10 @@ function SalesContent() {
                 <ModuleSkeleton />
               ) : (
                 /* ── ORDER FORM VIEW ─────────────────────────────────────── */
-                <div>
+                <div
+                  className="sales-record-view"
+                  data-document-kind={activeOrder && isQuotationStage(activeOrder.status) ? 'quotation' : 'sales-order'}
+                >
                   {activeOrder && (
                     <>
                   <div className="sales-proto-page-header">
@@ -2114,7 +2120,7 @@ function SalesContent() {
                               ] : []),
                               { label: 'Preview', icon: faFileAlt, disabled: !activeOrder.lines.length, onClick: () => previewSalesDocument(activeOrder, 'Quotation', 'QUOTATION') },
                               { label: 'Print', icon: faPrint, disabled: !activeOrder.lines.length, onClick: () => downloadSalesDocument(activeOrder, 'Quotation', 'QUOTE', 'QUOTATION') },
-                              { label: 'Pro-forma invoice', icon: faFileInvoiceDollar, disabled: !activeOrder.lines.length, onClick: () => downloadProformaInvoice(activeOrder) },
+                              { label: 'Pro-forma preview', icon: faFileInvoiceDollar, disabled: !activeOrder.lines.length, onClick: () => setShowProformaPreview(true) },
                               { label: 'Duplicate', icon: faCopy, onClick: () => duplicateSaleOrder(activeOrder) },
                               { label: creatingNewVersion ? 'Creating version…' : 'New Version', icon: faCodeBranch, disabled: creatingNewVersion, onClick: () => void handleCreateNewVersion(activeOrder) },
                               { label: 'Version History', icon: faClockRotateLeft, onClick: () => void openVersionHistory(activeOrder) },
@@ -3051,6 +3057,90 @@ function SalesContent() {
             </div>
         </div>
       </div>
+
+      {showProformaPreview && activeOrder && (() => {
+        const proformaRef = activeOrder.proformaRef || activeOrder.ref.replace(/^(QUO|QTN|SO)/i, 'PFI')
+        const paymentLines = buildPaymentDetailLines({
+          details: getDocumentPaymentDetails(activeOrder.id),
+          company: companySettings,
+          bankAccounts,
+          documentRef: proformaRef,
+        })
+        return (
+          <Modal title="Proforma invoice" onClose={() => setShowProformaPreview(false)} width={1100}>
+            <div className="sales-proforma-preview">
+              <section className="sales-proforma-preview__hero">
+                <div>
+                  <h2>{proformaRef}</h2>
+                  <p>{activeOrder.customerName} · Source {activeOrder.ref}</p>
+                </div>
+                <div className="sales-proforma-preview__amount">
+                  <span>Proforma total</span>
+                  <strong>{salesKes(activeOrder.total)}</strong>
+                </div>
+              </section>
+
+              <div className="sales-proforma-preview__warning" role="note">
+                This is a proforma invoice and not a tax invoice.
+              </div>
+
+              <section className="sales-proforma-preview__lines" aria-label="Proforma line items">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Description</th>
+                      <th>Qty</th>
+                      <th>Unit</th>
+                      <th>Unit price</th>
+                      <th>VAT</th>
+                      <th>Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {activeOrder.lines.filter(line => line.lineType !== 'section').map(line => (
+                      <tr key={line.id}>
+                        <td><strong>{line.productName || line.description || 'Item'}</strong><br /><small>{line.description || ''}</small></td>
+                        <td>{line.qty}</td>
+                        <td>Unit(s)</td>
+                        <td>{salesKes(line.unitPrice)}</td>
+                        <td>{line.taxRate || 0}%</td>
+                        <td>{salesKes(line.subtotal)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </section>
+
+              <aside className="sales-proforma-preview__source">
+                <dl>
+                  <div><dt>Issue date</dt><dd>{fmtDate(activeOrder.date)}</dd></div>
+                  <div><dt>Valid until</dt><dd>{activeOrder.validUntil ? fmtDate(activeOrder.validUntil) : 'Not set'}</dd></div>
+                  <div><dt>Source document</dt><dd>{activeOrder.ref}</dd></div>
+                  <div><dt>Payment terms</dt><dd>{activeOrder.paymentTerms || 'Not set'}</dd></div>
+                  <div><dt>Salesperson</dt><dd>{activeOrder.salespersonName || activeOrder.createdByName || 'Unassigned'}</dd></div>
+                </dl>
+              </aside>
+
+              <section className="sales-proforma-preview__payment">
+                <h3>Payment instructions</h3>
+                {paymentLines.length > 0 ? paymentLines.map((line, idx) => <p key={idx}>{line}</p>) : <p>Payment details have not been configured.</p>}
+                <div className="sales-proforma-preview__totals">
+                  <div><span>Untaxed amount</span><strong>{salesKes(activeOrder.subtotal)}</strong></div>
+                  <div><span>VAT</span><strong>{salesKes(activeOrder.taxTotal)}</strong></div>
+                  <div><span>Total</span><strong>{salesKes(activeOrder.total)}</strong></div>
+                </div>
+              </section>
+
+              <div className="flex flex-wrap justify-end gap-2 col-span-full">
+                <button type="button" className="sp-btn" onClick={() => setShowProformaPreview(false)}>Close</button>
+                <button type="button" className="sp-btn sp-btn-primary" onClick={() => void downloadProformaInvoice(activeOrder)}>
+                  Download proforma PDF
+                </button>
+              </div>
+            </div>
+          </Modal>
+        )
+      })()}
 
       {/* ── Modals ─────────────────────────────────────────────────────────── */}
       {showCreateContact && (

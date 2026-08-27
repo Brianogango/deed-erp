@@ -40,6 +40,7 @@ export interface CommercialPdfInput {
   customerCountry?: string
   customerTaxId?: string
   customerPhone?: string
+  customerEmail?: string
   attention?: string
   recipientIdNumber?: string
   /** Override the party heading, e.g. "Invoice To", "Quote To", "Receipt To". */
@@ -93,6 +94,7 @@ export async function buildCommercialPdf(
     customerCountry: input.customerCountry,
     customerTaxId: input.customerTaxId,
     customerPhone: input.customerPhone,
+    customerEmail: input.customerEmail,
     attention: input.attention,
     recipientIdNumber: input.recipientIdNumber,
     partyLabel: input.partyLabel,

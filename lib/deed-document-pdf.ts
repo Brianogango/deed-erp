@@ -1,12 +1,11 @@
 /**
- * Shared Deed commercial-document PDF layout (server + client safe).
- * Used by portal quote/invoice/receipt routes and mirrored by the
- * client commercial-pdf generator for Sales / Invoice downloads.
+ * Deed Technologies commercial document family.
+ * One clean A4 system for quotation, sales order, proforma invoice,
+ * tax invoice, bill, receipt and delivery note.
  */
 
 import { jsPDF } from 'jspdf'
 import autoTable from 'jspdf-autotable'
-import { resolveBankMpesa } from '@/lib/document-payment-details'
 import { customerFacingNotes } from '@/lib/customer-facing-notes'
 
 export interface DeedPdfLine {
@@ -17,9 +16,7 @@ export interface DeedPdfLine {
   taxRate?: number
   discountPct?: number
   subtotal?: number
-  /** Delivery notes: serial / IMEI for the shipped unit. */
   serial?: string
-  /** Delivery notes: unit specs (RAM, storage, CPU, accessories, …). */
   specs?: string
 }
 
@@ -38,7 +35,6 @@ export interface DeedPdfCompany {
   logoDataUrl?: string
   logoWidth?: number
   logoHeight?: number
-  /** jsPDF addImage format — JPEG data URLs fail when forced as PNG. */
   logoFormat?: 'PNG' | 'JPEG'
 }
 
@@ -63,20 +59,12 @@ export interface DeedPdfInput {
   customerCountry?: string
   customerTaxId?: string
   customerPhone?: string
-  /** Shown under the customer name in the party block. */
+  customerEmail?: string
   attention?: string
   partyLabel?: string
   lines: DeedPdfLine[]
   subtotal?: number
   discountTotal?: number
-  /**
-   * A header-level discount applied AFTER tax (subtotal + tax - discount =
-   * total) — e.g. a Sales Order's discountAmount or an Invoice's prorated
-   * header discount. Distinct from discountTotal above, which is a pre-tax
-   * sum of per-line discountPct amounts already netted into `subtotal`.
-   * Shown as its own "Discount" row between VAT and TOTAL so the math the
-   * customer sees matches how the total was actually computed.
-   */
   postTaxDiscountTotal?: number
   taxTotal?: number
   total?: number
@@ -86,136 +74,193 @@ export interface DeedPdfInput {
   hideAmounts?: boolean
   showPaymentDetails?: boolean
   showSignature?: boolean
-  /**
-   * Delivery notes: show Serial / Specs / Cond. columns instead of the
-   * simple qty-only hideAmounts table.
-   */
   deliveryNoteLayout?: boolean
-  /** Delivery notes: ID / passport for receipt acknowledgement. */
   recipientIdNumber?: string
-  /** Delivery notes: receipt acknowledgement block (default when deliveryNoteLayout). */
   showReceiptAcknowledgement?: boolean
-  /** Extra rows under payment details (receipts). */
   extraPaymentLines?: string[]
-  /**
-   * When provided, replaces the default bank/M-Pesa block (still includes
-   * payment reference / extra lines as already composed by the caller).
-   */
   paymentDetailLines?: string[]
 }
 
 const PAGE_W = 595.28
 const PAGE_H = 841.89
-const MARGIN = 36
-const NAVY: [number, number, number] = [27, 39, 98]
-const LIGHT_BLUE: [number, number, number] = [91, 155, 213]
-const CYAN: [number, number, number] = [0, 174, 239]
-const GRAY: [number, number, number] = [100, 116, 139]
-const TEXT: [number, number, number] = [15, 23, 42]
-const BORDER: [number, number, number] = [203, 213, 225]
-const SURFACE: [number, number, number] = [248, 250, 252]
-const FOOTER_GRAY: [number, number, number] = [148, 163, 184]
+const MARGIN = 34
+const RIGHT = PAGE_W - MARGIN
+const CONTENT_W = PAGE_W - MARGIN * 2
+const BODY_BOTTOM = PAGE_H - 54
 
-const money = (n: number) =>
-  Number(n || 0).toLocaleString('en-KE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+const NAVY: [number, number, number] = [32, 22, 77]
+const INK: [number, number, number] = [7, 22, 76]
+const CYAN: [number, number, number] = [0, 174, 239]
+const BLUE: [number, number, number] = [7, 139, 212]
+const MUTED: [number, number, number] = [91, 107, 128]
+const BORDER: [number, number, number] = [205, 219, 232]
+const SOFT: [number, number, number] = [246, 250, 253]
+const GREEN: [number, number, number] = [17, 134, 83]
+const GREEN_SOFT: [number, number, number] = [234, 248, 240]
+const AMBER: [number, number, number] = [188, 101, 0]
+const AMBER_SOFT: [number, number, number] = [255, 247, 232]
+const RED: [number, number, number] = [210, 38, 38]
+
+const money = (value: number) =>
+  Number(value || 0).toLocaleString('en-KE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
 const fmtDate = (value?: string) => {
-  if (!value) return ''
-  try {
-    return new Date(value).toLocaleDateString('en-KE', { day: '2-digit', month: 'short', year: 'numeric' })
-  } catch { return value }
+  if (!value) return '—'
+  const parsed = new Date(value)
+  if (Number.isNaN(parsed.getTime())) return value
+  return parsed.toLocaleDateString('en-KE', { day: '2-digit', month: 'short', year: 'numeric' })
 }
 
-const displayWebsite = (website?: string) => {
-  if (!website) return 'shop.deed.africa'
-  return website.replace(/^https?:\/\//i, '').replace(/\/$/, '')
+const cleanWebsite = (value?: string) =>
+  (value || 'deed.africa').replace(/^https?:\/\//i, '').replace(/\/$/, '')
+
+const titleKind = (title: string) => {
+  const value = title.toLowerCase().replace(/-/g, '')
+  if (value.includes('proforma')) return 'proforma'
+  if (value.includes('quotation') || value.includes('quote')) return 'quotation'
+  if (value.includes('sales order') || value.includes('sale order')) return 'sales-order'
+  if (value.includes('delivery')) return 'delivery'
+  if (value.includes('receipt')) return 'receipt'
+  if (value.includes('bill')) return 'bill'
+  return 'invoice'
 }
 
-const docNoLabel = (title: string) => {
-  const t = title.toLowerCase()
-  if (t.includes('receipt')) return 'Receipt No'
-  if (t.includes('request for quotation') || t.includes('rfq')) return 'RFQ No'
-  if (t.includes('purchase order')) return 'PO No'
-  if (t.includes('quote') || t.includes('quotation')) return 'Quote No'
-  if (t.includes('pro-forma') || t.includes('proforma')) return 'Proforma No'
-  if (t.includes('delivery')) return 'DN No'
-  if (t.includes('bill')) return 'Bill No'
-  return 'Invoice No'
+const statusFor = (input: DeedPdfInput) => {
+  const kind = titleKind(input.title)
+  if (kind === 'quotation') return { label: 'QUOTE READY', color: GREEN, fill: GREEN_SOFT }
+  if (kind === 'sales-order') return { label: 'CONFIRMED', color: GREEN, fill: GREEN_SOFT }
+  if (kind === 'proforma') return { label: 'SENT', color: BLUE, fill: SOFT }
+  if (kind === 'delivery') return { label: 'READY', color: GREEN, fill: GREEN_SOFT }
+  if (kind === 'receipt') return { label: 'PAID', color: GREEN, fill: GREEN_SOFT }
+  const total = Number(input.total) || 0
+  const paid = Number(input.amountPaid) || 0
+  if (paid >= total && total > 0) return { label: 'PAID', color: GREEN, fill: GREEN_SOFT }
+  if (paid > 0) return { label: 'PART PAID', color: AMBER, fill: AMBER_SOFT }
+  return { label: 'OPEN', color: BLUE, fill: SOFT }
 }
 
-const partyLabelFor = (title: string, override?: string) => {
-  if (override) return override
-  const t = title.toLowerCase()
-  if (t.includes('receipt')) return 'Receipt To'
-  if (t.includes('request for quotation') || t.includes('rfq') || t.includes('purchase order')) {
-    return 'Vendor'
+const partyLabelFor = (input: DeedPdfInput) => {
+  if (input.partyLabel) return input.partyLabel
+  const kind = titleKind(input.title)
+  if (kind === 'delivery') return 'DELIVER TO'
+  if (kind === 'receipt') return 'RECEIPT TO'
+  if (kind === 'bill') return 'BILL FROM'
+  return 'BILL TO'
+}
+
+const line = (doc: jsPDF, x1: number, y: number, x2: number, color = BORDER, width = .55) => {
+  doc.setDrawColor(...color).setLineWidth(width)
+  doc.line(x1, y, x2, y)
+}
+
+const writeLabel = (doc: jsPDF, text: string, x: number, y: number) => {
+  doc.setFont('helvetica', 'bold').setFontSize(7.5).setTextColor(...BLUE)
+  doc.text(text.toUpperCase(), x, y)
+}
+
+const writeValue = (doc: jsPDF, text: string, x: number, y: number, options: Record<string, unknown> = {}) => {
+  doc.setFont('helvetica', 'normal').setFontSize(8.3).setTextColor(...INK)
+  doc.text(text || '—', x, y, options as any)
+}
+
+function drawLogo(doc: jsPDF, company: DeedPdfCompany) {
+  const maxW = 118
+  const maxH = 48
+  if (company.logoDataUrl && company.logoWidth && company.logoHeight) {
+    const scale = Math.min(maxW / company.logoWidth, maxH / company.logoHeight)
+    try {
+      doc.addImage(
+        company.logoDataUrl,
+        company.logoFormat || 'PNG',
+        MARGIN,
+        22,
+        company.logoWidth * scale,
+        company.logoHeight * scale,
+      )
+      return
+    } catch {
+      // Fall through to the clean text mark only if the configured image is unreadable.
+    }
   }
-  if (t.includes('quote') || t.includes('quotation')) return 'Quote To'
-  if (t.includes('pro-forma') || t.includes('proforma')) return 'Bill To'
-  if (t.includes('delivery')) return 'Deliver To'
-  if (t.includes('bill')) return 'Bill From'
-  return 'Invoice To'
+  doc.setFont('helvetica', 'bold').setFontSize(26).setTextColor(...NAVY)
+  doc.text('deed', MARGIN, 50)
+  doc.setFontSize(6.5).setTextColor(...CYAN)
+  doc.text('TECHNOLOGIES', MARGIN + 8, 61)
 }
 
-function drawFooterTriangles(doc: jsPDF) {
-  const baseY = PAGE_H
-  doc.setFillColor(91, 155, 213)
-  doc.triangle(PAGE_W - 210, baseY, PAGE_W - 40, baseY - 95, PAGE_W, baseY, 'F')
-  doc.setFillColor(27, 39, 98)
-  doc.triangle(PAGE_W - 130, baseY, PAGE_W - 10, baseY - 70, PAGE_W, baseY, 'F')
-  doc.setFillColor(148, 163, 184)
-  doc.triangle(PAGE_W - 70, baseY, PAGE_W, baseY - 48, PAGE_W, baseY, 'F')
-  doc.setFillColor(203, 213, 225)
-  doc.triangle(MARGIN, baseY, MARGIN + 90, baseY - 28, MARGIN + 160, baseY, 'F')
-}
+function drawLetterhead(doc: jsPDF, company: DeedPdfCompany, continuation?: string) {
+  drawLogo(doc, company)
+  const details = [
+    [company.address, company.city].filter(Boolean).join(', '),
+    company.phone,
+    cleanWebsite(company.website),
+    company.email,
+  ].filter(Boolean) as string[]
 
-/**
- * Full-page faded logo watermark, inset from the edges (not edge-flush).
- * Drawn first on each page so letterhead/content paint above it.
- */
-function drawPageWatermark(doc: jsPDF, company: DeedPdfCompany) {
-  const insetX = MARGIN + 28
-  const insetY = 120
-  const maxW = PAGE_W - insetX * 2
-  const maxH = PAGE_H - insetY - 140
+  doc.setFont('helvetica', 'normal').setFontSize(7.5).setTextColor(...INK)
+  details.slice(0, 4).forEach((item, index) => doc.text(item, RIGHT, 27 + index * 11, { align: 'right' }))
+  line(doc, MARGIN, 76, RIGHT, CYAN, 1.2)
 
-  try {
-    const GState = (doc as any).GState
-    if (typeof GState === 'function') {
-      doc.saveGraphicsState()
-      doc.setGState(new GState({ opacity: 0.07 }))
-    }
-
-    if (company.logoDataUrl && company.logoWidth && company.logoHeight) {
-      const scale = Math.min(maxW / company.logoWidth, maxH / company.logoHeight)
-      const w = company.logoWidth * scale
-      const h = company.logoHeight * scale
-      const x = (PAGE_W - w) / 2
-      const y = insetY + (maxH - h) / 2
-      const fmt = company.logoFormat || 'PNG'
-      doc.addImage(company.logoDataUrl, fmt, x, y, w, h)
-    } else {
-      // Fallback wordmark — large, centered, same inset band as the logo.
-      doc.setFont('helvetica', 'bold').setFontSize(120).setTextColor(230, 238, 248)
-      doc.text('deed', PAGE_W / 2, insetY + maxH / 2 + 30, { align: 'center' })
-    }
-
-    if (typeof GState === 'function') {
-      doc.restoreGraphicsState()
-    }
-  } catch {
-    doc.setFont('helvetica', 'bold').setFontSize(96).setTextColor(230, 238, 248)
-    doc.text('deed', PAGE_W / 2, PAGE_H / 2, { align: 'center' })
+  if (continuation) {
+    doc.setFont('helvetica', 'bold').setFontSize(8).setTextColor(...NAVY)
+    doc.text(continuation, MARGIN, 91)
   }
 }
 
-function drawContactIcon(doc: jsPDF, kind: 'phone' | 'email' | 'pin', x: number, y: number) {
-  doc.setDrawColor(...LIGHT_BLUE)
-  doc.setFillColor(239, 246, 255)
-  doc.circle(x, y, 7, 'FD')
-  doc.setFont('helvetica', 'bold').setFontSize(6).setTextColor(...NAVY)
-  const glyph = kind === 'phone' ? 'T' : kind === 'email' ? '@' : 'P'
-  doc.text(glyph, x, y + 2, { align: 'center' })
+function drawStatus(doc: jsPDF, input: DeedPdfInput, y: number) {
+  const status = statusFor(input)
+  const width = Math.max(54, doc.getTextWidth(status.label) + 18)
+  doc.setFillColor(...status.fill).setDrawColor(...status.color).setLineWidth(.55)
+  doc.roundedRect(RIGHT - width, y - 13, width, 22, 4, 4, 'FD')
+  doc.setFont('helvetica', 'bold').setFontSize(7.5).setTextColor(...status.color)
+  doc.text(status.label, RIGHT - width / 2, y + 1, { align: 'center' })
+}
+
+function drawFooter(doc: jsPDF, company: DeedPdfCompany, input: DeedPdfInput, page: number, pages: number) {
+  line(doc, MARGIN, PAGE_H - 38, RIGHT, CYAN, .9)
+  doc.setFont('helvetica', 'normal').setFontSize(7).setTextColor(...MUTED)
+  doc.text(`Page ${page} of ${pages}`, MARGIN, PAGE_H - 22)
+  doc.text(company.invoiceFooter || 'Thank you for your business.', PAGE_W / 2, PAGE_H - 22, { align: 'center' })
+  const stamp = new Date().toLocaleString('en-KE', { dateStyle: 'medium', timeStyle: 'short' })
+  doc.text(`Generated: ${stamp}`, RIGHT, PAGE_H - 22, { align: 'right' })
+  doc.setFont('helvetica', 'bold').setFontSize(6.5).setTextColor(...NAVY)
+  doc.text(`${input.ref} · ${cleanWebsite(company.website)}`, RIGHT, PAGE_H - 10, { align: 'right' })
+}
+
+function pageBreak(doc: jsPDF, company: DeedPdfCompany, input: DeedPdfInput) {
+  doc.addPage()
+  drawLetterhead(doc, company, `${input.title.toUpperCase()} · ${input.ref}`)
+  return 108
+}
+
+function ensureRoom(doc: jsPDF, company: DeedPdfCompany, input: DeedPdfInput, y: number, needed: number) {
+  return y + needed > BODY_BOTTOM ? pageBreak(doc, company, input) : y
+}
+
+function drawMetaRow(doc: jsPDF, label: string, value: string, x: number, y: number, labelW = 82) {
+  doc.setFont('helvetica', 'bold').setFontSize(7.5).setTextColor(...MUTED)
+  doc.text(label, x, y)
+  doc.setFont('helvetica', 'normal').setFontSize(8.3).setTextColor(...INK)
+  doc.text(value || '—', x + labelW, y, { maxWidth: 175 })
+}
+
+function defaultPaymentLines(input: DeedPdfInput, company: DeedPdfCompany, banks: DeedPdfBank[]) {
+  if (input.paymentDetailLines?.length) return input.paymentDetailLines
+  const output = [...(input.extraPaymentLines || [])]
+  const bank = banks.find(item => item.active && item.accountNo && !/m-?pesa/i.test(item.bankName || ''))
+  if (bank) {
+    output.push('BANK TRANSFER')
+    output.push(`Bank: ${bank.bankName || 'Bank account'}`)
+    output.push(`Account name: ${company.name}`)
+    output.push(`Account number: ${bank.accountNo}`)
+  }
+  if (company.mpesaPaybill) {
+    output.push('M-PESA PAYMENT')
+    output.push(`Paybill number: ${company.mpesaPaybill}`)
+    output.push(`Account number: ${company.mpesaAccount || input.ref}`)
+  }
+  if (input.paymentCommunication || input.ref) output.push(`Payment reference: ${input.ref}`)
+  return output
 }
 
 export function buildDeedDocumentPdf(
@@ -224,467 +269,281 @@ export function buildDeedDocumentPdf(
   bankAccounts: DeedPdfBank[] = [],
 ): jsPDF {
   const doc = new jsPDF({ unit: 'pt', format: 'a4' })
-  const currency = company.currency || 'KES'
-  const rightX = PAGE_W - MARGIN
-  const contentW = PAGE_W - MARGIN * 2
-  // Leave clear air above the fixed contact footer so body text never stacks on it.
-  const contentBottom = PAGE_H - 100
+  const kind = titleKind(input.title)
+  const delivery = Boolean(input.deliveryNoteLayout) || kind === 'delivery'
   const showAmounts = !input.hideAmounts
-  const deliveryLayout = Boolean(input.deliveryNoteLayout) || (!showAmounts && /delivery/i.test(input.title))
-  const showPayment = input.showPaymentDetails ?? showAmounts
-  const showSignature = input.showSignature ?? true
-  const showAck = input.showReceiptAcknowledgement ?? deliveryLayout
-  const partyLabel = partyLabelFor(input.title, input.partyLabel)
-  const website = displayWebsite(company.website)
-  const colCount = showAmounts ? 6 : deliveryLayout ? 6 : 3
+  const currency = company.currency || 'KES'
+  const customerLabel = partyLabelFor(input)
 
-  const ensureRoom = (y: number, needed: number): number => {
-    if (y + needed <= contentBottom) return y
-    doc.addPage()
-    drawPageWatermark(doc, company)
-    return 56
-  }
+  drawLetterhead(doc, company)
 
-  // Watermark first so letterhead + body paint above it.
-  drawPageWatermark(doc, company)
-
-  // Letterhead — logo is the brand signal; document title stays secondary below it.
-  const LOGO_TOP = 20
-  const LOGO_MAX_H = 72
-  const LOGO_MAX_W = 200
-  const TITLE_GAP = 38
-  let letterheadBottom = LOGO_TOP + 28
-
-  if (company.logoDataUrl && company.logoWidth && company.logoHeight) {
-    const scale = Math.min(LOGO_MAX_H / company.logoHeight, LOGO_MAX_W / company.logoWidth)
-    const logoW = company.logoWidth * scale
-    const logoH = company.logoHeight * scale
-    try {
-      const fmt = company.logoFormat || 'PNG'
-      doc.addImage(company.logoDataUrl, fmt, MARGIN, LOGO_TOP, logoW, logoH)
-      letterheadBottom = LOGO_TOP + logoH
-    } catch {
-      doc.setFont('helvetica', 'bold').setFontSize(20).setTextColor(...NAVY)
-      doc.text('deed', MARGIN, LOGO_TOP + 28)
-      letterheadBottom = LOGO_TOP + 32
-    }
-  } else {
-    doc.setFont('helvetica', 'bold').setFontSize(20).setTextColor(...NAVY)
-    doc.text('deed', MARGIN, LOGO_TOP + 28)
-    doc.setFillColor(...CYAN)
-    doc.circle(MARGIN + 46, LOGO_TOP + 20, 2.4, 'F')
-    letterheadBottom = LOGO_TOP + 32
-  }
-
-  // Website stays top-right in the logo band (does not sit under the mark).
-  doc.setFont('helvetica', 'normal').setFontSize(9).setTextColor(...FOOTER_GRAY)
-  doc.text(website, rightX, LOGO_TOP + 18, { align: 'right' })
-
-  // Title sits clearly below the logo — smaller than the mark so it does not compete.
-  let y = letterheadBottom + TITLE_GAP
-  doc.setFont('helvetica', 'bold').setFontSize(18).setTextColor(...NAVY)
+  let y = 112
+  doc.setFont('helvetica', 'bold').setFontSize(21).setTextColor(...NAVY)
   doc.text(input.title.toUpperCase(), MARGIN, y)
+  drawStatus(doc, input, y)
 
-  y += 18
-  const metaRows = [
-    { label: docNoLabel(input.title), value: input.ref },
-    ...(input.date ? [{ label: 'Date', value: fmtDate(input.date) }] : []),
-    ...(input.dueDate ? [{ label: input.dueLabel ?? 'Due Date', value: fmtDate(input.dueDate) }] : []),
-    // Doc meta stays on the left — never mixed into the Quote/Bill To party block.
-    ...(input.sourceRef ? [{ label: 'Reference', value: input.sourceRef }] : []),
-    ...(input.salesperson ? [{ label: 'Prepared by', value: input.salesperson }] : []),
-  ]
-  metaRows.forEach(row => {
-    doc.setFont('helvetica', 'bold').setFontSize(9).setTextColor(...TEXT)
-    doc.text(`${row.label}:`, MARGIN, y)
-    doc.setFont('helvetica', 'normal')
-    doc.text(row.value, MARGIN + 78, y)
-    y += 14
+  y += 24
+  doc.setFont('helvetica', 'bold').setFontSize(14).setTextColor(...NAVY)
+  doc.text(input.ref, MARGIN, y)
+  doc.setFont('helvetica', 'normal').setFontSize(8).setTextColor(...MUTED)
+  const topDateLabel = kind === 'quotation' || kind === 'proforma' ? `Valid until: ${fmtDate(input.dueDate)}` : `${input.dueLabel || 'Date'}: ${fmtDate(input.dueDate || input.date)}`
+  doc.text(topDateLabel, RIGHT, y, { align: 'right' })
+
+  y += 28
+  const leftX = MARGIN + 10
+  const splitX = MARGIN + 232
+  const rightX = splitX + 18
+  writeLabel(doc, customerLabel, leftX, y)
+  doc.setFont('helvetica', 'bold').setFontSize(10).setTextColor(...INK)
+  doc.text(input.customerName || 'Customer', leftX, y + 17, { maxWidth: 195 })
+  let partyY = y + 32
+  const partyLines = [
+    input.attention ? `Attention: ${input.attention}` : '',
+    input.customerAddress || '',
+    input.customerCountry || '',
+    input.customerPhone ? `Phone: ${input.customerPhone}` : '',
+    input.customerEmail ? `Email: ${input.customerEmail}` : '',
+    input.customerTaxId ? `PIN: ${input.customerTaxId}` : '',
+  ].filter(Boolean)
+  partyLines.slice(0, 6).forEach(value => {
+    const wrapped = doc.splitTextToSize(value, 195) as string[]
+    writeValue(doc, wrapped.slice(0, 2).join('\n'), leftX, partyY, { maxWidth: 195 })
+    partyY += Math.max(12, wrapped.slice(0, 2).length * 10)
   })
 
-  let partyY = letterheadBottom + TITLE_GAP
-  doc.setFont('helvetica', 'bold').setFontSize(9).setTextColor(...LIGHT_BLUE)
-  doc.text(`${partyLabel}:`, rightX, partyY, { align: 'right' })
-  partyY += 14
-  doc.setFont('helvetica', 'bold').setFontSize(11).setTextColor(...LIGHT_BLUE)
-  doc.text(input.customerName, rightX, partyY, { align: 'right', maxWidth: 240 })
-  partyY += 14
-  if (input.attention) {
-    doc.setFont('helvetica', 'normal').setFontSize(9).setTextColor(...LIGHT_BLUE)
-    doc.text(`Attn: ${input.attention}`, rightX, partyY, { align: 'right', maxWidth: 240 })
-    partyY += 14
-  }
-  if (input.customerAddress) {
-    doc.setFont('helvetica', 'normal').setFontSize(9).setTextColor(...LIGHT_BLUE)
-    const addrLines = doc.splitTextToSize(input.customerAddress, 240) as string[]
-    for (const line of addrLines.slice(0, 3)) {
-      doc.text(line, rightX, partyY, { align: 'right' })
-      partyY += 12
-    }
-  }
-  if (input.customerCountry || (!input.customerAddress && !deliveryLayout)) {
-    doc.setFont('helvetica', 'normal').setFontSize(9).setTextColor(...LIGHT_BLUE)
-    doc.text(input.customerCountry || 'Kenya', rightX, partyY, { align: 'right' })
-    partyY += 14
-  }
-  if (input.customerPhone) {
-    doc.setFont('helvetica', 'normal').setFontSize(9).setTextColor(...LIGHT_BLUE)
-    doc.text(input.customerPhone, rightX, partyY, { align: 'right' })
-    partyY += 14
-  }
-  if (input.customerTaxId) {
-    doc.setFont('helvetica', 'normal').setFontSize(8).setTextColor(...GRAY)
-    doc.text(`PIN: ${input.customerTaxId}`, rightX, partyY, { align: 'right' })
-    partyY += 12
+  doc.setDrawColor(...BORDER).setLineWidth(.5)
+  doc.line(splitX, y - 5, splitX, Math.max(y + 92, partyY + 3))
+  const meta: Array<[string, string]> = [
+    ['Issue date', fmtDate(input.date)],
+    ...(input.sourceRef ? [['Source document', input.sourceRef] as [string, string]] : []),
+    ...(input.dueDate ? [[input.dueLabel || (kind === 'sales-order' ? 'Delivery date' : 'Valid until'), fmtDate(input.dueDate)] as [string, string]] : []),
+    ...(input.salesperson ? [['Salesperson', input.salesperson] as [string, string]] : []),
+    ...(showAmounts ? [['Currency', currency] as [string, string]] : []),
+  ]
+  meta.forEach((entry, index) => drawMetaRow(doc, entry[0], entry[1], rightX, y + index * 18, 92))
+  y = Math.max(partyY + 14, y + Math.max(94, meta.length * 18 + 14))
+
+  if (kind === 'proforma') {
+    doc.setFillColor(...AMBER_SOFT).setDrawColor(238, 177, 92).setLineWidth(.6)
+    doc.roundedRect(MARGIN, y, CONTENT_W, 28, 4, 4, 'FD')
+    doc.setFont('helvetica', 'bold').setFontSize(8).setTextColor(...AMBER)
+    doc.text('!  This is a proforma invoice and not a tax invoice.', MARGIN + 12, y + 18)
+    y += 40
   }
 
-  y = Math.max(y, partyY) + 18
-
-  const head = showAmounts
-    ? [['SL.', 'ITEM DESCRIPTION', 'UNIT PRICE', 'QUANTITY', 'TAX', 'TOTAL']]
-    : deliveryLayout
-      ? [['SL.', 'ITEM DESCRIPTION', 'QTY', 'SERIAL / IMEI', 'SPECS', 'COND. ✓']]
-      : [['SL.', 'ITEM DESCRIPTION', 'QUANTITY']]
-
-  let sl = 0
-  const bodyRows = input.lines.map(line => {
-    if (line.lineType === 'section') {
+  const commercialHead = [['#', 'DESCRIPTION', 'QTY', 'UNIT', `UNIT PRICE (${currency})`, 'VAT', `AMOUNT (${currency})`]]
+  const deliveryHead = [['#', 'ITEM DESCRIPTION', 'QTY', 'SERIAL / IMEI', 'SPECS', 'CONDITION']]
+  let rowNo = 0
+  const body = input.lines.map(item => {
+    if (item.lineType === 'section') {
       return [{
-        content: line.description,
-        colSpan: colCount,
-        styles: { fontStyle: 'bold' as const, textColor: NAVY, fillColor: [239, 246, 255] as [number, number, number] },
+        content: item.description,
+        colSpan: delivery ? 6 : 7,
+        styles: { fontStyle: 'bold' as const, textColor: NAVY, fillColor: SOFT },
       }]
     }
-    sl += 1
-    if (!showAmounts && deliveryLayout) {
+    rowNo += 1
+    if (delivery) {
       return [
-        String(sl),
-        line.description,
-        Number.isInteger(line.qty) ? String(line.qty) : money(line.qty),
-        line.serial?.trim() || '—',
-        line.specs?.trim() || '—',
+        String(rowNo),
+        item.description,
+        String(item.qty),
+        item.serial || '—',
+        item.specs || '—',
         '',
       ]
     }
-    if (!showAmounts) {
-      return [
-        String(sl),
-        line.description,
-        Number.isInteger(line.qty) ? String(line.qty) : money(line.qty),
-      ]
-    }
-    const taxCell = [
-      line.taxRate ? `VAT ${line.taxRate}%` : null,
-      (line.discountPct ?? 0) > 0 ? `Disc ${line.discountPct}%` : null,
-    ].filter(Boolean).join('\n') || '—'
     return [
-      String(sl),
-      line.description,
-      `${currency} ${money(line.unitPrice ?? 0)}`,
-      Number.isInteger(line.qty) ? String(line.qty) : money(line.qty),
-      taxCell,
-      `${currency} ${money(line.subtotal ?? 0)}`,
+      String(rowNo),
+      item.description,
+      String(item.qty),
+      'Unit(s)',
+      money(item.unitPrice || 0),
+      item.taxRate ? `${item.taxRate}%` : '0%',
+      money(item.subtotal || 0),
     ]
   })
 
   autoTable(doc, {
     startY: y,
-    margin: { left: MARGIN, right: MARGIN, top: 56, bottom: 100 },
-    head,
-    body: bodyRows as any,
+    margin: { left: MARGIN, right: MARGIN, top: 108, bottom: 62 },
+    head: delivery ? deliveryHead : commercialHead,
+    body: body as any,
     theme: 'grid',
     styles: {
       font: 'helvetica',
-      fontSize: 8.5,
-      textColor: TEXT,
-      cellPadding: { top: 7, bottom: 7, left: 6, right: 6 },
+      fontSize: 7.8,
+      textColor: INK,
       lineColor: BORDER,
-      lineWidth: 0.4,
-      overflow: 'linebreak',
+      lineWidth: .45,
+      cellPadding: { top: 7, right: 6, bottom: 7, left: 6 },
       valign: 'middle',
+      overflow: 'linebreak',
     },
     headStyles: {
-      fillColor: NAVY,
-      fontSize: 7.5,
+      fillColor: SOFT,
+      textColor: NAVY,
       fontStyle: 'bold',
-      textColor: [255, 255, 255],
-      lineColor: NAVY,
+      fontSize: 6.8,
       minCellHeight: 24,
       halign: 'center',
     },
-    alternateRowStyles: { fillColor: SURFACE },
-    columnStyles: showAmounts
+    alternateRowStyles: { fillColor: [252, 253, 255] },
+    columnStyles: delivery
       ? {
-          0: { cellWidth: 28, halign: 'center' },
-          1: { cellWidth: 'auto', halign: 'left' },
-          2: { cellWidth: 88,halign: 'right' },
-          3: { cellWidth: 58,halign: 'center' },
-          4: { cellWidth: 58,halign: 'center' },
-          5: { cellWidth: 92,halign: 'right' },
+          0: { cellWidth: 24, halign: 'center' },
+          1: { cellWidth: 150 },
+          2: { cellWidth: 34, halign: 'center' },
+          3: { cellWidth: 96 },
+          4: { cellWidth: 'auto' },
+          5: { cellWidth: 62, halign: 'center' },
         }
-      : deliveryLayout
-        ? {
-            0: { cellWidth: 26,halign: 'center' },
-            1: { cellWidth: 'auto',halign: 'left' },
-            2: { cellWidth: 36,halign: 'center' },
-            3: { cellWidth: 92,halign: 'left', font: 'courier', fontSize: 7.5 },
-            4: { cellWidth: 110,halign: 'left', fontSize: 7.5 },
-            5: { cellWidth: 42,halign: 'center' },
-          }
-        : {
-            0: { cellWidth: 28,halign: 'center' },
-            1: { cellWidth: 'auto',halign: 'left' },
-            2: { cellWidth: 70,halign: 'center' },
-          },
-    // New pages created by the table: stamp watermark before cells so content sits above it.
+      : {
+          0: { cellWidth: 24, halign: 'center' },
+          1: { cellWidth: 'auto' },
+          2: { cellWidth: 34, halign: 'center' },
+          3: { cellWidth: 48, halign: 'center' },
+          4: { cellWidth: 82, halign: 'right' },
+          5: { cellWidth: 38, halign: 'center' },
+          6: { cellWidth: 86, halign: 'right' },
+        },
     didDrawPage: data => {
-      if (data.pageNumber > 1) drawPageWatermark(doc, company)
+      if (data.pageNumber > 1) drawLetterhead(doc, company, `${input.title.toUpperCase()} · ${input.ref}`)
     },
   })
 
-  y = (doc as any).lastAutoTable.finalY + 18
+  y = (doc as any).lastAutoTable.finalY + 14
+  const notes = customerFacingNotes(input.notes) || ''
 
-  // Drop internal workflow / audit lines (reset-to-draft, auto-created, …)
-  // so customer PDFs only show commercial notes.
-  const filteredNotes = customerFacingNotes(input.notes)
-  const hadRawNotes = Boolean(String(input.notes ?? '').trim())
-  const notesText = filteredNotes
-    || (!hadRawNotes && input.sourceRef ? `Created from ${input.sourceRef}.` : '')
-  const taxRates = Array.from(new Set(input.lines.filter(l => l.lineType !== 'section' && (l.taxRate ?? 0) > 0).map(l => l.taxRate)))
-  const vatLabel = taxRates.length === 1 ? `VAT ${taxRates[0]}%` : 'VAT'
-
-  const totals: Array<{ label: string; value: string; bold?: boolean; accent?: boolean }> = []
   if (showAmounts) {
-    const disc = Number(input.discountTotal) || 0
-    const net = Number(input.subtotal) || 0
-    // When line discounts exist, show gross → discount → net so the PDF doesn't
-    // look like discount is applied twice on an already-net subtotal.
-    if (disc > 0) {
-      totals.push({ label: 'Subtotal', value: `${currency} ${money(net + disc)}` })
-      totals.push({ label: 'Discount', value: `- ${currency} ${money(disc)}` })
-    } else {
-      totals.push({ label: 'Subtotal', value: `${currency} ${money(net)}` })
+    const totalRows: Array<[string, string, boolean?]> = []
+    const lineDiscount = Number(input.discountTotal) || 0
+    const subtotal = Number(input.subtotal) || 0
+    totalRows.push(['Subtotal', `${currency} ${money(lineDiscount > 0 ? subtotal + lineDiscount : subtotal)}`])
+    if (lineDiscount > 0) totalRows.push(['Discount', `- ${currency} ${money(lineDiscount)}`])
+    totalRows.push(['VAT', `${currency} ${money(input.taxTotal || 0)}`])
+    if (Number(input.postTaxDiscountTotal) > 0) totalRows.push(['Order discount', `- ${currency} ${money(input.postTaxDiscountTotal || 0)}`])
+    totalRows.push(['TOTAL', `${currency} ${money(input.total || 0)}`, true])
+    if (Number(input.amountPaid) > 0) {
+      totalRows.push(['Paid', `- ${currency} ${money(input.amountPaid || 0)}`])
+      totalRows.push(['BALANCE DUE', `${currency} ${money(Math.max(0, Number(input.total || 0) - Number(input.amountPaid || 0)))}`, true])
     }
-    if (input.taxTotal) totals.push({ label: vatLabel, value: `${currency} ${money(input.taxTotal)}` })
-    const postTaxDisc = Number(input.postTaxDiscountTotal) || 0
-    // Distinct label from the pre-tax "Discount" row above (line discounts)
-    // in the rare case both are present on the same document at once.
-    if (postTaxDisc > 0) totals.push({ label: disc > 0 ? 'Order Discount' : 'Discount', value: `- ${currency} ${money(postTaxDisc)}` })
-    totals.push({ label: 'TOTAL', value: `${currency} ${money(input.total ?? 0)}`, bold: true, accent: true })
-    if (input.amountPaid && input.amountPaid > 0) {
-      totals.push({ label: 'Amount Paid', value: `- ${currency} ${money(input.amountPaid)}` })
-      totals.push({
-        label: 'Amount Due',
-        value: `${currency} ${money(Math.max(0, (input.total ?? 0) - input.amountPaid))}`,
-        bold: true,
-        accent: true,
+
+    const totalH = totalRows.length * 19 + 6
+    const notesLines = notes ? doc.splitTextToSize(notes, 250) as string[] : []
+    const notesH = notesLines.length ? Math.max(46, notesLines.length * 10 + 26) : 0
+    y = ensureRoom(doc, company, input, y, Math.max(totalH, notesH) + 12)
+
+    if (notesLines.length) {
+      writeLabel(doc, kind === 'sales-order' ? 'Fulfilment notes' : 'Notes', MARGIN, y + 10)
+      doc.setFont('helvetica', 'normal').setFontSize(7.7).setTextColor(...INK)
+      doc.text(notesLines, MARGIN, y + 27)
+    }
+
+    const totalsX = RIGHT - 220
+    totalRows.forEach((item, index) => {
+      const rowY = y + 14 + index * 19
+      if (item[2]) {
+        doc.setFillColor(...SOFT)
+        doc.rect(totalsX - 8, rowY - 13, 228, 19, 'F')
+      }
+      if (item[2] && index > 0) line(doc, totalsX - 8, rowY - 13, RIGHT, BORDER, .55)
+      doc.setFont('helvetica', item[2] ? 'bold' : 'normal').setFontSize(item[2] ? 9.5 : 8).setTextColor(...INK)
+      doc.text(item[0], totalsX, rowY)
+      doc.text(item[1], RIGHT - 6, rowY, { align: 'right' })
+    })
+    y += Math.max(totalH, notesH) + 12
+  } else if (notes) {
+    const wrapped = doc.splitTextToSize(notes, CONTENT_W - 10) as string[]
+    y = ensureRoom(doc, company, input, y, wrapped.length * 10 + 34)
+    writeLabel(doc, 'Delivery notes', MARGIN, y + 10)
+    doc.setFont('helvetica', 'normal').setFontSize(7.8).setTextColor(...INK)
+    doc.text(wrapped, MARGIN, y + 27)
+    y += wrapped.length * 10 + 38
+  }
+
+  if (input.showPaymentDetails ?? (showAmounts && kind !== 'quotation' && kind !== 'sales-order')) {
+    const payment = defaultPaymentLines(input, company, bankAccounts)
+    if (payment.length) {
+      const paymentH = Math.max(56, Math.ceil(payment.length / 2) * 14 + 30)
+      y = ensureRoom(doc, company, input, y, paymentH + 12)
+      line(doc, MARGIN, y, RIGHT, BORDER, .55)
+      writeLabel(doc, 'Payment instructions', MARGIN, y + 18)
+      const midpoint = Math.ceil(payment.length / 2)
+      payment.forEach((entry, index) => {
+        const isRight = index >= midpoint
+        const itemIndex = isRight ? index - midpoint : index
+        const x = isRight ? MARGIN + CONTENT_W / 2 + 12 : MARGIN
+        doc.setFont('helvetica', /BANK|M-PESA|PAYMENT/i.test(entry) ? 'bold' : 'normal')
+          .setFontSize(7.5)
+          .setTextColor(...INK)
+        doc.text(entry, x, y + 36 + itemIndex * 13, { maxWidth: CONTENT_W / 2 - 24 })
       })
+      y += paymentH
     }
   }
 
-  const leftW = contentW * 0.52
-  const rightW = contentW * 0.40
-  const colGap = contentW - leftW - rightW
-  const totalsX = MARGIN + leftW + colGap
-  const totalsH = Math.max(36, totals.length * 16 + 8)
-  const notesWrapped = notesText ? (doc.splitTextToSize(notesText, leftW - 18) as string[]) : []
-  const notesH = notesText ? Math.max(36, notesWrapped.length * 11 + 28) : 0
-  const notesTotalsH = Math.max(notesH, totalsH, showAmounts ? 36 : 0)
-
-  const paymentLines: string[] = []
-  if (showPayment) {
-    if (Array.isArray(input.paymentDetailLines) && input.paymentDetailLines.length > 0) {
-      paymentLines.push(...input.paymentDetailLines)
-    } else {
-      paymentLines.push(...(input.extraPaymentLines ?? []))
-      if (input.paymentCommunication || input.ref) {
-        paymentLines.unshift(`Payment Reference: ${input.ref}`)
-      }
-      const primaryBank = bankAccounts.find(a => a.active && a.id !== 'cash' && a.id !== 'mpesa' && !/m-?pesa|safaricom/i.test(a.bankName || ''))
-      if (primaryBank?.accountNo) {
-        paymentLines.push('Bank Transfer:')
-        paymentLines.push(`Account Name: ${company.name}`)
-        paymentLines.push(`Account Number: ${primaryBank.accountNo} (${primaryBank.currency || currency})`)
-        if (primaryBank.bankName) paymentLines.push(`Bank: ${primaryBank.bankName}`)
-        const mpesa = resolveBankMpesa(primaryBank as any, {
-          mpesaPaybill: company.mpesaPaybill || '',
-          mpesaAccount: company.mpesaAccount || '',
-        })
-        if (mpesa) {
-          paymentLines.push('M-PESA:')
-          paymentLines.push(`Pay Bill No: ${mpesa.paybill}`)
-          if (mpesa.account) paymentLines.push(`Account Number: ${mpesa.account} (${currency})`)
-        }
-      } else if (company.mpesaPaybill) {
-        paymentLines.push('M-PESA:')
-        paymentLines.push(`Pay Bill No: ${company.mpesaPaybill}`)
-        if (company.mpesaAccount) paymentLines.push(`Account Number: ${company.mpesaAccount} (${currency})`)
-      }
-    }
-  }
-
-  // Measure payment block with real wraps so height matches drawn text.
-  let paymentDrawH = 0
-  if (paymentLines.length) {
-    paymentDrawH = 22
-    for (const line of paymentLines) {
-      const wrapped = doc.splitTextToSize(line, leftW - 12) as string[]
-      paymentDrawH += Math.max(1, wrapped.length) * 11
-    }
-    paymentDrawH += 6
-  }
-  const sigH = showSignature ? 68 : 0
-  const bottomBlockH = Math.max(paymentDrawH, sigH)
-
-  // Natural flow under the table — do not shove totals into the footer zone.
-  y = ensureRoom(y, notesTotalsH + 14)
-
-  const blockTop = y
-
-  if (notesText) {
-    doc.setFillColor(...CYAN)
-    doc.roundedRect(MARGIN, blockTop, 3.5, 14, 1, 1, 'F')
-    doc.setFont('helvetica', 'bold').setFontSize(9).setTextColor(...NAVY)
-    doc.text('Notes', MARGIN + 10, blockTop + 11)
-    doc.setFont('helvetica', 'normal').setFontSize(8.5).setTextColor(...GRAY)
-    doc.text(notesWrapped, MARGIN + 10, blockTop + 26)
-  }
-
-  if (showAmounts && totals.length) {
-    let totalsY = blockTop + 12
-    for (const row of totals) {
-      doc.setFont('helvetica', row.bold ? 'bold' : 'normal').setFontSize(row.bold ? 12 : 9)
-      doc.setTextColor(...(row.accent ? NAVY : TEXT))
-      doc.text(row.label, totalsX, totalsY)
-      doc.text(row.value, rightX, totalsY, { align: 'right' })
-      totalsY += row.bold ? 18 : 15
-    }
-  }
-
-  y = blockTop + notesTotalsH + 18
-
-  if (bottomBlockH > 0) {
-    y = ensureRoom(y, bottomBlockH + 8)
-    const paySigTop = y
-
-    if (paymentLines.length) {
-      doc.setFillColor(...NAVY)
-      doc.roundedRect(MARGIN, paySigTop, 3.5, 14, 1, 1, 'F')
-      doc.setFont('helvetica', 'bold').setFontSize(9).setTextColor(...NAVY)
-      doc.text('Payment Details', MARGIN + 10, paySigTop + 11)
-      let payY = paySigTop + 28
-      doc.setFont('helvetica', 'normal').setFontSize(8.5).setTextColor(...TEXT)
-      for (const line of paymentLines) {
-        const isHeading = line.endsWith(':') && !line.includes('Reference')
-        doc.setFont('helvetica', isHeading ? 'bold' : 'normal')
-        const wrapped = doc.splitTextToSize(line, leftW - 12) as string[]
-        doc.text(wrapped, MARGIN + 10, payY)
-        payY += Math.max(1, wrapped.length) * 11
-      }
-    }
-
-    if (showSignature) {
-      const sigX = totalsX
-      // Prefer the lower content band (just above the fixed footer) so the
-      // signature does not sit flush under totals when the page has free space.
-      const sigTop = Math.max(paySigTop, contentBottom - sigH)
-
-      doc.setFont('helvetica', 'bold').setFontSize(8).setTextColor(...GRAY)
-      doc.text('AUTHORISED SIGNATURE', sigX, sigTop + 11)
-      doc.setDrawColor(...BORDER).setLineWidth(0.8)
-      doc.line(sigX, sigTop + 46, rightX, sigTop + 46)
-      doc.setFont('helvetica', 'normal').setFontSize(8).setTextColor(...GRAY)
-      doc.text('Authorised Signature', sigX + rightW / 2, sigTop + 60, { align: 'center' })
-      y = Math.max(y, sigTop + sigH)
-    } else {
-      y = Math.max(y, paySigTop + bottomBlockH)
-    }
-  }
-
+  const showSignature = input.showSignature ?? true
+  const showAck = input.showReceiptAcknowledgement ?? delivery
   if (showAck) {
-    const ackH = 118
-    y = ensureRoom(y + 10, ackH)
-    doc.setDrawColor(...BORDER).setLineWidth(0.6)
-    doc.setFillColor(255, 255, 255)
-    doc.roundedRect(MARGIN, y, contentW, ackH - 8, 3, 3, 'S')
-    doc.setFont('helvetica', 'bold').setFontSize(9).setTextColor(...NAVY)
-    doc.text('Receipt Acknowledgement', MARGIN + 12, y + 16)
-
-    const colW = (contentW - 36) / 2
-    const leftAck = MARGIN + 12
-    const rightAck = MARGIN + 18 + colW
-    const row1 = y + 34
-    const row2 = y + 72
-
-    const drawAckField = (x: number, top: number, label: string, value?: string, lineH = 28) => {
-      doc.setFont('helvetica', 'bold').setFontSize(7).setTextColor(...GRAY)
-      doc.text(label.toUpperCase(), x, top)
-      if (value?.trim()) {
-        doc.setFont('helvetica', 'normal').setFontSize(9).setTextColor(...TEXT)
-        doc.text(value.trim(), x, top + 16, { maxWidth: colW - 8 })
-      } else {
-        doc.setDrawColor(...TEXT).setLineWidth(0.5)
-        doc.line(x, top + lineH, x + colW - 8, top + lineH)
+    y = ensureRoom(doc, company, input, y, 108)
+    line(doc, MARGIN, y, RIGHT, BORDER, .55)
+    writeLabel(doc, 'Receipt acknowledgement', MARGIN, y + 18)
+    const half = CONTENT_W / 2 - 16
+    const fields: Array<[string, string, number, number]> = [
+      ['Received by', input.attention || '', MARGIN, y + 48],
+      ['ID / Passport No.', input.recipientIdNumber || '', MARGIN + half + 32, y + 48],
+      ['Signature', '', MARGIN, y + 84],
+      ['Date received', '', MARGIN + half + 32, y + 84],
+    ]
+    fields.forEach(([label, value, x, rowY]) => {
+      doc.setFont('helvetica', 'normal').setFontSize(7).setTextColor(...MUTED)
+      doc.text(label, x, rowY - 10)
+      doc.setFont('helvetica', 'normal').setFontSize(8).setTextColor(...INK)
+      doc.text(value, x, rowY)
+      line(doc, x, rowY + 5, x + half, BORDER, .55)
+    })
+    y += 102
+  } else if (showSignature && kind !== 'proforma' && kind !== 'invoice' && kind !== 'bill' && kind !== 'receipt') {
+    y = ensureRoom(doc, company, input, y, 102)
+    line(doc, MARGIN, y, RIGHT, BORDER, .55)
+    const quote = kind === 'quotation'
+    writeLabel(doc, quote ? 'Accept quotation' : 'Authorised by', MARGIN, y + 18)
+    if (!quote) writeLabel(doc, 'Received by', MARGIN + CONTENT_W / 2 + 14, y + 18)
+    const leftWidth = quote ? CONTENT_W * .7 : CONTENT_W / 2 - 14
+    const signatureFields = quote ? ['Signature', 'Name', 'Date'] : ['Signature', 'Name', 'Date']
+    signatureFields.forEach((label, index) => {
+      const rowY = y + 42 + index * 18
+      doc.setFont('helvetica', 'normal').setFontSize(7).setTextColor(...MUTED)
+      doc.text(`${label}:`, MARGIN, rowY)
+      line(doc, MARGIN + 48, rowY + 2, MARGIN + leftWidth, BORDER, .55)
+      if (!quote) {
+        const rx = MARGIN + CONTENT_W / 2 + 14
+        doc.text(`${label}:`, rx, rowY)
+        line(doc, rx + 48, rowY + 2, RIGHT, BORDER, .55)
       }
-    }
-
-    drawAckField(leftAck, row1, 'Received By (Full Name)', input.attention)
-    drawAckField(rightAck, row1, 'ID / Passport No.', input.recipientIdNumber)
-    drawAckField(leftAck, row2, 'Signature', undefined, 34)
-    drawAckField(rightAck, row2, 'Date Received', undefined, 34)
-    y += ackH
+    })
+    y += 98
   }
 
-  const pageCount = doc.getNumberOfPages()
-  const phone = company.phone || ''
-  const email = company.email || ''
-  const address = [company.address, company.city].filter(Boolean).join(', ')
-  const pin = company.kraPin || ''
+  if (kind === 'proforma') {
+    y = ensureRoom(doc, company, input, y, 54)
+    writeLabel(doc, 'Important', MARGIN, y + 12)
+    doc.setFont('helvetica', 'normal').setFontSize(7.7).setTextColor(...INK)
+    doc.text('This proforma invoice is valid until the expiry date stated above.', MARGIN, y + 29)
+    doc.text('Full payment must be received before goods or services are delivered.', MARGIN, y + 42)
+  }
 
-  for (let page = 1; page <= pageCount; page++) {
+  const pages = doc.getNumberOfPages()
+  for (let page = 1; page <= pages; page += 1) {
     doc.setPage(page)
-    if (page > 1) {
-      // Continuation header only — watermark already drawn when the page was created.
-      doc.setFont('helvetica', 'bold').setFontSize(8).setTextColor(...NAVY)
-      doc.text(`${input.title.toUpperCase()} · ${input.ref}`, MARGIN, 28)
-      doc.setFont('helvetica', 'normal').setFontSize(8).setTextColor(...FOOTER_GRAY)
-      doc.text(website, rightX, 28, { align: 'right' })
-    }
-
-    // Page chrome is always absolute to A4 — never follows mid-page content.
-    drawFooterTriangles(doc)
-
-    const footerY = PAGE_H - 52
-    doc.setDrawColor(...BORDER).setLineWidth(0.5)
-    doc.line(MARGIN, footerY - 14, rightX, footerY - 14)
-
-    const col1 = MARGIN + 12
-    const col2 = MARGIN + contentW * 0.32
-    const col3 = MARGIN + contentW * 0.58
-    drawContactIcon(doc, 'phone', col1, footerY)
-    doc.setFont('helvetica', 'normal').setFontSize(7.5).setTextColor(...GRAY)
-    doc.text(phone, col1 + 12, footerY + 2)
-
-    drawContactIcon(doc, 'email', col2, footerY)
-    doc.text(email, col2 + 12, footerY + 2)
-
-    drawContactIcon(doc, 'pin', col3, footerY)
-    const addrLines = doc.splitTextToSize(address || 'Kenya', 118) as string[]
-    doc.text(addrLines.slice(0, 2), col3 + 12, footerY - 2)
-
-    if (pin) {
-      doc.setFont('helvetica', 'bold').setFontSize(7.5).setTextColor(...NAVY)
-      doc.text(`PIN: ${pin}`, rightX, footerY + 2, { align: 'right' })
-    }
-
-    doc.setFont('helvetica', 'normal').setFontSize(8).setTextColor(...GRAY)
-    doc.text(company.invoiceFooter || 'Thank you for your business.', PAGE_W / 2, PAGE_H - 18, { align: 'center' })
+    drawFooter(doc, company, input, page, pages)
   }
 
   return doc
 }
 
 export function deedPdfToBuffer(doc: jsPDF): Uint8Array<ArrayBuffer> {
-  const ab = doc.output('arraybuffer') as ArrayBuffer
-  return new Uint8Array(ab)
+  const output = doc.output('arraybuffer') as ArrayBuffer
+  return new Uint8Array(output)
 }
