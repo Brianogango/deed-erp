@@ -1,5 +1,13 @@
 import type { RepairStatus } from '@/lib/repair-types'
 
+/** Jobs that have left the open workshop queue (Dashboard "Open Repairs"). */
+export const CLOSED_REPAIR_STATUSES = ['closed', 'cancelled', 'delivered', 'invoiced'] as const
+
+export function isOpenRepairJob(repair: { status?: string } | null | undefined): boolean {
+  const status = String(repair?.status ?? '')
+  return !CLOSED_REPAIR_STATUSES.includes(status as (typeof CLOSED_REPAIR_STATUSES)[number])
+}
+
 export const REPAIR_PROGRESS_ORDER: RepairStatus[] = [
   'pending_verification',
   'received',

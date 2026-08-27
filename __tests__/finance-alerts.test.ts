@@ -42,6 +42,16 @@ describe('buildFinanceAlerts', () => {
     expect(alerts[0].sub).toContain('1,000')
   })
 
+  it('counts invoices without dueDate using the invoice date, matching Outstanding', () => {
+    const alerts = buildFinanceAlerts({
+      ...base,
+      invoices: [
+        { type: 'customer_invoice', status: 'posted', total: 400, amountPaid: 0, date: '2020-01-01' },
+      ],
+    })
+    expect(alerts[0]?.title).toContain('1 overdue customer invoice')
+  })
+
   it('flags overdue and open supplier bills separately', () => {
     const alerts = buildFinanceAlerts({
       ...base,

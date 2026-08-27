@@ -706,13 +706,14 @@ export function invoicePaymentStatus(inv: PaymentStatusInput): PaymentStatus {
  * a posted invoice past its due date with a residual balance.
  */
 export function isInvoiceOverdue(
-  inv: { status: unknown; total: number; amountPaid: number; dueDate?: string },
-  today: string = new Date().toISOString().slice(0, 10),
+  inv: { status: unknown; total: number; amountPaid: number; dueDate?: string; date?: string },
+  today: string = new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Nairobi' }),
 ): boolean {
   if (invoiceDocState(inv.status) !== 'posted') return false
-  if (!inv.dueDate) return false
+  const due = String(inv.dueDate || inv.date || '').slice(0, 10)
+  if (!due) return false
   const residual = (Number(inv.total) || 0) - (Number(inv.amountPaid) || 0)
-  return residual > 0 && inv.dueDate.slice(0, 10) < today
+  return residual > 0 && due < today
 }
 
 // ─── Cancellation guards ─────────────────────────────────────────────────────

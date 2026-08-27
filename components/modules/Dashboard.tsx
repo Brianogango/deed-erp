@@ -36,6 +36,9 @@ import {
 } from '@/lib/dashboard-priority'
 import { buildFinanceAlerts, computeCashbookTotals, cashPositionFromTotals } from '@/lib/finance-alerts'
 import { saleOrderInvoiceStatus, invoicePaymentStatus, isOpenInvoice, invoiceResidual, isInvoiceOverdue } from '@/lib/odoo-sales-flow'
+import { onHandQtyAtStockLocations } from '@/lib/business-logic'
+import { computeLowStockItems } from '@/lib/kpi-stock'
+import { isOpenRepairJob } from '@/lib/repair-progress'
 import { buildCashbookEntries } from '@/components/modules/Cashbook'
 import { Fa } from '@/components/icons'
 import { OnboardingChecklist } from '@/components/erp/OnboardingChecklist'
@@ -223,6 +226,8 @@ export function Dashboard() {
     bankAccounts,
     bankStatementLines,
     companySettings,
+    serials,
+    bulkStock,
   } = useApp()
   const { employees, leaveRequests } = useHrStore()
 
@@ -333,18 +338,18 @@ export function Dashboard() {
   }, [visibleSalesOrders])
 
   const inventoryStats = useMemo(() => {
-    const lowStockItems = products.filter(p => p.stockQty <= p.minStock && p.minStock > 0 && p.unit !== 'service')
+    const lowStockItems = computeLowStockItems(products, serials, bulkStock)
     const activeSkus = products.filter(p => p.isActive && p.unit !== 'service')
-    const totalUnits = activeSkus.reduce((sum, p) => sum + p.stockQty, 0)
+    const totalUnits = activeSkus.reduce((sum, p) => sum + onHandQtyAtStockLocations(p, serials, bulkStock, p.id), 0)
     const pendingReceipts = purchaseOrders.filter(po => ['sent', 'confirmed', 'partial'].includes(po.status)).length
     const draftTransfers = stockTransfers.filter(t => t.status === 'draft').length
-    const stockValue = products.reduce((sum, p) => sum + p.costPrice * p.stockQty, 0)
+    const stockValue = products.reduce((sum, p) => sum + p.costPrice * onHandQtyAtStockLocations(p, serials, bulkStock, p.id), 0)
 
     return { lowStockItems, activeSkus, totalUnits, pendingReceipts, draftTransfers, stockValue }
-  }, [products, purchaseOrders, stockTransfers])
+  }, [products, serials, bulkStock, purchaseOrders, stockTransfers])
 
   const repairStats = useMemo(() => {
-    const active = visibleRepairs.filter(r => !['closed', 'cancelled', 'delivered', 'invoiced'].includes(r.status))
+    const active = visibleRepairs.filter(isOpenRepairJob)
     const awaitingParts = active.filter(r => r.status === 'awaiting_parts')
     const inQc = active.filter(r => r.status === 'qc')
     const ready = visibleRepairs.filter(r => r.status === 'ready')
@@ -602,12 +607,12 @@ export function Dashboard() {
     }
 
     if (canSeeInventory) {
-      const outOfStock = inventoryStats.lowStockItems.filter(p => p.stockQty === 0)
+      const outOfStock = inventoryStats.lowStockItems.filter(p => p.onHand === 0)
       if (outOfStock.length > 0) {
         items.push({ key: 'out-of-stock', title: `${outOfStock.length} product${outOfStock.length > 1 ? 's' : ''} out of stock`, sub: outOfStock.slice(0, 3).map(p => p.name).join(', '), tone: 'danger', module: 'inventory', path: '/operations?tab=warehouse_view' })
       }
       if (isInventoryOfficer || isAdminOfficer) {
-        items.push(...inventoryStats.lowStockItems.filter(p => p.stockQty > 0).slice(0, 3).map(p => ({ key: `stock-${p.id}`, title: `${p.name} is low`, sub: `${p.stockQty}/${p.minStock} units · ${p.category}`, tone: 'warn', module: 'inventory' as ModuleId, path: '/operations?tab=warehouse_view' })))
+        items.push(...inventoryStats.lowStockItems.filter(p => p.onHand > 0).slice(0, 3).map(p => ({ key: `stock-${p.id}`, title: `${p.name} is low`, sub: `${p.onHand}/${p.minStock} units · ${p.category}`, tone: 'warn', module: 'inventory' as ModuleId, path: '/operations?tab=warehouse_view' })))
       }
     }
 
@@ -759,7 +764,7 @@ export function Dashboard() {
                 />
                 <div className="dashboard-list-rows">
                   {inventoryStats.lowStockItems.slice(0, 4).map(p => {
-                    const isOut = p.stockQty === 0
+                    const isOut = p.onHand === 0
                     return (
                       <div key={p.id} className="dashboard-list-row">
                         <div className="flex items-center gap-2 sm:gap-3 min-w-0">
@@ -770,7 +775,7 @@ export function Dashboard() {
                           </div>
                         </div>
                         <div className="flex items-center gap-2 sm:gap-3">
-                          <span className="text-[11px] sm:text-xs font-mono text-[var(--text-2)]">{p.stockQty}/{p.minStock}</span>
+                          <span className="text-[11px] sm:text-xs font-mono text-[var(--text-2)]">{p.onHand}/{p.minStock}</span>
                           <Badge status={isOut ? 'cancelled' : 'pending'} label={isOut ? 'Out' : 'Low'} />
                         </div>
                       </div>
@@ -831,8 +836,8 @@ export function Dashboard() {
                 <div className="p-4 grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
                   {ALL_CATEGORIES.map(cat => {
                     const prods = products.filter(p => p.category === cat && p.isActive)
-                    const val = prods.reduce((a, p) => a + p.costPrice * p.stockQty, 0)
-                    const qty = prods.reduce((a, p) => a + p.stockQty, 0)
+                    const val = prods.reduce((a, p) => a + p.costPrice * onHandQtyAtStockLocations(p, serials, bulkStock, p.id), 0)
+                    const qty = prods.reduce((a, p) => a + onHandQtyAtStockLocations(p, serials, bulkStock, p.id), 0)
                     const color = CATEGORY_COLORS[cat] ?? '#6B7280'
                     return (
                       <div key={cat} className="dashboard-category-card">

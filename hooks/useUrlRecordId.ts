@@ -27,22 +27,32 @@ export type SetUrlRecordIdOptions = {
  * Persist an open list→detail record id in the URL so refresh / share keeps the same page.
  * Pattern matches Expenses / Outsource deep-links.
  *
- * Local state is updated immediately on setRecordId; URL sync only flows
- * searchParams → local when the URL actually changes (browser back/forward,
- * refresh). That way Back can clear the open record without the stale query
- * string reopening it before router.replace finishes.
+ * Local state is updated immediately on setRecordId. A module-level pending map
+ * survives <Suspense> remounts so a click is not lost before router.replace
+ * commits, and so a stale empty searchParams cannot snap the page back to list.
  */
+const pendingRecordIds = new Map<string, string | null>()
+
+function pendingKey(pathname: string, param: string) {
+  return `${pathname}::${param}`
+}
+
 export function useUrlRecordId(options: Options = {}) {
   const param = options.param ?? 'id'
   const searchParams = useSearchParams()
   const router = useRouter()
   const pathname = usePathname()
   const queryId = searchParams.get(param)
-  const [recordId, setLocalRecordId] = useState<string | null>(queryId)
+  const key = pendingKey(pathname, param)
+  const [recordId, setLocalRecordId] = useState<string | null>(() => (
+    pendingRecordIds.has(key) ? pendingRecordIds.get(key)! : queryId
+  ))
 
   const setRecordId = useCallback((id: string | null, opts?: SetUrlRecordIdOptions) => {
     setLocalRecordId(id)
     if (opts?.localOnly) return
+
+    pendingRecordIds.set(pendingKey(pathname, param), id)
 
     const params = new URLSearchParams(searchParams.toString())
     if (id) {
@@ -69,8 +79,26 @@ export function useUrlRecordId(options: Options = {}) {
   }, [searchParams, router, pathname, param, options.whenOpen, options.clearKeys])
 
   useEffect(() => {
-    setLocalRecordId(searchParams.get(param))
-  }, [searchParams, param])
+    const urlId = searchParams.get(param)
+    const mapKey = pendingKey(pathname, param)
+    if (pendingRecordIds.has(mapKey)) {
+      const pending = pendingRecordIds.get(mapKey) ?? null
+      if (pending !== urlId) {
+        setLocalRecordId(pending)
+        return
+      }
+      pendingRecordIds.delete(mapKey)
+    }
+    setLocalRecordId(urlId)
+  }, [searchParams, param, pathname])
+
+  useEffect(() => {
+    const onPopState = () => {
+      pendingRecordIds.delete(pendingKey(pathname, param))
+    }
+    window.addEventListener('popstate', onPopState)
+    return () => window.removeEventListener('popstate', onPopState)
+  }, [pathname, param])
 
   return [recordId, setRecordId] as const
 }

@@ -7,11 +7,14 @@
  */
 
 import type { LocationId } from './store'
-import { inferTrackingMethod, isSerialTracking } from './inventory-identifiers'
+import { inferTrackingMethod, isSerialTracking, isStockTracked } from './inventory-identifiers'
 
 // ── Minimal types (mirrors store types without the full import chain) ──────────
 
 export interface StockProduct {
+  id?: string
+  isActive?: boolean | null
+  minStock?: number | null
   requiresSerial?: boolean | null
   trackingMethod?: string | null
   category?: string | null
@@ -83,6 +86,37 @@ export function calcStockByLocation(
       .forEach(level => { locs[level.location] = level.qty })
   }
   return locs
+}
+
+/** Locations that count as on-hand for low-stock / warehouse KPIs. */
+const ON_HAND_LOCATIONS: LocationId[] = ['warehouse', 'shop', 'repair_unit']
+
+/** On-hand units at warehouse + shop + repair (same total Operations uses). */
+export function onHandQtyAtStockLocations(
+  product: StockProduct | undefined,
+  serials: SerialNumber[],
+  bulkStock: BulkStockLevel[],
+  productId: string,
+): number {
+  const locs = calcStockByLocation(product, serials, bulkStock, productId)
+  return ON_HAND_LOCATIONS.reduce((sum, loc) => sum + (Number(locs[loc]) || 0), 0)
+}
+
+/**
+ * One low-stock definition for Dashboard and Operations:
+ * active, stock-tracked SKU with a reorder point, on-hand at or below min.
+ */
+export function isLowStockSku(product: StockProduct | undefined, onHand: number): boolean {
+  if (!product || product.isActive === false) return false
+  const tracking = inferTrackingMethod({
+    trackingMethod: product.trackingMethod,
+    category: product.category,
+    requiresSerial: product.requiresSerial,
+    unit: product.unit,
+  })
+  if (!isStockTracked(tracking) || String(product.unit ?? '').toLowerCase() === 'service') return false
+  const min = Number(product.minStock) || 0
+  return min > 0 && onHand <= min
 }
 
 const PARTNER_STOCK_LOCATION: LocationId = 'warehouse'

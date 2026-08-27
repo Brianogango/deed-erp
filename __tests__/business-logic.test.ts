@@ -17,6 +17,8 @@ import {
   aggregatePayroll,
   resolveDepositStatus,
   capPayment,
+  onHandQtyAtStockLocations,
+  isLowStockSku,
   type StockProduct,
   type SerialNumber,
   type BulkStockLevel,
@@ -109,6 +111,38 @@ describe('calcStockByLocation()', () => {
       const result = calcStockByLocation(undefined, [], [], 'prod-1')
       expect(result).toEqual({ warehouse: 0, shop: 0, repair_unit: 0, vendor: 0, customer: 0, employee: 0, pending_testing: 0, quarantine: 0 })
     })
+  })
+})
+
+describe('onHandQtyAtStockLocations() / isLowStockSku()', () => {
+  const bulkSku: StockProduct = {
+    id: 'prod-1',
+    isActive: true,
+    minStock: 5,
+    requiresSerial: false,
+    unit: 'pcs',
+  }
+
+  it('sums warehouse + shop + repair_unit only', () => {
+    const bulk: BulkStockLevel[] = [
+      { productId: 'prod-1', location: 'warehouse', qty: 2 },
+      { productId: 'prod-1', location: 'shop', qty: 1 },
+      { productId: 'prod-1', location: 'repair_unit', qty: 1 },
+      { productId: 'prod-1', location: 'customer', qty: 9 },
+    ]
+    expect(onHandQtyAtStockLocations(bulkSku, [], bulk, 'prod-1')).toBe(4)
+  })
+
+  it('flags an active stock-tracked SKU at or below min', () => {
+    expect(isLowStockSku(bulkSku, 5)).toBe(true)
+    expect(isLowStockSku(bulkSku, 4)).toBe(true)
+    expect(isLowStockSku(bulkSku, 6)).toBe(false)
+  })
+
+  it('ignores inactive, service, and minStock 0 SKUs', () => {
+    expect(isLowStockSku({ ...bulkSku, isActive: false }, 0)).toBe(false)
+    expect(isLowStockSku({ ...bulkSku, unit: 'service' }, 0)).toBe(false)
+    expect(isLowStockSku({ ...bulkSku, minStock: 0 }, 0)).toBe(false)
   })
 })
 

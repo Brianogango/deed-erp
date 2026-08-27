@@ -114,6 +114,9 @@ import {
   mergeSaleOrdersPreservingDraftEdits,
   saleOrderLinesFingerprint,
 } from '@/lib/sale-order-draft-edits'
+import { mergeRepairsStoreWrite } from '@/lib/repair-store-merge'
+import { mergeCollectionById } from '@/lib/collection-merge'
+import { fetchAllCollectionPages } from '@/lib/api-pagination'
 import {
   registerSaleOrderDraftPersistApi,
   scheduleDraftSaleOrderLinePersist,
@@ -5542,7 +5545,9 @@ export function StoreProvider({
   const [bulkStock, setBulkStock]           = useLS<BulkStockLevel[]>('deed_bulkStock', seedBulkStock)
   const [openingStockPosted, setOpeningStockPosted] = useLS<boolean>('deed_openingStockPosted', false)
   
-  const [stockMoves, setStockMoves] = useState<StockMove[]>([])
+  const [stockMoves, setStockMoves] = useLS<StockMove[]>('deed_stockMoves', [], {
+    mergeRemote: (local, remote) => mergeCollectionById(local as StockMove[], remote as StockMove[]),
+  })
 
   // Heal lock when OPENING moves already exist (ops seed / missed flag sync).
   const openingStockLocked = isOpeningStockLocked(openingStockPosted, stockMoves)
@@ -5599,16 +5604,15 @@ export function StoreProvider({
           case 'sales': {
             const results = await Promise.allSettled([
               fetch('/api/quotes').then(r => r.ok ? r.json() : null),
-              fetch('/api/sale-orders?limit=200').then(r => r.ok ? r.json() : null),
+              fetchAllCollectionPages('/api/sale-orders'),
             ])
             const val = (r: PromiseSettledResult<unknown>) =>
               r.status === 'fulfilled' && r.value != null ? r.value : null
-            const [dq, dso] = results.map(val) as any[]
+            const dq = val(results[0])
+            const dso = val(results[1])
             if (dq) setQuotes(Array.isArray(dq) ? normalizeQuotesForClient(dq) as Quote[] : [])
-            if (dso) {
-              const incoming = normalizeSaleOrdersForClient(
-                Array.isArray(dso) ? dso : (dso.items ?? []),
-              ) as SaleOrder[]
+            if (Array.isArray(dso) && dso.length > 0) {
+              const incoming = normalizeSaleOrdersForClient(dso) as SaleOrder[]
               setSaleOrders(prev => mergeSaleOrdersPreservingDraftEdits(prev, incoming))
             }
             break
@@ -5626,10 +5630,11 @@ export function StoreProvider({
             break
           }
           case 'repairs': {
-            const data = await fetch('/api/repairs?limit=200').then(r => r.ok ? r.json() : null)
-            const list = Array.isArray(data) ? data : (data?.items ?? null)
-            if (Array.isArray(list)) {
-              setRepairs(prev => JSON.stringify(prev) === JSON.stringify(list) ? prev : list)
+            // Blob SoT already hydrates via app_state. A paginated page must
+            // never replace the list or open-job counts jump 200 ↔ full.
+            const list = await fetchAllCollectionPages('/api/repairs')
+            if (list.length > 0) {
+              setRepairs(prev => mergeRepairsStoreWrite(prev, list) as RepairOrder[])
             }
             break
           }
@@ -5659,8 +5664,10 @@ export function StoreProvider({
             break
           }
           case 'stock_moves': {
-            const d = await fetch('/api/stock-moves?limit=200').then(r => r.ok ? r.json() : null)
-            if (d) setStockMoves(Array.isArray(d) ? d : (d.items ?? []))
+            const list = await fetchAllCollectionPages('/api/stock-moves')
+            if (list.length > 0) {
+              setStockMoves(prev => mergeCollectionById(prev, list as StockMove[]))
+            }
             break
           }
         }

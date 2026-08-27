@@ -259,6 +259,45 @@
         ],
         "createdAt": "2026-08-26T08:27:06.824Z",
         "reason": "Incumbent repair modal motion; collect/close checkbox does not restyle existing easing"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "*",
+        "files": [
+          "components/data-table/DataTable.tsx",
+          "components/modules/Cashbook.tsx",
+          "components/modules/Dashboard.tsx",
+          "components/modules/Inventory.tsx",
+          "components/modules/Purchase.tsx",
+          "components/modules/Repair.tsx",
+          "components/modules/RepairClientJobs.tsx"
+        ],
+        "createdAt": "2026-08-27T11:44:29.283Z",
+        "reason": "Incumbent Deed ERP module tokens; this change is KPI/click logic only, not a visual redesign."
+      },
+      {
+        "rule": "design-system-font-size",
+        "value": "*",
+        "files": [
+          "components/data-table/DataTable.tsx",
+          "components/modules/Cashbook.tsx",
+          "components/modules/Dashboard.tsx",
+          "components/modules/Inventory.tsx",
+          "components/modules/Purchase.tsx",
+          "components/modules/Repair.tsx",
+          "components/modules/RepairClientJobs.tsx"
+        ],
+        "createdAt": "2026-08-27T11:44:29.314Z",
+        "reason": "Incumbent Deed ERP type sizes; this change is KPI/click logic only, not a visual redesign."
+      },
+      {
+        "rule": "side-tab",
+        "value": "*",
+        "files": [
+          "components/modules/RepairClientJobs.tsx"
+        ],
+        "createdAt": "2026-08-27T11:50:05.346Z",
+        "reason": "Incumbent repair list status-color left border; click/open-job bugfix does not restyle existing row accents"
       }
     ]
   }

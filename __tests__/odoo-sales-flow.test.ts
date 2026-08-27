@@ -435,6 +435,16 @@ describe('invoice document state and payment status', () => {
     expect(isInvoiceOverdue({ ...overdue, dueDate: '2026-08-01' }, today)).toBe(false)
     expect(isInvoiceOverdue({ ...overdue, status: 'draft' }, today)).toBe(false)
   })
+
+  it('falls back to invoice date when dueDate is missing (same rule as Needs attention)', () => {
+    const today = '2026-08-27'
+    expect(isInvoiceOverdue({
+      status: 'posted', total: 100, amountPaid: 0, date: '2026-08-01',
+    }, today)).toBe(true)
+    expect(isInvoiceOverdue({
+      status: 'posted', total: 100, amountPaid: 0, date: '2026-08-28',
+    }, today)).toBe(false)
+  })
 })
 
 describe('saleTransitionError role gates', () => {

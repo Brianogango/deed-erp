@@ -1,6 +1,6 @@
 // @ts-nocheck
 'use client'
-import { useState, useMemo, useRef, useCallback, useEffect, Suspense } from 'react'
+import { useState, useMemo, useRef, useCallback, Suspense } from 'react'
 import { useRepairStore } from '@/lib/store'
 import { useRepair, RepairProvider } from './repair/RepairContext'
 import RepairClientJobs from './RepairClientJobs'
@@ -28,10 +28,11 @@ import { PrimaryActionButton } from '@/components/erp'
 import { Fa } from '@/components/icons'
 import { faPlus, faTools } from '@fortawesome/free-solid-svg-icons'
 import { useUrlRecordId } from '@/hooks/useUrlRecordId'
+import { isOpenRepairJob } from '@/lib/repair-progress'
 
 function RepairContent() {
   const { 
-    view, setView, activeRepair, setActiveId, mainTab, setMainTab, visibleRepairs, currentUser,
+    view, setView, activeRepair, setActiveId, mainTab, setMainTab, openRepairCount, currentUser,
     showAssignModal, setShowAssignModal,
     showDiagnosisModal, setShowDiagnosisModal,
     showQuoteModal, setShowQuoteModal,
@@ -56,7 +57,7 @@ function RepairContent() {
           <div className="repair-module-header">
             <ModuleHeader
               title="Repair management"
-              subtitle={`${visibleRepairs.length} open job${visibleRepairs.length === 1 ? '' : 's'}`}
+              subtitle={`${openRepairCount} open job${openRepairCount === 1 ? '' : 's'}`}
               subtitleMode="visible"
               icon={<Fa icon={faTools} />}
               color="#061B4F"
@@ -131,15 +132,15 @@ function RepairInner() {
     getVisibleRepairs, updateRepairProgress, moveRepairToPreviousProgress, requestProcurement, markUnrepairable, returnToCustomer, fileWarrantyClaim, showToast, appendRepairHistory
   } = useRepairStore()
 
-  const [urlActiveId, setUrlActiveId] = useUrlRecordId()
-  const [view, setLocalView] = useState('list')
-  const [activeId, setLocalActiveId] = useState(null)
-  const setActiveId = useCallback((id) => {
-    setLocalActiveId(id)
-    setUrlActiveId(id)
-  }, [setUrlActiveId])
+  const [activeId, setActiveId] = useUrlRecordId()
+  const [isIntake, setIsIntake] = useState(false)
   const setView = useCallback((nextView) => {
-    setLocalView(nextView)
+    if (nextView === 'intake') {
+      setIsIntake(true)
+      setActiveId(null)
+      return
+    }
+    setIsIntake(false)
     if (nextView === 'list') setActiveId(null)
   }, [setActiveId])
   const [filter, setFilter] = useState('all')
@@ -238,27 +239,17 @@ function RepairInner() {
     }
   }, [repairs, updateRepair, appendRepairHistory, showToast])
 
-  const activeRepair = useMemo(() => repairs.find(r => r.id === activeId), [repairs, activeId])
+  const activeRepair = useMemo(() => repairs.find(r => r.id === activeId) ?? null, [repairs, activeId])
+  const view = isIntake ? 'intake' : activeId ? 'detail' : 'list'
   const currentUser = useMemo(() => users.find(u => u.id === currentUserId), [users, currentUserId])
+  const allVisibleRepairs = useMemo(() => getVisibleRepairs(), [getVisibleRepairs, repairs])
+  const openRepairCount = useMemo(
+    () => allVisibleRepairs.filter(isOpenRepairJob).length,
+    [allVisibleRepairs],
+  )
   const visibleRepairs = useMemo(() => {
-    const all = getVisibleRepairs()
-    return filter === 'all' ? all : all.filter(r => r.status === filter)
-  }, [getVisibleRepairs, filter, repairs])
-
-  // Deep-link: keep ?id=<repairId> while a repair is open and restore it on refresh.
-  // Back clears local + URL via setActiveId(null); do not fight that with a stale ?id=.
-  useEffect(() => {
-    if (!urlActiveId) {
-      if (activeId) setLocalActiveId(null)
-      if (view === 'detail') setLocalView('list')
-      return
-    }
-
-    if (repairs.some(r => r.id === urlActiveId)) {
-      if (activeId !== urlActiveId) setLocalActiveId(urlActiveId)
-      if (view !== 'detail') setLocalView('detail')
-    }
-  }, [urlActiveId, repairs, activeId, view])
+    return filter === 'all' ? allVisibleRepairs : allVisibleRepairs.filter(r => r.status === filter)
+  }, [allVisibleRepairs, filter])
 
   if (!mounted) return <ModuleSkeleton />
 
@@ -275,7 +266,7 @@ function RepairInner() {
     showEditDetailsModal, setShowEditDetailsModal,
     showStopDiagnosisModal, setShowStopDiagnosisModal,
     diagReportInputRef, qcReportInputRef, uploadingDiagReport, setUploadingDiagReport, uploadingQcReport, setUploadingQcReport, handleReportUpload,
-    visibleRepairs, activeRepair, currentUser
+    visibleRepairs, openRepairCount, activeRepair, currentUser
   }
 
   return (

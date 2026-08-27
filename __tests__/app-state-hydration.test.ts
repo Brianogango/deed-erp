@@ -54,17 +54,25 @@ describe('appStateKeysForRoute', () => {
     ]))
   })
 
-  it('keeps the dashboard payload lean (no serials / bulk stock / workshop extras)', () => {
+  it('keeps the dashboard payload aligned with Operations / Finance KPI inputs', () => {
     const keys = appStateKeysForRoute('/')
-    expect(keys).toContain('deed_saleOrders')
-    expect(keys).not.toContain('deed_serials')
-    expect(keys).not.toContain('deed_bulkStock')
+    expect(keys).toEqual(expect.arrayContaining([
+      'deed_saleOrders',
+      'deed_serials',
+      'deed_bulkStock',
+      'deed_posOrders',
+      'deed_purchaseOrders',
+      'deed_payrollRuns',
+    ]))
     expect(keys).not.toContain('deed_stockReservations')
     expect(keys).not.toContain('deed_outboundReleases')
     expect(keys).not.toContain('deed_bankStatementLines')
-    expect(keys).not.toContain('deed_purchaseOrders')
     expect(keys).not.toContain('deed_stockTransfers')
-    expect(keys).not.toContain('deed_posOrders')
+  })
+
+  it('hydrates stock moves on operations and inventory', () => {
+    expect(appStateKeysForRoute('/operations')).toContain('deed_stockMoves')
+    expect(appStateKeysForRoute('/inventory')).toContain('deed_stockMoves')
   })
 
   it('hydrates the company property register and COA on /property', () => {
