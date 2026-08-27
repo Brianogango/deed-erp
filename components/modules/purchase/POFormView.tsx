@@ -11,7 +11,7 @@ import { SmartButtons } from '@/components/erp/SmartButtons'
 import { PrimaryActionButton, SecondaryActionMenu, StatusBadge } from '@/components/erp'
 import { billableQty } from '@/lib/purchase/three-way-match'
 import {
-  Fa, faBox, faCheck, faFileInvoice, faPaperPlane, faPlus, faTrash, faUpload,
+  Fa, faBox, faCheck, faCreditCard, faFileInvoice, faPaperPlane, faPlus, faTrash, faUpload,
   faWarehouse, faBarcode, faWrench, faPhone, faLocationDot, faEnvelope, faStar,
 } from '@/components/icons'
 
@@ -78,7 +78,7 @@ export default function POFormView() {
     updatePO, updatePOLine, removePOLine, bulkAddPOLines, sendPO, confirmPO, createReceiptFromPO, deletePO, createBillFromPO, revertPOToDraft,
     postInvoice, registerPayment, createPurchaseReturn, addReturnLine, confirmPurchaseReturn, logReturnPickup,
     showToast, addContact,
-    setSubView, setActiveId,
+    setMainView, setSubView, setActiveId,
     editCell, setEditCell, editVal, setEditVal, commitCell,
     showAddLine, setShowAddLine, addProd, setAddProd, addQty, setAddQty, addPrice, setAddPrice, addVAT, setAddVAT, handleAddLine,
     showImport, setShowImport, showScanModal, setShowScanModal, scanFile, setScanFile, isScanningScan, setIsScanningScan, scanFileRef,
@@ -101,6 +101,22 @@ export default function POFormView() {
   if (!activePO) return null
 
   const vendor = contacts.find((c: any) => c.id === activePO.vendorId) || vendors.find((v: any) => v.id === activePO.vendorId)
+  const activeBillsForPO = invoices.filter((bill: any) => {
+    const belongsToPO = bill.purchaseOrderId === activePO.id || bill.id === activePO.billId
+    const isLive = !['cancelled', 'voided', 'void'].includes(String(bill.status))
+    return bill.type === 'vendor_bill' && belongsToPO && isLive
+  })
+  const billedQtyForLine = (poLine: typeof activePO.lines[number]) =>
+    activeBillsForPO.reduce((total: number, bill: any) => {
+      const billQty = (bill.lines ?? []).reduce((sum: number, line: any) => {
+        const sameProduct = Boolean(poLine.productId && line.productId && poLine.productId === line.productId)
+        const sameDescription = !line.productId && String(line.description ?? '').includes(poLine.productName)
+        return sum + (sameProduct || sameDescription ? Math.max(0, Math.floor(Number(line.qty) || 0)) : 0)
+      }, 0)
+      return total + billQty
+    }, 0)
+  const billableQtyForLine = (line: typeof activePO.lines[number]) =>
+    billableQty({ ...line, qtyBilled: billedQtyForLine(line) })
 
   const handleMailRfq = async () => {
     if (!vendor?.email) {
@@ -149,7 +165,7 @@ export default function POFormView() {
 
   const billableLinesFor = (po: typeof activePO) =>
     po.lines
-      .map(l => ({ id: l.id, label: l.productName, maxQty: billableQty(l) }))
+      .map(l => ({ id: l.id, label: l.productName, maxQty: billableQtyForLine(l) }))
       .filter(l => l.maxQty > 0)
 
   const openBillModal = () => {
@@ -175,6 +191,12 @@ export default function POFormView() {
     }
   }
 
+  const openBillsTab = () => {
+    setActiveId(null)
+    setSubView('list')
+    setMainView('bills')
+  }
+
   const openReturnForPO = () => {
     const latest = receipts.filter(r => r.poId === activePO.id && r.status === 'validated').pop()
     if (!latest) { showToast('No validated receipt found', 'error'); return }
@@ -197,7 +219,7 @@ export default function POFormView() {
     // until the receipt is validated).
     const canReceive     = (activePO.status === 'confirmed' || activePO.status === 'partial') && hasOutstandingQty && ['director', 'admin_officer', 'inventory_officer'].includes(currentUser?.role ?? '')
     const canReturn      = (activePO.status === 'received' || activePO.status === 'partial') && receipts.some(r => r.poId === activePO.id && r.status === 'validated') && ['director', 'admin_officer', 'inventory_officer'].includes(currentUser?.role ?? '')
-    const hasBillableQty = activePO.lines.some(line => billableQty(line) > 0)
+    const hasBillableQty = activePO.lines.some(line => billableQtyForLine(line) > 0)
     const canCreateBill  = (activePO.status === 'received' || activePO.status === 'partial') && hasBillableQty && ['director', 'finance_officer', 'admin_officer'].includes(currentUser?.role ?? '')
     const canValidateBill = linkedBill?.status === 'draft' && ['director', 'finance_officer', 'admin_officer'].includes(currentUser?.role ?? '')
     const canPay         = !!linkedBill && invoiceDocState(linkedBill.status) === 'posted' && (linkedBill.amountPaid ?? 0) < (linkedBill.total ?? 0) && ['director', 'finance_officer'].includes(currentUser?.role ?? '')
@@ -350,8 +372,14 @@ export default function POFormView() {
                 {actionBusy === 'validate' ? 'Posting…' : 'Validate Bill'}
               </PrimaryActionButton>
             )}
-            {canPay && (
-              <span className="text-[10px] text-[var(--text-3)] italic">Pay via Finance → Accounting</span>
+            {!canSend && !canConfirm && !canReceive && !canCreateBill && !canValidateBill && canPay && (
+              <PrimaryActionButton
+                icon={<Fa icon={faCreditCard} />}
+                hideLabelOnMobile={false}
+                onClick={openBillsTab}
+              >
+                Register payment
+              </PrimaryActionButton>
             )}
             <SecondaryActionMenu
               label="More"
@@ -399,6 +427,18 @@ export default function POFormView() {
                   label: 'Validate bill',
                   hidden: !canValidateBill || canSend || canConfirm || canReceive || canCreateBill,
                   onClick: () => { void postInvoice(linkedBill!.id) },
+                },
+                {
+                  id: 'open-bill',
+                  label: 'Open vendor bill',
+                  hidden: !linkedBill,
+                  onClick: openBillsTab,
+                },
+                {
+                  id: 'pay-bill',
+                  label: 'Register payment',
+                  hidden: !canPay,
+                  onClick: openBillsTab,
                 },
                 { id: 'revert', label: 'Revert to draft', hidden: !canRevertToDraft, onClick: () => revertPOToDraft(activePO.id) },
                 { id: 'return', label: 'Return to vendor', hidden: !canReturn, onClick: () => openReturnForPO() },
