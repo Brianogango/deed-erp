@@ -1,5 +1,5 @@
 import 'server-only'
-import { persistStoreJournalEntry, reverseJournalEntry } from '@/lib/accounting/journal-service'
+import { createJournalEntry, persistStoreJournalEntry, reverseJournalEntry, type CreateJournalEntryInput } from '@/lib/accounting/journal-service'
 import { COMPANY_ACCOUNT_FALLBACKS, formatAccountLabel } from '@/lib/product-accounts'
 import {
   buildVendorBillPerpetualLines,
@@ -12,12 +12,6 @@ import {
   CUSTOMER_CREDITS_ACCOUNT,
   CUSTOMER_DEPOSITS_ACCOUNT,
 } from '@/lib/accounting/liability-accounts'
-import { isAccountingPostingEngineEnabled } from '@/lib/accounting/posting-flag'
-import {
-  postCustomerInvoice,
-  postInvoicePayment,
-  postVendorBill,
-} from '@/lib/accounting/posting-service'
 import { labelForRole } from '@/lib/accounting/coa-roles'
 
 export type InvoiceLike = {
@@ -33,6 +27,7 @@ export type InvoiceLike = {
   taxTotal?: number
   taxAmount?: number
   purchaseOrderId?: string
+  invoiceDate?: string | Date
   lines?: Array<{
     productId?: string
     qty?: number
@@ -118,7 +113,10 @@ export function invoiceJournalRef(invoice: Pick<InvoiceLike, 'ref' | 'invoiceNum
  * Build + persist invoice posting journal to Prisma (idempotent on ref).
  * Vendor bills with PO + automated valuation clear GRNI instead of double-expensing.
  */
-export async function postInvoiceJournalToPrisma(invoice: InvoiceLike, opts?: { createdById?: string }) {
+export async function buildInvoiceJournalInput(
+  invoice: InvoiceLike,
+  opts?: { createdById?: string },
+): Promise<CreateJournalEntryInput> {
   const ref = String(invoice.ref || invoice.invoiceNumber || invoice.id)
   const partner = invoice.partnerName || invoice.clientName || 'Customer'
   const total = money(invoice.total ?? invoice.totalAmount)
@@ -126,6 +124,10 @@ export async function postInvoiceJournalToPrisma(invoice: InvoiceLike, opts?: { 
   const tax = money(invoice.taxTotal ?? invoice.taxAmount)
   const isVendor = invoice.type === 'vendor_bill'
   const isCredit = isVendor && total < 0
+
+  if (total <= 0 && !isCredit) {
+    throw new Error(`Invoice ${ref} has no positive posting amount`)
+  }
 
   if (isVendor) {
     const perpetual = Boolean(invoice.purchaseOrderId) && (await isPerpetualValuationEnabled())
@@ -149,55 +151,50 @@ export async function postInvoiceJournalToPrisma(invoice: InvoiceLike, opts?: { 
           lines: lineMeta,
           perpetual,
         })
-    if (isAccountingPostingEngineEnabled()) {
-      return postVendorBill({
-        invoiceId: invoice.id,
-        ref,
-        partnerName: partner,
-        isCredit,
-        lines: built,
-        createdById: opts?.createdById,
-      })
-    }
-    return persistStoreJournalEntry({
-      ref: `JRN/${ref}`,
-      source: 'bill',
+    return {
+      ref: `JRN/${ref}`.slice(0, 80),
+      journalCode: 'PUR',
+      date: invoice.invoiceDate,
       description: `${isCredit ? 'Vendor credit' : 'Bill'} ${ref} — ${partner}`,
+      sourceType: 'bill',
+      sourceId: invoice.id,
       invoiceId: invoice.id,
+      createdById: opts?.createdById,
+      skipIfExists: false,
       lines: built.map(l => ({
-        account: l.account,
-        description: l.description,
+        accountLabel: l.account,
+        label: l.description,
         debit: l.debit,
         credit: l.credit,
       })),
-    }, { createdById: opts?.createdById, journalCode: 'PUR' })
-  }
-
-  if (isAccountingPostingEngineEnabled()) {
-    return postCustomerInvoice({
-      invoiceId: invoice.id,
-      ref,
-      partnerName: partner,
-      total,
-      subtotal,
-      tax,
-      createdById: opts?.createdById,
-    })
+    }
   }
 
   const saleLabel = formatAccountLabel(COMPANY_ACCOUNT_FALLBACKS.saleAccountCode, [])
-  const lines = [
-    { account: labelForRole('ar'), description: `AR: ${partner}`, debit: total, credit: 0 },
-    { account: saleLabel, description: `Revenue: ${ref}`, debit: 0, credit: subtotal },
-    ...(tax > 0 ? [{ account: labelForRole('output_vat'), description: `VAT on ${ref}`, debit: 0, credit: tax }] : []),
-  ]
-  return persistStoreJournalEntry({
-    ref: `JRN/${ref}`,
-    source: 'invoice',
+  return {
+    ref: `JRN/${ref}`.slice(0, 80),
+    journalCode: 'SAL',
+    date: invoice.invoiceDate,
     description: `Invoice ${ref} — ${partner}`,
+    sourceType: 'invoice',
+    sourceId: invoice.id,
     invoiceId: invoice.id,
-    lines,
-  }, { createdById: opts?.createdById, journalCode: 'SAL' })
+    createdById: opts?.createdById,
+    skipIfExists: false,
+    lines: [
+      { accountLabel: labelForRole('ar'), label: `AR: ${partner}`, debit: total, credit: 0 },
+      { accountLabel: saleLabel, label: `Revenue: ${ref}`, debit: 0, credit: subtotal },
+      ...(tax > 0 ? [{ accountLabel: labelForRole('output_vat'), label: `VAT on ${ref}`, debit: 0, credit: tax }] : []),
+    ],
+  }
+}
+
+/**
+ * Canonical invoice posting path. There is no feature-flagged best-effort
+ * branch anymore: all invoice journals use the same validated journal service.
+ */
+export async function postInvoiceJournalToPrisma(invoice: InvoiceLike, opts?: { createdById?: string }) {
+  return createJournalEntry(await buildInvoiceJournalInput(invoice, opts))
 }
 
 export async function postInvoicePaymentJournalToPrisma(params: {
@@ -212,19 +209,6 @@ export async function postInvoicePaymentJournalToPrisma(params: {
   const amount = money(params.amount)
   const isVendor = params.invoice.type === 'vendor_bill'
   const method = String(params.method || '').toLowerCase()
-
-  if (isAccountingPostingEngineEnabled()) {
-    return postInvoicePayment({
-      invoiceId: params.invoice.id,
-      paymentId: params.paymentId,
-      ref,
-      partnerName: partner,
-      amount,
-      method: params.method,
-      isVendor,
-      createdById: params.createdById,
-    })
-  }
 
   if (!isVendor && isCustomerCreditMethod(method)) {
     return persistStoreJournalEntry({
