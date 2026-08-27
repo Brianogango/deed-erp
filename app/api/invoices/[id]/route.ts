@@ -373,6 +373,55 @@ export async function PUT(request: Request, { params }: { params: { id: string }
             documentType: postingInvoiceType,
           },
         })
+
+        const postedItems = await tx.invoiceItem.findMany({ where: { invoiceId: params.id } })
+        const partner = await tx.client.findUnique({ where: { id: before.clientId }, select: { kraPin: true } })
+        const taxPoint = data.invoiceDate ?? before.invoiceDate ?? new Date()
+        for (const item of postedItems) {
+          const category = String((item as any).taxCategory || 'not_selected')
+          await tx.taxTransaction.upsert({
+            where: {
+              sourceType_sourceId_sourceLineId: {
+                sourceType: postingInvoiceType === 'vendor_bill' ? 'vendor_bill' : 'invoice',
+                sourceId: params.id,
+                sourceLineId: item.id,
+              },
+            },
+            update: {
+              direction: postingInvoiceType === 'vendor_bill' ? 'input' : 'output',
+              taxCategory: category,
+              taxRate: item.taxRate,
+              taxableBase: (item as any).taxableBase ?? item.lineSubtotal,
+              taxAmount: item.lineTax,
+              taxPoint,
+              taxPeriod: new Date(taxPoint).toISOString().slice(0, 7),
+              partnerPin: partner?.kraPin ?? null,
+              transmissionStatus: postingInvoiceType === 'vendor_bill' ? 'pending_evidence' : 'pending',
+              inputClaimEligible: postingInvoiceType === 'vendor_bill'
+                ? Boolean((item as any).taxClaimEligible)
+                : false,
+              journalEntryId: journal.id,
+            },
+            create: {
+              sourceType: postingInvoiceType === 'vendor_bill' ? 'vendor_bill' : 'invoice',
+              sourceId: params.id,
+              sourceLineId: item.id,
+              direction: postingInvoiceType === 'vendor_bill' ? 'input' : 'output',
+              taxCategory: category,
+              taxRate: item.taxRate,
+              taxableBase: (item as any).taxableBase ?? item.lineSubtotal,
+              taxAmount: item.lineTax,
+              taxPoint,
+              taxPeriod: new Date(taxPoint).toISOString().slice(0, 7),
+              partnerPin: partner?.kraPin ?? null,
+              transmissionStatus: postingInvoiceType === 'vendor_bill' ? 'pending_evidence' : 'pending',
+              inputClaimEligible: postingInvoiceType === 'vendor_bill'
+                ? Boolean((item as any).taxClaimEligible)
+                : false,
+              journalEntryId: journal.id,
+            },
+          })
+        }
       }
 
       await writeFinancialAuditInTx(tx, {
