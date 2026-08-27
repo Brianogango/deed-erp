@@ -1,61 +1,58 @@
 import { NextResponse } from 'next/server'
 import { getRequiredSession, requireRole, withApiErrorHandling } from '@/lib/auth/api'
-import { readDeposits, writeDeposits } from '@/lib/deposit-store'
+import prisma from '@/lib/prisma'
 import { getNextDepositRef } from '@/lib/deposit-ref-counter'
-import { writeFinancialAudit } from '@/lib/finance-audit'
+import { createDepositWithReceipt } from '@/lib/accounting/deposit-service'
 
 const DEPOSIT_WRITE_ROLES = ['director', 'admin_officer', 'finance_officer']
-
 export const dynamic = 'force-dynamic'
 
-export type DepositStatus = 'active' | 'partially_paid' | 'fully_paid' | 'completed' | 'cancelled'
-
-export interface DepositItem {
-  productId: string
-  productName: string
-  sku: string
-  qty: number
-  unitPrice: number
-  total: number
+function toClient(d: any) {
+  return {
+    id: d.id,
+    ref: d.ref,
+    customerId: d.customerId ?? '',
+    customerName: d.customerName ?? '',
+    customerPhone: d.customerPhone ?? '',
+    items: (d.items ?? []).map((x: any) => ({
+      id: x.id,
+      productId: x.productId ?? '',
+      productName: x.productName ?? '',
+      sku: x.sku ?? '',
+      qty: x.qty,
+      unitPrice: Number(x.unitPrice),
+      total: Number(x.lineTotal),
+    })),
+    totalValue: Number(d.totalValue),
+    totalPaid: Number(d.totalPaid),
+    balance: Number(d.balance),
+    status: d.status,
+    payments: (d.payments ?? []).map((p: any) => ({
+      id: p.id,
+      date: p.paidAt.toISOString(),
+      amount: Number(p.amount),
+      method: p.method,
+      ref: p.paymentRef ?? undefined,
+      recordedBy: p.recordedBy ?? '',
+    })),
+    notes: d.notes ?? undefined,
+    dueDate: d.dueDate?.toISOString().slice(0,10),
+    completedAt: d.completedAt?.toISOString(),
+    cancelledAt: d.cancelledAt?.toISOString(),
+    cancelReason: d.cancelReason ?? undefined,
+    createdAt: d.createdAt.toISOString(),
+    createdBy: d.createdBy ?? '',
+  }
 }
-
-export interface DepositPayment {
-  id: string
-  date: string
-  amount: number
-  method: 'cash' | 'mpesa' | 'bank_transfer' | 'card'
-  ref?: string
-  recordedBy: string
-}
-
-export interface Deposit {
-  id: string
-  ref: string
-  customerId: string
-  customerName: string
-  customerPhone: string
-  items: DepositItem[]
-  totalValue: number
-  totalPaid: number
-  balance: number
-  status: DepositStatus
-  payments: DepositPayment[]
-  notes?: string
-  createdAt: string
-  createdBy: string
-  dueDate?: string
-  completedAt?: string
-  cancelledAt?: string
-  cancelReason?: string
-}
-
-const uid = () => crypto.randomUUID()
 
 export async function GET() {
   return withApiErrorHandling(async () => {
     await getRequiredSession()
-    const deposits = await readDeposits()
-    return NextResponse.json(deposits)
+    const rows = await prisma.deposit.findMany({
+      include: { items: { orderBy: { sortOrder: 'asc' } }, payments: { orderBy: { paidAt: 'asc' } } },
+      orderBy: { createdAt: 'desc' },
+    })
+    return NextResponse.json(rows.map(toClient))
   })
 }
 
@@ -63,96 +60,35 @@ export async function POST(request: Request) {
   return withApiErrorHandling(async () => {
     const actor = await requireRole(DEPOSIT_WRITE_ROLES)
     const body = await request.json()
-
-    const { customerId, customerName, customerPhone, items, dueDate, notes, initialPayment, payMethod, payRef } = body
-
+    const { customerId, customerName, customerPhone, items, dueDate, notes, initialPayment, payMethod, payRef, bankAccountId, idempotencyKey } = body
     if (!customerId || !customerName || !Array.isArray(items) || items.length === 0) {
       return NextResponse.json({ error: 'customerId, customerName and items are required' }, { status: 422 })
     }
-
-    // Total value is recomputed from line items server-side — never trusted from
-    // the client — so a deposit's balance always ties back to what was ordered.
-    const normalizedItems: DepositItem[] = items.map((it: any) => {
-      const qty = Number(it.qty) || 0
-      const unitPrice = Number(it.unitPrice) || 0
-      return {
-        productId: String(it.productId ?? ''),
-        productName: String(it.productName ?? ''),
-        sku: String(it.sku ?? ''),
-        qty,
-        unitPrice,
-        total: Math.round(qty * unitPrice * 100) / 100,
-      }
-    })
-    if (normalizedItems.some(item =>
-      !item.productId ||
-      !item.productName.trim() ||
-      !Number.isFinite(item.qty) ||
-      !Number.isFinite(item.unitPrice) ||
-      item.qty <= 0 ||
-      item.unitPrice < 0
-    )) {
-      return NextResponse.json(
-        { error: 'Each reserved item requires a product, positive quantity, and valid unit price' },
-        { status: 422 },
-      )
-    }
-    const totalValue = Math.round(normalizedItems.reduce((sum, it) => sum + it.total, 0) * 100) / 100
-    if (totalValue <= 0) {
-      return NextResponse.json({ error: 'Deposit order total must be greater than zero' }, { status: 422 })
-    }
-
-    const deposit = Number(initialPayment) || 0
-    if (deposit <= 0) {
-      return NextResponse.json({ error: 'Initial deposit amount is required' }, { status: 422 })
-    }
-    if (deposit > totalValue) {
-      return NextResponse.json({ error: 'Initial deposit cannot exceed the order total' }, { status: 422 })
-    }
-
-    const ref = typeof body.ref === 'string' && body.ref.trim() ? body.ref.trim() : await getNextDepositRef()
-    const now = new Date().toISOString()
-
-    const paymentHistory: DepositPayment[] = [{
-      id: uid(),
-      date: now,
-      amount: deposit,
-      method: payMethod || 'cash',
-      ref: payRef || undefined,
-      recordedBy: actor.name,
-    }]
-
-    const status: DepositStatus = deposit >= totalValue ? 'fully_paid' : 'partially_paid'
-
-    const newDeposit: Deposit = {
-      id: typeof body.id === 'string' && body.id.trim() ? body.id.trim() : uid(),
+    const ref = typeof body.ref === 'string' && body.ref.trim()
+      ? body.ref.trim()
+      : await getNextDepositRef()
+    const row = await createDepositWithReceipt({
+      id: typeof body.id === 'string' && body.id.trim() ? body.id.trim() : undefined,
       ref,
-      customerId,
-      customerName,
-      customerPhone: customerPhone || '',
-      items: normalizedItems,
-      totalValue,
-      totalPaid: deposit,
-      balance: Math.round((totalValue - deposit) * 100) / 100,
-      status,
-      payments: paymentHistory,
-      notes: notes || undefined,
-      dueDate: dueDate || undefined,
-      createdAt: now,
-      createdBy: actor.name,
-    }
-
-    const deposits = await readDeposits()
-    deposits.unshift(newDeposit)
-    await writeDeposits(deposits)
-
-    await writeFinancialAudit({
-      userId: actor.id,
-      action: 'create_deposit',
-      entityType: 'deposit',
-      newValues: { ref, totalValue, initialPayment: deposit },
+      customerId: String(customerId),
+      customerName: String(customerName),
+      customerPhone: customerPhone ? String(customerPhone) : undefined,
+      items: items.map((x:any) => ({
+        productId: String(x.productId ?? ''),
+        productName: String(x.productName ?? ''),
+        sku: x.sku ? String(x.sku) : undefined,
+        qty: Number(x.qty),
+        unitPrice: Number(x.unitPrice),
+      })),
+      amount: Number(initialPayment),
+      method: String(payMethod || 'cash'),
+      paymentRef: payRef ? String(payRef) : null,
+      bankAccountId: bankAccountId ? String(bankAccountId) : null,
+      idempotencyKey: idempotencyKey ? String(idempotencyKey) : null,
+      dueDate: dueDate ? new Date(dueDate) : null,
+      notes: notes ? String(notes) : null,
+      actor: { id: actor.id, name: actor.name },
     })
-
-    return NextResponse.json(newDeposit, { status: 201 })
+    return NextResponse.json(toClient(row), { status: 201 })
   })
 }
