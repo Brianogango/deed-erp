@@ -89,6 +89,7 @@ export interface RepairCtxValue {
   handleReportUpload: (file: File, field: 'diagnosisReportData' | 'qcReportData', nameFld: 'diagnosisReportName' | 'qcReportName', repairId: string, setLoading: (v: boolean) => void) => Promise<void> | void
   // Derived
   visibleRepairs: ReturnType<typeof useRepairStore>['repairs']
+  openRepairCount: number
   activeRepair: ReturnType<typeof useRepairStore>['repairs'][0] | null
   currentUser: ReturnType<typeof useRepairStore>['users'][0] | undefined
 }

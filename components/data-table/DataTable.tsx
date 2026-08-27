@@ -28,10 +28,14 @@ const PRIORITY_CAP: Record<'tablet' | 'laptop' | 'desktop', ColumnPriority> = {
   desktop: 3,
 }
 
-function isInteractiveTarget(target: EventTarget | null): boolean {
-  return target instanceof Element && Boolean(target.closest(
-    'a, button, input, select, textarea, [role="button"], [role="link"], [contenteditable="true"]',
-  ))
+function isInteractiveTarget(target: EventTarget | null, currentTarget?: EventTarget | null): boolean {
+  if (!(target instanceof Element)) return false
+  const match = target.closest('a, button, input, select, textarea, label, [contenteditable="true"]')
+  if (!match) return false
+  if (currentTarget instanceof Node && (match === currentTarget || !currentTarget.contains(match))) {
+    return false
+  }
+  return true
 }
 
 /** Tables fill the card — no artificial scroll floor. */
@@ -423,7 +427,7 @@ export default function DataTable<T>({
                     className={`table-row ${onRowClick ? 'cursor-pointer' : ''} ${rowClassName ? rowClassName(row) : ''}`}
                     style={rowStyle ? rowStyle(row) : undefined}
                     onClick={onRowClick ? event => {
-                      if (!isInteractiveTarget(event.target)) onRowClick(row)
+                      if (!isInteractiveTarget(event.target, event.currentTarget)) onRowClick(row)
                     } : undefined}
                     onKeyDown={onRowClick ? event => {
                       if (event.key === 'Enter' && event.target === event.currentTarget) {

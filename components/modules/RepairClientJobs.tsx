@@ -76,8 +76,16 @@ function MobileRepairCard({ r, onSelect, outsourceJobs }: any) {
     : { color: CYAN }
 
   return (
-    <button
+    <div
+      role="button"
+      tabIndex={0}
       onClick={() => onSelect(r.id)}
+      onKeyDown={e => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          onSelect(r.id)
+        }
+      }}
       className="repair-mobile-card w-full text-left"
       style={{ borderLeft: `3px solid ${rowColor}` }}
     >
@@ -137,7 +145,7 @@ function MobileRepairCard({ r, onSelect, outsourceJobs }: any) {
           <Fa icon={faChevronRight} className="text-[10px] text-[var(--text-4)]" />
         </div>
       </div>
-    </button>
+    </div>
   )
 }
 
@@ -413,6 +421,7 @@ export default function RepairClientJobs({ onSelect }: { onSelect: (id: string) 
   function repairRowActions(r: RepairRow) {
     return (
       <button
+        type="button"
         onClick={e => { e.stopPropagation(); void printRepairSticker(r) }}
         title="Print intake sticker"
         className="w-7 h-7 rounded-full flex items-center justify-center transition-all hover:bg-slate-100"

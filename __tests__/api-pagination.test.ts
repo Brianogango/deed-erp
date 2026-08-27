@@ -3,6 +3,7 @@ import {
   parsePaginationParams,
   paginateArray,
   paginatedResponse,
+  parseCollectionPayload,
   PAGINATION_DEFAULT_LIMIT,
   PAGINATION_MAX_LIMIT,
 } from '@/lib/api-pagination'
@@ -59,5 +60,27 @@ describe('paginateArray()', () => {
     expect(page.total).toBe(120)
     expect(page.totalPages).toBe(3)
     expect(paginatedResponse([], 0, 1, 50).totalPages).toBe(0)
+  })
+})
+
+describe('parseCollectionPayload()', () => {
+  it('wraps a raw array as a single page', () => {
+    const parsed = parseCollectionPayload([{ id: 1 }, { id: 2 }])
+    expect(parsed.items).toHaveLength(2)
+    expect(parsed.total).toBe(2)
+    expect(parsed.totalPages).toBe(1)
+  })
+
+  it('reads a paginated envelope', () => {
+    const parsed = parseCollectionPayload({
+      items: [{ id: 'a' }],
+      total: 401,
+      page: 2,
+      limit: 200,
+    })
+    expect(parsed.items).toEqual([{ id: 'a' }])
+    expect(parsed.total).toBe(401)
+    expect(parsed.page).toBe(2)
+    expect(parsed.totalPages).toBe(3)
   })
 })

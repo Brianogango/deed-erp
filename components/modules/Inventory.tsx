@@ -17,7 +17,8 @@ import { printLabelsForSerialUnits } from '@/lib/inventory/print-serial-device-l
 import { guardSpreadsheetFile, guardSpreadsheetRows, SpreadsheetGuardError } from '@/lib/spreadsheet-guard'
 import { Barcode } from '@/components/modules/Barcode'
 import { inferTrackingMethod, isSerialTracking, isStockTracked, isSerialOnlyCategory, type TrackingMethod } from '@/lib/inventory-identifiers'
-import { availableSellableQty, isListedInProductCatalog } from '@/lib/business-logic'
+import { availableSellableQty, isListedInProductCatalog, isLowStockSku, onHandQtyAtStockLocations } from '@/lib/business-logic'
+import { isStockOutMove } from '@/lib/kpi-stock'
 import { unitSellingName } from '@/lib/reconfiguration/unit-selling-name'
 import { catalogDeviceConfig, compactSpecsString, isReconfigurableCatalogCategory } from '@/lib/reconfiguration/unit-config'
 import InventoryProductsPanel from '@/components/inventory/InventoryProductsPanel'
@@ -452,13 +453,10 @@ function InventoryContent() {
     return { pendingReceipts: pending, validatedReceipts: validated }
   }, [receipts])
 
-  const stockOutMoves = useMemo(() => {
-    const out: typeof stockMoves = []
-    for (const m of stockMoves) {
-      if (m.type === 'out' || m.type === 'return') out.push(m)
-    }
-    return out
-  }, [stockMoves])
+  const stockOutMoves = useMemo(
+    () => stockMoves.filter(isStockOutMove),
+    [stockMoves],
+  )
 
   const {
     lowStockProducts,
@@ -472,9 +470,8 @@ function InventoryContent() {
     const lStock: typeof stockableProducts = []
     const validProductIds = new Set<string>()
     for (const p of stockableProducts) {
-      const locs = getStockByLocation(p.id)
-      const derivedTotal = (locs.warehouse ?? 0) + (locs.shop ?? 0) + (locs.repair_unit ?? 0)
-      const isLow = derivedTotal <= p.minStock && p.minStock > 0
+      const derivedTotal = onHandQtyAtStockLocations(p, serials, bulkStock, p.id)
+      const isLow = isLowStockSku(p, derivedTotal)
       if (isLow) low.push(p)
       const matchesCat = catFilter === 'All' || p.category === catFilter
       const matchesId = reportProductId === 'All' || p.id === reportProductId
@@ -505,7 +502,7 @@ function InventoryContent() {
       filteredTrackedSerials: rSerials,
       filteredLowStock: lStock,
     }
-  }, [stockableProducts, stockMoves, serials, bulkStock, getStockByLocation, catFilter, reportProductId, reportMonth])
+  }, [stockableProducts, stockMoves, serials, bulkStock, catFilter, reportProductId, reportMonth])
 
   const displayedTrackedSerials = useMemo(() => {
     const q = serialReportSearch.trim().toLowerCase()

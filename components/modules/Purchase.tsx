@@ -27,6 +27,7 @@ import {
   type PurchaseStatusFilter,
   type PurchaseTypeFilter,
 } from '@/lib/purchases-filter'
+import { invoiceResidual, isOpenInvoice } from '@/lib/odoo-sales-flow'
 
 type MainView = 'orders' | 'receipts' | 'returns' | 'bills'
 type SubView  = 'list' | 'form' | 'receive' | 'receipt'
@@ -294,7 +295,7 @@ function PurchaseContent() {
     rfqs:        purchaseOrders.filter(p => p.status === 'draft' || p.status === 'sent').length,
     activePOs:   purchaseOrders.filter(p => p.status === 'confirmed' || p.status === 'partial').length,
     pendingGRNs: receipts.filter(r => r.status === 'draft').length,
-    unpaid:      vendorBills.filter(b => b.amountPaid < b.total && b.status !== 'cancelled').reduce((s, b) => s + (b.total - b.amountPaid), 0),
+    unpaid:      vendorBills.filter(isOpenInvoice).reduce((s, b) => s + invoiceResidual(b), 0),
   }), [purchaseOrders, receipts, vendorBills])
 
   const rfqPreview = useMemo(() => {

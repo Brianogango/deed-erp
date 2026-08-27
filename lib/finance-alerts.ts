@@ -3,7 +3,7 @@
 // Extracted from the Accounting module's former in-page workflow-alert strip
 // so the logic exists exactly once.
 
-import { invoiceDocState } from '@/lib/odoo-sales-flow'
+import { invoiceResidual, isInvoiceOverdue, isOpenInvoice } from '@/lib/odoo-sales-flow'
 
 export interface FinanceAlert {
   key: string
@@ -21,12 +21,20 @@ type StatementLineLike = { status?: string }
 type BankAccountLike = { id: string; name: string; active?: boolean; openingBalance?: number }
 type CashbookEntryLike = { bankAccountId: string; debit: number; credit: number }
 
-const openBalance = (i: InvoiceLike) => Math.max(0, (Number(i.total) || 0) - (Number(i.amountPaid) || 0))
+const openBalance = (i: InvoiceLike) => invoiceResidual({
+  total: Number(i.total) || 0,
+  amountPaid: Number(i.amountPaid) || 0,
+})
 // Open = posted document with a residual; payment progress is derived from
-// amountPaid, never from the stored status.
-const isOpen = (i: InvoiceLike) => invoiceDocState(i.status) === 'posted' && openBalance(i) > 0
-const isPastDue = (i: InvoiceLike, today: Date) =>
-  isOpen(i) && new Date(i.dueDate || i.date || 0) < today
+// amountPaid, never from the stored status. Overdue uses the same Nairobi
+// calendar-date rule as the Outstanding KPI (`isInvoiceOverdue`).
+const isOpen = (i: InvoiceLike) => isOpenInvoice({
+  status: i.status,
+  total: Number(i.total) || 0,
+  amountPaid: Number(i.amountPaid) || 0,
+})
+const nairobiToday = () => new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Nairobi' })
+const isPastDue = (i: InvoiceLike, today: string) => isInvoiceOverdue(i, today)
 
 /** Running balance per bank/cash account: opening balance + cashbook activity. */
 export function computeCashbookTotals(
@@ -65,7 +73,7 @@ export function buildFinanceAlerts(data: {
 }): FinanceAlert[] {
   const { invoices, expenses, payrollRuns, bankStatementLines, bankAccounts, cashbookTotals } = data
 
-  const today = new Date()
+  const today = nairobiToday()
   const customerInvoices = invoices.filter(i => i.type === 'customer_invoice')
   const vendorBills = invoices.filter(i => i.type === 'vendor_bill')
   const overdueInvoices = customerInvoices.filter(i => isPastDue(i, today))

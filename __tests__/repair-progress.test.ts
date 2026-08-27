@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { getPreviousRepairProgressStatus, repairProgressOrderFor } from '@/lib/repair-progress'
+import { getPreviousRepairProgressStatus, repairProgressOrderFor, isOpenRepairJob } from '@/lib/repair-progress'
 
 describe('getPreviousRepairProgressStatus', () => {
   it('moves diagnosed back to assigned', () => {
@@ -53,5 +53,16 @@ describe('getPreviousRepairProgressStatus', () => {
     expect(order).not.toContain('approved')
     expect(order).toContain('assigned')
     expect(order).toContain('in_repair')
+  })
+})
+
+describe('isOpenRepairJob', () => {
+  it('matches Dashboard Open Repairs (excludes closed terminal statuses)', () => {
+    expect(isOpenRepairJob({ status: 'in_repair' })).toBe(true)
+    expect(isOpenRepairJob({ status: 'ready' })).toBe(true)
+    expect(isOpenRepairJob({ status: 'closed' })).toBe(false)
+    expect(isOpenRepairJob({ status: 'invoiced' })).toBe(false)
+    expect(isOpenRepairJob({ status: 'delivered' })).toBe(false)
+    expect(isOpenRepairJob({ status: 'cancelled' })).toBe(false)
   })
 })

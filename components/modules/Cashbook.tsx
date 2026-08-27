@@ -7,6 +7,7 @@ import {
 } from '@/lib/store'
 import type { Account } from '@/lib/store'
 import { invoicePaymentStatus } from '@/lib/odoo-sales-flow'
+import { computeCashbookTotals } from '@/lib/finance-alerts'
 import { DataTable, type ColumnDef } from '@/components/data-table'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -1019,6 +1020,12 @@ export default function CashbookTab({ accounts }: { accounts: Account[] }) {
     return map
   }, [monthEntries, openingByAccount])
 
+  // Same lifetime book balance the dashboard uses for "cash accounts negative".
+  const bookBalanceByAccount = useMemo(
+    () => computeCashbookTotals(bankAccounts, allEntries),
+    [bankAccounts, allEntries],
+  )
+
   const ACCT_COLOR: Record<string, string> = {
     ncba: 'var(--navy)', equity: '#0891B2', kcb: 'var(--warning)', mpesa: '#16A34A', cash: 'var(--text-4)',
   }
@@ -1064,7 +1071,7 @@ export default function CashbookTab({ accounts }: { accounts: Account[] }) {
       {/* Per-account KPI cards — desktop only; mobile uses the account select + one balance line */}
       <div className="finance-cashbook-accounts hidden sm:grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2">
         {bankAccounts.filter(a => a.active).map(acc => {
-          const closing = closingByAccount[acc.id] ?? 0
+          const bookBal = bookBalanceByAccount[acc.id] ?? 0
           const mCredit = monthEntries.filter(e => e.bankAccountId === acc.id).reduce((s,e) => s+e.credit, 0)
           const mDebit  = monthEntries.filter(e => e.bankAccountId === acc.id).reduce((s,e) => s+e.debit,  0)
           const color   = ACCT_COLOR[acc.id] ?? 'var(--text-4)'
@@ -1076,9 +1083,9 @@ export default function CashbookTab({ accounts }: { accounts: Account[] }) {
                 <p className="text-[9px] uppercase tracking-wide font-medium truncate" style={{ color: 'var(--text-4)', maxWidth: 100 }}>{acc.name}</p>
                 <span className="text-[8px] font-bold px-1.5 py-0.5 rounded-full text-white" style={{ background: color }}>{acc.id.toUpperCase()}</span>
               </div>
-              <p className="text-sm font-bold" style={{ color }}>{fmtKes(closing)}</p>
+              <p className="text-sm font-bold" style={{ color }}>{fmtKes(bookBal)}</p>
               <p className="text-[9px] mt-0.5" style={{ color: 'var(--text-4)' }}>
-                +{fmtKes(mCredit)} / −{fmtKes(mDebit)}
+                Book · this month +{fmtKes(mCredit)} / −{fmtKes(mDebit)}
               </p>
             </button>
           )
