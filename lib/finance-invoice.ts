@@ -101,6 +101,25 @@ export function clampAmountPaid(amountPaid: unknown, totalAmount: number): numbe
   return Math.min(Math.max(0, round2(num(amountPaid))), totalAmount)
 }
 
+/** Customer invoice and vendor bill record page. */
+export function financeInvoicePath(id: string): string {
+  return `/finance/invoices/${id}`
+}
+
+/**
+ * `/finance?edit=<id>` should open the editor once. After Save/Discard, the
+ * same query must not reopen the modal while the URL still has `edit`
+ * (router.replace is async; invoice store updates retrigger the effect).
+ */
+export function shouldApplyInvoiceEditQuery(
+  editId: string | null | undefined,
+  alreadyHandledId: string | null,
+): boolean {
+  const id = String(editId || '').trim()
+  if (!id) return false
+  return alreadyHandledId !== id
+}
+
 /** Client-store invoice line shape (deed_invoices). */
 export interface ClientInvoiceLine {
   id: string

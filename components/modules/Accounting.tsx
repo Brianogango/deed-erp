@@ -67,6 +67,7 @@ import { DataTable, type ColumnDef, type PrimaryFilterConfig } from '@/component
 import { Fa } from '@/components/icons'
 import CashbookTab, { buildCashbookEntries } from './Cashbook'
 import { computeCashbookTotals, cashPositionFromTotals } from '@/lib/finance-alerts'
+import { financeInvoicePath, shouldApplyInvoiceEditQuery } from '@/lib/finance-invoice'
 import { AccountingProvider } from './accounting/AccountingContext'
 import JournalsTab from './accounting/JournalsTab'
 import ChartOfAccountsTab from './accounting/ChartOfAccountsTab'
@@ -879,7 +880,7 @@ function AccountingContent() {
   }, [payMethod, bankAccounts])
 
   // ── Handlers ────────────────────────────────────────────────────────────────
-  const resetInvForm = () => {
+  const resetInvForm = (opts?: { navigateToInvoiceId?: string | null }) => {
     setShowNewForm(false)
     setEditingInvId(null)
     setNewPartnerId('')
@@ -892,6 +893,10 @@ function AccountingContent() {
     setApplyVat(false)
     setChangingPartner(false)
     setReceiptFile(null)
+    if (opts?.navigateToInvoiceId) {
+      router.push(financeInvoicePath(opts.navigateToInvoiceId))
+      return
+    }
     // Drop deep-link so refresh does not reopen a discarded editor.
     if (searchParams.get('edit')) {
       const params = new URLSearchParams(searchParams.toString())
@@ -904,7 +909,7 @@ function AccountingContent() {
   const handleEditInvoice = (inv: Invoice) => {
     if (inv.status !== 'draft') {
       showToast('Reset to draft first, then edit and save.', 'info')
-      router.push(`/finance/invoices/${inv.id}`)
+      router.push(financeInvoicePath(inv.id))
       return
     }
     setEditingInvId(inv.id)
@@ -940,7 +945,7 @@ function AccountingContent() {
       handledEditRef.current = null
       return
     }
-    if (handledEditRef.current === editId && showNewForm && editingInvId === editId) return
+    if (!shouldApplyInvoiceEditQuery(editId, handledEditRef.current)) return
     const inv = allInvoices.find(i => i.id === editId)
     if (!inv) return // wait until invoices hydrate — do not strip ?edit
 
@@ -951,7 +956,7 @@ function AccountingContent() {
       params.delete('edit')
       const qs = params.toString()
       router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false })
-      router.push(`/finance/invoices/${inv.id}`)
+      router.push(financeInvoicePath(inv.id))
       return
     }
 
@@ -1139,6 +1144,7 @@ function AccountingContent() {
     }
     const type = tab === 'invoices' ? 'customer_invoice' : 'vendor_bill'
     const vatRate = applyVat ? invoiceVatRate : 0
+    let savedId: string | null = null
 
     if (editingInvId) {
       const existing = allInvoices.find(i => i.id === editingInvId)
@@ -1170,14 +1176,17 @@ function AccountingContent() {
       if (type === 'customer_invoice') {
         setDocumentPaymentDetails(editingInvId, normalizeDocumentPaymentDetails(newPaymentDetails))
       }
-      showToast('Invoice updated', 'success')
+      savedId = editingInvId
+      showToast(tab === 'bills' ? 'Bill updated' : 'Invoice updated', 'success')
     } else {
       const created = createManualInvoice(type, newPartnerId, newPartnerName, newDueDate, newLines, vatRate, newNotes.trim(), newDocumentDate)
       if (type === 'customer_invoice' && created?.id) {
         setDocumentPaymentDetails(created.id, normalizeDocumentPaymentDetails(newPaymentDetails))
       }
+      savedId = created?.id ?? null
     }
-    resetInvForm()
+    if (savedId) handledEditRef.current = savedId
+    resetInvForm({ navigateToInvoiceId: savedId })
   }
 
   const saveAccount = () => {

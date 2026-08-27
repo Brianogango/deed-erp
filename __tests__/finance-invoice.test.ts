@@ -7,6 +7,8 @@ import {
   preserveInvoiceLinesOnStoreWrite,
   preservePostedInvoicePaymentProgress,
   enforcePostedInvoiceImmutability,
+  financeInvoicePath,
+  shouldApplyInvoiceEditQuery,
 } from '@/lib/finance-invoice'
 
 describe('computeInvoiceTotals', () => {
@@ -291,5 +293,19 @@ describe('enforcePostedInvoiceImmutability (FIN-001)', () => {
     expect(rejected).toHaveLength(1)
     expect(rejected[0].id).toBe('inv1')
     expect(merged[1].amountPaid).toBe(4000)
+  })
+})
+
+describe('invoice editor navigation', () => {
+  it('opens the record page for an invoice id', () => {
+    expect(financeInvoicePath('inv-1')).toBe('/finance/invoices/inv-1')
+  })
+
+  it('applies a new edit query once, then ignores it until the id changes', () => {
+    expect(shouldApplyInvoiceEditQuery('inv-1', null)).toBe(true)
+    expect(shouldApplyInvoiceEditQuery('inv-1', 'inv-1')).toBe(false)
+    expect(shouldApplyInvoiceEditQuery('inv-2', 'inv-1')).toBe(true)
+    expect(shouldApplyInvoiceEditQuery('', 'inv-1')).toBe(false)
+    expect(shouldApplyInvoiceEditQuery(null, null)).toBe(false)
   })
 })
