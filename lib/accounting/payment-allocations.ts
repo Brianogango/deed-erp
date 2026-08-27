@@ -185,6 +185,7 @@ export async function recordPaymentWithAllocations(opts: {
   allocations: AllocationInput[]
   allowUnallocated?: boolean
   journal?: (paymentId: string) => CreateJournalEntryInput
+  audit?: (tx: Prisma.TransactionClient, payment: any, allocations: any[]) => Promise<void>
 }) {
   return prisma.$transaction(async tx => {
     if (opts.idempotencyKey) {
@@ -283,6 +284,9 @@ export async function recordPaymentWithAllocations(opts: {
 
     if (opts.journal) {
       await createJournalEntryInTx(tx, opts.journal(payment.id))
+    }
+    if (opts.audit) {
+      await opts.audit(tx, payment, allocations)
     }
 
     const allocatedSum = paymentAllocatedSum(allocations.map(a => ({ amount: Number(a.amount) })))
