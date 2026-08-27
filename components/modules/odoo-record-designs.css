@@ -4437,3 +4437,89 @@ main#main-content:has(.finance-invoice-detail) {
     text-align: left !important;
   }
 }
+
+
+/* Invoice line items: natural-height full-width table with a separate totals summary.
+   Avoids the tall empty grid cell created when a one-row table shares a row
+   with the taller totals column. */
+.finance-invoice-detail .invoice-detail__card[aria-label='Line items'] {
+  display: block !important;
+  width: 100% !important;
+  max-width: none !important;
+  overflow: hidden !important;
+}
+
+.finance-invoice-detail .invoice-detail__card[aria-label='Line items'] .invoice-detail__card-head,
+.finance-invoice-detail .invoice-detail__card[aria-label='Line items'] .invoice-detail__table-wrap,
+.finance-invoice-detail .invoice-detail__card[aria-label='Line items'] .invoice-detail__totals {
+  grid-column: auto !important;
+  grid-row: auto !important;
+  align-self: auto !important;
+}
+
+.finance-invoice-detail .invoice-detail__card[aria-label='Line items'] .invoice-detail__table-wrap {
+  display: block !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  height: auto !important;
+  min-height: 0 !important;
+  max-width: none !important;
+  overflow-x: auto !important;
+}
+
+.finance-invoice-detail .invoice-detail__card[aria-label='Line items'] .invoice-detail__table {
+  width: 100% !important;
+  min-width: 760px;
+  table-layout: auto !important;
+}
+
+.finance-invoice-detail .invoice-detail__card[aria-label='Line items'] .invoice-detail__table th:first-child,
+.finance-invoice-detail .invoice-detail__card[aria-label='Line items'] .invoice-detail__table td:first-child {
+  width: 44px;
+}
+
+.finance-invoice-detail .invoice-detail__card[aria-label='Line items'] .invoice-detail__table th:nth-child(3),
+.finance-invoice-detail .invoice-detail__card[aria-label='Line items'] .invoice-detail__table td:nth-child(3) {
+  width: 80px;
+}
+
+.finance-invoice-detail .invoice-detail__card[aria-label='Line items'] .invoice-detail__table th:nth-child(4),
+.finance-invoice-detail .invoice-detail__card[aria-label='Line items'] .invoice-detail__table td:nth-child(4) {
+  width: 120px;
+}
+
+.finance-invoice-detail .invoice-detail__card[aria-label='Line items'] .invoice-detail__table th:nth-child(5),
+.finance-invoice-detail .invoice-detail__card[aria-label='Line items'] .invoice-detail__table td:nth-child(5),
+.finance-invoice-detail .invoice-detail__card[aria-label='Line items'] .invoice-detail__table th:nth-child(6),
+.finance-invoice-detail .invoice-detail__card[aria-label='Line items'] .invoice-detail__table td:nth-child(6) {
+  width: 90px;
+}
+
+.finance-invoice-detail .invoice-detail__card[aria-label='Line items'] .invoice-detail__table th:nth-child(7),
+.finance-invoice-detail .invoice-detail__card[aria-label='Line items'] .invoice-detail__table td:nth-child(7) {
+  width: 130px;
+}
+
+.finance-invoice-detail .invoice-detail__card[aria-label='Line items'] .invoice-detail__totals {
+  width: min(100%, 360px) !important;
+  min-height: 0 !important;
+  margin: 10px 16px 16px auto !important;
+  padding: 0 !important;
+}
+
+@media (max-width: 767px) {
+  .finance-invoice-detail .invoice-detail__card[aria-label='Line items'] .invoice-detail__table {
+    min-width: 0 !important;
+  }
+
+  .finance-invoice-detail .invoice-detail__card[aria-label='Line items'] .invoice-detail__table th,
+  .finance-invoice-detail .invoice-detail__card[aria-label='Line items'] .invoice-detail__table td {
+    width: auto !important;
+  }
+
+  .finance-invoice-detail .invoice-detail__card[aria-label='Line items'] .invoice-detail__totals {
+    width: auto !important;
+    margin: 0 8px 8px !important;
+    padding: 12px !important;
+  }
+}
