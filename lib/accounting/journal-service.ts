@@ -1,4 +1,5 @@
 import 'server-only'
+import type { Prisma } from '@prisma/client'
 import prisma from '@/lib/prisma'
 import { extractAccountCode, uuidFromKey } from '@/lib/accounting/ids'
 import { fiscalLockConflictMessage, isDocumentDateFiscalLocked } from '@/lib/finance-controls'
@@ -26,29 +27,39 @@ export type CreateJournalEntryInput = {
   skipIfExists?: boolean
 }
 
+type AccountingDb = typeof prisma | Prisma.TransactionClient
+
 function round2(n: number) {
   return Math.round(Number(n || 0) * 100) / 100
 }
 
-export async function getFiscalLockDate(): Promise<Date | null> {
-  const lock = await prisma.fiscalLock.findFirst({ orderBy: { lockDate: 'desc' } })
+async function getFiscalLockDateFrom(db: AccountingDb): Promise<Date | null> {
+  const lock = await db.fiscalLock.findFirst({ orderBy: { lockDate: 'desc' } })
   return lock?.lockDate ?? null
 }
 
-export async function assertFiscalPeriodOpen(date: Date | string): Promise<void> {
-  const lockDate = await getFiscalLockDate()
+export async function getFiscalLockDate(): Promise<Date | null> {
+  return getFiscalLockDateFrom(prisma)
+}
+
+async function assertFiscalPeriodOpenWith(db: AccountingDb, date: Date | string): Promise<void> {
+  const lockDate = await getFiscalLockDateFrom(db)
   if (!lockDate || !isDocumentDateFiscalLocked(date, lockDate)) return
   const err = new Error(fiscalLockConflictMessage(lockDate))
   ;(err as Error & { status?: number }).status = 409
   throw err
 }
 
-async function resolveAccountId(accountLabel: string): Promise<string> {
+export async function assertFiscalPeriodOpen(date: Date | string): Promise<void> {
+  return assertFiscalPeriodOpenWith(prisma, date)
+}
+
+async function resolveAccountId(db: AccountingDb, accountLabel: string): Promise<string> {
   const code = extractAccountCode(accountLabel)
   if (!code) throw new Error(`Journal account must start with a valid account code: ${accountLabel}`)
-  const account = await prisma.accountCode.findUnique({
+  const account = await db.accountCode.findUnique({
     where: { code },
-    select: { id: true, isActive: true, code: true, name: true },
+    select: { id: true, isActive: true },
   })
   if (!account) {
     throw new Error(`Unknown account ${code}. Create and approve the account in the Chart of Accounts before posting.`)
@@ -70,7 +81,7 @@ function validateJournalLines(ref: string, lines: JournalLineInput[]) {
   }
 }
 
-export async function createJournalEntry(params: CreateJournalEntryInput) {
+async function createJournalEntryWith(db: AccountingDb, params: CreateJournalEntryInput) {
   validateJournalLines(params.ref, params.lines)
   const totalDebit = round2(params.lines.reduce((s, l) => s + Number(l.debit || 0), 0))
   const totalCredit = round2(params.lines.reduce((s, l) => s + Number(l.credit || 0), 0))
@@ -79,7 +90,7 @@ export async function createJournalEntry(params: CreateJournalEntryInput) {
     throw new Error(`Unbalanced journal ${params.ref}: debit=${totalDebit} credit=${totalCredit}`)
   }
 
-  const existing = await prisma.journalEntry.findUnique({ where: { ref: params.ref }, select: { id: true, ref: true } })
+  const existing = await db.journalEntry.findUnique({ where: { ref: params.ref }, select: { id: true, ref: true } })
   if (existing) {
     if (params.skipIfExists !== false) return existing
     throw new Error(`Journal ref already exists: ${params.ref}`)
@@ -87,7 +98,7 @@ export async function createJournalEntry(params: CreateJournalEntryInput) {
 
   let journalId: string | null = null
   if (params.journalCode) {
-    const journal = await prisma.journal.findUnique({ where: { code: params.journalCode }, select: { id: true } })
+    const journal = await db.journal.findUnique({ where: { code: params.journalCode }, select: { id: true } })
     if (!journal) throw new Error(`Unknown journal code: ${params.journalCode}`)
     journalId = journal.id
   }
@@ -95,12 +106,12 @@ export async function createJournalEntry(params: CreateJournalEntryInput) {
   const entryDate = params.date
     ? (params.date instanceof Date ? params.date : new Date(String(params.date).includes('T') ? String(params.date) : `${params.date}T00:00:00Z`))
     : new Date()
-  await assertFiscalPeriodOpen(entryDate)
+  await assertFiscalPeriodOpenWith(db, entryDate)
 
   const lineCreates = []
   for (let i = 0; i < params.lines.length; i++) {
     const line = params.lines[i]
-    const accountId = await resolveAccountId(line.accountLabel)
+    const accountId = await resolveAccountId(db, line.accountLabel)
     lineCreates.push({
       accountId,
       accountLabel: String(line.accountLabel).slice(0, 200),
@@ -112,7 +123,7 @@ export async function createJournalEntry(params: CreateJournalEntryInput) {
     })
   }
 
-  return prisma.journalEntry.create({
+  return db.journalEntry.create({
     data: {
       id: uuidFromKey('journal', params.ref),
       ref: params.ref,
@@ -134,6 +145,14 @@ export async function createJournalEntry(params: CreateJournalEntryInput) {
     },
     include: { lines: true },
   })
+}
+
+export async function createJournalEntryInTx(tx: Prisma.TransactionClient, params: CreateJournalEntryInput) {
+  return createJournalEntryWith(tx, params)
+}
+
+export async function createJournalEntry(params: CreateJournalEntryInput) {
+  return createJournalEntryWith(prisma, params)
 }
 
 export async function persistStoreJournalEntry(entry: {
@@ -181,27 +200,30 @@ export async function reverseJournalEntry(ref: string, userId?: string) {
   const original = await prisma.journalEntry.findUniqueOrThrow({ where: { ref }, include: { lines: true } })
   const prior = await prisma.journalEntry.findFirst({ where: { reversalOfId: original.id } })
   if (prior) return prior
-  const revRef = `REV/${original.ref}`.slice(0, 80)
-  const reversal = await createJournalEntry({
-    ref: revRef,
-    date: new Date(),
-    description: `Reversal of ${original.ref}`,
-    sourceType: original.sourceType || 'manual',
-    sourceId: original.sourceId,
-    invoiceId: original.invoiceId,
-    paymentId: original.paymentId,
-    createdById: userId,
-    skipIfExists: true,
-    lines: original.lines.map(l => ({
-      accountLabel: l.accountLabel,
-      label: `Reversal: ${l.label ?? ''}`,
-      debit: Number(l.credit),
-      credit: Number(l.debit),
-    })),
-  })
-  await prisma.$transaction([
-    prisma.journalEntry.update({ where: { id: original.id }, data: { isReversed: true } }),
-    prisma.journalEntry.update({ where: { id: reversal.id }, data: { reversalOfId: original.id } }),
-  ])
-  return reversal
+
+  return prisma.$transaction(async tx => {
+    const again = await tx.journalEntry.findFirst({ where: { reversalOfId: original.id } })
+    if (again) return again
+    const revRef = `REV/${original.ref}`.slice(0, 80)
+    const reversal = await createJournalEntryInTx(tx, {
+      ref: revRef,
+      date: new Date(),
+      description: `Reversal of ${original.ref}`,
+      sourceType: original.sourceType || 'manual',
+      sourceId: original.sourceId,
+      invoiceId: original.invoiceId,
+      paymentId: original.paymentId,
+      createdById: userId,
+      skipIfExists: true,
+      lines: original.lines.map(l => ({
+        accountLabel: l.accountLabel,
+        label: `Reversal: ${l.label ?? ''}`,
+        debit: Number(l.credit),
+        credit: Number(l.debit),
+      })),
+    })
+    await tx.journalEntry.update({ where: { id: original.id }, data: { isReversed: true } })
+    await tx.journalEntry.update({ where: { id: reversal.id }, data: { reversalOfId: original.id } })
+    return reversal
+  }, { isolationLevel: 'Serializable' })
 }
