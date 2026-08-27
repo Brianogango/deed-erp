@@ -34,7 +34,13 @@ const isOpen = (i: InvoiceLike) => isOpenInvoice({
   amountPaid: Number(i.amountPaid) || 0,
 })
 const nairobiToday = () => new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Nairobi' })
-const isPastDue = (i: InvoiceLike, today: string) => isInvoiceOverdue(i, today)
+const isPastDue = (i: InvoiceLike, today: string) => isInvoiceOverdue({
+  status: i.status,
+  total: Number(i.total) || 0,
+  amountPaid: Number(i.amountPaid) || 0,
+  dueDate: i.dueDate,
+  date: i.date,
+}, today)
 
 /** Running balance per bank/cash account: opening balance + cashbook activity. */
 export function computeCashbookTotals(
