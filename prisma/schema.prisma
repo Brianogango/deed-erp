@@ -1747,6 +1747,17 @@ model Payment {
   id            String        @id @default(uuid()) @db.Uuid
   invoiceId     String?       @map("invoice_id") @db.Uuid
   amount        Decimal       @db.Decimal(14, 2)
+  amountBase    Decimal       @default(0) @map("amount_base") @db.Decimal(14, 2)
+  paymentType   String        @default("customer_receipt") @map("payment_type") @db.VarChar(30)
+  partnerId     String?       @map("partner_id") @db.Uuid
+  bankAccountId String?       @map("bank_account_id") @db.Uuid
+  journalId     String?       @map("journal_id") @db.Uuid
+  currencyCode  String        @default("KES") @map("currency_code") @db.VarChar(3)
+  exchangeRateToBase Decimal  @default(1) @map("exchange_rate_to_base") @db.Decimal(18, 8)
+  externalReference String?   @map("external_reference") @db.VarChar(120)
+  idempotencyKey String?      @unique @map("idempotency_key") @db.VarChar(120)
+  reconciliationStatus String @default("unreconciled") @map("reconciliation_status") @db.VarChar(20)
+  postingStatus String        @default("unposted") @map("posting_status") @db.VarChar(20)
   paymentMethod PaymentMethod @map("payment_method")
   reference     String?       @db.VarChar(80)
   mpesaPhone    String?       @map("mpesa_phone") @db.VarChar(20)
@@ -1766,6 +1777,10 @@ model Payment {
 
   @@index([invoiceId], map: "idx_payments_invoice")
   @@index([paidAt], map: "idx_payments_date")
+  @@index([partnerId, paidAt], map: "idx_payments_partner_date")
+  @@index([bankAccountId, paidAt], map: "idx_payments_bank_date")
+  @@index([journalId], map: "idx_payments_journal")
+  @@index([postingStatus], map: "idx_payments_posting")
   @@map("payments")
 }
 
