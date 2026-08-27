@@ -140,6 +140,8 @@ function mapInvoiceItems(lines: any[]) {
       lineTotal: money.lineTotal,
       sortOrder: index,
       ...(optionalUuid(l.productId) ? { productId: optionalUuid(l.productId) } : {}),
+      ...(optionalUuid(l.purchaseOrderItemId ?? l.poItemId) ? { purchaseOrderItemId: optionalUuid(l.purchaseOrderItemId ?? l.poItemId) } : {}),
+      ...(optionalUuid(l.grnItemId ?? l.receiptLineId) ? { grnItemId: optionalUuid(l.grnItemId ?? l.receiptLineId) } : {}),
       ...(optionalUuid(l.serialNumberId ?? l.serialId) ? { serialNumberId: optionalUuid(l.serialNumberId ?? l.serialId) } : {}),
     }
   })
@@ -265,6 +267,8 @@ export async function PUT(request: Request, { params }: { params: { id: string }
     // transaction; persistence itself occurs inside the same DB transaction.
     let postingJournal: Awaited<ReturnType<typeof buildInvoiceJournalInput>> | null = null
     let postingInvoiceType: 'customer_invoice' | 'vendor_bill' = 'customer_invoice'
+    let postingPurchaseOrderId: string | null = null
+    let postingBillLines: any[] = []
     let postingMirror: Awaited<ReturnType<typeof resolveBlobInvoiceMirror>> | null = null
     if (willPostNow) {
       const taxCheckItems = lines !== undefined ? mapInvoiceItems(lines) : before.items
@@ -299,7 +303,7 @@ export async function PUT(request: Request, { params }: { params: { id: string }
         subtotal: Number(data.subtotal ?? before.subtotal),
         taxAmount: Number(data.taxAmount ?? before.taxAmount),
         type: postingInvoiceType,
-        purchaseOrderId: optionalUuid(body.purchaseOrderId) ?? postingMirror.purchaseOrderId ?? undefined,
+        purchaseOrderId: (postingPurchaseOrderId = optionalUuid(body.purchaseOrderId) ?? postingMirror.purchaseOrderId ?? null) ?? undefined,
         partnerName: postingMirror.partnerName,
         clientName: postingMirror.clientName,
         lines: normalizedItems.map((i: any) => ({
@@ -310,6 +314,15 @@ export async function PUT(request: Request, { params }: { params: { id: string }
           description: i.description,
         })),
       }, { createdById: actor.id })
+      postingBillLines = normalizedItems.map((i: any) => ({
+        purchaseOrderItemId: i.purchaseOrderItemId ?? undefined,
+        grnItemId: i.grnItemId ?? undefined,
+        productId: i.productId ?? undefined,
+        qty: Number(i.qty),
+        unitPrice: Number(i.unitPrice),
+        taxRate: Number(i.taxRate),
+        description: i.description,
+      }))
     }
 
     const invoice = await prisma.$transaction(async tx => {
@@ -335,6 +348,15 @@ export async function PUT(request: Request, { params }: { params: { id: string }
             data: mapped.map((item: any) => ({ ...item, invoiceId: params.id })),
           })
         }
+      }
+
+      if (postingInvoiceType === 'vendor_bill' && postingPurchaseOrderId) {
+        const { assertVendorBillThreeWayMatchInTx } = await import('@/lib/purchase/assert-bill-match.server')
+        await assertVendorBillThreeWayMatchInTx(tx, {
+          purchaseOrderId: postingPurchaseOrderId,
+          vendorId: before.clientId,
+          billLines: postingBillLines,
+        })
       }
 
       let journalId: string | null = null
