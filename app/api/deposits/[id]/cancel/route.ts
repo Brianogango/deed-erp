@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server'
 import { requireRole, withApiErrorHandling } from '@/lib/auth/api'
-import { readDeposits, writeDeposits } from '@/lib/deposit-store'
-import { writeFinancialAudit } from '@/lib/finance-audit'
+import { refundDeposit } from '@/lib/accounting/deposit-service'
 
 export const dynamic = 'force-dynamic'
 
@@ -9,34 +8,17 @@ export async function POST(request: Request, { params }: { params: { id: string 
   return withApiErrorHandling(async () => {
     const actor = await requireRole(['director', 'finance_officer'])
     const body = await request.json().catch(() => ({}))
-
-    const deposits = await readDeposits()
-    const idx = deposits.findIndex(d => d.id === params.id)
-    if (idx === -1) return NextResponse.json({ error: 'Not found' }, { status: 404 })
-
-    const deposit = deposits[idx]
-
-    if (['completed', 'cancelled'].includes(deposit.status)) {
-      return NextResponse.json({ error: 'Cannot cancel a deposit in this status' }, { status: 422 })
-    }
-
-    deposits[idx] = {
-      ...deposit,
-      status: 'cancelled',
-      cancelledAt: new Date().toISOString(),
-      cancelReason: body.reason || undefined,
-    }
-
-    await writeDeposits(deposits)
-
-    await writeFinancialAudit({
-      userId: actor.id,
-      action: 'cancel_deposit',
-      entityType: 'deposit',
-      oldValues: { ref: deposit.ref, status: deposit.status, totalPaid: deposit.totalPaid },
-      newValues: { status: 'cancelled', reason: body.reason || undefined },
+    const reason = String(body.reason || '').trim()
+    if (!reason) return NextResponse.json({ error: 'Cancellation/refund reason is required' }, { status: 422 })
+    const result = await refundDeposit({
+      depositId: params.id,
+      amount: body.amount == null ? undefined : Number(body.amount),
+      method: String(body.method || 'bank_transfer'),
+      bankAccountId: body.bankAccountId ? String(body.bankAccountId) : null,
+      reference: body.reference ? String(body.reference) : null,
+      reason,
+      actor: { id: actor.id, name: actor.name },
     })
-
-    return NextResponse.json(deposits[idx])
+    return NextResponse.json({ ok: true, ...result })
   })
 }
