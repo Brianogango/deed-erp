@@ -2263,7 +2263,7 @@ function AccountingContent() {
         {showNewForm && (
           <Modal
             title={editingInvId ? `Edit ${tab === 'bills' ? 'Bill' : 'Invoice'}` : (tab === 'bills' ? 'New Vendor Bill' : 'New Invoice')}
-            onClose={resetInvForm}
+            onClose={() => resetInvForm()}
             width={980}
           >
             <div className="finance-document-editor flex flex-col min-h-[560px]">
@@ -2617,7 +2617,7 @@ function AccountingContent() {
               </div>
 
               <div className="finance-document-editor__footer flex items-center justify-between pt-4 border-t border-[var(--border-lt)]">
-                <button className="btn-outline text-xs cursor-pointer" onClick={resetInvForm}>Discard</button>
+                <button className="btn-outline text-xs cursor-pointer" onClick={() => resetInvForm()}>Discard</button>
                 <button
                   className="btn-primary flex items-center gap-2 text-xs disabled:opacity-50 disabled:cursor-not-allowed"
                   onClick={createDocument}
