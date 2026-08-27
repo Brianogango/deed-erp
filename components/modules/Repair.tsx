@@ -29,6 +29,7 @@ import { Fa } from '@/components/icons'
 import { faPlus, faTools } from '@fortawesome/free-solid-svg-icons'
 import { useUrlRecordId } from '@/hooks/useUrlRecordId'
 import { isOpenRepairJob } from '@/lib/repair-progress'
+import { repairModuleView } from '@/lib/repair-workspace-view'
 
 function RepairContent() {
   const { 
@@ -240,7 +241,7 @@ function RepairInner() {
   }, [repairs, updateRepair, appendRepairHistory, showToast])
 
   const activeRepair = useMemo(() => repairs.find(r => r.id === activeId) ?? null, [repairs, activeId])
-  const view = isIntake ? 'intake' : activeId ? 'detail' : 'list'
+  const view = repairModuleView(isIntake, activeId)
   const currentUser = useMemo(() => users.find(u => u.id === currentUserId), [users, currentUserId])
   const allVisibleRepairs = useMemo(() => getVisibleRepairs(), [getVisibleRepairs, repairs])
   const openRepairCount = useMemo(

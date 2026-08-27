@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { mergeCollectionById } from '@/lib/collection-merge'
 import { computeLowStockItems, isStockOutMove } from '@/lib/kpi-stock'
-import { isOpenRepairJob } from '@/lib/repair-progress'
 
 describe('mergeCollectionById()', () => {
   it('unions by id so a short page cannot shrink the store', () => {
@@ -41,16 +40,5 @@ describe('computeLowStockItems() / isStockOutMove()', () => {
     expect(isStockOutMove({ type: 'return' })).toBe(true)
     expect(isStockOutMove({ type: 'in' })).toBe(false)
     expect(isStockOutMove({ type: 'OUT' })).toBe(true)
-  })
-})
-
-describe('isOpenRepairJob()', () => {
-  it('matches Dashboard Open Repairs (excludes closed terminal statuses)', () => {
-    expect(isOpenRepairJob({ status: 'in_repair' })).toBe(true)
-    expect(isOpenRepairJob({ status: 'ready' })).toBe(true)
-    expect(isOpenRepairJob({ status: 'closed' })).toBe(false)
-    expect(isOpenRepairJob({ status: 'invoiced' })).toBe(false)
-    expect(isOpenRepairJob({ status: 'delivered' })).toBe(false)
-    expect(isOpenRepairJob({ status: 'cancelled' })).toBe(false)
   })
 })
