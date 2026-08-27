@@ -3794,6 +3794,7 @@ export type InventoryStoreState = Pick<AppState,
 
 export type SalesStoreState = Pick<AppState,
   | 'saleOrders'
+  | 'repairs'
   | 'contacts'
   | 'products'
   | 'serials'
