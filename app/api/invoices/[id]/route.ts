@@ -90,16 +90,37 @@ function mapInvoiceItems(lines: any[]) {
         unitPrice: 0,
         discountPct: 0,
         taxRate: 0,
+        taxCategory: 'out_of_scope',
+        taxCode: 'SECTION',
+        taxableBase: 0,
+        taxClaimEligible: false,
         lineSubtotal: 0,
         lineTax: 0,
         lineTotal: 0,
         sortOrder: index,
       }
     }
+    const requestedTaxCategory = String(l.taxCategory ?? l.taxCode ?? 'not_selected').toLowerCase()
+    const taxCategory = requestedTaxCategory === 'standard' || requestedTaxCategory === 'vat' || requestedTaxCategory === 'standard_16'
+      ? 'standard_16'
+      : requestedTaxCategory === 'zero' || requestedTaxCategory === 'zero_rated'
+        ? 'zero_rated'
+        : requestedTaxCategory === 'exempt'
+          ? 'exempt'
+          : requestedTaxCategory === 'out_of_scope'
+            ? 'out_of_scope'
+            : requestedTaxCategory === 'non_vat_supplier'
+              ? 'non_vat_supplier'
+              : 'not_selected'
+    // Numeric VAT defaults to zero. A statutory tax category must be selected
+    // before posting; 0 does not imply zero-rated.
+    const effectiveTaxRate = taxCategory === 'standard_16'
+      ? Number(l.taxRate ?? 16)
+      : 0
     const money = computeInvoiceLineMoney({
       qty: l.qty,
       unitPrice: l.unitPrice,
-      taxRate: l.taxRate,
+      taxRate: effectiveTaxRate,
       discountPct: l.discountPct ?? l.discount,
       subtotal: l.subtotal,
       lineSubtotal: l.lineSubtotal,
@@ -110,6 +131,10 @@ function mapInvoiceItems(lines: any[]) {
       unitPrice: money.unitPrice,
       discountPct: money.discountPct,
       taxRate: money.taxRate,
+      taxCategory,
+      taxCode: taxCategory === 'standard_16' ? 'VAT16' : taxCategory,
+      taxableBase: money.lineSubtotal,
+      taxClaimEligible: taxCategory === 'standard_16' || taxCategory === 'zero_rated',
       lineSubtotal: money.lineSubtotal,
       lineTax: money.lineTax,
       lineTotal: money.lineTotal,
@@ -242,6 +267,16 @@ export async function PUT(request: Request, { params }: { params: { id: string }
     let postingInvoiceType: 'customer_invoice' | 'vendor_bill' = 'customer_invoice'
     let postingMirror: Awaited<ReturnType<typeof resolveBlobInvoiceMirror>> | null = null
     if (willPostNow) {
+      const taxCheckItems = lines !== undefined ? mapInvoiceItems(lines) : before.items
+      const unresolvedTax = taxCheckItems.some((item: any) =>
+        Number(item.qty) !== 0 && String(item.taxCategory ?? 'not_selected') === 'not_selected'
+      )
+      if (unresolvedTax) {
+        return NextResponse.json({
+          error: 'Tax category must be selected on every posting line. A 0% amount is not automatically zero-rated VAT.',
+        }, { status: 409 })
+      }
+
       postingMirror = await resolveBlobInvoiceMirror(before.id)
       postingInvoiceType = body.type === 'vendor_bill' || postingMirror.type === 'vendor_bill'
         ? 'vendor_bill'
