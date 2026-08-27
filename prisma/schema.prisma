@@ -1281,7 +1281,7 @@ model SupplierPayment {
   poId          String        @map("po_id") @db.Uuid
   amount        Decimal       @db.Decimal(14, 2)
   amountBase    Decimal       @default(0) @map("amount_base") @db.Decimal(14, 2)
-  paymentType   String        @default("customer_receipt") @map("payment_type") @db.VarChar(30)
+  paymentType   String        @default("supplier_payment") @map("payment_type") @db.VarChar(30)
   partnerId     String?       @map("partner_id") @db.Uuid
   bankAccountId String?       @map("bank_account_id") @db.Uuid
   journalId     String?       @map("journal_id") @db.Uuid
@@ -3276,7 +3276,8 @@ model BankAccount {
   createdAt       DateTime @default(now()) @map("created_at")
   updatedAt       DateTime @updatedAt @map("updated_at")
 
-  @@unique([glAccountId], map: "uq_bank_account_gl")
+  @@index([glAccountId], map: "idx_bank_account_gl")
+  @@unique([name], map: "uq_bank_account_name")
   @@map("bank_accounts")
 }
 

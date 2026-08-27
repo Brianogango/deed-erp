@@ -103,6 +103,8 @@ export async function allocatePayment(opts: {
   paymentId: string
   allocations: AllocationInput[]
   createdById?: string
+  journal?: (paymentId: string, created: Array<{ invoiceId: string; amount: unknown }>) => CreateJournalEntryInput
+  audit?: (tx: Prisma.TransactionClient, payment: any, created: any[]) => Promise<void>
 }) {
   return prisma.$transaction(async tx => {
     const payment = await tx.payment.findUniqueOrThrow({
@@ -118,7 +120,7 @@ export async function allocatePayment(opts: {
     const invoiceIds = [...new Set(opts.allocations.map(a => a.invoiceId))]
     const invoices = await tx.invoice.findMany({
       where: { id: { in: invoiceIds } },
-      select: { id: true, totalAmount: true, paymentBlocked: true },
+      select: { id: true, totalAmount: true, paymentBlocked: true, invoiceNumber: true },
     })
     const invoiceMap = new Map(invoices.map(i => [i.id, i]))
     const residuals = new Map<string, number>()
@@ -154,6 +156,17 @@ export async function allocatePayment(opts: {
     for (const invoiceId of invoiceIds) {
       const newPaid = await sumAllocationsForInvoiceInTx(tx, invoiceId)
       await tx.invoice.update({ where: { id: invoiceId }, data: { amountPaid: newPaid } })
+    }
+
+    if (opts.journal) {
+      const journal = await createJournalEntryInTx(tx, opts.journal(payment.id, created))
+      await tx.payment.update({
+        where: { id: payment.id },
+        data: { journalId: journal.id, postingStatus: 'posted' },
+      })
+    }
+    if (opts.audit) {
+      await opts.audit(tx, payment, created)
     }
 
     const newAllocated = await sumAllocationsForPaymentInTx(tx, payment.id)
@@ -283,7 +296,11 @@ export async function recordPaymentWithAllocations(opts: {
     }
 
     if (opts.journal) {
-      await createJournalEntryInTx(tx, opts.journal(payment.id))
+      const journal = await createJournalEntryInTx(tx, opts.journal(payment.id))
+      await tx.payment.update({
+        where: { id: payment.id },
+        data: { journalId: journal.id, postingStatus: 'posted' },
+      })
     }
     if (opts.audit) {
       await opts.audit(tx, payment, allocations)
