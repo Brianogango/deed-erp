@@ -58,7 +58,7 @@ model Product {
   category        String
   salePrice       Float
   costPrice       Float
-  taxRate         Float    @default(16)
+  taxRate         Float    @default(0)
   minStock        Int      @default(5)
   unit            String   @default("pcs")
   description     String?

@@ -124,7 +124,7 @@ const blankProduct = () => {
     name: '', sku: '', barcode: '', category,
     productKind,
     trackingMethod,
-    salePrice: '', costPrice: '', wholesalePrice: '', commissionRatePercent: '', taxRate: '16', minStock: '5',
+    salePrice: '', costPrice: '', wholesalePrice: '', commissionRatePercent: '', taxRate: '0', minStock: '5',
     unit: defaultUnitForKind(productKind, trackingMethod),
     invoicePolicy: 'order' as 'order' | 'delivery',
     pricingCategoryId: '',
@@ -1073,16 +1073,16 @@ function InventoryContent() {
     const headers = ['Name', 'Category', 'Product Type', 'Unit', 'Barcode', 'Sale Price', 'Cost Price', 'Tax Rate', 'Min Stock', 'Warranty Months', 'Description', 'Revenue Account', 'Purchase Account', 'Inventory Asset Account', 'COGS Account', 'Adjustment Account', 'Write-off Account', 'Price Difference Account']
     const categories = ALL_CATEGORIES.join(' | ')
     const sampleRows = [
-      ['HP ProBook 450 G9', 'Laptops', 'storable', 'pcs', '1234567890123', 85000, 72000, 16, 3, 12, 'Intel Core i5, 8GB RAM, 256GB SSD', '5001', '6101', '1200', '6001', '6200', '6205', '6210'],
-      ['Dell OptiPlex 3000', 'Desktops', 'storable', 'pcs', '9876543210987', 75000, 63000, 16, 2, 12, 'Intel Core i3, 4GB RAM, 1TB HDD', '5001', '6101', '1200', '6001', '6200', '6205', '6210'],
-      ['Cat6 Ethernet Cable 5m', 'Networking', 'consumable', 'pcs', '', 850, 500, 16, 10, 0, 'Shielded Cat6 patch cable', '5001', '6101', '', '', '', '', ''],
-      ['HP LaserJet Toner CF217A', 'Parts & Components', 'consumable', 'pcs', '', 3500, 2800, 16, 5, 0, 'Compatible black toner', '5002', '6101', '', '', '', '', ''],
-      ['Monthly Support Contract', 'Services', 'service', 'month', '', 15000, 0, 16, 0, 0, 'Monthly IT support retainer', '5003', '', '', '', '', '', ''],
+      ['HP ProBook 450 G9', 'Laptops', 'storable', 'pcs', '1234567890123', 85000, 72000, 0, 3, 12, 'Intel Core i5, 8GB RAM, 256GB SSD', '5001', '6101', '1200', '6001', '6200', '6205', '6210'],
+      ['Dell OptiPlex 3000', 'Desktops', 'storable', 'pcs', '9876543210987', 75000, 63000, 0, 2, 12, 'Intel Core i3, 4GB RAM, 1TB HDD', '5001', '6101', '1200', '6001', '6200', '6205', '6210'],
+      ['Cat6 Ethernet Cable 5m', 'Networking', 'consumable', 'pcs', '', 850, 500, 0, 10, 0, 'Shielded Cat6 patch cable', '5001', '6101', '', '', '', '', ''],
+      ['HP LaserJet Toner CF217A', 'Parts & Components', 'consumable', 'pcs', '', 3500, 2800, 0, 5, 0, 'Compatible black toner', '5002', '6101', '', '', '', '', ''],
+      ['Monthly Support Contract', 'Services', 'service', 'month', '', 15000, 0, 0, 0, 0, 'Monthly IT support retainer', '5003', '', '', '', '', '', ''],
     ]
     const notes = [
       [`Categories: ${categories}`],
       ['Product Type: storable | consumable | service'],
-      ['Tax Rate: enter 16 for 16% VAT, 0 for exempt'],
+      ['Tax Rate: defaults to 0. Enter 16 only when VAT applies'],
       ['Min Stock: low-stock alert threshold (0 = no alert)'],
       ['Warranty Months: 0 for non-warrantied items'],
       ['Barcode: optional product-level lookup code (leave blank if not needed)'],
@@ -1165,7 +1165,7 @@ function InventoryContent() {
           barcode,
           salePrice: Number(col(row, 'Sale Price', 'SalePrice', 'salePrice', 'sale_price')) || 0,
           costPrice: Number(col(row, 'Cost Price', 'CostPrice', 'costPrice', 'cost_price')) || 0,
-          taxRate: Number(col(row, 'Tax Rate', 'TaxRate', 'taxRate', 'tax_rate')) || 16,
+          taxRate: Number(col(row, 'Tax Rate', 'TaxRate', 'taxRate', 'tax_rate')) || 0,
           minStock: Number(col(row, 'Min Stock', 'MinStock', 'Reorder Level', 'minStock')) || 5,
           warrantyMonths: Number(col(row, 'Warranty Months', 'WarrantyMonths', 'warrantyMonths')) || 12,
           description: col(row, 'Description', 'description'),
@@ -3602,8 +3602,8 @@ function InventoryContent() {
         const exactDup = !editId && !form.parentId && products.find((p: Product) => p.isActive && p.name.trim().toLowerCase() === form.name.trim().toLowerCase())
         const archivedDup = !editId && !form.parentId && products.find((p: Product) => !p.isActive && p.name.trim().toLowerCase() === form.name.trim().toLowerCase())
         return (
-        <Modal title={editId ? 'Edit Product Master' : form.parentId ? 'Create Product Variant' : 'Create New Product'} onClose={closeProductForm} width={640}>
-          <div className="flex flex-col gap-4">
+        <Modal title={editId ? 'Edit Product Master' : form.parentId ? 'Create Product Variant' : 'Create New Product'} onClose={closeProductForm} width={920}>
+          <div className="flex flex-col gap-5 pb-1">
 
             {!editId && !form.parentId && canEditStock && (
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 px-3 py-2.5 rounded-xl border border-sky-100 bg-sky-50/80">
@@ -3691,7 +3691,11 @@ function InventoryContent() {
               </div>
             )}
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <section className="rounded-2xl border border-[var(--border)] bg-[var(--bg-card)] p-4">
+              <div className="mb-3">
+                <p className="text-[11px] font-black uppercase tracking-wider text-[var(--navy)]">Product identity</p>
+                <p className="text-[10px] text-[var(--text-3)] mt-0.5">Name, configuration, catalogue type and stock tracking.</p>
+              </div>
               <div>
                 <Field label="Product Name" required>
                   <Input value={form.name} onChange={(v: string) => { setF('name')(v); setDupConfirm(false) }} placeholder="e.g. HP ProBook 450 G9" />
@@ -3764,7 +3768,7 @@ function InventoryContent() {
                   </div>
                 )}
               </div>
-            </div>
+            </section>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <Field label="Product Type" required>
                 <Select
@@ -3885,7 +3889,7 @@ function InventoryContent() {
               </div>
             )}
             {form.productKind !== 'service' && form.category !== 'Services' && (
-              <>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <Field label="Condition" hint="Printed on labels · selects New vs Refurb pricing band">
                   <Select
                     value={form.productType === 'new' ? 'new' : 'refurbished'}
@@ -3913,9 +3917,14 @@ function InventoryContent() {
                     ]}
                   />
                 </Field>
-              </>
+              </div>
             )}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            <section className="rounded-2xl border border-[var(--border)] bg-[var(--bg-card)] p-4">
+              <div className="mb-3">
+                <p className="text-[11px] font-black uppercase tracking-wider text-[var(--navy)]">Pricing and tax</p>
+                <p className="text-[10px] text-[var(--text-3)] mt-0.5">VAT is off by default and only applies when explicitly selected.</p>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               <Field label="Cost Price" hint="Sale and wholesale update from cost">
                 <Input
                   type="number"
@@ -3946,11 +3955,21 @@ function InventoryContent() {
                   })()}
                 />
               </Field>
-              <Field label="Tax Rate (%)"><Input type="number" value={form.taxRate} onChange={setF('taxRate')} /></Field>
+              <Field label="VAT / Tax Rate" hint="Defaults to 0%. Select 16% only when VAT applies.">
+                <Select
+                  value={String(form.taxRate ?? '0')}
+                  onChange={setF('taxRate')}
+                  options={[
+                    { value: '0', label: '0% — No VAT' },
+                    { value: '16', label: '16% — VAT' },
+                  ]}
+                />
+              </Field>
               <Field label="Commission %" hint="Blank uses the category rate from Settings → Sales">
                 <Input type="number" value={form.commissionRatePercent} onChange={setF('commissionRatePercent')} placeholder="Category default" />
               </Field>
-            </div>
+              </div>
+            </section>
             {form.productKind !== 'service' && form.category !== 'Services' && (() => {
               const quote = quoteSalePriceFromCost({
                 costPrice: form.costPrice,
@@ -4098,10 +4117,10 @@ function InventoryContent() {
               )}
             </div>
 
-            <div className="flex gap-3 justify-end mt-2">
-              <button className="btn-secondary px-6" onClick={closeProductForm}>Cancel</button>
+            <div className="sticky bottom-0 z-20 -mx-1 mt-1 flex flex-col-reverse gap-3 border-t border-[var(--border)] bg-[var(--bg-card)] px-1 pb-1 pt-4 sm:flex-row sm:justify-end">
+              <button className="btn-secondary w-full px-6 sm:w-auto" onClick={closeProductForm}>Cancel</button>
               <button
-                className="btn-primary px-8"
+                className="btn-primary w-full px-8 sm:w-auto"
                 onClick={() => { void saveProduct() }}
                 disabled={savingProduct || (dupConfirm && !!exactDup) || !!archivedDup}
               >

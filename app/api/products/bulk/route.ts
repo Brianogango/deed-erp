@@ -49,7 +49,7 @@ export async function POST(request: Request) {
             ? undefined
             : Number(raw.commissionRatePercent),
           minStock: Number(raw.minStock ?? raw.reorderLevel ?? 5),
-          taxRate: Number(raw.taxRate ?? 16),
+          taxRate: Number(raw.taxRate ?? 0),
           sku: raw.skuProvided === false ? '' : (raw.sku ?? ''),
         })
         const result = await publishProduct(validated)

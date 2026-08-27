@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import {
   applyInvoiceLinkToRepair,
+  dedupeRepairSaleOrders,
   extractRepairRefFromText,
   findRepairForSaleOrder,
+  findSaleOrderForRepair,
   stampInvoiceOnMatchingRepair,
 } from '@/lib/repair/sale-order-link'
 
@@ -74,5 +76,67 @@ describe('applyInvoiceLinkToRepair', () => {
       linkedInvoiceId: 'inv-1',
       linkedInvoiceRef: 'INV/2026/0134',
     })
+  })
+})
+
+
+describe('findSaleOrderForRepair', () => {
+  const oldQuote = {
+    id: 'quo-old',
+    ref: 'QUO/2026/0263',
+    status: 'quotation',
+    notes: 'Repair quote — REP/0294 — HP 1030 G3',
+    createdAt: '2026-08-25T09:00:00.000Z',
+  }
+  const latestQuote = {
+    ...oldQuote,
+    id: 'quo-latest',
+    ref: 'QUO/2026/0265',
+    createdAt: '2026-08-25T10:00:00.000Z',
+  }
+
+  it('reuses the explicit linked sale order', () => {
+    expect(findSaleOrderForRepair(
+      [oldQuote, latestQuote],
+      { id: 'repair-1', ref: 'REP/0294', saleOrderId: oldQuote.id },
+    )?.id).toBe(oldQuote.id)
+  })
+
+  it('falls back to the newest repair-note match when the link was lost', () => {
+    expect(findSaleOrderForRepair(
+      [oldQuote, latestQuote],
+      { id: 'repair-1', ref: 'REP/0294' },
+    )?.id).toBe(latestQuote.id)
+  })
+
+  it('prefers a confirmed order over a later stray draft', () => {
+    expect(findSaleOrderForRepair(
+      [{ ...oldQuote, status: 'sale' }, latestQuote],
+      { id: 'repair-1', ref: 'REP/0294' },
+    )?.id).toBe(oldQuote.id)
+  })
+})
+
+describe('dedupeRepairSaleOrders', () => {
+  it('shows one repair quotation while preserving unrelated orders', () => {
+    const duplicateNotes = 'Repair quote — REP/0294 — HP 1030 G3'
+    const orders = [
+      { id: 'quo-265', ref: 'QUO/2026/0265', status: 'quotation', notes: duplicateNotes },
+      { id: 'quo-263', ref: 'QUO/2026/0263', status: 'quotation', notes: duplicateNotes },
+      { id: 'walk-in', ref: 'QUO/2026/0264', status: 'quotation', notes: 'Walk-in sale' },
+    ]
+    expect(dedupeRepairSaleOrders(orders).map(order => order.id)).toEqual(['quo-265', 'walk-in'])
+  })
+
+  it('keeps the repair-linked record even if a higher duplicate ref exists', () => {
+    const notes = 'Repair quote — REP/0294 — HP 1030 G3'
+    const orders = [
+      { id: 'linked', ref: 'QUO/2026/0263', status: 'quotation', notes },
+      { id: 'stray', ref: 'QUO/2026/0265', status: 'quotation', notes },
+    ]
+    expect(dedupeRepairSaleOrders(
+      orders,
+      [{ id: 'repair-1', ref: 'REP/0294', saleOrderId: 'linked' }],
+    ).map(order => order.id)).toEqual(['linked'])
   })
 })

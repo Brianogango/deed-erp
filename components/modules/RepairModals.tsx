@@ -503,6 +503,7 @@ export function QuoteModal({ repair, onClose }: { repair: RepairOrder, onClose: 
   const { generateRepairQuote, companySettings, products, systemSettings } = useRepairStore()
   const [applyVat, setApplyVat] = useState(repair.quote ? repair.quote.tax > 0 : false)
   const [submitted, setSubmitted] = useState(false)
+  const [saving, setSaving] = useState(false)
   const feeResolved = resolveDiagnosisFee(repair, systemSettings)
   const chargeFee = shouldChargeDiagnosisFee(repair) && feeResolved.amount > 0
   const [quoteLines, setQuoteLines] = useState<{
@@ -545,9 +546,9 @@ export function QuoteModal({ repair, onClose }: { repair: RepairOrder, onClose: 
   const outOfStockLines = editableLines.filter(l => requiresInventory(l.type) && l.productId && (l.stockQty ?? 0) === 0)
   const canSubmit = unlinkedInventoryLines.length === 0 && invalidQuoteLines.length === 0 && quoteLines.length > 0
 
-  const handleGenerateQuote = () => {
+  const handleGenerateQuote = async () => {
     setSubmitted(true)
-    if (!canSubmit) return
+    if (!canSubmit || saving) return
     const lines = quoteLines.map(line => {
       const qty = Number(line.qty)
       const unitPrice = Number(line.unitPrice) || 0
@@ -561,8 +562,13 @@ export function QuoteModal({ repair, onClose }: { repair: RepairOrder, onClose: 
         isDiagnosisFee: line.isDiagnosisFee || isDiagnosisFeeLine(line) || undefined,
       }
     })
-    generateRepairQuote(repair.id, lines as any, applyVat)
-    onClose()
+    setSaving(true)
+    try {
+      await Promise.resolve(generateRepairQuote(repair.id, lines as any, applyVat))
+      onClose()
+    } finally {
+      setSaving(false)
+    }
   }
 
   const taxable = quoteLines.reduce((s, l) => {
@@ -703,8 +709,8 @@ export function QuoteModal({ repair, onClose }: { repair: RepairOrder, onClose: 
 
         <div className="flex gap-2 justify-end pt-2 border-t border-[var(--border-lt)]">
           <button className="btn-outline min-w-[100px]" onClick={onClose}>Cancel</button>
-          <ActionBtn onClick={handleGenerateQuote} color="linear-gradient(135deg,#D97706,#F59E0B)" shadow="0 8px 24px rgba(245,158,11,0.35)" disabled={submitted && !canSubmit}>
-            <Fa icon={faFileInvoiceDollar} /> {repair.quote ? 'Update Quote' : 'Generate Quote'}
+          <ActionBtn onClick={handleGenerateQuote} color="linear-gradient(135deg,#D97706,#F59E0B)" shadow="0 8px 24px rgba(245,158,11,0.35)" disabled={saving || (submitted && !canSubmit)}>
+            <Fa icon={faFileInvoiceDollar} /> {saving ? 'Saving…' : repair.quote ? 'Update Quote' : 'Generate Quote'}
           </ActionBtn>
         </div>
       </div>

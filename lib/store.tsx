@@ -231,6 +231,7 @@ import {
 } from '@/lib/diagnosis-fee'
 import { buildRepairInvoiceCharges, repairInvoiceChargeTotal } from '@/lib/repair-invoice'
 import { isAssignableTechnician, isRepairTechActor } from '@/lib/repair/assignable-technicians'
+import { findSaleOrderForRepair } from '@/lib/repair/sale-order-link'
 import {
   buildDefaultRepairQcItems,
   prepareRepairQcItemsForRound,
@@ -3796,6 +3797,7 @@ export type InventoryStoreState = Pick<AppState,
 
 export type SalesStoreState = Pick<AppState,
   | 'saleOrders'
+  | 'repairs'
   | 'contacts'
   | 'products'
   | 'serials'
@@ -14768,7 +14770,7 @@ const storeCtx: AppState = {
       showToast(`Diagnosis fee KES ${resolved.amount.toLocaleString('en-KE')} recorded as paid`)
     },
 
-    generateRepairQuote: async (repairId, incomingLines, applyVat = true) => {
+    generateRepairQuote: async (repairId, incomingLines, applyVat = false) => {
       const user = currentUser()
       if (!user) return
       const repair = repairs.find(r => r.id === repairId)
@@ -14911,11 +14913,21 @@ const storeCtx: AppState = {
       // repair means it exists server-side — update it instead of duplicating.
       const existingSalesQuoteId = existingSalesQuote?.id ?? repair.salesQuoteId
 
-      // Also honour the sale order the customer-portal approval flow may have
-      // created (it records linkedSaleOrderId, not saleOrderId).
-      let linkedSaleOrderId = repair.saleOrderId ?? (repair as any).linkedSaleOrderId ?? existingSalesQuote?.saleOrderId
-      const linkedSaleOrder = linkedSaleOrderId ? saleOrders.find(s => s.id === linkedSaleOrderId) : undefined
-      let linkedSaleOrderRef = repair.saleOrderRef ?? (repair as any).linkedSaleOrderRef ?? linkedSaleOrder?.ref ?? linkedSaleOrder?.orderNumber
+      // Resolve one durable repair quotation. Older repair blobs can lose
+      // saleOrderId after refresh; the repair marker in notes survives and
+      // lets a retry update the existing quotation instead of creating a new one.
+      const preferredSaleOrderId =
+        repair.saleOrderId ?? (repair as any).linkedSaleOrderId ?? existingSalesQuote?.saleOrderId
+      const linkedSaleOrder = findSaleOrderForRepair(saleOrders as any[], {
+        ...repair,
+        saleOrderId: preferredSaleOrderId,
+      })
+      let linkedSaleOrderId = linkedSaleOrder?.id ?? preferredSaleOrderId
+      let linkedSaleOrderRef =
+        linkedSaleOrder?.ref
+        ?? linkedSaleOrder?.orderNumber
+        ?? repair.saleOrderRef
+        ?? (repair as any).linkedSaleOrderRef
 
       const soLines = quote.lines.map(l => ({
         id: uid(),
@@ -14939,7 +14951,7 @@ const storeCtx: AppState = {
             : `Direct Repair path (auto-approved by ${user.name})`
       }
 
-      if (isUpdate && linkedSaleOrderId) {
+      if (linkedSaleOrderId) {
         const soPatch = {
           lines: soLines,
           subtotal: quote.subtotal,
@@ -14948,6 +14960,8 @@ const storeCtx: AppState = {
           totalAmount: chargeTotal,
           total: chargeTotal,
           notes: `Repair quote — ${repair.ref} — ${repair.productName}`,
+          source: 'repair',
+          repairId: repair.id,
           repairRef: repair.ref,
         }
         setSaleOrders(p => p.map(s => s.id === linkedSaleOrderId ? { ...s, ...soPatch } : s))
@@ -14963,6 +14977,9 @@ const storeCtx: AppState = {
           date: now(), validUntil: addDays(now(), 7),
           lines: soLines, subtotal: quote.subtotal, taxTotal: quote.tax, total: chargeTotal,
           notes: `Repair quote — ${repair.ref} — ${repair.productName}`,
+          source: 'repair',
+          repairId: repair.id,
+          repairRef: repair.ref,
           createdByUserId: user.id,
         }
         setSaleOrders(p => [saleOrderRecord, ...p])
@@ -14989,7 +15006,7 @@ const storeCtx: AppState = {
         subtotal: l.subtotal,
         lineTotal: applyVat ? l.subtotal + Math.round(l.subtotal * (companySettings.vatRate / 100)) : l.subtotal,
       }))
-      const isQuoteUpdate = isUpdate && !!existingSalesQuoteId
+      const isQuoteUpdate = !!existingSalesQuoteId
       // Never CREATE a sales quote below KES 1 (e.g. full-warranty repairs) —
       // updating an existing quote to a lower total is still allowed.
       const shouldPushSalesQuote = isQuoteUpdate || chargeTotal >= 1
@@ -15023,7 +15040,7 @@ const storeCtx: AppState = {
         totalAmount: chargeTotal,
         total: chargeTotal,
         saleOrderId: linkedSaleOrderId,
-        version: isUpdate && existingSalesQuoteId ? ((quotes.find(q => q.id === existingSalesQuoteId)?.version ?? 1) + 1) : 1,
+        version: existingSalesQuoteId ? ((quotes.find(q => q.id === existingSalesQuoteId)?.version ?? 1) + 1) : 1,
         quoteDate: existingSalesQuote?.quoteDate ?? now(),
         issueDate: now(),
         validUntil: quote.validUntil,

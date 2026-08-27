@@ -53,8 +53,13 @@ describe('productSchema', () => {
   it('accepts valid product', async () => {
     const result = await productSchema.parseAsync(valid)
     expect(result.name).toBe('iPhone 15 Pro')
-    expect(result.taxRate).toBe(16) // default
+    expect(result.taxRate).toBe(0) // VAT is opt-in
     expect(result.isActive).toBe(true) // default
+  })
+
+  it('keeps VAT when the user explicitly selects it', async () => {
+    const result = await productSchema.parseAsync({ ...valid, taxRate: 16 })
+    expect(result.taxRate).toBe(16)
   })
 
   it('rejects name shorter than 3 chars', async () => {

@@ -98,6 +98,7 @@ import {
 } from '@/lib/sales/quotation-defaults'
 import { calcSaleOrderLineMoney } from '@/lib/sales/line-calc'
 import { isRepairLinkedSaleOrder } from '@/lib/sales/commission-closer'
+import { dedupeRepairSaleOrders } from '@/lib/repair/sale-order-link'
 import { SalespersonCloserField } from '@/components/sales/SalespersonCloserField'
 import { allocateDeliveredQtyToOrderLines, pairOrderLinesWithDeliveryLines } from '@/lib/delivery-prepare'
 import Chatter from '@/components/erp/Chatter'
@@ -344,7 +345,7 @@ function SalesContent() {
   const router = useRouter()
   const pathname = usePathname()
   const {
-    saleOrders, contacts, products, serials, invoices, deliveries, returnOrders, stockReservations,
+    saleOrders, repairs, contacts, products, serials, invoices, deliveries, returnOrders, stockReservations,
     approvalRequests,
     createSaleOrder, updateSaleOrder, confirmSO, ensureWaitingDeliveryForSO, markQuotationSent, setSaleOrderLock,
     addSOLine, removeSOLine, moveSOLine, addSOSection,
@@ -514,8 +515,16 @@ function SalesContent() {
   const [uploadingAttachment, setUploadingAttachment] = useState(false)
 
   // ── Derived data ────────────────────────────────────────────────────────
-  const salesOrderViews = useMemo(() => (saleOrders as any[]).map(normalizeSalesOrderView), [saleOrders])
-  const activeOrder = salesOrderViews.find(s => s.id === activeId) ?? null
+  const allSalesOrderViews = useMemo(
+    () => (saleOrders as any[]).map(normalizeSalesOrderView),
+    [saleOrders],
+  )
+  const salesOrderViews = useMemo(
+    () => dedupeRepairSaleOrders(allSalesOrderViews, repairs as any[]),
+    [allSalesOrderViews, repairs],
+  )
+  // Keep old deep links auditable even when the duplicate is hidden from lists.
+  const activeOrder = allSalesOrderViews.find(s => s.id === activeId) ?? null
 
   // Open the compose dialog (Odoo's Send by Email opens an email composer).
   const openSendQuoteModal = (order: SalesOrderView) => {

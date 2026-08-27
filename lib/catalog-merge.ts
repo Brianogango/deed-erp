@@ -248,7 +248,7 @@ export function mergeCatalogProducts<P extends ClientCatalogProduct>(
       pricingCategoryId,
       productKind: productKind || (local as any)?.productKind,
       unit: unitFromSpecs || local?.unit || 'pcs',
-      taxRate: Number.isFinite(taxFromSpecs) ? taxFromSpecs : (local?.taxRate ?? 16),
+      taxRate: Number.isFinite(taxFromSpecs) ? taxFromSpecs : (local?.taxRate ?? 0),
       deviceConfig: deviceConfigFromProductSpecs(specs)
         || catalogDeviceConfig(String(row.name ?? local?.name ?? ''), category)
         || (local as any)?.deviceConfig
