@@ -136,7 +136,7 @@ export async function publishProduct(validated: ValidatedProductInput): Promise<
       {
         productKind: validated.productKind || null,
         unit: validated.unit || null,
-        taxRatePct: validated.taxRate ?? 16,
+        taxRatePct: validated.taxRate ?? 0,
         pricingCategoryId,
       },
       validated.name,
@@ -231,7 +231,7 @@ export function toClientProduct(product: any, categoryName?: string) {
     pricingCategoryId: typeof specs.pricingCategoryId === 'string' ? specs.pricingCategoryId : null,
     productKind: typeof specs.productKind === 'string' ? specs.productKind : undefined,
     unit: typeof specs.unit === 'string' ? specs.unit : product.unit,
-    taxRate: Number(specs.taxRatePct ?? product.taxRate ?? 16),
+    taxRate: Number(specs.taxRatePct ?? product.taxRate ?? 0),
     deviceConfig: deviceConfigFromProductSpecs(specs),
     category: product.category?.name
       ? product.category
