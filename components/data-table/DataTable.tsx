@@ -17,6 +17,7 @@ import type {
 import DataTableToolbar from './DataTableToolbar'
 import MobileCardView from './MobileCardView'
 import AdvancedFilters, { applyFilterRules, type FilterRule } from './AdvancedFilters'
+import { matchesSearchTerms } from '@/lib/search'
 
 // Breakpoint → max column priority for the *default* visible set.
 // Matches lib/data-table/types.ts: 1 always · 2 tablet+ · 3 laptop/desktop.
@@ -214,12 +215,14 @@ export default function DataTable<T>({
   const filteredRows = useMemo(() => {
     let result = rows
     if (clientSearch && search.trim()) {
-      const needle = search.trim().toLowerCase()
+      // Search is a record operation, not a presentation operation. Search all
+      // configured columns at every breakpoint so mobile/card layouts return
+      // the same results as desktop even when a matching field is hidden.
       result = result.filter(row =>
-        eligibleColumns.some(col => {
-          const raw = getColumnValue(col, row, 'search')
-          return String(raw ?? '').toLowerCase().includes(needle)
-        })
+        matchesSearchTerms(search, [
+          ...columns.map(col => getColumnValue(col, row, 'search')),
+          rowLabel?.(row),
+        ])
       )
     }
     if (filterRules.length > 0) {
@@ -238,7 +241,7 @@ export default function DataTable<T>({
       }
     }
     return result
-  }, [rows, search, filterRules, eligibleColumns, columns, clientSearch, sort])
+  }, [rows, search, filterRules, columns, clientSearch, sort, rowLabel])
 
   const totalPages = Math.max(1, Math.ceil(filteredRows.length / perPage))
   useEffect(() => {
