@@ -1,6 +1,14 @@
 import { randomUUID } from 'crypto'
-import { loadAppState, saveStoreKeys } from '@/lib/server-store'
+import prisma from '@/lib/prisma'
 
+/**
+ * Compatibility facade for document-send history.
+ *
+ * The old implementation stored a bounded array in app_state under
+ * deed_documentEmailSends. History is now durable and relational:
+ * notification_events = document-send audit record
+ * notification_deliveries = per-channel provider attempt/result
+ */
 export const DOCUMENT_EMAIL_SENDS_KEY = 'deed_documentEmailSends'
 
 export type DocumentEmailDocumentType = 'quote' | 'invoice' | 'bill' | 'rfq' | 'payment_receipt'
@@ -43,25 +51,67 @@ export function parseEmailList(raw?: string | string[] | null): string[] {
   return out
 }
 
+function meta(value: unknown): Record<string, any> {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, any>
+    : {}
+}
+
+function isSuccessfulDelivery(status: string) {
+  return ['sent', 'delivered', 'read'].includes(status)
+}
+
 export async function listDocumentEmailSends(filters?: {
   documentId?: string
   documentType?: DocumentEmailDocumentType
   limit?: number
 }): Promise<DocumentEmailSend[]> {
-  const state = await loadAppState([DOCUMENT_EMAIL_SENDS_KEY])
-  const all = Array.isArray(state[DOCUMENT_EMAIL_SENDS_KEY])
-    ? (state[DOCUMENT_EMAIL_SENDS_KEY] as DocumentEmailSend[])
-    : []
-  let rows = all
-  if (filters?.documentId) {
-    rows = rows.filter(r => r.documentId === filters.documentId)
-  }
-  if (filters?.documentType) {
-    rows = rows.filter(r => r.documentType === filters.documentType)
-  }
-  rows = [...rows].sort((a, b) => String(b.sentAt).localeCompare(String(a.sentAt)))
-  const limit = filters?.limit ?? 200
-  return rows.slice(0, limit)
+  const limit = Math.max(1, Math.min(filters?.limit ?? 200, 500))
+  const rows = await prisma.notificationDelivery.findMany({
+    where: {
+      event: {
+        eventType: 'document.send',
+        ...(filters?.documentId ? { entityId: filters.documentId } : {}),
+        ...(filters?.documentType ? { entityType: filters.documentType } : {}),
+      },
+    },
+    include: {
+      event: {
+        select: {
+          entityType: true,
+          entityId: true,
+          actorUserId: true,
+          title: true,
+          metadata: true,
+          createdAt: true,
+        },
+      },
+    },
+    orderBy: { createdAt: 'desc' },
+    take: limit,
+  })
+
+  return rows.map(row => {
+    const eventMeta = meta(row.event.metadata)
+    const deliveryMeta = meta(row.metadata)
+    return {
+      id: row.id,
+      documentType: String(row.event.entityType || eventMeta.documentType || 'invoice') as DocumentEmailDocumentType,
+      documentId: String(row.event.entityId || eventMeta.documentId || ''),
+      documentRef: String(eventMeta.documentRef || ''),
+      to: String(row.destination || ''),
+      cc: Array.isArray(deliveryMeta.cc) ? deliveryMeta.cc.map(String) : [],
+      subject: String(eventMeta.subject || row.event.title || '') || undefined,
+      status: isSuccessfulDelivery(row.status) ? 'success' : 'failed',
+      error: row.lastError || undefined,
+      messageId: row.providerMessageId || undefined,
+      channel: row.channel === 'whatsapp' ? 'whatsapp' : 'email',
+      kind: deliveryMeta.kind === 'update' ? 'update' : deliveryMeta.kind === 'initial' ? 'initial' : undefined,
+      sentById: row.event.actorUserId || undefined,
+      sentByName: eventMeta.sentByName ? String(eventMeta.sentByName) : undefined,
+      sentAt: (row.sentAt || row.createdAt || row.event.createdAt).toISOString(),
+    }
+  })
 }
 
 export async function appendDocumentEmailSend(
@@ -70,9 +120,70 @@ export async function appendDocumentEmailSend(
     sentAt?: string
   },
 ): Promise<DocumentEmailSend> {
-  const entry: DocumentEmailSend = {
-    id: randomUUID(),
-    sentAt: input.sentAt || new Date().toISOString(),
+  const sentAt = input.sentAt ? new Date(input.sentAt) : new Date()
+  const normalizedSentAt = Number.isNaN(sentAt.getTime()) ? new Date() : sentAt
+  const eventId = randomUUID()
+  const deliveryId = randomUUID()
+  const channel = input.channel ?? 'email'
+  const successful = input.status === 'success'
+  const idempotencyKey = `document-send:${input.documentType}:${input.documentId}:${deliveryId}`
+
+  await prisma.$transaction(async tx => {
+    await tx.notificationEvent.create({
+      data: {
+        id: eventId,
+        eventType: 'document.send',
+        entityType: input.documentType,
+        entityId: input.documentId,
+        actorUserId: input.sentById || null,
+        severity: successful ? 'success' : 'warning',
+        priority: successful ? 'normal' : 'high',
+        title: input.subject || `${input.documentRef} document send`,
+        body: successful
+          ? `${input.documentRef} sent via ${channel}.`
+          : `${input.documentRef} failed to send via ${channel}.`,
+        metadata: {
+          documentType: input.documentType,
+          documentId: input.documentId,
+          documentRef: input.documentRef,
+          subject: input.subject || null,
+          sentByName: input.sentByName || null,
+        },
+        routing: {},
+        idempotencyKey,
+        createdAt: normalizedSentAt,
+        updatedAt: normalizedSentAt,
+      },
+    })
+    await tx.notificationDelivery.create({
+      data: {
+        id: deliveryId,
+        eventId,
+        channel,
+        destination: input.to,
+        provider: channel,
+        providerMessageId: input.messageId || null,
+        status: successful ? 'sent' : 'failed',
+        attemptCount: 1,
+        lastAttemptAt: normalizedSentAt,
+        sentAt: successful ? normalizedSentAt : null,
+        failedAt: successful ? null : normalizedSentAt,
+        lastError: input.error || null,
+        idempotencyKey: `${idempotencyKey}:${channel}`,
+        metadata: {
+          cc: input.cc ?? [],
+          kind: input.kind || null,
+          source: 'document-send-compat',
+        },
+        createdAt: normalizedSentAt,
+        updatedAt: normalizedSentAt,
+      },
+    })
+  })
+
+  return {
+    id: deliveryId,
+    sentAt: normalizedSentAt.toISOString(),
     cc: input.cc ?? [],
     documentType: input.documentType,
     documentId: input.documentId,
@@ -82,18 +193,9 @@ export async function appendDocumentEmailSend(
     status: input.status,
     error: input.error,
     messageId: input.messageId,
-    channel: input.channel ?? 'email',
+    channel,
     kind: input.kind,
     sentById: input.sentById,
     sentByName: input.sentByName,
   }
-
-  const state = await loadAppState([DOCUMENT_EMAIL_SENDS_KEY])
-  const prev = Array.isArray(state[DOCUMENT_EMAIL_SENDS_KEY])
-    ? (state[DOCUMENT_EMAIL_SENDS_KEY] as DocumentEmailSend[])
-    : []
-  // Keep the newest 2,000 sends to bound growth.
-  const next = [entry, ...prev].slice(0, 2000)
-  await saveStoreKeys({ [DOCUMENT_EMAIL_SENDS_KEY]: JSON.stringify(next) })
-  return entry
 }
