@@ -1161,6 +1161,8 @@ export interface InvoiceLine {
   productId?: string    // original product (for account lookup)
   serialNumberId?: string
   accountCode?: string  // revenue account code (e.g. '5001')
+  /** Statutory VAT category. PO bills set this from taxRate (16 → standard_16). */
+  taxCategory?: string
 }
 
 export interface InvoicePayment {
@@ -12999,7 +13001,11 @@ const storeCtx: AppState = {
         postedByName: actor?.name,
         postedAt: now(),
       }
-      const postedInvoice = { ...inv, ...postedMeta }
+      const linesWithTax = (inv.lines || []).map(l => ({
+        ...l,
+        taxCategory: l.taxCategory || (Number(l.taxRate) > 0 ? 'standard_16' : 'out_of_scope'),
+      }))
+      const postedInvoice = { ...inv, ...postedMeta, lines: linesWithTax }
       setInvoices(p => p.map(i => i.id === id ? postedInvoice : i))
       try {
         const res = await fetch(`/api/invoices/${id}`, {
@@ -13785,6 +13791,7 @@ const storeCtx: AppState = {
           id: uid(), description: `${l.productName} ×${l.billQty}`, qty: l.billQty,
           unitPrice: l.unitPrice, taxRate: l.taxRate, subtotal: l.billQty * l.unitPrice,
           productId: l.productId,
+          taxCategory: Number(l.taxRate) > 0 ? 'standard_16' : 'out_of_scope',
         })),
         subtotal: sub, taxTotal: tax, total: sub + tax, amountPaid: 0,
         purchaseOrderId: po.id, notes: '',

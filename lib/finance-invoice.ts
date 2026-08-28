@@ -476,6 +476,18 @@ export function resolveInvoiceLineTaxCategory(raw: unknown, taxRate: number): st
   return category
 }
 
+/**
+ * Fill a missing statutory category from the numeric VAT rate.
+ * Purchase bills and older drafts only carry taxRate (16 for Kenya VAT);
+ * posting must not 409 those lines, and must not zero the VAT by treating
+ * them as not_selected.
+ */
+export function inferInvoiceLineTaxCategory(raw: unknown, taxRate: number): string {
+  const resolved = resolveInvoiceLineTaxCategory(raw, taxRate)
+  if (resolved !== 'not_selected') return resolved
+  return Number(taxRate) > 0 ? 'standard_16' : 'out_of_scope'
+}
+
 /** True when a posting line still needs an explicit statutory tax category. */
 export function invoiceLineMissingTaxCategory(item: {
   qty?: unknown

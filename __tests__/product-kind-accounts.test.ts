@@ -77,5 +77,8 @@ describe('product account resolution', () => {
       { account: '5003 - Service Revenue', amount: 500 },
     ]))
     expect(COMPANY_ACCOUNT_FALLBACKS.saleAccountCode).toBe('5000')
+    expect(COMPANY_ACCOUNT_FALLBACKS.adjustmentAccountCode).toBe('6200')
+    expect(COMPANY_ACCOUNT_FALLBACKS.writeOffAccountCode).toBe('6205')
+    expect(COMPANY_ACCOUNT_FALLBACKS.priceDifferenceAccountCode).toBe('6210')
   })
 })

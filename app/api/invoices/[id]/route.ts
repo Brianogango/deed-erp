@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { getRequiredSession, requireRole, withApiErrorHandling } from '@/lib/auth/api'
 import { optionalUuid, resolveClientId } from '@/lib/legacy-compat'
-import { computeInvoiceTotals, computeInvoiceLineMoney, resolveInvoiceLineTaxCategory, invoiceLineMissingTaxCategory, postedInvoicePutDecision, stripPostedInvoiceEconomicFields, POSTED_INVOICE_ECONOMIC_PUT_KEYS, PRISMA_POSTED_INVOICE_STATUSES } from '@/lib/finance-invoice'
+import { computeInvoiceTotals, computeInvoiceLineMoney, inferInvoiceLineTaxCategory, invoiceLineMissingTaxCategory, postedInvoicePutDecision, stripPostedInvoiceEconomicFields, POSTED_INVOICE_ECONOMIC_PUT_KEYS, PRISMA_POSTED_INVOICE_STATUSES } from '@/lib/finance-invoice'
 import { writeFinancialAudit, writeFinancialAuditInTx } from '@/lib/finance-audit'
 import { lockVersionMismatch, nextLockVersion, readExpectedVersion } from '@/lib/optimistic-lock'
 import { checkFiscalLock } from '@/lib/fiscal-lock.server'
@@ -100,9 +100,9 @@ function mapInvoiceItems(lines: any[]) {
         sortOrder: index,
       }
     }
-    const taxCategory = resolveInvoiceLineTaxCategory(l.taxCategory ?? l.taxCode, Number(l.taxRate) || 0)
-    // Numeric VAT defaults to zero. A positive rate still requires standard_16;
-    // a 0% line with no category is out of scope, not silently zero-rated.
+    const taxCategory = inferInvoiceLineTaxCategory(l.taxCategory ?? l.taxCode, Number(l.taxRate) || 0)
+    // A positive numeric rate with no picker value is Kenya standard-rated VAT
+    // (PO bills only carry taxRate). 0% + no category stays out of scope.
     const effectiveTaxRate = taxCategory === 'standard_16'
       ? Number(l.taxRate ?? 16)
       : 0
@@ -275,10 +275,13 @@ export async function PUT(request: Request, { params }: { params: { id: string }
     let postingBillLines: any[] = []
     let postingMirror: Awaited<ReturnType<typeof resolveBlobInvoiceMirror>> | null = null
     if (willPostNow) {
-      // Check the source lines, not mapInvoiceItems(): mapping zeroes taxRate on
-      // not_selected rows, which would hide a positive VAT line that still needs
-      // a statutory category. 0% + no category resolves to out_of_scope.
-      const taxCheckItems = lines !== undefined ? lines : before.items
+      // Infer statutory category from taxRate so PO bills and older drafts
+      // (taxRate 16, category not_selected) can post. Mapping used to zero
+      // VAT on those rows; inferInvoiceLineTaxCategory keeps 16% as standard_16.
+      const taxCheckItems = (lines !== undefined ? lines : before.items).map((item: any) => ({
+        ...item,
+        taxCategory: inferInvoiceLineTaxCategory(item.taxCategory ?? item.taxCode, Number(item.taxRate) || 0),
+      }))
       const unresolvedTax = taxCheckItems.some((item: any) => invoiceLineMissingTaxCategory(item))
       if (unresolvedTax) {
         return NextResponse.json({

@@ -3,7 +3,7 @@ import prisma from '@/lib/prisma'
 import { getRequiredSession, requireRole, withApiErrorHandling } from '@/lib/auth/api'
 import { optionalUuid, resolveClientId } from '@/lib/legacy-compat'
 import { isUUID } from '@/lib/utils'
-import { computeInvoiceTotals, clampAmountPaid, computeInvoiceLineMoney } from '@/lib/finance-invoice'
+import { computeInvoiceTotals, clampAmountPaid, computeInvoiceLineMoney, inferInvoiceLineTaxCategory } from '@/lib/finance-invoice'
 import { assertBillableQty } from '@/lib/purchase/three-way-match'
 import { writeFinancialAudit } from '@/lib/finance-audit'
 import { getNextDocNumber } from '@/lib/doc-ref-counter'
@@ -115,6 +115,7 @@ function mapInvoiceItems(lines: any[], isCreditNote = false) {
         sortOrder: index,
       }
     }
+    const taxCategory = inferInvoiceLineTaxCategory(l.taxCategory ?? l.taxCode, Number(l.taxRate) || 0)
     const money = computeInvoiceLineMoney(isCreditNote ? absLine(l) : {
       qty: l.qty,
       unitPrice: l.unitPrice,
@@ -129,6 +130,10 @@ function mapInvoiceItems(lines: any[], isCreditNote = false) {
       unitPrice: money.unitPrice * sign,
       discountPct: money.discountPct,
       taxRate: money.taxRate,
+      taxCategory,
+      taxCode: taxCategory === 'standard_16' ? 'VAT16' : taxCategory,
+      taxableBase: money.lineSubtotal,
+      taxClaimEligible: taxCategory === 'standard_16' || taxCategory === 'zero_rated',
       lineSubtotal: money.lineSubtotal * sign,
       lineTax: money.lineTax * sign,
       lineTotal: money.lineTotal * sign,

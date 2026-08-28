@@ -16,11 +16,14 @@ describe('finance liability CoA split', () => {
     expect(CUSTOMER_DEPOSITS_ACCOUNT).not.toEqual(CUSTOMER_CREDITS_ACCOUNT)
   })
 
-  it('includes 3100, 3102, 3105, and 6108 in the zero-balance CoA template', () => {
+  it('includes 3100, 3102, 3105, 6108, and inventory posting accounts in the zero-balance CoA template', () => {
     const codes = new Set(buildZeroBalanceCoaTemplate().map(a => a.code))
     expect(codes.has('3100')).toBe(true)
     expect(codes.has('3102')).toBe(true)
     expect(codes.has('3105')).toBe(true)
     expect(codes.has('6108')).toBe(true)
+    expect(codes.has('6200')).toBe(true)
+    expect(codes.has('6205')).toBe(true)
+    expect(codes.has('6210')).toBe(true)
   })
 })

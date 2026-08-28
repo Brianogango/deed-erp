@@ -11,6 +11,7 @@ import {
   financeInvoiceListPath,
   shouldApplyInvoiceEditQuery,
   resolveInvoiceLineTaxCategory,
+  inferInvoiceLineTaxCategory,
   invoiceLineMissingTaxCategory,
   postedInvoicePutDecision,
   nextInvoiceJournalRef,
@@ -336,6 +337,22 @@ describe('resolveInvoiceLineTaxCategory', () => {
     expect(resolveInvoiceLineTaxCategory('vat', 16)).toBe('standard_16')
     expect(resolveInvoiceLineTaxCategory('zero', 0)).toBe('zero_rated')
     expect(resolveInvoiceLineTaxCategory('exempt', 0)).toBe('exempt')
+  })
+})
+
+describe('inferInvoiceLineTaxCategory', () => {
+  it('treats a positive VAT rate with no picker value as Kenya standard-rated', () => {
+    expect(inferInvoiceLineTaxCategory(undefined, 16)).toBe('standard_16')
+    expect(inferInvoiceLineTaxCategory('not_selected', 16)).toBe('standard_16')
+  })
+
+  it('keeps an explicit category', () => {
+    expect(inferInvoiceLineTaxCategory('exempt', 0)).toBe('exempt')
+    expect(inferInvoiceLineTaxCategory('zero_rated', 0)).toBe('zero_rated')
+  })
+
+  it('keeps 0% + no category as out of scope', () => {
+    expect(inferInvoiceLineTaxCategory(undefined, 0)).toBe('out_of_scope')
   })
 })
 

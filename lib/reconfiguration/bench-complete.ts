@@ -21,6 +21,7 @@ import {
   reconfigValuationEventKey,
 } from '@/lib/reconfiguration/costing'
 import { specsFromProposed } from '@/lib/reconfiguration/diff-engine'
+import { snapshotTextFields } from '@/lib/reconfiguration/snapshot-write'
 import {
   applyBenchJob,
   modulesFromInstalled,
@@ -358,13 +359,15 @@ export async function applyBenchAndComplete(params: ApplyBenchParams) {
   const currentSnap = await prisma.deviceConfigurationSnapshot.create({
     data: {
       serialId: device.serialId,
-      processor: device.current.processor,
-      processorGeneration: device.current.processorGeneration,
+      ...snapshotTextFields({
+        processor: device.current.processor,
+        processorGeneration: device.current.processorGeneration,
+        storageType: device.current.storageType,
+        displayName: job.before.displayName,
+      }),
       totalRamGb: device.current.totalRamGb,
       ramComposition: (device.current.ramComposition || []) as any,
       primaryStorageGb: device.current.primaryStorageGb,
-      storageType: device.current.storageType,
-      displayName: job.before.displayName,
       source: 'reconfiguration',
       sourceWorkOrderId: wo.id,
       isCurrent: true,
@@ -374,13 +377,15 @@ export async function applyBenchAndComplete(params: ApplyBenchParams) {
   const proposedSnap = await prisma.deviceConfigurationSnapshot.create({
     data: {
       serialId: device.serialId,
-      processor: proposedConfig.processor,
-      processorGeneration: proposedConfig.processorGeneration,
+      ...snapshotTextFields({
+        processor: proposedConfig.processor,
+        processorGeneration: proposedConfig.processorGeneration,
+        storageType: proposedConfig.storageType,
+        displayName: proposedConfig.displayName,
+      }),
       totalRamGb: proposedConfig.totalRamGb,
       ramComposition: proposedConfig.ramComposition as any,
       primaryStorageGb: proposedConfig.primaryStorageGb,
-      storageType: proposedConfig.storageType,
-      displayName: proposedConfig.displayName,
       source: 'reconfiguration',
       sourceWorkOrderId: wo.id,
       isCurrent: false,

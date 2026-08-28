@@ -2932,7 +2932,7 @@ model DeviceSerialCost {
 model DeviceConfigurationSnapshot {
   id                   String          @id @default(uuid()) @db.Uuid
   serialId             String          @map("serial_id") @db.Uuid
-  processor            String?         @db.VarChar(120)
+  processor            String?         @db.VarChar(500)
   processorGeneration  String?         @map("processor_generation") @db.VarChar(80)
   totalRamGb           Int             @default(0) @map("total_ram_gb")
   ramComposition       Json            @default("[]") @map("ram_composition")
@@ -2942,14 +2942,14 @@ model DeviceConfigurationSnapshot {
   screenSize           String?         @map("screen_size") @db.VarChar(40)
   screenResolution     String?         @map("screen_resolution") @db.VarChar(40)
   touchscreen          Boolean?
-  graphics             String?         @db.VarChar(120)
+  graphics             String?         @db.VarChar(500)
   operatingSystem      String?         @map("operating_system") @db.VarChar(120)
   keyboardLayout       String?         @map("keyboard_layout") @db.VarChar(40)
   colour               String?         @db.VarChar(40)
   includedAccessories  Json            @default("[]") @map("included_accessories")
   batteryCondition     String?         @map("battery_condition") @db.VarChar(40)
   grade                ConditionGrade?
-  displayName          String          @map("display_name") @db.VarChar(300)
+  displayName          String          @map("display_name") @db.VarChar(1000)
   source               String          @default("manual") @db.VarChar(40)
   sourceWorkOrderId    String?         @map("source_work_order_id") @db.Uuid
   isCurrent            Boolean         @default(false) @map("is_current")

@@ -81,6 +81,9 @@ export function buildZeroBalanceCoaTemplate(): CoaTemplateAccount[] {
     { code: '6101', name: 'Laptops', type: 'expense', group: 'Local Purchases', subGroup: 'Local Purchases', balance: 0 },
     // Debit when a buy-back is added as 3102 credit instead of paid in cash.
     { code: '6108', name: 'Trade-in Purchases', type: 'expense', group: 'Local Purchases', subGroup: 'Trade-in', balance: 0, notes: 'Buy-back amount when settled as store credit instead of cash' },
+    { code: '6200', name: 'Inventory Adjustment', type: 'expense', group: 'Direct Expenses', subGroup: 'Inventory', balance: 0, notes: 'Stock count / reconfiguration inventory adjustment' },
+    { code: '6205', name: 'Inventory Write-off', type: 'expense', group: 'Direct Expenses', subGroup: 'Inventory', balance: 0, notes: 'Damaged / obsolete stock write-off' },
+    { code: '6210', name: 'Purchase Price Difference', type: 'expense', group: 'Direct Expenses', subGroup: 'Inventory', balance: 0, notes: 'GRN vs vendor-bill purchase price variance' },
     { code: '6201', name: 'Salaries and Wages', type: 'expense', group: 'Salaries Expense', subGroup: 'Payroll', balance: 0 },
     { code: '6202', name: 'Employer NSSF Expense', type: 'expense', group: 'Salaries Expense', subGroup: 'Statutory Employer Cost', balance: 0 },
     { code: '6203', name: 'Employer Housing Levy Expense', type: 'expense', group: 'Salaries Expense', subGroup: 'Statutory Employer Cost', balance: 0 },
