@@ -208,7 +208,7 @@ function formatDate(value: string) {
 }
 
 function AnimatedAmount({ value, compact = true }: { value: number; compact?: boolean }) {
-  const [shown, setShown] = useState(value)
+  const [shown, setShown] = useState(0)
 
   useEffect(() => {
     if (typeof window === 'undefined' || window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
