@@ -7,6 +7,7 @@ import { checkRateLimit } from '@/lib/rate-limit'
 import { phoneMatches, isPortalPhoneVerificationRequired } from '@/lib/portal-verify'
 import prisma from '@/lib/prisma'
 import { getNextDocNumber } from '@/lib/doc-ref-counter'
+import { findExistingContact } from '@/lib/contact-prisma'
 
 type ItemDecision = { lineId: string; decision: 'approved' | 'declined' | 'deferred' }
 
@@ -112,9 +113,14 @@ export async function POST(
       const customerPhone = (targetRepair.customerPhone ?? '').replace(/\s+/g, '')
       const customerName = targetRepair.customerName ?? 'Unknown Customer'
       const customerEmail = targetRepair.customerEmail ?? null
-      let prismaClient = customerPhone ? await prisma.client.findFirst({
-        where: { OR: [{ phone: customerPhone }, { phone: customerPhone.replace(/^0/, '+254') }, { phone: customerPhone.replace(/^\+254/, '0') }] }
-      }) : null
+      // Match an existing client by phone, email, or exact name before
+      // creating — repeat repair customers must not duplicate the directory.
+      let prismaClient = await findExistingContact(prisma, {
+        name: customerName,
+        phone: customerPhone || undefined,
+        email: customerEmail ?? undefined,
+        type: 'individual',
+      })
       if (!prismaClient) {
         prismaClient = await prisma.client.create({ data: { clientNumber: await getNextDocNumber('client'), name: customerName, phone: customerPhone || null, email: customerEmail, clientType: 'individual' } })
       }
