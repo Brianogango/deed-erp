@@ -1,4 +1,5 @@
 'use client'
+import { matchesSearchTerms } from '@/lib/search'
 import { useMemo, useState } from 'react'
 import { useRepair } from './repair/RepairContext'
 import { RefurbStatus, fmtDate, fmtKes } from '@/lib/store'
@@ -33,16 +34,17 @@ export default function RepairRefurbJobs({ onSelect }: { onSelect: (id: string) 
   const isRepairTech = currentUser?.role === 'technician'
 
   const jobs = useMemo(() => {
-    const query = search.trim().toLowerCase()
     return refurbishmentJobs
       .filter(j => (isLeadTech || isAdmin) ? true : j.assignedTechnicianId === currentUserId)
       .filter(j => !['transferred', 'written_off'].includes(j.status))
-      .filter(j => {
-        if (!query) return true
-        return [j.ref, j.productName, j.serialNumber, j.assignedTechnicianName]
-          .filter(Boolean)
-          .some(value => String(value).toLowerCase().includes(query))
-      })
+      .filter(j => matchesSearchTerms(search, [
+        j.ref,
+        j.productName,
+        j.serialNumber,
+        j.assignedTechnicianName,
+        (j as any).sourceRef,
+        (j as any).condition,
+      ]))
   }, [refurbishmentJobs, isLeadTech, isAdmin, currentUserId, search])
 
   const byStatus = useMemo(() => ACTIVE_COLUMNS.reduce<Record<string, typeof jobs>>((acc, status) => {
