@@ -23,6 +23,12 @@ export type AssertVendorBillMatchInput = {
   billLines: VendorBillMatchLine[]
   priceTolerance?: number
   taxTolerance?: number
+  /**
+   * The bill being posted. Its lines already reserved qtyBilled at creation —
+   * without excluding them, posting rejects the bill for consuming its own
+   * reservation ("exceeds received/unbilled" on a perfectly matched bill).
+   */
+  excludeBillId?: string | null
 }
 
 const n = (v: unknown) => Number(v) || 0
@@ -51,6 +57,19 @@ export async function assertVendorBillThreeWayMatchInTx(
   const productMultiplicity = new Map<string, number>()
   for (const line of po.items) {
     productMultiplicity.set(line.productId, (productMultiplicity.get(line.productId) || 0) + 1)
+  }
+
+  // Quantities this bill already reserved on each PO line at creation.
+  const ownQtyByPoItem = new Map<string, number>()
+  if (input.excludeBillId) {
+    const own = await tx.invoice.findUnique({ where: { id: input.excludeBillId }, include: { items: true } })
+    for (const item of own?.items ?? []) {
+      const poItem = (item.purchaseOrderItemId && byId.get(item.purchaseOrderItemId))
+        || po.items.find(l => l.productId === item.productId)
+      if (poItem) {
+        ownQtyByPoItem.set(poItem.id, (ownQtyByPoItem.get(poItem.id) || 0) + Math.max(0, Math.floor(n(item.qty))))
+      }
+    }
   }
 
   const requested = new Map<string, { qty: number; line: VendorBillMatchLine }>()
@@ -91,21 +110,27 @@ export async function assertVendorBillThreeWayMatchInTx(
   const reservations: Array<{ poItemId: string; qty: number }> = []
   for (const [poItemId, req] of requested) {
     const poItem = byId.get(poItemId)!
-    const remaining = n(poItem.qtyReceived) - n(poItem.qtyBilled)
+    // This bill's own reservation is already inside qtyBilled — only the
+    // increment beyond it needs received-unbilled cover and a fresh claim.
+    const ownQty = ownQtyByPoItem.get(poItemId) || 0
+    const additional = Math.max(0, req.qty - ownQty)
+    const remaining = n(poItem.qtyReceived) - n(poItem.qtyBilled) + ownQty
     if (req.qty > remaining + 1e-9) {
       throw new Error(
         `3-way match failed for PO ${po.poNumber}: bill requests ${req.qty}, but only ${remaining} received and unbilled on line ${poItemId}`,
       )
     }
 
-    // Compare-and-swap prevents two concurrent bills from consuming the same
-    // received quantity even before SERIALIZABLE conflict detection.
-    const claimed = await tx.purchaseOrderItem.updateMany({
-      where: { id: poItemId, qtyBilled: poItem.qtyBilled },
-      data: { qtyBilled: { increment: Math.trunc(req.qty) } },
-    })
-    if (claimed.count !== 1) {
-      throw new Error(`PO ${po.poNumber} billing quantity changed concurrently; retry the bill posting.`)
+    if (additional > 0) {
+      // Compare-and-swap prevents two concurrent bills from consuming the same
+      // received quantity even before SERIALIZABLE conflict detection.
+      const claimed = await tx.purchaseOrderItem.updateMany({
+        where: { id: poItemId, qtyBilled: poItem.qtyBilled },
+        data: { qtyBilled: { increment: Math.trunc(additional) } },
+      })
+      if (claimed.count !== 1) {
+        throw new Error(`PO ${po.poNumber} billing quantity changed concurrently; retry the bill posting.`)
+      }
     }
     reservations.push({ poItemId, qty: req.qty })
   }
@@ -129,14 +154,28 @@ export async function assertVendorBillThreeWayMatchServer(
     if (input.vendorId && po.clientId && input.vendorId !== po.clientId) {
       throw new Error(`Vendor mismatch: bill vendor does not match PO ${po.poNumber}`)
     }
+    // Quantities this bill already reserved on each PO line at creation.
+    const ownQtyByProduct = new Map<string, number>()
+    if (input.excludeBillId) {
+      const own = await tx.invoice.findUnique({ where: { id: input.excludeBillId }, include: { items: true } })
+      for (const item of own?.items ?? []) {
+        if (!item.productId) continue
+        ownQtyByProduct.set(item.productId, (ownQtyByProduct.get(item.productId) || 0) + Math.max(0, Math.floor(n(item.qty))))
+      }
+    }
+    const requestedByProduct = new Map<string, number>()
     for (const bill of input.billLines) {
       const poItem = bill.purchaseOrderItemId
         ? po.items.find(x => x.id === bill.purchaseOrderItemId)
         : po.items.find(x => x.productId === bill.productId)
       if (!poItem) throw new Error('Vendor bill line is not linked to a purchase-order line')
-      const remaining = n(poItem.qtyReceived) - n(poItem.qtyBilled)
-      if (n(bill.qty) <= 0 || n(bill.qty) > remaining) {
-        throw new Error(`3-way match failed: quantity ${n(bill.qty)} exceeds received/unbilled ${remaining}`)
+      requestedByProduct.set(poItem.productId, (requestedByProduct.get(poItem.productId) || 0) + n(bill.qty))
+    }
+    for (const [productId, qty] of requestedByProduct) {
+      const poItem = po.items.find(x => x.productId === productId)!
+      const remaining = n(poItem.qtyReceived) - n(poItem.qtyBilled) + (ownQtyByProduct.get(productId) || 0)
+      if (qty <= 0 || qty > remaining) {
+        throw new Error(`3-way match failed: quantity ${qty} exceeds received/unbilled ${remaining}`)
       }
     }
     return { ok: true as const, poRef: po.poNumber }
