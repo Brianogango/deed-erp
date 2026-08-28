@@ -17,6 +17,7 @@ import type {
 import DataTableToolbar from './DataTableToolbar'
 import MobileCardView from './MobileCardView'
 import AdvancedFilters, { applyFilterRules, type FilterRule } from './AdvancedFilters'
+import { matchesSearchTerms } from '@/lib/search'
 
 // Breakpoint → max column priority for the *default* visible set.
 // Matches lib/data-table/types.ts: 1 always · 2 tablet+ · 3 laptop/desktop.
@@ -214,12 +215,13 @@ export default function DataTable<T>({
   const filteredRows = useMemo(() => {
     let result = rows
     if (clientSearch && search.trim()) {
-      const needle = search.trim().toLowerCase()
+      // Search must not change with the responsive layout. Include all data
+      // columns even when some are hidden on tablet/mobile.
       result = result.filter(row =>
-        eligibleColumns.some(col => {
-          const raw = getColumnValue(col, row, 'search')
-          return String(raw ?? '').toLowerCase().includes(needle)
-        })
+        matchesSearchTerms(search, [
+          ...columns.map(col => getColumnValue(col, row, 'search')),
+          rowLabel?.(row),
+        ])
       )
     }
     if (filterRules.length > 0) {
@@ -238,17 +240,17 @@ export default function DataTable<T>({
       }
     }
     return result
-  }, [rows, search, filterRules, eligibleColumns, columns, clientSearch, sort])
+  }, [rows, search, filterRules, columns, clientSearch, sort, rowLabel])
 
   const totalPages = Math.max(1, Math.ceil(filteredRows.length / perPage))
   useEffect(() => {
     if (page > totalPages) setPage(totalPages)
   }, [page, totalPages])
 
-  // Reset to page 1 when sort changes so the new first rows are visible.
+  // Search/filter/sort changes must never leave the user on a stale empty page.
   useEffect(() => {
     setPage(1)
-  }, [sort?.key, sort?.direction])
+  }, [search, sort?.key, sort?.direction])
 
   const pageRows = useMemo(() => {
     const start = (page - 1) * perPage
