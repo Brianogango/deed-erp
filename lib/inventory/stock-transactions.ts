@@ -2,7 +2,7 @@ import 'server-only'
 import { randomUUID } from 'crypto'
 import prisma from '@/lib/prisma'
 import { loadAppState, saveStoreKeys, withAppStateKeyLock } from '@/lib/server-store'
-import { adjustStockLevel } from '@/lib/inventory/stock-level'
+import { adjustStockLevel, createZeroStockLevel } from '@/lib/inventory/stock-level'
 import { calcStockByLocation, upsertBulkStock } from '@/lib/business-logic'
 import type { BulkStockLevel } from '@/lib/business-logic'
 import type { LocationId } from '@/lib/store'
@@ -24,6 +24,7 @@ function asLocationId(value: string | undefined): LocationId {
 type BlobProduct = {
   id: string
   name?: string
+  sku?: string
   stockQty?: number
   requiresSerial?: boolean
   trackingMethod?: string
@@ -32,6 +33,8 @@ type BlobProduct = {
   productKind?: string
   trackStock?: boolean
   warrantyMonths?: number
+  costPrice?: number
+  sellingPrice?: number
   specs?: unknown
   deviceConfig?: {
     totalRamGb: number
@@ -615,10 +618,19 @@ export async function reserveStockForSaleOrder(
   return { ok: true, reserved: reservedCount }
 }
 
+const PRODUCT_NAME_MAX = 500
+
+function skuFromStockHint(productId: string, hint?: { sku?: string; name?: string }) {
+  const sku = String(hint?.sku || '').trim()
+  if (sku) return sku.slice(0, 60)
+  const seed = String(hint?.name || 'PRODUCT').replace(/[^a-z0-9]+/gi, '-').replace(/^-+|-+$/g, '').toUpperCase().slice(0, 24) || 'PRODUCT'
+  return `${seed}-${productId.replace(/-/g, '').slice(0, 8)}`.slice(0, 60)
+}
+
 export async function resolvePrismaProductIdForStock(
   tx: Parameters<Parameters<typeof prisma.$transaction>[0]>[0],
   productId: string,
-  hint?: { sku?: string; name?: string },
+  hint?: { sku?: string; name?: string; requiresSerial?: boolean; trackingMethod?: string; costPrice?: number; sellingPrice?: number },
 ): Promise<string | null> {
   const byId = await tx.product.findUnique({ where: { id: productId }, select: { id: true } })
   if (byId) return byId.id
@@ -647,7 +659,32 @@ export async function resolvePrismaProductIdForStock(
     }
   }
 
-  return null
+  if (!isUuid(productId) || !name) return null
+
+  const tracking = String(hint?.trackingMethod || '').toUpperCase() === 'SERIAL' || hint?.requiresSerial
+    ? 'SERIAL' as const
+    : 'QUANTITY' as const
+  try {
+    const created = await tx.product.create({
+      data: {
+        id: productId,
+        sku: skuFromStockHint(productId, hint),
+        name: name.slice(0, PRODUCT_NAME_MAX),
+        description: name.slice(0, 2000),
+        trackingMethod: tracking,
+        trackStock: true,
+        costPrice: Number(hint?.costPrice || 0),
+        sellingPrice: Number(hint?.sellingPrice || 0),
+      },
+    })
+    await createZeroStockLevel(tx, created.id)
+    console.warn(`[stock] created missing Prisma product ${created.id} (${created.sku}) from catalogue`)
+    return created.id
+  } catch (err) {
+    console.error('[stock] failed to create missing Prisma product', productId, err)
+    const again = await tx.product.findUnique({ where: { id: productId }, select: { id: true } })
+    return again?.id ?? null
+  }
 }
 
 async function bumpPrismaOnHand(deltas: Map<string, number>) {
@@ -666,6 +703,9 @@ async function bumpPrismaOnHand(deltas: Map<string, number>) {
         const resolved = await resolvePrismaProductIdForStock(tx, productId, {
           sku: hint?.sku,
           name: hint?.name,
+          trackingMethod: hint?.trackingMethod,
+          costPrice: hint?.costPrice,
+          sellingPrice: hint?.sellingPrice,
         })
         if (!resolved) {
           throw new Error(
@@ -701,7 +741,7 @@ async function applyReceiptRelational(params: {
   supplierInvoiceNo?: string
   notes?: string
   userId?: string
-  lines: Array<{ productId: string; productName: string; qty: number }>
+  lines: Array<{ productId: string; productName: string; qty: number; sku?: string; requiresSerial?: boolean; trackingMethod?: string; costPrice?: number; sellingPrice?: number }>
 }): Promise<{ grnItemsByProductId: Map<string, string>; resolvedProductIds: Map<string, string> }> {
   const grnItemsByProductId = new Map<string, string>()
   const resolvedProductIds = new Map<string, string>()
@@ -730,7 +770,14 @@ async function applyReceiptRelational(params: {
         : null
 
     for (const line of validLines) {
-      const resolved = await resolvePrismaProductIdForStock(tx, line.productId, { name: line.productName })
+      const resolved = await resolvePrismaProductIdForStock(tx, line.productId, {
+        name: line.productName,
+        sku: line.sku,
+        requiresSerial: line.requiresSerial,
+        trackingMethod: line.trackingMethod,
+        costPrice: line.costPrice,
+        sellingPrice: line.sellingPrice,
+      })
       if (!resolved) {
         throw new Error(
           `Cannot update stock for "${line.productName || line.productId}" — this product is in the app catalogue but not linked in the database (ID mismatch). Re-save/publish the product from Inventory, then retry the GRN.`,
@@ -962,11 +1009,19 @@ export async function applyReceiptStockMutation(params: {
         supplierInvoiceNo: params.supplierInvoiceNo,
         notes: params.notes,
         userId: params.userId,
-        lines: params.lines.map(line => ({
-          productId: String(line.productId || ''),
-          productName: line.productName,
-          qty: Math.max(0, Math.floor(Number(line.qtyReceived) || 0)),
-        })),
+        lines: params.lines.map(line => {
+          const blob = products.find(p => p.id === String(line.productId || ''))
+          return {
+            productId: String(line.productId || ''),
+            productName: line.productName || blob?.name || 'Item',
+            qty: Math.max(0, Math.floor(Number(line.qtyReceived) || 0)),
+            sku: blob?.sku,
+            requiresSerial: line.requiresSerial || blob?.requiresSerial,
+            trackingMethod: blob?.trackingMethod,
+            costPrice: blob?.costPrice,
+            sellingPrice: blob?.sellingPrice,
+          }
+        }),
       })
       grnItemsByProductId = relational.grnItemsByProductId
       resolvedProductIds = relational.resolvedProductIds
