@@ -73,8 +73,13 @@ export function useUrlRecordId(options: Options = {}) {
       }
     }
     const qs = params.toString()
+    const href = qs ? `${pathname}?${qs}` : pathname
     startTransition(() => {
-      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false })
+      // Opening a detail record creates browser history so Back returns to
+      // the exact originating tab/list/filter URL. Explicit close/back removes
+      // the detail id without creating another history entry.
+      if (id) router.push(href, { scroll: false })
+      else router.replace(href, { scroll: false })
     })
   }, [searchParams, router, pathname, param, options.whenOpen, options.clearKeys])
 
