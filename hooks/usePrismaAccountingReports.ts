@@ -69,7 +69,7 @@ export type VatControlResponse = {
   outputVat: number
   inputVat: number
   vatPayable: number
-  source: 'gl' | 'invoices'
+  source: 'gl' | 'invoices' | 'tax_transactions'
   taxableSales?: number
   taxablePurchases?: number
   draft?: {
@@ -105,7 +105,7 @@ export function usePrismaAccountingReports(enabled: boolean, flags: PrismaReport
     setError(null)
     try {
       const fetches: Promise<Response>[] = [fetch('/api/accounting/journals?limit=300')]
-      if (flags.trialBalance !== false) fetches.push(fetch('/api/accounting/trial-balance'))
+      if (flags.trialBalance !== false) fetches.push(fetch(`/api/accounting/trial-balance?asOf=${new Date().toISOString().slice(0, 10)}`))
       if (flags.profitLoss) {
         const qs = new URLSearchParams()
         qs.set('view', flags.plView || 'management')

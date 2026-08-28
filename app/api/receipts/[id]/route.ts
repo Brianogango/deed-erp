@@ -14,22 +14,31 @@ async function mergeReceipt(params: { id: string; body: Record<string, unknown>;
 
   const previous = receipts[idx] as any
   const wasValidated = previous?.status === 'validated'
-  receipts[idx] = { ...previous, ...params.body, id: params.id } as Receipt
-  await saveStoreKeys({ deed_receipts: JSON.stringify(receipts) })
+  const next = { ...previous, ...params.body, id: params.id } as Receipt
+  const becomingValidated = !wasValidated && (next as any)?.status === 'validated'
 
   let valuation: unknown = null
-  const next = receipts[idx] as any
-  if (!wasValidated && next?.status === 'validated') {
+  if (becomingValidated) {
     try {
       valuation = await postReceiptValuationFromBlobs({
         receiptId: params.id,
         userId: params.userId,
+        receipt: next as any,
       })
     } catch (err) {
-      console.error('[receipts] valuation dual-write failed:', err)
+      return {
+        error: err instanceof Error ? err.message : 'Receipt valuation failed',
+        status: 422 as const,
+      }
+    }
+    if (!valuation || (typeof valuation === 'object' && valuation && 'ok' in valuation && !(valuation as { ok?: boolean }).ok)) {
+      const reason = (valuation as { reason?: string } | null)?.reason || 'valuation_failed'
+      return { error: `Receipt valuation failed: ${reason}`, status: 422 as const }
     }
   }
 
+  receipts[idx] = next
+  await saveStoreKeys({ deed_receipts: JSON.stringify(receipts) })
   return { item: receipts[idx], valuation }
 }
 
@@ -58,8 +67,15 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
   }
   const state = await loadAppState(['deed_receipts'])
   const receipts: any[] = Array.isArray(state.deed_receipts) ? state.deed_receipts as any[] : []
+  const existing = receipts.find(r => r.id === params.id)
+  if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  if (existing.status === 'validated') {
+    return NextResponse.json(
+      { error: 'Validated receipts cannot be deleted. Post a formal stock and accounting reversal instead.' },
+      { status: 409 },
+    )
+  }
   const filtered = receipts.filter(r => r.id !== params.id)
-  if (filtered.length === receipts.length) return NextResponse.json({ error: 'Not found' }, { status: 404 })
   await saveStoreKeys({ deed_receipts: JSON.stringify(filtered) })
   return NextResponse.json({ ok: true })
 }

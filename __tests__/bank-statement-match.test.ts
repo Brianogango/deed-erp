@@ -30,7 +30,7 @@ describe('statement ↔ cashbook match', () => {
       statementLines: [
         { id: 's1', date: '2026-05-10', debit: 0, credit: 1000 },
         { id: 's2', date: '2026-05-10', debit: 0, credit: 1000 },
-      ],
+      ] as Array<{ id: string; date: string; debit: number; credit: number; matchedEntryId?: string }>,
       cashbookEntries: [
         { id: 'e1', date: '2026-05-10', debit: 0, credit: 1000 },
       ],

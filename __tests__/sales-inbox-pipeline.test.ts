@@ -29,7 +29,7 @@ const config = resolveSalesInboxPipelineConfig({
   SALES_INBOX_AUTO_CREATE_ENABLED: 'true',
   SALES_INBOX_AUTO_CREATE_THRESHOLD: '0.9',
   SALES_INBOX_REVIEW_THRESHOLD: '0.75',
-})
+} as unknown as NodeJS.ProcessEnv)
 
 function mail(partial: Partial<ParsedInboundEmail>): ParsedInboundEmail {
   return {
@@ -298,7 +298,7 @@ describe('thread + contact resolution', () => {
 
 describe('mode gates', () => {
   it('shadow mode never mutates CRM decision to create', () => {
-    const shadow = resolveSalesInboxPipelineConfig({ SALES_INBOX_MODE: 'shadow' })
+    const shadow = resolveSalesInboxPipelineConfig({ SALES_INBOX_MODE: 'shadow' } as unknown as NodeJS.ProcessEnv)
     const m = mail({
       fromEmail: 'procurement@abc.co.ke',
       subject: 'RFQ',

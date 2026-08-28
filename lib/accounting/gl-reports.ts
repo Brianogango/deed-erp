@@ -233,6 +233,50 @@ export async function fetchPostedLines(opts: { dateFrom?: string; dateTo?: strin
   })
 }
 
+export function buildTrialBalanceFromAggregates(
+  map: Map<string, AggregatedAccount>,
+  asOf: string,
+) {
+  const rows = Array.from(map.values())
+    .map(r => {
+      const net = round2(r.debit - r.credit)
+      return {
+        id: r.id,
+        code: r.code,
+        name: r.name,
+        type: r.type,
+        group: r.group,
+        debit: net > 0 ? net : 0,
+        credit: net < 0 ? Math.abs(net) : 0,
+        grossDebit: round2(r.debit),
+        grossCredit: round2(r.credit),
+      }
+    })
+    .sort((a, b) => a.code.localeCompare(b.code))
+
+  const totals = rows.reduce(
+    (acc, r) => ({ debit: acc.debit + r.debit, credit: acc.credit + r.credit }),
+    { debit: 0, credit: 0 },
+  )
+
+  return {
+    currency: 'KES',
+    asOf,
+    rows,
+    totals: {
+      debit: round2(totals.debit),
+      credit: round2(totals.credit),
+    },
+    balanced: Math.abs(totals.debit - totals.credit) < 0.02,
+  }
+}
+
+export async function buildTrialBalance(opts: { asOf?: string }) {
+  const asOf = opts.asOf ?? new Date().toISOString().slice(0, 10)
+  const lines = await fetchPostedLines({ asOf })
+  return buildTrialBalanceFromAggregates(aggregateJournalLines(lines), asOf)
+}
+
 export async function buildProfitAndLoss(opts: { dateFrom?: string; dateTo?: string }) {
   const lines = await fetchPostedLines(opts)
   return buildProfitAndLossFromAggregates(aggregateJournalLines(lines), opts)

@@ -300,6 +300,223 @@ export async function applyDeliveryStockMutation(params: {
   return { ok: true }
 }
 
+/**
+ * Reverse a just-applied delivery stock mutation when valuation fails.
+ * Restores on-hand, serials, reservations, and Prisma stock levels.
+ */
+export async function reverseDeliveryStockMutation(params: {
+  deliveryId: string
+  deliveryRef: string
+  saleOrderId: string
+  lines: Array<{ productId: string; productName: string; qty: number; serialIds?: string[]; sourceLocation?: string }>
+}): Promise<void> {
+  const state = await loadAppState([
+    'deed_products',
+    'deed_serials',
+    'deed_bulkStock',
+    'deed_stockMoves',
+    'deed_stockReservations',
+  ])
+  const products: BlobProduct[] = Array.isArray(state.deed_products) ? [...(state.deed_products as BlobProduct[])] : []
+  const serials: BlobSerial[] = Array.isArray(state.deed_serials) ? [...(state.deed_serials as BlobSerial[])] : []
+  let bulkStock: BulkStockLevel[] =
+    Array.isArray(state.deed_bulkStock) ? [...(state.deed_bulkStock as BulkStockLevel[])] : []
+  const stockMoves: BlobStockMove[] = Array.isArray(state.deed_stockMoves) ? [...(state.deed_stockMoves as BlobStockMove[])] : []
+  const stockReservations: BlobReservation[] =
+    Array.isArray(state.deed_stockReservations) ? [...(state.deed_stockReservations as BlobReservation[])] : []
+  const stockLevelDeltas = new Map<string, number>()
+  const reservedRestoreByProduct = new Map<string, number>()
+
+  for (const line of params.lines) {
+    const qty = Math.max(0, Math.floor(Number(line.qty) || 0))
+    if (qty <= 0) continue
+    const productIdx = products.findIndex(p => p.id === line.productId)
+    if (productIdx === -1) continue
+    const product = products[productIdx]
+    if (isNonStockProduct(product)) continue
+    const location = asLocationId(line.sourceLocation)
+    const serialTracked = isSerialTracking(inferTrackingMethod(product))
+
+    if (serialTracked) {
+      for (const serialId of line.serialIds ?? []) {
+        const serialIdx = serials.findIndex(s => s.id === serialId)
+        if (serialIdx === -1) continue
+        serials[serialIdx] = {
+          ...serials[serialIdx],
+          status: 'available',
+          location,
+          soldDate: undefined,
+        }
+      }
+    } else {
+      bulkStock = upsertBulkStock(bulkStock, line.productId, location, qty)
+    }
+
+    products[productIdx] = {
+      ...product,
+      stockQty: (Number(product.stockQty) || 0) + qty,
+    }
+    if (isUuid(line.productId)) {
+      stockLevelDeltas.set(line.productId, (stockLevelDeltas.get(line.productId) ?? 0) + qty)
+    }
+
+    for (let rIdx = 0; rIdx < stockReservations.length; rIdx++) {
+      const reservation = stockReservations[rIdx]
+      if (
+        reservation.productId !== line.productId ||
+        (reservation.referenceId !== params.saleOrderId && reservation.deliveryId !== params.deliveryId)
+      ) continue
+      const prevFulfilled = Number(reservation.fulfilledQty ?? 0)
+      const restored = Math.min(prevFulfilled, qty)
+      const fulfilledQty = Math.max(0, prevFulfilled - restored)
+      stockReservations[rIdx] = {
+        ...reservation,
+        fulfilledQty,
+        status: 'reserved',
+        fulfilledDate: fulfilledQty > 0 ? reservation.fulfilledDate : undefined,
+      }
+      if (restored > 0 && isUuid(line.productId)) {
+        reservedRestoreByProduct.set(
+          line.productId,
+          (reservedRestoreByProduct.get(line.productId) ?? 0) + restored,
+        )
+      }
+    }
+  }
+
+  const remainingMoves = stockMoves.filter(m => m.documentRef !== params.deliveryRef)
+
+  try {
+    await prisma.$transaction(async tx => {
+      for (const [productId, delta] of stockLevelDeltas) {
+        const reservedDelta = reservedRestoreByProduct.get(productId) ?? 0
+        await adjustStockLevel(tx, productId, {
+          onHand: delta,
+          reserved: reservedDelta,
+        })
+      }
+    })
+  } catch (err) {
+    console.error('[reverseDeliveryStockMutation] prisma transaction failed:', err)
+    throw err
+  }
+
+  await saveStoreKeys({
+    deed_products: JSON.stringify(products),
+    deed_serials: JSON.stringify(serials),
+    deed_bulkStock: JSON.stringify(bulkStock),
+    deed_stockMoves: JSON.stringify(remainingMoves),
+    deed_stockReservations: JSON.stringify(stockReservations),
+  })
+}
+
+export async function reversePosStockMutation(params: {
+  orderRef: string
+  lines: Array<{
+    productId: string
+    productName: string
+    qty: number
+    serialId?: string
+    serialNumber?: string
+    sourceLocation?: string
+  }>
+}): Promise<void> {
+  const state = await loadAppState(['deed_products', 'deed_serials', 'deed_bulkStock', 'deed_stockMoves'])
+  const products: BlobProduct[] = Array.isArray(state.deed_products) ? [...(state.deed_products as BlobProduct[])] : []
+  const serials: BlobSerial[] = Array.isArray(state.deed_serials) ? [...(state.deed_serials as BlobSerial[])] : []
+  let bulkStock: BulkStockLevel[] =
+    Array.isArray(state.deed_bulkStock) ? [...(state.deed_bulkStock as BulkStockLevel[])] : []
+  const stockMoves: BlobStockMove[] = Array.isArray(state.deed_stockMoves) ? [...(state.deed_stockMoves as BlobStockMove[])] : []
+  const stockLevelDeltas = new Map<string, number>()
+  const location: LocationId = 'warehouse'
+
+  for (const line of params.lines) {
+    const productId = String(line.productId || '')
+    const qty = Math.max(0, Math.floor(Number(line.qty) || 0))
+    if (!productId || qty <= 0) continue
+    const product = products.find(p => p.id === productId)
+
+    if (line.serialId || (product && isSerialTracking(inferTrackingMethod(product)))) {
+      const serial = line.serialId
+        ? serials.find(s => s.id === line.serialId)
+        : serials.find(s =>
+            s.productId === productId
+            && String(s.serial || '').toLowerCase() === String(line.serialNumber || '').toLowerCase(),
+          )
+      if (serial) {
+        serial.status = 'available'
+        serial.location = location
+        serial.soldDate = undefined
+      }
+      const idx = products.findIndex(p => p.id === productId)
+      if (idx >= 0) products[idx] = { ...products[idx], stockQty: Number(products[idx].stockQty ?? 0) + 1 }
+      stockLevelDeltas.set(productId, (stockLevelDeltas.get(productId) ?? 0) + 1)
+    } else {
+      bulkStock = upsertBulkStock(bulkStock, productId, location, qty)
+      const idx = products.findIndex(p => p.id === productId)
+      if (idx >= 0) products[idx] = { ...products[idx], stockQty: Number(products[idx].stockQty ?? 0) + qty }
+      stockLevelDeltas.set(productId, (stockLevelDeltas.get(productId) ?? 0) + qty)
+    }
+  }
+
+  await bumpPrismaOnHand(stockLevelDeltas)
+  await saveStoreKeys({
+    deed_products: JSON.stringify(products),
+    deed_serials: JSON.stringify(serials),
+    deed_bulkStock: JSON.stringify(bulkStock),
+    deed_stockMoves: JSON.stringify(stockMoves.filter(m => m.documentRef !== params.orderRef)),
+  })
+}
+
+export async function reverseReceiptStockMutation(params: {
+  receiptRef: string
+  destination: string
+  lines: Array<{
+    productId: string
+    qtyReceived: number
+    requiresSerial: boolean
+    serials?: string[]
+  }>
+}): Promise<void> {
+  const state = await loadAppState(['deed_products', 'deed_serials', 'deed_bulkStock', 'deed_stockMoves'])
+  const products: BlobProduct[] = Array.isArray(state.deed_products) ? [...(state.deed_products as BlobProduct[])] : []
+  let serials: BlobSerial[] = Array.isArray(state.deed_serials) ? [...(state.deed_serials as BlobSerial[])] : []
+  let bulkStock: BulkStockLevel[] =
+    Array.isArray(state.deed_bulkStock) ? [...(state.deed_bulkStock as BulkStockLevel[])] : []
+  const stockMoves: BlobStockMove[] = Array.isArray(state.deed_stockMoves) ? [...(state.deed_stockMoves as BlobStockMove[])] : []
+  const destination = asLocationId(params.destination || 'warehouse')
+  const stockLevelDeltas = new Map<string, number>()
+  const serialKeys = new Set(
+    params.lines.flatMap(l => (l.serials || []).map(s => String(s).toLowerCase())).filter(Boolean),
+  )
+
+  for (const line of params.lines) {
+    const productId = String(line.productId || '')
+    const qty = Math.max(0, Math.floor(Number(line.qtyReceived) || 0))
+    if (!productId || qty <= 0) continue
+    const idx = products.findIndex(p => p.id === productId)
+    if (idx >= 0) {
+      products[idx] = { ...products[idx], stockQty: Math.max(0, Number(products[idx].stockQty ?? 0) - qty) }
+    }
+    if (!line.requiresSerial) {
+      bulkStock = upsertBulkStock(bulkStock, productId, destination, -qty)
+    }
+    stockLevelDeltas.set(productId, (stockLevelDeltas.get(productId) ?? 0) - qty)
+  }
+
+  if (serialKeys.size > 0) {
+    serials = serials.filter(s => !serialKeys.has(String(s.serial || '').toLowerCase()))
+  }
+
+  await bumpPrismaOnHand(stockLevelDeltas)
+  await saveStoreKeys({
+    deed_products: JSON.stringify(products),
+    deed_serials: JSON.stringify(serials),
+    deed_bulkStock: JSON.stringify(bulkStock),
+    deed_stockMoves: JSON.stringify(stockMoves.filter(m => m.documentRef !== params.receiptRef)),
+  })
+}
+
 export async function reserveStockForSaleOrder(
   orderId: string,
   userId?: string,

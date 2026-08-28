@@ -84,7 +84,7 @@ describe('helpers', () => {
     const { blockDomains, blockLocals } = resolveInboxBlocklists({
       SALES_INBOX_BLOCK_DOMAINS: 'bad.example',
       SALES_INBOX_BLOCK_LOCALS: 'jobs',
-    } as NodeJS.ProcessEnv)
+    } as unknown as NodeJS.ProcessEnv)
     expect(blockDomains.has('bad.example')).toBe(true)
     expect(blockLocals.has('jobs')).toBe(true)
     expect(blockLocals.has('noreply')).toBe(true)

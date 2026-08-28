@@ -49,7 +49,7 @@ describe('actsAsTechnician store ACL', () => {
   const kilo = (extra: Record<string, unknown> = {}) => ({
     id: 'k1',
     role: 'kilimall_officer' as const,
-    modules: ['kilimall', 'repair'],
+    modules: ['kilimall', 'repair'] as Array<'kilimall' | 'repair'>,
     actsAsTechnician: true,
     ...extra,
   })

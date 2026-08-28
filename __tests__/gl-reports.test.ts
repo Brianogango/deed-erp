@@ -3,6 +3,7 @@ import {
   aggregateJournalLines,
   buildBalanceSheetFromAggregates,
   buildProfitAndLossFromAggregates,
+  buildTrialBalanceFromAggregates,
   netBalanceForType,
   round2,
 } from '@/lib/accounting/gl-reports'
@@ -102,5 +103,34 @@ describe('gl-reports math', () => {
     expect(bs.totalLiabilities).toBe(20000)
     expect(bs.totalEquity).toBe(20000)
     expect(bs.balanced).toBe(true)
+  })
+
+  it('builds a cumulative trial balance from gross debit/credit nets', () => {
+    const map = aggregateJournalLines([
+      {
+        accountId: 'a1',
+        accountLabel: '1800 - AR',
+        debit: 1000,
+        credit: 200,
+        account: { code: '1800', name: 'AR', accountType: 'asset', accountGroup: 'Receivables' },
+      },
+      {
+        accountId: 'r1',
+        accountLabel: 'REV/5000',
+        debit: 0,
+        credit: 800,
+        account: { code: '5000', name: 'Sales', accountType: 'revenue', accountGroup: 'Revenue' },
+      },
+    ])
+    const tb = buildTrialBalanceFromAggregates(map, '2026-08-27')
+    expect(tb.asOf).toBe('2026-08-27')
+    expect(tb.rows.find(r => r.code === '1800')).toMatchObject({ debit: 800, credit: 0, grossDebit: 1000, grossCredit: 200 })
+    expect(tb.balanced).toBe(true)
+  })
+
+  it('fails closed when a journal line has no mapped account', () => {
+    expect(() => aggregateJournalLines([
+      { accountId: null, accountLabel: 'Mystery', debit: 10, credit: 0, account: null },
+    ])).toThrow(/Unmapped journal account/)
   })
 })

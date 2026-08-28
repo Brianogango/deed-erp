@@ -7575,7 +7575,12 @@ const storeCtx: AppState = {
               bankAccountId: journal.bankAccountId,
               date: journal.date,
             }),
-          }).catch(() => {})
+          }).then(async res => {
+            if (!res.ok) {
+              const payload = await res.json().catch(() => null) as { error?: string } | null
+              showToast(payload?.error || 'Expense journal posting failed', 'error')
+            }
+          }).catch(() => showToast('Expense journal posting failed', 'error'))
         }
         if (expense?.submittedByUserId) {
           const pending = nextChain.find(s => s.status === 'pending')
@@ -7626,7 +7631,12 @@ const storeCtx: AppState = {
             bankAccountId: journal.bankAccountId,
             date: journal.date,
           }),
-        }).catch(() => {})
+        }).then(async res => {
+          if (!res.ok) {
+            const payload = await res.json().catch(() => null) as { error?: string } | null
+            showToast(payload?.error || 'Expense journal posting failed', 'error')
+          }
+        }).catch(() => showToast('Expense journal posting failed', 'error'))
       }
       if (expense?.submittedByUserId) {
         notifyUsers({
@@ -7680,7 +7690,12 @@ const storeCtx: AppState = {
             bankAccountId: actualBankId,
             date: journal.date,
           }),
-        }).catch(() => {})
+        }).then(async res => {
+          if (!res.ok) {
+            const payload = await res.json().catch(() => null) as { error?: string } | null
+            showToast(payload?.error || 'Expense journal posting failed', 'error')
+          }
+        }).catch(() => showToast('Expense journal posting failed', 'error'))
       }
       showToast('Expense reimbursed and posted', 'success')
     },
