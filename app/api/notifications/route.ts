@@ -11,6 +11,16 @@ const iconForSeverity = (severity: string) =>
     : severity === 'attention' ? '🔔'
     : 'ℹ️'
 
+function legacyTypeForEvent(eventType: string) {
+  const root = eventType.split('.')[0]
+  if (root === 'hr') return 'leave'
+  if (root === 'repair') return 'repair'
+  if (root === 'finance' || root === 'purchase') return 'expense'
+  if (root === 'inventory' || root === 'aftersales') return 'asset'
+  if (root === 'system') return 'system'
+  return 'assignment'
+}
+
 function moduleForEvent(eventType: string): string | undefined {
   const root = eventType.split('.')[0]
   const map: Record<string, string> = {
@@ -59,7 +69,8 @@ export async function GET(request: NextRequest) {
       id: row.id,
       eventId: row.eventId,
       userId: row.userId,
-      type: row.event.eventType,
+      type: legacyTypeForEvent(row.event.eventType),
+      eventType: row.event.eventType,
       title: row.event.title,
       body: row.event.body,
       module: moduleForEvent(row.event.eventType),
