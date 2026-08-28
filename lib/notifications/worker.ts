@@ -12,6 +12,7 @@ import {
 } from './preferences'
 import { sendProviderDelivery } from './providers'
 import { publishNotificationEvent } from './service'
+import { renderNotificationTemplate } from './templates'
 import type {
   ExternalNotificationRecipient,
   NotificationChannel,
@@ -361,15 +362,39 @@ export async function dispatchPendingNotificationDeliveries(limit = 100) {
     })
 
     const metadata = asRecord(delivery.event.metadata)
+    const channel = delivery.channel as NotificationChannel
+    const rendered = await renderNotificationTemplate(delivery.event, channel)
+    const channelTextKey = `${channel}Text`
+    const effectiveMetadata: Record<string, unknown> = {
+      ...metadata,
+      [channelTextKey]: metadata[channelTextKey] ?? rendered.text,
+      ...(channel === 'email'
+        ? { emailSubject: metadata.emailSubject ?? rendered.subject }
+        : {}),
+    }
+
+    if (rendered.templateId) {
+      await prisma.notificationDelivery.update({
+        where: { id: delivery.id },
+        data: {
+          metadata: {
+            ...asRecord(delivery.metadata),
+            templateId: rendered.templateId,
+            templateVersion: rendered.templateVersion,
+          },
+        },
+      })
+    }
+
     const result = await sendProviderDelivery({
-      channel: delivery.channel as NotificationChannel,
+      channel,
       eventType: delivery.event.eventType,
-      title: delivery.event.title,
-      body: delivery.event.body,
+      title: rendered.subject,
+      body: rendered.text,
       actionUrl: delivery.event.actionUrl,
       destination: delivery.destination,
       endpoint,
-      metadata,
+      metadata: effectiveMetadata,
     })
 
     if (result.success) {
