@@ -26,4 +26,20 @@ describe('finance liability CoA split', () => {
     expect(codes.has('6205')).toBe(true)
     expect(codes.has('6210')).toBe(true)
   })
+
+  it('includes every account the posting engine references', () => {
+    const codes = new Set(buildZeroBalanceCoaTemplate().map(a => a.code))
+    // PPE cost + accumulated depreciation + disposal + depreciation expense
+    for (const c of ['1701', '1702', '1703', '1704', '1751', '1752', '1753', '1754', '6515', '6517', '5203']) {
+      expect(codes.has(c)).toBe(true)
+    }
+    // Returns, FX, services purchases, expense categories, opening equity
+    for (const c of ['5099', '5206', '6102', '6400', '6410', '6415', '6420', '6440', '6450', '6521', '6705', '4004']) {
+      expect(codes.has(c)).toBe(true)
+    }
+    // Equity block
+    for (const c of ['4001', '4002', '4003']) {
+      expect(codes.has(c)).toBe(true)
+    }
+  })
 })

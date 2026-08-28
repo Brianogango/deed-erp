@@ -20,6 +20,8 @@ const DEFAULT_WAREHOUSE_ID = 'main'
 const PRICE_DIFF_LABEL = formatAccountLabel(COMPANY_ACCOUNT_FALLBACKS.priceDifferenceAccountCode, [])
 const WRITE_OFF_LABEL = formatAccountLabel(COMPANY_ACCOUNT_FALLBACKS.writeOffAccountCode, [])
 const ADJUSTMENT_LABEL = formatAccountLabel(COMPANY_ACCOUNT_FALLBACKS.adjustmentAccountCode, [])
+/** Opening stock/balances offset equity — never the P&L adjustment account. */
+const OPENING_EQUITY_LABEL = '4004 - Opening Balance Equity'
 
 async function persistStockJournal(params: {
   ref: string
@@ -1063,7 +1065,7 @@ export async function processOpeningStockValuation(params: {
       createdById: params.userId,
       lines: [
         { accountLabel: inventoryLabel, label: 'Opening inventory', debit: total, credit: 0 },
-        { accountLabel: ADJUSTMENT_LABEL, label: 'Opening stock equity/variance', debit: 0, credit: total },
+        { accountLabel: OPENING_EQUITY_LABEL, label: 'Opening balance equity', debit: 0, credit: total },
       ],
       ledger: {
         productId: params.productId,

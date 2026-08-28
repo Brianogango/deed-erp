@@ -204,4 +204,6 @@ jobs:
             scripts/apply-sql-as-postgres.sh database/migrations/20260731_odoo_parity_phase2_safe.sql
             scripts/apply-sql-as-postgres.sh database/migrations/20260731_odoo_parity_phase4_safe.sql
             scripts/apply-sql-as-postgres.sh database/migrations/20260828_ops_after_accounting_safe.sql
+            scripts/apply-sql-as-postgres.sh database/migrations/20260828_coa_alignment_safe.sql
+            node scripts/fix-coa-blob-alignment.mjs
             node scripts/seed-products-final-b974.mjs
