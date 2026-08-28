@@ -1,4 +1,5 @@
 'use client'
+import { matchesSearchTerms } from '@/lib/search'
 import { useState, useMemo, useEffect, Suspense, useCallback, useRef, startTransition } from 'react'
 import { useSearchParams, useRouter, usePathname } from 'next/navigation'
 import { useCrmStore, OpportunityStage, LeadSource, fmtKes, fmtDate } from '@/lib/store'
@@ -933,10 +934,17 @@ function CRMContent() {
         {view === 'list' && (
           <div className="card overflow-hidden crm-opportunity-list">
             <PanelHeader title="All Opportunities" count={opportunities.filter(o => {
-              const term = oppSearch.toLowerCase()
               const ownerMatch = opportunityMatchesOwner(o, effectiveOwner)
-              return ownerMatch && (!term || (o.ref ?? '').toLowerCase().includes(term) || o.name.toLowerCase().includes(term) ||
-                (o.companyName ?? '').toLowerCase().includes(term) || (o.contactPersonName ?? '').toLowerCase().includes(term) || (o.ownerName ?? '').toLowerCase().includes(term))
+              return ownerMatch && matchesSearchTerms(oppSearch, [
+                o.ref,
+                o.name,
+                o.companyName,
+                o.contactPersonName,
+                o.ownerName,
+                o.stage,
+                o.leadSource,
+                o.expectedValue,
+              ])
             }).length}>
               <input
                 aria-label="Search opportunities"
@@ -960,10 +968,17 @@ function CRMContent() {
                 </div>
 
                 {opportunities.filter(o => {
-                  const term = oppSearch.toLowerCase()
                   const ownerMatch = opportunityMatchesOwner(o, effectiveOwner)
-                  return ownerMatch && (!term || (o.ref ?? '').toLowerCase().includes(term) || o.name.toLowerCase().includes(term) ||
-                    (o.companyName ?? '').toLowerCase().includes(term) || (o.contactPersonName ?? '').toLowerCase().includes(term) || (o.ownerName ?? '').toLowerCase().includes(term))
+              return ownerMatch && matchesSearchTerms(oppSearch, [
+                o.ref,
+                o.name,
+                o.companyName,
+                o.contactPersonName,
+                o.ownerName,
+                o.stage,
+                o.leadSource,
+                o.expectedValue,
+              ])
                 }).map(opp => {
                   const oppQuotes = quotes.filter(q => (opp.quoteIds ?? []).includes(q.id))
                   const companyContact = [opp.companyName, opp.contactPersonName].filter(Boolean).join(' · ') || 'Company not set'
@@ -1208,9 +1223,14 @@ function CRMContent() {
 
         <div className="card overflow-hidden">
           <PanelHeader title="Customer Contracts" count={customerContracts.filter(c => {
-            const s = contractSearch.toLowerCase()
-            return !s || c.ref.toLowerCase().includes(s) || c.companyName.toLowerCase().includes(s) ||
-              c.type.toLowerCase().includes(s) || c.contactPersonName.toLowerCase().includes(s)
+            return matchesSearchTerms(contractSearch, [
+              c.ref,
+              c.companyName,
+              c.type,
+              c.contactPersonName,
+              c.status,
+              c.slaTier,
+            ])
           }).length}>
             <input aria-label="Search contracts" className="form-input text-[11px] py-1.5" style={{ width: 200 }}
               placeholder="Search ref, company…" value={contractSearch} onChange={e => setContractSearch(e.target.value)} />
@@ -1218,9 +1238,14 @@ function CRMContent() {
           <div className="w-full">
             <div className="flex flex-col divide-y divide-gray-100">
             {customerContracts.filter(c => {
-              const s = contractSearch.toLowerCase()
-              return !s || c.ref.toLowerCase().includes(s) || c.companyName.toLowerCase().includes(s) ||
-                c.type.toLowerCase().includes(s) || c.contactPersonName.toLowerCase().includes(s)
+              return matchesSearchTerms(contractSearch, [
+              c.ref,
+              c.companyName,
+              c.type,
+              c.contactPersonName,
+              c.status,
+              c.slaTier,
+            ])
             }).map(contract => (
               <div key={contract.id} className="p-4 transition-colors" onMouseEnter={e=>{(e.currentTarget as HTMLElement).style.background='var(--bg-muted)'}} onMouseLeave={e=>{(e.currentTarget as HTMLElement).style.background=''}}>
                 <div className="flex items-start justify-between gap-4">
@@ -1382,9 +1407,13 @@ function CRMContent() {
         <div className="mod-body crm-body p-3 sm:p-4 flex flex-col gap-4">
         <div className="card overflow-hidden">
           <PanelHeader title="All Activities" count={opportunityActivities.filter(a => {
-            const s = activitySearch.toLowerCase()
-            return !s || (a.subject ?? '').toLowerCase().includes(s) || a.type.toLowerCase().includes(s) ||
-              (a.createdByName ?? '').toLowerCase().includes(s)
+            return matchesSearchTerms(activitySearch, [
+              a.subject,
+              a.type,
+              a.createdByName,
+              a.status,
+              a.opportunityId,
+            ])
           }).length}>
             <input aria-label="Search CRM activities" className="form-input text-[11px] py-1.5" style={{ width: 200 }}
               placeholder="Search subject, type…" value={activitySearch} onChange={e => setActivitySearch(e.target.value)} />
@@ -1392,9 +1421,13 @@ function CRMContent() {
           <div className="w-full">
             <div className="flex flex-col divide-y divide-gray-100">
             {opportunityActivities.filter(a => {
-              const s = activitySearch.toLowerCase()
-              return !s || (a.subject ?? '').toLowerCase().includes(s) || a.type.toLowerCase().includes(s) ||
-                (a.createdByName ?? '').toLowerCase().includes(s)
+              return matchesSearchTerms(activitySearch, [
+              a.subject,
+              a.type,
+              a.createdByName,
+              a.status,
+              a.opportunityId,
+            ])
             }).map(activity => {
               const opp = opportunities.find(o => o.id === activity.opportunityId)
               return (
