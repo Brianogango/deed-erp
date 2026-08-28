@@ -3,9 +3,11 @@ import type { ApprovalType } from '@/lib/sales-flow-types'
 import {
   extractApprovalValue,
   getApprovalRolesSync,
+  isSpecialPricingApprovalRequired,
   rolesFromThresholds,
   type ApprovalThreshold,
 } from '@/lib/sales-approval-rules'
+import { loadAppState } from '@/lib/server-store'
 
 /**
  * Prefer DB approval_rules; fall back to hardcoded APPROVAL_RULES.
@@ -14,12 +16,26 @@ import {
  * Policy locks:
  * - backorder never gates confirm (even if an old DB row still lists TL)
  * - purchase_high_value never gates PO confirm (amount cap removed)
- * - special_pricing is always Director OR Finance
+ * - special_pricing is Director OR Finance when Settings resumes it;
+ *   otherwise the ladder is on hold (roles kept, confirm not blocked)
  */
+async function specialPricingApprovalRequiredFromSettings(): Promise<boolean> {
+  try {
+    const state = await loadAppState(['deed_systemSettings'])
+    const settings = (state as any)?.deed_systemSettings ?? (state as any)?.systemSettings ?? {}
+    return isSpecialPricingApprovalRequired(settings)
+  } catch {
+    return false
+  }
+}
+
 export async function getApprovalRoles(type: ApprovalType, details: any): Promise<string[]> {
   if (type === 'backorder') return []
   if (type === 'purchase_high_value') return []
-  if (type === 'special_pricing') return ['director', 'finance_officer']
+  if (type === 'special_pricing') {
+    if (!(await specialPricingApprovalRequiredFromSettings())) return []
+    return ['director', 'finance_officer']
+  }
 
   try {
     const { default: prisma } = await import('@/lib/prisma')

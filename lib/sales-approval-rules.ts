@@ -10,6 +10,10 @@ export type ApprovalThreshold = { maxValue: number; requiredRoles: string[] }
  * Price types (`discount`, `special_pricing`) list Director + Finance as an
  * any-of set (one approval is enough). `backorder` and `purchase_high_value`
  * no longer gate confirm.
+ *
+ * `special_pricing` roles are kept, but confirm is on hold unless
+ * `salesRequireSpecialPricingApproval` is explicitly true (below cost /
+ * lowest selling point / pricelist). Do not delete this ladder.
  */
 export const APPROVAL_RULES: Record<ApprovalType, (details: any) => string[]> = {
   discount: (details) => {
@@ -18,6 +22,7 @@ export const APPROVAL_RULES: Record<ApprovalType, (details: any) => string[]> = 
     // Director OR Finance — not a sequential chain.
     return ['director', 'finance_officer']
   },
+  // Roles kept for resume. Confirm gating is `isSpecialPricingApprovalRequired`.
   special_pricing: () => ['director', 'finance_officer'],
   credit_override: (details) => {
     const amount = details.creditRequested || 0
@@ -32,6 +37,39 @@ export const APPROVAL_RULES: Record<ApprovalType, (details: any) => string[]> = 
   backorder: () => [],
   // High-value PO director approval was removed — confirm is not amount-gated.
   purchase_high_value: () => [],
+}
+
+/** Types that can block quotation confirm. */
+export const SALES_CONFIRM_APPROVAL_TYPES: ApprovalType[] = [
+  'discount',
+  'credit_override',
+  'backorder',
+  'special_pricing',
+]
+
+/**
+ * Below-lowest-selling-point / below-cost / below-pricelist authorization.
+ * On hold unless Settings explicitly turns it back on.
+ */
+export function isSpecialPricingApprovalRequired(
+  settings?: { salesRequireSpecialPricingApproval?: boolean } | null,
+): boolean {
+  return settings?.salesRequireSpecialPricingApproval === true
+}
+
+/** Approval types that still block confirm for the current settings. */
+export function salesConfirmGatingApprovalTypes(
+  settings?: { salesRequireSpecialPricingApproval?: boolean } | null,
+): ApprovalType[] {
+  if (isSpecialPricingApprovalRequired(settings)) return [...SALES_CONFIRM_APPROVAL_TYPES]
+  return SALES_CONFIRM_APPROVAL_TYPES.filter(type => type !== 'special_pricing')
+}
+
+export function isSalesConfirmGatingApproval(
+  type: string,
+  settings?: { salesRequireSpecialPricingApproval?: boolean } | null,
+): boolean {
+  return (salesConfirmGatingApprovalTypes(settings) as string[]).includes(type)
 }
 
 /** Types where any listed role may approve (single decision). */

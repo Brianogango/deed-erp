@@ -15,7 +15,7 @@ const TYPE_LABELS: Record<string, { label: string; unit: string; hint: string }>
   discount: { label: 'Discount %', unit: '%', hint: 'Ladder by discount percent. Empty roles = auto-approve.' },
   credit_override: { label: 'Credit overage (KES)', unit: 'KES', hint: 'Amount above available credit.' },
   backorder: { label: 'Backorder qty', unit: 'units', hint: 'Units short against on-hand stock.' },
-  special_pricing: { label: 'Special pricing', unit: '', hint: 'Always requires listed roles when active.' },
+  special_pricing: { label: 'Special pricing', unit: '', hint: 'Kept. Confirm is on hold unless Settings → Require approval below lowest selling point is on.' },
   corporate_deal: { label: 'Corporate deal', unit: '', hint: 'Always requires listed roles when active.' },
   expense: { label: 'Expense claims', unit: 'KES', hint: 'Sequential approvers by claim amount (finance_officer, then director above threshold).' },
 }

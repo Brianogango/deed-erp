@@ -73,7 +73,7 @@ import {
   approvalRecipientIds,
   approvalDocumentPath,
 } from '@/lib/sales-approvals'
-import { actorSatisfiesApprovalRoles } from '@/lib/sales-approval-rules'
+import { actorSatisfiesApprovalRoles, isSalesConfirmGatingApproval } from '@/lib/sales-approval-rules'
 import { computeSaleOrderApprovalTriggers } from '@/lib/sales/margin-approval'
 import { allocateSalesReturn } from '@/lib/sales/return-allocation'
 import {
@@ -740,8 +740,15 @@ export interface SystemSettings {
   /**
    * Minimum gross-margin % on quotation lines (after discount) before
    * special_pricing approval is required. Floor price remains product cost.
+   * Detection stays even while `salesRequireSpecialPricingApproval` is off.
    */
   salesMinMarginPercent: number
+  /**
+   * When true, selling below cost / lowest selling point / pricelist requires
+   * Director or Finance (`special_pricing`) before confirm. Default false =
+   * on hold; the ladder is kept, not deleted.
+   */
+  salesRequireSpecialPricingApproval: boolean
   // Inventory
   invProductsMasterOnly: boolean
   invNoDirectStockEdits: boolean
@@ -831,6 +838,7 @@ export const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
   salesOnlineAcceptance: false, salesPricelists: true, salesDiscountControl: true, salesConfirmedQuotesToOrders: true,
   salesLockConfirmed: true,
   salesMinMarginPercent: 10,
+  salesRequireSpecialPricingApproval: false,
   invProductsMasterOnly: true, invNoDirectStockEdits: true, invMultiStepRoutes: true,
   invStorageLocations: ['Incoming', 'Workshop', 'Ready for Sale', 'Faulty / Scrap'],
   invSerialNumbers: true, invLots: false, invAutomatedValuation: true, invCostingMethod: 'average',
@@ -10894,7 +10902,9 @@ const storeCtx: AppState = {
     },
 
     getSalesApprovalState: (documentId: string) => {
-      const requests = approvalRequests.filter(r => r.documentId === documentId && ['discount', 'credit_override', 'backorder', 'special_pricing'].includes(r.type))
+      const requests = approvalRequests.filter(r =>
+        r.documentId === documentId && isSalesConfirmGatingApproval(r.type, systemSettings),
+      )
       if (requests.length === 0) return { status: 'not_required', requests }
       if (requests.some(r => r.status === 'rejected')) return { status: 'rejected', requests }
       if (requests.some(r => r.status === 'pending')) return { status: 'pending', requests }
@@ -11584,6 +11594,10 @@ const storeCtx: AppState = {
           creditAvailable: !creditStatus.ok ? Number((creditStatus as any).creditAvailable) || 0 : undefined,
           backorderQty,
         })
+        // Detection stays; special_pricing does not gate confirm while on hold.
+        const gatingTriggers = approvalTriggers.filter(t =>
+          isSalesConfirmGatingApproval(t.type, systemSettings),
+        )
         const pricingTrigger = approvalTriggers.find(t => t.type === 'special_pricing')
         const discountTrigger = approvalTriggers.find(t => t.type === 'discount')
 
@@ -11591,7 +11605,7 @@ const storeCtx: AppState = {
         // cannot satisfy the required roles (Director/Finance may self-approve).
         const existingForDoc = approvalRequests.filter(r => r.documentId === id)
         const createdRequests: typeof approvalRequests = []
-        const unmetTriggers = approvalTriggers.filter(trigger => {
+        const unmetTriggers = gatingTriggers.filter(trigger => {
           const roles = APPROVAL_RULES[trigger.type](trigger.details)
           if (roles.length === 0) return false
           // Price: Director OR Finance may self-satisfy. Other types still need every role.
@@ -11639,7 +11653,7 @@ const storeCtx: AppState = {
 
         const leftoverSalesApprovals = approvalRequests.filter(r =>
           r.documentId === id &&
-          ['discount', 'credit_override', 'backorder', 'special_pricing'].includes(r.type) &&
+          isSalesConfirmGatingApproval(r.type, systemSettings) &&
           r.status === 'pending',
         )
         // Pending approvals still block everyone — including directors — so the
@@ -11670,7 +11684,7 @@ const storeCtx: AppState = {
           confirmedByName: user.name,
           approvedBy: user.id,
           // Do not force not_required — server enforces + role satisfaction.
-          approvalStatus: approvalTriggers.length > 0 ? 'approved' as const : 'not_required' as const,
+          approvalStatus: gatingTriggers.length > 0 ? 'approved' as const : 'not_required' as const,
           locked: systemSettings.salesLockConfirmed || undefined,
           // Odoo At Confirmation vs Manual reservation
           reserveStock,

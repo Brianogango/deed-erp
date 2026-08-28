@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { computeSaleOrderApprovalTriggers, lineGrossMarginPercent } from '@/lib/sales/margin-approval'
+import {
+  APPROVAL_RULES,
+  isSalesConfirmGatingApproval,
+  isSpecialPricingApprovalRequired,
+  salesConfirmGatingApprovalTypes,
+} from '@/lib/sales-approval-rules'
 
 describe('margin / floor approval automation', () => {
   it('computes gross margin after discount', () => {
@@ -62,5 +68,19 @@ describe('margin / floor approval automation', () => {
     const pricing = triggers.find(t => t.type === 'special_pricing')
     expect(pricing?.details.belowMargin).toBe(true)
     expect(Number(pricing?.details.minMarginPercent)).toBeGreaterThan(15)
+  })
+})
+
+describe('special_pricing approval hold', () => {
+  it('keeps the special_pricing ladder but does not gate confirm by default', () => {
+    expect(APPROVAL_RULES.special_pricing({})).toEqual(['director', 'finance_officer'])
+    expect(isSpecialPricingApprovalRequired(undefined)).toBe(false)
+    expect(isSpecialPricingApprovalRequired({})).toBe(false)
+    expect(isSpecialPricingApprovalRequired({ salesRequireSpecialPricingApproval: false })).toBe(false)
+    expect(isSpecialPricingApprovalRequired({ salesRequireSpecialPricingApproval: true })).toBe(true)
+    expect(salesConfirmGatingApprovalTypes(undefined)).not.toContain('special_pricing')
+    expect(salesConfirmGatingApprovalTypes({ salesRequireSpecialPricingApproval: true })).toContain('special_pricing')
+    expect(isSalesConfirmGatingApproval('special_pricing', undefined)).toBe(false)
+    expect(isSalesConfirmGatingApproval('discount', undefined)).toBe(true)
   })
 })

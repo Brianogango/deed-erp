@@ -264,12 +264,14 @@ export async function enforceSaleOrderApprovals(opts: {
   const orderId = existing?.id ?? body.id
 
   if (isConfirming) {
+    // Do not fail-close on a leftover `existing.approvalStatus === 'pending'`
+    // from special_pricing while that ladder is on hold. Client leftover
+    // checks still block discount / credit; trigger scan below still enforces.
     const pendingFlag =
       body.approvalStatus === 'pending' ||
-      existing?.approvalStatus === 'pending' ||
       (typeof body.approvalRequiredReason === 'string' && body.approvalRequiredReason.length > 0 &&
-        body.approvalStatus !== 'approved')
-    if (pendingFlag && body.approvalStatus !== 'approved') {
+        body.approvalStatus !== 'approved' && body.approvalStatus !== 'not_required')
+    if (pendingFlag) {
       return {
         ok: false,
         status: 403,

@@ -6,7 +6,10 @@ import {
   approvalRolesAreAnyOf,
   extractApprovalValue,
   getApprovalRolesSync,
+  isSalesConfirmGatingApproval,
+  isSpecialPricingApprovalRequired,
   rolesFromThresholds,
+  salesConfirmGatingApprovalTypes,
   type ApprovalThreshold,
 } from '@/lib/sales-approval-rules'
 
@@ -15,7 +18,10 @@ export {
   approvalRolesAreAnyOf,
   extractApprovalValue,
   getApprovalRolesSync,
+  isSalesConfirmGatingApproval,
+  isSpecialPricingApprovalRequired,
   rolesFromThresholds,
+  salesConfirmGatingApprovalTypes,
 }
 export type { ApprovalThreshold }
 
