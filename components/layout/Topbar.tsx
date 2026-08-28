@@ -96,6 +96,16 @@ const NOTIF_ICONS: Record<AppNotification['type'], string> = {
   repair:     '◈',
 }
 
+type BellNotification = AppNotification & {
+  eventId?: string
+  eventType?: string
+  severity?: 'info' | 'success' | 'attention' | 'warning' | 'critical'
+  priority?: 'low' | 'normal' | 'high' | 'urgent'
+  requiresAcknowledgement?: boolean
+  acknowledgedAt?: string | null
+  resolvedAt?: string | null
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // HOOKS
 // ═══════════════════════════════════════════════════════════════════════════
@@ -109,13 +119,29 @@ function useSoundPreference(): [boolean, (v: boolean) => void] {
   const [sound, setSound] = useState(true)
 
   useEffect(() => {
+    let cancelled = false
     const stored = localStorage.getItem('deed-sound')
     if (stored !== null) setSound(stored === 'true')
+
+    fetch('/api/notifications/preferences', { cache: 'no-store' })
+      .then(res => res.ok ? res.json() : null)
+      .then(data => {
+        if (cancelled || !data?.global || typeof data.global.soundEnabled !== 'boolean') return
+        setSound(data.global.soundEnabled)
+        localStorage.setItem('deed-sound', String(data.global.soundEnabled))
+      })
+      .catch(() => {})
+    return () => { cancelled = true }
   }, [])
 
   const setSoundPersist = useCallback((v: boolean) => {
     setSound(v)
     localStorage.setItem('deed-sound', String(v))
+    void fetch('/api/notifications/preferences', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ eventType: '*', soundEnabled: v }),
+    }).catch(() => {})
   }, [])
 
   return [sound, setSoundPersist]
@@ -174,17 +200,17 @@ const FILTER_TABS: { id: NotifFilter; label: string }[] = [
   { id: 'system',        label: 'System' },
 ]
 
-function notificationCategory(notification: AppNotification): 'actionable' | 'informational' | 'system' {
+function notificationCategory(notification: BellNotification): 'actionable' | 'informational' | 'system' {
   if (notification.type === 'system') return 'system'
   if (notification.type === 'asset') return 'informational'
   return 'actionable'
 }
 
-function groupByDate(notifs: AppNotification[]): { label: string; items: AppNotification[] }[] {
+function groupByDate(notifs: BellNotification[]): { label: string; items: BellNotification[] }[] {
   const now = new Date()
   const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
   const yesterdayStart = todayStart - 86400000
-  const groups: { label: string; items: AppNotification[] }[] = [
+  const groups: { label: string; items: BellNotification[] }[] = [
     { label: 'Today', items: [] },
     { label: 'Yesterday', items: [] },
     { label: 'Older', items: [] },
@@ -207,13 +233,15 @@ function NotificationsPanel({
   onMarkRead,
   onMarkAll,
   onClearRead,
+  onAcknowledge,
   onNavigate,
 }: {
-  notifs: AppNotification[]
+  notifs: BellNotification[]
   onClose: () => void
   onMarkRead: (id: string) => void
   onMarkAll: () => void
   onClearRead: () => void
+  onAcknowledge: (id: string) => void
   onNavigate: (module: ModuleId, path?: string) => void
 }) {
   const [activeFilter, setActiveFilter] = useState<NotifFilter>('all')
@@ -356,6 +384,7 @@ function NotificationsPanel({
                       key={n.id}
                       notification={n}
                       onMarkRead={() => onMarkRead(n.id)}
+                      onAcknowledge={() => onAcknowledge(n.id)}
                       onNavigate={() => {
                         if (n.module) onNavigate(n.module, n.path)
                         onClose()
@@ -391,10 +420,12 @@ function NotificationsPanel({
 function NotificationItem({
   notification,
   onMarkRead,
+  onAcknowledge,
   onNavigate,
 }: {
-  notification: AppNotification
+  notification: BellNotification
   onMarkRead: () => void
+  onAcknowledge: () => void
   onNavigate: () => void
 }) {
   const category = notificationCategory(notification)
@@ -461,7 +492,7 @@ function NotificationItem({
             <span className="font-bold">What changed:</span> {whatChanged}
           </p>
         )}
-        <div className="flex items-center gap-2 mt-2">
+        <div className="flex items-center gap-2 mt-2 flex-wrap">
           <span className="text-[10px] font-bold text-[var(--text-4)] uppercase tracking-wider">
             {timeAgo(notification.createdAt)}
           </span>
@@ -473,8 +504,252 @@ function NotificationItem({
               </span>
             </>
           )}
+          {notification.resolvedAt && (
+            <span className="text-[9px] font-bold rounded-full px-2 py-0.5 bg-emerald-100 text-emerald-700">
+              Resolved
+            </span>
+          )}
         </div>
+        {notification.requiresAcknowledgement && !notification.acknowledgedAt && !notification.resolvedAt && (
+          <button
+            type="button"
+            onClick={event => {
+              event.preventDefault()
+              event.stopPropagation()
+              onAcknowledge()
+            }}
+            className="mt-2 inline-flex items-center rounded-lg bg-[var(--primary)] px-2.5 py-1.5 text-[10px] font-bold text-white hover:opacity-90"
+          >
+            Acknowledge
+          </button>
+        )}
+        {notification.acknowledgedAt && !notification.resolvedAt && (
+          <span className="mt-2 inline-flex text-[9px] font-bold rounded-full px-2 py-0.5 bg-blue-100 text-blue-700">
+            Acknowledged
+          </span>
+        )}
       </div>
+    </div>
+  )
+}
+
+function urlBase64ToUint8Array(value: string): Uint8Array {
+  const padding = '='.repeat((4 - (value.length % 4)) % 4)
+  const base64 = (value + padding).replace(/-/g, '+').replace(/_/g, '/')
+  const raw = window.atob(base64)
+  return Uint8Array.from([...raw].map(char => char.charCodeAt(0)))
+}
+
+type GlobalNotificationPreference = {
+  inAppEnabled: boolean
+  pushEnabled: boolean
+  emailEnabled: boolean
+  whatsappEnabled: boolean
+  smsEnabled: boolean
+  soundEnabled: boolean
+  digestEnabled: boolean
+  quietStart: string | null
+  quietEnd: string | null
+  timezone: string
+  minimumSeverity: string
+}
+
+function NotificationPreferenceControls({
+  soundEnabled,
+  setSoundEnabled,
+}: {
+  soundEnabled: boolean
+  setSoundEnabled: (v: boolean) => void
+}) {
+  const [pref, setPref] = useState<GlobalNotificationPreference>({
+    inAppEnabled: true,
+    pushEnabled: true,
+    emailEnabled: true,
+    whatsappEnabled: false,
+    smsEnabled: false,
+    soundEnabled,
+    digestEnabled: false,
+    quietStart: null,
+    quietEnd: null,
+    timezone: 'Africa/Nairobi',
+    minimumSeverity: 'info',
+  })
+  const [pushSubscribed, setPushSubscribed] = useState(false)
+  const [pushBusy, setPushBusy] = useState(false)
+  const [pushSupported, setPushSupported] = useState(false)
+
+  const load = useCallback(async () => {
+    try {
+      const [prefRes] = await Promise.all([
+        fetch('/api/notifications/preferences', { cache: 'no-store' }),
+        fetch('/api/notifications/endpoints', { cache: 'no-store' }),
+      ])
+      if (prefRes.ok) {
+        const data = await prefRes.json()
+        if (data?.global) {
+          setPref(data.global)
+          if (typeof data.global.soundEnabled === 'boolean') setSoundEnabled(data.global.soundEnabled)
+        }
+      }
+      const supported = 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window
+      setPushSupported(supported)
+      if (supported) {
+        const registration = await navigator.serviceWorker.getRegistration('/')
+          || await navigator.serviceWorker.getRegistration()
+        const sub = await registration?.pushManager.getSubscription()
+        setPushSubscribed(Boolean(sub))
+      }
+    } catch {}
+  }, [setSoundEnabled])
+
+  useEffect(() => { void load() }, [load])
+
+  const update = useCallback(async (patch: Partial<GlobalNotificationPreference>) => {
+    setPref(prev => ({ ...prev, ...patch }))
+    try {
+      const res = await fetch('/api/notifications/preferences', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ eventType: '*', ...patch }),
+      })
+      if (!res.ok) throw new Error()
+    } catch {
+      void load()
+    }
+  }, [load])
+
+  const setPushForDevice = useCallback(async (enabled: boolean) => {
+    if (!pushSupported || pushBusy) return
+    setPushBusy(true)
+    try {
+      const registration = await navigator.serviceWorker.register('/deed-notifications-sw.js', { scope: '/' })
+      await navigator.serviceWorker.ready
+      const existing = await registration.pushManager.getSubscription()
+
+      if (!enabled) {
+        if (existing) {
+          const endpoint = existing.endpoint
+          await existing.unsubscribe()
+          await fetch('/api/notifications/endpoints', {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ endpoint }),
+          })
+        }
+        setPushSubscribed(false)
+        await update({ pushEnabled: false })
+        return
+      }
+
+      const permission = await Notification.requestPermission()
+      if (permission !== 'granted') throw new Error('Browser notification permission was not granted')
+
+      const configRes = await fetch('/api/notifications/endpoints', { cache: 'no-store' })
+      const config = await configRes.json()
+      if (!configRes.ok || !config.vapidPublicKey) throw new Error('Web Push is not configured on the server')
+
+      const subscription = existing || await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(config.vapidPublicKey),
+      })
+      const subJson = subscription.toJSON()
+      const saveRes = await fetch('/api/notifications/endpoints', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          endpoint: subscription.endpoint,
+          keys: subJson.keys,
+          deviceLabel: navigator.userAgent.includes('Mobile') ? 'Mobile browser' : 'Desktop browser',
+        }),
+      })
+      if (!saveRes.ok) throw new Error('Could not register this browser for push notifications')
+      setPushSubscribed(true)
+      await update({ pushEnabled: true })
+    } catch (error) {
+      console.warn('[notifications] push preference failed', error)
+      setPushSubscribed(false)
+    } finally {
+      setPushBusy(false)
+    }
+  }, [pushBusy, pushSupported, update])
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <label className="text-xs font-medium text-[var(--text-2)]">In-app notifications</label>
+          <p className="text-[10px] text-[var(--text-4)]">Bell inbox and real-time ERP alerts</p>
+        </div>
+        <Toggle on={pref.inAppEnabled} onChange={value => void update({ inAppEnabled: value })} />
+      </div>
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <label className="text-xs font-medium text-[var(--text-2)]">Browser Push</label>
+          <p className="text-[10px] text-[var(--text-4)]">
+            {pushSupported ? (pushSubscribed ? 'This browser is subscribed' : 'Notify even when the ERP tab is closed') : 'Not supported by this browser'}
+          </p>
+        </div>
+        <Toggle on={pushSubscribed} onChange={value => void setPushForDevice(value)} />
+      </div>
+      <div className="flex items-center justify-between">
+        <label className="text-xs font-medium text-[var(--text-2)]">Email alerts</label>
+        <Toggle on={pref.emailEnabled} onChange={value => void update({ emailEnabled: value })} />
+      </div>
+      <div className="flex items-center justify-between">
+        <label className="text-xs font-medium text-[var(--text-2)]">WhatsApp alerts</label>
+        <Toggle on={pref.whatsappEnabled} onChange={value => void update({ whatsappEnabled: value })} />
+      </div>
+      <div className="flex items-center justify-between">
+        <label className="text-xs font-medium text-[var(--text-2)]">SMS alerts</label>
+        <Toggle on={pref.smsEnabled} onChange={value => void update({ smsEnabled: value })} />
+      </div>
+      <div className="flex items-center justify-between">
+        <label className="text-xs font-medium text-[var(--text-2)]">Sound Alerts</label>
+        <Toggle
+          on={soundEnabled}
+          onChange={value => {
+            setSoundEnabled(value)
+            void update({ soundEnabled: value })
+          }}
+        />
+      </div>
+      <div className="grid grid-cols-2 gap-2 pt-1">
+        <label className="text-[10px] font-semibold text-[var(--text-3)]">
+          Quiet from
+          <input
+            type="time"
+            className="form-input mt-1"
+            value={pref.quietStart || ''}
+            onChange={event => void update({ quietStart: event.target.value || null })}
+          />
+        </label>
+        <label className="text-[10px] font-semibold text-[var(--text-3)]">
+          Quiet until
+          <input
+            type="time"
+            className="form-input mt-1"
+            value={pref.quietEnd || ''}
+            onChange={event => void update({ quietEnd: event.target.value || null })}
+          />
+        </label>
+      </div>
+      <label className="block text-[10px] font-semibold text-[var(--text-3)]">
+        Minimum alert severity
+        <select
+          className="form-input mt-1"
+          value={pref.minimumSeverity}
+          onChange={event => void update({ minimumSeverity: event.target.value })}
+        >
+          <option value="info">All notifications</option>
+          <option value="success">Success and above</option>
+          <option value="attention">Attention and above</option>
+          <option value="warning">Warning and critical</option>
+          <option value="critical">Critical only</option>
+        </select>
+      </label>
+      <p className="text-[10px] leading-relaxed text-[var(--text-4)]">
+        Critical security, finance-integrity and operational alerts can bypass quiet hours/channel preferences when policy requires it.
+      </p>
     </div>
   )
 }
@@ -656,15 +931,13 @@ function AccountPanel({
             />
           </div>
 
-          {/* Preferences Section */}
+          {/* Notification Preferences */}
           <div className="acct-section">
-            <p className="acct-label">Preferences</p>
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <label className="text-xs font-medium text-[var(--text-2)]">Sound Alerts</label>
-                <Toggle on={soundEnabled} onChange={setSoundEnabled} />
-              </div>
-            </div>
+            <p className="acct-label">Notification Channels</p>
+            <NotificationPreferenceControls
+              soundEnabled={soundEnabled}
+              setSoundEnabled={setSoundEnabled}
+            />
           </div>
 
           {/* Profile Section */}
@@ -773,14 +1046,9 @@ export default function Topbar() {
     currentUserId,
     activeModule,
     setModule,
-    notifications,
-    markNotificationRead,
-    markAllNotificationsRead,
-    clearReadNotifications,
     profileImages,
     sidebarOpen,
     toggleSidebar,
-    getVisibleRepairs,
     showToast,
   } = useShellStore()
 
@@ -793,7 +1061,7 @@ export default function Topbar() {
   const [searchOpen, setSearchOpen] = useState(false)
   const [soundEnabled, setSoundEnabled] = useSoundPreference()
   const [dateLabel, setDateLabel] = useState('')
-  const [dismissedTicketIds, setDismissedTicketIds] = useState<Set<string>>(new Set())
+  const [serverNotifs, setServerNotifs] = useState<BellNotification[]>([])
   const [tableDensity, setTableDensity] = useState<'cozy' | 'compact'>('cozy')
   const [syncStatus, setSyncStatus] = useState<SyncStatus>({
     stage: 'idle',
@@ -813,13 +1081,6 @@ export default function Topbar() {
       mobileMenuButtonRef.current?.focus()
     }
   }, [sidebarOpen])
-
-  useEffect(() => {
-    try {
-      const stored = localStorage.getItem('deed-dismissed-tickets')
-      if (stored) setDismissedTicketIds(new Set(JSON.parse(stored)))
-    } catch {}
-  }, [])
 
   useEffect(() => {
     if (!currentUserId) return
@@ -893,31 +1154,52 @@ export default function Topbar() {
     )
   }, [])
 
-  // Notifications
-  const notifList = Array.isArray(notifications) ? notifications : []
-  const baseNotifs = notifList.filter(n => n.userId === currentUserId)
-  const canAssignRepairs = ['director', 'technical_lead'].includes(currentUser?.role ?? '')
-  const visibleRepairsRaw = getVisibleRepairs()
-  const pendingTickets = canAssignRepairs
-    ? (Array.isArray(visibleRepairsRaw) ? visibleRepairsRaw : []).filter(r => r.status === 'received')
-    : []
+  // Notifications — relational notification ledger is authoritative.
+  const loadNotifications = useCallback(async () => {
+    if (!currentUserId) {
+      setServerNotifs([])
+      return
+    }
+    try {
+      const res = await fetch('/api/notifications?limit=200', { cache: 'no-store' })
+      if (!res.ok) return
+      const data = await res.json()
+      setServerNotifs(Array.isArray(data.notifications) ? data.notifications : [])
+    } catch {
+      // Keep the last known notification list during transient network failures.
+    }
+  }, [currentUserId])
 
-  const ticketNotifs: AppNotification[] = pendingTickets
-    .filter(r => !dismissedTicketIds.has(`pending-ticket-${r.id}`))
-    .map(r => ({
-      id: `pending-ticket-${r.id}`,
-      userId: currentUserId || '',
-      type: 'repair',
-      title: 'Action Required: Unassigned Ticket',
-      body: `${r.ref} — ${r.productName} needs to be assigned.`,
-      module: 'repair',
-      path: `?id=${r.id}`,
-      read: false,
-      createdAt: r.createdDate || new Date().toISOString(),
-      icon: '🚨',
-    }))
+  useEffect(() => {
+    if (!currentUserId) {
+      setServerNotifs([])
+      return
+    }
+    void loadNotifications()
 
-  const myNotifs = [...ticketNotifs, ...baseNotifs].sort(
+    const source = new EventSource('/api/notifications/stream')
+    const refresh = () => { void loadNotifications() }
+    source.addEventListener('notification', refresh)
+    source.addEventListener('ready', refresh)
+    return () => {
+      source.removeEventListener('notification', refresh)
+      source.removeEventListener('ready', refresh)
+      source.close()
+    }
+  }, [currentUserId, loadNotifications])
+
+  const mutateNotification = useCallback(async (action: 'read' | 'read_all' | 'clear_read' | 'acknowledge', id?: string) => {
+    try {
+      const res = await fetch('/api/notifications', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action, id }),
+      })
+      if (res.ok) await loadNotifications()
+    } catch {}
+  }, [loadNotifications])
+
+  const myNotifs = [...serverNotifs].sort(
     (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
   )
 
@@ -971,7 +1253,7 @@ export default function Topbar() {
     const hasUnreadUrgent = myNotifs.some(
       n =>
         !n.read &&
-        (n.icon === '🚨' || n.type === 'repair' || n.title.toLowerCase().includes('urgent'))
+        (n.icon === '🚨' || n.severity === 'critical')
     )
     const baseTitle = `${displayTitle.label} | Deed ERP`
 
@@ -1001,10 +1283,7 @@ export default function Topbar() {
     if (prevNotifIds.current.size > 0) {
       const newNotifs = myNotifs.filter(n => !n.read && !prevNotifIds.current.has(n.id))
       const hasUrgent = newNotifs.some(
-        n =>
-          n.icon === '🚨' ||
-          n.type === 'repair' ||
-          n.title.toLowerCase().includes('urgent')
+        n => n.icon === '🚨' || n.severity === 'critical'
       )
 
       if (hasUrgent && soundEnabled) {
@@ -1213,32 +1492,10 @@ export default function Topbar() {
               <NotificationsPanel
                 notifs={myNotifs}
                 onClose={() => setNotifOpen(false)}
-                onMarkRead={(id) => {
-                  if (id.startsWith('pending-ticket-')) {
-                    setDismissedTicketIds(prev => {
-                      const next = new Set(prev)
-                      next.add(id)
-                      localStorage.setItem('deed-dismissed-tickets', JSON.stringify([...next]))
-                      return next
-                    })
-                  } else {
-                    markNotificationRead(id)
-                  }
-                }}
-                onMarkAll={() => {
-                  markAllNotificationsRead()
-                  const ids = ticketNotifs.map(n => n.id)
-                  if (ids.length > 0) {
-                    setDismissedTicketIds(prev => {
-                      const next = new Set([...prev, ...ids])
-                      localStorage.setItem('deed-dismissed-tickets', JSON.stringify([...next]))
-                      return next
-                    })
-                  }
-                }}
-                onClearRead={() => {
-                  clearReadNotifications()
-                }}
+                onMarkRead={(id) => { void mutateNotification('read', id) }}
+                onMarkAll={() => { void mutateNotification('read_all') }}
+                onClearRead={() => { void mutateNotification('clear_read') }}
+                onAcknowledge={(id) => { void mutateNotification('acknowledge', id) }}
                 onNavigate={(mod, path) => {
                   setModule(mod)
                   const routeMap: Record<string, string> = {
@@ -1271,7 +1528,10 @@ export default function Topbar() {
                     settings: '/settings',
                   }
                   const baseRoute = routeMap[mod] || '/'
-                  router.push(path ? `${baseRoute}${path}` : baseRoute)
+                  const target = path
+                    ? (path.startsWith('/') ? path : `${baseRoute}${path}`)
+                    : baseRoute
+                  router.push(target)
                   setNotifOpen(false)
                 }}
               />

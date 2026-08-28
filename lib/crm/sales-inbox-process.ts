@@ -1,8 +1,6 @@
 import 'server-only'
-import { randomUUID } from 'crypto'
 import prisma from '@/lib/prisma'
 import { loadAppState, saveStoreKeys } from '@/lib/server-store'
-import { buildNotifyRows, type AppNotification } from '@/lib/in-app-notifications'
 import {
   draftLeadFromInboundEmail,
   pickRoundRobinOwner,
@@ -16,7 +14,7 @@ import {
   salesInboxConfigured,
 } from '@/lib/crm/sales-inbox-imap'
 import { storeLeadEmailAttachments } from '@/lib/crm/lead-attachments'
-import { notifyInboundLeadCreated } from '@/lib/crm/sales-inbox-notifications'
+import { publishNotificationEvent } from '@/lib/notifications/service'
 import { resolveSalesInboxPipelineConfig } from '@/lib/crm/inbox/config'
 import {
   decideInboundEmailPipeline,
@@ -250,7 +248,7 @@ async function processSalesInboxLeadsUnlocked(opts?: {
   }
   result.configured = true
 
-  const state = await loadAppState(['deed_systemSettings', RR_KEY, 'deed_notifications'])
+  const state = await loadAppState(['deed_systemSettings', RR_KEY])
   result.autoAssign = readAutoAssignFlag(state.deed_systemSettings)
   let lastOwnerId = readLastOwnerId(state[RR_KEY])
 
@@ -563,36 +561,22 @@ async function processSalesInboxLeadsUnlocked(opts?: {
       }
 
       if (ownerId && decision.shouldNotifyAssign) {
-        const owner = salesRepById.get(ownerId)
-        const existing = Array.isArray(state.deed_notifications)
-          ? state.deed_notifications as AppNotification[]
-          : []
-        const { next } = buildNotifyRows(
-          existing,
-          {
-            recipients: [ownerId],
-            type: 'system',
-            title: 'New inbound lead',
-            body: `${lead.name}${lead.companyName ? ` · ${lead.companyName}` : ''}`,
-            module: 'crm',
-            path: `/crm?crmTab=leads&leadId=${lead.id}`,
-            icon: '📧',
-            entityKey: `lead:${lead.id}`,
-          },
-          () => randomUUID(),
-        )
-        state.deed_notifications = next.slice(0, 500)
         try {
-          await notifyInboundLeadCreated({
-            leadId: lead.id,
-            leadName: lead.name,
-            companyName: lead.companyName,
-            leadEmail: lead.email,
-            subject: lead.emailSubject,
-            snippet: lead.emailSnippet,
-            ownerId,
-            ownerEmail: owner?.email || null,
-            ownerName: owner?.username || null,
+          await publishNotificationEvent({
+            eventType: 'crm.lead.created',
+            entityType: 'lead',
+            entityId: lead.id,
+            userIds: [ownerId],
+            title: 'New inbound lead',
+            body: `${lead.name}${lead.companyName ? ` · ${lead.companyName}` : ''}${lead.emailSubject ? ` — ${lead.emailSubject}` : ''}`,
+            actionUrl: `/crm?crmTab=leads&leadId=${lead.id}`,
+            metadata: {
+              leadEmail: lead.email,
+              subject: lead.emailSubject,
+              snippet: lead.emailSnippet,
+            },
+            idempotencyKey: `crm-lead-created:${lead.id}`,
+            excludeActor: false,
           })
         } catch (notifyErr) {
           result.errors.push(notifyErr instanceof Error ? notifyErr.message : 'notify failed')
@@ -624,11 +608,6 @@ async function processSalesInboxLeadsUnlocked(opts?: {
         [RR_KEY]: JSON.stringify({ lastOwnerId, updatedAt: new Date().toISOString() }),
       })
     } catch { /* ignore */ }
-    if (Array.isArray(state.deed_notifications)) {
-      try {
-        await saveStoreKeys({ deed_notifications: JSON.stringify(state.deed_notifications) })
-      } catch { /* ignore */ }
-    }
   }
 
   return result

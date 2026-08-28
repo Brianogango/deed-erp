@@ -1,7 +1,6 @@
 const COMMON_APP_STATE_KEYS = [
   'deed_companySettings',
   'deed_systemSettings',
-  'deed_notifications',
   'deed_profileImages',
 ]
 

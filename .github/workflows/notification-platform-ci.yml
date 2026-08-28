@@ -1,0 +1,42 @@
+name: Notification Platform CI
+
+on:
+  push:
+    branches:
+      - chatgpt/notification-platform-hardening-2026-08-28
+  pull_request:
+    branches:
+      - master
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      DATABASE_URL: postgresql://deed_ci:deed_ci@127.0.0.1:5432/deed_ci
+      POSTGRES_URL: postgresql://deed_ci:deed_ci@127.0.0.1:5432/deed_ci
+      AUTH_SECRET: ci-auth-secret-ci-auth-secret-ci
+      NEXTAUTH_SECRET: ci-auth-secret-ci-auth-secret-ci
+      CUSTOMER_PORTAL_SECRET: ci-portal-secret-ci-portal-secret
+      NEXT_PUBLIC_APP_URL: http://localhost:3000
+      NEXTAUTH_URL: http://localhost:3000
+      INTERNAL_API_SECRET: ci-internal-api-secret
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20.19.0'
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Generate Prisma client
+        run: npm run prisma:generate
+      - name: TypeScript
+        run: npm run typecheck
+      - name: Unit tests
+        run: npm test
+      - name: Production build
+        run: npm run build

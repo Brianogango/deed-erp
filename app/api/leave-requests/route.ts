@@ -5,12 +5,7 @@ import { writeFinancialAudit } from '@/lib/finance-audit'
 import prisma from '@/lib/prisma'
 import { EMPLOYEE_LEAVE_TYPES, isLeaveTypeAllowedForGender, leaveDaysForRange, remainingBalance, requiredNotice, noticeDaysGiven, type EmployeeGender, type StoreLeaveType } from '@/lib/leave-utils'
 import { toClientRequest, toClientBalance, defaultBalances, adjustBalance, getBalance } from '@/lib/hr/leave-store'
-import {
-  notifyLeaveApplied,
-  notifyLeaveBookedForEmployee,
-  queueLeaveNotification,
-  toLeaveNotifyPayload,
-} from '@/lib/hr/leave-notifications'
+import { publishLeaveApplied, publishLeaveBooked } from '@/lib/notifications/hr-events'
 
 const HR_ROLES = ['director', 'admin_officer', 'finance_officer', 'technical_lead']
 
@@ -181,23 +176,14 @@ export async function POST(request: Request) {
       }
       await writeFinancialAudit({ userId: session.user.id, action: 'hr_leave_write', entityType: 'leave_request', newValues: { created: created.length } })
 
-      // Email after persist — never blocks the write.
+      // Persist the notification event before returning; provider delivery is asynchronous.
       for (const item of pendingNotify) {
-        queueLeaveNotification(async () => {
-          const row = await prisma.leaveRequest.findUnique({ where: { id: item.id } })
-          if (!row || row.status !== 'pending_hr') return
-          await notifyLeaveApplied(toLeaveNotifyPayload(row as any))
-        })
+        const row = await prisma.leaveRequest.findUnique({ where: { id: item.id } })
+        if (row?.status === 'pending_hr') await publishLeaveApplied(row as any, session.user.id)
       }
       for (const item of bookedNotify) {
-        queueLeaveNotification(async () => {
-          const row = await prisma.leaveRequest.findUnique({ where: { id: item.id } })
-          if (!row || row.status !== 'approved') return
-          await notifyLeaveBookedForEmployee(toLeaveNotifyPayload({
-            ...(row as any),
-            reviewedByName: row.reviewedByName || session.user.name,
-          }))
-        })
+        const row = await prisma.leaveRequest.findUnique({ where: { id: item.id } })
+        if (row?.status === 'approved') await publishLeaveBooked(row as any, session.user.id)
       }
 
       return NextResponse.json({ ok: true, added: created.length })
@@ -279,9 +265,7 @@ export async function POST(request: Request) {
     await adjustBalance(employee.id, leaveType, year, { pending: days })
     await writeFinancialAudit({ userId: session.user.id, action: 'apply_leave', entityType: 'leave_request', entityId: row.id, newValues: { leaveType, days, employeeId: employee.id } })
 
-    queueLeaveNotification(async () => {
-      await notifyLeaveApplied(toLeaveNotifyPayload(row as any))
-    })
+    await publishLeaveApplied(row as any, session.user.id)
 
     return NextResponse.json({ ok: true, added: 1, request: toClientRequest(row as any) })
   })

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getRequiredSession, withApiErrorHandling } from '@/lib/auth/api'
 import { generateRfqEmail, sendEmail } from '@/lib/integrations/email'
+import { appendDocumentEmailSend, parseEmailList } from '@/lib/document-email-sends'
 
 /**
  * POST /api/integrations/send-rfq
@@ -56,9 +57,33 @@ export async function POST(request: Request) {
       ...content,
     })
 
+    const historyBase = {
+      documentType: 'rfq' as const,
+      documentId: payload.rfq.ref,
+      documentRef: payload.rfq.ref,
+      to,
+      cc: parseEmailList(payload.cc),
+      subject: content.subject,
+      channel: 'email' as const,
+      kind: 'initial' as const,
+      sentById: session.user.id,
+      sentByName: session.user.name,
+    }
+
     if (!result.success) {
+      await appendDocumentEmailSend({
+        ...historyBase,
+        status: 'failed',
+        error: result.error || 'Failed to send RFQ email',
+      }).catch(error => console.error('[send-rfq] failed to record send history', error))
       throw Object.assign(new Error(result.error || 'Failed to send RFQ email'), { status: 502 })
     }
+
+    await appendDocumentEmailSend({
+      ...historyBase,
+      status: 'success',
+      messageId: result.messageId,
+    }).catch(error => console.error('[send-rfq] failed to record send history', error))
 
     return NextResponse.json({ success: true, messageId: result.messageId })
   })

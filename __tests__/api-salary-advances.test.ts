@@ -3,20 +3,18 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 const {
   mockGetSession,
   mockPrisma,
-  mockNotifyApplied,
-  mockNotifyDecision,
-  mockNotifyDisbursed,
-  mockQueue,
+  mockPublishApplied,
+  mockPublishDecision,
+  mockPublishDisbursed,
 } = vi.hoisted(() => ({
   mockGetSession: vi.fn(),
   mockPrisma: {
     salaryAdvance: { findMany: vi.fn(), findUnique: vi.fn(), create: vi.fn(), update: vi.fn() },
     employee: { findFirst: vi.fn() },
   },
-  mockNotifyApplied: vi.fn(),
-  mockNotifyDecision: vi.fn(),
-  mockNotifyDisbursed: vi.fn(),
-  mockQueue: vi.fn((task: () => Promise<void>) => { void task() }),
+  mockPublishApplied: vi.fn(),
+  mockPublishDecision: vi.fn(),
+  mockPublishDisbursed: vi.fn(),
 }))
 
 vi.mock('@/lib/auth/api', () => ({
@@ -31,19 +29,14 @@ vi.mock('@/lib/auth/api', () => ({
 }))
 vi.mock('@/lib/finance-audit', () => ({ writeFinancialAudit: vi.fn() }))
 vi.mock('@/lib/prisma', () => ({ default: mockPrisma }))
-vi.mock('@/lib/hr/salary-advance-notifications', () => ({
-  notifySalaryAdvanceApplied: mockNotifyApplied,
-  notifySalaryAdvanceDecision: mockNotifyDecision,
-  notifySalaryAdvanceDisbursed: mockNotifyDisbursed,
-  queueSalaryAdvanceNotification: mockQueue,
-  toSalaryAdvanceNotifyPayload: (row: any) => ({
-    id: row.id,
-    ref: row.reference || row.ref || row.id,
-    employeeId: row.employeeId,
-    employeeName: row.employeeName || 'Employee',
-    amount: Number(row.amount) || 0,
-    status: row.status,
-  }),
+vi.mock('@/lib/notifications/hr-events', () => ({
+  publishLeaveApplied: vi.fn(),
+  publishLeaveBooked: vi.fn(),
+  publishLeaveDecision: vi.fn(),
+  publishLeaveCancelled: vi.fn(),
+  publishSalaryAdvanceApplied: mockPublishApplied,
+  publishSalaryAdvanceDecision: mockPublishDecision,
+  publishSalaryAdvanceDisbursed: mockPublishDisbursed,
 }))
 
 import { GET, POST } from '@/app/api/salary-advances/route'
@@ -56,7 +49,6 @@ const jsonReq = (body: unknown) => new Request('http://localhost/api/salary-adva
 
 beforeEach(() => {
   vi.clearAllMocks()
-  mockQueue.mockImplementation((task: () => Promise<void>) => { void task() })
   mockPrisma.employee.findFirst.mockResolvedValue({ id: 'emp-tech' })
   mockPrisma.salaryAdvance.findMany.mockResolvedValue([])
   mockPrisma.salaryAdvance.create.mockImplementation(({ data }: any) => Promise.resolve({
@@ -101,17 +93,16 @@ describe('POST /api/salary-advances', () => {
   it('queues HR email notification after create', async () => {
     mockGetSession.mockResolvedValue(techSession)
     await POST(jsonReq({ employeeId: 'emp-tech', amount: 5000, employeeName: 'Tech' }))
-    expect(mockQueue).toHaveBeenCalled()
-    expect(mockNotifyApplied).toHaveBeenCalledWith(expect.objectContaining({
+    expect(mockPublishApplied).toHaveBeenCalledWith(expect.objectContaining({
       employeeId: 'emp-tech',
       amount: 5000,
-    }))
+    }), 'u-tech')
   })
   it('rejects non-positive amount', async () => {
     mockGetSession.mockResolvedValue(techSession)
     const res = await POST(jsonReq({ employeeId: 'emp-tech', amount: 0 }))
     expect(res.status).toBe(422)
-    expect(mockNotifyApplied).not.toHaveBeenCalled()
+    expect(mockPublishApplied).not.toHaveBeenCalled()
   })
 })
 
@@ -129,7 +120,7 @@ describe('PUT /api/salary-advances/[id] lifecycle', () => {
     const res = await PUT(new Request('http://localhost/x', { method: 'PUT', body: JSON.stringify({ action: 'decide', approved: true }) }), { params: { id: 'adv1' } })
     expect(res.status).toBe(200)
     expect(mockPrisma.salaryAdvance.update.mock.calls[0][0].data.status).toBe('approved')
-    expect(mockNotifyDecision).toHaveBeenCalledWith(expect.objectContaining({ id: 'adv1' }), 'approved')
+    expect(mockPublishDecision).toHaveBeenCalledWith(expect.objectContaining({ id: 'adv1' }), 'approved', 'u-fin')
   })
   it('emails applicant when advance is disbursed', async () => {
     mockGetSession.mockResolvedValue(financeSession)
@@ -137,13 +128,13 @@ describe('PUT /api/salary-advances/[id] lifecycle', () => {
     mockPrisma.salaryAdvance.update.mockImplementation(({ data }: any) => Promise.resolve({ id: 'adv1', amount: 5000, employeeId: 'emp-tech', ...data }))
     const res = await PUT(new Request('http://localhost/x', { method: 'PUT', body: JSON.stringify({ action: 'pay' }) }), { params: { id: 'adv1' } })
     expect(res.status).toBe(200)
-    expect(mockNotifyDisbursed).toHaveBeenCalledWith(expect.objectContaining({ id: 'adv1', status: 'paid' }))
+    expect(mockPublishDisbursed).toHaveBeenCalledWith(expect.objectContaining({ id: 'adv1', status: 'paid' }), 'u-fin')
   })
   it('refuses to pay an advance that is not approved', async () => {
     mockGetSession.mockResolvedValue(financeSession)
     mockPrisma.salaryAdvance.findUnique.mockResolvedValue({ id: 'adv1', status: 'pending', amount: 5000 })
     const res = await PUT(new Request('http://localhost/x', { method: 'PUT', body: JSON.stringify({ action: 'pay' }) }), { params: { id: 'adv1' } })
     expect(res.status).toBe(409)
-    expect(mockNotifyDisbursed).not.toHaveBeenCalled()
+    expect(mockPublishDisbursed).not.toHaveBeenCalled()
   })
 })

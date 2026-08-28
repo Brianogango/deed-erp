@@ -28,7 +28,12 @@
     "postinstall": "prisma generate",
     "test:e2e": "playwright test",
     "parity:check": "node scripts/check-blob-parity.mjs",
-    "seed:final-b974": "node scripts/seed-products-final-b974.mjs"
+    "seed:final-b974": "node scripts/seed-products-final-b974.mjs",
+    "typecheck": "tsc --noEmit",
+    "migrate:notifications:safe": "node scripts/run-safe-notification-platform.mjs",
+    "backfill:notifications": "node scripts/backfill-notifications-to-prisma.mjs",
+    "notifications:vapid": "node scripts/generate-vapid-keys.mjs",
+    "validate:notifications": "node --check scripts/run-safe-notification-platform.mjs && node --check scripts/backfill-notifications-to-prisma.mjs && node --check scripts/generate-vapid-keys.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.92.0",

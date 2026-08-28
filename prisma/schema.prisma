@@ -3562,3 +3562,223 @@ model AccountingOutbox {
   @@index([status, availableAt], map: "idx_accounting_outbox_pending")
   @@map("accounting_outbox")
 }
+
+
+// ── Notification platform ─────────────────────────────────────────────────────
+// Durable event/outbox/delivery ledger. Replaces deed_notifications and
+// deed_documentEmailSends app_state blobs as the authoritative source.
+
+model NotificationEvent {
+  id                       String   @id @default(uuid()) @db.Uuid
+  eventType                String   @map("event_type") @db.VarChar(120)
+  entityType               String?  @map("entity_type") @db.VarChar(80)
+  entityId                 String?  @map("entity_id") @db.VarChar(160)
+  actorUserId              String?  @map("actor_user_id") @db.Uuid
+  severity                 String   @default("info") @db.VarChar(20)
+  priority                 String   @default("normal") @db.VarChar(20)
+  title                    String   @db.VarChar(240)
+  body                     String
+  actionUrl                String?  @map("action_url")
+  metadata                 Json     @default("{}")
+  routing                  Json     @default("{}")
+  idempotencyKey           String   @unique @map("idempotency_key") @db.VarChar(240)
+  requiresAcknowledgement  Boolean  @default(false) @map("requires_acknowledgement")
+  dueAt                    DateTime? @map("due_at")
+  escalateAt               DateTime? @map("escalate_at")
+  resolvedAt               DateTime? @map("resolved_at")
+  resolvedById             String?  @map("resolved_by_id") @db.Uuid
+  createdAt                DateTime @default(now()) @map("created_at")
+  updatedAt                DateTime @updatedAt @map("updated_at")
+
+  recipients  NotificationRecipient[]
+  outbox      NotificationOutbox?
+  deliveries  NotificationDelivery[]
+  escalations NotificationEscalation[]
+
+  @@index([eventType, createdAt], map: "idx_notification_events_type_created")
+  @@index([entityType, entityId], map: "idx_notification_events_entity")
+  @@index([escalateAt], map: "idx_notification_events_escalation")
+  @@map("notification_events")
+}
+
+model NotificationRecipient {
+  id               String    @id @default(uuid()) @db.Uuid
+  eventId          String    @map("event_id") @db.Uuid
+  userId           String    @map("user_id") @db.Uuid
+  readAt           DateTime? @map("read_at")
+  acknowledgedAt   DateTime? @map("acknowledged_at")
+  acknowledgedBy   String?   @map("acknowledged_by") @db.Uuid
+  dismissedAt      DateTime? @map("dismissed_at")
+  resolvedAt       DateTime? @map("resolved_at")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+
+  event      NotificationEvent      @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  deliveries NotificationDelivery[]
+
+  @@unique([eventId, userId])
+  @@index([userId, createdAt], map: "idx_notification_recipients_user_created")
+  @@map("notification_recipients")
+}
+
+model NotificationOutbox {
+  id            String    @id @default(uuid()) @db.Uuid
+  eventId       String    @unique @map("event_id") @db.Uuid
+  status        String    @default("queued") @db.VarChar(30)
+  attemptCount  Int       @default(0) @map("attempt_count")
+  nextAttemptAt DateTime  @default(now()) @map("next_attempt_at")
+  lockedAt      DateTime? @map("locked_at")
+  lockedBy      String?   @map("locked_by") @db.VarChar(120)
+  lastError     String?   @map("last_error")
+  processedAt   DateTime? @map("processed_at")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  event NotificationEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@index([nextAttemptAt, createdAt], map: "idx_notification_outbox_due")
+  @@map("notification_outbox")
+}
+
+model NotificationDelivery {
+  id                String    @id @default(uuid()) @db.Uuid
+  eventId           String    @map("event_id") @db.Uuid
+  recipientId       String?   @map("recipient_id") @db.Uuid
+  userId            String?   @map("user_id") @db.Uuid
+  channel           String    @db.VarChar(20)
+  destination       String?   @db.VarChar(500)
+  provider          String?   @db.VarChar(40)
+  providerMessageId String?   @map("provider_message_id") @db.VarChar(500)
+  status            String    @default("queued") @db.VarChar(30)
+  attemptCount      Int       @default(0) @map("attempt_count")
+  nextAttemptAt     DateTime  @default(now()) @map("next_attempt_at")
+  lastAttemptAt     DateTime? @map("last_attempt_at")
+  sentAt            DateTime? @map("sent_at")
+  deliveredAt       DateTime? @map("delivered_at")
+  readAt            DateTime? @map("read_at")
+  failedAt          DateTime? @map("failed_at")
+  lastError         String?   @map("last_error")
+  idempotencyKey    String    @unique @map("idempotency_key") @db.VarChar(240)
+  metadata          Json      @default("{}")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  event      NotificationEvent      @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  recipient  NotificationRecipient? @relation(fields: [recipientId], references: [id], onDelete: SetNull)
+  attempts   NotificationAttempt[]
+  deadLetter NotificationDeadLetter?
+
+  @@index([nextAttemptAt, createdAt], map: "idx_notification_deliveries_due")
+  @@index([provider, providerMessageId], map: "idx_notification_deliveries_provider_message")
+  @@index([eventId, channel], map: "idx_notification_deliveries_event")
+  @@map("notification_deliveries")
+}
+
+model NotificationAttempt {
+  id               String    @id @default(uuid()) @db.Uuid
+  deliveryId       String    @map("delivery_id") @db.Uuid
+  attemptNo        Int       @map("attempt_no")
+  status           String    @db.VarChar(30)
+  provider         String?   @db.VarChar(40)
+  providerResponse Json?     @map("provider_response")
+  errorCode        String?   @map("error_code") @db.VarChar(100)
+  error            String?
+  startedAt        DateTime  @default(now()) @map("started_at")
+  finishedAt       DateTime? @map("finished_at")
+
+  delivery NotificationDelivery @relation(fields: [deliveryId], references: [id], onDelete: Cascade)
+
+  @@unique([deliveryId, attemptNo])
+  @@index([deliveryId, attemptNo], map: "idx_notification_attempts_delivery")
+  @@map("notification_attempts")
+}
+
+model NotificationPreference {
+  id              String   @id @default(uuid()) @db.Uuid
+  userId          String   @map("user_id") @db.Uuid
+  eventType       String   @default("*") @map("event_type") @db.VarChar(120)
+  inAppEnabled    Boolean  @default(true) @map("in_app_enabled")
+  pushEnabled     Boolean  @default(true) @map("push_enabled")
+  emailEnabled    Boolean  @default(true) @map("email_enabled")
+  whatsappEnabled Boolean  @default(false) @map("whatsapp_enabled")
+  smsEnabled      Boolean  @default(false) @map("sms_enabled")
+  soundEnabled    Boolean  @default(true) @map("sound_enabled")
+  digestEnabled   Boolean  @default(false) @map("digest_enabled")
+  quietStart      String?  @map("quiet_start") @db.VarChar(5)
+  quietEnd        String?  @map("quiet_end") @db.VarChar(5)
+  timezone        String   @default("Africa/Nairobi") @db.VarChar(80)
+  minimumSeverity String   @default("info") @map("minimum_severity") @db.VarChar(20)
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  @@unique([userId, eventType])
+  @@index([userId], map: "idx_notification_preferences_user")
+  @@map("notification_preferences")
+}
+
+model NotificationEndpoint {
+  id          String    @id @default(uuid()) @db.Uuid
+  userId      String    @map("user_id") @db.Uuid
+  kind        String    @default("web_push") @db.VarChar(30)
+  endpoint    String
+  p256dh      String?
+  authSecret  String?   @map("auth_secret")
+  deviceLabel String?   @map("device_label") @db.VarChar(120)
+  userAgent   String?   @map("user_agent")
+  lastSeenAt  DateTime  @default(now()) @map("last_seen_at")
+  revokedAt   DateTime? @map("revoked_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  @@index([userId], map: "idx_notification_endpoints_user_active")
+  @@map("notification_endpoints")
+}
+
+model NotificationTemplate {
+  id              String   @id @default(uuid()) @db.Uuid
+  eventType       String   @map("event_type") @db.VarChar(120)
+  channel         String   @db.VarChar(20)
+  version         Int      @default(1)
+  subjectTemplate String?  @map("subject_template")
+  bodyTemplate    String   @map("body_template")
+  isActive        Boolean  @default(true) @map("is_active")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  @@unique([eventType, channel, version])
+  @@index([eventType, channel], map: "idx_notification_templates_active")
+  @@map("notification_templates")
+}
+
+model NotificationEscalation {
+  id               String    @id @default(uuid()) @db.Uuid
+  eventId          String    @map("event_id") @db.Uuid
+  level            Int       @default(1)
+  targetUserId     String?   @map("target_user_id") @db.Uuid
+  status           String    @default("queued") @db.VarChar(30)
+  escalatedAt      DateTime? @map("escalated_at")
+  acknowledgedAt  DateTime? @map("acknowledged_at")
+  createdAt        DateTime  @default(now()) @map("created_at")
+
+  event NotificationEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, level, targetUserId])
+  @@index([createdAt], map: "idx_notification_escalations_pending")
+  @@map("notification_escalations")
+}
+
+model NotificationDeadLetter {
+  id             String    @id @default(uuid()) @db.Uuid
+  deliveryId     String    @unique @map("delivery_id") @db.Uuid
+  reason         String
+  payload        Json      @default("{}")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  resolvedAt     DateTime? @map("resolved_at")
+  resolvedById   String?   @map("resolved_by_id") @db.Uuid
+  resolutionNote String?   @map("resolution_note")
+
+  delivery NotificationDelivery @relation(fields: [deliveryId], references: [id], onDelete: Cascade)
+
+  @@index([createdAt], map: "idx_notification_dead_letters_open")
+  @@map("notification_dead_letters")
+}
