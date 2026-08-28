@@ -51,9 +51,10 @@ type DashboardData = {
     id: string
     name: string
     currency: string
-    bookBalance: number
+    bookBalance: number | null
     bankBalance: number | null
     variance: number | null
+    sharedGl: boolean
     status: 'reconciled' | 'items_pending' | 'no_statement'
   }>
   budget: {
@@ -491,7 +492,7 @@ export default function AccountingDashboard({ onNavigate }: Props) {
                     <tr key={bank.id}>
                       <td><strong>{bank.name}</strong><small>{bank.currency}</small></td>
                       <td>{bank.bankBalance == null ? '—' : formatKes(bank.bankBalance, true)}</td>
-                      <td>{formatKes(bank.bookBalance, true)}</td>
+                      <td>{bank.bookBalance == null ? <span className="accounting-dashboard__shared-gl">Shared GL</span> : formatKes(bank.bookBalance, true)}</td>
                       <td className={bank.variance && Math.abs(bank.variance) > 1 ? 'is-negative' : ''}>{bank.variance == null ? '—' : formatKes(bank.variance, true)}</td>
                       <td><span className={`accounting-dashboard__status is-${bank.status}`}><i />{bank.status === 'reconciled' ? 'Reconciled' : bank.status === 'items_pending' ? 'Items pending' : 'No statement'}</span></td>
                     </tr>
@@ -583,7 +584,11 @@ export default function AccountingDashboard({ onNavigate }: Props) {
                         <td>{row.period}</td>
                         <td>{formatKes(row.amount, true)}</td>
                         <td>{formatDate(row.dueDate)}</td>
-                        <td><span className="accounting-dashboard__due"><i />Due</span></td>
+                        <td>
+                          <span className={row.status === 'settled' ? 'accounting-dashboard__status is-reconciled' : 'accounting-dashboard__due'}>
+                            <i />{row.status === 'settled' ? 'Settled' : 'Due'}
+                          </span>
+                        </td>
                       </tr>
                     )) : <tr><td colSpan={5}><EmptyValue>No posted statutory payroll obligations</EmptyValue></td></tr>}
                   </tbody>
