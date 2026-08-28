@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState, type ComponentType, type CSSProperties, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react'
 import {
   Activity,
   AlertTriangle,
@@ -18,6 +18,7 @@ import {
   TrendingUp,
   UsersRound,
   WalletCards,
+  type LucideIcon,
 } from 'lucide-react'
 import {
   Bar,
@@ -163,7 +164,7 @@ type Props = {
   onNavigate: (tab: string) => void
 }
 
-const kpiIcons: Record<string, ComponentType<{ size?: number; strokeWidth?: number }>> = {
+const kpiIcons: Record<string, LucideIcon> = {
   revenue: TrendingUp,
   grossProfit: CircleDollarSign,
   netProfit: BarChart3,
