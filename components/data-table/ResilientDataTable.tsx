@@ -27,6 +27,22 @@ export default function ResilientDataTable<T>(props: DataTableProps<T>) {
   } = props
 
   const [internalSearch, setInternalSearch] = useState('')
+  const effectiveSearch = searchValue !== undefined ? searchValue : internalSearch
+
+  // Hooks stay unconditional even for bespoke/server-side search callers.
+  // In that mode the memo simply hands rows through untouched.
+  const filteredRows = useMemo(() => {
+    if (!clientSearch || !effectiveSearch.trim()) return rows
+    return rows.filter(row => {
+      const values = columns.map(column => getColumnValue(column, row, 'search'))
+      return matchesSearch(effectiveSearch, ...values)
+    })
+  }, [rows, columns, effectiveSearch, clientSearch])
+
+  const handleSearchChange = (value: string) => {
+    if (searchValue === undefined) setInternalSearch(value)
+    onSearchChange?.(value)
+  }
 
   if (!clientSearch) {
     return (
@@ -35,20 +51,6 @@ export default function ResilientDataTable<T>(props: DataTableProps<T>) {
         clientSearch={false}
       />
     )
-  }
-
-  const effectiveSearch = searchValue !== undefined ? searchValue : internalSearch
-  const filteredRows = useMemo(() => {
-    if (!effectiveSearch.trim()) return rows
-    return rows.filter(row => {
-      const values = columns.map(column => getColumnValue(column, row, 'search'))
-      return matchesSearch(effectiveSearch, ...values)
-    })
-  }, [rows, columns, effectiveSearch])
-
-  const handleSearchChange = (value: string) => {
-    if (searchValue === undefined) setInternalSearch(value)
-    onSearchChange?.(value)
   }
 
   return (
