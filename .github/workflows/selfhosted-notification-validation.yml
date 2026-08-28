@@ -1,4 +1,5 @@
 name: Self-hosted Notification Validation
+# Fallback validation path when hosted runner capacity or billing is unavailable.
 
 on:
   push:
