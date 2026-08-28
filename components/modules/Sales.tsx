@@ -915,7 +915,11 @@ function SalesContent() {
       params.delete('view')
     }
     const qs = params.toString()
-    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false })
+    const target = qs ? `${pathname}?${qs}` : pathname
+    // List → record is a real navigation and must create browser history.
+    // Record → delivery / record → list are in-place context changes.
+    if (id && !searchParams.get('id')) router.push(target, { scroll: false })
+    else router.replace(target, { scroll: false })
   }, [searchParams, router, pathname])
 
   useEffect(() => {
