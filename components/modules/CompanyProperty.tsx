@@ -1,4 +1,5 @@
 'use client'
+import { matchesSearchTerms } from '@/lib/search'
 
 import { useMemo, useState } from 'react'
 import { useFinanceStore, fmtDate, fmtKes, type CompanyAsset, type CompanyAssetInput } from '@/lib/store'
@@ -436,15 +437,19 @@ export default function CompanyProperty() {
   const filtered = useMemo(() => {
     let list = filter === 'all' ? items : items.filter(a => a.status === filter)
     if (search.trim()) {
-      const q = search.trim().toLowerCase()
-      list = list.filter(a =>
-        a.ref.toLowerCase().includes(q)
-        || a.name.toLowerCase().includes(q)
-        || (a.assetTag ?? '').toLowerCase().includes(q)
-        || (a.serialNumber ?? '').toLowerCase().includes(q)
-        || a.locationName.toLowerCase().includes(q)
-        || (a.custodianName ?? '').toLowerCase().includes(q),
-      )
+      list = list.filter(a => matchesSearchTerms(search, [
+        a.ref,
+        a.name,
+        a.description,
+        a.assetTag,
+        a.serialNumber,
+        a.locationName,
+        a.custodianName,
+        a.supplierName,
+        a.purchaseOrderRef,
+        a.billRef,
+        a.status,
+      ]))
     }
     return [...list].sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt)))
   }, [items, filter, search])
