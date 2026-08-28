@@ -66,5 +66,9 @@ describe('finalizeValuation', () => {
     expect(manyErrors.ok).toBe(false)
     expect(manyErrors.reason).toContain('short 1')
     expect(manyErrors.reason).toContain('short 2')
+    const nonStock = finalizeValuation([
+      { productId: 'svc', result: { skipped: true, reason: 'non_stock' } },
+    ])
+    expect(nonStock.ok).toBe(true)
   })
 })

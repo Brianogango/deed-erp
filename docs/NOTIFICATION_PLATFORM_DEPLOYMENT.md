@@ -8,9 +8,11 @@ Apply the non-destructive foundation before deploying code that reads the relati
 
 ```bash
 cd /var/www/deed-erp
-node scripts/run-safe-notification-platform.mjs
+bash scripts/apply-sql-as-postgres.sh database/migrations/20260828_notification_platform_safe.sql
 npx prisma generate
 ```
+
+`node scripts/run-safe-notification-platform.mjs` is a wrapper around the same helper. Do **not** feed this file through `node-pg` `pool.query` — the trigger uses dollar-quoting and several tables `REFERENCES users`, which the app DB role cannot create.
 
 The migration does **not** delete `deed_notifications` or `deed_documentEmailSends` from `app_state`. They remain available during the cutover window.
 
