@@ -3,6 +3,7 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Fa, faChevronDown } from '@/components/icons'
+import { matchesSearchTerms } from '@/lib/search'
 
 export type SearchablePickOption = {
   id: string
@@ -43,10 +44,9 @@ export default function SearchablePick({
   const display = open ? query : (selected?.label || '')
 
   const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase()
-    if (!q) return options.slice(0, 80)
+    if (!query.trim()) return options.slice(0, 80)
     return options
-      .filter(option => option.label.toLowerCase().includes(q))
+      .filter(option => matchesSearchTerms(query, [option.label, option.id]))
       .slice(0, 80)
   }, [options, query])
 
@@ -91,20 +91,32 @@ export default function SearchablePick({
       if (menuRef.current?.contains(target)) return
       closeMenu()
     }
-    const onViewport = () => closeMenu()
+    const onResize = () => closeMenu()
+    const onScroll = (event: Event) => {
+      const target = event.target
+      if (target instanceof Node && menuRef.current?.contains(target)) return
+      closeMenu()
+    }
     document.addEventListener('mousedown', onPointerDown)
-    window.addEventListener('resize', onViewport)
-    window.addEventListener('scroll', onViewport, true)
+    window.addEventListener('resize', onResize)
+    window.addEventListener('scroll', onScroll, true)
     return () => {
       document.removeEventListener('mousedown', onPointerDown)
-      window.removeEventListener('resize', onViewport)
-      window.removeEventListener('scroll', onViewport, true)
+      window.removeEventListener('resize', onResize)
+      window.removeEventListener('scroll', onScroll, true)
     }
   }, [open])
 
   useEffect(() => {
     if (activeIndex >= filtered.length) setActiveIndex(0)
   }, [filtered.length, activeIndex])
+
+  useEffect(() => {
+    if (!open || filtered.length === 0) return
+    menuRef.current
+      ?.querySelector<HTMLElement>(`[data-reconfig-option-index="${activeIndex}"]`)
+      ?.scrollIntoView({ block: 'nearest' })
+  }, [open, activeIndex, filtered.length])
 
   return (
     <div ref={wrapRef} className="reconfig-pick">
@@ -191,6 +203,7 @@ export default function SearchablePick({
                 type="button"
                 role="option"
                 aria-selected={chosen}
+                data-reconfig-option-index={index}
                 className={`reconfig-pick-option${active ? ' is-active' : ''}${chosen ? ' is-chosen' : ''}`}
                 onMouseEnter={() => setActiveIndex(index)}
                 onMouseDown={e => e.preventDefault()}
