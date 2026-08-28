@@ -7,7 +7,7 @@ import { buildHistoricalAgeing } from '@/lib/accounting/ageing.server'
 import { buildCashFlowStatement } from '@/lib/accounting/cash-flow.server'
 import { buildVatReturnFromTaxLedger } from '@/lib/accounting/vat-reports.server'
 import { runIntegritySuite } from '@/lib/accounting/integrity-suite'
-import { classifyExpenseBucket } from '@/lib/accounting/management-pl'
+import { COA_ROLE_CODES } from '@/lib/accounting/coa-roles'
 
 export const dynamic = 'force-dynamic'
 
@@ -301,12 +301,6 @@ export async function GET(request: NextRequest) {
       } else if (line.account.accountType === 'expense') {
         const expense = debit - credit
         row.expenses += expense
-        const bucket = classifyExpenseBucket({
-          code: line.account.code,
-          group: line.account.accountGroup || undefined,
-          subGroup: line.account.subGroup || undefined,
-        })
-        void bucket
       }
     }
     const revenueTrend = [...trendMap.values()].map(r => ({
@@ -339,15 +333,43 @@ export async function GET(request: NextRequest) {
     for (const st of latestStatements) {
       if (!latestByBank.has(st.bankAccountId)) latestByBank.set(st.bankAccountId, st)
     }
+    const payrollLiabilityCodes = [
+      COA_ROLE_CODES.paye_payable,
+      COA_ROLE_CODES.nssf_payable,
+      COA_ROLE_CODES.shif_payable,
+      COA_ROLE_CODES.housing_levy_payable,
+    ]
+    const payrollLiabilityAccounts = await prisma.accountCode.findMany({
+      where: { code: { in: payrollLiabilityCodes } },
+      select: { id: true, code: true },
+    })
+    const allBalanceAccountIds = [
+      ...new Set([
+        ...bankAccounts.map(b => b.glAccountId),
+        ...payrollLiabilityAccounts.map(a => a.id),
+      ]),
+    ]
     const balances = await accountBalances(
       new Date(`${iso(asOfDate)}T23:59:59Z`),
-      [...new Set(bankAccounts.map(b => b.glAccountId))],
+      allBalanceAccountIds,
     )
+    const accountIdByCode = new Map(payrollLiabilityAccounts.map(a => [a.code, a.id]))
+    const liabilityBalance = (code: string) => {
+      const id = accountIdByCode.get(code)
+      if (!id) return 0
+      return money(Math.max(0, -(balances.get(id) || 0)))
+    }
+
+    const glUsage = new Map<string, number>()
+    for (const bank of bankAccounts) {
+      glUsage.set(bank.glAccountId, (glUsage.get(bank.glAccountId) || 0) + 1)
+    }
     const banks = bankAccounts.map(bank => {
       const statement = latestByBank.get(bank.id)
-      const bookBalance = money(balances.get(bank.glAccountId) || 0)
+      const hasDedicatedGl = (glUsage.get(bank.glAccountId) || 0) === 1
+      const bookBalance = hasDedicatedGl ? money(balances.get(bank.glAccountId) || 0) : null
       const bankBalance = statement ? money(statement.closingBalance) : null
-      const variance = bankBalance == null ? null : money(bankBalance - bookBalance)
+      const variance = bankBalance == null || bookBalance == null ? null : money(bankBalance - bookBalance)
       return {
         id: bank.id,
         name: bank.name,
@@ -355,6 +377,7 @@ export async function GET(request: NextRequest) {
         bookBalance,
         bankBalance,
         variance,
+        sharedGl: !hasDedicatedGl,
         status: statement?.status === 'reconciled'
           ? 'reconciled'
           : statement
@@ -410,10 +433,38 @@ export async function GET(request: NextRequest) {
     const inventoryDays = inventoryTurnover > 0 ? Math.round(365 / inventoryTurnover) : null
 
     const payrollObligations = payroll ? [
-      { id: 'paye', label: 'PAYE', period: payroll.periodEnd.toLocaleDateString('en-KE', { month: 'short', year: 'numeric', timeZone: 'UTC' }), amount: money(payroll.totalPaye), dueDate: iso(nextMonthDue(payroll.periodEnd, 9)), status: 'due' },
-      { id: 'nssf', label: 'NSSF', period: payroll.periodEnd.toLocaleDateString('en-KE', { month: 'short', year: 'numeric', timeZone: 'UTC' }), amount: money(payroll.totalNssf), dueDate: iso(nextMonthDue(payroll.periodEnd, 15)), status: 'due' },
-      { id: 'shif', label: 'SHIF', period: payroll.periodEnd.toLocaleDateString('en-KE', { month: 'short', year: 'numeric', timeZone: 'UTC' }), amount: money(payroll.totalShif), dueDate: iso(nextMonthDue(payroll.periodEnd, 9)), status: 'due' },
-      { id: 'housing', label: 'Housing Levy', period: payroll.periodEnd.toLocaleDateString('en-KE', { month: 'short', year: 'numeric', timeZone: 'UTC' }), amount: money(payroll.totalHousingLevy), dueDate: iso(nextMonthDue(payroll.periodEnd, 9)), status: 'due' },
+      {
+        id: 'paye',
+        label: 'PAYE',
+        period: payroll.periodEnd.toLocaleDateString('en-KE', { month: 'short', year: 'numeric', timeZone: 'UTC' }),
+        amount: liabilityBalance(COA_ROLE_CODES.paye_payable),
+        dueDate: iso(nextMonthDue(payroll.periodEnd, 9)),
+        status: liabilityBalance(COA_ROLE_CODES.paye_payable) > 0.01 ? 'due' : 'settled',
+      },
+      {
+        id: 'nssf',
+        label: 'NSSF',
+        period: payroll.periodEnd.toLocaleDateString('en-KE', { month: 'short', year: 'numeric', timeZone: 'UTC' }),
+        amount: liabilityBalance(COA_ROLE_CODES.nssf_payable),
+        dueDate: iso(nextMonthDue(payroll.periodEnd, 15)),
+        status: liabilityBalance(COA_ROLE_CODES.nssf_payable) > 0.01 ? 'due' : 'settled',
+      },
+      {
+        id: 'shif',
+        label: 'SHIF',
+        period: payroll.periodEnd.toLocaleDateString('en-KE', { month: 'short', year: 'numeric', timeZone: 'UTC' }),
+        amount: liabilityBalance(COA_ROLE_CODES.shif_payable),
+        dueDate: iso(nextMonthDue(payroll.periodEnd, 9)),
+        status: liabilityBalance(COA_ROLE_CODES.shif_payable) > 0.01 ? 'due' : 'settled',
+      },
+      {
+        id: 'housing',
+        label: 'Housing Levy',
+        period: payroll.periodEnd.toLocaleDateString('en-KE', { month: 'short', year: 'numeric', timeZone: 'UTC' }),
+        amount: liabilityBalance(COA_ROLE_CODES.housing_levy_payable),
+        dueDate: iso(nextMonthDue(payroll.periodEnd, 9)),
+        status: liabilityBalance(COA_ROLE_CODES.housing_levy_payable) > 0.01 ? 'due' : 'settled',
+      },
     ] : []
 
     const overdueCustomer = overdueCustomerInvoices
