@@ -200,17 +200,17 @@ const FILTER_TABS: { id: NotifFilter; label: string }[] = [
   { id: 'system',        label: 'System' },
 ]
 
-function notificationCategory(notification: AppNotification): 'actionable' | 'informational' | 'system' {
+function notificationCategory(notification: BellNotification): 'actionable' | 'informational' | 'system' {
   if (notification.type === 'system') return 'system'
   if (notification.type === 'asset') return 'informational'
   return 'actionable'
 }
 
-function groupByDate(notifs: AppNotification[]): { label: string; items: AppNotification[] }[] {
+function groupByDate(notifs: BellNotification[]): { label: string; items: BellNotification[] }[] {
   const now = new Date()
   const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
   const yesterdayStart = todayStart - 86400000
-  const groups: { label: string; items: AppNotification[] }[] = [
+  const groups: { label: string; items: BellNotification[] }[] = [
     { label: 'Today', items: [] },
     { label: 'Yesterday', items: [] },
     { label: 'Older', items: [] },
@@ -233,13 +233,15 @@ function NotificationsPanel({
   onMarkRead,
   onMarkAll,
   onClearRead,
+  onAcknowledge,
   onNavigate,
 }: {
-  notifs: AppNotification[]
+  notifs: BellNotification[]
   onClose: () => void
   onMarkRead: (id: string) => void
   onMarkAll: () => void
   onClearRead: () => void
+  onAcknowledge: (id: string) => void
   onNavigate: (module: ModuleId, path?: string) => void
 }) {
   const [activeFilter, setActiveFilter] = useState<NotifFilter>('all')
@@ -382,6 +384,7 @@ function NotificationsPanel({
                       key={n.id}
                       notification={n}
                       onMarkRead={() => onMarkRead(n.id)}
+                      onAcknowledge={() => onAcknowledge(n.id)}
                       onNavigate={() => {
                         if (n.module) onNavigate(n.module, n.path)
                         onClose()
@@ -417,10 +420,12 @@ function NotificationsPanel({
 function NotificationItem({
   notification,
   onMarkRead,
+  onAcknowledge,
   onNavigate,
 }: {
-  notification: AppNotification
+  notification: BellNotification
   onMarkRead: () => void
+  onAcknowledge: () => void
   onNavigate: () => void
 }) {
   const category = notificationCategory(notification)
@@ -487,7 +492,7 @@ function NotificationItem({
             <span className="font-bold">What changed:</span> {whatChanged}
           </p>
         )}
-        <div className="flex items-center gap-2 mt-2">
+        <div className="flex items-center gap-2 mt-2 flex-wrap">
           <span className="text-[10px] font-bold text-[var(--text-4)] uppercase tracking-wider">
             {timeAgo(notification.createdAt)}
           </span>
@@ -499,7 +504,30 @@ function NotificationItem({
               </span>
             </>
           )}
+          {notification.resolvedAt && (
+            <span className="text-[9px] font-bold rounded-full px-2 py-0.5 bg-emerald-100 text-emerald-700">
+              Resolved
+            </span>
+          )}
         </div>
+        {notification.requiresAcknowledgement && !notification.acknowledgedAt && !notification.resolvedAt && (
+          <button
+            type="button"
+            onClick={event => {
+              event.preventDefault()
+              event.stopPropagation()
+              onAcknowledge()
+            }}
+            className="mt-2 inline-flex items-center rounded-lg bg-[var(--primary)] px-2.5 py-1.5 text-[10px] font-bold text-white hover:opacity-90"
+          >
+            Acknowledge
+          </button>
+        )}
+        {notification.acknowledgedAt && !notification.resolvedAt && (
+          <span className="mt-2 inline-flex text-[9px] font-bold rounded-full px-2 py-0.5 bg-blue-100 text-blue-700">
+            Acknowledged
+          </span>
+        )}
       </div>
     </div>
   )
