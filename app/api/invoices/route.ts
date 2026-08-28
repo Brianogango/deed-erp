@@ -10,6 +10,7 @@ import { getNextDocNumber } from '@/lib/doc-ref-counter'
 import { checkFiscalLock } from '@/lib/fiscal-lock.server'
 import { parsePaginationParams, paginatedResponse } from '@/lib/api-pagination'
 import { isPosInvoiceWrite, POS_INVOICE_WRITE_ROLES, salesCommissionAppliesToInvoice } from '@/lib/sales/commission-closer'
+import { ensurePrismaPurchaseOrder } from '@/lib/purchase/po-prisma-sync'
 
 // technical_lead: repair quotes create/update their linked invoice (see recordRepairBilling).
 const WRITE_ROLES = ['director', 'finance_officer', 'admin_officer', 'technical_lead']
@@ -242,6 +243,9 @@ export async function POST(request: Request) {
     const purchaseOrderId = optionalUuid(body.purchaseOrderId)
     let invoice
     if (!isCreditNote && purchaseOrderId) {
+      // A blob-only PO (created while a product was missing from Prisma) must
+      // not fail the bill — materialize it first, then run the 3-way match.
+      await ensurePrismaPurchaseOrder(purchaseOrderId)
       try {
         invoice = await prisma.$transaction(async tx => {
           const [po, activeBills] = await Promise.all([

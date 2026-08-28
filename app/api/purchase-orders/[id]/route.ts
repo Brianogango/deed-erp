@@ -5,6 +5,7 @@ import { optionalUuid } from '@/lib/legacy-compat'
 import { lockVersionMismatch, nextLockVersion, readExpectedVersion } from '@/lib/optimistic-lock'
 import { writeFinancialAudit } from '@/lib/finance-audit'
 import { WRITE_ROLES, mapPOToClient, mirrorPurchaseOrder } from '../route'
+import { resolvePOLineProducts } from '@/lib/purchase/po-prisma-sync'
 
 /** PO statuses that must never be removed from the record (audit FIN-003). */
 const PROTECTED_PO_STATUSES = new Set(['partial', 'received'])
@@ -87,7 +88,9 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
     if (body.notes !== undefined) data.notes = body.notes ?? null
 
     if (Array.isArray(body.lines)) {
-      data.items = { deleteMany: {}, create: mapPOItemsForUpdate(body.lines, existing.items) }
+      // Same P2003 guard as PO create: resolve/auto-create missing products.
+      const resolvedLines = await resolvePOLineProducts(mapPOItemsForUpdate(body.lines, existing.items))
+      data.items = { deleteMany: {}, create: resolvedLines.filter(l => l.productId) }
     }
 
     const updated = await prisma.purchaseOrder.update({

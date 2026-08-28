@@ -275,6 +275,20 @@ export async function PUT(request: Request, { params }: { params: { id: string }
     let postingBillLines: any[] = []
     let postingMirror: Awaited<ReturnType<typeof resolveBlobInvoiceMirror>> | null = null
     if (willPostNow) {
+      // Posting assigns the official number. A client-allocated number can
+      // collide with an existing document (stale local counters) — the unique
+      // invoice_number constraint would otherwise surface as a bare 500.
+      const chosenNumber = String(data.invoiceNumber ?? before.invoiceNumber)
+      const numberClash = await prisma.invoice.findFirst({
+        where: { invoiceNumber: chosenNumber, id: { not: params.id } },
+        select: { id: true },
+      })
+      if (numberClash) {
+        const kind = (body.type === 'vendor_bill' || before.documentType === 'vendor_bill') ? 'vendor_bill' : 'invoice'
+        const { getNextDocNumber } = await import('@/lib/doc-ref-counter')
+        data.invoiceNumber = await getNextDocNumber(kind)
+      }
+
       // Infer statutory category from taxRate so PO bills and older drafts
       // (taxRate 16, category not_selected) can post. Mapping used to zero
       // VAT on those rows; inferInvoiceLineTaxCategory keeps 16% as standard_16.
