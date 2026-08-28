@@ -40,7 +40,7 @@ describe('stock posting builders', () => {
     const lines = buildStockReceiptLines({
       inventoryDebit: 1000,
       grniCredit: 1100,
-      priceDiffLabel: '6210',
+      priceDiffLabel: '6307',
     })
     const resolved = lines.map(l => ({
       account: resolvePostingAccountLabel(l),
@@ -50,7 +50,7 @@ describe('stock posting builders', () => {
     expect(() => assertPostingBalanced(resolved)).not.toThrow()
     expect(resolved.find(l => l.account.includes('1200'))?.debit).toBe(1000)
     expect(resolved.find(l => l.account.includes('3201'))?.credit).toBe(1100)
-    expect(resolved.find(l => l.account === '6210')?.debit).toBe(100)
+    expect(resolved.find(l => l.account === '6307')?.debit).toBe(100)
   })
 
   it('builds COGS / inventory reduction lines', () => {

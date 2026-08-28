@@ -38,7 +38,7 @@ describe('buy-back settlement: pay or add as credit', () => {
     expect(canCreditBuyBack({ status: 'approved', total: 0 }).ok).toBe(false)
   })
 
-  it('credits 3102 and does not touch petty cash', () => {
+  it('credits 3313 and does not touch petty cash', () => {
     const lines = buildBuyBackStoreCreditJournalLines({
       buyBackRef: 'BBK/0001',
       creditRef: 'CN/2026/0009',
@@ -51,8 +51,8 @@ describe('buy-back settlement: pay or add as credit', () => {
     expect(lines[1]?.account).toBe(CUSTOMER_CREDITS_ACCOUNT)
     expect(lines[1]?.credit).toBe(25000)
     expect(lines.some(l => l.account.includes('2211'))).toBe(false)
-    expect(CUSTOMER_CREDITS_CODE).toBe('3102')
-    expect(TRADE_IN_PURCHASES_CODE).toBe('6108')
+    expect(CUSTOMER_CREDITS_CODE).toBe('3313')
+    expect(TRADE_IN_PURCHASES_CODE).toBe('6114')
     expect(isBuyBackStoreCredit({ paymentMethod: BUYBACK_STORE_CREDIT_METHOD })).toBe(true)
   })
 })

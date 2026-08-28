@@ -64,9 +64,9 @@ export function classifyExpenseBucket(row: {
   if (OPERATING_GROUPS.has(group)) return 'operating'
 
   // Code-range fallbacks when CoA group is missing (blob-mirrored / unlabeled lines).
-  if (/^6[01]\d{2}$/.test(code)) return 'cogs'
-  if (code === '6401' || /^65\d{2}$/.test(code)) return 'finance'
-  if (/^6[2-9]\d{2}$/.test(code) || /^7\d{3}$/.test(code)) return 'operating'
+  if (/^6[01234]\d{2}$/.test(code)) return 'cogs' // COGS, purchases, direct & other direct
+  if (/^67\d{2}$/.test(code)) return 'finance' // financial expenses
+  if (/^6[56]\d{2}$/.test(code) || /^7\d{3}$/.test(code)) return 'operating'
 
   return 'operating'
 }

@@ -46,13 +46,13 @@ describe('product account resolution', () => {
       saleAccountCode: '5099',
     })
     expect(resolved.saleAccountCode).toBe('5099')
-    expect(resolved.costAccountCode).toBe('6102')
+    expect(resolved.costAccountCode).toBe('6301')
   })
 
   it('prefills empty form fields from category', () => {
     const filled = applyCategoryAccountDefaults('Services', {})
     expect(filled.productKind).toBe('service')
-    expect(filled.saleAccountCode).toBe('5003')
+    expect(filled.saleAccountCode).toBe('5101')
     expect(filled.inventoryAccountCode || '').toBe('')
   })
 
@@ -69,16 +69,16 @@ describe('product account resolution', () => {
       side: 'revenue',
       accounts: [
         { code: '5001', name: 'Hardware Sales' },
-        { code: '5003', name: 'Service Revenue' },
+        { code: '5101', name: 'Service Revenue' },
       ],
     })
     expect(buckets).toEqual(expect.arrayContaining([
       { account: '5001 - Hardware Sales', amount: 1200 },
-      { account: '5003 - Service Revenue', amount: 500 },
+      { account: '5101 - Service Revenue', amount: 500 },
     ]))
     expect(COMPANY_ACCOUNT_FALLBACKS.saleAccountCode).toBe('5000')
-    expect(COMPANY_ACCOUNT_FALLBACKS.adjustmentAccountCode).toBe('6200')
-    expect(COMPANY_ACCOUNT_FALLBACKS.writeOffAccountCode).toBe('6205')
-    expect(COMPANY_ACCOUNT_FALLBACKS.priceDifferenceAccountCode).toBe('6210')
+    expect(COMPANY_ACCOUNT_FALLBACKS.adjustmentAccountCode).toBe('6305')
+    expect(COMPANY_ACCOUNT_FALLBACKS.writeOffAccountCode).toBe('6306')
+    expect(COMPANY_ACCOUNT_FALLBACKS.priceDifferenceAccountCode).toBe('6307')
   })
 })

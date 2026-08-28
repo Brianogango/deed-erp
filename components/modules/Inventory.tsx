@@ -1073,11 +1073,11 @@ function InventoryContent() {
     const headers = ['Name', 'Category', 'Product Type', 'Unit', 'Barcode', 'Sale Price', 'Cost Price', 'Tax Rate', 'Min Stock', 'Warranty Months', 'Description', 'Revenue Account', 'Purchase Account', 'Inventory Asset Account', 'COGS Account', 'Adjustment Account', 'Write-off Account', 'Price Difference Account']
     const categories = ALL_CATEGORIES.join(' | ')
     const sampleRows = [
-      ['HP ProBook 450 G9', 'Laptops', 'storable', 'pcs', '1234567890123', 85000, 72000, 0, 3, 12, 'Intel Core i5, 8GB RAM, 256GB SSD', '5001', '6101', '1200', '6001', '6200', '6205', '6210'],
-      ['Dell OptiPlex 3000', 'Desktops', 'storable', 'pcs', '9876543210987', 75000, 63000, 0, 2, 12, 'Intel Core i3, 4GB RAM, 1TB HDD', '5001', '6101', '1200', '6001', '6200', '6205', '6210'],
+      ['HP ProBook 450 G9', 'Laptops', 'storable', 'pcs', '1234567890123', 85000, 72000, 0, 3, 12, 'Intel Core i5, 8GB RAM, 256GB SSD', '5001', '6101', '1200', '6001', '6305', '6306', '6307'],
+      ['Dell OptiPlex 3000', 'Desktops', 'storable', 'pcs', '9876543210987', 75000, 63000, 0, 2, 12, 'Intel Core i3, 4GB RAM, 1TB HDD', '5003', '6103', '1200', '6001', '6305', '6306', '6307'],
       ['Cat6 Ethernet Cable 5m', 'Networking', 'consumable', 'pcs', '', 850, 500, 0, 10, 0, 'Shielded Cat6 patch cable', '5001', '6101', '', '', '', '', ''],
       ['HP LaserJet Toner CF217A', 'Parts & Components', 'consumable', 'pcs', '', 3500, 2800, 0, 5, 0, 'Compatible black toner', '5002', '6101', '', '', '', '', ''],
-      ['Monthly Support Contract', 'Services', 'service', 'month', '', 15000, 0, 0, 0, 0, 'Monthly IT support retainer', '5003', '', '', '', '', '', ''],
+      ['Monthly Support Contract', 'Services', 'service', 'month', '', 15000, 0, 0, 0, 0, 'Monthly IT support retainer', '5101', '', '', '', '', '', ''],
     ]
     const notes = [
       [`Categories: ${categories}`],

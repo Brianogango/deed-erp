@@ -2593,20 +2593,22 @@ const bankAccountIdForMethod = (method?: string, bankAccountId?: string) => {
 }
 
 const expenseAccountForCategory = (category?: ExpenseCategory) => {
+  // Official Deed CoA (2025) operating-expense block — keep in sync with
+  // lib/accounting/expense-pos-accounts.ts.
   const map: Partial<Record<ExpenseCategory, string>> = {
-    courier: '6420 - Courier & Delivery',
-    office_supplies: '6405 - Office Supplies',
-    water: '6415 - Utilities - Water',
-    printing: '6410 - Printing & Stationery',
-    transport: '6400 - Transport & Fuel',
-    meals: '6430 - Meals & Entertainment',
-    utilities: '6415 - Utilities',
-    software: '6440 - Software & Subscriptions',
+    courier: '6519 - Courier and Delivery',
+    office_supplies: '6518 - Office Expenses',
+    water: '6506 - Water and Electricity',
+    printing: '6504 - Printing and Stationery',
+    transport: '6507 - Fuel and Transport',
+    meals: '6511 - Subsistence and Accommodation',
+    utilities: '6506 - Water and Electricity',
+    software: '6503 - Computer Expenses',
     hardware: '6521 - Expensed Assets',
-    maintenance: '6450 - Maintenance & Repairs',
-    other: '6499 - Other Operating Expenses',
+    maintenance: '6505 - Repairs and Maintenance',
+    other: '6599 - Other Operating Expenses',
   }
-  return map[category ?? 'other'] ?? '6499 - Other Operating Expenses'
+  return map[category ?? 'other'] ?? '6599 - Other Operating Expenses'
 }
 
 type VendorJournalOpts = {
@@ -2791,7 +2793,7 @@ const buildDepositPaymentJournal = (deposit: Pick<Deposit, 'id' | 'ref' | 'custo
 const buildExpenseApprovalJournal = (expense: Expense): JournalEntry => {
   const isReimbursement = expense.paymentMethod === 'reimbursement'
   const liabilityOrBank = isReimbursement
-    ? '3105 - Employee Reimbursements Payable'
+    ? '3312 - Employee Reimbursements Payable'
     : bankAccountLabel(bankAccountIdForMethod(expense.paymentMethod), expense.paymentMethod)
   const lines = [
     accountLine(expenseAccountForCategory(expense.category), `${expense.ref}: ${expense.description}`, expense.amount, 0),
@@ -2803,7 +2805,7 @@ const buildExpenseApprovalJournal = (expense: Expense): JournalEntry => {
 const buildExpenseReimbursementJournal = (expense: Expense, bankAccountId?: string): JournalEntry => {
   const actualBankId = bankAccountIdForMethod('bank_transfer', bankAccountId)
   const lines = [
-    accountLine('3105 - Employee Reimbursements Payable', `Settle reimbursement: ${expense.submittedByName}`, expense.amount, 0),
+    accountLine('3312 - Employee Reimbursements Payable', `Settle reimbursement: ${expense.submittedByName}`, expense.amount, 0),
     accountLine(bankAccountLabel(actualBankId), `Cash paid for ${expense.ref}`, 0, expense.amount),
   ]
   return { id: uid(), ref: `JRN/RIM/${expense.ref}`, date: now(), source: 'expense', description: `Expense reimbursement — ${expense.ref}`, status: 'posted', expenseId: expense.id, bankAccountId: actualBankId, lines, totalDebit: expense.amount, totalCredit: expense.amount }
@@ -2832,7 +2834,7 @@ const buildCustomerCreditJournal = (inv: Invoice, creditRef: string, amount: num
   const lines = [
     accountLine('5000 - Sales Revenue', `Credit note ${creditRef}: reverse ${inv.ref}`, revenueReversal, 0),
     ...(vatReversal > 0 ? [accountLine('3301 - Output VAT Payable', `Credit VAT ${creditRef}`, vatReversal, 0)] : []),
-    accountLine('3102 - Customer Credits', `Customer credit: ${inv.partnerName}`, 0, amount),
+    accountLine('3313 - Customer Credits', `Customer credit: ${inv.partnerName}`, 0, amount),
   ]
   return {
     id: uid(),
@@ -2850,7 +2852,7 @@ const buildCustomerCreditJournal = (inv: Invoice, creditRef: string, amount: num
 
 const buildCustomerCreditApplicationJournal = (inv: Invoice, amount: number, creditRefs: string): JournalEntry => {
   const lines = [
-    accountLine('3102 - Customer Credits', `Apply credit ${creditRefs}`, amount, 0),
+    accountLine('3313 - Customer Credits', `Apply credit ${creditRefs}`, amount, 0),
     accountLine('1800 - Accounts Receivable', `Credit applied to ${inv.ref}`, 0, amount),
   ]
   return {
@@ -9013,7 +9015,7 @@ const storeCtx: AppState = {
       if (!canApprovePayroll(currentUser())) { showToast('Only Finance or HR approvers can post payroll', 'error'); return }
       if (payroll.status !== 'approved') { showToast('Payroll must be approved before posting', 'error'); return }
       // The statutory GL journal is created by the payroll posting transaction
-      // (6201/6202/6203 Dr; 3110/3305-3309/3311/1810 Cr). postedJournalId is
+      // (6601/6606/6609 Dr; 3310/3302-3306/3311/1931 Cr). postedJournalId is
       // system-controlled there — sending it is rejected with 400.
       let serverJournalId: string | null = null
       try {
@@ -9033,9 +9035,9 @@ const storeCtx: AppState = {
       const journal: JournalEntry = {
         id: uid(), ref: `JRN/PAY/${payroll.year}/${payroll.month}`, date: now(), source: 'payroll', description: `Payroll journal for ${payroll.month}/${payroll.year}`, status: 'posted', payrollRunId: payroll.id,
         lines: [
-          { id: uid(), account: '6201 - Salaries and Wages', description: `Payroll expense ${payroll.ref}`, debit: payroll.totalGross, credit: 0 },
+          { id: uid(), account: '6601 - Salaries', description: `Payroll expense ${payroll.ref}`, debit: payroll.totalGross, credit: 0 },
           { id: uid(), account: '3311 - Other Payroll Deductions Payable', description: `Payroll deductions ${payroll.ref}`, debit: 0, credit: payroll.totalDeductions },
-          { id: uid(), account: '3110 - Net Payroll Payable', description: `Net salaries payable ${payroll.ref}`, debit: 0, credit: payroll.totalNet },
+          { id: uid(), account: '3310 - Net Payroll Payable', description: `Net salaries payable ${payroll.ref}`, debit: 0, credit: payroll.totalNet },
         ],
         totalDebit: payroll.totalGross,
         totalCredit: payroll.totalGross,
@@ -17521,10 +17523,10 @@ const storeCtx: AppState = {
       if (Math.abs(cashDifference) >= 1) {
         if (cashDifference > 0) {
           controlLines.push(accountLine('2211 - Petty Cash', 'Cash over on session close', cashDifference, 0))
-          controlLines.push(accountLine('6495 - Cash Over/Short', 'Cash over on session close', 0, cashDifference))
+          controlLines.push(accountLine('6595 - Cash Over/Short', 'Cash over on session close', 0, cashDifference))
         } else {
           const short = Math.abs(cashDifference)
-          controlLines.push(accountLine('6495 - Cash Over/Short', 'Cash short on session close', short, 0))
+          controlLines.push(accountLine('6595 - Cash Over/Short', 'Cash short on session close', short, 0))
           controlLines.push(accountLine('2211 - Petty Cash', 'Cash short on session close', 0, short))
         }
       }

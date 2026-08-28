@@ -32,14 +32,14 @@ describe('payment outstanding residuals', () => {
 
 describe('outstanding clearing CoA roles', () => {
   it('maps outstanding receipts/payments to live clearing codes', () => {
-    expect(COA_ROLE_CODES.outstanding_receipts).toBe('1805')
-    expect(COA_ROLE_CODES.outstanding_payments).toBe('3005')
-    expect(labelForRole('outstanding_receipts')).toBe('1805 - Outstanding Receipts')
+    expect(COA_ROLE_CODES.outstanding_receipts).toBe('1933')
+    expect(COA_ROLE_CODES.outstanding_payments).toBe('3202')
+    expect(labelForRole('outstanding_receipts')).toBe('1933 - Outstanding Receipts')
   })
 })
 
 describe('outstanding posting builders', () => {
-  it('parks unallocated customer receipt on 1805', () => {
+  it('parks unallocated customer receipt on 1933', () => {
     const lines = buildPaymentWithOutstandingLines({
       partnerName: 'Acme',
       paymentRef: 'RCPT-1',
@@ -55,7 +55,7 @@ describe('outstanding posting builders', () => {
     expect(() => assertPostingBalanced(resolved)).not.toThrow()
     expect(resolved.find(l => l.account.includes('2201'))?.debit).toBe(1000)
     expect(resolved.find(l => l.account.includes('1800'))?.credit).toBe(600)
-    expect(resolved.find(l => l.account.includes('1805'))?.credit).toBe(400)
+    expect(resolved.find(l => l.account.includes('1933'))?.credit).toBe(400)
   })
 
   it('clears outstanding onto AR on later allocation', () => {
@@ -70,11 +70,11 @@ describe('outstanding posting builders', () => {
       credit: Number(l.credit || 0),
     }))
     expect(() => assertPostingBalanced(resolved)).not.toThrow()
-    expect(resolved[0].account).toBe('1805 - Outstanding Receipts')
+    expect(resolved[0].account).toBe('1933 - Outstanding Receipts')
     expect(resolved[1].account).toBe('1800 - Accounts Receivable')
   })
 
-  it('builds vendor outstanding payment (3005)', () => {
+  it('builds vendor outstanding payment (3202)', () => {
     const lines = buildPaymentWithOutstandingLines({
       partnerName: 'Vendor Co',
       paymentRef: 'PAY-9',
@@ -89,6 +89,6 @@ describe('outstanding posting builders', () => {
       credit: Number(l.credit || 0),
     }))
     expect(() => assertPostingBalanced(resolved)).not.toThrow()
-    expect(resolved.find(l => l.account.includes('3005'))?.debit).toBe(2500)
+    expect(resolved.find(l => l.account.includes('3202'))?.debit).toBe(2500)
   })
 })

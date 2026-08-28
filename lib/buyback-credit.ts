@@ -1,6 +1,6 @@
 /**
  * After a buy-back is approved, settle it exactly once:
- * pay cash/M-Pesa/bank, or add the same amount as store credit (3102).
+ * pay cash/M-Pesa/bank, or add the same amount as store credit (3313).
  * Never both. Stocking still happens after either settlement.
  */
 
@@ -12,8 +12,8 @@ export const BUYBACK_STORE_CREDIT_METHOD = 'store_credit' as const
 export type BuyBackPayoutMethod = BuyBackCashMethod | typeof BUYBACK_STORE_CREDIT_METHOD
 
 /** Expense counterpart when the payout is store credit instead of cash. */
-export const TRADE_IN_PURCHASES_CODE = '6108'
-export const TRADE_IN_PURCHASES_ACCOUNT = '6108 - Trade-in Purchases'
+export const TRADE_IN_PURCHASES_CODE = '6114'
+export const TRADE_IN_PURCHASES_ACCOUNT = '6114 - Trade-in Purchases'
 
 export type BuyBackSettleLike = {
   status?: string
