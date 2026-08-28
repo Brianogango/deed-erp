@@ -245,7 +245,7 @@ export async function POST(request: Request) {
     if (!isCreditNote && purchaseOrderId) {
       // A blob-only PO (created while a product was missing from Prisma) must
       // not fail the bill — materialize it first, then run the 3-way match.
-      await ensurePrismaPurchaseOrder(purchaseOrderId)
+      await ensurePrismaPurchaseOrder(purchaseOrderId, actor.id)
       try {
         invoice = await prisma.$transaction(async tx => {
           const [po, activeBills] = await Promise.all([

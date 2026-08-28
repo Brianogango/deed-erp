@@ -256,6 +256,7 @@ export async function PUT(request: Request, { params }: { params: { id: string }
           await assertVendorBillThreeWayMatchServer({
             purchaseOrderId: poId,
             billLines,
+            excludeBillId: params.id,
           })
         } catch (err: any) {
           const status = typeof err?.status === 'number' ? err.status : 409
@@ -379,6 +380,7 @@ export async function PUT(request: Request, { params }: { params: { id: string }
           purchaseOrderId: postingPurchaseOrderId,
           vendorId: before.clientId,
           billLines: postingBillLines,
+          excludeBillId: params.id,
         })
       }
 

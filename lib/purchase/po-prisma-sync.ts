@@ -52,7 +52,7 @@ export async function resolvePOLineProducts<T extends { productId?: string | nul
  * bills and GRN valuation can post. Returns true when the PO exists after
  * the call. Never overwrites an existing Prisma PO.
  */
-export async function ensurePrismaPurchaseOrder(poId: string): Promise<boolean> {
+export async function ensurePrismaPurchaseOrder(poId: string, actorUserId?: string | null): Promise<boolean> {
   if (!optionalUuid(poId)) return false
   const existing = await prisma.purchaseOrder.findUnique({ where: { id: poId }, select: { id: true } })
   if (existing) return true
@@ -64,6 +64,15 @@ export async function ensurePrismaPurchaseOrder(poId: string): Promise<boolean> 
 
   const clientId = await resolveClientId(prisma, po.vendorId, { name: po.vendorName })
   await prisma.client.updateMany({ where: { id: clientId, isVendor: false }, data: { isVendor: true } })
+
+  // created_by is a required FK — fall back to any active user when the
+  // caller's id is not a Prisma user (e.g. a legacy/blob session id).
+  let createdById = actorUserId && optionalUuid(actorUserId) ? actorUserId : null
+  if (!createdById || !(await prisma.user.findUnique({ where: { id: createdById }, select: { id: true } }))) {
+    const anyUser = await prisma.user.findFirst({ where: { isActive: true }, orderBy: { createdAt: 'asc' }, select: { id: true } })
+    createdById = anyUser?.id ?? null
+  }
+  if (!createdById) return false
 
   const rawLines = (Array.isArray(po.lines) ? po.lines : [])
     .filter((l: any) => Boolean(optionalUuid(l.productId)))
@@ -92,6 +101,7 @@ export async function ensurePrismaPurchaseOrder(poId: string): Promise<boolean> 
       taxAmount: Math.max(0, Number(po.taxTotal ?? po.taxAmount) || 0),
       totalAmount: Math.max(0, Number(po.total ?? po.totalAmount) || 0),
       notes: po.notes ? String(po.notes) : null,
+      createdById,
       items: items.length ? { create: items.filter(i => i.productId) } : undefined,
     } as any,
   })
