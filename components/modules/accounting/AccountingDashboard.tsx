@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState, type ComponentType, type CSSProperties } from 'react'
+import { useCallback, useEffect, useMemo, useState, type ComponentType, type CSSProperties, type ReactNode } from 'react'
 import {
   Activity,
   AlertTriangle,
@@ -241,8 +241,8 @@ function Panel({
 }: {
   title: string
   subtitle?: string
-  action?: React.ReactNode
-  children: React.ReactNode
+  action?: ReactNode
+  children: ReactNode
   className?: string
   delay?: number
 }) {
@@ -307,7 +307,7 @@ function AgeingPanel({ title, totals, kind, onNavigate }: {
   )
 }
 
-function EmptyValue({ children = 'Not configured' }: { children?: React.ReactNode }) {
+function EmptyValue({ children = 'Not configured' }: { children?: ReactNode }) {
   return <span className="accounting-dashboard__muted-pill">{children}</span>
 }
 
@@ -434,7 +434,7 @@ export default function AccountingDashboard({ onNavigate }: Props) {
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--finance-border)" />
                     <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fontSize: 10, fill: 'var(--finance-text-3)' }} />
                     <YAxis tickLine={false} axisLine={false} tickFormatter={v => formatKes(v, true).replace('KES ', '')} tick={{ fontSize: 9, fill: 'var(--finance-text-3)' }} width={54} />
-                    <Tooltip formatter={(v: number | string) => formatKes(Number(v))} labelStyle={{ color: '#111827' }} />
+                    <Tooltip formatter={(v: unknown) => formatKes(Number(Array.isArray(v) ? v[0] : v))} labelStyle={{ color: '#111827' }} />
                     <Line type="monotone" dataKey="revenue" name="Revenue" stroke="#2563eb" strokeWidth={2.2} dot={{ r: 2.5 }} activeDot={{ r: 4 }} animationDuration={700} />
                     <Line type="monotone" dataKey="expenses" name="Expenses" stroke="#14b8a6" strokeWidth={2} dot={{ r: 2 }} animationDuration={850} />
                     <Line type="monotone" dataKey="profit" name="Net Profit" stroke="#172554" strokeWidth={2} dot={{ r: 2 }} animationDuration={1000} />
@@ -455,7 +455,7 @@ export default function AccountingDashboard({ onNavigate }: Props) {
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--finance-border)" />
                     <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fontSize: 10, fill: 'var(--finance-text-3)' }} />
                     <YAxis tickLine={false} axisLine={false} tickFormatter={v => formatKes(v, true).replace('KES ', '')} tick={{ fontSize: 9, fill: 'var(--finance-text-3)' }} width={54} />
-                    <Tooltip formatter={(v: number | string) => formatKes(Number(v))} labelStyle={{ color: '#111827' }} />
+                    <Tooltip formatter={(v: unknown) => formatKes(Number(Array.isArray(v) ? v[0] : v))} labelStyle={{ color: '#111827' }} />
                     <Bar dataKey="inflows" name="Cash Inflows" fill="#10b981" radius={[3, 3, 0, 0]} animationDuration={700} />
                     <Bar dataKey="outflowsNegative" name="Cash Outflows" fill="#ef4444" radius={[0, 0, 3, 3]} animationDuration={850} />
                     <Line type="monotone" dataKey="net" name="Net Cash" stroke="#2563eb" strokeWidth={2.2} dot={{ r: 2.5 }} animationDuration={1000} />
