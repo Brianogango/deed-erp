@@ -10740,7 +10740,11 @@ const storeCtx: AppState = {
       }
 
       if (newSerials.length > 0) {
-        setSerials(prev => [...prev, ...newSerials])
+        setSerials(prev => {
+          const have = new Set(prev.map(s => s.id))
+          const fresh = newSerials.filter(s => !have.has(s.id))
+          return fresh.length ? [...prev, ...fresh] : prev
+        })
       }
       if (bulkItems.length > 0) {
         setBulkStock(prev => bulkItems.reduce(
@@ -13628,7 +13632,14 @@ const storeCtx: AppState = {
       // Server already wrote products/bulkStock/serials blobs — do not re-increment
       // local qty (that caused double stock on sync). Only append serial rows we
       // built for UI until the next store hydrate.
-      if (newSerials.length > 0) setSerials(p => [...p, ...newSerials])
+      if (newSerials.length > 0) setSerials(p => {
+        // The server mutation already persisted these serial ids — after a
+        // re-hydrate they are present locally too, and a blind append would
+        // store the same serial twice.
+        const have = new Set(p.map(s => s.id))
+        const fresh = newSerials.filter(s => !have.has(s.id))
+        return fresh.length ? [...p, ...fresh] : p
+      })
       if (newRefurbJobs.length > 0) setRefurbishmentJobs(p => [...p, ...newRefurbJobs])
 
       // Update receipt status
