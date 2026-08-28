@@ -28,6 +28,7 @@ import PaymentDetailsPicker from '@/components/payment/PaymentDetailsPicker'
 import DocumentEmailSendHistory from '@/components/email/DocumentEmailSendHistory'
 import { ScheduleInvoiceDeliveryModal } from './ScheduleInvoiceDeliveryModal'
 import { canScheduleInvoiceDelivery, findInvoiceDeliveryJob } from '@/lib/invoice-delivery-job'
+import { financeInvoiceListPath } from '@/lib/finance-invoice'
 import {
   alignPaymentDetailsToTax,
   documentHasVat,
@@ -207,8 +208,8 @@ export default function InvoiceDetail() {
       <div className="mod-page">
         <RecordHeader
           title="Invoice not found"
-          onBack={() => router.push('/finance')}
-          backLabel="Back to finance"
+          onBack={() => router.push(financeInvoiceListPath('customer_invoice'))}
+          backLabel="Back to invoices"
         />
         <div className="mod-body p-12 text-center text-[var(--text-3)] text-sm">Invoice not found.</div>
       </div>
@@ -216,6 +217,7 @@ export default function InvoiceDetail() {
   }
 
   const docLabel = invoice.type === 'customer_invoice' ? 'Invoice' : 'Bill'
+  const documentListPath = financeInvoiceListPath(invoice.type)
   const balance = Math.max(0, invoice.total - invoice.amountPaid)
   const pct = invoice.total > 0 ? Math.min(100, (invoice.amountPaid / invoice.total) * 100) : 0
   // Odoo semantics: document state + separately computed payment status.
@@ -452,7 +454,7 @@ export default function InvoiceDetail() {
       <div className="invoice-detail__chrome">
         <Breadcrumbs
           items={[
-            { label: invoice.type === 'customer_invoice' ? 'Invoices' : 'Bills', onClick: () => router.push('/finance') },
+            { label: invoice.type === 'customer_invoice' ? 'Invoices' : 'Bills', onClick: () => router.push(documentListPath) },
             { label: titleRef },
           ]}
         />
@@ -1070,7 +1072,7 @@ export default function InvoiceDetail() {
           message={`Delete this ${docLabel.toLowerCase()}? This cannot be undone.`}
           confirmLabel="Delete"
           confirmColor="bg-red-600 hover:bg-red-700"
-          onConfirm={() => { deleteInvoice(invoice.id); router.push('/finance') }}
+          onConfirm={() => { deleteInvoice(invoice.id); router.push(documentListPath) }}
           onCancel={() => setShowDelete(false)}
         />
       )}
