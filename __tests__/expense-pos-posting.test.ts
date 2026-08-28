@@ -36,8 +36,8 @@ describe('expense-pos account helpers', () => {
   })
 
   it('maps bank ids to cashbook labels', () => {
-    expect(bankAccountLabelForId('mpesa')).toBe('2210 - M-Pesa Paybill')
-    expect(bankAccountLabelForId('ncba')).toBe('2201 - NCBA Bank')
+    expect(bankAccountLabelForId('mpesa')).toBe('2211 - Petty Cash / Mobile Money')
+    expect(bankAccountLabelForId('ncba')).toBe('2201 - ABSA Bank')
   })
 })
 
@@ -69,7 +69,7 @@ describe('expense / POS builders', () => {
       category: 'courier',
       paymentMethod: 'mpesa',
     })
-    expect(resolvePostingAccountLabel(lines[1])).toBe('2210 - M-Pesa Paybill')
+    expect(resolvePostingAccountLabel(lines[1])).toBe('2211 - Petty Cash / Mobile Money')
   })
 
   it('builds reimbursement payout (Dr 3105, Cr bank)', () => {
@@ -80,7 +80,30 @@ describe('expense / POS builders', () => {
       bankAccountId: 'ncba',
     })
     expect(resolvePostingAccountLabel(lines[0])).toBe('3105 - Employee Reimbursements Payable')
-    expect(resolvePostingAccountLabel(lines[1])).toBe('2201 - NCBA Bank')
+    expect(resolvePostingAccountLabel(lines[1])).toBe('2201 - ABSA Bank')
+  })
+
+  it('maps legacy KCB tender ids onto an existing canonical bank account', () => {
+    expect(bankAccountLabelForId('kcb')).toBe('2201 - ABSA Bank')
+  })
+
+  it('omits a zero-value tender line for a fully loyalty-funded sale', () => {
+    const lines = buildPosSaleLines({
+      total: 0,
+      subtotal: 1000,
+      tax: 0,
+      pointsRedeemed: 1000,
+      orderRef: 'POS0000',
+      paymentMethod: 'mpesa',
+    })
+    const resolved = lines.map(l => ({
+      debit: Number(l.debit || 0),
+      credit: Number(l.credit || 0),
+      account: resolvePostingAccountLabel(l),
+    }))
+    expect(() => assertPostingBalanced(resolved)).not.toThrow()
+    expect(resolved.some(l => l.account === '2211 - Petty Cash / Mobile Money')).toBe(false)
+    expect(resolved.some(l => l.account === '5200 - Sales Discounts')).toBe(true)
   })
 
   it('builds balanced POS sale with VAT and loyalty', () => {
@@ -98,7 +121,7 @@ describe('expense / POS builders', () => {
       account: resolvePostingAccountLabel(l),
     }))
     expect(() => assertPostingBalanced(resolved)).not.toThrow()
-    expect(resolved.some(l => l.account === '2210 - M-Pesa Paybill')).toBe(true)
+    expect(resolved.some(l => l.account === '2211 - Petty Cash / Mobile Money')).toBe(true)
     expect(resolved.some(l => l.account === '3301 - Output VAT Payable')).toBe(true)
     expect(resolved.some(l => l.account === '5200 - Sales Discounts')).toBe(true)
   })

@@ -3,6 +3,7 @@
 --      (Lenovo/HP catalog titles are 300–500+ characters).
 --   2. Perpetual inventory posting requires CoA 6200 / 6205 / 6210 which
 --      were never seeded (62xx on live is payroll 6201–6203).
+--   3. POS loyalty posting requires contra-revenue 5200.
 -- Additive and non-destructive. Safe to re-run.
 
 BEGIN;
@@ -24,6 +25,8 @@ SELECT gen_random_uuid(), v.code, v.name, v.account_type, v.account_group, v.sub
        true, false, 0, v.notes, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
 FROM (
   VALUES
+    ('5200', 'Sales Discounts & Loyalty Redemptions', 'revenue', 'Revenue - Contra', 'Discounts',
+     'Contra-revenue for approved sales discounts and POS loyalty redemptions'),
     ('6200', 'Inventory Adjustment', 'expense', 'Direct Expenses', 'Inventory',
      'Stock count / reconfiguration inventory adjustment'),
     ('6205', 'Inventory Write-off', 'expense', 'Direct Expenses', 'Inventory',

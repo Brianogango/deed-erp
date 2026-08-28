@@ -1,3 +1,5 @@
+import { cashAccountRoleForBankId, labelForRole } from '@/lib/accounting/coa-roles'
+
 /**
  * Expense / POS account label helpers (Finance Phase 7).
  * Labels match historical store.tsx journal strings for dual-write parity.
@@ -34,7 +36,13 @@ export function expenseAccountForCategory(category?: ExpenseCategoryKey): string
   return map[category ?? 'other'] ?? '6499 - Other Operating Expenses'
 }
 
-/** Historical cashbook bank labels used by expense/POS blob journals. */
+/**
+ * Resolve cashbook/POS tender ids onto the canonical live CoA.
+ *
+ * The strict posting engine resolves by account code. Legacy UI labels used
+ * 2210 for M-Pesa and 2203 for KCB even though those codes are not guaranteed
+ * in the canonical CoA, causing otherwise-valid POS/expense journals to fail.
+ */
 export function bankAccountLabelForId(bankAccountId?: string, method?: string): string {
   const id = bankAccountId
     || (method === 'mpesa' || method === 'mpesa_company'
@@ -42,11 +50,7 @@ export function bankAccountLabelForId(bankAccountId?: string, method?: string): 
       : method === 'cash' || method === 'petty_cash'
         ? 'cash'
         : 'ncba')
-  if (id === 'mpesa') return '2210 - M-Pesa Paybill'
-  if (id === 'cash') return '2211 - Petty Cash'
-  if (id === 'equity') return '2202 - Equity Bank'
-  if (id === 'kcb') return '2203 - KCB Bank'
-  return '2201 - NCBA Bank'
+  return labelForRole(cashAccountRoleForBankId(id))
 }
 
 export function bankAccountIdForPaymentMethod(method?: string, bankAccountId?: string): string {

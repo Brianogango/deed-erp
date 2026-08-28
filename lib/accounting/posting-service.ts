@@ -455,14 +455,17 @@ export function buildPosSaleLines(params: {
   const tax = roundMoney(params.tax)
   const points = roundMoney(params.pointsRedeemed)
   const bankId = bankAccountIdForPaymentMethod(params.paymentMethod, params.bankAccountId)
-  const lines: PostingLineInput[] = [
-    {
+  const lines: PostingLineInput[] = []
+  // A fully loyalty-funded sale has no cash/bank tender. Do not emit a
+  // zero-value tender line: strict journal validation correctly rejects it.
+  if (total > 0) {
+    lines.push({
       accountLabel: bankAccountLabelForId(bankId, params.paymentMethod),
       description: `POS receipt ${params.orderRef}`,
       debit: total,
       credit: 0,
-    },
-  ]
+    })
+  }
   if (points > 0) {
     lines.push({
       accountLabel: '5200 - Sales Discounts',

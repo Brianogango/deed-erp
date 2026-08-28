@@ -77,6 +77,7 @@ export function buildZeroBalanceCoaTemplate(): CoaTemplateAccount[] {
     { code: '5000', name: 'Sales — Products (Invoices)', type: 'revenue', group: 'Revenue - Products', subGroup: 'Product', balance: 0, isDynamic: true, dynamicKey: 'revenue' },
     { code: '5001', name: 'Laptops', type: 'revenue', group: 'Revenue - Products', subGroup: 'Product', balance: 0 },
     { code: '5105', name: 'Interest Income', type: 'revenue', group: 'Other Income', subGroup: 'Finance', balance: 0 },
+    { code: '5200', name: 'Sales Discounts & Loyalty Redemptions', type: 'revenue', group: 'Revenue - Contra', subGroup: 'Discounts', balance: 0, notes: 'Contra-revenue for approved sales discounts and POS loyalty redemptions' },
     { code: '6001', name: 'Cost of Goods Sold', type: 'expense', group: 'Direct Expenses', subGroup: 'COGS', balance: 0 },
     { code: '6101', name: 'Laptops', type: 'expense', group: 'Local Purchases', subGroup: 'Local Purchases', balance: 0 },
     // Debit when a buy-back is added as 3102 credit instead of paid in cash.
