@@ -1,5 +1,6 @@
 'use client'
 
+import { matchesSearchTerms } from '@/lib/search'
 import { Children, useState, useEffect, useRef, ReactNode, useCallback, useId, cloneElement, isValidElement, useMemo, type ReactElement } from 'react'
 import { createPortal } from 'react-dom'
 import { useAnchoredMenu } from '@/lib/data-table/use-anchored-menu'
@@ -1475,7 +1476,7 @@ export function SearchPicker<T extends { id: string }>({
   }, [selectedLabel, open])
 
   const filtered = items.filter(item =>
-    JSON.stringify(item).toLowerCase().includes(query.toLowerCase())
+    matchesSearchTerms(query, [item])
   )
 
   const positionMenu = useCallback(() => {
