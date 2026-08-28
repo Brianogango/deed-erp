@@ -141,7 +141,7 @@ export function AssignTechnicianModal({ repair, onClose }: { repair: RepairOrder
  * LogDiagnosisModal
  */
 export function LogDiagnosisModal({ repair, onClose }: { repair: RepairOrder, onClose: () => void }) {
-  const { logDiagnosis, updateRepair, showToast } = useRepairStore()
+  const { logDiagnosis, showToast } = useRepairStore()
   const existingDiagnosis = repair.diagnosis
   const isRevision = !!existingDiagnosis
   const revisionCount = repair.diagnosisHistory?.length ?? (existingDiagnosis ? 1 : 0)
@@ -174,12 +174,17 @@ export function LogDiagnosisModal({ repair, onClose }: { repair: RepairOrder, on
       estimatedHours: Number(diagForm.estimatedHours) || 0,
       revisionType: isRevision ? diagForm.revisionType : 'initial',
       revisionReason: isRevision ? diagForm.revisionReason.trim() : undefined,
-    } as any)
-    if (diagForm.clientCausedDamage) {
-      updateRepair(repair.id, { clientCausedDamage: true, clientDamageReason: diagForm.clientDamageReason || undefined, underWarranty: false, warrantyCoverage: 'void', warrantyVerificationStatus: 'excluded_client_damage' })
-    } else if (repair.underWarranty) {
-      updateRepair(repair.id, { warrantyCoverage })
-    }
+    } as any, diagForm.clientCausedDamage
+      ? {
+          clientCausedDamage: true,
+          clientDamageReason: diagForm.clientDamageReason || undefined,
+          underWarranty: false,
+          warrantyCoverage: 'void',
+          warrantyVerificationStatus: 'excluded_client_damage',
+        }
+      : repair.underWarranty
+        ? { warrantyCoverage }
+        : undefined)
     onClose()
   }
 
