@@ -1386,12 +1386,7 @@ function AccountingContent() {
         )}
         {/* ── Tab Content ────────────────────────────────────────────────────── */}
         {tab === 'dashboard' ? (
-          <AccountingDashboard
-            onNavigate={target => {
-              if (target === 'reports') setReport('pl')
-              else setTab(target as MainTab)
-            }}
-          />
+          <AccountingDashboard onNavigate={target => setTab(target as MainTab)} />
         ) : (
         <div className={`card overflow-hidden rounded-xl finance-content-card finance-subcomponent-shell finance-content-card--${tab}`}>
           {tab === 'integrity' ? (
