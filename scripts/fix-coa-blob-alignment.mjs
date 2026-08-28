@@ -47,6 +47,18 @@ const PRODUCT_RENUMBER = {
   6200: '6305', 6205: '6306', 6210: '6307',
 }
 
+/**
+ * Legacy blob journal labels whose account was renumbered. Dead codes
+ * (3105/6405/6430/6495/6499) are always safe to rewrite — posting to them is
+ * impossible now. Bare '5003'/'6102' labels (no name suffix) predate the
+ * official grid and meant services revenue / services purchases; labeled
+ * future lines like '6102 - Accessories' are never touched.
+ */
+const JOURNAL_LABEL_REMAP = {
+  3105: '3312', 6405: '6518', 6430: '6511', 6495: '6595', 6499: '6599',
+}
+const JOURNAL_BARE_CODE_REMAP = { 5003: '5101', 6102: '6301' }
+
 /** Product override fields that hold account codes. */
 const PRODUCT_CODE_FIELDS = [
   'saleAccountCode',
@@ -213,6 +225,35 @@ if (Array.isArray(products)) {
   if (!DRY && touched > 0) await writeBlob('deed_products', nextProducts)
 } else {
   console.log('deed_products blob not present — skipping product remap.')
+}
+
+// ── deed_journalEntries (display ledger labels) ──────────────────────────────
+const journals = await readBlob('deed_journalEntries')
+if (Array.isArray(journals)) {
+  let relabeled = 0
+  const nextJournals = journals.map(j => {
+    if (!j || !Array.isArray(j.lines)) return j
+    let changed = false
+    const lines = j.lines.map(l => {
+      const label = String(l?.account ?? '')
+      const m = label.match(/^(\d{4})(\s+[-—].*)?$/)
+      if (!m) return l
+      const [, code, suffix] = m
+      let nextCode = JOURNAL_LABEL_REMAP[code]
+      if (!nextCode && !suffix && JOURNAL_BARE_CODE_REMAP[code]) nextCode = JOURNAL_BARE_CODE_REMAP[code]
+      if (!nextCode) return l
+      const live = byCode.get(nextCode)
+      const nextLabel = suffix && live ? `${nextCode}${suffix}` : nextCode
+      changed = true
+      relabeled++
+      return { ...l, account: nextLabel }
+    })
+    return changed ? { ...j, lines } : j
+  })
+  console.log(`deed_journalEntries: ${relabeled} line labels remapped`)
+  if (!DRY && relabeled > 0) await writeBlob('deed_journalEntries', nextJournals)
+} else {
+  console.log('deed_journalEntries blob not present — skipping journal label remap.')
 }
 
 if (DRY) console.log('DRY RUN — nothing written.')
