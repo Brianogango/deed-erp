@@ -1,5 +1,6 @@
 // @ts-nocheck
 'use client'
+import { matchesSearchTerms } from '@/lib/search'
 import { Suspense, useState, useMemo, useRef, useEffect } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { loadXlsx } from '@/lib/xlsx-lazy'
@@ -380,12 +381,15 @@ function BuyBackTab({ detailId, onOpenDetail }: DetailTabProps) {
   }
 
   const sorted = [...buyBacks].sort((a, b) => b.date.localeCompare(a.date))
-  const s = search.toLowerCase()
-  const displayed = s ? sorted.filter(bb =>
-    bb.ref.toLowerCase().includes(s) ||
-    bb.customerName.toLowerCase().includes(s) ||
-    (bb.originalSORef ?? '').toLowerCase().includes(s) ||
-    (bb.repairRef ?? '').toLowerCase().includes(s)
+  const displayed = search.trim() ? sorted.filter(bb =>
+    matchesSearchTerms(search, [
+      bb.ref,
+      bb.customerName,
+      bb.originalSORef,
+      bb.repairRef,
+      bb.status,
+      bb.notes,
+    ])
   ) : sorted
   const detail = detailId ? buyBacks.find(bb => bb.id === detailId) ?? null : null
 
@@ -792,11 +796,8 @@ function DonationTab({ detailId, onOpenDetail }: DetailTabProps) {
 
   const sorted = [...donations].sort((a, b) => b.date.localeCompare(a.date))
   const [donSearch, setDonSearch] = useState('')
-  const ds = donSearch.toLowerCase()
-  const displayedDon = ds ? sorted.filter(d =>
-    d.ref.toLowerCase().includes(ds) ||
-    d.party.toLowerCase().includes(ds) ||
-    (d.notes ?? '').toLowerCase().includes(ds)
+  const displayedDon = donSearch.trim() ? sorted.filter(d =>
+    matchesSearchTerms(donSearch, [d.ref, d.party, d.notes, d.type, d.status])
   ) : sorted
   const detail = detailId ? donations.find(d => d.id === detailId) ?? null : null
 
@@ -1240,11 +1241,14 @@ function ExchangeTab({ detailId, onOpenDetail }: DetailTabProps) {
 
   const sorted = [...clientExchanges].sort((a, b) => b.date.localeCompare(a.date))
   const [excSearch, setExcSearch] = useState('')
-  const es = excSearch.toLowerCase()
-  const displayedExc = es ? sorted.filter(e =>
-    e.ref.toLowerCase().includes(es) ||
-    e.customerName.toLowerCase().includes(es) ||
-    (e.originalSORef ?? '').toLowerCase().includes(es)
+  const displayedExc = excSearch.trim() ? sorted.filter(e =>
+    matchesSearchTerms(excSearch, [
+      e.ref,
+      e.customerName,
+      e.originalSORef,
+      e.status,
+      e.notes,
+    ])
   ) : sorted
   const detail = detailId ? clientExchanges.find(e => e.id === detailId) ?? null : null
 
