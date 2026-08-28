@@ -35,18 +35,35 @@ export async function PUT(request: NextRequest) {
       : 'info'
     const timezone = String(body.timezone || 'Africa/Nairobi').slice(0, 80)
 
+    const existing = await prisma.notificationPreference.findUnique({
+      where: { userId_eventType: { userId: session.user.id, eventType } },
+    })
+    const base = existing || {
+      inAppEnabled: DEFAULT_NOTIFICATION_PREFERENCE.inAppEnabled,
+      pushEnabled: DEFAULT_NOTIFICATION_PREFERENCE.pushEnabled,
+      emailEnabled: DEFAULT_NOTIFICATION_PREFERENCE.emailEnabled,
+      whatsappEnabled: DEFAULT_NOTIFICATION_PREFERENCE.whatsappEnabled,
+      smsEnabled: DEFAULT_NOTIFICATION_PREFERENCE.smsEnabled,
+      soundEnabled: DEFAULT_NOTIFICATION_PREFERENCE.soundEnabled,
+      digestEnabled: DEFAULT_NOTIFICATION_PREFERENCE.digestEnabled,
+      quietStart: DEFAULT_NOTIFICATION_PREFERENCE.quietStart,
+      quietEnd: DEFAULT_NOTIFICATION_PREFERENCE.quietEnd,
+      timezone: DEFAULT_NOTIFICATION_PREFERENCE.timezone,
+      minimumSeverity: DEFAULT_NOTIFICATION_PREFERENCE.minimumSeverity,
+    }
+
     const data = {
-      inAppEnabled: body.inAppEnabled !== false,
-      pushEnabled: body.pushEnabled !== false,
-      emailEnabled: body.emailEnabled !== false,
-      whatsappEnabled: Boolean(body.whatsappEnabled),
-      smsEnabled: Boolean(body.smsEnabled),
-      soundEnabled: body.soundEnabled !== false,
-      digestEnabled: Boolean(body.digestEnabled),
-      quietStart: hhmm(body.quietStart),
-      quietEnd: hhmm(body.quietEnd),
-      timezone,
-      minimumSeverity: severity,
+      inAppEnabled: typeof body.inAppEnabled === 'boolean' ? body.inAppEnabled : base.inAppEnabled,
+      pushEnabled: typeof body.pushEnabled === 'boolean' ? body.pushEnabled : base.pushEnabled,
+      emailEnabled: typeof body.emailEnabled === 'boolean' ? body.emailEnabled : base.emailEnabled,
+      whatsappEnabled: typeof body.whatsappEnabled === 'boolean' ? body.whatsappEnabled : base.whatsappEnabled,
+      smsEnabled: typeof body.smsEnabled === 'boolean' ? body.smsEnabled : base.smsEnabled,
+      soundEnabled: typeof body.soundEnabled === 'boolean' ? body.soundEnabled : base.soundEnabled,
+      digestEnabled: typeof body.digestEnabled === 'boolean' ? body.digestEnabled : base.digestEnabled,
+      quietStart: 'quietStart' in body ? hhmm(body.quietStart) : base.quietStart,
+      quietEnd: 'quietEnd' in body ? hhmm(body.quietEnd) : base.quietEnd,
+      timezone: 'timezone' in body ? timezone : base.timezone,
+      minimumSeverity: 'minimumSeverity' in body ? severity : base.minimumSeverity,
     }
 
     const row = await prisma.notificationPreference.upsert({
