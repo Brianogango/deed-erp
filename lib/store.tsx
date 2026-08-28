@@ -760,6 +760,10 @@ export interface SystemSettings {
   invLots: boolean
   invAutomatedValuation: boolean
   invCostingMethod: 'fifo' | 'average' | 'standard'
+  /** Default low-stock alert threshold when a new product does not set one. */
+  invDefaultMinStock: number
+  /** Default warranty period (months) when a new product does not set one. */
+  invDefaultWarrantyMonths: number
   /** Feature flag for Device Reconfiguration work orders. Default true when unset. */
   reconfigurationEnabled: boolean
   /**
@@ -785,6 +789,8 @@ export interface SystemSettings {
   purHighValueThreshold: number
   purEnforceRFQFlow: boolean
   purStoreLeadTimes: boolean
+  /** Vendor bill due-date fallback when the vendor record sets no terms. */
+  purDefaultPaymentTermsDays: number
   // Repair
   repRepairOrders: boolean
   repWarrantyTracking: boolean
@@ -817,6 +823,8 @@ export interface SystemSettings {
   posSessionControl: boolean
   posCashControl: boolean
   posReceiptPrinting: boolean
+  /** Loyalty earn rate: 1 point per this many KES spent (1 point = 1 KES on redemption). */
+  posLoyaltyKesPerPoint: number
   // Security
   secDisableProductDeletion: boolean
   secDisableStockManipulation: boolean
@@ -844,11 +852,13 @@ export const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
   invProductsMasterOnly: true, invNoDirectStockEdits: true, invMultiStepRoutes: true,
   invStorageLocations: ['Incoming', 'Workshop', 'Ready for Sale', 'Faulty / Scrap'],
   invSerialNumbers: true, invLots: false, invAutomatedValuation: true, invCostingMethod: 'average',
+  invDefaultMinStock: 5, invDefaultWarrantyMonths: 12,
   reconfigurationEnabled: true, reconfigurationMinMarginPct: 10,
   invCategorySaleMarkupPct: {},
   pricingMarginPolicy: DEFAULT_PRICING_MARGIN_POLICY,
   purPurchaseAgreements: false, purVendorPricelists: true, purRequireApprovalHighValue: false,
   purHighValueThreshold: 50000, purEnforceRFQFlow: true, purStoreLeadTimes: true,
+  purDefaultPaymentTermsDays: 30,
   repRepairOrders: true, repWarrantyTracking: true, repPartsConsumption: true,
   repEnforceFlow: true, repOnlyAssignedTechSeesJob: true, repAdminAssignsJobs: true,
   diagnosisFeeKes: 1000, diagnosisFeeRegularKes: 1000, diagnosisFeeHighEndKes: 1000,
@@ -858,6 +868,7 @@ export const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
   accAdminOfficerInvoiceLimitKes: 1000000,
   hrAttendance: false, hrLeaves: true, hrRestrictSalaryInfo: true, hrRoleBasedVisibility: true,
   posSessionControl: true, posCashControl: true, posReceiptPrinting: true,
+  posLoyaltyKesPerPoint: 2000,
   secDisableProductDeletion: true, secDisableStockManipulation: true, secDisableInvoiceEditAfterValidation: true,
   secPortalRequirePhoneVerification: true,
 }
@@ -4131,6 +4142,7 @@ export type DeliveryStoreState = Pick<AppState,
 
 export type CommerceStoreState = Pick<AppState,
   | 'companySettings'
+  | 'systemSettings'
   | 'contacts'
   | 'currentUserId'
   | 'customerCredits'
@@ -10330,8 +10342,8 @@ const storeCtx: AppState = {
           pricingCategoryId: (row as any).pricingCategoryId || undefined,
           salePrice: Number(row.salePrice ?? 0),
           costPrice: Number(row.costPrice ?? 0),
-          taxRate: Number(row.taxRate ?? 16),
-          minStock: Number(row.minStock ?? 5),
+          taxRate: Number(row.taxRate ?? companySettings.vatRate ?? 16),
+          minStock: Number(row.minStock ?? systemSettings.invDefaultMinStock ?? 5),
           unit: row.unit || defaultUnitForKind(productKind, trackingMethod),
           description: row.description || '',
           isActive: true,
@@ -13810,7 +13822,7 @@ const storeCtx: AppState = {
       // Vendor's own payment terms govern the bill due date — previously
       // hardcoded to 30 days for every vendor regardless of what was agreed.
       const vendor = contacts.find(c => c.id === po.vendorId)
-      const termsDays = vendor?.paymentTermsDays ?? 30
+      const termsDays = vendor?.paymentTermsDays ?? systemSettings.purDefaultPaymentTermsDays ?? 30
       const bill: Invoice = {
         id: uid(), ref: draftInvoiceRef('vendor_bill'), type: 'vendor_bill', status: 'draft',
         partnerId: po.vendorId, partnerName: po.vendorName,
@@ -17659,7 +17671,7 @@ const storeCtx: AppState = {
       const user = currentUser()
       let pointsEarned = 0
       if (customerId) {
-        pointsEarned = loyaltyPointsEarned(total) // 1 point per 2000 KES
+        pointsEarned = loyaltyPointsEarned(total, systemSettings.posLoyaltyKesPerPoint)
         setContacts(prev => prev.map(c => c.id === customerId ? { ...c, loyaltyPoints: Math.max(0, (c.loyaltyPoints || 0) - pointsRedeemed) + pointsEarned } : c))
       }
       const resolvedBankId = isPosBankPayment(payment)
@@ -18490,10 +18502,10 @@ const storeCtx: AppState = {
           const invoice: Invoice = {
             id: uid(), ref: await storeCtxRef.current!.allocateDocRef('INV'), type: 'customer_invoice', status: 'posted',
             partnerId: delivery.customerId, partnerName: delivery.customerName,
-            date: now(), dueDate: addDays(now(), 30),
+            date: now(), dueDate: addDays(now(), systemSettings.purDefaultPaymentTermsDays ?? 30),
             lines: delivery.lines.map(l => ({
               id: uid(), description: l.productName, qty: l.qty,
-              unitPrice: soLineMap[l.productId]?.unitPrice ?? 0, taxRate: 16,
+              unitPrice: soLineMap[l.productId]?.unitPrice ?? 0, taxRate: companySettings.vatRate ?? 16,
               subtotal: soLineMap[l.productId]?.subtotal ?? 0,
             })),
             subtotal: so.subtotal, taxTotal: so.taxTotal, total: so.total,
@@ -19997,6 +20009,7 @@ const storeCtx: AppState = {
 
   const commerceStore = useMemo<CommerceStoreState>(() => ({
     companySettings,
+    systemSettings,
     contacts,
     currentUserId,
     customerCredits,
@@ -20017,6 +20030,7 @@ const storeCtx: AppState = {
     ...commerceActions,
   }), [
     companySettings,
+    systemSettings,
     contacts,
     currentUserId,
     customerCredits,

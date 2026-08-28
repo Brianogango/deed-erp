@@ -115,7 +115,7 @@ function applyCostBandPrices<T extends Record<string, any>>(
   }
 }
 
-const blankProduct = () => {
+const blankProduct = (formDefaults?: { minStock?: number; warrantyMonths?: number }) => {
   const category = 'Laptops' as CategoryId
   const defaults = applyCategoryAccountDefaults(category, {})
   const productKind = defaults.productKind
@@ -124,13 +124,14 @@ const blankProduct = () => {
     name: '', sku: '', barcode: '', category,
     productKind,
     trackingMethod,
-    salePrice: '', costPrice: '', wholesalePrice: '', commissionRatePercent: '', taxRate: '0', minStock: '5',
+    salePrice: '', costPrice: '', wholesalePrice: '', commissionRatePercent: '', taxRate: '0',
+    minStock: String(formDefaults?.minStock ?? 5),
     unit: defaultUnitForKind(productKind, trackingMethod),
     invoicePolicy: 'order' as 'order' | 'delivery',
     pricingCategoryId: '',
     productType: 'refurbished',
     description: '', canBeSold: true, canBePurchased: true, image: '',
-    isActive: true, warrantyMonths: '12',
+    isActive: true, warrantyMonths: String(formDefaults?.warrantyMonths ?? 12),
     saleAccountCode: defaults.saleAccountCode || '',
     costAccountCode: defaults.costAccountCode || '',
     inventoryAccountCode: defaults.inventoryAccountCode || '',
@@ -305,6 +306,10 @@ function InventoryContent() {
   const [openArchivedToken, setOpenArchivedToken] = useState(0)
   const [editId, setEditId] = useUrlRecordId({ param: 'edit' })
   const [form, setForm] = useState<any>(blankProduct())
+  const productFormDefaults = {
+    minStock: systemSettings.invDefaultMinStock ?? 5,
+    warrantyMonths: systemSettings.invDefaultWarrantyMonths ?? 12,
+  }
   const emptyPhotoSlots = (): Record<ProductImageSlot, { url: string | null; source: 'upload' | 'catalog' | null; pending?: boolean }> => ({
     1: { url: null, source: null },
     2: { url: null, source: null },
@@ -821,7 +826,7 @@ function InventoryContent() {
   }
 
   const openNew = () => {
-    setForm(blankProduct())
+    setForm(blankProduct(productFormDefaults))
     setPhotoSlots(emptyPhotoSlots())
     setEditId(null)
     setDupConfirm(false)
@@ -902,7 +907,7 @@ function InventoryContent() {
   const openVariant = (parent: Product) => {
     const kind = inferProductKind(parent)
     setForm({
-      ...blankProduct(),
+      ...blankProduct(productFormDefaults),
       name: parent.name,
       category: parent.category,
       productKind: kind,
@@ -1167,7 +1172,7 @@ function InventoryContent() {
           costPrice: Number(col(row, 'Cost Price', 'CostPrice', 'costPrice', 'cost_price')) || 0,
           taxRate: Number(col(row, 'Tax Rate', 'TaxRate', 'taxRate', 'tax_rate')) || 0,
           minStock: Number(col(row, 'Min Stock', 'MinStock', 'Reorder Level', 'minStock')) || 5,
-          warrantyMonths: Number(col(row, 'Warranty Months', 'WarrantyMonths', 'warrantyMonths')) || 12,
+          warrantyMonths: Number(col(row, 'Warranty Months', 'WarrantyMonths', 'warrantyMonths')) || (systemSettings.invDefaultWarrantyMonths ?? 12),
           description: col(row, 'Description', 'description'),
           saleAccountCode: col(row, 'Revenue Account', 'Sale Account', 'saleAccountCode', 'sale_account_code'),
           costAccountCode: col(row, 'Purchase Account', 'Cost Account', 'costAccountCode', 'cost_account_code'),
