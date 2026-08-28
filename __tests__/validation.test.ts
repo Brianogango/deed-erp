@@ -62,8 +62,11 @@ describe('productSchema', () => {
     expect(result.taxRate).toBe(16)
   })
 
-  it('rejects name shorter than 3 chars', async () => {
-    await expect(productSchema.parseAsync({ ...valid, name: 'Ab' })).rejects.toThrow()
+  it('accepts vendor titles longer than 200 characters', async () => {
+    const name = 'Lenovo V14 G5 IRL/14" FHD (1920x1080) TN 250nits Anti-glare, 45% NTSC/Intel Core i5-13420H, 8C (4P + 4E) / 12T, P-core up to 4.6GHz, E-core up to 3.4GHz, 12MB Intel Smart Cache/8GB SODIMM DDR5-5200/512GB SSD M.2 2242 PCIe 4.0x4 NVMe/SH/Non-backlit, English (UK)/Wi-Fi 6, 802.11ax 2x2 + BT5.2/DOS/1-year, Courier or Carry-in/Business Black'
+    expect(name.length).toBeGreaterThan(200)
+    const result = await productSchema.parseAsync({ ...valid, name })
+    expect(result.name).toBe(name)
   })
 
   it('rejects negative sale price', async () => {

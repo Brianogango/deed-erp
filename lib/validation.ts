@@ -7,7 +7,7 @@ import { MIN_PASSWORD_LENGTH } from '@/lib/auth/password-policy'
  */
 
 export const productSchema = z.object({
-  name: z.string().min(3, "Name must be at least 3 characters").max(200),
+  name: z.string().min(3, "Name must be at least 3 characters").max(500),
   sku: z.string().max(50).optional().nullable(),
   barcode: z.string().max(100).optional().nullable(),
   category: z.string().min(1, "Category is required"),

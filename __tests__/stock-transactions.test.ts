@@ -8,6 +8,7 @@ const mockStockLevelUpdate = vi.fn()
 const mockStockLevelCreate = vi.fn()
 const mockProductFindUnique = vi.fn()
 const mockProductFindFirst = vi.fn()
+const mockProductCreate = vi.fn()
 const mockStockReservationFindMany = vi.fn()
 const mockSaleOrderFindUnique = vi.fn()
 const mockMirrorReservations = vi.fn()
@@ -38,6 +39,7 @@ vi.mock('@/lib/prisma', () => ({
     product: {
       findUnique: (...args: unknown[]) => mockProductFindUnique(...args),
       findFirst: (...args: unknown[]) => mockProductFindFirst(...args),
+      create: (...args: unknown[]) => mockProductCreate(...args),
     },
     stockReservation: {
       findMany: (...args: unknown[]) => mockStockReservationFindMany(...args),
@@ -81,6 +83,7 @@ beforeEach(() => {
       product: {
         findUnique: mockProductFindUnique,
         findFirst: mockProductFindFirst,
+        create: mockProductCreate,
       },
       purchaseOrder: {
         findUnique: mockPurchaseOrderFindUnique,
@@ -101,6 +104,7 @@ beforeEach(() => {
   mockStockLevelCreate.mockResolvedValue({})
   mockProductFindUnique.mockResolvedValue({ id: PRODUCT_ID })
   mockProductFindFirst.mockResolvedValue(null)
+  mockProductCreate.mockResolvedValue({ id: PRODUCT_ID, sku: 'WIDGET' })
   mockStockReservationFindMany.mockResolvedValue([])
   mockMirrorReservations.mockResolvedValue({ mirrored: 1, skipped: 0, failed: 0 })
   mockPurchaseOrderFindUnique.mockResolvedValue(null)
@@ -344,9 +348,42 @@ describe('applyReceiptStockMutation() — atomic relational GRN', () => {
     expect(mockSaveStoreKeys).toHaveBeenCalled()
   })
 
-  it('aborts before any blob write when a line product cannot be resolved in Prisma', async () => {
+  it('creates a Prisma product from the catalogue when the GRN line is not linked yet', async () => {
     mockLoadAppState.mockResolvedValue({
-      deed_products: [{ id: PRODUCT_ID, name: 'Ghost Product', stockQty: 0, requiresSerial: false }],
+      deed_products: [{
+        id: PRODUCT_ID,
+        sku: 'LENOVOV1-H4IDD',
+        name: 'Lenovo V14 G5 IRL long vendor title',
+        stockQty: 0,
+        requiresSerial: true,
+        trackingMethod: 'SERIAL',
+      }],
+      deed_serials: [], deed_bulkStock: [], deed_stockMoves: [],
+    })
+    mockProductFindUnique.mockResolvedValue(null)
+    mockProductFindFirst.mockResolvedValue(null)
+    mockProductCreate.mockResolvedValue({ id: PRODUCT_ID, sku: 'LENOVOV1-H4IDD' })
+
+    const result = await applyReceiptStockMutation({
+      receiptId: 'rec-1', receiptRef: 'REC/2026/0083', destination: 'warehouse',
+      lines: [{
+        productId: PRODUCT_ID,
+        productName: 'Lenovo V14 G5 IRL long vendor title',
+        qtyReceived: 3,
+        requiresSerial: true,
+        serials: ['SN1', 'SN2', 'SN3'],
+      }],
+      userId: 'user-1',
+    })
+
+    expect(result.ok).toBe(true)
+    expect(mockProductCreate).toHaveBeenCalled()
+    expect(mockSaveStoreKeys).toHaveBeenCalled()
+  })
+
+  it('aborts before any blob write when a line has no catalogue product to link', async () => {
+    mockLoadAppState.mockResolvedValue({
+      deed_products: [],
       deed_serials: [], deed_bulkStock: [], deed_stockMoves: [],
     })
     mockProductFindUnique.mockResolvedValue(null)
@@ -354,11 +391,12 @@ describe('applyReceiptStockMutation() — atomic relational GRN', () => {
 
     const result = await applyReceiptStockMutation({
       receiptId: 'rec-1', receiptRef: 'REC/2026/0005', destination: 'warehouse',
-      lines: [{ productId: PRODUCT_ID, productName: 'Ghost Product', qtyReceived: 2, requiresSerial: false }],
+      lines: [{ productId: 'not-a-uuid', productName: 'Ghost Product', qtyReceived: 2, requiresSerial: false }],
       userId: 'user-1',
     })
 
     expect(result.ok).toBe(false)
+    expect(mockProductCreate).not.toHaveBeenCalled()
     expect(mockSaveStoreKeys).not.toHaveBeenCalled()
   })
 })

@@ -137,6 +137,6 @@ export function planArchivedProductIdentity(opts: {
     sku,
     barcode,
     copyBarcodeToKeep,
-    name: `${opts.drop.name} (merged)`.slice(0, 200),
+    name: `${opts.drop.name} (merged)`.slice(0, 500),
   }
 }
