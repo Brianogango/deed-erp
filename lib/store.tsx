@@ -3322,7 +3322,7 @@ export interface AppState {
   deleteCompanyAsset: (id: string) => void
   moveCompanyAsset: (id: string, locationName: string, note?: string) => void
   setCompanyAssetCustodian: (id: string, custodian: { employeeId?: string; name?: string }, note?: string) => void
-  setCompanyAssetStatus: (id: string, status: CompanyAssetStatus, note?: string, opts?: { createRepair?: boolean }) => void
+  setCompanyAssetStatus: (id: string, status: CompanyAssetStatus, note?: string, opts?: { createRepair?: boolean }) => void | Promise<void>
   disposeCompanyAsset: (id: string, qty: number, opts?: { reason?: string; proceedsKes?: number }) => void
   writeOffCompanyAsset: (id: string, reason?: string) => void
   runCompanyAssetDepreciation: (period?: string) => void
@@ -3588,7 +3588,7 @@ export interface AppState {
 
   // Repairs - Full Workflow
   /** Optional `intake` is merged into the created job before the authoritative POST (path, warranty, accessories, etc.). */
-  createRepair: (customerId: string, customerName: string, productName: string, serial: string, desc: string, intake?: Partial<RepairOrder>) => RepairOrder
+  createRepair: (customerId: string, customerName: string, productName: string, serial: string, desc: string, intake?: Partial<RepairOrder>) => Promise<RepairOrder>
   updateRepair: (id: string, p: Partial<RepairOrder>) => void
   deleteRepair: (id: string) => void
   checkWarrantyForRepair: (repairId: string, serial: string) => boolean
@@ -8381,7 +8381,7 @@ const storeCtx: AppState = {
       setCompanyAssets(prev => prev.map(a => a.id === id ? result.asset : a))
       showToast(result.asset.custodianName ? `Custodian set to ${result.asset.custodianName}` : 'Custodian cleared', 'success')
     },
-    setCompanyAssetStatus: (id, status, note, opts) => {
+    setCompanyAssetStatus: async (id, status, note, opts) => {
       const user = currentUser()
       if (!user) { showToast('Please log in to continue', 'error'); return }
       if (!canManageCompanyPropertyRole(user.role)) {
@@ -8405,7 +8405,7 @@ const storeCtx: AppState = {
         if (!self) {
           showToast('Add a customer contact named like the company to open a repair job', 'error')
         } else {
-          const repair = storeCtxRef.current?.createRepair(
+          const repair = await storeCtxRef.current?.createRepair(
             self.id,
             self.name,
             existing.name,
@@ -14395,19 +14395,16 @@ const storeCtx: AppState = {
     },
 
     // ── Repairs ───────────────────────────────────────────────────────────────
-    createRepair: (customerId, customerName, productName, serial, desc, intake) => {
+    createRepair: async (customerId, customerName, productName, serial, desc, intake) => {
       const customer = contacts.find(c => c.id === customerId)
       const user = currentUser()
-      // Note: ref is now fetched from server on demand via updateRepair
-      // For now, use a temporary placeholder that will be replaced
-      // Always stamp full ISO datetime (date + time) — never date-only.
+      // Sequential ticket is allocated by POST before this returns so the
+      // booking success screen never shares a timestamp placeholder (REP-227532).
       const bookedAt = new Date().toISOString()
       const intakePatch = intake ? { ...intake } : {}
-      // Never let intake override identity keys or the temporary ref before the
-      // server responds — those are owned by create/POST merge.
       delete (intakePatch as Partial<RepairOrder>).id
       delete (intakePatch as Partial<RepairOrder>).ref
-      const rep: RepairOrder = {
+      const draft: RepairOrder = {
         id: uid(),
         ref: `REP-${Date.now().toString().slice(-6)}`,
         status: 'received',
@@ -14472,45 +14469,39 @@ const storeCtx: AppState = {
         ),
         status: (intakePatch as Partial<RepairOrder>).status ?? 'received',
       }
-      setRepairs(p => [rep, ...p])
-      syncRepairToPortal(rep, 'Repair booked in')
-      fetch('/api/repairs', {
+      const res = await fetch('/api/repairs', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(rep),
+        body: JSON.stringify(draft),
       })
-        .then(async res => {
-          if (!res.ok) return null
-          return res.json() as Promise<RepairOrder>
-        })
-        .then(serverRepair => {
-          if (!serverRepair) return
-          setRepairs(prev => prev.map(item => {
-            if (item.id !== rep.id) return item
-            // Preserve any local intake details applied immediately after createRepair
-            // (company contact person, warranty, accessories, etc.) while adopting the
-            // server-generated reference.
-            const merged = { ...serverRepair, ...item, id: serverRepair.id, ref: serverRepair.ref }
-            syncRepairToPortal(merged, 'Repair booked in')
-            return merged
-          }))
-        })
-        .catch(() => { /* local/app_state sync remains available offline */ })
-      addAuditLog('create_repair', rep.ref, `Repair job created for ${customerName} - ${productName}`)
-      // Notify all lead techs of the new job
+      if (!res.ok) {
+        showToast('Could not allocate a repair ticket number', 'error')
+        throw new Error('Failed to create repair')
+      }
+      const serverRepair = await res.json() as RepairOrder
+      const merged: RepairOrder = {
+        ...draft,
+        ...serverRepair,
+        id: serverRepair.id || draft.id,
+        ref: serverRepair.ref || draft.ref,
+        previousRefs: serverRepair.previousRefs,
+      }
+      setRepairs(p => [merged, ...p])
+      syncRepairToPortal(merged, 'Repair booked in')
+      addAuditLog('create_repair', merged.ref, `Repair job created for ${customerName} - ${productName}`)
       notifyUsers({
         recipients: userIdsWithRoles(users, ['technical_lead'], currentUserId),
         type: 'repair',
         title: 'New repair job booked',
         body: `${customerName} — ${productName}`,
         module: 'repair',
-        path: `?id=${rep.id}`,
+        path: `?id=${merged.id}`,
         icon: '🛠️',
-        entityKey: `repair:${rep.id}:booked`,
+        entityKey: `repair:${merged.id}:booked`,
         excludeUserId: currentUserId,
       })
-      showToast(`${rep.ref} created`)
-      return rep
+      showToast(`${merged.ref} created`)
+      return merged
     },
     updateRepair: (id, p) => {
       const existing = repairsRef.current.find(r => r.id === id)

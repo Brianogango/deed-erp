@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from '@/lib/auth/server'
 import { loadAppState, saveStoreKeys } from '@/lib/server-store'
 import { getNextRepairRef } from '@/lib/repair-ref-counter'
+import { isOfficialRepairRef, isTemporaryRepairRef, uniqueRepairRefs } from '@/lib/repair-ref'
 import type { RepairOrder } from '@/lib/store'
 import { parsePaginationParams, paginateArray } from '@/lib/api-pagination'
 import { repairDatesWriteError } from '@/lib/data-validation'
@@ -109,12 +110,28 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    // Get the next unique repair reference from the atomic counter
-    const ref = await getNextRepairRef()
+    const requestedRef = String(body.ref ?? '').trim()
+    const repairId = typeof body.id === 'string' && body.id.trim() ? body.id.trim() : `rep_${Date.now()}`
 
-    // Load existing repairs
     const state = await loadAppState()
     const repairs = Array.isArray(state['deed_repairs_v2']) ? state['deed_repairs_v2'] as RepairOrder[] : []
+    const existingIdx = repairs.findIndex(r => r.id === repairId)
+    const existing = existingIdx >= 0 ? repairs[existingIdx] : null
+    const existingByRef = repairs.find(r => r.ref.toLowerCase() === requestedRef.toLowerCase())
+
+    // Never replace a sequential ticket, and never mint a second number on retry.
+    const keepExisting = existing && isOfficialRepairRef(existing.ref) ? existing.ref : null
+    const keepRequested = isOfficialRepairRef(requestedRef)
+      && (!existingByRef || existingByRef.id === repairId)
+      ? requestedRef
+      : null
+    const ref = keepExisting || keepRequested || await getNextRepairRef()
+    const previousRefs = uniqueRepairRefs([
+      ...(Array.isArray(existing?.previousRefs) ? existing!.previousRefs : []),
+      ...(Array.isArray(body.previousRefs) ? body.previousRefs as unknown[] : []),
+      isTemporaryRepairRef(requestedRef) ? requestedRef : null,
+      existing?.ref && existing.ref !== ref ? existing.ref : null,
+    ].filter(value => value && String(value) !== ref))
 
     // Always persist a full ISO datetime (date + time). Date-only strings keep
     // that calendar day at local midnight; empty values become now.
@@ -122,7 +139,6 @@ export async function POST(request: NextRequest) {
 
     // Create the new repair — body may include full intake (path, warranty, waiver).
     // Spread body after defaults so booking fields are not dropped by a thin client.
-    const repairId = typeof body.id === 'string' && body.id.trim() ? body.id.trim() : `rep_${Date.now()}`
     const repair = {
       status: String(body.status ?? 'received') as RepairOrder['status'],
       customerId: String(body.customerId ?? ''),
@@ -139,6 +155,7 @@ export async function POST(request: NextRequest) {
       // Force server-owned identity + full timestamp after body spread.
       id: repairId,
       ref,
+      previousRefs,
       intakeDate,
     } as RepairOrder
 
@@ -152,8 +169,6 @@ export async function POST(request: NextRequest) {
 
     // If a same-id draft already landed via store sync, merge so we never
     // clobber richer intake (repairPath / warranty) with a thinner write.
-    const existingIdx = repairs.findIndex(r => r.id === repair.id)
-    const existing = existingIdx >= 0 ? repairs[existingIdx] : null
     const incomingHasPath =
       body.repairPath === 'direct_repair' || body.repairPath === 'diagnosis_first'
     const mergedRepair = {
@@ -161,6 +176,7 @@ export async function POST(request: NextRequest) {
       ...repair,
       id: repairId,
       ref,
+      previousRefs,
       intakeDate,
       // Thin creates (no repairPath) must not wipe intake applied by a parallel
       // updateRepair / store sync before this POST finished.
