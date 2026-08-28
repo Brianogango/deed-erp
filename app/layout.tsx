@@ -1,4 +1,5 @@
 import './globals.css'
+import './erp-consistency.css'
 import '@/components/modules/odoo-record-designs.css'
 import type { Metadata, Viewport } from 'next'
 import { Suspense } from 'react'
