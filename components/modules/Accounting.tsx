@@ -78,6 +78,7 @@ import CommissionsTab from './accounting/CommissionsTab'
 import AgeingTab from './accounting/AgeingTab'
 import IntegrityDashboard from './accounting/IntegrityDashboard'
 import CashFlowPanel from './accounting/CashFlowPanel'
+import AccountingDashboard from './accounting/AccountingDashboard'
 import { usePrismaAccountingReports, bootstrapCoaClient } from '@/hooks/usePrismaAccountingReports'
 import {
   DEFAULT_DOCUMENT_PAYMENT_DETAILS,
@@ -94,6 +95,7 @@ import ContactFormModal, { blankCompanyContact, blankIndividualContact } from '@
 // ═══════════════════════════════════════════════════════════════════════════
 
 type MainTab =
+  | 'dashboard'
   | 'invoices'
   | 'bills'
   | 'journals'
@@ -339,7 +341,7 @@ function AccountingContent() {
   )
   const { cashAtBank: cashAtBankBS, cashInHand: cashInHandBS } = cashPositionFromTotals(cashbookTotals)
 
-  const defaultTab: MainTab = 'invoices'
+  const defaultTab: MainTab = 'dashboard'
   const queryTab = searchParams.get('tab') as MainTab | null
   const queryReport = searchParams.get('report') as ReportTab | null
   const isReportTabId = (value: string | null | undefined): value is ReportTab =>
@@ -698,6 +700,10 @@ function AccountingContent() {
   }, [tab, customerInvoices, vendorBills, invFilter, invSearch])
 
   const financeHeader: Record<MainTab, { title: string; subtitle: string }> = {
+    dashboard: {
+      title: 'Accounting Dashboard',
+      subtitle: 'Financial performance, liquidity, obligations and control exceptions',
+    },
     invoices: {
       title: 'Customer invoices',
       subtitle: `${customerInvoices.length} records · ${fmtKes(outstandingAR)} outstanding`,
@@ -1306,6 +1312,7 @@ function AccountingContent() {
 
         <TabBar
           tabs={[
+            { id: 'dashboard', label: 'Dashboard' },
             { id: 'invoices', label: 'Customer invoices' },
             { id: 'bills', label: 'Vendor bills' },
             { id: 'credits', label: 'Credits' },
@@ -1378,6 +1385,9 @@ function AccountingContent() {
           </div>
         )}
         {/* ── Tab Content ────────────────────────────────────────────────────── */}
+        {tab === 'dashboard' ? (
+          <AccountingDashboard onNavigate={target => setTab(target as MainTab)} />
+        ) : (
         <div className={`card overflow-hidden rounded-xl finance-content-card finance-subcomponent-shell finance-content-card--${tab}`}>
           {tab === 'integrity' ? (
             <IntegrityDashboard />
@@ -2187,6 +2197,7 @@ function AccountingContent() {
             <div className="finance-subview finance-subview--cashbook"><CashbookTab accounts={accounts} /></div>
           )}
         </div>
+        )}
 
         {/* ── BULK PAYMENT MODAL ── */}
         {showBulkPayModal && (() => {

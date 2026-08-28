@@ -27953,3 +27953,1391 @@ body:has(.client-repair-portal) {
     line-height: 1;
   }
 }
+
+
+/* ==========================================================================
+   Accounting decision dashboard — finance command centre
+   ========================================================================== */
+
+.accounting-dashboard {
+  --dash-navy: #0b1f44;
+  --dash-blue: #2563eb;
+  --dash-cyan: #0ea5e9;
+  --dash-teal: #14b8a6;
+  --dash-green: #10b981;
+  --dash-red: #ef4444;
+  --dash-amber: #f59e0b;
+  --dash-indigo: #4f46e5;
+  --dash-border: var(--finance-border, #e5e7eb);
+  --dash-surface: var(--finance-surface, #fff);
+  --dash-soft: var(--finance-soft, #f9fafb);
+  --dash-text: var(--finance-text, #111827);
+  --dash-muted: var(--finance-text-3, #6b7280);
+  min-width: 0;
+  padding: 0.75rem 1.5rem 1.5rem;
+  color: var(--dash-text);
+}
+
+.accounting-dashboard button {
+  font: inherit;
+}
+
+.accounting-dashboard__enter {
+  animation: accountingDashIn 520ms cubic-bezier(.22, .78, .28, 1) both;
+  animation-delay: var(--dash-delay, 0ms);
+}
+
+@keyframes accountingDashIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.accounting-dashboard__command {
+  display: flex;
+  min-width: 0;
+  align-items: end;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.75rem;
+  border: 1px solid var(--dash-border);
+  border-radius: 0.75rem;
+  background: var(--dash-surface);
+  padding: 0.9rem 1rem;
+}
+
+.accounting-dashboard__identity {
+  min-width: 0;
+}
+
+.accounting-dashboard__eyebrow {
+  display: block;
+  margin-bottom: 0.18rem;
+  color: var(--dash-cyan);
+  font-size: 0.55rem;
+  font-weight: 800;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.accounting-dashboard__identity h2 {
+  color: var(--dash-navy);
+  font-size: clamp(1.15rem, 1.8vw, 1.45rem);
+  font-weight: 800;
+  letter-spacing: -0.025em;
+  line-height: 1.15;
+}
+
+.accounting-dashboard__identity p {
+  margin-top: 0.25rem;
+  color: var(--dash-muted);
+  font-size: 0.68rem;
+  line-height: 1.45;
+}
+
+.accounting-dashboard__filters {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: end;
+  gap: 0.45rem;
+}
+
+.accounting-dashboard__filters label {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.accounting-dashboard__filters label > span {
+  color: var(--dash-muted);
+  font-size: 0.52rem;
+  font-weight: 750;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.accounting-dashboard__filters input,
+.accounting-dashboard__filters button {
+  min-height: 2.25rem;
+  border: 1px solid var(--dash-border);
+  border-radius: 0.5rem;
+  background: var(--dash-surface);
+  color: var(--dash-text);
+  font-size: 0.65rem;
+  font-weight: 650;
+}
+
+.accounting-dashboard__filters input {
+  width: 8.7rem;
+  padding: 0.45rem 0.6rem;
+}
+
+.accounting-dashboard__filters button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  padding: 0.45rem 0.7rem;
+  border-color: var(--dash-navy);
+  background: var(--dash-navy);
+  color: #fff;
+  transition: transform 160ms ease, background 160ms ease;
+}
+
+.accounting-dashboard__filters button:hover {
+  transform: translateY(-1px);
+  background: #132d5e;
+}
+
+.accounting-dashboard__error {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+  border: 1px solid #fecaca;
+  border-radius: 0.65rem;
+  background: #fef2f2;
+  padding: 0.7rem 0.8rem;
+  color: #991b1b;
+  font-size: 0.68rem;
+}
+
+.accounting-dashboard__error span {
+  min-width: 0;
+  flex: 1;
+}
+
+.accounting-dashboard__error button {
+  min-height: 1.9rem;
+  border: 1px solid #fecaca;
+  border-radius: 0.4rem;
+  background: #fff;
+  padding-inline: 0.65rem;
+  font-size: 0.62rem;
+  font-weight: 750;
+}
+
+.accounting-dashboard--loading {
+  min-height: 32rem;
+}
+
+.accounting-dashboard__loading {
+  display: grid;
+  min-height: 27rem;
+  place-items: center;
+  align-content: center;
+  gap: 0.45rem;
+  border: 1px solid var(--dash-border);
+  border-radius: 0.75rem;
+  background: var(--dash-surface);
+  color: var(--dash-muted);
+  text-align: center;
+}
+
+.accounting-dashboard__loading strong {
+  color: var(--dash-navy);
+  font-size: 0.85rem;
+}
+
+.accounting-dashboard__loading span {
+  max-width: 29rem;
+  font-size: 0.65rem;
+}
+
+.accounting-dashboard__kpis {
+  display: grid;
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+  gap: 0;
+  overflow: hidden;
+  margin-bottom: 0.75rem;
+  border: 1px solid var(--dash-border);
+  border-radius: 0.75rem;
+  background: var(--dash-surface);
+}
+
+.accounting-dashboard__kpi {
+  display: flex;
+  min-width: 0;
+  min-height: 5.4rem;
+  align-items: center;
+  gap: 0.65rem;
+  border-right: 1px solid var(--dash-border);
+  background: transparent;
+  padding: 0.75rem 0.8rem;
+  text-align: left;
+  transition: background 180ms ease, transform 180ms ease, box-shadow 180ms ease;
+}
+
+.accounting-dashboard__kpi:last-child {
+  border-right: 0;
+}
+
+.accounting-dashboard__kpi:hover {
+  z-index: 1;
+  background: var(--dash-soft);
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.08);
+  transform: translateY(-2px);
+}
+
+.accounting-dashboard__kpi-icon {
+  display: inline-flex;
+  width: 2rem;
+  height: 2rem;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: #eff6ff;
+  color: var(--dash-blue);
+}
+
+.accounting-dashboard__kpi.is-cyan .accounting-dashboard__kpi-icon { background: #ecfeff; color: #0891b2; }
+.accounting-dashboard__kpi.is-indigo .accounting-dashboard__kpi-icon { background: #eef2ff; color: var(--dash-indigo); }
+.accounting-dashboard__kpi.is-teal .accounting-dashboard__kpi-icon { background: #f0fdfa; color: #0f766e; }
+.accounting-dashboard__kpi.is-emerald .accounting-dashboard__kpi-icon { background: #ecfdf5; color: #059669; }
+.accounting-dashboard__kpi.is-slate .accounting-dashboard__kpi-icon { background: #f1f5f9; color: #475569; }
+.accounting-dashboard__kpi.is-red .accounting-dashboard__kpi-icon { background: #fef2f2; color: #dc2626; }
+.accounting-dashboard__kpi.is-green .accounting-dashboard__kpi-icon { background: #f0fdf4; color: #15803d; }
+
+.accounting-dashboard__kpi-copy {
+  display: grid;
+  min-width: 0;
+  gap: 0.12rem;
+}
+
+.accounting-dashboard__kpi-copy > span {
+  overflow: hidden;
+  color: var(--dash-muted);
+  font-size: 0.56rem;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.accounting-dashboard__kpi-copy > strong {
+  overflow: hidden;
+  color: var(--dash-navy);
+  font-size: clamp(0.82rem, 1vw, 1.05rem);
+  font-weight: 820;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.025em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.accounting-dashboard__kpi-copy > small {
+  display: flex;
+  align-items: center;
+  gap: 0.15rem;
+  color: var(--dash-muted);
+  font-size: 0.5rem;
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.accounting-dashboard .is-positive {
+  color: #059669 !important;
+}
+
+.accounting-dashboard .is-negative {
+  color: #dc2626 !important;
+}
+
+.accounting-dashboard .is-warning {
+  color: #b45309 !important;
+}
+
+.accounting-dashboard__top-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr) minmax(18.5rem, 0.95fr);
+  gap: 0.65rem;
+  min-width: 0;
+}
+
+.accounting-dashboard__panel,
+.accounting-dashboard__ageing,
+.accounting-dashboard__bank-wrap {
+  min-width: 0;
+  border: 1px solid var(--dash-border);
+  border-radius: 0.65rem;
+  background: var(--dash-surface);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.025);
+}
+
+.accounting-dashboard__panel {
+  padding: 0.8rem;
+}
+
+.accounting-dashboard__panel-head,
+.accounting-dashboard__bank-head,
+.accounting-dashboard__ageing-head {
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.accounting-dashboard__panel-head {
+  margin-bottom: 0.55rem;
+}
+
+.accounting-dashboard__panel-head h3,
+.accounting-dashboard__bank-head h3,
+.accounting-dashboard__ageing-head h3 {
+  color: var(--dash-navy);
+  font-size: 0.68rem;
+  font-weight: 780;
+  line-height: 1.25;
+}
+
+.accounting-dashboard__panel-head p,
+.accounting-dashboard__bank-head p,
+.accounting-dashboard__ageing-head p {
+  margin-top: 0.15rem;
+  color: var(--dash-muted);
+  font-size: 0.53rem;
+  line-height: 1.35;
+}
+
+.accounting-dashboard__chart-lg {
+  width: 100%;
+  height: 11.9rem;
+  min-width: 0;
+}
+
+.accounting-dashboard__legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 0.25rem;
+  color: var(--dash-muted);
+  font-size: 0.5rem;
+  font-weight: 650;
+}
+
+.accounting-dashboard__legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.28rem;
+}
+
+.accounting-dashboard__legend i {
+  width: 0.48rem;
+  height: 0.48rem;
+  border-radius: 0.14rem;
+  background: #94a3b8;
+}
+
+.accounting-dashboard__legend i.is-blue { background: var(--dash-blue); }
+.accounting-dashboard__legend i.is-teal { background: var(--dash-teal); }
+.accounting-dashboard__legend i.is-navy { background: #172554; }
+.accounting-dashboard__legend i.is-green { background: var(--dash-green); }
+.accounting-dashboard__legend i.is-red { background: var(--dash-red); }
+
+.accounting-dashboard__ageing-stack {
+  display: grid;
+  min-width: 0;
+  grid-template-rows: repeat(2, minmax(0, 1fr));
+  gap: 0.65rem;
+}
+
+.accounting-dashboard__ageing {
+  width: 100%;
+  padding: 0.75rem;
+  cursor: pointer;
+  transition: border-color 180ms ease, transform 180ms ease, box-shadow 180ms ease;
+}
+
+.accounting-dashboard__ageing:hover {
+  border-color: #bfdbfe;
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.06);
+  transform: translateY(-1px);
+}
+
+.accounting-dashboard__ageing-head > span {
+  display: inline-flex;
+  min-width: 2rem;
+  min-height: 1.35rem;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #dbeafe;
+  border-radius: 999px;
+  background: #eff6ff;
+  color: var(--dash-blue);
+  font-size: 0.48rem;
+  font-weight: 800;
+}
+
+.accounting-dashboard__ageing-head > span.is-positive {
+  border-color: #a7f3d0;
+  background: #ecfdf5;
+}
+
+.accounting-dashboard__ageing-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0.4rem;
+  margin-top: 0.65rem;
+}
+
+.accounting-dashboard__ageing-grid div {
+  min-width: 0;
+  border-right: 1px solid var(--dash-border);
+}
+
+.accounting-dashboard__ageing-grid div:last-child {
+  border-right: 0;
+}
+
+.accounting-dashboard__ageing-grid span,
+.accounting-dashboard__ageing-grid strong,
+.accounting-dashboard__ageing-grid small {
+  display: block;
+  min-width: 0;
+}
+
+.accounting-dashboard__ageing-grid span {
+  color: var(--dash-muted);
+  font-size: 0.48rem;
+  font-weight: 650;
+}
+
+.accounting-dashboard__ageing-grid strong {
+  margin-top: 0.12rem;
+  overflow: hidden;
+  color: var(--dash-text);
+  font-size: 0.62rem;
+  font-weight: 780;
+  font-variant-numeric: tabular-nums;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.accounting-dashboard__ageing-grid small {
+  margin-top: 0.04rem;
+  color: var(--dash-muted);
+  font-size: 0.47rem;
+}
+
+.accounting-dashboard__bank-wrap {
+  margin-top: 0.65rem;
+  overflow: hidden;
+}
+
+.accounting-dashboard__bank-head {
+  padding: 0.65rem 0.8rem 0.45rem;
+}
+
+.accounting-dashboard__bank-head button,
+.accounting-dashboard__panel-link {
+  color: var(--dash-blue);
+  font-size: 0.54rem;
+  font-weight: 750;
+  white-space: nowrap;
+}
+
+.accounting-dashboard__bank-head button:hover,
+.accounting-dashboard__panel-link:hover {
+  text-decoration: underline;
+}
+
+.accounting-dashboard__table-scroll {
+  width: 100%;
+  min-width: 0;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  scrollbar-width: thin;
+}
+
+.accounting-dashboard__table {
+  width: 100%;
+  min-width: 38rem;
+  border-collapse: collapse;
+  table-layout: auto;
+  color: var(--dash-text);
+  font-size: 0.55rem;
+}
+
+.accounting-dashboard__table th {
+  border-top: 1px solid var(--dash-border);
+  border-bottom: 1px solid var(--dash-border);
+  background: var(--dash-soft);
+  padding: 0.42rem 0.65rem;
+  color: var(--dash-muted);
+  font-size: 0.48rem;
+  font-weight: 760;
+  letter-spacing: 0.025em;
+  text-align: left;
+  text-transform: none;
+  white-space: nowrap;
+}
+
+.accounting-dashboard__table td {
+  border-bottom: 1px solid color-mix(in srgb, var(--dash-border) 70%, transparent);
+  padding: 0.48rem 0.65rem;
+  vertical-align: middle;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.accounting-dashboard__table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.accounting-dashboard__table td strong {
+  color: var(--dash-navy);
+  font-weight: 720;
+}
+
+.accounting-dashboard__table td small {
+  display: block;
+  margin-top: 0.08rem;
+  color: var(--dash-muted);
+  font-size: 0.47rem;
+}
+
+.accounting-dashboard__table .is-ref {
+  color: var(--dash-blue);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+.accounting-dashboard__status,
+.accounting-dashboard__due {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.5rem;
+  font-weight: 720;
+  white-space: nowrap;
+}
+
+.accounting-dashboard__status i,
+.accounting-dashboard__due i {
+  width: 0.4rem;
+  height: 0.4rem;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.accounting-dashboard__status.is-reconciled { color: #059669; }
+.accounting-dashboard__status.is-items_pending { color: #d97706; }
+.accounting-dashboard__status.is-no_statement { color: #64748b; }
+.accounting-dashboard__due { color: #d97706; }
+
+.accounting-dashboard__middle-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.12fr) minmax(0, 1.08fr) minmax(0, 0.82fr) minmax(0, 0.82fr);
+  gap: 0.65rem;
+  margin-top: 0.65rem;
+}
+
+.accounting-dashboard__muted-pill {
+  display: inline-flex;
+  max-width: 100%;
+  min-height: 1.4rem;
+  align-items: center;
+  border: 1px solid var(--dash-border);
+  border-radius: 999px;
+  background: var(--dash-soft);
+  padding: 0.2rem 0.45rem;
+  color: var(--dash-muted);
+  font-size: 0.48rem;
+  font-weight: 700;
+  white-space: normal;
+}
+
+.accounting-dashboard__budget-list {
+  display: grid;
+  gap: 0.18rem;
+}
+
+.accounting-dashboard__budget-row {
+  display: grid;
+  grid-template-columns: minmax(6.5rem, 1fr) minmax(4.4rem, .8fr) minmax(4.8rem, .8fr) minmax(3rem, .65fr) 2.7rem;
+  align-items: center;
+  gap: 0.45rem;
+  min-height: 1.9rem;
+  border-bottom: 1px solid color-mix(in srgb, var(--dash-border) 70%, transparent);
+  font-size: 0.52rem;
+}
+
+.accounting-dashboard__budget-row:last-child {
+  border-bottom: 0;
+}
+
+.accounting-dashboard__budget-row > span {
+  color: var(--dash-text);
+  font-weight: 680;
+}
+
+.accounting-dashboard__budget-row > strong {
+  color: var(--dash-muted);
+  font-size: 0.52rem;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.accounting-dashboard__budget-row > small {
+  color: var(--dash-muted);
+  font-size: 0.48rem;
+  text-align: right;
+}
+
+.accounting-dashboard__progress,
+.accounting-dashboard__check-progress > div {
+  overflow: hidden;
+  height: 0.34rem;
+  border-radius: 999px;
+  background: #e5e7eb;
+}
+
+.accounting-dashboard__progress i,
+.accounting-dashboard__check-progress i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--dash-green);
+  transition: width 650ms cubic-bezier(.22,.78,.28,1);
+}
+
+.accounting-dashboard__tax-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(8rem, .86fr);
+  gap: 0.75rem;
+}
+
+.accounting-dashboard__metric-list {
+  display: grid;
+  align-content: start;
+  gap: 0.1rem;
+}
+
+.accounting-dashboard__metric-list > div,
+.accounting-dashboard__statement > div {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.65rem;
+  min-height: 1.55rem;
+}
+
+.accounting-dashboard__metric-list span,
+.accounting-dashboard__statement span {
+  min-width: 0;
+  color: var(--dash-muted);
+  font-size: 0.52rem;
+}
+
+.accounting-dashboard__metric-list strong,
+.accounting-dashboard__statement strong {
+  flex: 0 0 auto;
+  color: var(--dash-text);
+  font-size: 0.54rem;
+  font-weight: 760;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.accounting-dashboard__metric-list.is-large > div {
+  min-height: 1.8rem;
+  border-bottom: 1px solid color-mix(in srgb, var(--dash-border) 66%, transparent);
+}
+
+.accounting-dashboard__metric-list.is-large > div:last-child {
+  border-bottom: 0;
+}
+
+.accounting-dashboard__filing-list {
+  display: grid;
+  align-content: start;
+  gap: 0.3rem;
+  border-left: 1px solid var(--dash-border);
+  padding-left: 0.75rem;
+}
+
+.accounting-dashboard__filing-list > div {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 0.35rem;
+  min-height: 1.55rem;
+  color: #059669;
+}
+
+.accounting-dashboard__filing-list span {
+  color: var(--dash-muted);
+  font-size: 0.5rem;
+}
+
+.accounting-dashboard__filing-list strong {
+  font-size: 0.51rem;
+  font-weight: 760;
+  font-variant-numeric: tabular-nums;
+}
+
+.accounting-dashboard__statement {
+  display: grid;
+  gap: 0.05rem;
+}
+
+.accounting-dashboard__statement > div.is-section {
+  min-height: 1.45rem;
+  margin-top: 0.15rem;
+}
+
+.accounting-dashboard__statement > div.is-section span {
+  color: var(--dash-navy);
+  font-size: 0.52rem;
+  font-weight: 800;
+}
+
+.accounting-dashboard__statement > div.is-expense strong {
+  color: #dc2626;
+}
+
+.accounting-dashboard__statement > div.is-total {
+  border-top: 1px solid var(--dash-border);
+  padding-top: 0.22rem;
+  font-weight: 760;
+}
+
+.accounting-dashboard__statement > div.is-grand {
+  margin-top: 0.12rem;
+  border-top: 1px solid var(--dash-border);
+  padding-top: 0.3rem;
+}
+
+.accounting-dashboard__statement > div.is-grand span,
+.accounting-dashboard__statement > div.is-grand strong {
+  color: #059669;
+  font-weight: 820;
+}
+
+.accounting-dashboard__operations-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, .78fr) minmax(0, .92fr) minmax(0, .92fr);
+  gap: 0.65rem;
+  margin-top: 0.65rem;
+}
+
+.accounting-dashboard__table.is-compact {
+  min-width: 31rem;
+}
+
+.accounting-dashboard__partner-table {
+  display: grid;
+  gap: 0.12rem;
+}
+
+.accounting-dashboard__partner-table > div {
+  display: grid;
+  grid-template-columns: 1.2rem minmax(0, 1fr) auto 2.8rem;
+  align-items: center;
+  gap: 0.4rem;
+  min-height: 1.65rem;
+  border-bottom: 1px solid color-mix(in srgb, var(--dash-border) 68%, transparent);
+}
+
+.accounting-dashboard__partner-table > div:last-child {
+  border-bottom: 0;
+}
+
+.accounting-dashboard__rank {
+  display: inline-flex;
+  width: 1.1rem;
+  height: 1.1rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.3rem;
+  background: var(--dash-soft);
+  color: var(--dash-muted);
+  font-size: 0.46rem;
+  font-weight: 800;
+}
+
+.accounting-dashboard__partner-name {
+  overflow: hidden;
+  color: var(--dash-text);
+  font-size: 0.52rem;
+  font-weight: 670;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.accounting-dashboard__partner-table strong {
+  color: var(--dash-navy);
+  font-size: 0.52rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.accounting-dashboard__partner-table small {
+  color: var(--dash-muted);
+  font-size: 0.48rem;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.accounting-dashboard__bottom-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.55fr) minmax(14.5rem, .72fr) minmax(16rem, .82fr);
+  gap: 0.65rem;
+  margin-top: 0.65rem;
+}
+
+.accounting-dashboard__recent-panel .accounting-dashboard__table {
+  min-width: 48rem;
+}
+
+.accounting-dashboard__check-progress {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.55rem;
+  margin-bottom: 0.45rem;
+}
+
+.accounting-dashboard__check-progress span {
+  color: var(--dash-muted);
+  font-size: 0.5rem;
+  font-weight: 750;
+}
+
+.accounting-dashboard__checklist {
+  display: grid;
+  gap: 0.06rem;
+}
+
+.accounting-dashboard__checklist button {
+  display: grid;
+  grid-template-columns: 1rem minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.4rem;
+  min-height: 1.75rem;
+  border-bottom: 1px solid color-mix(in srgb, var(--dash-border) 66%, transparent);
+  color: #059669;
+  text-align: left;
+}
+
+.accounting-dashboard__checklist button:has(svg + span + strong:not(:empty)) strong {
+  color: inherit;
+}
+
+.accounting-dashboard__checklist button span {
+  color: var(--dash-text);
+  font-size: 0.52rem;
+  font-weight: 630;
+}
+
+.accounting-dashboard__checklist button strong {
+  color: var(--dash-muted);
+  font-size: 0.48rem;
+  font-weight: 740;
+}
+
+.accounting-dashboard__checklist button:has(.lucide-triangle-alert) {
+  color: #d97706;
+}
+
+.accounting-dashboard__panel-link {
+  display: block;
+  margin: 0.55rem 0 0 auto;
+}
+
+.accounting-dashboard__alert-count {
+  display: inline-flex;
+  width: 1.35rem;
+  height: 1.35rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: #f1f5f9;
+  color: #64748b;
+  font-size: 0.5rem;
+  font-weight: 850;
+}
+
+.accounting-dashboard__alert-count.is-active {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.accounting-dashboard__alerts {
+  display: grid;
+  gap: 0.08rem;
+}
+
+.accounting-dashboard__alerts button {
+  display: grid;
+  grid-template-columns: 1.2rem minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 0.4rem;
+  min-height: 1.9rem;
+  border-bottom: 1px solid color-mix(in srgb, var(--dash-border) 68%, transparent);
+  text-align: left;
+}
+
+.accounting-dashboard__alerts button:last-child {
+  border-bottom: 0;
+}
+
+.accounting-dashboard__alert-icon {
+  display: inline-flex;
+  width: 1.1rem;
+  height: 1.1rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.32rem;
+}
+
+.accounting-dashboard__alert-icon.is-danger {
+  background: #fef2f2;
+  color: #dc2626;
+}
+
+.accounting-dashboard__alert-icon.is-warning {
+  background: #fffbeb;
+  color: #d97706;
+}
+
+.accounting-dashboard__alert-icon.is-ok {
+  background: #ecfdf5;
+  color: #059669;
+}
+
+.accounting-dashboard__alerts button > span:nth-child(2) {
+  color: var(--dash-text);
+  font-size: 0.52rem;
+  font-weight: 650;
+}
+
+.accounting-dashboard__alerts strong {
+  color: var(--dash-muted);
+  font-size: 0.5rem;
+  font-weight: 720;
+  font-variant-numeric: tabular-nums;
+}
+
+.accounting-dashboard__alerts small {
+  color: var(--dash-blue);
+  font-size: 0.48rem;
+  font-weight: 760;
+}
+
+.accounting-dashboard__foot {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-top: 0.65rem;
+  border: 1px solid var(--dash-border);
+  border-radius: 0.6rem;
+  background: var(--dash-surface);
+  padding: 0.55rem 0.75rem;
+  color: var(--dash-muted);
+  font-size: 0.52rem;
+}
+
+.accounting-dashboard__foot > div {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 0.35rem;
+  color: #059669;
+}
+
+.accounting-dashboard__foot > div span {
+  color: var(--dash-muted);
+}
+
+.accounting-dashboard__foot strong {
+  color: var(--dash-navy);
+}
+
+[data-theme='dark'] .accounting-dashboard {
+  --dash-navy: #e2e8f0;
+  --dash-border: var(--border-lt);
+  --dash-surface: var(--bg-card);
+  --dash-soft: var(--bg-surface);
+  --dash-text: var(--text-1);
+  --dash-muted: var(--text-3);
+}
+
+[data-theme='dark'] .accounting-dashboard__kpi-icon,
+[data-theme='dark'] .accounting-dashboard__rank,
+[data-theme='dark'] .accounting-dashboard__muted-pill {
+  background: var(--bg-surface);
+}
+
+[data-theme='dark'] .accounting-dashboard__error {
+  border-color: rgba(248, 113, 113, .3);
+  background: rgba(127, 29, 29, .16);
+  color: #fecaca;
+}
+
+@media (max-width: 1399px) {
+  .accounting-dashboard__kpis {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .accounting-dashboard__kpi:nth-child(4) {
+    border-right: 0;
+  }
+
+  .accounting-dashboard__kpi:nth-child(-n+4) {
+    border-bottom: 1px solid var(--dash-border);
+  }
+
+  .accounting-dashboard__top-grid {
+    grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
+  }
+
+  .accounting-dashboard__ageing-stack {
+    grid-column: 1 / -1;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-rows: none;
+  }
+
+  .accounting-dashboard__middle-grid,
+  .accounting-dashboard__operations-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .accounting-dashboard__bottom-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .accounting-dashboard__recent-panel {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 1023px) {
+  .accounting-dashboard {
+    padding-inline: 1.25rem;
+  }
+
+  .accounting-dashboard__command {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .accounting-dashboard__filters {
+    width: 100%;
+  }
+
+  .accounting-dashboard__filters label {
+    flex: 1 1 0;
+  }
+
+  .accounting-dashboard__filters input {
+    width: 100%;
+  }
+
+  .accounting-dashboard__top-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .accounting-dashboard__ageing-stack {
+    grid-column: auto;
+  }
+
+  .accounting-dashboard__bottom-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .accounting-dashboard__recent-panel {
+    grid-column: auto;
+  }
+
+  .accounting-dashboard__chart-lg {
+    height: 14rem;
+  }
+}
+
+@media (max-width: 767px) {
+  .finance-workspace[data-finance-tab='dashboard'] > .mod-header {
+    min-height: 6.9rem;
+  }
+
+  .accounting-dashboard {
+    padding: 0.65rem 0.75rem max(1rem, env(safe-area-inset-bottom));
+  }
+
+  .accounting-dashboard__command {
+    margin-bottom: 0.6rem;
+    border-radius: 0.65rem;
+    padding: 0.8rem;
+  }
+
+  .accounting-dashboard__identity h2 {
+    font-size: 1.15rem;
+  }
+
+  .accounting-dashboard__identity p {
+    font-size: 0.68rem;
+  }
+
+  .accounting-dashboard__filters {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: end;
+  }
+
+  .accounting-dashboard__filters button {
+    grid-column: 1 / -1;
+    min-height: 2.55rem;
+  }
+
+  .accounting-dashboard__filters input {
+    min-height: 2.55rem;
+    font-size: 0.75rem;
+  }
+
+  .accounting-dashboard__kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    border-radius: 0.65rem;
+  }
+
+  .accounting-dashboard__kpi {
+    min-height: 5.75rem;
+    border-right: 1px solid var(--dash-border);
+    border-bottom: 1px solid var(--dash-border);
+    padding: 0.72rem;
+  }
+
+  .accounting-dashboard__kpi:nth-child(even) {
+    border-right: 0;
+  }
+
+  .accounting-dashboard__kpi:nth-last-child(-n+2) {
+    border-bottom: 0;
+  }
+
+  .accounting-dashboard__kpi-icon {
+    width: 1.9rem;
+    height: 1.9rem;
+  }
+
+  .accounting-dashboard__kpi-copy > span {
+    font-size: 0.58rem;
+  }
+
+  .accounting-dashboard__kpi-copy > strong {
+    font-size: 0.88rem;
+  }
+
+  .accounting-dashboard__kpi-copy > small {
+    overflow: hidden;
+    max-width: 100%;
+    font-size: 0.49rem;
+    text-overflow: ellipsis;
+  }
+
+  .accounting-dashboard__ageing-stack,
+  .accounting-dashboard__middle-grid,
+  .accounting-dashboard__operations-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .accounting-dashboard__panel,
+  .accounting-dashboard__ageing,
+  .accounting-dashboard__bank-wrap {
+    border-radius: 0.65rem;
+  }
+
+  .accounting-dashboard__panel {
+    padding: 0.75rem;
+  }
+
+  .accounting-dashboard__panel-head h3,
+  .accounting-dashboard__bank-head h3,
+  .accounting-dashboard__ageing-head h3 {
+    font-size: 0.72rem;
+  }
+
+  .accounting-dashboard__chart-lg {
+    height: 13.5rem;
+  }
+
+  .accounting-dashboard__ageing-grid {
+    gap: 0.25rem;
+  }
+
+  .accounting-dashboard__ageing-grid strong {
+    font-size: 0.58rem;
+  }
+
+  .accounting-dashboard__bank-head {
+    padding: 0.7rem 0.75rem 0.5rem;
+  }
+
+  .accounting-dashboard__table {
+    min-width: 36rem;
+    font-size: 0.62rem;
+  }
+
+  .accounting-dashboard__table th {
+    font-size: 0.54rem;
+  }
+
+  .accounting-dashboard__table td {
+    padding-block: 0.6rem;
+  }
+
+  .accounting-dashboard__budget-row {
+    grid-template-columns: minmax(6rem, 1fr) auto;
+    gap: 0.35rem 0.65rem;
+    min-height: 2.9rem;
+    padding-block: 0.3rem;
+  }
+
+  .accounting-dashboard__budget-row > strong:first-of-type {
+    display: none;
+  }
+
+  .accounting-dashboard__budget-row > strong:nth-of-type(2) {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .accounting-dashboard__budget-row .accounting-dashboard__progress {
+    grid-column: 1;
+    grid-row: 2;
+  }
+
+  .accounting-dashboard__budget-row > small {
+    grid-column: 2;
+    grid-row: 2;
+  }
+
+  .accounting-dashboard__tax-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .accounting-dashboard__filing-list {
+    border-top: 1px solid var(--dash-border);
+    border-left: 0;
+    padding-top: 0.55rem;
+    padding-left: 0;
+  }
+
+  .accounting-dashboard__partner-table > div {
+    min-height: 2rem;
+  }
+
+  .accounting-dashboard__foot {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
+
+@media (max-width: 420px) {
+  .accounting-dashboard {
+    padding-inline: 0.6rem;
+  }
+
+  .accounting-dashboard__kpi {
+    gap: 0.45rem;
+    padding-inline: 0.55rem;
+  }
+
+  .accounting-dashboard__kpi-icon {
+    width: 1.7rem;
+    height: 1.7rem;
+  }
+
+  .accounting-dashboard__kpi-copy > strong {
+    font-size: 0.8rem;
+  }
+
+  .accounting-dashboard__ageing-grid {
+    grid-template-columns: repeat(5, minmax(2.8rem, 1fr));
+    overflow-x: auto;
+  }
+
+  .accounting-dashboard__ageing-grid div {
+    min-width: 2.8rem;
+  }
+}
+
+
+.accounting-dashboard__shared-gl {
+  display: inline-flex;
+  align-items: center;
+  min-height: 1.25rem;
+  border: 1px solid #fde68a;
+  border-radius: 999px;
+  background: #fffbeb;
+  padding: 0.15rem 0.4rem;
+  color: #a16207;
+  font-size: 0.48rem;
+  font-weight: 760;
+  white-space: nowrap;
+}
+
+[data-theme='dark'] .accounting-dashboard__shared-gl {
+  border-color: rgba(251, 191, 36, 0.3);
+  background: rgba(120, 53, 15, 0.18);
+  color: #fcd34d;
+}
+
+
+@media (max-width: 767px) {
+  .accounting-dashboard__panel-head p,
+  .accounting-dashboard__bank-head p,
+  .accounting-dashboard__ageing-head p {
+    font-size: 0.64rem;
+  }
+
+  .accounting-dashboard__legend,
+  .accounting-dashboard__ageing-grid span,
+  .accounting-dashboard__ageing-grid small,
+  .accounting-dashboard__budget-row,
+  .accounting-dashboard__budget-row > strong,
+  .accounting-dashboard__budget-row > small,
+  .accounting-dashboard__metric-list span,
+  .accounting-dashboard__statement span,
+  .accounting-dashboard__metric-list strong,
+  .accounting-dashboard__statement strong,
+  .accounting-dashboard__filing-list span,
+  .accounting-dashboard__filing-list strong,
+  .accounting-dashboard__partner-name,
+  .accounting-dashboard__partner-table strong,
+  .accounting-dashboard__partner-table small,
+  .accounting-dashboard__checklist button span,
+  .accounting-dashboard__checklist button strong,
+  .accounting-dashboard__alerts button > span:nth-child(2),
+  .accounting-dashboard__alerts strong,
+  .accounting-dashboard__alerts small,
+  .accounting-dashboard__foot {
+    font-size: 0.64rem;
+  }
+
+  .accounting-dashboard__ageing-grid strong {
+    font-size: 0.68rem;
+  }
+
+  .accounting-dashboard__table {
+    font-size: 0.7rem;
+  }
+
+  .accounting-dashboard__table th {
+    font-size: 0.61rem;
+  }
+
+  .accounting-dashboard__table td small,
+  .accounting-dashboard__status,
+  .accounting-dashboard__due,
+  .accounting-dashboard__muted-pill,
+  .accounting-dashboard__shared-gl {
+    font-size: 0.61rem;
+  }
+}
