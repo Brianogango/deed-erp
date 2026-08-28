@@ -7,6 +7,7 @@ import { PUBLIC_USERS } from '@/lib/auth/public-users'
 import { loadAppState } from '@/lib/server-store'
 import AppShell from '@/components/AppShell'
 import SwRegister from '@/components/SwRegister'
+import NavigationStateGuard from '@/components/navigation/NavigationStateGuard'
 import { robotoFlex, openSans, dmMono } from './fonts'
 
 export const metadata: Metadata = {
@@ -91,6 +92,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       <body className={bodyClassName}>
         <SwRegister />
         <AppShell initialUser={shellUser} initialUsers={users} serverState={serverState}>
+          <NavigationStateGuard />
           {children}
         </AppShell>
       </body>
