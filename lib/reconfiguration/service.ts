@@ -659,6 +659,10 @@ export async function listWorkOrders(filters?: { status?: string; q?: string }) 
     where.OR = [
       { ref: { contains: filters.q, mode: 'insensitive' } },
       { manufacturerSerial: { contains: filters.q, mode: 'insensitive' } },
+      { product: { is: { name: { contains: filters.q, mode: 'insensitive' } } } },
+      { product: { is: { sku: { contains: filters.q, mode: 'insensitive' } } } },
+      { currentSnapshot: { is: { displayName: { contains: filters.q, mode: 'insensitive' } } } },
+      { proposedSnapshot: { is: { displayName: { contains: filters.q, mode: 'insensitive' } } } },
     ]
   }
   return prisma.reconfigurationWorkOrder.findMany({
