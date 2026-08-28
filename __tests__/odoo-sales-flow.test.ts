@@ -449,13 +449,15 @@ describe('invoice document state and payment status', () => {
 
 describe('saleTransitionError role gates', () => {
   it('blocks sales_rep from cancelling or resetting a confirmed sale', () => {
-    expect(saleTransitionError('sale', 'cancelled', 'sales_rep')).toMatch(/Finance or Director/i)
-    expect(saleTransitionError('sale', 'quotation', 'sales_rep')).toMatch(/Finance or Director/i)
+    expect(saleTransitionError('sale', 'cancelled', 'sales_rep')).toMatch(/Finance, Admin Officer, or Director/i)
+    expect(saleTransitionError('sale', 'quotation', 'sales_rep')).toMatch(/Finance, Admin Officer, or Director/i)
   })
 
-  it('allows Finance/Director to cancel or reset a confirmed sale', () => {
+  it('allows Finance, Admin Officer, and Director to cancel or reset a confirmed sale', () => {
     expect(saleTransitionError('sale', 'cancelled', 'finance_officer')).toBeNull()
     expect(saleTransitionError('sale', 'quotation', 'director')).toBeNull()
+    expect(saleTransitionError('sale', 'cancelled', 'admin_officer')).toBeNull()
+    expect(saleTransitionError('sale', 'quotation', 'admin_officer')).toBeNull()
   })
 
   it('allows sales staff to cancel quotations', () => {
@@ -466,9 +468,12 @@ describe('saleTransitionError role gates', () => {
   it('blocks sales_rep from resetting a cancelled-but-previously-confirmed order', () => {
     expect(
       saleTransitionError('cancelled', 'quotation', 'sales_rep', { previouslyConfirmed: true }),
-    ).toMatch(/Finance or Director/i)
+    ).toMatch(/Finance, Admin Officer, or Director/i)
     expect(
       saleTransitionError('cancelled', 'quotation', 'finance_officer', { previouslyConfirmed: true }),
+    ).toBeNull()
+    expect(
+      saleTransitionError('cancelled', 'quotation', 'admin_officer', { previouslyConfirmed: true }),
     ).toBeNull()
   })
 })

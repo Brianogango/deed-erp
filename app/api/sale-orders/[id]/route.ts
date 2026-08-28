@@ -10,6 +10,7 @@ import {
   saleTransitionError,
   saleOrderCancelBlockers,
   isQuotationStage,
+  canReverseConfirmedSale,
 } from '@/lib/odoo-sales-flow'
 import { enforceSaleOrderApprovals } from '@/lib/sales-approval-enforcement.server'
 import { lockVersionMismatch, nextLockVersion, readExpectedVersion } from '@/lib/optimistic-lock'
@@ -332,9 +333,9 @@ async function enforceSaleWorkflow(
   // confirm action itself and does not require director rights.
   const lockingOnConfirm = to === 'sale' && from !== 'sale' && body.locked === true
   // Resetting a locked confirmed order back to quotation ("Set to Quotation")
-  // is a documented Finance/Director action (checked separately below) and
-  // always unlocks as part of that same request — it must not be blocked
-  // here just because the requester isn't specifically a director.
+  // is a documented Finance / Admin Officer / Director action (checked
+  // separately below) and always unlocks as part of that same request — it
+  // must not be blocked here just because the requester isn't a director.
   const unlockingOnReset = to === 'quotation' && from === 'sale' && body.locked === false
   if (lockChangeRequested && !isDirector && !lockingOnConfirm && !unlockingOnReset) {
     return NextResponse.json({ error: 'Only a director can lock or unlock a confirmed order' }, { status: 403 })
@@ -367,11 +368,11 @@ async function enforceSaleWorkflow(
       { status: 409 },
     )
   }
-  // Reset to quotation requires Finance/Director and cancel blockers when confirmed.
+  // Reset to quotation requires Finance / Admin Officer / Director and cancel
+  // blockers when confirmed.
   if (to === 'quotation' && from === 'sale') {
-    const canReset = ['director', 'finance_officer'].includes(session.user.role)
-    if (!canReset) {
-      return NextResponse.json({ error: 'Only Finance or Director can reset a sale order to quotation' }, { status: 403 })
+    if (!canReverseConfirmedSale(session.user.role)) {
+      return NextResponse.json({ error: 'Only Finance, Admin Officer, or Director can reset a sale order to quotation' }, { status: 403 })
     }
     const blockers = await saleOrderBlockersFor(existing.id)
     if (blockers.length > 0) {
@@ -381,12 +382,11 @@ async function enforceSaleWorkflow(
       )
     }
   }
-  // Cancelled → quotation: if the SO was previously confirmed, Finance/Director only.
+  // Cancelled → quotation: if the SO was previously confirmed, same reverse gate.
   if (to === 'quotation' && from === 'cancelled' && existing.confirmedAt) {
-    const canReset = ['director', 'finance_officer'].includes(session.user.role)
-    if (!canReset) {
+    if (!canReverseConfirmedSale(session.user.role)) {
       return NextResponse.json(
-        { error: 'Only Finance or Director can reset a previously confirmed order to quotation' },
+        { error: 'Only Finance, Admin Officer, or Director can reset a previously confirmed order to quotation' },
         { status: 403 },
       )
     }

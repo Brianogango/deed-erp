@@ -1,6 +1,8 @@
 import 'server-only'
+import prisma from '@/lib/prisma'
 import { createJournalEntry, persistStoreJournalEntry, reverseJournalEntry, type CreateJournalEntryInput } from '@/lib/accounting/journal-service'
 import { COMPANY_ACCOUNT_FALLBACKS, formatAccountLabel } from '@/lib/product-accounts'
+import { nextInvoiceJournalRef } from '@/lib/finance-invoice'
 import {
   buildVendorBillPerpetualLines,
   buildVendorCreditPerpetualLines,
@@ -110,6 +112,27 @@ export function invoiceJournalRef(invoice: Pick<InvoiceLike, 'ref' | 'invoiceNum
 }
 
 /**
+ * Canonical posting uses `JRN/${number}`. After Reset to Draft the original
+ * row stays (isReversed), so the next post must take `.../2`, `.../3`, …
+ * If the canonical ref exists and is still live, return it so the journal
+ * service can reject a double-post instead of silently minting a sibling.
+ */
+export async function allocateInvoiceJournalRef(canonical: string): Promise<string> {
+  const existing = await prisma.journalEntry.findMany({
+    where: {
+      OR: [
+        { ref: canonical },
+        { ref: { startsWith: `${canonical}/` } },
+      ],
+    },
+    select: { ref: true, isReversed: true },
+  })
+  const canonicalRow = existing.find(row => row.ref === canonical)
+  if (!canonicalRow || !canonicalRow.isReversed) return canonical
+  return nextInvoiceJournalRef(canonical, existing.map(row => row.ref))
+}
+
+/**
  * Build + persist invoice posting journal to Prisma (idempotent on ref).
  * Vendor bills with PO + automated valuation clear GRNI instead of double-expensing.
  */
@@ -194,7 +217,9 @@ export async function buildInvoiceJournalInput(
  * branch anymore: all invoice journals use the same validated journal service.
  */
 export async function postInvoiceJournalToPrisma(invoice: InvoiceLike, opts?: { createdById?: string }) {
-  return createJournalEntry(await buildInvoiceJournalInput(invoice, opts))
+  const input = await buildInvoiceJournalInput(invoice, opts)
+  input.ref = await allocateInvoiceJournalRef(input.ref)
+  return createJournalEntry(input)
 }
 
 export async function postInvoicePaymentJournalToPrisma(params: {
@@ -326,7 +351,17 @@ export async function postDepositClearJournalToPrisma(params: {
 
 /** Reverse the posting journal for an invoice (reset / unpaid cancel / void). */
 export async function reverseInvoiceJournalInPrisma(invoice: InvoiceLike, userId?: string) {
-  const ref = invoiceJournalRef(invoice)
+  const live = await prisma.journalEntry.findFirst({
+    where: {
+      invoiceId: invoice.id,
+      isReversed: false,
+      sourceType: { in: ['invoice', 'bill'] },
+      NOT: { ref: { startsWith: 'REV/' } },
+    },
+    orderBy: { postedAt: 'desc' },
+    select: { ref: true },
+  })
+  const ref = live?.ref ?? invoiceJournalRef(invoice)
   try {
     return await reverseJournalEntry(ref, userId)
   } catch (err: any) {

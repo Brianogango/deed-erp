@@ -298,6 +298,13 @@ describe('sale-order workflow enforcement (server-side)', () => {
     expect(res.status).toBe(200)
   })
 
+  it('admin_officer may reset a locked confirmed order back to quotation', async () => {
+    mockGetSession.mockResolvedValue(sessionFor('admin_officer'))
+    mockPrismaSO.findUnique.mockResolvedValue({ ...baseOrder, status: 'sale', locked: true })
+    const res = await PUT(putReq({ status: 'quotation', locked: false }), params)
+    expect(res.status).toBe(200)
+  })
+
   it('still blocks a sales_rep from resetting a locked confirmed order', async () => {
     mockGetSession.mockResolvedValue(sessionFor('sales_rep'))
     mockPrismaSO.findUnique.mockResolvedValue({ ...baseOrder, status: 'sale', locked: true })
@@ -306,7 +313,7 @@ describe('sale-order workflow enforcement (server-side)', () => {
     // lock-toggle exemption is ever reached — a sales_rep still cannot reset
     // a confirmed order to quotation, locked or not.
     expect(res.status).toBe(409)
-    expect((await res.json()).error).toMatch(/Only Finance or Director/i)
+    expect((await res.json()).error).toMatch(/Only Finance, Admin Officer, or Director/i)
     expect(mockPrismaSO.update).not.toHaveBeenCalled()
   })
 })
