@@ -1,4 +1,5 @@
 'use client'
+import { matchesSearchTerms } from '@/lib/search'
 import { useState, useEffect, useRef, useMemo, Suspense } from 'react'
 import { useCrmStore, Contact, SaleOrder, RepairOrder, Invoice, POSOrder, fmtDate, fmtDateTime, fmtKes } from '@/lib/store'
 import { invoiceDocState, invoicePaymentStatus, isOpenInvoice, invoiceResidual, displayDocRef, PAYMENT_STATUS_LABELS, isQuotationStage } from '@/lib/odoo-sales-flow'
@@ -182,16 +183,17 @@ function ContactsInner() {
   const [showArchived, setShowArchived] = useState(false)
   const filtered = contacts.filter(c => {
     if (!showArchived && c.isArchived) return false
-    const q = search.toLowerCase()
-    const matchSearch = !q
-      || c.name.toLowerCase().includes(q)
-      || (c.tradingName ?? '').toLowerCase().includes(q)
-      || c.email.toLowerCase().includes(q)
-      || c.phone.includes(q)
-      || (c.mobile ?? '').includes(q)
-      || (c.vatNumber ?? '').toLowerCase().includes(q)
-      || (c.idNumber ?? '').includes(q)
-      || (c.city ?? '').toLowerCase().includes(q)
+    const matchSearch = matchesSearchTerms(search, [
+      c.name,
+      c.tradingName,
+      c.email,
+      c.phone,
+      c.mobile,
+      c.vatNumber,
+      c.idNumber,
+      c.city,
+      c.country,
+    ])
     const matchTab =
       tab === 'all'         ? true :
       tab === 'companies'   ? c.type === 'company' :
