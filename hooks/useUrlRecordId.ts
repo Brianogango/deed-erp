@@ -10,6 +10,12 @@ type Options = {
   whenOpen?: Record<string, string>
   /** Extra query keys to remove when closing. */
   clearKeys?: string[]
+  /**
+   * Opening a record should normally add browser history so the browser Back
+   * button returns to the parent list. Set to replace only for exceptional
+   * flows that intentionally do not create a history entry.
+   */
+  openHistory?: 'push' | 'replace'
 }
 
 export type SetUrlRecordIdOptions = {
@@ -27,9 +33,11 @@ export type SetUrlRecordIdOptions = {
  * Persist an open list→detail record id in the URL so refresh / share keeps the same page.
  * Pattern matches Expenses / Outsource deep-links.
  *
- * Local state is updated immediately on setRecordId. A module-level pending map
- * survives <Suspense> remounts so a click is not lost before router.replace
- * commits, and so a stale empty searchParams cannot snap the page back to list.
+ * Local state is updated immediately on setRecordId. Opening a record pushes
+ * one history entry by default; clearing/switching records replaces the current
+ * URL so Back returns to the parent list without history spam. A module-level
+ * pending map survives <Suspense> remounts so a click is not lost before router
+ * navigation commits, and so stale searchParams cannot snap the page back.
  */
 const pendingRecordIds = new Map<string, string | null>()
 
@@ -73,10 +81,23 @@ export function useUrlRecordId(options: Options = {}) {
       }
     }
     const qs = params.toString()
+    const target = qs ? `${pathname}?${qs}` : pathname
+    const openingFromList = Boolean(id) && !recordId
+    const shouldPush = openingFromList && (options.openHistory ?? 'push') === 'push'
     startTransition(() => {
-      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false })
+      if (shouldPush) router.push(target, { scroll: false })
+      else router.replace(target, { scroll: false })
     })
-  }, [searchParams, router, pathname, param, options.whenOpen, options.clearKeys])
+  }, [
+    searchParams,
+    router,
+    pathname,
+    param,
+    recordId,
+    options.whenOpen,
+    options.clearKeys,
+    options.openHistory,
+  ])
 
   useEffect(() => {
     const urlId = searchParams.get(param)
