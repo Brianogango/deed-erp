@@ -594,7 +594,7 @@ function NotificationPreferenceControls({
       const supported = 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window
       setPushSupported(supported)
       if (supported) {
-        const registration = await navigator.serviceWorker.getRegistration('/deed-notifications-sw.js')
+        const registration = await navigator.serviceWorker.getRegistration('/')
           || await navigator.serviceWorker.getRegistration()
         const sub = await registration?.pushManager.getSubscription()
         setPushSubscribed(Boolean(sub))
@@ -1528,7 +1528,10 @@ export default function Topbar() {
                     settings: '/settings',
                   }
                   const baseRoute = routeMap[mod] || '/'
-                  router.push(path ? `${baseRoute}${path}` : baseRoute)
+                  const target = path
+                    ? (path.startsWith('/') ? path : `${baseRoute}${path}`)
+                    : baseRoute
+                  router.push(target)
                   setNotifOpen(false)
                 }}
               />
