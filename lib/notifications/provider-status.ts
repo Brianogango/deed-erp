@@ -15,7 +15,7 @@ function retryAt(attempt: number) {
 }
 
 const terminalSuccess = new Set(['delivered', 'read'])
-const terminalFailure = new Set(['failed', 'undelivered', 'bounced', 'dropped', 'complaint'])
+const terminalFailure = new Set(['failed', 'undelivered', 'bounce', 'bounced', 'dropped', 'complaint', 'spamreport', 'blocked'])
 
 export type ProviderDeliveryStatusInput = {
   provider: string
@@ -60,6 +60,16 @@ export async function applyProviderDeliveryStatus(input: ProviderDeliveryStatusI
 
   const status = input.status.toLowerCase()
   const at = input.occurredAt || new Date()
+
+  if (status === 'open') {
+    // Email open events are advisory; preserve delivered semantics without
+    // treating tracking pixels as a business acknowledgement.
+    await prisma.notificationDelivery.update({
+      where: { id: delivery.id },
+      data: { status: 'delivered', deliveredAt: delivery.deliveredAt || at, lastError: null },
+    })
+    return { matched: true as const, deliveryId: delivery.id, status: 'delivered' }
+  }
 
   if (status === 'read') {
     await prisma.notificationDelivery.update({
