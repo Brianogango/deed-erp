@@ -2,6 +2,7 @@ import { calcStockByLocation, type BulkStockLevel, type SerialNumber, type Stock
 import { inferTrackingMethod, isSerialTracking, type TrackingMethod } from '@/lib/inventory-identifiers'
 import { inferProductKind } from '@/lib/product-kind'
 import type { LocationId } from '@/lib/store'
+import { matchesSearch } from '@/lib/search-utils'
 
 export type StockAvailabilityFilter =
   | 'all'
@@ -159,16 +160,14 @@ export function productMatchesSearch(
   search: string,
   serials: Array<{ productId: string; serial?: string; barcode?: string }>,
 ): boolean {
-  const q = search.trim().toLowerCase()
-  if (!q) return true
-  if (product.name.toLowerCase().includes(q)) return true
-  if (product.sku.toLowerCase().includes(q)) return true
-  if ((product.barcode || '').toLowerCase().includes(q)) return true
-  return serials.some(s =>
-    s.productId === product.id && (
-      String(s.serial || '').toLowerCase().includes(q) ||
-      String(s.barcode || '').toLowerCase().includes(q)
-    ),
+  const productSerials = serials.filter(serial => serial.productId === product.id)
+  return matchesSearch(
+    search,
+    product.name,
+    product.sku,
+    product.barcode,
+    product.category,
+    ...productSerials.flatMap(serial => [serial.serial, serial.barcode]),
   )
 }
 
