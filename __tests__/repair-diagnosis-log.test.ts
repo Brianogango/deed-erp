@@ -34,7 +34,7 @@ describe('applyLoggedDiagnosis', () => {
     expect(next.status).toBe('diagnosed')
     expect(next.diagnosis).toEqual(diagnosis)
     expect(next.warrantyCoverage).toBe('partial')
-    expect((next.diagnosis as typeof diagnosis).findings).toContain('Blown capacitor')
+    expect(next.diagnosis.findings).toContain('Blown capacitor')
   })
 
   it('preserves diagnosis when a later patch is merged onto the logged row', () => {

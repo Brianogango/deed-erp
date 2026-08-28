@@ -20,6 +20,15 @@ export function nextStatusAfterDiagnosis(status: string, isRevision: boolean): s
   return status
 }
 
+type LoggedDiagnosis = {
+  revision?: number
+  revisionType?: string
+  revisionReason?: string
+  findings?: string
+  faultDescription?: string
+  diagnosedDate: string
+}
+
 export function applyLoggedDiagnosis<T extends {
   status: string
   diagnosis?: unknown
@@ -27,17 +36,10 @@ export function applyLoggedDiagnosis<T extends {
   statusHistory?: Array<{ status: string; date: string; note?: string; by?: string }>
 }>(
   repair: T,
-  diagnosis: {
-    revision?: number
-    revisionType?: string
-    revisionReason?: string
-    findings?: string
-    faultDescription?: string
-    diagnosedDate: string
-  },
+  diagnosis: LoggedDiagnosis,
   extras: DiagnosisLogRepairPatch | undefined,
   diagnosedBy: string,
-): T {
+): T & { diagnosis: LoggedDiagnosis; status: T['status'] } {
   const previousHistory = Array.isArray(repair.diagnosisHistory) && repair.diagnosisHistory.length
     ? repair.diagnosisHistory
     : repair.diagnosis
