@@ -80,6 +80,8 @@ export async function sendProviderDelivery(input: ProviderDeliveryInput): Promis
       provider: 'whatsapp',
       messageId: result.messageId,
       error: result.error,
+      errorCode: result.errorCode,
+      response: result.httpStatus ? { httpStatus: result.httpStatus } : undefined,
     }
   }
 
@@ -95,6 +97,8 @@ export async function sendProviderDelivery(input: ProviderDeliveryInput): Promis
       provider: 'twilio',
       messageId: result.messageId,
       error: result.error,
+      errorCode: result.errorCode,
+      response: result.httpStatus ? { httpStatus: result.httpStatus } : undefined,
     }
   }
 
