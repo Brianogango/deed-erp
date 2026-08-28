@@ -14,9 +14,10 @@ import { Fa } from '@/components/icons'
 import {
   faBuilding, faUsers, faBriefcase, faBoxesStacked, faCartShopping,
   faScrewdriverWrench, faLandmark, faUserGroup, faCashRegister, faShieldHalved,
-  faPlus, faCheck, faUpload, faBullseye, faChevronRight, faCog, faKey, faEnvelope,
+  faPlus, faCheck, faUpload, faBullseye, faChevronRight, faCog, faKey, faEnvelope, faBell,
 } from '@fortawesome/free-solid-svg-icons'
 import PartnerApiKeys from './settings/PartnerApiKeys'
+import NotificationOperationsPanel from './settings/NotificationOperationsPanel'
 import {
   BlobCutoverPanel,
   CurrencyRatesEditor,
@@ -28,7 +29,7 @@ import { resolveSettingsSection } from '@/lib/dashboard-priority'
 type Section =
   | 'general' | 'banks' | 'access' | 'email'
   | 'crm' | 'sales' | 'inventory' | 'purchase' | 'repair'
-  | 'accounting' | 'hr_config' | 'pos' | 'security' | 'partner_api' | 'data_cutover'
+  | 'accounting' | 'hr_config' | 'pos' | 'notifications' | 'security' | 'partner_api' | 'data_cutover'
 
 type UserFormState = {
   id: string; employeeId: string; username: string; name: string; role: string
@@ -225,6 +226,7 @@ export default function Settings() {
   const canAccessSettings = ['director', 'admin_officer', 'finance_officer'].includes(normalizedRole)
   const canManageSystemUsers = isAdmin(currentUser?.role)
   const canManageBanks = ['director', 'finance_officer'].includes(normalizedRole)
+  const canManageNotifications = ['director', 'admin_officer'].includes(normalizedRole)
 
   useEffect(() => {
     if (section === 'access' && !canManageSystemUsers) setSection('general')
@@ -445,6 +447,7 @@ export default function Settings() {
     { id: 'accounting', label: 'Accounting',    icon: faLandmark,        group: 'Modules' },
     { id: 'hr_config',  label: 'HR',            icon: faUserGroup,       group: 'Modules' },
     { id: 'pos',        label: 'Point of Sale', icon: faCashRegister,    group: 'Modules' },
+    ...(canManageNotifications ? [{ id: 'notifications' as Section, label: 'Notifications', icon: faBell, group: 'System' }] : []),
     { id: 'security',   label: 'Security',      icon: faShieldHalved, group: 'System' },
     ...(canManageSystemUsers ? [{ id: 'data_cutover' as Section, label: 'Data Cutover', icon: faShieldHalved, group: 'System' }] : []),
     ...(canManageSystemUsers ? [{ id: 'partner_api' as Section, label: 'Partner API', icon: faKey, group: 'System' }] : []),
@@ -1186,6 +1189,11 @@ ACCOUNTS_EMAIL=accounts@deed.co.ke`}</pre>
                 />
               </div>
             </div>
+          )}
+
+          {/* ════ NOTIFICATION OPERATIONS ════ */}
+          {section === 'notifications' && canManageNotifications && (
+            <NotificationOperationsPanel showToast={showToast} />
           )}
 
           {/* ════ SECURITY ════ */}
