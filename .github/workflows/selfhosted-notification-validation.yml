@@ -1,0 +1,43 @@
+name: Self-hosted Notification Validation
+
+on:
+  push:
+    branches:
+      - chatgpt/notification-platform-hardening-2026-08-28
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 30
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/deed_erp_ci
+      POSTGRES_URL: postgresql://postgres:postgres@127.0.0.1:5432/deed_erp_ci
+      AUTH_SECRET: selfhosted-ci-auth-secret-32-chars
+      NEXTAUTH_SECRET: selfhosted-ci-auth-secret-32-chars
+      CUSTOMER_PORTAL_SECRET: selfhosted-ci-portal-secret-32-chars
+      NEXT_PUBLIC_APP_URL: http://localhost:3100
+      NEXTAUTH_URL: http://localhost:3100
+      INTERNAL_API_SECRET: selfhosted-ci-internal-secret
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Notification script syntax
+        run: pnpm run validate:notifications
+      - name: Typecheck
+        run: pnpm run typecheck
+      - name: Unit tests
+        run: pnpm test
+      - name: Production build
+        run: pnpm build
