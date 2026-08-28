@@ -182,7 +182,7 @@ async function routeEvent(eventId: string) {
 }
 
 async function claimOutbox(limit: number, workerId: string): Promise<Array<{ id: string; event_id: string; attempt_count: number }>> {
-  return prisma.$queryRawUnsafe(
+  return prisma.$queryRawUnsafe<Array<{ id: string; event_id: string; attempt_count: number }>>(
     `WITH picked AS (
        SELECT id
        FROM notification_outbox
@@ -248,7 +248,7 @@ export async function routePendingNotificationEvents(limit = 50) {
 }
 
 async function claimDeliveries(limit: number): Promise<Array<{ id: string }>> {
-  return prisma.$queryRawUnsafe(
+  return prisma.$queryRawUnsafe<Array<{ id: string }>>(
     `WITH picked AS (
        SELECT id
        FROM notification_deliveries
