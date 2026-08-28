@@ -5,11 +5,7 @@ import { writeFinancialAudit } from '@/lib/finance-audit'
 import prisma from '@/lib/prisma'
 import { toClientRequest, adjustBalance, getBalance } from '@/lib/hr/leave-store'
 import type { StoreLeaveType } from '@/lib/leave-utils'
-import {
-  notifyLeaveDecision,
-  queueLeaveNotification,
-  toLeaveNotifyPayload,
-} from '@/lib/hr/leave-notifications'
+import { publishLeaveCancelled, publishLeaveDecision } from '@/lib/notifications/hr-events'
 
 const WRITE_ROLES = ['director', 'admin_officer', 'finance_officer', 'technical_lead']
 
@@ -92,12 +88,11 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
     existing.status === 'pending_hr'
     && (nextStatus === 'approved' || nextStatus === 'rejected')
   ) {
-    queueLeaveNotification(async () => {
-      await notifyLeaveDecision(
-        toLeaveNotifyPayload(updated as any),
-        nextStatus === 'approved' ? 'approved' : 'rejected',
-      )
-    })
+    await publishLeaveDecision(
+      updated as any,
+      nextStatus === 'approved' ? 'approved' : 'rejected',
+      session.user.id,
+    )
   }
 
   return NextResponse.json({ item: toClientRequest(updated as any) })
@@ -122,7 +117,8 @@ export async function DELETE(_: NextRequest, { params }: { params: { id: string 
   if (existing.status === 'pending_hr') await adjustBalance(existing.employeeId, leaveType, year, { pending: -days })
   else if (existing.status === 'approved') await adjustBalance(existing.employeeId, leaveType, year, { used: -days })
 
-  await prisma.leaveRequest.update({ where: { id: params.id }, data: { status: 'cancelled' as any } })
+  const cancelled = await prisma.leaveRequest.update({ where: { id: params.id }, data: { status: 'cancelled' as any } })
   await writeFinancialAudit({ userId: session.user.id, action: 'cancel_leave', entityType: 'leave_request', entityId: params.id })
+  await publishLeaveCancelled(cancelled as any, session.user.id)
   return NextResponse.json({ ok: true })
 }
