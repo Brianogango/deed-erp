@@ -5,17 +5,33 @@ import { findRepairLinkedInvoice } from './portal-invoice-link'
 import { loadAppState } from './server-store'
 import type { RepairOrder } from './repair-types'
 import { portalDiagnosisFeeFields } from './diagnosis-fee'
+import { collectStoredRepairRefAliases, findRepairByPortalRef, normalizePortalRepairRef } from './repair-ref'
 
-async function loadStoredPhotos(ref: string): Promise<{ url: string; name: string; date: string }[]> {
-  try {
-    const key = `repair_photos_${decodeURIComponent(ref).toUpperCase().replace(/\//g, '_')}`
-    const state = await loadAppState([key])
-    const rows = state[key]
-    if (!Array.isArray(rows)) return []
-    return rows.map((p: any) => ({ url: p.url, name: p.name ?? '', date: p.uploaded_at ?? '' }))
-  } catch {
-    return []
+async function loadStoredPhotos(repair: { ref?: unknown; previousRefs?: unknown }, requestedRef?: string): Promise<{ url: string; name: string; date: string }[]> {
+  const aliases = collectStoredRepairRefAliases({
+    ref: repair.ref,
+    previousRefs: [
+      ...(Array.isArray(repair.previousRefs) ? repair.previousRefs : []),
+      requestedRef,
+    ],
+  })
+  const photos: { url: string; name: string; date: string }[] = []
+  const seen = new Set<string>()
+  for (const alias of aliases) {
+    try {
+      const key = `repair_photos_${normalizePortalRepairRef(alias).toUpperCase().replace(/\//g, '_')}`
+      const state = await loadAppState([key])
+      const rows = state[key]
+      if (!Array.isArray(rows)) continue
+      for (const photo of rows) {
+        const url = String(photo?.url ?? '')
+        if (!url || seen.has(url)) continue
+        seen.add(url)
+        photos.push({ url, name: photo.name ?? '', date: photo.uploaded_at ?? '' })
+      }
+    } catch { /* ignore missing photo blobs */ }
   }
+  return photos
 }
 
 async function restoreApprovalIfMissing(ref: string): Promise<void> {
@@ -51,6 +67,7 @@ function erpToPortal(r: RepairOrder, linkedInvoice?: any): PortalRepair {
 
   const portal: PortalRepair = {
     ref: r.ref,
+    previousRefs: Array.isArray(r.previousRefs) ? r.previousRefs.map(String) : undefined,
     status: r.status as PortalRepairStatus,
     customerName: r.customerName,
     customerPhone: r.customerPhone,
@@ -174,32 +191,25 @@ function erpToPortal(r: RepairOrder, linkedInvoice?: any): PortalRepair {
 }
 
 export async function lookupRepair(ref: string): Promise<PortalRepair | null> {
-  // Restore persisted approval decision to in-memory map if this is a fresh server process
-  await restoreApprovalIfMissing(ref)
+  const decoded = normalizePortalRepairRef(ref)
+  await restoreApprovalIfMissing(decoded)
 
-  // Photos stored separately to avoid the 4MB body-size limit on deed_repairs_v2 sync
-  const storedPhotos = await loadStoredPhotos(ref)
-
-  // 1. Prefer the LIVE ERP record (deed_repairs_v2) so the portal always shows
-  //    the current status. The in-memory registry only holds a snapshot pushed
-  //    by the staff app and can go stale, so it must not shadow live data.
-  //    deed_invoices is loaded alongside so the payment prompt/amount populate.
   try {
     const state = await loadAppState(['deed_repairs_v2', 'deed_repairs', 'deed_invoices'])
     const repairs = (state['deed_repairs_v2'] ?? state['deed_repairs'] ?? []) as RepairOrder[]
     const invoices = (state['deed_invoices'] ?? []) as any[]
-    const decoded = decodeURIComponent(ref)
-    const erp = repairs.find(r => r.ref.toLowerCase() === decoded.toLowerCase())
+    const erp = findRepairByPortalRef(repairs, decoded)
     if (erp) {
+      await restoreApprovalIfMissing(erp.ref)
+      const storedPhotos = await loadStoredPhotos(erp, decoded)
       const linkedInvoice = findRepairLinkedInvoice(invoices, erp as any)
       const portal = erpToPortal(erp, linkedInvoice)
       return storedPhotos.length > 0 ? { ...portal, issuePhotos: storedPhotos } : portal
     }
   } catch {}
 
-  // 2. Fall back to the in-memory registry + static demo data for refs that are
-  //    not present in the live store (e.g. demo repairs REP/0038–0040).
-  const found = getPortalRepair(ref)
+  const storedPhotos = await loadStoredPhotos({ ref: decoded }, decoded)
+  const found = getPortalRepair(decoded)
   if (found) {
     return storedPhotos.length > 0 ? { ...found, issuePhotos: storedPhotos } : found
   }

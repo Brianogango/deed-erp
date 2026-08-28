@@ -406,7 +406,7 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
 
       // Single create with full intake — do not create-then-update. The bare
       // POST used to race store sync and drop repairPath / warranty flags.
-      const rep = createRepair(customerId, customerName, productLabel, device.serial, device.issueDesc, {
+      const rep = await createRepair(customerId, customerName, productLabel, device.serial, device.issueDesc, {
         status: 'received',
         customerPhone,
         customerEmail,

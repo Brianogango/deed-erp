@@ -39,6 +39,7 @@ export interface PortalDiagnosis {
 
 export interface PortalRepair {
   ref: string
+  previousRefs?: string[]
   status: PortalRepairStatus
   customerName: string
   customerPhone: string
@@ -173,7 +174,11 @@ if (!g._portalRepairs) g._portalRepairs = new Map()
 const registeredRepairs = g._portalRepairs
 
 export function registerPortalRepair(repair: PortalRepair) {
-  registeredRepairs.set(repair.ref.toUpperCase(), repair)
+  const keys = [repair.ref, ...(repair.previousRefs ?? [])]
+  for (const key of keys) {
+    const normalized = String(key || '').trim().toUpperCase()
+    if (normalized) registeredRepairs.set(normalized, repair)
+  }
 }
 
 export const PORTAL_REPAIRS: PortalRepair[] = [

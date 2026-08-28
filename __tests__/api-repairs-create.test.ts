@@ -112,4 +112,32 @@ describe('POST /api/repairs — intake fields', () => {
       serialWarrantyExceptionReason: 'label_unreadable',
     }))
   })
+
+  it('keeps an already-allocated sequential ticket instead of minting another', async () => {
+    const res = await POST(makeReq({
+      id: 'rep_keep_1',
+      ref: 'REP/0275',
+      customerName: 'Fiona Akoth',
+      productName: 'HP 840 G4',
+    }))
+    expect(res.status).toBe(201)
+    expect(mockGetNextRepairRef).not.toHaveBeenCalled()
+    const saved = JSON.parse(mockSaveStoreKeys.mock.calls[0][0].deed_repairs_v2)
+    expect(saved[0].ref).toBe('REP/0275')
+  })
+
+  it('stores the timestamp placeholder as previousRefs when allocating sequential', async () => {
+    const res = await POST(makeReq({
+      id: 'rep_alias_1',
+      ref: 'REP-227532',
+      customerName: 'Fiona Akoth',
+      productName: 'HP 840 G4',
+      intakeDate: '2026-08-17T10:57:07.532Z',
+    }))
+    expect(res.status).toBe(201)
+    expect(mockGetNextRepairRef).toHaveBeenCalledTimes(1)
+    const saved = JSON.parse(mockSaveStoreKeys.mock.calls[0][0].deed_repairs_v2)
+    expect(saved[0].ref).toBe('REP/2099/0001')
+    expect(saved[0].previousRefs).toEqual(['REP-227532'])
+  })
 })
