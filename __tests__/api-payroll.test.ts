@@ -5,6 +5,11 @@ const { mockRequireRole, mockPrisma } = vi.hoisted(() => ({
   mockPrisma: {
     payrollRun: { findMany: vi.fn(), findUnique: vi.fn(), create: vi.fn(), update: vi.fn() },
     payslip: { findMany: vi.fn(), create: vi.fn(), updateMany: vi.fn() },
+    // createRunFromClient upserts the statutory rule version, then writes the
+    // run + payslips + component lines inside prisma.$transaction.
+    statutoryRuleVersion: { upsert: vi.fn().mockResolvedValue({ id: 'rule-1' }) },
+    payrollComponentLine: { create: vi.fn(), createMany: vi.fn(), deleteMany: vi.fn() },
+    $transaction: vi.fn((fn: any) => fn(mockPrisma)),
   },
 }))
 

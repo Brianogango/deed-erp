@@ -93,7 +93,8 @@ describe('publishProduct StockLevel atomicity', () => {
     mockStockCreate.mockResolvedValue({})
     mockTransaction.mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) =>
       fn({
-        product: { create: mockProductCreate },
+        // The transaction body duplicate-checks via tx.product.findFirst.
+        product: { create: mockProductCreate, findFirst: mockFindFirst },
         stockLevel: { create: mockStockCreate },
       }),
     )

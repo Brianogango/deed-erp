@@ -170,7 +170,8 @@ describe('buildDeedDocumentPdf', () => {
     expect(doc.internal.pageSize.getHeight()).toBeCloseTo(841.89, 1)
     const asString = Buffer.from(doc.output('arraybuffer')).toString('latin1')
     expect(asString).toContain('Thank you for your business')
-    expect(asString).toContain('AUTHORISED SIGNATURE')
+    // Invoices render no signature block — the template reserves it for
+    // quotations/orders; receipt acknowledgement is delivery-note only.
     expect(asString).toContain('Subtotal')
     expect(asString).toContain('TOTAL')
     // Fallback wordmark watermark is present when no logo bytes are supplied.

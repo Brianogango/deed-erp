@@ -4,10 +4,10 @@ import { appStateKeysForRoute } from '@/lib/app-state-hydration'
 describe('appStateKeysForRoute', () => {
   it('always includes common settings keys', () => {
     const keys = appStateKeysForRoute('/sales')
+    // Notifications moved to the relational platform — no longer a blob key.
     expect(keys).toEqual(expect.arrayContaining([
       'deed_companySettings',
       'deed_systemSettings',
-      'deed_notifications',
       'deed_profileImages',
     ]))
   })

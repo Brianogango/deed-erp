@@ -106,8 +106,9 @@ describe('POST /api/leave-requests — Prisma-backed self-service', () => {
 
   it('rejects insufficient notice for annual leave', async () => {
     mockGetSession.mockResolvedValue(techSession)
-    // Clock is pinned to 2026-07-01; start 2026-07-06 is only a few working days away.
-    const res = await POST(postReq({ leaveType: 'annual', days: 1, startDate: '2026-07-06', endDate: '2026-07-06' }))
+    // Clock is pinned to Wed 2026-07-01; starting Fri 2026-07-03 gives only
+    // 2 working days of notice — short leave needs 3.
+    const res = await POST(postReq({ leaveType: 'annual', days: 1, startDate: '2026-07-03', endDate: '2026-07-03' }))
     expect(res.status).toBe(422)
     const body = await res.json()
     expect(String(body.error)).toMatch(/Insufficient notice/i)
