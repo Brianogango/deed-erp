@@ -96,6 +96,16 @@ const NOTIF_ICONS: Record<AppNotification['type'], string> = {
   repair:     '◈',
 }
 
+type BellNotification = AppNotification & {
+  eventId?: string
+  eventType?: string
+  severity?: 'info' | 'success' | 'attention' | 'warning' | 'critical'
+  priority?: 'low' | 'normal' | 'high' | 'urgent'
+  requiresAcknowledgement?: boolean
+  acknowledgedAt?: string | null
+  resolvedAt?: string | null
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // HOOKS
 // ═══════════════════════════════════════════════════════════════════════════
@@ -109,13 +119,29 @@ function useSoundPreference(): [boolean, (v: boolean) => void] {
   const [sound, setSound] = useState(true)
 
   useEffect(() => {
+    let cancelled = false
     const stored = localStorage.getItem('deed-sound')
     if (stored !== null) setSound(stored === 'true')
+
+    fetch('/api/notifications/preferences', { cache: 'no-store' })
+      .then(res => res.ok ? res.json() : null)
+      .then(data => {
+        if (cancelled || !data?.global || typeof data.global.soundEnabled !== 'boolean') return
+        setSound(data.global.soundEnabled)
+        localStorage.setItem('deed-sound', String(data.global.soundEnabled))
+      })
+      .catch(() => {})
+    return () => { cancelled = true }
   }, [])
 
   const setSoundPersist = useCallback((v: boolean) => {
     setSound(v)
     localStorage.setItem('deed-sound', String(v))
+    void fetch('/api/notifications/preferences', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ eventType: '*', soundEnabled: v }),
+    }).catch(() => {})
   }, [])
 
   return [sound, setSoundPersist]
