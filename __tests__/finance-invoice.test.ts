@@ -8,6 +8,7 @@ import {
   preservePostedInvoicePaymentProgress,
   enforcePostedInvoiceImmutability,
   financeInvoicePath,
+  financeInvoiceListPath,
   shouldApplyInvoiceEditQuery,
 } from '@/lib/finance-invoice'
 
@@ -299,6 +300,12 @@ describe('enforcePostedInvoiceImmutability (FIN-001)', () => {
 describe('invoice editor navigation', () => {
   it('opens the record page for an invoice id', () => {
     expect(financeInvoicePath('inv-1')).toBe('/finance/invoices/inv-1')
+  })
+
+  it('returns invoices and bills to their own lists', () => {
+    expect(financeInvoiceListPath('customer_invoice')).toBe('/finance?tab=invoices')
+    expect(financeInvoiceListPath('vendor_bill')).toBe('/finance?tab=bills')
+    expect(financeInvoiceListPath()).toBe('/finance?tab=invoices')
   })
 
   it('applies a new edit query once, then ignores it until the id changes', () => {
