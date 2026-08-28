@@ -1,4 +1,5 @@
 'use client'
+import { matchesSearchTerms } from '@/lib/search'
 
 import { useState, useEffect, useMemo, Suspense } from 'react'
 import { useSearchParams, useRouter, usePathname } from 'next/navigation'
@@ -371,10 +372,17 @@ function HRContent() {
     } finally { setSaving(false) }
   }
 
-  const filteredEmployees = employees.filter(e => {
-    const q = empSearch.toLowerCase()
-    return !q || e.fullName.toLowerCase().includes(q) || e.employeeNo.toLowerCase().includes(q) || e.jobTitle.toLowerCase().includes(q)
-  })
+  const filteredEmployees = employees.filter(e =>
+    matchesSearchTerms(empSearch, [
+      e.fullName,
+      e.employeeNo,
+      e.jobTitle,
+      e.department,
+      e.email,
+      e.phone,
+      e.status,
+    ])
+  )
 
   // Distinct employees whose approved leave covers today — not the all-time
   // count of approved requests.
