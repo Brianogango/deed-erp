@@ -5,7 +5,12 @@ import { subscribeNotificationChanges } from '@/lib/notifications/realtime'
 export const dynamic = 'force-dynamic'
 
 export async function GET(request: NextRequest) {
-  const session = await getRequiredSession()
+  let session
+  try {
+    session = await getRequiredSession()
+  } catch {
+    return new Response('Unauthorized', { status: 401 })
+  }
   const enc = new TextEncoder()
 
   const stream = new ReadableStream({
