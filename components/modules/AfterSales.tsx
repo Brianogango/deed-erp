@@ -1,5 +1,6 @@
 // @ts-nocheck
 'use client'
+import { matchesSearchTerms } from '@/lib/search'
 import { Suspense, useState, useMemo } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import {
@@ -129,10 +130,15 @@ function AfterSalesContent() {
   }, [warranties])
 
   const filteredWarranties = useMemo(() => {
-    const q = wSearch.toLowerCase()
     return refreshedWarranties.filter(w =>
       (wFilter === 'all' || w.status === wFilter) &&
-      (!q || w.customerName.toLowerCase().includes(q) || w.productName.toLowerCase().includes(q) || w.serialNumber.toLowerCase().includes(q))
+      matchesSearchTerms(wSearch, [
+        w.customerName,
+        w.productName,
+        w.serialNumber,
+        w.saleOrderRef,
+        w.status,
+      ])
     )
   }, [refreshedWarranties, wFilter, wSearch])
 
@@ -148,10 +154,15 @@ function AfterSalesContent() {
 
   // ── Derived RMA data ────────────────────────────────────────────────────────
   const filteredRMAs = useMemo(() => {
-    const q = rmaSearch.toLowerCase()
     return returnOrders.filter(r =>
       (rmaFilter === 'all' || r.status === rmaFilter) &&
-      (!q || r.ref.toLowerCase().includes(q) || r.customerName.toLowerCase().includes(q) || r.saleOrderRef.toLowerCase().includes(q))
+      matchesSearchTerms(rmaSearch, [
+        r.ref,
+        r.customerName,
+        r.saleOrderRef,
+        r.status,
+        r.reason,
+      ])
     )
   }, [returnOrders, rmaFilter, rmaSearch])
 
