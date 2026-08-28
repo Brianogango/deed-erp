@@ -1,4 +1,5 @@
 'use client'
+import { matchesSearchTerms } from '@/lib/search'
 import { usePurchase } from './PurchaseContext'
 import { Badge, PanelHeader, RecordCard } from '@/components/ui'
 import { DataTable, DetailsDrawer, type ColumnDef, type DrawerTab, type PrimaryFilterConfig } from '@/components/data-table'
@@ -39,12 +40,16 @@ export default function PurchaseReturnsTab() {
     if (retDateFrom && r.date < retDateFrom) return false
     if (retDateTo   && r.date > retDateTo)   return false
     if (retSearchSerial.trim()) {
-      const q = retSearchSerial.trim().toUpperCase()
-      const hasSerial = r.lines.some(l => l.serialIds.some(sid => {
-        const sn = serials.find(s => s.id === sid)
-        return sn?.serial.includes(q)
-      }))
-      if (!hasSerial) return false
+      const returnSerials = r.lines.flatMap(l => l.serialIds.map(sid => serials.find(s => s.id === sid)?.serial))
+      if (!matchesSearchTerms(retSearchSerial, [
+        r.ref,
+        r.vendorName,
+        r.poRef,
+        r.reason,
+        r.status,
+        r.collectedByName,
+        returnSerials,
+      ])) return false
     }
     return true
   })
