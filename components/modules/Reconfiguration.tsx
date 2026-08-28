@@ -434,7 +434,7 @@ export default function Reconfiguration() {
           <div className="reconfig-toolbar">
             <input
               className="form-input reconfig-toolbar-search"
-              placeholder="Search ref or serial…"
+              placeholder="Search ref, serial, device or SKU…"
               value={q}
               onChange={e => setQ(e.target.value)}
             />
@@ -652,6 +652,14 @@ export default function Reconfiguration() {
       {tab === 'detail' && detail && (
         <div className="reconfig-detail">
           <div className="reconfig-detail-head">
+            <button
+              type="button"
+              className="btn-outline reconfig-detail-back"
+              aria-label="Back to reconfiguration work orders"
+              onClick={() => { setDetail(null); setTab('orders') }}
+            >
+              ← Work orders
+            </button>
             <div className="reconfig-detail-titleblock">
               <h2>{detail.ref}</h2>
               <p>
