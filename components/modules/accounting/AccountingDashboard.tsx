@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState, type ComponentType, type CSSProperties } from 'react'
 import {
   Activity,
   AlertTriangle,
@@ -9,17 +9,11 @@ import {
   BadgeDollarSign,
   Banknote,
   BarChart3,
-  Boxes,
-  Building2,
-  CalendarDays,
   CheckCircle2,
   CircleDollarSign,
-  Landmark,
   Loader2,
-  PackageCheck,
   ReceiptText,
   RefreshCw,
-  Scale,
   ShieldCheck,
   TrendingUp,
   UsersRound,
@@ -28,7 +22,6 @@ import {
 import {
   Bar,
   CartesianGrid,
-  Cell,
   ComposedChart,
   Line,
   LineChart,
@@ -169,7 +162,7 @@ type Props = {
   onNavigate: (tab: string) => void
 }
 
-const kpiIcons: Record<string, React.ComponentType<{ size?: number; strokeWidth?: number }>> = {
+const kpiIcons: Record<string, ComponentType<{ size?: number; strokeWidth?: number }>> = {
   revenue: TrendingUp,
   grossProfit: CircleDollarSign,
   netProfit: BarChart3,
@@ -256,7 +249,7 @@ function Panel({
   return (
     <section
       className={`accounting-dashboard__panel accounting-dashboard__enter ${className}`}
-      style={{ '--dash-delay': `${delay}ms` } as React.CSSProperties}
+      style={{ '--dash-delay': `${delay}ms` } as CSSProperties}
     >
       <div className="accounting-dashboard__panel-head">
         <div className="min-w-0">
@@ -288,7 +281,7 @@ function AgeingPanel({ title, totals, kind, onNavigate }: {
     <button
       type="button"
       className="accounting-dashboard__ageing text-left accounting-dashboard__enter"
-      onClick={() => onNavigate('reports')}
+      onClick={() => onNavigate('ageing')}
       aria-label={`Open ${title}`}
     >
       <div className="accounting-dashboard__ageing-head">
@@ -406,13 +399,13 @@ export default function AccountingDashboard({ onNavigate }: Props) {
                   type="button"
                   key={kpi.id}
                   className={`accounting-dashboard__kpi accounting-dashboard__enter ${toneClass[kpi.tone] || ''}`}
-                  style={{ '--dash-delay': `${40 + index * 35}ms` } as React.CSSProperties}
+                  style={{ '--dash-delay': `${40 + index * 35}ms` } as CSSProperties}
                   onClick={() => {
                     if (kpi.id === 'ar') onNavigate('invoices')
                     else if (kpi.id === 'ap') onNavigate('bills')
                     else if (kpi.id === 'cash') onNavigate('cashbook')
-                    else if (kpi.id === 'vat') onNavigate('reports')
-                    else onNavigate('reports')
+                    else if (kpi.id === 'vat') onNavigate('vat')
+                    else onNavigate('pl')
                   }}
                 >
                   <span className="accounting-dashboard__kpi-icon"><Icon size={17} strokeWidth={2} /></span>
@@ -441,7 +434,7 @@ export default function AccountingDashboard({ onNavigate }: Props) {
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--finance-border)" />
                     <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fontSize: 10, fill: 'var(--finance-text-3)' }} />
                     <YAxis tickLine={false} axisLine={false} tickFormatter={v => formatKes(v, true).replace('KES ', '')} tick={{ fontSize: 9, fill: 'var(--finance-text-3)' }} width={54} />
-                    <Tooltip formatter={(v: number) => formatKes(v)} labelStyle={{ color: '#111827' }} />
+                    <Tooltip formatter={(v: number | string) => formatKes(Number(v))} labelStyle={{ color: '#111827' }} />
                     <Line type="monotone" dataKey="revenue" name="Revenue" stroke="#2563eb" strokeWidth={2.2} dot={{ r: 2.5 }} activeDot={{ r: 4 }} animationDuration={700} />
                     <Line type="monotone" dataKey="expenses" name="Expenses" stroke="#14b8a6" strokeWidth={2} dot={{ r: 2 }} animationDuration={850} />
                     <Line type="monotone" dataKey="profit" name="Net Profit" stroke="#172554" strokeWidth={2} dot={{ r: 2 }} animationDuration={1000} />
@@ -462,7 +455,7 @@ export default function AccountingDashboard({ onNavigate }: Props) {
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--finance-border)" />
                     <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fontSize: 10, fill: 'var(--finance-text-3)' }} />
                     <YAxis tickLine={false} axisLine={false} tickFormatter={v => formatKes(v, true).replace('KES ', '')} tick={{ fontSize: 9, fill: 'var(--finance-text-3)' }} width={54} />
-                    <Tooltip formatter={(v: number) => formatKes(v)} labelStyle={{ color: '#111827' }} />
+                    <Tooltip formatter={(v: number | string) => formatKes(Number(v))} labelStyle={{ color: '#111827' }} />
                     <Bar dataKey="inflows" name="Cash Inflows" fill="#10b981" radius={[3, 3, 0, 0]} animationDuration={700} />
                     <Bar dataKey="outflowsNegative" name="Cash Outflows" fill="#ef4444" radius={[0, 0, 3, 3]} animationDuration={850} />
                     <Line type="monotone" dataKey="net" name="Net Cash" stroke="#2563eb" strokeWidth={2.2} dot={{ r: 2.5 }} animationDuration={1000} />
