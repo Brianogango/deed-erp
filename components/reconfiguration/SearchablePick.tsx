@@ -91,20 +91,36 @@ export default function SearchablePick({
       if (menuRef.current?.contains(target)) return
       closeMenu()
     }
-    const onViewport = () => closeMenu()
+    const onResize = () => closeMenu()
+    const onScroll = (event: Event) => {
+      const target = event.target
+      // The list is intentionally scrollable. Because this listener runs in
+      // capture phase, scrolling the dropdown also reaches window; do not
+      // treat that internal list scroll as a viewport change.
+      if (target instanceof Node && menuRef.current?.contains(target)) return
+      closeMenu()
+    }
     document.addEventListener('mousedown', onPointerDown)
-    window.addEventListener('resize', onViewport)
-    window.addEventListener('scroll', onViewport, true)
+    window.addEventListener('resize', onResize)
+    window.addEventListener('scroll', onScroll, true)
     return () => {
       document.removeEventListener('mousedown', onPointerDown)
-      window.removeEventListener('resize', onViewport)
-      window.removeEventListener('scroll', onViewport, true)
+      window.removeEventListener('resize', onResize)
+      window.removeEventListener('scroll', onScroll, true)
     }
   }, [open])
 
   useEffect(() => {
     if (activeIndex >= filtered.length) setActiveIndex(0)
   }, [filtered.length, activeIndex])
+
+  useEffect(() => {
+    if (!open || filtered.length === 0) return
+    const active = menuRef.current?.querySelector<HTMLElement>(
+      `[data-reconfig-option-index="${activeIndex}"]`,
+    )
+    active?.scrollIntoView({ block: 'nearest' })
+  }, [open, activeIndex, filtered.length])
 
   return (
     <div ref={wrapRef} className="reconfig-pick">
@@ -191,6 +207,7 @@ export default function SearchablePick({
                 type="button"
                 role="option"
                 aria-selected={chosen}
+                data-reconfig-option-index={index}
                 className={`reconfig-pick-option${active ? ' is-active' : ''}${chosen ? ' is-chosen' : ''}`}
                 onMouseEnter={() => setActiveIndex(index)}
                 onMouseDown={e => e.preventDefault()}

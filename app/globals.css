@@ -11210,7 +11210,12 @@ main#main-content:has(.sales-pilot.sales-doc) > .min-w-0 {
 .reconfig-pick-menu {
   position: fixed;
   z-index: 80;
+  overflow-x: hidden;
   overflow-y: auto;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-gutter: stable;
   border: 1px solid color-mix(in srgb, var(--navy) 16%, var(--border));
   border-radius: var(--radius-sm);
   background: var(--bg-card);
