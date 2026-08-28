@@ -1,4 +1,5 @@
 'use client'
+import { matchesSearchTerms } from '@/lib/search'
 import React, { useMemo, useState, useRef, useEffect, Suspense } from 'react'
 import { loadXlsx } from '@/lib/xlsx-lazy'
 import {
@@ -505,15 +506,17 @@ function InventoryContent() {
   }, [stockableProducts, stockMoves, serials, bulkStock, catFilter, reportProductId, reportMonth])
 
   const displayedTrackedSerials = useMemo(() => {
-    const q = serialReportSearch.trim().toLowerCase()
     return filteredTrackedSerials.filter(s => {
       if (serialReportStatus !== 'all' && s.status !== serialReportStatus) return false
-      if (!q) return true
-      return (
-        s.serial.toLowerCase().includes(q) ||
-        String(s.barcode || '').toLowerCase().includes(q) ||
-        s.productName.toLowerCase().includes(q)
-      )
+      return matchesSearchTerms(serialReportSearch, [
+        s.serial,
+        s.barcode,
+        s.productName,
+        (s as any).sku,
+        (s as any).specs,
+        s.location,
+        s.status,
+      ])
     })
   }, [filteredTrackedSerials, serialReportStatus, serialReportSearch])
 
