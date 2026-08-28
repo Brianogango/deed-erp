@@ -6,11 +6,7 @@
  */
 import 'server-only'
 import prisma from '@/lib/prisma'
-import { sendMultiChannelMessage } from '@/lib/integrations/messaging'
-import {
-  appendDocumentEmailSend,
-  listDocumentEmailSends,
-} from '@/lib/document-email-sends'
+import { publishNotificationEvent } from '@/lib/notifications/service'
 
 export type PaymentReceiptNotifyInput = {
   invoiceId: string
@@ -113,21 +109,12 @@ export function paymentReceiptAlreadySent(
 export async function notifyCustomerPaymentReceived(
   input: PaymentReceiptNotifyInput,
 ): Promise<{ sent: boolean; skipped?: string; error?: string }> {
-  const prior = await listDocumentEmailSends({
-    documentId: input.paymentId,
-    documentType: 'payment_receipt',
-    limit: 20,
-  })
   const invoice = await prisma.invoice.findUnique({
     where: { id: input.invoiceId },
     include: { client: true },
   })
   if (!invoice) return { sent: false, skipped: 'invoice_missing' }
   if (!invoice.client) return { sent: false, skipped: 'client_missing' }
-
-  if (paymentReceiptAlreadySent(prior, input.paymentId, invoice.invoiceNumber)) {
-    return { sent: false, skipped: 'already_sent' }
-  }
 
   const email = String(invoice.client.email || '').trim()
   const phone = String(invoice.client.phone || invoice.client.phoneAlt || '').trim()
@@ -156,74 +143,42 @@ export async function notifyCustomerPaymentReceived(
     balance,
   })
 
-  const channels: Array<'email' | 'whatsapp' | 'sms'> = []
+  const channels: Array<'email' | 'whatsapp'> = []
   if (email) channels.push('email')
   if (phone) channels.push('whatsapp')
 
   try {
-    const result = await sendMultiChannelMessage({
-      purpose: 'payment_receipt',
-      recipient: {
+    await publishNotificationEvent({
+      eventType: 'finance.payment_received',
+      entityType: 'payment',
+      entityId: input.paymentId,
+      actorUserId: input.actorUserId || null,
+      externalRecipients: [{
         name: customerName,
         email: email || null,
         phone: phone || null,
-      },
-      channels: channels.length ? channels : ['email'],
-      mailbox: 'accounts',
-      replyTo: process.env.ACCOUNTS_EMAIL || undefined,
-      content: {
-        subject: content.subject,
-        html: content.html,
-        text: content.text,
-        whatsappText: content.whatsappText,
-        smsText: content.smsText,
-      },
+        channels,
+      }],
+      channels,
+      severity: 'success',
+      title: content.subject,
+      body: content.text,
       metadata: {
         invoiceId: input.invoiceId,
         paymentId: input.paymentId,
         invoiceRef: invoice.invoiceNumber,
+        amount: input.amount,
+        paymentMethod: input.paymentMethod || null,
+        reference: input.reference || null,
+        emailSubject: content.subject,
+        emailHtml: content.html,
+        emailText: content.text,
+        whatsappText: content.whatsappText,
+        smsText: content.smsText,
       },
+      idempotencyKey: `finance-payment-received:${input.paymentId}:${input.invoiceId}`,
+      excludeActor: false,
     })
-
-    const emailResult = result.results.email
-    const waResult = result.results.whatsapp
-    const anyOk = Object.values(result.results).some(r => r.success)
-
-    if (email) {
-      await appendDocumentEmailSend({
-        documentType: 'payment_receipt',
-        documentId: input.paymentId,
-        documentRef: invoice.invoiceNumber,
-        to: email,
-        subject: content.subject,
-        status: emailResult?.success ? 'success' : 'failed',
-        error: emailResult?.success ? undefined : (emailResult?.error || 'email_failed'),
-        messageId: emailResult?.messageId,
-        channel: 'email',
-        kind: 'initial',
-        sentById: input.actorUserId || undefined,
-        sentByName: input.actorName || undefined,
-      })
-    } else if (waResult) {
-      await appendDocumentEmailSend({
-        documentType: 'payment_receipt',
-        documentId: input.paymentId,
-        documentRef: invoice.invoiceNumber,
-        to: phone,
-        subject: content.subject,
-        status: waResult.success ? 'success' : 'failed',
-        error: waResult.success ? undefined : (waResult.error || 'whatsapp_failed'),
-        messageId: waResult.messageId,
-        channel: 'whatsapp',
-        kind: 'initial',
-        sentById: input.actorUserId || undefined,
-        sentByName: input.actorName || undefined,
-      })
-    }
-
-    if (!anyOk) {
-      return { sent: false, error: 'all_channels_failed' }
-    }
     return { sent: true }
   } catch (err) {
     const message = err instanceof Error ? err.message : 'notify_failed'
@@ -232,23 +187,6 @@ export async function notifyCustomerPaymentReceived(
       invoiceId: input.invoiceId,
       error: message,
     })
-    try {
-      await appendDocumentEmailSend({
-        documentType: 'payment_receipt',
-        documentId: input.paymentId,
-        documentRef: invoice.invoiceNumber,
-        to: email || phone || 'unknown',
-        subject: content.subject,
-        status: 'failed',
-        error: message,
-        channel: email ? 'email' : 'whatsapp',
-        kind: 'initial',
-        sentById: input.actorUserId || undefined,
-        sentByName: input.actorName || undefined,
-      })
-    } catch {
-      /* ignore log failure */
-    }
     return { sent: false, error: message }
   }
 }
