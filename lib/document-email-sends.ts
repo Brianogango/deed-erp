@@ -61,6 +61,14 @@ function isSuccessfulDelivery(status: string) {
   return ['sent', 'delivered', 'read'].includes(status)
 }
 
+function providerForChannel(channel: 'email' | 'whatsapp') {
+  if (channel === 'whatsapp') return 'whatsapp'
+  const configured = String(process.env.EMAIL_PROVIDER || 'smtp').trim().toLowerCase()
+  if (configured === 'sendgrid') return 'sendgrid'
+  if (configured === 'ses') return 'ses'
+  return 'smtp'
+}
+
 export async function listDocumentEmailSends(filters?: {
   documentId?: string
   documentType?: DocumentEmailDocumentType
@@ -161,7 +169,7 @@ export async function appendDocumentEmailSend(
         eventId,
         channel,
         destination: input.to,
-        provider: channel,
+        provider: providerForChannel(channel),
         providerMessageId: input.messageId || null,
         status: successful ? 'sent' : 'failed',
         attemptCount: 1,
