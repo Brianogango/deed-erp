@@ -1,5 +1,6 @@
 // @ts-nocheck
 'use client'
+import { matchesSearchTerms } from '@/lib/search'
 
 import { Suspense, useState, useMemo } from 'react'
 import { useFinanceStore, fmtKes } from '@/lib/store'
@@ -548,12 +549,13 @@ function DepositsContent() {
     let list = deposits
     if (statusFilter !== 'all') list = list.filter(d => d.status === statusFilter)
     if (search.trim()) {
-      const q = search.toLowerCase()
-      list = list.filter(d =>
-        d.ref.toLowerCase().includes(q) ||
-        d.customerName.toLowerCase().includes(q) ||
-        d.customerPhone.toLowerCase().includes(q)
-      )
+      list = list.filter(d => matchesSearchTerms(search, [
+        d.ref,
+        d.customerName,
+        d.customerPhone,
+        d.status,
+        d.notes,
+      ]))
     }
     return [...list].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
   }, [deposits, statusFilter, search])
