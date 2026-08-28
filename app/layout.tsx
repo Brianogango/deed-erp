@@ -75,7 +75,6 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const bootstrapKeys = [
     'deed_companySettings',
     'deed_systemSettings',
-    'deed_notifications',
     'deed_profileImages',
   ]
   const [users, serverState] = visregBypassAuth
