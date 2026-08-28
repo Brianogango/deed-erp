@@ -139,6 +139,7 @@ import {
   remainingUndeliveredByProduct,
   openDeliveryDemandByProduct,
   saleOrderLooksConfirmed,
+  canReverseConfirmedSale,
 } from '@/lib/odoo-sales-flow'
 import {
   allocateDeliveredQtyToOrderLines,
@@ -12640,16 +12641,16 @@ const storeCtx: AppState = {
       const so = soRef.current.find(s => s.id === id)
       if (!so) return false
       // Sent → draft: sales staff may unlock for edits. Confirmed SO → quotation
-      // still requires Finance / Director.
+      // still requires Finance / Admin Officer / Director.
       const salesCanResetSent = ['director', 'finance_officer', 'sales_rep', 'admin_officer'].includes(actor?.role ?? '')
-      const financeCanResetConfirmed = ['director', 'finance_officer'].includes(actor?.role ?? '')
+      const financeCanResetConfirmed = canReverseConfirmedSale(actor?.role)
       if (so.status === 'quotation_sent' || so.status === 'cancelled') {
         if (!actor || !salesCanResetSent) {
           showToast('You do not have permission to reset this quotation to draft', 'error')
           return false
         }
       } else if (!actor || !financeCanResetConfirmed) {
-        showToast('Only Finance or Director can reset a sale order to quotation', 'error')
+        showToast('Only Finance, Admin Officer, or Director can reset a sale order to quotation', 'error')
         return false
       }
       const blockers = saleOrderCancelBlockers({
@@ -12727,10 +12728,10 @@ const storeCtx: AppState = {
       const so = soRef.current.find(s => s.id === id)
       if (!so) return
       // Cancelling a confirmed Sales Order reverses a commercial document,
-      // same as "Set to Quotation" — requires Finance/Director (matches the
-      // server-side gate in saleTransitionError).
-      if (so.status === 'sale' && !['director', 'finance_officer'].includes(actor?.role ?? '')) {
-        showToast('Only Finance or Director can cancel a confirmed Sales Order', 'error')
+      // same as "Set to Quotation" — requires Finance / Admin Officer /
+      // Director (matches the server-side gate in saleTransitionError).
+      if (so.status === 'sale' && !canReverseConfirmedSale(actor?.role)) {
+        showToast('Only Finance, Admin Officer, or Director can cancel a confirmed Sales Order', 'error')
         return
       }
       // Dependent records are never silently cancelled: completed deliveries,

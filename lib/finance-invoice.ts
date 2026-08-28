@@ -6,6 +6,8 @@
 // line items. These helpers recompute the money from the line items so the
 // stored figures always tie back to qty × unitPrice (− line discount + tax).
 
+import { canCancelOrResetInvoice } from '@/lib/finance-controls'
+
 export interface RawInvoiceLine {
   qty?: number | string
   unitPrice?: number | string
@@ -208,6 +210,101 @@ const POSTED_INVOICE_PROTECTED_FIELDS = [
  * `draft` is the deliberate Finance "Reset to Draft" path (unpaid only).
  */
 const ALLOWED_POSTED_STATUS_TRANSITIONS = new Set(['posted', 'cancelled', 'draft'])
+
+/** Prisma document states that count as posted for invoice PUT immutability. */
+export const PRISMA_POSTED_INVOICE_STATUSES = new Set([
+  'approved', 'invoiced', 'dispatched', 'delivered',
+])
+
+const CLIENT_TO_PRISMA_INVOICE_STATUS: Record<string, string> = {
+  posted: 'approved',
+  paid: 'approved',
+  partially_paid: 'approved',
+  overdue: 'approved',
+  partial: 'approved',
+  pending: 'pending_approval',
+  sent: 'pending_approval',
+  open: 'approved',
+}
+
+const REVERSAL_TARGET_STATUSES = new Set(['draft', 'cancelled', 'voided'])
+
+/** Fields that change the commercial substance of a posted invoice. */
+export const POSTED_INVOICE_ECONOMIC_PUT_KEYS = [
+  'clientId', 'partnerId', 'saleOrderId', 'repairId', 'subject', 'subtotal',
+  'taxAmount', 'taxTotal', 'discountAmount', 'totalAmount', 'invoiceDate',
+  'date', 'dueDate', 'currencyCode', 'exchangeRateToBase', 'lines', 'items',
+  'invoiceNumber', 'ref',
+] as const
+
+export function mapClientInvoiceStatus(raw: string | undefined): string | undefined {
+  if (!raw) return undefined
+  return CLIENT_TO_PRISMA_INVOICE_STATUS[raw] ?? raw
+}
+
+export type PostedInvoicePutDecision =
+  | { kind: 'passthrough' }
+  | { kind: 'stay_posted' }
+  | { kind: 'reversal'; nextStatus: 'draft' | 'cancelled' | 'voided' }
+  | { kind: 'reject'; status: 409; error: string }
+  | { kind: 'forbidden'; status: 403; error: string }
+
+/**
+ * Decide whether a PUT on a Prisma-posted invoice is a status-only reversal
+ * (unpaid Reset to Draft / cancel) or must stay immutable.
+ *
+ * Line and total edits while posted are never allowed here — the caller still
+ * 409s `stay_posted` when economic fields are present.
+ */
+export function postedInvoicePutDecision(args: {
+  prismaStatus: string
+  amountPaid: number
+  nextStatus?: string
+  role?: string | null
+}): PostedInvoicePutDecision {
+  if (!PRISMA_POSTED_INVOICE_STATUSES.has(String(args.prismaStatus))) return { kind: 'passthrough' }
+
+  const mapped = mapClientInvoiceStatus(args.nextStatus)
+  if (!mapped || !REVERSAL_TARGET_STATUSES.has(mapped)) return { kind: 'stay_posted' }
+
+  if (!canCancelOrResetInvoice(args.role)) {
+    return {
+      kind: 'forbidden',
+      status: 403,
+      error: 'Only Finance, Admin Officer, or Director can reset or cancel a posted invoice',
+    }
+  }
+
+  if (mapped === 'draft' && Number(args.amountPaid) > 0) {
+    return {
+      kind: 'reject',
+      status: 409,
+      error: 'Invoices with payments cannot be reset. Cancel to create credit instead.',
+    }
+  }
+
+  return { kind: 'reversal', nextStatus: mapped as 'draft' | 'cancelled' | 'voided' }
+}
+
+export function stripPostedInvoiceEconomicFields(body: Record<string, unknown>): void {
+  for (const key of POSTED_INVOICE_ECONOMIC_PUT_KEYS) {
+    if (Object.prototype.hasOwnProperty.call(body, key)) delete body[key]
+  }
+}
+
+/**
+ * When `JRN/INV/...` already exists (typically reversed after Reset to Draft),
+ * allocate `JRN/INV/.../2`, `/3`, … so a re-post does not collide.
+ */
+export function nextInvoiceJournalRef(canonical: string, occupied: Iterable<string>): string {
+  const taken = new Set(occupied)
+  if (!taken.has(canonical)) return canonical
+  for (let n = 2; n < 100; n++) {
+    const candidate = `${canonical}/${n}`.slice(0, 80)
+    if (!taken.has(candidate)) return candidate
+  }
+  throw new Error(`Could not allocate journal ref for ${canonical}`)
+}
 
 export interface RejectedPostedInvoiceEdit {
   id: string

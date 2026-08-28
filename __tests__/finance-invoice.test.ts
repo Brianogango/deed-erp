@@ -12,6 +12,9 @@ import {
   shouldApplyInvoiceEditQuery,
   resolveInvoiceLineTaxCategory,
   invoiceLineMissingTaxCategory,
+  postedInvoicePutDecision,
+  nextInvoiceJournalRef,
+  stripPostedInvoiceEconomicFields,
 } from '@/lib/finance-invoice'
 
 describe('computeInvoiceTotals', () => {
@@ -349,5 +352,98 @@ describe('invoiceLineMissingTaxCategory', () => {
 
   it('ignores section rows', () => {
     expect(invoiceLineMissingTaxCategory({ qty: 0, lineType: 'section', taxRate: 16 })).toBe(false)
+  })
+})
+
+describe('postedInvoicePutDecision', () => {
+  it('passes through invoices that are not Prisma-posted', () => {
+    expect(postedInvoicePutDecision({
+      prismaStatus: 'draft',
+      amountPaid: 0,
+      nextStatus: 'draft',
+      role: 'finance_officer',
+    }).kind).toBe('passthrough')
+  })
+
+  it('allows unpaid posted → draft for Finance, Admin Officer, and Director', () => {
+    for (const role of ['finance_officer', 'admin_officer', 'director']) {
+      expect(postedInvoicePutDecision({
+        prismaStatus: 'approved',
+        amountPaid: 0,
+        nextStatus: 'draft',
+        role,
+      })).toEqual({ kind: 'reversal', nextStatus: 'draft' })
+    }
+  })
+
+  it('rejects paid posted → draft', () => {
+    const decision = postedInvoicePutDecision({
+      prismaStatus: 'approved',
+      amountPaid: 6500,
+      nextStatus: 'draft',
+      role: 'finance_officer',
+    })
+    expect(decision.kind).toBe('reject')
+    if (decision.kind === 'reject') expect(decision.status).toBe(409)
+  })
+
+  it('allows posted → cancelled for Admin Officer even when paid', () => {
+    expect(postedInvoicePutDecision({
+      prismaStatus: 'approved',
+      amountPaid: 6500,
+      nextStatus: 'cancelled',
+      role: 'admin_officer',
+    })).toEqual({ kind: 'reversal', nextStatus: 'cancelled' })
+  })
+
+  it('forbids technicians from resetting a posted invoice', () => {
+    const decision = postedInvoicePutDecision({
+      prismaStatus: 'approved',
+      amountPaid: 0,
+      nextStatus: 'draft',
+      role: 'technician',
+    })
+    expect(decision.kind).toBe('forbidden')
+    if (decision.kind === 'forbidden') expect(decision.status).toBe(403)
+  })
+
+  it('keeps stay_posted when status is unchanged so the caller can 409 economic edits', () => {
+    expect(postedInvoicePutDecision({
+      prismaStatus: 'approved',
+      amountPaid: 0,
+      nextStatus: 'posted',
+      role: 'finance_officer',
+    }).kind).toBe('stay_posted')
+  })
+
+  it('strips economic keys from a full-document Reset PUT without dropping status', () => {
+    const body: Record<string, unknown> = {
+      status: 'draft',
+      notes: 'keep me',
+      lines: [{ qty: 1 }],
+      totalAmount: 6500,
+      partnerId: 'cust-1',
+      invoiceNumber: 'INV/2026/0162',
+    }
+    stripPostedInvoiceEconomicFields(body)
+    expect(body.status).toBe('draft')
+    expect(body.notes).toBe('keep me')
+    expect(body.lines).toBeUndefined()
+    expect(body.totalAmount).toBeUndefined()
+    expect(body.invoiceNumber).toBeUndefined()
+  })
+})
+
+describe('nextInvoiceJournalRef', () => {
+  it('keeps the canonical ref when it is free', () => {
+    expect(nextInvoiceJournalRef('JRN/INV/2026/0162', [])).toBe('JRN/INV/2026/0162')
+  })
+
+  it('allocates /2 then /3 when the canonical ref is occupied', () => {
+    expect(nextInvoiceJournalRef('JRN/INV/2026/0162', ['JRN/INV/2026/0162'])).toBe('JRN/INV/2026/0162/2')
+    expect(nextInvoiceJournalRef(
+      'JRN/INV/2026/0162',
+      ['JRN/INV/2026/0162', 'JRN/INV/2026/0162/2'],
+    )).toBe('JRN/INV/2026/0162/3')
   })
 })

@@ -2,14 +2,14 @@ import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { getRequiredSession, requireRole, withApiErrorHandling } from '@/lib/auth/api'
 import { optionalUuid, resolveClientId } from '@/lib/legacy-compat'
-import { computeInvoiceTotals, computeInvoiceLineMoney, resolveInvoiceLineTaxCategory, invoiceLineMissingTaxCategory } from '@/lib/finance-invoice'
+import { computeInvoiceTotals, computeInvoiceLineMoney, resolveInvoiceLineTaxCategory, invoiceLineMissingTaxCategory, postedInvoicePutDecision, stripPostedInvoiceEconomicFields, POSTED_INVOICE_ECONOMIC_PUT_KEYS, PRISMA_POSTED_INVOICE_STATUSES } from '@/lib/finance-invoice'
 import { writeFinancialAudit, writeFinancialAuditInTx } from '@/lib/finance-audit'
 import { lockVersionMismatch, nextLockVersion, readExpectedVersion } from '@/lib/optimistic-lock'
 import { checkFiscalLock } from '@/lib/fiscal-lock.server'
 import { resolveBlobInvoiceMirror } from '@/lib/accounting/resolve-invoice-mirror'
 import { salesCommissionAppliesToInvoice } from '@/lib/sales/commission-closer'
 import { createJournalEntryInTx } from '@/lib/accounting/journal-service'
-import { buildInvoiceJournalInput } from '@/lib/accounting/invoice-journals'
+import { buildInvoiceJournalInput, allocateInvoiceJournalRef } from '@/lib/accounting/invoice-journals'
 
 // technical_lead: repair quotes create/update their linked invoice (see recordRepairBilling).
 const WRITE_ROLES = ['director', 'finance_officer', 'admin_officer', 'technical_lead']
@@ -169,16 +169,27 @@ export async function PUT(request: Request, { params }: { params: { id: string }
       return NextResponse.json({ error: 'Technicians may only update invoices linked to an actual Repair record' }, { status: 403 })
     }
 
-    const beforeIsPosted = before.status === 'approved' || before.status === 'invoiced' ||
-      before.status === 'dispatched' || before.status === 'delivered'
-    if (beforeIsPosted) {
-      const economicFields = [
-        'clientId', 'partnerId', 'saleOrderId', 'repairId', 'subject', 'subtotal',
-        'taxAmount', 'taxTotal', 'discountAmount', 'totalAmount', 'invoiceDate',
-        'date', 'dueDate', 'currencyCode', 'exchangeRateToBase', 'lines', 'items',
-        'invoiceNumber', 'ref',
-      ]
-      const attemptedEconomicMutation = economicFields.some(k => Object.prototype.hasOwnProperty.call(body, k))
+    const beforeIsPosted = PRISMA_POSTED_INVOICE_STATUSES.has(String(before.status))
+    const putDecision = postedInvoicePutDecision({
+      prismaStatus: before.status,
+      amountPaid: Number(before.amountPaid),
+      nextStatus: typeof body.status === 'string' ? body.status : undefined,
+      role: actor.role,
+    })
+    if (putDecision.kind === 'forbidden' || putDecision.kind === 'reject') {
+      return NextResponse.json({ error: putDecision.error }, { status: putDecision.status })
+    }
+    if (putDecision.kind === 'reversal') {
+      const lock = await checkFiscalLock(before.invoiceDate)
+      if (!lock.ok) {
+        return NextResponse.json({ error: lock.error }, { status: lock.status })
+      }
+      stripPostedInvoiceEconomicFields(body)
+      lines = undefined
+    } else if (beforeIsPosted) {
+      const attemptedEconomicMutation = POSTED_INVOICE_ECONOMIC_PUT_KEYS.some(
+        k => Object.prototype.hasOwnProperty.call(body, k),
+      )
       const attemptedStatusMutation = body.status !== undefined &&
         (INVOICE_STATUS_MAP[body.status] ?? body.status) !== before.status
       if (attemptedEconomicMutation || attemptedStatusMutation) {
@@ -204,11 +215,15 @@ export async function PUT(request: Request, { params }: { params: { id: string }
       delete body.items
     }
 
-    const data = mapInvoiceUpdateToDb(body, clientId)
+    const data = mapInvoiceUpdateToDb(body, putDecision.kind === 'reversal' ? undefined : clientId)
     // The official number is assigned when a draft is posted. Once assigned it
     // is immutable — posted invoices can never be renumbered.
     if (data.invoiceNumber !== undefined && before && before.status !== 'draft' && data.invoiceNumber !== before.invoiceNumber) {
       delete data.invoiceNumber
+    }
+    if (putDecision.kind === 'reversal') {
+      data.postingStatus = 'unposted'
+      data.postedJournalEntryId = null
     }
 
     const willBecomePosted = before.status === 'draft'
@@ -304,6 +319,7 @@ export async function PUT(request: Request, { params }: { params: { id: string }
           description: i.description,
         })),
       }, { createdById: actor.id })
+      postingJournal.ref = await allocateInvoiceJournalRef(postingJournal.ref)
       postingBillLines = normalizedItems.map((i: any) => ({
         purchaseOrderItemId: i.purchaseOrderItemId ?? undefined,
         grnItemId: i.grnItemId ?? undefined,
@@ -450,7 +466,7 @@ export async function PUT(request: Request, { params }: { params: { id: string }
 
     // Reset draft / unpaid cancel / void → reverse the posting journal in Prisma
     const leftPosted = before
-      && (before.status === 'approved' || before.status === 'invoiced')
+      && PRISMA_POSTED_INVOICE_STATUSES.has(String(before.status))
       && (invoice.status === 'draft' || invoice.status === 'cancelled' || invoice.status === 'voided')
     if (leftPosted && Number(before.amountPaid) <= 0) {
       try {

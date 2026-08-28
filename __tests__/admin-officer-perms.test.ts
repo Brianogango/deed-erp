@@ -13,6 +13,7 @@ import {
 import { canCreateCustomerInvoiceFromSO, canManageFullFinance, canManageMoney } from '@/lib/auth/access'
 import { canValidatePurchaseReceipt } from '@/lib/inventory/permissions'
 import { APPROVAL_RULES } from '@/lib/sales-approvals'
+import { canReverseConfirmedSale } from '@/lib/odoo-sales-flow'
 
 describe('hybrid finance seals', () => {
   it('allows admin officer to post or pay customer invoices of any amount', () => {
@@ -53,6 +54,8 @@ describe('hybrid finance seals', () => {
   it('lets admin officer cancel/reset invoices and apply customer credit', () => {
     expect(canCancelOrResetInvoice('admin_officer')).toBe(true)
     expect(canApplyCustomerCredit('admin_officer')).toBe(true)
+    expect(canReverseConfirmedSale('admin_officer')).toBe(true)
+    expect(canReverseConfirmedSale('sales_rep')).toBe(false)
     expect(canManageBankRecon('admin_officer')).toBe(false)
     expect(canManageBankRecon('finance_officer')).toBe(true)
     expect(canReimburseExpense('admin_officer')).toBe(false)

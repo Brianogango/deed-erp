@@ -101,6 +101,13 @@ export function saleOrderLooksConfirmed(order: {
 /** Roles allowed to confirm a quotation into a Sales Order. */
 export const SALE_CONFIRM_ROLES = ['director', 'sales_rep', 'admin_officer']
 
+/** Roles allowed to cancel or reset a confirmed Sales Order. */
+export const SALE_REVERSE_CONFIRMED_ROLES = ['director', 'finance_officer', 'admin_officer'] as const
+
+export function canReverseConfirmedSale(role: string | null | undefined): boolean {
+  return (SALE_REVERSE_CONFIRMED_ROLES as readonly string[]).includes(String(role ?? ''))
+}
+
 /**
  * Validate a sale-order status transition. Returns null when the transition
  * is legal for the role, otherwise a human-readable error. The API enforces
@@ -127,27 +134,27 @@ export function saleTransitionError(
     case 'cancelled':
       // Quotations may always be cancelled. Cancelling a confirmed Sales
       // Order reverses a commercial document, same as "Set to Quotation",
-      // so it requires the same Finance/Director gate. Dependent-record
+      // so it requires Finance / Admin Officer / Director. Dependent-record
       // blockers (completed deliveries, posted invoices) are checked
       // separately by the caller.
-      if (from === 'sale' && !['director', 'finance_officer'].includes(role)) {
-        return 'Only Finance or Director can cancel a confirmed Sales Order'
+      if (from === 'sale' && !canReverseConfirmedSale(role)) {
+        return 'Only Finance, Admin Officer, or Director can cancel a confirmed Sales Order'
       }
       return null
     case 'quotation':
-      // "Set to Quotation" from a confirmed SO requires Finance/Director
-      // (matches enforceSaleWorkflow + store resetSOToDraft). Cancelled orders
-      // that were previously confirmed use the same gate; draft/sent cancel
-      // → quotation stays available to sales staff.
-      if (from === 'sale' && !['director', 'finance_officer'].includes(role)) {
-        return 'Only Finance or Director can reset a sale order to quotation'
+      // "Set to Quotation" from a confirmed SO requires the same reverse
+      // gate (matches enforceSaleWorkflow + store resetSOToDraft). Cancelled
+      // orders that were previously confirmed use the same gate; draft/sent
+      // cancel → quotation stays available to sales staff.
+      if (from === 'sale' && !canReverseConfirmedSale(role)) {
+        return 'Only Finance, Admin Officer, or Director can reset a sale order to quotation'
       }
       if (
         from === 'cancelled' &&
         opts?.previouslyConfirmed &&
-        !['director', 'finance_officer'].includes(role)
+        !canReverseConfirmedSale(role)
       ) {
-        return 'Only Finance or Director can reset a previously confirmed order to quotation'
+        return 'Only Finance, Admin Officer, or Director can reset a previously confirmed order to quotation'
       }
       return null
     default:

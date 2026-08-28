@@ -140,6 +140,7 @@ import {
   deliveriesForSaleOrder,
   remainingUndeliveredByProduct,
   saleOrderLooksConfirmed,
+  canReverseConfirmedSale,
   type SalesListFilter,
 } from '@/lib/odoo-sales-flow'
 import { resolveInvoicePolicy } from '@/lib/sales/invoice-policy'
@@ -377,9 +378,9 @@ function SalesContent() {
   const isAdmin = currentUser?.role === 'director'
   const canEditDiscount = isAdmin || !systemSettings.salesDiscountControl
   const canInvoiceFromSO = canCreateCustomerInvoiceFromSO(currentUser?.role)
-  // Reversing a confirmed Sales Order (Set to Quotation / Cancel) is Finance/Director-only —
-  // matches the server-side check in enforceSaleWorkflow / cancelSO.
-  const canReverseConfirmedSO = currentUser?.role === 'director' || currentUser?.role === 'finance_officer'
+  // Reversing a confirmed Sales Order (Set to Quotation / Cancel) is
+  // Finance / Admin Officer / Director — matches enforceSaleWorkflow / cancelSO.
+  const canReverseConfirmedSO = canReverseConfirmedSale(currentUser?.role)
   const canConfirmQuote = canConfirmQuotation(currentUser?.role)
   const canReserveOnConfirm = canConfirmAndReserve(currentUser?.role)
   const canSkipReserveOnConfirm = canConfirmWithoutReservation(currentUser?.role)
@@ -2231,7 +2232,8 @@ function SalesContent() {
                         )}
                       </>)}
                       {activeOrder.status === 'cancelled' && (
-                        // Confirmed-then-cancelled needs Finance/Director; draft/sent cancel can be reset by sales.
+                        // Confirmed-then-cancelled needs Finance / Admin Officer / Director;
+                        // draft/sent cancel can be reset by sales.
                         (activeOrder.confirmedAt ? canReverseConfirmedSO : ['director', 'finance_officer', 'sales_rep', 'admin_officer'].includes(currentUser?.role ?? '')) && (
                           <button type="button" className="sp-btn" onClick={() => resetSOToDraft(activeOrder.id)}>Set to Quotation</button>
                         )
