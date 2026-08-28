@@ -2,6 +2,7 @@ import 'server-only'
 
 import crypto from 'crypto'
 import prisma from '@/lib/prisma'
+import type { Prisma } from '@prisma/client'
 import { defaultNotificationPolicy } from './registry'
 
 const MAX_ATTEMPTS = 5
@@ -124,11 +125,11 @@ export async function applyProviderDeliveryStatus(input: ProviderDeliveryStatusI
           create: {
             deliveryId: delivery.id,
             reason,
-            payload: input.raw || {},
+            payload: (input.raw || {}) as Prisma.InputJsonValue,
           },
           update: {
             reason,
-            payload: input.raw || {},
+            payload: (input.raw || {}) as Prisma.InputJsonValue,
             resolvedAt: null,
             resolutionNote: null,
           },
