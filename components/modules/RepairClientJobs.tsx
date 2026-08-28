@@ -1,4 +1,5 @@
 'use client'
+import { matchesSearchTerms } from '@/lib/search'
 import { useState, useMemo, useEffect } from 'react'
 import { DataTable, type ActiveFilterChip, type ColumnDef, type PrimaryFilterConfig } from '@/components/data-table'
 import { useRepair } from './repair/RepairContext'
@@ -201,16 +202,16 @@ export default function RepairClientJobs({ onSelect }: { onSelect: (id: string) 
   const filteredRepairs = useMemo(() => {
     let list = visibleRepairs
     if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase()
-      list = list.filter(r =>
-        r.ref.toLowerCase().includes(q) ||
-        r.customerName.toLowerCase().includes(q) ||
-        r.productName.toLowerCase().includes(q) ||
-        (r.customerPhone && r.customerPhone.toLowerCase().includes(q)) ||
-        (r.serialNumber && r.serialNumber.toLowerCase().includes(q)) ||
-        (r.assignedTechnicianName && r.assignedTechnicianName.toLowerCase().includes(q)) ||
-        (r.issueDescription && r.issueDescription.toLowerCase().includes(q))
-      )
+      list = list.filter(r => matchesSearchTerms(searchQuery, [
+        r.ref,
+        r.customerName,
+        r.customerPhone,
+        r.productName,
+        r.serialNumber,
+        r.assignedTechnicianName,
+        r.issueDescription,
+        r.status,
+      ]))
     }
     if (statusFilter === 'pending_group') list = list.filter(r => ['pending_verification','received','assigned'].includes(r.status))
     else if (statusFilter === 'done_group') list = list.filter(r => ['delivered','closed'].includes(r.status))
