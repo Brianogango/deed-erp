@@ -1,4 +1,5 @@
 'use client'
+import { matchesSearchTerms } from '@/lib/search'
 import { useState, useEffect, useMemo, useRef, Suspense, useCallback, Fragment, type FormEvent } from 'react'
 import { useSearchParams, useRouter, usePathname } from 'next/navigation'
 import {
@@ -739,11 +740,15 @@ function SalesContent() {
       filter,
       currentUserId,
     )
-    const q = search.toLowerCase()
-    const ms = !search
-      || s.ref.toLowerCase().includes(q)
-      || s.customerName.toLowerCase().includes(q)
-      || (s.quotationRef || '').toLowerCase().includes(q)
+    const ms = matchesSearchTerms(search, [
+      s.ref,
+      s.customerName,
+      s.quotationRef,
+      s.customerRef,
+      s.salespersonName,
+      s.status,
+      s.total,
+    ])
     return tabMatch && mf && ms
   }), [salesOrderViews, listTab, filter, search, currentUserId])
   const stats = useMemo(() => ({
@@ -3779,10 +3784,10 @@ function NewQuotationForm({
   }, [])
 
   const filteredCustomers = customers.filter(c =>
-    !customerSearch || c.name.toLowerCase().includes(customerSearch.toLowerCase()) || (c.email ?? '').toLowerCase().includes(customerSearch.toLowerCase())
+    matchesSearchTerms(customerSearch, [c.name, c.email, c.phone, c.mobile, c.vatNumber])
   )
   const getFilteredProducts = (search: string) =>
-    products.filter(p => !search || p.name.toLowerCase().includes(search.toLowerCase()) || (p.sku ?? '').toLowerCase().includes(search.toLowerCase()))
+    products.filter(p => matchesSearchTerms(search, [p.name, p.sku, p.category, p.specs]))
 
   return (
     <div>
