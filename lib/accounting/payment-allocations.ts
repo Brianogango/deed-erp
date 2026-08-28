@@ -14,6 +14,31 @@ export function round2(n: number) {
 
 export { invoiceResidual, paymentAllocatedSum, paymentUnallocated }
 
+function isRetryableTxn(err: unknown) {
+  const code = typeof err === 'object' && err && 'code' in err ? String((err as { code?: unknown }).code) : ''
+  const msg = err instanceof Error ? err.message : String(err ?? '')
+  return code === 'P2034' || /write conflict|deadlock|could not serialize/i.test(msg)
+}
+
+function taggedError(message: string, status = 409): Error {
+  const err = new Error(message)
+  ;(err as Error & { status?: number }).status = status
+  return err
+}
+
+async function runSerializable<T>(fn: (tx: Prisma.TransactionClient) => Promise<T>): Promise<T> {
+  let last: unknown
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      return await prisma.$transaction(fn, { isolationLevel: 'Serializable' })
+    } catch (err) {
+      last = err
+      if (!isRetryableTxn(err) || attempt === 2) throw err
+    }
+  }
+  throw last
+}
+
 export type AllocationInput = { invoiceId: string; amount: number }
 
 export type ValidateAllocationOptions = {
@@ -106,16 +131,16 @@ export async function allocatePayment(opts: {
   journal?: (paymentId: string, created: Array<{ invoiceId: string; amount: unknown }>) => CreateJournalEntryInput
   audit?: (tx: Prisma.TransactionClient, payment: any, created: any[]) => Promise<void>
 }) {
-  return prisma.$transaction(async tx => {
+  return runSerializable(async tx => {
     const payment = await tx.payment.findUniqueOrThrow({
       where: { id: opts.paymentId },
       include: { allocations: true },
     })
-    if (payment.isVoided) throw new Error('Cannot allocate a voided payment')
+    if (payment.isVoided) throw taggedError('Cannot allocate a voided payment')
 
     const alreadyAllocated = await sumAllocationsForPaymentInTx(tx, payment.id)
     const available = paymentUnallocated(Number(payment.amount), alreadyAllocated)
-    if (available <= 0.009) throw new Error('Payment has no unallocated amount remaining')
+    if (available <= 0.009) throw taggedError('Payment has no unallocated amount remaining')
 
     const invoiceIds = [...new Set(opts.allocations.map(a => a.invoiceId))]
     const invoices = await tx.invoice.findMany({
@@ -127,8 +152,8 @@ export async function allocatePayment(opts: {
 
     for (const invoiceId of invoiceIds) {
       const inv = invoiceMap.get(invoiceId)
-      if (!inv) throw new Error(`Invoice not found: ${invoiceId}`)
-      if (inv.paymentBlocked) throw new Error(`Payments blocked on invoice ${invoiceId}`)
+      if (!inv) throw taggedError(`Invoice not found: ${invoiceId}`, 404)
+      if (inv.paymentBlocked) throw taggedError(`Payments blocked on invoice ${invoiceId}`)
       const allocated = await sumAllocationsForInvoiceInTx(tx, invoiceId)
       residuals.set(invoiceId, invoiceResidual(Number(inv.totalAmount), allocated))
     }
@@ -139,7 +164,7 @@ export async function allocatePayment(opts: {
       residuals,
       { allocationCeiling: available },
     )
-    if (!validation.ok) throw new Error(validation.error)
+    if (!validation.ok) throw taggedError(validation.error)
 
     const created = []
     for (const alloc of opts.allocations) {
@@ -175,7 +200,7 @@ export async function allocatePayment(opts: {
       allocations: created,
       unallocatedAmount: paymentUnallocated(Number(payment.amount), newAllocated),
     }
-  }, { isolationLevel: 'Serializable' })
+  })
 }
 
 export async function recordPaymentWithAllocations(opts: {
@@ -200,7 +225,7 @@ export async function recordPaymentWithAllocations(opts: {
   journal?: (paymentId: string) => CreateJournalEntryInput
   audit?: (tx: Prisma.TransactionClient, payment: any, allocations: any[]) => Promise<void>
 }) {
-  return prisma.$transaction(async tx => {
+  return runSerializable(async tx => {
     if (opts.idempotencyKey) {
       const existing = await tx.payment.findFirst({
         where: {
@@ -236,8 +261,8 @@ export async function recordPaymentWithAllocations(opts: {
 
     for (const invoiceId of invoiceIds) {
       const inv = invoiceMap.get(invoiceId)
-      if (!inv) throw new Error(`Invoice not found: ${invoiceId}`)
-      if (inv.paymentBlocked) throw new Error(`Payments blocked on invoice ${invoiceId}`)
+      if (!inv) throw taggedError(`Invoice not found: ${invoiceId}`, 404)
+      if (inv.paymentBlocked) throw taggedError(`Payments blocked on invoice ${invoiceId}`)
       const allocated = await sumAllocationsForInvoiceInTx(tx, invoiceId)
       residuals.set(invoiceId, invoiceResidual(Number(inv.totalAmount), allocated))
     }
@@ -245,7 +270,7 @@ export async function recordPaymentWithAllocations(opts: {
     const validation = validateAllocationTotals(opts.amount, opts.allocations, residuals, {
       allowEmpty: Boolean(opts.allowUnallocated),
     })
-    if (!validation.ok) throw new Error(validation.error)
+    if (!validation.ok) throw taggedError(validation.error)
 
     const primaryInvoiceId = opts.invoiceId ?? invoiceIds[0] ?? null
     const payment = await tx.payment.create({
@@ -290,7 +315,7 @@ export async function recordPaymentWithAllocations(opts: {
       const newPaid = await sumAllocationsForInvoiceInTx(tx, invoiceId)
       const inv = invoiceMap.get(invoiceId)!
       if (newPaid > round2(Number(inv.totalAmount)) + 0.009) {
-        throw new Error(`Concurrent allocation would overpay invoice ${invoiceId}`)
+        throw taggedError(`Concurrent allocation would overpay invoice ${invoiceId}`)
       }
       await tx.invoice.update({ where: { id: invoiceId }, data: { amountPaid: newPaid } })
     }
@@ -313,5 +338,5 @@ export async function recordPaymentWithAllocations(opts: {
       unallocatedAmount: paymentUnallocated(opts.amount, allocatedSum),
       idempotent: false as const,
     }
-  }, { isolationLevel: 'Serializable' })
+  })
 }

@@ -61,10 +61,27 @@ export async function POST(
       return NextResponse.json({ error: 'Invoice not found' }, { status: 404 })
     }
 
+    // Blob status is what the invoice screen shows (POSTED). Accounting dual-write
+    // can leave Prisma as draft when posting PUT failed (tax category, lock, …).
+    const blobMirror = await resolveBlobInvoiceMirror(invoiceId)
+    const blobStatus = String(blobMirror.status || '')
+    const blobLooksPosted = Boolean(blobStatus)
+      && invoiceDocState(blobStatus) === 'posted'
+      && blobStatus !== 'pending_approval'
+      && blobStatus !== 'rejected'
+
+    let payableInvoice = invoice
     if (!isPayableInvoiceStatus(String(invoice.status))) {
-      return NextResponse.json({ error: 'Only posted invoices can receive payments' }, { status: 409 })
+      if (invoice.status === 'draft' && blobLooksPosted) {
+        payableInvoice = await prisma.invoice.update({
+          where: { id: invoiceId },
+          data: { status: 'approved' },
+        })
+      } else {
+        return NextResponse.json({ error: 'Only posted invoices can receive payments' }, { status: 409 })
+      }
     }
-    if (invoice.paymentBlocked) {
+    if (payableInvoice.paymentBlocked) {
       return NextResponse.json({ error: 'Payments are blocked on this invoice' }, { status: 409 })
     }
 
@@ -91,7 +108,9 @@ export async function POST(
       const sod = canPayOwnPostedInvoice({
         role: actor.role,
         actorUserId: actor.id,
-        postedByUserId: typeof mirror?.postedByUserId === 'string' ? mirror.postedByUserId : null,
+        postedByUserId: typeof mirror?.postedByUserId === 'string'
+          ? mirror.postedByUserId
+          : blobMirror.postedByUserId,
         invoiceTotal,
         sodThresholdKes: sodThreshold,
       })
@@ -118,9 +137,10 @@ export async function POST(
 
     // Resolve the actual cash/bank GL server-side. A caller may select a business
     // bank account, but never supplies the GL label that will be posted.
-    let cashAccountLabel = String(paymentMethod).toLowerCase() === 'bank_transfer'
-      ? '2201 - ABSA Bank'
-      : '2211 - Petty Cash / Mobile Money'
+    const method = String(paymentMethod).toLowerCase()
+    let cashAccountLabel = method === 'bank_transfer'
+      ? labelForRole('bank_absa')
+      : labelForRole('cash_mobile')
     if (bankAccountId) {
       const bank = await prisma.bankAccount.findUnique({ where: { id: bankAccountId } })
       if (!bank || !bank.isActive) {
@@ -154,7 +174,7 @@ export async function POST(
       allocations: [{ invoiceId, amount: capped }],
       journal: paymentId => ({
         ref: `JRN/PAY/${invoice.invoiceNumber}/${paymentId}`.slice(0, 80),
-        journalCode: String(paymentMethod).toLowerCase() === 'cash' ? 'CSH' : 'BNK',
+        journalCode: method === 'cash' || method === 'mpesa' ? 'CSH' : 'BNK',
         date: paymentDate,
         description: `Customer receipt for ${invoice.invoiceNumber}`,
         sourceType: 'payment',
@@ -162,7 +182,7 @@ export async function POST(
         invoiceId,
         paymentId,
         createdById: actor.id,
-        skipIfExists: false,
+        skipIfExists: true,
         lines: [
           {
             accountLabel: cashAccountLabel,

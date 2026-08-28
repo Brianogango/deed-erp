@@ -349,3 +349,39 @@ export function preserveInvoiceLinesOnStoreWrite(current: unknown, incoming: unk
     return row
   })
 }
+
+/**
+ * Statutory tax category for an invoice line.
+ * A positive VAT rate still requires an explicit standard-rated category.
+ * A 0% line with no category is out of scope — not silently zero-rated.
+ */
+export function resolveInvoiceLineTaxCategory(raw: unknown, taxRate: number): string {
+  const requested = String(raw ?? 'not_selected').trim().toLowerCase()
+  const category = requested === 'standard' || requested === 'vat' || requested === 'standard_16'
+    ? 'standard_16'
+    : requested === 'zero' || requested === 'zero_rated'
+      ? 'zero_rated'
+      : requested === 'exempt'
+        ? 'exempt'
+        : requested === 'out_of_scope'
+          ? 'out_of_scope'
+          : requested === 'non_vat_supplier'
+            ? 'non_vat_supplier'
+            : 'not_selected'
+  if (category === 'not_selected' && !(Number(taxRate) > 0)) return 'out_of_scope'
+  return category
+}
+
+/** True when a posting line still needs an explicit statutory tax category. */
+export function invoiceLineMissingTaxCategory(item: {
+  qty?: unknown
+  lineType?: unknown
+  type?: unknown
+  taxCategory?: unknown
+  taxCode?: unknown
+  taxRate?: unknown
+}): boolean {
+  if (item.lineType === 'section' || item.type === 'section') return false
+  if (Number(item.qty) === 0) return false
+  return resolveInvoiceLineTaxCategory(item.taxCategory ?? item.taxCode, Number(item.taxRate) || 0) === 'not_selected'
+}

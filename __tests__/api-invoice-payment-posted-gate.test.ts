@@ -14,6 +14,7 @@ const {
   mockCheckFiscalLock,
   mockFindUnique,
   mockFindFirst,
+  mockUpdateInvoice,
   mockRecordPayment,
   mockLoadAppState,
   mockResolveMirror,
@@ -26,6 +27,7 @@ const {
   mockCheckFiscalLock: vi.fn(),
   mockFindUnique: vi.fn(),
   mockFindFirst: vi.fn(),
+  mockUpdateInvoice: vi.fn(),
   mockRecordPayment: vi.fn(),
   mockLoadAppState: vi.fn(),
   mockResolveMirror: vi.fn(),
@@ -47,9 +49,12 @@ vi.mock('@/lib/auth/api', () => ({
   requireRole: mockRequireRole,
 }))
 vi.mock('@/lib/prisma', () => ({
-  default: { invoice: { findUnique: mockFindUnique }, payment: { findFirst: mockFindFirst } },
+  default: {
+    invoice: { findUnique: mockFindUnique, update: mockUpdateInvoice },
+    payment: { findFirst: mockFindFirst },
+  },
 }))
-vi.mock('@/lib/finance-audit', () => ({ writeFinancialAudit: vi.fn() }))
+vi.mock('@/lib/finance-audit', () => ({ writeFinancialAudit: vi.fn(), writeFinancialAuditInTx: vi.fn() }))
 vi.mock('@/lib/server-store', () => ({ loadAppState: mockLoadAppState }))
 vi.mock('@/lib/finance-controls', () => ({
   canPostOrPayCustomerInvoice: mockGate,
@@ -92,6 +97,9 @@ beforeEach(() => {
   mockRecordPayment.mockResolvedValue({ payment: { id: 'pay-1', paidAt: new Date() }, allocations: [{ id: 'alloc-1' }] })
   mockPostJournal.mockResolvedValue(undefined)
   mockNotify.mockResolvedValue(undefined)
+  mockUpdateInvoice.mockImplementation(async ({ data }: { data?: { status?: string } }) =>
+    invoiceWithStatus(data?.status || 'approved'),
+  )
 })
 
 describe('POST /api/invoices/[id]/payments — posted-status gate', () => {
@@ -116,4 +124,28 @@ describe('POST /api/invoices/[id]/payments — posted-status gate', () => {
       expect(mockRecordPayment).not.toHaveBeenCalled()
     })
   }
+
+  it('promotes a Prisma draft to payable when the blob invoice is posted', async () => {
+    mockFindUnique.mockResolvedValue(invoiceWithStatus('draft'))
+    mockResolveMirror.mockResolvedValue({
+      type: 'customer_invoice',
+      status: 'posted',
+      partnerName: 'Leah',
+    })
+    const res = await POST(payReq({ amount: 4500, paymentMethod: 'mpesa' }), { params: { id: 'inv-1' } })
+    expect(res.status).toBe(200)
+    expect(mockUpdateInvoice).toHaveBeenCalledWith(
+      expect.objectContaining({ data: { status: 'approved' } }),
+    )
+    expect(mockRecordPayment).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not promote a Prisma draft when the blob is also still draft', async () => {
+    mockFindUnique.mockResolvedValue(invoiceWithStatus('draft'))
+    mockResolveMirror.mockResolvedValue({ type: 'customer_invoice', status: 'draft' })
+    const res = await POST(payReq({ amount: 4500, paymentMethod: 'mpesa' }), { params: { id: 'inv-1' } })
+    expect(res.status).toBe(409)
+    expect(mockUpdateInvoice).not.toHaveBeenCalled()
+    expect(mockRecordPayment).not.toHaveBeenCalled()
+  })
 })
