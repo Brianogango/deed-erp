@@ -41,19 +41,24 @@ function collectWarnings(results: any[]) {
       : `${r.productId}: valuation skipped (${r.result?.reason || 'unknown'})`)
 }
 
-function isSoftSkip(result: any) {
-  return result?.skipped && result?.reason === 'already_processed'
+function isSoftSkip(result: any, opts?: { allowMissingProduct?: boolean }) {
+  if (result?.skipped && result?.reason === 'already_processed') return true
+  if (opts?.allowMissingProduct && result?.skipped && result?.reason === 'product_not_in_prisma') return true
+  if (result?.skipped && result?.reason === 'non_stock') return true
+  return false
 }
 
 /** Fail-closed: any hard line error or non-idempotent skip blocks the operational document. */
-export function finalizeValuation(results: any[]) {
+export function finalizeValuation(results: any[], opts?: { allowMissingProduct?: boolean }) {
   const warnings = collectWarnings(results)
-  const hard = results.filter((r: any) => r.error || (r.result?.skipped && !isSoftSkip(r.result)))
+  const hard = results.filter((r: any) => r.error || (r.result?.skipped && !isSoftSkip(r.result, opts)))
   if (hard.length > 0) {
-    const first = hard[0]
+    const reason = hard
+      .map(r => String(r.error || r.result?.reason || 'valuation_failed'))
+      .join('; ')
     return {
       ok: false as const,
-      reason: String(first.error || first.result?.reason || 'valuation_failed'),
+      reason,
       results,
       warnings,
     }
@@ -188,10 +193,8 @@ export async function postPosValuationFromPayload(params: {
       results.push({ productId, qty, error: err instanceof Error ? err.message : 'failed' })
     }
   }
-  return finalizeValuation(results)
+  return finalizeValuation(results, { allowMissingProduct: true })
 }
-
-/** Restore FIFO/COGS for every POS line after a failed checkout. */
 export async function reversePosValuationFromPayload(params: {
   orderRef: string
   lines: Array<{ productId?: string; qty?: number }>

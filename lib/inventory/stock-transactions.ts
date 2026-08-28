@@ -791,6 +791,7 @@ export async function applyPosStockMutation(params: {
     const qty = Math.max(0, Math.floor(Number(line.qty) || 0))
     if (!productId || qty <= 0) continue
     const product = products.find(p => p.id === productId)
+    if (product && isNonStockProduct(product)) continue
     // POS always sells from warehouse (shop = "With Issues", not a sales floor).
     const location: LocationId = 'warehouse'
 

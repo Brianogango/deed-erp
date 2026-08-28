@@ -208,19 +208,30 @@ async function applyOutboundValuation(params: {
   let unitCostUsed = 0
 
   if (costingMethod === 'fifo') {
-    const batches = await prisma.inventoryBatch.findMany({
-      where: { productId: params.productId, quantityAvailable: { gt: 0 } },
-      orderBy: [{ receivedAt: 'asc' }, { createdAt: 'asc' }],
-    })
-    const fifo = consumeBatchesFIFO(
-      batches.map(b => ({
+    const toLayers = (rows: Array<{ id: string; quantityAvailable: number; unitCost: unknown; receivedAt: Date }>) =>
+      rows.map(b => ({
         id: b.id,
         quantityAvailable: b.quantityAvailable,
         unitCost: Number(b.unitCost ?? 0),
         receivedAt: b.receivedAt,
-      })),
-      qty,
-    )
+      }))
+    const loadBatches = () => prisma.inventoryBatch.findMany({
+      where: { productId: params.productId, quantityAvailable: { gt: 0 } },
+      orderBy: [{ receivedAt: 'asc' }, { createdAt: 'asc' }],
+    })
+    let batches = await loadBatches()
+    let fifo = consumeBatchesFIFO(toLayers(batches), qty)
+    if (fifo.shortfall > 0 && params.kind === 'pos') {
+      const fallbackCost = (await resolveStandardCost(params.productId)) ?? 0
+      await upsertFifoBatch({
+        productId: params.productId,
+        qty: fifo.shortfall,
+        unitCost: fallbackCost,
+        reference: `AUTO-${params.reference || 'pos'}`.slice(0, 80),
+      })
+      batches = await loadBatches()
+      fifo = consumeBatchesFIFO(toLayers(batches), qty)
+    }
     if (fifo.shortfall > 0) {
       throw new Error(`Insufficient FIFO layers for product ${params.productId}: short ${fifo.shortfall}`)
     }
