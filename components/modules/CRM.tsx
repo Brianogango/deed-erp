@@ -933,80 +933,88 @@ function CRMContent() {
         {view === 'list' && (
           <div className="card overflow-hidden crm-opportunity-list">
             <PanelHeader title="All Opportunities" count={opportunities.filter(o => {
-              const s = oppSearch.toLowerCase()
+              const term = oppSearch.toLowerCase()
               const ownerMatch = opportunityMatchesOwner(o, effectiveOwner)
-              return ownerMatch && (!s || (o.ref ?? '').toLowerCase().includes(s) || o.name.toLowerCase().includes(s) ||
-                (o.companyName ?? '').toLowerCase().includes(s) || (o.contactPersonName ?? '').toLowerCase().includes(s) || (o.ownerName ?? '').toLowerCase().includes(s))
+              return ownerMatch && (!term || (o.ref ?? '').toLowerCase().includes(term) || o.name.toLowerCase().includes(term) ||
+                (o.companyName ?? '').toLowerCase().includes(term) || (o.contactPersonName ?? '').toLowerCase().includes(term) || (o.ownerName ?? '').toLowerCase().includes(term))
             }).length}>
-              <input aria-label="Search opportunities" className="form-input text-[11px] py-1.5" style={{ width: 220 }}
-                placeholder="Search ref, name, company…" value={oppSearch} onChange={e => setOppSearch(e.target.value)} />
+              <input
+                aria-label="Search opportunities"
+                className="form-input text-[11px] py-1.5 crm-opportunity-list__search"
+                placeholder="Search ref, name, company…"
+                value={oppSearch}
+                onChange={e => setOppSearch(e.target.value)}
+              />
             </PanelHeader>
-            <div className="crm-opportunity-list__rows w-full">
-              <div className="flex flex-col">
-              {opportunities.filter(o => {
-                const s = oppSearch.toLowerCase()
-                const ownerMatch = opportunityMatchesOwner(o, effectiveOwner)
-                return ownerMatch && (!s || (o.ref ?? '').toLowerCase().includes(s) || o.name.toLowerCase().includes(s) ||
-                  (o.companyName ?? '').toLowerCase().includes(s) || (o.contactPersonName ?? '').toLowerCase().includes(s) || (o.ownerName ?? '').toLowerCase().includes(s))
-              }).map(opp => {
-                const company = companies.find(c => c.id === (opp.companyId ?? opp.clientId))
-                const oppQuotes = quotes.filter(q => (opp.quoteIds ?? []).includes(q.id))
 
-                return (
-                  <div
-                    key={opp.id}
-                    className="crm-opportunity-list__row p-4 cursor-pointer transition-colors"
-                    style={{ borderBottom: '1px solid var(--border-lt)' }}
-                    onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--bg-surface)' }}
-                    onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent' }}
-                    onClick={() => { setActiveOppId(opp.id); setView('detail') }}
-                  >
-                    <div className="crm-opportunity-list__row-main flex items-start justify-between gap-4">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-1 flex-wrap">
-                          <span className="text-xs font-bold" style={{ color: 'var(--text-1)' }}>
-                            {opp.ref}
-                          </span>
-                          <Badge status={opp.stage} label={stageLabels[opp.stage] ?? STAGE_LABELS[opp.stage]} />
-                          <span className="badge badge-gray text-[9px]">{opp.probability}%</span>
-                        </div>
-                        <div className="text-sm mb-1" style={{ color: 'var(--text-1)' }}>
-                          {opp.name}
-                        </div>
-                        <div className="text-xs" style={{ color: 'var(--text-3)' }}>
-                          {[opp.companyName, opp.contactPersonName].filter(Boolean).join(' · ') || 'Company not set'}
-                        </div>
-                        <div className="text-xs mt-1" style={{ color: 'var(--text-3)' }}>
-                          Owner: {opp.ownerName || 'Unassigned'} · Close: {formatOptionalDate(opp.expectedCloseDate)}
-                          {oppQuotes.length > 0 && ` · ${oppQuotes.length} quote(s)`}
-                          {typeof opp.leadScore === 'number' && ` · Lead Score: ${opp.leadScore}`}
-                        </div>
+            <div className="crm-opportunity-list__scroll">
+              <div className="crm-opportunity-list__table">
+                <div className="crm-opportunity-list__columns" aria-hidden="true">
+                  <span>Opportunity</span>
+                  <span>Company / contact</span>
+                  <span>Owner</span>
+                  <span>Expected close</span>
+                  <span>Stage</span>
+                  <span>Probability</span>
+                  <span>Expected value</span>
+                </div>
+
+                {opportunities.filter(o => {
+                  const term = oppSearch.toLowerCase()
+                  const ownerMatch = opportunityMatchesOwner(o, effectiveOwner)
+                  return ownerMatch && (!term || (o.ref ?? '').toLowerCase().includes(term) || o.name.toLowerCase().includes(term) ||
+                    (o.companyName ?? '').toLowerCase().includes(term) || (o.contactPersonName ?? '').toLowerCase().includes(term) || (o.ownerName ?? '').toLowerCase().includes(term))
+                }).map(opp => {
+                  const oppQuotes = quotes.filter(q => (opp.quoteIds ?? []).includes(q.id))
+                  const companyContact = [opp.companyName, opp.contactPersonName].filter(Boolean).join(' · ') || 'Company not set'
+
+                  return (
+                    <button
+                      type="button"
+                      key={opp.id}
+                      className="crm-opportunity-list__row-grid"
+                      onClick={() => { setActiveOppId(opp.id); setView('detail') }}
+                    >
+                      <div className="crm-opportunity-list__opportunity">
+                        <strong>{opp.ref || 'No reference'}</strong>
+                        <span title={opp.name}>{opp.name}</span>
                       </div>
-                      <div className="crm-opportunity-list__amount text-right">
-                        <div className="text-sm font-bold" style={{ color: 'var(--text-1)' }}>
-                          {fmtKes(opp.expectedValue)}
-                        </div>
-                        {oppQuotes.length > 0 && (
-                          <div className="text-[10px] mt-1" style={{ color: 'var(--text-3)' }}>
-                            {oppQuotes.length} quote{oppQuotes.length > 1 ? 's' : ''} · Last: {oppQuotes[0].quoteNumber}
-                          </div>
-                        )}
-                        {typeof opp.leadScore === 'number' && (
-                          <div className="mt-2 text-[10px]">
-                            <span style={{ color: 'var(--text-3)' }}>Lead Score: </span>
-                            <span style={{ 
-                              color: opp.leadScore >= 80 ? 'var(--success)' : opp.leadScore >= 60 ? 'var(--warning)' : 'var(--text-3)',
-                              fontWeight: 700,
-                            }}>
-                              {opp.leadScore}/100
-                            </span>
-                          </div>
-                        )}
+
+                      <div className="crm-opportunity-list__cell" title={companyContact}>
+                        {companyContact}
                       </div>
-                    </div>
-                  </div>
-                )
-              })}
+
+                      <div className="crm-opportunity-list__cell" title={opp.ownerName || 'Unassigned'}>
+                        {opp.ownerName || 'Unassigned'}
+                      </div>
+
+                      <div className="crm-opportunity-list__cell">
+                        {formatOptionalDate(opp.expectedCloseDate)}
+                      </div>
+
+                      <div className="crm-opportunity-list__cell crm-opportunity-list__cell--stage">
+                        <Badge status={opp.stage} label={stageLabels[opp.stage] ?? STAGE_LABELS[opp.stage]} />
+                      </div>
+
+                      <div className="crm-opportunity-list__cell crm-opportunity-list__cell--probability">
+                        <span className="badge badge-gray text-[9px]">{opp.probability}%</span>
+                      </div>
+
+                      <div className="crm-opportunity-list__amount">
+                        {fmtKes(opp.expectedValue)}
+                      </div>
+
+                      <div className="crm-opportunity-list__mobile-meta">
+                        <Badge status={opp.stage} label={stageLabels[opp.stage] ?? STAGE_LABELS[opp.stage]} size="xs" />
+                        <span>{opp.probability}% probability</span>
+                        <span>{companyContact}</span>
+                        <span>Owner: {opp.ownerName || 'Unassigned'}</span>
+                        <span>Close: {formatOptionalDate(opp.expectedCloseDate)}</span>
+                        {oppQuotes.length > 0 && <span>{oppQuotes.length} quote{oppQuotes.length === 1 ? '' : 's'}</span>}
+                      </div>
+                    </button>
+                  )
+                })}
               </div>
             </div>
           </div>
