@@ -1,4 +1,5 @@
 'use client'
+import { matchesSearchTerms } from '@/lib/search'
 import { Suspense, useState, useRef, useEffect } from 'react'
 import {
   useCommerceStore, KilimallOrder, KilimallOrderStatus, KilimallSettlement,
@@ -130,12 +131,16 @@ function KilimallContent() {
 
   // Filtered orders
   const filteredOrders = kilimallOrders.filter(o => {
-    const q = orderSearch.toLowerCase()
     const matchStatus = orderStatusFilter === 'all' || o.status === orderStatusFilter
-    const matchSearch = !q || o.ref.toLowerCase().includes(q) || o.kilimallRef.toLowerCase().includes(q)
-      || o.productName.toLowerCase().includes(q)
-      || (o.fulfilledProductName ?? '').toLowerCase().includes(q)
-      || (o.customerName ?? '').toLowerCase().includes(q)
+    const matchSearch = matchesSearchTerms(orderSearch, [
+      o.ref,
+      o.kilimallRef,
+      o.productName,
+      o.fulfilledProductName,
+      o.customerName,
+      o.status,
+      o.trackingNumber,
+    ])
     return matchStatus && matchSearch
   })
 
