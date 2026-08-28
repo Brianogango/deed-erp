@@ -40,13 +40,11 @@ function roleAllowed(role: string, type: string) {
 }
 
 async function loadRepairRecipient(ref: string) {
+  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(ref)
   const repair = await prisma.repair.findFirst({
-    where: {
-      OR: [
-        { id: /^[0-9a-f-]{36}$/i.test(ref) ? ref : undefined },
-        { jobNumber: ref },
-      ].filter(Boolean) as any,
-    },
+    where: isUuid
+      ? { OR: [{ id: ref }, { jobNumber: ref }] }
+      : { jobNumber: ref },
     include: {
       client: { select: { name: true, email: true, phone: true, phoneAlt: true } },
     },
