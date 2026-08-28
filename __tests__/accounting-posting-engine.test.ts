@@ -102,7 +102,7 @@ describe('line builders', () => {
       amount: 200,
       method: 'customer_credit',
     })
-    expect(resolvePostingAccountLabel(credit[0])).toBe('3102 - Customer Credits')
+    expect(resolvePostingAccountLabel(credit[0])).toBe('3313 - Customer Credits')
   })
 })
 

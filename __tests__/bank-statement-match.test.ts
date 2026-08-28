@@ -77,9 +77,9 @@ describe('statement ↔ cashbook match', () => {
 
 describe('bank adjustment builders', () => {
   it('maps bank charge and interest roles', () => {
-    expect(COA_ROLE_CODES.bank_charges).toBe('6401')
-    expect(COA_ROLE_CODES.interest_income).toBe('5105')
-    expect(labelForRole('bank_charges')).toContain('6401')
+    expect(COA_ROLE_CODES.bank_charges).toBe('6703')
+    expect(COA_ROLE_CODES.interest_income).toBe('5201')
+    expect(labelForRole('bank_charges')).toContain('6703')
   })
 
   it('builds balanced bank charge / interest lines', () => {
@@ -90,11 +90,11 @@ describe('bank adjustment builders', () => {
       credit: Number(l.credit || 0),
     }))
     expect(() => assertPostingBalanced(resolved)).not.toThrow()
-    expect(resolved[0].account).toBe('6401 - Bank Charges')
+    expect(resolved[0].account).toBe('6703 - Bank Charges')
     expect(resolved[1].account).toBe('2201 - ABSA Bank')
 
     const interest = buildBankInterestLines({ amount: 80, bankAccountId: 'equity' })
     expect(resolvePostingAccountLabel(interest[0])).toBe('2202 - Equity Bank')
-    expect(resolvePostingAccountLabel(interest[1])).toBe('5105 - Interest Income')
+    expect(resolvePostingAccountLabel(interest[1])).toBe('5201 - Dividends and Interest')
   })
 })

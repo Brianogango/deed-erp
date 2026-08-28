@@ -279,8 +279,8 @@ export async function validateGoodsReceiptAtomic(input: {
     const grniCredit=money(valuations.reduce((a,x)=>a+x.grniValue,0))
     const variance=money(grniCredit-inventoryDebit)
     const journalLines:any[]=[{accountLabel:labelForRole('inventory'),label:`Inventory receipt ${input.receiptRef}`,debit:inventoryDebit,credit:0}]
-    if(variance>0) journalLines.push({accountLabel:'6210 - Purchase Price Difference',label:'Purchase price variance',debit:variance,credit:0})
-    else if(variance<0) journalLines.push({accountLabel:'6210 - Purchase Price Difference',label:'Purchase price variance',debit:0,credit:-variance})
+    if(variance>0) journalLines.push({accountLabel:'6307 - Purchase Price Difference',label:'Purchase price variance',debit:variance,credit:0})
+    else if(variance<0) journalLines.push({accountLabel:'6307 - Purchase Price Difference',label:'Purchase price variance',debit:0,credit:-variance})
     journalLines.push({accountLabel:labelForRole('grni'),label:`GRNI ${input.receiptRef}`,debit:0,credit:grniCredit})
     const journal=await createJournalEntryInTx(tx,{ref:`JRN/STK/RCV/${input.receiptRef}`.slice(0,80),journalCode:'STK',date:input.documentDate,description:`Goods receipt ${input.receiptRef}`,sourceType:'stock_receipt',sourceId:grn.id,createdById:input.actorId,skipIfExists:false,lines:journalLines})
     for(const row of valuations){

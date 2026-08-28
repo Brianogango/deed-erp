@@ -32,7 +32,7 @@ describe('vendor bill perpetual posting', () => {
     })
     const grni = lines.find(l => l.account === GRNI_ACCOUNT_LABEL)
     expect(grni?.debit).toBe(1000)
-    const variance = lines.find(l => l.account.includes('6210'))
+    const variance = lines.find(l => l.account.includes('6307'))
     expect(variance?.debit).toBe(100)
     expect(lines.some(l => l.account.includes('6101') && l.debit > 0)).toBe(false)
     expect(lines.find(l => l.account.includes('3000'))?.credit).toBe(1100)

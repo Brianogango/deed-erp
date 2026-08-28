@@ -31,8 +31,8 @@ beforeEach(() => {
 
 describe('expense-pos account helpers', () => {
   it('maps expense categories to historical labels', () => {
-    expect(expenseAccountForCategory('courier')).toBe('6420 - Courier & Delivery')
-    expect(expenseAccountForCategory('unknown')).toBe('6499 - Other Operating Expenses')
+    expect(expenseAccountForCategory('courier')).toBe('6519 - Courier and Delivery')
+    expect(expenseAccountForCategory('unknown')).toBe('6599 - Other Operating Expenses')
   })
 
   it('maps bank ids to cashbook labels', () => {
@@ -42,7 +42,7 @@ describe('expense-pos account helpers', () => {
 })
 
 describe('expense / POS builders', () => {
-  it('builds reimbursement approval (Dr expense, Cr 3105)', () => {
+  it('builds reimbursement approval (Dr expense, Cr 3312)', () => {
     const lines = buildExpenseApprovalLines({
       amount: 2500,
       ref: 'EXP-9',
@@ -57,7 +57,7 @@ describe('expense / POS builders', () => {
       account: resolvePostingAccountLabel(l),
     }))
     expect(() => assertPostingBalanced(resolved)).not.toThrow()
-    expect(resolved[0].account).toBe('6400 - Transport & Fuel')
+    expect(resolved[0].account).toBe('6507 - Fuel and Transport')
     expect(resolved[1].account).toBe(labelForRole('employee_reimbursements'))
   })
 
@@ -72,14 +72,14 @@ describe('expense / POS builders', () => {
     expect(resolvePostingAccountLabel(lines[1])).toBe('2211 - Petty Cash / Mobile Money')
   })
 
-  it('builds reimbursement payout (Dr 3105, Cr bank)', () => {
+  it('builds reimbursement payout (Dr 3312, Cr bank)', () => {
     const lines = buildExpenseReimbursementLines({
       amount: 2500,
       ref: 'EXP-9',
       submittedByName: 'Ada',
       bankAccountId: 'ncba',
     })
-    expect(resolvePostingAccountLabel(lines[0])).toBe('3105 - Employee Reimbursements Payable')
+    expect(resolvePostingAccountLabel(lines[0])).toBe('3312 - Employee Reimbursements Payable')
     expect(resolvePostingAccountLabel(lines[1])).toBe('2201 - ABSA Bank')
   })
 

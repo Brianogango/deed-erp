@@ -20,20 +20,21 @@ export type ExpenseCategoryKey =
   | string
 
 export function expenseAccountForCategory(category?: ExpenseCategoryKey): string {
+  // Official Deed CoA (2025) operating-expense block.
   const map: Record<string, string> = {
-    courier: '6420 - Courier & Delivery',
-    office_supplies: '6405 - Office Supplies',
-    water: '6415 - Utilities - Water',
-    printing: '6410 - Printing & Stationery',
-    transport: '6400 - Transport & Fuel',
-    meals: '6430 - Meals & Entertainment',
-    utilities: '6415 - Utilities',
-    software: '6440 - Software & Subscriptions',
+    courier: '6519 - Courier and Delivery',
+    office_supplies: '6518 - Office Expenses',
+    water: '6506 - Water and Electricity',
+    printing: '6504 - Printing and Stationery',
+    transport: '6507 - Fuel and Transport',
+    meals: '6511 - Subsistence and Accommodation',
+    utilities: '6506 - Water and Electricity',
+    software: '6503 - Computer Expenses',
     hardware: '6521 - Expensed Assets',
-    maintenance: '6450 - Maintenance & Repairs',
-    other: '6499 - Other Operating Expenses',
+    maintenance: '6505 - Repairs and Maintenance',
+    other: '6599 - Other Operating Expenses',
   }
-  return map[category ?? 'other'] ?? '6499 - Other Operating Expenses'
+  return map[category ?? 'other'] ?? '6599 - Other Operating Expenses'
 }
 
 /**

@@ -25,9 +25,9 @@ describe('management P&L classification', () => {
 
   it('classifies finance and operating costs', () => {
     expect(classifyExpenseBucket({ group: 'Finance Costs' })).toBe('finance')
-    expect(classifyExpenseBucket({ code: '6401' })).toBe('finance')
+    expect(classifyExpenseBucket({ code: '6703' })).toBe('finance')
     expect(classifyExpenseBucket({ group: 'Operating Expenses' })).toBe('operating')
-    expect(classifyExpenseBucket({ code: '6420' })).toBe('operating')
+    expect(classifyExpenseBucket({ code: '6519' })).toBe('operating')
   })
 
   it('detects other income groups', () => {
@@ -42,17 +42,17 @@ describe('buildManagementProfitAndLossFromAggregates', () => {
       ['5000', agg({
         code: '5000', name: 'Sales', type: 'revenue', group: 'Revenue - Products', debit: 0, credit: 10000,
       })],
-      ['5105', agg({
-        code: '5105', name: 'Interest', type: 'revenue', group: 'Other Income', debit: 0, credit: 200,
+      ['5201', agg({
+        code: '5201', name: 'Interest', type: 'revenue', group: 'Other Income', debit: 0, credit: 200,
       })],
       ['6001', agg({
         code: '6001', name: 'COGS', type: 'expense', group: 'Direct Expenses', subGroup: 'COGS', debit: 4000, credit: 0,
       })],
-      ['6405', agg({
-        code: '6405', name: 'Office', type: 'expense', group: 'Operating Expenses', debit: 1500, credit: 0,
+      ['6518', agg({
+        code: '6518', name: 'Office', type: 'expense', group: 'Operating Expenses', debit: 1500, credit: 0,
       })],
-      ['6401', agg({
-        code: '6401', name: 'Bank Charges', type: 'expense', group: 'Finance Costs', debit: 100, credit: 0,
+      ['6703', agg({
+        code: '6703', name: 'Bank Charges', type: 'expense', group: 'Financial Expenses', debit: 100, credit: 0,
       })],
     ])
 
