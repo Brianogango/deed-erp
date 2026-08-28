@@ -25,6 +25,8 @@ export interface NotificationResult {
   channel?: 'whatsapp' | 'sms'
   messageId?: string
   error?: string
+  errorCode?: string
+  httpStatus?: number
 }
 
 type SmsQueueItem<T> = {
@@ -56,37 +58,40 @@ const notifEnvNumber = (name: string, fallback: number, min: number, max: number
 
 function pumpSmsQueue() {
   if (smsLimiter.pumping) return
-  smsLimiter.pumping = true
+  if (smsLimiter.queue.length === 0) return
 
-  const step = () => {
-    const maxConcurrent = notifEnvNumber('SMS_MAX_CONCURRENT', 2, 1, 20)
-    const perSecond = notifEnvNumber('SMS_MAX_PER_SECOND', 1, 1, 50)
+  const maxConcurrent = notifEnvNumber('SMS_MAX_CONCURRENT', 2, 1, 20)
+  if (smsLimiter.active >= maxConcurrent) return
 
-    while (smsLimiter.active < maxConcurrent && smsLimiter.queue.length > 0) {
-      const waitMs = Math.max(0, smsLimiter.nextAllowedAt - Date.now())
-      if (waitMs > 0) {
-        setTimeout(step, waitMs)
-        smsLimiter.pumping = false
-        return
-      }
-
-      const item = smsLimiter.queue.shift()!
-      smsLimiter.active += 1
-      smsLimiter.nextAllowedAt = Date.now() + Math.ceil(1000 / perSecond)
-
-      void item.run()
-        .then(item.resolve, item.reject)
-        .finally(() => {
-          smsLimiter.active -= 1
-          smsLimiter.pumping = false
-          pumpSmsQueue()
-        })
-    }
-
-    smsLimiter.pumping = false
+  const perSecond = notifEnvNumber('SMS_MAX_PER_SECOND', 1, 1, 50)
+  const waitMs = Math.max(0, smsLimiter.nextAllowedAt - Date.now())
+  if (waitMs > 0) {
+    smsLimiter.pumping = true
+    setTimeout(() => {
+      smsLimiter.pumping = false
+      pumpSmsQueue()
+    }, waitMs)
+    return
   }
 
-  step()
+  const item = smsLimiter.queue.shift()!
+  smsLimiter.active += 1
+  smsLimiter.nextAllowedAt = Date.now() + Math.ceil(1000 / perSecond)
+
+  // Schedule the next item according to the global start-rate while allowing
+  // up to SMS_MAX_CONCURRENT requests to remain in flight.
+  smsLimiter.pumping = true
+  setTimeout(() => {
+    smsLimiter.pumping = false
+    pumpSmsQueue()
+  }, Math.ceil(1000 / perSecond))
+
+  void item.run()
+    .then(item.resolve, item.reject)
+    .finally(() => {
+      smsLimiter.active -= 1
+      pumpSmsQueue()
+    })
 }
 
 function withSmsRateLimit<T>(run: () => Promise<T>): Promise<T> {
@@ -156,6 +161,8 @@ export const sendNotification = async (options: NotificationOptions): Promise<No
       return {
         success: false,
         error: whatsappResult.error || 'WhatsApp delivery failed',
+        errorCode: whatsappResult.errorCode,
+        httpStatus: whatsappResult.httpStatus,
       }
     }
 
@@ -233,10 +240,12 @@ const sendViaSMS = async (to: string, message: string): Promise<NotificationResu
         timeout: notifEnvNumber('TWILIO_HTTP_TIMEOUT_MS', 10_000, 1_000, 120_000),
       })
 
+      const appBase = String(process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL || '').replace(/\/$/, '')
       const result = await client.messages.create({
         body: message,
         from: fromNumber,
         to,
+        ...(appBase ? { statusCallback: `${appBase}/api/webhooks/notifications/twilio` } : {}),
       })
 
       return {
@@ -248,6 +257,8 @@ const sendViaSMS = async (to: string, message: string): Promise<NotificationResu
       return {
         success: false,
         error: error.message || 'SMS delivery failed',
+        errorCode: error?.code != null ? String(error.code) : undefined,
+        httpStatus: error?.status != null ? Number(error.status) : undefined,
       }
     }
   })
