@@ -1,6 +1,6 @@
 import 'server-only'
 
-import { sendEmail, type MailboxProfile } from '@/lib/integrations/email'
+import { resolveEmailProvider, sendEmail, type MailboxProfile } from '@/lib/integrations/email'
 import { sendWhatsAppMessage } from '@/lib/integrations/whatsapp'
 import { sendNotification } from '@/lib/integrations/notifications'
 import { sendWebPush } from './web-push'
@@ -62,7 +62,7 @@ export async function sendProviderDelivery(input: ProviderDeliveryInput): Promis
     })
     return {
       success: result.success,
-      provider: 'email',
+      provider: resolveEmailProvider(),
       messageId: result.messageId,
       error: result.error,
     }
