@@ -998,8 +998,14 @@ ACCOUNTS_EMAIL=accounts@deed.co.ke`}</pre>
               </SectionCard>
               <SectionCard title="Pricing">
                 <SettingRow label="Enable Pricelists" desc="Lets sales reps pick a pricelist (Retail/Wholesale/Kilimall/custom) on new quotations; off keeps every quotation pricing from Retail automatically"><Toggle on={ss.salesPricelists} onChange={v => updateSystemSettings({ salesPricelists: v })} /></SettingRow>
-                <SettingRow label="Discount Control" desc="Restrict who can edit line discounts on quotations. High discounts, below-cost prices, and low margins still require approval before confirm."><Toggle on={ss.salesDiscountControl} onChange={v => updateSystemSettings({ salesDiscountControl: v })} /></SettingRow>
-                <SettingRow label="Minimum sales margin %" desc="Gross margin after discount below this % triggers special_pricing approval on confirm (Director or Finance). Floor price remains product cost.">
+                <SettingRow label="Discount Control" desc="Restrict who can edit line discounts on quotations. Line discounts above 10% still need Director or Finance before confirm."><Toggle on={ss.salesDiscountControl} onChange={v => updateSystemSettings({ salesDiscountControl: v })} /></SettingRow>
+                <SettingRow label="Require approval below lowest selling point" desc="On hold. When on, selling below cost, the margin floor, or pricelist needs Director or Finance before confirm. The rule is kept — turn this on to resume.">
+                  <Toggle
+                    on={ss.salesRequireSpecialPricingApproval === true}
+                    onChange={v => updateSystemSettings({ salesRequireSpecialPricingApproval: v })}
+                  />
+                </SettingRow>
+                <SettingRow label="Minimum sales margin %" desc="Gross margin after discount used to detect selling below the lowest selling point. Authorization stays on hold unless the toggle above is on. Floor price remains product cost.">
                   <Input
                     type="number"
                     value={String(ss.salesMinMarginPercent ?? 10)}

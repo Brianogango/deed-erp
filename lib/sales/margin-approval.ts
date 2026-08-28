@@ -5,6 +5,10 @@
  * When pricingMarginPolicy is enabled, each line's minimum classic GP% is:
  *   overheadRate + (categoryMinTarget - tierReduction(cost))
  * matching the Deed Margins spreadsheet identity.
+ *
+ * Confirm gating for special_pricing is on hold unless Settings
+ * `salesRequireSpecialPricingApproval` is true. This function still detects
+ * below-cost / below-margin / below-pricelist so the rule can be resumed.
  */
 
 import type { ApprovalType } from '@/lib/sales-flow-types'

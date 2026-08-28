@@ -111,7 +111,7 @@ import {
   stockShortageLines,
   type ConfirmQuotationMode,
 } from '@/lib/sales/confirm-quotation'
-import { canApprove } from '@/lib/sales-approvals'
+import { canApprove, isSalesConfirmGatingApproval } from '@/lib/sales-approvals'
 import { finishUxTask, startUxTask, trackUxEvent } from '@/lib/ux-telemetry'
 import {
   SALE_STATUS_BAR,
@@ -2140,7 +2140,7 @@ function SalesContent() {
                           {canConfirmQuote && (() => {
                             const pendingApprovals = (approvalRequests ?? []).filter(r =>
                               r.documentId === activeOrder.id
-                              && ['discount', 'credit_override', 'backorder', 'special_pricing'].includes(r.type)
+                              && isSalesConfirmGatingApproval(r.type, systemSettings)
                               && r.status === 'pending',
                             )
                             const actionableApprovals = pendingApprovals.filter(r =>
@@ -2389,11 +2389,11 @@ function SalesContent() {
                   </section>
 
 
-                      {isQuotationStage(activeOrder.status) && (activeOrder.approvalStatus === 'pending' || (approvalRequests ?? []).some(r =>
+                      {isQuotationStage(activeOrder.status) && (approvalRequests ?? []).some(r =>
                         r.documentId === activeOrder.id
-                        && ['discount', 'credit_override', 'backorder', 'special_pricing'].includes(r.type)
+                        && isSalesConfirmGatingApproval(r.type, systemSettings)
                         && r.status === 'pending',
-                      )) && (
+                      ) && (
                         <div className="sp-banner-warn" role="status">
                           <span aria-hidden>!</span>
                           <div className="w-full">
@@ -2402,7 +2402,7 @@ function SalesContent() {
                               {(approvalRequests ?? [])
                                 .filter(r =>
                                   r.documentId === activeOrder.id
-                                  && ['discount', 'credit_override', 'backorder', 'special_pricing'].includes(r.type)
+                                  && isSalesConfirmGatingApproval(r.type, systemSettings)
                                   && r.status === 'pending',
                                 )
                                 .map(r => r.type.replace(/_/g, ' '))
@@ -2412,7 +2412,7 @@ function SalesContent() {
                             {(() => {
                               const pending = (approvalRequests ?? []).filter(r =>
                                 r.documentId === activeOrder.id
-                                && ['discount', 'credit_override', 'backorder', 'special_pricing'].includes(r.type)
+                                && isSalesConfirmGatingApproval(r.type, systemSettings)
                                 && r.status === 'pending',
                               )
                               const actionable = pending.filter(r =>
@@ -3612,7 +3612,7 @@ function SalesContent() {
           approvalBlockers={(approvalRequests ?? [])
             .filter(r =>
               r.documentId === activeOrder.id
-              && ['discount', 'credit_override', 'backorder', 'special_pricing'].includes(r.type)
+              && isSalesConfirmGatingApproval(r.type, systemSettings)
               && r.status === 'pending',
             )
             .map(r => ({
