@@ -361,9 +361,8 @@ export default function AccountingDashboard({ onNavigate }: Props) {
     <div className="accounting-dashboard">
       <div className="accounting-dashboard__command accounting-dashboard__enter">
         <div className="accounting-dashboard__identity">
-          <span className="accounting-dashboard__eyebrow">Finance command centre</span>
-          <h2>Accounting Dashboard</h2>
-          <p>Real-time overview of financial performance, liquidity, obligations and control exceptions.</p>
+          <span className="accounting-dashboard__eyebrow">Decision period</span>
+          <p>Use one accounting cut-off across performance, liquidity, statutory obligations and controls.</p>
         </div>
         <div className="accounting-dashboard__filters">
           <label>
