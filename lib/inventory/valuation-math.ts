@@ -141,3 +141,44 @@ export function consumeBatchesFIFO(
   return { consumed, remainingBatches, totalCost, shortfall: remaining }
 }
 
+export type FifoRestoreLayer = FifoBatchLayer & { quantityReceived: number }
+
+/** Put consumed FIFO qty back onto the newest layers that still have room. */
+export function restoreBatchesFIFO(
+  batches: FifoRestoreLayer[],
+  qty: number,
+): {
+  restored: Array<{ batchId: string; qty: number }>
+  leftover: number
+  remainingBatches: FifoRestoreLayer[]
+} {
+  const need = Math.max(0, Math.floor(Number(qty) || 0))
+  const sorted = [...batches].sort((a, b) => {
+    const ta = a.receivedAt ? new Date(a.receivedAt).getTime() : 0
+    const tb = b.receivedAt ? new Date(b.receivedAt).getTime() : 0
+    if (ta !== tb) return tb - ta
+    return String(b.id).localeCompare(String(a.id))
+  })
+
+  let remaining = need
+  const restored: Array<{ batchId: string; qty: number }> = []
+  const remainingBatches: FifoRestoreLayer[] = []
+
+  for (const batch of sorted) {
+    const available = Math.max(0, Math.floor(Number(batch.quantityAvailable) || 0))
+    const received = Math.max(0, Math.floor(Number(batch.quantityReceived) || 0))
+    const room = Math.max(0, received - available)
+    const unitCost = Math.max(0, Number(batch.unitCost) || 0)
+    let nextAvail = available
+    if (remaining > 0 && room > 0) {
+      const take = Math.min(room, remaining)
+      nextAvail = available + take
+      remaining -= take
+      restored.push({ batchId: batch.id, qty: take })
+    }
+    remainingBatches.push({ ...batch, quantityAvailable: nextAvail, unitCost })
+  }
+
+  return { restored, leftover: remaining, remainingBatches }
+}
+

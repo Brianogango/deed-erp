@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from '@/lib/auth/server'
 import { applyPosStockMutation, reversePosStockMutation } from '@/lib/inventory/stock-transactions'
-import { postPosValuationFromPayload } from '@/lib/inventory/valuation-hooks'
+import { postPosValuationFromPayload, reversePosValuationFromPayload } from '@/lib/inventory/valuation-hooks'
 
 export const dynamic = 'force-dynamic'
 
@@ -54,6 +54,11 @@ export async function POST(request: NextRequest) {
       userId: session.user.id,
     })
   } catch (err) {
+    await reversePosValuationFromPayload({
+      orderRef: body.orderRef,
+      lines: body.lines.map(l => ({ productId: l.productId, qty: l.qty })),
+      userId: session.user.id,
+    }).catch(() => {})
     await reversePosStockMutation({ orderRef: body.orderRef, lines: body.lines })
     return NextResponse.json(
       { ok: false, error: err instanceof Error ? err.message : 'POS valuation failed' },
@@ -62,6 +67,11 @@ export async function POST(request: NextRequest) {
   }
 
   if (!valuation.ok) {
+    await reversePosValuationFromPayload({
+      orderRef: body.orderRef,
+      lines: body.lines.map(l => ({ productId: l.productId, qty: l.qty })),
+      userId: session.user.id,
+    }).catch(() => {})
     await reversePosStockMutation({ orderRef: body.orderRef, lines: body.lines })
     return NextResponse.json(
       { ok: false, error: `POS valuation failed: ${valuation.reason || 'unknown'}`, valuation },

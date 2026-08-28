@@ -1,6 +1,6 @@
 import 'server-only'
 import prisma from '@/lib/prisma'
-import { postStockJournal } from '@/lib/accounting/posting-service'
+import { postStockJournal, reversePosting } from '@/lib/accounting/posting-service'
 import { labelForRole } from '@/lib/accounting/coa-roles'
 import { loadAppState } from '@/lib/server-store'
 import { COMPANY_ACCOUNT_FALLBACKS, formatAccountLabel } from '@/lib/product-accounts'
@@ -9,6 +9,7 @@ import {
   applyDeliveryAverage,
   applyReceiptAverage,
   consumeBatchesFIFO,
+  restoreBatchesFIFO,
   stockValuationEventKey,
   stockValuationJournalRef,
   type StockValuationKind,
@@ -594,6 +595,111 @@ export async function processStockPosSale(params: {
     postJournal: params.postJournal,
     journalDescription: `POS sale ${params.qty}`,
   })
+}
+
+async function restoreFifoQty(params: {
+  productId: string
+  qty: number
+  unitCost: number
+  reference: string
+}) {
+  const batches = await prisma.inventoryBatch.findMany({
+    where: { productId: params.productId },
+    orderBy: [{ receivedAt: 'desc' }, { createdAt: 'desc' }],
+  })
+  const restored = restoreBatchesFIFO(
+    batches.map(b => ({
+      id: b.id,
+      quantityAvailable: b.quantityAvailable,
+      quantityReceived: b.quantityReceived,
+      unitCost: Number(b.unitCost ?? 0),
+      receivedAt: b.receivedAt,
+    })),
+    params.qty,
+  )
+  for (const line of restored.restored) {
+    await prisma.inventoryBatch.update({
+      where: { id: line.batchId },
+      data: { quantityAvailable: { increment: line.qty } },
+    })
+  }
+  if (restored.leftover > 0) {
+    await upsertFifoBatch({
+      productId: params.productId,
+      qty: restored.leftover,
+      unitCost: params.unitCost,
+      reference: `POS-REV-${params.reference}`.slice(0, 80),
+    })
+  }
+}
+
+/**
+ * Undo a POS valuation that already posted (FIFO consume + COGS) after the
+ * checkout itself failed. Idempotent when the VAL/POS event is gone.
+ */
+export async function reversePosSaleValuation(params: {
+  productId: string
+  qty?: number
+  reference?: string
+  userId?: string
+}) {
+  const reference = String(params.reference || '').trim()
+  const eventKey = stockValuationEventKey('pos', reference, params.productId)
+  const event = await prisma.valuationEvent.findUnique({ where: { eventKey } }).catch(() => null)
+  if (!event) {
+    return { skipped: true as const, reason: 'not_processed' }
+  }
+
+  const qty = Math.max(0, Math.floor(Number(event.qty) || Number(params.qty) || 0))
+  const unitCost = Math.max(0, Number(event.unitCost ?? 0))
+  const costingMethod = await resolveCostingMethod(params.productId)
+
+  if (qty > 0) {
+    if (costingMethod === 'fifo') {
+      await restoreFifoQty({
+        productId: params.productId,
+        qty,
+        unitCost,
+        reference: reference || 'noref',
+      })
+      await syncProductValuationFromBatches(params.productId)
+    } else {
+      const valuation = await prisma.productValuation.findUnique({ where: { productId: params.productId } })
+      const applied = applyReceiptAverage({
+        currentQty: valuation?.totalQty ?? 0,
+        currentValue: Number(valuation?.totalValue ?? 0),
+        qty,
+        unitCost,
+      })
+      await prisma.productValuation.upsert({
+        where: { productId: params.productId },
+        create: {
+          productId: params.productId,
+          averageCost: applied.averageCost,
+          totalQty: applied.totalQty,
+          totalValue: applied.totalValue,
+        },
+        update: {
+          averageCost: applied.averageCost,
+          totalQty: applied.totalQty,
+          totalValue: applied.totalValue,
+        },
+      })
+    }
+  }
+
+  const journalRef = stockValuationJournalRef('pos', reference, params.productId)
+  try {
+    await reversePosting(journalRef, params.userId)
+  } catch {
+    /* journal may be missing when valuation threw before posting */
+  }
+
+  const ledgerKey = `ledger:stock_pos:${reference}:${params.productId}`.slice(0, 160)
+  await prisma.inventoryLedgerEntry.deleteMany({ where: { eventKey: ledgerKey } }).catch(() => {})
+  await prisma.valuationEvent.deleteMany({ where: { eventKey } }).catch(() => {})
+
+  return { skipped: false as const, qty, unitCost }
 }
 
 /**

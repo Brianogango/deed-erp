@@ -8,6 +8,7 @@ import {
   processStockPosSale,
   processStockReceipt,
   processStockVendorReturn,
+  reversePosSaleValuation,
 } from '@/lib/inventory/valuation-service'
 
 type ReceiptLine = {
@@ -188,6 +189,31 @@ export async function postPosValuationFromPayload(params: {
     }
   }
   return finalizeValuation(results)
+}
+
+/** Restore FIFO/COGS for every POS line after a failed checkout. */
+export async function reversePosValuationFromPayload(params: {
+  orderRef: string
+  lines: Array<{ productId?: string; qty?: number }>
+  userId?: string
+}) {
+  const results = []
+  for (const line of params.lines || []) {
+    const productId = String(line.productId || '').trim()
+    if (!productId) continue
+    try {
+      const result = await reversePosSaleValuation({
+        productId,
+        qty: Math.max(0, Math.floor(Number(line.qty) || 0)),
+        reference: params.orderRef,
+        userId: params.userId,
+      })
+      results.push({ productId, result })
+    } catch (err) {
+      results.push({ productId, error: err instanceof Error ? err.message : 'failed' })
+    }
+  }
+  return { ok: true as const, results }
 }
 
 export async function postCustomerReturnValuation(params: {
