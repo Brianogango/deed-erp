@@ -9,6 +9,8 @@ import {
   enforcePostedInvoiceImmutability,
   financeInvoicePath,
   shouldApplyInvoiceEditQuery,
+  resolveInvoiceLineTaxCategory,
+  invoiceLineMissingTaxCategory,
 } from '@/lib/finance-invoice'
 
 describe('computeInvoiceTotals', () => {
@@ -307,5 +309,38 @@ describe('invoice editor navigation', () => {
     expect(shouldApplyInvoiceEditQuery('inv-2', 'inv-1')).toBe(true)
     expect(shouldApplyInvoiceEditQuery('', 'inv-1')).toBe(false)
     expect(shouldApplyInvoiceEditQuery(null, null)).toBe(false)
+  })
+})
+
+describe('resolveInvoiceLineTaxCategory', () => {
+  it('treats a 0% line with no category as out of scope', () => {
+    expect(resolveInvoiceLineTaxCategory(undefined, 0)).toBe('out_of_scope')
+    expect(resolveInvoiceLineTaxCategory('not_selected', 0)).toBe('out_of_scope')
+  })
+
+  it('keeps not_selected when a positive VAT rate has no category', () => {
+    expect(resolveInvoiceLineTaxCategory(undefined, 16)).toBe('not_selected')
+  })
+
+  it('maps aliases onto statutory categories', () => {
+    expect(resolveInvoiceLineTaxCategory('vat', 16)).toBe('standard_16')
+    expect(resolveInvoiceLineTaxCategory('zero', 0)).toBe('zero_rated')
+    expect(resolveInvoiceLineTaxCategory('exempt', 0)).toBe('exempt')
+  })
+})
+
+describe('invoiceLineMissingTaxCategory', () => {
+  it('allows a 0% line with no category (out of scope)', () => {
+    expect(invoiceLineMissingTaxCategory({ qty: 1, taxRate: 0 })).toBe(false)
+    expect(invoiceLineMissingTaxCategory({ qty: 1, taxCategory: 'not_selected', taxRate: 0 })).toBe(false)
+  })
+
+  it('blocks a positive VAT line with no category', () => {
+    expect(invoiceLineMissingTaxCategory({ qty: 1, taxRate: 16 })).toBe(true)
+    expect(invoiceLineMissingTaxCategory({ qty: 1, taxCategory: 'not_selected', taxRate: 16 })).toBe(true)
+  })
+
+  it('ignores section rows', () => {
+    expect(invoiceLineMissingTaxCategory({ qty: 0, lineType: 'section', taxRate: 16 })).toBe(false)
   })
 })

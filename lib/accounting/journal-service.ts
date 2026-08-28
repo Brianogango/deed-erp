@@ -71,30 +71,36 @@ export async function assertFiscalPeriodOpen(date: Date | string): Promise<void>
   return assertFiscalPeriodOpenWith(prisma, date)
 }
 
+function postingError(message: string, status = 409): Error {
+  const err = new Error(message)
+  ;(err as Error & { status?: number }).status = status
+  return err
+}
+
 async function resolveAccountId(db: AccountingDb, accountLabel: string): Promise<string> {
   const code = extractAccountCode(accountLabel)
-  if (!code) throw new Error(`Journal account must start with a valid account code: ${accountLabel}`)
+  if (!code) throw postingError(`Journal account must start with a valid account code: ${accountLabel}`)
   const account = await db.accountCode.findUnique({
     where: { code },
     select: { id: true, isActive: true },
   })
   if (!account) {
-    throw new Error(`Unknown account ${code}. Create and approve the account in the Chart of Accounts before posting.`)
+    throw postingError(`Unknown account ${code}. Create and approve the account in the Chart of Accounts before posting.`)
   }
   if (!account.isActive) {
-    throw new Error(`Inactive account ${code} cannot receive postings.`)
+    throw postingError(`Inactive account ${code} cannot receive postings.`)
   }
   return account.id
 }
 
 function validateJournalLines(ref: string, lines: JournalLineInput[]) {
-  if (lines.length < 2) throw new Error(`Journal ${ref} must contain at least two lines`)
+  if (lines.length < 2) throw postingError(`Journal ${ref} must contain at least two lines`)
   for (const [index, line] of lines.entries()) {
     const debit = round2(line.debit)
     const credit = round2(line.credit)
-    if (debit < 0 || credit < 0) throw new Error(`Journal ${ref} line ${index + 1} contains a negative amount`)
-    if (debit > 0 && credit > 0) throw new Error(`Journal ${ref} line ${index + 1} cannot contain both debit and credit`)
-    if (debit === 0 && credit === 0) throw new Error(`Journal ${ref} line ${index + 1} has no monetary value`)
+    if (debit < 0 || credit < 0) throw postingError(`Journal ${ref} line ${index + 1} contains a negative amount`)
+    if (debit > 0 && credit > 0) throw postingError(`Journal ${ref} line ${index + 1} cannot contain both debit and credit`)
+    if (debit === 0 && credit === 0) throw postingError(`Journal ${ref} line ${index + 1} has no monetary value`)
   }
 }
 
@@ -102,21 +108,21 @@ async function createJournalEntryWith(db: AccountingDb, params: CreateJournalEnt
   validateJournalLines(params.ref, params.lines)
   const totalDebit = round2(params.lines.reduce((s, l) => s + Number(l.debit || 0), 0))
   const totalCredit = round2(params.lines.reduce((s, l) => s + Number(l.credit || 0), 0))
-  if (totalDebit <= 0 || totalCredit <= 0) throw new Error(`Zero-value journal is not allowed: ${params.ref}`)
+  if (totalDebit <= 0 || totalCredit <= 0) throw postingError(`Zero-value journal is not allowed: ${params.ref}`)
   if (Math.abs(totalDebit - totalCredit) > 0.009) {
-    throw new Error(`Unbalanced journal ${params.ref}: debit=${totalDebit} credit=${totalCredit}`)
+    throw postingError(`Unbalanced journal ${params.ref}: debit=${totalDebit} credit=${totalCredit}`)
   }
 
   const existing = await db.journalEntry.findUnique({ where: { ref: params.ref }, select: { id: true, ref: true } })
   if (existing) {
     if (params.skipIfExists !== false) return existing
-    throw new Error(`Journal ref already exists: ${params.ref}`)
+    throw postingError(`Journal ref already exists: ${params.ref}`)
   }
 
   let journalId: string | null = null
   if (params.journalCode) {
     const journal = await db.journal.findUnique({ where: { code: params.journalCode }, select: { id: true } })
-    if (!journal) throw new Error(`Unknown journal code: ${params.journalCode}`)
+    if (!journal) throw postingError(`Unknown journal code: ${params.journalCode}`)
     journalId = journal.id
   }
 
@@ -140,28 +146,40 @@ async function createJournalEntryWith(db: AccountingDb, params: CreateJournalEnt
     })
   }
 
-  return db.journalEntry.create({
-    data: {
-      id: uuidFromKey('journal', params.ref),
-      ref: params.ref,
-      journalId,
-      entryDate,
-      description: params.description,
-      sourceType: params.sourceType,
-      sourceId: params.sourceId ?? null,
-      invoiceId: params.invoiceId ?? null,
-      paymentId: params.paymentId ?? null,
-      blobId: params.blobId ?? null,
-      isPosted: true,
-      postedAt: new Date(),
-      postedById: params.createdById ?? null,
-      createdById: params.createdById ?? null,
-      totalDebit,
-      totalCredit,
-      lines: { create: lineCreates },
-    },
-    include: { lines: true },
-  })
+  try {
+    return await db.journalEntry.create({
+      data: {
+        id: uuidFromKey('journal', params.ref),
+        ref: params.ref,
+        journalId,
+        entryDate,
+        description: params.description,
+        sourceType: params.sourceType,
+        sourceId: params.sourceId ?? null,
+        invoiceId: params.invoiceId ?? null,
+        paymentId: params.paymentId ?? null,
+        blobId: params.blobId ?? null,
+        isPosted: true,
+        postedAt: new Date(),
+        postedById: params.createdById ?? null,
+        createdById: params.createdById ?? null,
+        totalDebit,
+        totalCredit,
+        lines: { create: lineCreates },
+      },
+      include: { lines: true },
+    })
+  } catch (err) {
+    const code = typeof err === 'object' && err && 'code' in err ? String((err as { code?: unknown }).code) : ''
+    if (code === 'P2002') {
+      if (params.skipIfExists !== false) {
+        const raced = await db.journalEntry.findUnique({ where: { ref: params.ref }, select: { id: true, ref: true } })
+        if (raced) return raced
+      }
+      throw postingError(`Journal ref already exists: ${params.ref}`)
+    }
+    throw err
+  }
 }
 
 export async function createJournalEntryInTx(tx: Prisma.TransactionClient, params: CreateJournalEntryInput) {

@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { getRequiredSession, requireRole, withApiErrorHandling } from '@/lib/auth/api'
 import { optionalUuid, resolveClientId } from '@/lib/legacy-compat'
-import { computeInvoiceTotals, computeInvoiceLineMoney } from '@/lib/finance-invoice'
+import { computeInvoiceTotals, computeInvoiceLineMoney, resolveInvoiceLineTaxCategory, invoiceLineMissingTaxCategory } from '@/lib/finance-invoice'
 import { writeFinancialAudit, writeFinancialAuditInTx } from '@/lib/finance-audit'
 import { lockVersionMismatch, nextLockVersion, readExpectedVersion } from '@/lib/optimistic-lock'
 import { checkFiscalLock } from '@/lib/fiscal-lock.server'
@@ -100,20 +100,9 @@ function mapInvoiceItems(lines: any[]) {
         sortOrder: index,
       }
     }
-    const requestedTaxCategory = String(l.taxCategory ?? l.taxCode ?? 'not_selected').toLowerCase()
-    const taxCategory = requestedTaxCategory === 'standard' || requestedTaxCategory === 'vat' || requestedTaxCategory === 'standard_16'
-      ? 'standard_16'
-      : requestedTaxCategory === 'zero' || requestedTaxCategory === 'zero_rated'
-        ? 'zero_rated'
-        : requestedTaxCategory === 'exempt'
-          ? 'exempt'
-          : requestedTaxCategory === 'out_of_scope'
-            ? 'out_of_scope'
-            : requestedTaxCategory === 'non_vat_supplier'
-              ? 'non_vat_supplier'
-              : 'not_selected'
-    // Numeric VAT defaults to zero. A statutory tax category must be selected
-    // before posting; 0 does not imply zero-rated.
+    const taxCategory = resolveInvoiceLineTaxCategory(l.taxCategory ?? l.taxCode, Number(l.taxRate) || 0)
+    // Numeric VAT defaults to zero. A positive rate still requires standard_16;
+    // a 0% line with no category is out of scope, not silently zero-rated.
     const effectiveTaxRate = taxCategory === 'standard_16'
       ? Number(l.taxRate ?? 16)
       : 0
@@ -271,10 +260,11 @@ export async function PUT(request: Request, { params }: { params: { id: string }
     let postingBillLines: any[] = []
     let postingMirror: Awaited<ReturnType<typeof resolveBlobInvoiceMirror>> | null = null
     if (willPostNow) {
-      const taxCheckItems = lines !== undefined ? mapInvoiceItems(lines) : before.items
-      const unresolvedTax = taxCheckItems.some((item: any) =>
-        Number(item.qty) !== 0 && String(item.taxCategory ?? 'not_selected') === 'not_selected'
-      )
+      // Check the source lines, not mapInvoiceItems(): mapping zeroes taxRate on
+      // not_selected rows, which would hide a positive VAT line that still needs
+      // a statutory category. 0% + no category resolves to out_of_scope.
+      const taxCheckItems = lines !== undefined ? lines : before.items
+      const unresolvedTax = taxCheckItems.some((item: any) => invoiceLineMissingTaxCategory(item))
       if (unresolvedTax) {
         return NextResponse.json({
           error: 'Tax category must be selected on every posting line. A 0% amount is not automatically zero-rated VAT.',

@@ -12995,12 +12995,25 @@ const storeCtx: AppState = {
         postedByName: actor?.name,
         postedAt: now(),
       }
-      setInvoices(p => {
-        const next = p.map(i => i.id === id ? { ...i, ...postedMeta } : i)
-        const updated = next.find(i => i.id === id)
-        if (updated) sync(`/api/invoices/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
-        return next
-      })
+      const postedInvoice = { ...inv, ...postedMeta }
+      setInvoices(p => p.map(i => i.id === id ? postedInvoice : i))
+      try {
+        const res = await fetch(`/api/invoices/${id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(postedInvoice),
+        })
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({})) as { error?: string }
+          setInvoices(p => p.map(i => i.id === id ? inv : i))
+          showToast(err.error || 'Could not post invoice to accounting', 'error')
+          return
+        }
+      } catch {
+        setInvoices(p => p.map(i => i.id === id ? inv : i))
+        showToast('Could not post invoice to accounting', 'error')
+        return
+      }
       // Auto-post GL journal using the shared posting engine.
       postInvoiceJournalOnce({ ...inv, ref: finalRef })
       addAuditLog('post_invoice', finalRef, `Posted by ${actor?.name || 'Finance'}`)

@@ -5,6 +5,7 @@ export type BlobInvoiceType = 'customer_invoice' | 'vendor_bill'
 
 export type BlobInvoiceMirror = {
   type: BlobInvoiceType
+  status?: string
   purchaseOrderId?: string
   partnerName?: string
   clientName?: string
@@ -39,8 +40,9 @@ export async function resolveBlobInvoiceMirror(invoiceId: string): Promise<BlobI
     const partnerName = typeof mirror.partnerName === 'string' ? mirror.partnerName : undefined
     const clientName = typeof mirror.clientName === 'string' ? mirror.clientName : undefined
     const postedByUserId = typeof mirror.postedByUserId === 'string' ? mirror.postedByUserId : null
+    const status = typeof mirror.status === 'string' ? mirror.status : undefined
     const lines = Array.isArray(mirror.lines) ? mirror.lines as BlobInvoiceMirror['lines'] : undefined
-    return { type, purchaseOrderId, partnerName, clientName, postedByUserId, lines }
+    return { type, status, purchaseOrderId, partnerName, clientName, postedByUserId, lines }
   } catch {
     return { type: 'customer_invoice' }
   }
