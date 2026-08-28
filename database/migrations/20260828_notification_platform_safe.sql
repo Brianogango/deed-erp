@@ -235,3 +235,17 @@ DROP TRIGGER IF EXISTS trg_notification_recipient_notify ON notification_recipie
 CREATE TRIGGER trg_notification_recipient_notify
 AFTER INSERT OR UPDATE OR DELETE ON notification_recipients
 FOR EACH ROW EXECUTE FUNCTION deed_notify_notification_recipient_change();
+
+
+-- Versioned fallback templates. Event-specific templates can be inserted later
+-- with a higher version; the worker always prefers exact event_type over '*'
+-- and the highest active version.
+INSERT INTO notification_templates
+  (event_type, channel, version, subject_template, body_template, is_active)
+VALUES
+  ('*', 'email', 1, '{{title}}', '{{body}}', TRUE),
+  ('*', 'whatsapp', 1, NULL, '{{body}}', TRUE),
+  ('*', 'sms', 1, NULL, '{{body}}', TRUE),
+  ('*', 'push', 1, '{{title}}', '{{body}}', TRUE),
+  ('*', 'in_app', 1, '{{title}}', '{{body}}', TRUE)
+ON CONFLICT (event_type, channel, version) DO NOTHING;
