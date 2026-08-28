@@ -1,4 +1,5 @@
 'use client'
+import { matchesSearchTerms } from '@/lib/search'
 // @ts-nocheck
 
 import { Suspense, useState, useMemo } from 'react'
@@ -714,13 +715,14 @@ function HoldoversContent() {
   const filtered = useMemo(() => {
     let list = filter === 'all' ? items : items.filter(h => h.status === filter)
     if (search.trim()) {
-      const q = search.toLowerCase()
-      list = list.filter(h =>
-        h.ref.toLowerCase().includes(q) ||
-        h.clientName.toLowerCase().includes(q) ||
-        h.productName.toLowerCase().includes(q) ||
-        h.serialNumber.toLowerCase().includes(q)
-      )
+      list = list.filter(h => matchesSearchTerms(search, [
+        h.ref,
+        h.clientName,
+        h.productName,
+        h.serialNumber,
+        h.status,
+        h.notes,
+      ]))
     }
     return [...list].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
   }, [items, filter, search])
