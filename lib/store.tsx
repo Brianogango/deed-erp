@@ -13041,11 +13041,28 @@ const storeCtx: AppState = {
       const postedInvoice = { ...inv, ...postedMeta, lines: linesWithTax }
       setInvoices(p => p.map(i => i.id === id ? postedInvoice : i))
       try {
-        const res = await fetch(`/api/invoices/${id}`, {
+        let res = await fetch(`/api/invoices/${id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(postedInvoice),
         })
+        if (res.status === 404) {
+          // The bill exists only in the local store (its create POST failed
+          // earlier, e.g. a missing PO/product link). Create it as a draft,
+          // then post — creating it already-posted would skip the GL journal.
+          const create = await fetch('/api/invoices', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ...postedInvoice, status: 'draft' }),
+          })
+          if (create.ok) {
+            res = await fetch(`/api/invoices/${id}`, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(postedInvoice),
+            })
+          }
+        }
         if (!res.ok) {
           const err = await res.json().catch(() => ({})) as { error?: string }
           setInvoices(p => p.map(i => i.id === id ? inv : i))

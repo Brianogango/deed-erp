@@ -67,6 +67,13 @@ vi.mock('@/lib/server-store', () => ({
 
 vi.mock('@/lib/finance-audit', () => ({ writeFinancialAudit: mockWriteFinancialAudit }))
 
+// Product resolution/self-heal is covered by its own tests — keep the route
+// tests at the route boundary.
+vi.mock('@/lib/purchase/po-prisma-sync', () => ({
+  resolvePOLineProducts: (items: any[]) => Promise.resolve(items),
+  ensurePrismaPurchaseOrder: vi.fn().mockResolvedValue(true),
+}))
+
 // ── Imports (after mocks) ─────────────────────────────────────────────────────
 import { GET, POST } from '@/app/api/purchase-orders/route'
 import { GET as GET_ONE, PATCH, DELETE } from '@/app/api/purchase-orders/[id]/route'

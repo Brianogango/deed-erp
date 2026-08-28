@@ -17,6 +17,7 @@ const {
   mockPrismaInvoice: {
     findMany: vi.fn(),
     findUnique: vi.fn(),
+    findFirst: vi.fn().mockResolvedValue(null),
     findUniqueOrThrow: vi.fn(),
     create: vi.fn(),
     update: vi.fn(),

@@ -6,6 +6,7 @@ import { getNextDocNumber } from '@/lib/doc-ref-counter'
 import { loadAppState, saveStoreKeys } from '@/lib/server-store'
 import { parsePaginationParams, paginatedResponse } from '@/lib/api-pagination'
 import { inferTrackingMethod, isSerialTracking } from '@/lib/inventory-identifiers'
+import { resolvePOLineProducts, ensurePrismaPurchaseOrder } from '@/lib/purchase/po-prisma-sync'
 
 // Purchase Orders were entirely blob-only (deed_purchaseOrders via generic
 // JSON-collection CRUD) despite PurchaseOrder/PurchaseOrderItem existing as
@@ -144,7 +145,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'vendorName is required' }, { status: 400 })
     }
     const clientId = await resolveVendorClientId(body)
-    const items = mapPOItemsForCreate(Array.isArray(body.lines) ? body.lines : [])
+    // Auto-create catalog products missing from Prisma instead of dying on a
+    // P2003 FK violation — a blob-only product must not orphan the whole PO.
+    const items = await resolvePOLineProducts(mapPOItemsForCreate(Array.isArray(body.lines) ? body.lines : []))
     const poNumber = body.ref || (await getNextDocNumber('purchase_order'))
 
     const created = await prisma.purchaseOrder.create({
