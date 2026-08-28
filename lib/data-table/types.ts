@@ -50,6 +50,12 @@ export function getColumnValue<T>(
   if (column.accessor) return column.accessor(row)
   if (purpose !== 'export' && column.searchValue) return column.searchValue(row)
   if (column.exportValue) return column.exportValue(row)
+  // Most ERP columns use a key that directly matches the record field even
+  // when render() returns badges/React nodes. Prefer the raw field for data
+  // operations so search never depends on presentation markup.
+  if (row && typeof row === 'object' && column.key in (row as object)) {
+    return (row as Record<string, unknown>)[column.key]
+  }
   return column.render(row)
 }
 
