@@ -2,6 +2,7 @@ import 'server-only'
 
 import crypto from 'crypto'
 import prisma from '@/lib/prisma'
+import type { Prisma } from '@prisma/client'
 import { defaultNotificationPolicy } from './registry'
 import {
   bypassPreference,
@@ -405,7 +406,7 @@ export async function dispatchPendingNotificationDeliveries(limit = 100) {
           data: {
             status: delivered ? 'delivered' : 'sent',
             provider: result.provider,
-            providerResponse: result.response || {},
+            providerResponse: (result.response || {}) as Prisma.InputJsonValue,
             finishedAt: new Date(),
           },
         }),
@@ -431,7 +432,7 @@ export async function dispatchPendingNotificationDeliveries(limit = 100) {
       data: {
         status: 'failed',
         provider: result.provider,
-        providerResponse: result.response || {},
+        providerResponse: (result.response || {}) as Prisma.InputJsonValue,
         errorCode: result.errorCode || null,
         error,
         finishedAt: new Date(),

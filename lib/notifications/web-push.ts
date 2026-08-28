@@ -140,7 +140,7 @@ export async function sendWebPush(
           'TTL': '86400',
           'Urgency': 'normal',
         },
-        body: encrypted.body,
+        body: new Uint8Array(encrypted.body),
         signal: controller.signal,
       })
     } finally {

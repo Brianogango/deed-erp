@@ -533,11 +533,14 @@ function NotificationItem({
   )
 }
 
-function urlBase64ToUint8Array(value: string): Uint8Array {
+function urlBase64ToUint8Array(value: string): ArrayBuffer {
   const padding = '='.repeat((4 - (value.length % 4)) % 4)
   const base64 = (value + padding).replace(/-/g, '+').replace(/_/g, '/')
   const raw = window.atob(base64)
-  return Uint8Array.from([...raw].map(char => char.charCodeAt(0)))
+  const bytes = new ArrayBuffer(raw.length)
+  const view = new Uint8Array(bytes)
+  for (let i = 0; i < raw.length; i += 1) view[i] = raw.charCodeAt(i)
+  return bytes
 }
 
 type GlobalNotificationPreference = {
