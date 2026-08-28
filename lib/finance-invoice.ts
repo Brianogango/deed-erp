@@ -106,6 +106,13 @@ export function financeInvoicePath(id: string): string {
   return `/finance/invoices/${id}`
 }
 
+/** Canonical Accounting list route for an invoice/bill record. */
+export function financeInvoiceListPath(type?: string | null): string {
+  return type === 'vendor_bill'
+    ? '/finance?tab=bills'
+    : '/finance?tab=invoices'
+}
+
 /**
  * `/finance?edit=<id>` should open the editor once. After Save/Discard, the
  * same query must not reopen the modal while the URL still has `edit`
