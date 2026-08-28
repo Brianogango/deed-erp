@@ -190,13 +190,14 @@ export async function POST(request: NextRequest) {
     const deliveries = await prisma.notificationDelivery.findMany({
       where: { eventId: event.id },
       select: {
-        id: true, channel: true, provider: true, status: true,
-        messageId: false as never,
-      } as any,
-    }).catch(async () => prisma.notificationDelivery.findMany({
-      where: { eventId: event.id },
-      select: { id: true, channel: true, provider: true, status: true, providerMessageId: true, lastError: true },
-    }))
+        id: true,
+        channel: true,
+        provider: true,
+        status: true,
+        providerMessageId: true,
+        lastError: true,
+      },
+    })
 
     return NextResponse.json({ success: true, eventId: event.id, deliveries })
   } catch (error) {
