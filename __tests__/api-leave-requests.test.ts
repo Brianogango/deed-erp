@@ -1,8 +1,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
-const { mockGetSession, mockPrisma, mockNotifyLeaveApplied } = vi.hoisted(() => ({
+const { mockGetSession, mockPrisma, mockPublishLeaveApplied, mockPublishLeaveBooked } = vi.hoisted(() => ({
   mockGetSession: vi.fn(),
-  mockNotifyLeaveApplied: vi.fn(),
+  mockPublishLeaveApplied: vi.fn(),
+  mockPublishLeaveBooked: vi.fn(),
   mockPrisma: {
     leaveRequest: { findMany: vi.fn(), findFirst: vi.fn(), findUnique: vi.fn(), create: vi.fn(), update: vi.fn() },
     leaveBalance: { findMany: vi.fn(), findUnique: vi.fn(), upsert: vi.fn() },
@@ -22,15 +23,17 @@ vi.mock('@/lib/auth/api', () => ({
 }))
 vi.mock('@/lib/finance-audit', () => ({ writeFinancialAudit: vi.fn() }))
 vi.mock('@/lib/prisma', () => ({ default: mockPrisma }))
-vi.mock('@/lib/hr/leave-notifications', () => ({
-  notifyLeaveApplied: mockNotifyLeaveApplied,
-  notifyLeaveBookedForEmployee: vi.fn(),
-  queueLeaveNotification: (task: () => Promise<void>) => { void task() },
-  toLeaveNotifyPayload: (row: any) => row,
+vi.mock('@/lib/notifications/hr-events', () => ({
+  publishLeaveApplied: mockPublishLeaveApplied,
+  publishLeaveBooked: mockPublishLeaveBooked,
+  publishLeaveDecision: vi.fn(),
+  publishLeaveCancelled: vi.fn(),
+  publishSalaryAdvanceApplied: vi.fn(),
+  publishSalaryAdvanceDecision: vi.fn(),
+  publishSalaryAdvanceDisbursed: vi.fn(),
 }))
 
 import { POST } from '@/app/api/leave-requests/route'
-import { notifyLeaveApplied } from '@/lib/hr/leave-notifications'
 
 const techSession = { user: { id: 'u-tech', name: 'Tech', username: 'tech', role: 'technician' } }
 const hrSession = { user: { id: 'u-hr', name: 'HR', username: 'hr', role: 'admin_officer' } }
@@ -72,7 +75,7 @@ describe('POST /api/leave-requests — Prisma-backed self-service', () => {
     expect(created.employeeId).toBe('emp-tech')
     // Reserves the days as pending on the balance.
     expect(mockPrisma.leaveBalance.upsert).toHaveBeenCalled()
-    expect(notifyLeaveApplied).toHaveBeenCalled()
+    expect(mockPublishLeaveApplied).toHaveBeenCalledWith(expect.objectContaining({ id: 'new-id' }), 'u-tech')
   })
 
   it('derives the day count from the date range, ignoring a client-sent days value', async () => {
