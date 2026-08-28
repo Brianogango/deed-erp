@@ -1057,6 +1057,14 @@ ACCOUNTS_EMAIL=accounts@deed.co.ke`}</pre>
                   ]} />
                 </SettingRow>
               </SectionCard>
+              <SectionCard title="Product Defaults">
+                <SettingRow label="Default Min Stock" desc="Low-stock alert threshold pre-filled when a new product does not set one">
+                  <Input type="number" value={String(ss.invDefaultMinStock ?? 5)} onChange={v => updateSystemSettings({ invDefaultMinStock: Math.max(0, Number(v) || 0) })} />
+                </SettingRow>
+                <SettingRow label="Default Warranty (months)" desc="Warranty period pre-filled on new products and bulk imports">
+                  <Input type="number" value={String(ss.invDefaultWarrantyMonths ?? 12)} onChange={v => updateSystemSettings({ invDefaultWarrantyMonths: Math.max(0, Number(v) || 0) })} />
+                </SettingRow>
+              </SectionCard>
             </>
           )}
 
@@ -1068,6 +1076,9 @@ ACCOUNTS_EMAIL=accounts@deed.co.ke`}</pre>
                 <SettingRow label="Vendor Pricelists" desc="Store and apply vendor-specific pricing per product"><Toggle on={ss.purVendorPricelists} onChange={v => updateSystemSettings({ purVendorPricelists: v })} /></SettingRow>
                 <SettingRow label="Enforce RFQ → PO → Receipt → Bill" desc="Full purchase flow — no skipping steps"><Toggle on={ss.purEnforceRFQFlow} onChange={v => updateSystemSettings({ purEnforceRFQFlow: v })} /></SettingRow>
                 <SettingRow label="Store Vendor Lead Times" desc="Record expected delivery times per vendor and product"><Toggle on={ss.purStoreLeadTimes} onChange={v => updateSystemSettings({ purStoreLeadTimes: v })} /></SettingRow>
+                <SettingRow label="Default Payment Terms (days)" desc="Vendor bill due date falls back to this when the vendor record sets no terms">
+                  <Input type="number" value={String(ss.purDefaultPaymentTermsDays ?? 30)} onChange={v => updateSystemSettings({ purDefaultPaymentTermsDays: Math.max(0, Number(v) || 0) })} />
+                </SettingRow>
               </SectionCard>
             </>
           )}
@@ -1158,6 +1169,9 @@ ACCOUNTS_EMAIL=accounts@deed.co.ke`}</pre>
                 <SettingRow label="POS Session Control" desc="Require opening and closing a cash session for each shift"><Toggle on={ss.posSessionControl} onChange={v => updateSystemSettings({ posSessionControl: v })} /></SettingRow>
                 <SettingRow label="Cash Control" desc="Count cash at session open and close; track discrepancies"><Toggle on={ss.posCashControl} onChange={v => updateSystemSettings({ posCashControl: v })} /></SettingRow>
                 <SettingRow label="Receipt Printing" desc="Auto-generate a receipt after each POS sale"><Toggle on={ss.posReceiptPrinting} onChange={v => updateSystemSettings({ posReceiptPrinting: v })} /></SettingRow>
+                <SettingRow label="Loyalty: KES per point" desc="Customers earn 1 point per this many KES spent; 1 point redeems as 1 KES">
+                  <Input type="number" value={String(ss.posLoyaltyKesPerPoint ?? 2000)} onChange={v => updateSystemSettings({ posLoyaltyKesPerPoint: Math.max(1, Number(v) || 2000) })} />
+                </SettingRow>
               </SectionCard>
               <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between px-4 sm:px-5 py-3 border-b border-gray-50 gap-3 sm:gap-0">

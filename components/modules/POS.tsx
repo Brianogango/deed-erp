@@ -237,7 +237,7 @@ export default function PointOfSale() {
   const [mounted, setMounted] = useState(() => typeof window !== 'undefined')
   useEffect(() => { setMounted(true) }, [])
 
-  const { products, serials, contacts, invoices, createPOSOrder, posOrders, openPOSSession, closePOSSession, posSessionOpen, posSessionOpeningCash, posSessionId, posSessions, showToast, companySettings, getCustomerCreditStatus, bankAccounts, users, currentUserId, customerCredits } = useCommerceStore()
+  const { products, serials, contacts, invoices, createPOSOrder, posOrders, openPOSSession, closePOSSession, posSessionOpen, posSessionOpeningCash, posSessionId, posSessions, showToast, companySettings, getCustomerCreditStatus, bankAccounts, users, currentUserId, customerCredits, systemSettings } = useCommerceStore()
   const tenderBanks = bankAccounts.filter(b => b.active && b.id !== 'mpesa' && b.id !== 'cash')
   const { getStockByLocation, stockMoves } = useInventoryStore()
 
@@ -320,7 +320,7 @@ export default function PointOfSale() {
   const maxPoints = customerInfo ? Math.min(customerInfo.loyaltyPoints || 0, cartTotalBeforePoints) : 0
   const pointsToRedeem = Math.min(Number(redeemPoints) || 0, maxPoints)
   const cartTotal = cartTotalBeforePoints - pointsToRedeem
-  const pointsToEarn = customerId ? loyaltyPointsEarned(cartTotal) : 0
+  const pointsToEarn = customerId ? loyaltyPointsEarned(cartTotal, systemSettings.posLoyaltyKesPerPoint) : 0
 
   const processScan = (code: string) => {
     const trimmed = normalizeScanCode(code)

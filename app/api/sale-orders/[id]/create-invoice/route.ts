@@ -149,7 +149,10 @@ export async function POST(
       }
 
       const amount = computed.amount
-      const taxRate = 16
+      // VAT follows the company-wide rate from Settings → Accounting → Taxes.
+      const csState = await loadAppState(['deed_companySettings'])
+      const cs = csState.deed_companySettings as { vatRate?: unknown } | null
+      const taxRate = Number(cs && typeof cs === 'object' ? cs.vatRate : 16) || 16
       const lineSubtotal = Math.round(amount / (1 + taxRate / 100))
       const lineTax = amount - lineSubtotal
       const draftRef = await getNextDocNumber('invoice').catch(() => `DRAFT-INV-${Date.now().toString().slice(-6)}`)
