@@ -159,7 +159,6 @@ export async function GET(request: NextRequest) {
             isPosted: true,
             entryDate: { gte: trendStart, lte: dateTo },
           },
-          account: { isNot: null },
         },
         select: {
           debit: true,
