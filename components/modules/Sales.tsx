@@ -146,6 +146,7 @@ import {
 import { resolveInvoicePolicy } from '@/lib/sales/invoice-policy'
 import { isNonStockSaleLine } from '@/lib/sales/non-stock-line'
 import { sumUnappliedDownPayments } from '@/lib/sales/down-payment'
+import { financeInvoicePath } from '@/lib/finance-invoice'
 
 // ═══════════════════════════════════════════════════════════════════════════
 // TYPES
@@ -868,6 +869,11 @@ function SalesContent() {
   const activeInvoices = useMemo(
     () => activeOrder ? invoices.filter(i => i.saleOrderId === activeOrder.id) : [],
     [invoices, activeOrder],
+  )
+  /** Non-cancelled invoices already created from this order. */
+  const liveInvoices = useMemo(
+    () => activeInvoices.filter(i => !['cancelled', 'voided', 'void'].includes(String(i.status))),
+    [activeInvoices],
   )
   const activePaymentStatus = useMemo(() => {
     if (activeInvoices.length === 0) return 'not_paid' as const
@@ -2188,8 +2194,10 @@ function SalesContent() {
                             { label: 'Print', icon: faPrint, onClick: () => previewSalesDocument(activeOrder, 'Sale Order', 'SALES ORDER') },
                             { label: sendingQuoteId === activeOrder.id ? 'Sending…' : 'Send by email', icon: faFileAlt, disabled: sendingQuoteId === activeOrder.id, onClick: () => openSendQuoteModal(activeOrder) },
                             { label: 'Preview', icon: faFileAlt, onClick: () => previewSalesDocument(activeOrder, 'Sale Order', 'SALES ORDER') },
-                            { label: visibleDeliveries.length === 0 ? 'Create delivery' : 'Open deliveries', icon: faTruck, onClick: () => void openDeliveryView() },
-                            ...(canInvoiceFromSO && invoiceableLinesFor(activeOrder).length > 0 ? [{ label: 'Create Partial Invoice…', icon: faFileInvoiceDollar, onClick: () => openPartialInvoiceModal(activeOrder) }] : []),
+                            // Delivery lives on the primary button for users who cannot
+                            // invoice; keep it in the menu only when the primary is invoice.
+                            ...(canInvoiceFromSO ? [{ label: visibleDeliveries.length === 0 ? 'Create delivery' : 'Open deliveries', icon: faTruck, onClick: () => void openDeliveryView() }] : []),
+                            ...(canInvoiceFromSO && canCreateInvoiceNow ? [{ label: 'Create Partial Invoice…', icon: faFileInvoiceDollar, onClick: () => openPartialInvoiceModal(activeOrder) }] : []),
                             ...(activeDeliveries.some(d => canGenerateDeliveryNote(d)) ? [{ label: 'Print delivery note', icon: faTruck, onClick: () => { const del = activeDeliveries.find(d => canGenerateDeliveryNote(d)) ?? activeDeliveries[0]; setDnRecipientName(del.recipientName ?? activeOrder.customerName ?? ''); setDnRecipientPhone(del.recipientPhone ?? ''); setDnRecipientId(del.recipientIdNumber ?? ''); setDnAddress(del.deliveryAddress ?? ''); setDnNotes(del.notes ?? ''); setShowDnModal(true) } }] : []),
                             ...(activeOrder.locked && isAdmin ? [{ label: 'Unlock', icon: faRotateLeft, onClick: () => setSaleOrderLock(activeOrder.id, false) }] : []),
                             ...(!activeOrder.locked && systemSettings.salesLockConfirmed && isAdmin ? [{ label: 'Lock', icon: faSave, onClick: () => setSaleOrderLock(activeOrder.id, true) }] : []),
@@ -2213,6 +2221,16 @@ function SalesContent() {
                           ]}
                         />
                         {canInvoiceFromSO && activeOrder.status === 'sale' ? (
+                          liveInvoices.length > 0 && !canCreateInvoiceNow ? (
+                            // Fully billed: creation is done — take the user to the bill.
+                            <button
+                              type="button"
+                              className="sp-btn sp-btn-primary sales-action-primary"
+                              onClick={() => router.push(financeInvoicePath(liveInvoices[0].id))}
+                            >
+                              View invoice
+                            </button>
+                          ) : (
                           <button
                             type="button"
                             className="sp-btn sp-btn-primary sales-action-primary"
@@ -2225,6 +2243,7 @@ function SalesContent() {
                           >
                             Create invoice
                           </button>
+                          )
                         ) : (
                           <button type="button" className="sp-btn sp-btn-primary sales-action-primary" onClick={() => void openDeliveryView()}>
                             {visibleDeliveries.length === 0 ? 'Create delivery' : 'Delivery'}
