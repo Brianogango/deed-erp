@@ -1046,14 +1046,9 @@ export default function Topbar() {
     currentUserId,
     activeModule,
     setModule,
-    notifications,
-    markNotificationRead,
-    markAllNotificationsRead,
-    clearReadNotifications,
     profileImages,
     sidebarOpen,
     toggleSidebar,
-    getVisibleRepairs,
     showToast,
   } = useShellStore()
 
@@ -1066,7 +1061,7 @@ export default function Topbar() {
   const [searchOpen, setSearchOpen] = useState(false)
   const [soundEnabled, setSoundEnabled] = useSoundPreference()
   const [dateLabel, setDateLabel] = useState('')
-  const [dismissedTicketIds, setDismissedTicketIds] = useState<Set<string>>(new Set())
+  const [serverNotifs, setServerNotifs] = useState<BellNotification[]>([])
   const [tableDensity, setTableDensity] = useState<'cozy' | 'compact'>('cozy')
   const [syncStatus, setSyncStatus] = useState<SyncStatus>({
     stage: 'idle',
@@ -1086,13 +1081,6 @@ export default function Topbar() {
       mobileMenuButtonRef.current?.focus()
     }
   }, [sidebarOpen])
-
-  useEffect(() => {
-    try {
-      const stored = localStorage.getItem('deed-dismissed-tickets')
-      if (stored) setDismissedTicketIds(new Set(JSON.parse(stored)))
-    } catch {}
-  }, [])
 
   useEffect(() => {
     if (!currentUserId) return
@@ -1166,31 +1154,52 @@ export default function Topbar() {
     )
   }, [])
 
-  // Notifications
-  const notifList = Array.isArray(notifications) ? notifications : []
-  const baseNotifs = notifList.filter(n => n.userId === currentUserId)
-  const canAssignRepairs = ['director', 'technical_lead'].includes(currentUser?.role ?? '')
-  const visibleRepairsRaw = getVisibleRepairs()
-  const pendingTickets = canAssignRepairs
-    ? (Array.isArray(visibleRepairsRaw) ? visibleRepairsRaw : []).filter(r => r.status === 'received')
-    : []
+  // Notifications — relational notification ledger is authoritative.
+  const loadNotifications = useCallback(async () => {
+    if (!currentUserId) {
+      setServerNotifs([])
+      return
+    }
+    try {
+      const res = await fetch('/api/notifications?limit=200', { cache: 'no-store' })
+      if (!res.ok) return
+      const data = await res.json()
+      setServerNotifs(Array.isArray(data.notifications) ? data.notifications : [])
+    } catch {
+      // Keep the last known notification list during transient network failures.
+    }
+  }, [currentUserId])
 
-  const ticketNotifs: AppNotification[] = pendingTickets
-    .filter(r => !dismissedTicketIds.has(`pending-ticket-${r.id}`))
-    .map(r => ({
-      id: `pending-ticket-${r.id}`,
-      userId: currentUserId || '',
-      type: 'repair',
-      title: 'Action Required: Unassigned Ticket',
-      body: `${r.ref} — ${r.productName} needs to be assigned.`,
-      module: 'repair',
-      path: `?id=${r.id}`,
-      read: false,
-      createdAt: r.createdDate || new Date().toISOString(),
-      icon: '🚨',
-    }))
+  useEffect(() => {
+    if (!currentUserId) {
+      setServerNotifs([])
+      return
+    }
+    void loadNotifications()
 
-  const myNotifs = [...ticketNotifs, ...baseNotifs].sort(
+    const source = new EventSource('/api/notifications/stream')
+    const refresh = () => { void loadNotifications() }
+    source.addEventListener('notification', refresh)
+    source.addEventListener('ready', refresh)
+    return () => {
+      source.removeEventListener('notification', refresh)
+      source.removeEventListener('ready', refresh)
+      source.close()
+    }
+  }, [currentUserId, loadNotifications])
+
+  const mutateNotification = useCallback(async (action: 'read' | 'read_all' | 'clear_read' | 'acknowledge', id?: string) => {
+    try {
+      const res = await fetch('/api/notifications', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action, id }),
+      })
+      if (res.ok) await loadNotifications()
+    } catch {}
+  }, [loadNotifications])
+
+  const myNotifs = [...serverNotifs].sort(
     (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
   )
 
@@ -1244,7 +1253,7 @@ export default function Topbar() {
     const hasUnreadUrgent = myNotifs.some(
       n =>
         !n.read &&
-        (n.icon === '🚨' || n.type === 'repair' || n.title.toLowerCase().includes('urgent'))
+        (n.icon === '🚨' || n.severity === 'critical')
     )
     const baseTitle = `${displayTitle.label} | Deed ERP`
 
@@ -1486,32 +1495,10 @@ export default function Topbar() {
               <NotificationsPanel
                 notifs={myNotifs}
                 onClose={() => setNotifOpen(false)}
-                onMarkRead={(id) => {
-                  if (id.startsWith('pending-ticket-')) {
-                    setDismissedTicketIds(prev => {
-                      const next = new Set(prev)
-                      next.add(id)
-                      localStorage.setItem('deed-dismissed-tickets', JSON.stringify([...next]))
-                      return next
-                    })
-                  } else {
-                    markNotificationRead(id)
-                  }
-                }}
-                onMarkAll={() => {
-                  markAllNotificationsRead()
-                  const ids = ticketNotifs.map(n => n.id)
-                  if (ids.length > 0) {
-                    setDismissedTicketIds(prev => {
-                      const next = new Set([...prev, ...ids])
-                      localStorage.setItem('deed-dismissed-tickets', JSON.stringify([...next]))
-                      return next
-                    })
-                  }
-                }}
-                onClearRead={() => {
-                  clearReadNotifications()
-                }}
+                onMarkRead={(id) => { void mutateNotification('read', id) }}
+                onMarkAll={() => { void mutateNotification('read_all') }}
+                onClearRead={() => { void mutateNotification('clear_read') }}
+                onAcknowledge={(id) => { void mutateNotification('acknowledge', id) }}
                 onNavigate={(mod, path) => {
                   setModule(mod)
                   const routeMap: Record<string, string> = {
