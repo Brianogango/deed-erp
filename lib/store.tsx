@@ -2576,11 +2576,12 @@ function ppeAccountCodeFromLine(accountCode?: string): string | undefined {
 
 const bankAccountLabel = (bankAccountId?: string, method?: string) => {
   const id = bankAccountId || (method === 'mpesa' || method === 'mpesa_company' ? 'mpesa' : method === 'cash' || method === 'petty_cash' ? 'cash' : 'ncba')
-  if (id === 'mpesa') return '2210 - M-Pesa Paybill'
-  if (id === 'cash') return '2211 - Petty Cash'
+  // Keep the client-side mirror on the same canonical CoA codes as the
+  // server posting engine. 2210/2203 are legacy cashbook labels and may not
+  // exist in the strict relational CoA.
+  if (id === 'mpesa' || id === 'cash') return '2211 - Petty Cash / Mobile Money'
   if (id === 'equity') return '2202 - Equity Bank'
-  if (id === 'kcb') return '2203 - KCB Bank'
-  return '2201 - NCBA Bank'
+  return '2201 - ABSA Bank'
 }
 
 const bankAccountIdForMethod = (method?: string, bankAccountId?: string) => {
@@ -17770,35 +17771,54 @@ const storeCtx: AppState = {
       }
       setJournalEntries(p => [posJournal, ...p])
       addAuditLog('post_pos', order.ref, `POS sale posted to journal ${posJournal.ref}`)
-      void fetch('/api/pos/post-sale-journal', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          orderId: order.id,
-          orderRef: order.ref,
-          invoiceId: posInv.id,
-          total: posInv.total,
-          subtotal: sub,
-          tax,
-          pointsRedeemed,
-          paymentMethod: payment,
-          bankAccountId: posJournal.bankAccountId,
-          customerName: order.customerName,
-          revenueLines: revenueBuckets.length
-            ? revenueBuckets.map(b => ({ account: b.account, amount: b.amount }))
-            : undefined,
-          date: posJournal.date,
-        }),
-      }).catch(() => {})
+      let accountingPostError: string | null = null
+      try {
+        const journalRes = await fetch('/api/pos/post-sale-journal', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            orderId: order.id,
+            orderRef: order.ref,
+            invoiceId: posInv.id,
+            total: posInv.total,
+            subtotal: sub,
+            tax,
+            pointsRedeemed,
+            paymentMethod: payment,
+            bankAccountId: posJournal.bankAccountId,
+            customerName: order.customerName,
+            revenueLines: revenueBuckets.length
+              ? revenueBuckets.map(b => ({ account: b.account, amount: b.amount }))
+              : undefined,
+            date: posJournal.date,
+          }),
+        })
+        if (!journalRes.ok) {
+          const payload = await journalRes.json().catch(() => null) as { error?: string } | null
+          accountingPostError = payload?.error || `Accounting journal failed (HTTP ${journalRes.status})`
+        }
+      } catch {
+        accountingPostError = 'Could not reach the accounting posting service'
+      }
+      if (accountingPostError) {
+        addAuditLog('pos_accounting_post_failed', order.ref, accountingPostError)
+      }
       const bankLabel = resolvedBankId
         ? (bankAccounts.find(b => b.id === resolvedBankId)?.name || resolvedBankId)
         : undefined
       const payLabel = isPosBankPayment(payment) ? 'BANK' : payment.toUpperCase()
-      showToast(
-        `${order.ref} · ${fmtKes(order.total)} via ${payLabel}`
-          + (bankLabel ? ` (${bankLabel})` : '')
-          + (paymentReference ? ` · ${paymentReference}` : ''),
-      )
+      if (accountingPostError) {
+        showToast(
+          `${order.ref} sale recorded, but accounting needs attention: ${accountingPostError}`,
+          'error',
+        )
+      } else {
+        showToast(
+          `${order.ref} · ${fmtKes(order.total)} via ${payLabel}`
+            + (bankLabel ? ` (${bankLabel})` : '')
+            + (paymentReference ? ` · ${paymentReference}` : ''),
+        )
+      }
       return order
     },
 
