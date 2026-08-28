@@ -533,6 +533,227 @@ function NotificationItem({
   )
 }
 
+function urlBase64ToUint8Array(value: string): Uint8Array {
+  const padding = '='.repeat((4 - (value.length % 4)) % 4)
+  const base64 = (value + padding).replace(/-/g, '+').replace(/_/g, '/')
+  const raw = window.atob(base64)
+  return Uint8Array.from([...raw].map(char => char.charCodeAt(0)))
+}
+
+type GlobalNotificationPreference = {
+  inAppEnabled: boolean
+  pushEnabled: boolean
+  emailEnabled: boolean
+  whatsappEnabled: boolean
+  smsEnabled: boolean
+  soundEnabled: boolean
+  digestEnabled: boolean
+  quietStart: string | null
+  quietEnd: string | null
+  timezone: string
+  minimumSeverity: string
+}
+
+function NotificationPreferenceControls({
+  soundEnabled,
+  setSoundEnabled,
+}: {
+  soundEnabled: boolean
+  setSoundEnabled: (v: boolean) => void
+}) {
+  const [pref, setPref] = useState<GlobalNotificationPreference>({
+    inAppEnabled: true,
+    pushEnabled: true,
+    emailEnabled: true,
+    whatsappEnabled: false,
+    smsEnabled: false,
+    soundEnabled,
+    digestEnabled: false,
+    quietStart: null,
+    quietEnd: null,
+    timezone: 'Africa/Nairobi',
+    minimumSeverity: 'info',
+  })
+  const [pushSubscribed, setPushSubscribed] = useState(false)
+  const [pushBusy, setPushBusy] = useState(false)
+  const [pushSupported, setPushSupported] = useState(false)
+
+  const load = useCallback(async () => {
+    try {
+      const [prefRes] = await Promise.all([
+        fetch('/api/notifications/preferences', { cache: 'no-store' }),
+        fetch('/api/notifications/endpoints', { cache: 'no-store' }),
+      ])
+      if (prefRes.ok) {
+        const data = await prefRes.json()
+        if (data?.global) {
+          setPref(data.global)
+          if (typeof data.global.soundEnabled === 'boolean') setSoundEnabled(data.global.soundEnabled)
+        }
+      }
+      const supported = 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window
+      setPushSupported(supported)
+      if (supported) {
+        const registration = await navigator.serviceWorker.getRegistration('/deed-notifications-sw.js')
+          || await navigator.serviceWorker.getRegistration()
+        const sub = await registration?.pushManager.getSubscription()
+        setPushSubscribed(Boolean(sub))
+      }
+    } catch {}
+  }, [setSoundEnabled])
+
+  useEffect(() => { void load() }, [load])
+
+  const update = useCallback(async (patch: Partial<GlobalNotificationPreference>) => {
+    setPref(prev => ({ ...prev, ...patch }))
+    try {
+      const res = await fetch('/api/notifications/preferences', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ eventType: '*', ...patch }),
+      })
+      if (!res.ok) throw new Error()
+    } catch {
+      void load()
+    }
+  }, [load])
+
+  const setPushForDevice = useCallback(async (enabled: boolean) => {
+    if (!pushSupported || pushBusy) return
+    setPushBusy(true)
+    try {
+      const registration = await navigator.serviceWorker.register('/deed-notifications-sw.js', { scope: '/' })
+      await navigator.serviceWorker.ready
+      const existing = await registration.pushManager.getSubscription()
+
+      if (!enabled) {
+        if (existing) {
+          const endpoint = existing.endpoint
+          await existing.unsubscribe()
+          await fetch('/api/notifications/endpoints', {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ endpoint }),
+          })
+        }
+        setPushSubscribed(false)
+        await update({ pushEnabled: false })
+        return
+      }
+
+      const permission = await Notification.requestPermission()
+      if (permission !== 'granted') throw new Error('Browser notification permission was not granted')
+
+      const configRes = await fetch('/api/notifications/endpoints', { cache: 'no-store' })
+      const config = await configRes.json()
+      if (!configRes.ok || !config.vapidPublicKey) throw new Error('Web Push is not configured on the server')
+
+      const subscription = existing || await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(config.vapidPublicKey),
+      })
+      const subJson = subscription.toJSON()
+      const saveRes = await fetch('/api/notifications/endpoints', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          endpoint: subscription.endpoint,
+          keys: subJson.keys,
+          deviceLabel: navigator.userAgent.includes('Mobile') ? 'Mobile browser' : 'Desktop browser',
+        }),
+      })
+      if (!saveRes.ok) throw new Error('Could not register this browser for push notifications')
+      setPushSubscribed(true)
+      await update({ pushEnabled: true })
+    } catch (error) {
+      console.warn('[notifications] push preference failed', error)
+      setPushSubscribed(false)
+    } finally {
+      setPushBusy(false)
+    }
+  }, [pushBusy, pushSupported, update])
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <label className="text-xs font-medium text-[var(--text-2)]">In-app notifications</label>
+          <p className="text-[10px] text-[var(--text-4)]">Bell inbox and real-time ERP alerts</p>
+        </div>
+        <Toggle on={pref.inAppEnabled} onChange={value => void update({ inAppEnabled: value })} />
+      </div>
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <label className="text-xs font-medium text-[var(--text-2)]">Browser Push</label>
+          <p className="text-[10px] text-[var(--text-4)]">
+            {pushSupported ? (pushSubscribed ? 'This browser is subscribed' : 'Notify even when the ERP tab is closed') : 'Not supported by this browser'}
+          </p>
+        </div>
+        <Toggle on={pushSubscribed} onChange={value => void setPushForDevice(value)} />
+      </div>
+      <div className="flex items-center justify-between">
+        <label className="text-xs font-medium text-[var(--text-2)]">Email alerts</label>
+        <Toggle on={pref.emailEnabled} onChange={value => void update({ emailEnabled: value })} />
+      </div>
+      <div className="flex items-center justify-between">
+        <label className="text-xs font-medium text-[var(--text-2)]">WhatsApp alerts</label>
+        <Toggle on={pref.whatsappEnabled} onChange={value => void update({ whatsappEnabled: value })} />
+      </div>
+      <div className="flex items-center justify-between">
+        <label className="text-xs font-medium text-[var(--text-2)]">SMS alerts</label>
+        <Toggle on={pref.smsEnabled} onChange={value => void update({ smsEnabled: value })} />
+      </div>
+      <div className="flex items-center justify-between">
+        <label className="text-xs font-medium text-[var(--text-2)]">Sound Alerts</label>
+        <Toggle
+          on={soundEnabled}
+          onChange={value => {
+            setSoundEnabled(value)
+            void update({ soundEnabled: value })
+          }}
+        />
+      </div>
+      <div className="grid grid-cols-2 gap-2 pt-1">
+        <label className="text-[10px] font-semibold text-[var(--text-3)]">
+          Quiet from
+          <input
+            type="time"
+            className="form-input mt-1"
+            value={pref.quietStart || ''}
+            onChange={event => void update({ quietStart: event.target.value || null })}
+          />
+        </label>
+        <label className="text-[10px] font-semibold text-[var(--text-3)]">
+          Quiet until
+          <input
+            type="time"
+            className="form-input mt-1"
+            value={pref.quietEnd || ''}
+            onChange={event => void update({ quietEnd: event.target.value || null })}
+          />
+        </label>
+      </div>
+      <label className="block text-[10px] font-semibold text-[var(--text-3)]">
+        Minimum alert severity
+        <select
+          className="form-input mt-1"
+          value={pref.minimumSeverity}
+          onChange={event => void update({ minimumSeverity: event.target.value })}
+        >
+          <option value="info">All notifications</option>
+          <option value="success">Success and above</option>
+          <option value="attention">Attention and above</option>
+          <option value="warning">Warning and critical</option>
+          <option value="critical">Critical only</option>
+        </select>
+      </label>
+      <p className="text-[10px] leading-relaxed text-[var(--text-4)]">
+        Critical security, finance-integrity and operational alerts can bypass quiet hours/channel preferences when policy requires it.
+      </p>
+    </div>
+  )
+}
+
 /**
  * Account Settings Panel Component
  */
@@ -710,15 +931,13 @@ function AccountPanel({
             />
           </div>
 
-          {/* Preferences Section */}
+          {/* Notification Preferences */}
           <div className="acct-section">
-            <p className="acct-label">Preferences</p>
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <label className="text-xs font-medium text-[var(--text-2)]">Sound Alerts</label>
-                <Toggle on={soundEnabled} onChange={setSoundEnabled} />
-              </div>
-            </div>
+            <p className="acct-label">Notification Channels</p>
+            <NotificationPreferenceControls
+              soundEnabled={soundEnabled}
+              setSoundEnabled={setSoundEnabled}
+            />
           </div>
 
           {/* Profile Section */}
