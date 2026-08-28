@@ -29688,3 +29688,108 @@ body:has(.client-repair-portal) {
     flex-wrap: wrap !important;
   }
 }
+
+
+/* ==========================================================================
+   Outsource attention panel text-overlap fix — 2026-08-28
+   Unresolved repair rows and vendor balance rows have different information
+   hierarchies, so they must not share the same two-column child placement.
+   ========================================================================== */
+
+.outsource-attention__group > .outsource-attention__job {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-auto-rows: auto;
+  align-items: start;
+  gap: 0.18rem;
+  min-width: 0;
+  width: 100%;
+  padding: 0.62rem 0.65rem;
+}
+
+.outsource-attention__job > .outsource-attention__ref,
+.outsource-attention__job > .outsource-attention__device,
+.outsource-attention__job > .outsource-attention__vendor {
+  grid-column: 1;
+  min-width: 0;
+  max-width: 100%;
+  margin: 0;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  overflow-wrap: anywhere;
+  word-break: normal;
+}
+
+.outsource-attention__job > .outsource-attention__ref {
+  grid-row: 1;
+  color: var(--flow-cyan);
+  font-size: 0.61rem;
+  font-weight: 750;
+  line-height: 1.25;
+}
+
+.outsource-attention__job > .outsource-attention__device {
+  grid-row: 2;
+  color: var(--flow-ink);
+  font-size: 0.7rem;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.outsource-attention__job > .outsource-attention__vendor {
+  grid-row: 3;
+  color: var(--flow-muted);
+  font-size: 0.61rem;
+  line-height: 1.3;
+}
+
+.outsource-attention__group > .outsource-attention__balance {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) max-content;
+  align-items: center;
+  gap: 0.45rem;
+  min-width: 0;
+  width: 100%;
+}
+
+.outsource-attention__balance > .outsource-attention__vendor-name {
+  min-width: 0;
+  max-width: 100%;
+  color: var(--flow-ink);
+  font-size: 0.68rem;
+  font-weight: 700;
+  line-height: 1.3;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.outsource-attention__balance > .outsource-attention__amount {
+  min-width: max-content;
+  justify-self: end;
+  align-self: center;
+  color: var(--flow-cyan);
+  font-size: 0.61rem;
+  font-weight: 750;
+  line-height: 1.25;
+  white-space: nowrap;
+}
+
+@media (max-width: 420px) {
+  .outsource-attention__group {
+    padding-inline: 0.55rem;
+  }
+
+  .outsource-attention__group > .outsource-attention__job,
+  .outsource-attention__group > .outsource-attention__balance {
+    padding-inline: 0.55rem;
+  }
+
+  .outsource-attention__balance > .outsource-attention__vendor-name {
+    font-size: 0.66rem;
+  }
+
+  .outsource-attention__balance > .outsource-attention__amount {
+    font-size: 0.6rem;
+  }
+}

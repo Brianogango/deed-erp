@@ -628,8 +628,15 @@ function OutsourceContent() {
               <div className="outsource-attention__group">
                 <p>Returned unresolved</p>
                 {outsourceJobs.filter(job => job.status === 'returned_unresolved').slice(0, 4).map(job => (
-                  <button key={job.id} type="button" onClick={() => setActiveJobId(job.id)}>
-                    <span>{job.ref}</span><strong>{job.deviceDescription}</strong><small>{job.vendorName}</small>
+                  <button
+                    key={job.id}
+                    type="button"
+                    className="outsource-attention__job"
+                    onClick={() => setActiveJobId(job.id)}
+                  >
+                    <span className="outsource-attention__ref">{job.ref}</span>
+                    <strong className="outsource-attention__device">{job.deviceDescription}</strong>
+                    <small className="outsource-attention__vendor">{job.vendorName}</small>
                   </button>
                 ))}
                 {unresolvedCount === 0 && <small className="outsource-attention__empty">No unresolved returns.</small>}
@@ -637,8 +644,14 @@ function OutsourceContent() {
               <div className="outsource-attention__group">
                 <p>Vendor balances</p>
                 {outsourceVendors.filter(v => vendorBilled(v.id) > vendorPaid(v.id)).slice(0, 4).map(vendor => (
-                  <button key={vendor.id} type="button" onClick={() => setSelectedVendorId(vendor.id)}>
-                    <strong>{vendor.name}</strong><span>{fmtKes(vendorBilled(vendor.id) - vendorPaid(vendor.id))}</span>
+                  <button
+                    key={vendor.id}
+                    type="button"
+                    className="outsource-attention__balance"
+                    onClick={() => setSelectedVendorId(vendor.id)}
+                  >
+                    <strong className="outsource-attention__vendor-name">{vendor.name}</strong>
+                    <span className="outsource-attention__amount">{fmtKes(vendorBilled(vendor.id) - vendorPaid(vendor.id))}</span>
                   </button>
                 ))}
                 {vendorOutstanding <= 0 && <small className="outsource-attention__empty">No outstanding balances.</small>}
