@@ -195,7 +195,8 @@ import {
 } from '@/lib/buyback-credit'
 import { customerCreditBalance } from '@/lib/customer-credit-view'
 import { ensureArray, parseStoredState } from '@/lib/safe-local-state'
-import { repairOutsourceReadiness } from '@/lib/repair-outsource'
+import { repairOutsourceReadiness, repairHasLoggedDiagnosis } from '@/lib/repair-outsource'
+import { applyLoggedDiagnosis, type DiagnosisLogRepairPatch } from '@/lib/repair-diagnosis-log'
 import { getPreviousRepairProgressStatus } from '@/lib/repair-progress'
 import { assertFiniteSequenceNext, repairDatesWriteError } from '@/lib/data-validation'
 import { ensureRepairIntakeTimestamp } from '@/lib/repair-datetime'
@@ -3600,7 +3601,7 @@ export interface AppState {
   // Repair Workflow Actions
   verifyRepairIntake: (repairId: string, notes?: string) => void
   assignTechnicianToRepair: (repairId: string, technicianId: string) => void
-  logDiagnosis: (repairId: string, diagnosis: Omit<RepairDiagnosis, 'diagnosedBy' | 'diagnosedDate'>) => void
+  logDiagnosis: (repairId: string, diagnosis: Omit<RepairDiagnosis, 'diagnosedBy' | 'diagnosedDate'>, extras?: DiagnosisLogRepairPatch) => void
   stopAtDiagnosis: (repairId: string) => void          // Close job at diagnosis stage, charge diagnosis fee
   markDiagnosisFeePaid: (repairId: string, method?: string) => void
   waiveDiagnosisFee: (repairId: string, reason: string) => void
@@ -14520,18 +14521,25 @@ const storeCtx: AppState = {
         })
         if (dateErr) { showToast(dateErr, 'error'); return }
       }
-      const partsTotal = (patch.partsUsed ?? existing.partsUsed).reduce((a, x) => a + x.qty * x.price, 0)
-      const updatedBase = { ...existing, ...patch }
-      const feeDue = shouldChargeDiagnosisFee(updatedBase) && (updatedBase.diagnosisStopped || updatedBase.diagnosisFeeStatus === 'applicable')
-        ? (updatedBase.diagnosisFee ?? 0)
-        : 0
-      const updated: RepairOrder = {
-        ...updatedBase,
-        total: updatedBase.underWarranty && updatedBase.warrantyCoverage === 'full'
-          ? 0
-          : partsTotal + updatedBase.laborCost + feeDue,
+      const applyPatch = (base: RepairOrder): RepairOrder => {
+        const updatedBase = { ...base, ...patch }
+        const partsTotal = (patch.partsUsed ?? base.partsUsed ?? []).reduce((a, x) => a + x.qty * x.price, 0)
+        const feeDue = shouldChargeDiagnosisFee(updatedBase) && (updatedBase.diagnosisStopped || updatedBase.diagnosisFeeStatus === 'applicable')
+          ? (updatedBase.diagnosisFee ?? 0)
+          : 0
+        return {
+          ...updatedBase,
+          total: updatedBase.underWarranty && updatedBase.warrantyCoverage === 'full'
+            ? 0
+            : partsTotal + updatedBase.laborCost + feeDue,
+        }
       }
-      setRepairs(prev => prev.map(r => r.id === id ? updated : r))
+      let updated = applyPatch(existing)
+      setRepairs(prev => prev.map(r => {
+        if (r.id !== id) return r
+        updated = applyPatch(r)
+        return updated
+      }))
       repairsRef.current = repairsRef.current.map(r => r.id === id ? updated : r)
       // Sync portal when customer-visible intake / report fields change
       if (
@@ -14668,10 +14676,10 @@ const storeCtx: AppState = {
       showToast(`Assigned to ${tech.name}`)
     },
     
-    logDiagnosis: (repairId, diagnosisInput) => {
+    logDiagnosis: (repairId, diagnosisInput, extras) => {
       const user = currentUser()
       if (!user) return
-      const repair = repairs.find(r => r.id === repairId)
+      const repair = repairsRef.current.find(r => r.id === repairId)
       if (!repair) return
       if (isDirectRepairPath(repair.repairPath)) {
         showToast('Direct Repair jobs skip diagnosis — change the workflow path first if diagnosis is required', 'error')
@@ -14695,33 +14703,13 @@ const storeCtx: AppState = {
         diagnosedBy: user.name,
         diagnosedDate: now(),
       }
-      const diagnosisHistory = [...previousHistory, diagnosis]
-      // After a Back step to assigned, revising an existing diagnosis must still
-      // advance to diagnosed — otherwise quote/start stay locked forever.
-      const nextStatus = (repair.status === 'assigned' || repair.status === 'received' || !isRevision)
-        ? 'diagnosed'
-        : repair.status
+      const updated = applyLoggedDiagnosis(repair, diagnosis, extras, user.name)
+      repairsRef.current = repairsRef.current.map(r => r.id === repairId ? updated : r)
+      setRepairs(p => p.map(r => r.id === repairId ? updated : r))
 
-      const diagHistEntry = {
-        status: 'diagnosed' as const,
-        date: diagnosis.diagnosedDate,
-        note: isRevision ? `Diagnosis ${diagnosis.revisionType === 'correction' ? 'correction' : 'update'} #${nextRevision}: ${diagnosis.faultDescription}` : diagnosis.faultDescription ?? 'Diagnosis completed',
-        by: user.name,
-      }
-      setRepairs(p => p.map(r => r.id === repairId ? {
-        ...r,
-        diagnosis,
-        diagnosisHistory,
-        status: nextStatus,
-        statusHistory: [
-          ...(r.statusHistory || []).filter(h => !(h.status === 'diagnosed' && !isRevision)),
-          diagHistEntry,
-        ],
-      } : r))
-
-      if (repair) syncRepairToPortal({ ...repair, diagnosis, diagnosisHistory, status: nextStatus }, isRevision ? 'Diagnosis updated — latest findings are available' : 'Diagnosis completed')
+      syncRepairToPortal(updated, isRevision ? 'Diagnosis updated — latest findings are available' : 'Diagnosis completed')
       addAuditLog(isRevision ? 'update_diagnosis' : 'diagnose_repair', repairId, `${isRevision ? 'Diagnosis updated' : 'Diagnosis logged'}: ${diagnosis.findings}`)
-      showToast(isRevision ? 'Diagnosis update saved — revise the quote if pricing changed' : 'Diagnosis logged — choose to proceed to repair or stop here')
+      showToast(isRevision ? 'Diagnosis update saved — revise the quote if pricing changed' : 'Diagnosis logged — you can generate a quote and pick parts')
     },
 
     stopAtDiagnosis: (repairId) => {
@@ -14809,7 +14797,7 @@ const storeCtx: AppState = {
     generateRepairQuote: async (repairId, incomingLines, applyVat = false) => {
       const user = currentUser()
       if (!user) return
-      const repair = repairs.find(r => r.id === repairId)
+      const repair = repairsRef.current.find(r => r.id === repairId)
       if (!repair) return
       if (blockIfOutsourced(repairId, 'update the repair quote')) return
       const canGenerate = ['director', 'technical_lead', 'admin_officer', 'sales_rep', 'finance_officer'].includes(user.role) || repair.assignedTechnicianId === user.id
@@ -14819,6 +14807,9 @@ const storeCtx: AppState = {
       const QUOTABLE_STATUSES = quotableStatusesForPath(repair.repairPath)
       if (!QUOTABLE_STATUSES.includes(repair.status)) {
         showToast('Cannot generate a new quote at this stage', 'error'); return
+      }
+      if (!isDirectRepairPath(repair.repairPath) && !repairHasLoggedDiagnosis(repair)) {
+        showToast('Log diagnosis before generating a quote or picking parts', 'error'); return
       }
       if (!incomingLines.length) {
         showToast('Add at least one quote line before generating a quote', 'error'); return
