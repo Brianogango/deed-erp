@@ -67,7 +67,7 @@ export async function POST(request: NextRequest) {
     await prisma.$transaction([
       prisma.notificationDelivery.update({
         where: { id: body.deliveryId },
-        data: { status: 'queued', nextAttemptAt: now, failedAt: null, lastError: null },
+        data: { status: 'queued', nextAttemptAt: now, attemptCount: 0, failedAt: null, lastError: null },
       }),
       prisma.notificationDeadLetter.updateMany({
         where: { deliveryId: body.deliveryId, resolvedAt: null },
