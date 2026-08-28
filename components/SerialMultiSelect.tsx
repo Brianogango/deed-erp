@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useAnchoredMenu } from '@/lib/data-table/use-anchored-menu'
 import { getSerialMenuPlacement } from '@/lib/inventory/serial-menu-placement'
+import { matchesSearch } from '@/lib/search-utils'
 
 export interface SerialOption {
   id: string
@@ -33,9 +34,8 @@ export default function SerialMultiSelect({ options, maxSelectable, onAssign, di
   const [selected, setSelected] = useState<Set<string>>(() => new Set())
 
   const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase()
-    if (!q) return options
-    return options.filter(o => o.label.toLowerCase().includes(q) || (o.sublabel ?? '').toLowerCase().includes(q))
+    if (!query.trim()) return options
+    return options.filter(option => matchesSearch(query, option.label, option.sublabel, option.id))
   }, [options, query])
 
   const openPicker = () => {
