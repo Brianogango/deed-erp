@@ -372,9 +372,80 @@ const sendViaSES = async (message: EmailMessage): Promise<EmailResult> => {
   }
 }
 
+const smtpTransportCache = (() => {
+  const root = globalThis as unknown as { __deedSmtpTransporters?: Map<string, any> }
+  if (!root.__deedSmtpTransporters) root.__deedSmtpTransporters = new Map<string, any>()
+  return root.__deedSmtpTransporters
+})()
+
+function envNumber(name: string, fallback: number, min: number, max: number) {
+  const raw = Number(process.env[name])
+  if (!Number.isFinite(raw)) return fallback
+  return Math.min(max, Math.max(min, Math.floor(raw)))
+}
+
+function smtpTransportKey(profile: MailboxProfile, mailbox: MailboxConfig) {
+  return [
+    process.env.SMTP_HOST || '',
+    process.env.SMTP_PORT || '587',
+    process.env.SMTP_SECURE || 'false',
+    profile,
+    mailbox.user,
+  ].join('|')
+}
+
+async function getSmtpTransporter(profile: MailboxProfile, mailbox: MailboxConfig) {
+  const key = smtpTransportKey(profile, mailbox)
+  const cached = smtpTransportCache.get(key)
+  if (cached) return cached
+
+  const nodemailer = await import('nodemailer')
+  const port = Number(process.env.SMTP_PORT) || 587
+  const secure = process.env.SMTP_SECURE === 'true' || port === 465
+  const rejectUnauthorized = process.env.SMTP_TLS_REJECT_UNAUTHORIZED !== 'false'
+  const transporter = nodemailer.default.createTransport({
+    pool: true,
+    host: process.env.SMTP_HOST,
+    port,
+    secure,
+    requireTLS: !secure && process.env.SMTP_REQUIRE_TLS !== 'false',
+    auth: {
+      user: mailbox.user,
+      pass: mailbox.pass,
+    },
+    maxConnections: envNumber('SMTP_MAX_CONNECTIONS', 3, 1, 20),
+    maxMessages: envNumber('SMTP_MAX_MESSAGES_PER_CONNECTION', 100, 1, 1000),
+    rateDelta: envNumber('SMTP_RATE_DELTA_MS', 1000, 100, 60_000),
+    rateLimit: envNumber('SMTP_RATE_LIMIT', 8, 1, 100),
+    connectionTimeout: envNumber('SMTP_CONNECTION_TIMEOUT_MS', 10_000, 1000, 120_000),
+    greetingTimeout: envNumber('SMTP_GREETING_TIMEOUT_MS', 10_000, 1000, 120_000),
+    socketTimeout: envNumber('SMTP_SOCKET_TIMEOUT_MS', 30_000, 1000, 300_000),
+    tls: {
+      rejectUnauthorized,
+      servername: process.env.SMTP_TLS_SERVERNAME || process.env.SMTP_HOST,
+      minVersion: 'TLSv1.2',
+    },
+  })
+
+  transporter.on('error', (error: unknown) => {
+    console.error('[email] pooled SMTP transporter error', {
+      profile,
+      host: process.env.SMTP_HOST,
+      user: mailbox.user,
+      error: error instanceof Error ? error.message : String(error),
+    })
+    smtpTransportCache.delete(key)
+  })
+
+  smtpTransportCache.set(key, transporter)
+  return transporter
+}
+
 /**
  * SMTP Implementation (Nodemailer)
- * npm install nodemailer
+ * Uses a bounded connection pool, TLS certificate verification and explicit
+ * connection/greeting/socket timeouts. Set SMTP_TLS_REJECT_UNAUTHORIZED=false
+ * only as a temporary emergency override for a known private certificate.
  */
 const sendViaSMTP = async (message: EmailMessage): Promise<EmailResult> => {
   if (!process.env.SMTP_HOST) {
@@ -391,8 +462,7 @@ const sendViaSMTP = async (message: EmailMessage): Promise<EmailResult> => {
       error: `SMTP credentials not configured for mailbox profile "${profile}"`,
     }
   }
-  // Department profiles authenticate as sales@/accounts@ and send From+Reply-To
-  // as that same address. Caller From is only honored when it matches.
+
   const requestedFrom = (message.from || '').trim()
   const authUser = mailbox.user.trim().toLowerCase()
   const mailboxFrom = mailbox.from.trim()
@@ -402,18 +472,9 @@ const sendViaSMTP = async (message: EmailMessage): Promise<EmailResult> => {
     || requestedFrom.toLowerCase() === mailboxFrom.toLowerCase()
   const from = fromAllowed && requestedFrom ? requestedFrom : mailboxFrom
   const replyTo = (message.replyTo || mailbox.replyTo || mailbox.from).trim() || from
+
   try {
-    const nodemailer = await import('nodemailer')
-    const transporter = nodemailer.default.createTransport({
-      host: process.env.SMTP_HOST,
-      port: Number(process.env.SMTP_PORT) || 587,
-      secure: process.env.SMTP_SECURE === 'true',
-      auth: {
-        user: mailbox.user,
-        pass: mailbox.pass,
-      },
-      tls: { rejectUnauthorized: false },
-    })
+    const transporter = await getSmtpTransporter(profile, mailbox)
     const result = await transporter.sendMail({
       from,
       to: message.to,
@@ -446,12 +507,18 @@ const sendViaSMTP = async (message: EmailMessage): Promise<EmailResult> => {
     const response = String(error?.response || error?.message || '')
     const authFailed = error?.code === 'EAUTH' || responseCode === 535 || /authentication|login/i.test(response)
     const senderRejected = /sender|from address|not owned|not allowed|relay/i.test(response)
+    const tlsFailed = /certificate|self signed|unable to verify|tls/i.test(response)
+    const timedOut = error?.code === 'ETIMEDOUT' || /timeout/i.test(response)
     const friendly = authFailed
       ? `SMTP login failed for ${mailbox.user}. Create that mailbox in cPanel (or set ${String(profile).toUpperCase()}_SMTP_USER/PASS) so From/Reply-To can be ${from}.`
+      : tlsFailed
+        ? `SMTP TLS validation failed for ${process.env.SMTP_HOST}. Fix the mail-server certificate/hostname; do not disable verification permanently.`
+      : timedOut
+        ? `SMTP connection to ${process.env.SMTP_HOST} timed out. Check firewall, port, DNS and mail-server availability.`
       : responseCode === 550 && senderRejected
         ? `Mail server rejected the sender address (${from}). Authenticate as ${from} or create it as an alias.`
         : responseCode === 550
-          ? `Mail server rejected the recipient (550 No Such User Here). Please ensure the mailbox exists.`
+          ? 'Mail server rejected the recipient (550 No Such User Here). Please ensure the mailbox exists.'
           : (error?.message || 'Unknown SMTP error')
     console.error('[email] SMTP send failed', {
       profile,
