@@ -4,7 +4,7 @@ import { getRequiredSession, withApiErrorHandling } from '@/lib/auth/api'
 import { optionalUuid } from '@/lib/legacy-compat'
 import { lockVersionMismatch, nextLockVersion, readExpectedVersion } from '@/lib/optimistic-lock'
 import { writeFinancialAudit } from '@/lib/finance-audit'
-import { WRITE_ROLES, mapPOToClient, mirrorPurchaseOrder } from '../route'
+import { WRITE_ROLES, mapPOToClient, mirrorPurchaseOrder } from '@/lib/purchase/po-api-shared'
 import { resolvePOLineProducts } from '@/lib/purchase/po-prisma-sync'
 
 /** PO statuses that must never be removed from the record (audit FIN-003). */
