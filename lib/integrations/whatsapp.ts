@@ -30,9 +30,46 @@ export interface WhatsAppResult {
   success: boolean
   messageId?: string
   error?: string
+  errorCode?: string
+  httpStatus?: number
 }
 
-const WHATSAPP_API_URL = 'https://graph.facebook.com/v18.0'
+const WHATSAPP_API_VERSION = String(process.env.WHATSAPP_GRAPH_API_VERSION || 'v18.0').trim()
+const WHATSAPP_API_URL = `https://graph.facebook.com/${WHATSAPP_API_VERSION}`
+
+type WhatsAppCircuitState = {
+  consecutiveFailures: number
+  openUntil: number
+}
+
+const whatsappCircuit = (() => {
+  const root = globalThis as unknown as { __deedWhatsAppCircuit?: WhatsAppCircuitState }
+  if (!root.__deedWhatsAppCircuit) {
+    root.__deedWhatsAppCircuit = { consecutiveFailures: 0, openUntil: 0 }
+  }
+  return root.__deedWhatsAppCircuit
+})()
+
+const waEnvNumber = (name: string, fallback: number, min: number, max: number) => {
+  const value = Number(process.env[name])
+  if (!Number.isFinite(value)) return fallback
+  return Math.min(max, Math.max(min, Math.floor(value)))
+}
+
+function recordWhatsAppSuccess() {
+  whatsappCircuit.consecutiveFailures = 0
+  whatsappCircuit.openUntil = 0
+}
+
+function recordWhatsAppFailure(shouldTrip: boolean) {
+  if (!shouldTrip) return
+  whatsappCircuit.consecutiveFailures += 1
+  const threshold = waEnvNumber('WHATSAPP_CIRCUIT_FAILURE_THRESHOLD', 5, 2, 50)
+  if (whatsappCircuit.consecutiveFailures >= threshold) {
+    const cooldown = waEnvNumber('WHATSAPP_CIRCUIT_COOLDOWN_MS', 60_000, 5_000, 15 * 60_000)
+    whatsappCircuit.openUntil = Date.now() + cooldown
+  }
+}
 
 /**
  * Send WhatsApp message via Cloud API
@@ -45,11 +82,22 @@ export const sendWhatsAppMessage = async (message: WhatsAppMessage): Promise<Wha
     return {
       success: false,
       error: 'WhatsApp API not configured. Set WHATSAPP_PHONE_NUMBER_ID and WHATSAPP_ACCESS_TOKEN.',
+      errorCode: 'not_configured',
+    }
+  }
+
+  if (whatsappCircuit.openUntil > Date.now()) {
+    const retrySeconds = Math.ceil((whatsappCircuit.openUntil - Date.now()) / 1000)
+    return {
+      success: false,
+      error: `WhatsApp provider circuit is open after repeated upstream failures. Retry in about ${retrySeconds}s.`,
+      errorCode: 'circuit_open',
+      httpStatus: 503,
     }
   }
 
   try {
-    let payload: any = {
+    const payload: any = {
       messaging_product: 'whatsapp',
       to: message.to,
       type: message.type,
@@ -59,7 +107,6 @@ export const sendWhatsAppMessage = async (message: WhatsAppMessage): Promise<Wha
       case 'text':
         payload.text = { body: message.text }
         break
-
       case 'template':
         payload.template = {
           name: message.templateName,
@@ -72,14 +119,12 @@ export const sendWhatsAppMessage = async (message: WhatsAppMessage): Promise<Wha
           ] : [],
         }
         break
-
       case 'document':
         payload.document = {
           link: message.documentUrl,
           filename: message.documentFilename,
         }
         break
-
       case 'image':
         payload.image = {
           link: message.imageUrl,
@@ -88,32 +133,54 @@ export const sendWhatsAppMessage = async (message: WhatsAppMessage): Promise<Wha
         break
     }
 
-    const response = await fetch(`${WHATSAPP_API_URL}/${phoneNumberId}/messages`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${accessToken}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(payload),
-    })
+    const controller = new AbortController()
+    const timeoutMs = waEnvNumber('WHATSAPP_HTTP_TIMEOUT_MS', 10_000, 1_000, 120_000)
+    const timeout = setTimeout(() => controller.abort(), timeoutMs)
+    let response: Response
+    try {
+      response = await fetch(`${WHATSAPP_API_URL}/${phoneNumberId}/messages`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+        signal: controller.signal,
+      })
+    } finally {
+      clearTimeout(timeout)
+    }
 
-    const data = await response.json()
+    const data = await response.json().catch(() => ({}))
 
     if (!response.ok) {
+      const code = String(data?.error?.code ?? response.status)
+      const shouldTrip = response.status === 429 || response.status >= 500
+      recordWhatsAppFailure(shouldTrip)
       return {
         success: false,
-        error: data.error?.message || 'WhatsApp API error',
+        error: data?.error?.message || `WhatsApp API returned HTTP ${response.status}`,
+        errorCode: code,
+        httpStatus: response.status,
       }
     }
 
+    recordWhatsAppSuccess()
     return {
       success: true,
       messageId: data.messages?.[0]?.id,
+      httpStatus: response.status,
     }
   } catch (error) {
+    const timedOut = error instanceof Error && error.name === 'AbortError'
+    recordWhatsAppFailure(true)
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Unknown error',
+      error: timedOut
+        ? 'WhatsApp API request timed out'
+        : error instanceof Error ? error.message : 'Unknown error',
+      errorCode: timedOut ? 'timeout' : 'network_error',
+      httpStatus: timedOut ? 504 : 503,
     }
   }
 }
