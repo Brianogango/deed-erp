@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState, startTransition } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
+import { decideRecordNavigation, type RecordHistoryOverride } from '@/lib/navigation-history'
 
 type Options = {
   /** Query key for the open record (default `id`). */
@@ -22,7 +23,7 @@ export type SetUrlRecordIdOptions = {
   /** Skip navigation — only update local state (URL already correct). */
   localOnly?: boolean
   /** Override the default history behavior for exceptional flows. */
-  history?: 'auto' | 'push' | 'replace'
+  history?: RecordHistoryOverride
 }
 
 /**
@@ -63,9 +64,14 @@ export function useUrlRecordId(options: Options = {}) {
     const mapKey = pendingKey(pathname, param)
     pendingRecordIds.set(mapKey, id)
 
-    // If this hook created the detail history entry, closing should consume it
-    // instead of replacing it and leaving a duplicate list entry behind.
-    if (!id && opts?.history !== 'replace' && pushedDetailKeys.has(mapKey)) {
+    const decision = decideRecordNavigation({
+      nextId: id,
+      currentQueryId: queryId,
+      openedViaPush: pushedDetailKeys.has(mapKey),
+      history: opts?.history,
+    })
+
+    if (decision === 'back') {
       pushedDetailKeys.delete(mapKey)
       startTransition(() => router.back())
       return
@@ -92,14 +98,10 @@ export function useUrlRecordId(options: Options = {}) {
 
     const qs = params.toString()
     const target = qs ? `${pathname}?${qs}` : pathname
-    const requestedHistory = opts?.history ?? 'auto'
-    const shouldPush = requestedHistory === 'push'
-      || (requestedHistory === 'auto' && Boolean(id) && !queryId)
-
-    if (shouldPush) pushedDetailKeys.add(mapKey)
+    if (decision === 'push') pushedDetailKeys.add(mapKey)
 
     startTransition(() => {
-      if (shouldPush) router.push(target, { scroll: false })
+      if (decision === 'push') router.push(target, { scroll: false })
       else router.replace(target, { scroll: false })
     })
   }, [searchParams, router, pathname, param, queryId, options.whenOpen, options.clearKeys])
