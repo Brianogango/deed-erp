@@ -3,7 +3,9 @@
 --   * creates relational notification/outbox/delivery tables only
 --   * leaves legacy app_state notification blobs untouched for rollback/backfill
 --   * adds LISTEN/NOTIFY trigger for real-time bell updates
--- Apply with: node scripts/run-safe-notification-platform.mjs
+-- Apply with: bash scripts/apply-sql-as-postgres.sh database/migrations/20260828_notification_platform_safe.sql
+-- Do not use node-pg pool.query on this file: dollar-quoted trigger bodies and
+-- REFERENCES users must run as the postgres OS role via psql.
 
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
@@ -174,6 +176,24 @@ CREATE INDEX IF NOT EXISTS idx_notification_endpoints_user_active
   ON notification_endpoints (user_id)
   WHERE revoked_at IS NULL;
 
+-- Empty leftover from an unused older schema (name / trigger_event / subject / body).
+-- CREATE TABLE IF NOT EXISTS would keep that shell, then the event_type index fails.
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.tables
+    WHERE table_schema = 'public' AND table_name = 'notification_templates'
+  ) AND EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'notification_templates' AND column_name = 'trigger_event'
+  ) AND NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'notification_templates' AND column_name = 'event_type'
+  ) THEN
+    DROP TABLE public.notification_templates;
+  END IF;
+END $$;
+
 CREATE TABLE IF NOT EXISTS notification_templates (
   id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   event_type        VARCHAR(120) NOT NULL,
@@ -223,7 +243,7 @@ CREATE INDEX IF NOT EXISTS idx_notification_dead_letters_open
   WHERE resolved_at IS NULL;
 
 CREATE OR REPLACE FUNCTION deed_notify_notification_recipient_change()
-RETURNS trigger AS $
+RETURNS trigger AS $deed_notify$
 DECLARE
   target_user UUID;
 BEGIN
@@ -237,7 +257,7 @@ BEGIN
   PERFORM pg_notify('deed_notifications_changed', COALESCE(target_user::text, ''));
   RETURN NEW;
 END;
-$ LANGUAGE plpgsql;
+$deed_notify$ LANGUAGE plpgsql;
 
 DROP TRIGGER IF EXISTS trg_notification_recipient_notify ON notification_recipients;
 CREATE TRIGGER trg_notification_recipient_notify
@@ -257,3 +277,21 @@ VALUES
   ('*', 'push', 1, '{{title}}', '{{body}}', TRUE),
   ('*', 'in_app', 1, '{{title}}', '{{body}}', TRUE)
 ON CONFLICT (event_type, channel, version) DO NOTHING;
+
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'deed_user') THEN
+    GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE
+      notification_events,
+      notification_recipients,
+      notification_outbox,
+      notification_deliveries,
+      notification_attempts,
+      notification_preferences,
+      notification_endpoints,
+      notification_templates,
+      notification_escalations,
+      notification_dead_letters
+    TO deed_user;
+  END IF;
+END $$;

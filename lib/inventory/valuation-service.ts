@@ -14,6 +14,7 @@ import {
   stockValuationJournalRef,
   type StockValuationKind,
 } from '@/lib/inventory/valuation-math'
+import { isNonStockProduct } from '@/lib/sales/non-stock-line'
 
 const DEFAULT_WAREHOUSE_ID = 'main'
 const PRICE_DIFF_LABEL = formatAccountLabel(COMPANY_ACCOUNT_FALLBACKS.priceDifferenceAccountCode, [])
@@ -69,8 +70,10 @@ async function persistStockJournal(params: {
         update: { journalEntryId: journal.id },
       })
     } catch (err) {
-      throw new Error(
-        `Inventory ledger write failed for ${eventKey}: ${err instanceof Error ? err.message : String(err)}`,
+      // Journal already posted. A missing/locked ledger table must not roll back POS.
+      console.error(
+        `Inventory ledger write failed for ${eventKey}:`,
+        err instanceof Error ? err.message : err,
       )
     }
   }
@@ -82,6 +85,27 @@ export type CostingMethod = 'average' | 'fifo' | 'standard'
 async function productExists(productId: string): Promise<boolean> {
   const row = await prisma.product.findUnique({ where: { id: productId }, select: { id: true } })
   return Boolean(row)
+}
+
+async function isPrismaNonStockProduct(productId: string): Promise<boolean> {
+  const row = await prisma.product.findUnique({
+    where: { id: productId },
+    select: {
+      trackStock: true,
+      trackingMethod: true,
+      invoicePolicy: true,
+      specs: true,
+      category: { select: { name: true } },
+    },
+  })
+  if (!row) return false
+  return isNonStockProduct({
+    trackStock: row.trackStock,
+    trackingMethod: row.trackingMethod,
+    invoicePolicy: row.invoicePolicy,
+    specs: row.specs,
+    category: row.category?.name,
+  })
 }
 
 async function resolveCostingMethod(productId: string): Promise<CostingMethod> {
@@ -185,6 +209,9 @@ async function applyOutboundValuation(params: {
   if (!(await productExists(params.productId))) {
     return { skipped: true as const, reason: 'product_not_in_prisma' }
   }
+  if (await isPrismaNonStockProduct(params.productId)) {
+    return { skipped: true as const, reason: 'non_stock' }
+  }
 
   const costingMethod = await resolveCostingMethod(params.productId)
   const eventKey = stockValuationEventKey(params.kind, params.reference || params.movementId || '', params.productId)
@@ -223,12 +250,18 @@ async function applyOutboundValuation(params: {
     let fifo = consumeBatchesFIFO(toLayers(batches), qty)
     if (fifo.shortfall > 0 && params.kind === 'pos') {
       const fallbackCost = (await resolveStandardCost(params.productId)) ?? 0
-      await upsertFifoBatch({
-        productId: params.productId,
-        qty: fifo.shortfall,
-        unitCost: fallbackCost,
-        reference: `AUTO-${params.reference || 'pos'}`.slice(0, 80),
-      })
+      try {
+        await upsertFifoBatch({
+          productId: params.productId,
+          qty: fifo.shortfall,
+          unitCost: fallbackCost,
+          reference: `AUTO-${params.reference || 'pos'}`.slice(0, 80),
+        })
+      } catch (err) {
+        throw new Error(
+          `POS FIFO auto-cover failed for product ${params.productId}: ${err instanceof Error ? err.message : String(err)}`,
+        )
+      }
       batches = await loadBatches()
       fifo = consumeBatchesFIFO(toLayers(batches), qty)
     }
