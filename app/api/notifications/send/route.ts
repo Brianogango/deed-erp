@@ -1,162 +1,206 @@
 import { NextRequest, NextResponse } from 'next/server'
+import crypto from 'crypto'
+import prisma from '@/lib/prisma'
 import { getServerSession } from '@/lib/auth/server'
-import { sendNotification, sendRepairNotification, sendQuoteNotification, sendProcurementNotification } from '@/lib/integrations/notifications'
-import { buildRepairLinkMessage, sendMultiChannelMessage, type MessageChannel } from '@/lib/integrations/messaging'
+import { publishNotificationEvent } from '@/lib/notifications/service'
+import { runNotificationWorker } from '@/lib/notifications/worker'
+import type { NotificationChannel } from '@/lib/notifications/types'
 
-const escapeHtml = (value: unknown) => String(value ?? '')
-  .replace(/&/g, '&amp;')
-  .replace(/</g, '&lt;')
-  .replace(/>/g, '&gt;')
-  .replace(/"/g, '&quot;')
-  .replace(/'/g, '&#39;')
+export const dynamic = 'force-dynamic'
+
+const safeEqual = (a: string, b: string) => {
+  if (!a || !b || a.length !== b.length) return false
+  try { return crypto.timingSafeEqual(Buffer.from(a), Buffer.from(b)) } catch { return false }
+}
+
+const contentHash = (value: unknown) =>
+  crypto.createHash('sha256').update(JSON.stringify(value)).digest('hex').slice(0, 24)
+
+function requestedChannels(params: any, defaults: NotificationChannel[]): NotificationChannel[] {
+  const allowed = new Set<NotificationChannel>(['email', 'whatsapp', 'sms'])
+  const raw = Array.isArray(params.channels)
+    ? params.channels
+    : params.channel && params.channel !== 'auto'
+      ? [params.channel]
+      : params.channel === 'auto'
+        ? ['whatsapp']
+        : defaults
+  const clean = [...new Set(raw.filter((v: unknown) => allowed.has(v as NotificationChannel)))] as NotificationChannel[]
+  return clean.length ? clean : defaults
+}
+
+function roleAllowed(role: string, type: string) {
+  const rules: Record<string, string[]> = {
+    repair: ['director', 'admin_officer', 'technical_lead', 'technician'],
+    quote: ['director', 'admin_officer', 'technical_lead', 'sales_rep'],
+    procurement: ['director', 'admin_officer', 'technical_lead', 'technician'],
+    general: ['director', 'admin_officer', 'super_admin'],
+  }
+  return Boolean(rules[type]?.includes(role))
+}
+
+async function loadRepairRecipient(ref: string) {
+  const repair = await prisma.repair.findFirst({
+    where: {
+      OR: [
+        { id: /^[0-9a-f-]{36}$/i.test(ref) ? ref : undefined },
+        { jobNumber: ref },
+      ].filter(Boolean) as any,
+    },
+    include: {
+      client: { select: { name: true, email: true, phone: true, phoneAlt: true } },
+    },
+  })
+  if (!repair) return null
+  return {
+    repair,
+    recipient: {
+      name: repair.client.name,
+      email: repair.client.email,
+      phone: repair.client.phone || repair.client.phoneAlt,
+    },
+  }
+}
 
 /**
- * POST /api/notifications/send
- * Send notification via Email, WhatsApp, or SMS.
- * Requires either a valid user session OR the x-internal-secret header.
+ * Manual/specialized notification gateway.
+ *
+ * Security:
+ * - internal calls require INTERNAL_API_SECRET;
+ * - authenticated users are role-gated per business purpose;
+ * - repair/quote customer destinations are loaded from the authoritative repair
+ *   record instead of trusting a client-supplied phone/email;
+ * - general arbitrary destinations are restricted to director/admin roles.
+ *
+ * All sends first create a durable event/outbox row. Provider work then runs
+ * through the same retry/DLQ/delivery-status pipeline as automated events.
  */
 export async function POST(request: NextRequest) {
-  const internalSecret = process.env.INTERNAL_API_SECRET
-  const callerSecret   = request.headers.get('x-internal-secret')
+  const internalSecret = String(process.env.INTERNAL_API_SECRET || '').trim()
+  const callerSecret = String(request.headers.get('x-internal-secret') || '').trim()
+  const internal = Boolean(internalSecret && safeEqual(callerSecret, internalSecret))
 
-  const isInternalCall = internalSecret && callerSecret === internalSecret
-  if (!isInternalCall) {
-    const session = await getServerSession()
-    if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+  const session = internal ? null : await getServerSession()
+  if (!internal && !session?.user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
   try {
     const body = await request.json()
     const { type, ...params } = body
-    const requestedChannels: MessageChannel[] = Array.isArray(params.channels)
-      ? params.channels
-      : (params.channel === 'email' ? ['email'] : [])
-
-    let result
-
-    switch (type) {
-      case 'repair':
-        if (requestedChannels.includes('email')) {
-          const appBaseUrl = (process.env.NEXT_PUBLIC_APP_URL || 'https://erp.deed.co.ke').replace(/\/$/, '')
-          const trackingUrl = params.trackingUrl || params.repairUrl || `${appBaseUrl}/portal/repair/${encodeURIComponent(params.repairRef)}`
-          result = await sendMultiChannelMessage({
-            purpose: 'repair_link',
-            recipient: { name: params.customerName, email: params.customerEmail, phone: params.customerPhone },
-            channels: requestedChannels,
-            mailbox: 'sales',
-            content: buildRepairLinkMessage({
-              customerName: params.customerName,
-              repairRef: params.repairRef,
-              deviceName: params.deviceName,
-              trackingUrl,
-              message: params.message,
-            }),
-            metadata: { repairRef: params.repairRef, type: 'repair' },
-          })
-        } else {
-          result = await sendRepairNotification(
-            params.customerName,
-            params.customerPhone,
-            params.repairRef,
-            params.deviceName,
-            params.message,
-            params.options
-          )
-        }
-        break
-
-      case 'quote':
-        if (requestedChannels.includes('email')) {
-          const companyName = process.env.PDF_COMPANY_NAME || 'Deed Technologies'
-          const quoteTotal = Number(params.quoteTotal || 0).toLocaleString()
-          const quoteUrl = params.quoteUrl || ''
-          const safeCompanyName = escapeHtml(companyName)
-          const safeCustomerName = escapeHtml(params.customerName)
-          const safeRepairRef = escapeHtml(params.repairRef)
-          const safeDeviceName = escapeHtml(params.deviceName)
-          const safeQuoteTotal = escapeHtml(quoteTotal)
-          const safeQuoteUrl = escapeHtml(quoteUrl)
-          const subject = `Repair quotation ${params.repairRef} from ${companyName}`
-          const text = `Hi ${params.customerName},\n\nYour repair quotation is ready.\n\nRepair: ${params.repairRef}\nDevice: ${params.deviceName}\nTotal: KES ${quoteTotal} (incl. VAT)\n${quoteUrl ? `\nView and accept online: ${quoteUrl}\n` : ''}\nBest regards,\n${companyName}`
-          result = await sendMultiChannelMessage({
-            purpose: 'repair_quote',
-            recipient: { name: params.customerName, email: params.customerEmail, phone: params.customerPhone },
-            channels: requestedChannels,
-            mailbox: 'sales',
-            content: {
-              subject,
-              text,
-              smsText: `Hi ${params.customerName}, quote for repair ${params.repairRef}: KES ${quoteTotal}. ${quoteUrl || ''} - ${companyName}`,
-              whatsappText: text,
-              html: `<!DOCTYPE html><html><body style="font-family:'Segoe UI',Arial,sans-serif;color:#0f172a;background:#f8fafc;margin:0;padding:24px;"><div style="max-width:640px;margin:0 auto;background:#fff;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;"><div style="background:#1B2762;color:#fff;padding:24px;"><h1 style="margin:0;font-size:22px;">${safeCompanyName}</h1><p style="margin:4px 0 0;opacity:.85;">Repair Quotation</p></div><div style="padding:28px;"><p>Hi ${safeCustomerName},</p><p>Your repair quotation is ready.</p><div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:16px;margin:18px 0;"><p><strong>Repair:</strong> ${safeRepairRef}</p><p><strong>Device:</strong> ${safeDeviceName}</p><p><strong>Total:</strong> KES ${safeQuoteTotal} (incl. VAT)</p></div>${quoteUrl ? `<p><a href="${safeQuoteUrl}" style="display:inline-block;background:#1B2762;color:#fff;text-decoration:none;padding:12px 18px;border-radius:8px;font-weight:700;">View and Accept Quote</a></p>` : ''}<p>Best regards,<br><strong>${safeCompanyName}</strong></p></div></div></body></html>`,
-            },
-            metadata: { repairRef: params.repairRef, type: 'quote' },
-          })
-        } else {
-          result = await sendQuoteNotification(
-            params.customerName,
-            params.customerPhone,
-            params.repairRef,
-            params.deviceName,
-            params.quoteTotal,
-            params.quoteUrl
-          )
-        }
-        break
-
-      case 'procurement':
-        result = await sendProcurementNotification(
-          params.repairRef,
-          params.technicianName,
-          params.items,
-          params.urgency,
-          params.notes
-        )
-        break
-
-      case 'general':
-        if (requestedChannels.includes('email')) {
-          const subject = params.subject || 'Message from Deed Technologies'
-          const text = String(params.message || '')
-          result = await sendMultiChannelMessage({
-            purpose: 'general',
-            recipient: { name: params.name, email: params.email || params.to, phone: params.phone },
-            channels: requestedChannels,
-            mailbox: params.mailbox || 'default',
-            content: {
-              subject,
-              text,
-              smsText: text,
-              whatsappText: text,
-              html: `<!DOCTYPE html><html><body style="font-family:'Segoe UI',Arial,sans-serif;color:#0f172a;"><p>${escapeHtml(text).replace(/\n/g, '<br/>')}</p></body></html>`,
-            },
-            metadata: { type: 'general' },
-          })
-        } else {
-          result = await sendNotification({
-            to: params.to,
-            message: params.message,
-            priority: params.priority,
-            channel: params.channel,
-          })
-        }
-        break
-
-      default:
-        return NextResponse.json(
-          { error: 'Invalid notification type' },
-          { status: 400 }
-        )
+    if (!['repair', 'quote', 'procurement', 'general'].includes(String(type))) {
+      return NextResponse.json({ error: 'Invalid notification type' }, { status: 400 })
+    }
+    if (!internal && !roleAllowed(session!.user.role, String(type))) {
+      return NextResponse.json({ error: 'Forbidden — notification purpose not allowed for this role' }, { status: 403 })
     }
 
-    return NextResponse.json(result)
+    const actorUserId = session?.user.id || null
+    let event
+
+    if (type === 'repair' || type === 'quote') {
+      const repairRef = String(params.repairRef || '').trim()
+      if (!repairRef) return NextResponse.json({ error: 'repairRef is required' }, { status: 400 })
+      const record = await loadRepairRecipient(repairRef)
+      if (!record) return NextResponse.json({ error: 'Repair record not found' }, { status: 404 })
+
+      const channels = requestedChannels(params, type === 'quote' ? ['email', 'whatsapp'] : ['whatsapp'])
+      const deviceName = [record.repair.deviceBrand, record.repair.deviceModel || record.repair.deviceType].filter(Boolean).join(' ')
+      const quoteTotal = Number(params.quoteTotal || record.repair.estimatedCost || 0)
+      const title = type === 'quote'
+        ? `Repair quotation ready — ${record.repair.jobNumber}`
+        : `Repair update — ${record.repair.jobNumber}`
+      const message = type === 'quote'
+        ? `Your repair quotation is ready. Repair: ${record.repair.jobNumber}. Device: ${deviceName}. Total: KES ${quoteTotal.toLocaleString('en-KE')}.${params.quoteUrl ? ` View: ${params.quoteUrl}` : ''}`
+        : String(params.message || 'There is an update on your repair.')
+
+      event = await publishNotificationEvent({
+        eventType: type === 'quote' ? 'repair.quote_ready' : 'repair.customer_message',
+        entityType: 'repair',
+        entityId: record.repair.id,
+        actorUserId,
+        externalRecipients: [{
+          ...record.recipient,
+          channels,
+        }],
+        channels,
+        severity: type === 'quote' ? 'attention' : 'info',
+        title,
+        body: message,
+        actionUrl: params.quoteUrl || `/portal/repair/${encodeURIComponent(record.repair.jobNumber)}`,
+        metadata: {
+          emailSubject: title,
+          emailText: message,
+          whatsappText: message,
+          smsText: message.slice(0, 480),
+          quoteTotal,
+        },
+        idempotencyKey: String(body.idempotencyKey || `manual:${type}:${record.repair.id}:${contentHash({ channels, message, quoteTotal })}`),
+      })
+    } else if (type === 'procurement') {
+      const repairRef = String(params.repairRef || '').trim()
+      const items = Array.isArray(params.items) ? params.items : []
+      const total = items.reduce((sum: number, item: any) => sum + Number(item.qty || 0) * Number(item.estimatedCost || 0), 0)
+      const itemText = items.map((item: any) => `${item.productName || 'Item'} × ${item.qty || 0}`).join(', ')
+      const message = `Parts request for repair ${repairRef}. Requested by ${params.technicianName || session?.user.name || 'ERP user'}. ${itemText}. Estimated total KES ${Math.round(total).toLocaleString('en-KE')}.${params.notes ? ` Notes: ${params.notes}` : ''}`
+      event = await publishNotificationEvent({
+        eventType: 'repair.parts_requested',
+        entityType: 'repair',
+        entityId: repairRef || null,
+        actorUserId,
+        roles: ['inventory_officer', 'admin_officer'],
+        severity: String(params.urgency).toLowerCase() === 'urgent' ? 'critical' : 'attention',
+        title: `Parts request — ${repairRef || 'repair'}`,
+        body: message,
+        actionUrl: '/purchase',
+        metadata: { items, estimatedTotal: total },
+        idempotencyKey: String(body.idempotencyKey || `parts-request:${repairRef}:${contentHash({ items, notes: params.notes })}`),
+      })
+    } else {
+      // Arbitrary external messaging is intentionally administrator-only.
+      const channels = requestedChannels(params, ['email'])
+      const email = String(params.email || (params.channel === 'email' ? params.to : '') || '').trim() || null
+      const phone = String(params.phone || (params.channel !== 'email' ? params.to : '') || '').trim() || null
+      if (!email && !phone) return NextResponse.json({ error: 'Recipient email or phone is required' }, { status: 400 })
+      const message = String(params.message || '').trim()
+      if (!message) return NextResponse.json({ error: 'Message is required' }, { status: 400 })
+      const title = String(params.subject || 'Message from Deed Technologies').slice(0, 240)
+      event = await publishNotificationEvent({
+        eventType: 'system.manual_message',
+        entityType: 'manual_message',
+        actorUserId,
+        externalRecipients: [{ name: params.name || null, email, phone, channels }],
+        channels,
+        severity: 'info',
+        title,
+        body: message,
+        metadata: {
+          emailSubject: title,
+          emailText: message,
+          whatsappText: message,
+          smsText: message.slice(0, 480),
+        },
+        idempotencyKey: String(body.idempotencyKey || `manual-general:${contentHash({ email, phone, channels, title, message })}`),
+      })
+    }
+
+    // Give interactive sends an immediate attempt while remaining durable if a
+    // provider fails or the process terminates after the event was committed.
+    await runNotificationWorker({ routeLimit: 20, deliveryLimit: 50, escalationLimit: 5 })
+    const deliveries = await prisma.notificationDelivery.findMany({
+      where: { eventId: event.id },
+      select: {
+        id: true, channel: true, provider: true, status: true,
+        messageId: false as never,
+      } as any,
+    }).catch(async () => prisma.notificationDelivery.findMany({
+      where: { eventId: event.id },
+      select: { id: true, channel: true, provider: true, status: true, providerMessageId: true, lastError: true },
+    }))
+
+    return NextResponse.json({ success: true, eventId: event.id, deliveries })
   } catch (error) {
-    console.error('Notification API error:', error)
-    return NextResponse.json(
-      { error: 'Failed to send notification' },
-      { status: 500 }
-    )
+    console.error('[notifications/send] failed', error)
+    return NextResponse.json({ error: 'Failed to queue notification' }, { status: 500 })
   }
 }
