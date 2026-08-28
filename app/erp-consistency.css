@@ -1,0 +1,20 @@
+/* Cross-ERP interaction consistency overrides.
+   Keep this file small: only shared navigation/search/scroll affordances belong here. */
+
+/* Long Reconfiguration part/component lists must own the wheel/touch gesture. */
+.reconfig-pick-menu {
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-gutter: stable;
+}
+
+/* Search controls should remain usable at narrow widths instead of forcing
+   their toolbar siblings off-screen. */
+.dt-toolbar input[type='search'],
+.dt-toolbar input[placeholder*='Search'],
+.mod-page input[type='search'] {
+  min-width: 0;
+}
