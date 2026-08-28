@@ -139,8 +139,14 @@ export function useUrlQueryState(param: string, fallback: string) {
     const params = new URLSearchParams(searchParams.toString())
     params.set(param, next)
     const qs = params.toString()
+    const href = qs ? `${pathname}?${qs}` : pathname
     startTransition(() => {
-      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false })
+      // Opening a record must create a history entry so the browser Back
+      // button returns to the originating list/tab/filter context. Explicitly
+      // closing a record replaces the detail URL with the list URL to avoid
+      // adding redundant list entries.
+      if (id) router.push(href, { scroll: false })
+      else router.replace(href, { scroll: false })
     })
   }, [searchParams, router, pathname, param])
 
