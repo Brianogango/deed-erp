@@ -1,4 +1,5 @@
 'use client'
+import { matchesSearchTerms } from '@/lib/search'
 
 import { useMemo, useState, useCallback, useEffect, useRef, Suspense } from 'react'
 import { useSearchParams, useRouter, usePathname } from 'next/navigation'
@@ -668,7 +669,6 @@ function AccountingContent() {
 
   const filteredInvoices = useMemo(() => {
     const list = tab === 'invoices' ? customerInvoices : vendorBills
-    const q = invSearch.toLowerCase()
     const res: Invoice[] = []
     for (const i of list) {
       // Odoo semantics: document state (Draft/Posted/Cancelled) is separate
@@ -686,14 +686,15 @@ function AccountingContent() {
       else if (invFilter === 'blocked') pass = payState === 'blocked'
       else pass = docState === invFilter
 
-      if (pass) {
-        if (
-          !q ||
-          i.ref.toLowerCase().includes(q) ||
-          i.partnerName.toLowerCase().includes(q)
-        ) {
-          res.push(i)
-        }
+      if (pass && matchesSearchTerms(invSearch, [
+        i.ref,
+        i.partnerName,
+        i.date,
+        i.dueDate,
+        i.status,
+        i.total,
+      ])) {
+        res.push(i)
       }
     }
     return res.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
