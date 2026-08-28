@@ -29288,3 +29288,56 @@ body:has(.client-repair-portal) {
   background: rgba(120, 53, 15, 0.18);
   color: #fcd34d;
 }
+
+
+@media (max-width: 767px) {
+  .accounting-dashboard__panel-head p,
+  .accounting-dashboard__bank-head p,
+  .accounting-dashboard__ageing-head p {
+    font-size: 0.64rem;
+  }
+
+  .accounting-dashboard__legend,
+  .accounting-dashboard__ageing-grid span,
+  .accounting-dashboard__ageing-grid small,
+  .accounting-dashboard__budget-row,
+  .accounting-dashboard__budget-row > strong,
+  .accounting-dashboard__budget-row > small,
+  .accounting-dashboard__metric-list span,
+  .accounting-dashboard__statement span,
+  .accounting-dashboard__metric-list strong,
+  .accounting-dashboard__statement strong,
+  .accounting-dashboard__filing-list span,
+  .accounting-dashboard__filing-list strong,
+  .accounting-dashboard__partner-name,
+  .accounting-dashboard__partner-table strong,
+  .accounting-dashboard__partner-table small,
+  .accounting-dashboard__checklist button span,
+  .accounting-dashboard__checklist button strong,
+  .accounting-dashboard__alerts button > span:nth-child(2),
+  .accounting-dashboard__alerts strong,
+  .accounting-dashboard__alerts small,
+  .accounting-dashboard__foot {
+    font-size: 0.64rem;
+  }
+
+  .accounting-dashboard__ageing-grid strong {
+    font-size: 0.68rem;
+  }
+
+  .accounting-dashboard__table {
+    font-size: 0.7rem;
+  }
+
+  .accounting-dashboard__table th {
+    font-size: 0.61rem;
+  }
+
+  .accounting-dashboard__table td small,
+  .accounting-dashboard__status,
+  .accounting-dashboard__due,
+  .accounting-dashboard__muted-pill,
+  .accounting-dashboard__shared-gl {
+    font-size: 0.61rem;
+  }
+}
