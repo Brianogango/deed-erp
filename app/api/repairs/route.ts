@@ -127,7 +127,9 @@ export async function POST(request: NextRequest) {
       : null
     const ref = keepExisting || keepRequested || await getNextRepairRef()
     const previousRefs = uniqueRepairRefs([
-      ...(Array.isArray(existing?.previousRefs) ? existing!.previousRefs : []),
+      ...(Array.isArray((existing as { previousRefs?: unknown } | null)?.previousRefs)
+        ? (existing as { previousRefs: unknown[] }).previousRefs
+        : []),
       ...(Array.isArray(body.previousRefs) ? body.previousRefs as unknown[] : []),
       isTemporaryRepairRef(requestedRef) ? requestedRef : null,
       existing?.ref && existing.ref !== ref ? existing.ref : null,

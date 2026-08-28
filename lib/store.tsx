@@ -1730,6 +1730,8 @@ export interface RepairQAItem {
 export interface RepairOrder {
   id: string
   ref: string
+  /** Timestamp tickets (`REP-227532`) replaced by the sequential counter. */
+  previousRefs?: string[]
   status: RepairStatus
   
   // Customer & Device
