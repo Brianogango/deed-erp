@@ -27,6 +27,93 @@ export interface NotificationResult {
   error?: string
 }
 
+type SmsQueueItem<T> = {
+  run: () => Promise<T>
+  resolve: (value: T) => void
+  reject: (error: unknown) => void
+}
+
+type SmsLimiterState = {
+  active: number
+  nextAllowedAt: number
+  queue: Array<SmsQueueItem<any>>
+  pumping: boolean
+}
+
+const smsLimiter = (() => {
+  const root = globalThis as unknown as { __deedSmsLimiter?: SmsLimiterState }
+  if (!root.__deedSmsLimiter) {
+    root.__deedSmsLimiter = { active: 0, nextAllowedAt: 0, queue: [], pumping: false }
+  }
+  return root.__deedSmsLimiter
+})()
+
+const notifEnvNumber = (name: string, fallback: number, min: number, max: number) => {
+  const value = Number(process.env[name])
+  if (!Number.isFinite(value)) return fallback
+  return Math.min(max, Math.max(min, Math.floor(value)))
+}
+
+function pumpSmsQueue() {
+  if (smsLimiter.pumping) return
+  smsLimiter.pumping = true
+
+  const step = () => {
+    const maxConcurrent = notifEnvNumber('SMS_MAX_CONCURRENT', 2, 1, 20)
+    const perSecond = notifEnvNumber('SMS_MAX_PER_SECOND', 1, 1, 50)
+
+    while (smsLimiter.active < maxConcurrent && smsLimiter.queue.length > 0) {
+      const waitMs = Math.max(0, smsLimiter.nextAllowedAt - Date.now())
+      if (waitMs > 0) {
+        setTimeout(step, waitMs)
+        smsLimiter.pumping = false
+        return
+      }
+
+      const item = smsLimiter.queue.shift()!
+      smsLimiter.active += 1
+      smsLimiter.nextAllowedAt = Date.now() + Math.ceil(1000 / perSecond)
+
+      void item.run()
+        .then(item.resolve, item.reject)
+        .finally(() => {
+          smsLimiter.active -= 1
+          smsLimiter.pumping = false
+          pumpSmsQueue()
+        })
+    }
+
+    smsLimiter.pumping = false
+  }
+
+  step()
+}
+
+function withSmsRateLimit<T>(run: () => Promise<T>): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    smsLimiter.queue.push({ run, resolve, reject })
+    pumpSmsQueue()
+  })
+}
+
+async function mapWithConcurrency<T, R>(
+  items: T[],
+  limit: number,
+  worker: (item: T, index: number) => Promise<R>,
+): Promise<R[]> {
+  const output = new Array<R>(items.length)
+  let cursor = 0
+  const runners = Array.from({ length: Math.min(Math.max(1, limit), Math.max(1, items.length)) }, async () => {
+    while (true) {
+      const index = cursor++
+      if (index >= items.length) return
+      output[index] = await worker(items[index], index)
+    }
+  })
+  await Promise.all(runners)
+  return output
+}
+
 /**
  * Send notification via WhatsApp or SMS
  * In production: Tries WhatsApp first, falls back to SMS
@@ -121,7 +208,6 @@ const sendViaWhatsApp = async (to: string, message: string): Promise<WhatsAppRes
  * Note: Only works on server-side (Node.js environment)
  */
 const sendViaSMS = async (to: string, message: string): Promise<NotificationResult> => {
-  // Check if running on server
   if (typeof window !== 'undefined') {
     return {
       success: false,
@@ -140,28 +226,31 @@ const sendViaSMS = async (to: string, message: string): Promise<NotificationResu
     }
   }
 
-  try {
-    // Dynamic import for server-side only
-    const twilio = await import('twilio')
-    const client = twilio.default(accountSid, authToken)
+  return withSmsRateLimit(async () => {
+    try {
+      const twilio = await import('twilio')
+      const client = twilio.default(accountSid, authToken, {
+        timeout: notifEnvNumber('TWILIO_HTTP_TIMEOUT_MS', 10_000, 1_000, 120_000),
+      })
 
-    const result = await client.messages.create({
-      body: message,
-      from: fromNumber,
-      to: to,
-    })
+      const result = await client.messages.create({
+        body: message,
+        from: fromNumber,
+        to,
+      })
 
-    return {
-      success: true,
-      channel: 'sms',
-      messageId: result.sid,
+      return {
+        success: true,
+        channel: 'sms',
+        messageId: result.sid,
+      }
+    } catch (error: any) {
+      return {
+        success: false,
+        error: error.message || 'SMS delivery failed',
+      }
     }
-  } catch (error: any) {
-    return {
-      success: false,
-      error: error.message || 'SMS delivery failed',
-    }
-  }
+  })
 }
 
 /**
@@ -196,18 +285,15 @@ export const sendBatchNotifications = async (
   recipients: Array<{ phone: string; message: string }>,
   options?: { priority?: NotificationOptions['priority']; channel?: NotificationOptions['channel'] }
 ): Promise<Array<NotificationResult & { phone: string }>> => {
-  const results = await Promise.all(
-    recipients.map(async ({ phone, message }) => {
-      const result = await sendNotification({
-        to: formatPhoneNumber(phone),
-        message,
-        ...options,
-      })
-      return { ...result, phone }
+  const concurrency = notifEnvNumber('NOTIFICATION_BATCH_CONCURRENCY', 4, 1, 20)
+  return mapWithConcurrency(recipients, concurrency, async ({ phone, message }) => {
+    const result = await sendNotification({
+      to: formatPhoneNumber(phone),
+      message,
+      ...options,
     })
-  )
-
-  return results
+    return { ...result, phone }
+  })
 }
 
 /**
