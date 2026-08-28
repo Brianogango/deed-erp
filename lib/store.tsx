@@ -2602,7 +2602,7 @@ const expenseAccountForCategory = (category?: ExpenseCategory) => {
     meals: '6430 - Meals & Entertainment',
     utilities: '6415 - Utilities',
     software: '6440 - Software & Subscriptions',
-    hardware: '1510 - Equipment & Hardware',
+    hardware: '6521 - Expensed Assets',
     maintenance: '6450 - Maintenance & Repairs',
     other: '6499 - Other Operating Expenses',
   }
@@ -3574,7 +3574,7 @@ export interface AppState {
   // addHRDocument moved to useHrStore() (hooks/useHrStore.ts)
   createPayrollRun: (month: string, year: number) => PayrollRun
   approvePayrollRun: (id: string) => void
-  postPayrollRun: (id: string) => void
+  postPayrollRun: (id: string) => void | Promise<void>
   applySalaryAdvance: (request: Omit<SalaryAdvance, 'id' | 'ref' | 'requestedDate' | 'status' | 'monthlyDeduction' | 'amountRecovered' | 'outstandingAmount' | 'deductions'>) => SalaryAdvance
   decideSalaryAdvance: (id: string, approved: boolean, note?: string) => void
   markSalaryAdvancePaid: (id: string, paidDate?: string) => void
@@ -9007,29 +9007,43 @@ const storeCtx: AppState = {
       addAuditLog('approve_payroll', payroll.ref, `Payroll approved by ${currentUser()?.name}`)
       showToast('Payroll approved')
     },
-    postPayrollRun: (id) => {
+    postPayrollRun: async (id) => {
       const payroll = payrollRef.current.find(run => run.id === id)
       if (!payroll) return
       if (!canApprovePayroll(currentUser())) { showToast('Only Finance or HR approvers can post payroll', 'error'); return }
       if (payroll.status !== 'approved') { showToast('Payroll must be approved before posting', 'error'); return }
+      // The statutory GL journal is created by the payroll posting transaction
+      // (6201/6202/6203 Dr; 3110/3305-3309/3311/1810 Cr). postedJournalId is
+      // system-controlled there — sending it is rejected with 400.
+      let serverJournalId: string | null = null
+      try {
+        const res = await fetch(`/api/payroll/${id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status: 'posted' }),
+        })
+        const payload = await res.json().catch(() => ({})) as { error?: string; item?: { postedJournalId?: string } }
+        if (!res.ok) { showToast(payload.error || 'Payroll posting failed', 'error'); return }
+        serverJournalId = payload.item?.postedJournalId ?? null
+      } catch {
+        showToast('Payroll posting failed', 'error'); return
+      }
+      // Display-side summary for the blob ledger only. Mirror-skip (source
+      // 'payroll') keeps it out of the GL — the API journal is authoritative.
       const journal: JournalEntry = {
         id: uid(), ref: `JRN/PAY/${payroll.year}/${payroll.month}`, date: now(), source: 'payroll', description: `Payroll journal for ${payroll.month}/${payroll.year}`, status: 'posted', payrollRunId: payroll.id,
         lines: [
-          { id: uid(), account: 'Payroll Expense', description: `Payroll expense ${payroll.ref}`, debit: payroll.totalGross, credit: 0 },
-          { id: uid(), account: 'Payroll Deductions Payable', description: `Payroll deductions ${payroll.ref}`, debit: 0, credit: payroll.totalDeductions },
-          { id: uid(), account: 'Salaries Payable', description: `Net salaries payable ${payroll.ref}`, debit: 0, credit: payroll.totalNet },
+          { id: uid(), account: '6201 - Salaries and Wages', description: `Payroll expense ${payroll.ref}`, debit: payroll.totalGross, credit: 0 },
+          { id: uid(), account: '3311 - Other Payroll Deductions Payable', description: `Payroll deductions ${payroll.ref}`, debit: 0, credit: payroll.totalDeductions },
+          { id: uid(), account: '3110 - Net Payroll Payable', description: `Net salaries payable ${payroll.ref}`, debit: 0, credit: payroll.totalNet },
         ],
         totalDebit: payroll.totalGross,
         totalCredit: payroll.totalGross,
       }
-      setJournalEntries(prev => [journal, ...prev])
-          setPayrollRuns(prev => {
-            const next = prev.map(run => run.id === id ? { ...run, status: 'posted' as const, postedJournalId: journal.id } : run)
-            sync(`/api/payroll/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'posted', postedJournalId: journal.id }) })
-            return next
-          })
+      setJournalEntries(prev => (prev.some(j => j.ref === journal.ref) ? prev : [journal, ...prev]))
+      setPayrollRuns(prev => prev.map(run => run.id === id ? { ...run, status: 'posted' as const, postedJournalId: journal.id } : run))
       setPayslips(prev => prev.map(payslip => payslip.payrollRunId === payroll.id ? { ...payslip, status: 'published' } : payslip))
-      addAuditLog('post_payroll', payroll.ref, `Payroll posted to accounting journal ${journal.ref}`)
+      addAuditLog('post_payroll', payroll.ref, `Payroll posted to accounting (GL journal ${serverJournalId ?? 'unknown'})`)
       showToast('Payroll posted to accounting journal')
     },
     applySalaryAdvance: (request) => {

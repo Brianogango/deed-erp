@@ -29,7 +29,7 @@ export function expenseAccountForCategory(category?: ExpenseCategoryKey): string
     meals: '6430 - Meals & Entertainment',
     utilities: '6415 - Utilities',
     software: '6440 - Software & Subscriptions',
-    hardware: '1510 - Equipment & Hardware',
+    hardware: '6521 - Expensed Assets',
     maintenance: '6450 - Maintenance & Repairs',
     other: '6499 - Other Operating Expenses',
   }

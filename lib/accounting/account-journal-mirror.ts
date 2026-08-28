@@ -93,6 +93,10 @@ export async function mirrorJournalEntriesToPrisma(entriesInput: unknown, opts: 
     for (const e of entries) {
       const ref = String(e?.ref ?? '').trim()
       if (!ref || !Array.isArray(e.lines) || e.lines.length === 0) continue
+      // Blob payroll journals are a display-side summary; the statutory GL
+      // journal is created by the payroll posting transaction with the same
+      // business document. Mirroring the blob copy would double-post payroll.
+      if (String(e?.source ?? '') === 'payroll') { result.skipped++; continue }
       try {
         const fp = fingerprint({
           ref,
