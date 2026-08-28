@@ -109,10 +109,16 @@ function mapInvoiceItems(lines: any[], isCreditNote = false) {
         unitPrice: 0,
         discountPct: 0,
         taxRate: 0,
+        taxCategory: 'out_of_scope',
+        taxCode: 'SECTION',
+        taxableBase: 0,
+        taxClaimEligible: false,
         lineSubtotal: 0,
         lineTax: 0,
         lineTotal: 0,
         sortOrder: index,
+        productId: undefined as string | undefined,
+        serialNumberId: undefined as string | undefined,
       }
     }
     const taxCategory = inferInvoiceLineTaxCategory(l.taxCategory ?? l.taxCode, Number(l.taxRate) || 0)
@@ -138,8 +144,8 @@ function mapInvoiceItems(lines: any[], isCreditNote = false) {
       lineTax: money.lineTax * sign,
       lineTotal: money.lineTotal * sign,
       sortOrder: index,
-      ...(optionalUuid(l.productId) ? { productId: optionalUuid(l.productId) } : {}),
-      ...(optionalUuid(l.serialNumberId ?? l.serialId) ? { serialNumberId: optionalUuid(l.serialNumberId ?? l.serialId) } : {}),
+      productId: optionalUuid(l.productId) ?? undefined,
+      serialNumberId: optionalUuid(l.serialNumberId ?? l.serialId) ?? undefined,
     }
   })
 }
