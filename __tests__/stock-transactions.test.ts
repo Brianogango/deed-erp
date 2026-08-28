@@ -414,4 +414,29 @@ describe('applyPosStockMutation()', () => {
     })
     expect(mockSaveStoreKeys).not.toHaveBeenCalled()
   })
+
+  it('skips service / non-stock POS lines instead of requiring warehouse qty', async () => {
+    mockLoadAppState.mockResolvedValue({
+      deed_products: [{
+        id: PRODUCT_ID,
+        name: 'On-site setup',
+        stockQty: 0,
+        requiresSerial: false,
+        unit: 'service',
+        productKind: 'service',
+        trackStock: false,
+      }],
+      deed_serials: [],
+      deed_bulkStock: [],
+      deed_stockMoves: [],
+    })
+
+    const result = await applyPosStockMutation({
+      orderRef: 'POS/2026/0003',
+      lines: [{ productId: PRODUCT_ID, productName: 'On-site setup', qty: 1 }],
+      userId: 'user-1',
+    })
+
+    expect(result).toEqual(expect.objectContaining({ ok: true }))
+  })
 })

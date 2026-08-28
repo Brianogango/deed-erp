@@ -84,3 +84,16 @@ describe('restoreBatchesFIFO', () => {
     expect(result.restored).toEqual([])
   })
 })
+
+describe('POS auto-cover of missing FIFO layers', () => {
+  it('consumes a seeded shortfall layer at product cost', () => {
+    const seeded = consumeBatchesFIFO(
+      [{ id: 'auto', quantityAvailable: 1, unitCost: 27000, receivedAt: '2026-08-28' }],
+      1,
+    )
+    expect(seeded.shortfall).toBe(0)
+    expect(seeded.consumed).toEqual([
+      { batchId: 'auto', qty: 1, unitCost: 27000, totalCost: 27000 },
+    ])
+  })
+})

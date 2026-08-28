@@ -54,5 +54,17 @@ describe('finalizeValuation', () => {
     expect(okRetry.ok).toBe(true)
     const lineError = finalizeValuation([{ productId: 'b', error: 'Insufficient FIFO layers' }])
     expect(lineError.ok).toBe(false)
+    const missingOnPos = finalizeValuation(
+      [{ productId: 'a', result: { skipped: true, reason: 'product_not_in_prisma' } }],
+      { allowMissingProduct: true },
+    )
+    expect(missingOnPos.ok).toBe(true)
+    const manyErrors = finalizeValuation([
+      { productId: 'a', error: 'short 1' },
+      { productId: 'b', error: 'short 2' },
+    ])
+    expect(manyErrors.ok).toBe(false)
+    expect(manyErrors.reason).toContain('short 1')
+    expect(manyErrors.reason).toContain('short 2')
   })
 })
