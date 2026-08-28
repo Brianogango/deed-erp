@@ -1,12 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { randomUUID } from 'crypto'
 import prisma from '@/lib/prisma'
 import { getRequiredSession, requireRole, withApiErrorHandling } from '@/lib/auth/api'
 import { pickRoundRobinOwner } from '@/lib/crm/sales-inbox-leads'
 import { LEAD_ASSIGNEE_ROLES } from '@/lib/crm/lead-assignees'
 import { loadAppState, saveStoreKeys } from '@/lib/server-store'
-import { buildNotifyRows } from '@/lib/in-app-notifications'
-import { notifyInboundLeadCreated } from '@/lib/crm/sales-inbox-notifications'
+import { publishNotificationEvent } from '@/lib/notifications/service'
 
 const WRITE_ROLES = ['director', 'admin_officer', 'sales_rep', 'sales']
 
@@ -164,41 +162,22 @@ export async function POST(req: NextRequest) {
 
       if (ownerId) {
         try {
-          const owner = await prisma.user.findUnique({
-            where: { id: ownerId },
-            select: { email: true, username: true },
-          })
-          const state = await loadAppState(['deed_notifications'])
-          const existing = Array.isArray(state.deed_notifications)
-            ? state.deed_notifications as import('@/lib/in-app-notifications').AppNotification[]
-            : []
-          const { next } = buildNotifyRows(
-            existing,
-            {
-              recipients: [ownerId],
-              type: 'system',
-              title: 'Inbound lead accepted',
-              body: `${updated.name}${updated.companyName ? ` · ${updated.companyName}` : ''}`,
-              module: 'crm',
-              path: `/crm?crmTab=leads&leadId=${updated.id}`,
-              icon: '📧',
-              entityKey: `lead:${updated.id}`,
-              excludeUserId: session.id,
+          await publishNotificationEvent({
+            eventType: 'crm.lead.created',
+            entityType: 'lead',
+            entityId: updated.id,
+            actorUserId: session.id,
+            userIds: [ownerId],
+            title: 'Inbound lead accepted',
+            body: `${updated.name}${updated.companyName ? ` · ${updated.companyName}` : ''}`,
+            actionUrl: `/crm?crmTab=leads&leadId=${updated.id}`,
+            metadata: {
+              leadEmail: updated.email,
+              subject: updated.emailSubject,
             },
-            () => randomUUID(),
-          )
-          await saveStoreKeys({ deed_notifications: JSON.stringify(next.slice(0, 500)) })
-          await notifyInboundLeadCreated({
-            leadId: updated.id,
-            leadName: updated.name,
-            companyName: updated.companyName,
-            leadEmail: updated.email,
-            subject: updated.emailSubject,
-            ownerId,
-            ownerEmail: owner?.email || null,
-            ownerName: owner?.username || null,
+            idempotencyKey: `crm-lead-accepted:${updated.id}:${ownerId}`,
           })
-        } catch { /* notify best-effort */ }
+        } catch { /* notification outbox is best-effort after lead commit */ }
       }
 
       return NextResponse.json({ ok: true, lead: updated })
