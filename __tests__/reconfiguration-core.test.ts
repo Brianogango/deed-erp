@@ -10,6 +10,7 @@ import {
   reconfigCompletionEventKey,
 } from '@/lib/reconfiguration/costing'
 import { buildDisplayName, buildSpecsString, parseSpecsString } from '@/lib/reconfiguration/display-name'
+import { SNAPSHOT_FIELD_MAX, clipSnapshotText, snapshotTextFields } from '@/lib/reconfiguration/snapshot-write'
 import { canTransition, nextStatus } from '@/lib/reconfiguration/state-machine'
 import { buildReservationId } from '@/lib/reconfiguration/service'
 import type { InstalledComponentView } from '@/lib/reconfiguration/types'
@@ -82,6 +83,20 @@ describe('display-name', () => {
         storageType: 'SSD',
       }),
     ).toContain('8GB RAM')
+  })
+})
+
+describe('snapshot-write clip', () => {
+  it('clips catalog titles that exceed the display_name column', () => {
+    const longName = `${'Lenovo V14 G5 Intel Core Ultra '.repeat(50)} - 8GB RAM, 256GB SSD`
+    expect(longName.length).toBeGreaterThan(SNAPSHOT_FIELD_MAX.displayName)
+    const clipped = snapshotTextFields({ displayName: longName })
+    expect(clipped.displayName.length).toBe(SNAPSHOT_FIELD_MAX.displayName)
+  })
+
+  it('returns null for empty optional fields and Device for empty display name', () => {
+    expect(clipSnapshotText('', 10)).toBeNull()
+    expect(snapshotTextFields({ displayName: '' }).displayName).toBe('Device')
   })
 })
 

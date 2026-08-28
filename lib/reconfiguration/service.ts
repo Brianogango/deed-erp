@@ -18,6 +18,7 @@ import {
 } from '@/lib/reconfiguration/costing'
 import { calculateConfigurationDiff, specsFromProposed } from '@/lib/reconfiguration/diff-engine'
 import { buildDisplayName } from '@/lib/reconfiguration/display-name'
+import { snapshotTextFields } from '@/lib/reconfiguration/snapshot-write'
 import { resolveUnitConfig } from '@/lib/reconfiguration/unit-config'
 import { planComponentInstall, planComponentRemoval } from '@/lib/inventory/reconfiguration-stock'
 import {
@@ -280,14 +281,16 @@ export async function seedInstalledComponents(params: {
   await prisma.deviceConfigurationSnapshot.create({
     data: {
       serialId: device.serialId,
-      processor: config.processor,
-      processorGeneration: config.processorGeneration,
+      ...snapshotTextFields({
+        processor: config.processor,
+        processorGeneration: config.processorGeneration,
+        storageType: config.storageType,
+        displayName: config.displayName,
+      }),
       totalRamGb: config.totalRamGb,
       ramComposition: config.ramComposition as any,
       primaryStorageGb: config.primaryStorageGb,
       secondaryStorageGb: config.secondaryStorageGb,
-      storageType: config.storageType,
-      displayName: config.displayName,
       source: 'migration',
       isCurrent: true,
       createdById: params.userId || null,
@@ -523,14 +526,16 @@ async function applyTargetToWorkOrder(workOrderId: string, target: TargetConfigI
   const currentSnap = await prisma.deviceConfigurationSnapshot.create({
     data: {
       serialId: wo.serialId,
-      processor: device.current.processor,
-      processorGeneration: device.current.processorGeneration,
+      ...snapshotTextFields({
+        processor: device.current.processor,
+        processorGeneration: device.current.processorGeneration,
+        storageType: device.current.storageType,
+        displayName: device.current.displayName,
+      }),
       totalRamGb: device.current.totalRamGb,
       ramComposition: (device.current.ramComposition || []) as any,
       primaryStorageGb: device.current.primaryStorageGb,
       secondaryStorageGb: device.current.secondaryStorageGb,
-      storageType: device.current.storageType,
-      displayName: device.current.displayName,
       source: 'reconfiguration',
       sourceWorkOrderId: workOrderId,
       isCurrent: true,
@@ -541,14 +546,16 @@ async function applyTargetToWorkOrder(workOrderId: string, target: TargetConfigI
   const proposedSnap = await prisma.deviceConfigurationSnapshot.create({
     data: {
       serialId: wo.serialId,
-      processor: diff.proposed.processor,
-      processorGeneration: diff.proposed.processorGeneration,
+      ...snapshotTextFields({
+        processor: diff.proposed.processor,
+        processorGeneration: diff.proposed.processorGeneration,
+        storageType: diff.proposed.storageType,
+        displayName: diff.proposed.displayName,
+      }),
       totalRamGb: diff.proposed.totalRamGb,
       ramComposition: diff.proposed.ramComposition as any,
       primaryStorageGb: diff.proposed.primaryStorageGb,
       secondaryStorageGb: diff.proposed.secondaryStorageGb,
-      storageType: diff.proposed.storageType,
-      displayName: diff.proposed.displayName,
       source: 'reconfiguration',
       sourceWorkOrderId: workOrderId,
       isCurrent: false,

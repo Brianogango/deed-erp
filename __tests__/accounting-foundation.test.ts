@@ -98,6 +98,10 @@ describe('zero-balance CoA template', () => {
     expect(rows.every(r => r.balance === 0)).toBe(true)
     expect(rows.some(r => r.code === '1800')).toBe(true)
     expect(rows.some(r => r.code === '3000')).toBe(true)
+    expect(rows.some(r => r.code === '6200')).toBe(true)
+    expect(rows.some(r => r.code === '6210')).toBe(true)
+    const codes = rows.map(r => r.code)
+    expect(new Set(codes).size).toBe(codes.length)
   })
 
   it('maps to blob account shape', () => {
