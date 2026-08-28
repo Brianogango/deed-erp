@@ -1,6 +1,7 @@
 import './globals.css'
 import '@/components/modules/odoo-record-designs.css'
 import type { Metadata, Viewport } from 'next'
+import { Suspense } from 'react'
 import { getServerSession } from '@/lib/auth/server'
 import { listPublicUsers } from '@/lib/auth/users-repository'
 import { PUBLIC_USERS } from '@/lib/auth/public-users'
@@ -92,7 +93,9 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       <body className={bodyClassName}>
         <SwRegister />
         <AppShell initialUser={shellUser} initialUsers={users} serverState={serverState}>
-          <NavigationStateGuard />
+          <Suspense fallback={null}>
+            <NavigationStateGuard />
+          </Suspense>
           {children}
         </AppShell>
       </body>
