@@ -499,8 +499,8 @@ export async function GET(request: NextRequest) {
         inputVat: money(vat.inputVat),
         vatPayable,
         withholdingVat: money(vat.withholdingVat || 0),
-        etimsPending: Number(vat.etimsPendingCount || 0),
-        etimsMissingEvidence: Number(vat.etimsMissingEvidenceCount || 0),
+        etimsPending: Number(vat.pendingTransmissionCount || 0),
+        etimsLinked: Number(vat.etimsLinkedCount || 0),
         glDifference: vat.glDifference == null ? null : money(vat.glDifference),
       },
       profitLoss: {
