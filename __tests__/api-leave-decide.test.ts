@@ -7,6 +7,12 @@ const { mockGetServerSession, mockPrisma, mockNotifyLeaveDecision } = vi.hoisted
     leaveRequest: { findUnique: vi.fn(), update: vi.fn() },
     leaveBalance: { findUnique: vi.fn(), upsert: vi.fn() },
     employee: { findFirst: vi.fn(), findUnique: vi.fn() },
+    // notification service publishes inside prisma.$transaction
+    notificationEvent: { findUnique: vi.fn().mockResolvedValue(null), create: vi.fn().mockResolvedValue({ id: 'evt-test' }), update: vi.fn() },
+    notificationRecipient: { findMany: vi.fn().mockResolvedValue([]), create: vi.fn(), update: vi.fn() },
+    notificationOutbox: { create: vi.fn() },
+    user: { findMany: vi.fn().mockResolvedValue([]), findUnique: vi.fn() },
+    $transaction: vi.fn((fn: any) => fn(mockPrisma)),
   },
 }))
 
@@ -32,9 +38,20 @@ vi.mock('@/lib/hr/leave-notifications', () => ({
   }),
 }))
 
+// The route publishes through the notification platform (hr-events →
+// notification service), not the legacy leave-notifications helper.
+const { mockPublishLeaveDecision, mockPublishLeaveCancelled } = vi.hoisted(() => ({
+  mockPublishLeaveDecision: vi.fn(),
+  mockPublishLeaveCancelled: vi.fn(),
+}))
+vi.mock('@/lib/notifications/hr-events', () => ({
+  publishLeaveDecision: mockPublishLeaveDecision,
+  publishLeaveCancelled: mockPublishLeaveCancelled,
+}))
+
 import { PUT } from '@/app/api/leave-requests/[id]/route'
 import { NextRequest } from 'next/server'
-import { notifyLeaveDecision } from '@/lib/hr/leave-notifications'
+import { publishLeaveDecision } from '@/lib/notifications/hr-events'
 
 const directorSession = { user: { id: 'u-director', name: 'Director', username: 'director', role: 'director' } }
 
@@ -67,18 +84,20 @@ describe('PUT /api/leave-requests/[id] — no self-approval', () => {
     const res = await PUT(putReq({ status: 'approved', reviewNotes: 'OK' }), { params: { id: 'lr-1' } })
     expect(res.status).toBe(200)
     expect(mockPrisma.leaveRequest.update).toHaveBeenCalled()
-    expect(notifyLeaveDecision).toHaveBeenCalledWith(
+    expect(publishLeaveDecision).toHaveBeenCalledWith(
       expect.objectContaining({ id: 'lr-1' }),
       'approved',
+      'u-director',
     )
   })
 
   it('emails the applicant on reject', async () => {
     const res = await PUT(putReq({ status: 'rejected', reviewNotes: 'No cover' }), { params: { id: 'lr-1' } })
     expect(res.status).toBe(200)
-    expect(notifyLeaveDecision).toHaveBeenCalledWith(
+    expect(publishLeaveDecision).toHaveBeenCalledWith(
       expect.objectContaining({ id: 'lr-1' }),
       'rejected',
+      'u-director',
     )
   })
 

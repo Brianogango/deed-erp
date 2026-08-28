@@ -6,6 +6,7 @@ const {
   mockGetSession,
   mockRequireRole,
   mockPrismaInvoice,
+  mockPrismaInvoiceItem,
   mockPrismaPurchaseOrder,
   mockPrismaPurchaseOrderItem,
   mockResolveClientId,
@@ -16,10 +17,18 @@ const {
   mockPrismaInvoice: {
     findMany: vi.fn(),
     findUnique: vi.fn(),
+    findUniqueOrThrow: vi.fn(),
     create: vi.fn(),
     update: vi.fn(),
+    updateMany: vi.fn().mockResolvedValue({ count: 1 }),
     delete: vi.fn(),
     count: vi.fn(),
+  },
+  mockPrismaInvoiceItem: {
+    findMany: vi.fn().mockResolvedValue([]),
+    deleteMany: vi.fn(),
+    createMany: vi.fn(),
+    create: vi.fn(),
   },
   mockPrismaPurchaseOrder: {
     findUnique: vi.fn(),
@@ -65,12 +74,16 @@ vi.mock('@/lib/prisma', () => ({
         invoice: mockPrismaInvoice,
         purchaseOrder: mockPrismaPurchaseOrder,
         purchaseOrderItem: mockPrismaPurchaseOrderItem,
+        invoiceItem: mockPrismaInvoiceItem,
+        taxTransaction: { upsert: vi.fn() },
+        client: { findUnique: vi.fn().mockResolvedValue(null) },
       }),
   },
 }))
 
 vi.mock('@/lib/finance-audit', () => ({
   writeFinancialAudit: vi.fn().mockResolvedValue(undefined),
+  writeFinancialAuditInTx: vi.fn().mockResolvedValue(undefined),
 }))
 
 vi.mock('@/lib/accounting/invoice-journals', () => ({
@@ -78,6 +91,24 @@ vi.mock('@/lib/accounting/invoice-journals', () => ({
   postInvoiceJournalToPrisma: vi.fn().mockResolvedValue(undefined),
   reverseInvoiceJournalInPrisma: vi.fn().mockResolvedValue(null),
   postCustomerCreditJournalToPrisma: vi.fn().mockResolvedValue(undefined),
+  buildInvoiceJournalInput: vi.fn().mockResolvedValue({
+    ref: 'JRN/INV/2026/0001',
+    sourceType: 'invoice',
+    sourceId: 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb',
+    invoiceId: 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb',
+    lines: [
+      { accountLabel: '1800 - Accounts Receivable', label: 'AR', debit: 1160, credit: 0 },
+      { accountLabel: '5000 - Sales Revenue', label: 'Revenue', debit: 0, credit: 1000 },
+      { accountLabel: '3301 - Output VAT Payable', label: 'VAT', debit: 0, credit: 160 },
+    ],
+  }),
+  allocateInvoiceJournalRef: vi.fn().mockImplementation(async (ref: string) => ref),
+}))
+
+vi.mock('@/lib/accounting/journal-service', () => ({
+  createJournalEntryInTx: vi.fn().mockResolvedValue({ id: 'je-1' }),
+  createJournalEntry: vi.fn().mockResolvedValue({ id: 'je-1' }),
+  reverseJournalEntry: vi.fn().mockResolvedValue(null),
 }))
 
 vi.mock('@/lib/accounting/resolve-invoice-mirror', () => ({
@@ -157,6 +188,8 @@ beforeEach(() => {
   mockRequireRole.mockResolvedValue(directorUser)
   mockResolveClientId.mockResolvedValue(CLIENT_ID)
   mockPrismaInvoice.count.mockResolvedValue(0)
+  mockPrismaInvoice.updateMany.mockResolvedValue({ count: 1 })
+  mockPrismaInvoice.findUniqueOrThrow.mockImplementation((...args: any[]) => mockPrismaInvoice.findUnique(...args))
   mockGetNextDocNumber.mockResolvedValue('INV-00001')
   mockPostSalesCommissionForInvoice.mockResolvedValue(undefined)
 })
@@ -434,7 +467,8 @@ describe('PUT /api/invoices/:id', () => {
     mockPrismaInvoice.findUnique.mockResolvedValue({ ...baseInvoice, lockVersion: 0 })
     mockPrismaInvoice.update.mockResolvedValue(baseInvoice)
     await PUT(idReq(INVOICE_ID, { status: 'pending' }), { params: { id: INVOICE_ID } })
-    const updateData = mockPrismaInvoice.update.mock.calls[0][0].data
+    // The guarded write goes through updateMany (optimistic lockVersion).
+    const updateData = mockPrismaInvoice.updateMany.mock.calls[0][0].data
     expect(updateData.status).toBe('pending_approval')
   })
 
@@ -443,9 +477,9 @@ describe('PUT /api/invoices/:id', () => {
     mockPrismaInvoice.update.mockResolvedValue(baseInvoice)
     const lines = [{ description: 'Service', qty: 1, unitPrice: 5000 }]
     await PUT(idReq(INVOICE_ID, { lines }), { params: { id: INVOICE_ID } })
-    const updateData = mockPrismaInvoice.update.mock.calls[0][0].data
-    expect(updateData.items).toHaveProperty('deleteMany')
-    expect(updateData.items).toHaveProperty('create')
+    // Items are replaced via the item table, not a nested invoice update.
+    expect(mockPrismaInvoiceItem.deleteMany).toHaveBeenCalledWith({ where: { invoiceId: INVOICE_ID } })
+    expect(mockPrismaInvoiceItem.createMany).toHaveBeenCalled()
   })
 
   it('refuses to wipe existing items with lines:[]', async () => {
@@ -455,8 +489,8 @@ describe('PUT /api/invoices/:id', () => {
     })
     mockPrismaInvoice.update.mockResolvedValue(baseInvoice)
     await PUT(idReq(INVOICE_ID, { lines: [], status: 'posted' }), { params: { id: INVOICE_ID } })
-    const updateData = mockPrismaInvoice.update.mock.calls[0][0].data
-    expect(updateData.items).toBeUndefined()
+    expect(mockPrismaInvoiceItem.deleteMany).not.toHaveBeenCalled()
+    expect(mockPrismaInvoiceItem.createMany).not.toHaveBeenCalled()
   })
 
   it('returns 403 for unauthorized role', async () => {
@@ -533,6 +567,9 @@ describe('POST /api/invoices — server-side 3-way match', () => {
       id: PO_ID,
       items: [{ id: PO_ITEM_ID, productId: PRODUCT_ID, qtyOrdered: 10, qtyReceived: 5, qtyBilled: 1 }],
     })
+    // qtyBilled is recomputed from live bills — the existing billed qty comes
+    // from a prior active bill, not the stale PO counter.
+    mockPrismaInvoice.findMany.mockResolvedValue([{ items: [{ productId: PRODUCT_ID, qty: 1 }] }])
     mockPrismaInvoice.create.mockResolvedValue(baseInvoice)
 
     const res = await POST(postReq({
@@ -554,6 +591,7 @@ describe('POST /api/invoices — server-side 3-way match', () => {
       id: PO_ID,
       items: [{ id: PO_ITEM_ID, productId: PRODUCT_ID, qtyOrdered: 5, qtyReceived: 5, qtyBilled: 3 }],
     })
+    mockPrismaInvoice.findMany.mockResolvedValue([{ items: [{ productId: PRODUCT_ID, qty: 3 }] }])
     mockPrismaInvoice.create.mockResolvedValue(baseInvoice)
 
     const res = await POST(postReq({

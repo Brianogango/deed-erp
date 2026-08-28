@@ -7,6 +7,7 @@
  */
 
 import { describe, it, expect } from 'vitest'
+import { calculateKenyaPayroll } from '@/lib/hr/kenya-payroll'
 import {
   calcStockByLocation,
   availableSellableQty,
@@ -305,14 +306,17 @@ describe('computePayrollLine()', () => {
     expect(line.allowances).toBe(15000)
   })
 
-  it('computes deductions as 18% of basicSalary (rounded)', () => {
+  it('computes statutory deductions via the Kenya payroll engine', () => {
     const line = computePayrollLine(emp)
-    expect(line.deductions).toBe(Math.round(50000 * 0.18)) // 9000
+    // Real PAYE + NSSF + SHIF + AHL on 65,000 gross — not the old flat 18%.
+    const engine = calculateKenyaPayroll(emp.basicSalary, emp.housingAllowance, emp.transportAllowance)
+    expect(line.deductions).toBe(engine.totalDeductions)
+    expect(line.deductions).toBeCloseTo(16547.1, 2)
   })
 
   it('netPay = basicSalary + allowances − deductions', () => {
     const line = computePayrollLine(emp)
-    expect(line.netPay).toBe(50000 + 15000 - 9000) // 56000
+    expect(line.netPay).toBeCloseTo(50000 + 15000 - line.deductions, 2)
   })
 
   it('carries employee id and name through', () => {
@@ -326,17 +330,19 @@ describe('computePayrollLine()', () => {
     expect(line.basicSalary).toBe(50000)
   })
 
-  it('rounds deductions correctly for non-integer results', () => {
+  it('deductions track the statutory engine for non-integer salaries', () => {
     const oddSalary: PayrollEmployee = { ...emp, basicSalary: 33333 }
     const line = computePayrollLine(oddSalary)
-    expect(line.deductions).toBe(Math.round(33333 * 0.18))
+    const engine = calculateKenyaPayroll(33333, emp.housingAllowance, emp.transportAllowance)
+    expect(line.deductions).toBe(engine.totalDeductions)
   })
 
   it('handles zero allowances', () => {
     const noAllowances: PayrollEmployee = { ...emp, housingAllowance: 0, transportAllowance: 0 }
     const line = computePayrollLine(noAllowances)
     expect(line.allowances).toBe(0)
-    expect(line.netPay).toBe(50000 - Math.round(50000 * 0.18))
+    const engine = calculateKenyaPayroll(50000, 0, 0)
+    expect(line.netPay).toBeCloseTo(50000 - engine.totalDeductions, 2)
   })
 })
 

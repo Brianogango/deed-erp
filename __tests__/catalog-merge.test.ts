@@ -66,7 +66,7 @@ describe('mergeCatalogProducts', () => {
     expect(added.salePrice).toBe(1500)     // decimal-as-string coerced
     expect(added.category).toBe('Parts & Components')
     expect(added.requiresSerial).toBe(false)
-    expect(added.taxRate).toBe(16)
+    expect(added.taxRate).toBe(0)          // product VAT defaults to zero until set
     expect(added.canBeSold).toBe(true)
   })
 

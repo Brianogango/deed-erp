@@ -146,7 +146,7 @@ describe('delivery note commercial PDF', () => {
     expect(asString).toContain('SPECS')
     expect(asString).toContain('SN-AAA-001')
     expect(asString).toContain('16GB RAM')
-    expect(asString).toContain('Receipt Acknowledgement')
+    expect(asString).toContain('RECEIPT ACKNOWLEDGEMENT')
     expect(asString).toContain('Jane Wanjiku')
   })
 })
