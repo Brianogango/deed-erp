@@ -62,6 +62,8 @@ export interface HrCtx {
   users: User[]
   showToast: (msg: string, type?: 'success' | 'error' | 'info') => void
   addAuditLog: (action: string, documentRef: string, details: string) => void
+  /** @deprecated Compatibility injection only. HR actions no longer create client-side business notifications. */
+  pushNotif?: (...args: unknown[]) => void
   workflowApprovals: WorkflowApproval[]
   setWorkflowApprovals: (updater: (prev: WorkflowApproval[]) => WorkflowApproval[]) => void
 }
