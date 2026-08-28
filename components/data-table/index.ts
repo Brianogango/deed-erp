@@ -1,4 +1,4 @@
-export { default as DataTable } from './DataTable'
+export { default as DataTable } from './ResilientDataTable'
 export type { DataTableProps } from './DataTable'
 export { default as DetailsDrawer } from './DetailsDrawer'
 export type { DrawerTab, DrawerTabId } from './DetailsDrawer'
