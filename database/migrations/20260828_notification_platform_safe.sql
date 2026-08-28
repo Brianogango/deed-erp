@@ -5,6 +5,8 @@
 --   * adds LISTEN/NOTIFY trigger for real-time bell updates
 -- Apply with: node scripts/run-safe-notification-platform.mjs
 
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
 CREATE TABLE IF NOT EXISTS notification_events (
   id                        UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   event_type                VARCHAR(120) NOT NULL,
@@ -221,15 +223,21 @@ CREATE INDEX IF NOT EXISTS idx_notification_dead_letters_open
   WHERE resolved_at IS NULL;
 
 CREATE OR REPLACE FUNCTION deed_notify_notification_recipient_change()
-RETURNS trigger AS $$
+RETURNS trigger AS $
 DECLARE
   target_user UUID;
 BEGIN
-  target_user := COALESCE(NEW.user_id, OLD.user_id);
+  IF TG_OP = 'DELETE' THEN
+    target_user := OLD.user_id;
+    PERFORM pg_notify('deed_notifications_changed', COALESCE(target_user::text, ''));
+    RETURN OLD;
+  END IF;
+
+  target_user := NEW.user_id;
   PERFORM pg_notify('deed_notifications_changed', COALESCE(target_user::text, ''));
-  RETURN COALESCE(NEW, OLD);
+  RETURN NEW;
 END;
-$$ LANGUAGE plpgsql;
+$ LANGUAGE plpgsql;
 
 DROP TRIGGER IF EXISTS trg_notification_recipient_notify ON notification_recipients;
 CREATE TRIGGER trg_notification_recipient_notify
