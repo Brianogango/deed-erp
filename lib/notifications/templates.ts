@@ -52,17 +52,21 @@ export async function renderNotificationTemplate(
   event: EventLike,
   channel: NotificationChannel,
 ): Promise<RenderedNotificationTemplate> {
-  const template = await prisma.notificationTemplate.findFirst({
+  const exact = await prisma.notificationTemplate.findFirst({
     where: {
       channel,
       isActive: true,
-      eventType: { in: [event.eventType, '*'] },
+      eventType: event.eventType,
     },
-    orderBy: [
-      // exact event beats wildcard
-      { eventType: 'desc' },
-      { version: 'desc' },
-    ],
+    orderBy: { version: 'desc' },
+  })
+  const template = exact || await prisma.notificationTemplate.findFirst({
+    where: {
+      channel,
+      isActive: true,
+      eventType: '*',
+    },
+    orderBy: { version: 'desc' },
   })
 
   const metadata = asRecord(event.metadata)
