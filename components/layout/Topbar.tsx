@@ -1283,10 +1283,7 @@ export default function Topbar() {
     if (prevNotifIds.current.size > 0) {
       const newNotifs = myNotifs.filter(n => !n.read && !prevNotifIds.current.has(n.id))
       const hasUrgent = newNotifs.some(
-        n =>
-          n.icon === '🚨' ||
-          n.type === 'repair' ||
-          n.title.toLowerCase().includes('urgent')
+        n => n.icon === '🚨' || n.severity === 'critical'
       )
 
       if (hasUrgent && soundEnabled) {
