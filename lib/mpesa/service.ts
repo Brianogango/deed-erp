@@ -22,15 +22,13 @@ function toRecord(row: {
   checkoutRequestId: string
   merchantRequestId: string
   phone: string
-  amount: { toNumber?: () => number } | number | string
+  amount: unknown
   status: string
   resultCode: string | null
   resultDesc: string | null
   mpesaReceipt: string | null
 }): StkRecord {
-  const amount = typeof row.amount === 'object' && row.amount && 'toNumber' in row.amount
-    ? row.amount.toNumber()
-    : Number(row.amount)
+  const amount = Number(row.amount)
   return {
     checkoutRequestId: row.checkoutRequestId,
     merchantRequestId: row.merchantRequestId,
