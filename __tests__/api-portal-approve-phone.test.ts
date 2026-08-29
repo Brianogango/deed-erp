@@ -10,7 +10,9 @@ const { mockLookupRepair, mockLoadAppState, mockCheckRateLimit } = vi.hoisted(()
 vi.mock('@/lib/portal-repair-server', () => ({ lookupRepair: mockLookupRepair }))
 vi.mock('@/lib/server-store', () => ({
   loadAppState: mockLoadAppState,
+  loadAppStateForWrite: mockLoadAppState,
   saveStoreKeys: vi.fn().mockResolvedValue(undefined),
+  withAppStateKeyLock: (_key: string, fn: () => Promise<unknown>) => fn(),
 }))
 vi.mock('@/lib/rate-limit', () => ({ checkRateLimit: mockCheckRateLimit }))
 vi.mock('@/lib/prisma', () => ({ default: { client: { findFirst: vi.fn(), create: vi.fn() }, user: { findFirst: vi.fn() }, saleOrder: { findUnique: vi.fn(), update: vi.fn(), create: vi.fn() }, invoice: { findUnique: vi.fn(), update: vi.fn(), create: vi.fn() } } }))

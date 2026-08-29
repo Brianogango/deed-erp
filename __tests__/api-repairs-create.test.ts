@@ -14,7 +14,9 @@ vi.mock('@/lib/auth/server', () => ({
 
 vi.mock('@/lib/server-store', () => ({
   loadAppState: mockLoadAppState,
+  loadAppStateForWrite: mockLoadAppState,
   saveStoreKeys: mockSaveStoreKeys,
+  withAppStateKeyLock: (_key: string, fn: () => Promise<unknown>) => fn(),
 }))
 
 vi.mock('@/lib/repair-ref-counter', () => ({

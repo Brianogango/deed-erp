@@ -593,8 +593,18 @@ export default function RepairPortalPage() {
             {(repair.qcReportUrl || repair.qcReportData) && repair.qcReportName ? (
               <a href={repair.qcReportUrl || repair.qcReportData} download={repair.qcReportName}><span>Quality check report</span><strong>Available ↓</strong></a>
             ) : <div><span>Quality check report</span><small>Pending</small></div>}
-            {invoiceOrQuoteTotal > 0 ? <a href={'/api/portal/repair/' + encodeURIComponent(ref) + '/invoice-pdf'} download><span>Invoice</span><strong>Available ↓</strong></a> : <div><span>Invoice</span><small>Locked</small></div>}
-            {paymentConfirmed ? <a href={'/api/portal/repair/' + encodeURIComponent(ref) + '/receipt-pdf'} download><span>Receipt</span><strong>Available ↓</strong></a> : <div><span>Receipt</span><small>Locked</small></div>}
+            {(invoiceOrQuoteTotal > 0 || paymentConfirmed) && !verifyPhone.trim() && (
+              <div className="client-repair-verify">
+                <label htmlFor="repair-doc-phone">Verify phone number</label>
+                <p>Documents carry your billing details — enter the phone number registered on this repair to download them.</p>
+                <div className="client-repair-phone-field">
+                  <span>+254</span>
+                  <input id="repair-doc-phone" value={verifyPhone} onChange={event => setVerifyPhone(event.target.value)} inputMode="tel" placeholder="712 345 678" />
+                </div>
+              </div>
+            )}
+            {invoiceOrQuoteTotal > 0 ? <a href={'/api/portal/repair/' + encodeURIComponent(ref) + '/invoice-pdf?phone=' + encodeURIComponent(verifyPhone.trim())} download><span>Invoice</span><strong>Available ↓</strong></a> : <div><span>Invoice</span><small>Locked</small></div>}
+            {paymentConfirmed ? <a href={'/api/portal/repair/' + encodeURIComponent(ref) + '/receipt-pdf?phone=' + encodeURIComponent(verifyPhone.trim())} download><span>Receipt</span><strong>Available ↓</strong></a> : <div><span>Receipt</span><small>Locked</small></div>}
           </div>
         </details>
 

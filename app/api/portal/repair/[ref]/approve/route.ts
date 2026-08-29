@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { approvalDecisions } from '@/lib/portal-repairs'
 import { lookupRepair } from '@/lib/portal-repair-server'
 import { roundMoney, settlementAfterReapproval } from '@/lib/portal-payment'
-import { saveStoreKeys, loadAppState } from '@/lib/server-store'
+import { saveStoreKeys, loadAppState, loadAppStateForWrite, withAppStateKeyLock } from '@/lib/server-store'
 import { checkRateLimit } from '@/lib/rate-limit'
 import { phoneMatches, isPortalPhoneVerificationRequired } from '@/lib/portal-verify'
 import prisma from '@/lib/prisma'
@@ -248,7 +248,17 @@ export async function POST(
     }
   }
 
-  await saveStoreKeys({ 'deed_repairs_v2': JSON.stringify(repairs) })
+  // Persist under the ledger lock against a fresh read — the array loaded at
+  // the top is stale by now (Prisma work happened in between), and writing it
+  // wholesale would drop concurrent repairs/approvals.
+  await withAppStateKeyLock('deed_repairs_v2', async () => {
+    const fresh = await loadAppStateForWrite()
+    const freshRepairs = Array.isArray(fresh['deed_repairs_v2']) ? fresh['deed_repairs_v2'] as any[] : []
+    const idx = freshRepairs.findIndex((r: any) => r.id === targetRepair.id)
+    if (idx >= 0) freshRepairs[idx] = targetRepair
+    else freshRepairs.unshift(targetRepair)
+    await saveStoreKeys({ 'deed_repairs_v2': JSON.stringify(freshRepairs) })
+  })
 
   if (repair.customerPhone) {
     const message = approved

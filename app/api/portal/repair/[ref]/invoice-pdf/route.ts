@@ -5,6 +5,8 @@ import { DEFAULT_COMPANY_SETTINGS, DEFAULT_BANK_ACCOUNTS } from '@/lib/store'
 import { buildDeedDocumentPdf, deedPdfToBuffer } from '@/lib/deed-document-pdf'
 import { loadLogoForPdfServer } from '@/lib/pdf-logo.server'
 import { customerFacingNotes } from '@/lib/customer-facing-notes'
+import { getServerSession } from '@/lib/auth/server'
+import { portalDocumentAccessAllowed, isPortalPhoneVerificationRequired } from '@/lib/portal-verify'
 
 export const dynamic = 'force-dynamic'
 
@@ -32,6 +34,18 @@ export async function GET(
     const repair = repairs.find((r: any) => r.ref.toLowerCase() === ref.toLowerCase())
     if (!repair) {
       return NextResponse.json({ error: 'Repair not found.' }, { status: 404 })
+    }
+
+    // The ref alone is not a capability — invoice PDFs carry customer PII and
+    // commercial detail. Staff session or the registered phone number.
+    const session = await getServerSession().catch(() => null)
+    const settingsState = await loadAppState(['deed_systemSettings'])
+    const allowed = await portalDocumentAccessAllowed(_req, repair, {
+      session,
+      phoneVerificationRequired: isPortalPhoneVerificationRequired(settingsState.deed_systemSettings as any),
+    })
+    if (!allowed) {
+      return NextResponse.json({ error: 'Enter the registered phone number to download this document.' }, { status: 403 })
     }
 
     const invoice = findRepairLinkedInvoice(invoices, repair)

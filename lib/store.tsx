@@ -15885,7 +15885,9 @@ const storeCtx: AppState = {
 
       if (allPassed) {
         const partsToConsume = repair.partsUsed.filter(part => part.reservedDate && !part.usedDate) || []
-        const consumeLines = partsToConsume.map(part => {
+        // The Settings toggle must actually gate consumption.
+        const consumptionEnabled = systemSettings.repPartsConsumption !== false
+        const consumeLines = consumptionEnabled ? partsToConsume.map(part => {
           const product = prodRef.current.find(p => p.id === part.productId)
           return {
             productId: part.productId,
@@ -15893,7 +15895,7 @@ const storeCtx: AppState = {
             qty: part.qty,
             requiresSerial: Boolean(product?.requiresSerial),
           }
-        })
+        }) : []
         // Apply consume plan against a mutable local stock snapshot so multi-line
         // deductions don't over-allocate the same units in one QC pass.
         const localBulk = bulkStock.map(l => ({ ...l }))
@@ -15909,6 +15911,12 @@ const storeCtx: AppState = {
             .filter(s => s.productId === productId && s.repairId === repairId && s.status === 'assigned')
             .map(s => ({ id: s.id, serial: s.serial, location: (s.location || 'repair_unit') as LocationId })),
         })
+        // A failed/partial plan must not mark parts consumed — they could never
+        // be re-consumed, and inventory would diverge from the repair ledger.
+        if (consumePlan.errors && consumePlan.errors.length > 0) {
+          showToast(`Cannot complete QC — parts consumption failed: ${consumePlan.errors[0]}`, 'error')
+          return
+        }
         for (const step of consumePlan.steps) {
           if (step.kind === 'consume_serial') {
             setSerials(p => p.map(s => s.id === step.serialId ? { ...s, status: 'sold' as const } : s))
@@ -15944,6 +15952,17 @@ const storeCtx: AppState = {
         }
         setRepairs(p => p.map(r => r.id === repairId ? passedRepair : r))
         syncRepairToPortal(passedRepair, 'Device ready for collection')
+
+        // A draft invoice created at quote-approval time (Path B procurement
+        // flow) must post when the job passes QC — the old auto-post lived in
+        // markRepairReady, which no UI calls, so those drafts never posted
+        // and AR/revenue never reached the books.
+        const linkedInvoice = repair.invoiceId ? invRef.current.find(i => i.id === repair.invoiceId) : null
+        if (linkedInvoice && linkedInvoice.status === 'draft' && linkedInvoice.lines.length > 0) {
+          void storeCtxRef.current!.postInvoice(linkedInvoice.id)
+          addAuditLog('post_invoice', linkedInvoice.ref, `Auto-posted on QC pass — ${repair.ref}`)
+        }
+
         notifyUsers({
           recipients: [
             repair.assignedTechnicianId,
@@ -16313,7 +16332,7 @@ const storeCtx: AppState = {
         showToast('Invoice already exists for this repair', 'error')
         return null
       }
-      
+
       const chargeLines = buildRepairInvoiceCharges(repair, applyVat, companySettings.vatRate)
       const lines: InvoiceLine[] = chargeLines.map(line => ({
         id: uid(),
@@ -16333,9 +16352,18 @@ const storeCtx: AppState = {
         return null
       }
 
+      // allocateDocRef is async — a second click can pass the invoiceId check
+      // above while this awaits. Re-check against the live store before writing.
+      const invoiceRef = await storeCtxRef.current!.allocateDocRef('INV')
+      const freshRepair = repairsRef.current.find(r => r.id === repairId)
+      if (freshRepair?.invoiceId) {
+        showToast('Invoice already exists for this repair', 'error')
+        return null
+      }
+
       const invoice: Invoice = {
         id: uid(),
-        ref: await storeCtxRef.current!.allocateDocRef('INV'),
+        ref: invoiceRef,
         type: 'customer_invoice',
         status: 'posted',
         partnerId: repair.customerId,

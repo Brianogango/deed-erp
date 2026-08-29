@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { loadAppState, saveStoreKeys } from '@/lib/server-store'
+import { loadAppStateForWrite, saveStoreKeys, withAppStateKeyLock } from '@/lib/server-store'
 import { getNextRepairRef } from '@/lib/repair-ref-counter'
 import { checkRateLimit } from '@/lib/rate-limit'
 import type { RepairOrder } from '@/lib/store'
@@ -51,12 +51,15 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Direct repairs require liability waiver acceptance.' }, { status: 422 })
   }
 
-  const state = await loadAppState()
-  const repairs = Array.isArray(state[REPAIR_STORE_KEY]) ? state[REPAIR_STORE_KEY] as RepairOrder[] : []
-  const today = new Date().toISOString().slice(0, 10)
-  const now = new Date().toISOString()
-  // Get the next unique repair reference from the atomic server-side counter
-  const ref = await getNextRepairRef()
+  // Serialize the read-modify-write on the repairs ledger; fail rather than
+  // overwrite it when the load itself failed.
+  const { repair, ref } = await withAppStateKeyLock(REPAIR_STORE_KEY, async () => {
+    const state = await loadAppStateForWrite()
+    const repairs = Array.isArray(state[REPAIR_STORE_KEY]) ? state[REPAIR_STORE_KEY] as RepairOrder[] : []
+    const today = new Date().toISOString().slice(0, 10)
+    const now = new Date().toISOString()
+    // Get the next unique repair reference from the atomic server-side counter
+    const ref = await getNextRepairRef()
 
   const accessories = Array.isArray(body.accessories)
     ? body.accessories.map((item) => ({
@@ -109,10 +112,12 @@ export async function POST(req: NextRequest) {
     intakeSource: 'customer',
   }
 
-  const updatedRepairs = [repair, ...repairs]
-  await saveStoreKeys({ [REPAIR_STORE_KEY]: JSON.stringify(updatedRepairs) })
+    const updatedRepairs = [repair, ...repairs]
+    await saveStoreKeys({ [REPAIR_STORE_KEY]: JSON.stringify(updatedRepairs) })
+    return { repair, ref }
+  })
 
-  const relativeTrackingUrl = `/portal/repair/${encodeURIComponent(ref)}`
+  const relativeTrackingUrl = `/portal/repair/${encodeURIComponent(repair.ref)}`
   const appBaseUrl = (process.env.NEXT_PUBLIC_APP_URL || 'https://erp.deed.co.ke').replace(/\/$/, '')
   const trackingUrl = `${appBaseUrl}${relativeTrackingUrl}`
   const linkDelivery = repair.customerEmail
