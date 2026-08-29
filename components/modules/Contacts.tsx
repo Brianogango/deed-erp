@@ -732,7 +732,7 @@ function ContactsInner() {
                   <h4>Credit & payment</h4>
                   <div className="contacts-credit-summary">
                     <div><span>Available store credit</span><strong className={storeCredit > 0 ? 'is-positive' : ''}>{fmtKes(storeCredit)}</strong></div>
-                    <div><span>Payment terms</span><strong>{vc.paymentTermsDays === 0 ? 'Due immediately' : `${vc.paymentTermsDays ?? 30} days`}</strong></div>
+                    <div><span>Payment terms</span><strong>{vc.paymentTermsDays === 0 ? 'Due immediately' : `${vc.paymentTermsDays ?? 0} days`}</strong></div>
                     <div><span>Credit limit</span><strong>{vc.creditLimit ? fmtKes(vc.creditLimit) : '—'}</strong></div>
                     <div><span>Open balance</span><strong>{fmtKes(openBalance)}</strong></div>
                   </div>

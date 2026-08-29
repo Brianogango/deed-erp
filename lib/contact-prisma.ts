@@ -1,5 +1,6 @@
 import { loadAppState, saveStoreKeys } from '@/lib/server-store'
 import type { Contact } from '@/lib/store'
+import { DEFAULT_CONTACT_PAYMENT_TERMS_DAYS } from '@/lib/sales/quotation-defaults'
 
 export const CONTACT_STORE_KEY = 'deed_contacts'
 
@@ -86,7 +87,7 @@ function normalizeName(value: unknown): string {
 }
 
 export function clientToContact(client: any): Contact {
-  const paymentTermsDays = numberOr(client.paymentTermsDays, 30)
+  const paymentTermsDays = numberOr(client.paymentTermsDays, DEFAULT_CONTACT_PAYMENT_TERMS_DAYS)
   return {
     id: client.id,
     type: client.clientType === 'individual' ? 'individual' : 'company',
@@ -154,7 +155,7 @@ export function normalizeContact(body: ContactInput, existing?: Contact): Contac
     industry: cleanText(body.industry) ?? existing?.industry,
     tags: tagsFrom(body.tags, existing?.tags ?? []),
     creditLimit: numberOr(body.creditLimit, existing?.creditLimit ?? 0),
-    paymentTermsDays: numberOr(body.paymentTermsDays, existing?.paymentTermsDays ?? 30),
+    paymentTermsDays: numberOr(body.paymentTermsDays, existing?.paymentTermsDays ?? DEFAULT_CONTACT_PAYMENT_TERMS_DAYS),
     bankName: cleanText(body.bankName) ?? existing?.bankName,
     bankAccount: cleanText(body.bankAccount) ?? existing?.bankAccount,
     bankBranch: cleanText(body.bankBranch) ?? existing?.bankBranch,
@@ -188,7 +189,7 @@ export function contactToClientData(contact: Contact, includeCreateFields = fals
     industry: contact.industry ?? null,
     tags: contact.tags,
     creditLimit: contact.creditLimit ?? 0,
-    paymentTermsDays: contact.paymentTermsDays ?? 30,
+    paymentTermsDays: contact.paymentTermsDays ?? DEFAULT_CONTACT_PAYMENT_TERMS_DAYS,
     bankName: contact.bankName ?? null,
     bankAccount: contact.bankAccount ?? null,
     bankBranch: contact.bankBranch ?? null,

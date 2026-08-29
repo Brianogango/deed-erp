@@ -120,7 +120,7 @@ export const createInvoiceTool: ToolDefinition = {
 
     const subtotal = Math.round(items.reduce((s, l) => s + Number(l.lineSubtotal), 0) * 100) / 100
     const invoiceNumber = await getNextDocNumber('invoice')
-    const dueDate = new Date(Date.now() + (dueInDays ?? 30) * 86400000)
+    const dueDate = new Date(Date.now() + (dueInDays ?? 0) * 86400000)
 
     const invoice = await prisma.invoice.create({
       data: {

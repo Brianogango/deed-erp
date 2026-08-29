@@ -1,6 +1,7 @@
 'use client'
 
 import { useMemo, useState } from 'react'
+import { DEFAULT_CONTACT_PAYMENT_TERMS_DAYS } from '@/lib/sales/quotation-defaults'
 import type { Contact } from '@/lib/store'
 import { useCrmStore } from '@/lib/store'
 import { SlidePanel, Field, Input, Select, Textarea } from '@/components/ui'
@@ -41,7 +42,7 @@ export function blankCompanyContact(overrides: Partial<ContactFormValues> = {}):
     industry: '', email: '', phone: '', mobile: '', website: '',
     address: '', postalAddress: '', city: '', country: 'Kenya',
     isCustomer: true, isVendor: false, tags: [],
-    paymentTermsDays: 30, creditLimit: 0,
+    paymentTermsDays: DEFAULT_CONTACT_PAYMENT_TERMS_DAYS, creditLimit: 0,
     bankName: '', bankAccount: '', bankBranch: '',
     notes: '',
     ...overrides,
@@ -55,6 +56,7 @@ export function blankIndividualContact(overrides: Partial<ContactFormValues> = {
     address: '', city: '', country: 'Kenya',
     companyId: undefined,
     isCustomer: true, isVendor: false, tags: [],
+    paymentTermsDays: DEFAULT_CONTACT_PAYMENT_TERMS_DAYS,
     notes: '',
     ...overrides,
   }
@@ -88,7 +90,7 @@ export default function ContactFormModal({
   const { contacts, addContact, updateContact, showToast } = useCrmStore()
   const [form, setForm] = useState<ContactFormValues>(() => ({
     ...initial,
-    paymentTermsDays: initial.paymentTermsDays ?? 30,
+    paymentTermsDays: initial.paymentTermsDays ?? DEFAULT_CONTACT_PAYMENT_TERMS_DAYS,
     ...(forceCustomer ? { isCustomer: true } : {}),
     ...(forceVendor ? { isVendor: true } : {}),
   }))
@@ -102,7 +104,7 @@ export default function ContactFormModal({
     [contacts],
   )
 
-  const paymentTermsValue = String(form.paymentTermsDays ?? 30)
+  const paymentTermsValue = String(form.paymentTermsDays ?? DEFAULT_CONTACT_PAYMENT_TERMS_DAYS)
   const paymentTermsOptions = useMemo(() => {
     const base: Array<{ value: string; label: string }> = PAYMENT_TERMS_DAY_OPTIONS.map(o => ({
       value: o.value,
@@ -133,7 +135,7 @@ export default function ContactFormModal({
       isCustomer: forceCustomer ? true : form.isCustomer,
       isVendor: forceVendor ? true : form.isVendor,
       tags: form.tags,
-      paymentTermsDays: form.paymentTermsDays ?? 30,
+      paymentTermsDays: form.paymentTermsDays ?? DEFAULT_CONTACT_PAYMENT_TERMS_DAYS,
       creditLimit: form.creditLimit ?? 0,
     }
     setForm(type === 'company'

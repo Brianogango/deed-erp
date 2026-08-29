@@ -470,7 +470,7 @@ function AccountingContent() {
   const [newPartnerId, setNewPartnerId] = useState('')
   const [newPartnerName, setNewPartnerName] = useState('')
   const [newDocumentDate, setNewDocumentDate] = useState(today())
-  const [newDueDate, setNewDueDate] = useState(addDays(today(), 30))
+  const [newDueDate, setNewDueDate] = useState(today())
   const [newLines, setNewLines] = useState<ManualInvoiceLine[]>([newManualInvoiceLine()])
   const moveNewLine = (index: number, direction: -1 | 1) => {
     setNewLines(prev => {
@@ -901,7 +901,7 @@ function AccountingContent() {
     setNewPartnerId('')
     setNewPartnerName('')
     setNewDocumentDate(today())
-    setNewDueDate(addDays(today(), 30))
+    setNewDueDate(today())
     setNewLines([newManualInvoiceLine()])
     setNewNotes('')
     setNewPaymentDetails({ ...DEFAULT_DOCUMENT_PAYMENT_DETAILS })
@@ -931,7 +931,7 @@ function AccountingContent() {
     setNewPartnerId(inv.partnerId)
     setNewPartnerName(inv.partnerName)
     setNewDocumentDate(inv.date || today())
-    setNewDueDate(inv.dueDate || addDays(today(), 30))
+    setNewDueDate(inv.dueDate || today())
     setNewLines((inv.lines || []).map(l => ({
       type: l.lineType === 'section' ? 'section' : 'item',
       desc: l.description,

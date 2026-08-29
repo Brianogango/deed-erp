@@ -12591,7 +12591,7 @@ const storeCtx: AppState = {
             partnerId: remote.partnerId || so.customerId,
             partnerName: remote.partnerName || so.customerName,
             date: remote.date || now(),
-            dueDate: remote.dueDate || addDays(now(), parseInt(so.paymentTerms ?? '', 10) || 30),
+            dueDate: remote.dueDate || addDays(now(), parseInt(so.paymentTerms ?? '', 10) || 0),
             lines: remoteLines,
             subtotal: subtotal || remoteLines.reduce((s, l) => s + (Number(l.subtotal) || 0), 0),
             taxTotal,
@@ -12878,7 +12878,7 @@ const storeCtx: AppState = {
         partnerId,
         partnerName,
         date: documentDate || now(),
-        dueDate: dueDate || addDays(now(), 30),
+        dueDate: dueDate || addDays(now(), 0),
         lines: builtLines,
         subtotal,
         taxTotal,
@@ -18627,7 +18627,7 @@ const storeCtx: AppState = {
         partnerId: delivery.customerId,
         partnerName: delivery.customerName,
         date: now(),
-        dueDate: addDays(now(), 30),
+        dueDate: addDays(now(), 0),
         lines: delivery.lines.map(line => {
           const idx = soLinesPool.findIndex(l => l.productId === line.productId)
           const soLine = idx >= 0 ? soLinesPool.splice(idx, 1)[0] : null
