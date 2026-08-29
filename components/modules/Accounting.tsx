@@ -69,6 +69,7 @@ import CashbookTab, { buildCashbookEntries } from './Cashbook'
 import { computeCashbookTotals, cashPositionFromTotals } from '@/lib/finance-alerts'
 import { financeInvoicePath, shouldApplyInvoiceEditQuery } from '@/lib/finance-invoice'
 import { AccountingProvider } from './accounting/AccountingContext'
+import FinancialReportTab from './accounting/FinancialReportTab'
 import JournalsTab from './accounting/JournalsTab'
 import ChartOfAccountsTab from './accounting/ChartOfAccountsTab'
 import GeneralLedgerTab from './accounting/GeneralLedgerTab'
@@ -118,8 +119,9 @@ type MainTab =
   | 'integrity'
   | 'cash_flow'
 
-type ReportTab = 'monthly' | 'pl' | 'bs' | 'vat' | 'ageing' | 'trial_balance' | 'cash_position' | 'fx' | 'cash_flow'
+type ReportTab = 'financial_report' | 'monthly' | 'pl' | 'bs' | 'vat' | 'ageing' | 'trial_balance' | 'cash_position' | 'fx' | 'cash_flow'
 const REPORT_TABS: Array<{ id: ReportTab; label: string; icon: any }> = [
+  { id: 'financial_report', label: 'Financial report', icon: faChartLine },
   { id: 'monthly', label: 'Monthly', icon: faChartLine },
   { id: 'pl', label: 'P&L', icon: faChartLine },
   { id: 'bs', label: 'Balance sheet', icon: faBalanceScale },
@@ -130,7 +132,7 @@ const REPORT_TABS: Array<{ id: ReportTab; label: string; icon: any }> = [
   { id: 'cash_position', label: 'Cash position', icon: faMoneyBillWave },
   { id: 'fx', label: 'FX revaluation', icon: faMoneyBillWave },
 ]
-const REPORT_TAB_IDS = new Set<ReportTab>(['monthly', 'pl', 'bs', 'vat', 'ageing', 'trial_balance', 'cash_position', 'fx', 'cash_flow'])
+const REPORT_TAB_IDS = new Set<ReportTab>(['financial_report', 'monthly', 'pl', 'bs', 'vat', 'ageing', 'trial_balance', 'cash_position', 'fx', 'cash_flow'])
 
 // ── Balance Sheet group lists ─────────────────────────────────────────────────
 const CA_GROUPS = [
@@ -1624,6 +1626,8 @@ function AccountingContent() {
                 </div>
               </div>
             </div>
+          ) : activeTab === 'financial_report' ? (
+            <div className="finance-subview finance-subview--financial-report"><FinancialReportTab /></div>
           ) : activeTab === 'monthly' ? (
             <div className="p-4 sm:p-6 space-y-6">
               <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4">
