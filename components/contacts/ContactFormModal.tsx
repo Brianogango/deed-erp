@@ -176,47 +176,45 @@ export default function ContactFormModal({
 
   return (
     <SlidePanel
-      title={editId ? `Edit ${form.name || 'contact'}` : 'Add contact'}
-      subtitle={editId ? 'Update contact information' : 'Create a company or individual record'}
+      title={editId ? `Edit ${form.name || 'contact'}` : 'New contact'}
+      subtitle={editId ? 'Update contact information' : 'Capture essentials first. Add more details only when needed.'}
       onClose={onClose}
     >
-      <div className="contacts-form-sheet">
+      <div className={`contacts-form-sheet contacts-form-sheet--${form.type}`}>
       {!editId && (
         <div className="contacts-type-switch" role="group" aria-label="Contact type">
-          {(['company', 'individual'] as const).map(t => (
+          {(['individual', 'company'] as const).map(t => (
             <button
               key={t}
               type="button"
               onClick={() => switchType(t)}
               className={form.type === t ? 'is-active' : ''}
+              aria-pressed={form.type === t}
             >
-              {t === 'company'
-                ? <><Fa icon={faBuilding} /> Company / Organisation</>
-                : <><Fa icon={faUser} /> Individual / Person</>}
+              {t === 'individual'
+                ? <><Fa icon={faUser} /> <span><strong>Individual</strong><small>Person / contact</small></span></>
+                : <><Fa icon={faBuilding} /> <span><strong>Company</strong><small>Organisation / business</small></span></>}
             </button>
           ))}
         </div>
       )}
 
-      <nav className="contacts-form-steps" aria-label="Contact form sections">
-        <span className="is-active"><b>1</b> Basic</span>
-        <span><b>2</b> Contact</span>
-        <span><b>3</b> Business</span>
-        <span><b>4</b> Notes</span>
-      </nav>
-
-      <div className="contacts-form-grid">
-        <SectionLabel label="Basic Information" />
-
+      <div className="contacts-form-grid contacts-form-grid--progressive">
         {form.type === 'company' ? (
           <>
-            <div className="sm:col-span-2">
+            <div className="contacts-form-wide">
               <Field label="Company Name" required id="contact-name" error={fieldErrors.name}>
                 <Input value={form.name} onChange={f('name')} placeholder="e.g. Acme Corporation Ltd" autoFocus />
               </Field>
             </div>
-            <Field label="Trading Name">
-              <Input value={form.tradingName ?? ''} onChange={f('tradingName')} placeholder="e.g. Acme (if different)" />
+            <Field label="Phone">
+              <Input value={form.phone} onChange={f('phone')} type="tel" placeholder="+254 700 000 000" maxLength={20} pattern="^\+?[0-9\s\-\(\)]+$" />
+            </Field>
+            <Field label="Email">
+              <Input value={form.email} onChange={f('email')} type="email" placeholder="info@company.com" maxLength={100} />
+            </Field>
+            <Field label="KRA PIN">
+              <Input value={form.vatNumber ?? ''} onChange={f('vatNumber')} placeholder="e.g. P051130572W" />
             </Field>
             <Field label="Industry">
               <Select
@@ -225,114 +223,199 @@ export default function ContactFormModal({
                 options={[{ value: '', label: 'Select industry...' }, ...CONTACT_INDUSTRIES.map(i => ({ value: i, label: i }))]}
               />
             </Field>
-            <Field label="Registration Number">
-              <Input value={form.registrationNumber ?? ''} onChange={f('registrationNumber')} placeholder="e.g. CPR/2024/1234" />
-            </Field>
-            <Field label="KRA PIN">
-              <Input value={form.vatNumber ?? ''} onChange={f('vatNumber')} placeholder="e.g. P051130572W" />
-            </Field>
           </>
         ) : (
           <>
-            <div className="sm:col-span-2">
+            <div className="contacts-form-wide">
+              <Field label="Linked Company">
+                <Select
+                  value={form.companyId ?? ''}
+                  onChange={f('companyId')}
+                  options={[{ value: '', label: 'No company / Independent' }, ...companies.map(c => ({ value: c.id, label: c.name }))]}
+                />
+              </Field>
+            </div>
+            <div className="contacts-form-wide">
               <Field label="Full Name" required id="contact-name" error={fieldErrors.name}>
                 <Input value={form.name} onChange={f('name')} placeholder="e.g. John Kamau Mwangi" autoFocus />
               </Field>
             </div>
-            <Field label="Job Title">
-              <Input value={form.jobTitle ?? ''} onChange={f('jobTitle')} placeholder="e.g. IT Manager" />
+            <div className="contacts-form-wide">
+              <Field label="Job Title">
+                <Input value={form.jobTitle ?? ''} onChange={f('jobTitle')} placeholder="e.g. IT Manager" />
+              </Field>
+            </div>
+            <Field label="Email">
+              <Input value={form.email} onChange={f('email')} type="email" placeholder="name@company.com" maxLength={100} />
             </Field>
-            <Field label="Linked Company">
-              <Select
-                value={form.companyId ?? ''}
-                onChange={f('companyId')}
-                options={[{ value: '', label: 'No company / Independent' }, ...companies.map(c => ({ value: c.id, label: c.name }))]}
-              />
+            <Field label="Phone">
+              <Input value={form.phone} onChange={f('phone')} type="tel" placeholder="+254 700 000 000" maxLength={20} pattern="^\+?[0-9\s\-\(\)]+$" />
             </Field>
-            <Field label="National ID / Passport No.">
-              <Input value={form.idNumber ?? ''} onChange={f('idNumber')} placeholder="e.g. 12345678" />
-            </Field>
-            <Field label="KRA PIN">
-              <Input value={form.vatNumber ?? ''} onChange={f('vatNumber')} placeholder="e.g. A123456789B" />
-            </Field>
+            <div className="contacts-form-wide contacts-form-mobile-field">
+              <Field label="Mobile">
+                <Input value={form.mobile ?? ''} onChange={f('mobile')} type="tel" placeholder="+254 700 000 000" maxLength={20} pattern="^\+?[0-9\s\-\(\)]+$" />
+              </Field>
+            </div>
           </>
         )}
 
-        <SectionLabel label="Contact Details" />
-
-        <Field label="Email"><Input value={form.email} onChange={f('email')} type="email" placeholder="email@example.com" maxLength={100} /></Field>
-        <Field label="Phone"><Input value={form.phone} onChange={f('phone')} type="tel" placeholder="+254 700 000 000" maxLength={20} pattern="^\+?[0-9\s\-\(\)]+$" /></Field>
-        <Field label="Mobile"><Input value={form.mobile ?? ''} onChange={f('mobile')} type="tel" placeholder="+254 700 000 000" maxLength={20} pattern="^\+?[0-9\s\-\(\)]+$" /></Field>
-        {form.type === 'company' && (
-          <Field label="Website"><Input value={form.website ?? ''} onChange={f('website')} placeholder="https://example.com" /></Field>
-        )}
-
-        <SectionLabel label="Address" />
-
-        <div className="sm:col-span-2">
-          <Field label="Physical Address">
-            <Input value={form.address} onChange={f('address')} placeholder="Street / Building, Area" />
-          </Field>
-        </div>
-        {form.type === 'company' && (
-          <Field label="Postal Address">
-            <Input value={form.postalAddress ?? ''} onChange={f('postalAddress')} placeholder="P.O. Box 00000-00100" />
-          </Field>
-        )}
-        <Field label="City"><Input value={form.city ?? ''} onChange={f('city')} placeholder="e.g. Nairobi" /></Field>
-        <Field label="Country"><Input value={form.country ?? ''} onChange={f('country')} placeholder="e.g. Kenya" /></Field>
-
-        <SectionLabel label="Business relationship" />
-
-        <div className="contacts-relationship-options">
-          <label className={form.isCustomer ? 'is-selected' : ''}>
-            <input
-              type="checkbox"
-              checked={form.isCustomer}
-              disabled={forceCustomer}
-              onChange={e => f('isCustomer')(e.target.checked)}
-            />
-            <span><strong>Customer</strong><small>Buys from us</small></span>
-          </label>
-          <label className={form.isVendor ? 'is-selected' : ''}>
-            <input
-              type="checkbox"
-              checked={form.isVendor}
-              disabled={forceVendor}
-              onChange={e => f('isVendor')(e.target.checked)}
-            />
-            <span><strong>Vendor</strong><small>Supplies to us</small></span>
-          </label>
-        </div>
-
-        <SectionLabel label="Payment settings" />
-
-        <Field
-          label="Payment Terms (days)"
-          hint="This determines when this customer's invoices are marked overdue."
-        >
-          <Select
-            value={paymentTermsValue}
-            onChange={v => f('paymentTermsDays')(Number(v))}
-            options={paymentTermsOptions}
-          />
-        </Field>
-        <Field label="Credit Limit (KES)">
-          <Input value={String(form.creditLimit ?? '')} onChange={v => f('creditLimit')(Number(v) || 0)} placeholder="e.g. 500000" />
-        </Field>
-        <details className="contacts-form-optional">
-          <summary>Banking details <span>Optional</span></summary>
-          <div className="contacts-form-optional__grid">
-            <Field label="Bank Name"><Input value={form.bankName ?? ''} onChange={f('bankName')} placeholder="e.g. Equity Bank" /></Field>
-            <Field label="Account Number"><Input value={form.bankAccount ?? ''} onChange={f('bankAccount')} placeholder="e.g. 0110123456" /></Field>
-            <Field label="Branch"><Input value={form.bankBranch ?? ''} onChange={f('bankBranch')} placeholder="e.g. Westlands Branch" /></Field>
+        <div className="contacts-form-relationship-block">
+          <div className="contacts-form-inline-heading">
+            <div>
+              <strong>Business relationship</strong>
+              <span>Select one or both</span>
+            </div>
           </div>
-        </details>
+          <div className="contacts-relationship-options contacts-relationship-options--compact">
+            <label className={form.isCustomer ? 'is-selected' : ''}>
+              <input
+                type="checkbox"
+                checked={form.isCustomer}
+                disabled={forceCustomer}
+                onChange={e => f('isCustomer')(e.target.checked)}
+              />
+              <span><strong>Customer</strong><small>Buys from us</small></span>
+            </label>
+            <label className={form.isVendor ? 'is-selected' : ''}>
+              <input
+                type="checkbox"
+                checked={form.isVendor}
+                disabled={forceVendor}
+                onChange={e => f('isVendor')(e.target.checked)}
+              />
+              <span><strong>Vendor</strong><small>Supplies to us</small></span>
+            </label>
+          </div>
+        </div>
 
-        <details className="contacts-form-optional">
-          <summary>Internal notes <span>Optional</span></summary>
-          <div className="contacts-form-optional__body">
-            <Textarea value={form.notes ?? ''} onChange={f('notes')} placeholder="Preferences, context or other useful notes..." rows={3} />
+        <details className="contacts-form-optional contacts-form-more" defaultOpen={Boolean(editId)}>
+          <summary>
+            <div>
+              <strong>More details</strong>
+              <small>
+                {form.type === 'company'
+                  ? 'Trading name, registration, address, terms, banking and notes'
+                  : 'ID, KRA PIN, address, terms, banking and notes'}
+              </small>
+            </div>
+            <span>Optional</span>
+          </summary>
+
+          <div className="contacts-form-more__content">
+            {form.type === 'company' ? (
+              <section className="contacts-form-more__section">
+                <div className="contacts-form-more__heading">
+                  <strong>Company details</strong>
+                  <span>Additional legal and contact information</span>
+                </div>
+                <div className="contacts-form-optional__grid">
+                  <Field label="Trading Name">
+                    <Input value={form.tradingName ?? ''} onChange={f('tradingName')} placeholder="e.g. Acme (if different)" />
+                  </Field>
+                  <Field label="Registration Number">
+                    <Input value={form.registrationNumber ?? ''} onChange={f('registrationNumber')} placeholder="e.g. CPR/2024/1234" />
+                  </Field>
+                  <Field label="Mobile">
+                    <Input value={form.mobile ?? ''} onChange={f('mobile')} type="tel" placeholder="+254 700 000 000" maxLength={20} pattern="^\+?[0-9\s\-\(\)]+$" />
+                  </Field>
+                  <Field label="Website">
+                    <Input value={form.website ?? ''} onChange={f('website')} placeholder="https://example.com" />
+                  </Field>
+                </div>
+              </section>
+            ) : (
+              <section className="contacts-form-more__section">
+                <div className="contacts-form-more__heading">
+                  <strong>Identity & tax</strong>
+                  <span>Only add when required</span>
+                </div>
+                <div className="contacts-form-optional__grid">
+                  <Field label="National ID / Passport No.">
+                    <Input value={form.idNumber ?? ''} onChange={f('idNumber')} placeholder="e.g. 12345678" />
+                  </Field>
+                  <Field label="KRA PIN">
+                    <Input value={form.vatNumber ?? ''} onChange={f('vatNumber')} placeholder="e.g. A123456789B" />
+                  </Field>
+                </div>
+              </section>
+            )}
+
+            <section className="contacts-form-more__section">
+              <div className="contacts-form-more__heading">
+                <strong>Address</strong>
+                <span>Physical and location details</span>
+              </div>
+              <div className="contacts-form-optional__grid">
+                <div className="contacts-form-wide">
+                  <Field label="Physical Address">
+                    <Input value={form.address} onChange={f('address')} placeholder="Street / Building, Area" />
+                  </Field>
+                </div>
+                {form.type === 'company' && (
+                  <Field label="Postal Address">
+                    <Input value={form.postalAddress ?? ''} onChange={f('postalAddress')} placeholder="P.O. Box 00000-00100" />
+                  </Field>
+                )}
+                <Field label="City">
+                  <Input value={form.city ?? ''} onChange={f('city')} placeholder="e.g. Nairobi" />
+                </Field>
+                <Field label="Country">
+                  <Input value={form.country ?? ''} onChange={f('country')} placeholder="e.g. Kenya" />
+                </Field>
+              </div>
+            </section>
+
+            <section className="contacts-form-more__section">
+              <div className="contacts-form-more__heading">
+                <strong>Commercial settings</strong>
+                <span>Invoice terms and account controls</span>
+              </div>
+              <div className="contacts-form-optional__grid">
+                <Field
+                  label="Payment Terms (days)"
+                  hint="Determines when this customer's invoices are marked overdue."
+                >
+                  <Select
+                    value={paymentTermsValue}
+                    onChange={v => f('paymentTermsDays')(Number(v))}
+                    options={paymentTermsOptions}
+                  />
+                </Field>
+                <Field label="Credit Limit (KES)">
+                  <Input value={String(form.creditLimit ?? '')} onChange={v => f('creditLimit')(Number(v) || 0)} placeholder="e.g. 500000" />
+                </Field>
+              </div>
+            </section>
+
+            <section className="contacts-form-more__section">
+              <div className="contacts-form-more__heading">
+                <strong>Banking details</strong>
+                <span>Optional settlement information</span>
+              </div>
+              <div className="contacts-form-optional__grid">
+                <Field label="Bank Name">
+                  <Input value={form.bankName ?? ''} onChange={f('bankName')} placeholder="e.g. Equity Bank" />
+                </Field>
+                <Field label="Account Number">
+                  <Input value={form.bankAccount ?? ''} onChange={f('bankAccount')} placeholder="e.g. 0110123456" />
+                </Field>
+                <div className="contacts-form-wide">
+                  <Field label="Branch">
+                    <Input value={form.bankBranch ?? ''} onChange={f('bankBranch')} placeholder="e.g. Westlands Branch" />
+                  </Field>
+                </div>
+              </div>
+            </section>
+
+            <section className="contacts-form-more__section contacts-form-more__section--last">
+              <div className="contacts-form-more__heading">
+                <strong>Internal notes</strong>
+                <span>Preferences, context or other useful information</span>
+              </div>
+              <div className="contacts-form-optional__body">
+                <Textarea value={form.notes ?? ''} onChange={f('notes')} placeholder="Add internal notes..." rows={3} />
+              </div>
+            </section>
           </div>
         </details>
       </div>
