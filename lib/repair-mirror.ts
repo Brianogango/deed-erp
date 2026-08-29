@@ -91,6 +91,35 @@ function fingerprint(r: any, mapped: ReturnType<typeof mapRepair>): string {
 let _mirrorRunning = false
 
 /**
+ * Phase 2a read path: full repairs from the relational table (payload first).
+ * Returns null when the table is empty/unmirrored — callers fall back to the
+ * blob. Never throws.
+ */
+export async function loadRepairsFromPrisma(): Promise<any[] | null> {
+  try {
+    const rows = await prisma.repair.findMany({ select: { payload: true } })
+    const withPayload = rows.filter(r => r.payload && typeof r.payload === 'object')
+    if (!withPayload.length) return null
+    return withPayload.map(r => r.payload)
+  } catch {
+    return null
+  }
+}
+
+/** Single repair by current ref or id. Payload only; null when unmirrored. */
+export async function findRepairInPrisma(refOrId: string): Promise<any | null> {
+  try {
+    const row = await prisma.repair.findFirst({
+      where: { OR: [{ jobNumber: refOrId }, { id: refOrId }] },
+      select: { payload: true },
+    })
+    return row?.payload ?? null
+  } catch {
+    return null
+  }
+}
+
+/**
  * Mirror repairs from the blob into the relational table.
  * Fire-and-forget safe: never throws; logs failures per repair.
  * Pass `force: true` to rewrite every repair regardless of fingerprints.
@@ -139,7 +168,8 @@ export async function mirrorRepairsToPrisma(repairsInput: unknown, opts: { force
         }
 
         const createdById = UUID_RE.test(String(r.createdBy ?? '')) && userIds.has(r.createdBy) ? r.createdBy : systemUser.id
-        const data = { ...mapped, clientId, assignedToId, invoiceId }
+        // Phase 2a: carry the full blob repair so relational reads are lossless.
+        const data = { ...mapped, clientId, assignedToId, invoiceId, payload: r }
 
         // A repair renumbered after its first mirror (REP-445447 → REP/0306)
         // otherwise deadlocks the upsert: jobNumber misses, id collides.
