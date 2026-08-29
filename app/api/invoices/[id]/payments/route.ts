@@ -11,7 +11,8 @@ import {
 import { checkFiscalLock } from '@/lib/fiscal-lock.server'
 import { resolveBlobInvoiceMirror } from '@/lib/accounting/resolve-invoice-mirror'
 import { invoiceDocState } from '@/lib/odoo-sales-flow'
-import { labelForRole } from '@/lib/accounting/coa-roles'
+import { labelForRole, cashAccountRoleForBankId } from '@/lib/accounting/coa-roles'
+import { isUuid } from '@/lib/legacy-compat'
 
 const WRITE_ROLES = ['director', 'finance_officer', 'admin_officer']
 
@@ -141,7 +142,7 @@ export async function POST(
     let cashAccountLabel = method === 'bank_transfer'
       ? labelForRole('bank_absa')
       : labelForRole('cash_mobile')
-    if (bankAccountId) {
+    if (bankAccountId && isUuid(bankAccountId)) {
       const bank = await prisma.bankAccount.findUnique({ where: { id: bankAccountId } })
       if (!bank || !bank.isActive) {
         return NextResponse.json({ error: 'Invalid or inactive bank account' }, { status: 400 })
@@ -151,6 +152,9 @@ export async function POST(
         return NextResponse.json({ error: 'Bank account is not mapped to an active GL account' }, { status: 409 })
       }
       cashAccountLabel = `${gl.code} - ${gl.name}`
+    } else if (bankAccountId) {
+      // Blob cashbook id ('ncba', 'im', …) — resolve via the role map.
+      cashAccountLabel = labelForRole(cashAccountRoleForBankId(bankAccountId))
     }
 
     const { recordPaymentWithAllocations } = await import('@/lib/accounting/payment-allocations')
