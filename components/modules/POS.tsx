@@ -24,6 +24,8 @@ import {
   receiptLogoSrc,
   resolvePosReceiptCustomer,
 } from '@/lib/pos-receipt-print'
+import { fetchMpesaStatus, sendMpesaStk, waitForMpesaStk } from '@/lib/mpesa/client'
+import { normalizeMpesaPhone } from '@/lib/mpesa/phone'
 
 function ReceiptPrintView({
   order,
@@ -246,6 +248,9 @@ export default function PointOfSale() {
   const [search, setSearch] = useState('')
   const [category, setCategory] = useState('All')
   const [payMethod, setPayMethod] = useState<'cash' | 'mpesa' | 'bank'>('mpesa')
+  const [mpesaPhone, setMpesaPhone] = useState('')
+  const [darajaReady, setDarajaReady] = useState(false)
+  const [stkStatus, setStkStatus] = useState('')
   const [bankAccountId, setBankAccountId] = useState('')
   const [paymentReference, setPaymentReference] = useState('')
   const [customerId, setCustomerId] = useState('')
@@ -441,6 +446,17 @@ export default function PointOfSale() {
     ? new Date(activeSession.openedAt).toLocaleTimeString('en-KE', { hour: '2-digit', minute: '2-digit' })
     : null
 
+  useEffect(() => {
+    void fetchMpesaStatus()
+      .then(s => setDarajaReady(s.configured))
+      .catch(() => setDarajaReady(false))
+  }, [])
+
+  useEffect(() => {
+    const fromCustomer = customerInfo?.mobile || customerInfo?.phone || ''
+    if (fromCustomer) setMpesaPhone(fromCustomer)
+  }, [customerInfo?.mobile, customerInfo?.phone])
+
   const charge = async () => {
     if (cart.length === 0) { showToast('Cart is empty', 'error'); return }
     if (!posSessionOpen) { showToast('No active POS session', 'error'); return }
@@ -457,8 +473,38 @@ export default function PointOfSale() {
       return
     }
 
+    let mpesaReceipt: string | undefined
+    if (payMethod === 'mpesa' && darajaReady) {
+      const phone = normalizeMpesaPhone(mpesaPhone)
+      if (!phone) {
+        showToast('Enter the customer M-Pesa number (07XX …)', 'error')
+        return
+      }
+    }
+
     setCharging(true)
     try {
+      if (payMethod === 'mpesa' && darajaReady) {
+        const phone = normalizeMpesaPhone(mpesaPhone) as string
+        setStkStatus('Sending M-Pesa prompt…')
+        const pushed = await sendMpesaStk({
+          phone,
+          amount: cartTotal,
+          accountReference: 'POS',
+          transactionDesc: 'POS sale',
+          source: 'pos',
+        })
+        setStkStatus(pushed.customerMessage || 'Ask the customer to enter their M-Pesa PIN')
+        const settled = await waitForMpesaStk(pushed.checkoutRequestId)
+        if (settled.status !== 'success') {
+          showToast(settled.resultDesc || 'M-Pesa prompt was not completed', 'error')
+          setStkStatus('')
+          return
+        }
+        mpesaReceipt = settled.mpesaReceipt || settled.checkoutRequestId
+        setStkStatus(settled.mpesaReceipt ? `Paid ${settled.mpesaReceipt}` : 'M-Pesa confirmed')
+      }
+
       const order = await createPOSOrder(
         cart.map(i => ({
           productId: i.productId,
@@ -479,6 +525,9 @@ export default function PointOfSale() {
           ...(payMethod === 'bank'
             ? { bankAccountId: selectedBankId, paymentReference: paymentReference.trim() || undefined }
             : {}),
+          ...(payMethod === 'mpesa' && mpesaReceipt
+            ? { paymentReference: mpesaReceipt }
+            : {}),
           salespersonId: salespersonId || cashier?.id,
           salespersonName: salespersonName || cashier?.name,
         },
@@ -491,9 +540,13 @@ export default function PointOfSale() {
         setWalkInBuyerName('')
         setRedeemPoints('')
         setPaymentReference('')
+        setStkStatus('')
         setReceiptOrder(order)
         setIsPrinting(true)
       }
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'M-Pesa prompt failed', 'error')
+      setStkStatus('')
     } finally {
       setCharging(false)
     }
@@ -867,6 +920,18 @@ export default function PointOfSale() {
                 ))}
                 </div>
               </section>
+              {payMethod === 'mpesa' && darajaReady && (
+                <div className="pos-bank-payment">
+                  <Field label="M-Pesa number">
+                    <Input
+                      value={mpesaPhone}
+                      onChange={setMpesaPhone}
+                      placeholder="07XX XXX XXX"
+                    />
+                  </Field>
+                  {stkStatus && <p className="text-[11px] text-t2 mt-1">{stkStatus}</p>}
+                </div>
+              )}
               {payMethod === 'bank' && (
                 <div className="pos-bank-payment">
                   <Field label="Bank account">
@@ -896,7 +961,11 @@ export default function PointOfSale() {
                   cursor: cart.length > 0 && !charging ? 'pointer' : 'default',
                 }}
               >
-                {charging ? 'Charging…' : cart.length > 0 ? `Charge ${fmtKes(cartTotal)}` : 'Add items to cart'}
+                {charging
+                  ? (stkStatus || 'Charging…')
+                  : cart.length > 0
+                    ? (payMethod === 'mpesa' && darajaReady ? `Prompt ${fmtKes(cartTotal)}` : `Charge ${fmtKes(cartTotal)}`)
+                    : 'Add items to cart'}
               </button>
               <button type="button" className="pos-back-products" onClick={() => setCartOpen(false)}>Back to products</button>
               <p className="pos-opening-cash">Opening cash <strong>{fmtKes(posSessionOpeningCash)}</strong></p>

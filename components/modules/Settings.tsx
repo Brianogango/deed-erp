@@ -642,6 +642,11 @@ export default function Settings() {
                   <Field label="VAT Rate (%)"><Input type="number" value={String(companySettings.vatRate)} onChange={v => updateCompanySettings({ vatRate: Number(v) })} /></Field>
                   <Field label="M-Pesa Paybill"><Input value={companySettings.mpesaPaybill} onChange={v => updateCompanySettings({ mpesaPaybill: v })} /></Field>
                   <Field label="M-Pesa Account"><Input value={companySettings.mpesaAccount} onChange={v => updateCompanySettings({ mpesaAccount: v })} /></Field>
+                  <p className="sm:col-span-2 text-[11px] text-t3">
+                    STK prompts on POS and invoices use Daraja keys on the server
+                    (MPESA_CONSUMER_KEY, MPESA_PASSKEY, MPESA_SHORTCODE). The paybill
+                    above is what prints on documents.
+                  </p>
                   <div className="sm:col-span-2">
                     <Field label="Invoice Footer"><Textarea value={companySettings.invoiceFooter} onChange={v => updateCompanySettings({ invoiceFooter: v })} /></Field>
                   </div>
