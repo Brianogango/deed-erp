@@ -355,8 +355,14 @@ export function Dashboard() {
     const ready = visibleRepairs.filter(r => r.status === 'ready')
     const urgent = active.filter(r => r.priority === 'urgent' || r.priority === 'high' || r.status === 'approved' || r.status === 'diagnosed')
     const unassigned = visibleRepairs.filter(r => r.status === 'received' && !r.assignedTechnicianId)
+    // Jobs sitting in the workshop pipeline past 7 days from intake.
+    const agingCutoff = Date.now() - 7 * 86400000
+    const aging = active.filter(r => {
+      const intake = new Date((r as any).intakeDate ?? (r as any).createdDate ?? 0).getTime()
+      return Number.isFinite(intake) && intake > 0 && intake < agingCutoff
+    })
 
-    return { active, awaitingParts, inQc, ready, urgent, unassigned }
+    return { active, awaitingParts, inQc, ready, urgent, unassigned, aging }
   }, [visibleRepairs])
 
   // Six-month paid-revenue trend, split between the repair workshop (invoices
@@ -445,7 +451,7 @@ export function Dashboard() {
         { key: 'payables', label: 'Payables', value: financeStats.payables, sub: `${financeStats.pendingBills.length} bills pending`, color: '#8B5CF6', icon: <Fa icon={faMoneyCheckDollar} />, isCurrency: true, onClick: () => handleNav('accounting', '/finance?tab=bills') },
         { key: 'open-orders', label: 'Open Sales', value: salesStats.openOrders, sub: `${salesStats.myQuotes.length} quotations active`, color: '#00B0D7', icon: <Fa icon={faCartShopping} />, onClick: () => handleNav('sales', '/sales') },
         { key: 'stock', label: 'Low Stock', value: inventoryStats.lowStockItems.length, sub: `${inventoryStats.totalUnits} units on hand`, color: '#F97316', icon: <Fa icon={faBoxesStacked} />, onClick: () => handleNav('inventory', '/operations') },
-        { key: 'repairs', label: 'Open Repairs', value: repairStats.active.length, sub: `${repairStats.unassigned.length} waiting assignment`, color: '#16A34A', icon: <Fa icon={faScrewdriverWrench} />, onClick: () => handleNav('repair', '/repairs') },
+        { key: 'repairs', label: 'Open Repairs', value: repairStats.active.length, sub: `${repairStats.unassigned.length} waiting assignment${repairStats.aging.length > 0 ? ` · ${repairStats.aging.length} aging 7d+` : ''}`, color: '#16A34A', icon: <Fa icon={faScrewdriverWrench} />, onClick: () => handleNav('repair', '/repairs') },
         { key: 'repair-revenue', label: 'Repair Revenue', value: techLeadStats.repairRevenueThisMonth, sub: `This month · actual sales ${fmtKes(techLeadStats.salesRevenueThisMonth)}`, color: '#047857', icon: <Fa icon={faScrewdriverWrench} />, isCurrency: true, onClick: () => handleNav('accounting', '/finance?tab=invoices') },
         { key: 'active-users', label: 'Active Users', value: users.filter(u => u.active).length, sub: `${employees.filter(e => e.status === 'active').length} active employees`, color: '#1B2762', icon: <Fa icon={faUsers} />, onClick: () => handleRoute('/settings?tab=users') },
         { key: 'approvals', label: 'Approvals', value: selfServiceStats.pendingLeave + selfServiceStats.pendingPayroll.length + selfServiceStats.pendingExpenseClaims.length, sub: 'Leave, payroll, and expense queues', color: '#0891B2', icon: <Fa icon={faShieldHalved} />, onClick: () => handleNav('hr', '/hr') },

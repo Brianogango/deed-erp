@@ -50,6 +50,7 @@ export type StockValuationKind =
   | 'adjustment_sub'
   | 'opening'
   | 'pos'
+  | 'repair'
 
 const KIND_TOKEN: Record<StockValuationKind, string> = {
   receipt: 'RCV',
@@ -60,6 +61,7 @@ const KIND_TOKEN: Record<StockValuationKind, string> = {
   adjustment_sub: 'ADJ-',
   opening: 'OPEN',
   pos: 'POS',
+  repair: 'RPR',
 }
 
 /** Stable idempotency keys / journal refs for stock valuation events. */

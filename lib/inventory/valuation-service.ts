@@ -22,6 +22,8 @@ const WRITE_OFF_LABEL = formatAccountLabel(COMPANY_ACCOUNT_FALLBACKS.writeOffAcc
 const ADJUSTMENT_LABEL = formatAccountLabel(COMPANY_ACCOUNT_FALLBACKS.adjustmentAccountCode, [])
 /** Opening stock/balances offset equity — never the P&L adjustment account. */
 const OPENING_EQUITY_LABEL = '4004 - Opening Balance Equity'
+/** Repair parts consumption posts to direct repair costs, not generic COGS. */
+const REPAIR_COST_LABEL = '6301 - Solutions and Expert Repair Services\' Costs'
 
 async function persistStockJournal(params: {
   ref: string
@@ -640,6 +642,33 @@ export async function processStockPosSale(params: {
     userId: params.userId,
     postJournal: params.postJournal,
     journalDescription: `POS sale ${params.qty}`,
+  })
+}
+
+/**
+ * Repair parts consumption (QC pass) — Dr 6301 Solutions & Repair Services'
+ * Costs / Cr 1200 Inventory at the moving-average cost. Idempotent per
+ * (repair ref, productId).
+ */
+export async function processStockRepairConsume(params: {
+  productId: string
+  qty: number
+  reference?: string
+  userId?: string
+  postJournal?: boolean
+}) {
+  return applyOutboundValuation({
+    productId: params.productId,
+    qty: params.qty,
+    kind: 'repair',
+    reference: params.reference,
+    userId: params.userId,
+    postJournal: params.postJournal,
+    journalDescription: `Repair parts consumption ${params.reference ?? ''}`.trim(),
+    journalLines: (totalCost) => [
+      { accountLabel: REPAIR_COST_LABEL, label: 'Repair parts cost', debit: totalCost, credit: 0 },
+      { accountLabel: formatAccountLabel(COMPANY_ACCOUNT_FALLBACKS.inventoryAccountCode, []), label: 'Inventory reduction', debit: 0, credit: totalCost },
+    ],
   })
 }
 
