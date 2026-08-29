@@ -60,14 +60,6 @@ export function blankIndividualContact(overrides: Partial<ContactFormValues> = {
   }
 }
 
-function SectionLabel({ label }: { label: string }) {
-  return (
-    <div className="contacts-form-section-label">
-      <span>{label}</span>
-    </div>
-  )
-}
-
 type Props = {
   /** Existing contact id when editing; omit for create. */
   editId?: string | null
