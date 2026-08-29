@@ -4182,6 +4182,8 @@ export type AfterSalesStoreState = Pick<AppState,
   | 'contacts'
   | 'currentUserId'
   | 'donations'
+  | 'invoices'
+  | 'posOrders'
   | 'products'
   | 'returnOrders'
   | 'saleOrders'
@@ -20102,6 +20104,8 @@ const storeCtx: AppState = {
     contacts,
     currentUserId,
     donations,
+    invoices,
+    posOrders,
     products,
     returnOrders,
     saleOrders,
@@ -20115,6 +20119,8 @@ const storeCtx: AppState = {
     contacts,
     currentUserId,
     donations,
+    invoices,
+    posOrders,
     products,
     returnOrders,
     saleOrders,

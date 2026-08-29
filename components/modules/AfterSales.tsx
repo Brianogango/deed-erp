@@ -59,6 +59,7 @@ function AfterSalesContent() {
   const mounted = useMounted()
   const {
     warranties, saleOrders, products, serials, users, currentUserId,
+    invoices, posOrders,
     returnOrders, buyBacks, donations, clientExchanges,
     createReturnOrder, approveReturn, receiveReturn, processReturn, rejectReturn,
     releaseSerialToStock,
@@ -174,10 +175,33 @@ function AfterSalesContent() {
     : null
 
   // ── RMA creation helpers ────────────────────────────────────────────────────
-  const matchedSO = useMemo(() =>
-    saleOrders.find(o => o.ref.toLowerCase() === rmaSORef.toLowerCase().trim()),
-    [saleOrders, rmaSORef]
-  )
+  // Match the source document by ref: a sale order, a POS order (via its
+  // invoice), or the invoice itself — POS sales have no sale order.
+  const matchedSO = useMemo(() => {
+    const q = rmaSORef.toLowerCase().trim()
+    if (!q) return null
+    const so = saleOrders.find(o => o.ref.toLowerCase() === q)
+    if (so) return { id: so.id, ref: so.ref, customerId: so.customerId, customerName: so.customerName, lines: so.lines, date: so.date, total: so.total }
+    const posOrder = posOrders.find(o => o.ref.toLowerCase() === q)
+    const inv = invoices.find(i =>
+      i.ref.toLowerCase() === q
+      || (posOrder?.invoiceRef && i.ref.toLowerCase() === String(posOrder.invoiceRef).toLowerCase()),
+    )
+    if (inv) {
+      return {
+        id: inv.id,
+        ref: inv.ref,
+        customerId: inv.partnerId,
+        customerName: inv.partnerName,
+        date: inv.date,
+        total: inv.total,
+        lines: (inv.lines ?? [])
+          .filter(l => l.lineType !== 'section')
+          .map(l => ({ productId: l.productId ?? '', productName: l.description, qty: l.qty })),
+      }
+    }
+    return null
+  }, [saleOrders, invoices, posOrders, rmaSORef])
 
   function openCreateRMA() {
     setRmaSORef(''); setRmaReason(''); setRmaLines([])
@@ -799,12 +823,12 @@ function AfterSalesContent() {
             </div>
 
             <div className="space-y-3">
-              {/* Sale Order lookup */}
+              {/* Source document lookup — sale order, POS order, or invoice */}
               <div>
-                <label className="text-[11px] font-semibold text-t2 block mb-1">Sale Order Reference *</label>
-                <input aria-label="Sale order reference" className="form-input w-full text-[12px]" placeholder="e.g. SO/0045"
+                <label className="text-[11px] font-semibold text-t2 block mb-1">Sale Order / POS / Invoice Reference *</label>
+                <input aria-label="Sale order, POS, or invoice reference" className="form-input w-full text-[12px]" placeholder="e.g. SO/0045, POS/0001, INV/2026/0021"
                   value={rmaSORef} onChange={e => setRmaSORef(e.target.value)} />
-                {rmaSORef && !matchedSO && <p className="text-[10px] text-red-600 mt-1">No sale order found with this reference</p>}
+                {rmaSORef && !matchedSO && <p className="text-[10px] text-red-600 mt-1">No sale order, POS sale, or invoice found with this reference</p>}
                 {matchedSO && (
                   <div className="mt-1 px-3 py-2 rounded-lg text-[11px]" style={{ background: 'var(--success-bg)', border: '1px solid #A7F3D0' }}>
                     ✓ {matchedSO.customerName} · {fmtDate(matchedSO.date)} · {fmtKes(matchedSO.total)}

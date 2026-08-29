@@ -17,7 +17,7 @@ import type { BankAccount, CompanySettings } from '@/lib/store'
 
 export const DOCUMENT_PAYMENT_DETAILS_KEY = 'deed_documentPaymentDetails'
 
-export type PaymentBankRole = 'ncba' | 'absa' | 'im' | 'equity' | 'credit'
+export type PaymentBankRole = 'ncba' | 'absa' | 'im' | 'equity' | 'credit' | 'tende'
 
 export type DocumentPaymentDetails = {
   /** When true (default), PDF uses company default: first bank + its M-Pesa. */
@@ -40,12 +40,13 @@ export const DEFAULT_DOCUMENT_PAYMENT_DETAILS: DocumentPaymentDetails = {
 }
 
 /** Canonical M-Pesa pairs for Deed bank accounts (source of truth for PDF pairing). */
-export const BANK_MPESA_BY_ROLE: Record<PaymentBankRole, { paybill: string; account: string }> = {
+export const BANK_MPESA_BY_ROLE: Partial<Record<PaymentBankRole, { paybill: string; account: string }>> = {
   ncba: { paybill: '880100', account: '468778' },
   absa: { paybill: '303030', account: '2043953071' },
   im: { paybill: '542542', account: '391572' },
   equity: { paybill: '247247', account: '0020284195905' },
   credit: { paybill: '972700', account: '0131006000351' },
+  // tende: card/online gateway — no M-Pesa pair.
 }
 
 export function normalizeDocumentPaymentDetails(
@@ -82,6 +83,7 @@ export function documentHasVat(doc: {
 
 export function resolvePaymentBankRole(bank: Pick<BankAccount, 'id' | 'name' | 'bankName'>): PaymentBankRole | null {
   const hay = `${bank.id} ${bank.bankName} ${bank.name}`
+  if (/tende/i.test(hay)) return 'tende'
   if (/ncba/i.test(hay)) return 'ncba'
   if (/absa/i.test(hay)) return 'absa'
   if (/equity/i.test(hay)) return 'equity'
@@ -109,6 +111,7 @@ export function paymentRoleLabel(role: PaymentBankRole): string {
   if (role === 'absa') return 'ABSA'
   if (role === 'equity') return 'Equity'
   if (role === 'credit') return 'Credit Bank'
+  if (role === 'tende') return 'Tende Pay'
   return 'I&M Bank'
 }
 
@@ -142,7 +145,7 @@ export function resolveBankMpesa(
 }
 
 /** Non-VAT banks staff may pick on a document. */
-export const NON_VAT_PAYMENT_ROLES: PaymentBankRole[] = ['absa', 'im', 'equity', 'credit']
+export const NON_VAT_PAYMENT_ROLES: PaymentBankRole[] = ['absa', 'im', 'equity', 'credit', 'tende']
 
 /**
  * Align stored payment details to VAT / non-VAT bank rules.
