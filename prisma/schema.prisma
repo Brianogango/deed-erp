@@ -736,7 +736,7 @@ model Client {
   creditBalance Decimal  @default(0) @map("credit_balance") @db.Decimal(14, 2)
   isCustomer    Boolean  @default(true) @map("is_customer")
   isVendor      Boolean  @default(false) @map("is_vendor")
-  paymentTermsDays Int?  @default(30) @map("payment_terms_days")
+  paymentTermsDays Int?  @default(0) @map("payment_terms_days")
   bankName      String?  @map("bank_name") @db.VarChar(100)
   bankAccount   String?  @map("bank_account") @db.VarChar(80)
   bankBranch    String?  @map("bank_branch") @db.VarChar(100)

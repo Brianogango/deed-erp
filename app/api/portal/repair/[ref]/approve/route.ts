@@ -199,7 +199,7 @@ export async function POST(
           const invoiceNumber = await getNextDocNumber('invoice')
           invoice = await prisma.invoice.create({
             data: {
-              invoiceNumber, clientId: prismaClient.id, createdById: systemUser.id, saleOrderId: saleOrder.id, status: 'approved', invoiceDate: new Date(date), dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), subject: `Repair Invoice — ${ref}`,
+              invoiceNumber, clientId: prismaClient.id, createdById: systemUser.id, saleOrderId: saleOrder.id, status: 'approved', invoiceDate: new Date(date), dueDate: new Date(date), subject: `Repair Invoice — ${ref}`,
               subtotal: approvedSubtotal, taxAmount: approvedTax, discountAmount: 0, totalAmount: approvedTotal, amountPaid: preservedAmountPaid,
               notes: `Auto-created from repair quote approval: ${ref}${partiallyApproved ? ' (approved items only)' : ''}`,
               items: { create: invoiceItems }
@@ -216,7 +216,7 @@ export async function POST(
         const existingInvoices = (appState['deed_invoices'] as any[]) || []
         const invoiceForAppState = {
           id: invoice.id, ref: invoice.invoiceNumber, type: 'customer_invoice', status: 'posted', partnerId: prismaClient.id, partnerName: customerName, date,
-          dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
+          dueDate: date,
           lines: approvedLines.map((line: any) => ({ id: crypto.randomUUID(), description: line.description ?? 'Repair Service', qty: Number(line.qty ?? 1), unitPrice: Number(line.unitPrice ?? 0), taxRate: 0, subtotal: Number(line.subtotal ?? line.unitPrice ?? 0) })),
           subtotal: approvedSubtotal, taxTotal: approvedTax, total: approvedTotal, amountPaid: preservedAmountPaid, saleOrderId: saleOrder.id, repairId: targetRepair.id,
           notes: `Auto-created from approved repair quote lines: ${ref}`,

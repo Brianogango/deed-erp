@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  DEFAULT_CONTACT_PAYMENT_TERMS_DAYS,
   quotationPaymentTermsDays,
   quotationPaymentTermsLabel,
   serializeQuotationPaymentTerms,
@@ -7,6 +8,7 @@ import {
 
 describe('quotation payment terms defaults', () => {
   it('uses immediate payment when the contact has no configured terms', () => {
+    expect(DEFAULT_CONTACT_PAYMENT_TERMS_DAYS).toBe(0)
     expect(quotationPaymentTermsDays(undefined)).toBe(0)
     expect(quotationPaymentTermsDays({})).toBe(0)
     expect(quotationPaymentTermsLabel(0)).toBe('Immediate')

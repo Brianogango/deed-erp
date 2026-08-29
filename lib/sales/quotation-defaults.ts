@@ -1,3 +1,6 @@
+/** Cash / due immediately unless a contact is given explicit credit terms. */
+export const DEFAULT_CONTACT_PAYMENT_TERMS_DAYS = 0
+
 export type QuotationPaymentTermsContact = {
   paymentTermsDays?: number | string | null
   paymentTerms?: string | null
@@ -22,7 +25,7 @@ export function quotationPaymentTermsDays(
   if (!legacyTerms || /^immediate$/i.test(legacyTerms)) return 0
 
   const legacyDays = Number.parseInt(legacyTerms.match(/\d+/)?.[0] ?? '', 10)
-  return Number.isFinite(legacyDays) && legacyDays >= 0 ? legacyDays : 0
+  return Number.isFinite(legacyDays) && legacyDays >= 0 ? legacyDays : DEFAULT_CONTACT_PAYMENT_TERMS_DAYS
 }
 
 export function quotationPaymentTermsLabel(days: number): string {

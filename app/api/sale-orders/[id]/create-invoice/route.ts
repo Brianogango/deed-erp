@@ -425,7 +425,7 @@ export async function POST(
 
     const draftRef = await getNextDocNumber('invoice').catch(() => `DRAFT-INV-${Date.now().toString().slice(-6)}`)
     const paymentTermsDays = Number(confirmed.paymentTermsDays)
-    const dueDate = new Date(Date.now() + (Number.isFinite(paymentTermsDays) && paymentTermsDays >= 0 ? paymentTermsDays : 30) * 86400000)
+    const dueDate = new Date(Date.now() + (Number.isFinite(paymentTermsDays) && paymentTermsDays >= 0 ? paymentTermsDays : 0) * 86400000)
     const invoiceNotes = downDeduction > 0
       ? `Created from ${confirmed.orderNumber} · Down payments deducted: KES ${downDeduction.toLocaleString()}`
       : `Created from ${confirmed.orderNumber}`

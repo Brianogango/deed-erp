@@ -234,9 +234,9 @@ describe('POST /api/contacts', () => {
     expect((await res.json()).isVendor).toBe(false)
   })
 
-  it('defaults paymentTermsDays to 30', async () => {
+  it('defaults paymentTermsDays to 0 (due immediately)', async () => {
     const res = await POST(postReq({ name: 'Customer' }))
-    expect((await res.json()).paymentTermsDays).toBe(30)
+    expect((await res.json()).paymentTermsDays).toBe(0)
   })
 
   it('defaults type to "company" for unrecognized type values', async () => {
