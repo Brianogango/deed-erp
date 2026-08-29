@@ -36,7 +36,7 @@ function ReceiptPrintView({
 }: {
   order: any
   companySettings: any
-  bankAccounts?: { id: string; name: string }[]
+  bankAccounts?: { id: string; name: string; bankName?: string }[]
   serials?: { id: string; serial?: string }[]
   stockMoves?: { documentRef?: string; productId?: string; serialNumbers?: string[] }[]
   invoices?: { id?: string; ref?: string; partnerName?: string; notes?: string }[]
@@ -151,7 +151,7 @@ function ReceiptPrintView({
         {order.bankAccountId ? (
           <div className="flex justify-between mt-1 text-[11px]">
             <span>Bank</span>
-            <span>{bankAccounts?.find(b => b.id === order.bankAccountId)?.name || order.bankAccountId}</span>
+            <span>{(() => { const b = bankAccounts?.find(b => b.id === order.bankAccountId); return b ? (b.bankName || b.name) : order.bankAccountId })()}</span>
           </div>
         ) : null}
         {order.paymentReference ? (
@@ -873,7 +873,7 @@ export default function PointOfSale() {
                     <Select
                       value={bankAccountId || tenderBanks.find(b => b.id === 'ncba')?.id || tenderBanks[0]?.id || ''}
                       onChange={setBankAccountId}
-                      options={tenderBanks.map(b => ({ value: b.id, label: b.name }))}
+                      options={tenderBanks.map(b => ({ value: b.id, label: b.bankName || b.name }))}
                     />
                   </Field>
                   <Field label="Payment reference (optional)">

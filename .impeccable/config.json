@@ -307,6 +307,54 @@
         ],
         "createdAt": "2026-08-27T11:20:58.122Z",
         "reason": "Incumbent GRN receive-screen hex colors; receipt-detail navigation does not restyle that form"
+      },
+      {
+        "rule": "side-tab",
+        "value": "*",
+        "files": [
+          "components/modules/AfterSales.tsx"
+        ],
+        "createdAt": "2026-08-29T08:48:31.467Z"
+      },
+      {
+        "rule": "layout-transition",
+        "value": "*",
+        "files": [
+          "components/modules/AfterSales.tsx"
+        ],
+        "createdAt": "2026-08-29T08:48:31.509Z"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "#854d0e",
+        "files": [
+          "components/modules/AfterSales.tsx"
+        ],
+        "createdAt": "2026-08-29T08:48:44.168Z"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "#991b1b",
+        "files": [
+          "components/modules/AfterSales.tsx"
+        ],
+        "createdAt": "2026-08-29T08:48:44.200Z"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "#5b21b6",
+        "files": [
+          "components/modules/AfterSales.tsx"
+        ],
+        "createdAt": "2026-08-29T08:48:44.232Z"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "*",
+        "files": [
+          "components/modules/AfterSales.tsx"
+        ],
+        "createdAt": "2026-08-29T08:49:10.969Z"
       }
     ]
   }
