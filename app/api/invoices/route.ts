@@ -320,6 +320,54 @@ export async function POST(request: Request) {
     // draft → approved PATCH that posts commission for quotations.
     const createdPosted = invoice.status === 'approved' || invoice.status === 'invoiced'
     const isVendor = Boolean(isCreditNote) || body.type === 'vendor_bill'
+
+    // An invoice created already-posted (repair billing, SO fast-path) must
+    // post its GL journal here — it never passes through the PUT posting
+    // path. POS invoices are excluded: their tender journal posts via
+    // /api/pos/post-sale-journal (Dr bank / Cr revenue, no AR).
+    if (createdPosted && !isVendor && !invoice.isPosInvoice) {
+      try {
+        const { buildInvoiceJournalInput, allocateInvoiceJournalRef } = await import('@/lib/accounting/invoice-journals')
+        const { createJournalEntry } = await import('@/lib/accounting/journal-service')
+        const journalInput = await buildInvoiceJournalInput({
+          id: invoice.id,
+          ref: invoice.invoiceNumber,
+          invoiceNumber: invoice.invoiceNumber,
+          invoiceDate: invoice.invoiceDate,
+          totalAmount: Number(invoice.totalAmount),
+          subtotal: Number(invoice.subtotal),
+          taxAmount: Number(invoice.taxAmount),
+          type: 'customer_invoice',
+          repairId: invoice.repairId ?? undefined,
+          partnerName: body.partnerName ?? body.clientName,
+          lines: (invoice.items ?? []).map(i => ({
+            productId: i.productId ?? undefined,
+            qty: Number(i.qty),
+            unitPrice: Number(i.unitPrice),
+            subtotal: Number(i.lineSubtotal),
+            description: i.description,
+          })),
+        }, { createdById: actor.id })
+        journalInput.skipIfExists = true
+        journalInput.ref = await allocateInvoiceJournalRef(journalInput.ref)
+        const journal = await createJournalEntry(journalInput)
+        await prisma.invoice.update({
+          where: { id: invoice.id },
+          data: {
+            postingStatus: 'posted',
+            postedJournalEntryId: journal.id,
+            postedAt: new Date(),
+            postedById: actor.id,
+            documentType: 'customer_invoice',
+          },
+        })
+      } catch (err) {
+        // The invoice exists; a journal failure must not roll it back — the
+        // blob journal mirror remains the fallback.
+        console.error('[invoice] GL journal for posted-at-create invoice failed:', err)
+      }
+    }
+
     if (createdPosted && !isVendor && salesCommissionAppliesToInvoice(invoice) && (isPosInvoiceWrite(body) || invoice.saleOrderId)) {
       try {
         const { postSalesCommissionForInvoice } = await import('@/lib/accounting/sales-commission')

@@ -4,7 +4,7 @@ const { mockPrisma, mockLoadAppState, mockSaveStoreKeys, mockResolveClientId } =
   mockPrisma: {
     user: { findFirst: vi.fn(), findMany: vi.fn() },
     invoice: { findUnique: vi.fn() },
-    repair: { upsert: vi.fn() },
+    repair: { upsert: vi.fn(), findUnique: vi.fn().mockResolvedValue(null), update: vi.fn().mockResolvedValue({}) },
   },
   mockLoadAppState: vi.fn(),
   mockSaveStoreKeys: vi.fn(),
@@ -49,10 +49,27 @@ beforeEach(() => {
   mockPrisma.user.findMany.mockResolvedValue([{ id: USER_ID }])
   mockPrisma.invoice.findUnique.mockResolvedValue(null)
   mockPrisma.repair.upsert.mockResolvedValue({})
+  mockPrisma.repair.findUnique.mockResolvedValue(null)
+  mockPrisma.repair.update.mockResolvedValue({})
   mockResolveClientId.mockResolvedValue(CLIENT_ID)
 })
 
 describe('mirrorRepairsToPrisma()', () => {
+  it('updates by id when the repair was renumbered after its first mirror', async () => {
+    // REP-445447 was mirrored, then renumbered REP/0306 — the row exists with
+    // the blob id under the OLD job number. Upsert-by-jobNumber deadlocks
+    // (jobNumber misses, id collides); the mirror must update by id instead.
+    mockPrisma.repair.findUnique.mockResolvedValue({ id: REPAIR_ID })
+    const result = await mirrorRepairsToPrisma([{ ...blobRepair, ref: 'REP/0306' }])
+    expect(result.mirrored).toBe(1)
+    expect(result.failed).toBe(0)
+    expect(mockPrisma.repair.update).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: REPAIR_ID },
+      data: expect.objectContaining({ jobNumber: 'REP/0306' }),
+    }))
+    expect(mockPrisma.repair.upsert).not.toHaveBeenCalled()
+  })
+
   it('upserts core repair fields keyed by job number', async () => {
     const result = await mirrorRepairsToPrisma([blobRepair])
     expect(result.mirrored).toBe(1)
