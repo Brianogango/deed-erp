@@ -141,16 +141,26 @@ export async function mirrorRepairsToPrisma(repairsInput: unknown, opts: { force
         const createdById = UUID_RE.test(String(r.createdBy ?? '')) && userIds.has(r.createdBy) ? r.createdBy : systemUser.id
         const data = { ...mapped, clientId, assignedToId, invoiceId }
 
-        await prisma.repair.upsert({
-          where: { jobNumber: ref },
-          create: {
-            ...(UUID_RE.test(String(r.id ?? '')) ? { id: r.id } : {}),
-            jobNumber: ref,
-            createdById,
-            ...data,
-          },
-          update: data,
-        })
+        // A repair renumbered after its first mirror (REP-445447 → REP/0306)
+        // otherwise deadlocks the upsert: jobNumber misses, id collides.
+        const blobId = UUID_RE.test(String(r.id ?? '')) ? String(r.id) : null
+        const existingById = blobId
+          ? await prisma.repair.findUnique({ where: { id: blobId }, select: { id: true } })
+          : null
+        if (existingById) {
+          await prisma.repair.update({ where: { id: existingById.id }, data: { ...data, jobNumber: ref } })
+        } else {
+          await prisma.repair.upsert({
+            where: { jobNumber: ref },
+            create: {
+              ...(blobId ? { id: blobId } : {}),
+              jobNumber: ref,
+              createdById,
+              ...data,
+            },
+            update: data,
+          })
+        }
         nextHashes[ref] = hash
         dirty = true
         result.mirrored++
