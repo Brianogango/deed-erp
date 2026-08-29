@@ -1,7 +1,7 @@
 import 'server-only'
 
 import type { PublicUser } from '@/lib/auth/types'
-import { getJarvisProvider, JARVIS_MAX_TOKENS, JARVIS_MAX_TOOL_ROUNDS } from './provider'
+import { getJarvisProvidersWithFallback, isProviderOverloadError, JARVIS_MAX_TOKENS, JARVIS_MAX_TOOL_ROUNDS } from './provider'
 import { buildSystemPrompt } from './system-prompt'
 import { allTools } from './tools'
 import { allowedToolNamesForRole } from './permissions'
@@ -64,7 +64,6 @@ export async function runChatTurn(params: {
 }): Promise<ChatTurnResult> {
   const { user, conversationId, ipAddress, history, userMessage, mode, pageContext } = params
 
-  const provider = getJarvisProvider()
   const allowedNames = allowedToolNamesForRole(user.role)
   const tools = toolsForRole(allowedNames)
   const system = buildSystemPrompt(user, { mode, pageContext })
@@ -82,14 +81,15 @@ export async function runChatTurn(params: {
     ? `${userMessage}\n\n---\n${knowledgeBlock}`
     : userMessage
 
-  const result = await provider.runToolLoop({
+  const { primary, fallback } = getJarvisProvidersWithFallback()
+  const loopArgs = {
     system,
     history,
     userMessage: augmentedMessage,
     tools,
     maxRounds: JARVIS_MAX_TOOL_ROUNDS,
     maxTokens: JARVIS_MAX_TOKENS,
-    onToolCall: async (name, input) => {
+    onToolCall: async (name: string, input: unknown) => {
       const outcome = await runTool(name, input, {
         user,
         conversationId,
@@ -101,7 +101,22 @@ export async function runChatTurn(params: {
         error: outcome.error,
       }
     },
-  })
+  }
+
+  // Retry the same tool loop on the fallback provider when the primary is
+  // overloaded/rate-limited (e.g. a Gemini 503) — tools and permissions are
+  // identical, only the model changes.
+  let result
+  try {
+    result = await primary.runToolLoop(loopArgs)
+  } catch (err) {
+    if (fallback && isProviderOverloadError(err)) {
+      console.warn(`[jarvis] primary provider overloaded (${err instanceof Error ? err.message : err}) — falling back`)
+      result = await fallback.runToolLoop(loopArgs)
+    } else {
+      throw err
+    }
+  }
 
   const toolCalls: ToolCallRecord[] = result.toolCalls
   const sources = buildAnswerSources(passages, toolCalls)

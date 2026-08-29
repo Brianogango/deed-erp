@@ -11,6 +11,8 @@ import { summarizeRepairsTool } from './summarize-repairs'
 import { overduePaymentsTool } from './overdue-payments'
 import { procurementSummaryTool } from './procurement-summary'
 import { draftQuotationTool } from './draft-quotation'
+import { createQuotationTool } from './create-quotation'
+import { createInvoiceTool } from './create-invoice'
 import { draftMessageTool } from './draft-message'
 import { searchDocumentsTool } from './search-documents'
 import { summarizeSalesLeadsTool } from './summarize-sales-leads'
@@ -27,6 +29,8 @@ const REGISTRY: ToolDefinition[] = [
   overduePaymentsTool,
   procurementSummaryTool,
   draftQuotationTool,
+  createQuotationTool,
+  createInvoiceTool,
   draftMessageTool,
   searchDocumentsTool,
   summarizeSalesLeadsTool,
