@@ -10,6 +10,7 @@ import { resolveBlobInvoiceMirror } from '@/lib/accounting/resolve-invoice-mirro
 import { salesCommissionAppliesToInvoice } from '@/lib/sales/commission-closer'
 import { createJournalEntryInTx } from '@/lib/accounting/journal-service'
 import { buildInvoiceJournalInput, allocateInvoiceJournalRef } from '@/lib/accounting/invoice-journals'
+import { ensurePrismaPurchaseOrder } from '@/lib/purchase/po-prisma-sync'
 
 // technical_lead: repair quotes create/update their linked invoice (see recordRepairBilling).
 const WRITE_ROLES = ['director', 'finance_officer', 'admin_officer', 'technical_lead']
@@ -228,6 +229,8 @@ export async function PUT(request: Request, { params }: { params: { id: string }
 
     const willBecomePosted = before.status === 'draft'
       && (data.status === 'approved' || data.status === 'invoiced')
+    // Resolved Prisma PO id for the vendor-bill path (twin-id safe).
+    let vendorPoId: string | null = null
     if (willBecomePosted) {
       const postDate = data.invoiceDate ?? before.invoiceDate ?? new Date()
       const lock = await checkFiscalLock(postDate)
@@ -238,9 +241,12 @@ export async function PUT(request: Request, { params }: { params: { id: string }
       // Phase 3: server 3-way match before posting a vendor bill linked to a PO.
       const preMirror = await resolveBlobInvoiceMirror(params.id)
       const willBeVendor = body.type === 'vendor_bill' || preMirror.type === 'vendor_bill'
-      const poId = optionalUuid(body.purchaseOrderId)
+      const rawPoId = optionalUuid(body.purchaseOrderId)
         ?? preMirror.purchaseOrderId
         ?? null
+      // Resolve blob-only / twin-id POs onto the Prisma record before matching.
+      const poId = rawPoId ? (await ensurePrismaPurchaseOrder(rawPoId, actor.id)) ?? rawPoId : null
+      vendorPoId = poId
       if (willBeVendor && poId) {
         try {
           const { assertVendorBillThreeWayMatchServer } = await import('@/lib/purchase/assert-bill-match.server')
@@ -326,7 +332,7 @@ export async function PUT(request: Request, { params }: { params: { id: string }
         subtotal: Number(data.subtotal ?? before.subtotal),
         taxAmount: Number(data.taxAmount ?? before.taxAmount),
         type: postingInvoiceType,
-        purchaseOrderId: (postingPurchaseOrderId = optionalUuid(body.purchaseOrderId) ?? postingMirror.purchaseOrderId ?? null) ?? undefined,
+        purchaseOrderId: (postingPurchaseOrderId = vendorPoId ?? optionalUuid(body.purchaseOrderId) ?? postingMirror.purchaseOrderId ?? null) ?? undefined,
         partnerName: postingMirror.partnerName,
         clientName: postingMirror.clientName,
         lines: normalizedItems.map((i: any) => ({

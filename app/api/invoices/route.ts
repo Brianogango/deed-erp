@@ -245,14 +245,20 @@ export async function POST(request: Request) {
     if (!isCreditNote && purchaseOrderId) {
       // A blob-only PO (created while a product was missing from Prisma) must
       // not fail the bill — materialize it first, then run the 3-way match.
-      await ensurePrismaPurchaseOrder(purchaseOrderId, actor.id)
+      // When the PO exists under a twin id (blob-first create, then API
+      // re-create), the twin's Prisma id wins for the FK and the match.
+      const resolvedPoId = await ensurePrismaPurchaseOrder(purchaseOrderId, actor.id)
+      if (resolvedPoId && resolvedPoId !== purchaseOrderId) {
+        invoiceData.purchaseOrderId = resolvedPoId
+      }
+      const effectivePoId = resolvedPoId ?? purchaseOrderId
       try {
         invoice = await prisma.$transaction(async tx => {
           const [po, activeBills] = await Promise.all([
-            tx.purchaseOrder.findUnique({ where: { id: purchaseOrderId }, include: { items: true } }),
+            tx.purchaseOrder.findUnique({ where: { id: effectivePoId }, include: { items: true } }),
             tx.invoice.findMany({
               where: {
-                purchaseOrderId,
+                purchaseOrderId: effectivePoId,
                 status: { notIn: ['cancelled', 'voided'] },
                 totalAmount: { gt: 0 },
               },
