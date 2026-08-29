@@ -86,6 +86,14 @@ export async function loadAppStateForWrite(keys?: string[]): Promise<AppStateMap
       }
     }
   }
+  // Phase 2c: the repairs table is the write target too — read-modify-write
+  // cycles must start from the authoritative copy, not the frozen blob backup.
+  if (!wantedKeys || wantedKeys.includes('deed_repairs_v2')) {
+    const fromPrisma = await import('./repair-mirror')
+      .then(m => m.loadRepairsFromPrisma())
+      .catch(() => null)
+    if (fromPrisma) state['deed_repairs_v2'] = fromPrisma
+  }
   return state
 }
 
@@ -213,10 +221,10 @@ export async function saveStoreKeys(entries: Record<string, string>): Promise<vo
       ON CONFLICT(key) DO UPDATE SET value = EXCLUDED.value, updated_at = EXCLUDED.updated_at
     `
 
-    // Repairs migration phase 2b: the repairs table is the authoritative
-    // store. Upsert synchronously (fingerprinted — only changed rows) so a
-    // following read never sees a pre-write state. The blob write above stays
-    // as the rollback/backup copy during the transition.
+    // Repairs migration phase 2c: the repairs table is authoritative — upsert
+    // synchronously (fingerprinted — only changed rows) so a following read
+    // never sees a pre-write state. The blob write above is now a write-only
+    // backup copy; nothing reads it. Removing that write is the final cleanup.
     if (entries['deed_repairs_v2'] && process.env.NODE_ENV !== 'test') {
       await import('./repair-mirror')
         .then(m => m.mirrorRepairsToPrisma(entries['deed_repairs_v2']))
