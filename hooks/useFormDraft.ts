@@ -136,13 +136,28 @@ export function useFormDraft<T extends Record<string, unknown>>(
   }
 }
 
-/** Clear business + draft keys from localStorage on explicit logout (SEC-004). */
+/**
+ * Clear business + draft keys from localStorage on explicit logout (SEC-004).
+ *
+ * POS till-session keys are preserved: a till that was opened stays open until
+ * someone runs Close Session at end-of-day reconciliation (see lib/pos-session.ts).
+ * Auto-logout / inactivity logout must not destroy the open till, so these keys
+ * survive logout and re-hydrate on the next login.
+ */
+const LOGOUT_PRESERVED_KEYS = new Set([
+  'deed_posSessionOpen',
+  'deed_posSessionId',
+  'deed_posSessionOpeningCash',
+  'deed_posSessions',
+])
+
 export function purgeClientBusinessStorage() {
   if (typeof window === 'undefined') return
   const keys: string[] = []
   for (let i = 0; i < localStorage.length; i += 1) {
     const key = localStorage.key(i)
     if (!key) continue
+    if (LOGOUT_PRESERVED_KEYS.has(key)) continue
     if (key.startsWith('deed_') || key.startsWith('draft_')) keys.push(key)
   }
   for (const key of keys) {
