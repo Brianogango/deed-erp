@@ -11,7 +11,7 @@ const COOKIE_NAME = 'deed-session'
 const PUBLIC_PAGES        = new Set(['/login'])
 // /api/setup-admin has no session to check against on a fresh DB — it enforces
 // its own SETUP_ADMIN_SECRET header check and refuses to run once users exist.
-const PUBLIC_API_PATHS    = new Set(['/api/auth/login', '/api/auth/logout', '/api/setup-admin'])
+const PUBLIC_API_PATHS    = new Set(['/api/auth/login', '/api/auth/logout', '/api/setup-admin', '/api/mpesa/callback'])
 // sw.js and offline.html must be reachable without a session: the login page
 // is where stale service workers get replaced, and a worker script that
 // redirects to /login can never be updated by a signed-out browser.

@@ -35,6 +35,8 @@ import {
   normalizeDocumentPaymentDetails,
   paymentDetailsEqual,
 } from '@/lib/document-payment-details'
+import { fetchMpesaStatus, sendMpesaStk, waitForMpesaStk } from '@/lib/mpesa/client'
+import { normalizeMpesaPhone } from '@/lib/mpesa/phone'
 
 const today = () => new Date().toISOString().slice(0, 10)
 
@@ -86,6 +88,10 @@ export default function InvoiceDetail() {
   const [payBankAccountId, setPayBankAccountId] = useState('')
   const [payReference, setPayReference] = useState('')
   const [payDate, setPayDate] = useState(today())
+  const [payPhone, setPayPhone] = useState('')
+  const [darajaReady, setDarajaReady] = useState(false)
+  const [stkBusy, setStkBusy] = useState(false)
+  const [stkStatus, setStkStatus] = useState('')
   const [showDelete, setShowDelete] = useState(false)
   const [showCancel, setShowCancel] = useState(false)
   const [showResetDraft, setShowResetDraft] = useState(false)
@@ -199,6 +205,19 @@ export default function InvoiceDetail() {
     setDocumentPaymentDetails,
   ])
 
+  useEffect(() => {
+    void fetchMpesaStatus()
+      .then(s => setDarajaReady(s.configured))
+      .catch(() => setDarajaReady(false))
+  }, [])
+
+  useEffect(() => {
+    if (!showPayModal) return
+    const contact = contacts.find(c => c.id === invoice?.partnerId)
+    const phone = contact?.mobile || contact?.phone || ''
+    if (phone) setPayPhone(phone)
+  }, [showPayModal, contacts, invoice?.partnerId])
+
   if (!mounted) return <ModuleSkeleton />
 
   if (!invoice && !lookupReady) return <ModuleSkeleton />
@@ -261,7 +280,6 @@ export default function InvoiceDetail() {
     { key: 'activities', label: 'Activities', value: '2' },
   ]
 
-
   const handlePayment = () => {
     if (!payAmount || Number(payAmount) <= 0) return
     if (balance <= 0) { showToast('Invoice is already fully paid', 'info'); return }
@@ -271,6 +289,48 @@ export default function InvoiceDetail() {
     setPayAmount('')
     setPayReference('')
     setPayDate(today())
+    setStkStatus('')
+  }
+
+  const handleSendStk = async () => {
+    if (!invoice || invoice.type !== 'customer_invoice') return
+    const amount = Number(payAmount)
+    if (!amount || amount <= 0) { showToast('Enter the amount to collect', 'error'); return }
+    const phone = normalizeMpesaPhone(payPhone)
+    if (!phone) { showToast('Enter a valid M-Pesa number (07XX …)', 'error'); return }
+    setStkBusy(true)
+    setStkStatus('Sending M-Pesa prompt…')
+    try {
+      const pushed = await sendMpesaStk({
+        phone,
+        amount: Math.min(amount, balance),
+        accountReference: displayDocRef(invoice.ref),
+        transactionDesc: 'Invoice',
+        source: 'invoice',
+        invoiceId: invoice.id,
+      })
+      setStkStatus(pushed.customerMessage || 'Ask the customer to enter their PIN')
+      const settled = await waitForMpesaStk(pushed.checkoutRequestId)
+      if (settled.status !== 'success') {
+        showToast(settled.resultDesc || 'M-Pesa prompt was not completed', 'error')
+        setStkStatus(settled.resultDesc || 'Not completed')
+        return
+      }
+      const receipt = settled.mpesaReceipt || settled.checkoutRequestId
+      setPayReference(receipt)
+      registerPayment(invoice.id, Math.min(amount, balance), 'mpesa', payBankAccountId || undefined, receipt, payDate)
+      setShowPayModal(false)
+      setPayAmount('')
+      setPayReference('')
+      setPayDate(today())
+      setStkStatus('')
+      showToast(`M-Pesa ${receipt} recorded`)
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'M-Pesa prompt failed', 'error')
+      setStkStatus('')
+    } finally {
+      setStkBusy(false)
+    }
   }
 
   const handlePrepareRelease = () => {
@@ -1052,11 +1112,27 @@ export default function InvoiceDetail() {
               />
             </Field>
 
+            {payMethod === 'mpesa' && darajaReady && invoice.type === 'customer_invoice' && (
+              <Field label="M-Pesa number">
+                <Input value={payPhone} onChange={setPayPhone} placeholder="07XX XXX XXX" />
+                {stkStatus && <p className="text-[11px] text-[var(--text-3)] mt-1">{stkStatus}</p>}
+              </Field>
+            )}
+
             <div className="flex gap-2 justify-end pt-2">
               <button className="btn-outline" onClick={() => setShowPayModal(false)}>Cancel</button>
+              {payMethod === 'mpesa' && darajaReady && invoice.type === 'customer_invoice' && (
+                <button
+                  className="btn-outline disabled:opacity-40"
+                  disabled={!payAmount || Number(payAmount) <= 0 || balance <= 0 || stkBusy}
+                  onClick={() => { void handleSendStk() }}
+                >
+                  {stkBusy ? 'Waiting for PIN…' : 'Send M-Pesa prompt'}
+                </button>
+              )}
               <button
                 className="btn-primary disabled:opacity-40"
-                disabled={!payAmount || Number(payAmount) <= 0 || balance <= 0}
+                disabled={!payAmount || Number(payAmount) <= 0 || balance <= 0 || stkBusy}
                 onClick={handlePayment}
               >
                 {willFullyPay || overpay ? 'Mark as Paid' : 'Record Partial Payment'}
