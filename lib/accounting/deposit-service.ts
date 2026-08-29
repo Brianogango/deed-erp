@@ -2,7 +2,8 @@ import 'server-only'
 import type { Prisma } from '@prisma/client'
 import prisma from '@/lib/prisma'
 import { createJournalEntryInTx } from '@/lib/accounting/journal-service'
-import { cashAccountRoleForMethod, labelForRole } from '@/lib/accounting/coa-roles'
+import { cashAccountRoleForBankId, cashAccountRoleForMethod, labelForRole } from '@/lib/accounting/coa-roles'
+import { isUuid } from '@/lib/legacy-compat'
 import { writeFinancialAuditInTx } from '@/lib/finance-audit'
 import { paymentUnallocated } from '@/lib/accounting/residuals'
 
@@ -10,11 +11,16 @@ const money = (n: unknown) => Math.round((Number(n) || 0) * 100) / 100
 
 async function cashAccountLabel(tx: Prisma.TransactionClient, method: string, bankAccountId?: string | null) {
   if (bankAccountId) {
-    const bank = await tx.bankAccount.findUnique({ where: { id: bankAccountId } })
-    if (!bank || !bank.isActive) throw new Error('Invalid or inactive bank account')
-    const gl = await tx.accountCode.findUnique({ where: { id: bank.glAccountId } })
-    if (!gl || !gl.isActive) throw new Error('Bank account is not mapped to an active GL account')
-    return `${gl.code} - ${gl.name}`
+    // Blob cashbook ids ('ncba', 'im', 'absa'…) are not Prisma UUIDs — only
+    // hit the table for a real bank-account id, else resolve via the role map.
+    if (isUuid(bankAccountId)) {
+      const bank = await tx.bankAccount.findUnique({ where: { id: bankAccountId } })
+      if (!bank || !bank.isActive) throw new Error('Invalid or inactive bank account')
+      const gl = await tx.accountCode.findUnique({ where: { id: bank.glAccountId } })
+      if (!gl || !gl.isActive) throw new Error('Bank account is not mapped to an active GL account')
+      return `${gl.code} - ${gl.name}`
+    }
+    return labelForRole(cashAccountRoleForBankId(bankAccountId))
   }
   return labelForRole(cashAccountRoleForMethod(method))
 }
