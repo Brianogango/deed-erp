@@ -1,7 +1,7 @@
 import 'server-only'
 import prisma from '@/lib/prisma'
 import { createJournalEntry, persistStoreJournalEntry, reverseJournalEntry, type CreateJournalEntryInput } from '@/lib/accounting/journal-service'
-import { COMPANY_ACCOUNT_FALLBACKS, formatAccountLabel } from '@/lib/product-accounts'
+import { COMPANY_ACCOUNT_FALLBACKS, formatAccountLabel, aggregateLinesByAccount } from '@/lib/product-accounts'
 import { nextInvoiceJournalRef } from '@/lib/finance-invoice'
 import {
   buildVendorBillPerpetualLines,
@@ -29,6 +29,7 @@ export type InvoiceLike = {
   taxTotal?: number
   taxAmount?: number
   purchaseOrderId?: string
+  repairId?: string | null
   invoiceDate?: string | Date
   lines?: Array<{
     productId?: string
@@ -194,6 +195,30 @@ export async function buildInvoiceJournalInput(
   }
 
   const saleLabel = formatAccountLabel(COMPANY_ACCOUNT_FALLBACKS.saleAccountCode, [])
+  // Revenue splits per line: product → category → company fallback. Repair
+  // service lines (labor, logistics, diagnosis — no product) post to 5121
+  // Hardware Support per the official chart.
+  const isRepair = Boolean(invoice.repairId)
+  const productState = await loadAppState(['deed_products'])
+  const products = Array.isArray(productState.deed_products) ? productState.deed_products as any[] : []
+  const revenueBuckets = aggregateLinesByAccount({
+    lines: (invoice.lines ?? []).map(l => ({
+      productId: l.productId,
+      subtotal: money(l.subtotal),
+      accountCode: l.accountCode ?? (isRepair && !l.productId ? '5121' : undefined),
+    })),
+    resolveProduct: (id) => products.find(p => p?.id === id),
+    side: 'revenue',
+    accounts: [],
+  })
+  const revenueJournalLines = revenueBuckets.length
+    ? revenueBuckets.map(b => ({
+        accountLabel: b.account,
+        label: `Revenue: ${ref}`,
+        debit: 0,
+        credit: b.amount,
+      }))
+    : [{ accountLabel: saleLabel, label: `Revenue: ${ref}`, debit: 0, credit: subtotal }]
   return {
     ref: `JRN/${ref}`.slice(0, 80),
     journalCode: 'SAL',
@@ -206,7 +231,7 @@ export async function buildInvoiceJournalInput(
     skipIfExists: false,
     lines: [
       { accountLabel: labelForRole('ar'), label: `AR: ${partner}`, debit: total, credit: 0 },
-      { accountLabel: saleLabel, label: `Revenue: ${ref}`, debit: 0, credit: subtotal },
+      ...revenueJournalLines,
       ...(tax > 0 ? [{ accountLabel: labelForRole('output_vat'), label: `VAT on ${ref}`, debit: 0, credit: tax }] : []),
     ],
   }

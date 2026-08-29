@@ -332,6 +332,7 @@ export async function PUT(request: Request, { params }: { params: { id: string }
         subtotal: Number(data.subtotal ?? before.subtotal),
         taxAmount: Number(data.taxAmount ?? before.taxAmount),
         type: postingInvoiceType,
+        repairId: before.repairId ?? undefined,
         purchaseOrderId: (postingPurchaseOrderId = vendorPoId ?? optionalUuid(body.purchaseOrderId) ?? postingMirror.purchaseOrderId ?? null) ?? undefined,
         partnerName: postingMirror.partnerName,
         clientName: postingMirror.clientName,
