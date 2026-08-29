@@ -15,6 +15,7 @@ vi.mock('@/lib/auth/server', () => ({
 
 vi.mock('@/lib/server-store', () => ({
   loadAppState: mockLoadAppState,
+  loadAppStateForWrite: mockLoadAppState,
   saveStoreKeys: mockSaveStoreKeys,
   getAppStateVersion: mockGetAppStateVersion,
 }))

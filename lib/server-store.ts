@@ -52,6 +52,14 @@ export async function loadAppState(keys?: string[]): Promise<AppStateMap> {
         }
       }
     }
+    // Phase 2b: the repairs table is authoritative — serve it whenever the
+    // caller asks for (or bulk-loads) the repairs store.
+    if (!wantedKeys || wantedKeys.includes('deed_repairs_v2')) {
+      const fromPrisma = await import('./repair-mirror')
+        .then(m => m.loadRepairsFromPrisma())
+        .catch(() => null)
+      if (fromPrisma) state['deed_repairs_v2'] = fromPrisma
+    }
     return state
   } catch {
     return {}
@@ -205,13 +213,14 @@ export async function saveStoreKeys(entries: Record<string, string>): Promise<vo
       ON CONFLICT(key) DO UPDATE SET value = EXCLUDED.value, updated_at = EXCLUDED.updated_at
     `
 
-    // Repairs migration phase 1: mirror core repair fields into the relational
-    // repairs table whenever the blob changes. Fire-and-forget; dynamic import
-    // avoids a circular dependency and keeps unit tests DB-free.
+    // Repairs migration phase 2b: the repairs table is the authoritative
+    // store. Upsert synchronously (fingerprinted — only changed rows) so a
+    // following read never sees a pre-write state. The blob write above stays
+    // as the rollback/backup copy during the transition.
     if (entries['deed_repairs_v2'] && process.env.NODE_ENV !== 'test') {
-      void import('./repair-mirror')
+      await import('./repair-mirror')
         .then(m => m.mirrorRepairsToPrisma(entries['deed_repairs_v2']))
-        .catch(() => {})
+        .catch(err => console.error('[repair-mirror] sync write failed:', err))
     }
     // Accounting / inventory dual-write mirrors — NEVER delete app_state keys.
     if (process.env.NODE_ENV !== 'test') {
