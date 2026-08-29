@@ -27,6 +27,33 @@ export function getJarvisProvider(env: NodeJS.ProcessEnv = process.env): JarvisL
   return createGeminiJarvisProvider()
 }
 
+/** True for provider overload / rate-limit / 5xx errors worth retrying on the other provider. */
+export function isProviderOverloadError(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err ?? '')
+  return /503|502|500|overload|high demand|rate.?limit|too many requests|capacity|unavailable/i.test(msg)
+}
+
+/**
+ * Primary + fallback providers. When Gemini is overloaded (or Anthropic is
+ * down), the chat engine retries the same tool loop on the other provider —
+ * tools and permissions are identical, only the model changes.
+ */
+export function getJarvisProvidersWithFallback(env: NodeJS.ProcessEnv = process.env): {
+  primary: JarvisLlmProvider
+  fallback: JarvisLlmProvider | null
+} {
+  const primary = getJarvisProvider(env)
+  const primaryId = resolveJarvisProviderId(env)
+  const fallbackId: JarvisProviderId = primaryId === 'anthropic' ? 'gemini' : 'anthropic'
+  const fallbackConfigured = fallbackId === 'gemini'
+    ? Boolean((env.GEMINI_API_KEY || env.GOOGLE_AI_API_KEY || '').trim())
+    : Boolean((env.ANTHROPIC_API_KEY || '').trim())
+  const fallback = fallbackConfigured
+    ? (fallbackId === 'gemini' ? createGeminiJarvisProvider() : createAnthropicJarvisProvider())
+    : null
+  return { primary, fallback }
+}
+
 export function describeJarvisProvider(env: NodeJS.ProcessEnv = process.env) {
   const status = jarvisProviderConfigured(env)
   if (!status.configured) {

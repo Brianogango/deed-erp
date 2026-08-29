@@ -15,18 +15,20 @@ const ROLE_TOOL_ALLOWLIST: Record<UserRole, string[]> = {
   director: [
     'search_customers', 'check_inventory', 'explain_invoice', 'track_repair',
     'check_warranty', 'summarize_sales', 'summarize_repairs', 'overdue_payments', 'procurement_summary',
-    'draft_quotation', 'draft_message', 'search_documents',
+    'draft_quotation', 'create_quotation', 'create_invoice', 'draft_message', 'search_documents',
     'summarize_sales_leads', 'import_sales_inbox_leads',
   ],
   admin_officer: [
     'search_customers', 'check_inventory', 'explain_invoice', 'track_repair',
     'check_warranty', 'summarize_repairs', 'overdue_payments', 'draft_message', 'search_documents',
     'summarize_sales_leads', 'import_sales_inbox_leads',
+    'create_quotation', 'create_invoice',
   ],
   finance_officer: [
     'search_customers', 'check_inventory', 'explain_invoice',
     'summarize_sales', 'overdue_payments', 'procurement_summary',
     'draft_message', 'search_documents',
+    'create_invoice',
   ],
   inventory_officer: [
     'check_inventory', 'procurement_summary', 'search_documents',
@@ -36,7 +38,7 @@ const ROLE_TOOL_ALLOWLIST: Record<UserRole, string[]> = {
   ],
   sales_rep: [
     'search_customers', 'check_inventory', 'explain_invoice',
-    'summarize_sales', 'draft_quotation', 'draft_message', 'search_documents',
+    'summarize_sales', 'draft_quotation', 'create_quotation', 'draft_message', 'search_documents',
     'summarize_sales_leads', 'import_sales_inbox_leads',
   ],
   technical_lead: [
