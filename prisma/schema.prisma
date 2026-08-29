@@ -1956,6 +1956,10 @@ model Repair {
   source            String       @default("walkin") @db.VarChar(30)
   referredById      String?      @map("referred_by") @db.Uuid
   notes             String?
+  // Full blob repair (deed_repairs_v2 row) — phase 2a: lets read surfaces
+  // serve the complete job from the relational table while writes still
+  // mirror from the blob. Phase 2b moves writes and retires the blob.
+  payload           Json?
   createdById       String       @map("created_by") @db.Uuid
   createdAt         DateTime     @default(now()) @map("created_at")
   updatedAt         DateTime     @updatedAt @map("updated_at")

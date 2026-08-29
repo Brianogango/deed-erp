@@ -6,6 +6,7 @@ import { loadAppState } from './server-store'
 import type { RepairOrder } from './repair-types'
 import { portalDiagnosisFeeFields } from './diagnosis-fee'
 import { collectStoredRepairRefAliases, findRepairByPortalRef, normalizePortalRepairRef } from './repair-ref'
+import { findRepairInPrisma } from './repair-mirror'
 
 async function loadStoredPhotos(repair: { ref?: unknown; previousRefs?: unknown }, requestedRef?: string): Promise<{ url: string; name: string; date: string }[]> {
   const aliases = collectStoredRepairRefAliases({
@@ -195,6 +196,18 @@ export async function lookupRepair(ref: string): Promise<PortalRepair | null> {
   await restoreApprovalIfMissing(decoded)
 
   try {
+    // Phase 2a: the relational table carries the full job in payload.
+    const fromPrisma = await findRepairInPrisma(decoded)
+    if (fromPrisma) {
+      await restoreApprovalIfMissing(fromPrisma.ref ?? decoded)
+      const storedPhotos = await loadStoredPhotos(fromPrisma, decoded)
+      const state = await loadAppState(['deed_invoices'])
+      const invoices = (state['deed_invoices'] ?? []) as any[]
+      const linkedInvoice = findRepairLinkedInvoice(invoices, fromPrisma as any)
+      const portal = erpToPortal(fromPrisma as RepairOrder, linkedInvoice)
+      return storedPhotos.length > 0 ? { ...portal, issuePhotos: storedPhotos } : portal
+    }
+
     const state = await loadAppState(['deed_repairs_v2', 'deed_repairs', 'deed_invoices'])
     const repairs = (state['deed_repairs_v2'] ?? state['deed_repairs'] ?? []) as RepairOrder[]
     const invoices = (state['deed_invoices'] ?? []) as any[]

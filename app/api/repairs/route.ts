@@ -9,6 +9,7 @@ import { repairDatesWriteError } from '@/lib/data-validation'
 import { ensureRepairIntakeTimestamp } from '@/lib/repair-datetime'
 import { hasModuleAccess } from '@/lib/auth/access'
 import { filterStoreValueForRole } from '@/lib/auth/authorization'
+import { loadRepairsFromPrisma } from '@/lib/repair-mirror'
 
 function publicPhotoUrl(ref: string, index: number) {
   return `/api/portal/repair/${encodeURIComponent(ref)}/photos/${index}`
@@ -46,8 +47,16 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const state = await loadAppState()
-    let repairs = Array.isArray(state['deed_repairs_v2']) ? state['deed_repairs_v2'] as RepairOrder[] : []
+    // Phase 2a: read from the relational table when mirrored (payload carries
+    // the full job); fall back to the blob otherwise.
+    const fromPrisma = await loadRepairsFromPrisma()
+    let repairs: RepairOrder[]
+    if (fromPrisma) {
+      repairs = fromPrisma as RepairOrder[]
+    } else {
+      const state = await loadAppState()
+      repairs = Array.isArray(state['deed_repairs_v2']) ? state['deed_repairs_v2'] as RepairOrder[] : []
+    }
     repairs = filterStoreValueForRole(
       { id: user?.id, role: user?.role, modules: user?.modules, actsAsTechnician: user?.actsAsTechnician },
       'deed_repairs_v2',
