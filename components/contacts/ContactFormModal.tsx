@@ -94,6 +94,8 @@ export default function ContactFormModal({
   }))
   const [saving, setSaving] = useState(false)
   const [fieldErrors, setFieldErrors] = useState<Partial<Record<'name', string>>>({})
+  // React 18's DetailsHTMLAttributes has `open`/`onToggle` but not `defaultOpen`.
+  const [moreDetailsOpen, setMoreDetailsOpen] = useState(() => Boolean(editId))
 
   const companies = useMemo(
     () => contacts.filter(c => c.type === 'company'),
@@ -280,7 +282,11 @@ export default function ContactFormModal({
           </div>
         </div>
 
-        <details className="contacts-form-optional contacts-form-more" defaultOpen={Boolean(editId)}>
+        <details
+          className="contacts-form-optional contacts-form-more"
+          open={moreDetailsOpen}
+          onToggle={event => setMoreDetailsOpen(event.currentTarget.open)}
+        >
           <summary>
             <div>
               <strong>More details</strong>
