@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { loadAppState } from '@/lib/server-store'
+import { getServerSession } from '@/lib/auth/server'
+import { portalDocumentAccessAllowed, isPortalPhoneVerificationRequired } from '@/lib/portal-verify'
 
 export const dynamic = 'force-dynamic'
 
@@ -27,7 +29,19 @@ export async function GET(_req: NextRequest, { params }: { params: { ref: string
   try {
     const ref = decodeURIComponent(params.ref)
     const key = paymentProofKey(ref)
-    const state = await loadAppState([key, 'deed_repairs_v2'])
+    const state = await loadAppState([key, 'deed_repairs_v2', 'deed_systemSettings'])
+
+    // Payment screenshots are customer PII — ref alone is not a capability.
+    const repairs = (state['deed_repairs_v2'] as any[]) || []
+    const repairForGate = repairs.find((r: any) => String(r.ref ?? '').toLowerCase() === ref.toLowerCase())
+    const session = await getServerSession().catch(() => null)
+    const allowed = await portalDocumentAccessAllowed(_req, repairForGate, {
+      session,
+      phoneVerificationRequired: isPortalPhoneVerificationRequired(state['deed_systemSettings'] as any),
+    })
+    if (!allowed) {
+      return NextResponse.json({ error: 'Enter the registered phone number to view this document.' }, { status: 403 })
+    }
 
     let dataUrl: string | undefined
     const stored = state[key] as { dataUrl?: string } | undefined
@@ -35,8 +49,7 @@ export async function GET(_req: NextRequest, { params }: { params: { ref: string
       dataUrl = stored.dataUrl
     } else {
       // Legacy fallback: screenshot embedded directly in the repair record
-      const repairs = (state['deed_repairs_v2'] as any[]) || []
-      const repair = repairs.find((r: any) => String(r.ref ?? '').toLowerCase() === ref.toLowerCase())
+      const repair = repairForGate
       const inline = repair?.paymentConfirmationImageUrl
       if (typeof inline === 'string' && inline.startsWith('data:')) dataUrl = inline
     }

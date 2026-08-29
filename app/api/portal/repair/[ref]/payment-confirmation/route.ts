@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { lookupRepair } from '@/lib/portal-repair-server'
 import { findRepairLinkedInvoice } from '@/lib/portal-invoice-link'
-import { saveStoreKeys, loadAppState } from '@/lib/server-store'
+import { saveStoreKeys, loadAppState, loadAppStateForWrite, withAppStateKeyLock } from '@/lib/server-store'
 import { checkRateLimit } from '@/lib/rate-limit'
 import { phoneMatches, isPortalPhoneVerificationRequired } from '@/lib/portal-verify'
 
@@ -100,7 +100,15 @@ export async function POST(req: NextRequest, { params }: { params: { ref: string
     ? 'Portal M-PESA confirmation received; amount appears to match the invoice. Awaiting finance verification.'
     : 'Portal M-PESA confirmation received; requires finance review to verify the amount and reference.'
 
-  await saveStoreKeys({ 'deed_repairs_v2': JSON.stringify(repairs) })
+  // Persist under the ledger lock against a fresh read (see approve route).
+  await withAppStateKeyLock('deed_repairs_v2', async () => {
+    const fresh = await loadAppStateForWrite()
+    const freshRepairs = Array.isArray(fresh['deed_repairs_v2']) ? fresh['deed_repairs_v2'] as any[] : []
+    const idx = freshRepairs.findIndex((r: any) => r.id === targetRepair.id)
+    if (idx >= 0) freshRepairs[idx] = targetRepair
+    else freshRepairs.unshift(targetRepair)
+    await saveStoreKeys({ 'deed_repairs_v2': JSON.stringify(freshRepairs) })
+  })
 
   const updated = await lookupRepair(ref)
   return NextResponse.json({ repair: updated, status: 'pending_review', amountMatches, parsedAmount, invoiceTotal, receiptNumber: mpesaCode ?? undefined }, { status: 200 })

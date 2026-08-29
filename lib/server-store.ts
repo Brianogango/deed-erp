@@ -58,6 +58,29 @@ export async function loadAppState(keys?: string[]): Promise<AppStateMap> {
   }
 }
 
+/**
+ * loadAppState for read-modify-write writers. A swallowed load failure
+ * returns {} — a following saveStoreKeys would then overwrite the full ledger
+ * with a one-item array. Writers must fail instead of wiping.
+ */
+export async function loadAppStateForWrite(keys?: string[]): Promise<AppStateMap> {
+  await ensureTable()
+  const wantedKeys = keys?.filter(Boolean)
+  const { rows } = wantedKeys?.length
+    ? await sql`SELECT key, value FROM app_state WHERE key = ANY(${wantedKeys})`
+    : await sql`SELECT key, value FROM app_state`
+  const state = rowsToAppState(rows as { key: string; value: string }[])
+  if (wantedKeys?.length) {
+    for (const key of wantedKeys.filter(isBlobKey)) {
+      const blob = await readBlob(key)
+      if (blob !== null) {
+        try { state[key] = JSON.parse(blob) } catch { state[key] = blob }
+      }
+    }
+  }
+  return state
+}
+
 export async function loadInitialAppState(): Promise<AppStateMap> {
   try {
     await ensureTable()

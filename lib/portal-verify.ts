@@ -41,3 +41,21 @@ export function isPortalPhoneVerificationRequired(
 ): boolean {
   return settings?.secPortalRequirePhoneVerification !== false
 }
+
+/**
+ * Read-side gate for portal document endpoints (invoice/receipt PDFs, payment
+ * proof, photos, reports). A repair ref is guessable, so these require either
+ * a staff session or the customer phone on file (?phone=). Returns true when
+ * access is allowed.
+ */
+export async function portalDocumentAccessAllowed(
+  req: { url: string },
+  repair: { customerPhone?: string | null } | null | undefined,
+  opts: { session?: unknown; phoneVerificationRequired?: boolean } = {},
+): Promise<boolean> {
+  if (opts.session) return true
+  if (opts.phoneVerificationRequired === false) return true
+  if (!repair) return false
+  const phone = new URL(req.url).searchParams.get('phone')
+  return phoneMatches(phone, repair.customerPhone)
+}

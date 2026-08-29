@@ -26,7 +26,18 @@ function stripInlinePhotoPayloads(repair: any) {
   // Mask the customer phone so it can serve as an ownership secret for
   // state-changing portal actions (quote approval, payment confirmation).
   if (next.customerPhone) next.customerPhone = maskPhone(next.customerPhone)
+  // Email is equally identifying — mask it the same way.
+  if (next.customerEmail) next.customerEmail = maskEmail(next.customerEmail)
   return next
+}
+
+/** Mask an email for display, e.g. "jane.doe@example.com" -> "ja**@example.com". */
+function maskEmail(email: string | null | undefined): string {
+  const raw = String(email ?? '')
+  const at = raw.indexOf('@')
+  if (at <= 0) return raw ? '**' : ''
+  const head = raw.slice(0, Math.min(2, at))
+  return `${head}${'*'.repeat(Math.max(2, at - head.length))}${raw.slice(at)}`
 }
 
 export async function GET(
