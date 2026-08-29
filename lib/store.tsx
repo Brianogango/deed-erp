@@ -15934,6 +15934,19 @@ const storeCtx: AppState = {
           }
         }
 
+        // Post the repair-parts COGS journal (Dr 6301 / Cr 1200) for the
+        // consumed parts. Idempotent per repair+product — safe on every pass.
+        if (consumptionEnabled && partsToConsume.length > 0) {
+          void fetch(`/api/repairs/${repairId}/parts-cogs`, { method: 'POST' })
+            .then(async res => {
+              if (!res.ok) {
+                const payload = await res.json().catch(() => null) as { error?: string } | null
+                showToast(payload?.error || 'Parts posted to accounting with warnings', 'error')
+              }
+            })
+            .catch(() => showToast('Parts cost journal could not post — finance can retry from the repair', 'error'))
+        }
+
         const passedRepair: RepairOrder = {
           ...repair,
           qcItems: updatedQCItems,
