@@ -17804,7 +17804,10 @@ const storeCtx: AppState = {
       } catch {
         /* local + later blob sync still hold the ticket */
       }
-      const invRefAllocated = await storeCtxRef.current!.allocateDocRef('INV')
+      // POS sales carry the till-ticket number (POS/NNNN) as their document
+      // ref — the invoice record IS the sale receipt, so it shows as POS/0069
+      // everywhere instead of consuming an INV/2026/NNNN invoice number.
+      const invRefAllocated = orderRef
       const posInv: Invoice = {
         // Posted document, fully paid (amountPaid === total → derived Paid).
         id: invoiceId, ref: invRefAllocated, type: 'customer_invoice', status: 'posted',
