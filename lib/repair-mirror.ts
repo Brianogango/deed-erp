@@ -5,17 +5,15 @@ import { loadAppState, saveStoreKeys } from './server-store'
 import { resolveClientId } from './legacy-compat'
 
 /**
- * Repairs migration — phase 1 (write-through mirror).
+ * Repairs migration — phase 2c (table is authoritative).
  *
- * The operational source of truth for repairs is still the deed_repairs_v2
- * JSON blob. This module mirrors the CORE fields of every repair into the
- * relational `repairs` table whenever the blob is saved, so that:
- *   - invoices/sale orders can hold real foreign keys to repairs,
- *   - reporting can run on SQL instead of parsing JSON blobs,
- *   - phase 2 (moving reads + writes to the table) starts from a full dataset.
+ * The `repairs` table is the operational source of truth: every repair write
+ * upserts synchronously (fingerprinted — only changed rows), and every read
+ * surface (store hydration, repairs API, portal) is served the full job from
+ * the row's payload. The deed_repairs_v2 blob is still written as a backup
+ * copy but nothing reads it; removing that write is the final cleanup.
  *
- * A fingerprint per repair (stored in app_state) keeps the mirror cheap:
- * only repairs whose mapped fields actually changed are written.
+ * A fingerprint per repair (stored in app_state) keeps the upsert cheap.
  */
 
 const MIRROR_STATE_KEY = 'repair_mirror_hashes_v1'
