@@ -49,18 +49,30 @@ export async function resolvePOLineProducts<T extends { productId?: string | nul
 
 /**
  * Materialize a blob-only purchase order into Prisma (same id) so vendor
- * bills and GRN valuation can post. Returns true when the PO exists after
- * the call. Never overwrites an existing Prisma PO.
+ * bills and GRN valuation can post. When the PO already exists under a
+ * different id (blob-first create, then API re-create), returns the Prisma
+ * twin's id — callers must use the returned id for FK references.
+ * Returns null when the PO exists in neither store.
  */
-export async function ensurePrismaPurchaseOrder(poId: string, actorUserId?: string | null): Promise<boolean> {
-  if (!optionalUuid(poId)) return false
+export async function ensurePrismaPurchaseOrder(poId: string, actorUserId?: string | null): Promise<string | null> {
+  if (!optionalUuid(poId)) return null
   const existing = await prisma.purchaseOrder.findUnique({ where: { id: poId }, select: { id: true } })
-  if (existing) return true
+  if (existing) return existing.id
 
   const state = await loadAppState(['deed_purchaseOrders'])
   const blob = Array.isArray(state.deed_purchaseOrders) ? (state.deed_purchaseOrders as any[]) : []
   const po = blob.find(p => p?.id === poId)
-  if (!po) return false
+  if (!po) return null
+
+  // Same PO number under a different id: link the twin, never duplicate.
+  const poNumber = String(po.ref ?? po.poNumber ?? '').trim()
+  if (poNumber) {
+    const twin = await prisma.purchaseOrder.findUnique({ where: { poNumber }, select: { id: true } })
+    if (twin) {
+      console.warn(`[po-sync] blob PO ${poId} maps to existing Prisma PO ${twin.id} (${poNumber})`)
+      return twin.id
+    }
+  }
 
   const clientId = await resolveClientId(prisma, po.vendorId, { name: po.vendorName })
   await prisma.client.updateMany({ where: { id: clientId, isVendor: false }, data: { isVendor: true } })
@@ -72,7 +84,7 @@ export async function ensurePrismaPurchaseOrder(poId: string, actorUserId?: stri
     const anyUser = await prisma.user.findFirst({ where: { isActive: true }, orderBy: { createdAt: 'asc' }, select: { id: true } })
     createdById = anyUser?.id ?? null
   }
-  if (!createdById) return false
+  if (!createdById) return null
 
   const rawLines = (Array.isArray(po.lines) ? po.lines : [])
     .filter((l: any) => Boolean(optionalUuid(l.productId)))
@@ -106,5 +118,5 @@ export async function ensurePrismaPurchaseOrder(poId: string, actorUserId?: stri
     } as any,
   })
   console.warn(`[po-sync] materialized blob-only purchase order ${po.ref ?? poId} into Prisma`)
-  return true
+  return poId
 }
