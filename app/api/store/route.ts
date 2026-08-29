@@ -4,7 +4,7 @@ import {
   hasPermission, SENSITIVE_STORE_KEY_PERMISSIONS, CLIENT_IMMUTABLE_STORE_KEYS, canReadStoreKey,
   CONTENT_FILTERED_STORE_KEYS, filterStoreValueForRole, hasFullStoreContentAccess, mergeFilteredStoreWrite,
 } from '@/lib/auth/authorization'
-import { loadAppState, saveStoreKeys, getAppStateVersion } from '@/lib/server-store'
+import { loadAppState, loadAppStateForWrite, saveStoreKeys, getAppStateVersion } from '@/lib/server-store'
 import { mergeAppendOnlyJournals } from '@/lib/finance-controls'
 import { preserveInvoiceLinesOnStoreWrite, preservePostedInvoicePaymentProgress, enforcePostedInvoiceImmutability, type RejectedPostedInvoiceEdit } from '@/lib/finance-invoice'
 import { mergeProductsStoreWrite } from '@/lib/catalog-merge'
@@ -175,7 +175,9 @@ export async function POST(request: Request) {
   const mergeKeys = Object.keys(entries).filter(key =>
     CONTENT_FILTERED_STORE_KEYS.has(key) && !hasFullStoreContentAccess(session.user, key))
   if (mergeKeys.length > 0) {
-    const currentState = await loadAppState(mergeKeys)
+    // Write path: the merge base must be the write target (blob), not the
+    // derived Prisma read copy — a lagging mirror must not regress the ledger.
+    const currentState = await loadAppStateForWrite(mergeKeys)
     for (const key of mergeKeys) {
       let incoming: unknown
       try { incoming = JSON.parse(entries[key]) } catch { continue }
@@ -211,7 +213,7 @@ export async function POST(request: Request) {
   const keysToProtect = Object.keys(entries).filter(key => PROTECTED_NON_EMPTY_ARRAY_KEYS.has(key))
   const skippedKeys: string[] = []
   if (keysToProtect.length > 0) {
-    const currentState = await loadAppState(keysToProtect)
+    const currentState = await loadAppStateForWrite(keysToProtect)
     for (const key of keysToProtect) {
       const incomingLength = parseArrayLength(entries[key])
       const currentLength = Array.isArray(currentState[key]) ? currentState[key].length : null
