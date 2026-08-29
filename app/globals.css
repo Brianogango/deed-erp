@@ -1490,30 +1490,34 @@
     padding: 16px 14px 104px;
   }
 
-  .contacts-form-grid > .sm\:col-span-2,
-  .contacts-form-section-label,
+  .contacts-form-wide,
+  .contacts-form-relationship-block,
   .contacts-relationship-options,
   .contacts-form-optional {
     grid-column: 1;
   }
 
   .contacts-type-switch {
-    margin-inline: 14px;
+    gap: 6px;
+    margin: 12px 14px 0;
   }
 
-  .contacts-form-steps {
+  .contacts-type-switch button {
+    min-height: 52px;
     padding-inline: 8px;
-  }
-
-  .contacts-form-steps span {
-    flex-direction: column;
-    gap: 3px;
-    font-size: 10px;
   }
 
   .contacts-relationship-options,
   .contacts-form-optional__grid {
     grid-template-columns: 1fr;
+  }
+
+  .contacts-form-more summary small {
+    white-space: normal;
+  }
+
+  .contacts-form-more__section {
+    padding-inline: 11px;
   }
 
   .contacts-form-footer {
@@ -1543,6 +1547,14 @@
 }
 
 @media (max-width: 420px) {
+  .contacts-type-switch button small {
+    display: none;
+  }
+
+  .contacts-type-switch button > span {
+    align-items: center;
+  }
+
   .contacts-mobile-card {
     padding: 12px;
   }
