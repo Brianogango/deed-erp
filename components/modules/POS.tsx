@@ -247,7 +247,7 @@ export default function PointOfSale() {
   const [mounted, setMounted] = useState(() => typeof window !== 'undefined')
   useEffect(() => { setMounted(true) }, [])
 
-  const { products, serials, contacts, invoices, createPOSOrder, posOrders, openPOSSession, closePOSSession, posSessionOpen, posSessionOpeningCash, posSessionId, posSessions, showToast, companySettings, getCustomerCreditStatus, applyCustomerCreditToInvoice, bankAccounts, users, currentUserId, customerCredits, systemSettings } = useCommerceStore()
+  const { products, serials, contacts, invoices, createPOSOrder, posOrders, openPOSSession, closePOSSession, posSessionOpen, posSessionOpeningCash, posSessionId, posSessions, showToast, companySettings, getCustomerCreditStatus, bankAccounts, users, currentUserId, customerCredits, systemSettings } = useCommerceStore()
   const tenderBanks = bankAccounts.filter(b => b.active && b.id !== 'mpesa' && b.id !== 'cash')
   const { getStockByLocation, stockMoves } = useInventoryStore()
 
@@ -569,9 +569,6 @@ export default function PointOfSale() {
       )
 
       if (order) {
-        if (clientCreditToApply > 0 && order.invoiceId) {
-          await applyCustomerCreditToInvoice(order.invoiceId, clientCreditToApply)
-        }
         setCart([])
         setCustomerId('')
         setCustomerName('')
