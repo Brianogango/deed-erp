@@ -99,7 +99,7 @@ export async function POST(request: NextRequest) {
       createdAt: session.user.createdAt,
       actsAsTechnician: Boolean(token.actsAsTechnician ?? session.user.actsAsTechnician),
       mfaVerified: token.mfaVerified === true,
-      sessionVersion: Math.max(1, Number(token.sessionVersion ?? session.user.sessionVersion ?? 1) || 1),
+      sessionVersion: Math.max(1, Number(token.sessionVersion ?? 1) || 1),
       sessionIssuedAt,
     },
     secret: SECRET,
