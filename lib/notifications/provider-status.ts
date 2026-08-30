@@ -4,6 +4,7 @@ import crypto from 'crypto'
 import prisma from '@/lib/prisma'
 import type { Prisma } from '@prisma/client'
 import { defaultNotificationPolicy } from './registry'
+import { resolveSmsProvider } from './sms-provider'
 
 const MAX_ATTEMPTS = 5
 
@@ -40,7 +41,7 @@ async function createSmsFallback(delivery: any) {
       userId: delivery.userId,
       channel: 'sms',
       destination: delivery.destination,
-      provider: 'twilio',
+      provider: resolveSmsProvider() || 'twilio',
       status: 'queued',
       idempotencyKey: key,
       metadata: { fallbackFromDeliveryId: delivery.id },

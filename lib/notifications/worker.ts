@@ -12,6 +12,7 @@ import {
   severityAllowed,
 } from './preferences'
 import { sendProviderDelivery } from './providers'
+import { resolveSmsProvider } from './sms-provider'
 import { publishNotificationEvent } from './service'
 import { renderNotificationTemplate } from './templates'
 import type {
@@ -83,7 +84,7 @@ async function createDelivery(input: {
       userId: input.userId || null,
       channel: input.channel,
       destination: input.destination || null,
-      provider: input.channel === 'sms' ? 'twilio' : input.channel,
+      provider: input.channel === 'sms' ? (resolveSmsProvider() || 'twilio') : input.channel,
       status,
       deliveredAt: input.channel === 'in_app' ? now : null,
       sentAt: input.channel === 'in_app' ? now : null,
