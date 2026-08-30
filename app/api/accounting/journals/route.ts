@@ -3,8 +3,24 @@ import prisma from '@/lib/prisma'
 import { requireRole, withApiErrorHandling } from '@/lib/auth/api'
 import { createJournalEntry } from '@/lib/accounting/journal-service'
 import { checkFiscalLock } from '@/lib/fiscal-lock.server'
+import { z } from 'zod'
 
 export const dynamic = 'force-dynamic'
+
+const manualJournalSchema = z.object({
+  ref: z.string().trim().min(1).max(80),
+  description: z.string().trim().min(1).max(500),
+  date: z.string().trim().max(40).optional(),
+  journalCode: z.string().trim().max(20).optional(),
+  lines: z.array(z.object({
+    account: z.string().trim().max(200).optional(),
+    accountLabel: z.string().trim().max(200).optional(),
+    description: z.string().trim().max(300).optional(),
+    label: z.string().trim().max(300).optional(),
+    debit: z.coerce.number().finite().nonnegative().max(9_999_999_999.99).default(0),
+    credit: z.coerce.number().finite().nonnegative().max(9_999_999_999.99).default(0),
+  }).strict()).min(2).max(500),
+}).strict()
 
 /** Read-only Prisma journals (KES). Never mutates app_state. */
 export async function GET(request: NextRequest) {
@@ -74,16 +90,23 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   return withApiErrorHandling(async () => {
     const actor = await requireRole(['director', 'finance_officer'])
-    const body = await request.json().catch(() => ({}))
-
-    const ref = String(body.ref || '').trim()
-    const description = String(body.description || '').trim()
+    const parsed = manualJournalSchema.safeParse(await request.json().catch(() => ({})))
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: 'Invalid manual journal', issues: parsed.error.issues.map(i => ({ path: i.path.join('.'), message: i.message })) },
+        { status: 422 },
+      )
+    }
+    const body = parsed.data
+    const ref = body.ref
+    const description = body.description
     const date = body.date || new Date().toISOString().slice(0, 10)
-    const lines = Array.isArray(body.lines) ? body.lines : []
+    const lines = body.lines
 
-    if (!ref) return NextResponse.json({ error: 'ref is required' }, { status: 400 })
-    if (!description) return NextResponse.json({ error: 'description is required' }, { status: 400 })
-    if (lines.length === 0) return NextResponse.json({ error: 'lines are required' }, { status: 400 })
+    const parsedDate = new Date(String(date).includes('T') ? String(date) : `${date}T00:00:00Z`)
+    if (Number.isNaN(parsedDate.getTime())) {
+      return NextResponse.json({ error: 'Invalid journal date' }, { status: 422 })
+    }
 
     const lock = await checkFiscalLock(date)
     if (!lock.ok) {
@@ -92,18 +115,19 @@ export async function POST(request: NextRequest) {
 
     const entry = await createJournalEntry({
       ref,
-      journalCode: body.journalCode ? String(body.journalCode) : undefined,
+      journalCode: body.journalCode || undefined,
       date,
       description,
-      sourceType: String(body.sourceType || body.source || 'manual'),
-      sourceId: body.sourceId ? String(body.sourceId) : null,
+      // Manual API entries can never impersonate system-generated provenance.
+      sourceType: 'manual',
+      sourceId: null,
       createdById: actor.id,
       skipIfExists: false,
-      lines: lines.map((l: any) => ({
+      lines: lines.map(l => ({
         accountLabel: String(l.account || l.accountLabel || ''),
         label: l.description || l.label || undefined,
-        debit: Number(l.debit || 0),
-        credit: Number(l.credit || 0),
+        debit: l.debit,
+        credit: l.credit,
       })),
     })
 
