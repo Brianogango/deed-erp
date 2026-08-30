@@ -11,3 +11,9 @@ export function extractAccountCode(label: string): string | null {
   const m = String(label ?? '').trim().match(/^(\d{3,6})\b/)
   return m ? m[1] : null
 }
+
+/** Next source_version for (sourceType, sourceId) so reset-and-repost does not collide. */
+export function nextJournalSourceVersion(existingMax: number | null | undefined): number {
+  const n = Number(existingMax)
+  return Number.isFinite(n) && n > 0 ? n + 1 : 1
+}
