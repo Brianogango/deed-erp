@@ -15,6 +15,7 @@ import { matchPosScan, normalizeScanCode } from '@/lib/barcode-scan'
 import { isOrphanedPosSession, posOrdersForSession } from '@/lib/pos-session'
 import { loyaltyPointsEarned } from '@/lib/loyalty'
 import { customerCreditBalance } from '@/lib/customer-credit-view'
+import { canApplyCustomerCredit } from '@/lib/finance-controls'
 import { resolvePosLineSerial } from '@/lib/pos-transaction-history'
 import { unitSellingName } from '@/lib/reconfiguration/unit-selling-name'
 import { productThumbUrl } from '@/lib/product-images'
@@ -26,6 +27,8 @@ import {
 } from '@/lib/pos-receipt-print'
 import { fetchMpesaStatus, sendMpesaStk, waitForMpesaStk } from '@/lib/mpesa/client'
 import { normalizeMpesaPhone } from '@/lib/mpesa/phone'
+
+const POS_MOBILE_PAGE_SIZE = 6
 
 function ReceiptPrintView({
   order,
@@ -140,6 +143,9 @@ function ReceiptPrintView({
         <div className="flex justify-between mb-1"><span>Subtotal</span><span>{fmtKes(order.subtotal)}</span></div>
         {order.taxTotal > 0 && <div className="flex justify-between mb-1"><span>VAT</span><span>{fmtKes(order.taxTotal)}</span></div>}
         {order.pointsRedeemed ? (<div className="flex justify-between mb-1" style={{ color: 'var(--danger)' }}><span>Points Redeemed</span><span>-{fmtKes(order.pointsRedeemed)}</span></div>) : null}
+        {order.customerCreditAmount ? (
+          <div className="flex justify-between mb-1"><span>Client Credit</span><span>-{fmtKes(order.customerCreditAmount)}</span></div>
+        ) : null}
         <div className="flex justify-between font-bold text-sm pt-2 mt-2" style={{ borderTop: '1px solid var(--border)' }}>
           <span>FINAL TOTAL</span><span>{fmtKes(order.total)}</span>
         </div>
@@ -148,7 +154,9 @@ function ReceiptPrintView({
         </div>
         <div className="flex justify-between mt-2">
           <span>Payment Mode</span>
-          <span className="uppercase">{isPosBankPayment(order.payment) ? 'bank' : order.payment}</span>
+          <span className="uppercase">{order.customerCreditAmount
+            ? `${order.customerCreditAmount >= order.total ? 'client credit' : `client credit + ${isPosBankPayment(order.payment) ? 'bank' : order.payment}`}`
+            : (isPosBankPayment(order.payment) ? 'bank' : order.payment)}</span>
         </div>
         {order.bankAccountId ? (
           <div className="flex justify-between mt-1 text-[11px]">
@@ -239,7 +247,7 @@ export default function PointOfSale() {
   const [mounted, setMounted] = useState(() => typeof window !== 'undefined')
   useEffect(() => { setMounted(true) }, [])
 
-  const { products, serials, contacts, invoices, createPOSOrder, posOrders, openPOSSession, closePOSSession, posSessionOpen, posSessionOpeningCash, posSessionId, posSessions, showToast, companySettings, getCustomerCreditStatus, bankAccounts, users, currentUserId, customerCredits, systemSettings } = useCommerceStore()
+  const { products, serials, contacts, invoices, createPOSOrder, posOrders, openPOSSession, closePOSSession, posSessionOpen, posSessionOpeningCash, posSessionId, posSessions, showToast, companySettings, getCustomerCreditStatus, applyCustomerCreditToInvoice, bankAccounts, users, currentUserId, customerCredits, systemSettings } = useCommerceStore()
   const tenderBanks = bankAccounts.filter(b => b.active && b.id !== 'mpesa' && b.id !== 'cash')
   const { getStockByLocation, stockMoves } = useInventoryStore()
 
@@ -269,8 +277,12 @@ export default function PointOfSale() {
   const [showCamera, setShowCamera] = useState(false)
   const [salespersonId, setSalespersonId] = useState('')
   const [salespersonName, setSalespersonName] = useState('')
+  const [mobilePage, setMobilePage] = useState(1)
+  const [useClientCredit, setUseClientCredit] = useState(false)
+  const [clientCreditInput, setClientCreditInput] = useState('')
   const scanRef = useRef<HTMLInputElement>(null)
   const cashier = users.find(u => u.id === currentUserId)
+  const canUseClientCredit = canApplyCustomerCredit(cashier?.role)
 
   useEffect(() => {
     if (salespersonId || !cashier?.id) return
@@ -316,6 +328,12 @@ export default function PointOfSale() {
       || serialMatchByProduct.has(p.id)
     return matchCat && matchSearch
   })
+  const mobilePageCount = Math.max(1, Math.ceil(filteredProducts.length / POS_MOBILE_PAGE_SIZE))
+
+  useEffect(() => { setMobilePage(1) }, [category, searchTerm])
+  useEffect(() => {
+    if (mobilePage > mobilePageCount) setMobilePage(mobilePageCount)
+  }, [mobilePage, mobilePageCount])
 
   const cartSubtotal = cart.reduce((a, i) => a + i.price * i.qty, 0)
   const cartTax = applyVat && companySettings.vatRate > 0 ? Math.round(cartSubtotal * companySettings.vatRate / 100) : 0
@@ -325,7 +343,18 @@ export default function PointOfSale() {
   const maxPoints = customerInfo ? Math.min(customerInfo.loyaltyPoints || 0, cartTotalBeforePoints) : 0
   const pointsToRedeem = Math.min(Number(redeemPoints) || 0, maxPoints)
   const cartTotal = cartTotalBeforePoints - pointsToRedeem
+  const maxClientCredit = customerId ? Math.min(storeCredit, cartTotal) : 0
+  const requestedClientCredit = useClientCredit ? Math.max(0, Number(clientCreditInput) || 0) : 0
+  const clientCreditToApply = Math.min(requestedClientCredit, maxClientCredit)
+  const paymentDue = Math.max(0, cartTotal - clientCreditToApply)
   const pointsToEarn = customerId ? loyaltyPointsEarned(cartTotal, systemSettings.posLoyaltyKesPerPoint) : 0
+
+  useEffect(() => {
+    if (!customerId || storeCredit <= 0) {
+      setUseClientCredit(false)
+      setClientCreditInput('')
+    }
+  }, [customerId, storeCredit])
 
   const processScan = (code: string) => {
     const trimmed = normalizeScanCode(code)
@@ -467,14 +496,19 @@ export default function PointOfSale() {
       if (cs.isLocked) { showToast(cs.message, 'error'); return }
     }
 
+    if (useClientCredit && !canUseClientCredit) {
+      showToast('Only Finance, Admin Officer, or Director can apply client credit', 'error')
+      return
+    }
+
     const selectedBankId = bankAccountId || tenderBanks.find(b => b.id === 'ncba')?.id || tenderBanks[0]?.id || ''
-    if (payMethod === 'bank' && !selectedBankId) {
+    if (paymentDue > 0 && payMethod === 'bank' && !selectedBankId) {
       showToast('Select a bank account before charging', 'error')
       return
     }
 
     let mpesaReceipt: string | undefined
-    if (payMethod === 'mpesa' && darajaReady) {
+    if (paymentDue > 0 && payMethod === 'mpesa' && darajaReady) {
       const phone = normalizeMpesaPhone(mpesaPhone)
       if (!phone) {
         showToast('Enter the customer M-Pesa number (07XX …)', 'error')
@@ -484,12 +518,12 @@ export default function PointOfSale() {
 
     setCharging(true)
     try {
-      if (payMethod === 'mpesa' && darajaReady) {
+      if (paymentDue > 0 && payMethod === 'mpesa' && darajaReady) {
         const phone = normalizeMpesaPhone(mpesaPhone) as string
         setStkStatus('Sending M-Pesa prompt…')
         const pushed = await sendMpesaStk({
           phone,
-          amount: cartTotal,
+          amount: paymentDue,
           accountReference: 'POS',
           transactionDesc: 'POS sale',
           source: 'pos',
@@ -530,16 +564,22 @@ export default function PointOfSale() {
             : {}),
           salespersonId: salespersonId || cashier?.id,
           salespersonName: salespersonName || cashier?.name,
+          customerCreditAmount: clientCreditToApply || undefined,
         },
       )
 
       if (order) {
+        if (clientCreditToApply > 0 && order.invoiceId) {
+          await applyCustomerCreditToInvoice(order.invoiceId, clientCreditToApply)
+        }
         setCart([])
         setCustomerId('')
         setCustomerName('')
         setWalkInBuyerName('')
         setRedeemPoints('')
         setPaymentReference('')
+        setUseClientCredit(false)
+        setClientCreditInput('')
         setStkStatus('')
         setReceiptOrder(order)
         setIsPrinting(true)
@@ -686,7 +726,7 @@ export default function PointOfSale() {
 
             <div className="pos-category-tabs" role="tablist" aria-label="Product categories">
               {categories.map(c => (
-                <button key={c} onClick={() => setCategory(c)}
+                <button key={c} onClick={() => { setCategory(c); setMobilePage(1) }}
                   className="pos-category-tab"
                   role="tab"
                   aria-selected={category === c}
@@ -704,14 +744,15 @@ export default function PointOfSale() {
             {/* Products grid */}
             <div className="pos-product-scroll">
               <div className="pos-product-grid">
-                {filteredProducts.map(product => {
+                {filteredProducts.map((product, productIndex) => {
                   const matchedSerial = serialMatchByProduct.get(product.id)
+                  const productMobilePage = Math.floor(productIndex / POS_MOBILE_PAGE_SIZE) + 1
                   return (
                     <button
                       type="button"
                       key={product.id}
                       onClick={() => addToCart(product, matchedSerial?.id)}
-                      className="pos-product-card"
+                      className={`pos-product-card ${productMobilePage === mobilePage ? 'is-mobile-page-active' : 'is-mobile-page-hidden'}`}
                     >
                       <div className="pos-product-media" aria-hidden="true">
                         <PosProductThumb product={product} />
@@ -733,6 +774,27 @@ export default function PointOfSale() {
                   )
                 })}
               </div>
+              {filteredProducts.length > POS_MOBILE_PAGE_SIZE && (
+                <nav className="pos-mobile-pagination" aria-label="Product pages">
+                  <button
+                    type="button"
+                    onClick={() => setMobilePage(page => Math.max(1, page - 1))}
+                    disabled={mobilePage <= 1}
+                    aria-label="Previous product page"
+                  >
+                    ‹
+                  </button>
+                  <span>Page <strong>{mobilePage}</strong> of {mobilePageCount}</span>
+                  <button
+                    type="button"
+                    onClick={() => setMobilePage(page => Math.min(mobilePageCount, page + 1))}
+                    disabled={mobilePage >= mobilePageCount}
+                    aria-label="Next product page"
+                  >
+                    ›
+                  </button>
+                </nav>
+              )}
               {filteredProducts.length === 0 && (
                 <div className="pos-empty-products">
                   <div className="text-4xl mb-2 text-t4" aria-hidden="true"><Fa icon={faMagnifyingGlass} /></div>
@@ -836,17 +898,60 @@ export default function PointOfSale() {
                       setCustomerId(id)
                       setCustomerName(name)
                       setWalkInBuyerName('')
+                      setUseClientCredit(false)
+                      setClientCreditInput('')
                     }}
                     onClear={() => {
                       setCustomerId('')
                       setCustomerName('')
+                      setUseClientCredit(false)
+                      setClientCreditInput('')
                     }}
                   />
                 </Field>
-                {storeCredit > 0 && (
-                  <p className="text-[11px] font-medium" style={{ color: 'var(--success)' }}>
-                    Store credit {fmtKes(storeCredit)} — apply on the invoice in Finance
-                  </p>
+                {storeCredit > 0 && customerId && (
+                  <div className={`pos-client-credit-panel ${useClientCredit ? 'is-active' : ''}`}>
+                    <div className="pos-client-credit-head">
+                      <div>
+                        <p>Client Credit</p>
+                        <span>{canUseClientCredit ? 'Available to apply to this sale' : 'Finance approval required'}</span>
+                      </div>
+                      <strong>{fmtKes(storeCredit)}</strong>
+                    </div>
+                    <button
+                      type="button"
+                      className="pos-client-credit-toggle"
+                      disabled={!canUseClientCredit || cartTotal <= 0}
+                      aria-pressed={useClientCredit}
+                      onClick={() => {
+                        const next = !useClientCredit
+                        setUseClientCredit(next)
+                        setClientCreditInput(next ? String(maxClientCredit) : '')
+                      }}
+                    >
+                      <span className="pos-client-credit-check" aria-hidden="true">{useClientCredit ? '✓' : ''}</span>
+                      <span>Use client credit</span>
+                    </button>
+                    {useClientCredit && (
+                      <div className="pos-client-credit-apply">
+                        <label htmlFor="pos-client-credit-amount">Amount to apply</label>
+                        <div>
+                          <input
+                            id="pos-client-credit-amount"
+                            type="number"
+                            min="0"
+                            max={maxClientCredit}
+                            inputMode="decimal"
+                            value={clientCreditInput}
+                            onChange={e => setClientCreditInput(e.target.value)}
+                            aria-label="Client credit amount to apply"
+                          />
+                          <button type="button" onClick={() => setClientCreditInput(String(maxClientCredit))}>Max</button>
+                        </div>
+                        <p>Remaining credit after sale <strong>{fmtKes(Math.max(0, storeCredit - clientCreditToApply))}</strong></p>
+                      </div>
+                    )}
+                  </div>
                 )}
                 <SalespersonCloserField
                   variant="compact"
@@ -894,7 +999,8 @@ export default function PointOfSale() {
                 <div className="flex justify-between text-[11px] text-t3"><span>Subtotal</span><span>{fmtKes(cartSubtotal)}</span></div>
                 {cartTax > 0 && <div className="flex justify-between text-[11px] text-t3"><span>VAT ({companySettings.vatRate}%)</span><span>{fmtKes(cartTax)}</span></div>}
                 {pointsToRedeem > 0 && <div className="flex justify-between text-[11px] text-indigo-600 font-bold"><span>Points Discount</span><span>-{fmtKes(pointsToRedeem)}</span></div>}
-                <div className="flex justify-between text-lg font-black text-t1 pt-1"><span>Total</span><span>{fmtKes(cartTotal)}</span></div>
+                {clientCreditToApply > 0 && <div className="flex justify-between text-[11px] pos-client-credit-total"><span>Less: Client Credit</span><span>-{fmtKes(clientCreditToApply)}</span></div>}
+                <div className="flex justify-between text-lg font-black text-t1 pt-1"><span>Total due</span><span>{fmtKes(paymentDue)}</span></div>
                 {pointsToEarn > 0 && <p className="text-[10px] text-center font-bold text-indigo-600 pt-1">Earns {pointsToEarn} loyalty points</p>}
               </section>
 
@@ -964,7 +1070,11 @@ export default function PointOfSale() {
                 {charging
                   ? (stkStatus || 'Charging…')
                   : cart.length > 0
-                    ? (payMethod === 'mpesa' && darajaReady ? `Prompt ${fmtKes(cartTotal)}` : `Charge ${fmtKes(cartTotal)}`)
+                    ? (paymentDue <= 0
+                      ? `Complete sale · ${fmtKes(clientCreditToApply)} credit`
+                      : payMethod === 'mpesa' && darajaReady
+                        ? `Prompt ${fmtKes(paymentDue)}`
+                        : `Charge ${fmtKes(paymentDue)}`)
                     : 'Add items to cart'}
               </button>
               <button type="button" className="pos-back-products" onClick={() => setCartOpen(false)}>Back to products</button>
@@ -987,9 +1097,10 @@ export default function PointOfSale() {
           {showCloseSession && (() => {
             const liveSession = posSessions.find(s => s.id === posSessionId)
             const sessionOrders = posOrdersForSession(posOrders, posSessionId || '', liveSession?.openedAt)
-            const totalCash = sessionOrders.filter(o => o.payment === 'cash').reduce((a, o) => a + o.total, 0)
-            const totalMpesa = sessionOrders.filter(o => o.payment === 'mpesa').reduce((a, o) => a + o.total, 0)
-            const totalBank = sessionOrders.filter(o => isPosBankPayment(o.payment)).reduce((a, o) => a + o.total, 0)
+            const tenderAmount = (o: typeof sessionOrders[number]) => Math.max(0, o.total - (o.customerCreditAmount || 0))
+            const totalCash = sessionOrders.filter(o => o.payment === 'cash').reduce((a, o) => a + tenderAmount(o), 0)
+            const totalMpesa = sessionOrders.filter(o => o.payment === 'mpesa').reduce((a, o) => a + tenderAmount(o), 0)
+            const totalBank = sessionOrders.filter(o => isPosBankPayment(o.payment)).reduce((a, o) => a + tenderAmount(o), 0)
             const totalSales = sessionOrders.reduce((a, o) => a + o.total, 0)
             const expectedCash = posSessionOpeningCash + totalCash
             const counted = Number(closingCash) || 0
