@@ -907,6 +907,99 @@ export default function SecuritySettingsDashboard({
         <span className="font-bold text-[var(--primary-dark)]">Security Settings</span>
       </div>
 
+      <style jsx global>{`
+        .security-mobile-pagination {
+          display: none;
+        }
+
+        @keyframes deedSecurityPhoneIn {
+          from { opacity: 0; transform: translateY(8px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+
+        @keyframes deedSecurityPhoneSlide {
+          from { opacity: 0; transform: translateX(18px); }
+          to { opacity: 1; transform: translateX(0); }
+        }
+
+        @media (max-width: 767px) {
+          .security-dashboard .security-mobile-page:not(.is-mobile-page-active) {
+            display: none;
+          }
+
+          .security-dashboard .security-mobile-page.is-mobile-page-active {
+            animation: deedSecurityPhoneIn 220ms cubic-bezier(.2,.75,.25,1) both;
+          }
+
+          .security-dashboard .security-summary-card {
+            animation: deedSecurityPhoneIn 200ms ease-out both;
+          }
+
+          .security-dashboard .security-summary-card:nth-child(2) { animation-delay: 30ms; }
+          .security-dashboard .security-summary-card:nth-child(3) { animation-delay: 60ms; }
+          .security-dashboard .security-summary-card:nth-child(4) { animation-delay: 90ms; }
+
+          .security-dashboard .security-status-row:active,
+          .security-dashboard .security-quick-action:active:not(:disabled) {
+            transform: scale(.985);
+          }
+
+          .security-dashboard .security-detail-drawer {
+            animation: deedSecurityPhoneSlide 220ms cubic-bezier(.2,.75,.25,1) both;
+          }
+
+          .security-mobile-pagination {
+            display: flex;
+            min-height: 44px;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+          }
+
+          .security-mobile-pagination > button {
+            display: inline-flex;
+            width: 40px;
+            height: 40px;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid #D7E0EA;
+            border-radius: 11px;
+            background: #fff;
+            color: #172033;
+            font-size: 20px;
+            font-weight: 800;
+          }
+
+          .security-mobile-pagination > button:disabled {
+            opacity: .35;
+          }
+
+          .security-mobile-pagination > span {
+            min-width: 120px;
+            color: #667085;
+            font-size: 10px;
+            font-weight: 700;
+            text-align: center;
+          }
+
+          .security-mobile-pagination > span small {
+            display: block;
+            margin-top: 2px;
+            color: #8995A7;
+            font-size: 9px;
+            font-weight: 600;
+          }
+        }
+
+        @media (max-width: 767px) and (prefers-reduced-motion: reduce) {
+          .security-dashboard .security-mobile-page.is-mobile-page-active,
+          .security-dashboard .security-summary-card,
+          .security-dashboard .security-detail-drawer {
+            animation: none !important;
+          }
+        }
+      `}</style>
+
       {detailPanel && (
         <div className="fixed inset-0 z-[10015] flex justify-end bg-[#0E1730]/35 backdrop-blur-[1px]" role="dialog" aria-modal="true" aria-label="Security details">
           <button type="button" className="absolute inset-0 cursor-default" aria-label="Close security details" onClick={() => setDetailPanel(null)} />
