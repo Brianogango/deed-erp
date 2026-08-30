@@ -204,13 +204,6 @@ export async function middleware(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    if (requiresPrivilegedMfa(token.role) && token.mfaVerified !== true) {
-      return NextResponse.json(
-        { error: 'MFA verification required', code: 'MFA_REQUIRED' },
-        { status: 401, headers: { 'Cache-Control': 'no-store' } },
-      )
-    }
-
     // Authenticated browser mutations must originate from this ERP origin.
     // Public partner/webhook/portal routes are handled before this block and
     // keep their own authentication contracts.
@@ -230,16 +223,25 @@ export async function middleware(request: NextRequest) {
     // Cache miss fails open — getServerSession re-checks Postgres.
     const userId = typeof token.id === 'string' ? token.id : (typeof token.sub === 'string' ? token.sub : '')
     let requestHeaders: Headers | null = null
+    let effectiveRole = typeof token.role === 'string' ? token.role : ''
     if (userId) {
       const { evaluateSessionAccess } = await import('@/lib/auth/session-validity')
-      const access = await evaluateSessionAccess(userId, typeof token.role === 'string' ? token.role : null)
+      const access = await evaluateSessionAccess(userId, effectiveRole || null)
       if (!access.allowed) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
       }
       if (access.effectiveRole) {
+        effectiveRole = access.effectiveRole
         requestHeaders = new Headers(request.headers)
         requestHeaders.set('x-deed-effective-role', access.effectiveRole)
       }
+    }
+
+    if (requiresPrivilegedMfa(effectiveRole) && token.mfaVerified !== true) {
+      return NextResponse.json(
+        { error: 'MFA verification required', code: 'MFA_REQUIRED' },
+        { status: 401, headers: { 'Cache-Control': 'no-store' } },
+      )
     }
 
     const { checkRateLimit } = await import('@/lib/rate-limit')
@@ -278,22 +280,24 @@ export async function middleware(request: NextRequest) {
 
   const token = SECRET ? await getToken({ req: request, secret: SECRET, cookieName: COOKIE_NAME }) : null
 
-  if (token && requiresPrivilegedMfa(token.role) && token.mfaVerified !== true) {
-    const res = redirectTo('/login', request, `${pathname}${request.nextUrl.search}`)
-    res.cookies.set(COOKIE_NAME, '', { httpOnly: true, path: '/', maxAge: 0 })
-    return res
-  }
-
   if (token) {
     const pageUserId = typeof token.id === 'string' ? token.id : (typeof token.sub === 'string' ? token.sub : '')
+    let pageEffectiveRole = typeof token.role === 'string' ? token.role : ''
     if (pageUserId) {
       const { evaluateSessionAccess } = await import('@/lib/auth/session-validity')
-      const access = await evaluateSessionAccess(pageUserId, typeof token.role === 'string' ? token.role : null)
+      const access = await evaluateSessionAccess(pageUserId, pageEffectiveRole || null)
       if (!access.allowed) {
         const res = redirectTo('/login', request, `${pathname}${request.nextUrl.search}`)
         res.cookies.set(COOKIE_NAME, '', { httpOnly: true, path: '/', maxAge: 0 })
         return res
       }
+      if (access.effectiveRole) pageEffectiveRole = access.effectiveRole
+    }
+
+    if (requiresPrivilegedMfa(pageEffectiveRole) && token.mfaVerified !== true) {
+      const res = redirectTo('/login', request, `${pathname}${request.nextUrl.search}`)
+      res.cookies.set(COOKIE_NAME, '', { httpOnly: true, path: '/', maxAge: 0 })
+      return res
     }
   }
 
