@@ -204,11 +204,12 @@ function SecurityStatusRow({
   statusTone?: 'green' | 'blue' | 'amber' | 'red' | 'gray'
   onClick?: () => void
 }) {
-  const Wrapper = onClick ? 'button' : 'div'
   return (
-    <Wrapper
-      {...(onClick ? { type: 'button' as const, onClick } : {})}
-      className="flex w-full items-center gap-3 border-b border-[#EDF1F6] px-3 py-2.5 text-left last:border-b-0"
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={!onClick}
+      className="flex w-full items-center gap-3 border-b border-[#EDF1F6] px-3 py-2.5 text-left last:border-b-0 disabled:cursor-default disabled:opacity-100"
     >
       <IconBox icon={icon} tone={tone} />
       <span className="min-w-0 flex-1">
@@ -217,7 +218,7 @@ function SecurityStatusRow({
       </span>
       <StatusPill tone={statusTone}>{status}</StatusPill>
       {onClick && <Fa icon={faChevronRight} className="text-[#9BA8BA]" style={{ fontSize: 8 }} />}
-    </Wrapper>
+    </button>
   )
 }
 
