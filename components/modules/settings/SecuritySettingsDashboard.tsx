@@ -474,6 +474,15 @@ export default function SecuritySettingsDashboard({
     showToast('Security report downloaded', 'success')
   }
 
+  const openPasswordPolicy = useCallback(() => {
+    passwordPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }, [])
+
+  const openSecurityAudit = useCallback(async () => {
+    await refresh(true)
+    setDetailPanel('securityAudit')
+  }, [refresh])
+
   const securityStatuses = useMemo(() => ([
     {
       icon: faShieldHalved,
@@ -491,6 +500,7 @@ export default function SecuritySettingsDashboard({
       detail: `Minimum ${password?.minimumLength ?? 8} characters · last 5 passwords cannot be reused`,
       status: 'Enforced',
       statusTone: 'green' as const,
+      onClick: openPasswordPolicy,
     },
     {
       icon: faBell,
@@ -499,6 +509,7 @@ export default function SecuritySettingsDashboard({
       detail: `Inactive sessions expire after ${overview?.sessionPolicy.inactivityMinutes ?? 30} minutes`,
       status: 'Enforced',
       statusTone: 'green' as const,
+      onClick: () => setDetailPanel('sessions'),
     },
     {
       icon: faBullseye,
@@ -516,6 +527,7 @@ export default function SecuritySettingsDashboard({
       detail: 'Security and business audit events are retained in PostgreSQL',
       status: systemSettings.auditLogs ? 'Enabled' : 'Disabled',
       statusTone: systemSettings.auditLogs ? 'green' as const : 'amber' as const,
+      onClick: () => setDetailPanel('audit'),
     },
     {
       icon: faShieldHalved,
@@ -524,6 +536,7 @@ export default function SecuritySettingsDashboard({
       detail: 'Deletion, stock, invoice and portal safeguards',
       status: dataProtectionEnabled ? 'Enabled' : 'Review',
       statusTone: dataProtectionEnabled ? 'green' as const : 'amber' as const,
+      onClick: () => setDetailPanel('data'),
     },
     {
       icon: faUpload,
@@ -532,8 +545,9 @@ export default function SecuritySettingsDashboard({
       detail: 'Server backup posture is verified by the production security audit',
       status: 'Verify host',
       statusTone: 'blue' as const,
+      onClick: () => setDetailPanel('backup'),
     },
-  ]), [dataProtectionEnabled, ipAllowlist.length, mfaEnforced, overview?.sessionPolicy.inactivityMinutes, password?.minimumLength, currentUser?.role, systemSettings.auditLogs])
+  ]), [dataProtectionEnabled, ipAllowlist.length, mfaEnforced, overview?.sessionPolicy.inactivityMinutes, password?.minimumLength, currentUser?.role, systemSettings.auditLogs, openPasswordPolicy])
 
   return (
     <div className="security-dashboard min-w-0">
