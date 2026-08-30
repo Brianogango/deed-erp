@@ -134,7 +134,7 @@ export function makeListHandler<T extends object>(config: CrudConfig<T>) {
  */
 export function makeCreateHandler<T extends object>(config: CrudConfig<T>) {
   return async function POST(request: NextRequest) {
-    const { session, error } = await requireSession(config.allowedWriteRoles)
+    const { error } = await requireSession(config.allowedWriteRoles)
     if (error) return error
 
     const body = await parseBody(request)
@@ -175,7 +175,7 @@ export function makeCreateHandler<T extends object>(config: CrudConfig<T>) {
  */
 export function makePatchHandler<T extends object>(config: CrudConfig<T>) {
   return async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
-    const { error } = await requireSession(config.allowedWriteRoles)
+    const { session, error } = await requireSession(config.allowedWriteRoles)
     if (error) return error
 
     const body = await parseBody(request)
