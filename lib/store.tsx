@@ -7836,30 +7836,39 @@ const storeCtx: AppState = {
         reimbursementReference: reference,
         reimbursementDate,
       }
-      setExpenses(prev => prev.map(e => e.id === id ? reimbursedExpense : e))
-      if (!journalEntries.some(j => j.ref === `JRN/RIM/${expense.ref}`)) {
-        const journal = buildExpenseReimbursementJournal(reimbursedExpense, actualBankId, reimbursementDate)
-        setJournalEntries(prev => [journal, ...prev])
-        addAuditLog('post_reimbursement', expense.ref, `Expense reimbursement ${expense.ref} posted to journal ${journal.ref}${reference ? ` (Ref: ${reference})` : ''}`)
-        void fetch('/api/expenses/post-journal', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            kind: 'reimbursement',
-            expenseId: reimbursedExpense.id,
-            ref: reimbursedExpense.ref,
-            amount: reimbursedExpense.amount,
-            submittedByName: reimbursedExpense.submittedByName,
-            bankAccountId: actualBankId,
-            date: journal.date,
-          }),
-        }).then(async res => {
-          if (!res.ok) {
-            const payload = await res.json().catch(() => null) as { error?: string } | null
-            showToast(payload?.error || 'Expense journal posting failed', 'error')
-          }
-        }).catch(() => showToast('Expense journal posting failed', 'error'))
+      const journalRef = `JRN/RIM/${expense.ref}`
+      if (journalEntries.some(j => j.ref === journalRef)) {
+        showToast('This reimbursement was already posted', 'info')
+        return
       }
+      const journal = buildExpenseReimbursementJournal(reimbursedExpense, actualBankId, reimbursementDate)
+      setExpenses(prev => prev.map(e => e.id === id ? reimbursedExpense : e))
+      setJournalEntries(prev => [journal, ...prev])
+      addAuditLog('post_reimbursement', expense.ref, `Expense reimbursement ${expense.ref} posted to journal ${journal.ref}${reference ? ` (Ref: ${reference})` : ''}`)
+      void fetch('/api/expenses/post-journal', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          kind: 'reimbursement',
+          expenseId: reimbursedExpense.id,
+          ref: reimbursedExpense.ref,
+          amount: reimbursedExpense.amount,
+          submittedByName: reimbursedExpense.submittedByName,
+          bankAccountId: actualBankId,
+          date: journal.date,
+        }),
+      }).then(async res => {
+        if (!res.ok) {
+          const payload = await res.json().catch(() => null) as { error?: string } | null
+          setExpenses(prev => prev.map(e => e.id === id ? expense : e))
+          setJournalEntries(prev => prev.filter(j => j.ref !== journal.ref))
+          showToast(payload?.error || 'Expense reimbursement posting failed', 'error')
+        }
+      }).catch(() => {
+        setExpenses(prev => prev.map(e => e.id === id ? expense : e))
+        setJournalEntries(prev => prev.filter(j => j.ref !== journal.ref))
+        showToast('Expense reimbursement posting failed', 'error')
+      })
       showToast('Expense reimbursed and posted', 'success')
     },
 
