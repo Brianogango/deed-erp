@@ -20,9 +20,14 @@ const CHALLENGE_TTL_SECONDS = 5 * 60
 const TOTP_STEP_SECONDS = 30
 const TOTP_DIGITS = 6
 function secretForChallenges(): string {
-  const secret = process.env.MFA_CHALLENGE_SECRET || process.env.NEXTAUTH_SECRET || process.env.AUTH_SECRET || ''
-  if (!secret) throw new Error('MFA challenge secret is not configured')
-  return secret
+  const dedicated = process.env.MFA_CHALLENGE_SECRET || ''
+  if (dedicated) return dedicated
+  if (process.env.MFA_ENFORCE_PRIVILEGED === 'true') {
+    throw new Error('MFA_CHALLENGE_SECRET is required when privileged MFA is enforced')
+  }
+  const fallback = process.env.NEXTAUTH_SECRET || process.env.AUTH_SECRET || ''
+  if (!fallback) throw new Error('MFA challenge secret is not configured')
+  return fallback
 }
 
 function encryptionKey(): Buffer {
@@ -197,15 +202,19 @@ export async function verifyMfaCode(userId: string, code: string, enableOnSucces
   if (lastUsedStep != null && matchedStep <= lastUsedStep) return false
 
   const now = new Date().toISOString()
-  await sql`
+  // Replay protection must be atomic: two concurrent requests using the same
+  // TOTP step cannot both succeed after reading the same previous value.
+  const updated = await sql`
     UPDATE user_mfa
     SET enabled = ${enableOnSuccess ? true : Boolean(rows[0].enabled)},
         enrolled_at = CASE WHEN ${enableOnSuccess} THEN COALESCE(enrolled_at, ${now}) ELSE enrolled_at END,
         last_used_step = ${matchedStep},
         updated_at = ${now}
     WHERE user_id = ${userId}
+      AND (last_used_step IS NULL OR last_used_step < ${matchedStep})
+    RETURNING user_id
   `
-  return true
+  return updated.rows.length === 1
 }
 
 export async function resetUserMfa(userId: string) {
