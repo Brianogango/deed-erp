@@ -86,6 +86,27 @@ const ROUTE_APP_STATE_KEYS: Record<string, string[]> = {
   '/settings': ['deed_companySettings', 'deed_systemSettings', 'deed_departments', 'deed_profileImages'],
 }
 
+
+// Client-writable app-state keys are registered centrally. POST /api/store and
+// PUT /api/store/[key] use this registry to reject arbitrary deed_* namespaces
+// instead of turning any attacker-chosen key into a durable database row.
+// deed_payments remains for the legacy collection CRUD path even though finance
+// screens now read authoritative payment records through dedicated APIs.
+const LEGACY_CLIENT_APP_STATE_KEYS = ['deed_payments']
+
+export const ALL_CLIENT_APP_STATE_KEYS = Object.freeze(Array.from(new Set([
+  ...COMMON_APP_STATE_KEYS,
+  ...HR_APP_STATE_KEYS,
+  ...Object.values(ROUTE_APP_STATE_KEYS).flat(),
+  ...LEGACY_CLIENT_APP_STATE_KEYS,
+])))
+
+const ALL_CLIENT_APP_STATE_KEY_SET = new Set<string>(ALL_CLIENT_APP_STATE_KEYS)
+
+export function isKnownClientAppStateKey(key: string): boolean {
+  return ALL_CLIENT_APP_STATE_KEY_SET.has(key)
+}
+
 function normalizeRoute(pathname: string) {
   const clean = (pathname || '/').split('?')[0].split('#')[0]
   if (clean.length > 1 && clean.endsWith('/')) return clean.slice(0, -1)

@@ -115,6 +115,31 @@ describe('POST /api/store — sensitive key gating', () => {
     expect(res.status).toBe(401)
   })
 
+  it('rejects attacker-chosen deed_* namespaces instead of creating arbitrary app-state rows', async () => {
+    mockGetSession.mockResolvedValue(directorSession)
+    const res = await STORE_POST(postReq({ deed_attacker_controlled_namespace: '[]' }))
+    expect(res.status).toBe(400)
+    expect(await res.json()).toMatchObject({ error: 'Unknown app-state key' })
+    expect(mockSaveStoreKeys).not.toHaveBeenCalled()
+  })
+
+  it('rejects unexpected top-level request fields', async () => {
+    mockGetSession.mockResolvedValue(directorSession)
+    const res = await STORE_POST(postReq({ deed_quotes: '[]', admin: true }))
+    expect(res.status).toBe(400)
+    expect(mockSaveStoreKeys).not.toHaveBeenCalled()
+  })
+
+  it('rejects prototype-pollution fields hidden inside a double-encoded store value', async () => {
+    mockGetSession.mockResolvedValue(directorSession)
+    const poisoned = '{"0":{"__proto__":{"isAdmin":true}}}'
+    const res = await STORE_POST(postReq({ deed_quotes: poisoned }))
+    expect(res.status).toBe(400)
+    expect(await res.json()).toMatchObject({ code: 'prototype_pollution_key' })
+    expect(mockSaveStoreKeys).not.toHaveBeenCalled()
+  })
+
+
   it('saves permitted keys and drops restricted ones from a mixed batch', async () => {
     // A blanket 403 on mixed batches caused real data loss: the client flushes
     // every dirty key together, so e.g. a technician's repair diagnosis was

@@ -2,6 +2,7 @@ import type { NextRequest } from 'next/server'
 import { NextResponse } from 'next/server'
 import { getToken } from 'next-auth/jwt'
 import { safeReturnTo } from '@/lib/auth/return-to'
+import { assertSafeRequestEnvelope, assertSameOriginBrowserWrite, InputSecurityError } from '@/lib/input-security'
 
 export { safeReturnTo }
 const SECRET = process.env.NEXTAUTH_SECRET ?? process.env.AUTH_SECRET ?? ''
@@ -88,6 +89,21 @@ function withRateLimitHeaders(response: NextResponse, remaining: number, resetAt
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
+
+  // SEC-INPUT: every request surface is untrusted. Validate URL/query input and
+  // inspect write bodies before public-route shortcuts, authentication, or any
+  // business handler gets a chance to consume the payload.
+  try {
+    await assertSafeRequestEnvelope(request)
+  } catch (error) {
+    if (error instanceof InputSecurityError) {
+      return NextResponse.json(
+        { error: error.message, code: error.code },
+        { status: error.status, headers: { 'Cache-Control': 'no-store' } },
+      )
+    }
+    throw error
+  }
 
   // Public static assets and public portal / track paths
   if (PUBLIC_ASSET_PATHS.has(pathname) || PUBLIC_PATH_PREFIXES.some(p => pathname.startsWith(p))) {
@@ -185,6 +201,21 @@ export async function middleware(request: NextRequest) {
     const token = await getToken({ req: request, secret: SECRET, cookieName: COOKIE_NAME })
     if (!token) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    // Authenticated browser mutations must originate from this ERP origin.
+    // Public partner/webhook/portal routes are handled before this block and
+    // keep their own authentication contracts.
+    try {
+      assertSameOriginBrowserWrite(request)
+    } catch (error) {
+      if (error instanceof InputSecurityError) {
+        return NextResponse.json(
+          { error: error.message, code: error.code },
+          { status: error.status, headers: { 'Cache-Control': 'no-store' } },
+        )
+      }
+      throw error
     }
 
     // SEC-002: deny JWT sessions revoked via the shared validity cache.

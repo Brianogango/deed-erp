@@ -10,6 +10,8 @@ import { mergeRepairsStoreWrite } from '@/lib/repair-store-merge'
 import { mergePosOrdersStoreWrite } from '@/lib/pos-orders-merge'
 import { loadAppState, saveStoreKeys } from '@/lib/server-store'
 import { appendStoreAudit } from '@/lib/store-audit'
+import { isKnownClientAppStateKey } from '@/lib/app-state-hydration'
+import { assertSafeStoreValue, InputSecurityError, readSafeJson } from '@/lib/input-security'
 
 type Params = { params: { key: string } }
 
@@ -17,7 +19,13 @@ export async function GET(_req: NextRequest, { params }: Params) {
   const session = await getServerSession()
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const key   = decodeURIComponent(params.key)
+  const key = decodeURIComponent(params.key)
+  if (
+    (!isKnownClientAppStateKey(key) && !CLIENT_IMMUTABLE_STORE_KEYS.has(key))
+    || !/^deed_[A-Za-z0-9_]{1,120}$/.test(key)
+  ) {
+    return NextResponse.json({ error: 'Unknown or invalid app-state key' }, { status: 400 })
+  }
 
   if (!canReadStoreKey(session.user, key)) {
     return NextResponse.json({ error: `Forbidden — insufficient role to read: ${key}` }, { status: 403 })
@@ -34,12 +42,37 @@ export async function PUT(request: NextRequest, { params }: Params) {
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   let body: { value: unknown } | null = null
-  try { body = await request.json() } catch {}
-  if (!body || !('value' in body)) {
-    return NextResponse.json({ error: 'Expected { value: ... }' }, { status: 400 })
+  try {
+    const parsed = await readSafeJson<Record<string, unknown>>(request, {
+      maxBytes: 12 * 1024 * 1024,
+      limits: {
+        maxDepth: 24,
+        maxNodes: 150_000,
+        maxArrayLength: 30_000,
+        maxObjectKeys: 3_000,
+        maxStringLength: 4_000_000,
+      },
+    })
+    const fields = Object.keys(parsed)
+    if (fields.length !== 1 || fields[0] !== 'value') {
+      return NextResponse.json({ error: 'Expected exactly { value: ... }' }, { status: 400 })
+    }
+    body = parsed as { value: unknown }
+    assertSafeStoreValue(body.value, 'store value')
+  } catch (error) {
+    if (error instanceof InputSecurityError) {
+      return NextResponse.json({ error: error.message, code: error.code }, { status: error.status })
+    }
+    throw error
   }
 
   const key = decodeURIComponent(params.key)
+  if (
+    (!isKnownClientAppStateKey(key) && !CLIENT_IMMUTABLE_STORE_KEYS.has(key))
+    || !/^deed_[A-Za-z0-9_]{1,120}$/.test(key)
+  ) {
+    return NextResponse.json({ error: 'Unknown or invalid app-state key' }, { status: 400 })
+  }
 
   if (CLIENT_IMMUTABLE_STORE_KEYS.has(key)) {
     return NextResponse.json({ error: `Forbidden — ${key} is server-managed and cannot be written by a client` }, { status: 403 })

@@ -3,9 +3,37 @@ import { getRequiredSession, requireRole, withApiErrorHandling } from '@/lib/aut
 import prisma from '@/lib/prisma'
 import { getNextDepositRef } from '@/lib/deposit-ref-counter'
 import { createDepositWithReceipt } from '@/lib/accounting/deposit-service'
+import { z } from 'zod'
 
 const DEPOSIT_WRITE_ROLES = ['director', 'admin_officer', 'finance_officer']
 export const dynamic = 'force-dynamic'
+
+const depositCreateSchema = z.object({
+  customerId: z.string().trim().min(1).max(80),
+  customerName: z.string().trim().min(1).max(200),
+  customerPhone: z.string().trim().max(50).optional().nullable(),
+  items: z.array(z.object({
+    productId: z.string().trim().min(1).max(80),
+    productName: z.string().trim().min(1).max(240),
+    sku: z.string().trim().max(120).optional().nullable(),
+    qty: z.coerce.number().int().positive().max(1_000_000),
+    unitPrice: z.coerce.number().finite().nonnegative().max(9_999_999_999.99),
+    total: z.coerce.number().finite().nonnegative().optional(),
+  }).strict()).min(1).max(500),
+  initialPayment: z.coerce.number().finite().positive().max(9_999_999_999.99),
+  payMethod: z.enum(['cash', 'mpesa', 'bank_transfer', 'card']).default('cash'),
+  payRef: z.string().trim().max(160).optional().nullable(),
+  bankAccountId: z.string().trim().max(80).optional().nullable(),
+  idempotencyKey: z.string().trim().max(160).optional().nullable(),
+  dueDate: z.string().trim().max(40).optional().nullable(),
+  notes: z.string().trim().max(10_000).optional().nullable(),
+
+  // Legacy UI sends these optimistic fields. They are accepted only for
+  // compatibility and never persisted as authoritative values.
+  id: z.string().max(80).optional(),
+  ref: z.string().max(80).optional(),
+  totalValue: z.coerce.number().finite().nonnegative().optional(),
+}).strict()
 
 function toClient(d: any) {
   return {
@@ -59,34 +87,40 @@ export async function GET() {
 export async function POST(request: Request) {
   return withApiErrorHandling(async () => {
     const actor = await requireRole(DEPOSIT_WRITE_ROLES)
-    const body = await request.json()
-    const { customerId, customerName, customerPhone, items, dueDate, notes, initialPayment, payMethod, payRef, bankAccountId, idempotencyKey } = body
-    if (!customerId || !customerName || !Array.isArray(items) || items.length === 0) {
-      return NextResponse.json({ error: 'customerId, customerName and items are required' }, { status: 422 })
+    const parsed = depositCreateSchema.safeParse(await request.json())
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: 'Invalid deposit request', issues: parsed.error.issues.map(i => ({ path: i.path.join('.'), message: i.message })) },
+        { status: 422 },
+      )
     }
-    const ref = typeof body.ref === 'string' && body.ref.trim()
-      ? body.ref.trim()
-      : await getNextDepositRef()
+    const body = parsed.data
+    const dueDate = body.dueDate ? new Date(body.dueDate) : null
+    if (dueDate && Number.isNaN(dueDate.getTime())) {
+      return NextResponse.json({ error: 'Invalid deposit due date' }, { status: 422 })
+    }
+
+    // Identity/reference and all totals/status/posting fields are server-owned.
+    const ref = await getNextDepositRef()
     const row = await createDepositWithReceipt({
-      id: typeof body.id === 'string' && body.id.trim() ? body.id.trim() : undefined,
       ref,
-      customerId: String(customerId),
-      customerName: String(customerName),
-      customerPhone: customerPhone ? String(customerPhone) : undefined,
-      items: items.map((x:any) => ({
-        productId: String(x.productId ?? ''),
-        productName: String(x.productName ?? ''),
-        sku: x.sku ? String(x.sku) : undefined,
-        qty: Number(x.qty),
-        unitPrice: Number(x.unitPrice),
+      customerId: body.customerId,
+      customerName: body.customerName,
+      customerPhone: body.customerPhone || undefined,
+      items: body.items.map(x => ({
+        productId: x.productId,
+        productName: x.productName,
+        sku: x.sku || undefined,
+        qty: x.qty,
+        unitPrice: x.unitPrice,
       })),
-      amount: Number(initialPayment),
-      method: String(payMethod || 'cash'),
-      paymentRef: payRef ? String(payRef) : null,
-      bankAccountId: bankAccountId ? String(bankAccountId) : null,
-      idempotencyKey: idempotencyKey ? String(idempotencyKey) : null,
-      dueDate: dueDate ? new Date(dueDate) : null,
-      notes: notes ? String(notes) : null,
+      amount: body.initialPayment,
+      method: body.payMethod,
+      paymentRef: body.payRef || null,
+      bankAccountId: body.bankAccountId || null,
+      idempotencyKey: body.idempotencyKey || null,
+      dueDate,
+      notes: body.notes || null,
       actor: { id: actor.id, name: actor.name },
     })
     return NextResponse.json(toClient(row), { status: 201 })

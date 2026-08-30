@@ -4,7 +4,7 @@ import { getRequiredSession, withApiErrorHandling } from '@/lib/auth/api'
 import { optionalUuid } from '@/lib/legacy-compat'
 import { lockVersionMismatch, nextLockVersion, readExpectedVersion } from '@/lib/optimistic-lock'
 import { writeFinancialAudit } from '@/lib/finance-audit'
-import { WRITE_ROLES, mapPOToClient, mirrorPurchaseOrder } from '@/lib/purchase/po-api-shared'
+import { WRITE_ROLES, mapPOToClient, mirrorPurchaseOrder, computePOTotals } from '@/lib/purchase/po-api-shared'
 import { resolvePOLineProducts } from '@/lib/purchase/po-prisma-sync'
 
 /** PO statuses that must never be removed from the record (audit FIN-003). */
@@ -24,23 +24,41 @@ function mapPOItemsForUpdate(lines: any[], existingItems: any[]) {
       const prev =
         (l.id ? existingItems.find((row: any) => row.id === l.id) : null) ??
         (l.productId ? existingItems.find((row: any) => row.productId === l.productId) : null)
-      const qtyOrdered = Math.max(0, Math.floor(Number(l.qty) || 0))
-      const incomingReceived = Math.max(0, Math.floor(Number(l.qtyReceived) || 0))
-      const incomingBilled = Math.max(0, Math.floor(Number(l.qtyBilled) || 0))
-      const qtyReceived = Math.min(qtyOrdered, Math.max(Number(prev?.qtyReceived) || 0, incomingReceived))
-      const qtyBilled = Math.min(qtyOrdered, Math.max(Number(prev?.qtyBilled) || 0, incomingBilled))
+
+      const rawQty = Number(l.qty)
+      const rawUnitCost = Number(l.unitPrice)
+      const rawTaxRate = Number(l.taxRate)
+      const qtyOrdered = Number.isFinite(rawQty) ? Math.min(1_000_000, Math.max(0, Math.floor(rawQty))) : 0
+      const unitCost = Number.isFinite(rawUnitCost) ? Math.min(9_999_999_999.99, Math.max(0, rawUnitCost)) : 0
+      const taxRate = Number.isFinite(rawTaxRate) ? Math.min(100, Math.max(0, rawTaxRate)) : 0
+
+      // Receiving and billing counters are controlled by GRN/bill workflows.
+      // A stale or tampered PO edit can preserve progress but can never advance it.
+      const qtyReceived = Math.min(qtyOrdered, Math.max(0, Number(prev?.qtyReceived) || 0))
+      const qtyBilled = Math.min(qtyOrdered, Math.max(0, Number(prev?.qtyBilled) || 0))
       return {
         productId: optionalUuid(l.productId),
-        description: l.productName ?? l.description ?? null,
+        description: l.productName ?? l.description
+          ? String(l.productName ?? l.description).trim().slice(0, 1_000)
+          : null,
         qtyOrdered,
         qtyReceived,
         qtyBilled,
-        unitCost: Math.max(0, Number(l.unitPrice) || 0),
-        taxRate: Math.max(0, Number(l.taxRate) || 0),
-        lineTotal: Math.max(0, Number(l.subtotal) || 0),
-        accountCode: l.accountCode ?? null,
+        unitCost,
+        taxRate,
+        lineTotal: Math.round(qtyOrdered * unitCost * 100) / 100,
+        accountCode: l.accountCode ? String(l.accountCode).trim().slice(0, 80) : null,
       }
     })
+}
+
+const CLIENT_STATUS_TRANSITIONS: Record<string, readonly string[]> = {
+  draft: ['draft', 'sent', 'confirmed', 'cancelled'],
+  sent: ['sent', 'confirmed', 'cancelled'],
+  confirmed: ['confirmed', 'cancelled'],
+  partial: ['partial'],
+  received: ['received'],
+  cancelled: ['cancelled'],
 }
 
 export async function GET(_: NextRequest, { params }: { params: { id: string } }) {
@@ -78,19 +96,53 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
     }
 
     const data: Record<string, any> = { lockVersion: nextLockVersion(existing.lockVersion) }
-    if (body.ref !== undefined) data.poNumber = body.ref
-    if (body.status !== undefined) data.status = body.status
-    if (body.date !== undefined) data.orderDate = new Date(body.date)
-    if (body.expectedDate !== undefined) data.expectedDate = body.expectedDate ? new Date(body.expectedDate) : null
-    if (body.subtotal !== undefined) data.subtotal = Math.max(0, Number(body.subtotal) || 0)
-    if (body.taxTotal !== undefined || body.taxAmount !== undefined) data.taxAmount = Math.max(0, Number(body.taxTotal ?? body.taxAmount) || 0)
-    if (body.total !== undefined || body.totalAmount !== undefined) data.totalAmount = Math.max(0, Number(body.total ?? body.totalAmount) || 0)
-    if (body.notes !== undefined) data.notes = body.notes ?? null
+
+    if (body.ref !== undefined && String(body.ref) !== existing.poNumber) {
+      return NextResponse.json({ error: 'Purchase order number is system-controlled' }, { status: 400 })
+    }
+
+    if (body.status !== undefined) {
+      const requestedStatus = String(body.status)
+      const allowed = CLIENT_STATUS_TRANSITIONS[String(existing.status)] ?? [String(existing.status)]
+      if (!allowed.includes(requestedStatus)) {
+        return NextResponse.json(
+          { error: `Illegal purchase order status change: ${existing.status} → ${requestedStatus}` },
+          { status: 409 },
+        )
+      }
+      const hasProgress = existing.items.some((item: any) => Number(item.qtyReceived) > 0 || Number(item.qtyBilled) > 0)
+      if (requestedStatus === 'cancelled' && hasProgress) {
+        return NextResponse.json({ error: 'A received or billed purchase order cannot be cancelled from the edit form' }, { status: 409 })
+      }
+      data.status = requestedStatus
+    }
+
+    if (body.date !== undefined) {
+      const parsed = new Date(String(body.date))
+      if (Number.isNaN(parsed.getTime())) return NextResponse.json({ error: 'Invalid purchase order date' }, { status: 422 })
+      data.orderDate = parsed
+    }
+    if (body.expectedDate !== undefined) {
+      if (!body.expectedDate) data.expectedDate = null
+      else {
+        const parsed = new Date(String(body.expectedDate))
+        if (Number.isNaN(parsed.getTime())) return NextResponse.json({ error: 'Invalid expected date' }, { status: 422 })
+        data.expectedDate = parsed
+      }
+    }
+    if (body.notes !== undefined) data.notes = body.notes == null ? null : String(body.notes).trim().slice(0, 5_000)
 
     if (Array.isArray(body.lines)) {
       // Same P2003 guard as PO create: resolve/auto-create missing products.
       const resolvedLines = await resolvePOLineProducts(mapPOItemsForUpdate(body.lines, existing.items))
-      data.items = { deleteMany: {}, create: resolvedLines.filter(l => l.productId) }
+      const safeLines = resolvedLines.filter(l => l.productId)
+      const totals = computePOTotals(safeLines)
+      data.items = { deleteMany: {}, create: safeLines }
+      // Header money is always derived from the server-validated lines. Client
+      // subtotal/tax/total fields are display hints only and are ignored.
+      data.subtotal = totals.subtotal
+      data.taxAmount = totals.taxAmount
+      data.totalAmount = totals.totalAmount
     }
 
     const updated = await prisma.purchaseOrder.update({

@@ -10,21 +10,25 @@ export const productSchema = z.object({
   name: z.string().min(3, "Name must be at least 3 characters").max(500),
   sku: z.string().max(50).optional().nullable(),
   barcode: z.string().max(100).optional().nullable(),
-  category: z.string().min(1, "Category is required"),
+  category: z.string().min(1, "Category is required").max(160),
   productKind: z.enum(['storable', 'consumable', 'service']).optional().nullable(),
   trackingMethod: z.enum(['NONE', 'QUANTITY', 'BATCH', 'SERIAL']).optional().nullable(),
   /** Pricing condition — defaults refurbished (Deed stock); Prisma column defaults to new. */
   productType: z.enum(['new', 'refurbished']).optional().nullable(),
   /** Optional override into pricingMarginPolicy.categories (e.g. brand_new_pcs, monitors). */
   pricingCategoryId: z.string().max(80).optional().nullable(),
-  salePrice: z.number().nonnegative("Sale price cannot be negative"),
-  costPrice: z.number().nonnegative("Cost price cannot be negative"),
+  salePrice: z.number().finite().nonnegative("Sale price cannot be negative").max(9_999_999_999.99),
+  /** Legacy alias accepted by API clients; canonical persistence uses salePrice. */
+  sellingPrice: z.number().finite().nonnegative().max(9_999_999_999.99).optional(),
+  costPrice: z.number().finite().nonnegative("Cost price cannot be negative").max(9_999_999_999.99),
   /** Optional reseller override. Empty / 0 → Partner API uses min GP band from cost. */
-  wholesalePrice: z.number().nonnegative("Wholesale price cannot be negative").optional().nullable(),
+  wholesalePrice: z.number().finite().nonnegative("Wholesale price cannot be negative").max(9_999_999_999.99).optional().nullable(),
   /** Optional sales commission % override. Empty / null → category rate, else 0. */
   commissionRatePercent: z.number().min(0).max(100).optional().nullable(),
   taxRate: z.number().min(0).max(100).default(0),
-  minStock: z.number().int().nonnegative().default(5),
+  minStock: z.number().int().nonnegative().max(1_000_000).default(5),
+  /** Legacy alias accepted by API clients; canonical persistence uses minStock. */
+  reorderLevel: z.number().int().nonnegative().max(1_000_000).optional(),
   unit: z.string().max(40).optional().nullable(),
   description: z.string().max(1000).optional().nullable(),
   isActive: z.boolean().default(true),
@@ -33,10 +37,29 @@ export const productSchema = z.object({
   canBePurchased: z.boolean().optional(),
   invoicePolicy: z.enum(['order', 'delivery']).optional().nullable(),
   /** Manual RAM/SSD when the product name has no capacities (bare model SKU). */
-  deviceRamGb: z.number().int().nonnegative().optional().nullable(),
-  deviceStorageGb: z.number().int().nonnegative().optional().nullable(),
+  deviceRamGb: z.number().int().nonnegative().max(4096).optional().nullable(),
+  deviceStorageGb: z.number().int().nonnegative().max(10_000_000).optional().nullable(),
   deviceStorageType: z.string().max(40).optional().nullable(),
-})
+
+  // Current Inventory form compatibility. These are explicitly tolerated so
+  // strict validation does not force us back to accepting arbitrary objects.
+  // Fields not persisted by the relational catalog remain non-authoritative.
+  skuProvided: z.boolean().optional(),
+  requiresSerial: z.boolean().optional(),
+  warrantyMonths: z.number().int().nonnegative().max(240).optional(),
+  parentId: z.string().max(80).optional().nullable(),
+  image: z.string().max(2_000_000).optional().nullable(),
+  stockQty: z.literal(0).optional(),
+  saleAccountCode: z.string().max(80).optional().nullable(),
+  costAccountCode: z.string().max(80).optional().nullable(),
+  inventoryAccountCode: z.string().max(80).optional().nullable(),
+  cogsAccountCode: z.string().max(80).optional().nullable(),
+  adjustmentAccountCode: z.string().max(80).optional().nullable(),
+  writeOffAccountCode: z.string().max(80).optional().nullable(),
+  priceDifferenceAccountCode: z.string().max(80).optional().nullable(),
+}).strict()
+
+export const productUpdateSchema = productSchema.partial().strict()
 
 export const userUpdateSchema = z.object({
   username: z.string().min(3).max(50).optional(),
@@ -48,12 +71,12 @@ export const userUpdateSchema = z.object({
   actsAsTechnician: z.boolean().optional(),
   password: z.string().min(MIN_PASSWORD_LENGTH, `Password must be at least ${MIN_PASSWORD_LENGTH} characters`).optional(),
   mustChangePassword: z.boolean().optional(),
-})
+}).strict()
 
 export const loginSchema = z.object({
   username: z.string().min(1, "Username is required"),
   password: z.string().min(1, "Password is required"),
-})
+}).strict()
 
 export const validate = async <T>(schema: z.Schema<T>, data: unknown): Promise<T> => {
   try {
