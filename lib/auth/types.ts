@@ -62,6 +62,7 @@ export interface PublicUser {
 
 export interface AuthUserRecord extends PublicUser {
   passwordHash: string
+  sessionVersion: number
   /** Recent password hashes (newest first), used to block reuse. */
   passwordHistory?: string[]
   failedLoginAttempts: number
