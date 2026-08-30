@@ -119,6 +119,45 @@ describe('expense / POS builders', () => {
     expect(resolved.some(l => l.account === '5200 - Sales Discounts')).toBe(true)
   })
 
+  it('builds a balanced split-tender POS sale with client credit', () => {
+    const lines = buildPosSaleLines({
+      total: 1160,
+      subtotal: 1000,
+      tax: 160,
+      customerCreditAmount: 460,
+      orderRef: 'POS-CREDIT-1',
+      paymentMethod: 'mpesa',
+    })
+    const resolved = lines.map(l => ({
+      debit: Number(l.debit || 0),
+      credit: Number(l.credit || 0),
+      account: resolvePostingAccountLabel(l),
+    }))
+    expect(() => assertPostingBalanced(resolved)).not.toThrow()
+    expect(resolved.find(l => l.account === '2211 - Petty Cash / Mobile Money')?.debit).toBe(700)
+    expect(resolved.find(l => l.account === labelForRole('customer_credits'))?.debit).toBe(460)
+  })
+
+  it('omits cash/bank tender when client credit funds the whole POS sale', () => {
+    const lines = buildPosSaleLines({
+      total: 1000,
+      subtotal: 1000,
+      tax: 0,
+      customerCreditAmount: 1000,
+      orderRef: 'POS-CREDIT-2',
+      paymentMethod: 'bank',
+      bankAccountId: 'ncba',
+    })
+    const resolved = lines.map(l => ({
+      debit: Number(l.debit || 0),
+      credit: Number(l.credit || 0),
+      account: resolvePostingAccountLabel(l),
+    }))
+    expect(() => assertPostingBalanced(resolved)).not.toThrow()
+    expect(resolved.some(l => l.account === '2201 - ABSA Bank')).toBe(false)
+    expect(resolved.find(l => l.account === labelForRole('customer_credits'))?.debit).toBe(1000)
+  })
+
   it('builds balanced POS sale with VAT and loyalty', () => {
     const lines = buildPosSaleLines({
       total: 1000,
