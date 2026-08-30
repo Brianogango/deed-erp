@@ -143,9 +143,9 @@ export async function notifyCustomerPaymentReceived(
     balance,
   })
 
-  const channels: Array<'email' | 'whatsapp'> = []
+  const channels: Array<'email' | 'whatsapp' | 'sms'> = []
   if (email) channels.push('email')
-  if (phone) channels.push('whatsapp')
+  if (phone) channels.push('whatsapp', 'sms')
 
   try {
     await publishNotificationEvent({
