@@ -10,12 +10,17 @@ import {
 } from '@/lib/integrations/telerivet'
 import { summarizeEnv } from '@/lib/security/production-env'
 
-const { mockApplyStatus } = vi.hoisted(() => ({
+const { mockApplyStatus, mockRecordInboundSms } = vi.hoisted(() => ({
   mockApplyStatus: vi.fn(),
+  mockRecordInboundSms: vi.fn(),
 }))
 
 vi.mock('@/lib/notifications/provider-status', () => ({
   applyProviderDeliveryStatus: mockApplyStatus,
+}))
+
+vi.mock('@/lib/notifications/sms-conversations', () => ({
+  recordInboundSms: mockRecordInboundSms,
 }))
 
 import { POST } from '@/app/api/webhooks/notifications/telerivet/route'
@@ -121,6 +126,7 @@ describe('POST /api/webhooks/notifications/telerivet', () => {
     vi.clearAllMocks()
     process.env.TELERIVET_WEBHOOK_SECRET = 'shared-test-secret'
     mockApplyStatus.mockResolvedValue({ matched: true })
+    mockRecordInboundSms.mockResolvedValue({ id: 'msg-1' })
   })
 
   afterEach(() => {
@@ -134,6 +140,30 @@ describe('POST /api/webhooks/notifications/telerivet', () => {
       body: JSON.stringify({ secret: 'wrong', id: 'WV1', status: 'delivered' }),
     }))
     expect(bad.status).toBe(401)
+    expect(mockApplyStatus).not.toHaveBeenCalled()
+  })
+
+  it('stores inbound SMS replies when Telerivet posts message_received', async () => {
+    const res = await POST(new NextRequest('http://localhost/api/webhooks/notifications/telerivet', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        secret: 'shared-test-secret',
+        event: 'message_received',
+        id: 'WV-IN-1',
+        from_number: '+254712345678',
+        to_number: '+254700000000',
+        content: 'Can I collect tomorrow?',
+        status: 'received',
+      }),
+    }))
+    expect(res.status).toBe(200)
+    expect(mockRecordInboundSms).toHaveBeenCalledWith(expect.objectContaining({
+      provider: 'telerivet',
+      providerMessageId: 'WV-IN-1',
+      from: '+254712345678',
+      body: 'Can I collect tomorrow?',
+    }))
     expect(mockApplyStatus).not.toHaveBeenCalled()
   })
 
