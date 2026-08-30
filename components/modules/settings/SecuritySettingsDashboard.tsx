@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Fa } from '@/components/icons'
 import {
   faBell,
@@ -98,7 +98,7 @@ type Props = {
     secPortalRequirePhoneVerification: boolean
   }
   showToast: (message: string, type?: ToastType) => void
-  onOpenUserAccess: () => void
+  onOpenPartnerApi?: () => void
 }
 
 const cardClass = 'rounded-[18px] border border-[#DDE5EF] bg-white shadow-[0_1px_2px_rgba(15,23,42,0.03)]'
@@ -174,7 +174,7 @@ function SummaryCard({
         : valueTone === 'amber' ? '#D97706'
           : '#172033'
   return (
-    <div className={`${cardClass} flex min-h-[105px] items-center gap-3 px-4 py-4`}>
+    <div className={`${cardClass} security-summary-card flex min-h-[105px] items-center gap-3 px-4 py-4`}>
       <IconBox icon={icon} tone={tone} />
       <div className="min-w-0">
         <p className="text-[10px] font-semibold text-[#667085]">{label}</p>
@@ -207,7 +207,7 @@ function SecurityStatusRow({
       type="button"
       onClick={onClick}
       disabled={!onClick}
-      className="flex w-full items-center gap-3 border-b border-[#EDF1F6] px-3 py-2.5 text-left last:border-b-0 disabled:cursor-default disabled:opacity-100"
+      className="security-status-row flex w-full items-center gap-3 border-b border-[#EDF1F6] px-3 py-2.5 text-left last:border-b-0 disabled:cursor-default disabled:opacity-100"
     >
       <IconBox icon={icon} tone={tone} />
       <span className="min-w-0 flex-1">
@@ -244,7 +244,7 @@ function QuickAction({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className="flex min-h-[44px] w-full items-center gap-3 rounded-xl border px-4 text-left text-[10.5px] font-bold transition hover:-translate-y-[1px] hover:shadow-sm disabled:cursor-not-allowed disabled:opacity-50"
+      className="security-quick-action flex min-h-[44px] w-full items-center gap-3 rounded-xl border px-4 text-left text-[10.5px] font-bold transition hover:-translate-y-[1px] hover:shadow-sm disabled:cursor-not-allowed disabled:opacity-50"
       style={{ borderColor: tones[tone].border, color: tones[tone].text, background: tones[tone].bg }}
     >
       <Fa icon={icon} style={{ fontSize: 12 }} />
@@ -327,7 +327,7 @@ export default function SecuritySettingsDashboard({
   currentUser,
   systemSettings,
   showToast,
-  onOpenUserAccess,
+  onOpenPartnerApi,
 }: Props) {
   const [overview, setOverview] = useState<SecurityOverview | null>(null)
   const [loading, setLoading] = useState(true)
@@ -335,6 +335,9 @@ export default function SecuritySettingsDashboard({
   const [revokingSessionId, setRevokingSessionId] = useState<string | null>(null)
   const [savingMfaPolicy, setSavingMfaPolicy] = useState(false)
   const [showEnvironment, setShowEnvironment] = useState(false)
+  const [detailPanel, setDetailPanel] = useState<'sessions' | 'audit' | 'data' | 'backup' | 'securityAudit' | null>(null)
+  const [mobileDetailPage, setMobileDetailPage] = useState(0)
+  const passwordPanelRef = useRef<HTMLDivElement | null>(null)
 
   const refresh = useCallback(async (announce = false) => {
     setLoading(true)
