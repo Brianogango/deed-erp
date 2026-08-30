@@ -386,12 +386,19 @@ export const updateAuthUser = async (id: string, input: UpdateUserInput, passwor
     WHERE id = ${id}
   `
 
-  // Security-sensitive account changes must revoke/revalidate existing JWTs.
-  // A password reset must not leave an already-issued session alive.
-  if (
+  // Password changes require forced re-authentication. Mark the session cache
+  // inactive even though the DB account remains active; a successful fresh
+  // login publishes the active state again after verifying the new password.
+  const passwordChanged = nextUser.passwordHash !== existingUser.passwordHash
+  if (passwordChanged) {
+    await invalidateUserSessions(id, {
+      isActive: false,
+      role: nextUser.role,
+      actsAsTechnician: Boolean(nextUser.actsAsTechnician),
+    })
+  } else if (
     nextUser.role !== existingUser.role ||
     nextUser.active !== existingUser.active ||
-    nextUser.passwordHash !== existingUser.passwordHash ||
     Boolean(nextUser.actsAsTechnician) !== Boolean(existingUser.actsAsTechnician)
   ) {
     await invalidateUserSessions(id, {
