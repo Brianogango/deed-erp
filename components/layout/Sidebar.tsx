@@ -243,12 +243,12 @@ export default function Sidebar() {
       `}
     >
       {/* ── Brand Header ── */}
-      <div className={`sidebar-brand-header sidebar-section-border flex h-[76px] flex-shrink-0 items-center border-b ${sidebarOpen ? 'gap-1.5 px-5 lg:px-3' : 'justify-center px-0'}`}>
+      <div className={`sidebar-brand-header sidebar-section-border flex h-[76px] flex-shrink-0 items-center border-b ${sidebarOpen ? 'gap-1.5 px-5 lg:px-2.5' : 'justify-center px-0'} lg:h-[96px]`}>
         {!sidebarOpen ? (
           <img src="/deed-icon-transparent.png" alt="Deed Technologies" className="sidebar-brand-mark h-9 w-9 object-contain" />
         ) : (
           <div className="flex min-w-0 flex-1 items-center overflow-hidden">
-            <img src="/deed-logo-inverted.png" alt="Deed Technologies" className="sidebar-logo-inverted sidebar-logo-white-user" />
+            <img src="/deed-logo-sidebar.png" alt="Deed Technologies" className="sidebar-logo-inverted sidebar-logo-white-user" />
             <img src="/deed-logo.png" alt="Deed Technologies" className="sidebar-logo-standard hidden h-9 w-auto max-w-[155px] object-contain" />
           </div>
         )}
@@ -303,7 +303,7 @@ export default function Sidebar() {
                   <div className="sidebar-group-rule h-px flex-1 rounded-full" />
                   <Fa
                     icon={faChevronDown}
-                    className={`sidebar-group-chevron text-[8px] ${isOpen ? '' : '-rotate-90'}`}
+                    className={`sidebar-group-chevron text-[9px] ${isOpen ? '' : '-rotate-90'}`}
                   />
                 </button>
               ) : (
@@ -410,7 +410,7 @@ function SidebarNavItem({ item, isActive, isExpanded, isPinned, currentUserId, o
       {/* Badge */}
       {item.badge != null && item.badge > 0 && (
         <span
-          className={`flex items-center justify-center rounded-full font-black text-white ${isExpanded ? 'ml-auto h-5 min-w-[20px] px-1.5 text-[9px]' : 'absolute -top-0.5 -right-0.5 h-4 min-w-[16px] px-1 text-[8px]'}`}
+          className={`flex items-center justify-center rounded-full font-black text-white ${isExpanded ? 'ml-auto h-5 min-w-[20px] px-1.5 text-[9px]' : 'absolute -top-0.5 -right-0.5 h-4 min-w-[16px] px-1 text-[9px]'}`}
           style={{ background: isActive ? 'rgba(255,255,255,0.30)' : DEED_BLUE, boxShadow: isActive ? 'none' : `0 2px 8px rgba(0,174,239,0.5)` }}
         >
           {item.badge > 99 ? '99+' : item.badge}
