@@ -5,7 +5,13 @@ import { listAuthUsers } from '@/lib/auth/users-repository'
 import { sql } from '@/lib/auth/db'
 import { readEnvFile } from '@/lib/security/production-env'
 import { SESSION_TTL_SECONDS } from '@/lib/auth/session-policy'
-import { MIN_PASSWORD_LENGTH } from '@/lib/auth/password-policy'
+import {
+  MIN_PASSWORD_LENGTH,
+  REQUIRE_PASSWORD_LOWERCASE,
+  REQUIRE_PASSWORD_NUMBER,
+  REQUIRE_PASSWORD_SPECIAL,
+  REQUIRE_PASSWORD_UPPERCASE,
+} from '@/lib/auth/password-policy'
 
 type DbRow = Record<string, unknown>
 
@@ -150,10 +156,10 @@ export async function GET() {
     },
     passwordPolicy: {
       minimumLength: MIN_PASSWORD_LENGTH,
-      requireUppercase: false,
-      requireLowercase: false,
-      requireNumbers: false,
-      requireSpecial: false,
+      requireUppercase: REQUIRE_PASSWORD_UPPERCASE,
+      requireLowercase: REQUIRE_PASSWORD_LOWERCASE,
+      requireNumbers: REQUIRE_PASSWORD_NUMBER,
+      requireSpecial: REQUIRE_PASSWORD_SPECIAL,
       rotationDays: 0,
       preventReuseCount: 5,
     },
