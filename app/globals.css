@@ -8678,13 +8678,13 @@ main#main-content:has(.finance-workspace) > .min-w-0 {
 
 .sidebar-logo-white-user {
   display: block;
-  width: 172px;
-  max-width: 100%;
-  height: 52px;
-  max-height: 52px;
+  width: 184px;
+  max-width: 184px;
+  height: 54px;
+  max-height: 54px;
   object-fit: contain;
   object-position: left center;
-  filter: brightness(0) invert(1) contrast(1.18) drop-shadow(0 2px 4px rgba(0, 0, 0, 0.16));
+  filter: none;
   opacity: 1;
 }
 
