@@ -34,8 +34,13 @@ function providerKey(provider?: string | null, providerMessageId?: string | null
   return `${provider}:${providerMessageId}`
 }
 
-const json = (value: unknown): Prisma.InputJsonValue =>
-  (value && typeof value === 'object' ? value : {}) as Prisma.InputJsonValue
+const json = (value: unknown): Prisma.InputJsonValue => {
+  try {
+    return JSON.parse(JSON.stringify(value && typeof value === 'object' ? value : {})) as Prisma.InputJsonValue
+  } catch {
+    return {} as Prisma.InputJsonValue
+  }
+}
 
 async function resolveThread(input: {
   participantPhone: string
