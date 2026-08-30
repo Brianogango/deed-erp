@@ -13,7 +13,7 @@ import {
 } from './preferences'
 import { sendProviderDelivery } from './providers'
 import { resolveSmsProvider } from './sms-provider'
-import { recordOutboundSms } from './sms-conversations'
+import { isSmsPhoneOptedOut, recordOutboundSms } from './sms-conversations'
 import { publishNotificationEvent } from './service'
 import { renderNotificationTemplate } from './templates'
 import type {
@@ -322,6 +322,21 @@ export async function dispatchPendingNotificationDeliveries(limit = 100) {
       include: { event: true },
     })
     if (!delivery) continue
+
+    if (delivery.channel === 'sms' && delivery.destination) {
+      const optedOut = await isSmsPhoneOptedOut(delivery.destination).catch(() => false)
+      if (optedOut) {
+        await prisma.notificationDelivery.update({
+          where: { id: delivery.id },
+          data: {
+            status: 'suppressed',
+            failedAt: null,
+            lastError: 'recipient_opted_out',
+          },
+        })
+        continue
+      }
+    }
 
     const severity = delivery.event.severity as NotificationSeverity
     const deliveryPolicy = defaultNotificationPolicy(delivery.event.eventType)
