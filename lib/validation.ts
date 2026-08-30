@@ -1,5 +1,11 @@
 import { z } from 'zod'
-import { MIN_PASSWORD_LENGTH } from '@/lib/auth/password-policy'
+import {
+  MIN_PASSWORD_LENGTH,
+  REQUIRE_PASSWORD_LOWERCASE,
+  REQUIRE_PASSWORD_NUMBER,
+  REQUIRE_PASSWORD_SPECIAL,
+  REQUIRE_PASSWORD_UPPERCASE,
+} from '@/lib/auth/password-policy'
 
 /**
  * Common validation schemas for the ERP system.
@@ -69,7 +75,13 @@ export const userUpdateSchema = z.object({
   modules: z.array(z.string()).optional(),
   active: z.boolean().optional(),
   actsAsTechnician: z.boolean().optional(),
-  password: z.string().min(MIN_PASSWORD_LENGTH, `Password must be at least ${MIN_PASSWORD_LENGTH} characters`).optional(),
+  password: z.string()
+    .min(MIN_PASSWORD_LENGTH, `Password must be at least ${MIN_PASSWORD_LENGTH} characters`)
+    .refine(value => !REQUIRE_PASSWORD_UPPERCASE || /[A-Z]/.test(value), 'Password must contain an uppercase letter')
+    .refine(value => !REQUIRE_PASSWORD_LOWERCASE || /[a-z]/.test(value), 'Password must contain a lowercase letter')
+    .refine(value => !REQUIRE_PASSWORD_NUMBER || /\d/.test(value), 'Password must contain a number')
+    .refine(value => !REQUIRE_PASSWORD_SPECIAL || /[^A-Za-z0-9]/.test(value), 'Password must contain a special character')
+    .optional(),
   mustChangePassword: z.boolean().optional(),
 }).strict()
 
