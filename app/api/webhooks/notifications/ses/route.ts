@@ -1,23 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import crypto from 'crypto'
 import { applyProviderDeliveryStatus } from '@/lib/notifications/provider-status'
+import { isAllowedSnsHttpsUrl } from '@/lib/notifications/sns-url'
 
 export const dynamic = 'force-dynamic'
 
 type SnsEnvelope = Record<string, string>
-
-export function isAllowedSnsHttpsUrl(raw: string): boolean {
-  try {
-    const url = new URL(raw)
-    if (url.protocol !== 'https:' || url.username || url.password) return false
-    if (url.port && url.port !== '443') return false
-    const host = url.hostname.toLowerCase()
-    return host === 'sns.amazonaws.com'
-      || /^sns\.[a-z0-9-]+\.amazonaws\.com(?:\.cn)?$/.test(host)
-  } catch {
-    return false
-  }
-}
 
 function canonicalSnsString(body: SnsEnvelope): string {
   const fields = body.Type === 'SubscriptionConfirmation' || body.Type === 'UnsubscribeConfirmation'

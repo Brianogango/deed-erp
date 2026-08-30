@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { isAllowedSnsHttpsUrl } from '@/app/api/webhooks/notifications/ses/route'
+import { isAllowedSnsHttpsUrl } from '@/lib/notifications/sns-url'
 
 describe('SNS webhook SSRF guard', () => {
   it('allows only HTTPS AWS SNS service hosts', () => {
