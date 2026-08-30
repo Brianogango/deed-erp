@@ -586,9 +586,9 @@ export default function SecuritySettingsDashboard({
             <SummaryCard
               icon={faShieldHalved}
               tone="blue"
-              label="Last Security Event"
+              label="Last Security Scan"
               value={loading ? '—' : timeAgo(securityEvent)}
-              detail="Latest recorded audit activity"
+              detail="Latest recorded security activity"
               valueTone="blue"
             />
           </div>
@@ -674,11 +674,18 @@ export default function SecuritySettingsDashboard({
                 right={<ToggleDisplay on={false} label="SMS backup disabled" disabled />}
               />
 
-              <p className="mb-1.5 mt-3 text-[9.5px] font-black uppercase tracking-[0.08em] text-[#435169]">MFA Status</p>
+              <p className="mb-1.5 mt-3 text-[9.5px] font-black uppercase tracking-[0.08em] text-[#435169]">MFA Settings</p>
               <RowSetting
-                title="Privileged accounts protected"
-                detail={overview ? `${overview.summary.activeMfaUsers} enrolled · ${overview.summary.privilegedUsers} eligible` : 'Loading enrollment status…'}
-                right={<StatusPill tone={mfaEnforced ? 'green' : 'amber'}>{mfaEnforced ? 'Required' : 'Review'}</StatusPill>}
+                title="Allow users to manage their MFA"
+                detail={overview
+                  ? `Self-enrollment is available at secure sign-in · ${overview.summary.activeMfaUsers}/${overview.summary.privilegedUsers} privileged accounts enrolled`
+                  : 'Users can enroll their authenticator during secure sign-in'}
+                right={<ToggleDisplay on label="Allow MFA self-enrollment" disabled />}
+              />
+              <RowSetting
+                title="MFA grace period"
+                detail="Enrollment/verification challenge remains valid for 5 minutes"
+                right={<ToggleDisplay on label="Five minute MFA challenge window" disabled />}
               />
             </div>
           </SubPanel>
