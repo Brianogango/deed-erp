@@ -32,8 +32,7 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
   const userId = String(target.user_id)
   const updated = await sql`
     UPDATE users
-    SET session_version = COALESCE(session_version, 1) + 1,
-        updated_at = NOW()
+    SET session_version = COALESCE(session_version, 1) + 1
     WHERE id = ${userId}
     RETURNING role, acts_as_technician
   `
