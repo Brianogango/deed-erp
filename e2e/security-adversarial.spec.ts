@@ -53,6 +53,51 @@ test.describe('security adversarial RBAC and IDOR', () => {
     await attacker.close()
   })
 
+  test('sales users cannot horizontally access another rep CRM opportunity', async ({ browser }) => {
+    const owner = await loginAs(browser, E2E_USERS.salesA)
+    const attacker = await loginAs(browser, E2E_USERS.salesB)
+
+    const contact = await owner.request.post('/api/contacts', {
+      data: {
+        name: `IDOR CRM Customer ${Date.now()}`,
+        type: 'company',
+        isCustomer: true,
+        isVendor: false,
+        phone: `07${String(Date.now()).slice(-8)}`,
+      },
+    })
+    expect([200, 201]).toContain(contact.status())
+    const contactBody = await contact.json()
+    expect(contactBody.id).toBeTruthy()
+
+    const created = await owner.request.post('/api/opportunities', {
+      data: {
+        clientId: contactBody.id,
+        name: `Owner Opportunity ${Date.now()}`,
+        stage: 'new',
+        probability: 20,
+        value: 10000,
+      },
+    })
+    expect(created.status()).toBe(201)
+    const opportunity = await created.json()
+
+    expect((await owner.request.get(`/api/opportunities/${opportunity.id}`)).status()).toBe(200)
+    expect((await attacker.request.get(`/api/opportunities/${opportunity.id}`)).status()).toBe(403)
+    expect((await attacker.request.patch(`/api/opportunities/${opportunity.id}`, {
+      data: { value: 99999999 },
+    })).status()).toBe(403)
+    expect((await attacker.request.delete(`/api/opportunities/${opportunity.id}`)).status()).toBe(403)
+
+    const attackerList = await attacker.request.get('/api/opportunities')
+    expect(attackerList.status()).toBe(200)
+    const attackerRows = await attackerList.json()
+    expect(Array.isArray(attackerRows) && attackerRows.some((entry: any) => entry.id === opportunity.id)).toBe(false)
+
+    await owner.close()
+    await attacker.close()
+  })
+
   test('technician cannot create commercial sale orders', async ({ browser }) => {
     const technician = await loginAs(browser, E2E_USERS.technician)
     const response = await technician.request.post('/api/sale-orders', {
