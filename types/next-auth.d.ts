@@ -11,6 +11,7 @@ declare module 'next-auth' {
       active: boolean
       createdAt: string
       actsAsTechnician?: boolean
+      sessionVersion?: number
     } & DefaultSession['user']
   }
 }
@@ -24,5 +25,6 @@ declare module 'next-auth/jwt' {
     active: boolean
     createdAt: string
     actsAsTechnician?: boolean
+    sessionVersion?: number
   }
 }

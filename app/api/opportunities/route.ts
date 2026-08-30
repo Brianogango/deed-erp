@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { getRequiredSession, withApiErrorHandling } from '@/lib/auth/api'
+import { normalizePermissionRole } from '@/lib/auth/authorization'
 import { saveStoreKeys } from '@/lib/server-store'
 import { normalizeOpportunitiesForClient } from '@/lib/opportunity-normalization'
 
@@ -32,8 +33,20 @@ function mapOpportunityToDb(body: any) {
 
 export async function GET() {
   return withApiErrorHandling(async () => {
-    await getRequiredSession()
+    const session = await getRequiredSession()
+    const role = normalizePermissionRole(session.user.role)
+    if (!role || !['director', 'admin_officer', 'finance_officer', 'kilimall_officer', 'technical_lead', 'sales_rep'].includes(role)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
     const opportunities = await prisma.opportunity.findMany({
+      where: role === 'sales_rep'
+        ? {
+            OR: [
+              { createdById: session.user.id },
+              { assignedToId: session.user.id },
+            ],
+          }
+        : undefined,
       include: {
         client: true,
         assignedTo: true,
@@ -48,10 +61,15 @@ export async function GET() {
 export async function POST(request: Request) {
   return withApiErrorHandling(async () => {
     const session = await getRequiredSession()
+    const role = normalizePermissionRole(session.user.role)
+    if (!role || !['director', 'admin_officer', 'sales_rep'].includes(role)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
     const body = await request.json()
     const opportunity = await prisma.opportunity.create({
       data: {
         ...mapOpportunityToDb(body),
+        ...(role === 'sales_rep' ? { assignedToId: session.user.id } : {}),
         createdById: session.user.id,
       },
       include: {

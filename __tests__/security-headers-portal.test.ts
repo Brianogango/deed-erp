@@ -64,10 +64,17 @@ describe('next.config security headers (AGENT-SEC-003)', () => {
     const mod = require('../next.config.js') as { SECURITY_HEADERS?: { key: string; value: string }[] }
     const headers = mod.SECURITY_HEADERS ?? []
     const byKey = Object.fromEntries(headers.map(h => [h.key, h.value]))
+    expect(byKey['Content-Security-Policy']).toContain("default-src 'self'")
+    expect(byKey['Content-Security-Policy']).toContain("object-src 'none'")
+    expect(byKey['Content-Security-Policy']).toContain("frame-ancestors 'none'")
+    expect(byKey['Content-Security-Policy']).not.toMatch(/script-src[^;]*https:/)
+    expect(byKey['Strict-Transport-Security']).toContain('max-age=31536000')
     expect(byKey['X-Frame-Options']).toBe('DENY')
     expect(byKey['X-Content-Type-Options']).toBe('nosniff')
     expect(byKey['Referrer-Policy']).toBe('strict-origin-when-cross-origin')
     expect(byKey['Permissions-Policy']).toContain('camera=()')
+    expect(byKey['Cross-Origin-Opener-Policy']).toBe('same-origin')
+    expect(byKey['Cross-Origin-Resource-Policy']).toBe('same-origin')
   })
 
   it('does not allow wildcard remote image hostnames', async () => {

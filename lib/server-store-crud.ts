@@ -2,6 +2,7 @@ import 'server-only'
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from './auth/server'
 import { isRoleAllowed } from './auth/authorization'
+import type { PublicUser } from './auth/types'
 import { loadAppState, saveStoreKeys, withAppStateKeyLock } from './server-store'
 import { parsePaginationParams, paginateArray } from './api-pagination'
 
@@ -52,6 +53,12 @@ export interface CrudConfig<T extends object> {
   validateWrite?: (next: T, previous: T | undefined) => string | null
   /** Roles allowed to write (POST/PATCH/DELETE). GET is open to any authenticated user. */
   allowedWriteRoles?: string[]
+  /**
+   * Optional row-level authorization for detail mutations. Use this for
+   * collaborative ledgers where a role may write only records it owns or is
+   * assigned to. Returning false produces 403 before any merge/write occurs.
+   */
+  recordAccess?: (user: PublicUser, record: T, action: 'patch' | 'delete') => boolean
   /**
    * Opt-in: serialize concurrent writers to this collection with a
    * transaction-scoped advisory lock (see withAppStateKeyLock). Without it,
@@ -168,7 +175,7 @@ export function makeCreateHandler<T extends object>(config: CrudConfig<T>) {
  */
 export function makePatchHandler<T extends object>(config: CrudConfig<T>) {
   return async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
-    const { error } = await requireSession(config.allowedWriteRoles)
+    const { session, error } = await requireSession(config.allowedWriteRoles)
     if (error) return error
 
     const body = await parseBody(request)
@@ -180,6 +187,9 @@ export function makePatchHandler<T extends object>(config: CrudConfig<T>) {
       if (idx === -1) return { notFound: true as const }
 
       const previous = items[idx]
+      if (config.recordAccess && (!session || !config.recordAccess(session.user, previous, 'patch'))) {
+        return { forbidden: true as const }
+      }
       const next = { ...previous, ...body, id: params.id } as T
       if (config.validateWrite) {
         const writeError = config.validateWrite(next, previous)
@@ -192,6 +202,7 @@ export function makePatchHandler<T extends object>(config: CrudConfig<T>) {
     }
     const outcome = config.lockKey ? await withAppStateKeyLock(config.lockKey, run) : await run()
     if (outcome.notFound) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+    if (outcome.forbidden) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     if (outcome.error) return NextResponse.json({ error: outcome.error }, { status: 422 })
     if (outcome.result && config.onWritten) {
       void Promise.resolve(config.onWritten(outcome.result, 'patch')).catch(() => {})
@@ -205,13 +216,17 @@ export function makePatchHandler<T extends object>(config: CrudConfig<T>) {
  */
 export function makeDeleteHandler<T extends object>(config: CrudConfig<T>) {
   return async function DELETE(_: NextRequest, { params }: { params: { id: string } }) {
-    const { error } = await requireSession(config.allowedWriteRoles)
+    const { session, error } = await requireSession(config.allowedWriteRoles)
     if (error) return error
 
     const items = await readCollection<T>(config.storeKey)
-    const filtered = items.filter(i => (i as AnyRecord)['id'] !== params.id)
-    if (filtered.length === items.length) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+    const existing = items.find(i => (i as AnyRecord)['id'] === params.id)
+    if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+    if (config.recordAccess && (!session || !config.recordAccess(session.user, existing, 'delete'))) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
 
+    const filtered = items.filter(i => (i as AnyRecord)['id'] !== params.id)
     await writeCollection(config.storeKey, filtered)
     return NextResponse.json({ ok: true })
   }

@@ -2,19 +2,13 @@ import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { requirePermission, sanitizeActor, withApiErrorHandling } from '@/lib/auth/api'
 import { hashPassword } from '@/lib/auth/password'
-import { createAuthUser, findAuthUserByUsername, listPublicUsers, toPublicAuthUser } from '@/lib/auth/users-repository'
+import { createAuthUser, deleteAuthUser, findAuthUserByUsername, listPublicUsers, toPublicAuthUser } from '@/lib/auth/users-repository'
 import { normalizeCreateUserInput } from '@/lib/auth/validation'
 import { ROLE_DEFAULT_MODULES } from '@/lib/auth/types'
 import { buildCredentialMessage, sendMultiChannelMessage } from '@/lib/integrations/messaging'
+import { generateTemporaryPassword } from '@/lib/auth/temporary-credentials'
 
 const sanitizeUsername = (value: string) => value.toLowerCase().trim().replace(/[^a-z0-9_.-]+/g, '.').replace(/^\.+|\.+$/g, '')
-
-const generateTemporaryPassword = () => {
-  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%'
-  let password = 'D3ed!'
-  for (let i = 0; i < 9; i += 1) password += alphabet[Math.floor(Math.random() * alphabet.length)]
-  return password
-}
 
 const buildUsernameCandidates = (employee: { email: string | null; employeeNumber: string; firstName: string; lastName: string }) => {
   const fullName = `${employee.firstName ?? ''} ${employee.lastName ?? ''}`.trim()
@@ -113,15 +107,25 @@ export async function POST(request: Request) {
       metadata: { userId: user.id, action: 'create_user' },
     })
 
+    if (!credentialDelivery.success) {
+      // Never reveal a credential through the admin API. If secure delivery
+      // fails, roll the account creation back so there is no orphaned account
+      // with an undisclosed password.
+      await deleteAuthUser(user.id)
+      throw Object.assign(
+        new Error('Credential delivery failed; account creation was rolled back. Fix HR email delivery and retry.'),
+        { status: 503 },
+      )
+    }
+
     console.log('[users] User created', {
       userId: user.id,
       username,
-      credentialDelivery: credentialDelivery.results.email,
+      credentialDelivered: true,
     })
 
     return NextResponse.json({
       user: toPublicAuthUser(user),
-      temporaryPassword: credentialDelivery.success ? undefined : temporaryPassword,
       credentialDelivery,
       audit: {
         action: 'create_user',

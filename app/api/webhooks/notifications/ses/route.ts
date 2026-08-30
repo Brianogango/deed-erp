@@ -6,6 +6,19 @@ export const dynamic = 'force-dynamic'
 
 type SnsEnvelope = Record<string, string>
 
+export function isAllowedSnsHttpsUrl(raw: string): boolean {
+  try {
+    const url = new URL(raw)
+    if (url.protocol !== 'https:' || url.username || url.password) return false
+    if (url.port && url.port !== '443') return false
+    const host = url.hostname.toLowerCase()
+    return host === 'sns.amazonaws.com'
+      || /^sns\.[a-z0-9-]+\.amazonaws\.com(?:\.cn)?$/.test(host)
+  } catch {
+    return false
+  }
+}
+
 function canonicalSnsString(body: SnsEnvelope): string {
   const fields = body.Type === 'SubscriptionConfirmation' || body.Type === 'UnsubscribeConfirmation'
     ? ['Message', 'MessageId', 'SubscribeURL', 'Timestamp', 'Token', 'TopicArn', 'Type']
@@ -18,18 +31,20 @@ function canonicalSnsString(body: SnsEnvelope): string {
 
 async function verifySns(body: SnsEnvelope): Promise<boolean> {
   try {
+    if (!isAllowedSnsHttpsUrl(body.SigningCertURL)) return false
     const certUrl = new URL(body.SigningCertURL)
-    const allowed = certUrl.protocol === 'https:' &&
-      (certUrl.hostname === 'sns.amazonaws.com' || /^sns\.[a-z0-9-]+\.amazonaws\.com(?:\.cn)?$/.test(certUrl.hostname))
-    if (!allowed) return false
+    if (!/^\/SimpleNotificationService-[A-Za-z0-9_-]+\.pem$/.test(certUrl.pathname)) return false
 
     const controller = new AbortController()
     const timeout = setTimeout(() => controller.abort(), 5000)
     let cert = ''
     try {
-      const response = await fetch(certUrl, { signal: controller.signal })
+      const response = await fetch(certUrl, { signal: controller.signal, redirect: 'error' })
       if (!response.ok) return false
+      const length = Number(response.headers.get('content-length') || 0)
+      if (length > 128 * 1024) return false
       cert = await response.text()
+      if (cert.length > 128 * 1024 || !cert.includes('BEGIN CERTIFICATE')) return false
     } finally {
       clearTimeout(timeout)
     }
@@ -53,11 +68,11 @@ export async function POST(request: NextRequest) {
   }
 
   if (body.Type === 'SubscriptionConfirmation' && body.SubscribeURL) {
-    const url = new URL(body.SubscribeURL)
-    if (url.protocol !== 'https:' || !url.hostname.endsWith('amazonaws.com')) {
+    if (!isAllowedSnsHttpsUrl(body.SubscribeURL)) {
       return NextResponse.json({ error: 'Invalid SNS subscribe URL' }, { status: 400 })
     }
-    await fetch(url)
+    const url = new URL(body.SubscribeURL)
+    await fetch(url, { redirect: 'error', signal: AbortSignal.timeout(5000) })
     return NextResponse.json({ ok: true, subscribed: true })
   }
 

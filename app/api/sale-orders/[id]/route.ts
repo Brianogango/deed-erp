@@ -44,7 +44,7 @@ async function broadcastSaleOrders() {
 const WRITE_ROLES = ['director', 'admin_officer', 'finance_officer', 'sales_rep', 'technical_lead']
 // Repair staff update repair-linked sale orders via quote revisions in the
 // Repair module; those syncs must not be rejected or the SO goes stale.
-const REPAIR_WRITE_ROLES = [...WRITE_ROLES, 'technician']
+const REPAIR_WRITE_ROLES = [...WRITE_ROLES]
 
 function isRepairLinked(body: any) {
   return Boolean(body?.repairId || body?.repairRef || /repair/i.test(String(body?.notes ?? '')))
@@ -424,6 +424,12 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
       include: { items: true },
     })
     if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+    if (!canAccessRecord(session.user.role, 'sale_order', {
+      createdByUserId: existing.createdById,
+      salespersonId: existing.salespersonId,
+    }, session.user.id)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
 
     const expectedVersion = readExpectedVersion(body)
     if (lockVersionMismatch(existing.lockVersion, expectedVersion)) {
@@ -581,6 +587,12 @@ export async function DELETE(_: NextRequest, { params }: { params: { id: string 
       include: { items: true },
     })
     if (!order) return NextResponse.json({ error: 'Sale order not found' }, { status: 404 })
+    if (!canAccessRecord(session.user.role, 'sale_order', {
+      createdByUserId: order.createdById,
+      salespersonId: order.salespersonId,
+    }, session.user.id)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
 
     const status = normalizeSaleStatus(order.status)
     if (status === 'cancelled') {

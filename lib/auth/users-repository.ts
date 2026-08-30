@@ -1,7 +1,6 @@
 import 'server-only'
 
 import { sql } from './db'
-import { buildSeedUsers } from './seed'
 import type { AuthUserRecord, CreateUserInput, PublicUser, UpdateUserInput } from './types'
 import { invalidateUserSessions } from './session-validity'
 
@@ -27,6 +26,7 @@ type UserRow = {
   employee_id?: string | null
   email?: string | null
   acts_as_technician?: boolean | number | null
+  session_version?: number | null
 }
 
 const normalizeStoredRole = (role: string): AuthUserRecord['role'] => {
@@ -79,6 +79,7 @@ const toAuthUser = (row: UserRow): AuthUserRecord & { passwordHistory: string[] 
   active: row.is_active ?? (row.active != null ? Boolean(row.active) : true),
   createdAt: row.created_at,
   passwordHash: row.password_hash,
+  sessionVersion: Math.max(1, Number(row.session_version ?? 1) || 1),
   passwordHistory: row.password_history_json ? JSON.parse(row.password_history_json) : [],
   failedLoginAttempts: row.failed_login_attempts ?? 0,
   lockedUntil: row.locked_until ?? null,
@@ -149,22 +150,6 @@ const getUserCount = async () => {
   return Number(rows[0].count)
 }
 
-const seedUsersIfEmpty = async () => {
-  await ensureSchemaReady()
-  if ((await getUserCount()) > 0) return
-
-  const seededUsers = await buildSeedUsers()
-
-  for (const user of seededUsers) {
-    const historyJson = JSON.stringify([user.passwordHash])
-    await sql`
-      INSERT INTO users (id, username, name, role, modules_json, active, created_at, password_hash, password_history_json, must_change_password)
-      VALUES (${user.id}, ${user.username}, ${user.name}, ${user.role}, ${JSON.stringify(user.modules)}, ${user.active ? 1 : 0}, ${user.createdAt}, ${user.passwordHash}, ${historyJson}, 1)
-      ON CONFLICT (id) DO NOTHING
-    `
-  }
-}
-
 const migrateRoles = async () => {
   // Normalise legacy role names to the current operational role catalog.
   await sql`UPDATE users SET role = 'director'        WHERE role IN ('admin', 'super_admin')`
@@ -223,6 +208,14 @@ const migrateActsAsTechnician = async () => {
   }
 }
 
+const migrateSessionVersion = async () => {
+  try {
+    await sql`ALTER TABLE users ADD COLUMN session_version INTEGER NOT NULL DEFAULT 1`
+  } catch {
+    // Column probably exists
+  }
+}
+
 export const ensureUserStore = async () => {
   await ensureSchemaReady()
   await migratePasswordHistory()
@@ -230,7 +223,7 @@ export const ensureUserStore = async () => {
   await migrateMustChangePassword()
   await migrateEmployeeLinkFields()
   await migrateActsAsTechnician()
-  await seedUsersIfEmpty()
+  await migrateSessionVersion()
   await migrateRoles()
 }
 
@@ -243,7 +236,7 @@ export const listAuthUsers = async () => {
            active, must_change_password,
            created_at, password_hash, password_history_json,
            failed_login_attempts, locked_until,
-           employee_id, email, acts_as_technician
+           employee_id, email, acts_as_technician, session_version
     FROM users
     ORDER BY created_at DESC, username ASC
   `
@@ -265,7 +258,7 @@ export const findAuthUserById = async (id: string) => {
            active, must_change_password,
            created_at, password_hash, password_history_json,
            failed_login_attempts, locked_until,
-           employee_id, email, acts_as_technician
+           employee_id, email, acts_as_technician, session_version
     FROM users
     WHERE id = ${id}
   `
@@ -282,7 +275,7 @@ export const findAuthUserByUsername = async (username: string) => {
            active, must_change_password,
            created_at, password_hash, password_history_json,
            failed_login_attempts, locked_until,
-           employee_id, email, acts_as_technician
+           employee_id, email, acts_as_technician, session_version
     FROM users
     WHERE lower(username) = lower(${username})
   `
@@ -304,6 +297,7 @@ export const createAuthUser = async (input: CreateUserInput, passwordHash: strin
     active: input.active ?? true,
     createdAt: now(),
     passwordHash,
+    sessionVersion: 1,
     failedLoginAttempts: 0,
     lockedUntil: null,
     mustChangePassword: input.mustChangePassword ?? true,
@@ -322,7 +316,7 @@ export const createAuthUser = async (input: CreateUserInput, passwordHash: strin
       active, must_change_password,
       created_at, updated_at,
       password_hash, password_history_json,
-      employee_id, email, acts_as_technician
+      employee_id, email, acts_as_technician, session_version
     )
     VALUES (
       ${user.id}, ${user.username}, ${user.name}, ${user.role},
@@ -331,7 +325,7 @@ export const createAuthUser = async (input: CreateUserInput, passwordHash: strin
       ${user.active ? 1 : 0}, ${user.mustChangePassword ? 1 : 0},
       ${user.createdAt}, ${nowTs},
       ${user.passwordHash}, ${historyJson},
-      ${user.employeeId}, ${user.email}, ${user.actsAsTechnician ?? false}
+      ${user.employeeId}, ${user.email}, ${user.actsAsTechnician ?? false}, ${user.sessionVersion}
     )
   `
   return user
@@ -343,8 +337,9 @@ export const updateAuthUser = async (id: string, input: UpdateUserInput, passwor
   const existingUser = await findAuthUserById(id)
   if (!existingUser) return null
 
+  const passwordWillChange = Boolean(passwordHash && passwordHash !== existingUser.passwordHash)
   let historyJson = existingUser.passwordHistory ? JSON.stringify(existingUser.passwordHistory) : '[]'
-  if (passwordHash && passwordHash !== existingUser.passwordHash) {
+  if (passwordWillChange) {
     const history = existingUser.passwordHistory || []
     historyJson = JSON.stringify([passwordHash, ...history].slice(0, 5)) // Keep the last 5 hashes
   }
@@ -357,6 +352,7 @@ export const updateAuthUser = async (id: string, input: UpdateUserInput, passwor
     modules: input.modules ? [...input.modules] : existingUser.modules,
     active: input.active ?? existingUser.active,
     passwordHash: passwordHash ?? existingUser.passwordHash,
+    sessionVersion: passwordWillChange ? Math.max(1, existingUser.sessionVersion) + 1 : Math.max(1, existingUser.sessionVersion),
     mustChangePassword: input.mustChangePassword ?? existingUser.mustChangePassword,
     employeeId: input.employeeId !== undefined ? input.employeeId : existingUser.employeeId,
     email: input.email !== undefined ? input.email : existingUser.email,
@@ -382,12 +378,22 @@ export const updateAuthUser = async (id: string, input: UpdateUserInput, passwor
         employee_id          = ${nextUser.employeeId ?? null},
         email                = ${nextUser.email ?? null},
         acts_as_technician   = ${nextUser.actsAsTechnician ?? false},
+        session_version      = ${nextUser.sessionVersion},
         updated_at           = ${nowTs}
     WHERE id = ${id}
   `
 
-  // Role / active / technician-capability changes must refresh session claims.
-  if (
+  // Password changes require forced re-authentication. Mark the session cache
+  // inactive even though the DB account remains active; a successful fresh
+  // login publishes the active state again after verifying the new password.
+  const passwordChanged = passwordWillChange
+  if (passwordChanged) {
+    await invalidateUserSessions(id, {
+      isActive: false,
+      role: nextUser.role,
+      actsAsTechnician: Boolean(nextUser.actsAsTechnician),
+    })
+  } else if (
     nextUser.role !== existingUser.role ||
     nextUser.active !== existingUser.active ||
     Boolean(nextUser.actsAsTechnician) !== Boolean(existingUser.actsAsTechnician)

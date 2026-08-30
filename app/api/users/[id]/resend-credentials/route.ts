@@ -3,24 +3,15 @@ import { requirePermission, sanitizeActor, withApiErrorHandling } from '@/lib/au
 import { hashPassword } from '@/lib/auth/password'
 import { findAuthUserById, updateAuthUser, toPublicAuthUser } from '@/lib/auth/users-repository'
 import { buildCredentialMessage, sendMultiChannelMessage } from '@/lib/integrations/messaging'
+import { generateTemporaryPassword } from '@/lib/auth/temporary-credentials'
 
 /**
  * POST /api/users/[id]/resend-credentials
  *
- * Regenerates a temporary password for the user, marks mustChangePassword=true,
- * and sends the temporary credentials to the user's email address through the HR
- * mailbox. If email delivery fails, the password is returned to the admin for
- * secure manual sharing as a fallback.
- *
- * Requires `manageUsers` permission.
+ * Rotates a user's temporary password and delivers it only through the
+ * configured HR email channel. No credential is returned by this API.
+ * Delivery failure rolls the password change back.
  */
-const generateTemporaryPassword = () => {
-  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%'
-  let password = 'D3ed!'
-  for (let i = 0; i < 9; i += 1) password += alphabet[Math.floor(Math.random() * alphabet.length)]
-  return password
-}
-
 export async function POST(_request: Request, { params }: { params: { id: string } }) {
   return withApiErrorHandling(async () => {
     const actor = await requirePermission('manageUsers')
@@ -58,11 +49,24 @@ export async function POST(_request: Request, { params }: { params: { id: string
       metadata: { userId: user.id, action: 'resend_credentials' },
     })
 
-    console.log('[users] Credentials reset', { userId: user.id, credentialDelivery: credentialDelivery.results.email })
+    if (!credentialDelivery.success) {
+      // Restore the previous credential rather than returning the new password
+      // to an administrator or leaving the user locked out without delivery.
+      await updateAuthUser(
+        params.id,
+        { mustChangePassword: Boolean(user.mustChangePassword) },
+        user.passwordHash,
+      )
+      throw Object.assign(
+        new Error('Credential delivery failed; password reset was rolled back. Fix HR email delivery and retry.'),
+        { status: 503 },
+      )
+    }
+
+    console.log('[users] Credentials reset', { userId: user.id, credentialDelivered: true })
 
     return NextResponse.json({
       user: toPublicAuthUser(updated),
-      temporaryPassword: credentialDelivery.success ? undefined : temporaryPassword,
       credentialDelivery,
       audit: {
         action: 'resend_credentials',

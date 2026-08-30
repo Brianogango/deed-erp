@@ -97,5 +97,5 @@ export async function POST(request: NextRequest) {
     invalidatedAt: Date.now(),
   })
 
-  return issueSessionResponse(request, user)
+  return issueSessionResponse(request, user, { sessionVersion: account.sessionVersion })
 }
