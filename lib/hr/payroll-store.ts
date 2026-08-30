@@ -25,6 +25,9 @@ export function payslipToClient(p: any): Payslip {
     salaryAdvanceDeductions: Array.isArray(p.advanceDeductions) ? p.advanceDeductions : [],
     netPay: num(p.netPay),
     status: (p.status as Payslip['status']) ?? 'draft',
+    paymentStatus: (p.paymentStatus as Payslip['paymentStatus']) ?? 'pending',
+    paidAt: p.paidAt ? new Date(p.paidAt).toISOString() : undefined,
+    paymentReference: p.paymentReference ?? undefined,
     generatedDate: p.createdAt ? new Date(p.createdAt).toISOString() : new Date().toISOString(),
     downloadUrl: undefined,
   }
