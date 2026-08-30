@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import dynamic from 'next/dynamic'
 import { useShellStore, ModuleId, AppNotification, SYNC_STATUS_EVENT, LAST_SYNC_AT_LS, DIRTY_KEYS_LS } from '@/lib/store'
 import type { UpdateUserInput } from '@/lib/auth/types'
+import { passwordPolicyError } from '@/lib/auth/password-policy'
 import { formatRoleLabel, hasModuleAccess, isAdmin as isAdminRole } from '@/lib/auth/access'
 import { usePathname, useRouter } from 'next/navigation'
 import { readGuardedImageAsDataUrl } from '@/lib/client-image-guard'
@@ -803,8 +804,9 @@ function AccountPanel({
         setPwError('Enter your current password to change it.')
         return
       }
-      if (newPw.length < 8) {
-        setPwError('New password must be at least 8 characters.')
+      const policyError = passwordPolicyError(newPw)
+      if (policyError) {
+        setPwError(policyError)
         return
       }
       if (newPw !== confirmPw) {
