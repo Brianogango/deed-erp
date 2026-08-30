@@ -104,9 +104,7 @@ export default function SecureLogin() {
           {phase === 'credentials' ? 'Secure sign in' : phase === 'enroll' ? 'Protect your account' : 'Verify your identity'}
         </h1>
         <p className="mt-2 text-sm leading-6 text-slate-500">
-          {phase === 'credentials'
-            ? 'Sign in to your Deed ERP workspace.'
-            : message}
+          {phase === 'credentials' ? 'Sign in to your Deed ERP workspace.' : message}
         </p>
 
         {error && <div className="mt-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
@@ -119,6 +117,7 @@ export default function SecureLogin() {
                 autoFocus
                 autoComplete="username"
                 maxLength={50}
+                placeholder="your.username"
                 value={username}
                 onChange={event => setUsername(event.target.value)}
                 className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-4 py-3 font-normal outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-200"
@@ -130,6 +129,7 @@ export default function SecureLogin() {
                 type="password"
                 autoComplete="current-password"
                 maxLength={128}
+                placeholder="••••••••••••"
                 value={password}
                 onChange={event => setPassword(event.target.value)}
                 className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-4 py-3 font-normal outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-200"
