@@ -6,7 +6,7 @@ import {
   Expense, ExpenseCategory, ExpensePaymentMethod,
   EXPENSE_CATEGORIES,
 } from '@/lib/store'
-import { canUserApproveExpenseStep } from '@/lib/expense-approval-chain'
+import { canUserReviewExpense } from '@/lib/expense-approval-chain'
 import { ModuleSkeleton, useMounted, RecordCard, ModuleHeader, TabBar } from '@/components/ui'
 import { PrimaryActionButton, SecondaryActionMenu, StatusBadge } from '@/components/erp'
 import { DataTable, type ColumnDef, type PrimaryFilterConfig } from '@/components/data-table'
@@ -130,16 +130,15 @@ function ExpensesContent() {
 
   const currentUser = users.find(u => u.id === currentUserId) ?? null
   const isFinance   = ['director', 'finance_officer'].includes(currentUser?.role ?? '')
-  // Approvers include finance roles plus anyone named on a pending expense-chain step.
-  const canReviewExpenses = isFinance || expenses.some(e =>
-    e.status === 'submitted' && canUserApproveExpenseStep(currentUser?.role, e.approvalChain),
-  )
+  const canReviewExpenses = expenses.some(e =>
+    e.status === 'submitted' && canUserReviewExpense(currentUser?.role, e.approvalChain),
+  ) || isFinance
 
   const myExpenses  = expenses.filter(e => e.submittedByUserId === currentUserId)
   const allPending  = canReviewExpenses
     ? expenses.filter(e =>
         e.status === 'submitted'
-        && (isFinance || canUserApproveExpenseStep(currentUser?.role, e.approvalChain)),
+        && canUserReviewExpense(currentUser?.role, e.approvalChain),
       )
     : []
   const pendingReimbursements = isFinance ? expenses.filter(e => e.status === 'approved') : []
@@ -181,7 +180,7 @@ function ExpensesContent() {
   const reviewList = canReviewExpenses ? expenses
     .filter(e => reviewStatus === 'all' || e.status === reviewStatus)
     .filter(e => reviewUser  === 'all' || e.submittedByUserId === reviewUser)
-    .filter(e => isFinance || e.status !== 'submitted' || canUserApproveExpenseStep(currentUser?.role, e.approvalChain))
+    .filter(e => e.status !== 'submitted' || canUserReviewExpense(currentUser?.role, e.approvalChain))
     : []
 
   // ── Submit modal ──
@@ -670,10 +669,7 @@ function ExpensesContent() {
         const exp = expenses.find(e => e.id === reviewingId)
         if (!exp) return null
         const canReview = exp.status === 'submitted'
-          && (
-            (!exp.approvalChain?.length && isFinance)
-            || canUserApproveExpenseStep(currentUser?.role, exp.approvalChain)
-          )
+          && canUserReviewExpense(currentUser?.role, exp.approvalChain)
         return (
           <div className="modal-overlay expenses-modal-overlay" onClick={() => setReviewingId(null)}>
             <div className="modal-box expenses-review-modal w-full max-w-md" onClick={e => e.stopPropagation()}>
