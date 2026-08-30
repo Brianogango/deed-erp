@@ -168,6 +168,31 @@ describe('POST /api/purchase-orders', () => {
     expect(mockPrismaPurchaseOrder.create).not.toHaveBeenCalled()
   })
 
+  it('ignores tampered header totals/status/ref and derives them from validated lines', async () => {
+    mockPrismaPurchaseOrder.create.mockResolvedValue(dbPo)
+
+    const res = await POST(postReq({
+      ref: 'PO/ATTACKER/9999',
+      status: 'received',
+      vendorName: 'Acme Supplies',
+      lines: [{ productId: PRODUCT_ID, productName: 'Widget', qty: 2, unitPrice: 100, taxRate: 16, subtotal: 1, qtyReceived: 999, qtyBilled: 999 }],
+      subtotal: 1,
+      taxTotal: 0,
+      total: 1,
+    }))
+    expect(res.status).toBe(201)
+    const data = mockPrismaPurchaseOrder.create.mock.calls[0][0].data
+    expect(data.poNumber).toBe('PO/2026/0001')
+    expect(data.status).toBe('draft')
+    expect(data.subtotal).toBe(200)
+    expect(data.taxAmount).toBe(32)
+    expect(data.totalAmount).toBe(232)
+    expect(data.items.create[0].qtyReceived).toBe(0)
+    expect(data.items.create[0].qtyBilled).toBe(0)
+    expect(data.items.create[0].lineTotal).toBe(200)
+  })
+
+
   it('returns 403 for a role outside WRITE_ROLES', async () => {
     mockGetSession.mockResolvedValue(salesSession)
     const res = await POST(postReq({ vendorName: 'Acme Supplies', lines: [] }))
@@ -229,6 +254,35 @@ describe('PATCH /api/purchase-orders/:id', () => {
     expect(res.status).toBe(409)
     expect(mockPrismaPurchaseOrder.update).not.toHaveBeenCalled()
   })
+
+  it('does not allow the edit payload to advance received/billed quantities or supply header totals', async () => {
+    mockPrismaPurchaseOrder.findUnique.mockResolvedValue(existingWithItems)
+    mockPrismaPurchaseOrder.update.mockResolvedValue(dbPo)
+
+    const res = await PATCH(patchReq({
+      lockVersion: 2,
+      subtotal: 1,
+      taxTotal: 0,
+      total: 1,
+      lines: [{ id: ITEM_ID, productId: PRODUCT_ID, qty: 10, qtyReceived: 10, qtyBilled: 10, unitPrice: 100, taxRate: 16, subtotal: 1 }],
+    }), { params: { id: PO_ID } })
+
+    expect(res.status).toBe(200)
+    const data = mockPrismaPurchaseOrder.update.mock.calls[0][0].data
+    expect(data.items.create[0].qtyReceived).toBe(6)
+    expect(data.items.create[0].qtyBilled).toBe(4)
+    expect(data.subtotal).toBe(1000)
+    expect(data.taxAmount).toBe(160)
+    expect(data.totalAmount).toBe(1160)
+  })
+
+  it('rejects a client attempt to jump a PO into received status', async () => {
+    mockPrismaPurchaseOrder.findUnique.mockResolvedValue(existingWithItems)
+    const res = await PATCH(patchReq({ lockVersion: 2, status: 'received' }), { params: { id: PO_ID } })
+    expect(res.status).toBe(409)
+    expect(mockPrismaPurchaseOrder.update).not.toHaveBeenCalled()
+  })
+
 
   it('returns 403 for a role outside WRITE_ROLES', async () => {
     mockGetSession.mockResolvedValue(salesSession)
