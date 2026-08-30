@@ -8662,7 +8662,7 @@ main#main-content:has(.finance-workspace) > .min-w-0 {
 
 .sidebar-brand-header {
   min-width: 0;
-  min-height: 92px;
+  min-height: 78px;
   background: rgba(4, 17, 42, 0.12);
 }
 
@@ -8678,14 +8678,13 @@ main#main-content:has(.finance-workspace) > .min-w-0 {
 
 .sidebar-logo-white-user {
   display: block;
-  width: 176px;
-  max-width: 176px;
-  height: 78px;
-  max-height: 78px;
+  width: 184px;
+  max-width: 184px;
+  height: 54px;
+  max-height: 54px;
   object-fit: contain;
   object-position: left center;
-  mix-blend-mode: screen;
-  filter: contrast(1.55) brightness(1.18);
+  filter: none;
   opacity: 1;
 }
 
