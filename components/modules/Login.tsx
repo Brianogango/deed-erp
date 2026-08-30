@@ -137,7 +137,7 @@ export default function Login() {
   const passwordInvalid = touched.password && !password
 
   return (
-    <div className="relative min-h-screen w-full overflow-hidden">
+    <div className="relative min-h-screen w-full overflow-x-hidden overflow-y-auto">
 
       {/* ── Full-page background image (with branded navy + network fallback) ──
           Fallback gradient keeps the deep navy-blue on the right, beneath the
