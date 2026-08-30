@@ -1,18 +1,19 @@
 import { expect, type APIRequestContext, type Browser, type BrowserContext } from '@playwright/test'
-import { E2E_USER } from './global-setup'
+import { E2E_USER, E2E_USERS } from './global-setup'
 
 /** Unique suffix so parallel CI re-runs do not collide on names/phones. */
 export function e2eTag(label = 'wf') {
   return `e2e-${label}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`
 }
 
-/** Log in as the seeded director and return an authenticated browser context. */
-export async function loginViaApi(browser: Browser): Promise<BrowserContext> {
+type E2EIdentity = (typeof E2E_USERS)[keyof typeof E2E_USERS]
+
+export async function loginAs(browser: Browser, identity: E2EIdentity): Promise<BrowserContext> {
   const context = await browser.newContext()
   let lastStatus = 0
   for (let attempt = 0; attempt < 4; attempt++) {
     const res = await context.request.post('/api/auth/login', {
-      data: { username: E2E_USER.username, password: E2E_USER.password },
+      data: { username: identity.username, password: identity.password },
     })
     lastStatus = res.status()
     if (lastStatus === 200) return context
@@ -22,8 +23,13 @@ export async function loginViaApi(browser: Browser): Promise<BrowserContext> {
     }
     break
   }
-  expect(lastStatus, 'login should succeed').toBe(200)
+  expect(lastStatus, `login should succeed for ${identity.role}`).toBe(200)
   return context
+}
+
+/** Log in as the seeded director and return an authenticated browser context. */
+export async function loginViaApi(browser: Browser): Promise<BrowserContext> {
+  return loginAs(browser, E2E_USER)
 }
 
 export async function jsonOrThrow(res: Awaited<ReturnType<APIRequestContext['post']>>, label: string) {
