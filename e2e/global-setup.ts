@@ -52,6 +52,14 @@ export const E2E_USERS = {
     role: 'finance_officer',
     modules: ['dashboard','accounting','sales','crm','contacts','purchase','inventory','deposits','expenses','leave','my_documents'],
   },
+  sessionProbe: {
+    id: '9e2e0000-0000-4000-8000-000000000007',
+    username: 'e2esessionprobe',
+    password: TEST_PASSWORD,
+    name: 'E2E Session Probe',
+    role: 'technician',
+    modules: ['dashboard','repair','reconfiguration','expenses','leave','my_documents'],
+  },
 } as const
 
 export const E2E_USER = E2E_USERS.director
