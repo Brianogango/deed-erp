@@ -248,7 +248,7 @@ export default function Sidebar() {
           <img src="/deed-icon-transparent.png" alt="Deed Technologies" className="sidebar-brand-mark h-9 w-9 object-contain" />
         ) : (
           <div className="flex min-w-0 flex-1 items-center overflow-hidden">
-            <img src="/deed-logo-transparent.png" alt="Deed Technologies" className="sidebar-logo-inverted sidebar-logo-white-user" />
+            <img src="/deed-logo-inverted.png" alt="Deed Technologies" className="sidebar-logo-inverted sidebar-logo-white-user" />
             <img src="/deed-logo.png" alt="Deed Technologies" className="sidebar-logo-standard hidden h-9 w-auto max-w-[155px] object-contain" />
           </div>
         )}
