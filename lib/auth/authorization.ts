@@ -398,7 +398,7 @@ export function canAccessRecord(
     case 'repair':
       if (['director', 'admin_officer', 'finance_officer', 'technical_lead'].includes(normalizedRole)) return true
       if (normalizedRole === 'technician' || options?.actsAsTechnician) {
-        return record.assignedTechnicianId === userId
+        return record.assignedTechnicianId === userId || record.createdByUserId === userId
       }
       return false
     case 'expense':
