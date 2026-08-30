@@ -225,6 +225,7 @@ model User {
   isActive     Boolean   @default(true) @map("is_active")
   lastLoginAt  DateTime? @map("last_login_at")
   mustResetPw  Boolean   @default(false) @map("must_reset_pw")
+  sessionVersion Int      @default(1) @map("session_version")
   avatarUrl    String?   @map("avatar_url")
   createdAt    DateTime  @default(now()) @map("created_at")
   updatedAt    DateTime  @updatedAt @map("updated_at")
