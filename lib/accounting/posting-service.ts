@@ -439,7 +439,7 @@ export function buildExpenseCompanyPaymentLines(params: {
   ]
 }
 
-/** Expense reimbursement payout: Dr 3105, Cr bank. */
+/** Expense reimbursement payout: Dr employee reimbursements payable, Cr bank. */
 export function buildExpenseReimbursementLines(params: {
   amount: number
   ref: string
@@ -797,7 +797,8 @@ export async function postExpenseApproval(params: {
     source: 'expense',
     description: `Expense approval — ${params.ref}`,
     date: params.date,
-    blobId: params.expenseId,
+    // Reimbursement is a distinct accounting event from approval.
+    blobId: `${params.expenseId}:reimbursement`,
     lines,
     createdById: params.createdById,
     journalCode: 'MISC',
@@ -831,7 +832,10 @@ export async function postExpenseCompanyPayment(params: {
     source: 'expense',
     description: `Expense payment — ${params.ref}`,
     date: params.date,
-    blobId: params.expenseId,
+    // Approval already owns sourceId=<expenseId>. Use an event-specific
+    // source id so the relational (source_type, source_id, source_version)
+    // uniqueness constraint permits a later cash-payment journal.
+    blobId: `${params.expenseId}:payment`,
     lines,
     createdById: params.createdById,
     journalCode: isCash ? 'CSH' : 'BNK',
