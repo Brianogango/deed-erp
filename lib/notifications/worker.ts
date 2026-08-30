@@ -105,12 +105,14 @@ async function routeUserRecipient(event: any, recipient: any, channels: Notifica
 
   const severity = event.severity as NotificationSeverity
   const preference = await getEffectiveNotificationPreference(user.id, event.eventType)
+  const policy = defaultNotificationPolicy(event.eventType)
   const bypass = bypassPreference(event.eventType, severity)
 
   if (!bypass && !severityAllowed(preference, severity)) return
 
   for (const channel of channels) {
-    if (!bypass && !channelEnabled(preference, channel)) continue
+    const mandatoryChannel = Boolean(policy.mandatoryChannels?.includes(channel))
+    if (!bypass && !mandatoryChannel && !channelEnabled(preference, channel)) continue
 
     if (channel === 'push') {
       const endpoints = await prisma.notificationEndpoint.findMany({
@@ -322,7 +324,9 @@ export async function dispatchPendingNotificationDeliveries(limit = 100) {
     if (!delivery) continue
 
     const severity = delivery.event.severity as NotificationSeverity
-    if (delivery.userId && delivery.channel !== 'in_app' && !bypassPreference(delivery.event.eventType, severity)) {
+    const deliveryPolicy = defaultNotificationPolicy(delivery.event.eventType)
+    const mandatoryChannel = Boolean(deliveryPolicy.mandatoryChannels?.includes(delivery.channel as NotificationChannel))
+    if (delivery.userId && delivery.channel !== 'in_app' && !mandatoryChannel && !bypassPreference(delivery.event.eventType, severity)) {
       const pref = await getEffectiveNotificationPreference(delivery.userId, delivery.event.eventType)
       if (isQuietNow(pref)) {
         await prisma.notificationDelivery.update({
