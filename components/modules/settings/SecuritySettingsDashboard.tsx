@@ -5,9 +5,7 @@ import { Fa } from '@/components/icons'
 import {
   faBell,
   faBullseye,
-  faCheck,
   faChevronRight,
-  faCog,
   faEnvelope,
   faKey,
   faLandmark,
@@ -104,7 +102,6 @@ type Props = {
 
 const cardClass = 'rounded-[18px] border border-[#DDE5EF] bg-white shadow-[0_1px_2px_rgba(15,23,42,0.03)]'
 const titleClass = 'text-[13px] font-bold tracking-[-0.01em] text-[#111827]'
-const mutedClass = 'text-[10.5px] leading-[1.45] text-[#778399]'
 
 function ToggleDisplay({ on, onClick, disabled = false, label }: { on: boolean; onClick?: () => void; disabled?: boolean; label: string }) {
   return (
