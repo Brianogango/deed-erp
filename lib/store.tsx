@@ -2177,6 +2177,9 @@ export interface POSOrder {
   salespersonName?: string
   pointsEarned?: number
   pointsRedeemed?: number
+  /** Client/store credit applied to this POS sale; the remainder is the selected tender. */
+  customerCreditAmount?: number
+  customerCreditRefs?: string[]
   createdAt?: string
   invoiceId?: string
   invoiceRef?: string
@@ -3778,6 +3781,8 @@ export interface AppState {
       paymentReference?: string
       salespersonId?: string
       salespersonName?: string
+      /** Optional client credit portion; remaining total is collected via `payment`. */
+      customerCreditAmount?: number
     },
   ) => POSOrder | null | Promise<POSOrder | null>
 
@@ -18012,9 +18017,10 @@ const storeCtx: AppState = {
       }
       const openSession = posSessions.find(s => s.id === sessionId)
       const orders = posOrdersForSession(posOrders, sessionId, openSession?.openedAt)
-      const totalCash = orders.filter(o => o.payment === 'cash').reduce((a, o) => a + o.total, 0)
-      const totalMpesa = orders.filter(o => o.payment === 'mpesa').reduce((a, o) => a + o.total, 0)
-      const totalBank = orders.filter(o => isPosBankPayment(o.payment)).reduce((a, o) => a + o.total, 0)
+      const tenderAmount = (order: POSOrder) => Math.max(0, order.total - (order.customerCreditAmount || 0))
+      const totalCash = orders.filter(o => o.payment === 'cash').reduce((a, o) => a + tenderAmount(o), 0)
+      const totalMpesa = orders.filter(o => o.payment === 'mpesa').reduce((a, o) => a + tenderAmount(o), 0)
+      const totalBank = orders.filter(o => isPosBankPayment(o.payment)).reduce((a, o) => a + tenderAmount(o), 0)
       const totalCard = totalBank // legacy field: bank + historical card
       const totalSales = orders.reduce((a, o) => a + o.total, 0)
       const counted = Math.max(0, Number(closingCash) || 0)
@@ -18049,7 +18055,7 @@ const storeCtx: AppState = {
       for (const o of orders) {
         if (!isPosBankPayment(o.payment)) continue
         const id = o.bankAccountId || bankAccountIdForMethod(o.payment)
-        bankByAccount.set(id, (bankByAccount.get(id) || 0) + o.total)
+        bankByAccount.set(id, (bankByAccount.get(id) || 0) + tenderAmount(o))
       }
       for (const [bankId, amt] of bankByAccount) {
         if (amt <= 0) continue
@@ -18151,16 +18157,34 @@ const storeCtx: AppState = {
       const vatRate = Number(companySettings.vatRate ?? 16)
       const tax = applyVat ? Math.round(sub * vatRate / 100) : 0
       const total = Math.max(0, sub + tax - pointsRedeemed)
+      const requestedCustomerCredit = Math.max(0, Number(paymentMeta?.customerCreditAmount) || 0)
       const user = currentUser()
-      let pointsEarned = 0
-      if (customerId) {
-        pointsEarned = loyaltyPointsEarned(total, systemSettings.posLoyaltyKesPerPoint)
-        setContacts(prev => prev.map(c => c.id === customerId ? { ...c, loyaltyPoints: Math.max(0, (c.loyaltyPoints || 0) - pointsRedeemed) + pointsEarned } : c))
+      if (requestedCustomerCredit > 0 && !customerId) {
+        showToast('Select a customer before applying client credit', 'error')
+        return null
       }
-      const resolvedBankId = isPosBankPayment(payment)
+      if (requestedCustomerCredit > 0 && !canApplyCustomerCredit(user?.role)) {
+        showToast('Only Finance, Admin Officer, or Director can apply client credit', 'error')
+        return null
+      }
+      const availableCustomerCredit = customerId
+        ? customerCreditBalance(customerCreditsRef.current, customerId)
+        : 0
+      if (requestedCustomerCredit > Math.min(availableCustomerCredit, total) + 0.01) {
+        showToast('Client credit balance changed — review the available balance and try again', 'error')
+        return null
+      }
+      const customerCreditAmount = Math.min(requestedCustomerCredit, availableCustomerCredit, total)
+      const tenderTotal = Math.max(0, total - customerCreditAmount)
+      const pointsEarned = customerId
+        ? loyaltyPointsEarned(total, systemSettings.posLoyaltyKesPerPoint)
+        : 0
+      const resolvedBankId = tenderTotal > 0 && isPosBankPayment(payment)
         ? (paymentMeta?.bankAccountId || bankAccountIdForMethod(payment))
         : undefined
-      const paymentReference = (paymentMeta?.paymentReference || '').trim() || undefined
+      const paymentReference = tenderTotal > 0
+        ? ((paymentMeta?.paymentReference || '').trim() || undefined)
+        : undefined
       let orderRef: string
       try {
         orderRef = await storeCtxRef.current!.allocateDocRef('POS')
@@ -18171,6 +18195,44 @@ const storeCtx: AppState = {
         orderRef = nextPosTicketRef(posOrders.map(o => o.ref))
       }
       const invoiceId = uid()
+      const creditAppliedAt = now()
+      const creditAppliedBy = user?.name || user?.username || 'POS'
+      let creditRemaining = customerCreditAmount
+      const creditRefs: string[] = []
+      const nextCustomerCredits = customerCreditAmount > 0
+        ? customerCreditsRef.current.map(credit => {
+            if (
+              creditRemaining <= 0
+              || credit.customerId !== customerId
+              || !['available', 'partially_used'].includes(credit.status)
+              || credit.balance <= 0
+            ) return credit
+            const amount = Math.min(creditRemaining, credit.balance)
+            creditRemaining -= amount
+            const nextBalance = Math.max(0, credit.balance - amount)
+            creditRefs.push(credit.ref)
+            return {
+              ...credit,
+              balance: nextBalance,
+              status: nextBalance <= 0 ? 'used' as const : 'partially_used' as const,
+              applications: [
+                ...(credit.applications ?? []),
+                {
+                  invoiceId,
+                  invoiceRef: orderRef,
+                  amount,
+                  date: creditAppliedAt,
+                  appliedBy: creditAppliedBy,
+                },
+              ],
+            }
+          })
+        : customerCreditsRef.current
+      if (creditRemaining > 0.01) {
+        showToast('Client credit could not be fully allocated — refresh the customer balance and try again', 'error')
+        return null
+      }
+
       const order: POSOrder = {
         id: uid(), ref: orderRef, sessionId,
         lines: normalizedLines, subtotal: sub, taxTotal: tax, total, payment,
@@ -18178,6 +18240,8 @@ const storeCtx: AppState = {
         paymentReference,
         customerId, customerName, date: now(), createdAt: new Date().toISOString(),
         createdByUserId: user?.id, createdByName: user?.name, pointsEarned, pointsRedeemed,
+        customerCreditAmount: customerCreditAmount || undefined,
+        customerCreditRefs: creditRefs.length ? creditRefs : undefined,
         salespersonId: paymentMeta?.salespersonId || user?.id,
         salespersonName: paymentMeta?.salespersonName || user?.name,
         invoiceId,
@@ -18215,6 +18279,22 @@ const storeCtx: AppState = {
         setProducts(p => p.map(x => x.id === l.productId ? { ...x, stockQty: Math.max(0, x.stockQty - l.qty) } : x))
         if (l.serialId) setSerials(p => p.map(s => s.id === l.serialId ? { ...s, status: 'sold', location: 'customer', soldDate: now() } : s))
       })
+      if (customerId) {
+        setContacts(prev => prev.map(contact =>
+          contact.id === customerId
+            ? { ...contact, loyaltyPoints: Math.max(0, (contact.loyaltyPoints || 0) - pointsRedeemed) + pointsEarned }
+            : contact,
+        ))
+      }
+      if (customerCreditAmount > 0) {
+        setCustomerCredits(nextCustomerCredits)
+        addAuditLog(
+          'apply_pos_customer_credit',
+          order.ref,
+          `Applied ${fmtKes(customerCreditAmount)} client credit (${creditRefs.join(', ')})`,
+        )
+      }
+
       // Persist the till ticket before the invoice so a later crash still leaves
       // Transaction History intact. Server union-merge is the source of truth.
       setPosOrders(p => [order, ...p])
@@ -18232,7 +18312,7 @@ const storeCtx: AppState = {
       // everywhere instead of consuming an INV/2026/NNNN invoice number.
       const invRefAllocated = orderRef
       const posInv: Invoice = {
-        // Posted document, fully paid (amountPaid === total → derived Paid).
+        // Posted document, fully settled by the selected tender plus any client credit.
         id: invoiceId, ref: invRefAllocated, type: 'customer_invoice', status: 'posted',
         partnerId: customerId ?? 'walk-in', partnerName: customerName ?? 'Walk-in Customer',
         date: now(), dueDate: now(),
@@ -18253,14 +18333,18 @@ const storeCtx: AppState = {
           }
         }),
         subtotal: sub, taxTotal: tax, total, amountPaid: total,
-        notes: paymentReference ? `POS ${order.ref} · Ref ${paymentReference}` : `POS ${order.ref}`,
+        notes: [
+          `POS ${order.ref}`,
+          paymentReference ? `Ref ${paymentReference}` : '',
+          creditRefs.length ? `Client credit ${creditRefs.join(', ')} (${fmtKes(customerCreditAmount)})` : '',
+        ].filter(Boolean).join(' · '),
         isPosInvoice: true,
         salespersonId: order.salespersonId,
         salespersonName: order.salespersonName,
       }
       setPosOrders(p => p.map(o => o.id === order.id ? { ...o, invoiceRef: posInv.ref } : o))
       setInvoices(p => [posInv, ...p])
-      sync('/api/invoices', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(posInv) })
+      await sync('/api/invoices', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(posInv) })
       const revenueBuckets = aggregateLinesByAccount({
         lines: posInv.lines,
         resolveProduct: (productId) => prodRef.current.find(p => p.id === productId),
@@ -18281,17 +18365,23 @@ const storeCtx: AppState = {
         posOrderId: order.id,
         bankAccountId: bankAccountIdForMethod(payment, resolvedBankId),
         lines: [
-          accountLine(
+          ...(tenderTotal > 0 ? [accountLine(
             bankAccountLabel(bankAccountIdForMethod(payment, resolvedBankId), payment),
             paymentReference ? `POS receipt ${order.ref} · ${paymentReference}` : `POS receipt ${order.ref}`,
-            posInv.total,
+            tenderTotal,
             0,
-          ),
+          )] : []),
+          ...(customerCreditAmount > 0 ? [accountLine(
+            '3313 - Customer Credits',
+            `Client credit applied ${creditRefs.join(', ') || order.ref}`,
+            customerCreditAmount,
+            0,
+          )] : []),
           ...(pointsRedeemed > 0 ? [accountLine('5200 - Sales Discounts', `Loyalty redemption ${order.ref}`, pointsRedeemed, 0)] : []),
           ...revenueLines,
           ...(tax > 0 ? [accountLine('3301 - Output VAT Payable', `VAT on ${order.ref}`, 0, tax)] : []),
         ],
-        totalDebit: posInv.total + pointsRedeemed,
+        totalDebit: tenderTotal + customerCreditAmount + pointsRedeemed,
         totalCredit: sub + tax,
       }
       setJournalEntries(p => [posJournal, ...p])
@@ -18306,6 +18396,7 @@ const storeCtx: AppState = {
             orderRef: order.ref,
             invoiceId: posInv.id,
             total: posInv.total,
+            customerCreditAmount,
             subtotal: sub,
             tax,
             pointsRedeemed,
@@ -18332,6 +18423,7 @@ const storeCtx: AppState = {
         ? (bankAccounts.find(b => b.id === resolvedBankId)?.name || resolvedBankId)
         : undefined
       const payLabel = isPosBankPayment(payment) ? 'BANK' : payment.toUpperCase()
+      const creditLabel = customerCreditAmount > 0 && tenderTotal > 0 ? ` + ${fmtKes(customerCreditAmount)} client credit` : ''
       if (accountingPostError) {
         showToast(
           `${order.ref} sale recorded, but accounting needs attention: ${accountingPostError}`,
@@ -18339,8 +18431,9 @@ const storeCtx: AppState = {
         )
       } else {
         showToast(
-          `${order.ref} · ${fmtKes(order.total)} via ${payLabel}`
-            + (bankLabel ? ` (${bankLabel})` : '')
+          `${order.ref} · ${fmtKes(order.total)} via ${tenderTotal > 0 ? payLabel : 'CLIENT CREDIT'}`
+            + (tenderTotal > 0 && bankLabel ? ` (${bankLabel})` : '')
+            + creditLabel
             + (paymentReference ? ` · ${paymentReference}` : ''),
         )
       }
