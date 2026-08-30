@@ -10,6 +10,8 @@ import { ensureRepairIntakeTimestamp } from '@/lib/repair-datetime'
 import { hasModuleAccess } from '@/lib/auth/access'
 import { filterStoreValueForRole } from '@/lib/auth/authorization'
 import { loadRepairsFromPrisma } from '@/lib/repair-mirror'
+import { DIRECT_REPAIR_WAIVER_TEXT } from '@/lib/repair-path'
+import { resolveDiagnosisFee, normalizeDeviceTier } from '@/lib/diagnosis-fee'
 
 function publicPhotoUrl(ref: string, index: number) {
   return `/api/portal/repair/${encodeURIComponent(ref)}/photos/${index}`
@@ -135,7 +137,8 @@ export async function POST(request: NextRequest) {
 
   try {
     const requestedRef = String(body.ref ?? '').trim()
-    const repairId = typeof body.id === 'string' && body.id.trim() ? body.id.trim() : `rep_${Date.now()}`
+    const submittedId = typeof body.id === 'string' ? body.id.trim() : ''
+    const repairId = /^[A-Za-z0-9_-]{1,80}$/.test(submittedId) ? submittedId : `rep_${Date.now()}`
 
     // Serialize the read-modify-write on the repairs ledger, and fail rather
     // than overwrite it when the load itself failed (loadAppState swallows
@@ -158,7 +161,6 @@ export async function POST(request: NextRequest) {
       ...(Array.isArray((existing as { previousRefs?: unknown } | null)?.previousRefs)
         ? (existing as { previousRefs: unknown[] }).previousRefs
         : []),
-      ...(Array.isArray(body.previousRefs) ? body.previousRefs as unknown[] : []),
       isTemporaryRepairRef(requestedRef) ? requestedRef : null,
       existing?.ref && existing.ref !== ref ? existing.ref : null,
     ].filter(value => value && String(value) !== ref))
@@ -167,27 +169,109 @@ export async function POST(request: NextRequest) {
     // that calendar day at local midnight; empty values become now.
     const intakeDate = ensureRepairIntakeTimestamp(body.intakeDate)
 
-    // Create the new repair — body may include full intake (path, warranty, waiver).
-    // Spread body after defaults so booking fields are not dropped by a thin client.
+    const cleanText = (value: unknown, max: number) => String(value ?? '').normalize('NFKC').trim().slice(0, max)
+    const optionalText = (value: unknown, max: number) => {
+      const text = cleanText(value, max)
+      return text || undefined
+    }
+    const accessories: RepairOrder['accessories'] = Array.isArray(body.accessories)
+      ? body.accessories.slice(0, 100).map((item: any) => ({
+          name: cleanText(item?.name ?? item, 160),
+          received: item?.received !== false,
+          notes: optionalText(item?.notes, 500),
+        })).filter(item => item.name)
+      : []
+    const repairPath = body.repairPath === 'direct_repair' ? 'direct_repair' : 'diagnosis_first'
+    const waiverAccepted = repairPath === 'direct_repair' && body.liabilityWaiverAccepted === true
+    const warrantyCoverage = ['full', 'partial', 'void'].includes(String(body.warrantyCoverage))
+      ? body.warrantyCoverage as RepairOrder['warrantyCoverage']
+      : undefined
+    const warrantyVerificationStatus = [
+      'not_checked', 'verified', 'pending_manual_review', 'excluded_client_damage',
+    ].includes(String(body.warrantyVerificationStatus))
+      ? body.warrantyVerificationStatus as RepairOrder['warrantyVerificationStatus']
+      : undefined
+    const serialWarrantyExceptionReason = [
+      'device_cannot_power_on', 'label_unreadable', 'sticker_missing', 'customer_unable_to_confirm', 'other',
+    ].includes(String(body.serialWarrantyExceptionReason))
+      ? body.serialWarrantyExceptionReason as RepairOrder['serialWarrantyExceptionReason']
+      : undefined
+
+    // Create from an explicit intake allowlist. Workflow, assignment, billing,
+    // costs, QA, audit, invoice, delivery and posting fields are server-owned.
     const repair = {
-      status: String(body.status ?? 'received') as RepairOrder['status'],
-      customerId: String(body.customerId ?? ''),
-      customerName: String(body.customerName),
-      customerPhone: String(body.customerPhone ?? ''),
-      productId: String(body.productId ?? ''),
-      productName: String(body.productName),
-      serialNumber: String(body.serialNumber ?? ''),
-      intakeChannel: (body.intakeChannel === 'website' || body.intakeChannel === 'whatsapp' || body.intakeChannel === 'call' || body.intakeChannel === 'email' || body.intakeChannel === 'rider_pickup') ? body.intakeChannel as RepairOrder['intakeChannel'] : 'walk_in',
-      intakeNotes: '',
-      issueDescription: String(body.issueDescription ?? ''),
-      accessories: [] as RepairOrder['accessories'],
-      ...(body as Partial<RepairOrder>),
-      // Force server-owned identity + full timestamp after body spread.
       id: repairId,
       ref,
       previousRefs,
+      status: 'received',
+      customerId: cleanText(body.customerId, 80),
+      customerName: cleanText(body.customerName, 200),
+      customerPhone: cleanText(body.customerPhone, 50),
+      customerEmail: optionalText(body.customerEmail, 254),
+      contactPersonId: optionalText(body.contactPersonId, 80),
+      contactPersonName: optionalText(body.contactPersonName, 200),
+      contactPersonPhone: optionalText(body.contactPersonPhone, 50),
+      contactPersonEmail: optionalText(body.contactPersonEmail, 254),
+      contactPersonTitle: optionalText(body.contactPersonTitle, 120),
+      productId: cleanText(body.productId, 80),
+      productName: cleanText(body.productName, 240),
+      serialNumber: cleanText(body.serialNumber, 160),
+      serialId: optionalText(body.serialId, 80),
+      deviceCondition: ['good', 'fair', 'poor', 'damaged'].includes(String(body.deviceCondition))
+        ? body.deviceCondition as RepairOrder['deviceCondition']
+        : undefined,
+      clientLaptopPassword: optionalText(body.clientLaptopPassword, 500),
+      deviceColor: optionalText(body.deviceColor, 80),
+      priority: ['low', 'normal', 'high', 'urgent'].includes(String(body.priority))
+        ? body.priority as RepairOrder['priority']
+        : 'normal',
+      intakeChannel: ['website', 'whatsapp', 'call', 'email', 'rider_pickup', 'walk_in'].includes(String(body.intakeChannel))
+        ? body.intakeChannel as RepairOrder['intakeChannel']
+        : 'walk_in',
       intakeDate,
+      intakeNotes: cleanText(body.intakeNotes, 5_000),
+      issueDescription: cleanText(body.issueDescription, 10_000),
+      accessories,
+      repairPath,
+      liabilityWaiverAccepted: waiverAccepted,
+      liabilityWaiverText: waiverAccepted ? DIRECT_REPAIR_WAIVER_TEXT : undefined,
+      liabilityWaiverAcceptedAt: waiverAccepted ? new Date().toISOString() : undefined,
+      liabilityWaiverSignature: waiverAccepted ? optionalText(body.liabilityWaiverSignature, 200) : undefined,
+      deviceTier: normalizeDeviceTier(body.deviceTier) ?? undefined,
+      deviceType: optionalText(body.deviceType, 120),
+      deviceBrand: optionalText(body.deviceBrand, 120),
+      deviceModel: optionalText(body.deviceModel, 160),
+      customerBillingType: body.customerBillingType === 'corporate' ? 'corporate' : 'walk_in',
+      underWarranty: body.underWarranty === true,
+      warrantyId: optionalText(body.warrantyId, 80),
+      warrantyCoverage,
+      warrantyVerificationStatus,
+      serialWarrantyException: body.serialWarrantyException === true,
+      serialWarrantyExceptionReason,
+      serialWarrantyExceptionNotes: optionalText(body.serialWarrantyExceptionNotes, 2_000),
+      clientCausedDamage: body.clientCausedDamage === true,
+      clientDamageReason: optionalText(body.clientDamageReason, 2_000),
+      estimatedCompletionDate: optionalText(body.estimatedCompletionDate, 40),
+      partsUsed: [] as RepairOrder['partsUsed'],
+      laborCost: 0,
+      logisticsCost: 0,
+      total: 0,
+      qcItems: [] as RepairOrder['qcItems'],
+      createdBy: cleanText(user?.username ?? user?.id ?? 'system', 160),
+      bookedByName: cleanText(user?.name ?? 'System', 200),
+      createdDate: new Date().toISOString(),
+      notes: cleanText(body.notes, 10_000),
+      slaMissed: false,
+      date: intakeDate,
+      description: cleanText(body.issueDescription, 10_000),
+      technicianName: '',
     } as RepairOrder
+
+    const fee = resolveDiagnosisFee(repair, state.deed_systemSettings as any)
+    repair.diagnosisFee = fee.amount
+    repair.diagnosisFeeStatus = fee.status
+    repair.diagnosisFeeBilling = fee.billing
+    repair.customerBillingType = fee.customerType
 
     const dateErr = repairDatesWriteError(repair)
     if (dateErr) {
