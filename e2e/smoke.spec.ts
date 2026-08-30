@@ -56,7 +56,7 @@ test.describe('repair → quote → invoice money path', () => {
     })
     expect(res.status()).toBe(201)
     const repair = await res.json()
-    expect(repair.ref).toMatch(/^REP\//)
+    expect(repair.ref).toMatch(/^REP-[23456789ABCDEFGHJKLMNPQRSTUVWXYZ]{8}$/)
     repairRef = repair.ref
     repairId = repair.id
   })

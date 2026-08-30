@@ -71,7 +71,7 @@ export default function TrackRepairPage() {
             type="text"
             value={ref}
             onChange={e => { setRef(e.target.value); setError(null) }}
-            placeholder="e.g. REP/0040"
+            placeholder="e.g. REP-7K3M9X2Q"
             autoFocus
             style={{
               background: 'rgba(255,255,255,0.05)',

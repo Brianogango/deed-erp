@@ -15,7 +15,7 @@ export const trackRepairTool: ToolDefinition = {
   inputSchema: {
     type: 'object',
     properties: {
-      query: { type: 'string', description: 'Job number (e.g. RPR-00012), serial number, or IMEI' },
+      query: { type: 'string', description: 'Job number (e.g. REP-7K3M9X2Q or REP/0275), serial number, or IMEI' },
     },
     required: ['query'],
   },

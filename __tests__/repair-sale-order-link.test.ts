@@ -18,9 +18,11 @@ const repair = {
 }
 
 describe('extractRepairRefFromText', () => {
-  it('matches short and year-prefixed repair refs', () => {
+  it('matches short, year-prefixed, and random repair refs', () => {
     expect(extractRepairRefFromText('Repair quote — REP/0289 — HP SPECTRE')).toBe('REP/0289')
     expect(extractRepairRefFromText('Repair order REP/2026/0088')).toBe('REP/2026/0088')
+    expect(extractRepairRefFromText('Repair quote — REP-7K3M9X2Q — HP SPECTRE')).toBe('REP-7K3M9X2Q')
+    expect(extractRepairRefFromText('Created from REP-227532')).toBeUndefined()
   })
 
   it('returns undefined when no repair ref is present', () => {

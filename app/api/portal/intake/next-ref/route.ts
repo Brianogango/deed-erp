@@ -1,22 +1,15 @@
 import { NextResponse } from 'next/server'
-import { getNextRepairRef } from '@/lib/repair-ref-counter'
 
 export const dynamic = 'force-dynamic'
 
 /**
  * GET /api/portal/intake/next-ref
- * Returns the next unique repair reference number for portal intake.
- * Public endpoint (no authentication required for portal customers).
+ * Ticket numbers are allocated only when the repair is created.
+ * A public preview endpoint would leak valid-looking refs.
  */
 export async function GET() {
-  try {
-    const ref = await getNextRepairRef()
-    return NextResponse.json({ ref }, { status: 200 })
-  } catch (err) {
-    console.error('[portal-intake-next-ref] Error generating repair reference:', err)
-    return NextResponse.json(
-      { error: 'Failed to generate repair reference' },
-      { status: 500 }
-    )
-  }
+  return NextResponse.json(
+    { error: 'Repair references are assigned when the job is booked.' },
+    { status: 404 },
+  )
 }

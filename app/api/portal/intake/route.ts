@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { loadAppStateForWrite, saveStoreKeys, withAppStateKeyLock } from '@/lib/server-store'
 import { getNextRepairRef } from '@/lib/repair-ref-counter'
+import { takenRepairRefs } from '@/lib/repair-ref'
 import { checkRateLimit } from '@/lib/rate-limit'
 import type { RepairOrder } from '@/lib/store'
 import { buildRepairLinkMessage, sendMultiChannelMessage } from '@/lib/integrations/messaging'
@@ -13,8 +14,7 @@ function clean(value: unknown, max = 2_000): string {
   return String(value ?? '').normalize('NFKC').trim().slice(0, max)
 }
 
-// Reference generation is now handled server-side by getNextRepairRef()
-// to ensure uniqueness across concurrent requests
+// Official ticket numbers are minted server-side so they stay unique and unguessable.
 
 export async function POST(req: NextRequest) {
   // Rate limit: 5 submissions per IP per hour
@@ -58,8 +58,7 @@ export async function POST(req: NextRequest) {
     const repairs = Array.isArray(state[REPAIR_STORE_KEY]) ? state[REPAIR_STORE_KEY] as RepairOrder[] : []
     const today = new Date().toISOString().slice(0, 10)
     const now = new Date().toISOString()
-    // Get the next unique repair reference from the atomic server-side counter
-    const ref = await getNextRepairRef()
+    const ref = await getNextRepairRef(takenRepairRefs(repairs))
 
   const accessories = Array.isArray(body.accessories)
     ? body.accessories.slice(0, 100).map((item) => ({

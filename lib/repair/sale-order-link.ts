@@ -4,6 +4,8 @@
  * and `saleOrderId` on the repair blob.
  */
 
+import { REPAIR_REF_IN_TEXT_RE } from '@/lib/repair-ref'
+
 export type RepairSaleOrderLink = {
   id?: string | null
   saleOrderId?: string | null
@@ -22,10 +24,8 @@ export type SaleOrderRepairHint = {
   notes?: string | null
 }
 
-const REPAIR_REF_RE = /\bREP\/\d{4}\/\d+\b|\bREP\/\d+\b/i
-
 export function extractRepairRefFromText(text?: string | null): string | undefined {
-  const match = String(text ?? '').match(REPAIR_REF_RE)
+  const match = String(text ?? '').match(REPAIR_REF_IN_TEXT_RE)
   return match ? match[0].toUpperCase() : undefined
 }
 
