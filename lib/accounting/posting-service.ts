@@ -470,6 +470,7 @@ export function buildPosSaleLines(params: {
   subtotal: number
   tax: number
   pointsRedeemed?: number
+  customerCreditAmount?: number
   orderRef: string
   paymentMethod?: string
   bankAccountId?: string
@@ -479,15 +480,27 @@ export function buildPosSaleLines(params: {
   const subtotal = roundMoney(params.subtotal)
   const tax = roundMoney(params.tax)
   const points = roundMoney(params.pointsRedeemed)
+  const customerCredit = Math.max(0, Math.min(total, roundMoney(params.customerCreditAmount)))
+  const tenderTotal = Math.max(0, roundMoney(total - customerCredit))
   const bankId = bankAccountIdForPaymentMethod(params.paymentMethod, params.bankAccountId)
   const lines: PostingLineInput[] = []
-  // A fully loyalty-funded sale has no cash/bank tender. Do not emit a
-  // zero-value tender line: strict journal validation correctly rejects it.
-  if (total > 0) {
+  // A fully loyalty/client-credit funded sale has no cash/bank tender.
+  if (tenderTotal > 0) {
     lines.push({
       accountLabel: bankAccountLabelForId(bankId, params.paymentMethod),
       description: `POS receipt ${params.orderRef}`,
-      debit: total,
+      debit: tenderTotal,
+      credit: 0,
+    })
+  }
+  // Client credit is applied to the invoice immediately after the POS sale.
+  // Keep that portion in AR here; the credit application journal then Dr
+  // Customer Credits / Cr AR, preserving a clean audit trail for split tender.
+  if (customerCredit > 0) {
+    lines.push({
+      role: 'ar',
+      description: `Client credit pending application ${params.orderRef}`,
+      debit: customerCredit,
       credit: 0,
     })
   }
@@ -884,6 +897,7 @@ export async function postPosSale(params: {
   subtotal: number
   tax: number
   pointsRedeemed?: number
+  customerCreditAmount?: number
   paymentMethod?: string
   bankAccountId?: string
   customerName?: string
@@ -896,12 +910,15 @@ export async function postPosSale(params: {
     subtotal: params.subtotal,
     tax: params.tax,
     pointsRedeemed: params.pointsRedeemed,
+    customerCreditAmount: params.customerCreditAmount,
     orderRef: params.orderRef,
     paymentMethod: params.paymentMethod,
     bankAccountId: params.bankAccountId,
     revenueLines: params.revenueLines,
   })
   const method = String(params.paymentMethod || '').toLowerCase()
+  const credit = Math.max(0, Math.min(roundMoney(params.total), roundMoney(params.customerCreditAmount)))
+  const tenderTotal = Math.max(0, roundMoney(params.total) - credit)
   return commitPosting({
     ref: `JRN/${params.orderRef}`,
     source: 'pos',
@@ -911,7 +928,9 @@ export async function postPosSale(params: {
     blobId: params.orderId,
     lines,
     createdById: params.createdById,
-    journalCode: method === 'cash' || method === 'petty_cash' ? 'CSH' : 'BNK',
+    journalCode: tenderTotal <= 0 && credit > 0
+      ? 'SAL'
+      : (method === 'cash' || method === 'petty_cash' ? 'CSH' : 'BNK'),
   })
 }
 
