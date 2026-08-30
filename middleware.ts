@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server'
 import { getToken } from 'next-auth/jwt'
 import { safeReturnTo } from '@/lib/auth/return-to'
 import { assertSafeRequestEnvelope, assertSameOriginBrowserWrite, InputSecurityError } from '@/lib/input-security'
+import { assertStoreWriteAuthorized, StoreWriteAuthorizationError } from '@/lib/auth/store-write-policy'
 
 export { safeReturnTo }
 const SECRET = process.env.NEXTAUTH_SECRET ?? process.env.AUTH_SECRET ?? ''
@@ -198,7 +199,14 @@ export async function middleware(request: NextRequest) {
       }
     }
 
-    const token = await getToken({ req: request, secret: SECRET, cookieName: COOKIE_NAME })
+    let token
+    try {
+      token = await getToken({ req: request, secret: SECRET, cookieName: COOKIE_NAME })
+    } catch {
+      // next-auth <=4.24.14 could throw on malformed Bearer percent-encoding.
+      // Treat any decoder failure as an invalid credential instead of surfacing 500.
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
     if (!token) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
@@ -212,6 +220,20 @@ export async function middleware(request: NextRequest) {
       if (error instanceof InputSecurityError) {
         return NextResponse.json(
           { error: error.message, code: error.code },
+          { status: error.status, headers: { 'Cache-Control': 'no-store' } },
+        )
+      }
+      throw error
+    }
+
+    // Wholesale app-state sync is now default-deny. Every writable deed_* key
+    // must be explicitly registered with a role/module policy.
+    try {
+      await assertStoreWriteAuthorized(request, { role: token.role, modules: token.modules })
+    } catch (error) {
+      if (error instanceof StoreWriteAuthorizationError) {
+        return NextResponse.json(
+          { error: error.message, deniedKeys: error.deniedKeys },
           { status: error.status, headers: { 'Cache-Control': 'no-store' } },
         )
       }
@@ -268,7 +290,14 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next()
   }
 
-  const token = SECRET ? await getToken({ req: request, secret: SECRET, cookieName: COOKIE_NAME }) : null
+  let token = null
+  if (SECRET) {
+    try {
+      token = await getToken({ req: request, secret: SECRET, cookieName: COOKIE_NAME })
+    } catch {
+      token = null
+    }
+  }
 
   if (token) {
     const pageUserId = typeof token.id === 'string' ? token.id : (typeof token.sub === 'string' ? token.sub : '')
