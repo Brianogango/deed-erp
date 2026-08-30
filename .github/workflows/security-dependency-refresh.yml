@@ -1,0 +1,56 @@
+name: Security Dependency Refresh
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  refresh:
+    if: github.ref == 'refs/heads/security/closure-20260830'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: security/closure-20260830
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Upgrade patched authentication and framework versions
+        run: |
+          set -euo pipefail
+          pnpm install --frozen-lockfile
+          pnpm up next-auth@4.24.15 next@15.5.21
+          pnpm remove xlsx
+          pnpm add https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz
+          npm install --package-lock-only --ignore-scripts
+
+      - name: Verify upgraded dependency tree
+        run: |
+          set -euo pipefail
+          pnpm typecheck
+          pnpm test
+          pnpm build
+          pnpm audit --prod --audit-level high
+
+      - name: Commit regenerated manifests and lockfiles
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add package.json pnpm-lock.yaml package-lock.json
+          if git diff --cached --quiet; then
+            echo 'No dependency changes to commit.'
+            exit 0
+          fi
+          git commit -m 'security: upgrade patched framework and spreadsheet dependencies'
+          git push origin HEAD:security/closure-20260830
