@@ -102,6 +102,7 @@ export default async function globalSetup() {
       `ALTER TABLE users ADD COLUMN IF NOT EXISTS must_change_password INTEGER DEFAULT 0`,
       `ALTER TABLE users ADD COLUMN IF NOT EXISTS failed_login_attempts INTEGER DEFAULT 0`,
       `ALTER TABLE users ADD COLUMN IF NOT EXISTS locked_until TEXT`,
+      `ALTER TABLE users ADD COLUMN IF NOT EXISTS session_version INTEGER NOT NULL DEFAULT 1`,
     ]) {
       await pool.query(ddl)
     }
