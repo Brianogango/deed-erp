@@ -229,6 +229,60 @@ export async function assertSafeRequestEnvelope(request: Request): Promise<void>
       assertSafeString(value, `form field "${key}"`, 250_000)
       if (FORBIDDEN_OBJECT_KEYS.has(key)) fail('Forbidden form field name', 400, 'prototype_pollution_key')
     }
+    return
+  }
+
+  if (contentType.includes('multipart/form-data')) return
+
+  // Do not trust Content-Type as a security boundary. Some third-party
+  // callbacks legitimately send JSON as text/plain, and a hostile caller can
+  // deliberately mislabel JSON to try to skip structural checks.
+  const raw = await request.clone().text()
+  if (!raw) return
+  if (byteLength(raw) > maxBytes) fail('Request body is too large', 413, 'payload_too_large')
+  const trimmed = raw.trim()
+  if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+    let parsed: unknown
+    try {
+      parsed = JSON.parse(trimmed)
+    } catch {
+      fail('Invalid JSON payload', 400, 'invalid_json')
+    }
+    assertSafeJsonValue(parsed, {}, 'request body')
+  } else {
+    assertSafeString(raw, 'request body', maxBytes)
+  }
+}
+
+export function assertSameOriginBrowserWrite(request: Request): void {
+  const method = request.method.toUpperCase()
+  if (method === 'GET' || method === 'HEAD' || method === 'OPTIONS') return
+
+  const secFetchSite = (request.headers.get('sec-fetch-site') || '').toLowerCase()
+  if (secFetchSite === 'cross-site') {
+    fail('Cross-site write request blocked', 403, 'cross_site_write')
+  }
+
+  const origin = request.headers.get('origin')
+  if (!origin) return
+
+  let supplied: URL
+  try {
+    supplied = new URL(origin)
+  } catch {
+    fail('Invalid request origin', 403, 'invalid_origin')
+  }
+
+  const requestUrl = new URL(request.url)
+  const forwardedHost = request.headers.get('x-forwarded-host')?.split(',')[0]?.trim()
+    || request.headers.get('host')
+    || requestUrl.host
+  const forwardedProto = request.headers.get('x-forwarded-proto')?.split(',')[0]?.trim()
+    || requestUrl.protocol.replace(':', '')
+  const expectedOrigin = `${forwardedProto}://${forwardedHost}`
+
+  if (supplied.origin !== expectedOrigin && supplied.origin !== requestUrl.origin) {
+    fail('Cross-origin write request blocked', 403, 'origin_mismatch')
   }
 }
 
