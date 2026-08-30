@@ -45,6 +45,26 @@ export function canUserApproveExpenseStep(userRole: string | undefined, chain?: 
   return pending.role === userRole
 }
 
+/**
+ * Expense review authority used consistently by queue, modal and store.
+ *
+ * - Director is the break-glass approver and may action any pending expense step.
+ * - Finance Officer may action only a Finance Officer step.
+ * - A legacy expense with no chain may still be reviewed by Director/Finance.
+ * - Other roles cannot post expense approvals because the server posting endpoint
+ *   is intentionally sealed to Finance/Director.
+ */
+export function canUserReviewExpense(
+  userRole: string | undefined,
+  chain?: ExpenseApprovalStep[],
+) {
+  if (!userRole) return false
+  if (!chain?.length) return userRole === 'director' || userRole === 'finance_officer'
+  if (!currentPendingExpenseStep(chain)) return false
+  if (userRole === 'director') return true
+  return userRole === 'finance_officer' && canUserApproveExpenseStep(userRole, chain)
+}
+
 export function advanceExpenseApproval(params: {
   chain: ExpenseApprovalStep[]
   approved: boolean
