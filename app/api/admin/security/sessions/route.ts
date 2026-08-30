@@ -11,8 +11,7 @@ export async function DELETE() {
 
   const { rows } = await sql`
     UPDATE users
-    SET session_version = COALESCE(session_version, 1) + 1,
-        updated_at = NOW()
+    SET session_version = COALESCE(session_version, 1) + 1
     WHERE id <> ${session.user.id}
     RETURNING id, role, acts_as_technician
   `
