@@ -1,3 +1,4 @@
+import crypto from 'node:crypto'
 import { NextRequest, NextResponse } from 'next/server'
 import { encode, getToken } from 'next-auth/jwt'
 import { getServerSession } from '@/lib/auth/server'
@@ -7,6 +8,7 @@ import {
   SESSION_REFRESH_THRESHOLD_SECONDS,
   SESSION_WARN_BEFORE_SECONDS,
 } from '@/lib/auth/session-policy'
+import { sql } from '@/lib/auth/db'
 
 const SECRET = process.env.NEXTAUTH_SECRET ?? process.env.AUTH_SECRET ?? ''
 const COOKIE_NAME = 'deed-session'
@@ -115,5 +117,46 @@ export async function POST(request: NextRequest) {
     path: '/',
     maxAge,
   })
+
+  try {
+    const oldJwt = request.cookies.get(COOKIE_NAME)?.value || ''
+    const oldHash = oldJwt ? crypto.createHash('sha256').update(oldJwt).digest('hex') : ''
+    const newHash = crypto.createHash('sha256').update(jwt).digest('hex')
+    const expiresAtDate = new Date(expiresAt)
+    const ipAddress =
+      request.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
+      || request.headers.get('x-real-ip')
+      || null
+    const userAgent = request.headers.get('user-agent')?.slice(0, 500) || null
+
+    let updatedRows: Record<string, unknown>[] = []
+    if (oldHash) {
+      const updated = await sql`
+        UPDATE user_sessions
+        SET token_hash = ${newHash},
+            ip_address = ${ipAddress},
+            user_agent = ${userAgent},
+            expires_at = ${expiresAtDate}
+        WHERE token_hash = ${oldHash}
+        RETURNING id
+      `
+      updatedRows = updated.rows
+    }
+
+    if (updatedRows.length === 0) {
+      await sql`
+        INSERT INTO user_sessions (user_id, token_hash, ip_address, user_agent, expires_at, created_at)
+        VALUES (${session.user.id}, ${newHash}, ${ipAddress}, ${userAgent}, ${expiresAtDate}, NOW())
+        ON CONFLICT (token_hash) DO UPDATE SET
+          ip_address = EXCLUDED.ip_address,
+          user_agent = EXCLUDED.user_agent,
+          expires_at = EXCLUDED.expires_at
+      `
+    }
+  } catch {
+    // Session indexing supports administrative visibility only. The refreshed
+    // JWT cookie remains authoritative if the optional index write fails.
+  }
+
   return response
 }
