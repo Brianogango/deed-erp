@@ -23,7 +23,11 @@ function shouldUseSecureCookie(request: NextRequest) {
   )
 }
 
-export async function issueSessionResponse(request: NextRequest, user: PublicUser) {
+export async function issueSessionResponse(
+  request: NextRequest,
+  user: PublicUser,
+  options: { mfaVerified?: boolean } = {},
+) {
   const secret = authSecret()
   if (!secret) {
     return NextResponse.json({ message: 'Server configuration error' }, { status: 500 })
@@ -41,7 +45,7 @@ export async function issueSessionResponse(request: NextRequest, user: PublicUse
       createdAt: user.createdAt,
       actsAsTechnician: Boolean(user.actsAsTechnician),
       sessionIssuedAt: new Date().toISOString(),
-      mfaVerified: true,
+      mfaVerified: options.mfaVerified === true,
     },
     secret,
     maxAge: SESSION_AGE,
