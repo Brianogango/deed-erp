@@ -5,6 +5,7 @@ import { isSerialOnlyCategory } from '@/lib/inventory-identifiers'
 import { resolveListSaleFromMargin } from '@/lib/pricing/apply-margin-sale-price'
 import { loadServerMarginPolicy } from '@/lib/pricing/sync-product-list-from-cost.server'
 import { deviceConfigFromProductSpecs, withCatalogDeviceConfig } from '@/lib/reconfiguration/unit-config'
+import { productUpdateSchema, validate } from '@/lib/validation'
 
 const WRITE_ROLES = ['director', 'admin_officer', 'inventory_officer', 'technical_lead', 'finance_officer']
 
@@ -87,7 +88,8 @@ function mapBody(body: any, existingSpecs: Record<string, unknown>) {
 async function handleUpdate(request: NextRequest, id: string) {
   return withApiErrorHandling(async () => {
     await requireRole(WRITE_ROLES)
-    const body = await request.json()
+    const rawBody = await request.json()
+    const body = await validate(productUpdateSchema, rawBody)
     const existing = await prisma.product.findUnique({
       where: { id },
       select: {
