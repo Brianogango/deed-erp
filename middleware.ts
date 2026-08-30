@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server'
 import { getToken } from 'next-auth/jwt'
 import { safeReturnTo } from '@/lib/auth/return-to'
 import { assertSafeRequestEnvelope, assertSameOriginBrowserWrite, InputSecurityError } from '@/lib/input-security'
+import { requiresPrivilegedMfa } from '@/lib/auth/mfa-policy'
 
 export { safeReturnTo }
 const SECRET = process.env.NEXTAUTH_SECRET ?? process.env.AUTH_SECRET ?? ''
@@ -203,6 +204,13 @@ export async function middleware(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
+    if (requiresPrivilegedMfa(token.role) && token.mfaVerified !== true) {
+      return NextResponse.json(
+        { error: 'MFA verification required', code: 'MFA_REQUIRED' },
+        { status: 401, headers: { 'Cache-Control': 'no-store' } },
+      )
+    }
+
     // Authenticated browser mutations must originate from this ERP origin.
     // Public partner/webhook/portal routes are handled before this block and
     // keep their own authentication contracts.
@@ -269,6 +277,12 @@ export async function middleware(request: NextRequest) {
   }
 
   const token = SECRET ? await getToken({ req: request, secret: SECRET, cookieName: COOKIE_NAME }) : null
+
+  if (token && requiresPrivilegedMfa(token.role) && token.mfaVerified !== true) {
+    const res = redirectTo('/login', request, `${pathname}${request.nextUrl.search}`)
+    res.cookies.set(COOKIE_NAME, '', { httpOnly: true, path: '/', maxAge: 0 })
+    return res
+  }
 
   if (token) {
     const pageUserId = typeof token.id === 'string' ? token.id : (typeof token.sub === 'string' ? token.sub : '')
