@@ -352,12 +352,15 @@ export default function Settings() {
   }
 
   const posDailySummary = useMemo(() => {
-    const map = new Map<string, { date: string; cash: number; mpesa: number; bank: number; total: number; count: number }>()
+    const map = new Map<string, { date: string; cash: number; mpesa: number; bank: number; credit: number; total: number; count: number }>()
     posOrders.forEach(o => {
-      const cur = map.get(o.date) || { date: o.date, cash: 0, mpesa: 0, bank: 0, total: 0, count: 0 }
-      if (o.payment === 'cash') cur.cash += o.total
-      if (o.payment === 'mpesa') cur.mpesa += o.total
-      if (o.payment === 'bank' || o.payment === 'card') cur.bank += o.total
+      const cur = map.get(o.date) || { date: o.date, cash: 0, mpesa: 0, bank: 0, credit: 0, total: 0, count: 0 }
+      const credit = Math.max(0, Number(o.customerCreditAmount) || 0)
+      const tender = Math.max(0, o.total - credit)
+      if (o.payment === 'cash') cur.cash += tender
+      if (o.payment === 'mpesa') cur.mpesa += tender
+      if (o.payment === 'bank' || o.payment === 'card') cur.bank += tender
+      cur.credit += credit
       cur.total += o.total; cur.count += 1
       map.set(o.date, cur)
     })
@@ -1179,8 +1182,8 @@ export default function Settings() {
                   <ExportButtons
                     title="POS Daily Shift Summary"
                     filename="pos_shift_summary"
-                    headers={['Date', 'Orders', 'Cash (KES)', 'M-Pesa (KES)', 'Bank (KES)', 'Total Revenue (KES)']}
-                    rows={posDailySummary.map(s => [fmtDate(s.date), s.count, s.cash, s.mpesa, s.bank, s.total])}
+                    headers={['Date', 'Orders', 'Cash (KES)', 'M-Pesa (KES)', 'Bank (KES)', 'Client Credit (KES)', 'Total Revenue (KES)']}
+                    rows={posDailySummary.map(s => [fmtDate(s.date), s.count, s.cash, s.mpesa, s.bank, s.credit, s.total])}
                   />
                 </div>
 
@@ -1192,6 +1195,7 @@ export default function Settings() {
                     { key: 'cash', label: 'Cash (KES)', priority: 2, width: '1fr', render: s => <span className="font-mono text-t2">{fmtKes(s.cash)}</span>, exportValue: s => s.cash },
                     { key: 'mpesa', label: 'M-Pesa (KES)', priority: 2, width: '1fr', render: s => <span className="font-mono text-t2">{fmtKes(s.mpesa)}</span>, exportValue: s => s.mpesa },
                     { key: 'bank', label: 'Bank (KES)', priority: 3, width: '1fr', render: s => <span className="font-mono text-t2">{fmtKes(s.bank)}</span>, exportValue: s => s.bank },
+                    { key: 'credit', label: 'Client credit', priority: 3, width: '1fr', render: s => <span className="font-mono text-t2">{fmtKes(s.credit)}</span>, exportValue: s => s.credit },
                     { key: 'total', label: 'Total revenue', priority: 1, width: '1.2fr', render: s => <span className="font-mono font-bold text-emerald-600">{fmtKes(s.total)}</span>, exportValue: s => s.total },
                   ] as ColumnDef<typeof posDailySummary[number]>[]}
                   rows={posDailySummary}
