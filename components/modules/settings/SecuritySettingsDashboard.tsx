@@ -331,6 +331,7 @@ export default function SecuritySettingsDashboard({
   const [overview, setOverview] = useState<SecurityOverview | null>(null)
   const [loading, setLoading] = useState(true)
   const [revoking, setRevoking] = useState(false)
+  const [savingMfaPolicy, setSavingMfaPolicy] = useState(false)
   const [showEnvironment, setShowEnvironment] = useState(false)
 
   const refresh = useCallback(async (announce = false) => {
@@ -378,6 +379,32 @@ export default function SecuritySettingsDashboard({
   const ipAllowlist = overview?.summary.ipAllowlist || []
   const auditRows = overview?.audits || []
   const securityEvent = overview?.summary.lastSecurityEventAt
+
+  const setMfaEnforcement = async (next: boolean) => {
+    if (currentUser?.role !== 'director' || savingMfaPolicy) return
+    if (!next && !window.confirm('Disable mandatory MFA for Director, Admin Officer and Finance Officer?')) return
+
+    setSavingMfaPolicy(true)
+    try {
+      const response = await fetch('/api/admin/security/env', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          updates: { MFA_ENFORCE_PRIVILEGED: String(next) },
+          reload: true,
+          confirm: 'SAVE DEED ERP ENV',
+        }),
+      })
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(data.error || 'Could not update MFA enforcement')
+      showToast(next ? 'Privileged MFA enforcement enabled' : 'Privileged MFA enforcement disabled', next ? 'success' : 'info')
+      await refresh(false)
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'Could not update MFA enforcement', 'error')
+    } finally {
+      setSavingMfaPolicy(false)
+    }
+  }
 
   const revokeAll = async () => {
     if (currentUser?.role !== 'director') {
@@ -608,8 +635,8 @@ export default function SecuritySettingsDashboard({
                   <ToggleDisplay
                     on={mfaEnforced}
                     label="Require MFA for privileged roles"
-                    disabled={currentUser?.role !== 'director'}
-                    onClick={currentUser?.role === 'director' ? () => setShowEnvironment(true) : undefined}
+                    disabled={currentUser?.role !== 'director' || savingMfaPolicy}
+                    onClick={currentUser?.role === 'director' ? () => void setMfaEnforcement(!mfaEnforced) : undefined}
                   />
                 }
               />
