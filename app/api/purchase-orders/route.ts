@@ -4,7 +4,7 @@ import { getRequiredSession, withApiErrorHandling } from '@/lib/auth/api'
 import { getNextDocNumber } from '@/lib/doc-ref-counter'
 import { parsePaginationParams, paginatedResponse } from '@/lib/api-pagination'
 import { resolvePOLineProducts } from '@/lib/purchase/po-prisma-sync'
-import { WRITE_ROLES, mapPOToClient, mapPOItemsForCreate, resolveVendorClientId, mirrorPurchaseOrder } from '@/lib/purchase/po-api-shared'
+import { WRITE_ROLES, mapPOToClient, mapPOItemsForCreate, computePOTotals, resolveVendorClientId, mirrorPurchaseOrder } from '@/lib/purchase/po-api-shared'
 
 // Purchase Orders were entirely blob-only (deed_purchaseOrders via generic
 // JSON-collection CRUD) despite PurchaseOrder/PurchaseOrderItem existing as
@@ -64,19 +64,29 @@ export async function POST(request: NextRequest) {
     // Auto-create catalog products missing from Prisma instead of dying on a
     // P2003 FK violation — a blob-only product must not orphan the whole PO.
     const items = await resolvePOLineProducts(mapPOItemsForCreate(Array.isArray(body.lines) ? body.lines : []))
-    const poNumber = body.ref || (await getNextDocNumber('purchase_order'))
+    const poNumber = await getNextDocNumber('purchase_order')
+    const totals = computePOTotals(items)
+    const notes = body.notes == null ? null : String(body.notes).trim().slice(0, 5_000)
+
+    const orderDate = body.date ? new Date(String(body.date)) : new Date()
+    const expectedDate = body.expectedDate ? new Date(String(body.expectedDate)) : null
+    if (Number.isNaN(orderDate.getTime()) || (expectedDate && Number.isNaN(expectedDate.getTime()))) {
+      return NextResponse.json({ error: 'Invalid purchase order date' }, { status: 422 })
+    }
 
     const created = await prisma.purchaseOrder.create({
       data: {
         poNumber,
         clientId,
-        status: body.status ?? 'draft',
-        orderDate: body.date ? new Date(body.date) : new Date(),
-        expectedDate: body.expectedDate ? new Date(body.expectedDate) : null,
-        subtotal: Math.max(0, Number(body.subtotal) || 0),
-        taxAmount: Math.max(0, Number(body.taxTotal ?? body.taxAmount) || 0),
-        totalAmount: Math.max(0, Number(body.total ?? body.totalAmount) || 0),
-        notes: body.notes ?? null,
+        // Creation always starts as draft. Confirmation/receipt status changes
+        // happen through explicit workflow transitions, never caller assignment.
+        status: 'draft',
+        orderDate,
+        expectedDate,
+        subtotal: totals.subtotal,
+        taxAmount: totals.taxAmount,
+        totalAmount: totals.totalAmount,
+        notes,
         createdById: session.user.id,
         items: { create: items },
       } as any,
