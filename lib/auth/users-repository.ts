@@ -1,7 +1,6 @@
 import 'server-only'
 
 import { sql } from './db'
-import { buildSeedUsers } from './seed'
 import type { AuthUserRecord, CreateUserInput, PublicUser, UpdateUserInput } from './types'
 import { invalidateUserSessions } from './session-validity'
 
@@ -151,22 +150,6 @@ const getUserCount = async () => {
   return Number(rows[0].count)
 }
 
-const seedUsersIfEmpty = async () => {
-  await ensureSchemaReady()
-  if ((await getUserCount()) > 0) return
-
-  const seededUsers = await buildSeedUsers()
-
-  for (const user of seededUsers) {
-    const historyJson = JSON.stringify([user.passwordHash])
-    await sql`
-      INSERT INTO users (id, username, name, role, modules_json, active, created_at, password_hash, password_history_json, must_change_password)
-      VALUES (${user.id}, ${user.username}, ${user.name}, ${user.role}, ${JSON.stringify(user.modules)}, ${user.active ? 1 : 0}, ${user.createdAt}, ${user.passwordHash}, ${historyJson}, 1)
-      ON CONFLICT (id) DO NOTHING
-    `
-  }
-}
-
 const migrateRoles = async () => {
   // Normalise legacy role names to the current operational role catalog.
   await sql`UPDATE users SET role = 'director'        WHERE role IN ('admin', 'super_admin')`
@@ -241,7 +224,6 @@ export const ensureUserStore = async () => {
   await migrateEmployeeLinkFields()
   await migrateActsAsTechnician()
   await migrateSessionVersion()
-  await seedUsersIfEmpty()
   await migrateRoles()
 }
 
