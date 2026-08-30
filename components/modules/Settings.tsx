@@ -17,6 +17,7 @@ import {
   faPlus, faCheck, faUpload, faBullseye, faChevronRight, faCog, faKey, faEnvelope, faBell,
 } from '@fortawesome/free-solid-svg-icons'
 import PartnerApiKeys from './settings/PartnerApiKeys'
+import ProductionEnvSettings from './settings/ProductionEnvSettings'
 import NotificationOperationsPanel from './settings/NotificationOperationsPanel'
 import {
   BlobCutoverPanel,
@@ -920,25 +921,17 @@ export default function Settings() {
                       <p key={hint} className="text-[11px] text-gray-500">• {hint}</p>
                     ))}
                     <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-[11px] text-slate-700 leading-relaxed">
-                      <p className="font-bold mb-1">Put this in Contabo <span className="font-mono">/var/www/deed-erp/.env</span> then restart PM2:</p>
-                      <pre className="font-mono text-[10px] whitespace-pre-wrap overflow-x-auto">{`EMAIL_PROVIDER=smtp
-EMAIL_FROM=info@deed.co.ke
-SMTP_HOST=mail.deed.co.ke
-SMTP_PORT=587
-SMTP_SECURE=false
-SMTP_USER=info@deed.co.ke
-SMTP_PASS=YOUR_MAILBOX_PASSWORD
-HR_EMAIL=hr@deed.co.ke
-HR_TEAM_EMAIL=hr@deed.co.ke
-# Optional — only when hr@ / accounts@ mailboxes exist in cPanel:
-# HR_SMTP_USER=hr@deed.co.ke
-# HR_SMTP_PASS=...
-# ACCOUNTS_SMTP_USER=accounts@deed.co.ke
-# ACCOUNTS_SMTP_PASS=...
-LEAVE_APPLY_CC_EMAILS=edwin@deed.co.ke,dennis@deed.co.ke
-SALES_EMAIL=sales@deed.co.ke
-ACCOUNTS_EMAIL=accounts@deed.co.ke`}</pre>
-                      <p className="mt-2">Covers RFQ mail, sales quotes, invoices, user credentials, portal notices, leave, and salary-advance emails. Leave/salary-advance apply goes <span className="font-mono">To: HR_TEAM_EMAIL</span> and <span className="font-mono">Cc: LEAVE_APPLY_CC_EMAILS</span> (Edwin + Dennis). Approve/reject/disburse goes to the applier&apos;s HR employee email only. Quotes send <span className="font-mono">From/Reply-To: SALES_EMAIL</span> and invoices <span className="font-mono">From/Reply-To: ACCOUNTS_EMAIL</span> — those mailboxes must exist in cPanel (password can match <span className="font-mono">SMTP_PASS</span>, or set dedicated <span className="font-mono">*_SMTP_USER/PASS</span>).</p>
+                      <p className="font-bold mb-1">Add or change mail secrets in Settings → Security.</p>
+                      <p>The Director can set SMTP host, mailbox passwords, and department From addresses there without editing the server file by hand. Quotes send <span className="font-mono">From/Reply-To: SALES_EMAIL</span> and invoices <span className="font-mono">From/Reply-To: ACCOUNTS_EMAIL</span>.</p>
+                      {normalizedRole === 'director' && (
+                        <button
+                          type="button"
+                          className="btn-secondary text-[11px] mt-2 min-h-[44px]"
+                          onClick={() => setSection('security')}
+                        >
+                          Open Security environment
+                        </button>
+                      )}
                     </div>
                   </div>
                 )}
@@ -1218,6 +1211,7 @@ ACCOUNTS_EMAIL=accounts@deed.co.ke`}</pre>
           {/* ════ SECURITY ════ */}
           {section === 'security' && (
             <>
+              {normalizedRole === 'director' && <ProductionEnvSettings showToast={showToast} />}
               <SectionCard title="Data Protection">
                 <SettingRow label="Disable Product Deletion" desc="Products can be archived but never permanently deleted — preserves history"><Toggle on={ss.secDisableProductDeletion} onChange={v => updateSystemSettings({ secDisableProductDeletion: v })} /></SettingRow>
                 <SettingRow label="Disable Manual Stock Manipulation" desc="Stock levels can only change through validated inventory operations"><Toggle on={ss.secDisableStockManipulation} onChange={v => updateSystemSettings({ secDisableStockManipulation: v })} /></SettingRow>

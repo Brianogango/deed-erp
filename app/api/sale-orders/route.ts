@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { getRequiredSession, withApiErrorHandling } from '@/lib/auth/api'
+import { normalizePermissionRole } from '@/lib/auth/authorization'
 import { optionalUuid, resolveClientId } from '@/lib/legacy-compat'
 import { isUUID } from '@/lib/utils'
 import { saveStoreKeys } from '@/lib/server-store'
@@ -134,7 +135,11 @@ function mapSaleOrderItems(lines: any[], knownProductIds?: Set<string>) {
 
 export async function GET(request: Request) {
   return withApiErrorHandling(async () => {
-    await getRequiredSession()
+    const session = await getRequiredSession()
+    const role = normalizePermissionRole(session.user.role)
+    if (!role || !['director', 'admin_officer', 'finance_officer', 'sales_rep', 'technical_lead'].includes(role)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
     const { searchParams } = new URL(request.url)
     const status = searchParams.get('status')
     const q = searchParams.get('q')
@@ -143,16 +148,30 @@ export async function GET(request: Request) {
       allowedSorts: ['createdAt', 'updatedAt', 'orderDate', 'totalAmount', 'orderNumber', 'status'],
     })
 
+    const ownership = role === 'sales_rep'
+      ? {
+          OR: [
+            { createdById: session.user.id },
+            { salespersonId: session.user.id },
+          ],
+        }
+      : {}
+
+    const searchFilter = q
+      ? {
+          OR: [
+            { orderNumber: { contains: q, mode: 'insensitive' as const } },
+            { client: { name: { contains: q, mode: 'insensitive' as const } } },
+          ],
+        }
+      : {}
+
     const where = {
-      ...(status ? { status } : {}),
-      ...(q
-        ? {
-            OR: [
-              { orderNumber: { contains: q, mode: 'insensitive' as const } },
-              { client: { name: { contains: q, mode: 'insensitive' as const } } },
-            ],
-          }
-        : {}),
+      AND: [
+        ownership,
+        ...(status ? [{ status }] : []),
+        ...(q ? [searchFilter] : []),
+      ],
     }
 
     const [total, orders] = await Promise.all([
@@ -178,6 +197,10 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   return withApiErrorHandling(async () => {
     const session = await getRequiredSession()
+    const role = normalizePermissionRole(session.user.role)
+    if (!role || !['director', 'admin_officer', 'finance_officer', 'sales_rep', 'technical_lead'].includes(role)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
     const body = await request.json()
 
     const status = normalizeSaleStatus(body.status)
@@ -254,7 +277,7 @@ export async function POST(request: Request) {
         taxAmount: totals.taxAmount,
         discountAmount: totals.discountAmount,
         totalAmount: totals.totalAmount,
-        amountPaid: Number(body.amountPaid ?? 0),
+        amountPaid: 0,
         notes: body.notes ?? null,
         customerRef: body.customerRef ? String(body.customerRef).slice(0, 120) : null,
         invoiceAddress: body.invoiceAddress ?? null,
@@ -263,7 +286,7 @@ export async function POST(request: Request) {
         currencyCode: body.currencyCode ?? 'KES',
         baseCurrencyCode: body.baseCurrencyCode ?? 'KES',
         exchangeRateToBase: Number(body.exchangeRateToBase ?? 1) || 1,
-        salespersonId: optionalUuid(body.salespersonId),
+        salespersonId: role === 'sales_rep' ? session.user.id : optionalUuid(body.salespersonId),
         salespersonName: body.salespersonName ? String(body.salespersonName).slice(0, 120) : null,
         salesTeam: body.salesTeam ? String(body.salesTeam).slice(0, 120) : null,
         paymentTermsDays: body.paymentTermsDays !== undefined || body.paymentTerms !== undefined

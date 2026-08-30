@@ -24,6 +24,19 @@ const mfaChallenge = requiredSecret('MFA_CHALLENGE_SECRET', 32)
 if (env.MFA_ENFORCE_PRIVILEGED !== 'true') failures.push('MFA_ENFORCE_PRIVILEGED must be true for security closure')
 if (env.SETUP_ADMIN_SECRET) failures.push('SETUP_ADMIN_SECRET must be removed after initial provisioning')
 
+const rotatedAtRaw = String(env.SECURITY_SECRETS_ROTATED_AT || '')
+if (!rotatedAtRaw) {
+  failures.push('SECURITY_SECRETS_ROTATED_AT is missing; privileged secrets must be rotated and dated')
+} else {
+  const rotatedAt = Date.parse(rotatedAtRaw)
+  if (!Number.isFinite(rotatedAt)) failures.push('SECURITY_SECRETS_ROTATED_AT is not a valid ISO date')
+  else {
+    const ageDays = (Date.now() - rotatedAt) / 86_400_000
+    if (ageDays < -1) failures.push('SECURITY_SECRETS_ROTATED_AT is in the future')
+    if (ageDays > 180) failures.push('Privileged application secrets are older than 180 days')
+  }
+}
+
 for (const key of ['NEXTAUTH_URL', 'NEXT_PUBLIC_APP_URL']) {
   const raw = String(env[key] || '')
   if (!raw) {

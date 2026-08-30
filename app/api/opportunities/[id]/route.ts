@@ -39,7 +39,7 @@ export async function GET(_: NextRequest, { params }: { params: { id: string } }
     })
     if (!opp) return NextResponse.json({ error: 'Not found' }, { status: 404 })
     if (!canAccessRecord(session.user.role, 'opportunity', {
-      ownerId: opp.assignedToId,
+      ownerId: opp.createdById,
       assignedToId: opp.assignedToId,
     }, session.user.id)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
@@ -53,10 +53,21 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
     const session = await getRequiredSession()
     if (!WRITE_ROLES.includes(session.user.role)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
+    const existing = await prisma.opportunity.findUnique({ where: { id: params.id } })
+    if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+    if (!canAccessRecord(session.user.role, 'opportunity', {
+      ownerId: existing.createdById,
+      assignedToId: existing.assignedToId,
+    }, session.user.id)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+
     const body = await request.json()
+    const data = mapOpportunityToDb(body)
+    if (session.user.role === 'sales_rep') delete data.assignedToId
     const opp = await prisma.opportunity.update({
       where: { id: params.id },
-      data: mapOpportunityToDb(body),
+      data,
       include: { client: true, assignedTo: true },
     })
     void broadcastOpportunities()
@@ -72,6 +83,14 @@ export async function DELETE(_: NextRequest, { params }: { params: { id: string 
   return withApiErrorHandling(async () => {
     const session = await getRequiredSession()
     if (!WRITE_ROLES.includes(session.user.role)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    const existing = await prisma.opportunity.findUnique({ where: { id: params.id } })
+    if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+    if (!canAccessRecord(session.user.role, 'opportunity', {
+      ownerId: existing.createdById,
+      assignedToId: existing.assignedToId,
+    }, session.user.id)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
     await prisma.opportunity.delete({ where: { id: params.id } })
     void broadcastOpportunities()
     return NextResponse.json({ ok: true })

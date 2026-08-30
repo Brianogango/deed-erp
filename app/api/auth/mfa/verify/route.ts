@@ -52,5 +52,5 @@ export async function POST(request: NextRequest) {
   })
 
   const user = toPublicAuthUser(account)
-  return issueSessionResponse(request, user, { mfaVerified: true })
+  return issueSessionResponse(request, user, { mfaVerified: true, sessionVersion: account.sessionVersion })
 }

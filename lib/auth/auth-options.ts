@@ -50,6 +50,7 @@ export const authOptions: NextAuthOptions = {
       session.user.active    = token.active    as boolean
       session.user.createdAt = token.createdAt as string
       session.user.actsAsTechnician = Boolean(token.actsAsTechnician)
+      session.user.sessionVersion = Math.max(1, Number(token.sessionVersion ?? 1) || 1)
       return session
     },
   },

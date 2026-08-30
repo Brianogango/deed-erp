@@ -257,6 +257,7 @@ export async function POST(request: NextRequest) {
       logisticsCost: 0,
       total: 0,
       qcItems: [] as RepairOrder['qcItems'],
+      createdByUserId: cleanText(user?.id, 80),
       createdBy: cleanText(user?.username ?? user?.id ?? 'system', 160),
       bookedByName: cleanText(user?.name ?? 'System', 200),
       createdDate: new Date().toISOString(),

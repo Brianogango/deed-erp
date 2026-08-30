@@ -172,6 +172,8 @@ describe('module landing behaviour', () => {
     expect(resolveSettingsSection('account')).toBe('general')
     expect(resolveSettingsSection('partner_api')).toBe('partner_api')
     expect(resolveSettingsSection('security')).toBe('security')
+    expect(resolveSettingsSection('secrets')).toBe('security')
+    expect(resolveSettingsSection('env')).toBe('security')
     expect(resolveSettingsSection(null)).toBe('general')
     expect(resolveSettingsSection('bogus')).toBe('general')
   })
