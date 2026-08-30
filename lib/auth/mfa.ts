@@ -71,6 +71,10 @@ export function parseMfaChallenge(token: string | undefined | null): ChallengePa
 }
 
 export function mfaRequiredForRole(role: string | null | undefined): boolean {
+  // Explicit rollout flag prevents an environment that has not yet received the
+  // encryption key from locking every privileged user out during deployment.
+  // Production security verification requires this flag to be true.
+  if (process.env.MFA_ENFORCE_PRIVILEGED !== 'true') return false
   return PRIVILEGED_ROLES.has(String(role || ''))
 }
 
