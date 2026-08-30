@@ -211,6 +211,25 @@ jobs:
             scripts/apply-sql-as-postgres.sh database/migrations/20260828_official_coa_alignment_safe.sql
             scripts/apply-sql-as-postgres.sh database/migrations/20260829_contact_payment_terms_default_zero_safe.sql
             scripts/apply-sql-as-postgres.sh database/migrations/20260829_mpesa_stk_requests_safe.sql
+            scripts/apply-sql-as-postgres.sh database/migrations/20260830_user_mfa_security_safe.sql
             node scripts/fix-coa-blob-alignment.mjs
             node scripts/zero-contact-payment-terms.mjs --apply
             node scripts/seed-products-final-b974.mjs
+
+      - name: Verify production commit, MFA config, and host posture
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          command_timeout: 10m
+          script: |
+            set -euo pipefail
+            cd /var/www/deed-erp
+            LIVE_SHA="$(git rev-parse HEAD)"
+            EXPECTED_SHA="${{ github.sha }}"
+            echo "Production commit: $LIVE_SHA"
+            echo "Expected commit:   $EXPECTED_SHA"
+            test "$LIVE_SHA" = "$EXPECTED_SHA"
+            node scripts/security/verify-production-config.mjs
+            EXPECTED_COMMIT_SHA="$EXPECTED_SHA" bash scripts/security/audit-production-host.sh
