@@ -12,6 +12,7 @@ import { filterStoreValueForRole } from '@/lib/auth/authorization'
 import { loadRepairsFromPrisma } from '@/lib/repair-mirror'
 import { DIRECT_REPAIR_WAIVER_TEXT } from '@/lib/repair-path'
 import { resolveDiagnosisFee, normalizeDeviceTier } from '@/lib/diagnosis-fee'
+import { publishNotificationEvent } from '@/lib/notifications/service'
 
 function publicPhotoUrl(ref: string, index: number) {
   return `/api/portal/repair/${encodeURIComponent(ref)}/photos/${index}`
@@ -322,6 +323,32 @@ export async function POST(request: NextRequest) {
       ? repairs.map((r, i) => (i === existingIdx ? mergedRepair : r))
       : [mergedRepair, ...repairs]
     await saveStoreKeys({ 'deed_repairs_v2': JSON.stringify(updatedRepairs) })
+
+    if (!existing && mergedRepair.customerPhone) {
+      await publishNotificationEvent({
+        eventType: 'repair.received',
+        entityType: 'repair',
+        entityId: mergedRepair.id,
+        actorUserId: user?.id || null,
+        externalRecipients: [{
+          name: mergedRepair.customerName,
+          phone: mergedRepair.customerPhone,
+          email: mergedRepair.customerEmail || null,
+          channels: ['sms'],
+        }],
+        channels: ['sms'],
+        severity: 'success',
+        title: `Repair received — ${mergedRepair.ref}`,
+        body: `Deed Technologies: We have received your ${mergedRepair.productName}. Repair reference: ${mergedRepair.ref}. Track progress using the secure link below.`,
+        actionUrl: `/portal/repair/${encodeURIComponent(mergedRepair.ref)}`,
+        metadata: {
+          repairRef: mergedRepair.ref,
+          customerName: mergedRepair.customerName,
+          productName: mergedRepair.productName,
+        },
+        idempotencyKey: `repair-received-sms:${mergedRepair.id}`,
+      }).catch(error => console.error('[repairs POST] could not queue repair received SMS', error))
+    }
 
     return NextResponse.json(mergedRepair, { status: 201 })
     })
