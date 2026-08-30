@@ -1227,7 +1227,7 @@ export default function Settings() {
                 secPortalRequirePhoneVerification: ss.secPortalRequirePhoneVerification,
               }}
               showToast={showToast}
-              onOpenUserAccess={() => setSection('access')}
+              onOpenPartnerApi={canManageSystemUsers ? () => setSection('partner_api') : undefined}
             />
           )}
 
