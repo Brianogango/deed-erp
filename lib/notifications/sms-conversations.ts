@@ -240,6 +240,62 @@ export async function markSmsThreadRead(threadId: string) {
   ])
 }
 
+export async function backfillRecentSmsConversations(limit = 250) {
+  const deliveries = await prisma.notificationDelivery.findMany({
+    where: { channel: 'sms' },
+    include: { event: true },
+    orderBy: { createdAt: 'desc' },
+    take: Math.max(1, Math.min(limit, 500)),
+  })
+  if (!deliveries.length) return { checked: 0, backfilled: 0 }
+
+  const existing = await prisma.communicationMessage.findMany({
+    where: { notificationDeliveryId: { in: deliveries.map(row => row.id) } },
+    select: { notificationDeliveryId: true },
+  })
+  const seen = new Set(existing.map(row => row.notificationDeliveryId).filter(Boolean))
+  let backfilled = 0
+
+  for (const delivery of deliveries) {
+    if (seen.has(delivery.id) || !delivery.destination) continue
+    const metadata = delivery.event.metadata && typeof delivery.event.metadata === 'object' && !Array.isArray(delivery.event.metadata)
+      ? delivery.event.metadata as Record<string, unknown>
+      : {}
+    const routing = delivery.event.routing && typeof delivery.event.routing === 'object' && !Array.isArray(delivery.event.routing)
+      ? delivery.event.routing as Record<string, unknown>
+      : {}
+    const external = Array.isArray(routing.externalRecipients)
+      ? routing.externalRecipients as Array<Record<string, unknown>>
+      : []
+    const participantName = external[0]?.name ? String(external[0].name) : null
+    const preferredThreadId = String(metadata.communicationThreadId || '').trim() || null
+
+    await recordOutboundSms({
+      notificationDeliveryId: delivery.id,
+      destination: delivery.destination,
+      body: String(metadata.smsText || delivery.event.body || '').slice(0, 480),
+      provider: delivery.provider,
+      providerMessageId: delivery.providerMessageId,
+      status: delivery.status,
+      sentAt: delivery.sentAt,
+      deliveredAt: delivery.deliveredAt,
+      eventType: delivery.event.eventType,
+      entityType: delivery.event.entityType,
+      entityId: delivery.event.entityId,
+      participantName,
+      createdByUserId: delivery.event.actorUserId,
+      preferredThreadId,
+      metadata: {
+        eventId: delivery.eventId,
+        historicalBackfill: true,
+      },
+    }).catch(() => null)
+    backfilled += 1
+  }
+
+  return { checked: deliveries.length, backfilled }
+}
+
 export async function latestSmsThreadForPhone(phone: string) {
   const normalized = normalizeSmsPhone(phone)
   if (!normalized) return null
