@@ -12,13 +12,42 @@ import {
   buildPaymentWithOutstandingLines,
   resolvePostingAccountLabel,
 } from '@/lib/accounting/posting-service'
+import { randomUUID } from 'node:crypto'
+
+const safeLegacyText = (value: unknown, max: number) => {
+  if (value == null) return ''
+  return String(value).trim().slice(0, max)
+}
 
 const blobConfig = {
   storeKey: 'deed_payments',
   allowedWriteRoles: ['director', 'finance_officer', 'admin_officer'],
   build: (body: Record<string, unknown>): Payment | string => {
-    if (!body.customerId) return 'customerId is required'
-    return { ...body } as unknown as Payment
+    const customerId = safeLegacyText(body.customerId, 64)
+    const amount = Number(body.amount)
+    if (!customerId) return 'customerId is required'
+    if (!Number.isFinite(amount) || amount <= 0 || amount > 9_999_999_999.99) {
+      return 'amount must be a positive valid monetary value'
+    }
+
+    const paidAtRaw = body.paidAt ?? body.date
+    const paidAt = paidAtRaw ? new Date(String(paidAtRaw)) : new Date()
+    if (Number.isNaN(paidAt.getTime())) return 'payment date is invalid'
+
+    // Legacy compatibility only: explicitly map permitted business inputs.
+    // Client IDs, status/audit/posting fields and arbitrary extra properties
+    // are never spread into the stored payment record.
+    return {
+      id: randomUUID(),
+      customerId,
+      customerName: safeLegacyText(body.customerName ?? body.partnerName, 200),
+      invoiceId: safeLegacyText(body.invoiceId, 64) || undefined,
+      amount: roundMoney(amount),
+      method: safeLegacyText(body.method ?? body.paymentMethod ?? 'cash', 40) || 'cash',
+      reference: safeLegacyText(body.reference, 120) || undefined,
+      date: paidAt.toISOString(),
+      notes: safeLegacyText(body.notes, 5_000) || undefined,
+    } as unknown as Payment
   },
 }
 
@@ -69,21 +98,28 @@ export async function POST(request: NextRequest) {
     }
 
     const paidAt = body.paidAt ? new Date(String(body.paidAt)) : (body.date ? new Date(String(body.date)) : new Date())
+    if (Number.isNaN(paidAt.getTime())) {
+      return NextResponse.json({ error: 'Invalid payment date' }, { status: 422 })
+    }
     const lock = await checkFiscalLock(paidAt)
     if (!lock.ok) {
       return NextResponse.json({ error: lock.error }, { status: lock.status })
     }
 
+    if (hasAllocationsKey && body.allocations.length > 500) {
+      return NextResponse.json({ error: 'Too many payment allocations' }, { status: 413 })
+    }
     const allocations = hasAllocationsKey
       ? body.allocations.map((a: { invoiceId?: string; amount?: number }) => ({
-          invoiceId: String(a.invoiceId || ''),
+          invoiceId: String(a.invoiceId || '').trim().slice(0, 64),
           amount: Number(a.amount || 0),
-        })).filter((a: { invoiceId: string; amount: number }) => a.invoiceId && a.amount > 0)
+        })).filter((a: { invoiceId: string; amount: number }) =>
+          a.invoiceId && Number.isFinite(a.amount) && a.amount > 0 && a.amount <= 9_999_999_999.99)
       : []
 
     const amount = Number(body.amount)
-    if (!amount || amount <= 0) {
-      return NextResponse.json({ error: 'Amount must be positive' }, { status: 400 })
+    if (!Number.isFinite(amount) || amount <= 0 || amount > 9_999_999_999.99) {
+      return NextResponse.json({ error: 'Amount must be a positive valid monetary value' }, { status: 400 })
     }
 
     const totalAllocated = roundMoney(
@@ -99,17 +135,19 @@ export async function POST(request: NextRequest) {
       // Empty allocations array is treated as a fully outstanding receipt/payment.
     }
 
-    const paymentMethod = String(body.paymentMethod || body.method || 'cash')
-    const reference = body.reference ? String(body.reference) : null
-    const notes = body.notes ? String(body.notes) : null
-    const mpesaPhone = body.mpesaPhone ? String(body.mpesaPhone) : null
+    const paymentMethod = safeLegacyText(body.paymentMethod || body.method || 'cash', 40) || 'cash'
+    const reference = safeLegacyText(body.reference, 120) || null
+    const notes = safeLegacyText(body.notes, 5_000) || null
+    const mpesaPhone = safeLegacyText(body.mpesaPhone, 40) || null
     const partnerName = body.partnerName || body.customerName
-      ? String(body.partnerName || body.customerName)
+      ? safeLegacyText(body.partnerName || body.customerName, 200)
       : null
     const direction = String(body.direction || 'inbound').toLowerCase() === 'outbound'
       ? 'outbound'
       : 'inbound'
-    const idempotencyKey = typeof body.idempotencyKey === 'string' ? body.idempotencyKey : undefined
+    const idempotencyKey = typeof body.idempotencyKey === 'string'
+      ? body.idempotencyKey.trim().slice(0, 120)
+      : undefined
 
     if (idempotencyKey) {
       const existing = await prisma.payment.findFirst({
