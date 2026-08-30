@@ -36,7 +36,7 @@ export const productSchema = z.object({
   deviceRamGb: z.number().int().nonnegative().optional().nullable(),
   deviceStorageGb: z.number().int().nonnegative().optional().nullable(),
   deviceStorageType: z.string().max(40).optional().nullable(),
-})
+}).strict()
 
 export const userUpdateSchema = z.object({
   username: z.string().min(3).max(50).optional(),
@@ -48,12 +48,12 @@ export const userUpdateSchema = z.object({
   actsAsTechnician: z.boolean().optional(),
   password: z.string().min(MIN_PASSWORD_LENGTH, `Password must be at least ${MIN_PASSWORD_LENGTH} characters`).optional(),
   mustChangePassword: z.boolean().optional(),
-})
+}).strict()
 
 export const loginSchema = z.object({
   username: z.string().min(1, "Username is required"),
   password: z.string().min(1, "Password is required"),
-})
+}).strict()
 
 export const validate = async <T>(schema: z.Schema<T>, data: unknown): Promise<T> => {
   try {
