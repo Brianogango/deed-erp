@@ -129,9 +129,11 @@ export async function mirrorPurchaseOrder(prismaOrder: any, body: Record<string,
   const prevRecord = idx >= 0 ? existing[idx] : {}
   const passthrough: Record<string, unknown> = {}
   for (const key of PASSTHROUGH_KEYS) {
-    if (body[key] !== undefined) passthrough[key] = body[key]
-    else if (prevRecord[key] !== undefined) passthrough[key] = prevRecord[key]
+    // Receipt, billing and approval linkage is workflow-owned. Preserve the
+    // existing server copy but never accept these fields from a client PO body.
+    if (prevRecord[key] !== undefined) passthrough[key] = prevRecord[key]
   }
+  void body
   const merged = { receiptIds: [], ...prevRecord, ...passthrough, ...mapPOToClient(prismaOrder) }
   const next = idx >= 0 ? existing.map((p: any, i: number) => (i === idx ? merged : p)) : [merged, ...existing]
   await saveStoreKeys({ deed_purchaseOrders: JSON.stringify(next) })
