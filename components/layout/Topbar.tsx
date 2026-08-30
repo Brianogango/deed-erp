@@ -1082,7 +1082,7 @@ export default function Topbar() {
   useEffect(() => {
     const wasOpen = wasSidebarOpenRef.current
     wasSidebarOpenRef.current = sidebarOpen
-    if (wasOpen && !sidebarOpen && window.matchMedia('(max-width: 767px)').matches) {
+    if (wasOpen && !sidebarOpen && window.matchMedia('(max-width: 1023px)').matches) {
       mobileMenuButtonRef.current?.focus()
     }
   }, [sidebarOpen])
@@ -1132,6 +1132,16 @@ export default function Topbar() {
 
     window.addEventListener(SYNC_STATUS_EVENT, onSyncStatus as EventListener)
     return () => window.removeEventListener(SYNC_STATUS_EVENT, onSyncStatus as EventListener)
+  }, [])
+
+  useEffect(() => {
+    const openAccount = () => {
+      setPanelOpen(true)
+      setNotifOpen(false)
+      setSearchOpen(false)
+    }
+    window.addEventListener('deed:account-open', openAccount)
+    return () => window.removeEventListener('deed:account-open', openAccount)
   }, [])
 
   // Ctrl+K global shortcut
@@ -1390,7 +1400,7 @@ export default function Topbar() {
         <button
           type="button"
           ref={mobileMenuButtonRef}
-          className="md:hidden flex items-center justify-center w-9 h-9 rounded-lg flex-shrink-0
+          className="lg:hidden flex items-center justify-center w-9 h-9 rounded-lg flex-shrink-0
             bg-[var(--bg-surface)] border border-[var(--border)]
             hover:bg-[var(--bg-muted)] transition-colors cursor-pointer"
           onClick={toggleSidebar}

@@ -166,7 +166,7 @@ function SessionExpiryWarningModal({
 function SidebarBackdrop({ onClose }: { onClose: () => void }) {
   return (
     <div
-      className="fixed inset-0 z-40 bg-black/50 md:hidden transition-opacity duration-200"
+      className="fixed inset-0 z-40 bg-black/45 backdrop-blur-[1px] lg:hidden transition-opacity duration-200"
       onClick={onClose}
     />
   )
@@ -406,10 +406,18 @@ function AppContent({ children }: { children: React.ReactNode }) {
 
   }, [])
 
-  // Lock body scroll when mobile sidebar drawer is open
+  // Lock page scroll only while the tablet/mobile sidebar is acting as an overlay.
   useEffect(() => {
-    document.body.style.overflow = sidebarOpen ? 'hidden' : ''
-    return () => { document.body.style.overflow = '' }
+    const media = window.matchMedia('(max-width: 1023px)')
+    const apply = () => {
+      document.body.style.overflow = sidebarOpen && media.matches ? 'hidden' : ''
+    }
+    apply()
+    media.addEventListener('change', apply)
+    return () => {
+      media.removeEventListener('change', apply)
+      document.body.style.overflow = ''
+    }
   }, [sidebarOpen])
 
   // Instant scroll-to-top on route change (smooth scroll feels like lag on nav).

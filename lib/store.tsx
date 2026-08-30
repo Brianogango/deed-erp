@@ -5463,7 +5463,7 @@ export function StoreProvider({
   })
   // Always start open (matches SSR); correct to actual viewport width after hydration
   const [sidebarOpen, setSidebarOpen] = useState(true)
-  useEffect(() => { setSidebarOpen(window.innerWidth >= 768) }, [])
+  useEffect(() => { setSidebarOpen(window.innerWidth >= 1024) }, [])
   const [toast, setToast] = useState<AppState['toast']>(null)
 
   // Legacy & CRM
