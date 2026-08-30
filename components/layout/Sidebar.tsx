@@ -245,15 +245,28 @@ export default function Sidebar() {
       `}
     >
       {/* ── Brand Header ── */}
-      <div className={`sidebar-brand-header sidebar-section-border flex h-[76px] flex-shrink-0 items-center border-b ${sidebarOpen ? 'px-5' : 'justify-center px-0'}`}>
+      <div className={`sidebar-brand-header sidebar-section-border flex h-[76px] flex-shrink-0 items-center border-b ${sidebarOpen ? 'gap-1.5 px-5 lg:px-3' : 'justify-center px-0'}`}>
         {!sidebarOpen ? (
           <img src="/deed-icon-transparent.png" alt="Deed Technologies" className="sidebar-brand-mark h-9 w-9 object-contain" />
         ) : (
-          <div className="flex min-w-0 flex-1 items-center">
+          <div className="flex min-w-0 flex-1 items-center overflow-hidden">
             <img src={DEED_SIDEBAR_WHITE_LOGO} alt="Deed Technologies" className="sidebar-logo-inverted sidebar-logo-white-user" />
             <img src="/deed-logo.png" alt="Deed Technologies" className="sidebar-logo-standard hidden h-9 w-auto max-w-[155px] object-contain" />
           </div>
         )}
+
+        {sidebarOpen && (
+          <button
+            type="button"
+            onClick={toggleSidebar}
+            className="sidebar-header-collapse-btn hidden lg:inline-flex"
+            aria-label="Collapse sidebar"
+            title="Collapse sidebar"
+          >
+            <Fa icon={faChevronLeft} />
+          </button>
+        )}
+
         {sidebarOpen && (
           <button
             type="button"
@@ -348,14 +361,16 @@ export default function Sidebar() {
           )}
         </button>
 
-        <button
-          onClick={toggleSidebar}
-          className="sidebar-collapse-btn mt-2 hidden lg:flex h-9 w-full items-center justify-center rounded-xl cursor-pointer"
-          aria-label={sidebarOpen ? 'Collapse sidebar' : 'Expand sidebar'}
-        >
-          <Fa icon={sidebarOpen ? faChevronLeft : faChevronRight} className="text-xs" />
-          {sidebarOpen && <span className="ml-2.5 text-[11px] font-bold">Collapse</span>}
-        </button>
+        {!sidebarOpen && (
+          <button
+            onClick={toggleSidebar}
+            className="sidebar-collapse-btn mt-2 hidden lg:flex h-9 w-full items-center justify-center rounded-xl cursor-pointer"
+            aria-label="Expand sidebar"
+            title="Expand sidebar"
+          >
+            <Fa icon={faChevronRight} className="text-xs" />
+          </button>
+        )}
       </div>
     </aside>
   )
