@@ -45,13 +45,14 @@ export async function POST(request: NextRequest) {
     )
   )
   if (inbound) {
+    const { secret: _secret, ...safePayload } = payload
     await recordInboundSms({
       provider: 'telerivet',
       providerMessageId: String(payload.id),
       from: String(payload.from_number),
       to: payload.to_number || null,
       body: String(payload.content),
-      metadata: payload,
+      metadata: safePayload,
     })
   }
 
