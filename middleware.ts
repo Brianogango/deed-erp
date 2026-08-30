@@ -2,6 +2,7 @@ import type { NextRequest } from 'next/server'
 import { NextResponse } from 'next/server'
 import { getToken } from 'next-auth/jwt'
 import { safeReturnTo } from '@/lib/auth/return-to'
+import { assertSafeRequestEnvelope, InputSecurityError } from '@/lib/input-security'
 
 export { safeReturnTo }
 const SECRET = process.env.NEXTAUTH_SECRET ?? process.env.AUTH_SECRET ?? ''
@@ -88,6 +89,21 @@ function withRateLimitHeaders(response: NextResponse, remaining: number, resetAt
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
+
+  // SEC-INPUT: every request surface is untrusted. Validate URL/query input and
+  // inspect write bodies before public-route shortcuts, authentication, or any
+  // business handler gets a chance to consume the payload.
+  try {
+    await assertSafeRequestEnvelope(request)
+  } catch (error) {
+    if (error instanceof InputSecurityError) {
+      return NextResponse.json(
+        { error: error.message, code: error.code },
+        { status: error.status, headers: { 'Cache-Control': 'no-store' } },
+      )
+    }
+    throw error
+  }
 
   // Public static assets and public portal / track paths
   if (PUBLIC_ASSET_PATHS.has(pathname) || PUBLIC_PATH_PREFIXES.some(p => pathname.startsWith(p))) {
