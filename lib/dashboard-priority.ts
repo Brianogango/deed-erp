@@ -220,6 +220,9 @@ const SETTINGS_ALIASES: Record<string, SettingsSection> = {
   hr: 'hr_config',
   smtp: 'email',
   mail: 'email',
+  env: 'security',
+  secrets: 'security',
+  environment: 'security',
 }
 
 export function resolveSettingsSection(param: string | null | undefined): SettingsSection {
