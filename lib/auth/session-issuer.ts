@@ -26,7 +26,7 @@ function shouldUseSecureCookie(request: NextRequest) {
 export async function issueSessionResponse(
   request: NextRequest,
   user: PublicUser,
-  options: { mfaVerified?: boolean } = {},
+  options: { mfaVerified?: boolean; sessionVersion?: number } = {},
 ) {
   const secret = authSecret()
   if (!secret) {
@@ -46,6 +46,7 @@ export async function issueSessionResponse(
       actsAsTechnician: Boolean(user.actsAsTechnician),
       sessionIssuedAt: new Date().toISOString(),
       mfaVerified: options.mfaVerified === true,
+      sessionVersion: Math.max(1, Number(options.sessionVersion ?? 1) || 1),
     },
     secret,
     maxAge: SESSION_AGE,
