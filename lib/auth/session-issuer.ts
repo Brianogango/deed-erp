@@ -1,9 +1,11 @@
 import 'server-only'
 
+import crypto from 'node:crypto'
 import { encode } from 'next-auth/jwt'
 import { NextRequest, NextResponse } from 'next/server'
 import { getFirstAllowedModule } from '@/lib/auth/access'
 import type { PublicUser } from '@/lib/auth/types'
+import { sql } from '@/lib/auth/db'
 
 const SESSION_AGE = 12 * 60 * 60
 const COOKIE_NAME = 'deed-session'
@@ -33,6 +35,7 @@ export async function issueSessionResponse(
     return NextResponse.json({ message: 'Server configuration error' }, { status: 500 })
   }
 
+  const issuedAt = new Date()
   const jwt = await encode({
     token: {
       sub: user.id,
@@ -44,13 +47,36 @@ export async function issueSessionResponse(
       active: user.active,
       createdAt: user.createdAt,
       actsAsTechnician: Boolean(user.actsAsTechnician),
-      sessionIssuedAt: new Date().toISOString(),
+      sessionIssuedAt: issuedAt.toISOString(),
       mfaVerified: options.mfaVerified === true,
       sessionVersion: Math.max(1, Number(options.sessionVersion ?? 1) || 1),
     },
     secret,
     maxAge: SESSION_AGE,
   })
+
+  // Keep a revocable server-side session index without storing the JWT itself.
+  // JWT authorization remains authoritative; this table powers the Security UI
+  // and lets administrators identify active devices safely.
+  try {
+    const tokenHash = crypto.createHash('sha256').update(jwt).digest('hex')
+    const ipAddress =
+      request.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
+      || request.headers.get('x-real-ip')
+      || null
+    const userAgent = request.headers.get('user-agent')?.slice(0, 500) || null
+    const expiresAt = new Date(issuedAt.getTime() + SESSION_AGE * 1000)
+    await sql`
+      INSERT INTO user_sessions (user_id, token_hash, ip_address, user_agent, expires_at, created_at)
+      VALUES (${user.id}, ${tokenHash}, ${ipAddress}, ${userAgent}, ${expiresAt}, ${issuedAt})
+      ON CONFLICT (token_hash) DO UPDATE SET
+        ip_address = EXCLUDED.ip_address,
+        user_agent = EXCLUDED.user_agent,
+        expires_at = EXCLUDED.expires_at
+    `
+  } catch (error) {
+    console.warn('[auth/session] session index write skipped:', error instanceof Error ? error.message : 'unknown_error')
+  }
 
   const response = NextResponse.json({
     user,

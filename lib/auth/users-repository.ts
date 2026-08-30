@@ -3,6 +3,7 @@ import 'server-only'
 import { sql } from './db'
 import type { AuthUserRecord, CreateUserInput, PublicUser, UpdateUserInput } from './types'
 import { invalidateUserSessions } from './session-validity'
+import { PASSWORD_HISTORY_COUNT } from './password-policy'
 
 // Row type matches the live PostgreSQL schema which has BOTH Prisma-managed
 // columns (is_active, must_reset_pw) AND legacy app columns (active, must_change_password).
@@ -341,7 +342,7 @@ export const updateAuthUser = async (id: string, input: UpdateUserInput, passwor
   let historyJson = existingUser.passwordHistory ? JSON.stringify(existingUser.passwordHistory) : '[]'
   if (passwordWillChange) {
     const history = existingUser.passwordHistory || []
-    historyJson = JSON.stringify([passwordHash, ...history].slice(0, 5)) // Keep the last 5 hashes
+    historyJson = JSON.stringify([passwordHash, ...history].slice(0, PASSWORD_HISTORY_COUNT)) // Keep the configured password history
   }
 
   const nextUser: AuthUserRecord = {

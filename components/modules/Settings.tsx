@@ -17,7 +17,7 @@ import {
   faPlus, faCheck, faUpload, faBullseye, faChevronRight, faCog, faKey, faEnvelope, faBell,
 } from '@fortawesome/free-solid-svg-icons'
 import PartnerApiKeys from './settings/PartnerApiKeys'
-import ProductionEnvSettings from './settings/ProductionEnvSettings'
+import SecuritySettingsDashboard from './settings/SecuritySettingsDashboard'
 import NotificationOperationsPanel from './settings/NotificationOperationsPanel'
 import {
   BlobCutoverPanel,
@@ -540,17 +540,19 @@ export default function Settings() {
         {/* ── Main content ── */}
         <main className="settings-main flex-1 min-w-0">
 
-          {/* Section heading */}
-          <div className="settings-section-heading flex items-center gap-2 mb-4">
-            {activeNav && (
-              <div className="flex items-center gap-2">
-                <div className="w-7 h-7 rounded-lg bg-[var(--info-bg)] flex items-center justify-center">
-                  <Fa icon={activeNav.icon} style={{ fontSize: 12, color: 'var(--navy)' }} />
+          {/* Section heading — Security renders its approved dashboard heading internally. */}
+          {section !== 'security' && (
+            <div className="settings-section-heading flex items-center gap-2 mb-4">
+              {activeNav && (
+                <div className="flex items-center gap-2">
+                  <div className="w-7 h-7 rounded-lg bg-[var(--info-bg)] flex items-center justify-center">
+                    <Fa icon={activeNav.icon} style={{ fontSize: 12, color: 'var(--navy)' }} />
+                  </div>
+                  <h3 className="text-[13px] font-bold text-gray-800">{activeNav.label}</h3>
                 </div>
-                <h3 className="text-[13px] font-bold text-gray-800">{activeNav.label}</h3>
-              </div>
-            )}
-          </div>
+              )}
+            </div>
+          )}
 
           {/* ════ GENERAL ════ */}
           {section === 'general' && (
@@ -1210,49 +1212,23 @@ export default function Settings() {
 
           {/* ════ SECURITY ════ */}
           {section === 'security' && (
-            <>
-              {normalizedRole === 'director' && <ProductionEnvSettings showToast={showToast} />}
-              <SectionCard title="Data Protection">
-                <SettingRow label="Disable Product Deletion" desc="Products can be archived but never permanently deleted — preserves history"><Toggle on={ss.secDisableProductDeletion} onChange={v => updateSystemSettings({ secDisableProductDeletion: v })} /></SettingRow>
-                <SettingRow label="Disable Manual Stock Manipulation" desc="Stock levels can only change through validated inventory operations"><Toggle on={ss.secDisableStockManipulation} onChange={v => updateSystemSettings({ secDisableStockManipulation: v })} /></SettingRow>
-                <SettingRow label="Lock Invoices After Validation" desc="Validated invoices cannot be edited — corrections require a credit note"><Toggle on={ss.secDisableInvoiceEditAfterValidation} onChange={v => updateSystemSettings({ secDisableInvoiceEditAfterValidation: v })} /></SettingRow>
-                <SettingRow label="Require Phone Verification on Portal" desc="Customers must enter the phone number on file to approve quotes or confirm payment via the portal (on by default — turn off only if needed)"><Toggle on={ss.secPortalRequirePhoneVerification} onChange={v => updateSystemSettings({ secPortalRequirePhoneVerification: v })} /></SettingRow>
-              </SectionCard>
-              <SectionCard title="System Rules">
-                <div className="py-1">
-                  {[
-                    { rule: '1', text: 'Products are created in Inventory and referenced from Sales, Purchase, POS, and Repairs — never duplicated.' },
-                    { rule: '2', text: 'No duplicate data entry across modules. One record, many references.' },
-                    { rule: '3', text: 'Every sale must trace back to a stock movement, an invoice, and a payment.' },
-                    { rule: '4', text: 'Every repair must trace the device, assigned technician, parts consumed, and final outcome.' },
-                  ].map(r => (
-                    <div key={r.rule} className="flex gap-2 sm:gap-3 py-3.5 border-b border-gray-50 last:border-0 items-start">
-                      <span className="w-5 h-5 rounded-full bg-[var(--info-bg)] text-navy-500 text-[10px] font-bold flex items-center justify-center flex-shrink-0 mt-0.5">{r.rule}</span>
-                      <span className="text-[12px] text-gray-500 leading-relaxed">{r.text}</span>
-                    </div>
-                  ))}
-                </div>
-              </SectionCard>
-              <SectionCard title="Role Permissions">
-                <div className="py-1">
-                  {[
-                    { role: 'Director',          perms: 'Full system access — all modules, approvals, user rights, audit trail, and final overrides' },
-                    { role: 'Admin Officer',     perms: 'Process & master-data control — contacts, POs, workflows, user onboarding. No payment posting' },
-                    { role: 'Finance Officer',   perms: 'Money control — invoicing, payments, bank, tax, reconciliation. No physical stock actions' },
-                    { role: 'Inventory Officer', perms: 'Stock in/out, goods receipt, transfers, counts. No accounting or payment access' },
-                    { role: 'Kilimall Officer',  perms: 'Marketplace order processing, fulfilment, returns, settlement uploads' },
-                    { role: 'Sales Rep',         perms: 'CRM, quotes, sales orders, contacts — no purchasing, stock edits, or finance' },
-                    { role: 'Technical Lead',    perms: 'All repair jobs, technician assignment, QA sign-off, refurbishment — no accounting' },
-                    { role: 'Technician',        perms: 'Assigned repair jobs only — diagnosis, parts request, status updates' },
-                  ].map(r => (
-                    <div key={r.role} className="flex gap-3 py-3.5 border-b border-gray-50 last:border-0 items-start">
-                      <span className="w-20 sm:w-24 text-[11px] font-bold text-gray-700 flex-shrink-0">{r.role}</span>
-                      <span className="text-[11.5px] text-gray-500 leading-relaxed">{r.perms}</span>
-                    </div>
-                  ))}
-                </div>
-              </SectionCard>
-            </>
+            <SecuritySettingsDashboard
+              currentUser={currentUser ? {
+                id: currentUser.id,
+                name: currentUser.name,
+                username: currentUser.username,
+                role: currentUser.role,
+              } : null}
+              systemSettings={{
+                auditLogs: ss.auditLogs,
+                secDisableProductDeletion: ss.secDisableProductDeletion,
+                secDisableStockManipulation: ss.secDisableStockManipulation,
+                secDisableInvoiceEditAfterValidation: ss.secDisableInvoiceEditAfterValidation,
+                secPortalRequirePhoneVerification: ss.secPortalRequirePhoneVerification,
+              }}
+              showToast={showToast}
+              onOpenUserAccess={() => setSection('access')}
+            />
           )}
 
           {/* ════ PARTNER API ════ */}
