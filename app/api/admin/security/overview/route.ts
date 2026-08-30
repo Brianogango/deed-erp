@@ -1,4 +1,5 @@
-import { NextResponse } from 'next/server'
+import crypto from 'node:crypto'
+import { NextRequest, NextResponse } from 'next/server'
 
 import { getServerSession } from '@/lib/auth/server'
 import { listAuthUsers } from '@/lib/auth/users-repository'
@@ -42,7 +43,7 @@ function splitCsv(value: string | undefined): string[] {
     .slice(0, 50)
 }
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   const session = await getServerSession()
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
@@ -57,6 +58,7 @@ export async function GET() {
     SELECT
       s.id,
       s.user_id,
+      s.token_hash,
       s.ip_address,
       s.user_agent,
       s.expires_at,
@@ -115,9 +117,13 @@ export async function GET() {
   const enrolledMfaUsers = Number(mfaRows[0]?.enrolled_count || 0)
   const activeApiKeys = Number(apiRows[0]?.active_count || 0)
 
+  const currentJwt = request.cookies.get('deed-session')?.value || ''
+  const currentSessionHash = currentJwt ? crypto.createHash('sha256').update(currentJwt).digest('hex') : ''
+
   const sessions = sessionRows.map(row => ({
     id: asString(row.id),
     userId: asString(row.user_id),
+    isCurrent: Boolean(currentSessionHash && asString(row.token_hash) === currentSessionHash),
     name: asString(row.name) || asString(row.username) || 'ERP user',
     username: asString(row.username),
     ipAddress: asString(row.ip_address) || '—',
