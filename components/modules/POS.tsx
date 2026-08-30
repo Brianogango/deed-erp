@@ -1053,6 +1053,9 @@ export default function PointOfSale() {
                   </Field>
                 </div>
               )}
+            </div>
+
+            <div className="pos-checkout-footer">
               <button
                 type="button"
                 className="pos-charge-action"
@@ -1068,14 +1071,18 @@ export default function PointOfSale() {
                   ? (stkStatus || 'Charging…')
                   : cart.length > 0
                     ? (paymentDue <= 0
-                      ? `Complete sale · ${fmtKes(clientCreditToApply)} credit`
+                      ? (clientCreditToApply > 0
+                        ? `Complete sale · ${fmtKes(clientCreditToApply)} credit`
+                        : 'Complete sale · No payment due')
                       : payMethod === 'mpesa' && darajaReady
                         ? `Prompt ${fmtKes(paymentDue)}`
                         : `Charge ${fmtKes(paymentDue)}`)
                     : 'Add items to cart'}
               </button>
-              <button type="button" className="pos-back-products" onClick={() => setCartOpen(false)}>Back to products</button>
-              <p className="pos-opening-cash">Opening cash <strong>{fmtKes(posSessionOpeningCash)}</strong></p>
+              <div className="pos-checkout-footer-meta">
+                <button type="button" className="pos-back-products" onClick={() => setCartOpen(false)}>Back to products</button>
+                <p className="pos-opening-cash">Opening cash <strong>{fmtKes(posSessionOpeningCash)}</strong></p>
+              </div>
             </div>
           </aside>
 
