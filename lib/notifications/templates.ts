@@ -84,6 +84,16 @@ export async function renderNotificationTemplate(
   }
 
   if (!template) {
+    if (channel === 'sms' && event.actionUrl) {
+      const base = String(process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL || '').replace(/\/$/, '')
+      const url = event.actionUrl.startsWith('http')
+        ? event.actionUrl
+        : base
+          ? `${base}${event.actionUrl.startsWith('/') ? '' : '/'}${event.actionUrl}`
+          : event.actionUrl
+      const text = event.body.includes(url) ? event.body : `${event.body}\n${url}`
+      return { subject: event.title, text }
+    }
     return { subject: event.title, text: event.body }
   }
 
