@@ -1935,6 +1935,8 @@ export interface RepairOrder {
   deliveryJobId?: string
   
   // Metadata
+  /** Server-authored user id of the intake creator; used for row-level access. */
+  createdByUserId?: string
   createdBy: string
   bookedByName: string        // Display name of the staff who created the intake
   createdDate: string
