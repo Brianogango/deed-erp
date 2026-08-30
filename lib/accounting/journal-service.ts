@@ -1,7 +1,7 @@
 import 'server-only'
 import type { Prisma } from '@prisma/client'
 import prisma from '@/lib/prisma'
-import { extractAccountCode, uuidFromKey } from '@/lib/accounting/ids'
+import { extractAccountCode, uuidFromKey, nextJournalSourceVersion } from '@/lib/accounting/ids'
 import { fiscalLockConflictMessage, isDocumentDateFiscalLocked } from '@/lib/finance-controls'
 
 export type JournalLineInput = {
@@ -19,6 +19,7 @@ export type CreateJournalEntryInput = {
   description: string
   sourceType: string
   sourceId?: string | null
+  sourceVersion?: number
   invoiceId?: string | null
   paymentId?: string | null
   blobId?: string | null
@@ -131,6 +132,16 @@ async function createJournalEntryWith(db: AccountingDb, params: CreateJournalEnt
     : new Date()
   await assertFiscalPeriodOpenWith(db, entryDate)
 
+  let sourceVersion = params.sourceVersion
+  if (sourceVersion == null && params.sourceType && params.sourceId) {
+    const latest = await db.journalEntry.findFirst({
+      where: { sourceType: params.sourceType, sourceId: params.sourceId },
+      orderBy: { sourceVersion: 'desc' },
+      select: { sourceVersion: true },
+    })
+    sourceVersion = nextJournalSourceVersion(latest?.sourceVersion)
+  }
+
   const lineCreates = []
   for (let i = 0; i < params.lines.length; i++) {
     const line = params.lines[i]
@@ -156,6 +167,7 @@ async function createJournalEntryWith(db: AccountingDb, params: CreateJournalEnt
         description: params.description,
         sourceType: params.sourceType,
         sourceId: params.sourceId ?? null,
+        sourceVersion: sourceVersion ?? 1,
         invoiceId: params.invoiceId ?? null,
         paymentId: params.paymentId ?? null,
         blobId: params.blobId ?? null,

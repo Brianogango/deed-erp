@@ -105,6 +105,7 @@ import { normalizeQuotesForClient } from '@/lib/quote-normalization'
 import { normalizeOpportunitiesForClient } from '@/lib/opportunity-normalization'
 import { normalizeCompaniesForClient } from '@/lib/company-normalization'
 import { saleOrderPersistBody } from '@/lib/sale-order-persist'
+import { omitLockVersion, readLockVersionFromResponse } from '@/lib/optimistic-lock'
 import { resolveAddSaleOrderLineTaxRate } from '@/lib/sale-order-line-tax'
 import {
   markSaleOrderDraftEdit,
@@ -16593,6 +16594,7 @@ const storeCtx: AppState = {
         qty: line.qty,
         unitPrice: line.unitPrice,
         taxRate: line.taxRate,
+        taxCategory: line.taxRate > 0 ? 'standard_16' : 'out_of_scope',
         subtotal: line.subtotal,
         productId: line.productId,
       }))
@@ -16682,24 +16684,49 @@ const storeCtx: AppState = {
       let rebuilt = false
 
       if (invoice && !invoiceAlreadyMatches) {
+        const commitInvoice = (next: Invoice) => {
+          invRef.current = invRef.current.map(inv => inv.id === next.id ? next : inv)
+          setInvoices(p => p.map(inv => inv.id === next.id ? next : inv))
+        }
+        const putInvoice = async (id: string, body: Record<string, unknown>) => {
+          const send = async (payload: Record<string, unknown>) => {
+            const res = await fetch(`/api/invoices/${id}`, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(payload),
+            })
+            const data = await res.json().catch(() => null)
+            return { res, data }
+          }
+          let { res, data } = await send(omitLockVersion(body))
+          const conflictLock = readLockVersionFromResponse(data)
+          if (
+            res.status === 409
+            && conflictLock !== undefined
+            && String((data as { error?: string } | null)?.error || '').includes('modified by another user')
+          ) {
+            ;({ res, data } = await send({ ...omitLockVersion(body), lockVersion: conflictLock }))
+          }
+          return { res, data }
+        }
         if (invoice.status === 'posted') {
           const actor = currentUser()
           if (!canCancelOrResetInvoice(actor?.role)) {
             showToast('Only Finance, Admin Officer, or Director can rebuild a posted invoice from the quote', 'error')
             return invoice
           }
-          const resetRes = await fetch(`/api/invoices/${invoice.id}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ status: 'draft' }),
-          })
+          const { res: resetRes, data: resetBody } = await putInvoice(invoice.id, { status: 'draft' })
           if (!resetRes.ok) {
-            const data = await resetRes.json().catch(() => null) as { error?: string } | null
-            showToast(data?.error || `Could not reset ${invoice.ref} to draft`, 'error')
+            showToast((resetBody as { error?: string } | null)?.error || `Could not reset ${invoice.ref} to draft`, 'error')
             return invoice
           }
-          invoice = { ...invoice, status: 'draft' }
-          setInvoices(p => p.map(inv => inv.id === invoice!.id ? invoice! : inv))
+          const resetLock = readLockVersionFromResponse(resetBody)
+          invoice = {
+            ...invoice,
+            status: 'draft',
+            ...(resetLock !== undefined ? { lockVersion: resetLock } : {}),
+          }
+          commitInvoice(invoice)
         }
         const patched: Invoice = {
           ...invoice,
@@ -16711,21 +16738,22 @@ const storeCtx: AppState = {
           repairId,
           notes: invoice.notes?.includes(repair.ref) ? invoice.notes : `${invoice.notes ?? ''}\n${invoiceNotes}`.trim(),
         }
-        setInvoices(p => p.map(inv => inv.id === patched.id ? patched : inv))
-        const putRes = await fetch(`/api/invoices/${patched.id}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(patched),
-        })
+        commitInvoice(patched)
+        const { res: putRes, data: putBody } = await putInvoice(patched.id, patched as unknown as Record<string, unknown>)
         if (!putRes.ok) {
-          const data = await putRes.json().catch(() => null) as { error?: string } | null
-          showToast(data?.error || `Could not update ${patched.ref} from the quote`, 'error')
+          showToast((putBody as { error?: string } | null)?.error || `Could not update ${patched.ref} from the quote`, 'error')
           return patched
         }
-        if (patched.status !== 'posted') {
-          await storeCtxRef.current!.postInvoice(patched.id)
+        const rewriteLock = readLockVersionFromResponse(putBody)
+        invoice = {
+          ...patched,
+          ...(rewriteLock !== undefined ? { lockVersion: rewriteLock } : {}),
         }
-        invoice = invRef.current.find(inv => inv.id === patched.id) ?? { ...patched, status: 'posted' }
+        commitInvoice(invoice)
+        if (invoice.status !== 'posted') {
+          await storeCtxRef.current!.postInvoice(invoice.id)
+        }
+        invoice = invRef.current.find(inv => inv.id === invoice!.id) ?? { ...invoice, status: 'posted' }
         rebuilt = true
       } else if (!invoice) {
         const freshRepair = repairsRef.current.find(r => r.id === repairId)
