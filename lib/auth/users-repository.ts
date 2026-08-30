@@ -386,10 +386,12 @@ export const updateAuthUser = async (id: string, input: UpdateUserInput, passwor
     WHERE id = ${id}
   `
 
-  // Role / active / technician-capability changes must refresh session claims.
+  // Security-sensitive account changes must revoke/revalidate existing JWTs.
+  // A password reset must not leave an already-issued session alive.
   if (
     nextUser.role !== existingUser.role ||
     nextUser.active !== existingUser.active ||
+    nextUser.passwordHash !== existingUser.passwordHash ||
     Boolean(nextUser.actsAsTechnician) !== Boolean(existingUser.actsAsTechnician)
   ) {
     await invalidateUserSessions(id, {
