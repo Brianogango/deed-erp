@@ -28,6 +28,8 @@ const PUBLIC_PATH_PREFIXES = [
   '/api/portal/repair',
   '/api/portal/quotes',
   '/api/portal/intake',
+  // Provider status callbacks authenticate themselves (Twilio signature, Telerivet secret, …).
+  '/api/webhooks/notifications',
   // High-fidelity Sales UX review pack (demo data only — no production writes)
   '/sales-prototype',
 ]

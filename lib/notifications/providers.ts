@@ -4,6 +4,7 @@ import { resolveEmailProvider, sendEmail, type MailboxProfile } from '@/lib/inte
 import { sendWhatsAppMessage } from '@/lib/integrations/whatsapp'
 import { sendNotification } from '@/lib/integrations/notifications'
 import { sendWebPush } from './web-push'
+import { resolveSmsProvider } from './sms-provider'
 import type { NotificationChannel, ProviderSendResult } from './types'
 
 const escapeHtml = (value: string) =>
@@ -86,7 +87,8 @@ export async function sendProviderDelivery(input: ProviderDeliveryInput): Promis
   }
 
   if (input.channel === 'sms') {
-    if (!input.destination) return { success: false, provider: 'twilio', error: 'Missing SMS destination', errorCode: 'missing_destination' }
+    const provider = resolveSmsProvider() || 'twilio'
+    if (!input.destination) return { success: false, provider, error: 'Missing SMS destination', errorCode: 'missing_destination' }
     const result = await sendNotification({
       to: input.destination,
       channel: 'sms',
@@ -94,7 +96,7 @@ export async function sendProviderDelivery(input: ProviderDeliveryInput): Promis
     })
     return {
       success: result.success,
-      provider: 'twilio',
+      provider,
       messageId: result.messageId,
       error: result.error,
       errorCode: result.errorCode,

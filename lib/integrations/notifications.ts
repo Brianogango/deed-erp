@@ -12,6 +12,8 @@
  */
 
 import { sendWhatsAppMessage, WhatsAppResult } from './whatsapp'
+import { sendTelerivetSms } from './telerivet'
+import { resolveSmsProvider } from '@/lib/notifications/sms-provider'
 
 export interface NotificationOptions {
   to: string              // Phone number with country code
@@ -211,7 +213,7 @@ const sendViaWhatsApp = async (to: string, message: string): Promise<WhatsAppRes
 }
 
 /**
- * Send via SMS (Twilio)
+ * Send via SMS (Telerivet when configured, otherwise Twilio).
  * Note: Only works on server-side (Node.js environment)
  */
 const sendViaSMS = async (to: string, message: string): Promise<NotificationResult> => {
@@ -222,18 +224,38 @@ const sendViaSMS = async (to: string, message: string): Promise<NotificationResu
     }
   }
 
-  const accountSid = process.env.TWILIO_ACCOUNT_SID
-  const authToken = process.env.TWILIO_AUTH_TOKEN
-  const fromNumber = process.env.TWILIO_PHONE_NUMBER
-
-  if (!accountSid || !authToken || !fromNumber) {
+  const provider = resolveSmsProvider()
+  if (!provider) {
     return {
       success: false,
-      error: 'SMS not configured. Set TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, and TWILIO_PHONE_NUMBER.',
+      error: 'SMS not configured. Set Telerivet (TELERIVET_API_KEY, TELERIVET_PROJECT_ID) or Twilio credentials.',
     }
   }
 
   return withSmsRateLimit(async () => {
+    if (provider === 'telerivet') {
+      const result = await sendTelerivetSms({ to, message })
+      return {
+        success: result.success,
+        channel: 'sms',
+        messageId: result.messageId,
+        error: result.error,
+        errorCode: result.errorCode,
+        httpStatus: result.httpStatus,
+      }
+    }
+
+    const accountSid = process.env.TWILIO_ACCOUNT_SID
+    const authToken = process.env.TWILIO_AUTH_TOKEN
+    const fromNumber = process.env.TWILIO_PHONE_NUMBER
+
+    if (!accountSid || !authToken || !fromNumber) {
+      return {
+        success: false,
+        error: 'SMS not configured. Set TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, and TWILIO_PHONE_NUMBER.',
+      }
+    }
+
     try {
       const twilio = await import('twilio')
       const client = twilio.default(accountSid, authToken, {

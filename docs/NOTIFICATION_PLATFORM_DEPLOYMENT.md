@@ -91,6 +91,16 @@ WHATSAPP_APP_SECRET=<Meta app secret>
 
 The POST route verifies `X-Hub-Signature-256` before accepting delivery/read statuses.
 
+### Telerivet SMS
+
+Status webhook URL (not the site root):
+
+```text
+https://erp.deed.co.ke/api/webhooks/notifications/telerivet
+```
+
+Enable **Message status notifications**. The route checks `TELERIVET_WEBHOOK_SECRET` against the `secret` field Telerivet posts. Sending requires `TELERIVET_API_KEY`, `TELERIVET_PROJECT_ID`, and optionally `TELERIVET_PHONE_ID`. Set `SMS_PROVIDER=telerivet` to force this transport.
+
 ### Twilio SMS
 
 Status callback URL:
