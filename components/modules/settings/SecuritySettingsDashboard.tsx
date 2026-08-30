@@ -740,7 +740,7 @@ export default function SecuritySettingsDashboard({
               <h4 className="text-[11px] font-bold text-[#182033]">Active Sessions</h4>
               <p className="mt-0.5 text-[8.7px] text-[#8894A6]">View and manage active user sessions.</p>
             </div>
-            <button type="button" onClick={onOpenUserAccess} className="text-[#6B778A]"><Fa icon={faChevronRight} style={{ fontSize: 8 }} /></button>
+            <button type="button" onClick={() => setDetailPanel('sessions')} className="text-[#6B778A]" aria-label="View all active sessions"><Fa icon={faChevronRight} style={{ fontSize: 8 }} /></button>
           </div>
           <div className="px-3.5 py-3">
             <div className="overflow-x-auto">
@@ -780,7 +780,7 @@ export default function SecuritySettingsDashboard({
                 </tbody>
               </table>
             </div>
-            <button type="button" onClick={onOpenUserAccess} className="mt-2 text-[8.5px] font-bold text-[var(--primary-dark)]">View all sessions →</button>
+            <button type="button" onClick={() => setDetailPanel('sessions')} className="mt-2 text-[8.5px] font-bold text-[var(--primary-dark)]">View all sessions →</button>
           </div>
         </section>
 
@@ -790,7 +790,7 @@ export default function SecuritySettingsDashboard({
               <h4 className="text-[11px] font-bold text-[#182033]">Audit Logs</h4>
               <p className="mt-0.5 text-[8.7px] text-[#8894A6]">View security-related events and activities.</p>
             </div>
-            <Fa icon={faChevronRight} className="text-[#6B778A]" style={{ fontSize: 8 }} />
+            <button type="button" onClick={() => setDetailPanel('audit')} className="text-[#6B778A]" aria-label="View audit logs"><Fa icon={faChevronRight} style={{ fontSize: 8 }} /></button>
           </div>
           <div className="px-3.5 py-3">
             {auditRows.length ? (
@@ -806,7 +806,7 @@ export default function SecuritySettingsDashboard({
             ) : (
               <p className="py-5 text-center text-[9px] text-[#8A96A8]">No audit rows returned yet.</p>
             )}
-            <button type="button" onClick={() => void refresh(true)} className="mt-2 text-[8.5px] font-bold text-[var(--primary-dark)]">Refresh logs →</button>
+            <button type="button" onClick={() => setDetailPanel('audit')} className="mt-2 text-[8.5px] font-bold text-[var(--primary-dark)]">View all logs →</button>
           </div>
         </section>
 
@@ -840,7 +840,7 @@ export default function SecuritySettingsDashboard({
               <h4 className="text-[11px] font-bold text-[#182033]">API Security</h4>
               <p className="mt-0.5 text-[8.7px] text-[#8894A6]">API access and request limits.</p>
             </div>
-            <Fa icon={faChevronRight} className="text-[#6B778A]" style={{ fontSize: 8 }} />
+            <button type="button" onClick={onOpenPartnerApi} disabled={!onOpenPartnerApi} className="text-[#6B778A] disabled:opacity-40" aria-label="Open Partner API settings"><Fa icon={faChevronRight} style={{ fontSize: 8 }} /></button>
           </div>
           <div className="px-3.5 py-3">
             <div className="flex items-center justify-between border-b border-[#F0F3F7] py-2">
@@ -864,7 +864,7 @@ export default function SecuritySettingsDashboard({
               <h4 className="text-[11px] font-bold text-[#182033]">Data Protection</h4>
               <p className="mt-0.5 text-[8.7px] text-[#8894A6]">Application and transport safeguards.</p>
             </div>
-            <Fa icon={faChevronRight} className="text-[#6B778A]" style={{ fontSize: 8 }} />
+            <button type="button" onClick={() => setDetailPanel('data')} className="text-[#6B778A]" aria-label="View data protection controls"><Fa icon={faChevronRight} style={{ fontSize: 8 }} /></button>
           </div>
           <div className="px-3.5 py-3">
             <div className="flex items-center justify-between border-b border-[#F0F3F7] py-2">
@@ -881,6 +881,25 @@ export default function SecuritySettingsDashboard({
             </div>
           </div>
         </section>
+      </div>
+
+      <div className="security-mobile-pagination mt-3" aria-label="Security detail pages">
+        <button
+          type="button"
+          onClick={() => setMobileDetailPage(page => Math.max(0, page - 1))}
+          disabled={mobileDetailPage === 0}
+          aria-label="Previous security detail"
+        >‹</button>
+        <span>
+          <strong>{mobileDetailPage + 1}</strong> / 5
+          <small>{['Active Sessions', 'Audit Logs', 'IP Allowlist', 'API Security', 'Data Protection'][mobileDetailPage]}</small>
+        </span>
+        <button
+          type="button"
+          onClick={() => setMobileDetailPage(page => Math.min(4, page + 1))}
+          disabled={mobileDetailPage === 4}
+          aria-label="Next security detail"
+        >›</button>
       </div>
 
       <div className="mt-3 flex flex-col gap-2 border-t border-[#E7ECF3] px-1 pt-3 text-[8.5px] text-[#8A96A8] sm:flex-row sm:items-center sm:justify-between">
