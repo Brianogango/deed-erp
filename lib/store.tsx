@@ -218,6 +218,7 @@ import {
   type BillingExemptReason,
 } from '@/lib/repair-billing-exempt'
 import { applyRepairHandover, canCloseRepairAfterHandover } from '@/lib/repair-handover'
+import { resolveWarrantyMonths, addWarrantyMonths } from '@/lib/warranty-period'
 import {
   ensureDiagnosisFeeInQuoteLines,
   isDiagnosisFeeLine,
@@ -853,7 +854,7 @@ export const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
   invProductsMasterOnly: true, invNoDirectStockEdits: true, invMultiStepRoutes: true,
   invStorageLocations: ['Incoming', 'Workshop', 'Ready for Sale', 'Faulty / Scrap'],
   invSerialNumbers: true, invLots: false, invAutomatedValuation: true, invCostingMethod: 'average',
-  invDefaultMinStock: 5, invDefaultWarrantyMonths: 12,
+  invDefaultMinStock: 5, invDefaultWarrantyMonths: 6,
   reconfigurationEnabled: true, reconfigurationMinMarginPct: 10,
   invCategorySaleMarkupPct: {},
   pricingMarginPolicy: DEFAULT_PRICING_MARGIN_POLICY,
@@ -12515,16 +12516,17 @@ const storeCtx: AppState = {
         const prod = prodRef.current.find(x => x.id === l.productId)
         l.serialIds.forEach(sid => {
           setSerials(p => p.map(s => s.id === sid ? { ...s, status: 'sold', location: 'customer', soldDate: now(), saleOrderId: del.saleOrderId } : s))
-          if (prod && prod.warrantyMonths > 0) {
+          if (prod && resolveWarrantyMonths(prod.warrantyMonths, systemSettings.invDefaultWarrantyMonths) > 0) {
             const serial = serialRef.current.find(s => s.id === sid)
+            const months = resolveWarrantyMonths(prod.warrantyMonths, systemSettings.invDefaultWarrantyMonths)
             const war: Warranty = {
               id: uid(), ref: seq('WAR', 'war'),
               customerId: del.customerId, customerName: del.customerName,
               productId: l.productId, productName: l.productName,
               serialId: sid, serialNumber: serial?.serial ?? '',
               deliveryId: del.id, saleOrderRef: so.ref,
-              startDate: now(), endDate: addMonths(now(), prod.warrantyMonths),
-              status: 'active', months: prod.warrantyMonths,
+              startDate: now(), endDate: addWarrantyMonths(now(), months),
+              status: 'active', months,
             }
             newWarranties.push(war)
           }
@@ -18881,18 +18883,19 @@ const storeCtx: AppState = {
             line.serialIds.includes(s.id) ? { ...s, status: 'sold', location: 'customer', soldDate: now() } : s
           ))
 
-          if (product.warrantyMonths > 0) {
+          if (resolveWarrantyMonths(product.warrantyMonths, systemSettings.invDefaultWarrantyMonths) > 0) {
             line.serialIds.forEach(serialId => {
               const serial = serials.find(s => s.id === serialId)
               if (serial) {
+                const months = resolveWarrantyMonths(product.warrantyMonths, systemSettings.invDefaultWarrantyMonths)
                 newWarranties.push({
                   id: uid(), ref: seq('WAR', 'war'),
                   customerId: delivery.customerId, customerName: delivery.customerName,
                   productId: line.productId, productName: line.productName,
                   serialId: serial.id, serialNumber: serial.serial,
                   deliveryId: delivery.id, saleOrderRef: delivery.saleOrderRef,
-                  startDate: now(), endDate: addMonths(now(), product.warrantyMonths),
-                  status: 'active', months: product.warrantyMonths,
+                  startDate: now(), endDate: addWarrantyMonths(now(), months),
+                  status: 'active', months,
                 })
               }
             })

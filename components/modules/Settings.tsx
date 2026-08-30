@@ -1067,7 +1067,7 @@ ACCOUNTS_EMAIL=accounts@deed.co.ke`}</pre>
                   <Input type="number" value={String(ss.invDefaultMinStock ?? 5)} onChange={v => updateSystemSettings({ invDefaultMinStock: Math.max(0, Number(v) || 0) })} />
                 </SettingRow>
                 <SettingRow label="Default Warranty (months)" desc="Warranty period pre-filled on new products and bulk imports">
-                  <Input type="number" value={String(ss.invDefaultWarrantyMonths ?? 12)} onChange={v => updateSystemSettings({ invDefaultWarrantyMonths: Math.max(0, Number(v) || 0) })} />
+                  <Input type="number" value={String(ss.invDefaultWarrantyMonths ?? 6)} onChange={v => updateSystemSettings({ invDefaultWarrantyMonths: Math.max(0, Number(v) || 0) })} />
                 </SettingRow>
               </SectionCard>
             </>
