@@ -231,6 +231,16 @@ export async function updateSmsConversationStatus(input: {
   return result.count
 }
 
+export async function isSmsPhoneOptedOut(phone: string) {
+  const normalized = normalizeSmsPhone(phone)
+  if (!normalized) return false
+  const row = await prisma.communicationThread.findFirst({
+    where: { channel: 'sms', participantPhone: normalized, status: 'opted_out' },
+    select: { id: true },
+  })
+  return Boolean(row)
+}
+
 export async function markSmsThreadRead(threadId: string) {
   const now = new Date()
   await prisma.$transaction([
