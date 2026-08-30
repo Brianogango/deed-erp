@@ -20,6 +20,7 @@ export type PosHistoryTicket = {
   invoiceRef?: string
   customerName?: string
   payment?: string
+  customerCreditAmount?: number
   date: string
   createdAt?: string
   lines?: PosReceiptLine[]
@@ -94,7 +95,10 @@ export function ticketLines(
 }
 
 export function payLabel(order: PosHistoryTicket): string {
-  return isPosBankPayment(order.payment) ? 'Bank' : (order.payment || '—')
+  const tender = isPosBankPayment(order.payment) ? 'Bank' : (order.payment || '—')
+  const credit = Math.max(0, Number(order.customerCreditAmount) || 0)
+  if (credit <= 0) return tender
+  return tender === '—' ? 'Client credit' : `Client credit + ${tender}`
 }
 
 export function filterPosHistoryOrders<T extends PosHistoryTicket>(
