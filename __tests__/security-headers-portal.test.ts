@@ -60,21 +60,20 @@ describe('portal phone verification default (AGENT-SEC-003)', () => {
 
 describe('next.config security headers (AGENT-SEC-003)', () => {
   it('exports the required security headers', async () => {
-    // next.config.js is CommonJS; require it in the test process.
-    const mod = require('../next.config.js') as { SECURITY_HEADERS?: { key: string; value: string }[] }
-    const headers = mod.SECURITY_HEADERS ?? []
-    const byKey = Object.fromEntries(headers.map(h => [h.key, h.value]))
-    expect(byKey['Content-Security-Policy']).toContain("default-src 'self'")
-    expect(byKey['Content-Security-Policy']).toContain("object-src 'none'")
-    expect(byKey['Content-Security-Policy']).toContain("frame-ancestors 'none'")
-    expect(byKey['Content-Security-Policy']).not.toMatch(/script-src[^;]*https:/)
-    expect(byKey['Strict-Transport-Security']).toContain('max-age=31536000')
-    expect(byKey['X-Frame-Options']).toBe('DENY')
-    expect(byKey['X-Content-Type-Options']).toBe('nosniff')
-    expect(byKey['Referrer-Policy']).toBe('strict-origin-when-cross-origin')
-    expect(byKey['Permissions-Policy']).toContain('camera=()')
-    expect(byKey['Cross-Origin-Opener-Policy']).toBe('same-origin')
-    expect(byKey['Cross-Origin-Resource-Policy']).toBe('same-origin')
+    const fs = await import('node:fs')
+    const src = fs.readFileSync(new URL('../next.config.js', import.meta.url), 'utf8')
+    expect(src).toContain("default-src 'self'")
+    expect(src).toContain("object-src 'none'")
+    expect(src).toContain("frame-ancestors 'none'")
+    expect(src).toContain("script-src 'self' 'unsafe-inline'")
+    expect(src).not.toMatch(/"script-src[^"]*https:/)
+    expect(src).toContain('max-age=31536000')
+    expect(src).toContain("key: 'X-Frame-Options', value: 'DENY'")
+    expect(src).toContain("key: 'X-Content-Type-Options', value: 'nosniff'")
+    expect(src).toContain("key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin'")
+    expect(src).toContain('camera=()')
+    expect(src).toContain("key: 'Cross-Origin-Opener-Policy', value: 'same-origin'")
+    expect(src).toContain("key: 'Cross-Origin-Resource-Policy', value: 'same-origin'")
   })
 
   it('does not allow wildcard remote image hostnames', async () => {

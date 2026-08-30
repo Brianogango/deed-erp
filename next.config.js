@@ -80,6 +80,3 @@ const nextConfig = {
 }
 
 module.exports = withBundleAnalyzer(nextConfig)
-// Exported for unit tests (CommonJS consumers can require and read .default or the analyzer wrap).
-module.exports.SECURITY_HEADERS = SECURITY_HEADERS
-module.exports.CONTENT_SECURITY_POLICY = CONTENT_SECURITY_POLICY

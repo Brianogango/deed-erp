@@ -250,7 +250,7 @@ export function summarizeEnv(values: Record<string, string>): EnvFieldSummary[] 
       placeholder: looksLikePlaceholder(raw),
       restartRequired: secret || key.startsWith('NEXT_PUBLIC_') || key === 'NODE_ENV' || key === 'NEXTAUTH_URL',
     }
-    if (!secret && kind !== 'secret') row.value = raw
+    if (!secret) row.value = raw
     if (key === 'DATABASE_URL' || key === 'POSTGRES_URL') row.database = raw ? databaseMeta(raw) : undefined
     rows.push(row)
   }
