@@ -1,0 +1,131 @@
+name: Security Closure
+
+on:
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  application-security:
+    name: Security typecheck, tests and build
+    runs-on: ubuntu-latest
+    env:
+      NEXTAUTH_SECRET: ci-security-nextauth-secret-000000000000000000000000
+      AUTH_SECRET: ci-security-nextauth-secret-000000000000000000000000
+      MFA_ENCRYPTION_KEY: ci-security-mfa-encryption-key-000000000000000000000
+      MFA_CHALLENGE_SECRET: ci-security-mfa-challenge-key-0000000000000000000000
+      MFA_ENFORCE_PRIVILEGED: 'false'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Security-focused unit tests
+        run: pnpm test -- __tests__/input-security.test.ts __tests__/api-store-permissions.test.ts __tests__/store-write-policy.test.ts __tests__/security-headers.test.ts
+
+      - name: Full unit suite
+        run: pnpm test
+
+      - name: Production build
+        run: pnpm build
+
+      - name: Production dependency vulnerability audit
+        run: pnpm audit --prod --audit-level high
+
+  security-e2e:
+    name: Security adversarial E2E
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/deed_erp_ci
+      POSTGRES_URL: postgresql://postgres:postgres@localhost:5432/deed_erp_ci
+      NEXTAUTH_SECRET: ci-only-secret-not-for-production-000000000000000000
+      AUTH_SECRET: ci-only-secret-not-for-production-000000000000000000
+      NEXT_PUBLIC_APP_URL: http://localhost:3100
+      MFA_ENFORCE_PRIVILEGED: 'false'
+      E2E_USERNAME: e2edirector
+      E2E_PASSWORD: ci-e2e-password-not-for-production
+      E2E_RELAX_RATE_LIMIT: '1'
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: deed_erp_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Push disposable CI schema
+        run: npx prisma db push --accept-data-loss
+
+      - name: Production build
+        run: pnpm build
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Run security closure E2E
+        run: npx playwright test e2e/security-closure.spec.ts
+
+  secret-patterns:
+    name: Tracked secret pattern check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Reject tracked production environment files
+        shell: bash
+        run: |
+          set -euo pipefail
+          bad=$(git ls-files | grep -E '(^|/)\.env(\.production|\.local)?$' || true)
+          if [ -n "$bad" ]; then
+            echo "Tracked environment file(s) found:"
+            echo "$bad"
+            exit 1
+          fi
+
+      - name: Reject common private-key material
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git grep -n -I -E -- '-----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY-----' -- ':!*.md'; then
+            echo 'Private key material found in tracked source.'
+            exit 1
+          fi
