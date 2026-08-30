@@ -57,6 +57,7 @@ type SecurityOverview = {
   sessions: Array<{
     id: string
     userId: string
+    isCurrent: boolean
     name: string
     username: string
     ipAddress: string
@@ -366,6 +367,7 @@ export default function SecuritySettingsDashboard({
       ? [{
           id: 'current-session',
           userId: currentUser.id,
+          isCurrent: true,
           name: currentUser.name || currentUser.username,
           username: currentUser.username,
           ipAddress: 'This device',
@@ -734,7 +736,7 @@ export default function SecuritySettingsDashboard({
                       <td className="max-w-[70px] truncate py-2 font-mono">{session.ipAddress}</td>
                       <td className="py-2 text-right">{timeAgo(session.createdAt)}</td>
                       <td className="py-2 text-right">
-                        {session.id !== 'current-session' && currentUser?.role === 'director' ? (
+                        {!session.isCurrent && session.id !== 'current-session' && currentUser?.role === 'director' ? (
                           <button
                             type="button"
                             disabled={Boolean(revokingSessionId)}
