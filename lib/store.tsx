@@ -18176,15 +18176,15 @@ const storeCtx: AppState = {
       }
       const customerCreditAmount = Math.min(requestedCustomerCredit, availableCustomerCredit, total)
       const tenderTotal = Math.max(0, total - customerCreditAmount)
-      let pointsEarned = 0
-      if (customerId) {
-        pointsEarned = loyaltyPointsEarned(total, systemSettings.posLoyaltyKesPerPoint)
-        setContacts(prev => prev.map(c => c.id === customerId ? { ...c, loyaltyPoints: Math.max(0, (c.loyaltyPoints || 0) - pointsRedeemed) + pointsEarned } : c))
-      }
-      const resolvedBankId = isPosBankPayment(payment)
+      const pointsEarned = customerId
+        ? loyaltyPointsEarned(total, systemSettings.posLoyaltyKesPerPoint)
+        : 0
+      const resolvedBankId = tenderTotal > 0 && isPosBankPayment(payment)
         ? (paymentMeta?.bankAccountId || bankAccountIdForMethod(payment))
         : undefined
-      const paymentReference = (paymentMeta?.paymentReference || '').trim() || undefined
+      const paymentReference = tenderTotal > 0
+        ? ((paymentMeta?.paymentReference || '').trim() || undefined)
+        : undefined
       let orderRef: string
       try {
         orderRef = await storeCtxRef.current!.allocateDocRef('POS')
@@ -18279,6 +18279,13 @@ const storeCtx: AppState = {
         setProducts(p => p.map(x => x.id === l.productId ? { ...x, stockQty: Math.max(0, x.stockQty - l.qty) } : x))
         if (l.serialId) setSerials(p => p.map(s => s.id === l.serialId ? { ...s, status: 'sold', location: 'customer', soldDate: now() } : s))
       })
+      if (customerId) {
+        setContacts(prev => prev.map(contact =>
+          contact.id === customerId
+            ? { ...contact, loyaltyPoints: Math.max(0, (contact.loyaltyPoints || 0) - pointsRedeemed) + pointsEarned }
+            : contact,
+        ))
+      }
       if (customerCreditAmount > 0) {
         setCustomerCredits(nextCustomerCredits)
         addAuditLog(
