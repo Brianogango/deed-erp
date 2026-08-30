@@ -377,7 +377,10 @@ export function buildBankInterestLines(params: {
   ]
 }
 
-/** Expense approval: Dr category expense, Cr reimbursement payable or bank. */
+/** Expense approval: recognise the expense, but never pretend cash moved.
+ * Staff-paid claims credit employee reimbursements; company-funded claims credit
+ * Outstanding Payments until Finance records the actual payment.
+ */
 export function buildExpenseApprovalLines(params: {
   amount: number
   ref: string
@@ -392,10 +395,7 @@ export function buildExpenseApprovalLines(params: {
   const expenseAccount = expenseAccountForCategory(params.category)
   const creditAccount = isReimbursement
     ? labelForRole('employee_reimbursements')
-    : bankAccountLabelForId(
-      bankAccountIdForPaymentMethod(params.paymentMethod, params.bankAccountId),
-      params.paymentMethod,
-    )
+    : labelForRole('outstanding_payments')
   return [
     {
       accountLabel: expenseAccount,
@@ -407,7 +407,32 @@ export function buildExpenseApprovalLines(params: {
       accountLabel: creditAccount,
       description: isReimbursement
         ? `Reimbursement payable: ${params.submittedByName || 'Employee'}`
-        : `Company-paid expense: ${params.ref}`,
+        : `Approved company expense payable: ${params.ref}`,
+      debit: 0,
+      credit: amount,
+    },
+  ]
+}
+
+/** Company-funded expense payment: Dr outstanding payments, Cr actual bank/cash. */
+export function buildExpenseCompanyPaymentLines(params: {
+  amount: number
+  ref: string
+  paymentMethod?: string
+  bankAccountId?: string
+}): PostingLineInput[] {
+  const amount = roundMoney(params.amount)
+  const bankId = bankAccountIdForPaymentMethod(params.paymentMethod, params.bankAccountId)
+  return [
+    {
+      role: 'outstanding_payments',
+      description: `Settle approved expense: ${params.ref}`,
+      debit: amount,
+      credit: 0,
+    },
+    {
+      accountLabel: bankAccountLabelForId(bankId, params.paymentMethod),
+      description: `Cash paid for ${params.ref}`,
       debit: 0,
       credit: amount,
     },
@@ -776,6 +801,40 @@ export async function postExpenseApproval(params: {
     lines,
     createdById: params.createdById,
     journalCode: 'MISC',
+    tx: params.tx,
+  })
+}
+
+/** Company-funded expense payout. Idempotent on `JRN/EXPPAY/<ref>`. */
+export async function postExpenseCompanyPayment(params: {
+  expenseId: string
+  ref: string
+  amount: number
+  paymentMethod?: string
+  bankAccountId?: string
+  date?: string
+  createdById?: string
+  tx?: Prisma.TransactionClient
+}) {
+  const amount = roundMoney(params.amount)
+  if (amount <= 0) return null
+  const lines = buildExpenseCompanyPaymentLines({
+    amount,
+    ref: params.ref,
+    paymentMethod: params.paymentMethod,
+    bankAccountId: params.bankAccountId,
+  })
+  const bankId = bankAccountIdForPaymentMethod(params.paymentMethod, params.bankAccountId)
+  const isCash = bankId === 'cash' || bankId === 'mpesa'
+  return commitPosting({
+    ref: `JRN/EXPPAY/${params.ref}`,
+    source: 'expense',
+    description: `Expense payment — ${params.ref}`,
+    date: params.date,
+    blobId: params.expenseId,
+    lines,
+    createdById: params.createdById,
+    journalCode: isCash ? 'CSH' : 'BNK',
     tx: params.tx,
   })
 }
