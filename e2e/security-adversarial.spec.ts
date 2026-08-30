@@ -181,6 +181,28 @@ test.describe('security adversarial RBAC and IDOR', () => {
     await sales.close()
   })
 
+  test('password rotation invalidates the already-issued session', async ({ browser }) => {
+    const identity = E2E_USERS.sessionProbe
+    const context = await loginAs(browser, identity)
+    const nextPassword = `Session-Probe-${Date.now()}-Aa1!`
+
+    const changed = await context.request.patch(`/api/users/${identity.id}`, {
+      data: { password: nextPassword },
+    })
+    expect(changed.status()).toBe(200)
+
+    const staleSession = await context.request.get('/api/store')
+    expect(staleSession.status()).toBe(401)
+    await context.close()
+
+    const fresh = await browser.newContext()
+    const relogin = await fresh.request.post('/api/auth/login', {
+      data: { username: identity.username, password: nextPassword },
+    })
+    expect(relogin.status()).toBe(200)
+    await fresh.close()
+  })
+
   test('malformed authentication and disabled bootstrap fail closed', async ({ request }) => {
     const malformed = await request.get('/api/store', {
       headers: { Authorization: 'Bearer %E0%A4%A' },
