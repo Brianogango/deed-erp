@@ -3,12 +3,41 @@ const withBundleAnalyzer = require('@next/bundle-analyzer')({
   enabled: process.env.ANALYZE === 'true',
 })
 
-/** Application-level security headers (audit SEC-004 / AGENT-SEC-003). */
+/**
+ * Application-level browser security policy.
+ *
+ * Next.js emits small inline bootstrap scripts/styles in production, so this
+ * policy permits inline script/style while still denying foreign script
+ * origins, plugins, framing and hostile base/form targets. Remove
+ * 'unsafe-inline' only after migrating the app to per-request CSP nonces.
+ */
+const CONTENT_SECURITY_POLICY = [
+  "default-src 'self'",
+  "base-uri 'self'",
+  "object-src 'none'",
+  "frame-ancestors 'none'",
+  "form-action 'self'",
+  "script-src 'self' 'unsafe-inline'",
+  "style-src 'self' 'unsafe-inline'",
+  "img-src 'self' data: blob: https:",
+  "font-src 'self' data:",
+  "connect-src 'self' https: wss:",
+  "frame-src 'self' blob:",
+  "worker-src 'self' blob:",
+  "manifest-src 'self'",
+  "media-src 'self' blob: https:",
+  "upgrade-insecure-requests",
+].join('; ')
+
 const SECURITY_HEADERS = [
+  { key: 'Content-Security-Policy', value: CONTENT_SECURITY_POLICY },
+  { key: 'Strict-Transport-Security', value: 'max-age=31536000; includeSubDomains' },
   { key: 'X-Frame-Options', value: 'DENY' },
   { key: 'X-Content-Type-Options', value: 'nosniff' },
   { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
-  { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=()' },
+  { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=(), payment=(), usb=()' },
+  { key: 'Cross-Origin-Opener-Policy', value: 'same-origin' },
+  { key: 'Cross-Origin-Resource-Policy', value: 'same-origin' },
 ]
 
 /** @type {import('next').NextConfig} */
@@ -53,3 +82,4 @@ const nextConfig = {
 module.exports = withBundleAnalyzer(nextConfig)
 // Exported for unit tests (CommonJS consumers can require and read .default or the analyzer wrap).
 module.exports.SECURITY_HEADERS = SECURITY_HEADERS
+module.exports.CONTENT_SECURITY_POLICY = CONTENT_SECURITY_POLICY
