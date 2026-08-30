@@ -52,12 +52,12 @@ interface NavGroup {
 export default function Sidebar() {
   const pathname = usePathname()
   const router = useRouter()
-  const { sidebarOpen, toggleSidebar, getVisibleRepairs, users, currentUserId, activeModule, setModule } = useShellStore()
-  const [isMobile, setIsMobile] = useState(false)
+  const { sidebarOpen, toggleSidebar, getVisibleRepairs, users, currentUserId, activeModule, setModule, profileImages } = useShellStore()
+  const [isOverlay, setIsOverlay] = useState(false)
 
   useEffect(() => {
-    const media = window.matchMedia('(max-width: 767px)')
-    const update = () => setIsMobile(media.matches)
+    const media = window.matchMedia('(max-width: 1023px)')
+    const update = () => setIsOverlay(media.matches)
     update()
     media.addEventListener('change', update)
     return () => media.removeEventListener('change', update)
@@ -65,6 +65,9 @@ export default function Sidebar() {
 
   const currentUser = users.find(u => u.id === currentUserId)
   const role = currentUser?.role || ''
+  const avatar = currentUserId ? (profileImages[currentUserId] ?? null) : null
+  const initials = (currentUser?.name || 'User').split(/\s+/).filter(Boolean).slice(0, 2).map(part => part[0]).join('').toUpperCase() || 'U'
+  const roleLabel = role.replace(/_/g, ' ').replace(/\b\w/g, letter => letter.toUpperCase())
   const visibleRepairsRaw = getVisibleRepairs()
   const pendingRepairs = (Array.isArray(visibleRepairsRaw) ? visibleRepairsRaw : [])
     .filter(r => ['received', 'assigned'].includes(r.status)).length
@@ -228,40 +231,41 @@ export default function Sidebar() {
     <aside
       id="primary-navigation"
       aria-label="Primary navigation"
-      aria-hidden={isMobile && !sidebarOpen ? true : undefined}
-      {...(isMobile && !sidebarOpen ? { inert: true } : {})}
+      aria-hidden={isOverlay && !sidebarOpen ? true : undefined}
+      {...(isOverlay && !sidebarOpen ? { inert: true } : {})}
       className={`
-        sidebar-shell fixed md:relative inset-y-0 left-0 z-50 flex-shrink-0 flex flex-col
-        transition-all duration-500 ease-[cubic-bezier(0.4,0,0.2,1)]
+        sidebar-shell fixed lg:relative inset-y-0 left-0 z-50 flex-shrink-0 flex flex-col
+        transition-[width,transform,box-shadow] duration-300 ease-[cubic-bezier(0.4,0,0.2,1)]
         ${sidebarOpen
-          ? 'w-64 translate-x-0 shadow-2xl'
-          : 'w-64 -translate-x-full md:w-[72px] md:translate-x-0'
+          ? 'w-[296px] translate-x-0 shadow-2xl lg:w-[252px] lg:shadow-none'
+          : 'w-[296px] -translate-x-full lg:w-[72px] lg:translate-x-0'
         }
       `}
     >
       {/* ── Brand Header ── */}
-      <div
-        className={`sidebar-section-border flex items-center h-16 flex-shrink-0 border-b transition-all duration-300 overflow-hidden ${sidebarOpen ? 'px-5' : 'justify-center px-0'}`}
-      >
-        <div className="flex items-center gap-3 overflow-hidden">
-          {/* Collapsed: symbol icon */}
-          <div
-            className={`rounded-xl flex items-center justify-center flex-shrink-0 shadow-lg overflow-hidden transition-all duration-300 ${sidebarOpen ? 'w-0 opacity-0 pointer-events-none' : 'w-9 h-9 opacity-100'}`}
-            style={{ background: DEED_NAVY }}
+      <div className={`sidebar-brand-header sidebar-section-border flex h-[76px] flex-shrink-0 items-center border-b ${sidebarOpen ? 'px-5' : 'justify-center px-0'}`}>
+        {!sidebarOpen ? (
+          <img src="/deed-icon-transparent.png" alt="Deed Technologies" className="sidebar-brand-mark h-9 w-9 object-contain" />
+        ) : (
+          <div className="flex min-w-0 flex-1 items-center">
+            <img src="/deed-logo-inverted.png" alt="Deed Technologies" className="sidebar-logo-inverted h-9 w-auto max-w-[155px] object-contain" />
+            <img src="/deed-logo.png" alt="Deed Technologies" className="sidebar-logo-standard hidden h-9 w-auto max-w-[155px] object-contain" />
+          </div>
+        )}
+        {sidebarOpen && (
+          <button
+            type="button"
+            onClick={toggleSidebar}
+            className="sidebar-overlay-close lg:hidden"
+            aria-label="Close navigation menu"
           >
-            <img src="/deed-icon-transparent.png" alt="Deed" className="w-7 h-7 object-contain brightness-0 invert" />
-          </div>
-
-          {/* Expanded: main logo + ERP label */}
-          <div className={`flex items-center gap-2 transition-all duration-500 overflow-hidden ${sidebarOpen ? 'opacity-100 max-w-full' : 'opacity-0 max-w-0 pointer-events-none'}`}>
-            <img src="/deed-logo-inverted.png" alt="Deed Technologies" className="h-8 w-auto max-w-[110px] object-contain flex-shrink-0" />
-            <span className="text-[10px] font-bold tracking-[0.2em] uppercase whitespace-nowrap" style={{ color: 'rgba(255,255,255,0.45)' }}>ERP</span>
-          </div>
-        </div>
+            ×
+          </button>
+        )}
       </div>
 
       {/* ── Navigation ── */}
-      <div className="flex-1 overflow-y-auto overflow-x-hidden py-4 custom-scrollbar">
+      <div className="sidebar-nav-scroll flex-1 overflow-y-auto overflow-x-hidden py-4 custom-scrollbar">
         {groups.map((group, idx) => {
           const hasActiveItem = group.items.some(item => isNavItemActive(pathname, item))
           // The active module's group cannot be hidden; everything else honours
@@ -308,7 +312,7 @@ export default function Sidebar() {
                       onTogglePin={() => togglePinned(item.id)}
                       onNavigate={() => {
                         if (item.id !== 'settings') setModule(item.id)
-                        if (window.innerWidth < 768 && sidebarOpen) toggleSidebar()
+                        if (window.innerWidth < 1024 && sidebarOpen) toggleSidebar()
                       }}
                     />
                   ))}
@@ -319,11 +323,32 @@ export default function Sidebar() {
         })}
       </div>
 
-      {/* ── Collapse Toggle ── */}
-      <div className="sidebar-section-border p-3 flex-shrink-0 border-t">
+      {/* ── User / Collapse Footer ── */}
+      <div className="sidebar-footer sidebar-section-border flex-shrink-0 border-t p-3">
+        <button
+          type="button"
+          className={`sidebar-user-card ${sidebarOpen ? 'expanded' : 'collapsed'}`}
+          onClick={() => window.dispatchEvent(new CustomEvent('deed:account-open'))}
+          aria-label="Open account settings"
+        >
+          <span className="sidebar-user-avatar">
+            {avatar ? <img src={avatar} alt="" className="h-full w-full object-cover" /> : initials}
+            <span className="sidebar-online-dot" aria-hidden="true" />
+          </span>
+          {sidebarOpen && (
+            <>
+              <span className="min-w-0 flex-1 text-left">
+                <span className="sidebar-user-name block truncate">{currentUser?.name || 'User'}</span>
+                <span className="sidebar-user-role block truncate">{roleLabel || 'User'}</span>
+              </span>
+              <Fa icon={faChevronDown} className="sidebar-user-chevron text-[9px]" />
+            </>
+          )}
+        </button>
+
         <button
           onClick={toggleSidebar}
-          className="sidebar-collapse-btn hidden md:flex items-center justify-center w-full h-9 rounded-xl cursor-pointer"
+          className="sidebar-collapse-btn mt-2 hidden lg:flex h-9 w-full items-center justify-center rounded-xl cursor-pointer"
           aria-label={sidebarOpen ? 'Collapse sidebar' : 'Expand sidebar'}
         >
           <Fa icon={sidebarOpen ? faChevronLeft : faChevronRight} className="text-xs" />
