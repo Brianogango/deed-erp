@@ -9,8 +9,8 @@ import { normalizeDeviceTier } from '@/lib/diagnosis-fee'
 
 const REPAIR_STORE_KEY = 'deed_repairs_v2'
 
-function clean(value: unknown): string {
-  return String(value ?? '').trim()
+function clean(value: unknown, max = 2_000): string {
+  return String(value ?? '').normalize('NFKC').trim().slice(0, max)
 }
 
 // Reference generation is now handled server-side by getNextRepairRef()
@@ -34,10 +34,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Invalid JSON payload.' }, { status: 400 })
   }
 
-  const customerName = clean(body.customerName)
-  const customerPhone = clean(body.customerPhone)
-  const productName = clean(body.productName)
-  const issueDescription = clean(body.issueDescription)
+  const customerName = clean(body.customerName, 200)
+  const customerPhone = clean(body.customerPhone, 50)
+  const productName = clean(body.productName, 240)
+  const issueDescription = clean(body.issueDescription, 10_000)
   const repairPath = normalizeRepairPath(body.repairPath)
   const liabilityWaiverAccepted = body.liabilityWaiverAccepted === true
   // Device tier is staff-picked (not customer portal). Portal leaves fee pending for Diagnosis First.
@@ -62,12 +62,12 @@ export async function POST(req: NextRequest) {
     const ref = await getNextRepairRef()
 
   const accessories = Array.isArray(body.accessories)
-    ? body.accessories.map((item) => ({
-        name: clean((item as Record<string, unknown>)?.name ?? item),
+    ? body.accessories.slice(0, 100).map((item) => ({
+        name: clean((item as Record<string, unknown>)?.name ?? item, 160),
         received: true,
-        notes: clean((item as Record<string, unknown>)?.notes),
+        notes: clean((item as Record<string, unknown>)?.notes, 500),
       })).filter(item => item.name)
-    : clean(body.accessories).split(',').map(name => name.trim()).filter(Boolean).map(name => ({ name, received: true }))
+    : clean(body.accessories, 5_000).split(',').slice(0, 100).map(name => name.trim().slice(0, 160)).filter(Boolean).map(name => ({ name, received: true }))
 
   const repair: RepairOrder = {
     id: `rep_${Date.now()}`,
@@ -76,15 +76,15 @@ export async function POST(req: NextRequest) {
     customerId: '',
     customerName,
     customerPhone,
-    customerEmail: clean(body.customerEmail) || undefined,
+    customerEmail: clean(body.customerEmail, 254) || undefined,
     productId: '',
     productName,
-    serialNumber: clean(body.serialNumber),
+    serialNumber: clean(body.serialNumber, 160),
     deviceCondition: ['good', 'fair', 'poor', 'damaged'].includes(clean(body.deviceCondition)) ? clean(body.deviceCondition) as RepairOrder['deviceCondition'] : undefined,
     priority: ['low', 'normal', 'high', 'urgent'].includes(clean(body.priority)) ? clean(body.priority) as RepairOrder['priority'] : 'normal',
     intakeChannel: 'website',
     intakeDate: now,
-    intakeNotes: clean(body.intakeNotes),
+    intakeNotes: clean(body.intakeNotes, 5_000),
     issueDescription,
     accessories,
     repairPath,
@@ -104,7 +104,7 @@ export async function POST(req: NextRequest) {
     createdBy: 'portal_customer',
     bookedByName: 'Customer Portal',
     createdDate: today,
-    notes: clean(body.notes),
+    notes: clean(body.notes, 10_000),
     slaMissed: false,
     date: today,
     description: issueDescription,
