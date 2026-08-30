@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from '@/lib/auth/server'
 import {
-  hasPermission, SENSITIVE_STORE_KEY_PERMISSIONS, CLIENT_IMMUTABLE_STORE_KEYS, canReadStoreKey,
+  CLIENT_IMMUTABLE_STORE_KEYS, canReadStoreKey,
   CONTENT_FILTERED_STORE_KEYS, filterStoreValueForRole, hasFullStoreContentAccess, mergeFilteredStoreWrite,
 } from '@/lib/auth/authorization'
+import { canWriteStoreKey } from '@/lib/auth/store-write-policy'
 import { loadAppState, loadAppStateForWrite, saveStoreKeys, getAppStateVersion } from '@/lib/server-store'
 import { mergeAppendOnlyJournals } from '@/lib/finance-controls'
 import { preserveInvoiceLinesOnStoreWrite, preservePostedInvoicePaymentProgress, enforcePostedInvoiceImmutability, type RejectedPostedInvoiceEdit } from '@/lib/finance-invoice'
@@ -186,10 +187,7 @@ export async function POST(request: Request) {
   // deed_auditLogs, which is director-only) — a blanket 403 here silently lost
   // the legitimate keys in the same batch (repairs, quotes, ...) even though the
   // caller was fully allowed to write them.
-  const deniedKeys = Object.keys(entries).filter(key => {
-    const action = SENSITIVE_STORE_KEY_PERMISSIONS[key]
-    return action && !hasPermission(session.user, action)
-  })
+  const deniedKeys = Object.keys(entries).filter(key => !canWriteStoreKey(session.user, key))
   for (const key of deniedKeys) delete entries[key]
 
   if (Object.keys(entries).length === 0) {
