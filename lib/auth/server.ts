@@ -5,31 +5,40 @@ import { getServerSession as nextAuthGetServerSession } from 'next-auth'
 
 import { authOptions } from './auth-options'
 import type { PublicUser, ServerSession, UserRole, ModuleId } from './types'
-import { resolveUserSessionStatus } from './session-validity.server'
+import { findAuthUserById } from './users-repository'
 
 export const getServerSession = async (): Promise<ServerSession | null> => {
   const session = await nextAuthGetServerSession(authOptions)
 
   if (!session?.user?.id) return null
 
-  // Live active/role check so deactivated users and role changes take effect
-  // without waiting for the JWT to expire (SEC-002).
-  const status = await resolveUserSessionStatus(session.user.id)
-  if (!status.isActive) return null
+  // Security-sensitive session validation reads the user row directly.
+  // This deliberately does not rely only on the middleware cache: password
+  // changes increment session_version, so a JWT minted before that change must
+  // fail even across separate Node/Edge processes or when Redis is unavailable.
+  let liveUser
+  try {
+    liveUser = await findAuthUserById(session.user.id)
+  } catch (error) {
+    console.error('[auth/server] live session validation failed:', error instanceof Error ? error.message : 'unknown_error')
+    return null
+  }
+  if (!liveUser?.active) return null
 
-  const role = (status.role || session.user.role) as UserRole
+  const jwtSessionVersion = Math.max(0, Number(session.user.sessionVersion ?? 0) || 0)
+  if (jwtSessionVersion < 1 || jwtSessionVersion !== Math.max(1, liveUser.sessionVersion)) return null
+
+  const role = liveUser.role as UserRole
 
   const user: PublicUser = {
-    id:        session.user.id,
-    username:  session.user.username,
-    name:      session.user.name ?? '',
+    id:        liveUser.id,
+    username:  liveUser.username,
+    name:      liveUser.name ?? '',
     role,
-    modules:   Array.isArray(session.user.modules) ? session.user.modules as ModuleId[] : [],
+    modules:   Array.isArray(liveUser.modules) ? liveUser.modules as ModuleId[] : [],
     active:    true,
-    createdAt: session.user.createdAt,
-    actsAsTechnician: Boolean(
-      status.actsAsTechnician ?? (session.user as PublicUser).actsAsTechnician,
-    ),
+    createdAt: liveUser.createdAt,
+    actsAsTechnician: Boolean(liveUser.actsAsTechnician),
   }
 
   return {
