@@ -37,17 +37,46 @@ const blobConfig = {
     // Legacy compatibility only: explicitly map permitted business inputs.
     // Client IDs, status/audit/posting fields and arbitrary extra properties
     // are never spread into the stored payment record.
+    const id = randomUUID()
+    const rawMethod = safeLegacyText(body.method ?? body.paymentMethod ?? 'cash', 40)
+    const method: Payment['method'] = ['cash', 'bank_transfer', 'mpesa', 'card', 'cheque'].includes(rawMethod)
+      ? rawMethod as Payment['method']
+      : 'cash'
+    const rawInvoices = Array.isArray(body.invoices) ? body.invoices.slice(0, 500) : []
+    const invoices = rawInvoices
+      .map((entry: any) => {
+        const invoiceId = safeLegacyText(entry?.invoiceId, 64)
+        const allocated = Number(entry?.amountAllocated ?? entry?.amount)
+        if (!invoiceId || !Number.isFinite(allocated) || allocated <= 0) return null
+        return {
+          invoiceId,
+          invoiceRef: safeLegacyText(entry?.invoiceRef, 80),
+          amountAllocated: roundMoney(Math.min(allocated, amount)),
+        }
+      })
+      .filter(Boolean) as Payment['invoices']
+    const allocated = invoices.reduce((sum, entry) => sum + entry.amountAllocated, 0)
+    if (allocated > amount + 0.01) return 'invoice allocations exceed payment amount'
+
+    const ref = `PAY/${id.slice(0, 8).toUpperCase()}`
+    const reference = safeLegacyText(body.reference, 120)
+    const at = paidAt.toISOString()
     return {
-      id: randomUUID(),
+      id,
+      ref,
       customerId,
       customerName: safeLegacyText(body.customerName ?? body.partnerName, 200),
-      invoiceId: safeLegacyText(body.invoiceId, 64) || undefined,
       amount: roundMoney(amount),
-      method: safeLegacyText(body.method ?? body.paymentMethod ?? 'cash', 40) || 'cash',
-      reference: safeLegacyText(body.reference, 120) || undefined,
-      date: paidAt.toISOString(),
+      method,
+      invoices,
+      status: 'pending',
+      reference,
+      receiptNumber: ref,
+      receivedBy: 'ERP',
+      receivedDate: at,
+      accountingDate: at.slice(0, 10),
       notes: safeLegacyText(body.notes, 5_000) || undefined,
-    } as unknown as Payment
+    } as Payment
   },
 }
 
