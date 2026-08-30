@@ -8,6 +8,8 @@ import { assignableTechnicians } from '@/lib/repair/assignable-technicians'
 import { DIRECT_REPAIR_WAIVER_TEXT } from '@/lib/repair-path'
 import { isRepairNoCharge } from '@/lib/repair-billing-exempt'
 import { shouldDefaultCloseAfterHandover } from '@/lib/repair-handover'
+import { buildRepairInvoiceCharges, repairBillingNeedsSync } from '@/lib/repair-invoice'
+import { findSaleOrderForRepair, findSalesQuoteForRepair } from '@/lib/repair/sale-order-link'
 import {
   DIAGNOSIS_FEE_LINE_DESCRIPTION,
   isDiagnosisFeeLine,
@@ -1000,10 +1002,22 @@ export function ScheduleDeliveryModal({ repair, onClose }: { repair: RepairOrder
  * RepairProgressModal
  */
 export function RepairProgressModal({ repair, onClose }: { repair: RepairOrder, onClose: () => void }) {
-  const { startRepair, markRepairComplete, createInvoiceFromRepair } = useRepairStore()
+  const { startRepair, markRepairComplete, createInvoiceFromRepair, invoices, quotes, saleOrders, companySettings } = useRepairStore()
   const [notes, setNotes] = useState('')
   const noCharge = !!(repair.billingExempt || (repair.underWarranty && repair.warrantyCoverage === 'full'))
   const billingExempt = !!repair.billingExempt
+  const linkedInvoice = invoices.find(i => i.id === (repair.invoiceId ?? (repair as any).linkedInvoiceId))
+    ?? invoices.find(i => i.repairId === repair.id)
+  const billingSync = repairBillingNeedsSync({
+    salesQuoteStatus: findSalesQuoteForRepair(quotes, repair)?.status,
+    saleOrderStatus: findSaleOrderForRepair(saleOrders, repair)?.status,
+    invoice: linkedInvoice,
+    charges: buildRepairInvoiceCharges(repair, true, companySettings?.vatRate ?? 0),
+  })
+  const canBillFromQuote = !noCharge
+    && ['ready', 'invoiced'].includes(repair.status)
+    && billingSync.needed
+    && !(billingSync.invoicePaid && !billingSync.matchesInvoice)
 
   const canStartHere = (['approved', 'awaiting_parts'].includes(repair.status))
     || (repair.repairPath === 'direct_repair' && ['assigned', 'diagnosed', 'approved', 'awaiting_parts'].includes(repair.status))
@@ -1014,7 +1028,7 @@ export function RepairProgressModal({ repair, onClose }: { repair: RepairOrder, 
       startRepair(repair.id)
     } else if (repair.status === 'in_repair') {
       markRepairComplete(repair.id)
-    } else if (repair.status === 'ready' && !noCharge) {
+    } else if (canBillFromQuote) {
       createInvoiceFromRepair(repair.id, true)
     }
     onClose()
@@ -1027,8 +1041,12 @@ export function RepairProgressModal({ repair, onClose }: { repair: RepairOrder, 
       return { title: 'Mark Repair Complete', btn: 'Complete Repair',   icon: faCheckCircle,      accent: '#059669', grad: 'linear-gradient(135deg,#047857,#059669)', shadow: '0 8px 24px rgba(5,150,105,0.4)' }
     if (repair.status === 'ready' && noCharge)
       return { title: 'No Invoice Needed',    btn: 'Done',              icon: faCheckCircle,      accent: '#059669', grad: 'linear-gradient(135deg,#047857,#059669)', shadow: '0 8px 24px rgba(5,150,105,0.4)' }
-    if (repair.status === 'ready')
-      return { title: 'Create Invoice',       btn: 'Generate Invoice',  icon: faFileInvoiceDollar, accent: '#D97706', grad: 'linear-gradient(135deg,#B45309,#D97706)', shadow: '0 8px 24px rgba(217,119,6,0.4)'  }
+    if (canBillFromQuote)
+      return {
+        title: billingSync.canRewriteInvoice || billingSync.quoteOpen ? 'Align Invoice with Quote' : 'Create Invoice',
+        btn: billingSync.canRewriteInvoice || billingSync.quoteOpen ? 'Update from Quote' : 'Generate Invoice',
+        icon: faFileInvoiceDollar, accent: '#D97706', grad: 'linear-gradient(135deg,#B45309,#D97706)', shadow: '0 8px 24px rgba(217,119,6,0.4)',
+      }
     return   { title: 'Update Progress',      btn: 'Update',            icon: faHistory,           accent: '#475569', grad: 'linear-gradient(135deg,#334155,#475569)', shadow: '0 8px 24px rgba(71,85,105,0.35)' }
   }
 
@@ -1037,6 +1055,9 @@ export function RepairProgressModal({ repair, onClose }: { repair: RepairOrder, 
     ? (billingExempt
       ? 'This job is no-charge — prepare release / mark collected. No customer invoice.'
       : 'Full warranty — no customer invoice. Prepare release / mark collected.')
+    : null
+  const billingHint = canBillFromQuote && (billingSync.canRewriteInvoice || billingSync.quoteOpen || billingSync.saleOrderOpen)
+    ? 'Uses the approved quote lines, converts the quotation, and posts one invoice.'
     : null
 
   return (
@@ -1055,7 +1076,7 @@ export function RepairProgressModal({ repair, onClose }: { repair: RepairOrder, 
           <div className="flex-1">
             <p className="text-xs font-black text-[var(--text-1)] uppercase tracking-tight">{cfg.title}</p>
             <p className="text-[10px] text-[var(--text-3)] font-medium mt-0.5">
-              {readyNoChargeHint || 'Moving this job to the next stage in the workflow'}
+              {readyNoChargeHint || billingHint || 'Moving this job to the next stage in the workflow'}
             </p>
           </div>
         </div>

@@ -48,6 +48,12 @@ function vatForQuoteType(type: string | undefined, applyVat: boolean, vatRate: n
   return type === 'part' || type === 'software' || type === 'license' ? vatRate : 0
 }
 
+function quoteLineDescription(line: QuoteLikeLine): string {
+  const raw = String(line.description || line.productName || 'Service').trim() || 'Service'
+  const type = String(line.type ?? '').trim()
+  return type ? `[${type.toUpperCase()}] ${raw}` : raw
+}
+
 function executionCharges(
   repair: RepairInvoiceSource,
   applyVat: boolean,
@@ -97,7 +103,7 @@ function quoteCharges(
     const subtotal = money(line.subtotal) || qty * unitPrice
     if (subtotal < 0.01 && unitPrice <= 0) return []
     return [{
-      description: String(line.description || line.productName || 'Service').trim() || 'Service',
+      description: quoteLineDescription(line),
       qty,
       unitPrice,
       taxRate: quoteHasTax ? vatForQuoteType(line.type, applyVat, vatRate) : 0,
@@ -133,18 +139,27 @@ export function executionChargeTotal(repair: RepairInvoiceSource): number {
   return executionCharges(repair, false, 0).reduce((sum, line) => sum + line.subtotal, 0)
 }
 
+export function quoteChargeTotal(
+  repair: RepairInvoiceSource,
+  applyVat = true,
+  vatRate = 0,
+): number {
+  return quoteCharges(repair, applyVat, vatRate).reduce((sum, line) => sum + line.subtotal, 0)
+}
+
 /**
- * Invoice the work that was actually logged. If labour/parts were never
- * posted (common when the quote was promoted to Sales), fall back to the
- * approved repair quote so Create invoice is not stuck at KES 0.
+ * Bill the approved repair quote. Workshop `partsUsed` is inventory, not the
+ * commercial offer — only use it when there is no billable quote.
  */
 export function buildRepairInvoiceCharges(
   repair: RepairInvoiceSource,
   applyVat = true,
   vatRate = 0,
 ): RepairInvoiceChargeLine[] {
-  const logged = executionCharges(repair, applyVat, vatRate)
-  const body = executionChargeTotal(repair) >= 1 ? logged : quoteCharges(repair, applyVat, vatRate)
+  const quoted = quoteCharges(repair, applyVat, vatRate)
+  const body = quoteChargeTotal(repair, applyVat, vatRate) >= 1 || quoted.length > 0
+    ? quoted
+    : executionCharges(repair, applyVat, vatRate)
   return [...body, ...diagnosisCharges(repair)]
 }
 
@@ -153,4 +168,54 @@ export function repairInvoiceChargeTotal(lines: RepairInvoiceChargeLine[]): numb
     const tax = Math.round(line.subtotal * (line.taxRate || 0) / 100)
     return sum + line.subtotal + tax
   }, 0)
+}
+
+function lineFingerprint(row: { qty?: unknown; unitPrice?: unknown; subtotal?: unknown }): string {
+  const qty = money(row.qty)
+  const unitPrice = money(row.unitPrice)
+  const subtotal = money(row.subtotal) || qty * unitPrice
+  return `${qty}x${unitPrice}=${subtotal}`
+}
+
+export function invoiceMatchesRepairCharges(
+  invoice: { lines?: { qty?: unknown; unitPrice?: unknown; subtotal?: unknown; lineType?: string; description?: unknown }[] | null; total?: unknown } | null | undefined,
+  charges: RepairInvoiceChargeLine[],
+): boolean {
+  if (!invoice) return false
+  const expectedTotal = repairInvoiceChargeTotal(charges)
+  if (Math.abs(money(invoice.total) - expectedTotal) > 1) return false
+  const invLines = (invoice.lines ?? []).filter(line => line?.lineType !== 'section')
+  if (invLines.length !== charges.length) return false
+  const invoiceFp = invLines.map(lineFingerprint).sort().join('|')
+  const chargeFp = charges.map(lineFingerprint).sort().join('|')
+  return invoiceFp === chargeFp
+}
+
+const ACCEPTED_QUOTE_STATUSES = new Set(['accepted', 'revised'])
+const OPEN_QUOTATION_STATUSES = new Set(['quotation', 'quotation_sent'])
+
+export type RepairBillingSyncState = {
+  needed: boolean
+  canRewriteInvoice: boolean
+  quoteOpen: boolean
+  saleOrderOpen: boolean
+  matchesInvoice: boolean
+  invoicePaid: boolean
+  missingInvoice: boolean
+}
+
+export function repairBillingNeedsSync(opts: {
+  salesQuoteStatus?: string | null
+  saleOrderStatus?: string | null
+  invoice?: { lines?: { qty?: unknown; unitPrice?: unknown; subtotal?: unknown; lineType?: string }[] | null; total?: unknown; amountPaid?: unknown; status?: string | null } | null
+  charges: RepairInvoiceChargeLine[]
+}): RepairBillingSyncState {
+  const quoteOpen = !!opts.salesQuoteStatus && !ACCEPTED_QUOTE_STATUSES.has(String(opts.salesQuoteStatus).toLowerCase())
+  const saleOrderOpen = !!opts.saleOrderStatus && OPEN_QUOTATION_STATUSES.has(String(opts.saleOrderStatus).toLowerCase())
+  const missingInvoice = !opts.invoice || String(opts.invoice.status ?? '').toLowerCase() === 'cancelled'
+  const matchesInvoice = !missingInvoice && invoiceMatchesRepairCharges(opts.invoice, opts.charges)
+  const invoicePaid = money(opts.invoice?.amountPaid) > 0
+  const canRewriteInvoice = !missingInvoice && !invoicePaid && !matchesInvoice
+  const needed = missingInvoice || quoteOpen || saleOrderOpen || canRewriteInvoice
+  return { needed, canRewriteInvoice, quoteOpen, saleOrderOpen, matchesInvoice, invoicePaid, missingInvoice }
 }
