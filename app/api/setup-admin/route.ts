@@ -1,15 +1,14 @@
-import { randomBytes, timingSafeEqual } from 'crypto'
+import { timingSafeEqual } from 'crypto'
 import { NextRequest, NextResponse } from 'next/server'
 import { sql } from '@/lib/auth/db'
 import { hashPassword } from '@/lib/auth/password'
+import { isStrongBootstrapPassword } from '@/lib/auth/temporary-credentials'
+import { InputSecurityError, readSafeJson } from '@/lib/input-security'
 
 // One-time bootstrap endpoint for provisioning the first director account on
-// a fresh database. It intentionally sits outside session auth (there is no
-// admin yet to log in as), so it is locked down instead by:
-//   - requiring SETUP_ADMIN_SECRET to be set and matched via a header
-//   - refusing to run once any user already exists (no repeatable reset)
-//   - never hardcoding a password — a random one is generated and logged
-//     server-side only, never returned in the HTTP response
+// a fresh database. It requires SETUP_ADMIN_SECRET, refuses to run once a user
+// exists, and never generates, logs, or returns a password. The caller must
+// supply a strong initial password over the protected HTTPS setup request.
 function safeEqual(a: string, b: string): boolean {
   const bufA = Buffer.from(a)
   const bufB = Buffer.from(b)
@@ -29,6 +28,34 @@ export async function POST(request: NextRequest) {
   const provided = request.headers.get('x-setup-secret') ?? ''
   if (!provided || !safeEqual(provided, setupSecret)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  let body: unknown
+  try {
+    body = await readSafeJson(request, {
+      maxBytes: 4096,
+      limits: { maxDepth: 3, maxNodes: 20, maxObjectKeys: 4, maxArrayLength: 0, maxStringLength: 256 },
+    })
+  } catch (error) {
+    if (error instanceof InputSecurityError) {
+      return NextResponse.json({ error: 'Invalid setup payload' }, { status: error.status })
+    }
+    throw error
+  }
+
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    return NextResponse.json({ error: 'Expected setup object' }, { status: 400 })
+  }
+  const fields = Object.keys(body as Record<string, unknown>)
+  if (fields.length !== 1 || fields[0] !== 'password') {
+    return NextResponse.json({ error: 'Expected exactly { password }' }, { status: 400 })
+  }
+  const initialPassword = (body as Record<string, unknown>).password
+  if (!isStrongBootstrapPassword(initialPassword)) {
+    return NextResponse.json(
+      { error: 'Initial password must be 16–128 characters with uppercase, lowercase, number, and symbol.' },
+      { status: 400 },
+    )
   }
 
   const steps: string[] = []
@@ -66,17 +93,13 @@ export async function POST(request: NextRequest) {
       'sops','after_sales','expenses','leave','my_documents',
     ])
 
-    const tempPassword = randomBytes(18).toString('base64url')
-    const hash = await hashPassword(tempPassword)
+    const hash = await hashPassword(initialPassword)
     await sql`
       INSERT INTO users (id, username, name, role, modules_json, active, created_at, password_hash, must_change_password)
       VALUES ('u_admin', 'admin', 'Administrator', 'director', ${allModules}, 1, ${new Date().toISOString().slice(0, 10)}, ${hash}, 1)
       ON CONFLICT (username) DO NOTHING
     `
     steps.push('Initial director account "admin" created — must change password at first login')
-
-    // Logged server-side only; never included in the HTTP response.
-    console.warn(`[setup-admin] Temporary password for "admin": ${tempPassword}`)
 
     return NextResponse.json({ ok: true, steps })
   } catch (e) {
