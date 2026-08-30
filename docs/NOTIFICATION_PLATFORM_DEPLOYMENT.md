@@ -185,7 +185,7 @@ Administrators can inspect the platform at:
 
 The panel exposes delivery counts, channel volume, pending outbox/delivery counts, current dead letters and recent failures. Dead-letter deliveries can be requeued from the panel.
 
-The same screen now includes **SMS Message Center** with **All / Inbox / Sent / Failed** views, full message threads, delivery state, inbound replies and direct SMS reply. Replies of `STOP`, `UNSUBSCRIBE`, `CANCEL`, `END` or `QUIT` mark that conversation as opted out and block manual replies from the ERP.
+The same screen now includes **SMS Message Center** with **All / Inbox / Sent / Failed** views, full message threads, delivery state, inbound replies and direct SMS reply. Replies of `STOP`, `UNSUBSCRIBE`, `CANCEL`, `END` or `QUIT` mark the phone as opted out; the worker suppresses subsequent SMS deliveries to that number and the Message Center blocks manual replies.
 
 User-level delivery preferences are under:
 
