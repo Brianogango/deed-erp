@@ -86,7 +86,7 @@ import { isDownPaymentMode, normalizeCreateInvoiceMode } from '@/lib/sales/down-
 import {
   advanceExpenseApproval,
   buildExpenseApprovalChain,
-  canUserApproveExpenseStep,
+  canUserReviewExpense,
   expenseChainIsComplete,
 } from '@/lib/expense-approval-chain'
 import type { ApprovalRequest, ApprovalType, StockReservation } from '@/lib/sales-flow-types'
@@ -7647,7 +7647,7 @@ const storeCtx: AppState = {
 
       const chain = expense.approvalChain
       if (chain?.length) {
-        if (!canUserApproveExpenseStep(user.role, chain)) {
+        if (!canUserReviewExpense(user.role, chain)) {
           const pending = chain.find(s => s.status === 'pending')
           showToast(`This step requires ${pending?.role?.replace('_', ' ') ?? 'another approver'}`, 'error')
           return
