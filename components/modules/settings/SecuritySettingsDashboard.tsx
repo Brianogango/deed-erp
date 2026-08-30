@@ -331,6 +331,7 @@ export default function SecuritySettingsDashboard({
   const [overview, setOverview] = useState<SecurityOverview | null>(null)
   const [loading, setLoading] = useState(true)
   const [revoking, setRevoking] = useState(false)
+  const [revokingSessionId, setRevokingSessionId] = useState<string | null>(null)
   const [savingMfaPolicy, setSavingMfaPolicy] = useState(false)
   const [showEnvironment, setShowEnvironment] = useState(false)
 
@@ -423,6 +424,24 @@ export default function SecuritySettingsDashboard({
       showToast(error instanceof Error ? error.message : 'Could not revoke sessions', 'error')
     } finally {
       setRevoking(false)
+    }
+  }
+
+  const revokeSession = async (sessionId: string, userName: string) => {
+    if (currentUser?.role !== 'director' || revokingSessionId) return
+    if (!window.confirm(`Revoke active ERP sessions for ${userName}? They will need to sign in again.`)) return
+
+    setRevokingSessionId(sessionId)
+    try {
+      const response = await fetch(`/api/admin/security/sessions/${encodeURIComponent(sessionId)}`, { method: 'DELETE' })
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(data.error || 'Could not revoke session')
+      showToast(data.message || 'Session revoked', 'success')
+      await refresh(false)
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'Could not revoke session', 'error')
+    } finally {
+      setRevokingSessionId(null)
     }
   }
 
@@ -697,13 +716,14 @@ export default function SecuritySettingsDashboard({
           </div>
           <div className="px-3.5 py-3">
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[300px] text-left">
+              <table className="w-full min-w-[355px] text-left">
                 <thead>
                   <tr className="text-[7.5px] font-bold text-[#718096]">
                     <th className="pb-2">User</th>
                     <th className="pb-2">Device</th>
                     <th className="pb-2">IP</th>
                     <th className="pb-2 text-right">Active</th>
+                    <th className="pb-2 text-right">Action</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -713,6 +733,20 @@ export default function SecuritySettingsDashboard({
                       <td className="max-w-[82px] truncate py-2">{compactAgent(session.userAgent)}</td>
                       <td className="max-w-[70px] truncate py-2 font-mono">{session.ipAddress}</td>
                       <td className="py-2 text-right">{timeAgo(session.createdAt)}</td>
+                      <td className="py-2 text-right">
+                        {session.id !== 'current-session' && currentUser?.role === 'director' ? (
+                          <button
+                            type="button"
+                            disabled={Boolean(revokingSessionId)}
+                            onClick={() => void revokeSession(session.id, session.name)}
+                            className="rounded-md border border-[#F3C4C4] bg-[#FFF7F7] px-1.5 py-1 text-[7.5px] font-bold text-[#D63D3D] disabled:opacity-50"
+                          >
+                            {revokingSessionId === session.id ? '…' : 'Revoke'}
+                          </button>
+                        ) : (
+                          <span className="text-[7.5px] text-[#9AA5B5]">Current</span>
+                        )}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
