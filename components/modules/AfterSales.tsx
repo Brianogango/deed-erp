@@ -18,6 +18,7 @@ import type { IconProp } from '@fortawesome/fontawesome-svg-core'
 import TradeIn from './TradeIn'
 import { SerialReturnPicker } from '@/components/tradein/SerialReturnPicker'
 import { useUrlQueryState, useUrlRecordId } from '@/hooks/useUrlRecordId'
+import { formatWarrantyDuration } from '@/lib/warranty-period'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -305,7 +306,7 @@ function AfterSalesContent() {
               <div className="flex justify-between"><span className="text-t3">Customer</span><span className="font-medium">{w.customerName}</span></div>
               <div className="flex justify-between"><span className="text-t3">Product</span><span className="font-medium">{w.productName}</span></div>
               <div className="flex justify-between"><span className="text-t3">Serial No</span><span className="font-mono font-semibold">{w.serialNumber}</span></div>
-              <div className="flex justify-between"><span className="text-t3">Duration</span><span>{w.months} months</span></div>
+              <div className="flex justify-between"><span className="text-t3">Duration</span><span>{formatWarrantyDuration(w.months)}</span></div>
               <div className="flex justify-between"><span className="text-t3">Sale Order</span><span className="font-mono">{w.saleOrderRef}</span></div>
             </div>
           </div>
@@ -554,7 +555,7 @@ function AfterSalesContent() {
     },
     {
       key: 'duration', label: 'Duration', priority: 2, width: '100px',
-      render: w => <span className="text-xs text-t3">{w.months} months</span>,
+      render: w => <span className="text-xs text-t3">{formatWarrantyDuration(w.months)}</span>,
       exportValue: w => w.months,
     },
     {
@@ -590,7 +591,7 @@ function AfterSalesContent() {
         </div>
         <p className="text-xs font-semibold text-t1">{w.customerName}</p>
         <p className="aftersales-wrap text-[10px] text-t2" title={`${w.productName} · ${w.serialNumber}`}>{w.productName} · <span className="font-mono">{w.serialNumber}</span></p>
-        <p className="text-[10px] text-t3 mt-0.5">{w.months}mo · {fmtDate(w.startDate)} → {fmtDate(w.endDate)}</p>
+        <p className="text-[10px] text-t3 mt-0.5">{formatWarrantyDuration(w.months)} · {fmtDate(w.startDate)} → {fmtDate(w.endDate)}</p>
         <p style={{ fontSize: 9, fontWeight: 600, color: days < 0 ? 'var(--danger)' : days <= 30 ? 'var(--warning-text)' : 'var(--success)', marginTop: 2 }}>
           {days < 0 ? `${Math.abs(days)}d overdue` : `${days}d left`}
         </p>

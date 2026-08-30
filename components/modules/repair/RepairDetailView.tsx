@@ -112,7 +112,7 @@ function ActionBtn({ onClick, href, icon, label, color, shadow, pulse = false }:
 
 export default function RepairDetailView() {
   const {
-    activeRepair: r, currentUserId, currentUser, systemSettings, setView, setActiveId,
+    activeRepair: r, currentUserId, currentUser, systemSettings, companySettings, setView, setActiveId,
     setShowAssignModal, setShowDiagnosisModal, setShowQuoteModal, setShowQAModal,
     setShowDeclineModal, setShowProcurementModal, updateRepair, showToast,
     diagReportInputRef, qcReportInputRef, handleReportUpload, uploadingDiagReport, setUploadingDiagReport, uploadingQcReport, setUploadingQcReport,

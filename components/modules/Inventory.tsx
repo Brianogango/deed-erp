@@ -131,7 +131,7 @@ const blankProduct = (formDefaults?: { minStock?: number; warrantyMonths?: numbe
     pricingCategoryId: '',
     productType: 'refurbished',
     description: '', canBeSold: true, canBePurchased: true, image: '',
-    isActive: true, warrantyMonths: String(formDefaults?.warrantyMonths ?? 12),
+    isActive: true, warrantyMonths: String(formDefaults?.warrantyMonths ?? 6),
     saleAccountCode: defaults.saleAccountCode || '',
     costAccountCode: defaults.costAccountCode || '',
     inventoryAccountCode: defaults.inventoryAccountCode || '',
@@ -308,7 +308,7 @@ function InventoryContent() {
   const [form, setForm] = useState<any>(blankProduct())
   const productFormDefaults = {
     minStock: systemSettings.invDefaultMinStock ?? 5,
-    warrantyMonths: systemSettings.invDefaultWarrantyMonths ?? 12,
+    warrantyMonths: systemSettings.invDefaultWarrantyMonths ?? 6,
   }
   const emptyPhotoSlots = (): Record<ProductImageSlot, { url: string | null; source: 'upload' | 'catalog' | null; pending?: boolean }> => ({
     1: { url: null, source: null },
@@ -1172,7 +1172,7 @@ function InventoryContent() {
           costPrice: Number(col(row, 'Cost Price', 'CostPrice', 'costPrice', 'cost_price')) || 0,
           taxRate: Number(col(row, 'Tax Rate', 'TaxRate', 'taxRate', 'tax_rate')) || 0,
           minStock: Number(col(row, 'Min Stock', 'MinStock', 'Reorder Level', 'minStock')) || 5,
-          warrantyMonths: Number(col(row, 'Warranty Months', 'WarrantyMonths', 'warrantyMonths')) || (systemSettings.invDefaultWarrantyMonths ?? 12),
+          warrantyMonths: Number(col(row, 'Warranty Months', 'WarrantyMonths', 'warrantyMonths')) || (systemSettings.invDefaultWarrantyMonths ?? 6),
           description: col(row, 'Description', 'description'),
           saleAccountCode: col(row, 'Revenue Account', 'Sale Account', 'saleAccountCode', 'sale_account_code'),
           costAccountCode: col(row, 'Purchase Account', 'Cost Account', 'costAccountCode', 'cost_account_code'),
