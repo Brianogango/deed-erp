@@ -196,3 +196,47 @@ export function stampInvoiceOnMatchingRepair<T extends RepairSaleOrderLink & Rec
   if (!repair?.id || repair.invoiceId) return repairs
   return repairs.map(r => (r.id === repair.id ? applyInvoiceLinkToRepair(r, invoice) : r))
 }
+
+export type RepairSalesQuoteLink = {
+  id?: string | null
+  ref?: string | null
+  salesQuoteId?: string | null
+  salesQuoteRef?: string | null
+}
+
+export type SalesQuoteCandidate = {
+  id?: string | null
+  ref?: string | null
+  quoteNumber?: string | null
+  source?: string | null
+  repairId?: string | null
+  repairRef?: string | null
+}
+
+/** Resolve the Sales quote that was pushed from a repair quote. */
+export function findSalesQuoteForRepair<T extends SalesQuoteCandidate>(
+  quotes: T[] | null | undefined,
+  repair: RepairSalesQuoteLink | null | undefined,
+): T | undefined {
+  if (!repair || !Array.isArray(quotes) || quotes.length === 0) return undefined
+  const quoteId = String(repair.salesQuoteId ?? '').trim()
+  if (quoteId) {
+    const byId = quotes.find(quote => String(quote.id ?? '').trim() === quoteId)
+    if (byId) return byId
+  }
+  const quoteRef = String(repair.salesQuoteRef ?? '').trim()
+  if (quoteRef) {
+    const byRef = quotes.find(quote =>
+      String(quote.ref ?? '').trim() === quoteRef
+      || String(quote.quoteNumber ?? '').trim() === quoteRef,
+    )
+    if (byRef) return byRef
+  }
+  const repairId = String(repair.id ?? '').trim()
+  const repairRef = String(repair.ref ?? '').trim().toUpperCase()
+  return quotes.find(quote => {
+    if (String(quote.source ?? '') !== 'repair') return false
+    if (repairId && String(quote.repairId ?? '').trim() === repairId) return true
+    return !!repairRef && String(quote.repairRef ?? '').trim().toUpperCase() === repairRef
+  })
+}

@@ -5,6 +5,7 @@ import {
   extractRepairRefFromText,
   findRepairForSaleOrder,
   findSaleOrderForRepair,
+  findSalesQuoteForRepair,
   stampInvoiceOnMatchingRepair,
 } from '@/lib/repair/sale-order-link'
 
@@ -138,5 +139,29 @@ describe('dedupeRepairSaleOrders', () => {
       orders,
       [{ id: 'repair-1', ref: 'REP/0294', saleOrderId: 'linked' }],
     ).map(order => order.id)).toEqual(['linked'])
+  })
+})
+
+describe('findSalesQuoteForRepair', () => {
+  const quote = {
+    id: 'quote-1',
+    ref: 'QUO/2026/0284',
+    source: 'repair',
+    repairId: 'repair-310',
+    repairRef: 'REP/0310',
+  }
+
+  it('matches by salesQuoteId first', () => {
+    expect(findSalesQuoteForRepair(
+      [quote],
+      { id: 'repair-310', ref: 'REP/0310', salesQuoteId: 'quote-1' },
+    )?.ref).toBe('QUO/2026/0284')
+  })
+
+  it('falls back to the repair source link', () => {
+    expect(findSalesQuoteForRepair(
+      [quote],
+      { id: 'repair-310', ref: 'REP/0310' },
+    )?.id).toBe('quote-1')
   })
 })

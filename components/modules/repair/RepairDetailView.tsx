@@ -38,6 +38,8 @@ import {
 } from '@/lib/repair-billing-exempt'
 import { resolveDiagnosisFee, shouldChargeDiagnosisFee } from '@/lib/diagnosis-fee'
 import { pickRepairPrimaryAction } from '@/lib/repair-handover'
+import { buildRepairInvoiceCharges, repairBillingNeedsSync } from '@/lib/repair-invoice'
+import { findSaleOrderForRepair, findSalesQuoteForRepair } from '@/lib/repair/sale-order-link'
 
 const PROC_COLORS = {
   pending:   { bg: 'bg-amber-50',   text: 'text-amber-700',   border: 'border-amber-200',   dot: '#F59E0B' },
@@ -122,7 +124,7 @@ export default function RepairDetailView() {
     markPartsArrived, closeRepairJob, markUnrepairable,
   } = useRepair()
 
-  const { invoices, setModule, outboundReleases, initRelease, serials, reviewPortalPayment, leaveDeviceWithDeed, convertRetainedRepairToDonation, convertRetainedRepairToBuyBack, createTradeInFromRepair, waiveDiagnosisFee, markDiagnosisFeePaid, markRepairNoCharge } = useRepairStore()
+  const { invoices, quotes, saleOrders, setModule, outboundReleases, initRelease, serials, reviewPortalPayment, leaveDeviceWithDeed, convertRetainedRepairToDonation, convertRetainedRepairToBuyBack, createTradeInFromRepair, waiveDiagnosisFee, markDiagnosisFeePaid, markRepairNoCharge } = useRepairStore()
 
   const [showOrcPanel, setShowOrcPanel] = useState(false)
   const [showPaymentRejectInput, setShowPaymentRejectInput] = useState(false)
@@ -251,9 +253,20 @@ export default function RepairDetailView() {
   const canMarkPartsArrived = r.status === 'awaiting_parts'
     && ['technical_lead', 'director', 'inventory_officer'].includes(currentRole)
     && !pendingOutsourceJob
-  const canInvoice = r.status === 'ready'
+  const linkedInvoice      = invoices.find(i => i.id === (r.invoiceId ?? (r as any).linkedInvoiceId))
+    ?? invoices.find(i => i.repairId === r.id)
+  const linkedSaleOrder    = findSaleOrderForRepair(saleOrders, r)
+  const linkedSalesQuote   = findSalesQuoteForRepair(quotes, r)
+  const billingSync        = repairBillingNeedsSync({
+    salesQuoteStatus: linkedSalesQuote?.status,
+    saleOrderStatus: linkedSaleOrder?.status,
+    invoice: linkedInvoice,
+    charges: buildRepairInvoiceCharges(r, true, companySettings?.vatRate ?? 0),
+  })
+  const canInvoice = ['ready', 'invoiced'].includes(r.status)
     && !noCharge
-    && !r.invoiceId
+    && billingSync.needed
+    && !(billingSync.invoicePaid && !billingSync.matchesInvoice)
     && ['director', 'finance_officer', 'admin_officer'].includes(currentUser?.role ?? '')
     && !pendingOutsourceJob
   const canCloseJob = ['delivered', 'collected'].includes(r.status)
@@ -264,11 +277,13 @@ export default function RepairDetailView() {
   const failedQcItems = (r.qcItems ?? []).filter(item => item.testedDate && !item.passed)
   const showQcFailPanel = !!(r.qcFailReason || failedQcItems.length) && ['in_repair', 'qc'].includes(r.status)
   const canUpdateProgress = !TERMINAL.includes(r.status)
-    && ['approved', 'awaiting_parts', 'in_repair', 'ready'].includes(r.status)
+    && (
+      ['approved', 'awaiting_parts', 'in_repair', 'ready'].includes(r.status)
+      || (r.status === 'invoiced' && canInvoice)
+    )
     && (isMyRepair || ['director', 'technical_lead', 'finance_officer', 'admin_officer'].includes(currentUser?.role ?? ''))
     && !pendingOutsourceJob
 
-  const linkedInvoice      = invoices.find(i => i.id === (r.invoiceId ?? (r as any).linkedInvoiceId))
   const linkedOutsourceJob = pendingOutsourceJob ?? outsourceJobs.find(j => j.repairOrderId === r.id)
 
   const hasProc      = (r.procurementRequests?.length ?? 0) > 0
@@ -281,7 +296,9 @@ export default function RepairDetailView() {
     : canStart     ? (billingExempt ? 'No-charge job — start the repair (quote & billing skipped)' : 'Start the repair')
     : canComplete  ? 'Mark repair complete to submit for QA'
     : canPerformQA ? 'Perform QC check — repair is ready for testing'
-    : canInvoice   ? 'Generate the customer invoice before release'
+    : canInvoice   ? (billingSync.canRewriteInvoice || billingSync.quoteOpen || billingSync.saleOrderOpen
+      ? 'Rebuild the invoice from the approved quote and convert the quotation'
+      : 'Generate the customer invoice before release')
     : canQuote && !r.quote ? 'Generate a repair quote'
     : canQuote && r.quote ? 'Update or re-send the quote to move forward'
     : canCloseJob  ? 'Close the job after collection'
@@ -520,7 +537,7 @@ export default function RepairDetailView() {
               <ActionBtn onClick={() => markPartsArrived(r.id)} icon={faBoxOpen} label="Mark parts arrived" color="bg-orange-600 hover:bg-orange-700" shadow="shadow-orange-100" pulse />
             )}
             {primaryActionId === 'invoice' && (
-              <ActionBtn onClick={() => setShowProgressModal(true)} icon={faFileInvoiceDollar} label="Create invoice" color="bg-amber-600 hover:bg-amber-700" shadow="shadow-amber-100" pulse />
+              <ActionBtn onClick={() => setShowProgressModal(true)} icon={faFileInvoiceDollar} label={billingSync.canRewriteInvoice || billingSync.quoteOpen ? 'Align invoice with quote' : 'Create invoice'} color="bg-amber-600 hover:bg-amber-700" shadow="shadow-amber-100" pulse />
             )}
             {primaryActionId === 'prepare_release' && (
               <ActionBtn
@@ -551,7 +568,7 @@ export default function RepairDetailView() {
                 { id: 'quote', label: isQuoteDeclinedReopenable(r.status) ? 'Revise & re-send quote' : r.quote ? 'Edit quote' : 'Generate quote', onClick: () => setShowQuoteModal(true), hidden: !canQuote || primaryActionId === 'quote' },
                 { id: 'parts_arrived', label: 'Mark parts arrived', onClick: () => markPartsArrived(r.id), hidden: !canMarkPartsArrived || primaryActionId === 'parts_arrived' },
                 { id: 'progress', label: 'Update progress', onClick: () => setShowProgressModal(true), hidden: !canUpdateProgress || ['start', 'complete', 'invoice'].includes(primaryActionId ?? '') },
-                { id: 'invoice', label: 'Create invoice', onClick: () => setShowProgressModal(true), hidden: !canInvoice || primaryActionId === 'invoice' },
+                { id: 'invoice', label: billingSync.canRewriteInvoice || billingSync.quoteOpen ? 'Align invoice with quote' : 'Create invoice', onClick: () => setShowProgressModal(true), hidden: !canInvoice || primaryActionId === 'invoice' },
                 { id: 'procure', label: 'Request parts', onClick: () => setShowProcurementModal(true), hidden: !canProcure },
                 { id: 'stop', label: 'Stop at diagnosis', onClick: () => setShowStopDiagnosisModal(true), hidden: !canStopAtDiagnosis },
                 { id: 'mark_fee_paid', label: 'Mark diagnosis fee paid (early)', onClick: () => markDiagnosisFeePaid(r.id), hidden: !canMarkDiagnosisFeePaid },

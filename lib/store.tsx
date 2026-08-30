@@ -231,9 +231,9 @@ import {
   taxableQuoteSubtotal,
   diagnosisFeeAmount,
 } from '@/lib/diagnosis-fee'
-import { buildRepairInvoiceCharges, repairInvoiceChargeTotal } from '@/lib/repair-invoice'
+import { buildRepairInvoiceCharges, invoiceMatchesRepairCharges, repairInvoiceChargeTotal } from '@/lib/repair-invoice'
 import { isAssignableTechnician, isRepairTechActor } from '@/lib/repair/assignable-technicians'
-import { findSaleOrderForRepair } from '@/lib/repair/sale-order-link'
+import { findSaleOrderForRepair, findSalesQuoteForRepair } from '@/lib/repair/sale-order-link'
 import {
   buildDefaultRepairQcItems,
   prepareRepairQcItemsForRound,
@@ -483,6 +483,7 @@ export interface Quote {
   convertedToId?: string
   saleOrderId?: string
   invoiceId?: string
+  convertedDate?: string
   parentQuoteId?: string
   approvalStatus?: 'not_required' | 'pending' | 'approved' | 'rejected'
   approvalRequestIds?: string[]
@@ -16187,6 +16188,31 @@ const storeCtx: AppState = {
           addAuditLog('post_invoice', linkedInvoice.ref, `Auto-posted on QC pass — ${repair.ref}`)
         }
 
+        const readySaleOrder = findSaleOrderForRepair(soRef.current, repair)
+        if (linkedInvoice && readySaleOrder && (readySaleOrder.status === 'quotation' || readySaleOrder.status === 'quotation_sent')) {
+          const confirmedAt = readySaleOrder.confirmedAt ?? new Date().toISOString()
+          setSaleOrders(prev => prev.map(s => s.id === readySaleOrder.id
+            ? { ...s, status: 'sale' as const, confirmedAt, invoiceId: linkedInvoice.id }
+            : s))
+          sync(`/api/sale-orders/${readySaleOrder.id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status: 'sale', confirmedAt, invoiceId: linkedInvoice.id }),
+          })
+        }
+        const readySalesQuote = findSalesQuoteForRepair(quotes, repair)
+        if (linkedInvoice && readySalesQuote && readySalesQuote.status !== 'accepted') {
+          setQuotes(p => {
+            const next = p.map(q => q.id === readySalesQuote.id ? {
+              ...q, status: 'accepted' as const, invoiceId: linkedInvoice.id, saleOrderId: readySaleOrder?.id ?? q.saleOrderId,
+              acceptedDate: q.acceptedDate ?? now(), convertedDate: q.convertedDate ?? now(),
+            } : q)
+            const updated = next.find(q => q.id === readySalesQuote.id)
+            if (updated) sync(`/api/quotes/${readySalesQuote.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+            return next
+          })
+        }
+
         notifyUsers({
           recipients: [
             repair.assignedTechnicianId,
@@ -16551,14 +16577,15 @@ const storeCtx: AppState = {
         )
         return null
       }
-      
-      if (repair.invoiceId) {
-        showToast('Invoice already exists for this repair', 'error')
+
+      const chargeLines = buildRepairInvoiceCharges(repair, applyVat, companySettings.vatRate)
+      const chargeTotal = repairInvoiceChargeTotal(chargeLines)
+      if (chargeTotal < 1) {
+        showToast('Invoice total must be at least KES 1 — invoices below KES 1 cannot be created', 'error')
         return null
       }
 
-      const chargeLines = buildRepairInvoiceCharges(repair, applyVat, companySettings.vatRate)
-      const lines: InvoiceLine[] = chargeLines.map(line => ({
+      const toInvoiceLines = (): InvoiceLine[] => chargeLines.map(line => ({
         id: uid(),
         description: line.description,
         qty: line.qty,
@@ -16567,79 +16594,232 @@ const storeCtx: AppState = {
         subtotal: line.subtotal,
         productId: line.productId,
       }))
-      
-      const subtotal = lines.reduce((sum, line) => sum + line.subtotal, 0)
-      const taxTotal = lines.reduce((sum, line) => sum + Math.round(line.subtotal * line.taxRate / 100), 0)
+      const subtotal = chargeLines.reduce((sum, line) => sum + line.subtotal, 0)
+      const taxTotal = chargeLines.reduce((sum, line) => sum + Math.round(line.subtotal * line.taxRate / 100), 0)
 
-      if (repairInvoiceChargeTotal(chargeLines) < 1) {
-        showToast('Invoice total must be at least KES 1 — invoices below KES 1 cannot be created', 'error')
-        return null
+      const resolveExistingInvoice = (row: typeof repair) => {
+        const listed = invRef.current
+        return (row.invoiceId ? listed.find(inv => inv.id === row.invoiceId) : undefined)
+          ?? ((row as any).linkedInvoiceId ? listed.find(inv => inv.id === (row as any).linkedInvoiceId) : undefined)
+          ?? listed.find(inv =>
+            inv.repairId === repairId
+            || (!!row.saleOrderId && inv.saleOrderId === row.saleOrderId)
+            || (!!row.ref && inv.notes?.includes(row.ref)),
+          )
       }
 
-      // allocateDocRef is async — a second click can pass the invoiceId check
-      // above while this awaits. Re-check against the live store before writing.
-      const invoiceRef = await storeCtxRef.current!.allocateDocRef('INV')
-      const freshRepair = repairsRef.current.find(r => r.id === repairId)
-      if (freshRepair?.invoiceId) {
-        showToast('Invoice already exists for this repair', 'error')
-        return null
+      let existingInvoice = resolveExistingInvoice(repair)
+      if (existingInvoice?.status === 'cancelled') existingInvoice = undefined
+
+      if (existingInvoice && Number(existingInvoice.amountPaid) > 0 && !invoiceMatchesRepairCharges(existingInvoice, chargeLines)) {
+        showToast(`${existingInvoice.ref} already has payments — cannot rebuild it from the quote. Issue a credit note.`, 'error')
+        return existingInvoice
       }
 
-      const invoice: Invoice = {
-        id: uid(),
-        ref: invoiceRef,
-        type: 'customer_invoice',
-        status: 'posted',
-        partnerId: repair.customerId,
-        partnerName: repair.customerName,
-        date: now(),
-        dueDate: now(),
-        lines,
-        subtotal,
-        taxTotal,
-        total: subtotal + taxTotal,
-        amountPaid: 0,
-        repairId,
-        notes: `Repair invoice for ${repair.ref}${
-          isDiagnosisFeeSettled(repair) && repair.diagnosisFeeStatus === 'paid'
-            ? ` — diagnosis fee KES ${(repair.diagnosisFee ?? 0).toLocaleString('en-KE')} collected early (not credited against this bill)`
-            : ''
-        }`,
+      const linkedSaleOrder = findSaleOrderForRepair(soRef.current, repair)
+      const linkedSalesQuote = findSalesQuoteForRepair(quotes, repair)
+      const invoiceAlreadyMatches = existingInvoice ? invoiceMatchesRepairCharges(existingInvoice, chargeLines) : false
+      const quoteAlreadyAccepted = !linkedSalesQuote || linkedSalesQuote.status === 'accepted'
+      const soAlreadySale = !linkedSaleOrder || linkedSaleOrder.status === 'sale'
+      if (existingInvoice && invoiceAlreadyMatches && quoteAlreadyAccepted && soAlreadySale) {
+        if (!repair.invoiceId) {
+          setRepairs(p => p.map(r => r.id === repairId ? { ...r, invoiceId: existingInvoice!.id, invoiceDate: r.invoiceDate ?? now(), status: r.status === 'ready' ? 'invoiced' : r.status } : r))
+        }
+        showToast(`Invoice ${existingInvoice.ref} already exists for this repair`, 'info')
+        return existingInvoice
       }
-      
-      setInvoices(p => [invoice, ...p])
-      sync('/api/invoices', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(invoice) })
 
-      // Post GL journal: DR Accounts Receivable / CR Sales Revenue [/ CR VAT]
-      const glJournal: JournalEntry = {
-        id: uid(), ref: `JRN/${invoice.ref}`,
-        date: now(), source: 'invoice',
-        description: `Repair invoice ${invoice.ref} — ${repair.customerName}`, status: 'posted', invoiceId: invoice.id,
-        lines: [
-          { id: uid(), account: '1800 - Accounts Receivable', description: `AR: ${repair.customerName}`, debit: invoice.total, credit: 0 },
-          { id: uid(), account: '5000 - Sales Revenue', description: `Revenue: ${invoice.ref}`, debit: 0, credit: invoice.subtotal },
-          ...(invoice.taxTotal > 0 ? [{ id: uid(), account: '3301 - Output VAT Payable', description: `VAT on ${invoice.ref}`, debit: 0, credit: invoice.taxTotal }] : []),
-        ],
-        totalDebit: invoice.total, totalCredit: invoice.total,
+      const soLines = (repair.quote?.lines ?? [])
+        .filter(line => line.decision !== 'declined')
+        .map(line => ({
+          id: uid(),
+          ...saleLineFieldsForRepairQuoteLine(line),
+        }))
+      let soId = linkedSaleOrder?.id ?? repair.saleOrderId ?? (repair as any).linkedSaleOrderId
+      let soRefValue = linkedSaleOrder?.ref ?? linkedSaleOrder?.orderNumber ?? repair.saleOrderRef ?? (repair as any).linkedSaleOrderRef
+      if (!soId) {
+        soId = uid()
+        soRefValue = await storeCtxRef.current!.allocateDocRef('SO')
+        const newSo = {
+          id: soId, ref: soRefValue, status: 'sale' as const, confirmedAt: new Date().toISOString(),
+          customerId: repair.customerId, customerName: repair.customerName,
+          date: now(), validUntil: addDays(now(), 30),
+          lines: soLines, subtotal: repair.quote?.subtotal ?? subtotal,
+          taxAmount: repair.quote?.tax ?? taxTotal,
+          taxTotal: repair.quote?.tax ?? taxTotal,
+          totalAmount: repair.quote?.total ?? chargeTotal,
+          total: repair.quote?.total ?? chargeTotal,
+          notes: `Repair order ${repair.ref}`, createdByUserId: repair.createdBy,
+        }
+        setSaleOrders(p => [newSo as SaleOrder, ...p])
+        sync('/api/sale-orders', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(newSo) })
+      } else if (linkedSaleOrder && (linkedSaleOrder.status === 'quotation' || linkedSaleOrder.status === 'quotation_sent' || (linkedSaleOrder.lines?.length ?? 0) < soLines.length)) {
+        const confirmedAt = linkedSaleOrder.confirmedAt ?? new Date().toISOString()
+        const soPatch = {
+          status: 'sale' as const,
+          confirmedAt,
+          lines: soLines.length ? soLines : linkedSaleOrder.lines,
+          subtotal: repair.quote?.subtotal ?? linkedSaleOrder.subtotal,
+          taxAmount: repair.quote?.tax ?? linkedSaleOrder.taxAmount,
+          taxTotal: repair.quote?.tax ?? linkedSaleOrder.taxTotal,
+          totalAmount: repair.quote?.total ?? linkedSaleOrder.totalAmount ?? linkedSaleOrder.total,
+          total: repair.quote?.total ?? linkedSaleOrder.total,
+        }
+        setSaleOrders(p => p.map(s => s.id === soId ? { ...s, ...soPatch } : s))
+        sync(`/api/sale-orders/${soId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(soPatch) })
       }
-      setJournalEntries(p => [glJournal, ...p])
+
+      const invoiceNotes = `Repair invoice for ${repair.ref}${
+        isDiagnosisFeeSettled(repair) && repair.diagnosisFeeStatus === 'paid'
+          ? ` — diagnosis fee KES ${(repair.diagnosisFee ?? 0).toLocaleString('en-KE')} collected early (not credited against this bill)`
+          : ''
+      }`
+      const lines = toInvoiceLines()
+      let invoice = existingInvoice
+      let createdNew = false
+      let rebuilt = false
+
+      if (invoice && !invoiceAlreadyMatches) {
+        if (invoice.status === 'posted') {
+          const actor = currentUser()
+          if (!canCancelOrResetInvoice(actor?.role)) {
+            showToast('Only Finance, Admin Officer, or Director can rebuild a posted invoice from the quote', 'error')
+            return invoice
+          }
+          const resetRes = await fetch(`/api/invoices/${invoice.id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status: 'draft' }),
+          })
+          if (!resetRes.ok) {
+            const data = await resetRes.json().catch(() => null) as { error?: string } | null
+            showToast(data?.error || `Could not reset ${invoice.ref} to draft`, 'error')
+            return invoice
+          }
+          invoice = { ...invoice, status: 'draft' }
+          setInvoices(p => p.map(inv => inv.id === invoice!.id ? invoice! : inv))
+        }
+        const patched: Invoice = {
+          ...invoice,
+          lines,
+          subtotal,
+          taxTotal,
+          total: chargeTotal,
+          saleOrderId: soId,
+          repairId,
+          notes: invoice.notes?.includes(repair.ref) ? invoice.notes : `${invoice.notes ?? ''}\n${invoiceNotes}`.trim(),
+        }
+        setInvoices(p => p.map(inv => inv.id === patched.id ? patched : inv))
+        const putRes = await fetch(`/api/invoices/${patched.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(patched),
+        })
+        if (!putRes.ok) {
+          const data = await putRes.json().catch(() => null) as { error?: string } | null
+          showToast(data?.error || `Could not update ${patched.ref} from the quote`, 'error')
+          return patched
+        }
+        if (patched.status !== 'posted') {
+          await storeCtxRef.current!.postInvoice(patched.id)
+        }
+        invoice = invRef.current.find(inv => inv.id === patched.id) ?? { ...patched, status: 'posted' }
+        rebuilt = true
+      } else if (!invoice) {
+        const freshRepair = repairsRef.current.find(r => r.id === repairId)
+        if (freshRepair?.invoiceId) {
+          const raced = resolveExistingInvoice(freshRepair)
+          if (raced && raced.status !== 'cancelled') {
+            showToast('Invoice already exists for this repair', 'info')
+            return raced
+          }
+        }
+        const invoiceRef = await storeCtxRef.current!.allocateDocRef('INV')
+        invoice = {
+          id: uid(),
+          ref: invoiceRef,
+          type: 'customer_invoice',
+          status: 'posted',
+          partnerId: repair.customerId,
+          partnerName: repair.customerName,
+          date: now(),
+          dueDate: now(),
+          lines,
+          subtotal,
+          taxTotal,
+          total: chargeTotal,
+          amountPaid: 0,
+          repairId,
+          saleOrderId: soId,
+          notes: invoiceNotes,
+        }
+        setInvoices(p => [invoice!, ...p])
+        sync('/api/invoices', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(invoice) })
+        const glJournal: JournalEntry = {
+          id: uid(), ref: `JRN/${invoice.ref}`,
+          date: now(), source: 'invoice',
+          description: `Repair invoice ${invoice.ref} — ${repair.customerName}`, status: 'posted', invoiceId: invoice.id,
+          lines: [
+            { id: uid(), account: '1800 - Accounts Receivable', description: `AR: ${repair.customerName}`, debit: invoice.total, credit: 0 },
+            { id: uid(), account: '5000 - Sales Revenue', description: `Revenue: ${invoice.ref}`, debit: 0, credit: invoice.subtotal },
+            ...(invoice.taxTotal > 0 ? [{ id: uid(), account: '3301 - Output VAT Payable', description: `VAT on ${invoice.ref}`, debit: 0, credit: invoice.taxTotal }] : []),
+          ],
+          totalDebit: invoice.total, totalCredit: invoice.total,
+        }
+        setJournalEntries(p => [glJournal, ...p])
+        createdNew = true
+      }
+
+      if (soId && invoice) {
+        setSaleOrders(p => p.map(s => s.id === soId ? { ...s, status: 'sale' as const, invoiceId: invoice!.id, confirmedAt: s.confirmedAt ?? new Date().toISOString() } : s))
+        sync(`/api/sale-orders/${soId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status: 'sale', invoiceId: invoice.id, confirmedAt: new Date().toISOString() }),
+        })
+      }
+
+      if (linkedSalesQuote && invoice) {
+        setQuotes(p => {
+          const next = p.map(q => q.id === linkedSalesQuote.id ? {
+            ...q,
+            status: 'accepted' as const,
+            saleOrderId: soId ?? q.saleOrderId,
+            invoiceId: invoice!.id,
+            acceptedDate: q.acceptedDate ?? now(),
+            convertedDate: q.convertedDate ?? now(),
+          } : q)
+          const updated = next.find(q => q.id === linkedSalesQuote.id)
+          if (updated) sync(`/api/quotes/${linkedSalesQuote.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+          return next
+        })
+      }
 
       setRepairs(p => p.map(r => r.id === repairId ? {
         ...r,
-        invoiceId: invoice.id,
-        invoiceDate: now(),
+        invoiceId: invoice!.id,
+        invoiceDate: r.invoiceDate ?? now(),
         status: 'invoiced',
+        ...(soId ? { saleOrderId: soId, saleOrderRef: soRefValue } : {}),
+        ...(linkedSalesQuote ? { salesQuoteId: linkedSalesQuote.id, salesQuoteRef: linkedSalesQuote.ref ?? linkedSalesQuote.quoteNumber } : {}),
         diagnosisFeeStatus: (() => {
           if (!shouldChargeDiagnosisFee(r) || !(r.diagnosisFee ?? 0)) return r.diagnosisFeeStatus
           if (r.diagnosisFeeStatus === 'paid' || r.diagnosisFeePaidAt) return 'paid'
-          // Fee line included on this invoice
           if (r.diagnosisFeeStatus !== 'waived' && r.diagnosisFeeStatus !== 'not_applicable') return 'invoiced'
           return r.diagnosisFeeStatus
         })(),
       } : r))
 
-      addAuditLog('invoice_repair', repair.ref, `Invoice ${invoice.ref} created`)
-      showToast(`Invoice ${invoice.ref} generated`)
+      addAuditLog('invoice_repair', repair.ref, rebuilt
+        ? `Invoice ${invoice!.ref} rebuilt from quote`
+        : createdNew
+          ? `Invoice ${invoice!.ref} created`
+          : `Invoice ${invoice!.ref} linked from quote`)
+      showToast(rebuilt
+        ? `Invoice ${invoice!.ref} updated from the quote`
+        : createdNew
+          ? `Invoice ${invoice!.ref} generated`
+          : `Invoice ${invoice!.ref} linked — quote converted`)
       return invoice
     },
 
