@@ -108,8 +108,17 @@ describe('userUpdateSchema', () => {
     expect(result.name).toBe('Alice')
   })
 
-  it('rejects password shorter than 8 chars', async () => {
+  it('rejects passwords that do not meet the strong password policy', async () => {
     await expect(userUpdateSchema.parseAsync({ password: 'short' })).rejects.toThrow()
+    await expect(userUpdateSchema.parseAsync({ password: 'alllowercase123!' })).rejects.toThrow()
+    await expect(userUpdateSchema.parseAsync({ password: 'ALLUPPERCASE123!' })).rejects.toThrow()
+    await expect(userUpdateSchema.parseAsync({ password: 'NoNumbersHere!' })).rejects.toThrow()
+    await expect(userUpdateSchema.parseAsync({ password: 'NoSpecialHere123' })).rejects.toThrow()
+  })
+
+  it('accepts a strong 12+ character password', async () => {
+    const result = await userUpdateSchema.parseAsync({ password: 'Strong-Pass-2026!' })
+    expect(result.password).toBe('Strong-Pass-2026!')
   })
 
   it('rejects invalid email', async () => {
