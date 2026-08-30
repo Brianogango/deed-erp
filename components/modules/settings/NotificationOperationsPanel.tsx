@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import SmsMessageCenter from './SmsMessageCenter'
 
 type NotificationOps = {
   since: string
@@ -174,6 +175,8 @@ export default function NotificationOperationsPanel({
           </div>
         </div>
       </section>
+
+      <SmsMessageCenter showToast={showToast} />
 
       <section className="rounded-2xl border border-gray-100 bg-white shadow-sm overflow-hidden">
         <div className="px-4 sm:px-5 py-3 border-b border-gray-50">
