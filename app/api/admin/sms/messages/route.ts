@@ -4,7 +4,7 @@ import prisma from '@/lib/prisma'
 import { requireRole, withApiErrorHandling } from '@/lib/auth/api'
 import { publishNotificationEvent } from '@/lib/notifications/service'
 import { runNotificationWorker } from '@/lib/notifications/worker'
-import { markSmsThreadRead } from '@/lib/notifications/sms-conversations'
+import { backfillRecentSmsConversations, markSmsThreadRead } from '@/lib/notifications/sms-conversations'
 
 export const dynamic = 'force-dynamic'
 
@@ -16,11 +16,15 @@ const asFolder = (value: string | null) =>
 export async function GET(request: NextRequest) {
   return withApiErrorHandling(async () => {
     await requireRole(allowedRoles)
+    await backfillRecentSmsConversations(250).catch(error => {
+      console.error('[sms messages] backfill failed', error)
+    })
+
     const folder = asFolder(request.nextUrl.searchParams.get('folder'))
     const query = String(request.nextUrl.searchParams.get('q') || '').trim()
     const threadId = String(request.nextUrl.searchParams.get('threadId') || '').trim()
 
-    const relationFilter =
+    const relationFilter: any =
       folder === 'inbox'
         ? { messages: { some: { direction: 'inbound' } } }
         : folder === 'sent'
@@ -29,7 +33,7 @@ export async function GET(request: NextRequest) {
             ? { messages: { some: { direction: 'outbound', status: { in: ['failed', 'dead_letter', 'retrying'] } } } }
             : {}
 
-    const searchFilter = query
+    const searchFilter: any = query
       ? {
           OR: [
             { participantPhone: { contains: query, mode: 'insensitive' as const } },
