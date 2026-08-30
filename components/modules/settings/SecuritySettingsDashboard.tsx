@@ -643,13 +643,13 @@ export default function SecuritySettingsDashboard({
                   label="Security Audit"
                   icon={faBullseye}
                   tone="blue"
-                  onClick={() => void refresh(true)}
+                  onClick={() => void openSecurityAudit()}
                 />
                 <QuickAction
                   label="Backup Now"
                   icon={faUpload}
                   tone="cyan"
-                  onClick={() => showToast('Backup execution remains a production-host operation. Use the security host audit before running a live backup.', 'info')}
+                  onClick={() => setDetailPanel('backup')}
                 />
                 <QuickAction
                   label="Download Security Report"
@@ -707,6 +707,7 @@ export default function SecuritySettingsDashboard({
             </div>
           </SubPanel>
 
+          <div ref={passwordPanelRef} className="scroll-mt-4">
           <SubPanel title="Password Policy" subtitle="Current password requirements enforced when passwords are created or changed.">
             <RowSetting
               title="Minimum length"
@@ -728,6 +729,7 @@ export default function SecuritySettingsDashboard({
               right={<span className="flex h-8 min-w-[48px] items-center justify-center rounded-lg border border-[#DDE5EF] bg-[#FAFCFE] px-2 text-[10px] font-bold text-[#334155]">{password?.preventReuseCount ?? 5}</span>}
             />
           </SubPanel>
+          </div>
         </div>
       </div>
 
