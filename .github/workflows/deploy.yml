@@ -233,3 +233,4 @@ jobs:
             test "$LIVE_SHA" = "$EXPECTED_SHA"
             node scripts/security/verify-production-config.mjs
             EXPECTED_COMMIT_SHA="$EXPECTED_SHA" bash scripts/security/audit-production-host.sh
+            node scripts/security/live-penetration-smoke.mjs
