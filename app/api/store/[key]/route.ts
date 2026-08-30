@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from '@/lib/auth/server'
 import {
-  hasPermission, SENSITIVE_STORE_KEY_PERMISSIONS, CLIENT_IMMUTABLE_STORE_KEYS, canReadStoreKey,
+  CLIENT_IMMUTABLE_STORE_KEYS, canReadStoreKey,
   CONTENT_FILTERED_STORE_KEYS, filterStoreValueForRole, hasFullStoreContentAccess, mergeFilteredStoreWrite,
 } from '@/lib/auth/authorization'
+import { canWriteStoreKey } from '@/lib/auth/store-write-policy'
 import { preserveInvoiceLinesOnStoreWrite, preservePostedInvoicePaymentProgress, enforcePostedInvoiceImmutability } from '@/lib/finance-invoice'
 import { mergeSaleOrdersStoreWrite } from '@/lib/sale-order-store-merge'
 import { mergeRepairsStoreWrite } from '@/lib/repair-store-merge'
@@ -78,9 +79,8 @@ export async function PUT(request: NextRequest, { params }: Params) {
     return NextResponse.json({ error: `Forbidden — ${key} is server-managed and cannot be written by a client` }, { status: 403 })
   }
 
-  const restrictedAction = SENSITIVE_STORE_KEY_PERMISSIONS[key]
-  if (restrictedAction && !hasPermission(session.user, restrictedAction)) {
-    return NextResponse.json({ error: `Forbidden — insufficient role to write: ${key}` }, { status: 403 })
+  if (!canWriteStoreKey(session.user, key)) {
+    return NextResponse.json({ error: `Forbidden — insufficient role/module to write: ${key}` }, { status: 403 })
   }
 
   let value = typeof body.value === 'string' ? body.value : JSON.stringify(body.value)
