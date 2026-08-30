@@ -3,7 +3,7 @@ import { useState, useMemo } from 'react'
 import {
   useFinanceStore, fmtKes, fmtDate,
   CashbookEntry, BankAccount, BankStatementLine, StatementLineCategory,
-  Invoice, POSOrder, Expense, PayrollRun, PurchaseOrder, POLine, Deposit,
+  Invoice, POSOrder, Expense, JournalEntry, Deposit,
 } from '@/lib/store'
 import type { Account } from '@/lib/store'
 import { invoicePaymentStatus } from '@/lib/odoo-sales-flow'
@@ -98,13 +98,12 @@ export function buildCashbookEntries(
     invoices: Invoice[]
     posOrders: POSOrder[]
     expenses: Expense[]
-    payrollRuns: PayrollRun[]
-    purchaseOrders: PurchaseOrder[]
+    journalEntries: JournalEntry[]
     deposits: Deposit[]
   },
   accounts: Account[],
 ): CashbookEntry[] {
-  const { invoices, posOrders, expenses, payrollRuns, purchaseOrders, deposits } = state
+  const { invoices, posOrders, expenses, journalEntries, deposits } = state
   const entries: CashbookEntry[] = []
 
   // 1. Customer invoice payments → Credit actual bank account used per receipt.
@@ -183,91 +182,56 @@ export function buildCashbookEntries(
     })
   })
 
-  // 5. Expenses → Debit when company-paid expenses are approved, or reimbursable claims are actually reimbursed.
+  // 5. Expenses → only actual company payments/reimbursements enter cashbook.
   expenses
-    .filter(e => e.status === 'reimbursed' || (e.status === 'approved' && e.paymentMethod !== 'reimbursement'))
+    .filter(e => e.status === 'paid' || e.status === 'reimbursed')
     .forEach(exp => {
-    entries.push({
-      id: `exp-${exp.id}`,
-      date: exp.expenseDate,
-      ref: exp.ref,
-      description: exp.description,
-      category: getCOACategory('expense', accounts, exp.category),
-      bankAccountId: exp.paymentMethod === 'reimbursement'
+      const reimbursed = exp.status === 'reimbursed'
+      const bankAccountId = reimbursed
         ? (exp.reimbursementBankAccount || 'ncba')
-        : expenseBank(exp.paymentMethod),
-      debit: exp.amount,
-      credit: 0,
-      sourceType: 'expense',
-      sourceId: exp.id,
-      recordedBy: exp.submittedByName,
-    })
-  })
-
-  // 6. Posted payroll runs → Debit NCBA
-  payrollRuns.filter(p => p.status === 'posted').forEach(run => {
-    entries.push({
-      id: `pay-${run.id}`,
-      date: `${run.year}-${run.month.padStart(2, '0')}-28`,
-      ref: run.ref,
-      description: `Payroll ${run.month}/${run.year} — ${run.lines.length} employees`,
-      category: getCOACategory('payroll', accounts),
-      bankAccountId: 'ncba',
-      debit: run.totalNet,
-      credit: 0,
-      sourceType: 'payroll',
-      sourceId: run.id,
-      recordedBy: 'HR System',
-    })
-  })
-
-  // 7. Received purchase orders (no linked paid bill) → Debit per account line
-  purchaseOrders.filter(po => po.status === 'received').forEach(po => {
-    const alreadyCaptured = invoices.some(i => i.id === po.billId && invoicePaymentStatus(i) === 'paid')
-    if (alreadyCaptured) return
-
-    const hasAccountCodes = po.lines.length > 0 && po.lines.some(l => l.accountCode)
-    if (hasAccountCodes) {
-      const groups = new Map<string, { lines: POLine[]; accountName: string }>()
-      po.lines.forEach(l => {
-        const code = l.accountCode ?? 'other'
-        const acct = accounts.find(a => a.code === code)
-        const name = acct?.name ?? getCOACategory('purchase', accounts)
-        if (!groups.has(code)) groups.set(code, { lines: [], accountName: name })
-        groups.get(code)!.lines.push(l)
-      })
-      groups.forEach(({ lines, accountName }, code) => {
-        const total = lines.reduce((s, l) => s + l.subtotal, 0)
-        entries.push({
-          id: `po-${po.id}-${code}`,
-          date: po.date,
-          ref: po.ref,
-          description: `Purchase — ${po.vendorName}${groups.size > 1 ? ` [${accountName}]` : ''}`,
-          category: accountName,
-          bankAccountId: 'ncba',
-          debit: total,
-          credit: 0,
-          sourceType: 'purchase',
-          sourceId: po.id,
-          recordedBy: 'System',
-        })
-      })
-    } else {
+        : (exp.paymentBankAccount || expenseBank(exp.paymentMethod))
+      const paymentDate = reimbursed
+        ? (exp.reimbursementDate || exp.expenseDate)
+        : (exp.paidDate || exp.expenseDate)
       entries.push({
-        id: `po-${po.id}`,
-        date: po.date,
-        ref: po.ref,
-        description: `Purchase — ${po.vendorName}`,
-        category: getCOACategory('purchase', accounts),
-        bankAccountId: 'ncba',
-        debit: po.total,
+        id: reimbursed ? `exp-rim-${exp.id}` : `exp-pay-${exp.id}`,
+        date: paymentDate,
+        ref: (reimbursed ? exp.reimbursementReference : exp.paymentReference) || exp.ref,
+        description: reimbursed
+          ? `Expense reimbursement — ${exp.description}`
+          : `Expense payment — ${exp.description}`,
+        category: getCOACategory('expense', accounts, exp.category),
+        bankAccountId,
+        debit: exp.amount,
         credit: 0,
-        sourceType: 'purchase',
-        sourceId: po.id,
-        recordedBy: 'System',
+        sourceType: 'expense',
+        sourceId: exp.id,
+        recordedBy: exp.reviewedByName || 'Finance',
       })
-    }
-  })
+    })
+
+  // 6. Payroll → only an explicit payroll payment journal moves cash.
+  journalEntries
+    .filter(j => Boolean(j.payrollRunId) && j.ref.startsWith('JRN/PAYROLL-PAY/'))
+    .forEach(journal => {
+      entries.push({
+        id: `payroll-payment-${journal.id}`,
+        date: journal.date,
+        ref: journal.ref,
+        description: journal.description || 'Payroll payment',
+        category: getCOACategory('payroll', accounts),
+        bankAccountId: journal.bankAccountId || 'ncba',
+        debit: journal.totalCredit,
+        credit: 0,
+        sourceType: 'payroll',
+        sourceId: journal.payrollRunId!,
+        recordedBy: 'Finance',
+      })
+    })
+
+  // Purchase orders and goods receipts are deliberately excluded. They create
+  // inventory/GRNI/AP accounting movements, not bank/cash movements. Supplier
+  // cash leaves the business only when the vendor bill payment is registered.
 
   return entries.sort((a, b) => a.date.localeCompare(b.date))
 }
@@ -951,7 +915,7 @@ export default function CashbookTab({ accounts }: { accounts: Account[] }) {
   const allEntries = useMemo(
     () => buildCashbookEntries(appState, accounts),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [appState.invoices, appState.posOrders, appState.expenses, appState.payrollRuns, appState.purchaseOrders, appState.deposits, accounts],
+    [appState.invoices, appState.posOrders, appState.expenses, appState.journalEntries, appState.deposits, accounts],
   )
 
   const availableMonths = useMemo(() => {
