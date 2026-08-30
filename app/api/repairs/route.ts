@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from '@/lib/auth/server'
 import { loadAppState, loadAppStateForWrite, saveStoreKeys, withAppStateKeyLock } from '@/lib/server-store'
 import { getNextRepairRef } from '@/lib/repair-ref-counter'
-import { isOfficialRepairRef, isTemporaryRepairRef, uniqueRepairRefs } from '@/lib/repair-ref'
+import { isOfficialRepairRef, isTemporaryRepairRef, takenRepairRefs, uniqueRepairRefs } from '@/lib/repair-ref'
 import type { RepairOrder } from '@/lib/store'
 import { parsePaginationParams, paginateArray } from '@/lib/api-pagination'
 import { repairDatesWriteError } from '@/lib/data-validation'
@@ -150,13 +150,13 @@ export async function POST(request: NextRequest) {
     const existing = existingIdx >= 0 ? repairs[existingIdx] : null
     const existingByRef = repairs.find(r => r.ref.toLowerCase() === requestedRef.toLowerCase())
 
-    // Never replace a sequential ticket, and never mint a second number on retry.
+    // Never replace an official ticket, and never mint a second number on retry.
     const keepExisting = existing && isOfficialRepairRef(existing.ref) ? existing.ref : null
     const keepRequested = isOfficialRepairRef(requestedRef)
       && (!existingByRef || existingByRef.id === repairId)
       ? requestedRef
       : null
-    const ref = keepExisting || keepRequested || await getNextRepairRef()
+    const ref = keepExisting || keepRequested || await getNextRepairRef(takenRepairRefs(repairs))
     const previousRefs = uniqueRepairRefs([
       ...(Array.isArray((existing as { previousRefs?: unknown } | null)?.previousRefs)
         ? (existing as { previousRefs: unknown[] }).previousRefs

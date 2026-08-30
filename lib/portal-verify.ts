@@ -1,11 +1,11 @@
 // Ownership verification helpers for the public customer portal.
 //
 // Portal repair endpoints are reachable without a session and are addressed by
-// a repair reference. References are somewhat guessable, so any state-changing
-// portal action (approving a quote, confirming payment) additionally requires
-// the caller to prove they are the customer by supplying the phone number on
-// file. The phone is masked in the public GET payload so knowing the reference
-// alone does not reveal the secret.
+// a repair reference. Legacy sequential tickets (`REP/0275`) are guessable, so
+// any state-changing portal action (approving a quote, confirming payment)
+// additionally requires the caller to prove they are the customer by supplying
+// the phone number on file. New tickets are random (`REP-7K3M9X2Q`); phone
+// proof still applies. The phone is masked in the public GET payload.
 
 /** Reduce a phone number to comparable digits (last 9, ignoring +254/0 prefixes). */
 export function normalizePhone(phone: string | null | undefined): string {
@@ -44,7 +44,7 @@ export function isPortalPhoneVerificationRequired(
 
 /**
  * Read-side gate for portal document endpoints (invoice/receipt PDFs, payment
- * proof, photos, reports). A repair ref is guessable, so these require either
+ * proof, photos, reports). A legacy sequential repair ref is guessable, so these require either
  * a staff session or the customer phone on file (?phone=). Returns true when
  * access is allowed.
  */

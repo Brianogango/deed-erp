@@ -4,7 +4,8 @@ import { getNextRepairRef } from '@/lib/repair-ref-counter'
 
 /**
  * GET /api/repairs/next-ref
- * Returns the next unique repair reference number.
+ * Preview a random unused-looking ticket. The official number is assigned
+ * when POST /api/repairs persists the job — this does not reserve a sequence.
  * Authenticated staff only.
  */
 export async function GET() {

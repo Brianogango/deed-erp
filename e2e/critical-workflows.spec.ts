@@ -154,7 +154,7 @@ test.describe('3. Repair intake → diagnosis → completion → collection', ()
       },
     })
     const repair = await jsonOrThrow(created, 'create repair')
-    expect(repair.ref).toMatch(/^REP\//)
+    expect(repair.ref).toMatch(/^REP-[23456789ABCDEFGHJKLMNPQRSTUVWXYZ]{8}$/)
     repairId = repair.id
     expect(repair.status).toBeTruthy()
 

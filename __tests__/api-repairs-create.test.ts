@@ -128,7 +128,19 @@ describe('POST /api/repairs — intake fields', () => {
     expect(saved[0].ref).toBe('REP/0275')
   })
 
-  it('stores the timestamp placeholder as previousRefs when allocating sequential', async () => {
+  it('passes existing ticket numbers when minting a new one', async () => {
+    mockLoadAppState.mockResolvedValue({
+      deed_repairs_v2: [{ id: 'old', ref: 'REP/0275', previousRefs: ['REP-227532'] }],
+    })
+    const res = await POST(makeReq({
+      customerName: 'New Customer',
+      productName: 'ThinkPad',
+    }))
+    expect(res.status).toBe(201)
+    expect(mockGetNextRepairRef).toHaveBeenCalledWith(['REP/0275', 'REP-227532'])
+  })
+
+  it('stores the timestamp placeholder as previousRefs when allocating official', async () => {
     const res = await POST(makeReq({
       id: 'rep_alias_1',
       ref: 'REP-227532',

@@ -1748,7 +1748,7 @@ export interface RepairQAItem {
 export interface RepairOrder {
   id: string
   ref: string
-  /** Timestamp tickets (`REP-227532`) replaced by the sequential counter. */
+  /** Timestamp tickets (`REP-227532`) replaced when an official ref was allocated. */
   previousRefs?: string[]
   status: RepairStatus
   
@@ -14685,7 +14685,7 @@ const storeCtx: AppState = {
     createRepair: async (customerId, customerName, productName, serial, desc, intake) => {
       const customer = contacts.find(c => c.id === customerId)
       const user = currentUser()
-      // Sequential ticket is allocated by POST before this returns so the
+      // Official ticket is allocated by POST before this returns so the
       // booking success screen never shares a timestamp placeholder (REP-227532).
       const bookedAt = new Date().toISOString()
       const intakePatch = intake ? { ...intake } : {}

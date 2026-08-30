@@ -250,5 +250,6 @@ describe('POST /api/portal/intake — success', () => {
     expect(saved).toHaveLength(2)
     expect(saved[0].ref).toBe('REP/0001')
     expect(saved[1].ref).toBe('REP/0000')
+    expect(mockGetNextRepairRef).toHaveBeenCalledWith(['REP/0000'])
   })
 })
