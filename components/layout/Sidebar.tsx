@@ -383,14 +383,6 @@ function SidebarNavItem({ item, isActive, isExpanded, isPinned, currentUserId, o
         aria-current={isActive ? 'page' : undefined}
         className={`sidebar-nav-item group relative flex items-center rounded-xl cursor-pointer ${isActive ? 'active' : ''} ${isExpanded ? 'min-w-0 flex-1 px-3.5 py-2.5' : 'h-11 w-11 mx-auto justify-center'}`}
       >
-      {/* Active left-bar indicator */}
-      {isActive && (
-        <div
-          className={`absolute left-0 rounded-r-full bg-white ${isExpanded ? 'w-[3px] top-[22%] bottom-[22%]' : 'w-[3px] h-6 top-1/2 -translate-y-1/2'}`}
-          style={{ opacity: 0.8 }}
-        />
-      )}
-
       {/* Icon */}
       <div className={`flex items-center justify-center flex-shrink-0 transition-transform duration-200 ${isActive ? 'scale-110' : 'group-hover:scale-110'} ${isExpanded ? 'w-4 h-4' : 'w-[18px] h-[18px]'}`}>
         <Fa icon={item.icon} className="w-full h-full" />
