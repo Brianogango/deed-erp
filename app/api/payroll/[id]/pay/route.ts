@@ -62,6 +62,9 @@ export async function POST(
         description: `Payroll payment — ${payroll.runReference}`,
         sourceType: 'payroll_payment',
         sourceId: payroll.id,
+        // Preserve the operational bank/cash account separately from the CoA
+        // control account so Cashbook can recover the exact account on reload.
+        blobId: `bank:${bankAccountId}`,
         createdById: actorId,
         skipIfExists: true,
         lines: [
