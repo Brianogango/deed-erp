@@ -19,8 +19,6 @@ const CHALLENGE_COOKIE = 'deed-mfa-challenge'
 const CHALLENGE_TTL_SECONDS = 5 * 60
 const TOTP_STEP_SECONDS = 30
 const TOTP_DIGITS = 6
-let schemaReady = false
-
 function secretForChallenges(): string {
   const secret = process.env.MFA_CHALLENGE_SECRET || process.env.NEXTAUTH_SECRET || process.env.AUTH_SECRET || ''
   if (!secret) throw new Error('MFA challenge secret is not configured')
@@ -92,21 +90,6 @@ export function challengeFromRequest(request: NextRequest): ChallengePayload | n
   return parseMfaChallenge(request.cookies.get(CHALLENGE_COOKIE)?.value)
 }
 
-async function ensureSchema() {
-  if (schemaReady) return
-  await sql`
-    CREATE TABLE IF NOT EXISTS user_mfa (
-      user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
-      secret_enc TEXT NOT NULL,
-      enabled BOOLEAN NOT NULL DEFAULT false,
-      enrolled_at TEXT,
-      last_used_step BIGINT,
-      updated_at TEXT NOT NULL
-    )
-  `
-  schemaReady = true
-}
-
 function encryptSecret(secret: string): string {
   const iv = crypto.randomBytes(12)
   const cipher = crypto.createCipheriv('aes-256-gcm', encryptionKey(), iv)
@@ -167,14 +150,12 @@ function totpForStep(secret: string, step: number): string {
 }
 
 export async function getMfaState(userId: string): Promise<{ configured: boolean; enabled: boolean }> {
-  await ensureSchema()
   const { rows } = await sql`SELECT enabled FROM user_mfa WHERE user_id = ${userId}`
   if (!rows.length) return { configured: false, enabled: false }
   return { configured: true, enabled: Boolean(rows[0].enabled) }
 }
 
 export async function prepareMfaEnrollment(userId: string, username: string) {
-  await ensureSchema()
   const secret = toBase32(crypto.randomBytes(20))
   const encrypted = encryptSecret(secret)
   const now = new Date().toISOString()
@@ -195,7 +176,6 @@ export async function prepareMfaEnrollment(userId: string, username: string) {
 }
 
 export async function verifyMfaCode(userId: string, code: string, enableOnSuccess = false): Promise<boolean> {
-  await ensureSchema()
   const normalized = String(code || '').replace(/\s/g, '')
   if (!/^\d{6}$/.test(normalized)) return false
   const { rows } = await sql`SELECT secret_enc, enabled, last_used_step FROM user_mfa WHERE user_id = ${userId}`
@@ -229,6 +209,5 @@ export async function verifyMfaCode(userId: string, code: string, enableOnSucces
 }
 
 export async function resetUserMfa(userId: string) {
-  await ensureSchema()
   await sql`DELETE FROM user_mfa WHERE user_id = ${userId}`
 }
