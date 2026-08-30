@@ -1,6 +1,8 @@
 import { timingSafeEqual } from 'crypto'
 import { NextRequest, NextResponse } from 'next/server'
 import { sql } from '@/lib/auth/db'
+import { createAuthUser } from '@/lib/auth/users-repository'
+import { ROLE_DEFAULT_MODULES } from '@/lib/auth/types'
 import { hashPassword } from '@/lib/auth/password'
 import { isStrongBootstrapPassword } from '@/lib/auth/temporary-credentials'
 import { InputSecurityError, readSafeJson } from '@/lib/input-security'
@@ -64,20 +66,36 @@ export async function POST(request: NextRequest) {
     await sql`SELECT 1`
     steps.push('DB connection: OK')
 
-    await sql`
-      CREATE TABLE IF NOT EXISTS users (
-        id TEXT PRIMARY KEY,
-        username TEXT NOT NULL UNIQUE,
-        name TEXT NOT NULL,
-        role TEXT NOT NULL,
-        modules_json TEXT NOT NULL,
-        active INTEGER NOT NULL DEFAULT 1,
-        created_at TEXT NOT NULL,
-        password_hash TEXT NOT NULL,
-        must_change_password INTEGER DEFAULT 1
-      )
+    // Bootstrap is not a migration mechanism. Require the real production
+    // schema so this endpoint cannot create an incompatible legacy users table.
+    const { rows: schemaRows } = await sql`
+      SELECT column_name
+      FROM information_schema.columns
+      WHERE table_schema = 'public'
+        AND table_name = 'users'
+        AND column_name IN (
+          'id', 'username', 'email', 'role', 'password_hash',
+          'is_active', 'must_reset_pw', 'created_at', 'updated_at',
+          'modules_json', 'active', 'must_change_password', 'session_version'
+        )
     `
-    steps.push('Table: OK')
+    const requiredColumns = new Set([
+      'id', 'username', 'email', 'role', 'password_hash',
+      'is_active', 'must_reset_pw', 'created_at', 'updated_at',
+      'modules_json', 'active', 'must_change_password', 'session_version',
+    ])
+    for (const row of schemaRows) requiredColumns.delete(String(row.column_name))
+    if (requiredColumns.size > 0) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: 'Database schema is not ready for secure bootstrap. Apply migrations first.',
+          missingColumns: [...requiredColumns].sort(),
+        },
+        { status: 503 },
+      )
+    }
+    steps.push('User schema: OK')
 
     const { rows: countRows } = await sql`SELECT COUNT(*) as count FROM users`
     if (Number(countRows[0].count) > 0) {
@@ -87,19 +105,17 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const allModules = JSON.stringify([
-      'dashboard','sales','crm','inventory','contacts','purchase','pos','repair',
-      'refurbishment','delivery','ecommerce','kilimall','accounting','hr','outsource',
-      'sops','after_sales','expenses','leave','my_documents',
-    ])
-
     const hash = await hashPassword(initialPassword)
-    await sql`
-      INSERT INTO users (id, username, name, role, modules_json, active, created_at, password_hash, must_change_password)
-      VALUES ('u_admin', 'admin', 'Administrator', 'director', ${allModules}, 1, ${new Date().toISOString().slice(0, 10)}, ${hash}, 1)
-      ON CONFLICT (username) DO NOTHING
-    `
-    steps.push('Initial director account "admin" created — must change password at first login')
+    await createAuthUser({
+      username: 'admin',
+      name: 'Administrator',
+      email: 'admin@deed.africa',
+      role: 'director',
+      modules: [...ROLE_DEFAULT_MODULES.director],
+      active: true,
+      mustChangePassword: true,
+    }, hash)
+    steps.push('Initial Director account "admin" created — password change required at first login')
 
     return NextResponse.json({ ok: true, steps })
   } catch (e) {
