@@ -734,7 +734,7 @@ export default function SecuritySettingsDashboard({
       </div>
 
       <div className="mt-4 grid min-w-0 grid-cols-1 gap-3 md:grid-cols-2 2xl:grid-cols-5">
-        <section className={`${cardClass} min-w-0 overflow-hidden`}>
+        <section className={`${cardClass} security-mobile-page ${mobileDetailPage === 0 ? 'is-mobile-page-active' : ''} min-w-0 overflow-hidden`}>
           <div className="flex items-start justify-between border-b border-[#EDF1F6] px-3.5 py-3">
             <div>
               <h4 className="text-[11px] font-bold text-[#182033]">Active Sessions</h4>
@@ -784,7 +784,7 @@ export default function SecuritySettingsDashboard({
           </div>
         </section>
 
-        <section className={`${cardClass} min-w-0 overflow-hidden`}>
+        <section className={`${cardClass} security-mobile-page ${mobileDetailPage === 1 ? 'is-mobile-page-active' : ''} min-w-0 overflow-hidden`}>
           <div className="flex items-start justify-between border-b border-[#EDF1F6] px-3.5 py-3">
             <div>
               <h4 className="text-[11px] font-bold text-[#182033]">Audit Logs</h4>
@@ -810,7 +810,7 @@ export default function SecuritySettingsDashboard({
           </div>
         </section>
 
-        <section className={`${cardClass} min-w-0 overflow-hidden`}>
+        <section className={`${cardClass} security-mobile-page ${mobileDetailPage === 2 ? 'is-mobile-page-active' : ''} min-w-0 overflow-hidden`}>
           <div className="flex items-start justify-between border-b border-[#EDF1F6] px-3.5 py-3">
             <div>
               <h4 className="text-[11px] font-bold text-[#182033]">IP Allowlist</h4>
@@ -834,7 +834,7 @@ export default function SecuritySettingsDashboard({
           </div>
         </section>
 
-        <section className={`${cardClass} min-w-0 overflow-hidden`}>
+        <section className={`${cardClass} security-mobile-page ${mobileDetailPage === 3 ? 'is-mobile-page-active' : ''} min-w-0 overflow-hidden`}>
           <div className="flex items-start justify-between border-b border-[#EDF1F6] px-3.5 py-3">
             <div>
               <h4 className="text-[11px] font-bold text-[#182033]">API Security</h4>
@@ -858,7 +858,7 @@ export default function SecuritySettingsDashboard({
           </div>
         </section>
 
-        <section className={`${cardClass} min-w-0 overflow-hidden`}>
+        <section className={`${cardClass} security-mobile-page ${mobileDetailPage === 4 ? 'is-mobile-page-active' : ''} min-w-0 overflow-hidden`}>
           <div className="flex items-start justify-between border-b border-[#EDF1F6] px-3.5 py-3">
             <div>
               <h4 className="text-[11px] font-bold text-[#182033]">Data Protection</h4>
