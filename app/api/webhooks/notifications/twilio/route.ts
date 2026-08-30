@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import twilio from 'twilio'
 import { applyProviderDeliveryStatus } from '@/lib/notifications/provider-status'
+import { recordInboundSms } from '@/lib/notifications/sms-conversations'
 
 export const dynamic = 'force-dynamic'
 
@@ -24,6 +25,28 @@ export async function POST(request: NextRequest) {
 
   const messageId = params.MessageSid || params.SmsSid
   const status = params.MessageStatus || params.SmsStatus
+  const inbound = Boolean(
+    messageId
+    && params.From
+    && params.Body
+    && (!status || String(status).toLowerCase() === 'received')
+  )
+
+  if (inbound) {
+    await recordInboundSms({
+      provider: 'twilio',
+      providerMessageId: messageId,
+      from: params.From,
+      to: params.To || null,
+      body: params.Body,
+      metadata: params,
+    })
+    return new NextResponse('<?xml version="1.0" encoding="UTF-8"?><Response></Response>', {
+      status: 200,
+      headers: { 'Content-Type': 'text/xml; charset=utf-8' },
+    })
+  }
+
   if (messageId && status) {
     await applyProviderDeliveryStatus({
       provider: 'twilio',
