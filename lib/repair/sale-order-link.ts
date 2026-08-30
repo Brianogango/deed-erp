@@ -209,6 +209,7 @@ export type SalesQuoteCandidate = {
   ref?: string | null
   quoteNumber?: string | null
   source?: string | null
+  status?: string | null
   repairId?: string | null
   repairRef?: string | null
 }

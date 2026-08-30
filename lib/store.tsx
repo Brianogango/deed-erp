@@ -3959,6 +3959,8 @@ export type RepairStoreState = Pick<AppState,
   | 'systemSettings'
   | 'companySettings'
   | 'invoices'
+  | 'quotes'
+  | 'saleOrders'
   | 'outboundReleases'
   | 'serials'
   | 'createRepair'
@@ -20264,6 +20266,8 @@ const storeCtx: AppState = {
     systemSettings,
     companySettings,
     invoices,
+    quotes,
+    saleOrders,
     outboundReleases,
     serials,
     ...repairActions,
@@ -20281,6 +20285,8 @@ const storeCtx: AppState = {
     systemSettings,
     companySettings,
     invoices,
+    quotes,
+    saleOrders,
     outboundReleases,
     serials,
     repairActions,

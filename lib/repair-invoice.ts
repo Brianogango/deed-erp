@@ -178,7 +178,7 @@ function lineFingerprint(row: { qty?: unknown; unitPrice?: unknown; subtotal?: u
 }
 
 export function invoiceMatchesRepairCharges(
-  invoice: { lines?: { qty?: unknown; unitPrice?: unknown; subtotal?: unknown; lineType?: string }[] | null; total?: unknown } | null | undefined,
+  invoice: { lines?: { qty?: unknown; unitPrice?: unknown; subtotal?: unknown; lineType?: string; description?: unknown }[] | null; total?: unknown } | null | undefined,
   charges: RepairInvoiceChargeLine[],
 ): boolean {
   if (!invoice) return false
