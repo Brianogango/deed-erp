@@ -13,6 +13,8 @@ import { mergeRepairsStoreWrite } from '@/lib/repair-store-merge'
 import { mergePosOrdersStoreWrite } from '@/lib/pos-orders-merge'
 import { mergePosSessionsStoreWrite, reconcileOpenPosSessionFlags } from '@/lib/pos-session'
 import { appendStoreAudit } from '@/lib/store-audit'
+import { isKnownClientAppStateKey } from '@/lib/app-state-hydration'
+import { assertSafeStoreValue, InputSecurityError, readSafeJson } from '@/lib/input-security'
 import crypto from 'crypto'
 
 const PROTECTED_NON_EMPTY_ARRAY_KEYS = new Set<string>([
@@ -114,20 +116,64 @@ export async function POST(request: Request) {
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   let body: unknown
   try {
-    body = await request.json()
-  } catch {
-    return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
+    body = await readSafeJson(request, {
+      maxBytes: 12 * 1024 * 1024,
+      limits: {
+        maxDepth: 24,
+        maxNodes: 150_000,
+        maxArrayLength: 30_000,
+        maxObjectKeys: 3_000,
+        maxStringLength: 4_000_000,
+      },
+    })
+  } catch (error) {
+    if (error instanceof InputSecurityError) {
+      return NextResponse.json({ error: error.message, code: error.code }, { status: error.status })
+    }
+    throw error
   }
 
   if (!body || typeof body !== 'object' || Array.isArray(body)) {
     return NextResponse.json({ error: 'Expected object' }, { status: 400 })
   }
 
+  const rawBody = body as Record<string, unknown>
+  const allowedMetaKeys = new Set(['_version', 'If-Match'])
+  const unexpectedTopLevel = Object.keys(rawBody).filter(
+    key => !key.startsWith('deed_') && !allowedMetaKeys.has(key),
+  )
+  if (unexpectedTopLevel.length > 0) {
+    return NextResponse.json(
+      { error: 'Unexpected request fields', fields: unexpectedTopLevel.slice(0, 20) },
+      { status: 400 },
+    )
+  }
+
+  const unknownStoreKeys = Object.keys(rawBody).filter(
+    key => key.startsWith('deed_')
+      && !CLIENT_IMMUTABLE_STORE_KEYS.has(key)
+      && !isKnownClientAppStateKey(key),
+  )
+  if (unknownStoreKeys.length > 0) {
+    return NextResponse.json(
+      { error: 'Unknown app-state key', keys: unknownStoreKeys.slice(0, 20) },
+      { status: 400 },
+    )
+  }
+
   const entries: Record<string, string> = {}
-  for (const [k, v] of Object.entries(body as Record<string, unknown>)) {
-    if (!k.startsWith('deed_')) continue
-    if (CLIENT_IMMUTABLE_STORE_KEYS.has(k)) continue
-    entries[k] = typeof v === 'string' ? v : JSON.stringify(v)
+  try {
+    for (const [k, v] of Object.entries(rawBody)) {
+      if (!k.startsWith('deed_')) continue
+      if (CLIENT_IMMUTABLE_STORE_KEYS.has(k)) continue
+      assertSafeStoreValue(v, k)
+      entries[k] = typeof v === 'string' ? v : JSON.stringify(v)
+    }
+  } catch (error) {
+    if (error instanceof InputSecurityError) {
+      return NextResponse.json({ error: error.message, code: error.code }, { status: error.status })
+    }
+    throw error
   }
 
   if (Object.keys(entries).length === 0) {
