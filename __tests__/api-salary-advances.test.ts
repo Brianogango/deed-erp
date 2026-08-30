@@ -82,13 +82,27 @@ describe('POST /api/salary-advances', () => {
     expect(res.status).toBe(201)
     expect(mockPrisma.salaryAdvance.create.mock.calls[0][0].data.status).toBe('pending')
   })
-  it('persists the client-provided id when present', async () => {
+  it('does not let the client assign the database id/reference', async () => {
     mockGetSession.mockResolvedValue(techSession)
     const id = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
     const res = await POST(jsonReq({ id, employeeId: 'emp-tech', amount: 5000, ref: 'ADV/0009' }))
     expect(res.status).toBe(201)
-    expect(mockPrisma.salaryAdvance.create.mock.calls[0][0].data.id).toBe(id)
-    expect(mockPrisma.salaryAdvance.create.mock.calls[0][0].data.reference).toBe('ADV/0009')
+    expect(mockPrisma.salaryAdvance.create.mock.calls[0][0].data.id).toBeUndefined()
+    expect(mockPrisma.salaryAdvance.create.mock.calls[0][0].data.reference).toBeUndefined()
+  })
+
+  it('forces a non-HR user to their own employee profile even if another employeeId is submitted', async () => {
+    mockGetSession.mockResolvedValue(techSession)
+    const res = await POST(jsonReq({ employeeId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', amount: 5000 }))
+    expect(res.status).toBe(201)
+    expect(mockPrisma.salaryAdvance.create.mock.calls[0][0].data.employeeId).toBe('emp-tech')
+  })
+
+  it('rejects unknown create fields instead of accepting mass assignment', async () => {
+    mockGetSession.mockResolvedValue(techSession)
+    const res = await POST(jsonReq({ employeeId: 'emp-tech', amount: 5000, approvedByUserId: 'u-attacker' }))
+    expect(res.status).toBe(422)
+    expect(mockPrisma.salaryAdvance.create).not.toHaveBeenCalled()
   })
   it('queues HR email notification after create', async () => {
     mockGetSession.mockResolvedValue(techSession)
