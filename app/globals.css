@@ -8662,7 +8662,8 @@ main#main-content:has(.finance-workspace) > .min-w-0 {
 
 .sidebar-brand-header {
   min-width: 0;
-  background: rgba(4, 17, 42, 0.26);
+  min-height: 92px;
+  background: rgba(4, 17, 42, 0.12);
 }
 
 .sidebar-brand-mark,
@@ -8673,6 +8674,19 @@ main#main-content:has(.finance-workspace) > .min-w-0 {
 
 .sidebar-brand-mark {
   filter: drop-shadow(0 4px 12px rgba(0, 174, 239, 0.22));
+}
+
+.sidebar-logo-white-user {
+  display: block;
+  width: 176px;
+  max-width: 176px;
+  height: 78px;
+  max-height: 78px;
+  object-fit: contain;
+  object-position: left center;
+  mix-blend-mode: screen;
+  filter: contrast(1.55) brightness(1.18);
+  opacity: 1;
 }
 
 .sidebar-overlay-close {
@@ -8935,7 +8949,8 @@ main#main-content:has(.finance-workspace) > .min-w-0 {
     background: #fff;
   }
 
-  .sidebar-logo-inverted {
+  .sidebar-logo-inverted,
+  .sidebar-logo-white-user {
     display: none !important;
   }
 
