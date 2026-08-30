@@ -493,13 +493,12 @@ export function buildPosSaleLines(params: {
       credit: 0,
     })
   }
-  // Client credit is applied to the invoice immediately after the POS sale.
-  // Keep that portion in AR here; the credit application journal then Dr
-  // Customer Credits / Cr AR, preserving a clean audit trail for split tender.
+  // POS settles client credit in the same sale event: debit the customer-credit
+  // liability directly and collect only the remainder through cash/mobile/bank.
   if (customerCredit > 0) {
     lines.push({
-      role: 'ar',
-      description: `Client credit pending application ${params.orderRef}`,
+      role: 'customer_credits',
+      description: `Client credit applied ${params.orderRef}`,
       debit: customerCredit,
       credit: 0,
     })
