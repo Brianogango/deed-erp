@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Fa } from '@/components/icons'
 import {
   faBell,
@@ -98,7 +98,7 @@ type Props = {
     secPortalRequirePhoneVerification: boolean
   }
   showToast: (message: string, type?: ToastType) => void
-  onOpenUserAccess: () => void
+  onOpenPartnerApi?: () => void
 }
 
 const cardClass = 'rounded-[18px] border border-[#DDE5EF] bg-white shadow-[0_1px_2px_rgba(15,23,42,0.03)]'
@@ -174,7 +174,7 @@ function SummaryCard({
         : valueTone === 'amber' ? '#D97706'
           : '#172033'
   return (
-    <div className={`${cardClass} flex min-h-[105px] items-center gap-3 px-4 py-4`}>
+    <div className={`${cardClass} security-summary-card flex min-h-[105px] items-center gap-3 px-4 py-4`}>
       <IconBox icon={icon} tone={tone} />
       <div className="min-w-0">
         <p className="text-[10px] font-semibold text-[#667085]">{label}</p>
@@ -207,7 +207,7 @@ function SecurityStatusRow({
       type="button"
       onClick={onClick}
       disabled={!onClick}
-      className="flex w-full items-center gap-3 border-b border-[#EDF1F6] px-3 py-2.5 text-left last:border-b-0 disabled:cursor-default disabled:opacity-100"
+      className="security-status-row flex w-full items-center gap-3 border-b border-[#EDF1F6] px-3 py-2.5 text-left last:border-b-0 disabled:cursor-default disabled:opacity-100"
     >
       <IconBox icon={icon} tone={tone} />
       <span className="min-w-0 flex-1">
@@ -244,7 +244,7 @@ function QuickAction({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className="flex min-h-[44px] w-full items-center gap-3 rounded-xl border px-4 text-left text-[10.5px] font-bold transition hover:-translate-y-[1px] hover:shadow-sm disabled:cursor-not-allowed disabled:opacity-50"
+      className="security-quick-action flex min-h-[44px] w-full items-center gap-3 rounded-xl border px-4 text-left text-[10.5px] font-bold transition hover:-translate-y-[1px] hover:shadow-sm disabled:cursor-not-allowed disabled:opacity-50"
       style={{ borderColor: tones[tone].border, color: tones[tone].text, background: tones[tone].bg }}
     >
       <Fa icon={icon} style={{ fontSize: 12 }} />
@@ -327,7 +327,7 @@ export default function SecuritySettingsDashboard({
   currentUser,
   systemSettings,
   showToast,
-  onOpenUserAccess,
+  onOpenPartnerApi,
 }: Props) {
   const [overview, setOverview] = useState<SecurityOverview | null>(null)
   const [loading, setLoading] = useState(true)
@@ -335,6 +335,9 @@ export default function SecuritySettingsDashboard({
   const [revokingSessionId, setRevokingSessionId] = useState<string | null>(null)
   const [savingMfaPolicy, setSavingMfaPolicy] = useState(false)
   const [showEnvironment, setShowEnvironment] = useState(false)
+  const [detailPanel, setDetailPanel] = useState<'sessions' | 'audit' | 'data' | 'backup' | 'securityAudit' | null>(null)
+  const [mobileDetailPage, setMobileDetailPage] = useState(0)
+  const passwordPanelRef = useRef<HTMLDivElement | null>(null)
 
   const refresh = useCallback(async (announce = false) => {
     setLoading(true)
@@ -471,6 +474,15 @@ export default function SecuritySettingsDashboard({
     showToast('Security report downloaded', 'success')
   }
 
+  const openPasswordPolicy = useCallback(() => {
+    passwordPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }, [])
+
+  const openSecurityAudit = useCallback(async () => {
+    await refresh(true)
+    setDetailPanel('securityAudit')
+  }, [refresh])
+
   const securityStatuses = useMemo(() => ([
     {
       icon: faShieldHalved,
@@ -488,6 +500,7 @@ export default function SecuritySettingsDashboard({
       detail: `Minimum ${password?.minimumLength ?? 8} characters · last 5 passwords cannot be reused`,
       status: 'Enforced',
       statusTone: 'green' as const,
+      onClick: openPasswordPolicy,
     },
     {
       icon: faBell,
@@ -496,6 +509,7 @@ export default function SecuritySettingsDashboard({
       detail: `Inactive sessions expire after ${overview?.sessionPolicy.inactivityMinutes ?? 30} minutes`,
       status: 'Enforced',
       statusTone: 'green' as const,
+      onClick: () => setDetailPanel('sessions'),
     },
     {
       icon: faBullseye,
@@ -513,6 +527,7 @@ export default function SecuritySettingsDashboard({
       detail: 'Security and business audit events are retained in PostgreSQL',
       status: systemSettings.auditLogs ? 'Enabled' : 'Disabled',
       statusTone: systemSettings.auditLogs ? 'green' as const : 'amber' as const,
+      onClick: () => setDetailPanel('audit'),
     },
     {
       icon: faShieldHalved,
@@ -521,6 +536,7 @@ export default function SecuritySettingsDashboard({
       detail: 'Deletion, stock, invoice and portal safeguards',
       status: dataProtectionEnabled ? 'Enabled' : 'Review',
       statusTone: dataProtectionEnabled ? 'green' as const : 'amber' as const,
+      onClick: () => setDetailPanel('data'),
     },
     {
       icon: faUpload,
@@ -529,8 +545,9 @@ export default function SecuritySettingsDashboard({
       detail: 'Server backup posture is verified by the production security audit',
       status: 'Verify host',
       statusTone: 'blue' as const,
+      onClick: () => setDetailPanel('backup'),
     },
-  ]), [dataProtectionEnabled, ipAllowlist.length, mfaEnforced, overview?.sessionPolicy.inactivityMinutes, password?.minimumLength, currentUser?.role, systemSettings.auditLogs])
+  ]), [dataProtectionEnabled, ipAllowlist.length, mfaEnforced, overview?.sessionPolicy.inactivityMinutes, password?.minimumLength, currentUser?.role, systemSettings.auditLogs, openPasswordPolicy])
 
   return (
     <div className="security-dashboard min-w-0">
@@ -626,13 +643,13 @@ export default function SecuritySettingsDashboard({
                   label="Security Audit"
                   icon={faBullseye}
                   tone="blue"
-                  onClick={() => void refresh(true)}
+                  onClick={() => void openSecurityAudit()}
                 />
                 <QuickAction
                   label="Backup Now"
                   icon={faUpload}
                   tone="cyan"
-                  onClick={() => showToast('Backup execution remains a production-host operation. Use the security host audit before running a live backup.', 'info')}
+                  onClick={() => setDetailPanel('backup')}
                 />
                 <QuickAction
                   label="Download Security Report"
@@ -690,6 +707,7 @@ export default function SecuritySettingsDashboard({
             </div>
           </SubPanel>
 
+          <div ref={passwordPanelRef} className="scroll-mt-4">
           <SubPanel title="Password Policy" subtitle="Current password requirements enforced when passwords are created or changed.">
             <RowSetting
               title="Minimum length"
@@ -711,17 +729,18 @@ export default function SecuritySettingsDashboard({
               right={<span className="flex h-8 min-w-[48px] items-center justify-center rounded-lg border border-[#DDE5EF] bg-[#FAFCFE] px-2 text-[10px] font-bold text-[#334155]">{password?.preventReuseCount ?? 5}</span>}
             />
           </SubPanel>
+          </div>
         </div>
       </div>
 
       <div className="mt-4 grid min-w-0 grid-cols-1 gap-3 md:grid-cols-2 2xl:grid-cols-5">
-        <section className={`${cardClass} min-w-0 overflow-hidden`}>
+        <section className={`${cardClass} security-mobile-page ${mobileDetailPage === 0 ? 'is-mobile-page-active' : ''} min-w-0 overflow-hidden`}>
           <div className="flex items-start justify-between border-b border-[#EDF1F6] px-3.5 py-3">
             <div>
               <h4 className="text-[11px] font-bold text-[#182033]">Active Sessions</h4>
               <p className="mt-0.5 text-[8.7px] text-[#8894A6]">View and manage active user sessions.</p>
             </div>
-            <button type="button" onClick={onOpenUserAccess} className="text-[#6B778A]"><Fa icon={faChevronRight} style={{ fontSize: 8 }} /></button>
+            <button type="button" onClick={() => setDetailPanel('sessions')} className="text-[#6B778A]" aria-label="View all active sessions"><Fa icon={faChevronRight} style={{ fontSize: 8 }} /></button>
           </div>
           <div className="px-3.5 py-3">
             <div className="overflow-x-auto">
@@ -761,17 +780,17 @@ export default function SecuritySettingsDashboard({
                 </tbody>
               </table>
             </div>
-            <button type="button" onClick={onOpenUserAccess} className="mt-2 text-[8.5px] font-bold text-[var(--primary-dark)]">View all sessions →</button>
+            <button type="button" onClick={() => setDetailPanel('sessions')} className="mt-2 text-[8.5px] font-bold text-[var(--primary-dark)]">View all sessions →</button>
           </div>
         </section>
 
-        <section className={`${cardClass} min-w-0 overflow-hidden`}>
+        <section className={`${cardClass} security-mobile-page ${mobileDetailPage === 1 ? 'is-mobile-page-active' : ''} min-w-0 overflow-hidden`}>
           <div className="flex items-start justify-between border-b border-[#EDF1F6] px-3.5 py-3">
             <div>
               <h4 className="text-[11px] font-bold text-[#182033]">Audit Logs</h4>
               <p className="mt-0.5 text-[8.7px] text-[#8894A6]">View security-related events and activities.</p>
             </div>
-            <Fa icon={faChevronRight} className="text-[#6B778A]" style={{ fontSize: 8 }} />
+            <button type="button" onClick={() => setDetailPanel('audit')} className="text-[#6B778A]" aria-label="View audit logs"><Fa icon={faChevronRight} style={{ fontSize: 8 }} /></button>
           </div>
           <div className="px-3.5 py-3">
             {auditRows.length ? (
@@ -787,11 +806,11 @@ export default function SecuritySettingsDashboard({
             ) : (
               <p className="py-5 text-center text-[9px] text-[#8A96A8]">No audit rows returned yet.</p>
             )}
-            <button type="button" onClick={() => void refresh(true)} className="mt-2 text-[8.5px] font-bold text-[var(--primary-dark)]">Refresh logs →</button>
+            <button type="button" onClick={() => setDetailPanel('audit')} className="mt-2 text-[8.5px] font-bold text-[var(--primary-dark)]">View all logs →</button>
           </div>
         </section>
 
-        <section className={`${cardClass} min-w-0 overflow-hidden`}>
+        <section className={`${cardClass} security-mobile-page ${mobileDetailPage === 2 ? 'is-mobile-page-active' : ''} min-w-0 overflow-hidden`}>
           <div className="flex items-start justify-between border-b border-[#EDF1F6] px-3.5 py-3">
             <div>
               <h4 className="text-[11px] font-bold text-[#182033]">IP Allowlist</h4>
@@ -815,13 +834,13 @@ export default function SecuritySettingsDashboard({
           </div>
         </section>
 
-        <section className={`${cardClass} min-w-0 overflow-hidden`}>
+        <section className={`${cardClass} security-mobile-page ${mobileDetailPage === 3 ? 'is-mobile-page-active' : ''} min-w-0 overflow-hidden`}>
           <div className="flex items-start justify-between border-b border-[#EDF1F6] px-3.5 py-3">
             <div>
               <h4 className="text-[11px] font-bold text-[#182033]">API Security</h4>
               <p className="mt-0.5 text-[8.7px] text-[#8894A6]">API access and request limits.</p>
             </div>
-            <Fa icon={faChevronRight} className="text-[#6B778A]" style={{ fontSize: 8 }} />
+            <button type="button" onClick={onOpenPartnerApi} disabled={!onOpenPartnerApi} className="text-[#6B778A] disabled:opacity-40" aria-label="Open Partner API settings"><Fa icon={faChevronRight} style={{ fontSize: 8 }} /></button>
           </div>
           <div className="px-3.5 py-3">
             <div className="flex items-center justify-between border-b border-[#F0F3F7] py-2">
@@ -839,13 +858,13 @@ export default function SecuritySettingsDashboard({
           </div>
         </section>
 
-        <section className={`${cardClass} min-w-0 overflow-hidden`}>
+        <section className={`${cardClass} security-mobile-page ${mobileDetailPage === 4 ? 'is-mobile-page-active' : ''} min-w-0 overflow-hidden`}>
           <div className="flex items-start justify-between border-b border-[#EDF1F6] px-3.5 py-3">
             <div>
               <h4 className="text-[11px] font-bold text-[#182033]">Data Protection</h4>
               <p className="mt-0.5 text-[8.7px] text-[#8894A6]">Application and transport safeguards.</p>
             </div>
-            <Fa icon={faChevronRight} className="text-[#6B778A]" style={{ fontSize: 8 }} />
+            <button type="button" onClick={() => setDetailPanel('data')} className="text-[#6B778A]" aria-label="View data protection controls"><Fa icon={faChevronRight} style={{ fontSize: 8 }} /></button>
           </div>
           <div className="px-3.5 py-3">
             <div className="flex items-center justify-between border-b border-[#F0F3F7] py-2">
@@ -864,10 +883,226 @@ export default function SecuritySettingsDashboard({
         </section>
       </div>
 
+      <div className="security-mobile-pagination mt-3" aria-label="Security detail pages">
+        <button
+          type="button"
+          onClick={() => setMobileDetailPage(page => Math.max(0, page - 1))}
+          disabled={mobileDetailPage === 0}
+          aria-label="Previous security detail"
+        >‹</button>
+        <span>
+          <strong>{mobileDetailPage + 1}</strong> / 5
+          <small>{['Active Sessions', 'Audit Logs', 'IP Allowlist', 'API Security', 'Data Protection'][mobileDetailPage]}</small>
+        </span>
+        <button
+          type="button"
+          onClick={() => setMobileDetailPage(page => Math.min(4, page + 1))}
+          disabled={mobileDetailPage === 4}
+          aria-label="Next security detail"
+        >›</button>
+      </div>
+
       <div className="mt-3 flex flex-col gap-2 border-t border-[#E7ECF3] px-1 pt-3 text-[8.5px] text-[#8A96A8] sm:flex-row sm:items-center sm:justify-between">
         <span>© 2026 Deed Technologies LTD. Security controls use the existing ERP authentication and audit stack.</span>
         <span className="font-bold text-[var(--primary-dark)]">Security Settings</span>
       </div>
+
+      <style jsx global>{`
+        .security-mobile-pagination {
+          display: none;
+        }
+
+        @keyframes deedSecurityPhoneIn {
+          from { opacity: 0; transform: translateY(8px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+
+        @keyframes deedSecurityPhoneSlide {
+          from { opacity: 0; transform: translateX(18px); }
+          to { opacity: 1; transform: translateX(0); }
+        }
+
+        @media (max-width: 767px) {
+          .security-dashboard .security-mobile-page:not(.is-mobile-page-active) {
+            display: none;
+          }
+
+          .security-dashboard .security-mobile-page.is-mobile-page-active {
+            animation: deedSecurityPhoneIn 220ms cubic-bezier(.2,.75,.25,1) both;
+          }
+
+          .security-dashboard .security-summary-card {
+            animation: deedSecurityPhoneIn 200ms ease-out both;
+          }
+
+          .security-dashboard .security-summary-card:nth-child(2) { animation-delay: 30ms; }
+          .security-dashboard .security-summary-card:nth-child(3) { animation-delay: 60ms; }
+          .security-dashboard .security-summary-card:nth-child(4) { animation-delay: 90ms; }
+
+          .security-dashboard .security-status-row:active,
+          .security-dashboard .security-quick-action:active:not(:disabled) {
+            transform: scale(.985);
+          }
+
+          .security-dashboard .security-detail-drawer {
+            animation: deedSecurityPhoneSlide 220ms cubic-bezier(.2,.75,.25,1) both;
+          }
+
+          .security-mobile-pagination {
+            display: flex;
+            min-height: 44px;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+          }
+
+          .security-mobile-pagination > button {
+            display: inline-flex;
+            width: 40px;
+            height: 40px;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid #D7E0EA;
+            border-radius: 11px;
+            background: #fff;
+            color: #172033;
+            font-size: 20px;
+            font-weight: 800;
+          }
+
+          .security-mobile-pagination > button:disabled {
+            opacity: .35;
+          }
+
+          .security-mobile-pagination > span {
+            min-width: 120px;
+            color: #667085;
+            font-size: 10px;
+            font-weight: 700;
+            text-align: center;
+          }
+
+          .security-mobile-pagination > span small {
+            display: block;
+            margin-top: 2px;
+            color: #8995A7;
+            font-size: 9px;
+            font-weight: 600;
+          }
+        }
+
+        @media (max-width: 767px) and (prefers-reduced-motion: reduce) {
+          .security-dashboard .security-mobile-page.is-mobile-page-active,
+          .security-dashboard .security-summary-card,
+          .security-dashboard .security-detail-drawer {
+            animation: none !important;
+          }
+        }
+      `}</style>
+
+      {detailPanel && (
+        <div className="fixed inset-0 z-[10015] flex justify-end bg-[#0E1730]/35 backdrop-blur-[1px]" role="dialog" aria-modal="true" aria-label="Security details">
+          <button type="button" className="absolute inset-0 cursor-default" aria-label="Close security details" onClick={() => setDetailPanel(null)} />
+          <div className="security-detail-drawer relative h-full w-full max-w-[720px] overflow-y-auto border-l border-[#D7E0EA] bg-[#F5F8FC] shadow-2xl">
+            <div className="sticky top-0 z-10 flex items-center justify-between border-b border-[#DDE5EF] bg-white/95 px-4 py-4 backdrop-blur sm:px-5">
+              <div className="min-w-0">
+                <h3 className="truncate text-sm font-black text-[#172033]">
+                  {detailPanel === 'sessions' ? 'Active Sessions'
+                    : detailPanel === 'audit' ? 'Audit Logs'
+                      : detailPanel === 'data' ? 'Data Protection'
+                        : detailPanel === 'backup' ? 'Backup & Recovery'
+                          : 'Security Audit'}
+                </h3>
+                <p className="mt-0.5 text-[10px] text-[#7A8699]">Security controls and live operational status.</p>
+              </div>
+              <button type="button" onClick={() => setDetailPanel(null)} className="ml-3 rounded-xl border border-[#D7E0EA] bg-white px-3 py-2 text-[10px] font-bold text-[#526175] hover:bg-[#F8FAFC]">Close</button>
+            </div>
+
+            <div className="p-4 sm:p-5">
+              {detailPanel === 'sessions' && (
+                <div className="rounded-[18px] border border-[#DDE5EF] bg-white shadow-[0_1px_2px_rgba(15,23,42,0.03)] overflow-hidden">
+                  <div className="flex items-center justify-between border-b border-[#EDF1F6] px-4 py-3">
+                    <div><p className="text-[13px] font-bold text-[#111827]">All active sessions</p><p className="mt-0.5 text-[9.5px] text-[#8995A7]">{activeSessions.length} currently visible</p></div>
+                    <button type="button" onClick={() => void refresh(true)} className="rounded-lg border border-[#DDE5EF] px-3 py-2 text-[9px] font-bold text-[#526175]">Refresh</button>
+                  </div>
+                  <div className="divide-y divide-[#EDF1F6]">
+                    {activeSessions.map(session => (
+                      <div key={session.id} className="grid gap-2 px-4 py-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+                        <div className="min-w-0">
+                          <p className="truncate text-[11px] font-bold text-[#182033]">{session.name} <span className="font-normal text-[#7A8699]">@{session.username}</span></p>
+                          <p className="mt-1 text-[9px] text-[#667085]">{compactAgent(session.userAgent)} · {session.ipAddress} · {timeAgo(session.createdAt)}</p>
+                        </div>
+                        {!session.isCurrent && session.id !== 'current-session' && currentUser?.role === 'director' ? (
+                          <button type="button" disabled={Boolean(revokingSessionId)} onClick={() => void revokeSession(session.id, session.name)} className="justify-self-start rounded-lg border border-[#F3C4C4] bg-[#FFF7F7] px-3 py-2 text-[9px] font-bold text-[#D63D3D] disabled:opacity-50 sm:justify-self-end">
+                            {revokingSessionId === session.id ? 'Revoking…' : 'Revoke session'}
+                          </button>
+                        ) : <StatusPill tone="green">Current</StatusPill>}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {detailPanel === 'audit' && (
+                <div className="rounded-[18px] border border-[#DDE5EF] bg-white shadow-[0_1px_2px_rgba(15,23,42,0.03)] overflow-hidden">
+                  <div className="flex items-center justify-between border-b border-[#EDF1F6] px-4 py-3">
+                    <div><p className="text-[13px] font-bold text-[#111827]">Security audit log</p><p className="mt-0.5 text-[9.5px] text-[#8995A7]">{auditRows.length} recent events</p></div>
+                    <button type="button" onClick={() => void refresh(true)} className="rounded-lg border border-[#DDE5EF] px-3 py-2 text-[9px] font-bold text-[#526175]">Refresh</button>
+                  </div>
+                  <div className="divide-y divide-[#EDF1F6]">
+                    {auditRows.length ? auditRows.map(row => (
+                      <div key={row.id} className="grid gap-1 px-4 py-3 text-[9px] sm:grid-cols-[110px_minmax(0,1fr)_110px] sm:gap-3">
+                        <span className="text-[#667085]">{row.createdAt ? new Date(row.createdAt).toLocaleString('en-KE') : '—'}</span>
+                        <span className="min-w-0 truncate font-semibold text-[#263247]">{codeLabel(row.action)} · {row.entityType || row.entityKey || 'security'}</span>
+                        <span className="font-mono text-[#667085] sm:text-right">{row.ipAddress}</span>
+                      </div>
+                    )) : <p className="px-4 py-8 text-center text-[10px] text-[#8995A7]">No audit rows returned yet.</p>}
+                  </div>
+                </div>
+              )}
+
+              {detailPanel === 'data' && (
+                <div className="rounded-[18px] border border-[#DDE5EF] bg-white shadow-[0_1px_2px_rgba(15,23,42,0.03)] p-4">
+                  <p className="text-[13px] font-bold text-[#111827]">Data protection controls</p>
+                  <div className="mt-3">
+                    <RowSetting title="CSP + HSTS" detail="Browser transport and resource execution protections" right={<StatusPill tone={overview?.securityControls.csp && overview?.securityControls.hsts ? 'green' : 'amber'}>{overview?.securityControls.csp && overview?.securityControls.hsts ? 'Enabled' : 'Review'}</StatusPill>} />
+                    <RowSetting title="Default-deny store ACL" detail="State keys are protected by server-side access control" right={<StatusPill tone={overview?.securityControls.defaultDenyStore ? 'green' : 'amber'}>{overview?.securityControls.defaultDenyStore ? 'Enabled' : 'Review'}</StatusPill>} />
+                    <RowSetting title="Same-origin writes" detail="State-changing browser requests require approved origin context" right={<StatusPill tone={overview?.securityControls.sameOriginWrites ? 'green' : 'amber'}>{overview?.securityControls.sameOriginWrites ? 'Enabled' : 'Review'}</StatusPill>} />
+                    <RowSetting title="Business guards" detail="Deletion, stock, invoice and portal safeguards" right={<StatusPill tone={dataProtectionEnabled ? 'green' : 'amber'}>{dataProtectionEnabled ? 'Enabled' : 'Review'}</StatusPill>} />
+                  </div>
+                </div>
+              )}
+
+              {detailPanel === 'backup' && (
+                <div className="rounded-[18px] border border-[#DDE5EF] bg-white shadow-[0_1px_2px_rgba(15,23,42,0.03)] p-4">
+                  <p className="text-[13px] font-bold text-[#111827]">Production backup posture</p>
+                  <p className="mt-2 text-[10px] leading-relaxed text-[#667085]">Live backups remain a host-level operation and are intentionally not triggered by a browser button. This view now opens the correct backup/recovery context instead of sending you elsewhere.</p>
+                  <div className="mt-4 rounded-xl border border-[#DDE5EF] bg-[#FAFCFE] p-3">
+                    <p className="text-[9px] font-bold text-[#334155]">Latest security activity</p>
+                    <p className="mt-1 text-[9px] text-[#7A8699]">{timeAgo(securityEvent)}</p>
+                  </div>
+                  <button type="button" onClick={() => void openSecurityAudit()} className="mt-4 min-h-[38px] rounded-xl border border-[#9FC6F4] bg-white px-4 text-[10px] font-bold text-[#0D67C7]">Verify security posture</button>
+                </div>
+              )}
+
+              {detailPanel === 'securityAudit' && (
+                <div className="rounded-[18px] border border-[#DDE5EF] bg-white shadow-[0_1px_2px_rgba(15,23,42,0.03)] p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div><p className="text-[13px] font-bold text-[#111827]">Security posture snapshot</p><p className="mt-0.5 text-[9.5px] text-[#8995A7]">Generated {overview?.generatedAt ? new Date(overview.generatedAt).toLocaleString('en-KE') : '—'}</p></div>
+                    <StatusPill tone={overview?.ok ? 'green' : 'amber'}>{overview?.ok ? 'Healthy' : 'Review'}</StatusPill>
+                  </div>
+                  <div className="mt-4">
+                    <RowSetting title="MFA enforcement" detail="Privileged account challenge policy" right={<StatusPill tone={mfaEnforced ? 'green' : 'amber'}>{mfaEnforced ? 'Enforced' : 'Review'}</StatusPill>} />
+                    <RowSetting title="Audit logging" detail="Security and business event retention" right={<StatusPill tone={systemSettings.auditLogs ? 'green' : 'amber'}>{systemSettings.auditLogs ? 'Enabled' : 'Review'}</StatusPill>} />
+                    <RowSetting title="Upload guards" detail="Server-side file validation posture" right={<StatusPill tone={overview?.securityControls.uploadGuards ? 'green' : 'amber'}>{overview?.securityControls.uploadGuards ? 'Enabled' : 'Review'}</StatusPill>} />
+                    <RowSetting title="Row-level authorization" detail="Server authorization on protected resources" right={<StatusPill tone={overview?.securityControls.rowLevelAuthorization ? 'green' : 'amber'}>{overview?.securityControls.rowLevelAuthorization ? 'Enabled' : 'Review'}</StatusPill>} />
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {showEnvironment && (
         <div className="fixed inset-0 z-[10020] flex justify-end bg-[#0E1730]/35 backdrop-blur-[1px]" role="dialog" aria-modal="true" aria-label="Production security environment">
