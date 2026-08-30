@@ -3783,6 +3783,61 @@ model NotificationEscalation {
   @@map("notification_escalations")
 }
 
+model CommunicationThread {
+  id               String   @id @default(uuid()) @db.Uuid
+  threadKey        String   @unique @map("thread_key") @db.VarChar(240)
+  channel          String   @default("sms") @db.VarChar(20)
+  participantPhone String   @map("participant_phone") @db.VarChar(40)
+  participantName  String?  @map("participant_name") @db.VarChar(200)
+  entityType       String?  @map("entity_type") @db.VarChar(80)
+  entityId         String?  @map("entity_id") @db.VarChar(160)
+  status           String   @default("open") @db.VarChar(30)
+  unreadCount      Int      @default(0) @map("unread_count")
+  lastMessageAt    DateTime @default(now()) @map("last_message_at")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  messages CommunicationMessage[]
+
+  @@index([participantPhone, lastMessageAt], map: "idx_comm_threads_phone_last")
+  @@index([entityType, entityId], map: "idx_comm_threads_entity")
+  @@index([lastMessageAt], map: "idx_comm_threads_last_message")
+  @@map("communication_threads")
+}
+
+model CommunicationMessage {
+  id                     String    @id @default(uuid()) @db.Uuid
+  threadId               String    @map("thread_id") @db.Uuid
+  direction              String    @db.VarChar(12)
+  channel                String    @default("sms") @db.VarChar(20)
+  body                   String
+  provider               String?   @db.VarChar(40)
+  providerMessageId      String?   @map("provider_message_id") @db.VarChar(500)
+  providerMessageKey     String?   @unique @map("provider_message_key") @db.VarChar(560)
+  notificationDeliveryId String?   @unique @map("notification_delivery_id") @db.Uuid
+  eventType              String?   @map("event_type") @db.VarChar(120)
+  entityType             String?   @map("entity_type") @db.VarChar(80)
+  entityId               String?   @map("entity_id") @db.VarChar(160)
+  senderPhone            String?   @map("sender_phone") @db.VarChar(40)
+  recipientPhone         String?   @map("recipient_phone") @db.VarChar(40)
+  status                 String    @default("queued") @db.VarChar(30)
+  sentAt                 DateTime? @map("sent_at")
+  deliveredAt            DateTime? @map("delivered_at")
+  readAt                 DateTime? @map("read_at")
+  receivedAt             DateTime? @map("received_at")
+  createdByUserId        String?   @map("created_by_user_id") @db.Uuid
+  metadata               Json      @default("{}")
+  createdAt              DateTime  @default(now()) @map("created_at")
+  updatedAt              DateTime  @updatedAt @map("updated_at")
+
+  thread CommunicationThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+
+  @@index([threadId, createdAt], map: "idx_comm_messages_thread_created")
+  @@index([provider, providerMessageId], map: "idx_comm_messages_provider_message")
+  @@index([direction, status, createdAt], map: "idx_comm_messages_direction_status")
+  @@map("communication_messages")
+}
+
 model NotificationDeadLetter {
   id             String    @id @default(uuid()) @db.Uuid
   deliveryId     String    @unique @map("delivery_id") @db.Uuid
