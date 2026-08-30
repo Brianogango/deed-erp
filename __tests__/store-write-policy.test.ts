@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { ALL_CLIENT_APP_STATE_KEYS } from '@/lib/app-state-hydration'
 import { canWriteStoreKey, STORE_WRITE_POLICIES } from '@/lib/auth/store-write-policy'
 
 const user = (role: string, modules: string[] = []) => ({ role, modules })
@@ -8,20 +9,9 @@ describe('legacy store write policy', () => {
     expect(canWriteStoreKey(user('director', ['settings']), 'deed_attackerControlled')).toBe(false)
   })
 
-  it('has an explicit policy for every intended high-risk ledger', () => {
-    for (const key of [
-      'deed_invoices',
-      'deed_payments',
-      'deed_journalEntries',
-      'deed_bankAccounts',
-      'deed_payrollRuns',
-      'deed_purchaseOrders',
-      'deed_repairs_v2',
-      'deed_products',
-      'deed_contacts',
-    ]) {
-      expect(STORE_WRITE_POLICIES[key], key).toBeTruthy()
-    }
+  it('requires an explicit ACL for every client-writable app-state key', () => {
+    const missing = ALL_CLIENT_APP_STATE_KEYS.filter(key => !STORE_WRITE_POLICIES[key])
+    expect(missing, `Missing store write policies: ${missing.join(', ')}`).toEqual([])
   })
 
   it('prevents technicians from writing finance ledgers', () => {
