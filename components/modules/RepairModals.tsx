@@ -507,7 +507,7 @@ function ProductPicker({ value, productId, onSelect, products, requireInventory,
  * QuoteModal
  */
 export function QuoteModal({ repair, onClose }: { repair: RepairOrder, onClose: () => void }) {
-  const { generateRepairQuote, companySettings, products, systemSettings } = useRepairStore()
+  const { generateRepairQuote, companySettings, products, systemSettings, showToast } = useRepairStore()
   const [applyVat, setApplyVat] = useState(repair.quote ? repair.quote.tax > 0 : false)
   const [submitted, setSubmitted] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -572,6 +572,31 @@ export function QuoteModal({ repair, onClose }: { repair: RepairOrder, onClose: 
     setSaving(true)
     try {
       await Promise.resolve(generateRepairQuote(repair.id, lines as any, applyVat))
+      if (repair.customerPhone) {
+        const quoteTotal = lines.reduce((sum, line) => sum + Number(line.subtotal || 0), 0)
+          + (applyVat
+            ? Math.round(lines
+                .filter(line => !line.isDiagnosisFee)
+                .reduce((sum, line) => sum + Number(line.subtotal || 0), 0) * (companySettings.vatRate / 100))
+            : 0)
+        const quoteUrl = typeof window !== 'undefined'
+          ? `${window.location.origin}/portal/repair/${encodeURIComponent(repair.ref)}`
+          : `/portal/repair/${encodeURIComponent(repair.ref)}`
+        const notify = await fetch('/api/notifications/send', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            type: 'quote',
+            repairRef: repair.ref,
+            quoteTotal,
+            quoteUrl,
+            channels: ['email', 'whatsapp', 'sms'],
+          }),
+        }).catch(() => null)
+        if (!notify?.ok) {
+          showToast('Quote saved, but customer SMS notification could not be confirmed', 'info')
+        }
+      }
       onClose()
     } finally {
       setSaving(false)
