@@ -5,6 +5,7 @@ import { canReimburseExpense, canReviewExpense } from '@/lib/finance-controls'
 import { checkFiscalLock } from '@/lib/fiscal-lock.server'
 import {
   postExpenseApproval,
+  postExpenseCompanyPayment,
   postExpenseReimbursement,
 } from '@/lib/accounting/posting-service'
 import { roundMoney } from '@/lib/accounting/money'
@@ -21,16 +22,22 @@ export async function POST(request: NextRequest) {
     const actor = await requireRole(['director', 'finance_officer'])
 
     const body = await request.json().catch(() => ({}))
-    const kind = body.kind === 'reimbursement' ? 'reimbursement' : body.kind === 'approval' ? 'approval' : null
+    const kind = body.kind === 'reimbursement'
+      ? 'reimbursement'
+      : body.kind === 'payment'
+        ? 'payment'
+        : body.kind === 'approval'
+          ? 'approval'
+          : null
     if (!kind) {
-      return NextResponse.json({ error: 'kind must be approval or reimbursement' }, { status: 400 })
+      return NextResponse.json({ error: 'kind must be approval, payment, or reimbursement' }, { status: 400 })
     }
 
     if (kind === 'approval' && !canReviewExpense(actor.role)) {
       return NextResponse.json({ error: 'Only Finance or Director can post expense approvals' }, { status: 403 })
     }
-    if (kind === 'reimbursement' && !canReimburseExpense(actor.role)) {
-      return NextResponse.json({ error: 'Only Finance or Director can post expense reimbursements' }, { status: 403 })
+    if ((kind === 'reimbursement' || kind === 'payment') && !canReimburseExpense(actor.role)) {
+      return NextResponse.json({ error: 'Only Finance or Director can post expense payments' }, { status: 403 })
     }
 
     const expenseId = String(body.expenseId || '').trim()
@@ -63,20 +70,35 @@ export async function POST(request: NextRequest) {
             createdById: actor.id,
             tx,
           })
-        : await postExpenseReimbursement({
-            expenseId,
-            ref,
-            amount,
-            submittedByName: body.submittedByName ? String(body.submittedByName) : undefined,
-            bankAccountId: body.bankAccountId ? String(body.bankAccountId) : undefined,
-            date,
-            createdById: actor.id,
-            tx,
-          })
+        : kind === 'payment'
+          ? await postExpenseCompanyPayment({
+              expenseId,
+              ref,
+              amount,
+              paymentMethod: body.paymentMethod ? String(body.paymentMethod) : undefined,
+              bankAccountId: body.bankAccountId ? String(body.bankAccountId) : undefined,
+              date,
+              createdById: actor.id,
+              tx,
+            })
+          : await postExpenseReimbursement({
+              expenseId,
+              ref,
+              amount,
+              submittedByName: body.submittedByName ? String(body.submittedByName) : undefined,
+              bankAccountId: body.bankAccountId ? String(body.bankAccountId) : undefined,
+              date,
+              createdById: actor.id,
+              tx,
+            })
 
       await writeFinancialAuditInTx(tx, {
         userId: actor.id,
-        action: kind === 'approval' ? 'post_expense_engine' : 'post_expense_reimbursement_engine',
+        action: kind === 'approval'
+          ? 'post_expense_engine'
+          : kind === 'payment'
+            ? 'post_expense_payment_engine'
+            : 'post_expense_reimbursement_engine',
         entityType: 'expense',
         entityId: expenseId,
         relatedJournalId: posted && 'id' in posted ? String(posted.id) : null,

@@ -223,6 +223,7 @@ export function Dashboard() {
     posOrders,
     deposits,
     accounts,
+    journalEntries,
     bankAccounts,
     bankStatementLines,
     companySettings,
@@ -422,14 +423,14 @@ export function Dashboard() {
   const financeDeskStats = useMemo(() => {
     if (!canSeeFinance) return null
     const entries = buildCashbookEntries(
-      { invoices, posOrders, expenses, payrollRuns, purchaseOrders, deposits },
+      { invoices, posOrders, expenses, journalEntries, deposits },
       accounts,
     )
     const cashbookTotals = computeCashbookTotals(bankAccounts, entries)
     const { cashAtBank, cashInHand } = cashPositionFromTotals(cashbookTotals)
     const alerts = buildFinanceAlerts({ invoices, expenses, payrollRuns, bankStatementLines, bankAccounts, cashbookTotals })
     return { cashAtBank, cashInHand, alerts }
-  }, [canSeeFinance, invoices, posOrders, expenses, payrollRuns, purchaseOrders, deposits, accounts, bankAccounts, bankStatementLines])
+  }, [canSeeFinance, invoices, posOrders, expenses, journalEntries, deposits, accounts, bankAccounts, bankStatementLines, payrollRuns])
 
   const selfServiceStats = useMemo(() => {
     const myLeave = leaveRequests.filter(l => l.employeeId === currentEmployee?.id)

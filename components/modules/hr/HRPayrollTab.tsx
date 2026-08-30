@@ -10,8 +10,8 @@ import { faCheck, faCircleCheck, faMoneyBillWave, faDownload, faPrint } from '@f
 
 export default function HRPayrollTab() {
   const {
-    users, currentUserId, payrollRuns, payslips, journalEntries,
-    createPayrollRun, approvePayrollRun, postPayrollRun, systemSettings,
+    users, currentUserId, payrollRuns, payslips, journalEntries, bankAccounts,
+    createPayrollRun, approvePayrollRun, postPayrollRun, payPayrollRun, systemSettings,
   } = useApp()
   const { employees, departments } = useHrStore()
 
@@ -53,6 +53,13 @@ export default function HRPayrollTab() {
   const [showPayrollModal, setShowPayrollModal] = useState(false)
   const [payrollMonth, setPayrollMonth] = useState(new Date().toISOString().slice(5, 7))
   const [payrollYear, setPayrollYear]   = useState(String(new Date().getFullYear()))
+  const [payingRunId, setPayingRunId] = useState<string | null>(null)
+  const [payBankAccountId, setPayBankAccountId] = useState('')
+  const [payReference, setPayReference] = useState('')
+  const [payDate, setPayDate] = useState(() => new Date().toISOString().slice(0, 10))
+
+  const payrollPaymentFor = (runId: string) =>
+    journalEntries.find(j => j.payrollRunId === runId && j.ref.startsWith('JRN/PAYROLL-PAY/'))
 
   const createPayroll = () => {
     createPayrollRun(payrollMonth, Number(payrollYear))
@@ -127,6 +134,17 @@ export default function HRPayrollTab() {
       exportValue: run => run.status,
     },
     {
+      key: 'payment', label: 'Payment', priority: 1, width: '110px',
+      render: run => {
+        if (run.status !== 'posted') return <span style={{ color: 'var(--text-4)', fontSize: 10 }}>—</span>
+        const paid = payrollPaymentFor(run.id)
+        return paid
+          ? <Badge status="paid" label="Paid" />
+          : <Badge status="pending" label="Awaiting payment" />
+      },
+      exportValue: run => run.status === 'posted' ? (payrollPaymentFor(run.id) ? 'Paid' : 'Awaiting payment') : '',
+    },
+    {
       key: 'netPay', label: 'Net Pay', priority: 1, width: '100px', align: 'right',
       render: run => <span className="font-mono font-semibold" style={{ fontSize: 11 }}>{fmtKes(run.totalNet)}</span>,
       exportValue: run => run.totalNet,
@@ -168,10 +186,24 @@ export default function HRPayrollTab() {
             <Fa icon={faMoneyBillWave} style={{ fontSize: 9 }} /> Post to Accounting
           </button>
         )}
-        {run.status === 'posted' && (
+        {run.status === 'posted' && payrollPaymentFor(run.id) && (
           <span className="flex items-center gap-1" style={{ color: 'var(--success)', fontSize: 10 }}>
-            <Fa icon={faCircleCheck} style={{ fontSize: 11 }} /> Posted
+            <Fa icon={faCircleCheck} style={{ fontSize: 11 }} /> Paid
           </span>
+        )}
+        {run.status === 'posted' && !payrollPaymentFor(run.id) && canManagePayroll && (
+          <button
+            style={{ background: '#E8F3FA', border: 'none', borderRadius: 6, color: 'var(--navy)', padding: '3px 8px', fontSize: 10, cursor: 'pointer', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 4 }}
+            onClick={e => {
+              e.stopPropagation()
+              setPayingRunId(run.id)
+              setPayBankAccountId(bankAccounts.find(a => a.active && a.id !== 'cash' && a.id !== 'mpesa')?.id ?? bankAccounts.find(a => a.active)?.id ?? '')
+              setPayReference('')
+              setPayDate(new Date().toISOString().slice(0, 10))
+            }}
+          >
+            <Fa icon={faMoneyBillWave} style={{ fontSize: 9 }} /> Pay Payroll
+          </button>
         )}
       </span>
     )
@@ -320,6 +352,52 @@ export default function HRPayrollTab() {
           </div>
         </div>
       )}
+
+      {/* Pay posted payroll — cash moves only at this step. */}
+      {payingRunId && (() => {
+        const run = payrollRuns.find(r => r.id === payingRunId)
+        if (!run) return null
+        return (
+          <Modal title="Pay Payroll" subtitle={`${run.ref} · Net payroll settlement`} onClose={() => setPayingRunId(null)} width={440}>
+            <div className="rounded-xl p-3 mb-4" style={{ background: '#F8FAFC', border: '1px solid var(--border-lt)' }}>
+              <div className="text-[10px] uppercase font-semibold" style={{ color: 'var(--text-4)' }}>Amount to pay</div>
+              <div className="font-mono text-xl font-bold mt-1" style={{ color: 'var(--navy)' }}>{fmtKes(run.totalNet)}</div>
+              <div className="text-[10px] mt-1" style={{ color: 'var(--text-3)' }}>Posting created the payroll liability. This payment clears Net Payroll Payable and moves cash.</div>
+            </div>
+            <div className="grid grid-cols-1 gap-3">
+              <Field label="Pay From" required>
+                <Select
+                  value={payBankAccountId}
+                  onChange={setPayBankAccountId}
+                  options={[
+                    { value: '', label: 'Select bank / cash account...' },
+                    ...bankAccounts.filter(a => a.active).map(a => ({ value: a.id, label: a.name })),
+                  ]}
+                />
+              </Field>
+              <Field label="Payment Date" required>
+                <Input value={payDate} onChange={setPayDate} type="date" />
+              </Field>
+              <Field label="Payment Reference">
+                <Input value={payReference} onChange={setPayReference} placeholder="Bank ref / M-Pesa ref / cheque no." />
+              </Field>
+            </div>
+            <div className="hr-modal-actions flex justify-end gap-2 mt-4">
+              <button className="btn-outline" onClick={() => setPayingRunId(null)}>Cancel</button>
+              <button
+                className="btn-primary"
+                disabled={!payBankAccountId || !payDate}
+                onClick={() => {
+                  void payPayrollRun(run.id, payBankAccountId, payReference.trim() || undefined, payDate)
+                  setPayingRunId(null)
+                }}
+              >
+                Confirm Payroll Payment
+              </button>
+            </div>
+          </Modal>
+        )
+      })()}
 
       {/* Create Payroll Run modal */}
       {showPayrollModal && (

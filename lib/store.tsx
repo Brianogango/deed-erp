@@ -86,7 +86,7 @@ import { isDownPaymentMode, normalizeCreateInvoiceMode } from '@/lib/sales/down-
 import {
   advanceExpenseApproval,
   buildExpenseApprovalChain,
-  canUserApproveExpenseStep,
+  canUserReviewExpense,
   expenseChainIsComplete,
 } from '@/lib/expense-approval-chain'
 import type { ApprovalRequest, ApprovalType, StockReservation } from '@/lib/sales-flow-types'
@@ -2426,6 +2426,9 @@ export interface Payslip {
   salaryAdvanceDeductions?: Array<{ advanceId: string; ref: string; amount: number; remainingAfter: number }>
   netPay: number
   status: 'draft' | 'published'
+  paymentStatus?: 'pending' | 'paid'
+  paidAt?: string
+  paymentReference?: string
   generatedDate: string
   downloadUrl?: string
 }
@@ -2471,7 +2474,7 @@ export interface JournalEntry {
   id: string
   ref: string
   date: string
-  source: 'payroll' | 'refund' | 'invoice' | 'payment' | 'bill' | 'purchase_payment' | 'expense' | 'pos' | 'pos_session' | 'purchase' | 'manual' | 'adjustment'
+  source: 'payroll' | 'payroll_payment' | 'refund' | 'invoice' | 'payment' | 'bill' | 'purchase_payment' | 'expense' | 'pos' | 'pos_session' | 'purchase' | 'manual' | 'adjustment'
   description: string
   status: 'posted'
   lines: JournalEntryLine[]
@@ -2803,23 +2806,79 @@ const buildDepositPaymentJournal = (deposit: Pick<Deposit, 'id' | 'ref' | 'custo
 
 const buildExpenseApprovalJournal = (expense: Expense): JournalEntry => {
   const isReimbursement = expense.paymentMethod === 'reimbursement'
-  const liabilityOrBank = isReimbursement
+  const liability = isReimbursement
     ? '3312 - Employee Reimbursements Payable'
-    : bankAccountLabel(bankAccountIdForMethod(expense.paymentMethod), expense.paymentMethod)
+    : '3202 - Outstanding Payments'
   const lines = [
     accountLine(expenseAccountForCategory(expense.category), `${expense.ref}: ${expense.description}`, expense.amount, 0),
-    accountLine(liabilityOrBank, isReimbursement ? `Reimbursement payable: ${expense.submittedByName}` : `Company-paid expense: ${expense.ref}`, 0, expense.amount),
+    accountLine(
+      liability,
+      isReimbursement
+        ? `Reimbursement payable: ${expense.submittedByName}`
+        : `Approved company expense payable: ${expense.ref}`,
+      0,
+      expense.amount,
+    ),
   ]
-  return { id: uid(), ref: `JRN/EXP/${expense.ref}`, date: isoDate(expense.expenseDate), source: 'expense', description: `Expense approval — ${expense.ref}`, status: 'posted', expenseId: expense.id, bankAccountId: isReimbursement ? undefined : bankAccountIdForMethod(expense.paymentMethod), lines, totalDebit: expense.amount, totalCredit: expense.amount }
+  return {
+    id: uid(),
+    ref: `JRN/EXP/${expense.ref}`,
+    date: isoDate(expense.expenseDate),
+    source: 'expense',
+    description: `Expense approval — ${expense.ref}`,
+    status: 'posted',
+    expenseId: expense.id,
+    lines,
+    totalDebit: expense.amount,
+    totalCredit: expense.amount,
+  }
 }
 
-const buildExpenseReimbursementJournal = (expense: Expense, bankAccountId?: string): JournalEntry => {
+const buildExpenseCompanyPaymentJournal = (
+  expense: Expense,
+  bankAccountId?: string,
+  method?: string,
+  paymentDate?: string,
+): JournalEntry => {
+  const actualBankId = bankAccountIdForMethod(method || expense.paymentMethod, bankAccountId)
+  const lines = [
+    accountLine('3202 - Outstanding Payments', `Settle approved expense: ${expense.ref}`, expense.amount, 0),
+    accountLine(bankAccountLabel(actualBankId, method), `Cash paid for ${expense.ref}`, 0, expense.amount),
+  ]
+  return {
+    id: uid(),
+    ref: `JRN/EXPPAY/${expense.ref}`,
+    date: isoDate(paymentDate || now()),
+    source: 'expense',
+    description: `Expense payment — ${expense.ref}`,
+    status: 'posted',
+    expenseId: expense.id,
+    bankAccountId: actualBankId,
+    lines,
+    totalDebit: expense.amount,
+    totalCredit: expense.amount,
+  }
+}
+
+const buildExpenseReimbursementJournal = (expense: Expense, bankAccountId?: string, paymentDate?: string): JournalEntry => {
   const actualBankId = bankAccountIdForMethod('bank_transfer', bankAccountId)
   const lines = [
     accountLine('3312 - Employee Reimbursements Payable', `Settle reimbursement: ${expense.submittedByName}`, expense.amount, 0),
     accountLine(bankAccountLabel(actualBankId), `Cash paid for ${expense.ref}`, 0, expense.amount),
   ]
-  return { id: uid(), ref: `JRN/RIM/${expense.ref}`, date: now(), source: 'expense', description: `Expense reimbursement — ${expense.ref}`, status: 'posted', expenseId: expense.id, bankAccountId: actualBankId, lines, totalDebit: expense.amount, totalCredit: expense.amount }
+  return {
+    id: uid(),
+    ref: `JRN/RIM/${expense.ref}`,
+    date: isoDate(paymentDate || now()),
+    source: 'expense',
+    description: `Expense reimbursement — ${expense.ref}`,
+    status: 'posted',
+    expenseId: expense.id,
+    bankAccountId: actualBankId,
+    lines,
+    totalDebit: expense.amount,
+    totalCredit: expense.amount,
+  }
 }
 
 const buildReversalJournal = (original: JournalEntry, documentRef: string, reason = 'Document cancelled'): JournalEntry => {
@@ -2970,7 +3029,7 @@ export const EXPENSE_CATEGORIES = [
 
 export type ExpenseCategory = typeof EXPENSE_CATEGORIES[number]['value']
 export type ExpensePaymentMethod = 'reimbursement' | 'petty_cash' | 'mpesa_company' | 'company_card'
-export type ExpenseStatus = 'submitted' | 'approved' | 'rejected' | 'reimbursed'
+export type ExpenseStatus = 'submitted' | 'approved' | 'rejected' | 'paid' | 'reimbursed'
 
 export type ExpenseApprovalStep = {
   role: string
@@ -3006,6 +3065,11 @@ export interface Expense {
   reimbursementMethod?: string
   reimbursementBankAccount?: string
   reimbursementReference?: string
+  reimbursementDate?: string
+  // Direct company-funded expenses are approved first, then paid separately.
+  paymentBankAccount?: string
+  paymentReference?: string
+  paidDate?: string
   notes?: string
   createdAt: string
 }
@@ -3321,7 +3385,8 @@ export interface AppState {
   expenses: Expense[]
   submitExpense: (e: Omit<Expense, 'id' | 'ref' | 'submittedByUserId' | 'submittedByName' | 'submittedDate' | 'status' | 'createdAt'>) => Expense
   reviewExpense: (id: string, approved: boolean, notes?: string) => void
-  reimburseExpense: (id: string, notes?: string, method?: string, bankAccountId?: string, reference?: string) => void
+  payExpense: (id: string, method?: string, bankAccountId?: string, reference?: string, paymentDate?: string, notes?: string) => void
+  reimburseExpense: (id: string, notes?: string, method?: string, bankAccountId?: string, reference?: string, paymentDate?: string) => void
 
   // Deposits
   deposits: Deposit[]
@@ -3588,6 +3653,7 @@ export interface AppState {
   createPayrollRun: (month: string, year: number) => PayrollRun
   approvePayrollRun: (id: string) => void
   postPayrollRun: (id: string) => void | Promise<void>
+  payPayrollRun: (id: string, bankAccountId?: string, reference?: string, paymentDate?: string) => void | Promise<void>
   applySalaryAdvance: (request: Omit<SalaryAdvance, 'id' | 'ref' | 'requestedDate' | 'status' | 'monthlyDeduction' | 'amountRecovered' | 'outstandingAmount' | 'deductions'>) => SalaryAdvance
   decideSalaryAdvance: (id: string, approved: boolean, note?: string) => void
   markSalaryAdvancePaid: (id: string, paidDate?: string) => void
@@ -4071,6 +4137,8 @@ export type FinanceStoreState = Pick<AppState,
   | 'recordOutsourcePayment'
   | 'registerPayment'
   | 'setInvoicePaymentBlocked'
+  | 'payExpense'
+  | 'payPayrollRun'
   | 'reimburseExpense'
   | 'removePOLine'
   | 'resetInvoiceToDraft'
@@ -5681,9 +5749,21 @@ export function StoreProvider({
             break
           case 'payroll': {
             if (!['director', 'finance_officer'].includes(initialUser.role)) break
-            const data = await fetch('/api/payroll').then(r => r.ok ? r.json() : null)
+            const [data, paymentJournalData] = await Promise.all([
+              fetch('/api/payroll').then(r => r.ok ? r.json() : null),
+              fetch('/api/accounting/journals?source=payroll_payment&limit=500').then(r => r.ok ? r.json() : null),
+            ])
             if (data?.runs) setPayrollRuns(data.runs)
             if (data?.payslips) setPayslips(data.payslips)
+            const paymentJournals = Array.isArray(paymentJournalData?.journals)
+              ? paymentJournalData.journals as JournalEntry[]
+              : []
+            if (paymentJournals.length > 0) {
+              setJournalEntries(prev => {
+                const authoritativeRefs = new Set(paymentJournals.map(j => j.ref))
+                return [...paymentJournals, ...prev.filter(j => !authoritativeRefs.has(j.ref))]
+              })
+            }
             break
           }
           case 'salary_advances': {
@@ -6662,6 +6742,8 @@ export function StoreProvider({
     recordOutsourcePayment: (...args: Parameters<AppState['recordOutsourcePayment']>) => storeCtxRef.current!.recordOutsourcePayment(...args),
     registerPayment: (...args: Parameters<AppState['registerPayment']>) => storeCtxRef.current!.registerPayment(...args),
     setInvoicePaymentBlocked: (...args: Parameters<AppState['setInvoicePaymentBlocked']>) => storeCtxRef.current!.setInvoicePaymentBlocked(...args),
+    payExpense: (...args: Parameters<AppState['payExpense']>) => storeCtxRef.current!.payExpense(...args),
+    payPayrollRun: (...args: Parameters<AppState['payPayrollRun']>) => storeCtxRef.current!.payPayrollRun(...args),
     reimburseExpense: (...args: Parameters<AppState['reimburseExpense']>) => storeCtxRef.current!.reimburseExpense(...args),
     removePOLine: (...args: Parameters<AppState['removePOLine']>) => storeCtxRef.current!.removePOLine(...args),
     resetInvoiceToDraft: (...args: Parameters<AppState['resetInvoiceToDraft']>) => storeCtxRef.current!.resetInvoiceToDraft(...args),
@@ -7561,11 +7643,11 @@ const storeCtx: AppState = {
       }
       const expense = expenses.find(e => e.id === id)
       if (!expense) return
-      if (expense.status === 'reimbursed') { showToast('Reimbursed expenses cannot be reviewed again', 'error'); return }
+      if (expense.status === 'reimbursed' || expense.status === 'paid') { showToast('Paid expenses cannot be reviewed again', 'error'); return }
 
       const chain = expense.approvalChain
       if (chain?.length) {
-        if (!canUserApproveExpenseStep(user.role, chain)) {
+        if (!canUserReviewExpense(user.role, chain)) {
           const pending = chain.find(s => s.status === 'pending')
           showToast(`This step requires ${pending?.role?.replace('_', ' ') ?? 'another approver'}`, 'error')
           return
@@ -7685,7 +7767,67 @@ const storeCtx: AppState = {
       showToast(approved ? 'Expense approved and posted' : 'Expense rejected', approved ? 'success' : 'error')
     },
 
-    reimburseExpense: (id, notes, method, bankAccountId, reference) => {
+    payExpense: (id, method, bankAccountId, reference, paymentDate, notes) => {
+      const user = currentUser()
+      if (!user) return
+      if (!canManageFullFinanceAction(user)) {
+        showToast('Only Finance or Director can pay approved expenses', 'error'); return
+      }
+      const expense = expenses.find(e => e.id === id)
+      if (!expense) return
+      if (expense.paymentMethod === 'reimbursement') {
+        showToast('Staff-paid claims must use Reimburse, not Pay', 'error'); return
+      }
+      if (expense.status !== 'approved') {
+        showToast('Expense must be approved before payment', 'error'); return
+      }
+      const actualBankId = bankAccountIdForMethod(method || expense.paymentMethod, bankAccountId)
+      const paidDate = paymentDate || now()
+      const paidExpense: Expense = {
+        ...expense,
+        status: 'paid',
+        paidDate,
+        paymentBankAccount: actualBankId,
+        paymentReference: reference,
+        reviewNotes: notes ?? expense.reviewNotes,
+      }
+      const journalRef = `JRN/EXPPAY/${expense.ref}`
+      if (journalEntries.some(j => j.ref === journalRef)) {
+        showToast('This expense payment was already posted', 'info')
+        return
+      }
+      const journal = buildExpenseCompanyPaymentJournal(paidExpense, actualBankId, method, paidDate)
+      setExpenses(prev => prev.map(e => e.id === id ? paidExpense : e))
+      setJournalEntries(prev => [journal, ...prev])
+      addAuditLog('post_expense_payment', expense.ref, `Expense payment ${expense.ref} posted to ${journal.ref}${reference ? ` (Ref: ${reference})` : ''}`)
+      void fetch('/api/expenses/post-journal', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          kind: 'payment',
+          expenseId: paidExpense.id,
+          ref: paidExpense.ref,
+          amount: paidExpense.amount,
+          paymentMethod: method || paidExpense.paymentMethod,
+          bankAccountId: actualBankId,
+          date: paidDate,
+        }),
+      }).then(async res => {
+        if (!res.ok) {
+          const payload = await res.json().catch(() => null) as { error?: string } | null
+          setExpenses(prev => prev.map(e => e.id === id ? expense : e))
+          setJournalEntries(prev => prev.filter(j => j.ref !== journal.ref))
+          showToast(payload?.error || 'Expense payment posting failed', 'error')
+        }
+      }).catch(() => {
+        setExpenses(prev => prev.map(e => e.id === id ? expense : e))
+        setJournalEntries(prev => prev.filter(j => j.ref !== journal.ref))
+        showToast('Expense payment posting failed', 'error')
+      })
+      showToast('Expense marked paid', 'success')
+    },
+
+    reimburseExpense: (id, notes, method, bankAccountId, reference, paymentDate) => {
       const user = currentUser()
       if (!user) return
       if (!canManageFullFinanceAction(user)) {
@@ -7696,6 +7838,7 @@ const storeCtx: AppState = {
       if (expense.paymentMethod !== 'reimbursement') { showToast('Only staff reimbursement claims can be reimbursed', 'error'); return }
       if (expense.status !== 'approved') { showToast('Expense must be approved before reimbursement', 'error'); return }
       const actualBankId = bankAccountIdForMethod(method, bankAccountId)
+      const reimbursementDate = paymentDate || now()
       const reimbursedExpense: Expense = {
         ...expense,
         status: 'reimbursed',
@@ -7703,31 +7846,41 @@ const storeCtx: AppState = {
         reimbursementMethod: method,
         reimbursementBankAccount: actualBankId,
         reimbursementReference: reference,
+        reimbursementDate,
       }
+      const journalRef = `JRN/RIM/${expense.ref}`
+      if (journalEntries.some(j => j.ref === journalRef)) {
+        showToast('This reimbursement was already posted', 'info')
+        return
+      }
+      const journal = buildExpenseReimbursementJournal(reimbursedExpense, actualBankId, reimbursementDate)
       setExpenses(prev => prev.map(e => e.id === id ? reimbursedExpense : e))
-      if (!journalEntries.some(j => j.ref === `JRN/RIM/${expense.ref}`)) {
-        const journal = buildExpenseReimbursementJournal(reimbursedExpense, actualBankId)
-        setJournalEntries(prev => [journal, ...prev])
-        addAuditLog('post_reimbursement', expense.ref, `Expense reimbursement ${expense.ref} posted to journal ${journal.ref}${reference ? ` (Ref: ${reference})` : ''}`)
-        void fetch('/api/expenses/post-journal', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            kind: 'reimbursement',
-            expenseId: reimbursedExpense.id,
-            ref: reimbursedExpense.ref,
-            amount: reimbursedExpense.amount,
-            submittedByName: reimbursedExpense.submittedByName,
-            bankAccountId: actualBankId,
-            date: journal.date,
-          }),
-        }).then(async res => {
-          if (!res.ok) {
-            const payload = await res.json().catch(() => null) as { error?: string } | null
-            showToast(payload?.error || 'Expense journal posting failed', 'error')
-          }
-        }).catch(() => showToast('Expense journal posting failed', 'error'))
-      }
+      setJournalEntries(prev => [journal, ...prev])
+      addAuditLog('post_reimbursement', expense.ref, `Expense reimbursement ${expense.ref} posted to journal ${journal.ref}${reference ? ` (Ref: ${reference})` : ''}`)
+      void fetch('/api/expenses/post-journal', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          kind: 'reimbursement',
+          expenseId: reimbursedExpense.id,
+          ref: reimbursedExpense.ref,
+          amount: reimbursedExpense.amount,
+          submittedByName: reimbursedExpense.submittedByName,
+          bankAccountId: actualBankId,
+          date: journal.date,
+        }),
+      }).then(async res => {
+        if (!res.ok) {
+          const payload = await res.json().catch(() => null) as { error?: string } | null
+          setExpenses(prev => prev.map(e => e.id === id ? expense : e))
+          setJournalEntries(prev => prev.filter(j => j.ref !== journal.ref))
+          showToast(payload?.error || 'Expense reimbursement posting failed', 'error')
+        }
+      }).catch(() => {
+        setExpenses(prev => prev.map(e => e.id === id ? expense : e))
+        setJournalEntries(prev => prev.filter(j => j.ref !== journal.ref))
+        showToast('Expense reimbursement posting failed', 'error')
+      })
       showToast('Expense reimbursed and posted', 'success')
     },
 
@@ -9061,6 +9214,62 @@ const storeCtx: AppState = {
       setPayslips(prev => prev.map(payslip => payslip.payrollRunId === payroll.id ? { ...payslip, status: 'published' } : payslip))
       addAuditLog('post_payroll', payroll.ref, `Payroll posted to accounting (GL journal ${serverJournalId ?? 'unknown'})`)
       showToast('Payroll posted to accounting journal')
+    },
+    payPayrollRun: async (id, bankAccountId, reference, paymentDate) => {
+      const user = currentUser()
+      if (!user || !canManageFullFinanceAction(user)) {
+        showToast('Only Finance or Director can pay payroll', 'error'); return
+      }
+      const payroll = payrollRef.current.find(run => run.id === id)
+      if (!payroll) return
+      if (payroll.status !== 'posted') {
+        showToast('Payroll must be posted before it can be paid', 'error'); return
+      }
+      const journalRef = `JRN/PAYROLL-PAY/${payroll.ref}`
+      if (journalEntries.some(j => j.ref === journalRef)) {
+        showToast('Payroll is already paid', 'info'); return
+      }
+      const actualBankId = bankAccountId || 'ncba'
+      const paidDate = paymentDate || now()
+      try {
+        const res = await fetch(`/api/payroll/${id}/pay`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            bankAccountId: actualBankId,
+            reference: reference || undefined,
+            paymentDate: paidDate,
+          }),
+        })
+        const payload = await res.json().catch(() => ({})) as { error?: string; journal?: { id?: string; ref?: string } }
+        if (!res.ok) {
+          showToast(payload.error || 'Payroll payment failed', 'error'); return
+        }
+        const journal: JournalEntry = {
+          id: payload.journal?.id || uid(),
+          ref: payload.journal?.ref || journalRef,
+          date: isoDate(paidDate),
+          source: 'payment',
+          description: `Payroll payment — ${payroll.ref}`,
+          status: 'posted',
+          payrollRunId: payroll.id,
+          bankAccountId: actualBankId,
+          lines: [
+            accountLine('3310 - Net Payroll Payable', `Settle net payroll ${payroll.ref}`, payroll.totalNet, 0),
+            accountLine(bankAccountLabel(actualBankId), `Payroll cash payment ${payroll.ref}`, 0, payroll.totalNet),
+          ],
+          totalDebit: payroll.totalNet,
+          totalCredit: payroll.totalNet,
+        }
+        setJournalEntries(prev => prev.some(j => j.ref === journal.ref) ? prev : [journal, ...prev])
+        setPayslips(prev => prev.map(ps => ps.payrollRunId === payroll.id
+          ? { ...ps, paymentStatus: 'paid', paidAt: isoDate(paidDate), paymentReference: reference }
+          : ps))
+        addAuditLog('pay_payroll', payroll.ref, `Payroll paid from ${actualBankId}${reference ? ` (Ref: ${reference})` : ''}`)
+        showToast('Payroll payment posted to Cashbook', 'success')
+      } catch {
+        showToast('Payroll payment failed', 'error')
+      }
     },
     applySalaryAdvance: (request) => {
       const user = currentUser()

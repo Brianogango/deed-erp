@@ -2,9 +2,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   assertPostingBalanced,
   buildExpenseApprovalLines,
+  buildExpenseCompanyPaymentLines,
   buildExpenseReimbursementLines,
   buildPosSaleLines,
   postExpenseApproval,
+  postExpenseCompanyPayment,
   postExpenseReimbursement,
   postPosSale,
   resolvePostingAccountLabel,
@@ -61,7 +63,7 @@ describe('expense / POS builders', () => {
     expect(resolved[1].account).toBe(labelForRole('employee_reimbursements'))
   })
 
-  it('builds company-paid approval against M-Pesa', () => {
+  it('builds company-funded approval against outstanding payments, not bank', () => {
     const lines = buildExpenseApprovalLines({
       amount: 800,
       ref: 'EXP-10',
@@ -69,6 +71,17 @@ describe('expense / POS builders', () => {
       category: 'courier',
       paymentMethod: 'mpesa',
     })
+    expect(resolvePostingAccountLabel(lines[1])).toBe(labelForRole('outstanding_payments'))
+  })
+
+  it('builds company-funded payout only when payment is recorded', () => {
+    const lines = buildExpenseCompanyPaymentLines({
+      amount: 800,
+      ref: 'EXP-10',
+      paymentMethod: 'mpesa',
+      bankAccountId: 'mpesa',
+    })
+    expect(resolvePostingAccountLabel(lines[0])).toBe(labelForRole('outstanding_payments'))
     expect(resolvePostingAccountLabel(lines[1])).toBe('2211 - Petty Cash / Mobile Money')
   })
 
@@ -144,6 +157,20 @@ describe('expense / POS post helpers', () => {
         source: 'expense',
       }),
       expect.objectContaining({ journalCode: 'MISC' }),
+    )
+  })
+
+  it('posts company-funded expense payment as a cash/bank journal', async () => {
+    await postExpenseCompanyPayment({
+      expenseId: 'exp-2',
+      ref: 'EXP-2',
+      amount: 800,
+      paymentMethod: 'mpesa',
+      bankAccountId: 'mpesa',
+    })
+    expect(mockPersist).toHaveBeenCalledWith(
+      expect.objectContaining({ ref: 'JRN/EXPPAY/EXP-2', source: 'expense' }),
+      expect.objectContaining({ journalCode: 'CSH' }),
     )
   })
 

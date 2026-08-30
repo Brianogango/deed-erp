@@ -45,6 +45,11 @@ export async function GET(request: NextRequest) {
         totalCredit: Number(e.totalCredit),
         invoiceId: e.invoiceId || undefined,
         paymentId: e.paymentId || undefined,
+        sourceId: e.sourceId || undefined,
+        payrollRunId: e.sourceType === 'payroll_payment' ? (e.sourceId || undefined) : undefined,
+        bankAccountId: e.sourceType === 'payroll_payment' && e.blobId?.startsWith('bank:')
+          ? e.blobId.slice('bank:'.length)
+          : undefined,
         lines: e.lines.map(l => ({
           id: l.id,
           account: l.accountLabel,
