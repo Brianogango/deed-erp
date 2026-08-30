@@ -907,6 +907,110 @@ export default function SecuritySettingsDashboard({
         <span className="font-bold text-[var(--primary-dark)]">Security Settings</span>
       </div>
 
+      {detailPanel && (
+        <div className="fixed inset-0 z-[10015] flex justify-end bg-[#0E1730]/35 backdrop-blur-[1px]" role="dialog" aria-modal="true" aria-label="Security details">
+          <button type="button" className="absolute inset-0 cursor-default" aria-label="Close security details" onClick={() => setDetailPanel(null)} />
+          <div className="security-detail-drawer relative h-full w-full max-w-[720px] overflow-y-auto border-l border-[#D7E0EA] bg-[#F5F8FC] shadow-2xl">
+            <div className="sticky top-0 z-10 flex items-center justify-between border-b border-[#DDE5EF] bg-white/95 px-4 py-4 backdrop-blur sm:px-5">
+              <div className="min-w-0">
+                <h3 className="truncate text-sm font-black text-[#172033]">
+                  {detailPanel === 'sessions' ? 'Active Sessions'
+                    : detailPanel === 'audit' ? 'Audit Logs'
+                      : detailPanel === 'data' ? 'Data Protection'
+                        : detailPanel === 'backup' ? 'Backup & Recovery'
+                          : 'Security Audit'}
+                </h3>
+                <p className="mt-0.5 text-[10px] text-[#7A8699]">Security controls and live operational status.</p>
+              </div>
+              <button type="button" onClick={() => setDetailPanel(null)} className="ml-3 rounded-xl border border-[#D7E0EA] bg-white px-3 py-2 text-[10px] font-bold text-[#526175] hover:bg-[#F8FAFC]">Close</button>
+            </div>
+
+            <div className="p-4 sm:p-5">
+              {detailPanel === 'sessions' && (
+                <div className="rounded-[18px] border border-[#DDE5EF] bg-white shadow-[0_1px_2px_rgba(15,23,42,0.03)] overflow-hidden">
+                  <div className="flex items-center justify-between border-b border-[#EDF1F6] px-4 py-3">
+                    <div><p className="text-[13px] font-bold text-[#111827]">All active sessions</p><p className="mt-0.5 text-[9.5px] text-[#8995A7]">{activeSessions.length} currently visible</p></div>
+                    <button type="button" onClick={() => void refresh(true)} className="rounded-lg border border-[#DDE5EF] px-3 py-2 text-[9px] font-bold text-[#526175]">Refresh</button>
+                  </div>
+                  <div className="divide-y divide-[#EDF1F6]">
+                    {activeSessions.map(session => (
+                      <div key={session.id} className="grid gap-2 px-4 py-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+                        <div className="min-w-0">
+                          <p className="truncate text-[11px] font-bold text-[#182033]">{session.name} <span className="font-normal text-[#7A8699]">@{session.username}</span></p>
+                          <p className="mt-1 text-[9px] text-[#667085]">{compactAgent(session.userAgent)} · {session.ipAddress} · {timeAgo(session.createdAt)}</p>
+                        </div>
+                        {!session.isCurrent && session.id !== 'current-session' && currentUser?.role === 'director' ? (
+                          <button type="button" disabled={Boolean(revokingSessionId)} onClick={() => void revokeSession(session.id, session.name)} className="justify-self-start rounded-lg border border-[#F3C4C4] bg-[#FFF7F7] px-3 py-2 text-[9px] font-bold text-[#D63D3D] disabled:opacity-50 sm:justify-self-end">
+                            {revokingSessionId === session.id ? 'Revoking…' : 'Revoke session'}
+                          </button>
+                        ) : <StatusPill tone="green">Current</StatusPill>}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {detailPanel === 'audit' && (
+                <div className="rounded-[18px] border border-[#DDE5EF] bg-white shadow-[0_1px_2px_rgba(15,23,42,0.03)] overflow-hidden">
+                  <div className="flex items-center justify-between border-b border-[#EDF1F6] px-4 py-3">
+                    <div><p className="text-[13px] font-bold text-[#111827]">Security audit log</p><p className="mt-0.5 text-[9.5px] text-[#8995A7]">{auditRows.length} recent events</p></div>
+                    <button type="button" onClick={() => void refresh(true)} className="rounded-lg border border-[#DDE5EF] px-3 py-2 text-[9px] font-bold text-[#526175]">Refresh</button>
+                  </div>
+                  <div className="divide-y divide-[#EDF1F6]">
+                    {auditRows.length ? auditRows.map(row => (
+                      <div key={row.id} className="grid gap-1 px-4 py-3 text-[9px] sm:grid-cols-[110px_minmax(0,1fr)_110px] sm:gap-3">
+                        <span className="text-[#667085]">{row.createdAt ? new Date(row.createdAt).toLocaleString('en-KE') : '—'}</span>
+                        <span className="min-w-0 truncate font-semibold text-[#263247]">{codeLabel(row.action)} · {row.entityType || row.entityKey || 'security'}</span>
+                        <span className="font-mono text-[#667085] sm:text-right">{row.ipAddress}</span>
+                      </div>
+                    )) : <p className="px-4 py-8 text-center text-[10px] text-[#8995A7]">No audit rows returned yet.</p>}
+                  </div>
+                </div>
+              )}
+
+              {detailPanel === 'data' && (
+                <div className="rounded-[18px] border border-[#DDE5EF] bg-white shadow-[0_1px_2px_rgba(15,23,42,0.03)] p-4">
+                  <p className="text-[13px] font-bold text-[#111827]">Data protection controls</p>
+                  <div className="mt-3">
+                    <RowSetting title="CSP + HSTS" detail="Browser transport and resource execution protections" right={<StatusPill tone={overview?.securityControls.csp && overview?.securityControls.hsts ? 'green' : 'amber'}>{overview?.securityControls.csp && overview?.securityControls.hsts ? 'Enabled' : 'Review'}</StatusPill>} />
+                    <RowSetting title="Default-deny store ACL" detail="State keys are protected by server-side access control" right={<StatusPill tone={overview?.securityControls.defaultDenyStore ? 'green' : 'amber'}>{overview?.securityControls.defaultDenyStore ? 'Enabled' : 'Review'}</StatusPill>} />
+                    <RowSetting title="Same-origin writes" detail="State-changing browser requests require approved origin context" right={<StatusPill tone={overview?.securityControls.sameOriginWrites ? 'green' : 'amber'}>{overview?.securityControls.sameOriginWrites ? 'Enabled' : 'Review'}</StatusPill>} />
+                    <RowSetting title="Business guards" detail="Deletion, stock, invoice and portal safeguards" right={<StatusPill tone={dataProtectionEnabled ? 'green' : 'amber'}>{dataProtectionEnabled ? 'Enabled' : 'Review'}</StatusPill>} />
+                  </div>
+                </div>
+              )}
+
+              {detailPanel === 'backup' && (
+                <div className="rounded-[18px] border border-[#DDE5EF] bg-white shadow-[0_1px_2px_rgba(15,23,42,0.03)] p-4">
+                  <p className="text-[13px] font-bold text-[#111827]">Production backup posture</p>
+                  <p className="mt-2 text-[10px] leading-relaxed text-[#667085]">Live backups remain a host-level operation and are intentionally not triggered by a browser button. This view now opens the correct backup/recovery context instead of sending you elsewhere.</p>
+                  <div className="mt-4 rounded-xl border border-[#DDE5EF] bg-[#FAFCFE] p-3">
+                    <p className="text-[9px] font-bold text-[#334155]">Latest security activity</p>
+                    <p className="mt-1 text-[9px] text-[#7A8699]">{timeAgo(securityEvent)}</p>
+                  </div>
+                  <button type="button" onClick={() => void openSecurityAudit()} className="mt-4 min-h-[38px] rounded-xl border border-[#9FC6F4] bg-white px-4 text-[10px] font-bold text-[#0D67C7]">Verify security posture</button>
+                </div>
+              )}
+
+              {detailPanel === 'securityAudit' && (
+                <div className="rounded-[18px] border border-[#DDE5EF] bg-white shadow-[0_1px_2px_rgba(15,23,42,0.03)] p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div><p className="text-[13px] font-bold text-[#111827]">Security posture snapshot</p><p className="mt-0.5 text-[9.5px] text-[#8995A7]">Generated {overview?.generatedAt ? new Date(overview.generatedAt).toLocaleString('en-KE') : '—'}</p></div>
+                    <StatusPill tone={overview?.ok ? 'green' : 'amber'}>{overview?.ok ? 'Healthy' : 'Review'}</StatusPill>
+                  </div>
+                  <div className="mt-4">
+                    <RowSetting title="MFA enforcement" detail="Privileged account challenge policy" right={<StatusPill tone={mfaEnforced ? 'green' : 'amber'}>{mfaEnforced ? 'Enforced' : 'Review'}</StatusPill>} />
+                    <RowSetting title="Audit logging" detail="Security and business event retention" right={<StatusPill tone={systemSettings.auditLogs ? 'green' : 'amber'}>{systemSettings.auditLogs ? 'Enabled' : 'Review'}</StatusPill>} />
+                    <RowSetting title="Upload guards" detail="Server-side file validation posture" right={<StatusPill tone={overview?.securityControls.uploadGuards ? 'green' : 'amber'}>{overview?.securityControls.uploadGuards ? 'Enabled' : 'Review'}</StatusPill>} />
+                    <RowSetting title="Row-level authorization" detail="Server authorization on protected resources" right={<StatusPill tone={overview?.securityControls.rowLevelAuthorization ? 'green' : 'amber'}>{overview?.securityControls.rowLevelAuthorization ? 'Enabled' : 'Review'}</StatusPill>} />
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {showEnvironment && (
         <div className="fixed inset-0 z-[10020] flex justify-end bg-[#0E1730]/35 backdrop-blur-[1px]" role="dialog" aria-modal="true" aria-label="Production security environment">
           <button type="button" className="absolute inset-0 cursor-default" aria-label="Close production security environment" onClick={() => setShowEnvironment(false)} />
