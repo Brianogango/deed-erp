@@ -558,6 +558,16 @@ type GlobalNotificationPreference = {
   minimumSeverity: string
 }
 
+function AccountChannelIcon({ kind }: { kind: 'inapp' | 'push' | 'email' | 'whatsapp' | 'sms' | 'sound' }) {
+  const common = { width: 19, height: 19, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 1.8, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const }
+  if (kind === 'inapp') return <svg {...common}><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"/><path d="M10 21h4"/></svg>
+  if (kind === 'push') return <svg {...common}><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18"/><path d="M8 6.5h.01M11 6.5h.01"/></svg>
+  if (kind === 'email') return <svg {...common}><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg>
+  if (kind === 'whatsapp') return <svg {...common}><path d="M20.5 11.7a8.5 8.5 0 0 1-12.7 7.4L3 20.5l1.4-4.6A8.5 8.5 0 1 1 20.5 11.7Z"/><path d="M8.4 8.1c.3 3.5 2.1 5.4 5.7 6.1l1.2-1.2-2.3-1.1-.8.7c-1.3-.5-2.3-1.5-2.8-2.8l.7-.8-1-2.2-.7 1.3Z"/></svg>
+  if (kind === 'sms') return <svg {...common}><path d="M21 15a4 4 0 0 1-4 4H8l-5 2 1.5-4A5 5 0 0 1 3 13V8a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4Z"/><path d="M8 10h8M8 13h5"/></svg>
+  return <svg {...common}><path d="M11 5 6 9H3v6h3l5 4Z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M18 6a8.5 8.5 0 0 1 0 12"/></svg>
+}
+
 function NotificationPreferenceControls({
   soundEnabled,
   setSoundEnabled,
@@ -678,82 +688,110 @@ function NotificationPreferenceControls({
   }, [pushBusy, pushSupported, update])
 
   return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <label className="text-xs font-medium text-[var(--text-2)]">In-app notifications</label>
-          <p className="text-[10px] text-[var(--text-4)]">Bell inbox and real-time ERP alerts</p>
+    <div className="acct-notification-wrap">
+      <div className="acct-notification-card">
+        <div className="acct-channel-row">
+          <span className="acct-channel-icon"><AccountChannelIcon kind="inapp" /></span>
+          <span className="acct-channel-copy">
+            <span className="acct-channel-title">In-app notifications</span>
+            <span className="acct-channel-detail">Bell inbox and real-time ERP alerts</span>
+          </span>
+          <Toggle on={pref.inAppEnabled} onChange={value => void update({ inAppEnabled: value })} />
         </div>
-        <Toggle on={pref.inAppEnabled} onChange={value => void update({ inAppEnabled: value })} />
-      </div>
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <label className="text-xs font-medium text-[var(--text-2)]">Browser Push</label>
-          <p className="text-[10px] text-[var(--text-4)]">
-            {pushSupported ? (pushSubscribed ? 'This browser is subscribed' : 'Notify even when the ERP tab is closed') : 'Not supported by this browser'}
-          </p>
+
+        <div className="acct-channel-row">
+          <span className="acct-channel-icon"><AccountChannelIcon kind="push" /></span>
+          <span className="acct-channel-copy">
+            <span className="acct-channel-title">Browser Push</span>
+            <span className="acct-channel-detail">
+              {pushSupported ? (pushSubscribed ? 'This browser is subscribed' : 'Notify even when the ERP tab is closed') : 'Not supported by this browser'}
+            </span>
+          </span>
+          <Toggle on={pushSubscribed} onChange={value => void setPushForDevice(value)} />
         </div>
-        <Toggle on={pushSubscribed} onChange={value => void setPushForDevice(value)} />
-      </div>
-      <div className="flex items-center justify-between">
-        <label className="text-xs font-medium text-[var(--text-2)]">Email alerts</label>
-        <Toggle on={pref.emailEnabled} onChange={value => void update({ emailEnabled: value })} />
-      </div>
-      <div className="flex items-center justify-between">
-        <label className="text-xs font-medium text-[var(--text-2)]">WhatsApp alerts</label>
-        <Toggle on={pref.whatsappEnabled} onChange={value => void update({ whatsappEnabled: value })} />
-      </div>
-      <div className="flex items-center justify-between">
-        <label className="text-xs font-medium text-[var(--text-2)]">SMS alerts</label>
-        <Toggle on={pref.smsEnabled} onChange={value => void update({ smsEnabled: value })} />
-      </div>
-      <div className="flex items-center justify-between">
-        <label className="text-xs font-medium text-[var(--text-2)]">Sound Alerts</label>
-        <Toggle
-          on={soundEnabled}
-          onChange={value => {
-            setSoundEnabled(value)
-            void update({ soundEnabled: value })
-          }}
-        />
-      </div>
-      <div className="grid grid-cols-2 gap-2 pt-1">
-        <label className="text-[10px] font-semibold text-[var(--text-3)]">
-          Quiet from
-          <input
-            type="time"
-            className="form-input mt-1"
-            value={pref.quietStart || ''}
-            onChange={event => void update({ quietStart: event.target.value || null })}
+
+        <div className="acct-channel-row">
+          <span className="acct-channel-icon"><AccountChannelIcon kind="email" /></span>
+          <span className="acct-channel-copy">
+            <span className="acct-channel-title">Email alerts</span>
+            <span className="acct-channel-detail">Receive important ERP alerts by email</span>
+          </span>
+          <Toggle on={pref.emailEnabled} onChange={value => void update({ emailEnabled: value })} />
+        </div>
+
+        <div className="acct-channel-row">
+          <span className="acct-channel-icon"><AccountChannelIcon kind="whatsapp" /></span>
+          <span className="acct-channel-copy">
+            <span className="acct-channel-title">WhatsApp alerts</span>
+            <span className="acct-channel-detail">Operational notifications on WhatsApp</span>
+          </span>
+          <Toggle on={pref.whatsappEnabled} onChange={value => void update({ whatsappEnabled: value })} />
+        </div>
+
+        <div className="acct-channel-row">
+          <span className="acct-channel-icon"><AccountChannelIcon kind="sms" /></span>
+          <span className="acct-channel-copy">
+            <span className="acct-channel-title">SMS alerts</span>
+            <span className="acct-channel-detail">Text-message alerts for selected events</span>
+          </span>
+          <Toggle on={pref.smsEnabled} onChange={value => void update({ smsEnabled: value })} />
+        </div>
+
+        <div className="acct-channel-row">
+          <span className="acct-channel-icon"><AccountChannelIcon kind="sound" /></span>
+          <span className="acct-channel-copy">
+            <span className="acct-channel-title">Sound Alerts</span>
+            <span className="acct-channel-detail">Play an alert sound for new notifications</span>
+          </span>
+          <Toggle
+            on={soundEnabled}
+            onChange={value => {
+              setSoundEnabled(value)
+              void update({ soundEnabled: value })
+            }}
           />
-        </label>
-        <label className="text-[10px] font-semibold text-[var(--text-3)]">
-          Quiet until
-          <input
-            type="time"
-            className="form-input mt-1"
-            value={pref.quietEnd || ''}
-            onChange={event => void update({ quietEnd: event.target.value || null })}
-          />
-        </label>
+        </div>
       </div>
-      <label className="block text-[10px] font-semibold text-[var(--text-3)]">
-        Minimum alert severity
-        <select
-          className="form-input mt-1"
-          value={pref.minimumSeverity}
-          onChange={event => void update({ minimumSeverity: event.target.value })}
-        >
-          <option value="info">All notifications</option>
-          <option value="success">Success and above</option>
-          <option value="attention">Attention and above</option>
-          <option value="warning">Warning and critical</option>
-          <option value="critical">Critical only</option>
-        </select>
-      </label>
-      <p className="text-[10px] leading-relaxed text-[var(--text-4)]">
-        Critical security, finance-integrity and operational alerts can bypass quiet hours/channel preferences when policy requires it.
-      </p>
+
+      <div className="acct-notification-advanced">
+        <div className="acct-advanced-grid">
+          <label>
+            <span>Quiet from</span>
+            <input
+              type="time"
+              className="form-input"
+              value={pref.quietStart || ''}
+              onChange={event => void update({ quietStart: event.target.value || null })}
+            />
+          </label>
+          <label>
+            <span>Quiet until</span>
+            <input
+              type="time"
+              className="form-input"
+              value={pref.quietEnd || ''}
+              onChange={event => void update({ quietEnd: event.target.value || null })}
+            />
+          </label>
+        </div>
+        <label className="acct-severity-field">
+          <span>Minimum alert severity</span>
+          <select
+            className="form-input"
+            value={pref.minimumSeverity}
+            onChange={event => void update({ minimumSeverity: event.target.value })}
+          >
+            <option value="info">All notifications</option>
+            <option value="success">Success and above</option>
+            <option value="attention">Attention and above</option>
+            <option value="warning">Warning and critical</option>
+            <option value="critical">Critical only</option>
+          </select>
+        </label>
+        <p className="acct-notification-note">
+          Critical security, finance-integrity and operational alerts can bypass quiet hours when policy requires it.
+        </p>
+      </div>
     </div>
   )
 }
@@ -838,199 +876,138 @@ function AccountPanel({
   return (
     <>
       <div className="acct-backdrop" onClick={onClose} />
-      <div className="acct-panel">
-        {/* Header */}
-        <div className="
-          flex items-center justify-between
-          px-5 py-4 border-b border-[var(--border-lt)] flex-shrink-0
-        ">
-          <div>
-            <p className="text-sm font-bold text-[var(--text-1)]">Account Settings</p>
-            <p className="text-[10px] text-[var(--text-4)] mt-0.5">
-              Edit your profile, photo and preferences
-            </p>
+      <aside className="acct-panel" role="dialog" aria-modal="true" aria-label="Account Settings">
+        <header className="acct-panel-header">
+          <div className="acct-header-icon" aria-hidden="true">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M20 21a8 8 0 0 0-16 0"/>
+              <circle cx="12" cy="7" r="4"/>
+            </svg>
           </div>
-          <button
-            onClick={onClose}
-            className="
-              w-8 h-8 rounded-lg flex items-center justify-center
-              bg-[var(--bg-surface)] border border-[var(--border)]
-              text-[var(--text-3)] hover:text-[var(--text-1)]
-              transition-colors cursor-pointer text-lg
-            "
-          >
-            ×
-          </button>
-        </div>
+          <div className="acct-header-copy">
+            <h2>Account Settings</h2>
+            <p>Edit your profile, photo and preferences</p>
+          </div>
+          <button onClick={onClose} className="acct-close-btn" aria-label="Close account settings">×</button>
+        </header>
 
-        <div className="flex-1 overflow-y-auto pb-6">
-          {/* Profile Photo Section */}
-          <div className="acct-section">
+        <div className="acct-panel-body">
+          <section className="acct-section acct-profile-section">
             <p className="acct-label">Profile Photo</p>
-            <div className="flex items-center gap-4">
-              <div className="relative flex-shrink-0">
-                <div className="
-                  w-18 h-18 rounded-full flex-shrink-0
-                  bg-gradient-to-br from-primary-500 to-accent-500
-                  border-3 border-[var(--border)]
-                  overflow-hidden
-                  flex items-center justify-center
-                  shadow-md
-                ">
+            <div className="acct-profile-card">
+              <div className="acct-avatar-wrap">
+                <div className="acct-avatar">
                   {avatar ? (
-                    <img src={avatar} alt="profile" className="w-full h-full object-cover" />
+                    <img src={avatar} alt="Profile" />
                   ) : (
-                    <span className="text-white font-bold text-2xl">{initials}</span>
+                    <span>{initials}</span>
                   )}
                 </div>
                 <button
                   onClick={() => fileRef.current?.click()}
-                  className="absolute bottom-0 right-0 w-6 h-6 rounded-full bg-primary-500 border-2 border-[var(--bg-card)] cursor-pointer flex items-center justify-center hover:bg-primary-600 transition-colors"
+                  className="acct-camera-btn"
                   title="Change photo"
                   aria-label="Change profile photo"
                 >
-                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
                     <circle cx="12" cy="13" r="4"/>
                   </svg>
                 </button>
               </div>
-              <div>
-                <p className="text-sm font-bold text-[var(--text-1)]">{currentUser?.name}</p>
-                <p className="text-xs text-[var(--text-3)] mt-0.5">@{currentUser?.username}</p>
-                <span className="inline-block mt-2 badge badge-blue">
-                  {formatRoleLabel(currentUser?.role)}
-                </span>
-                <div className="flex gap-2 mt-2">
-                  <button
-                    onClick={() => fileRef.current?.click()}
-                    className="
-                      px-2.5 py-1 text-xs font-semibold
-                      bg-primary-500 text-white rounded-lg
-                      hover:bg-primary-600 transition-colors
-                    "
-                  >
+
+              <div className="acct-profile-copy">
+                <div>
+                  <h3>{currentUser?.name || 'User'}</h3>
+                  <p className="acct-username">@{currentUser?.username || 'user'}</p>
+                  <span className="acct-role-pill">{formatRoleLabel(currentUser?.role)}</span>
+                </div>
+                <p className="acct-profile-note">This is how your name and role appear in Deed Technologies.</p>
+                <div className="acct-profile-actions">
+                  <button type="button" onClick={() => fileRef.current?.click()} className="acct-upload-btn">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3v12"/><path d="m7 8 5-5 5 5"/><path d="M5 21h14a2 2 0 0 0 2-2v-4"/><path d="M3 15v4a2 2 0 0 0 2 2"/></svg>
                     Upload Photo
                   </button>
                   {avatar && (
-                    <button
-                      onClick={() => currentUserId && setProfileImage(currentUserId, '')}
-                      className="
-                        px-2.5 py-1 text-xs font-semibold
-                        bg-red-100 text-red-700 rounded-lg
-                        hover:bg-red-200 transition-colors
-                      "
-                    >
+                    <button type="button" onClick={() => currentUserId && setProfileImage(currentUserId, '')} className="acct-remove-btn">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="m19 6-1 15H6L5 6"/><path d="M10 11v6M14 11v6"/></svg>
                       Remove
                     </button>
                   )}
                 </div>
               </div>
             </div>
-            <input
-              ref={fileRef}
-              type="file"
-              accept="image/jpeg,image/png,image/webp"
-              onChange={handleImageUpload}
-              className="hidden"
-            />
-          </div>
+            <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp" onChange={handleImageUpload} className="hidden" />
+          </section>
 
-          {/* Notification Preferences */}
-          <div className="acct-section">
-            <p className="acct-label">Notification Channels</p>
-            <NotificationPreferenceControls
-              soundEnabled={soundEnabled}
-              setSoundEnabled={setSoundEnabled}
-            />
-          </div>
-
-          {/* Profile Section */}
-          <div className="acct-section">
-            <p className="acct-label">Profile</p>
-            <div className="space-y-3">
-              <div>
-                <label className="text-xs font-medium text-[var(--text-3)] block mb-1">Full Name</label>
-                <input
-                  type="text"
-                  value={name}
-                  onChange={e => setName(e.target.value)}
-                  className="form-input"
-                />
-              </div>
-              <div>
-                <label className="text-xs font-medium text-[var(--text-3)] block mb-1">Username</label>
-                <input
-                  type="text"
-                  value={username}
-                  onChange={e => setUsername(e.target.value)}
-                  className="form-input"
-                />
-              </div>
+          <section className="acct-section acct-notification-section">
+            <div className="acct-section-heading">
+              <span className="acct-section-icon" aria-hidden="true">
+                <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"/><path d="M10 21h4"/></svg>
+              </span>
+              <span>
+                <strong>Notification Channels</strong>
+                <small>Choose how you’d like to stay updated</small>
+              </span>
             </div>
-          </div>
+            <NotificationPreferenceControls soundEnabled={soundEnabled} setSoundEnabled={setSoundEnabled} />
+          </section>
 
-          {/* Password Section */}
-          <div className="acct-section">
-            <p className="acct-label">Change Password</p>
-            <div className="space-y-3">
-              <div>
-                <label className="text-xs font-medium text-[var(--text-3)] block mb-1">
-                  Current Password
-                </label>
-                <input
-                  type="password"
-                  value={currentPw}
-                  onChange={e => setCurrentPw(e.target.value)}
-                  className="form-input"
-                />
-              </div>
-              <div>
-                <label className="text-xs font-medium text-[var(--text-3)] block mb-1">
-                  New Password
-                </label>
-                <input
-                  type="password"
-                  value={newPw}
-                  onChange={e => setNewPw(e.target.value)}
-                  className="form-input"
-                />
-              </div>
-              <div>
-                <label className="text-xs font-medium text-[var(--text-3)] block mb-1">
-                  Confirm Password
-                </label>
-                <input
-                  type="password"
-                  value={confirmPw}
-                  onChange={e => setConfirmPw(e.target.value)}
-                  className="form-input"
-                />
-              </div>
-              {pwError && (
-                <p className="text-xs text-red-600 font-medium">{pwError}</p>
-              )}
+          <section className="acct-section">
+            <div className="acct-section-heading">
+              <span className="acct-section-icon" aria-hidden="true">
+                <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21a8 8 0 0 0-16 0"/><circle cx="12" cy="7" r="4"/></svg>
+              </span>
+              <span><strong>Profile</strong><small>Update your account identity</small></span>
             </div>
-          </div>
+            <div className="acct-form-card">
+              <label>
+                <span>Full Name</span>
+                <input type="text" value={name} onChange={e => setName(e.target.value)} className="form-input" />
+              </label>
+              <label>
+                <span>Username</span>
+                <input type="text" value={username} onChange={e => setUsername(e.target.value)} className="form-input" />
+              </label>
+            </div>
+          </section>
+
+          <section className="acct-section">
+            <div className="acct-section-heading">
+              <span className="acct-section-icon" aria-hidden="true">
+                <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>
+              </span>
+              <span><strong>Change Password</strong><small>Keep your account credentials secure</small></span>
+            </div>
+            <div className="acct-form-card">
+              <label>
+                <span>Current Password</span>
+                <input type="password" value={currentPw} onChange={e => setCurrentPw(e.target.value)} className="form-input" />
+              </label>
+              <label>
+                <span>New Password</span>
+                <input type="password" value={newPw} onChange={e => setNewPw(e.target.value)} className="form-input" />
+              </label>
+              <label>
+                <span>Confirm Password</span>
+                <input type="password" value={confirmPw} onChange={e => setConfirmPw(e.target.value)} className="form-input" />
+              </label>
+              {pwError && <p className="acct-password-error">{pwError}</p>}
+            </div>
+          </section>
         </div>
 
-        {/* Footer */}
-        <div className="px-5 py-3 border-t border-[var(--border-lt)] bg-[var(--bg-surface)] flex gap-2 flex-shrink-0">
-          <button
-            onClick={() => void logout()}
-            className="btn-danger flex-1 text-xs"
-          >
+        <footer className="acct-panel-footer">
+          <button onClick={() => void logout()} className="acct-signout-btn">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M10 17l5-5-5-5"/><path d="M15 12H3"/><path d="M21 19V5a2 2 0 0 0-2-2h-6"/></svg>
             Sign Out
           </button>
-          <button
-            onClick={() => void handleSave()}
-            disabled={saving}
-            className={`btn-primary flex-1 text-xs ${saved ? '!bg-[var(--success)]' : ''}`}
-          >
+          <button onClick={() => void handleSave()} disabled={saving} className={`acct-save-btn ${saved ? 'is-saved' : ''}`}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><path d="m8.5 12 2.3 2.3 4.8-5"/></svg>
             {saving ? 'Saving…' : saved ? 'Saved!' : 'Save Changes'}
           </button>
-        </div>
-      </div>
+        </footer>
+      </aside>
     </>
   )
 }
