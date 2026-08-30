@@ -365,7 +365,7 @@ function ExpensesContent() {
     <div className="mod-page expenses-workspace">
       <ModuleHeader
         title="Expenses"
-        subtitle="Submit, approve and reimburse claims"
+        subtitle="Submit, approve and settle expenses"
         icon={<Fa icon={faClipboardList} />}
         color="var(--navy)"
         primaryAction={
@@ -401,7 +401,7 @@ function ExpensesContent() {
         <div className="expenses-kpi-card"><small>My claims</small><strong>{myExpenses.length}</strong><span>{fmtKes(myTotal)} submitted</span></div>
         <div className="expenses-kpi-card"><small>Pending review</small><strong>{canReviewExpenses ? allPending.length : myPending}</strong><span>{canReviewExpenses ? fmtKes(totalPendingAmt) : 'Awaiting approval'}</span></div>
         <div className="expenses-kpi-card"><small>Approved to pay</small><strong>{isFinance ? pendingReimbursements.length : myApproved}</strong><span>{isFinance ? fmtKes(reimbDue) : 'Ready for finance'}</span></div>
-        <div className="expenses-kpi-card"><small>Reimbursed this month</small><strong>{fmtKes(myReimbursed)}</strong><span>Paid claims</span></div>
+        <div className="expenses-kpi-card"><small>Paid / reimbursed</small><strong>{fmtKes(myReimbursed)}</strong><span>Settled claims</span></div>
       </div>
       <div className="expenses-content-shell">
 
@@ -783,7 +783,7 @@ function ExpensesContent() {
                   <h3 className="text-sm font-bold text-t1">{isReimbursable(exp.paymentMethod) ? 'Reimburse Expense' : 'Pay Expense'}</h3>
                   <p className="text-[11px] text-t3">{exp.ref} · {exp.submittedByName}</p>
                 </div>
-                <button className="expenses-modal-close" aria-label="Close reimbursement" onClick={() => setReimbursingId(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: 'var(--text-4)' }}>×</button>
+                <button className="expenses-modal-close" aria-label="Close expense payment" onClick={() => setReimbursingId(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: 'var(--text-4)' }}>×</button>
               </div>
 
               <div className="expenses-reimburse-amount rounded-xl p-3 mb-4 text-center" style={{ background: '#E8F3FA', border: '1px solid #A8D4E8' }}>
@@ -795,14 +795,14 @@ function ExpensesContent() {
               <div className="expenses-reimburse-form space-y-3 mb-4">
                 <div>
                   <label className="text-[11px] font-semibold text-t2 block mb-1">Bank Account</label>
-                  <select aria-label="Reimbursement bank account" className="form-input w-full text-[12px]" value={reimburseBankAccountId} onChange={e => setReimburseBankAccountId(e.target.value)}>
+                  <select aria-label="Expense payment account" className="form-input w-full text-[12px]" value={reimburseBankAccountId} onChange={e => setReimburseBankAccountId(e.target.value)}>
                     <option value="">— Select Bank Account —</option>
                     {bankAccounts.filter(a => a.active).map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
                   </select>
                 </div>
                 <div>
                   <label className="text-[11px] font-semibold text-t2 block mb-1">Payment Method</label>
-                  <select aria-label="Reimbursement payment method" className="form-input w-full text-[12px]" value={reimburseMethod} onChange={e => setReimburseMethod(e.target.value)}>
+                  <select aria-label="Expense payment method" className="form-input w-full text-[12px]" value={reimburseMethod} onChange={e => setReimburseMethod(e.target.value)}>
                     <option value="bank">Bank Transfer</option>
                     <option value="mpesa">M-Pesa</option>
                     <option value="cash">Cash</option>
@@ -826,14 +826,16 @@ function ExpensesContent() {
                 </div>
                 <div>
                   <label className="text-[11px] font-semibold text-t2 block mb-1">Payment Note (optional)</label>
-                  <textarea aria-label="Reimbursement note" className="form-input w-full text-[12px]" rows={2} placeholder="Any note about this payment..."
+                  <textarea aria-label="Expense payment note" className="form-input w-full text-[12px]" rows={2} placeholder="Any note about this payment..."
                     value={reimburseNote} onChange={e => setReimburseNote(e.target.value)} />
                 </div>
               </div>
 
               <div className="expenses-modal-actions flex gap-2 justify-end">
                 <button onClick={() => { setReimbursingId(null); setReimburseReference(''); setReimburseBankAccountId('') }} className="btn-outline text-[11px] py-2 px-4">Cancel</button>
-                <button onClick={() => {
+                <button
+                  disabled={!reimburseBankAccountId || !reimburseDate}
+                  onClick={() => {
                   const reference = reimburseReference.trim() || undefined
                   const bankAccountId = reimburseBankAccountId || undefined
                   const note = reimburseNote.trim() || undefined
@@ -848,7 +850,7 @@ function ExpensesContent() {
                   setReimburseNote('')
                   setReimburseDate(new Date().toISOString().slice(0, 10))
                 }}
-                  className="btn-primary text-[11px] py-2 px-4" style={{ background: 'var(--accent-cyan)' }}>
+                  className="btn-primary text-[11px] py-2 px-4 disabled:opacity-50 disabled:cursor-not-allowed" style={{ background: 'var(--accent-cyan)' }}>
                   {isReimbursable(exp.paymentMethod) ? 'Confirm Reimbursement' : 'Confirm Payment'}
                 </button>
               </div>
