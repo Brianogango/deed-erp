@@ -22,15 +22,16 @@ import { readGuardedImageAsDataUrl, validateImageUpload } from '@/lib/client-ima
 
 const PAYMENT_METHODS: { value: ExpensePaymentMethod; label: string; desc: string; isReimbursable: boolean }[] = [
   { value: 'reimbursement',  label: 'Reimbursement',     desc: 'I paid from my own pocket',      isReimbursable: true },
-  { value: 'petty_cash',     label: 'Petty Cash',        desc: 'Company cash box was used',       isReimbursable: false },
-  { value: 'mpesa_company',  label: 'M-Pesa (Company)',  desc: 'Company M-Pesa / Till / Paybill', isReimbursable: false },
-  { value: 'company_card',   label: 'Company Card',      desc: 'Company debit / credit card',     isReimbursable: false },
+  { value: 'petty_cash',     label: 'Petty Cash',        desc: 'Pay from company petty cash',      isReimbursable: false },
+  { value: 'mpesa_company',  label: 'M-Pesa (Company)',  desc: 'Pay from company M-Pesa',           isReimbursable: false },
+  { value: 'company_card',   label: 'Company Bank/Card', desc: 'Pay from a company bank account',  isReimbursable: false },
 ]
 
 const STATUS_META: Record<Expense['status'], { label: string; badgeStatus: string }> = {
   submitted:   { label: 'Pending review', badgeStatus: 'pending' },
   approved:    { label: 'Approved',       badgeStatus: 'approved' },
   rejected:    { label: 'Rejected',       badgeStatus: 'failed' },
+  paid:        { label: 'Paid',           badgeStatus: 'paid' },
   reimbursed:  { label: 'Reimbursed',     badgeStatus: 'paid' },
 }
 
@@ -125,7 +126,7 @@ function ExpensesContent() {
   const router = useRouter()
   const pathname = usePathname()
 
-  const { users, currentUserId, expenses, submitExpense, reviewExpense, reimburseExpense, showToast, bankAccounts } = useFinanceStore()
+  const { users, currentUserId, expenses, submitExpense, reviewExpense, payExpense, reimburseExpense, showToast, bankAccounts } = useFinanceStore()
 
   const currentUser = users.find(u => u.id === currentUserId) ?? null
   const isFinance   = ['director', 'finance_officer'].includes(currentUser?.role ?? '')
@@ -141,7 +142,7 @@ function ExpensesContent() {
         && (isFinance || canUserApproveExpenseStep(currentUser?.role, e.approvalChain)),
       )
     : []
-  const pendingReimbursements = isFinance ? expenses.filter(e => e.status === 'approved' && isReimbursable(e.paymentMethod)) : []
+  const pendingReimbursements = isFinance ? expenses.filter(e => e.status === 'approved') : []
 
   const defaultTab = canReviewExpenses ? 'review' : 'mine'
   const queryTab = searchParams.get('tab') as 'mine' | 'review' | null
@@ -319,6 +320,7 @@ function ExpensesContent() {
   const [reimburseBankAccountId, setReimburseBankAccountId] = useState('')
   const [reimburseMethod, setReimburseMethod] = useState('bank')
   const [reimburseReference, setReimburseReference] = useState('')
+  const [reimburseDate, setReimburseDate] = useState(() => new Date().toISOString().slice(0, 10))
 
   // ── Receipt preview ──
   const [previewExp, setPreviewExp] = useState<Expense | null>(null)
@@ -350,7 +352,7 @@ function ExpensesContent() {
   const myTotal      = myExpenses.reduce((s, e) => s + e.amount, 0)
   const myPending    = myExpenses.filter(e => e.status === 'submitted').length
   const myApproved   = myExpenses.filter(e => e.status === 'approved').length
-  const myReimbursed = myExpenses.filter(e => e.status === 'reimbursed').reduce((s, e) => s + e.amount, 0)
+  const myReimbursed = myExpenses.filter(e => e.status === 'reimbursed' || e.status === 'paid').reduce((s, e) => s + e.amount, 0)
 
   const totalPendingAmt = allPending.reduce((s, e) => s + e.amount, 0)
   const reimbDue        = pendingReimbursements.reduce((s, e) => s + e.amount, 0)
@@ -398,7 +400,7 @@ function ExpensesContent() {
       <div className="expenses-kpi-strip" aria-label="Expense overview">
         <div className="expenses-kpi-card"><small>My claims</small><strong>{myExpenses.length}</strong><span>{fmtKes(myTotal)} submitted</span></div>
         <div className="expenses-kpi-card"><small>Pending review</small><strong>{canReviewExpenses ? allPending.length : myPending}</strong><span>{canReviewExpenses ? fmtKes(totalPendingAmt) : 'Awaiting approval'}</span></div>
-        <div className="expenses-kpi-card"><small>Approved to reimburse</small><strong>{isFinance ? pendingReimbursements.length : myApproved}</strong><span>{isFinance ? fmtKes(reimbDue) : 'Ready for finance'}</span></div>
+        <div className="expenses-kpi-card"><small>Approved to pay</small><strong>{isFinance ? pendingReimbursements.length : myApproved}</strong><span>{isFinance ? fmtKes(reimbDue) : 'Ready for finance'}</span></div>
         <div className="expenses-kpi-card"><small>Reimbursed this month</small><strong>{fmtKes(myReimbursed)}</strong><span>Paid claims</span></div>
       </div>
       <div className="expenses-content-shell">
@@ -436,6 +438,7 @@ function ExpensesContent() {
                   { value: 'submitted', label: 'Pending' },
                   { value: 'approved', label: 'Approved' },
                   { value: 'rejected', label: 'Rejected' },
+                  { value: 'paid', label: 'Paid' },
                   { value: 'reimbursed', label: 'Reimbursed' },
                 ],
                 onChange: v => setReviewStatus(v as typeof reviewStatus),
@@ -464,6 +467,7 @@ function ExpensesContent() {
               setReimburseMethod('bank')
               setReimburseBankAccountId('')
               setReimburseReference('')
+              setReimburseDate(new Date().toISOString().slice(0, 10))
             }}
             onView={e => setReviewingId(e.id)}
               />
@@ -485,7 +489,7 @@ function ExpensesContent() {
               </section>
               {isFinance && (
                 <section>
-                  <div className="expenses-queue-heading"><strong>Ready to reimburse</strong><span>{pendingReimbursements.length}</span></div>
+                  <div className="expenses-queue-heading"><strong>Ready to pay</strong><span>{pendingReimbursements.length}</span></div>
                   {pendingReimbursements.slice(0, 3).map(exp => (
                     <button
                       key={exp.id}
@@ -497,13 +501,14 @@ function ExpensesContent() {
                         setReimburseMethod('bank')
                         setReimburseBankAccountId('')
                         setReimburseReference('')
+                        setReimburseDate(new Date().toISOString().slice(0, 10))
                       }}
                     >
                       <span><strong>{exp.submittedByName}</strong><small>{exp.ref}</small></span>
                       <em>{fmtKes(exp.amount)}</em>
                     </button>
                   ))}
-                  {pendingReimbursements.length === 0 && <p className="expenses-queue-empty">No approved claims need payment.</p>}
+                  {pendingReimbursements.length === 0 && <p className="expenses-queue-empty">No approved expenses need payment.</p>}
                 </section>
               )}
             </aside>
@@ -563,7 +568,7 @@ function ExpensesContent() {
 
               {/* Payment method */}
               <div>
-                <label className="text-[11px] font-semibold text-t2 block mb-2">How was it paid? *</label>
+                <label className="text-[11px] font-semibold text-t2 block mb-2">Payment route / funding source *</label>
                 <div className="expenses-payment-options grid grid-cols-2 gap-2">
                   {PAYMENT_METHODS.map(pm => {
                     const active = form.paymentMethod === pm.value
@@ -775,14 +780,14 @@ function ExpensesContent() {
             <div className="modal-box expenses-reimburse-modal w-full max-w-sm" onClick={e => e.stopPropagation()}>
               <div className="expenses-modal-header flex items-center justify-between mb-4">
                 <div>
-                  <h3 className="text-sm font-bold text-t1">Mark as Reimbursed</h3>
+                  <h3 className="text-sm font-bold text-t1">{isReimbursable(exp.paymentMethod) ? 'Reimburse Expense' : 'Pay Expense'}</h3>
                   <p className="text-[11px] text-t3">{exp.ref} · {exp.submittedByName}</p>
                 </div>
                 <button className="expenses-modal-close" aria-label="Close reimbursement" onClick={() => setReimbursingId(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: 'var(--text-4)' }}>×</button>
               </div>
 
               <div className="expenses-reimburse-amount rounded-xl p-3 mb-4 text-center" style={{ background: '#E8F3FA', border: '1px solid #A8D4E8' }}>
-                <p className="text-[10px] text-t3 mb-1">Amount to reimburse to {exp.submittedByName}</p>
+                <p className="text-[10px] text-t3 mb-1">{isReimbursable(exp.paymentMethod) ? `Amount to reimburse to ${exp.submittedByName}` : 'Approved company expense to pay'}</p>
                 <p className="text-2xl font-bold" style={{ color: 'var(--navy)' }}>{fmtKes(exp.amount)}</p>
                 <p className="text-[10px] text-t3 mt-1">{catLabel(exp.category)} · {fmtDate(exp.expenseDate)}</p>
               </div>
@@ -805,13 +810,23 @@ function ExpensesContent() {
                   </select>
                 </div>
                 <div>
+                  <label className="text-[11px] font-semibold text-t2 block mb-1">Payment Date</label>
+                  <input
+                    type="date"
+                    aria-label="Expense payment date"
+                    className="form-input w-full text-[12px]"
+                    value={reimburseDate}
+                    onChange={e => setReimburseDate(e.target.value)}
+                  />
+                </div>
+                <div>
                   <label className="text-[11px] font-semibold text-t2 block mb-1">{reimburseMethod === 'cheque' ? 'Cheque Number' : 'Payment Reference'}</label>
                   <input aria-label={reimburseMethod === 'cheque' ? 'Cheque number' : 'Payment reference'} className="form-input w-full text-[12px]" placeholder={reimburseMethod === 'cheque' ? 'e.g. 000123' : 'e.g. M-Pesa ref QGH123XY'}
                     value={reimburseReference} onChange={e => setReimburseReference(e.target.value)} />
                 </div>
                 <div>
-                  <label className="text-[11px] font-semibold text-t2 block mb-1">Reimbursement Note (optional)</label>
-                  <textarea aria-label="Reimbursement note" className="form-input w-full text-[12px]" rows={2} placeholder="Any note about the reimbursement..."
+                  <label className="text-[11px] font-semibold text-t2 block mb-1">Payment Note (optional)</label>
+                  <textarea aria-label="Reimbursement note" className="form-input w-full text-[12px]" rows={2} placeholder="Any note about this payment..."
                     value={reimburseNote} onChange={e => setReimburseNote(e.target.value)} />
                 </div>
               </div>
@@ -819,14 +834,22 @@ function ExpensesContent() {
               <div className="expenses-modal-actions flex gap-2 justify-end">
                 <button onClick={() => { setReimbursingId(null); setReimburseReference(''); setReimburseBankAccountId('') }} className="btn-outline text-[11px] py-2 px-4">Cancel</button>
                 <button onClick={() => {
-                  reimburseExpense(reimbursingId, reimburseNote.trim() || undefined, reimburseMethod, reimburseBankAccountId || undefined, reimburseReference.trim() || undefined)
+                  const reference = reimburseReference.trim() || undefined
+                  const bankAccountId = reimburseBankAccountId || undefined
+                  const note = reimburseNote.trim() || undefined
+                  if (isReimbursable(exp.paymentMethod)) {
+                    reimburseExpense(reimbursingId, note, reimburseMethod, bankAccountId, reference, reimburseDate)
+                  } else {
+                    payExpense(reimbursingId, reimburseMethod, bankAccountId, reference, reimburseDate, note)
+                  }
                   setReimbursingId(null)
                   setReimburseReference('')
                   setReimburseBankAccountId('')
                   setReimburseNote('')
+                  setReimburseDate(new Date().toISOString().slice(0, 10))
                 }}
                   className="btn-primary text-[11px] py-2 px-4" style={{ background: 'var(--accent-cyan)' }}>
-                  Confirm Reimbursement
+                  {isReimbursable(exp.paymentMethod) ? 'Confirm Reimbursement' : 'Confirm Payment'}
                 </button>
               </div>
             </div>
@@ -918,8 +941,10 @@ function ExpenseTable({
       {onReview && exp.status === 'submitted' && (
         <button className="btn-primary text-[10px] py-1.5 px-3" onClick={() => onReview(exp)}>Review</button>
       )}
-      {onReimburse && exp.status === 'approved' && isReimbursable(exp.paymentMethod) && (
-        <button className="btn-primary text-[10px] py-1.5 px-3 bg-cyan-600 hover:bg-cyan-700" onClick={() => onReimburse(exp)}>Reimburse</button>
+      {onReimburse && exp.status === 'approved' && (
+        <button className="btn-primary text-[10px] py-1.5 px-3 bg-cyan-600 hover:bg-cyan-700" onClick={() => onReimburse(exp)}>
+          {isReimbursable(exp.paymentMethod) ? 'Reimburse' : 'Pay'}
+        </button>
       )}
       {onView && (
         <button className="btn-secondary text-[10px] py-1.5 px-3" onClick={() => onView(exp)}>View</button>
@@ -957,6 +982,9 @@ function ExpenseTable({
           )}
           {exp.status === 'reimbursed' && exp.reimbursementReference && (
             <p className="text-[10px] text-cyan-700 mt-1 truncate max-w-[120px]" title={exp.reimbursementReference}>Paid: {exp.reimbursementReference}</p>
+          )}
+          {exp.status === 'paid' && exp.paymentReference && (
+            <p className="text-[10px] text-cyan-700 mt-1 truncate max-w-[120px]" title={exp.paymentReference}>Paid: {exp.paymentReference}</p>
           )}
         </div>
       ),
