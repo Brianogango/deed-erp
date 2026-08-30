@@ -2474,7 +2474,7 @@ export interface JournalEntry {
   id: string
   ref: string
   date: string
-  source: 'payroll' | 'refund' | 'invoice' | 'payment' | 'bill' | 'purchase_payment' | 'expense' | 'pos' | 'pos_session' | 'purchase' | 'manual' | 'adjustment'
+  source: 'payroll' | 'payroll_payment' | 'refund' | 'invoice' | 'payment' | 'bill' | 'purchase_payment' | 'expense' | 'pos' | 'pos_session' | 'purchase' | 'manual' | 'adjustment'
   description: string
   status: 'posted'
   lines: JournalEntryLine[]
@@ -5749,9 +5749,21 @@ export function StoreProvider({
             break
           case 'payroll': {
             if (!['director', 'finance_officer'].includes(initialUser.role)) break
-            const data = await fetch('/api/payroll').then(r => r.ok ? r.json() : null)
+            const [data, paymentJournalData] = await Promise.all([
+              fetch('/api/payroll').then(r => r.ok ? r.json() : null),
+              fetch('/api/accounting/journals?source=payroll_payment&limit=500').then(r => r.ok ? r.json() : null),
+            ])
             if (data?.runs) setPayrollRuns(data.runs)
             if (data?.payslips) setPayslips(data.payslips)
+            const paymentJournals = Array.isArray(paymentJournalData?.journals)
+              ? paymentJournalData.journals as JournalEntry[]
+              : []
+            if (paymentJournals.length > 0) {
+              setJournalEntries(prev => {
+                const authoritativeRefs = new Set(paymentJournals.map(j => j.ref))
+                return [...paymentJournals, ...prev.filter(j => !authoritativeRefs.has(j.ref))]
+              })
+            }
             break
           }
           case 'salary_advances': {
