@@ -133,6 +133,7 @@ export async function POST(request: Request) {
         to: payload.quote.contactEmail,
         cc,
         subject: finalEmailContent.subject,
+        body: finalEmailContent.text,
         status: results.email.success ? 'success' : 'failed',
         error: results.email.error,
         messageId: results.email.messageId,
