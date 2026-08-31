@@ -264,17 +264,16 @@ export default function DataTable<T>({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page, totalPages, filteredRows.length, pageProp])
 
-  // Reset to page 1 when sort changes so the new first rows are visible.
-  // Skip the first run — otherwise a restored URL page is wiped on mount.
-  const skipSortPageReset = useRef(true)
+  // Reset to page 1 when the user changes sort — not on mount, and not when
+  // React Strict Mode re-runs the same effect (that was wiping a restored page).
+  const sortKey = `${sort?.key ?? ''}:${sort?.direction ?? ''}`
+  const prevSortKey = useRef(sortKey)
   useEffect(() => {
-    if (skipSortPageReset.current) {
-      skipSortPageReset.current = false
-      return
-    }
+    if (prevSortKey.current === sortKey) return
+    prevSortKey.current = sortKey
     goToPage(1)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sort?.key, sort?.direction])
+  }, [sortKey])
 
   const pageRows = useMemo(() => {
     const start = (page - 1) * perPage

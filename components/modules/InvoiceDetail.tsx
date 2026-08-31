@@ -51,7 +51,8 @@ export default function InvoiceDetail() {
       ? new URLSearchParams(window.location.search)
       : searchParams
     const livePage = parseFinanceListPage(params.get('listPage') ?? params.get('page'))
-    router.push(financeInvoiceListPath(type, { page: livePage }))
+    const path = financeInvoiceListPath(type, { page: livePage })
+    router.push(path)
   }
   const {
     invoices,
