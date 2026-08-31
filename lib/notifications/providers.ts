@@ -14,6 +14,8 @@ export function mailboxForEvent(eventType: string): MailboxProfile {
   if (eventType.startsWith('hr.')) return 'hr'
   if (eventType.startsWith('finance.')) return 'accounts'
   if (eventType.startsWith('sales.') || eventType.startsWith('crm.')) return 'sales'
+  if (eventType.startsWith('repair.') || eventType.startsWith('aftersales.')) return 'repairs'
+  if (eventType.startsWith('purchase.')) return 'procurement'
   return 'default'
 }
 
@@ -62,9 +64,12 @@ export async function sendProviderDelivery(input: ProviderDeliveryInput): Promis
   if (input.channel === 'email') {
     if (!input.destination) return { success: false, provider: 'email', error: 'Missing email destination', errorCode: 'missing_destination' }
     const html = String(metadata.emailHtml || genericHtml(input.title, input.body, input.actionUrl))
+    const requestedMailbox = String(metadata.mailbox || '').trim() as MailboxProfile
+    const allowedMailboxes = new Set<MailboxProfile>(['default', 'hr', 'sales', 'accounts', 'repairs', 'procurement'])
+    const mailbox = allowedMailboxes.has(requestedMailbox) ? requestedMailbox : mailboxForEvent(input.eventType)
     const result = await sendEmail({
       to: input.destination,
-      mailbox: mailboxForEvent(input.eventType),
+      mailbox,
       subject,
       html,
       text: String(metadata.emailText || text),
