@@ -15,6 +15,7 @@ import {
 } from '@/lib/crm/sales-inbox-imap'
 import { storeLeadEmailAttachments } from '@/lib/crm/lead-attachments'
 import { publishNotificationEvent } from '@/lib/notifications/service'
+import { recordInboundEmail as recordCommunicationInboundEmail } from '@/lib/notifications/email-conversations'
 import { resolveSalesInboxPipelineConfig } from '@/lib/crm/inbox/config'
 import {
   decideInboundEmailPipeline,
@@ -174,6 +175,27 @@ async function recordInboundEmail(opts: {
         },
       },
     })
+    await recordCommunicationInboundEmail({
+      provider: 'imap',
+      providerMessageId: opts.mail.messageId,
+      internetMessageId: opts.mail.messageId,
+      from: opts.mail.fromEmail,
+      to: opts.mailbox,
+      mailbox: 'sales',
+      subject: opts.mail.subject,
+      body: opts.mail.textBody || '',
+      participantName: opts.mail.fromName || null,
+      inReplyTo: opts.mail.inReplyTo || null,
+      references: String(opts.mail.references || '').split(/\s+/).map(v => v.trim()).filter(Boolean),
+      entityType: opts.leadId ? 'lead' : opts.clientId ? 'client' : null,
+      entityId: opts.leadId || opts.clientId || null,
+      metadata: {
+        salesDecision: opts.decision,
+        processingStatus: opts.status,
+        sourceMailbox: opts.mailbox,
+        providerThreadId: opts.threadId,
+      },
+    }).catch(error => console.error('[sales inbox] could not write email conversation ledger', error))
     return 'ok'
   } catch (err: any) {
     if (err?.code === 'P2002') return 'duplicate'
