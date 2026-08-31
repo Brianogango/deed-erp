@@ -3787,8 +3787,11 @@ model CommunicationThread {
   id               String   @id @default(uuid()) @db.Uuid
   threadKey        String   @unique @map("thread_key") @db.VarChar(240)
   channel          String   @default("sms") @db.VarChar(20)
-  participantPhone String   @map("participant_phone") @db.VarChar(40)
+  participantPhone String?  @map("participant_phone") @db.VarChar(40)
+  participantEmail String?  @map("participant_email") @db.VarChar(320)
   participantName  String?  @map("participant_name") @db.VarChar(200)
+  mailbox          String?  @db.VarChar(80)
+  subject          String?  @db.VarChar(500)
   entityType       String?  @map("entity_type") @db.VarChar(80)
   entityId         String?  @map("entity_id") @db.VarChar(160)
   status           String   @default("open") @db.VarChar(30)
@@ -3800,6 +3803,8 @@ model CommunicationThread {
   messages CommunicationMessage[]
 
   @@index([participantPhone, lastMessageAt], map: "idx_comm_threads_phone_last")
+  @@index([participantEmail, lastMessageAt], map: "idx_comm_threads_email_last")
+  @@index([mailbox, lastMessageAt], map: "idx_comm_threads_mailbox_last")
   @@index([entityType, entityId], map: "idx_comm_threads_entity")
   @@index([lastMessageAt], map: "idx_comm_threads_last_message")
   @@map("communication_threads")
@@ -3810,16 +3815,21 @@ model CommunicationMessage {
   threadId               String    @map("thread_id") @db.Uuid
   direction              String    @db.VarChar(12)
   channel                String    @default("sms") @db.VarChar(20)
+  subject                String?   @db.VarChar(500)
   body                   String
   provider               String?   @db.VarChar(40)
   providerMessageId      String?   @map("provider_message_id") @db.VarChar(500)
   providerMessageKey     String?   @unique @map("provider_message_key") @db.VarChar(560)
+  internetMessageId      String?   @map("internet_message_id") @db.VarChar(500)
+  inReplyTo              String?   @map("in_reply_to") @db.VarChar(500)
   notificationDeliveryId String?   @unique @map("notification_delivery_id") @db.Uuid
   eventType              String?   @map("event_type") @db.VarChar(120)
   entityType             String?   @map("entity_type") @db.VarChar(80)
   entityId               String?   @map("entity_id") @db.VarChar(160)
   senderPhone            String?   @map("sender_phone") @db.VarChar(40)
   recipientPhone         String?   @map("recipient_phone") @db.VarChar(40)
+  senderEmail            String?   @map("sender_email") @db.VarChar(320)
+  recipientEmail         String?   @map("recipient_email") @db.VarChar(320)
   status                 String    @default("queued") @db.VarChar(30)
   sentAt                 DateTime? @map("sent_at")
   deliveredAt            DateTime? @map("delivered_at")
@@ -3834,6 +3844,9 @@ model CommunicationMessage {
 
   @@index([threadId, createdAt], map: "idx_comm_messages_thread_created")
   @@index([provider, providerMessageId], map: "idx_comm_messages_provider_message")
+  @@index([internetMessageId], map: "idx_comm_messages_internet_message_id")
+  @@index([senderEmail, createdAt], map: "idx_comm_messages_sender_email")
+  @@index([recipientEmail, createdAt], map: "idx_comm_messages_recipient_email")
   @@index([direction, status, createdAt], map: "idx_comm_messages_direction_status")
   @@map("communication_messages")
 }
