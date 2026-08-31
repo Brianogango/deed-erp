@@ -19,6 +19,7 @@ import {
 import { STATUS_LABELS, STATUS_COLORS } from '../repair-config'
 import StatusStepper from './StatusStepper'
 import MessageThread from './MessageThread'
+import EntityEmailThread from '@/components/email/EntityEmailThread'
 import Chatter from '@/components/erp/Chatter'
 import { Modal } from '@/components/ui'
 import { SecondaryActionMenu, StatusBadge } from '@/components/erp'
@@ -1766,6 +1767,14 @@ export default function RepairDetailView() {
 
             {/* Customer Chat */}
             <MessageThread repairRef={r.ref} staffName={currentUser?.name || 'Staff'} />
+
+            <EntityEmailThread
+              entityType="repair"
+              entityId={r.id}
+              title="Customer Email"
+              showToast={showToast}
+              compact
+            />
 
             {/* Internal staff notes / activities (DocumentMessage) */}
             <Chatter
