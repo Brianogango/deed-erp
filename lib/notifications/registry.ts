@@ -95,6 +95,7 @@ export const NOTIFICATION_POLICIES: Record<string, NotificationPolicy> = {
   'aftersales.sla_breach': POLICY(['in_app', 'push', 'email'], 'critical', { recipientRoles: ['technical_lead', 'director'], requiresAcknowledgement: true, escalationMinutes: 60, mandatory: true }),
 
   'system.escalation': POLICY(['in_app', 'push', 'email'], 'critical', { requiresAcknowledgement: true, mandatory: true }),
+  'system.push_test': POLICY(['push'], 'info'),
   'system.manual_message': POLICY(['email'], 'info'),
   'system.sms_reply': POLICY(['sms'], 'info'),
   'system.security': POLICY(['in_app', 'push', 'email'], 'critical', { recipientRoles: ['director'], requiresAcknowledgement: true, escalationMinutes: 30, mandatory: true }),

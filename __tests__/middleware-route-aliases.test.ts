@@ -62,7 +62,7 @@ describe('legacy ERP route aliases', () => {
     expect(getToken).not.toHaveBeenCalled()
   })
 
-  it.each(['/sw.js', '/offline.html', '/manifest.json'])('serves %s without a session', async path => {
+  it.each(['/sw.js', '/deed-notifications-sw.js', '/offline.html', '/manifest.json'])('serves %s without a session', async path => {
     getToken.mockResolvedValue(null)
     const response = await middleware(new NextRequest(`https://erp.example.test${path}`))
 

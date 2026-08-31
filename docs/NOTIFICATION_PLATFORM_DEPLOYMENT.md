@@ -41,6 +41,8 @@ VAPID_SUBJECT=mailto:info@deed.co.ke
 ```
 
 Users can then enable Browser Push from **Account Settings → Notification Channels**.
+The live service worker is `/sw.js` (PWA + push). `/deed-notifications-sw.js` remains as a legacy alias.
+After enabling, **Send test notification** posts to `/api/notifications/push-test` and should produce an OS toast.
 
 ## 3. Notification worker
 

@@ -571,9 +571,11 @@ function AccountChannelIcon({ kind }: { kind: 'inapp' | 'push' | 'email' | 'what
 function NotificationPreferenceControls({
   soundEnabled,
   setSoundEnabled,
+  showToast,
 }: {
   soundEnabled: boolean
   setSoundEnabled: (v: boolean) => void
+  showToast: (message: string, type?: 'success' | 'error' | 'info') => void
 }) {
   const [pref, setPref] = useState<GlobalNotificationPreference>({
     inAppEnabled: true,
@@ -591,10 +593,11 @@ function NotificationPreferenceControls({
   const [pushSubscribed, setPushSubscribed] = useState(false)
   const [pushBusy, setPushBusy] = useState(false)
   const [pushSupported, setPushSupported] = useState(false)
+  const [pushConfigured, setPushConfigured] = useState(true)
 
   const load = useCallback(async () => {
     try {
-      const [prefRes] = await Promise.all([
+      const [prefRes, endpointRes] = await Promise.all([
         fetch('/api/notifications/preferences', { cache: 'no-store' }),
         fetch('/api/notifications/endpoints', { cache: 'no-store' }),
       ])
@@ -604,6 +607,10 @@ function NotificationPreferenceControls({
           setPref(data.global)
           if (typeof data.global.soundEnabled === 'boolean') setSoundEnabled(data.global.soundEnabled)
         }
+      }
+      if (endpointRes.ok) {
+        const config = await endpointRes.json()
+        setPushConfigured(Boolean(config.pushConfigured && config.vapidPublicKey))
       }
       const supported = 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window
       setPushSupported(supported)
@@ -634,9 +641,13 @@ function NotificationPreferenceControls({
 
   const setPushForDevice = useCallback(async (enabled: boolean) => {
     if (!pushSupported || pushBusy) return
+    if (enabled && !pushConfigured) {
+      showToast('Browser push is not configured on this server yet', 'error')
+      return
+    }
     setPushBusy(true)
     try {
-      const registration = await navigator.serviceWorker.register('/deed-notifications-sw.js', { scope: '/' })
+      const registration = await navigator.serviceWorker.register('/sw.js', { scope: '/' })
       await navigator.serviceWorker.ready
       const existing = await registration.pushManager.getSubscription()
 
@@ -652,15 +663,17 @@ function NotificationPreferenceControls({
         }
         setPushSubscribed(false)
         await update({ pushEnabled: false })
+        showToast('Browser push turned off for this device', 'info')
         return
       }
 
       const permission = await Notification.requestPermission()
-      if (permission !== 'granted') throw new Error('Browser notification permission was not granted')
+      if (permission !== 'granted') throw new Error('Allow notifications in the browser to enable Browser Push')
 
       const configRes = await fetch('/api/notifications/endpoints', { cache: 'no-store' })
       const config = await configRes.json()
       if (!configRes.ok || !config.vapidPublicKey) throw new Error('Web Push is not configured on the server')
+      setPushConfigured(true)
 
       const subscription = existing || await registration.pushManager.subscribe({
         userVisibleOnly: true,
@@ -679,13 +692,30 @@ function NotificationPreferenceControls({
       if (!saveRes.ok) throw new Error('Could not register this browser for push notifications')
       setPushSubscribed(true)
       await update({ pushEnabled: true })
+      showToast('This browser will get ERP alerts even when the tab is closed', 'success')
     } catch (error) {
       console.warn('[notifications] push preference failed', error)
       setPushSubscribed(false)
+      showToast(error instanceof Error ? error.message : 'Could not enable browser push', 'error')
     } finally {
       setPushBusy(false)
     }
-  }, [pushBusy, pushSupported, update])
+  }, [pushBusy, pushConfigured, pushSupported, showToast, update])
+
+  const sendPushTest = useCallback(async () => {
+    if (!pushSubscribed || pushBusy) return
+    setPushBusy(true)
+    try {
+      const res = await fetch('/api/notifications/push-test', { method: 'POST' })
+      const body = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(body.error || 'Test notification could not be sent')
+      showToast('Test notification sent — check the system tray', 'success')
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'Test notification failed', 'error')
+    } finally {
+      setPushBusy(false)
+    }
+  }, [pushBusy, pushSubscribed, showToast])
 
   return (
     <div className="acct-notification-wrap">
@@ -704,10 +734,29 @@ function NotificationPreferenceControls({
           <span className="acct-channel-copy">
             <span className="acct-channel-title">Browser Push</span>
             <span className="acct-channel-detail">
-              {pushSupported ? (pushSubscribed ? 'This browser is subscribed' : 'Notify even when the ERP tab is closed') : 'Not supported by this browser'}
+              {!pushSupported
+                ? 'Not supported by this browser. Use Chrome, Edge, or Firefox on HTTPS.'
+                : !pushConfigured
+                  ? 'Not configured on this server yet'
+                  : pushSubscribed
+                    ? 'This browser is subscribed — alerts arrive even if the ERP tab is closed'
+                    : 'Notify even when the ERP tab is closed'}
             </span>
+            {pushSubscribed && (
+              <button
+                type="button"
+                className="acct-push-test"
+                disabled={pushBusy}
+                onClick={() => void sendPushTest()}
+              >
+                Send test notification
+              </button>
+            )}
           </span>
-          <Toggle on={pushSubscribed} onChange={value => void setPushForDevice(value)} />
+          <Toggle
+            on={pushSubscribed}
+            onChange={value => void setPushForDevice(value)}
+          />
         </div>
 
         <div className="acct-channel-row">
@@ -950,7 +999,7 @@ function AccountPanel({
                 <small>Choose how you’d like to stay updated</small>
               </span>
             </div>
-            <NotificationPreferenceControls soundEnabled={soundEnabled} setSoundEnabled={setSoundEnabled} />
+            <NotificationPreferenceControls soundEnabled={soundEnabled} setSoundEnabled={setSoundEnabled} showToast={showToast} />
           </section>
 
           <section className="acct-section">
