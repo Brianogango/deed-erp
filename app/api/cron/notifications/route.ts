@@ -3,6 +3,7 @@ import crypto from 'crypto'
 import { requireRole, withApiErrorHandling } from '@/lib/auth/api'
 import { runNotificationWorker } from '@/lib/notifications/worker'
 import { scanOperationalNotificationEvents } from '@/lib/notifications/operational-scanner'
+import { processDepartmentEmailReplies } from '@/lib/notifications/email-inbox'
 
 function secretOk(request: NextRequest) {
   const expected = String(process.env.CRON_SECRET || '').trim()
@@ -18,8 +19,9 @@ export async function POST(request: NextRequest) {
   return withApiErrorHandling(async () => {
     if (!secretOk(request)) await requireRole(['director', 'admin_officer', 'super_admin'])
     const scan = await scanOperationalNotificationEvents()
+    const emailInbox = await processDepartmentEmailReplies().catch(error => ({ error: error instanceof Error ? error.message : 'email inbox processing failed' }))
     const worker = await runNotificationWorker()
-    return NextResponse.json({ ok: true, scan, worker })
+    return NextResponse.json({ ok: true, scan, emailInbox, worker })
   })
 }
 
