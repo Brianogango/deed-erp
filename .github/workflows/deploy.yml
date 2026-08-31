@@ -213,8 +213,8 @@ jobs:
             scripts/apply-sql-as-postgres.sh database/migrations/20260829_mpesa_stk_requests_safe.sql
             scripts/apply-sql-as-postgres.sh database/migrations/20260830_user_mfa_security_safe.sql
             scripts/apply-sql-as-postgres.sh database/migrations/20260830_user_session_version_safe.sql
-            scripts/apply-sql-as-postgres.sh database/migrations/20260831_sms_conversations.sql \
-            database/migrations/20260831_email_conversations.sql
+            scripts/apply-sql-as-postgres.sh database/migrations/20260831_sms_conversations.sql
+            scripts/apply-sql-as-postgres.sh database/migrations/20260831_email_conversations.sql
             node scripts/fix-coa-blob-alignment.mjs
             node scripts/zero-contact-payment-terms.mjs --apply
             node scripts/seed-products-final-b974.mjs
