@@ -6,6 +6,7 @@ import type { Prisma } from '@prisma/client'
 import { defaultNotificationPolicy } from './registry'
 import { resolveSmsProvider } from './sms-provider'
 import { updateSmsConversationStatus } from './sms-conversations'
+import { updateEmailConversationStatus } from './email-conversations'
 
 const MAX_ATTEMPTS = 5
 
@@ -63,14 +64,23 @@ export async function applyProviderDeliveryStatus(input: ProviderDeliveryStatusI
 
   const status = input.status.toLowerCase()
   const at = input.occurredAt || new Date()
-  const syncSmsStatus = async (nextStatus: string) => {
-    if (delivery.channel !== 'sms') return
-    await updateSmsConversationStatus({
-      provider: input.provider,
-      providerMessageId: input.messageId,
-      status: nextStatus,
-      occurredAt: at,
-    }).catch(error => console.error('[notifications] SMS conversation status sync failed', error))
+  const syncConversationStatus = async (nextStatus: string) => {
+    if (delivery.channel === 'sms') {
+      await updateSmsConversationStatus({
+        provider: input.provider,
+        providerMessageId: input.messageId,
+        status: nextStatus,
+        occurredAt: at,
+      }).catch(error => console.error('[notifications] SMS conversation status sync failed', error))
+    }
+    if (delivery.channel === 'email') {
+      await updateEmailConversationStatus({
+        provider: input.provider,
+        providerMessageId: input.messageId,
+        status: nextStatus,
+        occurredAt: at,
+      }).catch(error => console.error('[notifications] email conversation status sync failed', error))
+    }
   }
 
   if (status === 'open') {
@@ -80,6 +90,7 @@ export async function applyProviderDeliveryStatus(input: ProviderDeliveryStatusI
       where: { id: delivery.id },
       data: { status: 'delivered', deliveredAt: delivery.deliveredAt || at, lastError: null },
     })
+    await syncConversationStatus('delivered')
     return { matched: true as const, deliveryId: delivery.id, status: 'delivered' }
   }
 
@@ -88,7 +99,7 @@ export async function applyProviderDeliveryStatus(input: ProviderDeliveryStatusI
       where: { id: delivery.id },
       data: { status: 'read', deliveredAt: delivery.deliveredAt || at, readAt: at, lastError: null },
     })
-    await syncSmsStatus('read')
+    await syncConversationStatus('read')
     return { matched: true as const, deliveryId: delivery.id, status: 'read' }
   }
 
@@ -107,7 +118,7 @@ export async function applyProviderDeliveryStatus(input: ProviderDeliveryStatusI
         lastError: null,
       },
     })
-    await syncSmsStatus(isDelivered ? 'delivered' : 'sent')
+    await syncConversationStatus(isDelivered ? 'delivered' : 'sent')
     return { matched: true as const, deliveryId: delivery.id, status: isDelivered ? 'delivered' : 'sent' }
   }
 
@@ -119,7 +130,7 @@ export async function applyProviderDeliveryStatus(input: ProviderDeliveryStatusI
       where: { id: delivery.id },
       data: { status: 'retrying', nextAttemptAt: retryAt(Math.max(delivery.attemptCount, 1)), lastError: input.error || status },
     })
-    await syncSmsStatus('retrying')
+    await syncConversationStatus('retrying')
     return { matched: true as const, deliveryId: delivery.id, status: 'retrying' }
   }
 
@@ -150,7 +161,7 @@ export async function applyProviderDeliveryStatus(input: ProviderDeliveryStatusI
         }),
       ])
       await createSmsFallback(delivery)
-      await syncSmsStatus('dead_letter')
+      await syncConversationStatus('dead_letter')
       return { matched: true as const, deliveryId: delivery.id, status: 'dead_letter' }
     }
 
@@ -163,7 +174,7 @@ export async function applyProviderDeliveryStatus(input: ProviderDeliveryStatusI
         lastError: reason,
       },
     })
-    await syncSmsStatus('retrying')
+    await syncConversationStatus('retrying')
     return { matched: true as const, deliveryId: delivery.id, status: 'retrying' }
   }
 
