@@ -77,6 +77,7 @@ Apply the additive SMS conversation migration before enabling inbound replies:
 ```bash
 cd /var/www/deed-erp
 bash scripts/apply-sql-as-postgres.sh database/migrations/20260831_sms_conversations.sql
+bash scripts/apply-sql-as-postgres.sh database/migrations/20260831_email_conversations.sql
 npx prisma generate
 ```
 
@@ -185,7 +186,7 @@ Administrators can inspect the platform at:
 
 The panel exposes delivery counts, channel volume, pending outbox/delivery counts, current dead letters and recent failures. Dead-letter deliveries can be requeued from the panel.
 
-The same screen now includes **SMS Message Center** with **All / Inbox / Sent / Failed** views, full message threads, delivery state, inbound replies and direct SMS reply. Replies of `STOP`, `UNSUBSCRIBE`, `CANCEL`, `END` or `QUIT` mark the phone as opted out; the worker suppresses subsequent SMS deliveries to that number and the Message Center blocks manual replies.
+The same screen now includes **Email Message Center** with mailbox filters, Inbox / Sent / Failed views, linked ERP threads and direct replies, plus **SMS Message Center** with **All / Inbox / Sent / Failed** views, full message threads, delivery state, inbound replies and direct SMS reply. Replies of `STOP`, `UNSUBSCRIBE`, `CANCEL`, `END` or `QUIT` mark the phone as opted out; the worker suppresses subsequent SMS deliveries to that number and the Message Center blocks manual replies.
 
 User-level delivery preferences are under:
 
@@ -223,3 +224,12 @@ Confirm each business action leaves an event in `notification_events` and channe
 Application rollback does not require deleting notification data. The migration is additive. If code is rolled back, the legacy app_state blobs remain untouched unless explicitly removed later.
 
 Do not drop notification tables during an incident. Stop the notification worker first, roll back application code, investigate failed/dead-letter deliveries, then resume after correction.
+
+
+## 10. Email release policy and inboxes
+
+Email delivery now distinguishes automatic business notifications from user-triggered customer communication. Events with `emailMode: manual` only create an email delivery when the publisher sets `metadata.emailTriggered=true`. This prevents background condition scanners from silently emailing customers while still allowing SMS/WhatsApp/in-app channels configured for the same event.
+
+Current manual-email events include repair customer messages, repair quotations, repair-ready/uncollected notices, generic manual messages and email replies. Quote, invoice and RFQ document sends remain explicit user actions.
+
+Department mailbox profiles are: `sales`, `accounts`, `hr`, `repairs`, `procurement`, and `default`. The notification cron also checks configured IMAP inboxes for Accounts, HR, Repairs, Procurement and General mailboxes. Inbound messages are only recorded/thread-linked and surfaced to staff; they do not post accounting entries, approve HR requests, or change repair state.
