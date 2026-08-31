@@ -21,21 +21,38 @@ type TrimLine = {
   id?: string
   lineType?: string
   productId?: unknown
-  qty?: number
-  qtyDelivered?: number
-  qtyInvoiced?: number
-  unitPrice?: number
-  taxRate?: number
-  discount?: number
-  discountPercent?: number
-  subtotal?: number
-  lineTotal?: number
+  description?: unknown
+  productName?: unknown
+  qty?: unknown
+  qtyDelivered?: unknown
+  qtyInvoiced?: unknown
+  /** Prisma Decimal or a plain number — callers coerce with asNumber(). */
+  unitPrice?: unknown
+  taxRate?: unknown
+  discount?: unknown
+  discountPercent?: unknown
+  subtotal?: unknown
+  lineTotal?: unknown
   serialIds?: string[]
+}
+
+function asNumber(value: unknown): number {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : 0
+  if (typeof value === 'string' && value.trim() !== '') {
+    const n = Number(value)
+    return Number.isFinite(n) ? n : 0
+  }
+  if (value && typeof value === 'object' && 'toNumber' in value && typeof (value as { toNumber: () => unknown }).toNumber === 'function') {
+    const n = Number((value as { toNumber: () => unknown }).toNumber())
+    return Number.isFinite(n) ? n : 0
+  }
+  const n = Number(value)
+  return Number.isFinite(n) ? n : 0
 }
 
 function isSectionLine(line: TrimLine) {
   if (line.lineType === 'section') return true
-  return Number(line.qty) === 0 && !line.productId && !(Number(line.unitPrice) > 0)
+  return asNumber(line.qty) === 0 && !line.productId && !(asNumber(line.unitPrice) > 0)
 }
 
 function dropEmptySections<T extends TrimLine>(lines: T[]): T[] {
@@ -71,11 +88,11 @@ export function trimSaleOrderLinesToDelivered<T extends TrimLine>(lines: readonl
       next.push(line)
       continue
     }
-    const originalQty = Math.max(0, Number(line.qty) || 0)
+    const originalQty = Math.max(0, asNumber(line.qty))
     const floor = Math.max(
       0,
-      Number(line.qtyDelivered) || 0,
-      Number(line.qtyInvoiced) || 0,
+      asNumber(line.qtyDelivered),
+      asNumber(line.qtyInvoiced),
     )
     const qty = Math.min(originalQty, floor)
     if (qty <= 0) {
@@ -90,7 +107,13 @@ export function trimSaleOrderLinesToDelivered<T extends TrimLine>(lines: readonl
     changed = true
     const extras = (line.serialIds ?? []).slice(qty)
     releasedSerialIds.push(...extras)
-    const money = calcSaleOrderLineMoney({ ...line, qty })
+    const money = calcSaleOrderLineMoney({
+      lineType: line.lineType,
+      qty,
+      unitPrice: asNumber(line.unitPrice),
+      taxRate: asNumber(line.taxRate),
+      discount: asNumber(line.discount ?? line.discountPercent),
+    })
     next.push({
       ...line,
       qty: money.qty,
@@ -109,9 +132,9 @@ export function trimSaleOrderLinesToDelivered<T extends TrimLine>(lines: readonl
 
 function commercialPrice(line: TrimLine) {
   return {
-    unitPrice: Number(line.unitPrice) || 0,
-    taxRate: Number(line.taxRate) || 0,
-    discount: Number(line.discount ?? line.discountPercent) || 0,
+    unitPrice: asNumber(line.unitPrice),
+    taxRate: asNumber(line.taxRate),
+    discount: asNumber(line.discount ?? line.discountPercent),
   }
 }
 
@@ -146,12 +169,12 @@ export function isFulfillmentQtyTrim(
       || !moneyEquals(prevPrice.taxRate, nextPrice.taxRate)
       || !moneyEquals(prevPrice.discount, nextPrice.discount)
     ) return false
-    const originalQty = Math.max(0, Number(prev.qty) || 0)
-    const nextQty = Math.max(0, Number(line.qty) || 0)
+    const originalQty = Math.max(0, asNumber(prev.qty))
+    const nextQty = Math.max(0, asNumber(line.qty))
     const floor = Math.max(
       0,
-      Number(line.qtyDelivered ?? prev.qtyDelivered) || 0,
-      Number(line.qtyInvoiced ?? prev.qtyInvoiced) || 0,
+      asNumber(line.qtyDelivered ?? prev.qtyDelivered),
+      asNumber(line.qtyInvoiced ?? prev.qtyInvoiced),
     )
     if (nextQty > originalQty + 1e-9) return false
     if (nextQty + 1e-9 < floor) return false
@@ -162,8 +185,8 @@ export function isFulfillmentQtyTrim(
     if (id && requestedIds.has(id)) continue
     const floor = Math.max(
       0,
-      Number(prev.qtyDelivered) || 0,
-      Number(prev.qtyInvoiced) || 0,
+      asNumber(prev.qtyDelivered),
+      asNumber(prev.qtyInvoiced),
     )
     // A removed line is only a trim when nothing was delivered or invoiced.
     if (floor > 0) return false

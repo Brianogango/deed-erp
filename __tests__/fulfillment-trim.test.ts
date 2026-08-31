@@ -14,8 +14,9 @@ describe('trimSaleOrderLinesToDelivered', () => {
     ])
     expect(result.changed).toBe(true)
     expect(result.lines.map(l => l.id)).toEqual(['sec', 'a'])
-    expect(result.lines.find(l => l.id === 'a')?.qty).toBe(2)
-    expect(result.lines.find(l => l.id === 'a')?.lineTotal).toBe(2000)
+    const laptop = result.lines.find(l => l.id === 'a')
+    expect(laptop?.qty).toBe(2)
+    expect(laptop && 'lineTotal' in laptop ? laptop.lineTotal : undefined).toBe(2000)
   })
 
   it('never reduces below already-invoiced qty', () => {
@@ -66,6 +67,20 @@ describe('isFulfillmentQtyTrim', () => {
     expect(isFulfillmentQtyTrim(existing, {
       lines: [{ id: 'a', qty: 2, unitPrice: 1000, taxRate: 16, qtyDelivered: 2 }],
     })).toBe(false)
+  })
+
+  it('accepts Prisma Decimal-shaped money fields', () => {
+    const decimal = (n: number) => ({ toNumber: () => n, toString: () => String(n), valueOf: () => n })
+    expect(isFulfillmentQtyTrim({
+      items: [
+        { id: 'a', description: 'Laptop', qty: 2, unitPrice: decimal(1000), taxRate: decimal(16), lineTotal: decimal(2000), qtyDelivered: 1, qtyInvoiced: 0 },
+      ],
+    }, {
+      fulfillmentTrim: true,
+      lines: [
+        { id: 'a', qty: 1, unitPrice: decimal(1000), taxRate: decimal(16), qtyDelivered: 1, qtyInvoiced: 0 },
+      ],
+    })).toBe(true)
   })
 })
 

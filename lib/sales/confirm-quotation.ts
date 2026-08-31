@@ -40,7 +40,13 @@ function dropEmptySections<T extends ConfirmableLine>(lines: T[]): T[] {
 }
 
 function withLineMoney<T extends ConfirmableLine>(line: T, qty: number): T {
-  const money = calcSaleOrderLineMoney({ ...line, qty })
+  const money = calcSaleOrderLineMoney({
+    lineType: line.lineType,
+    qty,
+    unitPrice: line.unitPrice,
+    taxRate: line.taxRate,
+    discount: line.discount ?? line.discountPercent,
+  })
   const serialIds = Array.isArray(line.serialIds) ? line.serialIds.slice(0, qty) : line.serialIds
   return {
     ...line,
@@ -125,7 +131,7 @@ export function confirmSelectionTotals<T extends ConfirmableLine>(
   lines: readonly T[],
   headerDiscount?: number,
 ) {
-  return calcSaleOrderTotals(lines, { headerDiscount })
+  return calcSaleOrderTotals([...lines], { headerDiscount })
 }
 
 const CONFIRM_ROLES = new Set(['director', 'sales_rep', 'admin_officer'])
