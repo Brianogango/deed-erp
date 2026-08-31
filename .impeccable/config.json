@@ -355,6 +355,33 @@
           "components/modules/AfterSales.tsx"
         ],
         "createdAt": "2026-08-29T08:49:10.969Z"
+      },
+      {
+        "rule": "design-system-font-size",
+        "value": "*",
+        "files": [
+          "components/modules/settings/NotificationOperationsPanel.tsx"
+        ],
+        "createdAt": "2026-08-31T14:21:20.670Z",
+        "reason": "Incumbent notifications console nano labels from PR #583; pagination and message-log polish do not restyle the Overview/Rules type scale"
+      },
+      {
+        "rule": "gray-on-color",
+        "value": "*",
+        "files": [
+          "components/modules/settings/NotificationOperationsPanel.tsx"
+        ],
+        "createdAt": "2026-08-31T14:21:20.702Z",
+        "reason": "Incumbent notifications console; gray-on-color fires on ternary badge class strings, not gray text on colored cards"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "*",
+        "files": [
+          "components/modules/settings/NotificationOperationsPanel.tsx"
+        ],
+        "createdAt": "2026-08-31T14:21:57.525Z",
+        "reason": "Incumbent notifications console palette from PR #583; pagination does not restyle Overview analytics hexes"
       }
     ]
   }

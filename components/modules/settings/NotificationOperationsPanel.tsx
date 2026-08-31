@@ -6,12 +6,12 @@ import {
   faArrowRight,
   faBell,
   faChartLine,
-  faCheck,
+  faChevronLeft,
+  faChevronRight,
   faClock,
   faDownload,
   faEnvelope,
   faFileLines,
-  faFilter,
   faFloppyDisk,
   faGear,
   faMagnifyingGlass,
@@ -306,6 +306,94 @@ function ChannelBadge({ channel }: { channel: string }) {
   )
 }
 
+function pageWindow(current: number, total: number, size = 5) {
+  if (total <= size) return Array.from({ length: total }, (_, index) => index + 1)
+  const half = Math.floor(size / 2)
+  let start = Math.max(1, current - half)
+  const end = Math.min(total, start + size - 1)
+  start = Math.max(1, end - size + 1)
+  return Array.from({ length: end - start + 1 }, (_, index) => start + index)
+}
+
+function ConsolePager({
+  page,
+  pageSize,
+  total,
+  onPageChange,
+}: {
+  page: number
+  pageSize: number
+  total: number
+  onPageChange: (page: number) => void
+}) {
+  const totalPages = Math.max(1, Math.ceil(total / pageSize))
+  const from = total === 0 ? 0 : (page - 1) * pageSize + 1
+  const to = Math.min(page * pageSize, total)
+  const pages = pageWindow(page, totalPages)
+
+  return (
+    <div className="flex flex-col gap-3 border-t border-slate-100 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+      <p className="text-[9px] text-slate-400">
+        Showing {from} to {to} of {total} results
+      </p>
+      <div className="flex items-center gap-1">
+        <button
+          type="button"
+          aria-label="Previous page"
+          onClick={() => onPageChange(Math.max(1, page - 1))}
+          disabled={page <= 1}
+          className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-slate-500 disabled:opacity-30"
+        >
+          <Fa icon={faChevronLeft} className="text-[9px]" />
+        </button>
+        {pages[0] > 1 && (
+          <>
+            <button
+              type="button"
+              onClick={() => onPageChange(1)}
+              className="h-8 min-w-8 rounded-lg border border-slate-200 bg-white px-2 text-[9px] font-bold text-slate-600"
+            >
+              1
+            </button>
+            {pages[0] > 2 && <span className="px-1 text-[9px] text-slate-400">…</span>}
+          </>
+        )}
+        {pages.map(value => (
+          <button
+            key={value}
+            type="button"
+            onClick={() => onPageChange(value)}
+            className={'h-8 min-w-8 rounded-lg border px-2 text-[9px] font-bold ' + (page === value ? 'border-[#00AEEF] bg-[#00AEEF] text-white' : 'border-slate-200 bg-white text-slate-600')}
+          >
+            {value}
+          </button>
+        ))}
+        {pages[pages.length - 1] < totalPages && (
+          <>
+            {pages[pages.length - 1] < totalPages - 1 && <span className="px-1 text-[9px] text-slate-400">…</span>}
+            <button
+              type="button"
+              onClick={() => onPageChange(totalPages)}
+              className={'h-8 min-w-8 rounded-lg border px-2 text-[9px] font-bold ' + (page === totalPages ? 'border-[#00AEEF] bg-[#00AEEF] text-white' : 'border-slate-200 bg-white text-slate-600')}
+            >
+              {totalPages}
+            </button>
+          </>
+        )}
+        <button
+          type="button"
+          aria-label="Next page"
+          onClick={() => onPageChange(Math.min(totalPages, page + 1))}
+          disabled={page >= totalPages}
+          className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-slate-500 disabled:opacity-30"
+        >
+          <Fa icon={faChevronRight} className="text-[9px]" />
+        </button>
+      </div>
+    </div>
+  )
+}
+
 export default function NotificationOperationsPanel({
   showToast,
   onOpenEmailSettings,
@@ -335,6 +423,8 @@ export default function NotificationOperationsPanel({
 
   const [policyQuery, setPolicyQuery] = useState('')
   const [policyModule, setPolicyModule] = useState('all')
+  const [policyPage, setPolicyPage] = useState(1)
+  const policyPageSize = 8
   const [selectedPolicyEvent, setSelectedPolicyEvent] = useState('repair.ready')
   const [savingPreference, setSavingPreference] = useState(false)
 
@@ -470,6 +560,21 @@ export default function NotificationOperationsPanel({
         policy.recipientRoles.some(role => role.toLowerCase().includes(q))
     })
   }, [policies, policyQuery, policyModule])
+
+  const pagedPolicies = useMemo(() => {
+    const start = (policyPage - 1) * policyPageSize
+    return filteredPolicies.slice(start, start + policyPageSize)
+  }, [filteredPolicies, policyPage])
+
+  const policyTotalPages = Math.max(1, Math.ceil(filteredPolicies.length / policyPageSize))
+
+  useEffect(() => {
+    setPolicyPage(1)
+  }, [policyQuery, policyModule])
+
+  useEffect(() => {
+    if (policyPage > policyTotalPages) setPolicyPage(policyTotalPages)
+  }, [policyPage, policyTotalPages])
 
   const selectedPolicy = policies.find(policy => policy.eventType === selectedPolicyEvent) ||
     policies.find(policy => policy.eventType === selectedEvent) ||
@@ -818,26 +923,7 @@ export default function NotificationOperationsPanel({
                 </div>
               )}
 
-              <div className="flex flex-col gap-3 border-t border-slate-100 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-                <p className="text-[9px] text-slate-400">
-                  Showing {pagedDeliveries.length === 0 ? 0 : (page - 1) * pageSize + 1} to {Math.min(page * pageSize, filteredDeliveries.length)} of {filteredDeliveries.length} results
-                </p>
-                <div className="flex items-center gap-1">
-                  <button type="button" onClick={() => setPage(value => Math.max(1, value - 1))} disabled={page <= 1} className="h-8 w-8 rounded-lg border border-slate-200 text-[10px] text-slate-500 disabled:opacity-30">‹</button>
-                  {Array.from({ length: Math.min(totalPages, 5) }, (_, index) => index + 1).map(value => (
-                    <button
-                      key={value}
-                      type="button"
-                      onClick={() => setPage(value)}
-                      className={'h-8 min-w-8 rounded-lg border px-2 text-[9px] font-bold ' + (page === value ? 'border-[#00AEEF] bg-[#00AEEF] text-white' : 'border-slate-200 bg-white text-slate-600')}
-                    >
-                      {value}
-                    </button>
-                  ))}
-                  {totalPages > 5 && <span className="px-1 text-[9px] text-slate-400">… {totalPages}</span>}
-                  <button type="button" onClick={() => setPage(value => Math.min(totalPages, value + 1))} disabled={page >= totalPages} className="h-8 w-8 rounded-lg border border-slate-200 text-[10px] text-slate-500 disabled:opacity-30">›</button>
-                </div>
-              </div>
+              <ConsolePager page={page} pageSize={pageSize} total={filteredDeliveries.length} onPageChange={setPage} />
             </section>
 
             <aside className="space-y-4">
@@ -1101,7 +1187,7 @@ export default function NotificationOperationsPanel({
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {filteredPolicies.map(policy => (
+                    {pagedPolicies.map(policy => (
                       <tr
                         key={policy.eventType}
                         onClick={() => setSelectedPolicyEvent(policy.eventType)}
@@ -1125,8 +1211,8 @@ export default function NotificationOperationsPanel({
               </div>
 
               <div className="divide-y divide-slate-100 lg:hidden">
-                {filteredPolicies.map(policy => (
-                  <button key={policy.eventType} type="button" onClick={() => setSelectedPolicyEvent(policy.eventType)} className="w-full p-4 text-left">
+                {pagedPolicies.map(policy => (
+                  <button key={policy.eventType} type="button" onClick={() => setSelectedPolicyEvent(policy.eventType)} className={'w-full p-4 text-left ' + (selectedPolicyEvent === policy.eventType ? 'bg-cyan-50/50' : '')}>
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
                         <p className="truncate text-[10.5px] font-black text-[#14213D]">{humanize(policy.eventType.split('.').slice(1).join(' '))}</p>
@@ -1138,6 +1224,15 @@ export default function NotificationOperationsPanel({
                   </button>
                 ))}
               </div>
+
+              {filteredPolicies.length === 0 && (
+                <div className="px-5 py-12 text-center">
+                  <p className="text-[12px] font-bold text-slate-600">No automation rules match this view.</p>
+                  <p className="mt-1 text-[10px] text-slate-400">Change the module filter or search term.</p>
+                </div>
+              )}
+
+              <ConsolePager page={policyPage} pageSize={policyPageSize} total={filteredPolicies.length} onPageChange={setPolicyPage} />
             </section>
 
             {selectedPolicy && (
@@ -1191,51 +1286,92 @@ export default function NotificationOperationsPanel({
 
       {activeTab === 'messages' && (
         <div className="space-y-4">
-          <div className="rounded-2xl border border-slate-200 bg-white p-4">
-            <div className="flex items-start gap-3">
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-cyan-50 text-cyan-600"><Fa icon={faBell} /></div>
-              <div>
-                <h3 className="text-[11px] font-black text-[#14213D]">Message Log & Replies</h3>
-                <p className="mt-0.5 text-[9px] leading-relaxed text-slate-400">SMS is two-way and supports replies below. Email, WhatsApp, push and in-app delivery state remains visible in the Overview delivery ledger.</p>
-              </div>
-            </div>
-          </div>
           <SmsMessageCenter showToast={showToast} />
 
-          <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+          <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.03)]">
             <div className="border-b border-slate-100 px-4 py-3">
-              <h3 className="text-[11px] font-black text-[#14213D]">Recent Delivery Exceptions</h3>
+              <h3 className="text-[12px] font-black text-[#14213D]">Recent delivery exceptions</h3>
+              <p className="mt-0.5 text-[9px] text-slate-400">Failed, retrying and dead-letter deliveries from the last {days} days.</p>
             </div>
             {(ops?.recentFailures || []).length === 0 ? (
-              <div className="px-5 py-10 text-center text-[10px] text-slate-400">No failed, retrying or dead-letter deliveries.</div>
+              <div className="px-5 py-12 text-center">
+                <p className="text-[12px] font-bold text-slate-600">No failed, retrying or dead-letter deliveries.</p>
+                <p className="mt-1 text-[10px] text-slate-400">Successful email, WhatsApp, push and in-app traffic stays on Overview.</p>
+              </div>
             ) : (
-              <div className="divide-y divide-slate-100">
-                {(ops?.recentFailures || []).map(row => (
-                  <div key={row.id} className="flex flex-col gap-3 p-4 sm:flex-row sm:items-start sm:justify-between">
-                    <div className="min-w-0">
+              <>
+                <div className="hidden overflow-x-auto lg:block">
+                  <table className="w-full min-w-[760px] border-collapse text-left">
+                    <thead className="bg-slate-50/80">
+                      <tr>
+                        {['Event', 'Channel', 'Status', 'Error', 'Updated', 'Actions'].map(label => (
+                          <th key={label} className="border-b border-slate-100 px-4 py-2.5 text-[8.5px] font-black uppercase tracking-wider text-slate-400">{label}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {(ops?.recentFailures || []).map(row => (
+                        <tr key={row.id} className="align-top transition hover:bg-slate-50/60">
+                          <td className="px-4 py-3">
+                            <p className="max-w-[220px] truncate text-[10.5px] font-bold text-[#14213D]">{row.title}</p>
+                            <p className="mt-0.5 max-w-[220px] truncate font-mono text-[8.5px] text-slate-400">{row.eventType}</p>
+                          </td>
+                          <td className="px-4 py-3"><ChannelBadge channel={row.channel} /></td>
+                          <td className="px-4 py-3">
+                            <span className={'inline-flex rounded-full border px-2 py-1 text-[8.5px] font-black uppercase ' + statusTone(row.status)}>
+                              {row.status.replaceAll('_', ' ')}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3">
+                            {row.error
+                              ? <p className="max-w-sm text-[9px] leading-relaxed text-red-700">{row.error}</p>
+                              : <span className="text-[9px] text-slate-400">—</span>}
+                          </td>
+                          <td className="px-4 py-3 text-[9px] text-slate-500">{formatWhen(row.updatedAt)} · {row.attempts} attempt{row.attempts === 1 ? '' : 's'}</td>
+                          <td className="px-4 py-3">
+                            {row.status === 'dead_letter' ? (
+                              <button
+                                type="button"
+                                onClick={() => void retryDeadLetter(row.id)}
+                                disabled={retryingId === row.id}
+                                className="rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-[9px] font-black text-red-700 disabled:opacity-50"
+                              >
+                                {retryingId === row.id ? 'Queueing…' : 'Retry'}
+                              </button>
+                            ) : (
+                              <span className="text-[9px] text-slate-400">—</span>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="divide-y divide-slate-100 lg:hidden">
+                  {(ops?.recentFailures || []).map(row => (
+                    <div key={row.id} className="p-4">
                       <div className="flex flex-wrap items-center gap-2">
                         <span className={'rounded-full border px-2 py-1 text-[8px] font-black uppercase ' + statusTone(row.status)}>{row.status.replaceAll('_', ' ')}</span>
                         <ChannelBadge channel={row.channel} />
-                        <span className={'rounded-full border px-2 py-1 text-[8px] font-black uppercase ' + severityTone(row.severity)}>{row.severity}</span>
                       </div>
-                      <p className="mt-2 text-[10.5px] font-bold text-slate-700">{row.title}</p>
+                      <p className="mt-2 text-[10.5px] font-bold text-[#14213D]">{row.title}</p>
                       <p className="mt-0.5 font-mono text-[8.5px] text-slate-400">{row.eventType}</p>
-                      {row.error && <p className="mt-2 max-w-4xl rounded-xl bg-red-50 px-3 py-2 text-[9px] leading-relaxed text-red-700">{row.error}</p>}
+                      {row.error && <p className="mt-2 text-[9px] leading-relaxed text-red-700">{row.error}</p>}
                       <p className="mt-2 text-[8.5px] text-slate-400">Updated {formatWhen(row.updatedAt)} · {row.attempts} attempt{row.attempts === 1 ? '' : 's'}</p>
+                      {row.status === 'dead_letter' && (
+                        <button
+                          type="button"
+                          onClick={() => void retryDeadLetter(row.id)}
+                          disabled={retryingId === row.id}
+                          className="mt-3 w-full rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[9px] font-black text-red-700 disabled:opacity-50"
+                        >
+                          {retryingId === row.id ? 'Queueing…' : 'Retry delivery'}
+                        </button>
+                      )}
                     </div>
-                    {row.status === 'dead_letter' && (
-                      <button
-                        type="button"
-                        onClick={() => void retryDeadLetter(row.id)}
-                        disabled={retryingId === row.id}
-                        className="min-h-9 shrink-0 rounded-xl bg-[#1A1F5E] px-4 text-[9px] font-black text-white disabled:opacity-50"
-                      >
-                        {retryingId === row.id ? 'Queueing…' : 'Retry delivery'}
-                      </button>
-                    )}
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              </>
             )}
           </section>
         </div>
