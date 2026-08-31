@@ -32,7 +32,7 @@ function requestedChannels(params: any, defaults: NotificationChannel[]): Notifi
 function roleAllowed(role: string, type: string) {
   const rules: Record<string, string[]> = {
     repair: ['director', 'admin_officer', 'technical_lead', 'technician'],
-    quote: ['director', 'admin_officer', 'technical_lead', 'sales_rep'],
+    quote: ['director', 'admin_officer', 'technical_lead', 'technician', 'sales_rep'],
     procurement: ['director', 'admin_officer', 'technical_lead', 'technician'],
     general: ['director', 'admin_officer', 'super_admin'],
   }
