@@ -2,6 +2,7 @@
 
 import { FormEvent, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
+import OtpField from '@/components/auth/OtpField'
 
 type Phase = 'credentials' | 'enroll' | 'verify'
 
@@ -152,19 +153,14 @@ export default function SecureLogin() {
                 )}
               </div>
             )}
-            <label className="block text-sm font-semibold text-slate-700">
-              Six-digit authenticator code
-              <input
-                autoFocus
-                inputMode="numeric"
-                autoComplete="one-time-code"
-                pattern="[0-9]*"
-                maxLength={6}
-                value={code}
-                onChange={event => setCode(event.target.value.replace(/\D/g, '').slice(0, 6))}
-                className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-center font-mono text-2xl tracking-[0.35em] outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-200"
-              />
-            </label>
+            <OtpField
+              id="secure-mfa-code"
+              value={code}
+              onChange={setCode}
+              verifying={pending}
+              disabled={pending}
+              label="Authenticator PIN"
+            />
             <button disabled={pending || code.length !== 6} className="w-full rounded-xl bg-slate-900 px-4 py-3 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50">
               {pending ? 'Verifying…' : phase === 'enroll' ? 'Enable MFA and sign in' : 'Verify and sign in'}
             </button>

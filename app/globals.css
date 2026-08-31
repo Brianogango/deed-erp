@@ -31363,3 +31363,321 @@ body:has(.client-repair-portal) {
     font-size: 0.6rem;
   }
 }
+
+
+/* ==========================================================================
+   MFA / OTP field — branded segmented security code interaction
+   ========================================================================== */
+
+.otp-field {
+  width: 100%;
+  min-width: 0;
+}
+
+.otp-field__meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.55rem;
+}
+
+.otp-field__label {
+  color: #475569;
+  font-size: 0.75rem;
+  font-weight: 750;
+  letter-spacing: 0.01em;
+}
+
+.otp-field__status {
+  display: inline-flex;
+  min-height: 1.5rem;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #e2e8f0;
+  border-radius: 999px;
+  padding: 0.2rem 0.55rem;
+  background: rgba(248, 250, 252, 0.9);
+  color: #94a3b8;
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  transition: all 180ms ease;
+}
+
+.otp-field__status--ready {
+  border-color: rgba(16, 185, 129, 0.24);
+  background: rgba(16, 185, 129, 0.08);
+  color: #047857;
+}
+
+.otp-field__frame {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  border-radius: 1rem;
+}
+
+.otp-field__native-input {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: transparent;
+  color: transparent;
+  caret-color: transparent;
+  font-size: 16px;
+  opacity: 0.01;
+  outline: none;
+}
+
+.otp-field__native-input:disabled {
+  cursor: wait;
+}
+
+.otp-field__cells {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: clamp(0.34rem, 1.7vw, 0.55rem);
+  width: 100%;
+}
+
+.otp-field__cell {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  height: 3.25rem;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border: 1px solid #dbe4ef;
+  border-radius: 0.9rem;
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.98), rgba(248,250,252,0.96));
+  color: #0f172a;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.035);
+  transition:
+    border-color 180ms ease,
+    background-color 180ms ease,
+    box-shadow 180ms ease,
+    transform 150ms ease;
+}
+
+.otp-field__cell::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(135deg, rgba(0,174,239,0.06), transparent 55%);
+  opacity: 0;
+  transition: opacity 180ms ease;
+}
+
+.otp-field__cell--filled {
+  border-color: rgba(15, 69, 134, 0.2);
+  background: #fff;
+  box-shadow: 0 5px 15px rgba(15, 42, 86, 0.055);
+}
+
+.otp-field__cell--filled::before {
+  opacity: 1;
+}
+
+.otp-field__cell--active {
+  z-index: 2;
+  border-color: #00aeef;
+  background: #fff;
+  box-shadow:
+    0 0 0 3px rgba(0, 174, 239, 0.12),
+    0 8px 24px rgba(0, 102, 204, 0.12);
+  transform: translateY(-1px);
+  animation: otpCellPulse 1.5s ease-in-out infinite;
+}
+
+.otp-field__digit,
+.otp-field__placeholder {
+  position: relative;
+  z-index: 1;
+  display: inline-block;
+  line-height: 1;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: clamp(1.2rem, 3vw, 1.45rem);
+  font-weight: 850;
+  font-variant-numeric: tabular-nums;
+}
+
+.otp-field__digit {
+  color: #102a56;
+  animation: otpDigitPop 220ms cubic-bezier(.2,.9,.25,1.35) both;
+}
+
+.otp-field__placeholder {
+  color: #d5dde8;
+  font-size: 0.9rem;
+  transform: translateY(-1px);
+}
+
+.otp-field__cursor {
+  position: absolute;
+  right: 0.55rem;
+  bottom: 0.55rem;
+  left: 0.55rem;
+  height: 2px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #0066cc, #00aeef);
+  box-shadow: 0 0 10px rgba(0,174,239,0.5);
+  animation: otpCursorBlink 950ms ease-in-out infinite;
+}
+
+.otp-field__progress {
+  height: 3px;
+  overflow: hidden;
+  margin-top: 0.6rem;
+  border-radius: 999px;
+  background: #edf2f7;
+}
+
+.otp-field__progress > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #102a56 0%, #0066cc 52%, #00aeef 100%);
+  box-shadow: 0 0 10px rgba(0,174,239,0.24);
+  transition: width 240ms cubic-bezier(.2,.75,.25,1);
+}
+
+.otp-field__hint {
+  display: flex;
+  align-items: center;
+  gap: 0.42rem;
+  margin-top: 0.55rem;
+  color: #94a3b8;
+  font-size: 0.65rem;
+  line-height: 1.35;
+}
+
+.otp-field__hint-dot {
+  width: 0.4rem;
+  height: 0.4rem;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: #00aeef;
+  box-shadow: 0 0 0 4px rgba(0,174,239,0.08);
+}
+
+.otp-field--complete .otp-field__cell {
+  border-color: rgba(16, 185, 129, 0.24);
+  box-shadow: 0 5px 16px rgba(16, 185, 129, 0.055);
+}
+
+.otp-field--complete .otp-field__progress > span {
+  background: linear-gradient(90deg, #059669, #10b981);
+}
+
+.otp-field--complete:not(.otp-field--verifying) .otp-field__frame {
+  animation: otpCompleteGlow 420ms ease-out both;
+}
+
+.otp-field__scan {
+  position: absolute;
+  z-index: 10;
+  top: 0;
+  bottom: 0;
+  width: 34%;
+  pointer-events: none;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(0,174,239,0.08),
+    rgba(255,255,255,0.55),
+    rgba(0,174,239,0.08),
+    transparent
+  );
+  filter: blur(0.5px);
+  animation: otpScan 1.15s ease-in-out infinite;
+}
+
+.otp-field--verifying .otp-field__cell {
+  border-color: rgba(0, 174, 239, 0.28);
+  background: rgba(248, 252, 255, 0.98);
+}
+
+@keyframes otpDigitPop {
+  0% {
+    opacity: 0;
+    transform: translateY(5px) scale(.78);
+  }
+  65% {
+    opacity: 1;
+    transform: translateY(-1px) scale(1.08);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes otpCellPulse {
+  0%, 100% {
+    box-shadow:
+      0 0 0 3px rgba(0, 174, 239, 0.1),
+      0 8px 24px rgba(0, 102, 204, 0.1);
+  }
+  50% {
+    box-shadow:
+      0 0 0 4px rgba(0, 174, 239, 0.16),
+      0 10px 28px rgba(0, 102, 204, 0.16);
+  }
+}
+
+@keyframes otpCursorBlink {
+  0%, 100% { opacity: .35; transform: scaleX(.72); }
+  50% { opacity: 1; transform: scaleX(1); }
+}
+
+@keyframes otpCompleteGlow {
+  0% { transform: scale(.994); }
+  45% { transform: scale(1.006); filter: drop-shadow(0 0 10px rgba(16,185,129,.10)); }
+  100% { transform: scale(1); filter: none; }
+}
+
+@keyframes otpScan {
+  0% { left: -42%; opacity: 0; }
+  20% { opacity: 1; }
+  80% { opacity: 1; }
+  100% { left: 108%; opacity: 0; }
+}
+
+@media (max-width: 420px) {
+  .otp-field__cells {
+    gap: 0.32rem;
+  }
+
+  .otp-field__cell {
+    height: 3rem;
+    border-radius: 0.76rem;
+  }
+
+  .otp-field__digit {
+    font-size: 1.16rem;
+  }
+
+  .otp-field__cursor {
+    right: 0.42rem;
+    bottom: 0.45rem;
+    left: 0.42rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .otp-field__cell--active,
+  .otp-field__digit,
+  .otp-field--complete:not(.otp-field--verifying) .otp-field__frame,
+  .otp-field__scan,
+  .otp-field__cursor {
+    animation: none !important;
+  }
+}
