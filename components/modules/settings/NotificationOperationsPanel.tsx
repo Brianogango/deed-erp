@@ -569,12 +569,8 @@ export default function NotificationOperationsPanel({
   const policyTotalPages = Math.max(1, Math.ceil(filteredPolicies.length / policyPageSize))
 
   useEffect(() => {
-    setPolicyPage(1)
-  }, [policyQuery, policyModule])
-
-  useEffect(() => {
-    if (policyPage > policyTotalPages) setPolicyPage(policyTotalPages)
-  }, [policyPage, policyTotalPages])
+    setPolicyPage(current => Math.min(current, policyTotalPages))
+  }, [policyTotalPages])
 
   const selectedPolicy = policies.find(policy => policy.eventType === selectedPolicyEvent) ||
     policies.find(policy => policy.eventType === selectedEvent) ||
@@ -1165,9 +1161,9 @@ export default function NotificationOperationsPanel({
                 <div className="flex flex-col gap-2 sm:flex-row">
                   <div className="relative">
                     <Fa icon={faMagnifyingGlass} className="absolute left-3 top-1/2 -translate-y-1/2 text-[9px] text-slate-400" />
-                    <input value={policyQuery} onChange={event => setPolicyQuery(event.target.value)} placeholder="Search rules..." className="h-9 rounded-xl border border-slate-200 pl-8 pr-3 text-[9.5px] outline-none focus:border-cyan-400" />
+                    <input value={policyQuery} onChange={event => { setPolicyQuery(event.target.value); setPolicyPage(1) }} placeholder="Search rules..." className="h-9 rounded-xl border border-slate-200 pl-8 pr-3 text-[9.5px] outline-none focus:border-cyan-400" />
                   </div>
-                  <select value={policyModule} onChange={event => setPolicyModule(event.target.value)} className="h-9 rounded-xl border border-slate-200 bg-white px-3 text-[9.5px] font-semibold text-slate-600">
+                  <select value={policyModule} onChange={event => { setPolicyModule(event.target.value); setPolicyPage(1) }} className="h-9 rounded-xl border border-slate-200 bg-white px-3 text-[9.5px] font-semibold text-slate-600">
                     <option value="all">All modules</option>
                     {modules.map(module => <option key={module} value={module}>{humanize(module)}</option>)}
                   </select>
