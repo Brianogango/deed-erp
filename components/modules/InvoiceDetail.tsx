@@ -26,6 +26,7 @@ import { OutboundReleasePanel, OrcStatusBadge } from './OutboundReleasePanel'
 import { downloadInvoicePdf, invoicePdfBase64 } from './invoice-pdf'
 import PaymentDetailsPicker from '@/components/payment/PaymentDetailsPicker'
 import DocumentEmailSendHistory from '@/components/email/DocumentEmailSendHistory'
+import EntityEmailThread from '@/components/email/EntityEmailThread'
 import { ScheduleInvoiceDeliveryModal } from './ScheduleInvoiceDeliveryModal'
 import { canScheduleInvoiceDelivery, findInvoiceDeliveryJob } from '@/lib/invoice-delivery-job'
 import { financeInvoiceListPath } from '@/lib/finance-invoice'
@@ -945,6 +946,15 @@ export default function InvoiceDetail() {
                     refreshKey={emailHistoryKey}
                     title="Invoice email history"
                   />
+                  <div className="mt-3">
+                    <EntityEmailThread
+                      entityType="invoice"
+                      entityId={invoice.id}
+                      title="Invoice Email Conversation"
+                      showToast={showToast}
+                      compact
+                    />
+                  </div>
                 )}
               </div>
             )}
