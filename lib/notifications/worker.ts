@@ -12,6 +12,7 @@ import {
   severityAllowed,
 } from './preferences'
 import { sendProviderDelivery } from './providers'
+import { isPausedOutboundChannel } from './outbound-pause'
 import { resolveSmsProvider } from './sms-provider'
 import { isSmsPhoneOptedOut, recordOutboundSms } from './sms-conversations'
 import { publishNotificationEvent } from './service'
@@ -72,6 +73,8 @@ async function createDelivery(input: {
   destination?: string | null
   endpointId?: string | null
 }) {
+  if (isPausedOutboundChannel(input.channel)) return null
+
   const destinationKey = input.endpointId || input.destination || input.userId || 'in-app'
   const idempotencyKey = `${input.eventId}:${input.channel}:${hash(destinationKey)}`
   const status = input.channel === 'in_app' ? 'delivered' : 'queued'
@@ -276,6 +279,7 @@ async function claimDeliveries(limit: number): Promise<Array<{ id: string }>> {
 }
 
 async function maybeCreateSmsFallback(delivery: any) {
+  if (isPausedOutboundChannel('sms')) return
   const policy = defaultNotificationPolicy(delivery.event.eventType)
   if (delivery.channel !== 'whatsapp' || !policy.fallbackSms || !delivery.destination) return
   await createDelivery({
@@ -322,6 +326,18 @@ export async function dispatchPendingNotificationDeliveries(limit = 100) {
       include: { event: true },
     })
     if (!delivery) continue
+
+    if (isPausedOutboundChannel(delivery.channel)) {
+      await prisma.notificationDelivery.update({
+        where: { id: delivery.id },
+        data: {
+          status: 'suppressed',
+          failedAt: null,
+          lastError: 'paused_email_sms_by_operator',
+        },
+      })
+      continue
+    }
 
     if (delivery.channel === 'sms' && delivery.destination) {
       const optedOut = await isSmsPhoneOptedOut(delivery.destination).catch(() => false)
