@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import SmsMessageCenter from './SmsMessageCenter'
+import EmailMessageCenter from './EmailMessageCenter'
 
 type NotificationOps = {
   since: string
@@ -175,6 +176,8 @@ export default function NotificationOperationsPanel({
           </div>
         </div>
       </section>
+
+      <EmailMessageCenter showToast={showToast} />
 
       <SmsMessageCenter showToast={showToast} />
 
