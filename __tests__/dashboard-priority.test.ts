@@ -117,14 +117,14 @@ describe('dashboard role + per-user module gating', () => {
     expect(dashboardSectionsForUser(user('director', ['dashboard'])).leaveApprovals).toBe(false)
   })
 
-  it('filters sales-rep dashboard orders and rep rows to the signed-in user', () => {
+  it('shows every sale order on a sales-rep dashboard but still scopes the rep picker', () => {
     const salesRep = user('sales_rep', ['sales'], 'rep-1')
     const orders = [
       { id: 'mine', createdByUserId: 'rep-1' },
       { id: 'other', createdByUserId: 'rep-2' },
       { id: 'assigned', createdByUserId: 'rep-2', salespersonId: 'rep-1' },
     ]
-    expect(visibleDashboardSalesOrders(salesRep, orders).map(order => order.id)).toEqual(['mine', 'assigned'])
+    expect(visibleDashboardSalesOrders(salesRep, orders).map(order => order.id)).toEqual(['mine', 'other', 'assigned'])
     expect(visibleDashboardRepUsers(salesRep, [{ id: 'rep-1' }, { id: 'rep-2' }])).toEqual([{ id: 'rep-1' }])
     expect(visibleDashboardSalesOrders(user('sales_rep', ['dashboard'], 'rep-1'), orders)).toEqual([])
   })

@@ -455,7 +455,7 @@ describe('GET /api/store — collaborative high-risk content filtering', () => {
     return new NR(`http://localhost/api/store?keys=${keys}`, { method: 'GET' })
   }
 
-  it('serves a sales rep only their own sale orders', async () => {
+  it('serves a sales rep every sale order', async () => {
     mockGetSession.mockResolvedValue(salesSession)
     mockLoadAppState.mockResolvedValue({
       deed_saleOrders: [
@@ -464,7 +464,7 @@ describe('GET /api/store — collaborative high-risk content filtering', () => {
       ],
     })
     const body = await (await STORE_GET(getReq('deed_saleOrders'))).json()
-    expect(body.deed_saleOrders.map((order: any) => order.id)).toEqual(['mine'])
+    expect(body.deed_saleOrders.map((order: any) => order.id)).toEqual(['mine', 'other'])
   })
 
   it('serves a technician only assigned repairs', async () => {
