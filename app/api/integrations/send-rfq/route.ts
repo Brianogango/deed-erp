@@ -64,6 +64,7 @@ export async function POST(request: Request) {
       to,
       cc: parseEmailList(payload.cc),
       subject: content.subject,
+      body: content.text,
       channel: 'email' as const,
       kind: 'initial' as const,
       sentById: session.user.id,
