@@ -288,6 +288,12 @@ export default function RepairDetailView() {
 
   const hasProc      = (r.procurementRequests?.length ?? 0) > 0
   const hasPartsUsed = (r.partsUsed?.length ?? 0) > 0
+  const diagnosisSectionTarget = hasDiagnosis ? 'repair-diagnosis' : 'repair-diagnosis-financials'
+  const partsSectionTarget = hasProc || canProcure
+    ? 'repair-parts'
+    : hasPartsUsed
+      ? 'repair-parts-used'
+      : null
 
   const nextActionHint = pendingOutsourceJob ? `Device is at ${pendingOutsourceJob.vendorName} via ${pendingOutsourceJob.ref}. Mark it returned in Outsource before continuing.`
     : isQuoteDeclinedReopenable(r.status) ? 'Customer declined this quote — revise and re-send, or return the device'
@@ -406,8 +412,14 @@ export default function RepairDetailView() {
   const repairAgeDays = Number.isFinite(intakeTimestamp)
     ? Math.max(0, Math.floor((Date.now() - intakeTimestamp) / 86400000))
     : 0
-  const scrollToRepairSection = (id: string) => {
-    document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  const scrollToRepairSection = (id: string | null) => {
+    if (!id) return
+    const target = document.getElementById(id)
+    if (!target) {
+      showToast('This repair section is not available yet', 'info')
+      return
+    }
+    target.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }
 
   return (
@@ -672,11 +684,13 @@ export default function RepairDetailView() {
 
       <nav className="repair-detail__tabs" aria-label="Repair record sections">
         <button className="repair-detail__tab repair-detail__tab--primary" type="button" onClick={() => scrollToRepairSection('repair-overview')}>Overview</button>
-        <button className="repair-detail__tab repair-detail__tab--primary" type="button" onClick={() => scrollToRepairSection('repair-diagnosis')}>
+        <button className="repair-detail__tab repair-detail__tab--primary" type="button" onClick={() => scrollToRepairSection(diagnosisSectionTarget)}>
           <span className="repair-tab-label--full">Diagnosis &amp; quote</span>
           <span className="repair-tab-label--compact">Quote</span>
         </button>
-        <button className="repair-detail__tab repair-detail__tab--primary" type="button" onClick={() => scrollToRepairSection('repair-parts')}>Parts</button>
+        {partsSectionTarget && (
+          <button className="repair-detail__tab repair-detail__tab--primary" type="button" onClick={() => scrollToRepairSection(partsSectionTarget)}>Parts</button>
+        )}
         <button className="repair-detail__tab repair-detail__tab--secondary" type="button" onClick={() => scrollToRepairSection('repair-qc')}>Quality check</button>
         <button className="repair-detail__tab repair-detail__tab--secondary" type="button" onClick={() => scrollToRepairSection('repair-delivery')}>Delivery</button>
         <button className="repair-detail__tab repair-detail__tab--secondary" type="button" onClick={() => scrollToRepairSection('repair-history')}>Messages &amp; history</button>
@@ -949,11 +963,10 @@ export default function RepairDetailView() {
 
             {/* ── Diagnosis & Technical Assessment ── */}
             {hasDiagnosis && (
-              <SectionCard delay={200}>
+              <SectionCard delay={200} id="repair-diagnosis">
                 <SectionHeader
                   icon={faStethoscope}
                   iconBg="bg-blue-600"
-                  id="repair-diagnosis"
               title="Diagnosis & Technical Assessment"
                   subtitle={
                     r.diagnosis?.diagnosedDate
@@ -1166,6 +1179,63 @@ export default function RepairDetailView() {
               </SectionCard>
             )}
 
+            {/* Quality Check — permanent target for the section tab */}
+            <SectionCard delay={65} id="repair-qc">
+              <SectionHeader
+                icon={faShieldAlt}
+                iconBg={r.qcPassedDate ? 'bg-emerald-600' : showQcFailPanel ? 'bg-amber-600' : 'bg-slate-700'}
+                title="Quality Check"
+                subtitle={
+                  r.qcPassedDate
+                    ? `Passed ${new Date(r.qcPassedDate).toLocaleDateString('en-KE', { day: 'numeric', month: 'short', year: 'numeric' })}`
+                    : showQcFailPanel
+                      ? 'Rework required before release'
+                      : r.status === 'qc'
+                        ? 'Awaiting QC execution'
+                        : 'QC has not been completed'
+                }
+                action={
+                  canPerformQA
+                    ? (
+                      <button type="button" className="btn-primary text-[10px]" onClick={() => setShowQAModal(true)}>
+                        Run QC
+                      </button>
+                    )
+                    : null
+                }
+              />
+              <div className="px-4 sm:px-6 py-4 sm:py-5">
+                <div className="grid grid-cols-3 gap-2 sm:gap-3">
+                  <div className="rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] p-3">
+                    <p className="text-[9px] font-black uppercase tracking-widest text-[var(--text-4)]">Checks</p>
+                    <p className="mt-1 text-lg font-black text-[var(--text-1)]">{r.qcItems?.length ?? 0}</p>
+                  </div>
+                  <div className="rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] p-3">
+                    <p className="text-[9px] font-black uppercase tracking-widest text-[var(--text-4)]">Passed</p>
+                    <p className="mt-1 text-lg font-black text-emerald-600">{(r.qcItems ?? []).filter(item => item.testedDate && item.passed).length}</p>
+                  </div>
+                  <div className="rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] p-3">
+                    <p className="text-[9px] font-black uppercase tracking-widest text-[var(--text-4)]">Failed</p>
+                    <p className="mt-1 text-lg font-black text-amber-600">{failedQcItems.length}</p>
+                  </div>
+                </div>
+                {r.qcPassedDate ? (
+                  <div className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 px-3.5 py-2.5">
+                    <p className="text-[10px] font-black uppercase tracking-wider text-emerald-700">QC passed</p>
+                    <p className="mt-0.5 text-[11px] font-semibold text-emerald-900">
+                      {r.qcApprovedBy ? `Approved by ${r.qcApprovedBy}` : 'Quality checks completed successfully'}
+                    </p>
+                  </div>
+                ) : (
+                  <p className="mt-3 text-[10px] font-semibold text-[var(--text-3)]">
+                    {r.status === 'qc'
+                      ? 'This repair is ready for an independent quality check.'
+                      : 'QC becomes actionable when the repair reaches the quality-check stage.'}
+                  </p>
+                )}
+              </div>
+            </SectionCard>
+
             {/* ── QC Fail Results (visible to tech after rework) ── */}
             {showQcFailPanel && (
               <SectionCard delay={70}>
@@ -1206,7 +1276,6 @@ export default function RepairDetailView() {
                 <SectionHeader
                   icon={faShieldAlt}
                   iconBg="bg-emerald-500"
-                  id="repair-qc"
               title="QC Report File"
                   subtitle="Lightweight attachment visible to the customer portal"
                   action={
@@ -1240,7 +1309,7 @@ export default function RepairDetailView() {
 
             {/* ── Parts Used in Repair ── */}
             {hasPartsUsed && (
-              <SectionCard delay={260}>
+              <SectionCard delay={260} id="repair-parts-used">
                 <SectionHeader
                   icon={faBoxOpen}
                   iconBg="bg-orange-500"
@@ -1340,7 +1409,52 @@ export default function RepairDetailView() {
 
           {/* ═══ Right Column ═══ */}
           <aside className="repair-detail__aside lg:col-span-4">
-            <span id="repair-delivery" className="sr-only" aria-hidden="true" />
+            <SectionCard delay={80} id="repair-delivery">
+              <SectionHeader
+                icon={faTruck}
+                iconBg={r.status === 'delivered' || r.status === 'collected' || r.status === 'closed' ? 'bg-emerald-600' : 'bg-teal-600'}
+                title="Delivery & Handover"
+                subtitle={
+                  r.status === 'delivered' || r.status === 'collected' || r.status === 'closed'
+                    ? 'Handover completed'
+                    : r.deliveryMethod === 'delivery'
+                      ? 'Rider delivery'
+                      : 'Customer collection'
+                }
+                action={
+                  canScheduleDelivery
+                    ? <button type="button" className="btn-outline text-[10px]" onClick={() => setShowDeliveryModal(true)}>Schedule</button>
+                    : canMarkCollected
+                      ? <button type="button" className="btn-outline text-[10px]" onClick={() => setShowMarkDeliveredConfirm(true)}>Mark collected</button>
+                      : null
+                }
+              />
+              <div className="px-4 sm:px-6 py-4 sm:py-5 space-y-3">
+                <div className="grid grid-cols-2 gap-2.5">
+                  <InfoField label="Method" value={r.deliveryMethod === 'delivery' ? 'Rider delivery' : 'Customer collection'} />
+                  <InfoField label="Status" value={STATUS_LABELS[r.status as keyof typeof STATUS_LABELS] ?? r.status.replace(/_/g, ' ')} />
+                  <InfoField
+                    label="Scheduled"
+                    value={r.deliveryScheduledDate ? new Date(r.deliveryScheduledDate).toLocaleDateString('en-KE', { day: 'numeric', month: 'short', year: 'numeric' }) : 'Not scheduled'}
+                  />
+                  <InfoField
+                    label={r.deliveryMethod === 'delivery' ? 'Rider' : 'Recipient'}
+                    value={r.deliveryMethod === 'delivery' ? r.deliveryRiderName : r.deliveryRecipient}
+                  />
+                </div>
+                {r.deliveryJobId && (
+                  <div className="rounded-xl border border-teal-200 bg-teal-50 px-3 py-2.5">
+                    <p className="text-[9px] font-black uppercase tracking-widest text-teal-700">Delivery job</p>
+                    <p className="mt-0.5 text-[11px] font-mono font-bold text-teal-900">{r.deliveryJobId}</p>
+                  </div>
+                )}
+                {r.deliveryActualDate && (
+                  <p className="text-[10px] font-semibold text-[var(--text-3)]">
+                    Handed over {new Date(r.deliveryActualDate).toLocaleString('en-KE', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                  </p>
+                )}
+              </div>
+            </SectionCard>
 
             {/* Follow-up Portal */}
             <div className="relative rounded-xl sm:rounded-2xl overflow-hidden shadow-sm border" style={{ borderColor: 'var(--border)', background: 'var(--navy)' }}>
@@ -1380,8 +1494,8 @@ export default function RepairDetailView() {
             </div>
 
             {/* Financials */}
-            <SectionCard delay={100}>
-              <SectionHeader id="repair-diagnosis-financials" icon={faQuoteRight} iconBg="bg-emerald-600" title="Financials" subtitle="Quote & charges" />
+            <SectionCard delay={100} id="repair-diagnosis-financials">
+              <SectionHeader icon={faQuoteRight} iconBg="bg-emerald-600" title="Financials" subtitle="Quote & charges" />
               <div className="px-4 sm:px-6 py-4 sm:py-5">
                 {r.quote ? (
                   <div className="space-y-3">
@@ -1567,11 +1681,10 @@ export default function RepairDetailView() {
 
             {/* Parts & Procurement */}
             {hasProc ? (
-              <SectionCard delay={180}>
+              <SectionCard delay={180} id="repair-parts">
                 <SectionHeader
                   icon={faBoxOpen}
                   iconBg="bg-orange-500"
-                  id="repair-parts"
               title="Parts & Procurement"
                   subtitle={`${r.procurementRequests.length} request${r.procurementRequests.length !== 1 ? 's' : ''}`}
                   action={
@@ -1625,7 +1738,7 @@ export default function RepairDetailView() {
                 </div>
               </SectionCard>
             ) : canProcure ? (
-              <SectionCard delay={180}>
+              <SectionCard delay={180} id="repair-parts">
                 <div className="px-4 sm:px-6 py-5 flex flex-col items-center gap-3">
                   <div className="w-11 h-11 rounded-2xl bg-orange-50 border border-orange-200 flex items-center justify-center">
                     <Fa icon={faBoxOpen} className="text-orange-400 text-base" />
@@ -1642,8 +1755,6 @@ export default function RepairDetailView() {
                 </div>
               </SectionCard>
             ) : null}
-
-            <span id="repair-history" className="sr-only" aria-hidden="true" />
 
             {/* Work Notes */}
             <SectionCard delay={160}>
@@ -1727,17 +1838,19 @@ export default function RepairDetailView() {
               </div>
             </SectionCard>
 
-            {/* Customer Chat */}
-            <MessageThread repairRef={r.ref} staffName={currentUser?.name || 'Staff'} />
+            <div id="repair-history" className="repair-detail__history-section space-y-4">
+              {/* Customer Chat */}
+              <MessageThread repairRef={r.ref} staffName={currentUser?.name || 'Staff'} />
 
-            {/* Internal staff notes / activities (DocumentMessage) */}
-            <Chatter
-              model="repair"
-              recordId={r.id}
-              staffName={currentUser?.name || 'Staff'}
-              title="Internal Notes & Activities"
-              compact
-            />
+              {/* Internal staff notes / activities (DocumentMessage) */}
+              <Chatter
+                model="repair"
+                recordId={r.id}
+                staffName={currentUser?.name || 'Staff'}
+                title="Internal Notes & Activities"
+                compact
+              />
+            </div>
 
 
           </aside>
