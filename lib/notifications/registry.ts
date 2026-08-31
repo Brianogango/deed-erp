@@ -96,6 +96,7 @@ export const NOTIFICATION_POLICIES: Record<string, NotificationPolicy> = {
 
   'system.escalation': POLICY(['in_app', 'push', 'email'], 'critical', { requiresAcknowledgement: true, mandatory: true }),
   'system.manual_message': POLICY(['email'], 'info', { emailMode: 'manual' }),
+  'system.email_reply': POLICY(['email'], 'info', { emailMode: 'manual' }),
   'system.sms_reply': POLICY(['sms'], 'info'),
   'system.security': POLICY(['in_app', 'push', 'email'], 'critical', { recipientRoles: ['director'], requiresAcknowledgement: true, escalationMinutes: 30, mandatory: true }),
   'system.integration_failure': POLICY(['in_app', 'email'], 'critical', { recipientRoles: ['director'], requiresAcknowledgement: true, escalationMinutes: 60, mandatory: true }),
