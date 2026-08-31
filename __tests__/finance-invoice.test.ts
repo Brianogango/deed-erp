@@ -9,6 +9,7 @@ import {
   enforcePostedInvoiceImmutability,
   financeInvoicePath,
   financeInvoiceListPath,
+  parseFinanceListPage,
   shouldApplyInvoiceEditQuery,
   resolveInvoiceLineTaxCategory,
   inferInvoiceLineTaxCategory,
@@ -308,10 +309,25 @@ describe('invoice editor navigation', () => {
     expect(financeInvoicePath('inv-1')).toBe('/finance/invoices/inv-1')
   })
 
+  it('carries the list page on the invoice URL so Back can restore it', () => {
+    expect(financeInvoicePath('inv-1', { listPage: 3 })).toBe('/finance/invoices/inv-1?listPage=3')
+    expect(financeInvoicePath('inv-1', { listPage: 1 })).toBe('/finance/invoices/inv-1')
+    expect(financeInvoicePath('inv-1', { listPage: 'nope' })).toBe('/finance/invoices/inv-1')
+  })
+
   it('returns customer invoices and vendor bills to their own lists', () => {
     expect(financeInvoiceListPath('customer_invoice')).toBe('/finance?tab=invoices')
     expect(financeInvoiceListPath('vendor_bill')).toBe('/finance?tab=bills')
     expect(financeInvoiceListPath()).toBe('/finance?tab=invoices')
+  })
+
+  it('keeps the invoices list on the same page after opening a record', () => {
+    expect(financeInvoiceListPath('customer_invoice', { page: 3 })).toBe('/finance?tab=invoices&page=3')
+    expect(financeInvoiceListPath('vendor_bill', { page: 2 })).toBe('/finance?tab=bills&page=2')
+    expect(financeInvoiceListPath('customer_invoice', { page: 1 })).toBe('/finance?tab=invoices')
+    expect(parseFinanceListPage('3')).toBe(3)
+    expect(parseFinanceListPage(0)).toBe(1)
+    expect(parseFinanceListPage(undefined)).toBe(1)
   })
 
   it('applies a new edit query once, then ignores it until the id changes', () => {

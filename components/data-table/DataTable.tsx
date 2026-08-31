@@ -72,6 +72,12 @@ export interface DataTableProps<T> {
    */
   clientSearch?: boolean
   perPage?: number
+  /**
+   * Controlled 1-based page. Omit to keep page in local state.
+   * Pair with `onPageChange` so a parent can persist page in the URL.
+   */
+  page?: number
+  onPageChange?: (page: number) => void
 
   primaryFilters?: PrimaryFilterConfig[]
   advancedFilters?: ReactNode
@@ -133,6 +139,8 @@ export default function DataTable<T>({
   onSearchChange,
   clientSearch = true,
   perPage = 20,
+  page: pageProp,
+  onPageChange,
   primaryFilters,
   advancedFilters,
   activeFilters,
@@ -176,7 +184,13 @@ export default function DataTable<T>({
 
   const [filterRules, setFilterRules] = useState<FilterRule[]>([])
   const [filtersOpen, setFiltersOpen] = useState(false)
-  const [page, setPage] = useState(1)
+  const [internalPage, setInternalPage] = useState(1)
+  const page = pageProp ?? internalPage
+  const goToPage = (next: number) => {
+    const nextPage = Math.max(1, Math.floor(Number(next)) || 1)
+    if (pageProp === undefined) setInternalPage(nextPage)
+    onPageChange?.(nextPage)
+  }
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set())
   const [sort, setSort] = useState<TableSortState | null>(defaultSort)
 
@@ -242,13 +256,24 @@ export default function DataTable<T>({
 
   const totalPages = Math.max(1, Math.ceil(filteredRows.length / perPage))
   useEffect(() => {
-    if (page > totalPages) setPage(totalPages)
-  }, [page, totalPages])
+    if (page <= totalPages) return
+    // Controlled restore (e.g. /finance?tab=invoices&page=3) can mount before
+    // rows hydrate. Clamping to 1 here would wipe the URL page.
+    if (filteredRows.length === 0 && pageProp != null) return
+    goToPage(totalPages)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page, totalPages, filteredRows.length, pageProp])
 
-  // Reset to page 1 when sort changes so the new first rows are visible.
+  // Reset to page 1 when the user changes sort — not on mount, and not when
+  // React Strict Mode re-runs the same effect (that was wiping a restored page).
+  const sortKey = `${sort?.key ?? ''}:${sort?.direction ?? ''}`
+  const prevSortKey = useRef(sortKey)
   useEffect(() => {
-    setPage(1)
-  }, [sort?.key, sort?.direction])
+    if (prevSortKey.current === sortKey) return
+    prevSortKey.current = sortKey
+    goToPage(1)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sortKey])
 
   const pageRows = useMemo(() => {
     const start = (page - 1) * perPage
@@ -272,7 +297,7 @@ export default function DataTable<T>({
   function applyView(view: SavedView) {
     setSearch(view.search)
     setVisibleColumnKeys(view.visibleColumnKeys)
-    setPage(1)
+    goToPage(1)
   }
 
   function saveCurrentView(name: string) {
@@ -319,7 +344,7 @@ export default function DataTable<T>({
   const clearFilters = () => {
     setFilterRules([])
     onClearFilters?.()
-    setPage(1)
+    goToPage(1)
   }
 
   return (
@@ -332,7 +357,7 @@ export default function DataTable<T>({
           onVisibleKeysChange={setVisibleColumnKeys}
           breakpoint={breakpoint}
           search={search}
-          onSearchChange={v => { setSearch(v); setPage(1) }}
+          onSearchChange={v => { setSearch(v); goToPage(1) }}
           searchPlaceholder={searchPlaceholder}
           hideSearch={hideSearch}
           primaryFilters={primaryFilters}
@@ -365,7 +390,7 @@ export default function DataTable<T>({
         <AdvancedFilters
           columns={eligibleColumns}
           rules={filterRules}
-          onChange={rules => { setFilterRules(rules); setPage(1) }}
+          onChange={rules => { setFilterRules(rules); goToPage(1) }}
           onClose={() => setFiltersOpen(false)}
         />
       )}
@@ -472,7 +497,7 @@ export default function DataTable<T>({
             </Table>
           )}
 
-          <Pagination page={page} total={filteredRows.length} perPage={perPage} onChange={setPage} />
+          <Pagination page={page} total={filteredRows.length} perPage={perPage} onChange={goToPage} />
         </>
       )}
     </div>

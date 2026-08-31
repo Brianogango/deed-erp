@@ -67,7 +67,7 @@ import { DataTable, type ColumnDef, type PrimaryFilterConfig } from '@/component
 import { Fa } from '@/components/icons'
 import CashbookTab, { buildCashbookEntries } from './Cashbook'
 import { computeCashbookTotals, cashPositionFromTotals } from '@/lib/finance-alerts'
-import { financeInvoicePath, shouldApplyInvoiceEditQuery } from '@/lib/finance-invoice'
+import { financeInvoicePath, parseFinanceListPage, shouldApplyInvoiceEditQuery } from '@/lib/finance-invoice'
 import { AccountingProvider } from './accounting/AccountingContext'
 import FinancialReportTab from './accounting/FinancialReportTab'
 import JournalsTab from './accounting/JournalsTab'
@@ -354,16 +354,24 @@ function AccountingContent() {
   const [tab, setLocalTab] = useState<MainTab>(initialTab)
   const [reportTab, setReportTab] = useState<ReportTab>(initialReportTab)
   const activeTab = tab === 'reports' ? reportTab : tab
+  const urlInvoiceListPage = parseFinanceListPage(searchParams.get('page'))
+  const [invoiceListPage, setInvoiceListPageState] = useState(urlInvoiceListPage)
+  useEffect(() => {
+    setInvoiceListPageState(urlInvoiceListPage)
+  }, [urlInvoiceListPage])
 
   const setTab = (newTab: MainTab) => {
     const nextTab = isReportTabId(newTab) ? 'reports' : newTab
+    if (nextTab === tab && !(isReportTabId(newTab) && newTab !== reportTab)) return
     if (isReportTabId(newTab)) setReportTab(newTab)
     setLocalTab(nextTab)
     setSelectedInvIds(new Set())
+    setInvoiceListPageState(1)
     const params = new URLSearchParams(searchParams.toString())
     params.set('tab', nextTab)
     if (nextTab === 'reports') params.set('report', isReportTabId(newTab) ? newTab : reportTab)
     else params.delete('report')
+    params.delete('page')
     router.replace(`${pathname}?${params.toString()}`, { scroll: false })
   }
 
@@ -373,6 +381,8 @@ function AccountingContent() {
     const params = new URLSearchParams(searchParams.toString())
     params.set('tab', 'reports')
     params.set('report', newReport)
+    params.delete('page')
+    setInvoiceListPageState(1)
     router.replace(`${pathname}?${params.toString()}`, { scroll: false })
   }
 
@@ -457,6 +467,19 @@ function AccountingContent() {
   // ── Invoice / Bill state ────────────────────────────────────────────────────
   const [invFilter, setInvFilter] = useState('all')
   const [invSearch, setInvSearch] = useState('')
+  const setInvoiceListPage = useCallback((nextPage: number) => {
+    const page = parseFinanceListPage(nextPage)
+    setInvoiceListPageState(page)
+    if (page === parseFinanceListPage(searchParams.get('page'))) return
+    const params = new URLSearchParams(searchParams.toString())
+    if (page <= 1) params.delete('page')
+    else params.set('page', String(page))
+    const qs = params.toString()
+    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false })
+  }, [pathname, router, searchParams])
+  const openInvoiceRecord = useCallback((id: string) => {
+    router.push(financeInvoicePath(id, { listPage: invoiceListPage }))
+  }, [invoiceListPage, router])
   const [selectedInvIds, setSelectedInvIds] = useState<Set<string>>(new Set())
   const [showBulkPayModal, setShowBulkPayModal] = useState(false)
   const [bulkDownloading, setBulkDownloading] = useState(false)
@@ -751,7 +774,7 @@ function AccountingContent() {
         { value: 'overdue', label: 'Overdue' },
         { value: 'blocked', label: 'Blocked' },
       ],
-      onChange: setInvFilter,
+        onChange: (value: string) => { setInvFilter(value); setInvoiceListPage(1) },
     },
   ]
 
@@ -909,7 +932,7 @@ function AccountingContent() {
     setChangingPartner(false)
     setReceiptFile(null)
     if (opts?.navigateToInvoiceId) {
-      router.push(financeInvoicePath(opts.navigateToInvoiceId))
+      router.push(financeInvoicePath(opts.navigateToInvoiceId, { listPage: invoiceListPage }))
       return
     }
     // Drop deep-link so refresh does not reopen a discarded editor.
@@ -924,7 +947,7 @@ function AccountingContent() {
   const handleEditInvoice = (inv: Invoice) => {
     if (inv.status !== 'draft') {
       showToast('Reset to draft first, then edit and save.', 'info')
-      router.push(financeInvoicePath(inv.id))
+      router.push(financeInvoicePath(inv.id, { listPage: invoiceListPage }))
       return
     }
     setEditingInvId(inv.id)
@@ -971,7 +994,7 @@ function AccountingContent() {
       params.delete('edit')
       const qs = params.toString()
       router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false })
-      router.push(financeInvoicePath(inv.id))
+      router.push(financeInvoicePath(inv.id, { listPage: invoiceListPage }))
       return
     }
 
@@ -1458,15 +1481,17 @@ function AccountingContent() {
                 rows={filteredInvoices}
                 rowKey={i => i.id}
                 searchValue={invSearch}
-                onSearchChange={setInvSearch}
+                onSearchChange={value => { setInvSearch(value); setInvoiceListPage(1) }}
                 searchPlaceholder="Search invoice number or partner…"
                 clientSearch={false}
+                page={invoiceListPage}
+                onPageChange={setInvoiceListPage}
                 primaryFilters={invoicePrimaryFilters}
-                onClearFilters={() => { setInvSearch(''); setInvFilter('all') }}
+                onClearFilters={() => { setInvSearch(''); setInvFilter('all'); setInvoiceListPage(1) }}
                 hideColumnFilters
                 selectable
                 emptyMessage={tab === 'invoices' ? 'No invoices found' : 'No bills found'}
-                onRowClick={i => router.push(`/finance/invoices/${i.id}`)}
+                onRowClick={i => openInvoiceRecord(i.id)}
                 rowLabel={i => `${displayDocRef(i.ref)} ${i.partnerName}`}
                 cardAccent={i => Math.max(0, i.total - i.amountPaid) > 0 ? 'var(--danger)' : 'var(--success)'}
                 renderCard={i => {
@@ -1486,7 +1511,7 @@ function AccountingContent() {
                         { label: 'Paid', value: fmtKes(i.amountPaid) },
                         { label: 'Paid %', value: `${Math.round(pct)}%` },
                       ]}
-                      onClick={() => router.push(`/finance/invoices/${i.id}`)}
+                      onClick={() => openInvoiceRecord(i.id)}
                     />
                   )
                 }}

@@ -103,16 +103,33 @@ export function clampAmountPaid(amountPaid: unknown, totalAmount: number): numbe
   return Math.min(Math.max(0, round2(num(amountPaid))), totalAmount)
 }
 
+/** 1-based list page. Invalid or missing values become page 1. */
+export function parseFinanceListPage(raw: unknown): number {
+  const n = typeof raw === 'number' ? raw : Number.parseInt(String(raw ?? '').trim(), 10)
+  if (!Number.isFinite(n) || n < 1) return 1
+  return Math.min(Math.floor(n), 9999)
+}
+
 /** Customer invoice and vendor bill record page. */
-export function financeInvoicePath(id: string): string {
-  return `/finance/invoices/${id}`
+export function financeInvoicePath(
+  id: string,
+  opts?: { listPage?: number | string | null },
+): string {
+  const page = parseFinanceListPage(opts?.listPage)
+  if (page <= 1) return `/finance/invoices/${id}`
+  return `/finance/invoices/${id}?listPage=${page}`
 }
 
 /** Canonical Accounting list route for an invoice/bill record. */
-export function financeInvoiceListPath(type?: string | null): string {
-  return type === 'vendor_bill'
-    ? '/finance?tab=bills'
-    : '/finance?tab=invoices'
+export function financeInvoiceListPath(
+  type?: string | null,
+  opts?: { page?: number | string | null },
+): string {
+  const params = new URLSearchParams()
+  params.set('tab', type === 'vendor_bill' ? 'bills' : 'invoices')
+  const page = parseFinanceListPage(opts?.page)
+  if (page > 1) params.set('page', String(page))
+  return `/finance?${params.toString()}`
 }
 
 /**

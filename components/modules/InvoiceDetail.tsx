@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { useParams, useRouter } from 'next/navigation'
+import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import {
   faPencil,
   faMoneyBillWave,
@@ -28,7 +28,7 @@ import PaymentDetailsPicker from '@/components/payment/PaymentDetailsPicker'
 import DocumentEmailSendHistory from '@/components/email/DocumentEmailSendHistory'
 import { ScheduleInvoiceDeliveryModal } from './ScheduleInvoiceDeliveryModal'
 import { canScheduleInvoiceDelivery, findInvoiceDeliveryJob } from '@/lib/invoice-delivery-job'
-import { financeInvoiceListPath } from '@/lib/finance-invoice'
+import { financeInvoiceListPath, parseFinanceListPage } from '@/lib/finance-invoice'
 import {
   alignPaymentDetailsToTax,
   documentHasVat,
@@ -44,6 +44,16 @@ export default function InvoiceDetail() {
   const mounted = useMounted()
   const { id } = useParams<{ id: string }>()
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const listPage = parseFinanceListPage(searchParams.get('listPage') ?? searchParams.get('page'))
+  const goToDocumentList = (type?: string | null) => {
+    const params = typeof window !== 'undefined'
+      ? new URLSearchParams(window.location.search)
+      : searchParams
+    const livePage = parseFinanceListPage(params.get('listPage') ?? params.get('page'))
+    const path = financeInvoiceListPath(type, { page: livePage })
+    router.push(path)
+  }
   const {
     invoices,
     contacts,
@@ -227,7 +237,7 @@ export default function InvoiceDetail() {
       <div className="mod-page">
         <RecordHeader
           title="Invoice not found"
-          onBack={() => router.push(financeInvoiceListPath('customer_invoice'))}
+          onBack={() => goToDocumentList('customer_invoice')}
           backLabel="Back to invoices"
         />
         <div className="mod-body p-12 text-center text-[var(--text-3)] text-sm">Invoice not found.</div>
@@ -236,7 +246,7 @@ export default function InvoiceDetail() {
   }
 
   const docLabel = invoice.type === 'customer_invoice' ? 'Invoice' : 'Bill'
-  const documentListPath = financeInvoiceListPath(invoice.type)
+  const documentListPath = financeInvoiceListPath(invoice.type, { page: listPage })
   const balance = Math.max(0, invoice.total - invoice.amountPaid)
   const pct = invoice.total > 0 ? Math.min(100, (invoice.amountPaid / invoice.total) * 100) : 0
   // Odoo semantics: document state + separately computed payment status.
@@ -514,7 +524,7 @@ export default function InvoiceDetail() {
       <div className="invoice-detail__chrome">
         <Breadcrumbs
           items={[
-            { label: invoice.type === 'customer_invoice' ? 'Invoices' : 'Bills', onClick: () => router.push(documentListPath) },
+            { label: invoice.type === 'customer_invoice' ? 'Invoices' : 'Bills', onClick: () => goToDocumentList(invoice.type) },
             { label: titleRef },
           ]}
         />
