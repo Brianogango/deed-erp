@@ -205,8 +205,9 @@ const ALL_OPERATIONAL_ROLES: readonly UserRole[] = [
 
 // High-risk collaborative keys cannot be hidden wholesale because several
 // roles legitimately share them. Require both an appropriate operational role
-// and an explicit module grant; ownership filtering below then narrows rows for
-// sales reps and technicians.
+// and an explicit module grant; row filters below still narrow repairs for
+// technicians and CRM opportunities for sales reps. Sale orders are shared
+// across the sales team (sales reps read the full quotes/SO book).
 export const COLLABORATIVE_STORE_READ_POLICIES: Record<string, CollaborativeReadPolicy> = {
   deed_saleOrders: {
     roles: ['director', 'admin_officer', 'finance_officer', 'sales_rep'],
@@ -307,6 +308,9 @@ export const hasFullStoreContentAccess = (
   const role = normalizePermissionRole(user?.role)
   if (key === 'deed_invoices') return role === 'director' || role === 'finance_officer' || role === 'admin_officer'
   if (key === 'deed_expenses') return role === 'director' || role === 'finance_officer'
+  // Sales reps read the full quotes/SO book. Keep this false so their store
+  // writes still merge — a stale tab with a partial cache cannot wipe the
+  // rest of the ledger.
   if (key === 'deed_saleOrders') return role !== 'sales_rep'
   if (key === 'deed_repairs_v2') return role !== 'technician' && !user?.actsAsTechnician
   if (key === 'deed_opportunities') return role !== 'sales_rep'
@@ -330,13 +334,7 @@ export function filterStoreValueForRole(
     // Everyone keeps their own claims (self-service submissions/tracking).
     return (value as StoreRow[]).filter(e => !!e?.submittedByUserId && e.submittedByUserId === user?.id)
   }
-  if (key === 'deed_saleOrders') {
-    // ir.rule: sales reps see only orders they created or own as salesperson.
-    return (value as StoreRow[]).filter(order => {
-      if (!user?.id) return false
-      return order.createdByUserId === user.id || order.salespersonId === user.id
-    })
-  }
+  if (key === 'deed_saleOrders') return value
   if (key === 'deed_repairs_v2') {
     return (value as StoreRow[]).filter(repair => !!user?.id && repair.assignedTechnicianId === user.id)
   }
@@ -367,14 +365,11 @@ export function mergeFilteredStoreWrite(current: unknown, incoming: unknown): St
 
 export type RecordAccessModel = 'sale_order' | 'opportunity' | 'repair' | 'expense'
 
-const saleOrderOwnedByUser = (record: StoreRow, userId: string) =>
-  record.createdByUserId === userId || record.salespersonId === userId
-
 const opportunityOwnedByUser = (record: StoreRow, userId: string) =>
   record.ownerId === userId || record.assignedToId === userId
 
 /**
- * Row-level read/write guard for APIs (mirrors filterStoreValueForRole / ir.rule).
+ * Row-level read/write guard for APIs (mirrors filterStoreValueForRole).
  */
 export function canAccessRecord(
   role: string | null | undefined,
@@ -388,9 +383,7 @@ export function canAccessRecord(
 
   switch (model) {
     case 'sale_order':
-      if (['director', 'admin_officer', 'finance_officer', 'technical_lead'].includes(normalizedRole)) return true
-      if (normalizedRole === 'sales_rep') return saleOrderOwnedByUser(record, userId)
-      return false
+      return ['director', 'admin_officer', 'finance_officer', 'technical_lead', 'sales_rep'].includes(normalizedRole)
     case 'opportunity':
       if (['director', 'admin_officer', 'finance_officer', 'kilimall_officer', 'technical_lead'].includes(normalizedRole)) return true
       if (normalizedRole === 'sales_rep') return opportunityOwnedByUser(record, userId)

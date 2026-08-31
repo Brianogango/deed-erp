@@ -3,7 +3,9 @@
 // P2 workload → P3 analytics → P4 shortcuts), and every section is gated by
 // the matrix below. Data-level security is enforced server-side by the
 // role/module/content-filtered store APIs (lib/auth/authorization.ts); these
-// helpers independently keep dashboard rendering aligned with that policy.
+// helpers independently keep dashboard section gating aligned with that policy.
+// Sale-order lists are company-wide for sales reps; commission/rep pickers stay
+// self-scoped.
 
 import { canApproveLeaveRole } from '@/lib/auth/access'
 import type { ModuleId, PublicUser, UserRole } from '@/lib/auth/types'
@@ -161,15 +163,12 @@ export function canShowDashboardLeaveApprovals(
   return dashboardSectionsForUser(user).leaveApprovals
 }
 
-export function visibleDashboardSalesOrders<T extends { createdByUserId?: string; salespersonId?: string }>(
+export function visibleDashboardSalesOrders<T>(
   user: DashboardUser | null | undefined,
   orders: readonly T[],
 ): T[] {
   if (!dashboardSectionsForUser(user).sales) return []
   const list = Array.isArray(orders) ? orders : []
-  if (user?.role === 'sales_rep') {
-    return list.filter(order => order.createdByUserId === user.id || order.salespersonId === user.id)
-  }
   return [...list]
 }
 

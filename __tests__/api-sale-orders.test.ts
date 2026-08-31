@@ -174,6 +174,20 @@ describe('GET /api/sale-orders', () => {
     const res = await GET(getReq())
     expect(res.status).toBe(401)
   })
+
+  it('does not scope a sales_rep list to created-by or salesperson', async () => {
+    mockGetSession.mockResolvedValue({
+      user: { id: USER_ID, name: 'Joseph', username: 'joseph', role: 'sales_rep' },
+    })
+    mockPrismaSO.findMany.mockResolvedValue([dbOrder])
+    mockPrismaSO.count.mockResolvedValue(1)
+    const res = await GET(getReq())
+    expect(res.status).toBe(200)
+    const callArg = mockPrismaSO.findMany.mock.calls[0][0]
+    expect(callArg.where.OR).toBeUndefined()
+    expect(JSON.stringify(callArg.where)).not.toContain('createdById')
+    expect(JSON.stringify(callArg.where)).not.toContain('salespersonId')
+  })
 })
 
 // ── POST /api/sale-orders ─────────────────────────────────────────────────────

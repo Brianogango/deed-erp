@@ -7,7 +7,6 @@ import type { ToolDefinition } from '../types'
 const inputSchema = z.object({
   fromDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   toDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  // sales_rep callers are always scoped to themselves regardless of this flag.
   ownOnly: z.boolean().optional(),
 })
 
@@ -29,11 +28,9 @@ export const summarizeSalesTool: ToolDefinition = {
   run: async (ctx, rawInput) => {
     const { fromDate, toDate } = inputSchema.parse(rawInput)
 
-    const isSalesRep = ctx.user.role === 'sales_rep'
     const orders = await prisma.saleOrder.findMany({
       where: {
         orderDate: { gte: new Date(fromDate), lte: new Date(`${toDate}T23:59:59`) },
-        ...(isSalesRep ? { createdById: ctx.user.id } : {}),
       },
       include: { items: { include: { product: { select: { name: true } } } } },
     })
@@ -54,7 +51,7 @@ export const summarizeSalesTool: ToolDefinition = {
       .map(([name, value]) => ({ name, value: value.toFixed(2) }))
 
     return {
-      scope: isSalesRep ? 'own_orders_only' : 'all_orders',
+      scope: 'all_orders',
       fromDate,
       toDate,
       orderCount: orders.length,

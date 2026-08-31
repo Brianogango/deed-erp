@@ -148,15 +148,6 @@ export async function GET(request: Request) {
       allowedSorts: ['createdAt', 'updatedAt', 'orderDate', 'totalAmount', 'orderNumber', 'status'],
     })
 
-    const ownership = role === 'sales_rep'
-      ? {
-          OR: [
-            { createdById: session.user.id },
-            { salespersonId: session.user.id },
-          ],
-        }
-      : {}
-
     const searchFilter = q
       ? {
           OR: [
@@ -167,11 +158,8 @@ export async function GET(request: Request) {
       : {}
 
     const where = {
-      AND: [
-        ownership,
-        ...(status ? [{ status }] : []),
-        ...(q ? [searchFilter] : []),
-      ],
+      ...(status ? { status } : {}),
+      ...(q ? searchFilter : {}),
     }
 
     const [total, orders] = await Promise.all([
