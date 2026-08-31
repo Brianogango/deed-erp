@@ -3,6 +3,7 @@ import type { Prisma } from '@prisma/client'
 export type NotificationChannel = 'in_app' | 'email' | 'whatsapp' | 'sms' | 'push'
 export type NotificationSeverity = 'info' | 'success' | 'attention' | 'warning' | 'critical'
 export type NotificationPriority = 'low' | 'normal' | 'high' | 'urgent'
+export type EmailDeliveryMode = 'automatic' | 'manual'
 
 export type ExternalNotificationRecipient = {
   name?: string | null
@@ -23,6 +24,12 @@ export type NotificationPolicy = {
   mandatory?: boolean
   /** Channels that must deliver for this event even when the user's optional channel preference is off. */
   mandatoryChannels?: NotificationChannel[]
+  /**
+   * Whether email can be released by the background router automatically.
+   * "manual" means the event may still exist (and other channels may still run),
+   * but an email delivery is only created when metadata.emailTriggered === true.
+   */
+  emailMode?: EmailDeliveryMode
 }
 
 export type PublishNotificationInput = {
