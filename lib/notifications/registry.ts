@@ -25,6 +25,7 @@ const POLICY = (
  * Event-specific user/customer targets are added by the publisher/scanner.
  */
 export const NOTIFICATION_POLICIES: Record<string, NotificationPolicy> = {
+  'communication.email.reply_received': POLICY(['in_app', 'push'], 'attention'),
   'crm.lead.created': POLICY(['in_app', 'push', 'email'], 'attention', { escalationMinutes: 60, escalationRoles: ['director'] }),
   'crm.opportunity.assigned': POLICY(['in_app', 'push'], 'attention'),
   'crm.opportunity.stale': POLICY(['in_app', 'email'], 'warning', { escalationMinutes: 1440, escalationRoles: ['director'] }),
