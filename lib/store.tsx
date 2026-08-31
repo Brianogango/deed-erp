@@ -143,6 +143,12 @@ import {
   canReverseConfirmedSale,
 } from '@/lib/odoo-sales-flow'
 import {
+  applyConfirmLineSelection,
+  confirmSelectionHasProduct,
+} from '@/lib/sales/confirm-quotation'
+import { calcSaleOrderTotals } from '@/lib/sales/line-calc'
+import { trimSaleOrderLinesToDelivered } from '@/lib/sales/fulfillment-trim'
+import {
   allocateDeliveredQtyToOrderLines,
   assertSerialUsableForDeliveryPrepare,
   pairOrderLinesWithDeliveryLines,
@@ -3549,7 +3555,7 @@ export interface AppState {
   moveSOLine: (orderId: string, lineId: string, direction: -1 | 1) => void | Promise<boolean>
   /** Insert a section heading on a quotation. */
   addSOSection: (orderId: string, title?: string) => void | Promise<boolean>
-  confirmSO: (id: string, opts?: { reserveStock?: boolean }) => void | Promise<void>
+  confirmSO: (id: string, opts?: { reserveStock?: boolean; qtyByLineId?: Record<string, number> }) => void | Promise<void>
   /** Create a waiting delivery when a confirmed SO has none (heal / retry). */
   ensureWaitingDeliveryForSO: (id: string) => Promise<Delivery | null>
   /** Send by Email succeeded → Quotation Sent (records date/user/recipient). */
@@ -3562,8 +3568,8 @@ export interface AppState {
   createNewSOVersion: (orderId: string) => Promise<SaleOrder | null>
   /** Reserve quantity / assigned serials for this delivery. */
   prepareDelivery: (deliveryId: string, qtysDone?: Record<string, number>) => boolean
-  /** Validate a delivery; partial quantities create a backorder delivery. */
-  validateDelivery: (deliveryId: string, qtysDone?: Record<string, number>) => void
+  /** Validate a delivery; partial quantities create a backorder unless cancelRemaining is set. */
+  validateDelivery: (deliveryId: string, qtysDone?: Record<string, number>, opts?: { cancelRemaining?: boolean }) => void
   /** Persist successful final DN generation before enabling invoicing. */
   markDeliveryNoteGenerated: (deliveryId: string) => Promise<boolean>
   updateDelivery: (deliveryId: string, p: Partial<Pick<Delivery, 'status' | 'recipientName' | 'recipientPhone' | 'recipientIdNumber' | 'deliveryAddress' | 'notes' | 'deliveryNoteGeneratedAt' | 'deliveryNoteGeneratedByUserId'>>) => void
@@ -11803,13 +11809,22 @@ const storeCtx: AppState = {
       confirmingSaleOrderIds.add(id)
       const snapshot = { ...so }
       try {
-        const orderLines = so.lines.filter((line: any) => line.lineType !== 'section')
-        if (!orderLines.length) {
-          showToast('Add at least one product before confirming', 'error')
+        const selection = applyConfirmLineSelection(so.lines ?? [], opts?.qtyByLineId)
+        if (!confirmSelectionHasProduct(selection.lines)) {
+          showToast('Keep at least one product to confirm', 'error')
           return
         }
+        const orderLines = selection.lines.filter((line: any) => line.lineType !== 'section')
+        const confirmTotals = calcSaleOrderTotals(selection.lines, {
+          headerDiscount: Number(so.discountAmount) || 0,
+        })
+        if (selection.releasedSerialIds.length > 0) {
+          setSerials(p => p.map(s =>
+            selection.releasedSerialIds.includes(s.id) ? { ...s, status: 'available' } : s,
+          ))
+        }
 
-        const creditStatus = storeCtxRef.current!.getCustomerCreditStatus(so.customerId, so.total)
+        const creditStatus = storeCtxRef.current!.getCustomerCreditStatus(so.customerId, confirmTotals.totalAmount)
         const canCreditOverride = user.role === 'director' || user.role === 'finance_officer'
         if (!creditStatus.ok && !canCreditOverride) {
           showToast(creditStatus.message || 'Customer credit check failed — cannot confirm', 'error')
@@ -11847,12 +11862,12 @@ const storeCtx: AppState = {
         const approvalTriggers = computeSaleOrderApprovalTriggers({
           lines: orderLines as any,
           products: prodRef.current as any,
-          headerDiscountAmount: Number(so.discountAmount) || 0,
-          orderTotal: so.total,
+          headerDiscountAmount: confirmTotals.discountAmount,
+          orderTotal: confirmTotals.totalAmount,
           minMarginPercent: Number(systemSettings.salesMinMarginPercent ?? systemSettings.reconfigurationMinMarginPct ?? 10),
           pricingMarginPolicy: systemSettings.pricingMarginPolicy,
           listPriceByProductId,
-          creditRequested: !creditStatus.ok ? so.total : undefined,
+          creditRequested: !creditStatus.ok ? confirmTotals.totalAmount : undefined,
           creditAvailable: !creditStatus.ok ? Number((creditStatus as any).creditAvailable) || 0 : undefined,
           backorderQty,
         })
@@ -11916,7 +11931,8 @@ const storeCtx: AppState = {
         const leftoverSalesApprovals = approvalRequests.filter(r =>
           r.documentId === id &&
           isSalesConfirmGatingApproval(r.type, systemSettings) &&
-          r.status === 'pending',
+          r.status === 'pending' &&
+          gatingTriggers.some(t => t.type === r.type),
         )
         // Pending approvals still block everyone — including directors — so the
         // audit decision is explicit (approve/reject) rather than silent.
@@ -11960,11 +11976,13 @@ const storeCtx: AppState = {
           pricingExceptionProducts: pricingTrigger?.details?.products,
           backorderQty: backorderQty > 0 ? backorderQty : undefined,
           discountPercent: discountTrigger?.details?.discountPercent,
-          discountAmount: Number(so.discountAmount) || 0,
-          creditRequested: !creditStatus.ok ? so.total : undefined,
+          discountAmount: confirmTotals.discountAmount,
+          creditRequested: !creditStatus.ok ? confirmTotals.totalAmount : undefined,
           creditAvailable: !creditStatus.ok ? Number((creditStatus as any).creditAvailable) || 0 : undefined,
-          lines: orderLines,
-          total: so.total,
+          lines: selection.lines,
+          total: confirmTotals.totalAmount,
+          subtotal: confirmTotals.subtotal,
+          taxTotal: confirmTotals.taxAmount,
         })
 
         let confirmRes = await fetch(`/api/sale-orders/${id}`, {
@@ -12080,6 +12098,13 @@ const storeCtx: AppState = {
           if (s.id !== id) return s
           return {
             ...s,
+            lines: selection.lines,
+            subtotal: confirmTotals.subtotal,
+            taxTotal: confirmTotals.taxAmount,
+            taxAmount: confirmTotals.taxAmount,
+            discountAmount: confirmTotals.discountAmount,
+            total: confirmTotals.totalAmount,
+            totalAmount: confirmTotals.totalAmount,
             ref: serverRef,
             orderNumber: serverRef,
             quotationRef: s.quotationRef ?? snapshot.ref,
@@ -12102,7 +12127,11 @@ const storeCtx: AppState = {
           }
         }))
 
-        addAuditLog('confirm_sale_order', serverRef, `Same document: quotation ${snapshot.ref} renamed to sales order ${serverRef} by ${user.name}${systemSettings.salesLockConfirmed ? ' · order locked' : ''}`)
+        addAuditLog(
+          'confirm_sale_order',
+          serverRef,
+          `Same document: quotation ${snapshot.ref} renamed to sales order ${serverRef} by ${user.name}${systemSettings.salesLockConfirmed ? ' · order locked' : ''}${selection.changed ? ` · ${selection.droppedIds.length} line(s) dropped at confirm` : ''}`,
+        )
         showToast(
           del
             ? `Confirmed — this document is now ${serverRef} (was ${snapshot.ref}). Prepare delivery ${del.ref} to allocate stock.`
@@ -12444,10 +12473,11 @@ const storeCtx: AppState = {
       showToast(`${del.ref} prepared — stock reserved and ready to validate`)
       return true
     },
-    validateDelivery: async (deliveryId, qtysDone) => {
+    validateDelivery: async (deliveryId, qtysDone, opts) => {
       if (!canApproveInventoryAction(currentUser())) {
         showToast('Only Inventory or Admin can validate deliveries', 'error'); return;
       }
+      const cancelRemaining = opts?.cancelRemaining === true
       const del = delRef.current.find(d => d.id === deliveryId)!
       const so  = soRef.current.find(s => s.id === del.saleOrderId)!
       if (del.status !== 'ready' || !del.preparedAt) {
@@ -12575,7 +12605,7 @@ const storeCtx: AppState = {
           return need > 0 ? { ...line, qty: need, qtyDone: 0, serialIds: [] as string[] } : null
         })
         .filter(Boolean) as typeof backorderLines
-      if (clampedBackorder.length > 0) {
+      if (clampedBackorder.length > 0 && !cancelRemaining) {
         const backorderShort = clampedBackorder.some(l => {
           const prod = prodRef.current.find(p => p.id === l.productId)
           if (isNonStockSaleLine(l, prod ?? null)) return false
@@ -12606,13 +12636,50 @@ const storeCtx: AppState = {
         if (s.id !== del.saleOrderId) return s;
         const doneByProduct: Record<string, number> = {}
         doneLines.forEach(l => { doneByProduct[l.productId] = (doneByProduct[l.productId] ?? 0) + l.qty })
-        const lines = allocateDeliveredQtyToOrderLines(s.lines, doneByProduct, 'add')
-        const updated = { ...s, lines }
-        sync(`/api/sale-orders/${s.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+        const allocated = allocateDeliveredQtyToOrderLines(s.lines, doneByProduct, 'add')
+        const trimmed = cancelRemaining
+          ? trimSaleOrderLinesToDelivered(allocated)
+          : { lines: allocated, changed: false, releasedSerialIds: [] }
+        if (trimmed.releasedSerialIds.length > 0) {
+          setSerials(prev => prev.map(serial =>
+            trimmed.releasedSerialIds.includes(serial.id) ? { ...serial, status: 'available' } : serial,
+          ))
+        }
+        const money = calcSaleOrderTotals(trimmed.lines, { headerDiscount: Number(s.discountAmount) || 0 })
+        const updated = {
+          ...s,
+          lines: trimmed.lines,
+          subtotal: money.subtotal,
+          taxTotal: money.taxAmount,
+          taxAmount: money.taxAmount,
+          discountAmount: money.discountAmount,
+          total: money.totalAmount,
+          totalAmount: money.totalAmount,
+        }
+        sync(`/api/sale-orders/${s.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            ...updated,
+            fulfillmentTrim: cancelRemaining && trimmed.changed,
+          }),
+        })
         return updated
       }))
-      addAuditLog('validate_delivery', del.ref, `Delivery validated${backorder ? ` · backorder ${backorder.ref} created` : ''}`)
-      showToast(`Delivery done · stock updated${backorder ? ` · backorder ${backorder.ref} created` : ''}${newWarranties.length > 0 ? ` · ${newWarranties.length} warranty(ies) created` : ''}`)
+      addAuditLog(
+        'validate_delivery',
+        del.ref,
+        `Delivery validated${backorder ? ` · backorder ${backorder.ref} created` : cancelRemaining ? ' · remaining lines dropped' : ''}`,
+      )
+      showToast(
+        `Delivery done · stock updated${
+          backorder
+            ? ` · backorder ${backorder.ref} created`
+            : cancelRemaining
+              ? ' · remaining lines dropped'
+              : ''
+        }${newWarranties.length > 0 ? ` · ${newWarranties.length} warranty(ies) created` : ''}`,
+      )
     },
     markDeliveryNoteGenerated: async (deliveryId) => {
       const delivery = delRef.current.find(item => item.id === deliveryId)
