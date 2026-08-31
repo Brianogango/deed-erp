@@ -19,7 +19,7 @@
  * Logical mailbox profile. Selects which SMTP credentials & default From address are used.
  * Falls back to the default profile when env vars for the requested profile are missing.
  */
-export type MailboxProfile = 'default' | 'hr' | 'sales' | 'accounts'
+export type MailboxProfile = 'default' | 'hr' | 'sales' | 'accounts' | 'repairs' | 'procurement'
 
 export interface EmailMessage {
   to: string | string[]
@@ -143,6 +143,22 @@ export const pickMailbox = (profile: MailboxProfile): MailboxConfig => {
       def,
     )
   }
+  if (profile === 'repairs') {
+    return departmentMailboxWithDefaultFallback(
+      process.env.REPAIRS_EMAIL || process.env.REPAIRS_SMTP_USER || 'repairs@deed.co.ke',
+      process.env.REPAIRS_SMTP_USER,
+      process.env.REPAIRS_SMTP_PASS,
+      def,
+    )
+  }
+  if (profile === 'procurement') {
+    return departmentMailboxWithDefaultFallback(
+      process.env.PROCUREMENT_EMAIL || process.env.PROCUREMENT_SMTP_USER || 'procurement@deed.co.ke',
+      process.env.PROCUREMENT_SMTP_USER,
+      process.env.PROCUREMENT_SMTP_PASS,
+      def,
+    )
+  }
   return def
 }
 
@@ -195,7 +211,7 @@ export function getEmailConfigStatus(): EmailConfigStatus {
     if (!process.env.EMAIL_FROM) missing.push('EMAIL_FROM')
   }
 
-  const profiles: MailboxProfile[] = ['default', 'hr', 'sales', 'accounts']
+  const profiles: MailboxProfile[] = ['default', 'hr', 'sales', 'accounts', 'repairs', 'procurement']
   const mailboxes = profiles.map(id => {
     const cfg = pickMailbox(id)
     return {
