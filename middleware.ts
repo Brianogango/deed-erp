@@ -18,7 +18,7 @@ const PUBLIC_API_PATHS    = new Set(['/api/auth/login', '/api/auth/logout', '/ap
 // is where stale service workers get replaced, and a worker script that
 // redirects to /login can never be updated by a signed-out browser.
 const PUBLIC_ASSET_PATHS  = new Set([
-  '/deed-logo.png', '/deed-logo.svg', '/deed-logo-receipt.png', '/deed-logo-sidebar.png', '/deed-icon.svg', '/login-bg.jpg', '/sw.js', '/offline.html', '/manifest.json',
+  '/deed-logo.png', '/deed-logo.svg', '/deed-logo-receipt.png', '/deed-logo-sidebar.png', '/deed-icon.svg', '/login-bg.jpg', '/sw.js', '/deed-notifications-sw.js', '/offline.html', '/manifest.json',
   // Partner integration guide — shareable without an ERP login
   '/docs/partner-api-guide.html',
 ])

@@ -1,5 +1,7 @@
-// Deed ERP Service Worker — PWA + Offline POS
+// Deed ERP Service Worker — PWA + Offline POS + Web Push
 //
+// v9: handle Web Push toasts on the same worker that owns '/' so Account
+// Settings → Browser Push is not overwritten by the PWA registration.
 // v8: offline Try Again probes the network and navigates back into the app
 // instead of a bare reload that can strand users on /offline.html.
 // v7: bump cache after module-error auto-recovery so clients drop stale
@@ -12,8 +14,8 @@
 // v2 pre-cached '/' and '/login' at install time; after a deploy those stale
 // snapshots referenced fingerprinted CSS/JS chunks that no longer existed,
 // so users saw a completely unstyled login page until they cleared site data.
-const CACHE = 'deed-erp-v8'
-const RUNTIME_CACHE = 'deed-erp-runtime-v8'
+const CACHE = 'deed-erp-v9'
+const RUNTIME_CACHE = 'deed-erp-runtime-v9'
 const OFFLINE_URL = '/offline.html'
 
 // Next.js static assets are fingerprinted — cache them aggressively
@@ -154,3 +156,34 @@ function deleteFromStore(db, storeName, id) {
     req.onerror   = e => reject(e.target.error)
   })
 }
+
+// ── Web Push (OS toasts while the ERP tab is closed) ─────────────────────────
+self.addEventListener('push', event => {
+  let payload = {}
+  try { payload = event.data ? event.data.json() : {} } catch {}
+  const title = payload.title || 'Deed ERP'
+  const options = {
+    body: payload.body || 'You have a new notification.',
+    icon: '/deed-logo.png',
+    badge: '/deed-logo.png',
+    data: { url: payload.url || '/' },
+    tag: payload.eventType || 'deed-notification',
+    renotify: true,
+  }
+  event.waitUntil(self.registration.showNotification(title, options))
+})
+
+self.addEventListener('notificationclick', event => {
+  event.notification.close()
+  const target = new URL(event.notification.data?.url || '/', self.location.origin).href
+  event.waitUntil((async () => {
+    const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true })
+    for (const client of windows) {
+      if ('focus' in client) {
+        if (typeof client.navigate === 'function') await client.navigate(target)
+        return client.focus()
+      }
+    }
+    if (self.clients.openWindow) return self.clients.openWindow(target)
+  })())
+})
