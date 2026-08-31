@@ -2,6 +2,7 @@
 import { FormEvent, useEffect, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { AuthToast } from '@/components/auth/AuthFeedback'
+import OtpField from '@/components/auth/OtpField'
 
 type LoginPhase = 'credentials' | 'enroll' | 'verify'
 
@@ -383,34 +384,13 @@ export default function Login() {
                 </div>
               )}
 
-              {/* MFA PIN field — fixed-height wrapper prevents it collapsing/disappearing */}
-              <div className="min-h-[78px]">
-                <label htmlFor="mfa-code" className="mb-2 block text-[12px] font-semibold text-slate-600">
-                  Authenticator PIN
-                </label>
-                <div className="relative">
-                  <span className="pointer-events-none absolute inset-y-0 left-4 flex items-center text-slate-400" aria-hidden="true">
-                    <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4">
-                      <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
-                    </svg>
-                  </span>
-                  <input
-                    id="mfa-code"
-                    type="text"
-                    inputMode="numeric"
-                    autoComplete="one-time-code"
-                    autoFocus
-                    pattern="[0-9]*"
-                    maxLength={6}
-                    value={code}
-                    onChange={e => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                    placeholder="000000"
-                    aria-label="Six-digit authenticator PIN"
-                    className="block h-[46px] w-full min-w-0 rounded-2xl border border-slate-200 bg-slate-50 py-3 pl-11 pr-4 text-center font-mono text-[20px] font-bold tracking-[0.28em] text-slate-900 caret-[var(--primary)] outline-none transition placeholder:text-slate-300 focus:border-[var(--primary)] focus:bg-white focus:ring-2 focus:ring-[var(--primary)]/25"
-                    style={{ WebkitTextFillColor: '#0f172a', opacity: 1 }}
-                  />
-                </div>
-              </div>
+              <OtpField
+                value={code}
+                onChange={setCode}
+                verifying={pending}
+                disabled={pending}
+                label="Authenticator PIN"
+              />
 
               <button
                 type="submit"
