@@ -553,7 +553,7 @@ export function QuoteModal({ repair, onClose }: { repair: RepairOrder, onClose: 
   const outOfStockLines = editableLines.filter(l => requiresInventory(l.type) && l.productId && (l.stockQty ?? 0) === 0)
   const canSubmit = unlinkedInventoryLines.length === 0 && invalidQuoteLines.length === 0 && quoteLines.length > 0
 
-  const handleGenerateQuote = async () => {
+  const handleGenerateQuote = async (sendToCustomer = false) => {
     setSubmitted(true)
     if (!canSubmit || saving) return
     const lines = quoteLines.map(line => {
@@ -572,30 +572,44 @@ export function QuoteModal({ repair, onClose }: { repair: RepairOrder, onClose: 
     setSaving(true)
     try {
       await Promise.resolve(generateRepairQuote(repair.id, lines as any, applyVat))
-      if (repair.customerPhone) {
-        const quoteTotal = lines.reduce((sum, line) => sum + Number(line.subtotal || 0), 0)
-          + (applyVat
-            ? Math.round(lines
-                .filter(line => !line.isDiagnosisFee)
-                .reduce((sum, line) => sum + Number(line.subtotal || 0), 0) * (companySettings.vatRate / 100))
-            : 0)
-        const quoteUrl = typeof window !== 'undefined'
-          ? `${window.location.origin}/portal/repair/${encodeURIComponent(repair.ref)}`
-          : `/portal/repair/${encodeURIComponent(repair.ref)}`
-        const notify = await fetch('/api/notifications/send', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            type: 'quote',
-            repairRef: repair.ref,
-            quoteTotal,
-            quoteUrl,
-            channels: ['email', 'whatsapp', 'sms'],
-          }),
-        }).catch(() => null)
-        if (!notify?.ok) {
-          showToast('Quote saved, but customer SMS notification could not be confirmed', 'info')
+
+      if (sendToCustomer) {
+        const channels: Array<'email' | 'whatsapp' | 'sms'> = []
+        if (repair.customerEmail) channels.push('email')
+        if (repair.customerPhone) channels.push('whatsapp', 'sms')
+
+        if (!channels.length) {
+          showToast('Quote saved. Add a customer email or phone number before sending.', 'info')
+        } else {
+          const quoteTotal = lines.reduce((sum, line) => sum + Number(line.subtotal || 0), 0)
+            + (applyVat
+              ? Math.round(lines
+                  .filter(line => !line.isDiagnosisFee)
+                  .reduce((sum, line) => sum + Number(line.subtotal || 0), 0) * (companySettings.vatRate / 100))
+              : 0)
+          const quoteUrl = typeof window !== 'undefined'
+            ? `${window.location.origin}/portal/repair/${encodeURIComponent(repair.ref)}`
+            : `/portal/repair/${encodeURIComponent(repair.ref)}`
+          const notify = await fetch('/api/notifications/send', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              type: 'quote',
+              repairRef: repair.ref,
+              quoteTotal,
+              quoteUrl,
+              channels,
+            }),
+          }).catch(() => null)
+
+          if (!notify?.ok) {
+            showToast('Quote saved, but customer communication could not be confirmed.', 'info')
+          } else {
+            showToast(`Quote saved and queued for ${channels.join(', ')}.`, 'success')
+          }
         }
+      } else {
+        showToast('Quote saved. Customer communication has not been sent.', 'success')
       }
       onClose()
     } finally {
@@ -739,10 +753,18 @@ export function QuoteModal({ repair, onClose }: { repair: RepairOrder, onClose: 
           </div>
         )}
 
-        <div className="flex gap-2 justify-end pt-2 border-t border-[var(--border-lt)]">
+        <div className="flex flex-wrap gap-2 justify-end pt-2 border-t border-[var(--border-lt)]">
           <button className="btn-outline min-w-[100px]" onClick={onClose}>Cancel</button>
-          <ActionBtn onClick={handleGenerateQuote} color="linear-gradient(135deg,#D97706,#F59E0B)" shadow="0 8px 24px rgba(245,158,11,0.35)" disabled={saving || (submitted && !canSubmit)}>
-            <Fa icon={faFileInvoiceDollar} /> {saving ? 'Saving…' : repair.quote ? 'Update Quote' : 'Generate Quote'}
+          <button
+            type="button"
+            className="btn-outline min-w-[120px]"
+            disabled={saving || (submitted && !canSubmit)}
+            onClick={() => void handleGenerateQuote(false)}
+          >
+            {saving ? 'Saving…' : repair.quote ? 'Save Update' : 'Save Quote'}
+          </button>
+          <ActionBtn onClick={() => { void handleGenerateQuote(true) }} color="linear-gradient(135deg,#D97706,#F59E0B)" shadow="0 8px 24px rgba(245,158,11,0.35)" disabled={saving || (submitted && !canSubmit)}>
+            <Fa icon={faFileInvoiceDollar} /> {saving ? 'Saving…' : 'Save & Send to Customer'}
           </ActionBtn>
         </div>
       </div>
