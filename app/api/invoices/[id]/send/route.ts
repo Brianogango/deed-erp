@@ -110,6 +110,7 @@ ${companyName}`
       to: recipient,
       cc,
       subject,
+      body: text,
       status: result.success ? 'success' : 'failed',
       error: emailResult?.error,
       messageId: emailResult?.messageId,
