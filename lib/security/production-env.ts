@@ -130,6 +130,7 @@ export const PRODUCTION_ENV_CATALOG: readonly EnvFieldSpec[] = [
   { key: 'SMS_MAX_CONCURRENT', category: 'Notifications', kind: 'value', description: 'Max concurrent SMS sends.' },
   { key: 'SMS_MAX_PER_SECOND', category: 'Notifications', kind: 'value', description: 'SMS send rate.' },
   { key: 'NOTIFICATION_BATCH_CONCURRENCY', category: 'Notifications', kind: 'value', description: 'Notification worker concurrency.' },
+  { key: 'NOTIFICATIONS_PAUSE_EMAIL_SMS', category: 'Notifications', kind: 'value', description: 'Pause worker email and SMS. Default true. Set false to resume.' },
   { key: 'SENDGRID_WEBHOOK_PUBLIC_KEY', category: 'Notifications', kind: 'value', description: 'SendGrid event webhook public key.' },
   { key: 'NOTIFICATION_WEBHOOK_SECRET', category: 'Notifications', kind: 'secret', generate: true, description: 'Shared-secret fallback for notification webhooks.' },
   { key: 'GOOGLE_CLIENT_ID', category: 'Integrations', kind: 'value', description: 'Google OAuth client id.' },
