@@ -102,18 +102,39 @@ export async function POST(request: NextRequest) {
       const record = await loadRepairRecipient(repairRef)
       if (!record) return NextResponse.json({ error: 'Repair record not found' }, { status: 404 })
 
-      const channels = requestedChannels(params, type === 'quote' ? ['email', 'whatsapp', 'sms'] : ['whatsapp', 'sms'])
+      const purpose = String(params.purpose || '').trim().toLowerCase()
+      const defaultChannels: NotificationChannel[] = type === 'quote'
+        ? ['email', 'whatsapp', 'sms']
+        : purpose === 'ready' || purpose === 'uncollected'
+          ? ['email']
+          : ['email']
+      const channels = requestedChannels(params, defaultChannels)
       const deviceName = [record.repair.deviceBrand, record.repair.deviceModel || record.repair.deviceType].filter(Boolean).join(' ')
       const quoteTotal = Number(params.quoteTotal || record.repair.estimatedCost || 0)
+      const eventType = type === 'quote'
+        ? 'repair.quote_ready'
+        : purpose === 'ready'
+          ? 'repair.ready'
+          : purpose === 'uncollected'
+            ? 'repair.uncollected'
+            : 'repair.customer_message'
       const title = type === 'quote'
         ? `Repair quotation ready — ${record.repair.jobNumber}`
-        : `Repair update — ${record.repair.jobNumber}`
+        : purpose === 'ready'
+          ? `Your repair ${record.repair.jobNumber} is ready`
+          : purpose === 'uncollected'
+            ? `Repair awaiting collection — ${record.repair.jobNumber}`
+            : `Repair update — ${record.repair.jobNumber}`
       const message = type === 'quote'
         ? `Your repair quotation is ready. Repair: ${record.repair.jobNumber}. Device: ${deviceName}. Total: KES ${quoteTotal.toLocaleString('en-KE')}.${params.quoteUrl ? ` View: ${params.quoteUrl}` : ''}`
-        : String(params.message || 'There is an update on your repair.')
+        : purpose === 'ready'
+          ? String(params.message || `Your ${deviceName || 'device'} is ready for collection. Please contact Deed Technologies to arrange collection.`)
+          : purpose === 'uncollected'
+            ? String(params.message || 'Your device is still awaiting collection. Please contact Deed Technologies to arrange collection.')
+            : String(params.message || 'There is an update on your repair.')
 
       event = await publishNotificationEvent({
-        eventType: type === 'quote' ? 'repair.quote_ready' : 'repair.customer_message',
+        eventType,
         entityType: 'repair',
         entityId: record.repair.id,
         actorUserId,
@@ -132,6 +153,9 @@ export async function POST(request: NextRequest) {
           whatsappText: message,
           smsText: message.slice(0, 480),
           quoteTotal,
+          emailTriggered: channels.includes('email'),
+          triggeredByUserId: actorUserId,
+          manualPurpose: purpose || type,
         },
         idempotencyKey: String(body.idempotencyKey || `manual:${type}:${record.repair.id}:${contentHash({ channels, message, quoteTotal })}`),
       })
@@ -177,6 +201,8 @@ export async function POST(request: NextRequest) {
           emailText: message,
           whatsappText: message,
           smsText: message.slice(0, 480),
+          emailTriggered: channels.includes('email'),
+          triggeredByUserId: actorUserId,
         },
         idempotencyKey: String(body.idempotencyKey || `manual-general:${contentHash({ email, phone, channels, title, message })}`),
       })
