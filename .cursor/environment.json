@@ -1,0 +1,14 @@
+{
+  "name": "Deed ERP",
+  "install": "npm ci",
+  "terminals": [
+    {
+      "name": "dev",
+      "command": "VISREG_BYPASS_AUTH=true npm run dev",
+      "description": "Next.js 14 dev server on http://localhost:3000 in visual-regression bypass mode (no database). Serves the real production routes (for example /sales, /pos, /crm) without auth so UI work needs no persisted records. For authenticated or data-dependent testing, set a disposable DATABASE_URL secret, run `npx prisma db push`, then run the app without VISREG_BYPASS_AUTH."
+    }
+  ],
+  "ports": [
+    { "name": "web", "port": 3000 }
+  ]
+}
