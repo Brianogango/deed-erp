@@ -1838,7 +1838,7 @@ export default function RepairDetailView() {
               </div>
             </SectionCard>
 
-            <div id="repair-history" className="repair-detail__history-section space-y-4">
+            <div id="repair-history" className="repair-detail__history-section space-y-4" style={{ scrollMarginTop: 170 }}>
               {/* Customer Chat */}
               <MessageThread repairRef={r.ref} staffName={currentUser?.name || 'Staff'} />
 
