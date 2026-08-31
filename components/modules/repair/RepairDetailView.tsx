@@ -154,6 +154,7 @@ export default function RepairDetailView() {
   const [tradeInPrice, setTradeInPrice] = useState('')
   const [tradeInCondition, setTradeInCondition] = useState<'good' | 'fair' | 'poor'>('good')
   const [tradeInNotes, setTradeInNotes] = useState('')
+  const [sendingCustomerEmail, setSendingCustomerEmail] = useState<'ready' | 'uncollected' | null>(null)
 
   if (!r) return null
 
@@ -205,6 +206,9 @@ export default function RepairDetailView() {
   const canDelete   = isDirector
   const canMoveBack           = ['technical_lead', 'director'].includes(currentRole) && !TERMINAL.includes(r.status) && r.status !== 'pending_verification' && !pendingOutsourceJob
   const canScheduleDelivery   = isDeliveryManager && ['ready', 'invoiced'].includes(r.status) && !pendingOutsourceJob
+  const canSendCustomerEmail  = Boolean(r.customerEmail)
+    && ['ready', 'invoiced', 'verified_released'].includes(r.status)
+    && ['director', 'admin_officer', 'technical_lead'].includes(currentRole)
   const canMarkCollected      = isDeliveryManager && ['ready', 'invoiced', 'verified_released'].includes(r.status) && !pendingOutsourceJob
   const canPrepareRelease     = isDeliveryManager && ['ready', 'invoiced'].includes(r.status) && !repairOrc && !pendingOutsourceJob
   // Managers (director/admin officer/lead tech) can correct intake details until the job is terminal
@@ -393,6 +397,37 @@ export default function RepairDetailView() {
     updateRepair(r.id, { issuePhotos: photos })
   }
 
+
+  const sendCustomerEmail = async (purpose: 'ready' | 'uncollected') => {
+    if (!r.customerEmail || sendingCustomerEmail) return
+    setSendingCustomerEmail(purpose)
+    try {
+      const res = await fetch('/api/notifications/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'repair',
+          repairRef: r.ref,
+          purpose,
+          channels: ['email'],
+        }),
+      })
+      const body = await res.json().catch(() => ({}))
+      if (!res.ok || body?.success === false) {
+        throw new Error(body?.error || 'Customer email could not be sent')
+      }
+      showToast(
+        purpose === 'ready'
+          ? 'Repair-ready email queued for the customer.'
+          : 'Collection reminder email queued for the customer.',
+        'success',
+      )
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'Customer email could not be sent', 'error')
+    } finally {
+      setSendingCustomerEmail(null)
+    }
+  }
 
   const portalUrl  = `https://erp.deed.co.ke/portal/repair/${r.ref}`
   const copyLink   = () => {
@@ -587,6 +622,8 @@ export default function RepairDetailView() {
                 { id: 'unrepairable', label: 'Mark unrepairable', onClick: () => { setUnrepairableReason(''); setShowUnrepairableModal(true) }, hidden: !canMarkUnrepairable, danger: true },
                 { id: 'back', label: 'Back step', onClick: () => moveRepairToPreviousProgress(r.id), hidden: !canMoveBack },
                 { id: 'schedule', label: 'Schedule delivery', onClick: () => setShowDeliveryModal(true), hidden: !canScheduleDelivery },
+                { id: 'email_ready', label: sendingCustomerEmail === 'ready' ? 'Sending ready email…' : 'Email ready notice', onClick: () => { void sendCustomerEmail('ready') }, hidden: !canSendCustomerEmail || Boolean(sendingCustomerEmail) },
+                { id: 'email_reminder', label: sendingCustomerEmail === 'uncollected' ? 'Sending reminder…' : 'Email collection reminder', onClick: () => { void sendCustomerEmail('uncollected') }, hidden: !canSendCustomerEmail || Boolean(sendingCustomerEmail) },
                 { id: 'prepare_release', label: 'Prepare release', onClick: openPrepareRelease, hidden: !canPrepareRelease || primaryActionId === 'prepare_release' },
                 { id: 'collect', label: 'Mark collected', onClick: () => setShowMarkDeliveredConfirm(true), hidden: !canMarkCollected || primaryActionId === 'collect' },
                 { id: 'close', label: 'Close job', onClick: () => closeRepairJob(r.id), hidden: !canCloseJob || primaryActionId === 'close' },
