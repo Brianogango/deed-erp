@@ -1,10 +1,10 @@
 {
   "location": "warehouse",
   "apply": true,
-  "documentRef": "STOCK-IN-DDR5-8GB-20260828-4PCS",
-  "reason": "Stock in — 4 pcs 8GB DDR5 RAM Module",
-  "note": "Brian requested 4 pcs of 8GB DDR5 RAM Module added to warehouse.",
+  "documentRef": "STOCK-IN-256GB-NVME-2280-20260831-1PC",
+  "reason": "Stock in — 1 pc 256GB NVMe SSD - M.2 2280 PCIe",
+  "note": "Brian requested 1 piece of 256GB NVMe SSD - M.2 2280 PCIe added to warehouse.",
   "items": [
-    { "name": "8GB DDR5 RAM Module", "qty": 4 }
+    { "name": "256GB NVMe SSD - M.2 2280 PCIe", "qty": 1 }
   ]
 }
