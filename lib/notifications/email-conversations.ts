@@ -248,6 +248,19 @@ export async function recordInboundEmail(input: {
     })
   }
 
+  if (!thread && normalizeSubject(input.subject)) {
+    thread = await prisma.communicationThread.findFirst({
+      where: {
+        channel: 'email',
+        participantEmail: from,
+        ...(input.mailbox ? { mailbox: input.mailbox } : {}),
+        subject: { equals: normalizeSubject(input.subject), mode: 'insensitive' },
+        status: { in: ['open', 'active'] },
+      },
+      orderBy: { lastMessageAt: 'desc' },
+    })
+  }
+
   if (!thread) {
     thread = await prisma.communicationThread.findFirst({
       where: {
