@@ -1,5 +1,6 @@
 import 'server-only'
 
+import prisma from '@/lib/prisma'
 import {
   fetchSalesInboxEmails,
   markSalesInboxUidsSeen,
@@ -136,9 +137,9 @@ export async function processDepartmentEmailReplies(opts?: {
 
           if (message) {
             state.recorded += 1
-            const thread = await import('@/lib/prisma').then(({ default: prisma }) =>
-              prisma.communicationThread.findUnique({ where: { id: message.threadId } }),
-            )
+            const thread = await prisma.communicationThread.findUnique({
+              where: { id: message.threadId },
+            })
 
             await publishNotificationEvent({
               eventType: 'communication.email.reply_received',
