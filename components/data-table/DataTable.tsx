@@ -256,11 +256,13 @@ export default function DataTable<T>({
 
   const totalPages = Math.max(1, Math.ceil(filteredRows.length / perPage))
   useEffect(() => {
-    if (page > totalPages) goToPage(totalPages)
-    // Clamp only when the page is out of range. `goToPage` is omitted so a
-    // parent that has not yet committed a URL update does not retrigger this.
+    if (page <= totalPages) return
+    // Controlled restore (e.g. /finance?tab=invoices&page=3) can mount before
+    // rows hydrate. Clamping to 1 here would wipe the URL page.
+    if (filteredRows.length === 0 && pageProp != null) return
+    goToPage(totalPages)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, totalPages])
+  }, [page, totalPages, filteredRows.length, pageProp])
 
   // Reset to page 1 when sort changes so the new first rows are visible.
   // Skip the first run — otherwise a restored URL page is wiped on mount.

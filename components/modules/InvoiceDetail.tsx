@@ -46,6 +46,13 @@ export default function InvoiceDetail() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const listPage = parseFinanceListPage(searchParams.get('listPage') ?? searchParams.get('page'))
+  const goToDocumentList = (type?: string | null) => {
+    const params = typeof window !== 'undefined'
+      ? new URLSearchParams(window.location.search)
+      : searchParams
+    const livePage = parseFinanceListPage(params.get('listPage') ?? params.get('page'))
+    router.push(financeInvoiceListPath(type, { page: livePage }))
+  }
   const {
     invoices,
     contacts,
@@ -229,7 +236,7 @@ export default function InvoiceDetail() {
       <div className="mod-page">
         <RecordHeader
           title="Invoice not found"
-          onBack={() => router.push(financeInvoiceListPath('customer_invoice', { page: listPage }))}
+          onBack={() => goToDocumentList('customer_invoice')}
           backLabel="Back to invoices"
         />
         <div className="mod-body p-12 text-center text-[var(--text-3)] text-sm">Invoice not found.</div>
@@ -516,7 +523,7 @@ export default function InvoiceDetail() {
       <div className="invoice-detail__chrome">
         <Breadcrumbs
           items={[
-            { label: invoice.type === 'customer_invoice' ? 'Invoices' : 'Bills', onClick: () => router.push(documentListPath) },
+            { label: invoice.type === 'customer_invoice' ? 'Invoices' : 'Bills', onClick: () => goToDocumentList(invoice.type) },
             { label: titleRef },
           ]}
         />

@@ -362,6 +362,7 @@ function AccountingContent() {
 
   const setTab = (newTab: MainTab) => {
     const nextTab = isReportTabId(newTab) ? 'reports' : newTab
+    if (nextTab === tab && !(isReportTabId(newTab) && newTab !== reportTab)) return
     if (isReportTabId(newTab)) setReportTab(newTab)
     setLocalTab(nextTab)
     setSelectedInvIds(new Set())
