@@ -89,6 +89,7 @@ import {
 } from '@/components/modules/sales/workbench'
 import ContactFormModal, { blankIndividualContact } from '@/components/contacts/ContactFormModal'
 import DocumentEmailSendHistory from '@/components/email/DocumentEmailSendHistory'
+import EntityEmailThread from '@/components/email/EntityEmailThread'
 import { resolveListPrice, BUILTIN_PRICELISTS, pricelistSelectOptions, type PriceListDef } from '@/lib/pricing/pricelist'
 import { quoteSalePriceFromCost } from '@/lib/sale-price-calculator'
 import {
@@ -3076,6 +3077,15 @@ function SalesContent() {
                                 refreshKey={emailHistoryKey}
                                 title="Quote email history"
                               />
+                              <div style={{ marginTop: 12 }}>
+                                <EntityEmailThread
+                                  entityType="quote"
+                                  entityId={activeOrder.id}
+                                  title="Quote Email Conversation"
+                                  showToast={showToast}
+                                  compact
+                                />
+                              </div>
                             </div>
                           </div>
                         )}
