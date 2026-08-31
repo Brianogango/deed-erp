@@ -35,8 +35,8 @@ export const NOTIFICATION_POLICIES: Record<string, NotificationPolicy> = {
   'sales.followup.overdue': POLICY(['in_app', 'push'], 'warning'),
 
   'repair.received': POLICY(['sms'], 'success'),
-  'repair.customer_message': POLICY(['email', 'whatsapp', 'sms'], 'attention', { fallbackSms: true }),
-  'repair.quote_ready': POLICY(['email', 'whatsapp', 'sms'], 'attention', { fallbackSms: true }),
+  'repair.customer_message': POLICY(['email', 'whatsapp', 'sms'], 'attention', { fallbackSms: true, emailMode: 'manual' }),
+  'repair.quote_ready': POLICY(['email', 'whatsapp', 'sms'], 'attention', { fallbackSms: true, emailMode: 'manual' }),
   'repair.unassigned': POLICY(['in_app', 'push'], 'critical', { recipientRoles: ['technical_lead', 'director'], requiresAcknowledgement: true, escalationMinutes: 30, escalationRoles: ['director'], mandatory: true }),
   'repair.assignment': POLICY(['in_app', 'push'], 'attention'),
   'repair.diagnosis_overdue': POLICY(['in_app', 'push', 'email'], 'warning', { escalationMinutes: 120, escalationRoles: ['technical_lead', 'director'] }),
@@ -45,8 +45,8 @@ export const NOTIFICATION_POLICIES: Record<string, NotificationPolicy> = {
   'repair.parts_requested': POLICY(['in_app', 'email'], 'attention', { recipientRoles: ['inventory_officer', 'admin_officer'] }),
   'repair.parts_received': POLICY(['in_app', 'push'], 'attention'),
   'repair.sla_breach': POLICY(['in_app', 'push', 'email'], 'critical', { recipientRoles: ['technical_lead', 'director'], requiresAcknowledgement: true, escalationMinutes: 60, mandatory: true }),
-  'repair.ready': POLICY(['email', 'whatsapp', 'sms'], 'success', { fallbackSms: true }),
-  'repair.uncollected': POLICY(['email', 'whatsapp', 'sms'], 'warning', { fallbackSms: true }),
+  'repair.ready': POLICY(['email', 'whatsapp', 'sms'], 'success', { fallbackSms: true, emailMode: 'manual' }),
+  'repair.uncollected': POLICY(['email', 'whatsapp', 'sms'], 'warning', { fallbackSms: true, emailMode: 'manual' }),
 
   'purchase.rfq_ready': POLICY(['in_app'], 'attention'),
   'purchase.po_approval_required': POLICY(['in_app', 'push', 'email'], 'attention', { recipientRoles: ['director', 'finance_officer'], requiresAcknowledgement: true, escalationMinutes: 180 }),
@@ -95,7 +95,7 @@ export const NOTIFICATION_POLICIES: Record<string, NotificationPolicy> = {
   'aftersales.sla_breach': POLICY(['in_app', 'push', 'email'], 'critical', { recipientRoles: ['technical_lead', 'director'], requiresAcknowledgement: true, escalationMinutes: 60, mandatory: true }),
 
   'system.escalation': POLICY(['in_app', 'push', 'email'], 'critical', { requiresAcknowledgement: true, mandatory: true }),
-  'system.manual_message': POLICY(['email'], 'info'),
+  'system.manual_message': POLICY(['email'], 'info', { emailMode: 'manual' }),
   'system.sms_reply': POLICY(['sms'], 'info'),
   'system.security': POLICY(['in_app', 'push', 'email'], 'critical', { recipientRoles: ['director'], requiresAcknowledgement: true, escalationMinutes: 30, mandatory: true }),
   'system.integration_failure': POLICY(['in_app', 'email'], 'critical', { recipientRoles: ['director'], requiresAcknowledgement: true, escalationMinutes: 60, mandatory: true }),
