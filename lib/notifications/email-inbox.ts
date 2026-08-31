@@ -89,7 +89,7 @@ export async function processDepartmentEmailReplies(opts?: {
   limitPerMailbox?: number
   profiles?: DepartmentMailbox[]
 }) {
-  const profiles = opts?.profiles || ['accounts', 'hr', 'repairs', 'procurement', 'default']
+  const profiles: DepartmentMailbox[] = opts?.profiles || ['accounts', 'hr', 'repairs', 'procurement', 'default']
   const result: Record<string, { configured: boolean; fetched: number; recorded: number; errors: string[] }> = {}
 
   for (const profile of profiles) {
